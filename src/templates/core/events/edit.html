@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Ereignis bearbeiten" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    <h1 class="text-2xl font-bold mb-6">{% trans "Ereignis bearbeiten" %}</h1>
+
+    {# Meta (readonly) #}
+    <div class="bg-gray-50 border border-gray-200 rounded-md p-4 mb-4">
+        <dl class="grid grid-cols-2 gap-4 text-sm">
+            <div>
+                <dt class="text-gray-500">{% trans "Dokumentationstyp" %}</dt>
+                <dd class="font-medium">{{ event.document_type.name }}</dd>
+            </div>
+            <div>
+                <dt class="text-gray-500">{% trans "Zeitpunkt" %}</dt>
+                <dd class="font-medium">{{ event.occurred_at|date:"d.m.Y H:i" }}</dd>
+            </div>
+            <div>
+                <dt class="text-gray-500">{% trans "Klientel" %}</dt>
+                <dd class="font-medium">
+                    {% if event.is_anonymous %}{% trans "Anonym" %}{% elif event.client %}{{ event.client.pseudonym }}{% else %}–{% endif %}
+                </dd>
+            </div>
+        </dl>
+    </div>
+
+    {# Editierbare Felder #}
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="expected_updated_at" value="{{ event.updated_at.isoformat }}">
+
+        {% if data_form.fields %}
+        <div class="bg-white border border-gray-200 rounded-md p-4 space-y-4">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase">{% trans "Felder" %}</h2>
+            {% for field in data_form %}
+            <div>
+                <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                    {{ field.label }}{% if field.field.required %} *{% endif %}
+                </label>
+                {{ field }}
+                {% if field.errors %}
+                <ul class="mt-1 text-sm text-red-600">
+                    {% for error in field.errors %}
+                    <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-3">
+            <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
+                {% trans "Änderungen speichern" %}
+            </button>
+            <a href="{% url 'core:event_detail' event.pk %}" class="w-full sm:w-auto text-center px-4 py-2 border border-gray-300 text-sm rounded-md hover:bg-gray-50">{% trans "Abbrechen" %}</a>
+        </div>
+        {% else %}
+        <div class="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+            <p class="text-sm text-yellow-800">
+                {% trans "Alle Felder dieses Ereignisses sind für Ihre Rolle eingeschränkt. Eine Bearbeitung ist nicht möglich." %}
+            </p>
+        </div>
+        <div class="mt-4">
+            <a href="{% url 'core:event_detail' event.pk %}" class="text-sm text-indigo-600 hover:underline">{% trans "Zurück" %}</a>
+        </div>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

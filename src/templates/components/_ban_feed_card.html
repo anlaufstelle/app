@@ -1,0 +1,19 @@
+{% load i18n %}
+<a href="{% url 'core:event_detail' event.pk %}" class="block bg-red-50 border border-red-200 rounded-md p-4 hover:border-red-300 hover:shadow-sm transition">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+            <span class="text-sm text-red-600 font-mono">{{ event.occurred_at|time:"H:i" }}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">
+                {% trans "Hausverbot" %}
+            </span>
+            {% if event.client %}
+            <span class="text-sm text-red-900 font-medium">{{ event.client.pseudonym }}</span>
+            {% else %}
+            <span class="text-sm text-red-600 italic">{% trans "Anonym" %}</span>
+            {% endif %}
+        </div>
+        {% if event.created_by %}
+        <span class="text-xs text-red-500">{{ event.created_by.display_name|default:event.created_by.username }}</span>
+        {% endif %}
+    </div>
+</a>

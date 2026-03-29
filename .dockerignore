@@ -1,0 +1,10 @@
+.venv
+venv
+node_modules
+__pycache__
+.git
+*.pyc
+src/staticfiles/
+src/static/css/styles.css
+.env
+docs/

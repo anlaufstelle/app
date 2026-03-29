@@ -1,0 +1,41 @@
+{% load i18n %}
+
+{% if q %}
+    {% if has_results %}
+        {# Klientel #}
+        {% if clients %}
+        <div class="mb-6">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{% trans "Klientel" %} ({{ clients|length }})</h2>
+            <div class="bg-white border border-gray-200 rounded-md divide-y divide-gray-200">
+                {% for client in clients %}
+                <a href="{% url 'core:client_detail' client.pk %}" class="block px-4 py-3 hover:bg-gray-50">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-indigo-600">{{ client.pseudonym }}</span>
+                        {% include "components/_client_badge.html" with client=client %}
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        {# Ereignisse #}
+        {% if events %}
+        <div class="mb-6">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{% trans "Ereignisse" %} ({{ events|length }})</h2>
+            <div class="space-y-2">
+                {% for event in events %}
+                {% include "components/_event_card.html" with event=event show_date=True show_client=True %}
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+    {% else %}
+    <div class="text-center py-12 text-gray-500">
+        <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <p>{% blocktrans with term=q %}Keine Ergebnisse für „{{ term }}"{% endblocktrans %}</p>
+    </div>
+    {% endif %}
+{% else %}
+{% include "components/_empty_state.html" with icon="search" message=_("Suchbegriff eingeben, um Klientel und Ereignisse zu finden.") %}
+{% endif %}

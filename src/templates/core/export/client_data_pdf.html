@@ -1,0 +1,185 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <title>{% trans "Datenauskunft" %} — {{ client.pseudonym }}</title>
+    <style>
+        body { font-family: sans-serif; font-size: 12px; color: #1a1a1a; margin: 40px; }
+        h1 { font-size: 20px; margin-bottom: 4px; }
+        h2 { font-size: 14px; margin-top: 24px; margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+        .meta { color: #666; font-size: 11px; margin-bottom: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; font-size: 11px; }
+        th { background: #f5f5f5; font-weight: 600; }
+        .footer { margin-top: 40px; font-size: 10px; color: #999; border-top: 1px solid #ccc; padding-top: 8px; }
+        .notice { background: #f0f0ff; border: 1px solid #c0c0ff; padding: 8px; margin-bottom: 16px; font-size: 11px; }
+    </style>
+</head>
+<body>
+    <h1>{{ facility_name }}</h1>
+    <p class="meta">{% trans "Datenauskunft gemäß Art. 15 DSGVO" %} — {{ client.pseudonym }}</p>
+
+    <div class="notice">
+        {% trans "Dieses Dokument enthält alle zu Ihrer Person gespeicherten Daten gemäß Art. 15 DSGVO (Auskunftsrecht) und Art. 20 DSGVO (Datenübertragbarkeit)." %}
+    </div>
+
+    <h2>{% trans "1. Stammdaten" %}</h2>
+    <table>
+        <tr><th>{% trans "Pseudonym" %}</th><td>{{ client.pseudonym }}</td></tr>
+        <tr><th>{% trans "Kontaktstufe" %}</th><td>{{ client.contact_stage }}</td></tr>
+        <tr><th>{% trans "Altersgruppe" %}</th><td>{{ client.age_cluster }}</td></tr>
+        <tr><th>{% trans "Aktiv" %}</th><td>{% if client.is_active %}{% trans "Ja" %}{% else %}{% trans "Nein" %}{% endif %}</td></tr>
+        <tr><th>{% trans "Erstellt am" %}</th><td>{{ client.created_at }}</td></tr>
+        <tr><th>{% trans "Erstellt von" %}</th><td>{{ client.created_by|default:"-" }}</td></tr>
+    </table>
+
+    <h2>{% trans "2. Fälle" %}</h2>
+    {% if cases %}
+    <table>
+        <thead>
+            <tr>
+                <th>{% trans "Titel" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Erstellt am" %}</th>
+                <th>{% trans "Geschlossen am" %}</th>
+                <th>{% trans "Fallverantwortlich" %}</th>
+                <th>{% trans "Erstellt von" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for case in cases %}
+            <tr>
+                <td>{{ case.title }}</td>
+                <td>{{ case.status }}</td>
+                <td>{{ case.created_at }}</td>
+                <td>{{ case.closed_at|default:"-" }}</td>
+                <td>{{ case.lead_user|default:"-" }}</td>
+                <td>{{ case.created_by|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>{% trans "Keine Fälle vorhanden." %}</p>
+    {% endif %}
+
+    <h2>{% trans "3. Kontakte" %}</h2>
+    {% if events %}
+    <table>
+        <thead>
+            <tr>
+                <th>{% trans "Dokumentationstyp" %}</th>
+                <th>{% trans "Zeitpunkt" %}</th>
+                <th>{% trans "Erstellt von" %}</th>
+                <th>{% trans "Daten" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for event in events %}
+            <tr>
+                <td>{{ event.document_type }}</td>
+                <td>{{ event.occurred_at }}</td>
+                <td>{{ event.created_by|default:"-" }}</td>
+                <td>
+                    {% for key, value in event.data.items %}
+                        <strong>{{ key }}:</strong> {{ value }}{% if not forloop.last %}, {% endif %}
+                    {% endfor %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>{% trans "Keine Kontakte vorhanden." %}</p>
+    {% endif %}
+
+    <h2>{% trans "4. Änderungshistorie" %}</h2>
+    {% if event_history %}
+    <table>
+        <thead>
+            <tr>
+                <th>{% trans "Aktion" %}</th>
+                <th>{% trans "Geändert am" %}</th>
+                <th>{% trans "Geändert von" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for entry in event_history %}
+            <tr>
+                <td>{{ entry.action }}</td>
+                <td>{{ entry.changed_at }}</td>
+                <td>{{ entry.changed_by|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>{% trans "Keine Änderungshistorie vorhanden." %}</p>
+    {% endif %}
+
+    <h2>{% trans "5. Löschanträge" %}</h2>
+    {% if deletion_requests %}
+    <table>
+        <thead>
+            <tr>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Begründung" %}</th>
+                <th>{% trans "Beantragt von" %}</th>
+                <th>{% trans "Geprüft von" %}</th>
+                <th>{% trans "Erstellt am" %}</th>
+                <th>{% trans "Geprüft am" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for dr in deletion_requests %}
+            <tr>
+                <td>{{ dr.status }}</td>
+                <td>{{ dr.reason }}</td>
+                <td>{{ dr.requested_by|default:"-" }}</td>
+                <td>{{ dr.reviewed_by|default:"-" }}</td>
+                <td>{{ dr.created_at }}</td>
+                <td>{{ dr.reviewed_at|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>{% trans "Keine Löschanträge vorhanden." %}</p>
+    {% endif %}
+
+    <h2>{% trans "6. Aufgaben" %}</h2>
+    {% if work_items %}
+    <table>
+        <thead>
+            <tr>
+                <th>{% trans "Titel" %}</th>
+                <th>{% trans "Beschreibung" %}</th>
+                <th>{% trans "Status" %}</th>
+                <th>{% trans "Priorität" %}</th>
+                <th>{% trans "Erstellt am" %}</th>
+                <th>{% trans "Fällig am" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for wi in work_items %}
+            <tr>
+                <td>{{ wi.title }}</td>
+                <td>{{ wi.description|default:"-" }}</td>
+                <td>{{ wi.status }}</td>
+                <td>{{ wi.priority }}</td>
+                <td>{{ wi.created_at }}</td>
+                <td>{{ wi.due_date|default:"-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>{% trans "Keine Aufgaben vorhanden." %}</p>
+    {% endif %}
+
+    <div class="footer">
+        {% blocktrans with date=generated_at|date:"d.m.Y H:i" %}Erstellt am {{ date }} · Anlaufstelle{% endblocktrans %}
+    </div>
+</body>
+</html>

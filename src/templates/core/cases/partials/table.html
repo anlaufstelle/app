@@ -1,0 +1,62 @@
+{% load i18n %}
+
+{% if cases %}
+{# Desktop: Table #}
+<div class="hidden sm:block bg-white border border-gray-200 rounded-md overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Titel" %}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Klientel" %}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Status" %}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">{% trans "Fallverantwortlich" %}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">{% trans "Erstellt" %}</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+            {% for case in cases %}
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3">
+                    <a href="{% url 'core:case_detail' case.pk %}" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">
+                        {{ case.title }}
+                    </a>
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-500">
+                    {% if case.client %}{{ case.client.pseudonym }}{% else %}–{% endif %}
+                </td>
+                <td class="px-4 py-3">
+                    {% include "core/cases/partials/status_badge.html" with case=case %}
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
+                    {{ case.lead_user|default:"–" }}
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
+                    {{ case.created_at|date:"d.m.Y" }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{# Mobile: Card layout #}
+<div class="sm:hidden space-y-2">
+    {% for case in cases %}
+    <a href="{% url 'core:case_detail' case.pk %}" class="block bg-white border border-gray-200 rounded-md p-3 hover:border-indigo-300">
+        <div class="flex items-center justify-between">
+            <span class="text-sm font-medium text-indigo-600">{{ case.title }}</span>
+            {% include "core/cases/partials/status_badge.html" with case=case %}
+        </div>
+        <div class="mt-1 text-xs text-gray-500">
+            {% if case.client %}{{ case.client.pseudonym }} · {% endif %}
+            {{ case.created_at|date:"d.m.Y" }}
+        </div>
+    </a>
+    {% endfor %}
+</div>
+
+{% include "components/_pagination.html" with page=cases extra_params=pagination_params %}
+
+{% else %}
+{% include "components/_empty_state.html" with icon="search" message=_("Keine Fälle gefunden") %}
+{% endif %}

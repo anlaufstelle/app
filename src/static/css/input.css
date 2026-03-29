@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    [x-cloak] { display: none !important; }
+
+    a:focus-visible, button:focus-visible, input:focus-visible,
+    select:focus-visible, textarea:focus-visible {
+        @apply ring-2 ring-indigo-500 ring-offset-2 outline-none;
+    }
+}
+
+@media print {
+    nav, .no-print, button, [role="navigation"] {
+        display: none !important;
+    }
+    body {
+        background: white !important;
+    }
+    main {
+        margin-left: 0 !important;
+    }
+    .page-break-before {
+        page-break-before: always;
+    }
+    table, tr {
+        page-break-inside: avoid;
+    }
+}

@@ -1,0 +1,119 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <title>{% trans "Halbjahresbericht" %}</title>
+    <style>
+        body { font-family: sans-serif; font-size: 12px; color: #1a1a1a; margin: 40px; }
+        h1 { font-size: 20px; margin-bottom: 4px; }
+        h2 { font-size: 14px; margin-top: 24px; margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+        .meta { color: #666; font-size: 11px; margin-bottom: 20px; }
+        .kpi-grid { display: flex; gap: 16px; margin-bottom: 20px; }
+        .kpi-card { border: 1px solid #ddd; border-radius: 4px; padding: 12px; flex: 1; text-align: center; }
+        .kpi-value { font-size: 24px; font-weight: bold; }
+        .kpi-label { font-size: 10px; color: #666; margin-top: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; font-size: 11px; }
+        th { background: #f5f5f5; font-weight: 600; }
+        td.num { text-align: right; }
+        .footer { margin-top: 40px; font-size: 10px; color: #999; border-top: 1px solid #ccc; padding-top: 8px; }
+    </style>
+</head>
+<body>
+    <h1>{{ facility_name }}</h1>
+    <p class="meta">{% trans "Halbjahresbericht" %} · {{ date_from|date:"d.m.Y" }} – {{ date_to|date:"d.m.Y" }}</p>
+
+    <h2>{% trans "Zusammenfassung" %}</h2>
+    <div class="kpi-grid">
+        <div class="kpi-card">
+            <div class="kpi-value">{{ stats.total_contacts }}</div>
+            <div class="kpi-label">{% trans "Gesamtkontakte" %}</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">{{ stats.by_contact_stage.anonym }}</div>
+            <div class="kpi-label">{% trans "Anonym" %}</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">{{ stats.by_contact_stage.identifiziert }}</div>
+            <div class="kpi-label">{% trans "Identifiziert" %}</div>
+        </div>
+        <div class="kpi-card">
+            <div class="kpi-value">{{ stats.by_contact_stage.qualifiziert }}</div>
+            <div class="kpi-label">{% trans "Qualifiziert" %}</div>
+        </div>
+    </div>
+
+    <p><strong>{% trans "Einzigartige Klientel:" %}</strong> {{ stats.unique_clients }}</p>
+
+    <h2>{% trans "Kontakte nach Dokumentationstyp" %}</h2>
+    {% if stats.by_document_type %}
+    <table>
+        <thead>
+            <tr>
+                <th>{% trans "Typ" %}</th>
+                <th>{% trans "Kategorie" %}</th>
+                <th style="text-align:right">{% trans "Anzahl" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in stats.by_document_type %}
+            <tr>
+                <td>{{ row.name }}</td>
+                <td>{{ row.category }}</td>
+                <td class="num">{{ row.count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>{% trans "Keine Daten im gewählten Zeitraum." %}</p>
+    {% endif %}
+
+    <h2>{% trans "Kontakte nach Altersgruppe" %}</h2>
+    {% if stats.by_age_cluster %}
+    <table>
+        <thead>
+            <tr>
+                <th>{% trans "Altersgruppe" %}</th>
+                <th style="text-align:right">{% trans "Anzahl" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in stats.by_age_cluster %}
+            <tr>
+                <td>{{ row.label }}</td>
+                <td class="num">{{ row.count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>{% trans "Keine Daten im gewählten Zeitraum." %}</p>
+    {% endif %}
+
+    {% if stats.top_clients %}
+    <h2>{% trans "Top 5 Klientel" %}</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>{% trans "Pseudonym" %}</th>
+                <th style="text-align:right">{% trans "Kontakte" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in stats.top_clients %}
+            <tr>
+                <td>{{ row.pseudonym }}</td>
+                <td class="num">{{ row.count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <div class="footer">
+        {% blocktrans with date=generated_at|date:"d.m.Y H:i" %}Erstellt am {{ date }} · Anlaufstelle{% endblocktrans %}
+    </div>
+</body>
+</html>

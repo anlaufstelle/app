@@ -1,0 +1,62 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html lang="{{ LANGUAGE_CODE|default:'de' }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>500 – {% trans "Serverfehler" %}</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f9fafb;
+            color: #111827;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container { text-align: center; padding: 2rem; }
+        .error-code {
+            font-size: 3.75rem;
+            font-weight: 700;
+            color: #4f46e5;
+            line-height: 1;
+        }
+        .error-title {
+            margin-top: 1rem;
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #111827;
+        }
+        .error-message {
+            margin-top: 0.5rem;
+            color: #4b5563;
+        }
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            margin-top: 1.5rem;
+            padding: 0.5rem 1rem;
+            background-color: #4f46e5;
+            color: #fff;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            text-decoration: none;
+            transition: background-color 0.15s;
+        }
+        .back-link:hover { background-color: #4338ca; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <p class="error-code">500</p>
+        <h1 class="error-title">{% trans "Serverfehler" %}</h1>
+        <p class="error-message">{% trans "Ein interner Fehler ist aufgetreten. Bitte versuchen Sie es später erneut." %}</p>
+        <div>
+            <a href="/" class="back-link">{% trans "Zurück zur Startseite" %}</a>
+        </div>
+    </div>
+</body>
+</html>

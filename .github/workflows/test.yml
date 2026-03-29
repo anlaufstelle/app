@@ -1,0 +1,78 @@
+name: Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: anlaufstelle
+          POSTGRES_USER: anlaufstelle
+          POSTGRES_PASSWORD: anlaufstelle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U anlaufstelle"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: python -m pytest -m "not e2e"
+        env:
+          POSTGRES_HOST: localhost
+          ENCRYPTION_KEY: P2N8yY4cVt1BmHZSvNrkSfkDYIJwEFcftRmO4bE-nZM=
+
+  check:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: anlaufstelle
+          POSTGRES_USER: anlaufstelle
+          POSTGRES_PASSWORD: anlaufstelle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U anlaufstelle"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: cd src && python manage.py check --settings=anlaufstelle.settings.dev
+        env:
+          POSTGRES_HOST: localhost
+      - run: cd src && python manage.py makemigrations --check --dry-run --settings=anlaufstelle.settings.dev
+        env:
+          POSTGRES_HOST: localhost
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install pip-audit
+      - run: pip-audit -r requirements.txt

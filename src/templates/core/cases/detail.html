@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ case.title }} – Anlaufstelle{% endblock %}
+
+{% block content %}
+{# Header #}
+<div class="mb-6">
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-2xl font-bold">{{ case.title }}</h1>
+            <div class="mt-1 flex items-center space-x-3">
+                {% include "core/cases/partials/status_badge.html" with case=case %}
+                {% if case.client %}
+                <a href="{% url 'core:client_detail' case.client.pk %}" class="text-sm text-indigo-600 hover:text-indigo-800">
+                    {{ case.client.pseudonym }}
+                </a>
+                {% endif %}
+            </div>
+        </div>
+        <div class="flex space-x-2">
+            {# --- Desktop-Buttons (md+) --- #}
+            <div class="hidden md:flex md:space-x-2">
+                <a href="{% url 'core:case_update' case.pk %}" class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm rounded-md hover:bg-gray-50">
+                    {% trans "Bearbeiten" %}
+                </a>
+                {% if case.status == 'open' and user.is_lead_or_admin %}
+                <form method="post" action="{% url 'core:case_close' case.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="inline-flex items-center px-3 py-2 bg-gray-600 text-white text-sm rounded-md hover:bg-gray-700">
+                        {% trans "Schließen" %}
+                    </button>
+                </form>
+                {% elif case.status == 'closed' and user.is_lead_or_admin %}
+                <form method="post" action="{% url 'core:case_reopen' case.pk %}">
+                    {% csrf_token %}
+                    <button type="submit" class="inline-flex items-center px-3 py-2 bg-green-600 text-white text-sm rounded-md hover:bg-green-700">
+                        {% trans "Wiedereröffnen" %}
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+            {# --- Mobile-Buttons (< md) --- #}
+            <div class="flex space-x-2 md:hidden">
+            <a href="{% url 'core:case_update' case.pk %}" class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm rounded-md hover:bg-gray-50" aria-label="{% trans 'Bearbeiten' %}">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+            </a>
+            {% if user.is_lead_or_admin %}
+            <div x-data="{ mobileMenu: false }" class="relative md:hidden">
+                <button @click="mobileMenu = !mobileMenu" type="button" class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm rounded-md hover:bg-gray-50" aria-label="{% trans 'Weitere Aktionen' %}" data-testid="mobile-overflow-menu">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
+                </button>
+                <div x-show="mobileMenu" @click.away="mobileMenu = false" x-cloak x-transition
+                     class="absolute right-0 mt-1 w-56 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10">
+                    {% if case.status == 'open' %}
+                    <form method="post" action="{% url 'core:case_close' case.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                            {% trans "Schließen" %}
+                        </button>
+                    </form>
+                    {% elif case.status == 'closed' %}
+                    <form method="post" action="{% url 'core:case_reopen' case.pk %}">
+                        {% csrf_token %}
+                        <button type="submit" class="flex items-center w-full px-4 py-2 text-sm text-green-700 hover:bg-gray-100">
+                            {% trans "Wiedereröffnen" %}
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{# Meta-Informationen #}
+<div class="bg-white border border-gray-200 rounded-md p-4 mb-6">
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+        <div>
+            <span class="text-gray-500">{% trans "Fallverantwortlich" %}</span>
+            <p class="font-medium">{{ case.lead_user|default:"-" }}</p>
+        </div>
+        <div>
+            <span class="text-gray-500">{% trans "Erstellt am" %}</span>
+            <p class="font-medium">{{ case.created_at|date:"d.m.Y H:i" }}</p>
+        </div>
+        <div>
+            <span class="text-gray-500">{% trans "Erstellt von" %}</span>
+            <p class="font-medium">{{ case.created_by|default:"-" }}</p>
+        </div>
+        {% if case.closed_at %}
+        <div>
+            <span class="text-gray-500">{% trans "Geschlossen am" %}</span>
+            <p class="font-medium">{{ case.closed_at|date:"d.m.Y H:i" }}</p>
+        </div>
+        {% endif %}
+    </div>
+    {% if case.description %}
+    <div class="mt-4 pt-4 border-t border-gray-200">
+        <span class="text-sm text-gray-500">{% trans "Beschreibung" %}</span>
+        <p class="mt-1 text-sm text-gray-700 whitespace-pre-wrap">{{ case.description }}</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    {# Events #}
+    <div class="lg:col-span-2">
+        <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{% trans "Kontakte" %}</h2>
+        <div id="case-event-list" aria-live="polite" role="region">
+            {% include "core/cases/partials/event_list.html" %}
+        </div>
+    </div>
+
+    {# Right column: placeholder sections #}
+    <div class="space-y-6">
+        {% include "core/cases/partials/episode_list.html" %}
+        {% include "core/cases/partials/goals_section.html" %}
+    </div>
+</div>
+{% endblock %}

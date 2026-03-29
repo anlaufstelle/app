@@ -1,0 +1,43 @@
+{% load i18n %}
+
+{# Offen #}
+<section class="mb-8">
+    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{% trans "Offen" %} ({{ open_items|length }})</h2>
+    {% if open_items %}
+    <div class="space-y-3">
+        {% for wi in open_items %}
+        {% include "core/workitems/partials/item_card.html" %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-500">{% trans "Keine offenen Aufgaben" %}</p>
+    {% endif %}
+</section>
+
+{# In Bearbeitung #}
+<section class="mb-8">
+    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{% trans "In Bearbeitung" %} ({{ in_progress_items|length }})</h2>
+    {% if in_progress_items %}
+    <div class="space-y-3">
+        {% for wi in in_progress_items %}
+        {% include "core/workitems/partials/item_card.html" %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-500">{% trans "Keine Aufgaben in Bearbeitung" %}</p>
+    {% endif %}
+</section>
+
+{# Kürzlich Erledigt #}
+<section>
+    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{% trans "Kürzlich erledigt" %} ({{ done_items|length }})</h2>
+    {% if done_items %}
+    <div class="space-y-3">
+        {% for wi in done_items %}
+        {% include "core/workitems/partials/item_card.html" %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-500">{% trans "Keine kürzlich erledigten Aufgaben" %}</p>
+    {% endif %}
+</section>

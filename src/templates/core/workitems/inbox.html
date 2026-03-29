@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Aufgaben" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">{% trans "Aufgaben" %}</h1>
+    <div class="hidden md:block">
+        <a href="{% url 'core:workitem_create' %}" class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+            {% trans "Neue Aufgabe" %}
+        </a>
+    </div>
+</div>
+
+{# Filter-Leiste #}
+<div class="flex flex-wrap gap-3 mb-6 p-4 bg-gray-50 rounded-md border border-gray-200" data-filter-persist>
+    <div>
+        <label for="filter-item-type" class="block text-xs font-medium text-gray-500 mb-1">{% trans "Typ" %}</label>
+        <select id="filter-item-type" name="item_type"
+            class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            hx-get="{% url 'core:workitem_inbox' %}"
+            hx-target="#inbox-content"
+            hx-trigger="change"
+            hx-include="[name='priority'],[name='assigned_to'],[name='due']"
+        >
+            <option value="">{% trans "Alle" %}</option>
+            {% for value, label in item_type_choices %}
+            <option value="{{ value }}" {% if selected_item_type == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="filter-priority" class="block text-xs font-medium text-gray-500 mb-1">{% trans "Priorität" %}</label>
+        <select id="filter-priority" name="priority"
+            class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            hx-get="{% url 'core:workitem_inbox' %}"
+            hx-target="#inbox-content"
+            hx-trigger="change"
+            hx-include="[name='item_type'],[name='assigned_to'],[name='due']"
+        >
+            <option value="">{% trans "Alle" %}</option>
+            {% for value, label in priority_choices %}
+            <option value="{{ value }}" {% if selected_priority == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="filter-assigned-to" class="block text-xs font-medium text-gray-500 mb-1">{% trans "Zugewiesen an" %}</label>
+        <select id="filter-assigned-to" name="assigned_to"
+            class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            hx-get="{% url 'core:workitem_inbox' %}"
+            hx-target="#inbox-content"
+            hx-trigger="change"
+            hx-include="[name='item_type'],[name='priority'],[name='due']"
+        >
+            <option value="">{% trans "Alle" %}</option>
+            {% for u in facility_users %}
+            <option value="{{ u.pk }}" {% if selected_assigned_to == u.pk|stringformat:"s" %}selected{% endif %}>{{ u.get_full_name|default:u.username }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div>
+        <label for="filter-due" class="block text-xs font-medium text-gray-500 mb-1">{% trans "Fälligkeit" %}</label>
+        <select id="filter-due" name="due"
+            class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+            hx-get="{% url 'core:workitem_inbox' %}"
+            hx-target="#inbox-content"
+            hx-trigger="change"
+            hx-include="[name='item_type'],[name='priority'],[name='assigned_to']"
+        >
+            <option value="">{% trans "Alle" %}</option>
+            {% for value, label in due_filter_choices %}
+            <option value="{{ value }}" {% if selected_due == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+<div id="inbox-content">
+    {% include "core/workitems/partials/inbox_content.html" %}
+</div>
+{% endblock %}

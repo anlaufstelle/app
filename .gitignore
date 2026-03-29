@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Django
+*.sqlite3
+src/staticfiles/
+src/static/css/styles.css
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# AI Tools
+.claude/
+.codex/
+.gemini/
+.copilot/
+.github/copilot/
+.aider*
+.cursor/
+.continue/
+.codeium/
+.tabnine/
+.superpowers/
+docs/superpowers/
+docs/plans/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment & Secrets
+.env
+*.env.local
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Node (Tailwind)
+node_modules/
+package-lock.json
+
+# Backups
+backups/
+
+# SSL-Zertifikate (lokal generiert)
+certs/
+
+# Worktrees
+.worktrees/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Screenshots (temporär)
+admin-overview.png

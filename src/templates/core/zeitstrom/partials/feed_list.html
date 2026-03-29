@@ -1,0 +1,18 @@
+{% load i18n %}
+{% if feed_items %}
+<div class="space-y-2">
+    {% for item in feed_items %}
+        {% if item.type == "event" %}
+            {% include "components/_event_card.html" with event=item.object show_date=False show_client=True %}
+        {% elif item.type == "activity" %}
+            {% include "components/_activity_card.html" with activity=item.object %}
+        {% elif item.type == "workitem" %}
+            {% include "components/_workitem_feed_card.html" with workitem=item.object %}
+        {% elif item.type == "ban" %}
+            {% include "components/_ban_feed_card.html" with event=item.object %}
+        {% endif %}
+    {% endfor %}
+</div>
+{% else %}
+{% include "components/_empty_state.html" with icon="clock" message=_("Keine Einträge für diesen Zeitraum") %}
+{% endif %}

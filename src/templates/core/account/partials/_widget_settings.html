@@ -1,0 +1,51 @@
+{% load i18n %}
+<div class="space-y-3" x-data="widgetSettings()">
+    <label class="flex items-center justify-between cursor-pointer">
+        <span class="text-sm text-gray-700">{% trans "Meine Aufgaben" %}</span>
+        <button @click="toggle('tasks')" :class="config.tasks ? 'bg-indigo-600' : 'bg-gray-200'" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200">
+            <span :class="config.tasks ? 'translate-x-5' : 'translate-x-0'" class="inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 mt-0.5 ml-0.5"></span>
+        </button>
+    </label>
+    <label class="flex items-center justify-between cursor-pointer">
+        <span class="text-sm text-gray-700">{% trans "Übersicht" %}</span>
+        <button @click="toggle('stats')" :class="config.stats ? 'bg-indigo-600' : 'bg-gray-200'" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200">
+            <span :class="config.stats ? 'translate-x-5' : 'translate-x-0'" class="inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 mt-0.5 ml-0.5"></span>
+        </button>
+    </label>
+    <label class="flex items-center justify-between cursor-pointer">
+        <span class="text-sm text-gray-700">{% trans "Heute" %}</span>
+        <button @click="toggle('activity')" :class="config.activity ? 'bg-indigo-600' : 'bg-gray-200'" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200">
+            <span :class="config.activity ? 'translate-x-5' : 'translate-x-0'" class="inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 mt-0.5 ml-0.5"></span>
+        </button>
+    </label>
+    <label class="flex items-center justify-between cursor-pointer">
+        <span class="text-sm text-gray-700">{% trans "Letzte Klientel" %}</span>
+        <button @click="toggle('recent_clients')" :class="config.recent_clients ? 'bg-indigo-600' : 'bg-gray-200'" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200">
+            <span :class="config.recent_clients ? 'translate-x-5' : 'translate-x-0'" class="inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 mt-0.5 ml-0.5"></span>
+        </button>
+    </label>
+</div>
+
+<script>
+function widgetSettings() {
+    return {
+        config: JSON.parse(document.getElementById('widget-config-data').textContent),
+        toggle(widget) {
+            this.config[widget] = !this.config[widget];
+            const el = document.getElementById('widget-' + widget.replace('_', '-'));
+            if (el) {
+                el.style.display = this.config[widget] ? '' : 'none';
+            }
+            const csrfToken = JSON.parse(document.body.getAttribute('hx-headers'))['X-CSRFToken'];
+            fetch('{% url "core:dashboard_preferences" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': csrfToken
+                },
+                body: 'widget=' + widget + '&enabled=' + this.config[widget]
+            });
+        }
+    }
+}
+</script>

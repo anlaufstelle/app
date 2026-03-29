@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% load i18n core_tags %}
+
+{% block title %}{% trans "Audit-Log Detail" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold">{% trans "Audit-Log Detail" %}</h1>
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-md p-4 space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Zeitstempel" %}</span>
+                <p class="text-sm font-medium">{{ entry.timestamp|date:"d.m.Y H:i:s" }}</p>
+            </div>
+            <div>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Benutzer" %}</span>
+                <p class="text-sm font-medium">
+                    {% if entry.user %}{{ entry.user }}{% else %}<span class="text-gray-400">–</span>{% endif %}
+                </p>
+            </div>
+            <div>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Aktion" %}</span>
+                <p class="text-sm font-medium">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-700">
+                        {{ entry.get_action_display }}
+                    </span>
+                </p>
+            </div>
+            <div>
+                <span class="text-xs text-gray-500 uppercase">{% trans "IP-Adresse" %}</span>
+                <p class="text-sm font-mono">{{ entry.ip_address|default:"–" }}</p>
+            </div>
+            <div>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Zieltyp" %}</span>
+                <p class="text-sm font-medium">{{ entry.target_type|default:"–" }}</p>
+            </div>
+            <div>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Ziel-ID" %}</span>
+                <p class="text-sm font-mono text-gray-500">{{ entry.target_id|default:"–" }}</p>
+            </div>
+        </div>
+
+        <div>
+            <span class="text-xs text-gray-500 uppercase">{% trans "Details" %}</span>
+            <div class="mt-1">
+                {{ entry.detail|pretty_json }}
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <a href="{% url 'core:audit_log' %}" class="text-sm text-indigo-600 hover:underline">{% trans "Zurück zur Liste" %}</a>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,99 @@
+{% load i18n %}
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <title>{% trans "Sachbericht an das Jugendamt" %}</title>
+    <style>
+        body { font-family: sans-serif; font-size: 12px; color: #1a1a1a; margin: 40px; }
+        h1 { font-size: 18px; text-align: center; margin-bottom: 4px; }
+        h2 { font-size: 14px; margin-top: 24px; margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+        .subtitle { text-align: center; font-size: 13px; color: #333; margin-bottom: 20px; }
+        .meta { margin-bottom: 20px; }
+        .meta-row { display: flex; margin-bottom: 4px; }
+        .meta-label { font-weight: 600; width: 160px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; font-size: 11px; }
+        th { background: #f5f5f5; font-weight: 600; }
+        td.num { text-align: right; }
+        .summary { margin-bottom: 20px; }
+        .summary p { margin: 4px 0; }
+        .signature { margin-top: 60px; }
+        .signature-line { border-top: 1px solid #333; width: 250px; margin-top: 40px; padding-top: 4px; font-size: 10px; color: #666; }
+        .footer { margin-top: 40px; font-size: 10px; color: #999; border-top: 1px solid #ccc; padding-top: 8px; }
+    </style>
+</head>
+<body>
+    <h1>{% trans "Sachbericht an das Jugendamt" %}</h1>
+    <p class="subtitle">{{ facility_name }}</p>
+
+    <div class="meta">
+        <div class="meta-row">
+            <span class="meta-label">{% trans "Einrichtung:" %}</span>
+            <span>{{ facility_name }}</span>
+        </div>
+        <div class="meta-row">
+            <span class="meta-label">{% trans "Berichtszeitraum:" %}</span>
+            <span>{{ date_from|date:"d.m.Y" }} – {{ date_to|date:"d.m.Y" }}</span>
+        </div>
+    </div>
+
+    <div class="summary">
+        <h2>{% trans "Zusammenfassung" %}</h2>
+        <p><strong>{% trans "Gesamtkontakte (ohne Notizen/Hausverbote):" %}</strong> {{ stats.total }}</p>
+        <p><strong>{% trans "Einzigartige Klientel:" %}</strong> {{ stats.unique_clients }}</p>
+    </div>
+
+    <h2>{% trans "Leistungen nach Kategorie" %}</h2>
+    {% if stats.by_category %}
+    <table>
+        <thead>
+            <tr>
+                <th>{% trans "Kategorie" %}</th>
+                <th style="text-align:right">{% trans "Anzahl" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for name, count in stats.by_category %}
+            <tr>
+                <td>{{ name }}</td>
+                <td class="num">{{ count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>{% trans "Keine relevanten Kontakte im Berichtszeitraum." %}</p>
+    {% endif %}
+
+    <h2>{% trans "Altersverteilung" %}</h2>
+    {% if stats.by_age_cluster %}
+    <table>
+        <thead>
+            <tr>
+                <th>{% trans "Altersgruppe" %}</th>
+                <th style="text-align:right">{% trans "Anzahl" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in stats.by_age_cluster %}
+            <tr>
+                <td>{{ row.label }}</td>
+                <td class="num">{{ row.count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p>{% trans "Keine Altersdaten vorhanden." %}</p>
+    {% endif %}
+
+    <div class="signature">
+        <div class="signature-line">{% trans "Ort, Datum, Unterschrift" %}</div>
+    </div>
+
+    <div class="footer">
+        {% blocktrans with date=generated_at|date:"d.m.Y H:i" %}Erstellt am {{ date }} · Anlaufstelle{% endblocktrans %}
+    </div>
+</body>
+</html>

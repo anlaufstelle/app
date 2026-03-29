@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}403 – {% trans "Zugriff verweigert" %}{% endblock %}
+
+{% block content %}
+<div class="min-h-[70vh] flex items-center justify-center">
+    <div class="text-center">
+        <p class="text-6xl font-bold text-indigo-600">403</p>
+        <h1 class="mt-4 text-2xl font-semibold text-gray-900">{% trans "Zugriff verweigert" %}</h1>
+        <p class="mt-2 text-gray-600">{% trans "Sie haben keine Berechtigung, diese Seite aufzurufen." %}</p>
+        <div class="mt-6">
+            <a href="{% url 'core:zeitstrom' %}"
+               class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 text-sm font-medium transition-colors">
+                {% trans "Zurück zur Startseite" %}
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% load i18n date_tags %}
+
+{% block title %}{{ workitem.title }} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold">{{ workitem.title }}</h1>
+        {% if user.is_staff_or_above %}
+        <a href="{% url 'core:workitem_update' pk=workitem.pk %}" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md hover:bg-gray-50">
+            {% trans "Bearbeiten" %}
+        </a>
+        {% endif %}
+    </div>
+
+    <div class="bg-white border border-gray-200 rounded-md p-4 space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Typ" %}</span>
+                <p class="text-sm font-medium">{{ workitem.get_item_type_display }}</p>
+            </div>
+            <div>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Status" %}</span>
+                <p class="text-sm font-medium">{{ workitem.get_status_display }}</p>
+                {% if workitem.completed_at %}
+                <p class="text-xs text-gray-500 mt-1">{% trans "Abgeschlossen am:" %} {{ workitem.completed_at|date:"d.m.Y H:i" }}</p>
+                {% endif %}
+                {% if user.is_lead_or_admin or workitem.created_by == user or workitem.assigned_to == user %}
+                <div class="flex items-center space-x-2 mt-2">
+                    {% if workitem.status == "open" %}
+                    <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="status" value="in_progress">
+                        <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
+                        <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100">
+                            {% trans "Annehmen" %}
+                        </button>
+                    </form>
+                    <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="status" value="dismissed">
+                        <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
+                        <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-50 text-gray-600 hover:bg-gray-100">
+                            {% trans "Verwerfen" %}
+                        </button>
+                    </form>
+                    {% elif workitem.status == "in_progress" %}
+                    <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="status" value="done">
+                        <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
+                        <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100">
+                            {% trans "Erledigt" %}
+                        </button>
+                    </form>
+                    <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="status" value="open">
+                        <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
+                        <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-gray-50 text-gray-600 hover:bg-gray-100">
+                            {% trans "Zurücksetzen" %}
+                        </button>
+                    </form>
+                    {% endif %}
+                </div>
+                {% endif %}
+            </div>
+            <div>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Priorität" %}</span>
+                <p class="text-sm font-medium">
+                    {% if workitem.priority == "urgent" %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">{% trans "Dringend" %}</span>
+                    {% elif workitem.priority == "important" %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">{% trans "Wichtig" %}</span>
+                    {% else %}
+                    {{ workitem.get_priority_display }}
+                    {% endif %}
+                </p>
+            </div>
+            <div>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Zu erledigen bis" %}</span>
+                {% due_date_info workitem as ddi %}
+                {% if ddi %}
+                <p class="text-sm font-medium {{ ddi.css_class }}">{{ ddi.text }}</p>
+                <p class="text-xs text-gray-500">{{ ddi.raw_date|date:"d.m.Y" }}</p>
+                {% else %}
+                <p class="text-sm text-gray-400">{% trans "Keine Frist" %}</p>
+                {% endif %}
+            </div>
+            <div>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Erstellt am" %}</span>
+                <p class="text-sm font-medium">{{ workitem.created_at|date:"d.m.Y H:i" }}</p>
+            </div>
+        </div>
+
+        {% if workitem.client %}
+        <div>
+            <span class="text-xs text-gray-500 uppercase">{% trans "Klientel" %}</span>
+            <p class="text-sm"><a href="{% url 'core:client_detail' pk=workitem.client.pk %}" class="text-indigo-600 hover:underline">{{ workitem.client.pseudonym }}</a></p>
+        </div>
+        {% endif %}
+
+        <div>
+            <span class="text-xs text-gray-500 uppercase">{% trans "Erstellt von" %}</span>
+            <p class="text-sm font-medium">{{ workitem.created_by.get_full_name|default:workitem.created_by.username }}</p>
+        </div>
+
+        {% if workitem.assigned_to %}
+        <div>
+            <span class="text-xs text-gray-500 uppercase">{% trans "Zugewiesen an" %}</span>
+            <p class="text-sm font-medium">{{ workitem.assigned_to.get_full_name|default:workitem.assigned_to.username }}</p>
+        </div>
+        {% endif %}
+
+        {% if workitem.description %}
+        <div>
+            <span class="text-xs text-gray-500 uppercase">{% trans "Beschreibung" %}</span>
+            <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ workitem.description }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="mt-4">
+        <a href="{% url 'core:workitem_inbox' %}" class="text-sm text-indigo-600 hover:underline">{% trans "Zurück zur Inbox" %}</a>
+    </div>
+</div>
+{% endblock %}

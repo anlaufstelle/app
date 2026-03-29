@@ -1,0 +1,75 @@
+{% load i18n %}
+
+{# Zeitraum-Auswahl #}
+<div class="mb-6 flex flex-wrap gap-2 items-end no-print">
+    <div class="flex gap-2">
+        <button hx-get="{% url 'core:statistics' %}?period=month"
+                hx-target="#statistics-content"
+                class="px-4 py-2 rounded-md text-sm font-medium {% if period == 'month' %}bg-indigo-600 text-white{% else %}bg-white border border-gray-300 text-gray-700 hover:bg-gray-50{% endif %}">
+            {% trans "Monat" %}
+        </button>
+        <button hx-get="{% url 'core:statistics' %}?period=quarter"
+                hx-target="#statistics-content"
+                class="px-4 py-2 rounded-md text-sm font-medium {% if period == 'quarter' %}bg-indigo-600 text-white{% else %}bg-white border border-gray-300 text-gray-700 hover:bg-gray-50{% endif %}">
+            {% trans "Quartal" %}
+        </button>
+        <button hx-get="{% url 'core:statistics' %}?period=half"
+                hx-target="#statistics-content"
+                class="px-4 py-2 rounded-md text-sm font-medium {% if period == 'half' %}bg-indigo-600 text-white{% else %}bg-white border border-gray-300 text-gray-700 hover:bg-gray-50{% endif %}">
+            {% trans "Halbjahr" %}
+        </button>
+        <button hx-get="{% url 'core:statistics' %}?period=year"
+                hx-target="#statistics-content"
+                class="px-4 py-2 rounded-md text-sm font-medium {% if period == 'year' %}bg-indigo-600 text-white{% else %}bg-white border border-gray-300 text-gray-700 hover:bg-gray-50{% endif %}">
+            {% trans "Jahr" %}
+        </button>
+    </div>
+    <form class="flex gap-2 items-end ml-4">
+        <input type="hidden" name="period" value="custom">
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">{% trans "Von" %}</label>
+            <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"
+                   class="border border-gray-300 rounded-md px-3 py-2 text-sm">
+        </div>
+        <div>
+            <label class="block text-xs text-gray-500 mb-1">{% trans "Bis" %}</label>
+            <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"
+                   class="border border-gray-300 rounded-md px-3 py-2 text-sm">
+        </div>
+        <button type="submit"
+                hx-get="{% url 'core:statistics' %}"
+                hx-target="#statistics-content"
+                hx-include="closest form"
+                class="px-4 py-2 rounded-md text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
+            {% trans "Anwenden" %}
+        </button>
+    </form>
+</div>
+
+{% if period == "year" and selected_year %}
+<div class="mb-4 flex items-center gap-3 no-print">
+    <button hx-get="{% url 'core:statistics' %}?period=year&year={{ selected_year|add:'-1' }}"
+            hx-target="#statistics-content"
+            class="p-2 rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+            aria-label="{% trans 'Vorheriges Jahr' %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+    </button>
+    <span class="text-lg font-semibold text-gray-900">{{ selected_year }}</span>
+    {% if selected_year < current_year %}
+    <button hx-get="{% url 'core:statistics' %}?period=year&year={{ selected_year|add:'1' }}"
+            hx-target="#statistics-content"
+            class="p-2 rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
+            aria-label="{% trans 'Nächstes Jahr' %}">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+    </button>
+    {% endif %}
+</div>
+{% endif %}
+
+<div id="dashboard-content">
+    {% include "core/statistics/partials/dashboard_content.html" %}
+</div>

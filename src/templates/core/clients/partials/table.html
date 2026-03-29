@@ -1,0 +1,56 @@
+{% load i18n %}
+
+{% if clients %}
+{# Desktop: Table #}
+<div class="hidden sm:block bg-white border border-gray-200 rounded-md overflow-hidden">
+    <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+            <tr>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Pseudonym" %}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Stufe" %}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">{% trans "Alter" %}</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">{% trans "Letzter Kontakt" %}</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-200">
+            {% for client in clients %}
+            <tr class="hover:bg-gray-50">
+                <td class="px-4 py-3">
+                    <a href="{% url 'core:client_detail' client.pk %}" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">
+                        {{ client.pseudonym }}
+                    </a>
+                </td>
+                <td class="px-4 py-3">
+                    {% include "components/_client_badge.html" with client=client %}
+                </td>
+                <td class="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">{{ client.get_age_cluster_display }}</td>
+                <td class="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
+                    {% if client.last_contact %}{{ client.last_contact|date:"d.m.Y H:i" }}{% else %}–{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{# Mobile: Card layout #}
+<div class="sm:hidden space-y-2">
+    {% for client in clients %}
+    <a href="{% url 'core:client_detail' client.pk %}" class="block bg-white border border-gray-200 rounded-md p-3 hover:border-indigo-300">
+        <div class="flex items-center justify-between">
+            <span class="text-sm font-medium text-indigo-600">{{ client.pseudonym }}</span>
+            {% include "components/_client_badge.html" with client=client %}
+        </div>
+        <div class="mt-1 text-xs text-gray-500">
+            {{ client.get_age_cluster_display }}
+            {% if client.last_contact %}· {{ client.last_contact|date:"d.m.Y" }}{% endif %}
+        </div>
+    </a>
+    {% endfor %}
+</div>
+
+{% include "components/_pagination.html" with page=clients extra_params=pagination_params %}
+
+{% else %}
+{% include "components/_empty_state.html" with icon="users" message=_("Keine Klientel gefunden") %}
+{% endif %}

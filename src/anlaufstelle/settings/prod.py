@@ -1,0 +1,50 @@
+"""
+Production settings for Anlaufstelle.
+"""
+
+import os
+import sys
+
+from django.core.exceptions import ImproperlyConfigured
+
+from .base import *  # noqa: F401, F403
+
+DEBUG = False
+
+ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
+
+# --- Security ---
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_HSTS_SECONDS = 31536000
+SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+SECURE_HSTS_PRELOAD = True
+SECURE_SSL_REDIRECT = True
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+
+# --- E-Mail (SMTP) ---
+# Für Passwort-zurücksetzen und andere E-Mail-Funktionen.
+# Konfiguration via Umgebungsvariablen:
+#   EMAIL_HOST, EMAIL_PORT, EMAIL_HOST_USER, EMAIL_HOST_PASSWORD,
+#   EMAIL_USE_TLS, DEFAULT_FROM_EMAIL
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "True").lower() in ("true", "1", "yes")
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@anlaufstelle.app")
+
+# --- Database ---
+
+CONN_MAX_AGE = 60
+
+# --- Encryption Key (mandatory in production) ---
+if "collectstatic" not in sys.argv and not ENCRYPTION_KEY:  # noqa: F405
+    raise ImproperlyConfigured(
+        "ENCRYPTION_KEY must be set in production. "
+        'Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+    )

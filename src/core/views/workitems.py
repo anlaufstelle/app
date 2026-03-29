@@ -1,0 +1,273 @@
+"""Views for WorkItem management."""
+
+import logging
+from datetime import timedelta
+
+from django.contrib import messages
+from django.db.models import Case, IntegerField, Q, Value, When
+from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.utils.translation import gettext_lazy as _
+from django.views import View
+from django_ratelimit.decorators import ratelimit
+
+from core.forms.workitems import WorkItemForm
+from core.models import Client, WorkItem
+from core.models.user import User
+from core.services.workitems import create_workitem, update_workitem_status
+from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
+
+logger = logging.getLogger(__name__)
+
+
+class WorkItemInboxView(AssistantOrAboveRequiredMixin, View):
+    """Personal WorkItem inbox with filtering by type, priority, assignment and due date."""
+
+    DUE_FILTER_CHOICES = [
+        ("overdue", _("Überfällig")),
+        ("today", _("Heute")),
+        ("week", _("Diese Woche")),
+        ("none", _("Ohne Frist")),
+    ]
+
+    def _apply_filters(self, qs, request):
+        """Evaluate GET parameters and filter the queryset."""
+        item_type = request.GET.get("item_type")
+        if item_type and item_type in dict(WorkItem.ItemType.choices):
+            qs = qs.filter(item_type=item_type)
+
+        priority = request.GET.get("priority")
+        if priority and priority in dict(WorkItem.Priority.choices):
+            qs = qs.filter(priority=priority)
+
+        assigned_to = request.GET.get("assigned_to")
+        if assigned_to:
+            qs = qs.filter(assigned_to_id=assigned_to)
+
+        due = request.GET.get("due")
+        if due:
+            today = timezone.localdate()
+            valid_due_values = {c[0] for c in self.DUE_FILTER_CHOICES}
+            if due in valid_due_values:
+                if due == "overdue":
+                    qs = qs.filter(
+                        due_date__lt=today,
+                        status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS],
+                    )
+                elif due == "today":
+                    qs = qs.filter(due_date=today)
+                elif due == "week":
+                    qs = qs.filter(due_date__gte=today, due_date__lte=today + timedelta(days=7))
+                elif due == "none":
+                    qs = qs.filter(due_date__isnull=True)
+
+        return qs
+
+    def get(self, request):
+        facility = request.current_facility
+        user = request.user
+
+        today = timezone.localdate()
+        base_qs = (
+            WorkItem.objects.for_facility(facility)
+            .select_related("client", "created_by", "assigned_to")
+            .annotate(
+                priority_order=Case(
+                    When(priority=WorkItem.Priority.URGENT, then=Value(0)),
+                    When(priority=WorkItem.Priority.IMPORTANT, then=Value(1)),
+                    When(priority=WorkItem.Priority.NORMAL, then=Value(2)),
+                    output_field=IntegerField(),
+                ),
+                due_date_bucket=Case(
+                    When(
+                        due_date__lt=today,
+                        status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS],
+                        then=Value(0),
+                    ),
+                    When(due_date=today, then=Value(1)),
+                    When(due_date__gt=today, then=Value(2)),
+                    When(due_date__isnull=True, then=Value(9)),
+                    default=Value(5),
+                    output_field=IntegerField(),
+                ),
+            )
+            .order_by("due_date_bucket", "due_date", "priority_order", "-created_at")
+        )
+
+        base_qs = self._apply_filters(base_qs, request)
+
+        open_items = base_qs.filter(
+            status=WorkItem.Status.OPEN,
+        ).filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
+
+        in_progress_items = base_qs.filter(
+            status=WorkItem.Status.IN_PROGRESS,
+        ).filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
+
+        seven_days_ago = timezone.now() - timedelta(days=7)
+        done_items = base_qs.filter(
+            status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED],
+            updated_at__gte=seven_days_ago,
+        )
+
+        facility_users = User.objects.filter(facility=facility).order_by("last_name", "first_name", "username")
+
+        context = {
+            "open_items": open_items,
+            "in_progress_items": in_progress_items,
+            "done_items": done_items,
+            "item_type_choices": WorkItem.ItemType.choices,
+            "priority_choices": WorkItem.Priority.choices,
+            "due_filter_choices": self.DUE_FILTER_CHOICES,
+            "facility_users": facility_users,
+            "selected_item_type": request.GET.get("item_type", ""),
+            "selected_priority": request.GET.get("priority", ""),
+            "selected_assigned_to": request.GET.get("assigned_to", ""),
+            "selected_due": request.GET.get("due", ""),
+        }
+
+        if request.headers.get("HX-Request"):
+            return render(request, "core/workitems/partials/inbox_content.html", context)
+
+        return render(request, "core/workitems/inbox.html", context)
+
+
+class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
+    """HTMX: update WorkItem status."""
+
+    @method_decorator(ratelimit(key="user", rate="120/h", method="POST", block=True))
+    def post(self, request, pk):
+        workitem = get_object_or_404(
+            WorkItem,
+            pk=pk,
+            facility=request.current_facility,
+        )
+
+        user = request.user
+        if not (user.is_lead_or_admin or workitem.created_by == user or workitem.assigned_to == user):
+            return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
+
+        new_status = request.POST.get("status")
+        valid_statuses = [s.value for s in WorkItem.Status]
+        if new_status not in valid_statuses:
+            return HttpResponseBadRequest(_("Ungültiger Status"))
+
+        update_workitem_status(workitem, new_status, request.user)
+
+        if request.htmx:
+            if request.POST.get("hide"):
+                return HttpResponse("")
+            return render(request, "core/workitems/partials/item_card.html", {"wi": workitem})
+
+        messages.success(request, _("Status aktualisiert."))
+        next_url = request.POST.get("next")
+        if next_url and next_url.startswith("/"):
+            return redirect(next_url)
+        return redirect("core:workitem_inbox")
+
+
+class WorkItemCreateView(StaffRequiredMixin, View):
+    """Create a WorkItem."""
+
+    def get(self, request):
+        facility = request.current_facility
+        form = WorkItemForm(facility=facility)
+
+        client_id = request.GET.get("client")
+        client_pseudonym = ""
+        if client_id:
+            try:
+                client = Client.objects.get(pk=client_id, facility=facility)
+                client_pseudonym = client.pseudonym
+            except (Client.DoesNotExist, ValueError):
+                client_id = ""
+
+        context = {
+            "form": form,
+            "client_id": client_id or "",
+            "client_pseudonym": client_pseudonym,
+        }
+        return render(request, "core/workitems/form.html", context)
+
+    @method_decorator(ratelimit(key="user", rate="60/h", method="POST", block=True))
+    def post(self, request):
+        facility = request.current_facility
+        form = WorkItemForm(request.POST, facility=facility)
+
+        if form.is_valid():
+            create_workitem(
+                facility=facility,
+                user=request.user,
+                client=form.cleaned_data.get("client"),
+                item_type=form.cleaned_data["item_type"],
+                title=form.cleaned_data["title"],
+                description=form.cleaned_data.get("description", ""),
+                priority=form.cleaned_data["priority"],
+                due_date=form.cleaned_data.get("due_date"),
+                assigned_to=form.cleaned_data.get("assigned_to"),
+            )
+            messages.success(request, _("Aufgabe wurde erstellt."))
+            return redirect("core:workitem_inbox")
+
+        context = {
+            "form": form,
+            "client_id": request.POST.get("client", ""),
+            "client_pseudonym": "",
+        }
+        return render(request, "core/workitems/form.html", context)
+
+
+class WorkItemUpdateView(StaffRequiredMixin, View):
+    """Edit a WorkItem."""
+
+    def get(self, request, pk):
+        workitem = get_object_or_404(
+            WorkItem.objects.select_related("client"),
+            pk=pk,
+            facility=request.current_facility,
+        )
+        form = WorkItemForm(instance=workitem, facility=request.current_facility)
+        context = {
+            "form": form,
+            "workitem": workitem,
+            "client_id": str(workitem.client.pk) if workitem.client else "",
+            "client_pseudonym": workitem.client.pseudonym if workitem.client else "",
+        }
+        return render(request, "core/workitems/form.html", context)
+
+    def post(self, request, pk):
+        workitem = get_object_or_404(
+            WorkItem,
+            pk=pk,
+            facility=request.current_facility,
+        )
+        form = WorkItemForm(request.POST, instance=workitem, facility=request.current_facility)
+
+        if form.is_valid():
+            wi = form.save(commit=False)
+            wi.client = form.cleaned_data.get("client")
+            wi.save()
+            messages.success(request, _("Aufgabe wurde aktualisiert."))
+            return redirect("core:workitem_inbox")
+
+        context = {
+            "form": form,
+            "workitem": workitem,
+            "client_id": request.POST.get("client", ""),
+            "client_pseudonym": "",
+        }
+        return render(request, "core/workitems/form.html", context)
+
+
+class WorkItemDetailView(AssistantOrAboveRequiredMixin, View):
+    """WorkItem detail view."""
+
+    def get(self, request, pk):
+        workitem = get_object_or_404(
+            WorkItem.objects.select_related("client", "created_by", "assigned_to"),
+            pk=pk,
+            facility=request.current_facility,
+        )
+        return render(request, "core/workitems/detail.html", {"workitem": workitem})

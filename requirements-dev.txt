@@ -1,0 +1,7 @@
+-r requirements.txt
+ruff>=0.3
+pytest>=8.0
+pytest-django>=4.8
+pytest-timeout>=2.3
+playwright>=1.40
+pytest-playwright>=0.4

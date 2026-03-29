@@ -1,0 +1,29 @@
+{% load i18n date_tags %}
+{% if tasks %}
+<div class="space-y-2">
+    {% for wi in tasks %}
+    <a href="{% url 'core:workitem_detail' pk=wi.pk %}" class="flex items-center justify-between p-3 rounded-md hover:bg-gray-50">
+        <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-900 truncate">{{ wi.title }}</p>
+            <p class="text-xs text-gray-500 mt-0.5">
+                {% if wi.client %}{{ wi.client.pseudonym }}{% endif %}
+                {% if wi.status == "in_progress" %}<span class="text-blue-600"> · {% trans "In Bearbeitung" %}</span>{% endif %}
+            </p>
+        </div>
+        <div class="flex items-center space-x-2 ml-3 flex-shrink-0">
+            {% due_date_info wi as ddi %}
+            {% if ddi %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ ddi.css_class }}">{{ ddi.text }}</span>
+            {% endif %}
+            {% if wi.priority == "urgent" %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">!</span>
+            {% elif wi.priority == "important" %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">!</span>
+            {% endif %}
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-sm text-gray-500 text-center py-4">{% trans "Keine offenen Aufgaben" %}</p>
+{% endif %}

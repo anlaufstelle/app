@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: anlaufstelle
+      POSTGRES_USER: anlaufstelle
+      POSTGRES_PASSWORD: anlaufstelle
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anlaufstelle"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  web:
+    build: .
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - ./src:/app
+    ports:
+      - "8000:8000"
+    environment:
+      DJANGO_SETTINGS_MODULE: anlaufstelle.settings.dev
+      POSTGRES_HOST: db
+      POSTGRES_DB: anlaufstelle
+      POSTGRES_USER: anlaufstelle
+      POSTGRES_PASSWORD: anlaufstelle
+    depends_on:
+      db:
+        condition: service_healthy
+
+  tailwind:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: npx tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --watch
+    profiles:
+      - tailwind
+
+volumes:
+  pgdata:

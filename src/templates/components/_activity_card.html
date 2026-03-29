@@ -1,0 +1,61 @@
+{% load i18n core_tags %}
+
+{% activity_target_url activity as target_url %}
+<div class="bg-white border border-gray-200 rounded-md px-4 py-2.5" x-data="{ expanded: false }">
+    <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-3 min-w-0">
+            <span class="text-sm text-gray-500 font-mono whitespace-nowrap">{{ activity.occurred_at|time:"H:i" }}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ activity.verb|verb_badge_classes }}">
+                {{ activity.get_verb_display }}
+            </span>
+            <span class="text-sm text-gray-700 truncate">{{ activity.summary }}</span>
+        </div>
+        <div class="flex items-center space-x-2 ml-2 shrink-0">
+            {% if activity.actor %}
+            <span class="text-xs text-gray-500 hidden sm:inline">{{ activity.actor.get_short_name|default:activity.actor.username }}</span>
+            {% endif %}
+            <button type="button"
+                    @click="expanded = !expanded"
+                    class="text-gray-400 hover:text-gray-600 transition-transform duration-200 p-0.5"
+                    :class="expanded ? 'rotate-180' : ''"
+                    :aria-expanded="expanded"
+                    aria-label="{% trans 'Details anzeigen' %}">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                </svg>
+            </button>
+        </div>
+    </div>
+    <div x-show="expanded" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" x-cloak>
+        <div class="mt-2 bg-gray-50 rounded px-3 py-2 text-sm text-gray-600 space-y-1">
+            {% if activity.actor %}
+            <div>
+                <span class="font-medium text-gray-700">{% trans "Benutzer:" %}</span>
+                {{ activity.actor.get_full_name|default:activity.actor.username }}
+            </div>
+            {% endif %}
+            {% with activity|target_type_label as type_label %}
+            {% if type_label %}
+            <div>
+                <span class="font-medium text-gray-700">{% trans "Objekttyp:" %}</span>
+                {{ type_label }}
+            </div>
+            {% endif %}
+            {% endwith %}
+            <div>
+                <span class="font-medium text-gray-700">{% trans "Zeitpunkt:" %}</span>
+                {{ activity.occurred_at|date:"d.m.Y H:i" }}
+            </div>
+            {% if target_url %}
+            <div class="pt-1">
+                <a href="{{ target_url }}" class="inline-flex items-center text-sm text-indigo-600 hover:text-indigo-800 font-medium">
+                    {% trans "Zum Objekt" %}
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5 ml-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M3 10a.75.75 0 01.75-.75h10.638L10.23 5.29a.75.75 0 111.04-1.08l5.5 5.25a.75.75 0 010 1.08l-5.5 5.25a.75.75 0 11-1.04-1.08l4.158-3.96H3.75A.75.75 0 013 10z" clip-rule="evenodd" />
+                    </svg>
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>

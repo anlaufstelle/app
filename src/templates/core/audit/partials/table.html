@@ -1,0 +1,64 @@
+{% load i18n core_tags %}
+<div id="audit-table">
+    {% if page_obj.object_list %}
+    <div class="hidden sm:block bg-white border border-gray-200 rounded-md overflow-hidden">
+        <table class="min-w-full divide-y divide-gray-200">
+            <thead class="bg-gray-50">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Zeitstempel" %}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Benutzer" %}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Aktion" %}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Zieltyp" %}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Ziel-ID" %}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Details" %}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "IP" %}</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+                {% for entry in page_obj %}
+                <tr class="hover:bg-gray-50">
+                    <td class="px-4 py-3 text-gray-900 whitespace-nowrap">
+                        <a href="{% url 'core:audit_detail' pk=entry.pk %}" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">{{ entry.timestamp|date:"d.m.Y H:i:s" }}</a>
+                    </td>
+                    <td class="px-4 py-3 text-gray-700 whitespace-nowrap">
+                        {% if entry.user %}{{ entry.user }}{% else %}<span class="text-gray-400">–</span>{% endif %}
+                    </td>
+                    <td class="px-4 py-3 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-700">
+                            {{ entry.get_action_display }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-gray-700">{{ entry.target_type|default:"–" }}</td>
+                    <td class="px-4 py-3 text-gray-500 font-mono text-xs">{{ entry.target_id|default:"–" }}</td>
+                    <td class="px-4 py-3 text-gray-700 max-w-xs truncate">{{ entry.detail|json_summary }}</td>
+                    <td class="px-4 py-3 text-gray-500 font-mono text-xs whitespace-nowrap">{{ entry.ip_address|default:"–" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {# Mobile Cards #}
+    <div class="sm:hidden space-y-2">
+        {% for entry in page_obj %}
+        <a href="{% url 'core:audit_detail' pk=entry.pk %}" class="block bg-white border border-gray-200 rounded-md p-3 hover:border-indigo-300">
+            <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-indigo-600">{{ entry.timestamp|date:"d.m.Y H:i:s" }}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-700">
+                    {{ entry.get_action_display }}
+                </span>
+            </div>
+            <div class="mt-1 text-xs text-gray-500">
+                {% if entry.user %}{{ entry.user }}{% else %}–{% endif %}
+                · {{ entry.target_type|default:"–" }}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+
+    {% include "components/_pagination.html" with page=page_obj extra_params=pagination_params %}
+
+    {% else %}
+    {% include "components/_empty_state.html" with icon="check" message=_("Keine Einträge gefunden.") %}
+    {% endif %}
+</div>

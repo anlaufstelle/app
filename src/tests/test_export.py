@@ -1,0 +1,276 @@
+"""Tests für Export-Views und Services."""
+
+from datetime import date, timedelta
+
+import pytest
+from django.test import Client as DjangoClient
+from django.utils import timezone
+
+from core.models import (
+    AuditLog,
+    Client,
+    DocumentType,
+    Event,
+    Facility,
+    Organization,
+    User,
+)
+from core.services.export import (
+    JUGENDAMT_CATEGORY_MAP,
+    get_jugendamt_statistics,
+)
+
+
+@pytest.fixture
+def facility(db):
+    org = Organization.objects.create(name="Export-Org")
+    return Facility.objects.create(organization=org, name="Export-Einrichtung")
+
+
+@pytest.fixture
+def admin_user(facility):
+    return User.objects.create_user(
+        username="export_admin",
+        password="test1234",
+        role=User.Role.ADMIN,
+        facility=facility,
+        is_staff=True,
+    )
+
+
+@pytest.fixture
+def staff_user(facility):
+    return User.objects.create_user(
+        username="export_staff",
+        password="test1234",
+        role=User.Role.STAFF,
+        facility=facility,
+        is_staff=True,
+    )
+
+
+@pytest.fixture
+def doc_type_kontakt(facility):
+    return DocumentType.objects.create(
+        facility=facility,
+        name="Kontakt",
+        category=DocumentType.Category.CONTACT,
+        system_type=DocumentType.SystemType.CONTACT,
+    )
+
+
+@pytest.fixture
+def doc_type_notiz(facility):
+    return DocumentType.objects.create(
+        facility=facility,
+        name="Notiz",
+        category=DocumentType.Category.NOTE,
+        system_type=DocumentType.SystemType.NOTE,
+    )
+
+
+@pytest.fixture
+def doc_type_hausverbot(facility):
+    return DocumentType.objects.create(
+        facility=facility,
+        name="Hausverbot",
+        category=DocumentType.Category.ADMIN,
+        system_type=DocumentType.SystemType.BAN,
+    )
+
+
+@pytest.fixture
+def sample_client(facility, admin_user):
+    return Client.objects.create(
+        facility=facility,
+        pseudonym="Export-01",
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        age_cluster=Client.AgeCluster.AGE_18_26,
+        created_by=admin_user,
+    )
+
+
+@pytest.fixture
+def sample_events(facility, admin_user, doc_type_kontakt, doc_type_notiz, sample_client):
+    Event.objects.create(
+        facility=facility,
+        client=sample_client,
+        document_type=doc_type_kontakt,
+        occurred_at=timezone.now() - timedelta(days=2),
+        data_json={"dauer": 15},
+        created_by=admin_user,
+    )
+    Event.objects.create(
+        facility=facility,
+        client=None,
+        document_type=doc_type_kontakt,
+        occurred_at=timezone.now() - timedelta(days=3),
+        data_json={"dauer": 10},
+        is_anonymous=True,
+        created_by=admin_user,
+    )
+    Event.objects.create(
+        facility=facility,
+        client=sample_client,
+        document_type=doc_type_notiz,
+        occurred_at=timezone.now() - timedelta(days=1),
+        data_json={"notiz": "Test"},
+        created_by=admin_user,
+    )
+
+
+@pytest.mark.django_db
+class TestStatisticsViewAccess:
+    """Statistik-View: LeadOrAdmin required, Staff → 403."""
+
+    def test_admin_can_access(self, admin_user):
+        client = DjangoClient()
+        client.force_login(admin_user)
+        response = client.get("/statistics/")
+        assert response.status_code == 200
+
+    def test_staff_gets_403(self, staff_user):
+        client = DjangoClient()
+        client.force_login(staff_user)
+        response = client.get("/statistics/")
+        assert response.status_code == 403
+
+    def test_unauthenticated_redirects(self):
+        client = DjangoClient()
+        response = client.get("/statistics/")
+        assert response.status_code == 302
+
+    def test_htmx_returns_partial(self, admin_user, facility, sample_events):
+        client = DjangoClient()
+        client.force_login(admin_user)
+        response = client.get("/statistics/", HTTP_HX_REQUEST="true")
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "Gesamtkontakte" in content
+        assert "<!DOCTYPE" not in content  # Partial, not full page
+
+
+@pytest.mark.django_db
+class TestCSVExport:
+    """CSV-Export: korrekter Header, AuditLog."""
+
+    def test_csv_download(self, admin_user, facility, sample_events):
+        client = DjangoClient()
+        client.force_login(admin_user)
+        today = date.today()
+        response = client.get(f"/statistics/export/csv/?date_from={today - timedelta(days=30)}&date_to={today}")
+        assert response.status_code == 200
+        assert response["Content-Type"] == "text/csv; charset=utf-8"
+        assert "attachment" in response["Content-Disposition"]
+        content = b"".join(response.streaming_content).decode("utf-8")
+        assert "Dokumentationstyp" in content
+
+    def test_csv_creates_audit_log(self, admin_user, facility, sample_events):
+        client = DjangoClient()
+        client.force_login(admin_user)
+        today = date.today()
+        client.get(f"/statistics/export/csv/?date_from={today - timedelta(days=30)}&date_to={today}")
+        assert AuditLog.objects.filter(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.EXPORT,
+            target_type="CSV",
+        ).exists()
+
+    def test_csv_staff_forbidden(self, staff_user):
+        client = DjangoClient()
+        client.force_login(staff_user)
+        response = client.get("/statistics/export/csv/?date_from=2026-01-01&date_to=2026-03-20")
+        assert response.status_code == 403
+
+    def test_csv_missing_dates(self, admin_user):
+        client = DjangoClient()
+        client.force_login(admin_user)
+        response = client.get("/statistics/export/csv/")
+        assert response.status_code == 400
+
+
+@pytest.mark.django_db
+class TestPDFExport:
+    """PDF-Export: content-type, AuditLog."""
+
+    def test_pdf_download(self, admin_user, facility, sample_events):
+        client = DjangoClient()
+        client.force_login(admin_user)
+        today = date.today()
+        response = client.get(f"/statistics/export/pdf/?date_from={today - timedelta(days=30)}&date_to={today}")
+        assert response.status_code == 200
+        assert response["Content-Type"] == "application/pdf"
+        assert response.content[:4] == b"%PDF"
+
+    def test_pdf_creates_audit_log(self, admin_user, facility, sample_events):
+        client = DjangoClient()
+        client.force_login(admin_user)
+        today = date.today()
+        client.get(f"/statistics/export/pdf/?date_from={today - timedelta(days=30)}&date_to={today}")
+        assert AuditLog.objects.filter(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.EXPORT,
+            target_type="PDF",
+        ).exists()
+
+
+@pytest.mark.django_db
+class TestJugendamtExport:
+    """Jugendamt-Export: Kategorien-Mapping, ausgeschlossene Typen."""
+
+    def test_category_mapping_excludes_notiz_and_hausverbot(self):
+        assert "note" not in JUGENDAMT_CATEGORY_MAP
+        assert "ban" not in JUGENDAMT_CATEGORY_MAP
+
+    def test_category_mapping_includes_services(self):
+        assert JUGENDAMT_CATEGORY_MAP["contact"] == "Kontakte"
+        assert JUGENDAMT_CATEGORY_MAP["crisis"] == "Beratung"
+        assert JUGENDAMT_CATEGORY_MAP["medical"] == "Versorgung"
+
+    def test_jugendamt_statistics_excludes_notiz(
+        self, facility, admin_user, doc_type_kontakt, doc_type_notiz, sample_client
+    ):
+        Event.objects.create(
+            facility=facility,
+            client=sample_client,
+            document_type=doc_type_kontakt,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=admin_user,
+        )
+        Event.objects.create(
+            facility=facility,
+            client=sample_client,
+            document_type=doc_type_notiz,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=admin_user,
+        )
+        today = date.today()
+        stats = get_jugendamt_statistics(facility, today - timedelta(days=1), today)
+        # Notiz should be excluded from total
+        assert stats["total"] == 1
+        category_names = [name for name, _ in stats["by_category"]]
+        assert "Kontakte" in category_names
+
+    def test_jugendamt_pdf_download(self, admin_user, facility, sample_events):
+        client = DjangoClient()
+        client.force_login(admin_user)
+        today = date.today()
+        response = client.get(f"/statistics/export/jugendamt/?date_from={today - timedelta(days=30)}&date_to={today}")
+        assert response.status_code == 200
+        assert response["Content-Type"] == "application/pdf"
+
+    def test_jugendamt_creates_audit_log(self, admin_user, facility, sample_events):
+        client = DjangoClient()
+        client.force_login(admin_user)
+        today = date.today()
+        client.get(f"/statistics/export/jugendamt/?date_from={today - timedelta(days=30)}&date_to={today}")
+        assert AuditLog.objects.filter(
+            facility=facility,
+            user=admin_user,
+            action=AuditLog.Action.EXPORT,
+            target_type="Jugendamt-PDF",
+        ).exists()

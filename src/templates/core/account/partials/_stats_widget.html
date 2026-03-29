@@ -1,0 +1,19 @@
+{% load i18n %}
+<div class="grid grid-cols-2 gap-4">
+    <div class="bg-indigo-50 rounded-lg p-4 text-center">
+        <p class="text-2xl font-bold text-indigo-700">{{ stats.events_today }}</p>
+        <p class="text-xs text-indigo-600 mt-1">{% trans "Kontakte heute" %}</p>
+    </div>
+    <div class="bg-green-50 rounded-lg p-4 text-center">
+        <p class="text-2xl font-bold text-green-700">{{ stats.open_cases }}</p>
+        <p class="text-xs text-green-600 mt-1">{% trans "Offene Fälle" %}</p>
+    </div>
+    <div class="bg-yellow-50 rounded-lg p-4 text-center">
+        <p class="text-2xl font-bold text-yellow-700">{{ stats.my_open_tasks }}</p>
+        <p class="text-xs text-yellow-600 mt-1">{% trans "Meine Aufgaben" %}</p>
+    </div>
+    <div class="bg-gray-50 rounded-lg p-4 text-center">
+        <p class="text-2xl font-bold text-gray-700">{{ stats.total_open_tasks }}</p>
+        <p class="text-xs text-gray-600 mt-1">{% trans "Aufgaben gesamt" %}</p>
+    </div>
+</div>

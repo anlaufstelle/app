@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Löschantrag prüfen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+    <h1 class="text-2xl font-bold mb-6">{% trans "Löschantrag prüfen" %}</h1>
+
+    {# Antrag-Info #}
+    <div class="bg-white border border-gray-200 rounded-md p-4 mb-4">
+        <dl class="space-y-2 text-sm">
+            <div class="flex justify-between">
+                <dt class="text-gray-500">{% trans "Beantragt von" %}</dt>
+                <dd class="font-medium">{{ deletion_request.requested_by.display_name|default:deletion_request.requested_by.username }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-gray-500">{% trans "Beantragt am" %}</dt>
+                <dd class="font-medium">{{ deletion_request.created_at|date:"d.m.Y H:i" }}</dd>
+            </div>
+            <div>
+                <dt class="text-gray-500 mb-1">{% trans "Begründung" %}</dt>
+                <dd class="font-medium">{{ deletion_request.reason }}</dd>
+            </div>
+        </dl>
+    </div>
+
+    {# Event-Zusammenfassung #}
+    <div class="bg-white border border-gray-200 rounded-md p-4 mb-6">
+        <h2 class="text-sm font-semibold text-gray-500 uppercase mb-2">{% trans "Betroffenes Ereignis" %}</h2>
+        <dl class="space-y-2 text-sm">
+            <div class="flex justify-between">
+                <dt class="text-gray-500">{% trans "Dokumentationstyp" %}</dt>
+                <dd class="font-medium">{{ event.document_type.name }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-gray-500">{% trans "Zeitpunkt" %}</dt>
+                <dd class="font-medium">{{ event.occurred_at|date:"d.m.Y H:i" }}</dd>
+            </div>
+            <div class="flex justify-between">
+                <dt class="text-gray-500">{% trans "Klientel" %}</dt>
+                <dd class="font-medium">{% if event.client %}{{ event.client.pseudonym }}{% else %}–{% endif %}</dd>
+            </div>
+        </dl>
+    </div>
+
+    <form method="post" class="flex items-center space-x-3">
+        {% csrf_token %}
+        <button type="submit" name="action" value="approve" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700">
+            {% trans "Genehmigen" %}
+        </button>
+        <button type="submit" name="action" value="reject" class="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md hover:bg-gray-50">
+            {% trans "Ablehnen" %}
+        </button>
+    </form>
+</div>
+{% endblock %}

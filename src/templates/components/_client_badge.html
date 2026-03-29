@@ -1,0 +1,5 @@
+{% load i18n %}
+
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if client.contact_stage == 'qualified' %}bg-purple-100 text-purple-800{% else %}bg-green-100 text-green-800{% endif %}">
+    {{ client.get_contact_stage_display }}
+</span>

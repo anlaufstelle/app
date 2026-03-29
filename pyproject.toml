@@ -1,0 +1,23 @@
+[project]
+name = "anlaufstelle"
+version = "0.9.0"
+description = "Open-Source-Fachsystem für niedrigschwellige soziale Einrichtungen"
+requires-python = ">=3.13"
+license = "AGPL-3.0-or-later"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+src = ["src"]
+extend-exclude = ["src/core/migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "anlaufstelle.settings.test"
+pythonpath = ["src"]
+testpaths = ["src/tests"]
+markers = [
+    "e2e: End-to-End-Tests mit Playwright (benötigen laufenden Server)",
+]

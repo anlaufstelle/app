@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% load i18n static %}
+
+{% block title %}{% trans "Neuer Kontakt" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    <h1 class="text-2xl font-bold mb-6">{% trans "Neuer Kontakt" %}</h1>
+
+    <form method="post" class="space-y-4" id="event-create-form" data-autosave>
+        {% csrf_token %}
+
+        {# Sektion 1: Meta — kompaktes Layout #}
+        <div class="bg-white border border-gray-200 rounded-md p-4 space-y-3"
+             x-data="{
+                query: '{{ client_pseudonym|default:'' }}',
+                results: [],
+                selectedId: '{{ client_id|default:'' }}',
+                show: false,
+                isAnonymous: false,
+                anonymousAllowed: true,
+                highlightIndex: -1,
+                _justSelected: false,
+                _fetchGen: 0,
+                updateAnonymousAllowed(selectEl) {
+                    const opt = selectEl.options[selectEl.selectedIndex];
+                    this.anonymousAllowed = !opt || !opt.dataset.minStage;
+                    if (!this.anonymousAllowed) this.isAnonymous = false;
+                },
+                selectItem(item) {
+                    this._justSelected = true;
+                    this._fetchGen++;
+                    this.selectedId = item.id;
+                    this.query = item.pseudonym;
+                    this.show = false;
+                    this.results = [];
+                    this.highlightIndex = -1;
+                },
+                moveHighlight(delta) {
+                    if (!this.show || this.results.length === 0) return;
+                    this.highlightIndex = (this.highlightIndex + delta + this.results.length) % this.results.length;
+                },
+                confirmHighlight() {
+                    if (this.highlightIndex >= 0 && this.highlightIndex < this.results.length) {
+                        this.selectItem(this.results[this.highlightIndex]);
+                    }
+                }
+            }"
+             x-init="updateAnonymousAllowed($refs.docTypeSelect)">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase">{% trans "Basis-Daten" %}</h2>
+
+            {% if meta_form.non_field_errors %}
+            <div class="bg-red-50 border border-red-200 rounded-md p-3">
+                {% for error in meta_form.non_field_errors %}
+                <p class="text-sm text-red-600">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            {# Dokumentationstyp + Zeitpunkt nebeneinander auf Desktop #}
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {# Dokumentationstyp #}
+                <div>
+                    <label for="id_document_type" class="block text-sm font-medium text-gray-700 mb-1">{{ meta_form.document_type.label }} *</label>
+                    <select name="document_type" id="id_document_type"
+                            x-ref="docTypeSelect"
+                            @change="updateAnonymousAllowed($el)"
+                            tabindex="1"
+                            class="w-full border border-gray-300 rounded-md px-3 py-2"
+                            hx-get="{% url 'core:event_fields_partial' %}"
+                            hx-target="#dynamic-fields"
+                            hx-trigger="change"
+                            hx-include="[name='document_type']">
+                        <option value="">---------</option>
+                        {% for dt in meta_form.document_type.field.queryset %}
+                        <option value="{{ dt.pk }}"
+                                data-min-stage="{{ dt.min_contact_stage|default:'' }}"
+                                {% if meta_form.document_type.value|stringformat:"s" == dt.pk|stringformat:"s" %}selected{% endif %}>{{ dt.name }}</option>
+                        {% endfor %}
+                    </select>
+                    {% for error in meta_form.document_type.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+                    {% endfor %}
+                </div>
+
+                {# Zeitpunkt #}
+                <div>
+                    <label for="id_occurred_at" class="block text-sm font-medium text-gray-700 mb-1">{{ meta_form.occurred_at.label }} *</label>
+                    {{ meta_form.occurred_at }}
+                    {% for error in meta_form.occurred_at.errors %}
+                    <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+                    {% endfor %}
+                </div>
+            </div>
+
+            {# Klientel-Autocomplete mit Tastatur-Navigation #}
+            <div x-show="!isAnonymous">
+                <label class="block text-sm font-medium text-gray-700 mb-1">{% trans "Klientel" %}</label>
+                <div class="relative">
+                    <input type="text"
+                           x-model="query"
+                           tabindex="2"
+                           @input.debounce.150ms="if(_justSelected) { _justSelected = false; return; } highlightIndex = -1; let g1 = ++_fetchGen; fetch(`{% url 'core:client_autocomplete' %}?q=${encodeURIComponent(query)}`).then(r => r.json()).then(d => { if(g1 === _fetchGen) { results = d; show = d.length > 0 } })"
+                           @focus="if(!show && !_justSelected) { let g2 = ++_fetchGen; fetch(`{% url 'core:client_autocomplete' %}?q=${encodeURIComponent(query)}`).then(r => r.json()).then(d => { if(g2 === _fetchGen) { results = d; show = d.length > 0 } }) }"
+                           @keydown.arrow-down.prevent="moveHighlight(1)"
+                           @keydown.arrow-up.prevent="moveHighlight(-1)"
+                           @keydown.enter.prevent="confirmHighlight()"
+                           @keydown.escape="show = false"
+                           @click.away="show = false"
+                           placeholder="{% trans 'Pseudonym eingeben...' %}"
+                           aria-label="{% trans 'Klientel suchen' %}"
+                           role="combobox"
+                           aria-expanded="false"
+                           :aria-expanded="show.toString()"
+                           aria-autocomplete="list"
+                           aria-controls="client-autocomplete-list"
+                           class="w-full border border-gray-300 rounded-md px-3 py-2"
+                           autocomplete="off">
+                    <input type="hidden" name="client" x-model="selectedId">
+
+                    {# Dropdown mit Tastatur-Hervorhebung #}
+                    <div x-show="show" x-cloak id="client-autocomplete-list" role="listbox" class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                        <template x-for="(c, idx) in results" :key="c.id">
+                            <button type="button"
+                                    @mousedown.prevent="selectItem(c)"
+                                    @mouseenter="highlightIndex = idx"
+                                    role="option"
+                                    :aria-selected="highlightIndex === idx"
+                                    :class="highlightIndex === idx ? 'bg-indigo-50' : ''"
+                                    class="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex items-center justify-between">
+                                <span x-text="c.pseudonym"></span>
+                                <span class="text-xs text-gray-500" x-text="c.stage"></span>
+                            </button>
+                        </template>
+                    </div>
+                </div>
+                {% for error in meta_form.client.errors %}
+                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            {# Anonym-Checkbox #}
+            <div>
+                <label class="flex items-center space-x-2">
+                    <input type="checkbox" name="is_anonymous"
+                           x-model="isAnonymous"
+                           :disabled="!anonymousAllowed"
+                           tabindex="3"
+                           class="rounded border-gray-300"
+                           :class="{ 'opacity-50 cursor-not-allowed': !anonymousAllowed }">
+                    <span class="text-sm text-gray-700"
+                          :class="{ 'text-gray-400': !anonymousAllowed }">{% trans "Anonymer Kontakt" %}</span>
+                </label>
+                <p x-show="!anonymousAllowed" x-cloak class="mt-1 text-xs text-amber-600">
+                    {% trans "Nicht verfügbar: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe." %}
+                </p>
+            </div>
+        </div>
+
+        {# Sektion 2: Dynamische Felder #}
+        <div id="dynamic-fields">
+            {% include "core/events/partials/dynamic_fields.html" %}
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-3">
+            <button type="submit" id="event-submit-btn" tabindex="100"
+                    class="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors">
+                {% trans "Speichern" %}
+            </button>
+            <a href="{% url 'core:zeitstrom' %}" tabindex="101" class="w-full sm:w-auto text-center px-4 py-2 border border-gray-300 text-sm rounded-md hover:bg-gray-50">{% trans "Abbrechen" %}</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/autosave.js' %}"></script>
+<script src="{% static 'js/keyboard-shortcuts.js' %}" defer></script>
+{% endblock %}
