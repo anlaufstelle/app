@@ -21,3 +21,15 @@ testpaths = ["src/tests"]
 markers = [
     "e2e: End-to-End-Tests mit Playwright (benötigen laufenden Server)",
 ]
+
+[tool.coverage.run]
+source = ["core"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "if __name__ == .__main__.",
+]

@@ -18,6 +18,7 @@ src/static/css/styles.css
 *~
 
 # AI Tools
+CLAUDE.md
 .claude/
 .codex/
 .gemini/

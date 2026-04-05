@@ -31,7 +31,7 @@ jobs:
           python-version: "3.13"
           cache: pip
       - run: pip install -r requirements-dev.txt
-      - run: python -m pytest -m "not e2e"
+      - run: python -m pytest -m "not e2e" --cov=core --cov-report=term-missing --cov-report=xml
         env:
           POSTGRES_HOST: localhost
           ENCRYPTION_KEY: P2N8yY4cVt1BmHZSvNrkSfkDYIJwEFcftRmO4bE-nZM=
@@ -65,6 +65,12 @@ jobs:
       - run: cd src && python manage.py makemigrations --check --dry-run --settings=anlaufstelle.settings.dev
         env:
           POSTGRES_HOST: localhost
+      - run: cd src && python manage.py check --deploy --settings=anlaufstelle.settings.prod
+        env:
+          POSTGRES_HOST: localhost
+          SECRET_KEY: ci-check-only-not-a-real-secret
+          ENCRYPTION_KEY: P2N8yY4cVt1BmHZSvNrkSfkDYIJwEFcftRmO4bE-nZM=
+          ALLOWED_HOSTS: localhost
 
   audit:
     runs-on: ubuntu-latest
