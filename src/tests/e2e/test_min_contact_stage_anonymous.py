@@ -2,10 +2,14 @@
 
 Verifiziert, dass die Anonym-Checkbox im Event-Formular deaktiviert wird,
 wenn der gewählte Dokumentationstyp eine Mindest-Kontaktstufe erfordert.
-Refs #394
+Außerdem: Kontakt ohne Klientel wird automatisch als anonym gespeichert.
+Refs #394, #472
 """
 
+import re
+
 import pytest
+from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -59,3 +63,22 @@ class TestAnonymousMinContactStageGate:
         page.select_option("select[name='document_type']", label="Kontakt")
         checkbox.wait_for(state="visible")
         assert not checkbox.is_disabled()
+
+    def test_submit_without_client_auto_sets_anonymous(self, authenticated_page, base_url):
+        """Kontakt ohne Klientel wird automatisch als anonym gespeichert. Refs #472"""
+        page = authenticated_page
+        page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
+
+        # Kontakt (kein min_contact_stage) ist default — kein Klientel auswählen
+        page.select_option("select[name='document_type']", label="Kontakt")
+
+        # Checkbox ist NICHT gesetzt
+        checkbox = page.locator("input[name='is_anonymous']")
+        assert not checkbox.is_checked()
+
+        # Absenden
+        page.locator("#event-submit-btn").click()
+        page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"), timeout=15000)
+
+        # Event-Detailseite zeigt "Anonym"
+        expect(page.locator("text=Anonym")).to_be_visible()

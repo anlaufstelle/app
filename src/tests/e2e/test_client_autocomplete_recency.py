@@ -23,8 +23,9 @@ class TestClientAutocompleteRecency:
         dropdown.wait_for(state="visible", timeout=5000)
         assert dropdown.is_visible()
 
-        # Mindestens ein Client sollte angezeigt werden
+        # Warten auf Alpine x-for-Rendering, dann Options prüfen
         options = page.locator("[role='option']")
+        options.first.wait_for(state="visible", timeout=5000)
         assert options.count() > 0
 
     def test_focus_dropdown_sorted_by_recency(self, authenticated_page, base_url):

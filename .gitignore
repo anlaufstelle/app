@@ -5,6 +5,11 @@ __pycache__/
 .venv/
 venv/
 
+# Coverage
+htmlcov/
+.coverage
+coverage.xml
+
 # Django
 *.sqlite3
 src/staticfiles/

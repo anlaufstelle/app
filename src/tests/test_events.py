@@ -670,6 +670,49 @@ class TestMinContactStageGate:
         )
         assert form.is_valid()
 
+    def test_create_event_auto_anonymous_when_no_client(self, facility, staff_user):
+        """Event without client is auto-normalized to anonymous."""
+        from core.models import DocumentType
+
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            name="Frei",
+            category=DocumentType.Category.NOTE,
+        )
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            client=None,
+            is_anonymous=False,
+        )
+        assert event.pk is not None
+        assert event.is_anonymous is True
+        assert event.client is None
+
+    def test_create_event_no_client_with_min_stage_rejected(self, facility, staff_user):
+        """Event without client and min_contact_stage still raises ValidationError."""
+        from core.models import DocumentType
+
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            name="Nur Qualifiziert",
+            category=DocumentType.Category.SERVICE,
+            min_contact_stage="qualified",
+        )
+        with pytest.raises(Exception, match="Klientel ausgewählt werden"):
+            create_event(
+                facility=facility,
+                user=staff_user,
+                document_type=doc_type,
+                occurred_at=timezone.now(),
+                data_json={},
+                client=None,
+                is_anonymous=False,
+            )
+
     def test_form_accepts_anonymous_with_min_stage_defers_to_service(self, facility, staff_user):
         """EventMetaForm.clean() no longer checks anonymous+min_stage (deferred to service)."""
         from core.forms.events import EventMetaForm

@@ -47,6 +47,11 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
     if client and client.facility_id != facility.pk:
         raise ValueError("Client gehört nicht zur Facility")
 
+    # Auto-normalize: no client → anonymous (when allowed)
+    if client is None and not is_anonymous:
+        if not document_type.min_contact_stage:
+            is_anonymous = True
+
     # Gate: anonymous not allowed when min_contact_stage is set
     if document_type.min_contact_stage and is_anonymous:
         raise ValidationError(

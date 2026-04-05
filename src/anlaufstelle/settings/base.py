@@ -203,7 +203,7 @@ LOGGING = {
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "default-src": ["'self'"],
-        "script-src": ["'self'"],
+        "script-src": ["'self'", "'unsafe-eval'"],  # Alpine.js benötigt unsafe-eval (new Function())
         "style-src": ["'self'", "'unsafe-inline'"],
         "img-src": ["'self'", "data:"],
         "font-src": ["'self'"],

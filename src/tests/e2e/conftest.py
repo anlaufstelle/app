@@ -113,7 +113,7 @@ def base_url():
             resp = requests.get(f"{url}/login/", timeout=1)
             if resp.status_code == 200:
                 break
-        except requests.ConnectionError:
+        except (requests.ConnectionError, requests.ReadTimeout):
             time.sleep(0.5)
     else:
         proc.terminate()

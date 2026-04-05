@@ -7,12 +7,8 @@
 <div class="max-w-2xl">
     <h1 class="text-2xl font-bold mb-6">{% trans "Neuer Kontakt" %}</h1>
 
-    <form method="post" class="space-y-4" id="event-create-form" data-autosave>
-        {% csrf_token %}
-
-        {# Sektion 1: Meta — kompaktes Layout #}
-        <div class="bg-white border border-gray-200 rounded-md p-4 space-y-3"
-             x-data="{
+    <form method="post" class="space-y-4" id="event-create-form" data-autosave
+          x-data="{
                 query: '{{ client_pseudonym|default:'' }}',
                 results: [],
                 selectedId: '{{ client_id|default:'' }}',
@@ -46,7 +42,12 @@
                     }
                 }
             }"
-             x-init="updateAnonymousAllowed($refs.docTypeSelect)">
+          x-init="updateAnonymousAllowed($refs.docTypeSelect)"
+          @submit="if (!selectedId && anonymousAllowed) isAnonymous = true">
+        {% csrf_token %}
+
+        {# Sektion 1: Meta — kompaktes Layout #}
+        <div class="bg-white border border-gray-200 rounded-md p-4 space-y-3">
             <h2 class="text-sm font-semibold text-gray-500 uppercase">{% trans "Basis-Daten" %}</h2>
 
             {% if meta_form.non_field_errors %}
