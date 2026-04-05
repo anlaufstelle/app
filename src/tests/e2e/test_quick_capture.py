@@ -78,8 +78,12 @@ class TestSchnellerfassung:
         page.select_option("select[name='document_type']", label="Kontakt")
         page.wait_for_load_state("domcontentloaded")
 
-        # Anonym-Checkbox setzen (kein Klientel noetig)
-        page.locator("input[name='is_anonymous']").check()
+        # Warten bis HTMX dynamische Felder geladen hat
+        page.locator("#dynamic-fields").wait_for(state="attached")
+
+        # Kein Klientel ausgewaehlt → wird automatisch anonym
+        # Fokus ins Formular setzen (noetig fuer Ctrl+Enter keydown Handler)
+        page.locator("select[name='document_type']").focus()
 
         # Strg+Enter
         page.keyboard.press("Control+Enter")
@@ -163,8 +167,7 @@ class TestAutoSave:
         page.select_option("select[name='document_type']", label="Kontakt")
         page.wait_for_load_state("domcontentloaded")
 
-        # Anonym-Checkbox setzen
-        page.locator("input[name='is_anonymous']").check()
+        # Kein Klientel → wird automatisch anonym
 
         # Warten bis Auto-Save speichert
         page.wait_for_timeout(6000)

@@ -37,11 +37,6 @@ class EventMetaForm(forms.Form):
             },
         ),
     )
-    is_anonymous = forms.BooleanField(
-        required=False,
-        label=_("Anonymer Kontakt"),
-        widget=forms.CheckboxInput(attrs={"class": "rounded border-gray-300"}),
-    )
     case = forms.ModelChoiceField(
         queryset=Case.objects.none(),
         required=False,

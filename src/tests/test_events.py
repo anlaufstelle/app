@@ -143,13 +143,13 @@ class TestEventCreateView:
         assert Event.objects.filter(document_type=doc_type_contact, created_by=staff_user).exists()
 
     def test_event_create_anonymous(self, client, staff_user, doc_type_contact):
+        """Without client selection, event is automatically anonymous."""
         client.force_login(staff_user)
         response = client.post(
             reverse("core:event_create"),
             {
                 "document_type": str(doc_type_contact.pk),
                 "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
-                "is_anonymous": "on",
                 "dauer": "5",
                 "notiz": "",
             },
@@ -713,8 +713,8 @@ class TestMinContactStageGate:
                 is_anonymous=False,
             )
 
-    def test_form_accepts_anonymous_with_min_stage_defers_to_service(self, facility, staff_user):
-        """EventMetaForm.clean() no longer checks anonymous+min_stage (deferred to service)."""
+    def test_form_valid_without_client_and_min_stage_doctype(self, facility, staff_user):
+        """EventMetaForm is valid without client — anonymous check deferred to service."""
         from core.forms.events import EventMetaForm
         from core.models import DocumentType
 
@@ -729,7 +729,6 @@ class TestMinContactStageGate:
             data={
                 "document_type": str(doc_type.pk),
                 "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
-                "is_anonymous": True,
             },
             facility=facility,
         )

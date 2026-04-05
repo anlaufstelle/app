@@ -146,8 +146,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
 
         client = None
         client_id = meta_form.cleaned_data.get("client")
-        is_anonymous = meta_form.cleaned_data.get("is_anonymous", False)
-        if client_id and not is_anonymous:
+        if client_id:
             client = Client.objects.for_facility(facility).filter(pk=client_id).first()
 
         case = meta_form.cleaned_data.get("case")
@@ -160,7 +159,6 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                 occurred_at=meta_form.cleaned_data["occurred_at"],
                 data_json=data_form.cleaned_data,
                 client=client,
-                is_anonymous=is_anonymous,
                 case=case,
             )
         except ValidationError as e:

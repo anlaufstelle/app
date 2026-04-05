@@ -105,8 +105,7 @@ class TestEventErstellung:
         page.fill("input[name='dauer']", "20")
         page.fill("textarea[name='notiz']", "E2E-Test Kontakt")
 
-        # Anonym-Checkbox
-        page.check("input[name='is_anonymous']")
+        # Kein Klientel ausgewählt → wird automatisch anonym
 
         page.click("button:has-text('Speichern')")
         page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))

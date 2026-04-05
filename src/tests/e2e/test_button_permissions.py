@@ -43,10 +43,7 @@ def _create_event_and_go_to_detail(page, base_url):
     page.wait_for_load_state("domcontentloaded")
     page.fill("input[name='occurred_at']", "2026-03-20T10:00")
 
-    # Mark as anonymous so no client is required
-    checkbox = page.locator("input[name='is_anonymous']")
-    if not checkbox.is_checked():
-        checkbox.check()
+    # No client selected → automatically anonymous
 
     # Fill optional duration field if present
     dauer = page.locator("input[name='dauer']")

@@ -13,7 +13,6 @@
                 results: [],
                 selectedId: '{{ client_id|default:'' }}',
                 show: false,
-                isAnonymous: false,
                 anonymousAllowed: true,
                 highlightIndex: -1,
                 _justSelected: false,
@@ -21,7 +20,6 @@
                 updateAnonymousAllowed(selectEl) {
                     const opt = selectEl.options[selectEl.selectedIndex];
                     this.anonymousAllowed = !opt || !opt.dataset.minStage;
-                    if (!this.anonymousAllowed) this.isAnonymous = false;
                 },
                 selectItem(item) {
                     this._justSelected = true;
@@ -42,8 +40,7 @@
                     }
                 }
             }"
-          x-init="updateAnonymousAllowed($refs.docTypeSelect)"
-          @submit="if (!selectedId && anonymousAllowed) isAnonymous = true">
+          x-init="updateAnonymousAllowed($refs.docTypeSelect)">
         {% csrf_token %}
 
         {# Sektion 1: Meta — kompaktes Layout #}
@@ -95,8 +92,11 @@
             </div>
 
             {# Klientel-Autocomplete mit Tastatur-Navigation #}
-            <div x-show="!isAnonymous">
-                <label class="block text-sm font-medium text-gray-700 mb-1">{% trans "Klientel" %}</label>
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">
+                    {% trans "Klientel" %}
+                    <span x-show="!anonymousAllowed" x-cloak class="text-red-500">*</span>
+                </label>
                 <div class="relative">
                     <input type="text"
                            x-model="query"
@@ -138,22 +138,11 @@
                 {% for error in meta_form.client.errors %}
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>
                 {% endfor %}
-            </div>
-
-            {# Anonym-Checkbox #}
-            <div>
-                <label class="flex items-center space-x-2">
-                    <input type="checkbox" name="is_anonymous"
-                           x-model="isAnonymous"
-                           :disabled="!anonymousAllowed"
-                           tabindex="3"
-                           class="rounded border-gray-300"
-                           :class="{ 'opacity-50 cursor-not-allowed': !anonymousAllowed }">
-                    <span class="text-sm text-gray-700"
-                          :class="{ 'text-gray-400': !anonymousAllowed }">{% trans "Anonymer Kontakt" %}</span>
-                </label>
                 <p x-show="!anonymousAllowed" x-cloak class="mt-1 text-xs text-amber-600">
-                    {% trans "Nicht verfügbar: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe." %}
+                    {% trans "Pflichtfeld: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe." %}
+                </p>
+                <p x-show="anonymousAllowed && !selectedId" x-cloak class="mt-1 text-xs text-gray-500">
+                    {% trans "Ohne Klientel wird der Kontakt als anonym gespeichert." %}
                 </p>
             </div>
         </div>
