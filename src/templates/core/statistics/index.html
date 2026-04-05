@@ -1,7 +1,12 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}{% trans "Statistik" %} – Anlaufstelle{% endblock %}
+
+{% block extra_head %}
+<script src="{% static 'js/statistics-charts.js' %}"></script>
+<script src="{% static 'js/chart.min.js' %}" defer></script>
+{% endblock %}
 
 {% block content %}
 <h1 class="text-2xl font-bold mb-6">{% trans "Statistik" %}</h1>

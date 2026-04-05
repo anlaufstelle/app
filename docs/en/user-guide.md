@@ -282,6 +282,32 @@ For more extensive research, the search page at `/search/` is available. It show
    - **Custom:** Enter start and end dates manually.
 3. The dashboard updates automatically and displays aggregated key figures for contact numbers, documentation types, and client groups.
 
+### Year Navigation
+
+To view data for a specific year:
+
+1. Click **Year**.
+2. Use the arrow buttons to the left and right of the year number to navigate to the previous or next year.
+3. For the current year, the period from January 1st to today is shown. For past years, the full year (January 1st -- December 31st) is displayed.
+
+### Trend Charts
+
+Below the key figures, the dashboard shows three interactive charts:
+
+| Chart | Description |
+|-------|-------------|
+| **Contacts Over Time** | Line chart with monthly breakdown of contacts (Total, Anonymous, Identified, Qualified) |
+| **Documentation Types** | Bar chart showing the distribution by documentation type (e.g. Contact, Counseling, Needle Exchange) |
+| **Age Groups** | Doughnut chart showing the demographic distribution by age group |
+
+The charts update automatically when the time period is changed.
+
+**Data Source Indicator:** The line chart legend shows whether a data point comes from a **Snapshot** (pre-computed monthly data) or from **Live Data** (current database query). Snapshots ensure that historical trends are preserved even after retention periods expire.
+
+**Documentation Type Filter:** Use the "All Documentation Types" dropdown above the charts to filter the view to a specific documentation type.
+
+> **Note:** Charts are not shown when printing. Use the PDF or CSV export functions for reports.
+
 ### CSV Export
 
 The CSV export contains all events from the selected time period with all non-encrypted fields.

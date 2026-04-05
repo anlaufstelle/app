@@ -41,6 +41,77 @@
     </div>
 </div>
 
+{# Charts #}
+<div x-data="statisticsCharts()" x-init="fetchAndRender()"
+     @htmx:after-swap.window="if ($event.detail.target && $event.detail.target.id === 'statistics-content') fetchAndRender()"
+     class="mb-8 no-print" x-cloak>
+
+    {# Chart-Filter #}
+    <div class="flex flex-wrap gap-3 mb-4">
+        <select x-model="docTypeFilter" @change="fetchAndRender()"
+                class="border border-gray-300 rounded-md px-3 py-2 text-sm">
+            <option value="">{% trans "Alle Dokumentationstypen" %}</option>
+            {% for dt in document_types %}
+            <option value="{{ dt.id }}">{{ dt.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    {# Fehler-Anzeige #}
+    <template x-if="error">
+        <div class="bg-red-50 border border-red-200 rounded-md p-3 mb-4">
+            <p class="text-sm text-red-600" x-text="'Fehler: ' + error"></p>
+        </div>
+    </template>
+
+    {# Lade-Indikator #}
+    <div x-show="loading" x-cloak class="flex items-center justify-center py-12">
+        <svg class="animate-spin h-6 w-6 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+        </svg>
+    </div>
+
+    {# Charts #}
+    <div class="space-y-6">
+        {# Liniendiagramm: Kontakte im Zeitverlauf (volle Breite) #}
+        <div class="bg-white rounded-lg border border-gray-200 p-4">
+            <h3 class="text-md font-semibold mb-2">{% trans "Kontakte im Zeitverlauf" %}</h3>
+            <div class="relative" style="height: 300px;">
+                <canvas id="chart-contacts"></canvas>
+            </div>
+            <div class="flex gap-4 mt-2 text-xs text-gray-500" x-show="sources.length > 0">
+                <span class="flex items-center gap-1">
+                    <span class="inline-block w-2 h-2 rounded-full bg-indigo-600"></span>
+                    {% trans "Live-Daten" %}
+                </span>
+                <span class="flex items-center gap-1">
+                    <span class="inline-block w-2 h-2 rounded bg-indigo-400"></span>
+                    {% trans "Snapshot" %}
+                </span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {# Balkendiagramm: Dokumentationstypen #}
+            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 class="text-md font-semibold mb-2">{% trans "Dokumentationstypen" %}</h3>
+                <div class="relative" style="height: 300px;">
+                    <canvas id="chart-doc-types"></canvas>
+                </div>
+            </div>
+
+            {# Doughnut: Altersgruppen #}
+            <div class="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 class="text-md font-semibold mb-2">{% trans "Altersgruppen" %}</h3>
+                <div class="relative" style="height: 300px;">
+                    <canvas id="chart-age-clusters"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 {# Tabelle: Kontakte nach Dokumentationstyp #}
 <div class="mb-8">
     <h2 class="text-lg font-semibold mb-3">{% trans "Kontakte nach Dokumentationstyp" %}</h2>

@@ -52,7 +52,7 @@ class TestStatisticsHTMX:
         zeitraum_text = page.locator("text=Zeitraum:").inner_text()
 
         # Auf Halbjahr klicken (HTMX aktualisiert den Content asynchron)
-        with page.expect_response(lambda r: "/statistics/" in r.url):
+        with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
             page.locator("button:has-text('Halbjahr')").click()
 
         # Nach HTMX-Swap den neuen Text prüfen
@@ -74,7 +74,7 @@ class TestStatisticsYearNavigation:
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
 
-        with page.expect_response(lambda r: "/statistics/" in r.url):
+        with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
             page.get_by_role("button", name="Jahr", exact=True).click()
 
         zeitraum = page.locator("text=Zeitraum:").inner_text()
@@ -86,7 +86,7 @@ class TestStatisticsYearNavigation:
         page.goto(f"{base_url}/statistics/")
 
         # Auf Jahr klicken
-        with page.expect_response(lambda r: "/statistics/" in r.url):
+        with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
             page.get_by_role("button", name="Jahr", exact=True).click()
 
         # Aktuelles Jahr merken
@@ -94,7 +94,7 @@ class TestStatisticsYearNavigation:
         current_year_text = year_label.inner_text()
 
         # Pfeil links klicken
-        with page.expect_response(lambda r: "/statistics/" in r.url):
+        with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
             page.locator("[aria-label='Vorheriges Jahr']").click()
 
         new_year_text = page.locator("[aria-label='Vorheriges Jahr']").locator("..").locator("span")
@@ -113,7 +113,7 @@ class TestStatisticsYearNavigation:
         assert page.locator("[aria-label='Nächstes Jahr']").is_visible()
 
         # Klick auf Pfeil rechts
-        with page.expect_response(lambda r: "/statistics/" in r.url):
+        with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
             page.locator("[aria-label='Nächstes Jahr']").click()
 
         year_label = page.locator("[aria-label='Vorheriges Jahr']").locator("..").locator("span")
@@ -124,7 +124,7 @@ class TestStatisticsYearNavigation:
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
 
-        with page.expect_response(lambda r: "/statistics/" in r.url):
+        with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
             page.get_by_role("button", name="Jahr", exact=True).click()
 
         assert page.locator("[aria-label='Nächstes Jahr']").count() == 0

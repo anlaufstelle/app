@@ -279,6 +279,32 @@ Für umfangreichere Recherchen steht weiterhin die Suchseite unter `/search/` zu
    - **Benutzerdefiniert:** Geben Sie Start- und Enddatum manuell ein.
 3. Das Dashboard aktualisiert sich automatisch und zeigt aggregierte Kennzahlen zu Kontaktzahlen, Dokumentationstypen und Klientelgruppen.
 
+### Jahresnavigation
+
+Um die Daten eines bestimmten Jahres zu sehen:
+
+1. Klicken Sie auf **Jahr**.
+2. Mit den Pfeil-Buttons links und rechts neben der Jahreszahl navigieren Sie zum vorherigen oder nächsten Jahr.
+3. Beim aktuellen Jahr wird der Zeitraum vom 01.01. bis heute angezeigt, bei vergangenen Jahren das vollständige Jahr (01.01. – 31.12.).
+
+### Trend-Charts
+
+Unterhalb der Kennzahlen zeigt das Dashboard drei interaktive Diagramme:
+
+| Diagramm | Beschreibung |
+|----------|-------------|
+| **Kontakte im Zeitverlauf** | Liniendiagramm mit monatlicher Aufschlüsselung der Kontakte (Gesamt, Anonym, Identifiziert, Qualifiziert) |
+| **Dokumentationstypen** | Balkendiagramm mit der Verteilung nach Dokumentationstyp (z. B. Kontakt, Beratungsgespräch, Spritzentausch) |
+| **Altersgruppen** | Ringdiagramm mit der demografischen Verteilung nach Altersgruppe |
+
+Die Charts aktualisieren sich automatisch beim Wechsel des Zeitraums.
+
+**Datenquellen-Anzeige:** Im Liniendiagramm zeigt die Legende, ob ein Datenpunkt aus einem **Snapshot** (vorberechnete Monatsdaten) oder aus **Live-Daten** (aktuelle Datenbankabfrage) stammt. Snapshots stellen sicher, dass historische Trends auch nach Ablauf von Löschfristen erhalten bleiben.
+
+**Dokumentationstyp-Filter:** Über das Dropdown „Alle Dokumentationstypen" oberhalb der Charts können Sie die Ansicht auf einen bestimmten Dokumentationstyp einschränken.
+
+> **Hinweis:** Die Charts werden beim Drucken nicht angezeigt. Nutzen Sie für Berichte die PDF- oder CSV-Exportfunktionen.
+
 ### CSV-Export
 
 Der CSV-Export enthält alle Ereignisse des gewählten Zeitraums mit allen nicht-verschlüsselten Feldern.

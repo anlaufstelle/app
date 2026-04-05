@@ -3,7 +3,7 @@
 import logging
 from datetime import date, timedelta
 
-from django.http import HttpResponse, StreamingHttpResponse
+from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -11,9 +11,9 @@ from django.utils.translation import gettext as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
-from core.models import AuditLog
+from core.models import AuditLog, DocumentType
 from core.services.export import export_events_csv, generate_jugendamt_pdf, generate_report_pdf
-from core.services.snapshot import get_statistics_hybrid
+from core.services.snapshot import _merge_stats, get_statistics_hybrid, get_statistics_trend
 from core.signals.audit import get_client_ip
 from core.views.mixins import LeadOrAdminRequiredMixin
 
@@ -55,6 +55,7 @@ class StatisticsView(LeadOrAdminRequiredMixin, View):
             "can_export": True,
             "selected_year": selected_year if period == "year" else None,
             "current_year": today.year,
+            "document_types": DocumentType.objects.filter(facility=facility).order_by("name"),
         }
 
         if request.headers.get("HX-Request"):
@@ -78,6 +79,88 @@ class StatisticsView(LeadOrAdminRequiredMixin, View):
             return int(value)
         except (ValueError, TypeError):
             return default
+
+
+GERMAN_MONTHS = [
+    "",
+    "Jan",
+    "Feb",
+    "Mär",
+    "Apr",
+    "Mai",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Okt",
+    "Nov",
+    "Dez",
+]
+
+
+class ChartDataView(LeadOrAdminRequiredMixin, View):
+    """JSON API endpoint returning chart-ready statistics data."""
+
+    def get(self, request):
+        facility = request.current_facility
+        period = request.GET.get("period", "month")
+        today = timezone.localdate()
+
+        if period == "custom":
+            date_from = StatisticsView._parse_date(request.GET.get("date_from"), today - timedelta(days=30))
+            date_to = StatisticsView._parse_date(request.GET.get("date_to"), today)
+        elif period == "year":
+            selected_year = StatisticsView._parse_year(request.GET.get("year"), today.year)
+            date_from = date(selected_year, 1, 1)
+            date_to = today if selected_year == today.year else date(selected_year, 12, 31)
+        elif period == "quarter":
+            date_from = today - timedelta(days=90)
+            date_to = today
+        elif period == "half":
+            date_from = today - timedelta(days=182)
+            date_to = today
+        else:
+            date_from = today - timedelta(days=30)
+            date_to = today
+
+        segments = get_statistics_trend(facility, date_from, date_to)
+
+        # Build per-segment arrays for the line chart
+        labels = []
+        totals = []
+        anonym = []
+        identifiziert = []
+        qualifiziert = []
+        sources = []
+
+        for seg in segments:
+            year, month = seg["label"].split("-")
+            labels.append(f"{GERMAN_MONTHS[int(month)]} {year}")
+            totals.append(seg["total_contacts"])
+            stage = seg.get("by_contact_stage", {})
+            anonym.append(stage.get("anonym", 0))
+            identifiziert.append(stage.get("identifiziert", 0))
+            qualifiziert.append(stage.get("qualifiziert", 0))
+            sources.append(seg["source"])
+
+        # Aggregate document_types and age_clusters across all segments
+        segment_stats = [{k: v for k, v in seg.items() if k not in ("label", "source")} for seg in segments]
+        aggregated = _merge_stats(segment_stats)
+
+        data = {
+            "labels": labels,
+            "contacts": {
+                "total": totals,
+                "anonym": anonym,
+                "identifiziert": identifiziert,
+                "qualifiziert": qualifiziert,
+            },
+            "document_types": aggregated.get("by_document_type", []),
+            "age_clusters": aggregated.get("by_age_cluster", []),
+            "sources": sources,
+        }
+
+        return JsonResponse(data)
 
 
 class CSVExportView(LeadOrAdminRequiredMixin, View):

@@ -258,6 +258,42 @@ def get_statistics_hybrid(facility, date_from, date_to):
     return merged
 
 
+def get_statistics_trend(facility, date_from, date_to):
+    """Return per-segment statistics for trend visualisation.
+
+    Unlike :func:`get_statistics_hybrid` which merges all segments into one
+    aggregated result, this function returns the individual monthly data
+    points so they can be rendered as a time-series chart.
+
+    Each entry contains:
+    - ``label`` – ``"YYYY-MM"`` month identifier
+    - ``source`` – ``"snapshot"`` or ``"live"``
+    - The standard statistics fields (``total_contacts``, etc.)
+    """
+    segments = _split_into_segments(date_from, date_to)
+    result = []
+
+    for seg_from, seg_to, use_snapshot in segments:
+        stats = None
+        source = "live"
+        if use_snapshot:
+            stats = get_snapshot(facility, seg_from.year, seg_from.month)
+            if stats is not None:
+                source = "snapshot"
+        if stats is None:
+            stats = get_statistics(facility, seg_from, seg_to)
+            stats.pop("top_clients", None)
+        result.append(
+            {
+                "label": f"{seg_from.year}-{seg_from.month:02d}",
+                "source": source,
+                **stats,
+            }
+        )
+
+    return result
+
+
 def get_jugendamt_statistics_hybrid(facility, date_from, date_to):
     """Return Jugendamt statistics for a date range, using snapshots where possible.
 
