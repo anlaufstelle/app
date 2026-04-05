@@ -32,6 +32,10 @@
                 <p class="text-sm font-medium" data-testid="profile-facility">{{ user.facility }}</p>
             </div>
             {% endif %}
+            <div>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Sprache" %}</span>
+                <p class="text-sm font-medium" data-testid="profile-language">{{ user.get_preferred_language_display }}</p>
+            </div>
         </div>
         <div class="mt-4 pt-4 border-t border-gray-200">
             <a href="{% url 'password_change' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md hover:bg-gray-50">

@@ -39,7 +39,15 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
         (
             "Anlaufstelle",
             {
-                "fields": ("role", "facility", "display_name", "phone", "notes", "must_change_password"),
+                "fields": (
+                    "role",
+                    "facility",
+                    "display_name",
+                    "phone",
+                    "notes",
+                    "must_change_password",
+                    "preferred_language",
+                ),
             },
         ),
     )

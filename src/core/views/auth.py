@@ -2,9 +2,14 @@
 
 import logging
 
+from django.conf import settings
 from django.contrib.auth import views as auth_views
 from django.utils.decorators import method_decorator
+from django.views.decorators.http import require_POST
+from django.views.i18n import set_language
 from django_ratelimit.decorators import ratelimit
+
+from core.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -54,3 +59,14 @@ class CustomPasswordChangeView(auth_views.PasswordChangeView):
         self.request.user.must_change_password = False
         self.request.user.save(update_fields=["must_change_password"])
         return response
+
+
+@require_POST
+def set_user_language(request):
+    """Save language preference to user model, then delegate to Django's set_language."""
+    language = request.POST.get("language")
+    if language and request.user.is_authenticated:
+        valid_langs = [code for code, _ in settings.LANGUAGES]
+        if language in valid_langs:
+            User.objects.filter(pk=request.user.pk).update(preferred_language=language)
+    return set_language(request)

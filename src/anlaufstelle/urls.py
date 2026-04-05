@@ -2,12 +2,18 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path, reverse_lazy
 
-from core.views.auth import CustomLoginView, CustomLogoutView, CustomPasswordChangeView
+from core.views.auth import (
+    CustomLoginView,
+    CustomLogoutView,
+    CustomPasswordChangeView,
+    set_user_language,
+)
 from core.views.health import HealthView
 from core.views.pwa import ManifestView, ServiceWorkerView
 
 urlpatterns = [
     path("admin-mgmt/", admin.site.urls),
+    path("i18n/setlang/", set_user_language, name="set_language"),
     path("i18n/", include("django.conf.urls.i18n")),
     path("health/", HealthView.as_view(), name="health"),
     path("login/", CustomLoginView.as_view(), name="login"),

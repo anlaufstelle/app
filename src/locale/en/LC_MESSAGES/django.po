@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-28 16:36+0100\n"
+"POT-Creation-Date: 2026-03-30 01:05+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -26,11 +26,11 @@ msgstr "Qualified"
 #: src/core/models/workitem.py:45 src/core/services/export.py:60
 #: src/templates/base.html:87 src/templates/base.html:112
 #: src/templates/base.html:199 src/templates/base.html:260
-#: src/templates/core/cases/form.html:47
+#: src/templates/core/cases/form.html:50
 #: src/templates/core/cases/partials/table.html:10
 #: src/templates/core/clients/list.html:4
 #: src/templates/core/clients/list.html:8
-#: src/templates/core/events/create.html:95
+#: src/templates/core/events/create.html:98
 #: src/templates/core/events/delete_confirm.html:32
 #: src/templates/core/events/deletion_review.html:41
 #: src/templates/core/events/detail.html:58
@@ -58,8 +58,10 @@ msgstr "Client does not belong to this facility."
 
 #: src/core/forms/clients.py:33
 #, fuzzy
-#| msgid "Ein Klient mit diesem Pseudonym existiert bereits in dieser Einrichtung."
-msgid "Ein Klientel mit diesem Pseudonym existiert bereits in dieser Einrichtung."
+#| msgid ""
+#| "Ein Klient mit diesem Pseudonym existiert bereits in dieser Einrichtung."
+msgid ""
+"Ein Klientel mit diesem Pseudonym existiert bereits in dieser Einrichtung."
 msgstr "A client with this pseudonym already exists in this facility."
 
 #: src/core/forms/episodes.py:41 src/core/models/episode.py:22
@@ -89,7 +91,7 @@ msgstr "Document type"
 msgid "Zeitpunkt"
 msgstr "Timestamp"
 
-#: src/core/forms/events.py:42 src/templates/core/events/create.html:149
+#: src/core/forms/events.py:42 src/templates/core/events/create.html:152
 msgid "Anonymer Kontakt"
 msgstr "Anonymous contact"
 
@@ -176,14 +178,14 @@ msgstr "Settings changed"
 #: src/core/models/client.py:32 src/core/models/document_type.py:50
 #: src/core/models/document_type.py:133 src/core/models/event.py:22
 #: src/core/models/organization.py:41 src/core/models/settings.py:19
-#: src/core/models/time_filter.py:21 src/core/models/user.py:29
+#: src/core/models/time_filter.py:21 src/core/models/user.py:30
 #: src/core/models/workitem.py:37 src/core/models/workitem.py:125
 #: src/templates/core/account/profile.html:31
 msgid "Einrichtung"
 msgstr "Facility"
 
-#: src/core/models/audit.py:42 src/core/models/user.py:51
-#: src/core/models/user.py:52 src/templates/core/audit/detail.html:19
+#: src/core/models/audit.py:42 src/core/models/user.py:58
+#: src/core/models/user.py:59 src/templates/core/audit/detail.html:19
 #: src/templates/core/audit/list.html:30
 #: src/templates/core/audit/partials/table.html:9
 msgid "Benutzer"
@@ -358,7 +360,9 @@ msgid "Kontaktstufe"
 msgstr "Contact stage"
 
 #: src/core/models/client.py:44
-msgid "Identifiziert = Pseudonym bekannt, Qualifiziert = vollständige Identität bekannt"
+msgid ""
+"Identifiziert = Pseudonym bekannt, Qualifiziert = vollständige Identität "
+"bekannt"
 msgstr "Identified = pseudonym known, Qualified = full identity known"
 
 #: src/core/models/client.py:50 src/core/services/export.py:62
@@ -375,7 +379,7 @@ msgstr "Age group"
 msgid "Altersgruppe des Klientel zum Zeitpunkt der Erfassung"
 msgstr "Client's age group at time of registration"
 
-#: src/core/models/client.py:55 src/core/models/user.py:43
+#: src/core/models/client.py:55 src/core/models/user.py:44
 #: src/templates/core/clients/detail.html:112
 msgid "Notizen"
 msgstr "Notes"
@@ -564,8 +568,11 @@ msgid "Slug"
 msgstr "Slug"
 
 #: src/core/models/document_type.py:139
-msgid "Stabiler Identifier — wird als Key in data_json verwendet. Nach Erstellung unveränderbar."
-msgstr "Stable identifier — used as key in data_json. Immutable after creation."
+msgid ""
+"Stabiler Identifier — wird als Key in data_json verwendet. Nach Erstellung "
+"unveränderbar."
+msgstr ""
+"Stable identifier — used as key in data_json. Immutable after creation."
 
 #: src/core/models/document_type.py:145
 msgid "Feldtyp"
@@ -817,7 +824,8 @@ msgid "Endzeit"
 msgstr "End time"
 
 #: src/core/models/time_filter.py:30
-msgid "Schichtende (z.B. 16:00). Bei Nachtschicht: Ende nach Mitternacht möglich"
+msgid ""
+"Schichtende (z.B. 16:00). Bei Nachtschicht: Ende nach Mitternacht möglich"
 msgstr "Shift end (e.g. 16:00). For night shifts: end after midnight possible"
 
 #: src/core/models/time_filter.py:34
@@ -825,7 +833,9 @@ msgid "Standard"
 msgstr "Default"
 
 #: src/core/models/time_filter.py:35
-msgid "Wird als Standard-Schicht vorausgewählt, wenn keine aktive Schicht erkannt wird"
+msgid ""
+"Wird als Standard-Schicht vorausgewählt, wenn keine aktive Schicht erkannt "
+"wird"
 msgstr "Pre-selected as default shift when no active shift is detected"
 
 #: src/core/models/time_filter.py:41 src/core/models/time_filter.py:42
@@ -833,37 +843,41 @@ msgstr "Pre-selected as default shift when no active shift is detected"
 msgid "Zeitfilter"
 msgstr "Time filter"
 
-#: src/core/models/user.py:12
+#: src/core/models/user.py:13
 msgid "Administrator"
 msgstr "Administrator"
 
-#: src/core/models/user.py:13
+#: src/core/models/user.py:14
 msgid "Leitung"
 msgstr "Manager"
 
-#: src/core/models/user.py:14
+#: src/core/models/user.py:15
 msgid "Fachkraft"
 msgstr "Social worker"
 
-#: src/core/models/user.py:15
+#: src/core/models/user.py:16
 msgid "Assistenz"
 msgstr "Assistant"
 
-#: src/core/models/user.py:21 src/templates/core/account/profile.html:22
+#: src/core/models/user.py:22 src/templates/core/account/profile.html:22
 msgid "Rolle"
 msgstr "Role"
 
-#: src/core/models/user.py:34
+#: src/core/models/user.py:35
 msgid "Anzeigename"
 msgstr "Display name"
 
-#: src/core/models/user.py:39
+#: src/core/models/user.py:40
 msgid "Telefon"
 msgstr "Phone"
 
-#: src/core/models/user.py:47
+#: src/core/models/user.py:48
 msgid "Passwort muss geändert werden"
 msgstr "Password must be changed"
+
+#: src/core/models/user.py:54
+msgid "Bevorzugte Sprache"
+msgstr "Preferred Language"
 
 #: src/core/models/workitem.py:16
 msgid "Hinweis"
@@ -928,7 +942,8 @@ msgid "Kategorisierung der Aufgabe (Aufgabe, Telefonat, Termin etc.)"
 msgstr "Categorization of the task (task, phone call, appointment, etc.)"
 
 #: src/core/models/workitem.py:73
-msgid "Offen = noch nicht begonnen, In Bearbeitung = aktiv, Erledigt = abgeschlossen"
+msgid ""
+"Offen = noch nicht begonnen, In Bearbeitung = aktiv, Erledigt = abgeschlossen"
 msgstr "Open = not yet started, In progress = active, Completed = finished"
 
 #: src/core/models/workitem.py:79
@@ -1023,23 +1038,41 @@ msgid "Episoden können nur für offene Fälle erstellt werden."
 msgstr "Episodes can only be created for open cases."
 
 #: src/core/services/event.py:54
-msgid "Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, da eine Mindest-Kontaktstufe vorausgesetzt wird."
-msgstr "Anonymous contacts are not allowed for this document type, as a minimum contact stage is required."
+msgid ""
+"Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, da eine "
+"Mindest-Kontaktstufe vorausgesetzt wird."
+msgstr ""
+"Anonymous contacts are not allowed for this document type, as a minimum "
+"contact stage is required."
 
 #: src/core/services/event.py:63
 #, fuzzy
-#| msgid "Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, da eine Mindest-Kontaktstufe vorausgesetzt wird."
-msgid "Für diesen Dokumentationstyp muss ein Klientel ausgewählt werden, da eine Mindest-Kontaktstufe vorausgesetzt wird."
-msgstr "Anonymous contacts are not allowed for this document type, as a minimum contact stage is required."
+#| msgid ""
+#| "Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, da eine "
+#| "Mindest-Kontaktstufe vorausgesetzt wird."
+msgid ""
+"Für diesen Dokumentationstyp muss ein Klientel ausgewählt werden, da eine "
+"Mindest-Kontaktstufe vorausgesetzt wird."
+msgstr ""
+"Anonymous contacts are not allowed for this document type, as a minimum "
+"contact stage is required."
 
 #: src/core/services/event.py:75
 #, fuzzy, python-format
-#| msgid "Klient muss mindestens die Kontaktstufe '%(required_stage)s' haben, aktuelle Stufe ist '%(actual_stage)s'."
-msgid "Klientel muss mindestens die Kontaktstufe '%(required_stage)s' haben, aktuelle Stufe ist '%(actual_stage)s'."
-msgstr "Client must have at least contact stage '%(required_stage)s', current stage: '%(actual_stage)s'"
+#| msgid ""
+#| "Klient muss mindestens die Kontaktstufe '%(required_stage)s' haben, "
+#| "aktuelle Stufe ist '%(actual_stage)s'."
+msgid ""
+"Klientel muss mindestens die Kontaktstufe '%(required_stage)s' haben, "
+"aktuelle Stufe ist '%(actual_stage)s'."
+msgstr ""
+"Client must have at least contact stage '%(required_stage)s', current stage: "
+"'%(actual_stage)s'"
 
 #: src/core/services/event.py:124
-msgid "Das Ereignis wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."
+msgid ""
+"Das Ereignis wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite "
+"neu."
 msgstr "This event has been modified in the meantime. Please reload the page."
 
 #: src/core/services/export.py:105 src/core/views/events.py:232
@@ -1233,7 +1266,8 @@ msgid "Serverfehler"
 msgstr ""
 
 #: src/templates/500.html:56
-msgid "Ein interner Fehler ist aufgetreten. Bitte versuchen Sie es später erneut."
+msgid ""
+"Ein interner Fehler ist aufgetreten. Bitte versuchen Sie es später erneut."
 msgstr ""
 
 #: src/templates/auth/login.html:7 src/templates/auth/login.html:39
@@ -1265,13 +1299,17 @@ msgid "Für schnelleren Zugriff"
 msgstr "For faster access"
 
 #: src/templates/auth/login.html:64
-msgid "Teilen <span class=\"inline-block\">&#x2191;</span> → „Zum Home-Bildschirm\" tippen"
-msgstr "Tap Share <span class=\"inline-block\">&#x2191;</span> → \"Add to Home Screen\""
+msgid ""
+"Teilen <span class=\"inline-block\">&#x2191;</span> → „Zum Home-Bildschirm\" "
+"tippen"
+msgstr ""
+"Tap Share <span class=\"inline-block\">&#x2191;</span> → \"Add to Home "
+"Screen\""
 
 #: src/templates/auth/password_change.html:7
 #: src/templates/auth/password_change.html:12
 #: src/templates/auth/password_change.html:46
-#: src/templates/core/account/profile.html:38
+#: src/templates/core/account/profile.html:42
 msgid "Passwort ändern"
 msgstr "Change Password"
 
@@ -1404,12 +1442,12 @@ msgstr ""
 
 #: src/templates/components/_confirm_modal.html:17
 #: src/templates/core/cases/episode_form.html:33
-#: src/templates/core/cases/form.html:112
-#: src/templates/core/cases/form.html:114
+#: src/templates/core/cases/form.html:115
+#: src/templates/core/cases/form.html:117
 #: src/templates/core/cases/partials/goals_section.html:44
 #: src/templates/core/clients/form.html:37
 #: src/templates/core/clients/form.html:39
-#: src/templates/core/events/create.html:167
+#: src/templates/core/events/create.html:170
 #: src/templates/core/events/delete_confirm.html:62
 #: src/templates/core/events/edit.html:59
 #: src/templates/core/workitems/form.html:128
@@ -1491,7 +1529,7 @@ msgid "Übersicht"
 msgstr "Overview"
 
 #: src/templates/core/account/partials/_widget_settings.html:22
-#: src/templates/core/account/profile.html:52
+#: src/templates/core/account/profile.html:56
 #, fuzzy
 #| msgid "Letzte Klienten"
 msgid "Letzte Klientel"
@@ -1502,34 +1540,38 @@ msgstr "Recent Clients"
 msgid "Mein Profil"
 msgstr "My Profile"
 
-#: src/templates/core/account/profile.html:53
+#: src/templates/core/account/profile.html:36
+msgid "Sprache"
+msgstr "Language"
+
+#: src/templates/core/account/profile.html:57
 msgid "Alle anzeigen"
 msgstr "Show all"
 
-#: src/templates/core/account/profile.html:61
+#: src/templates/core/account/profile.html:65
 msgid "Letzte Ereignisse"
 msgstr "Recent Events"
 
-#: src/templates/core/account/profile.html:76
+#: src/templates/core/account/profile.html:80
 msgid "Keine Ereignisse vorhanden."
 msgstr "No events available."
 
-#: src/templates/core/account/profile.html:82
+#: src/templates/core/account/profile.html:86
 #: src/templates/core/handover/index.html:68
 #: src/templates/core/zeitstrom/index.html:122
 msgid "Offene Aufgaben"
 msgstr "Open Tasks"
 
-#: src/templates/core/account/profile.html:97
+#: src/templates/core/account/profile.html:101
 msgid "Keine offenen Aufgaben."
 msgstr "No open tasks."
 
-#: src/templates/core/account/profile.html:103
+#: src/templates/core/account/profile.html:107
 #: src/templates/core/workitems/partials/inbox_content.html:33
 msgid "Kürzlich erledigt"
 msgstr "Recently completed"
 
-#: src/templates/core/account/profile.html:118
+#: src/templates/core/account/profile.html:122
 msgid "Keine erledigten Aufgaben."
 msgstr "No recently completed tasks."
 
@@ -1622,10 +1664,10 @@ msgid "Neue Episode"
 msgstr "New Episode"
 
 #: src/templates/core/cases/episode_form.html:31
-#: src/templates/core/cases/form.html:109
+#: src/templates/core/cases/form.html:112
 #: src/templates/core/cases/partials/goals_section.html:41
 #: src/templates/core/clients/form.html:34
-#: src/templates/core/events/create.html:165
+#: src/templates/core/events/create.html:168
 #: src/templates/core/workitems/form.html:126
 msgid "Speichern"
 msgstr "Save"
@@ -1644,20 +1686,20 @@ msgstr "Edit Case"
 msgid "Neuer Fall"
 msgstr "New Case"
 
-#: src/templates/core/cases/form.html:58
-#: src/templates/core/events/create.html:107
+#: src/templates/core/cases/form.html:61
+#: src/templates/core/events/create.html:110
 #: src/templates/core/workitems/form.html:96
 msgid "Pseudonym eingeben..."
 msgstr "Enter pseudonym..."
 
-#: src/templates/core/cases/form.html:59
-#: src/templates/core/events/create.html:108
+#: src/templates/core/cases/form.html:62
+#: src/templates/core/events/create.html:111
 #, fuzzy
 #| msgid "Klient suchen"
 msgid "Klientel suchen"
 msgstr "Search client"
 
-#: src/templates/core/cases/form.html:109
+#: src/templates/core/cases/form.html:112
 msgid "Fall erstellen"
 msgstr "Create Case"
 
@@ -1895,12 +1937,20 @@ msgid "DSGVO-Dokumentationspaket"
 msgstr "GDPR Documentation Package"
 
 #: src/templates/core/dsgvo/package.html:9
-msgid "Compliance-Vorlagen gemäß DSGVO, automatisch mit Ihren Einrichtungsdaten befüllt."
-msgstr "Compliance templates per GDPR, automatically filled with your facility data."
+msgid ""
+"Compliance-Vorlagen gemäß DSGVO, automatisch mit Ihren Einrichtungsdaten "
+"befüllt."
+msgstr ""
+"Compliance templates per GDPR, automatically filled with your facility data."
 
 #: src/templates/core/dsgvo/package.html:17
-msgid "Diese Vorlagen werden automatisch mit den Daten Ihrer Einrichtung befüllt (Name, Löschfristen). Bitte prüfen und ergänzen Sie die Dokumente vor der Verwendung."
-msgstr "These templates are automatically filled with your facility data (name, retention periods). Please review and complete the documents before use."
+msgid ""
+"Diese Vorlagen werden automatisch mit den Daten Ihrer Einrichtung befüllt "
+"(Name, Löschfristen). Bitte prüfen und ergänzen Sie die Dokumente vor der "
+"Verwendung."
+msgstr ""
+"These templates are automatically filled with your facility data (name, "
+"retention periods). Please review and complete the documents before use."
 
 #: src/templates/core/dsgvo/package.html:25
 msgid "Dokument"
@@ -1914,12 +1964,14 @@ msgstr "GDPR Article"
 msgid "Herunterladen"
 msgstr "Download"
 
-#: src/templates/core/events/create.html:47
+#: src/templates/core/events/create.html:50
 msgid "Basis-Daten"
 msgstr "Basic data"
 
-#: src/templates/core/events/create.html:152
-msgid "Nicht verfügbar: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe."
+#: src/templates/core/events/create.html:155
+msgid ""
+"Nicht verfügbar: Dieser Dokumentationstyp erfordert eine Mindest-"
+"Kontaktstufe."
 msgstr "Not available: This document type requires a minimum contact stage."
 
 #: src/templates/core/events/delete_confirm.html:4
@@ -1929,13 +1981,24 @@ msgstr "Delete Event"
 
 #: src/templates/core/events/delete_confirm.html:13
 #, fuzzy
-#| msgid "Dieses Ereignis gehört zu einem qualifizierten Klienten. Es wird ein Löschantrag erstellt, der von einer Leitung genehmigt werden muss (4-Augen-Prinzip)."
-msgid "Dieses Ereignis gehört zu einem qualifizierten Klientel. Es wird ein Löschantrag erstellt, der von einer Leitung genehmigt werden muss (4-Augen-Prinzip)."
-msgstr "This event belongs to a qualified client. A deletion request will be created that must be approved by a manager (four-eyes principle)."
+#| msgid ""
+#| "Dieses Ereignis gehört zu einem qualifizierten Klienten. Es wird ein "
+#| "Löschantrag erstellt, der von einer Leitung genehmigt werden muss (4-"
+#| "Augen-Prinzip)."
+msgid ""
+"Dieses Ereignis gehört zu einem qualifizierten Klientel. Es wird ein "
+"Löschantrag erstellt, der von einer Leitung genehmigt werden muss (4-Augen-"
+"Prinzip)."
+msgstr ""
+"This event belongs to a qualified client. A deletion request will be created "
+"that must be approved by a manager (four-eyes principle)."
 
 #: src/templates/core/events/delete_confirm.html:15
-msgid "Möchten Sie dieses Ereignis wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden."
-msgstr "Are you sure you want to delete this event? This action cannot be undone."
+msgid ""
+"Möchten Sie dieses Ereignis wirklich löschen? Diese Aktion kann nicht "
+"rückgängig gemacht werden."
+msgstr ""
+"Are you sure you want to delete this event? This action cannot be undone."
 
 #: src/templates/core/events/delete_confirm.html:48
 msgid "Grund für die Löschung..."
@@ -2013,7 +2076,9 @@ msgid "Änderungen speichern"
 msgstr "Save changes"
 
 #: src/templates/core/events/edit.html:64
-msgid "Alle Felder dieses Ereignisses sind für Ihre Rolle eingeschränkt. Eine Bearbeitung ist nicht möglich."
+msgid ""
+"Alle Felder dieses Ereignisses sind für Ihre Rolle eingeschränkt. Eine "
+"Bearbeitung ist nicht möglich."
 msgstr ""
 
 #: src/templates/core/events/edit.html:68
@@ -2027,8 +2092,12 @@ msgid "Datenauskunft gemäß Art. 15 DSGVO"
 msgstr "Data disclosure pursuant to Art. 15 GDPR"
 
 #: src/templates/core/export/client_data_pdf.html:24
-msgid "Dieses Dokument enthält alle zu Ihrer Person gespeicherten Daten gemäß Art. 15 DSGVO (Auskunftsrecht) und Art. 20 DSGVO (Datenübertragbarkeit)."
-msgstr "This document contains all data stored about you pursuant to Art. 15 GDPR (right of access) and Art. 20 GDPR (data portability)."
+msgid ""
+"Dieses Dokument enthält alle zu Ihrer Person gespeicherten Daten gemäß Art. "
+"15 DSGVO (Auskunftsrecht) und Art. 20 DSGVO (Datenübertragbarkeit)."
+msgstr ""
+"This document contains all data stored about you pursuant to Art. 15 GDPR "
+"(right of access) and Art. 20 GDPR (data portability)."
 
 #: src/templates/core/export/client_data_pdf.html:27
 msgid "1. Stammdaten"
@@ -2393,8 +2462,12 @@ msgid "Passwort geändert"
 msgstr "Password changed"
 
 #: src/templates/registration/password_reset_complete.html:15
-msgid "Ihr Passwort wurde erfolgreich geändert. Sie können sich jetzt mit Ihrem neuen Passwort anmelden."
-msgstr "Your password has been changed successfully. You can now log in with your new password."
+msgid ""
+"Ihr Passwort wurde erfolgreich geändert. Sie können sich jetzt mit Ihrem "
+"neuen Passwort anmelden."
+msgstr ""
+"Your password has been changed successfully. You can now log in with your "
+"new password."
 
 #: src/templates/registration/password_reset_complete.html:21
 msgid "Zur Anmeldung"
@@ -2410,8 +2483,11 @@ msgid "Passwort setzen"
 msgstr "Set password"
 
 #: src/templates/registration/password_reset_confirm.html:47
-msgid "Der Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen. Bitte fordern Sie einen neuen Link an."
-msgstr "The password reset link is invalid or has expired. Please request a new link."
+msgid ""
+"Der Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen. Bitte "
+"fordern Sie einen neuen Link an."
+msgstr ""
+"The password reset link is invalid or has expired. Please request a new link."
 
 #: src/templates/registration/password_reset_confirm.html:51
 msgid "Neuen Link anfordern"
@@ -2423,8 +2499,12 @@ msgid "E-Mail gesendet"
 msgstr "Email sent"
 
 #: src/templates/registration/password_reset_done.html:15
-msgid "Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde eine Nachricht mit einem Link zum Zurücksetzen des Passworts gesendet."
-msgstr "If an account with this email address exists, a message with a password reset link has been sent."
+msgid ""
+"Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde eine Nachricht "
+"mit einem Link zum Zurücksetzen des Passworts gesendet."
+msgstr ""
+"If an account with this email address exists, a message with a password "
+"reset link has been sent."
 
 #: src/templates/registration/password_reset_done.html:18
 msgid "Bitte prüfen Sie Ihren Posteingang und ggf. Ihren Spam-Ordner."
@@ -2440,15 +2520,21 @@ msgid "Hallo"
 msgstr "Hello"
 
 #: src/templates/registration/password_reset_email.html:4
-msgid "Sie erhalten diese E-Mail, weil jemand das Zurücksetzen des Passworts für Ihr Konto bei Anlaufstelle angefordert hat."
-msgstr "You are receiving this email because someone has requested a password reset for your account."
+msgid ""
+"Sie erhalten diese E-Mail, weil jemand das Zurücksetzen des Passworts für "
+"Ihr Konto bei Anlaufstelle angefordert hat."
+msgstr ""
+"You are receiving this email because someone has requested a password reset "
+"for your account."
 
 #: src/templates/registration/password_reset_email.html:6
 msgid "Klicken Sie auf den folgenden Link, um Ihr Passwort zurückzusetzen:"
 msgstr "Click the following link to reset your password:"
 
 #: src/templates/registration/password_reset_email.html:10
-msgid "Falls Sie diese Anforderung nicht gestellt haben, können Sie diese E-Mail ignorieren."
+msgid ""
+"Falls Sie diese Anforderung nicht gestellt haben, können Sie diese E-Mail "
+"ignorieren."
 msgstr "If you did not make this request, you can ignore this email."
 
 #: src/templates/registration/password_reset_email.html:12
@@ -2465,8 +2551,11 @@ msgid "Passwort zurücksetzen"
 msgstr "Reset password"
 
 #: src/templates/registration/password_reset_form.html:15
-msgid "Geben Sie Ihre E-Mail-Adresse ein. Sie erhalten einen Link zum Zurücksetzen Ihres Passworts."
-msgstr "Enter your email address. You will receive a link to reset your password."
+msgid ""
+"Geben Sie Ihre E-Mail-Adresse ein. Sie erhalten einen Link zum Zurücksetzen "
+"Ihres Passworts."
+msgstr ""
+"Enter your email address. You will receive a link to reset your password."
 
 #: src/templates/registration/password_reset_form.html:34
 msgid "E-Mail-Adresse"

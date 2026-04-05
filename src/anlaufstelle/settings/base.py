@@ -50,6 +50,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "core.middleware.htmx_session.HtmxSessionMiddleware",
     "core.middleware.facility_scope.FacilityScopeMiddleware",
+    "core.middleware.user_language.UserLanguageMiddleware",
     "core.middleware.password_change.ForcePasswordChangeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
