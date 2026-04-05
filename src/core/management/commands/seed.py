@@ -1022,7 +1022,10 @@ class Command(BaseCommand):
         if Event.objects.filter(facility=facility).exists():
             return
 
-        admin = User.objects.filter(username="admin").first()
+        facility_users = list(User.objects.filter(facility=facility))
+        staff_users = [u for u in facility_users if u.role in (User.Role.STAFF, User.Role.LEAD)]
+        if not staff_users:
+            staff_users = facility_users
         clients = list(Client.objects.filter(facility=facility))
         doc_types = {dt.name: dt for dt in DocumentType.objects.filter(facility=facility)}
 
@@ -1071,12 +1074,14 @@ class Command(BaseCommand):
             ),
         ]
 
-        for dt_name, client_idx, is_anonymous, days_ago, data_json in event_defs:
+        for idx, (dt_name, client_idx, is_anonymous, days_ago, data_json) in enumerate(event_defs):
             doc_type = doc_types.get(dt_name)
             if doc_type is None:
                 continue
             client = clients[client_idx] if client_idx is not None else None
-            occurred = timezone.now() - timedelta(days=days_ago, hours=random.randint(0, 12))
+            hour, minute = Command._random_time_of_day()
+            base_date = timezone.now() - timedelta(days=days_ago)
+            occurred = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
             Event.objects.create(
                 facility=facility,
                 client=client,
@@ -1084,7 +1089,7 @@ class Command(BaseCommand):
                 occurred_at=occurred,
                 data_json=data_json,
                 is_anonymous=is_anonymous,
-                created_by=admin,
+                created_by=staff_users[idx % len(staff_users)],
             )
 
     # ------------------------------------------------------------------
@@ -1125,16 +1130,26 @@ class Command(BaseCommand):
         today = timezone.localdate()
 
         now = timezone.now()
+        # Fachkräfte (STAFF/LEAD) für gleichmäßige Verteilung
+        staff_users = [u for u in users if u.role in (User.Role.STAFF, User.Role.LEAD)]
+        if not staff_users:
+            staff_users = users
         batch = []
         hausverbot_active_count = 0
-        for _ in range(to_create_count):
+        for i in range(to_create_count):
             doc_type = random.choices(doc_types, weights=weights, k=1)[0]
             is_anonymous = random.random() < 0.15
             client = None if is_anonymous else random.choice(clients)
             days_ago = self._weighted_days_ago(zeitraum)
-            hour, minute = self._random_time_of_day()
+            if days_ago == 0:
+                hour, minute = self._random_time_of_day(max_hour=now.hour, max_minute=now.minute)
+            else:
+                hour, minute = self._random_time_of_day()
             base_date = now - timedelta(days=days_ago)
-            occurred = min(base_date.replace(hour=hour, minute=minute, second=0, microsecond=0), now)
+            occurred = min(
+                base_date.replace(hour=hour, minute=minute, second=0, microsecond=0),
+                now,
+            )
             data_json = self._random_data(doc_type.system_type or doc_type.name, dt_data_templates)
 
             # Bans realistic: most expired, max 2 active (grund from pool)
@@ -1155,7 +1170,7 @@ class Command(BaseCommand):
                     occurred_at=occurred,
                     data_json=data_json,
                     is_anonymous=is_anonymous,
-                    created_by=random.choice(users),
+                    created_by=staff_users[i % len(staff_users)],
                 )
             )
 
@@ -1166,12 +1181,25 @@ class Command(BaseCommand):
             self.stdout.write(f"  {len(batch)} Events für {facility.name} erstellt.")
 
     @staticmethod
-    def _random_time_of_day():
-        """Weighted hour distribution matching typical opening hours (8-19h)."""
+    def _random_time_of_day(max_hour=None, max_minute=None):
+        """Weighted hour distribution matching typical opening hours (8-19h).
+
+        Morgen-Anlauf → Vormittag-Peak → Nachmittag → Abend ausklingend.
+        If max_hour is set, limits generated times (for today's events).
+        """
         hours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
         weights = [5, 8, 15, 15, 10, 8, 12, 12, 10, 8, 5, 3]
+        if max_hour is not None:
+            filtered = [(h, w) for h, w in zip(hours, weights) if h <= max_hour]
+            if not filtered:
+                return 8, 0
+            hours, weights = zip(*filtered)
+            hours, weights = list(hours), list(weights)
         hour = random.choices(hours, weights=weights, k=1)[0]
-        minute = random.randint(0, 11) * 5  # 0, 5, 10, ..., 55
+        if max_hour is not None and hour == max_hour and max_minute is not None:
+            minute = random.randint(0, max(0, max_minute // 5)) * 5
+        else:
+            minute = random.randint(0, 11) * 5  # 0, 5, 10, ..., 55
         return hour, minute
 
     @staticmethod
@@ -1432,14 +1460,25 @@ class Command(BaseCommand):
         item_types = list(WorkItem.ItemType.values)
 
         today = date.today()
+        now = timezone.now()
+        zeitraum = cfg["zeitraum_days"]
         to_create = []
+        timestamps = []
         for i in range(count - existing):
             title = _WORK_ITEM_TITLES[i % len(_WORK_ITEM_TITLES)]
             client = random.choice(clients) if random.random() < 0.7 else None
             priority = random.choice(priorities)
             status = random.choice(statuses)
+
+            # Realistic created_at spread over the seed timeframe
+            days_ago = self._weighted_days_ago(zeitraum)
+            hour, minute = self._random_time_of_day()
+            created_ts = now - timedelta(days=days_ago, hours=now.hour - hour, minutes=now.minute - minute)
+            created_ts = min(created_ts, now)
+            timestamps.append(created_ts)
+
             completed_at = (
-                timezone.now() - timedelta(days=random.randint(1, 30))
+                min(created_ts + timedelta(days=random.randint(1, 30)), now)
                 if status in (WorkItem.Status.DONE, WorkItem.Status.DISMISSED)
                 else None
             )
@@ -1465,6 +1504,10 @@ class Command(BaseCommand):
 
         if to_create:
             WorkItem.objects.bulk_create(to_create, batch_size=1000)
+            # Fix auto_now_add: set realistic created_at timestamps
+            created_items = list(WorkItem.objects.filter(facility=facility).order_by("pk")[existing:])
+            for wi, ts in zip(created_items, timestamps):
+                WorkItem.objects.filter(pk=wi.pk).update(created_at=ts)
             self.stdout.write(f"  {len(to_create)} WorkItems für {facility.name} erstellt.")
 
     @staticmethod
