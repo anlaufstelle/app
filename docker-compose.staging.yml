@@ -1,0 +1,68 @@
+# Staging-Umgebung fuer Anlaufstelle
+# Dient zur Validierung vor dem Produktiv-Deployment.
+# Identisch zur Produktion, aber mit eigener Datenbank (anlaufstelle_staging),
+# eigenem .env.staging und Staging-Subdomain (staging.$DOMAIN).
+#
+# Verwendung:
+#   docker compose -f docker-compose.staging.yml up -d
+
+services:
+  db:
+    image: postgres:16-alpine
+    env_file: .env.staging
+    volumes:
+      - pgdata_staging:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - internal
+
+  web:
+    image: ghcr.io/anlaufstelle/app:latest
+    env_file: .env.staging
+    environment:
+      DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
+      POSTGRES_HOST: db
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')\""]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - internal
+      - frontend
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "8443:443"
+      - "8080:80"
+    volumes:
+      - ./Caddyfile.staging:/etc/caddy/Caddyfile:ro
+      - caddy_data_staging:/data
+      - caddy_config_staging:/config
+    env_file: .env.staging
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - frontend
+
+volumes:
+  pgdata_staging:
+  caddy_data_staging:
+  caddy_config_staging:
+
+networks:
+  internal:
+    internal: true
+  frontend:

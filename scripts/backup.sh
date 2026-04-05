@@ -3,6 +3,10 @@ set -euo pipefail
 
 # Anlaufstelle Backup-Skript
 # Erstellt verschlüsselte PostgreSQL-Backups mit Rotation
+#
+# Verwendung:
+#   ./backup.sh            Backup erstellen mit Rotation
+#   ./backup.sh --verify   Letztes Backup in temporaere DB wiederherstellen und pruefen
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -20,6 +24,62 @@ fi
 : "${POSTGRES_USER:?POSTGRES_USER nicht gesetzt}"
 : "${POSTGRES_DB:?POSTGRES_DB nicht gesetzt}"
 : "${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY nicht gesetzt}"
+
+# --verify: Letztes Backup in temporaere Datenbank wiederherstellen und pruefen
+if [[ "${1:-}" == "--verify" ]]; then
+    DAILY_DIR="${BACKUP_DIR}/daily"
+
+    # Neuestes Backup finden
+    LATEST_BACKUP=$(find "$DAILY_DIR" -name "*.sql.gz.enc" -type f 2>/dev/null \
+        | sort -r | head -n1)
+
+    if [[ -z "$LATEST_BACKUP" ]]; then
+        echo "FEHLER: Kein Backup in ${DAILY_DIR} gefunden."
+        exit 1
+    fi
+
+    echo "Verifiziere Backup: ${LATEST_BACKUP}"
+
+    VERIFY_DB="anlaufstelle_verify_$$"
+
+    # Aufraeum-Trap: temporaere DB bei Fehler oder Abbruch droppen
+    cleanup() {
+        echo "Raeume temporaere Datenbank '${VERIFY_DB}' auf..."
+        docker compose -f "$COMPOSE_FILE" exec -T db \
+            psql -U "$POSTGRES_USER" -d postgres \
+            -c "DROP DATABASE IF EXISTS \"${VERIFY_DB}\";" 2>/dev/null || true
+    }
+    trap cleanup EXIT
+
+    # Temporaere Datenbank erstellen
+    echo "Erstelle temporaere Datenbank: ${VERIFY_DB}"
+    docker compose -f "$COMPOSE_FILE" exec -T db \
+        psql -U "$POSTGRES_USER" -d postgres \
+        -c "CREATE DATABASE \"${VERIFY_DB}\";"
+
+    # Backup entschluesseln, entpacken und wiederherstellen
+    echo "Stelle Backup in temporaere Datenbank wieder her..."
+    openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY \
+        -in "$LATEST_BACKUP" \
+        | gunzip \
+        | docker compose -f "$COMPOSE_FILE" exec -T db \
+            psql -U "$POSTGRES_USER" "$VERIFY_DB" > /dev/null
+
+    # Einfache Pruefabfrage ausfuehren
+    echo "Pruefe wiederhergestellte Daten..."
+    FACILITY_COUNT=$(docker compose -f "$COMPOSE_FILE" exec -T db \
+        psql -U "$POSTGRES_USER" -d "$VERIFY_DB" -t -A \
+        -c "SELECT COUNT(*) FROM core_facility;")
+
+    if [[ -z "$FACILITY_COUNT" || "$FACILITY_COUNT" -lt 0 ]] 2>/dev/null; then
+        echo "FEHLER: Pruefabfrage fehlgeschlagen."
+        exit 1
+    fi
+
+    echo "Verifikation erfolgreich: ${FACILITY_COUNT} Einrichtung(en) in core_facility."
+    echo "Backup ist gueltig: ${LATEST_BACKUP}"
+    exit 0
+fi
 
 TIMESTAMP=$(date +%Y-%m-%d_%H%M%S)
 DAILY_DIR="${BACKUP_DIR}/daily"
