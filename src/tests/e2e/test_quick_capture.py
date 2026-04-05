@@ -56,6 +56,7 @@ class TestSchnellerfassung:
 
         # Warten bis Dropdown sichtbar
         page.locator("#client-autocomplete-list").wait_for(state="visible", timeout=5000)
+        page.wait_for_timeout(500)  # Debounce (150ms) + Re-Fetch abwarten
 
         # Pfeil-runter + warten bis Alpine highlightet + Enter
         autocomplete.press("ArrowDown")

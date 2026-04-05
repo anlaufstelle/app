@@ -41,17 +41,21 @@ class TestClientAutocompleteRecency:
         options = page.locator("[role='option']")
         options.first.wait_for(state="visible", timeout=5000)
 
-        # Alle Seed-Clients mit Events sollten vor E2E-Test-Client (ohne Events) stehen
+        # Dropdown-Reihenfolge muss der API-Antwort entsprechen (Recency-Sortierung).
+        # Nicht hardcoden: Seed-Events werden per Index auf UUID-sortierte Clients
+        # gemappt, daher aendert sich die Reihenfolge bei jedem --flush.
+        api_pseudonyms = page.evaluate("""async () => {
+            const resp = await fetch('/api/clients/autocomplete/?q=');
+            const data = await resp.json();
+            return data.map(c => c.pseudonym);
+        }""")
+
         texts = [options.nth(i).inner_text() for i in range(options.count())]
         pseudonyms = [t.split("\n")[0] for t in texts]
 
-        # E2E-Test-Client (kein Event) darf nicht vor den Seed-Clients stehen
-        seed_clients = {"Stern-42", "Wolke-17", "Blitz-08", "Regen-55", "Wind-33", "Nebel-71", "Sonne-99"}
-        seed_positions = [i for i, p in enumerate(pseudonyms) if p in seed_clients]
-        other_positions = [i for i, p in enumerate(pseudonyms) if p not in seed_clients]
-
-        if seed_positions and other_positions:
-            assert max(seed_positions) < min(other_positions)
+        assert pseudonyms == api_pseudonyms, (
+            f"Dropdown-Reihenfolge weicht von API ab:\n  Dropdown: {pseudonyms}\n  API:      {api_pseudonyms}"
+        )
 
     def test_search_filters_and_keeps_recency_order(self, authenticated_page, base_url):
         """Tippen filtert Ergebnisse, Sortierung bleibt nach Aktualität."""
