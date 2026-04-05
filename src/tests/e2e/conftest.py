@@ -3,6 +3,10 @@
 E2E-Tests laufen gegen die echte Dev-Datenbank (nicht die Test-DB).
 Der Server wird als Subprocess gestartet, Seed-Daten werden einmalig geladen.
 Login-Sessions werden per Storage-State wiederverwendet (verhindert Rate-Limiting).
+
+Bei paralleler Ausführung (pytest-xdist) bekommt jeder Worker:
+- eigene Datenbank (anlaufstelle_e2e, anlaufstelle_e2e_1, ...)
+- eigenen gunicorn-Prozess auf eigenem Port (8844, 8845, ...)
 """
 
 import os
@@ -13,6 +17,7 @@ import time
 
 import pytest
 import requests
+from filelock import FileLock
 
 _TEST_ENV = {**os.environ, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.test"}
 # E2E-Server + Seed mit e2e-Settings (Dev/PBKDF2 + kein Rate-Limit).
@@ -21,17 +26,17 @@ _TEST_ENV = {**os.environ, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.test
 _E2E_ENV = {**os.environ, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.e2e"}
 
 
-@pytest.fixture(scope="session")
-def django_db_setup():
-    """Override: E2E-Tests brauchen keine Test-DB, der Server nutzt die echte Dev-DB."""
+def _get_worker_info(request):
+    """Worker-Nummer und -ID für xdist-Parallelisierung."""
+    worker_input = getattr(request.config, "workerinput", None)
+    if worker_input:
+        wid = worker_input["workerid"]  # "gw0", "gw1", ...
+        return int(wid.replace("gw", "")), wid
+    return 0, "master"
 
 
-@pytest.fixture(scope="session")
-def base_url():
-    """Startet den Django-Dev-Server mit Seed-Daten für die gesamte Test-Session."""
-    python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
-
-    # E2E-Datenbank (anlaufstelle_e2e) erstellen falls nicht vorhanden
+def _create_e2e_db(python, db_name):
+    """E2E-Datenbank erstellen falls nicht vorhanden."""
     subprocess.run(
         [
             python,
@@ -41,39 +46,29 @@ def base_url():
             "  host='{host}', port='{port}', user='{user}', password='{pw}', dbname='{db}', autocommit=True"
             "); "
             "cur = conn.cursor(); "
-            "cur.execute(\"SELECT 1 FROM pg_database WHERE datname='anlaufstelle_e2e'\"); "
+            "cur.execute(\"SELECT 1 FROM pg_database WHERE datname='{e2e_db}'\"); "
             "exists = cur.fetchone(); "
-            "cur.execute('CREATE DATABASE anlaufstelle_e2e') if not exists else None; "
+            "cur.execute('CREATE DATABASE {e2e_db}') if not exists else None; "
             "conn.close()".format(
                 host=os.environ.get("POSTGRES_HOST", "localhost"),
                 port=os.environ.get("POSTGRES_PORT", "5432"),
                 user=os.environ.get("POSTGRES_USER", "anlaufstelle"),
                 pw=os.environ.get("POSTGRES_PASSWORD", "anlaufstelle"),
                 db=os.environ.get("POSTGRES_DB", "anlaufstelle"),
+                e2e_db=db_name,
             ),
         ],
         check=True,
         capture_output=True,
     )
 
-    # Migrationen + Seed mit E2E-Settings (eigene DB, PBKDF2-Hasher, kein Rate-Limit)
-    subprocess.run([python, "src/manage.py", "migrate", "--run-syncdb"], check=True, capture_output=True, env=_E2E_ENV)
-    subprocess.run([python, "src/manage.py", "seed", "--flush"], check=True, capture_output=True, env=_E2E_ENV)
 
-    # Static Files sammeln (WhiteNoise servt sie dann über gunicorn)
-    subprocess.run(
-        [python, "src/manage.py", "collectstatic", "--noinput"],
-        check=True,
-        capture_output=True,
-        env=_E2E_ENV,
-    )
-
-    # Alte gunicorn-Prozesse auf Port 8844 beenden (Reste abgebrochener Läufe)
+def _kill_port(port):
+    """Alte Prozesse auf einem Port beenden."""
     try:
-        stale = subprocess.run(["lsof", "-ti", ":8844"], capture_output=True, text=True)
+        stale = subprocess.run(["lsof", "-ti", f":{port}"], capture_output=True, text=True)
     except FileNotFoundError:
-        # lsof nicht verfügbar — Fallback: pkill
-        subprocess.run(["pkill", "-f", "gunicorn.*8844"], capture_output=True)
+        subprocess.run(["pkill", "-f", f"gunicorn.*{port}"], capture_output=True)
         stale = None
     if stale and stale.stdout.strip():
         for pid in stale.stdout.split():
@@ -82,6 +77,67 @@ def base_url():
             except (ProcessLookupError, ValueError):
                 pass
         time.sleep(1)
+
+
+def _wait_for_server(url, retries=30, interval=0.5):
+    """Warten bis der Server auf /login/ antwortet."""
+    for _ in range(retries):
+        try:
+            resp = requests.get(f"{url}/login/", timeout=1)
+            if resp.status_code == 200:
+                return
+        except (requests.ConnectionError, requests.ReadTimeout):
+            time.sleep(interval)
+    raise RuntimeError(f"Server konnte nicht gestartet werden: {url}")
+
+
+@pytest.fixture(scope="session")
+def django_db_setup():
+    """Override: E2E-Tests brauchen keine Test-DB, der Server nutzt die echte Dev-DB."""
+
+
+@pytest.fixture(scope="session")
+def base_url(request, tmp_path_factory):
+    """Startet den Django-Dev-Server mit Seed-Daten für die gesamte Test-Session.
+
+    Bei xdist-Parallelisierung bekommt jeder Worker eigene DB + eigenen Port.
+    """
+    worker_num, worker_id = _get_worker_info(request)
+    port = 8844 + worker_num
+    db_name = "anlaufstelle_e2e" if worker_num == 0 else f"anlaufstelle_e2e_{worker_num}"
+
+    python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
+    worker_env = {**_E2E_ENV, "E2E_DATABASE_NAME": db_name}
+
+    # collectstatic nur einmal (filelock über shared tmp-Verzeichnis)
+    root_tmp = tmp_path_factory.getbasetemp().parent
+    with FileLock(str(root_tmp / "collectstatic.lock")):
+        if not (root_tmp / "collectstatic.done").exists():
+            subprocess.run(
+                [python, "src/manage.py", "collectstatic", "--noinput"],
+                check=True,
+                capture_output=True,
+                env=worker_env,
+            )
+            (root_tmp / "collectstatic.done").touch()
+
+    # E2E-Datenbank erstellen + Migrationen + Seed (pro Worker)
+    _create_e2e_db(python, db_name)
+    subprocess.run(
+        [python, "src/manage.py", "migrate", "--run-syncdb"],
+        check=True,
+        capture_output=True,
+        env=worker_env,
+    )
+    subprocess.run(
+        [python, "src/manage.py", "seed", "--flush"],
+        check=True,
+        capture_output=True,
+        env=worker_env,
+    )
+
+    # Alte gunicorn-Prozesse auf diesem Port beenden
+    _kill_port(port)
 
     # gunicorn statt runserver: 2 Workers + 2 Threads = 4 parallele Request-Slots.
     # Verhindert Timeouts durch Request-Stau (Session-Saves, HTMX, WeasyPrint).
@@ -92,7 +148,7 @@ def base_url():
             "gunicorn",
             "anlaufstelle.wsgi:application",
             "--bind",
-            "127.0.0.1:8844",
+            f"127.0.0.1:{port}",
             "--workers",
             "2",
             "--threads",
@@ -104,25 +160,32 @@ def base_url():
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        env=_E2E_ENV,
+        env=worker_env,
     )
 
-    url = "http://127.0.0.1:8844"
-    for _ in range(30):
-        try:
-            resp = requests.get(f"{url}/login/", timeout=1)
-            if resp.status_code == 200:
-                break
-        except (requests.ConnectionError, requests.ReadTimeout):
-            time.sleep(0.5)
-    else:
-        proc.terminate()
-        raise RuntimeError("gunicorn-Server konnte nicht gestartet werden")
+    url = f"http://127.0.0.1:{port}"
+    _wait_for_server(url)
 
     yield url
 
     proc.send_signal(signal.SIGTERM)
     proc.wait(timeout=10)
+
+
+@pytest.fixture(scope="session")
+def e2e_env(base_url):
+    """Worker-spezifische Umgebungsvariablen für manage.py-Aufrufe in Tests.
+
+    Tests die manage.py shell/Befehle brauchen, MÜSSEN dieses Fixture nutzen
+    statt eigene _E2E_ENV zu konstruieren — sonst landet der Befehl bei
+    paralleler Ausführung auf der falschen Datenbank.
+    """
+    from urllib.parse import urlparse
+
+    port = urlparse(base_url).port
+    worker_num = port - 8844
+    db_name = "anlaufstelle_e2e" if worker_num == 0 else f"anlaufstelle_e2e_{worker_num}"
+    return {**_E2E_ENV, "E2E_DATABASE_NAME": db_name}
 
 
 @pytest.fixture(scope="session")

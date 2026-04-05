@@ -1,13 +1,33 @@
-"""E2E-Tests fuer PWA Offline-Modus.
-
-Testet Service-Worker-Registrierung, Offline-Banner und
-optimistisches Speichern bei Netzausfall.
-"""
+"""E2E-Tests: PWA — Setup, Manifest, Service Worker, Offline-Modus."""
 
 import pytest
 
+pytestmark = pytest.mark.e2e
 
-@pytest.mark.e2e
+
+class TestPWASetup:
+    """PWA-Setup: Manifest, Service Worker Registration, SW-Endpoint."""
+
+    def test_manifest_link_in_head(self, authenticated_page, base_url):
+        page = authenticated_page
+        page.goto(f"{base_url}/")
+        manifest = page.locator("link[rel='manifest']")
+        assert manifest.count() == 1
+        assert "manifest.json" in manifest.get_attribute("href")
+
+    def test_sw_registration_script(self, authenticated_page, base_url):
+        page = authenticated_page
+        page.goto(f"{base_url}/")
+        html = page.content()
+        assert "sw-register.js" in html
+
+    def test_sw_endpoint(self, authenticated_page, base_url):
+        page = authenticated_page
+        response = page.goto(f"{base_url}/sw.js")
+        assert response.status == 200
+        assert "javascript" in response.headers.get("content-type", "")
+
+
 def test_service_worker_registered(authenticated_page, base_url):
     """Service Worker ist registriert und aktiv."""
     page = authenticated_page
@@ -34,7 +54,6 @@ def test_service_worker_registered(authenticated_page, base_url):
     assert sw_state == "active", f"Service Worker Status: {sw_state}"
 
 
-@pytest.mark.e2e
 def test_offline_banner_visible_when_offline(authenticated_page, base_url):
     """Offline-Banner erscheint wenn Netzwerk offline geht."""
     page = authenticated_page
@@ -63,7 +82,6 @@ def test_offline_banner_visible_when_offline(authenticated_page, base_url):
     assert not banner.is_visible()
 
 
-@pytest.mark.e2e
 @pytest.mark.xfail(reason="Service Worker faengt POST-Requests im Offline-Modus noch nicht ab")
 def test_offline_form_submit_shows_feedback(authenticated_page, base_url):
     """Formular-Submit im Offline-Modus zeigt Feedback statt Fehler."""

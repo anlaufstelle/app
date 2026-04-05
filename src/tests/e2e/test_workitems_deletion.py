@@ -1,12 +1,4 @@
-"""E2E-Tests: 4-Augen-Prinzip bei Löschanträgen.
-
-Testet:
-- DeletionRequest erstellen UND reviewen (Genehmigen/Ablehnen)
-- Reviewer ≠ Antragsteller wird erzwungen
-
-Bereits abgedeckt in test_stream_d.py:
-- WorkItem create, inbox, status HTMX, badge, Hausverbot-Banner
-"""
+"""E2E-Tests: Löschanträge — 4-Augen-Prinzip und Liste."""
 
 import re
 
@@ -51,6 +43,7 @@ def _create_qualified_event_and_request_deletion(page, base_url):
 class TestFourEyesPrincipleReview:
     """4-Augen-Prinzip: Löschantrag genehmigen/ablehnen."""
 
+    @pytest.mark.smoke
     def test_lead_can_approve_deletion_request(self, authenticated_page, lead_page, base_url):
         """Lead (thomas) genehmigt von admin gestellten Löschantrag."""
         _create_qualified_event_and_request_deletion(authenticated_page, base_url)
@@ -93,6 +86,7 @@ class TestFourEyesPrincipleReview:
 class TestReviewerNotRequester:
     """Reviewer darf nicht der Antragsteller sein."""
 
+    @pytest.mark.smoke
     def test_requester_cannot_approve_own_request(self, authenticated_page, base_url):
         """Admin kann eigenen Löschantrag nicht genehmigen."""
         _create_qualified_event_and_request_deletion(authenticated_page, base_url)
@@ -135,3 +129,18 @@ class TestReviewerNotRequester:
             or lead_page.locator("text=Stern-42").count() > 0
         )
         assert has_context
+
+
+class TestDeletionRequestList:
+    """Löschanträge-Liste → Lead sieht offene Anträge."""
+
+    def test_deletion_request_list_accessible(self, authenticated_page, base_url):
+        page = authenticated_page
+        nav = page.locator("nav[aria-label='Hauptnavigation']")
+        loeschantraege_link = nav.locator("a:has-text('Löschanträge')")
+
+        if loeschantraege_link.count() > 0:
+            loeschantraege_link.click()
+            page.wait_for_url(re.compile(r"/deletion-requests/$"))
+            assert page.locator("h1").inner_text() == "Löschanträge"
+            assert page.locator("text=Ausstehend").first.is_visible()

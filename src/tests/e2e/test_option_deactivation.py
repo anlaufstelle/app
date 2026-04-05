@@ -6,7 +6,6 @@ Tests:
 - Wert bleibt nach Speichern erhalten
 """
 
-import os
 import re
 import subprocess
 import sys
@@ -16,10 +15,9 @@ import pytest
 pytestmark = pytest.mark.e2e
 
 SUBMIT = "#main-content button[type='submit']"
-_E2E_ENV = {**os.environ, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.e2e"}
 
 
-def _find_event_with_sachspenden():
+def _find_event_with_sachspenden(e2e_env):
     """Find UUID of an event containing 'sachspenden' via Django shell."""
     result = subprocess.run(
         [
@@ -33,7 +31,7 @@ def _find_event_with_sachspenden():
         ],
         capture_output=True,
         text=True,
-        env=_E2E_ENV,
+        env=e2e_env,
     )
     return result.stdout.strip() or None
 
@@ -58,11 +56,11 @@ class TestOptionDeactivation:
         assert "beratung" in values, "Aktive Option 'beratung' muss vorhanden sein"
         assert "sachspenden" not in values, "Deaktivierte Option 'sachspenden' darf nicht vorhanden sein"
 
-    def test_edit_event_shows_inactive_with_label(self, authenticated_page, base_url):
+    def test_edit_event_shows_inactive_with_label(self, authenticated_page, base_url, e2e_env):
         """Event mit deaktiviertem Wert bearbeiten: Option sichtbar mit '(deaktiviert)'."""
         page = authenticated_page
 
-        event_uuid = _find_event_with_sachspenden()
+        event_uuid = _find_event_with_sachspenden(e2e_env)
         assert event_uuid, "Seed-Event mit 'sachspenden' nicht gefunden"
 
         page.goto(f"{base_url}/events/{event_uuid}/edit/")
@@ -77,11 +75,11 @@ class TestOptionDeactivation:
         label_text = page.locator("text=Sachspenden (deaktiviert)")
         assert label_text.is_visible(), "Label muss '(deaktiviert)' enthalten"
 
-    def test_inactive_value_preserved_on_save(self, authenticated_page, base_url):
+    def test_inactive_value_preserved_on_save(self, authenticated_page, base_url, e2e_env):
         """Beim Speichern bleibt der deaktivierte Wert erhalten."""
         page = authenticated_page
 
-        event_uuid = _find_event_with_sachspenden()
+        event_uuid = _find_event_with_sachspenden(e2e_env)
         assert event_uuid, "Seed-Event mit 'sachspenden' nicht gefunden"
 
         page.goto(f"{base_url}/events/{event_uuid}/edit/")

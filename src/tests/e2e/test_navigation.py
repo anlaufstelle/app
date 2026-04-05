@@ -7,6 +7,7 @@ import pytest
 pytestmark = pytest.mark.e2e
 
 
+@pytest.mark.smoke
 class TestSidebarCreateButtons:
     """Alle drei Anlage-Buttons sind im Sidebar-Neu-Dropdown sichtbar und funktional."""
 

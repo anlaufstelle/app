@@ -168,7 +168,11 @@ Der Server ist unter `https://localhost:8443` erreichbar (selbstsigniertes Zerti
 | `make test`      | Unit- und Integrationstests ausführen (ohne E2E)                  |
 | `make test-e2e`  | End-to-End-Tests mit Playwright ausführen                         |
 | `make check`     | Django-Systemcheck und Migrations-Konsistenz prüfen               |
-| `make ci`        | Vollständige CI-Pipeline lokal: `lint` + `check` + `test`        |
+| `make ci`        | Vollständige CI-Pipeline lokal: `lint` + `check` + `test-parallel` |
+| `make test-focus T=<pfad>` | Einzelne Testdatei mit Fail-Fast                         |
+| `make test-parallel` | Unit- und Integrationstests parallel (pytest-xdist)            |
+| `make test-e2e-parallel` | E2E-Tests parallel (Default 2 Worker, konfigurierbar)     |
+| `make test-e2e-smoke` | Nur Smoke-markierte E2E-Tests (~2-3 min)                    |
 | `make dev`       | Datenbank starten, migrieren und Server starten (kombiniert)      |
 
 Vor jedem Commit sollte `make ci` lokal erfolgreich durchlaufen.
@@ -178,7 +182,8 @@ Vor jedem Commit sollte `make ci` lokal erfolgreich durchlaufen.
 | Port | Prozess | Gestartet von | Zweck |
 |------|---------|---------------|-------|
 | **8443** | gunicorn (HTTPS) | `make run` / `make dev` | Dev-Server (Standard) |
-| **8844** | gunicorn (HTTP) | `make test-e2e` / E2E-conftest | E2E-Testserver (temporär) |
+| **8844** | gunicorn (HTTP) | `make test-e2e` / E2E-conftest | E2E-Testserver Worker 0 (temporär) |
+| **8845+** | gunicorn (HTTP) | `make test-e2e-parallel` | E2E-Testserver Worker 1+ (temporär) |
 | **8000** | Django runserver | `make run-http` | Fallback ohne HTTPS |
 | **5432** | PostgreSQL | `make db` (Docker) | Datenbank |
 
@@ -283,6 +288,8 @@ make test
 
 Tests liegen unter `src/tests/`. Neue Tests kommen in die passende Datei oder in eine neue Datei nach dem Muster `test_<feature>.py`.
 
+**Parallel:** `make test-parallel` nutzt pytest-xdist für parallele Ausführung auf allen verfügbaren CPU-Kernen. `make ci` nutzt automatisch die parallele Variante.
+
 ### End-to-End-Tests (Playwright)
 
 ```bash
@@ -298,11 +305,15 @@ E2E-Tests liegen unter `src/tests/e2e/`. Sie sind mit `@pytest.mark.e2e` markier
 
 Fixtures für Login, Server-Setup u. ä. liegen in `src/tests/e2e/conftest.py`. Ausführliches Runbook mit Checklisten und Troubleshooting: [docs/e2e-runbook.md](docs/e2e-runbook.md).
 
+**Parallele E2E-Tests:** `make test-e2e-parallel` startet pro xdist-Worker einen eigenen gunicorn-Prozess auf eigenem Port mit eigener Datenbank. Default: 2 Worker (`E2E_WORKERS=4 make test-e2e-parallel` für mehr). `--dist loadfile` hält Tests aus derselben Datei auf demselben Worker.
+
+**Smoke-Tests:** `make test-e2e-smoke` führt nur mit `@pytest.mark.smoke` markierte E2E-Tests aus (~40 kritische Flows, ~2-3 min). Ideal zur schnellen Validierung nach Feature-Implementierung.
+
 ### Vollständige CI-Pipeline lokal
 
 ```bash
 make ci
-# entspricht: lint + check + test
+# entspricht: lint + check + test-parallel
 ```
 
 Diese Pipeline muss vor jedem Pull Request lokal grün sein.

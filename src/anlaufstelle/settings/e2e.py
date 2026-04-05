@@ -6,10 +6,13 @@ dürfen hier NICHT verwendet werden, da Django bei jedem Login den
 Hash automatisch auf den primären Hasher umschreibt.
 """
 
+import os
+
 from .dev import *  # noqa: F401, F403
 
 # Eigene E2E-Datenbank — Dev-Daten bleiben unberührt
-DATABASES["default"] = {**DATABASES["default"], "NAME": "anlaufstelle_e2e"}  # noqa: F405
+_db_name = os.environ.get("E2E_DATABASE_NAME", "anlaufstelle_e2e")
+DATABASES["default"] = {**DATABASES["default"], "NAME": _db_name}  # noqa: F405
 
 # Rate-Limiting deaktivieren (E2E-Tests machen viele Logins auf einer IP)
 RATELIMIT_ENABLE = False

@@ -1,40 +1,30 @@
-"""E2E-Tests für Stream E: Health, Statistik, CSV/PDF/Jugendamt-Export."""
-
-import re
+"""E2E-Tests: Statistik-Dashboard — Navigation, KPIs, HTMX, Jahresnavigation."""
 
 import pytest
 
 pytestmark = pytest.mark.e2e
 
 
-class TestHealthEndpoint:
-    """1. /health/ → JSON "ok"."""
-
-    def test_health_returns_ok(self, authenticated_page, base_url):
-        page = authenticated_page
-        page.goto(f"{base_url}/health/")
-        content = page.locator("body").inner_text()
-        assert '"status": "ok"' in content or '"status":"ok"' in content
-
-
 class TestStatisticsNavigation:
-    """2. Nav: "Statistik" Link für Admin sichtbar."""
+    """Nav: "Statistik" Link für Admin sichtbar."""
 
+    @pytest.mark.smoke
     def test_statistik_link_visible(self, authenticated_page):
         page = authenticated_page
         nav = page.locator("nav[aria-label='Hauptnavigation']")
         assert nav.locator("a:has-text('Statistik')").is_visible()
 
+    @pytest.mark.smoke
     def test_statistik_link_navigates(self, authenticated_page, base_url):
         page = authenticated_page
         nav = page.locator("nav[aria-label='Hauptnavigation']")
         nav.locator("a:has-text('Statistik')").click()
-        page.wait_for_url(re.compile(r"/statistics/$"))
+        page.wait_for_url("**/statistics/")
         assert page.locator("h1").inner_text() == "Statistik"
 
 
 class TestStatisticsDashboard:
-    """3. Dashboard: KPI-Karten + Tabellen sichtbar."""
+    """Dashboard: KPI-Karten + Tabellen sichtbar."""
 
     def test_kpi_cards_visible(self, authenticated_page, base_url):
         page = authenticated_page
@@ -52,7 +42,7 @@ class TestStatisticsDashboard:
 
 
 class TestStatisticsHTMX:
-    """4. Zeitraum-Wechsel per HTMX."""
+    """Zeitraum-Wechsel per HTMX."""
 
     def test_period_switch_updates_content(self, authenticated_page, base_url):
         page = authenticated_page
@@ -70,78 +60,8 @@ class TestStatisticsHTMX:
         assert new_text != zeitraum_text
 
 
-class TestCSVExportE2E:
-    """5. CSV-Export-Button → Download."""
-
-    def test_csv_export_button_visible(self, authenticated_page, base_url):
-        page = authenticated_page
-        page.goto(f"{base_url}/statistics/")
-        assert page.locator("a:has-text('CSV-Export')").is_visible()
-
-    def test_csv_download(self, authenticated_page, base_url):
-        page = authenticated_page
-        page.goto(f"{base_url}/statistics/")
-
-        with page.expect_download() as download_info:
-            page.locator("a:has-text('CSV-Export')").click()
-        download = download_info.value
-        assert download.suggested_filename.endswith(".csv")
-
-
-class TestPDFExportE2E:
-    """6. PDF-Export-Button → Download."""
-
-    def test_pdf_export_button_visible(self, authenticated_page, base_url):
-        page = authenticated_page
-        page.goto(f"{base_url}/statistics/")
-        assert page.locator("a:has-text('PDF-Bericht')").is_visible()
-
-    def test_pdf_download(self, authenticated_page, base_url):
-        page = authenticated_page
-        page.goto(f"{base_url}/statistics/")
-
-        with page.expect_download() as download_info:
-            page.locator("a:has-text('PDF-Bericht')").click()
-        download = download_info.value
-        assert download.suggested_filename.endswith(".pdf")
-
-
-class TestJugendamtExportE2E:
-    """7. Jugendamt-Export → Download."""
-
-    def test_jugendamt_export_button_visible(self, authenticated_page, base_url):
-        page = authenticated_page
-        page.goto(f"{base_url}/statistics/")
-        assert page.locator("a:has-text('Jugendamt-Bericht')").is_visible()
-
-    def test_jugendamt_download(self, authenticated_page, base_url):
-        page = authenticated_page
-        page.goto(f"{base_url}/statistics/")
-
-        with page.expect_download() as download_info:
-            page.locator("a:has-text('Jugendamt-Bericht')").click()
-        download = download_info.value
-        assert download.suggested_filename.startswith("jugendamt_")
-
-
-class TestStatisticsAccessControl:
-    """8. Staff-User: kein Zugriff auf Statistik."""
-
-    def test_staff_no_access(self, staff_page, base_url):
-        page = staff_page
-        page.goto(f"{base_url}/")
-
-        # Statistik-Link sollte nicht sichtbar sein
-        nav = page.locator("nav[aria-label='Hauptnavigation']")
-        assert nav.locator("a:has-text('Statistik')").count() == 0
-
-        # Direkter Zugriff → 403
-        response = page.goto(f"{base_url}/statistics/")
-        assert response.status == 403
-
-
 class TestStatisticsYearNavigation:
-    """9. Jahres-Navigation: Button, Pfeile, Zeitraum (#437)."""
+    """Jahres-Navigation: Button, Pfeile, Zeitraum (#437)."""
 
     def test_jahr_button_visible(self, authenticated_page, base_url):
         """Jahr-Button ist auf der Statistik-Seite sichtbar."""

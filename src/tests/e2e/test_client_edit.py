@@ -29,6 +29,7 @@ class TestClientEdit:
         page.click("a:has-text('Bearbeiten')")
         page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/edit/"))
 
+    @pytest.mark.smoke
     def test_edit_form_loads_with_existing_data(self, authenticated_page, base_url):
         """Edit-Formular zeigt aktuelles Pseudonym vorausgefüllt."""
         page = authenticated_page
@@ -42,6 +43,7 @@ class TestClientEdit:
         # Contact-Stage Dropdown ist sichtbar
         assert page.locator('select[name="contact_stage"]').is_visible()
 
+    @pytest.mark.smoke
     def test_edit_pseudonym_saves_and_redirects(self, authenticated_page, base_url):
         """Pseudonym ändern → Speichern → Detail zeigt neuen Wert."""
         page = authenticated_page
@@ -80,6 +82,7 @@ class TestClientEdit:
 class TestClientEditPermissions:
     """Berechtigungsprüfungen für Client-Edit."""
 
+    @pytest.mark.smoke
     def test_assistant_cannot_edit_client(self, assistant_page, authenticated_page, base_url):
         """Assistenz bekommt 403 auf Client-Edit-URL."""
         # Als Admin einen Seed-Client (Sonne-99) für den Test nutzen

@@ -16,18 +16,21 @@ pytestmark = pytest.mark.e2e
 class TestLoginAllRoles:
     """Login mit allen 4 Rollen funktioniert (via Session-Fixtures)."""
 
+    @pytest.mark.smoke
     def test_admin_login(self, authenticated_page):
         page = authenticated_page
         assert page.locator("h1").inner_text() == "Zeitstrom"
         nav = page.locator("nav[aria-label='Hauptnavigation']")
         assert nav.locator("text=Zeitstrom").is_visible()
 
+    @pytest.mark.smoke
     def test_lead_login(self, lead_page):
         page = lead_page
         assert page.locator("h1").inner_text() == "Zeitstrom"
         nav = page.locator("nav[aria-label='Hauptnavigation']")
         assert nav.locator("a:has-text('Statistik')").is_visible()
 
+    @pytest.mark.smoke
     def test_staff_login(self, staff_page):
         page = staff_page
         assert page.locator("h1").inner_text() == "Zeitstrom"
@@ -35,6 +38,7 @@ class TestLoginAllRoles:
         assert nav.locator("a:has-text('Statistik')").count() == 0
         assert nav.locator("a:has-text('Fälle')").is_visible()
 
+    @pytest.mark.smoke
     def test_assistant_login(self, assistant_page):
         page = assistant_page
         assert page.locator("h1").inner_text() == "Zeitstrom"
@@ -61,6 +65,7 @@ class TestPasswordChangePage:
 class TestAssistantNavigation:
     """Assistenz-Rolle sieht eingeschränkte Navigation."""
 
+    @pytest.mark.smoke
     def test_assistant_no_audit_link(self, assistant_page):
         nav = assistant_page.locator("nav[aria-label='Hauptnavigation']")
         assert nav.locator("a:has-text('Audit')").count() == 0
@@ -69,6 +74,7 @@ class TestAssistantNavigation:
         nav = assistant_page.locator("nav[aria-label='Hauptnavigation']")
         assert nav.locator("a:has-text('Statistik')").count() == 0
 
+    @pytest.mark.smoke
     def test_assistant_cannot_access_audit(self, assistant_page, base_url):
         resp = assistant_page.goto(f"{base_url}/audit/")
         assert resp.status == 403

@@ -39,7 +39,7 @@ jobs:
           POSTGRES_HOST: localhost
           ENCRYPTION_KEY: P2N8yY4cVt1BmHZSvNrkSfkDYIJwEFcftRmO4bE-nZM=
       - run: python -m playwright install --with-deps chromium
-      - run: python -m pytest -m "e2e" --timeout=120
+      - run: python -m pytest -m "e2e" --timeout=120 -n 2 --dist loadfile
         env:
           DJANGO_SETTINGS_MODULE: anlaufstelle.settings.e2e
           POSTGRES_HOST: localhost

@@ -1,4 +1,4 @@
-"""Systematic permission negative tests (Stream I, Refs #73)."""
+"""Systematische Negativ-Tests für Berechtigungen."""
 
 import uuid
 

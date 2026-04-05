@@ -1,4 +1,4 @@
-"""Tests für WorkItem-Inbox, CRUD und Context Processor (D.1–D.3)."""
+"""Tests für WorkItem-Inbox, CRUD und Context Processor."""
 
 import datetime
 

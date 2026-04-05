@@ -1,4 +1,4 @@
-"""Tests für Client-Management (C.2, C.3, C.4)."""
+"""Tests für Client-Management."""
 
 import pytest
 from django.urls import reverse

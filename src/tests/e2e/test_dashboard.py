@@ -11,6 +11,7 @@ pytestmark = pytest.mark.e2e
 class TestDashboardStartseite:
     """Zeitstrom ist die neue Startseite."""
 
+    @pytest.mark.smoke
     def test_zeitstrom_is_start_page(self, authenticated_page):
         page = authenticated_page
         assert page.url.endswith("/")
@@ -34,11 +35,13 @@ class TestDashboardStartseite:
 class TestGlobalSearch:
     """Globale Suche in der Sidebar."""
 
+    @pytest.mark.smoke
     def test_search_input_visible(self, authenticated_page):
         page = authenticated_page
         search_input = page.locator("[data-testid='global-search-input']")
         assert search_input.is_visible()
 
+    @pytest.mark.smoke
     def test_search_returns_results(self, authenticated_page):
         page = authenticated_page
         search_input = page.locator("[data-testid='global-search-input']")

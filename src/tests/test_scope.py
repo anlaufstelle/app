@@ -177,9 +177,7 @@ class TestCaseListScope:
     def test_case_list_other_facility_not_visible(self, client, staff_user, facility, organization):
         """Cases of another facility are not shown in the case list."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
-            facility=other_facility, pseudonym="Fremd-CA-01", created_by=staff_user
-        )
+        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-CA-01", created_by=staff_user)
         Case.objects.create(
             facility=other_facility,
             client=other_client,
@@ -200,9 +198,7 @@ class TestCaseDetailScope:
     def test_case_detail_other_facility_404(self, client, staff_user, facility, organization):
         """Accessing a case from another facility returns 404."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
-            facility=other_facility, pseudonym="Fremd-CD-02", created_by=staff_user
-        )
+        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-CD-02", created_by=staff_user)
         other_case = Case.objects.create(
             facility=other_facility,
             client=other_client,
@@ -222,9 +218,7 @@ class TestEpisodeCreateScope:
     def test_episode_create_other_facility_404(self, client, staff_user, facility, organization):
         """Creating an episode for a case in another facility returns 404."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
-            facility=other_facility, pseudonym="Fremd-EP-01", created_by=staff_user
-        )
+        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-EP-01", created_by=staff_user)
         other_case = Case.objects.create(
             facility=other_facility,
             client=other_client,
@@ -244,9 +238,7 @@ class TestEpisodeUpdateScope:
     def test_episode_update_other_facility_404(self, client, staff_user, facility, organization):
         """Editing an episode belonging to a case in another facility returns 404."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
-            facility=other_facility, pseudonym="Fremd-EP-02", created_by=staff_user
-        )
+        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-EP-02", created_by=staff_user)
         other_case = Case.objects.create(
             facility=other_facility,
             client=other_client,
@@ -262,9 +254,7 @@ class TestEpisodeUpdateScope:
         )
 
         client.force_login(staff_user)
-        response = client.get(
-            reverse("core:episode_update", kwargs={"case_pk": other_case.pk, "pk": other_episode.pk})
-        )
+        response = client.get(reverse("core:episode_update", kwargs={"case_pk": other_case.pk, "pk": other_episode.pk}))
 
         assert response.status_code == 404
 
@@ -274,9 +264,7 @@ class TestGoalCreateScope:
     def test_goal_create_other_facility_404(self, client, staff_user, facility, organization):
         """Creating a goal for a case in another facility returns 404."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
-            facility=other_facility, pseudonym="Fremd-GO-01", created_by=staff_user
-        )
+        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-GO-01", created_by=staff_user)
         other_case = Case.objects.create(
             facility=other_facility,
             client=other_client,
@@ -299,9 +287,7 @@ class TestGoalToggleScope:
     def test_goal_toggle_other_facility_404(self, client, staff_user, facility, organization):
         """Toggling a goal from another facility's case returns 404."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
-            facility=other_facility, pseudonym="Fremd-GO-02", created_by=staff_user
-        )
+        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-GO-02", created_by=staff_user)
         other_case = Case.objects.create(
             facility=other_facility,
             client=other_client,
@@ -316,9 +302,7 @@ class TestGoalToggleScope:
         )
 
         client.force_login(staff_user)
-        response = client.post(
-            reverse("core:goal_toggle", kwargs={"case_pk": other_case.pk, "pk": other_goal.pk})
-        )
+        response = client.post(reverse("core:goal_toggle", kwargs={"case_pk": other_case.pk, "pk": other_goal.pk}))
 
         assert response.status_code == 404
 
@@ -328,9 +312,7 @@ class TestMilestoneScope:
     def test_milestone_toggle_other_facility_404(self, client, staff_user, facility, organization):
         """Toggling a milestone from another facility's case returns 404."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
-            facility=other_facility, pseudonym="Fremd-MS-01", created_by=staff_user
-        )
+        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-MS-01", created_by=staff_user)
         other_case = Case.objects.create(
             facility=other_facility,
             client=other_client,
@@ -366,9 +348,7 @@ class TestHandoverScope:
     ):
         """Handover summary only counts events from the user's own facility."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
-            facility=other_facility, pseudonym="Fremd-HO-01", created_by=staff_user
-        )
+        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-HO-01", created_by=staff_user)
         Event.objects.create(
             facility=other_facility,
             client=other_client,
@@ -385,14 +365,10 @@ class TestHandoverScope:
         summary = response.context["summary"]
         assert summary["stats"]["events_total"] == 0
 
-    def test_handover_other_facility_workitems_not_shown(
-        self, client, staff_user, facility, organization
-    ):
+    def test_handover_other_facility_workitems_not_shown(self, client, staff_user, facility, organization):
         """Handover open tasks do not include work items from other facilities."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
-            facility=other_facility, pseudonym="Fremd-HO-02", created_by=staff_user
-        )
+        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-HO-02", created_by=staff_user)
         WorkItem.objects.create(
             facility=other_facility,
             client=other_client,
@@ -416,9 +392,7 @@ class TestDSGVOPackageScope:
     def test_dsgvo_document_uses_own_facility(self, client, admin_user, facility):
         """DSGVO document download renders content with the user's own facility data."""
         client.force_login(admin_user)
-        response = client.get(
-            reverse("core:dsgvo_document", kwargs={"document": "verarbeitungsverzeichnis"})
-        )
+        response = client.get(reverse("core:dsgvo_document", kwargs={"document": "verarbeitungsverzeichnis"}))
 
         assert response.status_code == 200
         content = response.content.decode()
@@ -433,9 +407,7 @@ class TestCSVExportScope:
     ):
         """CSV export only contains events from the user's own facility."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
-            facility=other_facility, pseudonym="Fremd-EX-01", created_by=lead_user
-        )
+        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-EX-01", created_by=lead_user)
         Event.objects.create(
             facility=other_facility,
             client=other_client,
@@ -461,14 +433,10 @@ class TestCSVExportScope:
 
 @pytest.mark.django_db
 class TestPDFExportScope:
-    def test_pdf_export_scoped_to_facility(
-        self, client, lead_user, facility, organization, doc_type_contact
-    ):
+    def test_pdf_export_scoped_to_facility(self, client, lead_user, facility, organization, doc_type_contact):
         """PDF export only uses data from the user's own facility."""
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
-        other_client = Client.objects.create(
-            facility=other_facility, pseudonym="Fremd-PDF-01", created_by=lead_user
-        )
+        other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-PDF-01", created_by=lead_user)
         Event.objects.create(
             facility=other_facility,
             client=other_client,

@@ -1,6 +1,7 @@
 PYTHON ?= .venv/bin/python
+E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint test test-e2e check
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -82,11 +83,23 @@ test:
 test-e2e:
 	$(PYTHON) -m pytest -m e2e --browser chromium -v
 
+test-focus:
+	$(PYTHON) -m pytest -m "not e2e" -x $(T)
+
+test-parallel:
+	$(PYTHON) -m pytest -m "not e2e" -n auto -x
+
+test-e2e-parallel:
+	$(PYTHON) -m pytest -m e2e --browser chromium -n $(E2E_WORKERS) --dist loadfile -v
+
+test-e2e-smoke:
+	$(PYTHON) -m pytest -m "e2e and smoke" --browser chromium -v
+
 check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
-ci: lint check test
+ci: lint check test-parallel
 
 # Alles zusammen
 dev: db migrate run

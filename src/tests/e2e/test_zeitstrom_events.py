@@ -1,11 +1,9 @@
-"""E2E-Tests: Timeline-Events, Schicht-Zuordnung, Löschung.
+"""E2E-Tests: Zeitstrom, Events, Schicht-Zuordnung, Löschung.
 
 Tests:
-- Event erscheint im korrekten Schicht-Tab und nicht in anderen
+- Aktivitätslog-Startseite, TimeFilter, Event-Erstellung, -Bearbeitung, -Löschung
+- Event erscheint im korrekten Schicht-Tab
 - Event-Löschung für qualifizierte Klientel (4-Augen-Prinzip)
-
-Bereits abgedeckt in test_stream_c.py:
-- Timeline / TimeFilter, Event erstellen/bearbeiten/löschen (identified)
 """
 
 import re
@@ -16,6 +14,178 @@ import pytest
 pytestmark = pytest.mark.e2e
 
 SUBMIT = "#main-content button[type='submit']"
+
+
+class TestAktivitaetslogStartseite:
+    """Login → Aktivitätslog-Startseite mit TimeFilter-Tabs."""
+
+    def test_login_redirects_to_dashboard(self, authenticated_page):
+        page = authenticated_page
+        assert page.url.endswith("/")
+        assert page.locator("h1").inner_text() == "Zeitstrom"
+
+    def test_time_filter_tabs_visible(self, authenticated_page, base_url):
+        page = authenticated_page
+        page.goto(f"{base_url}/")
+        page.wait_for_load_state("domcontentloaded")
+        tabs = page.locator("[data-testid='time-filter-tabs']")
+        assert tabs.locator("button:has-text('Frühdienst')").is_visible()
+        assert tabs.locator("button:has-text('Spätdienst')").is_visible()
+        assert tabs.locator("button:has-text('Nachtdienst')").is_visible()
+
+    def test_navigation_links(self, authenticated_page):
+        page = authenticated_page
+        nav = page.locator("nav[aria-label='Hauptnavigation']")
+        assert nav.get_by_role("link", name="Zeitstrom", exact=True).is_visible()
+        assert nav.locator("a[href='/clients/']").is_visible()
+
+
+class TestTimeFilterHTMX:
+    """TimeFilter wechseln → Event-Liste aktualisiert sich (HTMX)."""
+
+    def test_time_filter_switch_updates_event_list(self, authenticated_page, base_url):
+        page = authenticated_page
+        page.goto(f"{base_url}/")
+        page.wait_for_load_state("domcontentloaded")
+        event_list = page.locator("#feed-list")
+        assert event_list.is_visible()
+
+        # Klick auf Spätdienst-Tab
+        page.locator("[data-testid='time-filter-tabs'] button:has-text('Spätdienst')").click()
+        # HTMX sollte den Inhalt aktualisieren (Warten auf Netzwerk-Idle)
+        page.wait_for_load_state("domcontentloaded")
+        assert event_list.is_visible()
+
+
+class TestEventErstellung:
+    """Event-Erstellung mit Dokumenttyp, dynamische Felder, Autocomplete, Speichern."""
+
+    @pytest.mark.smoke
+    def test_event_create_with_dynamic_fields(self, authenticated_page, base_url):
+        page = authenticated_page
+
+        # Neuer Kontakt → Dokumenttyp-Auswahl → dynamische Felder
+        page.goto(f"{base_url}/events/new/")
+        page.wait_for_load_state("domcontentloaded")
+        assert page.locator("h1").inner_text() == "Neuer Kontakt"
+
+        # Dokumenttyp wählen → dynamische Felder laden (HTMX)
+        page.select_option("select[name='document_type']", label="Kontakt")
+
+        # HTMX lädt Felder asynchron — auf konkretes Element warten
+        page.locator("label:has-text('Dauer')").wait_for(state="visible", timeout=10000)
+
+        # Dynamische Felder sollten sichtbar sein
+        assert page.locator("label:has-text('Dauer')").is_visible()
+        assert page.locator("label:has-text('Notiz')").is_visible()
+
+    @pytest.mark.smoke
+    def test_client_autocomplete(self, authenticated_page, base_url):
+        """Client-Autocomplete tippen → Vorschläge erscheinen."""
+        page = authenticated_page
+        page.goto(f"{base_url}/events/new/")
+
+        page.select_option("select[name='document_type']", label="Kontakt")
+        page.wait_for_load_state("domcontentloaded")
+
+        # Autocomplete tippen
+        autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
+        autocomplete.fill("Stern")
+        # Warten auf Alpine.js Debounce (200ms) + Fetch
+        suggestion = page.locator("button:has-text('Stern-42')")
+        suggestion.wait_for(state="visible", timeout=5000)
+
+        # Vorschlag sollte erscheinen
+        assert suggestion.is_visible()
+
+        # Auswählen
+        page.locator("button:has-text('Stern-42')").click()
+        assert autocomplete.input_value() == "Stern-42"
+
+    @pytest.mark.smoke
+    def test_event_save_and_appears_in_detail(self, authenticated_page, base_url):
+        """Event speichern → Detail-Seite mit Daten."""
+        page = authenticated_page
+        page.goto(f"{base_url}/events/new/")
+
+        # Formular ausfüllen
+        page.select_option("select[name='document_type']", label="Kontakt")
+        # Warten bis HTMX dynamische Felder geladen hat
+        page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
+        page.fill("input[name='dauer']", "20")
+        page.fill("textarea[name='notiz']", "E2E-Test Kontakt")
+
+        # Kein Klientel ausgewählt → wird automatisch anonym
+
+        page.click("button:has-text('Speichern')")
+        page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
+
+        # Detail-Seite prüfen
+        assert page.locator("[role='alert']:has-text('Kontakt wurde dokumentiert.')").first.is_visible()
+        assert page.locator("dd:has-text('E2E-Test Kontakt')").first.is_visible()
+        assert page.locator("dd:has-text('Anonym')").is_visible()
+
+        # EventHistory-Eintrag CREATE
+        assert page.locator("h2:has-text('Änderungshistorie')").is_visible()
+
+
+class TestEventEditAndDelete:
+    """Event bearbeiten und löschen."""
+
+    def _create_identified_event(self, page, base_url):
+        """Hilfsfunktion: Event für identified Client erstellen."""
+        page.goto(f"{base_url}/events/new/")
+        page.select_option("select[name='document_type']", label="Kontakt")
+        page.wait_for_load_state("domcontentloaded")
+
+        # Autocomplete: identifizierten Client wählen
+        autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
+        autocomplete.fill("Blitz")
+        page.wait_for_timeout(500)
+        page.wait_for_load_state("domcontentloaded")
+        page.locator("button:has-text('Blitz-08')").click()
+
+        page.fill("input[name='dauer']", "10")
+        page.click("button:has-text('Speichern')")
+        page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
+        return page.url
+
+    @pytest.mark.smoke
+    def test_event_edit_creates_history(self, authenticated_page, base_url):
+        """Event bearbeiten → EventHistory-Eintrag."""
+        page = authenticated_page
+        self._create_identified_event(page, base_url)
+
+        # Bearbeiten
+        page.click("a:has-text('Bearbeiten')")
+        page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/edit/$"))
+
+        page.fill("input[name='dauer']", "45")
+        page.click("button:has-text('Änderungen speichern')")
+        page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
+
+        # History prüfen
+        assert page.locator("[role='alert']:has-text('Ereignis wurde aktualisiert.')").first.is_visible()
+        assert page.locator("span:has-text('Aktualisiert')").first.is_visible()
+        assert page.locator("span:has-text('Erstellt')").first.is_visible()
+
+    @pytest.mark.smoke
+    def test_event_delete_identified_direct(self, authenticated_page, base_url):
+        """Event löschen (identified) → direkt gelöscht."""
+        page = authenticated_page
+        self._create_identified_event(page, base_url)
+
+        # Löschen
+        page.click("a:has-text('Löschen')")
+        page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/delete/$"))
+
+        # Identified Client → kein 4-Augen, direkter Löschen-Button
+        assert page.locator("button:has-text('Endgültig löschen')").is_visible()
+
+        page.click("button:has-text('Endgültig löschen')")
+        page.wait_for_url(lambda url: "/events/" not in url)
+
+        assert page.locator("[role='alert']:has-text('Ereignis wurde gelöscht.')").first.is_visible()
 
 
 class TestNachtdienstShiftAssignment:

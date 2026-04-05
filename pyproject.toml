@@ -18,8 +18,10 @@ select = ["E", "F", "I", "W"]
 DJANGO_SETTINGS_MODULE = "anlaufstelle.settings.test"
 pythonpath = ["src"]
 testpaths = ["src/tests"]
+addopts = "--reuse-db"
 markers = [
     "e2e: End-to-End-Tests mit Playwright (benötigen laufenden Server)",
+    "smoke: Kritische User-Flows für schnelle lokale Validierung",
 ]
 
 [tool.coverage.run]

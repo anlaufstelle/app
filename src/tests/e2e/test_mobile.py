@@ -31,6 +31,59 @@ def _assert_no_horizontal_overflow(page):
     assert not can_scroll, "Horizontaler Scrollbar sichtbar"
 
 
+class TestMobileNavMore:
+    """Mobile Bottom-Nav mit Mehr-Dropdown."""
+
+    def test_more_dropdown(self, mobile_page, base_url):
+        page = mobile_page
+        page.goto(f"{base_url}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        # Mehr-Button should be visible
+        more_btn = page.locator("button:has-text('Mehr')")
+        assert more_btn.is_visible()
+
+        # Click opens dropdown with Aufgaben, Klientel
+        more_btn.click()
+        page.wait_for_timeout(300)
+        assert page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Aufgaben')").is_visible()
+        assert page.locator("nav[aria-label='Mobile Navigation'] a[href='/clients/']").is_visible()
+
+    def test_staff_no_statistik_in_more(self, base_url, browser):
+        """Staff-User sieht kein Statistik im Mehr-Menü."""
+        context = browser.new_context()
+        page = context.new_page()
+        page.goto(f"{base_url}/login/")
+        page.fill('input[name="username"]', "miriam")
+        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.click('button[type="submit"]')
+        page.wait_for_url(f"{base_url}/")
+
+        page.set_viewport_size({"width": 375, "height": 812})
+        page.goto(f"{base_url}/")
+
+        more_btn = page.locator("button:has-text('Mehr')")
+        more_btn.click()
+        page.wait_for_timeout(300)
+
+        assert page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Statistik')").count() == 0
+        context.close()
+
+
+class TestMobileCards:
+    """Card-Layout auf Mobile."""
+
+    def test_clients_card_layout_mobile(self, mobile_page, base_url):
+        page = mobile_page
+        page.goto(f"{base_url}/clients/")
+        page.wait_for_load_state("domcontentloaded")
+
+        # Table should be hidden on mobile
+        assert not page.locator(".hidden.sm\\:block table").is_visible()
+        # Card layout should be visible
+        assert page.locator(".sm\\:hidden").first.is_visible()
+
+
 class TestMobileSidebarAndNav:
     """Sidebar versteckt, Bottom-Nav sichtbar auf Mobile."""
 

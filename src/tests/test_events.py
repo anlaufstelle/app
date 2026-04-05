@@ -1,4 +1,4 @@
-"""Tests für Event-CRUD (C.5, C.6, C.7)."""
+"""Tests für Event-CRUD."""
 
 from unittest.mock import patch
 

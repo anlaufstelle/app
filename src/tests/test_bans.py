@@ -1,4 +1,4 @@
-"""Tests für Hausverbot-Logik (D.4)."""
+"""Tests für Hausverbot-Logik."""
 
 from datetime import date, timedelta
 

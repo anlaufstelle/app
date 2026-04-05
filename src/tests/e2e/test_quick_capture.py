@@ -57,8 +57,9 @@ class TestSchnellerfassung:
         # Warten bis Dropdown sichtbar
         page.locator("#client-autocomplete-list").wait_for(state="visible", timeout=5000)
 
-        # Pfeil-runter + Enter zum Auswaehlen
+        # Pfeil-runter + warten bis Alpine highlightet + Enter
         autocomplete.press("ArrowDown")
+        page.locator("#client-autocomplete-list button.bg-indigo-50").wait_for(state="visible", timeout=3000)
         autocomplete.press("Enter")
 
         # Dropdown sollte geschlossen sein
@@ -130,24 +131,30 @@ class TestAutoSave:
         # localStorage vorher leeren
         page.evaluate(self._JS_CLEAR)
 
-        # Dokumentationstyp waehlen
-        page.select_option("select[name='document_type']", label="Kontakt")
-        page.wait_for_load_state("domcontentloaded")
+        # Nicht-Default-DocType waehlen (Seed setzt "Kontakt" als Default —
+        # bei Restore waere der Wert identisch und das Banner erschiene nicht)
+        page.select_option("select[name='document_type']", label="Krisengespräch")
+        page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
 
-        # Warten bis Auto-Save greift (5 Sekunden Intervall + Puffer)
-        page.wait_for_timeout(6000)
+        # Feld mit abweichendem Wert fuellen (noetig damit Restore einen Unterschied erkennt)
+        page.fill("input[name='dauer']", "42")
 
-        # Pruefen ob localStorage Daten hat
-        stored = page.evaluate(self._JS_GET)
-        assert stored is not None, "Auto-Save sollte Daten in localStorage gespeichert haben"
+        # Warten bis Auto-Save tatsaechlich in localStorage geschrieben hat
+        page.wait_for_function(
+            """() => {
+                const uid = document.body.dataset.userId || '';
+                return localStorage.getItem('autosave_' + uid + '_/events/new/') !== null;
+            }""",
+            timeout=15000,
+        )
 
         # Seite verlassen und zurueckkehren
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
         page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
 
-        # Banner sollte angezeigt werden
+        # Banner sollte angezeigt werden (erhöhter Timeout für parallele Ausführung)
         banner = page.locator("#autosave-restored-banner")
-        banner.wait_for(state="visible", timeout=5000)
+        banner.wait_for(state="visible", timeout=10000)
         assert banner.is_visible(), "Wiederherstellungs-Banner sollte sichtbar sein"
         assert "Entwurf wiederhergestellt" in banner.text_content()
 

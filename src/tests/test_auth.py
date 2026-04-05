@@ -1,4 +1,4 @@
-"""Tests für Stream B: Auth-Infrastruktur."""
+"""Tests für Auth-Middleware und Rollen."""
 
 import string
 

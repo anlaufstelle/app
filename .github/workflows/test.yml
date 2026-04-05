@@ -31,7 +31,7 @@ jobs:
           python-version: "3.13"
           cache: pip
       - run: pip install -r requirements-dev.txt
-      - run: python -m pytest -m "not e2e" --cov=core --cov-report=term-missing --cov-report=xml
+      - run: python -m pytest -m "not e2e" -n auto --cov=core --cov-report=term-missing --cov-report=xml
         env:
           POSTGRES_HOST: localhost
           ENCRYPTION_KEY: P2N8yY4cVt1BmHZSvNrkSfkDYIJwEFcftRmO4bE-nZM=

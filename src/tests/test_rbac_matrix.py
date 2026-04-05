@@ -17,6 +17,7 @@ from core.models import AuditLog
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _login(client, user_fixture, request):
     """Resolve a fixture name to a user object and force-login."""
     user = request.getfixturevalue(user_fixture)

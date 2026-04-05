@@ -11,6 +11,7 @@ pytestmark = pytest.mark.e2e
 class TestCaseNavigation:
     """Navigation: Fälle-Link in Sidebar sichtbar und funktional."""
 
+    @pytest.mark.smoke
     def test_faelle_link_visible(self, authenticated_page):
         """'Fälle' link is visible in sidebar navigation."""
         page = authenticated_page
@@ -29,6 +30,7 @@ class TestCaseNavigation:
 class TestCaseCRUD:
     """CRUD-Operationen für Fälle."""
 
+    @pytest.mark.smoke
     def test_create_case(self, staff_page, base_url):
         """Neuen Fall erstellen: Titel ausfüllen, absenden, Detail-Seite prüfen."""
         page = staff_page
@@ -77,6 +79,7 @@ class TestCaseCRUD:
         # Mindestens eines muss zutreffen: Ergebnisse geändert oder Empty-State
         assert closed_rows != initial_count or closed_rows >= 0 or empty_state > 0
 
+    @pytest.mark.smoke
     def test_case_detail_shows_info(self, staff_page, base_url):
         """Fall-Detail zeigt Titel, Status-Badge und Meta-Informationen."""
         page = staff_page
@@ -124,6 +127,7 @@ class TestCaseCRUD:
         # Detail-Seite zeigt aktualisierten Titel
         assert page.locator("h1").inner_text() == updated_title
 
+    @pytest.mark.smoke
     def test_close_case(self, lead_page, base_url):
         """Fall schließen (Lead-User): Status wechselt zu 'Geschlossen'."""
         page = lead_page
@@ -150,6 +154,7 @@ class TestCaseCRUD:
         # "Wiedereröffnen"-Button erscheint
         assert desktop_btns.locator("button:has-text('Wiedereröffnen')").is_visible()
 
+    @pytest.mark.smoke
     def test_reopen_case(self, lead_page, base_url):
         """Geschlossenen Fall wiedereröffnen (Lead-User)."""
         page = lead_page
@@ -183,6 +188,7 @@ class TestCaseCRUD:
 class TestEpisodes:
     """Episoden: Erstellen und Abschließen."""
 
+    @pytest.mark.smoke
     def test_create_episode(self, staff_page, base_url):
         """Neue Episode erstellen: von Fall-Detail aus, Formular ausfüllen."""
         page = staff_page

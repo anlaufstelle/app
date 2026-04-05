@@ -6,7 +6,6 @@ Ablauf:
 3. Statistik-Seite erneut laden → Zahlen identisch
 """
 
-import os
 import subprocess
 import sys
 
@@ -14,16 +13,14 @@ import pytest
 
 pytestmark = pytest.mark.e2e
 
-_E2E_ENV = {**os.environ, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.e2e"}
 
-
-def _run_management_command(*args):
-    """Run a Django management command in the E2E environment."""
+def _run_management_command(env, *args):
+    """Run a Django management command in the worker-aware E2E environment."""
     result = subprocess.run(
         [sys.executable, "src/manage.py", *args],
         capture_output=True,
         text=True,
-        env=_E2E_ENV,
+        env=env,
     )
     return result
 
@@ -31,12 +28,12 @@ def _run_management_command(*args):
 class TestStatisticsSnapshotPreservation:
     """Statistik-Zahlen bleiben nach enforce_retention erhalten."""
 
-    def test_statistics_preserved_after_retention(self, lead_page, base_url):
+    def test_statistics_preserved_after_retention(self, lead_page, base_url, e2e_env):
         """Gesamtkontakte auf Statistik-Seite bleiben nach Retention stabil."""
         page = lead_page
 
         # Snapshots für alle vorhandenen Monate erstellen
-        _run_management_command("create_statistics_snapshots", "--backfill")
+        _run_management_command(e2e_env, "create_statistics_snapshots", "--backfill")
 
         # Statistik-Seite mit Jahres-Ansicht laden
         page.goto(
@@ -51,7 +48,7 @@ class TestStatisticsSnapshotPreservation:
         total_before = kpi_card.inner_text().strip()
 
         # enforce_retention ausführen (erstellt Snapshots + löscht Events)
-        result = _run_management_command("enforce_retention")
+        result = _run_management_command(e2e_env, "enforce_retention")
         assert result.returncode == 0, f"enforce_retention failed: {result.stderr}"
 
         # Seite neu laden
