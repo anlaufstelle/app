@@ -42,6 +42,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "csp.middleware.CSPMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
@@ -159,6 +160,8 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # --- Logging ---
 
+LOG_FORMAT = os.environ.get("LOG_FORMAT", "text")  # "text" or "json"
+
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
@@ -167,11 +170,14 @@ LOGGING = {
             "format": "{levelname} {asctime} {module} {message}",
             "style": "{",
         },
+        "json": {
+            "()": "core.logging.JsonFormatter",
+        },
     },
     "handlers": {
         "console": {
             "class": "logging.StreamHandler",
-            "formatter": "verbose",
+            "formatter": "json" if LOG_FORMAT == "json" else "verbose",
         },
     },
     "root": {
@@ -190,6 +196,20 @@ LOGGING = {
             "propagate": False,
         },
     },
+}
+
+# --- Content Security Policy (django-csp, Defense-in-Depth neben Caddy) ---
+
+CONTENT_SECURITY_POLICY = {
+    "DIRECTIVES": {
+        "default-src": ["'self'"],
+        "script-src": ["'self'"],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        "img-src": ["'self'", "data:"],
+        "font-src": ["'self'"],
+        "connect-src": ["'self'"],
+        "frame-ancestors": ["'none'"],
+    }
 }
 
 # --- Django Unfold ---

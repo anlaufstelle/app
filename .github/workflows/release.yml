@@ -26,3 +26,4 @@ jobs:
             ghcr.io/${{ github.repository }}:latest
           build-args: |
             DJANGO_SECRET_KEY=build-only-collectstatic
+            APP_VERSION=${{ github.ref_name }}

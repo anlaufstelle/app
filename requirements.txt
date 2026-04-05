@@ -8,3 +8,5 @@ cryptography>=41.0
 python-dotenv>=1.0
 weasyprint>=60.0
 django-unfold>=0.61
+django-csp>=4.0
+sentry-sdk[django]>=2.0

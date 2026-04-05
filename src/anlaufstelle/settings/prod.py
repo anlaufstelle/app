@@ -5,9 +5,20 @@ Production settings for Anlaufstelle.
 import os
 import sys
 
+import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
 
 from .base import *  # noqa: F401, F403
+
+# --- Sentry (optional, via SENTRY_DSN env var) ---
+
+_sentry_dsn = os.environ.get("SENTRY_DSN", "")
+if _sentry_dsn:
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
+        send_default_pii=False,
+    )
 
 DEBUG = False
 

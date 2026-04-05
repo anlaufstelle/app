@@ -36,6 +36,10 @@ COPY src/ ./
 # Copy compiled Tailwind CSS
 COPY --from=node /build/src/static/css/styles.css static/css/styles.css
 
+# App version (set at build time, exposed via /health/)
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
+
 # Collect static files (needs a dummy secret key)
 ARG DJANGO_SECRET_KEY=build-only-placeholder
 ENV DJANGO_SETTINGS_MODULE=anlaufstelle.settings.prod
