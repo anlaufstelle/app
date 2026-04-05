@@ -4,7 +4,7 @@
 
 **Dokumentation, Statistik und Teamkommunikation für Kontaktläden, Notschlafstellen und Streetwork — Open Source, DSGVO-konform, pseudonymisiert, kostenlos.**
 
-> ⚠️ **Pre-Release (v0.9)** — Anlaufstelle ist funktionsfähig, aber noch nicht für den Produktiveinsatz freigegeben. Qualitätssicherung und Stabilisierung laufen. Wir suchen Piloteinrichtungen, die das System gemeinsam mit uns testen und weiterentwickeln möchten — [Kontakt aufnehmen](mailto:kontakt@anlaufstelle.app).
+> ⚠️ **Pre-Release (v0.9.1)** — Anlaufstelle ist funktionsfähig, aber noch nicht für den Produktiveinsatz freigegeben. Qualitätssicherung und Stabilisierung laufen. Wir suchen Piloteinrichtungen, die das System gemeinsam mit uns testen und weiterentwickeln möchten — [Kontakt aufnehmen](mailto:kontakt@anlaufstelle.app).
 
 ---
 
