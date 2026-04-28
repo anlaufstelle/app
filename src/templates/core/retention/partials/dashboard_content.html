@@ -29,7 +29,73 @@
     </div>
 </div>
 
-{# Proposals by category #}
+{# Proposals by category — Bulk-Toolbar scopes selection to this section #}
+<section data-testid="retention-bulk-section"
+         x-data="{
+            count: 0,
+            deferDays: 30,
+            updateCount() {
+                this.count = document.querySelectorAll('[data-bulk-proposal]:checked').length;
+            },
+            selectVisible(checked) {
+                document.querySelectorAll('[data-bulk-proposal]').forEach(el => { el.checked = checked; });
+                this.updateCount();
+            }
+         }"
+         @retention-bulk-change.window="updateCount()">
+
+    {# Sticky bulk toolbar — visible when at least one proposal is selected #}
+    <div class="sticky top-0 z-10 bg-white border border-gray-200 rounded-md p-3 mb-4 shadow-sm flex flex-wrap items-center gap-3"
+         x-show="count > 0" x-cloak x-transition
+         role="toolbar" aria-label="{% trans 'Massenaktionen für Löschvorschläge' %}">
+        <span class="text-sm font-medium text-gray-700" data-testid="retention-bulk-count">
+            <span x-text="count"></span> {% trans "ausgewählt" %}
+        </span>
+        <div class="flex-grow"></div>
+        <button type="button"
+                data-testid="retention-bulk-approve"
+                hx-post="{% url 'core:retention_bulk_approve' %}"
+                hx-include="[data-bulk-proposal]:checked"
+                hx-confirm="{% trans 'Ausgewählte Vorschläge wirklich freigeben?' %}"
+                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
+            {% trans "Freigeben" %}
+        </button>
+        <label class="inline-flex items-center gap-1 text-xs text-gray-600">
+            {% trans "Tage:" %}
+            <input type="number" name="days" min="1" max="365" x-model.number="deferDays"
+                   class="w-16 rounded-md border-gray-300 text-xs focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                   aria-label="{% trans 'Tage bis zur erneuten Prüfung' %}">
+        </label>
+        <button type="button"
+                data-testid="retention-bulk-defer"
+                hx-post="{% url 'core:retention_bulk_defer' %}"
+                hx-include="[data-bulk-proposal]:checked, input[name='days']"
+                hx-confirm="{% trans 'Ausgewählte Vorschläge zurückstellen?' %}"
+                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            {% trans "Aufschieben" %}
+        </button>
+        <button type="button"
+                data-testid="retention-bulk-reject"
+                hx-post="{% url 'core:retention_bulk_reject' %}"
+                hx-include="[data-bulk-proposal]:checked"
+                hx-confirm="{% trans 'Ausgewählte Vorschläge ablehnen (keine Löschung)?' %}"
+                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            {% trans "Ablehnen" %}
+        </button>
+        <button type="button" @click="selectVisible(false)"
+                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
+            {% trans "Auswahl aufheben" %}
+        </button>
+    </div>
+
+    {# Global select-all convenience (above the first category) #}
+    <label class="inline-flex items-center gap-2 text-sm text-gray-600 mb-3">
+        <input type="checkbox" @change="selectVisible($event.target.checked)"
+               class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+               data-testid="retention-select-all">
+        {% trans "Alle auswählbaren Vorschläge markieren" %}
+    </label>
+
 <div id="retention-proposals">
 {% for category in categories %}
 <section id="retention-category-{{ category.key }}" class="mb-8 scroll-mt-4">
@@ -48,3 +114,4 @@
 <p class="text-sm text-gray-500">{% trans "Keine Löschvorschläge vorhanden" %}</p>
 {% endfor %}
 </div>
+</section>

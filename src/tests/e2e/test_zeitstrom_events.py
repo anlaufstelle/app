@@ -104,6 +104,56 @@ class TestEventErstellung:
         assert autocomplete.input_value() == "Stern-42"
 
     @pytest.mark.smoke
+    def test_event_create_with_case_assignment(self, authenticated_page, base_url):
+        """Event mit Fall-Zuordnung anlegen → Detailseite zeigt Fall-Link."""
+        page = authenticated_page
+        page.goto(f"{base_url}/events/new/")
+        page.wait_for_load_state("domcontentloaded")
+
+        page.select_option("select[name='document_type']", label="Kontakt")
+        page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
+
+        # Klientel auswählen, zu dem ein offener Fall existiert (Seed: Stern-42 → „Gesundheitsversorgung")
+        autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
+        autocomplete.fill("Stern-42")
+        option = page.locator("button:has-text('Stern-42')")
+        option.wait_for(state="visible", timeout=5000)
+        option.click()
+
+        # Fall-Dropdown enthält passenden Fall mit Pseudonym im Label
+        case_select = page.locator("select[name='case']")
+        assert case_select.is_visible()
+        case_select.select_option(label="Gesundheitsversorgung – Stern-42")
+
+        page.fill("input[name='dauer']", "25")
+        page.fill("textarea[name='notiz']", "E2E-Test Fall-Zuordnung")
+
+        page.click("button:has-text('Speichern')")
+        page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
+
+        # Detailseite zeigt Fall-Zeile mit Link zur Case-Detail-Seite
+        fall_term = page.locator("dt:has-text('Fall')")
+        expect(fall_term).to_be_visible()
+        fall_link = page.locator("dd a:has-text('Gesundheitsversorgung')")
+        expect(fall_link).to_be_visible()
+        assert re.search(r"/cases/[0-9a-f-]+/$", fall_link.get_attribute("href"))
+
+    def test_event_create_anonymous_hides_case_without_client_link(self, authenticated_page, base_url):
+        """Anonymer Kontakt ohne Fall speichern → Detailseite zeigt keine Fall-Zeile."""
+        page = authenticated_page
+        page.goto(f"{base_url}/events/new/")
+        page.wait_for_load_state("domcontentloaded")
+
+        page.select_option("select[name='document_type']", label="Kontakt")
+        page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
+        page.fill("input[name='dauer']", "5")
+
+        page.click("button:has-text('Speichern')")
+        page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
+
+        assert page.locator("dt:has-text('Fall')").count() == 0
+
+    @pytest.mark.smoke
     def test_event_save_and_appears_in_detail(self, authenticated_page, base_url):
         """Event speichern → Detail-Seite mit Daten."""
         page = authenticated_page

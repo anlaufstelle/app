@@ -6,6 +6,14 @@
     {# Header: status badge + due date #}
     <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
+            {% if proposal.status == 'pending' or proposal.status == 'deferred' %}
+            <label class="inline-flex items-center" aria-label="{% trans 'Auswählen' %}">
+                <input type="checkbox" name="proposal_ids" value="{{ proposal.pk }}"
+                       data-bulk-proposal
+                       @change="$dispatch('retention-bulk-change')"
+                       class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+            </label>
+            {% endif %}
             <span class="text-sm font-medium">{{ proposal.target_type }}</span>
             {% if proposal.status == 'pending' %}
             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">{% trans "Ausstehend" %}</span>
