@@ -1,0 +1,18 @@
+{% load i18n %}{% autoescape off %}
+{% trans "Hallo" %} {{ user.get_full_name|default:user.get_username }},
+
+{% trans "für Sie wurde ein Konto bei Anlaufstelle angelegt." %}
+
+{% trans "Bitte setzen Sie über den folgenden Link Ihr Passwort, um Ihr Konto zu aktivieren:" %}
+
+{{ protocol }}://{{ domain }}{% url 'password_reset_confirm' uidb64=uid token=token %}
+
+{% trans "Ihr Benutzername:" %} {{ user.get_username }}
+
+{% trans "Der Link ist aus Sicherheitsgründen zeitlich begrenzt gültig. Falls der Link abgelaufen ist, kann ein Administrator eine neue Einladung versenden." %}
+
+{% trans "Falls Sie diese E-Mail unerwartet erhalten haben, können Sie sie ignorieren — das Konto bleibt ohne gesetztes Passwort unzugänglich." %}
+
+{% trans "Mit freundlichen Grüßen" %}
+{% trans "Ihr Anlaufstelle-Team" %}
+{% endautoescape %}

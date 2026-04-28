@@ -7,7 +7,7 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from core.models import Case
+from core.models import AuditLog, Case
 from core.services.sensitivity import user_can_see_event
 
 logger = logging.getLogger(__name__)
@@ -35,14 +35,30 @@ def create_case(facility, user, client, title, description="", lead_user=None):
 
 
 @transaction.atomic
-def update_case(case, user, **fields):  # user reserved for future audit trail
-    """Update mutable fields on a case (title, description, lead_user, client)."""
+def update_case(case, user, **fields):
+    """Update mutable fields on a case (title, description, lead_user, client).
+
+    Writes an AuditLog entry with the names of changed fields (no PII values).
+    """
     allowed = {"title", "description", "lead_user", "client"}
+    changed_fields = []
     for key, value in fields.items():
         if key not in allowed:
             raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
+        if getattr(case, key) != value:
+            changed_fields.append(key)
         setattr(case, key, value)
     case.save()
+
+    if changed_fields:
+        AuditLog.objects.create(
+            facility=case.facility,
+            user=user,
+            action=AuditLog.Action.CASE_UPDATE,
+            target_type="Case",
+            target_id=str(case.pk),
+            detail={"changed_fields": changed_fields},
+        )
     return case
 
 

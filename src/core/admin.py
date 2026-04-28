@@ -24,6 +24,7 @@ from core.models import (
     WorkItem,
 )
 from core.models.attachment import EventAttachment
+from core.services.invite import send_invite_email
 from core.services.password import generate_initial_password
 
 # --- User ---
@@ -56,7 +57,7 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
         (
             None,
             {
-                "fields": ("username",),
+                "fields": ("username", "email"),
             },
         ),
         (
@@ -68,18 +69,51 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
     )
 
     def save_model(self, request, obj, form, change):
-        if not change:
+        """Token-basierter Invite-Flow beim User-Anlegen.
+
+        Primär: User ohne Passwort anlegen (`set_unusable_password`) und
+        Einladungs-E-Mail mit Password-Reset-Token an `obj.email` versenden.
+
+        Fallback ohne E-Mail: Klartext-Initialpasswort generieren und in
+        der Admin-Oberfläche anzeigen — mit Warnhinweis, dass dieser Weg
+        unsicherer ist. Siehe Issue #528.
+        """
+        if change:
+            super().save_model(request, obj, form, change)
+            return
+
+        obj.must_change_password = True
+
+        if obj.email:
+            obj.set_unusable_password()
+            super().save_model(request, obj, form, change)
+            try:
+                send_invite_email(obj, request=request)
+            except Exception as exc:  # pragma: no cover - Mail-Backend-Fehler
+                messages.error(
+                    request,
+                    f"Einladungs-E-Mail konnte nicht versendet werden: {exc}. "
+                    f"Bitte über „Setup-Link erneut senden“ erneut versuchen.",
+                )
+                return
+            messages.success(
+                request,
+                f"Einladungslink wurde an {obj.email} gesendet.",
+            )
+        else:
             password = generate_initial_password()
             obj.set_password(password)
-            obj.must_change_password = True
             super().save_model(request, obj, form, change)
+            messages.warning(
+                request,
+                "Kein E-Mail-Adresse hinterlegt — Fallback auf Klartext-Initialpasswort. "
+                "Sicherer Weg: E-Mail nachtragen und Einladung erneut versenden.",
+            )
             messages.success(
                 request,
                 f"Initialpasswort für {obj.username}: {password} — Bitte notieren, es wird nicht erneut angezeigt!",
                 extra_tags="password-display",
             )
-        else:
-            super().save_model(request, obj, form, change)
 
     def response_add(self, request, obj, post_url_continue=None):
         response = super().response_add(request, obj, post_url_continue)
@@ -319,6 +353,15 @@ class SettingsAdmin(ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
+
+    def save_model(self, request, obj, form, change):
+        """Write a SETTINGS_CHANGE audit entry for every Settings update."""
+        from core.services.settings import log_settings_change, snapshot_settings
+
+        before = snapshot_settings(obj) if change and obj.pk else {}
+        super().save_model(request, obj, form, change)
+        if change:
+            log_settings_change(obj, request.user, before)
 
 
 # --- StatisticsSnapshot ---

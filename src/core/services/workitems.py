@@ -5,7 +5,7 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 
-from core.models import Activity, WorkItem
+from core.models import Activity, AuditLog, WorkItem
 from core.services.activity import log_activity
 
 logger = logging.getLogger(__name__)
@@ -28,14 +28,28 @@ def create_workitem(facility, user, *, client=None, **data):
 
 @transaction.atomic
 def update_workitem(workitem, user, **fields):
-    """Update a work item with activity logging.
+    """Update a work item with activity logging and audit logging.
 
     Accepts allowed fields (item_type, title, description, priority, due_date,
-    assigned_to, client) and persists them.
+    assigned_to, client) and persists them. Writes an AuditLog entry with the
+    names of changed fields (no PII values).
     """
+    changed_fields = []
     for key, value in fields.items():
+        if getattr(workitem, key) != value:
+            changed_fields.append(key)
         setattr(workitem, key, value)
     workitem.save()
+
+    if changed_fields:
+        AuditLog.objects.create(
+            facility=workitem.facility,
+            user=user,
+            action=AuditLog.Action.WORKITEM_UPDATE,
+            target_type="WorkItem",
+            target_id=str(workitem.pk),
+            detail={"changed_fields": changed_fields},
+        )
 
     log_activity(
         facility=workitem.facility,

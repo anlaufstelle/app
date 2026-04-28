@@ -24,6 +24,9 @@ class AuditLog(models.Model):
         DOWNLOAD = "download", _("Download")
         LEGAL_HOLD = "legal_hold", _("Legal Hold")
         OFFLINE_KEY_FETCH = "offline_key_fetch", _("Offline-Schlüssel abgerufen")
+        CLIENT_UPDATE = "client_update", _("Klientel aktualisiert")
+        CASE_UPDATE = "case_update", _("Fall aktualisiert")
+        WORKITEM_UPDATE = "workitem_update", _("Aufgabe aktualisiert")
 
     objects = FacilityScopedManager()
 

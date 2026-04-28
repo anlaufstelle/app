@@ -60,7 +60,11 @@ def update_client(client, user, *, old_stage=None, **fields):
     if old_stage is None:
         old_stage = client.contact_stage
 
+    # Diff erfassen — nur Feldnamen, keine PII-Werte selbst
+    changed_fields = []
     for key, value in fields.items():
+        if getattr(client, key) != value:
+            changed_fields.append(key)
         setattr(client, key, value)
     client.save()
 
@@ -74,6 +78,16 @@ def update_client(client, user, *, old_stage=None, **fields):
             verb=Activity.Verb.QUALIFIED,
             target=client,
             summary=f"{client.pseudonym} qualifiziert",
+        )
+
+    if changed_fields:
+        AuditLog.objects.create(
+            facility=client.facility,
+            user=user,
+            action=AuditLog.Action.CLIENT_UPDATE,
+            target_type="Client",
+            target_id=str(client.pk),
+            detail={"changed_fields": changed_fields},
         )
 
     log_activity(
