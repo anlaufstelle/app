@@ -57,6 +57,32 @@
           x-init="updateAnonymousAllowed($refs.docTypeSelect)">
         {% csrf_token %}
 
+        {# Schnell-Vorlagen (Quick-Templates, Refs #494) #}
+        {% if quick_templates %}
+        <div class="bg-indigo-50 border border-indigo-200 rounded-md p-4 space-y-2" data-testid="quick-templates">
+            <h2 class="text-sm font-semibold text-indigo-800 uppercase">{% trans "Schnell-Vorlagen" %}</h2>
+            {% if applied_template %}
+            <p class="text-xs text-indigo-700">
+                {% blocktrans with name=applied_template.name %}Vorlage angewendet: <strong>{{ name }}</strong>{% endblocktrans %}
+                — <a href="{% url 'core:event_create' %}{% if client_id %}?client={{ client_id }}{% endif %}" class="underline">{% trans "Vorlage entfernen" %}</a>
+            </p>
+            {% else %}
+            <p class="text-xs text-indigo-700">{% trans "Wählen Sie eine Vorlage, um Felder automatisch vorzubefüllen." %}</p>
+            {% endif %}
+            <div class="flex flex-wrap gap-2">
+                {% for tpl in quick_templates %}
+                <a href="{% url 'core:event_create' %}?template={{ tpl.pk }}{% if client_id %}&client={{ client_id }}{% endif %}"
+                   class="inline-flex items-center px-3 py-1.5 text-sm rounded-md border border-indigo-300 bg-white text-indigo-700 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                   data-template-id="{{ tpl.pk }}"
+                   data-template-name="{{ tpl.name }}">
+                    <span>{{ tpl.name }}</span>
+                    <span class="ml-2 text-xs text-indigo-500">{{ tpl.document_type.name }}</span>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         {# Sektion 1: Meta — kompaktes Layout #}
         <div class="bg-white border border-gray-200 rounded-md p-4 space-y-3">
             <h2 class="text-sm font-semibold text-gray-500 uppercase">{% trans "Basis-Daten" %}</h2>

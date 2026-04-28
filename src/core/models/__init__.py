@@ -10,6 +10,7 @@ from .event import Event
 from .event_history import EventHistory
 from .organization import Facility, Organization
 from .outcome import Milestone, OutcomeGoal
+from .quick_template import QuickTemplate
 from .recent_client_visit import RecentClientVisit
 from .retention import LegalHold, RetentionProposal
 from .settings import Settings
@@ -35,6 +36,7 @@ __all__ = [
     "Milestone",
     "Organization",
     "OutcomeGoal",
+    "QuickTemplate",
     "RecentClientVisit",
     "Facility",
     "LegalHold",

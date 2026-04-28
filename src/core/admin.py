@@ -17,6 +17,7 @@ from core.models import (
     Facility,
     FieldTemplate,
     Organization,
+    QuickTemplate,
     Settings,
     StatisticsSnapshot,
     TimeFilter,
@@ -179,6 +180,30 @@ class FieldTemplateAdmin(ModelAdmin):
         if obj:
             return (*self.readonly_fields, "slug")
         return self.readonly_fields
+
+
+@admin.register(QuickTemplate)
+class QuickTemplateAdmin(ModelAdmin):
+    """Admin für Quick-Templates (vorbefüllte Event-Vorlagen).
+
+    ``prefilled_data`` wird beim Speichern über den Service auf NORMAL-Felder
+    gefiltert (Whitelist). So kann der Admin-User Werte pflegen, ohne die
+    Sensitivitäts-Regeln zu umgehen.
+    """
+
+    list_display = ("name", "document_type", "facility", "is_active", "sort_order")
+    list_filter = ("is_active", "facility", "document_type")
+    search_fields = ("name",)
+    autocomplete_fields = ("document_type",)
+    readonly_fields = ("created_at",)
+
+    def save_model(self, request, obj, form, change):
+        from core.services.quick_templates import filter_prefilled_data
+
+        obj.prefilled_data = filter_prefilled_data(obj.document_type, obj.prefilled_data or {})
+        if not change and obj.created_by_id is None:
+            obj.created_by = request.user
+        super().save_model(request, obj, form, change)
 
 
 # --- Event / EventHistory ---

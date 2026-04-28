@@ -29,6 +29,12 @@ from core.services.file_vault import (
     get_original_filename,
     store_encrypted_file,
 )
+from core.services.quick_templates import (
+    apply_template,
+    get_template_for_user,
+    get_templates_for_document_type,
+    list_templates_for_user,
+)
 from core.services.sensitivity import (
     get_visible_attachment_or_404,
     get_visible_event_or_404,
@@ -160,20 +166,47 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
         if client_id:
             meta_form.fields["client"].initial = client_id
 
+        # Quick-Templates (Refs #494): Applied template prefills dynamic fields
+        # and selects the associated DocumentType. Template-Auswahl über
+        # ``?template=<uuid>`` – der Service liefert nur Templates, deren
+        # DocumentType der User sehen darf.
+        applied_template = None
+        template_id = request.GET.get("template")
+        prefill_data = None
+        if template_id:
+            applied_template = get_template_for_user(request.user, facility, template_id)
+            if applied_template is not None:
+                default_doc_type = applied_template.document_type
+                initial["document_type"] = default_doc_type.pk
+                meta_form = EventMetaForm(facility=facility, user=request.user, initial=initial)
+                if client_id:
+                    meta_form.fields["client"].initial = client_id
+                prefill_data = apply_template(applied_template)
+
         # Pre-render dynamic fields when default document type is set
-        data_form = (
-            DynamicEventDataForm(document_type=default_doc_type, facility=facility)
-            if default_doc_type
-            else DynamicEventDataForm()
-        )
         if default_doc_type:
+            data_form = DynamicEventDataForm(
+                document_type=default_doc_type,
+                initial_data=prefill_data,
+                facility=facility,
+            )
             _remove_restricted_fields(request.user, default_doc_type, data_form)
+        else:
+            data_form = DynamicEventDataForm()
+
+        quick_templates = list_templates_for_user(request.user, facility)
+        current_doc_type_templates = (
+            get_templates_for_document_type(request.user, facility, default_doc_type) if default_doc_type else []
+        )
 
         context = {
             "meta_form": meta_form,
             "data_form": data_form,
             "client_id": client_id or "",
             "client_pseudonym": "",
+            "quick_templates": quick_templates,
+            "current_doc_type_templates": current_doc_type_templates,
+            "applied_template": applied_template,
         }
 
         if client_id:
