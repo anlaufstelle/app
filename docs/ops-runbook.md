@@ -608,7 +608,7 @@ Job CVEs, folgendes Vorgehen:
 
 ## 9. Row Level Security (RLS)
 
-Seit v0.10.0 sind **18 facility-gescopte Tabellen** per PostgreSQL-RLS gegen
+Seit v0.10.0 sind **19 facility-gescopte Tabellen** per PostgreSQL-RLS gegen
 Cross-Facility-Leaks abgesichert (Defense-in-Depth unterhalb der Django-
 Scoping-Schicht). Jede Policy vergleicht `facility_id` gegen die Session-
 Variable `app.current_facility_id`, die von der
