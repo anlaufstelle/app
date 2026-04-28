@@ -39,6 +39,9 @@ class AuditLog(models.Model):
         MFA_ENABLED = "mfa_enabled", _("2FA aktiviert")
         MFA_DISABLED = "mfa_disabled", _("2FA deaktiviert")
         MFA_FAILED = "mfa_failed", _("2FA-Verifikation fehlgeschlagen")
+        BACKUP_CODES_GENERATED = "backup_codes_generated", _("2FA Backup-Codes generiert")
+        BACKUP_CODES_USED = "backup_codes_used", _("2FA Backup-Code verwendet")
+        BACKUP_CODES_REGENERATED = "backup_codes_regenerated", _("2FA Backup-Codes neu generiert")
 
     objects = FacilityScopedManager()
 
