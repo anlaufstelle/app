@@ -608,7 +608,7 @@ class TestEventAttachmentAtomicity:
         attachments_before = EventAttachment.objects.count()
 
         with patch(
-            "core.views.events.store_encrypted_file",
+            "core.services.file_vault.store_encrypted_file",
             side_effect=ValidationError("virus"),
         ):
             response = client.post(
@@ -640,7 +640,7 @@ class TestEventAttachmentAtomicity:
         new_upload = SimpleUploadedFile("new.pdf", b"new bytes", content_type="application/pdf")
 
         with patch(
-            "core.views.events.store_encrypted_file",
+            "core.services.file_vault.store_encrypted_file",
             side_effect=ValidationError("virus"),
         ):
             response = client.post(
