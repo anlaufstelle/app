@@ -42,19 +42,24 @@ def create_or_update_snapshot(facility, year, month):
     # Remove top_clients (not snapshot-safe due to anonymization)
     stats.pop("top_clients", None)
 
-    # Enrich by_document_type with system_type and document_type_id
-    for entry in stats.get("by_document_type", []):
-        try:
-            dt = DocumentType.objects.get(
+    # Enrich by_document_type with system_type and document_type_id.
+    # Bulk-Lookup statt N+1-Loop (Refs #598 Finding T-3): eine einzige Query
+    # holt alle relevanten DocumentTypes, das Dict-Composite-Key (name,
+    # category) stellt sicher, dass nur exakte Treffer zugeordnet werden.
+    entries = stats.get("by_document_type", [])
+    if entries:
+        dt_lookup = {
+            (dt.name, dt.category): dt
+            for dt in DocumentType.objects.filter(
                 facility=facility,
-                name=entry["name"],
-                category=entry["category"],
+                name__in=[e["name"] for e in entries],
+                category__in=[e["category"] for e in entries],
             )
-            entry["system_type"] = dt.system_type or ""
-            entry["document_type_id"] = str(dt.id)
-        except DocumentType.DoesNotExist:
-            entry["system_type"] = ""
-            entry["document_type_id"] = ""
+        }
+        for entry in entries:
+            dt = dt_lookup.get((entry["name"], entry["category"]))
+            entry["system_type"] = dt.system_type if dt and dt.system_type else ""
+            entry["document_type_id"] = str(dt.id) if dt else ""
 
     # Force-convert lazy translation strings to plain strings for JSON storage
     stats = json.loads(json.dumps(stats, cls=DjangoJSONEncoder))

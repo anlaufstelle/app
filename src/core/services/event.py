@@ -176,6 +176,14 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
         target=event,
         summary=summary,
     )
+    AuditLog.objects.create(
+        facility=facility,
+        user=user,
+        action=AuditLog.Action.EVENT_CREATE,
+        target_type="Event",
+        target_id=str(event.pk),
+        detail={"document_type": document_type.name, "is_anonymous": is_anonymous},
+    )
     return event
 
 

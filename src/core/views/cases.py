@@ -15,7 +15,7 @@ from django_ratelimit.decorators import ratelimit
 
 from core.forms.cases import CaseForm
 from core.forms.episodes import EpisodeForm
-from core.models import Case, Client, Event
+from core.models import Case, Event
 from core.models.episode import Episode
 from core.models.outcome import Milestone, OutcomeGoal
 from core.services.cases import (
@@ -26,6 +26,7 @@ from core.services.cases import (
     reopen_case,
     update_case,
 )
+from core.services.clients import get_client_or_none
 from core.services.episodes import (
     close_episode,
     create_episode,
@@ -128,11 +129,9 @@ class CaseCreateView(StaffRequiredMixin, View):
         client_pseudonym = ""
         if client_id:
             form.fields["client"].initial = client_id
-            try:
-                client_obj = Client.objects.get(pk=client_id, facility=facility)
+            client_obj = get_client_or_none(facility, client_id)
+            if client_obj:
                 client_pseudonym = client_obj.pseudonym
-            except Client.DoesNotExist:
-                pass
 
         context = {
             "form": form,

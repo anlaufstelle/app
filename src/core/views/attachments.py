@@ -1,19 +1,49 @@
-"""Views for the central file attachment overview."""
+"""Views for the central file attachment overview and download."""
 
 import logging
 
+from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.shortcuts import render
 from django.views import View
 
-from core.models import DocumentType
+from core.models import AuditLog, DocumentType
 from core.models.attachment import EventAttachment
-from core.services.file_vault import get_original_filename
-from core.services.sensitivity import allowed_sensitivities_for_user
+from core.services.file_vault import get_decrypted_file_stream, get_original_filename
+from core.services.sensitivity import allowed_sensitivities_for_user, get_visible_attachment_or_404, user_can_see_field
+from core.utils.downloads import safe_download_response
 from core.utils.formatting import format_file_size
 from core.views.mixins import AssistantOrAboveRequiredMixin
 
 logger = logging.getLogger(__name__)
+
+
+# MIME types that may be rendered inline in the browser without XSS risk
+# (text/html and image/svg+xml are deliberately excluded — they can contain
+# active script content). Issue #508.
+INLINE_MIME_WHITELIST = frozenset(
+    {
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "application/pdf",
+        "text/plain",
+    }
+)
+
+
+def _attachment_disposition(mime_type, force_download):
+    """Return the Content-Disposition disposition token for an attachment.
+
+    Inline display is only allowed for whitelisted MIME types and only when
+    the caller did not explicitly request a download (``?download=1``).
+    """
+    if force_download:
+        return "attachment"
+    if (mime_type or "").lower() in INLINE_MIME_WHITELIST:
+        return "inline"
+    return "attachment"
 
 
 class AttachmentListView(AssistantOrAboveRequiredMixin, View):
@@ -64,7 +94,7 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, View):
                     "original_filename": get_original_filename(att),
                     "file_size_display": format_file_size(att.file_size),
                     "doc_type_name": att.event.document_type.name,
-                    "client_pseudonym": att.event.client.pseudonym if att.event.client else "\u2014",
+                    "client_pseudonym": att.event.client.pseudonym if att.event.client else "—",
                 }
             )
 
@@ -82,3 +112,46 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, View):
         if request.headers.get("HX-Request"):
             return render(request, "core/attachments/partials/attachment_table.html", context)
         return render(request, "core/attachments/list.html", context)
+
+
+class AttachmentDownloadView(AssistantOrAboveRequiredMixin, View):
+    """Auth-checked streaming view for an encrypted file attachment.
+
+    By default, displays the file inline if its MIME type is on the safe
+    whitelist (images, PDF, plain text). Other types and requests with
+    ``?download=1`` are served with ``Content-Disposition: attachment``.
+    """
+
+    def get(self, request, pk, attachment_pk):
+        event, attachment = get_visible_attachment_or_404(request.user, request.current_facility, pk, attachment_pk)
+
+        # Field-level sensitivity check (PermissionDenied keeps the UX hint
+        # that the event exists but a specific attachment field is restricted).
+        ft = attachment.field_template
+        doc_sensitivity = event.document_type.sensitivity
+        if not user_can_see_field(request.user, doc_sensitivity, ft.sensitivity):
+            raise PermissionDenied
+
+        # Audit log
+        AuditLog.objects.create(
+            facility=event.facility,
+            user=request.user,
+            action=AuditLog.Action.DOWNLOAD,
+            target_type="EventAttachment",
+            target_id=str(attachment.pk),
+            detail={"event_id": str(event.pk), "field": ft.slug},
+        )
+
+        force_download = request.GET.get("download") in ("1", "true")
+        disposition = _attachment_disposition(attachment.mime_type, force_download)
+
+        original_filename = get_original_filename(attachment)
+        as_attachment = disposition == "attachment"
+        response = safe_download_response(
+            original_filename,
+            attachment.mime_type,
+            get_decrypted_file_stream(attachment),
+            as_attachment=as_attachment,
+        )
+        response["Content-Length"] = attachment.file_size
+        return response

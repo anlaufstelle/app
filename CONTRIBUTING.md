@@ -228,6 +228,20 @@ pkill -f gunicorn
 - Rollen-Zugriffsschutz über Mixins aus `core/views/mixins.py`.
 - Keine neuen Abhängigkeiten ohne vorherige Absprache einführen.
 
+### Facility-Scoping & Row Level Security
+
+Jedes neue facility-gescopte Model muss auf **beiden** Verteidigungslinien abgesichert sein:
+
+1. **Django-Layer (erste Linie):**
+   - `facility = models.ForeignKey(Facility, ...)` am Model
+   - `objects = FacilityScopedManager()` (aus [`src/core/models/managers.py`](src/core/models/managers.py))
+   - Views/Services filtern via `.for_facility(request.current_facility)`
+2. **PostgreSQL-RLS (zweite Linie, Defense-in-Depth):**
+   - Neue Migration nach dem Muster von [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): Tabelle zu `DIRECT_TABLES` hinzufügen (oder `JOIN_TABLES`, falls kein direktes `facility_id`-Feld vorhanden ist). Die Migration setzt `ENABLE + FORCE ROW LEVEL SECURITY` plus eine `facility_isolation`-Policy.
+   - Tabelle in `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) ergänzen, damit der RLS-Setup-Test die Abdeckung garantiert.
+
+Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS greift in Produktion nur, wenn der Django-DB-User **kein** Superuser ist (siehe [docs/coolify-deployment.md](docs/coolify-deployment.md)).
+
 ### Linting und Formatierung
 
 Das Projekt verwendet [Ruff](https://docs.astral.sh/ruff/) für Linting und Formatierung:

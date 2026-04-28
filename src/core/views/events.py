@@ -5,7 +5,7 @@ import logging
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.http import Http404, JsonResponse
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -13,20 +13,18 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.forms.events import DynamicEventDataForm, EventMetaForm
-from core.models import AuditLog, Client, DeletionRequest, DocumentType, Event, FieldTemplate
+from core.models import Client, DocumentType, FieldTemplate
 from core.models.attachment import EventAttachment
+from core.services.clients import get_client_or_none
 from core.services.encryption import safe_decrypt
 from core.services.event import (
-    approve_deletion,
     create_event,
-    reject_deletion,
     request_deletion,
     soft_delete_event,
     update_event,
 )
 from core.services.file_vault import (
     delete_attachment_file,
-    get_decrypted_file_stream,
     get_original_filename,
     store_encrypted_file,
 )
@@ -37,14 +35,12 @@ from core.services.quick_templates import (
     list_templates_for_user,
 )
 from core.services.sensitivity import (
-    get_visible_attachment_or_404,
     get_visible_event_or_404,
     user_can_see_document_type,
     user_can_see_field,
 )
-from core.utils.downloads import safe_download_response
 from core.utils.formatting import format_file_size
-from core.views.mixins import AssistantOrAboveRequiredMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
+from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
 
@@ -210,12 +206,9 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
             "applied_template": applied_template,
         }
 
-        if client_id:
-            try:
-                client = Client.objects.get(pk=client_id, facility=facility)
-                context["client_pseudonym"] = client.pseudonym
-            except Client.DoesNotExist:
-                pass
+        client = get_client_or_none(facility, client_id)
+        if client:
+            context["client_pseudonym"] = client.pseudonym
 
         return render(request, "core/events/create.html", context)
 
@@ -227,13 +220,8 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
         if not meta_form.is_valid():
             # Preserve client selection on validation error
             client_id = request.POST.get("client", "")
-            client_pseudonym = ""
-            if client_id:
-                try:
-                    client_obj = Client.objects.get(pk=client_id, facility=facility)
-                    client_pseudonym = client_obj.pseudonym
-                except (Client.DoesNotExist, ValueError):
-                    pass
+            client_obj = get_client_or_none(facility, client_id)
+            client_pseudonym = client_obj.pseudonym if client_obj else ""
 
             # Re-render dynamic fields for selected document type
             doc_type_id = request.POST.get("document_type")
@@ -344,77 +332,6 @@ class EventFieldsPartialView(AssistantOrAboveRequiredMixin, View):
         data_form = DynamicEventDataForm(document_type=doc_type, facility=request.current_facility)
         _remove_restricted_fields(request.user, doc_type, data_form)
         return render(request, "core/events/partials/dynamic_fields.html", {"data_form": data_form})
-
-
-# MIME types that may be rendered inline in the browser without XSS risk
-# (text/html and image/svg+xml are deliberately excluded — they can contain
-# active script content). Issue #508.
-INLINE_MIME_WHITELIST = frozenset(
-    {
-        "image/jpeg",
-        "image/png",
-        "image/gif",
-        "image/webp",
-        "application/pdf",
-        "text/plain",
-    }
-)
-
-
-def _attachment_disposition(mime_type, force_download):
-    """Return the Content-Disposition disposition token for an attachment.
-
-    Inline display is only allowed for whitelisted MIME types and only when
-    the caller did not explicitly request a download (``?download=1``).
-    """
-    if force_download:
-        return "attachment"
-    if (mime_type or "").lower() in INLINE_MIME_WHITELIST:
-        return "inline"
-    return "attachment"
-
-
-class AttachmentDownloadView(AssistantOrAboveRequiredMixin, View):
-    """Auth-checked streaming view for an encrypted file attachment.
-
-    By default, displays the file inline if its MIME type is on the safe
-    whitelist (images, PDF, plain text). Other types and requests with
-    ``?download=1`` are served with ``Content-Disposition: attachment``.
-    """
-
-    def get(self, request, pk, attachment_pk):
-        event, attachment = get_visible_attachment_or_404(request.user, request.current_facility, pk, attachment_pk)
-
-        # Field-level sensitivity check (PermissionDenied keeps the UX hint
-        # that the event exists but a specific attachment field is restricted).
-        ft = attachment.field_template
-        doc_sensitivity = event.document_type.sensitivity
-        if not user_can_see_field(request.user, doc_sensitivity, ft.sensitivity):
-            raise PermissionDenied
-
-        # Audit log
-        AuditLog.objects.create(
-            facility=event.facility,
-            user=request.user,
-            action=AuditLog.Action.DOWNLOAD,
-            target_type="EventAttachment",
-            target_id=str(attachment.pk),
-            detail={"event_id": str(event.pk), "field": ft.slug},
-        )
-
-        force_download = request.GET.get("download") in ("1", "true")
-        disposition = _attachment_disposition(attachment.mime_type, force_download)
-
-        original_filename = get_original_filename(attachment)
-        as_attachment = disposition == "attachment"
-        response = safe_download_response(
-            original_filename,
-            attachment.mime_type,
-            get_decrypted_file_stream(attachment),
-            as_attachment=as_attachment,
-        )
-        response["Content-Length"] = attachment.file_size
-        return response
 
 
 class EventDetailView(AssistantOrAboveRequiredMixin, View):
@@ -677,68 +594,3 @@ class EventDeleteView(StaffRequiredMixin, View):
         return redirect("core:zeitstrom")
 
 
-class DeletionRequestListView(LeadOrAdminRequiredMixin, View):
-    """List of all deletion requests."""
-
-    def get(self, request):
-        facility = request.current_facility
-        all_requests = DeletionRequest.objects.for_facility(facility).select_related("requested_by", "reviewed_by")
-
-        pending = all_requests.filter(status=DeletionRequest.Status.PENDING)
-        approved = all_requests.filter(status=DeletionRequest.Status.APPROVED)
-        rejected = all_requests.filter(status=DeletionRequest.Status.REJECTED)
-
-        context = {
-            "pending_requests": pending,
-            "approved_requests": approved,
-            "rejected_requests": rejected,
-        }
-        return render(request, "core/deletion_requests/list.html", context)
-
-
-class DeletionRequestReviewView(LeadOrAdminRequiredMixin, View):
-    """Review a deletion request (four-eyes principle)."""
-
-    def get(self, request, pk):
-        dr = get_object_or_404(
-            DeletionRequest,
-            pk=pk,
-            facility=request.current_facility,
-            status=DeletionRequest.Status.PENDING,
-        )
-
-        try:
-            event = Event.objects.select_related("document_type", "client").get(
-                pk=dr.target_id, facility=request.current_facility
-            )
-        except Event.DoesNotExist:
-            raise Http404
-
-        context = {
-            "deletion_request": dr,
-            "event": event,
-        }
-        return render(request, "core/events/deletion_review.html", context)
-
-    def post(self, request, pk):
-        dr = get_object_or_404(
-            DeletionRequest,
-            pk=pk,
-            facility=request.current_facility,
-            status=DeletionRequest.Status.PENDING,
-        )
-
-        # Reviewer must not be the requester
-        if dr.requested_by == request.user:
-            messages.error(request, _("Sie können Ihren eigenen Löschantrag nicht genehmigen."))
-            return redirect("core:deletion_review", pk=pk)
-
-        action = request.POST.get("action")
-        if action == "approve":
-            approve_deletion(dr, request.user)
-            messages.success(request, _("Löschantrag wurde genehmigt."))
-        elif action == "reject":
-            reject_deletion(dr, request.user)
-            messages.info(request, _("Löschantrag wurde abgelehnt."))
-
-        return redirect("core:zeitstrom")

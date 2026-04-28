@@ -19,12 +19,26 @@ from core.signals.audit import get_client_ip
 logger = logging.getLogger(__name__)
 
 
+def _login_username_key(group, request):
+    """Ratelimit-Key aus Username: lowercased + gestrippt, damit 'Alice',
+    ' alice ' und 'alice' nicht als drei unabhängige Buckets zählen."""
+    return (request.POST.get("username") or "").lower().strip()
+
+
 class CustomLoginView(auth_views.LoginView):
-    """Login with session timeout from facility settings."""
+    """Login with session timeout from facility settings.
+
+    Zwei-Ebenen-Ratelimit (Refs #598 S-3):
+    - IP-Limit (5/m): schützt vor klassischem Brute-Force von einer IP.
+    - Username-Limit (10/h): schützt vor verteilten Angriffen auf einen Account
+      (Botnet mit rotierenden IPs). Ein echter Nutzer tippt nicht 10× in einer
+      Stunde das falsche Passwort — dann geht er auf Password-Reset.
+    """
 
     template_name = "auth/login.html"
 
     @method_decorator(ratelimit(key="ip", rate="5/m", method="POST", block=True))
+    @method_decorator(ratelimit(key=_login_username_key, rate="10/h", method="POST", block=True))
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
@@ -57,11 +71,41 @@ class CustomLogoutView(auth_views.LogoutView):
 
 
 class RateLimitedPasswordResetView(auth_views.PasswordResetView):
-    """Password reset with rate limiting to prevent abuse."""
+    """Password reset with rate limiting and audit logging."""
 
     @method_decorator(ratelimit(key="ip", rate="5/m", method="POST", block=True))
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        """Audit each accepted reset request (Refs #598 S-9).
+
+        Response-Verhalten bleibt identisch: gleiche Antwort egal ob die Email
+        einem Account zugeordnet ist (Anti-Enumeration). Im Audit-Log wird der
+        User nur eingetragen, wenn genau ein eindeutiger Treffer existiert —
+        das ist für Admin-Forensik relevant, ohne PII-Enumeration via Logs.
+        """
+        email = form.cleaned_data.get("email", "")
+        matched_user = None
+        facility = None
+        try:
+            matched_user = User.objects.filter(email__iexact=email, is_active=True).first()
+            if matched_user is not None:
+                facility = getattr(matched_user, "facility", None)
+        except Exception:
+            # Auth-Signal-Receiver dürfen den Flow nie kippen.
+            logger.exception("Password-Reset User-Lookup fehlgeschlagen")
+
+        AuditLog.objects.create(
+            facility=facility,
+            user=matched_user,
+            action=AuditLog.Action.PASSWORD_RESET_REQUESTED,
+            target_type="User" if matched_user else "",
+            target_id=str(matched_user.pk) if matched_user else "",
+            detail={"email": email} if email else {},
+            ip_address=get_client_ip(self.request),
+        )
+        return super().form_valid(form)
 
 
 class CustomPasswordChangeView(auth_views.PasswordChangeView):

@@ -4,7 +4,7 @@ from django.urls import path
 from django.views.generic import RedirectView
 
 from core.views.account import AccountProfileView, DashboardPreferenceUpdateView
-from core.views.attachments import AttachmentListView
+from core.views.attachments import AttachmentDownloadView, AttachmentListView
 from core.views.audit import AuditLogDetailView, AuditLogListView
 from core.views.cases import (
     CaseAssignEventView,
@@ -36,10 +36,8 @@ from core.views.clients import (
     ClientUpdateView,
 )
 from core.views.dsgvo import DSGVODocumentDownloadView, DSGVOPackageView
+from core.views.event_deletion import DeletionRequestListView, DeletionRequestReviewView
 from core.views.events import (
-    AttachmentDownloadView,
-    DeletionRequestListView,
-    DeletionRequestReviewView,
     EventCreateView,
     EventDeleteView,
     EventDetailView,

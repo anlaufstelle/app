@@ -58,7 +58,7 @@ def _log_workitem_update(workitem, user, changed_fields):
 
 @transaction.atomic
 def create_workitem(facility, user, *, client=None, **data):
-    """Create a work item with activity logging."""
+    """Create a work item with activity and audit logging."""
     workitem = WorkItem(facility=facility, created_by=user, client=client, **data)
     workitem.save()
     log_activity(
@@ -67,6 +67,13 @@ def create_workitem(facility, user, *, client=None, **data):
         verb=Activity.Verb.CREATED,
         target=workitem,
         summary=f"Aufgabe: {workitem.title}",
+    )
+    AuditLog.objects.create(
+        facility=facility,
+        user=user,
+        action=AuditLog.Action.WORKITEM_CREATE,
+        target_type="WorkItem",
+        target_id=str(workitem.pk),
     )
     return workitem
 
