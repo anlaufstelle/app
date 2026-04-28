@@ -82,17 +82,42 @@ class Client(models.Model):
 
     def anonymize(self):
         """Anonymize the client (GDPR-compliant): personal data is deleted, the record is kept
-        for statistical purposes. Events and cases remain linked via SET_NULL."""
-        self.pseudonym = f"Gelöscht-{str(self.pk)[:8]}"
-        self.notes = ""
-        self.age_cluster = self.AgeCluster.UNKNOWN
-        self.is_active = False
-        self.save(update_fields=["pseudonym", "notes", "age_cluster", "is_active"])
+        for statistical purposes. Events and cases remain linked via SET_NULL.
 
-        # Anonymize open work items linked to this client
-        from core.models.workitem import WorkItem
+        Anonymization covers (Refs #529):
+        - Client fields (pseudonym, notes, age_cluster, is_active)
+        - Case.title / Case.description of all linked cases
+        - Episode.title / Episode.description of all episodes of those cases
+        - Workitems in every status (not only open/in_progress), title and description
+        """
+        from django.db import transaction
 
-        self.work_items.filter(status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS]).update(
-            title="Aufgabe (anonymisiert)",
-            description="",
-        )
+        from core.models.case import Case
+        from core.models.episode import Episode
+
+        with transaction.atomic():
+            self.pseudonym = f"Gelöscht-{str(self.pk)[:8]}"
+            self.notes = ""
+            self.age_cluster = self.AgeCluster.UNKNOWN
+            self.is_active = False
+            self.save(update_fields=["pseudonym", "notes", "age_cluster", "is_active"])
+
+            # Anonymize cases of this client — keep created_at for chronological context.
+            cases = Case.objects.filter(client=self)
+            case_ids = list(cases.values_list("pk", flat=True))
+            for case in cases:
+                case.title = f"[Anonymisiert {case.created_at:%Y-%m-%d}]"
+                case.description = ""
+                case.save(update_fields=["title", "description"])
+
+            # Anonymize episodes of those cases.
+            Episode.objects.filter(case_id__in=case_ids).update(
+                title="Episode (anonymisiert)",
+                description="",
+            )
+
+            # Anonymize ALL work items (also DONE/DISMISSED), not only open/in_progress.
+            self.work_items.all().update(
+                title="Aufgabe (anonymisiert)",
+                description="",
+            )

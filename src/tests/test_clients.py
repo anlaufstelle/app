@@ -3,7 +3,7 @@
 import pytest
 from django.urls import reverse
 
-from core.models import AuditLog, Client
+from core.models import AuditLog, Case, Client, Episode, WorkItem
 from core.models.activity import Activity
 from core.services.clients import update_client
 
@@ -206,3 +206,145 @@ class TestUpdateClientService:
         result = update_client(client_identified, staff_user, notes="Test")
         assert result.pk == client_identified.pk
         assert result.notes == "Test"
+
+
+@pytest.mark.django_db
+class TestClientAnonymize:
+    """Regression tests for Client.anonymize() — Refs #529.
+
+    Ensures anonymization covers cascading personal data in cases, episodes
+    and all workitems (not only open/in_progress ones)."""
+
+    def test_anonymize_clears_client_fields(self, client_identified):
+        client_identified.notes = "Sensible Notiz"
+        client_identified.age_cluster = Client.AgeCluster.AGE_18_26
+        client_identified.save(update_fields=["notes", "age_cluster"])
+
+        client_identified.anonymize()
+        client_identified.refresh_from_db()
+
+        assert client_identified.pseudonym.startswith("Gelöscht-")
+        assert client_identified.notes == ""
+        assert client_identified.age_cluster == Client.AgeCluster.UNKNOWN
+        assert client_identified.is_active is False
+
+    def test_anonymize_clears_case_title(self, facility, client_identified, staff_user):
+        case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Sensibler Falltitel mit Klarnamen",
+            description="Detailreiche, personenbezogene Beschreibung.",
+            status=Case.Status.OPEN,
+            created_by=staff_user,
+        )
+
+        client_identified.anonymize()
+        case.refresh_from_db()
+
+        assert "Klarnamen" not in case.title
+        assert case.title.startswith("[Anonymisiert ")
+        assert case.description == ""
+
+    def test_anonymize_clears_closed_case_title(self, facility, client_identified, staff_user):
+        """Closed cases must also be anonymized."""
+        from django.utils import timezone
+
+        case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Abgeschlossener Fall mit Klarnamen",
+            description="Sensible Historie.",
+            status=Case.Status.CLOSED,
+            closed_at=timezone.now(),
+            created_by=staff_user,
+        )
+
+        client_identified.anonymize()
+        case.refresh_from_db()
+
+        assert "Klarnamen" not in case.title
+        assert case.description == ""
+
+    def test_anonymize_clears_episode_notes(self, facility, client_identified, staff_user):
+        from django.utils import timezone
+
+        case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Fall",
+            status=Case.Status.OPEN,
+            created_by=staff_user,
+        )
+        episode = Episode.objects.create(
+            case=case,
+            title="Sensible Episode mit Klarnamen",
+            description="Freitext mit Personenbezug.",
+            started_at=timezone.now().date(),
+            created_by=staff_user,
+        )
+
+        client_identified.anonymize()
+        episode.refresh_from_db()
+
+        assert "Klarnamen" not in episode.title
+        assert episode.description == ""
+
+    def test_anonymize_clears_closed_workitems(self, facility, client_identified, staff_user):
+        """Workitems with status DONE/DISMISSED must also be anonymized (Refs #529)."""
+        done = WorkItem.objects.create(
+            facility=facility,
+            client=client_identified,
+            created_by=staff_user,
+            item_type=WorkItem.ItemType.TASK,
+            status=WorkItem.Status.DONE,
+            title="Erledigte Aufgabe mit Klarnamen",
+            description="Sensible Beschreibung.",
+        )
+        dismissed = WorkItem.objects.create(
+            facility=facility,
+            client=client_identified,
+            created_by=staff_user,
+            item_type=WorkItem.ItemType.TASK,
+            status=WorkItem.Status.DISMISSED,
+            title="Verworfene Aufgabe mit Klarnamen",
+            description="Weitere sensible Daten.",
+        )
+
+        client_identified.anonymize()
+        done.refresh_from_db()
+        dismissed.refresh_from_db()
+
+        assert done.title == "Aufgabe (anonymisiert)"
+        assert done.description == ""
+        assert dismissed.title == "Aufgabe (anonymisiert)"
+        assert dismissed.description == ""
+
+    def test_anonymize_clears_open_workitems(self, facility, client_identified, staff_user):
+        """Regression: open/in_progress workitems continue to be anonymized."""
+        open_item = WorkItem.objects.create(
+            facility=facility,
+            client=client_identified,
+            created_by=staff_user,
+            item_type=WorkItem.ItemType.TASK,
+            status=WorkItem.Status.OPEN,
+            title="Offene Aufgabe mit Klarnamen",
+            description="Details.",
+        )
+        in_progress = WorkItem.objects.create(
+            facility=facility,
+            client=client_identified,
+            created_by=staff_user,
+            item_type=WorkItem.ItemType.TASK,
+            status=WorkItem.Status.IN_PROGRESS,
+            title="Laufende Aufgabe",
+            description="Weiteres.",
+        )
+
+        client_identified.anonymize()
+        open_item.refresh_from_db()
+        in_progress.refresh_from_db()
+
+        assert open_item.title == "Aufgabe (anonymisiert)"
+        assert open_item.description == ""
+        assert in_progress.title == "Aufgabe (anonymisiert)"
+        assert in_progress.description == ""
