@@ -662,3 +662,75 @@ class TestEventAttachmentAtomicity:
         # Response: Redirect oder Form-Rerender, nie 500 — das Formular muss
         # in jedem Fall gnadenvoll wieder ins UI kommen.
         assert response.status_code in (200, 302)
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_encryption_key")
+class TestStorageOrphanCleanup:
+    """Direct-Cleanup beim Service + periodisches Orphan-Cleanup (#662 FND-03)."""
+
+    def test_db_save_failure_removes_just_written_file(self, facility, staff_user, doc_type_with_file):
+        """Schlaegt EventAttachment.objects.create fehl, wird die ``.enc``-Datei
+        in derselben Service-Funktion wieder geloescht — kein Orphan."""
+        dt, _, ft_file = doc_type_with_file
+        event = Event.objects.create(
+            facility=facility,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        uploaded = SimpleUploadedFile("test.pdf", PDF_HEADER, content_type="application/pdf")
+
+        from core.services import file_vault as fv
+
+        before = (
+            {p.name for p in fv._facility_dir(facility).glob("*.enc")} if fv._facility_dir(facility).exists() else set()
+        )
+
+        with patch.object(EventAttachment.objects, "create", side_effect=RuntimeError("DB down")):
+            with pytest.raises(RuntimeError):
+                store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
+
+        after = (
+            {p.name for p in fv._facility_dir(facility).glob("*.enc")} if fv._facility_dir(facility).exists() else set()
+        )
+        assert after == before, f"Service hat Orphan zurueckgelassen: {after - before}"
+
+    def test_cleanup_orphan_storage_files_removes_unreferenced(
+        self, facility, staff_user, doc_type_with_file, settings
+    ):
+        """Eine ``.enc``-Datei ohne ``EventAttachment``-Record und aelter als
+        ``min_age_seconds`` wird vom Cleanup-Helper entfernt."""
+        from core.services.file_vault import cleanup_orphan_storage_files
+
+        # Echte EventAttachment-Datei legen (referenziert)
+        dt, _, ft_file = doc_type_with_file
+        event = Event.objects.create(
+            facility=facility,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        uploaded = SimpleUploadedFile("ref.pdf", PDF_HEADER, content_type="application/pdf")
+        ref_attachment = store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
+        ref_path = get_attachment_path(ref_attachment)
+
+        # Orphan: eine .enc-Datei ohne DB-Record
+        from core.services import file_vault as fv
+
+        orphan_path = fv._facility_dir(facility) / "00000000-deadbeef-cafe-babe-000000000000.enc"
+        orphan_path.write_bytes(b"orphan-bytes")
+        # Mtime in die Vergangenheit setzen (>min_age_seconds)
+        import os
+
+        old = orphan_path.stat().st_mtime - 7200
+        os.utime(orphan_path, (old, old))
+
+        # Cleanup mit min_age_seconds=3600 — Orphan ist 2h alt, wird geloescht.
+        # Referenz-File: gerade frisch, also unter cutoff aber referenziert -> bleibt.
+        deleted = cleanup_orphan_storage_files(min_age_seconds=3600)
+        assert deleted >= 1
+        assert not orphan_path.exists()
+        assert ref_path.exists()

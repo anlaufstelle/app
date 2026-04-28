@@ -314,3 +314,72 @@ class TestBackwardCompatibility:
         assert field["attachment_id"] == str(att.pk)
         assert len(field["entries"]) == 1
         assert field["entries"][0]["attachment_id"] == str(att.pk)
+
+
+@pytest.mark.django_db
+class TestEventDetailContextQueryCount:
+    """``build_event_detail_context`` darf bei mehr Attachments + Versions-
+    Ketten nicht linear mehr Queries machen (#662 FND-05)."""
+
+    def _build_event_with_chain(self, facility, staff_user, dt, ft, *, entries: int, versions: int):
+        """Lege ein Event mit ``entries`` File-Eintraegen, jeder mit
+        ``versions`` Replace-Versionen. Returns event."""
+        event = Event.objects.create(
+            facility=facility, document_type=dt, occurred_at=timezone.now(), created_by=staff_user
+        )
+        marker_entries = []
+        for i in range(entries):
+            current = store_encrypted_file(facility, _upload(f"e{i}-v0".encode()), ft, event, staff_user, sort_order=i)
+            for v in range(1, versions):
+                current = store_encrypted_file(
+                    facility, _upload(f"e{i}-v{v}".encode()), ft, event, staff_user, supersedes=current
+                )
+            marker_entries.append({"id": str(current.pk), "sort": i})
+        event.data_json = {"anhang": {"__files__": True, "entries": marker_entries}}
+        event.save(update_fields=["data_json"])
+        return event
+
+    def _count(self, event, user):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from core.services.event import build_event_detail_context
+
+        with CaptureQueriesContext(connection) as ctx:
+            build_event_detail_context(event, user)
+        return len(ctx.captured_queries)
+
+    def test_constant_query_count_regardless_of_entries(self, facility, staff_user, doc_type_with_file):
+        """Egal ob 1 oder 5 File-Entries, der Detail-Context muss mit
+        derselben Anzahl Queries auskommen — sonst war wieder ein
+        per-Entry-Lookup eingeschlichen."""
+        dt, ft = doc_type_with_file
+
+        small = self._build_event_with_chain(facility, staff_user, dt, ft, entries=1, versions=1)
+        large = self._build_event_with_chain(facility, staff_user, dt, ft, entries=5, versions=1)
+
+        small_queries = self._count(small, staff_user)
+        large_queries = self._count(large, staff_user)
+
+        # 5 Entries duerfen hoechstens 2 Queries mehr brauchen als 1 Entry
+        # (Marge fuer kleine Variationen; vor dem Fix waren es 5+).
+        assert large_queries <= small_queries + 2, (
+            f"Query-Count waechst zu schnell: 1 Entry = {small_queries} Queries, "
+            f"5 Entries = {large_queries} Queries. Erwartet <= {small_queries + 2}."
+        )
+
+    def test_constant_query_count_regardless_of_version_chain(self, facility, staff_user, doc_type_with_file):
+        """Eine Versionskette mit 5 Versionen darf nicht 5x mehr Queries
+        ausloesen als eine ohne Versionen."""
+        dt, ft = doc_type_with_file
+
+        no_versions = self._build_event_with_chain(facility, staff_user, dt, ft, entries=1, versions=1)
+        with_versions = self._build_event_with_chain(facility, staff_user, dt, ft, entries=1, versions=5)
+
+        without_chain_queries = self._count(no_versions, staff_user)
+        with_chain_queries = self._count(with_versions, staff_user)
+
+        assert with_chain_queries <= without_chain_queries + 1, (
+            f"Versionskette laesst Query-Count wachsen: ohne = {without_chain_queries}, "
+            f"mit 4 Vorgaengern = {with_chain_queries}."
+        )

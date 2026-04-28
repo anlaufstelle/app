@@ -37,21 +37,27 @@
 
         navigator.serviceWorker.addEventListener("message", async function (event) {
             if (event.data.type === "QUEUE_REQUEST") {
-                if (window.offlineQueue) {
-                    try {
-                        await window.offlineQueue.enqueueRequest(
-                            event.data.url,
-                            event.data.method,
-                            event.data.body,
-                            event.data.headers
-                        );
-                    } catch (e) {
-                        // No session key — show a non-intrusive console hint.
-                        // The SW already responded with the offline yellow banner,
-                        // so the user sees feedback. We just cannot persist.
-                        // eslint-disable-next-line no-console
-                        console.warn("[offline-queue]", e.message);
-                    }
+                // ACK/NACK an den Service Worker zurueckschicken (#662 FND-02).
+                // Ohne ACK wartet der SW max. QUEUE_ACK_TIMEOUT_MS und liefert
+                // dann eine 503-Response, damit der User keinen falschen
+                // Erfolgs-Banner sieht.
+                var port = event.ports && event.ports[0];
+                if (!window.offlineQueue) {
+                    if (port) port.postMessage({ type: "QUEUE_NACK", reason: "OfflineQueueNotLoaded" });
+                    return;
+                }
+                try {
+                    await window.offlineQueue.enqueueRequest(
+                        event.data.url,
+                        event.data.method,
+                        event.data.body,
+                        event.data.headers
+                    );
+                    if (port) port.postMessage({ type: "QUEUE_ACK" });
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.warn("[offline-queue]", e.message);
+                    if (port) port.postMessage({ type: "QUEUE_NACK", reason: e.name || "EnqueueFailed" });
                 }
             } else if (event.data.type === "REPLAY_QUEUE") {
                 if (window.offlineQueue) await window.offlineQueue.replayQueue();

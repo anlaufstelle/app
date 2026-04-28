@@ -180,7 +180,12 @@ class TestOfflineEntrypointsMobile:
         card_btn = page.locator("[data-testid='card-take-offline-btn']").first
         card_btn.wait_for(state="visible", timeout=5000)
         card_btn.click()
-        page.wait_for_timeout(500)  # IndexedDB / OfflineClient-Round-Trip abwarten
+        # Inaktivitaets-Assertion: 500ms Pause, danach pruefen dass keine
+        # Navigation passiert ist. Polling ist hier nicht moeglich, da wir
+        # gerade auf das *Ausbleiben* eines Events warten (kein UI-Signal,
+        # auf das wir warten koennten). Dokumentierter Ausnahmefall —
+        # nicht von #662 FND-10 erfasst.
+        page.wait_for_timeout(500)
         assert page.url == list_url, "Offline-Klick hat ungewollt navigiert"
 
     def test_mobile_detail_overflow_menu_has_offline_toggle(self, staff_page, base_url):

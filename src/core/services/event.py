@@ -1,6 +1,7 @@
 """Service layer for Event CRUD with EventHistory and AuditLog."""
 
 import logging
+import uuid
 
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
@@ -8,7 +9,6 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, Client, DeletionRequest, Event, EventHistory
-from core.models.attachment import EventAttachment
 from core.services.activity import log_activity
 from core.services.encryption import safe_decrypt
 from core.services.file_vault import (
@@ -97,8 +97,13 @@ def remove_restricted_fields(user, document_type, data_form):
     return restricted
 
 
-def _build_prior_versions(event, attachment):
+def _build_prior_versions(attachment, predecessor_index):
     """Walk the ``superseded_by`` chain backwards for an attachment.
+
+    ``predecessor_index`` ist ``{successor_pk: predecessor}`` für alle
+    Attachments des Events, vorab in einem einzigen Query erstellt
+    (#662 FND-05). Damit ist die Auflösung der Versionskette O(N) statt
+    Query-pro-Schritt.
 
     Returns a list of dicts (newest-first) describing each predecessor —
     used by the detail view to show a „Vorversionen"-list (Refs #587).
@@ -106,7 +111,7 @@ def _build_prior_versions(event, attachment):
     prior_versions = []
     current_attachment = attachment
     seen = {current_attachment.pk}
-    predecessor = EventAttachment.objects.filter(event=event, superseded_by=current_attachment).first()
+    predecessor = predecessor_index.get(current_attachment.pk)
     while predecessor is not None and predecessor.pk not in seen:
         seen.add(predecessor.pk)
         prior_versions.append(
@@ -118,7 +123,7 @@ def _build_prior_versions(event, attachment):
             }
         )
         current_attachment = predecessor
-        predecessor = EventAttachment.objects.filter(event=event, superseded_by=current_attachment).first()
+        predecessor = predecessor_index.get(current_attachment.pk)
     return prior_versions
 
 
@@ -135,6 +140,15 @@ def build_event_detail_context(event, user):
     """
     field_templates = build_field_template_lookup(event.document_type, ordered=True)
     doc_sensitivity = event.document_type.sensitivity
+
+    # Alle Attachments des Events vorab in 1 Query laden + Indizes bauen
+    # (#662 FND-05): bisher loeste jedes File-Entry und jeder Schritt einer
+    # Versionskette eine eigene DB-Query aus.
+    all_attachments = list(event.attachments.all())
+    attachments_by_pk = {att.pk: att for att in all_attachments}
+    # Vorgaenger-Index: zu jedem ``superseded_by`` (Nachfolger-PK) das
+    # Vorgaenger-Attachment.
+    predecessor_index = {att.superseded_by_id: att for att in all_attachments if att.superseded_by_id is not None}
 
     fields_display = []
     for key, value in (event.data_json or {}).items():
@@ -156,17 +170,20 @@ def build_event_detail_context(event, user):
         # File attachment marker — beide Formate (Stufe A + B) transparent.
         if _is_file_marker(value):
             entries_meta = normalize_file_marker(value)
-            # Zu jedem Entry das aktuelle (nicht soft-deleted) Attachment aus
-            # seiner Kette nachladen; entry.id ist die attachment_id (alt) bzw.
-            # der Head einer Versionskette (neu).
             file_entries = []
             for entry in entries_meta:
-                att = EventAttachment.objects.filter(pk=entry["id"], event=event).first()
+                # Entry-ID ist die Attachment-PK; aus dem vorab geladenen
+                # Index lesen statt erneut DB zu fragen.
+                try:
+                    entry_pk = uuid.UUID(entry["id"]) if not isinstance(entry["id"], uuid.UUID) else entry["id"]
+                except (ValueError, TypeError):
+                    continue
+                att = attachments_by_pk.get(entry_pk)
                 if not att:
                     continue
                 if att.deleted_at is not None:
                     continue
-                prior = _build_prior_versions(event, att)
+                prior = _build_prior_versions(att, predecessor_index)
                 file_entries.append(
                     {
                         "attachment_id": str(att.pk),

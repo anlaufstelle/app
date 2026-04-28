@@ -260,7 +260,9 @@ class FieldTemplate(models.Model):
             values = [v.strip() for v in raw.split(",")] if self.field_type == ft.MULTI_SELECT else [raw]
             for v in values:
                 if v not in active:
-                    raise ValidationError({"default_value": _(f"Default-Wert '{v}' ist kein aktiver Options-Slug.")})
+                    raise ValidationError(
+                        {"default_value": _("Default-Wert '%(value)s' ist kein aktiver Options-Slug.") % {"value": v}}
+                    )
 
     _SLUG_RETRY_LIMIT = 3
 

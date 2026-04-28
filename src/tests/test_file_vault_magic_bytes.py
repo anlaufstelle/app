@@ -57,6 +57,22 @@ VALID_PNG_BYTES = (
 # Windows-PE-Header — libmagic erkennt das als application/x-dosexec.
 PE_EXECUTABLE_BYTES = b"MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x00" + b"\x00" * 128
 
+# Minimaler ZIP-basierter OOXML-Container (.docx). libmagic liefert dafuer
+# je nach Version "application/zip" oder die offizielle OOXML-MIME zurueck —
+# beides ist legitim (#662 FND-04).
+VALID_DOCX_BYTES = (
+    b"PK\x03\x04"  # ZIP local file header
+    b"\x14\x00\x06\x00"  # version + flags
+    b"\x08\x00"  # compression
+    b"\x00\x00\x00\x00"  # mod time/date
+    b"\x00\x00\x00\x00"  # crc32
+    b"\x00\x00\x00\x00"  # compressed size
+    b"\x00\x00\x00\x00"  # uncompressed size
+    b"\x13\x00\x00\x00"  # filename length (19) + extra length
+    b"[Content_Types].xml"
+    b"PK\x05\x06" + b"\x00" * 18  # central directory end signature
+)
+
 
 @pytest.fixture
 def _encryption_key(settings):
@@ -132,6 +148,56 @@ class TestMagicBytesValidation:
         assert log.detail["declared"] == "application/pdf"
         assert log.detail["detected"].startswith("image/png")
         assert log.detail["filename"] == "tricky.pdf"
+
+    def test_docx_accepted_when_libmagic_returns_zip(
+        self, facility_with_settings, staff_user, doc_type_with_file, event
+    ):
+        """Ein gueltiges DOCX (ZIP-Container) muss akzeptiert werden — auch
+        wenn libmagic ``application/zip`` statt der offiziellen OOXML-MIME
+        zurueckliefert (#662 FND-04). Whitelist muss `.docx` enthalten."""
+        Settings.objects.update_or_create(
+            facility=event.facility,
+            defaults={"allowed_file_types": "pdf,docx", "max_file_size_mb": 10},
+        )
+        _, ft_file = doc_type_with_file
+        uploaded = SimpleUploadedFile(
+            "lebenslauf.docx",
+            VALID_DOCX_BYTES,
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+        attachment = store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
+
+        assert attachment.pk is not None
+        # Kein SECURITY_VIOLATION wegen mime_mismatch.
+        assert (
+            AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION, detail__reason="mime_mismatch").count()
+            == 0
+        )
+
+    def test_pe_executable_disguised_as_docx_rejected(
+        self, facility_with_settings, staff_user, doc_type_with_file, event
+    ):
+        """Ein PE-Executable mit ``.docx``-Extension und OOXML-MIME muss
+        weiterhin abgelehnt werden — die Aequivalenzklasse hilft nur bei
+        echten Container-Files (#662 FND-04)."""
+        Settings.objects.update_or_create(
+            facility=event.facility,
+            defaults={"allowed_file_types": "pdf,docx", "max_file_size_mb": 10},
+        )
+        _, ft_file = doc_type_with_file
+        uploaded = SimpleUploadedFile(
+            "trojaner.docx",
+            PE_EXECUTABLE_BYTES,
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+
+        with pytest.raises(ValidationError):
+            store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
+
+        assert EventAttachment.objects.filter(event=event).count() == 0
+        log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
+        assert log.detail["reason"] == "mime_mismatch"
 
     def test_pe_executable_rejected(self, facility_with_settings, staff_user, doc_type_with_file, event):
         """PE-Executable (MZ-Header) mit PDF-Content-Type → ValidationError + SECURITY_VIOLATION."""
