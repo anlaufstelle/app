@@ -1,5 +1,7 @@
 """Service layer for retention proposals and legal holds."""
 
+from datetime import date, timedelta
+
 from django.db import transaction
 from django.db.utils import IntegrityError
 from django.utils import timezone
@@ -52,6 +54,154 @@ def approve_proposal(proposal, user):
         },
     )
     return proposal
+
+
+@transaction.atomic
+def defer_proposal(proposal, user, days=30):
+    """Defer a retention proposal by `days` (default 30) — sets DEFERRED status."""
+    deferred_until = date.today() + timedelta(days=days)
+    proposal.status = RetentionProposal.Status.DEFERRED
+    proposal.deferred_until = deferred_until
+    proposal.defer_count = (proposal.defer_count or 0) + 1
+    proposal.save(update_fields=["status", "deferred_until", "defer_count"])
+    AuditLog.objects.create(
+        facility=proposal.facility,
+        user=user,
+        action=AuditLog.Action.DELETE,
+        target_type=proposal.target_type,
+        target_id=str(proposal.target_id),
+        detail={
+            "category": "retention_proposal_deferred",
+            "retention_category": proposal.retention_category,
+            "deferred_until": str(deferred_until),
+            "defer_count": proposal.defer_count,
+            "days": days,
+        },
+    )
+    return proposal
+
+
+@transaction.atomic
+def reject_proposal(proposal, user):
+    """Reject a retention proposal — marks it as REJECTED, no deletion will occur."""
+    proposal.status = RetentionProposal.Status.REJECTED
+    proposal.save(update_fields=["status"])
+    AuditLog.objects.create(
+        facility=proposal.facility,
+        user=user,
+        action=AuditLog.Action.DELETE,
+        target_type=proposal.target_type,
+        target_id=str(proposal.target_id),
+        detail={
+            "category": "retention_proposal_rejected",
+            "retention_category": proposal.retention_category,
+        },
+    )
+    return proposal
+
+
+@transaction.atomic
+def bulk_approve_proposals(proposals, user):
+    """Approve multiple proposals in a single transaction.
+
+    Returns count of processed proposals.
+    """
+    count = 0
+    for proposal in proposals:
+        approve_proposal(proposal, user)
+        count += 1
+    return count
+
+
+@transaction.atomic
+def bulk_defer_proposals(proposals, user, days=30):
+    """Defer multiple proposals in a single transaction.
+
+    Returns count of processed proposals.
+    """
+    count = 0
+    for proposal in proposals:
+        defer_proposal(proposal, user, days=days)
+        count += 1
+    return count
+
+
+@transaction.atomic
+def bulk_reject_proposals(proposals, user):
+    """Reject multiple proposals in a single transaction.
+
+    Returns count of processed proposals.
+    """
+    count = 0
+    for proposal in proposals:
+        reject_proposal(proposal, user)
+        count += 1
+    return count
+
+
+@transaction.atomic
+def reactivate_deferred_proposals(facility):
+    """Reactivate deferred proposals whose `deferred_until` has passed.
+
+    Behavior depends on facility settings:
+    - If `retention_auto_approve_after_defer=True` AND `defer_count` has exceeded
+      `retention_max_defer_count`: proposal is auto-approved.
+    - Otherwise: proposal reverts to PENDING for a new manual decision.
+
+    Returns a tuple `(reactivated_count, auto_approved_count)`.
+    """
+    today = date.today()
+    reactivated = 0
+    auto_approved = 0
+
+    try:
+        settings_obj = facility.settings
+        auto_approve = settings_obj.retention_auto_approve_after_defer
+        max_defer_count = settings_obj.retention_max_defer_count
+    except facility._meta.model.settings.RelatedObjectDoesNotExist:
+        auto_approve = False
+        max_defer_count = 2
+
+    due_proposals = RetentionProposal.objects.filter(
+        facility=facility,
+        status=RetentionProposal.Status.DEFERRED,
+        deferred_until__lte=today,
+    )
+
+    for proposal in due_proposals:
+        if auto_approve and proposal.defer_count >= max_defer_count:
+            proposal.status = RetentionProposal.Status.APPROVED
+            proposal.save(update_fields=["status"])
+            AuditLog.objects.create(
+                facility=proposal.facility,
+                action=AuditLog.Action.DELETE,
+                target_type=proposal.target_type,
+                target_id=str(proposal.target_id),
+                detail={
+                    "category": "retention_proposal_auto_approved",
+                    "retention_category": proposal.retention_category,
+                    "defer_count": proposal.defer_count,
+                    "max_defer_count": max_defer_count,
+                },
+            )
+            auto_approved += 1
+        else:
+            proposal.status = RetentionProposal.Status.PENDING
+            proposal.save(update_fields=["status"])
+            AuditLog.objects.create(
+                facility=proposal.facility,
+                action=AuditLog.Action.DELETE,
+                target_type=proposal.target_type,
+                target_id=str(proposal.target_id),
+                detail={
+                    "category": "retention_proposal_reactivated",
+                    "retention_category": proposal.retention_category,
+                    "defer_count": proposal.defer_count,
+                },
+            )
+            reactivated += 1
+
+    return reactivated, auto_approved
 
 
 @transaction.atomic
@@ -114,8 +264,6 @@ def dismiss_legal_hold(hold, user):
 
 def has_active_hold(facility, target_type, target_id):
     """Check if a target has an active (not dismissed, not expired) legal hold."""
-    from datetime import date
-
     return (
         LegalHold.objects.filter(
             facility=facility,
@@ -132,8 +280,6 @@ def has_active_hold(facility, target_type, target_id):
 
 def get_active_hold_target_ids(facility, target_type="Event"):
     """Return set of target_ids with active legal holds for a facility."""
-    from datetime import date
-
     qs = LegalHold.objects.filter(
         facility=facility,
         target_type=target_type,

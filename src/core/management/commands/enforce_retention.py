@@ -16,7 +16,12 @@ from core.models import (
     Settings,
 )
 from core.services.file_vault import delete_event_attachments
-from core.services.retention import cleanup_stale_proposals, create_proposal, get_active_hold_target_ids
+from core.services.retention import (
+    cleanup_stale_proposals,
+    create_proposal,
+    get_active_hold_target_ids,
+    reactivate_deferred_proposals,
+)
 from core.services.snapshot import ensure_snapshots_for_months
 
 
@@ -73,6 +78,15 @@ class Command(BaseCommand):
                 self.stdout.write(self.style.WARNING(f"No settings for facility '{facility.name}', skipping."))
                 continue
 
+            # Reactivate deferred proposals whose wait has expired (Issue #515)
+            if not dry_run:
+                reactivated, auto_approved = reactivate_deferred_proposals(facility)
+                if reactivated or auto_approved:
+                    self.stdout.write(
+                        f"Facility '{facility.name}': {reactivated} proposal(s) reactivated, "
+                        f"{auto_approved} auto-approved after defer."
+                    )
+
             # Snapshots vor Löschung sichern
             if not dry_run:
                 doomed_qs = self._collect_doomed_events(facility, settings_obj, now)
@@ -117,6 +131,14 @@ class Command(BaseCommand):
             except Settings.DoesNotExist:
                 self.stdout.write(self.style.WARNING(f"No settings for facility '{facility.name}', skipping."))
                 continue
+
+            # Reactivate deferred proposals whose wait has expired (Issue #515)
+            reactivated, auto_approved = reactivate_deferred_proposals(facility)
+            if reactivated or auto_approved:
+                self.stdout.write(
+                    f"Facility '{facility.name}': {reactivated} proposal(s) reactivated, "
+                    f"{auto_approved} auto-approved after defer."
+                )
 
             held_ids = get_active_hold_target_ids(facility, "Event")
             created_count = 0

@@ -77,6 +77,85 @@ class TestWorkItemInboxFilters:
         open_items = list(response.context["open_items"])
         assert wi_staff in open_items
 
+    def test_inbox_me_filter_shows_own_items_only(self, client, staff_user, lead_user, facility):
+        """Sentinel 'me' zeigt nur eigene zugewiesene WorkItems."""
+        client.force_login(staff_user)
+        wi_self = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=staff_user,
+            title="Mir",
+        )
+        WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=lead_user,
+            title="Anderem",
+        )
+
+        response = client.get(reverse("core:workitem_inbox"), {"assigned_to": "me"})
+        assert response.status_code == 200
+        open_items = list(response.context["open_items"])
+        assert wi_self in open_items
+        assert all(wi.assigned_to_id == staff_user.id for wi in open_items)
+
+    def test_inbox_me_filter_excludes_other_assigned_items(self, client, staff_user, lead_user, facility):
+        """Sentinel 'me' schließt Items anderer Zuweisungen (inkl. unassigned) aus."""
+        client.force_login(staff_user)
+        WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=lead_user,
+            title="Für Lead",
+        )
+        WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=None,
+            title="Unassigned",
+        )
+
+        response = client.get(reverse("core:workitem_inbox"), {"assigned_to": "me"})
+        assert response.status_code == 200
+        open_items = list(response.context["open_items"])
+        in_progress_items = list(response.context["in_progress_items"])
+        done_items = list(response.context["done_items"])
+        assert all(wi.assigned_to_id == staff_user.id for wi in open_items)
+        assert all(wi.assigned_to_id == staff_user.id for wi in in_progress_items)
+        assert all(wi.assigned_to_id == staff_user.id for wi in done_items)
+        assert len(open_items) == 0
+
+    def test_inbox_default_remains_all(self, client, staff_user, lead_user, facility):
+        """Default-Verhalten ohne Filter bleibt 'Alle' (eigene + unassigned in Open/In-Progress)."""
+        client.force_login(staff_user)
+        wi_self = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=staff_user,
+            title="Mir",
+        )
+        wi_unassigned = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=None,
+            title="Unassigned",
+        )
+        WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=lead_user,
+            title="Für Lead",
+        )
+
+        response = client.get(reverse("core:workitem_inbox"))
+        assert response.status_code == 200
+        open_items = list(response.context["open_items"])
+        # Implicit filter: eigene + unassigned sichtbar, fremde nicht
+        assert wi_self in open_items
+        assert wi_unassigned in open_items
+        assert len(open_items) == 2
+        assert response.context["selected_assigned_to"] == ""
+
     def test_no_filter_returns_all(self, client, staff_user, facility):
         """Ohne Filter werden alle eigenen WorkItems angezeigt."""
         client.force_login(staff_user)

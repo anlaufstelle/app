@@ -56,6 +56,14 @@ class Client(models.Model):
         help_text=_("Interne Notizen, nur für Fachkräfte sichtbar"),
     )
     is_active = models.BooleanField(default=True, verbose_name=_("Aktiv"))
+    k_anonymized = models.BooleanField(
+        default=False,
+        verbose_name=_("K-anonymisiert"),
+        help_text=_(
+            "Kennzeichnet, ob der Datensatz per K-Anonymisierung generalisiert wurde "
+            "(Alternative zu Hard-Delete für Langzeit-Statistik)."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Erstellt am"))
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -121,3 +129,14 @@ class Client(models.Model):
                 title="Aufgabe (anonymisiert)",
                 description="",
             )
+
+    def k_anonymize(self, k=5):
+        """K-anonymize this client as an alternative to hard-delete (Refs #535).
+
+        Generalizes identifying fields so the record stays statistically usable
+        (age_cluster, contact_stage) while no longer being re-identifiable.
+        This is additive to ``anonymize()`` and non-destructive to linked data.
+        """
+        from core.services.k_anonymization import k_anonymize_client
+
+        k_anonymize_client(self, k=k)

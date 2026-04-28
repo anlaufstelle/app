@@ -43,6 +43,8 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, View):
             qs = qs.filter(priority=priority)
 
         assigned_to = request.GET.get("assigned_to")
+        if assigned_to == "me":
+            assigned_to = str(request.user.id)
         if assigned_to:
             qs = qs.filter(assigned_to_id=assigned_to)
 

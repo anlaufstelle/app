@@ -26,6 +26,11 @@ markers = [
 
 [tool.coverage.run]
 source = ["core"]
+omit = [
+    "*/tests/*",
+    "*/migrations/*",
+    "*/management/commands/seed*.py",
+]
 
 [tool.coverage.report]
 show_missing = true

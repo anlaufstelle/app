@@ -16,7 +16,9 @@ class RetentionProposal(models.Model):
     class Status(models.TextChoices):
         PENDING = "pending", _("Ausstehend")
         APPROVED = "approved", _("Freigegeben")
-        HELD = "held", _("Aufgeschoben")
+        HELD = "held", _("Legal Hold")
+        DEFERRED = "deferred", _("Zurückgestellt")
+        REJECTED = "rejected", _("Abgelehnt")
 
     class TargetType(models.TextChoices):
         EVENT = "Event", _("Event")
@@ -50,6 +52,17 @@ class RetentionProposal(models.Model):
         verbose_name=_("Kategorie"),
         help_text=_("anonymous, identified, qualified oder document_type"),
     )
+    deferred_until = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name=_("Wiedervorlage am"),
+        help_text=_("Datum, ab dem ein zurückgestellter Vorschlag wieder vorgelegt wird."),
+    )
+    defer_count = models.PositiveIntegerField(
+        default=0,
+        verbose_name=_("Anzahl Zurückstellungen"),
+        help_text=_("Wie oft wurde der Vorschlag bereits zurückgestellt."),
+    )
 
     class Meta:
         verbose_name = _("Löschvorschlag")
@@ -58,7 +71,7 @@ class RetentionProposal(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["facility", "target_type", "target_id"],
-                condition=models.Q(status__in=["pending", "held"]),
+                condition=models.Q(status__in=["pending", "held", "deferred"]),
                 name="unique_active_retention_proposal",
             ),
         ]

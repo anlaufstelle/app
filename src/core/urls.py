@@ -55,6 +55,9 @@ from core.views.offline import (
 )
 from core.views.retention import (
     RetentionApproveView,
+    RetentionBulkApproveView,
+    RetentionBulkDeferView,
+    RetentionBulkRejectView,
     RetentionDashboardView,
     RetentionDismissHoldView,
     RetentionHoldView,
@@ -134,6 +137,9 @@ urlpatterns = [
     path("deletion-requests/<uuid:pk>/review/", DeletionRequestReviewView.as_view(), name="deletion_review"),
     # Retention Dashboard
     path("retention/", RetentionDashboardView.as_view(), name="retention_dashboard"),
+    path("retention/bulk-approve/", RetentionBulkApproveView.as_view(), name="retention_bulk_approve"),
+    path("retention/bulk-defer/", RetentionBulkDeferView.as_view(), name="retention_bulk_defer"),
+    path("retention/bulk-reject/", RetentionBulkRejectView.as_view(), name="retention_bulk_reject"),
     # WorkItems
     path("workitems/", WorkItemInboxView.as_view(), name="workitem_inbox"),
     path("workitems/new/", WorkItemCreateView.as_view(), name="workitem_create"),

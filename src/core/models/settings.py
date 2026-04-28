@@ -70,6 +70,41 @@ class Settings(models.Model):
             "Einrichtung — unabhängig vom einzelnen Benutzerfeld mfa_required."
         ),
     )
+    retention_auto_approve_after_defer = models.BooleanField(
+        default=False,
+        verbose_name=_("Auto-Freigabe nach mehrfacher Zurückstellung"),
+        help_text=_(
+            "Wenn aktiv, werden Löschvorschläge nach Überschreiten der maximalen "
+            "Zurückstellungszahl automatisch freigegeben, statt manuelle Entscheidung "
+            "zu erzwingen."
+        ),
+    )
+    retention_max_defer_count = models.PositiveIntegerField(
+        default=2,
+        verbose_name=_("Maximale Zurückstellungen"),
+        help_text=_(
+            "Nach wie vielen Zurückstellungen eine endgültige Entscheidung "
+            "erzwungen oder (bei Auto-Freigabe) automatisch freigegeben wird."
+        ),
+    )
+    retention_use_k_anonymization = models.BooleanField(
+        default=False,
+        verbose_name=_("K-Anonymisierung statt Hard-Delete"),
+        help_text=_(
+            "Wenn aktiv, wird bei DSGVO-Löschung statt Hard-Delete eine "
+            "K-Anonymisierung durchgeführt. Der Datensatz bleibt statistisch "
+            "auswertbar, ist aber nicht mehr re-identifizierbar."
+        ),
+    )
+    k_anonymity_threshold = models.PositiveIntegerField(
+        default=5,
+        verbose_name=_("K-Anonymitäts-Schwelle"),
+        help_text=_(
+            "Mindest-Gruppengröße für K-Anonymität (z.B. k=5 → mindestens 5 "
+            "Datensätze pro Bucket). Je höher der Wert, desto stärker die "
+            "Anonymisierung."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Einstellungen")

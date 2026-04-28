@@ -2,14 +2,17 @@
 
 from datetime import date, timedelta
 
-from django.http import HttpResponseBadRequest, HttpResponseNotAllowed
-from django.shortcuts import get_object_or_404, render
+from django.http import HttpResponseBadRequest, HttpResponseNotAllowed, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext as _
 from django.views import View
 
 from core.models import LegalHold, RetentionProposal
 from core.services.retention import (
     approve_proposal,
+    bulk_approve_proposals,
+    bulk_defer_proposals,
+    bulk_reject_proposals,
     create_legal_hold,
     dismiss_legal_hold,
     get_dashboard_proposals,
@@ -69,6 +72,8 @@ class RetentionDashboardView(LeadOrAdminRequiredMixin, View):
         pending_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.PENDING)
         held_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.HELD)
         approved_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.APPROVED)
+        deferred_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.DEFERRED)
+        rejected_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.REJECTED)
 
         # Facility settings
         try:
@@ -102,6 +107,8 @@ class RetentionDashboardView(LeadOrAdminRequiredMixin, View):
             "pending_count": pending_count,
             "held_count": held_count,
             "approved_count": approved_count,
+            "deferred_count": deferred_count,
+            "rejected_count": rejected_count,
             "retention_settings": retention_settings,
             "today": today,
             "soon_threshold": today + timedelta(days=7),
@@ -180,6 +187,101 @@ class RetentionHoldView(LeadOrAdminRequiredMixin, View):
 
     def get(self, request, pk):
         return HttpResponseNotAllowed(["POST"])
+
+
+class _BulkActionMixin(LeadOrAdminRequiredMixin):
+    """Shared helper for bulk actions on retention proposals.
+
+    Subclasses must define:
+    - action_fn: callable(proposals, user, **kwargs) -> int
+    - allowed_statuses: iterable of RetentionProposal.Status values
+    """
+
+    action_fn = None
+    allowed_statuses = (
+        RetentionProposal.Status.PENDING,
+        RetentionProposal.Status.DEFERRED,
+    )
+    extra_kwargs_fn = None  # Optional: callable(request) -> dict
+
+    def _get_proposal_ids(self, request):
+        ids = request.POST.getlist("proposal_ids") or request.POST.getlist("proposal_ids[]")
+        return [i for i in ids if i]
+
+    def _load_proposals(self, request, ids):
+        return list(
+            RetentionProposal.objects.filter(
+                pk__in=ids,
+                facility=request.current_facility,
+                status__in=self.allowed_statuses,
+            )
+        )
+
+    def post(self, request):
+        ids = self._get_proposal_ids(request)
+        if not ids:
+            return HttpResponseBadRequest(_("Keine Vorschläge ausgewählt."))
+
+        proposals = self._load_proposals(request, ids)
+        if not proposals:
+            return HttpResponseBadRequest(_("Keine gültigen Vorschläge gefunden."))
+
+        extra_kwargs = self.extra_kwargs_fn(request) if self.extra_kwargs_fn else {}
+        count = type(self).action_fn(proposals, request.user, **extra_kwargs)
+
+        if request.headers.get("HX-Request"):
+            response = redirect("core:retention_dashboard")
+            response["HX-Redirect"] = response["Location"]
+            return response
+
+        if request.headers.get("Accept", "").startswith("application/json"):
+            return JsonResponse({"processed": count})
+
+        return redirect("core:retention_dashboard")
+
+    def get(self, request):
+        return HttpResponseNotAllowed(["POST"])
+
+
+class RetentionBulkApproveView(_BulkActionMixin, View):
+    """Bulk-approve retention proposals."""
+
+    action_fn = staticmethod(bulk_approve_proposals)
+    allowed_statuses = (
+        RetentionProposal.Status.PENDING,
+        RetentionProposal.Status.DEFERRED,
+    )
+
+
+class RetentionBulkDeferView(_BulkActionMixin, View):
+    """Bulk-defer retention proposals (default 30 days)."""
+
+    action_fn = staticmethod(bulk_defer_proposals)
+    allowed_statuses = (
+        RetentionProposal.Status.PENDING,
+        RetentionProposal.Status.DEFERRED,
+    )
+
+    @staticmethod
+    def extra_kwargs_fn(request):
+        days_raw = request.POST.get("days", "30").strip()
+        try:
+            days = int(days_raw)
+        except (TypeError, ValueError):
+            days = 30
+        if days <= 0:
+            days = 30
+        return {"days": days}
+
+
+class RetentionBulkRejectView(_BulkActionMixin, View):
+    """Bulk-reject retention proposals."""
+
+    action_fn = staticmethod(bulk_reject_proposals)
+    allowed_statuses = (
+        RetentionProposal.Status.PENDING,
+        RetentionProposal.Status.DEFERRED,
+    )
 
 
 class RetentionDismissHoldView(LeadOrAdminRequiredMixin, View):
