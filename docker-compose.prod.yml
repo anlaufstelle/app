@@ -14,7 +14,7 @@ services:
       - internal
 
   web:
-    image: ghcr.io/anlaufstelle/app:latest
+    image: ghcr.io/tobiasnix/anlaufstelle:latest
     env_file: .env
     environment:
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
