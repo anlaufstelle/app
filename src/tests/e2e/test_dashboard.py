@@ -4,6 +4,7 @@ Refs #386 — Frontend-Redesign.
 """
 
 import pytest
+from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -47,11 +48,12 @@ class TestGlobalSearch:
         search_input = page.locator("[data-testid='global-search-input']")
         search_input.click()
         search_input.press_sequentially("Stern", delay=50)
-        page.wait_for_timeout(1000)
 
+        # Der Results-Container wird bereits vor dem HTMX-Fetch sichtbar
+        # — warten bis der konkrete Treffer im Dropdown steht.
         results = page.locator("[data-testid='global-search-results']")
         results.wait_for(state="visible", timeout=5000)
-        assert "Stern-42" in results.inner_text()
+        expect(results).to_contain_text("Stern-42", timeout=5000)
 
     def test_search_all_results_link(self, authenticated_page, base_url):
         page = authenticated_page
@@ -60,11 +62,11 @@ class TestGlobalSearch:
         search_input = page.locator("[data-testid='global-search-input']")
         search_input.click()
         search_input.press_sequentially("Stern", delay=50)
-        page.wait_for_timeout(1000)
 
         results = page.locator("[data-testid='global-search-results']")
         results.wait_for(state="visible", timeout=5000)
         link = results.locator("a:has-text('Alle Ergebnisse anzeigen')")
+        link.wait_for(state="visible", timeout=5000)
         assert link.is_visible()
 
     def test_full_search_page_still_works(self, authenticated_page, base_url):

@@ -44,6 +44,7 @@ def _select_qualified_client(page, base_url, e2e_env):
 class TestFileUploadAndDownload:
     """Upload a file via event form, verify on detail page, download it."""
 
+    @pytest.mark.smoke
     def test_lead_uploads_file_and_downloads(self, lead_page, base_url, e2e_env, _test_pdf):
         """Lead creates event with file upload, sees it on detail, downloads it."""
         page = lead_page

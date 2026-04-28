@@ -46,6 +46,7 @@ class TestClientExportJSON:
 class TestClientExportPDF:
     """PDF-Export herunterladen."""
 
+    @pytest.mark.smoke
     def test_lead_can_download_pdf(self, lead_page, base_url):
         """Leitung kann PDF-Export herunterladen."""
         lead_page.goto(f"{base_url}/clients/")

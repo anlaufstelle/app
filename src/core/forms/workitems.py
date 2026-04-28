@@ -75,3 +75,11 @@ class WorkItemForm(forms.ModelForm):
             ).get()
         except Client.DoesNotExist:
             raise forms.ValidationError(_("Ungültige Klientel-ID"))
+
+    def clean(self):
+        cleaned = super().clean()
+        remind_at = cleaned.get("remind_at")
+        due_date = cleaned.get("due_date")
+        if remind_at and due_date and remind_at > due_date:
+            raise forms.ValidationError({"remind_at": _("Die Erinnerung muss vor oder am Fälligkeitstag liegen.")})
+        return cleaned

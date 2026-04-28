@@ -8,6 +8,7 @@ pytestmark = pytest.mark.e2e
 class TestAuditLogAccess:
     """Admin-Zugriff auf Audit-Log und Action-Filter."""
 
+    @pytest.mark.smoke
     def test_admin_can_access_audit_log(self, authenticated_page, base_url):
         """Admin kann /audit/ aufrufen und sieht h1 sowie die Tabelle oder Leer-Zustand."""
         page = authenticated_page
