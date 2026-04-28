@@ -32,6 +32,10 @@ EXPECTED_TABLES = [
     "core_eventhistory",
     "core_eventattachment",
     "core_episode",
+    # Retro-Audit #600: transitiv facility-gescopte Tabellen (Migration 0063).
+    "core_outcomegoal",
+    "core_milestone",
+    "core_documenttypefield",
 ]
 
 
