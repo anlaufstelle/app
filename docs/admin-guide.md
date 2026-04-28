@@ -382,7 +382,24 @@ Felder, zu denen bereits Werte in Ereignissen existieren, können **nicht ohne W
 
 Unter **Core → Feldvorlagen** können Sie die Optionen von Auswahl- und Mehrfachauswahl-Feldern (Select / Multi-Select) bearbeiten. Die Optionen werden im Feld **Options json** als JSON-Array gespeichert.
 
-> **Gilt nur für Select / Multi-Select.** Für andere Feldtypen (Text, Textbereich, Zahl, Datum, Uhrzeit, Ja/Nein, Datei) wird `options_json` nicht ausgewertet — das Feld bitte leer lassen (`[]`). Default-Werte für Nicht-Auswahlfelder (z. B. ein Vorgabewert für ein Zahlenfeld) sind aktuell **nicht** möglich; siehe [#624](https://github.com/tobiasnix/anlaufstelle/issues/624).
+> **Gilt nur für Select / Multi-Select.** Für andere Feldtypen (Text, Textbereich, Zahl, Datum, Uhrzeit, Ja/Nein, Datei) wird `options_json` nicht ausgewertet — das Feld bitte leer lassen (`[]`).
+
+#### Default-Werte (`default_value`)
+
+Im Feld **Default-Wert** einer Feldvorlage kann ein Vorgabewert hinterlegt werden, der beim **Neu-Anlegen** eines Ereignisses vorgeblendet wird. Beim **Bearbeiten** eines bestehenden Ereignisses hat der gespeicherte Wert immer Vorrang.
+
+| Feldtyp | Format | Beispiel |
+|---|---|---|
+| Text / Textbereich | beliebiger String | `Standard-Notiz` |
+| Zahl | Ganzzahl | `15` |
+| Datum | ISO-Format `YYYY-MM-DD` | `2026-01-01` |
+| Uhrzeit | ISO-Format `HH:MM` oder `HH:MM:SS` | `09:30` |
+| Ja/Nein | `true` oder `false` | `true` |
+| Auswahl | Slug einer aktiven Option | `beratung` |
+| Mehrfachauswahl | Komma-getrennte Liste aktiver Options-Slugs | `beratung, essen` |
+| Datei | nicht unterstützt | — |
+
+Vorrangregel beim Neu-Anlegen: **Quick-Template > Default-Wert > leer**. Ungültige Werte werden in `FieldTemplate.clean()` beim Speichern im Admin abgelehnt.
 
 **Schema einer Option:**
 

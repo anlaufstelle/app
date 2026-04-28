@@ -81,7 +81,7 @@
             {% if applied_template %}
             <p class="text-xs text-indigo-700">
                 {% blocktrans with name=applied_template.name %}Vorlage angewendet: <strong>{{ name }}</strong>{% endblocktrans %}
-                — <a href="{% url 'core:event_create' %}{% if client_id %}?client={{ client_id }}{% endif %}" class="underline">{% trans "Vorlage entfernen" %}</a>
+                — <a href="{% url 'core:event_create' %}{% if client_id %}?client={{ client_id }}{% endif %}" class="underline" data-autosave-clear-link data-testid="template-remove-link">{% trans "Vorlage entfernen" %}</a>
             </p>
             {% else %}
             <p class="text-xs text-indigo-700">{% trans "Wählen Sie eine Vorlage, um Felder automatisch vorzubefüllen." %}</p>

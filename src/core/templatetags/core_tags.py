@@ -10,6 +10,20 @@ register = template.Library()
 
 
 @register.filter
+def get_item(container, key):
+    """Dict-Lookup via Key im Template (z.B. ``existing_attachments|get_item:slug``).
+
+    Gibt ``None`` zurück, wenn Key fehlt oder Container kein Dict ist.
+    """
+    if container is None:
+        return None
+    try:
+        return container.get(key)
+    except AttributeError:
+        return None
+
+
+@register.filter
 def decrypt(value):
     """Decrypt a field value, or return [encrypted] as fallback."""
     from core.services.encryption import is_encrypted_value, safe_decrypt

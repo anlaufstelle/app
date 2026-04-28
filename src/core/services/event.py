@@ -62,8 +62,14 @@ def filtered_server_data_json(user, event):
         if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
             continue
         # File markers — keep metadata but not the file bytes.
-        if isinstance(value, dict) and value.get("__file__"):
-            result[slug] = {"__file__": True, "name": value.get("name", "")}
+        if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
+            if value.get("__files__"):
+                result[slug] = {
+                    "__files__": True,
+                    "entries": [{"id": e.get("id"), "sort": e.get("sort", 0)} for e in (value.get("entries") or [])],
+                }
+            else:
+                result[slug] = {"__file__": True, "name": value.get("name", "")}
             continue
         result[slug] = safe_decrypt(value, default="") if isinstance(value, dict) else value
     return result
@@ -147,20 +153,44 @@ def build_event_detail_context(event, user):
             )
             continue
 
-        # File attachment marker
-        if isinstance(value, dict) and value.get("__file__"):
-            attachment = EventAttachment.objects.filter(pk=value.get("attachment_id"), event=event).first()
-            if attachment:
-                prior_versions = _build_prior_versions(event, attachment)
+        # File attachment marker — beide Formate (Stufe A + B) transparent.
+        if _is_file_marker(value):
+            entries_meta = normalize_file_marker(value)
+            # Zu jedem Entry das aktuelle (nicht soft-deleted) Attachment aus
+            # seiner Kette nachladen; entry.id ist die attachment_id (alt) bzw.
+            # der Head einer Versionskette (neu).
+            file_entries = []
+            for entry in entries_meta:
+                att = EventAttachment.objects.filter(pk=entry["id"], event=event).first()
+                if not att:
+                    continue
+                if att.deleted_at is not None:
+                    continue
+                prior = _build_prior_versions(event, att)
+                file_entries.append(
+                    {
+                        "attachment_id": str(att.pk),
+                        "original_filename": get_original_filename(att),
+                        "file_size_display": format_file_size(att.file_size),
+                        "prior_versions": prior,
+                    }
+                )
+            if file_entries:
+                # Für Rückwärtskompatibilität mit Templates (Stufe A): wir
+                # setzen attachment_id/original_filename/file_size_display/
+                # prior_versions auf das **erste** Entry (singleton-Verhalten)
+                # UND liefern zusätzlich ``entries`` mit der vollen Liste.
+                first = file_entries[0]
                 fields_display.append(
                     {
                         "label": ft.name if ft else key,
                         "is_file": True,
-                        "attachment_id": str(attachment.pk),
-                        "original_filename": get_original_filename(attachment),
-                        "file_size_display": format_file_size(attachment.file_size),
+                        "attachment_id": first["attachment_id"],
+                        "original_filename": first["original_filename"],
+                        "file_size_display": first["file_size_display"],
+                        "prior_versions": first["prior_versions"],
+                        "entries": file_entries,
                         "is_sensitive": bool(field_sensitivity),
-                        "prior_versions": prior_versions,
                     }
                 )
                 continue
@@ -200,15 +230,51 @@ def _snapshot_field_metadata(document_type):
 
 
 def _is_file_marker(value):
-    """Return True if value is a file attachment marker dict."""
+    """Return True if value is a Stufe-A (__file__) or Stufe-B (__files__) marker."""
+    if not isinstance(value, dict):
+        return False
+    if value.get("__file__") is True and "attachment_id" in value:
+        return True
+    if value.get("__files__") is True and isinstance(value.get("entries"), list):
+        return True
+    return False
+
+
+def is_singleton_file_marker(value):
+    """Alt-Format (Stufe A): ``{"__file__": True, "attachment_id": "<uuid>"}``."""
     return isinstance(value, dict) and value.get("__file__") is True and "attachment_id" in value
+
+
+def is_multi_file_marker(value):
+    """Neu-Format (Stufe B): ``{"__files__": True, "entries": [{"id": ..., "sort": ...}]}``."""
+    return isinstance(value, dict) and value.get("__files__") is True and isinstance(value.get("entries"), list)
+
+
+def normalize_file_marker(value):
+    """Liefert eine Liste von ``{"id": <attachment_id>, "sort": <int>}``.
+
+    Akzeptiert sowohl das Stufe-A-Singleton als auch das Stufe-B-List-Format.
+    Nicht-Marker-Werte liefern eine leere Liste.
+    """
+    if is_multi_file_marker(value):
+        entries = value["entries"] or []
+        return [
+            {"id": str(e.get("id")), "sort": int(e.get("sort", i))}
+            for i, e in enumerate(entries)
+            if e and e.get("id")
+        ]
+    if is_singleton_file_marker(value):
+        return [{"id": str(value.get("attachment_id")), "sort": 0}]
+    return []
 
 
 def _validate_data_json(document_type, data_json):
     """Only accept fields defined in the DocumentType's field templates.
 
-    FILE-typed fields use marker dicts ``{"__file__": True, "attachment_id": "..."}``
-    instead of plain values.  These markers are passed through without modification.
+    FILE-typed fields use marker dicts — entweder das Stufe-A-Singleton
+    (``{"__file__": True, "attachment_id": "..."}``) oder das Stufe-B-List-
+    Format (``{"__files__": True, "entries": [...]}``). Beide werden
+    unmodifiziert durchgereicht.
     """
     if not data_json:
         return {}

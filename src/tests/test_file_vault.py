@@ -219,7 +219,10 @@ class TestFileUploadView:
 
         event = Event.objects.filter(document_type=dt).latest("created_at")
         assert "scan" in event.data_json
-        assert event.data_json["scan"]["__file__"] is True
+        # Stufe B (#622): Neue Events nutzen __files__-Format.
+        marker = event.data_json["scan"]
+        assert marker.get("__files__") is True
+        assert len(marker["entries"]) == 1
 
         attachment = EventAttachment.objects.get(event=event)
         assert attachment.field_template == ft_file

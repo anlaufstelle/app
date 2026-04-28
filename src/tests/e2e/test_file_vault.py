@@ -167,7 +167,11 @@ class TestFileEdit:
     """File replacement on event edit."""
 
     def test_replace_file_on_edit(self, lead_page, base_url, e2e_env, _test_pdf, tmp_path):
-        """Replacing a file on edit keeps the old version as a superseded predecessor (Refs #587)."""
+        """Replacing a file on edit keeps the old version as a superseded predecessor (Refs #587 + #622).
+
+        Stufe B (#622): Replace läuft jetzt über den per-Entry „Ersetzen"-File-
+        Input, nicht mehr durch erneuten Upload in das Haupt-File-Feld.
+        """
         page = lead_page
 
         # Create event with file
@@ -185,10 +189,11 @@ class TestFileEdit:
         page.click('a:has-text("Bearbeiten")')
         page.wait_for_load_state("domcontentloaded")
 
-        # Upload replacement file
+        # Upload replacement via per-Entry Replace-Input (Stufe B).
         replacement = tmp_path / "replacement.pdf"
         replacement.write_bytes(_VALID_PDF_BYTES)
-        page.set_input_files('input[name="scan-bescheid"]', str(replacement))
+        replace_input = page.locator('input[type="file"][name^="scan-bescheid__replace__"]').first
+        replace_input.set_input_files(str(replacement))
         page.click('button:has-text("Speichern")')
         page.wait_for_url(lambda url: "/edit/" not in url, timeout=10000)
 
@@ -224,12 +229,13 @@ class TestFileEdit:
         page.click('button:has-text("Speichern")')
         page.wait_for_url(lambda url: "/events/" in url and "/new/" not in url, timeout=10000)
 
-        # Ersetzen
+        # Ersetzen — Stufe B via per-Entry Replace-Input.
         page.click('a:has-text("Bearbeiten")')
         page.wait_for_load_state("domcontentloaded")
         replacement = tmp_path / "replacement.pdf"
         replacement.write_bytes(_VALID_PDF_BYTES)
-        page.set_input_files('input[name="scan-bescheid"]', str(replacement))
+        replace_input = page.locator('input[type="file"][name^="scan-bescheid__replace__"]').first
+        replace_input.set_input_files(str(replacement))
         page.click('button:has-text("Speichern")')
         page.wait_for_url(lambda url: "/edit/" not in url, timeout=10000)
 

@@ -17,6 +17,26 @@ class EventAttachment(models.Model):
         related_name="attachments",
         verbose_name=_("Event"),
     )
+    # Versions-Kette (Stufe B, Refs #622): Ein ``entry_id`` identifiziert eine
+    # Kette von Attachments, die dieselbe logische Datei über ihre Replace-
+    # History hinweg repräsentiert. Für Stufe-A-Einträge (1 Datei pro Feld)
+    # wird eine eigene ``entry_id`` pro Kette in der Data-Migration gesetzt.
+    entry_id = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        verbose_name=_("Entry-ID (Versionskette)"),
+    )
+    sort_order = models.IntegerField(
+        default=0,
+        verbose_name=_("Sortierung"),
+        help_text=_("Reihenfolge der Einträge innerhalb eines Feldes (0-indexed)."),
+    )
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Soft-deleted am"),
+        help_text=_("Markiert den Eintrag als vom User entfernt. Physischer Delete erst beim Event-Delete/Anonymize."),
+    )
     field_template = models.ForeignKey(
         "core.FieldTemplate",
         on_delete=models.PROTECT,
