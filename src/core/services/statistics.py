@@ -2,12 +2,16 @@
 
 import logging
 
+from django.conf import settings
+from django.db import connection
 from django.db.models import Count, Q
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Event
 
 logger = logging.getLogger(__name__)
+
+STATISTICS_MV_NAME = "core_statistics_event_flat"
 
 
 def get_statistics(facility, date_from, date_to):
@@ -98,3 +102,62 @@ def get_statistics(facility, date_from, date_to):
         "top_clients": top_clients,
         "unique_clients": unique_clients,
     }
+
+
+# ---------------------------------------------------------------------------
+# Materialized View Pfad (Refs #544)
+# ---------------------------------------------------------------------------
+
+
+def _flat_view_enabled() -> bool:
+    """Return True wenn die Materialized View genutzt werden darf.
+
+    Aktiviert wird der Pfad über ``settings.STATISTICS_USE_FLAT_VIEW = True``.
+    Zusätzlich muss das Backend Postgres sein — SQLite hat keine
+    Materialized Views (siehe Migration 0049).
+    """
+    return bool(getattr(settings, "STATISTICS_USE_FLAT_VIEW", False)) and connection.vendor == "postgresql"
+
+
+def get_event_counts_by_month(facility, year):
+    """Gesamte Event-Anzahl pro Monat für ein Kalenderjahr.
+
+    Wählt je nach Feature-Flag den Pfad:
+    - ``STATISTICS_USE_FLAT_VIEW=True`` + Postgres → Materialized View
+      ``core_statistics_event_flat`` (dramatisch schneller bei vielen Events).
+    - sonst → klassisches ``Event``-Queryset als Fallback.
+
+    Rückgabe: Liste von Dicts ``{"month": 1..12, "count": int}``, lückenlos
+    von Januar bis Dezember.
+    """
+    counts = {month: 0 for month in range(1, 13)}
+
+    if _flat_view_enabled():
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"""
+                SELECT EXTRACT(MONTH FROM month)::int AS m, COUNT(*)::bigint
+                FROM {STATISTICS_MV_NAME}
+                WHERE facility_id = %s
+                  AND EXTRACT(YEAR FROM month)::int = %s
+                GROUP BY m
+                ORDER BY m
+                """,
+                [facility.pk, year],
+            )
+            for month, count in cursor.fetchall():
+                counts[int(month)] = int(count)
+    else:
+        rows = (
+            Event.objects.filter(
+                facility=facility,
+                is_deleted=False,
+                occurred_at__year=year,
+            )
+            .values_list("occurred_at__month")
+            .annotate(count=Count("id"))
+        )
+        for month, count in rows:
+            counts[int(month)] = int(count)
+
+    return [{"month": month, "count": counts[month]} for month in range(1, 13)]
