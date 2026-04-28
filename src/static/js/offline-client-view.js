@@ -27,6 +27,21 @@
             get hasWorkitems() {
                 return Boolean(this.data && this.data.workitems && this.data.workitems.length);
             },
+            get noEvents() {
+                return !this.hasEvents;
+            },
+            get noCases() {
+                return !this.hasCases;
+            },
+            get noWorkitems() {
+                return !this.hasWorkitems;
+            },
+            get showUnavailable() {
+                return !this.loading && !this.available;
+            },
+            get showAvailable() {
+                return !this.loading && this.available;
+            },
             async load() {
                 this.loading = true;
                 try {
@@ -41,6 +56,24 @@
                     if (!cached) {
                         this.available = false;
                         return;
+                    }
+                    // Vorab-Formatierung fuer CSP-konforme Templates (Refs #693).
+                    if (cached.events) {
+                        cached.events = cached.events.map((ev) => {
+                            const fields = ev.data_fields || {};
+                            return Object.assign({}, ev, {
+                                occurred_at_fmt: this.formatTs(ev.occurred_at),
+                                data_fields_pairs: Object.keys(fields).map((slug) => ({
+                                    slug: slug,
+                                    value_fmt: this.formatFieldValue(fields[slug]),
+                                })),
+                                has_data_fields: Object.keys(fields).length > 0,
+                                is_unsynced:
+                                    ev.localStatus === "modified" ||
+                                    ev.localStatus === "new",
+                                is_conflict: ev.localStatus === "conflict",
+                            });
+                        });
                     }
                     this.data = cached;
                     this.lastSynced = cached.lastSynced;

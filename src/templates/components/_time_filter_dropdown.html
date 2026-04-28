@@ -11,14 +11,6 @@
         hx-include="#filter-doc-type, #filter-type"
         hx-target="#{{ feed_target_id|default:'event-list' }}"
         hx-swap="innerHTML"
-        hx-on::before-request="
-            document.querySelectorAll('.time-filter-tab').forEach(function(b) {
-                b.classList.remove('bg-accent-light', 'text-accent', 'border-b-2', 'border-accent', 'font-semibold');
-                b.classList.add('text-ink-muted', 'hover:text-ink', 'hover:bg-canvas');
-            });
-            this.classList.remove('text-ink-muted', 'hover:text-ink', 'hover:bg-canvas');
-            this.classList.add('bg-accent-light', 'text-accent', 'border-b-2', 'border-accent', 'font-semibold');
-        "
     >
         {% trans "Alle" %}
     </button>
@@ -31,14 +23,6 @@
         hx-include="#filter-doc-type, #filter-type"
         hx-target="#{{ feed_target_id|default:'event-list' }}"
         hx-swap="innerHTML"
-        hx-on::before-request="
-            document.querySelectorAll('.time-filter-tab').forEach(function(b) {
-                b.classList.remove('bg-accent-light', 'text-accent', 'border-b-2', 'border-accent', 'font-semibold');
-                b.classList.add('text-ink-muted', 'hover:text-ink', 'hover:bg-canvas');
-            });
-            this.classList.remove('text-ink-muted', 'hover:text-ink', 'hover:bg-canvas');
-            this.classList.add('bg-accent-light', 'text-accent', 'border-b-2', 'border-accent', 'font-semibold');
-        "
     >
         {{ tf.label }}
         <span class="font-mono text-[11px] text-ink-muted ml-1">{{ tf.start_time|time:"H:i" }}–{{ tf.end_time|time:"H:i" }}</span>

@@ -17,7 +17,7 @@
                 <button type="button"
                         @click="toggle"
                         class="text-ink-muted hover:text-ink transition-transform duration-200 p-0.5"
-                        :class="expanded ? 'rotate-180' : ''"
+                        :class="rotateClass"
                         :aria-expanded="expanded"
                         aria-label="{% trans 'Details anzeigen' %}">
                     <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">

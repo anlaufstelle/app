@@ -175,6 +175,9 @@ document.addEventListener("alpine:init", () => {
         toggle() {
             this.expanded = !this.expanded;
         },
+        get rotateClass() {
+            return this.expanded ? "rotate-180" : "";
+        },
     }));
 
     /** History-Entry-Detail-Toggle (events/detail.html unten). */
@@ -276,6 +279,7 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("clientAutocomplete", () => ({
         query: "",
         results: [],
+        enrichedResults: [],
         selectedId: "",
         show: false,
         highlightIndex: -1,
@@ -286,6 +290,20 @@ document.addEventListener("alpine:init", () => {
             this.query = this.$el.dataset.initialPseudonym || "";
             this.selectedId = this.$el.dataset.initialClientId || "";
             this._autocompleteUrl = this.$el.dataset.autocompleteUrl || "";
+            // CSP-friendly: enriche Items mit isHighlighted statt
+            // ``highlightIndex === idx`` im Template (Refs #693).
+            this.$watch("highlightIndex", () => this._enrich());
+            this.$watch("results", () => this._enrich());
+        },
+        _enrich() {
+            const hi = this.highlightIndex;
+            this.enrichedResults = this.results.map((c, i) => {
+                const isHi = i === hi;
+                return Object.assign({}, c, {
+                    isHighlighted: isHi,
+                    highlightClass: isHi ? "bg-accent-light" : "",
+                });
+            });
         },
         setQuery(event) { this.query = event.target.value; },
         setSelectedId(event) { this.selectedId = event.target.value; },
@@ -373,6 +391,7 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("eventClientAutocomplete", () => ({
         query: "",
         results: [],
+        enrichedResults: [],
         selectedId: "",
         show: false,
         anonymousAllowed: true,
@@ -394,6 +413,20 @@ document.addEventListener("alpine:init", () => {
             if (this.selectedId) {
                 this.loadCasesForClient(this.selectedId);
             }
+            // CSP-friendly: enriche Items mit isHighlighted statt
+            // ``highlightIndex === idx`` im Template (Refs #693).
+            this.$watch("highlightIndex", () => this._enrich());
+            this.$watch("results", () => this._enrich());
+        },
+        _enrich() {
+            const hi = this.highlightIndex;
+            this.enrichedResults = this.results.map((c, i) => {
+                const isHi = i === hi;
+                return Object.assign({}, c, {
+                    isHighlighted: isHi,
+                    highlightClass: isHi ? "bg-accent-light" : "",
+                });
+            });
         },
         buildAutocompleteUrl() {
             const params = new URLSearchParams({ q: this.query });

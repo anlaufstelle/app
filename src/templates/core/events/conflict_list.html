@@ -19,18 +19,18 @@
         <div class="py-8 text-center text-ink-muted">{% trans "Lade Konflikte..." %}</div>
     </template>
 
-    <template x-if="!loading && items.length === 0">
+    <template x-if="showEmpty">
         <div class="bg-surface border border-subtle rounded-[10px] p-6 text-sm text-ink-muted text-center" data-testid="conflict-list-empty">
             {% trans "Keine ungelösten Konflikte." %}
         </div>
     </template>
 
-    <template x-if="!loading && items.length > 0">
+    <template x-if="showList">
         <div class="bg-surface border border-subtle rounded-[10px] overflow-hidden divide-y divide-subtle">
             <template x-for="item in items" :key="item.pk">
                 <a :href="'/offline/conflicts/' + item.pk + '/'" class="flex items-center justify-between px-4 py-3 hover:bg-canvas" data-testid="conflict-list-item">
                     <div>
-                        <span class="text-sm font-medium text-ink" x-text="item.documentTypeName || 'Ereignis'"></span>
+                        <span class="text-sm font-medium text-ink" x-text="item.documentTypeName"></span>
                         <span class="ml-2 text-xs text-ink-muted" x-text="item.lastEditedAtFmt"></span>
                     </div>
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">

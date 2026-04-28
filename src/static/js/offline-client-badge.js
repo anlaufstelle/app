@@ -37,6 +37,11 @@
             get hasMessage() {
                 return this.message !== "";
             },
+            get toastClass() {
+                return this.messageType === "error"
+                    ? "border-red-400 bg-red-50 text-red-800"
+                    : "border-green-500 bg-green-50 text-green-900";
+            },
             async refresh() {
                 if (!window.offlineClient) return;
                 try {

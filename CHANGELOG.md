@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **CSP-Folgefehler nach `@alpinejs/csp`-Migration** — Time-Filter-Tab-Highlight auf Zeitstrom-Feed (`hx-on::before-request` durch JS-Listener ersetzt), 11 Alpine-Expressions auf Computed-Getter / pre-formatierte Properties umgestellt (Toast-Farbe, Klientel-Autocomplete-Highlight, Aktivitätskarten-Pfeil, Offline-Toggle-Label, Konflikt-Diff-Tabelle, Offline-Detail-Sichtbarkeit). Architektur-Test verbietet zukünftig Ternaries, `||`/`&&`, Method-Calls und Object-Literale in `:class`/`x-text`/`x-show`/`x-if`/`x-bind:`/`x-model`-Direktiven sowie HTMX-Inline-Handler `hx-on::`.
+
 ## [0.10.1] - 2026-04-26
 
 ### Added

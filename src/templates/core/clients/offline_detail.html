@@ -22,7 +22,7 @@
         </div>
     </template>
 
-    <template x-if="!loading && !available">
+    <template x-if="showUnavailable">
         <div class="bg-yellow-50 border border-yellow-200 rounded-[10px] p-4" data-testid="offline-not-available">
             <p class="text-sm text-yellow-900">
                 {% trans "Dieses Klientel wurde nicht für die Offline-Nutzung vorbereitet oder der lokale Cache ist leer." %}
@@ -33,7 +33,7 @@
         </div>
     </template>
 
-    <template x-if="!loading && available">
+    <template x-if="showAvailable">
         <div>
             <div class="mb-6">
                 <h1 class="text-[22px] font-bold text-ink" x-text="data.client.pseudonym" data-testid="offline-pseudonym"></h1>
@@ -56,7 +56,7 @@
                     <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">
                         {% trans "Kontakt-Chronik" %}
                     </h2>
-                    <template x-if="data.events.length === 0">
+                    <template x-if="noEvents">
                         <p class="text-sm text-ink-muted py-4">{% trans "Noch keine Kontakte dokumentiert." %}</p>
                     </template>
                     <div class="space-y-2" x-show="hasEvents">
@@ -64,15 +64,15 @@
                             <div class="block bg-surface border border-subtle rounded-[10px] p-4" data-testid="offline-event">
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-center space-x-3">
-                                        <span class="text-sm text-ink-muted font-mono" x-text="formatTs(event.occurred_at)"></span>
+                                        <span class="text-sm text-ink-muted font-mono" x-text="event.occurred_at_fmt"></span>
                                         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-accent-light text-accent"
                                               x-text="event.document_type_name"></span>
-                                        <template x-if="event.localStatus === 'modified' || event.localStatus === 'new'">
+                                        <template x-if="event.is_unsynced">
                                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800" data-testid="event-unsynced-badge">
                                                 {% trans "Nicht synchronisiert" %}
                                             </span>
                                         </template>
-                                        <template x-if="event.localStatus === 'conflict'">
+                                        <template x-if="event.is_conflict">
                                             <a :href="'/offline/conflicts/' + event.pk + '/'"
                                                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 hover:bg-red-200"
                                                data-testid="event-conflict-badge">
@@ -82,12 +82,12 @@
                                     </div>
                                     <span class="text-xs text-ink-muted" x-text="event.created_by_display"></span>
                                 </div>
-                                <template x-if="Object.keys(event.data_fields || {}).length">
+                                <template x-if="event.has_data_fields">
                                     <dl class="mt-2 text-sm text-ink-soft space-y-1">
-                                        <template x-for="[slug, value] in Object.entries(event.data_fields)" :key="slug">
+                                        <template x-for="pair in event.data_fields_pairs" :key="pair.slug">
                                             <div class="flex">
-                                                <dt class="w-32 text-xs text-ink-muted" x-text="slug"></dt>
-                                                <dd class="flex-1" x-text="formatFieldValue(value)"></dd>
+                                                <dt class="w-32 text-xs text-ink-muted" x-text="pair.slug"></dt>
+                                                <dd class="flex-1" x-text="pair.value_fmt"></dd>
                                             </div>
                                         </template>
                                     </dl>
@@ -99,7 +99,7 @@
 
                 <div>
                     <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Fälle" %}</h2>
-                    <template x-if="data.cases.length === 0">
+                    <template x-if="noCases">
                         <p class="text-sm text-ink-muted">{% trans "Keine Fälle" %}</p>
                     </template>
                     <div class="space-y-2" x-show="hasCases">
@@ -114,7 +114,7 @@
                     </div>
 
                     <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3 mt-6">{% trans "Aufgaben" %}</h2>
-                    <template x-if="data.workitems.length === 0">
+                    <template x-if="noWorkitems">
                         <p class="text-sm text-ink-muted">{% trans "Keine offenen Aufgaben" %}</p>
                     </template>
                     <div class="space-y-2" x-show="hasWorkitems">

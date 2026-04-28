@@ -64,6 +64,7 @@
             resolving: false,
             resolved: false,
             diffKeys: [],
+            diffRows: [],
 
             init() {
                 this.eventPk = this.$el.dataset.eventPk || "";
@@ -78,6 +79,15 @@
             },
             get hasDiffKeys() {
                 return this.diffKeys.length > 0;
+            },
+            get showError() {
+                return !this.loading && this.error !== "";
+            },
+            get showResolved() {
+                return !this.loading && this.error === "" && this.resolved;
+            },
+            get showForm() {
+                return !this.loading && this.error === "" && !this.resolved;
             },
 
             async load() {
@@ -114,6 +124,17 @@
                         this.perFieldChoice[key] =
                             this.localData[key] !== this.serverData[key] ? "local" : "server";
                     }
+                    // CSP-konforme Vorab-Aufbereitung der Diff-Tabelle (Refs #693).
+                    this.diffRows = this.diffKeys.map((key) => {
+                        const hasDiff = this.localData[key] !== this.serverData[key];
+                        return {
+                            key: key,
+                            localFmt: _formatValue(this.localData[key]),
+                            serverFmt: _formatValue(this.serverData[key]),
+                            hasDiff: hasDiff,
+                            diffClass: hasDiff ? "bg-yellow-50" : "",
+                        };
+                    });
                 } catch (e) {
                     // eslint-disable-next-line no-console
                     console.error("[conflict-resolver] load failed", e);

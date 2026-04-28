@@ -23,6 +23,8 @@
         {% for client in clients %}
         <div class="bg-surface border border-subtle rounded-[10px] p-3 sm:p-0 sm:border-0 sm:rounded-none hover:shadow-sm sm:hover:shadow-none sm:hover:bg-canvas transition-colors"
              x-data="clientRowOffline" data-pk="{{ client.pk|escapejs }}"
+             data-label-take="{% trans 'Offline mitnehmen' %}"
+             data-label-remove="{% trans 'Aus Offline-Cache entfernen' %}"
              x-init="refresh"
              @offline-clients-count.window="refresh">
             <div class="flex items-start justify-between gap-2 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto] sm:gap-4 sm:items-center sm:px-4 sm:py-3">
@@ -71,7 +73,7 @@
                             :disabled="busy"
                             class="inline-flex items-center text-[12px] text-ink-muted hover:text-accent disabled:opacity-50 px-2 py-1"
                             data-testid="card-take-offline-btn"
-                            :aria-label="isOffline ? '{% trans 'Aus Offline-Cache entfernen' %}' : '{% trans 'Offline mitnehmen' %}'">
+                            :aria-label="offlineToggleLabel">
                         <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
                     </button>
                 </div>
@@ -82,7 +84,7 @@
                             :disabled="busy"
                             class="inline-flex items-center text-[12px] text-ink-muted hover:text-accent disabled:opacity-50"
                             data-testid="row-take-offline-btn"
-                            :aria-label="isOffline ? '{% trans 'Aus Offline-Cache entfernen' %}' : '{% trans 'Offline mitnehmen' %}'">
+                            :aria-label="offlineToggleLabel">
                         <svg aria-hidden="true" class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
                         <span x-show="notOffline">{% trans "Mitnehmen" %}</span>
                         <span x-show="isOffline" x-cloak>{% trans "Entfernen" %}</span>

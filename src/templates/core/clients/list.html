@@ -61,7 +61,7 @@
      role="status"
      aria-live="polite"
      class="fixed bottom-6 right-6 z-50 max-w-sm border-2 rounded-md shadow-lg p-4 text-sm flex items-start gap-3"
-     :class="messageType === 'error' ? 'border-red-400 bg-red-50 text-red-800' : 'border-green-500 bg-green-50 text-green-900'"
+     :class="toastClass"
      data-testid="client-offline-toast">
     <svg x-show="isMessageNotError" class="w-5 h-5 flex-shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
     <svg x-show="isMessageError" x-cloak class="w-5 h-5 flex-shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>

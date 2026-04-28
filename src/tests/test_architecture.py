@@ -152,6 +152,115 @@ class TestAlpineCspCompatibilityGuard:
             f"Betroffen: {violations}"
         )
 
+    # Alpine-Direktiven, deren Werte unter ``@alpinejs/csp`` nur einfache
+    # Property-Zugriffe, Vergleiche und Object-Literale enthalten duerfen.
+    # Ternaeres ``? :``, logische ``||`` / ``&&`` und Method-Calls mit
+    # Argumenten loesen unter dem CSP-Build Eval aus und brechen darum
+    # silent. Refs #693.
+    _ALPINE_VALUE_DIRECTIVE = re.compile(
+        r"""(?:^|\s)
+            (?::[a-zA-Z][\w:-]*           # :class, :value, :aria-selected, ...
+            |x-text
+            |x-html
+            |x-show
+            |x-if
+            |x-effect
+            |x-bind:[a-zA-Z][\w:-]*
+            |x-model(?::[\w.]+)?
+            )
+            \s*=\s*
+            "(?P<value>[^"]*)"
+        """,
+        re.VERBOSE,
+    )
+    # ``hx-on::evt`` und ``hx-on:evt`` werden intern via ``Function()``
+    # ausgewertet und brauchen ``script-src 'unsafe-eval'``. Refs #692.
+    _HTMX_INLINE_HANDLER = re.compile(r"\shx-on:", re.IGNORECASE)
+
+    def test_no_unsafe_alpine_expressions_in_templates(self):
+        """Alpine-Direktiven duerfen keine Ternaries, ||/&& oder
+        Method-Calls mit Argumenten enthalten — sonst bricht
+        ``@alpinejs/csp`` (Refs #693).
+        """
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = []
+        for template_file in self._TEMPLATES_DIR.rglob("*.html"):
+            source = template_file.read_text(errors="ignore")
+            for match in self._ALPINE_VALUE_DIRECTIVE.finditer(source):
+                value = match.group("value")
+                stripped = value.strip()
+                # Object-Literale (``{ 'foo': bar }``) — der gevendor'te
+                # ``@alpinejs/csp`` 3.14.8 kann sie nicht zuverlaessig
+                # tokenisieren (verschluckt das schliessende ``}``).
+                # Bitte ueber String-Property bzw. Getter binden.
+                if stripped.startswith("{") and stripped.endswith("}"):
+                    line = source[: match.start()].count("\n") + 1
+                    violations.append(
+                        f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line} "
+                        f"Object-Literal in Alpine-Direktive (CSP-Build "
+                        f"3.14.8 inkompatibel): {value!r}"
+                    )
+                    continue
+                # Ternary ``? ... :`` (mit Whitespace, aber Doppelpunkt
+                # nicht in Object-Keys).
+                if re.search(r"\?[^?]*:", value):
+                    line = source[: match.start()].count("\n") + 1
+                    violations.append(
+                        f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line} "
+                        f"ternary in Alpine-Direktive: {value!r}"
+                    )
+                    continue
+                if "||" in value or "&&" in value:
+                    line = source[: match.start()].count("\n") + 1
+                    violations.append(
+                        f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line} "
+                        f"logischer Operator in Alpine-Direktive: {value!r}"
+                    )
+                    continue
+                # Method-Call mit Argumenten: ``foo(...)`` mit Inhalt in
+                # Klammern (auch ``a.b(c)``). Aufruf ohne Argumente
+                # (``foo()``) ist unter @alpinejs/csp ebenfalls verboten,
+                # bleibt aber als eigene Heuristik fuer kuenftige
+                # Verschaerfungen ungenutzt. Verweis auf Property-Getter.
+                if re.search(r"[a-zA-Z_]\w*\([^)]+\)", value):
+                    line = source[: match.start()].count("\n") + 1
+                    violations.append(
+                        f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line} "
+                        f"Method-Call mit Argumenten in Alpine-Direktive: {value!r}"
+                    )
+        assert not violations, (
+            "Alpine-Direktiven enthalten Ausdruecke, die der "
+            "@alpinejs/csp-Build nicht ausfuehrt. Bitte Ternaries durch "
+            "Object-Syntax ``:class=\"{ 'foo': cond }\"`` oder einen "
+            "Computed-Getter ersetzen, ``||`` / ``&&`` in einen Getter "
+            "auslagern, Method-Calls in property-getter umbauen.\n"
+            "Refs #693, #672.\n"
+            f"Betroffen: {violations}"
+        )
+
+    def test_no_htmx_inline_handlers_in_templates(self):
+        """``hx-on::evt`` Inline-Handler werden intern per ``Function()``
+        evaluiert und brauchen ``script-src 'unsafe-eval'``. Refs #692.
+        """
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = []
+        for template_file in self._TEMPLATES_DIR.rglob("*.html"):
+            source = template_file.read_text(errors="ignore")
+            for match in self._HTMX_INLINE_HANDLER.finditer(source):
+                line = source[: match.start()].count("\n") + 1
+                violations.append(f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line}")
+        assert not violations, (
+            "HTMX-Inline-Handler ``hx-on::`` / ``hx-on:`` werden vom "
+            "Browser per ``Function()`` ausgewertet und brauchen "
+            "``script-src 'unsafe-eval'``. Bitte Listener in eigene "
+            "static/js/*.js-Datei auslegen und auf ``htmx:beforeRequest`` "
+            "(o. a.) am ``document.body`` reagieren.\n"
+            "Refs #692.\n"
+            f"Betroffen: {violations}"
+        )
+
     def test_csp_script_src_is_strict(self):
         """CSP ``script-src`` darf weder ``'unsafe-inline'`` noch
         ``'unsafe-eval'`` enthalten.

@@ -35,17 +35,29 @@
             get hasMessage() {
                 return this.message !== "";
             },
+            get toastClass() {
+                return this.messageType === "error"
+                    ? "border-red-400 bg-red-50 text-red-800"
+                    : "border-green-500 bg-green-50 text-green-900";
+            },
         }));
 
         Alpine.data("clientRowOffline", () => ({
             isOffline: false,
             busy: false,
             _pk: "",
+            _labelTake: "",
+            _labelRemove: "",
             init() {
                 this._pk = this.$el.dataset.pk || "";
+                this._labelTake = this.$el.dataset.labelTake || "";
+                this._labelRemove = this.$el.dataset.labelRemove || "";
             },
             get notOffline() {
                 return !this.isOffline;
+            },
+            get offlineToggleLabel() {
+                return this.isOffline ? this._labelRemove : this._labelTake;
             },
             async refresh() {
                 if (!window.offlineClient) return;

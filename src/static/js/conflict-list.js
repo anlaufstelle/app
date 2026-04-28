@@ -12,6 +12,12 @@
             get hasItems() {
                 return this.items.length > 0;
             },
+            get showList() {
+                return !this.loading && this.items.length > 0;
+            },
+            get showEmpty() {
+                return !this.loading && this.items.length === 0;
+            },
             async load() {
                 try {
                     if (window.crypto_session && window.crypto_session.ready) {
@@ -34,7 +40,7 @@
                         }
                         return {
                             pk: r.pk,
-                            documentTypeName: data.documentTypeName || "",
+                            documentTypeName: data.documentTypeName || "Ereignis",
                             lastEditedAtFmt: lastEditedAtFmt,
                         };
                     });

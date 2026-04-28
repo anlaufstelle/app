@@ -51,14 +51,14 @@
                     <input type="hidden" name="client" :value="selectedId" @input="setSelectedId">
 
                     <div x-show="show" x-cloak id="client-autocomplete-list" role="listbox" class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
-                        <template x-for="(c, idx) in results" :key="c.id">
+                        <template x-for="(c, idx) in enrichedResults" :key="c.id">
                             <button type="button"
                                     :data-idx="idx"
                                     @mousedown.prevent="selectByEvent"
                                     @mouseenter="highlightByEvent"
                                     role="option"
-                                    :aria-selected="highlightIndex === idx"
-                                    :class="highlightIndex === idx ? 'bg-accent-light' : ''"
+                                    :aria-selected="c.isHighlighted"
+                                    :class="c.highlightClass"
                                     class="w-full text-left px-3 py-2 text-[13px] text-ink hover:bg-accent-light flex items-center justify-between">
                                 <span class="font-semibold" x-text="c.pseudonym"></span>
                                 <span class="text-[11px] text-ink-muted" x-text="c.stage"></span>
