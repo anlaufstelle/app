@@ -22,6 +22,7 @@ addopts = "--reuse-db"
 markers = [
     "e2e: End-to-End-Tests mit Playwright (benötigen laufenden Server)",
     "smoke: Kritische User-Flows für schnelle lokale Validierung",
+    "slow: Tests mit Laufzeit > 2s (typisch: Seed-Läufe mit größerem Datensatz). Per `-m 'not slow'` deselektierbar.",
 ]
 
 [tool.coverage.run]
