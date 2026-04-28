@@ -6,6 +6,7 @@ from core.views.auth import (
     CustomLoginView,
     CustomLogoutView,
     CustomPasswordChangeView,
+    OfflineKeySaltView,
     set_user_language,
 )
 from core.views.health import HealthView
@@ -19,6 +20,7 @@ urlpatterns = [
     path("login/", CustomLoginView.as_view(), name="login"),
     path("logout/", CustomLogoutView.as_view(), name="logout"),
     path("password-change/", CustomPasswordChangeView.as_view(), name="password_change"),
+    path("auth/offline-key-salt/", OfflineKeySaltView.as_view(), name="offline_key_salt"),
     # Password Reset
     path(
         "password-reset/",

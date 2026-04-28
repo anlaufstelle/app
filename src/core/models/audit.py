@@ -23,6 +23,7 @@ class AuditLog(models.Model):
         SETTINGS_CHANGE = "settings_change", _("Einstellungen geändert")
         DOWNLOAD = "download", _("Download")
         LEGAL_HOLD = "legal_hold", _("Legal Hold")
+        OFFLINE_KEY_FETCH = "offline_key_fetch", _("Offline-Schlüssel abgerufen")
 
     objects = FacilityScopedManager()
 

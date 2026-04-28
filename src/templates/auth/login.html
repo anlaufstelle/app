@@ -11,6 +11,10 @@
     <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <script src="{% static 'js/alpine.min.js' %}" defer></script>
+    {# Crypto modules so we can derive the offline session key after a successful login #}
+    <script src="{% static 'js/dexie.min.js' %}"></script>
+    <script src="{% static 'js/crypto.js' %}"></script>
+    <script src="{% static 'js/offline-store.js' %}"></script>
 </head>
 <body class="h-full bg-gray-50 flex items-center justify-center">
     <div class="w-full max-w-sm p-6 bg-white rounded-lg shadow-md">
@@ -22,7 +26,7 @@
         </div>
         {% endif %}
 
-        <form method="post" class="space-y-4">
+        <form method="post" class="space-y-4" id="login-form">
             {% csrf_token %}
             <div>
                 <label for="id_username" class="block text-sm font-medium text-gray-700">{% trans "Benutzername" %}</label>
@@ -68,5 +72,6 @@
         </div>
     </div>
     <script src="{% static 'js/sw-register.js' %}" defer></script>
+    <script src="{% static 'js/auth-bootstrap.js' %}" defer></script>
 </body>
 </html>

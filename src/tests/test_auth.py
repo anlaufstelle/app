@@ -237,7 +237,7 @@ class TestForcePasswordChangeMiddleware:
 
     def test_exempt_urls_not_redirected(self, rf, staff_user):
         staff_user.must_change_password = True
-        for url in ["/login/", "/logout/", "/password-change/", "/static/foo.css", "/admin/"]:
+        for url in ["/login/", "/logout/", "/password-change/", "/static/foo.css", "/admin-mgmt/"]:
             request = rf.get(url)
             request.user = staff_user
             request.path = url

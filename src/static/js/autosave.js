@@ -1,21 +1,25 @@
-/**
- * Auto-Save Modul: Formulardaten periodisch in localStorage sichern.
+/*
+ * Auto-save module: periodically persist form data into encrypted IndexedDB.
  *
- * Verwendung: <form data-autosave> auf ein Formular setzen.
- * - Speichert alle 5 Sekunden geaenderte Formulardaten in localStorage
- * - Stellt Daten bei Seitenladung wieder her (mit Banner-Hinweis)
- * - Loescht localStorage-Eintrag nach erfolgreichem Submit
- * - Key-Schema: autosave_<pathname> (z.B. autosave_/events/new/)
+ * Activate per form via <form data-autosave>.
+ * - Saves all editable fields every 5 seconds via window.offlineStore + crypto
+ * - Restores on page load (with banner)
+ * - Clears the entry after a successful submit
+ * - Form key: autosave_<userId>_<pathname>
+ *
+ * If the session key is not available (logout, session timeout, password
+ * change, unsupported browser), autosave silently disables itself instead of
+ * falling back to plaintext storage. Refs #573, #576.
  */
 (function () {
-    'use strict';
+    "use strict";
 
     var INTERVAL_MS = 5000;
-    var KEY_PREFIX = 'autosave_';
+    var KEY_PREFIX = "autosave_";
 
     function getStorageKey() {
-        var userId = document.body.dataset.userId || '';
-        return KEY_PREFIX + userId + '_' + window.location.pathname;
+        var userId = document.body.dataset.userId || "";
+        return KEY_PREFIX + userId + "_" + window.location.pathname;
     }
 
     function getFormData(form) {
@@ -23,21 +27,15 @@
         var elements = form.elements;
         for (var i = 0; i < elements.length; i++) {
             var el = elements[i];
-            if (!el.name || el.name === 'csrfmiddlewaretoken' || el.type === 'hidden') {
-                continue;
-            }
-            if (el.type === 'checkbox') {
+            if (!el.name || el.name === "csrfmiddlewaretoken" || el.type === "hidden") continue;
+            if (el.type === "checkbox") {
                 data[el.name] = el.checked;
-            } else if (el.type === 'radio') {
-                if (el.checked) {
-                    data[el.name] = el.value;
-                }
-            } else if (el.tagName === 'SELECT' && el.multiple) {
+            } else if (el.type === "radio") {
+                if (el.checked) data[el.name] = el.value;
+            } else if (el.tagName === "SELECT" && el.multiple) {
                 var selected = [];
                 for (var j = 0; j < el.options.length; j++) {
-                    if (el.options[j].selected) {
-                        selected.push(el.options[j].value);
-                    }
+                    if (el.options[j].selected) selected.push(el.options[j].value);
                 }
                 data[el.name] = selected;
             } else {
@@ -52,24 +50,20 @@
         var elements = form.elements;
         for (var i = 0; i < elements.length; i++) {
             var el = elements[i];
-            if (!el.name || el.name === 'csrfmiddlewaretoken' || el.type === 'hidden') {
-                continue;
-            }
-            if (!(el.name in data)) {
-                continue;
-            }
+            if (!el.name || el.name === "csrfmiddlewaretoken" || el.type === "hidden") continue;
+            if (!(el.name in data)) continue;
             var value = data[el.name];
-            if (el.type === 'checkbox') {
+            if (el.type === "checkbox") {
                 if (el.checked !== value) {
                     el.checked = value;
                     restored = true;
                 }
-            } else if (el.type === 'radio') {
+            } else if (el.type === "radio") {
                 if (el.value === value && !el.checked) {
                     el.checked = true;
                     restored = true;
                 }
-            } else if (el.tagName === 'SELECT' && el.multiple) {
+            } else if (el.tagName === "SELECT" && el.multiple) {
                 if (Array.isArray(value)) {
                     for (var j = 0; j < el.options.length; j++) {
                         var shouldSelect = value.indexOf(el.options[j].value) !== -1;
@@ -79,94 +73,135 @@
                         }
                     }
                 }
-            } else {
-                if (el.value !== value && value !== '') {
-                    el.value = value;
-                    restored = true;
-                }
+            } else if (el.value !== value && value !== "") {
+                el.value = value;
+                restored = true;
             }
         }
-        // Trigger change events for Alpine.js / HTMX reactivity
         if (restored) {
-            var selects = form.querySelectorAll('select');
+            var selects = form.querySelectorAll("select");
             for (var k = 0; k < selects.length; k++) {
-                selects[k].dispatchEvent(new Event('change', { bubbles: true }));
+                selects[k].dispatchEvent(new Event("change", { bubbles: true }));
             }
         }
         return restored;
     }
 
     function showRestoredBanner(form) {
-        var banner = document.createElement('div');
-        banner.id = 'autosave-restored-banner';
-        banner.setAttribute('role', 'status');
-        banner.className = 'mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-800 ' +
-            'flex items-center justify-between';
-
-        var textSpan = document.createElement('span');
-        textSpan.textContent = 'Entwurf wiederhergestellt';
+        var banner = document.createElement("div");
+        banner.id = "autosave-restored-banner";
+        banner.setAttribute("role", "status");
+        banner.className =
+            "mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-800 " +
+            "flex items-center justify-between";
+        var textSpan = document.createElement("span");
+        textSpan.textContent = "Entwurf wiederhergestellt";
         banner.appendChild(textSpan);
-
-        var closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'text-blue-600 hover:text-blue-800 font-medium';
-        closeBtn.textContent = 'Schlie\u00dfen';
-        closeBtn.addEventListener('click', function () {
+        var closeBtn = document.createElement("button");
+        closeBtn.type = "button";
+        closeBtn.className = "text-blue-600 hover:text-blue-800 font-medium";
+        closeBtn.textContent = "Schließen";
+        closeBtn.addEventListener("click", function () {
             banner.remove();
         });
         banner.appendChild(closeBtn);
-
         form.parentElement.insertBefore(banner, form);
     }
 
-    function init() {
-        var form = document.querySelector('form[data-autosave]');
-        if (!form) return;
+    function isOfflineReady() {
+        return (
+            window.crypto_session &&
+            window.crypto_session.hasSessionKey() &&
+            window.offlineStore &&
+            typeof window.offlineStore.putEncrypted === "function"
+        );
+    }
 
-        var storageKey = getStorageKey();
-        var lastSavedJson = '';
-
-        // Wiederherstellen bei Seitenladung
+    async function _migrateLegacyLocalStorage(storageKey, form) {
+        // One-shot migration of plaintext localStorage drafts from pre-#573 versions
         try {
-            var saved = localStorage.getItem(storageKey);
-            if (saved) {
-                var data = JSON.parse(saved);
-                var wasRestored = restoreFormData(form, data);
-                if (wasRestored) {
-                    showRestoredBanner(form);
-                }
+            var raw = localStorage.getItem(storageKey);
+            if (!raw) return;
+            var data = JSON.parse(raw);
+            if (data && typeof data === "object") {
+                await window.offlineStore.putEncrypted("drafts", {
+                    formKey: storageKey,
+                    updatedAt: Date.now(),
+                    data: data,
+                });
+                restoreFormData(form, data);
+                showRestoredBanner(form);
             }
-        } catch (e) {
-            // localStorage nicht verfuegbar oder korrupt — ignorieren
+        } catch (_e) {
+            // ignore
+        } finally {
+            try {
+                localStorage.removeItem(storageKey);
+            } catch (_e) {
+                // ignore
+            }
+        }
+    }
+
+    async function init() {
+        var form = document.querySelector("form[data-autosave]");
+        if (!form) return;
+        if (window.crypto_session && window.crypto_session.ready) {
+            await window.crypto_session.ready();
+        }
+        if (!isOfflineReady()) {
+            // No session key (e.g. unsupported browser or session expired).
+            // Autosave is intentionally a no-op here; we never fall back to
+            // plaintext storage.
+            return;
         }
 
-        // Periodisches Speichern
-        setInterval(function () {
+        var storageKey = getStorageKey();
+        var lastSavedJson = "";
+
+        // Restore on load (encrypted store first, then legacy migration)
+        try {
+            var existing = await window.offlineStore.getDecrypted("drafts", storageKey);
+            if (existing && existing.data) {
+                var wasRestored = restoreFormData(form, existing.data);
+                if (wasRestored) showRestoredBanner(form);
+                lastSavedJson = JSON.stringify(existing.data);
+            } else {
+                await _migrateLegacyLocalStorage(storageKey, form);
+            }
+        } catch (_e) {
+            // ignore — better to autosave fresh than crash the form
+        }
+
+        setInterval(async function () {
+            if (!isOfflineReady()) return;
             try {
                 var currentData = getFormData(form);
                 var json = JSON.stringify(currentData);
                 if (json !== lastSavedJson) {
-                    localStorage.setItem(storageKey, json);
+                    await window.offlineStore.putEncrypted("drafts", {
+                        formKey: storageKey,
+                        updatedAt: Date.now(),
+                        data: currentData,
+                    });
                     lastSavedJson = json;
                 }
-            } catch (e) {
-                // Fehler beim Speichern ignorieren
+            } catch (_e) {
+                // ignore
             }
         }, INTERVAL_MS);
 
-        // Nach Submit localStorage loeschen
-        form.addEventListener('submit', function () {
+        form.addEventListener("submit", function () {
             try {
-                localStorage.removeItem(storageKey);
-            } catch (e) {
-                // Ignorieren
+                window.offlineStore.deleteRow("drafts", storageKey);
+            } catch (_e) {
+                // ignore
             }
         });
     }
 
-    // Initialisierung nach DOM-Ready
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
     } else {
         init();
     }

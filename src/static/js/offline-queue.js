@@ -1,191 +1,156 @@
-/**
- * Offline-Queue: Speichert POST/PUT-Requests bei Netzausfall in IndexedDB
- * und sendet sie bei Wiederverbindung erneut.
+/*
+ * Offline-Queue: receives QUEUE_REQUEST messages from the Service Worker,
+ * stores the request body encrypted at rest in IndexedDB (via offline-store
+ * + crypto_session), and replays the queue when the network returns.
+ *
+ * Refs #573, #576.
+ *
+ * Failure modes that this module guards against:
+ *   - missing CryptoKey (e.g. session timed out): rejects the enqueue so
+ *     the user sees an explicit error instead of a silent leak to plaintext
+ *     localStorage
+ *   - 4xx replay: keeps the record in the queue with `lastError`
+ *   - 5xx replay: exponential backoff via `retryAfter`
+ *   - multipart/form-data: rejected before enqueue (the SW already returns
+ *     503 for this case, this is the defence in depth)
  */
 (function () {
-    'use strict';
+    "use strict";
 
-    const DB_NAME = 'anlaufstelle-offline';
-    const DB_VERSION = 1;
-    const STORE_NAME = 'requests';
+    const MAX_BACKOFF_MS = 30 * 60 * 1000; // 30 min
+    const BASE_BACKOFF_MS = 60 * 1000; // 1 min
 
-    /** IndexedDB oeffnen/erstellen. */
-    function openDB() {
-        return new Promise((resolve, reject) => {
-            const req = indexedDB.open(DB_NAME, DB_VERSION);
-            req.onupgradeneeded = () => {
-                const db = req.result;
-                if (!db.objectStoreNames.contains(STORE_NAME)) {
-                    db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
-                }
-            };
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-        });
-    }
-
-    /** Request in IndexedDB speichern. */
-    async function enqueueRequest(url, method, body, headers) {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readwrite');
-            const store = tx.objectStore(STORE_NAME);
-            store.add({
-                url: url,
-                method: method,
-                body: body,
-                headers: headers,
-                timestamp: Date.now(),
-            });
-            tx.oncomplete = () => {
-                db.close();
-                _updateQueueCount();
-                resolve();
-            };
-            tx.onerror = () => {
-                db.close();
-                reject(tx.error);
-            };
-        });
-    }
-
-    /** Anzahl der gespeicherten Requests zurueckgeben. */
-    async function getQueueCount() {
-        try {
-            const db = await openDB();
-            return new Promise((resolve) => {
-                const tx = db.transaction(STORE_NAME, 'readonly');
-                const store = tx.objectStore(STORE_NAME);
-                const countReq = store.count();
-                countReq.onsuccess = () => {
-                    db.close();
-                    resolve(countReq.result);
-                };
-                countReq.onerror = () => {
-                    db.close();
-                    resolve(0);
-                };
-            });
-        } catch {
-            return 0;
+    function _store() {
+        if (!window.offlineStore) {
+            throw new Error("OfflineStoreNotLoaded");
         }
+        return window.offlineStore;
     }
 
-    /** Alle gespeicherten Requests abrufen. */
-    async function getAllQueued() {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readonly');
-            const store = tx.objectStore(STORE_NAME);
-            const req = store.getAll();
-            req.onsuccess = () => {
-                db.close();
-                resolve(req.result);
-            };
-            req.onerror = () => {
-                db.close();
-                reject(req.error);
-            };
-        });
-    }
-
-    /** Einen einzelnen Eintrag nach ID loeschen. */
-    async function deleteEntry(id) {
-        const db = await openDB();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readwrite');
-            const store = tx.objectStore(STORE_NAME);
-            store.delete(id);
-            tx.oncomplete = () => {
-                db.close();
-                resolve();
-            };
-            tx.onerror = () => {
-                db.close();
-                reject(tx.error);
-            };
-        });
-    }
-
-    /** Aktuellen CSRF-Token aus dem Cookie lesen. */
-    function _getCSRFToken() {
+    function _csrfFromCookie() {
         const match = document.cookie.match(/csrftoken=([^;]+)/);
         return match ? match[1] : null;
     }
 
-    /** Aktuellen CSRF-Token vom Server holen (Fallback). */
-    async function _fetchCSRFToken() {
+    async function _refreshCsrf() {
         try {
-            const resp = await fetch('/login/', { method: 'GET', credentials: 'same-origin' });
-            if (resp.ok) {
-                const match = document.cookie.match(/csrftoken=([^;]+)/);
-                return match ? match[1] : null;
-            }
-        } catch {
-            // Netzwerk noch nicht verfuegbar
+            await fetch("/login/", { method: "GET", credentials: "same-origin" });
+        } catch (_e) {
+            // network still down
         }
-        return null;
+        return _csrfFromCookie();
     }
 
-    /** Queue-Zaehler im Alpine-Store aktualisieren. */
     async function _updateQueueCount() {
-        const count = await getQueueCount();
-        window.dispatchEvent(new CustomEvent('offline-queue-count', { detail: { count: count } }));
+        const count = await _store().count("queue");
+        window.dispatchEvent(new CustomEvent("offline-queue-count", { detail: { count: count } }));
     }
 
-    /**
-     * Gespeicherte Requests absenden wenn online.
-     * CSRF-Token wird vor dem Replay aktualisiert.
-     */
+    async function enqueueRequest(url, method, body, headers) {
+        if (window.crypto_session && window.crypto_session.ready) {
+            await window.crypto_session.ready();
+        }
+        if (!window.crypto_session || !window.crypto_session.hasSessionKey()) {
+            const err = new Error("NoSessionKey");
+            err.name = "NoSessionKeyError";
+            throw err;
+        }
+        const ct = (headers && headers["content-type"]) || "";
+        if (ct.toLowerCase().startsWith("multipart/form-data")) {
+            const err = new Error("Multipart uploads cannot be queued offline");
+            err.name = "OfflineUploadError";
+            throw err;
+        }
+        await _store().putEncrypted("queue", {
+            url: url,
+            createdAt: Date.now(),
+            attempts: 0,
+            retryAfter: 0,
+            lastError: "",
+            data: { method: method, body: body, headers: headers || {} },
+        });
+        await _updateQueueCount();
+    }
+
+    async function getQueueCount() {
+        try {
+            return await _store().count("queue");
+        } catch (_e) {
+            return 0;
+        }
+    }
+
+    async function _isReady(record) {
+        return !record.retryAfter || record.retryAfter <= Date.now();
+    }
+
+    function _backoffFor(attempts) {
+        return Math.min(BASE_BACKOFF_MS * Math.pow(2, attempts), MAX_BACKOFF_MS);
+    }
+
     async function replayQueue() {
         if (!navigator.onLine) return;
-
-        const items = await getAllQueued();
-        if (items.length === 0) return;
-
-        // Aktuellen CSRF-Token holen
-        let csrfToken = _getCSRFToken();
-        if (!csrfToken) {
-            csrfToken = await _fetchCSRFToken();
+        if (window.crypto_session && window.crypto_session.ready) {
+            await window.crypto_session.ready();
         }
+        if (!window.crypto_session || !window.crypto_session.hasSessionKey()) return;
 
-        for (const item of items) {
+        const records = await _store().listDecrypted("queue");
+        if (records.length === 0) return;
+
+        let csrf = _csrfFromCookie();
+        if (!csrf) csrf = await _refreshCsrf();
+
+        for (const record of records) {
+            if (!(await _isReady(record))) continue;
+            const headers = Object.assign({}, record.data.headers);
+            if (csrf) headers["X-CSRFToken"] = csrf;
             try {
-                // CSRF-Token im Header aktualisieren
-                const headers = Object.assign({}, item.headers);
-                if (csrfToken) {
-                    headers['X-CSRFToken'] = csrfToken;
-                }
-
-                await fetch(item.url, {
-                    method: item.method,
-                    body: item.body,
+                const response = await fetch(record.url, {
+                    method: record.data.method,
+                    body: record.data.body,
                     headers: headers,
-                    credentials: 'same-origin',
+                    credentials: "same-origin",
                 });
-                await deleteEntry(item.id);
-            } catch {
-                // Netzwerk wieder weg — abbrechen, Rest bleibt in der Queue
+                if (response.ok) {
+                    await _store().deleteRow("queue", record.id);
+                } else if (response.status >= 500) {
+                    // Server hiccup — exponential backoff, keep record
+                    const attempts = (record.attempts || 0) + 1;
+                    await _store().putEncrypted("queue", {
+                        ...record,
+                        attempts: attempts,
+                        retryAfter: Date.now() + _backoffFor(attempts),
+                        lastError: "" + response.status,
+                    });
+                    break;
+                } else {
+                    // 4xx — record stays for user inspection (conflict UI in M6B)
+                    await _store().putEncrypted("queue", {
+                        ...record,
+                        attempts: (record.attempts || 0) + 1,
+                        lastError: "" + response.status,
+                    });
+                    break;
+                }
+            } catch (_e) {
+                // Network gone again; stop and try later
                 break;
             }
         }
-
-        _updateQueueCount();
+        await _updateQueueCount();
     }
 
-    // Event-Listener: Beim Online-Event Queue absenden
-    window.addEventListener('online', () => {
+    window.addEventListener("online", () => {
         replayQueue();
     });
 
-    // Queue-Count beim Laden pruefen
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', _updateQueueCount);
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", _updateQueueCount);
     } else {
         _updateQueueCount();
     }
 
-    // API exportieren
     window.offlineQueue = {
         enqueueRequest: enqueueRequest,
         replayQueue: replayQueue,

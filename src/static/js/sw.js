@@ -1,30 +1,35 @@
-const CACHE_NAME = 'anlaufstelle-v3';
+/*
+ * Service Worker for Anlaufstelle PWA.
+ *
+ * - App-Shell cache for static assets (cache-first)
+ * - Network-first for HTML/HTMX
+ * - POST/PUT on whitelisted URLs gets queued via the document-side
+ *   window.offlineQueue when the network fails
+ * - Multipart-form-data POST is NOT queued offline (binary blobs require
+ *   the encrypted IndexedDB pipeline planned in #574); we return 503 so the
+ *   UI can show an explicit "Datei-Upload erfordert Internetverbindung"
+ *   message instead of silently dropping the upload (#567).
+ *
+ * Refs #573, #576.
+ */
+
+importScripts("/static/js/url-patterns.js");
+
+const CACHE_NAME = "anlaufstelle-v4";
 const APP_SHELL = [
-    '/static/css/styles.css',
-    '/static/icons/icon-192.png',
-    '/static/icons/icon-512.png',
-    '/static/icons/icon-192.svg',
-    '/static/icons/icon-512.svg',
+    "/static/css/styles.css",
+    "/static/icons/icon-192.png",
+    "/static/icons/icon-512.png",
+    "/static/icons/icon-192.svg",
+    "/static/icons/icon-512.svg",
 ];
 
-// URL-Muster fuer Requests die bei Offline gequeuet werden sollen
-const QUEUE_URL_PATTERNS = [
-    /\/events\/new\//,
-    /\/events\/\d+\/edit\//,
-    /\/workitems\/[^/]+\/edit\//,
-    /\/workitems\/new\//,
-];
-
-// Install: cache app shell
-self.addEventListener('install', (event) => {
-    event.waitUntil(
-        caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
-    );
+self.addEventListener("install", (event) => {
+    event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
     self.skipWaiting();
 });
 
-// Activate: clean old caches
-self.addEventListener('activate', (event) => {
+self.addEventListener("activate", (event) => {
     event.waitUntil(
         caches.keys().then((keys) =>
             Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
@@ -33,63 +38,86 @@ self.addEventListener('activate', (event) => {
     self.clients.claim();
 });
 
-/**
- * Prueft ob eine URL fuer Offline-Queuing relevant ist.
- */
 function shouldQueueRequest(url) {
-    return QUEUE_URL_PATTERNS.some((pattern) => pattern.test(url));
+    return self.URL_PATTERNS.QUEUE_PATTERNS.some((pattern) => pattern.test(url));
 }
 
-/**
- * Benachrichtigt den Client ueber einen gequeueten Request.
- */
+function isMultipart(request) {
+    const ct = request.headers.get("content-type") || "";
+    return ct.toLowerCase().startsWith("multipart/form-data");
+}
+
 async function notifyClients(data) {
-    const clients = await self.clients.matchAll({ type: 'window' });
-    clients.forEach((client) => {
-        client.postMessage(data);
-    });
+    const clients = await self.clients.matchAll({ type: "window" });
+    clients.forEach((client) => client.postMessage(data));
 }
 
-// Fetch: network-first for HTML/HTMX, cache-first for static assets
-self.addEventListener('fetch', (event) => {
+self.addEventListener("fetch", (event) => {
     const { request } = event;
 
     // POST/PUT bei Netzausfall queuen (nur fuer relevante URLs)
-    if ((request.method === 'POST' || request.method === 'PUT') && shouldQueueRequest(request.url)) {
+    if ((request.method === "POST" || request.method === "PUT") && shouldQueueRequest(request.url)) {
+        // Multipart-Uploads NICHT queuen — die binären Daten würden im IndexedDB
+        // landen und beim Replay falsch interpretiert werden.
+        if (isMultipart(request)) {
+            event.respondWith(
+                fetch(request.clone()).catch(
+                    () =>
+                        new Response(
+                            '<div id="flash-messages">' +
+                                '<div class="rounded-md bg-red-50 p-4 mb-4">' +
+                                '<p class="text-sm text-red-800">' +
+                                "Datei-Upload erfordert Internetverbindung. Bitte erneut versuchen, sobald Sie online sind." +
+                                "</p></div></div>",
+                            {
+                                status: 503,
+                                statusText: "Offline-Upload not supported",
+                                headers: {
+                                    "Content-Type": "text/html",
+                                    "HX-Retarget": "#flash-messages",
+                                    "HX-Reswap": "outerHTML",
+                                },
+                            }
+                        )
+                )
+            );
+            return;
+        }
+
         event.respondWith(
             fetch(request.clone()).catch(async () => {
-                // Request-Daten fuer spaeteres Replay speichern
                 const body = await request.clone().text();
                 const headers = {};
                 request.headers.forEach((value, key) => {
-                    // Nur relevante Headers speichern
-                    if (['content-type', 'x-csrftoken', 'hx-request', 'hx-target', 'hx-current-url'].includes(key.toLowerCase())) {
+                    if (
+                        ["content-type", "x-csrftoken", "hx-request", "hx-target", "hx-current-url"].includes(
+                            key.toLowerCase()
+                        )
+                    ) {
                         headers[key] = value;
                     }
                 });
 
-                // Client benachrichtigen damit offline-queue.js den Request speichert
                 await notifyClients({
-                    type: 'QUEUE_REQUEST',
+                    type: "QUEUE_REQUEST",
                     url: request.url,
                     method: request.method,
                     body: body,
                     headers: headers,
                 });
 
-                // Erfolgs-Antwort zurueckgeben damit das UI nicht haengt
                 return new Response(
                     '<div id="flash-messages">' +
-                    '<div class="rounded-md bg-yellow-50 p-4 mb-4">' +
-                    '<p class="text-sm text-yellow-800">' +
-                    'Offline — Ihre Eingaben wurden gespeichert und werden bei Verbindung automatisch gesendet.' +
-                    '</p></div></div>',
+                        '<div class="rounded-md bg-yellow-50 p-4 mb-4">' +
+                        '<p class="text-sm text-yellow-800">' +
+                        "Offline — Ihre Eingaben wurden lokal verschlüsselt und werden bei Verbindung automatisch gesendet." +
+                        "</p></div></div>",
                     {
                         status: 200,
                         headers: {
-                            'Content-Type': 'text/html',
-                            'HX-Retarget': '#flash-messages',
-                            'HX-Reswap': 'outerHTML',
+                            "Content-Type": "text/html",
+                            "HX-Retarget": "#flash-messages",
+                            "HX-Reswap": "outerHTML",
                         },
                     }
                 );
@@ -98,34 +126,30 @@ self.addEventListener('fetch', (event) => {
         return;
     }
 
-    // Skip non-GET requests
-    if (request.method !== 'GET') return;
+    if (request.method !== "GET") return;
 
-    // Static assets: cache-first
-    if (request.url.includes('/static/')) {
+    if (request.url.includes("/static/")) {
         event.respondWith(
-            caches.match(request).then((cached) => cached || fetch(request).then((response) => {
-                const clone = response.clone();
-                caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-                return response;
-            }))
+            caches.match(request).then(
+                (cached) =>
+                    cached ||
+                    fetch(request).then((response) => {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+                        return response;
+                    })
+            )
         );
         return;
     }
 
-    // HTML/HTMX: network-first
-    if (request.headers.get('Accept')?.includes('text/html') || request.headers.get('HX-Request')) {
-        event.respondWith(
-            fetch(request).catch(() => caches.match(request))
-        );
+    if (request.headers.get("Accept")?.includes("text/html") || request.headers.get("HX-Request")) {
+        event.respondWith(fetch(request).catch(() => caches.match(request)));
     }
 });
 
-// Background Sync: Queue absenden wenn Verbindung wieder da
-self.addEventListener('sync', (event) => {
-    if (event.tag === 'replay-offline-queue') {
-        event.waitUntil(
-            notifyClients({ type: 'REPLAY_QUEUE' })
-        );
+self.addEventListener("sync", (event) => {
+    if (event.tag === "replay-offline-queue") {
+        event.waitUntil(notifyClients({ type: "REPLAY_QUEUE" }));
     }
 });

@@ -53,6 +53,17 @@ class User(AbstractUser):
         default=settings.LANGUAGE_CODE,
         verbose_name=_("Bevorzugte Sprache"),
     )
+    offline_key_salt = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        verbose_name=_("Offline-Schlüssel-Salt"),
+        help_text=_(
+            "Base64URL-Salt für die client-seitige PBKDF2-Ableitung. "
+            "Lazy generiert beim ersten Salt-Endpoint-Aufruf, "
+            "rotiert bei Passwort-Änderung."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Benutzer")

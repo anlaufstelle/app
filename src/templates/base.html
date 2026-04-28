@@ -322,6 +322,11 @@
 
     {% block extra_js %}{% endblock %}
 
+    {# Offline-Modul-Reihenfolge: dexie → url-patterns → crypto → offline-store → offline-queue → autosave → sw-register #}
+    <script src="{% static 'js/dexie.min.js' %}"></script>
+    <script src="{% static 'js/url-patterns.js' %}"></script>
+    <script src="{% static 'js/crypto.js' %}"></script>
+    <script src="{% static 'js/offline-store.js' %}"></script>
     <script src="{% static 'js/filter-persistence.js' %}" defer></script>
     <script src="{% static 'js/offline-queue.js' %}"></script>
     <script src="{% static 'js/sw-register.js' %}" defer></script>

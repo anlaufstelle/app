@@ -106,31 +106,52 @@ class TestSchnellerfassung:
 
 
 class TestAutoSave:
-    """Auto-Save: Formulardaten in localStorage sichern und wiederherstellen."""
+    """Auto-Save: Formulardaten verschlüsselt in IndexedDB sichern (Refs #573).
 
-    # JS helpers — autosave key includes userId for shared-device isolation
-    _JS_CLEAR = """(() => {
+    Storage-state-Login skips the login.html bootstrap that derives the
+    AES-GCM session key, so each test seeds a key explicitly before
+    interacting with the form.
+    """
+
+    _JS_SETUP_KEY = """async () => {
+        await window.crypto_session.ready();
+        if (!window.crypto_session.hasSessionKey()) {
+            await window.crypto_session.deriveSessionKey('test-pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+        }
+    }"""
+    _JS_DRAFT_KEY = """() => {
         const uid = document.body.dataset.userId || '';
-        localStorage.removeItem('autosave_' + uid + '_/events/new/');
-    })()"""
-    _JS_GET = """(() => {
+        return 'autosave_' + uid + '_/events/new/';
+    }"""
+    _JS_CLEAR = """async () => {
         const uid = document.body.dataset.userId || '';
-        return localStorage.getItem('autosave_' + uid + '_/events/new/');
-    })()"""
-    _JS_SET = """(() => {
+        const key = 'autosave_' + uid + '_/events/new/';
+        if (window.offlineStore) await window.offlineStore.deleteRow('drafts', key);
+        try { localStorage.removeItem(key); } catch (e) {}
+    }"""
+    _JS_GET = """async () => {
         const uid = document.body.dataset.userId || '';
-        localStorage.setItem('autosave_' + uid + '_/events/new/',
-            JSON.stringify({document_type: 'fake-value'}));
-    })()"""
+        const key = 'autosave_' + uid + '_/events/new/';
+        if (!window.offlineStore) return null;
+        const row = await window.offlineStore.getDecrypted('drafts', key);
+        return row ? row.data : null;
+    }"""
+
+    def _bootstrap(self, page, base_url):
+        # First visit: derive a session key, then reload so autosave's init()
+        # runs with isOfflineReady() == true (the storage_state login skips
+        # login.html's normal key-derivation path).
+        page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
+        page.wait_for_function("window.crypto_session && window.offlineStore")
+        page.evaluate(self._JS_SETUP_KEY)
+        page.evaluate(self._JS_CLEAR)
+        page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
+        page.wait_for_function("window.crypto_session && window.offlineStore")
 
     def test_autosave_restores_data_after_navigation(self, authenticated_page, base_url):
-        """Formulardaten werden nach Seitenverlassen wiederhergestellt."""
+        """Formulardaten werden nach Seitenverlassen wiederhergestellt (encrypted)."""
         page = authenticated_page
-
-        page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
-
-        # localStorage vorher leeren
-        page.evaluate(self._JS_CLEAR)
+        self._bootstrap(page, base_url)
 
         # Nicht-Default-DocType waehlen (Seed setzt "Kontakt" als Default —
         # bei Restore waere der Wert identisch und das Banner erschiene nicht)
@@ -140,91 +161,71 @@ class TestAutoSave:
         # Feld mit abweichendem Wert fuellen (noetig damit Restore einen Unterschied erkennt)
         page.fill("input[name='dauer']", "42")
 
-        # Warten bis Auto-Save tatsaechlich in localStorage geschrieben hat
-        page.wait_for_function(
-            """() => {
-                const uid = document.body.dataset.userId || '';
-                return localStorage.getItem('autosave_' + uid + '_/events/new/') !== null;
-            }""",
-            timeout=15000,
-        )
+        # Wait long enough for the autosave 5s interval to actually run and
+        # the encrypted record to be committed to IndexedDB.
+        page.wait_for_timeout(7000)
+        stored = page.evaluate(self._JS_GET)
+        assert stored is not None, "Auto-Save sollte vor Navigation Daten gespeichert haben"
 
-        # Seite verlassen und zurueckkehren
+        # Seite verlassen und zurueckkehren — Key ist persistent in eigener crypto-DB
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
         page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
 
-        # Banner sollte angezeigt werden (erhöhter Timeout für parallele Ausführung)
         banner = page.locator("#autosave-restored-banner")
         banner.wait_for(state="visible", timeout=10000)
         assert banner.is_visible(), "Wiederherstellungs-Banner sollte sichtbar sein"
         assert "Entwurf wiederhergestellt" in banner.text_content()
 
-        # localStorage aufraumen
         page.evaluate(self._JS_CLEAR)
 
     def test_autosave_cleared_after_submit(self, authenticated_page, base_url):
-        """Nach erfolgreichem Submit ist der localStorage-Eintrag geloescht."""
+        """Nach erfolgreichem Submit ist der IndexedDB-Eintrag geloescht."""
         page = authenticated_page
+        self._bootstrap(page, base_url)
 
-        page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
-
-        # localStorage vorher leeren
-        page.evaluate(self._JS_CLEAR)
-
-        # Dokumentationstyp waehlen
         page.select_option("select[name='document_type']", label="Kontakt")
         page.wait_for_load_state("domcontentloaded")
-
-        # Kein Klientel → wird automatisch anonym
 
         # Warten bis Auto-Save speichert
         page.wait_for_timeout(6000)
 
-        # Sicherstellen dass etwas gespeichert wurde
         stored = page.evaluate(self._JS_GET)
         assert stored is not None, "Auto-Save sollte vor Submit Daten gespeichert haben"
 
-        # Absenden
         page.locator("#event-submit-btn").click()
         page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
 
-        # localStorage sollte leer sein (pruefen auf der Detailseite)
+        # IndexedDB-Draft sollte nach Submit geloescht sein
         cleared = page.evaluate(self._JS_GET)
-        assert cleared is None, "localStorage sollte nach Submit geloescht sein"
+        assert cleared is None, "Draft sollte nach Submit geloescht sein"
 
     def test_autosave_banner_dismissable(self, authenticated_page, base_url):
         """Wiederherstellungs-Banner laesst sich schliessen."""
         page = authenticated_page
+        self._bootstrap(page, base_url)
 
-        page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
+        # Daten mit abweichendem (Nicht-Default) Dokumenttyp eingeben
+        page.select_option("select[name='document_type']", label="Krisengespräch")
+        page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
+        page.fill("input[name='dauer']", "17")
 
-        # Manuell Daten in localStorage setzen
-        page.evaluate(self._JS_SET)
+        # Auto-Save triggern
+        page.wait_for_function(
+            """async () => {
+                const uid = document.body.dataset.userId || '';
+                const key = 'autosave_' + uid + '_/events/new/';
+                const row = await window.offlineStore.db.drafts.get(key);
+                return row !== undefined;
+            }""",
+            timeout=15000,
+        )
 
         # Seite neu laden um Wiederherstellung auszuloesen
         page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
 
         banner = page.locator("#autosave-restored-banner")
-        # Das Banner erscheint moeglicherweise nicht wenn keine Felder tatsaechlich
-        # wiederhergestellt wurden (da 'fake-value' kein gueltiger Select-Wert ist).
-        # Wir testen stattdessen direkt mit einem gueltigen Szenario.
-        page.evaluate(self._JS_CLEAR)
-
-        # Daten mit gueltigem Dokumenttyp setzen und testen
-        page.select_option("select[name='document_type']", label="Kontakt")
-        page.wait_for_load_state("domcontentloaded")
-
-        # Auto-Save triggern
-        page.wait_for_timeout(6000)
-
-        # Seite neu laden
-        page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
-
-        banner = page.locator("#autosave-restored-banner")
         if banner.count() > 0 and banner.is_visible():
-            # Schliessen-Button klicken
             page.locator("#autosave-restored-banner button").click()
             page.locator("#autosave-restored-banner").wait_for(state="hidden", timeout=3000)
 
-        # Aufraeumen
         page.evaluate(self._JS_CLEAR)
