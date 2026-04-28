@@ -23,7 +23,15 @@
 
         {% if form.errors %}
         <div class="mb-4 p-3 bg-red-100 text-red-800 rounded-md text-sm" role="alert">
-            {% trans "Benutzername oder Passwort falsch." %}
+            {% if form.non_field_errors %}
+                {# Spezifische Meldungen (z.B. Account-Lockout, Refs #612) durchreichen. #}
+                {% for error in form.non_field_errors %}
+                    <p>{{ error }}</p>
+                {% endfor %}
+            {% else %}
+                {# Field-Level-Fehler verallgemeinern — keine Enumeration ob Username oder Passwort falsch ist. #}
+                {% trans "Benutzername oder Passwort falsch." %}
+            {% endif %}
         </div>
         {% endif %}
 

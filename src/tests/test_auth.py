@@ -371,3 +371,131 @@ class TestRateLimiting:
             REMOTE_ADDR="10.66.66.250",
         )
         assert response.status_code == 403
+
+
+# --- B.8: Account-Lockout (Refs #612) ---
+
+
+@pytest.mark.django_db
+class TestLoginLockoutService:
+    def _failed(self, user):
+        return AuditLog.objects.create(
+            facility=user.facility,
+            user=user,
+            action=AuditLog.Action.LOGIN_FAILED,
+            detail={"username": user.username},
+        )
+
+    def test_not_locked_without_failed_attempts(self, staff_user):
+        from core.services.login_lockout import is_locked
+
+        assert is_locked(staff_user) is False
+
+    def test_locked_after_threshold(self, staff_user):
+        from core.services.login_lockout import LOCKOUT_THRESHOLD, is_locked
+
+        for _ in range(LOCKOUT_THRESHOLD):
+            self._failed(staff_user)
+        assert is_locked(staff_user) is True
+
+    def test_not_locked_after_unlock(self, staff_user, admin_user):
+        from core.services.login_lockout import LOCKOUT_THRESHOLD, is_locked, unlock
+
+        for _ in range(LOCKOUT_THRESHOLD):
+            self._failed(staff_user)
+        assert is_locked(staff_user) is True
+        unlock(staff_user, unlocked_by=admin_user)
+        assert is_locked(staff_user) is False
+
+    def test_unlock_only_affects_prior_failures(self, staff_user, admin_user):
+        from core.services.login_lockout import LOCKOUT_THRESHOLD, is_locked, unlock
+
+        for _ in range(LOCKOUT_THRESHOLD):
+            self._failed(staff_user)
+        unlock(staff_user, unlocked_by=admin_user)
+        # Neue Fehlversuche nach Unlock zählen wieder bis zum Threshold.
+        for _ in range(LOCKOUT_THRESHOLD - 1):
+            self._failed(staff_user)
+        assert is_locked(staff_user) is False
+        self._failed(staff_user)
+        assert is_locked(staff_user) is True
+
+    def test_old_failures_outside_window_ignored(self, staff_user):
+        from datetime import timedelta
+        from unittest.mock import patch
+
+        from django.utils import timezone
+
+        from core.services import login_lockout
+        from core.services.login_lockout import LOCKOUT_THRESHOLD, LOCKOUT_WINDOW, is_locked
+
+        for _ in range(LOCKOUT_THRESHOLD + 2):
+            self._failed(staff_user)
+        # Fenster in die Zukunft verschieben → alle bisherigen Fehlversuche
+        # fallen aus dem Tracking-Fenster. AuditLog-Timestamps sind append-only
+        # (DB-Trigger), daher verschieben wir NOW() statt der Entries.
+        future = timezone.now() + LOCKOUT_WINDOW + timedelta(minutes=5)
+        with patch.object(login_lockout, "timezone") as mock_tz:
+            mock_tz.now.return_value = future
+            assert is_locked(staff_user) is False
+
+    def test_none_user_is_not_locked(self, db):
+        from core.services.login_lockout import is_locked
+
+        assert is_locked(None) is False
+
+    def test_lockout_is_per_user(self, staff_user, lead_user):
+        from core.services.login_lockout import LOCKOUT_THRESHOLD, is_locked
+
+        for _ in range(LOCKOUT_THRESHOLD):
+            self._failed(staff_user)
+        assert is_locked(staff_user) is True
+        assert is_locked(lead_user) is False
+
+
+@pytest.mark.django_db
+class TestLoginLockoutIntegration:
+    """Korrektes Passwort wird bei gesperrtem Account abgewiesen."""
+
+    def test_correct_password_blocked_when_locked(self, client, staff_user):
+        from core.services.login_lockout import LOCKOUT_THRESHOLD
+
+        for _ in range(LOCKOUT_THRESHOLD):
+            AuditLog.objects.create(
+                facility=staff_user.facility,
+                user=staff_user,
+                action=AuditLog.Action.LOGIN_FAILED,
+                detail={"username": staff_user.username},
+            )
+        response = client.post(
+            "/login/",
+            {"username": "teststaff", "password": "testpass123"},
+        )
+        # Kein Redirect → Form wird mit Fehler erneut gerendert.
+        assert response.status_code == 200
+        assert response.wsgi_request.user.is_anonymous, "User darf nicht eingeloggt sein"
+        # Eigener AuditLog-Eintrag mit reason=locked.
+        locked_entry = AuditLog.objects.filter(
+            user=staff_user,
+            action=AuditLog.Action.LOGIN_FAILED,
+            detail__reason="locked",
+        ).first()
+        assert locked_entry is not None
+
+    def test_correct_password_works_after_unlock(self, client, staff_user, admin_user):
+        from core.services.login_lockout import LOCKOUT_THRESHOLD, unlock
+
+        for _ in range(LOCKOUT_THRESHOLD):
+            AuditLog.objects.create(
+                facility=staff_user.facility,
+                user=staff_user,
+                action=AuditLog.Action.LOGIN_FAILED,
+                detail={"username": staff_user.username},
+            )
+        unlock(staff_user, unlocked_by=admin_user)
+        response = client.post(
+            "/login/",
+            {"username": "teststaff", "password": "testpass123"},
+        )
+        assert response.status_code == 302
+        assert response.url == "/"
