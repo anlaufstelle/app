@@ -548,3 +548,83 @@ class TestVirusScanIntegration:
 
         assert attachment.pk is not None
         assert EventAttachment.objects.filter(event=event).count() == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_encryption_key")
+class TestEventAttachmentAtomicity:
+    """Event-ORM und Dateioperationen müssen atomar sein (Refs #584).
+
+    Scheitert `store_encrypted_file`, darf weder das Event noch der
+    Attachment-Record in der DB verbleiben — und im Update-Pfad darf die
+    alte Datei nicht gelöscht werden.
+    """
+
+    def test_create_rolls_back_event_when_file_store_fails(
+        self, client, staff_user, facility, doc_type_with_file
+    ):
+        """Virus/Upload-Fehler im Create-Pfad rollt das Event zurück."""
+        dt, _, _ = doc_type_with_file
+        Settings.objects.get_or_create(facility=facility)
+
+        client.force_login(staff_user)
+        uploaded = SimpleUploadedFile("infected.pdf", b"X", content_type="application/pdf")
+
+        events_before = Event.objects.count()
+        attachments_before = EventAttachment.objects.count()
+
+        with patch(
+            "core.views.events.store_encrypted_file",
+            side_effect=ValidationError("virus"),
+        ):
+            response = client.post(
+                reverse("core:event_create"),
+                {
+                    "document_type": str(dt.pk),
+                    "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                    "notiz": "x",
+                    "scan": uploaded,
+                },
+            )
+
+        # Formular rendert, Event- und Attachment-Zählung unverändert.
+        assert response.status_code == 200
+        assert Event.objects.count() == events_before
+        assert EventAttachment.objects.count() == attachments_before
+
+    def test_update_preserves_old_file_when_new_upload_fails(
+        self, client, staff_user, event_with_file, doc_type_with_file
+    ):
+        """Scheitert die neue Datei im Update-Pfad, bleibt die alte vollständig
+        erhalten (DB + Filesystem)."""
+        event, old_attachment = event_with_file
+        dt, _, ft_file = doc_type_with_file
+        old_path = get_attachment_path(old_attachment)
+        assert old_path.exists()
+
+        client.force_login(staff_user)
+        new_upload = SimpleUploadedFile("new.pdf", b"new bytes", content_type="application/pdf")
+
+        with patch(
+            "core.views.events.store_encrypted_file",
+            side_effect=ValidationError("virus"),
+        ):
+            response = client.post(
+                reverse("core:event_update", kwargs={"pk": event.pk}),
+                {
+                    "document_type": str(dt.pk),
+                    "occurred_at": event.occurred_at.strftime("%Y-%m-%dT%H:%M"),
+                    "notiz": event.data_json.get("notiz", ""),
+                    "scan": new_upload,
+                    "expected_updated_at": event.updated_at.isoformat(),
+                },
+            )
+
+        # Alter Attachment-Record unverändert, alte Datei noch auf Platte.
+        assert EventAttachment.objects.filter(pk=old_attachment.pk).exists()
+        assert old_path.exists()
+        # Kein neuer Attachment-Record (Rollback).
+        assert EventAttachment.objects.filter(event=event).count() == 1
+        # Response: Redirect oder Form-Rerender, nie 500 — das Formular muss
+        # in jedem Fall gnadenvoll wieder ins UI kommen.
+        assert response.status_code in (200, 302)

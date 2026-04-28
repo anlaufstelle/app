@@ -2,7 +2,7 @@
 
 from django.shortcuts import redirect
 
-EXEMPT_URLS = ["/login/", "/logout/", "/password-change/", "/password-reset/", "/static/", "/admin-mgmt/"]
+EXEMPT_URLS = ["/login/", "/logout/", "/password-change/", "/password-reset/", "/static/"]
 
 
 class ForcePasswordChangeMiddleware:

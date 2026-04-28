@@ -112,12 +112,24 @@ class TestMFAEnforcementMiddleware:
     def test_exempt_urls_pass_through_even_when_required(self, rf, staff_user):
         staff_user.mfa_required = True
         staff_user.save(update_fields=["mfa_required"])
-        for url in ["/login/", "/logout/", "/mfa/setup/", "/mfa/verify/", "/static/foo.css", "/admin-mgmt/"]:
+        for url in ["/login/", "/logout/", "/mfa/setup/", "/mfa/verify/", "/static/foo.css"]:
             request = rf.get(url)
             request.user = staff_user
             request.session = {"mfa_verified": False}
             response = self._middleware()(request)
             assert response == request, f"URL {url} sollte exempt sein"
+
+    def test_admin_mgmt_not_exempt_from_mfa(self, rf, staff_user):
+        """Django-Admin ist die höchstprivilegierte UI — MFA darf hier nicht
+        umgehbar sein (Refs #582)."""
+        staff_user.mfa_required = True
+        staff_user.save(update_fields=["mfa_required"])
+        request = rf.get("/admin-mgmt/")
+        request.user = staff_user
+        request.session = {"mfa_verified": False}
+        response = self._middleware()(request)
+        assert response != request, "Admin ohne MFA-Setup muss redirecten"
+        assert "/mfa/setup/" in response.url
 
 
 @pytest.fixture

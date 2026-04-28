@@ -30,6 +30,16 @@ from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 logger = logging.getLogger(__name__)
 
 
+def can_user_mutate_workitem(user, workitem):
+    """True if ``user`` darf ``workitem`` mutieren (Status/Priorität/Assignee).
+
+    Identisch zur Einzel-Update-Regel: Leads/Admins, Ersteller:innen und
+    Zugewiesene. Zentrale Hilfsfunktion, damit Single- und Bulk-Routen
+    dieselbe Policy anwenden (Refs #583).
+    """
+    return user.is_lead_or_admin or workitem.created_by == user or workitem.assigned_to == user
+
+
 class WorkItemInboxView(AssistantOrAboveRequiredMixin, View):
     """Personal WorkItem inbox with filtering by type, priority, assignment and due date."""
 
@@ -156,8 +166,7 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
             facility=request.current_facility,
         )
 
-        user = request.user
-        if not (user.is_lead_or_admin or workitem.created_by == user or workitem.assigned_to == user):
+        if not can_user_mutate_workitem(request.user, workitem):
             return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
 
         new_status = request.POST.get("status")
@@ -334,6 +343,14 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         workitems = self._load_workitems(request, ids)
         if not workitems:
             return HttpResponseBadRequest(_("Keine gültigen Aufgaben gefunden."))
+
+        # Ownership-Check pro Item — Bulk-Route darf nicht feiner erlauben als
+        # die Single-Route (Refs #583). Sobald ein Item nicht mutierbar ist,
+        # brechen wir ab, um keine Teil-Mutation mit irreführender
+        # "5 aktualisiert"-Erfolgsmeldung zu erzeugen.
+        forbidden = [wi for wi in workitems if not can_user_mutate_workitem(request.user, wi)]
+        if forbidden:
+            return HttpResponseForbidden(_("Keine Berechtigung für ausgewählte Aufgaben."))
 
         try:
             count = self.perform_action(request, workitems)

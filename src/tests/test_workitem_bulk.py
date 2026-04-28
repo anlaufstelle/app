@@ -219,3 +219,76 @@ class TestBulkViews:
             assert wi.status == WorkItem.Status.DONE
         foreign_wi.refresh_from_db()
         assert foreign_wi.status == WorkItem.Status.OPEN
+
+    def test_bulk_rejects_items_without_ownership(
+        self, client, facility, staff_user, assistant_user
+    ):
+        """Assistenz darf Bulk-Mutation auf nicht eigene/zugewiesene Items nicht
+        ausführen — Bulk-Route muss dieselbe Ownership-Policy wie die
+        Single-Route durchsetzen (Refs #583)."""
+        # Aufgabe gehört staff_user, assistant ist nicht Ersteller/Assignee
+        foreign = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            title="Fremde Aufgabe",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(foreign.pk)], "status": "done"},
+        )
+        assert response.status_code == 403
+        foreign.refresh_from_db()
+        assert foreign.status == WorkItem.Status.OPEN
+
+    def test_bulk_allows_assigned_items(self, client, facility, staff_user, assistant_user):
+        """Assistenz darf Items bulk-mutieren, die ihr zugewiesen sind."""
+        mine = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=assistant_user,
+            title="Mir zugewiesen",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(mine.pk)], "status": "done"},
+        )
+        assert response.status_code == 302
+        mine.refresh_from_db()
+        assert mine.status == WorkItem.Status.DONE
+
+    def test_bulk_mixed_ownership_rejects_whole_batch(
+        self, client, facility, staff_user, assistant_user
+    ):
+        """Bei gemischtem Batch (eigene + fremde) wird der ganze Request
+        abgelehnt — kein Partial-Success, damit der Erfolgstext nicht lügt."""
+        own = WorkItem.objects.create(
+            facility=facility,
+            created_by=assistant_user,
+            title="Eigene",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+        foreign = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            title="Fremde",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(own.pk), str(foreign.pk)], "status": "done"},
+        )
+        assert response.status_code == 403
+        own.refresh_from_db()
+        foreign.refresh_from_db()
+        # Kein Item darf verändert worden sein.
+        assert own.status == WorkItem.Status.OPEN
+        assert foreign.status == WorkItem.Status.OPEN

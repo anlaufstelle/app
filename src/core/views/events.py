@@ -4,6 +4,7 @@ import logging
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
@@ -286,16 +287,32 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
             else:
                 text_data[key] = value
 
+        # Event + Dateianhänge atomar: scheitert die File-Verschlüsselung
+        # (Virus, Disk, Fernet), rollt die Transaktion auch das Event zurück
+        # — sonst verweist die DB auf einen Anhang, der nie persistiert
+        # wurde (Refs #584).
         try:
-            event = create_event(
-                facility=facility,
-                user=request.user,
-                document_type=doc_type,
-                occurred_at=meta_form.cleaned_data["occurred_at"],
-                data_json=text_data,
-                client=client,
-                case=case,
-            )
+            with transaction.atomic():
+                event = create_event(
+                    facility=facility,
+                    user=request.user,
+                    document_type=doc_type,
+                    occurred_at=meta_form.cleaned_data["occurred_at"],
+                    data_json=text_data,
+                    client=client,
+                    case=case,
+                )
+                if file_fields:
+                    field_templates = {
+                        dtf.field_template.slug: dtf.field_template
+                        for dtf in doc_type.fields.select_related("field_template")
+                    }
+                    for slug, uploaded_file in file_fields.items():
+                        ft = field_templates.get(slug)
+                        if ft:
+                            attachment = store_encrypted_file(facility, uploaded_file, ft, event, request.user)
+                            event.data_json[slug] = {"__file__": True, "attachment_id": str(attachment.pk)}
+                    event.save(update_fields=["data_json"])
         except ValidationError as e:
             meta_form.add_error(None, e.message)
             return render(
@@ -303,18 +320,6 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                 "core/events/create.html",
                 {"meta_form": meta_form, "data_form": data_form},
             )
-
-        # Store encrypted file attachments
-        if file_fields:
-            field_templates = {
-                dtf.field_template.slug: dtf.field_template for dtf in doc_type.fields.select_related("field_template")
-            }
-            for slug, uploaded_file in file_fields.items():
-                ft = field_templates.get(slug)
-                if ft:
-                    attachment = store_encrypted_file(facility, uploaded_file, ft, event, request.user)
-                    event.data_json[slug] = {"__file__": True, "attachment_id": str(attachment.pk)}
-            event.save(update_fields=["data_json"])
 
         messages.success(request, _("Kontakt wurde dokumentiert."))
         return redirect("core:event_detail", pk=event.pk)
@@ -590,8 +595,33 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                         merged[slug] = existing_marker
 
             expected_updated_at = request.POST.get("expected_updated_at")
+            # Event-Update + Attachment-Replacement atomar (Refs #584). Beim
+            # Update speichern wir die neue Datei ZUERST und löschen die alte
+            # erst nach erfolgreichem Commit — scheitert der neue Upload,
+            # bleibt die alte Datei vollständig erhalten.
             try:
-                update_event(event, request.user, merged, expected_updated_at=expected_updated_at)
+                with transaction.atomic():
+                    update_event(event, request.user, merged, expected_updated_at=expected_updated_at)
+
+                    if file_fields:
+                        for slug, uploaded_file in file_fields.items():
+                            ft = field_templates.get(slug)
+                            if not ft:
+                                continue
+                            old = event.attachments.filter(field_template=ft).first()
+                            # Neue Datei FIRST — scheitert das, rollen wir
+                            # das Event und das alte Attachment unverändert zurück.
+                            attachment = store_encrypted_file(facility, uploaded_file, ft, event, request.user)
+                            event.data_json[slug] = {"__file__": True, "attachment_id": str(attachment.pk)}
+                            if old:
+                                old_for_cleanup = old
+                                old.delete()
+                                # Physisches File erst nach Commit löschen —
+                                # sonst wäre die alte Datei bei Rollback weg.
+                                transaction.on_commit(
+                                    lambda a=old_for_cleanup: delete_attachment_file(a)
+                                )
+                        event.save(update_fields=["data_json"])
             except ValidationError as e:
                 # Stage 3 (#575): JSON/HTMX clients receive a 409 with the
                 # current server state so the client-side conflict resolver
@@ -604,21 +634,6 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                     return _conflict_response(request.user, event, expected_updated_at)
                 messages.error(request, str(e.message))
                 return redirect("core:event_update", pk=event.pk)
-
-            # Store new file attachments (replace old ones)
-            if file_fields:
-                for slug, uploaded_file in file_fields.items():
-                    ft = field_templates.get(slug)
-                    if not ft:
-                        continue
-                    # Delete old attachment if exists
-                    old = event.attachments.filter(field_template=ft).first()
-                    if old:
-                        delete_attachment_file(old)
-                        old.delete()
-                    attachment = store_encrypted_file(facility, uploaded_file, ft, event, request.user)
-                    event.data_json[slug] = {"__file__": True, "attachment_id": str(attachment.pk)}
-                event.save(update_fields=["data_json"])
 
             messages.success(request, _("Ereignis wurde aktualisiert."))
             return redirect("core:event_detail", pk=event.pk)

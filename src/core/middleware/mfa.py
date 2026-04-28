@@ -22,7 +22,6 @@ EXEMPT_URLS = [
     "/password-change/",
     "/password-reset/",
     "/static/",
-    "/admin-mgmt/",
     "/mfa/",
     "/i18n/",
     "/health/",

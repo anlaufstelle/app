@@ -237,13 +237,25 @@ class TestForcePasswordChangeMiddleware:
 
     def test_exempt_urls_not_redirected(self, rf, staff_user):
         staff_user.must_change_password = True
-        for url in ["/login/", "/logout/", "/password-change/", "/static/foo.css", "/admin-mgmt/"]:
+        for url in ["/login/", "/logout/", "/password-change/", "/static/foo.css"]:
             request = rf.get(url)
             request.user = staff_user
             request.path = url
             middleware = ForcePasswordChangeMiddleware(lambda r: r)
             response = middleware(request)
             assert response == request, f"URL {url} sollte exempt sein"
+
+    def test_admin_mgmt_not_exempt_from_password_change(self, rf, staff_user):
+        """Admin-UI darf nicht als Bypass für erzwungene Passwort-Änderung
+        dienen (Refs #582)."""
+        staff_user.must_change_password = True
+        request = rf.get("/admin-mgmt/")
+        request.user = staff_user
+        request.path = "/admin-mgmt/"
+        middleware = ForcePasswordChangeMiddleware(lambda r: r)
+        response = middleware(request)
+        assert response.status_code == 302
+        assert "/password-change/" in response.url
 
     def test_anonymous_user_not_redirected(self, rf, db):
         request = rf.get("/")
