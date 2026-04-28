@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}{% trans "Klientel" %} – Anlaufstelle{% endblock %}
 
@@ -52,38 +52,19 @@
     {% include "core/clients/partials/table.html" %}
 </div>
 
-<script>
-    function clientRowOffline(pk) {
-        return {
-            isOffline: false,
-            busy: false,
-            async refresh() {
-                if (!window.offlineClient) return;
-                try {
-                    this.isOffline = await window.offlineClient.isClientOffline(pk);
-                } catch (_e) {
-                    this.isOffline = false;
-                }
-            },
-            async toggleOffline() {
-                if (this.busy) return;
-                this.busy = true;
-                try {
-                    if (!window.offlineClient) return;
-                    if (this.isOffline) {
-                        await window.offlineClient.removeClientFromOffline(pk);
-                    } else {
-                        await window.offlineClient.takeClientOffline(pk);
-                    }
-                    await this.refresh();
-                } catch (e) {
-                    // eslint-disable-next-line no-console
-                    console.error("[client-row-offline]", e);
-                } finally {
-                    this.busy = false;
-                }
-            },
-        };
-    }
-</script>
+<div x-data="clientOfflineToast()"
+     x-show="message" x-cloak x-transition
+     role="status"
+     aria-live="polite"
+     class="fixed bottom-6 right-6 z-50 max-w-sm border-2 rounded-md shadow-lg p-4 text-sm flex items-start gap-3"
+     :class="messageType === 'error' ? 'border-red-400 bg-red-50 text-red-800' : 'border-green-500 bg-green-50 text-green-900'"
+     data-testid="client-offline-toast">
+    <svg x-show="messageType !== 'error'" class="w-5 h-5 flex-shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+    <svg x-show="messageType === 'error'" x-cloak class="w-5 h-5 flex-shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+    <span x-text="message" class="flex-1 font-medium"></span>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/client-row-offline.js' %}"></script>
 {% endblock %}
