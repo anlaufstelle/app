@@ -10,7 +10,7 @@ This guide is intended for social workers, managers, and assistants working in d
 ## Table of Contents
 
 1. [Login and Password](#1-login-and-password)
-2. [Home -- Zeitstrom](#2-home--zeitstrom)
+2. [Home -- Dashboard](#2-home--dashboard)
 3. [Documenting a Contact (Creating an Event)](#3-documenting-a-contact-creating-an-event)
 4. [Managing Clients](#4-managing-clients)
 5. [Hints and Tasks (Work Items)](#5-hints-and-tasks-work-items)
@@ -36,7 +36,7 @@ This guide is intended for social workers, managers, and assistants working in d
 ### Changing Your Password
 
 1. Click on your name or the user menu in the top-right corner.
-2. Select **Change Password** (URL: `/password-change/`).
+2. Select **Change Password** (URL: `/password/`).
 3. Enter your current password.
 4. Enter the new password twice.
 5. Click **Save**.
@@ -81,46 +81,46 @@ Click **Sign Out** in the top-right corner. For data protection reasons, you wil
 
 ---
 
-## 2. Home -- Zeitstrom
+## 2. Home -- Dashboard
 
-After signing in, you land on the **Zeitstrom** (`/`) -- a chronological daily feed that unifies contacts, system activities, tasks, and entry bans in a single view.
+After signing in, you land on the **Dashboard** (`/`). The dashboard gives you a personalized overview of your daily work.
 
-### What the Zeitstrom shows
+### Widgets
 
-The feed combines four sources for the current day:
+The dashboard consists of four widgets:
 
-| Source | What is shown |
-|--------|---------------|
-| **Contacts** (Events) | Documentation entries with preview fields |
-| **Activities** | System operations (created, edited, deleted ...) |
-| **Tasks** (Work Items) | Hints and tasks with priority and status |
-| **Entry Bans** | Active entry bans -- additionally shown as a red banner on top |
+| Widget | Description |
+|--------|-------------|
+| **My Tasks** | Your open and in-progress tasks, sorted by priority and due date |
+| **Overview** | Key figures: contacts today, open cases, your tasks, total tasks |
+| **Today** | A compact daily feed showing recent activities and contacts. Use "Show all" to go to the full activity log. |
+| **Recent Clients** | Recently visited client profiles for quick access |
 
-The right sidebar shows your **5 most urgent open tasks** (sorted by priority, due date, and created date) for quick access during a shift.
+### Showing and Hiding Widgets
 
-### Changing the date
+1. Click the **gear icon** next to the "Dashboard" heading.
+2. In the dropdown, toggle individual widgets on or off.
+3. Your settings are saved automatically and persist across logins.
 
-- **Arrow buttons** above the feed: jump to the previous or next day.
-- **Today** link: returns to the current day.
+### Entry Ban Banner
 
-### Shift filter
+If there are active entry bans in your facility, they are displayed as a red banner below the heading -- on the dashboard as well as in the activity log.
 
-Below the date navigation you find **TimeFilter tabs** (e.g., "Early shift", "Late shift", "Night shift" -- configurable by the administration). When you open the Zeitstrom, the shift that matches the current time is auto-selected; night shifts crossing midnight are handled correctly.
+### Activity Log and Timeline
 
-When a shift filter is active, an expandable **shift handover block** appears above the feed with statistics (number of contacts, activities, new tasks) and highlights (crisis events, new entry bans, urgent tasks).
+In addition to the dashboard, two more views are available:
 
-### Filtering the feed
+**Activity Log** (`/aktivitaetslog/`): The full daily feed of all documented contacts and system activities. Accessible via the sidebar navigation or the "Show all" link in the dashboard widget.
 
-Two dropdowns above the feed:
+- **Change date:** Navigate to the previous or next day using the arrow buttons.
+- **Filter feed type:** Select "All", "Events", or "Activities" from the dropdown.
 
-- **Type**: All · Events · Activities · Tasks · Entry Bans
-- **Documentation type**: only entries of a specific type (e.g., "Contact", "Crisis counseling") -- you only see types your role is allowed to view.
+**Timeline** (`/timeline/`): A shift-based view with TimeFilter tabs (e.g., "Early shift", "Late shift", "Night shift"). The timeline shows only contacts (events), not system activities.
 
-Filter changes reload only the feed (HTMX), without a full page refresh.
+1. Click on the desired shift tab.
+2. The event list updates immediately and shows only contacts from that time window.
 
-### Entry Ban banner
-
-If there are active entry bans in your facility, they are displayed as a red banner below the heading.
+> **Note:** The tab marked as default is automatically activated when the timeline is opened.
 
 ---
 
@@ -172,7 +172,7 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 
 ### Editing a Contact
 
-1. Open the event (via the Zeitstrom or the client chronology).
+1. Open the event (via the activity log or the client chronology).
 2. Click **Edit**.
 3. Change the desired fields and click **Save**.
 
@@ -449,7 +449,7 @@ The youth welfare office export generates a standardized report in the official 
 
 When a social worker or assistant wants to delete a contact belonging to a qualified client, a **deletion request** is created that must be approved by a lead or administrator.
 
-1. View open deletion requests at `/deletion-requests/`.
+1. View open deletion requests at `/events/deletion-requests/`.
 2. Click on a request to see the details and the affected event.
 3. Click **Approve** or **Reject** and confirm.
 
@@ -538,7 +538,7 @@ Anlaufstelle distinguishes four roles. Your role is assigned by the administrato
 
 | Function | Assistant | Social Worker | Lead | Admin |
 |---|---|---|---|---|
-| View Zeitstrom / home page | Yes | Yes | Yes | Yes |
+| View dashboard / home page | Yes | Yes | Yes | Yes |
 | Document anonymous contacts | Yes | Yes | Yes | Yes |
 | Document identified contacts | Yes | Yes | Yes | Yes |
 | Create and search for clients | Yes | Yes | Yes | Yes |

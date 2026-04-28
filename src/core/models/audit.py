@@ -16,7 +16,6 @@ class AuditLog(models.Model):
         LOGIN = "login", _("Anmeldung")
         LOGOUT = "logout", _("Abmeldung")
         LOGIN_FAILED = "login_failed", _("Anmeldung fehlgeschlagen")
-        LOGIN_UNLOCK = "login_unlock", _("Account-Sperre aufgehoben")
         VIEW_QUALIFIED = "view_qualified", _("Qualifizierte Daten eingesehen")
         EXPORT = "export", _("Export")
         DELETE = "delete", _("Löschung")
@@ -25,26 +24,13 @@ class AuditLog(models.Model):
         DOWNLOAD = "download", _("Download")
         LEGAL_HOLD = "legal_hold", _("Legal Hold")
         OFFLINE_KEY_FETCH = "offline_key_fetch", _("Offline-Schlüssel abgerufen")
-        CLIENT_CREATE = "client_create", _("Klientel angelegt")
         CLIENT_UPDATE = "client_update", _("Klientel aktualisiert")
-        CASE_CREATE = "case_create", _("Fall angelegt")
         CASE_UPDATE = "case_update", _("Fall aktualisiert")
-        CASE_CLOSE = "case_close", _("Fall geschlossen")
-        CASE_REOPEN = "case_reopen", _("Fall wiedereröffnet")
-        MILESTONE_DELETE = "milestone_delete", _("Meilenstein gelöscht")
-        EVENT_CREATE = "event_create", _("Ereignis angelegt")
-        WORKITEM_CREATE = "workitem_create", _("Aufgabe angelegt")
         WORKITEM_UPDATE = "workitem_update", _("Aufgabe aktualisiert")
-        USER_ROLE_CHANGED = "user_role_changed", _("Benutzerrolle geändert")
-        USER_DEACTIVATED = "user_deactivated", _("Benutzer deaktiviert")
-        PASSWORD_RESET_REQUESTED = "password_reset_requested", _("Passwort-Reset angefordert")
         SECURITY_VIOLATION = "security_violation", _("Sicherheitsverletzung")
         MFA_ENABLED = "mfa_enabled", _("2FA aktiviert")
         MFA_DISABLED = "mfa_disabled", _("2FA deaktiviert")
         MFA_FAILED = "mfa_failed", _("2FA-Verifikation fehlgeschlagen")
-        BACKUP_CODES_GENERATED = "backup_codes_generated", _("2FA Backup-Codes generiert")
-        BACKUP_CODES_USED = "backup_codes_used", _("2FA Backup-Code verwendet")
-        BACKUP_CODES_REGENERATED = "backup_codes_regenerated", _("2FA Backup-Codes neu generiert")
 
     objects = FacilityScopedManager()
 
@@ -92,14 +78,6 @@ class AuditLog(models.Model):
         verbose_name = _("Audit-Log")
         verbose_name_plural = _("Audit-Logs")
         ordering = ["-timestamp"]
-        # Composite-Indexe für AuditLogListView-Filter (facility × timestamp)
-        # und die häufigsten Zusatz-Filter action/user. Tabelle wächst
-        # append-only, Index-Wartung ist günstig. Refs #638.
-        indexes = [
-            models.Index(fields=["facility", "-timestamp"], name="auditlog_facility_ts_idx"),
-            models.Index(fields=["action", "-timestamp"], name="auditlog_action_ts_idx"),
-            models.Index(fields=["user", "-timestamp"], name="auditlog_user_ts_idx"),
-        ]
 
     def save(self, *args, **kwargs):
         """Prevent updates — only inserts are allowed."""

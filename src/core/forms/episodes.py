@@ -5,9 +5,6 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models.episode import Episode
 
-# Tailwind-Klassen fuer Form-Inputs (Theme Gruen, siehe Plan #663)
-INPUT_CSS = "w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink"
-
 
 class EpisodeForm(forms.ModelForm):
     """Form for creating and editing episodes."""
@@ -16,23 +13,23 @@ class EpisodeForm(forms.ModelForm):
         model = Episode
         fields = ["title", "description", "started_at", "ended_at"]
         widgets = {
-            "title": forms.TextInput(attrs={"class": INPUT_CSS}),
+            "title": forms.TextInput(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
             "description": forms.Textarea(
                 attrs={
-                    "class": INPUT_CSS,
+                    "class": "w-full border border-gray-300 rounded-md px-3 py-2",
                     "rows": 4,
                 }
             ),
             "started_at": forms.DateInput(
                 attrs={
                     "type": "date",
-                    "class": INPUT_CSS,
+                    "class": "w-full border border-gray-300 rounded-md px-3 py-2",
                 },
             ),
             "ended_at": forms.DateInput(
                 attrs={
                     "type": "date",
-                    "class": INPUT_CSS,
+                    "class": "w-full border border-gray-300 rounded-md px-3 py-2",
                 },
             ),
         }

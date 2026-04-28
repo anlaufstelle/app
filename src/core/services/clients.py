@@ -2,7 +2,6 @@
 
 import logging
 
-from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from core.models import AuditLog, Client
@@ -16,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 @transaction.atomic
 def create_client(facility, user, **data):
-    """Create a client with activity and audit logging."""
+    """Create a client with activity logging."""
     client = Client(facility=facility, created_by=user, **data)
     client.save()
     log_activity(
@@ -25,13 +24,6 @@ def create_client(facility, user, **data):
         verb=Activity.Verb.CREATED,
         target=client,
         summary=f"Klientel {client.pseudonym} angelegt",
-    )
-    AuditLog.objects.create(
-        facility=facility,
-        user=user,
-        action=AuditLog.Action.CLIENT_CREATE,
-        target_type="Client",
-        target_id=str(client.pk),
     )
     return client
 
@@ -115,27 +107,6 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     return client
 
 
-def get_client_or_none(facility, client_id):
-    """Lookup a client by PK scoped to *facility*.
-
-    Returns None if the client doesn't exist, the ID isn't a valid UUID, or
-    the client belongs to a different facility. Gedacht für View-GET-Handler,
-    die einen vorselektierten Client aus der URL/Query laden wollen, ohne bei
-    fehlendem/ungültigem Parameter eine 404 zu werfen — stattdessen wird das
-    Formular unverändert angezeigt.
-
-    Refs #598 Finding R-5.
-    """
-    if not client_id:
-        return None
-    try:
-        return Client.objects.get(pk=client_id, facility=facility)
-    except (Client.DoesNotExist, ValueError, ValidationError):
-        # Django wirft bei ungültigen UUID-Strings ValidationError (nicht
-        # ValueError) — beide Fälle werden als "not found" behandelt.
-        return None
-
-
 def track_client_visit(user, client, facility):
     """Record that a user visited a client detail page.
 
@@ -146,8 +117,8 @@ def track_client_visit(user, client, facility):
         client=client,
         defaults={"facility": facility},
     )
-    # Prune: keep only the 20 most recent visits. Subquery-Variante spart
-    # einen Roundtrip gegenüber "erst SELECT LIMIT 20 holen, dann DELETE"
-    # — Refs #642.
-    keep_qs = RecentClientVisit.objects.filter(user=user).order_by("-visited_at").values("pk")[:20]
-    RecentClientVisit.objects.filter(user=user).exclude(pk__in=keep_qs).delete()
+    # Prune: keep only the 20 most recent visits
+    visits = RecentClientVisit.objects.filter(user=user).order_by("-visited_at")
+    ids_to_keep = list(visits[:20].values_list("pk", flat=True))
+    if ids_to_keep:
+        RecentClientVisit.objects.filter(user=user).exclude(pk__in=ids_to_keep).delete()

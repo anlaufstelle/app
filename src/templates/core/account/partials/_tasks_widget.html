@@ -2,10 +2,10 @@
 {% if tasks %}
 <div class="space-y-2">
     {% for wi in tasks %}
-    <a href="{% url 'core:workitem_detail' pk=wi.pk %}" class="flex items-center justify-between p-3 rounded-md hover:bg-canvas">
+    <a href="{% url 'core:workitem_detail' pk=wi.pk %}" class="flex items-center justify-between p-3 rounded-md hover:bg-gray-50">
         <div class="flex-1 min-w-0">
-            <p class="text-sm font-medium text-ink truncate">{{ wi.title }}</p>
-            <p class="text-xs text-ink-muted mt-0.5">
+            <p class="text-sm font-medium text-gray-900 truncate">{{ wi.title }}</p>
+            <p class="text-xs text-gray-500 mt-0.5">
                 {% if wi.client %}{{ wi.client.pseudonym }}{% endif %}
                 {% if wi.status == "in_progress" %}<span class="text-blue-600"> · {% trans "In Bearbeitung" %}</span>{% endif %}
             </p>
@@ -25,5 +25,5 @@
     {% endfor %}
 </div>
 {% else %}
-<p class="text-sm text-ink-muted text-center py-4">{% trans "Keine offenen Aufgaben" %}</p>
+<p class="text-sm text-gray-500 text-center py-4">{% trans "Keine offenen Aufgaben" %}</p>
 {% endif %}

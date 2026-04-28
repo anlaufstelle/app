@@ -1,11 +1,11 @@
 {% load i18n %}
 
 {% if data_form and data_form.fields %}
-<div class="bg-surface border border-subtle rounded-[10px] p-5 space-y-4">
-    <h2 class="text-[11px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Felder" %}</h2>
+<div class="bg-white border border-gray-200 rounded-md p-4 space-y-4">
+    <h2 class="text-sm font-semibold text-gray-500 uppercase">{% trans "Felder" %}</h2>
     {% for field in data_form %}
     <div>
-        <label for="{{ field.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
+        <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
             {{ field.label }}{% if field.field.required %} *{% endif %}
         </label>
         {{ field }}
@@ -17,7 +17,7 @@
         </ul>
         {% endif %}
         {% if field.help_text %}
-        <p class="mt-1 text-[11px] text-ink-muted">{{ field.help_text }}</p>
+        <p class="mt-1 text-sm text-gray-500">{{ field.help_text }}</p>
         {% endif %}
     </div>
     {% endfor %}

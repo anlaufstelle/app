@@ -7,44 +7,6 @@ from django.utils.translation import gettext_lazy as _
 from core.models import Case, DocumentType, DocumentTypeField, FieldTemplate
 from core.models.settings import Settings
 
-# Tailwind-Klassen fuer Form-Inputs (Theme Gruen, siehe Plan #663)
-INPUT_CSS = "w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink"
-
-
-class MultipleFileInput(forms.ClearableFileInput):
-    """ClearableFileInput-Widget mit ``multiple``-Attribut — Django erlaubt
-    Multi-File-Upload seit 5.0, aber der Standard-Widget blockiert das aktiv.
-    Refs #622.
-    """
-
-    allow_multiple_selected = True
-
-
-class MultipleFileField(forms.FileField):
-    """FileField, das eine Liste von UploadedFile zurückgibt (auch für N=0/1).
-
-    Wird für FILE-Feldtypen in :class:`DynamicEventDataForm` verwendet, damit
-    mehrere Dateien pro Feld hochgeladen werden können (Refs #622).
-    """
-
-    def __init__(self, *args, **kwargs):
-        kwargs.setdefault("widget", MultipleFileInput())
-        super().__init__(*args, **kwargs)
-
-    def clean(self, data, initial=None):
-        single_clean = super().clean
-        if isinstance(data, (list, tuple)):
-            return [single_clean(d, initial) for d in data if d]
-        if data:
-            return [single_clean(data, initial)]
-        return []
-
-
-def _case_label(case: Case) -> str:
-    """Dropdown label: title plus client pseudonym so users can distinguish cases."""
-    pseudonym = case.client.pseudonym if case.client_id else None
-    return f"{case.title} – {pseudonym}" if pseudonym else case.title
-
 
 class EventMetaForm(forms.Form):
     """Event metadata (document type, client, timestamp)."""
@@ -54,7 +16,7 @@ class EventMetaForm(forms.Form):
         label=_("Dokumentationstyp"),
         widget=forms.Select(
             attrs={
-                "class": INPUT_CSS,
+                "class": "w-full border border-gray-300 rounded-md px-3 py-2",
                 "hx-get": "",  # wird im View gesetzt
                 "hx-target": "#dynamic-fields",
                 "hx-trigger": "change",
@@ -71,7 +33,7 @@ class EventMetaForm(forms.Form):
         widget=forms.DateTimeInput(
             attrs={
                 "type": "datetime-local",
-                "class": INPUT_CSS,
+                "class": "w-full border border-gray-300 rounded-md px-3 py-2",
                 "tabindex": "4",
             },
         ),
@@ -80,8 +42,7 @@ class EventMetaForm(forms.Form):
         queryset=Case.objects.none(),
         required=False,
         label=_("Fall"),
-        empty_label=_("– Keinem Fall zuordnen –"),
-        widget=forms.Select(attrs={"class": INPUT_CSS}),
+        widget=forms.Select(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
     )
 
     def __init__(self, *args, facility=None, user=None, **kwargs):
@@ -99,9 +60,7 @@ class EventMetaForm(forms.Form):
 
                 qs = qs.filter(sensitivity__in=allowed_sensitivities_for_user(user))
             self.fields["document_type"].queryset = qs
-            case_qs = Case.objects.for_facility(facility).filter(status=Case.Status.OPEN).select_related("client")
-            self.fields["case"].queryset = case_qs
-            self.fields["case"].label_from_instance = _case_label
+            self.fields["case"].queryset = Case.objects.filter(facility=facility, status=Case.Status.OPEN)
 
     def clean(self):
         cleaned = super().clean()
@@ -120,7 +79,7 @@ class DynamicEventDataForm(forms.Form):
         FieldTemplate.FieldType.BOOLEAN: (forms.BooleanField, {"widget": forms.CheckboxInput}),
         FieldTemplate.FieldType.SELECT: (forms.ChoiceField, {"widget": forms.Select}),
         FieldTemplate.FieldType.MULTI_SELECT: (forms.MultipleChoiceField, {"widget": forms.CheckboxSelectMultiple}),
-        FieldTemplate.FieldType.FILE: (MultipleFileField, {"widget": MultipleFileInput}),
+        FieldTemplate.FieldType.FILE: (forms.FileField, {"widget": forms.ClearableFileInput}),
     }
 
     def __init__(self, *args, document_type=None, initial_data=None, facility=None, **kwargs):
@@ -152,11 +111,11 @@ class DynamicEventDataForm(forms.Form):
             else:
                 widget = widget.__class__(attrs=widget.attrs.copy() if hasattr(widget, "attrs") else {})
 
-            css = INPUT_CSS
+            css = "w-full border border-gray-300 rounded-md px-3 py-2"
             if not isinstance(widget, (forms.CheckboxInput, forms.CheckboxSelectMultiple)):
                 widget.attrs.setdefault("class", css)
             else:
-                widget.attrs.setdefault("class", "rounded border-subtle text-accent")
+                widget.attrs.setdefault("class", "rounded border-gray-300")
 
             kwargs_copy["widget"] = widget
             kwargs_copy["required"] = ft.is_required
@@ -185,10 +144,6 @@ class DynamicEventDataForm(forms.Form):
 
             if initial_data and ft.slug in initial_data:
                 field.initial = initial_data[ft.slug]
-            elif ft.field_type != FieldTemplate.FieldType.FILE:
-                default_initial = ft.get_default_initial()
-                if default_initial is not None:
-                    field.initial = default_initial
 
             self.fields[ft.slug] = field
 
@@ -205,28 +160,21 @@ class DynamicEventDataForm(forms.Form):
         for field_name, field_obj in self.fields.items():
             if not isinstance(field_obj, forms.FileField):
                 continue
-            value = cleaned.get(field_name)
-            if not value:
+            uploaded = cleaned.get(field_name)
+            if not uploaded:
                 continue
-            # MultipleFileField \u2192 Liste; klassisches FileField \u2192 Einzelobjekt.
-            uploads = value if isinstance(value, list) else [value]
-            for uploaded in uploads:
-                if not uploaded:
-                    continue
-                ext = uploaded.name.rsplit(".", 1)[-1].lower() if "." in uploaded.name else ""
-                if allowed and ext not in allowed:
-                    self.add_error(
-                        field_name,
-                        _("Dateityp .%(ext)s nicht erlaubt. Erlaubt: %(allowed)s")
-                        % {"ext": ext, "allowed": ", ".join(sorted(allowed))},
-                    )
-                if uploaded.size > max_bytes:
-                    self.add_error(
-                        field_name,
-                        _("Datei zu gro\u00df (%(size)d MB). Maximum: %(max)d MB")
-                        % {
-                            "size": uploaded.size // (1024 * 1024),
-                            "max": facility_settings.max_file_size_mb,
-                        },
-                    )
+            ext = uploaded.name.rsplit(".", 1)[-1].lower() if "." in uploaded.name else ""
+            if allowed and ext not in allowed:
+                self.add_error(
+                    field_name,
+                    _(f"Dateityp .{ext} nicht erlaubt. Erlaubt: {', '.join(sorted(allowed))}"),
+                )
+            if uploaded.size > max_bytes:
+                self.add_error(
+                    field_name,
+                    _(
+                        f"Datei zu gro\u00df ({uploaded.size // (1024 * 1024)} MB)."
+                        f" Maximum: {facility_settings.max_file_size_mb} MB"
+                    ),
+                )
         return cleaned

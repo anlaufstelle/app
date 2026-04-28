@@ -160,16 +160,6 @@ class FieldTemplate(models.Model):
         default=list,
         verbose_name=_("Optionen (JSON)"),
     )
-    default_value = models.TextField(
-        blank=True,
-        default="",
-        verbose_name=_("Default-Wert"),
-        help_text=_(
-            "Wird beim Neu-Anlegen eines Ereignisses vorgeblendet. "
-            "Leer lassen = kein Default. Für SELECT/MULTI_SELECT: Option-Slug(s) "
-            "(mehrere durch Komma trennen). Für FILE nicht unterstützt."
-        ),
-    )
     statistics_category = models.CharField(
         max_length=100,
         blank=True,
@@ -220,49 +210,6 @@ class FieldTemplate(models.Model):
         super().clean()
         if self.slug and not _SLUG_RE.fullmatch(self.slug):
             raise ValidationError({"slug": _("Nur a-z, 0-9 und Bindestriche erlaubt.")})
-        self._validate_default_value()
-
-    def _validate_default_value(self):
-        raw = (self.default_value or "").strip()
-        if not raw:
-            return
-        ft = self.FieldType
-        if self.field_type == ft.FILE:
-            raise ValidationError({"default_value": _("Für Datei-Felder ist kein Default-Wert zulässig.")})
-        if self.field_type == ft.NUMBER:
-            try:
-                int(raw)
-            except ValueError:
-                raise ValidationError({"default_value": _("Default-Wert muss eine ganze Zahl sein.")}) from None
-        elif self.field_type == ft.DATE:
-            from datetime import date
-
-            try:
-                date.fromisoformat(raw)
-            except ValueError:
-                raise ValidationError(
-                    {"default_value": _("Default-Wert muss ein ISO-Datum sein (YYYY-MM-DD).")}
-                ) from None
-        elif self.field_type == ft.TIME:
-            from datetime import time
-
-            try:
-                time.fromisoformat(raw)
-            except ValueError:
-                raise ValidationError(
-                    {"default_value": _("Default-Wert muss eine ISO-Uhrzeit sein (HH:MM oder HH:MM:SS).")}
-                ) from None
-        elif self.field_type == ft.BOOLEAN:
-            if raw.lower() not in {"true", "false", "1", "0"}:
-                raise ValidationError({"default_value": _("Default-Wert muss 'true' oder 'false' sein.")})
-        elif self.field_type in (ft.SELECT, ft.MULTI_SELECT):
-            active = {o["slug"] for o in (self.options_json or []) if o.get("is_active", True) and "slug" in o}
-            values = [v.strip() for v in raw.split(",")] if self.field_type == ft.MULTI_SELECT else [raw]
-            for v in values:
-                if v not in active:
-                    raise ValidationError(
-                        {"default_value": _("Default-Wert '%(value)s' ist kein aktiver Options-Slug.") % {"value": v}}
-                    )
 
     _SLUG_RETRY_LIMIT = 3
 
@@ -305,37 +252,6 @@ class FieldTemplate(models.Model):
         if not self.options_json:
             return []
         return [(o["slug"], o["label"]) for o in self.options_json if o.get("is_active", True)]
-
-    def get_default_initial(self):
-        """Cast ``default_value`` (String) in den passenden Python-Typ fürs Form-Initial.
-
-        Gibt ``None`` zurück, wenn kein Default gesetzt ist oder der Wert
-        für den Feldtyp nicht parsbar ist (fail-safe — kein User-Fehler).
-        """
-        raw = (self.default_value or "").strip()
-        if not raw:
-            return None
-        ft = self.FieldType
-        try:
-            if self.field_type == ft.NUMBER:
-                return int(raw)
-            if self.field_type == ft.DATE:
-                from datetime import date
-
-                return date.fromisoformat(raw)
-            if self.field_type == ft.TIME:
-                from datetime import time
-
-                return time.fromisoformat(raw)
-            if self.field_type == ft.BOOLEAN:
-                return raw.lower() in {"true", "1"}
-            if self.field_type == ft.MULTI_SELECT:
-                return [v.strip() for v in raw.split(",") if v.strip()]
-            if self.field_type == ft.FILE:
-                return None
-            return raw
-        except (ValueError, TypeError):
-            return None
 
     def __str__(self):
         return f"{self.facility.name} — {self.name} ({self.get_field_type_display()})"

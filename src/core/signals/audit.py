@@ -4,7 +4,6 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
-from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
 from core.models import AuditLog
@@ -112,63 +111,3 @@ def on_user_login_failed(sender, credentials, request, **kwargs):
         detail={"message": "Fehlgeschlagener Login-Versuch", "username": username},
         ip_address=ip_address,
     )
-
-
-# --- User-Model: Rollenwechsel + Deaktivierung ----------------------------
-#
-# Django-Admin mutiert User direkt (ohne Service). pre_save erfasst den alten
-# Zustand; post_save diffed und schreibt bei echten Änderungen einen Audit-
-# Eintrag. Wir setzen temporäre ``_audit_old_*``-Attribute auf der Instanz —
-# die sind request-lokal und überleben nicht über den Signal-Fan-Out hinaus.
-from core.models import User  # noqa: E402  (nach AppConfig.ready() geladen)
-
-
-@receiver(pre_save, sender=User)
-def _capture_old_user_state(sender, instance, **kwargs):
-    """Snapshot des alten User-Zustands, bevor save() den neuen Zustand schreibt."""
-    if not instance.pk:
-        instance._audit_old_role = None
-        instance._audit_old_is_active = None
-        return
-    try:
-        old = User.objects.only("role", "is_active").get(pk=instance.pk)
-    except User.DoesNotExist:
-        instance._audit_old_role = None
-        instance._audit_old_is_active = None
-        return
-    instance._audit_old_role = old.role
-    instance._audit_old_is_active = old.is_active
-
-
-@receiver(post_save, sender=User)
-def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
-    """Vergleicht alten und neuen User-Zustand; loggt Rollenwechsel und
-    Deaktivierung (True → False) als eigene AuditLog-Einträge."""
-    if created:
-        return  # Neu-Anlage wird via Admin-Create-Flow separat auditiert.
-    old_role = getattr(instance, "_audit_old_role", None)
-    old_is_active = getattr(instance, "_audit_old_is_active", None)
-
-    if old_role is not None and old_role != instance.role:
-        AuditLog.objects.create(
-            facility=getattr(instance, "facility", None),
-            user=instance,
-            action=AuditLog.Action.USER_ROLE_CHANGED,
-            target_type="User",
-            target_id=str(instance.pk),
-            detail={
-                "old_role": old_role,
-                "new_role": instance.role,
-                "username": instance.username,
-            },
-        )
-
-    if old_is_active is True and instance.is_active is False:
-        AuditLog.objects.create(
-            facility=getattr(instance, "facility", None),
-            user=instance,
-            action=AuditLog.Action.USER_DEACTIVATED,
-            target_type="User",
-            target_id=str(instance.pk),
-            detail={"username": instance.username},
-        )

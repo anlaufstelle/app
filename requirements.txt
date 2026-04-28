@@ -62,8 +62,6 @@ pyphen==0.17.2
     # via weasyprint
 python-dotenv==1.2.2
     # via -r requirements.in
-python-magic==0.4.27
-    # via -r requirements.in
 qrcode==8.2
     # via -r requirements.in
 sentry-sdk[django]==2.58.0

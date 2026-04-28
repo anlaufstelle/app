@@ -4,33 +4,29 @@
 {% block title %}{% trans "Fälle" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-{# PageHeader #}
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-[22px] font-bold text-ink">{% trans "Fälle" %}</h1>
+    <h1 class="text-2xl font-bold">{% trans "Fälle" %}</h1>
     <div class="hidden md:block">
-        <a href="{% url 'core:case_create' %}" class="inline-flex items-center gap-1.5 bg-accent text-white text-[13px] font-semibold rounded-md px-3.5 py-2">
-            <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        <a href="{% url 'core:case_create' %}" class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
             {% trans "Neuer Fall" %}
         </a>
     </div>
 </div>
 
 {# Suchleiste + Status-Filter #}
-<div class="mb-4 flex flex-col sm:flex-row gap-2.5 no-print">
-    <div class="relative flex-1">
-        <svg aria-hidden="true" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-        <input type="text"
-               name="q"
-               value="{{ q }}"
-               placeholder="{% trans 'Titel suchen...' %}"
-               class="w-full bg-surface border border-subtle rounded-[10px] pl-8 pr-3 py-2 text-[13px] text-ink"
-               hx-get="{% url 'core:case_list' %}"
-               hx-trigger="keyup changed delay:300ms"
-               hx-target="#case-table"
-               hx-include="[name='status']"
-        >
-    </div>
-    <select name="status" aria-label="{% trans 'Status filtern' %}" class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
+<div class="mb-4 flex flex-col sm:flex-row gap-3 no-print">
+    <input type="text"
+           name="q"
+           value="{{ q }}"
+           placeholder="{% trans 'Titel suchen...' %}"
+           class="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm"
+           hx-get="{% url 'core:case_list' %}"
+           hx-trigger="keyup changed delay:300ms"
+           hx-target="#case-table"
+           hx-include="[name='status']"
+    >
+    <select name="status" aria-label="{% trans 'Status filtern' %}" class="border border-gray-300 rounded-md px-3 py-2 text-sm"
             hx-get="{% url 'core:case_list' %}"
             hx-trigger="change"
             hx-target="#case-table"

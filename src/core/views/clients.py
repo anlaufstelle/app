@@ -14,14 +14,13 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
-from core.constants import DEFAULT_PAGE_SIZE, RATELIMIT_MUTATION
 from core.forms.clients import ClientForm
 from core.models import AuditLog, Client, Event, WorkItem
 from core.models import Case as CaseModel
-from core.services.audit import log_audit_event
 from core.services.bans import get_active_bans_for_client
 from core.services.client_export import export_client_data, export_client_data_pdf
 from core.services.clients import create_client, track_client_visit, update_client
+from core.signals.audit import get_client_ip
 from core.utils.downloads import safe_download_response
 from core.views.mixins import AssistantOrAboveRequiredMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
 
@@ -52,7 +51,7 @@ class ClientListView(AssistantOrAboveRequiredMixin, View):
         # Pagination
         from django.core.paginator import Paginator
 
-        paginator = Paginator(qs, DEFAULT_PAGE_SIZE)
+        paginator = Paginator(qs, 25)
         page = request.GET.get("page")
         clients = paginator.get_page(page)
 
@@ -93,7 +92,6 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
                 client=client,
                 status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS],
             )
-            .select_related("client", "assigned_to", "created_by")
             .annotate(
                 priority_order=Case(
                     When(priority=WorkItem.Priority.URGENT, then=Value(0)),
@@ -107,7 +105,13 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
 
         # AuditLog for qualified client
         if client.contact_stage == Client.ContactStage.QUALIFIED:
-            log_audit_event(request, AuditLog.Action.VIEW_QUALIFIED, target_obj=client)
+            AuditLog.objects.create(
+                facility=facility,
+                user=request.user,
+                action=AuditLog.Action.VIEW_QUALIFIED,
+                target_type="Client",
+                target_id=str(client.pk),
+            )
 
         active_bans = get_active_bans_for_client(client, user=request.user)
 
@@ -132,10 +136,6 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
         return render(request, "core/clients/detail.html", context)
 
 
-@method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
-)
 class ClientCreateView(StaffRequiredMixin, View):
     """Create a new client."""
 
@@ -159,10 +159,6 @@ class ClientCreateView(StaffRequiredMixin, View):
         return render(request, "core/clients/form.html", {"form": form, "is_edit": False})
 
 
-@method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
-)
 class ClientUpdateView(StaffRequiredMixin, View):
     """Edit a client."""
 
@@ -244,12 +240,14 @@ class ClientDataExportJSONView(LeadOrAdminRequiredMixin, View):
 
         data = export_client_data(client, facility)
 
-        log_audit_event(
-            request,
-            AuditLog.Action.EXPORT,
-            target_obj=client,
+        AuditLog.objects.create(
+            facility=facility,
+            user=request.user,
+            action=AuditLog.Action.EXPORT,
             target_type="Client-JSON",
+            target_id=str(client.pk),
             detail={"format": "JSON", "pseudonym": client.pseudonym},
+            ip_address=get_client_ip(request),
         )
 
         return safe_download_response(
@@ -269,12 +267,14 @@ class ClientDataExportPDFView(LeadOrAdminRequiredMixin, View):
 
         pdf_bytes = export_client_data_pdf(client, facility)
 
-        log_audit_event(
-            request,
-            AuditLog.Action.EXPORT,
-            target_obj=client,
+        AuditLog.objects.create(
+            facility=facility,
+            user=request.user,
+            action=AuditLog.Action.EXPORT,
             target_type="Client-PDF",
+            target_id=str(client.pk),
             detail={"format": "PDF", "pseudonym": client.pseudonym},
+            ip_address=get_client_ip(request),
         )
 
         return safe_download_response(

@@ -7,9 +7,8 @@ Dieses Handbuch richtet sich an Fachkräfte, Leitungen und Assistenzen in Kontak
 ## Inhaltsverzeichnis
 
 1. [Login und Passwort](#1-login-und-passwort)
-2. [Startseite – Zeitstrom](#2-startseite--zeitstrom)
+2. [Startseite – Dashboard](#2-startseite--dashboard)
 3. [Kontakt dokumentieren (Event erstellen)](#3-kontakt-dokumentieren-event-erstellen)
-   - [Dateien-Übersicht](#3a-dateien-übersicht)
 4. [Klientel verwalten](#4-klienten-verwalten)
 5. [Hinweise und Aufgaben (WorkItems)](#5-hinweise-und-aufgaben-workitems)
 6. [Suche](#6-suche)
@@ -34,7 +33,7 @@ Dieses Handbuch richtet sich an Fachkräfte, Leitungen und Assistenzen in Kontak
 ### Passwort ändern
 
 1. Klicken Sie oben rechts auf Ihren Namen oder das Benutzer-Menü.
-2. Wählen Sie **Passwort ändern** (URL: `/password-change/`).
+2. Wählen Sie **Passwort ändern** (URL: `/password/`).
 3. Geben Sie Ihr aktuelles Passwort ein.
 4. Geben Sie das neue Passwort zweimal ein.
 5. Klicken Sie auf **Speichern**.
@@ -79,46 +78,46 @@ Klicken Sie oben rechts auf **Abmelden**. Aus Datenschutzgründen werden Sie nac
 
 ---
 
-## 2. Startseite – Zeitstrom
+## 2. Startseite – Dashboard
 
-Nach dem Login landen Sie auf dem **Zeitstrom** (`/`) — einem chronologischen Tagesfeed, der Kontakte, Systemaktivitäten, Aufgaben und Hausverbote in einer einheitlichen Ansicht zusammenführt.
+Nach dem Login landen Sie auf dem **Dashboard** (`/`). Das Dashboard gibt Ihnen einen personalisierten Überblick über Ihren Arbeitsalltag.
 
-### Was der Zeitstrom zeigt
+### Widgets
 
-Der Feed fasst vier Quellen des aktuellen Tages zusammen:
+Das Dashboard besteht aus vier Widgets:
 
-| Quelle | Was wird angezeigt |
-|--------|--------------------|
-| **Kontakte** (Events) | Dokumentationseinträge mit Vorschaufeldern |
-| **Aktivitäten** | System-Operationen (erstellt, bearbeitet, gelöscht …) |
-| **Aufgaben** (WorkItems) | Hinweise und Aufgaben mit Priorität und Status |
-| **Hausverbote** | Aktive Hausverbote — zusätzlich als rotes Banner oben |
+| Widget | Beschreibung |
+|--------|-------------|
+| **Meine Aufgaben** | Ihre offenen und laufenden Aufgaben, sortiert nach Priorität und Fälligkeit |
+| **Übersicht** | Kennzahlen: Kontakte heute, offene Fälle, eigene Aufgaben, Aufgaben gesamt |
+| **Heute** | Kompakter Tagesfeed mit den letzten Aktivitäten und Kontakten. Über „Alle anzeigen" gelangen Sie zum vollständigen Aktivitätslog. |
+| **Letzte Klientel** | Kürzlich besuchte Klientelprofile für den Schnellzugriff |
 
-In der rechten Seitenspalte stehen Ihre **5 dringendsten offenen Aufgaben** (sortiert nach Priorität, Fälligkeit und Erstelldatum) — ein Schnellzugriff während der Schicht.
+### Widgets ein- und ausblenden
 
-### Datum wechseln
-
-- **Pfeil-Buttons** über dem Feed: zum vorherigen oder nächsten Tag.
-- Link **Heute**: springt zurück auf den aktuellen Tag.
-
-### Schichtfilter
-
-Unter der Datumsnavigation stehen **TimeFilter-Tabs** (z. B. „Frühdienst", „Spätdienst", „Nachtdienst" — konfigurierbar durch die Administration). Beim Öffnen des Zeitstroms wird die Schicht, die zur aktuellen Uhrzeit passt, automatisch vorausgewählt; Nachtschichten mit Mitternachts-Überlappung werden korrekt behandelt.
-
-Wenn ein Schichtfilter aktiv ist, erscheint oberhalb des Feeds ein aufklappbarer **Schichtübergabe-Block** mit Statistiken (Anzahl Kontakte, Aktivitäten, neue Aufgaben) und Highlights (Krisen-Ereignisse, neue Hausverbote, dringende Aufgaben).
-
-### Feed filtern
-
-Direkt über dem Feed gibt es zwei Dropdowns:
-
-- **Typ**: Alle · Events · Aktivitäten · Aufgaben · Hausverbote
-- **Dokumentationstyp**: nur Einträge eines bestimmten Typs (z. B. „Kontakt", „Krisengespräch") — Sie sehen nur die Typen, die Ihre Rolle einsehen darf
-
-Filteränderungen laden nur den Feed neu (HTMX), ohne die ganze Seite zu aktualisieren.
+1. Klicken Sie auf das **Zahnrad-Symbol** neben der Überschrift „Dashboard".
+2. Im Dropdown können Sie einzelne Widgets per Toggle ein- oder ausblenden.
+3. Ihre Einstellung wird automatisch gespeichert und bleibt auch nach erneutem Login erhalten.
 
 ### Hausverbot-Banner
 
-Wenn aktive Hausverbote in Ihrer Einrichtung bestehen, werden diese als rotes Banner unterhalb der Überschrift angezeigt.
+Wenn aktive Hausverbote in Ihrer Einrichtung bestehen, werden diese als rotes Banner unterhalb der Überschrift angezeigt — auf dem Dashboard ebenso wie im Aktivitätslog.
+
+### Aktivitätslog und Timeline
+
+Neben dem Dashboard stehen Ihnen zwei weitere Ansichten zur Verfügung:
+
+**Aktivitätslog** (`/aktivitaetslog/`): Der vollständige Tagesfeed aller dokumentierten Kontakte und Systemaktivitäten. Erreichbar über die Sidebar-Navigation oder den Link „Alle anzeigen" im Dashboard-Widget.
+
+- **Datum wechseln:** Navigieren Sie mit den Pfeil-Buttons zum vorherigen oder nächsten Tag.
+- **Feed-Typ filtern:** Wählen Sie „Alle", „Events" oder „Aktivitäten" im Dropdown.
+
+**Timeline** (`/timeline/`): Schichtbasierte Ansicht mit TimeFilter-Tabs (z. B. „Frühdienst", „Spätdienst", „Nachtdienst"). Die Timeline zeigt nur Kontakte (Events), keine Systemaktivitäten.
+
+1. Klicken Sie auf den gewünschten Schicht-Tab.
+2. Die Ereignisliste aktualisiert sich sofort und zeigt nur Kontakte aus diesem Zeitfenster.
+
+> **Hinweis:** Der Tab, der als Standard markiert ist, wird automatisch beim Öffnen der Timeline aktiviert.
 
 ---
 
@@ -164,15 +163,13 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 - **Maximale Größe:** Standardmäßig sind **bis zu 10 MiB pro Datei** erlaubt. Ihre Administration kann diesen Wert anpassen.
 - **Unterstützte Formate:** PDF, Office-Dokumente und Bilder. Die genaue, für Ihre Einrichtung erlaubte Liste erfragen Sie bitte bei Ihrer Administration.
 - **Herunterladen:** Öffnen Sie die Detailansicht des Ereignisses und klicken Sie auf den Datei-Link. Die Datei wird beim Abruf automatisch entschlüsselt und im Browser ausgeliefert.
-- **Ersetzen (mit Versionshistorie):** Beim Bearbeiten eines Ereignisses können Sie die bestehende Datei durch eine neue ersetzen. Die alte Datei wird **nicht** gelöscht — sie bleibt als **Vorversion** erhalten und ist in der Ereignis-Detailansicht über ein aufklappbares Akkordeon weiterhin herunterladbar. Vorversionen werden erst beim vollständigen Löschen des Ereignisses entfernt.
+- **Ersetzen:** Beim Bearbeiten eines Ereignisses können Sie die bestehende Datei durch eine neue ersetzen. Die alte Datei wird erst gelöscht, wenn der neue Upload erfolgreich abgeschlossen ist — Sie verlieren also nichts, wenn der Upload abbricht.
 
 > **Offline-Hinweis:** Ereignisse mit Datei-Anhängen können aktuell **nicht offline** gespeichert werden. Wenn Sie offline arbeiten, erscheint beim Anhängen einer Datei ein deutlicher Hinweis. Siehe [Abschnitt 8](#8-pwa-installieren-und-offline-arbeiten).
 
-> **Zentrale Dateiübersicht:** Alle Dateianhänge Ihrer Einrichtung lassen sich über die **Dateien-Seite** in einer Liste durchsuchen und filtern — siehe [Abschnitt 3a: Dateien-Übersicht](#3a-dateien-übersicht).
-
 ### Kontakt bearbeiten
 
-1. Öffnen Sie das Ereignis (über den Zeitstrom oder die Klientel-Chronik).
+1. Öffnen Sie das Ereignis (über den Aktivitätslog oder die Klientel-Chronik).
 2. Klicken Sie auf **Bearbeiten**.
 3. Ändern Sie die gewünschten Felder und klicken Sie auf **Speichern**.
 
@@ -188,46 +185,6 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 4. Bestätigen Sie die Löschung.
 
 > **Wichtig:** Wenn der Kontakt einem **qualifizierten Klientel** zugeordnet ist, wird kein sofortiges Löschen durchgeführt. Stattdessen wird automatisch ein **Löschantrag** gestellt, der von einer Leitung oder Administration genehmigt werden muss (4-Augen-Prinzip). Sie erhalten eine entsprechende Rückmeldung.
-
----
-
-## 3a. Dateien-Übersicht
-
-Die **Dateien-Seite** (`/attachments/`, Sidebar-Eintrag **Dateien**) zeigt alle Anhänge Ihrer Einrichtung in einer durchsuchbaren Liste — ohne vorher das jeweilige Ereignis öffnen zu müssen.
-
-### Zugriff
-
-- **Sidebar-Navigation → Dateien**
-- Verfügbar für Assistenzen, Fachkräfte, Leitungen und Administratoren.
-
-### Sichtbarkeit
-
-Sie sehen nur Dateien, deren Ereignis **und** Feld Ihre Sensitivitätsrolle erreicht:
-
-- Felder mit „hoher" Sensitivität bleiben für Fachkräfte einer niedrigeren Stufe verborgen — gleiches Gate wie im Ereignis-Detail.
-- Anhänge gelöschter Ereignisse sind nicht enthalten.
-- Facility-Scoping: Sie sehen ausschließlich Dateien Ihrer eigenen Einrichtung.
-
-### Filter
-
-Zwei Filter oberhalb der Tabelle:
-
-- **Dokumentationstyp** — nur Anhänge zu Ereignissen eines bestimmten Typs (z. B. „Beratungsgespräch").
-- **Klientel** — alle Anhänge zu einem bestimmten Pseudonym.
-
-Die Filter sind kombinierbar und aktualisieren die Liste via HTMX ohne kompletten Seitenreload.
-
-### Herunterladen
-
-Jede Zeile zeigt den Originaldateinamen. Ein Klick darauf liefert die entschlüsselte Datei — exakt wie in der Ereignis-Detailansicht. Downloads werden im Audit-Log protokolliert.
-
-### Verschlüsselung
-
-Alle Dateien liegen auf dem Server verschlüsselt (AES-GCM). Entschlüsselt wird erst beim Download-Request im Django-Prozess; direkt auf die Festplatte zugreifende Admins sehen nur die verschlüsselten Binärdaten.
-
-### Vorversionen
-
-Ersetzte Dateien bleiben als Vorversionen erhalten (siehe [Abschnitt 3 – Dateianhänge](#dateianhänge)). Die Dateien-Übersicht zeigt aktuell nur die jeweils aktuelle Version eines Eintrags; Vorversionen sind über den Eintrag in der Ereignis-Detailseite einsehbar.
 
 ---
 
@@ -489,7 +446,7 @@ Der Jugendamt-Export erstellt einen standardisierten Sachbericht im Jugendamt-Fo
 
 Wenn eine Fachkraft oder Assistenz einen Kontakt eines qualifizierten Klientel löschen möchte, entsteht ein **Löschantrag**, der von einer Leitung oder Administration genehmigt werden muss.
 
-1. Offene Löschanträge sehen Sie unter `/deletion-requests/`.
+1. Offene Löschanträge sehen Sie unter `/events/deletion-requests/`.
 2. Klicken Sie auf einen Antrag, um Details und das betroffene Ereignis einzusehen.
 3. Klicken Sie auf **Genehmigen** oder **Ablehnen** und bestätigen Sie.
 
@@ -578,7 +535,7 @@ Anlaufstelle unterscheidet vier Rollen. Ihre Rolle wird von der Administration f
 
 | Funktion | Assistenz | Fachkraft | Leitung | Admin |
 |---|---|---|---|---|
-| Zeitstrom / Startseite einsehen | Ja | Ja | Ja | Ja |
+| Dashboard / Startseite einsehen | Ja | Ja | Ja | Ja |
 | Anonyme Kontakte dokumentieren | Ja | Ja | Ja | Ja |
 | Identifizierte Kontakte dokumentieren | Ja | Ja | Ja | Ja |
 | Klientel anlegen und suchen | Ja | Ja | Ja | Ja |

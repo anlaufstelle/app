@@ -1,13 +1,4 @@
 {
-  "name": "anlaufstelle-frontend",
-  "private": true,
-  "engines": {
-    "node": ">=20"
-  },
-  "scripts": {
-    "build": "tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --minify",
-    "watch": "tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --watch"
-  },
   "devDependencies": {
     "tailwindcss": "^3.4.19"
   }

@@ -174,6 +174,14 @@ class TestKAnonymizedClientSkip:
     xfail, damit der Bug sichtbar bleibt, ohne Produktivcode anzufassen.
     """
 
+    @pytest.mark.xfail(
+        reason=(
+            "enforce_retention._anonymize_clients prüft nur pseudonym-Präfix 'Gelöscht-', "
+            "nicht das k_anonymized-Flag. k-anonymisierte Clients werden dadurch ein "
+            "zweites Mal via anonymize() überschrieben."
+        ),
+        strict=True,
+    )
     def test_k_anonymized_client_not_touched_by_enforce_retention(
         self,
         facility,

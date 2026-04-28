@@ -9,9 +9,10 @@ from core.models import DeletionRequest, Event, EventHistory, WorkItem
 from core.services.encryption import safe_decrypt
 
 
-def _gather_client_fields(client):
-    """Serialize the client's master data."""
-    return {
+def export_client_data(client, facility):
+    """Collect all personal data for a client. Returns a dict."""
+    # Client master data
+    client_data = {
         "pseudonym": client.pseudonym,
         "contact_stage": client.get_contact_stage_display(),
         "age_cluster": client.get_age_cluster_display(),
@@ -20,26 +21,7 @@ def _gather_client_fields(client):
         "created_by": client.created_by.username if client.created_by else None,
     }
 
-
-def _serialize_event(event):
-    """Serialize a single Event instance, decrypting encrypted data_json values."""
-    decrypted_data = {}
-    if event.data_json:
-        for key, value in event.data_json.items():
-            if isinstance(value, dict):
-                decrypted_data[key] = safe_decrypt(value)
-            else:
-                decrypted_data[key] = value
-    return {
-        "document_type": event.document_type.name,
-        "occurred_at": event.occurred_at.isoformat(),
-        "created_by": event.created_by.username if event.created_by else None,
-        "data": decrypted_data,
-    }
-
-
-def _gather_events(client):
-    """Return (events_data, event_ids) for all non-deleted events of the client."""
+    # Events (non-deleted)
     events = (
         Event.objects.filter(client=client, is_deleted=False)
         .select_related("document_type", "created_by")
@@ -49,14 +31,26 @@ def _gather_events(client):
     event_ids = []
     for event in events:
         event_ids.append(event.pk)
-        events_data.append(_serialize_event(event))
-    return events_data, event_ids
+        # Decrypt data_json fields
+        decrypted_data = {}
+        if event.data_json:
+            for key, value in event.data_json.items():
+                if isinstance(value, dict):
+                    decrypted_data[key] = safe_decrypt(value)
+                else:
+                    decrypted_data[key] = value
+        events_data.append(
+            {
+                "document_type": event.document_type.name,
+                "occurred_at": event.occurred_at.isoformat(),
+                "created_by": event.created_by.username if event.created_by else None,
+                "data": decrypted_data,
+            }
+        )
 
-
-def _gather_cases(client):
-    """Serialize all cases linked to the client."""
+    # Cases
     cases = CaseModel.objects.filter(client=client).select_related("created_by", "lead_user").order_by("-created_at")
-    return [
+    cases_data = [
         {
             "title": case.title,
             "description": case.description,
@@ -69,13 +63,11 @@ def _gather_cases(client):
         for case in cases
     ]
 
-
-def _gather_event_history(event_ids):
-    """Serialize EventHistory entries for the given event IDs."""
+    # EventHistory for client's events
     history_entries = (
         EventHistory.objects.filter(event_id__in=event_ids).select_related("changed_by").order_by("-changed_at")
     )
-    return [
+    history_data = [
         {
             "action": entry.get_action_display(),
             "changed_at": entry.changed_at.isoformat(),
@@ -84,15 +76,13 @@ def _gather_event_history(event_ids):
         for entry in history_entries
     ]
 
-
-def _gather_deletion_requests(event_ids):
-    """Serialize DeletionRequest entries for the given event IDs."""
+    # DeletionRequests for client's events
     deletion_requests = (
         DeletionRequest.objects.filter(target_id__in=event_ids, target_type="Event")
         .select_related("requested_by", "reviewed_by")
         .order_by("-created_at")
     )
-    return [
+    deletion_data = [
         {
             "status": dr.get_status_display(),
             "reason": dr.reason,
@@ -104,11 +94,9 @@ def _gather_deletion_requests(event_ids):
         for dr in deletion_requests
     ]
 
-
-def _gather_workitems(client):
-    """Serialize all work items linked to the client."""
+    # WorkItems for client
     workitems = WorkItem.objects.filter(client=client).order_by("-created_at")
-    return [
+    workitems_data = [
         {
             "title": wi.title,
             "description": wi.description,
@@ -120,27 +108,20 @@ def _gather_workitems(client):
         for wi in workitems
     ]
 
-
-def _build_export_meta(facility):
-    """Return export metadata (timestamp + resolved facility name)."""
+    # Facility full name from settings
     facility_name = getattr(getattr(facility, "settings", None), "facility_full_name", "") or facility.name
-    return {
-        "timestamp": timezone.now().isoformat(),
-        "facility_name": facility_name,
-    }
 
-
-def export_client_data(client, facility):
-    """Collect all personal data for a client. Returns a dict."""
-    events_data, event_ids = _gather_events(client)
     return {
-        "client": _gather_client_fields(client),
+        "client": client_data,
         "events": events_data,
-        "cases": _gather_cases(client),
-        "event_history": _gather_event_history(event_ids),
-        "deletion_requests": _gather_deletion_requests(event_ids),
-        "work_items": _gather_workitems(client),
-        "export_meta": _build_export_meta(facility),
+        "cases": cases_data,
+        "event_history": history_data,
+        "deletion_requests": deletion_data,
+        "work_items": workitems_data,
+        "export_meta": {
+            "timestamp": timezone.now().isoformat(),
+            "facility_name": facility_name,
+        },
     }
 
 

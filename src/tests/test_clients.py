@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from core.models import AuditLog, Case, Client, Episode, WorkItem
 from core.models.activity import Activity
-from core.services.clients import get_client_or_none, update_client
+from core.services.clients import update_client
 
 
 @pytest.mark.django_db
@@ -392,34 +392,3 @@ class TestClientAnonymize:
         assert open_item.description == ""
         assert in_progress.title == "Aufgabe (anonymisiert)"
         assert in_progress.description == ""
-
-
-@pytest.mark.django_db
-class TestGetClientOrNone:
-    """Refs #598 R-5: zentraler Service für den duplizierten Client-Lookup."""
-
-    def test_returns_client_for_valid_id_and_facility(self, facility, client_identified):
-        result = get_client_or_none(facility, str(client_identified.pk))
-        assert result == client_identified
-
-    def test_returns_none_for_wrong_facility(self, other_facility, client_identified):
-        """Cross-Facility-Schutz: ein Client aus Facility A darf aus Sicht
-        Facility B nicht auffindbar sein."""
-        result = get_client_or_none(other_facility, str(client_identified.pk))
-        assert result is None
-
-    def test_returns_none_for_nonexistent_id(self, facility):
-        """Nicht existente ID (gültiges UUID-Format)."""
-        result = get_client_or_none(facility, "00000000-0000-0000-0000-000000000000")
-        assert result is None
-
-    def test_returns_none_for_invalid_uuid(self, facility):
-        """Ungültiger UUID-String — muss None liefern, nicht 500."""
-        result = get_client_or_none(facility, "not-a-uuid")
-        assert result is None
-
-    def test_returns_none_for_empty_string(self, facility):
-        assert get_client_or_none(facility, "") is None
-
-    def test_returns_none_for_none(self, facility):
-        assert get_client_or_none(facility, None) is None

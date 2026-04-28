@@ -3,8 +3,48 @@
 import pytest
 from django.urls import reverse
 
-from core.models import RecentClientVisit
+from core.models import (
+    DashboardPreference,
+    RecentClientVisit,
+)
 from core.services.clients import track_client_visit
+
+
+@pytest.mark.django_db
+class TestDashboardPreferenceUpdateView:
+    def test_toggle_widget(self, client, staff_user):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:dashboard_preferences"),
+            {"widget": "tasks", "enabled": "false"},
+        )
+        assert response.status_code == 200
+        pref = DashboardPreference.objects.get(user=staff_user)
+        assert pref.widgets["tasks"] is False
+
+    def test_toggle_creates_preference(self, client, staff_user):
+        client.force_login(staff_user)
+        assert not DashboardPreference.objects.filter(user=staff_user).exists()
+        client.post(
+            reverse("core:dashboard_preferences"),
+            {"widget": "stats", "enabled": "false"},
+        )
+        assert DashboardPreference.objects.filter(user=staff_user).exists()
+
+    def test_invalid_widget_returns_400(self, client, staff_user):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:dashboard_preferences"),
+            {"widget": "invalid", "enabled": "true"},
+        )
+        assert response.status_code == 400
+
+    def test_requires_auth(self, client):
+        response = client.post(
+            reverse("core:dashboard_preferences"),
+            {"widget": "tasks", "enabled": "true"},
+        )
+        assert response.status_code == 302
 
 
 @pytest.mark.django_db

@@ -4,23 +4,22 @@
 {% block title %}{% trans "Aufgaben" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-{# PageHeader (Design: als-screens.jsx WorkitemsScreen) #}
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-[22px] font-bold text-ink">{% trans "Aufgaben" %}</h1>
+    <h1 class="text-2xl font-bold">{% trans "Aufgaben" %}</h1>
     <div class="hidden md:block">
-        <a href="{% url 'core:workitem_create' %}" class="inline-flex items-center gap-1.5 bg-accent text-white text-[13px] font-semibold rounded-md px-3.5 py-2">
-            <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        <a href="{% url 'core:workitem_create' %}" class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
+            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
             {% trans "Neue Aufgabe" %}
         </a>
     </div>
 </div>
 
-{# Filter-Leiste (Card mit Selects, Tokens) #}
-<div class="flex flex-wrap gap-3 mb-5 px-4 py-3 bg-surface rounded-[10px] border border-subtle" data-filter-persist>
+{# Filter-Leiste #}
+<div class="flex flex-wrap gap-3 mb-6 p-4 bg-gray-50 rounded-md border border-gray-200" data-filter-persist>
     <div>
-        <label for="filter-item-type" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Typ" %}</label>
+        <label for="filter-item-type" class="block text-xs font-medium text-gray-500 mb-1">{% trans "Typ" %}</label>
         <select id="filter-item-type" name="item_type"
-            class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
+            class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
@@ -33,9 +32,9 @@
         </select>
     </div>
     <div>
-        <label for="filter-priority" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Priorität" %}</label>
+        <label for="filter-priority" class="block text-xs font-medium text-gray-500 mb-1">{% trans "Priorität" %}</label>
         <select id="filter-priority" name="priority"
-            class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
+            class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
@@ -48,9 +47,9 @@
         </select>
     </div>
     <div>
-        <label for="filter-assigned-to" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Zugewiesen an" %}</label>
+        <label for="filter-assigned-to" class="block text-xs font-medium text-gray-500 mb-1">{% trans "Zugewiesen an" %}</label>
         <select id="filter-assigned-to" name="assigned_to"
-            class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
+            class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
@@ -64,9 +63,9 @@
         </select>
     </div>
     <div>
-        <label for="filter-due" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Fälligkeit" %}</label>
+        <label for="filter-due" class="block text-xs font-medium text-gray-500 mb-1">{% trans "Fälligkeit" %}</label>
         <select id="filter-due" name="due"
-            class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
+            class="block w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
@@ -82,16 +81,34 @@
 
 {# Bulk-Edit (Refs #267): Alpine-State für Auswahl und Aktions-Forms #}
 <div
-    x-data="workitemBulkSelect"
+    x-data="{
+        selected: [],
+        isSelected(id) { return this.selected.includes(id) },
+        toggle(id) {
+            const i = this.selected.indexOf(id);
+            if (i === -1) this.selected.push(id); else this.selected.splice(i, 1);
+        },
+        toggleAll(checked) {
+            const boxes = document.querySelectorAll('input[name=workitem_ids]');
+            this.selected = [];
+            boxes.forEach(b => { b.checked = checked; if (checked) this.selected.push(b.value); });
+        },
+        clear() {
+            this.selected = [];
+            document.querySelectorAll('input[name=workitem_ids]').forEach(b => b.checked = false);
+            const master = document.getElementById('workitem-select-all');
+            if (master) master.checked = false;
+        }
+    }"
     @workitem-bulk-clear.window="clear()"
 >
     {# Action-Bar: sichtbar wenn mindestens ein Item ausgewählt #}
     <div
         x-show="selected.length > 0"
         x-cloak
-        class="sticky top-0 z-10 mb-4 flex flex-wrap items-center gap-3 p-3 bg-accent-light border border-accent/20 rounded-[10px] shadow-sm"
+        class="sticky top-0 z-10 mb-4 flex flex-wrap items-center gap-3 p-3 bg-indigo-50 border border-indigo-200 rounded-md shadow-sm"
     >
-        <span class="text-[13px] font-semibold text-accent">
+        <span class="text-sm font-medium text-indigo-900">
             <span x-text="selected.length"></span>
             {% trans "ausgewählt" %}
         </span>
@@ -103,13 +120,13 @@
                 <input type="hidden" name="workitem_ids" :value="id">
             </template>
             <label class="sr-only" for="bulk-status">{% trans "Status" %}</label>
-            <select id="bulk-status" name="status" class="text-[13px] bg-surface border border-subtle rounded-[10px] px-2 py-1">
-                <option value="">{% trans "Status ändern..." %}</option>
+            <select id="bulk-status" name="status" class="text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">{% trans "Status ändern…" %}</option>
                 {% for value, label in status_choices %}
                 <option value="{{ value }}">{{ label }}</option>
                 {% endfor %}
             </select>
-            <button type="submit" class="px-3 py-1.5 bg-accent text-white text-[13px] font-semibold rounded-md">{% trans "Anwenden" %}</button>
+            <button type="submit" class="px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">{% trans "Anwenden" %}</button>
         </form>
 
         {# Priorität #}
@@ -119,13 +136,13 @@
                 <input type="hidden" name="workitem_ids" :value="id">
             </template>
             <label class="sr-only" for="bulk-priority">{% trans "Priorität" %}</label>
-            <select id="bulk-priority" name="priority" class="text-[13px] bg-surface border border-subtle rounded-[10px] px-2 py-1">
-                <option value="">{% trans "Priorität ändern..." %}</option>
+            <select id="bulk-priority" name="priority" class="text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">{% trans "Priorität ändern…" %}</option>
                 {% for value, label in priority_choices %}
                 <option value="{{ value }}">{{ label }}</option>
                 {% endfor %}
             </select>
-            <button type="submit" class="px-3 py-1.5 bg-accent text-white text-[13px] font-semibold rounded-md">{% trans "Anwenden" %}</button>
+            <button type="submit" class="px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">{% trans "Anwenden" %}</button>
         </form>
 
         {# Zuweisen #}
@@ -135,22 +152,22 @@
                 <input type="hidden" name="workitem_ids" :value="id">
             </template>
             <label class="sr-only" for="bulk-assign">{% trans "Zuweisen" %}</label>
-            <select id="bulk-assign" name="assigned_to" class="text-[13px] bg-surface border border-subtle rounded-[10px] px-2 py-1">
+            <select id="bulk-assign" name="assigned_to" class="text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
                 <option value="">{% trans "Zuweisung entfernen" %}</option>
                 {% for u in facility_users %}
                 <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
                 {% endfor %}
             </select>
-            <button type="submit" class="px-3 py-1.5 bg-accent text-white text-[13px] font-semibold rounded-md">{% trans "Anwenden" %}</button>
+            <button type="submit" class="px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">{% trans "Anwenden" %}</button>
         </form>
 
-        <button type="button" @click="clear()" class="ml-auto text-[13px] text-accent hover:underline">{% trans "Auswahl löschen" %}</button>
+        <button type="button" @click="clear()" class="ml-auto text-sm text-indigo-700 hover:text-indigo-900 underline">{% trans "Auswahl löschen" %}</button>
     </div>
 
     {# Select-All-Steuerung oberhalb der Liste #}
-    <div class="flex items-center gap-2 mb-3 text-[13px] text-ink-muted">
+    <div class="flex items-center gap-2 mb-3 text-sm text-gray-600">
         <input type="checkbox" id="workitem-select-all"
-            class="h-4 w-4 rounded border-subtle text-accent"
+            class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
             @change="toggleAll($event.target.checked)">
         <label for="workitem-select-all">{% trans "Alle sichtbaren auswählen" %}</label>
     </div>

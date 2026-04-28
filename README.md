@@ -4,7 +4,7 @@
 
 **Dokumentation, Statistik und Teamkommunikation für Kontaktläden, Notschlafstellen und Streetwork — Open Source, DSGVO-konform, pseudonymisiert, kostenlos.**
 
-> ⚠️ **Pre-Release (v0.10.1)** — Anlaufstelle ist funktionsfähig, aber noch nicht für den Produktiveinsatz freigegeben. Qualitätssicherung und Stabilisierung laufen. Wir suchen Piloteinrichtungen, die das System gemeinsam mit uns testen und weiterentwickeln möchten — [Kontakt aufnehmen](mailto:kontakt@anlaufstelle.app).
+> ⚠️ **Pre-Release (v0.10.0)** — Anlaufstelle ist funktionsfähig, aber noch nicht für den Produktiveinsatz freigegeben. Qualitätssicherung und Stabilisierung laufen. Wir suchen Piloteinrichtungen, die das System gemeinsam mit uns testen und weiterentwickeln möchten — [Kontakt aufnehmen](mailto:kontakt@anlaufstelle.app).
 
 ---
 
@@ -47,7 +47,7 @@ Typische Teamgröße: 5–20 Mitarbeitende. Typische Situation: Dokumentation mi
 
 Anlaufstelle ist eine Software für die tägliche Arbeit in der niedrigschwelligen Sozialarbeit. Sie unterstützt Ihr Team bei der Dokumentation, der Informationsweitergabe zwischen Diensten und der Erstellung von Berichten und Statistiken — ohne dass Klientel einen bürgerlichen Namen angeben müssen.
 
-Etablierte kommerzielle Sozialbereichssoftware richtet sich an große Träger, ist für kleine Einrichtungen zu teuer und setzt voraus, dass jede Person mit Name und Adresse erfasst wird. Anlaufstelle füllt diese Lücke: niedrigschwellig, finanzierbar, datenschutzgerecht.
+Kommerzielle Sozialbereichssoftware (Vivendi, SoPart, Kilanka) richtet sich an große Träger, ist für kleine Einrichtungen zu teuer und setzt voraus, dass jede Person mit Name und Adresse erfasst wird. Anlaufstelle füllt diese Lücke: niedrigschwellig, finanzierbar, datenschutzgerecht.
 
 ---
 

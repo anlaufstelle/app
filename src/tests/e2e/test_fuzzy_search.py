@@ -4,7 +4,6 @@ import re
 import uuid
 
 import pytest
-from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -59,11 +58,10 @@ class TestFuzzySearch:
         search_input = page.locator("[data-testid='global-search-input']")
         search_input.click()
         search_input.press_sequentially(typo, delay=50)
+        page.wait_for_timeout(800)
 
-        # Der Results-Container wird schon vor dem HTMX-Fetch sichtbar
-        # — warten, bis die Fuzzy-Sektion wirklich mit Daten gefüllt ist.
         results = page.locator("[data-testid='global-search-results']")
         results.wait_for(state="visible", timeout=5000)
-        expect(results).to_contain_text(pseudo, timeout=5000)
         text = results.inner_text()
         assert "ähnliche pseudonyme" in text.lower()
+        assert pseudo in text

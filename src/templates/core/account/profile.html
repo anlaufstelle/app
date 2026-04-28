@@ -5,126 +5,125 @@
 
 {% block content %}
 <div class="max-w-2xl">
-    <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Mein Profil" %}</h1>
+    <h1 class="text-2xl font-bold mb-6">{% trans "Mein Profil" %}</h1>
 
     {# Profilinfo-Card #}
-    <div class="bg-surface border border-subtle rounded-[10px] p-5 mb-5">
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div class="bg-white border border-gray-200 rounded-md p-4 mb-6">
+        <div class="space-y-3">
             <div>
-                <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Name" %}</div>
-                <p class="text-[14px] font-semibold text-ink mt-1" data-testid="profile-name">{{ user.get_full_name|default:user.username }}</p>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Name" %}</span>
+                <p class="text-sm font-medium" data-testid="profile-name">{{ user.get_full_name|default:user.username }}</p>
             </div>
             <div>
-                <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Benutzername" %}</div>
-                <p class="text-[14px] font-semibold text-ink mt-1">{{ user.username }}</p>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Benutzername" %}</span>
+                <p class="text-sm font-medium">{{ user.username }}</p>
             </div>
             <div>
-                <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Rolle" %}</div>
-                <p class="mt-1">
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-accent-light text-accent" data-testid="profile-role">
+                <span class="text-xs text-gray-500 uppercase">{% trans "Rolle" %}</span>
+                <p class="text-sm">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700" data-testid="profile-role">
                         {{ user.get_role_display }}
                     </span>
                 </p>
             </div>
             {% if user.facility %}
             <div>
-                <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Einrichtung" %}</div>
-                <p class="text-[14px] font-semibold text-ink mt-1" data-testid="profile-facility">{{ user.facility }}</p>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Einrichtung" %}</span>
+                <p class="text-sm font-medium" data-testid="profile-facility">{{ user.facility }}</p>
             </div>
             {% endif %}
             <div>
-                <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Sprache" %}</div>
-                <p class="text-[14px] font-semibold text-ink mt-1" data-testid="profile-language">{{ user.get_preferred_language_display }}</p>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Sprache" %}</span>
+                <p class="text-sm font-medium" data-testid="profile-language">{{ user.get_preferred_language_display }}</p>
             </div>
         </div>
-        <div class="mt-5 pt-4 border-t border-subtle flex flex-wrap gap-2">
-            <a href="{% url 'password_change' %}" class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
+        <div class="mt-4 pt-4 border-t border-gray-200 flex flex-wrap gap-2">
+            <a href="{% url 'password_change' %}" class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md hover:bg-gray-50">
                 {% trans "Passwort ändern" %}
             </a>
             <a href="{% url 'mfa_settings' %}" data-testid="profile-mfa-link"
-               class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
+               class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md hover:bg-gray-50">
                 {% trans "2FA verwalten" %}
             </a>
         </div>
     </div>
 
     {# Stats-Kacheln #}
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5 mb-5">
+    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         {% include "core/account/partials/_stats_widget.html" %}
     </div>
 
     {# Letzte Klientel #}
     {% if recent_clients %}
-    <div class="bg-surface border border-subtle rounded-[10px] p-5 mb-5">
-        <div class="flex items-center justify-between mb-3">
-            <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Letzte Klientel" %}</h2>
-            <a href="{% url 'core:client_list' %}" class="text-[12px] text-accent hover:underline font-semibold">{% trans "Alle anzeigen" %}</a>
+    <div class="bg-white border border-gray-200 rounded-lg p-5 mb-6">
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide">{% trans "Letzte Klientel" %}</h2>
+            <a href="{% url 'core:client_list' %}" class="text-xs text-indigo-600 hover:underline">{% trans "Alle anzeigen" %}</a>
         </div>
         {% include "core/account/partials/_recent_clients_widget.html" %}
     </div>
     {% endif %}
 
     {# Letzte Events #}
-    <div class="bg-surface border border-subtle rounded-[10px] p-5 mb-5">
-        <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Letzte Ereignisse" %}</h2>
+    <div class="bg-white border border-gray-200 rounded-md p-4 mb-6">
+        <h2 class="text-lg font-semibold mb-3">{% trans "Letzte Ereignisse" %}</h2>
         {% if recent_events %}
-        <ul class="divide-y divide-subtle">
+        <ul class="divide-y divide-gray-100">
             {% for event in recent_events %}
-            <li class="py-2.5 flex items-center gap-2 flex-wrap">
-                <span class="font-mono text-[12px] text-ink-muted">{{ event.occurred_at|date:"d.m.Y H:i" }}</span>
-                <a href="{% url 'core:event_detail' pk=event.pk %}" class="text-[13px] text-accent hover:underline font-semibold">
-                    {{ event.document_type }}
+            <li class="py-2">
+                <a href="{% url 'core:event_detail' pk=event.pk %}" class="text-sm text-indigo-600 hover:underline">
+                    {{ event.document_type }} – {{ event.occurred_at|date:"d.m.Y H:i" }}
                 </a>
                 {% if event.client %}
-                <span class="text-[11px] text-ink-muted">({{ event.client }})</span>
+                <span class="text-xs text-gray-500 ml-1">({{ event.client }})</span>
                 {% endif %}
             </li>
             {% endfor %}
         </ul>
         {% else %}
-        <p class="text-[13px] text-ink-muted">{% trans "Keine Ereignisse vorhanden." %}</p>
+        <p class="text-sm text-gray-500">{% trans "Keine Ereignisse vorhanden." %}</p>
         {% endif %}
     </div>
 
     {# Offene Aufgaben #}
-    <div class="bg-surface border border-subtle rounded-[10px] p-5 mb-5">
-        <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Offene Aufgaben" %}</h2>
+    <div class="bg-white border border-gray-200 rounded-md p-4 mb-6">
+        <h2 class="text-lg font-semibold mb-3">{% trans "Offene Aufgaben" %}</h2>
         {% if open_workitems %}
-        <ul class="divide-y divide-subtle">
+        <ul class="divide-y divide-gray-100">
             {% for item in open_workitems %}
-            <li class="py-2.5 flex items-center gap-2 flex-wrap">
-                <a href="{% url 'core:workitem_detail' pk=item.pk %}" class="text-[13px] text-accent hover:underline font-semibold">
+            <li class="py-2">
+                <a href="{% url 'core:workitem_detail' pk=item.pk %}" class="text-sm text-indigo-600 hover:underline">
                     {{ item.title }}
                 </a>
-                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold {% if item.status == 'in_progress' %}bg-yellow-100 text-yellow-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {% if item.status == 'in_progress' %}bg-yellow-100 text-yellow-700{% else %}bg-blue-100 text-blue-700{% endif %}">
                     {{ item.get_status_display }}
                 </span>
             </li>
             {% endfor %}
         </ul>
         {% else %}
-        <p class="text-[13px] text-ink-muted">{% trans "Keine offenen Aufgaben." %}</p>
+        <p class="text-sm text-gray-500">{% trans "Keine offenen Aufgaben." %}</p>
         {% endif %}
     </div>
 
     {# Erledigte Aufgaben #}
-    <div class="bg-surface border border-subtle rounded-[10px] p-5">
-        <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Kürzlich erledigt" %}</h2>
+    <div class="bg-white border border-gray-200 rounded-md p-4">
+        <h2 class="text-lg font-semibold mb-3">{% trans "Kürzlich erledigt" %}</h2>
         {% if done_workitems %}
-        <ul class="divide-y divide-subtle">
+        <ul class="divide-y divide-gray-100">
             {% for item in done_workitems %}
-            <li class="py-2.5 flex items-center gap-2 flex-wrap">
-                <a href="{% url 'core:workitem_detail' pk=item.pk %}" class="text-[13px] text-accent hover:underline font-semibold">
+            <li class="py-2">
+                <a href="{% url 'core:workitem_detail' pk=item.pk %}" class="text-sm text-indigo-600 hover:underline">
                     {{ item.title }}
                 </a>
-                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">
+                <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
                     {{ item.get_status_display }}
                 </span>
             </li>
             {% endfor %}
         </ul>
         {% else %}
-        <p class="text-[13px] text-ink-muted">{% trans "Keine erledigten Aufgaben." %}</p>
+        <p class="text-sm text-gray-500">{% trans "Keine erledigten Aufgaben." %}</p>
         {% endif %}
     </div>
 </div>

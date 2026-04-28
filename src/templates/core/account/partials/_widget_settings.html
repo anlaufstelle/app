@@ -1,0 +1,29 @@
+{% load i18n static %}
+<div class="space-y-3" x-data="widgetSettings()" data-preferences-url="{% url 'core:dashboard_preferences' %}">
+    <label class="flex items-center justify-between cursor-pointer">
+        <span class="text-sm text-gray-700">{% trans "Meine Aufgaben" %}</span>
+        <button @click="toggle('tasks')" :class="config.tasks ? 'bg-indigo-600' : 'bg-gray-200'" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200">
+            <span :class="config.tasks ? 'translate-x-5' : 'translate-x-0'" class="inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 mt-0.5 ml-0.5"></span>
+        </button>
+    </label>
+    <label class="flex items-center justify-between cursor-pointer">
+        <span class="text-sm text-gray-700">{% trans "Übersicht" %}</span>
+        <button @click="toggle('stats')" :class="config.stats ? 'bg-indigo-600' : 'bg-gray-200'" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200">
+            <span :class="config.stats ? 'translate-x-5' : 'translate-x-0'" class="inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 mt-0.5 ml-0.5"></span>
+        </button>
+    </label>
+    <label class="flex items-center justify-between cursor-pointer">
+        <span class="text-sm text-gray-700">{% trans "Heute" %}</span>
+        <button @click="toggle('activity')" :class="config.activity ? 'bg-indigo-600' : 'bg-gray-200'" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200">
+            <span :class="config.activity ? 'translate-x-5' : 'translate-x-0'" class="inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 mt-0.5 ml-0.5"></span>
+        </button>
+    </label>
+    <label class="flex items-center justify-between cursor-pointer">
+        <span class="text-sm text-gray-700">{% trans "Letzte Klientel" %}</span>
+        <button @click="toggle('recent_clients')" :class="config.recent_clients ? 'bg-indigo-600' : 'bg-gray-200'" class="relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200">
+            <span :class="config.recent_clients ? 'translate-x-5' : 'translate-x-0'" class="inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 mt-0.5 ml-0.5"></span>
+        </button>
+    </label>
+</div>
+
+<script src="{% static 'js/widget-settings.js' %}" defer></script>

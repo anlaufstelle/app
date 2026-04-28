@@ -13,18 +13,14 @@ class TestUnifiedLayout:
         page.set_viewport_size({"width": 1280, "height": 800})
         page.goto(f"{base_url}/")
         assert page.locator("main#main-content").is_visible()
-        # h1 ist eindeutig, "text=Zeitstrom" matched seit #663 auch den Create-Dropdown-Subtitle.
-        assert page.locator("main#main-content h1").is_visible()
+        assert page.locator("text=Zeitstrom").first.is_visible()
 
     def test_desktop_clients_visible(self, authenticated_page, base_url):
         page = authenticated_page
         page.set_viewport_size({"width": 1280, "height": 800})
         page.goto(f"{base_url}/clients/")
         assert page.locator("h1:has-text('Klientel')").is_visible()
-        # Klientel-Liste seit Refs #643 als CSS-Grid statt <table>; bei 1280px greift sm:grid.
-        assert page.locator(".client-list").is_visible()
-        # Mindestens ein Klientel-Row als Link
-        assert page.locator(".client-list a[href^='/clients/']").first.is_visible()
+        assert page.locator("table").is_visible()
 
     def test_desktop_statistics_visible(self, authenticated_page, base_url):
         page = authenticated_page
@@ -44,9 +40,8 @@ class TestUnifiedLayout:
         page.set_viewport_size({"width": 375, "height": 812})
         page.goto(f"{base_url}/clients/")
         assert page.locator("main#main-content h1").is_visible()
-        # Mobile card layout: zumindest ein Klientel-Detail-Link (UUID-href, nicht "/clients/new/")
-        # Der "Neues Klientel"-Button ist auf Mobile via hidden md:block versteckt.
-        assert page.locator(".client-list a[href^='/clients/']").first.is_visible()
+        # Mobile card layout should be visible
+        assert page.locator("main#main-content .sm\\:hidden a").first.is_visible()
 
     def test_mobile_statistics_visible(self, authenticated_page, base_url):
         page = authenticated_page

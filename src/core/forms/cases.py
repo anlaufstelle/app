@@ -6,9 +6,6 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import Case, Client, User
 
-# Tailwind-Klassen fuer Form-Inputs (Theme Gruen, siehe Plan #663)
-INPUT_CSS = "w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink"
-
 
 class CaseForm(forms.ModelForm):
     """Form for creating and editing cases."""
@@ -23,14 +20,14 @@ class CaseForm(forms.ModelForm):
         model = Case
         fields = ["title", "description", "lead_user"]
         widgets = {
-            "title": forms.TextInput(attrs={"class": INPUT_CSS}),
+            "title": forms.TextInput(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
             "description": forms.Textarea(
                 attrs={
-                    "class": INPUT_CSS,
+                    "class": "w-full border border-gray-300 rounded-md px-3 py-2",
                     "rows": 4,
                 }
             ),
-            "lead_user": forms.Select(attrs={"class": INPUT_CSS}),
+            "lead_user": forms.Select(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
         }
 
     def __init__(self, *args, facility=None, **kwargs):

@@ -240,53 +240,6 @@ def _setup_page(context):
     return page
 
 
-def _cleanup_browser_state(page) -> None:
-    """Defensiv: IndexedDB, Service Worker und Caches im aktuellen Origin
-    leeren, bevor der Context geschlossen wird.
-
-    Hintergrund (Refs #668): ``browser.new_context(...)`` erzeugt zwar
-    isolierte Cookies/Storage, aber Playwright/Chromium koennen in
-    selteneren Faellen Service-Worker-Registrierungen oder Cache-API-
-    Eintraege ueber Context-Grenzen hinweg sichtbar machen, wenn Tests
-    den Browser-Prozess teilen. ``context.close()`` raeumt zwar auf,
-    aber ein expliziter Cleanup vor dem Close gibt eine zusaetzliche
-    Sicherheitsschicht und macht die Zustands-Annahme explizit. Ohne
-    diesen Cleanup waren Folge-Tests in derselben Session oft flaky:
-    leere IndexedDB / leerer SW-Cache wurde nicht wirklich leer.
-
-    Wird best-effort ausgefuehrt — bei Page-Close oder JS-Disabled
-    Edge-Cases einfach ignoriert.
-    """
-    try:
-        page.evaluate(
-            """
-            async () => {
-                if ('serviceWorker' in navigator) {
-                    const regs = await navigator.serviceWorker.getRegistrations();
-                    await Promise.all(regs.map(r => r.unregister()));
-                }
-                if (window.indexedDB && indexedDB.databases) {
-                    const dbs = await indexedDB.databases();
-                    await Promise.all(dbs.map(db => new Promise((resolve) => {
-                        const req = indexedDB.deleteDatabase(db.name);
-                        req.onsuccess = req.onerror = req.onblocked = resolve;
-                    })));
-                }
-                if (window.caches) {
-                    const keys = await caches.keys();
-                    await Promise.all(keys.map(k => caches.delete(k)));
-                }
-                try { localStorage.clear(); } catch (_) {}
-                try { sessionStorage.clear(); } catch (_) {}
-            }
-            """
-        )
-    except Exception:
-        # Page already closed, navigation interrupted, etc. — nicht
-        # kritisch, der Context wird sowieso gleich geschlossen.
-        pass
-
-
 @pytest.fixture
 def authenticated_page(base_url, browser, _login_storage_state):
     """Playwright-Page mit eingeloggtem Admin-User (wiederverwendete Session)."""
@@ -294,7 +247,6 @@ def authenticated_page(base_url, browser, _login_storage_state):
     page = _setup_page(context)
     page.goto(f"{base_url}/")
     yield page
-    _cleanup_browser_state(page)
     context.close()
 
 
@@ -305,7 +257,6 @@ def lead_page(base_url, browser, _lead_storage_state):
     page = _setup_page(context)
     page.goto(f"{base_url}/")
     yield page
-    _cleanup_browser_state(page)
     context.close()
 
 
@@ -316,7 +267,6 @@ def staff_page(base_url, browser, _staff_storage_state):
     page = _setup_page(context)
     page.goto(f"{base_url}/")
     yield page
-    _cleanup_browser_state(page)
     context.close()
 
 
@@ -327,7 +277,6 @@ def assistant_page(base_url, browser, _assistant_storage_state):
     page = _setup_page(context)
     page.goto(f"{base_url}/")
     yield page
-    _cleanup_browser_state(page)
     context.close()
 
 

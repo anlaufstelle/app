@@ -9,49 +9,16 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.utils import timezone
 
-# ``store_encrypted_file`` ruft seit #610 libmagic für die Magic-Bytes-Prüfung
-# auf. Ohne libmagic (Host ohne ``libmagic1``) sind diese Tests nicht lauffähig
-# — im Docker-Image bzw. CI ist die Bibliothek installiert.
-try:
-    import magic
-
-    magic.from_buffer(b"%PDF-1.4\n", mime=True)
-except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library fehlt
-    pytest.skip(
-        f"libmagic nicht lauffähig ({_libmagic_exc}) — Tests erfordern libmagic1.",
-        allow_module_level=True,
-    )
-
-from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings  # noqa: E402
-from core.models.attachment import EventAttachment  # noqa: E402
-from core.services.file_vault import (  # noqa: E402
+from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings
+from core.models.attachment import EventAttachment
+from core.services.file_vault import (
     delete_attachment_file,
     delete_event_attachments,
     get_attachment_path,
     get_original_filename,
     store_encrypted_file,
 )
-from core.services.virus_scan import ScanResult, VirusScannerUnavailableError  # noqa: E402
-
-# Echte Magic-Bytes für MIME-Prüfung (Refs #610).
-# ``store_encrypted_file`` lehnt seit #610 Dateien ab, deren Bytes nicht zum
-# deklarierten ``content_type`` passen — Tests brauchen daher echte Header.
-PDF_HEADER = (
-    b"%PDF-1.4\n"
-    b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
-    b"2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\n"
-    b"xref\n0 3\n0000000000 65535 f\n"
-    b"trailer<</Size 3/Root 1 0 R>>\n"
-    b"startxref\n9\n%%EOF\n"
-)
-PNG_HEADER = (
-    b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
-    b"\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4"
-    b"\x89\x00\x00\x00\rIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4"
-    b"\x00\x00\x00\x00IEND\xaeB`\x82"
-)
-ZIP_HEADER = b"PK\x03\x04" + b"\x00" * 26  # Minimaler ZIP-Local-File-Header.
-HTML_HEADER = b"<!DOCTYPE html>\n<html><body>"
+from core.services.virus_scan import ScanResult, VirusScannerUnavailableError
 
 
 @pytest.fixture
@@ -92,7 +59,7 @@ def event_with_file(facility, staff_user, doc_type_with_file, _encryption_key, s
         data_json={"notiz": "Test"},
         created_by=staff_user,
     )
-    uploaded = SimpleUploadedFile("testfile.pdf", PDF_HEADER, content_type="application/pdf")
+    uploaded = SimpleUploadedFile("testfile.pdf", b"PDF content here", content_type="application/pdf")
     settings.MEDIA_ROOT = str(settings.MEDIA_ROOT)  # ensure it's a string path
     attachment = store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
     event.data_json["scan"] = {"__file__": True, "attachment_id": str(attachment.pk)}
@@ -112,7 +79,7 @@ class TestFileVaultService:
             data_json={},
             created_by=staff_user,
         )
-        content = PDF_HEADER
+        content = b"Hello encrypted file!"
         uploaded = SimpleUploadedFile("test.pdf", content, content_type="application/pdf")
 
         attachment = store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
@@ -140,7 +107,7 @@ class TestFileVaultService:
             data_json={},
             created_by=staff_user,
         )
-        uploaded = SimpleUploadedFile("geheim_bescheid.pdf", PDF_HEADER, content_type="application/pdf")
+        uploaded = SimpleUploadedFile("geheim_bescheid.pdf", b"secret", content_type="application/pdf")
         attachment = store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
 
         # Storage filename must not contain original name
@@ -161,7 +128,7 @@ class TestFileVaultService:
             data_json={},
             created_by=staff_user,
         )
-        uploaded = SimpleUploadedFile("test.pdf", PDF_HEADER, content_type="application/pdf")
+        uploaded = SimpleUploadedFile("test.pdf", b"data", content_type="application/pdf")
         attachment = store_encrypted_file(facility_a, uploaded, ft_file, event, staff_user)
 
         path = get_attachment_path(attachment)
@@ -204,7 +171,7 @@ class TestFileUploadView:
         Settings.objects.get_or_create(facility=facility)
 
         client.force_login(staff_user)
-        uploaded = SimpleUploadedFile("bescheid.pdf", PDF_HEADER, content_type="application/pdf")
+        uploaded = SimpleUploadedFile("bescheid.pdf", b"PDF bytes", content_type="application/pdf")
 
         response = client.post(
             reverse("core:event_create"),
@@ -219,14 +186,11 @@ class TestFileUploadView:
 
         event = Event.objects.filter(document_type=dt).latest("created_at")
         assert "scan" in event.data_json
-        # Stufe B (#622): Neue Events nutzen __files__-Format.
-        marker = event.data_json["scan"]
-        assert marker.get("__files__") is True
-        assert len(marker["entries"]) == 1
+        assert event.data_json["scan"]["__file__"] is True
 
         attachment = EventAttachment.objects.get(event=event)
         assert attachment.field_template == ft_file
-        assert attachment.file_size == len(PDF_HEADER)
+        assert attachment.file_size == len(b"PDF bytes")
 
     def test_download_requires_auth(self, client, event_with_file):
         event, attachment = event_with_file
@@ -245,7 +209,7 @@ class TestFileUploadView:
 
         # Verify content is decrypted correctly
         content = b"".join(response.streaming_content)
-        assert content == PDF_HEADER
+        assert content == b"PDF content here"
 
     def test_download_force_attachment_with_query_param(self, client, staff_user, event_with_file):
         """?download=1 forces Content-Disposition: attachment even for whitelisted MIME types."""
@@ -266,7 +230,7 @@ class TestFileUploadView:
             data_json={},
             created_by=staff_user,
         )
-        uploaded = SimpleUploadedFile("photo.png", PNG_HEADER, content_type="image/png")
+        uploaded = SimpleUploadedFile("photo.png", b"PNG bytes here", content_type="image/png")
         attachment = store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
 
         client.force_login(staff_user)
@@ -285,7 +249,7 @@ class TestFileUploadView:
             data_json={},
             created_by=staff_user,
         )
-        uploaded = SimpleUploadedFile("archive.zip", ZIP_HEADER, content_type="application/zip")
+        uploaded = SimpleUploadedFile("archive.zip", b"ZIP bytes", content_type="application/zip")
         attachment = store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
 
         client.force_login(staff_user)
@@ -304,7 +268,7 @@ class TestFileUploadView:
             data_json={},
             created_by=staff_user,
         )
-        uploaded = SimpleUploadedFile("evil.html", HTML_HEADER, content_type="text/html")
+        uploaded = SimpleUploadedFile("evil.html", b"<script>alert(1)</script>", content_type="text/html")
         attachment = store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
 
         client.force_login(staff_user)
@@ -385,7 +349,7 @@ class TestAttachmentListSensitivityFiltering:
                 data_json={},
                 created_by=staff_user,
             )
-            uploaded = SimpleUploadedFile(f"secret_{i}.pdf", PDF_HEADER, content_type="application/pdf")
+            uploaded = SimpleUploadedFile(f"secret_{i}.pdf", b"high content", content_type="application/pdf")
             store_encrypted_file(facility, uploaded, ft_file, ev, staff_user)
 
         # Create 2 NORMAL events with attachments (older, would be pushed out)
@@ -397,7 +361,7 @@ class TestAttachmentListSensitivityFiltering:
                 data_json={},
                 created_by=staff_user,
             )
-            uploaded = SimpleUploadedFile(f"open_{i}.pdf", PDF_HEADER, content_type="application/pdf")
+            uploaded = SimpleUploadedFile(f"open_{i}.pdf", b"normal content", content_type="application/pdf")
             store_encrypted_file(facility, uploaded, ft_file, ev, staff_user)
 
         client.force_login(staff_user)
@@ -446,10 +410,10 @@ class TestAttachmentListSensitivityFiltering:
             data_json={},
             created_by=staff_user,
         )
-        uploaded_normal = SimpleUploadedFile("visible.pdf", PDF_HEADER, content_type="application/pdf")
+        uploaded_normal = SimpleUploadedFile("visible.pdf", b"ok", content_type="application/pdf")
         store_encrypted_file(facility, uploaded_normal, ft_normal, ev, staff_user)
 
-        uploaded_high = SimpleUploadedFile("hidden.pdf", PDF_HEADER, content_type="application/pdf")
+        uploaded_high = SimpleUploadedFile("hidden.pdf", b"secret", content_type="application/pdf")
         store_encrypted_file(facility, uploaded_high, ft_high, ev, staff_user)
 
         client.force_login(staff_user)
@@ -574,7 +538,7 @@ class TestVirusScanIntegration:
 
     def test_clean_file_is_stored(self, facility, staff_user, doc_type_with_file):
         event, ft_file = self._event(facility, staff_user, doc_type_with_file)
-        uploaded = SimpleUploadedFile("ok.pdf", PDF_HEADER, content_type="application/pdf")
+        uploaded = SimpleUploadedFile("ok.pdf", b"PDF bytes", content_type="application/pdf")
 
         with patch(
             "core.services.file_vault.scan_file",
@@ -608,7 +572,7 @@ class TestEventAttachmentAtomicity:
         attachments_before = EventAttachment.objects.count()
 
         with patch(
-            "core.services.file_vault.store_encrypted_file",
+            "core.views.events.store_encrypted_file",
             side_effect=ValidationError("virus"),
         ):
             response = client.post(
@@ -640,7 +604,7 @@ class TestEventAttachmentAtomicity:
         new_upload = SimpleUploadedFile("new.pdf", b"new bytes", content_type="application/pdf")
 
         with patch(
-            "core.services.file_vault.store_encrypted_file",
+            "core.views.events.store_encrypted_file",
             side_effect=ValidationError("virus"),
         ):
             response = client.post(
@@ -662,75 +626,3 @@ class TestEventAttachmentAtomicity:
         # Response: Redirect oder Form-Rerender, nie 500 — das Formular muss
         # in jedem Fall gnadenvoll wieder ins UI kommen.
         assert response.status_code in (200, 302)
-
-
-@pytest.mark.django_db
-@pytest.mark.usefixtures("_encryption_key")
-class TestStorageOrphanCleanup:
-    """Direct-Cleanup beim Service + periodisches Orphan-Cleanup (#662 FND-03)."""
-
-    def test_db_save_failure_removes_just_written_file(self, facility, staff_user, doc_type_with_file):
-        """Schlaegt EventAttachment.objects.create fehl, wird die ``.enc``-Datei
-        in derselben Service-Funktion wieder geloescht — kein Orphan."""
-        dt, _, ft_file = doc_type_with_file
-        event = Event.objects.create(
-            facility=facility,
-            document_type=dt,
-            occurred_at=timezone.now(),
-            data_json={},
-            created_by=staff_user,
-        )
-        uploaded = SimpleUploadedFile("test.pdf", PDF_HEADER, content_type="application/pdf")
-
-        from core.services import file_vault as fv
-
-        before = (
-            {p.name for p in fv._facility_dir(facility).glob("*.enc")} if fv._facility_dir(facility).exists() else set()
-        )
-
-        with patch.object(EventAttachment.objects, "create", side_effect=RuntimeError("DB down")):
-            with pytest.raises(RuntimeError):
-                store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
-
-        after = (
-            {p.name for p in fv._facility_dir(facility).glob("*.enc")} if fv._facility_dir(facility).exists() else set()
-        )
-        assert after == before, f"Service hat Orphan zurueckgelassen: {after - before}"
-
-    def test_cleanup_orphan_storage_files_removes_unreferenced(
-        self, facility, staff_user, doc_type_with_file, settings
-    ):
-        """Eine ``.enc``-Datei ohne ``EventAttachment``-Record und aelter als
-        ``min_age_seconds`` wird vom Cleanup-Helper entfernt."""
-        from core.services.file_vault import cleanup_orphan_storage_files
-
-        # Echte EventAttachment-Datei legen (referenziert)
-        dt, _, ft_file = doc_type_with_file
-        event = Event.objects.create(
-            facility=facility,
-            document_type=dt,
-            occurred_at=timezone.now(),
-            data_json={},
-            created_by=staff_user,
-        )
-        uploaded = SimpleUploadedFile("ref.pdf", PDF_HEADER, content_type="application/pdf")
-        ref_attachment = store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
-        ref_path = get_attachment_path(ref_attachment)
-
-        # Orphan: eine .enc-Datei ohne DB-Record
-        from core.services import file_vault as fv
-
-        orphan_path = fv._facility_dir(facility) / "00000000-deadbeef-cafe-babe-000000000000.enc"
-        orphan_path.write_bytes(b"orphan-bytes")
-        # Mtime in die Vergangenheit setzen (>min_age_seconds)
-        import os
-
-        old = orphan_path.stat().st_mtime - 7200
-        os.utime(orphan_path, (old, old))
-
-        # Cleanup mit min_age_seconds=3600 — Orphan ist 2h alt, wird geloescht.
-        # Referenz-File: gerade frisch, also unter cutoff aber referenziert -> bleibt.
-        deleted = cleanup_orphan_storage_files(min_age_seconds=3600)
-        assert deleted >= 1
-        assert not orphan_path.exists()
-        assert ref_path.exists()

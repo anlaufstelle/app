@@ -19,7 +19,7 @@ Dieses Verzeichnis enthält die gesamte Projektdokumentation.
 | Dokument | Beschreibung | Zielgruppe |
 |----------|-------------|------------|
 | [admin-guide.md](admin-guide.md) | Betriebshandbuch: Installation, Backup, Monitoring, DSGVO | IT-Admins |
-| [user-guide.md](user-guide.md) | Benutzerhandbuch: Zeitstrom, Klientel, Events, Suche, Export, Rollen | Endanwender |
+| [user-guide.md](user-guide.md) | Benutzerhandbuch: Dashboard, Aktivitätslog, Klientel, Events, Suche, Export, Rollen | Endanwender |
 
 ---
 

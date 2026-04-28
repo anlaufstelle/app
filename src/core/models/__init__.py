@@ -3,6 +3,7 @@ from .attachment import EventAttachment
 from .audit import AuditLog
 from .case import Case
 from .client import Client
+from .dashboard_preference import DashboardPreference
 from .document_type import DocumentType, DocumentTypeField, FieldTemplate
 from .episode import Episode
 from .event import Event
@@ -24,6 +25,7 @@ __all__ = [
     "EventAttachment",
     "Case",
     "Client",
+    "DashboardPreference",
     "DeletionRequest",
     "DocumentType",
     "Episode",

@@ -10,7 +10,6 @@ import re
 from datetime import datetime, time
 
 import pytest
-from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -104,80 +103,6 @@ class TestEventErstellung:
         assert autocomplete.input_value() == "Stern-42"
 
     @pytest.mark.smoke
-    def test_event_create_with_case_assignment(self, authenticated_page, base_url):
-        """Event mit Fall-Zuordnung anlegen → Detailseite zeigt Fall-Link."""
-        page = authenticated_page
-        page.goto(f"{base_url}/events/new/")
-        page.wait_for_load_state("domcontentloaded")
-
-        page.select_option("select[name='document_type']", label="Kontakt")
-        page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
-
-        # Klientel auswählen, zu dem ein offener Fall existiert (Seed: Stern-42 → „Gesundheitsversorgung")
-        autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
-        autocomplete.fill("Stern-42")
-        option = page.locator("button:has-text('Stern-42')")
-        option.wait_for(state="visible", timeout=5000)
-        option.click()
-
-        # Fall-Dropdown erscheint dynamisch nach Klientel-Auswahl (Refs #620).
-        # Nur Fälle des ausgewählten Klientels sind drin — daher reicht der Titel.
-        case_select = page.locator("select[name='case']")
-        case_select.wait_for(state="visible", timeout=5000)
-        case_select.select_option(label="Gesundheitsversorgung")
-
-        page.fill("input[name='dauer']", "25")
-        page.fill("textarea[name='notiz']", "E2E-Test Fall-Zuordnung")
-
-        page.click("button:has-text('Speichern')")
-        page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
-
-        # Detailseite zeigt Fall-Zeile mit Link zur Case-Detail-Seite
-        fall_term = page.locator("dt:has-text('Fall')")
-        expect(fall_term).to_be_visible()
-        fall_link = page.locator("dd a:has-text('Gesundheitsversorgung')")
-        expect(fall_link).to_be_visible()
-        assert re.search(r"/cases/[0-9a-f-]+/$", fall_link.get_attribute("href"))
-
-    def test_case_dropdown_filtered_to_selected_client(self, authenticated_page, base_url):
-        """Nach Klientel-Auswahl enthält das Fall-Dropdown nur passende Fälle (Refs #620)."""
-        page = authenticated_page
-        page.goto(f"{base_url}/events/new/")
-        page.wait_for_load_state("domcontentloaded")
-        page.select_option("select[name='document_type']", label="Kontakt")
-        page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
-
-        # Stern-42 hat im Seed den offenen Fall „Gesundheitsversorgung".
-        autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
-        autocomplete.fill("Stern-42")
-        page.locator("button:has-text('Stern-42')").first.wait_for(state="visible", timeout=5000)
-        page.locator("button:has-text('Stern-42')").first.click()
-
-        case_select = page.locator("select[name='case']")
-        case_select.wait_for(state="visible", timeout=5000)
-        options = case_select.locator("option")
-        # Platzhalter + exakt ein passender Fall; „Wohnungssuche – Sonne-99"
-        # gehört zu einem anderen Klientel und darf NICHT auftauchen.
-        option_texts = options.all_inner_texts()
-        assert any("Gesundheitsversorgung" in t for t in option_texts)
-        assert not any("Wohnungssuche" in t for t in option_texts)
-
-    def test_event_create_anonymous_hides_case_without_client_link(self, authenticated_page, base_url):
-        """Anonymer Kontakt ohne Fall speichern → Detailseite zeigt keine Fall-Zeile."""
-        page = authenticated_page
-        page.goto(f"{base_url}/events/new/")
-        page.wait_for_load_state("domcontentloaded")
-
-        page.select_option("select[name='document_type']", label="Kontakt")
-        page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
-        page.fill("input[name='dauer']", "5")
-
-        page.click("button:has-text('Speichern')")
-        page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
-
-        assert page.locator("dt:has-text('Fall')").count() == 0
-
-    @pytest.mark.smoke
     def test_event_save_and_appears_in_detail(self, authenticated_page, base_url):
         """Event speichern → Detail-Seite mit Daten."""
         page = authenticated_page
@@ -216,11 +141,9 @@ class TestEventEditAndDelete:
         # Autocomplete: identifizierten Client wählen
         autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
         autocomplete.fill("Blitz")
-        # Auf die dynamisch geladene Option warten, statt auf Debounce-Timeout.
+        page.wait_for_timeout(500)
         page.wait_for_load_state("domcontentloaded")
-        option = page.locator("button:has-text('Blitz-08')")
-        option.wait_for(state="visible", timeout=5000)
-        option.click()
+        page.locator("button:has-text('Blitz-08')").click()
 
         page.fill("input[name='dauer']", "10")
         page.click("button:has-text('Speichern')")
@@ -310,11 +233,10 @@ class TestNachtdienstShiftAssignment:
 
         # Auf einen anderen Schicht-Tab klicken → Event sollte nicht erscheinen
         other_shift = self._get_other_shift_label()
-        other_tab = page.locator(f"button:has-text('{other_shift}')")
-        other_tab.click()
+        page.locator(f"button:has-text('{other_shift}')").click()
         page.wait_for_load_state("domcontentloaded")
-        # HTMX-Swap abwarten: gewechselter Tab wird aktiv markiert.
-        expect(other_tab).to_have_class(re.compile(r"bg-accent-light"))
+        # Kurz warten auf HTMX-Response
+        page.wait_for_timeout(500)
 
 
 class TestQualifiedClientEventDeletion:

@@ -5,33 +5,30 @@ import logging
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
-from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
-from core.models import Client, DocumentType, FieldTemplate
-from core.services.clients import get_client_or_none
+from core.models import AuditLog, Client, DeletionRequest, DocumentType, Event, FieldTemplate
+from core.models.attachment import EventAttachment
 from core.services.encryption import safe_decrypt
 from core.services.event import (
-    apply_attachment_changes,
-    attach_files_to_new_event,
-    build_event_detail_context,
-    build_field_template_lookup,
+    approve_deletion,
     create_event,
-    filtered_server_data_json,
-    remove_restricted_fields,
+    reject_deletion,
     request_deletion,
     soft_delete_event,
-    split_file_and_text_data,
     update_event,
 )
 from core.services.file_vault import (
+    delete_attachment_file,
+    get_decrypted_file_stream,
     get_original_filename,
+    store_encrypted_file,
 )
 from core.services.quick_templates import (
     apply_template,
@@ -40,11 +37,14 @@ from core.services.quick_templates import (
     list_templates_for_user,
 )
 from core.services.sensitivity import (
+    get_visible_attachment_or_404,
     get_visible_event_or_404,
     user_can_see_document_type,
+    user_can_see_field,
 )
+from core.utils.downloads import safe_download_response
 from core.utils.formatting import format_file_size
-from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
+from core.views.mixins import AssistantOrAboveRequiredMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +65,36 @@ def _wants_json_response(request) -> bool:
     return False
 
 
+def _filtered_server_data_json(user, event):
+    """Return ``event.data_json`` with fields the user cannot see removed.
+
+    Keeps the conflict-diff honest: the user only ever sees values they could
+    also read via the normal detail view, so the merge UI cannot become a
+    side-channel for restricted content. Encrypted values stay as their
+    marker dicts — the client-side UI shows ``[verschlüsselt]`` for those
+    rather than trying to decrypt.
+    """
+    if not event.data_json:
+        return {}
+    doc_sensitivity = event.document_type.sensitivity
+    field_templates = {
+        dtf.field_template.slug: dtf.field_template
+        for dtf in event.document_type.fields.select_related("field_template")
+    }
+    result = {}
+    for slug, value in event.data_json.items():
+        ft = field_templates.get(slug)
+        field_sensitivity = ft.sensitivity if ft else ""
+        if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
+            continue
+        # File markers — keep metadata but not the file bytes.
+        if isinstance(value, dict) and value.get("__file__"):
+            result[slug] = {"__file__": True, "name": value.get("name", "")}
+            continue
+        result[slug] = safe_decrypt(value, default="") if isinstance(value, dict) else value
+    return result
+
+
 def _conflict_response(user, event, client_expected):
     """Build the 409-Conflict JSON payload for a stale optimistic-concurrency edit.
 
@@ -80,7 +110,7 @@ def _conflict_response(user, event, client_expected):
         {
             "error": "conflict",
             "server_state": {
-                "data_json": filtered_server_data_json(user, event),
+                "data_json": _filtered_server_data_json(user, event),
                 "updated_at": event.updated_at.isoformat() if event.updated_at else None,
                 "document_type_name": event.document_type.name,
             },
@@ -88,6 +118,26 @@ def _conflict_response(user, event, client_expected):
         },
         status=409,
     )
+
+
+def _remove_restricted_fields(user, document_type, data_form):
+    """Remove fields from *data_form* that *user* may not see.
+
+    Returns a list of removed field names.
+    """
+    doc_sensitivity = document_type.sensitivity
+    field_templates = {}
+    for dtf in document_type.fields.select_related("field_template"):
+        field_templates[dtf.field_template.slug] = dtf.field_template
+
+    restricted = []
+    for name in list(data_form.fields.keys()):
+        ft = field_templates.get(name)
+        field_sensitivity = ft.sensitivity if ft else ""
+        if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
+            del data_form.fields[name]
+            restricted.append(name)
+    return restricted
 
 
 class EventCreateView(AssistantOrAboveRequiredMixin, View):
@@ -141,7 +191,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                 initial_data=prefill_data,
                 facility=facility,
             )
-            remove_restricted_fields(request.user, default_doc_type, data_form)
+            _remove_restricted_fields(request.user, default_doc_type, data_form)
         else:
             data_form = DynamicEventDataForm()
 
@@ -160,13 +210,16 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
             "applied_template": applied_template,
         }
 
-        client = get_client_or_none(facility, client_id)
-        if client:
-            context["client_pseudonym"] = client.pseudonym
+        if client_id:
+            try:
+                client = Client.objects.get(pk=client_id, facility=facility)
+                context["client_pseudonym"] = client.pseudonym
+            except Client.DoesNotExist:
+                pass
 
         return render(request, "core/events/create.html", context)
 
-    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
+    @method_decorator(ratelimit(key="user", rate="60/h", method="POST", block=True))
     def post(self, request):
         facility = request.current_facility
         meta_form = EventMetaForm(request.POST, facility=facility, user=request.user)
@@ -174,8 +227,13 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
         if not meta_form.is_valid():
             # Preserve client selection on validation error
             client_id = request.POST.get("client", "")
-            client_obj = get_client_or_none(facility, client_id)
-            client_pseudonym = client_obj.pseudonym if client_obj else ""
+            client_pseudonym = ""
+            if client_id:
+                try:
+                    client_obj = Client.objects.get(pk=client_id, facility=facility)
+                    client_pseudonym = client_obj.pseudonym
+                except (Client.DoesNotExist, ValueError):
+                    pass
 
             # Re-render dynamic fields for selected document type
             doc_type_id = request.POST.get("document_type")
@@ -202,7 +260,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
 
         doc_type = meta_form.cleaned_data["document_type"]
         data_form = DynamicEventDataForm(request.POST, request.FILES, document_type=doc_type, facility=facility)
-        remove_restricted_fields(request.user, doc_type, data_form)
+        _remove_restricted_fields(request.user, doc_type, data_form)
 
         if not data_form.is_valid():
             return render(
@@ -218,7 +276,16 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
 
         case = meta_form.cleaned_data.get("case")
 
-        file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)
+        # Separate file uploads from text data
+        from django.core.files.uploadedfile import UploadedFile
+
+        file_fields = {}
+        text_data = {}
+        for key, value in data_form.cleaned_data.items():
+            if isinstance(value, UploadedFile):
+                file_fields[key] = value
+            else:
+                text_data[key] = value
 
         # Event + Dateianhänge atomar: scheitert die File-Verschlüsselung
         # (Virus, Disk, Fernet), rollt die Transaktion auch das Event zurück
@@ -235,7 +302,17 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                     client=client,
                     case=case,
                 )
-                attach_files_to_new_event(event, request.user, file_fields, doc_type)
+                if file_fields:
+                    field_templates = {
+                        dtf.field_template.slug: dtf.field_template
+                        for dtf in doc_type.fields.select_related("field_template")
+                    }
+                    for slug, uploaded_file in file_fields.items():
+                        ft = field_templates.get(slug)
+                        if ft:
+                            attachment = store_encrypted_file(facility, uploaded_file, ft, event, request.user)
+                            event.data_json[slug] = {"__file__": True, "attachment_id": str(attachment.pk)}
+                    event.save(update_fields=["data_json"])
         except ValidationError as e:
             meta_form.add_error(None, e.message)
             return render(
@@ -265,8 +342,79 @@ class EventFieldsPartialView(AssistantOrAboveRequiredMixin, View):
         if not user_can_see_document_type(request.user, doc_type):
             raise PermissionDenied
         data_form = DynamicEventDataForm(document_type=doc_type, facility=request.current_facility)
-        remove_restricted_fields(request.user, doc_type, data_form)
+        _remove_restricted_fields(request.user, doc_type, data_form)
         return render(request, "core/events/partials/dynamic_fields.html", {"data_form": data_form})
+
+
+# MIME types that may be rendered inline in the browser without XSS risk
+# (text/html and image/svg+xml are deliberately excluded — they can contain
+# active script content). Issue #508.
+INLINE_MIME_WHITELIST = frozenset(
+    {
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "application/pdf",
+        "text/plain",
+    }
+)
+
+
+def _attachment_disposition(mime_type, force_download):
+    """Return the Content-Disposition disposition token for an attachment.
+
+    Inline display is only allowed for whitelisted MIME types and only when
+    the caller did not explicitly request a download (``?download=1``).
+    """
+    if force_download:
+        return "attachment"
+    if (mime_type or "").lower() in INLINE_MIME_WHITELIST:
+        return "inline"
+    return "attachment"
+
+
+class AttachmentDownloadView(AssistantOrAboveRequiredMixin, View):
+    """Auth-checked streaming view for an encrypted file attachment.
+
+    By default, displays the file inline if its MIME type is on the safe
+    whitelist (images, PDF, plain text). Other types and requests with
+    ``?download=1`` are served with ``Content-Disposition: attachment``.
+    """
+
+    def get(self, request, pk, attachment_pk):
+        event, attachment = get_visible_attachment_or_404(request.user, request.current_facility, pk, attachment_pk)
+
+        # Field-level sensitivity check (PermissionDenied keeps the UX hint
+        # that the event exists but a specific attachment field is restricted).
+        ft = attachment.field_template
+        doc_sensitivity = event.document_type.sensitivity
+        if not user_can_see_field(request.user, doc_sensitivity, ft.sensitivity):
+            raise PermissionDenied
+
+        # Audit log
+        AuditLog.objects.create(
+            facility=event.facility,
+            user=request.user,
+            action=AuditLog.Action.DOWNLOAD,
+            target_type="EventAttachment",
+            target_id=str(attachment.pk),
+            detail={"event_id": str(event.pk), "field": ft.slug},
+        )
+
+        force_download = request.GET.get("download") in ("1", "true")
+        disposition = _attachment_disposition(attachment.mime_type, force_download)
+
+        original_filename = get_original_filename(attachment)
+        as_attachment = disposition == "attachment"
+        response = safe_download_response(
+            original_filename,
+            attachment.mime_type,
+            get_decrypted_file_stream(attachment),
+            as_attachment=as_attachment,
+        )
+        response["Content-Length"] = attachment.file_size
+        return response
 
 
 class EventDetailView(AssistantOrAboveRequiredMixin, View):
@@ -279,14 +427,66 @@ class EventDetailView(AssistantOrAboveRequiredMixin, View):
             pk,
             select_related=("document_type", "client", "created_by"),
         )
-        context = build_event_detail_context(event, request.user)
+
+        # Prepare fields with labels and decrypted values
+        field_templates = {}
+        for dtf in event.document_type.fields.select_related("field_template").order_by("sort_order"):
+            field_templates[dtf.field_template.slug] = dtf.field_template
+
+        doc_sensitivity = event.document_type.sensitivity
+
+        fields_display = []
+        for key, value in (event.data_json or {}).items():
+            ft = field_templates.get(key)
+            field_sensitivity = ft.sensitivity if ft else ""
+            is_encrypted = ft.is_encrypted if ft else False
+
+            if not user_can_see_field(request.user, doc_sensitivity, field_sensitivity):
+                fields_display.append(
+                    {
+                        "label": ft.name if ft else key.replace("-", " ").title(),
+                        "value": _("[Eingeschränkt]"),
+                        "is_sensitive": bool(field_sensitivity),
+                        "restricted": True,
+                    }
+                )
+                continue
+
+            # File attachment marker
+            if isinstance(value, dict) and value.get("__file__"):
+                attachment = EventAttachment.objects.filter(pk=value.get("attachment_id"), event=event).first()
+                if attachment:
+                    fields_display.append(
+                        {
+                            "label": ft.name if ft else key,
+                            "is_file": True,
+                            "attachment_id": str(attachment.pk),
+                            "original_filename": get_original_filename(attachment),
+                            "file_size_display": format_file_size(attachment.file_size),
+                            "is_sensitive": bool(field_sensitivity),
+                        }
+                    )
+                    continue
+
+            fields_display.append(
+                {
+                    "label": ft.name if ft else key.replace("-", " ").title(),
+                    "value": safe_decrypt(value, default=_("[verschlüsselt]")),
+                    "is_encrypted": is_encrypted,
+                    "is_sensitive": bool(field_sensitivity),
+                }
+            )
+
+        history = event.history.select_related("changed_by").order_by("-changed_at")
+
+        context = {
+            "event": event,
+            "fields_display": fields_display,
+            "history": history,
+        }
         return render(request, "core/events/detail.html", context)
 
 
-@method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
-)
 class EventUpdateView(AssistantOrAboveRequiredMixin, View):
     """Edit an event."""
 
@@ -302,15 +502,22 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             raise PermissionDenied
         return super().dispatch(request, *args, **kwargs)
 
+    @staticmethod
+    def _remove_restricted_fields(user, event, data_form):
+        """Remove restricted fields from the form.
+
+        Returns a list of field names that were removed.
+        """
+        return _remove_restricted_fields(user, event.document_type, data_form)
+
     def get(self, request, pk):
         event = self.event
 
-        # Decrypted data as initial_data (skip file markers, both legacy __file__
-        # and new __files__ format).
+        # Decrypted data as initial_data (skip file markers)
         initial_data = {}
         for key, value in (event.data_json or {}).items():
-            if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
-                continue
+            if isinstance(value, dict) and value.get("__file__"):
+                continue  # File fields don't use initial_data
             initial_data[key] = safe_decrypt(value, default="")
 
         data_form = DynamicEventDataForm(
@@ -320,40 +527,20 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         )
 
         # Remove sensitive fields from the form
-        remove_restricted_fields(request.user, event.document_type, data_form)
+        self._remove_restricted_fields(request.user, event, data_form)
 
-        # Build attachment info for file fields — jetzt pro Slug eine Liste
-        # von Einträgen (Refs #622). Rückwärtskompatibel: legacy __file__
-        # wird per normalize_file_marker auch als Liste mit einem Eintrag
-        # gerendert.
-        from core.services.event import normalize_file_marker
-
-        existing_attachments_by_slug = {}
-        for slug, value in (event.data_json or {}).items():
-            entries_meta = normalize_file_marker(value)
-            if not entries_meta:
-                continue
-            entries = []
-            for entry in entries_meta:
-                att = event.attachments.filter(pk=entry["id"]).first()
-                if not att or att.deleted_at is not None:
-                    continue
-                entries.append(
-                    {
-                        "entry_id": str(att.entry_id),
-                        "attachment_id": str(att.pk),
-                        "filename": get_original_filename(att),
-                        "size": format_file_size(att.file_size),
-                        "sort_order": att.sort_order,
-                    }
-                )
-            if entries:
-                existing_attachments_by_slug[slug] = entries
+        # Build attachment info for file fields
+        existing_attachments = {}
+        for attachment in event.attachments.select_related("field_template"):
+            existing_attachments[attachment.field_template.slug] = {
+                "filename": get_original_filename(attachment),
+                "size": format_file_size(attachment.file_size),
+            }
 
         context = {
             "event": event,
             "data_form": data_form,
-            "existing_attachments": existing_attachments_by_slug,
+            "existing_attachments": existing_attachments,
         }
         return render(request, "core/events/edit.html", context)
 
@@ -364,7 +551,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         # Pass existing data so inactive options stay in choices for validation
         existing_data = {}
         for key, value in (event.data_json or {}).items():
-            if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
+            if isinstance(value, dict) and value.get("__file__"):
                 continue  # File fields don't use initial_data
             existing_data[key] = safe_decrypt(value, default="")
 
@@ -377,40 +564,62 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         )
 
         # Remove sensitive fields and preserve existing values
-        restricted_keys = remove_restricted_fields(request.user, event.document_type, data_form)
+        restricted_keys = self._remove_restricted_fields(request.user, event, data_form)
 
         if data_form.is_valid():
-            file_fields, merged = split_file_and_text_data(data_form.cleaned_data)
+            from django.core.files.uploadedfile import UploadedFile
+
+            # Separate file uploads from text data
+            file_fields = {}
+            merged = {}
+            for key, value in data_form.cleaned_data.items():
+                if isinstance(value, UploadedFile):
+                    file_fields[key] = value
+                else:
+                    merged[key] = value
 
             # Re-insert restricted fields with original values
             for key in restricted_keys:
                 if key in (event.data_json or {}):
                     merged[key] = event.data_json[key]
 
-            # Für FILE-Felder: bestehenden Marker (beide Formate) erstmal
-            # beibehalten — apply_attachment_changes passt ihn anschliessend an.
-            field_templates = build_field_template_lookup(event.document_type)
+            # Preserve existing file markers for FILE fields without new upload
+            field_templates = {
+                dtf.field_template.slug: dtf.field_template
+                for dtf in event.document_type.fields.select_related("field_template")
+            }
             for slug, ft in field_templates.items():
-                if ft.field_type == FieldTemplate.FieldType.FILE:
+                if ft.field_type == FieldTemplate.FieldType.FILE and slug not in file_fields:
                     existing_marker = (event.data_json or {}).get(slug)
-                    if isinstance(existing_marker, dict) and (
-                        existing_marker.get("__file__") or existing_marker.get("__files__")
-                    ):
+                    if isinstance(existing_marker, dict) and existing_marker.get("__file__"):
                         merged[slug] = existing_marker
 
             expected_updated_at = request.POST.get("expected_updated_at")
-            # Event-Update + Attachment-Versionierung atomar (Refs #584/#587/#622).
+            # Event-Update + Attachment-Replacement atomar (Refs #584). Beim
+            # Update speichern wir die neue Datei ZUERST und löschen die alte
+            # erst nach erfolgreichem Commit — scheitert der neue Upload,
+            # bleibt die alte Datei vollständig erhalten.
             try:
                 with transaction.atomic():
                     update_event(event, request.user, merged, expected_updated_at=expected_updated_at)
-                    apply_attachment_changes(
-                        event,
-                        request.user,
-                        request.POST,
-                        request.FILES,
-                        file_fields,
-                        event.document_type,
-                    )
+
+                    if file_fields:
+                        for slug, uploaded_file in file_fields.items():
+                            ft = field_templates.get(slug)
+                            if not ft:
+                                continue
+                            old = event.attachments.filter(field_template=ft).first()
+                            # Neue Datei FIRST — scheitert das, rollen wir
+                            # das Event und das alte Attachment unverändert zurück.
+                            attachment = store_encrypted_file(facility, uploaded_file, ft, event, request.user)
+                            event.data_json[slug] = {"__file__": True, "attachment_id": str(attachment.pk)}
+                            if old:
+                                old_for_cleanup = old
+                                old.delete()
+                                # Physisches File erst nach Commit löschen —
+                                # sonst wäre die alte Datei bei Rollback weg.
+                                transaction.on_commit(lambda a=old_for_cleanup: delete_attachment_file(a))
+                        event.save(update_fields=["data_json"])
             except ValidationError as e:
                 # Stage 3 (#575): JSON/HTMX clients receive a 409 with the
                 # current server state so the client-side conflict resolver
@@ -434,10 +643,6 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         return render(request, "core/events/edit.html", context)
 
 
-@method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
-)
 class EventDeleteView(StaffRequiredMixin, View):
     """Delete an event (with four-eyes principle for qualified data)."""
 
@@ -468,5 +673,72 @@ class EventDeleteView(StaffRequiredMixin, View):
         else:
             soft_delete_event(event, request.user)
             messages.success(request, _("Ereignis wurde gelöscht."))
+
+        return redirect("core:zeitstrom")
+
+
+class DeletionRequestListView(LeadOrAdminRequiredMixin, View):
+    """List of all deletion requests."""
+
+    def get(self, request):
+        facility = request.current_facility
+        all_requests = DeletionRequest.objects.for_facility(facility).select_related("requested_by", "reviewed_by")
+
+        pending = all_requests.filter(status=DeletionRequest.Status.PENDING)
+        approved = all_requests.filter(status=DeletionRequest.Status.APPROVED)
+        rejected = all_requests.filter(status=DeletionRequest.Status.REJECTED)
+
+        context = {
+            "pending_requests": pending,
+            "approved_requests": approved,
+            "rejected_requests": rejected,
+        }
+        return render(request, "core/deletion_requests/list.html", context)
+
+
+class DeletionRequestReviewView(LeadOrAdminRequiredMixin, View):
+    """Review a deletion request (four-eyes principle)."""
+
+    def get(self, request, pk):
+        dr = get_object_or_404(
+            DeletionRequest,
+            pk=pk,
+            facility=request.current_facility,
+            status=DeletionRequest.Status.PENDING,
+        )
+
+        try:
+            event = Event.objects.select_related("document_type", "client").get(
+                pk=dr.target_id, facility=request.current_facility
+            )
+        except Event.DoesNotExist:
+            raise Http404
+
+        context = {
+            "deletion_request": dr,
+            "event": event,
+        }
+        return render(request, "core/events/deletion_review.html", context)
+
+    def post(self, request, pk):
+        dr = get_object_or_404(
+            DeletionRequest,
+            pk=pk,
+            facility=request.current_facility,
+            status=DeletionRequest.Status.PENDING,
+        )
+
+        # Reviewer must not be the requester
+        if dr.requested_by == request.user:
+            messages.error(request, _("Sie können Ihren eigenen Löschantrag nicht genehmigen."))
+            return redirect("core:deletion_review", pk=pk)
+
+        action = request.POST.get("action")
+        if action == "approve":
+            approve_deletion(dr, request.user)
+            messages.success(request, _("Löschantrag wurde genehmigt."))
+        elif action == "reject":
+            reject_deletion(dr, request.user)
+            messages.info(request, _("Löschantrag wurde abgelehnt."))
 
         return redirect("core:zeitstrom")

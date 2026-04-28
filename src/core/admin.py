@@ -26,28 +26,9 @@ from core.models import (
 )
 from core.models.attachment import EventAttachment
 from core.services.invite import send_invite_email
-from core.services.login_lockout import is_locked as user_is_locked
-from core.services.login_lockout import unlock as unlock_user
 from core.services.password import generate_initial_password
 
 # --- User ---
-
-
-@admin.action(description="Account-Sperre aufheben (Login freigeben)")
-def unlock_selected_users(modeladmin, request, queryset):
-    """Admin-Action: LOGIN_UNLOCK-AuditLog schreiben, damit is_locked() künftig
-    alle bisherigen LOGIN_FAILED-Einträge dieser User ignoriert."""
-    from core.signals.audit import get_client_ip
-
-    unlocked = 0
-    for user in queryset:
-        if user_is_locked(user):
-            unlock_user(user, unlocked_by=request.user, ip_address=get_client_ip(request))
-            unlocked += 1
-    if unlocked:
-        messages.success(request, f"{unlocked} Account-Sperre(n) aufgehoben.")
-    else:
-        messages.info(request, "Keine der ausgewählten Accounts war gesperrt.")
 
 
 @admin.register(User)
@@ -57,7 +38,6 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
     change_password_form = AdminPasswordChangeForm
     list_display = ("username", "display_name", "role", "facility", "is_active")
     list_filter = ("role", "facility", "is_active", "is_staff")
-    actions = [unlock_selected_users]
     fieldsets = BaseUserAdmin.fieldsets + (
         (
             "Anlaufstelle",
@@ -204,20 +184,6 @@ class FieldTemplateAdmin(ModelAdmin):
     )
     list_filter = ("is_active", "field_type", "is_encrypted", "sensitivity", "is_required", "facility")
     search_fields = ("name",)
-    fields = (
-        "facility",
-        "name",
-        "slug",
-        "field_type",
-        "is_required",
-        "is_encrypted",
-        "sensitivity",
-        "options_json",
-        "default_value",
-        "statistics_category",
-        "help_text",
-        "is_active",
-    )
     actions = ("deactivate_selected", "activate_selected")
 
     def get_readonly_fields(self, request, obj=None):

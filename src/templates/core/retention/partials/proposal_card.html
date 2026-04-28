@@ -1,19 +1,11 @@
 {% load i18n %}
 
-<div id="proposal-{{ proposal.pk }}" class="proposal-card bg-surface border-l-4 {% if proposal.urgency == 'red' %}border-red-500{% elif proposal.urgency == 'yellow' %}border-yellow-400{% else %}border-subtle{% endif %} rounded-md p-4 shadow-sm"
-     {% if proposal.status == 'pending' %}x-data="proposalCard"{% endif %}>
+<div id="proposal-{{ proposal.pk }}" class="proposal-card bg-white border-l-4 {% if proposal.urgency == 'red' %}border-red-500{% elif proposal.urgency == 'yellow' %}border-yellow-400{% else %}border-gray-300{% endif %} rounded-md p-4 shadow-sm"
+     {% if proposal.status == 'pending' %}x-data="{ showHoldForm: false }"{% endif %}>
 
     {# Header: status badge + due date #}
     <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2">
-            {% if proposal.status == 'pending' or proposal.status == 'deferred' %}
-            <label class="inline-flex items-center" aria-label="{% trans 'Auswählen' %}">
-                <input type="checkbox" name="proposal_ids" value="{{ proposal.pk }}"
-                       data-bulk-proposal
-                       @change="$dispatch('retention-bulk-change')"
-                       class="rounded border-subtle text-accent focus:ring-accent">
-            </label>
-            {% endif %}
             <span class="text-sm font-medium">{{ proposal.target_type }}</span>
             {% if proposal.status == 'pending' %}
             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800">{% trans "Ausstehend" %}</span>
@@ -23,11 +15,11 @@
             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">{% trans "Freigegeben" %}</span>
             {% endif %}
         </div>
-        <span class="text-xs text-ink-muted">{% trans "Frist:" %} {{ proposal.deletion_due_at|date:"d.m.Y" }}</span>
+        <span class="text-xs text-gray-500">{% trans "Frist:" %} {{ proposal.deletion_due_at|date:"d.m.Y" }}</span>
     </div>
 
     {# Details #}
-    <div class="text-sm text-ink-muted mb-3 space-y-0.5">
+    <div class="text-sm text-gray-600 mb-3 space-y-0.5">
         {% if proposal.details.pseudonym %}
         <div>{% trans "Pseudonym:" %} {{ proposal.details.pseudonym }}</div>
         {% endif %}
@@ -38,7 +30,7 @@
         <div>{% trans "Datum:" %} {{ proposal.details.occurred_at }}</div>
         {% endif %}
         {% if proposal.details.event_id %}
-        <div class="text-xs text-ink-muted">ID: {{ proposal.details.event_id }}</div>
+        <div class="text-xs text-gray-400">ID: {{ proposal.details.event_id }}</div>
         {% endif %}
     </div>
 
@@ -52,35 +44,35 @@
                 class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700">
             {% trans "Freigeben" %}
         </button>
-        <button @click="toggleHoldForm()"
+        <button @click="showHoldForm = !showHoldForm"
                 class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700">
             {% trans "Hold setzen" %}
         </button>
     </div>
 
     {# Hold form (hidden by default) #}
-    <div x-show="showHoldForm" x-cloak x-transition class="mt-3 p-3 bg-canvas rounded-md border border-subtle">
+    <div x-show="showHoldForm" x-cloak x-transition class="mt-3 p-3 bg-gray-50 rounded-md border border-gray-200">
         <form hx-post="{% url 'core:retention_hold' pk=proposal.pk %}"
               hx-target="#proposal-{{ proposal.pk }}"
               hx-swap="outerHTML">
             <div class="mb-2">
-                <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Begründung" %} *</label>
+                <label class="block text-xs font-medium text-gray-700 mb-1">{% trans "Begründung" %} *</label>
                 <textarea name="reason" rows="2" required
-                          class="w-full rounded-md border-subtle text-sm focus:border-accent focus:ring-1 focus:ring-accent"
+                          class="w-full rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                           placeholder="{% trans 'Grund für den Hold...' %}"></textarea>
             </div>
             <div class="mb-3">
-                <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Ablaufdatum" %} ({% trans "optional" %})</label>
+                <label class="block text-xs font-medium text-gray-700 mb-1">{% trans "Ablaufdatum" %} ({% trans "optional" %})</label>
                 <input type="date" name="expires_at"
-                       class="w-full rounded-md border-subtle text-sm focus:border-accent focus:ring-1 focus:ring-accent">
+                       class="w-full rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
             </div>
             <div class="flex items-center gap-2">
                 <button type="submit"
                         class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700">
                     {% trans "Hold erstellen" %}
                 </button>
-                <button type="button" @click="toggleHoldForm()"
-                        class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-surface border border-subtle text-ink-soft hover:bg-canvas">
+                <button type="button" @click="showHoldForm = false"
+                        class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
                     {% trans "Abbrechen" %}
                 </button>
             </div>
@@ -89,7 +81,7 @@
 
     {% elif proposal.status == 'held' %}
     {% if proposal.active_hold %}
-    <div class="bg-blue-50 border border-blue-200 rounded-[10px] p-3 mb-2">
+    <div class="bg-blue-50 border border-blue-200 rounded-md p-3 mb-2">
         <div class="text-sm text-blue-800 space-y-1">
             <div><span class="font-medium">{% trans "Begründung:" %}</span> {{ proposal.active_hold.reason }}</div>
             {% if proposal.active_hold.expires_at %}

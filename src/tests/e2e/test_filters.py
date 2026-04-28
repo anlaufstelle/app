@@ -8,7 +8,6 @@ Testet:
 import re
 
 import pytest
-from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -44,9 +43,9 @@ class TestWorkItemInboxFilters:
 
         # Nach Aufgabe filtern
         page.select_option("#filter-item-type", value="task")
+        # Warten bis HTMX-Swap abgeschlossen ist
+        page.wait_for_timeout(1000)
         page.wait_for_load_state("domcontentloaded")
-        # HTMX-Swap: Hinweis-Eintrag muss aus der Inbox verschwinden.
-        expect(page.locator("#inbox-content").locator("text=E2E-Hinweis-Filter")).to_have_count(0)
 
         assert page.locator("text=E2E-Aufgabe-Filter").count() > 0
         assert page.locator("#inbox-content").locator("text=E2E-Hinweis-Filter").count() == 0
@@ -63,9 +62,8 @@ class TestWorkItemInboxFilters:
 
         # Nach Dringend filtern
         page.select_option("#filter-priority", value="urgent")
+        page.wait_for_timeout(1000)
         page.wait_for_load_state("domcontentloaded")
-        # HTMX-Swap: Normal-Eintrag muss aus der Inbox verschwinden.
-        expect(page.locator("#inbox-content").locator("text=E2E-Normal-Filter")).to_have_count(0)
 
         assert page.locator("text=E2E-Dringend-Filter").count() > 0
         assert page.locator("#inbox-content").locator("text=E2E-Normal-Filter").count() == 0

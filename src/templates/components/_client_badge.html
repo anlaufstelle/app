@@ -1,6 +1,5 @@
 {% load i18n %}
 
-{# Stage-Farben aus Design (als-mock.jsx stageMeta): qualified=purple, identified=green, anonymous=gray #}
-<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold {% if client.contact_stage == 'qualified' %}bg-purple-100 text-purple-800{% elif client.contact_stage == 'identified' %}bg-green-100 text-green-800{% else %}bg-canvas text-ink-soft{% endif %}">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if client.contact_stage == 'qualified' %}bg-purple-100 text-purple-800{% else %}bg-green-100 text-green-800{% endif %}">
     {{ client.get_contact_stage_display }}
 </span>
