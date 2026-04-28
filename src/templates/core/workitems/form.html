@@ -5,18 +5,18 @@
 
 {% block content %}
 <div class="max-w-2xl">
-    <h1 class="text-2xl font-bold mb-6">{% if workitem %}{% trans "Aufgabe bearbeiten" %}{% else %}{% trans "Neue Aufgabe" %}{% endif %}</h1>
+    <h1 class="text-[22px] font-bold text-ink mb-6">{% if workitem %}{% trans "Aufgabe bearbeiten" %}{% else %}{% trans "Neue Aufgabe" %}{% endif %}</h1>
 
-    <form method="post" class="space-y-6">
+    <form method="post" class="space-y-5">
         {% csrf_token %}
         {% if workitem %}
         <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
         {% endif %}
 
-        <div class="bg-white border border-gray-200 rounded-md p-4 space-y-4">
+        <div class="bg-surface border border-subtle rounded-[10px] p-5 space-y-4">
             {# Typ #}
             <div>
-                <label for="id_item_type" class="block text-sm font-medium text-gray-700 mb-1">{{ form.item_type.label }}</label>
+                <label for="id_item_type" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.item_type.label }}</label>
                 {{ form.item_type }}
                 {% for error in form.item_type.errors %}
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>
@@ -25,7 +25,7 @@
 
             {# Titel #}
             <div>
-                <label for="id_title" class="block text-sm font-medium text-gray-700 mb-1">{{ form.title.label }} *</label>
+                <label for="id_title" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.title.label }} *</label>
                 {{ form.title }}
                 {% for error in form.title.errors %}
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>
@@ -34,7 +34,7 @@
 
             {# Beschreibung #}
             <div>
-                <label for="id_description" class="block text-sm font-medium text-gray-700 mb-1">{{ form.description.label }}</label>
+                <label for="id_description" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.description.label }}</label>
                 {{ form.description }}
                 {% for error in form.description.errors %}
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>
@@ -43,7 +43,7 @@
 
             {# Priorität #}
             <div>
-                <label for="id_priority" class="block text-sm font-medium text-gray-700 mb-1">{{ form.priority.label }}</label>
+                <label for="id_priority" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.priority.label }}</label>
                 {{ form.priority }}
                 {% for error in form.priority.errors %}
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>
@@ -68,13 +68,13 @@
                     if (input) { input.value = val; input.dispatchEvent(new Event('change')); }
                 }
             }">
-                <label for="id_due_date" class="block text-sm font-medium text-gray-700 mb-1">{{ form.due_date.label }}</label>
+                <label for="id_due_date" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.due_date.label }}</label>
                 {{ form.due_date }}
-                <div class="mt-1 flex flex-wrap gap-1">
-                    <button type="button" @click="setDate('today')" class="px-2 py-0.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded">{% trans "Heute" %}</button>
-                    <button type="button" @click="setDate('tomorrow')" class="px-2 py-0.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded">{% trans "Morgen" %}</button>
-                    <button type="button" @click="setDate('next_friday')" class="px-2 py-0.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded">{% trans "Nächste Woche" %}</button>
-                    <button type="button" @click="setDate('2weeks')" class="px-2 py-0.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded">{% trans "In 2 Wochen" %}</button>
+                <div class="mt-1.5 flex flex-wrap gap-1">
+                    <button type="button" @click="setDate('today')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Heute" %}</button>
+                    <button type="button" @click="setDate('tomorrow')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Morgen" %}</button>
+                    <button type="button" @click="setDate('next_friday')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Nächste Woche" %}</button>
+                    <button type="button" @click="setDate('2weeks')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "In 2 Wochen" %}</button>
                 </div>
                 {% for error in form.due_date.errors %}
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>
@@ -99,15 +99,15 @@
                     if (input) { input.value = val; input.dispatchEvent(new Event('change')); }
                 }
             }">
-                <label for="id_remind_at" class="block text-sm font-medium text-gray-700 mb-1">{{ form.remind_at.label }}</label>
+                <label for="id_remind_at" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.remind_at.label }}</label>
                 {{ form.remind_at }}
                 {% if form.remind_at.help_text %}
-                <p class="mt-1 text-xs text-gray-500">{{ form.remind_at.help_text }}</p>
+                <p class="mt-1 text-[11px] text-ink-muted">{{ form.remind_at.help_text }}</p>
                 {% endif %}
-                <div class="mt-1 flex flex-wrap gap-1">
-                    <button type="button" @click="setRemindDate('tomorrow')" class="px-2 py-0.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded">{% trans "Morgen" %}</button>
-                    <button type="button" @click="setRemindDate('next_friday')" class="px-2 py-0.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded">{% trans "Nächste Woche" %}</button>
-                    <button type="button" @click="setRemindDate('2weeks')" class="px-2 py-0.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded">{% trans "In 2 Wochen" %}</button>
+                <div class="mt-1.5 flex flex-wrap gap-1">
+                    <button type="button" @click="setRemindDate('tomorrow')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Morgen" %}</button>
+                    <button type="button" @click="setRemindDate('next_friday')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Nächste Woche" %}</button>
+                    <button type="button" @click="setRemindDate('2weeks')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "In 2 Wochen" %}</button>
                 </div>
                 {% for error in form.remind_at.errors %}
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>
@@ -116,10 +116,10 @@
 
             {# Wiederholung #}
             <div>
-                <label for="id_recurrence" class="block text-sm font-medium text-gray-700 mb-1">{{ form.recurrence.label }}</label>
+                <label for="id_recurrence" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.recurrence.label }}</label>
                 {{ form.recurrence }}
                 {% if form.recurrence.help_text %}
-                <p class="mt-1 text-xs text-gray-500">{{ form.recurrence.help_text }}</p>
+                <p class="mt-1 text-[11px] text-ink-muted">{{ form.recurrence.help_text }}</p>
                 {% endif %}
                 {% for error in form.recurrence.errors %}
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>
@@ -134,7 +134,7 @@
                 show: false,
                 _justSelected: false
             }">
-                <label class="block text-sm font-medium text-gray-700 mb-1">{% trans "Klientel" %}</label>
+                <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Klientel" %}</label>
                 <div class="relative">
                     <input type="text"
                            x-model="query"
@@ -142,17 +142,17 @@
                            @focus="if(!show && !_justSelected) { fetch(`{% url 'core:client_autocomplete' %}?q=${encodeURIComponent(query)}`).then(r => r.json()).then(d => { results = d; show = d.length > 0 }) }"
                            @click.away="show = false"
                            placeholder="{% trans 'Pseudonym eingeben...' %}"
-                           class="w-full border border-gray-300 rounded-md px-3 py-2"
+                           class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
                            autocomplete="off">
                     <input type="hidden" name="client" x-model="selectedId">
 
-                    <div x-show="show" x-cloak class="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-auto">
+                    <div x-show="show" x-cloak class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
                         <template x-for="c in results" :key="c.id">
                             <button type="button"
                                     @click="_justSelected = true; selectedId = c.id; query = c.pseudonym; show = false"
-                                    class="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 flex items-center justify-between">
-                                <span x-text="c.pseudonym"></span>
-                                <span class="text-xs text-gray-500" x-text="c.stage"></span>
+                                    class="w-full text-left px-3 py-2 text-[13px] text-ink hover:bg-accent-light flex items-center justify-between">
+                                <span class="font-semibold" x-text="c.pseudonym"></span>
+                                <span class="text-[11px] text-ink-muted" x-text="c.stage"></span>
                             </button>
                         </template>
                     </div>
@@ -161,7 +161,7 @@
 
             {# Zugewiesen an #}
             <div>
-                <label for="id_assigned_to" class="block text-sm font-medium text-gray-700 mb-1">{{ form.assigned_to.label }}</label>
+                <label for="id_assigned_to" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.assigned_to.label }}</label>
                 {{ form.assigned_to }}
                 {% for error in form.assigned_to.errors %}
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>
@@ -169,11 +169,11 @@
             </div>
         </div>
 
-        <div class="flex flex-col sm:flex-row gap-3">
-            <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
+        <div class="flex flex-col sm:flex-row gap-2.5">
+            <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-accent text-white text-[13px] font-semibold rounded-md">
                 {% trans "Speichern" %}
             </button>
-            <a href="{% url 'core:workitem_inbox' %}" class="w-full sm:w-auto text-center px-4 py-2 border border-gray-300 text-sm rounded-md hover:bg-gray-50">{% trans "Abbrechen" %}</a>
+            <a href="{% url 'core:workitem_inbox' %}" class="w-full sm:w-auto text-center px-4 py-2 bg-surface border border-subtle text-[13px] text-ink-soft rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
         </div>
     </form>
 </div>

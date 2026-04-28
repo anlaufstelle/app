@@ -41,12 +41,12 @@ class TestDocTypeFilterPreservedOnTimeFilterSwitch:
         assert count >= 2, "Mindestens 2 Zeitfilter-Tabs erwartet"
 
         # Den zweiten Tab klicken (ein anderer als der aktuell aktive)
-        # Finde einen Tab der nicht aktiv ist (kein bg-indigo-50)
+        # Finde einen Tab der nicht aktiv ist (kein bg-accent-light)
         clicked = False
         for i in range(count):
             btn = time_filter_buttons.nth(i)
             classes = btn.get_attribute("class") or ""
-            if "bg-indigo-50" not in classes:
+            if "bg-accent-light" not in classes:
                 btn.click()
                 clicked = True
                 break

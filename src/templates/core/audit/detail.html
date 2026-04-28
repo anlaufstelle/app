@@ -6,45 +6,45 @@
 {% block content %}
 <div class="max-w-2xl">
     <div class="flex items-center justify-between mb-6">
-        <h1 class="text-2xl font-bold">{% trans "Audit-Log Detail" %}</h1>
+        <h1 class="text-[22px] font-bold text-ink">{% trans "Audit-Log Detail" %}</h1>
     </div>
 
-    <div class="bg-white border border-gray-200 rounded-md p-4 space-y-4">
+    <div class="bg-surface border border-subtle rounded-[10px] p-4 space-y-4">
         <div class="grid grid-cols-2 gap-4">
             <div>
-                <span class="text-xs text-gray-500 uppercase">{% trans "Zeitstempel" %}</span>
+                <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zeitstempel" %}</span>
                 <p class="text-sm font-medium">{{ entry.timestamp|date:"d.m.Y H:i:s" }}</p>
             </div>
             <div>
-                <span class="text-xs text-gray-500 uppercase">{% trans "Benutzer" %}</span>
+                <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Benutzer" %}</span>
                 <p class="text-sm font-medium">
-                    {% if entry.user %}{{ entry.user }}{% else %}<span class="text-gray-400">–</span>{% endif %}
+                    {% if entry.user %}{{ entry.user }}{% else %}<span class="text-ink-muted">–</span>{% endif %}
                 </p>
             </div>
             <div>
-                <span class="text-xs text-gray-500 uppercase">{% trans "Aktion" %}</span>
+                <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktion" %}</span>
                 <p class="text-sm font-medium">
-                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-700">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-accent-light text-accent">
                         {{ entry.get_action_display }}
                     </span>
                 </p>
             </div>
             <div>
-                <span class="text-xs text-gray-500 uppercase">{% trans "IP-Adresse" %}</span>
+                <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "IP-Adresse" %}</span>
                 <p class="text-sm font-mono">{{ entry.ip_address|default:"–" }}</p>
             </div>
             <div>
-                <span class="text-xs text-gray-500 uppercase">{% trans "Zieltyp" %}</span>
+                <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zieltyp" %}</span>
                 <p class="text-sm font-medium">{{ entry.target_type|default:"–" }}</p>
             </div>
             <div>
-                <span class="text-xs text-gray-500 uppercase">{% trans "Ziel-ID" %}</span>
-                <p class="text-sm font-mono text-gray-500">{{ entry.target_id|default:"–" }}</p>
+                <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Ziel-ID" %}</span>
+                <p class="text-sm font-mono text-ink-muted">{{ entry.target_id|default:"–" }}</p>
             </div>
         </div>
 
         <div>
-            <span class="text-xs text-gray-500 uppercase">{% trans "Details" %}</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Details" %}</span>
             <div class="mt-1">
                 {{ entry.detail|pretty_json }}
             </div>
@@ -52,7 +52,7 @@
     </div>
 
     <div class="mt-4">
-        <a href="{% url 'core:audit_log' %}" class="text-sm text-indigo-600 hover:underline">{% trans "Zurück zur Liste" %}</a>
+        <a href="{% url 'core:audit_log' %}" class="text-sm text-accent hover:underline">{% trans "Zurück zur Liste" %}</a>
     </div>
 </div>
 {% endblock %}

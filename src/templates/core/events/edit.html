@@ -5,21 +5,21 @@
 
 {% block content %}
 <div class="max-w-2xl">
-    <h1 class="text-2xl font-bold mb-6">{% trans "Ereignis bearbeiten" %}</h1>
+    <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Ereignis bearbeiten" %}</h1>
 
     {# Meta (readonly) #}
-    <div class="bg-gray-50 border border-gray-200 rounded-md p-4 mb-4">
+    <div class="bg-canvas border border-subtle rounded-[10px] p-4 mb-4">
         <dl class="grid grid-cols-2 gap-4 text-sm">
             <div>
-                <dt class="text-gray-500">{% trans "Dokumentationstyp" %}</dt>
+                <dt class="text-ink-muted">{% trans "Dokumentationstyp" %}</dt>
                 <dd class="font-medium">{{ event.document_type.name }}</dd>
             </div>
             <div>
-                <dt class="text-gray-500">{% trans "Zeitpunkt" %}</dt>
+                <dt class="text-ink-muted">{% trans "Zeitpunkt" %}</dt>
                 <dd class="font-medium">{{ event.occurred_at|date:"d.m.Y H:i" }}</dd>
             </div>
             <div>
-                <dt class="text-gray-500">{% trans "Klientel" %}</dt>
+                <dt class="text-ink-muted">{% trans "Klientel" %}</dt>
                 <dd class="font-medium">
                     {% if event.is_anonymous %}{% trans "Anonym" %}{% elif event.client %}{{ event.client.pseudonym }}{% else %}–{% endif %}
                 </dd>
@@ -33,11 +33,11 @@
         <input type="hidden" name="expected_updated_at" value="{{ event.updated_at.isoformat }}">
 
         {% if data_form.fields %}
-        <div class="bg-white border border-gray-200 rounded-md p-4 space-y-4">
-            <h2 class="text-sm font-semibold text-gray-500 uppercase">{% trans "Felder" %}</h2>
+        <div class="bg-surface border border-subtle rounded-[10px] p-4 space-y-4">
+            <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Felder" %}</h2>
             {% for field in data_form %}
             <div>
-                <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-ink-soft mb-1">
                     {{ field.label }}{% if field.field.required %} *{% endif %}
                 </label>
 
@@ -47,14 +47,14 @@
                 {% if entries %}
                 <ul class="mb-2 space-y-2" data-testid="attachment-entries-{{ field.name }}">
                     {% for entry in entries %}
-                    <li class="flex flex-wrap items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-md"
+                    <li class="flex flex-wrap items-center gap-2 p-2 bg-canvas border border-subtle rounded-[10px]"
                         data-entry-id="{{ entry.entry_id }}">
                         <a href="{% url 'core:attachment_download' event.pk entry.attachment_id %}"
-                           class="text-indigo-600 hover:underline text-sm">
+                           class="text-accent hover:underline text-sm">
                             {{ entry.filename }}
                         </a>
-                        <span class="text-xs text-gray-500">({{ entry.size }})</span>
-                        <label class="ml-auto inline-flex items-center gap-1 text-xs text-gray-600">
+                        <span class="text-xs text-ink-muted">({{ entry.size }})</span>
+                        <label class="ml-auto inline-flex items-center gap-1 text-xs text-ink-muted">
                             <span>{% trans "Ersetzen" %}:</span>
                             <input type="file" name="{{ field.name }}__replace__{{ entry.entry_id }}"
                                    class="text-xs" data-testid="attachment-replace-{{ entry.entry_id }}">
@@ -72,7 +72,7 @@
                     {% endfor %}
                 </ul>
                 {% endif %}
-                <p class="text-xs text-gray-500 mb-1">{% trans "Weitere Dateien hinzufügen (mehrere möglich):" %}</p>
+                <p class="text-xs text-ink-muted mb-1">{% trans "Weitere Dateien hinzufügen (mehrere möglich):" %}</p>
                 {{ field }}
                 {% endwith %}
                 {% else %}
@@ -91,19 +91,19 @@
         </div>
 
         <div class="flex flex-col sm:flex-row gap-3">
-            <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
+            <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-accent text-white text-sm font-medium rounded-md hover:bg-accent">
                 {% trans "Änderungen speichern" %}
             </button>
-            <a href="{% url 'core:event_detail' event.pk %}" class="w-full sm:w-auto text-center px-4 py-2 border border-gray-300 text-sm rounded-md hover:bg-gray-50">{% trans "Abbrechen" %}</a>
+            <a href="{% url 'core:event_detail' event.pk %}" class="w-full sm:w-auto text-center px-4 py-2 border border-subtle text-sm rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
         </div>
         {% else %}
-        <div class="bg-yellow-50 border border-yellow-200 rounded-md p-4">
+        <div class="bg-yellow-50 border border-yellow-200 rounded-[10px] p-4">
             <p class="text-sm text-yellow-800">
                 {% trans "Alle Felder dieses Ereignisses sind für Ihre Rolle eingeschränkt. Eine Bearbeitung ist nicht möglich." %}
             </p>
         </div>
         <div class="mt-4">
-            <a href="{% url 'core:event_detail' event.pk %}" class="text-sm text-indigo-600 hover:underline">{% trans "Zurück" %}</a>
+            <a href="{% url 'core:event_detail' event.pk %}" class="text-sm text-accent hover:underline">{% trans "Zurück" %}</a>
         </div>
         {% endif %}
     </form>

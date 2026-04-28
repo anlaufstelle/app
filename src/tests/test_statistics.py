@@ -216,8 +216,8 @@ class TestStatisticsViewHTMX:
         content = response.content.decode()
         # Buttons muessen im Response enthalten sein
         assert "statistics-content" in content or "hx-target" in content
-        # Der aktive Button (Quartal) muss hervorgehoben sein
-        assert "bg-indigo-600" in content
+        # Der aktive Button (Quartal) muss hervorgehoben sein (Theme Gruen, #663)
+        assert "bg-accent" in content
 
     def test_htmx_request_quarter_button_active(self, client, admin_user):
         """Bei period=quarter muss der Quartal-Button aktiv sein."""
@@ -365,7 +365,7 @@ class TestStatisticsYearPeriod:
         )
         content = response.content.decode()
         assert "Jahr" in content
-        assert "bg-indigo-600" in content
+        assert "bg-accent" in content  # Theme Gruen, #663
 
     @patch("core.views.statistics.timezone")
     def test_year_navigation_arrows(self, mock_tz, client, admin_user):

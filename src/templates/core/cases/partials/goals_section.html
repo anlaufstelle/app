@@ -1,25 +1,25 @@
 {% load i18n %}
 
 <div id="goals-section" aria-live="polite" role="region">
-    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{% trans "Wirkungsziele" %}</h2>
+    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Wirkungsziele" %}</h2>
 
     {% if goals %}
     <div class="space-y-3">
         {% for goal in goals %}
-        <div class="bg-white border border-gray-200 rounded-md p-4" x-data="{ editing: false }">
+        <div class="bg-surface border border-subtle rounded-[10px] p-4" x-data="{ editing: false }">
             <div class="flex items-start justify-between">
                 <div class="flex-1 min-w-0" x-show="!editing">
                     <div class="flex items-center">
-                        <h3 class="font-medium text-gray-900">{{ goal.title }}</h3>
+                        <h3 class="font-medium text-ink">{{ goal.title }}</h3>
                         <button type="button" @click="editing = true"
-                                class="ml-2 text-gray-400 hover:text-gray-600" title="{% trans 'Bearbeiten' %}" aria-label="{% trans 'Bearbeiten' %}">
+                                class="ml-2 text-ink-muted hover:text-ink-muted" title="{% trans 'Bearbeiten' %}" aria-label="{% trans 'Bearbeiten' %}">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                             </svg>
                         </button>
                     </div>
                     {% if goal.description %}
-                    <p class="text-sm text-gray-600 mt-1 whitespace-pre-wrap">{{ goal.description }}</p>
+                    <p class="text-sm text-ink-muted mt-1 whitespace-pre-wrap">{{ goal.description }}</p>
                     {% endif %}
                 </div>
                 {# Inline edit form #}
@@ -31,16 +31,16 @@
                           class="space-y-2">
                         {% csrf_token %}
                         <input type="text" name="title" value="{{ goal.title }}"
-                               class="w-full text-sm font-medium border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                               class="w-full text-sm font-medium border border-subtle rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-accent"
                                placeholder="{% trans 'Titel' %}">
                         <textarea name="description" rows="2"
-                                  class="w-full text-sm border border-gray-300 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                  class="w-full text-sm border border-subtle rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-accent"
                                   placeholder="{% trans 'Beschreibung (optional)' %}">{{ goal.description }}</textarea>
                         <div class="flex items-center space-x-2">
-                            <button type="submit" class="text-sm bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700">
+                            <button type="submit" class="text-sm bg-accent text-white px-3 py-1 rounded hover:bg-accent">
                                 {% trans "Speichern" %}
                             </button>
-                            <button type="button" @click="editing = false" class="text-sm text-gray-500 hover:text-gray-700">
+                            <button type="button" @click="editing = false" class="text-sm text-ink-muted hover:text-ink-soft">
                                 {% trans "Abbrechen" %}
                             </button>
                         </div>
@@ -67,7 +67,7 @@
                       hx-target="#goals-section"
                       hx-swap="outerHTML">
                     {% csrf_token %}
-                    <button type="submit" class="text-sm text-gray-600 hover:text-gray-800">
+                    <button type="submit" class="text-sm text-ink-muted hover:text-ink-soft">
                         {% trans "Nicht erreicht" %}
                     </button>
                 </form>
@@ -86,7 +86,7 @@
 
             {# Milestones checklist #}
             {% if goal.milestones.all %}
-            <div class="mt-3 border-t border-gray-100 pt-3">
+            <div class="mt-3 border-t border-subtle pt-3">
                 <ul class="space-y-1">
                     {% for milestone in goal.milestones.all %}
                     <li class="flex items-center justify-between group">
@@ -101,12 +101,12 @@
                                 <svg class="w-4 h-4 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                                 </svg>
-                                <span class="text-gray-400 line-through">{{ milestone.title }}</span>
+                                <span class="text-ink-muted line-through">{{ milestone.title }}</span>
                                 {% else %}
-                                <svg class="w-4 h-4 text-gray-300 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg class="w-4 h-4 text-ink-muted mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <circle cx="12" cy="12" r="10" stroke-width="2" />
                                 </svg>
-                                <span class="text-gray-700">{{ milestone.title }}</span>
+                                <span class="text-ink-soft">{{ milestone.title }}</span>
                                 {% endif %}
                             </button>
                         </form>
@@ -135,15 +135,15 @@
                       class="flex items-center space-x-2">
                     {% csrf_token %}
                     <input type="text" name="title" placeholder="{% trans 'Neuer Meilenstein' %}" required
-                           class="flex-1 text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500">
-                    <button type="submit" class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">+</button>
+                           class="flex-1 text-sm border border-subtle rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-accent">
+                    <button type="submit" class="text-sm text-accent hover:text-accent font-medium">+</button>
                 </form>
             </div>
         </div>
         {% endfor %}
     </div>
     {% else %}
-    <p class="text-sm text-gray-400">{% trans "Noch keine Wirkungsziele vorhanden." %}</p>
+    <p class="text-sm text-ink-muted">{% trans "Noch keine Wirkungsziele vorhanden." %}</p>
     {% endif %}
 
     {# Add goal form #}
@@ -155,8 +155,8 @@
               class="flex items-center space-x-2">
             {% csrf_token %}
             <input type="text" name="title" placeholder="{% trans 'Neues Wirkungsziel' %}" required
-                   class="flex-1 text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500">
-            <button type="submit" class="text-sm bg-indigo-600 text-white px-3 py-1 rounded hover:bg-indigo-700">
+                   class="flex-1 text-sm border border-subtle rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-accent">
+            <button type="submit" class="text-sm bg-accent text-white px-3 py-1 rounded hover:bg-accent">
                 {% trans "Hinzufügen" %}
             </button>
         </form>

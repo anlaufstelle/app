@@ -17,10 +17,10 @@
         </ul>
     </div>
 
-    <div class="bg-white border border-gray-200 rounded-md p-6 mb-4">
+    <div class="bg-surface border border-subtle rounded-[10px] p-6 mb-4">
         <ul class="grid grid-cols-2 gap-2 font-mono text-center text-base" id="backup-codes-list" data-testid="backup-codes-list">
             {% for code in codes %}
-            <li class="py-2 px-3 bg-gray-50 rounded select-all">{{ code }}</li>
+            <li class="py-2 px-3 bg-canvas rounded select-all">{{ code }}</li>
             {% endfor %}
         </ul>
     </div>
@@ -29,31 +29,31 @@
         <button type="button"
                 data-testid="backup-codes-copy"
                 @click="navigator.clipboard.writeText(Array.from(document.querySelectorAll('#backup-codes-list li')).map(li => li.textContent.trim()).join('\n'))"
-                class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm rounded-md hover:bg-gray-50">
+                class="inline-flex items-center px-3 py-2 border border-subtle text-sm rounded-md hover:bg-canvas">
             {% trans "In die Zwischenablage kopieren" %}
         </button>
         <button type="button"
                 data-testid="backup-codes-download"
                 @click="const blob = new Blob([Array.from(document.querySelectorAll('#backup-codes-list li')).map(li => li.textContent.trim()).join('\n') + '\n'], {type:'text/plain'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'anlaufstelle-backup-codes.txt'; a.click(); URL.revokeObjectURL(url);"
-                class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm rounded-md hover:bg-gray-50">
+                class="inline-flex items-center px-3 py-2 border border-subtle text-sm rounded-md hover:bg-canvas">
             {% trans "Als Datei herunterladen" %}
         </button>
         <button type="button" @click="window.print()"
-                class="inline-flex items-center px-3 py-2 border border-gray-300 text-sm rounded-md hover:bg-gray-50">
+                class="inline-flex items-center px-3 py-2 border border-subtle text-sm rounded-md hover:bg-canvas">
             {% trans "Drucken" %}
         </button>
     </div>
 
     <form method="get" action="{% url 'mfa_settings' %}" class="print:hidden">
-        <label class="inline-flex items-start gap-2 mb-3 text-sm text-gray-700">
+        <label class="inline-flex items-start gap-2 mb-3 text-sm text-ink-soft">
             <input type="checkbox" x-model="confirmed" data-testid="backup-codes-confirm"
-                   class="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500">
+                   class="mt-0.5 rounded border-subtle text-accent focus:ring-accent">
             <span>{% trans "Ich habe die Codes sicher gespeichert." %}</span>
         </label>
         <div>
             <button type="submit" :disabled="!confirmed"
                     data-testid="backup-codes-continue"
-                    class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                    class="inline-flex items-center px-4 py-2 bg-accent text-white text-sm font-medium rounded-md hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed">
                 {% trans "Zu den 2FA-Einstellungen" %}
             </button>
         </div>

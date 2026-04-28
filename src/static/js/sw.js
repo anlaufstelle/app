@@ -15,7 +15,7 @@
 
 importScripts("/static/js/url-patterns.js");
 
-const CACHE_NAME = "anlaufstelle-v5";
+const CACHE_NAME = "anlaufstelle-v6";
 const APP_SHELL = [
     "/static/css/styles.css",
     "/static/icons/icon-192.png",

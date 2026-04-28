@@ -14,23 +14,25 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 **B. Tägliche Arbeit**
 5. [Wie funktioniert der Zeitstrom?](#5-wie-funktioniert-der-zeitstrom)
 6. [Wie funktioniert die Übergabe (Schichtübergabe)?](#6-wie-funktioniert-die-übergabe-schichtübergabe)
-7. [Wie lade ich eine Datei an ein Ereignis an?](#7-wie-lade-ich-eine-datei-an-ein-ereignis-an)
-8. [Kann ich offline arbeiten, wenn ich im Einsatz unterwegs bin?](#8-kann-ich-offline-arbeiten-wenn-ich-im-einsatz-unterwegs-bin)
-9. [Die Suche findet meinen Klienten nicht, obwohl der Name fast passt.](#9-die-suche-findet-meinen-klienten-nicht-obwohl-der-name-fast-passt)
-10. [Wie lege ich eine Schnell-Vorlage (Quick-Template) an?](#10-wie-lege-ich-eine-schnell-vorlage-quick-template-an)
+7. [Was ist der Unterschied zwischen „Hinweis" und „Aufgabe"?](#7-was-ist-der-unterschied-zwischen-hinweis-und-aufgabe)
+8. [Was bedeutet die „Wiedervorlage" bei einer Aufgabe?](#8-was-bedeutet-die-wiedervorlage-bei-einer-aufgabe)
+9. [Wie lade ich eine Datei an ein Ereignis an?](#9-wie-lade-ich-eine-datei-an-ein-ereignis-an)
+10. [Kann ich offline arbeiten, wenn ich im Einsatz unterwegs bin?](#10-kann-ich-offline-arbeiten-wenn-ich-im-einsatz-unterwegs-bin)
+11. [Die Suche findet meinen Klienten nicht, obwohl der Name fast passt.](#11-die-suche-findet-meinen-klienten-nicht-obwohl-der-name-fast-passt)
+12. [Wie lege ich eine Schnell-Vorlage (Quick-Template) an?](#12-wie-lege-ich-eine-schnell-vorlage-quick-template-an)
 
 **C. Rollen & Datenschutz**
-11. [Wie funktionieren Zugriffsberechtigungen?](#11-wie-funktionieren-zugriffsberechtigungen)
-12. [Was bedeutet die Sensitivitätsstufe?](#12-was-bedeutet-die-sensitivitätsstufe-niedrigmittelhoch)
-13. [Wie funktioniert das Löschsystem (4-Augen-Prinzip)?](#13-wie-funktioniert-das-löschsystem-4-augen-prinzip)
-14. [Was hat KEINEN Löschmechanismus?](#14-was-hat-keinen-löschmechanismus)
+13. [Wie funktionieren Zugriffsberechtigungen?](#13-wie-funktionieren-zugriffsberechtigungen)
+14. [Was bedeutet die Sensitivitätsstufe?](#14-was-bedeutet-die-sensitivitätsstufe-niedrigmittelhoch)
+15. [Wie funktioniert das Löschsystem (4-Augen-Prinzip)?](#15-wie-funktioniert-das-löschsystem-4-augen-prinzip)
+16. [Was hat KEINEN Löschmechanismus?](#16-was-hat-keinen-löschmechanismus)
 
 **D. Administration & Betrieb**
-15. [Wie funktionieren Aufbewahrungsfristen?](#15-wie-funktionieren-aufbewahrungsfristen)
-16. [Welche automatisierten Scripts gibt es?](#16-welche-automatisierten-scripts-gibt-es)
+17. [Wie funktionieren Aufbewahrungsfristen?](#17-wie-funktionieren-aufbewahrungsfristen)
+18. [Welche automatisierten Scripts gibt es?](#18-welche-automatisierten-scripts-gibt-es)
 
 **E. Fehlermeldungen**
-17. [Was bedeutet „Datensatz wurde zwischenzeitlich geändert"?](#17-was-bedeutet-datensatz-wurde-zwischenzeitlich-geändert)
+19. [Was bedeutet „Datensatz wurde zwischenzeitlich geändert"?](#19-was-bedeutet-datensatz-wurde-zwischenzeitlich-geändert)
 
 ---
 
@@ -171,7 +173,53 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 
 ---
 
-### 7. Wie lade ich eine Datei an ein Ereignis an?
+### 7. Was ist der Unterschied zwischen „Hinweis" und „Aufgabe"?
+
+**Inhaltlich:** Eine **Aufgabe** ist etwas, das aktiv erledigt werden soll (mit Status, Priorität, Frist). Ein **Hinweis** ist eher informativ — eine Notiz für das Team, ohne klare „muss-ich-tun"-Verpflichtung.
+
+**Technisch:** Beide sind derselbe Datentyp (`WorkItem`) und unterscheiden sich nur durch das Feld `item_type`. Es gibt **keinen funktionalen Unterschied** in Status, Wiederholung, Berechtigungen oder Benachrichtigungen — die Trennung ist rein eine Anzeige- und Filter-Hilfe für Nutzer:innen.
+
+**Wo zeigt sich der Unterschied?**
+
+| Stelle | Verhalten |
+|--------|-----------|
+| **Inbox-Filter** | Dropdown „Typ" filtert auf Hinweis oder Aufgabe |
+| **Listen / Detail** | Anzeige-Badge mit dem gewählten Typ |
+| **Default beim Anlegen** | „Aufgabe" |
+
+**Relevante Dateien:**
+- [`src/core/models/workitem.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/workitem.py) — `ItemType.HINT` / `ItemType.TASK`
+- [`src/core/views/workitems.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/workitems.py) — Filter in `WorkItemInboxView`
+
+---
+
+### 8. Was bedeutet die „Wiedervorlage" bei einer Aufgabe?
+
+Die **Wiedervorlage** (Feld `remind_at`) ist ein **optionales Frühwarn-Datum**, getrennt von der Fälligkeit (`due_date`). Sinngemäß: *„Vor dem Fälligkeitstermin (oder spätestens an ihm) soll die Aufgabe wieder ins Blickfeld rücken."*
+
+**Verhalten:**
+
+| Aspekt | Wert |
+|--------|------|
+| **Pflichtfeld?** | Nein — optional, Default leer |
+| **Verhältnis zu `due_date`** | Wiedervorlage muss **≤ Fälligkeit** sein (gleicher Tag erlaubt) |
+| **Sichtbarkeit** | Bis zum Wiedervorlage-Datum unauffällig in der Inbox; **am Vortag** gelbes Badge „Morgen fällig", **am Tag selbst** orange Badge „Heute fällig" |
+| **Erledigte Items** | Kein Badge mehr |
+| **Wiederholung** | Bei automatisch erzeugten Folgeaufgaben bleibt der Offset zwischen `remind_at` und `due_date` erhalten |
+
+**Wichtig:** „Aufpoppen" heißt **ausschließlich UI-Badge** in der Inbox/Liste, sobald die Seite aufgerufen wird — es gibt **keine E-Mail, keine Push-Nachricht, keinen Hintergrund-Job**.
+
+**Beispiel:** Eine Aufgabe ist fällig am 30.04., Wiedervorlage am 28.04. Bis zum 27.04. ist sie unauffällig in der Inbox. Am 28.04. erscheint das gelbe „Morgen fällig"-Badge, am 29.04. das orangene „Heute fällig"-Badge.
+
+**Relevante Dateien:**
+- [`src/core/models/workitem.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/workitem.py) — Feld `remind_at`
+- [`src/core/utils/dates.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/utils/dates.py) — `describe_remind_at()` (Badge-Logik)
+- [`src/core/forms/workitems.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/forms/workitems.py) — Validierung `remind_at ≤ due_date`
+- [`src/core/services/workitems.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/workitems.py) — Offset-Erhalt bei Wiederholung
+
+---
+
+### 9. Wie lade ich eine Datei an ein Ereignis an?
 
 Beim Anlegen oder Bearbeiten eines Ereignisses gibt es ein **Datei-Upload-Feld**. Die Datei wird vor der Ablage automatisch per **ClamAV auf Viren geprüft** und anschließend **verschlüsselt gespeichert** (AES-GCM im Encrypted File Vault).
 
@@ -188,7 +236,7 @@ Beim Anlegen oder Bearbeiten eines Ereignisses gibt es ein **Datei-Upload-Feld**
 
 ---
 
-### 8. Kann ich offline arbeiten, wenn ich im Einsatz unterwegs bin?
+### 10. Kann ich offline arbeiten, wenn ich im Einsatz unterwegs bin?
 
 Ja — seit v0.10 gibt es einen sicheren **Offline-Modus** für Streetwork und mobile Einsätze.
 
@@ -201,11 +249,11 @@ Ja — seit v0.10 gibt es einen sicheren **Offline-Modus** für Streetwork und m
 
 **Wichtig — Daten können verloren gehen:** Bei **Logout, Passwort-Änderung oder Schließen des Tabs** werden alle Offline-Daten unlesbar. Daher gilt: **Erst synchronisieren, dann ausloggen!**
 
-**Einschränkung:** Datei-Anhänge (siehe FAQ #7) sind offline nicht möglich — das ist eine bewusste Sicherheitsentscheidung.
+**Einschränkung:** Datei-Anhänge (siehe FAQ #9) sind offline nicht möglich — das ist eine bewusste Sicherheitsentscheidung.
 
 ---
 
-### 9. Die Suche findet meinen Klienten nicht, obwohl der Name fast passt.
+### 11. Die Suche findet meinen Klienten nicht, obwohl der Name fast passt.
 
 Die Suche ist **tippfehler-tolerant** (Fuzzy Search): „Muller" findet auch „Müller", „Tomas" auch „Thomas". Sie müssen den Namen nicht exakt kennen.
 
@@ -217,7 +265,7 @@ Die Suche ist **tippfehler-tolerant** (Fuzzy Search): „Muller" findet auch „
 
 ---
 
-### 10. Wie lege ich eine Schnell-Vorlage (Quick-Template) an?
+### 12. Wie lege ich eine Schnell-Vorlage (Quick-Template) an?
 
 Schnell-Vorlagen beschleunigen das Erfassen wiederkehrender Dokumentationen. Aktuell werden sie **ausschließlich durch Admins im Django-Admin-Bereich** gepflegt (siehe [Admin-Guide § 2.8](admin-guide.md#28-schnell-vorlagen-quick-templates)).
 
@@ -227,7 +275,7 @@ Schnell-Vorlagen beschleunigen das Erfassen wiederkehrender Dokumentationen. Akt
 
 ## C. Rollen & Datenschutz
 
-### 11. Wie funktionieren Zugriffsberechtigungen?
+### 13. Wie funktionieren Zugriffsberechtigungen?
 
 Zugriffsberechtigungen werden über drei Ebenen gesteuert: **Rolle**, **Einrichtung** und **Sensitivitätsstufe**. Zusammen bestimmen sie, welcher User welche Daten sehen und welche Aktionen ausführen darf.
 
@@ -292,7 +340,7 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 |-------|-------------|
 | **Eigentümer-Berechtigung** | Assistenz darf eigene Kontakte bearbeiten, auch wenn „Bearbeiten" sonst ab Fachkraft gilt |
 | **Zuweisungs-Berechtigung** | Arbeitsauftrag-Status kann vom Ersteller, Zugewiesenen oder der Leitung geändert werden |
-| **Sensitivitätsstufe** | Zusätzlich zur Rolle steuern `DocumentType.sensitivity` und `FieldTemplate.sensitivity` den Feldzugriff. `FieldTemplate.sensitivity` überschreibt den DocumentType-Level nach oben (→ [FAQ #12](#12-was-bedeutet-die-sensitivitätsstufe-niedrigmittelhoch)) |
+| **Sensitivitätsstufe** | Zusätzlich zur Rolle steuern `DocumentType.sensitivity` und `FieldTemplate.sensitivity` den Feldzugriff. `FieldTemplate.sensitivity` überschreibt den DocumentType-Level nach oben (→ [FAQ #14](#14-was-bedeutet-die-sensitivitätsstufe-niedrigmittelhoch)) |
 | **Passwort-Pflicht** | Bei gesetztem `must_change_password`-Flag wird der User vor jeder Aktion zum Passwortwechsel gezwungen |
 | **Session-Timeout** | Konfigurierbar pro Einrichtung (Standard: 30 Min.), nach Ablauf automatischer Logout |
 
@@ -323,7 +371,7 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 
 ---
 
-### 12. Was bedeutet die Sensitivitätsstufe (niedrig/mittel/hoch)?
+### 14. Was bedeutet die Sensitivitätsstufe (niedrig/mittel/hoch)?
 
 Die **Sensitivitätsstufe** steuert, welche Benutzerrolle welche Dokumentationseinträge und Felder sehen darf. Konfiguration pro `DocumentType`.
 
@@ -344,7 +392,7 @@ Die **Sensitivitätsstufe** steuert, welche Benutzerrolle welche Dokumentationse
 - [`src/core/models/document_type.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/document_type.py) — `Sensitivity`-Choices
 - [`src/core/services/sensitivity.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/sensitivity.py) — Zentrale Logik für Rollen-/Feldprüfung
 
-### 13. Wie funktioniert das Löschsystem (4-Augen-Prinzip)?
+### 15. Wie funktioniert das Löschsystem (4-Augen-Prinzip)?
 
 Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt von der **Kontaktstufe des Klienten** ab:
 
@@ -376,7 +424,7 @@ Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt
 - [`src/core/services/event.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/event.py) — `soft_delete_event`, `request_deletion`, `approve_deletion`, `reject_deletion`
 - [`src/core/views/events.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/events.py) — `EventDeleteView`, `DeletionRequestReviewView`
 
-### 14. Was hat KEINEN Löschmechanismus?
+### 16. Was hat KEINEN Löschmechanismus?
 
 - **Clients** — kein manueller Löschantrag, aber automatische Anonymisierung durch `enforce_retention`
 - **Cases / Episodes** — kein Löschmechanismus
@@ -388,7 +436,7 @@ Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt
 
 ## D. Administration & Betrieb
 
-### 15. Wie funktionieren Aufbewahrungsfristen?
+### 17. Wie funktionieren Aufbewahrungsfristen?
 
 Konfigurierbar pro Facility in **Administration → Einstellungen**:
 
@@ -407,7 +455,7 @@ Zusätzlich: Per-DocumentType-Override via `DocumentType.retention_days`.
 - [`src/core/models/settings.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/settings.py) — Retention-Felder
 - [`src/core/management/commands/enforce_retention.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/management/commands/enforce_retention.py) — `--dry-run`, `--facility`
 
-### 16. Welche automatisierten Scripts gibt es?
+### 18. Welche automatisierten Scripts gibt es?
 
 #### Cron-Schedule (Host-Level)
 
@@ -437,7 +485,7 @@ Zusätzlich: Per-DocumentType-Override via `DocumentType.retention_days`.
 
 ## E. Fehlermeldungen
 
-### 17. Was bedeutet „Datensatz wurde zwischenzeitlich geändert"?
+### 19. Was bedeutet „Datensatz wurde zwischenzeitlich geändert"?
 
 Jemand anderes (oder Sie selbst in einem anderen Tab) hat denselben Datensatz parallel bearbeitet und bereits gespeichert. Um zu verhindern, dass Änderungen stillschweigend überschrieben werden (**Optimistic Locking**), blockt das System Ihren Speicherversuch.
 
@@ -450,5 +498,5 @@ So gehen weder Ihre noch die parallelen Änderungen verloren.
 
 ---
 
-*Konsolidiert aus [#105](https://github.com/tobiasnix/anlaufstelle/issues/105), [#429](https://github.com/tobiasnix/anlaufstelle/issues/429), [#471](https://github.com/tobiasnix/anlaufstelle/issues/471), [#506](https://github.com/tobiasnix/anlaufstelle/issues/506). Alle Inhalte am 05.04.2026 gegen den Code verifiziert. v0.10-Ergänzungen ([#589](https://github.com/tobiasnix/anlaufstelle/issues/589)): File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking.*
+*Konsolidiert aus [#105](https://github.com/tobiasnix/anlaufstelle/issues/105), [#429](https://github.com/tobiasnix/anlaufstelle/issues/429), [#471](https://github.com/tobiasnix/anlaufstelle/issues/471), [#506](https://github.com/tobiasnix/anlaufstelle/issues/506). Alle Inhalte am 25.04.2026 gegen den Code verifiziert. v0.10-Ergänzungen ([#589](https://github.com/tobiasnix/anlaufstelle/issues/589)): File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking. Ergänzung 25.04.2026: WorkItem-Hinweis-vs-Aufgabe und Wiedervorlage (FAQ #7, #8).*
 

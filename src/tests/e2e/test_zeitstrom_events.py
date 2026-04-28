@@ -314,7 +314,7 @@ class TestNachtdienstShiftAssignment:
         other_tab.click()
         page.wait_for_load_state("domcontentloaded")
         # HTMX-Swap abwarten: gewechselter Tab wird aktiv markiert.
-        expect(other_tab).to_have_class(re.compile(r"bg-indigo-50"))
+        expect(other_tab).to_have_class(re.compile(r"bg-accent-light"))
 
 
 class TestQualifiedClientEventDeletion:
