@@ -4,7 +4,7 @@ import logging
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import Http404, StreamingHttpResponse
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -35,6 +35,7 @@ from core.services.sensitivity import (
     user_can_see_document_type,
     user_can_see_field,
 )
+from core.utils.downloads import safe_download_response
 from core.utils.formatting import format_file_size
 from core.views.mixins import AssistantOrAboveRequiredMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
 
@@ -273,9 +274,7 @@ class AttachmentDownloadView(AssistantOrAboveRequiredMixin, View):
     """
 
     def get(self, request, pk, attachment_pk):
-        event, attachment = get_visible_attachment_or_404(
-            request.user, request.current_facility, pk, attachment_pk
-        )
+        event, attachment = get_visible_attachment_or_404(request.user, request.current_facility, pk, attachment_pk)
 
         # Field-level sensitivity check (PermissionDenied keeps the UX hint
         # that the event exists but a specific attachment field is restricted).
@@ -298,13 +297,14 @@ class AttachmentDownloadView(AssistantOrAboveRequiredMixin, View):
         disposition = _attachment_disposition(attachment.mime_type, force_download)
 
         original_filename = get_original_filename(attachment)
-        response = StreamingHttpResponse(
+        as_attachment = disposition == "attachment"
+        response = safe_download_response(
+            original_filename,
+            attachment.mime_type,
             get_decrypted_file_stream(attachment),
-            content_type=attachment.mime_type,
+            as_attachment=as_attachment,
         )
-        response["Content-Disposition"] = f'{disposition}; filename="{original_filename}"'
         response["Content-Length"] = attachment.file_size
-        response["X-Content-Type-Options"] = "nosniff"
         return response
 
 

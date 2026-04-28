@@ -6,6 +6,8 @@ import pytest
 from django.urls import reverse
 
 from core.models import WorkItem
+from core.models.activity import Activity
+from core.services.workitems import update_workitem
 
 
 @pytest.fixture
@@ -372,3 +374,41 @@ class TestDeletionRequestList:
         client.force_login(lead_user)
         response = client.get(reverse("core:deletion_request_list"))
         assert dr in response.context["pending_requests"]
+
+
+@pytest.mark.django_db
+class TestUpdateWorkItemService:
+    """Tests for the update_workitem service function."""
+
+    def test_updates_fields(self, facility, staff_user, workitem_open):
+        updated = update_workitem(
+            workitem_open,
+            staff_user,
+            title="Neuer Titel",
+            priority=WorkItem.Priority.URGENT,
+        )
+        updated.refresh_from_db()
+        assert updated.title == "Neuer Titel"
+        assert updated.priority == WorkItem.Priority.URGENT
+
+    def test_logs_updated_activity(self, facility, staff_user, workitem_open):
+        update_workitem(workitem_open, staff_user, title="Geaendert")
+        assert Activity.objects.filter(
+            verb=Activity.Verb.UPDATED,
+            target_id=workitem_open.pk,
+        ).exists()
+
+    def test_updates_client_association(self, facility, staff_user, workitem_open, client_qualified):
+        update_workitem(workitem_open, staff_user, client=client_qualified)
+        workitem_open.refresh_from_db()
+        assert workitem_open.client == client_qualified
+
+    def test_clears_client_association(self, facility, staff_user, workitem_open):
+        update_workitem(workitem_open, staff_user, client=None)
+        workitem_open.refresh_from_db()
+        assert workitem_open.client is None
+
+    def test_returns_updated_workitem(self, facility, staff_user, workitem_open):
+        result = update_workitem(workitem_open, staff_user, description="Neue Beschreibung")
+        assert result.pk == workitem_open.pk
+        assert result.description == "Neue Beschreibung"

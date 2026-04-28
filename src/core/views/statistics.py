@@ -3,7 +3,7 @@
 import logging
 from datetime import date, timedelta
 
-from django.http import HttpResponse, JsonResponse, StreamingHttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -15,6 +15,7 @@ from core.models import AuditLog, DocumentType
 from core.services.export import export_events_csv, generate_jugendamt_pdf, generate_report_pdf
 from core.services.snapshot import _merge_stats, get_statistics_hybrid, get_statistics_trend
 from core.signals.audit import get_client_ip
+from core.utils.downloads import safe_download_response
 from core.utils.formatting import parse_date
 from core.views.mixins import LeadOrAdminRequiredMixin
 
@@ -68,7 +69,6 @@ class StatisticsView(LeadOrAdminRequiredMixin, View):
         if request.headers.get("HX-Request"):
             return render(request, "core/statistics/partials/full_content.html", context)
         return render(request, "core/statistics/index.html", context)
-
 
     @staticmethod
     def _parse_year(value, default):
@@ -173,12 +173,11 @@ class CSVExportView(LeadOrAdminRequiredMixin, View):
         if not date_from or not date_to:
             return HttpResponse(_("date_from und date_to erforderlich"), status=400)
 
-        response = StreamingHttpResponse(
+        response = safe_download_response(
+            f"export_{date_from}_{date_to}.csv",
+            "text/csv; charset=utf-8",
             export_events_csv(facility, date_from, date_to, user=request.user),
-            content_type="text/csv; charset=utf-8",
         )
-        filename = f"export_{date_from}_{date_to}.csv"
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
 
         AuditLog.objects.create(
             facility=facility,
@@ -206,9 +205,11 @@ class PDFExportView(LeadOrAdminRequiredMixin, View):
         stats = get_statistics_hybrid(facility, date_from, date_to)
         pdf_bytes = generate_report_pdf(facility, date_from, date_to, stats)
 
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        filename = f"bericht_{date_from}_{date_to}.pdf"
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response = safe_download_response(
+            f"bericht_{date_from}_{date_to}.pdf",
+            "application/pdf",
+            pdf_bytes,
+        )
 
         AuditLog.objects.create(
             facility=facility,
@@ -235,9 +236,11 @@ class JugendamtExportView(LeadOrAdminRequiredMixin, View):
 
         pdf_bytes = generate_jugendamt_pdf(facility, date_from, date_to)
 
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        filename = f"jugendamt_{date_from}_{date_to}.pdf"
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response = safe_download_response(
+            f"jugendamt_{date_from}_{date_to}.pdf",
+            "application/pdf",
+            pdf_bytes,
+        )
 
         AuditLog.objects.create(
             facility=facility,

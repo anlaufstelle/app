@@ -121,7 +121,7 @@
         <h2 class="text-sm font-semibold text-gray-500 uppercase mb-3">{% trans "Änderungshistorie" %}</h2>
         <div class="space-y-3">
             {% for entry in history %}
-            {% compute_diff entry as diff %}
+            {% compute_diff entry user=request.user as diff %}
             <div x-data="{ open: false }">
                 <div class="flex items-start space-x-3 text-sm">
                     <span class="text-gray-500 font-mono whitespace-nowrap">{{ entry.changed_at|date:"d.m.Y H:i" }}</span>

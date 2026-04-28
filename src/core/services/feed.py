@@ -3,6 +3,7 @@
 from collections import defaultdict
 from datetime import datetime, time, timedelta
 
+from django.db.models import Q
 from django.utils import timezone
 
 from core.models import Activity, DocumentTypeField, Event, WorkItem
@@ -71,6 +72,17 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
         # In mixed feed: exclude 'created' activities (redundant with first-class object cards)
         if include_all:
             activities_qs = activities_qs.exclude(verb=Activity.Verb.CREATED)
+
+        # Filter out activities whose target is an Event the user may not see (#562)
+        if user is not None:
+            from django.contrib.contenttypes.models import ContentType
+
+            event_ct = ContentType.objects.get_for_model(Event)
+            visible_event_ids = Event.objects.visible_to(user).values_list("pk", flat=True)
+            activities_qs = activities_qs.exclude(
+                Q(target_type=event_ct) & ~Q(target_id__in=visible_event_ids),
+            )
+
         activities = activities_qs.select_related("actor", "target_type").order_by("-occurred_at")[:200]
         activities_list = [{"type": "activity", "occurred_at": a.occurred_at, "object": a} for a in activities]
 

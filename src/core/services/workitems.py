@@ -26,6 +26,28 @@ def create_workitem(facility, user, *, client=None, **data):
     return workitem
 
 
+@transaction.atomic
+def update_workitem(workitem, user, **fields):
+    """Update a work item with activity logging.
+
+    Accepts allowed fields (item_type, title, description, priority, due_date,
+    assigned_to, client) and persists them.
+    """
+    for key, value in fields.items():
+        setattr(workitem, key, value)
+    workitem.save()
+
+    log_activity(
+        facility=workitem.facility,
+        actor=user,
+        verb=Activity.Verb.UPDATED,
+        target=workitem,
+        summary=f"Aufgabe aktualisiert: {workitem.title}",
+    )
+
+    return workitem
+
+
 def update_workitem_status(workitem, new_status, user):
     """Perform a status transition including auto-assign and completed_at management.
 

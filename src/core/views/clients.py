@@ -6,7 +6,7 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.db.models import Case, F, IntegerField, Max, Q, Value, When
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -14,13 +14,13 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.forms.clients import ClientForm
-from core.models import Activity, AuditLog, Client, Event, WorkItem
+from core.models import AuditLog, Client, Event, WorkItem
 from core.models import Case as CaseModel
-from core.services.activity import log_activity
 from core.services.bans import get_active_bans_for_client
 from core.services.client_export import export_client_data, export_client_data_pdf
-from core.services.clients import create_client, track_client_visit, update_client_stage
+from core.services.clients import create_client, track_client_visit, update_client
 from core.signals.audit import get_client_ip
+from core.utils.downloads import safe_download_response
 from core.views.mixins import AssistantOrAboveRequiredMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -171,16 +171,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
         old_stage = client.contact_stage
         form = ClientForm(request.POST, instance=client, facility=request.current_facility)
         if form.is_valid():
-            client = form.save()
-            update_client_stage(client, old_stage, client.contact_stage, request.current_facility, request.user)
-            if old_stage != client.contact_stage and client.contact_stage == Client.ContactStage.QUALIFIED:
-                log_activity(
-                    facility=client.facility,
-                    actor=self.request.user,
-                    verb=Activity.Verb.QUALIFIED,
-                    target=client,
-                    summary=f"{client.pseudonym} qualifiziert",
-                )
+            client = update_client(client, request.user, old_stage=old_stage, **form.cleaned_data)
             messages.success(request, _("Klientel wurde aktualisiert."))
             return redirect("core:client_detail", pk=client.pk)
         return render(request, "core/clients/form.html", {"form": form, "client": client, "is_edit": True})
@@ -247,12 +238,11 @@ class ClientDataExportJSONView(LeadOrAdminRequiredMixin, View):
             ip_address=get_client_ip(request),
         )
 
-        response = HttpResponse(
+        return safe_download_response(
+            f"datenauskunft_{client.pseudonym}.json",
+            "application/json; charset=utf-8",
             json.dumps(data, ensure_ascii=False, indent=2, default=str),
-            content_type="application/json; charset=utf-8",
         )
-        response["Content-Disposition"] = f'attachment; filename="datenauskunft_{client.pseudonym}.json"'
-        return response
 
 
 class ClientDataExportPDFView(LeadOrAdminRequiredMixin, View):
@@ -275,6 +265,8 @@ class ClientDataExportPDFView(LeadOrAdminRequiredMixin, View):
             ip_address=get_client_ip(request),
         )
 
-        response = HttpResponse(pdf_bytes, content_type="application/pdf")
-        response["Content-Disposition"] = f'attachment; filename="datenauskunft_{client.pseudonym}.pdf"'
-        return response
+        return safe_download_response(
+            f"datenauskunft_{client.pseudonym}.pdf",
+            "application/pdf",
+            pdf_bytes,
+        )

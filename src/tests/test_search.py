@@ -109,6 +109,52 @@ class TestSearch:
         _, events = search_clients_and_events(facility, staff_user, "dauer")
         assert len(events) == 0
 
+    def test_search_excludes_events_matching_only_sensitive_fields(
+        self, client, staff_user, facility, client_identified
+    ):
+        """Event with NORMAL doc_type but a HIGH-sensitivity field must not
+        appear in results for a staff user when the match is only in the HIGH field."""
+        from core.models import DocumentType, DocumentTypeField, FieldTemplate
+        from core.services.search import search_clients_and_events
+
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.NOTE,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+            name="Notiz mit High-Feld",
+        )
+        ft_normal = FieldTemplate.objects.create(
+            facility=facility,
+            name="Kommentar",
+            field_type=FieldTemplate.FieldType.TEXT,
+            sensitivity="",  # inherits NORMAL from doc_type
+        )
+        ft_high = FieldTemplate.objects.create(
+            facility=facility,
+            name="Geheim",
+            field_type=FieldTemplate.FieldType.TEXT,
+            sensitivity="high",
+        )
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_normal, sort_order=0)
+        DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_high, sort_order=1)
+
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={ft_normal.slug: "harmloses Wort", ft_high.slug: "Geheimwort123"},
+            created_by=staff_user,
+        )
+
+        # Staff (max ELEVATED) searches for value only in HIGH field → no match
+        _, events = search_clients_and_events(facility, staff_user, "Geheimwort123")
+        assert len(events) == 0
+
+        # Staff searches for value in NORMAL field → match
+        _, events = search_clients_and_events(facility, staff_user, "harmloses Wort")
+        assert len(events) == 1
+
     def test_search_htmx_returns_partial(self, client, staff_user, client_identified):
         client.force_login(staff_user)
         response = client.get(

@@ -45,6 +45,48 @@ def update_client_stage(client, old_stage, new_stage, facility, user):
     )
 
 
+@transaction.atomic
+def update_client(client, user, *, old_stage=None, **fields):
+    """Update a client with activity logging and stage-change auditing.
+
+    Accepts a dict of allowed fields (pseudonym, contact_stage, age_cluster, notes).
+    Handles AuditLog for stage changes and Activity for qualification transitions.
+
+    old_stage: If provided, used as the previous contact_stage for stage-change
+    detection.  When called from a ModelForm view, the form's _post_clean may
+    already have mutated the instance, so the caller should capture the stage
+    before form.is_valid().
+    """
+    if old_stage is None:
+        old_stage = client.contact_stage
+
+    for key, value in fields.items():
+        setattr(client, key, value)
+    client.save()
+
+    new_stage = client.contact_stage
+    update_client_stage(client, old_stage, new_stage, client.facility, user)
+
+    if old_stage != new_stage and new_stage == Client.ContactStage.QUALIFIED:
+        log_activity(
+            facility=client.facility,
+            actor=user,
+            verb=Activity.Verb.QUALIFIED,
+            target=client,
+            summary=f"{client.pseudonym} qualifiziert",
+        )
+
+    log_activity(
+        facility=client.facility,
+        actor=user,
+        verb=Activity.Verb.UPDATED,
+        target=client,
+        summary=f"Klientel {client.pseudonym} aktualisiert",
+    )
+
+    return client
+
+
 def track_client_visit(user, client, facility):
     """Record that a user visited a client detail page.
 

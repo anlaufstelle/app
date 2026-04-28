@@ -4,6 +4,8 @@ import pytest
 from django.urls import reverse
 
 from core.models import AuditLog, Client
+from core.models.activity import Activity
+from core.services.clients import update_client
 
 
 @pytest.mark.django_db
@@ -148,3 +150,59 @@ class TestClientUpdate:
             target_type="Client",
             target_id=str(client_identified.pk),
         ).exists()
+
+
+@pytest.mark.django_db
+class TestUpdateClientService:
+    """Tests for the update_client service function."""
+
+    def test_updates_fields(self, client_identified, staff_user):
+        updated = update_client(
+            client_identified,
+            staff_user,
+            pseudonym="Neues-Pseudonym",
+            age_cluster=Client.AgeCluster.AGE_18_26,
+        )
+        updated.refresh_from_db()
+        assert updated.pseudonym == "Neues-Pseudonym"
+        assert updated.age_cluster == Client.AgeCluster.AGE_18_26
+
+    def test_logs_updated_activity(self, client_identified, staff_user):
+        update_client(client_identified, staff_user, notes="Neue Notiz")
+        assert Activity.objects.filter(
+            verb=Activity.Verb.UPDATED,
+            target_id=client_identified.pk,
+        ).exists()
+
+    def test_stage_change_creates_audit(self, client_identified, staff_user):
+        update_client(
+            client_identified,
+            staff_user,
+            contact_stage=Client.ContactStage.QUALIFIED,
+        )
+        assert AuditLog.objects.filter(
+            action=AuditLog.Action.STAGE_CHANGE,
+            target_id=str(client_identified.pk),
+        ).exists()
+
+    def test_qualification_logs_qualified_activity(self, client_identified, staff_user):
+        update_client(
+            client_identified,
+            staff_user,
+            contact_stage=Client.ContactStage.QUALIFIED,
+        )
+        assert Activity.objects.filter(
+            verb=Activity.Verb.QUALIFIED,
+            target_id=client_identified.pk,
+        ).exists()
+
+    def test_no_stage_change_no_audit(self, client_identified, staff_user):
+        update_client(client_identified, staff_user, notes="Nur Notiz")
+        assert not AuditLog.objects.filter(
+            action=AuditLog.Action.STAGE_CHANGE,
+        ).exists()
+
+    def test_returns_updated_client(self, client_identified, staff_user):
+        result = update_client(client_identified, staff_user, notes="Test")
+        assert result.pk == client_identified.pk
+        assert result.notes == "Test"

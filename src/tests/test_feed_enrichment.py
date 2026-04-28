@@ -315,6 +315,91 @@ class TestMixedFeedCreatedFilter:
         assert Activity.Verb.CREATED in verbs
 
 
+@pytest.mark.django_db
+class TestActivitySensitivityFilter:
+    """Tests for sensitivity-based activity filtering in feed (#562)."""
+
+    def test_activity_for_hidden_event_excluded_from_feed(
+        self, facility, staff_user, client_identified
+    ):
+        """Activity targeting a HIGH-sensitivity event must not appear for staff users."""
+        today = timezone.localdate()
+        now = timezone.make_aware(datetime.combine(today, time(12, 0)))
+
+        # HIGH sensitivity → invisible to staff (max ELEVATED)
+        dt_high = DocumentType.objects.create(
+            facility=facility,
+            name="Vertraulich",
+            category="service",
+            sensitivity=DocumentType.Sensitivity.HIGH,
+        )
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=dt_high,
+            occurred_at=now,
+            data_json={},
+            created_by=staff_user,
+        )
+        log_activity(
+            facility=facility,
+            actor=staff_user,
+            verb=Activity.Verb.CREATED,
+            target=event,
+            summary="Vertraulich erstellt",
+        )
+
+        items = build_feed_items(facility, today, feed_type="activities", user=staff_user)
+        activity_items = [i for i in items if i["type"] == "activity"]
+        target_ids = [i["object"].target_id for i in activity_items]
+        assert event.pk not in target_ids
+
+    def test_activity_for_visible_event_included(
+        self, facility, staff_user, client_identified, doc_type_contact
+    ):
+        """Activity targeting a NORMAL-sensitivity event must remain visible for staff."""
+        today = timezone.localdate()
+        now = timezone.make_aware(datetime.combine(today, time(12, 0)))
+
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=now,
+            data_json={"dauer": 10},
+            created_by=staff_user,
+        )
+        log_activity(
+            facility=facility,
+            actor=staff_user,
+            verb=Activity.Verb.UPDATED,
+            target=event,
+            summary="Kontakt aktualisiert",
+        )
+
+        items = build_feed_items(facility, today, feed_type="activities", user=staff_user)
+        activity_items = [i for i in items if i["type"] == "activity"]
+        target_ids = [i["object"].target_id for i in activity_items]
+        assert event.pk in target_ids
+
+    def test_non_event_activity_unaffected(self, facility, staff_user, client_identified):
+        """Activity targeting a Client (not an Event) must not be filtered out."""
+        today = timezone.localdate()
+
+        log_activity(
+            facility=facility,
+            actor=staff_user,
+            verb=Activity.Verb.UPDATED,
+            target=client_identified,
+            summary="Klientel aktualisiert",
+        )
+
+        items = build_feed_items(facility, today, feed_type="activities", user=staff_user)
+        activity_items = [i for i in items if i["type"] == "activity"]
+        assert len(activity_items) == 1
+        assert activity_items[0]["object"].target_id == client_identified.pk
+
+
 class TestVerbBadgeClasses:
     """Tests for verb_badge_classes template filter."""
 

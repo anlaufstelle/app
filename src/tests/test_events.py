@@ -30,6 +30,51 @@ class TestEventService:
         assert event.pk is not None
         assert EventHistory.objects.filter(event=event, action=EventHistory.Action.CREATE).exists()
 
+    def test_event_history_stores_field_metadata(self, facility, staff_user, doc_type_contact):
+        """EventHistory.field_metadata must capture slug -> name/sensitivity/is_encrypted."""
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 15, "notiz": "Test"},
+        )
+        entry = EventHistory.objects.filter(event=event, action=EventHistory.Action.CREATE).first()
+        assert entry.field_metadata
+        assert "dauer" in entry.field_metadata
+        assert "notiz" in entry.field_metadata
+        for slug in ("dauer", "notiz"):
+            meta = entry.field_metadata[slug]
+            assert "name" in meta
+            assert "sensitivity" in meta
+            assert "is_encrypted" in meta
+
+    def test_update_event_stores_field_metadata(self, facility, staff_user, doc_type_contact):
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 15},
+        )
+        update_event(event, staff_user, {"dauer": 30})
+        entry = EventHistory.objects.filter(event=event, action=EventHistory.Action.UPDATE).first()
+        assert entry.field_metadata
+        assert "dauer" in entry.field_metadata
+
+    def test_soft_delete_stores_field_metadata(self, facility, staff_user, doc_type_contact):
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 15},
+        )
+        soft_delete_event(event, staff_user)
+        entry = EventHistory.objects.filter(event=event, action=EventHistory.Action.DELETE).first()
+        assert entry.field_metadata
+        assert "dauer" in entry.field_metadata
+
     def test_update_event_creates_history(self, facility, staff_user, doc_type_contact):
         event = create_event(
             facility=facility,

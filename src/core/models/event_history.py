@@ -42,6 +42,14 @@ class EventHistory(models.Model):
     )
     data_before = models.JSONField(null=True, blank=True, verbose_name=_("Daten vorher"))
     data_after = models.JSONField(null=True, blank=True, verbose_name=_("Daten nachher"))
+    field_metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text=(
+            "Snapshot der Feld-Labels, Sensitivität und Verschlüsselungsstatus "
+            "zum Zeitpunkt der Änderung für revisionsfeste Darstellung."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Ereignis-Historie")

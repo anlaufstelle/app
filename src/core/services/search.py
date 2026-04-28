@@ -2,8 +2,8 @@
 
 import logging
 
-from core.models import Client, Event, FieldTemplate
-from core.services.sensitivity import allowed_sensitivities_for_user
+from core.models import Client, DocumentTypeField, Event, FieldTemplate
+from core.services.sensitivity import allowed_sensitivities_for_user, user_can_see_field
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,20 @@ def search_clients_and_events(facility, user, query, max_clients=20, max_events=
         FieldTemplate.objects.for_facility(facility).filter(is_encrypted=True).values_list("slug", flat=True)
     )
 
+    # Build slug → field sensitivity mapping for each document type
+    # so we can exclude fields the user may not see.
+    _dt_field_sensitivity_cache: dict[str, dict[str, str]] = {}
+
+    def _get_field_sensitivities(doc_type):
+        dt_id = str(doc_type.pk)
+        if dt_id not in _dt_field_sensitivity_cache:
+            _dt_field_sensitivity_cache[dt_id] = dict(
+                DocumentTypeField.objects.filter(document_type=doc_type)
+                .select_related("field_template")
+                .values_list("field_template__slug", "field_template__sensitivity")
+            )
+        return _dt_field_sensitivity_cache[dt_id]
+
     events_by_data = []
     candidates = list(
         Event.objects.filter(
@@ -49,8 +63,13 @@ def search_clients_and_events(facility, user, query, max_clients=20, max_events=
     q_lower = query.lower()
     for event in candidates:
         data = event.data_json or {}
+        field_sensitivities = _get_field_sensitivities(event.document_type)
         for key, value in data.items():
             if key in encrypted_field_slugs:
+                continue
+            # Check field-level sensitivity: skip fields the user may not see
+            field_sens = field_sensitivities.get(key, "")
+            if not user_can_see_field(user, event.document_type.sensitivity, field_sens):
                 continue
             if isinstance(value, dict):
                 continue

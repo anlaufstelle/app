@@ -2,13 +2,14 @@
 
 import logging
 
-from django.http import Http404, HttpResponse
+from django.http import Http404
 from django.shortcuts import render
 from django.views import View
 
 from core.models import AuditLog
 from core.services.dsgvo_package import DOCUMENTS, get_document_list, render_document
 from core.signals.audit import get_client_ip
+from core.utils.downloads import safe_download_response
 from core.views.mixins import AdminRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,8 @@ class DSGVODocumentDownloadView(AdminRequiredMixin, View):
             ip_address=get_client_ip(request),
         )
 
-        response = HttpResponse(content, content_type="text/markdown; charset=utf-8")
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
-        return response
+        return safe_download_response(
+            filename,
+            "text/markdown; charset=utf-8",
+            content,
+        )

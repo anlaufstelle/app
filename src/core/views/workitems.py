@@ -16,7 +16,7 @@ from django_ratelimit.decorators import ratelimit
 from core.forms.workitems import WorkItemForm
 from core.models import Client, WorkItem
 from core.models.user import User
-from core.services.workitems import create_workitem, update_workitem_status
+from core.services.workitems import create_workitem, update_workitem, update_workitem_status
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -246,9 +246,17 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
         form = WorkItemForm(request.POST, instance=workitem, facility=request.current_facility)
 
         if form.is_valid():
-            wi = form.save(commit=False)
-            wi.client = form.cleaned_data.get("client")
-            wi.save()
+            update_workitem(
+                workitem,
+                request.user,
+                client=form.cleaned_data.get("client"),
+                item_type=form.cleaned_data["item_type"],
+                title=form.cleaned_data["title"],
+                description=form.cleaned_data.get("description", ""),
+                priority=form.cleaned_data["priority"],
+                due_date=form.cleaned_data.get("due_date"),
+                assigned_to=form.cleaned_data.get("assigned_to"),
+            )
             messages.success(request, _("Aufgabe wurde aktualisiert."))
             return redirect("core:workitem_inbox")
 

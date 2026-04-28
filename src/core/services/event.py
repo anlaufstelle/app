@@ -15,6 +15,22 @@ from core.services.sensitivity import user_can_see_document_type
 logger = logging.getLogger(__name__)
 
 
+def _snapshot_field_metadata(document_type):
+    """Return a frozen snapshot of field labels, sensitivity and encryption status.
+
+    Format: ``{ "slug": {"name": "...", "sensitivity": "...", "is_encrypted": bool}, ... }``
+    """
+    result = {}
+    for dtf in document_type.fields.select_related("field_template"):
+        ft = dtf.field_template
+        result[ft.slug] = {
+            "name": ft.name,
+            "sensitivity": ft.sensitivity,
+            "is_encrypted": ft.is_encrypted,
+        }
+    return result
+
+
 def _is_file_marker(value):
     """Return True if value is a file attachment marker dict."""
     return isinstance(value, dict) and value.get("__file__") is True and "attachment_id" in value
@@ -148,6 +164,7 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
         changed_by=user,
         action=EventHistory.Action.CREATE,
         data_after=data_json,
+        field_metadata=_snapshot_field_metadata(document_type),
     )
     summary = f"{document_type.name}"
     if client:
@@ -181,6 +198,7 @@ def update_event(event, user, data_json, expected_updated_at=None, **kwargs):
         action=EventHistory.Action.UPDATE,
         data_before=data_before,
         data_after=data_json,
+        field_metadata=_snapshot_field_metadata(event.document_type),
     )
     return event
 
@@ -198,6 +216,7 @@ def soft_delete_event(event, user):
         changed_by=user,
         action=EventHistory.Action.DELETE,
         data_before={"_redacted": True, "fields": field_names},
+        field_metadata=_snapshot_field_metadata(event.document_type),
     )
     AuditLog.objects.create(
         facility=event.facility,
