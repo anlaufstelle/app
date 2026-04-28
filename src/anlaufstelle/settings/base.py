@@ -253,7 +253,7 @@ CONTENT_SECURITY_POLICY = {
         #   - Pflicht-MFA (TOTP) fuer Admin / Lead
         #   - keine `unsafe-inline` (Inline-Scripts und -Event-Handler durch
         #     Architektur-Tests verboten — Refs #618, #662 FND-01)
-        "script-src": ["'self'", "'unsafe-eval'"],
+        "script-src": ["'self'"],
         "style-src": ["'self'", "'unsafe-inline'"],
         "img-src": ["'self'", "data:"],
         "font-src": ["'self'"],

@@ -83,16 +83,16 @@
 {# Bulk-Edit (Refs #267): Alpine-State für Auswahl und Aktions-Forms #}
 <div
     x-data="workitemBulkSelect"
-    @workitem-bulk-clear.window="clear()"
+    @workitem-bulk-clear.window="clear"
 >
     {# Action-Bar: sichtbar wenn mindestens ein Item ausgewählt #}
     <div
-        x-show="selected.length > 0"
+        x-show="hasSelection"
         x-cloak
         class="sticky top-0 z-10 mb-4 flex flex-wrap items-center gap-3 p-3 bg-accent-light border border-accent/20 rounded-[10px] shadow-sm"
     >
         <span class="text-[13px] font-semibold text-accent">
-            <span x-text="selected.length"></span>
+            <span x-text="selectionCount"></span>
             {% trans "ausgewählt" %}
         </span>
 
@@ -144,7 +144,7 @@
             <button type="submit" class="px-3 py-1.5 bg-accent text-white text-[13px] font-semibold rounded-md">{% trans "Anwenden" %}</button>
         </form>
 
-        <button type="button" @click="clear()" class="ml-auto text-[13px] text-accent hover:underline">{% trans "Auswahl löschen" %}</button>
+        <button type="button" @click="clear" class="ml-auto text-[13px] text-accent hover:underline">{% trans "Auswahl löschen" %}</button>
     </div>
 
     {# Select-All-Steuerung oberhalb der Liste #}

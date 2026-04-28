@@ -1,17 +1,32 @@
 /*
- * Alpine-Komponente für die Offline-Ansicht eines Klientels
- * (Refs #618). Inline-Script wäre unter CSP stumm geblockt.
+ * Alpine-Komponente fuer die Offline-Ansicht eines Klientels
+ * (Refs #618). Auf Alpine.data() registriert fuer den
+ * @alpinejs/csp Build (Refs #672).
  */
 (function () {
     "use strict";
 
-    window.offlineClientView = function offlineClientView(pk) {
-        return {
+    document.addEventListener("alpine:init", () => {
+        Alpine.data("offlineClientView", () => ({
             loading: true,
             available: false,
             data: null,
             lastSynced: null,
             lastSyncedRel: "",
+            _pk: "",
+            init() {
+                this._pk = this.$el.dataset.pk || "";
+            },
+            // CSP-konforme Wrapper-Methoden — kein ``data.events.length`` Inline.
+            get hasEvents() {
+                return Boolean(this.data && this.data.events && this.data.events.length);
+            },
+            get hasCases() {
+                return Boolean(this.data && this.data.cases && this.data.cases.length);
+            },
+            get hasWorkitems() {
+                return Boolean(this.data && this.data.workitems && this.data.workitems.length);
+            },
             async load() {
                 this.loading = true;
                 try {
@@ -22,7 +37,7 @@
                         this.available = false;
                         return;
                     }
-                    const cached = await window.offlineClient.getOfflineClient(pk);
+                    const cached = await window.offlineClient.getOfflineClient(this._pk);
                     if (!cached) {
                         this.available = false;
                         return;
@@ -62,6 +77,6 @@
                 const diffD = Math.floor(diffH / 24);
                 return "vor " + diffD + " Tg";
             },
-        };
-    };
+        }));
+    });
 })();

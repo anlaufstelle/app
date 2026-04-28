@@ -4,7 +4,7 @@
 {% block title %}{% trans "Konflikt auflösen" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-<div x-data="conflictResolver('{{ event_pk|escapejs }}')" x-init="load()"
+<div x-data="conflictResolver" data-event-pk="{{ event_pk|escapejs }}" x-init="load"
      data-testid="conflict-resolver-view" class="space-y-6">
 
     <div class="flex items-center space-x-2">
@@ -73,17 +73,17 @@
             </div>
 
             <div class="flex flex-wrap gap-2">
-                <button type="button" @click="keepLocal()" :disabled="resolving"
+                <button type="button" @click="keepLocal" :disabled="resolving"
                         class="inline-flex items-center px-4 py-2 bg-accent text-white text-sm font-medium rounded-md hover:bg-accent disabled:opacity-60"
                         data-testid="conflict-keep-local">
                     {% trans "Meine Version behalten" %}
                 </button>
-                <button type="button" @click="keepServer()" :disabled="resolving"
+                <button type="button" @click="keepServer" :disabled="resolving"
                         class="inline-flex items-center px-4 py-2 bg-surface border border-subtle text-ink-soft text-sm font-medium rounded-md hover:bg-canvas disabled:opacity-60"
                         data-testid="conflict-keep-server">
                     {% trans "Server-Version übernehmen" %}
                 </button>
-                <button type="button" @click="keepMerged()" :disabled="resolving"
+                <button type="button" @click="keepMerged" :disabled="resolving"
                         class="inline-flex items-center px-4 py-2 bg-amber-600 text-white text-sm font-medium rounded-md hover:bg-amber-700 disabled:opacity-60"
                         data-testid="conflict-merge">
                     {% trans "Manuell mergen" %}

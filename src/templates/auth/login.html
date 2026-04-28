@@ -13,7 +13,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     {# Siehe base.html zur Script-Reihenfolge. #}
     <script src="{% static 'js/alpine-components.js' %}" defer></script>
-    <script src="{% static 'js/alpine.min.js' %}" defer></script>
+    <script src="{% static 'js/alpine-csp.min.js' %}" defer></script>
     {# Crypto modules so we can derive the offline session key after a successful login #}
     <script src="{% static 'js/dexie.min.js' %}"></script>
     <script src="{% static 'js/crypto.js' %}"></script>
@@ -71,7 +71,7 @@
             {# PWA Install-Prompt (Chrome/Edge/Android) #}
             <div x-data="pwaInstallPrompt" x-cloak>
                 <div x-show="showInstall" class="mt-6 border-t border-subtle pt-4 text-center">
-                    <button @click="triggerInstall()"
+                    <button @click="triggerInstall"
                             class="text-[13px] text-accent hover:underline font-semibold">
                         {% trans "Als App installieren" %}
                     </button>

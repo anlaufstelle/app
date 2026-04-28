@@ -1,21 +1,7 @@
 /*
- * Alpine-Komponenten für den Offline-Toggle auf der Klientel-Liste
- * (Refs #618).
- *
- * Der vorherige Inline-Script-Block im Template wurde unter der CSP
- * `script-src 'self' 'unsafe-eval'` still geblockt — Ergebnis: die
- * Funktion `clientRowOffline` war nie definiert, Alpine fand sie nicht,
- * der Button blieb stumm. Auslagerung in eine eigene Datei löst das.
- *
- * Das Script wird aus dem Template ohne `defer` geladen: die Alpine-
- * x-data-Ausdrücke referenzieren `clientRowOffline(pk)` und
- * `clientOfflineToast()` direkt, die Funktionen müssen deshalb vor
- * `Alpine.start()` auf `window` verfügbar sein.  Defer würde zwar nach
- * Alpine geladen werden (gleiche `defer`-Ordnung), aber Alpine.start()
- * läuft auf `DOMContentLoaded` — und unsere Offline-Abhängigkeiten
- * (Dexie, offline-store etc.) laden ebenfalls ohne `defer`; das
- * mischt die Reihenfolge. Synchrones Laden vor `</body>` ist
- * hier die robusteste Lösung.
+ * Alpine-Komponenten fuer den Offline-Toggle auf der Klientel-Liste
+ * (Refs #618). Auf Alpine.data() registriert fuer den
+ * @alpinejs/csp Build (Refs #672).
  */
 (function () {
     "use strict";
@@ -26,28 +12,45 @@
         );
     }
 
-    window.clientOfflineToast = function clientOfflineToast() {
-        return {
+    document.addEventListener("alpine:init", () => {
+        Alpine.data("clientOfflineToast", () => ({
             message: "",
             messageType: "info",
             init() {
                 window.addEventListener("offline-feedback", (ev) => {
                     this.message = ev.detail.text;
                     this.messageType = ev.detail.type || "info";
-                    setTimeout(() => { this.message = ""; }, 6000);
+                    setTimeout(() => {
+                        this.message = "";
+                    }, 6000);
                 });
             },
-        };
-    };
+            // CSP-konforme Wrapper
+            get isMessageNotError() {
+                return this.messageType !== "error";
+            },
+            get isMessageError() {
+                return this.messageType === "error";
+            },
+            get hasMessage() {
+                return this.message !== "";
+            },
+        }));
 
-    window.clientRowOffline = function clientRowOffline(pk) {
-        return {
+        Alpine.data("clientRowOffline", () => ({
             isOffline: false,
             busy: false,
+            _pk: "",
+            init() {
+                this._pk = this.$el.dataset.pk || "";
+            },
+            get notOffline() {
+                return !this.isOffline;
+            },
             async refresh() {
                 if (!window.offlineClient) return;
                 try {
-                    this.isOffline = await window.offlineClient.isClientOffline(pk);
+                    this.isOffline = await window.offlineClient.isClientOffline(this._pk);
                 } catch (_e) {
                     this.isOffline = false;
                 }
@@ -56,7 +59,7 @@
                 if (this.busy) return;
                 if (!window.offlineClient) {
                     notify(
-                        "Offline-Funktion nicht aktiv — bitte neu anmelden, damit der Sitzungsschlüssel erzeugt wird.",
+                        "Offline-Funktion nicht aktiv — bitte neu anmelden, damit der Sitzungsschluessel erzeugt wird.",
                         "error"
                     );
                     return;
@@ -64,16 +67,16 @@
                 this.busy = true;
                 try {
                     if (this.isOffline) {
-                        await window.offlineClient.removeClientFromOffline(pk);
+                        await window.offlineClient.removeClientFromOffline(this._pk);
                         notify("Aus Offline-Cache entfernt.", "info");
                     } else {
-                        await window.offlineClient.takeClientOffline(pk);
-                        notify("Klientel ist jetzt offline verfügbar.", "info");
+                        await window.offlineClient.takeClientOffline(this._pk);
+                        notify("Klientel ist jetzt offline verfuegbar.", "info");
                     }
                     await this.refresh();
                 } catch (e) {
                     if (e && e.name === "NoSessionKeyError") {
-                        notify("Offline-Schlüssel nicht aktiv — bitte neu anmelden.", "error");
+                        notify("Offline-Schluessel nicht aktiv — bitte neu anmelden.", "error");
                     } else if (e && e.name === "OfflineLimitError") {
                         notify(e.message || "Offline-Limit erreicht.", "error");
                     } else {
@@ -85,6 +88,6 @@
                     this.busy = false;
                 }
             },
-        };
-    };
+        }));
+    });
 })();

@@ -19,7 +19,7 @@
     startet (alpine.min.js queue't Alpine.start() direkt nach Load). Refs #669.
     {% endcomment %}
     <script src="{% static 'js/alpine-components.js' %}" defer></script>
-    <script src="{% static 'js/alpine.min.js' %}" defer></script>
+    <script src="{% static 'js/alpine-csp.min.js' %}" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
 <body class="h-full overflow-x-hidden" data-user-id="{{ request.user.pk|default:'' }}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
@@ -30,30 +30,30 @@
 
     {# Offline-Banner und Sync-Indikator #}
     <div x-data="offlineStatus"
-         @online.window="onOnline()"
-         @offline.window="onOffline()"
-         @offline-queue-count.window="onQueueCount($event.detail)"
-         @offline-clients-count.window="onClientsCount($event.detail)"
-         @offline-unsynced-count.window="onUnsyncedCount($event.detail)"
-         @offline-conflict-count.window="onConflictCount($event.detail)"
+         @online.window="onOnline"
+         @offline.window="onOffline"
+         @offline-queue-count.window="onQueueEvent"
+         @offline-clients-count.window="onClientsEvent"
+         @offline-unsynced-count.window="onUnsyncedEvent"
+         @offline-conflict-count.window="onConflictEvent"
          id="offline-status">
         <div x-show="offline" x-cloak
              class="fixed top-0 inset-x-0 z-50 bg-yellow-500 text-white text-center text-sm py-2"
              data-testid="offline-banner">
             {% trans "Offline — Daten werden bei Verbindung gespeichert" %}
-            <span x-show="cachedClients > 0" x-cloak class="ml-2 text-xs" data-testid="offline-cached-count">
+            <span x-show="hasCachedClients" x-cloak class="ml-2 text-xs" data-testid="offline-cached-count">
                 (<span x-text="cachedClients"></span> {% trans "Klientel lokal verfügbar" %})
             </span>
-            <span x-show="unsyncedCount > 0" x-cloak class="ml-2 text-xs" data-testid="offline-unsynced-count">
+            <span x-show="hasUnsynced" x-cloak class="ml-2 text-xs" data-testid="offline-unsynced-count">
                 · <span x-text="unsyncedCount"></span> {% trans "nicht synchronisiert" %}
             </span>
         </div>
-        <div x-show="!offline && queueCount > 0" x-cloak
+        <div x-show="showSyncBanner" x-cloak
              class="fixed top-0 inset-x-0 z-50 bg-blue-500 text-white text-center text-sm py-2"
              data-testid="sync-banner">
             <span x-text="queueCount"></span> {% trans "Aenderung(en) werden synchronisiert..." %}
         </div>
-        <div x-show="!offline && conflictCount > 0" x-cloak
+        <div x-show="showConflictBanner" x-cloak
              class="fixed top-0 inset-x-0 z-50 bg-red-500 text-white text-center text-sm py-2"
              data-testid="conflict-banner">
             <a href="{% url 'core:offline_conflict_list' %}" class="underline">
@@ -75,22 +75,22 @@
             </div>
         </a>
         {# Global Search #}
-        <div class="px-4 py-3 border-b border-subtle relative" x-data="globalSearch" :aria-expanded="open">
+        <div class="px-4 py-3 border-b border-subtle relative" x-data="globalSearch" :aria-expanded="ariaExpanded">
             <div class="relative">
                 <svg aria-hidden="true" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                <input type="text" name="q" x-model="q" placeholder="{% trans 'Suche...' %}"
+                <input type="text" name="q" :value="q" @input="setQ" placeholder="{% trans 'Suche...' %}"
                        hx-get="{% url 'core:global_search' %}"
                        hx-trigger="keyup changed delay:300ms"
                        hx-target="#global-search-results"
                        hx-include="this"
-                       @focus="focus()" @click.away="close()"
-                       @keydown.escape="escape()"
+                       @focus="focus" @click.away="close"
+                       @keydown.escape="escape"
                        class="w-full pl-8 pr-3 py-1.5 rounded-md border border-subtle bg-canvas text-[13px] text-ink"
                        autocomplete="off"
                        aria-controls="global-search-results"
                        data-testid="global-search-input">
             </div>
-            <div id="global-search-results" x-show="open && q.length > 0" x-cloak
+            <div id="global-search-results" x-show="hasResults" x-cloak
                  aria-live="polite" role="region" aria-label="{% trans 'Suchergebnisse' %}"
                  class="absolute left-4 right-4 mt-1 bg-surface shadow-lg rounded-md border border-subtle z-50 max-h-96 overflow-y-auto"
                  data-testid="global-search-results">
@@ -98,12 +98,12 @@
         </div>
         {# --- "Neu erstellen" Create-Button: full-width mit Dropdown --- #}
         <div class="px-4 py-3 border-b border-subtle relative" x-data="createMenu">
-            <button @click="toggle()" class="flex items-center gap-2 w-full bg-accent text-white rounded-md px-3 py-2 text-[13px] font-semibold" aria-label="{% trans 'Neu erstellen' %}" data-testid="sidebar-create-btn">
+            <button @click="toggle" class="flex items-center gap-2 w-full bg-accent text-white rounded-md px-3 py-2 text-[13px] font-semibold" aria-label="{% trans 'Neu erstellen' %}" data-testid="sidebar-create-btn">
                 <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                 {% trans "Neu erstellen" %}
                 <svg aria-hidden="true" class="ml-auto w-3 h-3 opacity-70" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
             </button>
-            <div x-show="createOpen" @click.away="close()" x-cloak x-transition
+            <div x-show="createOpen" @click.away="close" x-cloak x-transition
                  class="absolute left-4 right-4 top-[calc(100%-4px)] bg-surface rounded-lg shadow-lg border border-subtle z-50 overflow-hidden" data-testid="sidebar-create-dropdown">
                 <a href="{% url 'core:event_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle">
                     <div class="text-[13px] font-semibold text-ink">{% trans "Kontakt dokumentieren" %}</div>
@@ -228,11 +228,11 @@
         <div class="flex justify-around py-1 pb-2">
             {# Slot 1: Neu (+) Dropdown #}
             <div class="relative" x-data="createMenu">
-                <button @click="toggle()" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center text-ink-muted hover:text-accent" aria-label="{% trans 'Neu erstellen' %}" data-testid="mobile-nav-create">
+                <button @click="toggle" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center text-ink-muted hover:text-accent" aria-label="{% trans 'Neu erstellen' %}" data-testid="mobile-nav-create">
                     <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                     <span class="text-[10px] font-medium">{% trans "Neu" %}</span>
                 </button>
-                <div x-show="createOpen" @click.away="close()" x-cloak x-transition
+                <div x-show="createOpen" @click.away="close" x-cloak x-transition
                      class="absolute bottom-full left-0 mb-2 w-52 bg-surface rounded-lg shadow-lg border border-subtle py-1 z-50" data-testid="mobile-create-dropdown">
                     <a href="{% url 'core:event_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle">
                         <div class="text-[13px] font-semibold text-ink">{% trans "Kontakt dokumentieren" %}</div>
@@ -268,14 +268,14 @@
             </a>
             {# Slot 5: Mehr (inkl. Suche, Übergabe und sonstiger Items) #}
             <div class="relative" x-data="mobileMore">
-                <button @click="toggleMore()" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'handover,case_list,case_detail,case_create,case_update,attachment_list,search,statistics,deletion_request_list,deletion_review,retention_dashboard,audit_log,dsgvo_package,dsgvo_document,account_profile' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-more">
+                <button @click="toggleMore" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'handover,case_list,case_detail,case_create,case_update,attachment_list,search,statistics,deletion_request_list,deletion_review,retention_dashboard,audit_log,dsgvo_package,dsgvo_document,account_profile' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-more">
                     <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
                     <span class="text-[10px] font-medium">{% trans "Mehr" %}</span>
                 </button>
-                <div x-show="moreOpen" @click.away="closeAll()" x-cloak x-transition
+                <div x-show="moreOpen" @click.away="closeAll" x-cloak x-transition
                      class="absolute bottom-full right-0 mb-2 w-52 bg-surface rounded-lg shadow-lg border border-subtle py-1 z-50">
                     {# Suche im Mehr-Dropdown (vorher eigener Slot) #}
-                    <button @click="toggleSearch()" class="w-full flex items-center gap-2.5 px-4 py-2 text-[13px] text-ink hover:bg-canvas" data-testid="mobile-nav-search">
+                    <button @click="toggleSearch" class="w-full flex items-center gap-2.5 px-4 py-2 text-[13px] text-ink hover:bg-canvas" data-testid="mobile-nav-search">
                         <svg aria-hidden="true" class="w-4 h-4 text-ink-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                         {% trans "Suche" %}
                     </button>
@@ -311,12 +311,12 @@
                 {# Mobile Search Overlay (eigenständig, getriggert aus Mehr-Dropdown) #}
                 <div x-show="searchOpen" x-cloak x-transition
                      class="fixed inset-x-0 top-0 z-[60] bg-surface shadow-lg border-b border-subtle p-4"
-                     @click.away="closeSearch()" @keydown.escape.window="closeSearch()"
+                     @click.away="closeSearch" @keydown.escape.window="closeSearch"
                      data-testid="mobile-search-overlay">
                     <div class="flex items-center gap-2" x-data="mobileSearchInput">
                         <div class="relative flex-1">
                             <svg aria-hidden="true" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                            <input type="text" name="q" x-model="mq" placeholder="{% trans 'Suche...' %}"
+                            <input type="text" name="q" :value="mq" @input="setMq" placeholder="{% trans 'Suche...' %}"
                                    hx-get="{% url 'core:global_search' %}"
                                    hx-trigger="keyup changed delay:300ms"
                                    hx-target="#mobile-search-results"
@@ -325,7 +325,7 @@
                                    autocomplete="off"
                                    x-ref="input">
                         </div>
-                        <button @click="closeSearch()" class="p-2 text-ink-muted hover:text-ink">
+                        <button @click="closeSearch" class="p-2 text-ink-muted hover:text-ink">
                             <svg aria-hidden="true" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                         </button>
                     </div>

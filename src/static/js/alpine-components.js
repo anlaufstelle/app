@@ -39,17 +39,31 @@ document.addEventListener("alpine:init", () => {
         onOffline() {
             this.offline = true;
         },
-        onQueueCount(detail) {
-            this.queueCount = detail.count;
+        onQueueEvent(event) {
+            this.queueCount = event.detail.count;
         },
-        onClientsCount(detail) {
-            this.cachedClients = detail.count;
+        onClientsEvent(event) {
+            this.cachedClients = event.detail.count;
         },
-        onUnsyncedCount(detail) {
-            this.unsyncedCount = detail.count;
+        onUnsyncedEvent(event) {
+            this.unsyncedCount = event.detail.count;
         },
-        onConflictCount(detail) {
-            this.conflictCount = detail.count;
+        onConflictEvent(event) {
+            this.conflictCount = event.detail.count;
+        },
+        // CSP-Build erlaubt keine Function-Calls in x-show/x-bind — nur
+        // Property-Pfade. Daher computed getters statt Methoden.
+        get hasCachedClients() {
+            return this.cachedClients > 0;
+        },
+        get hasUnsynced() {
+            return this.unsyncedCount > 0;
+        },
+        get showSyncBanner() {
+            return !this.offline && this.queueCount > 0;
+        },
+        get showConflictBanner() {
+            return !this.offline && this.conflictCount > 0;
         },
     }));
 
@@ -57,6 +71,7 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("globalSearch", () => ({
         q: "",
         open: false,
+        setQ(event) { this.q = event.target.value; },
         focus() {
             this.open = true;
         },
@@ -66,6 +81,13 @@ document.addEventListener("alpine:init", () => {
         escape() {
             this.open = false;
             this.q = "";
+        },
+        // CSP-Build erlaubt nur Property-Pfade — daher computed getters.
+        get hasResults() {
+            return this.open && this.q.length > 0;
+        },
+        get ariaExpanded() {
+            return this.open ? "true" : "false";
         },
     }));
 
@@ -102,6 +124,7 @@ document.addEventListener("alpine:init", () => {
     /** Mobile-Search-Overlay-Inputfeld; fokussiert sich beim Mount. */
     Alpine.data("mobileSearchInput", () => ({
         mq: "",
+        setMq(event) { this.mq = event.target.value; },
         init() {
             this.$nextTick(() => this.$refs.input.focus());
         },
@@ -160,6 +183,9 @@ document.addEventListener("alpine:init", () => {
         toggle() {
             this.open = !this.open;
         },
+        get isClosed() {
+            return !this.open;
+        },
     }));
 
     // ---- Auth (login + MFA) ----
@@ -176,6 +202,15 @@ document.addEventListener("alpine:init", () => {
             if (initial) {
                 this.mode = initial;
             }
+        },
+        switchMode() {
+            this.mode = this.mode === "totp" ? "backup" : "totp";
+        },
+        get isTotp() {
+            return this.mode === "totp";
+        },
+        get isBackup() {
+            return this.mode === "backup";
         },
     }));
 
@@ -251,6 +286,32 @@ document.addEventListener("alpine:init", () => {
             this.query = this.$el.dataset.initialPseudonym || "";
             this.selectedId = this.$el.dataset.initialClientId || "";
             this._autocompleteUrl = this.$el.dataset.autocompleteUrl || "";
+        },
+        setQuery(event) { this.query = event.target.value; },
+        setSelectedId(event) { this.selectedId = event.target.value; },
+        get ariaExpanded() {
+            return this.show ? "true" : "false";
+        },
+        hideResults() {
+            this.show = false;
+        },
+        selectByEvent(event) {
+            const idx = parseInt(event.currentTarget.dataset.idx, 10);
+            if (Number.isFinite(idx) && this.results[idx]) {
+                this.selectItem(this.results[idx]);
+            }
+        },
+        highlightByEvent(event) {
+            const idx = parseInt(event.currentTarget.dataset.idx, 10);
+            if (Number.isFinite(idx)) {
+                this.highlightIndex = idx;
+            }
+        },
+        moveHighlightUp() {
+            this.moveHighlight(-1);
+        },
+        moveHighlightDown() {
+            this.moveHighlight(1);
         },
         fetchResults() {
             const gen = ++this._fetchGen;
@@ -403,11 +464,41 @@ document.addEventListener("alpine:init", () => {
                     this.clientCases = [];
                 });
         },
+        onDocTypeChange(event) {
+            this.updateAnonymousAllowed(event.target);
+        },
+        setQuery(event) { this.query = event.target.value; },
+        setSelectedId(event) { this.selectedId = event.target.value; },
+        setSelectedCaseId(event) { this.selectedCaseId = event.target.value; },
+        get ariaExpanded() {
+            return this.show ? "true" : "false";
+        },
+        hideResults() {
+            this.show = false;
+        },
+        get notAnonymousAllowed() {
+            return !this.anonymousAllowed;
+        },
+        get showAnonymousHint() {
+            return this.anonymousAllowed && !this.selectedId;
+        },
+        get showCaseDropdown() {
+            return this.selectedId && this.clientCases.length > 0;
+        },
+        get showNoCasesHint() {
+            return this.selectedId && this.clientCases.length === 0;
+        },
         moveHighlight(delta) {
             if (!this.show || this.results.length === 0) return;
             this.highlightIndex =
                 (this.highlightIndex + delta + this.results.length) %
                 this.results.length;
+        },
+        moveHighlightUp() {
+            this.moveHighlight(-1);
+        },
+        moveHighlightDown() {
+            this.moveHighlight(1);
         },
         confirmHighlight() {
             if (
@@ -415,6 +506,18 @@ document.addEventListener("alpine:init", () => {
                 this.highlightIndex < this.results.length
             ) {
                 this.selectItem(this.results[this.highlightIndex]);
+            }
+        },
+        selectByEvent(event) {
+            const idx = parseInt(event.currentTarget.dataset.idx, 10);
+            if (Number.isFinite(idx) && this.results[idx]) {
+                this.selectItem(this.results[idx]);
+            }
+        },
+        highlightByEvent(event) {
+            const idx = parseInt(event.currentTarget.dataset.idx, 10);
+            if (Number.isFinite(idx)) {
+                this.highlightIndex = idx;
             }
         },
     }));
@@ -488,6 +591,15 @@ document.addEventListener("alpine:init", () => {
             const master = document.getElementById("workitem-select-all");
             if (master) master.checked = false;
         },
+        get hasSelection() {
+            return this.selected.length > 0;
+        },
+        get selectionCount() {
+            return this.selected.length;
+        },
+        onToggleAll(event) {
+            this.toggleAll(event.target.checked);
+        },
     }));
 
     /**
@@ -510,6 +622,15 @@ document.addEventListener("alpine:init", () => {
                 });
             this.updateCount();
         },
+        deselectAll() {
+            this.selectVisible(false);
+        },
+        onSelectAll(event) {
+            this.selectVisible(event.target.checked);
+        },
+        get hasCount() {
+            return this.count > 0;
+        },
     }));
 
     /** Proposal-Card mit Hold-Form-Toggle (retention/partials/proposal_card.html). */
@@ -525,6 +646,12 @@ document.addEventListener("alpine:init", () => {
         editing: false,
         toggleEdit() {
             this.editing = !this.editing;
+        },
+        cancelEdit() {
+            this.editing = false;
+        },
+        get isViewing() {
+            return !this.editing;
         },
     }));
 });

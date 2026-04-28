@@ -47,14 +47,14 @@
     }
 
     /*
-     * Alpine component factory. Used in conflict_review.html:
-     *   <div x-data="conflictResolver('<uuid>')" x-init="load()">
+     * Alpine.data factory — used as ``x-data="conflictResolver"`` mit
+     * ``data-event-pk="<uuid>"`` (CSP-friendly). Refs #672.
      */
-    function conflictResolver(eventPk) {
+    function buildResolver() {
         return {
             loading: true,
             error: "",
-            eventPk: eventPk,
+            eventPk: "",
             localData: {},
             serverData: {},
             mergedData: {},
@@ -65,6 +65,21 @@
             resolved: false,
             diffKeys: [],
 
+            init() {
+                this.eventPk = this.$el.dataset.eventPk || "";
+            },
+
+            // CSP-konforme Wrapper-Methoden
+            get hasError() {
+                return this.error !== "";
+            },
+            get isUnresolved() {
+                return !this.resolved;
+            },
+            get hasDiffKeys() {
+                return this.diffKeys.length > 0;
+            },
+
             async load() {
                 this.loading = true;
                 try {
@@ -72,7 +87,7 @@
                         await window.crypto_session.ready();
                     }
                     if (!window.offlineStore) {
-                        this.error = "Offline-Speicher nicht verfügbar.";
+                        this.error = "Offline-Speicher nicht verfuegbar.";
                         return;
                     }
                     const record = await window.offlineStore.getOfflineEvent(this.eventPk);
@@ -181,7 +196,7 @@
                 if (result.status === "conflict") {
                     // The server changed again in the meantime. Reload the
                     // component state from the refreshed IndexedDB entry.
-                    this.error = "Der Server wurde erneut geändert. Bitte den Konflikt nochmals prüfen.";
+                    this.error = "Der Server wurde erneut geaendert. Bitte den Konflikt nochmals pruefen.";
                     this.load();
                     return;
                 }
@@ -195,10 +210,13 @@
     }
 
     // Helpers exposed for tests and tooling:
-    window.conflictResolver = conflictResolver;
     window.conflictResolverUtils = {
         diffKeys: _diffKeys,
         formatValue: _formatValue,
         asList: _asList,
     };
+
+    document.addEventListener("alpine:init", () => {
+        Alpine.data("conflictResolver", buildResolver);
+    });
 })();

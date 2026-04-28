@@ -60,7 +60,7 @@
                     <label for="id_document_type" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ meta_form.document_type.label }} *</label>
                     <select name="document_type" id="id_document_type"
                             x-ref="docTypeSelect"
-                            @change="updateAnonymousAllowed($el)"
+                            @change="onDocTypeChange"
                             tabindex="1"
                             class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
                             hx-get="{% url 'core:event_fields_partial' %}"
@@ -93,36 +93,37 @@
             <div>
                 <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
                     {% trans "Klientel" %}
-                    <span x-show="!anonymousAllowed" x-cloak class="text-red-500">*</span>
+                    <span x-show="notAnonymousAllowed" x-cloak class="text-red-500">*</span>
                 </label>
                 <div class="relative">
                     <input type="text"
-                           x-model="query"
+                           :value="query" @input="setQuery"
                            tabindex="2"
-                           @input.debounce.150ms="onInput()"
-                           @focus="onFocus()"
-                           @keydown.arrow-down.prevent="moveHighlight(1)"
-                           @keydown.arrow-up.prevent="moveHighlight(-1)"
-                           @keydown.enter.prevent="confirmHighlight()"
-                           @keydown.escape="show = false"
-                           @click.away="show = false"
+                           @input.debounce.150ms="onInput"
+                           @focus="onFocus"
+                           @keydown.arrow-down.prevent="moveHighlightDown"
+                           @keydown.arrow-up.prevent="moveHighlightUp"
+                           @keydown.enter.prevent="confirmHighlight"
+                           @keydown.escape="hideResults"
+                           @click.away="hideResults"
                            placeholder="{% trans 'Pseudonym eingeben...' %}"
                            aria-label="{% trans 'Klientel suchen' %}"
                            role="combobox"
                            aria-expanded="false"
-                           :aria-expanded="show.toString()"
+                           :aria-expanded="ariaExpanded"
                            aria-autocomplete="list"
                            aria-controls="client-autocomplete-list"
                            class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
                            autocomplete="off">
-                    <input type="hidden" name="client" x-model="selectedId">
+                    <input type="hidden" name="client" :value="selectedId" @input="setSelectedId">
 
                     {# Dropdown mit Tastatur-Hervorhebung #}
                     <div x-show="show" x-cloak id="client-autocomplete-list" role="listbox" class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
                         <template x-for="(c, idx) in results" :key="c.id">
                             <button type="button"
-                                    @mousedown.prevent="selectItem(c)"
-                                    @mouseenter="highlightIndex = idx"
+                                    :data-idx="idx"
+                                    @mousedown.prevent="selectByEvent"
+                                    @mouseenter="highlightByEvent"
                                     role="option"
                                     :aria-selected="highlightIndex === idx"
                                     :class="highlightIndex === idx ? 'bg-accent-light' : ''"
@@ -136,17 +137,17 @@
                 {% for error in meta_form.client.errors %}
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>
                 {% endfor %}
-                <p x-show="!anonymousAllowed" x-cloak class="mt-1 text-[11px] text-yellow-700">
+                <p x-show="notAnonymousAllowed" x-cloak class="mt-1 text-[11px] text-yellow-700">
                     {% trans "Pflichtfeld: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe." %}
                 </p>
-                <p x-show="anonymousAllowed && !selectedId" x-cloak class="mt-1 text-[11px] text-ink-muted">
+                <p x-show="showAnonymousHint" x-cloak class="mt-1 text-[11px] text-ink-muted">
                     {% trans "Ohne Klientel wird der Kontakt als anonym gespeichert." %}
                 </p>
             </div>
 
-            <div x-show="selectedId && clientCases.length > 0" x-cloak>
+            <div x-show="showCaseDropdown" x-cloak>
                 <label for="id_case" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Fall" %}</label>
-                <select name="case" id="id_case" x-model="selectedCaseId"
+                <select name="case" id="id_case" :value="selectedCaseId" @change="setSelectedCaseId"
                         class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink">
                     <option value="">{% trans "– Keinem Fall zuordnen –" %}</option>
                     <template x-for="c in clientCases" :key="c.id">
@@ -160,7 +161,7 @@
                     {% trans "Optional: Kontakt einem offenen Fall des ausgewählten Klientels zuordnen." %}
                 </p>
             </div>
-            <p x-show="selectedId && clientCases.length === 0" x-cloak class="text-[11px] text-ink-muted" data-testid="no-cases-for-client">
+            <p x-show="showNoCasesHint" x-cloak class="text-[11px] text-ink-muted" data-testid="no-cases-for-client">
                 {% trans "Kein offener Fall für dieses Klientel vorhanden." %}
             </p>
         </div>

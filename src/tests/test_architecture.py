@@ -152,29 +152,34 @@ class TestAlpineCspCompatibilityGuard:
             f"Betroffen: {violations}"
         )
 
-    def test_csp_script_src_has_no_unsafe_inline(self):
-        """CSP ``script-src`` darf kein ``'unsafe-inline'`` enthalten.
+    def test_csp_script_src_is_strict(self):
+        """CSP ``script-src`` darf weder ``'unsafe-inline'`` noch
+        ``'unsafe-eval'`` enthalten.
 
         Inline-Scripts werden durch ``TestNoInlineScriptBlocksGuard`` (Refs
         #618) und Inline-Event-Attribute durch ``test_no_inline_event_-
         attributes_in_templates`` (Refs #662 FND-01) bereits verboten — daher
         darf ``'unsafe-inline'`` nie noetig sein.
 
-        Hinweis: ``'unsafe-eval'`` ist aktuell bewusst akzeptiert, weil
-        Alpine.js (Standard-Build) `x-show`/`@event`-Expressions per dyn-
-        Funktionsauswertung auswertet. Der Wechsel auf @alpinejs/csp scheitert
-        am restriktiven Expression-Subset des CSP-Builds und braucht eine
-        eigene Migrations-Phase (Folge-Issue zu #669).
+        ``'unsafe-eval'`` wurde mit dem Wechsel auf den ``@alpinejs/csp``-Build
+        entfernt (Refs #672). Inline-Objekt-x-data ist durch
+        ``TestAlpineCspCompatibilityGuard`` ausgeschlossen, alle komplexen
+        Expressions sind in Component-Methoden ausgelagert, alle Komponenten
+        per ``Alpine.data()`` registriert.
         """
         from anlaufstelle.settings.base import CONTENT_SECURITY_POLICY
 
         script_src = CONTENT_SECURITY_POLICY["DIRECTIVES"].get("script-src", [])
-        assert "'unsafe-inline'" not in script_src, (
-            "CSP script-src enthaelt 'unsafe-inline'. Inline-Scripts/Event-"
-            "Attribute werden durch Architektur-Tests bereits ausgeschlossen "
-            "(Refs #618, #662 FND-01) — daher darf 'unsafe-inline' nicht im "
-            "script-src stehen.\n"
-            f"Aktueller script-src: {script_src}"
+        forbidden = ["'unsafe-inline'", "'unsafe-eval'"]
+        violations = [t for t in forbidden if t in script_src]
+        assert not violations, (
+            "CSP script-src enthaelt verbotene Lockerungen. Audit-Finding S-6 "
+            "ist mit dem Wechsel auf @alpinejs/csp adressiert; Inline-Scripts "
+            "und -Event-Attribute werden durch Architektur-Tests "
+            "ausgeschlossen.\n"
+            f"Verbotene Tokens: {violations}\n"
+            f"Aktueller script-src: {script_src}\n"
+            "Refs #672 (CSP-Migration), #669 (Phase 1A), #618, #662 FND-01."
         )
 
 

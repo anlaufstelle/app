@@ -4,7 +4,7 @@
 {% block title %}{% trans "Offline-Ansicht" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-<div x-data="offlineClientView('{{ client_pk|escapejs }}')" x-init="load()"
+<div x-data="offlineClientView" data-pk="{{ client_pk|escapejs }}" x-init="load"
      data-testid="offline-client-view">
 
     <div class="mb-4 flex items-center space-x-2">
@@ -59,7 +59,7 @@
                     <template x-if="data.events.length === 0">
                         <p class="text-sm text-ink-muted py-4">{% trans "Noch keine Kontakte dokumentiert." %}</p>
                     </template>
-                    <div class="space-y-2" x-show="data.events.length">
+                    <div class="space-y-2" x-show="hasEvents">
                         <template x-for="event in data.events" :key="event.pk">
                             <div class="block bg-surface border border-subtle rounded-[10px] p-4" data-testid="offline-event">
                                 <div class="flex items-center justify-between">
@@ -102,7 +102,7 @@
                     <template x-if="data.cases.length === 0">
                         <p class="text-sm text-ink-muted">{% trans "Keine Fälle" %}</p>
                     </template>
-                    <div class="space-y-2" x-show="data.cases.length">
+                    <div class="space-y-2" x-show="hasCases">
                         <template x-for="caseRec in data.cases" :key="caseRec.pk">
                             <div class="block bg-surface border border-subtle rounded-[10px] p-3">
                                 <div class="flex items-center justify-between">
@@ -117,7 +117,7 @@
                     <template x-if="data.workitems.length === 0">
                         <p class="text-sm text-ink-muted">{% trans "Keine offenen Aufgaben" %}</p>
                     </template>
-                    <div class="space-y-2" x-show="data.workitems.length">
+                    <div class="space-y-2" x-show="hasWorkitems">
                         <template x-for="wi in data.workitems" :key="wi.pk">
                             <div class="block bg-surface border border-subtle rounded-[10px] p-3">
                                 <span class="text-sm font-medium" x-text="wi.title"></span>

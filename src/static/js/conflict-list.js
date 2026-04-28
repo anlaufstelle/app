@@ -1,14 +1,17 @@
 /*
- * Alpine-Komponente für die Konflikt-Liste (Refs #618).
- * Inline-Script wäre unter CSP stumm geblockt.
+ * Alpine-Komponente fuer die Konflikt-Liste (Refs #618).
+ * Auf Alpine.data() registriert fuer den @alpinejs/csp Build (Refs #672).
  */
 (function () {
     "use strict";
 
-    window.conflictList = function conflictList() {
-        return {
+    document.addEventListener("alpine:init", () => {
+        Alpine.data("conflictList", () => ({
             loading: true,
             items: [],
+            get hasItems() {
+                return this.items.length > 0;
+            },
             async load() {
                 try {
                     if (window.crypto_session && window.crypto_session.ready) {
@@ -42,6 +45,6 @@
                     this.loading = false;
                 }
             },
-        };
-    };
+        }));
+    });
 })();

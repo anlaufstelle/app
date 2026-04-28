@@ -52,7 +52,7 @@
                 class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700">
             {% trans "Freigeben" %}
         </button>
-        <button @click="toggleHoldForm()"
+        <button @click="toggleHoldForm"
                 class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700">
             {% trans "Hold setzen" %}
         </button>
@@ -79,7 +79,7 @@
                         class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700">
                     {% trans "Hold erstellen" %}
                 </button>
-                <button type="button" @click="toggleHoldForm()"
+                <button type="button" @click="toggleHoldForm"
                         class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-surface border border-subtle text-ink-soft hover:bg-canvas">
                     {% trans "Abbrechen" %}
                 </button>

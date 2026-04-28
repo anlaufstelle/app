@@ -21,14 +21,22 @@ document.addEventListener("htmx:beforeSwap", function (evt) {
   });
 });
 
-/* exported statisticsCharts */
-function statisticsCharts() {
+/* statisticsCharts wird per Alpine.data() registriert (CSP-friendly, Refs #672). */
+function buildStatisticsCharts() {
   return {
     charts: {},
     loading: true,
     error: null,
     sources: [],
     docTypeFilter: "",
+    setDocTypeFilter(event) { this.docTypeFilter = event.target.value; },
+    // CSP-konforme Wrapper
+    get hasSources() {
+      return this.sources.length > 0;
+    },
+    get hasError() {
+      return this.error !== null;
+    },
 
     async fetchAndRender() {
       const params = new URLSearchParams(window.location.search);
@@ -234,3 +242,7 @@ function statisticsCharts() {
     },
   };
 }
+
+document.addEventListener("alpine:init", function () {
+  Alpine.data("statisticsCharts", buildStatisticsCharts);
+});

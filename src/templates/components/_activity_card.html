@@ -15,7 +15,7 @@
                 <span class="text-[11px] text-ink-muted hidden sm:inline whitespace-nowrap">{{ activity.actor.get_short_name|default:activity.actor.username }}</span>
                 {% endif %}
                 <button type="button"
-                        @click="toggle()"
+                        @click="toggle"
                         class="text-ink-muted hover:text-ink transition-transform duration-200 p-0.5"
                         :class="expanded ? 'rotate-180' : ''"
                         :aria-expanded="expanded"

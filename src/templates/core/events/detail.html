@@ -35,10 +35,10 @@
                 {% endif %}
                 {% if user.is_lead_or_admin or user.is_staff_or_above and event.created_by == user %}
                 <div x-data="mobileOverflowMenu" class="relative">
-                    <button @click="toggle()" type="button" class="inline-flex items-center px-3 py-2 border border-subtle text-sm rounded-md hover:bg-canvas" aria-label="{% trans 'Weitere Aktionen' %}" data-testid="mobile-overflow-menu">
+                    <button @click="toggle" type="button" class="inline-flex items-center px-3 py-2 border border-subtle text-sm rounded-md hover:bg-canvas" aria-label="{% trans 'Weitere Aktionen' %}" data-testid="mobile-overflow-menu">
                         <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
                     </button>
-                    <div x-show="mobileMenu" @click.away="close()" x-cloak x-transition
+                    <div x-show="mobileMenu" @click.away="close" x-cloak x-transition
                          class="absolute right-0 mt-1 w-56 bg-surface rounded-md shadow-lg border border-subtle py-1 z-10">
                         <a href="{% url 'core:event_delete' event.pk %}" class="flex items-center px-4 py-2 text-sm text-red-600 hover:bg-canvas">
                             {% trans "Löschen" %}
@@ -166,8 +166,8 @@
                     </span>
                     <span class="text-ink-muted">{{ entry.changed_by.display_name|default:entry.changed_by.username }}</span>
                     {% if diff.fields %}
-                    <button @click="toggle()" class="text-ink-muted hover:text-ink-muted ml-auto text-xs underline" type="button">
-                        <span x-show="!open">{% trans "Details" %}</span>
+                    <button @click="toggle" class="text-ink-muted hover:text-ink-muted ml-auto text-xs underline" type="button">
+                        <span x-show="isClosed">{% trans "Details" %}</span>
                         <span x-show="open" x-cloak>{% trans "Ausblenden" %}</span>
                     </button>
                     {% endif %}

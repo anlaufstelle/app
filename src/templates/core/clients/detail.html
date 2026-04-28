@@ -16,9 +16,9 @@
 
 {# Profil-Header #}
 <div class="mb-5"
-     x-data="offlineClientBadge('{{ client.pk|escapejs }}')"
-     x-init="refresh()"
-     @offline-clients-count.window="refresh()">
+     x-data="offlineClientBadge" data-pk="{{ client.pk|escapejs }}"
+     x-init="refresh"
+     @offline-clients-count.window="refresh">
     <div class="flex items-start justify-between gap-3 flex-wrap">
         <div>
             <h1 class="text-[26px] font-bold text-ink mb-2">{{ client.pseudonym }}</h1>
@@ -43,12 +43,12 @@
             {# --- Desktop-Buttons (md+) --- #}
             <div class="hidden md:flex md:gap-2">
                 <button type="button"
-                        @click="toggleOffline()"
+                        @click="toggleOffline"
                         :disabled="busy"
                         class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas disabled:opacity-50"
                         data-testid="take-offline-btn">
                     <svg aria-hidden="true" class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
-                    <span x-show="!isOffline">{% trans "Offline mitnehmen" %}</span>
+                    <span x-show="notOffline">{% trans "Offline mitnehmen" %}</span>
                     <span x-show="isOffline" x-cloak>{% trans "Aus Offline-Cache entfernen" %}</span>
                 </button>
                 {% if user.is_staff_or_above %}
@@ -68,12 +68,12 @@
                 {% endif %}
                 {% if user.is_lead_or_admin %}
                 <div x-data="simpleDropdown" class="relative">
-                    <button @click="toggle()" type="button" class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
+                    <button @click="toggle" type="button" class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
                         <svg aria-hidden="true" class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         {% trans "Datenauskunft" %}
                         <svg aria-hidden="true" class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
-                    <div x-show="open" @click.away="close()" x-cloak x-transition
+                    <div x-show="open" @click.away="close" x-cloak x-transition
                          class="absolute right-0 mt-1 w-56 bg-surface rounded-md shadow-lg border border-subtle py-1 z-10">
                         <a href="{% url 'core:client_export_json' client.pk %}" class="flex items-center px-4 py-2 text-[13px] text-ink hover:bg-canvas">
                             {% trans "JSON-Export (Art. 20)" %}
@@ -93,10 +93,10 @@
             </a>
             {% endif %}
             <div x-data="mobileOverflowMenu" class="relative md:hidden">
-                <button @click="toggle()" type="button" class="inline-flex items-center bg-surface border border-subtle text-ink-soft rounded-md px-3 py-2" aria-label="{% trans 'Weitere Aktionen' %}" data-testid="mobile-overflow-menu">
+                <button @click="toggle" type="button" class="inline-flex items-center bg-surface border border-subtle text-ink-soft rounded-md px-3 py-2" aria-label="{% trans 'Weitere Aktionen' %}" data-testid="mobile-overflow-menu">
                     <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
                 </button>
-                <div x-show="mobileMenu" @click.away="close()" x-cloak x-transition
+                <div x-show="mobileMenu" @click.away="close" x-cloak x-transition
                      class="absolute right-0 mt-1 w-56 bg-surface rounded-md shadow-lg border border-subtle py-1 z-10">
                     {% if user.is_staff_or_above %}
                     <a href="{% url 'core:workitem_create' %}?client={{ client.pk }}" class="flex items-center px-4 py-2 text-[13px] text-ink hover:bg-canvas">
@@ -114,7 +114,7 @@
                             class="w-full text-left flex items-center px-4 py-2 text-[13px] text-ink hover:bg-canvas disabled:opacity-50"
                             data-testid="mobile-take-offline-btn">
                         <svg aria-hidden="true" class="w-4 h-4 mr-2 text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
-                        <span x-show="!isOffline">{% trans "Offline mitnehmen" %}</span>
+                        <span x-show="notOffline">{% trans "Offline mitnehmen" %}</span>
                         <span x-show="isOffline" x-cloak>{% trans "Aus Offline-Cache entfernen" %}</span>
                     </button>
                     {% if user.is_lead_or_admin %}
@@ -228,8 +228,8 @@
      class="fixed bottom-6 right-6 z-50 max-w-sm border-2 rounded-md shadow-lg p-4 text-sm flex items-start gap-3"
      :class="messageType === 'error' ? 'border-red-400 bg-red-50 text-red-800' : 'border-green-500 bg-green-50 text-green-900'"
      data-testid="offline-toast">
-    <svg x-show="messageType !== 'error'" class="w-5 h-5 flex-shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-    <svg x-show="messageType === 'error'" x-cloak class="w-5 h-5 flex-shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+    <svg x-show="isMessageNotError" class="w-5 h-5 flex-shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+    <svg x-show="isMessageError" x-cloak class="w-5 h-5 flex-shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
     <span x-text="message" class="flex-1 font-medium"></span>
 </div>
 

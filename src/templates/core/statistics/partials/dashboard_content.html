@@ -53,13 +53,13 @@
 </div>
 
 {# Charts #}
-<div x-data="statisticsCharts()" x-init="fetchAndRender()"
+<div x-data="statisticsCharts" x-init="fetchAndRender"
      @htmx:after-swap.window="if ($event.detail.target && $event.detail.target.id === 'statistics-content') fetchAndRender()"
      class="mb-8 no-print" x-cloak>
 
     {# Chart-Filter #}
     <div class="flex flex-wrap gap-3 mb-4">
-        <select x-model="docTypeFilter" @change="fetchAndRender()"
+        <select :value="docTypeFilter" @change="setDocTypeFilter" @change="fetchAndRender"
                 class="bg-surface border border-subtle rounded-[10px] px-3 py-1.5 text-[13px] text-ink-soft">
             <option value="">{% trans "Alle Dokumentationstypen" %}</option>
             {% for dt in document_types %}
@@ -91,7 +91,7 @@
             <div class="relative" style="height: 300px;">
                 <canvas id="chart-contacts"></canvas>
             </div>
-            <div class="flex gap-4 mt-2 text-[11px] text-ink-muted" x-show="sources.length > 0">
+            <div class="flex gap-4 mt-2 text-[11px] text-ink-muted" x-show="hasSources">
                 <span class="flex items-center gap-1">
                     <span class="inline-block w-2 h-2 rounded-full bg-accent"></span>
                     {% trans "Live-Daten" %}

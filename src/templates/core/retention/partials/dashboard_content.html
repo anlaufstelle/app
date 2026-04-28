@@ -32,11 +32,11 @@
 {# Proposals by category — Bulk-Toolbar scopes selection to this section #}
 <section data-testid="retention-bulk-section"
          x-data="retentionBulkSelect"
-         @retention-bulk-change.window="updateCount()">
+         @retention-bulk-change.window="updateCount">
 
     {# Sticky bulk toolbar — visible when at least one proposal is selected #}
     <div class="sticky top-0 z-10 bg-surface border border-subtle rounded-[10px] p-3 mb-4 shadow-sm flex flex-wrap items-center gap-3"
-         x-show="count > 0" x-cloak x-transition
+         x-show="hasCount" x-cloak x-transition
          role="toolbar" aria-label="{% trans 'Massenaktionen für Löschvorschläge' %}">
         <span class="text-sm font-medium text-ink-soft" data-testid="retention-bulk-count">
             <span x-text="count"></span> {% trans "ausgewählt" %}
@@ -72,7 +72,7 @@
                 class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-surface border border-subtle text-ink-soft hover:bg-canvas focus:outline-none focus:ring-2 focus:ring-accent">
             {% trans "Ablehnen" %}
         </button>
-        <button type="button" @click="selectVisible(false)"
+        <button type="button" @click="deselectAll"
                 class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-surface border border-subtle text-ink-soft hover:bg-canvas">
             {% trans "Auswahl aufheben" %}
         </button>
@@ -80,7 +80,7 @@
 
     {# Global select-all convenience (above the first category) #}
     <label class="inline-flex items-center gap-2 text-sm text-ink-muted mb-3">
-        <input type="checkbox" @change="selectVisible($event.target.checked)"
+        <input type="checkbox" @change="onSelectAll"
                class="rounded border-subtle text-accent focus:ring-accent"
                data-testid="retention-select-all">
         {% trans "Alle auswählbaren Vorschläge markieren" %}

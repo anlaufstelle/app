@@ -31,30 +31,31 @@
                 <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Klientel" %}</label>
                 <div class="relative">
                     <input type="text"
-                           x-model="query"
-                           @input.debounce.150ms="onInput()"
-                           @focus="onFocus()"
-                           @keydown.arrow-down.prevent="moveHighlight(1)"
-                           @keydown.arrow-up.prevent="moveHighlight(-1)"
-                           @keydown.enter.prevent="confirmHighlight()"
-                           @keydown.escape="show = false"
-                           @click.away="show = false"
+                           :value="query" @input="setQuery"
+                           @input.debounce.150ms="onInput"
+                           @focus="onFocus"
+                           @keydown.arrow-down.prevent="moveHighlightDown"
+                           @keydown.arrow-up.prevent="moveHighlightUp"
+                           @keydown.enter.prevent="confirmHighlight"
+                           @keydown.escape="hideResults"
+                           @click.away="hideResults"
                            placeholder="{% trans 'Pseudonym eingeben...' %}"
                            aria-label="{% trans 'Klientel suchen' %}"
                            role="combobox"
                            aria-expanded="false"
-                           :aria-expanded="show.toString()"
+                           :aria-expanded="ariaExpanded"
                            aria-autocomplete="list"
                            aria-controls="client-autocomplete-list"
                            class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
                            autocomplete="off">
-                    <input type="hidden" name="client" x-model="selectedId">
+                    <input type="hidden" name="client" :value="selectedId" @input="setSelectedId">
 
                     <div x-show="show" x-cloak id="client-autocomplete-list" role="listbox" class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
                         <template x-for="(c, idx) in results" :key="c.id">
                             <button type="button"
-                                    @mousedown.prevent="selectItem(c)"
-                                    @mouseenter="highlightIndex = idx"
+                                    :data-idx="idx"
+                                    @mousedown.prevent="selectByEvent"
+                                    @mouseenter="highlightByEvent"
                                     role="option"
                                     :aria-selected="highlightIndex === idx"
                                     :class="highlightIndex === idx ? 'bg-accent-light' : ''"

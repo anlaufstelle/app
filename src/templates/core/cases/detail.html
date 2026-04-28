@@ -57,10 +57,10 @@
             </a>
             {% if user.is_lead_or_admin %}
             <div x-data="mobileOverflowMenu" class="relative md:hidden">
-                <button @click="toggle()" type="button" class="inline-flex items-center bg-surface border border-subtle text-ink-soft rounded-md px-3 py-2" aria-label="{% trans 'Weitere Aktionen' %}" data-testid="mobile-overflow-menu">
+                <button @click="toggle" type="button" class="inline-flex items-center bg-surface border border-subtle text-ink-soft rounded-md px-3 py-2" aria-label="{% trans 'Weitere Aktionen' %}" data-testid="mobile-overflow-menu">
                     <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
                 </button>
-                <div x-show="mobileMenu" @click.away="close()" x-cloak x-transition
+                <div x-show="mobileMenu" @click.away="close" x-cloak x-transition
                      class="absolute right-0 mt-1 w-56 bg-surface rounded-md shadow-lg border border-subtle py-1 z-10">
                     {% if case.status == 'open' %}
                     <form method="post" action="{% url 'core:case_close' case.pk %}">
