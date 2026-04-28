@@ -266,6 +266,25 @@ class TestWorkItemCRUD:
         response = client.get(reverse("core:workitem_update", kwargs={"pk": workitem_open.pk}))
         assert response.status_code == 200
 
+    def test_update_get_prefills_due_date_iso_format(self, client, staff_user, facility):
+        """Bearbeiten-Formular muss `due_date` im ISO-Format rendern, sonst
+        lässt das HTML5-Date-Input den Wert fallen (Refs #619)."""
+        from datetime import date
+
+        wi = WorkItem.objects.create(
+            facility=facility,
+            title="Mit Datum",
+            due_date=date(2026, 5, 7),
+            created_by=staff_user,
+        )
+        client.force_login(staff_user)
+        response = client.get(reverse("core:workitem_update", kwargs={"pk": wi.pk}))
+        assert response.status_code == 200
+        assert 'value="2026-05-07"' in response.content.decode(), (
+            "due_date muss als YYYY-MM-DD im value-Attribut stehen; sonst "
+            "akzeptiert der Browser ihn nicht und das Feld erscheint leer."
+        )
+
     def test_update_post(self, client, staff_user, workitem_open):
         client.force_login(staff_user)
         response = client.post(

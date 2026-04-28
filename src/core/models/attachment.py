@@ -48,6 +48,29 @@ class EventAttachment(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Erstellt am"))
 
+    # Versionierung (Refs #587, Stufe A): statt eine alte Datei beim Ersetzen
+    # zu löschen, markieren wir sie als superseded. Pro (event, field_template)
+    # bleibt die jeweils neueste Version `is_current=True`; Vorgänger zeigen
+    # per `superseded_by` auf ihren Nachfolger und zusammen bilden sie die
+    # Versionskette. Disk-Cleanup erst beim Event-Delete/Anonymize.
+    is_current = models.BooleanField(
+        default=True,
+        verbose_name=_("Aktuelle Version"),
+    )
+    superseded_by = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="prior_versions",
+        verbose_name=_("Ersetzt durch"),
+    )
+    superseded_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Ersetzt am"),
+    )
+
     class Meta:
         verbose_name = _("Dateianhang")
         verbose_name_plural = _("Dateianhänge")

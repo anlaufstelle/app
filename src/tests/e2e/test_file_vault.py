@@ -167,7 +167,7 @@ class TestFileEdit:
     """File replacement on event edit."""
 
     def test_replace_file_on_edit(self, lead_page, base_url, e2e_env, _test_pdf, tmp_path):
-        """Replacing a file on edit updates the attachment."""
+        """Replacing a file on edit keeps the old version as a superseded predecessor (Refs #587)."""
         page = lead_page
 
         # Create event with file
@@ -192,13 +192,52 @@ class TestFileEdit:
         page.click('button:has-text("Speichern")')
         page.wait_for_url(lambda url: "/edit/" not in url, timeout=10000)
 
-        # Verify new file is shown
+        # Aktuelle Version ist „replacement.pdf"; die alte „e2e-test.pdf" wandert
+        # in den Vorversionen-Akkordeon. Das Top-Level-Label zeigt nur noch die
+        # aktuelle Version.
         assert page.locator("text=replacement.pdf").count() >= 1
-        assert page.locator("text=e2e-test.pdf").count() == 0
+        prior_container = page.locator("[data-testid='attachment-prior-versions']")
+        assert prior_container.count() == 1
+        # Akkordeon aufklappen, damit die Vorversion sichtbar wird.
+        prior_container.locator("summary").click()
+        assert "e2e-test.pdf" in prior_container.inner_text()
 
-        # Download and verify content
+        # Download current version and verify content
         with page.expect_download() as download_info:
             page.locator("a:has-text('replacement.pdf')").click()
+        download = download_info.value
+        with open(download.path(), "rb") as f:
+            assert f.read() == _VALID_PDF_BYTES
+
+    def test_prior_version_stays_downloadable(self, lead_page, base_url, e2e_env, _test_pdf, tmp_path):
+        """Nach Ersetzen muss die Vorversion weiterhin herunterladbar sein (Refs #587)."""
+        page = lead_page
+
+        # Original anlegen
+        page.goto(f"{base_url}/events/new/")
+        page.wait_for_load_state("domcontentloaded")
+        page.select_option('select[name="document_type"]', label="Beratungsgespräch")
+        page.wait_for_selector("text=Scan/Bescheid", timeout=10000)
+        _select_qualified_client(page, base_url, e2e_env)
+        page.fill('input[name="thema"]', "E2E Vorversion-Download")
+        page.set_input_files('input[name="scan-bescheid"]', _test_pdf)
+        page.click('button:has-text("Speichern")')
+        page.wait_for_url(lambda url: "/events/" in url and "/new/" not in url, timeout=10000)
+
+        # Ersetzen
+        page.click('a:has-text("Bearbeiten")')
+        page.wait_for_load_state("domcontentloaded")
+        replacement = tmp_path / "replacement.pdf"
+        replacement.write_bytes(_VALID_PDF_BYTES)
+        page.set_input_files('input[name="scan-bescheid"]', str(replacement))
+        page.click('button:has-text("Speichern")')
+        page.wait_for_url(lambda url: "/edit/" not in url, timeout=10000)
+
+        # Vorversion-Akkordeon aufklappen und Vorversion herunterladen
+        prior_container = page.locator("[data-testid='attachment-prior-versions']")
+        prior_container.locator("summary").click()
+        with page.expect_download() as download_info:
+            prior_container.locator("a:has-text('e2e-test.pdf')").click()
         download = download_info.value
         with open(download.path(), "rb") as f:
             assert f.read() == _VALID_PDF_BYTES

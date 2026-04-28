@@ -18,6 +18,8 @@
                 highlightIndex: -1,
                 _justSelected: false,
                 _fetchGen: 0,
+                clientCases: [],
+                selectedCaseId: '',
                 updateAnonymousAllowed(selectEl) {
                     const opt = selectEl.options[selectEl.selectedIndex];
                     this.anonymousAllowed = !opt || !opt.dataset.minStage;
@@ -28,6 +30,8 @@
                         this.selectedId = '';
                         this.query = '';
                         this.results = [];
+                        this.clientCases = [];
+                        this.selectedCaseId = '';
                     }
                 },
                 buildAutocompleteUrl() {
@@ -43,6 +47,19 @@
                     this.show = false;
                     this.results = [];
                     this.highlightIndex = -1;
+                    this.loadCasesForClient(item.id);
+                },
+                loadCasesForClient(clientId) {
+                    this.selectedCaseId = '';
+                    if (!clientId) {
+                        this.clientCases = [];
+                        return;
+                    }
+                    const url = `{% url 'core:cases_for_client' %}?client=${encodeURIComponent(clientId)}`;
+                    fetch(url, { credentials: 'same-origin' })
+                        .then(r => r.ok ? r.json() : [])
+                        .then(data => { this.clientCases = Array.isArray(data) ? data : []; })
+                        .catch(() => { this.clientCases = []; });
                 },
                 moveHighlight(delta) {
                     if (!this.show || this.results.length === 0) return;
@@ -54,7 +71,7 @@
                     }
                 }
             }"
-          x-init="updateAnonymousAllowed($refs.docTypeSelect)">
+          x-init="updateAnonymousAllowed($refs.docTypeSelect); if (selectedId) loadCasesForClient(selectedId)">
         {% csrf_token %}
 
         {# Schnell-Vorlagen (Quick-Templates, Refs #494) #}
@@ -186,19 +203,30 @@
                 </p>
             </div>
 
-            {# Fall-Zuordnung (optional, nur wenn offene Fälle existieren) #}
-            {% if meta_form.case.field.queryset.exists %}
-            <div>
-                <label for="id_case" class="block text-sm font-medium text-gray-700 mb-1">{{ meta_form.case.label }}</label>
-                {{ meta_form.case }}
+            {# Fall-Zuordnung (optional) — Auswahl ist auf die offenen Fälle
+               des ausgewählten Klientels beschränkt (Refs #620). Ohne
+               Klientel ist das Dropdown ausgeblendet, weil ein anonymer
+               Kontakt nicht an einen klientelbezogenen Fall gehängt werden
+               darf und service-seitig ohnehin scheitern würde. #}
+            <div x-show="selectedId && clientCases.length > 0" x-cloak>
+                <label for="id_case" class="block text-sm font-medium text-gray-700 mb-1">{% trans "Fall" %}</label>
+                <select name="case" id="id_case" x-model="selectedCaseId"
+                        class="w-full border border-gray-300 rounded-md px-3 py-2">
+                    <option value="">{% trans "– Keinem Fall zuordnen –" %}</option>
+                    <template x-for="c in clientCases" :key="c.id">
+                        <option :value="c.id" x-text="c.title"></option>
+                    </template>
+                </select>
                 {% for error in meta_form.case.errors %}
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>
                 {% endfor %}
                 <p class="mt-1 text-xs text-gray-500">
-                    {% trans "Optional: Kontakt einem offenen Fall zuordnen. Anonyme Kontakte können nicht an klientelbezogene Fälle gehängt werden." %}
+                    {% trans "Optional: Kontakt einem offenen Fall des ausgewählten Klientels zuordnen." %}
                 </p>
             </div>
-            {% endif %}
+            <p x-show="selectedId && clientCases.length === 0" x-cloak class="text-xs text-gray-500" data-testid="no-cases-for-client">
+                {% trans "Kein offener Fall für dieses Klientel vorhanden." %}
+            </p>
         </div>
 
         {# Sektion 2: Dynamische Felder #}

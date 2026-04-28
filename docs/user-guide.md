@@ -9,6 +9,7 @@ Dieses Handbuch richtet sich an Fachkräfte, Leitungen und Assistenzen in Kontak
 1. [Login und Passwort](#1-login-und-passwort)
 2. [Startseite – Zeitstrom](#2-startseite--zeitstrom)
 3. [Kontakt dokumentieren (Event erstellen)](#3-kontakt-dokumentieren-event-erstellen)
+   - [Dateien-Übersicht](#3a-dateien-übersicht)
 4. [Klientel verwalten](#4-klienten-verwalten)
 5. [Hinweise und Aufgaben (WorkItems)](#5-hinweise-und-aufgaben-workitems)
 6. [Suche](#6-suche)
@@ -163,9 +164,11 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 - **Maximale Größe:** Standardmäßig sind **bis zu 10 MiB pro Datei** erlaubt. Ihre Administration kann diesen Wert anpassen.
 - **Unterstützte Formate:** PDF, Office-Dokumente und Bilder. Die genaue, für Ihre Einrichtung erlaubte Liste erfragen Sie bitte bei Ihrer Administration.
 - **Herunterladen:** Öffnen Sie die Detailansicht des Ereignisses und klicken Sie auf den Datei-Link. Die Datei wird beim Abruf automatisch entschlüsselt und im Browser ausgeliefert.
-- **Ersetzen:** Beim Bearbeiten eines Ereignisses können Sie die bestehende Datei durch eine neue ersetzen. Die alte Datei wird erst gelöscht, wenn der neue Upload erfolgreich abgeschlossen ist — Sie verlieren also nichts, wenn der Upload abbricht.
+- **Ersetzen (mit Versionshistorie):** Beim Bearbeiten eines Ereignisses können Sie die bestehende Datei durch eine neue ersetzen. Die alte Datei wird **nicht** gelöscht — sie bleibt als **Vorversion** erhalten und ist in der Ereignis-Detailansicht über ein aufklappbares Akkordeon weiterhin herunterladbar. Vorversionen werden erst beim vollständigen Löschen des Ereignisses entfernt.
 
 > **Offline-Hinweis:** Ereignisse mit Datei-Anhängen können aktuell **nicht offline** gespeichert werden. Wenn Sie offline arbeiten, erscheint beim Anhängen einer Datei ein deutlicher Hinweis. Siehe [Abschnitt 8](#8-pwa-installieren-und-offline-arbeiten).
+
+> **Zentrale Dateiübersicht:** Alle Dateianhänge Ihrer Einrichtung lassen sich über die **Dateien-Seite** in einer Liste durchsuchen und filtern — siehe [Abschnitt 3a: Dateien-Übersicht](#3a-dateien-übersicht).
 
 ### Kontakt bearbeiten
 
@@ -185,6 +188,46 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 4. Bestätigen Sie die Löschung.
 
 > **Wichtig:** Wenn der Kontakt einem **qualifizierten Klientel** zugeordnet ist, wird kein sofortiges Löschen durchgeführt. Stattdessen wird automatisch ein **Löschantrag** gestellt, der von einer Leitung oder Administration genehmigt werden muss (4-Augen-Prinzip). Sie erhalten eine entsprechende Rückmeldung.
+
+---
+
+## 3a. Dateien-Übersicht
+
+Die **Dateien-Seite** (`/attachments/`, Sidebar-Eintrag **Dateien**) zeigt alle Anhänge Ihrer Einrichtung in einer durchsuchbaren Liste — ohne vorher das jeweilige Ereignis öffnen zu müssen.
+
+### Zugriff
+
+- **Sidebar-Navigation → Dateien**
+- Verfügbar für Assistenzen, Fachkräfte, Leitungen und Administratoren.
+
+### Sichtbarkeit
+
+Sie sehen nur Dateien, deren Ereignis **und** Feld Ihre Sensitivitätsrolle erreicht:
+
+- Felder mit „hoher" Sensitivität bleiben für Fachkräfte einer niedrigeren Stufe verborgen — gleiches Gate wie im Ereignis-Detail.
+- Anhänge gelöschter Ereignisse sind nicht enthalten.
+- Facility-Scoping: Sie sehen ausschließlich Dateien Ihrer eigenen Einrichtung.
+
+### Filter
+
+Zwei Filter oberhalb der Tabelle:
+
+- **Dokumentationstyp** — nur Anhänge zu Ereignissen eines bestimmten Typs (z. B. „Beratungsgespräch").
+- **Klientel** — alle Anhänge zu einem bestimmten Pseudonym.
+
+Die Filter sind kombinierbar und aktualisieren die Liste via HTMX ohne kompletten Seitenreload.
+
+### Herunterladen
+
+Jede Zeile zeigt den Originaldateinamen. Ein Klick darauf liefert die entschlüsselte Datei — exakt wie in der Ereignis-Detailansicht. Downloads werden im Audit-Log protokolliert.
+
+### Verschlüsselung
+
+Alle Dateien liegen auf dem Server verschlüsselt (AES-GCM). Entschlüsselt wird erst beim Download-Request im Django-Prozess; direkt auf die Festplatte zugreifende Admins sehen nur die verschlüsselten Binärdaten.
+
+### Vorversionen
+
+Ersetzte Dateien bleiben als Vorversionen erhalten (siehe [Abschnitt 3 – Dateianhänge](#dateianhänge)). Die Dateien-Übersicht zeigt aktuell nur die jeweils aktuelle Version eines Eintrags; Vorversionen sind über den Eintrag in der Ereignis-Detailseite einsehbar.
 
 ---
 
