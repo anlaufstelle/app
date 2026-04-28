@@ -5,14 +5,14 @@
 
 {% block content %}
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-2xl font-bold">{% trans "Dateien" %}</h1>
+    <h1 class="text-[22px] font-bold text-ink">{% trans "Dateien" %}</h1>
 </div>
 
 {# Filter bar #}
-<div class="mb-4 flex flex-col sm:flex-row gap-3 no-print" data-filter-persist>
+<div class="mb-4 flex flex-col sm:flex-row gap-2.5 no-print" data-filter-persist>
     <select name="document_type"
             aria-label="{% trans 'Dokumentationstyp filtern' %}"
-            class="border border-gray-300 rounded-md px-3 py-2 text-sm"
+            class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
             hx-get="{% url 'core:attachment_list' %}"
             hx-trigger="change"
             hx-target="#attachment-table"
@@ -26,7 +26,7 @@
            name="client"
            value="{{ selected_client }}"
            placeholder="{% trans 'Klient-ID filtern...' %}"
-           class="border border-gray-300 rounded-md px-3 py-2 text-sm"
+           class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
            hx-get="{% url 'core:attachment_list' %}"
            hx-trigger="keyup changed delay:300ms"
            hx-target="#attachment-table"

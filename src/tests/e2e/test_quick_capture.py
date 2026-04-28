@@ -67,7 +67,7 @@ class TestSchnellerfassung:
 
         # Pfeil-runter + warten bis Alpine highlightet + Enter
         autocomplete.press("ArrowDown")
-        page.locator("#client-autocomplete-list button.bg-indigo-50").wait_for(state="visible", timeout=3000)
+        page.locator("#client-autocomplete-list button.bg-accent-light").wait_for(state="visible", timeout=3000)
         autocomplete.press("Enter")
 
         # Dropdown sollte geschlossen sein

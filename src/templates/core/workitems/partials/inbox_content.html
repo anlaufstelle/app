@@ -2,7 +2,7 @@
 
 {# Offen #}
 <section class="mb-8">
-    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{% trans "Offen" %} ({{ open_items|length }}{% if open_has_more %}+{% endif %})</h2>
+    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Offen" %} ({{ open_items|length }}{% if open_has_more %}+{% endif %})</h2>
     {% if open_items %}
     <div class="space-y-3">
         {% for wi in open_items %}
@@ -10,16 +10,16 @@
         {% endfor %}
     </div>
     {% if open_has_more %}
-    <p class="text-xs text-gray-500 mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
+    <p class="text-xs text-ink-muted mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
     {% endif %}
     {% else %}
-    <p class="text-sm text-gray-500">{% trans "Keine offenen Aufgaben" %}</p>
+    <p class="text-sm text-ink-muted">{% trans "Keine offenen Aufgaben" %}</p>
     {% endif %}
 </section>
 
 {# In Bearbeitung #}
 <section class="mb-8">
-    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{% trans "In Bearbeitung" %} ({{ in_progress_items|length }}{% if in_progress_has_more %}+{% endif %})</h2>
+    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "In Bearbeitung" %} ({{ in_progress_items|length }}{% if in_progress_has_more %}+{% endif %})</h2>
     {% if in_progress_items %}
     <div class="space-y-3">
         {% for wi in in_progress_items %}
@@ -27,16 +27,16 @@
         {% endfor %}
     </div>
     {% if in_progress_has_more %}
-    <p class="text-xs text-gray-500 mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
+    <p class="text-xs text-ink-muted mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
     {% endif %}
     {% else %}
-    <p class="text-sm text-gray-500">{% trans "Keine Aufgaben in Bearbeitung" %}</p>
+    <p class="text-sm text-ink-muted">{% trans "Keine Aufgaben in Bearbeitung" %}</p>
     {% endif %}
 </section>
 
 {# Kürzlich Erledigt #}
 <section>
-    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{% trans "Kürzlich erledigt" %} ({{ done_items|length }}{% if done_has_more %}+{% endif %})</h2>
+    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Kürzlich erledigt" %} ({{ done_items|length }}{% if done_has_more %}+{% endif %})</h2>
     {% if done_items %}
     <div class="space-y-3">
         {% for wi in done_items %}
@@ -44,9 +44,9 @@
         {% endfor %}
     </div>
     {% if done_has_more %}
-    <p class="text-xs text-gray-500 mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
+    <p class="text-xs text-ink-muted mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
     {% endif %}
     {% else %}
-    <p class="text-sm text-gray-500">{% trans "Keine kürzlich erledigten Aufgaben" %}</p>
+    <p class="text-sm text-ink-muted">{% trans "Keine kürzlich erledigten Aufgaben" %}</p>
     {% endif %}
 </section>

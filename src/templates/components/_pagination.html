@@ -1,7 +1,7 @@
 {% load i18n %}
 {# Generic pagination component. Expects: page (Page object), extra_params (query string, optional) #}
 {% if page.has_other_pages %}
-<div class="mt-4 flex items-center justify-between text-sm text-gray-600">
+<div class="mt-4 flex items-center justify-between text-sm text-ink-muted">
     <div>
         {% blocktrans with start=page.start_index end=page.end_index total=page.paginator.count %}
         {{ start }}–{{ end }} von {{ total }} Einträgen
@@ -10,14 +10,14 @@
     <div class="flex gap-1">
         {% if page.has_previous %}
         <a href="?page={{ page.previous_page_number }}{% if extra_params %}&{{ extra_params }}{% endif %}"
-           class="px-3 py-1 rounded border border-gray-300 hover:bg-gray-50">‹</a>
+           class="px-3 py-1 rounded border border-subtle hover:bg-canvas">‹</a>
         {% endif %}
-        <span class="px-3 py-1 rounded border border-indigo-300 bg-indigo-50 text-indigo-700 font-medium">
+        <span class="px-3 py-1 rounded border border-accent/30 bg-accent-light text-accent font-medium">
             {{ page.number }} / {{ page.paginator.num_pages }}
         </span>
         {% if page.has_next %}
         <a href="?page={{ page.next_page_number }}{% if extra_params %}&{{ extra_params }}{% endif %}"
-           class="px-3 py-1 rounded border border-gray-300 hover:bg-gray-50">›</a>
+           class="px-3 py-1 rounded border border-subtle hover:bg-canvas">›</a>
         {% endif %}
     </div>
 </div>

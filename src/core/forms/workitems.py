@@ -6,6 +6,9 @@ from django.utils.translation import gettext_lazy as _
 from core.models import User, WorkItem
 from core.models.client import Client
 
+# Tailwind-Klassen fuer Form-Inputs (Theme Gruen, siehe Plan #663)
+INPUT_CSS = "w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink"
+
 
 class WorkItemForm(forms.ModelForm):
     """Form for creating and editing WorkItems."""
@@ -25,15 +28,15 @@ class WorkItemForm(forms.ModelForm):
             "assigned_to",
         ]
         widgets = {
-            "item_type": forms.Select(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
-            "title": forms.TextInput(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
+            "item_type": forms.Select(attrs={"class": INPUT_CSS}),
+            "title": forms.TextInput(attrs={"class": INPUT_CSS}),
             "description": forms.Textarea(
                 attrs={
-                    "class": "w-full border border-gray-300 rounded-md px-3 py-2",
+                    "class": INPUT_CSS,
                     "rows": 4,
                 }
             ),
-            "priority": forms.Select(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
+            "priority": forms.Select(attrs={"class": INPUT_CSS}),
             # Explizites ISO-Format (Refs #619): HTML5 `<input type="date">`
             # akzeptiert nur `YYYY-MM-DD`; ohne `format=` nimmt Django den
             # ersten Eintrag aus DATE_INPUT_FORMATS — unter LANGUAGE_CODE=de-DE
@@ -42,18 +45,18 @@ class WorkItemForm(forms.ModelForm):
                 format="%Y-%m-%d",
                 attrs={
                     "type": "date",
-                    "class": "w-full border border-gray-300 rounded-md px-3 py-2",
+                    "class": INPUT_CSS,
                 },
             ),
             "remind_at": forms.DateInput(
                 format="%Y-%m-%d",
                 attrs={
                     "type": "date",
-                    "class": "w-full border border-gray-300 rounded-md px-3 py-2",
+                    "class": INPUT_CSS,
                 },
             ),
-            "recurrence": forms.Select(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
-            "assigned_to": forms.Select(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
+            "recurrence": forms.Select(attrs={"class": INPUT_CSS}),
+            "assigned_to": forms.Select(attrs={"class": INPUT_CSS}),
         }
 
     def __init__(self, *args, facility=None, **kwargs):

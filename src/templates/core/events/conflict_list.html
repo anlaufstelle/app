@@ -8,30 +8,30 @@
 
     <div class="flex items-center justify-between">
         <div>
-            <h1 class="text-xl font-bold text-gray-900">{% trans "Offline-Konflikte" %}</h1>
-            <p class="mt-1 text-sm text-gray-600">
+            <h1 class="text-xl font-bold text-ink">{% trans "Offline-Konflikte" %}</h1>
+            <p class="mt-1 text-sm text-ink-muted">
                 {% trans "Ereignisse, bei denen lokale Änderungen mit dem Server abgeglichen werden müssen." %}
             </p>
         </div>
     </div>
 
     <template x-if="loading">
-        <div class="py-8 text-center text-gray-500">{% trans "Lade Konflikte..." %}</div>
+        <div class="py-8 text-center text-ink-muted">{% trans "Lade Konflikte..." %}</div>
     </template>
 
     <template x-if="!loading && items.length === 0">
-        <div class="bg-white border border-gray-200 rounded-md p-6 text-sm text-gray-500 text-center" data-testid="conflict-list-empty">
+        <div class="bg-surface border border-subtle rounded-[10px] p-6 text-sm text-ink-muted text-center" data-testid="conflict-list-empty">
             {% trans "Keine ungelösten Konflikte." %}
         </div>
     </template>
 
     <template x-if="!loading && items.length > 0">
-        <div class="bg-white border border-gray-200 rounded-md overflow-hidden divide-y divide-gray-200">
+        <div class="bg-surface border border-subtle rounded-[10px] overflow-hidden divide-y divide-subtle">
             <template x-for="item in items" :key="item.pk">
-                <a :href="'/offline/conflicts/' + item.pk + '/'" class="flex items-center justify-between px-4 py-3 hover:bg-gray-50" data-testid="conflict-list-item">
+                <a :href="'/offline/conflicts/' + item.pk + '/'" class="flex items-center justify-between px-4 py-3 hover:bg-canvas" data-testid="conflict-list-item">
                     <div>
-                        <span class="text-sm font-medium text-gray-900" x-text="item.documentTypeName || 'Ereignis'"></span>
-                        <span class="ml-2 text-xs text-gray-500" x-text="item.lastEditedAtFmt"></span>
+                        <span class="text-sm font-medium text-ink" x-text="item.documentTypeName || 'Ereignis'"></span>
+                        <span class="ml-2 text-xs text-ink-muted" x-text="item.lastEditedAtFmt"></span>
                     </div>
                     <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                         {% trans "Konflikt" %}

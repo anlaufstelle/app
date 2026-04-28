@@ -114,10 +114,11 @@ class TestMobileSidebarAndNav:
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Alle 4 Slots: Neu, Zeitstrom, Suche, Mehr
+        # Alle 5 Slots: Neu, Zeitstrom, Klientel, Aufgaben, Mehr (Suche im Mehr-Dropdown)
         assert page.locator("[data-testid='mobile-nav-create']").is_visible()
         assert page.locator("[data-testid='mobile-nav-zeitstrom']").is_visible()
-        assert page.locator("[data-testid='mobile-nav-search']").is_visible()
+        assert page.locator("[data-testid='mobile-nav-clients']").is_visible()
+        assert page.locator("[data-testid='mobile-nav-workitems']").is_visible()
         assert page.locator("[data-testid='mobile-nav-more']").is_visible()
 
     def test_mobile_touch_targets_min_size(self, mobile_page, base_url):
@@ -129,7 +130,8 @@ class TestMobileSidebarAndNav:
         for testid in [
             "mobile-nav-create",
             "mobile-nav-zeitstrom",
-            "mobile-nav-search",
+            "mobile-nav-clients",
+            "mobile-nav-workitems",
             "mobile-nav-more",
         ]:
             box = page.locator(f"[data-testid='{testid}']").bounding_box()
@@ -151,36 +153,31 @@ class TestMobileNavigation:
         assert page.locator("h1").inner_text() == "Zeitstrom"
 
     def test_mobile_nav_more_opens_menu(self, mobile_page, base_url):
+        # Klientel/Aufgaben sind jetzt eigene Bottom-Nav-Slots — Mehr enthält Uebergabe/Dateien/Suche etc.
         page = mobile_page
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
         page.locator("[data-testid='mobile-nav-more']").click()
-        klienten_link = page.locator("nav[aria-label='Mobile Navigation'] a[href='/clients/']")
-        klienten_link.wait_for(state="visible", timeout=3000)
-        assert klienten_link.is_visible(), "Klientel-Link im Mehr-Menü nicht sichtbar"
+        uebergabe_link = page.locator("nav[aria-label='Mobile Navigation'] a[href='/uebergabe/']")
+        uebergabe_link.wait_for(state="visible", timeout=3000)
+        assert uebergabe_link.is_visible(), "Uebergabe-Link im Mehr-Menue nicht sichtbar"
 
-    def test_mobile_nav_more_navigate_to_clients(self, mobile_page, base_url):
+    def test_mobile_nav_clients_navigates(self, mobile_page, base_url):
         page = mobile_page
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
-        page.locator("[data-testid='mobile-nav-more']").click()
-        clients_link = page.locator("nav[aria-label='Mobile Navigation'] a[href='/clients/']")
-        clients_link.wait_for(state="visible", timeout=3000)
-        clients_link.click()
+        page.locator("[data-testid='mobile-nav-clients']").click()
         page.wait_for_url("**/clients/")
         assert page.locator("h1").inner_text() == "Klientel"
 
-    def test_mobile_nav_more_navigate_to_workitems(self, mobile_page, base_url):
+    def test_mobile_nav_workitems_navigates(self, mobile_page, base_url):
         page = mobile_page
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
-        page.locator("[data-testid='mobile-nav-more']").click()
-        aufgaben_link = page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Aufgaben')")
-        aufgaben_link.wait_for(state="visible", timeout=3000)
-        aufgaben_link.click()
+        page.locator("[data-testid='mobile-nav-workitems']").click()
         page.wait_for_url("**/workitems/")
         assert page.locator("h1").inner_text() == "Aufgaben"
 
@@ -200,6 +197,8 @@ class TestMobileNavigation:
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
+        # Suche liegt jetzt im Mehr-Dropdown (Design-Refresh: 5 Bottom-Nav-Slots).
+        page.locator("[data-testid='mobile-nav-more']").click()
         page.locator("[data-testid='mobile-nav-search']").click()
         overlay = page.locator("[data-testid='mobile-search-overlay']")
         overlay.wait_for(state="visible", timeout=3000)
@@ -228,17 +227,19 @@ class TestMobileZeitstrom:
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Datums-Navigation sollte sichtbar und nutzbar sein
-        date_nav = page.locator(".flex.items-center.justify-center.space-x-4")
-        assert date_nav.is_visible()
+        # Datums-Navigation sollte sichtbar und nutzbar sein (Heute-Datum als h2-aehnliches Element)
+        date_nav = page.locator("text=" + "April")
+        assert date_nav.first.is_visible()
 
     def test_mobile_zeitstrom_filter_selects_visible(self, mobile_page, base_url):
+        # Type-Filter ist seit Visual-Refresh (#663) als Pills (Alle/Kontakte/Aktivitaeten/...) statt Select.
         page = mobile_page
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
-        filter_type = page.locator("#filter-type")
-        assert filter_type.is_visible(), "Type-Filter sollte auf Mobile sichtbar sein"
+        # Mindestens eine Filter-Pill muss sichtbar sein (z.B. "Alle")
+        alle_pill = page.locator("a:has-text('Alle')").first
+        assert alle_pill.is_visible(), "Type-Filter-Pill sollte auf Mobile sichtbar sein"
 
 
 class TestMobileClientList:
