@@ -1,7 +1,6 @@
 """Views for audit log."""
 
 import logging
-from datetime import date
 from urllib.parse import urlencode
 
 from django.core.paginator import Paginator
@@ -10,6 +9,7 @@ from django.views import View
 
 from core.models import AuditLog
 from core.models.user import User
+from core.utils.formatting import parse_date
 from core.views.mixins import AdminRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -34,13 +34,13 @@ class AuditLogListView(AdminRequiredMixin, View):
 
         # Filter: date_from
         date_from_str = request.GET.get("date_from", "")
-        date_from = self._parse_date(date_from_str)
+        date_from = parse_date(date_from_str)
         if date_from:
             queryset = queryset.filter(timestamp__date__gte=date_from)
 
         # Filter: date_to
         date_to_str = request.GET.get("date_to", "")
-        date_to = self._parse_date(date_to_str)
+        date_to = parse_date(date_to_str)
         if date_to:
             queryset = queryset.filter(timestamp__date__lte=date_to)
 
@@ -79,14 +79,6 @@ class AuditLogListView(AdminRequiredMixin, View):
             return render(request, "core/audit/partials/table.html", context)
         return render(request, "core/audit/list.html", context)
 
-    @staticmethod
-    def _parse_date(value):
-        if not value:
-            return None
-        try:
-            return date.fromisoformat(value)
-        except (ValueError, TypeError):
-            return None
 
 
 class AuditLogDetailView(AdminRequiredMixin, View):

@@ -30,12 +30,14 @@ class AccountProfileView(AssistantOrAboveRequiredMixin, TemplateView):
         start_dt = timezone.make_aware(datetime.combine(today, time.min))
         end_dt = timezone.make_aware(datetime.combine(today, time.max))
         context["stats"] = {
-            "events_today": Event.objects.filter(
+            "events_today": Event.objects.visible_to(user)
+            .filter(
                 facility=facility,
                 is_deleted=False,
                 occurred_at__gte=start_dt,
                 occurred_at__lte=end_dt,
-            ).count(),
+            )
+            .count(),
             "open_cases": CaseModel.objects.filter(
                 facility=facility,
                 status=CaseModel.Status.OPEN,
@@ -60,7 +62,8 @@ class AccountProfileView(AssistantOrAboveRequiredMixin, TemplateView):
 
         # Last 10 created events (read-only)
         context["recent_events"] = (
-            Event.objects.filter(created_by=user, is_deleted=False, facility=facility)
+            Event.objects.visible_to(user)
+            .filter(created_by=user, is_deleted=False, facility=facility)
             .select_related("document_type", "client")
             .order_by("-occurred_at")[:10]
         )

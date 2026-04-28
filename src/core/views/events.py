@@ -35,6 +35,7 @@ from core.services.sensitivity import (
     user_can_see_document_type,
     user_can_see_field,
 )
+from core.utils.formatting import format_file_size
 from core.views.mixins import AssistantOrAboveRequiredMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -58,15 +59,6 @@ def _remove_restricted_fields(user, document_type, data_form):
             del data_form.fields[name]
             restricted.append(name)
     return restricted
-
-
-def _format_file_size(size_bytes):
-    """Format file size for display."""
-    if size_bytes < 1024:
-        return f"{size_bytes} B"
-    if size_bytes < 1024 * 1024:
-        return f"{size_bytes / 1024:.1f} KB"
-    return f"{size_bytes / (1024 * 1024):.1f} MB"
 
 
 class EventCreateView(AssistantOrAboveRequiredMixin, View):
@@ -361,7 +353,7 @@ class EventDetailView(AssistantOrAboveRequiredMixin, View):
                             "is_file": True,
                             "attachment_id": str(attachment.pk),
                             "original_filename": get_original_filename(attachment),
-                            "file_size_display": _format_file_size(attachment.file_size),
+                            "file_size_display": format_file_size(attachment.file_size),
                             "is_sensitive": bool(field_sensitivity),
                         }
                     )
@@ -433,7 +425,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         for attachment in event.attachments.select_related("field_template"):
             existing_attachments[attachment.field_template.slug] = {
                 "filename": get_original_filename(attachment),
-                "size": _format_file_size(attachment.file_size),
+                "size": format_file_size(attachment.file_size),
             }
 
         context = {

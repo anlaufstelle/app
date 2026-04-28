@@ -53,6 +53,14 @@ class CustomLogoutView(auth_views.LogoutView):
         return response
 
 
+class RateLimitedPasswordResetView(auth_views.PasswordResetView):
+    """Password reset with rate limiting to prevent abuse."""
+
+    @method_decorator(ratelimit(key="ip", rate="5/m", method="POST", block=True))
+    def post(self, request, *args, **kwargs):
+        return super().post(request, *args, **kwargs)
+
+
 class CustomPasswordChangeView(auth_views.PasswordChangeView):
     """Password change with must_change_password reset and offline-salt rotation."""
 

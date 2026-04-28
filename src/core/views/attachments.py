@@ -2,25 +2,18 @@
 
 import logging
 
+from django.db.models import Q
 from django.shortcuts import render
 from django.views import View
 
 from core.models import DocumentType
 from core.models.attachment import EventAttachment
 from core.services.file_vault import get_original_filename
-from core.services.sensitivity import user_can_see_field
+from core.services.sensitivity import allowed_sensitivities_for_user
+from core.utils.formatting import format_file_size
 from core.views.mixins import AssistantOrAboveRequiredMixin
 
 logger = logging.getLogger(__name__)
-
-
-def _format_file_size(size_bytes):
-    """Format file size for display."""
-    if size_bytes < 1024:
-        return f"{size_bytes} B"
-    if size_bytes < 1024 * 1024:
-        return f"{size_bytes / 1024:.1f} KB"
-    return f"{size_bytes / (1024 * 1024):.1f} MB"
 
 
 class AttachmentListView(AssistantOrAboveRequiredMixin, View):
@@ -28,6 +21,7 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, View):
 
     def get(self, request):
         facility = request.current_facility
+        allowed = allowed_sensitivities_for_user(request.user)
 
         # Get all attachments for this facility via event__facility
         attachments = (
@@ -38,6 +32,15 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, View):
                 "event__client",
                 "field_template",
                 "created_by",
+            )
+            # Sensitivity filter BEFORE slicing: effective sensitivity is
+            # max(doc_type, field_template). Both must be within the user's
+            # allowed range for the attachment to be visible.
+            .filter(
+                event__document_type__sensitivity__in=allowed,
+            )
+            .filter(
+                Q(field_template__sensitivity="") | Q(field_template__sensitivity__in=allowed),
             )
             .order_by("-created_at")
         )
@@ -51,22 +54,19 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, View):
         if client_id:
             attachments = attachments.filter(event__client_id=client_id)
 
-        # Filter by sensitivity -- only show attachments the user can see
+        # Build display list from pre-filtered queryset
         visible = []
         for att in attachments[:200]:
-            ft = att.field_template
-            doc_sensitivity = att.event.document_type.sensitivity
-            if user_can_see_field(request.user, doc_sensitivity, ft.sensitivity):
-                visible.append(
-                    {
-                        "attachment": att,
-                        "event": att.event,
-                        "original_filename": get_original_filename(att),
-                        "file_size_display": _format_file_size(att.file_size),
-                        "doc_type_name": att.event.document_type.name,
-                        "client_pseudonym": att.event.client.pseudonym if att.event.client else "\u2014",
-                    }
-                )
+            visible.append(
+                {
+                    "attachment": att,
+                    "event": att.event,
+                    "original_filename": get_original_filename(att),
+                    "file_size_display": format_file_size(att.file_size),
+                    "doc_type_name": att.event.document_type.name,
+                    "client_pseudonym": att.event.client.pseudonym if att.event.client else "\u2014",
+                }
+            )
 
         # Document types for filter dropdown
         doc_types = DocumentType.objects.for_facility(facility).filter(is_active=True)

@@ -294,3 +294,13 @@ class TestRateLimiting:
                 REMOTE_ADDR="10.99.99.99",
             )
         assert response.status_code == 403
+
+    def test_password_reset_post_rate_limited(self, client):
+        """Nach 5 POST-Requests auf password-reset von derselben IP → 403."""
+        for i in range(6):
+            response = client.post(
+                "/password-reset/",
+                {"email": "test@example.com"},
+                REMOTE_ADDR="10.88.88.88",
+            )
+        assert response.status_code == 403

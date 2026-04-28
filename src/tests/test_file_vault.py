@@ -302,6 +302,147 @@ class TestFileUploadView:
 
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
+class TestAttachmentListSensitivityFiltering:
+    """Verify that the attachment list filters by sensitivity BEFORE slicing."""
+
+    def test_attachments_list_filters_before_slicing(
+        self, client, staff_user, facility, settings
+    ):
+        """Staff (max ELEVATED) must see NORMAL attachments even if many HIGH
+        attachments exist — the sensitivity filter must run before the [:200]
+        slice so that invisible HIGH records do not push visible NORMAL records
+        out of the result window.
+        """
+        settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
+        settings.ENCRYPTION_KEYS = ""
+
+        ft_file = FieldTemplate.objects.create(
+            facility=facility,
+            name="Datei",
+            field_type=FieldTemplate.FieldType.FILE,
+        )
+
+        # HIGH doc type — invisible to STAFF
+        dt_high = DocumentType.objects.create(
+            facility=facility,
+            name="Geheim",
+            sensitivity=DocumentType.Sensitivity.HIGH,
+        )
+        DocumentTypeField.objects.create(
+            document_type=dt_high, field_template=ft_file, sort_order=0
+        )
+
+        # NORMAL doc type — visible to STAFF
+        dt_normal = DocumentType.objects.create(
+            facility=facility,
+            name="Offen",
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+        )
+        DocumentTypeField.objects.create(
+            document_type=dt_normal, field_template=ft_file, sort_order=0
+        )
+
+        # Create 5 HIGH events with attachments (newer, would fill the slice)
+        for i in range(5):
+            ev = Event.objects.create(
+                facility=facility,
+                document_type=dt_high,
+                occurred_at=timezone.now(),
+                data_json={},
+                created_by=staff_user,
+            )
+            uploaded = SimpleUploadedFile(
+                f"secret_{i}.pdf", b"high content", content_type="application/pdf"
+            )
+            store_encrypted_file(facility, uploaded, ft_file, ev, staff_user)
+
+        # Create 2 NORMAL events with attachments (older, would be pushed out)
+        for i in range(2):
+            ev = Event.objects.create(
+                facility=facility,
+                document_type=dt_normal,
+                occurred_at=timezone.now(),
+                data_json={},
+                created_by=staff_user,
+            )
+            uploaded = SimpleUploadedFile(
+                f"open_{i}.pdf", b"normal content", content_type="application/pdf"
+            )
+            store_encrypted_file(facility, uploaded, ft_file, ev, staff_user)
+
+        client.force_login(staff_user)
+        response = client.get(reverse("core:attachment_list"))
+        assert response.status_code == 200
+        content = response.content.decode()
+
+        # NORMAL attachments must be visible
+        assert "open_0.pdf" in content
+        assert "open_1.pdf" in content
+
+        # HIGH attachments must NOT be visible to staff
+        assert "secret_0.pdf" not in content
+
+    def test_attachments_list_field_level_sensitivity_filtered(
+        self, client, staff_user, facility, settings
+    ):
+        """Attachments whose field_template has HIGH sensitivity are hidden
+        from STAFF even when the doc_type is NORMAL.
+        """
+        settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
+        settings.ENCRYPTION_KEYS = ""
+
+        ft_normal = FieldTemplate.objects.create(
+            facility=facility,
+            name="NormalFile",
+            field_type=FieldTemplate.FieldType.FILE,
+        )
+        ft_high = FieldTemplate.objects.create(
+            facility=facility,
+            name="HighFile",
+            field_type=FieldTemplate.FieldType.FILE,
+            sensitivity=DocumentType.Sensitivity.HIGH,
+        )
+
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name="Mischtyp",
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+        )
+        DocumentTypeField.objects.create(
+            document_type=dt, field_template=ft_normal, sort_order=0
+        )
+        DocumentTypeField.objects.create(
+            document_type=dt, field_template=ft_high, sort_order=1
+        )
+
+        ev = Event.objects.create(
+            facility=facility,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        uploaded_normal = SimpleUploadedFile(
+            "visible.pdf", b"ok", content_type="application/pdf"
+        )
+        store_encrypted_file(facility, uploaded_normal, ft_normal, ev, staff_user)
+
+        uploaded_high = SimpleUploadedFile(
+            "hidden.pdf", b"secret", content_type="application/pdf"
+        )
+        store_encrypted_file(facility, uploaded_high, ft_high, ev, staff_user)
+
+        client.force_login(staff_user)
+        response = client.get(reverse("core:attachment_list"))
+        assert response.status_code == 200
+        content = response.content.decode()
+
+        assert "visible.pdf" in content
+        assert "hidden.pdf" not in content
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_encryption_key")
 class TestFileValidation:
     def test_invalid_extension_rejected(self, client, staff_user, facility, doc_type_with_file):
         dt, _, _ = doc_type_with_file

@@ -4,7 +4,7 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Event, WorkItem
+from core.models import DocumentType, Event, WorkItem
 
 
 @pytest.fixture
@@ -102,3 +102,26 @@ class TestAccountProfileView:
         events = response.context["recent_events"]
         assert own_event in events
         assert other_event not in events
+
+    def test_profile_hides_own_high_events_for_staff(
+        self, client, staff_user, facility, client_identified, profile_url
+    ):
+        """Staff darf eigene HIGH-Events auf der Profilseite nicht sehen."""
+        doc_type_high = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.SERVICE,
+            sensitivity=DocumentType.Sensitivity.HIGH,
+            name="Hochsensibel",
+        )
+        high_event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_high,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        client.force_login(staff_user)
+        response = client.get(profile_url)
+        assert high_event not in response.context["recent_events"]
+        assert response.context["stats"]["events_today"] == 0

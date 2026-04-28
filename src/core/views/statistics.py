@@ -15,6 +15,7 @@ from core.models import AuditLog, DocumentType
 from core.services.export import export_events_csv, generate_jugendamt_pdf, generate_report_pdf
 from core.services.snapshot import _merge_stats, get_statistics_hybrid, get_statistics_trend
 from core.signals.audit import get_client_ip
+from core.utils.formatting import parse_date
 from core.views.mixins import LeadOrAdminRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -29,8 +30,8 @@ class StatisticsView(LeadOrAdminRequiredMixin, View):
         today = timezone.localdate()
 
         if period == "custom":
-            date_from = self._parse_date(request.GET.get("date_from"), today - timedelta(days=30))
-            date_to = self._parse_date(request.GET.get("date_to"), today)
+            date_from = parse_date(request.GET.get("date_from"), today - timedelta(days=30))
+            date_to = parse_date(request.GET.get("date_to"), today)
         elif period == "year":
             selected_year = self._parse_year(request.GET.get("year"), today.year)
             date_from = date(selected_year, 1, 1)
@@ -68,14 +69,6 @@ class StatisticsView(LeadOrAdminRequiredMixin, View):
             return render(request, "core/statistics/partials/full_content.html", context)
         return render(request, "core/statistics/index.html", context)
 
-    @staticmethod
-    def _parse_date(value, default):
-        if not value:
-            return default
-        try:
-            return date.fromisoformat(value)
-        except (ValueError, TypeError):
-            return default
 
     @staticmethod
     def _parse_year(value, default):
@@ -113,8 +106,8 @@ class ChartDataView(LeadOrAdminRequiredMixin, View):
         today = timezone.localdate()
 
         if period == "custom":
-            date_from = StatisticsView._parse_date(request.GET.get("date_from"), today - timedelta(days=30))
-            date_to = StatisticsView._parse_date(request.GET.get("date_to"), today)
+            date_from = parse_date(request.GET.get("date_from"), today - timedelta(days=30))
+            date_to = parse_date(request.GET.get("date_to"), today)
         elif period == "year":
             selected_year = StatisticsView._parse_year(request.GET.get("year"), today.year)
             date_from = date(selected_year, 1, 1)
@@ -175,8 +168,8 @@ class CSVExportView(LeadOrAdminRequiredMixin, View):
     @method_decorator(ratelimit(key="user", rate="10/h", method="GET", block=True))
     def get(self, request):
         facility = request.current_facility
-        date_from = StatisticsView._parse_date(request.GET.get("date_from"), None)
-        date_to = StatisticsView._parse_date(request.GET.get("date_to"), None)
+        date_from = parse_date(request.GET.get("date_from"), None)
+        date_to = parse_date(request.GET.get("date_to"), None)
         if not date_from or not date_to:
             return HttpResponse(_("date_from und date_to erforderlich"), status=400)
 
@@ -205,8 +198,8 @@ class PDFExportView(LeadOrAdminRequiredMixin, View):
     @method_decorator(ratelimit(key="user", rate="10/h", method="GET", block=True))
     def get(self, request):
         facility = request.current_facility
-        date_from = StatisticsView._parse_date(request.GET.get("date_from"), None)
-        date_to = StatisticsView._parse_date(request.GET.get("date_to"), None)
+        date_from = parse_date(request.GET.get("date_from"), None)
+        date_to = parse_date(request.GET.get("date_to"), None)
         if not date_from or not date_to:
             return HttpResponse(_("date_from und date_to erforderlich"), status=400)
 
@@ -235,8 +228,8 @@ class JugendamtExportView(LeadOrAdminRequiredMixin, View):
     @method_decorator(ratelimit(key="user", rate="10/h", method="GET", block=True))
     def get(self, request):
         facility = request.current_facility
-        date_from = StatisticsView._parse_date(request.GET.get("date_from"), None)
-        date_to = StatisticsView._parse_date(request.GET.get("date_to"), None)
+        date_from = parse_date(request.GET.get("date_from"), None)
+        date_to = parse_date(request.GET.get("date_to"), None)
         if not date_from or not date_to:
             return HttpResponse(_("date_from und date_to erforderlich"), status=400)
 
