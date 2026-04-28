@@ -4,7 +4,7 @@ import json
 
 from django import template
 from django.urls import reverse
-from django.utils.safestring import mark_safe
+from django.utils.html import format_html
 
 register = template.Library()
 
@@ -21,12 +21,21 @@ def decrypt(value):
 
 @register.filter
 def pretty_json(value):
-    """Render a dict/list as indented JSON wrapped in <pre><code>."""
+    """Render a dict/list as indented JSON wrapped in <pre><code>.
+
+    Uses format_html so that any HTML metacharacters in keys or string values
+    (e.g. user-controlled data in AuditLog.detail like failed-login usernames
+    or client pseudonyms) are escaped before reaching the DOM. Prevents stored
+    XSS in the audit detail view.
+    """
     if not value:
         return "–"
     try:
         formatted = json.dumps(value, indent=2, ensure_ascii=False)
-        return mark_safe(f'<pre class="text-sm bg-gray-50 rounded p-3 overflow-x-auto"><code>{formatted}</code></pre>')
+        return format_html(
+            '<pre class="text-sm bg-gray-50 rounded p-3 overflow-x-auto"><code>{}</code></pre>',
+            formatted,
+        )
     except (TypeError, ValueError):
         return str(value)
 

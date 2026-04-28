@@ -7,19 +7,33 @@
 <div class="max-w-2xl">
     <h1 class="text-2xl font-bold mb-6">{% trans "Neuer Kontakt" %}</h1>
 
-    <form method="post" class="space-y-4" id="event-create-form" data-autosave
+    <form method="post" enctype="multipart/form-data" class="space-y-4" id="event-create-form" data-autosave
           x-data="{
                 query: '{{ client_pseudonym|default:'' }}',
                 results: [],
                 selectedId: '{{ client_id|default:'' }}',
                 show: false,
                 anonymousAllowed: true,
+                minStage: '',
                 highlightIndex: -1,
                 _justSelected: false,
                 _fetchGen: 0,
                 updateAnonymousAllowed(selectEl) {
                     const opt = selectEl.options[selectEl.selectedIndex];
                     this.anonymousAllowed = !opt || !opt.dataset.minStage;
+                    this.minStage = (opt && opt.dataset.minStage) || '';
+                    if (this.minStage && this.selectedId) {
+                        // Reset the previously selected client if it no longer fits the new min stage
+                        this._fetchGen++;
+                        this.selectedId = '';
+                        this.query = '';
+                        this.results = [];
+                    }
+                },
+                buildAutocompleteUrl() {
+                    const params = new URLSearchParams({q: this.query});
+                    if (this.minStage) params.set('min_stage', this.minStage);
+                    return `{% url 'core:client_autocomplete' %}?${params.toString()}`;
                 },
                 selectItem(item) {
                     this._justSelected = true;
@@ -101,8 +115,8 @@
                     <input type="text"
                            x-model="query"
                            tabindex="2"
-                           @input.debounce.150ms="if(_justSelected) { _justSelected = false; return; } highlightIndex = -1; let g1 = ++_fetchGen; fetch(`{% url 'core:client_autocomplete' %}?q=${encodeURIComponent(query)}`).then(r => r.json()).then(d => { if(g1 === _fetchGen) { results = d; show = d.length > 0 } })"
-                           @focus="if(!show && !_justSelected) { let g2 = ++_fetchGen; fetch(`{% url 'core:client_autocomplete' %}?q=${encodeURIComponent(query)}`).then(r => r.json()).then(d => { if(g2 === _fetchGen) { results = d; show = d.length > 0 } }) }"
+                           @input.debounce.150ms="if(_justSelected) { _justSelected = false; return; } highlightIndex = -1; let g1 = ++_fetchGen; fetch(buildAutocompleteUrl()).then(r => r.json()).then(d => { if(g1 === _fetchGen) { results = d; show = d.length > 0 } })"
+                           @focus="if(!show && !_justSelected) { let g2 = ++_fetchGen; fetch(buildAutocompleteUrl()).then(r => r.json()).then(d => { if(g2 === _fetchGen) { results = d; show = d.length > 0 } }) }"
                            @keydown.arrow-down.prevent="moveHighlight(1)"
                            @keydown.arrow-up.prevent="moveHighlight(-1)"
                            @keydown.enter.prevent="confirmHighlight()"

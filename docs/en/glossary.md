@@ -38,7 +38,7 @@
 | Pseudonym | Pseudonym | A name assigned by the team to identify a person in the system. Primary identifier in Anlaufstelle. The mapping to the real name exists only in staff knowledge, not in the system. |
 | Role | Role | Determines which actions a user may perform. Four roles: Admin (system control), Lead (professional leadership), Staff (case worker), Assistant (support). |
 | Scope | Scope | Visibility boundary. Determines which data is accessible to a user — based on facility, role, and contact level. |
-| Sensitivität | Sensitivity | Classification of a document type or field regarding its protection level. Controls whether field values are stored encrypted and which roles have access. |
+| Sensitivität | Sensitivity | Classification of a document type or field regarding its protection level. Controls which roles may access field values. Configurable per document type and per field (`FieldTemplate.sensitivity`). Independent of field encryption (`is_encrypted`). |
 | TimeFilter | Time filter | Technical term for a named time filter. Belongs to a facility and defines a time window (start time, end time) with a label. |
 | User | User | A staff member — a person who works with the system. Has credentials and a role assignment within a facility. |
 | WorkItem | Work item | An operational entry (note or task) with its own lifecycle and optional priority. Separate from case documentation. |

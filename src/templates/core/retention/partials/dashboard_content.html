@@ -1,0 +1,50 @@
+{% load i18n %}
+
+{# Summary cards — clickable, scroll to the proposals section (#516) #}
+<div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+    <a href="#retention-proposals" id="summary-pending"
+       class="block bg-white border border-yellow-200 rounded-md p-4 hover:border-yellow-400 hover:shadow transition focus:outline-none focus:ring-2 focus:ring-yellow-400">
+        <div class="text-sm font-medium text-yellow-800">{% trans "Ausstehend" %}</div>
+        <div class="text-2xl font-bold text-yellow-600 mt-1">{{ pending_count }}</div>
+    </a>
+    <a href="#retention-proposals" id="summary-held"
+       class="block bg-white border border-blue-200 rounded-md p-4 hover:border-blue-400 hover:shadow transition focus:outline-none focus:ring-2 focus:ring-blue-400">
+        <div class="text-sm font-medium text-blue-800">{% trans "Aufgeschoben" %}</div>
+        <div class="text-2xl font-bold text-blue-600 mt-1">{{ held_count }}</div>
+    </a>
+    <a href="#retention-proposals" id="summary-approved"
+       class="block bg-white border border-green-200 rounded-md p-4 hover:border-green-400 hover:shadow transition focus:outline-none focus:ring-2 focus:ring-green-400">
+        <div class="text-sm font-medium text-green-800">{% trans "Freigegeben" %}</div>
+        <div class="text-2xl font-bold text-green-600 mt-1">{{ approved_count }}</div>
+    </a>
+</div>
+
+{# Retention settings info #}
+<div class="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
+    <h3 class="text-sm font-semibold text-blue-800 mb-2">{% trans "Aufbewahrungsfristen" %}</h3>
+    <div class="text-sm text-blue-700 space-y-1">
+        <div>{% trans "Anonym" %}: {{ retention_settings.anonymous }} {% trans "Tage" %}</div>
+        <div>{% trans "Identifiziert" %}: {{ retention_settings.identified }} {% trans "Tage" %}</div>
+        <div>{% trans "Qualifiziert" %}: {{ retention_settings.qualified }} {% trans "Tage" %}</div>
+    </div>
+</div>
+
+{# Proposals by category #}
+<div id="retention-proposals">
+{% for category in categories %}
+<section id="retention-category-{{ category.key }}" class="mb-8 scroll-mt-4">
+    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{{ category.label }} ({{ category.count }})</h2>
+    {% if category.proposals %}
+    <div class="space-y-3">
+        {% for proposal in category.proposals %}
+            {% include "core/retention/partials/proposal_card.html" %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-sm text-gray-500">{% trans "Keine Vorschläge in dieser Kategorie" %}</p>
+    {% endif %}
+</section>
+{% empty %}
+<p class="text-sm text-gray-500">{% trans "Keine Löschvorschläge vorhanden" %}</p>
+{% endfor %}
+</div>

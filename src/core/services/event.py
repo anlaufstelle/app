@@ -2,26 +2,55 @@
 
 import logging
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, Client, DeletionRequest, Event, EventHistory
 from core.services.activity import log_activity
+from core.services.file_vault import delete_event_attachments
+from core.services.sensitivity import user_can_see_document_type
 
 logger = logging.getLogger(__name__)
 
 
+def _is_file_marker(value):
+    """Return True if value is a file attachment marker dict."""
+    return isinstance(value, dict) and value.get("__file__") is True and "attachment_id" in value
+
+
 def _validate_data_json(document_type, data_json):
-    """Only accept fields defined in the DocumentType's field templates."""
+    """Only accept fields defined in the DocumentType's field templates.
+
+    FILE-typed fields use marker dicts ``{"__file__": True, "attachment_id": "..."}``
+    instead of plain values.  These markers are passed through without modification.
+    """
     if not data_json:
         return {}
     allowed_slugs = set(document_type.fields.values_list("field_template__slug", flat=True))
+    file_slugs = set(
+        document_type.fields.filter(
+            field_template__field_type="file",
+        ).values_list("field_template__slug", flat=True)
+    )
     unknown = set(data_json.keys()) - allowed_slugs
     if unknown:
         logger.warning("Unknown fields in data_json removed: %s", unknown)
-    return {k: v for k, v in data_json.items() if k in allowed_slugs}
+    cleaned = {}
+    for k, v in data_json.items():
+        if k not in allowed_slugs:
+            continue
+        # Allow file marker dicts for FILE-typed fields
+        if k in file_slugs and _is_file_marker(v):
+            cleaned[k] = v
+        elif k in file_slugs:
+            # Non-marker values for FILE fields are handled by the upload flow;
+            # skip plain values (e.g. stale filenames) so they don't overwrite markers.
+            continue
+        else:
+            cleaned[k] = v
+    return cleaned
 
 
 # Ordered contact stages (lowest → highest).
@@ -46,6 +75,19 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
         raise ValueError("DocumentType gehört nicht zur Facility")
     if client and client.facility_id != facility.pk:
         raise ValueError("Client gehört nicht zur Facility")
+    if case is not None:
+        if case.facility_id != facility.pk:
+            raise ValidationError(_("Fall gehört nicht zur selben Einrichtung wie das Ereignis."))
+        if case.client_id is not None and client is not None and case.client_id != client.pk:
+            raise ValidationError(_("Klientel des Ereignisses passt nicht zum Klientel des Falls."))
+        if case.client_id is not None and (client is None or is_anonymous):
+            raise ValidationError(_("Anonyme Ereignisse dürfen nicht an klientelbezogene Fälle gehängt werden."))
+
+    # Sensitivity gate: user must be allowed to create events of this DocumentType.
+    # The form queryset already hides restricted types in the UI; this is the
+    # server-side guarantee against spoofed POSTs.
+    if user is not None and not user_can_see_document_type(user, document_type):
+        raise PermissionDenied(_("Diese Dokumentation darf von Ihrer Rolle nicht erstellt werden."))
 
     # Auto-normalize: no client → anonymous (when allowed)
     if client is None and not is_anonymous:
@@ -149,6 +191,7 @@ def soft_delete_event(event, user):
     field_names = list((event.data_json or {}).keys())
     event.is_deleted = True
     event.data_json = {}
+    delete_event_attachments(event)
     event.save()
     EventHistory.objects.create(
         event=event,
@@ -178,7 +221,22 @@ def soft_delete_event(event, user):
 
 
 def request_deletion(event, user, reason):
-    """Create a deletion request for qualified data (four-eyes principle)."""
+    """Create a deletion request for qualified data (four-eyes principle).
+
+    Idempotent: if a PENDING DeletionRequest already exists for the same
+    event, the existing record is returned instead of creating a duplicate.
+    Without this guard, double-clicks or parallel requests by multiple
+    fachkräfte would clutter the four-eyes review queue with duplicate
+    entries that all need to be reviewed individually (#530).
+    """
+    existing = DeletionRequest.objects.filter(
+        facility=event.facility,
+        target_type="Event",
+        target_id=event.pk,
+        status=DeletionRequest.Status.PENDING,
+    ).first()
+    if existing is not None:
+        return existing
     return DeletionRequest.objects.create(
         facility=event.facility,
         target_type="Event",

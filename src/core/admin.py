@@ -23,6 +23,7 @@ from core.models import (
     User,
     WorkItem,
 )
+from core.models.attachment import EventAttachment
 from core.services.password import generate_initial_password
 
 # --- User ---
@@ -136,8 +137,8 @@ class DocumentTypeAdmin(ModelAdmin):
 
 @admin.register(FieldTemplate)
 class FieldTemplateAdmin(ModelAdmin):
-    list_display = ("name", "slug", "field_type", "is_required", "is_encrypted", "facility")
-    list_filter = ("field_type", "is_encrypted", "is_required", "facility")
+    list_display = ("name", "slug", "field_type", "is_required", "is_encrypted", "sensitivity", "facility")
+    list_filter = ("field_type", "is_encrypted", "sensitivity", "is_required", "facility")
     search_fields = ("name",)
 
     def get_readonly_fields(self, request, obj=None):
@@ -163,6 +164,44 @@ class EventHistoryAdmin(ModelAdmin):
     list_display = ("event", "action", "changed_by", "changed_at")
     list_filter = ("action",)
     readonly_fields = ("event", "changed_by", "changed_at", "action", "data_before", "data_after")
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+# --- EventAttachment ---
+
+
+@admin.register(EventAttachment)
+class EventAttachmentAdmin(ModelAdmin):
+    list_display = (
+        "storage_filename",
+        "event",
+        "field_template",
+        "mime_type",
+        "file_size",
+        "created_by",
+        "created_at",
+    )
+    list_filter = ("mime_type",)
+    readonly_fields = (
+        "id",
+        "event",
+        "field_template",
+        "storage_filename",
+        "original_filename_encrypted",
+        "file_size",
+        "mime_type",
+        "created_by",
+        "created_at",
+    )
+    search_fields = ("storage_filename",)
 
     def has_add_permission(self, request):
         return False
@@ -263,7 +302,13 @@ class AuditLogAdmin(ModelAdmin):
 
 @admin.register(Settings)
 class SettingsAdmin(ModelAdmin):
-    list_display = ("facility", "facility_full_name", "session_timeout_minutes")
+    list_display = (
+        "facility",
+        "facility_full_name",
+        "session_timeout_minutes",
+        "allowed_file_types",
+        "max_file_size_mb",
+    )
 
     def has_add_permission(self, request):
         # Only allow if there are facilities without settings

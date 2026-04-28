@@ -94,7 +94,7 @@ Anlaufstelle uses four roles with increasing privileges:
 | **Lead** | Leitung | Supervisory role. Everything Staff can do, plus pseudonym management, contact level changes, statistics, exports, and deletion approvals. |
 | **Admin** | Admin | Full system control. User management, documentation type configuration, system settings, and audit log access. |
 
-Access is not purely role-based but context-dependent: what a user can see also depends on the contact level of the person and the sensitivity of the documentation type.
+Access is not purely role-based but context-dependent: what a user can see also depends on the contact level of the person, the sensitivity of the documentation type, and field-level sensitivity overrides.
 
 ## Non-Functional Requirements
 

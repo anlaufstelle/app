@@ -15,6 +15,21 @@ from core.services.statistics import get_statistics
 logger = logging.getLogger(__name__)
 
 
+def is_multi_month_range(date_from, date_to):
+    """Return True if the given date range spans more than one month.
+
+    The hybrid statistics merge sums ``unique_clients`` over monthly snapshots,
+    which double-counts clients seen in multiple months. The number is
+    therefore an approximation as soon as the range spans more than ~31 days.
+    Callers use this flag to render a "ca." prefix and tooltip in the UI
+    (#533). A range fully within a calendar month — even if it covers exactly
+    31 days — does not trigger approximation.
+    """
+    if date_from is None or date_to is None:
+        return False
+    return (date_to - date_from).days > 31
+
+
 def create_or_update_snapshot(facility, year, month):
     """Create or update a statistics snapshot for a given facility and month."""
     date_from = date(year, month, 1)

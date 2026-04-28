@@ -49,7 +49,7 @@ def export_events_csv(facility, date_from, date_to, user=None):
             ft = all_field_templates[slug]
             # Without a concrete doc-type we use NORMAL as baseline; the
             # per-event loop below will do the precise check.
-            if user_can_see_field(user, DocumentType.Sensitivity.NORMAL, ft.is_encrypted):
+            if user_can_see_field(user, DocumentType.Sensitivity.NORMAL, ft.sensitivity):
                 visible_field_slugs.append(slug)
         field_slugs = visible_field_slugs
 
@@ -98,10 +98,10 @@ def export_events_csv(facility, date_from, date_to, user=None):
         data = event.data_json or {}
         for field_slug in field_slugs:
             ft = all_field_templates.get(field_slug)
-            is_encrypted = ft.is_encrypted if ft else False
+            field_sensitivity = ft.sensitivity if ft else ""
 
             # Per-event sensitivity check using the actual document type
-            if user is not None and not user_can_see_field(user, doc_sensitivity, is_encrypted):
+            if user is not None and not user_can_see_field(user, doc_sensitivity, field_sensitivity):
                 row.append(_("[Eingeschränkt]"))
                 continue
 

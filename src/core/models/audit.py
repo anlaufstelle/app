@@ -21,6 +21,8 @@ class AuditLog(models.Model):
         DELETE = "delete", _("Löschung")
         STAGE_CHANGE = "stage_change", _("Stufenwechsel")
         SETTINGS_CHANGE = "settings_change", _("Einstellungen geändert")
+        DOWNLOAD = "download", _("Download")
+        LEGAL_HOLD = "legal_hold", _("Legal Hold")
 
     objects = FacilityScopedManager()
 

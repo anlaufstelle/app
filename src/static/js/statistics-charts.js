@@ -5,6 +5,22 @@
  *   <div x-data="statisticsCharts()" x-init="fetchAndRender()">
  */
 
+// Destroy any Chart.js instances inside an HTMX swap target BEFORE the swap
+// happens. Without this, Chart.js holds references to canvases that get
+// removed by HTMX, then complains "Canvas is already in use" when the new
+// canvas with the same id is mounted. The destroyCharts() call inside
+// fetchAndRender() runs on the *new* component instance after the swap, when
+// the orphaned instances are no longer reachable via getElementById.
+document.addEventListener("htmx:beforeSwap", function (evt) {
+  if (typeof Chart === "undefined") return;
+  var target = evt && evt.detail && evt.detail.target;
+  if (!target || typeof target.querySelectorAll !== "function") return;
+  target.querySelectorAll("canvas").forEach(function (canvas) {
+    var existing = Chart.getChart(canvas);
+    if (existing) existing.destroy();
+  });
+});
+
 /* exported statisticsCharts */
 function statisticsCharts() {
   return {

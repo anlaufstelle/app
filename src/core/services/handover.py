@@ -31,19 +31,16 @@ def build_handover_summary(facility, target_date, time_filter, user):
     # --- Stats ---
     time_range = (start_dt, end_dt)
 
-    events_total = Event.objects.filter(
+    visible_events = Event.objects.visible_to(user).filter(
         facility=facility,
         is_deleted=False,
         occurred_at__range=time_range,
-    ).count()
+    )
+
+    events_total = visible_events.count()
 
     events_by_type = list(
-        Event.objects.filter(
-            facility=facility,
-            is_deleted=False,
-            occurred_at__range=time_range,
-        )
-        .values("document_type__name", "document_type__color")
+        visible_events.values("document_type__name", "document_type__color")
         .annotate(count=Count("id"))
         .order_by("-count")
     )
@@ -64,12 +61,7 @@ def build_handover_summary(facility, target_date, time_filter, user):
         updated_at__range=time_range,
     ).count()
 
-    bans_new = Event.objects.filter(
-        facility=facility,
-        is_deleted=False,
-        document_type__system_type="ban",
-        occurred_at__range=time_range,
-    ).count()
+    bans_new = visible_events.filter(document_type__system_type="ban").count()
 
     clients_new = Client.objects.filter(
         facility=facility,
@@ -88,23 +80,13 @@ def build_handover_summary(facility, target_date, time_filter, user):
 
     # --- Highlights ---
     crisis_events = (
-        Event.objects.filter(
-            facility=facility,
-            document_type__system_type="crisis",
-            is_deleted=False,
-            occurred_at__range=time_range,
-        )
+        visible_events.filter(document_type__system_type="crisis")
         .select_related("document_type", "client", "created_by")
         .order_by("-occurred_at")[:10]
     )
 
     ban_events = (
-        Event.objects.filter(
-            facility=facility,
-            document_type__system_type="ban",
-            is_deleted=False,
-            occurred_at__range=time_range,
-        )
+        visible_events.filter(document_type__system_type="ban")
         .select_related("document_type", "client", "created_by")
         .order_by("-occurred_at")[:10]
     )

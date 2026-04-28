@@ -55,6 +55,7 @@ def doc_type_all_encrypted(facility):
         name="Geheimfeld",
         field_type=FieldTemplate.FieldType.TEXT,
         is_encrypted=True,
+        sensitivity="high",
     )
     DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, sort_order=0)
     return doc_type
@@ -245,10 +246,11 @@ class TestClientDetailButtonVisibility:
 
 @pytest.mark.django_db
 class TestEventEditAllFieldsRestricted:
-    """When staff edits an event where ALL fields are encrypted (HIGH), the
-    form should show the restriction message and no save button."""
+    """Staff accessing a HIGH event they may not see is blocked at the route
+    level (404) rather than via a soft restriction message on a masked form.
+    """
 
-    def test_staff_sees_restriction_message(self, client, staff_user, facility, doc_type_all_encrypted):
+    def test_staff_gets_404_on_high_event_edit(self, client, staff_user, facility, doc_type_all_encrypted):
         event = Event.objects.create(
             facility=facility,
             document_type=doc_type_all_encrypted,
@@ -258,10 +260,7 @@ class TestEventEditAllFieldsRestricted:
         )
         client.force_login(staff_user)
         response = client.get(reverse("core:event_update", kwargs={"pk": event.pk}))
-        content = response.content.decode()
-        assert response.status_code == 200
-        assert "eingeschränkt" in content
-        assert "Änderungen speichern" not in content
+        assert response.status_code == 404
 
 
 # ===========================================================================

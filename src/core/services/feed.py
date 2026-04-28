@@ -32,8 +32,13 @@ def get_time_range(target_date, time_filter=None):
     return start_dt, end_dt
 
 
-def build_feed_items(facility, target_date, feed_type, time_filter=None):
-    """Build a unified feed of events, activities, work items, and bans for a given date."""
+def build_feed_items(facility, target_date, feed_type, time_filter=None, user=None):
+    """Build a unified feed of events, activities, work items, and bans for a given date.
+
+    *user* is required for sensitivity-based event visibility — without it the
+    feed includes events whose existence the caller is not allowed to know
+    about (#522). Callers must always pass ``request.user``.
+    """
     start_dt, end_dt = get_time_range(target_date, time_filter)
 
     events_list = []
@@ -45,7 +50,7 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None):
 
     # Events (exclude bans when loading all types to avoid duplicates with bans feed)
     if feed_type == "events" or include_all:
-        events_qs = Event.objects.filter(
+        events_qs = Event.objects.visible_to(user).filter(
             facility=facility,
             is_deleted=False,
             occurred_at__gte=start_dt,
@@ -85,7 +90,8 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None):
     # Bans
     if feed_type == "bans" or include_all:
         bans = (
-            Event.objects.filter(
+            Event.objects.visible_to(user)
+            .filter(
                 facility=facility,
                 is_deleted=False,
                 document_type__system_type="ban",
@@ -150,7 +156,7 @@ def enrich_events_with_preview(feed_items, user):
         for ft in dt_fields.get(event.document_type_id, []):
             if ft.field_type == "textarea":
                 continue
-            if not user_can_see_field(user, doc_sensitivity, ft.is_encrypted):
+            if not user_can_see_field(user, doc_sensitivity, ft.sensitivity):
                 continue
             value = data.get(ft.slug)
             if value is None or value == "":

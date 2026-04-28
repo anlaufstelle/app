@@ -2,8 +2,11 @@
 
 import copy
 import random
+import struct
+import zlib
 from datetime import date, time, timedelta
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
@@ -17,18 +20,22 @@ from core.models import (
     DocumentTypeField,
     Episode,
     Event,
+    EventAttachment,
     EventHistory,
     Facility,
     FieldTemplate,
+    LegalHold,
     Milestone,
     Organization,
     OutcomeGoal,
+    RetentionProposal,
     Settings,
     TimeFilter,
     User,
     WorkItem,
 )
 from core.services.encryption import encrypt_event_data
+from core.services.file_vault import store_encrypted_file
 
 # ---------------------------------------------------------------------------
 # Scale configuration
@@ -43,7 +50,9 @@ SCALE_CONFIG = {
         "episodes": 0,
         "goals": 0,
         "work_items": 5,
+        "retention_proposals": 4,
         "zeitraum_days": 80,
+        "attachment_ratio": 0.5,
     },
     "medium": {
         "facilities": 2,
@@ -56,7 +65,9 @@ SCALE_CONFIG = {
         "milestones_per_goal": 3,
         "work_items": 25,
         "deletion_requests": 5,
+        "retention_proposals": 6,
         "zeitraum_days": 365,
+        "attachment_ratio": 0.25,
     },
     "large": {
         "facilities": 5,
@@ -69,7 +80,9 @@ SCALE_CONFIG = {
         "milestones_per_goal": 4,
         "work_items": 100,
         "deletion_requests": 15,
+        "retention_proposals": 12,
         "zeitraum_days": 3 * 365,
+        "attachment_ratio": 0.1,
     },
     "solo": {
         "facilities": 1,
@@ -82,7 +95,9 @@ SCALE_CONFIG = {
         "milestones_per_goal": 3,
         "work_items": 20,
         "deletion_requests": 4,
+        "retention_proposals": 6,
         "zeitraum_days": 1000,
+        "attachment_ratio": 0.25,
     },
 }
 
@@ -619,6 +634,9 @@ class Command(BaseCommand):
                 self._create_work_items(facility, users, clients, cfg)
                 self._create_deletion_requests(facility, users, cfg)
 
+            self._attach_files_to_counseling_events(facility, users, cfg)
+            self._create_retention_proposals(facility, users, cfg)
+
             cases = list(Case.objects.filter(facility=facility))
             self._create_episodes(facility, users, cases, cfg)
             self._create_goals(facility, users, cases, cfg)
@@ -636,7 +654,10 @@ class Command(BaseCommand):
         from django.db import connection
 
         self.stdout.write("Deleting existing data...")
+        EventAttachment.objects.all().delete()
         Activity.objects.all().delete()
+        LegalHold.objects.all().delete()
+        RetentionProposal.objects.all().delete()
         DeletionRequest.objects.all().delete()
         WorkItem.objects.all().delete()
         Milestone.objects.all().delete()
@@ -695,6 +716,8 @@ class Command(BaseCommand):
                 "retention_qualified_days": 3650,
                 "retention_activities_days": 365,
                 "default_document_type": default_dt,
+                "allowed_file_types": "pdf,jpg,jpeg,png,docx",
+                "max_file_size_mb": 10,
             },
         )
 
@@ -778,6 +801,9 @@ class Command(BaseCommand):
                         "field_type": field_def.get("type", FieldTemplate.FieldType.TEXT),
                         "is_required": field_def.get("required", False),
                         "is_encrypted": field_def.get("encrypted", False),
+                        "sensitivity": field_def.get(
+                            "sensitivity", "high" if field_def.get("encrypted", False) else ""
+                        ),
                         "options_json": field_def.get("options", []),
                         "help_text": field_def.get("help_text", ""),
                     },
@@ -922,6 +948,13 @@ class Command(BaseCommand):
                     {"name": "Dauer", "slug": "dauer", "type": "number", "help_text": "Dauer in Minuten"},
                     {"name": "Vereinbarungen", "slug": "vereinbarungen", "type": "textarea", "encrypted": True},
                     {"name": "Nächster Termin", "slug": "naechster-termin", "type": "date"},
+                    {
+                        "name": "Scan/Bescheid",
+                        "slug": "scan-bescheid",
+                        "type": FieldTemplate.FieldType.FILE,
+                        "required": False,
+                        "encrypted": True,
+                    },
                 ],
             },
             {
@@ -1278,6 +1311,110 @@ class Command(BaseCommand):
             elif ftype == "time":
                 data[key] = f"{random.randint(8, 20):02d}:{random.choice(['00', '15', '30', '45'])}"
         return data
+
+    # ------------------------------------------------------------------
+    # File attachments for counseling events
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _generate_dummy_file():
+        """Generate an in-memory dummy file. Returns (SimpleUploadedFile, mime_type)."""
+        choice = random.choice(["pdf", "jpeg", "png"])
+
+        if choice == "pdf":
+            content = (
+                b"%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+                b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+                b"3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R>>endobj\n"
+                b"xref\n0 4\n0000000000 65535 f \n0000000009 00000 n \n"
+                b"0000000058 00000 n \n0000000115 00000 n \n"
+                b"trailer<</Size 4/Root 1 0 R>>\nstartxref\n190\n%%EOF"
+            )
+            name = f"Bescheid-{random.randint(1000, 9999)}.pdf"
+            mime = "application/pdf"
+        elif choice == "jpeg":
+            # Minimal valid JPEG: SOI + APP0 (JFIF) + SOF0 + SOS + EOI
+            content = (
+                b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+                b"\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t"
+                b"\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a"
+                b"\x1f\x1e\x1d\x1a\x1c\x1c $.' \",#\x1c\x1c(7),01444\x1f'9=82<.342"
+                b"\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00"
+                b"\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00"
+                b"\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b"
+                b"\xff\xda\x00\x08\x01\x01\x00\x00?\x00T\xdb\x9e\xa7(\xff\xd9"
+            )
+            name = f"Scan-{random.randint(1000, 9999)}.jpg"
+            mime = "image/jpeg"
+        else:
+            # Minimal valid 1x1 white PNG
+            ihdr_data = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+            ihdr_crc = struct.pack(">I", zlib.crc32(b"IHDR" + ihdr_data) & 0xFFFFFFFF)
+            raw_pixel = b"\x00\xff\xff\xff"  # filter-byte + RGB
+            idat_data = zlib.compress(raw_pixel)
+            idat_crc = struct.pack(">I", zlib.crc32(b"IDAT" + idat_data) & 0xFFFFFFFF)
+            iend_crc = struct.pack(">I", zlib.crc32(b"IEND") & 0xFFFFFFFF)
+            content = (
+                b"\x89PNG\r\n\x1a\n"
+                + struct.pack(">I", len(ihdr_data))
+                + b"IHDR"
+                + ihdr_data
+                + ihdr_crc
+                + struct.pack(">I", len(idat_data))
+                + b"IDAT"
+                + idat_data
+                + idat_crc
+                + struct.pack(">I", 0)
+                + b"IEND"
+                + iend_crc
+            )
+            name = f"Dokument-{random.randint(1000, 9999)}.png"
+            mime = "image/png"
+
+        return SimpleUploadedFile(name, content, content_type=mime)
+
+    def _attach_files_to_counseling_events(self, facility, users, cfg):
+        """Attach dummy encrypted files to a portion of counseling events."""
+        ratio = cfg.get("attachment_ratio", 0)
+        if ratio <= 0:
+            return
+
+        # Find counseling events without existing attachments
+        counseling_events = list(
+            Event.objects.filter(
+                facility=facility,
+                document_type__system_type="counseling",
+            ).exclude(
+                attachments__isnull=False,
+            )
+        )
+        if not counseling_events:
+            return
+
+        # Find the "scan-bescheid" field template
+        field_template = FieldTemplate.objects.filter(
+            slug="scan-bescheid",
+            document_type_fields__document_type__facility=facility,
+        ).first()
+        if not field_template:
+            return
+
+        staff_users = [u for u in users if u.role in (User.Role.STAFF, User.Role.LEAD)]
+        if not staff_users:
+            staff_users = users
+
+        count = max(1, int(len(counseling_events) * ratio))
+        selected = random.sample(counseling_events, min(count, len(counseling_events)))
+
+        created = 0
+        for event in selected:
+            uploaded = self._generate_dummy_file()
+            attachment = store_encrypted_file(facility, uploaded, field_template, event, random.choice(staff_users))
+            event.data_json["scan-bescheid"] = {"__file__": True, "attachment_id": str(attachment.pk)}
+            event.save(update_fields=["data_json"])
+            created += 1
+
+        if created:
+            self.stdout.write(f"  {created} Dateianhänge für {facility.name} erstellt.")
 
     # ------------------------------------------------------------------
     # Cases (medium / large only)
@@ -1729,3 +1866,85 @@ class Command(BaseCommand):
         if to_create:
             DeletionRequest.objects.bulk_create(to_create, batch_size=500)
             self.stdout.write(f"  {len(to_create)} DeletionRequests für {facility.name} erstellt.")
+
+    def _create_retention_proposals(self, facility, users, cfg):
+        count = cfg.get("retention_proposals", 0)
+        if count == 0:
+            return
+        existing = RetentionProposal.objects.filter(facility=facility).count()
+        if existing >= count:
+            return
+
+        events = list(Event.objects.filter(facility=facility, is_deleted=False)[: count * 2])
+        if not events:
+            return
+
+        categories = ["anonymous", "identified", "qualified", "document_type"]
+        now = timezone.now()
+
+        proposals_to_create = []
+        holds_to_create = []
+        for i in range(min(count - existing, len(events))):
+            event = events[i]
+            category = random.choice(categories)
+            status = random.choices(
+                [
+                    RetentionProposal.Status.PENDING,
+                    RetentionProposal.Status.APPROVED,
+                    RetentionProposal.Status.HELD,
+                ],
+                weights=[0.5, 0.2, 0.3],
+            )[0]
+
+            deletion_due = (now + timedelta(days=random.randint(-10, 60))).date()
+            details = {
+                "document_type": event.document_type.name if event.document_type else None,
+                "occurred_at": str(event.occurred_at),
+            }
+            if event.client:
+                details["pseudonym"] = event.client.pseudonym
+                details["contact_stage"] = event.client.contact_stage
+
+            proposal = RetentionProposal(
+                facility=facility,
+                target_type=RetentionProposal.TargetType.EVENT,
+                target_id=event.pk,
+                deletion_due_at=deletion_due,
+                status=status,
+                details=details,
+                retention_category=category,
+            )
+            proposals_to_create.append(proposal)
+
+            if status == RetentionProposal.Status.HELD:
+                creator = random.choice(users)
+                expires = (now + timedelta(days=random.randint(30, 180))).date() if random.random() > 0.3 else None
+                holds_to_create.append(
+                    (
+                        event,
+                        LegalHold(
+                            facility=facility,
+                            target_type="Event",
+                            target_id=event.pk,
+                            reason=random.choice(
+                                [
+                                    "Laufendes Gerichtsverfahren.",
+                                    "Jugendamt-Überprüfung noch nicht abgeschlossen.",
+                                    "Klientel hat Widerspruch eingelegt.",
+                                    "Anfrage der Aufsichtsbehörde.",
+                                ]
+                            ),
+                            expires_at=expires,
+                            created_by=creator,
+                        ),
+                    )
+                )
+
+        if proposals_to_create:
+            RetentionProposal.objects.bulk_create(proposals_to_create, batch_size=500)
+        if holds_to_create:
+            LegalHold.objects.bulk_create([h for _, h in holds_to_create], batch_size=500)
+        self.stdout.write(
+            f"  {len(proposals_to_create)} RetentionProposals"
+            f" + {len(holds_to_create)} LegalHolds für {facility.name} erstellt."
+        )

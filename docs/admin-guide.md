@@ -607,6 +607,8 @@ Anlaufstelle wurde nach dem Prinzip **Privacy by Design** (Art. 25 DSGVO) entwic
 
 Sensible Felder in der Datenbank werden mit dem `ENCRYPTION_KEY` verschlüsselt gespeichert. Dies gilt als zusätzliche Schutzmaßnahme über die allgemeine Datenbankzugriffskontrolle hinaus.
 
+**Sichtbarkeit vs. Verschlüsselung:** Die Verschlüsselung (`is_encrypted`) und die Sichtbarkeitsstufe (`sensitivity`) eines Feldes sind unabhängig voneinander konfigurierbar. Ein verschlüsseltes Feld kann für alle Rollen sichtbar sein, und ein nicht-verschlüsseltes Feld kann auf bestimmte Rollen eingeschränkt werden.
+
 - Der Schlüssel wird über die Umgebungsvariable `ENCRYPTION_KEY` bereitgestellt.
 - In der Produktion verweigert die Anwendung den Start, wenn kein Schlüssel gesetzt ist.
 - Ein Schlüsselverlust bedeutet den dauerhaften Verlust der verschlüsselten Daten.

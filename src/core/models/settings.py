@@ -51,6 +51,17 @@ class Settings(models.Model):
         default=365,
         verbose_name=_("Aufbewahrung Aktivitäten (Tage)"),
     )
+    allowed_file_types = models.CharField(
+        max_length=500,
+        blank=True,
+        default="pdf,jpg,jpeg,png,docx",
+        verbose_name=_("Erlaubte Dateitypen"),
+        help_text=_("Kommagetrennte Dateiendungen (z.B. pdf,jpg,png,docx)"),
+    )
+    max_file_size_mb = models.PositiveIntegerField(
+        default=10,
+        verbose_name=_("Max. Dateigröße (MB)"),
+    )
 
     class Meta:
         verbose_name = _("Einstellungen")

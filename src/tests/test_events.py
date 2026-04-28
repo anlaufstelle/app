@@ -733,3 +733,148 @@ class TestMinContactStageGate:
             facility=facility,
         )
         assert form.is_valid()
+
+
+@pytest.mark.django_db
+class TestDocumentTypeRoleFilter:
+    """Restriktive DocumentTypes dürfen nur Rollen mit ausreichender
+    Sensitivity-Berechtigung angeboten werden — sowohl im Form-Queryset als
+    auch im HTMX-Field-Partial und im Service-Layer.
+    """
+
+    def test_assistant_does_not_see_elevated_doctype_in_form_queryset(self, facility, assistant_user, doc_type_crisis):
+        from core.forms.events import EventMetaForm
+
+        form = EventMetaForm(facility=facility, user=assistant_user)
+        ids = list(form.fields["document_type"].queryset.values_list("pk", flat=True))
+        assert doc_type_crisis.pk not in ids
+
+    def test_staff_sees_elevated_doctype_in_form_queryset(self, facility, staff_user, doc_type_crisis):
+        from core.forms.events import EventMetaForm
+
+        form = EventMetaForm(facility=facility, user=staff_user)
+        ids = list(form.fields["document_type"].queryset.values_list("pk", flat=True))
+        assert doc_type_crisis.pk in ids
+
+    def test_lead_sees_elevated_doctype_in_form_queryset(self, facility, lead_user, doc_type_crisis):
+        from core.forms.events import EventMetaForm
+
+        form = EventMetaForm(facility=facility, user=lead_user)
+        ids = list(form.fields["document_type"].queryset.values_list("pk", flat=True))
+        assert doc_type_crisis.pk in ids
+
+    def test_event_create_get_hides_restricted_doctype_for_assistant(
+        self, client, assistant_user, doc_type_crisis, doc_type_contact
+    ):
+        client.force_login(assistant_user)
+        response = client.get(reverse("core:event_create"))
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert doc_type_crisis.name not in content
+        assert doc_type_contact.name in content
+
+    def test_event_fields_partial_blocks_restricted_doctype_for_assistant(
+        self, client, assistant_user, doc_type_crisis
+    ):
+        client.force_login(assistant_user)
+        response = client.get(
+            reverse("core:event_fields_partial"),
+            {"document_type": str(doc_type_crisis.pk)},
+        )
+        assert response.status_code == 403
+
+    def test_event_fields_partial_returns_form_for_staff(self, client, staff_user, doc_type_crisis):
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:event_fields_partial"),
+            {"document_type": str(doc_type_crisis.pk)},
+        )
+        assert response.status_code == 200
+
+    def test_create_event_service_rejects_restricted_doctype_for_assistant(
+        self, facility, assistant_user, doc_type_crisis, client_identified
+    ):
+        from django.core.exceptions import PermissionDenied
+
+        with pytest.raises(PermissionDenied):
+            create_event(
+                facility=facility,
+                user=assistant_user,
+                document_type=doc_type_crisis,
+                occurred_at=timezone.now(),
+                data_json={},
+                client=client_identified,
+            )
+
+    def test_create_event_service_allows_restricted_doctype_for_staff(
+        self, facility, staff_user, doc_type_crisis, client_identified
+    ):
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_crisis,
+            occurred_at=timezone.now(),
+            data_json={},
+            client=client_identified,
+        )
+        assert event.pk is not None
+
+    def test_event_create_post_rejects_restricted_doctype_for_assistant(
+        self, client, assistant_user, doc_type_crisis, client_identified
+    ):
+        """A spoofed POST with a restricted DocumentType id must be rejected
+        even though the form queryset hides it from the dropdown."""
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_crisis.pk),
+                "client": str(client_identified.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+            },
+        )
+        # Either 403 (rejected at form/service) or form re-render with error
+        assert response.status_code in (200, 403)
+        assert not Event.objects.filter(document_type=doc_type_crisis, created_by=assistant_user).exists()
+
+
+@pytest.mark.django_db
+class TestClientAutocompleteMinStageFilter:
+    """ClientAutocomplete must filter results by an optional min_stage query
+    parameter so the dropdown does not offer clients below the chosen
+    DocumentType's required contact stage. (Issue #507)
+    """
+
+    def test_autocomplete_filters_clients_below_min_stage(
+        self, client, staff_user, client_identified, client_qualified
+    ):
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_autocomplete"),
+            {"q": "Test", "min_stage": "qualified"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        pseudonyms = [d["pseudonym"] for d in data]
+        assert "Test-QU-01" in pseudonyms
+        assert "Test-ID-01" not in pseudonyms
+
+    def test_autocomplete_without_min_stage_returns_all(self, client, staff_user, client_identified, client_qualified):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:client_autocomplete"), {"q": "Test"})
+        assert response.status_code == 200
+        data = response.json()
+        pseudonyms = [d["pseudonym"] for d in data]
+        assert "Test-QU-01" in pseudonyms
+        assert "Test-ID-01" in pseudonyms
+
+    def test_autocomplete_unknown_min_stage_returns_all(self, client, staff_user, client_identified, client_qualified):
+        """An unknown stage value falls back to no filter (defensive)."""
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:client_autocomplete"),
+            {"q": "Test", "min_stage": "bogus"},
+        )
+        assert response.status_code == 200
+        data = response.json()
+        assert len(data) >= 2

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Dateien" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-2xl font-bold">{% trans "Dateien" %}</h1>
+</div>
+
+{# Filter bar #}
+<div class="mb-4 flex flex-col sm:flex-row gap-3 no-print" data-filter-persist>
+    <select name="document_type"
+            aria-label="{% trans 'Dokumentationstyp filtern' %}"
+            class="border border-gray-300 rounded-md px-3 py-2 text-sm"
+            hx-get="{% url 'core:attachment_list' %}"
+            hx-trigger="change"
+            hx-target="#attachment-table"
+            hx-include="[name='client']">
+        <option value="">{% trans "Alle Dokumentationstypen" %}</option>
+        {% for dt in doc_types %}
+        <option value="{{ dt.pk }}" {% if selected_doc_type == dt.pk|slugify %}selected{% endif %}>{{ dt.name }}</option>
+        {% endfor %}
+    </select>
+    <input type="text"
+           name="client"
+           value="{{ selected_client }}"
+           placeholder="{% trans 'Klient-ID filtern...' %}"
+           class="border border-gray-300 rounded-md px-3 py-2 text-sm"
+           hx-get="{% url 'core:attachment_list' %}"
+           hx-trigger="keyup changed delay:300ms"
+           hx-target="#attachment-table"
+           hx-include="[name='document_type']">
+</div>
+
+<div id="attachment-table">
+    {% include "core/attachments/partials/attachment_table.html" %}
+</div>
+{% endblock %}

@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Case, DocumentType, DocumentTypeField, FieldTemplate
+from core.models.settings import Settings
 
 
 class EventMetaForm(forms.Form):
@@ -44,15 +45,21 @@ class EventMetaForm(forms.Form):
         widget=forms.Select(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
     )
 
-    def __init__(self, *args, facility=None, **kwargs):
+    def __init__(self, *args, facility=None, user=None, **kwargs):
         initial = kwargs.get("initial", {})
         if "occurred_at" not in initial:
             initial["occurred_at"] = timezone.localtime(timezone.now()).strftime("%Y-%m-%dT%H:%M")
             kwargs["initial"] = initial
         super().__init__(*args, **kwargs)
         self._facility = facility
+        self._user = user
         if facility:
-            self.fields["document_type"].queryset = DocumentType.objects.for_facility(facility).filter(is_active=True)
+            qs = DocumentType.objects.for_facility(facility).filter(is_active=True)
+            if user is not None:
+                from core.services.sensitivity import allowed_sensitivities_for_user
+
+                qs = qs.filter(sensitivity__in=allowed_sensitivities_for_user(user))
+            self.fields["document_type"].queryset = qs
             self.fields["case"].queryset = Case.objects.filter(facility=facility, status=Case.Status.OPEN)
 
     def clean(self):
@@ -72,9 +79,11 @@ class DynamicEventDataForm(forms.Form):
         FieldTemplate.FieldType.BOOLEAN: (forms.BooleanField, {"widget": forms.CheckboxInput}),
         FieldTemplate.FieldType.SELECT: (forms.ChoiceField, {"widget": forms.Select}),
         FieldTemplate.FieldType.MULTI_SELECT: (forms.MultipleChoiceField, {"widget": forms.CheckboxSelectMultiple}),
+        FieldTemplate.FieldType.FILE: (forms.FileField, {"widget": forms.ClearableFileInput}),
     }
 
-    def __init__(self, *args, document_type=None, initial_data=None, **kwargs):
+    def __init__(self, *args, document_type=None, initial_data=None, facility=None, **kwargs):
+        self.facility = facility
         super().__init__(*args, **kwargs)
         if not document_type:
             return
@@ -137,3 +146,35 @@ class DynamicEventDataForm(forms.Form):
                 field.initial = initial_data[ft.slug]
 
             self.fields[ft.slug] = field
+
+    def clean(self):
+        cleaned = super().clean()
+        if not self.facility:
+            return cleaned
+        try:
+            facility_settings = Settings.objects.get(facility=self.facility)
+        except Settings.DoesNotExist:
+            return cleaned
+        allowed = {ext.strip().lower() for ext in facility_settings.allowed_file_types.split(",") if ext.strip()}
+        max_bytes = facility_settings.max_file_size_mb * 1024 * 1024
+        for field_name, field_obj in self.fields.items():
+            if not isinstance(field_obj, forms.FileField):
+                continue
+            uploaded = cleaned.get(field_name)
+            if not uploaded:
+                continue
+            ext = uploaded.name.rsplit(".", 1)[-1].lower() if "." in uploaded.name else ""
+            if allowed and ext not in allowed:
+                self.add_error(
+                    field_name,
+                    _(f"Dateityp .{ext} nicht erlaubt. Erlaubt: {', '.join(sorted(allowed))}"),
+                )
+            if uploaded.size > max_bytes:
+                self.add_error(
+                    field_name,
+                    _(
+                        f"Datei zu gro\u00df ({uploaded.size // (1024 * 1024)} MB)."
+                        f" Maximum: {facility_settings.max_file_size_mb} MB"
+                    ),
+                )
+        return cleaned

@@ -39,22 +39,30 @@ from core.services.goals import (
     unachieve_goal,
     update_goal,
 )
+from core.services.sensitivity import get_visible_event_or_404
 from core.views.mixins import LeadOrAdminRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
 
 
-def _get_case_event_context(case, facility):
-    """Return events and unassigned events for a case (shared by detail/assign/remove views)."""
+def _get_case_event_context(case, facility, user):
+    """Return events and unassigned events for a case (shared by detail/assign/remove views).
+
+    Both querysets are filtered through ``Event.objects.visible_to(user)`` so
+    that lower roles do not see the existence of higher-sensitivity events
+    they have no business knowing about (#522).
+    """
     events = (
-        Event.objects.filter(case=case, is_deleted=False)
+        Event.objects.visible_to(user)
+        .filter(case=case, is_deleted=False)
         .select_related("document_type", "created_by")
         .order_by("-occurred_at")
     )
     unassigned_events = []
     if case.client:
         unassigned_events = (
-            Event.objects.filter(
+            Event.objects.visible_to(user)
+            .filter(
                 client=case.client,
                 case__isnull=True,
                 is_deleted=False,
@@ -175,7 +183,7 @@ class CaseDetailView(StaffRequiredMixin, View):
             "case": case,
             "episodes": episodes,
             "goals": goals,
-            **_get_case_event_context(case, facility),
+            **_get_case_event_context(case, facility, request.user),
         }
         return render(request, "core/cases/detail.html", context)
 
@@ -258,10 +266,10 @@ class CaseAssignEventView(StaffRequiredMixin, View):
             messages.error(request, _("Kein Ereignis ausgewählt."))
             return redirect("core:case_detail", pk=case.pk)
 
-        event = get_object_or_404(Event, pk=event_id, facility=facility, is_deleted=False)
+        event = get_visible_event_or_404(request.user, facility, event_id)
         assign_event_to_case(case, event, request.user)
 
-        context = {"case": case, **_get_case_event_context(case, facility)}
+        context = {"case": case, **_get_case_event_context(case, facility, request.user)}
         return render(request, "core/cases/partials/event_list.html", context)
 
 
@@ -271,10 +279,10 @@ class CaseRemoveEventView(StaffRequiredMixin, View):
     def post(self, request, pk, event_pk):
         facility = request.current_facility
         case = get_object_or_404(Case, pk=pk, facility=facility)
-        event = get_object_or_404(Event, pk=event_pk, facility=facility, is_deleted=False)
+        event = get_visible_event_or_404(request.user, facility, event_pk)
         remove_event_from_case(event, request.user)
 
-        context = {"case": case, **_get_case_event_context(case, facility)}
+        context = {"case": case, **_get_case_event_context(case, facility, request.user)}
         return render(request, "core/cases/partials/event_list.html", context)
 
 

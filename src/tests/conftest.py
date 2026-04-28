@@ -150,6 +150,7 @@ def doc_type_crisis(facility):
         name="Notiz (Krise)",
         field_type=FieldTemplate.FieldType.TEXTAREA,
         is_encrypted=True,
+        sensitivity="high",
     )
 
     DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_notiz_krise, sort_order=0)

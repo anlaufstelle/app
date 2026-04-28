@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Löschfristen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-bold mb-6">{% trans "Löschfristen" %}</h1>
+<div id="retention-dashboard-content">
+    {% include "core/retention/partials/dashboard_content.html" %}
+</div>
+{% endblock %}

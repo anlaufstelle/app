@@ -50,6 +50,26 @@ class TestStatisticsCharts:
         # Nach HTMX-Swap warten bis Alpine die Charts neu initialisiert
         page.wait_for_selector("#chart-contacts", timeout=10000)
 
+    def test_charts_no_canvas_reuse_error_on_period_change(self, authenticated_page, base_url):
+        """Regression #509: Periodenwechsel darf keinen Chart.js
+        'Canvas is already in use'-Fehler in der Konsole erzeugen."""
+        page = authenticated_page
+        console_errors = []
+        page.on("console", lambda msg: console_errors.append(msg.text) if msg.type == "error" else None)
+
+        page.goto(f"{base_url}/statistics/")
+        page.wait_for_selector("#chart-contacts", timeout=5000)
+
+        # Drei Periodenwechsel hintereinander stressen den Lifecycle.
+        # get_by_role mit exact=True, damit "Jahr" nicht "Halbjahr" matched.
+        for label in ("Quartal", "Halbjahr", "Jahr"):
+            with page.expect_response(lambda r: re.search(r"/statistics/chart-data/", r.url)):
+                page.get_by_role("button", name=label, exact=True).click()
+            page.wait_for_selector("#chart-contacts", timeout=10000)
+
+        canvas_reuse_errors = [e for e in console_errors if "Canvas is already in use" in e]
+        assert canvas_reuse_errors == [], f"Chart.js canvas-reuse error on period change: {canvas_reuse_errors}"
+
     def test_document_type_dropdown_visible(self, authenticated_page, base_url):
         """DocumentType-Filter-Dropdown ist vorhanden."""
         page = authenticated_page

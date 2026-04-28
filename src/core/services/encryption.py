@@ -112,3 +112,73 @@ def encrypt_event_data(document_type, data_json):
 def generate_key():
     """Generate a new Fernet key (Base64-encoded)."""
     return Fernet.generate_key().decode("utf-8")
+
+
+# --- Binary file encryption (chunk-based) ---
+
+FILE_FORMAT_VERSION = 1
+CHUNK_SIZE = 64 * 1024  # 64 KB per chunk
+
+
+def encrypt_file(input_stream, output_path):
+    """Encrypt a file stream in chunks, writing to output_path.
+
+    Format: [1B version][4B chunk_count][per chunk: 4B token_len + token_bytes]
+    Each chunk is independently Fernet-encrypted for streaming decryption.
+    """
+    import struct
+    from pathlib import Path
+
+    f = get_fernet()
+    chunks = []
+    while True:
+        data = input_stream.read(CHUNK_SIZE)
+        if not data:
+            break
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        chunks.append(f.encrypt(data))
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    with open(output_path, "wb") as out:
+        out.write(struct.pack(">B", FILE_FORMAT_VERSION))
+        out.write(struct.pack(">I", len(chunks)))
+        for token in chunks:
+            token_bytes = token if isinstance(token, bytes) else token.encode("utf-8")
+            out.write(struct.pack(">I", len(token_bytes)))
+            out.write(token_bytes)
+
+
+def decrypt_file_stream(input_path):
+    """Generator that yields decrypted chunks from an encrypted file.
+
+    Reads chunk-by-chunk to avoid loading the entire file into memory.
+    """
+    import struct
+
+    f = get_fernet()
+
+    with open(input_path, "rb") as inp:
+        version_bytes = inp.read(1)
+        if not version_bytes:
+            raise EncryptionError("Empty encrypted file")
+        (version,) = struct.unpack(">B", version_bytes)
+        if version != FILE_FORMAT_VERSION:
+            raise EncryptionError(f"Unsupported file format version: {version}")
+
+        (chunk_count,) = struct.unpack(">I", inp.read(4))
+
+        for _ in range(chunk_count):
+            len_bytes = inp.read(4)
+            if len(len_bytes) < 4:
+                raise EncryptionError("Truncated encrypted file")
+            (token_len,) = struct.unpack(">I", len_bytes)
+            token = inp.read(token_len)
+            if len(token) < token_len:
+                raise EncryptionError("Truncated encrypted file")
+            try:
+                yield f.decrypt(token)
+            except InvalidToken as exc:
+                raise EncryptionError(f"Chunk decryption failed: {exc}") from exc

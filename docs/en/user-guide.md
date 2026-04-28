@@ -310,7 +310,7 @@ The charts update automatically when the time period is changed.
 
 ### CSV Export
 
-The CSV export contains all events from the selected time period with all non-encrypted fields.
+The CSV export contains all events from the selected time period. Fields whose sensitivity level exceeds the exporting user's role permissions are shown as "[Restricted]".
 
 1. Open the statistics dashboard and select the desired time period.
 2. Click **Export CSV**.

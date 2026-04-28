@@ -29,7 +29,14 @@
 <div class="grid grid-cols-2 gap-4 mb-8">
     <div class="bg-white rounded-lg border border-gray-200 p-4">
         <p class="text-sm text-gray-500">{% trans "Einzigartige Klientel" %}</p>
+        {% if unique_clients_is_approximation %}
+        <p class="text-3xl font-bold text-gray-900"
+           title="{% trans 'Approximation: Für Zeiträume über einen Monat hinaus werden Klientel über Monatssnapshots summiert. Klientel, die in mehreren Monaten erscheinen, werden mehrfach gezählt.' %}">
+            <span class="text-gray-500 text-xl mr-1">ca.</span>{{ stats.unique_clients }}
+        </p>
+        {% else %}
         <p class="text-3xl font-bold text-gray-900">{{ stats.unique_clients }}</p>
+        {% endif %}
     </div>
     <div class="bg-white rounded-lg border border-gray-200 p-4">
         <p class="text-sm text-gray-500">{% trans "Top-Klientel" %}</p>

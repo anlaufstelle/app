@@ -90,12 +90,44 @@ class TestRequestDeletion:
         assert event_qualified.is_deleted is False
         assert event_qualified.data_json == {"dauer": 20, "notiz": "Qualifiziert"}
 
-    def test_multiple_requests_for_same_event(self, event_qualified, staff_user, lead_user):
-        """Multiple deletion requests can coexist for the same event."""
+    def test_idempotent_when_pending_request_exists(self, event_qualified, staff_user, lead_user):
+        """Issue #530: a second request_deletion() for the same event while a
+        PENDING request exists must return the existing record, not create a
+        duplicate. Different requesters get the same record."""
         dr1 = request_deletion(event_qualified, staff_user, "Grund 1")
         dr2 = request_deletion(event_qualified, lead_user, "Grund 2")
-        assert dr1.pk != dr2.pk
+        assert dr1.pk == dr2.pk
+        assert DeletionRequest.objects.filter(target_id=event_qualified.pk).count() == 1
+        # The existing record's reason and requester are preserved
+        dr1.refresh_from_db()
+        assert dr1.reason == "Grund 1"
+        assert dr1.requested_by == staff_user
+
+    def test_new_request_allowed_after_previous_was_rejected(self, event_qualified, staff_user, lead_user):
+        """When the previous request was REJECTED, a fresh PENDING one is allowed."""
+        dr1 = request_deletion(event_qualified, staff_user, "Grund 1")
+        reject_deletion(dr1, lead_user)
+
+        dr2 = request_deletion(event_qualified, staff_user, "Grund 2")
+        assert dr2.pk != dr1.pk
         assert DeletionRequest.objects.filter(target_id=event_qualified.pk).count() == 2
+
+    def test_db_constraint_prevents_duplicate_pending_requests(self, event_qualified, staff_user):
+        """The DB-level UniqueConstraint(condition=Q(status='pending')) is the
+        ultimate guard — even a raw .objects.create() that bypasses the
+        service must be rejected."""
+        from django.db import IntegrityError, transaction
+
+        request_deletion(event_qualified, staff_user, "Grund 1")
+        with pytest.raises(IntegrityError):
+            with transaction.atomic():
+                DeletionRequest.objects.create(
+                    facility=event_qualified.facility,
+                    target_type="Event",
+                    target_id=event_qualified.pk,
+                    reason="Spoofed",
+                    requested_by=staff_user,
+                )
 
     def test_reviewed_by_initially_null(self, event_qualified, staff_user):
         dr = request_deletion(event_qualified, staff_user, "Grund")
@@ -320,15 +352,23 @@ class TestDeletionRequestReviewView:
         assert pending_request.status == DeletionRequest.Status.REJECTED
         assert event_qualified.is_deleted is False
 
-    def test_same_user_cannot_approve_own_request(self, client, pending_request, staff_user, admin_user, facility):
-        """The requester (staff_user) is different from the reviewer.
-
-        But if requester == reviewer, the view must block approval.
-        Here we create a request by lead_user and try to review as lead_user.
-        """
+    def test_same_user_cannot_approve_own_request(
+        self, client, admin_user, facility, client_qualified, doc_type_contact
+    ):
+        """If requester == reviewer, the view must block approval."""
         from core.models import DeletionRequest as DR
 
-        event = Event.objects.get(pk=pending_request.target_id)
+        # Use a fresh event so the new unique_pending_deletion_request constraint
+        # (#530) doesn't reject the setup as a duplicate of the pending_request
+        # fixture.
+        event = Event.objects.create(
+            facility=facility,
+            client=client_qualified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 5, "notiz": "Self review event"},
+            created_by=admin_user,
+        )
         dr = DR.objects.create(
             facility=facility,
             target_type="Event",

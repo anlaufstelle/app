@@ -80,7 +80,8 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
         track_client_visit(request.user, client, facility)
 
         events = (
-            Event.objects.filter(client=client, is_deleted=False)
+            Event.objects.visible_to(request.user)
+            .filter(client=client, is_deleted=False)
             .select_related("document_type", "created_by")
             .order_by("-occurred_at")
         )
@@ -111,7 +112,7 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
                 target_id=str(client.pk),
             )
 
-        active_bans = get_active_bans_for_client(client)
+        active_bans = get_active_bans_for_client(client, user=request.user)
 
         open_cases = (
             CaseModel.objects.filter(
@@ -190,6 +191,8 @@ class ClientAutocompleteView(AssistantOrAboveRequiredMixin, View):
 
     @method_decorator(ratelimit(key="user", rate="30/m", method="GET"))
     def get(self, request):
+        from core.services.event import CONTACT_STAGE_ORDER, stage_index
+
         q = request.GET.get("q", "").strip()
 
         qs = Client.objects.filter(
@@ -198,6 +201,17 @@ class ClientAutocompleteView(AssistantOrAboveRequiredMixin, View):
         )
         if q:
             qs = qs.filter(pseudonym__icontains=q)
+
+        # Issue #507: filter by min_contact_stage from the selected DocumentType.
+        # Frontend passes data-min-stage from the DocumentType <option>; we drop
+        # all clients whose contact_stage is below the requirement.
+        min_stage = request.GET.get("min_stage", "").strip()
+        if min_stage:
+            required = stage_index(min_stage)
+            if required >= 0:
+                allowed = [s for s in CONTACT_STAGE_ORDER if stage_index(s) >= required]
+                qs = qs.filter(contact_stage__in=allowed)
+
         clients = qs.annotate(
             last_contact=Max("events__occurred_at", filter=Q(events__is_deleted=False)),
         ).order_by(F("last_contact").desc(nulls_last=True), "pseudonym")[:30]

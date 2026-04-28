@@ -124,6 +124,8 @@ python src/manage.py seed --flush          # vorhandene Daten vorher löschen
 | Meilensteine / Ziel | — | 3 | 4 |
 | WorkItems | 5 | 25 | 100 |
 | DeletionRequests | — | 5 | 15 |
+| RetentionProposals | 4 | 6 | 12 |
+| Dateianhänge (ca.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) |
 | Zeitraum | 80 Tage | 365 Tage | 3 Jahre |
 
 > **Hinweis:** `small` enthält kein Fallmanagement (keine Episoden, Ziele). Für die Entwicklung am Fallmanagement `medium` verwenden.

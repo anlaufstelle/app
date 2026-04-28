@@ -1,4 +1,5 @@
 from .activity import Activity
+from .attachment import EventAttachment
 from .audit import AuditLog
 from .case import Case
 from .client import Client
@@ -10,6 +11,7 @@ from .event_history import EventHistory
 from .organization import Facility, Organization
 from .outcome import Milestone, OutcomeGoal
 from .recent_client_visit import RecentClientVisit
+from .retention import LegalHold, RetentionProposal
 from .settings import Settings
 from .statistics_snapshot import StatisticsSnapshot
 from .time_filter import TimeFilter
@@ -19,6 +21,7 @@ from .workitem import DeletionRequest, WorkItem
 __all__ = [
     "Activity",
     "AuditLog",
+    "EventAttachment",
     "Case",
     "Client",
     "DashboardPreference",
@@ -34,6 +37,8 @@ __all__ = [
     "OutcomeGoal",
     "RecentClientVisit",
     "Facility",
+    "LegalHold",
+    "RetentionProposal",
     "Settings",
     "StatisticsSnapshot",
     "TimeFilter",

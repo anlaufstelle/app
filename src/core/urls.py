@@ -4,6 +4,7 @@ from django.urls import path
 from django.views.generic import RedirectView
 
 from core.views.account import AccountProfileView, DashboardPreferenceUpdateView
+from core.views.attachments import AttachmentListView
 from core.views.audit import AuditLogDetailView, AuditLogListView
 from core.views.cases import (
     CaseAssignEventView,
@@ -36,6 +37,7 @@ from core.views.clients import (
 )
 from core.views.dsgvo import DSGVODocumentDownloadView, DSGVOPackageView
 from core.views.events import (
+    AttachmentDownloadView,
     DeletionRequestListView,
     DeletionRequestReviewView,
     EventCreateView,
@@ -45,6 +47,12 @@ from core.views.events import (
     EventUpdateView,
 )
 from core.views.handover import HandoverView
+from core.views.retention import (
+    RetentionApproveView,
+    RetentionDashboardView,
+    RetentionDismissHoldView,
+    RetentionHoldView,
+)
 from core.views.search import GlobalSearchPartialView, SearchView
 from core.views.statistics import (
     ChartDataView,
@@ -103,14 +111,23 @@ urlpatterns = [
     ),
     path("cases/<uuid:case_pk>/milestones/<uuid:pk>/toggle/", MilestoneToggleView.as_view(), name="milestone_toggle"),
     path("cases/<uuid:case_pk>/milestones/<uuid:pk>/delete/", MilestoneDeleteView.as_view(), name="milestone_delete"),
+    # Attachments (central file overview)
+    path("attachments/", AttachmentListView.as_view(), name="attachment_list"),
     # Events
     path("events/new/", EventCreateView.as_view(), name="event_create"),
     path("events/<uuid:pk>/", EventDetailView.as_view(), name="event_detail"),
     path("events/<uuid:pk>/edit/", EventUpdateView.as_view(), name="event_update"),
     path("events/<uuid:pk>/delete/", EventDeleteView.as_view(), name="event_delete"),
+    path(
+        "events/<uuid:pk>/attachments/<uuid:attachment_pk>/download/",
+        AttachmentDownloadView.as_view(),
+        name="attachment_download",
+    ),
     # Deletion Requests
     path("deletion-requests/", DeletionRequestListView.as_view(), name="deletion_request_list"),
     path("deletion-requests/<uuid:pk>/review/", DeletionRequestReviewView.as_view(), name="deletion_review"),
+    # Retention Dashboard
+    path("retention/", RetentionDashboardView.as_view(), name="retention_dashboard"),
     # WorkItems
     path("workitems/", WorkItemInboxView.as_view(), name="workitem_inbox"),
     path("workitems/new/", WorkItemCreateView.as_view(), name="workitem_create"),
@@ -140,4 +157,7 @@ urlpatterns = [
     path("api/cases/for-client/", CasesForClientView.as_view(), name="cases_for_client"),
     path("api/dashboard/preferences/", DashboardPreferenceUpdateView.as_view(), name="dashboard_preferences"),
     path("api/search/global/", GlobalSearchPartialView.as_view(), name="global_search"),
+    path("api/retention/<uuid:pk>/approve/", RetentionApproveView.as_view(), name="retention_approve"),
+    path("api/retention/<uuid:pk>/hold/", RetentionHoldView.as_view(), name="retention_hold"),
+    path("api/retention/hold/<uuid:pk>/dismiss/", RetentionDismissHoldView.as_view(), name="retention_dismiss_hold"),
 ]

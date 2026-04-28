@@ -53,7 +53,13 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
             selected_filter_id = "all"
 
         # Build feed items
-        feed_items = build_feed_items(facility, target_date, feed_type, time_filter=selected_filter)
+        feed_items = build_feed_items(
+            facility,
+            target_date,
+            feed_type,
+            time_filter=selected_filter,
+            user=self.request.user,
+        )
         enrich_events_with_preview(feed_items, self.request.user)
 
         # Document type filter (from Timeline)
@@ -65,7 +71,16 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                 if item["type"] != "event" or str(item["object"].document_type_id) == doc_type_id
             ]
 
-        document_types = DocumentType.objects.for_facility(facility).filter(is_active=True).order_by("name")
+        from core.services.sensitivity import allowed_sensitivities_for_user
+
+        document_types = (
+            DocumentType.objects.for_facility(facility)
+            .filter(
+                is_active=True,
+                sensitivity__in=allowed_sensitivities_for_user(self.request.user),
+            )
+            .order_by("name")
+        )
 
         # Sidebar: open workitems (from Aktivitätslog)
         workitems = (
@@ -147,7 +162,13 @@ class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, TemplateView):
         if time_filter_id and time_filter_id != "all":
             time_filter = TimeFilter.objects.for_facility(facility).filter(pk=time_filter_id).first()
 
-        feed_items = build_feed_items(facility, target_date, feed_type, time_filter=time_filter)
+        feed_items = build_feed_items(
+            facility,
+            target_date,
+            feed_type,
+            time_filter=time_filter,
+            user=self.request.user,
+        )
         enrich_events_with_preview(feed_items, self.request.user)
 
         # Document type filter

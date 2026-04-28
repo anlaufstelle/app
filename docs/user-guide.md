@@ -307,7 +307,7 @@ Die Charts aktualisieren sich automatisch beim Wechsel des Zeitraums.
 
 ### CSV-Export
 
-Der CSV-Export enthält alle Ereignisse des gewählten Zeitraums mit allen nicht-verschlüsselten Feldern.
+Der CSV-Export enthält alle Ereignisse des gewählten Zeitraums. Felder, deren Sensitivitätsstufe die Berechtigung des exportierenden Benutzers übersteigt, werden als „[Eingeschränkt]" angezeigt.
 
 1. Öffnen Sie das Statistik-Dashboard und wählen Sie den gewünschten Zeitraum.
 2. Klicken Sie auf **CSV exportieren**.

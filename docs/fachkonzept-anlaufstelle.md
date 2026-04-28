@@ -4,7 +4,7 @@
 
 Autor: Barbara Nix, Tobias Nix
 Stand: März 2026
-Version: 1.2
+Version: 1.3
 
 ---
 
@@ -15,6 +15,7 @@ Version: 1.2
 | 1.0 | Dezember 2025 | Erstfassung |
 | 1.1 | Februar 2026 | Schichtkonzept durch benannte Zeitfilter ersetzt. Übergabe-Konzept aufgelöst — abgedeckt durch Arbeitsinfos (Hinweise, Aufgaben). Organisationshierarchie als offene Entscheidung markiert. |
 | 1.2 | März 2026 | Alle offenen Entscheidungen geschlossen: Organisationshierarchie (Option 2: Klein + vorbereitet), JSONB (bedingt entschieden für Phase 1–3), Lizenz (AGPL v3). Phasenplan: Phase 1 gesplittet in 1a (zeigbarer Kern) und 1b (Fundament komplett). |
+| 1.3 | April 2026 | Feld-Level-Sensitivität: Verschlüsselung und Sichtbarkeit entkoppelt (`FieldTemplate.sensitivity`). |
 
 ---
 
@@ -575,7 +576,7 @@ Dokumentationstypen sind konfigurierbar. Eine Einrichtung kann eigene Typen defi
 
 #### FieldTemplate — Die Feldvorlage
 
-Ein FieldTemplate definiert ein Feld innerhalb eines Dokumentationstyps: Name, Datentyp (Text, Zahl, Datum, Auswahl, Mehrfachauswahl, Boolean, ...), ob es ein Pflichtfeld ist, welche Optionen zur Auswahl stehen, ob es verschlüsselt gespeichert wird, welcher Statistik-Kategorie es zugeordnet ist.
+Ein FieldTemplate definiert ein Feld innerhalb eines Dokumentationstyps: Name, Datentyp (Text, Zahl, Datum, Auswahl, Mehrfachauswahl, Boolean, ...), ob es ein Pflichtfeld ist, welche Optionen zur Auswahl stehen, ob es verschlüsselt gespeichert wird (`is_encrypted`), welche Sichtbarkeitsstufe es hat (`sensitivity`), welcher Statistik-Kategorie es zugeordnet ist.
 
 FieldTemplates sind die Bausteine des semantischen Feldsystems. Sie tragen Bedeutung: Das System weiß, dass das Feld „Vermittlung an" ein Freitextfeld ist, das zur Statistik-Kategorie „Vermittlungen" gehört und als nicht-sensibel eingestuft ist.
 
@@ -662,7 +663,7 @@ Scope-Regeln bestimmen, welche Daten für wen sichtbar sind:
 - Identifizierte Kontakte: Für alle Rollen sichtbar (Pseudonym, Kontaktliste, Basisinformationen).
 - Qualifizierte Kontakte: Details (Beratungsnotizen, Gesundheitsdaten, verschlüsselte Felder) nur für Staff, Lead und Admin sichtbar. Assistant sieht nur das Pseudonym und den letzten Kontakt.
 
-**Sensitivität:** Einzelne Felder können unabhängig von der Kontaktstufe als sensibel markiert und verschlüsselt gespeichert werden. Der Zugriff auf verschlüsselte Felder kann auf bestimmte Rollen eingeschränkt werden.
+**Sensitivität:** Einzelne Felder können über `FieldTemplate.sensitivity` eine eigene Sichtbarkeitsstufe erhalten, die den Dokumentationstyp-Level nach oben überschreibt. Unabhängig davon steuert `is_encrypted`, ob Feldwerte verschlüsselt gespeichert werden.
 
 ---
 
@@ -813,7 +814,7 @@ Domänenbibliotheken sind keine fest eingebauten Typen. Sie sind Seed-Daten — 
 
 **Mindestkontaktstufe** bestimmt, ab welcher Stufe der Typ zugeordnet werden kann. Ein Spritzentausch kann anonym dokumentiert werden (nur Zählung). Ein Beratungsgespräch erfordert einen qualifizierten Kontakt mit Pseudonym und Beratungshistorie.
 
-**Sensitivität** steuert, ob die Feldwerte des Typs verschlüsselt gespeichert werden. Medizinische Versorgung und Beratungsgespräche enthalten potenziell Gesundheitsdaten (Art. 9 DSGVO) und werden verschlüsselt.
+**Sensitivität** steuert, welche Rollen die Feldwerte des Typs sehen dürfen. Verschlüsselung (`is_encrypted`) ist unabhängig davon konfigurierbar. Medizinische Versorgung und Beratungsgespräche enthalten potenziell Gesundheitsdaten (Art. 9 DSGVO) und werden verschlüsselt.
 
 **Statistik-Zuordnung** definiert, unter welcher Kategorie der Typ in Statistiken und Behördenberichten erscheint. Das ermöglicht automatische Aggregation ohne manuelle Zuordnung.
 
@@ -978,7 +979,7 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 | **Pseudonym** | Vom Team vergebener Name für eine Person im System. Primärer Identifikator in Anlaufstelle. Die Zuordnung zum realen Namen existiert nur im Wissen der Mitarbeitenden, nicht im System. |
 | **Role** | Rolle — bestimmt, welche Aktionen ein User ausführen darf. Vier Rollen: Admin (Systemkontrolle), Lead (fachliche Leitung), Staff (Fachkraft), Assistant (Assistenz). |
 | **Scope** | Sichtbarkeitsbereich. Bestimmt, welche Daten für einen User zugänglich sind — abhängig von Einrichtung, Rolle und Kontaktstufe. |
-| **Sensitivität** | Einstufung eines Dokumentationstyps oder Feldes hinsichtlich des Schutzbedarfs. Steuert, ob Feldwerte verschlüsselt gespeichert werden und welche Rollen Zugriff haben. |
+| **Sensitivität** | Einstufung eines Dokumentationstyps oder Feldes hinsichtlich des Schutzbedarfs. Steuert, welche Rollen auf Feldwerte zugreifen dürfen. Konfigurierbar pro Dokumentationstyp und pro Feld (`FieldTemplate.sensitivity`). Unabhängig von der Feldverschlüsselung (`is_encrypted`). |
 | **TimeFilter** | Technischer Begriff für einen benannten Zeitfilter. Gehört zu einer Einrichtung und definiert ein Zeitfenster (Startzeit, Endzeit) mit einem Label. |
 | **User** | Mitarbeitende — eine Person, die mit dem System arbeitet. Hat Zugangsdaten und eine Rollenzuweisung in einer Einrichtung. |
 | **WorkItem** | Arbeitsinfo — ein operativer Eintrag (Hinweis oder Aufgabe) mit eigenem Lebenszyklus und optionaler Priorität. Getrennt von der fachlichen Dokumentation. |

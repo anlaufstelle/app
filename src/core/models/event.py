@@ -6,13 +6,13 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
-from core.models.managers import FacilityScopedManager
+from core.models.managers import EventManager
 
 
 class Event(models.Model):
     """A single documentation event (contact, service, note, etc.)."""
 
-    objects = FacilityScopedManager()
+    objects = EventManager()
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     facility = models.ForeignKey(
@@ -100,4 +100,7 @@ class Event(models.Model):
         for key in encrypted_field_names:
             value = self.data_json.get(key)
             if value and not is_encrypted_value(value):
+                # Skip file attachment markers — they are metadata, not user data
+                if isinstance(value, dict) and value.get("__file__"):
+                    continue
                 self.data_json[key] = encrypt_field(value)

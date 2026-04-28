@@ -20,9 +20,20 @@ if _sentry_dsn:
         send_default_pii=False,
     )
 
+# --- Media (encrypted attachments) ---
+
+MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))  # noqa: F405
+
 DEBUG = False
 
+# Fail-closed: Prod darf nicht mit unsicheren Defaults oder leerer Konfiguration starten.
+if "collectstatic" not in sys.argv:
+    if not SECRET_KEY:  # noqa: F405
+        raise ImproperlyConfigured("DJANGO_SECRET_KEY muss in Produktion gesetzt sein.")
+
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
+if "collectstatic" not in sys.argv and not ALLOWED_HOSTS:
+    raise ImproperlyConfigured("ALLOWED_HOSTS muss in Produktion gesetzt sein (Kommaseparierte Liste).")
 
 # --- Security ---
 
@@ -54,8 +65,10 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@anlaufstelle.
 CONN_MAX_AGE = 60
 
 # --- Encryption Key (mandatory in production) ---
-if "collectstatic" not in sys.argv and not ENCRYPTION_KEY:  # noqa: F405
+# Akzeptiert ENCRYPTION_KEYS (Plural, MultiFernet-Rotation) oder ENCRYPTION_KEY (Singular, Legacy).
+# Mindestens eins muss gesetzt sein.
+if "collectstatic" not in sys.argv and not (ENCRYPTION_KEY or ENCRYPTION_KEYS):  # noqa: F405
     raise ImproperlyConfigured(
-        "ENCRYPTION_KEY must be set in production. "
+        "ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein. "
         'Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
     )

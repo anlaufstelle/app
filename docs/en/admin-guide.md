@@ -236,6 +236,8 @@ The sensitivity level controls which roles can access entries of this type:
 | **Elevated** | Staff, lead, admin | Counseling sessions, medical care |
 | **High** | Lead and admin only | Crisis interventions, highly sensitive data |
 
+**Field-level override:** Individual fields can override the document type's sensitivity level via `FieldTemplate.sensitivity`. This is independent of encryption (`is_encrypted`), which only controls whether field values are encrypted at rest.
+
 #### System Type
 
 The system type links a documentation type to internal application logic. It is set at creation and **cannot be changed afterwards**.

@@ -123,6 +123,10 @@
                 {% if overdue_workitems_count %}<span class="ml-auto inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-600 text-white">{{ overdue_workitems_count }}!</span>{% endif %}
                 {% if open_workitems_count %}<span class="{% if not overdue_workitems_count %}ml-auto {% endif %}inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">{{ open_workitems_count }}</span>{% endif %}
             </a>
+            <a href="{% url 'core:attachment_list' %}" class="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 {% if request.resolver_match.url_name == 'attachment_list' %}bg-indigo-50 text-indigo-700{% endif %}" data-testid="nav-attachments">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
+                {% trans "Dateien" %}
+            </a>
             {% if user.is_lead_or_admin %}
             <a href="{% url 'core:statistics' %}" class="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 {% if request.resolver_match.url_name in 'statistics,statistics_csv_export,statistics_pdf_export,statistics_jugendamt_export' %}bg-indigo-50 text-indigo-700{% endif %}">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
@@ -131,6 +135,10 @@
             <a href="{% url 'core:deletion_request_list' %}" class="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 {% if request.resolver_match.url_name in 'deletion_request_list,deletion_review' %}bg-indigo-50 text-indigo-700{% endif %}">
                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                 {% trans "Löschanträge" %}
+            </a>
+            <a href="{% url 'core:retention_dashboard' %}" class="flex items-center px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-100 {% if request.resolver_match.url_name == 'retention_dashboard' %}bg-indigo-50 text-indigo-700{% endif %}">
+                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                {% trans "Löschfristen" %}
             </a>
             {% endif %}
             {% if user.is_admin %}
@@ -247,7 +255,7 @@
             </div>
             {# Slot 4: Mehr #}
             <div class="relative" x-data="{ moreOpen: false }">
-                <button @click="moreOpen = !moreOpen" class="flex flex-col items-center px-3 py-1 text-xs min-w-[44px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'handover,client_list,client_detail,client_create,client_update,case_list,case_detail,case_create,case_update,workitem_inbox,workitem_detail,workitem_create,workitem_update,search,statistics,deletion_request_list,deletion_review,audit_log' %}text-indigo-600{% else %}text-gray-600 hover:text-indigo-600{% endif %}" data-testid="mobile-nav-more">
+                <button @click="moreOpen = !moreOpen" class="flex flex-col items-center px-3 py-1 text-xs min-w-[44px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'handover,client_list,client_detail,client_create,client_update,case_list,case_detail,case_create,case_update,workitem_inbox,workitem_detail,workitem_create,workitem_update,attachment_list,search,statistics,deletion_request_list,deletion_review,retention_dashboard,audit_log' %}text-indigo-600{% else %}text-gray-600 hover:text-indigo-600{% endif %}" data-testid="mobile-nav-more">
                     <svg class="w-6 h-6 mb-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h.01M12 12h.01M19 12h.01M6 12a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0zm7 0a1 1 0 11-2 0 1 1 0 012 0z"/></svg>
                     {% trans "Mehr" %}
                 </button>
@@ -269,12 +277,18 @@
                         {% if overdue_workitems_count %}<span class="ml-auto inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-600 text-white">{{ overdue_workitems_count }}!</span>{% endif %}
                         {% if open_workitems_count %}<span class="{% if not overdue_workitems_count %}ml-auto {% endif %}inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">{{ open_workitems_count }}</span>{% endif %}
                     </a>
+                    <a href="{% url 'core:attachment_list' %}" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        {% trans "Dateien" %}
+                    </a>
                     {% if user.is_lead_or_admin %}
                     <a href="{% url 'core:statistics' %}" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                         {% trans "Statistik" %}
                     </a>
                     <a href="{% url 'core:deletion_request_list' %}" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                         {% trans "Löschanträge" %}
+                    </a>
+                    <a href="{% url 'core:retention_dashboard' %}" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                        {% trans "Löschfristen" %}
                     </a>
                     {% endif %}
                     {% if user.is_admin %}

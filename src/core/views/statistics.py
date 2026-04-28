@@ -45,6 +45,8 @@ class StatisticsView(LeadOrAdminRequiredMixin, View):
             date_from = today - timedelta(days=30)
             date_to = today
 
+        from core.services.snapshot import is_multi_month_range
+
         stats = get_statistics_hybrid(facility, date_from, date_to)
 
         context = {
@@ -56,6 +58,10 @@ class StatisticsView(LeadOrAdminRequiredMixin, View):
             "selected_year": selected_year if period == "year" else None,
             "current_year": today.year,
             "document_types": DocumentType.objects.filter(facility=facility).order_by("name"),
+            # #533: unique_clients is summed across monthly snapshots, so it
+            # double-counts clients seen in multiple months. Surface that fact
+            # to the template so it can render a "ca." prefix + tooltip.
+            "unique_clients_is_approximation": is_multi_month_range(date_from, date_to),
         }
 
         if request.headers.get("HX-Request"):

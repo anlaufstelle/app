@@ -40,6 +40,9 @@ Gemini.md
 docs/superpowers/
 docs/plans/
 
+# Media (encrypted file uploads)
+src/media/
+
 # OS
 .DS_Store
 Thumbs.db

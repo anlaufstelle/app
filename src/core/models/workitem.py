@@ -163,6 +163,14 @@ class DeletionRequest(models.Model):
                 condition=~models.Q(requested_by=models.F("reviewed_by")),
                 name="deletion_request_different_reviewer",
             ),
+            # #530: prevent duplicate PENDING requests for the same target.
+            # Partial unique index — closed (APPROVED/REJECTED) records
+            # remain unconstrained so re-requests after rejection are allowed.
+            models.UniqueConstraint(
+                fields=["facility", "target_type", "target_id"],
+                condition=models.Q(status="pending"),
+                name="unique_pending_deletion_request",
+            ),
         ]
 
     def __str__(self):

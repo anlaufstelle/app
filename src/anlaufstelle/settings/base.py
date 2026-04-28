@@ -13,10 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 load_dotenv(BASE_DIR.parent / ".env")
 
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-dev-only-change-in-production",
-)
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 
 DEBUG = False
 
@@ -145,6 +142,11 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+# --- Media files (encrypted attachments — NOT served via Django URL) ---
+
+MEDIA_ROOT = BASE_DIR / "media"
+MEDIA_URL = "/media/"
 
 # --- Encryption ---
 # MultiFernet key rotation: ENCRYPTION_KEYS is a comma-separated list of Fernet keys.

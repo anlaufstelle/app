@@ -2,11 +2,13 @@
 
 import logging
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Case
+from core.services.sensitivity import user_can_see_event
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +66,23 @@ def reopen_case(case, user):  # user reserved for future audit trail
 
 @transaction.atomic
 def assign_event_to_case(case, event, user):  # user reserved for future audit trail
-    """Assign an event to a case. Both must belong to the same facility."""
+    """Assign an event to a case. Both must belong to the same facility.
+
+    Additional invariants:
+    - Anonymous events may only be attached to cases without a client.
+    - Clientel of the event must match the case's clientel when both are set.
+    - The user must be permitted to see the event (service-layer fallback for
+      callers that bypass the view-level :func:`get_visible_event_or_404`).
+    """
     if event.facility_id != case.facility_id:
         raise ValueError(_("Ereignis gehört nicht zur selben Einrichtung wie der Fall."))
+    if user is not None and not user_can_see_event(user, event):
+        raise ValidationError(_("Ereignis ist für diese Rolle nicht sichtbar."))
+    if case.client_id is not None:
+        if event.is_anonymous or event.client_id is None:
+            raise ValidationError(_("Anonyme Ereignisse können nicht an einen klientelbezogenen Fall gehängt werden."))
+        if event.client_id != case.client_id:
+            raise ValidationError(_("Klientel des Ereignisses passt nicht zum Klientel des Falls."))
     event.case = case
     event.save()
     return event

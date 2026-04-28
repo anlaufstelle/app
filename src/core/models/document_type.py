@@ -122,6 +122,7 @@ class FieldTemplate(models.Model):
         BOOLEAN = "boolean", _("Ja/Nein")
         SELECT = "select", _("Auswahl")
         MULTI_SELECT = "multi_select", _("Mehrfachauswahl")
+        FILE = "file", _("Datei")
 
     objects = FacilityScopedManager()
 
@@ -146,6 +147,14 @@ class FieldTemplate(models.Model):
     )
     is_required = models.BooleanField(default=False, verbose_name=_("Pflichtfeld"))
     is_encrypted = models.BooleanField(default=False, verbose_name=_("Verschlüsselt"))
+    sensitivity = models.CharField(
+        max_length=20,
+        choices=DocumentType.Sensitivity.choices,
+        blank=True,
+        default="",
+        verbose_name=_("Sensibilität"),
+        help_text=_("Feld-Level Sichtbarkeit. Leer = erbt vom Dokumentationstyp."),
+    )
     options_json = models.JSONField(
         blank=True,
         default=list,
@@ -197,6 +206,10 @@ class FieldTemplate(models.Model):
     _SLUG_RETRY_LIMIT = 3
 
     def save(self, *args, **kwargs):
+        # FILE fields are always encrypted at rest
+        if self.field_type == self.FieldType.FILE:
+            self.is_encrypted = True
+
         if self._state.adding:
             auto_slug = not self.slug
             if auto_slug:
