@@ -90,14 +90,70 @@ class TestRetentionApproveFlow:
         pending_before = page.locator("span:has-text('Ausstehend')").count()
         assert pending_before >= 1, "Keine ausstehenden Proposals vorhanden"
 
-        # Click first "Freigeben" button (handle confirm dialog)
+        # Click first "Freigeben" button on a proposal card (handle confirm dialog).
+        # Scope verhindert Clash mit dem gleichnamigen Bulk-Toolbar-Button.
         page.on("dialog", lambda dialog: dialog.accept())
-        page.locator("button:has-text('Freigeben')").first.click()
+        page.locator(".proposal-card button:has-text('Freigeben')").first.click()
 
         # The card should now show "Freigegeben" — warten, bis HTMX-Swap
         # das Badge neu gerendert hat.
         page.locator("span:has-text('Freigegeben')").first.wait_for(state="visible", timeout=5000)
         assert page.locator("span:has-text('Freigegeben')").count() >= 1
+
+
+class TestRetentionBulkFlow:
+    """Bulk-Actions: Mehrere Löschvorschläge in einem Rutsch bearbeiten."""
+
+    def test_bulk_approve_two_proposals(self, authenticated_page, base_url):
+        _ensure_proposals(authenticated_page, base_url)
+        page = authenticated_page
+        page.goto(f"{base_url}/retention/")
+        page.wait_for_load_state("domcontentloaded")
+
+        checkboxes = page.locator("[data-bulk-proposal]")
+        n = checkboxes.count()
+        assert n >= 2, "Für den Test werden mindestens 2 pending Vorschläge gebraucht"
+
+        approved_before = page.locator("span:has-text('Freigegeben')").count()
+
+        checkboxes.nth(0).check()
+        checkboxes.nth(1).check()
+
+        counter = page.locator("[data-testid='retention-bulk-count']")
+        counter.wait_for(state="visible", timeout=3000)
+        assert "2" in counter.inner_text()
+
+        page.on("dialog", lambda dialog: dialog.accept())
+        page.locator("[data-testid='retention-bulk-approve']").click()
+
+        # HX-Redirect triggert full-page-Reload zurück auf /retention/ —
+        # auf mindestens zwei neue „Freigegeben"-Badges warten.
+        page.wait_for_function(
+            (
+                "count => Array.from(document.querySelectorAll('span'))"
+                ".filter(s => s.textContent.trim() === 'Freigegeben').length >= count"
+            ),
+            arg=approved_before + 2,
+            timeout=10000,
+        )
+
+    def test_select_all_toggles_every_checkbox(self, authenticated_page, base_url):
+        _ensure_proposals(authenticated_page, base_url)
+        page = authenticated_page
+        page.goto(f"{base_url}/retention/")
+        page.wait_for_load_state("domcontentloaded")
+
+        total = page.locator("[data-bulk-proposal]").count()
+        assert total >= 1
+
+        page.locator("[data-testid='retention-select-all']").check()
+        counter = page.locator("[data-testid='retention-bulk-count']")
+        counter.wait_for(state="visible", timeout=3000)
+        assert str(total) in counter.inner_text()
+
+        page.locator("[data-testid='retention-select-all']").uncheck()
+        # Nach dem Abwählen muss die Toolbar wieder verschwinden
+        page.locator("[data-testid='retention-bulk-count']").wait_for(state="hidden", timeout=3000)
 
 
 class TestRetentionHoldFlow:
@@ -155,8 +211,9 @@ class TestRetentionHoldFlow:
         # After dismissal, card should revert — auf Reaparition der
         # Freigeben-Buttons warten (signalisiert Zurück-zu-Ausstehend).
         page.wait_for_load_state("domcontentloaded")
-        page.locator("button:has-text('Freigeben')").first.wait_for(state="visible", timeout=5000)
-        assert page.locator("button:has-text('Freigeben')").count() >= 1
+        card_btn = page.locator(".proposal-card button:has-text('Freigeben')")
+        card_btn.first.wait_for(state="visible", timeout=5000)
+        assert card_btn.count() >= 1
 
 
 class TestRetentionNavigation:

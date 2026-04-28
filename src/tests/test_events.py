@@ -209,6 +209,57 @@ class TestEventCreateView:
         response = client.get(reverse("core:event_create"))
         assert response.status_code == 200
 
+    def test_event_create_form_shows_case_dropdown(self, client, staff_user, case_open):
+        """Open cases of the facility are selectable in the create form."""
+        client.force_login(staff_user)
+        response = client.get(reverse("core:event_create"))
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert 'name="case"' in content
+        assert case_open.title in content
+
+    def test_event_create_assigns_case(self, client, staff_user, doc_type_contact, client_identified, case_open):
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_contact.pk),
+                "client": str(client_identified.pk),
+                "case": str(case_open.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "dauer": "15",
+                "notiz": "Fallbezug",
+            },
+        )
+        assert response.status_code == 302
+        event = Event.objects.filter(document_type=doc_type_contact, created_by=staff_user).first()
+        assert event is not None
+        assert event.case_id == case_open.pk
+
+    def test_event_create_rejects_case_of_other_client(self, client, staff_user, facility, doc_type_contact, case_open):
+        """Case is bound to client_identified; picking a different client must fail."""
+        from core.models import Client as ClientModel
+
+        other = ClientModel.objects.create(
+            facility=facility,
+            pseudonym="Orca",
+            contact_stage=ClientModel.ContactStage.IDENTIFIED,
+        )
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_contact.pk),
+                "client": str(other.pk),
+                "case": str(case_open.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "dauer": "15",
+                "notiz": "Mismatch",
+            },
+        )
+        assert response.status_code == 200
+        assert not Event.objects.filter(created_by=staff_user).exists()
+
 
 @pytest.mark.django_db
 class TestEventDetailView:

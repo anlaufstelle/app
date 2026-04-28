@@ -3,13 +3,11 @@
 import logging
 from datetime import datetime, time
 
-from django.http import JsonResponse
 from django.utils import timezone
-from django.views import View
 from django.views.generic import TemplateView
 
 from core.models import Case as CaseModel
-from core.models import DashboardPreference, Event, RecentClientVisit, WorkItem
+from core.models import Event, RecentClientVisit, WorkItem
 from core.views.mixins import AssistantOrAboveRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -91,24 +89,3 @@ class AccountProfileView(AssistantOrAboveRequiredMixin, TemplateView):
         )
 
         return context
-
-
-class DashboardPreferenceUpdateView(AssistantOrAboveRequiredMixin, View):
-    """HTMX endpoint to toggle dashboard widgets on/off."""
-
-    def post(self, request):
-        widget = request.POST.get("widget", "")
-        enabled = request.POST.get("enabled", "true") == "true"
-
-        valid_widgets = set(DashboardPreference.DEFAULT_WIDGETS.keys())
-        if widget not in valid_widgets:
-            return JsonResponse({"error": "Invalid widget"}, status=400)
-
-        pref, _created = DashboardPreference.objects.get_or_create(
-            user=request.user,
-            defaults={"widgets": dict(DashboardPreference.DEFAULT_WIDGETS)},
-        )
-        pref.widgets[widget] = enabled
-        pref.save(update_fields=["widgets", "updated_at"])
-
-        return JsonResponse({"widget": widget, "enabled": enabled})

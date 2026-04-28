@@ -95,6 +95,15 @@
                         <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         {% trans "Neuer Kontakt" %}
                     </a>
+                    <button type="button"
+                            @click="mobileMenu = false; toggleOffline()"
+                            :disabled="busy"
+                            class="w-full text-left flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                            data-testid="mobile-take-offline-btn">
+                        <svg class="w-4 h-4 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                        <span x-show="!isOffline">{% trans "Offline mitnehmen" %}</span>
+                        <span x-show="isOffline" x-cloak>{% trans "Aus Offline-Cache entfernen" %}</span>
+                    </button>
                     {% if user.is_lead_or_admin %}
                     <div class="border-t border-gray-100 my-1"></div>
                     <a href="{% url 'core:client_export_json' client.pk %}" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">

@@ -8,6 +8,12 @@ from core.models import Case, DocumentType, DocumentTypeField, FieldTemplate
 from core.models.settings import Settings
 
 
+def _case_label(case: Case) -> str:
+    """Dropdown label: title plus client pseudonym so users can distinguish cases."""
+    pseudonym = case.client.pseudonym if case.client_id else None
+    return f"{case.title} – {pseudonym}" if pseudonym else case.title
+
+
 class EventMetaForm(forms.Form):
     """Event metadata (document type, client, timestamp)."""
 
@@ -42,6 +48,7 @@ class EventMetaForm(forms.Form):
         queryset=Case.objects.none(),
         required=False,
         label=_("Fall"),
+        empty_label=_("– Keinem Fall zuordnen –"),
         widget=forms.Select(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
     )
 
@@ -60,7 +67,9 @@ class EventMetaForm(forms.Form):
 
                 qs = qs.filter(sensitivity__in=allowed_sensitivities_for_user(user))
             self.fields["document_type"].queryset = qs
-            self.fields["case"].queryset = Case.objects.filter(facility=facility, status=Case.Status.OPEN)
+            case_qs = Case.objects.for_facility(facility).filter(status=Case.Status.OPEN).select_related("client")
+            self.fields["case"].queryset = case_qs
+            self.fields["case"].label_from_instance = _case_label
 
     def clean(self):
         cleaned = super().clean()
