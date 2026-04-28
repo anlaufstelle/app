@@ -113,6 +113,18 @@ Anlaufstelle ist von Grund auf für den Umgang mit besonders schützenswerten Da
 
 ---
 
+## Unterstützung bei der Einführung
+
+Anlaufstelle ist Open Source und kostenlos nutzbar. Wenn Sie Hilfe bei der Einführung in Ihrer Einrichtung benötigen, bieten die Macher von Anlaufstelle professionelle Unterstützung an:
+
+- **Beratung** — von der Bedarfsanalyse über Dokumentationskonzepte bis zur Einrichtung des Systems
+- **Schulung** — Teamschulungen per Videokonferenz oder vor Ort
+- **Anpassung** — Konfiguration der Dokumentationstypen für Ihre Einrichtung
+
+**Erstgespräch (30 Minuten) kostenlos.** Kontakt: [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app)
+
+---
+
 ## Dokumentation
 
 Benutzerhandbuch, Admin-Handbuch und Fachkonzept finden Sie im [docs/](docs/)-Verzeichnis.

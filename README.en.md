@@ -113,6 +113,18 @@ Anlaufstelle is designed from the ground up for handling particularly sensitive 
 
 ---
 
+## Support for getting started
+
+Anlaufstelle is open source and free to use. If you need help introducing the system in your facility, the makers of Anlaufstelle offer professional support:
+
+- **Consulting** — from needs assessment and documentation concepts to system setup
+- **Training** — team training via video conference or on-site
+- **Customization** — configuration of documentation types for your facility
+
+**Initial consultation (30 minutes) free of charge.** Contact: [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app)
+
+---
+
 ## Documentation
 
 User manual, admin manual, and domain concept are available in the [docs/](docs/) directory.
