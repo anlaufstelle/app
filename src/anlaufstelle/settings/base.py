@@ -115,6 +115,20 @@ AUTH_PASSWORD_VALIDATORS = [
 SESSION_COOKIE_AGE = 1800  # 30 Minuten
 SESSION_SAVE_EVERY_REQUEST = True
 
+# --- Trusted Proxy Hops (Client-IP-Ermittlung) ---
+# Anzahl der vertrauenswürdigen Proxy-Hops vor der Django-App. Bestimmt, welcher
+# Eintrag aus X-Forwarded-For als echte Client-IP interpretiert wird.
+#
+#   0 → REMOTE_ADDR direkt verwenden (kein Reverse-Proxy, spoofing-sicher)
+#   1 → Caddy-only (Default): split(",")[-1]
+#   2 → CDN + Caddy (z.B. Cloudflare → Caddy): split(",")[-2]
+#   N → Allgemein: split(",")[-N]
+#
+# X-Forwarded-For-Konvention: "client, proxy1, proxy2" — jeder Proxy hängt die IP
+# an, von der er den Request bekommen hat. Bei N vertrauenswürdigen Proxies ist
+# der N-te Eintrag von rechts die echte Client-IP.
+TRUSTED_PROXY_HOPS = int(os.environ.get("TRUSTED_PROXY_HOPS", "1"))
+
 # --- i18n ---
 
 LANGUAGE_CODE = "de"

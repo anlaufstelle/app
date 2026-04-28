@@ -4,10 +4,12 @@ from datetime import timedelta
 
 import pytest
 from django.db import connection
+from django.test import RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog
+from core.signals.audit import get_client_ip
 
 
 def _make_audit_log(facility, user, action=AuditLog.Action.LOGIN, delta_days=0):
@@ -92,6 +94,97 @@ def test_audit_log_filter_by_date(client, admin_user, facility):
     ids = [str(entry.pk) for entry in response.context["page_obj"].object_list]
     assert str(new_entry.pk) in ids
     assert str(old_entry.pk) not in ids
+
+
+class TestGetClientIp:
+    """Tests für die konfigurierbare Client-IP-Ermittlung via TRUSTED_PROXY_HOPS."""
+
+    def test_none_request_returns_none(self):
+        assert get_client_ip(None) is None
+
+    def test_zero_hops_uses_remote_addr(self, settings):
+        """TRUSTED_PROXY_HOPS=0 ignoriert X-Forwarded-For (spoofing-sicher)."""
+        settings.TRUSTED_PROXY_HOPS = 0
+        rf = RequestFactory()
+        request = rf.get("/")
+        request.META["HTTP_X_FORWARDED_FOR"] = "1.2.3.4, 5.6.7.8"
+        request.META["REMOTE_ADDR"] = "10.0.0.1"
+        assert get_client_ip(request) == "10.0.0.1"
+
+    def test_zero_hops_without_forwarded_for(self, settings):
+        settings.TRUSTED_PROXY_HOPS = 0
+        rf = RequestFactory()
+        request = rf.get("/")
+        request.META["REMOTE_ADDR"] = "10.0.0.1"
+        assert get_client_ip(request) == "10.0.0.1"
+
+    def test_one_hop_caddy_only(self, settings):
+        """TRUSTED_PROXY_HOPS=1 (Default): letzter X-Forwarded-For-Eintrag = Client-IP."""
+        settings.TRUSTED_PROXY_HOPS = 1
+        rf = RequestFactory()
+        request = rf.get("/")
+        request.META["HTTP_X_FORWARDED_FOR"] = "203.0.113.50, 70.41.3.18"
+        request.META["REMOTE_ADDR"] = "127.0.0.1"
+        assert get_client_ip(request) == "70.41.3.18"
+
+    def test_one_hop_single_entry(self, settings):
+        settings.TRUSTED_PROXY_HOPS = 1
+        rf = RequestFactory()
+        request = rf.get("/")
+        request.META["HTTP_X_FORWARDED_FOR"] = "203.0.113.50"
+        request.META["REMOTE_ADDR"] = "127.0.0.1"
+        assert get_client_ip(request) == "203.0.113.50"
+
+    def test_two_hops_cdn_plus_caddy(self, settings):
+        """TRUSTED_PROXY_HOPS=2 (z.B. Cloudflare → Caddy): vorletzter Eintrag = Client-IP."""
+        settings.TRUSTED_PROXY_HOPS = 2
+        rf = RequestFactory()
+        request = rf.get("/")
+        # Client: 203.0.113.50, CDN: 70.41.3.18, Caddy: 10.0.0.2
+        request.META["HTTP_X_FORWARDED_FOR"] = "203.0.113.50, 70.41.3.18, 10.0.0.2"
+        request.META["REMOTE_ADDR"] = "127.0.0.1"
+        assert get_client_ip(request) == "70.41.3.18"
+
+    def test_three_hops(self, settings):
+        settings.TRUSTED_PROXY_HOPS = 3
+        rf = RequestFactory()
+        request = rf.get("/")
+        request.META["HTTP_X_FORWARDED_FOR"] = "1.1.1.1, 2.2.2.2, 3.3.3.3, 4.4.4.4"
+        request.META["REMOTE_ADDR"] = "127.0.0.1"
+        assert get_client_ip(request) == "2.2.2.2"
+
+    def test_empty_forwarded_for_falls_back_to_remote_addr(self, settings):
+        settings.TRUSTED_PROXY_HOPS = 1
+        rf = RequestFactory()
+        request = rf.get("/")
+        request.META["HTTP_X_FORWARDED_FOR"] = ""
+        request.META["REMOTE_ADDR"] = "10.0.0.1"
+        assert get_client_ip(request) == "10.0.0.1"
+
+    def test_missing_forwarded_for_falls_back_to_remote_addr(self, settings):
+        settings.TRUSTED_PROXY_HOPS = 1
+        rf = RequestFactory()
+        request = rf.get("/")
+        request.META["REMOTE_ADDR"] = "10.0.0.1"
+        assert get_client_ip(request) == "10.0.0.1"
+
+    def test_fewer_hops_than_trusted_falls_back(self, settings):
+        """Weniger X-Forwarded-For-Einträge als TRUSTED_PROXY_HOPS → REMOTE_ADDR."""
+        settings.TRUSTED_PROXY_HOPS = 3
+        rf = RequestFactory()
+        request = rf.get("/")
+        # Nur zwei Einträge, aber 3 Hops erwartet — Header könnte manipuliert sein.
+        request.META["HTTP_X_FORWARDED_FOR"] = "1.1.1.1, 2.2.2.2"
+        request.META["REMOTE_ADDR"] = "10.0.0.1"
+        assert get_client_ip(request) == "10.0.0.1"
+
+    def test_whitespace_only_entries_ignored(self, settings):
+        settings.TRUSTED_PROXY_HOPS = 1
+        rf = RequestFactory()
+        request = rf.get("/")
+        request.META["HTTP_X_FORWARDED_FOR"] = "1.1.1.1,   , 2.2.2.2"
+        request.META["REMOTE_ADDR"] = "10.0.0.1"
+        assert get_client_ip(request) == "2.2.2.2"
 
 
 @pytest.mark.django_db
