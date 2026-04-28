@@ -138,9 +138,7 @@ class TestDirectEventDeleteAccess:
 class TestCaseAssignEventAccess:
     """POST to /cases/<uuid>/events/assign/ must refuse hidden events."""
 
-    def test_staff_cannot_assign_high_event_to_case(
-        self, client, staff_user, facility, client_identified, event_high
-    ):
+    def test_staff_cannot_assign_high_event_to_case(self, client, staff_user, facility, client_identified, event_high):
         case = Case.objects.create(
             facility=facility,
             client=client_identified,
@@ -179,9 +177,7 @@ class TestCaseRemoveEventAccess:
         event_high.case = case
         event_high.save()
         client.force_login(staff_user)
-        response = client.post(
-            reverse("core:case_remove_event", kwargs={"pk": case.pk, "event_pk": event_high.pk})
-        )
+        response = client.post(reverse("core:case_remove_event", kwargs={"pk": case.pk, "event_pk": event_high.pk}))
         assert response.status_code == 404
         event_high.refresh_from_db()
         assert event_high.case_id == case.pk

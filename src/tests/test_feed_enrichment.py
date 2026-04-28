@@ -319,9 +319,7 @@ class TestMixedFeedCreatedFilter:
 class TestActivitySensitivityFilter:
     """Tests for sensitivity-based activity filtering in feed (#562)."""
 
-    def test_activity_for_hidden_event_excluded_from_feed(
-        self, facility, staff_user, client_identified
-    ):
+    def test_activity_for_hidden_event_excluded_from_feed(self, facility, staff_user, client_identified):
         """Activity targeting a HIGH-sensitivity event must not appear for staff users."""
         today = timezone.localdate()
         now = timezone.make_aware(datetime.combine(today, time(12, 0)))
@@ -354,9 +352,7 @@ class TestActivitySensitivityFilter:
         target_ids = [i["object"].target_id for i in activity_items]
         assert event.pk not in target_ids
 
-    def test_activity_for_visible_event_included(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_activity_for_visible_event_included(self, facility, staff_user, client_identified, doc_type_contact):
         """Activity targeting a NORMAL-sensitivity event must remain visible for staff."""
         today = timezone.localdate()
         now = timezone.make_aware(datetime.combine(today, time(12, 0)))

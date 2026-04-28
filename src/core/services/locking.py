@@ -27,13 +27,6 @@ def check_version_conflict(instance, expected_updated_at):
     """
     if not expected_updated_at:
         return
-    current = (
-        type(instance)
-        .objects.filter(pk=instance.pk)
-        .values_list("updated_at", flat=True)
-        .first()
-    )
+    current = type(instance).objects.filter(pk=instance.pk).values_list("updated_at", flat=True).first()
     if current and str(current.isoformat()) != str(expected_updated_at):
-        raise ValidationError(
-            _("Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu.")
-        )
+        raise ValidationError(_("Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."))

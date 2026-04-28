@@ -31,9 +31,9 @@ class TestWorkItemInbox:
     def test_inbox_shows_sections(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/workitems/")
-        assert page.locator("text=Offen").first.is_visible()
-        assert page.locator("text=In Bearbeitung").first.is_visible()
-        assert page.locator("text=Kürzlich erledigt").first.is_visible()
+        assert page.locator("section h2", has_text="Offen").first.is_visible()
+        assert page.locator("section h2", has_text="In Bearbeitung").first.is_visible()
+        assert page.locator("section h2", has_text="Kürzlich erledigt").first.is_visible()
 
     @pytest.mark.smoke
     def test_create_workitem_and_appears_in_inbox(self, authenticated_page, base_url):

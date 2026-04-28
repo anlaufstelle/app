@@ -72,9 +72,7 @@ def test_login_falls_back_when_subtle_crypto_unavailable(browser, base_url):
     """If WebCrypto is missing, the form does a normal native submit and login still works."""
     context = browser.new_context()
     # Disable subtle crypto BEFORE any script of the page runs
-    context.add_init_script(
-        "Object.defineProperty(window.crypto, 'subtle', { value: undefined, configurable: true });"
-    )
+    context.add_init_script("Object.defineProperty(window.crypto, 'subtle', { value: undefined, configurable: true });")
     page = context.new_page()
     page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
     page.fill("#id_username", "miriam")

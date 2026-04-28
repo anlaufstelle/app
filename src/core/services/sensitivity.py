@@ -100,9 +100,7 @@ def get_visible_attachment_or_404(user, facility, event_pk, attachment_pk):
     caller responsibility since it may require :class:`PermissionDenied`
     semantics rather than 404.
     """
-    event = get_visible_event_or_404(
-        user, facility, event_pk, select_related=("document_type",)
-    )
+    event = get_visible_event_or_404(user, facility, event_pk, select_related=("document_type",))
     attachment = EventAttachment.objects.filter(pk=attachment_pk, event=event).first()
     if attachment is None:
         raise Http404("Attachment not found")

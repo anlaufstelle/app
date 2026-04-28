@@ -31,9 +31,7 @@ def _snapshot(settings_obj):
 
 def _diff_fields(before, after):
     """Return a sorted list of field names that changed between before/after."""
-    return sorted(
-        field for field in _AUDIT_FIELDS if before.get(field) != after.get(field)
-    )
+    return sorted(field for field in _AUDIT_FIELDS if before.get(field) != after.get(field))
 
 
 @transaction.atomic

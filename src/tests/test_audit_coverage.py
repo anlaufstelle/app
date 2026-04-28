@@ -66,9 +66,7 @@ class TestCaseUpdateAudit:
             created_by=staff_user,
         )
         update_case(case, staff_user, title="Neuer Titel")
-        entry = AuditLog.objects.filter(
-            action=AuditLog.Action.CASE_UPDATE, target_id=str(case.pk)
-        ).latest("timestamp")
+        entry = AuditLog.objects.filter(action=AuditLog.Action.CASE_UPDATE, target_id=str(case.pk)).latest("timestamp")
         assert "title" in entry.detail.get("changed_fields", [])
         assert "Neuer Titel" not in str(entry.detail)
 

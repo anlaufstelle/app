@@ -76,9 +76,7 @@ class TestCreateEventRejectsClientMismatch:
 
 @pytest.mark.django_db
 class TestCreateEventRejectsAnonymousOnClientCase:
-    def test_anonymous_event_rejected_on_client_bound_case(
-        self, facility, staff_user, case_open
-    ):
+    def test_anonymous_event_rejected_on_client_bound_case(self, facility, staff_user, case_open):
         # A contact-style doc type without a min_contact_stage allows anonymous.
         anon_type = DocumentType.objects.create(
             facility=facility,
@@ -101,9 +99,7 @@ class TestCreateEventRejectsAnonymousOnClientCase:
 
 @pytest.mark.django_db
 class TestAssignEventInvariants:
-    def test_cross_facility_raises(
-        self, facility, staff_user, doc_type_contact, client_identified, other_case
-    ):
+    def test_cross_facility_raises(self, facility, staff_user, doc_type_contact, client_identified, other_case):
         event = Event.objects.create(
             facility=facility,
             client=client_identified,
@@ -132,9 +128,7 @@ class TestAssignEventInvariants:
         with pytest.raises(ValidationError):
             assign_event_to_case(case_open, event, staff_user)
 
-    def test_anonymous_event_rejected_on_client_case(
-        self, facility, staff_user, doc_type_contact, case_open
-    ):
+    def test_anonymous_event_rejected_on_client_case(self, facility, staff_user, doc_type_contact, case_open):
         event = Event.objects.create(
             facility=facility,
             client=None,
@@ -147,9 +141,7 @@ class TestAssignEventInvariants:
         with pytest.raises(ValidationError):
             assign_event_to_case(case_open, event, staff_user)
 
-    def test_hidden_event_rejected_for_staff(
-        self, facility, staff_user, client_identified, case_open
-    ):
+    def test_hidden_event_rejected_for_staff(self, facility, staff_user, client_identified, case_open):
         high_type = DocumentType.objects.create(
             facility=facility,
             category=DocumentType.Category.SERVICE,

@@ -80,7 +80,6 @@ class AuditLogListView(AdminRequiredMixin, View):
         return render(request, "core/audit/list.html", context)
 
 
-
 class AuditLogDetailView(AdminRequiredMixin, View):
     """Detail view for a single audit log entry."""
 
