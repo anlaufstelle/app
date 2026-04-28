@@ -141,9 +141,7 @@ class TestStatisticsButtons:
 
         # Monat-Button sollte jetzt inaktiv sein
         month_button = page.locator("button:has-text('Monat')")
-        assert "bg-accent" not in month_button.get_attribute("class"), (
-            "Monat-Button ist noch aktiv nach Quartal-Klick"
-        )
+        assert "bg-accent" not in month_button.get_attribute("class"), "Monat-Button ist noch aktiv nach Quartal-Klick"
 
     def test_half_year_button_becomes_active(self, authenticated_page, base_url):
         """Klick auf 'Halbjahr' markiert den Button als aktiv."""

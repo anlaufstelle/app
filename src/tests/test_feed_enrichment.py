@@ -187,9 +187,7 @@ class TestEnrichEventsWithPreview:
         enrich_events_with_preview(feed_items, staff_user)
         assert event.preview_fields[0]["value"] == "Essen, Kleidung"
 
-    def test_file_marker_stage_a_renders_label(
-        self, facility, staff_user, client_identified
-    ):
+    def test_file_marker_stage_a_renders_label(self, facility, staff_user, client_identified):
         """Stufe-A-File-Marker (`{"__file__": True, ...}`) ist im Preview ein
         sprechender Hinweis statt rohes Dict-Repr (Refs #670 FND-12).
         """
@@ -208,9 +206,7 @@ class TestEnrichEventsWithPreview:
         enrich_events_with_preview(feed_items, staff_user)
         assert event.preview_fields[0]["value"] == "[Datei]"
 
-    def test_file_marker_stage_b_singular(
-        self, facility, staff_user, client_identified
-    ):
+    def test_file_marker_stage_b_singular(self, facility, staff_user, client_identified):
         """Stufe-B-Marker (`__files__` mit 1 Entry) → `[1 Datei]`."""
         dt = DocumentType.objects.create(facility=facility, name="StageB1", category="contact")
         ft = FieldTemplate.objects.create(facility=facility, name="Scans", field_type="file")
@@ -232,9 +228,7 @@ class TestEnrichEventsWithPreview:
         enrich_events_with_preview(feed_items, staff_user)
         assert event.preview_fields[0]["value"] == "[1 Datei]"
 
-    def test_file_marker_stage_b_plural(
-        self, facility, staff_user, client_identified
-    ):
+    def test_file_marker_stage_b_plural(self, facility, staff_user, client_identified):
         """Stufe-B-Marker (`__files__` mit 3 Entries) → `[3 Dateien]`."""
         dt = DocumentType.objects.create(facility=facility, name="StageB3", category="contact")
         ft = FieldTemplate.objects.create(facility=facility, name="Scans", field_type="file")
