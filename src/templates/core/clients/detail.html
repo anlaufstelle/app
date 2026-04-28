@@ -7,7 +7,7 @@
 {# Breadcrumb (Design: als-screens.jsx ClientDetailScreen) #}
 <div class="flex items-center gap-2.5 mb-5">
     <a href="{% url 'core:client_list' %}" class="flex items-center gap-1 text-[13px] text-ink-muted hover:text-ink">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
         {% trans "Klientel" %}
     </a>
     <span class="text-subtle">/</span>
@@ -33,7 +33,7 @@
                 <span x-show="isOffline" x-cloak
                       class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-yellow-100 text-yellow-800"
                       data-testid="offline-available-badge">
-                    <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <svg aria-hidden="true" class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     <span>{% trans "Lokal verfügbar" %}</span>
                     <span x-show="expiresAtDisplay" class="ml-1 text-[10px]">(<span x-text="expiresAtDisplay"></span>)</span>
                 </span>
@@ -47,18 +47,18 @@
                         :disabled="busy"
                         class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas disabled:opacity-50"
                         data-testid="take-offline-btn">
-                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                    <svg aria-hidden="true" class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
                     <span x-show="!isOffline">{% trans "Offline mitnehmen" %}</span>
                     <span x-show="isOffline" x-cloak>{% trans "Aus Offline-Cache entfernen" %}</span>
                 </button>
                 {% if user.is_staff_or_above %}
                 <a href="{% url 'core:workitem_create' %}?client={{ client.pk }}" class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                    <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                     {% trans "Neue Aufgabe" %}
                 </a>
                 {% endif %}
                 <a href="{% url 'core:event_create' %}?client={{ client.pk }}" class="inline-flex items-center gap-1.5 bg-accent text-white text-[13px] font-semibold rounded-md px-3.5 py-2">
-                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                    <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                     {% trans "Neuer Kontakt" %}
                 </a>
                 {% if user.is_staff_or_above %}
@@ -69,9 +69,9 @@
                 {% if user.is_lead_or_admin %}
                 <div x-data="simpleDropdown" class="relative">
                     <button @click="toggle()" type="button" class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
-                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        <svg aria-hidden="true" class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         {% trans "Datenauskunft" %}
-                        <svg class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                        <svg aria-hidden="true" class="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
                     </button>
                     <div x-show="open" @click.away="close()" x-cloak x-transition
                          class="absolute right-0 mt-1 w-56 bg-surface rounded-md shadow-lg border border-subtle py-1 z-10">
@@ -89,23 +89,23 @@
             <div class="flex gap-2 md:hidden">
             {% if user.is_staff_or_above %}
             <a href="{% url 'core:client_update' client.pk %}" class="inline-flex items-center bg-surface border border-subtle text-ink-soft rounded-md px-3 py-2" aria-label="{% trans 'Bearbeiten' %}">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
             </a>
             {% endif %}
             <div x-data="mobileOverflowMenu" class="relative md:hidden">
                 <button @click="toggle()" type="button" class="inline-flex items-center bg-surface border border-subtle text-ink-soft rounded-md px-3 py-2" aria-label="{% trans 'Weitere Aktionen' %}" data-testid="mobile-overflow-menu">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
+                    <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
                 </button>
                 <div x-show="mobileMenu" @click.away="close()" x-cloak x-transition
                      class="absolute right-0 mt-1 w-56 bg-surface rounded-md shadow-lg border border-subtle py-1 z-10">
                     {% if user.is_staff_or_above %}
                     <a href="{% url 'core:workitem_create' %}?client={{ client.pk }}" class="flex items-center px-4 py-2 text-[13px] text-ink hover:bg-canvas">
-                        <svg class="w-4 h-4 mr-2 text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        <svg aria-hidden="true" class="w-4 h-4 mr-2 text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         {% trans "Neue Aufgabe" %}
                     </a>
                     {% endif %}
                     <a href="{% url 'core:event_create' %}?client={{ client.pk }}" class="flex items-center px-4 py-2 text-[13px] text-ink hover:bg-canvas">
-                        <svg class="w-4 h-4 mr-2 text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                        <svg aria-hidden="true" class="w-4 h-4 mr-2 text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                         {% trans "Neuer Kontakt" %}
                     </a>
                     <button type="button"
@@ -113,7 +113,7 @@
                             :disabled="busy"
                             class="w-full text-left flex items-center px-4 py-2 text-[13px] text-ink hover:bg-canvas disabled:opacity-50"
                             data-testid="mobile-take-offline-btn">
-                        <svg class="w-4 h-4 mr-2 text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                        <svg aria-hidden="true" class="w-4 h-4 mr-2 text-ink-muted" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
                         <span x-show="!isOffline">{% trans "Offline mitnehmen" %}</span>
                         <span x-show="isOffline" x-cloak>{% trans "Aus Offline-Cache entfernen" %}</span>
                     </button>
@@ -138,7 +138,7 @@
 <div class="mb-4 space-y-2">
     {% for ban in active_bans %}
     <div class="flex items-center px-4 py-2.5 bg-ban-soft border border-ban/30 rounded-[10px] text-[13px] text-ban-deep">
-        <svg class="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+        <svg aria-hidden="true" class="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
         <span class="font-semibold">{% trans "Hausverbot" %}</span>
         {% if ban.grund %}&nbsp;– {{ ban.grund|truncatewords:10 }}{% endif %}
         {% if ban.bis_datum %}<span class="ml-auto text-[11px]">{% trans "Bis:" %} {{ ban.bis_datum|date }}</span>{% endif %}
@@ -169,7 +169,7 @@
                     {% if event.created_by %}
                     <span class="ml-auto text-[11px] text-ink-muted">{{ event.created_by.display_name|default:event.created_by.username }}</span>
                     {% endif %}
-                    <svg class="w-3.5 h-3.5 text-ink-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                    <svg aria-hidden="true" class="w-3.5 h-3.5 text-ink-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                 </div>
             </a>
             {% endfor %}
@@ -214,7 +214,7 @@
         {% if user.is_staff_or_above %}
         <div class="mt-2">
             <a href="{% url 'core:case_create' %}?client={{ client.pk }}" class="inline-flex items-center text-[12px] text-accent hover:underline font-semibold">
-                <svg class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                <svg aria-hidden="true" class="w-3.5 h-3.5 mr-1" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                 {% trans "Neuer Fall" %}
             </a>
         </div>

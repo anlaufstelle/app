@@ -10,9 +10,12 @@ als die Single-Route.
 from django.contrib import messages
 from django.http import HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import redirect
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_BULK_ACTION
 from core.models import WorkItem
 from core.models.user import User
 from core.services.workitems import (
@@ -24,6 +27,10 @@ from core.views.mixins import AssistantOrAboveRequiredMixin
 from core.views.workitems import can_user_mutate_workitem
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_BULK_ACTION, method="POST", block=True),
+    name="post",
+)
 class _BulkActionMixin(AssistantOrAboveRequiredMixin):
     """Shared helper for bulk WorkItem actions (Refs #267).
 

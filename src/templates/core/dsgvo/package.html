@@ -11,7 +11,7 @@
 
 <div class="bg-blue-50 border border-blue-200 rounded-[10px] p-4 mb-6">
     <div class="flex">
-        <svg class="w-5 h-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg aria-hidden="true" class="w-5 h-5 text-blue-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
         </svg>
         <p class="text-sm text-blue-800">{% trans "Diese Vorlagen werden automatisch mit den Daten Ihrer Einrichtung befüllt (Name, Löschfristen). Bitte prüfen und ergänzen Sie die Dokumente vor der Verwendung." %}</p>
@@ -34,7 +34,7 @@
                 <td class="px-6 py-4 text-sm text-ink-muted">{{ doc.article }}</td>
                 <td class="px-6 py-4 text-right">
                     <a href="{% url 'core:dsgvo_document' doc.slug %}" class="inline-flex items-center px-3 py-1.5 border border-subtle text-sm rounded-md hover:bg-canvas text-ink-soft">
-                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        <svg aria-hidden="true" class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         {% trans "Herunterladen" %}
                     </a>
                 </td>
