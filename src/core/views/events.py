@@ -18,6 +18,8 @@ from core.models import Client, DocumentType, FieldTemplate
 from core.services.clients import get_client_or_none
 from core.services.encryption import safe_decrypt
 from core.services.event import (
+    apply_attachment_changes,
+    attach_files_to_new_event,
     build_event_detail_context,
     build_field_template_lookup,
     create_event,
@@ -25,11 +27,11 @@ from core.services.event import (
     remove_restricted_fields,
     request_deletion,
     soft_delete_event,
+    split_file_and_text_data,
     update_event,
 )
 from core.services.file_vault import (
     get_original_filename,
-    store_encrypted_file,
 )
 from core.services.quick_templates import (
     apply_template,
@@ -216,20 +218,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
 
         case = meta_form.cleaned_data.get("case")
 
-        # Separate file uploads from text data. MultipleFileField liefert eine
-        # Liste (auch bei einzelnem File); klassische FileFields eine einzelne
-        # UploadedFile. Beide normalisieren wir auf Listen (Refs #622).
-        from django.core.files.uploadedfile import UploadedFile
-
-        file_fields = {}
-        text_data = {}
-        for key, value in data_form.cleaned_data.items():
-            if isinstance(value, list) and value and all(isinstance(v, UploadedFile) for v in value):
-                file_fields[key] = value
-            elif isinstance(value, UploadedFile):
-                file_fields[key] = [value]
-            else:
-                text_data[key] = value
+        file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)
 
         # Event + Dateianhänge atomar: scheitert die File-Verschlüsselung
         # (Virus, Disk, Fernet), rollt die Transaktion auch das Event zurück
@@ -246,23 +235,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                     client=client,
                     case=case,
                 )
-                if file_fields:
-                    field_templates = build_field_template_lookup(doc_type)
-                    for slug, uploaded_list in file_fields.items():
-                        ft = field_templates.get(slug)
-                        if not ft or not uploaded_list:
-                            continue
-                        entries = []
-                        for idx, uploaded_file in enumerate(uploaded_list):
-                            attachment = store_encrypted_file(
-                                facility, uploaded_file, ft, event, request.user, sort_order=idx
-                            )
-                            entries.append({"id": str(attachment.pk), "sort": idx})
-                        # Stufe B (#622): Neues Events nutzen immer ``__files__``,
-                        # auch bei einer einzigen Datei — das spart einen zweiten
-                        # Code-Pfad beim Auslesen.
-                        event.data_json[slug] = {"__files__": True, "entries": entries}
-                    event.save(update_fields=["data_json"])
+                attach_files_to_new_event(event, request.user, file_fields, doc_type)
         except ValidationError as e:
             meta_form.add_error(None, e.message)
             return render(
@@ -403,18 +376,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         restricted_keys = remove_restricted_fields(request.user, event.document_type, data_form)
 
         if data_form.is_valid():
-            from django.core.files.uploadedfile import UploadedFile
-
-            # Separate file uploads from text data. Multi-File liefert Liste.
-            file_fields = {}
-            merged = {}
-            for key, value in data_form.cleaned_data.items():
-                if isinstance(value, list) and value and all(isinstance(v, UploadedFile) for v in value):
-                    file_fields[key] = value
-                elif isinstance(value, UploadedFile):
-                    file_fields[key] = [value]
-                else:
-                    merged[key] = value
+            file_fields, merged = split_file_and_text_data(data_form.cleaned_data)
 
             # Re-insert restricted fields with original values
             for key in restricted_keys:
@@ -422,7 +384,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                     merged[key] = event.data_json[key]
 
             # Für FILE-Felder: bestehenden Marker (beide Formate) erstmal
-            # beibehalten — die Update-Logik unten passt ihn ggf. an.
+            # beibehalten — apply_attachment_changes passt ihn anschliessend an.
             field_templates = build_field_template_lookup(event.document_type)
             for slug, ft in field_templates.items():
                 if ft.field_type == FieldTemplate.FieldType.FILE:
@@ -434,85 +396,17 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
 
             expected_updated_at = request.POST.get("expected_updated_at")
             # Event-Update + Attachment-Versionierung atomar (Refs #584/#587/#622).
-            # Soft-delete via entry_id-Remove, Replace via entry_id-Key, Add
-            # via multiple-Upload — alle drei Modi laufen im selben Commit.
             try:
                 with transaction.atomic():
                     update_event(event, request.user, merged, expected_updated_at=expected_updated_at)
-
-                    from core.services.event import normalize_file_marker
-                    from core.services.file_vault import soft_delete_attachment_chain
-
-                    # Pro FILE-Feld drei Modi:
-                    for slug, ft in field_templates.items():
-                        if ft.field_type != FieldTemplate.FieldType.FILE:
-                            continue
-
-                        # Bestehenden Marker (legacy + neu) zu Liste normalisieren.
-                        existing_marker = (event.data_json or {}).get(slug)
-                        current_entries = normalize_file_marker(existing_marker)
-
-                        # 1) REMOVE: Hidden-CSV im POST (`<slug>__remove`) listet
-                        #    entry_ids, die soft-deleted werden sollen.
-                        remove_raw = request.POST.get(f"{slug}__remove", "")
-                        remove_ids = {x.strip() for x in remove_raw.split(",") if x.strip()}
-                        if remove_ids:
-                            filtered = []
-                            for entry in current_entries:
-                                att = event.attachments.filter(pk=entry["id"]).first()
-                                if att and str(att.entry_id) in remove_ids:
-                                    soft_delete_attachment_chain(event, att.entry_id, request.user)
-                                    continue
-                                filtered.append(entry)
-                            current_entries = filtered
-
-                        # 2) REPLACE: Pro bestehendem Entry ein File-Input
-                        #    `<slug>__replace__<entry_id>`; wenn gesetzt, wird
-                        #    der Vorgänger supersededt (Stufe-A-Verhalten).
-                        updated_entries = []
-                        for entry in current_entries:
-                            att = event.attachments.filter(pk=entry["id"]).first()
-                            if not att:
-                                continue
-                            replace_file = request.FILES.get(f"{slug}__replace__{att.entry_id}")
-                            if replace_file is not None:
-                                new_att = store_encrypted_file(
-                                    facility,
-                                    replace_file,
-                                    ft,
-                                    event,
-                                    request.user,
-                                    supersedes=att,
-                                )
-                                updated_entries.append({"id": str(new_att.pk), "sort": att.sort_order})
-                            else:
-                                updated_entries.append(entry)
-
-                        # 3) ADD: alle Files aus dem Multi-Upload-Feld werden
-                        #    als neue Einträge angehängt (frische entry_ids).
-                        add_files = file_fields.get(slug) or []
-                        base_sort = (max((e.get("sort", 0) for e in updated_entries), default=-1)) + 1
-                        for idx, uploaded_file in enumerate(add_files):
-                            new_att = store_encrypted_file(
-                                facility,
-                                uploaded_file,
-                                ft,
-                                event,
-                                request.user,
-                                sort_order=base_sort + idx,
-                            )
-                            updated_entries.append({"id": str(new_att.pk), "sort": base_sort + idx})
-
-                        # Marker in das neue Format bringen — oder (keine Entries) entfernen.
-                        if updated_entries:
-                            event.data_json[slug] = {
-                                "__files__": True,
-                                "entries": updated_entries,
-                            }
-                        elif slug in event.data_json:
-                            del event.data_json[slug]
-
-                    event.save(update_fields=["data_json"])
+                    apply_attachment_changes(
+                        event,
+                        request.user,
+                        request.POST,
+                        request.FILES,
+                        file_fields,
+                        event.document_type,
+                    )
             except ValidationError as e:
                 # Stage 3 (#575): JSON/HTMX clients receive a 409 with the
                 # current server state so the client-side conflict resolver
