@@ -6,6 +6,19 @@ from django.views.generic import RedirectView
 from core.views.account import AccountProfileView
 from core.views.attachments import AttachmentDownloadView, AttachmentListView
 from core.views.audit import AuditLogDetailView, AuditLogListView
+from core.views.case_episodes import (
+    EpisodeCloseView,
+    EpisodeCreateView,
+    EpisodeUpdateView,
+)
+from core.views.case_goals import (
+    GoalCreateView,
+    GoalToggleView,
+    GoalUpdateView,
+    MilestoneCreateView,
+    MilestoneDeleteView,
+    MilestoneToggleView,
+)
 from core.views.cases import (
     CaseAssignEventView,
     CaseCloseView,
@@ -16,15 +29,6 @@ from core.views.cases import (
     CaseReopenView,
     CasesForClientView,
     CaseUpdateView,
-    EpisodeCloseView,
-    EpisodeCreateView,
-    EpisodeUpdateView,
-    GoalCreateView,
-    GoalToggleView,
-    GoalUpdateView,
-    MilestoneCreateView,
-    MilestoneDeleteView,
-    MilestoneToggleView,
 )
 from core.views.clients import (
     ClientAutocompleteView,
@@ -68,15 +72,19 @@ from core.views.statistics import (
     PDFExportView,
     StatisticsView,
 )
-from core.views.workitems import (
+from core.views.workitem_actions import (
+    WorkItemCreateView,
+    WorkItemStatusUpdateView,
+    WorkItemUpdateView,
+)
+from core.views.workitem_bulk import (
     WorkItemBulkAssignView,
     WorkItemBulkPriorityView,
     WorkItemBulkStatusView,
-    WorkItemCreateView,
+)
+from core.views.workitems import (
     WorkItemDetailView,
     WorkItemInboxView,
-    WorkItemStatusUpdateView,
-    WorkItemUpdateView,
 )
 from core.views.zeitstrom import ZeitstromFeedPartialView, ZeitstromView
 

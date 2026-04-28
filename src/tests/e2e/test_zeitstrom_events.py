@@ -120,10 +120,11 @@ class TestEventErstellung:
         option.wait_for(state="visible", timeout=5000)
         option.click()
 
-        # Fall-Dropdown enthält passenden Fall mit Pseudonym im Label
+        # Fall-Dropdown erscheint dynamisch nach Klientel-Auswahl (Refs #620).
+        # Nur Fälle des ausgewählten Klientels sind drin — daher reicht der Titel.
         case_select = page.locator("select[name='case']")
-        assert case_select.is_visible()
-        case_select.select_option(label="Gesundheitsversorgung – Stern-42")
+        case_select.wait_for(state="visible", timeout=5000)
+        case_select.select_option(label="Gesundheitsversorgung")
 
         page.fill("input[name='dauer']", "25")
         page.fill("textarea[name='notiz']", "E2E-Test Fall-Zuordnung")
@@ -137,6 +138,29 @@ class TestEventErstellung:
         fall_link = page.locator("dd a:has-text('Gesundheitsversorgung')")
         expect(fall_link).to_be_visible()
         assert re.search(r"/cases/[0-9a-f-]+/$", fall_link.get_attribute("href"))
+
+    def test_case_dropdown_filtered_to_selected_client(self, authenticated_page, base_url):
+        """Nach Klientel-Auswahl enthält das Fall-Dropdown nur passende Fälle (Refs #620)."""
+        page = authenticated_page
+        page.goto(f"{base_url}/events/new/")
+        page.wait_for_load_state("domcontentloaded")
+        page.select_option("select[name='document_type']", label="Kontakt")
+        page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
+
+        # Stern-42 hat im Seed den offenen Fall „Gesundheitsversorgung".
+        autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
+        autocomplete.fill("Stern-42")
+        page.locator("button:has-text('Stern-42')").first.wait_for(state="visible", timeout=5000)
+        page.locator("button:has-text('Stern-42')").first.click()
+
+        case_select = page.locator("select[name='case']")
+        case_select.wait_for(state="visible", timeout=5000)
+        options = case_select.locator("option")
+        # Platzhalter + exakt ein passender Fall; „Wohnungssuche – Sonne-99"
+        # gehört zu einem anderen Klientel und darf NICHT auftauchen.
+        option_texts = options.all_inner_texts()
+        assert any("Gesundheitsversorgung" in t for t in option_texts)
+        assert not any("Wohnungssuche" in t for t in option_texts)
 
     def test_event_create_anonymous_hides_case_without_client_link(self, authenticated_page, base_url):
         """Anonymer Kontakt ohne Fall speichern → Detailseite zeigt keine Fall-Zeile."""

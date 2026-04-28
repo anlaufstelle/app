@@ -107,6 +107,27 @@
                         {{ field.original_filename }}
                         <span class="text-gray-400 text-xs">({{ field.file_size_display }})</span>
                     </a>
+                    {% if field.prior_versions %}
+                    <details class="mt-1" data-testid="attachment-prior-versions">
+                        <summary class="text-xs text-gray-500 cursor-pointer hover:text-gray-700">
+                            {% blocktrans count count=field.prior_versions|length %}{{ count }} Vorversion{% plural %}{{ count }} Vorversionen{% endblocktrans %}
+                        </summary>
+                        <ul class="mt-1 ml-4 space-y-1 text-xs">
+                            {% for prev in field.prior_versions %}
+                            <li class="flex items-center gap-2">
+                                <a href="{% url 'core:attachment_download' event.pk prev.attachment_id %}"
+                                   class="text-indigo-600 hover:text-indigo-800 hover:underline">
+                                    {{ prev.original_filename }}
+                                </a>
+                                <span class="text-gray-400">({{ prev.file_size_display }})</span>
+                                {% if prev.superseded_at %}
+                                <span class="text-gray-400">— {% trans "ersetzt" %} {{ prev.superseded_at|date:"d.m.Y H:i" }}</span>
+                                {% endif %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </details>
+                    {% endif %}
                 </dd>
                 {% elif field.restricted %}
                 <dd class="text-sm text-gray-400 italic">

@@ -210,13 +210,15 @@ class TestEventCreateView:
         assert response.status_code == 200
 
     def test_event_create_form_shows_case_dropdown(self, client, staff_user, case_open):
-        """Open cases of the facility are selectable in the create form."""
+        """Form enthält das Case-Select + lädt Fälle pro Klientel per Fetch (Refs #620)."""
         client.force_login(staff_user)
         response = client.get(reverse("core:event_create"))
         assert response.status_code == 200
         content = response.content.decode()
         assert 'name="case"' in content
-        assert case_open.title in content
+        # Der Inhalt wird dynamisch über /api/cases/for-client/ nach Klientel-
+        # Auswahl geladen — die URL muss im Rendering-Payload auftauchen.
+        assert "/api/cases/for-client/" in content
 
     def test_event_create_assigns_case(self, client, staff_user, doc_type_contact, client_identified, case_open):
         client.force_login(staff_user)
@@ -1100,3 +1102,185 @@ class TestEventAttachmentAtomicity:
         # Rollback-Garantie: weder Event noch Attachment in der DB.
         assert Event.objects.count() == events_before
         assert EventAttachment.objects.count() == 0
+
+
+@pytest.mark.django_db
+class TestEventAttachmentVersioning:
+    """Attachment-Versionierung beim Ersetzen (Refs #587, Stufe A).
+
+    Upload einer neuen Datei in ein Feld mit bestehender Datei darf die
+    Vorversion NICHT physisch löschen. Stattdessen: alte Version bleibt
+    erhalten, wird als `is_current=False` markiert und zeigt via
+    `superseded_by` auf den Nachfolger.
+    """
+
+    @pytest.fixture
+    def doc_type_with_file(self, facility):
+        from core.models import DocumentType, DocumentTypeField, FieldTemplate
+
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name="Doc mit Anhang",
+            category=DocumentType.Category.NOTE,
+        )
+        ft_file = FieldTemplate.objects.create(
+            facility=facility,
+            name="Anhang",
+            field_type=FieldTemplate.FieldType.FILE,
+        )
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft_file, sort_order=0)
+        return dt, ft_file
+
+    @staticmethod
+    def _pdf_bytes(marker=b"A"):
+        return (
+            b"%PDF-1.4\n"
+            b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+            b"2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\n"
+            b"xref\n0 3\n0000000000 65535 f\n"
+            b"trailer<</Size 3/Root 1 0 R>>\n"
+            b"startxref\n9\n%%EOF\n" + marker
+        )
+
+    def test_replace_supersedes_old_attachment(self, client, staff_user, facility, doc_type_with_file):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from core.models.attachment import EventAttachment
+
+        doc_type, _ft = doc_type_with_file
+        client.force_login(staff_user)
+
+        # Erste Datei beim Anlegen hochladen.
+        first_file = SimpleUploadedFile("original.pdf", self._pdf_bytes(b"v1"), content_type="application/pdf")
+        resp = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "anhang": first_file,
+            },
+        )
+        assert resp.status_code == 302
+        event = Event.objects.filter(document_type=doc_type).first()
+        assert event is not None
+        original_attachment = event.attachments.get()
+        assert original_attachment.is_current is True
+        assert original_attachment.superseded_by is None
+
+        # Jetzt Ersetzen per Update.
+        replacement = SimpleUploadedFile("neu.pdf", self._pdf_bytes(b"v2"), content_type="application/pdf")
+        resp = client.post(
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            {
+                "document_type": str(doc_type.pk),
+                "occurred_at": event.occurred_at.strftime("%Y-%m-%dT%H:%M"),
+                "anhang": replacement,
+            },
+        )
+        assert resp.status_code == 302
+
+        # Zwei Attachments in der Kette, alte ist superseded.
+        attachments = list(EventAttachment.objects.filter(event=event).order_by("created_at"))
+        assert len(attachments) == 2
+        old, new = attachments
+        old.refresh_from_db()
+        new.refresh_from_db()
+        assert old.pk == original_attachment.pk
+        assert old.is_current is False
+        assert old.superseded_by_id == new.pk
+        assert old.superseded_at is not None
+        assert new.is_current is True
+        assert new.superseded_by is None
+
+    def test_event_data_json_points_at_current_version(self, client, staff_user, facility, doc_type_with_file):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        doc_type, _ft = doc_type_with_file
+        client.force_login(staff_user)
+
+        first = SimpleUploadedFile("a.pdf", self._pdf_bytes(b"v1"), content_type="application/pdf")
+        client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "anhang": first,
+            },
+        )
+        event = Event.objects.get(document_type=doc_type)
+
+        second = SimpleUploadedFile("b.pdf", self._pdf_bytes(b"v2"), content_type="application/pdf")
+        client.post(
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            {
+                "document_type": str(doc_type.pk),
+                "occurred_at": event.occurred_at.strftime("%Y-%m-%dT%H:%M"),
+                "anhang": second,
+            },
+        )
+        event.refresh_from_db()
+        current_id = event.data_json["anhang"]["attachment_id"]
+        current = event.attachments.get(pk=current_id)
+        assert current.is_current is True
+
+    def test_detail_view_exposes_prior_versions(self, client, staff_user, facility, doc_type_with_file):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        doc_type, _ft = doc_type_with_file
+        client.force_login(staff_user)
+
+        client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "anhang": SimpleUploadedFile("a.pdf", self._pdf_bytes(b"v1"), content_type="application/pdf"),
+            },
+        )
+        event = Event.objects.get(document_type=doc_type)
+        client.post(
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            {
+                "document_type": str(doc_type.pk),
+                "occurred_at": event.occurred_at.strftime("%Y-%m-%dT%H:%M"),
+                "anhang": SimpleUploadedFile("b.pdf", self._pdf_bytes(b"v2"), content_type="application/pdf"),
+            },
+        )
+
+        response = client.get(reverse("core:event_detail", kwargs={"pk": event.pk}))
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "attachment-prior-versions" in content
+        assert "Vorversion" in content
+
+    def test_soft_delete_removes_all_versions(self, client, staff_user, facility, doc_type_with_file):
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from core.models.attachment import EventAttachment
+
+        doc_type, _ft = doc_type_with_file
+        client.force_login(staff_user)
+
+        client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "anhang": SimpleUploadedFile("a.pdf", self._pdf_bytes(b"v1"), content_type="application/pdf"),
+            },
+        )
+        event = Event.objects.get(document_type=doc_type)
+        client.post(
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            {
+                "document_type": str(doc_type.pk),
+                "occurred_at": event.occurred_at.strftime("%Y-%m-%dT%H:%M"),
+                "anhang": SimpleUploadedFile("b.pdf", self._pdf_bytes(b"v2"), content_type="application/pdf"),
+            },
+        )
+        assert EventAttachment.objects.filter(event=event).count() == 2
+
+        from core.services.event import soft_delete_event
+
+        soft_delete_event(event, staff_user)
+        assert EventAttachment.objects.filter(event=event).count() == 0
