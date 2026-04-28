@@ -24,8 +24,12 @@ class TestDocTypeFilterPreservedOnTimeFilterSwitch:
         # "Kontakt" ist im Seed immer vorhanden
         doc_type_select.select_option(label="Kontakt")
         page.wait_for_load_state("domcontentloaded")
-        # Warten bis HTMX-Response geladen ist
-        page.wait_for_timeout(500)
+        # Dropdown-Wert wird serverseitig gerendert — auf einen nicht-leeren
+        # Wert warten (signalisiert abgeschlossenen HTMX-Swap).
+        page.wait_for_function(
+            "() => document.querySelector('#filter-doc-type')?.value !== ''",
+            timeout=5000,
+        )
 
         # Aktuellen Wert des Dropdowns prüfen
         selected_value = doc_type_select.input_value()
@@ -49,9 +53,13 @@ class TestDocTypeFilterPreservedOnTimeFilterSwitch:
 
         assert clicked, "Es sollte mindestens einen inaktiven Zeitfilter-Tab geben"
 
-        # Warten auf HTMX-Response
+        # Warten auf HTMX-Response — der Event-Feed wurde neu gerendert,
+        # der doc_type-Dropdown muss den alten Wert bewahren.
         page.wait_for_load_state("domcontentloaded")
-        page.wait_for_timeout(500)
+        page.wait_for_function(
+            f"() => document.querySelector('#filter-doc-type')?.value === '{selected_value}'",
+            timeout=5000,
+        )
 
         # Prüfen: Der doc_type-Dropdown sollte immer noch denselben Wert haben
         new_selected_value = doc_type_select.input_value()

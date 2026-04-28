@@ -10,6 +10,7 @@ import re
 from datetime import datetime, time
 
 import pytest
+from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -141,9 +142,11 @@ class TestEventEditAndDelete:
         # Autocomplete: identifizierten Client wählen
         autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
         autocomplete.fill("Blitz")
-        page.wait_for_timeout(500)
+        # Auf die dynamisch geladene Option warten, statt auf Debounce-Timeout.
         page.wait_for_load_state("domcontentloaded")
-        page.locator("button:has-text('Blitz-08')").click()
+        option = page.locator("button:has-text('Blitz-08')")
+        option.wait_for(state="visible", timeout=5000)
+        option.click()
 
         page.fill("input[name='dauer']", "10")
         page.click("button:has-text('Speichern')")
@@ -233,10 +236,11 @@ class TestNachtdienstShiftAssignment:
 
         # Auf einen anderen Schicht-Tab klicken → Event sollte nicht erscheinen
         other_shift = self._get_other_shift_label()
-        page.locator(f"button:has-text('{other_shift}')").click()
+        other_tab = page.locator(f"button:has-text('{other_shift}')")
+        other_tab.click()
         page.wait_for_load_state("domcontentloaded")
-        # Kurz warten auf HTMX-Response
-        page.wait_for_timeout(500)
+        # HTMX-Swap abwarten: gewechselter Tab wird aktiv markiert.
+        expect(other_tab).to_have_class(re.compile(r"bg-indigo-50"))
 
 
 class TestQualifiedClientEventDeletion:

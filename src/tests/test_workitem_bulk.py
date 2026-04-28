@@ -307,17 +307,13 @@ class TestBulkViews:
 
 @pytest.mark.django_db
 class TestBulkStatusRecurrence:
-    """Integrationstest Bulk-Status DONE + Recurrence (Refs #591, WP1).
+    """Integrationstest Bulk-Status DONE + Recurrence (Refs #593).
 
-    Erwartung aus dem Plan: Wenn Bulk-Status DONE auf recurring Items gesetzt
-    wird, sollte pro Item eine Auto-Duplizierung wie im Single-Update-Pfad
-    (``update_workitem_status``) erfolgen.
-
-    Aktueller Stand: ``bulk_update_workitem_status`` triggert die Recurrence
-    NICHT — es ruft weder ``duplicate_recurring_workitem`` noch
-    ``update_workitem_status`` auf (siehe ``src/core/services/workitems.py``).
-    Damit ist das ein aufgedeckter Prod-Gap, den wir per ``xfail(strict=True)``
-    dokumentieren, ohne Produktivcode anzufassen.
+    Wenn Bulk-Status DONE auf recurring Items gesetzt wird, wird pro Item
+    analog zum Single-Update-Pfad (``update_workitem_status``) eine
+    Auto-Duplizierung via ``duplicate_recurring_workitem`` erzeugt.
+    Idempotenz stellt der ``recurrence_duplicated_at``-Marker sicher
+    (Refs #596).
     """
 
     @pytest.fixture
@@ -335,15 +331,6 @@ class TestBulkStatusRecurrence:
             for i in range(2)
         ]
 
-    @pytest.mark.xfail(
-        reason=(
-            "Prod-Gap (Refs #591): bulk_update_workitem_status triggert "
-            "Recurrence-Duplizierung nicht. Der Service ruft weder "
-            "duplicate_recurring_workitem noch update_workitem_status auf. "
-            "Erst nach Fix darf dieser xfail entfernt werden."
-        ),
-        strict=True,
-    )
     def test_bulk_done_on_recurring_items_creates_followups(self, facility, staff_user, recurring_pair):
         """Nach Bulk-DONE auf 2 monatliche Items sollen 2 Folgeaufgaben mit
         ``due_date=2026-06-15`` und Status OPEN entstehen."""

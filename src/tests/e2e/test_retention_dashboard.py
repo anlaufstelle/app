@@ -78,6 +78,7 @@ class TestRetentionDashboardAccess:
 class TestRetentionApproveFlow:
     """Proposal freigeben via HTMX."""
 
+    @pytest.mark.smoke
     def test_approve_proposal(self, authenticated_page, base_url):
         """Admin gibt einen Proposal frei — Badge wechselt zu 'Freigegeben'."""
         _ensure_proposals(authenticated_page, base_url)
@@ -92,9 +93,10 @@ class TestRetentionApproveFlow:
         # Click first "Freigeben" button (handle confirm dialog)
         page.on("dialog", lambda dialog: dialog.accept())
         page.locator("button:has-text('Freigeben')").first.click()
-        page.wait_for_timeout(1000)
 
-        # The card should now show "Freigegeben"
+        # The card should now show "Freigegeben" — warten, bis HTMX-Swap
+        # das Badge neu gerendert hat.
+        page.locator("span:has-text('Freigegeben')").first.wait_for(state="visible", timeout=5000)
         assert page.locator("span:has-text('Freigegeben')").count() >= 1
 
 
@@ -111,16 +113,20 @@ class TestRetentionHoldFlow:
         # Click "Hold setzen" on first pending proposal
         hold_btn = page.locator("button:has-text('Hold setzen')").first
         hold_btn.click()
-        page.wait_for_timeout(500)
+        # Modal/Form via HTMX laden — auf textarea warten.
+        reason_field = page.locator("textarea[name='reason']").first
+        reason_field.wait_for(state="visible", timeout=5000)
 
         # Fill in reason
-        page.locator("textarea[name='reason']").first.fill("E2E-Test: Gerichtsverfahren")
+        reason_field.fill("E2E-Test: Gerichtsverfahren")
 
         # Submit hold form
         page.locator("button:has-text('Hold erstellen')").first.click()
-        page.wait_for_timeout(1000)
 
-        # The card should now show "Aufgeschoben"
+        # The card should now show "Aufgeschoben" — warten bis Badge UND
+        # der eingegebene Reason-Text gerendert sind (beides nach HTMX-Swap).
+        page.locator("span:has-text('Aufgeschoben')").first.wait_for(state="visible", timeout=5000)
+        page.locator("text=E2E-Test: Gerichtsverfahren").wait_for(state="visible", timeout=5000)
         assert page.locator("span:has-text('Aufgeschoben')").count() >= 1
         assert page.locator("text=E2E-Test: Gerichtsverfahren").is_visible()
 
@@ -135,20 +141,21 @@ class TestRetentionHoldFlow:
         if page.locator("button:has-text('Hold aufheben')").count() == 0:
             hold_btn = page.locator("button:has-text('Hold setzen')").first
             hold_btn.click()
-            page.wait_for_timeout(500)
-            page.locator("textarea[name='reason']").first.fill("Temporärer Hold")
+            reason_field = page.locator("textarea[name='reason']").first
+            reason_field.wait_for(state="visible", timeout=5000)
+            reason_field.fill("Temporärer Hold")
             page.locator("button:has-text('Hold erstellen')").first.click()
-            page.wait_for_timeout(1000)
+            # Warten bis Hold-Button „Hold aufheben" erscheint.
+            page.locator("button:has-text('Hold aufheben')").first.wait_for(state="visible", timeout=5000)
 
         # Now dismiss the hold
         page.on("dialog", lambda dialog: dialog.accept())
         page.locator("button:has-text('Hold aufheben')").first.click()
-        page.wait_for_timeout(1000)
 
-        # After dismissal, card should revert — the dismiss button should be gone
-        # and the proposal card should show "Ausstehend" again
+        # After dismissal, card should revert — auf Reaparition der
+        # Freigeben-Buttons warten (signalisiert Zurück-zu-Ausstehend).
         page.wait_for_load_state("domcontentloaded")
-        # Verify the first proposal card shows Freigeben/Hold buttons again
+        page.locator("button:has-text('Freigeben')").first.wait_for(state="visible", timeout=5000)
         assert page.locator("button:has-text('Freigeben')").count() >= 1
 
 

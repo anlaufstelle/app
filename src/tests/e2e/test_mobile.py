@@ -45,8 +45,9 @@ class TestMobileNavMore:
 
         # Click opens dropdown with Aufgaben, Klientel
         more_btn.click()
-        page.wait_for_timeout(300)
-        assert page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Aufgaben')").is_visible()
+        aufgaben_link = page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Aufgaben')")
+        aufgaben_link.wait_for(state="visible", timeout=3000)
+        assert aufgaben_link.is_visible()
         assert page.locator("nav[aria-label='Mobile Navigation'] a[href='/clients/']").is_visible()
 
     def test_staff_no_statistik_in_more(self, base_url, browser):
@@ -64,7 +65,10 @@ class TestMobileNavMore:
 
         more_btn = page.locator("button:has-text('Mehr')")
         more_btn.click()
-        page.wait_for_timeout(300)
+        # Menü geöffnet — auf ein immer-vorhandenes Element warten.
+        page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Aufgaben')").wait_for(
+            state="visible", timeout=3000
+        )
 
         assert page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Statistik')").count() == 0
         context.close()
@@ -152,8 +156,8 @@ class TestMobileNavigation:
         page.wait_for_load_state("domcontentloaded")
 
         page.locator("[data-testid='mobile-nav-more']").click()
-        page.wait_for_timeout(300)  # Alpine-Transition
         klienten_link = page.locator("nav[aria-label='Mobile Navigation'] a[href='/clients/']")
+        klienten_link.wait_for(state="visible", timeout=3000)
         assert klienten_link.is_visible(), "Klientel-Link im Mehr-Menü nicht sichtbar"
 
     def test_mobile_nav_more_navigate_to_clients(self, mobile_page, base_url):
@@ -162,8 +166,9 @@ class TestMobileNavigation:
         page.wait_for_load_state("domcontentloaded")
 
         page.locator("[data-testid='mobile-nav-more']").click()
-        page.wait_for_timeout(300)
-        page.locator("nav[aria-label='Mobile Navigation'] a[href='/clients/']").click()
+        clients_link = page.locator("nav[aria-label='Mobile Navigation'] a[href='/clients/']")
+        clients_link.wait_for(state="visible", timeout=3000)
+        clients_link.click()
         page.wait_for_url("**/clients/")
         assert page.locator("h1").inner_text() == "Klientel"
 
@@ -173,8 +178,9 @@ class TestMobileNavigation:
         page.wait_for_load_state("domcontentloaded")
 
         page.locator("[data-testid='mobile-nav-more']").click()
-        page.wait_for_timeout(300)
-        page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Aufgaben')").click()
+        aufgaben_link = page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Aufgaben')")
+        aufgaben_link.wait_for(state="visible", timeout=3000)
+        aufgaben_link.click()
         page.wait_for_url("**/workitems/")
         assert page.locator("h1").inner_text() == "Aufgaben"
 
@@ -184,8 +190,8 @@ class TestMobileNavigation:
         page.wait_for_load_state("domcontentloaded")
 
         page.locator("[data-testid='mobile-nav-create']").click()
-        page.wait_for_timeout(300)
         dropdown = page.locator("[data-testid='mobile-create-dropdown']")
+        dropdown.wait_for(state="visible", timeout=3000)
         assert dropdown.is_visible(), "Create-Dropdown sollte sichtbar sein"
         assert dropdown.locator("a:has-text('Kontakt')").is_visible()
 
@@ -195,8 +201,8 @@ class TestMobileNavigation:
         page.wait_for_load_state("domcontentloaded")
 
         page.locator("[data-testid='mobile-nav-search']").click()
-        page.wait_for_timeout(300)
         overlay = page.locator("[data-testid='mobile-search-overlay']")
+        overlay.wait_for(state="visible", timeout=3000)
         assert overlay.is_visible(), "Such-Overlay sollte sichtbar sein"
 
 
@@ -426,10 +432,10 @@ class TestMobileDetailOverflowMenu:
 
         # Overflow-Menü öffnen
         page.locator("[data-testid='mobile-overflow-menu']").click()
-        page.wait_for_timeout(300)
 
-        # Aktionen im Menü prüfen
+        # Aktionen im Menü prüfen — auf Menu-Panel warten.
         menu = page.locator("[data-testid='mobile-overflow-menu'] + div")
+        menu.locator("a:has-text('Neue Aufgabe')").wait_for(state="visible", timeout=3000)
         assert menu.locator("a:has-text('Neue Aufgabe')").is_visible()
         assert menu.locator("a:has-text('Neuer Kontakt')").is_visible()
 
