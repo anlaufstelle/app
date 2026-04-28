@@ -236,7 +236,24 @@ LOGGING = {
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "default-src": ["'self'"],
-        "script-src": ["'self'", "'unsafe-eval'"],  # Alpine.js benötigt unsafe-eval (new Function())
+        # 'unsafe-eval' wird benoetigt, weil Alpine.js (Standard-Build) `x-show`/
+        # `x-bind`/`@event`-Expressions per dyn-Funktionsauswertung evaluiert.
+        # Audit-Finding S-6 (docs/audits/2026-04-21-tiefenanalyse-v0.10.md)
+        # forderte den Wechsel auf @alpinejs/csp. Erste Phase (alle Inline-
+        # `x-data="{...}"` zu registrierten Alpine.data()-Komponenten) ist
+        # umgesetzt (Refs #669); der CSP-Build erlaubt aber nur sehr
+        # einfache Expressions (kein `&&`, kein `> 0`, kein `$event.detail.x`),
+        # was praktisch alle bestehenden Templates brechen wuerde. Volle
+        # Migration ist als Folge-Issue #672 dokumentiert; bis dahin akzeptieren
+        # wir 'unsafe-eval' bewusst — Defense-in-Depth besteht durch:
+        #   - PostgreSQL Row Level Security (Migration 0047_postgres_rls_setup)
+        #   - Audit-Logging aller Schreib-Aktionen (AuditLog)
+        #   - CSRF (HttpOnly + SameSite=Strict)
+        #   - Rate-Limit auf Login + sensiblen Endpoints
+        #   - Pflicht-MFA (TOTP) fuer Admin / Lead
+        #   - keine `unsafe-inline` (Inline-Scripts und -Event-Handler durch
+        #     Architektur-Tests verboten — Refs #618, #662 FND-01)
+        "script-src": ["'self'", "'unsafe-eval'"],
         "style-src": ["'self'", "'unsafe-inline'"],
         "img-src": ["'self'", "data:"],
         "font-src": ["'self'"],

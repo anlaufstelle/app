@@ -11,6 +11,8 @@
     <meta name="theme-color" content="#2d6a4f">
     <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
     <meta name="apple-mobile-web-app-capable" content="yes">
+    {# Siehe base.html zur Script-Reihenfolge. #}
+    <script src="{% static 'js/alpine-components.js' %}" defer></script>
     <script src="{% static 'js/alpine.min.js' %}" defer></script>
     {# Crypto modules so we can derive the offline session key after a successful login #}
     <script src="{% static 'js/dexie.min.js' %}"></script>
@@ -67,14 +69,9 @@
             </form>
 
             {# PWA Install-Prompt (Chrome/Edge/Android) #}
-            <div x-data="{ installPrompt: null, showInstall: false, showIos: false }"
-                 x-init="
-                    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; showInstall = true; });
-                    if (/iPhone|iPad|iPod/.test(navigator.userAgent) && !navigator.standalone) { showIos = true; }
-                 "
-                 x-cloak>
+            <div x-data="pwaInstallPrompt" x-cloak>
                 <div x-show="showInstall" class="mt-6 border-t border-subtle pt-4 text-center">
-                    <button @click="installPrompt.prompt(); installPrompt.userChoice.then(() => { showInstall = false })"
+                    <button @click="triggerInstall()"
                             class="text-[13px] text-accent hover:underline font-semibold">
                         {% trans "Als App installieren" %}
                     </button>

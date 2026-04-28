@@ -6,12 +6,12 @@
     {% if goals %}
     <div class="space-y-3">
         {% for goal in goals %}
-        <div class="bg-surface border border-subtle rounded-[10px] p-4" x-data="{ editing: false }">
+        <div class="bg-surface border border-subtle rounded-[10px] p-4" x-data="goalsSection">
             <div class="flex items-start justify-between">
                 <div class="flex-1 min-w-0" x-show="!editing">
                     <div class="flex items-center">
                         <h3 class="font-medium text-ink">{{ goal.title }}</h3>
-                        <button type="button" @click="editing = true"
+                        <button type="button" @click="toggleEdit()"
                                 class="ml-2 text-ink-muted hover:text-ink-muted" title="{% trans 'Bearbeiten' %}" aria-label="{% trans 'Bearbeiten' %}">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />

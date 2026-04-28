@@ -82,25 +82,7 @@
 
 {# Bulk-Edit (Refs #267): Alpine-State für Auswahl und Aktions-Forms #}
 <div
-    x-data="{
-        selected: [],
-        isSelected(id) { return this.selected.includes(id) },
-        toggle(id) {
-            const i = this.selected.indexOf(id);
-            if (i === -1) this.selected.push(id); else this.selected.splice(i, 1);
-        },
-        toggleAll(checked) {
-            const boxes = document.querySelectorAll('input[name=workitem_ids]');
-            this.selected = [];
-            boxes.forEach(b => { b.checked = checked; if (checked) this.selected.push(b.value); });
-        },
-        clear() {
-            this.selected = [];
-            document.querySelectorAll('input[name=workitem_ids]').forEach(b => b.checked = false);
-            const master = document.getElementById('workitem-select-all');
-            if (master) master.checked = false;
-        }
-    }"
+    x-data="workitemBulkSelect"
     @workitem-bulk-clear.window="clear()"
 >
     {# Action-Bar: sichtbar wenn mindestens ein Item ausgewählt #}

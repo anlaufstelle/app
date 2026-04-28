@@ -1,7 +1,7 @@
 {% load i18n core_tags %}
 
 {% activity_target_url activity as target_url %}
-<div class="flex bg-surface border border-subtle rounded-[10px] overflow-hidden" x-data="{ expanded: false }">
+<div class="flex bg-surface border border-subtle rounded-[10px] overflow-hidden" x-data="expandableActivityCard">
     {# Linke Kante in Aktivitaeten-Farbe #}
     <div class="w-[3px] bg-activity flex-shrink-0"></div>
     <div class="flex-1 px-3.5 py-2.5 min-w-0">
@@ -15,7 +15,7 @@
                 <span class="text-[11px] text-ink-muted hidden sm:inline whitespace-nowrap">{{ activity.actor.get_short_name|default:activity.actor.username }}</span>
                 {% endif %}
                 <button type="button"
-                        @click="expanded = !expanded"
+                        @click="toggle()"
                         class="text-ink-muted hover:text-ink transition-transform duration-200 p-0.5"
                         :class="expanded ? 'rotate-180' : ''"
                         :aria-expanded="expanded"

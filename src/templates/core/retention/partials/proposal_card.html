@@ -1,7 +1,7 @@
 {% load i18n %}
 
 <div id="proposal-{{ proposal.pk }}" class="proposal-card bg-surface border-l-4 {% if proposal.urgency == 'red' %}border-red-500{% elif proposal.urgency == 'yellow' %}border-yellow-400{% else %}border-subtle{% endif %} rounded-md p-4 shadow-sm"
-     {% if proposal.status == 'pending' %}x-data="{ showHoldForm: false }"{% endif %}>
+     {% if proposal.status == 'pending' %}x-data="proposalCard"{% endif %}>
 
     {# Header: status badge + due date #}
     <div class="flex items-center justify-between mb-2">
@@ -52,7 +52,7 @@
                 class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700">
             {% trans "Freigeben" %}
         </button>
-        <button @click="showHoldForm = !showHoldForm"
+        <button @click="toggleHoldForm()"
                 class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700">
             {% trans "Hold setzen" %}
         </button>
@@ -79,7 +79,7 @@
                         class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 text-white hover:bg-blue-700">
                     {% trans "Hold erstellen" %}
                 </button>
-                <button type="button" @click="showHoldForm = false"
+                <button type="button" @click="toggleHoldForm()"
                         class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-surface border border-subtle text-ink-soft hover:bg-canvas">
                     {% trans "Abbrechen" %}
                 </button>

@@ -62,12 +62,14 @@ run-http:
 	$(PYTHON) src/manage.py runserver 0.0.0.0:8000
 
 # Selbstsigniertes Zertifikat generieren
+# LAN-IP fürs Testen von Mobilgeräten/PWA: SSL_HOST_IP=192.168.x.y make ssl-cert
+SSL_HOST_IP ?= 192.168.1.193
 ssl-cert:
 	@mkdir -p certs
 	openssl req -x509 -newkey rsa:2048 -keyout certs/dev-key.pem -out certs/dev-cert.pem \
 		-days 365 -nodes -subj "/CN=localhost" \
-		-addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:0.0.0.0"
-	@echo "Zertifikat erstellt: certs/dev-cert.pem + certs/dev-key.pem"
+		-addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:0.0.0.0,IP:$(SSL_HOST_IP)"
+	@echo "Zertifikat erstellt: certs/dev-cert.pem + certs/dev-key.pem (LAN-IP: $(SSL_HOST_IP))"
 
 seed:
 	$(PYTHON) src/manage.py seed
