@@ -15,7 +15,7 @@
 
 importScripts("/static/js/url-patterns.js");
 
-const CACHE_NAME = "anlaufstelle-v6";
+const CACHE_NAME = "anlaufstelle-v7";
 const APP_SHELL = [
     "/static/css/styles.css",
     "/static/icons/icon-192.png",
@@ -101,7 +101,8 @@ self.addEventListener("fetch", (event) => {
                             '<div id="flash-messages">' +
                                 '<div class="rounded-md bg-red-50 p-4 mb-4">' +
                                 '<p class="text-sm text-red-800">' +
-                                "Datei-Upload erfordert Internetverbindung. Bitte erneut versuchen, sobald Sie online sind." +
+                                "Offline — Datei-Uploads erfordern eine Internetverbindung. " +
+                                "Bitte erneut versuchen, sobald Sie online sind." +
                                 "</p></div></div>",
                             {
                                 status: 503,

@@ -85,16 +85,16 @@ def test_offline_banner_visible_when_offline(authenticated_page, base_url):
     assert not banner.is_visible()
 
 
-@pytest.mark.xfail(reason="Service Worker faengt POST-Requests im Offline-Modus noch nicht ab")
-def test_offline_form_submit_shows_feedback(authenticated_page, base_url):
-    """Formular-Submit im Offline-Modus zeigt Feedback statt Fehler."""
-    page = authenticated_page
+def _wait_for_active_service_worker(page, base_url) -> None:
+    """Ensure a Service Worker is registered, activated and controls the page.
 
-    # Event-Erstellungsseite laden
-    page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
-
-    # Warten bis Service Worker aktiv ist
-    page.evaluate("""
+    Erstes ``page.goto`` registriert den SW; ein zweites ``goto`` (oder
+    ``reload``) ist noetig, damit der SW die Page tatsaechlich kontrolliert
+    (``navigator.serviceWorker.controller`` ist sonst ``null`` und Requests
+    laufen am SW vorbei).
+    """
+    page.evaluate(
+        """
         async () => {
             const reg = await navigator.serviceWorker.getRegistration('/');
             if (!reg) return;
@@ -107,44 +107,100 @@ def test_offline_form_submit_shows_feedback(authenticated_page, base_url):
                 setTimeout(resolve, 5000);
             });
         }
-    """)
+        """
+    )
+    if not page.evaluate("() => !!navigator.serviceWorker.controller"):
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_function(
+            "() => !!navigator.serviceWorker.controller", timeout=5000
+        )
 
-    # Offline gehen
-    page.context.set_offline(True)
-    page.evaluate("window.dispatchEvent(new Event('offline'))")
 
-    # Offline-Banner pruefen
-    banner = page.locator('[data-testid="offline-banner"]')
-    banner.wait_for(state="visible", timeout=5000)
+def test_offline_url_encoded_post_returns_offline_feedback(browser, base_url):
+    """Offline + URL-encoded POST an /workitems/new/ → SW queuet & liefert Feedback.
 
-    # Formular per fetch absenden (POST an /events/new/)
-    # Der Service Worker faengt den Request ab und gibt eine Offline-Meldung zurueck
-    response_text = page.evaluate("""
-        async () => {
-            const form = document.querySelector('form');
-            if (!form) return 'no-form';
-            const formData = new FormData(form);
-            try {
-                const response = await fetch(form.action || window.location.href, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
-                    },
-                });
-                return await response.text();
-            } catch(e) {
-                return 'fetch-error: ' + e.message;
+    Der Service Worker faengt POSTs auf whitelisted URLs (events/workitems
+    new/edit) ab, wenn die Netzwerk-Anfrage scheitert, persistiert das Body
+    in der Encrypted-Offline-Queue und gibt eine HTML-Antwort mit
+    'Offline'-Meldung zurueck. Aktives Login statt Storage-State-Restore,
+    damit ``crypto_session.hasSessionKey()`` greift und die Queue tatsaechlich
+    persistieren kann. Refs #573, #576, #669 (Phase A).
+    """
+    # Aktives Login (statt storage_state-Restore), damit crypto_session in
+    # memory den Schluessel via PBKDF2 ableitet.
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    page.goto(f"{base_url}/login/")
+    page.fill('input[name="username"]', "admin")
+    page.fill('input[name="password"]', "anlaufstelle2026")
+    page.click('button[type="submit"]')
+    page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
+    try:
+        page.goto(f"{base_url}/workitems/new/", wait_until="domcontentloaded")
+        _wait_for_active_service_worker(page, base_url)
+
+        # Offline gehen
+        page.context.set_offline(True)
+        page.evaluate("window.dispatchEvent(new Event('offline'))")
+
+        banner = page.locator('[data-testid="offline-banner"]')
+        banner.wait_for(state="visible", timeout=5000)
+
+        # URL-encoded Form-Submit (kein Multipart) — der Standard-Queue-Pfad
+        response_text = page.evaluate(
+            """
+            async () => {
+                const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+                const body = new URLSearchParams({
+                    'csrfmiddlewaretoken': csrf,
+                    'item_type': 'task',
+                    'title': 'E2E offline POST',
+                    'description': '',
+                    'priority': 'normal',
+                    'recurrence': '',
+                }).toString();
+                try {
+                    const response = await fetch('/workitems/new/', {
+                        method: 'POST',
+                        body: body,
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'X-CSRFToken': csrf,
+                        },
+                    });
+                    return await response.text();
+                } catch(e) {
+                    return 'fetch-error: ' + e.message;
+                }
             }
-        }
-    """)
+            """
+        )
 
-    # Die Antwort vom Service Worker sollte eine Offline-Meldung enthalten
-    assert "Offline" in response_text, f"Erwartete Offline-Meldung, bekam: {response_text[:200]}"
+        assert "Offline" in response_text, (
+            f"Erwartete Offline-Meldung vom SW, bekam: {response_text[:200]}"
+        )
+        assert (
+            "lokal verschl" in response_text
+            or "synchronisiert" in response_text
+            or "automatisch gesendet" in response_text
+        ), f"Erwartete 'lokal verschluesselt'-Hinweis, bekam: {response_text[:300]}"
 
-    # Wieder online
-    page.context.set_offline(False)
-    page.evaluate("window.dispatchEvent(new Event('online'))")
+        # Wieder online — Replay startet automatisch
+        page.context.set_offline(False)
+        page.evaluate("window.dispatchEvent(new Event('online'))")
+    finally:
+        context.close()
+
+
+# Hinweis: Multipart-Form-POSTs (z.B. Event-Anlage mit Datei-Anhang) werden
+# vom SW per Design NICHT in der verschluesselten Offline-Queue persistiert
+# — Binaerdaten brauchen eine eigene Pipeline (Issue #574). Der SW liefert
+# stattdessen eine 503 mit „Offline — Datei-Uploads erfordern eine
+# Internetverbindung"-Meldung. Ein E2E-Test fuer diesen Pfad ist im Browser-
+# Test-Setup nicht zuverlaessig: der Browser bricht den fetch ab, bevor
+# der SW den intercept-Pfad fuer multipart-Bodies vollstaendig durchlaufen
+# kann. Fix wird zusammen mit der Multipart-Pipeline aus #574 angegangen.
 
 
 MOBILE_VIEWPORT = {"width": 375, "height": 812}
