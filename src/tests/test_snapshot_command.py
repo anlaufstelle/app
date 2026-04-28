@@ -5,8 +5,8 @@ from unittest.mock import patch
 
 import pytest
 from django.core.management import call_command
-from django.test.utils import CaptureQueriesContext
 from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from core.models import Client, DocumentType, Event, StatisticsSnapshot
@@ -132,7 +132,7 @@ def test_facility_filter(
     )
 
     # other_facility needs its own client and doc_type
-    from core.models import Client, DocumentType
+    from core.models import DocumentType
 
     other_client = Client.objects.create(
         facility=other_facility,
@@ -176,7 +176,6 @@ def test_create_snapshot_is_not_n_plus_1(facility, client_identified, staff_user
     (``DocumentType.objects.get`` im Loop). Neue Impl: 1 Bulk-Query pro
     Snapshot-Erstellung, unabhängig von N.
     """
-    jan_dt = timezone.make_aware(datetime(2025, 1, 15, 10, 0))
 
     def _create_dt_events(n, month):
         """n DocumentTypes + je 1 Event im angegebenen Monat."""

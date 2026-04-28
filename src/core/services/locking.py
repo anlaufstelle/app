@@ -39,9 +39,7 @@ def check_version_conflict(instance, expected_updated_at):
     if current is None:
         return
     expected = (
-        datetime.fromisoformat(expected_updated_at)
-        if isinstance(expected_updated_at, str)
-        else expected_updated_at
+        datetime.fromisoformat(expected_updated_at) if isinstance(expected_updated_at, str) else expected_updated_at
     )
     if current != expected:
         raise ValidationError(_("Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."))

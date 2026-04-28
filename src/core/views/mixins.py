@@ -79,7 +79,5 @@ class HTMXPartialMixin:
 
         template = self.partial_template_name if self.is_htmx() else self.template_name
         if template is None:
-            raise ValueError(
-                "HTMXPartialMixin erfordert partial_template_name und template_name."
-            )
+            raise ValueError("HTMXPartialMixin erfordert partial_template_name und template_name.")
         return render(self.request, template, context)

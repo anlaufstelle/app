@@ -118,8 +118,7 @@ class TestFacilityScopeCursorHygiene:
             _call_middleware(request)
 
         assert cursor_spy.call_count == 0, (
-            "Anonymous Request sollte keinen DB-Cursor öffnen "
-            "(Regression-Schutz gegen unnötige SET-Roundtrips)."
+            "Anonymous Request sollte keinen DB-Cursor öffnen (Regression-Schutz gegen unnötige SET-Roundtrips)."
         )
 
     def test_authenticated_request_opens_cursor(self, facility, staff_user):

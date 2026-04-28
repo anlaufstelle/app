@@ -3,11 +3,9 @@
 import pytest
 from django.http import HttpResponse
 from django.test import RequestFactory
-from django.urls import path
 from django.views import View
 
 from core.views.mixins import FacilityScopedViewMixin, HTMXPartialMixin
-
 
 # --- FacilityScopedViewMixin ---------------------------------------------
 

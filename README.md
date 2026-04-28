@@ -47,7 +47,7 @@ Typische Teamgröße: 5–20 Mitarbeitende. Typische Situation: Dokumentation mi
 
 Anlaufstelle ist eine Software für die tägliche Arbeit in der niedrigschwelligen Sozialarbeit. Sie unterstützt Ihr Team bei der Dokumentation, der Informationsweitergabe zwischen Diensten und der Erstellung von Berichten und Statistiken — ohne dass Klientel einen bürgerlichen Namen angeben müssen.
 
-Kommerzielle Sozialbereichssoftware (Vivendi, SoPart, Kilanka) richtet sich an große Träger, ist für kleine Einrichtungen zu teuer und setzt voraus, dass jede Person mit Name und Adresse erfasst wird. Anlaufstelle füllt diese Lücke: niedrigschwellig, finanzierbar, datenschutzgerecht.
+Etablierte kommerzielle Sozialbereichssoftware richtet sich an große Träger, ist für kleine Einrichtungen zu teuer und setzt voraus, dass jede Person mit Name und Adresse erfasst wird. Anlaufstelle füllt diese Lücke: niedrigschwellig, finanzierbar, datenschutzgerecht.
 
 ---
 

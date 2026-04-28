@@ -24,9 +24,14 @@
         return window.offlineStore;
     }
 
-    function _csrfFromCookie() {
-        const match = document.cookie.match(/csrftoken=([^;]+)/);
-        return match ? match[1] : null;
+    function _csrfFromMeta() {
+        // Refs #602: CSRF_COOKIE_HTTPONLY verbietet JS-Zugriff aufs Cookie,
+        // Token kommt aus dem <meta name="csrf-token">-Tag im Basistemplate.
+        if (typeof window.getCsrfToken === "function") {
+            return window.getCsrfToken() || null;
+        }
+        const meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.getAttribute("content") || null : null;
     }
 
     function _bundleUrl(clientPk) {
@@ -68,7 +73,7 @@
             throw err;
         }
 
-        const csrf = _csrfFromCookie();
+        const csrf = _csrfFromMeta();
         const headers = { Accept: "application/json" };
         if (csrf) headers["X-CSRFToken"] = csrf;
 

@@ -592,5 +592,3 @@ class EventDeleteView(StaffRequiredMixin, View):
             messages.success(request, _("Ereignis wurde gelöscht."))
 
         return redirect("core:zeitstrom")
-
-

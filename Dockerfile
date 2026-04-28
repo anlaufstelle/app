@@ -16,12 +16,13 @@ RUN npm install && npx tailwindcss -i src/static/css/input.css -o src/static/css
 # Stage 3: Runtime
 FROM python:3.13-slim AS final
 
-# WeasyPrint system dependencies (Debian Bookworm)
+# WeasyPrint + libmagic (file-upload magic-bytes validation, Refs #610) system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 \
     libcairo2 libgdk-pixbuf-2.0-0 libffi-dev \
     libglib2.0-0 shared-mime-info \
     fontconfig fonts-dejavu-core \
+    libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

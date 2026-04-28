@@ -7,7 +7,6 @@ import pytest
 
 from core.logging import JsonFormatter, scrub
 
-
 # --- Scrub-Regex direkt -------------------------------------------------
 
 
