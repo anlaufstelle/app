@@ -59,7 +59,8 @@ Thumbs.db
 
 # Node (Tailwind)
 node_modules/
-package-lock.json
+# package-lock.json wird committet (Refs #656) — reproduzierbare
+# `npm ci`-Installs + GitHub-Actions setup-node Cache-Hit.
 
 # Backups
 backups/
