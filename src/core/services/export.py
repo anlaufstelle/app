@@ -18,13 +18,9 @@ from core.services.sensitivity import user_can_see_field
 logger = logging.getLogger(__name__)
 
 
-def export_events_csv(facility, date_from, date_to, user=None):
-    """Generate CSV data for events in the given period. Returns (header, rows).
-
-    When *user* is provided, fields are filtered by the user's role and the
-    field's sensitivity level (same logic as EventDetailView).
-    """
-    events = (
+def _get_events_queryset(facility, date_from, date_to):
+    """Events in the given period, ordered descending by occurrence."""
+    return (
         Event.objects.filter(
             facility=facility,
             is_deleted=False,
@@ -35,25 +31,33 @@ def export_events_csv(facility, date_from, date_to, user=None):
         .order_by("-occurred_at")
     )
 
-    # Dynamic columns: collect all FieldTemplate slugs for the facility
+
+def _collect_field_templates(facility, user):
+    """Return (all_field_templates, visible_slugs) for a facility.
+
+    Visible slugs are pre-filtered by the user's role using ``NORMAL`` as the
+    baseline document sensitivity; the caller must still run the per-event
+    check against the actual document type's sensitivity.
+    """
     all_field_templates = {}
     for ft in FieldTemplate.objects.for_facility(facility).order_by("name"):
         all_field_templates[ft.slug] = ft
     field_slugs = list(all_field_templates.keys())
 
-    # If a user is given, determine which field slugs the user may see.
-    # Fields whose effective sensitivity exceeds the user's role are excluded.
     if user is not None:
         visible_field_slugs = []
         for slug in field_slugs:
             ft = all_field_templates[slug]
-            # Without a concrete doc-type we use NORMAL as baseline; the
-            # per-event loop below will do the precise check.
             if user_can_see_field(user, DocumentType.Sensitivity.NORMAL, ft.sensitivity):
                 visible_field_slugs.append(slug)
         field_slugs = visible_field_slugs
 
-    header = [
+    return all_field_templates, field_slugs
+
+
+def _build_header(all_field_templates, field_slugs):
+    """Static CSV columns followed by the visible dynamic field names."""
+    return [
         _("Datum"),
         _("Uhrzeit"),
         _("Dokumentationstyp"),
@@ -62,69 +66,88 @@ def export_events_csv(facility, date_from, date_to, user=None):
         _("Altersgruppe"),
     ] + [all_field_templates[s].name for s in field_slugs]
 
+
+def _resolve_field_value(value, ft):
+    """Convert a raw data_json value into a CSV-ready string.
+
+    Handles encrypted dicts, multi/single-select option lookups and lists.
+    """
+    if isinstance(value, dict):
+        return safe_decrypt(value)
+    if isinstance(value, list):
+        if ft and ft.options_json:
+            label_map = {o["slug"]: o["label"] for o in ft.options_json if isinstance(o, dict)}
+            return ", ".join(label_map.get(str(v), str(v)) for v in value)
+        return ", ".join(str(v) for v in value)
+    if isinstance(value, str) and ft and ft.options_json:
+        label_map = {o["slug"]: o["label"] for o in ft.options_json if isinstance(o, dict)}
+        return label_map.get(value, value)
+    return value
+
+
+def _build_event_row(event, all_field_templates, field_slugs, user):
+    """Build a single CSV row for an event, applying per-event sensitivity checks."""
+    client_name = event.client.pseudonym if event.client else (_("Anonym") if event.is_anonymous else "–")
+    contact_stage = ""
+    age_cluster = ""
+    if event.client:
+        contact_stage = event.client.get_contact_stage_display()
+        age_cluster = event.client.get_age_cluster_display()
+
+    row = [
+        event.occurred_at.strftime("%d.%m.%Y"),
+        event.occurred_at.strftime("%H:%M"),
+        event.document_type.name,
+        client_name,
+        contact_stage,
+        age_cluster,
+    ]
+
+    doc_sensitivity = event.document_type.sensitivity
+    data = event.data_json or {}
+    for field_slug in field_slugs:
+        ft = all_field_templates.get(field_slug)
+        field_sensitivity = ft.sensitivity if ft else ""
+
+        if user is not None and not user_can_see_field(user, doc_sensitivity, field_sensitivity):
+            row.append(_("[Eingeschränkt]"))
+            continue
+
+        value = data.get(field_slug, "")
+        row.append(_resolve_field_value(value, ft))
+
+    return row
+
+
+def _stream_row(writer, output, row):
+    """Write one row to the buffered writer and flush it as a streamed chunk."""
+    writer.writerow(row)
+    chunk = output.getvalue()
+    output.seek(0)
+    output.truncate(0)
+    return chunk
+
+
+def export_events_csv(facility, date_from, date_to, user=None):
+    """Generate CSV data for events in the given period. Yields CSV chunks.
+
+    When *user* is provided, fields are filtered by the user's role and the
+    field's sensitivity level (same logic as EventDetailView).
+    """
+    events = _get_events_queryset(facility, date_from, date_to)
+    all_field_templates, field_slugs = _collect_field_templates(facility, user)
+    header = _build_header(all_field_templates, field_slugs)
+
     output = io.StringIO()
     writer = csv.writer(output, dialect="excel")
 
-    # Metadata header row with facility, user, and export timestamp
     user_name = user.get_full_name() if user else "System"
-    writer.writerow([f"# Export: {facility.name} | {user_name} | {timezone.now().isoformat()}"])
-    yield output.getvalue()
-    output.seek(0)
-    output.truncate(0)
-
-    writer.writerow(header)
-    yield output.getvalue()
-    output.seek(0)
-    output.truncate(0)
+    yield _stream_row(writer, output, [f"# Export: {facility.name} | {user_name} | {timezone.now().isoformat()}"])
+    yield _stream_row(writer, output, header)
 
     for event in events:
-        client_name = event.client.pseudonym if event.client else (_("Anonym") if event.is_anonymous else "–")
-        contact_stage = ""
-        age_cluster = ""
-        if event.client:
-            contact_stage = event.client.get_contact_stage_display()
-            age_cluster = event.client.get_age_cluster_display()
-
-        row = [
-            event.occurred_at.strftime("%d.%m.%Y"),
-            event.occurred_at.strftime("%H:%M"),
-            event.document_type.name,
-            client_name,
-            contact_stage,
-            age_cluster,
-        ]
-
-        doc_sensitivity = event.document_type.sensitivity
-        data = event.data_json or {}
-        for field_slug in field_slugs:
-            ft = all_field_templates.get(field_slug)
-            field_sensitivity = ft.sensitivity if ft else ""
-
-            # Per-event sensitivity check using the actual document type
-            if user is not None and not user_can_see_field(user, doc_sensitivity, field_sensitivity):
-                row.append(_("[Eingeschränkt]"))
-                continue
-
-            value = data.get(field_slug, "")
-            if isinstance(value, dict):
-                value = safe_decrypt(value)
-            elif isinstance(value, list):
-                # Resolve option slugs to labels
-                if ft and ft.options_json:
-                    label_map = {o["slug"]: o["label"] for o in ft.options_json if isinstance(o, dict)}
-                    value = ", ".join(label_map.get(str(v), str(v)) for v in value)
-                else:
-                    value = ", ".join(str(v) for v in value)
-            elif isinstance(value, str) and ft and ft.options_json:
-                # Single select values: resolve slug to label
-                label_map = {o["slug"]: o["label"] for o in ft.options_json if isinstance(o, dict)}
-                value = label_map.get(value, value)
-            row.append(value)
-
-        writer.writerow(row)
-        yield output.getvalue()
-        output.seek(0)
-        output.truncate(0)
+        row = _build_event_row(event, all_field_templates, field_slugs, user)
+        yield _stream_row(writer, output, row)
 
 
 def generate_report_pdf(facility, date_from, date_to, stats):
