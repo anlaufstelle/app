@@ -233,6 +233,29 @@
                 // ignore
             }
         });
+
+        // "Vorlage entfernen" navigiert zurück auf denselben Pfad ohne
+        // template-Query — würde ohne Eingriff den Draft wiederherstellen
+        // und die vermeintlich leere Form wieder füllen. Refs #625.
+        document.addEventListener("click", function (e) {
+            var link = e.target.closest("[data-autosave-clear-link]");
+            if (!link || e.defaultPrevented) return;
+            e.preventDefault();
+            var target = link.getAttribute("href") || link.href;
+            var done = function () {
+                window.location.href = target;
+            };
+            try {
+                var promise = window.offlineStore.deleteRow("drafts", storageKey);
+                if (promise && typeof promise.finally === "function") {
+                    promise.finally(done);
+                } else {
+                    done();
+                }
+            } catch (_e) {
+                done();
+            }
+        });
     }
 
     if (document.readyState === "loading") {

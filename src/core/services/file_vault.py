@@ -165,8 +165,22 @@ def _enforce_magic_bytes(facility, uploaded_file, event, user):
     )
 
 
-def store_encrypted_file(facility, uploaded_file, field_template, event, user, supersedes=None):
+def store_encrypted_file(
+    facility,
+    uploaded_file,
+    field_template,
+    event,
+    user,
+    supersedes=None,
+    sort_order=None,
+):
     """Encrypt and store an uploaded file. Returns EventAttachment instance.
+
+    Modi:
+    * ``supersedes=None`` → **add**: Neue Versionskette mit frischer ``entry_id``.
+    * ``supersedes=<attachment>`` → **replace**: Übernimmt ``entry_id`` und
+      ``sort_order`` des Vorgängers, markiert diesen als ersetzt
+      (``is_current=False``, ``superseded_by=<new>``, ``superseded_at``).
 
     1. Enforce ``Settings.allowed_file_types`` extension whitelist (Refs #610).
     2. Scan file with ClamAV (if CLAMAV_ENABLED) BEFORE encryption — infected
@@ -180,10 +194,8 @@ def store_encrypted_file(facility, uploaded_file, field_template, event, user, s
     6. Encrypt file stream to disk
     7. Create EventAttachment record
 
-    If ``supersedes`` is given, the referenced prior attachment is not deleted:
-    it gets ``is_current=False``, ``superseded_by`` pointing at the new record,
-    and ``superseded_at`` set. Disk file stays until the event itself is deleted
-    or anonymized (Refs #587, Stufe A — Versionshistorie).
+    Disk file stays until the event itself is deleted or anonymized
+    (Refs #587/622 — Versionshistorie + Stufe-B Multi-Entry).
     """
     _enforce_allowed_file_types(facility, uploaded_file, event, user)
     _run_virus_scan(facility, uploaded_file, event, user)
@@ -194,6 +206,15 @@ def store_encrypted_file(facility, uploaded_file, field_template, event, user, s
 
     encrypt_file(uploaded_file, output_path)
 
+    if supersedes is not None:
+        # Replace-Modus: entry_id + sort_order vom Vorgänger übernehmen.
+        entry_id = supersedes.entry_id
+        effective_sort = supersedes.sort_order if sort_order is None else sort_order
+    else:
+        # Add-Modus: frische entry_id, sort_order wie übergeben (oder 0).
+        entry_id = uuid.uuid4()
+        effective_sort = sort_order if sort_order is not None else 0
+
     new_attachment = EventAttachment.objects.create(
         event=event,
         field_template=field_template,
@@ -203,6 +224,8 @@ def store_encrypted_file(facility, uploaded_file, field_template, event, user, s
         mime_type=uploaded_file.content_type or "application/octet-stream",
         created_by=user,
         is_current=True,
+        entry_id=entry_id,
+        sort_order=effective_sort,
     )
 
     if supersedes is not None:
@@ -212,6 +235,37 @@ def store_encrypted_file(facility, uploaded_file, field_template, event, user, s
         supersedes.save(update_fields=["is_current", "superseded_by", "superseded_at"])
 
     return new_attachment
+
+
+def soft_delete_attachment_chain(event, entry_id, user):
+    """Markiere alle Attachments einer Versionskette (entry_id) als soft-deleted.
+
+    Für UI-Lösch-Aktionen (Stufe B, Refs #622). Physischer Disk-Cleanup
+    erfolgt weiterhin erst im Event-Delete/Anonymize. Bereits soft-deleted
+    eingetragene Entries werden nicht erneut angefasst.
+
+    Returns: Anzahl der neu soft-deleted Attachments in der Kette.
+    """
+    qs = event.attachments.filter(entry_id=entry_id, deleted_at__isnull=True)
+    now = timezone.now()
+    updated = qs.update(deleted_at=now)
+    return updated
+
+
+def get_current_entries_for_field(event, field_template):
+    """Liefert die aktuellen, nicht soft-deleted Einträge für ein FILE-Feld.
+
+    Gibt Heads der Versionsketten zurück (is_current=True, deleted_at IS NULL),
+    sortiert nach ``sort_order`` und ``created_at``. Der Aufrufer kann daraus
+    ``entry_id``, ``pk``, ``original_filename`` etc. ableiten.
+    """
+    return list(
+        event.attachments.filter(
+            field_template=field_template,
+            is_current=True,
+            deleted_at__isnull=True,
+        ).order_by("sort_order", "created_at")
+    )
 
 
 def get_attachment_path(attachment):

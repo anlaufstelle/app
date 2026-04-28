@@ -277,6 +277,70 @@ class TestAutoSave:
             "Banner darf nach Verwerfen + Reload nicht wieder erscheinen"
         )
 
+    def test_template_remove_link_clears_draft(self, authenticated_page, base_url, e2e_env):
+        """„Vorlage entfernen" löscht den Draft, sodass kein Restore passiert (Refs #625).
+
+        Ohne Draft-Clear würde autosave.js nach dem Sprung zurück auf
+        /events/new/ (ohne ?template=) den alten Draft wieder laden und so
+        den „leeren" Zustand verfälschen.
+        """
+        import subprocess
+        import sys
+
+        python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
+
+        tpl_id_proc = subprocess.run(
+            [
+                python,
+                "src/manage.py",
+                "shell",
+                "-c",
+                (
+                    "from core.models import DocumentType, Facility, QuickTemplate;"
+                    " f = Facility.objects.get(name='Hauptstelle');"
+                    " dt = DocumentType.objects.get(facility=f, name='Kontakt');"
+                    " tpl, _ = QuickTemplate.objects.get_or_create("
+                    "  facility=f, document_type=dt, name='E2E Remove-Link',"
+                    "  defaults={'prefilled_data': {'dauer': 55}, 'is_active': True},"
+                    " );"
+                    " tpl.prefilled_data = {'dauer': 55};"
+                    " tpl.is_active = True;"
+                    " tpl.save();"
+                    " print(tpl.pk)"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            env=e2e_env,
+        )
+        tpl_id = tpl_id_proc.stdout.strip().splitlines()[-1]
+        assert tpl_id, f"Template-PK konnte nicht erzeugt werden: {tpl_id_proc.stderr}"
+
+        self._bootstrap(page=authenticated_page, base_url=base_url)
+        page = authenticated_page
+
+        # 1) Alten Draft auf /events/new/ anlegen (abweichend vom Template)
+        page.select_option("select[name='document_type']", label="Kontakt")
+        page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
+        page.fill("input[name='dauer']", "13")
+        page.wait_for_timeout(7000)
+        assert page.evaluate(self._JS_GET) is not None, "Draft sollte vor Template-Anwendung gespeichert sein"
+
+        # 2) Template anwenden: dauer=55, data-autosave-server-prefilled aktiv
+        page.goto(f"{base_url}/events/new/?template={tpl_id}", wait_until="domcontentloaded")
+        assert page.locator("input[name='dauer']").input_value() == "55"
+
+        # 3) „Vorlage entfernen"-Link klicken → navigiert zu /events/new/
+        page.locator('[data-testid="template-remove-link"]').click()
+        page.wait_for_url(f"{base_url}/events/new/", timeout=5000)
+
+        # 4) Draft muss weg sein — kein Banner, dauer-Feld leer
+        stored = page.evaluate(self._JS_GET)
+        assert stored is None, "Draft sollte nach Vorlage-Entfernen geloescht sein"
+        assert page.locator("#autosave-restored-banner").count() == 0, (
+            "Banner darf nach Vorlage-Entfernen nicht erscheinen"
+        )
+
     def test_server_prefill_overrides_existing_draft(self, authenticated_page, base_url, e2e_env):
         """Quick-Template-Prefill ueberschreibt einen bestehenden Draft (Refs #625).
 

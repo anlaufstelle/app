@@ -1143,6 +1143,13 @@ class TestEventAttachmentVersioning:
         )
 
     def test_replace_supersedes_old_attachment(self, client, staff_user, facility, doc_type_with_file):
+        """Replace-Modus über `__replace__<entry_id>` (Stufe B, Refs #622).
+
+        Stufe A setzte einen erneuten Upload in dasselbe Feld automatisch
+        als Replace. Stufe B macht aus einem erneuten Upload per Default
+        einen Add; Replace ist jetzt explizit über die per-Entry-Replace-
+        Inputs.
+        """
         from django.core.files.uploadedfile import SimpleUploadedFile
 
         from core.models.attachment import EventAttachment
@@ -1150,7 +1157,6 @@ class TestEventAttachmentVersioning:
         doc_type, _ft = doc_type_with_file
         client.force_login(staff_user)
 
-        # Erste Datei beim Anlegen hochladen.
         first_file = SimpleUploadedFile("original.pdf", self._pdf_bytes(b"v1"), content_type="application/pdf")
         resp = client.post(
             reverse("core:event_create"),
@@ -1167,19 +1173,18 @@ class TestEventAttachmentVersioning:
         assert original_attachment.is_current is True
         assert original_attachment.superseded_by is None
 
-        # Jetzt Ersetzen per Update.
+        # Replace per dedicated __replace__<entry_id> POST key.
         replacement = SimpleUploadedFile("neu.pdf", self._pdf_bytes(b"v2"), content_type="application/pdf")
         resp = client.post(
             reverse("core:event_update", kwargs={"pk": event.pk}),
             {
                 "document_type": str(doc_type.pk),
                 "occurred_at": event.occurred_at.strftime("%Y-%m-%dT%H:%M"),
-                "anhang": replacement,
+                f"anhang__replace__{original_attachment.entry_id}": replacement,
             },
         )
         assert resp.status_code == 302
 
-        # Zwei Attachments in der Kette, alte ist superseded.
         attachments = list(EventAttachment.objects.filter(event=event).order_by("created_at"))
         assert len(attachments) == 2
         old, new = attachments
@@ -1191,6 +1196,8 @@ class TestEventAttachmentVersioning:
         assert old.superseded_at is not None
         assert new.is_current is True
         assert new.superseded_by is None
+        # Entry-ID bleibt beim Replace stabil (Stufe B, Refs #622).
+        assert new.entry_id == original_attachment.entry_id
 
     def test_event_data_json_points_at_current_version(self, client, staff_user, facility, doc_type_with_file):
         from django.core.files.uploadedfile import SimpleUploadedFile
@@ -1208,6 +1215,7 @@ class TestEventAttachmentVersioning:
             },
         )
         event = Event.objects.get(document_type=doc_type)
+        original_entry_id = event.attachments.get().entry_id
 
         second = SimpleUploadedFile("b.pdf", self._pdf_bytes(b"v2"), content_type="application/pdf")
         client.post(
@@ -1215,11 +1223,16 @@ class TestEventAttachmentVersioning:
             {
                 "document_type": str(doc_type.pk),
                 "occurred_at": event.occurred_at.strftime("%Y-%m-%dT%H:%M"),
-                "anhang": second,
+                f"anhang__replace__{original_entry_id}": second,
             },
         )
         event.refresh_from_db()
-        current_id = event.data_json["anhang"]["attachment_id"]
+        # Neues Format: data_json[slug] = {"__files__": True, "entries": [...]}.
+        marker = event.data_json["anhang"]
+        assert marker.get("__files__") is True
+        entries = marker["entries"]
+        assert len(entries) == 1
+        current_id = entries[0]["id"]
         current = event.attachments.get(pk=current_id)
         assert current.is_current is True
 
@@ -1238,12 +1251,15 @@ class TestEventAttachmentVersioning:
             },
         )
         event = Event.objects.get(document_type=doc_type)
+        entry_id = event.attachments.get().entry_id
         client.post(
             reverse("core:event_update", kwargs={"pk": event.pk}),
             {
                 "document_type": str(doc_type.pk),
                 "occurred_at": event.occurred_at.strftime("%Y-%m-%dT%H:%M"),
-                "anhang": SimpleUploadedFile("b.pdf", self._pdf_bytes(b"v2"), content_type="application/pdf"),
+                f"anhang__replace__{entry_id}": SimpleUploadedFile(
+                    "b.pdf", self._pdf_bytes(b"v2"), content_type="application/pdf"
+                ),
             },
         )
 
@@ -1270,12 +1286,15 @@ class TestEventAttachmentVersioning:
             },
         )
         event = Event.objects.get(document_type=doc_type)
+        entry_id = event.attachments.get().entry_id
         client.post(
             reverse("core:event_update", kwargs={"pk": event.pk}),
             {
                 "document_type": str(doc_type.pk),
                 "occurred_at": event.occurred_at.strftime("%Y-%m-%dT%H:%M"),
-                "anhang": SimpleUploadedFile("b.pdf", self._pdf_bytes(b"v2"), content_type="application/pdf"),
+                f"anhang__replace__{entry_id}": SimpleUploadedFile(
+                    "b.pdf", self._pdf_bytes(b"v2"), content_type="application/pdf"
+                ),
             },
         )
         assert EventAttachment.objects.filter(event=event).count() == 2

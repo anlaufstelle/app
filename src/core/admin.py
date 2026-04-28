@@ -204,6 +204,20 @@ class FieldTemplateAdmin(ModelAdmin):
     )
     list_filter = ("is_active", "field_type", "is_encrypted", "sensitivity", "is_required", "facility")
     search_fields = ("name",)
+    fields = (
+        "facility",
+        "name",
+        "slug",
+        "field_type",
+        "is_required",
+        "is_encrypted",
+        "sensitivity",
+        "options_json",
+        "default_value",
+        "statistics_category",
+        "help_text",
+        "is_active",
+    )
     actions = ("deactivate_selected", "activate_selected")
 
     def get_readonly_fields(self, request, obj=None):
