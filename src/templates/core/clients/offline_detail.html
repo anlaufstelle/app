@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Offline-Ansicht" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div x-data="offlineClientView('{{ client_pk|escapejs }}')" x-init="load()"
+     data-testid="offline-client-view">
+
+    <div class="mb-4 flex items-center space-x-2">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+            {% trans "Offline-Ansicht" %}
+        </span>
+        <span x-show="lastSynced" x-cloak class="text-xs text-gray-500" data-testid="offline-last-synced">
+            {% trans "Synchronisiert:" %} <span x-text="lastSyncedRel"></span>
+        </span>
+    </div>
+
+    <template x-if="loading">
+        <div class="py-8 text-center text-gray-500" data-testid="offline-loading">
+            {% trans "Lade Offline-Daten..." %}
+        </div>
+    </template>
+
+    <template x-if="!loading && !available">
+        <div class="bg-yellow-50 border border-yellow-200 rounded-md p-4" data-testid="offline-not-available">
+            <p class="text-sm text-yellow-900">
+                {% trans "Dieses Klientel wurde nicht für die Offline-Nutzung vorbereitet oder der lokale Cache ist leer." %}
+            </p>
+            <a href="/clients/{{ client_pk }}/" class="mt-2 inline-flex items-center text-sm text-indigo-600 hover:underline">
+                {% trans "Online öffnen" %}
+            </a>
+        </div>
+    </template>
+
+    <template x-if="!loading && available">
+        <div>
+            <div class="mb-6">
+                <h1 class="text-2xl font-bold" x-text="data.client.pseudonym" data-testid="offline-pseudonym"></h1>
+                <div class="mt-1 flex items-center space-x-3">
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                          x-text="data.client.contact_stage_display"></span>
+                    <span class="text-sm text-gray-500" x-text="data.client.age_cluster_display"></span>
+                </div>
+            </div>
+
+            <template x-if="data.client.notes">
+                <div class="bg-white border border-gray-200 rounded-md p-4 mb-6">
+                    <h2 class="text-sm font-semibold text-gray-500 uppercase mb-2">{% trans "Notizen" %}</h2>
+                    <p class="text-sm text-gray-700 whitespace-pre-wrap" x-text="data.client.notes"></p>
+                </div>
+            </template>
+
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div class="lg:col-span-2">
+                    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                        {% trans "Kontakt-Chronik" %}
+                    </h2>
+                    <template x-if="data.events.length === 0">
+                        <p class="text-sm text-gray-500 py-4">{% trans "Noch keine Kontakte dokumentiert." %}</p>
+                    </template>
+                    <div class="space-y-2" x-show="data.events.length">
+                        <template x-for="event in data.events" :key="event.pk">
+                            <div class="block bg-white border border-gray-200 rounded-md p-4" data-testid="offline-event">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center space-x-3">
+                                        <span class="text-sm text-gray-500 font-mono" x-text="formatTs(event.occurred_at)"></span>
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800"
+                                              x-text="event.document_type_name"></span>
+                                        <template x-if="event.localStatus === 'modified' || event.localStatus === 'new'">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800" data-testid="event-unsynced-badge">
+                                                {% trans "Nicht synchronisiert" %}
+                                            </span>
+                                        </template>
+                                        <template x-if="event.localStatus === 'conflict'">
+                                            <a :href="'/offline/conflicts/' + event.pk + '/'"
+                                               class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 hover:bg-red-200"
+                                               data-testid="event-conflict-badge">
+                                                {% trans "Konflikt" %}
+                                            </a>
+                                        </template>
+                                    </div>
+                                    <span class="text-xs text-gray-500" x-text="event.created_by_display"></span>
+                                </div>
+                                <template x-if="Object.keys(event.data_fields || {}).length">
+                                    <dl class="mt-2 text-sm text-gray-700 space-y-1">
+                                        <template x-for="[slug, value] in Object.entries(event.data_fields)" :key="slug">
+                                            <div class="flex">
+                                                <dt class="w-32 text-xs text-gray-500" x-text="slug"></dt>
+                                                <dd class="flex-1" x-text="formatFieldValue(value)"></dd>
+                                            </div>
+                                        </template>
+                                    </dl>
+                                </template>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+
+                <div>
+                    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{% trans "Fälle" %}</h2>
+                    <template x-if="data.cases.length === 0">
+                        <p class="text-sm text-gray-500">{% trans "Keine Fälle" %}</p>
+                    </template>
+                    <div class="space-y-2" x-show="data.cases.length">
+                        <template x-for="caseRec in data.cases" :key="caseRec.pk">
+                            <div class="block bg-white border border-gray-200 rounded-md p-3">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm font-medium" x-text="caseRec.title"></span>
+                                    <span class="text-xs text-gray-500" x-text="caseRec.status_display"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3 mt-6">{% trans "Aufgaben" %}</h2>
+                    <template x-if="data.workitems.length === 0">
+                        <p class="text-sm text-gray-500">{% trans "Keine offenen Aufgaben" %}</p>
+                    </template>
+                    <div class="space-y-2" x-show="data.workitems.length">
+                        <template x-for="wi in data.workitems" :key="wi.pk">
+                            <div class="block bg-white border border-gray-200 rounded-md p-3">
+                                <span class="text-sm font-medium" x-text="wi.title"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+</div>
+
+<script>
+    function offlineClientView(pk) {
+        return {
+            loading: true,
+            available: false,
+            data: null,
+            lastSynced: null,
+            lastSyncedRel: "",
+            async load() {
+                this.loading = true;
+                try {
+                    if (window.crypto_session && window.crypto_session.ready) {
+                        await window.crypto_session.ready();
+                    }
+                    if (!window.offlineClient) {
+                        this.available = false;
+                        return;
+                    }
+                    const cached = await window.offlineClient.getOfflineClient(pk);
+                    if (!cached) {
+                        this.available = false;
+                        return;
+                    }
+                    this.data = cached;
+                    this.lastSynced = cached.lastSynced;
+                    this.lastSyncedRel = this.relativeTime(cached.lastSynced);
+                    this.available = true;
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.error("[offline-viewer]", e);
+                    this.available = false;
+                } finally {
+                    this.loading = false;
+                }
+            },
+            formatTs(iso) {
+                if (!iso) return "";
+                const d = new Date(iso);
+                return d.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+            },
+            formatFieldValue(v) {
+                if (v == null) return "";
+                if (typeof v === "object") {
+                    if (v.__file__) return "[Datei: " + (v.name || "") + "]";
+                    return JSON.stringify(v);
+                }
+                return String(v);
+            },
+            relativeTime(ts) {
+                if (!ts) return "";
+                const diffMin = Math.floor((Date.now() - ts) / 60000);
+                if (diffMin < 1) return "gerade eben";
+                if (diffMin < 60) return "vor " + diffMin + " Min";
+                const diffH = Math.floor(diffMin / 60);
+                if (diffH < 24) return "vor " + diffH + " Std";
+                const diffD = Math.floor(diffH / 24);
+                return "vor " + diffD + " Tg";
+            },
+        };
+    }
+</script>
+{% endblock %}

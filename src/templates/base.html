@@ -22,20 +22,36 @@
     </a>
 
     {# Offline-Banner und Sync-Indikator #}
-    <div x-data="{ offline: !navigator.onLine, queueCount: 0 }"
+    <div x-data="{ offline: !navigator.onLine, queueCount: 0, cachedClients: 0, unsyncedCount: 0, conflictCount: 0 }"
          @online.window="offline = false"
          @offline.window="offline = true"
          @offline-queue-count.window="queueCount = $event.detail.count"
+         @offline-clients-count.window="cachedClients = $event.detail.count"
+         @offline-unsynced-count.window="unsyncedCount = $event.detail.count"
+         @offline-conflict-count.window="conflictCount = $event.detail.count"
          id="offline-status">
         <div x-show="offline" x-cloak
              class="fixed top-0 inset-x-0 z-50 bg-yellow-500 text-white text-center text-sm py-2"
              data-testid="offline-banner">
             {% trans "Offline — Daten werden bei Verbindung gespeichert" %}
+            <span x-show="cachedClients > 0" x-cloak class="ml-2 text-xs" data-testid="offline-cached-count">
+                (<span x-text="cachedClients"></span> {% trans "Klientel lokal verfügbar" %})
+            </span>
+            <span x-show="unsyncedCount > 0" x-cloak class="ml-2 text-xs" data-testid="offline-unsynced-count">
+                · <span x-text="unsyncedCount"></span> {% trans "nicht synchronisiert" %}
+            </span>
         </div>
         <div x-show="!offline && queueCount > 0" x-cloak
              class="fixed top-0 inset-x-0 z-50 bg-blue-500 text-white text-center text-sm py-2"
              data-testid="sync-banner">
             <span x-text="queueCount"></span> {% trans "Aenderung(en) werden synchronisiert..." %}
+        </div>
+        <div x-show="!offline && conflictCount > 0" x-cloak
+             class="fixed top-0 inset-x-0 z-50 bg-red-500 text-white text-center text-sm py-2"
+             data-testid="conflict-banner">
+            <a href="{% url 'core:offline_conflict_list' %}" class="underline">
+                <span x-text="conflictCount"></span> {% trans "Konflikt(e) — bitte auflösen" %}
+            </a>
         </div>
     </div>
 
@@ -322,13 +338,15 @@
 
     {% block extra_js %}{% endblock %}
 
-    {# Offline-Modul-Reihenfolge: dexie → url-patterns → crypto → offline-store → offline-queue → autosave → sw-register #}
+    {# Offline-Modul-Reihenfolge: dexie → url-patterns → crypto → offline-store → offline-queue → offline-client → offline-edit → autosave → sw-register #}
     <script src="{% static 'js/dexie.min.js' %}"></script>
     <script src="{% static 'js/url-patterns.js' %}"></script>
     <script src="{% static 'js/crypto.js' %}"></script>
     <script src="{% static 'js/offline-store.js' %}"></script>
     <script src="{% static 'js/filter-persistence.js' %}" defer></script>
     <script src="{% static 'js/offline-queue.js' %}"></script>
+    <script src="{% static 'js/offline-client.js' %}"></script>
+    <script src="{% static 'js/offline-edit.js' %}"></script>
     <script src="{% static 'js/sw-register.js' %}" defer></script>
 </body>
 </html>

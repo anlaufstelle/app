@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% load i18n static %}
+
+{% block title %}{% trans "Konflikte" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div x-data="conflictList()" x-init="load()" data-testid="conflict-list-view" class="space-y-6">
+
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-xl font-bold text-gray-900">{% trans "Offline-Konflikte" %}</h1>
+            <p class="mt-1 text-sm text-gray-600">
+                {% trans "Ereignisse, bei denen lokale Änderungen mit dem Server abgeglichen werden müssen." %}
+            </p>
+        </div>
+    </div>
+
+    <template x-if="loading">
+        <div class="py-8 text-center text-gray-500">{% trans "Lade Konflikte..." %}</div>
+    </template>
+
+    <template x-if="!loading && items.length === 0">
+        <div class="bg-white border border-gray-200 rounded-md p-6 text-sm text-gray-500 text-center" data-testid="conflict-list-empty">
+            {% trans "Keine ungelösten Konflikte." %}
+        </div>
+    </template>
+
+    <template x-if="!loading && items.length > 0">
+        <div class="bg-white border border-gray-200 rounded-md overflow-hidden divide-y divide-gray-200">
+            <template x-for="item in items" :key="item.pk">
+                <a :href="'/offline/conflicts/' + item.pk + '/'" class="flex items-center justify-between px-4 py-3 hover:bg-gray-50" data-testid="conflict-list-item">
+                    <div>
+                        <span class="text-sm font-medium text-gray-900" x-text="item.documentTypeName || 'Ereignis'"></span>
+                        <span class="ml-2 text-xs text-gray-500" x-text="item.lastEditedAtFmt"></span>
+                    </div>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        {% trans "Konflikt" %}
+                    </span>
+                </a>
+            </template>
+        </div>
+    </template>
+</div>
+
+<script>
+    function conflictList() {
+        return {
+            loading: true,
+            items: [],
+            async load() {
+                try {
+                    if (window.crypto_session && window.crypto_session.ready) {
+                        await window.crypto_session.ready();
+                    }
+                    if (!window.offlineStore) return;
+                    const rows = await window.offlineStore.listConflicts();
+                    this.items = rows.map((r) => {
+                        const data = r.data || {};
+                        let lastEditedAtFmt = "";
+                        if (data.lastEditedAt) {
+                            try {
+                                lastEditedAtFmt = new Date(data.lastEditedAt).toLocaleString("de-DE", {
+                                    dateStyle: "short",
+                                    timeStyle: "short",
+                                });
+                            } catch (_e) {
+                                /* noop */
+                            }
+                        }
+                        return {
+                            pk: r.pk,
+                            documentTypeName: data.documentTypeName || "",
+                            lastEditedAtFmt: lastEditedAtFmt,
+                        };
+                    });
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.error("[conflict-list]", e);
+                } finally {
+                    this.loading = false;
+                }
+            },
+        };
+    }
+</script>
+{% endblock %}

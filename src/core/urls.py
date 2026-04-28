@@ -47,6 +47,12 @@ from core.views.events import (
     EventUpdateView,
 )
 from core.views.handover import HandoverView
+from core.views.offline import (
+    OfflineClientBundleView,
+    OfflineClientDetailView,
+    OfflineConflictListView,
+    OfflineConflictReviewView,
+)
 from core.views.retention import (
     RetentionApproveView,
     RetentionDashboardView,
@@ -160,4 +166,26 @@ urlpatterns = [
     path("api/retention/<uuid:pk>/approve/", RetentionApproveView.as_view(), name="retention_approve"),
     path("api/retention/<uuid:pk>/hold/", RetentionHoldView.as_view(), name="retention_hold"),
     path("api/retention/hold/<uuid:pk>/dismiss/", RetentionDismissHoldView.as_view(), name="retention_dismiss_hold"),
+    # Offline (Streetwork Stage 2)
+    path(
+        "api/offline/bundle/client/<uuid:pk>/",
+        OfflineClientBundleView.as_view(),
+        name="offline_bundle",
+    ),
+    path(
+        "offline/clients/<uuid:pk>/",
+        OfflineClientDetailView.as_view(),
+        name="offline_client_detail",
+    ),
+    # Offline (Streetwork Stage 3) — conflict review UI
+    path(
+        "offline/conflicts/",
+        OfflineConflictListView.as_view(),
+        name="offline_conflict_list",
+    ),
+    path(
+        "offline/conflicts/<uuid:pk>/",
+        OfflineConflictReviewView.as_view(),
+        name="offline_conflict_review",
+    ),
 ]

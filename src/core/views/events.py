@@ -4,7 +4,7 @@ import logging
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.http import Http404
+from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -40,6 +40,77 @@ from core.utils.formatting import format_file_size
 from core.views.mixins import AssistantOrAboveRequiredMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
+
+
+def _wants_json_response(request) -> bool:
+    """Return True if the caller prefers a JSON response (HTMX/fetch).
+
+    Used by :class:`EventUpdateView` to decide whether an optimistic-concurrency
+    conflict should emit a 409 JSON body (Stage 3, Refs #575) or the classic
+    HTML redirect+flash fallback for normal form submissions.
+    """
+    accept = (request.headers.get("Accept") or "").lower()
+    if "application/json" in accept:
+        return True
+    # HTMX requests implicitly want a partial/data response, not a full redirect.
+    if request.headers.get("HX-Request"):
+        return True
+    return False
+
+
+def _filtered_server_data_json(user, event):
+    """Return ``event.data_json`` with fields the user cannot see removed.
+
+    Keeps the conflict-diff honest: the user only ever sees values they could
+    also read via the normal detail view, so the merge UI cannot become a
+    side-channel for restricted content. Encrypted values stay as their
+    marker dicts — the client-side UI shows ``[verschlüsselt]`` for those
+    rather than trying to decrypt.
+    """
+    if not event.data_json:
+        return {}
+    doc_sensitivity = event.document_type.sensitivity
+    field_templates = {
+        dtf.field_template.slug: dtf.field_template
+        for dtf in event.document_type.fields.select_related("field_template")
+    }
+    result = {}
+    for slug, value in event.data_json.items():
+        ft = field_templates.get(slug)
+        field_sensitivity = ft.sensitivity if ft else ""
+        if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
+            continue
+        # File markers — keep metadata but not the file bytes.
+        if isinstance(value, dict) and value.get("__file__"):
+            result[slug] = {"__file__": True, "name": value.get("name", "")}
+            continue
+        result[slug] = safe_decrypt(value, default="") if isinstance(value, dict) else value
+    return result
+
+
+def _conflict_response(user, event, client_expected):
+    """Build the 409-Conflict JSON payload for a stale optimistic-concurrency edit.
+
+    The payload carries enough context for :file:`conflict-resolver.js` to show
+    a side-by-side diff: the current server ``data_json`` (sensitivity-filtered,
+    so an offline edit never surfaces fields the user is not allowed to see),
+    the freshly read ``updated_at`` (which becomes the new
+    ``expected_updated_at`` after the user resolves the conflict), the
+    document-type display name, and the value the client sent — so the UI can
+    label the two sides unambiguously.
+    """
+    return JsonResponse(
+        {
+            "error": "conflict",
+            "server_state": {
+                "data_json": _filtered_server_data_json(user, event),
+                "updated_at": event.updated_at.isoformat() if event.updated_at else None,
+                "document_type_name": event.document_type.name,
+            },
+            "client_expected": client_expected,
+        },
+        status=409,
+    )
 
 
 def _remove_restricted_fields(user, document_type, data_form):
@@ -489,6 +560,15 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             try:
                 update_event(event, request.user, merged, expected_updated_at=expected_updated_at)
             except ValidationError as e:
+                # Stage 3 (#575): JSON/HTMX clients receive a 409 with the
+                # current server state so the client-side conflict resolver
+                # can show a diff. Normal browser requests fall back to the
+                # previous redirect + flash message behaviour.
+                if _wants_json_response(request):
+                    # Refresh the event so we emit the committed server state,
+                    # not the in-memory copy this view started from.
+                    event.refresh_from_db()
+                    return _conflict_response(request.user, event, expected_updated_at)
                 messages.error(request, str(e.message))
                 return redirect("core:event_update", pk=event.pk)
 

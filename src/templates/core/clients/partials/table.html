@@ -10,15 +10,25 @@
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Stufe" %}</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">{% trans "Alter" %}</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">{% trans "Letzter Kontakt" %}</th>
+                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{% trans "Offline" %}</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-gray-200">
             {% for client in clients %}
-            <tr class="hover:bg-gray-50">
+            <tr class="hover:bg-gray-50"
+                x-data="clientRowOffline('{{ client.pk|escapejs }}')"
+                x-init="refresh()"
+                @offline-clients-count.window="refresh()">
                 <td class="px-4 py-3">
                     <a href="{% url 'core:client_detail' client.pk %}" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">
                         {{ client.pseudonym }}
                     </a>
+                    <span x-show="isOffline" x-cloak
+                          class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800"
+                          data-testid="client-row-offline-badge"
+                          title="{% trans 'Lokal verfügbar' %}">
+                        {% trans "Offline" %}
+                    </span>
                 </td>
                 <td class="px-4 py-3">
                     {% include "components/_client_badge.html" with client=client %}
@@ -26,6 +36,17 @@
                 <td class="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">{{ client.get_age_cluster_display }}</td>
                 <td class="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
                     {% if client.last_contact %}{{ client.last_contact|date:"d.m.Y H:i" }}{% else %}–{% endif %}
+                </td>
+                <td class="px-4 py-3 text-right">
+                    <button type="button"
+                            @click.prevent="toggleOffline()"
+                            :disabled="busy"
+                            class="inline-flex items-center text-xs text-gray-600 hover:text-indigo-600 disabled:opacity-50"
+                            data-testid="row-take-offline-btn">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                        <span x-show="!isOffline">{% trans "Mitnehmen" %}</span>
+                        <span x-show="isOffline" x-cloak>{% trans "Entfernen" %}</span>
+                    </button>
                 </td>
             </tr>
             {% endfor %}

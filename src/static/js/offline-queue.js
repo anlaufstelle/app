@@ -114,6 +114,21 @@
                 });
                 if (response.ok) {
                     await _store().deleteRow("queue", record.id);
+                } else if (response.status === 409) {
+                    // Stage 3 (#575) — optimistic concurrency conflict. Do
+                    // NOT retry (the stale token would bounce again); mark
+                    // the queued record as conflict so the conflict-list
+                    // UI can pick it up. The actual merge round-trip goes
+                    // through offline-edit.js, but generic queue entries
+                    // (e.g. from an offline CREATE-then-EDIT roll-up) may
+                    // still hit this branch.
+                    await _store().putEncrypted("queue", {
+                        ...record,
+                        attempts: (record.attempts || 0) + 1,
+                        lastError: "409",
+                        localStatus: "conflict",
+                    });
+                    continue; // try the next queued record, don't halt
                 } else if (response.status >= 500) {
                     // Server hiccup — exponential backoff, keep record
                     const attempts = (record.attempts || 0) + 1;

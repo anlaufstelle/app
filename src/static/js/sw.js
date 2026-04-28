@@ -144,7 +144,22 @@ self.addEventListener("fetch", (event) => {
     }
 
     if (request.headers.get("Accept")?.includes("text/html") || request.headers.get("HX-Request")) {
-        event.respondWith(fetch(request).catch(() => caches.match(request)));
+        // Offline-Fallback für Klientel-Detail: Wenn Netz weg ist, auf die
+        // Offline-Viewer-Seite umleiten, die per JS aus IndexedDB rendert.
+        // Der Viewer liefert "Nicht offline verfügbar", wenn kein Bundle
+        // im Cache liegt — dadurch bleibt die UX konsistent (kein 502).
+        event.respondWith(
+            fetch(request).catch(() => {
+                const clientPk =
+                    self.URL_PATTERNS.extractClientPk &&
+                    self.URL_PATTERNS.extractClientPk(request.url);
+                if (clientPk) {
+                    const offlineUrl = "/offline/clients/" + clientPk + "/";
+                    return Response.redirect(offlineUrl, 302);
+                }
+                return caches.match(request);
+            })
+        );
     }
 });
 
