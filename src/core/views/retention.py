@@ -1,6 +1,6 @@
 """Views for the Retention Dashboard (GDPR retention management)."""
 
-from datetime import date, timedelta
+from datetime import date
 
 from django.http import HttpResponseBadRequest, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -9,111 +9,23 @@ from django.views import View
 
 from core.models import LegalHold, RetentionProposal
 from core.services.retention import (
+    annotate_urgency,
     approve_proposal,
+    build_retention_dashboard_context,
     bulk_approve_proposals,
     bulk_defer_proposals,
     bulk_reject_proposals,
     create_legal_hold,
     dismiss_legal_hold,
-    get_dashboard_proposals,
 )
 from core.views.mixins import LeadOrAdminRequiredMixin
-
-CATEGORY_LABELS = {
-    "anonymous": _("Anonym"),
-    "identified": _("Identifiziert"),
-    "qualified": _("Qualifiziert"),
-    "document_type": _("Dokumenttyp"),
-}
 
 
 class RetentionDashboardView(LeadOrAdminRequiredMixin, View):
     """Retention dashboard showing proposals grouped by category."""
 
     def get(self, request):
-        facility = request.current_facility
-        proposals_by_category = get_dashboard_proposals(facility)
-
-        # Collect active holds for held proposals
-        held_target_ids = set()
-        for proposals in proposals_by_category.values():
-            for p in proposals:
-                if p.status == RetentionProposal.Status.HELD:
-                    held_target_ids.add(p.target_id)
-
-        holds_by_target = {}
-        if held_target_ids:
-            active_holds = LegalHold.objects.filter(
-                facility=facility,
-                target_id__in=held_target_ids,
-                dismissed_at__isnull=True,
-            )
-            for hold in active_holds:
-                holds_by_target[hold.target_id] = hold
-
-        # Attach holds to proposals and compute urgency
-        today = date.today()
-        for proposals in proposals_by_category.values():
-            for p in proposals:
-                p.active_hold = holds_by_target.get(p.target_id)
-                days_until = (p.deletion_due_at - today).days
-                if days_until <= 7:
-                    p.urgency = "red"
-                elif days_until <= 30:
-                    p.urgency = "yellow"
-                else:
-                    p.urgency = "gray"
-
-        # Counts
-        all_proposals = []
-        for proposals in proposals_by_category.values():
-            all_proposals.extend(proposals)
-
-        pending_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.PENDING)
-        held_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.HELD)
-        approved_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.APPROVED)
-        deferred_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.DEFERRED)
-        rejected_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.REJECTED)
-
-        # Facility settings
-        try:
-            settings = facility.settings
-            retention_settings = {
-                "anonymous": settings.retention_anonymous_days,
-                "identified": settings.retention_identified_days,
-                "qualified": settings.retention_qualified_days,
-            }
-        except facility._meta.model.settings.RelatedObjectDoesNotExist:
-            retention_settings = {
-                "anonymous": 90,
-                "identified": 365,
-                "qualified": 3650,
-            }
-
-        # Build category list with labels
-        categories = []
-        for cat_key, proposals in proposals_by_category.items():
-            categories.append(
-                {
-                    "key": cat_key,
-                    "label": CATEGORY_LABELS.get(cat_key, cat_key),
-                    "proposals": proposals,
-                    "count": len(proposals),
-                }
-            )
-
-        context = {
-            "categories": categories,
-            "pending_count": pending_count,
-            "held_count": held_count,
-            "approved_count": approved_count,
-            "deferred_count": deferred_count,
-            "rejected_count": rejected_count,
-            "retention_settings": retention_settings,
-            "today": today,
-            "soon_threshold": today + timedelta(days=7),
-        }
-
+        context = build_retention_dashboard_context(request.current_facility, request.user)
         if request.headers.get("HX-Request"):
             return render(request, "core/retention/partials/dashboard_content.html", context)
         return render(request, "core/retention/dashboard.html", context)
@@ -130,14 +42,7 @@ class RetentionApproveView(LeadOrAdminRequiredMixin, View):
         )
         approve_proposal(proposal, request.user)
 
-        today = date.today()
-        days_until = (proposal.deletion_due_at - today).days
-        if days_until <= 7:
-            proposal.urgency = "red"
-        elif days_until <= 30:
-            proposal.urgency = "yellow"
-        else:
-            proposal.urgency = "gray"
+        annotate_urgency(proposal)
         proposal.active_hold = None
 
         return render(request, "core/retention/partials/proposal_card.html", {"proposal": proposal})
@@ -173,14 +78,7 @@ class RetentionHoldView(LeadOrAdminRequiredMixin, View):
         # Refresh proposal from DB
         proposal.refresh_from_db()
 
-        today = date.today()
-        days_until = (proposal.deletion_due_at - today).days
-        if days_until <= 7:
-            proposal.urgency = "red"
-        elif days_until <= 30:
-            proposal.urgency = "yellow"
-        else:
-            proposal.urgency = "gray"
+        annotate_urgency(proposal)
         proposal.active_hold = hold
 
         return render(request, "core/retention/partials/proposal_card.html", {"proposal": proposal})
@@ -305,14 +203,7 @@ class RetentionDismissHoldView(LeadOrAdminRequiredMixin, View):
 
         if proposal:
             proposal.refresh_from_db()
-            today = date.today()
-            days_until = (proposal.deletion_due_at - today).days
-            if days_until <= 7:
-                proposal.urgency = "red"
-            elif days_until <= 30:
-                proposal.urgency = "yellow"
-            else:
-                proposal.urgency = "gray"
+            annotate_urgency(proposal)
             proposal.active_hold = None
 
         return render(request, "core/retention/partials/proposal_card.html", {"proposal": proposal})
