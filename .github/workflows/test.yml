@@ -77,7 +77,7 @@ jobs:
       - run: cd src && python manage.py check --deploy --settings=anlaufstelle.settings.prod
         env:
           POSTGRES_HOST: localhost
-          SECRET_KEY: ci-check-only-not-a-real-secret
+          DJANGO_SECRET_KEY: ci-check-only-not-a-real-secret
           ENCRYPTION_KEY: P2N8yY4cVt1BmHZSvNrkSfkDYIJwEFcftRmO4bE-nZM=
           ALLOWED_HOSTS: localhost
 

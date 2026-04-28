@@ -195,13 +195,18 @@ class TestEventErstellung:
         page.click("button:has-text('Speichern')")
         page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
 
-        # Detail-Seite prüfen
-        assert page.locator("[role='alert']:has-text('Kontakt wurde dokumentiert.')").first.is_visible()
-        assert page.locator("dd:has-text('E2E-Test Kontakt')").first.is_visible()
-        assert page.locator("dd:has-text('Anonym')").is_visible()
+        # Detail-Seite prüfen — explizite Waits, weil ``wait_for_url`` direkt
+        # nach dem URL-Match weitergeht und die Detail-Sektionen unter Last
+        # noch nicht im DOM stehen müssen (synchrones ``is_visible()`` traf
+        # mehrfach in CI auf ``False``).
+        page.locator("[role='alert']:has-text('Kontakt wurde dokumentiert.')").first.wait_for(
+            state="visible", timeout=5000
+        )
+        page.locator("dd:has-text('E2E-Test Kontakt')").first.wait_for(state="visible", timeout=5000)
+        page.locator("dd:has-text('Anonym')").wait_for(state="visible", timeout=5000)
 
         # EventHistory-Eintrag CREATE
-        assert page.locator("h2:has-text('Änderungshistorie')").is_visible()
+        page.locator("h2:has-text('Änderungshistorie')").wait_for(state="visible", timeout=5000)
 
 
 class TestEventEditAndDelete:

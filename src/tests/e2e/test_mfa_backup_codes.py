@@ -4,7 +4,6 @@ Deckt den kompletten Flow ab: Login → Backup-Code-Eingabe statt TOTP →
 Session ist als verifiziert markiert, User landet auf der Startseite.
 """
 
-import os
 import re
 import subprocess
 import sys
@@ -14,10 +13,14 @@ import pytest
 pytestmark = pytest.mark.e2e
 
 
-def _enable_totp_and_generate_codes(username: str) -> list[str]:
+def _enable_totp_and_generate_codes(username: str, e2e_env) -> list[str]:
     """Django-Shell-Helper: Confirmed TOTPDevice + frische Backup-Codes anlegen.
 
     Gibt die Codes zurück, damit der Test sie im UI eingeben kann.
+
+    ``e2e_env`` aus der Fixture trägt ``E2E_DATABASE_NAME`` für den aktuellen
+    xdist-Worker — sonst landen TOTPDevice und Backup-Codes in der default-
+    DB ``anlaufstelle_e2e`` und kollidieren mit Tests anderer Workers.
     """
     result = subprocess.run(
         [
@@ -35,7 +38,7 @@ def _enable_totp_and_generate_codes(username: str) -> list[str]:
                 "print('|'.join(generate_backup_codes(u)))"
             ),
         ],
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.e2e"},
+        env=e2e_env,
         capture_output=True,
         text=True,
     )
@@ -46,7 +49,7 @@ def _enable_totp_and_generate_codes(username: str) -> list[str]:
     return lines[-1].split("|")
 
 
-def _cleanup_totp(username: str) -> None:
+def _cleanup_totp(username: str, e2e_env) -> None:
     subprocess.run(
         [
             sys.executable,
@@ -62,7 +65,7 @@ def _cleanup_totp(username: str) -> None:
                 "StaticDevice.objects.filter(user=u).delete()"
             ),
         ],
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.e2e"},
+        env=e2e_env,
         capture_output=True,
         text=True,
     )
@@ -72,8 +75,8 @@ class TestZZMFABackupCodeLogin:
     """ZZ-Prefix: wir seeden TOTP in die DB und räumen danach wieder auf; andere
     Tests sollen den ungewöhnlichen Zustand nicht sehen."""
 
-    def test_user_can_login_with_backup_code(self, base_url, browser):
-        codes = _enable_totp_and_generate_codes("lena")
+    def test_user_can_login_with_backup_code(self, base_url, browser, e2e_env):
+        codes = _enable_totp_and_generate_codes("lena", e2e_env)
         try:
             context = browser.new_context(locale="de-DE")
             page = context.new_page()
@@ -98,10 +101,10 @@ class TestZZMFABackupCodeLogin:
             finally:
                 context.close()
         finally:
-            _cleanup_totp("lena")
+            _cleanup_totp("lena", e2e_env)
 
-    def test_backup_codes_settings_page_shows_counter_after_login(self, base_url, browser):
-        codes = _enable_totp_and_generate_codes("thomas")
+    def test_backup_codes_settings_page_shows_counter_after_login(self, base_url, browser, e2e_env):
+        codes = _enable_totp_and_generate_codes("thomas", e2e_env)
         try:
             context = browser.new_context(locale="de-DE")
             page = context.new_page()
@@ -125,15 +128,15 @@ class TestZZMFABackupCodeLogin:
             finally:
                 context.close()
         finally:
-            _cleanup_totp("thomas")
+            _cleanup_totp("thomas", e2e_env)
 
 
 @pytest.mark.smoke
 class TestZZMFASettingsBackupSection:
     """MFA-Settings zeigt Backup-Codes-Sektion, wenn ein TOTP-Device existiert."""
 
-    def test_settings_shows_backup_section_when_totp_enabled(self, base_url, browser):
-        codes = _enable_totp_and_generate_codes("admin")
+    def test_settings_shows_backup_section_when_totp_enabled(self, base_url, browser, e2e_env):
+        codes = _enable_totp_and_generate_codes("admin", e2e_env)
         try:
             context = browser.new_context(locale="de-DE")
             page = context.new_page()
@@ -154,4 +157,4 @@ class TestZZMFASettingsBackupSection:
             finally:
                 context.close()
         finally:
-            _cleanup_totp("admin")
+            _cleanup_totp("admin", e2e_env)

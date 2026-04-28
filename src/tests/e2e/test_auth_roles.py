@@ -126,9 +126,13 @@ class TestAssistantQualifiedClientAccess:
         assert assistant_page.locator("h1").inner_text() == "Stern-42"
 
 
-def _seed_failed_logins_and_check_lock(username, n=10):
-    """Schreibt n LOGIN_FAILED-AuditLog-Einträge für den User und verifiziert Lockout."""
-    import os
+def _seed_failed_logins_and_check_lock(username, e2e_env, n=10):
+    """Schreibt n LOGIN_FAILED-AuditLog-Einträge für den User und verifiziert Lockout.
+
+    ``e2e_env`` (aus der ``e2e_env``-Fixture) trägt ``E2E_DATABASE_NAME`` für den
+    aktuellen xdist-Worker — ohne das landet der manage.py-shell-Aufruf in der
+    default-DB ``anlaufstelle_e2e`` und kollidiert mit Tests auf anderen Workern.
+    """
     import subprocess
     import sys
 
@@ -148,11 +152,38 @@ def _seed_failed_logins_and_check_lock(username, n=10):
                 "print('LOCKED=' + str(is_locked(u)))"
             ),
         ],
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.e2e"},
+        env=e2e_env,
         capture_output=True,
         text=True,
     )
     assert "LOCKED=True" in result.stdout, f"Seed fehlgeschlagen: {result.stdout}\n{result.stderr}"
+
+
+def _clear_lockout_for(usernames, e2e_env):
+    """Setzt LOGIN_FAILED-Zähler per LOGIN_UNLOCK-AuditLog für genannte User zurück.
+
+    AuditLog-Tabelle hat einen ``auditlog_immutable``-DB-Trigger, daher muss der
+    Cleanup über den ``login_lockout.unlock``-Service laufen (schreibt einen
+    UNLOCK-Eintrag, ab dem ``is_locked()`` LOGIN_FAILED-Einträge ignoriert).
+
+    ``e2e_env`` aus der gleichnamigen Fixture sorgt dafür, dass der manage.py-
+    Aufruf gegen die worker-spezifische ``anlaufstelle_e2e[_N]``-DB läuft.
+    """
+    import subprocess
+    import sys
+
+    code = (
+        "from core.models import User; "
+        "from core.services.login_lockout import unlock; "
+        f"users = User.objects.filter(username__in={list(usernames)!r}); "
+        "[unlock(u, unlocked_by=u) for u in users]"
+    )
+    subprocess.run(
+        [sys.executable, "src/manage.py", "shell", "-c", code],
+        env=e2e_env,
+        check=False,
+        capture_output=True,
+    )
 
 
 class TestZZAccountLockout:
@@ -160,9 +191,19 @@ class TestZZAccountLockout:
     AuditLog-Einträge in die Session geschrieben werden und andere Auth-Tests
     auf einen sauberen Zustand angewiesen sind."""
 
-    def test_lockout_blocks_correct_password_login(self, base_url, browser):
+    @pytest.fixture(autouse=True)
+    def _cleanup_lockout_state(self, e2e_env):
+        """Räumt LOGIN_FAILED-Counts für miriam + lena nach jedem Test auf,
+        damit ``_staff_storage_state`` / ``_assistant_storage_state`` und andere
+        Auth-Fixtures sich nicht plötzlich gegen einen gesperrten User
+        einloggen müssen.
+        """
+        yield
+        _clear_lockout_for(["miriam", "lena"], e2e_env)
+
+    def test_lockout_blocks_correct_password_login(self, base_url, browser, e2e_env):
         """10 LOGIN_FAILED → auch korrektes Passwort blockiert, Fehlermeldung sichtbar."""
-        _seed_failed_logins_and_check_lock("miriam", n=10)
+        _seed_failed_logins_and_check_lock("miriam", e2e_env, n=10)
 
         context = browser.new_context(locale="de-DE")
         page = context.new_page()
@@ -182,9 +223,9 @@ class TestZZAccountLockout:
         finally:
             context.close()
 
-    def test_admin_unlock_action_restores_login(self, base_url, browser, authenticated_page):
+    def test_admin_unlock_action_restores_login(self, base_url, browser, authenticated_page, e2e_env):
         """Admin nutzt UserAdmin-Action „Account-Sperre aufheben"; gesperrter User kann wieder einloggen."""
-        _seed_failed_logins_and_check_lock("lena", n=10)
+        _seed_failed_logins_and_check_lock("lena", e2e_env, n=10)
 
         # Admin-Page (authenticated_page ist admin) navigiert zum User-Admin und
         # ruft die Action „unlock_selected_users" auf.

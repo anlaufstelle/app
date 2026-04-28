@@ -666,11 +666,20 @@ document.addEventListener("alpine:init", () => {
         },
     }));
 
-    /** Proposal-Card mit Hold-Form-Toggle (retention/partials/proposal_card.html). */
+    /** Proposal-Card mit Hold-Form-Toggle (retention/partials/proposal_card.html).
+     *
+     * ``notifyBulkChange`` ersetzt das Inline-``$dispatch('retention-bulk-change')``
+     * an der Bulk-Auswahl-Checkbox — Function-Calls mit String-Argumenten sind
+     * im ``@alpinejs/csp``-Build nicht erlaubt, daher muss der Dispatch über
+     * eine Component-Method laufen.
+     */
     Alpine.data("proposalCard", () => ({
         showHoldForm: false,
         toggleHoldForm() {
             this.showHoldForm = !this.showHoldForm;
+        },
+        notifyBulkChange() {
+            this.$dispatch("retention-bulk-change");
         },
     }));
 

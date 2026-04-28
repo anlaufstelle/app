@@ -7,49 +7,60 @@ import pytest
 pytestmark = pytest.mark.e2e
 
 
-def _ensure_proposals(page, base_url):
-    """Create retention proposals via Django shell if none exist."""
+def _ensure_proposals(e2e_env, min_pending=3):
+    """Garantiert mindestens ``min_pending`` pending-RetentionProposals.
+
+    Robust gegen Side-Effects anderer Tests, die proposals approven oder
+    deferren: zählt pending, holt fehlende Anzahl Events ohne existierende
+    Proposal-Verknüpfung und legt für jedes ein neues pending-Proposal an.
+
+    Frühere Implementierung nutzte ``get_or_create(... status__in=[...])`` —
+    ``__in`` ist als Lookup in ``get_or_create`` nicht zuverlässig (Django
+    überträgt die Bedingung in den ``GET``-Filter, aber nicht in den
+    ``CREATE``-Pfad), und unique-Constraints verhinderten Re-Creates für
+    bereits-approved Targets. Folge: bei isolierten Single-File-Runs grün,
+    aber im parallelen ``loadfile``-Scheduling rote Asserts mit
+    ``count >= 2 false``.
+    """
     import subprocess
     import sys
 
+    # ``manage.py shell -c "..."`` akzeptiert keine if/for-Statements,
+    # nur einzelne Ausdrücke. Daher gesamte Logik als List-Comprehension
+    # mit Conditional-Slicing (need=0 → free_events=[], leerer Comprehension).
+    code = (
+        "from core.models import Event, Facility, RetentionProposal; "
+        "from datetime import date, timedelta; "
+        "f = Facility.objects.first(); "
+        "pending = RetentionProposal.objects.filter(facility=f, status='pending').count(); "
+        f"need = max(0, {min_pending} - pending); "
+        "used = set(RetentionProposal.objects.filter(facility=f).values_list('target_id', flat=True)); "
+        "free_events = [e for e in Event.objects.filter(facility=f, is_deleted=False) if e.pk not in used][:need]; "
+        "cats = ['anonymous', 'identified', 'qualified']; "
+        "[RetentionProposal.objects.create("
+        "  facility=f, target_type='Event', target_id=e.pk, "
+        "  deletion_due_at=date.today() + timedelta(days=i*10+5), status='pending', "
+        "  retention_category=cats[i % len(cats)], "
+        "  details={'pseudonym': e.client.pseudonym if e.client else None, "
+        "           'document_type': e.document_type.name if e.document_type else None, "
+        "           'occurred_at': str(e.occurred_at)}) for i, e in enumerate(free_events)]; "
+        "print(f'pending={RetentionProposal.objects.filter(facility=f, status=\"pending\").count()}')"
+    )
     result = subprocess.run(
-        [
-            sys.executable,
-            "src/manage.py",
-            "shell",
-            "-c",
-            (
-                "from core.models import Event, Facility, RetentionProposal; "
-                "from datetime import date, timedelta; "
-                "f = Facility.objects.first(); "
-                "count = RetentionProposal.objects.filter(facility=f, status='pending').count(); "
-                "print(f'existing={count}'); "
-                "events = list(Event.objects.filter(facility=f, is_deleted=False)[:3]) if count < 2 else []; "
-                "[RetentionProposal.objects.get_or_create("
-                "  facility=f, target_type='Event', target_id=e.pk, "
-                "  status__in=['pending', 'held'], "
-                "  defaults={'deletion_due_at': date.today() + timedelta(days=i*10+5), "
-                "  'status': 'pending', 'retention_category': ['anonymous', 'identified', 'qualified'][i], "
-                "  'details': {'pseudonym': e.client.pseudonym if e.client else None, "
-                "  'document_type': e.document_type.name if e.document_type else None, "
-                "  'occurred_at': str(e.occurred_at)}}) "
-                "for i, e in enumerate(events)]; "
-                "print(f'total={RetentionProposal.objects.filter(facility=f, status=\"pending\").count()}')"
-            ),
-        ],
-        env={**__import__("os").environ, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.e2e"},
+        [sys.executable, "src/manage.py", "shell", "-c", code],
+        env=e2e_env,
         capture_output=True,
         text=True,
     )
-    assert "total=" in result.stdout, f"Seed failed: {result.stderr}"
+    assert "pending=" in result.stdout, f"Seed failed: {result.stderr}\n{result.stdout}"
 
 
 class TestRetentionDashboardAccess:
     """Dashboard-Zugriff und Inhalt."""
 
-    def test_lead_can_access_dashboard(self, lead_page, base_url):
+    def test_lead_can_access_dashboard(self, lead_page, base_url, e2e_env):
         """Lead kann das Retention Dashboard aufrufen."""
-        _ensure_proposals(lead_page, base_url)
+        _ensure_proposals(e2e_env)
         page = lead_page
         page.goto(f"{base_url}/retention/")
         page.wait_for_load_state("domcontentloaded")
@@ -58,9 +69,9 @@ class TestRetentionDashboardAccess:
         assert page.locator("text=Ausstehend").first.is_visible()
         assert page.locator("text=Aufbewahrungsfristen").is_visible()
 
-    def test_admin_can_access_dashboard(self, authenticated_page, base_url):
+    def test_admin_can_access_dashboard(self, authenticated_page, base_url, e2e_env):
         """Admin kann das Retention Dashboard aufrufen."""
-        _ensure_proposals(authenticated_page, base_url)
+        _ensure_proposals(e2e_env)
         page = authenticated_page
         page.goto(f"{base_url}/retention/")
         page.wait_for_load_state("domcontentloaded")
@@ -79,9 +90,9 @@ class TestRetentionApproveFlow:
     """Proposal freigeben via HTMX."""
 
     @pytest.mark.smoke
-    def test_approve_proposal(self, authenticated_page, base_url):
+    def test_approve_proposal(self, authenticated_page, base_url, e2e_env):
         """Admin gibt einen Proposal frei — Badge wechselt zu 'Freigegeben'."""
-        _ensure_proposals(authenticated_page, base_url)
+        _ensure_proposals(e2e_env)
         page = authenticated_page
         page.goto(f"{base_url}/retention/")
         page.wait_for_load_state("domcontentloaded")
@@ -104,8 +115,8 @@ class TestRetentionApproveFlow:
 class TestRetentionBulkFlow:
     """Bulk-Actions: Mehrere Löschvorschläge in einem Rutsch bearbeiten."""
 
-    def test_bulk_approve_two_proposals(self, authenticated_page, base_url):
-        _ensure_proposals(authenticated_page, base_url)
+    def test_bulk_approve_two_proposals(self, authenticated_page, base_url, e2e_env):
+        _ensure_proposals(e2e_env)
         page = authenticated_page
         page.goto(f"{base_url}/retention/")
         page.wait_for_load_state("domcontentloaded")
@@ -137,8 +148,8 @@ class TestRetentionBulkFlow:
             timeout=10000,
         )
 
-    def test_select_all_toggles_every_checkbox(self, authenticated_page, base_url):
-        _ensure_proposals(authenticated_page, base_url)
+    def test_select_all_toggles_every_checkbox(self, authenticated_page, base_url, e2e_env):
+        _ensure_proposals(e2e_env)
         page = authenticated_page
         page.goto(f"{base_url}/retention/")
         page.wait_for_load_state("domcontentloaded")
@@ -159,9 +170,9 @@ class TestRetentionBulkFlow:
 class TestRetentionHoldFlow:
     """Legal Hold setzen und aufheben via HTMX."""
 
-    def test_set_hold_on_proposal(self, authenticated_page, base_url):
+    def test_set_hold_on_proposal(self, authenticated_page, base_url, e2e_env):
         """Hold setzen — Badge wechselt zu 'Aufgeschoben'."""
-        _ensure_proposals(authenticated_page, base_url)
+        _ensure_proposals(e2e_env)
         page = authenticated_page
         page.goto(f"{base_url}/retention/")
         page.wait_for_load_state("domcontentloaded")
@@ -186,9 +197,9 @@ class TestRetentionHoldFlow:
         assert page.locator("span:has-text('Aufgeschoben')").count() >= 1
         assert page.locator("text=E2E-Test: Gerichtsverfahren").is_visible()
 
-    def test_dismiss_hold(self, authenticated_page, base_url):
+    def test_dismiss_hold(self, authenticated_page, base_url, e2e_env):
         """Hold aufheben — Badge zurück zu 'Ausstehend'."""
-        _ensure_proposals(authenticated_page, base_url)
+        _ensure_proposals(e2e_env)
         page = authenticated_page
         page.goto(f"{base_url}/retention/")
         page.wait_for_load_state("domcontentloaded")

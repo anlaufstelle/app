@@ -18,7 +18,6 @@ admin-User unverändert sehen.
 """
 
 import base64
-import os
 import re
 import subprocess
 import sys
@@ -43,8 +42,13 @@ def _generate_totp_code(base32_secret: str) -> str:
     return f"{token:06d}"
 
 
-def _cleanup_totp(username: str) -> None:
-    """TOTP-/Static-Devices des Users wieder entfernen."""
+def _cleanup_totp(username: str, e2e_env) -> None:
+    """TOTP-/Static-Devices des Users wieder entfernen.
+
+    ``e2e_env`` aus der Fixture trägt ``E2E_DATABASE_NAME`` für den aktuellen
+    xdist-Worker — sonst greift der Cleanup auf die default-DB statt auf die
+    worker-spezifische.
+    """
     subprocess.run(
         [
             sys.executable,
@@ -60,19 +64,19 @@ def _cleanup_totp(username: str) -> None:
                 "StaticDevice.objects.filter(user=u).delete()"
             ),
         ],
-        env={**os.environ, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.e2e"},
+        env=e2e_env,
         capture_output=True,
         text=True,
     )
 
 
-def _ensure_no_totp(username: str) -> None:
+def _ensure_no_totp(username: str, e2e_env) -> None:
     """Vor dem Setup-Flow sicherstellen, dass der User keine Device hat.
 
     Andere Tests könnten trotz Cleanup Reste hinterlassen; ein Aufruf vor
     dem eigentlichen Test ist billig und macht die Reihenfolge egal.
     """
-    _cleanup_totp(username)
+    _cleanup_totp(username, e2e_env)
 
 
 class TestZZMFASetupFlow:
@@ -81,9 +85,9 @@ class TestZZMFASetupFlow:
     diesen Zwischenstand nicht sehen — siehe auch ``test_mfa_backup_codes``.
     """
 
-    def test_admin_first_time_totp_setup_redirects_to_backup_codes(self, base_url, browser):
+    def test_admin_first_time_totp_setup_redirects_to_backup_codes(self, base_url, browser, e2e_env):
         """Voller First-Time-Setup-Flow: Setup-Seite → Backup-Codes-Seite → Settings."""
-        _ensure_no_totp("admin")
+        _ensure_no_totp("admin", e2e_env)
         try:
             context = browser.new_context(locale="de-DE")
             page = context.new_page()
@@ -140,12 +144,12 @@ class TestZZMFASetupFlow:
             finally:
                 context.close()
         finally:
-            _cleanup_totp("admin")
+            _cleanup_totp("admin", e2e_env)
 
-    def test_setup_with_invalid_token_stays_on_setup_page(self, base_url, browser):
+    def test_setup_with_invalid_token_stays_on_setup_page(self, base_url, browser, e2e_env):
         """Ungültiger TOTP-Code: Setup-Seite bleibt, Fehlermeldung erscheint,
         kein Device wird bestätigt."""
-        _ensure_no_totp("admin")
+        _ensure_no_totp("admin", e2e_env)
         try:
             context = browser.new_context(locale="de-DE")
             page = context.new_page()
@@ -173,4 +177,4 @@ class TestZZMFASetupFlow:
             finally:
                 context.close()
         finally:
-            _cleanup_totp("admin")
+            _cleanup_totp("admin", e2e_env)

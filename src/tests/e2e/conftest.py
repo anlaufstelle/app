@@ -35,6 +35,24 @@ def _get_worker_info(request):
     return 0, "master"
 
 
+def _run_or_die(cmd, env, label):
+    """Subprocess + bei Exit != 0 vollen stdout/stderr in die Exception-Message einbetten.
+
+    pytest captured ``sys.stderr`` von Fixtures, also reicht ein einfacher ``sys.stderr.write``
+    nicht — die Ausgabe taucht im Test-Setup-Error nicht auf. RuntimeError mit komplettem
+    Inhalt im Message-String wird dagegen vollständig im pytest-Traceback gerendert.
+    """
+    result = subprocess.run(cmd, capture_output=True, text=True, env=env)
+    if result.returncode != 0:
+        msg = (
+            f"FAIL: {label} (exit {result.returncode})\n"
+            f"--- STDOUT ---\n{result.stdout}\n"
+            f"--- STDERR ---\n{result.stderr}\n"
+        )
+        raise RuntimeError(msg)
+    return result
+
+
 def _create_e2e_db(python, db_name):
     """E2E-Datenbank erstellen falls nicht vorhanden."""
     subprocess.run(
@@ -123,17 +141,15 @@ def base_url(request, tmp_path_factory):
 
     # E2E-Datenbank erstellen + Migrationen + Seed (pro Worker)
     _create_e2e_db(python, db_name)
-    subprocess.run(
+    _run_or_die(
         [python, "src/manage.py", "migrate", "--run-syncdb"],
-        check=True,
-        capture_output=True,
         env=worker_env,
+        label="migrate --run-syncdb",
     )
-    subprocess.run(
+    _run_or_die(
         [python, "src/manage.py", "seed", "--flush"],
-        check=True,
-        capture_output=True,
         env=worker_env,
+        label="seed --flush",
     )
 
     # Alte gunicorn-Prozesse auf diesem Port beenden

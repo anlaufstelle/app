@@ -124,6 +124,8 @@ pytest-xdist==3.8.0
     # via -r requirements-dev.in
 python-dotenv==1.2.2
     # via -r requirements.in
+python-magic==0.4.27
+    # via -r requirements.in
 python-slugify==8.0.4
     # via pytest-playwright
 qrcode==8.2

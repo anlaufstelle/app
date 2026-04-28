@@ -1,7 +1,7 @@
 {% load i18n %}
 
 <div id="proposal-{{ proposal.pk }}" class="proposal-card bg-surface border-l-4 {% if proposal.urgency == 'red' %}border-red-500{% elif proposal.urgency == 'yellow' %}border-yellow-400{% else %}border-subtle{% endif %} rounded-md p-4 shadow-sm"
-     {% if proposal.status == 'pending' %}x-data="proposalCard"{% endif %}>
+     {% if proposal.status == 'pending' or proposal.status == 'deferred' %}x-data="proposalCard"{% endif %}>
 
     {# Header: status badge + due date #}
     <div class="flex items-center justify-between mb-2">
@@ -10,7 +10,7 @@
             <label class="inline-flex items-center" aria-label="{% trans 'Auswählen' %}">
                 <input type="checkbox" name="proposal_ids" value="{{ proposal.pk }}"
                        data-bulk-proposal
-                       @change="$dispatch('retention-bulk-change')"
+                       @change="notifyBulkChange"
                        class="rounded border-subtle text-accent focus:ring-accent">
             </label>
             {% endif %}

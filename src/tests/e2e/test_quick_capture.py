@@ -264,8 +264,15 @@ class TestAutoSave:
         banner = page.locator("#autosave-restored-banner")
         banner.wait_for(state="visible", timeout=10000)
 
-        page.locator('[data-testid="autosave-discard"]').click()
-        page.wait_for_url(f"{base_url}/events/new/", timeout=5000)
+        # Discard-Handler in autosave.js setzt window.location.href = pathname,
+        # also Page-Reload zur SELBEN URL. ``wait_for_url(target_url)`` erkennt
+        # das nicht als Navigation (Target = aktuelle URL) und kehrt sofort
+        # zurück; nachfolgende ``page.evaluate`` läuft dann während der noch
+        # laufenden Reload-Navigation und scheitert mit
+        # "Execution context was destroyed". ``expect_navigation`` hingegen
+        # synchronisiert auf das ``framenavigated``-Event auch bei Same-URL.
+        with page.expect_navigation(wait_until="domcontentloaded"):
+            page.locator('[data-testid="autosave-discard"]').click()
 
         # Nach dem Discard darf kein Draft mehr existieren
         stored = page.evaluate(self._JS_GET)

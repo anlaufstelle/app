@@ -42,6 +42,10 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # AdminCSPRelaxMiddleware muss VOR CSPMiddleware stehen, damit sie in
+    # Outbound-Reihenfolge den von CSPMiddleware gesetzten Header noch ändern
+    # kann (Django ruft Response-Verarbeitung in umgekehrter Listen-Reihenfolge).
+    "core.middleware.admin_csp_relax.AdminCSPRelaxMiddleware",
     "csp.middleware.CSPMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
