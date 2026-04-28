@@ -93,7 +93,7 @@ Einmalige Backup-Codes als Self-Service-Recovery sind geplant: [Issue #588](http
 
 ### 5. Wie funktioniert der Zeitstrom?
 
-Der Zeitstrom ist die **Startseite** der Anwendung (`/`). Er zeigt einen chronologischen Aktivitäts-Feed für den aktuellen Tag — eine Kombination aus Dashboard, Aktivitätslog und Timeline.
+Der Zeitstrom ist die **Startseite** der Anwendung (`/`). Er zeigt einen chronologischen Aktivitäts-Feed für den aktuellen Tag und ist die zentrale Tagesansicht (früher als separates Dashboard, Aktivitätslog und Timeline getrennt).
 
 #### Welche Daten zeigt der Zeitstrom?
 
@@ -129,24 +129,10 @@ Die rechte Spalte zeigt die **5 dringendsten offenen Arbeitsaufträge** (Status 
 
 Filter-Änderungen (Schicht, Typ, Dokumentationstyp) lösen einen HTMX-Request aus. Nur der Feed-Container wird ersetzt — kein Full-Page-Reload.
 
-#### Was ist Zeitstrom 2.0?
-
-Ein **experimentelles** alternatives UI unter `/zeitstrom-v2/`:
-
-| | Zeitstrom | Zeitstrom 2.0 |
-|---|-----------|---------------|
-| **Darstellung** | Karten-Feed | Tabelle mit Zeilen |
-| **Zeitraum** | Ein Tag (Datumsnavigation) | Alle Ereignisse (Datumsbereich-Filter) |
-| **Primärfilter** | Schicht-Tabs | Volltextsuche (Klientel-Pseudonym) |
-| **Sekundärfilter** | Dokumentationstyp | Dokumentationstyp + Datumsbereich |
-| **Paginierung** | Nein (max. 200) | Ja (50 pro Seite) |
-| **Zweck** | Tagesübersicht / Schichtübergabe | Suche / Audit-Trail |
-
 **Relevante Dateien:**
 - [`src/core/views/zeitstrom.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/zeitstrom.py) — `ZeitstromView`, `ZeitstromFeedPartialView`
 - [`src/core/services/feed.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/feed.py) — `build_feed_items()`, `enrich_events_with_preview()`
 - [`src/core/services/handover.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/handover.py) — `build_handover_summary()`
-- [`src/core/views/zeitstrom_v2.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/zeitstrom_v2.py) — `ZeitstromV2View` (Experiment)
 
 ---
 
