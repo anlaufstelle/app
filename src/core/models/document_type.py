@@ -254,17 +254,13 @@ class FieldTemplate(models.Model):
                 ) from None
         elif self.field_type == ft.BOOLEAN:
             if raw.lower() not in {"true", "false", "1", "0"}:
-                raise ValidationError(
-                    {"default_value": _("Default-Wert muss 'true' oder 'false' sein.")}
-                )
+                raise ValidationError({"default_value": _("Default-Wert muss 'true' oder 'false' sein.")})
         elif self.field_type in (ft.SELECT, ft.MULTI_SELECT):
             active = {o["slug"] for o in (self.options_json or []) if o.get("is_active", True) and "slug" in o}
             values = [v.strip() for v in raw.split(",")] if self.field_type == ft.MULTI_SELECT else [raw]
             for v in values:
                 if v not in active:
-                    raise ValidationError(
-                        {"default_value": _(f"Default-Wert '{v}' ist kein aktiver Options-Slug.")}
-                    )
+                    raise ValidationError({"default_value": _(f"Default-Wert '{v}' ist kein aktiver Options-Slug.")})
 
     _SLUG_RETRY_LIMIT = 3
 

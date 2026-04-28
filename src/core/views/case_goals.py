@@ -9,6 +9,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_FREQUENT
 from core.models import Case
 from core.models.outcome import Milestone, OutcomeGoal
 from core.services.goals import (
@@ -32,7 +33,7 @@ def _goals_context(case):
 class GoalCreateView(StaffRequiredMixin, View):
     """HTMX: create a new OutcomeGoal for a case."""
 
-    @method_decorator(ratelimit(key="user", rate="120/h", method="POST", block=True))
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, case_pk):
         facility = request.current_facility
         case = get_object_or_404(Case, pk=case_pk, facility=facility)
@@ -45,7 +46,7 @@ class GoalCreateView(StaffRequiredMixin, View):
 class GoalUpdateView(StaffRequiredMixin, View):
     """HTMX: update an OutcomeGoal title/description."""
 
-    @method_decorator(ratelimit(key="user", rate="120/h", method="POST", block=True))
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, case_pk, pk):
         facility = request.current_facility
         case = get_object_or_404(Case, pk=case_pk, facility=facility)
@@ -59,7 +60,7 @@ class GoalUpdateView(StaffRequiredMixin, View):
 class GoalToggleView(StaffRequiredMixin, View):
     """HTMX: toggle goal achievement status."""
 
-    @method_decorator(ratelimit(key="user", rate="120/h", method="POST", block=True))
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, case_pk, pk):
         facility = request.current_facility
         case = get_object_or_404(Case, pk=case_pk, facility=facility)
@@ -74,7 +75,7 @@ class GoalToggleView(StaffRequiredMixin, View):
 class MilestoneCreateView(StaffRequiredMixin, View):
     """HTMX: create a new Milestone for a goal."""
 
-    @method_decorator(ratelimit(key="user", rate="120/h", method="POST", block=True))
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, case_pk, goal_pk):
         facility = request.current_facility
         case = get_object_or_404(Case, pk=case_pk, facility=facility)
@@ -88,7 +89,7 @@ class MilestoneCreateView(StaffRequiredMixin, View):
 class MilestoneToggleView(StaffRequiredMixin, View):
     """HTMX: toggle milestone completion."""
 
-    @method_decorator(ratelimit(key="user", rate="120/h", method="POST", block=True))
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, case_pk, pk):
         facility = request.current_facility
         case = get_object_or_404(Case, pk=case_pk, facility=facility)
@@ -100,10 +101,10 @@ class MilestoneToggleView(StaffRequiredMixin, View):
 class MilestoneDeleteView(StaffRequiredMixin, View):
     """HTMX: delete a milestone."""
 
-    @method_decorator(ratelimit(key="user", rate="120/h", method="POST", block=True))
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, case_pk, pk):
         facility = request.current_facility
         case = get_object_or_404(Case, pk=case_pk, facility=facility)
         milestone = get_object_or_404(Milestone, pk=pk, goal__case=case)
-        delete_milestone(milestone)
+        delete_milestone(milestone, request.user)
         return render(request, "core/cases/partials/goals_section.html", _goals_context(case))

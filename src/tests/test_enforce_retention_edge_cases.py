@@ -17,7 +17,7 @@ import pytest
 from django.core.management import call_command
 from django.utils import timezone
 
-from core.models import DocumentType, Event, EventHistory, RetentionProposal
+from core.models import DocumentType, Event, EventHistory
 from core.models.audit import AuditLog
 
 
@@ -63,7 +63,6 @@ class TestProposeMode:
         stdout = StringIO()
         call_command("enforce_retention", "--propose", stdout=stdout)
 
-        proposals = RetentionProposal.objects.filter(facility=facility, target_type="Event")
         # Wenn das Event tatsächlich cut-off-fällig ist, sollte ein Proposal entstehen.
         # Mindestens sollte der Command ohne Fehler durchlaufen sein.
         assert stdout.getvalue() is not None  # Smoke: kein Crash
@@ -73,9 +72,7 @@ class TestProposeMode:
 
 @pytest.mark.django_db
 class TestDocumentTypeRetention:
-    def test_doc_type_retention_soft_deletes_old_events(
-        self, facility, settings_obj, client_identified, staff_user
-    ):
+    def test_doc_type_retention_soft_deletes_old_events(self, facility, settings_obj, client_identified, staff_user):
         """Events mit DocumentType.retention_days werden nach Ablauf soft-deleted."""
         # DocumentType mit retention_days=30
         doc_type = DocumentType.objects.create(
@@ -116,9 +113,7 @@ class TestDocumentTypeRetention:
         assert audit is not None
         assert audit.detail["document_type"] == "Kurzlebig"
 
-    def test_doc_type_retention_respects_legal_hold(
-        self, facility, settings_obj, client_identified, staff_user
-    ):
+    def test_doc_type_retention_respects_legal_hold(self, facility, settings_obj, client_identified, staff_user):
         """Events mit aktivem Legal Hold werden nicht gelöscht, auch wenn Retention abgelaufen."""
         from core.models import LegalHold
 

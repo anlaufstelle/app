@@ -14,15 +14,11 @@ class TestDefaultValueCasting:
     """get_default_initial() castet String nach Feldtyp."""
 
     def test_number(self, facility):
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Dauer", field_type="number", default_value="15"
-        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Dauer", field_type="number", default_value="15")
         assert ft.get_default_initial() == 15
 
     def test_text(self, facility):
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Kurztext", field_type="text", default_value="Hallo"
-        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Kurztext", field_type="text", default_value="Hallo")
         assert ft.get_default_initial() == "Hallo"
 
     def test_textarea(self, facility):
@@ -38,21 +34,15 @@ class TestDefaultValueCasting:
         assert ft.get_default_initial() == date(2026, 1, 15)
 
     def test_time(self, facility):
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Uhrzeit", field_type="time", default_value="09:30"
-        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Uhrzeit", field_type="time", default_value="09:30")
         assert ft.get_default_initial() == time(9, 30)
 
     def test_boolean_true(self, facility):
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Aktiv", field_type="boolean", default_value="true"
-        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Aktiv", field_type="boolean", default_value="true")
         assert ft.get_default_initial() is True
 
     def test_boolean_false(self, facility):
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Aktiv", field_type="boolean", default_value="false"
-        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Aktiv", field_type="boolean", default_value="false")
         assert ft.get_default_initial() is False
 
     def test_multi_select(self, facility):
@@ -70,15 +60,11 @@ class TestDefaultValueCasting:
         assert ft.get_default_initial() == ["a", "b"]
 
     def test_empty_default(self, facility):
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Leer", field_type="number", default_value=""
-        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Leer", field_type="number", default_value="")
         assert ft.get_default_initial() is None
 
     def test_file_type_returns_none(self, facility):
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Datei", field_type="file", default_value=""
-        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Datei", field_type="file", default_value="")
         assert ft.get_default_initial() is None
 
 
@@ -93,9 +79,7 @@ class TestDefaultValueValidation:
         ft.full_clean()
 
     def test_invalid_number_raises(self, facility):
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Dauer-Inv", field_type="number"
-        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Dauer-Inv", field_type="number")
         ft.default_value = "abc"
         with pytest.raises(ValidationError) as exc:
             ft.full_clean()
@@ -174,9 +158,7 @@ class TestDefaultValueInForm:
 
     def test_number_default_in_create(self, facility):
         doc_type = DocumentType.objects.create(facility=facility, name="Kontakt")
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Dauer", field_type="number", default_value="15"
-        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Dauer", field_type="number", default_value="15")
         DocumentTypeField.objects.create(document_type=doc_type, field_template=ft)
 
         form = DynamicEventDataForm(document_type=doc_type, facility=facility)
@@ -185,9 +167,7 @@ class TestDefaultValueInForm:
     def test_initial_data_overrides_default(self, facility):
         """Edit-Flow: bestehender Wert gewinnt gegen default_value."""
         doc_type = DocumentType.objects.create(facility=facility, name="Kontakt")
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Dauer", field_type="number", default_value="15"
-        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Dauer", field_type="number", default_value="15")
         DocumentTypeField.objects.create(document_type=doc_type, field_template=ft)
 
         form = DynamicEventDataForm(
@@ -199,9 +179,7 @@ class TestDefaultValueInForm:
 
     def test_empty_default_no_initial(self, facility):
         doc_type = DocumentType.objects.create(facility=facility, name="Kontakt")
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Dauer", field_type="number", default_value=""
-        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Dauer", field_type="number", default_value="")
         DocumentTypeField.objects.create(document_type=doc_type, field_template=ft)
 
         form = DynamicEventDataForm(document_type=doc_type, facility=facility)
@@ -237,9 +215,7 @@ class TestDefaultValueInForm:
 
     def test_file_no_default_ever(self, facility):
         doc_type = DocumentType.objects.create(facility=facility, name="Kontakt")
-        ft = FieldTemplate.objects.create(
-            facility=facility, name="Datei", field_type="file"
-        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Datei", field_type="file")
         DocumentTypeField.objects.create(document_type=doc_type, field_template=ft)
 
         form = DynamicEventDataForm(document_type=doc_type, facility=facility)

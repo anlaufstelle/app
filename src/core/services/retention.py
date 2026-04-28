@@ -8,6 +8,7 @@ from django.db.utils import IntegrityError
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from core.constants import RETENTION_URGENCY_RED_DAYS, RETENTION_URGENCY_YELLOW_DAYS
 from core.models import AuditLog, LegalHold, RetentionProposal
 
 # Category labels for the dashboard grouping. Lives next to the service
@@ -27,9 +28,9 @@ def _urgency_for(days_until):
     :mod:`core.views.retention` after a status change — the 7/30-day
     thresholds used to live in four places.
     """
-    if days_until <= 7:
+    if days_until <= RETENTION_URGENCY_RED_DAYS:
         return "red"
-    if days_until <= 30:
+    if days_until <= RETENTION_URGENCY_YELLOW_DAYS:
         return "yellow"
     return "gray"
 
