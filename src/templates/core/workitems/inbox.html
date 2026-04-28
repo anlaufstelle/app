@@ -79,7 +79,101 @@
     </div>
 </div>
 
-<div id="inbox-content">
-    {% include "core/workitems/partials/inbox_content.html" %}
+{# Bulk-Edit (Refs #267): Alpine-State für Auswahl und Aktions-Forms #}
+<div
+    x-data="{
+        selected: [],
+        isSelected(id) { return this.selected.includes(id) },
+        toggle(id) {
+            const i = this.selected.indexOf(id);
+            if (i === -1) this.selected.push(id); else this.selected.splice(i, 1);
+        },
+        toggleAll(checked) {
+            const boxes = document.querySelectorAll('input[name=workitem_ids]');
+            this.selected = [];
+            boxes.forEach(b => { b.checked = checked; if (checked) this.selected.push(b.value); });
+        },
+        clear() {
+            this.selected = [];
+            document.querySelectorAll('input[name=workitem_ids]').forEach(b => b.checked = false);
+            const master = document.getElementById('workitem-select-all');
+            if (master) master.checked = false;
+        }
+    }"
+    @workitem-bulk-clear.window="clear()"
+>
+    {# Action-Bar: sichtbar wenn mindestens ein Item ausgewählt #}
+    <div
+        x-show="selected.length > 0"
+        x-cloak
+        class="sticky top-0 z-10 mb-4 flex flex-wrap items-center gap-3 p-3 bg-indigo-50 border border-indigo-200 rounded-md shadow-sm"
+    >
+        <span class="text-sm font-medium text-indigo-900">
+            <span x-text="selected.length"></span>
+            {% trans "ausgewählt" %}
+        </span>
+
+        {# Status #}
+        <form method="post" action="{% url 'core:workitem_bulk_status' %}" class="flex items-center gap-2">
+            {% csrf_token %}
+            <template x-for="id in selected" :key="id">
+                <input type="hidden" name="workitem_ids" :value="id">
+            </template>
+            <label class="sr-only" for="bulk-status">{% trans "Status" %}</label>
+            <select id="bulk-status" name="status" class="text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">{% trans "Status ändern…" %}</option>
+                {% for value, label in status_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">{% trans "Anwenden" %}</button>
+        </form>
+
+        {# Priorität #}
+        <form method="post" action="{% url 'core:workitem_bulk_priority' %}" class="flex items-center gap-2">
+            {% csrf_token %}
+            <template x-for="id in selected" :key="id">
+                <input type="hidden" name="workitem_ids" :value="id">
+            </template>
+            <label class="sr-only" for="bulk-priority">{% trans "Priorität" %}</label>
+            <select id="bulk-priority" name="priority" class="text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">{% trans "Priorität ändern…" %}</option>
+                {% for value, label in priority_choices %}
+                <option value="{{ value }}">{{ label }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">{% trans "Anwenden" %}</button>
+        </form>
+
+        {# Zuweisen #}
+        <form method="post" action="{% url 'core:workitem_bulk_assign' %}" class="flex items-center gap-2">
+            {% csrf_token %}
+            <template x-for="id in selected" :key="id">
+                <input type="hidden" name="workitem_ids" :value="id">
+            </template>
+            <label class="sr-only" for="bulk-assign">{% trans "Zuweisen" %}</label>
+            <select id="bulk-assign" name="assigned_to" class="text-sm rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500">
+                <option value="">{% trans "Zuweisung entfernen" %}</option>
+                {% for u in facility_users %}
+                <option value="{{ u.pk }}">{{ u.get_full_name|default:u.username }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="px-3 py-1.5 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">{% trans "Anwenden" %}</button>
+        </form>
+
+        <button type="button" @click="clear()" class="ml-auto text-sm text-indigo-700 hover:text-indigo-900 underline">{% trans "Auswahl löschen" %}</button>
+    </div>
+
+    {# Select-All-Steuerung oberhalb der Liste #}
+    <div class="flex items-center gap-2 mb-3 text-sm text-gray-600">
+        <input type="checkbox" id="workitem-select-all"
+            class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            @change="toggleAll($event.target.checked)">
+        <label for="workitem-select-all">{% trans "Alle sichtbaren auswählen" %}</label>
+    </div>
+
+    <div id="inbox-content">
+        {% include "core/workitems/partials/inbox_content.html" %}
+    </div>
 </div>
 {% endblock %}

@@ -21,6 +21,64 @@ class DueDatePresentation:
     raw_date: date | None
 
 
+@dataclass(frozen=True)
+class RemindAtPresentation:
+    """Result of the remind-at analysis (Wiedervorlage)."""
+
+    text: str
+    css_class: str
+    raw_date: date
+
+
+def describe_remind_at(
+    remind_at: date | None,
+    *,
+    is_closed: bool = False,
+    today: date | None = None,
+) -> RemindAtPresentation | None:
+    """Describe a Wiedervorlage date as a short badge presentation.
+
+    Returns a badge only when the reminder date has arrived (today or earlier)
+    or is tomorrow; otherwise returns ``None``. Closed WorkItems never produce
+    a badge.
+
+    Args:
+        remind_at: Reminder date (None = no reminder).
+        is_closed: True if the WorkItem is done/dismissed.
+        today: Overridable for tests, default = localdate().
+    """
+    if remind_at is None or is_closed:
+        return None
+
+    if today is None:
+        today = timezone.localdate()
+
+    delta_days = (remind_at - today).days
+
+    if delta_days < 0:
+        return RemindAtPresentation(
+            text=_("Heute fällig"),
+            css_class="bg-orange-100 text-orange-800",
+            raw_date=remind_at,
+        )
+
+    if delta_days == 0:
+        return RemindAtPresentation(
+            text=_("Heute fällig"),
+            css_class="bg-orange-100 text-orange-800",
+            raw_date=remind_at,
+        )
+
+    if delta_days == 1:
+        return RemindAtPresentation(
+            text=_("Morgen fällig"),
+            css_class="bg-yellow-100 text-yellow-800",
+            raw_date=remind_at,
+        )
+
+    return None
+
+
 def describe_due_date(
     due_date: date | None,
     *,

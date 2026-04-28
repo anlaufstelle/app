@@ -17,7 +17,14 @@ from django_ratelimit.decorators import ratelimit
 from core.forms.workitems import WorkItemForm
 from core.models import Client, WorkItem
 from core.models.user import User
-from core.services.workitems import create_workitem, update_workitem, update_workitem_status
+from core.services.workitems import (
+    bulk_assign_workitems,
+    bulk_update_workitem_priority,
+    bulk_update_workitem_status,
+    create_workitem,
+    update_workitem,
+    update_workitem_status,
+)
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -123,6 +130,7 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, View):
             "done_items": done_items,
             "item_type_choices": WorkItem.ItemType.choices,
             "priority_choices": WorkItem.Priority.choices,
+            "status_choices": WorkItem.Status.choices,
             "due_filter_choices": self.DUE_FILTER_CHOICES,
             "facility_users": facility_users,
             "selected_item_type": request.GET.get("item_type", ""),
@@ -209,6 +217,8 @@ class WorkItemCreateView(StaffRequiredMixin, View):
                 description=form.cleaned_data.get("description", ""),
                 priority=form.cleaned_data["priority"],
                 due_date=form.cleaned_data.get("due_date"),
+                remind_at=form.cleaned_data.get("remind_at"),
+                recurrence=form.cleaned_data.get("recurrence") or WorkItem.Recurrence.NONE,
                 assigned_to=form.cleaned_data.get("assigned_to"),
             )
             messages.success(request, _("Aufgabe wurde erstellt."))
@@ -261,6 +271,8 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
                     description=form.cleaned_data.get("description", ""),
                     priority=form.cleaned_data["priority"],
                     due_date=form.cleaned_data.get("due_date"),
+                    remind_at=form.cleaned_data.get("remind_at"),
+                    recurrence=form.cleaned_data.get("recurrence") or WorkItem.Recurrence.NONE,
                     assigned_to=form.cleaned_data.get("assigned_to"),
                 )
             except ValidationError as e:
@@ -288,3 +300,88 @@ class WorkItemDetailView(AssistantOrAboveRequiredMixin, View):
             facility=request.current_facility,
         )
         return render(request, "core/workitems/detail.html", {"workitem": workitem})
+
+
+class _BulkActionMixin(AssistantOrAboveRequiredMixin):
+    """Shared helper for bulk WorkItem actions (Refs #267).
+
+    Subclasses implement ``perform_action(request, workitems)`` which applies the
+    mutation via a service function and returns the processed count. The mixin
+    takes care of scoping to ``request.current_facility`` and rendering the
+    inbox-partial for HTMX responses.
+    """
+
+    def _get_workitem_ids(self, request):
+        ids = request.POST.getlist("workitem_ids") or request.POST.getlist("workitem_ids[]")
+        return [i for i in ids if i]
+
+    def _load_workitems(self, request, ids):
+        return list(
+            WorkItem.objects.filter(
+                pk__in=ids,
+                facility=request.current_facility,
+            )
+        )
+
+    def perform_action(self, request, workitems):  # pragma: no cover - overridden
+        raise NotImplementedError
+
+    def post(self, request):
+        ids = self._get_workitem_ids(request)
+        if not ids:
+            return HttpResponseBadRequest(_("Keine Aufgaben ausgewählt."))
+
+        workitems = self._load_workitems(request, ids)
+        if not workitems:
+            return HttpResponseBadRequest(_("Keine gültigen Aufgaben gefunden."))
+
+        try:
+            count = self.perform_action(request, workitems)
+        except ValueError as exc:
+            return HttpResponseBadRequest(str(exc))
+
+        messages.success(request, _("%(count)d Aufgaben aktualisiert.") % {"count": count})
+
+        if request.headers.get("HX-Request"):
+            response = redirect("core:workitem_inbox")
+            response["HX-Redirect"] = response["Location"]
+            return response
+
+        return redirect("core:workitem_inbox")
+
+
+class WorkItemBulkStatusView(_BulkActionMixin, View):
+    """Bulk-update status for selected WorkItems."""
+
+    def perform_action(self, request, workitems):
+        status = request.POST.get("status", "").strip()
+        if status not in {s.value for s in WorkItem.Status}:
+            raise ValueError(_("Ungültiger Status"))
+        return bulk_update_workitem_status(workitems, request.user, status)
+
+
+class WorkItemBulkPriorityView(_BulkActionMixin, View):
+    """Bulk-update priority for selected WorkItems."""
+
+    def perform_action(self, request, workitems):
+        priority = request.POST.get("priority", "").strip()
+        if priority not in {p.value for p in WorkItem.Priority}:
+            raise ValueError(_("Ungültige Priorität"))
+        return bulk_update_workitem_priority(workitems, request.user, priority)
+
+
+class WorkItemBulkAssignView(_BulkActionMixin, View):
+    """Bulk-assign selected WorkItems (or clear the assignment)."""
+
+    def perform_action(self, request, workitems):
+        assignee_id = request.POST.get("assigned_to", "").strip()
+        assignee = None
+        if assignee_id:
+            try:
+                assignee = User.objects.get(
+                    pk=assignee_id,
+                    facility=request.current_facility,
+                )
+            except (User.DoesNotExist, ValueError, TypeError) as exc:
+                raise ValueError(_("Unbekannte Benutzerin/Benutzer")) from exc
+        return bulk_assign_workitems(workitems, request.user, assignee)

@@ -416,6 +416,92 @@ class TestUpdateWorkItemService:
 
 
 @pytest.mark.django_db
+class TestWorkItemRemindAt:
+    """Tests für Wiedervorlage (remind_at) — getrennt von due_date. Refs #265."""
+
+    def test_workitem_remind_at_stored_separately_from_due_date(self, facility, staff_user):
+        """remind_at und due_date sind unabhängige Felder."""
+        due = datetime.date.today() + datetime.timedelta(days=14)
+        remind = datetime.date.today() + datetime.timedelta(days=3)
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            title="Aufgabe mit Wiedervorlage",
+            status=WorkItem.Status.OPEN,
+            due_date=due,
+            remind_at=remind,
+        )
+        wi.refresh_from_db()
+        assert wi.due_date == due
+        assert wi.remind_at == remind
+        assert wi.due_date != wi.remind_at
+
+    def test_workitem_remind_at_defaults_to_none(self, facility, staff_user):
+        """remind_at ist optional und defaultet auf None."""
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            title="Ohne Wiedervorlage",
+            status=WorkItem.Status.OPEN,
+        )
+        wi.refresh_from_db()
+        assert wi.remind_at is None
+
+    def test_workitem_form_accepts_remind_at(self, client, staff_user, facility):
+        """Das WorkItemForm akzeptiert das remind_at-Feld über POST."""
+        remind = datetime.date.today() + datetime.timedelta(days=5)
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_create"),
+            {
+                "item_type": "task",
+                "title": "Aufgabe mit WV via Form",
+                "priority": "normal",
+                "remind_at": remind.isoformat(),
+                "recurrence": "none",
+            },
+        )
+        assert response.status_code == 302
+        wi = WorkItem.objects.get(title="Aufgabe mit WV via Form")
+        assert wi.remind_at == remind
+
+    def test_workitem_form_remind_at_optional(self, client, staff_user, facility):
+        """Das WorkItemForm akzeptiert das Fehlen von remind_at."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_create"),
+            {
+                "item_type": "task",
+                "title": "Aufgabe ohne WV via Form",
+                "priority": "normal",
+                "recurrence": "none",
+            },
+        )
+        assert response.status_code == 302
+        wi = WorkItem.objects.get(title="Aufgabe ohne WV via Form")
+        assert wi.remind_at is None
+
+    def test_workitem_update_sets_remind_at(self, client, staff_user, workitem_open):
+        """Beim Update lässt sich remind_at setzen, ohne due_date zu berühren."""
+        remind = datetime.date.today() + datetime.timedelta(days=1)
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": workitem_open.pk}),
+            {
+                "item_type": "task",
+                "title": workitem_open.title,
+                "priority": "normal",
+                "remind_at": remind.isoformat(),
+                "recurrence": "none",
+            },
+        )
+        assert response.status_code == 302
+        workitem_open.refresh_from_db()
+        assert workitem_open.remind_at == remind
+        assert workitem_open.due_date is None
+
+
+@pytest.mark.django_db
 class TestOptimisticLockingWorkItem:
     """Tests for optimistic locking on WorkItem updates (Refs #531)."""
 

@@ -71,6 +71,9 @@ from core.views.statistics import (
     StatisticsView,
 )
 from core.views.workitems import (
+    WorkItemBulkAssignView,
+    WorkItemBulkPriorityView,
+    WorkItemBulkStatusView,
     WorkItemCreateView,
     WorkItemDetailView,
     WorkItemInboxView,
@@ -143,6 +146,9 @@ urlpatterns = [
     # WorkItems
     path("workitems/", WorkItemInboxView.as_view(), name="workitem_inbox"),
     path("workitems/new/", WorkItemCreateView.as_view(), name="workitem_create"),
+    path("workitems/bulk-status/", WorkItemBulkStatusView.as_view(), name="workitem_bulk_status"),
+    path("workitems/bulk-priority/", WorkItemBulkPriorityView.as_view(), name="workitem_bulk_priority"),
+    path("workitems/bulk-assign/", WorkItemBulkAssignView.as_view(), name="workitem_bulk_assign"),
     path("workitems/<uuid:pk>/", WorkItemDetailView.as_view(), name="workitem_detail"),
     path("workitems/<uuid:pk>/edit/", WorkItemUpdateView.as_view(), name="workitem_update"),
     # Search

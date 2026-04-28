@@ -81,6 +81,51 @@
                 {% endfor %}
             </div>
 
+            {# Wiedervorlage am #}
+            <div x-data="{
+                setRemindDate(offset) {
+                    const d = new Date();
+                    if (offset === 'tomorrow') {
+                        d.setDate(d.getDate() + 1);
+                    } else if (offset === 'next_friday') {
+                        const day = d.getDay();
+                        const daysUntilNextFriday = ((5 - day + 7) % 7) + 7;
+                        d.setDate(d.getDate() + daysUntilNextFriday);
+                    } else if (offset === '2weeks') {
+                        d.setDate(d.getDate() + 14);
+                    }
+                    const val = d.toISOString().slice(0, 10);
+                    const input = document.getElementById('id_remind_at');
+                    if (input) { input.value = val; input.dispatchEvent(new Event('change')); }
+                }
+            }">
+                <label for="id_remind_at" class="block text-sm font-medium text-gray-700 mb-1">{{ form.remind_at.label }}</label>
+                {{ form.remind_at }}
+                {% if form.remind_at.help_text %}
+                <p class="mt-1 text-xs text-gray-500">{{ form.remind_at.help_text }}</p>
+                {% endif %}
+                <div class="mt-1 flex flex-wrap gap-1">
+                    <button type="button" @click="setRemindDate('tomorrow')" class="px-2 py-0.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded">{% trans "Morgen" %}</button>
+                    <button type="button" @click="setRemindDate('next_friday')" class="px-2 py-0.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded">{% trans "Nächste Woche" %}</button>
+                    <button type="button" @click="setRemindDate('2weeks')" class="px-2 py-0.5 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 rounded">{% trans "In 2 Wochen" %}</button>
+                </div>
+                {% for error in form.remind_at.errors %}
+                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+                {% endfor %}
+            </div>
+
+            {# Wiederholung #}
+            <div>
+                <label for="id_recurrence" class="block text-sm font-medium text-gray-700 mb-1">{{ form.recurrence.label }}</label>
+                {{ form.recurrence }}
+                {% if form.recurrence.help_text %}
+                <p class="mt-1 text-xs text-gray-500">{{ form.recurrence.help_text }}</p>
+                {% endif %}
+                {% for error in form.recurrence.errors %}
+                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+                {% endfor %}
+            </div>
+
             {# Klientel-Autocomplete #}
             <div x-data="{
                 query: '{{ client_pseudonym|default:'' }}',

@@ -87,6 +87,23 @@
                 {% else %}
                 <p class="text-sm text-gray-400">{% trans "Keine Frist" %}</p>
                 {% endif %}
+                {% if workitem.recurrence and workitem.recurrence != "none" %}
+                <p class="mt-1">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800" title="{% trans 'Wiederkehrend' %}">&#x21bb; {% trans "Wiederkehrend:" %} {{ workitem.get_recurrence_display }}</span>
+                </p>
+                {% endif %}
+            </div>
+            <div>
+                <span class="text-xs text-gray-500 uppercase">{% trans "Wiedervorlage am" %}</span>
+                {% if workitem.remind_at %}
+                {% remind_at_info workitem as rai %}
+                {% if rai %}
+                <p class="text-sm font-medium"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ rai.css_class }}">{{ rai.text }}</span></p>
+                {% endif %}
+                <p class="text-xs text-gray-500">{{ workitem.remind_at|date:"d.m.Y" }}</p>
+                {% else %}
+                <p class="text-sm text-gray-400">{% trans "Keine Wiedervorlage" %}</p>
+                {% endif %}
             </div>
             <div>
                 <span class="text-xs text-gray-500 uppercase">{% trans "Erstellt am" %}</span>

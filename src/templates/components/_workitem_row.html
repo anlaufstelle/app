@@ -10,6 +10,13 @@
         {% if ddi %}
         <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[0.65rem] leading-tight font-medium {{ ddi.css_class }}">{{ ddi.text }}</span>
         {% endif %}
+        {% remind_at_info wi as rai %}
+        {% if rai %}
+        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[0.65rem] leading-tight font-medium {{ rai.css_class }}" title="{% trans 'Wiedervorlage' %}">{% trans "WV" %}: {{ rai.text }}</span>
+        {% endif %}
+        {% if wi.recurrence and wi.recurrence != "none" %}
+        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[0.65rem] leading-tight font-medium bg-indigo-100 text-indigo-800" title="{% trans 'Wiederkehrend' %}">&#x21bb; {{ wi.get_recurrence_display }}</span>
+        {% endif %}
         {% if wi.priority == "urgent" %}
         <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[0.65rem] leading-tight font-medium bg-red-100 text-red-800">{% trans "Dringend" %}</span>
         {% elif wi.priority == "important" %}
@@ -21,11 +28,28 @@
 {% else %}
 <div class="bg-white border border-gray-200 rounded-md p-4" id="workitem-{{ wi.pk }}" aria-live="polite">
     <div class="flex items-center justify-between mb-2">
-        <a href="{% url 'core:workitem_detail' pk=wi.pk %}" class="text-sm font-medium text-gray-900 hover:text-indigo-600">{{ wi.title }}</a>
+        <div class="flex items-center gap-2 min-w-0">
+            {% if selectable %}
+            <input type="checkbox"
+                name="workitem_ids"
+                value="{{ wi.pk }}"
+                aria-label="{% trans 'Auswählen' %}"
+                class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                @change="toggle('{{ wi.pk }}')">
+            {% endif %}
+            <a href="{% url 'core:workitem_detail' pk=wi.pk %}" class="text-sm font-medium text-gray-900 hover:text-indigo-600 truncate">{{ wi.title }}</a>
+        </div>
         <div class="flex items-center space-x-2">
             {% due_date_info wi as ddi %}
             {% if ddi %}
             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ ddi.css_class }}">{{ ddi.text }}</span>
+            {% endif %}
+            {% remind_at_info wi as rai %}
+            {% if rai %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ rai.css_class }}" title="{% trans 'Wiedervorlage' %}">{% trans "WV" %}: {{ rai.text }}</span>
+            {% endif %}
+            {% if wi.recurrence and wi.recurrence != "none" %}
+            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800" title="{% trans 'Wiederkehrend' %}">&#x21bb; {{ wi.get_recurrence_display }}</span>
             {% endif %}
             {% if wi.priority == "urgent" %}
             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">{% trans "Dringend" %}</span>

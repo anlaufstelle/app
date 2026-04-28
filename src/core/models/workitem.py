@@ -27,6 +27,13 @@ class WorkItem(models.Model):
         IMPORTANT = "important", _("Wichtig")
         URGENT = "urgent", _("Dringend")
 
+    class Recurrence(models.TextChoices):
+        NONE = "none", _("Keine")
+        WEEKLY = "weekly", _("Wöchentlich")
+        MONTHLY = "monthly", _("Monatlich")
+        QUARTERLY = "quarterly", _("Vierteljährlich")
+        YEARLY = "yearly", _("Jährlich")
+
     objects = FacilityScopedManager()
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -93,6 +100,20 @@ class WorkItem(models.Model):
         blank=True,
         db_index=True,
         verbose_name=_("Zu erledigen bis"),
+    )
+    remind_at = models.DateField(
+        null=True,
+        blank=True,
+        db_index=True,
+        verbose_name=_("Wiedervorlage am"),
+        help_text=_("Optional. Wann soll das Workitem wieder aufpoppen?"),
+    )
+    recurrence = models.CharField(
+        max_length=20,
+        choices=Recurrence.choices,
+        default=Recurrence.NONE,
+        verbose_name=_("Wiederholung"),
+        help_text=_("Bei Erledigung wird automatisch eine Folgeaufgabe mit neuer Frist erstellt."),
     )
 
     class Meta:
