@@ -33,6 +33,8 @@ from django.views.generic import TemplateView
 from django_otp.plugins.otp_totp.models import TOTPDevice
 from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_MUTATION
+
 from core.models import AuditLog
 from core.services.mfa import (
     BACKUP_CODES_COUNT,
@@ -249,6 +251,10 @@ class MFARegenerateBackupCodesView(LoginRequiredMixin, View):
         return redirect("mfa_backup_codes")
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class MFADisableView(LoginRequiredMixin, View):
     """Deaktiviert 2FA für den aktuellen Nutzer, sofern nicht erzwungen."""
 

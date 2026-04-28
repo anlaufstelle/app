@@ -55,6 +55,10 @@ class EpisodeCreateView(StaffRequiredMixin, View):
         return render(request, "core/cases/episode_form.html", context)
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class EpisodeUpdateView(StaffRequiredMixin, View):
     """Edit an existing episode."""
 
@@ -86,6 +90,10 @@ class EpisodeUpdateView(StaffRequiredMixin, View):
         return render(request, "core/cases/episode_form.html", context)
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class EpisodeCloseView(StaffRequiredMixin, View):
     """Close an episode (POST only)."""
 

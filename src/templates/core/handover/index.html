@@ -12,7 +12,7 @@
 {# Datums-Navigation (Design-Pattern wie Zeitstrom) #}
 <div class="flex items-center justify-center gap-4 mb-5">
     <a href="?date={{ prev_date|date:'Y-m-d' }}{% if selected_filter %}&time_filter={{ selected_filter.pk }}{% endif %}" class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
     </a>
     <div class="text-center">
         <span class="font-semibold text-[15px] text-ink">{{ target_date|date:"l, j. F Y" }}</span>
@@ -21,7 +21,7 @@
         {% endif %}
     </div>
     <a href="?date={{ next_date|date:'Y-m-d' }}{% if selected_filter %}&time_filter={{ selected_filter.pk }}{% endif %}" class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink {% if next_date > today %}opacity-30 pointer-events-none{% endif %}">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
     </a>
 </div>
 
@@ -45,7 +45,7 @@
 {# Schicht-Header (Card mit accent-light bg, Design-Pattern) #}
 <div class="bg-accent-light border border-accent-light rounded-[10px] px-5 py-4 mb-5">
     <div class="flex items-center gap-2.5">
-        <svg class="w-4 h-4 text-accent" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0-4-4m4 4-4 4m0 6H4m0 0 4 4m-4-4 4-4"/></svg>
+        <svg aria-hidden="true" class="w-4 h-4 text-accent" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0-4-4m4 4-4 4m0 6H4m0 0 4 4m-4-4 4-4"/></svg>
         <h2 class="font-bold text-[14px] text-accent m-0">{{ summary.shift_label }}</h2>
         <span class="text-[12px] text-accent opacity-80">{{ summary.shift_range }}</span>
     </div>

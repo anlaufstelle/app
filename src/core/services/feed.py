@@ -5,6 +5,8 @@ from datetime import datetime, time, timedelta
 
 from django.db.models import Q
 from django.utils import timezone
+from django.utils.translation import gettext as _
+from django.utils.translation import ngettext
 
 from core.models import Activity, DocumentTypeField, Event, WorkItem
 from core.services.encryption import safe_decrypt
@@ -136,6 +138,15 @@ def _format_preview_value(value, ft):
         return ", ".join(label_map.get(v, str(v)) for v in value)
 
     if isinstance(value, dict):
+        # File-Marker (Stufe A: einzelnes Attachment, Stufe B: Liste mit Versionen)
+        # treten in `data_json` fuer File-Felder auf (siehe services/event.py:250-267).
+        # Sie wuerden sonst als rohes Dict-Repr im Preview landen — Privacy-Leak
+        # (UUIDs sichtbar) und UX-Bug (Refs #670 FND-12).
+        if value.get("__file__"):
+            return _("[Datei]")
+        if value.get("__files__"):
+            count = len(value.get("entries") or [])
+            return ngettext("[%(n)d Datei]", "[%(n)d Dateien]", count) % {"n": count}
         return safe_decrypt(value, default="[verschlüsselt]")
 
     return str(value)

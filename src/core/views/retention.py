@@ -4,9 +4,12 @@ from datetime import date
 
 from django.http import HttpResponseBadRequest, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.views import View
+from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_BULK_ACTION, RATELIMIT_MUTATION
 from core.models import LegalHold, RetentionProposal
 from core.services.retention import (
     annotate_urgency,
@@ -31,6 +34,10 @@ class RetentionDashboardView(LeadOrAdminRequiredMixin, View):
         return render(request, "core/retention/dashboard.html", context)
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class RetentionApproveView(LeadOrAdminRequiredMixin, View):
     """Approve a retention proposal for deletion."""
 
@@ -51,6 +58,10 @@ class RetentionApproveView(LeadOrAdminRequiredMixin, View):
         return HttpResponseNotAllowed(["POST"])
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class RetentionHoldView(LeadOrAdminRequiredMixin, View):
     """Create a legal hold on a retention proposal."""
 
@@ -87,6 +98,10 @@ class RetentionHoldView(LeadOrAdminRequiredMixin, View):
         return HttpResponseNotAllowed(["POST"])
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_BULK_ACTION, method="POST", block=True),
+    name="post",
+)
 class _BulkActionMixin(LeadOrAdminRequiredMixin):
     """Shared helper for bulk actions on retention proposals.
 
@@ -182,6 +197,10 @@ class RetentionBulkRejectView(_BulkActionMixin, View):
     )
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class RetentionDismissHoldView(LeadOrAdminRequiredMixin, View):
     """Dismiss an active legal hold."""
 

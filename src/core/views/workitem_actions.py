@@ -112,6 +112,10 @@ class WorkItemCreateView(StaffRequiredMixin, View):
         return render(request, "core/workitems/form.html", context)
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class WorkItemUpdateView(StaffRequiredMixin, View):
     """Edit a WorkItem."""
 

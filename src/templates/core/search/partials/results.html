@@ -50,7 +50,7 @@
         {% endif %}
     {% else %}
     <div class="text-center py-12 text-ink-muted">
-        <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <svg aria-hidden="true" class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
         <p>{% blocktrans with term=q %}Keine Ergebnisse für „{{ term }}"{% endblocktrans %}</p>
     </div>
     {% endif %}

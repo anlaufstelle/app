@@ -9,7 +9,7 @@
     <h1 class="text-[22px] font-bold text-ink">{% trans "Zeitstrom" %}</h1>
     <div class="hidden md:flex md:flex-wrap gap-2">
         <a href="{% url 'core:event_create' %}" class="inline-flex items-center gap-1.5 bg-accent text-white text-[13px] font-semibold rounded-md px-3.5 py-2">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
             {% trans "Neuer Kontakt" %}
         </a>
         {% if user.is_staff_or_above %}
@@ -28,7 +28,7 @@
 <div class="mb-5 space-y-2">
     {% for ban in active_bans %}
     <div class="flex items-center px-4 py-2.5 bg-ban-soft border border-ban/30 rounded-[10px] text-[13px] text-ban-deep">
-        <svg class="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+        <svg aria-hidden="true" class="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
         <span class="font-semibold">{% trans "Hausverbot:" %}</span>&nbsp;
         {% if ban.client %}
         <a href="{% url 'core:client_detail' pk=ban.client.pk %}" class="font-semibold underline">{{ ban.client.pseudonym }}</a>
@@ -45,7 +45,7 @@
 {# Datums-Navigation (zentriert, Card-Buttons + Heute-Link) #}
 <div class="flex items-center justify-center gap-4 mb-5">
     <a href="?date={{ prev_date|date:'Y-m-d' }}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_filter_id != 'all' %}&time_filter={{ selected_filter_id }}{% endif %}" class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
     </a>
     <div class="text-center">
         <span class="font-semibold text-[15px] text-ink">{{ target_date|date:"l, j. F Y" }}</span>
@@ -54,7 +54,7 @@
         {% endif %}
     </div>
     <a href="?date={{ next_date|date:'Y-m-d' }}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_filter_id != 'all' %}&time_filter={{ selected_filter_id }}{% endif %}" class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink {% if next_date > today %}opacity-30 pointer-events-none{% endif %}">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
     </a>
 </div>
 
@@ -65,7 +65,7 @@
 {% if handover_summary %}
 <details class="mb-5 bg-surface border border-subtle rounded-[10px] overflow-hidden" data-testid="handover-summary">
     <summary class="px-4 py-3 cursor-pointer hover:bg-canvas flex items-center gap-3 flex-wrap">
-        <svg class="w-4 h-4 text-ink-muted flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0-4-4m4 4-4 4m0 6H4m0 0 4 4m-4-4 4-4"/></svg>
+        <svg aria-hidden="true" class="w-4 h-4 text-ink-muted flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0-4-4m4 4-4 4m0 6H4m0 0 4 4m-4-4 4-4"/></svg>
         <span class="text-[13px] font-semibold text-ink-soft">{{ handover_summary.shift_label }} · {{ handover_summary.shift_range }}</span>
         <div class="ml-auto flex items-center gap-3 text-[12px] text-ink-muted">
             <span><b class="text-ink font-mono">{{ handover_summary.stats.events_total }}</b> {% trans "Kontakte" %}</span>
