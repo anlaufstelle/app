@@ -50,6 +50,78 @@ class TestEventAccessPolicyGuard:
         assert not violations, f"Event access policy violations: {violations}"
 
 
+class TestNoInlineScriptBlocksGuard:
+    """Templates dürfen keine Inline-``<script>``-Blöcke enthalten.
+
+    Die produktive CSP ([`base.py:240`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/anlaufstelle/settings/base.py#L240))
+    setzt ``script-src 'self' 'unsafe-eval'`` ohne ``unsafe-inline``.
+    Inline-Scripts werden vom Browser stumm blockiert — genau der Bug
+    aus [#618](https://github.com/tobiasnix/anlaufstelle/issues/618):
+    Alpine-Komponenten, die in einem Inline-Script definiert waren,
+    standen nicht zur Verfügung und Buttons sahen für den Nutzer wie
+    funktionslos aus. Fix: alle JS-Funktionen in eigene Dateien
+    auslagern und per ``<script src="...">`` laden.
+    """
+
+    _TEMPLATES_DIR = Path("src/templates")
+    # Matcht ``<script>`` ohne Attribut direkt nach dem Tag. Rein
+    # ``<script src="…">`` ist erlaubt, weil der Browser die externe
+    # Datei lädt — kein CSP-Konflikt. Auch ``<script defer src>`` etc.
+    # sind erlaubt.
+    _INLINE_SCRIPT = re.compile(r"<script\s*>", re.IGNORECASE)
+
+    def test_no_inline_script_blocks_in_templates(self):
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = []
+        for template_file in self._TEMPLATES_DIR.rglob("*.html"):
+            source = template_file.read_text(errors="ignore")
+            if self._INLINE_SCRIPT.search(source):
+                violations.append(str(template_file.relative_to(self._TEMPLATES_DIR)))
+        assert not violations, (
+            "Diese Templates enthalten Inline-<script>-Blöcke. Die CSP blockt die "
+            "stumm, Alpine-Komponenten werden dadurch unsichtbar kaputt "
+            "(Refs #618). Bitte JS in eigene static/js/*.js-Dateien auslagern "
+            "und via <script src=\"{% static 'js/…' %}\"></script> laden.\n"
+            f"Betroffen: {violations}"
+        )
+
+
+class TestNoMultilineDjangoCommentsGuard:
+    """Django-Inline-Kommentare ``{# ... #}`` dürfen nicht über mehrere Zeilen gehen.
+
+    Der Django-Template-Parser erkennt ``{# ... #}`` nur einzeilig
+    ([Django-Docs](https://docs.djangoproject.com/en/5.1/ref/templates/language/#comments)).
+    Mehrzeilige Formen werden ohne Fehlermeldung als Text ausgegeben und
+    erscheinen im gerenderten HTML — Meldung aus
+    [#618](https://github.com/tobiasnix/anlaufstelle/issues/618): der Kommentartext
+    stand roh zwischen Tabelle und Toast auf der Klientel-Liste. Für
+    mehrzeilige Kommentare ``{% comment %} ... {% endcomment %}`` nutzen —
+    oder den Kommentar ganz weglassen, da Commit-Message und Code-Historie
+    die Begründung ohnehin tragen.
+    """
+
+    _TEMPLATES_DIR = Path("src/templates")
+    _INLINE_COMMENT = re.compile(r"\{#.*?#\}", re.DOTALL)
+
+    def test_no_multiline_django_comments_in_templates(self):
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = []
+        for template_file in self._TEMPLATES_DIR.rglob("*.html"):
+            source = template_file.read_text(errors="ignore")
+            for match in self._INLINE_COMMENT.finditer(source):
+                if "\n" in match.group(0):
+                    line = source[: match.start()].count("\n") + 1
+                    violations.append(f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line}")
+        assert not violations, (
+            "Mehrzeilige ``{# ... #}``-Kommentare werden von Django als Text "
+            "ausgegeben (Refs #618). Bitte ``{% comment %} ... {% endcomment %}`` "
+            "nutzen oder den Kommentar weglassen.\n"
+            f"Betroffen: {violations}"
+        )
+
+
 class TestUserFacingEntryPointGuard:
     """Jede user-facing Route muss irgendwo als ``{% url '<name>' %}`` auftauchen.
 

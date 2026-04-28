@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n core_tags %}
+{% load i18n core_tags static %}
 
 {% block title %}{{ client.pseudonym }} – Anlaufstelle{% endblock %}
 
@@ -213,68 +213,18 @@
 </div>
 
 <div x-show="message" x-cloak x-transition
-     class="fixed bottom-6 right-6 z-50 max-w-sm bg-white border border-gray-200 rounded-md shadow-lg p-4 text-sm"
-     :class="messageType === 'error' ? 'border-red-300 text-red-800' : 'border-green-300 text-green-800'"
+     role="status"
+     aria-live="polite"
+     class="fixed bottom-6 right-6 z-50 max-w-sm border-2 rounded-md shadow-lg p-4 text-sm flex items-start gap-3"
+     :class="messageType === 'error' ? 'border-red-400 bg-red-50 text-red-800' : 'border-green-500 bg-green-50 text-green-900'"
      data-testid="offline-toast">
-    <span x-text="message"></span>
+    <svg x-show="messageType !== 'error'" class="w-5 h-5 flex-shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+    <svg x-show="messageType === 'error'" x-cloak class="w-5 h-5 flex-shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+    <span x-text="message" class="flex-1 font-medium"></span>
 </div>
 
-<script>
-    function offlineClientBadge(pk) {
-        return {
-            isOffline: false,
-            busy: false,
-            message: "",
-            messageType: "info",
-            expiresAtDisplay: "",
-            async refresh() {
-                if (!window.offlineClient) return;
-                try {
-                    this.isOffline = await window.offlineClient.isClientOffline(pk);
-                    if (this.isOffline) {
-                        const cached = await window.offlineClient.getOfflineClient(pk);
-                        if (cached && cached.expiresAt) {
-                            const exp = new Date(cached.expiresAt);
-                            this.expiresAtDisplay = exp.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
-                        }
-                    } else {
-                        this.expiresAtDisplay = "";
-                    }
-                } catch (_e) {
-                    this.isOffline = false;
-                }
-            },
-            async toggleOffline() {
-                if (this.busy) return;
-                this.busy = true;
-                this.message = "";
-                try {
-                    if (this.isOffline) {
-                        await window.offlineClient.removeClientFromOffline(pk);
-                        this.showMessage("Aus Offline-Cache entfernt.", "info");
-                    } else {
-                        await window.offlineClient.takeClientOffline(pk);
-                        this.showMessage("Klientel ist jetzt offline verfügbar.", "info");
-                    }
-                    await this.refresh();
-                } catch (e) {
-                    if (e && e.name === "OfflineLimitError") {
-                        this.showMessage(e.message, "error");
-                    } else if (e && e.name === "NoSessionKeyError") {
-                        this.showMessage("Offline-Schlüssel nicht aktiv. Bitte neu anmelden.", "error");
-                    } else {
-                        this.showMessage("Offline-Mitnahme fehlgeschlagen. Bitte erneut versuchen.", "error");
-                    }
-                } finally {
-                    this.busy = false;
-                }
-            },
-            showMessage(text, type) {
-                this.message = text;
-                this.messageType = type;
-                setTimeout(() => { this.message = ""; }, 4000);
-            },
-        };
-    }
-</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'js/offline-client-badge.js' %}"></script>
 {% endblock %}

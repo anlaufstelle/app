@@ -203,11 +203,6 @@
                 </p>
             </div>
 
-            {# Fall-Zuordnung (optional) — Auswahl ist auf die offenen Fälle
-               des ausgewählten Klientels beschränkt (Refs #620). Ohne
-               Klientel ist das Dropdown ausgeblendet, weil ein anonymer
-               Kontakt nicht an einen klientelbezogenen Fall gehängt werden
-               darf und service-seitig ohnehin scheitern würde. #}
             <div x-show="selectedId && clientCases.length > 0" x-cloak>
                 <label for="id_case" class="block text-sm font-medium text-gray-700 mb-1">{% trans "Fall" %}</label>
                 <select name="case" id="id_case" x-model="selectedCaseId"
