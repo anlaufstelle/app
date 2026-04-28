@@ -214,14 +214,16 @@ class DynamicEventDataForm(forms.Form):
                 if allowed and ext not in allowed:
                     self.add_error(
                         field_name,
-                        _(f"Dateityp .{ext} nicht erlaubt. Erlaubt: {', '.join(sorted(allowed))}"),
+                        _("Dateityp .%(ext)s nicht erlaubt. Erlaubt: %(allowed)s")
+                        % {"ext": ext, "allowed": ", ".join(sorted(allowed))},
                     )
                 if uploaded.size > max_bytes:
                     self.add_error(
                         field_name,
-                        _(
-                            f"Datei zu gro\u00df ({uploaded.size // (1024 * 1024)} MB)."
-                            f" Maximum: {facility_settings.max_file_size_mb} MB"
-                        ),
+                        _("Datei zu gro\u00df (%(size)d MB). Maximum: %(max)d MB")
+                        % {
+                            "size": uploaded.size // (1024 * 1024),
+                            "max": facility_settings.max_file_size_mb,
+                        },
                     )
         return cleaned
