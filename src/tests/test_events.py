@@ -1031,11 +1031,11 @@ class TestEventAttachmentAtomicity:
         )
         uploaded = SimpleUploadedFile("test.pdf", pdf_bytes, content_type="application/pdf")
 
-        # Die Referenz, die der View tatsächlich aufruft, liegt in
-        # ``core.views.events.store_encrypted_file`` (Import-Alias, siehe
-        # :file:`src/core/views/events.py`). Dort patchen — nicht im Service-Modul.
+        # ``store_encrypted_file`` wird jetzt aus ``core.services.event.
+        # attach_files_to_new_event`` heraus gerufen — den Lazy-Import-Alias
+        # in dem Service-Modul patchen, damit der Mock greift.
         with patch(
-            "core.views.events.store_encrypted_file",
+            "core.services.file_vault.store_encrypted_file",
             side_effect=RuntimeError("Simulierter Fernet-Fail"),
         ):
             with pytest.raises(RuntimeError, match="Simulierter Fernet-Fail"):
