@@ -7,11 +7,11 @@ RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
 # Stage 2: Compile Tailwind CSS
 FROM node:20-alpine AS node
 WORKDIR /build
-COPY package.json tailwind.config.js ./
+COPY package.json package-lock.json tailwind.config.js ./
 COPY src/templates/ src/templates/
 COPY src/core/ src/core/
 COPY src/static/css/input.css src/static/css/input.css
-RUN npm install && npx tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --minify
+RUN npm ci && npx tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --minify
 
 # Stage 3: Runtime
 FROM python:3.13-slim AS final

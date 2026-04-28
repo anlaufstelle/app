@@ -30,8 +30,12 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
       - run: pip install -r requirements-dev.txt
-      - run: npm install
+      - run: npm ci
       - run: npx tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --minify
       - run: cd src && python manage.py collectstatic --noinput
         env:
