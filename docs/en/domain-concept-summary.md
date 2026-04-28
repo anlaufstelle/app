@@ -80,7 +80,8 @@ Anlaufstelle processes social data of highly vulnerable people. Privacy is not a
 - **Retention periods.** Configurable per contact level and documentation type. Anonymous contacts are aggregated after 12 months (counts kept, individual records deleted). Identified contacts are deleted after a configurable period (e.g. 36 months after last contact).
 - **Deletion requests.** Deletion of qualified data requires a four-eyes approval (two authorized users).
 - **Audit log.** An append-only, immutable log records all security-relevant actions: data access, modifications, deletions, login attempts, and exports.
-- **Facility scoping.** Every query filters on `facility_id`, enforced by middleware. No cross-facility data leakage is possible.
+- **Facility scoping.** Every query filters on `facility_id`, enforced by middleware. Since v0.10, PostgreSQL Row Level Security provides defense-in-depth on all facility-scoped tables, with session-variable-driven policies that enforce the tenant boundary at the database layer itself.
+- **Two-factor authentication.** Since v0.10, TOTP-based 2FA is available and can be enforced per user or facility-wide.
 - **GDPR compliance.** Data subject rights (access, rectification, deletion, portability) are implemented as system functions. GDPR documentation templates (processing register, DPIA, DPA) are on the roadmap.
 
 ## Role Model
@@ -106,7 +107,21 @@ Access is not purely role-based but context-dependent: what a user can see also 
 - **Deployment:** Single `docker compose up` on a VPS, local server, or Raspberry Pi. Minimum: 1 vCPU, 1 GB RAM, 10 GB storage.
 - **Availability:** 99% target. Health-check endpoint at `/health/` for monitoring integration.
 
+## v0.10 Additions
+
+Release v0.10.0 (2026-04-19) extends the domain concept with several capabilities that sharpen the low-threshold fit and strengthen the privacy architecture. Configuration details live in the [admin guide](../admin-guide.md); this section summarizes the conceptual intent.
+
+- **Offline mode (M6A).** Street work teams frequently operate without connectivity. An optional offline mode provides a client-side capture and read cache encrypted with AES-GCM-256. The encryption key is derived from the user password via PBKDF2, lives only in browser memory, and is destroyed on logout -- no plaintext cache ever touches disk.
+- **File vault.** Attachments on events are no longer stored in the clear. They are scanned by ClamAV before acceptance and encrypted at rest, extending field-level encryption to binary material.
+- **Two-factor authentication.** TOTP-based second factor, configurable per user or enforced facility-wide, hardens login for facilities handling qualified data.
+- **Fuzzy search.** Pseudonyms are often misremembered or misspelled. A typo-tolerant search based on PostgreSQL `pg_trgm` trigrams, with a per-facility similarity threshold, helps staff find known persons without resorting to broader disclosures.
+- **Row Level Security.** PostgreSQL RLS policies on sixteen facility-scoped tables add a database-level safety net beneath the middleware filter. Session variables carry the current facility identity into the database, so even a bypassed ORM layer cannot cross tenants.
+- **Optimistic locking.** Client, Case, WorkItem, Settings, and Event records use version counters to prevent silent overwrites when two users edit the same record concurrently -- a realistic scenario in shift-based work.
+- **Retention dashboard and legal hold.** The automated retention workflow gains a review surface: leads bulk approve, defer, or reject deletion proposals. A Legal Hold flag excludes individual records from deletion when investigations or disputes require preservation. K-anonymization is available as an alternative to hard deletion, preserving statistics while removing identifying detail.
+- **Quick templates.** Admins maintain pre-filled event templates for recurring situations; templates are filtered by the user's role and the sensitivity of their fields so that assistants never see templates containing qualified-level content.
+- **Token invite flow.** New users receive a one-time token link instead of a plaintext initial password. Invitees choose their own password on first use, closing a long-standing onboarding weak spot.
+
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.9.0 -->
-<!-- translation-date: 2026-03-28 -->
+<!-- translation-version: v0.10.0 -->
+<!-- translation-date: 2026-04-19 -->
 <!-- source-hash: cd5148b -->

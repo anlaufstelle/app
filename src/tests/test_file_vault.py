@@ -560,9 +560,7 @@ class TestEventAttachmentAtomicity:
     alte Datei nicht gelöscht werden.
     """
 
-    def test_create_rolls_back_event_when_file_store_fails(
-        self, client, staff_user, facility, doc_type_with_file
-    ):
+    def test_create_rolls_back_event_when_file_store_fails(self, client, staff_user, facility, doc_type_with_file):
         """Virus/Upload-Fehler im Create-Pfad rollt das Event zurück."""
         dt, _, _ = doc_type_with_file
         Settings.objects.get_or_create(facility=facility)

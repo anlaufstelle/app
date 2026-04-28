@@ -73,7 +73,8 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         device = _get_unconfirmed_device(self.request.user)
         context["qr_data_url"] = _totp_png_data_url(device)
-        context["secret"] = device.bin_key.hex()  # Hex-Darstellung des Secrets als Fallback-Anzeige.
+        # Authenticator-Apps (FreeOTP+, Google Authenticator, …) erwarten Base32 (RFC 6238/3548).
+        context["secret"] = base64.b32encode(device.bin_key).decode("ascii").rstrip("=")
         context["issuer"] = django_settings.OTP_TOTP_ISSUER
         return context
 

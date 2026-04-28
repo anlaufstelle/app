@@ -16,6 +16,9 @@ Betriebshandbuch fuer Anlaufstelle. Ergaenzt das [Admin-Handbuch](admin-guide.md
 6. [Notfall-Prozeduren](#6-notfall-prozeduren)
 7. [ClamAV-Virenscan](#7-clamav-virenscan)
 8. [Dependencies aktualisieren](#8-dependencies-aktualisieren)
+9. [Row Level Security (RLS)](#9-row-level-security-rls)
+10. [Invite-Token-Hygiene](#10-invite-token-hygiene)
+11. [Statistics Materialized View](#11-statistics-materialized-view)
 
 ---
 
@@ -146,9 +149,11 @@ curl -sf https://$DOMAIN/health/
 
 | Job | Empfohlene Zeit | Zweck |
 |-----|----------------|-------|
+| `backup.sh` | Taeglich 02:00 | Verschluesseltes DB-Backup mit Rotation |
 | `enforce_retention` | Taeglich 03:00 | Abgelaufene Events soft-loeschen, Clients anonymisieren |
 | `create_statistics_snapshots` | Monatlich 1. Tag 04:00 | Monats-Aggregate sichern bevor Events geloescht werden |
-| `backup.sh` | Taeglich 02:00 | Verschluesseltes DB-Backup mit Rotation |
+| `refresh_statistics_view` | Stuendlich :15 | Materialized View `core_statistics_event_flat` aktualisieren (Statistik-Dashboard) |
+| Invite-Token-Audit | Woechentlich So 05:00 | Verwaiste Invite-User-Konten aufspueren (siehe [10](#10-invite-token-hygiene)) |
 | Health-Check | Alle 5 Minuten | Verfuegbarkeit pruefen |
 
 ### 3.2 Crontab-Eintraege
@@ -166,11 +171,17 @@ curl -sf https://$DOMAIN/health/
 # Statistik-Snapshots (monatlich am 1. um 04:00)
 0 4 1 * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py create_statistics_snapshots >> /var/log/anlaufstelle-snapshots.log 2>&1
 
+# Materialized-View-Refresh (stuendlich zur 15. Minute, Details siehe Abschnitt 11)
+15 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py refresh_statistics_view >> /var/log/anlaufstelle-mv.log 2>&1
+
+# Invite-Token-Audit (woechentlich So 05:00, Details siehe Abschnitt 10)
+0 5 * * 0 cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T db psql -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT username, email, date_joined FROM core_user WHERE last_login IS NULL AND NOT (password LIKE 'pbkdf2_%') AND date_joined < now() - interval '7 days';" >> /var/log/anlaufstelle-invites.log 2>&1
+
 # Health-Check (alle 5 Minuten)
 */5 * * * * curl -sf https://DOMAIN/health/ > /dev/null || echo "Anlaufstelle health check failed at $(date)" >> /var/log/anlaufstelle-health.log
 ```
 
-**Reihenfolge beachten:** Backup (02:00) → Retention (03:00) → Snapshots (04:00). Backup muss vor Retention laufen, damit geloeschte Daten im Backup enthalten sind.
+**Reihenfolge beachten:** Backup (02:00) → Retention (03:00) → Snapshots (04:00, monatlich) → MV-Refresh (stuendlich). Backup muss vor Retention laufen, damit geloeschte Daten im Backup enthalten sind. Der MV-Refresh nutzt `CONCURRENTLY` und blockiert laufende Reader nicht.
 
 ### 3.3 Manuelle Ausfuehrung
 
@@ -595,6 +606,194 @@ Job CVEs, folgendes Vorgehen:
 
 ---
 
+## 9. Row Level Security (RLS)
+
+Seit v0.10.0 sind **18 facility-gescopte Tabellen** per PostgreSQL-RLS gegen
+Cross-Facility-Leaks abgesichert (Defense-in-Depth unterhalb der Django-
+Scoping-Schicht). Jede Policy vergleicht `facility_id` gegen die Session-
+Variable `app.current_facility_id`, die von der
+[`FacilityScopeMiddleware`](../src/core/middleware/facility_scope.py) pro
+Request via `set_config(..., is_local=false)` gesetzt wird.
+
+**Fail-closed:** Ist die Variable nicht gesetzt oder leer (`NULL`),
+liefern die Policies **keine Zeilen** — auch nicht fuer den Tabellen-
+eigentuemer (`FORCE ROW LEVEL SECURITY`). Bypass nur fuer Superuser-DB-
+Rollen; der Django-DB-User darf deshalb in Produktion **kein** Superuser
+sein.
+
+### 9.1 Symptome eines RLS-Problems
+
+- UI zeigt leere Listen, obwohl in der DB Zeilen vorhanden sind.
+- Queries via ORM liefern plotzlich 0 Rows.
+- In den Logs tauchen keine Exceptions auf — RLS filtert silent.
+- `audit`-Tabellen bleiben leer fuer neue Facility-Zuweisungen.
+
+### 9.2 Diagnose in `psql`
+
+```sql
+-- Aktuelle Session-Variable pruefen (NULL = Middleware hat nicht gesetzt)
+SELECT current_setting('app.current_facility_id', true);
+
+-- Liste aller RLS-aktivierten Tabellen
+SELECT relname, relrowsecurity, relforcerowsecurity
+FROM pg_class
+WHERE relname LIKE 'core_%' AND relrowsecurity;
+
+-- Policies einer Tabelle anzeigen
+SELECT polname, polcmd, pg_get_expr(polqual, polrelid) AS using_clause
+FROM pg_policy
+WHERE polrelid = 'core_client'::regclass;
+```
+
+### 9.3 Manuelle Debug-Queries mit Facility-Kontext
+
+Einzelne Debug-Queries gegen die DB ausfuehren, **ohne** RLS zu umgehen —
+gesetzt wird nur fuer die laufende Transaktion:
+
+```sql
+BEGIN;
+SET LOCAL app.current_facility_id = '<facility-uuid-oder-pk>';
+SELECT count(*) FROM core_client;
+-- ... weitere Queries ...
+COMMIT;  -- oder ROLLBACK, SET LOCAL endet mit der Transaktion
+```
+
+**Vorsicht:** Niemals `SET app.current_facility_id` (ohne `LOCAL`) in
+einer Shared-Admin-Connection verwenden — der Wert bleibt sonst fuer
+nachfolgende Queries dieser Session gueltig.
+
+### 9.4 Haeufige Ursachen
+
+| Befund | Ursache | Fix |
+|--------|---------|-----|
+| `current_setting(...)` liefert `NULL` | Request kam ohne Auth-User durch (z.B. Management-Command, Cron) | Bewusstes Setzen via `set_config` oder `SET LOCAL` vor Query |
+| Variable ist gesetzt, aber Liste trotzdem leer | User ist auf falsche Facility gescopt | `SELECT facility_id FROM core_user WHERE id=<user_id>` pruefen |
+| Migration `0047` nicht angewandt | `showmigrations core` zeigt `[ ]` | `python manage.py migrate core 0047` |
+| Admin-Query ueber `./manage.py shell` liefert 0 Rows | Shell-Session setzt die Variable nicht | Vor Queries `connection.cursor().execute("SET app.current_facility_id = %s", [fid])` |
+
+Refs [#542](https://github.com/tobiasnix/anlaufstelle/issues/542),
+[#586](https://github.com/tobiasnix/anlaufstelle/issues/586).
+
+---
+
+## 10. Invite-Token-Hygiene
+
+Der Invite-Flow ([`src/core/services/invite.py`](../src/core/services/invite.py))
+nutzt Djangos `default_token_generator` — **keine** persistente Token-Tabelle.
+Der Setup-Link reitet auf `password_reset_confirm` und ist an
+`PASSWORD_RESET_TIMEOUT` (Default: 3 Tage) gebunden. Nach Ablauf wird der
+Token vom Signer stillschweigend abgelehnt; es gibt **keine** Datenbank-
+eintraege, die aufzuraeumen waeren.
+
+**Was stattdessen bereinigt werden muss:** User-Konten, die per Invite
+angelegt wurden und deren Empfaenger den Link nie einloeste — diese Konten
+bleiben mit unusable Password liegen.
+
+### 10.1 Stale Invite-User identifizieren
+
+```sql
+-- Alle User-Konten, die nie eingeloggt waren und kein nutzbares Passwort
+-- gesetzt haben, aelter als 7 Tage. Ein Management-Command existiert
+-- bewusst nicht — manuelle Sichtung vor dem Loeschen ist Pflicht
+-- (DSGVO Art. 6 / 17).
+SELECT id, username, email, date_joined, facility_id
+FROM core_user
+WHERE last_login IS NULL
+  AND NOT (password LIKE 'pbkdf2_%')  -- unusable = set_unusable_password()
+  AND date_joined < now() - interval '7 days'
+ORDER BY date_joined;
+```
+
+### 10.2 Setup-Link erneut versenden
+
+```bash
+# Django-Shell: neuen Invite-Link an einen bestehenden User senden
+docker compose -f docker-compose.prod.yml exec web \
+  python manage.py shell -c "
+from core.models import User
+from core.services.invite import send_invite_email
+send_invite_email(User.objects.get(username='<username>'))
+"
+```
+
+### 10.3 Verwaiste Konten loeschen
+
+Nach Ruecksprache mit der Einrichtungs-Leitung:
+
+```bash
+docker compose -f docker-compose.prod.yml exec web \
+  python manage.py shell -c "
+from core.models import User
+User.objects.filter(username='<username>').delete()
+"
+```
+
+**Cron-Empfehlung:** Wochen-Audit als reine Report-Query (siehe Abschnitt
+[3.2](#32-crontab-eintraege)) — kein automatisches Loeschen, da ein nicht
+zugestellter Invite auch ein Mail-Problem sein kann.
+
+Refs [#528](https://github.com/tobiasnix/anlaufstelle/issues/528).
+
+---
+
+## 11. Statistics Materialized View
+
+Seit v0.10.0 aggregiert die Materialized View `core_statistics_event_flat`
+alle Event-Fakten fuer das Statistik-Dashboard vor. Der Refresh laeuft per
+Management-Command und nutzt `REFRESH MATERIALIZED VIEW CONCURRENTLY`, damit
+laufende Leser nicht blockiert werden
+([`refresh_statistics_view.py`](../src/core/management/commands/refresh_statistics_view.py)).
+
+### 11.1 Manueller Refresh
+
+```bash
+# Concurrent Refresh (Default — non-blocking)
+docker compose -f docker-compose.prod.yml exec web \
+  python manage.py refresh_statistics_view
+
+# Blocking Refresh erzwingen (fallback ohne UNIQUE-Index)
+docker compose -f docker-compose.prod.yml exec web \
+  python manage.py refresh_statistics_view --no-concurrent
+```
+
+Faellt `CONCURRENTLY` fehl (z.B. weil der UNIQUE-Index nach einer
+Schema-Migration fehlt), logged das Command eine Warnung und wiederholt
+den Refresh ohne `CONCURRENTLY` — die View bleibt also konsistent, aber
+Reader blockieren fuer die Dauer des Refreshs.
+
+### 11.2 Cron-Empfehlung
+
+Stuendlich zur 15. Minute (siehe [3.2](#32-crontab-eintraege)). Bei hoher
+Event-Frequenz auf alle 15 Minuten verdichtbar; bei low-traffic auch
+alle 6 Stunden ausreichend. Das Dashboard toleriert leichten Staleness.
+
+### 11.3 Abgrenzung zu Snapshots
+
+| Artefakt | Zweck | Befehl | Frequenz |
+|----------|-------|--------|----------|
+| `core_statistics_event_flat` (MV) | Aktuelle Laufzeit-Aggregate fuer Dashboard | `refresh_statistics_view` | Stuendlich |
+| `core_statisticssnapshot` (Tabelle) | Persistente Monats-Aggregate (ueberdauert Event-Retention) | `create_statistics_snapshots` | Monatlich |
+
+Beide Jobs sind unabhaengig — Snapshots bleiben auch ohne MV korrekt,
+die MV kann auch ohne Snapshots refreshed werden.
+
+### 11.4 Health-Check
+
+```sql
+-- Letzten Refresh-Zeitpunkt nachsehen
+SELECT schemaname, matviewname, last_refresh
+FROM pg_stat_user_tables
+JOIN pg_matviews ON relname = matviewname
+WHERE matviewname = 'core_statistics_event_flat';
+
+-- Zeilenzahl pruefen (sollte ungefaehr core_event count entsprechen)
+SELECT count(*) FROM core_statistics_event_flat;
+```
+
+Refs [#544](https://github.com/tobiasnix/anlaufstelle/issues/544).
+
+---
+
 ## Kurzreferenz
 
 ```text
@@ -607,6 +806,8 @@ Migrations-Status         docker compose -f docker-compose.prod.yml exec web pyt
 Django Deploy-Check       docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
 Retention Testlauf        docker compose -f docker-compose.prod.yml exec web python manage.py enforce_retention --dry-run
 Snapshot Testlauf         docker compose -f docker-compose.prod.yml exec web python manage.py create_statistics_snapshots --dry-run
+MV-Refresh                docker compose -f docker-compose.prod.yml exec web python manage.py refresh_statistics_view
+RLS-Session-Var pruefen   psql -c "SELECT current_setting('app.current_facility_id', true);"
 Stack stoppen             docker compose -f docker-compose.prod.yml down
 Stack starten             docker compose -f docker-compose.prod.yml up -d
 Lock-Files regenerieren   make deps-lock

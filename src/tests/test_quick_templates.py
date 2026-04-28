@@ -325,3 +325,97 @@ class TestGetTemplatesForDocumentType:
         QuickTemplate.objects.create(facility=facility, document_type=doc_type_elevated, name="Hidden")
         result = get_templates_for_document_type(assistant_user, facility, doc_type_elevated)
         assert result == []
+
+
+@pytest.mark.django_db
+class TestQuickTemplateXSS:
+    """WP4: ``prefilled_data`` muss beim Rendern escaped werden.
+
+    Django escaped per Default alle Variable-Ausgaben in Templates. Dieser
+    Test stellt sicher, dass das Quick-Template-Prefill den Schutz nicht
+    durch ``|safe`` oder ``mark_safe`` umgeht. Der Prefill-Wert landet im
+    ``DynamicEventDataForm`` als ``field.initial`` (siehe
+    ``src/core/forms/events.py`` Zeilen 133–146) und wird im Widget
+    gerendert — Django-Forms escapen Widget-``value``-Attribute automatisch.
+    """
+
+    def test_prefilled_script_tag_is_escaped(self, client, staff_user, facility, doc_type_with_all):
+        """Script-Payload im prefilled_data wird nicht als aktives HTML
+        gerendert, sondern HTML-escaped."""
+        payload = "<script>alert('xss')</script>"
+        template = QuickTemplate.objects.create(
+            facility=facility,
+            document_type=doc_type_with_all,
+            name="XSS-Versuch",
+            prefilled_data={"bemerkung": payload},
+            created_by=staff_user,
+        )
+        client.force_login(staff_user)
+        url = reverse("core:event_create") + f"?template={template.pk}"
+        response = client.get(url)
+        assert response.status_code == 200
+        content = response.content.decode("utf-8")
+
+        # Der Payload darf NICHT unverändert im HTML auftauchen (kein aktives <script>)
+        assert payload not in content
+        assert "<script>alert" not in content
+        # Die escapte Variante MUSS vorhanden sein
+        assert "&lt;script&gt;alert" in content or "&lt;script&gt;" in content
+
+
+@pytest.mark.django_db
+class TestQuickTemplateOrdering:
+    """WP4: Deterministische Reihenfolge bei gleichem ``sort_order``.
+
+    Am Code verifiziert: ``list_templates_for_user`` und
+    ``get_templates_for_document_type`` ordnen nach ``("sort_order", "name")``
+    (siehe ``src/core/services/quick_templates.py``). Bei gleichem
+    ``sort_order`` wird also nach ``name`` aufsteigend sortiert — das ist
+    die Sekundär-Sortierung, die Determinismus garantiert.
+    """
+
+    def test_list_templates_for_user_stable_order_same_sort_order(self, facility, staff_user, doc_type_with_all):
+        """Zwei Templates mit identischem ``sort_order`` müssen über
+        mehrere Aufrufe in derselben Reihenfolge erscheinen — sortiert
+        nach ``name`` als Tiebreaker."""
+        tpl_b = QuickTemplate.objects.create(
+            facility=facility,
+            document_type=doc_type_with_all,
+            name="B-Template",
+            sort_order=10,
+        )
+        tpl_a = QuickTemplate.objects.create(
+            facility=facility,
+            document_type=doc_type_with_all,
+            name="A-Template",
+            sort_order=10,
+        )
+
+        order1 = [t.pk for t in list_templates_for_user(staff_user, facility)]
+        order2 = [t.pk for t in list_templates_for_user(staff_user, facility)]
+        assert order1 == order2, "Reihenfolge darf nicht zwischen Aufrufen schwanken"
+        # Sekundär-Sortierung nach name: "A-Template" vor "B-Template"
+        assert order1 == [tpl_a.pk, tpl_b.pk]
+
+    def test_get_templates_for_document_type_stable_order_same_sort_order(
+        self, facility, staff_user, doc_type_with_all
+    ):
+        """``get_templates_for_document_type`` nutzt dieselbe
+        Sekundär-Sortierung nach ``name``."""
+        tpl_b = QuickTemplate.objects.create(
+            facility=facility,
+            document_type=doc_type_with_all,
+            name="B-Doctype-Tpl",
+            sort_order=5,
+        )
+        tpl_a = QuickTemplate.objects.create(
+            facility=facility,
+            document_type=doc_type_with_all,
+            name="A-Doctype-Tpl",
+            sort_order=5,
+        )
+
+        order1 = [t.pk for t in get_templates_for_document_type(staff_user, facility, doc_type_with_all)]
+        order2 = [t.pk for t in get_templates_for_document_type(staff_user, facility, doc_type_with_all)]
+        assert order1 == order2
+        assert order1 == [tpl_a.pk, tpl_b.pk]

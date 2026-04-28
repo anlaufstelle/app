@@ -38,6 +38,19 @@ Initial-Admin anlegen über `http://<server-ip>:8000`.
 - **Compose-File:** `docker-compose.prod.yml`
 - **Domain:** `anlaufstelle.app` (Coolify kümmert sich um TLS via Traefik)
 
+> **ClamAV-Service:** `docker-compose.prod.yml` definiert einen Service `clamav`
+> (Image `clamav/clamav:stable`, Volume `clamav-db`, Healthcheck via `clamdcheck.sh`).
+> Coolify startet ihn beim Compose-Deploy automatisch mit — der `web`-Service
+> verbindet via `CLAMAV_HOST=clamav` und wartet per `depends_on: service_healthy`
+> auf die Signaturdatenbank. Refs [#524](https://github.com/tobiasnix/anlaufstelle/issues/524).
+>
+> - **Separater ClamAV-Host:** `CLAMAV_HOST`/`CLAMAV_PORT` in den ENVs auf den
+>   externen Host setzen, `CLAMAV_ENABLED=true` belassen.
+> - **Kompletter Verzicht:** `CLAMAV_ENABLED=false` (z.B. minimaler Dev-Server).
+>   **Nicht für produktive Einrichtungen empfohlen** — Upload-Malware-Scanning entfällt.
+> - **Healthcheck:** `curl https://anlaufstelle.app/health/` liefert u.a. `clamav: ok`
+>   bzw. `clamav: error`, solange `CLAMAV_ENABLED=true`.
+
 ### 4. Environment-Variablen
 
 In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.env.example):
@@ -55,7 +68,13 @@ In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.en
 **Optional:**
 - `SENTRY_DSN` — für Error-Tracking
 - `LOG_FORMAT=json` — strukturiertes Logging
-- `CLAMAV_ENABLED=true` — bleibt Default, deaktivieren nur wenn kein ClamAV-Container läuft
+- `CLAMAV_ENABLED=true` — Default. Zum aktiven Scannen muss zusätzlich ein
+  ClamAV-Container erreichbar sein (siehe Hinweiskasten in Schritt 3). Nur
+  deaktivieren, wenn bewusst kein ClamAV betrieben wird.
+- `CLAMAV_HOST` — default `clamav` (Service-Name aus `docker-compose.prod.yml`).
+  Bei externem ClamAV auf dessen Hostname/IP setzen.
+- `CLAMAV_PORT` — default `3310` (clamd TCP-Port).
+- `CLAMAV_TIMEOUT` — Timeout in Sekunden für Scan-Requests (optional).
 
 ### 5. Ersten Deploy anstoßen
 
@@ -78,9 +97,33 @@ Nach erstem Login sollte der Admin unter `/mfa/settings/` sofort TOTP einrichten
 (Refs [#521](https://github.com/tobiasnix/anlaufstelle/issues/521)). Für Einrichtungen
 mit hohem Sicherheitsbedarf in `Settings.mfa_enforced_facility_wide = True` setzen.
 
+### 7.5 Offline-Modus (Streetwork)
+
+Der Offline-Modus (M6A, Refs [#573](https://github.com/tobiasnix/anlaufstelle/issues/573))
+ist ein reines Client-Feature — **keine Server-ENVs, keine zusätzliche Infrastruktur nötig**.
+
+**Voraussetzung an Endgeräte:** Mitarbeiter-Geräte brauchen einen modernen Browser
+mit **IndexedDB**- und **WebCrypto**-Support (aktuelle Chromium-, Firefox-, Safari-
+und Edge-Versionen erfüllen das).
+
+**Admins sollten Mitarbeiter vor Rollout auf drei Punkte hinweisen:**
+
+1. **Vor Offline-Einsatz Klientel-Cache füllen** — Onboarding-Schritt am Arbeitsplatz,
+   damit die benötigten Datensätze lokal verschlüsselt verfügbar sind.
+2. **Nach Rückkehr synchronisieren, bevor der Logout erfolgt** — sonst bleiben
+   Änderungen nur lokal liegen und gehen beim Cache-Verlust verloren.
+3. **Passwort-Verlust = Datenverlust:** Bei vergessenem Passwort sind die offline
+   gespeicherten, lokal verschlüsselten Daten **unrettbar** — Recovery-Flows für
+   Offline-Daten sind nicht möglich.
+
 ## Nach Go-Live
 
 - Gesundheitsprüfung: `curl https://anlaufstelle.app/health/` → `{"status":"ok",...}`
+- ClamAV-Verbindung prüfen: `curl https://anlaufstelle.app/health/` → `clamav: ok`
+  (sonst Service-Logs von `clamav` in Coolify checken, Signatur-Download kann
+  nach Kaltstart bis zu 5 Minuten dauern).
+- RLS aktiv prüfen: per `psql` in der App-DB
+  `SELECT relrowsecurity FROM pg_class WHERE relname='core_client';` → `t`.
 - Sentry-Events in den ersten 24h prüfen
 - Backup-Job erstmalig manuell triggern und restore auf Staging testen
 - Monitoring-Alerts (Uptime + Disk + RAM) einrichten

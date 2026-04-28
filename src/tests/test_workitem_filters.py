@@ -192,6 +192,70 @@ class TestWorkItemInboxFilters:
         response = client.get(reverse("core:workitem_inbox"), {"item_type": "invalid"})
         assert response.status_code == 200
 
+    def test_combined_filters_me_task_urgent(self, client, staff_user, lead_user, facility):
+        """Kombi-Filter ?assigned_to=me&item_type=task&priority=urgent schneidet alle drei Kriterien.
+
+        Refs #591 WP3.
+        """
+        client.force_login(staff_user)
+
+        # 1) me + task + urgent → matcht
+        wi_match = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=staff_user,
+            item_type=WorkItem.ItemType.TASK,
+            priority=WorkItem.Priority.URGENT,
+            title="Match Me+Task+Urgent",
+        )
+        # 2) me + task + normal → item_type OK, priority falsch
+        wi_wrong_priority = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=staff_user,
+            item_type=WorkItem.ItemType.TASK,
+            priority=WorkItem.Priority.NORMAL,
+            title="Me+Task+Normal",
+        )
+        # 3) me + hint + urgent → priority OK, item_type falsch
+        wi_wrong_type = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=staff_user,
+            item_type=WorkItem.ItemType.HINT,
+            priority=WorkItem.Priority.URGENT,
+            title="Me+Hint+Urgent",
+        )
+        # 4) lead + task + urgent → item_type+priority OK, Zuweisung falsch
+        wi_wrong_assignee = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=lead_user,
+            item_type=WorkItem.ItemType.TASK,
+            priority=WorkItem.Priority.URGENT,
+            title="Lead+Task+Urgent",
+        )
+
+        response = client.get(
+            reverse("core:workitem_inbox"),
+            {
+                "assigned_to": "me",
+                "item_type": "task",
+                "priority": "urgent",
+            },
+        )
+        assert response.status_code == 200
+
+        all_items = (
+            list(response.context["open_items"])
+            + list(response.context["in_progress_items"])
+            + list(response.context["done_items"])
+        )
+        assert wi_match in all_items
+        assert wi_wrong_priority not in all_items
+        assert wi_wrong_type not in all_items
+        assert wi_wrong_assignee not in all_items
+
     def test_htmx_request_returns_partial(self, client, staff_user, facility):
         """HTMX-Requests liefern nur das Inbox-Content-Partial."""
         client.force_login(staff_user)

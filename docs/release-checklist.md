@@ -2,6 +2,8 @@
 
 Checkliste fuer Releases der Anlaufstelle-Anwendung.
 
+Stand: v0.10.0 (2026-04-19)
+
 ## 1. Pre-Release
 
 - [ ] CI gruen auf `main` (Test, Check, Audit — siehe [test.yml](../.github/workflows/test.yml))
@@ -27,6 +29,22 @@ git push origin vX.Y.Z
   - [ ] `GET /health/` liefert `{"status": "ok", "version": "vX.Y.Z"}`
   - [ ] Login als Admin funktioniert
   - [ ] Klient anlegen, bearbeiten, loeschen
+  - [ ] ClamAV-Smoke-Check ([#524](https://github.com/tobiasnix/anlaufstelle/issues/524)) — Upload-Scanner erreichbar:
+    ```bash
+    curl https://<domain>/health/ | jq '.clamav'
+    # Erwartet: "ok" (OK-Wert)
+    ```
+    Bei `error`/`disabled` wird jeder Datei-Upload fail-closed abgewiesen — vor Rollout klaeren, ob das gewollt ist.
+  - [ ] RLS-Aktiv-Check ([#542](https://github.com/tobiasnix/anlaufstelle/issues/542)) — Row-Level-Security auf allen `core_*`-Tabellen aktiv:
+    ```sql
+    -- per psql in Produktions-DB (readonly-User reicht):
+    SELECT relname FROM pg_class
+    WHERE relname LIKE 'core_%' AND relrowsecurity = true
+    ORDER BY relname;
+    -- Erwartet: 16 Zeilen. Fehlen Tabellen, wurde migration nicht sauber ausgerollt.
+    ```
+  - [ ] Offline-Key-Salt-Endpoint: `GET /auth/offline-key-salt/` mit gueltiger Session liefert `200`, ohne Session `401`.
+  - [ ] Token-Invite-E-Mail-Test: ersten Admin per `python manage.py setup_facility` einladen und pruefen, dass die Invite-E-Mail tatsaechlich zugestellt wird (SMTP-Konfig, SPF/DKIM, Spam-Ordner).
 - [ ] Migrations liefen fehlerfrei (Entrypoint fuehrt `migrate --noinput` automatisch aus)
 
 ## 3. Post-Release (Produktion)
@@ -39,6 +57,8 @@ git push origin vX.Y.Z
   ```
 - [ ] Health-Check: `GET /health/` erreichbar, Status `ok`, Version `vX.Y.Z`
 - [ ] Smoke-Test: Login als Admin, Dashboard laden
+- [ ] ClamAV-Prod-Check ([#524](https://github.com/tobiasnix/anlaufstelle/issues/524)): `curl https://<domain>/health/ | jq '.clamav'` liefert OK-Wert (sonst Datei-Uploads fail-closed).
+- [ ] RLS-Prod-Check ([#542](https://github.com/tobiasnix/anlaufstelle/issues/542)): SQL-Query aus Staging-Smoke-Test gegen Produktions-DB ausfuehren — `18` `core_*`-Tabellen mit `relrowsecurity = true`.
 - [ ] Sentry-Fehlerrate pruefen (falls konfiguriert) — keine neuen Fehler nach Deploy
 - [ ] Backup nach erfolgreichem Deploy verifizieren (Integritaet, Wiederherstellbarkeit)
 

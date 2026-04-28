@@ -3,8 +3,8 @@
 **Open-Source-Fachsystem für niedrigschwellige soziale Arbeit**
 
 Autor: Barbara Nix, Tobias Nix
-Stand: März 2026
-Version: 1.3
+Stand: April 2026
+Version: 1.4
 
 ---
 
@@ -16,6 +16,7 @@ Version: 1.3
 | 1.1 | Februar 2026 | Schichtkonzept durch benannte Zeitfilter ersetzt. Übergabe-Konzept aufgelöst — abgedeckt durch Arbeitsinfos (Hinweise, Aufgaben). Organisationshierarchie als offene Entscheidung markiert. |
 | 1.2 | März 2026 | Alle offenen Entscheidungen geschlossen: Organisationshierarchie (Option 2: Klein + vorbereitet), JSONB (bedingt entschieden für Phase 1–3), Lizenz (AGPL v3). Phasenplan: Phase 1 gesplittet in 1a (zeigbarer Kern) und 1b (Fundament komplett). |
 | 1.3 | April 2026 | Feld-Level-Sensitivität: Verschlüsselung und Sichtbarkeit entkoppelt (`FieldTemplate.sensitivity`). |
+| 1.4 | April 2026 (2026-04-19) | Mobile-/Offline-Strategie (§ 16) auf Ist-Stand v0.10 aktualisiert; Sicherheitskonzept um 2FA, File Vault, RLS erweitert. |
 
 ---
 
@@ -1048,31 +1049,44 @@ Jonas (Träger-Administrator) bzw. die Einrichtungsleitung braucht ein funktioni
 
 ### Warum das mehr als ein Satz verdient
 
-Deniz (Streetworker) arbeitet draußen, bei schlechtem Netz, mit dem Smartphone. Für ihn ist Mobile-Erfassung keine Komfortfunktion, sondern die einzige Möglichkeit, überhaupt digital zu dokumentieren. Im Fachkonzept steht „Mobile-first-Erfassung optimiert für Smartphone" als Kernlieferung (bereits umgesetzt). Das reicht nicht als Spezifikation.
+Deniz (Streetworker) arbeitet draußen, bei schlechtem Netz, mit dem Smartphone. Für ihn ist Mobile-Erfassung keine Komfortfunktion, sondern die einzige Möglichkeit, überhaupt digital zu dokumentieren. Im Fachkonzept steht „Mobile-first-Erfassung optimiert für Smartphone" als Kernlieferung. Das reicht nicht als Spezifikation.
 
 ### Technischer Ansatz: Progressive Web App (PWA)
 
-Anlaufstelle wird als PWA umgesetzt, nicht als native App. Die Begründung:
+Anlaufstelle ist als PWA umgesetzt, nicht als native App. Die Begründung:
 
 - **Kein App-Store notwendig.** Einrichtungen müssten sonst MDM-Policies für App-Installation durchsetzen — unrealistisch bei privaten Smartphones.
 - **Ein Codebase.** Django + HTMX liefern responsive HTML, das auf Desktop und Mobil funktioniert. Ein separates React-Native- oder Flutter-Projekt würde die Wartungslast verdoppeln — als Einzelentwickler mit AI nicht tragbar.
-- **Installierbar.** PWAs können auf dem Homescreen installiert werden und verhalten sich wie native Apps (Vollbild, eigenes Icon).
+- **Installierbar.** PWAs lassen sich auf dem Homescreen installieren und verhalten sich wie native Apps (Vollbild, eigenes Icon).
 
-### Offline-Fähigkeit: Abgestuft
+### Offline-Fähigkeit: Abgestuft (Streetwork-Modus M6A)
 
-Volle Offline-Synchronisation (wie bei CouchDB-basierten Systemen) ist mit Django + HTMX nicht realistisch und für die Zielgruppe überdimensioniert. Stattdessen ein abgestufter Ansatz:
+Volle Offline-Synchronisation (wie bei CouchDB-basierten Systemen) ist mit Django + HTMX nicht realistisch und für die Zielgruppe überdimensioniert. Stattdessen ein abgestufter Ansatz, der seit Release v0.10 (April 2026) als Streetwork-Modus M6A produktiv zur Verfügung steht und aktuell in Produktion eingesetzt wird:
 
-**Stufe 1 (bereits umgesetzt): Optimistisches Speichern.**
-- Die Schnellerfassung schickt Daten per POST. Bei Netzausfall zeigt das System eine Fehlermeldung und speichert den Entwurf lokal (im Service Worker Cache).
-- Beim nächsten erfolgreichen Request wird der Entwurf automatisch nachgeschickt.
-- Scope: Nur die Schnellerfassung (neuer Kontakt). Suche und Chronik erfordern Netz.
+**Stufe 1 — Write-Queue für offline erfasste Ereignisse (implementiert).**
+- Schnellerfassung und Ereigniserfassung schreiben bei Netzausfall in eine lokale Write-Queue im Browser (IndexedDB, verschlüsselt).
+- Ein Service Worker synchronisiert die Queue beim nächsten erfolgreichen Request transparent mit dem Server. Die Reihenfolge der Einträge bleibt erhalten; der Nutzer sieht einen Synchronisations­indikator.
+- Scope: Erfassung neuer Kontakte und Ereignisse. Suche und Chronik erfordern in dieser Stufe Netz.
 
-**Stufe 2 (Auswertung, siehe Roadmap): Lesezugriff offline.**
-- Die PWA cached die letzte Startseiten-Ansicht und die Liste aktiver Hausverbote.
-- Deniz kann unterwegs nachschlagen, ob jemand ein aktives Hausverbot hat — auch ohne Netz.
-- Schreibzugriff bleibt an Netzverbindung gebunden.
+**Stufe 2 — Read-Cache mitgenommener Klientel (implementiert).**
+- Vor dem Außeneinsatz kann eine Auswahl relevanter Klient:innen (inkl. aktive Hausverbote, Arbeitsinfos, letzte Ereignisse) explizit für die Offline-Nutzung vorgeladen werden.
+- Die PWA hält den Read-Cache verschlüsselt in IndexedDB vor. Deniz kann unterwegs nachschlagen, ob jemand ein aktives Hausverbot hat oder welche Vermittlung zuletzt lief — auch ohne Netz.
+- Schreibzugriff auf gecachte Datensätze ist in dieser Stufe nicht möglich; er ist Stufe 3 vorbehalten.
 
-**Bewusst nicht im Scope:** Vollständige bidirektionale Offline-Synchronisation. Das erfordert Konfliktauflösung, Versionierung und eine fundamental andere Architektur. Der Nutzen für die Zielgruppe rechtfertigt die Komplexität nicht.
+**Stufe 3 — Offline-Edit mit Side-by-Side-Konfliktauflösung (implementiert).**
+- Auf den in Stufe 2 gecachten Datensätzen sind auch Offline-Bearbeitungen möglich (z. B. Arbeitsinfo aktualisieren, Notiz an Klient:in anhängen).
+- Beim Wiederverbinden vergleicht das System serverseitigen Stand mit lokaler Änderung. Im Konfliktfall erscheint eine Side-by-Side-Ansicht beider Versionen; die Fachkraft entscheidet feldweise, welche Fassung übernommen wird. Optimistic Locking (§ Sicherheit) schützt vor stillem Überschreiben.
+- Datei-Anhänge sind offline nicht möglich und bleiben an eine bestehende Netzverbindung gebunden.
+
+### Kryptografie des lokalen Speichers
+
+Alle offline gehaltenen Nutzdaten — Write-Queue, Read-Cache und Offline-Edits — werden im Browser mit **AES-GCM-256** verschlüsselt abgelegt. Der Verschlüsselungsschlüssel wird beim Login aus dem Nutzerpasswort via **PBKDF2 mit 600 000 Iterationen (SHA-256)** abgeleitet. Der abgeleitete Schlüssel ist als WebCrypto-Key **non-extractable** markiert und existiert ausschließlich in-memory; er wird weder in localStorage noch in IndexedDB persistiert und verlässt den Browser nicht.
+
+### Grenzen und Risiken
+
+- **Datei-Anhänge offline nicht möglich.** Binärinhalte (Fotos, Scans, Dokumente) werden bewusst nicht in den Offline-Cache übernommen — aus Gründen von Speicherbudget, Malware-Scanning (siehe § Sicherheit, File Vault) und DSGVO-Minimierung.
+- **Key-Verlust bei Passwort-Vergessen.** Da der Offline-Schlüssel aus dem Passwort abgeleitet wird, sind offline gespeicherte Daten nach einem Passwort-Reset unwiederbringlich verloren; es existiert bewusst **kein Admin-Reset** für den lokalen Schlüssel. Nicht synchronisierte Write-Queue-Einträge gehen in diesem Fall verloren. Fachkräfte werden hierauf im Onboarding hingewiesen.
+- **Keine vollständige bidirektionale Dauer-Synchronisation.** Der Offline-Modus ist auf den Streetwork-Einsatzzyklus (vorladen → draußen arbeiten → synchronisieren) ausgelegt, nicht auf dauerhaft getrennte Replikate.
 
 ### Auto-Save
 
@@ -1115,6 +1129,10 @@ Ergänzend zur Datenschutz-Architektur im Hauptdokument:
 - **OWASP Top 10.** Django bietet eingebauten Schutz gegen CSRF, XSS, SQL-Injection. Die Konfiguration muss gehärtet werden: `SECURE_HSTS_SECONDS`, `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE`.
 - **Abhängigkeiten.** Automatische Schwachstellen-Prüfung mit `pip-audit` und `npm audit` in der CI-Pipeline.
 - **Rate-Limiting.** Login-Versuche: Maximal 5 pro Minute pro IP. API-Requests: Maximal 100 pro Minute pro authentifiziertem Nutzer.
+- **Zwei-Faktor-Authentifizierung (TOTP).** Nutzer:innen können einen zweiten Faktor auf Basis zeitbasierter Einmalpasswörter (TOTP, RFC 6238) einrichten. 2FA lässt sich wahlweise pro Nutzer:in aktivieren oder facility-weit erzwingen; im letzteren Fall wird der Login ohne eingerichteten zweiten Faktor zur Einrichtung zwangsweise umgeleitet. Recovery erfolgt über Einmal-Wiederherstellungscodes.
+- **Encrypted File Vault.** Hochgeladene Datei-Anhänge werden serverseitig mit AES-GCM verschlüsselt abgelegt; Klartext-Dateien liegen zu keinem Zeitpunkt auf dem Dateisystem. Jeder Upload durchläuft ein **ClamAV-Malware-Scanning fail-closed**: Solange der Scanner keine saubere Rückmeldung liefert, wird die Datei nicht freigegeben; Scanner-Ausfälle führen zur Ablehnung, nicht zur Annahme.
+- **Row Level Security (RLS).** Als Defense-in-Depth ergänzend zum applikationsseitigen Facility-Scoping sind 18 facility-gescoppte Tabellen mit PostgreSQL-RLS-Policies abgesichert. Die Policies werten die Session-Variable `app.current_facility_id` aus, die pro Request auf die Facility der authentifizierten Nutzer:in gesetzt wird. Ein Fehler im Applikationscode kann dadurch nicht zu Cross-Facility-Datenleaks führen.
+- **Optimistic Locking.** Zentrale Fachentitäten (Client, Case, WorkItem, Settings, Event) tragen eine Versions- bzw. Zeitstempelspalte. Beim Speichern wird geprüft, ob der geladene Stand noch aktuell ist; bei gleichzeitiger Bearbeitung entsteht ein sichtbarer Konflikt statt eines stillen Überschreibens. Diese Integritätsmaßnahme ist auch die Grundlage der Side-by-Side-Konfliktauflösung im Streetwork-Offline-Modus (§ 16).
 
 ---
 

@@ -618,9 +618,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                                 old.delete()
                                 # Physisches File erst nach Commit löschen —
                                 # sonst wäre die alte Datei bei Rollback weg.
-                                transaction.on_commit(
-                                    lambda a=old_for_cleanup: delete_attachment_file(a)
-                                )
+                                transaction.on_commit(lambda a=old_for_cleanup: delete_attachment_file(a))
                         event.save(update_fields=["data_json"])
             except ValidationError as e:
                 # Stage 3 (#575): JSON/HTMX clients receive a 409 with the

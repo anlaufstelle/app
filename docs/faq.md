@@ -7,20 +7,30 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 
 **A. Erste Schritte & Konfiguration**
 1. [Wie stelle ich den Standard-Dokumentationstyp ein?](#1-wie-stelle-ich-den-standard-dokumentationstyp-ein)
+2. [Wie richte ich 2FA ein?](#2-wie-richte-ich-2fa-ein)
+3. [Authenticator-App zeigt „Code ungültig" — was tun?](#3-authenticator-app-zeigt-code-ungültig--was-tun)
+4. [Ich habe mein Handy verloren — wie komme ich wieder rein?](#4-ich-habe-mein-handy-verloren--wie-komme-ich-wieder-rein)
 
 **B. Tägliche Arbeit**
-2. [Wie funktioniert der Zeitstrom?](#2-wie-funktioniert-der-zeitstrom)
-3. [Wie funktioniert die Übergabe (Schichtübergabe)?](#3-wie-funktioniert-die-übergabe-schichtübergabe)
+5. [Wie funktioniert der Zeitstrom?](#5-wie-funktioniert-der-zeitstrom)
+6. [Wie funktioniert die Übergabe (Schichtübergabe)?](#6-wie-funktioniert-die-übergabe-schichtübergabe)
+7. [Wie lade ich eine Datei an ein Ereignis an?](#7-wie-lade-ich-eine-datei-an-ein-ereignis-an)
+8. [Kann ich offline arbeiten, wenn ich im Einsatz unterwegs bin?](#8-kann-ich-offline-arbeiten-wenn-ich-im-einsatz-unterwegs-bin)
+9. [Die Suche findet meinen Klienten nicht, obwohl der Name fast passt.](#9-die-suche-findet-meinen-klienten-nicht-obwohl-der-name-fast-passt)
+10. [Wie lege ich eine Schnell-Vorlage (Quick-Template) an?](#10-wie-lege-ich-eine-schnell-vorlage-quick-template-an)
 
 **C. Rollen & Datenschutz**
-4. [Wie funktionieren Zugriffsberechtigungen?](#4-wie-funktionieren-zugriffsberechtigungen)
-5. [Was bedeutet die Sensitivitätsstufe?](#5-was-bedeutet-die-sensitivitätsstufe-niedrigmittelhoch)
-6. [Wie funktioniert das Löschsystem (4-Augen-Prinzip)?](#6-wie-funktioniert-das-löschsystem-4-augen-prinzip)
-7. [Was hat KEINEN Löschmechanismus?](#7-was-hat-keinen-löschmechanismus)
+11. [Wie funktionieren Zugriffsberechtigungen?](#11-wie-funktionieren-zugriffsberechtigungen)
+12. [Was bedeutet die Sensitivitätsstufe?](#12-was-bedeutet-die-sensitivitätsstufe-niedrigmittelhoch)
+13. [Wie funktioniert das Löschsystem (4-Augen-Prinzip)?](#13-wie-funktioniert-das-löschsystem-4-augen-prinzip)
+14. [Was hat KEINEN Löschmechanismus?](#14-was-hat-keinen-löschmechanismus)
 
 **D. Administration & Betrieb**
-8. [Wie funktionieren Aufbewahrungsfristen?](#8-wie-funktionieren-aufbewahrungsfristen)
-9. [Welche automatisierten Scripts gibt es?](#9-welche-automatisierten-scripts-gibt-es)
+15. [Wie funktionieren Aufbewahrungsfristen?](#15-wie-funktionieren-aufbewahrungsfristen)
+16. [Welche automatisierten Scripts gibt es?](#16-welche-automatisierten-scripts-gibt-es)
+
+**E. Fehlermeldungen**
+17. [Was bedeutet „Datensatz wurde zwischenzeitlich geändert"?](#17-was-bedeutet-datensatz-wurde-zwischenzeitlich-geändert)
 
 ---
 
@@ -36,9 +46,52 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 
 ---
 
+### 2. Wie richte ich 2FA ein?
+
+**Benutzermenü → Zwei-Faktor-Authentifizierung** (URL: `/mfa/settings/`) → **2FA einrichten**. Einen QR-Code mit einer Authenticator-App scannen (Google Authenticator, Microsoft Authenticator, Authy, FreeOTP+, 1Password, Bitwarden, Proton Pass) und den angezeigten 6-stelligen Code zur Bestätigung eintippen.
+
+Ausführliche Anleitung inkl. manuelle Eingabe: [User-Guide § 1 — Zwei-Faktor-Authentifizierung](user-guide.md#zwei-faktor-authentifizierung-2fa). Admin-seitige Erzwingung: [Admin-Guide § 2.7](admin-guide.md#27-zwei-faktor-authentifizierung-2fa).
+
+**Relevante Dateien:**
+- [`src/core/views/mfa.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/mfa.py) — `MFASetupView`, `MFAVerifyView`, `MFASettingsView`
+
+---
+
+### 3. Authenticator-App zeigt „Code ungültig" — was tun?
+
+TOTP-Codes sind 30 Sekunden gültig; auf beiden Seiten (Server und Telefon) muss die Systemzeit stimmen. Die häufigsten Ursachen:
+
+| Ursache | Erkennung | Lösung |
+|---------|-----------|--------|
+| **Code bereits abgelaufen** | Code wechselt in der App, während Sie tippen | Den neuen Code eingeben |
+| **Zeit-Drift auf dem Telefon** | App-Einstellungen → „Zeitkorrektur für Codes" / „Time sync" | In der App einmal Zeit neu synchronisieren |
+| **Zeit-Drift auf dem Server** | Bestätigt durch Administrator | Administrator: NTP-Sync prüfen ([`docs/ops-runbook.md`](https://github.com/tobiasnix/anlaufstelle/blob/main/docs/ops-runbook.md)) |
+| **Secret manuell falsch eingegeben** | QR-Code wurde nicht gescannt, sondern Zeichenkette getippt | **Base32** ohne Leerzeichen eingeben; in der App Typ „TOTP / zeitbasiert", 30 Sekunden, 6 Ziffern wählen. Am besten QR-Code erneut scannen. |
+| **Alter Setup-Versuch** | Mehrere ungültige Versuche kurz nach Einrichtung | Einrichtung unter `/mfa/settings/` abbrechen, erneut starten — dabei den QR-Code **aus dem frischen Formular** scannen |
+
+Wenn keine der Punkte hilft, wenden Sie sich an Ihren Administrator — fehlgeschlagene Versuche sind im `AuditLog` unter `MFA_FAILED` protokolliert.
+
+---
+
+### 4. Ich habe mein Handy verloren — wie komme ich wieder rein?
+
+Aktuell gibt es **keinen Self-Service-Recovery-Pfad**. Bitten Sie einen Administrator, Ihr TOTP-Gerät zu löschen:
+
+1. Admin-Bereich → **OTP → TOTP-Geräte**.
+2. Gerät des betroffenen Users auswählen → löschen.
+3. Beim nächsten Login werden Sie automatisch auf die Neu-Einrichtung (`/mfa/setup/`) geleitet, sofern 2FA für Ihr Konto/Ihre Einrichtung verpflichtend ist.
+
+Einmalige Backup-Codes als Self-Service-Recovery sind geplant: [Issue #588](https://github.com/tobiasnix/anlaufstelle/issues/588).
+
+**Relevante Dateien:**
+- [`src/core/models/user.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/user.py) — `User.is_mfa_enforced`
+- [`src/core/views/mfa.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/mfa.py) — `MFADisableView`, `MFASetupView`
+
+---
+
 ## B. Tägliche Arbeit
 
-### 2. Wie funktioniert der Zeitstrom?
+### 5. Wie funktioniert der Zeitstrom?
 
 Der Zeitstrom ist die **Startseite** der Anwendung (`/`). Er zeigt einen chronologischen Aktivitäts-Feed für den aktuellen Tag — eine Kombination aus Dashboard, Aktivitätslog und Timeline.
 
@@ -97,7 +150,7 @@ Ein **experimentelles** alternatives UI unter `/zeitstrom-v2/`:
 
 ---
 
-### 3. Wie funktioniert die Übergabe (Schichtübergabe)?
+### 6. Wie funktioniert die Übergabe (Schichtübergabe)?
 
 Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das analoge A4-Übergabebuch.
 
@@ -132,9 +185,63 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 
 ---
 
+### 7. Wie lade ich eine Datei an ein Ereignis an?
+
+Beim Anlegen oder Bearbeiten eines Ereignisses gibt es ein **Datei-Upload-Feld**. Die Datei wird vor der Ablage automatisch per **ClamAV auf Viren geprüft** und anschließend **verschlüsselt gespeichert** (AES-GCM im Encrypted File Vault).
+
+**Regeln auf einen Blick:**
+
+| Aspekt | Wert |
+|--------|------|
+| Maximale Dateigröße | Standard 10 MiB pro Datei (Admin kann erhöhen) |
+| Virenscan | ClamAV, automatisch vor der Speicherung |
+| Verschlüsselung | AES-GCM, Schlüssel in der Einrichtungs-Konfiguration |
+| Offline-Modus | Datei-Anhänge sind offline nicht möglich |
+
+**Wenn der Upload abgelehnt wird:** Meldet das System die Datei als infiziert, ist sie mit hoher Wahrscheinlichkeit tatsächlich befallen — **nicht einfach erneut hochladen**. Informieren Sie Ihre IT/Administration und entfernen Sie die Datei aus Ihrem Arbeitsordner.
+
+---
+
+### 8. Kann ich offline arbeiten, wenn ich im Einsatz unterwegs bin?
+
+Ja — seit v0.10 gibt es einen sicheren **Offline-Modus** für Streetwork und mobile Einsätze.
+
+**Ablauf:**
+1. **Vor dem Verlassen des Büros:** Klientel in den Offline-Cache laden (Schaltfläche in der Klientel-Liste).
+2. **Unterwegs:** Ereignisse erfassen, Klienteldaten ansehen und bearbeiten — auch ohne Netz.
+3. **Zurück im Büro:** Synchronisieren, damit lokale Änderungen in die Datenbank übernommen werden.
+
+**Sicherheit:** Alle Offline-Daten liegen **verschlüsselt im Browser** (IndexedDB). Der Schlüssel wird aus Ihrem Passwort abgeleitet — der Browser allein kann die Daten nicht entschlüsseln.
+
+**Wichtig — Daten können verloren gehen:** Bei **Logout, Passwort-Änderung oder Schließen des Tabs** werden alle Offline-Daten unlesbar. Daher gilt: **Erst synchronisieren, dann ausloggen!**
+
+**Einschränkung:** Datei-Anhänge (siehe FAQ #7) sind offline nicht möglich — das ist eine bewusste Sicherheitsentscheidung.
+
+---
+
+### 9. Die Suche findet meinen Klienten nicht, obwohl der Name fast passt.
+
+Die Suche ist **tippfehler-tolerant** (Fuzzy Search): „Muller" findet auch „Müller", „Tomas" auch „Thomas". Sie müssen den Namen nicht exakt kennen.
+
+**Konfiguration:** Die Ähnlichkeits-Schwelle (Wertebereich 0.0–1.0, Default ca. 0.3) ist **pro Einrichtung einstellbar**:
+- Niedrigere Werte → mehr Treffer, auch ungenauere
+- Höhere Werte → nur sehr ähnliche Treffer
+
+**Wenn ein erwarteter Treffer fehlt:** Sprechen Sie Ihre Administration an — sie kann den Schwellwert absenken.
+
+---
+
+### 10. Wie lege ich eine Schnell-Vorlage (Quick-Template) an?
+
+Schnell-Vorlagen beschleunigen das Erfassen wiederkehrender Dokumentationen. Aktuell werden sie **ausschließlich durch Admins im Django-Admin-Bereich** gepflegt (siehe [Admin-Guide § 2.8](admin-guide.md#28-schnell-vorlagen-quick-templates)).
+
+**Wenn Sie ein Muster entdecken, das Sie immer wieder tippen** (z.B. „Kurzkontakt am Tresen ohne Anliegen"), sprechen Sie Ihre Administration an — sie kann dafür eine Vorlage hinterlegen, die Ihnen im Erfassungsformular als Ein-Klick-Option zur Verfügung steht.
+
+---
+
 ## C. Rollen & Datenschutz
 
-### 4. Wie funktionieren Zugriffsberechtigungen?
+### 11. Wie funktionieren Zugriffsberechtigungen?
 
 Zugriffsberechtigungen werden über drei Ebenen gesteuert: **Rolle**, **Einrichtung** und **Sensitivitätsstufe**. Zusammen bestimmen sie, welcher User welche Daten sehen und welche Aktionen ausführen darf.
 
@@ -199,7 +306,7 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 |-------|-------------|
 | **Eigentümer-Berechtigung** | Assistenz darf eigene Kontakte bearbeiten, auch wenn „Bearbeiten" sonst ab Fachkraft gilt |
 | **Zuweisungs-Berechtigung** | Arbeitsauftrag-Status kann vom Ersteller, Zugewiesenen oder der Leitung geändert werden |
-| **Sensitivitätsstufe** | Zusätzlich zur Rolle steuern `DocumentType.sensitivity` und `FieldTemplate.sensitivity` den Feldzugriff. `FieldTemplate.sensitivity` überschreibt den DocumentType-Level nach oben (→ [FAQ #5](#5-was-bedeutet-die-sensitivitätsstufe-niedrigmittelhoch)) |
+| **Sensitivitätsstufe** | Zusätzlich zur Rolle steuern `DocumentType.sensitivity` und `FieldTemplate.sensitivity` den Feldzugriff. `FieldTemplate.sensitivity` überschreibt den DocumentType-Level nach oben (→ [FAQ #12](#12-was-bedeutet-die-sensitivitätsstufe-niedrigmittelhoch)) |
 | **Passwort-Pflicht** | Bei gesetztem `must_change_password`-Flag wird der User vor jeder Aktion zum Passwortwechsel gezwungen |
 | **Session-Timeout** | Konfigurierbar pro Einrichtung (Standard: 30 Min.), nach Ablauf automatischer Logout |
 
@@ -230,7 +337,7 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 
 ---
 
-### 5. Was bedeutet die Sensitivitätsstufe (niedrig/mittel/hoch)?
+### 12. Was bedeutet die Sensitivitätsstufe (niedrig/mittel/hoch)?
 
 Die **Sensitivitätsstufe** steuert, welche Benutzerrolle welche Dokumentationseinträge und Felder sehen darf. Konfiguration pro `DocumentType`.
 
@@ -251,7 +358,7 @@ Die **Sensitivitätsstufe** steuert, welche Benutzerrolle welche Dokumentationse
 - [`src/core/models/document_type.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/document_type.py) — `Sensitivity`-Choices
 - [`src/core/services/sensitivity.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/sensitivity.py) — Zentrale Logik für Rollen-/Feldprüfung
 
-### 6. Wie funktioniert das Löschsystem (4-Augen-Prinzip)?
+### 13. Wie funktioniert das Löschsystem (4-Augen-Prinzip)?
 
 Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt von der **Kontaktstufe des Klienten** ab:
 
@@ -283,7 +390,7 @@ Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt
 - [`src/core/services/event.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/event.py) — `soft_delete_event`, `request_deletion`, `approve_deletion`, `reject_deletion`
 - [`src/core/views/events.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/events.py) — `EventDeleteView`, `DeletionRequestReviewView`
 
-### 7. Was hat KEINEN Löschmechanismus?
+### 14. Was hat KEINEN Löschmechanismus?
 
 - **Clients** — kein manueller Löschantrag, aber automatische Anonymisierung durch `enforce_retention`
 - **Cases / Episodes** — kein Löschmechanismus
@@ -295,7 +402,7 @@ Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt
 
 ## D. Administration & Betrieb
 
-### 8. Wie funktionieren Aufbewahrungsfristen?
+### 15. Wie funktionieren Aufbewahrungsfristen?
 
 Konfigurierbar pro Facility in **Administration → Einstellungen**:
 
@@ -314,7 +421,7 @@ Zusätzlich: Per-DocumentType-Override via `DocumentType.retention_days`.
 - [`src/core/models/settings.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/settings.py) — Retention-Felder
 - [`src/core/management/commands/enforce_retention.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/management/commands/enforce_retention.py) — `--dry-run`, `--facility`
 
-### 9. Welche automatisierten Scripts gibt es?
+### 16. Welche automatisierten Scripts gibt es?
 
 #### Cron-Schedule (Host-Level)
 
@@ -342,5 +449,20 @@ Zusätzlich: Per-DocumentType-Override via `DocumentType.retention_days`.
 
 ---
 
-*Konsolidiert aus [#105](https://github.com/tobiasnix/anlaufstelle/issues/105), [#429](https://github.com/tobiasnix/anlaufstelle/issues/429), [#471](https://github.com/tobiasnix/anlaufstelle/issues/471), [#506](https://github.com/tobiasnix/anlaufstelle/issues/506). Alle Inhalte am 05.04.2026 gegen den Code verifiziert.*
+## E. Fehlermeldungen
+
+### 17. Was bedeutet „Datensatz wurde zwischenzeitlich geändert"?
+
+Jemand anderes (oder Sie selbst in einem anderen Tab) hat denselben Datensatz parallel bearbeitet und bereits gespeichert. Um zu verhindern, dass Änderungen stillschweigend überschrieben werden (**Optimistic Locking**), blockt das System Ihren Speicherversuch.
+
+**Lösung:**
+1. Seite neu laden — damit sehen Sie die aktuellste Version.
+2. Prüfen, welche Änderungen die andere Person eingetragen hat.
+3. Ihre eigenen Änderungen erneut eintragen und speichern.
+
+So gehen weder Ihre noch die parallelen Änderungen verloren.
+
+---
+
+*Konsolidiert aus [#105](https://github.com/tobiasnix/anlaufstelle/issues/105), [#429](https://github.com/tobiasnix/anlaufstelle/issues/429), [#471](https://github.com/tobiasnix/anlaufstelle/issues/471), [#506](https://github.com/tobiasnix/anlaufstelle/issues/506). Alle Inhalte am 05.04.2026 gegen den Code verifiziert. v0.10-Ergänzungen ([#589](https://github.com/tobiasnix/anlaufstelle/issues/589)): File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking.*
 

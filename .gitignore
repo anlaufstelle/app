@@ -27,6 +27,7 @@ src/static/css/output.css
 CLAUDE.md
 Gemini.md
 .claude/
+.codex
 .codex/
 .gemini/
 .copilot/

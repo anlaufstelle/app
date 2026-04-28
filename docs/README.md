@@ -29,6 +29,7 @@ Dieses Verzeichnis enthält die gesamte Projektdokumentation.
 |----------|-------------|------------|
 | [e2e-architecture.md](e2e-architecture.md) | E2E-Test-Infrastruktur: gunicorn, Playwright, Wait-Strategien, Fixtures | Entwickler, QA |
 | [e2e-runbook.md](e2e-runbook.md) | E2E-Test-Ausführung: Server starten, Tests laufen lassen, Debugging | Entwickler, QA |
+| [async-pdf-evaluation.md](async-pdf-evaluation.md) | Evaluierung asynchroner Task-Queues für WeasyPrint-PDF-Generierung. | Entwickler, Architekten |
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | Dev-Setup, Make-Targets, Coding Conventions, Architektur, PR-Prozess | Entwickler |
 
 ---

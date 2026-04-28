@@ -43,8 +43,9 @@ Templates included:
 |----------|-------------|
 | [e2e-architecture.md](../e2e-architecture.md) | E2E testing infrastructure (developer-facing) |
 | [e2e-runbook.md](../e2e-runbook.md) | E2E test execution, debugging, checklists |
+| [async-pdf-evaluation.md](../async-pdf-evaluation.md) | Evaluation of async task queues for WeasyPrint PDF generation. |
 
 <!-- translation-source: docs/README.md -->
-<!-- translation-version: v0.9.0 -->
-<!-- translation-date: 2026-03-28 -->
+<!-- translation-version: v0.10.0 -->
+<!-- translation-date: 2026-04-19 -->
 <!-- source-hash: d749493 -->

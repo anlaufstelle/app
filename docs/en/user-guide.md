@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-03-28 (v0.9.0).
+> The German version is the authoritative source. Last synced: 2026-04-19 (v0.10.0).
 
 # Anlaufstelle -- User Guide
 
@@ -16,7 +16,7 @@ This guide is intended for social workers, managers, and assistants working in d
 5. [Hints and Tasks (Work Items)](#5-hints-and-tasks-work-items)
 6. [Search](#6-search)
 7. [Statistics and Export](#7-statistics-and-export)
-8. [Installing the PWA (App on the Home Screen)](#8-installing-the-pwa-app-on-the-home-screen)
+8. [Installing the PWA and Working Offline](#8-installing-the-pwa-and-working-offline)
 9. [Roles and Permissions](#9-roles-and-permissions)
 10. [Case Management](#10-case-management)
 
@@ -42,6 +42,38 @@ This guide is intended for social workers, managers, and assistants working in d
 5. Click **Save**.
 
 > **Tip:** Choose a secure password (at least 12 characters, including upper and lower case letters and digits). The system enforces minimum requirements.
+
+> **Inviting new users:** The first invitation for a new user now arrives as a token link (no more plaintext initial password). The first time you open the link, you set your own password.
+
+### Two-Factor Authentication (2FA)
+
+Anlaufstelle supports time-based one-time passwords (TOTP) as a second login factor. Administrators can enforce 2FA for individual users or the whole facility; independently, each user can enable 2FA voluntarily.
+
+**Initial setup:**
+
+1. Click your name in the top-right corner > **Two-Factor Authentication** (URL: `/mfa/settings/`).
+2. Click **Set up 2FA** -- a QR code is displayed.
+3. Install an authenticator app and scan the QR code. Tested apps:
+   - **Google Authenticator** (Android/iOS)
+   - **Microsoft Authenticator** (Android/iOS)
+   - **Authy** (Android/iOS/Desktop)
+   - **FreeOTP / FreeOTP+** (Android, open source)
+   - **1Password**, **Bitwarden**, **Proton Pass** (as built-in authenticator)
+4. Enter the 6-digit code shown by the app and click **Confirm & activate**.
+
+> **Tip:** If the QR code cannot be scanned, click **Enter secret manually** and copy the string into the app (field "Secret" / "Key" -- Base32, no spaces). In the app, pick type **TOTP / time-based**.
+
+**Signing in with 2FA:**
+
+1. Enter username and password as usual.
+2. On the next page, enter the 6-digit code currently shown by the app.
+3. Each code is valid for **30 seconds** -- if it expires, just use the next one.
+
+**Disabling 2FA:**
+
+Under `/mfa/settings/` > **Disable 2FA**. This is **not possible** if your facility enforces 2FA or your account is individually marked as 2FA-required -- contact your administrator in that case.
+
+> **Lost phone / authenticator reset?** Currently, an administrator has to reset 2FA from the admin panel. Self-service recovery via backup codes is planned ([Issue #588](https://github.com/tobiasnix/anlaufstelle/issues/588)).
 
 ### Signing Out
 
@@ -112,6 +144,32 @@ You will be redirected to the detail view of the newly created entry. A success 
 
 > **Tip:** If you create a contact from the client detail page, the client is already pre-filled.
 
+### Quick Templates
+
+If your administrator has set up **quick templates** for recurring documentation patterns (e.g., "Counseling 30 min", "Standard check-in"), they appear as buttons at the top of the "New Contact" page.
+
+- **Click a template button** to pre-fill the form with the template's saved values and documentation type.
+- **You can still edit every field** before saving -- the template provides defaults, not a locked form.
+- **Fields you have already filled in are not overwritten** -- the template only populates empty fields.
+- **Sensitivity filter:** You only see templates whose documentation type you are allowed to access according to your role. Assistants therefore do not see templates for elevated- or high-sensitivity types.
+- **Self-healing:** If an administrator has deactivated a selection option after the template was created, the corresponding value is silently dropped when you apply the template -- no error, you simply pick an active option yourself.
+
+> **Note:** Templates are created and maintained by administrators in the Django admin interface. If you find yourself repeating the same documentation pattern, ask your admin to add a quick template.
+
+### File Attachments
+
+A file can be attached to each event -- for example, a scanned form, a photo of a document, or a PDF.
+
+- **Upload:** The contact form includes a file upload field. Pick a file from your device and save the event as usual.
+- **Virus scan:** Before saving, every file is automatically checked by a virus scanner (ClamAV). Infected files are rejected -- you receive an error and the event is not saved.
+- **Encryption:** All attachments are stored encrypted (AES-GCM). That means the file is not readable in cleartext on the server and can only be retrieved through Anlaufstelle itself.
+- **Maximum size:** By default, **up to 10 MiB per file** are allowed. Your administrator can adjust this limit.
+- **Supported formats:** PDF, Office documents, and images. Ask your administrator for the exact list allowed in your facility.
+- **Download:** Open the detail view of the event and click the file link. The file is automatically decrypted on retrieval and delivered in the browser.
+- **Replacing:** When editing an event, you can replace the existing file with a new one. The old file is only deleted after the new upload has finished successfully -- so nothing is lost if the upload is aborted.
+
+> **Offline note:** Events with file attachments currently **cannot** be saved offline. If you work offline, attaching a file shows an explicit hint. See [Section 8](#8-installing-the-pwa-and-working-offline).
+
 ### Editing a Contact
 
 1. Open the event (via the activity log or the client chronology).
@@ -119,6 +177,8 @@ You will be redirected to the detail view of the newly created entry. A success 
 3. Change the desired fields and click **Save**.
 
 > **Note:** Edits are recorded in the event's change history. Previous versions remain visible in the history.
+
+> **Concurrent editing:** If someone else edited the same record at the same time, an error message appears. Reload the page and re-enter your changes -- this ensures that no changes are silently overwritten.
 
 ### Deleting a Contact
 
@@ -184,6 +244,8 @@ From the detail page, you can directly record a new contact for this client or c
 
 > **Note:** A change in contact level is automatically recorded in the audit log.
 
+> **Concurrent editing:** If someone else edited the same record at the same time, an error message appears. Reload the page and re-enter your changes -- this ensures that no changes are silently overwritten.
+
 ---
 
 ## 5. Hints and Tasks (Work Items)
@@ -243,6 +305,42 @@ The list updates without a page reload.
 2. On the detail page, click **Edit**.
 3. Change the desired fields and save.
 
+> **Concurrent editing:** If someone else edited the same record at the same time, an error message appears. Reload the page and re-enter your changes -- this ensures that no changes are silently overwritten.
+
+### Filter: Assigned to Me
+
+In the inbox view you can activate the **"Assigned to me"** filter. With it enabled, you only see tasks and hints that are assigned to you personally -- general (unassigned) entries and entries for other people are hidden.
+
+The filter is useful when you want a clear overview of your own open items without being distracted by the whole team list.
+
+### Bulk Edit
+
+If you want to change several tasks at once, use bulk edit mode:
+
+1. In the inbox, select the desired tasks via the **checkbox** to the left of each card.
+2. A **bulk dropdown** with the available actions appears at the top.
+3. Change **status**, **priority**, or **assignment** centrally for all selected entries at once.
+4. Confirm the change -- all marked entries are updated together.
+
+### Reminder vs. Due Date
+
+Tasks have two distinct time fields:
+
+| Field | Meaning |
+|---|---|
+| **Due date (due_date)** | Deadline -- the latest point at which the task must be completed |
+| **Reminder (remind_at)** | The moment you want to be notified -- usually before the due date |
+
+**Example:** The due date is April 15th, and you set the reminder to April 10th -- that way you get a heads-up five days ahead and do not run into last-minute stress on the deadline.
+
+Both fields are optional. You can also create a task with only a due date, or only a reminder.
+
+### Recurring Due Dates
+
+For recurring tasks (e.g., monthly counseling sessions, weekly check-ins), you can set a **recurrence rhythm** (e.g., weekly, monthly).
+
+As soon as you set such a task to **"Done"**, a **follow-up task** with the same title and a new date based on the chosen rhythm is created automatically. That way you do not have to recreate the task manually every time.
+
 ---
 
 ## 6. Search
@@ -265,6 +363,17 @@ The search field is **permanently visible in the sidebar** (desktop). On smartph
 For more extensive research, the search page at `/search/` is available. It shows all results (up to 20 clients and 20 events) and is also accessible via the "Show all results" link in the quick search.
 
 > **Note:** Fields configured as encrypted are not included in search results.
+
+### Typo-tolerant Search (Fuzzy)
+
+Search also finds results when you make a typo or a name has been stored in a slightly different spelling. Examples:
+
+- Entering **"Muller"** also finds **"Müller"**.
+- Entering **"Tomas"** also finds **"Thomas"**.
+
+Technically this is based on trigram similarity in the PostgreSQL database (pg_trgm) -- you do not have to worry about the details.
+
+**Similarity threshold:** Per facility, your administrator can configure how "strict" fuzzy search behaves (value range 0.0--1.0, default around 0.3). A **lower value** returns more results but also more false matches; a **higher value** is stricter and only shows very similar terms.
 
 ---
 
@@ -348,7 +457,7 @@ When a social worker or assistant wants to delete a contact belonging to a quali
 
 ---
 
-## 8. Installing the PWA (App on the Home Screen)
+## 8. Installing the PWA and Working Offline
 
 Anlaufstelle can be installed on your smartphone or tablet home screen like a native app -- no app store required.
 
@@ -376,9 +485,39 @@ The app now appears as an icon on your home screen and opens in full-screen mode
 
 The installed app behaves like a regular program and is accessible via the Start menu or the desktop.
 
-> **Note:** The app is a **Progressive Web App (PWA)** -- it still requires an internet connection to function. It is not an offline application.
+> **Note:** The app is a **Progressive Web App (PWA)**. An **offline mode** is now available for streetwork use (see below) -- you can record events without an internet connection and sync them later.
 
 > **Firefox (Android):** Firefox does offer "Install", but the app always opens with the address bar visible. For the true app mode without the address bar, use **Chrome, Edge, or Samsung Internet** (Android) or **Safari** (iOS).
+
+### Offline Capture (Streetwork)
+
+For assignments without a reliable internet connection -- for example, outreach work -- you can use Anlaufstelle in offline mode.
+
+**Before the assignment (online):**
+
+1. Open the client list.
+2. Click **"Load clients for offline"** to load the relevant client profiles into the offline cache of your device. That way, pseudonyms and master data are available even without a network.
+
+**During the assignment (offline):**
+
+- You can record events as usual. Entries are stored encrypted locally in the browser (AES-GCM-256; the key is derived from your password).
+- The interface shows a hint that you are working offline and how many entries are still waiting to be synced.
+
+**Back online:**
+
+- As soon as the device is back online, the queue is **synced automatically**. Events recorded offline land on the server and become visible to the team.
+
+**Resolving conflicts:**
+
+If an event was edited online (by someone else) and offline (by you) at the same time, Anlaufstelle shows a **side-by-side diff** with three choices during sync:
+
+- **Keep mine** -- your offline edit wins.
+- **Keep server** -- the online edit wins, your offline version is discarded.
+- **Merge manually** -- you decide field by field which content is kept.
+
+> **Important -- avoid data loss:** On **logout, password change, or closing the tab**, any data still stored offline becomes **unreadable**. Therefore, **always sync first** before signing out, changing your password, or closing the browser.
+
+> **No file attachments offline:** Events with file attachments **cannot** be saved offline. For security reasons, no unencrypted file blobs are stored in the browser. In that case, record the event without the file first and attach the file once you are back online.
 
 ---
 
@@ -576,9 +715,14 @@ Each episode shows its status:
 
 ---
 
+> **More questions?** The [FAQ](../faq.md) (German only) answers common questions about data protection, 2FA, offline mode, retention periods, and more.
+
+---
+
 *Anlaufstelle -- Documentation system for low-threshold social services*
 
 <!-- translation-source: docs/user-guide.md -->
-<!-- translation-version: v0.9.0 -->
-<!-- translation-date: 2026-03-28 -->
-<!-- source-hash: 6e14fb6 -->
+<!-- translation-version: v0.10.0 -->
+<!-- translation-date: 2026-04-19 -->
+<!-- source-hash: 96720ec -->
+

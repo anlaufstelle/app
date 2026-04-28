@@ -1,5 +1,7 @@
 """Tests für den TOTP-Setup-Flow (Issue #521 Teil-Umsetzung)."""
 
+import base64
+
 import pytest
 from django_otp.oath import totp as oath_totp
 from django_otp.plugins.otp_totp.models import TOTPDevice
@@ -50,6 +52,22 @@ class TestMFASetupFlow:
         device.refresh_from_db()
         assert device.confirmed is False
         assert not AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.MFA_ENABLED).exists()
+
+    def test_setup_secret_is_base32_of_device_key(self, client, staff_user):
+        """Manuell anzeigbares Secret muss Base32 sein (RFC 6238/3548).
+
+        Authenticator-Apps (FreeOTP+, Google Authenticator, …) interpretieren
+        die ``secret``-Eingabe als Base32. Hex-Darstellung führt zu falsch
+        initialisiertem Gerät und „Code ungültig"-Fehlern.
+        """
+        client.login(username="teststaff", password="testpass123")
+        response = client.get("/mfa/setup/")
+        assert response.status_code == 200
+        device = TOTPDevice.objects.get(user=staff_user, confirmed=False)
+        secret = response.context["secret"]
+        padding = "=" * (-len(secret) % 8)
+        decoded = base64.b32decode(secret + padding)
+        assert decoded == device.bin_key
 
     def test_setup_redirects_when_device_already_confirmed(self, client, staff_user):
         TOTPDevice.objects.create(user=staff_user, name="existing", confirmed=True)

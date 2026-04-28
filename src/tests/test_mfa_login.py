@@ -131,6 +131,95 @@ class TestMFAEnforcementMiddleware:
         assert response != request, "Admin ohne MFA-Setup muss redirecten"
         assert "/mfa/setup/" in response.url
 
+    def test_admin_url_not_exempt_from_mfa(self, rf, staff_user):
+        """Auch die generische Django-Admin-URL ``/admin/`` darf MFA nicht
+        umgehen — falls sie jemals gemountet wird, sollte das Middleware-Gate
+        greifen. ``EXEMPT_URLS`` listet weder ``/admin/`` noch ``/admin-mgmt/``
+        (Refs #591, WP1)."""
+        staff_user.mfa_required = True
+        staff_user.save(update_fields=["mfa_required"])
+        request = rf.get("/admin/")
+        request.user = staff_user
+        request.session = {"mfa_verified": False}
+        response = self._middleware()(request)
+        assert response != request, "/admin/ ohne MFA-Setup muss redirecten"
+        assert response.status_code == 302
+        assert "/mfa/setup/" in response.url
+
+    def test_session_flag_without_device_still_redirects_to_setup(self, rf, staff_user):
+        """Security-Regression-Guard: Wenn ein Angreifer per Session-Flag
+        ``mfa_verified=True`` setzt, aber KEIN confirmed TOTPDevice existiert
+        und der User ``mfa_required=True`` hat → Middleware muss trotzdem auf
+        ``/mfa/setup/`` redirecten. Das manuelle Flag darf nicht ausreichen,
+        um den Device-Setup zu überspringen (Refs #591, WP1)."""
+        staff_user.mfa_required = True
+        staff_user.save(update_fields=["mfa_required"])
+        # KEIN Device erstellen — nur das Session-Flag manuell setzen.
+        request = rf.get("/")
+        request.user = staff_user
+        request.session = {"mfa_verified": True}
+        response = self._middleware()(request)
+        assert response != request, "Session-Flag ohne Device darf MFA-Setup-Redirect nicht umgehen."
+        assert response.status_code == 302
+        assert "/mfa/setup/" in response.url
+
+
+@pytest.mark.django_db
+class TestForcePasswordChangeMiddleware:
+    """Regression-Guards für Force-Password-Change-Gate (Commit 4ffe9e5).
+
+    Das Gate läuft als Middleware (``ForcePasswordChangeMiddleware``) und
+    redirectet jede geschützte Route auf ``/password-change/``, sobald der User
+    ``must_change_password=True`` hat.
+    """
+
+    def _middleware(self):
+        from core.middleware.password_change import ForcePasswordChangeMiddleware
+
+        return ForcePasswordChangeMiddleware(lambda r: r)
+
+    def test_user_with_must_change_password_redirects_on_admin_url(self, rf, staff_user):
+        """User mit ``must_change_password=True`` darf ``/admin/`` (oder
+        irgendeine geschützte Route) nicht aufrufen — muss auf
+        ``/password-change/`` redirecten."""
+        staff_user.must_change_password = True
+        staff_user.save(update_fields=["must_change_password"])
+        request = rf.get("/admin/")
+        request.user = staff_user
+        response = self._middleware()(request)
+        assert response != request
+        assert response.status_code == 302
+        assert "/password-change/" in response.url
+
+    def test_user_with_must_change_password_redirects_on_protected_route(self, rf, staff_user):
+        """Dasselbe Gate greift auch für beliebige Applikations-Routen."""
+        staff_user.must_change_password = True
+        staff_user.save(update_fields=["must_change_password"])
+        request = rf.get("/clients/")
+        request.user = staff_user
+        response = self._middleware()(request)
+        assert response != request
+        assert response.status_code == 302
+        assert "/password-change/" in response.url
+
+    def test_password_change_path_itself_is_exempt(self, rf, staff_user):
+        """Der ``/password-change/``-Pfad selbst muss exempt sein, sonst
+        droht eine Redirect-Schleife."""
+        staff_user.must_change_password = True
+        staff_user.save(update_fields=["must_change_password"])
+        request = rf.get("/password-change/")
+        request.user = staff_user
+        response = self._middleware()(request)
+        assert response == request
+
+    def test_user_without_flag_passes_through(self, rf, staff_user):
+        """Ohne ``must_change_password`` wird nicht umgeleitet."""
+        assert staff_user.must_change_password is False
+        request = rf.get("/admin/")
+        request.user = staff_user
+        response = self._middleware()(request)
+        assert response == request
+
 
 @pytest.fixture
 def rf():

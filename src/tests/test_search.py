@@ -184,9 +184,7 @@ class TestSearch:
 
         # 10 exakte Treffer für "Batch"
         batch_pks = {
-            ClientModel.objects.create(
-                facility=facility, pseudonym=f"Batch-{i:02d}", created_by=staff_user
-            ).pk
+            ClientModel.objects.create(facility=facility, pseudonym=f"Batch-{i:02d}", created_by=staff_user).pk
             for i in range(10)
         }
 
@@ -270,3 +268,106 @@ class TestSearch:
         assert response.status_code == 200
         assert "<!DOCTYPE html>" not in response.content.decode()
         assert "Test-ID-01" in response.content.decode()
+
+
+@pytest.mark.django_db
+class TestSearchThresholdBoundaries:
+    """WP4: Grenzwerte für ``search_trigram_threshold`` (0.0, 1.0) und
+    Query-Längen an der 2-Zeichen-Grenze.
+
+    Am Code verifiziert:
+    - ``search_similar_clients`` filtert ``similarity__gte=threshold`` und
+      schließt anschließend ``pseudonym__icontains=query`` aus (siehe
+      ``src/core/services/search.py``).
+    - Die Mindest-Query-Länge liegt bei ``len(query) < 2 → []`` — d.h. "S"
+      ist leer, "Sc" wird durchgelassen (der pg_trgm-Match kann trotzdem
+      leer bleiben, aber der Service wirft keinen Fehler).
+    - Der Settings-Validator erlaubt Werte im Bereich ``[0.0, 1.0]`` (siehe
+      ``src/core/models/settings.py``: MinValueValidator(0.0), MaxValueValidator(1.0)).
+    """
+
+    def test_threshold_zero_returns_non_empty(self, facility, staff_user):
+        """Bei threshold=0.0 wird jede Ähnlichkeit >= 0 akzeptiert; es muss
+        mindestens ein Kandidat zurückkommen, solange es Clients gibt, die
+        nicht bereits durch den icontains-Filter ausgeschlossen sind.
+        """
+        from core.models import Client as ClientModel
+        from core.services.search import search_similar_clients
+
+        ClientModel.objects.create(facility=facility, pseudonym="Anton", created_by=staff_user)
+        ClientModel.objects.create(facility=facility, pseudonym="Zebra", created_by=staff_user)
+
+        # Query "Baer" matcht weder "Anton" noch "Zebra" als Substring →
+        # beide bleiben Fuzzy-Kandidaten. Bei threshold=0.0 muss der Service
+        # mindestens einen liefern (und nicht leer sein), da similarity >= 0
+        # immer erfüllt ist.
+        result = search_similar_clients(facility, "Baer", threshold=0.0)
+        assert len(result) >= 1
+        # Keiner der Treffer darf als icontains-Match auftauchen — im Service
+        # werden diese explizit ausgeschlossen.
+        for c in result:
+            assert "Baer".lower() not in c.pseudonym.lower()
+
+    def test_threshold_one_excludes_fuzzy_exact_is_filtered(self, facility, staff_user):
+        """Bei threshold=1.0 werden Fuzzy-Treffer nur akzeptiert, wenn die
+        Ähnlichkeit exakt 1.0 ist. ``search_similar_clients`` schließt aber
+        gleichzeitig ``icontains=query`` aus — ein exakter Treffer wie
+        "Schmidt" bei Query "Schmidt" fällt dadurch raus. Ergebnis also leer.
+        """
+        from core.models import Client as ClientModel
+        from core.services.search import search_similar_clients
+
+        ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
+        ClientModel.objects.create(facility=facility, pseudonym="Schmitt", created_by=staff_user)
+
+        # Query exakt gleich einem Pseudonym: icontains-Match → Service
+        # schließt "Schmidt" aus. "Schmitt" hat similarity < 1.0 → kein Match.
+        result = search_similar_clients(facility, "Schmidt", threshold=1.0)
+        assert result == []
+
+    def test_threshold_one_near_duplicate_rejected(self, facility, staff_user):
+        """Bei threshold=1.0 werden sogar leichte Variationen zurückgewiesen."""
+        from core.models import Client as ClientModel
+        from core.services.search import search_similar_clients
+
+        ClientModel.objects.create(facility=facility, pseudonym="Mueller", created_by=staff_user)
+        # Query "Muller" ist ähnlich, aber nicht identisch → bei threshold=1.0 leer.
+        assert search_similar_clients(facility, "Muller", threshold=1.0) == []
+
+    def test_query_length_two_does_not_raise(self, facility, staff_user):
+        """Queries mit exakt 2 Zeichen werden durchgelassen (Mindestlänge
+        ``len(query) < 2``). Der Service muss eine Liste zurückgeben, nie
+        einen Fehler werfen."""
+        from core.models import Client as ClientModel
+        from core.services.search import search_similar_clients
+
+        ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
+
+        # 2 Zeichen: nicht geblockt, Return muss eine Liste sein
+        result = search_similar_clients(facility, "Sc")
+        assert isinstance(result, list)
+
+    def test_query_length_one_returns_empty(self, facility, staff_user):
+        """1-Zeichen-Queries werden vor pg_trgm abgefangen und sind leer."""
+        from core.models import Client as ClientModel
+        from core.services.search import search_similar_clients
+
+        ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
+        assert search_similar_clients(facility, "S") == []
+        assert search_similar_clients(facility, "") == []
+
+    def test_threshold_zero_via_facility_settings(self, facility, staff_user):
+        """Auch via facility.settings darf 0.0 konfiguriert werden (Validator-
+        Minimum). Der Service nutzt den Settings-Wert, wenn kein Override
+        übergeben wird."""
+        from core.models import Client as ClientModel
+        from core.models import Settings
+        from core.services.search import search_similar_clients
+
+        ClientModel.objects.create(facility=facility, pseudonym="Anton", created_by=staff_user)
+        Settings.objects.update_or_create(facility=facility, defaults={"search_trigram_threshold": 0.0})
+
+        # Bei 0.0 muss mindestens der Nicht-icontains-Match "Anton"
+        # durchkommen, wenn die Query selbst kein Substring ist.
+        result = search_similar_clients(facility, "Xyz")
+        assert len(result) >= 1

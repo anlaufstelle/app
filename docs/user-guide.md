@@ -13,7 +13,7 @@ Dieses Handbuch richtet sich an Fachkräfte, Leitungen und Assistenzen in Kontak
 5. [Hinweise und Aufgaben (WorkItems)](#5-hinweise-und-aufgaben-workitems)
 6. [Suche](#6-suche)
 7. [Statistik und Export](#7-statistik-und-export)
-8. [PWA installieren (App auf dem Startbildschirm)](#8-pwa-installieren-app-auf-dem-startbildschirm)
+8. [PWA installieren und Offline arbeiten](#8-pwa-installieren-und-offline-arbeiten)
 9. [Rollen und Berechtigungen](#9-rollen-und-berechtigungen)
 10. [Fallmanagement](#10-fallmanagement)
 
@@ -39,6 +39,38 @@ Dieses Handbuch richtet sich an Fachkräfte, Leitungen und Assistenzen in Kontak
 5. Klicken Sie auf **Speichern**.
 
 > **Tipp:** Wählen Sie ein sicheres Passwort (mindestens 12 Zeichen, Groß-/Kleinbuchstaben, Ziffern). Das System prüft die Mindestanforderungen.
+
+> **Einladung neuer Nutzer:** Die erste Einladung an neue Nutzer kommt jetzt per Token-Link (kein Klartext-Initialpasswort mehr). Beim ersten Klick auf den Link legen Sie selbst ein Passwort fest.
+
+### Zwei-Faktor-Authentifizierung (2FA)
+
+Die Anlaufstelle unterstützt zeitbasierte Einmalcodes (TOTP) als zweiten Faktor beim Login. Eine Administratorin kann 2FA für einzelne Benutzer oder einrichtungsweit verpflichtend machen; unabhängig davon kann jede/r Benutzer/in 2FA freiwillig aktivieren.
+
+**Einrichtung (einmalig):**
+
+1. Oben rechts auf Ihren Namen → **Zwei-Faktor-Authentifizierung** (URL: `/mfa/settings/`).
+2. **2FA einrichten** klicken → QR-Code wird angezeigt.
+3. Eine Authenticator-App installieren und den QR-Code scannen. Getestete Apps:
+   - **Google Authenticator** (Android/iOS)
+   - **Microsoft Authenticator** (Android/iOS)
+   - **Authy** (Android/iOS/Desktop)
+   - **FreeOTP / FreeOTP+** (Android, Open Source)
+   - **1Password**, **Bitwarden**, **Proton Pass** (als integrierter Authenticator)
+4. Den 6-stelligen Code aus der App eingeben und **Bestätigen & aktivieren** klicken.
+
+> **Tipp:** Falls der QR-Code nicht scannbar ist, tippen Sie auf **Secret manuell eingeben** und übertragen die Zeichenkette in die App (Feld „Secret" / „Schlüssel" — Base32, ohne Leerzeichen). Wählen Sie in der App den Typ **TOTP / zeitbasiert**.
+
+**Login mit 2FA:**
+
+1. Benutzername und Passwort wie gewohnt eingeben.
+2. Auf der folgenden Seite den aktuell in der App angezeigten 6-stelligen Code eintippen.
+3. Der Code ist jeweils **30 Sekunden** gültig — falls er abläuft, einfach den nächsten nehmen.
+
+**2FA deaktivieren:**
+
+Unter `/mfa/settings/` → **2FA deaktivieren**. Dies ist **nicht möglich**, wenn Ihre Einrichtung 2FA verpflichtend vorschreibt oder Ihr Konto individuell als 2FA-pflichtig markiert ist — in diesem Fall wenden Sie sich an Ihre Administration.
+
+> **Handy verloren / Authenticator zurückgesetzt?** Aktuell ist eine Admin-Intervention nötig (2FA im Admin-Bereich zurücksetzen). Self-Service-Recovery über Backup-Codes ist geplant ([Issue #588](https://github.com/tobiasnix/anlaufstelle/issues/588)).
 
 ### Abmelden
 
@@ -109,6 +141,32 @@ Sie werden zur Detailansicht des neu erstellten Eintrags weitergeleitet. Eine Er
 
 > **Tipp:** Wenn Sie von der Klientel-Detailseite aus einen Kontakt erfassen, ist der Klientel bereits vorausgefüllt.
 
+### Schnell-Vorlagen (Quick-Templates)
+
+Wenn Ihre Administration für wiederkehrende Dokumentationsmuster **Schnell-Vorlagen** eingerichtet hat (z. B. „Beratungsgespräch 30 Min", „Standard-Check-in"), erscheinen diese oben auf der Seite „Neuer Kontakt" als Buttons.
+
+- **Klick auf einen Button** füllt das Formular mit den hinterlegten Werten und dem passenden Dokumentationstyp vor.
+- **Alle Felder bleiben bearbeitbar** — die Vorlage liefert nur Defaults, keine Sperre.
+- **Bereits ausgefüllte Felder werden nicht überschrieben** — die Vorlage füllt nur leere Felder.
+- **Rollen-Filter:** Sie sehen nur Vorlagen, deren Dokumentationstyp Sie laut Ihrer Rolle einsehen dürfen. Assistenzen sehen daher keine Vorlagen für erhöhte/hohe Sensitivität.
+- **Selbstheilend:** Wurde nach Anlage einer Vorlage eine Auswahl-Option deaktiviert, wird der betroffene Wert beim Anwenden stillschweigend verworfen — Sie wählen dann einfach einen aktuell gültigen Wert.
+
+> **Hinweis:** Vorlagen werden von Administratoren im Django-Admin-Bereich angelegt und gepflegt. Wenn Sie feststellen, dass Sie dasselbe Dokumentationsmuster immer wieder tippen, bitten Sie die Administration, eine Schnell-Vorlage dafür zu hinterlegen.
+
+### Dateianhänge
+
+An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes Formular, ein Foto eines Dokuments oder ein PDF.
+
+- **Hochladen:** Im Kontakt-Formular gibt es ein Feld für den Datei-Upload. Wählen Sie eine Datei von Ihrem Gerät aus und speichern Sie das Ereignis wie gewohnt.
+- **Virenscan:** Vor dem Speichern wird jede Datei automatisch durch einen Virenscanner (ClamAV) geprüft. Infizierte Dateien werden abgelehnt — Sie erhalten eine Fehlermeldung und das Ereignis wird nicht gespeichert.
+- **Verschlüsselung:** Alle Anhänge werden verschlüsselt gespeichert (AES-GCM). Das bedeutet: Die Datei ist auf dem Server nicht im Klartext lesbar, sondern nur über Anlaufstelle selbst abrufbar.
+- **Maximale Größe:** Standardmäßig sind **bis zu 10 MiB pro Datei** erlaubt. Ihre Administration kann diesen Wert anpassen.
+- **Unterstützte Formate:** PDF, Office-Dokumente und Bilder. Die genaue, für Ihre Einrichtung erlaubte Liste erfragen Sie bitte bei Ihrer Administration.
+- **Herunterladen:** Öffnen Sie die Detailansicht des Ereignisses und klicken Sie auf den Datei-Link. Die Datei wird beim Abruf automatisch entschlüsselt und im Browser ausgeliefert.
+- **Ersetzen:** Beim Bearbeiten eines Ereignisses können Sie die bestehende Datei durch eine neue ersetzen. Die alte Datei wird erst gelöscht, wenn der neue Upload erfolgreich abgeschlossen ist — Sie verlieren also nichts, wenn der Upload abbricht.
+
+> **Offline-Hinweis:** Ereignisse mit Datei-Anhängen können aktuell **nicht offline** gespeichert werden. Wenn Sie offline arbeiten, erscheint beim Anhängen einer Datei ein deutlicher Hinweis. Siehe [Abschnitt 8](#8-pwa-installieren-und-offline-arbeiten).
+
 ### Kontakt bearbeiten
 
 1. Öffnen Sie das Ereignis (über den Aktivitätslog oder die Klientel-Chronik).
@@ -116,6 +174,8 @@ Sie werden zur Detailansicht des neu erstellten Eintrags weitergeleitet. Eine Er
 3. Ändern Sie die gewünschten Felder und klicken Sie auf **Speichern**.
 
 > **Hinweis:** Bearbeitungen werden in der Änderungshistorie des Ereignisses protokolliert. Frühere Versionen bleiben im Verlauf sichtbar.
+
+> **Gleichzeitige Bearbeitung:** Wenn jemand anderes den gleichen Datensatz gleichzeitig bearbeitet hat, erscheint eine Fehlermeldung. Laden Sie die Seite neu und tragen Sie Ihre Änderung erneut ein — so wird sichergestellt, dass keine Änderungen still überschrieben werden.
 
 ### Kontakt löschen
 
@@ -181,6 +241,8 @@ Von der Detailseite aus können Sie direkt einen neuen Kontakt für diesen Klien
 
 > **Hinweis:** Eine Änderung der Kontaktstufe wird automatisch im Audit-Log protokolliert.
 
+> **Gleichzeitige Bearbeitung:** Wenn jemand anderes den gleichen Datensatz gleichzeitig bearbeitet hat, erscheint eine Fehlermeldung. Laden Sie die Seite neu und tragen Sie Ihre Änderung erneut ein — so wird sichergestellt, dass keine Änderungen still überschrieben werden.
+
 ---
 
 ## 5. Hinweise und Aufgaben (WorkItems)
@@ -240,6 +302,42 @@ Die Liste aktualisiert sich ohne Seitenneuladung.
 2. Auf der Detailseite klicken Sie auf **Bearbeiten**.
 3. Ändern Sie die gewünschten Felder und speichern Sie.
 
+> **Gleichzeitige Bearbeitung:** Wenn jemand anderes den gleichen Datensatz gleichzeitig bearbeitet hat, erscheint eine Fehlermeldung. Laden Sie die Seite neu und tragen Sie Ihre Änderung erneut ein — so wird sichergestellt, dass keine Änderungen still überschrieben werden.
+
+### Filter: Mir zugewiesen
+
+In der Inbox-Ansicht können Sie den Filter **„Mir zugewiesen"** aktivieren. Dann sehen Sie ausschließlich Aufgaben und Hinweise, die Ihnen persönlich zugewiesen sind — allgemeine (nicht zugewiesene) Einträge und Einträge für andere Personen werden ausgeblendet.
+
+Der Filter ist hilfreich, wenn Sie sich einen klaren Überblick über Ihre eigenen offenen Punkte verschaffen möchten, ohne von der gesamten Teamliste abgelenkt zu werden.
+
+### Bulk-Edit
+
+Wenn Sie mehrere Aufgaben gleichzeitig bearbeiten möchten, nutzen Sie den Bulk-Edit-Modus:
+
+1. Wählen Sie in der Inbox die gewünschten Aufgaben über die **Checkbox** links neben jeder Karte aus.
+2. Oben erscheint ein **Bulk-Dropdown** mit den verfügbaren Aktionen.
+3. Ändern Sie zentral **Status**, **Priorität** oder **Zuweisung** für alle ausgewählten Einträge auf einmal.
+4. Bestätigen Sie die Änderung — alle markierten Einträge werden gemeinsam aktualisiert.
+
+### Erinnerung vs. Frist
+
+Aufgaben kennen zwei unterschiedliche Zeit-Felder:
+
+| Feld | Bedeutung |
+|---|---|
+| **Frist (due_date)** | Fälligkeitstermin — wann die Aufgabe spätestens erledigt sein muss |
+| **Erinnerung (remind_at)** | Zeitpunkt, zu dem Sie benachrichtigt werden möchten — üblicherweise vor der Frist |
+
+**Beispiel:** Die Frist ist der 15.04., die Erinnerung setzen Sie auf den 10.04. — so bekommen Sie fünf Tage vorher einen Hinweis und laufen nicht in den Terminstress am Fälligkeitstag.
+
+Beide Felder sind optional. Sie können eine Aufgabe auch nur mit Frist oder nur mit Erinnerung anlegen.
+
+### Wiederkehrende Fristen
+
+Für wiederkehrende Aufgaben (z. B. monatliche Beratungsgespräche, wöchentliche Check-ins) können Sie einen **Wiederholungs-Rhythmus** hinterlegen (z. B. wöchentlich, monatlich).
+
+Sobald Sie eine solche Aufgabe auf Status **„Erledigt"** setzen, wird automatisch eine **Folge-Aufgabe** mit demselben Titel und neuem Termin nach dem gewählten Rhythmus erzeugt. So müssen Sie die Aufgabe nicht manuell jedes Mal neu anlegen.
+
 ---
 
 ## 6. Suche
@@ -262,6 +360,17 @@ Das Suchfeld ist **permanent in der Sidebar** sichtbar (Desktop). Auf dem Smartp
 Für umfangreichere Recherchen steht weiterhin die Suchseite unter `/search/` zur Verfügung. Sie zeigt alle Treffer (bis zu 20 Klientel und 20 Ereignisse) und ist auch über den Link „Alle Ergebnisse anzeigen" in der Schnellsuche erreichbar.
 
 > **Hinweis:** Felder, die als verschlüsselt konfiguriert sind, werden in der Suche nicht durchsucht.
+
+### Tippfehler-tolerante Suche (Fuzzy)
+
+Die Suche findet auch Treffer, wenn Sie sich vertippen oder ein Name in einer ähnlichen Schreibweise hinterlegt ist. Beispiele:
+
+- Die Eingabe **„Muller"** findet auch **„Müller"**.
+- Die Eingabe **„Tomas"** findet auch **„Thomas"**.
+
+Technisch basiert das auf einer Trigramm-Ähnlichkeit der PostgreSQL-Datenbank (pg_trgm) — Sie müssen sich darum nicht kümmern.
+
+**Ähnlichkeits-Schwelle:** Pro Einrichtung kann Ihre Administration einstellen, wie „streng" die Fuzzy-Suche arbeitet (Wertebereich 0.0–1.0, Standard ca. 0.3). Ein **niedrigerer Wert** liefert mehr Treffer, aber auch mehr falsche Vorschläge; ein **höherer Wert** ist strenger und zeigt nur sehr ähnliche Begriffe.
 
 ---
 
@@ -345,7 +454,7 @@ Wenn eine Fachkraft oder Assistenz einen Kontakt eines qualifizierten Klientel l
 
 ---
 
-## 8. PWA installieren (App auf dem Startbildschirm)
+## 8. PWA installieren und Offline arbeiten
 
 Anlaufstelle kann wie eine native App auf dem Startbildschirm Ihres Smartphones oder Tablets installiert werden – ohne App Store.
 
@@ -373,9 +482,39 @@ Die App erscheint nun als Symbol auf Ihrem Startbildschirm und öffnet sich ohne
 
 Die installierte App verhält sich wie ein normales Programm und ist über das Startmenü oder den Desktop erreichbar.
 
-> **Hinweis:** Die App ist eine **Progressive Web App (PWA)** – sie benötigt weiterhin eine Internetverbindung zum Arbeiten. Es handelt sich nicht um eine Offline-Anwendung.
+> **Hinweis:** Die App ist eine **Progressive Web App (PWA)**. Für den Streetwork-Einsatz steht jetzt ein **Offline-Modus** zur Verfügung (siehe unten) — Sie können Ereignisse auch ohne Internetverbindung erfassen und später synchronisieren.
 
 > **Firefox (Android):** Firefox bietet zwar "Installieren" an, die App öffnet sich aber immer mit Adressleiste. Für den echten App-Modus ohne Adressleiste verwenden Sie **Chrome, Edge oder Samsung Internet** (Android) bzw. **Safari** (iOS).
+
+### Offline-Erfassung (Streetwork)
+
+Für Einsätze ohne verlässliche Internetverbindung — etwa bei aufsuchender Arbeit — können Sie Anlaufstelle im Offline-Modus nutzen.
+
+**Vor dem Einsatz (online):**
+
+1. Öffnen Sie die Klientel-Liste.
+2. Klicken Sie auf **„Klientel für Offline laden"**, um die relevanten Klientel-Profile in den Offline-Cache Ihres Geräts zu laden. So sind die Pseudonyme und Stammdaten auch ohne Netz verfügbar.
+
+**Während des Einsatzes (offline):**
+
+- Sie können Ereignisse wie gewohnt erfassen. Die Einträge werden verschlüsselt lokal im Browser gespeichert (AES-GCM-256; der Schlüssel wird aus Ihrem Passwort abgeleitet).
+- In der Oberfläche sehen Sie einen Hinweis, dass Sie offline arbeiten und wie viele Einträge noch auf die Synchronisation warten.
+
+**Zurück im Netz:**
+
+- Sobald das Gerät wieder online ist, wird die Warteschlange **automatisch synchronisiert**. Die offline erfassten Ereignisse landen auf dem Server und sind dort für das Team sichtbar.
+
+**Konflikte auflösen:**
+
+Wurde ein Ereignis gleichzeitig online (durch jemand anderen) und offline (durch Sie) bearbeitet, zeigt Anlaufstelle beim Synchronisieren einen **Side-by-Side-Diff** mit drei Auswahlmöglichkeiten:
+
+- **Meine Version übernehmen** — Ihre offline erfasste Änderung gewinnt.
+- **Server-Version übernehmen** — die Online-Änderung gewinnt, Ihre offline-Version wird verworfen.
+- **Manuell zusammenführen** — Sie entscheiden Feld für Feld, welche Inhalte übernommen werden.
+
+> **Wichtig — Datenverlust vermeiden:** Bei **Logout, Passwort-Änderung oder dem Schließen des Tabs** werden alle noch offline gespeicherten Daten **unlesbar**. Synchronisieren Sie daher **immer zuerst**, bevor Sie sich abmelden, Ihr Passwort ändern oder den Browser schließen.
+
+> **Keine Datei-Anhänge offline:** Ereignisse mit Datei-Anhängen können offline **nicht** gespeichert werden. Aus Sicherheitsgründen werden keine unverschlüsselten Datei-Blobs im Browser abgelegt. Erfassen Sie in diesem Fall zuerst das Ereignis ohne Datei und hängen Sie die Datei nach, sobald Sie wieder online sind.
 
 ---
 
@@ -570,6 +709,10 @@ Jede Episode zeigt ihren Status:
 | Kontakte zuordnen / entfernen | Nein | Ja | Ja | Ja |
 | Episoden verwalten | Nein | Ja | Ja | Ja |
 | Wirkungsziele und Meilensteine | Nein | Ja | Ja | Ja |
+
+---
+
+> **Weitere Fragen?** Die [FAQ](faq.md) beantwortet häufige Fragen zu Datenschutz, 2FA, Offline-Modus, Löschfristen und mehr.
 
 ---
 

@@ -923,3 +923,99 @@ class TestClientAutocompleteMinStageFilter:
         assert response.status_code == 200
         data = response.json()
         assert len(data) >= 2
+
+
+@pytest.mark.django_db
+class TestEventAttachmentAtomicity:
+    """Event + Attachment müssen atomar angelegt werden (Refs #584, Refs #591 WP2).
+
+    Scheitert der Attachment-Teil (Virus-Scan, Fernet, Disk, DB-Save), muss die
+    Event-Row zurückgerollt werden — sonst verweist die DB auf einen Anhang,
+    der nie persistiert wurde. Der View-Layer umschließt ``create_event()`` +
+    ``store_encrypted_file()`` bewusst mit ``transaction.atomic()``.
+    """
+
+    @pytest.fixture
+    def doc_type_with_file(self, facility):
+        """DocumentType mit einem File-Feld."""
+        from core.models import DocumentType, DocumentTypeField, FieldTemplate
+
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name="Doc mit Anhang",
+            category=DocumentType.Category.NOTE,
+        )
+        ft_file = FieldTemplate.objects.create(
+            facility=facility,
+            name="Anhang",
+            field_type=FieldTemplate.FieldType.FILE,
+        )
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft_file, sort_order=0)
+        return dt
+
+    def test_attachment_store_failure_rolls_back_event_creation(self, client, staff_user, facility, doc_type_with_file):
+        """Wenn ``store_encrypted_file`` fehlschlägt, darf kein Event bestehen bleiben.
+
+        Der View legt das Event zuerst per ``create_event()`` an und ruft erst
+        danach ``store_encrypted_file()``. Beide Aufrufe laufen innerhalb eines
+        gemeinsamen ``transaction.atomic()``-Blocks — ein Fehler im zweiten
+        Schritt muss den ersten rückgängig machen.
+        """
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        client.force_login(staff_user)
+        events_before = Event.objects.count()
+        history_before = EventHistory.objects.count()
+
+        uploaded = SimpleUploadedFile("test.pdf", b"PDF-Payload", content_type="application/pdf")
+
+        # Die Referenz, die der View tatsächlich aufruft, liegt in
+        # ``core.views.events.store_encrypted_file`` (Import-Alias, siehe
+        # :file:`src/core/views/events.py`). Dort patchen — nicht im Service-Modul.
+        with patch(
+            "core.views.events.store_encrypted_file",
+            side_effect=RuntimeError("Simulierter Fernet-Fail"),
+        ):
+            with pytest.raises(RuntimeError, match="Simulierter Fernet-Fail"):
+                client.post(
+                    reverse("core:event_create"),
+                    {
+                        "document_type": str(doc_type_with_file.pk),
+                        "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                        "anhang": uploaded,
+                    },
+                )
+
+        # Transaktion rollt zurück → kein neues Event, keine EventHistory.
+        assert Event.objects.count() == events_before
+        assert EventHistory.objects.count() == history_before
+
+    def test_attachment_save_failure_rolls_back_event_creation(self, client, staff_user, facility, doc_type_with_file):
+        """Alternative: Patch direkt auf ``EventAttachment.save`` — der Save
+        läuft innerhalb von ``store_encrypted_file``. Erfordert allerdings,
+        dass ``encrypt_file`` und Virus-Scan vorher laufen — im Testumfeld
+        ist CLAMAV_ENABLED=False, aber der Encryption-Key muss gesetzt sein.
+        """
+        from core.models.attachment import EventAttachment
+
+        client.force_login(staff_user)
+        events_before = Event.objects.count()
+
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        uploaded = SimpleUploadedFile("test.pdf", b"PDF-Payload", content_type="application/pdf")
+
+        with patch.object(EventAttachment, "save", side_effect=RuntimeError("DB-Save-Fehler")):
+            with pytest.raises(RuntimeError, match="DB-Save-Fehler"):
+                client.post(
+                    reverse("core:event_create"),
+                    {
+                        "document_type": str(doc_type_with_file.pk),
+                        "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                        "anhang": uploaded,
+                    },
+                )
+
+        # Rollback-Garantie: weder Event noch Attachment in der DB.
+        assert Event.objects.count() == events_before
+        assert EventAttachment.objects.count() == 0

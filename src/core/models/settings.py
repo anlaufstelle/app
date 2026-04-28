@@ -126,8 +126,7 @@ class Settings(models.Model):
         verbose_name_plural = _("Einstellungen")
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(search_trigram_threshold__gte=0.0)
-                & models.Q(search_trigram_threshold__lte=1.0),
+                condition=models.Q(search_trigram_threshold__gte=0.0) & models.Q(search_trigram_threshold__lte=1.0),
                 name="settings_trigram_threshold_range",
             ),
         ]

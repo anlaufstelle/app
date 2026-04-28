@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import socket
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
@@ -165,6 +166,85 @@ class TestStreamlikeObjects:
         assert result.clean is True
         # scan_stream wurde mit den Bytes aufgerufen.
         assert client.scan_stream.call_args[0][0] == b"some bytes"
+
+
+class TestScannerNetworkFailures:
+    """Fail-closed-Verhalten bei Netzwerk-Ausfällen (WP5 Gap-Analyse).
+
+    Das Upload-Contract sagt: bei aktivem CLAMAV_ENABLED ist der Scanner
+    Pflicht — ist er unerreichbar, muss der Upload mit
+    ``VirusScannerUnavailableError`` abgelehnt werden, *bevor* irgendein
+    ``scan_stream``-Aufruf passiert. Kein „silent allow".
+    """
+
+    def test_socket_timeout_on_ping_fails_closed(self, settings):
+        """``socket.timeout`` während ``ping()`` muss als unavailable propagieren."""
+        settings.CLAMAV_ENABLED = True
+        uploaded = SimpleUploadedFile("x.pdf", b"payload", content_type="application/pdf")
+
+        client = MagicMock()
+        client.ping.side_effect = socket.timeout("clamav ping timeout")
+
+        with patch("core.services.virus_scan._build_client", return_value=client):
+            with pytest.raises(VirusScannerUnavailableError) as exc_info:
+                scan_file(uploaded)
+        assert "nicht erreichbar" in str(exc_info.value) or "ping" in str(exc_info.value).lower()
+        client.scan_stream.assert_not_called()
+
+    def test_socket_timeout_during_scan_stream_is_wrapped(self, settings):
+        """Timeout erst beim ``scan_stream``-Aufruf (Daemon hängt mitten im Transfer)."""
+        settings.CLAMAV_ENABLED = True
+        uploaded = SimpleUploadedFile("x.pdf", b"payload", content_type="application/pdf")
+
+        client = MagicMock()
+        client.ping.return_value = True
+        client.scan_stream.side_effect = socket.timeout("clamav scan timeout")
+
+        with patch("core.services.virus_scan._build_client", return_value=client):
+            with pytest.raises(VirusScannerUnavailableError):
+                scan_file(uploaded)
+
+    def test_connection_refused_on_build_fails_closed(self, settings):
+        """``ConnectionRefusedError`` bereits beim Clientaufbau → unavailable."""
+        settings.CLAMAV_ENABLED = True
+        uploaded = SimpleUploadedFile("x.pdf", b"payload", content_type="application/pdf")
+
+        with patch(
+            "core.services.virus_scan._build_client",
+            side_effect=ConnectionRefusedError("clamd: connection refused"),
+        ):
+            with pytest.raises(VirusScannerUnavailableError) as exc_info:
+                scan_file(uploaded)
+        assert "refused" in str(exc_info.value).lower() or "initialis" in str(exc_info.value)
+
+    def test_connection_refused_during_scan_stream_is_wrapped(self, settings):
+        """``ConnectionRefusedError`` erst beim ``scan_stream``-Aufruf."""
+        settings.CLAMAV_ENABLED = True
+        uploaded = SimpleUploadedFile("x.pdf", b"payload", content_type="application/pdf")
+
+        client = MagicMock()
+        client.ping.return_value = True
+        client.scan_stream.side_effect = ConnectionRefusedError("clamd closed during scan")
+
+        with patch("core.services.virus_scan._build_client", return_value=client):
+            with pytest.raises(VirusScannerUnavailableError):
+                scan_file(uploaded)
+
+    def test_unavailable_scanner_produces_clean_exception_not_scanresult(self, settings):
+        """Regression: bei unavailable darf ``scan_file`` kein ScanResult(clean=True)
+        zurückgeben — sonst würde der Aufrufer den Upload fälschlich akzeptieren.
+        """
+        settings.CLAMAV_ENABLED = True
+        uploaded = SimpleUploadedFile("x.pdf", b"payload", content_type="application/pdf")
+
+        with patch(
+            "core.services.virus_scan._build_client",
+            side_effect=socket.timeout("clamav socket timeout"),
+        ):
+            with pytest.raises(VirusScannerUnavailableError):
+                result = scan_file(uploaded)
+                # Darf nicht erreicht werden.
+                assert False, f"Expected exception, got {result!r}"
 
 
 class TestPing:
