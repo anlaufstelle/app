@@ -7,12 +7,14 @@ from django.contrib.auth import views as auth_views
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
+from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.decorators.http import require_POST
 from django.views.i18n import set_language
 from django_ratelimit.decorators import ratelimit
 
 from core.models import AuditLog, User
+from core.services.login_lockout import is_locked
 from core.services.offline_keys import ensure_offline_key_salt
 from core.signals.audit import get_client_ip
 
@@ -43,9 +45,38 @@ class CustomLoginView(auth_views.LoginView):
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
+        # Account-Lockout (Refs #612): Nach 10 Fehlversuchen in 15 Minuten
+        # auch bei korrektem Passwort sperren. Der View-Level-Ratelimit
+        # schützt bereits vor Spam-Versuchen, der Lockout verhindert das
+        # „nach Cooldown sofort wieder durchkommen"-Muster.  Der Check greift
+        # VOR super().form_valid() — an dieser Stelle hat AuthenticationForm
+        # den User zwar geprüft, aber auth_login() noch nicht ausgeführt; es
+        # existiert also noch keine gebundene Session, die wir revoken müssten.
+        user = form.get_user()
+        if is_locked(user):
+            AuditLog.objects.create(
+                facility=getattr(user, "facility", None),
+                user=user,
+                action=AuditLog.Action.LOGIN_FAILED,
+                detail={
+                    "message": "Login blockiert durch Account-Lockout",
+                    "username": user.username,
+                    "reason": "locked",
+                },
+                ip_address=get_client_ip(self.request),
+            )
+            form.add_error(
+                None,
+                _(
+                    "Ihr Konto ist nach mehreren fehlgeschlagenen Versuchen "
+                    "temporär gesperrt. Bitte später erneut versuchen oder "
+                    "Administration kontaktieren."
+                ),
+            )
+            return self.form_invalid(form)
+
         response = super().form_valid(form)
         # Load session timeout from facility settings
-        user = form.get_user()
         facility = getattr(user, "facility", None)
         if facility is not None:
             try:
