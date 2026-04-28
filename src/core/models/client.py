@@ -3,6 +3,7 @@
 import uuid
 
 from django.conf import settings
+from django.contrib.postgres.indexes import GinIndex
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -83,6 +84,13 @@ class Client(models.Model):
             models.UniqueConstraint(
                 fields=["facility", "pseudonym"],
                 name="unique_facility_pseudonym",
+            ),
+        ]
+        indexes = [
+            GinIndex(
+                name="client_pseudonym_trgm_idx",
+                fields=["pseudonym"],
+                opclasses=["gin_trgm_ops"],
             ),
         ]
 

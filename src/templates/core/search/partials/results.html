@@ -30,6 +30,24 @@
             </div>
         </div>
         {% endif %}
+
+        {# Ähnliche Pseudonyme (Fuzzy) #}
+        {% if similar_clients %}
+        <div class="mb-6">
+            <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{% trans "Ähnliche Pseudonyme" %} ({{ similar_clients|length }})</h2>
+            <p class="text-xs text-gray-500 mb-2">{% trans "Tippfehler-tolerante Treffer – könnten gemeint sein." %}</p>
+            <div class="bg-white border border-gray-200 rounded-md divide-y divide-gray-200">
+                {% for client in similar_clients %}
+                <a href="{% url 'core:client_detail' client.pk %}" class="block px-4 py-3 hover:bg-gray-50">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium text-indigo-600">{{ client.pseudonym }}</span>
+                        {% include "components/_client_badge.html" with client=client %}
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
     {% else %}
     <div class="text-center py-12 text-gray-500">
         <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>

@@ -155,6 +155,111 @@ class TestSearch:
         _, events = search_clients_and_events(facility, staff_user, "harmloses Wort")
         assert len(events) == 1
 
+    def test_fuzzy_finds_typo_variant(self, client, staff_user, facility):
+        """pg_trgm: 'Schmitt' findet 'Schmidt' (Tippfehler-Toleranz)."""
+        from core.models import Client as ClientModel
+        from core.services.search import search_similar_clients
+
+        ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
+
+        similar = search_similar_clients(facility, "Schmitt")
+        assert [c.pseudonym for c in similar] == ["Schmidt"]
+
+    def test_fuzzy_excludes_exact_matches(self, client, staff_user, facility):
+        """exclude_pks verhindert Doppelung zwischen exakter und Fuzzy-Sektion."""
+        from core.models import Client as ClientModel
+        from core.services.search import search_similar_clients
+
+        exact = ClientModel.objects.create(facility=facility, pseudonym="Müller", created_by=staff_user)
+
+        similar = search_similar_clients(facility, "Müller", exclude_pks={exact.pk})
+        assert similar == []
+
+    def test_fuzzy_excludes_icontains_overflow(self, client, staff_user, facility):
+        """Alle icontains-Treffer werden aus Fuzzy ausgeschlossen, nicht nur die
+        angezeigten (Refs #580). Sonst würden Overflow-Exact-Hits als Fuzzy
+        mislabeled und echte Fuzzy-Kandidaten verdrängen."""
+        from core.models import Client as ClientModel
+        from core.services.search import search_similar_clients
+
+        # 10 exakte Treffer für "Batch"
+        batch_pks = {
+            ClientModel.objects.create(
+                facility=facility, pseudonym=f"Batch-{i:02d}", created_by=staff_user
+            ).pk
+            for i in range(10)
+        }
+
+        # Nur die ersten 5 als displayed exact hits vortäuschen
+        displayed = set(list(batch_pks)[:5])
+
+        similar = search_similar_clients(facility, "Batch", exclude_pks=displayed, max_results=10)
+        # Kein Batch-* darf mehr dabei sein — weder displayed noch überlauf.
+        similar_pks = {c.pk for c in similar}
+        assert similar_pks.isdisjoint(batch_pks)
+
+    def test_fuzzy_respects_threshold(self, client, staff_user, facility):
+        """Hoher Threshold filtert ähnliche, aber nicht identische Pseudonyme."""
+        from core.models import Client as ClientModel
+        from core.services.search import search_similar_clients
+
+        ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
+
+        # Niedrig: Match
+        assert len(search_similar_clients(facility, "Schmitt", threshold=0.3)) == 1
+        # Hoch: kein Match
+        assert search_similar_clients(facility, "Schmitt", threshold=0.95) == []
+
+    def test_fuzzy_facility_scoping(self, client, staff_user, facility, organization):
+        """Fuzzy-Suche darf nur eigene Facility treffen."""
+        from core.models import Client as ClientModel
+        from core.models import Facility
+        from core.services.search import search_similar_clients
+
+        other = Facility.objects.create(organization=organization, name="Andere")
+        ClientModel.objects.create(facility=other, pseudonym="Schmidt", created_by=staff_user)
+
+        assert search_similar_clients(facility, "Schmitt") == []
+
+    def test_fuzzy_excludes_inactive(self, client, staff_user, facility):
+        """Inaktive Klienten erscheinen nicht in Fuzzy-Ergebnissen."""
+        from core.models import Client as ClientModel
+        from core.services.search import search_similar_clients
+
+        ClientModel.objects.create(facility=facility, pseudonym="Schmidt", is_active=False, created_by=staff_user)
+        assert search_similar_clients(facility, "Schmitt") == []
+
+    def test_fuzzy_short_query_returns_empty(self, client, staff_user, facility):
+        """Queries unter 2 Zeichen liefern keine Fuzzy-Treffer (Rauschen vermeiden)."""
+        from core.models import Client as ClientModel
+        from core.services.search import search_similar_clients
+
+        ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
+        assert search_similar_clients(facility, "") == []
+        assert search_similar_clients(facility, "S") == []
+
+    def test_fuzzy_uses_facility_threshold(self, client, staff_user, facility):
+        """Threshold aus facility.settings wird genutzt, wenn kein Override."""
+        from core.models import Client as ClientModel
+        from core.models import Settings
+        from core.services.search import search_similar_clients
+
+        ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
+        Settings.objects.update_or_create(facility=facility, defaults={"search_trigram_threshold": 0.95})
+
+        assert search_similar_clients(facility, "Schmitt") == []
+
+    def test_search_view_surfaces_similar_section(self, client, staff_user, facility):
+        """Integrationstest: View rendert „Ähnliche Pseudonyme" bei Tippfehler."""
+        from core.models import Client as ClientModel
+
+        ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
+        client.force_login(staff_user)
+        response = client.get(reverse("core:search"), {"q": "Schmitt"})
+        content = response.content.decode()
+        assert "Ähnliche Pseudonyme" in content
+        assert "Schmidt" in content
+
     def test_search_htmx_returns_partial(self, client, staff_user, client_identified):
         client.force_login(staff_user)
         response = client.get(

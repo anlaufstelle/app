@@ -1,5 +1,6 @@
 """Facility settings (singleton per facility)."""
 
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -105,6 +106,16 @@ class Settings(models.Model):
             "Anonymisierung."
         ),
     )
+    search_trigram_threshold = models.FloatField(
+        default=0.3,
+        validators=[MinValueValidator(0.0), MaxValueValidator(1.0)],
+        verbose_name=_("Fuzzy-Search-Schwelle"),
+        help_text=_(
+            "Mindest-Ähnlichkeit (0.0–1.0) für Fuzzy-Treffer im Pseudonym. "
+            "Kleinere Werte liefern mehr, aber ungenauere Treffer; größere "
+            "Werte sind strenger. Standard: 0.3."
+        ),
+    )
     updated_at = models.DateTimeField(
         auto_now=True,
         verbose_name=_("Aktualisiert am"),
@@ -113,6 +124,13 @@ class Settings(models.Model):
     class Meta:
         verbose_name = _("Einstellungen")
         verbose_name_plural = _("Einstellungen")
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(search_trigram_threshold__gte=0.0)
+                & models.Q(search_trigram_threshold__lte=1.0),
+                name="settings_trigram_threshold_range",
+            ),
+        ]
 
     def __str__(self):
         return f"Einstellungen: {self.facility.name}"

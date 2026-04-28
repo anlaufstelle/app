@@ -59,7 +59,8 @@ class TestGlobalSearchView:
         assert "Test-ID-01" in response.content.decode()
 
     def test_global_search_limits_results(self, client, staff_user, facility):
-        """Global search returns max 5 clients."""
+        """Global search cappt Klientel-Sektion bei 5; Fuzzy-Sektion leakt keinen
+        icontains-Overflow (Refs #536, #580)."""
         from core.models import Client as ClientModel
 
         for i in range(10):
@@ -71,8 +72,9 @@ class TestGlobalSearchView:
         client.force_login(staff_user)
         response = client.get(reverse("core:global_search"), {"q": "Batch"})
         content = response.content.decode()
-        # Should have max 5 client results
-        assert content.count("Batch-") <= 5
+        # Alle 10 "Batch-*" sind icontains-Match → keiner darf in Fuzzy landen.
+        # Nur die 5 in der Klientel-Sektion dürfen sichtbar sein.
+        assert content.count("Batch-") == 5
 
     def test_global_search_empty_query(self, client, staff_user):
         client.force_login(staff_user)

@@ -138,6 +138,30 @@ def test_settings_singleton_per_facility(facility, organization):
 
 
 @pytest.mark.django_db
+def test_settings_trigram_threshold_validator_rejects_out_of_range(facility):
+    """Validator verhindert Werte außerhalb 0.0–1.0 (Refs #581)."""
+    from django.core.exceptions import ValidationError
+
+    s = Settings(facility=facility, search_trigram_threshold=-0.1)
+    with pytest.raises(ValidationError):
+        s.full_clean()
+
+    s.search_trigram_threshold = 1.5
+    with pytest.raises(ValidationError):
+        s.full_clean()
+
+    s.search_trigram_threshold = 0.5
+    s.full_clean()  # must not raise
+
+
+@pytest.mark.django_db
+def test_settings_trigram_threshold_db_constraint(facility):
+    """DB-CheckConstraint fängt Direct-Insert außerhalb 0.0–1.0 ab (Refs #581)."""
+    with pytest.raises(IntegrityError):
+        Settings.objects.create(facility=facility, search_trigram_threshold=-0.5)
+
+
+@pytest.mark.django_db
 def test_audit_log_ordering(facility, admin_user):
     """AuditLog entries are ordered by -timestamp (most recent first)."""
     log1 = AuditLog.objects.create(
