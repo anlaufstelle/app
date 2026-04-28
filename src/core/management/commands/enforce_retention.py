@@ -608,13 +608,13 @@ class Command(BaseCommand):
         """Anonymize clients whose events have all been soft-deleted.
 
         A client is anonymized when they have at least one event and all of them have is_deleted=True.
-        Already anonymized clients (pseudonym starts with 'Gelöscht-') are skipped.
+        Already anonymized clients (pseudonym starts with 'Gelöscht-' or k_anonymized=True) are skipped.
         """
         from django.db.models import Count, Q
 
         candidates = (
             Client.objects.filter(facility=facility)
-            .exclude(pseudonym__startswith="Gelöscht-")
+            .exclude(Q(pseudonym__startswith="Gelöscht-") | Q(k_anonymized=True))
             .annotate(
                 total_events=Count("events"),
                 active_events=Count("events", filter=Q(events__is_deleted=False)),

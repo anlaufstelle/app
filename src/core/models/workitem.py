@@ -115,6 +115,15 @@ class WorkItem(models.Model):
         verbose_name=_("Wiederholung"),
         help_text=_("Bei Erledigung wird automatisch eine Folgeaufgabe mit neuer Frist erstellt."),
     )
+    recurrence_duplicated_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Folgeaufgabe erstellt am"),
+        help_text=_(
+            "Zeitpunkt, an dem für dieses Item bereits eine wiederkehrende Folgeaufgabe erzeugt "
+            "wurde. Verhindert doppelte Duplikate beim erneuten Setzen auf 'Erledigt'."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Arbeitsauftrag")

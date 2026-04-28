@@ -28,6 +28,7 @@ class TestPWASetup:
         assert "javascript" in response.headers.get("content-type", "")
 
 
+@pytest.mark.smoke
 def test_service_worker_registered(authenticated_page, base_url):
     """Service Worker ist registriert und aktiv."""
     page = authenticated_page

@@ -14,7 +14,9 @@ class TestStatisticsCharts:
         """Drei Chart-Canvas-Elemente werden auf der Statistik-Seite gerendert."""
         page = authenticated_page
         page.goto(f"{base_url}/statistics/?period=year")
-        page.wait_for_timeout(2000)
+        # Auf das erste Chart-Canvas warten — signalisiert, dass HTMX-Response
+        # + Chart.js-Init abgeschlossen sind.
+        page.locator("#chart-contacts").wait_for(state="visible", timeout=10000)
 
         assert page.locator("#chart-contacts").is_visible()
         assert page.locator("#chart-doc-types").is_visible()
@@ -24,7 +26,7 @@ class TestStatisticsCharts:
         """Chart-Überschriften sind sichtbar."""
         page = authenticated_page
         page.goto(f"{base_url}/statistics/?period=year")
-        page.wait_for_timeout(1000)
+        page.locator("h3:has-text('Kontakte im Zeitverlauf')").wait_for(state="visible", timeout=5000)
 
         assert page.locator("h3:has-text('Kontakte im Zeitverlauf')").is_visible()
         assert page.locator("h3:has-text('Dokumentationstypen')").is_visible()
@@ -74,9 +76,9 @@ class TestStatisticsCharts:
         """DocumentType-Filter-Dropdown ist vorhanden."""
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
-        page.wait_for_timeout(1000)
-
         dropdown = page.locator("select").filter(has_text="Alle Dokumentationstypen")
+        dropdown.wait_for(state="visible", timeout=5000)
+
         assert dropdown.is_visible()
         # Dropdown sollte Optionen enthalten (Seed-Daten)
         options = dropdown.locator("option")
@@ -86,7 +88,8 @@ class TestStatisticsCharts:
         """Datenquellen-Legende (Live-Daten / Snapshot) ist sichtbar."""
         page = authenticated_page
         page.goto(f"{base_url}/statistics/?period=year")
-        page.wait_for_timeout(2000)
+        # Nach Charts-Render erscheint die Datenquellen-Legende.
+        page.locator("text=Live-Daten").wait_for(state="visible", timeout=10000)
 
         assert page.locator("text=Live-Daten").is_visible()
         assert page.locator("text=Snapshot").is_visible()
@@ -95,8 +98,8 @@ class TestStatisticsCharts:
         """Chart-Sektion hat no-print-Klasse."""
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
-        page.wait_for_timeout(1000)
-
         chart_section = page.locator("[x-data*='statisticsCharts']")
+        chart_section.wait_for(state="attached", timeout=5000)
+
         classes = chart_section.get_attribute("class") or ""
         assert "no-print" in classes

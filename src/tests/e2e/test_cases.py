@@ -70,8 +70,8 @@ class TestCaseCRUD:
         # Auf "Geschlossen" filtern — ändert die Ergebnismenge
         page.select_option('select[name="status"]', value="closed")
         page.wait_for_load_state("domcontentloaded")
-        # Kurz warten bis HTMX aktualisiert hat
-        page.wait_for_timeout(500)
+        # Auf den HTMX-Swap warten — Tabelle oder Empty-State, egal welcher.
+        page.locator("#case-table").wait_for(state="visible")
 
         # Der Filter wurde angewendet — entweder weniger Ergebnisse oder Empty-State
         closed_rows = page.locator("#case-table table tbody tr").count()

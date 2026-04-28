@@ -54,9 +54,15 @@ class TestSchnellerfassung:
         autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
         autocomplete.fill("Stern")
 
-        # Warten bis Dropdown sichtbar
+        # Warten bis Dropdown sichtbar und mindestens ein Ergebnis da ist.
         page.locator("#client-autocomplete-list").wait_for(state="visible", timeout=5000)
-        page.wait_for_timeout(500)  # Debounce (150ms) + Re-Fetch abwarten
+        page.locator("#client-autocomplete-list button").first.wait_for(state="visible", timeout=3000)
+        # Dokumentierter Ausnahmefall zur „kein wait_for_timeout"-Regel (Refs
+        # #598 T-1): Alpine refetched intern nach dem 150ms-Debounce und
+        # rerendert den Dropdown-Inhalt — ohne UI-Signal dafür ist eine
+        # kurze Stabilisierungs-Pause nötig, sonst geht das ArrowDown an
+        # ein DOM, das Alpine gleich neu aufbaut.
+        page.wait_for_timeout(300)
 
         # Pfeil-runter + warten bis Alpine highlightet + Enter
         autocomplete.press("ArrowDown")
@@ -161,8 +167,12 @@ class TestAutoSave:
         # Feld mit abweichendem Wert fuellen (noetig damit Restore einen Unterschied erkennt)
         page.fill("input[name='dauer']", "42")
 
-        # Wait long enough for the autosave 5s interval to actually run and
-        # the encrypted record to be committed to IndexedDB.
+        # Dokumentierter Ausnahmefall zur „kein wait_for_timeout"-Regel (Refs
+        # #598 T-1): Auto-Save läuft mit 5s-Intervall clientseitig, und die
+        # anschließende Encryption + IndexedDB-Write hat kein beobachtbares
+        # UI-Signal. 7s sind empirisch das Minimum mit Sicherheitsmarge; ein
+        # Poll über ``wait_for_function`` + async IndexedDB-Read schlägt mit
+        # Playwright's async-Bridge fehl.
         page.wait_for_timeout(7000)
         stored = page.evaluate(self._JS_GET)
         assert stored is not None, "Auto-Save sollte vor Navigation Daten gespeichert haben"
@@ -186,7 +196,8 @@ class TestAutoSave:
         page.select_option("select[name='document_type']", label="Kontakt")
         page.wait_for_load_state("domcontentloaded")
 
-        # Warten bis Auto-Save speichert
+        # Dokumentierter Ausnahmefall (Refs #598 T-1): Auto-Save 5s + Write-
+        # Latenz, kein beobachtbares UI-Signal — siehe Begründung oben.
         page.wait_for_timeout(6000)
 
         stored = page.evaluate(self._JS_GET)
