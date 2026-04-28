@@ -104,7 +104,9 @@ class Event(models.Model):
         for key in encrypted_field_names:
             value = self.data_json.get(key)
             if value and not is_encrypted_value(value):
-                # Skip file attachment markers — they are metadata, not user data
-                if isinstance(value, dict) and value.get("__file__"):
+                # Skip file attachment markers — they are metadata, not user data.
+                # Beide Formate berücksichtigen: Stufe A (__file__) und Stufe B
+                # (__files__, Refs #622).
+                if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
                     continue
                 self.data_json[key] = encrypt_field(value)

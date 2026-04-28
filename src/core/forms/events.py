@@ -8,6 +8,35 @@ from core.models import Case, DocumentType, DocumentTypeField, FieldTemplate
 from core.models.settings import Settings
 
 
+class MultipleFileInput(forms.ClearableFileInput):
+    """ClearableFileInput-Widget mit ``multiple``-Attribut — Django erlaubt
+    Multi-File-Upload seit 5.0, aber der Standard-Widget blockiert das aktiv.
+    Refs #622.
+    """
+
+    allow_multiple_selected = True
+
+
+class MultipleFileField(forms.FileField):
+    """FileField, das eine Liste von UploadedFile zurückgibt (auch für N=0/1).
+
+    Wird für FILE-Feldtypen in :class:`DynamicEventDataForm` verwendet, damit
+    mehrere Dateien pro Feld hochgeladen werden können (Refs #622).
+    """
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", MultipleFileInput())
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        single_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            return [single_clean(d, initial) for d in data if d]
+        if data:
+            return [single_clean(data, initial)]
+        return []
+
+
 def _case_label(case: Case) -> str:
     """Dropdown label: title plus client pseudonym so users can distinguish cases."""
     pseudonym = case.client.pseudonym if case.client_id else None
@@ -88,7 +117,7 @@ class DynamicEventDataForm(forms.Form):
         FieldTemplate.FieldType.BOOLEAN: (forms.BooleanField, {"widget": forms.CheckboxInput}),
         FieldTemplate.FieldType.SELECT: (forms.ChoiceField, {"widget": forms.Select}),
         FieldTemplate.FieldType.MULTI_SELECT: (forms.MultipleChoiceField, {"widget": forms.CheckboxSelectMultiple}),
-        FieldTemplate.FieldType.FILE: (forms.FileField, {"widget": forms.ClearableFileInput}),
+        FieldTemplate.FieldType.FILE: (MultipleFileField, {"widget": MultipleFileInput}),
     }
 
     def __init__(self, *args, document_type=None, initial_data=None, facility=None, **kwargs):
@@ -153,6 +182,10 @@ class DynamicEventDataForm(forms.Form):
 
             if initial_data and ft.slug in initial_data:
                 field.initial = initial_data[ft.slug]
+            elif ft.field_type != FieldTemplate.FieldType.FILE:
+                default_initial = ft.get_default_initial()
+                if default_initial is not None:
+                    field.initial = default_initial
 
             self.fields[ft.slug] = field
 
@@ -169,21 +202,26 @@ class DynamicEventDataForm(forms.Form):
         for field_name, field_obj in self.fields.items():
             if not isinstance(field_obj, forms.FileField):
                 continue
-            uploaded = cleaned.get(field_name)
-            if not uploaded:
+            value = cleaned.get(field_name)
+            if not value:
                 continue
-            ext = uploaded.name.rsplit(".", 1)[-1].lower() if "." in uploaded.name else ""
-            if allowed and ext not in allowed:
-                self.add_error(
-                    field_name,
-                    _(f"Dateityp .{ext} nicht erlaubt. Erlaubt: {', '.join(sorted(allowed))}"),
-                )
-            if uploaded.size > max_bytes:
-                self.add_error(
-                    field_name,
-                    _(
-                        f"Datei zu gro\u00df ({uploaded.size // (1024 * 1024)} MB)."
-                        f" Maximum: {facility_settings.max_file_size_mb} MB"
-                    ),
-                )
+            # MultipleFileField \u2192 Liste; klassisches FileField \u2192 Einzelobjekt.
+            uploads = value if isinstance(value, list) else [value]
+            for uploaded in uploads:
+                if not uploaded:
+                    continue
+                ext = uploaded.name.rsplit(".", 1)[-1].lower() if "." in uploaded.name else ""
+                if allowed and ext not in allowed:
+                    self.add_error(
+                        field_name,
+                        _(f"Dateityp .{ext} nicht erlaubt. Erlaubt: {', '.join(sorted(allowed))}"),
+                    )
+                if uploaded.size > max_bytes:
+                    self.add_error(
+                        field_name,
+                        _(
+                            f"Datei zu gro\u00df ({uploaded.size // (1024 * 1024)} MB)."
+                            f" Maximum: {facility_settings.max_file_size_mb} MB"
+                        ),
+                    )
         return cleaned

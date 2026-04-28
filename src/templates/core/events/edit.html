@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n core_tags %}
 
 {% block title %}{% trans "Ereignis bearbeiten" %} – Anlaufstelle{% endblock %}
 
@@ -40,7 +40,56 @@
                 <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
                     {{ field.label }}{% if field.field.required %} *{% endif %}
                 </label>
+
+                {# Stufe B (#622): FILE-Felder bekommen pro Entry Ersetzen- und Soft-Delete-Steuerung + Multi-Upload unten. #}
+                {% if field.field.widget.allow_multiple_selected %}
+                {% with entries=existing_attachments|get_item:field.name %}
+                {% if entries %}
+                <ul class="mb-2 space-y-2" data-testid="attachment-entries-{{ field.name }}">
+                    {% for entry in entries %}
+                    <li class="flex flex-wrap items-center gap-2 p-2 bg-gray-50 border border-gray-200 rounded-md"
+                        data-entry-id="{{ entry.entry_id }}">
+                        <a href="{% url 'core:attachment_download' event.pk entry.attachment_id %}"
+                           class="text-indigo-600 hover:underline text-sm">
+                            {{ entry.filename }}
+                        </a>
+                        <span class="text-xs text-gray-500">({{ entry.size }})</span>
+                        <label class="ml-auto inline-flex items-center gap-1 text-xs text-gray-600">
+                            <span>{% trans "Ersetzen" %}:</span>
+                            <input type="file" name="{{ field.name }}__replace__{{ entry.entry_id }}"
+                                   class="text-xs" data-testid="attachment-replace-{{ entry.entry_id }}">
+                        </label>
+                        <label class="inline-flex items-center gap-1 text-xs text-red-600">
+                            <input type="checkbox"
+                                   name="__remove_checkbox__{{ field.name }}"
+                                   value="{{ entry.entry_id }}"
+                                   data-testid="attachment-remove-{{ entry.entry_id }}"
+                                   onchange="(function(cb){
+                                       var form = cb.form;
+                                       var hidden = form.querySelector('input[name=\'{{ field.name }}__remove\']');
+                                       if (!hidden) {
+                                           hidden = document.createElement('input');
+                                           hidden.type = 'hidden';
+                                           hidden.name = '{{ field.name }}__remove';
+                                           form.appendChild(hidden);
+                                       }
+                                       var ids = new Set((hidden.value || '').split(',').filter(Boolean));
+                                       if (cb.checked) { ids.add(cb.value); } else { ids.delete(cb.value); }
+                                       hidden.value = Array.from(ids).join(',');
+                                   })(this)">
+                            {% trans "Entfernen" %}
+                        </label>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+                <p class="text-xs text-gray-500 mb-1">{% trans "Weitere Dateien hinzufügen (mehrere möglich):" %}</p>
                 {{ field }}
+                {% endwith %}
+                {% else %}
+                {{ field }}
+                {% endif %}
+
                 {% if field.errors %}
                 <ul class="mt-1 text-sm text-red-600">
                     {% for error in field.errors %}
