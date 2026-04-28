@@ -167,6 +167,7 @@ def test_seed_solo_creates_bulk_clients():
 # ---------------------------------------------------------------------------
 
 
+@pytest.mark.slow
 @pytest.mark.django_db
 def test_seed_medium_creates_two_facilities():
     """Medium scale creates two facilities."""
@@ -177,6 +178,7 @@ def test_seed_medium_creates_two_facilities():
     assert Facility.objects.filter(name="Zweigstelle Nord").exists()
 
 
+@pytest.mark.slow
 @pytest.mark.django_db
 def test_seed_medium_creates_users_per_facility():
     """Medium scale creates 4 users per facility (8 total for 2 facilities)."""
@@ -185,6 +187,7 @@ def test_seed_medium_creates_users_per_facility():
     assert User.objects.count() == 8
 
 
+@pytest.mark.slow
 @pytest.mark.django_db
 def test_seed_medium_second_facility_users_have_suffix():
     """Users in the second facility have a '_1' suffix to avoid name collision."""
@@ -208,6 +211,7 @@ def test_seed_creates_single_organization():
     assert Organization.objects.filter(name="Anlaufstelle").exists()
 
 
+@pytest.mark.slow
 @pytest.mark.django_db
 def test_seed_medium_shares_single_organization():
     """Medium scale: all facilities belong to the same organization."""
