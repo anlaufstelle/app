@@ -78,7 +78,6 @@ class TestRetentionDashboardAccess:
 class TestRetentionApproveFlow:
     """Proposal freigeben via HTMX."""
 
-    @pytest.mark.smoke
     def test_approve_proposal(self, authenticated_page, base_url):
         """Admin gibt einen Proposal frei — Badge wechselt zu 'Freigegeben'."""
         _ensure_proposals(authenticated_page, base_url)
@@ -90,70 +89,13 @@ class TestRetentionApproveFlow:
         pending_before = page.locator("span:has-text('Ausstehend')").count()
         assert pending_before >= 1, "Keine ausstehenden Proposals vorhanden"
 
-        # Click first "Freigeben" button on a proposal card (handle confirm dialog).
-        # Scope verhindert Clash mit dem gleichnamigen Bulk-Toolbar-Button.
+        # Click first "Freigeben" button (handle confirm dialog)
         page.on("dialog", lambda dialog: dialog.accept())
-        page.locator(".proposal-card button:has-text('Freigeben')").first.click()
+        page.locator("button:has-text('Freigeben')").first.click()
+        page.wait_for_timeout(1000)
 
-        # The card should now show "Freigegeben" — warten, bis HTMX-Swap
-        # das Badge neu gerendert hat.
-        page.locator("span:has-text('Freigegeben')").first.wait_for(state="visible", timeout=5000)
+        # The card should now show "Freigegeben"
         assert page.locator("span:has-text('Freigegeben')").count() >= 1
-
-
-class TestRetentionBulkFlow:
-    """Bulk-Actions: Mehrere Löschvorschläge in einem Rutsch bearbeiten."""
-
-    def test_bulk_approve_two_proposals(self, authenticated_page, base_url):
-        _ensure_proposals(authenticated_page, base_url)
-        page = authenticated_page
-        page.goto(f"{base_url}/retention/")
-        page.wait_for_load_state("domcontentloaded")
-
-        checkboxes = page.locator("[data-bulk-proposal]")
-        n = checkboxes.count()
-        assert n >= 2, "Für den Test werden mindestens 2 pending Vorschläge gebraucht"
-
-        approved_before = page.locator("span:has-text('Freigegeben')").count()
-
-        checkboxes.nth(0).check()
-        checkboxes.nth(1).check()
-
-        counter = page.locator("[data-testid='retention-bulk-count']")
-        counter.wait_for(state="visible", timeout=3000)
-        assert "2" in counter.inner_text()
-
-        page.on("dialog", lambda dialog: dialog.accept())
-        page.locator("[data-testid='retention-bulk-approve']").click()
-
-        # HX-Redirect triggert full-page-Reload zurück auf /retention/ —
-        # auf mindestens zwei neue „Freigegeben"-Badges warten.
-        page.wait_for_function(
-            (
-                "count => Array.from(document.querySelectorAll('span'))"
-                ".filter(s => s.textContent.trim() === 'Freigegeben').length >= count"
-            ),
-            arg=approved_before + 2,
-            timeout=10000,
-        )
-
-    def test_select_all_toggles_every_checkbox(self, authenticated_page, base_url):
-        _ensure_proposals(authenticated_page, base_url)
-        page = authenticated_page
-        page.goto(f"{base_url}/retention/")
-        page.wait_for_load_state("domcontentloaded")
-
-        total = page.locator("[data-bulk-proposal]").count()
-        assert total >= 1
-
-        page.locator("[data-testid='retention-select-all']").check()
-        counter = page.locator("[data-testid='retention-bulk-count']")
-        counter.wait_for(state="visible", timeout=3000)
-        assert str(total) in counter.inner_text()
-
-        page.locator("[data-testid='retention-select-all']").uncheck()
-        # Nach dem Abwählen muss die Toolbar wieder verschwinden
-        page.locator("[data-testid='retention-bulk-count']").wait_for(state="hidden", timeout=3000)
 
 
 class TestRetentionHoldFlow:
@@ -169,20 +111,16 @@ class TestRetentionHoldFlow:
         # Click "Hold setzen" on first pending proposal
         hold_btn = page.locator("button:has-text('Hold setzen')").first
         hold_btn.click()
-        # Modal/Form via HTMX laden — auf textarea warten.
-        reason_field = page.locator("textarea[name='reason']").first
-        reason_field.wait_for(state="visible", timeout=5000)
+        page.wait_for_timeout(500)
 
         # Fill in reason
-        reason_field.fill("E2E-Test: Gerichtsverfahren")
+        page.locator("textarea[name='reason']").first.fill("E2E-Test: Gerichtsverfahren")
 
         # Submit hold form
         page.locator("button:has-text('Hold erstellen')").first.click()
+        page.wait_for_timeout(1000)
 
-        # The card should now show "Aufgeschoben" — warten bis Badge UND
-        # der eingegebene Reason-Text gerendert sind (beides nach HTMX-Swap).
-        page.locator("span:has-text('Aufgeschoben')").first.wait_for(state="visible", timeout=5000)
-        page.locator("text=E2E-Test: Gerichtsverfahren").wait_for(state="visible", timeout=5000)
+        # The card should now show "Aufgeschoben"
         assert page.locator("span:has-text('Aufgeschoben')").count() >= 1
         assert page.locator("text=E2E-Test: Gerichtsverfahren").is_visible()
 
@@ -197,23 +135,21 @@ class TestRetentionHoldFlow:
         if page.locator("button:has-text('Hold aufheben')").count() == 0:
             hold_btn = page.locator("button:has-text('Hold setzen')").first
             hold_btn.click()
-            reason_field = page.locator("textarea[name='reason']").first
-            reason_field.wait_for(state="visible", timeout=5000)
-            reason_field.fill("Temporärer Hold")
+            page.wait_for_timeout(500)
+            page.locator("textarea[name='reason']").first.fill("Temporärer Hold")
             page.locator("button:has-text('Hold erstellen')").first.click()
-            # Warten bis Hold-Button „Hold aufheben" erscheint.
-            page.locator("button:has-text('Hold aufheben')").first.wait_for(state="visible", timeout=5000)
+            page.wait_for_timeout(1000)
 
         # Now dismiss the hold
         page.on("dialog", lambda dialog: dialog.accept())
         page.locator("button:has-text('Hold aufheben')").first.click()
+        page.wait_for_timeout(1000)
 
-        # After dismissal, card should revert — auf Reaparition der
-        # Freigeben-Buttons warten (signalisiert Zurück-zu-Ausstehend).
+        # After dismissal, card should revert — the dismiss button should be gone
+        # and the proposal card should show "Ausstehend" again
         page.wait_for_load_state("domcontentloaded")
-        card_btn = page.locator(".proposal-card button:has-text('Freigeben')")
-        card_btn.first.wait_for(state="visible", timeout=5000)
-        assert card_btn.count() >= 1
+        # Verify the first proposal card shows Freigeben/Hold buttons again
+        assert page.locator("button:has-text('Freigeben')").count() >= 1
 
 
 class TestRetentionNavigation:

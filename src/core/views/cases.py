@@ -1,8 +1,4 @@
-"""Views for case management — Case-CRUD + Event-Zuordnung.
-
-Episoden liegen in :file:`views/case_episodes.py`, Wirkungsziele und
-Meilensteine in :file:`views/case_goals.py` (Refs #605).
-"""
+"""Views for case management."""
 
 import logging
 from urllib.parse import urlencode
@@ -17,9 +13,11 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
-from core.constants import DEFAULT_PAGE_SIZE, RATELIMIT_MUTATION
 from core.forms.cases import CaseForm
-from core.models import Case, Event
+from core.forms.episodes import EpisodeForm
+from core.models import Case, Client, Event
+from core.models.episode import Episode
+from core.models.outcome import Milestone, OutcomeGoal
 from core.services.cases import (
     assign_event_to_case,
     close_case,
@@ -28,7 +26,20 @@ from core.services.cases import (
     reopen_case,
     update_case,
 )
-from core.services.clients import get_client_or_none
+from core.services.episodes import (
+    close_episode,
+    create_episode,
+    update_episode,
+)
+from core.services.goals import (
+    achieve_goal,
+    create_goal,
+    create_milestone,
+    delete_milestone,
+    toggle_milestone,
+    unachieve_goal,
+    update_goal,
+)
 from core.services.sensitivity import get_visible_event_or_404
 from core.views.mixins import LeadOrAdminRequiredMixin, StaffRequiredMixin
 
@@ -64,6 +75,12 @@ def _get_case_event_context(case, facility, user):
     return {"events": events, "unassigned_events": unassigned_events}
 
 
+def _get_goals_context(case):
+    """Return goals with prefetched milestones for a case (shared by goal/milestone views)."""
+    goals = case.goals.prefetch_related("milestones").all()
+    return {"case": case, "goals": goals}
+
+
 class CaseListView(StaffRequiredMixin, View):
     """Case list with search, filter by status and pagination."""
 
@@ -81,7 +98,7 @@ class CaseListView(StaffRequiredMixin, View):
 
         qs = qs.select_related("client", "lead_user").order_by("-created_at")
 
-        paginator = Paginator(qs, DEFAULT_PAGE_SIZE)
+        paginator = Paginator(qs, 25)
         page = request.GET.get("page")
         cases = paginator.get_page(page)
 
@@ -111,9 +128,11 @@ class CaseCreateView(StaffRequiredMixin, View):
         client_pseudonym = ""
         if client_id:
             form.fields["client"].initial = client_id
-            client_obj = get_client_or_none(facility, client_id)
-            if client_obj:
+            try:
+                client_obj = Client.objects.get(pk=client_id, facility=facility)
                 client_pseudonym = client_obj.pseudonym
+            except Client.DoesNotExist:
+                pass
 
         context = {
             "form": form,
@@ -123,7 +142,7 @@ class CaseCreateView(StaffRequiredMixin, View):
         }
         return render(request, "core/cases/form.html", context)
 
-    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
+    @method_decorator(ratelimit(key="user", rate="60/h", method="POST", block=True))
     def post(self, request):
         facility = request.current_facility
         form = CaseForm(request.POST, facility=facility)
@@ -170,10 +189,6 @@ class CaseDetailView(StaffRequiredMixin, View):
         return render(request, "core/cases/detail.html", context)
 
 
-@method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
-)
 class CaseUpdateView(StaffRequiredMixin, View):
     """Edit a case."""
 
@@ -225,10 +240,6 @@ class CaseUpdateView(StaffRequiredMixin, View):
         return render(request, "core/cases/form.html", context)
 
 
-@method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
-)
 class CaseCloseView(LeadOrAdminRequiredMixin, View):
     """Close a case (Lead or Admin only)."""
 
@@ -240,10 +251,6 @@ class CaseCloseView(LeadOrAdminRequiredMixin, View):
         return redirect("core:case_detail", pk=case.pk)
 
 
-@method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
-)
 class CaseReopenView(LeadOrAdminRequiredMixin, View):
     """Reopen a case (Lead or Admin only)."""
 
@@ -255,10 +262,6 @@ class CaseReopenView(LeadOrAdminRequiredMixin, View):
         return redirect("core:case_detail", pk=case.pk)
 
 
-@method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
-)
 class CaseAssignEventView(StaffRequiredMixin, View):
     """Assign an event to a case (HTMX)."""
 
@@ -277,10 +280,6 @@ class CaseAssignEventView(StaffRequiredMixin, View):
         return render(request, "core/cases/partials/event_list.html", context)
 
 
-@method_decorator(
-    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
-    name="post",
-)
 class CaseRemoveEventView(StaffRequiredMixin, View):
     """Remove an event from a case (HTMX)."""
 
@@ -312,3 +311,187 @@ class CasesForClientView(StaffRequiredMixin, View):
 
         data = [{"id": str(c["id"]), "title": c["title"]} for c in cases]
         return JsonResponse(data, safe=False)
+
+
+class EpisodeCreateView(StaffRequiredMixin, View):
+    """Create a new episode for a case."""
+
+    def get(self, request, case_pk):
+        facility = request.current_facility
+        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        if case.status != Case.Status.OPEN:
+            messages.error(request, _("Episoden können nur für offene Fälle erstellt werden."))
+            return redirect("core:case_detail", pk=case.pk)
+
+        form = EpisodeForm()
+        context = {"form": form, "case": case, "is_edit": False}
+        return render(request, "core/cases/episode_form.html", context)
+
+    @method_decorator(ratelimit(key="user", rate="60/h", method="POST", block=True))
+    def post(self, request, case_pk):
+        facility = request.current_facility
+        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        if case.status != Case.Status.OPEN:
+            messages.error(request, _("Episoden können nur für offene Fälle erstellt werden."))
+            return redirect("core:case_detail", pk=case.pk)
+
+        form = EpisodeForm(request.POST)
+        if form.is_valid():
+            create_episode(
+                case=case,
+                user=request.user,
+                title=form.cleaned_data["title"],
+                description=form.cleaned_data.get("description", ""),
+                started_at=form.cleaned_data["started_at"],
+            )
+            messages.success(request, _("Episode wurde erstellt."))
+            return redirect("core:case_detail", pk=case.pk)
+        context = {"form": form, "case": case, "is_edit": False}
+        return render(request, "core/cases/episode_form.html", context)
+
+
+class EpisodeUpdateView(StaffRequiredMixin, View):
+    """Edit an existing episode."""
+
+    def get(self, request, case_pk, pk):
+        facility = request.current_facility
+        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        episode = get_object_or_404(Episode, pk=pk, case=case)
+        form = EpisodeForm(instance=episode)
+        context = {"form": form, "case": case, "episode": episode, "is_edit": True}
+        return render(request, "core/cases/episode_form.html", context)
+
+    def post(self, request, case_pk, pk):
+        facility = request.current_facility
+        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        episode = get_object_or_404(Episode, pk=pk, case=case)
+        form = EpisodeForm(request.POST, instance=episode)
+        if form.is_valid():
+            update_episode(
+                episode,
+                request.user,
+                title=form.cleaned_data["title"],
+                description=form.cleaned_data.get("description", ""),
+                started_at=form.cleaned_data["started_at"],
+                ended_at=form.cleaned_data.get("ended_at"),
+            )
+            messages.success(request, _("Episode wurde aktualisiert."))
+            return redirect("core:case_detail", pk=case.pk)
+        context = {"form": form, "case": case, "episode": episode, "is_edit": True}
+        return render(request, "core/cases/episode_form.html", context)
+
+
+class EpisodeCloseView(StaffRequiredMixin, View):
+    """Close an episode (POST only)."""
+
+    def post(self, request, case_pk, pk):
+        facility = request.current_facility
+        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        episode = get_object_or_404(Episode, pk=pk, case=case)
+        close_episode(episode, request.user)
+        messages.success(request, _("Episode wurde abgeschlossen."))
+        return redirect("core:case_detail", pk=case.pk)
+
+
+class GoalCreateView(StaffRequiredMixin, View):
+    """HTMX: create a new OutcomeGoal for a case."""
+
+    @method_decorator(ratelimit(key="user", rate="120/h", method="POST", block=True))
+    def post(self, request, case_pk):
+        facility = request.current_facility
+        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        title = request.POST.get("title", "").strip()
+        if title:
+            create_goal(case=case, user=request.user, title=title)
+        return render(
+            request,
+            "core/cases/partials/goals_section.html",
+            _get_goals_context(case),
+        )
+
+
+class GoalUpdateView(StaffRequiredMixin, View):
+    """HTMX: update an OutcomeGoal title/description."""
+
+    @method_decorator(ratelimit(key="user", rate="120/h", method="POST", block=True))
+    def post(self, request, case_pk, pk):
+        facility = request.current_facility
+        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        goal = get_object_or_404(OutcomeGoal, pk=pk, case=case)
+        title = request.POST.get("title", "").strip() or None
+        description = request.POST.get("description")
+        update_goal(goal, request.user, title=title, description=description)
+        return render(
+            request,
+            "core/cases/partials/goals_section.html",
+            _get_goals_context(case),
+        )
+
+
+class GoalToggleView(StaffRequiredMixin, View):
+    """HTMX: toggle goal achievement status."""
+
+    @method_decorator(ratelimit(key="user", rate="120/h", method="POST", block=True))
+    def post(self, request, case_pk, pk):
+        facility = request.current_facility
+        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        goal = get_object_or_404(OutcomeGoal, pk=pk, case=case)
+        if goal.is_achieved:
+            unachieve_goal(goal, request.user)
+        else:
+            achieve_goal(goal, request.user)
+        return render(
+            request,
+            "core/cases/partials/goals_section.html",
+            _get_goals_context(case),
+        )
+
+
+class MilestoneCreateView(StaffRequiredMixin, View):
+    """HTMX: create a new Milestone for a goal."""
+
+    @method_decorator(ratelimit(key="user", rate="120/h", method="POST", block=True))
+    def post(self, request, case_pk, goal_pk):
+        facility = request.current_facility
+        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        goal = get_object_or_404(OutcomeGoal, pk=goal_pk, case=case)
+        title = request.POST.get("title", "").strip()
+        if title:
+            create_milestone(goal=goal, user=request.user, title=title)
+        return render(
+            request,
+            "core/cases/partials/goals_section.html",
+            _get_goals_context(case),
+        )
+
+
+class MilestoneToggleView(StaffRequiredMixin, View):
+    """HTMX: toggle milestone completion."""
+
+    @method_decorator(ratelimit(key="user", rate="120/h", method="POST", block=True))
+    def post(self, request, case_pk, pk):
+        facility = request.current_facility
+        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        milestone = get_object_or_404(Milestone, pk=pk, goal__case=case)
+        toggle_milestone(milestone, request.user)
+        return render(
+            request,
+            "core/cases/partials/goals_section.html",
+            _get_goals_context(case),
+        )
+
+
+class MilestoneDeleteView(StaffRequiredMixin, View):
+    """HTMX: delete a milestone."""
+
+    @method_decorator(ratelimit(key="user", rate="120/h", method="POST", block=True))
+    def post(self, request, case_pk, pk):
+        facility = request.current_facility
+        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        milestone = get_object_or_404(Milestone, pk=pk, goal__case=case)
+        delete_milestone(milestone)
+        return render(
+            request,
+            "core/cases/partials/goals_section.html",
+            _get_goals_context(case),
+        )

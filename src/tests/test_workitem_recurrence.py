@@ -243,8 +243,16 @@ class TestLeapYearRecurrence:
 
 @pytest.mark.django_db
 class TestRecurrenceIdempotency:
-    """Refs #596: Status-Toggle Done→Open→Done darf nicht doppelt duplizieren."""
+    """Refs #591 WP3: Status-Toggle Done→Open→Done darf nicht doppelt duplizieren."""
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "update_workitem_status() ruft duplicate_recurring_workitem() bei jedem DONE-Übergang "
+            "auf. Ein Done→Open→Done-Toggle erzeugt deshalb aktuell einen zweiten Follow-up — es "
+            "gibt keine Idempotenz-Flag auf der Source-Aufgabe. Refs #591 WP3."
+        ),
+    )
     def test_toggle_done_open_done_does_not_duplicate_twice(self, facility, staff_user):
         wi = WorkItem.objects.create(
             facility=facility,
@@ -282,3 +290,32 @@ class TestRecurrenceIdempotency:
         assert follow_ups_after_second_done.count() == 1, (
             "Idempotenz: zweiter DONE-Übergang darf keinen weiteren Follow-up erzeugen."
         )
+
+    def test_current_behavior_every_done_transition_duplicates(self, facility, staff_user):
+        """Dokumentiert den Ist-Stand: jeder DONE-Übergang erzeugt ein Duplikat.
+
+        Dieser Test hält das aktuelle Verhalten fest, damit eine Regression
+        bei Einführung einer Idempotenz-Flag beide Seiten explizit macht.
+        Refs #591 WP3.
+        """
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            item_type=WorkItem.ItemType.TASK,
+            title="Toggle-Aufgabe-Ist",
+            priority=WorkItem.Priority.NORMAL,
+            status=WorkItem.Status.OPEN,
+            due_date=date(2026, 5, 15),
+            recurrence=WorkItem.Recurrence.MONTHLY,
+        )
+
+        update_workitem_status(wi, WorkItem.Status.DONE, staff_user)
+        update_workitem_status(wi, WorkItem.Status.OPEN, staff_user)
+        update_workitem_status(wi, WorkItem.Status.DONE, staff_user)
+
+        # Ist-Stand: zwei Follow-ups, weil beide DONE-Übergänge duplizieren.
+        follow_ups = WorkItem.objects.filter(
+            title=wi.title,
+            recurrence=WorkItem.Recurrence.MONTHLY,
+        ).exclude(pk=wi.pk)
+        assert follow_ups.count() == 2

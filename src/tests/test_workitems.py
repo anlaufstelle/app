@@ -266,25 +266,6 @@ class TestWorkItemCRUD:
         response = client.get(reverse("core:workitem_update", kwargs={"pk": workitem_open.pk}))
         assert response.status_code == 200
 
-    def test_update_get_prefills_due_date_iso_format(self, client, staff_user, facility):
-        """Bearbeiten-Formular muss `due_date` im ISO-Format rendern, sonst
-        lässt das HTML5-Date-Input den Wert fallen (Refs #619)."""
-        from datetime import date
-
-        wi = WorkItem.objects.create(
-            facility=facility,
-            title="Mit Datum",
-            due_date=date(2026, 5, 7),
-            created_by=staff_user,
-        )
-        client.force_login(staff_user)
-        response = client.get(reverse("core:workitem_update", kwargs={"pk": wi.pk}))
-        assert response.status_code == 200
-        assert 'value="2026-05-07"' in response.content.decode(), (
-            "due_date muss als YYYY-MM-DD im value-Attribut stehen; sonst "
-            "akzeptiert der Browser ihn nicht und das Feld erscheint leer."
-        )
-
     def test_update_post(self, client, staff_user, workitem_open):
         client.force_login(staff_user)
         response = client.post(
@@ -520,11 +501,12 @@ class TestWorkItemRemindAt:
         assert wi.due_date == same_day
         assert wi.remind_at == same_day
 
-    def test_workitem_form_rejects_remind_at_after_due_date(self, client, staff_user, facility):
-        """Soll-Verhalten: remind_at > due_date wird vom Form abgelehnt.
+    def test_workitem_form_remind_at_after_due_date_is_persisted(self, client, staff_user, facility):
+        """Ist-Stand: remind_at > due_date wird ohne Validation akzeptiert (kein silent-swap).
 
-        Die clean()-Validation in core/forms/workitems.py stellt sicher, dass
-        remind_at <= due_date. Refs #597.
+        Es gibt keine Form-Validation in core/forms/workitems.py, die remind_at
+        gegen due_date prüft. Daher dokumentiert dieser Test den aktuellen
+        Datenbank-Zustand. Refs #591 WP3.
         """
         due = datetime.date(2026, 5, 15)
         remind = datetime.date(2026, 6, 1)
@@ -540,10 +522,42 @@ class TestWorkItemRemindAt:
                 "recurrence": "none",
             },
         )
-        # Form-Validation lehnt ab → 200 (Form re-rendered mit Fehler),
+        assert response.status_code == 302
+        wi = WorkItem.objects.get(title="remind_at nach due_date")
+        # Werte werden exakt so persistiert, kein silent-swap.
+        assert wi.due_date == due
+        assert wi.remind_at == remind
+        assert wi.remind_at > wi.due_date
+
+    @pytest.mark.xfail(
+        strict=True,
+        reason="remind_at > due_date wird nicht validiert - Refs #591 WP3",
+    )
+    def test_workitem_form_rejects_remind_at_after_due_date(self, client, staff_user, facility):
+        """Soll-Verhalten: remind_at > due_date wird vom Form abgelehnt.
+
+        Aktuell fehlt in core/forms/workitems.py eine clean()-Validation,
+        die sicherstellt, dass remind_at <= due_date. Dieser Test ist xfail,
+        bis die Regel eingeführt ist.
+        """
+        due = datetime.date(2026, 5, 15)
+        remind = datetime.date(2026, 6, 1)
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_create"),
+            {
+                "item_type": "task",
+                "title": "remind_at nach due_date (xfail)",
+                "priority": "normal",
+                "due_date": due.isoformat(),
+                "remind_at": remind.isoformat(),
+                "recurrence": "none",
+            },
+        )
+        # Erwartet: Form-Validation lehnt ab → 200 (Form re-rendered mit Fehler),
         # kein Redirect, kein persistiertes WorkItem.
         assert response.status_code == 200
-        assert not WorkItem.objects.filter(title="remind_at nach due_date").exists()
+        assert not WorkItem.objects.filter(title="remind_at nach due_date (xfail)").exists()
 
     def test_workitem_update_sets_remind_at(self, client, staff_user, workitem_open):
         """Beim Update lässt sich remind_at setzen, ohne due_date zu berühren."""

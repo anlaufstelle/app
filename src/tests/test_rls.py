@@ -26,16 +26,9 @@ EXPECTED_TABLES = [
     "core_settings",
     "core_timefilter",
     "core_legalhold",
-    "core_statisticssnapshot",
-    "core_recentclientvisit",
-    "core_quicktemplate",
     "core_eventhistory",
     "core_eventattachment",
     "core_episode",
-    # Retro-Audit #600: transitiv facility-gescopte Tabellen (Migration 0063).
-    "core_outcomegoal",
-    "core_milestone",
-    "core_documenttypefield",
 ]
 
 

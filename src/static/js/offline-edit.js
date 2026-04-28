@@ -25,31 +25,18 @@
         return window.offlineStore;
     }
 
-    function _csrfFromMeta() {
-        // Refs #602: CSRF_COOKIE_HTTPONLY verbietet JS-Zugriff aufs Cookie,
-        // Token kommt aus dem <meta name="csrf-token">-Tag im Basistemplate.
-        if (typeof window.getCsrfToken === "function") {
-            return window.getCsrfToken() || null;
-        }
-        const meta = document.querySelector('meta[name="csrf-token"]');
-        return meta ? meta.getAttribute("content") || null : null;
+    function _csrfFromCookie() {
+        const match = document.cookie.match(/csrftoken=([^;]+)/);
+        return match ? match[1] : null;
     }
 
     async function _refreshCsrf() {
         try {
-            const resp = await fetch("/login/", {
-                method: "GET",
-                credentials: "same-origin",
-            });
-            if (resp.ok) {
-                const html = await resp.text();
-                const m = html.match(/name=["']csrf-token["']\s+content=["']([^"']+)["']/i);
-                if (m) return m[1];
-            }
+            await fetch("/login/", { method: "GET", credentials: "same-origin" });
         } catch (_e) {
             // Still offline, ignore.
         }
-        return _csrfFromMeta();
+        return _csrfFromCookie();
     }
 
     function _eventEditUrl(eventPk) {
@@ -117,7 +104,7 @@
             return { status: "no-key" };
         }
 
-        let csrf = _csrfFromMeta();
+        let csrf = _csrfFromCookie();
         if (!csrf) csrf = await _refreshCsrf();
 
         const form = new URLSearchParams();

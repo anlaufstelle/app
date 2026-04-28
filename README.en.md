@@ -47,7 +47,7 @@ Typical team size: 5–20 staff. Typical situation: documentation with logbooks,
 
 Anlaufstelle is software for the daily work in low-threshold social services. It supports your team with documentation, information sharing between shifts, and the creation of reports and statistics — without requiring clients to provide their legal name.
 
-Established commercial social-sector software targets large organizations, is prohibitively expensive for small facilities, and requires every person to be registered with their full name and address. Anlaufstelle fills this gap: low-threshold, affordable, and privacy-compliant.
+Commercial social-sector software (Vivendi, SoPart, Kilanka) targets large organizations, is prohibitively expensive for small facilities, and requires every person to be registered with their full name and address. Anlaufstelle fills this gap: low-threshold, affordable, and privacy-compliant.
 
 ---
 

@@ -74,10 +74,6 @@ class Event(models.Model):
             models.Index(fields=["client", "-occurred_at"]),
             models.Index(fields=["document_type", "-occurred_at"]),
             models.Index(fields=["facility", "-occurred_at"]),
-            # Nahezu alle Event-Queries filtern is_deleted=False, daher
-            # Composite-Index (facility, is_deleted, -occurred_at) für
-            # Timeline-/Listen-Queries. Refs #638.
-            models.Index(fields=["facility", "is_deleted", "-occurred_at"], name="event_facility_del_occ_idx"),
         ]
 
     def __str__(self):
@@ -104,9 +100,7 @@ class Event(models.Model):
         for key in encrypted_field_names:
             value = self.data_json.get(key)
             if value and not is_encrypted_value(value):
-                # Skip file attachment markers — they are metadata, not user data.
-                # Beide Formate berücksichtigen: Stufe A (__file__) und Stufe B
-                # (__files__, Refs #622).
-                if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
+                # Skip file attachment markers — they are metadata, not user data
+                if isinstance(value, dict) and value.get("__file__"):
                     continue
                 self.data_json[key] = encrypt_field(value)

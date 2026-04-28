@@ -87,7 +87,7 @@
         return restored;
     }
 
-    function showRestoredBanner(form, storageKey) {
+    function showRestoredBanner(form) {
         var banner = document.createElement("div");
         banner.id = "autosave-restored-banner";
         banner.setAttribute("role", "status");
@@ -97,26 +97,6 @@
         var textSpan = document.createElement("span");
         textSpan.textContent = "Entwurf wiederhergestellt";
         banner.appendChild(textSpan);
-
-        var actions = document.createElement("div");
-        actions.className = "flex items-center gap-3";
-
-        var discardBtn = document.createElement("button");
-        discardBtn.type = "button";
-        discardBtn.className = "text-red-600 hover:text-red-800 font-medium";
-        discardBtn.textContent = "Verwerfen";
-        discardBtn.setAttribute("data-testid", "autosave-discard");
-        discardBtn.addEventListener("click", async function () {
-            try {
-                await window.offlineStore.deleteRow("drafts", storageKey);
-            } catch (_e) {
-                // ignore
-            }
-            // Reload without query string so the user lands on a fresh empty form.
-            window.location.href = window.location.pathname;
-        });
-        actions.appendChild(discardBtn);
-
         var closeBtn = document.createElement("button");
         closeBtn.type = "button";
         closeBtn.className = "text-blue-600 hover:text-blue-800 font-medium";
@@ -124,9 +104,7 @@
         closeBtn.addEventListener("click", function () {
             banner.remove();
         });
-        actions.appendChild(closeBtn);
-
-        banner.appendChild(actions);
+        banner.appendChild(closeBtn);
         form.parentElement.insertBefore(banner, form);
     }
 
@@ -152,7 +130,7 @@
                     data: data,
                 });
                 restoreFormData(form, data);
-                showRestoredBanner(form, storageKey);
+                showRestoredBanner(form);
             }
         } catch (_e) {
             // ignore
@@ -180,32 +158,19 @@
 
         var storageKey = getStorageKey();
         var lastSavedJson = "";
-        // If the server rendered this form with an intentional prefill
-        // (e.g. a Quick-Template), the server state wins over any older
-        // autosaved draft for the same path: drop the draft and skip restore
-        // so the prefill is not clobbered on load. Refs #625.
-        var serverPrefilled = form.hasAttribute("data-autosave-server-prefilled");
 
-        if (serverPrefilled) {
-            try {
-                await window.offlineStore.deleteRow("drafts", storageKey);
-            } catch (_e) {
-                // ignore — restore is skipped regardless
+        // Restore on load (encrypted store first, then legacy migration)
+        try {
+            var existing = await window.offlineStore.getDecrypted("drafts", storageKey);
+            if (existing && existing.data) {
+                var wasRestored = restoreFormData(form, existing.data);
+                if (wasRestored) showRestoredBanner(form);
+                lastSavedJson = JSON.stringify(existing.data);
+            } else {
+                await _migrateLegacyLocalStorage(storageKey, form);
             }
-        } else {
-            // Restore on load (encrypted store first, then legacy migration)
-            try {
-                var existing = await window.offlineStore.getDecrypted("drafts", storageKey);
-                if (existing && existing.data) {
-                    var wasRestored = restoreFormData(form, existing.data);
-                    if (wasRestored) showRestoredBanner(form, storageKey);
-                    lastSavedJson = JSON.stringify(existing.data);
-                } else {
-                    await _migrateLegacyLocalStorage(storageKey, form);
-                }
-            } catch (_e) {
-                // ignore — better to autosave fresh than crash the form
-            }
+        } catch (_e) {
+            // ignore — better to autosave fresh than crash the form
         }
 
         setInterval(async function () {
@@ -231,29 +196,6 @@
                 window.offlineStore.deleteRow("drafts", storageKey);
             } catch (_e) {
                 // ignore
-            }
-        });
-
-        // "Vorlage entfernen" navigiert zurück auf denselben Pfad ohne
-        // template-Query — würde ohne Eingriff den Draft wiederherstellen
-        // und die vermeintlich leere Form wieder füllen. Refs #625.
-        document.addEventListener("click", function (e) {
-            var link = e.target.closest("[data-autosave-clear-link]");
-            if (!link || e.defaultPrevented) return;
-            e.preventDefault();
-            var target = link.getAttribute("href") || link.href;
-            var done = function () {
-                window.location.href = target;
-            };
-            try {
-                var promise = window.offlineStore.deleteRow("drafts", storageKey);
-                if (promise && typeof promise.finally === "function") {
-                    promise.finally(done);
-                } else {
-                    done();
-                }
-            } catch (_e) {
-                done();
             }
         });
     }

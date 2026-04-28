@@ -15,7 +15,7 @@
 
 importScripts("/static/js/url-patterns.js");
 
-const CACHE_NAME = "anlaufstelle-v7";
+const CACHE_NAME = "anlaufstelle-v4";
 const APP_SHELL = [
     "/static/css/styles.css",
     "/static/icons/icon-192.png",
@@ -52,40 +52,6 @@ async function notifyClients(data) {
     clients.forEach((client) => client.postMessage(data));
 }
 
-// ACK-Timeout: nach dieser Zeit gilt enqueueRequest als gescheitert
-// (#662 FND-02). 5s ist großzügig genug für IndexedDB + AES-GCM-Verschlüsselung
-// und zugleich kurz genug, dass der User keine ewig drehende UI sieht.
-const QUEUE_ACK_TIMEOUT_MS = 5000;
-
-async function requestQueueAck(payload) {
-    // Sucht den Client, der den Request gestellt hat (oder den ersten
-    // verfügbaren), und schickt das QUEUE_REQUEST mit einem MessageChannel.
-    // Auflösung: ACK -> { ok: true }, NACK/Timeout/keine Clients -> { ok: false, reason }.
-    const clientList = await self.clients.matchAll({ type: "window" });
-    if (clientList.length === 0) {
-        return { ok: false, reason: "NoClient" };
-    }
-    return new Promise((resolve) => {
-        const channel = new MessageChannel();
-        const timer = setTimeout(() => {
-            resolve({ ok: false, reason: "Timeout" });
-        }, QUEUE_ACK_TIMEOUT_MS);
-        channel.port1.onmessage = (event) => {
-            clearTimeout(timer);
-            const data = event.data || {};
-            if (data.type === "QUEUE_ACK") {
-                resolve({ ok: true });
-            } else {
-                resolve({ ok: false, reason: data.reason || "NACK" });
-            }
-        };
-        // An den ersten Client schicken — er bekommt den Port und meldet
-        // ACK/NACK zurück. Andere Clients erhalten kein Signal, was korrekt
-        // ist (nur ein Tab persistiert die Queue).
-        clientList[0].postMessage(payload, [channel.port2]);
-    });
-}
-
 self.addEventListener("fetch", (event) => {
     const { request } = event;
 
@@ -101,8 +67,7 @@ self.addEventListener("fetch", (event) => {
                             '<div id="flash-messages">' +
                                 '<div class="rounded-md bg-red-50 p-4 mb-4">' +
                                 '<p class="text-sm text-red-800">' +
-                                "Offline — Datei-Uploads erfordern eine Internetverbindung. " +
-                                "Bitte erneut versuchen, sobald Sie online sind." +
+                                "Datei-Upload erfordert Internetverbindung. Bitte erneut versuchen, sobald Sie online sind." +
                                 "</p></div></div>",
                             {
                                 status: 503,
@@ -133,37 +98,13 @@ self.addEventListener("fetch", (event) => {
                     }
                 });
 
-                const ack = await requestQueueAck({
+                await notifyClients({
                     type: "QUEUE_REQUEST",
                     url: request.url,
                     method: request.method,
                     body: body,
                     headers: headers,
                 });
-
-                if (!ack.ok) {
-                    // Persistieren ist gescheitert (NoSessionKey, kein
-                    // offlineQueue, IndexedDB-Fehler, Timeout). Roter Banner
-                    // statt stummem Datenverlust (#662 FND-02).
-                    return new Response(
-                        '<div id="flash-messages">' +
-                            '<div class="rounded-md bg-red-50 p-4 mb-4">' +
-                            '<p class="text-sm text-red-800">' +
-                            "Offline — Ihre Eingaben konnten nicht lokal gespeichert werden (" +
-                            ack.reason +
-                            "). Bitte erneut versuchen, sobald Sie online sind." +
-                            "</p></div></div>",
-                        {
-                            status: 503,
-                            statusText: "Offline-Queue persistence failed",
-                            headers: {
-                                "Content-Type": "text/html",
-                                "HX-Retarget": "#flash-messages",
-                                "HX-Reswap": "outerHTML",
-                            },
-                        }
-                    );
-                }
 
                 return new Response(
                     '<div id="flash-messages">' +
@@ -188,25 +129,16 @@ self.addEventListener("fetch", (event) => {
     if (request.method !== "GET") return;
 
     if (request.url.includes("/static/")) {
-        // Stale-while-revalidate: sofort aus dem Cache servieren, im
-        // Hintergrund die neue Version holen und den Cache aktualisieren.
-        // Offline-Fähigkeit bleibt erhalten (Cache-Fallback), aber der
-        // User sieht beim nächsten Reload automatisch die aktuellen
-        // Assets — kein manueller Cache-Bump pro Release mehr nötig
-        // (Refs #618: alter cache-first-Ansatz hielt gefixtes JS fest).
         event.respondWith(
-            caches.match(request).then((cached) => {
-                const networkFetch = fetch(request)
-                    .then((response) => {
-                        if (response && response.ok) {
-                            const clone = response.clone();
-                            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
-                        }
+            caches.match(request).then(
+                (cached) =>
+                    cached ||
+                    fetch(request).then((response) => {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
                         return response;
                     })
-                    .catch(() => cached);
-                return cached || networkFetch;
-            })
+            )
         );
         return;
     }

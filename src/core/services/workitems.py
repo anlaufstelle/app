@@ -58,7 +58,7 @@ def _log_workitem_update(workitem, user, changed_fields):
 
 @transaction.atomic
 def create_workitem(facility, user, *, client=None, **data):
-    """Create a work item with activity and audit logging."""
+    """Create a work item with activity logging."""
     workitem = WorkItem(facility=facility, created_by=user, client=client, **data)
     workitem.save()
     log_activity(
@@ -67,13 +67,6 @@ def create_workitem(facility, user, *, client=None, **data):
         verb=Activity.Verb.CREATED,
         target=workitem,
         summary=f"Aufgabe: {workitem.title}",
-    )
-    AuditLog.objects.create(
-        facility=facility,
-        user=user,
-        action=AuditLog.Action.WORKITEM_CREATE,
-        target_type="WorkItem",
-        target_id=str(workitem.pk),
     )
     return workitem
 
@@ -166,27 +159,17 @@ def update_workitem_status(workitem, new_status, user):
 
 @transaction.atomic
 def duplicate_recurring_workitem(workitem, user):
-    """Create a follow-up WorkItem for a recurring task (Refs #266, #596).
+    """Create a follow-up WorkItem for a recurring task (Refs #266).
 
     Copies relevant fields (title, description, priority, assigned_to, client,
     item_type, facility, recurrence, remind_at) and bumps ``due_date`` by the
     recurrence interval. If the source has no ``due_date`` the interval is
     applied to today so the new item still has a valid deadline.
 
-    Idempotency (Refs #596): If the source WorkItem already carries a
-    ``recurrence_duplicated_at`` marker, the follow-up has already been
-    generated during an earlier DONE transition — the call is a no-op and
-    returns ``None``. This prevents duplicate follow-ups on Done→Open→Done
-    toggles and on bulk DONE paths that re-process items.
-
     Returns the newly created WorkItem, or ``None`` if ``recurrence`` is NONE
-    or unknown, or if the source is already marked as duplicated.
+    or unknown.
     """
     if not workitem.recurrence or workitem.recurrence == WorkItem.Recurrence.NONE:
-        return None
-
-    # Refs #596: Idempotency guard — skip if a follow-up was already produced.
-    if workitem.recurrence_duplicated_at is not None:
         return None
 
     reference_date = workitem.due_date or timezone.localdate()
@@ -221,25 +204,15 @@ def duplicate_recurring_workitem(workitem, user):
         target=new_workitem,
         summary=f"Wiederkehrende Folgeaufgabe: {new_workitem.title}",
     )
-    # Refs #596: Mark the source so a subsequent DONE transition does not
-    # duplicate again. Persist within the same atomic block.
-    workitem.recurrence_duplicated_at = timezone.now()
-    workitem.save(update_fields=["recurrence_duplicated_at"])
     return new_workitem
 
 
 @transaction.atomic
 def bulk_update_workitem_status(workitems, user, status):
-    """Bulk-update the status of multiple WorkItems (Refs #267, #593).
+    """Bulk-update the status of multiple WorkItems (Refs #267).
 
     Writes one AuditLog entry per changed WorkItem and respects completed_at
     semantics (set on DONE/DISMISSED, cleared otherwise).
-
-    On bulk DONE transitions (Refs #593): for items with a non-NONE recurrence,
-    a follow-up WorkItem is generated via ``duplicate_recurring_workitem`` —
-    analogous to the single-update path in ``update_workitem_status``. The
-    duplicate call is guarded by the ``recurrence_duplicated_at`` marker
-    (Refs #596), so re-processing the same batch stays idempotent.
 
     Returns the number of processed items.
     """
@@ -258,12 +231,6 @@ def bulk_update_workitem_status(workitems, user, status):
             workitem.completed_at = None
         workitem.save(update_fields=["status", "completed_at", "updated_at"])
         _log_workitem_update(workitem, user, ["status"])
-        # Refs #593: Align bulk DONE with single-update path — trigger
-        # recurrence duplication for recurring items. Idempotency (Refs #596)
-        # is enforced inside duplicate_recurring_workitem via the
-        # ``recurrence_duplicated_at`` marker.
-        if status == WorkItem.Status.DONE and workitem.recurrence and workitem.recurrence != WorkItem.Recurrence.NONE:
-            duplicate_recurring_workitem(workitem, user)
         count += 1
     return count
 

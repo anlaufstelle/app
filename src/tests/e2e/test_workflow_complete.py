@@ -58,8 +58,8 @@ class TestCompleteWorkflow:
         if goal_input.count() > 0:
             goal_input.fill(f"WF-Ziel-{tag}")
             goal_input.press("Enter")
-            # HTMX-Swap: das neue Ziel erscheint als Text-Knoten.
-            page.locator(f"text=WF-Ziel-{tag}").wait_for(state="visible", timeout=5000)
+            page.wait_for_timeout(1000)
+            assert page.locator(f"text=WF-Ziel-{tag}").is_visible()
 
         # --- 5. Event dokumentieren ---
         page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
@@ -108,19 +108,10 @@ class TestCompleteWorkflow:
         if option_count > 2:
             # Ersten Nicht-Placeholder-Typ wählen
             doc_type_select.select_option(index=1)
-            # HTMX lädt dynamische Felder — auf min. ein Kind im Container warten.
-            page.locator("#dynamic-fields input, #dynamic-fields textarea, #dynamic-fields select").first.wait_for(
-                state="attached", timeout=5000
-            )
+            page.wait_for_timeout(1000)
             # Zweiten Typ wählen — Felder sollten sich ändern
             doc_type_select.select_option(index=2)
-            # Re-render nach 2. Wechsel abwarten (auf domcontentloaded reicht
-            # nicht, weil HTMX-Swap asynchron ist — wir warten, dass das
-            # erste input/textarea/select aktuell ist).
-            page.wait_for_load_state("domcontentloaded")
-            page.locator("#dynamic-fields input, #dynamic-fields textarea, #dynamic-fields select").first.wait_for(
-                state="attached", timeout=5000
-            )
+            page.wait_for_timeout(1000)
             # Seite sollte weiterhin funktional sein
             assert page.locator("#main-content").is_visible()
 

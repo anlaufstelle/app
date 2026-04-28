@@ -8,8 +8,8 @@ einzelnen Model gehören:
 - Sequenzielles "Race" (deterministisch, kein Thread)
 
 Das eigentliche Locking liegt in :mod:`core.services.locking` und
-vergleicht den geparsten ``datetime``-Instant gegen den vom Client
-mitgelieferten Wert (Refs #595).
+vergleicht ``updated_at.isoformat()`` als String gegen den vom Client
+mitgelieferten Wert.
 """
 
 from __future__ import annotations
@@ -65,10 +65,11 @@ class TestSettingsOptimisticLocking:
 class TestLockingTimezoneEdgeCases:
     """Edge-Cases im Umgang mit Timezone-Varianten von ``updated_at``.
 
-    ``check_version_conflict`` normalisiert beide Seiten zu
-    ``datetime``-Instants (Refs #595). Damit ist der Vergleich
-    offset-unabhängig — ein semantisch identischer Timestamp mit anderem
-    Offset wird korrekt als "kein Konflikt" erkannt.
+    ``check_version_conflict`` vergleicht aktuell **stringly-typed**:
+    ``str(current.isoformat()) != str(expected_updated_at)``. Damit ist
+    der Vergleich offset-sensitiv — ein semantisch identischer Timestamp
+    mit anderem Offset wird als Konflikt erkannt. Der "gleiche UTC"-Test
+    bestätigt das Happy-Path-Verhalten.
     """
 
     def test_exact_utc_iso_string_passes(self, sample_workitem):
@@ -78,6 +79,14 @@ class TestLockingTimezoneEdgeCases:
         # Darf nicht raisen.
         check_version_conflict(sample_workitem, iso_utc)
 
+    @pytest.mark.xfail(
+        strict=True,
+        reason=(
+            "check_version_conflict vergleicht ISO-Strings statt Datetime-Instants — "
+            "ein semantisch identischer Timestamp mit +01:00-Offset wird fälschlich "
+            "als Konflikt erkannt. Refs #591 WP2 (Bug-Kandidat)."
+        ),
+    )
     def test_same_instant_different_offset_should_not_conflict(self, sample_workitem):
         """Gleicher Instant mit ``+01:00``-Offset sollte kein Konflikt sein."""
         import zoneinfo
@@ -89,7 +98,8 @@ class TestLockingTimezoneEdgeCases:
         # beides ist derselbe Instant, nur anders formatiert.
         iso_shifted = shifted.isoformat()
         assert iso_shifted != sample_workitem.updated_at.isoformat()
-        # Semantischer Vergleich → kein Raise (Refs #595).
+        # Erwartung: semantischer Vergleich → kein Raise.
+        # Tatsächliches Verhalten: String-Vergleich → ValidationError.
         check_version_conflict(sample_workitem, iso_shifted)
 
     def test_none_disables_check(self, sample_workitem):

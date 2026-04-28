@@ -70,7 +70,7 @@ class WorkItem(models.Model):
         choices=ItemType.choices,
         default=ItemType.TASK,
         verbose_name=_("Typ"),
-        help_text=_("Aufgabe = aktiv zu erledigen, Hinweis = informativ."),
+        help_text=_("Kategorisierung der Aufgabe (Aufgabe, Telefonat, Termin etc.)"),
     )
     status = models.CharField(
         max_length=20,
@@ -106,7 +106,7 @@ class WorkItem(models.Model):
         blank=True,
         db_index=True,
         verbose_name=_("Wiedervorlage am"),
-        help_text=_("Optional. Wann soll die Aufgabe wieder aufpoppen?"),
+        help_text=_("Optional. Wann soll das Workitem wieder aufpoppen?"),
     )
     recurrence = models.CharField(
         max_length=20,
@@ -115,25 +115,11 @@ class WorkItem(models.Model):
         verbose_name=_("Wiederholung"),
         help_text=_("Bei Erledigung wird automatisch eine Folgeaufgabe mit neuer Frist erstellt."),
     )
-    recurrence_duplicated_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name=_("Folgeaufgabe erstellt am"),
-        help_text=_(
-            "Zeitpunkt, an dem für dieses Item bereits eine wiederkehrende Folgeaufgabe erzeugt "
-            "wurde. Verhindert doppelte Duplikate beim erneuten Setzen auf 'Erledigt'."
-        ),
-    )
 
     class Meta:
         verbose_name = _("Arbeitsauftrag")
         verbose_name_plural = _("Arbeitsaufträge")
         ordering = ["-created_at"]
-        # WorkItemInboxView filtert facility + status, sortiert nach
-        # priority_order + -created_at. Refs #638.
-        indexes = [
-            models.Index(fields=["facility", "status", "-created_at"], name="workitem_facility_status_idx"),
-        ]
 
     def __str__(self):
         return self.title

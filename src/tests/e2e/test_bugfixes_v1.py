@@ -109,13 +109,13 @@ class TestStatisticsButtons:
         page = authenticated_page
         page.goto(f"{base_url}/statistics/", wait_until="domcontentloaded")
 
-        # Monat-Button sollte initial aktiv sein (bg-accent)
+        # Monat-Button sollte initial aktiv sein (bg-indigo-600)
         month_button = page.locator("button:has-text('Monat')")
-        assert "bg-accent" in month_button.get_attribute("class")
+        assert "bg-indigo-600" in month_button.get_attribute("class")
 
         # Quartal-Button sollte initial inaktiv sein
         quarter_button = page.locator("button:has-text('Quartal')")
-        assert "bg-accent" not in quarter_button.get_attribute("class")
+        assert "bg-indigo-600" not in quarter_button.get_attribute("class")
 
         # Klick auf Quartal und warten bis HTMX den Inhalt ersetzt hat
         quarter_button.click()
@@ -126,7 +126,7 @@ class TestStatisticsButtons:
                 const buttons = document.querySelectorAll('button');
                 for (const btn of buttons) {
                     if (btn.textContent.trim().includes('Quartal') &&
-                        btn.classList.contains('bg-accent')) {
+                        btn.classList.contains('bg-indigo-600')) {
                         return true;
                     }
                 }
@@ -137,11 +137,13 @@ class TestStatisticsButtons:
 
         # Quartal-Button sollte jetzt aktiv sein
         quarter_button = page.locator("button:has-text('Quartal')")
-        assert "bg-accent" in quarter_button.get_attribute("class"), "Quartal-Button ist nicht aktiv nach Klick"
+        assert "bg-indigo-600" in quarter_button.get_attribute("class"), "Quartal-Button ist nicht aktiv nach Klick"
 
         # Monat-Button sollte jetzt inaktiv sein
         month_button = page.locator("button:has-text('Monat')")
-        assert "bg-accent" not in month_button.get_attribute("class"), "Monat-Button ist noch aktiv nach Quartal-Klick"
+        assert "bg-indigo-600" not in month_button.get_attribute("class"), (
+            "Monat-Button ist noch aktiv nach Quartal-Klick"
+        )
 
     def test_half_year_button_becomes_active(self, authenticated_page, base_url):
         """Klick auf 'Halbjahr' markiert den Button als aktiv."""
@@ -158,7 +160,7 @@ class TestStatisticsButtons:
                 const buttons = document.querySelectorAll('button');
                 for (const btn of buttons) {
                     if (btn.textContent.trim().includes('Halbjahr') &&
-                        btn.classList.contains('bg-accent')) {
+                        btn.classList.contains('bg-indigo-600')) {
                         return true;
                     }
                 }
@@ -168,4 +170,4 @@ class TestStatisticsButtons:
         )
 
         half_button = page.locator("button:has-text('Halbjahr')")
-        assert "bg-accent" in half_button.get_attribute("class"), "Halbjahr-Button ist nicht aktiv nach Klick"
+        assert "bg-indigo-600" in half_button.get_attribute("class"), "Halbjahr-Button ist nicht aktiv nach Klick"

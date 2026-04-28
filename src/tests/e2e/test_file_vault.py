@@ -7,23 +7,11 @@ import pytest
 pytestmark = pytest.mark.e2e
 
 
-# Minimaler gültiger PDF-Header, damit der Magic-Bytes-Check des Services
-# (libmagic) den Upload als application/pdf erkennt (Refs #610).
-_VALID_PDF_BYTES = (
-    b"%PDF-1.4\n"
-    b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
-    b"2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\n"
-    b"xref\n0 3\n0000000000 65535 f\n"
-    b"trailer<</Size 3/Root 1 0 R>>\n"
-    b"startxref\n9\n%%EOF\n"
-)
-
-
 @pytest.fixture
 def _test_pdf(tmp_path):
     """Create a test PDF file for upload."""
     path = tmp_path / "e2e-test.pdf"
-    path.write_bytes(_VALID_PDF_BYTES)
+    path.write_text("E2E test PDF content")
     return str(path)
 
 
@@ -56,7 +44,6 @@ def _select_qualified_client(page, base_url, e2e_env):
 class TestFileUploadAndDownload:
     """Upload a file via event form, verify on detail page, download it."""
 
-    @pytest.mark.smoke
     def test_lead_uploads_file_and_downloads(self, lead_page, base_url, e2e_env, _test_pdf):
         """Lead creates event with file upload, sees it on detail, downloads it."""
         page = lead_page
@@ -96,9 +83,9 @@ class TestFileUploadAndDownload:
 
         # Verify content
         download_path = download.path()
-        with open(download_path, "rb") as f:
+        with open(download_path) as f:
             content = f.read()
-        assert content == _VALID_PDF_BYTES
+        assert content == "E2E test PDF content"
 
     def test_download_content_matches_upload(self, lead_page, base_url, e2e_env, _test_pdf):
         """Downloaded file content matches the original upload."""
@@ -119,8 +106,8 @@ class TestFileUploadAndDownload:
         with page.expect_download() as download_info:
             page.locator("a:has-text('e2e-test.pdf')").click()
         download = download_info.value
-        with open(download.path(), "rb") as f:
-            assert f.read() == _VALID_PDF_BYTES
+        with open(download.path()) as f:
+            assert f.read() == "E2E test PDF content"
 
     def test_download_creates_audit_log(self, lead_page, base_url, e2e_env, _test_pdf):
         """Downloading a file creates an AuditLog entry."""
@@ -167,11 +154,7 @@ class TestFileEdit:
     """File replacement on event edit."""
 
     def test_replace_file_on_edit(self, lead_page, base_url, e2e_env, _test_pdf, tmp_path):
-        """Replacing a file on edit keeps the old version as a superseded predecessor (Refs #587 + #622).
-
-        Stufe B (#622): Replace läuft jetzt über den per-Entry „Ersetzen"-File-
-        Input, nicht mehr durch erneuten Upload in das Haupt-File-Feld.
-        """
+        """Replacing a file on edit updates the attachment."""
         page = lead_page
 
         # Create event with file
@@ -189,64 +172,23 @@ class TestFileEdit:
         page.click('a:has-text("Bearbeiten")')
         page.wait_for_load_state("domcontentloaded")
 
-        # Upload replacement via per-Entry Replace-Input (Stufe B).
+        # Upload replacement file
         replacement = tmp_path / "replacement.pdf"
-        replacement.write_bytes(_VALID_PDF_BYTES)
-        replace_input = page.locator('input[type="file"][name^="scan-bescheid__replace__"]').first
-        replace_input.set_input_files(str(replacement))
+        replacement.write_text("Replacement PDF content")
+        page.set_input_files('input[name="scan-bescheid"]', str(replacement))
         page.click('button:has-text("Speichern")')
         page.wait_for_url(lambda url: "/edit/" not in url, timeout=10000)
 
-        # Aktuelle Version ist „replacement.pdf"; die alte „e2e-test.pdf" wandert
-        # in den Vorversionen-Akkordeon. Das Top-Level-Label zeigt nur noch die
-        # aktuelle Version.
+        # Verify new file is shown
         assert page.locator("text=replacement.pdf").count() >= 1
-        prior_container = page.locator("[data-testid='attachment-prior-versions']")
-        assert prior_container.count() == 1
-        # Akkordeon aufklappen, damit die Vorversion sichtbar wird.
-        prior_container.locator("summary").click()
-        assert "e2e-test.pdf" in prior_container.inner_text()
+        assert page.locator("text=e2e-test.pdf").count() == 0
 
-        # Download current version and verify content
+        # Download and verify content
         with page.expect_download() as download_info:
             page.locator("a:has-text('replacement.pdf')").click()
         download = download_info.value
-        with open(download.path(), "rb") as f:
-            assert f.read() == _VALID_PDF_BYTES
-
-    def test_prior_version_stays_downloadable(self, lead_page, base_url, e2e_env, _test_pdf, tmp_path):
-        """Nach Ersetzen muss die Vorversion weiterhin herunterladbar sein (Refs #587)."""
-        page = lead_page
-
-        # Original anlegen
-        page.goto(f"{base_url}/events/new/")
-        page.wait_for_load_state("domcontentloaded")
-        page.select_option('select[name="document_type"]', label="Beratungsgespräch")
-        page.wait_for_selector("text=Scan/Bescheid", timeout=10000)
-        _select_qualified_client(page, base_url, e2e_env)
-        page.fill('input[name="thema"]', "E2E Vorversion-Download")
-        page.set_input_files('input[name="scan-bescheid"]', _test_pdf)
-        page.click('button:has-text("Speichern")')
-        page.wait_for_url(lambda url: "/events/" in url and "/new/" not in url, timeout=10000)
-
-        # Ersetzen — Stufe B via per-Entry Replace-Input.
-        page.click('a:has-text("Bearbeiten")')
-        page.wait_for_load_state("domcontentloaded")
-        replacement = tmp_path / "replacement.pdf"
-        replacement.write_bytes(_VALID_PDF_BYTES)
-        replace_input = page.locator('input[type="file"][name^="scan-bescheid__replace__"]').first
-        replace_input.set_input_files(str(replacement))
-        page.click('button:has-text("Speichern")')
-        page.wait_for_url(lambda url: "/edit/" not in url, timeout=10000)
-
-        # Vorversion-Akkordeon aufklappen und Vorversion herunterladen
-        prior_container = page.locator("[data-testid='attachment-prior-versions']")
-        prior_container.locator("summary").click()
-        with page.expect_download() as download_info:
-            prior_container.locator("a:has-text('e2e-test.pdf')").click()
-        download = download_info.value
-        with open(download.path(), "rb") as f:
-            assert f.read() == _VALID_PDF_BYTES
+        with open(download.path()) as f:
+            assert f.read() == "Replacement PDF content"
 
 
 class TestFileOverview:

@@ -7,22 +7,21 @@ RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
 # Stage 2: Compile Tailwind CSS
 FROM node:20-alpine AS node
 WORKDIR /build
-COPY package.json package-lock.json tailwind.config.js ./
+COPY package.json tailwind.config.js ./
 COPY src/templates/ src/templates/
 COPY src/core/ src/core/
 COPY src/static/css/input.css src/static/css/input.css
-RUN npm ci && npx tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --minify
+RUN npm install && npx tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --minify
 
 # Stage 3: Runtime
 FROM python:3.13-slim AS final
 
-# WeasyPrint + libmagic (file-upload magic-bytes validation, Refs #610) system dependencies
+# WeasyPrint system dependencies (Debian Bookworm)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 libpangocairo-1.0-0 libpangoft2-1.0-0 \
     libcairo2 libgdk-pixbuf-2.0-0 libffi-dev \
     libglib2.0-0 shared-mime-info \
     fontconfig fonts-dejavu-core \
-    libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -54,13 +53,4 @@ RUN adduser --disabled-password --gecos '' --uid 1000 appuser && chown -R appuse
 USER appuser
 
 EXPOSE 8000
-
-# Healthcheck gegen /health/ — 30s Intervall, 5s Timeout, 10s Grace für
-# Startup. Für Deployments ohne docker-compose (plain docker run, k8s,
-# Coolify etc.), wo der Compose-Healthcheck nicht greift. Refs #654.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request, sys; \
-urllib.request.urlopen('http://localhost:8000/health/', timeout=5).read(); \
-sys.exit(0)" || exit 1
-
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

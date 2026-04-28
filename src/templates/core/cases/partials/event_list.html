@@ -3,11 +3,11 @@
 {% if events %}
 <div class="space-y-2">
     {% for event in events %}
-    <div class="flex items-center justify-between bg-surface border border-subtle rounded-[10px] p-3">
-        <a href="{% url 'core:event_detail' event.pk %}" class="flex-1 hover:text-accent">
+    <div class="flex items-center justify-between bg-white border border-gray-200 rounded-md p-3">
+        <a href="{% url 'core:event_detail' event.pk %}" class="flex-1 hover:text-indigo-600">
             <div class="flex items-center space-x-3">
-                <span class="text-sm text-ink-muted font-mono">{{ event.occurred_at|date:"d.m.Y H:i" }}</span>
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-accent-light text-accent">
+                <span class="text-sm text-gray-500 font-mono">{{ event.occurred_at|date:"d.m.Y H:i" }}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-indigo-100 text-indigo-800">
                     {{ event.document_type.name }}
                 </span>
             </div>
@@ -19,18 +19,18 @@
               hx-swap="innerHTML">
             {% csrf_token %}
             <button type="submit" class="ml-2 text-xs text-red-600 hover:text-red-800" title="{% trans 'Entfernen' %}">
-                <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
         </form>
     </div>
     {% endfor %}
 </div>
 {% else %}
-<p class="text-sm text-ink-muted py-2">{% trans "Keine Kontakte zugeordnet." %}</p>
+<p class="text-sm text-gray-500 py-2">{% trans "Keine Kontakte zugeordnet." %}</p>
 {% endif %}
 
 {% if unassigned_events %}
-<div class="mt-4 pt-4 border-t border-subtle">
+<div class="mt-4 pt-4 border-t border-gray-200">
     <form method="post"
           action="{% url 'core:case_assign_event' case.pk %}"
           hx-post="{% url 'core:case_assign_event' case.pk %}"
@@ -38,12 +38,12 @@
           hx-swap="innerHTML"
           class="flex items-center gap-2">
         {% csrf_token %}
-        <select name="event_id" class="flex-1 border border-subtle rounded-[10px] px-3 py-2 text-sm">
+        <select name="event_id" class="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm">
             {% for event in unassigned_events %}
             <option value="{{ event.pk }}">{{ event.occurred_at|date:"d.m.Y H:i" }} – {{ event.document_type.name }}</option>
             {% endfor %}
         </select>
-        <button type="submit" class="inline-flex items-center px-3 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent">
+        <button type="submit" class="inline-flex items-center px-3 py-2 bg-indigo-600 text-white text-sm rounded-md hover:bg-indigo-700">
             {% trans "Zuordnen" %}
         </button>
     </form>

@@ -4,20 +4,20 @@
 {% block title %}{% trans "Audit-Log" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-<h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Audit-Log" %}</h1>
+<h1 class="text-2xl font-bold mb-6">{% trans "Audit-Log" %}</h1>
 
 {# Filter form #}
 <form id="audit-filter-form"
       hx-get="{% url 'core:audit_log' %}"
       hx-target="#audit-table"
       hx-push-url="true"
-      class="mb-5 bg-surface rounded-[10px] border border-subtle p-4">
+      class="mb-6 bg-white rounded-md border border-gray-200 p-4">
     <div class="flex flex-wrap gap-4 items-end">
         {# Action filter #}
         <div>
-            <label for="filter-action" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Aktion" %}</label>
+            <label for="filter-action" class="block text-xs font-medium text-gray-500 mb-1">{% trans "Aktion" %}</label>
             <select id="filter-action" name="action"
-                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
+                    class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option value="">{% trans "Alle Aktionen" %}</option>
                 {% for value, label in action_choices %}
                 <option value="{{ value }}" {% if filter_action == value %}selected{% endif %}>{{ label }}</option>
@@ -27,9 +27,9 @@
 
         {# User filter #}
         <div>
-            <label for="filter-user" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Benutzer" %}</label>
+            <label for="filter-user" class="block text-xs font-medium text-gray-500 mb-1">{% trans "Benutzer" %}</label>
             <select id="filter-user" name="user"
-                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
+                    class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 <option value="">{% trans "Alle Benutzer" %}</option>
                 {% for u in facility_users %}
                 <option value="{{ u.pk }}" {% if filter_user == u.pk|stringformat:"s" %}selected{% endif %}>{{ u }}</option>
@@ -39,26 +39,26 @@
 
         {# Date from #}
         <div>
-            <label for="filter-date-from" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Von" %}</label>
+            <label for="filter-date-from" class="block text-xs font-medium text-gray-500 mb-1">{% trans "Von" %}</label>
             <input type="date" id="filter-date-from" name="date_from" value="{{ filter_date_from }}"
-                   class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
+                   class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
         </div>
 
         {# Date to #}
         <div>
-            <label for="filter-date-to" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bis" %}</label>
+            <label for="filter-date-to" class="block text-xs font-medium text-gray-500 mb-1">{% trans "Bis" %}</label>
             <input type="date" id="filter-date-to" name="date_to" value="{{ filter_date_to }}"
-                   class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
+                   class="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
         </div>
 
         {# Submit #}
         <div class="flex gap-2">
             <button type="submit"
-                    class="px-4 py-2 rounded-md text-[13px] font-semibold bg-accent text-white">
+                    class="px-4 py-2 rounded-md text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500">
                 {% trans "Filtern" %}
             </button>
             <a href="{% url 'core:audit_log' %}"
-               class="px-4 py-2 rounded-md text-[13px] font-medium bg-surface border border-subtle text-ink-soft hover:bg-canvas">
+               class="px-4 py-2 rounded-md text-sm font-medium bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
                 {% trans "Zurücksetzen" %}
             </a>
         </div>

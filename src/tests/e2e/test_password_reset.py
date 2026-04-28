@@ -43,7 +43,6 @@ def test_password_reset_form_loads(base_url, browser):
 
 
 @pytest.mark.e2e
-@pytest.mark.smoke
 def test_password_reset_full_flow(base_url, browser):
     """Kompletter Flow: Login → 'Passwort vergessen?' → E-Mail eingeben → Bestätigung."""
     context = browser.new_context(locale="de-DE")

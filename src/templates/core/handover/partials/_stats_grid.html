@@ -1,30 +1,29 @@
 {% load i18n %}
 
-{# KPI-Karten (Design: HandoverScreen - 4 Mono-Number Cards) #}
 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-    <div class="bg-surface border border-subtle rounded-[10px] px-5 py-4 text-center">
-        <div class="text-[28px] font-bold text-ink font-mono leading-none">{{ summary.stats.events_total }}</div>
-        <div class="text-[11px] text-ink-muted mt-1">{% trans "Kontakte" %}</div>
+    <div class="bg-gray-50 rounded-md p-3 text-center">
+        <div class="text-2xl font-bold text-gray-900">{{ summary.stats.events_total }}</div>
+        <div class="text-xs text-gray-500">{% trans "Kontakte" %}</div>
     </div>
-    <div class="bg-surface border border-subtle rounded-[10px] px-5 py-4 text-center">
-        <div class="text-[28px] font-bold text-ink font-mono leading-none">{{ summary.stats.activities_total }}</div>
-        <div class="text-[11px] text-ink-muted mt-1">{% trans "Aktivitäten" %}</div>
+    <div class="bg-gray-50 rounded-md p-3 text-center">
+        <div class="text-2xl font-bold text-gray-900">{{ summary.stats.activities_total }}</div>
+        <div class="text-xs text-gray-500">{% trans "Aktivitäten" %}</div>
     </div>
-    <div class="bg-surface border border-subtle rounded-[10px] px-5 py-4 text-center">
-        <div class="text-[28px] font-bold text-ink font-mono leading-none">{{ summary.stats.workitems_new }}</div>
-        <div class="text-[11px] text-ink-muted mt-1">{% trans "Neue Aufgaben" %}</div>
+    <div class="bg-gray-50 rounded-md p-3 text-center">
+        <div class="text-2xl font-bold text-gray-900">{{ summary.stats.workitems_new }}</div>
+        <div class="text-xs text-gray-500">{% trans "Neue Aufgaben" %}</div>
     </div>
-    <div class="bg-surface border border-subtle rounded-[10px] px-5 py-4 text-center">
-        <div class="text-[28px] font-bold text-ink font-mono leading-none">{{ summary.stats.clients_new }}</div>
-        <div class="text-[11px] text-ink-muted mt-1">{% trans "Neue Klientel" %}</div>
+    <div class="bg-gray-50 rounded-md p-3 text-center">
+        <div class="text-2xl font-bold text-gray-900">{{ summary.stats.clients_new }}</div>
+        <div class="text-xs text-gray-500">{% trans "Neue Klientel" %}</div>
     </div>
 </div>
 
 {% if summary.stats.events_by_type %}
 <div class="mt-3 flex flex-wrap gap-2">
     {% for et in summary.stats.events_by_type %}
-    <span class="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-semibold bg-canvas border border-subtle text-ink-soft">
-        {{ et.document_type__name }}: <span class="font-mono ml-1">{{ et.count }}</span>
+    <span class="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-700">
+        {{ et.document_type__name }}: {{ et.count }}
     </span>
     {% endfor %}
 </div>

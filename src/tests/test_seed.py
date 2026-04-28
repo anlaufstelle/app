@@ -3,21 +3,7 @@
 import pytest
 from django.core.management import call_command
 
-# Der Seed-Command erzeugt Datei-Uploads via ``store_encrypted_file``, das seit
-# #610 libmagic für Magic-Bytes-Validierung verwendet. Ohne libmagic (z.B.
-# Host ohne ``libmagic1``-Paket) ist der Command nicht lauffähig — im
-# Docker-Image/CI ist die Bibliothek vorhanden.
-try:
-    import magic
-
-    magic.from_buffer(b"%PDF-1.4\n", mime=True)
-except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library fehlt
-    pytest.skip(
-        f"libmagic nicht lauffähig ({_libmagic_exc}) — Seed-Tests erfordern libmagic1.",
-        allow_module_level=True,
-    )
-
-from core.models import (  # noqa: E402
+from core.models import (
     Case,
     Client,
     DocumentType,
@@ -167,7 +153,6 @@ def test_seed_solo_creates_bulk_clients():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.slow
 @pytest.mark.django_db
 def test_seed_medium_creates_two_facilities():
     """Medium scale creates two facilities."""
@@ -178,7 +163,6 @@ def test_seed_medium_creates_two_facilities():
     assert Facility.objects.filter(name="Zweigstelle Nord").exists()
 
 
-@pytest.mark.slow
 @pytest.mark.django_db
 def test_seed_medium_creates_users_per_facility():
     """Medium scale creates 4 users per facility (8 total for 2 facilities)."""
@@ -187,7 +171,6 @@ def test_seed_medium_creates_users_per_facility():
     assert User.objects.count() == 8
 
 
-@pytest.mark.slow
 @pytest.mark.django_db
 def test_seed_medium_second_facility_users_have_suffix():
     """Users in the second facility have a '_1' suffix to avoid name collision."""
@@ -211,7 +194,6 @@ def test_seed_creates_single_organization():
     assert Organization.objects.filter(name="Anlaufstelle").exists()
 
 
-@pytest.mark.slow
 @pytest.mark.django_db
 def test_seed_medium_shares_single_organization():
     """Medium scale: all facilities belong to the same organization."""

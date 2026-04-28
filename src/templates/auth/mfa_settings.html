@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="max-w-2xl">
-    <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Zwei-Faktor-Authentifizierung" %}</h1>
+    <h1 class="text-2xl font-bold mb-6">{% trans "Zwei-Faktor-Authentifizierung" %}</h1>
 
     {% if messages %}
         {% for message in messages %}
@@ -15,17 +15,17 @@
         {% endfor %}
     {% endif %}
 
-    <div class="bg-surface border border-subtle rounded-[10px] p-4 mb-5">
+    <div class="bg-white border border-gray-200 rounded-md p-4 mb-6">
         {% if has_device %}
             <p class="text-sm font-medium text-green-700 mb-2" data-testid="mfa-status">
                 {% trans "Aktiv: Zweiter Faktor per Authenticator-App." %}
             </p>
             {% if is_mfa_enforced %}
-                <p class="text-xs text-ink-muted mb-4">
+                <p class="text-xs text-gray-500 mb-4">
                     {% trans "Zwei-Faktor-Authentifizierung ist für dein Konto verpflichtend und kann nicht deaktiviert werden." %}
                 </p>
             {% else %}
-                <p class="text-xs text-ink-muted mb-4">
+                <p class="text-xs text-gray-500 mb-4">
                     {% trans "Du kannst die 2FA jederzeit deaktivieren. Bei wichtigen Rollen empfehlen wir die Aktivierung." %}
                 </p>
             {% endif %}
@@ -39,63 +39,19 @@
                 </button>
             </form>
             {% endif %}
-
-            {# Backup-Codes (Refs #588) #}
-            <div class="mt-6 pt-4 border-t border-subtle" x-data="regenerateBackupCodes">
-                <h2 class="text-sm font-semibold text-ink-soft mb-1">{% trans "Backup-Codes" %}</h2>
-                <p class="text-xs text-ink-muted mb-2">
-                    {% trans "Ersatz-Codes für den Fall, dass dein Authenticator-Gerät nicht verfügbar ist. Jeder Code ist einmalig." %}
-                </p>
-                <p class="text-sm mb-3" data-testid="backup-codes-counter">
-                    {% blocktrans with remaining=backup_codes_remaining total=backup_codes_total %}
-                        Noch <strong>{{ remaining }}</strong> von {{ total }} Codes verfügbar.
-                    {% endblocktrans %}
-                </p>
-                {% if backup_codes_low %}
-                <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-[10px] p-2 mb-3" data-testid="backup-codes-low-warning">
-                    {% trans "Wenige Backup-Codes übrig. Am besten jetzt einen neuen Satz generieren." %}
-                </p>
-                {% endif %}
-                <button type="button" @click="toggle()"
-                        data-testid="backup-codes-regenerate-toggle"
-                        class="inline-flex items-center px-3 py-2 border border-subtle text-xs font-medium rounded-md hover:bg-canvas">
-                    {% trans "Neue Backup-Codes generieren" %}
-                </button>
-
-                <div x-show="regenOpen" x-cloak x-transition class="mt-3 p-3 bg-canvas border border-subtle rounded-[10px]">
-                    <p class="text-xs text-ink-soft mb-2">
-                        {% trans "Zur Bestätigung einen aktuellen 6-stelligen TOTP-Code eingeben. Der bisherige Satz wird sofort ungültig." %}
-                    </p>
-                    <form method="post" action="{% url 'mfa_backup_codes_regenerate' %}" class="flex flex-wrap items-end gap-2">
-                        {% csrf_token %}
-                        <div class="flex-1 min-w-[8rem]">
-                            <label for="id_regen_token" class="block text-xs font-medium text-ink-soft mb-1">{% trans "TOTP-Code" %}</label>
-                            <input type="text" name="token" id="id_regen_token" required
-                                   inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code"
-                                   data-testid="backup-codes-regenerate-token"
-                                   class="w-full rounded-md border-subtle text-sm focus:border-accent focus:ring-accent px-3 py-2 border">
-                        </div>
-                        <button type="submit"
-                                data-testid="backup-codes-regenerate-submit"
-                                class="inline-flex items-center px-3 py-2 bg-accent text-white text-xs font-medium rounded-md hover:bg-accent">
-                            {% trans "Generieren" %}
-                        </button>
-                    </form>
-                </div>
-            </div>
         {% else %}
-            <p class="text-sm text-ink-soft mb-4" data-testid="mfa-status">
+            <p class="text-sm text-gray-700 mb-4" data-testid="mfa-status">
                 {% trans "Zwei-Faktor-Authentifizierung ist derzeit nicht aktiv." %}
             </p>
             <a href="{% url 'mfa_setup' %}" data-testid="mfa-setup-button"
-               class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-accent hover:bg-accent">
+               class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
                 {% trans "2FA einrichten" %}
             </a>
         {% endif %}
     </div>
 
-    <div class="text-sm text-ink-muted">
-        <a href="{% url 'core:account_profile' %}" class="text-accent hover:underline">
+    <div class="text-sm text-gray-500">
+        <a href="{% url 'core:account_profile' %}" class="text-indigo-600 hover:underline">
             &larr; {% trans "Zurück zum Profil" %}
         </a>
     </div>

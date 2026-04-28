@@ -9,7 +9,6 @@ venv/
 htmlcov/
 .coverage
 coverage.xml
-coverage.json
 
 # Django
 *.sqlite3
@@ -60,8 +59,7 @@ Thumbs.db
 
 # Node (Tailwind)
 node_modules/
-# package-lock.json wird committet (Refs #656) — reproduzierbare
-# `npm ci`-Installs + GitHub-Actions setup-node Cache-Hit.
+package-lock.json
 
 # Backups
 backups/

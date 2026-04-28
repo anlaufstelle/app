@@ -5,34 +5,32 @@
 
 {% block content %}
 <div class="max-w-lg">
-    <h1 class="text-[22px] font-bold text-ink mb-2">{% if is_edit %}{% trans "Episode bearbeiten" %}{% else %}{% trans "Neue Episode" %}{% endif %}</h1>
+    <h1 class="text-2xl font-bold mb-6">{% if is_edit %}{% trans "Episode bearbeiten" %}{% else %}{% trans "Neue Episode" %}{% endif %}</h1>
 
-    <p class="text-[13px] text-ink-muted mb-5">
-        {% trans "Fall" %}: <a href="{% url 'core:case_detail' case.pk %}" class="text-accent hover:underline font-semibold">{{ case.title }}</a>
+    <p class="text-sm text-gray-500 mb-4">
+        {% trans "Fall" %}: <a href="{% url 'core:case_detail' case.pk %}" class="text-indigo-600 hover:text-indigo-800">{{ case.title }}</a>
     </p>
 
     <form method="post" class="space-y-4">
         {% csrf_token %}
 
-        <div class="bg-surface border border-subtle rounded-[10px] p-5 space-y-4">
-            {% for field in form %}
-            <div>
-                <label for="{{ field.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
-                    {{ field.label }}{% if field.field.required %} *{% endif %}
-                </label>
-                {{ field }}
-                {% for error in field.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
-            </div>
+        {% for field in form %}
+        <div>
+            <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-700 mb-1">
+                {{ field.label }}{% if field.field.required %} *{% endif %}
+            </label>
+            {{ field }}
+            {% for error in field.errors %}
+            <p class="mt-1 text-sm text-red-600">{{ error }}</p>
             {% endfor %}
         </div>
+        {% endfor %}
 
-        <div class="flex flex-col sm:flex-row gap-2.5 pt-2">
-            <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-accent text-white text-[13px] font-semibold rounded-md">
+        <div class="flex flex-col sm:flex-row gap-3 pt-4">
+            <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700">
                 {% if is_edit %}{% trans "Speichern" %}{% else %}{% trans "Episode erstellen" %}{% endif %}
             </button>
-            <a href="{% url 'core:case_detail' case.pk %}" class="w-full sm:w-auto text-center px-4 py-2 bg-surface border border-subtle text-[13px] text-ink-soft rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
+            <a href="{% url 'core:case_detail' case.pk %}" class="w-full sm:w-auto text-center px-4 py-2 border border-gray-300 text-sm rounded-md hover:bg-gray-50">{% trans "Abbrechen" %}</a>
         </div>
     </form>
 </div>

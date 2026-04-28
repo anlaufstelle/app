@@ -30,11 +30,9 @@ class TestClientManagement:
 
         # HTMX-Suche nach Seed-Client
         page.fill("input[name='q']", "Blitz")
+        page.wait_for_timeout(500)
         page.wait_for_load_state("domcontentloaded")
-        # Auf das konkrete Ergebnis warten, statt blind auf den Debounce.
-        result = page.locator("a:has-text('Blitz-08')").first
-        result.wait_for(state="visible", timeout=5000)
-        assert result.is_visible()
+        assert page.locator("a:has-text('Blitz-08')").first.is_visible()
 
     def test_client_detail_event_timeline(self, authenticated_page, base_url):
         """Client-Detail → Event-Chronik sichtbar."""

@@ -17,26 +17,6 @@ class EventAttachment(models.Model):
         related_name="attachments",
         verbose_name=_("Event"),
     )
-    # Versions-Kette (Stufe B, Refs #622): Ein ``entry_id`` identifiziert eine
-    # Kette von Attachments, die dieselbe logische Datei über ihre Replace-
-    # History hinweg repräsentiert. Für Stufe-A-Einträge (1 Datei pro Feld)
-    # wird eine eigene ``entry_id`` pro Kette in der Data-Migration gesetzt.
-    entry_id = models.UUIDField(
-        default=uuid.uuid4,
-        editable=False,
-        verbose_name=_("Entry-ID (Versionskette)"),
-    )
-    sort_order = models.IntegerField(
-        default=0,
-        verbose_name=_("Sortierung"),
-        help_text=_("Reihenfolge der Einträge innerhalb eines Feldes (0-indexed)."),
-    )
-    deleted_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name=_("Soft-deleted am"),
-        help_text=_("Markiert den Eintrag als vom User entfernt. Physischer Delete erst beim Event-Delete/Anonymize."),
-    )
     field_template = models.ForeignKey(
         "core.FieldTemplate",
         on_delete=models.PROTECT,
@@ -67,29 +47,6 @@ class EventAttachment(models.Model):
         verbose_name=_("Erstellt von"),
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Erstellt am"))
-
-    # Versionierung (Refs #587, Stufe A): statt eine alte Datei beim Ersetzen
-    # zu löschen, markieren wir sie als superseded. Pro (event, field_template)
-    # bleibt die jeweils neueste Version `is_current=True`; Vorgänger zeigen
-    # per `superseded_by` auf ihren Nachfolger und zusammen bilden sie die
-    # Versionskette. Disk-Cleanup erst beim Event-Delete/Anonymize.
-    is_current = models.BooleanField(
-        default=True,
-        verbose_name=_("Aktuelle Version"),
-    )
-    superseded_by = models.ForeignKey(
-        "self",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="prior_versions",
-        verbose_name=_("Ersetzt durch"),
-    )
-    superseded_at = models.DateTimeField(
-        null=True,
-        blank=True,
-        verbose_name=_("Ersetzt am"),
-    )
 
     class Meta:
         verbose_name = _("Dateianhang")

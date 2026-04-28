@@ -3,42 +3,42 @@
 {% if summary.highlights %}
 <div class="space-y-2">
     {% for h in summary.highlights %}
-    <div class="flex items-start gap-3 px-3 py-2.5 rounded-[10px] {% if h.type == 'crisis' %}bg-yellow-50{% elif h.type == 'ban' %}bg-ban-soft{% else %}bg-event-soft{% endif %}">
+    <div class="flex items-start gap-3 p-2 rounded-md {% if h.type == 'crisis' %}bg-amber-50{% elif h.type == 'ban' %}bg-red-50{% else %}bg-blue-50{% endif %}">
         {% if h.type == "crisis" %}
-        <svg aria-hidden="true" class="w-4 h-4 mt-0.5 flex-shrink-0 text-yellow-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+        <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
         {% elif h.type == "ban" %}
-        <svg aria-hidden="true" class="w-4 h-4 mt-0.5 flex-shrink-0 text-ban-deep" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+        <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
         {% else %}
-        <svg aria-hidden="true" class="w-4 h-4 mt-0.5 flex-shrink-0 text-event-deep" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <svg class="w-4 h-4 mt-0.5 flex-shrink-0 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         {% endif %}
         <div class="flex-1 min-w-0">
-            <div class="flex items-center gap-2 text-[13px]">
-                <span class="font-mono text-ink-muted">{{ h.time|time:"H:i" }}</span>
+            <div class="flex items-center gap-2 text-sm">
+                <span class="font-mono text-gray-500">{{ h.time|time:"H:i" }}</span>
                 {% if h.type == "crisis" %}
-                <span class="font-semibold text-yellow-800">{% trans "Krisengespräch" %}</span>
+                <span class="font-medium text-amber-800">{% trans "Krisengespräch" %}</span>
                 {% elif h.type == "ban" %}
-                <span class="font-semibold text-ban-deep">{% trans "Hausverbot" %}</span>
+                <span class="font-medium text-red-800">{% trans "Hausverbot" %}</span>
                 {% else %}
-                <span class="font-semibold text-event-deep">{{ h.object.title|truncatewords:6 }}</span>
+                <span class="font-medium text-blue-800">{{ h.object.title|truncatewords:6 }}</span>
                 {% endif %}
                 {% if h.type != "task" and h.object.client %}
-                <span class="text-ink-soft">{{ h.object.client.pseudonym }}</span>
+                <span class="text-gray-600">{{ h.object.client.pseudonym }}</span>
                 {% endif %}
             </div>
             {% if h.type != "task" and h.object.preview_fields %}
-            <div class="mt-0.5 text-[11px] text-ink-muted">
+            <div class="mt-0.5 text-xs text-gray-500">
                 {% for pf in h.object.preview_fields %}
                 <span>{{ pf.label }}: {{ pf.value }}{% if not forloop.last %} · {% endif %}</span>
                 {% endfor %}
             </div>
             {% endif %}
             {% if h.type == "task" and h.object.assigned_to %}
-            <div class="mt-0.5 text-[11px] text-ink-muted">→ {{ h.object.assigned_to.display_name|default:h.object.assigned_to.username }}</div>
+            <div class="mt-0.5 text-xs text-gray-500">→ {{ h.object.assigned_to.display_name|default:h.object.assigned_to.username }}</div>
             {% endif %}
         </div>
     </div>
     {% endfor %}
 </div>
 {% else %}
-<p class="text-[13px] text-ink-muted italic">{% trans "Keine besonderen Vorkommnisse" %}</p>
+<p class="text-sm text-gray-500 italic">{% trans "Keine besonderen Vorkommnisse" %}</p>
 {% endif %}

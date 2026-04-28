@@ -71,11 +71,6 @@ class Case(models.Model):
         verbose_name = _("Fall")
         verbose_name_plural = _("Fälle")
         ordering = ["-created_at"]
-        # CaseListView filtert facility + optional status, sortiert -created_at.
-        # Refs #638.
-        indexes = [
-            models.Index(fields=["facility", "status", "-created_at"], name="case_facility_status_ca_idx"),
-        ]
 
     def __str__(self):
         return f"{self.title} ({self.get_status_display()})"

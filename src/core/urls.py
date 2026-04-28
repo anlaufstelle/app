@@ -3,22 +3,9 @@
 from django.urls import path
 from django.views.generic import RedirectView
 
-from core.views.account import AccountProfileView
-from core.views.attachments import AttachmentDownloadView, AttachmentListView
+from core.views.account import AccountProfileView, DashboardPreferenceUpdateView
+from core.views.attachments import AttachmentListView
 from core.views.audit import AuditLogDetailView, AuditLogListView
-from core.views.case_episodes import (
-    EpisodeCloseView,
-    EpisodeCreateView,
-    EpisodeUpdateView,
-)
-from core.views.case_goals import (
-    GoalCreateView,
-    GoalToggleView,
-    GoalUpdateView,
-    MilestoneCreateView,
-    MilestoneDeleteView,
-    MilestoneToggleView,
-)
 from core.views.cases import (
     CaseAssignEventView,
     CaseCloseView,
@@ -29,6 +16,15 @@ from core.views.cases import (
     CaseReopenView,
     CasesForClientView,
     CaseUpdateView,
+    EpisodeCloseView,
+    EpisodeCreateView,
+    EpisodeUpdateView,
+    GoalCreateView,
+    GoalToggleView,
+    GoalUpdateView,
+    MilestoneCreateView,
+    MilestoneDeleteView,
+    MilestoneToggleView,
 )
 from core.views.clients import (
     ClientAutocompleteView,
@@ -40,8 +36,10 @@ from core.views.clients import (
     ClientUpdateView,
 )
 from core.views.dsgvo import DSGVODocumentDownloadView, DSGVOPackageView
-from core.views.event_deletion import DeletionRequestListView, DeletionRequestReviewView
 from core.views.events import (
+    AttachmentDownloadView,
+    DeletionRequestListView,
+    DeletionRequestReviewView,
     EventCreateView,
     EventDeleteView,
     EventDetailView,
@@ -72,19 +70,15 @@ from core.views.statistics import (
     PDFExportView,
     StatisticsView,
 )
-from core.views.workitem_actions import (
-    WorkItemCreateView,
-    WorkItemStatusUpdateView,
-    WorkItemUpdateView,
-)
-from core.views.workitem_bulk import (
+from core.views.workitems import (
     WorkItemBulkAssignView,
     WorkItemBulkPriorityView,
     WorkItemBulkStatusView,
-)
-from core.views.workitems import (
+    WorkItemCreateView,
     WorkItemDetailView,
     WorkItemInboxView,
+    WorkItemStatusUpdateView,
+    WorkItemUpdateView,
 )
 from core.views.zeitstrom import ZeitstromFeedPartialView, ZeitstromView
 
@@ -179,6 +173,7 @@ urlpatterns = [
     path("api/events/fields/", EventFieldsPartialView.as_view(), name="event_fields_partial"),
     path("api/zeitstrom/feed/", ZeitstromFeedPartialView.as_view(), name="zeitstrom_feed_partial"),
     path("api/cases/for-client/", CasesForClientView.as_view(), name="cases_for_client"),
+    path("api/dashboard/preferences/", DashboardPreferenceUpdateView.as_view(), name="dashboard_preferences"),
     path("api/search/global/", GlobalSearchPartialView.as_view(), name="global_search"),
     path("api/retention/<uuid:pk>/approve/", RetentionApproveView.as_view(), name="retention_approve"),
     path("api/retention/<uuid:pk>/hold/", RetentionHoldView.as_view(), name="retention_hold"),

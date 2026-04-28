@@ -7,19 +7,36 @@ from core.models import Activity, Client, Event, WorkItem
 from core.services.feed import enrich_events_with_preview, get_time_range
 
 
-def _build_shift_metadata(time_filter, start_dt, end_dt):
-    """Return (shift_label, shift_range) strings for a shift window."""
+def build_handover_summary(facility, target_date, time_filter, user):
+    """Build structured handover summary for a shift.
+
+    Args:
+        facility: Facility instance
+        target_date: date object
+        time_filter: TimeFilter instance (or None for full day)
+        user: User instance (for sensitivity checks)
+
+    Returns dict with keys: shift_label, shift_range, date, stats, highlights, open_tasks
+    """
+    start_dt, end_dt = get_time_range(target_date, time_filter)
+
+    # Shift metadata
     if time_filter:
         shift_label = time_filter.label
         shift_range = f"{start_dt.strftime('%H:%M')} – {end_dt.strftime('%H:%M')}"
     else:
         shift_label = "Ganzer Tag"
         shift_range = "00:00 – 23:59"
-    return shift_label, shift_range
 
+    # --- Stats ---
+    time_range = (start_dt, end_dt)
 
-def _collect_stats(facility, visible_events, time_range):
-    """Aggregate counters for the shift (events, activities, workitems, bans, clients)."""
+    visible_events = Event.objects.visible_to(user).filter(
+        facility=facility,
+        is_deleted=False,
+        occurred_at__range=time_range,
+    )
+
     events_total = visible_events.count()
 
     events_by_type = list(
@@ -51,7 +68,7 @@ def _collect_stats(facility, visible_events, time_range):
         created_at__range=time_range,
     ).count()
 
-    return {
+    stats = {
         "events_total": events_total,
         "events_by_type": events_by_type,
         "activities_total": activities_total,
@@ -61,9 +78,7 @@ def _collect_stats(facility, visible_events, time_range):
         "clients_new": clients_new,
     }
 
-
-def _collect_highlights(facility, visible_events, time_range, user):
-    """Combine crisis/ban events and urgent tasks into a sorted highlights list."""
+    # --- Highlights ---
     crisis_events = (
         visible_events.filter(document_type__system_type="crisis")
         .select_related("document_type", "client", "created_by")
@@ -104,11 +119,7 @@ def _collect_highlights(facility, visible_events, time_range, user):
     if event_highlights:
         enrich_events_with_preview(event_highlights, user)
 
-    return highlights
-
-
-def _collect_open_tasks(facility):
-    """Return up to 10 open/in-progress work items ordered by priority and due date."""
+    # --- Open tasks (across all time, not just this shift) ---
     priority_order = DBCase(
         When(priority="urgent", then=Value(0)),
         When(priority="important", then=Value(1)),
@@ -116,7 +127,7 @@ def _collect_open_tasks(facility):
         default=Value(2),
         output_field=IntegerField(),
     )
-    return (
+    open_tasks = (
         WorkItem.objects.filter(
             facility=facility,
             status__in=["open", "in_progress"],
@@ -125,32 +136,6 @@ def _collect_open_tasks(facility):
         .select_related("client", "assigned_to")
         .order_by("priority_rank", "due_date", "-created_at")[:10]
     )
-
-
-def build_handover_summary(facility, target_date, time_filter, user):
-    """Build structured handover summary for a shift.
-
-    Args:
-        facility: Facility instance
-        target_date: date object
-        time_filter: TimeFilter instance (or None for full day)
-        user: User instance (for sensitivity checks)
-
-    Returns dict with keys: shift_label, shift_range, date, stats, highlights, open_tasks
-    """
-    start_dt, end_dt = get_time_range(target_date, time_filter)
-    shift_label, shift_range = _build_shift_metadata(time_filter, start_dt, end_dt)
-
-    time_range = (start_dt, end_dt)
-    visible_events = Event.objects.visible_to(user).filter(
-        facility=facility,
-        is_deleted=False,
-        occurred_at__range=time_range,
-    )
-
-    stats = _collect_stats(facility, visible_events, time_range)
-    highlights = _collect_highlights(facility, visible_events, time_range, user)
-    open_tasks = _collect_open_tasks(facility)
 
     return {
         "shift_label": shift_label,

@@ -39,9 +39,9 @@ class TestAuditDetail:
         assert page.locator("text=Aktion").is_visible()
         assert page.locator("text=IP-Adresse").is_visible()
 
-        # Aktion als Badge sichtbar (z.B. "Anmeldung") — #663: rounded → rounded-full
-        action_badge = page.locator("span.rounded-full.bg-accent-light")
-        assert action_badge.first.is_visible()
+        # Aktion als Badge sichtbar (z.B. "Anmeldung")
+        action_badge = page.locator("span.rounded.bg-indigo-100")
+        assert action_badge.is_visible()
 
         # Details-Abschnitt vorhanden
         assert page.locator("text=Details").is_visible()

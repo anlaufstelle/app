@@ -1,6 +1,6 @@
 [project]
 name = "anlaufstelle"
-version = "0.10.1"
+version = "0.10.0"
 description = "Open-Source-Fachsystem für niedrigschwellige soziale Einrichtungen"
 requires-python = ">=3.13"
 license = "AGPL-3.0-or-later"
@@ -22,7 +22,6 @@ addopts = "--reuse-db"
 markers = [
     "e2e: End-to-End-Tests mit Playwright (benötigen laufenden Server)",
     "smoke: Kritische User-Flows für schnelle lokale Validierung",
-    "slow: Tests mit Laufzeit > 2s (typisch: Seed-Läufe mit größerem Datensatz). Per `-m 'not slow'` deselektierbar.",
 ]
 
 [tool.coverage.run]

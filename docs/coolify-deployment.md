@@ -91,14 +91,6 @@ python manage.py setup_facility   # Admin-User + Facility anlegen
 
 Der Admin erhält eine Einladungs-E-Mail mit Setup-Link (Token-Invite-Flow, [#528](https://github.com/tobiasnix/anlaufstelle/issues/528)).
 
-> **⚠️ PostgreSQL-Rolle: NOSUPERUSER erforderlich.** Der in `POSTGRES_USER` konfigurierte DB-User darf **kein** PostgreSQL-Superuser sein — sonst wird Row Level Security (Migration [`0047_postgres_rls_setup.py`](../src/core/migrations/0047_postgres_rls_setup.py)) per Postgres-Default **bypasst** und das Facility-Isolations-Safety-Net ist wirkungslos. Im offiziellen `postgres:16`-Image wird der initial via `POSTGRES_USER` angelegte User standardmäßig als Superuser erstellt. Nach dem ersten `migrate` daher einmalig als Postgres-Admin per `psql` anpassen:
->
-> ```sql
-> ALTER ROLE anlaufstelle_user NOSUPERUSER;
-> ```
->
-> Prüfen mit `\du` oder `SELECT rolsuper FROM pg_roles WHERE rolname='anlaufstelle_user';` → `f`. Hintergrund: [docs/ops-runbook.md § 9](ops-runbook.md).
-
 ### 7. 2FA aktivieren
 
 Nach erstem Login sollte der Admin unter `/mfa/settings/` sofort TOTP einrichten
@@ -132,9 +124,6 @@ und Edge-Versionen erfüllen das).
   nach Kaltstart bis zu 5 Minuten dauern).
 - RLS aktiv prüfen: per `psql` in der App-DB
   `SELECT relrowsecurity FROM pg_class WHERE relname='core_client';` → `t`.
-- RLS-Wirksamkeit prüfen: Django-DB-User darf **kein** Superuser sein (sonst wird RLS bypasst).
-  `SELECT rolsuper FROM pg_roles WHERE rolname='<POSTGRES_USER>';` → `f`.
-  Falls `t`: `ALTER ROLE <POSTGRES_USER> NOSUPERUSER;` (siehe Schritt 6).
 - Sentry-Events in den ersten 24h prüfen
 - Backup-Job erstmalig manuell triggern und restore auf Staging testen
 - Monitoring-Alerts (Uptime + Disk + RAM) einrichten
