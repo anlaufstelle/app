@@ -21,7 +21,8 @@ class TestLoginAllRoles:
         page = authenticated_page
         assert page.locator("h1").inner_text() == "Zeitstrom"
         nav = page.locator("nav[aria-label='Hauptnavigation']")
-        assert nav.locator("text=Zeitstrom").is_visible()
+        # Nav-Link „Zeitstrom" — strict, nicht der Create-Dropdown-Subtitle
+        assert nav.locator("a[href='/']:has-text('Zeitstrom')").first.is_visible()
 
     @pytest.mark.smoke
     def test_lead_login(self, lead_page):
@@ -43,7 +44,7 @@ class TestLoginAllRoles:
         page = assistant_page
         assert page.locator("h1").inner_text() == "Zeitstrom"
         nav = page.locator("nav[aria-label='Hauptnavigation']")
-        assert nav.locator("text=Zeitstrom").is_visible()
+        assert nav.locator("a[href='/']:has-text('Zeitstrom')").first.is_visible()
 
 
 class TestPasswordChangePage:

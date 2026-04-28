@@ -10,10 +10,10 @@
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <script defer src="{% static 'js/alpine.min.js' %}"></script>
 </head>
-<body class="h-full bg-gray-50 flex items-center justify-center">
-    <div class="w-full max-w-sm p-6 bg-white rounded-lg shadow-md"
+<body class="h-full bg-canvas flex items-center justify-center">
+    <div class="w-full max-w-sm p-6 bg-surface rounded-lg shadow-md"
          x-data="{ mode: '{{ last_mode|default:'totp' }}' }">
-        <h1 class="text-2xl font-bold text-center text-indigo-600 mb-4">
+        <h1 class="text-2xl font-bold text-center text-accent mb-4">
             {% trans "Zwei-Faktor-Code" %}
         </h1>
 
@@ -25,10 +25,10 @@
             {% endfor %}
         {% endif %}
 
-        <p class="text-sm text-gray-600 mb-4 text-center" x-show="mode === 'totp'">
+        <p class="text-sm text-ink-muted mb-4 text-center" x-show="mode === 'totp'">
             {% trans "Gib den 6-stelligen Code aus deiner Authenticator-App ein." %}
         </p>
-        <p class="text-sm text-gray-600 mb-4 text-center" x-show="mode === 'backup'" x-cloak>
+        <p class="text-sm text-ink-muted mb-4 text-center" x-show="mode === 'backup'" x-cloak>
             {% trans "Gib einen deiner einmaligen Backup-Codes ein (Format xxxx-xxxx)." %}
         </p>
 
@@ -37,7 +37,7 @@
             <input type="hidden" name="mode" :value="mode">
 
             <div x-show="mode === 'totp'">
-                <label for="id_token_totp" class="block text-sm font-medium text-gray-700">
+                <label for="id_token_totp" class="block text-sm font-medium text-ink-soft">
                     {% trans "Code" %}
                 </label>
                 <input type="text" name="token" id="id_token_totp"
@@ -45,11 +45,11 @@
                        x-bind:autofocus="mode === 'totp'"
                        inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code"
                        data-testid="mfa-token-input"
-                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border text-center text-lg tracking-widest">
+                       class="mt-1 block w-full rounded-md border-subtle shadow-sm focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 border text-center text-lg tracking-widest">
             </div>
 
             <div x-show="mode === 'backup'" x-cloak>
-                <label for="id_token_backup" class="block text-sm font-medium text-gray-700">
+                <label for="id_token_backup" class="block text-sm font-medium text-ink-soft">
                     {% trans "Backup-Code" %}
                 </label>
                 <input type="text" name="token" id="id_token_backup"
@@ -57,12 +57,12 @@
                        inputmode="text" autocomplete="off" autocapitalize="none" spellcheck="false"
                        placeholder="xxxx-xxxx"
                        data-testid="mfa-backup-input"
-                       class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border text-center text-lg tracking-widest">
+                       class="mt-1 block w-full rounded-md border-subtle shadow-sm focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 border text-center text-lg tracking-widest">
             </div>
 
             <button type="submit"
                     data-testid="mfa-verify-button"
-                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 min-h-[44px]">
+                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent min-h-[44px]">
                 {% trans "Anmelden" %}
             </button>
         </form>
@@ -70,14 +70,14 @@
         <div class="text-center mt-3">
             <button type="button" @click="mode = (mode === 'totp' ? 'backup' : 'totp')"
                     data-testid="mfa-toggle-mode"
-                    class="text-sm text-indigo-600 hover:text-indigo-800">
+                    class="text-sm text-accent hover:text-accent">
                 <span x-show="mode === 'totp'">{% trans "Backup-Code verwenden" %}</span>
                 <span x-show="mode === 'backup'" x-cloak>{% trans "Zurück zur Authenticator-App" %}</span>
             </button>
         </div>
 
         <div class="text-center mt-4">
-            <a href="{% url 'logout' %}" class="text-sm text-gray-500 hover:text-gray-700">
+            <a href="{% url 'logout' %}" class="text-sm text-ink-muted hover:text-ink-soft">
                 {% trans "Abmelden" %}
             </a>
         </div>

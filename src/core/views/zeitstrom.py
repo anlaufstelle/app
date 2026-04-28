@@ -108,6 +108,16 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
         active_bans = get_active_bans(facility, user=self.request.user)
 
         today = timezone.localdate()
+        # Pills für die Type-Filter im Zeitstrom (Design: als-screens.jsx Filter-Pills)
+        from django.utils.translation import gettext as _
+
+        filter_options = [
+            ("", _("Alle")),
+            ("events", _("Kontakte")),
+            ("activities", _("Aktivitäten")),
+            ("workitems", _("Aufgaben")),
+            ("bans", _("Hausverbote")),
+        ]
         context.update(
             {
                 "feed_items": feed_items,
@@ -120,6 +130,7 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                 "next_date": target_date + timedelta(days=1),
                 "today": today,
                 "selected_type": feed_type,
+                "filter_options": filter_options,
                 "document_types": document_types,
                 "selected_doc_type": doc_type_id or "",
                 "events_partial_url": "core:zeitstrom_feed_partial",

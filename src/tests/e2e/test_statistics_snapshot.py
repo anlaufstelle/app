@@ -43,7 +43,7 @@ class TestStatisticsSnapshotPreservation:
         page.wait_for_load_state("domcontentloaded")
 
         # Gesamtkontakte aus KPI-Karte auslesen
-        kpi_card = page.locator("p.text-3xl.font-bold").first
+        kpi_card = page.locator("div.font-mono.font-bold").first
         kpi_card.wait_for(state="visible", timeout=5000)
         total_before = kpi_card.inner_text().strip()
 
@@ -59,7 +59,7 @@ class TestStatisticsSnapshotPreservation:
         page.wait_for_load_state("domcontentloaded")
 
         # Gesamtkontakte erneut auslesen
-        kpi_card_after = page.locator("p.text-3xl.font-bold").first
+        kpi_card_after = page.locator("div.font-mono.font-bold").first
         kpi_card_after.wait_for(state="visible", timeout=5000)
         total_after = kpi_card_after.inner_text().strip()
 

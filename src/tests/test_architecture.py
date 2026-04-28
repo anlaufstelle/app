@@ -140,7 +140,7 @@ class TestNoFStringInGettextCallsGuard:
         assert not violations, (
             "f-Strings in ``_(...)`` sind unbrauchbar fuer gettext: der Extraktor "
             "sieht nur den interpolierten Laufzeit-String. Bitte auf "
-            "``_(\"...%(name)s...\") % {\"name\": value}`` umstellen "
+            '``_("...%(name)s...") % {"name": value}`` umstellen '
             "(Refs #662 FND-07).\n"
             f"Betroffen: {violations}"
         )

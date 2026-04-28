@@ -194,8 +194,8 @@ class TestOfflineEntrypointsMobile:
         page.goto(f"{base_url}/clients/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Auf erste Karte zur Detailseite springen
-        page.locator("div.sm\\:hidden a[href^='/clients/']").first.click()
+        # Auf erste Karte zur Detailseite springen (#643 + #663: Single-Loop CSS-Grid statt sm:hidden)
+        page.locator(".client-list a[href^='/clients/']").first.click()
         page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
 
         # Overflow-Menü öffnen

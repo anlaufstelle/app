@@ -3,24 +3,24 @@
 {# Summary cards — clickable, scroll to the proposals section (#516) #}
 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
     <a href="#retention-proposals" id="summary-pending"
-       class="block bg-white border border-yellow-200 rounded-md p-4 hover:border-yellow-400 hover:shadow transition focus:outline-none focus:ring-2 focus:ring-yellow-400">
+       class="block bg-surface border border-yellow-200 rounded-[10px] p-4 hover:border-yellow-400 hover:shadow transition focus:outline-none focus:ring-2 focus:ring-yellow-400">
         <div class="text-sm font-medium text-yellow-800">{% trans "Ausstehend" %}</div>
         <div class="text-2xl font-bold text-yellow-600 mt-1">{{ pending_count }}</div>
     </a>
     <a href="#retention-proposals" id="summary-held"
-       class="block bg-white border border-blue-200 rounded-md p-4 hover:border-blue-400 hover:shadow transition focus:outline-none focus:ring-2 focus:ring-blue-400">
+       class="block bg-surface border border-blue-200 rounded-[10px] p-4 hover:border-blue-400 hover:shadow transition focus:outline-none focus:ring-2 focus:ring-blue-400">
         <div class="text-sm font-medium text-blue-800">{% trans "Aufgeschoben" %}</div>
         <div class="text-2xl font-bold text-blue-600 mt-1">{{ held_count }}</div>
     </a>
     <a href="#retention-proposals" id="summary-approved"
-       class="block bg-white border border-green-200 rounded-md p-4 hover:border-green-400 hover:shadow transition focus:outline-none focus:ring-2 focus:ring-green-400">
+       class="block bg-surface border border-green-200 rounded-[10px] p-4 hover:border-green-400 hover:shadow transition focus:outline-none focus:ring-2 focus:ring-green-400">
         <div class="text-sm font-medium text-green-800">{% trans "Freigegeben" %}</div>
         <div class="text-2xl font-bold text-green-600 mt-1">{{ approved_count }}</div>
     </a>
 </div>
 
 {# Retention settings info #}
-<div class="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
+<div class="bg-blue-50 border border-blue-200 rounded-[10px] p-4 mb-6">
     <h3 class="text-sm font-semibold text-blue-800 mb-2">{% trans "Aufbewahrungsfristen" %}</h3>
     <div class="text-sm text-blue-700 space-y-1">
         <div>{% trans "Anonym" %}: {{ retention_settings.anonymous }} {% trans "Tage" %}</div>
@@ -45,10 +45,10 @@
          @retention-bulk-change.window="updateCount()">
 
     {# Sticky bulk toolbar — visible when at least one proposal is selected #}
-    <div class="sticky top-0 z-10 bg-white border border-gray-200 rounded-md p-3 mb-4 shadow-sm flex flex-wrap items-center gap-3"
+    <div class="sticky top-0 z-10 bg-surface border border-subtle rounded-[10px] p-3 mb-4 shadow-sm flex flex-wrap items-center gap-3"
          x-show="count > 0" x-cloak x-transition
          role="toolbar" aria-label="{% trans 'Massenaktionen für Löschvorschläge' %}">
-        <span class="text-sm font-medium text-gray-700" data-testid="retention-bulk-count">
+        <span class="text-sm font-medium text-ink-soft" data-testid="retention-bulk-count">
             <span x-text="count"></span> {% trans "ausgewählt" %}
         </span>
         <div class="flex-grow"></div>
@@ -60,10 +60,10 @@
                 class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500">
             {% trans "Freigeben" %}
         </button>
-        <label class="inline-flex items-center gap-1 text-xs text-gray-600">
+        <label class="inline-flex items-center gap-1 text-xs text-ink-muted">
             {% trans "Tage:" %}
             <input type="number" name="days" min="1" max="365" x-model.number="deferDays"
-                   class="w-16 rounded-md border-gray-300 text-xs focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                   class="w-16 rounded-md border-subtle text-xs focus:border-accent focus:ring-1 focus:ring-accent"
                    aria-label="{% trans 'Tage bis zur erneuten Prüfung' %}">
         </label>
         <button type="button"
@@ -79,19 +79,19 @@
                 hx-post="{% url 'core:retention_bulk_reject' %}"
                 hx-include="[data-bulk-proposal]:checked"
                 hx-confirm="{% trans 'Ausgewählte Vorschläge ablehnen (keine Löschung)?' %}"
-                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-surface border border-subtle text-ink-soft hover:bg-canvas focus:outline-none focus:ring-2 focus:ring-accent">
             {% trans "Ablehnen" %}
         </button>
         <button type="button" @click="selectVisible(false)"
-                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50">
+                class="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-surface border border-subtle text-ink-soft hover:bg-canvas">
             {% trans "Auswahl aufheben" %}
         </button>
     </div>
 
     {# Global select-all convenience (above the first category) #}
-    <label class="inline-flex items-center gap-2 text-sm text-gray-600 mb-3">
+    <label class="inline-flex items-center gap-2 text-sm text-ink-muted mb-3">
         <input type="checkbox" @change="selectVisible($event.target.checked)"
-               class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+               class="rounded border-subtle text-accent focus:ring-accent"
                data-testid="retention-select-all">
         {% trans "Alle auswählbaren Vorschläge markieren" %}
     </label>
@@ -99,7 +99,7 @@
 <div id="retention-proposals">
 {% for category in categories %}
 <section id="retention-category-{{ category.key }}" class="mb-8 scroll-mt-4">
-    <h2 class="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">{{ category.label }} ({{ category.count }})</h2>
+    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{{ category.label }} ({{ category.count }})</h2>
     {% if category.proposals %}
     <div class="space-y-3">
         {% for proposal in category.proposals %}
@@ -107,11 +107,11 @@
         {% endfor %}
     </div>
     {% else %}
-    <p class="text-sm text-gray-500">{% trans "Keine Vorschläge in dieser Kategorie" %}</p>
+    <p class="text-sm text-ink-muted">{% trans "Keine Vorschläge in dieser Kategorie" %}</p>
     {% endif %}
 </section>
 {% empty %}
-<p class="text-sm text-gray-500">{% trans "Keine Löschvorschläge vorhanden" %}</p>
+<p class="text-sm text-ink-muted">{% trans "Keine Löschvorschläge vorhanden" %}</p>
 {% endfor %}
 </div>
 </section>

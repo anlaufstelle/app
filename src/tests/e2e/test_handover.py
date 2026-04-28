@@ -27,9 +27,13 @@ class TestHandoverPage:
         assert page.locator("h1").inner_text() == "Übergabe"
 
     def test_default_view_shows_full_day(self, authenticated_page, base_url):
-        """Ohne time_filter steht 'Ganzer Tag' als Schicht-Label."""
+        """Ohne time_filter steht 'Ganzer Tag' als Schicht-Label.
+
+        Verwendet ein Datum aus der Vergangenheit, da bei target_date == today der
+        View automatisch die zuletzt aktive Schicht wählt (handover.py).
+        """
         page = authenticated_page
-        page.goto(f"{base_url}/uebergabe/", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/uebergabe/?date=2026-04-15", wait_until="domcontentloaded")
         # Es gibt zwei "Ganzer Tag"-Elemente: Filter-Link und Schicht-Heading.
         # Wir prüfen das Heading-Element (h2 mit Schicht-Range).
         heading = page.locator("h2:has-text('Ganzer Tag')")

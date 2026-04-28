@@ -7,6 +7,9 @@ from django.utils.translation import gettext_lazy as _
 from core.models import Case, DocumentType, DocumentTypeField, FieldTemplate
 from core.models.settings import Settings
 
+# Tailwind-Klassen fuer Form-Inputs (Theme Gruen, siehe Plan #663)
+INPUT_CSS = "w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink"
+
 
 class MultipleFileInput(forms.ClearableFileInput):
     """ClearableFileInput-Widget mit ``multiple``-Attribut — Django erlaubt
@@ -51,7 +54,7 @@ class EventMetaForm(forms.Form):
         label=_("Dokumentationstyp"),
         widget=forms.Select(
             attrs={
-                "class": "w-full border border-gray-300 rounded-md px-3 py-2",
+                "class": INPUT_CSS,
                 "hx-get": "",  # wird im View gesetzt
                 "hx-target": "#dynamic-fields",
                 "hx-trigger": "change",
@@ -68,7 +71,7 @@ class EventMetaForm(forms.Form):
         widget=forms.DateTimeInput(
             attrs={
                 "type": "datetime-local",
-                "class": "w-full border border-gray-300 rounded-md px-3 py-2",
+                "class": INPUT_CSS,
                 "tabindex": "4",
             },
         ),
@@ -78,7 +81,7 @@ class EventMetaForm(forms.Form):
         required=False,
         label=_("Fall"),
         empty_label=_("– Keinem Fall zuordnen –"),
-        widget=forms.Select(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
+        widget=forms.Select(attrs={"class": INPUT_CSS}),
     )
 
     def __init__(self, *args, facility=None, user=None, **kwargs):
@@ -149,11 +152,11 @@ class DynamicEventDataForm(forms.Form):
             else:
                 widget = widget.__class__(attrs=widget.attrs.copy() if hasattr(widget, "attrs") else {})
 
-            css = "w-full border border-gray-300 rounded-md px-3 py-2"
+            css = INPUT_CSS
             if not isinstance(widget, (forms.CheckboxInput, forms.CheckboxSelectMultiple)):
                 widget.attrs.setdefault("class", css)
             else:
-                widget.attrs.setdefault("class", "rounded border-gray-300")
+                widget.attrs.setdefault("class", "rounded border-subtle text-accent")
 
             kwargs_copy["widget"] = widget
             kwargs_copy["required"] = ft.is_required

@@ -31,7 +31,9 @@ def _navigate_to_first_workitem_detail(page, base_url):
 def _navigate_to_first_client_detail(page, base_url):
     """Navigate to the detail page of the first client in the list."""
     page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
-    page.locator("a.text-sm.font-medium.text-indigo-600").first.click()
+    # Klientel-Pseudonym-Link in der Liste (#663: text-sm → text-[14px], font-medium → font-semibold)
+    # Klientel-Pseudonym-Link in der Liste (Visual-Refresh #663: Linktext span hat font-semibold text-accent)
+    page.locator(".client-list a[href^='/clients/']").first.click()
     page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/"), wait_until="domcontentloaded")
     page.wait_for_load_state("domcontentloaded")
 

@@ -8,7 +8,7 @@
     <title>{% trans "Anmelden" %} — Anlaufstelle</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#4f46e5">
+    <meta name="theme-color" content="#2d6a4f">
     <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <script src="{% static 'js/alpine.min.js' %}" defer></script>
@@ -17,66 +17,75 @@
     <script src="{% static 'js/crypto.js' %}"></script>
     <script src="{% static 'js/offline-store.js' %}"></script>
 </head>
-<body class="h-full bg-gray-50 flex items-center justify-center">
-    <div class="w-full max-w-sm p-6 bg-white rounded-lg shadow-md">
-        <h1 class="text-2xl font-bold text-center text-indigo-600 mb-6">Anlaufstelle</h1>
-
-        {% if form.errors %}
-        <div class="mb-4 p-3 bg-red-100 text-red-800 rounded-md text-sm" role="alert">
-            {% if form.non_field_errors %}
-                {# Spezifische Meldungen (z.B. Account-Lockout, Refs #612) durchreichen. #}
-                {% for error in form.non_field_errors %}
-                    <p>{{ error }}</p>
-                {% endfor %}
-            {% else %}
-                {# Field-Level-Fehler verallgemeinern — keine Enumeration ob Username oder Passwort falsch ist. #}
-                {% trans "Benutzername oder Passwort falsch." %}
-            {% endif %}
+<body class="h-full flex items-center justify-center p-6">
+    <div class="w-full max-w-[380px]">
+        {# Logo + Org-Header (Design: als-screens.jsx LoginScreen) #}
+        <div class="text-center mb-8">
+            <div class="w-12 h-12 rounded-xl bg-accent flex items-center justify-center mx-auto mb-4">
+                <svg class="w-6 h-6" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75"/></svg>
+            </div>
+            <h1 class="text-2xl font-bold text-ink">Anlaufstelle</h1>
+            <p class="text-[13px] text-ink-muted mt-1">{% trans "Open Source · DSGVO-konform · Selbst gehostet" %}</p>
         </div>
-        {% endif %}
 
-        <form method="post" class="space-y-4" id="login-form">
-            {% csrf_token %}
-            <div>
-                <label for="id_username" class="block text-sm font-medium text-gray-700">{% trans "Benutzername" %}</label>
-                <input type="text" name="username" id="id_username" autofocus required
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border">
+        <div class="bg-surface border border-subtle rounded-[10px] p-7">
+            {% if form.errors %}
+            <div class="mb-4 p-3 bg-red-100 text-red-800 rounded-md text-sm" role="alert">
+                {% if form.non_field_errors %}
+                    {# Spezifische Meldungen (z.B. Account-Lockout, Refs #612) durchreichen. #}
+                    {% for error in form.non_field_errors %}
+                        <p>{{ error }}</p>
+                    {% endfor %}
+                {% else %}
+                    {# Field-Level-Fehler verallgemeinern — keine Enumeration ob Username oder Passwort falsch ist. #}
+                    {% trans "Benutzername oder Passwort falsch." %}
+                {% endif %}
             </div>
-            <div>
-                <label for="id_password" class="block text-sm font-medium text-gray-700">{% trans "Passwort" %}</label>
-                <input type="password" name="password" id="id_password" required
-                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm px-3 py-2 border">
-            </div>
-            <button type="submit"
-                class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 min-h-[44px]">
-                {% trans "Anmelden" %}
-            </button>
-            <div class="text-center mt-2">
-                <a href="{% url 'password_reset' %}" class="text-sm text-indigo-600 hover:text-indigo-800">
-                    {% trans "Passwort vergessen?" %}
-                </a>
-            </div>
-        </form>
+            {% endif %}
 
-        {# PWA Install-Prompt (Chrome/Edge/Android) #}
-        <div x-data="{ installPrompt: null, showInstall: false, showIos: false }"
-             x-init="
-                window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; showInstall = true; });
-                if (/iPhone|iPad|iPod/.test(navigator.userAgent) && !navigator.standalone) { showIos = true; }
-             "
-             x-cloak>
-            <div x-show="showInstall" class="mt-6 border-t border-gray-200 pt-4 text-center">
-                <button @click="installPrompt.prompt(); installPrompt.userChoice.then(() => { showInstall = false })"
-                        class="text-sm text-indigo-600 hover:text-indigo-800 font-medium">
-                    {% trans "Als App installieren" %}
+            <form method="post" class="space-y-4" id="login-form">
+                {% csrf_token %}
+                <div>
+                    <label for="id_username" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Benutzername" %}</label>
+                    <input type="text" name="username" id="id_username" autofocus required
+                        class="block w-full rounded-md border border-subtle bg-canvas text-[14px] text-ink px-3 py-2.5">
+                </div>
+                <div>
+                    <label for="id_password" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Passwort" %}</label>
+                    <input type="password" name="password" id="id_password" required
+                        class="block w-full rounded-md border border-subtle bg-canvas text-[14px] text-ink px-3 py-2.5">
+                </div>
+                <button type="submit"
+                    class="w-full flex justify-center py-2.5 px-4 rounded-md text-[14px] font-semibold text-white bg-accent min-h-[44px]">
+                    {% trans "Anmelden" %}
                 </button>
-                <p class="text-xs text-gray-500 mt-1">{% trans "Für schnelleren Zugriff" %}</p>
-            </div>
-            <div x-show="showIos" class="mt-6 border-t border-gray-200 pt-4 text-center">
-                <p class="text-sm text-gray-600">
-                    {% blocktrans %}Teilen <span class="inline-block">&#x2191;</span> → „Zum Home-Bildschirm" tippen{% endblocktrans %}
-                </p>
-                <p class="text-xs text-gray-500 mt-1">{% trans "Für schnelleren Zugriff" %}</p>
+                <div class="text-center mt-2">
+                    <a href="{% url 'password_reset' %}" class="text-[13px] text-accent hover:underline">
+                        {% trans "Passwort vergessen?" %}
+                    </a>
+                </div>
+            </form>
+
+            {# PWA Install-Prompt (Chrome/Edge/Android) #}
+            <div x-data="{ installPrompt: null, showInstall: false, showIos: false }"
+                 x-init="
+                    window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); installPrompt = e; showInstall = true; });
+                    if (/iPhone|iPad|iPod/.test(navigator.userAgent) && !navigator.standalone) { showIos = true; }
+                 "
+                 x-cloak>
+                <div x-show="showInstall" class="mt-6 border-t border-subtle pt-4 text-center">
+                    <button @click="installPrompt.prompt(); installPrompt.userChoice.then(() => { showInstall = false })"
+                            class="text-[13px] text-accent hover:underline font-semibold">
+                        {% trans "Als App installieren" %}
+                    </button>
+                    <p class="text-[11px] text-ink-muted mt-1">{% trans "Für schnelleren Zugriff" %}</p>
+                </div>
+                <div x-show="showIos" class="mt-6 border-t border-subtle pt-4 text-center">
+                    <p class="text-[13px] text-ink-soft">
+                        {% blocktrans %}Teilen <span class="inline-block">&#x2191;</span> → „Zum Home-Bildschirm" tippen{% endblocktrans %}
+                    </p>
+                    <p class="text-[11px] text-ink-muted mt-1">{% trans "Für schnelleren Zugriff" %}</p>
+                </div>
             </div>
         </div>
     </div>

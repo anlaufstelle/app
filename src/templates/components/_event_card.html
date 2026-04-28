@@ -1,33 +1,34 @@
 {% load i18n core_tags %}
 
-<a href="{% url 'core:event_detail' event.pk %}" class="block bg-white border border-gray-200 rounded-md p-4 hover:border-indigo-300 hover:shadow-sm transition">
-    <div class="flex flex-wrap items-center justify-between gap-1">
-        <div class="flex items-center space-x-3 overflow-hidden">
+<a href="{% url 'core:event_detail' event.pk %}" class="flex bg-surface border border-subtle rounded-[10px] overflow-hidden hover:shadow-sm transition">
+    {# Linke Kante in Kontakt-Farbe #}
+    <div class="w-[3px] bg-event flex-shrink-0"></div>
+    <div class="flex-1 px-3.5 py-3 min-w-0">
+        <div class="flex flex-wrap items-center gap-2">
             {% if show_date %}
-            <span class="text-sm text-gray-500 font-mono flex-shrink-0">{{ event.occurred_at|date:"d.m.Y H:i" }}</span>
+            <span class="font-mono text-[13px] font-medium text-ink-muted flex-shrink-0">{{ event.occurred_at|date:"d.m.Y H:i" }}</span>
             {% else %}
-            <span class="text-sm text-gray-500 font-mono flex-shrink-0">{{ event.occurred_at|time:"H:i" }}</span>
+            <span class="font-mono text-[13px] font-medium text-ink-muted flex-shrink-0">{{ event.occurred_at|time:"H:i" }}</span>
             {% endif %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 {{ event.document_type.color|doctype_badge_classes }}">
-                {{ event.document_type.name }}
-            </span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-event-soft text-event-deep">{% trans "Kontakt" %}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-canvas border border-subtle text-ink-soft">{{ event.document_type.name }}</span>
             {% if show_client %}
                 {% if event.is_anonymous %}
-                <span class="text-sm text-gray-500 italic">{% trans "Anonym" %}</span>
+                <span class="text-[12px] text-ink-muted italic">{% trans "Anonym" %}</span>
                 {% elif event.client %}
-                <span class="text-sm text-gray-700 truncate">{{ event.client.pseudonym }}</span>
+                <span class="text-[12px] font-semibold text-accent truncate">{{ event.client.pseudonym }}</span>
                 {% endif %}
             {% endif %}
+            {% if event.created_by %}
+            <span class="ml-auto text-[11px] text-ink-muted whitespace-nowrap">{{ event.created_by.display_name|default:event.created_by.username }}</span>
+            {% endif %}
         </div>
-        {% if event.created_by %}
-        <span class="text-xs text-gray-500 flex-shrink-0">{{ event.created_by.display_name|default:event.created_by.username }}</span>
+        {% if event.preview_fields %}
+        <div class="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-ink-muted">
+            {% for pf in event.preview_fields %}
+            <span><span class="opacity-70">{{ pf.label }}:</span> {{ pf.value }}</span>
+            {% endfor %}
+        </div>
         {% endif %}
     </div>
-    {% if event.preview_fields %}
-    <div class="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-gray-500">
-        {% for pf in event.preview_fields %}
-        <span><span class="text-gray-400">{{ pf.label }}:</span> {{ pf.value }}</span>
-        {% endfor %}
-    </div>
-    {% endif %}
 </a>

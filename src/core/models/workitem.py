@@ -70,7 +70,7 @@ class WorkItem(models.Model):
         choices=ItemType.choices,
         default=ItemType.TASK,
         verbose_name=_("Typ"),
-        help_text=_("Kategorisierung der Aufgabe (Aufgabe, Telefonat, Termin etc.)"),
+        help_text=_("Aufgabe = aktiv zu erledigen, Hinweis = informativ."),
     )
     status = models.CharField(
         max_length=20,
