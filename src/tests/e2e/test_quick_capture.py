@@ -7,6 +7,7 @@ Testet:
 - Nach Submit ist localStorage leer
 """
 
+import os
 import re
 import time
 
@@ -236,7 +237,106 @@ class TestAutoSave:
 
         banner = page.locator("#autosave-restored-banner")
         if banner.count() > 0 and banner.is_visible():
-            page.locator("#autosave-restored-banner button").click()
+            # Banner has two buttons after #625 (Verwerfen/Schließen) — hit
+            # „Schließen" explicitly so the dismiss path is tested, not discard.
+            page.locator('#autosave-restored-banner button:has-text("Schließen")').click()
             page.locator("#autosave-restored-banner").wait_for(state="hidden", timeout=3000)
+
+        page.evaluate(self._JS_CLEAR)
+
+    def test_autosave_discard_deletes_draft(self, authenticated_page, base_url):
+        """„Verwerfen"-Button entfernt den Entwurf aus IndexedDB (Refs #625)."""
+        page = authenticated_page
+        self._bootstrap(page, base_url)
+
+        # Abweichenden Dokumenttyp waehlen + Feld fuellen, damit ein Draft entsteht
+        page.select_option("select[name='document_type']", label="Krisengespräch")
+        page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
+        page.fill("input[name='dauer']", "23")
+
+        # Dokumentierter Ausnahmefall (Refs #598 T-1): 5s Autosave-Intervall.
+        page.wait_for_timeout(7000)
+        assert page.evaluate(self._JS_GET) is not None, "Draft sollte vor Navigation gespeichert sein"
+
+        # Navigate away + zurueck, damit autosave.init() frisch laeuft und das Banner zeigt
+        page.goto(f"{base_url}/", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
+
+        banner = page.locator("#autosave-restored-banner")
+        banner.wait_for(state="visible", timeout=10000)
+
+        page.locator('[data-testid="autosave-discard"]').click()
+        page.wait_for_url(f"{base_url}/events/new/", timeout=5000)
+
+        # Nach dem Discard darf kein Draft mehr existieren
+        stored = page.evaluate(self._JS_GET)
+        assert stored is None, "Draft sollte nach Verwerfen geloescht sein"
+
+        # Und es darf kein Banner mehr erscheinen
+        assert page.locator("#autosave-restored-banner").count() == 0, (
+            "Banner darf nach Verwerfen + Reload nicht wieder erscheinen"
+        )
+
+    def test_server_prefill_overrides_existing_draft(self, authenticated_page, base_url, e2e_env):
+        """Quick-Template-Prefill ueberschreibt einen bestehenden Draft (Refs #625).
+
+        Reproduziert den Bug aus #625: Ohne den Server-Prefill-Vorrang
+        wuerde ``autosave.js`` den alten Draft nach dem Server-Render
+        restauren und die Template-Werte kippen.
+        """
+        import subprocess
+        import sys
+
+        python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
+
+        # QuickTemplate programmatisch anlegen (Hauptstelle, DocType „Kontakt")
+        tpl_id_proc = subprocess.run(
+            [
+                python,
+                "src/manage.py",
+                "shell",
+                "-c",
+                (
+                    "from core.models import DocumentType, Facility, QuickTemplate;"
+                    " f = Facility.objects.get(name='Hauptstelle');"
+                    " dt = DocumentType.objects.get(facility=f, name='Kontakt');"
+                    " tpl, _ = QuickTemplate.objects.get_or_create("
+                    "  facility=f, document_type=dt, name='E2E Prefill-Test',"
+                    "  defaults={'prefilled_data': {'dauer': 77}, 'is_active': True},"
+                    " );"
+                    " tpl.prefilled_data = {'dauer': 77};"
+                    " tpl.is_active = True;"
+                    " tpl.save();"
+                    " print(tpl.pk)"
+                ),
+            ],
+            capture_output=True,
+            text=True,
+            env=e2e_env,
+        )
+        tpl_id = tpl_id_proc.stdout.strip().splitlines()[-1]
+        assert tpl_id, f"Template-PK konnte nicht erzeugt werden: {tpl_id_proc.stderr}"
+
+        self._bootstrap(page=authenticated_page, base_url=base_url)
+        page = authenticated_page
+
+        # 1) Alten Draft auf /events/new/ erzeugen (abweichend vom Template)
+        page.select_option("select[name='document_type']", label="Kontakt")
+        page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
+        page.fill("input[name='dauer']", "11")
+
+        # Dokumentierter Ausnahmefall (Refs #598 T-1): 5s Autosave-Intervall.
+        page.wait_for_timeout(7000)
+        assert page.evaluate(self._JS_GET) is not None, "Draft sollte vor Template-Anwendung gespeichert sein"
+
+        # 2) Template anwenden → Server rendert mit dauer=77 und data-autosave-server-prefilled
+        page.goto(f"{base_url}/events/new/?template={tpl_id}", wait_until="domcontentloaded")
+
+        dauer_value = page.locator("input[name='dauer']").input_value()
+        assert dauer_value == "77", f"Server-Prefill (77) sollte den Draft (11) ueberschreiben, ist: {dauer_value!r}"
+
+        # 3) Draft muss aus IndexedDB entfernt sein
+        stored = page.evaluate(self._JS_GET)
+        assert stored is None, "Draft sollte beim Server-Prefill geloescht sein"
 
         page.evaluate(self._JS_CLEAR)

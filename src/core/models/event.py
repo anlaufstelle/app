@@ -74,6 +74,10 @@ class Event(models.Model):
             models.Index(fields=["client", "-occurred_at"]),
             models.Index(fields=["document_type", "-occurred_at"]),
             models.Index(fields=["facility", "-occurred_at"]),
+            # Nahezu alle Event-Queries filtern is_deleted=False, daher
+            # Composite-Index (facility, is_deleted, -occurred_at) für
+            # Timeline-/Listen-Queries. Refs #638.
+            models.Index(fields=["facility", "is_deleted", "-occurred_at"], name="event_facility_del_occ_idx"),
         ]
 
     def __str__(self):

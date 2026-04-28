@@ -15,7 +15,7 @@
 
 importScripts("/static/js/url-patterns.js");
 
-const CACHE_NAME = "anlaufstelle-v4";
+const CACHE_NAME = "anlaufstelle-v5";
 const APP_SHELL = [
     "/static/css/styles.css",
     "/static/icons/icon-192.png",
@@ -129,16 +129,25 @@ self.addEventListener("fetch", (event) => {
     if (request.method !== "GET") return;
 
     if (request.url.includes("/static/")) {
+        // Stale-while-revalidate: sofort aus dem Cache servieren, im
+        // Hintergrund die neue Version holen und den Cache aktualisieren.
+        // Offline-Fähigkeit bleibt erhalten (Cache-Fallback), aber der
+        // User sieht beim nächsten Reload automatisch die aktuellen
+        // Assets — kein manueller Cache-Bump pro Release mehr nötig
+        // (Refs #618: alter cache-first-Ansatz hielt gefixtes JS fest).
         event.respondWith(
-            caches.match(request).then(
-                (cached) =>
-                    cached ||
-                    fetch(request).then((response) => {
-                        const clone = response.clone();
-                        caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+            caches.match(request).then((cached) => {
+                const networkFetch = fetch(request)
+                    .then((response) => {
+                        if (response && response.ok) {
+                            const clone = response.clone();
+                            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+                        }
                         return response;
                     })
-            )
+                    .catch(() => cached);
+                return cached || networkFetch;
+            })
         );
         return;
     }

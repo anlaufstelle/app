@@ -382,6 +382,8 @@ Felder, zu denen bereits Werte in Ereignissen existieren, können **nicht ohne W
 
 Unter **Core → Feldvorlagen** können Sie die Optionen von Auswahl- und Mehrfachauswahl-Feldern (Select / Multi-Select) bearbeiten. Die Optionen werden im Feld **Options json** als JSON-Array gespeichert.
 
+> **Gilt nur für Select / Multi-Select.** Für andere Feldtypen (Text, Textbereich, Zahl, Datum, Uhrzeit, Ja/Nein, Datei) wird `options_json` nicht ausgewertet — das Feld bitte leer lassen (`[]`). Default-Werte für Nicht-Auswahlfelder (z. B. ein Vorgabewert für ein Zahlenfeld) sind aktuell **nicht** möglich; siehe [#624](https://github.com/tobiasnix/anlaufstelle/issues/624).
+
 **Schema einer Option:**
 
 ```json

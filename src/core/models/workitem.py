@@ -129,6 +129,11 @@ class WorkItem(models.Model):
         verbose_name = _("Arbeitsauftrag")
         verbose_name_plural = _("Arbeitsaufträge")
         ordering = ["-created_at"]
+        # WorkItemInboxView filtert facility + status, sortiert nach
+        # priority_order + -created_at. Refs #638.
+        indexes = [
+            models.Index(fields=["facility", "status", "-created_at"], name="workitem_facility_status_idx"),
+        ]
 
     def __str__(self):
         return self.title

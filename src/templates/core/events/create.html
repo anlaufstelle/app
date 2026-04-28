@@ -7,7 +7,7 @@
 <div class="max-w-2xl">
     <h1 class="text-2xl font-bold mb-6">{% trans "Neuer Kontakt" %}</h1>
 
-    <form method="post" enctype="multipart/form-data" class="space-y-4" id="event-create-form" data-autosave
+    <form method="post" enctype="multipart/form-data" class="space-y-4" id="event-create-form" data-autosave{% if applied_template %} data-autosave-server-prefilled{% endif %}
           x-data="{
                 query: '{{ client_pseudonym|default:'' }}',
                 results: [],
