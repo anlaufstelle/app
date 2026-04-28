@@ -7,6 +7,7 @@ Verify that:
 """
 
 import pytest
+from django.core.exceptions import ValidationError
 
 from core.models import AuditLog, Case
 from core.services.cases import update_case
@@ -120,3 +121,47 @@ class TestSettingsChangeAudit:
         ).latest("timestamp")
         assert "Geheime Einrichtung XYZ" not in str(entry.detail)
         assert "facility_full_name" in entry.detail.get("changed_fields", [])
+
+
+@pytest.mark.django_db
+class TestOptimisticLockingSettings:
+    """Tests for optimistic locking on Settings updates (Refs #531)."""
+
+    def test_optimistic_locking_settings_conflict(self, settings_obj, staff_user):
+        """A stale ``expected_updated_at`` must raise ValidationError."""
+        stale = "2000-01-01T00:00:00+00:00"
+        before_count = AuditLog.objects.filter(action=AuditLog.Action.SETTINGS_CHANGE).count()
+        with pytest.raises(ValidationError):
+            update_settings(
+                settings_obj,
+                staff_user,
+                session_timeout_minutes=99,
+                expected_updated_at=stale,
+            )
+        settings_obj.refresh_from_db()
+        assert settings_obj.session_timeout_minutes != 99
+        # No audit entry must have been written on a failed update.
+        after_count = AuditLog.objects.filter(action=AuditLog.Action.SETTINGS_CHANGE).count()
+        assert after_count == before_count
+
+    def test_optimistic_locking_settings_success_with_current_timestamp(self, settings_obj, staff_user):
+        settings_obj.refresh_from_db()
+        current = settings_obj.updated_at.isoformat()
+        update_settings(
+            settings_obj,
+            staff_user,
+            session_timeout_minutes=77,
+            expected_updated_at=current,
+        )
+        settings_obj.refresh_from_db()
+        assert settings_obj.session_timeout_minutes == 77
+
+    def test_optimistic_locking_settings_none_disables_check(self, settings_obj, staff_user):
+        update_settings(
+            settings_obj,
+            staff_user,
+            session_timeout_minutes=55,
+            expected_updated_at=None,
+        )
+        settings_obj.refresh_from_db()
+        assert settings_obj.session_timeout_minutes == 55

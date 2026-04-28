@@ -8,6 +8,7 @@ from core.models import AuditLog, Client
 from core.models.activity import Activity
 from core.models.recent_client_visit import RecentClientVisit
 from core.services.activity import log_activity
+from core.services.locking import check_version_conflict
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ def update_client_stage(client, old_stage, new_stage, facility, user):
 
 
 @transaction.atomic
-def update_client(client, user, *, old_stage=None, **fields):
+def update_client(client, user, *, old_stage=None, expected_updated_at=None, **fields):
     """Update a client with activity logging and stage-change auditing.
 
     Accepts a dict of allowed fields (pseudonym, contact_stage, age_cluster, notes).
@@ -56,7 +57,12 @@ def update_client(client, user, *, old_stage=None, **fields):
     detection.  When called from a ModelForm view, the form's _post_clean may
     already have mutated the instance, so the caller should capture the stage
     before form.is_valid().
+
+    expected_updated_at: Optional optimistic-locking guard (Refs #531). When set,
+    the DB-side ``updated_at`` must match — otherwise a ``ValidationError`` is
+    raised so the caller can surface a conflict message.
     """
+    check_version_conflict(client, expected_updated_at)
     if old_stage is None:
         old_stage = client.contact_stage
 

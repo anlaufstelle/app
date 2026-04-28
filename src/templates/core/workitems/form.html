@@ -9,6 +9,9 @@
 
     <form method="post" class="space-y-6">
         {% csrf_token %}
+        {% if workitem %}
+        <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
+        {% endif %}
 
         <div class="bg-white border border-gray-200 rounded-md p-4 space-y-4">
             {# Typ #}

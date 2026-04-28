@@ -4,6 +4,7 @@ import logging
 from urllib.parse import urlencode
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -213,14 +214,20 @@ class CaseUpdateView(StaffRequiredMixin, View):
         form = CaseForm(request.POST, facility=facility)
         if form.is_valid():
             client_obj = form.cleaned_data.get("client")
-            update_case(
-                case,
-                request.user,
-                title=form.cleaned_data["title"],
-                description=form.cleaned_data.get("description", ""),
-                lead_user=form.cleaned_data.get("lead_user"),
-                client=client_obj,
-            )
+            expected_updated_at = request.POST.get("expected_updated_at") or None
+            try:
+                update_case(
+                    case,
+                    request.user,
+                    expected_updated_at=expected_updated_at,
+                    title=form.cleaned_data["title"],
+                    description=form.cleaned_data.get("description", ""),
+                    lead_user=form.cleaned_data.get("lead_user"),
+                    client=client_obj,
+                )
+            except ValidationError as e:
+                messages.error(request, e.message if hasattr(e, "message") else str(e))
+                return redirect("core:case_update", pk=case.pk)
             messages.success(request, _("Fall wurde aktualisiert."))
             return redirect("core:case_detail", pk=case.pk)
         context = {

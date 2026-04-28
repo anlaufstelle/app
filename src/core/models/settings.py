@@ -105,6 +105,10 @@ class Settings(models.Model):
             "Anonymisierung."
         ),
     )
+    updated_at = models.DateTimeField(
+        auto_now=True,
+        verbose_name=_("Aktualisiert am"),
+    )
 
     class Meta:
         verbose_name = _("Einstellungen")

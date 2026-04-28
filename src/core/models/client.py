@@ -65,6 +65,7 @@ class Client(models.Model):
         ),
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Erstellt am"))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Aktualisiert am"))
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

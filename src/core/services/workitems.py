@@ -27,13 +27,19 @@ def create_workitem(facility, user, *, client=None, **data):
 
 
 @transaction.atomic
-def update_workitem(workitem, user, **fields):
+def update_workitem(workitem, user, *, expected_updated_at=None, **fields):
     """Update a work item with activity logging and audit logging.
 
     Accepts allowed fields (item_type, title, description, priority, due_date,
     assigned_to, client) and persists them. Writes an AuditLog entry with the
     names of changed fields (no PII values).
+
+    ``expected_updated_at`` enables optimistic locking (Refs #531) — when the
+    DB-side ``updated_at`` differs, a ``ValidationError`` is raised.
     """
+    from core.services.locking import check_version_conflict
+
+    check_version_conflict(workitem, expected_updated_at)
     changed_fields = []
     for key, value in fields.items():
         if getattr(workitem, key) != value:

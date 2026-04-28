@@ -4,6 +4,7 @@ import logging
 from datetime import timedelta
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db.models import Case, IntegerField, Q, Value, When
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
@@ -248,17 +249,23 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
         form = WorkItemForm(request.POST, instance=workitem, facility=request.current_facility)
 
         if form.is_valid():
-            update_workitem(
-                workitem,
-                request.user,
-                client=form.cleaned_data.get("client"),
-                item_type=form.cleaned_data["item_type"],
-                title=form.cleaned_data["title"],
-                description=form.cleaned_data.get("description", ""),
-                priority=form.cleaned_data["priority"],
-                due_date=form.cleaned_data.get("due_date"),
-                assigned_to=form.cleaned_data.get("assigned_to"),
-            )
+            expected_updated_at = request.POST.get("expected_updated_at") or None
+            try:
+                update_workitem(
+                    workitem,
+                    request.user,
+                    expected_updated_at=expected_updated_at,
+                    client=form.cleaned_data.get("client"),
+                    item_type=form.cleaned_data["item_type"],
+                    title=form.cleaned_data["title"],
+                    description=form.cleaned_data.get("description", ""),
+                    priority=form.cleaned_data["priority"],
+                    due_date=form.cleaned_data.get("due_date"),
+                    assigned_to=form.cleaned_data.get("assigned_to"),
+                )
+            except ValidationError as e:
+                messages.error(request, e.message if hasattr(e, "message") else str(e))
+                return redirect("core:workitem_update", pk=workitem.pk)
             messages.success(request, _("Aufgabe wurde aktualisiert."))
             return redirect("core:workitem_inbox")
 

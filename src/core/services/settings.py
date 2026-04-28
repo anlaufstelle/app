@@ -5,6 +5,7 @@ import logging
 from django.db import transaction
 
 from core.models import AuditLog, Settings
+from core.services.locking import check_version_conflict
 
 logger = logging.getLogger(__name__)
 
@@ -36,13 +37,17 @@ def _diff_fields(before, after):
 
 
 @transaction.atomic
-def update_settings(settings_obj, user, **fields):
+def update_settings(settings_obj, user, *, expected_updated_at=None, **fields):
     """Update a Settings instance and write a SETTINGS_CHANGE audit entry.
 
     Only writes an AuditLog entry when at least one audited field actually
     changed.  The detail payload contains only field names (no values, to avoid
     accidental logging of PII or business secrets).
+
+    ``expected_updated_at`` enables optimistic locking (Refs #531) — when the
+    DB-side ``updated_at`` differs, a ``ValidationError`` is raised.
     """
+    check_version_conflict(settings_obj, expected_updated_at)
     before = _snapshot(settings_obj)
     for key, value in fields.items():
         if key not in _AUDIT_FIELDS and key != "facility":

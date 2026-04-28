@@ -3,6 +3,7 @@
 import datetime
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.urls import reverse
 
 from core.models import WorkItem
@@ -412,3 +413,42 @@ class TestUpdateWorkItemService:
         result = update_workitem(workitem_open, staff_user, description="Neue Beschreibung")
         assert result.pk == workitem_open.pk
         assert result.description == "Neue Beschreibung"
+
+
+@pytest.mark.django_db
+class TestOptimisticLockingWorkItem:
+    """Tests for optimistic locking on WorkItem updates (Refs #531)."""
+
+    def test_optimistic_locking_workitem_conflict(self, workitem_open, staff_user):
+        stale = "2000-01-01T00:00:00+00:00"
+        with pytest.raises(ValidationError):
+            update_workitem(
+                workitem_open,
+                staff_user,
+                title="Parallel-Titel",
+                expected_updated_at=stale,
+            )
+        workitem_open.refresh_from_db()
+        assert workitem_open.title != "Parallel-Titel"
+
+    def test_optimistic_locking_workitem_success_with_current_timestamp(self, workitem_open, staff_user):
+        workitem_open.refresh_from_db()
+        current = workitem_open.updated_at.isoformat()
+        update_workitem(
+            workitem_open,
+            staff_user,
+            title="OK-Titel",
+            expected_updated_at=current,
+        )
+        workitem_open.refresh_from_db()
+        assert workitem_open.title == "OK-Titel"
+
+    def test_optimistic_locking_workitem_none_disables_check(self, workitem_open, staff_user):
+        update_workitem(
+            workitem_open,
+            staff_user,
+            title="Legacy-Titel",
+            expected_updated_at=None,
+        )
+        workitem_open.refresh_from_db()
+        assert workitem_open.title == "Legacy-Titel"

@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models import AuditLog, Case
+from core.services.locking import check_version_conflict
 from core.services.sensitivity import user_can_see_event
 
 logger = logging.getLogger(__name__)
@@ -35,11 +36,15 @@ def create_case(facility, user, client, title, description="", lead_user=None):
 
 
 @transaction.atomic
-def update_case(case, user, **fields):
+def update_case(case, user, *, expected_updated_at=None, **fields):
     """Update mutable fields on a case (title, description, lead_user, client).
 
     Writes an AuditLog entry with the names of changed fields (no PII values).
+
+    ``expected_updated_at`` enables optimistic locking (Refs #531) — when the
+    DB-side ``updated_at`` differs, a ``ValidationError`` is raised.
     """
+    check_version_conflict(case, expected_updated_at)
     allowed = {"title", "description", "lead_user", "client"}
     changed_fields = []
     for key, value in fields.items():

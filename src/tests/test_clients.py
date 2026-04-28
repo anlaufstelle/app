@@ -1,6 +1,7 @@
 """Tests für Client-Management."""
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.urls import reverse
 
 from core.models import AuditLog, Case, Client, Episode, WorkItem
@@ -206,6 +207,49 @@ class TestUpdateClientService:
         result = update_client(client_identified, staff_user, notes="Test")
         assert result.pk == client_identified.pk
         assert result.notes == "Test"
+
+
+@pytest.mark.django_db
+class TestOptimisticLockingClient:
+    """Tests for optimistic locking on Client updates (Refs #531)."""
+
+    def test_optimistic_locking_client_conflict(self, client_identified, staff_user):
+        """A stale ``expected_updated_at`` must raise ValidationError."""
+        stale = "2000-01-01T00:00:00+00:00"
+        with pytest.raises(ValidationError):
+            update_client(
+                client_identified,
+                staff_user,
+                notes="Parallel-Edit",
+                expected_updated_at=stale,
+            )
+        # DB unchanged
+        client_identified.refresh_from_db()
+        assert client_identified.notes != "Parallel-Edit"
+
+    def test_optimistic_locking_client_success_with_current_timestamp(self, client_identified, staff_user):
+        """Matching ``expected_updated_at`` must succeed."""
+        client_identified.refresh_from_db()
+        current = client_identified.updated_at.isoformat()
+        update_client(
+            client_identified,
+            staff_user,
+            notes="OK-Edit",
+            expected_updated_at=current,
+        )
+        client_identified.refresh_from_db()
+        assert client_identified.notes == "OK-Edit"
+
+    def test_optimistic_locking_client_none_disables_check(self, client_identified, staff_user):
+        """``expected_updated_at=None`` bypasses the check for backwards compatibility."""
+        update_client(
+            client_identified,
+            staff_user,
+            notes="Legacy-Caller",
+            expected_updated_at=None,
+        )
+        client_identified.refresh_from_db()
+        assert client_identified.notes == "Legacy-Caller"
 
 
 @pytest.mark.django_db

@@ -60,6 +60,7 @@ class Case(models.Model):
         help_text=_("Hauptverantwortliche Fachkraft für diesen Fall"),
     )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Erstellt am"))
+    updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Aktualisiert am"))
     closed_at = models.DateTimeField(
         null=True,
         blank=True,

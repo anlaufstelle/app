@@ -9,6 +9,9 @@
 
     <form method="post" class="space-y-4">
         {% csrf_token %}
+        {% if is_edit and client %}
+        <input type="hidden" name="expected_updated_at" value="{{ client.updated_at.isoformat }}">
+        {% endif %}
 
         {% for field in form %}
         <div>

@@ -5,6 +5,7 @@ import logging
 from urllib.parse import urlencode
 
 from django.contrib import messages
+from django.core.exceptions import ValidationError
 from django.db.models import Case, F, IntegerField, Max, Q, Value, When
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -171,7 +172,18 @@ class ClientUpdateView(StaffRequiredMixin, View):
         old_stage = client.contact_stage
         form = ClientForm(request.POST, instance=client, facility=request.current_facility)
         if form.is_valid():
-            client = update_client(client, request.user, old_stage=old_stage, **form.cleaned_data)
+            expected_updated_at = request.POST.get("expected_updated_at") or None
+            try:
+                client = update_client(
+                    client,
+                    request.user,
+                    old_stage=old_stage,
+                    expected_updated_at=expected_updated_at,
+                    **form.cleaned_data,
+                )
+            except ValidationError as e:
+                messages.error(request, e.message if hasattr(e, "message") else str(e))
+                return redirect("core:client_update", pk=client.pk)
             messages.success(request, _("Klientel wurde aktualisiert."))
             return redirect("core:client_detail", pk=client.pk)
         return render(request, "core/clients/form.html", {"form": form, "client": client, "is_edit": True})

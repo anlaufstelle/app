@@ -1,6 +1,7 @@
 """Tests for Case CRUD, event assignment, and navigation."""
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
 
@@ -98,6 +99,45 @@ class TestCaseService:
         remove_event_from_case(sample_event, staff_user)
         sample_event.refresh_from_db()
         assert sample_event.case is None
+
+
+@pytest.mark.django_db
+class TestOptimisticLockingCase:
+    """Tests for optimistic locking on Case updates (Refs #531)."""
+
+    def test_optimistic_locking_case_conflict(self, case_open, staff_user):
+        stale = "2000-01-01T00:00:00+00:00"
+        with pytest.raises(ValidationError):
+            update_case(
+                case_open,
+                staff_user,
+                title="Parallel-Titel",
+                expected_updated_at=stale,
+            )
+        case_open.refresh_from_db()
+        assert case_open.title != "Parallel-Titel"
+
+    def test_optimistic_locking_case_success_with_current_timestamp(self, case_open, staff_user):
+        case_open.refresh_from_db()
+        current = case_open.updated_at.isoformat()
+        update_case(
+            case_open,
+            staff_user,
+            title="OK-Titel",
+            expected_updated_at=current,
+        )
+        case_open.refresh_from_db()
+        assert case_open.title == "OK-Titel"
+
+    def test_optimistic_locking_case_none_disables_check(self, case_open, staff_user):
+        update_case(
+            case_open,
+            staff_user,
+            title="Legacy-Titel",
+            expected_updated_at=None,
+        )
+        case_open.refresh_from_db()
+        assert case_open.title == "Legacy-Titel"
 
 
 @pytest.mark.django_db
