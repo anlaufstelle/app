@@ -1,5 +1,7 @@
 """E2E-Tests: PWA — Setup, Manifest, Service Worker, Offline-Modus."""
 
+import re
+
 import pytest
 
 pytestmark = pytest.mark.e2e
@@ -143,3 +145,62 @@ def test_offline_form_submit_shows_feedback(authenticated_page, base_url):
     # Wieder online
     page.context.set_offline(False)
     page.evaluate("window.dispatchEvent(new Event('online'))")
+
+
+MOBILE_VIEWPORT = {"width": 375, "height": 812}
+
+
+class TestOfflineEntrypointsMobile:
+    """Offline-Mitnehmen-Button auf Mobile: Klientel-Liste (Karte) und Detail (Overflow-Menü)."""
+
+    def test_mobile_client_card_has_offline_toggle(self, staff_page, base_url):
+        page = staff_page
+        page.set_viewport_size(MOBILE_VIEWPORT)
+        page.goto(f"{base_url}/clients/")
+        page.wait_for_load_state("domcontentloaded")
+
+        # Mindestens eine Mobile-Karte mit eigenem Offline-Button
+        card_btn = page.locator("[data-testid='card-take-offline-btn']").first
+        card_btn.wait_for(state="visible", timeout=5000)
+        assert card_btn.is_visible()
+
+        # Desktop-Row-Button existiert zwar im DOM (same Partial), ist aber im
+        # Mobile-Viewport durch den sm:block-Container versteckt.
+        desktop_row_btn = page.locator("[data-testid='row-take-offline-btn']").first
+        assert not desktop_row_btn.is_visible()
+
+    def test_mobile_client_card_offline_button_does_not_navigate(self, staff_page, base_url):
+        """Klick auf den Offline-Button darf nicht zur Detailseite navigieren."""
+        page = staff_page
+        page.set_viewport_size(MOBILE_VIEWPORT)
+        page.goto(f"{base_url}/clients/")
+        page.wait_for_load_state("domcontentloaded")
+
+        list_url = page.url
+        card_btn = page.locator("[data-testid='card-take-offline-btn']").first
+        card_btn.wait_for(state="visible", timeout=5000)
+        card_btn.click()
+        page.wait_for_timeout(500)  # IndexedDB / OfflineClient-Round-Trip abwarten
+        assert page.url == list_url, "Offline-Klick hat ungewollt navigiert"
+
+    def test_mobile_detail_overflow_menu_has_offline_toggle(self, staff_page, base_url):
+        page = staff_page
+        page.set_viewport_size(MOBILE_VIEWPORT)
+        page.goto(f"{base_url}/clients/")
+        page.wait_for_load_state("domcontentloaded")
+
+        # Auf erste Karte zur Detailseite springen
+        page.locator("div.sm\\:hidden a[href^='/clients/']").first.click()
+        page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
+
+        # Overflow-Menü öffnen
+        overflow = page.locator("[data-testid='mobile-overflow-menu']")
+        overflow.click()
+
+        offline_btn = page.locator("[data-testid='mobile-take-offline-btn']")
+        offline_btn.wait_for(state="visible", timeout=3000)
+        # Einer der beiden Labels muss im Button stecken. Alpine togglet die Spans
+        # via x-show; text_content liest das DOM und ist deshalb nicht von der
+        # aktuellen Sichtbarkeit abhängig.
+        label = offline_btn.text_content() or ""
+        assert "Offline mitnehmen" in label or "Aus Offline-Cache entfernen" in label

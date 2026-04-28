@@ -3,7 +3,7 @@
 from django.urls import path
 from django.views.generic import RedirectView
 
-from core.views.account import AccountProfileView, DashboardPreferenceUpdateView
+from core.views.account import AccountProfileView
 from core.views.attachments import AttachmentDownloadView, AttachmentListView
 from core.views.audit import AuditLogDetailView, AuditLogListView
 from core.views.cases import (
@@ -171,7 +171,6 @@ urlpatterns = [
     path("api/events/fields/", EventFieldsPartialView.as_view(), name="event_fields_partial"),
     path("api/zeitstrom/feed/", ZeitstromFeedPartialView.as_view(), name="zeitstrom_feed_partial"),
     path("api/cases/for-client/", CasesForClientView.as_view(), name="cases_for_client"),
-    path("api/dashboard/preferences/", DashboardPreferenceUpdateView.as_view(), name="dashboard_preferences"),
     path("api/search/global/", GlobalSearchPartialView.as_view(), name="global_search"),
     path("api/retention/<uuid:pk>/approve/", RetentionApproveView.as_view(), name="retention_approve"),
     path("api/retention/<uuid:pk>/hold/", RetentionHoldView.as_view(), name="retention_hold"),

@@ -185,6 +185,20 @@
                     {% trans "Ohne Klientel wird der Kontakt als anonym gespeichert." %}
                 </p>
             </div>
+
+            {# Fall-Zuordnung (optional, nur wenn offene Fälle existieren) #}
+            {% if meta_form.case.field.queryset.exists %}
+            <div>
+                <label for="id_case" class="block text-sm font-medium text-gray-700 mb-1">{{ meta_form.case.label }}</label>
+                {{ meta_form.case }}
+                {% for error in meta_form.case.errors %}
+                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
+                {% endfor %}
+                <p class="mt-1 text-xs text-gray-500">
+                    {% trans "Optional: Kontakt einem offenen Fall zuordnen. Anonyme Kontakte können nicht an klientelbezogene Fälle gehängt werden." %}
+                </p>
+            </div>
+            {% endif %}
         </div>
 
         {# Sektion 2: Dynamische Felder #}

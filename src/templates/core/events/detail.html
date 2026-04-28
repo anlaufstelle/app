@@ -78,6 +78,14 @@
                 <dt class="text-gray-500">{% trans "Erstellt am" %}</dt>
                 <dd class="font-medium">{{ event.created_at|date:"d.m.Y H:i" }}</dd>
             </div>
+            {% if event.case %}
+            <div>
+                <dt class="text-gray-500">{% trans "Fall" %}</dt>
+                <dd class="font-medium">
+                    <a href="{% url 'core:case_detail' event.case.pk %}" class="text-indigo-600 hover:text-indigo-800">{{ event.case.title }}</a>
+                </dd>
+            </div>
+            {% endif %}
         </dl>
     </div>
 
