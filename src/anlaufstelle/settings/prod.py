@@ -60,6 +60,12 @@ CSRF_COOKIE_SECURE = True
 # CSRF-Cookie "Strict": Token wird nur bei same-origin-Form-Submits
 # mitgesendet. Refs #598 S-5, Phase-2-Entscheidung 2026-04-21.
 CSRF_COOKIE_SAMESITE = "Strict"
+# CSRF-Cookie HTTPOnly: Verhindert, dass JavaScript den Token aus dem Cookie
+# lesen kann — XSS-Mitigation. Der CSRF-Token wird für HTMX (via
+# body[hx-headers]), PWA-Offline-Module (via window.getCsrfToken() /
+# <meta name="csrf-token">) und Forms (via {% csrf_token %}) aus dem
+# gerenderten HTML gelesen, nicht aus dem Cookie. Refs #602.
+CSRF_COOKIE_HTTPONLY = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = "DENY"
 

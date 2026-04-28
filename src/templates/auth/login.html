@@ -4,6 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% trans "Anmelden" %} — Anlaufstelle</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="manifest" href="/manifest.json">
@@ -71,6 +72,7 @@
             </div>
         </div>
     </div>
+    <script src="{% static 'js/csrf.js' %}"></script>
     <script src="{% static 'js/sw-register.js' %}" defer></script>
     <script src="{% static 'js/auth-bootstrap.js' %}" defer></script>
 </body>

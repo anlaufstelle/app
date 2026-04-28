@@ -73,8 +73,7 @@ class TestForcePasswordChangeExemptUrls:
         response = _make_middleware()(request)
 
         assert response.status_code == 200, (
-            f"Pfad {path} sollte exempt sein (in EXEMPT_URLS), "
-            f"Middleware hat aber zu /password-change/ umgeleitet."
+            f"Pfad {path} sollte exempt sein (in EXEMPT_URLS), Middleware hat aber zu /password-change/ umgeleitet."
         )
 
     def test_exempt_url_prefix_matches(self, _staff_with_must_change):

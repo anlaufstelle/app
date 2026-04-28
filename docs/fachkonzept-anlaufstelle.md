@@ -77,7 +77,7 @@ Anlaufstelle ist das Fachsystem, das die Lücke zwischen teurer Großträger-Sof
 
 ### Abgrenzung zu bestehender Fachsoftware
 
-Der Markt für Fachsoftware im Sozialbereich bedient drei Segmente: Großträger und Komplexträger (Vivendi, for.CARE), Kommunen und Jugendämter (SoPart), mittlere freie Träger in der Jugendhilfe (Kilanka, NTC Horizont). Für niedrigschwellige Einrichtungen bleibt eine systematische Lücke:
+Der Markt für Fachsoftware im Sozialbereich bedient drei Segmente: umfassende Enterprise-Suiten für Großträger und Komplexträger, spezialisierte Fallbearbeitungssysteme für Kommunen und Jugendämter sowie mittelständische Branchenlösungen für freie Träger in der Jugendhilfe. Für niedrigschwellige Einrichtungen bleibt eine systematische Lücke:
 
 - **Zu teuer.** Preise sind häufig nicht einmal öffentlich einsehbar. Wo sie es sind, beginnen sie bei Bereichen, die für spendenfinanzierte Einrichtungen mit 5–15 Mitarbeitenden nicht tragbar sind.
 - **Zu komplex.** Wochenlange Einführungsprojekte, Consulting-Verträge und umfangreiche Schulungen setzen Ressourcen voraus, die in der Zielgruppe schlicht nicht vorhanden sind.
@@ -105,7 +105,7 @@ Die Ursache liegt nicht in mangelnder Digitalisierungsbereitschaft, sondern in e
 
 **Kosten:** Kommerzielle Fachsysteme kalkulieren für Organisationen mit mehreren Hundert Mitarbeitenden. Niedrigschwellige Einrichtungen haben typischerweise 5–15 Mitarbeitende, eine Mischfinanzierung aus öffentlichen Mitteln und Spenden, und kein separates IT-Budget.
 
-**Komplexität:** Systeme wie Vivendi oder SoPart erfordern aufwendige Einführungsprojekte mit externer Beratung. In einer Einrichtung, in der die Leitung Nachtdienste übernimmt und der IT-Support im Trägerverband ein Halbtagsadministrator ist, fehlen dafür schlicht die Kapazitäten.
+**Komplexität:** Etablierte Großträger- und Fallbearbeitungssysteme erfordern aufwendige Einführungsprojekte mit externer Beratung. In einer Einrichtung, in der die Leitung Nachtdienste übernimmt und der IT-Support im Trägerverband ein Halbtagsadministrator ist, fehlen dafür schlicht die Kapazitäten.
 
 **Falsche Grundannahmen:** Jedes gesichtete System setzt als Ausgangspunkt eine identifizierte Person voraus — mit Name, Geburtsdatum, Adresse. In niedrigschwelligen Einrichtungen ist der typische Kontakt anonym. Die Klientel haben das Recht, ihren Namen nicht zu nennen. Viele Kontakte bestehen aus der Ausgabe von sterilem Spritzbesteck, einem kurzen Gespräch, einer Tasse Kaffee. Ein System, das als erstes nach einem Namen fragt, hat die Arbeitsrealität nicht verstanden.
 
@@ -921,7 +921,7 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 
 ### Was Anlaufstelle nicht ist
 
-**Kein Jugendamt- oder Großträger-System.** Anlaufstelle richtet sich an niedrigschwellige Einrichtungen mit 5–30 Mitarbeitenden, nicht an Jugendämter mit Hunderten von Mitarbeitenden und komplexen Verwaltungsprozessen. Wer Hilfeplanung nach § 36 SGB VIII, Kostenträger-Abrechnung und Clearing-Prozesse braucht, ist mit Vivendi oder SoPart besser bedient.
+**Kein Jugendamt- oder Großträger-System.** Anlaufstelle richtet sich an niedrigschwellige Einrichtungen mit 5–30 Mitarbeitenden, nicht an Jugendämter mit Hunderten von Mitarbeitenden und komplexen Verwaltungsprozessen. Wer Hilfeplanung nach § 36 SGB VIII, Kostenträger-Abrechnung und Clearing-Prozesse braucht, ist mit etablierten Enterprise-Systemen für Großträger und Jugendämter besser bedient.
 
 **Kein allgemeines CRM.** Anlaufstelle verwaltet keine Kontaktdaten im klassischen Sinn — keine E-Mail-Adressen, keine Telefonnummern als Pflichtfelder, keine Kampagnen oder Fundraising-Funktionen. Es ist ein Fachsystem für die Dokumentation sozialer Arbeit, kein Customer-Relationship-Management-Tool.
 
