@@ -111,9 +111,7 @@ def _wait_for_active_service_worker(page, base_url) -> None:
     )
     if not page.evaluate("() => !!navigator.serviceWorker.controller"):
         page.reload(wait_until="domcontentloaded")
-        page.wait_for_function(
-            "() => !!navigator.serviceWorker.controller", timeout=5000
-        )
+        page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=5000)
 
 
 def test_offline_url_encoded_post_returns_offline_feedback(browser, base_url):
@@ -177,9 +175,7 @@ def test_offline_url_encoded_post_returns_offline_feedback(browser, base_url):
             """
         )
 
-        assert "Offline" in response_text, (
-            f"Erwartete Offline-Meldung vom SW, bekam: {response_text[:200]}"
-        )
+        assert "Offline" in response_text, f"Erwartete Offline-Meldung vom SW, bekam: {response_text[:200]}"
         assert (
             "lokal verschl" in response_text
             or "synchronisiert" in response_text
