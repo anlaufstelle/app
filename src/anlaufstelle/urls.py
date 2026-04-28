@@ -11,7 +11,14 @@ from core.views.auth import (
     set_user_language,
 )
 from core.views.health import HealthView
-from core.views.mfa import MFADisableView, MFASettingsView, MFASetupView, MFAVerifyView
+from core.views.mfa import (
+    MFABackupCodesView,
+    MFADisableView,
+    MFARegenerateBackupCodesView,
+    MFASettingsView,
+    MFASetupView,
+    MFAVerifyView,
+)
 from core.views.pwa import ManifestView, ServiceWorkerView
 
 urlpatterns = [
@@ -28,6 +35,12 @@ urlpatterns = [
     path("mfa/verify/", MFAVerifyView.as_view(), name="mfa_verify"),
     path("mfa/settings/", MFASettingsView.as_view(), name="mfa_settings"),
     path("mfa/disable/", MFADisableView.as_view(), name="mfa_disable"),
+    path("mfa/backup-codes/", MFABackupCodesView.as_view(), name="mfa_backup_codes"),
+    path(
+        "mfa/backup-codes/regenerate/",
+        MFARegenerateBackupCodesView.as_view(),
+        name="mfa_backup_codes_regenerate",
+    ),
     # Password Reset
     path(
         "password-reset/",

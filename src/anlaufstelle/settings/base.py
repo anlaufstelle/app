@@ -33,6 +33,7 @@ INSTALLED_APPS = [
     "django_htmx",
     "django_otp",
     "django_otp.plugins.otp_totp",
+    "django_otp.plugins.otp_static",
     # Project
     "core",
 ]

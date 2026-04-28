@@ -27,6 +27,12 @@ EXEMPT_URLS = [
     "/health/",
     "/sw.js",
     "/manifest.json",
+    # Post-Login Salt-Fetch für client-seitige Offline-Crypto (Refs #573/#588).
+    # Der Endpoint liefert nur den User-spezifischen Salt (kein MFA-Gate nötig);
+    # wenn er auf /mfa/verify/ umgeleitet würde, scheitert der auth-bootstrap
+    # am HTML-Response und fällt auf native form.submit mit rotiertem CSRF
+    # zurück — Ergebnis ist eine CSRF-Fehlerseite statt des MFA-Prompts.
+    "/auth/offline-key-salt/",
 ]
 
 

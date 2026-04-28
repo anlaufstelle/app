@@ -37,11 +37,13 @@ class TestMFASetupFlow:
         token = oath_totp(device.bin_key, step=device.step, t0=device.t0, digits=device.digits)
         response = client.post("/mfa/setup/", {"token": f"{token:0{device.digits}d}"})
         assert response.status_code == 302
-        assert response.url == "/mfa/settings/"
+        # Nach Setup werden frische Backup-Codes einmalig angezeigt (Refs #588).
+        assert response.url == "/mfa/backup-codes/"
         device.refresh_from_db()
         assert device.confirmed is True
-        # AuditLog wurde geschrieben.
+        # AuditLog wurde geschrieben — sowohl MFA_ENABLED als auch BACKUP_CODES_GENERATED.
         assert AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.MFA_ENABLED).exists()
+        assert AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.BACKUP_CODES_GENERATED).exists()
 
     def test_setup_post_rejects_invalid_token(self, client, staff_user):
         client.login(username="teststaff", password="testpass123")
