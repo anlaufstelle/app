@@ -8,69 +8,11 @@
     <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Neuer Kontakt" %}</h1>
 
     <form method="post" enctype="multipart/form-data" class="space-y-4" id="event-create-form" data-autosave{% if applied_template %} data-autosave-server-prefilled{% endif %}
-          x-data="{
-                query: '{{ client_pseudonym|default:'' }}',
-                results: [],
-                selectedId: '{{ client_id|default:'' }}',
-                show: false,
-                anonymousAllowed: true,
-                minStage: '',
-                highlightIndex: -1,
-                _justSelected: false,
-                _fetchGen: 0,
-                clientCases: [],
-                selectedCaseId: '',
-                updateAnonymousAllowed(selectEl) {
-                    const opt = selectEl.options[selectEl.selectedIndex];
-                    this.anonymousAllowed = !opt || !opt.dataset.minStage;
-                    this.minStage = (opt && opt.dataset.minStage) || '';
-                    if (this.minStage && this.selectedId) {
-                        this._fetchGen++;
-                        this.selectedId = '';
-                        this.query = '';
-                        this.results = [];
-                        this.clientCases = [];
-                        this.selectedCaseId = '';
-                    }
-                },
-                buildAutocompleteUrl() {
-                    const params = new URLSearchParams({q: this.query});
-                    if (this.minStage) params.set('min_stage', this.minStage);
-                    return `{% url 'core:client_autocomplete' %}?${params.toString()}`;
-                },
-                selectItem(item) {
-                    this._justSelected = true;
-                    this._fetchGen++;
-                    this.selectedId = item.id;
-                    this.query = item.pseudonym;
-                    this.show = false;
-                    this.results = [];
-                    this.highlightIndex = -1;
-                    this.loadCasesForClient(item.id);
-                },
-                loadCasesForClient(clientId) {
-                    this.selectedCaseId = '';
-                    if (!clientId) {
-                        this.clientCases = [];
-                        return;
-                    }
-                    const url = `{% url 'core:cases_for_client' %}?client=${encodeURIComponent(clientId)}`;
-                    fetch(url, { credentials: 'same-origin' })
-                        .then(r => r.ok ? r.json() : [])
-                        .then(data => { this.clientCases = Array.isArray(data) ? data : []; })
-                        .catch(() => { this.clientCases = []; });
-                },
-                moveHighlight(delta) {
-                    if (!this.show || this.results.length === 0) return;
-                    this.highlightIndex = (this.highlightIndex + delta + this.results.length) % this.results.length;
-                },
-                confirmHighlight() {
-                    if (this.highlightIndex >= 0 && this.highlightIndex < this.results.length) {
-                        this.selectItem(this.results[this.highlightIndex]);
-                    }
-                }
-            }"
-          x-init="updateAnonymousAllowed($refs.docTypeSelect); if (selectedId) loadCasesForClient(selectedId)">
+          x-data="eventClientAutocomplete"
+          data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
+          data-initial-client-id="{{ client_id|default:'' }}"
+          data-autocomplete-url="{% url 'core:client_autocomplete' %}"
+          data-cases-for-client-url="{% url 'core:cases_for_client' %}">
         {% csrf_token %}
 
         {# Schnell-Vorlagen (Quick-Templates, Refs #494) #}
@@ -157,8 +99,8 @@
                     <input type="text"
                            x-model="query"
                            tabindex="2"
-                           @input.debounce.150ms="if(_justSelected) { _justSelected = false; return; } highlightIndex = -1; let g1 = ++_fetchGen; fetch(buildAutocompleteUrl()).then(r => r.json()).then(d => { if(g1 === _fetchGen) { results = d; show = d.length > 0 } })"
-                           @focus="if(!show && !_justSelected) { let g2 = ++_fetchGen; fetch(buildAutocompleteUrl()).then(r => r.json()).then(d => { if(g2 === _fetchGen) { results = d; show = d.length > 0 } }) }"
+                           @input.debounce.150ms="onInput()"
+                           @focus="onFocus()"
                            @keydown.arrow-down.prevent="moveHighlight(1)"
                            @keydown.arrow-up.prevent="moveHighlight(-1)"
                            @keydown.enter.prevent="confirmHighlight()"

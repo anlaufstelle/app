@@ -110,6 +110,74 @@ class TestNoInlineScriptBlocksGuard:
         )
 
 
+class TestAlpineCspCompatibilityGuard:
+    """Alpine-Komponenten muessen CSP-konform definiert werden.
+
+    Hintergrund: Standard-Alpine wertet ``x-data="{ ... }"``-Inline-Objekte
+    per dynamischer Funktionsauswertung aus und benoetigt deshalb
+    ``script-src 'unsafe-eval'`` (Audit-Finding S-6 aus
+    [`docs/audits/2026-04-21-tiefenanalyse-v0.10.md`](https://github.com/tobiasnix/anlaufstelle/blob/main/docs/audits/2026-04-21-tiefenanalyse-v0.10.md)).
+    Die offizielle CSP-Variante (``@alpinejs/csp``) verzichtet auf
+    Eval, laesst dafuer nur registrierte Komponenten zu — also
+    ``x-data="myComponent"`` mit ``Alpine.data('myComponent', () => ({ ... }))``
+    in einer eigenen JS-Datei.
+
+    Dieser Guard verbietet neue Inline-Objekt-x-data-Stellen, sodass
+    der spaetere Build-Wechsel nicht von neuen Verstoessen blockiert wird.
+
+    Refs [#669](https://github.com/tobiasnix/anlaufstelle/issues/669)
+    """
+
+    _TEMPLATES_DIR = Path("src/templates")
+    # Matcht ``x-data="{...}"`` aber nicht ``x-data="myComponent"``.
+    # Auch mehrzeilige Inline-Objekte werden erfasst, weil das ``"{``
+    # direkt im Attribut steht.
+    _INLINE_X_DATA = re.compile(r'x-data\s*=\s*"\s*\{', re.IGNORECASE)
+
+    def test_no_inline_x_data_objects_in_templates(self):
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = []
+        for template_file in self._TEMPLATES_DIR.rglob("*.html"):
+            source = template_file.read_text(errors="ignore")
+            for match in self._INLINE_X_DATA.finditer(source):
+                line = source[: match.start()].count("\n") + 1
+                violations.append(f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line}")
+        assert not violations, (
+            "Inline-Objekt-x-data ('x-data=\"{ ... }\"') ist nicht CSP-kompatibel. "
+            "Bitte Komponente in src/static/js/alpine-components.js (oder eigener "
+            "Datei) per Alpine.data('name', () => ({ ... })) registrieren und im "
+            "Template als 'x-data=\"name\"' referenzieren. "
+            "Refs #669 (Phase 1, S-6)\n"
+            f"Betroffen: {violations}"
+        )
+
+    def test_csp_script_src_has_no_unsafe_inline(self):
+        """CSP ``script-src`` darf kein ``'unsafe-inline'`` enthalten.
+
+        Inline-Scripts werden durch ``TestNoInlineScriptBlocksGuard`` (Refs
+        #618) und Inline-Event-Attribute durch ``test_no_inline_event_-
+        attributes_in_templates`` (Refs #662 FND-01) bereits verboten — daher
+        darf ``'unsafe-inline'`` nie noetig sein.
+
+        Hinweis: ``'unsafe-eval'`` ist aktuell bewusst akzeptiert, weil
+        Alpine.js (Standard-Build) `x-show`/`@event`-Expressions per dyn-
+        Funktionsauswertung auswertet. Der Wechsel auf @alpinejs/csp scheitert
+        am restriktiven Expression-Subset des CSP-Builds und braucht eine
+        eigene Migrations-Phase (Folge-Issue zu #669).
+        """
+        from anlaufstelle.settings.base import CONTENT_SECURITY_POLICY
+
+        script_src = CONTENT_SECURITY_POLICY["DIRECTIVES"].get("script-src", [])
+        assert "'unsafe-inline'" not in script_src, (
+            "CSP script-src enthaelt 'unsafe-inline'. Inline-Scripts/Event-"
+            "Attribute werden durch Architektur-Tests bereits ausgeschlossen "
+            "(Refs #618, #662 FND-01) — daher darf 'unsafe-inline' nicht im "
+            "script-src stehen.\n"
+            f"Aktueller script-src: {script_src}"
+        )
+
+
 class TestNoFStringInGettextCallsGuard:
     """``_(f"…")`` und ``gettext_lazy(f"…")`` sind unbrauchbar fuer gettext.
 
