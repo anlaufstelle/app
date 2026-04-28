@@ -39,6 +39,50 @@
                 </button>
             </form>
             {% endif %}
+
+            {# Backup-Codes (Refs #588) #}
+            <div class="mt-6 pt-4 border-t border-gray-100" x-data="{ regenOpen: false }">
+                <h2 class="text-sm font-semibold text-gray-700 mb-1">{% trans "Backup-Codes" %}</h2>
+                <p class="text-xs text-gray-500 mb-2">
+                    {% trans "Ersatz-Codes für den Fall, dass dein Authenticator-Gerät nicht verfügbar ist. Jeder Code ist einmalig." %}
+                </p>
+                <p class="text-sm mb-3" data-testid="backup-codes-counter">
+                    {% blocktrans with remaining=backup_codes_remaining total=backup_codes_total %}
+                        Noch <strong>{{ remaining }}</strong> von {{ total }} Codes verfügbar.
+                    {% endblocktrans %}
+                </p>
+                {% if backup_codes_low %}
+                <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2 mb-3" data-testid="backup-codes-low-warning">
+                    {% trans "Wenige Backup-Codes übrig. Am besten jetzt einen neuen Satz generieren." %}
+                </p>
+                {% endif %}
+                <button type="button" @click="regenOpen = !regenOpen"
+                        data-testid="backup-codes-regenerate-toggle"
+                        class="inline-flex items-center px-3 py-2 border border-gray-300 text-xs font-medium rounded-md hover:bg-gray-50">
+                    {% trans "Neue Backup-Codes generieren" %}
+                </button>
+
+                <div x-show="regenOpen" x-cloak x-transition class="mt-3 p-3 bg-gray-50 border border-gray-200 rounded-md">
+                    <p class="text-xs text-gray-700 mb-2">
+                        {% trans "Zur Bestätigung einen aktuellen 6-stelligen TOTP-Code eingeben. Der bisherige Satz wird sofort ungültig." %}
+                    </p>
+                    <form method="post" action="{% url 'mfa_backup_codes_regenerate' %}" class="flex flex-wrap items-end gap-2">
+                        {% csrf_token %}
+                        <div class="flex-1 min-w-[8rem]">
+                            <label for="id_regen_token" class="block text-xs font-medium text-gray-700 mb-1">{% trans "TOTP-Code" %}</label>
+                            <input type="text" name="token" id="id_regen_token" required
+                                   inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code"
+                                   data-testid="backup-codes-regenerate-token"
+                                   class="w-full rounded-md border-gray-300 text-sm focus:border-indigo-500 focus:ring-indigo-500 px-3 py-2 border">
+                        </div>
+                        <button type="submit"
+                                data-testid="backup-codes-regenerate-submit"
+                                class="inline-flex items-center px-3 py-2 bg-indigo-600 text-white text-xs font-medium rounded-md hover:bg-indigo-700">
+                            {% trans "Generieren" %}
+                        </button>
+                    </form>
+                </div>
+            </div>
         {% else %}
             <p class="text-sm text-gray-700 mb-4" data-testid="mfa-status">
                 {% trans "Zwei-Faktor-Authentifizierung ist derzeit nicht aktiv." %}
