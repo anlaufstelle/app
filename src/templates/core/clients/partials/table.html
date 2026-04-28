@@ -1,94 +1,86 @@
 {% load i18n %}
 
-{% if clients %}
-{# Desktop: Table #}
-<div class="hidden sm:block bg-white border border-gray-200 rounded-md overflow-hidden">
-    <table class="min-w-full divide-y divide-gray-200">
-        <thead class="bg-gray-50">
-            <tr>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Pseudonym" %}</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">{% trans "Stufe" %}</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">{% trans "Alter" %}</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase hidden md:table-cell">{% trans "Letzter Kontakt" %}</th>
-                <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">{% trans "Offline" %}</th>
-            </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-200">
-            {% for client in clients %}
-            <tr class="hover:bg-gray-50"
-                x-data="clientRowOffline('{{ client.pk|escapejs }}')"
-                x-init="refresh()"
-                @offline-clients-count.window="refresh()">
-                <td class="px-4 py-3">
-                    <a href="{% url 'core:client_detail' client.pk %}" class="text-sm font-medium text-indigo-600 hover:text-indigo-800">
-                        {{ client.pseudonym }}
-                    </a>
-                    <span x-show="isOffline" x-cloak
-                          class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800"
-                          data-testid="client-row-offline-badge"
-                          title="{% trans 'Lokal verfügbar' %}">
-                        {% trans "Offline" %}
-                    </span>
-                </td>
-                <td class="px-4 py-3">
-                    {% include "components/_client_badge.html" with client=client %}
-                </td>
-                <td class="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">{{ client.get_age_cluster_display }}</td>
-                <td class="px-4 py-3 text-sm text-gray-500 hidden md:table-cell">
-                    {% if client.last_contact %}{{ client.last_contact|date:"d.m.Y H:i" }}{% else %}–{% endif %}
-                </td>
-                <td class="px-4 py-3 text-right">
-                    <button type="button"
-                            @click.prevent="toggleOffline()"
-                            :disabled="busy"
-                            class="inline-flex items-center text-xs text-gray-600 hover:text-indigo-600 disabled:opacity-50"
-                            data-testid="row-take-offline-btn">
-                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
-                        <span x-show="!isOffline">{% trans "Mitnehmen" %}</span>
-                        <span x-show="isOffline" x-cloak>{% trans "Entfernen" %}</span>
-                    </button>
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+{% comment %}
+    Responsive Client-Liste: ein einzelner for-Loop, per CSS-Grid wechselt
+    das Layout ab sm in eine Tabelle-ähnliche Ansicht, unter sm in Cards.
+    Refs #643 — zuvor zwei separate Loops (Desktop-Tabelle + Mobile-Cards),
+    was bei 25 Clients 50 Render-Iterationen und doppelte Alpine-
+    Initialisierung erzeugte.
+{% endcomment %}
 
-{# Mobile: Card layout — mit Offline-Toggle (konsistent zu Desktop-Tabelle) #}
-<div class="sm:hidden space-y-2">
-    {% for client in clients %}
-    <div class="bg-white border border-gray-200 rounded-md p-3 hover:border-indigo-300"
-         x-data="clientRowOffline('{{ client.pk|escapejs }}')"
-         x-init="refresh()"
-         @offline-clients-count.window="refresh()">
-        <div class="flex items-start justify-between gap-2">
-            <a href="{% url 'core:client_detail' client.pk %}" class="flex-1 min-w-0">
-                <div class="flex items-center gap-2">
-                    <span class="text-sm font-medium text-indigo-600 truncate">{{ client.pseudonym }}</span>
-                    <span x-show="isOffline" x-cloak
-                          class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 flex-shrink-0"
-                          data-testid="client-card-offline-badge"
-                          title="{% trans 'Lokal verfügbar' %}">
-                        {% trans "Offline" %}
-                    </span>
+{% if clients %}
+<div class="client-list">
+    {# Desktop-Header — nur ab sm: sichtbar und visuell als Tabellen-Kopfzeile #}
+    <div class="hidden sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto] gap-4 px-4 py-3 text-xs font-medium text-gray-500 uppercase bg-gray-50 border border-b-0 border-gray-200 rounded-t-md">
+        <div>{% trans "Pseudonym" %}</div>
+        <div>{% trans "Stufe" %}</div>
+        <div class="hidden md:block">{% trans "Alter" %}</div>
+        <div class="hidden md:block">{% trans "Letzter Kontakt" %}</div>
+        <div class="text-right">{% trans "Offline" %}</div>
+    </div>
+
+    <div class="sm:bg-white sm:border sm:border-gray-200 sm:rounded-b-md sm:divide-y sm:divide-gray-200 space-y-2 sm:space-y-0">
+        {% for client in clients %}
+        <div class="bg-white border border-gray-200 rounded-md p-3 sm:p-0 sm:border-0 sm:rounded-none hover:border-indigo-300 sm:hover:border-0 sm:hover:bg-gray-50"
+             x-data="clientRowOffline('{{ client.pk|escapejs }}')"
+             x-init="refresh()"
+             @offline-clients-count.window="refresh()">
+            <div class="flex items-start justify-between gap-2 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto] sm:gap-4 sm:items-center sm:px-4 sm:py-3">
+                {# Pseudonym + Offline-Badge #}
+                <div class="flex-1 min-w-0 sm:flex-auto">
+                    <a href="{% url 'core:client_detail' client.pk %}" class="block sm:inline">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-medium text-indigo-600 truncate hover:text-indigo-800">{{ client.pseudonym }}</span>
+                            <span x-show="isOffline" x-cloak
+                                  class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-yellow-100 text-yellow-800 flex-shrink-0"
+                                  data-testid="client-row-offline-badge"
+                                  title="{% trans 'Lokal verfügbar' %}">
+                                {% trans "Offline" %}
+                            </span>
+                        </div>
+                    </a>
+                    {# Mobile-Only: Stufe + Alter + Datum inline unter dem Pseudonym #}
+                    <div class="sm:hidden mt-1">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            {% include "components/_client_badge.html" with client=client %}
+                            <span class="text-xs text-gray-500">
+                                {{ client.get_age_cluster_display }}
+                                {% if client.last_contact %}· {{ client.last_contact|date:"d.m.Y" }}{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                {# Desktop-Only: Stufe als eigene Spalte #}
+                <div class="hidden sm:block">
                     {% include "components/_client_badge.html" with client=client %}
                 </div>
-                <div class="mt-1 text-xs text-gray-500">
-                    {{ client.get_age_cluster_display }}
-                    {% if client.last_contact %}· {{ client.last_contact|date:"d.m.Y" }}{% endif %}
+
+                {# Desktop-Only: Alter ab md: #}
+                <div class="hidden md:block text-sm text-gray-500">{{ client.get_age_cluster_display }}</div>
+
+                {# Desktop-Only: Letzter Kontakt ab md: #}
+                <div class="hidden md:block text-sm text-gray-500">
+                    {% if client.last_contact %}{{ client.last_contact|date:"d.m.Y H:i" }}{% else %}–{% endif %}
                 </div>
-            </a>
-            <button type="button"
-                    @click.stop="toggleOffline()"
-                    :disabled="busy"
-                    class="flex-shrink-0 inline-flex items-center text-xs text-gray-600 hover:text-indigo-600 disabled:opacity-50 px-2 py-1"
-                    data-testid="card-take-offline-btn"
-                    :aria-label="isOffline ? '{% trans 'Aus Offline-Cache entfernen' %}' : '{% trans 'Offline mitnehmen' %}'">
-                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
-            </button>
+
+                {# Offline-Toggle — kompakt auf Mobile, textuell auf Desktop #}
+                <div class="flex-shrink-0 sm:text-right">
+                    <button type="button"
+                            @click.prevent.stop="toggleOffline()"
+                            :disabled="busy"
+                            class="inline-flex items-center text-xs text-gray-600 hover:text-indigo-600 disabled:opacity-50 px-2 py-1 sm:px-0 sm:py-0"
+                            data-testid="row-take-offline-btn"
+                            :aria-label="isOffline ? '{% trans 'Aus Offline-Cache entfernen' %}' : '{% trans 'Offline mitnehmen' %}'">
+                        <svg class="w-4 h-4 sm:mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+                        <span class="hidden sm:inline" x-show="!isOffline">{% trans "Mitnehmen" %}</span>
+                        <span class="hidden sm:inline" x-show="isOffline" x-cloak>{% trans "Entfernen" %}</span>
+                    </button>
+                </div>
+            </div>
         </div>
+        {% endfor %}
     </div>
-    {% endfor %}
 </div>
 
 {% include "components/_pagination.html" with page=clients extra_params=pagination_params %}
