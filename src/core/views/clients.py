@@ -17,10 +17,10 @@ from django_ratelimit.decorators import ratelimit
 from core.forms.clients import ClientForm
 from core.models import AuditLog, Client, Event, WorkItem
 from core.models import Case as CaseModel
+from core.services.audit import log_audit_event
 from core.services.bans import get_active_bans_for_client
 from core.services.client_export import export_client_data, export_client_data_pdf
 from core.services.clients import create_client, track_client_visit, update_client
-from core.signals.audit import get_client_ip
 from core.utils.downloads import safe_download_response
 from core.views.mixins import AssistantOrAboveRequiredMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
 
@@ -106,13 +106,7 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
 
         # AuditLog for qualified client
         if client.contact_stage == Client.ContactStage.QUALIFIED:
-            AuditLog.objects.create(
-                facility=facility,
-                user=request.user,
-                action=AuditLog.Action.VIEW_QUALIFIED,
-                target_type="Client",
-                target_id=str(client.pk),
-            )
+            log_audit_event(request, AuditLog.Action.VIEW_QUALIFIED, target_obj=client)
 
         active_bans = get_active_bans_for_client(client, user=request.user)
 
@@ -241,14 +235,12 @@ class ClientDataExportJSONView(LeadOrAdminRequiredMixin, View):
 
         data = export_client_data(client, facility)
 
-        AuditLog.objects.create(
-            facility=facility,
-            user=request.user,
-            action=AuditLog.Action.EXPORT,
+        log_audit_event(
+            request,
+            AuditLog.Action.EXPORT,
+            target_obj=client,
             target_type="Client-JSON",
-            target_id=str(client.pk),
             detail={"format": "JSON", "pseudonym": client.pseudonym},
-            ip_address=get_client_ip(request),
         )
 
         return safe_download_response(
@@ -268,14 +260,12 @@ class ClientDataExportPDFView(LeadOrAdminRequiredMixin, View):
 
         pdf_bytes = export_client_data_pdf(client, facility)
 
-        AuditLog.objects.create(
-            facility=facility,
-            user=request.user,
-            action=AuditLog.Action.EXPORT,
+        log_audit_event(
+            request,
+            AuditLog.Action.EXPORT,
+            target_obj=client,
             target_type="Client-PDF",
-            target_id=str(client.pk),
             detail={"format": "PDF", "pseudonym": client.pseudonym},
-            ip_address=get_client_ip(request),
         )
 
         return safe_download_response(

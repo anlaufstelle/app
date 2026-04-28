@@ -6,9 +6,11 @@ all keys are tried for decryption.
 """
 
 import logging
+from functools import lru_cache
 
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
 from django.conf import settings
+from django.test.signals import setting_changed
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +40,19 @@ def _get_keys():
     return []
 
 
+@lru_cache(maxsize=1)
 def get_fernet():
-    """Create a MultiFernet instance from all configured keys."""
+    """Create a MultiFernet instance from all configured keys.
+
+    ``lru_cache(maxsize=1)`` hält eine Instanz pro Prozess — die Keys
+    stammen aus Django-Settings und ändern sich nicht zur Laufzeit.
+    Bei 200-Element-Loops (z.B. AttachmentListView mit ``safe_decrypt``
+    pro Row, Refs #644) spart das die wiederholte Fernet-Instantiierung
+    und Key-Normalisierung.
+
+    Cache wird bei Test-``override_settings`` auf ``ENCRYPTION_KEY(S)``
+    über den ``setting_changed``-Signal-Receiver invalidiert.
+    """
     keys = _get_keys()
     if not keys:
         raise EncryptionKeyMissing(
@@ -47,6 +60,15 @@ def get_fernet():
         )
     fernets = [Fernet(k.encode() if isinstance(k, str) else k) for k in keys]
     return MultiFernet(fernets)
+
+
+def _reset_fernet_cache(**kwargs):
+    """Invalidate get_fernet()-Cache wenn Keys per override_settings geändert werden."""
+    if kwargs.get("setting") in ("ENCRYPTION_KEY", "ENCRYPTION_KEYS"):
+        get_fernet.cache_clear()
+
+
+setting_changed.connect(_reset_fernet_cache)
 
 
 def encrypt_field(value):
