@@ -51,23 +51,7 @@
             </div>
 
             {# Zu erledigen bis #}
-            <div x-data="{
-                setDate(offset) {
-                    const d = new Date();
-                    if (offset === 'tomorrow') {
-                        d.setDate(d.getDate() + 1);
-                    } else if (offset === 'next_friday') {
-                        const day = d.getDay();
-                        const daysUntilNextFriday = ((5 - day + 7) % 7) + 7;
-                        d.setDate(d.getDate() + daysUntilNextFriday);
-                    } else if (offset === '2weeks') {
-                        d.setDate(d.getDate() + 14);
-                    }
-                    const val = d.toISOString().slice(0, 10);
-                    const input = document.getElementById('id_due_date');
-                    if (input) { input.value = val; input.dispatchEvent(new Event('change')); }
-                }
-            }">
+            <div x-data="dateQuickButtons" data-target-input="id_due_date">
                 <label for="id_due_date" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.due_date.label }}</label>
                 {{ form.due_date }}
                 <div class="mt-1.5 flex flex-wrap gap-1">
@@ -82,32 +66,16 @@
             </div>
 
             {# Wiedervorlage am #}
-            <div x-data="{
-                setRemindDate(offset) {
-                    const d = new Date();
-                    if (offset === 'tomorrow') {
-                        d.setDate(d.getDate() + 1);
-                    } else if (offset === 'next_friday') {
-                        const day = d.getDay();
-                        const daysUntilNextFriday = ((5 - day + 7) % 7) + 7;
-                        d.setDate(d.getDate() + daysUntilNextFriday);
-                    } else if (offset === '2weeks') {
-                        d.setDate(d.getDate() + 14);
-                    }
-                    const val = d.toISOString().slice(0, 10);
-                    const input = document.getElementById('id_remind_at');
-                    if (input) { input.value = val; input.dispatchEvent(new Event('change')); }
-                }
-            }">
+            <div x-data="dateQuickButtons" data-target-input="id_remind_at">
                 <label for="id_remind_at" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.remind_at.label }}</label>
                 {{ form.remind_at }}
                 {% if form.remind_at.help_text %}
                 <p class="mt-1 text-[11px] text-ink-muted">{{ form.remind_at.help_text }}</p>
                 {% endif %}
                 <div class="mt-1.5 flex flex-wrap gap-1">
-                    <button type="button" @click="setRemindDate('tomorrow')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Morgen" %}</button>
-                    <button type="button" @click="setRemindDate('next_friday')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Nächste Woche" %}</button>
-                    <button type="button" @click="setRemindDate('2weeks')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "In 2 Wochen" %}</button>
+                    <button type="button" @click="setDate('tomorrow')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Morgen" %}</button>
+                    <button type="button" @click="setDate('next_friday')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Nächste Woche" %}</button>
+                    <button type="button" @click="setDate('2weeks')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "In 2 Wochen" %}</button>
                 </div>
                 {% for error in form.remind_at.errors %}
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>
@@ -127,19 +95,16 @@
             </div>
 
             {# Klientel-Autocomplete #}
-            <div x-data="{
-                query: '{{ client_pseudonym|default:'' }}',
-                results: [],
-                selectedId: '{{ client_id|default:'' }}',
-                show: false,
-                _justSelected: false
-            }">
+            <div x-data="clientAutocomplete"
+                 data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
+                 data-initial-client-id="{{ client_id|default:'' }}"
+                 data-autocomplete-url="{% url 'core:client_autocomplete' %}">
                 <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Klientel" %}</label>
                 <div class="relative">
                     <input type="text"
                            x-model="query"
-                           @input.debounce.200ms="if(_justSelected) { _justSelected = false; return; } fetch(`{% url 'core:client_autocomplete' %}?q=${encodeURIComponent(query)}`).then(r => r.json()).then(d => { results = d; show = d.length > 0 })"
-                           @focus="if(!show && !_justSelected) { fetch(`{% url 'core:client_autocomplete' %}?q=${encodeURIComponent(query)}`).then(r => r.json()).then(d => { results = d; show = d.length > 0 }) }"
+                           @input.debounce.200ms="onInput()"
+                           @focus="onFocus()"
                            @click.away="show = false"
                            placeholder="{% trans 'Pseudonym eingeben...' %}"
                            class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
@@ -149,7 +114,7 @@
                     <div x-show="show" x-cloak class="absolute z-10 mt-1 w-full bg-surface border border-subtle rounded-[10px] shadow-lg max-h-60 overflow-auto">
                         <template x-for="c in results" :key="c.id">
                             <button type="button"
-                                    @click="_justSelected = true; selectedId = c.id; query = c.pseudonym; show = false"
+                                    @click="selectItem(c)"
                                     class="w-full text-left px-3 py-2 text-[13px] text-ink hover:bg-accent-light flex items-center justify-between">
                                 <span class="font-semibold" x-text="c.pseudonym"></span>
                                 <span class="text-[11px] text-ink-muted" x-text="c.stage"></span>

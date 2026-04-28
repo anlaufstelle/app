@@ -31,17 +31,7 @@
 
 {# Proposals by category — Bulk-Toolbar scopes selection to this section #}
 <section data-testid="retention-bulk-section"
-         x-data="{
-            count: 0,
-            deferDays: 30,
-            updateCount() {
-                this.count = document.querySelectorAll('[data-bulk-proposal]:checked').length;
-            },
-            selectVisible(checked) {
-                document.querySelectorAll('[data-bulk-proposal]').forEach(el => { el.checked = checked; });
-                this.updateCount();
-            }
-         }"
+         x-data="retentionBulkSelect"
          @retention-bulk-change.window="updateCount()">
 
     {# Sticky bulk toolbar — visible when at least one proposal is selected #}

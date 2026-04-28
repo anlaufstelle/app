@@ -24,39 +24,16 @@
             </div>
 
             {# Klientel-Autocomplete #}
-            <div x-data="{
-                query: '{{ client_pseudonym|default:'' }}',
-                results: [],
-                selectedId: '{{ client_id|default:'' }}',
-                show: false,
-                highlightIndex: -1,
-                _justSelected: false,
-                _fetchGen: 0,
-                selectItem(item) {
-                    this._justSelected = true;
-                    this._fetchGen++;
-                    this.selectedId = item.id;
-                    this.query = item.pseudonym;
-                    this.show = false;
-                    this.results = [];
-                    this.highlightIndex = -1;
-                },
-                moveHighlight(delta) {
-                    if (!this.show || this.results.length === 0) return;
-                    this.highlightIndex = (this.highlightIndex + delta + this.results.length) % this.results.length;
-                },
-                confirmHighlight() {
-                    if (this.highlightIndex >= 0 && this.highlightIndex < this.results.length) {
-                        this.selectItem(this.results[this.highlightIndex]);
-                    }
-                }
-            }">
+            <div x-data="clientAutocomplete"
+                 data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
+                 data-initial-client-id="{{ client_id|default:'' }}"
+                 data-autocomplete-url="{% url 'core:client_autocomplete' %}">
                 <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Klientel" %}</label>
                 <div class="relative">
                     <input type="text"
                            x-model="query"
-                           @input.debounce.150ms="if(_justSelected) { _justSelected = false; return; } highlightIndex = -1; let g1 = ++_fetchGen; fetch(`{% url 'core:client_autocomplete' %}?q=${encodeURIComponent(query)}`).then(r => r.json()).then(d => { if(g1 === _fetchGen) { results = d; show = d.length > 0 } })"
-                           @focus="if(!show && !_justSelected) { let g2 = ++_fetchGen; fetch(`{% url 'core:client_autocomplete' %}?q=${encodeURIComponent(query)}`).then(r => r.json()).then(d => { if(g2 === _fetchGen) { results = d; show = d.length > 0 } }) }"
+                           @input.debounce.150ms="onInput()"
+                           @focus="onFocus()"
                            @keydown.arrow-down.prevent="moveHighlight(1)"
                            @keydown.arrow-up.prevent="moveHighlight(-1)"
                            @keydown.enter.prevent="confirmHighlight()"
