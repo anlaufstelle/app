@@ -16,6 +16,7 @@ class AuditLog(models.Model):
         LOGIN = "login", _("Anmeldung")
         LOGOUT = "logout", _("Abmeldung")
         LOGIN_FAILED = "login_failed", _("Anmeldung fehlgeschlagen")
+        LOGIN_UNLOCK = "login_unlock", _("Account-Sperre aufgehoben")
         VIEW_QUALIFIED = "view_qualified", _("Qualifizierte Daten eingesehen")
         EXPORT = "export", _("Export")
         DELETE = "delete", _("Löschung")

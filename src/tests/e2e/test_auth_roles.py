@@ -125,6 +125,97 @@ class TestAssistantQualifiedClientAccess:
         assert assistant_page.locator("h1").inner_text() == "Stern-42"
 
 
+def _seed_failed_logins_and_check_lock(username, n=10):
+    """Schreibt n LOGIN_FAILED-AuditLog-Einträge für den User und verifiziert Lockout."""
+    import os
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "src/manage.py",
+            "shell",
+            "-c",
+            (
+                "from core.models import AuditLog, User; "
+                "from core.services.login_lockout import is_locked; "
+                f"u = User.objects.get(username='{username}'); "
+                f"[AuditLog.objects.create(facility=u.facility, user=u, "
+                f"action=AuditLog.Action.LOGIN_FAILED, "
+                f"detail={{'username': u.username}}) for _ in range({n})]; "
+                "print('LOCKED=' + str(is_locked(u)))"
+            ),
+        ],
+        env={**os.environ, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.e2e"},
+        capture_output=True,
+        text=True,
+    )
+    assert "LOCKED=True" in result.stdout, f"Seed fehlgeschlagen: {result.stdout}\n{result.stderr}"
+
+
+class TestZZAccountLockout:
+    """Account-Lockout nach Schwelle (Refs #612). ZZ-Prefix, da mehrere
+    AuditLog-Einträge in die Session geschrieben werden und andere Auth-Tests
+    auf einen sauberen Zustand angewiesen sind."""
+
+    def test_lockout_blocks_correct_password_login(self, base_url, browser):
+        """10 LOGIN_FAILED → auch korrektes Passwort blockiert, Fehlermeldung sichtbar."""
+        _seed_failed_logins_and_check_lock("miriam", n=10)
+
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        try:
+            page.goto(f"{base_url}/login/")
+            page.fill('input[name="username"]', "miriam")
+            page.fill('input[name="password"]', "anlaufstelle2026")
+            page.click('button[type="submit"]')
+            page.wait_for_load_state("domcontentloaded")
+
+            # Weiterhin auf /login/ — kein Redirect auf /
+            assert page.url.endswith("/login/"), f"Unerwartete Weiterleitung: {page.url}"
+            # Sichtbare Sperr-Meldung
+            locked_msg = page.locator("text=gesperrt")
+            locked_msg.wait_for(state="visible", timeout=3000)
+            assert locked_msg.is_visible(), f"Seiten-HTML ohne Lockout-Text:\n{page.content()[:2000]}"
+        finally:
+            context.close()
+
+    def test_admin_unlock_action_restores_login(self, base_url, browser, authenticated_page):
+        """Admin nutzt UserAdmin-Action „Account-Sperre aufheben"; gesperrter User kann wieder einloggen."""
+        _seed_failed_logins_and_check_lock("lena", n=10)
+
+        # Admin-Page (authenticated_page ist admin) navigiert zum User-Admin und
+        # ruft die Action „unlock_selected_users" auf.
+        admin = authenticated_page
+        admin.goto(f"{base_url}/admin-mgmt/core/user/")
+        admin.wait_for_load_state("domcontentloaded")
+        # Lena-Zeile selektieren
+        row = admin.locator("#result_list tbody tr", has_text="lena")
+        row.locator("input[name='_selected_action']").check()
+        admin.select_option("select[name='action']", "unlock_selected_users")
+        admin.locator("button[name='index']").click()
+        admin.wait_for_load_state("domcontentloaded")
+        # Erfolgsmeldung
+        assert (
+            admin.locator("text=Account-Sperre").first.is_visible()
+            or admin.locator(".messagelist .success, .messagelist li.success").count() > 0
+        )
+
+        # Separater Kontext → Lena versucht Login mit korrektem Passwort
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        try:
+            page.goto(f"{base_url}/login/")
+            page.fill('input[name="username"]', "lena")
+            page.fill('input[name="password"]', "anlaufstelle2026")
+            page.click('button[type="submit"]')
+            page.wait_for_url(f"{base_url}/")
+            assert page.url == f"{base_url}/"
+        finally:
+            context.close()
+
+
 class TestZZRateLimiting:
     """Rate-Limiting: 5 fehlgeschlagene Logins → Blockierung.
 
