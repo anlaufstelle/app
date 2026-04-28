@@ -14,6 +14,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
+from core.constants import DEFAULT_PAGE_SIZE
 from core.forms.clients import ClientForm
 from core.models import AuditLog, Client, Event, WorkItem
 from core.models import Case as CaseModel
@@ -51,7 +52,7 @@ class ClientListView(AssistantOrAboveRequiredMixin, View):
         # Pagination
         from django.core.paginator import Paginator
 
-        paginator = Paginator(qs, 25)
+        paginator = Paginator(qs, DEFAULT_PAGE_SIZE)
         page = request.GET.get("page")
         clients = paginator.get_page(page)
 

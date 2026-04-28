@@ -5,8 +5,6 @@ im angegebenen Output-Verzeichnis. Fehlerpfad: ungültiger Facility-Name
 → CommandError.
 """
 
-from pathlib import Path
-
 import pytest
 from django.core.management import CommandError, call_command
 
@@ -25,9 +23,7 @@ class TestGenerateDsgvoPackageCommand:
 
         # Jedes Slug aus DOCUMENTS produziert genau eine Datei.
         files = sorted(p.name for p in tmp_path.iterdir())
-        assert len(files) == len(DOCUMENTS), (
-            f"Erwartet: {len(DOCUMENTS)} Dateien, erhalten: {len(files)} ({files})"
-        )
+        assert len(files) == len(DOCUMENTS), f"Erwartet: {len(DOCUMENTS)} Dateien, erhalten: {len(files)} ({files})"
 
         # Alle Dateien sind Markdown und nicht leer.
         for path in tmp_path.iterdir():
@@ -44,9 +40,7 @@ class TestGenerateDsgvoPackageCommand:
         )
 
         # Mindestens eine Datei muss den Facility-Namen enthalten.
-        any_contains = any(
-            facility.name in p.read_text(encoding="utf-8") for p in tmp_path.iterdir()
-        )
+        any_contains = any(facility.name in p.read_text(encoding="utf-8") for p in tmp_path.iterdir())
         assert any_contains, "Keine Datei enthält den Facility-Namen"
 
     def test_unknown_facility_raises_command_error(self, tmp_path):

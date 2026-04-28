@@ -259,9 +259,7 @@ def normalize_file_marker(value):
     if is_multi_file_marker(value):
         entries = value["entries"] or []
         return [
-            {"id": str(e.get("id")), "sort": int(e.get("sort", i))}
-            for i, e in enumerate(entries)
-            if e and e.get("id")
+            {"id": str(e.get("id")), "sort": int(e.get("sort", i))} for i, e in enumerate(entries) if e and e.get("id")
         ]
     if is_singleton_file_marker(value):
         return [{"id": str(value.get("attachment_id")), "sort": 0}]

@@ -103,9 +103,7 @@ class TestMultiFileUpload:
 
         page.goto(event_url.rstrip("/") + "/edit/", wait_until="domcontentloaded")
         # Beide Entries in der Liste.
-        page.locator(f'[data-testid="attachment-entries-{slug}"] li').nth(1).wait_for(
-            state="attached", timeout=5000
-        )
+        page.locator(f'[data-testid="attachment-entries-{slug}"] li').nth(1).wait_for(state="attached", timeout=5000)
         entries = page.locator(f'[data-testid="attachment-entries-{slug}"] li')
         assert entries.count() == 2
         # Pro Entry: Replace-File-Input und Remove-Checkbox.

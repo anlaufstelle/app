@@ -17,6 +17,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
+from core.constants import DEFAULT_PAGE_SIZE, RATELIMIT_MUTATION
 from core.forms.cases import CaseForm
 from core.models import Case, Event
 from core.services.cases import (
@@ -80,7 +81,7 @@ class CaseListView(StaffRequiredMixin, View):
 
         qs = qs.select_related("client", "lead_user").order_by("-created_at")
 
-        paginator = Paginator(qs, 25)
+        paginator = Paginator(qs, DEFAULT_PAGE_SIZE)
         page = request.GET.get("page")
         cases = paginator.get_page(page)
 
@@ -122,7 +123,7 @@ class CaseCreateView(StaffRequiredMixin, View):
         }
         return render(request, "core/cases/form.html", context)
 
-    @method_decorator(ratelimit(key="user", rate="60/h", method="POST", block=True))
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request):
         facility = request.current_facility
         form = CaseForm(request.POST, facility=facility)

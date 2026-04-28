@@ -5,7 +5,9 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 
+from core.models import Activity, AuditLog
 from core.models.outcome import Milestone, OutcomeGoal
+from core.services.activity import log_activity
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +82,29 @@ def toggle_milestone(milestone, user):
 
 
 @transaction.atomic
-def delete_milestone(milestone):
-    """Delete a milestone (milestones are lightweight)."""
+def delete_milestone(milestone, user):
+    """Delete a milestone + AuditLog + Activity.
+
+    Milestones are lightweight, but the deletion is still a state-changing
+    operation that must be auditable.
+    """
+    case = milestone.goal.case
+    facility = case.facility
+    title = milestone.title
+    milestone_pk = str(milestone.pk)
     milestone.delete()
+    AuditLog.objects.create(
+        facility=facility,
+        user=user,
+        action=AuditLog.Action.MILESTONE_DELETE,
+        target_type="Milestone",
+        target_id=milestone_pk,
+        detail={"title": title, "case_id": str(case.pk)},
+    )
+    log_activity(
+        facility=facility,
+        actor=user,
+        verb=Activity.Verb.DELETED,
+        target=case,
+        summary=f'Meilenstein "{title}" gelöscht',
+    )

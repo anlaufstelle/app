@@ -88,6 +88,53 @@ def doctype_badge_classes(color):
     return _BADGE_COLOR_MAP.get(color, _DEFAULT_BADGE_CLASSES)
 
 
+# --- Semantic status badge ---
+# Maps a semantic status (open/closed/pending/...) to a color in _BADGE_COLOR_MAP.
+# Single source of truth for status colors across the app.
+_STATUS_COLOR_MAP = {
+    "open": "green",
+    "active": "green",
+    "success": "green",
+    "done": "green",
+    "completed": "green",
+    "closed": "gray",
+    "discarded": "gray",
+    "neutral": "gray",
+    "draft": "gray",
+    "pending": "amber",
+    "warning": "amber",
+    "important": "amber",
+    "yellow": "amber",
+    "danger": "red",
+    "error": "red",
+    "urgent": "red",
+    "rejected": "red",
+    "info": "blue",
+    "qualified": "purple",
+}
+
+
+@register.simple_tag
+def status_badge(status, label):
+    """Render a semantic status badge.
+
+    Usage::
+
+        {% status_badge case.status case.get_status_display %}
+        {% status_badge "urgent" "Dringend" %}
+
+    The ``status`` value is mapped through ``_STATUS_COLOR_MAP`` to one of the
+    palette colors in ``_BADGE_COLOR_MAP``. Unknown statuses fall back to gray.
+    """
+    color = _STATUS_COLOR_MAP.get(str(status).lower(), "gray")
+    classes = _BADGE_COLOR_MAP.get(color, _BADGE_COLOR_MAP["gray"])
+    return format_html(
+        '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {}">{}</span>',
+        classes,
+        label,
+    )
+
+
 # --- Activity verb badge ---
 _VERB_COLOR_MAP = {
     "updated": "gray",

@@ -7,8 +7,6 @@ Deckt ab:
   beim ersten Edit ins neue Format überführt.
 """
 
-from io import BytesIO
-
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
@@ -26,7 +24,6 @@ from core.services.file_vault import (
     soft_delete_attachment_chain,
     store_encrypted_file,
 )
-
 
 PDF_HEADER = (
     b"%PDF-1.4\n"
@@ -66,9 +63,7 @@ class TestNormalizeFileMarker:
         assert out == [{"id": "abc", "sort": 0}]
 
     def test_normalize_multi_keeps_list(self):
-        out = normalize_file_marker(
-            {"__files__": True, "entries": [{"id": "a", "sort": 0}, {"id": "b", "sort": 1}]}
-        )
+        out = normalize_file_marker({"__files__": True, "entries": [{"id": "a", "sort": 0}, {"id": "b", "sort": 1}]})
         assert out == [{"id": "a", "sort": 0}, {"id": "b", "sort": 1}]
 
     def test_normalize_non_marker(self):
