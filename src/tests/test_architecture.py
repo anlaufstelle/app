@@ -209,13 +209,8 @@ class TestRateLimitOnAllMutations:
             for cls_match in re.finditer(r"^class (\w+)\(", source, re.MULTILINE):
                 cls_name = cls_match.group(1)
                 cls_body_start = cls_match.end()
-                next_cls = re.search(
-                    r"^class \w+\(", source[cls_body_start:], re.MULTILINE
-                )
-                cls_body = source[
-                    cls_body_start : cls_body_start
-                    + (next_cls.start() if next_cls else 10**9)
-                ]
+                next_cls = re.search(r"^class \w+\(", source[cls_body_start:], re.MULTILINE)
+                cls_body = source[cls_body_start : cls_body_start + (next_cls.start() if next_cls else 10**9)]
                 # Capture decorator block above ``def post(self, ...)``
                 post_match = re.search(
                     r"((?:^    @[^\n]+\n)*)^    def post\(self",
@@ -230,9 +225,7 @@ class TestRateLimitOnAllMutations:
                 # erstrecken sich ueber mehrere Zeilen; daher den ganzen
                 # Block ab der ersten ``@``-Zeile bis zur class-Zeile lesen.
                 pre = source[: cls_match.start()]
-                last_block = (
-                    pre.rsplit("\n\n", 1)[-1] if "\n\n" in pre else pre
-                )
+                last_block = pre.rsplit("\n\n", 1)[-1] if "\n\n" in pre else pre
                 class_decos = last_block if "@" in last_block else ""
                 if "ratelimit" in decorators or "ratelimit" in class_decos:
                     continue
@@ -269,7 +262,7 @@ class TestSvgAccessibilityGuard:
     _TEMPLATES_DIR = Path("src/templates")
     _SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.IGNORECASE)
     _ARIA_HIDDEN = re.compile(r'aria-hidden\s*=\s*"true"', re.IGNORECASE)
-    _ARIA_LABEL = re.compile(r'aria-label\s*=', re.IGNORECASE)
+    _ARIA_LABEL = re.compile(r"aria-label\s*=", re.IGNORECASE)
     _ROLE_IMG = re.compile(r'role\s*=\s*"img"', re.IGNORECASE)
 
     def test_all_svgs_have_a11y_attribute(self):
@@ -280,11 +273,7 @@ class TestSvgAccessibilityGuard:
             source = template_file.read_text(errors="ignore")
             for match in self._SVG_OPEN.finditer(source):
                 attrs = match.group(1)
-                if (
-                    self._ARIA_HIDDEN.search(attrs)
-                    or self._ARIA_LABEL.search(attrs)
-                    or self._ROLE_IMG.search(attrs)
-                ):
+                if self._ARIA_HIDDEN.search(attrs) or self._ARIA_LABEL.search(attrs) or self._ROLE_IMG.search(attrs):
                     continue
                 # Look ahead for a <title> child within this svg block
                 tail = source[match.end() :]
@@ -292,12 +281,10 @@ class TestSvgAccessibilityGuard:
                 if close >= 0 and "<title" in tail[:close].lower():
                     continue
                 line = source[: match.start()].count("\n") + 1
-                violations.append(
-                    f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line}"
-                )
+                violations.append(f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line}")
         assert not violations, (
-            "Diese SVGs haben weder aria-hidden=\"true\" noch aria-label noch "
-            "role=\"img\" mit <title>. WCAG 2.1 SC 1.1.1: dekorative SVGs "
+            'Diese SVGs haben weder aria-hidden="true" noch aria-label noch '
+            'role="img" mit <title>. WCAG 2.1 SC 1.1.1: dekorative SVGs '
             "muessen vom Screen Reader ignoriert werden, nicht-dekorative "
             "muessen einen Text-Alternative bieten. "
             "Refs #669 (Phase G), #670 FND-15.\n"

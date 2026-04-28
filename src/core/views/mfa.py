@@ -34,7 +34,6 @@ from django_otp.plugins.otp_totp.models import TOTPDevice
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
-
 from core.models import AuditLog
 from core.services.mfa import (
     BACKUP_CODES_COUNT,

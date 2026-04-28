@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-04-26
+
 ### Added
 
 - **Visual Refresh** — Theme „Grün" mit DM Sans/Mono (self-hosted, kein Google-CDN), OKLCH-Akzentfarbe `#2d6a4f`, neuer Sidebar mit Logo-Box und „Neu erstellen"-Dropdown, Mobile-Bottom-Nav mit 5 Slots, 3 px farbige linke Kante an Feed-Cards, KPI-Cards mit Mono-Numbers, Card-Pattern flächig auf alle Templates.
@@ -41,6 +43,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **AuditLog für Case-Aktionen** — `close_case`, `reopen_case` und `delete_milestone` schreiben jetzt einen `AuditLog`-Eintrag (vorher silent).
 - **Vorlage-entfernen-Link** löscht den Autosave-Draft mit, sonst bestand der alte Draft-Stand weiter.
 - **Seed-Coverage-Pin** — `coverage.json` ignoriert; Ruff in CI auf `0.15.11` gepinnt.
+- **Service-Worker Offline-POST-Handling** — Multipart-Antwort beginnt jetzt konsistent mit „Offline — Datei-Uploads erfordern eine Internetverbindung" (Präfix-Konsistenz mit Standard-Queue-Pfad). Cache-Version v6→v7. xfail-Test in [`test_pwa_offline.py`](https://github.com/anlaufstelle/app/blob/main/src/tests/e2e/test_pwa_offline.py) durch echten URL-encoded-POST-Test ersetzt; Multipart-Pipeline
+- **E2E-Browser-State-Cleanup** — neue `_cleanup_browser_state(page)`-Hilfsfunktion in [`src/tests/e2e/conftest.py`](https://github.com/anlaufstelle/app/blob/main/src/tests/e2e/conftest.py) leert vor `context.close()` Service-Worker, IndexedDB, Cache-API und Storage, um Cross-Test-State-Pollution in der parallelen Suite zu reduzieren.
 
 ### Security
 

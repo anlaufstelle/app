@@ -16,7 +16,6 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
-
 from core.models import DeletionRequest, Event
 from core.services.event import approve_deletion, reject_deletion
 from core.views.mixins import LeadOrAdminRequiredMixin
