@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Zwei-Faktor-Authentifizierung" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    <h1 class="text-2xl font-bold mb-6">{% trans "Zwei-Faktor-Authentifizierung" %}</h1>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="mb-4 p-3 rounded-md text-sm {% if message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-green-100 text-green-800{% endif %}" role="alert">
+            {{ message }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="bg-white border border-gray-200 rounded-md p-4 mb-6">
+        {% if has_device %}
+            <p class="text-sm font-medium text-green-700 mb-2" data-testid="mfa-status">
+                {% trans "Aktiv: Zweiter Faktor per Authenticator-App." %}
+            </p>
+            {% if is_mfa_enforced %}
+                <p class="text-xs text-gray-500 mb-4">
+                    {% trans "Zwei-Faktor-Authentifizierung ist für dein Konto verpflichtend und kann nicht deaktiviert werden." %}
+                </p>
+            {% else %}
+                <p class="text-xs text-gray-500 mb-4">
+                    {% trans "Du kannst die 2FA jederzeit deaktivieren. Bei wichtigen Rollen empfehlen wir die Aktivierung." %}
+                </p>
+            {% endif %}
+
+            {% if can_disable %}
+            <form method="post" action="{% url 'mfa_disable' %}" class="inline">
+                {% csrf_token %}
+                <button type="submit" data-testid="mfa-disable-button"
+                        class="inline-flex items-center px-4 py-2 border border-red-300 text-sm font-medium rounded-md text-red-700 hover:bg-red-50">
+                    {% trans "2FA deaktivieren" %}
+                </button>
+            </form>
+            {% endif %}
+        {% else %}
+            <p class="text-sm text-gray-700 mb-4" data-testid="mfa-status">
+                {% trans "Zwei-Faktor-Authentifizierung ist derzeit nicht aktiv." %}
+            </p>
+            <a href="{% url 'mfa_setup' %}" data-testid="mfa-setup-button"
+               class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
+                {% trans "2FA einrichten" %}
+            </a>
+        {% endif %}
+    </div>
+
+    <div class="text-sm text-gray-500">
+        <a href="{% url 'core:account_profile' %}" class="text-indigo-600 hover:underline">
+            &larr; {% trans "Zurück zum Profil" %}
+        </a>
+    </div>
+</div>
+{% endblock %}

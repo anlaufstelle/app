@@ -1,12 +1,15 @@
 """Tests for file vault service + views."""
 
+from unittest.mock import patch
+
 import pytest
 from cryptography.fernet import Fernet
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, Settings
+from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings
 from core.models.attachment import EventAttachment
 from core.services.file_vault import (
     delete_attachment_file,
@@ -15,6 +18,7 @@ from core.services.file_vault import (
     get_original_filename,
     store_encrypted_file,
 )
+from core.services.virus_scan import ScanResult, VirusScannerUnavailableError
 
 
 @pytest.fixture
@@ -305,9 +309,7 @@ class TestFileUploadView:
 class TestAttachmentListSensitivityFiltering:
     """Verify that the attachment list filters by sensitivity BEFORE slicing."""
 
-    def test_attachments_list_filters_before_slicing(
-        self, client, staff_user, facility, settings
-    ):
+    def test_attachments_list_filters_before_slicing(self, client, staff_user, facility, settings):
         """Staff (max ELEVATED) must see NORMAL attachments even if many HIGH
         attachments exist — the sensitivity filter must run before the [:200]
         slice so that invisible HIGH records do not push visible NORMAL records
@@ -328,9 +330,7 @@ class TestAttachmentListSensitivityFiltering:
             name="Geheim",
             sensitivity=DocumentType.Sensitivity.HIGH,
         )
-        DocumentTypeField.objects.create(
-            document_type=dt_high, field_template=ft_file, sort_order=0
-        )
+        DocumentTypeField.objects.create(document_type=dt_high, field_template=ft_file, sort_order=0)
 
         # NORMAL doc type — visible to STAFF
         dt_normal = DocumentType.objects.create(
@@ -338,9 +338,7 @@ class TestAttachmentListSensitivityFiltering:
             name="Offen",
             sensitivity=DocumentType.Sensitivity.NORMAL,
         )
-        DocumentTypeField.objects.create(
-            document_type=dt_normal, field_template=ft_file, sort_order=0
-        )
+        DocumentTypeField.objects.create(document_type=dt_normal, field_template=ft_file, sort_order=0)
 
         # Create 5 HIGH events with attachments (newer, would fill the slice)
         for i in range(5):
@@ -351,9 +349,7 @@ class TestAttachmentListSensitivityFiltering:
                 data_json={},
                 created_by=staff_user,
             )
-            uploaded = SimpleUploadedFile(
-                f"secret_{i}.pdf", b"high content", content_type="application/pdf"
-            )
+            uploaded = SimpleUploadedFile(f"secret_{i}.pdf", b"high content", content_type="application/pdf")
             store_encrypted_file(facility, uploaded, ft_file, ev, staff_user)
 
         # Create 2 NORMAL events with attachments (older, would be pushed out)
@@ -365,9 +361,7 @@ class TestAttachmentListSensitivityFiltering:
                 data_json={},
                 created_by=staff_user,
             )
-            uploaded = SimpleUploadedFile(
-                f"open_{i}.pdf", b"normal content", content_type="application/pdf"
-            )
+            uploaded = SimpleUploadedFile(f"open_{i}.pdf", b"normal content", content_type="application/pdf")
             store_encrypted_file(facility, uploaded, ft_file, ev, staff_user)
 
         client.force_login(staff_user)
@@ -382,9 +376,7 @@ class TestAttachmentListSensitivityFiltering:
         # HIGH attachments must NOT be visible to staff
         assert "secret_0.pdf" not in content
 
-    def test_attachments_list_field_level_sensitivity_filtered(
-        self, client, staff_user, facility, settings
-    ):
+    def test_attachments_list_field_level_sensitivity_filtered(self, client, staff_user, facility, settings):
         """Attachments whose field_template has HIGH sensitivity are hidden
         from STAFF even when the doc_type is NORMAL.
         """
@@ -408,12 +400,8 @@ class TestAttachmentListSensitivityFiltering:
             name="Mischtyp",
             sensitivity=DocumentType.Sensitivity.NORMAL,
         )
-        DocumentTypeField.objects.create(
-            document_type=dt, field_template=ft_normal, sort_order=0
-        )
-        DocumentTypeField.objects.create(
-            document_type=dt, field_template=ft_high, sort_order=1
-        )
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft_normal, sort_order=0)
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft_high, sort_order=1)
 
         ev = Event.objects.create(
             facility=facility,
@@ -422,14 +410,10 @@ class TestAttachmentListSensitivityFiltering:
             data_json={},
             created_by=staff_user,
         )
-        uploaded_normal = SimpleUploadedFile(
-            "visible.pdf", b"ok", content_type="application/pdf"
-        )
+        uploaded_normal = SimpleUploadedFile("visible.pdf", b"ok", content_type="application/pdf")
         store_encrypted_file(facility, uploaded_normal, ft_normal, ev, staff_user)
 
-        uploaded_high = SimpleUploadedFile(
-            "hidden.pdf", b"secret", content_type="application/pdf"
-        )
+        uploaded_high = SimpleUploadedFile("hidden.pdf", b"secret", content_type="application/pdf")
         store_encrypted_file(facility, uploaded_high, ft_high, ev, staff_user)
 
         client.force_login(staff_user)
@@ -485,3 +469,82 @@ class TestFileValidation:
         )
         assert response.status_code == 200
         assert EventAttachment.objects.count() == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_encryption_key")
+class TestVirusScanIntegration:
+    """``store_encrypted_file`` darf infizierte Dateien niemals verschlüsseln
+    und muss jeden Fund als ``SECURITY_VIOLATION`` protokollieren (Issue #524)."""
+
+    def _event(self, facility, staff_user, doc_type_with_file):
+        dt, _, ft_file = doc_type_with_file
+        event = Event.objects.create(
+            facility=facility,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        return event, ft_file
+
+    def test_infected_file_raises_validation_error(self, facility, staff_user, doc_type_with_file):
+        event, ft_file = self._event(facility, staff_user, doc_type_with_file)
+        uploaded = SimpleUploadedFile("malware.pdf", b"bad", content_type="application/pdf")
+
+        with patch(
+            "core.services.file_vault.scan_file",
+            return_value=ScanResult(clean=False, infected=True, signature="Eicar-Test-Signature"),
+        ):
+            with pytest.raises(ValidationError) as exc_info:
+                store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
+
+        assert "Eicar-Test-Signature" in str(exc_info.value)
+        # Keine Attachment-Zeile, keine verschlüsselte Datei auf Platte.
+        assert EventAttachment.objects.filter(event=event).count() == 0
+
+    def test_infected_file_creates_security_violation_audit_log(self, facility, staff_user, doc_type_with_file):
+        event, ft_file = self._event(facility, staff_user, doc_type_with_file)
+        uploaded = SimpleUploadedFile("malware.pdf", b"bad", content_type="application/pdf")
+
+        with patch(
+            "core.services.file_vault.scan_file",
+            return_value=ScanResult(clean=False, infected=True, signature="Eicar-Test-Signature"),
+        ):
+            with pytest.raises(ValidationError):
+                store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
+
+        log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
+        assert log.user == staff_user
+        assert log.facility == facility
+        assert log.detail["reason"] == "virus_detected"
+        assert log.detail["signature"] == "Eicar-Test-Signature"
+        assert log.detail["filename"] == "malware.pdf"
+
+    def test_scanner_unavailable_fails_closed(self, facility, staff_user, doc_type_with_file):
+        event, ft_file = self._event(facility, staff_user, doc_type_with_file)
+        uploaded = SimpleUploadedFile("ok.pdf", b"ok", content_type="application/pdf")
+
+        with patch(
+            "core.services.file_vault.scan_file",
+            side_effect=VirusScannerUnavailableError("connection refused"),
+        ):
+            with pytest.raises(ValidationError):
+                store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
+
+        assert EventAttachment.objects.filter(event=event).count() == 0
+        log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
+        assert log.detail["reason"] == "virus_scanner_unavailable"
+
+    def test_clean_file_is_stored(self, facility, staff_user, doc_type_with_file):
+        event, ft_file = self._event(facility, staff_user, doc_type_with_file)
+        uploaded = SimpleUploadedFile("ok.pdf", b"PDF bytes", content_type="application/pdf")
+
+        with patch(
+            "core.services.file_vault.scan_file",
+            return_value=ScanResult(clean=True, infected=False),
+        ):
+            attachment = store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
+
+        assert attachment.pk is not None
+        assert EventAttachment.objects.filter(event=event).count() == 1

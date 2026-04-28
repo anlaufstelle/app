@@ -5,9 +5,13 @@ import uuid
 from pathlib import Path
 
 from django.conf import settings as django_settings
+from django.core.exceptions import ValidationError
+from django.utils.translation import gettext_lazy as _
 
 from core.models.attachment import EventAttachment
+from core.models.audit import AuditLog
 from core.services.encryption import decrypt_file_stream, encrypt_field, encrypt_file, safe_decrypt
+from core.services.virus_scan import VirusScannerUnavailableError, scan_file
 
 logger = logging.getLogger(__name__)
 
@@ -17,14 +21,67 @@ def _facility_dir(facility):
     return Path(django_settings.MEDIA_ROOT) / str(facility.pk)
 
 
+def _run_virus_scan(facility, uploaded_file, event, user):
+    """Scan ``uploaded_file`` via ClamAV. Raises ``ValidationError`` on hit or
+    when the scanner is unreachable while ``CLAMAV_ENABLED`` is true.
+
+    Creates an ``AuditLog`` entry with ``Action.SECURITY_VIOLATION`` for every
+    detected infection and also for fail-closed scanner outages — both are
+    security-relevant events that operators need to see.
+    """
+    try:
+        result = scan_file(uploaded_file)
+    except VirusScannerUnavailableError as exc:
+        logger.error(
+            "Virenscanner nicht erreichbar — Upload wird abgewiesen (fail-closed): %s",
+            exc,
+        )
+        AuditLog.objects.create(
+            facility=facility,
+            user=user,
+            action=AuditLog.Action.SECURITY_VIOLATION,
+            target_type="EventAttachment",
+            target_id=str(event.pk) if getattr(event, "pk", None) else "",
+            detail={
+                "reason": "virus_scanner_unavailable",
+                "filename": uploaded_file.name,
+                "error": str(exc),
+            },
+        )
+        raise ValidationError(_("Datei-Upload abgelehnt: Virenscanner ist nicht erreichbar.")) from exc
+
+    if result.infected:
+        AuditLog.objects.create(
+            facility=facility,
+            user=user,
+            action=AuditLog.Action.SECURITY_VIOLATION,
+            target_type="EventAttachment",
+            target_id=str(event.pk) if getattr(event, "pk", None) else "",
+            detail={
+                "reason": "virus_detected",
+                "filename": uploaded_file.name,
+                "signature": result.signature or "",
+            },
+        )
+        raise ValidationError(
+            _("Datei wurde von Virenscanner abgewiesen: %(signature)s") % {"signature": result.signature or "unknown"}
+        )
+
+
 def store_encrypted_file(facility, uploaded_file, field_template, event, user):
     """Encrypt and store an uploaded file. Returns EventAttachment instance.
 
-    1. Generate UUID filename
-    2. Create facility subdirectory
-    3. Encrypt file stream to disk
-    4. Create EventAttachment record
+    1. Scan file with ClamAV (if CLAMAV_ENABLED) BEFORE encryption — infected
+       uploads are rejected with ``ValidationError`` and logged as
+       ``SECURITY_VIOLATION``. Scanner errors are treated as fail-closed when
+       scanning is enabled (Issue #524).
+    2. Generate UUID filename
+    3. Create facility subdirectory
+    4. Encrypt file stream to disk
+    5. Create EventAttachment record
     """
+    _run_virus_scan(facility, uploaded_file, event, user)
+
     storage_name = f"{uuid.uuid4()}.enc"
     output_path = _facility_dir(facility) / storage_name
 

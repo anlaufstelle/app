@@ -47,6 +47,15 @@ class User(AbstractUser):
         default=False,
         verbose_name=_("Passwort muss geändert werden"),
     )
+    mfa_required = models.BooleanField(
+        default=False,
+        verbose_name=_("2FA erforderlich"),
+        help_text=_(
+            "Wenn aktiv, muss der Nutzer ein TOTP-Gerät einrichten, bevor er die "
+            "Anwendung weiter nutzen kann. Wird automatisch gesetzt, wenn die "
+            "Einrichtung 2FA für alle verlangt."
+        ),
+    )
     preferred_language = models.CharField(
         max_length=5,
         choices=settings.LANGUAGES,
@@ -87,3 +96,23 @@ class User(AbstractUser):
     @property
     def is_assistant_or_above(self):
         return self.role in (self.Role.ADMIN, self.Role.LEAD, self.Role.STAFF, self.Role.ASSISTANT)
+
+    @property
+    def has_confirmed_totp_device(self):
+        """True when the user has at least one confirmed TOTP device."""
+        from django_otp.plugins.otp_totp.models import TOTPDevice
+
+        return TOTPDevice.objects.filter(user=self, confirmed=True).exists()
+
+    @property
+    def is_mfa_enforced(self):
+        """True if either the user or the user's facility requires 2FA."""
+        if self.mfa_required:
+            return True
+        facility = self.facility
+        if facility is None:
+            return False
+        try:
+            return bool(facility.settings.mfa_enforced_facility_wide)
+        except facility._meta.model.settings.RelatedObjectDoesNotExist:
+            return False

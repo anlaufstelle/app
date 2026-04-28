@@ -27,6 +27,10 @@ class AuditLog(models.Model):
         CLIENT_UPDATE = "client_update", _("Klientel aktualisiert")
         CASE_UPDATE = "case_update", _("Fall aktualisiert")
         WORKITEM_UPDATE = "workitem_update", _("Aufgabe aktualisiert")
+        SECURITY_VIOLATION = "security_violation", _("Sicherheitsverletzung")
+        MFA_ENABLED = "mfa_enabled", _("2FA aktiviert")
+        MFA_DISABLED = "mfa_disabled", _("2FA deaktiviert")
+        MFA_FAILED = "mfa_failed", _("2FA-Verifikation fehlgeschlagen")
 
     objects = FacilityScopedManager()
 

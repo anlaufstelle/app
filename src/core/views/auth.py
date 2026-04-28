@@ -39,6 +39,9 @@ class CustomLoginView(auth_views.LoginView):
                 self.request.session.set_expiry(timeout)
             except facility._meta.model.settings.RelatedObjectDoesNotExist:
                 pass  # No settings -> default session timeout
+        # 2FA: Die Session startet immer unverifiziert — die MFA-Middleware
+        # leitet bei Bedarf nach /mfa/verify/ oder /mfa/setup/ weiter.
+        self.request.session["mfa_verified"] = False
         return response
 
 

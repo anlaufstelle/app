@@ -41,5 +41,19 @@ services:
     profiles:
       - tailwind
 
+  clamav:
+    image: clamav/clamav:stable
+    volumes:
+      - clamav-db:/var/lib/clamav
+    # Port 3310 ist nur innerhalb des Compose-Netzwerks sichtbar — kein Host-Binding.
+    # Aktivierung via CLAMAV_ENABLED=true im web-Container.
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+
 volumes:
   pgdata:
+  clamav-db:

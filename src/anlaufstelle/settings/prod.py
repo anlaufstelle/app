@@ -72,3 +72,8 @@ if "collectstatic" not in sys.argv and not (ENCRYPTION_KEY or ENCRYPTION_KEYS): 
         "ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein. "
         'Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
     )
+
+# --- Virenscan (Default: aktiv in Produktion) ---
+# In Produktion ist der Virenscan standardmäßig aktiv und kann nur durch explizite
+# Setzung von CLAMAV_ENABLED=false deaktiviert werden.
+CLAMAV_ENABLED = os.environ.get("CLAMAV_ENABLED", "true").lower() in ("true", "1", "yes")

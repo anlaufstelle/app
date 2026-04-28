@@ -14,6 +14,7 @@ Betriebshandbuch fuer Anlaufstelle. Ergaenzt das [Admin-Handbuch](admin-guide.md
 4. [Log-Analyse](#4-log-analyse)
 5. [Troubleshooting](#5-troubleshooting)
 6. [Notfall-Prozeduren](#6-notfall-prozeduren)
+7. [ClamAV-Virenscan](#7-clamav-virenscan)
 
 ---
 
@@ -463,6 +464,68 @@ Falls `SENTRY_DSN` in `.env` konfiguriert ist, werden unbehandelte Exceptions au
 ```dotenv
 SENTRY_DSN=https://...@sentry.io/...
 SENTRY_TRACES_SAMPLE_RATE=0.1
+```
+
+---
+
+## 7. ClamAV-Virenscan
+
+Jeder Datei-Upload in den Encrypted File Vault wird **vor** der Verschlüsselung
+gegen einen ClamAV-Daemon gescannt ([Issue #524](https://github.com/tobiasnix/anlaufstelle/issues/524)).
+Die Produktions-Compose-Datei [`docker-compose.prod.yml`](../docker-compose.prod.yml)
+startet den Scanner automatisch mit:
+
+```yaml
+clamav:
+  image: clamav/clamav:stable
+  volumes:
+    - clamav-db:/var/lib/clamav
+```
+
+### 7.1 Konfiguration
+
+Env-Vars (Defaults siehe [`src/anlaufstelle/settings/base.py`](../src/anlaufstelle/settings/base.py)):
+
+```dotenv
+CLAMAV_ENABLED=true        # Default in prod.py
+CLAMAV_HOST=clamav         # Service-Name im Compose-Netzwerk
+CLAMAV_PORT=3310
+CLAMAV_TIMEOUT=30          # Sekunden
+```
+
+In Entwicklung/Test ist der Scan deaktiviert (`CLAMAV_ENABLED=false`), damit
+keine ClamAV-Instanz erforderlich ist.
+
+### 7.2 Fail-closed
+
+Bei aktivem Scan und nicht erreichbarem Daemon wird jeder Upload mit einer
+`ValidationError` abgewiesen und eine `AuditLog`-Zeile mit
+`Action.SECURITY_VIOLATION` (`reason=virus_scanner_unavailable`) geschrieben.
+Funde werden mit `reason=virus_detected` und der gemeldeten Signatur geloggt.
+
+### 7.3 Healthcheck
+
+`GET /health/` liefert zusätzlich `"virus_scanner": "connected"|"unavailable"|"disabled"`.
+Bei aktivem Scanner und unerreichbarem Daemon wird der Gesamtstatus auf
+`"degraded"` gesetzt, der HTTP-Status bleibt 200 (die harte Sperre erfolgt
+beim Upload, nicht am Healthcheck).
+
+### 7.4 Datenbank-Updates (Signaturen)
+
+Das offizielle `clamav/clamav:stable`-Image aktualisiert die Signaturen
+automatisch über `freshclam` im Container. Persistenz erfolgt im
+benannten Volume `clamav-db`. Kein zusätzlicher Cron-Job notwendig.
+
+### 7.5 Manueller Check
+
+```bash
+# Daemon erreichbar?
+docker compose -f docker-compose.prod.yml exec web \
+  python -c "from core.services.virus_scan import ping; print(ping())"
+
+# EICAR-Test gegen den laufenden Scanner (manuell, nur zur Verifikation):
+docker compose -f docker-compose.prod.yml exec clamav \
+  sh -c 'echo "X5O!P%@AP[4\\PZX54(P^)7CC)7}\$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!\$H+H*" | clamdscan -'
 ```
 
 ---

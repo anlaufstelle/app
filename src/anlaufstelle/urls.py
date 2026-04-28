@@ -11,6 +11,7 @@ from core.views.auth import (
     set_user_language,
 )
 from core.views.health import HealthView
+from core.views.mfa import MFADisableView, MFASettingsView, MFASetupView, MFAVerifyView
 from core.views.pwa import ManifestView, ServiceWorkerView
 
 urlpatterns = [
@@ -22,6 +23,11 @@ urlpatterns = [
     path("logout/", CustomLogoutView.as_view(), name="logout"),
     path("password-change/", CustomPasswordChangeView.as_view(), name="password_change"),
     path("auth/offline-key-salt/", OfflineKeySaltView.as_view(), name="offline_key_salt"),
+    # Two-Factor Authentication (TOTP)
+    path("mfa/setup/", MFASetupView.as_view(), name="mfa_setup"),
+    path("mfa/verify/", MFAVerifyView.as_view(), name="mfa_verify"),
+    path("mfa/settings/", MFASettingsView.as_view(), name="mfa_settings"),
+    path("mfa/disable/", MFADisableView.as_view(), name="mfa_disable"),
     # Password Reset
     path(
         "password-reset/",

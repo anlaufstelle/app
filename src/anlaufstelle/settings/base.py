@@ -31,6 +31,8 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     # Third-party
     "django_htmx",
+    "django_otp",
+    "django_otp.plugins.otp_totp",
     # Project
     "core",
 ]
@@ -46,10 +48,12 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django_otp.middleware.OTPMiddleware",
     "core.middleware.htmx_session.HtmxSessionMiddleware",
     "core.middleware.facility_scope.FacilityScopeMiddleware",
     "core.middleware.user_language.UserLanguageMiddleware",
     "core.middleware.password_change.ForcePasswordChangeMiddleware",
+    "core.middleware.mfa.MFAEnforcementMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
@@ -102,6 +106,10 @@ AUTH_USER_MODEL = "core.User"
 LOGIN_URL = "/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/login/"
+
+# --- Two-Factor Authentication (TOTP) ---
+
+OTP_TOTP_ISSUER = "Anlaufstelle"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -169,6 +177,15 @@ MEDIA_URL = "/media/"
 
 ENCRYPTION_KEYS = os.environ.get("ENCRYPTION_KEYS", "")
 ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "")
+
+# --- Virenscan (ClamAV, Issue #524) ---
+# Prüft jede hochgeladene Datei VOR der Verschlüsselung gegen einen ClamAV-Daemon.
+# In Dev/Test per Default deaktiviert; prod.py aktiviert es.
+# Bei aktivem Scan und unerreichbarem Daemon wird der Upload abgewiesen (fail-closed).
+CLAMAV_ENABLED = os.environ.get("CLAMAV_ENABLED", "false").lower() in ("true", "1", "yes")
+CLAMAV_HOST = os.environ.get("CLAMAV_HOST", "clamav")
+CLAMAV_PORT = int(os.environ.get("CLAMAV_PORT", "3310"))
+CLAMAV_TIMEOUT = int(os.environ.get("CLAMAV_TIMEOUT", "30"))
 
 # --- Default PK ---
 

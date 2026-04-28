@@ -62,6 +62,14 @@ class Settings(models.Model):
         default=10,
         verbose_name=_("Max. Dateigröße (MB)"),
     )
+    mfa_enforced_facility_wide = models.BooleanField(
+        default=False,
+        verbose_name=_("2FA-Pflicht für alle Nutzer"),
+        help_text=_(
+            "Wenn aktiv, gilt MFA-Zwang (TOTP) automatisch für alle Nutzer dieser "
+            "Einrichtung — unabhängig vom einzelnen Benutzerfeld mfa_required."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Einstellungen")

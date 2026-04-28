@@ -19,8 +19,11 @@ services:
     environment:
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
       POSTGRES_HOST: db
+      CLAMAV_HOST: clamav
     depends_on:
       db:
+        condition: service_healthy
+      clamav:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')\""]
@@ -31,6 +34,20 @@ services:
     networks:
       - internal
       - frontend
+
+  clamav:
+    image: clamav/clamav:stable
+    volumes:
+      - clamav-db:/var/lib/clamav
+    healthcheck:
+      test: ["CMD", "clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 300s
+    restart: unless-stopped
+    networks:
+      - internal
 
   caddy:
     image: caddy:2-alpine
@@ -53,6 +70,7 @@ volumes:
   pgdata:
   caddy_data:
   caddy_config:
+  clamav-db:
 
 networks:
   internal:
