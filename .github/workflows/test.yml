@@ -91,3 +91,33 @@ jobs:
           cache: pip
       - run: pip install pip-audit
       - run: pip-audit -r requirements.txt
+
+  lock-check:
+    # Stellt sicher, dass requirements*.txt (Lock-Files) synchron zu
+    # requirements*.in sind. Schlägt fehl, wenn pip-compile Drift erkennt.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install pip-tools
+      - name: Verify requirements.txt is up to date
+        run: |
+          cp requirements.txt requirements.txt.bak
+          pip-compile --quiet --no-strip-extras --resolver=backtracking \
+            --output-file=requirements.txt requirements.in
+          if ! diff -u requirements.txt.bak requirements.txt; then
+            echo "::error::requirements.txt ist nicht aktuell — 'make deps-lock' ausführen."
+            exit 1
+          fi
+      - name: Verify requirements-dev.txt is up to date
+        run: |
+          cp requirements-dev.txt requirements-dev.txt.bak
+          pip-compile --quiet --no-strip-extras --resolver=backtracking \
+            --output-file=requirements-dev.txt requirements-dev.in
+          if ! diff -u requirements-dev.txt.bak requirements-dev.txt; then
+            echo "::error::requirements-dev.txt ist nicht aktuell — 'make deps-lock' ausführen."
+            exit 1
+          fi

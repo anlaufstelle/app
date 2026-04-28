@@ -56,8 +56,17 @@ cd anlaufstelle
 ```bash
 python3.13 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # enthält Runtime + Test/Lint-Tools
+# Alternativ nur Runtime (z.B. für Prod-Docker-Build):
+# pip install -r requirements.txt
 ```
+
+> **Lock-Files:** `requirements.txt` / `requirements-dev.txt` sind generierte
+> Lock-Files mit gepinnten transitiven Abhängigkeiten (via
+> [pip-tools](https://github.com/jazzband/pip-tools)). Direkte Abhängigkeiten
+> stehen in `requirements.in` / `requirements-dev.in`. Nach einer Änderung
+> dort: `make deps-lock` ausführen. Details:
+> [docs/ops-runbook.md § 8](docs/ops-runbook.md#8-dependencies-aktualisieren).
 
 **3. Datenbank starten**
 
@@ -175,6 +184,8 @@ Der Server ist unter `https://localhost:8443` erreichbar (selbstsigniertes Zerti
 | `make test-parallel` | Unit- und Integrationstests parallel (pytest-xdist)            |
 | `make test-e2e-parallel` | E2E-Tests parallel (Default 2 Worker, konfigurierbar)     |
 | `make test-e2e-smoke` | Nur Smoke-markierte E2E-Tests (~2-3 min)                    |
+| `make deps-lock` | Lock-Files aus `requirements*.in` neu erzeugen (pip-tools)        |
+| `make deps-check` | Prüft, ob Lock-Files aktuell zu `.in` sind (Drift-Detektion)     |
 | `make dev`       | Datenbank starten, migrieren und Server starten (kombiniert)      |
 
 Vor jedem Commit sollte `make ci` lokal erfolgreich durchlaufen.

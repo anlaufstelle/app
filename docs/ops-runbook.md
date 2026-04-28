@@ -15,6 +15,7 @@ Betriebshandbuch fuer Anlaufstelle. Ergaenzt das [Admin-Handbuch](admin-guide.md
 5. [Troubleshooting](#5-troubleshooting)
 6. [Notfall-Prozeduren](#6-notfall-prozeduren)
 7. [ClamAV-Virenscan](#7-clamav-virenscan)
+8. [Dependencies aktualisieren](#8-dependencies-aktualisieren)
 
 ---
 
@@ -530,6 +531,70 @@ docker compose -f docker-compose.prod.yml exec clamav \
 
 ---
 
+## 8. Dependencies aktualisieren
+
+Für reproduzierbare Builds nutzt das Projekt [pip-tools](https://github.com/jazzband/pip-tools).
+Die direkten Abhängigkeiten stehen in `requirements.in` / `requirements-dev.in`,
+die vollständig gepinnten Lock-Files `requirements.txt` / `requirements-dev.txt`
+werden daraus generiert und committed.
+
+### 8.1 Neue oder geänderte Abhängigkeit einpflegen
+
+```bash
+# 1. Abhängigkeit in requirements.in (Runtime) oder requirements-dev.in (Dev/Test)
+#    eintragen — mit offener Range, z.B. "Django>=5.1,<5.2".
+
+# 2. Lock-Files neu erzeugen (pip-tools muss installiert sein):
+make deps-lock
+
+# 3. Diff prüfen (welche transitiven Pakete kamen hinzu, welche Versionen wurden
+#    angehoben?), auf bekannte Breaking Changes sichten.
+git diff requirements.txt requirements-dev.txt
+
+# 4. Lokal verifizieren
+pip install -r requirements-dev.txt
+make ci
+
+# 5. .in- und .txt-Dateien zusammen committen (atomar).
+git add requirements.in requirements-dev.in requirements.txt requirements-dev.txt
+git commit -m "chore: bump <paket> auf <version>"
+```
+
+### 8.2 CI-Drift-Check
+
+Der GitHub-Workflow [`test.yml`](../.github/workflows/test.yml) enthält einen
+`lock-check`-Job, der `pip-compile` für beide Lock-Files ausführt und bei
+Drift fehlschlägt — so kann niemand versehentlich `requirements.in` ändern,
+ohne das Lock-File nachzuziehen.
+
+Lokale Variante (ohne Commit):
+
+```bash
+make deps-check
+```
+
+### 8.3 Sicherheits-Updates (pip-audit)
+
+Der `audit`-Job in CI läuft `pip-audit` gegen `requirements.txt`. Meldet der
+Job CVEs, folgendes Vorgehen:
+
+```bash
+# 1. requirements.in: betroffenes Paket auf Mindestversion anheben
+# 2. make deps-lock
+# 3. make ci + manuelle Verifikation
+# 4. Commit mit "security:"-Prefix, Referenz aufs Advisory
+```
+
+### 8.4 Troubleshooting
+
+| Problem | Ursache | Lösung |
+|---------|---------|--------|
+| `deps-check` schlägt fehl, obwohl nichts geändert wurde | Unterschiedliche pip-tools-Version zwischen Dev und CI | `pip install --upgrade pip-tools` und `make deps-lock` neu ausführen |
+| `pip-compile` findet keine passende Version | Zu strenge Range-Constraint | Range in `.in` lockern, z.B. `>=X,<Y+1` |
+| Transitive Dependency zieht vulnerable Version | Direkte Dependency fixiert alte Version | Direkte Dependency selbst einpflegen und anheben |
+
+---
+
 ## Kurzreferenz
 
 ```text
@@ -544,4 +609,6 @@ Retention Testlauf        docker compose -f docker-compose.prod.yml exec web pyt
 Snapshot Testlauf         docker compose -f docker-compose.prod.yml exec web python manage.py create_statistics_snapshots --dry-run
 Stack stoppen             docker compose -f docker-compose.prod.yml down
 Stack starten             docker compose -f docker-compose.prod.yml up -d
+Lock-Files regenerieren   make deps-lock
+Lock-File-Drift prüfen    make deps-check
 ```

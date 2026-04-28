@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -100,6 +100,34 @@ check:
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
 ci: lint check test-parallel
+
+# Dependencies: Lock-Files aus requirements*.in neu erzeugen (pip-tools).
+# Nach Änderungen an requirements.in oder requirements-dev.in ausführen.
+deps-lock:
+	$(PYTHON) -m piptools compile --no-strip-extras --resolver=backtracking \
+		--output-file=requirements.txt requirements.in
+	$(PYTHON) -m piptools compile --no-strip-extras --resolver=backtracking \
+		--output-file=requirements-dev.txt requirements-dev.in
+
+# Verifiziert, dass requirements*.txt aktuell zu requirements*.in ist.
+# Schlägt fehl, wenn ein Regen erforderlich wäre — wird in CI genutzt.
+# Ansatz: Datei sichern, regenerieren, mit git-diff vergleichen, Original wiederherstellen.
+deps-check:
+	@cp requirements.txt requirements.txt.bak && \
+		cp requirements-dev.txt requirements-dev.txt.bak && \
+		$(PYTHON) -m piptools compile --quiet --no-strip-extras --resolver=backtracking \
+			--output-file=requirements.txt requirements.in >/dev/null && \
+		$(PYTHON) -m piptools compile --quiet --no-strip-extras --resolver=backtracking \
+			--output-file=requirements-dev.txt requirements-dev.in >/dev/null && \
+		drift=0; \
+		diff -u requirements.txt.bak requirements.txt || drift=1; \
+		diff -u requirements-dev.txt.bak requirements-dev.txt || drift=1; \
+		mv requirements.txt.bak requirements.txt && \
+		mv requirements-dev.txt.bak requirements-dev.txt && \
+		if [ $$drift -ne 0 ]; then \
+			echo "Lock-Files sind nicht aktuell — 'make deps-lock' ausführen."; \
+			exit 1; \
+		fi
 
 # Alles zusammen
 dev: db migrate run

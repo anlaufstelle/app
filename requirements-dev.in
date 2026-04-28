@@ -1,5 +1,6 @@
--r requirements.txt
+-r requirements.in
 ruff>=0.3
+pip-tools>=7.4
 pytest>=8.0
 pytest-django>=4.8
 pytest-timeout>=2.3
