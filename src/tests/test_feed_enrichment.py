@@ -187,6 +187,79 @@ class TestEnrichEventsWithPreview:
         enrich_events_with_preview(feed_items, staff_user)
         assert event.preview_fields[0]["value"] == "Essen, Kleidung"
 
+    def test_file_marker_stage_a_renders_label(
+        self, facility, staff_user, client_identified
+    ):
+        """Stufe-A-File-Marker (`{"__file__": True, ...}`) ist im Preview ein
+        sprechender Hinweis statt rohes Dict-Repr (Refs #670 FND-12).
+        """
+        dt = DocumentType.objects.create(facility=facility, name="StageA", category="contact")
+        ft = FieldTemplate.objects.create(facility=facility, name="Scan", field_type="file")
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={"scan": {"__file__": True, "attachment_id": "abc"}},
+            created_by=staff_user,
+        )
+        feed_items = [{"type": "event", "occurred_at": event.occurred_at, "object": event}]
+        enrich_events_with_preview(feed_items, staff_user)
+        assert event.preview_fields[0]["value"] == "[Datei]"
+
+    def test_file_marker_stage_b_singular(
+        self, facility, staff_user, client_identified
+    ):
+        """Stufe-B-Marker (`__files__` mit 1 Entry) → `[1 Datei]`."""
+        dt = DocumentType.objects.create(facility=facility, name="StageB1", category="contact")
+        ft = FieldTemplate.objects.create(facility=facility, name="Scans", field_type="file")
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={
+                "scans": {
+                    "__files__": True,
+                    "entries": [{"id": "abc", "sort": 0}],
+                }
+            },
+            created_by=staff_user,
+        )
+        feed_items = [{"type": "event", "occurred_at": event.occurred_at, "object": event}]
+        enrich_events_with_preview(feed_items, staff_user)
+        assert event.preview_fields[0]["value"] == "[1 Datei]"
+
+    def test_file_marker_stage_b_plural(
+        self, facility, staff_user, client_identified
+    ):
+        """Stufe-B-Marker (`__files__` mit 3 Entries) → `[3 Dateien]`."""
+        dt = DocumentType.objects.create(facility=facility, name="StageB3", category="contact")
+        ft = FieldTemplate.objects.create(facility=facility, name="Scans", field_type="file")
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={
+                "scans": {
+                    "__files__": True,
+                    "entries": [
+                        {"id": "a", "sort": 0},
+                        {"id": "b", "sort": 1},
+                        {"id": "c", "sort": 2},
+                    ],
+                }
+            },
+            created_by=staff_user,
+        )
+        feed_items = [{"type": "event", "occurred_at": event.occurred_at, "object": event}]
+        enrich_events_with_preview(feed_items, staff_user)
+        assert event.preview_fields[0]["value"] == "[3 Dateien]"
+
     def test_empty_data_json(self, facility, staff_user, client_identified, doc_type_contact):
         event = Event.objects.create(
             facility=facility,

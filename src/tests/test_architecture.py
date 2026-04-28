@@ -178,6 +178,133 @@ class TestAlpineCspCompatibilityGuard:
         )
 
 
+class TestRateLimitOnAllMutations:
+    """Jede CBV-Klasse mit ``def post(...)`` in ``src/core/views/`` muss
+    einen ``@ratelimit``-Decorator (per ``method_decorator`` oder direkt) tragen.
+
+    Hintergrund: Brute-Force-/Spray-Schutz auf Mutationen ist Pflicht. Der
+    Audit (Refs #670 FND-14) hat 19 ungeschuetzte Handler gezeigt — von
+    ``MFADisableView`` ueber ``ClientCreateView`` bis ``RetentionApproveView``.
+
+    Ausnahmen muessen in der Allowlist stehen und mit Begruendung dokumentiert
+    sein.
+    """
+
+    _VIEWS_DIR = Path("src/core/views")
+    _ALLOWLIST = {
+        # name format "<file>:<class>" — keep empty unless a handler is
+        # genuinely safe to leave unrestricted (e.g. internal-only HTMX
+        # partial that requires already-authenticated session and has its
+        # own per-record locking). Document the reason inline.
+    }
+
+    def test_all_post_handlers_have_ratelimit(self):
+        if not self._VIEWS_DIR.exists():
+            pytest.skip(f"{self._VIEWS_DIR} nicht vorhanden")
+        violations = []
+        for py_file in sorted(self._VIEWS_DIR.glob("*.py")):
+            if py_file.name == "__init__.py":
+                continue
+            source = py_file.read_text()
+            for cls_match in re.finditer(r"^class (\w+)\(", source, re.MULTILINE):
+                cls_name = cls_match.group(1)
+                cls_body_start = cls_match.end()
+                next_cls = re.search(
+                    r"^class \w+\(", source[cls_body_start:], re.MULTILINE
+                )
+                cls_body = source[
+                    cls_body_start : cls_body_start
+                    + (next_cls.start() if next_cls else 10**9)
+                ]
+                # Capture decorator block above ``def post(self, ...)``
+                post_match = re.search(
+                    r"((?:^    @[^\n]+\n)*)^    def post\(self",
+                    cls_body,
+                    re.MULTILINE,
+                )
+                if not post_match:
+                    continue
+                decorators = post_match.group(1) or ""
+                # Class-level decorators above the ``class`` line. Multi-line
+                # decorators (``@method_decorator(\n    ratelimit(...),\n)``)
+                # erstrecken sich ueber mehrere Zeilen; daher den ganzen
+                # Block ab der ersten ``@``-Zeile bis zur class-Zeile lesen.
+                pre = source[: cls_match.start()]
+                last_block = (
+                    pre.rsplit("\n\n", 1)[-1] if "\n\n" in pre else pre
+                )
+                class_decos = last_block if "@" in last_block else ""
+                if "ratelimit" in decorators or "ratelimit" in class_decos:
+                    continue
+                identifier = f"{py_file.name}:{cls_name}"
+                if identifier in self._ALLOWLIST:
+                    continue
+                violations.append(identifier)
+        assert not violations, (
+            "POST-Handler ohne @ratelimit-Decorator. Bitte "
+            "@method_decorator(ratelimit(key='user', rate=RATELIMIT_MUTATION, "
+            "method='POST', block=True)) ergaenzen — fuer Bulk-Aktionen "
+            "RATELIMIT_BULK_ACTION (30/h) verwenden, sonst RATELIMIT_MUTATION "
+            "(60/h). Echte Ausnahmen in TestRateLimitOnAllMutations._ALLOWLIST "
+            "mit Begruendung eintragen.\n"
+            "Refs #669 (Phase F), #670 FND-14.\n"
+            f"Betroffen: {violations}"
+        )
+
+
+class TestSvgAccessibilityGuard:
+    """Jedes ``<svg>`` in einem Template muss WCAG-1.1.1-konform sein:
+    entweder ``aria-hidden=\"true\"`` (dekorativ, vom Screen Reader ignoriert),
+    ``aria-label=\"...\"``, ``role=\"img\"`` mit ``<title>``-Child oder ein
+    ``<title>``-Element direkt im SVG.
+
+    Hintergrund: Der Audit (Refs #670 FND-15) hat 23+ Templates mit
+    dekorativen SVGs ohne ``aria-hidden`` gefunden — Screen Reader lesen
+    sonst die XML-Source-Tokens vor (z.B. \"image\", Path-Daten). Default
+    in der App ist ``aria-hidden=\"true\"``; nur SVG-Icon-Buttons ohne
+    Text-Label brauchen ``aria-label`` (auf dem ``<button>`` ODER auf
+    dem SVG selbst).
+    """
+
+    _TEMPLATES_DIR = Path("src/templates")
+    _SVG_OPEN = re.compile(r"<svg\b([^>]*)>", re.IGNORECASE)
+    _ARIA_HIDDEN = re.compile(r'aria-hidden\s*=\s*"true"', re.IGNORECASE)
+    _ARIA_LABEL = re.compile(r'aria-label\s*=', re.IGNORECASE)
+    _ROLE_IMG = re.compile(r'role\s*=\s*"img"', re.IGNORECASE)
+
+    def test_all_svgs_have_a11y_attribute(self):
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = []
+        for template_file in self._TEMPLATES_DIR.rglob("*.html"):
+            source = template_file.read_text(errors="ignore")
+            for match in self._SVG_OPEN.finditer(source):
+                attrs = match.group(1)
+                if (
+                    self._ARIA_HIDDEN.search(attrs)
+                    or self._ARIA_LABEL.search(attrs)
+                    or self._ROLE_IMG.search(attrs)
+                ):
+                    continue
+                # Look ahead for a <title> child within this svg block
+                tail = source[match.end() :]
+                close = tail.lower().find("</svg>")
+                if close >= 0 and "<title" in tail[:close].lower():
+                    continue
+                line = source[: match.start()].count("\n") + 1
+                violations.append(
+                    f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line}"
+                )
+        assert not violations, (
+            "Diese SVGs haben weder aria-hidden=\"true\" noch aria-label noch "
+            "role=\"img\" mit <title>. WCAG 2.1 SC 1.1.1: dekorative SVGs "
+            "muessen vom Screen Reader ignoriert werden, nicht-dekorative "
+            "muessen einen Text-Alternative bieten. "
+            "Refs #669 (Phase G), #670 FND-15.\n"
+            f"Betroffen: {violations}"
+        )
+
+
 class TestNoFStringInGettextCallsGuard:
     """``_(f"…")`` und ``gettext_lazy(f"…")`` sind unbrauchbar fuer gettext.
 

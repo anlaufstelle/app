@@ -30,13 +30,13 @@
             <div class="flex space-x-2 md:hidden">
                 {% if user.is_staff_or_above or event.created_by == user %}
                 <a href="{% url 'core:event_update' event.pk %}" class="inline-flex items-center px-3 py-2 border border-subtle text-sm rounded-md hover:bg-canvas" aria-label="{% trans 'Bearbeiten' %}">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                    <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                 </a>
                 {% endif %}
                 {% if user.is_lead_or_admin or user.is_staff_or_above and event.created_by == user %}
                 <div x-data="mobileOverflowMenu" class="relative">
                     <button @click="toggle()" type="button" class="inline-flex items-center px-3 py-2 border border-subtle text-sm rounded-md hover:bg-canvas" aria-label="{% trans 'Weitere Aktionen' %}" data-testid="mobile-overflow-menu">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
+                        <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"/></svg>
                     </button>
                     <div x-show="mobileMenu" @click.away="close()" x-cloak x-transition
                          class="absolute right-0 mt-1 w-56 bg-surface rounded-md shadow-lg border border-subtle py-1 z-10">
@@ -105,7 +105,7 @@
                         <li class="flex flex-wrap items-center gap-2" data-attachment-id="{{ entry.attachment_id }}">
                             <a href="{% url 'core:attachment_download' event.pk entry.attachment_id %}"
                                class="inline-flex items-center gap-1 text-accent hover:text-accent hover:underline">
-                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                <svg aria-hidden="true" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m.75 12 3 3m0 0 3-3m-3 3v-6m-1.5-9H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
                                 </svg>
                                 {{ entry.original_filename }}

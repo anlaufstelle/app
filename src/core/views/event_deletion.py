@@ -10,8 +10,12 @@ import logging
 from django.contrib import messages
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django_ratelimit.decorators import ratelimit
+
+from core.constants import RATELIMIT_MUTATION
 
 from core.models import DeletionRequest, Event
 from core.services.event import approve_deletion, reject_deletion
@@ -43,6 +47,10 @@ class DeletionRequestListView(LeadOrAdminRequiredMixin, View):
         return render(request, "core/deletion_requests/list.html", context)
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class DeletionRequestReviewView(LeadOrAdminRequiredMixin, View):
     """Review a deletion request (four-eyes principle)."""
 

@@ -6,6 +6,58 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Visual Refresh** — Theme „Grün" mit DM Sans/Mono (self-hosted, kein Google-CDN), OKLCH-Akzentfarbe `#2d6a4f`, neuer Sidebar mit Logo-Box und „Neu erstellen"-Dropdown, Mobile-Bottom-Nav mit 5 Slots, 3 px farbige linke Kante an Feed-Cards, KPI-Cards mit Mono-Numbers, Card-Pattern flächig auf alle Templates.
+- **Klientel-Liste responsive** — Single-Loop und CSS-Grid statt Doppel-Renderpfad für Desktop/Mobile.
+- **MFA-Setup-Seite** zeigt Secret in Base32 (statt Hex) für Authenticator-Apps an.
+- **MFA-Backup-Codes** als zweiten Faktor bei verlorenem Authenticator-Gerät, mit eigenem Limit pro Stunde und Audit-Log-Eintrag bei Verwendung.
+- **Composite-Indexes** auf AuditLog (3×), Case, Event und WorkItem (Migration `0066`) für Listen-Filter mit Status + Datum.
+- **Attachment-Versionierung Stufe B** — pro Datei-Feld eine Liste von Versionen statt Single-Slot, mit Vorversionen-Anzeige im Event-Detail.
+- **Default-Werte für Feldvorlagen** (`FieldTemplate.default_value`) — Quick-Templates können Standardvorgaben befüllen.
+- **FAQ-Erweiterungen** — `Hinweis` vs. `Aufgabe`, Bedeutung der `Wiedervorlage`, Grenzen des Wizards/Hausverbot-Flows.
+- **Übergabe-Seite** mit 7 neuen E2E-Tests (Schicht-Wechsel, KPI-Cards, Highlights).
+- **Audit-Tiefenanalysen** — drei systematische Code-Audits (`docs/audits/2026-04-{21,23,25,26}-*.md`) mit Belegscreenshots, vollständig adressiert.
+- **`make ssl-cert` LAN-IP** — `SSL_HOST_IP=192.168.x.y make ssl-cert` für PWA-Tests von Mobilgeräten.
+
+### Changed
+
+- **Alpine-Komponenten registriert** — alle 26 inline `x-data="{.. }"` zu `Alpine.data()`-Komponenten in [`src/static/js/alpine-components.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/alpine-components.js) extrahiert; Architektur-Test verbietet neue Inline-Verstöße. Vorbereitung für späteren Wechsel auf den `@alpinejs/csp`-Build.
+- **EventUpdateView/EventCreateView** schlanker — neue Service-Funktionen (`apply_attachment_changes`, `attach_files_to_new_event`, `split_file_and_text_data`, `build_field_template_lookup`); `build_event_detail_context` mit `select_related` (kein N+1).
+- **Magic Numbers in `core.constants`** — Pagination-Defaults, Rate-Limit-Konstanten, Cache-TTLs zentralisiert.
+- **`seed.py` modularisiert** in 15 Domänen-Module (Clients, Events, Audit, Retention etc.) — vorher monolithisch.
+- **Anonyme Pages auf Default-Locale forcieren** — Login/Password-Reset/MFA-Login rendern unabhängig von `Accept-Language` immer in `LANGUAGE_CODE` (de). Authentifizierte User behalten ihre Profil-Sprache als Override ( FND-13).
+- **Feed-Card-Preview** für File-Marker — `__file__` und `__files__` werden als „[Datei]"/„[N Dateien]" angezeigt statt als rohes Dict-Repr ( FND-12).
+- **WorkItem.item_type help_text** korrigiert — passt jetzt zu den tatsächlichen Choices (`hint`/`task`).
+
+### Fixed
+
+- **Alpine-Komponenten-Bootstrap** — `alpine-components.js` lädt vor `alpine.min.js`, sodass `alpine:init` die `Alpine.data()`-Registrierungen sieht; behebt 27–43 `ReferenceError`s pro Seite ( FND-11).
+- **CSP-Inline-Handler** — Attachment-Entfernung im Event-Edit nutzt eigenen JS-Listener statt `onchange`-Attribut ( FND-01).
+- **Offline-Queue ACK-Protokoll** — `MessageChannel`-basiertes ACK/NACK statt naivem Success-Banner; korrekte Rückmeldung an die UI bei IndexedDB-Fehlern ( FND-02).
+- **File-Vault Cleanup** — Direct-Cleanup bei DB-Exception plus periodischer Orphan-Cleanup-Command ( FND-03).
+- **MIME-Validierung für DOCX/OOXML** — Container-Formate werden als äquivalent zu `application/zip` erkannt und nicht mehr fälschlich als unsicher abgelehnt ( FND-04).
+- **i18n f-Strings** — alle `_(f"..")` durch `_("..%(name)s..") % {"name": value}` ersetzt; Architektur-Test verbietet Rückfälle ( FND-07).
+- **AuditLog für Case-Aktionen** — `close_case`, `reopen_case` und `delete_milestone` schreiben jetzt einen `AuditLog`-Eintrag (vorher silent).
+- **Vorlage-entfernen-Link** löscht den Autosave-Draft mit, sonst bestand der alte Draft-Stand weiter.
+- **Seed-Coverage-Pin** — `coverage.json` ignoriert; Ruff in CI auf `0.15.11` gepinnt.
+
+### Security
+
+- **Rate-Limits flächig** — 19 fehlende `@ratelimit`-Decorators auf POST-Handlern ergänzt (Cases, Clients, Episodes, Events, Retention, MFA-Disable, WorkItem-Update, Bulk-Aktionen). Architektur-Test `TestRateLimitOnAllMutations` verbietet neue ungeschützte Mutationen ( FND-14).
+- **Account-Lockout** nach 10 Login-Fehlversuchen, Admin-Unlock im Profil.
+- **MFA-Backup-Codes** als zweiter Faktor mit eigenem 5/m-Limit, Audit-Log bei Verwendung.
+
+### Accessibility
+
+- **`aria-hidden="true"` auf 90 dekorativen SVG-Icons** in 23 Templates — Screen Reader liest keine Path-Daten mehr vor (WCAG 2.1 SC 1.1.1). Architektur-Test `TestSvgAccessibilityGuard` verbietet künftige Verstöße ( FND-15).
+
+### Performance
+
+- **Doppel-Rendering Klientel-Liste** auf Single-Loop reduziert (responsive Grid statt Desktop+Mobile-Render).
+- **`enrich_events_with_preview`** N+1 entfernt — `select_related("field_template")` statt pro Event eigene Query ( FND-05).
+- **WorkItemInbox-Pagination** auf 50 Einträge pro Liste begrenzt; Querysets nicht mehr pauschal in Templates evaluiert (, ).
+
 ## [0.10.0] - 2026-04-19
 
 ### Added

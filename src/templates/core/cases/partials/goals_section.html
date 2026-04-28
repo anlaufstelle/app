@@ -13,7 +13,7 @@
                         <h3 class="font-medium text-ink">{{ goal.title }}</h3>
                         <button type="button" @click="toggleEdit()"
                                 class="ml-2 text-ink-muted hover:text-ink-muted" title="{% trans 'Bearbeiten' %}" aria-label="{% trans 'Bearbeiten' %}">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                             </svg>
                         </button>
@@ -98,12 +98,12 @@
                             {% csrf_token %}
                             <button type="submit" class="flex items-center text-sm" aria-label="{% trans 'Meilenstein umschalten' %}">
                                 {% if milestone.is_completed %}
-                                <svg class="w-4 h-4 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <svg aria-hidden="true" class="w-4 h-4 text-green-500 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
                                 </svg>
                                 <span class="text-ink-muted line-through">{{ milestone.title }}</span>
                                 {% else %}
-                                <svg class="w-4 h-4 text-ink-muted mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg aria-hidden="true" class="w-4 h-4 text-ink-muted mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <circle cx="12" cy="12" r="10" stroke-width="2" />
                                 </svg>
                                 <span class="text-ink-soft">{{ milestone.title }}</span>

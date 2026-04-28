@@ -14,7 +14,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
-from core.constants import DEFAULT_PAGE_SIZE
+from core.constants import DEFAULT_PAGE_SIZE, RATELIMIT_MUTATION
 from core.forms.clients import ClientForm
 from core.models import AuditLog, Client, Event, WorkItem
 from core.models import Case as CaseModel
@@ -132,6 +132,10 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
         return render(request, "core/clients/detail.html", context)
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class ClientCreateView(StaffRequiredMixin, View):
     """Create a new client."""
 
@@ -155,6 +159,10 @@ class ClientCreateView(StaffRequiredMixin, View):
         return render(request, "core/clients/form.html", {"form": form, "is_edit": False})
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class ClientUpdateView(StaffRequiredMixin, View):
     """Edit a client."""
 

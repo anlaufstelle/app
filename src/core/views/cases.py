@@ -170,6 +170,10 @@ class CaseDetailView(StaffRequiredMixin, View):
         return render(request, "core/cases/detail.html", context)
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class CaseUpdateView(StaffRequiredMixin, View):
     """Edit a case."""
 
@@ -221,6 +225,10 @@ class CaseUpdateView(StaffRequiredMixin, View):
         return render(request, "core/cases/form.html", context)
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class CaseCloseView(LeadOrAdminRequiredMixin, View):
     """Close a case (Lead or Admin only)."""
 
@@ -232,6 +240,10 @@ class CaseCloseView(LeadOrAdminRequiredMixin, View):
         return redirect("core:case_detail", pk=case.pk)
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class CaseReopenView(LeadOrAdminRequiredMixin, View):
     """Reopen a case (Lead or Admin only)."""
 
@@ -243,6 +255,10 @@ class CaseReopenView(LeadOrAdminRequiredMixin, View):
         return redirect("core:case_detail", pk=case.pk)
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class CaseAssignEventView(StaffRequiredMixin, View):
     """Assign an event to a case (HTMX)."""
 
@@ -261,6 +277,10 @@ class CaseAssignEventView(StaffRequiredMixin, View):
         return render(request, "core/cases/partials/event_list.html", context)
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class CaseRemoveEventView(StaffRequiredMixin, View):
     """Remove an event from a case (HTMX)."""
 

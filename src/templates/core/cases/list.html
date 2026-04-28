@@ -9,7 +9,7 @@
     <h1 class="text-[22px] font-bold text-ink">{% trans "Fälle" %}</h1>
     <div class="hidden md:block">
         <a href="{% url 'core:case_create' %}" class="inline-flex items-center gap-1.5 bg-accent text-white text-[13px] font-semibold rounded-md px-3.5 py-2">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
             {% trans "Neuer Fall" %}
         </a>
     </div>
@@ -18,7 +18,7 @@
 {# Suchleiste + Status-Filter #}
 <div class="mb-4 flex flex-col sm:flex-row gap-2.5 no-print">
     <div class="relative flex-1">
-        <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <svg aria-hidden="true" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
         <input type="text"
                name="q"
                value="{{ q }}"

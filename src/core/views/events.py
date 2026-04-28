@@ -283,6 +283,10 @@ class EventDetailView(AssistantOrAboveRequiredMixin, View):
         return render(request, "core/events/detail.html", context)
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class EventUpdateView(AssistantOrAboveRequiredMixin, View):
     """Edit an event."""
 
@@ -430,6 +434,10 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         return render(request, "core/events/edit.html", context)
 
 
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
 class EventDeleteView(StaffRequiredMixin, View):
     """Delete an event (with four-eyes principle for qualified data)."""
 
