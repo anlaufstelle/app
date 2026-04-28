@@ -110,6 +110,42 @@ class TestNoInlineScriptBlocksGuard:
         )
 
 
+class TestNoFStringInGettextCallsGuard:
+    """``_(f"…")`` und ``gettext_lazy(f"…")`` sind unbrauchbar fuer gettext.
+
+    Der Extraktor sieht nur den fertig interpolierten Laufzeit-String,
+    nicht den stabilen Quellstring mit Platzhaltern. Damit landen weder
+    Variants in der ``.po``-Datei, noch koennen Uebersetzer eine sinnvolle
+    Vorlage erkennen. Stattdessen ``_("…%(name)s…") % {"name": value}``
+    nutzen (Refs #662 FND-07).
+    """
+
+    _SRC_DIR = Path("src/core")
+    # Greift ``_(f"…")`` und ``gettext(_lazy)?(f"…")`` mit ein- oder doppelten
+    # Anfuehrungszeichen, ueber whitespace (auch newline) hinweg.
+    _PATTERN = re.compile(r"(?:gettext(?:_lazy)?|_)\(\s*f[\"\']", re.IGNORECASE)
+
+    def test_no_fstring_in_gettext_calls(self):
+        if not self._SRC_DIR.exists():
+            pytest.skip(f"{self._SRC_DIR} nicht vorhanden")
+        violations = []
+        for py_file in self._SRC_DIR.rglob("*.py"):
+            # Tests selbst duerfen f-Strings auch in gettext-Aufrufen demoen.
+            if "/tests/" in str(py_file):
+                continue
+            source = py_file.read_text(errors="ignore")
+            for match in self._PATTERN.finditer(source):
+                line = source[: match.start()].count("\n") + 1
+                violations.append(f"{py_file.relative_to(self._SRC_DIR.parent)}:{line}")
+        assert not violations, (
+            "f-Strings in ``_(...)`` sind unbrauchbar fuer gettext: der Extraktor "
+            "sieht nur den interpolierten Laufzeit-String. Bitte auf "
+            "``_(\"...%(name)s...\") % {\"name\": value}`` umstellen "
+            "(Refs #662 FND-07).\n"
+            f"Betroffen: {violations}"
+        )
+
+
 class TestNoMultilineDjangoCommentsGuard:
     """Django-Inline-Kommentare ``{# ... #}`` dürfen nicht über mehrere Zeilen gehen.
 
