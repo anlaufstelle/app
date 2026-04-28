@@ -86,6 +86,29 @@ class TestNoInlineScriptBlocksGuard:
             f"Betroffen: {violations}"
         )
 
+    # Inline-Event-Attribute (onchange, onclick, onsubmit, ...) werden von der
+    # CSP ohne 'unsafe-inline' stumm blockiert (siehe #662 FND-01). Daher
+    # alle ``\son[a-z]+=`` in Templates verbieten — Listener gehoeren in
+    # eigene static/js/*.js-Dateien.
+    _INLINE_EVENT = re.compile(r"\son[a-z]+\s*=", re.IGNORECASE)
+
+    def test_no_inline_event_attributes_in_templates(self):
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = []
+        for template_file in self._TEMPLATES_DIR.rglob("*.html"):
+            source = template_file.read_text(errors="ignore")
+            for match in self._INLINE_EVENT.finditer(source):
+                line = source[: match.start()].count("\n") + 1
+                violations.append(f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line}")
+        assert not violations, (
+            "Inline-Event-Attribute (z. B. onchange=, onclick=) werden von der CSP "
+            "ohne 'unsafe-inline' stumm blockiert. Bitte JS-Listener in eigene "
+            "static/js/*.js-Dateien auslegen und ueber data-Attribute anbinden "
+            "(Refs #662 FND-01).\n"
+            f"Betroffen: {violations}"
+        )
+
 
 class TestNoMultilineDjangoCommentsGuard:
     """Django-Inline-Kommentare ``{# ... #}`` dürfen nicht über mehrere Zeilen gehen.
