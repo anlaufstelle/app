@@ -27,18 +27,37 @@
         return window.offlineStore;
     }
 
-    function _csrfFromCookie() {
-        const match = document.cookie.match(/csrftoken=([^;]+)/);
-        return match ? match[1] : null;
+    function _csrfFromMeta() {
+        // Liest den CSRF-Token aus dem <meta name="csrf-token">-Tag, den das
+        // Basistemplate rendert. Refs #602: CSRF_COOKIE_HTTPONLY=True verbietet
+        // JS-Zugriff auf das Cookie, der Token muss also aus dem DOM kommen.
+        if (typeof window.getCsrfToken === "function") {
+            return window.getCsrfToken() || null;
+        }
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.getAttribute("content") || null : null;
     }
 
     async function _refreshCsrf() {
         try {
-            await fetch("/login/", { method: "GET", credentials: "same-origin" });
+            // Fetch rendert beim Zurückkommen aus Offline den Login-Flow neu,
+            // inkl. aktualisiertem csrf_token im Meta-Tag (falls die Seite
+            // neu geladen wurde) oder zumindest einem frischen Cookie-Paar.
+            const resp = await fetch("/login/", {
+                method: "GET",
+                credentials: "same-origin",
+            });
+            // Wenn die Login-Seite Text zurückliefert, können wir den Token
+            // aus dem HTML parsen (Cookie ist mit HTTPOnly unerreichbar).
+            if (resp.ok) {
+                const html = await resp.text();
+                const m = html.match(/name=["']csrf-token["']\s+content=["']([^"']+)["']/i);
+                if (m) return m[1];
+            }
         } catch (_e) {
             // network still down
         }
-        return _csrfFromCookie();
+        return _csrfFromMeta();
     }
 
     async function _updateQueueCount() {
@@ -98,7 +117,7 @@
         const records = await _store().listDecrypted("queue");
         if (records.length === 0) return;
 
-        let csrf = _csrfFromCookie();
+        let csrf = _csrfFromMeta();
         if (!csrf) csrf = await _refreshCsrf();
 
         for (const record of records) {

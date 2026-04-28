@@ -967,7 +967,16 @@ class TestEventAttachmentAtomicity:
         events_before = Event.objects.count()
         history_before = EventHistory.objects.count()
 
-        uploaded = SimpleUploadedFile("test.pdf", b"PDF-Payload", content_type="application/pdf")
+        # Echter PDF-Header, weil store_encrypted_file seit #610 Magic-Bytes prüft.
+        pdf_bytes = (
+            b"%PDF-1.4\n"
+            b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+            b"2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\n"
+            b"xref\n0 3\n0000000000 65535 f\n"
+            b"trailer<</Size 3/Root 1 0 R>>\n"
+            b"startxref\n9\n%%EOF\n"
+        )
+        uploaded = SimpleUploadedFile("test.pdf", pdf_bytes, content_type="application/pdf")
 
         # Die Referenz, die der View tatsächlich aufruft, liegt in
         # ``core.views.events.store_encrypted_file`` (Import-Alias, siehe
@@ -995,7 +1004,19 @@ class TestEventAttachmentAtomicity:
         läuft innerhalb von ``store_encrypted_file``. Erfordert allerdings,
         dass ``encrypt_file`` und Virus-Scan vorher laufen — im Testumfeld
         ist CLAMAV_ENABLED=False, aber der Encryption-Key muss gesetzt sein.
+
+        Hinweis: Benötigt seit #610 die libmagic-Bibliothek, weil
+        ``store_encrypted_file`` vor ``EventAttachment.save`` eine Magic-Bytes-
+        Prüfung ausführt.
         """
+        # Skip, wenn libmagic nicht lauffähig (z.B. Host ohne libmagic1).
+        try:
+            import magic
+
+            magic.from_buffer(b"%PDF-1.4\n", mime=True)
+        except Exception as exc:  # noqa: BLE001
+            pytest.skip(f"libmagic nicht lauffähig: {exc}")
+
         from core.models.attachment import EventAttachment
 
         client.force_login(staff_user)
@@ -1003,7 +1024,16 @@ class TestEventAttachmentAtomicity:
 
         from django.core.files.uploadedfile import SimpleUploadedFile
 
-        uploaded = SimpleUploadedFile("test.pdf", b"PDF-Payload", content_type="application/pdf")
+        # Echter PDF-Header, weil store_encrypted_file seit #610 Magic-Bytes prüft.
+        pdf_bytes = (
+            b"%PDF-1.4\n"
+            b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+            b"2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\n"
+            b"xref\n0 3\n0000000000 65535 f\n"
+            b"trailer<</Size 3/Root 1 0 R>>\n"
+            b"startxref\n9\n%%EOF\n"
+        )
+        uploaded = SimpleUploadedFile("test.pdf", pdf_bytes, content_type="application/pdf")
 
         with patch.object(EventAttachment, "save", side_effect=RuntimeError("DB-Save-Fehler")):
             with pytest.raises(RuntimeError, match="DB-Save-Fehler"):

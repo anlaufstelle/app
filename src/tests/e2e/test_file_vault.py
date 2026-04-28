@@ -7,11 +7,23 @@ import pytest
 pytestmark = pytest.mark.e2e
 
 
+# Minimaler gültiger PDF-Header, damit der Magic-Bytes-Check des Services
+# (libmagic) den Upload als application/pdf erkennt (Refs #610).
+_VALID_PDF_BYTES = (
+    b"%PDF-1.4\n"
+    b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\n"
+    b"xref\n0 3\n0000000000 65535 f\n"
+    b"trailer<</Size 3/Root 1 0 R>>\n"
+    b"startxref\n9\n%%EOF\n"
+)
+
+
 @pytest.fixture
 def _test_pdf(tmp_path):
     """Create a test PDF file for upload."""
     path = tmp_path / "e2e-test.pdf"
-    path.write_text("E2E test PDF content")
+    path.write_bytes(_VALID_PDF_BYTES)
     return str(path)
 
 
@@ -84,9 +96,9 @@ class TestFileUploadAndDownload:
 
         # Verify content
         download_path = download.path()
-        with open(download_path) as f:
+        with open(download_path, "rb") as f:
             content = f.read()
-        assert content == "E2E test PDF content"
+        assert content == _VALID_PDF_BYTES
 
     def test_download_content_matches_upload(self, lead_page, base_url, e2e_env, _test_pdf):
         """Downloaded file content matches the original upload."""
@@ -107,8 +119,8 @@ class TestFileUploadAndDownload:
         with page.expect_download() as download_info:
             page.locator("a:has-text('e2e-test.pdf')").click()
         download = download_info.value
-        with open(download.path()) as f:
-            assert f.read() == "E2E test PDF content"
+        with open(download.path(), "rb") as f:
+            assert f.read() == _VALID_PDF_BYTES
 
     def test_download_creates_audit_log(self, lead_page, base_url, e2e_env, _test_pdf):
         """Downloading a file creates an AuditLog entry."""
@@ -175,7 +187,7 @@ class TestFileEdit:
 
         # Upload replacement file
         replacement = tmp_path / "replacement.pdf"
-        replacement.write_text("Replacement PDF content")
+        replacement.write_bytes(_VALID_PDF_BYTES)
         page.set_input_files('input[name="scan-bescheid"]', str(replacement))
         page.click('button:has-text("Speichern")')
         page.wait_for_url(lambda url: "/edit/" not in url, timeout=10000)
@@ -188,8 +200,8 @@ class TestFileEdit:
         with page.expect_download() as download_info:
             page.locator("a:has-text('replacement.pdf')").click()
         download = download_info.value
-        with open(download.path()) as f:
-            assert f.read() == "Replacement PDF content"
+        with open(download.path(), "rb") as f:
+            assert f.read() == _VALID_PDF_BYTES
 
 
 class TestFileOverview:

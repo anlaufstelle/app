@@ -4,6 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% block title %}Anlaufstelle{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="manifest" href="/manifest.json">
@@ -338,7 +339,8 @@
 
     {% block extra_js %}{% endblock %}
 
-    {# Offline-Modul-Reihenfolge: dexie → url-patterns → crypto → offline-store → offline-queue → offline-client → offline-edit → autosave → sw-register #}
+    {# Offline-Modul-Reihenfolge: csrf → dexie → url-patterns → crypto → offline-store → offline-queue → offline-client → offline-edit → autosave → sw-register #}
+    <script src="{% static 'js/csrf.js' %}"></script>
     <script src="{% static 'js/dexie.min.js' %}"></script>
     <script src="{% static 'js/url-patterns.js' %}"></script>
     <script src="{% static 'js/crypto.js' %}"></script>

@@ -127,7 +127,7 @@ def test_offline_form_submit_shows_feedback(authenticated_page, base_url):
                     method: 'POST',
                     body: formData,
                     headers: {
-                        'X-CSRFToken': document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '',
+                        'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
                     },
                 });
                 return await response.text();

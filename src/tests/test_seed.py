@@ -3,7 +3,21 @@
 import pytest
 from django.core.management import call_command
 
-from core.models import (
+# Der Seed-Command erzeugt Datei-Uploads via ``store_encrypted_file``, das seit
+# #610 libmagic für Magic-Bytes-Validierung verwendet. Ohne libmagic (z.B.
+# Host ohne ``libmagic1``-Paket) ist der Command nicht lauffähig — im
+# Docker-Image/CI ist die Bibliothek vorhanden.
+try:
+    import magic
+
+    magic.from_buffer(b"%PDF-1.4\n", mime=True)
+except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library fehlt
+    pytest.skip(
+        f"libmagic nicht lauffähig ({_libmagic_exc}) — Seed-Tests erfordern libmagic1.",
+        allow_module_level=True,
+    )
+
+from core.models import (  # noqa: E402
     Case,
     Client,
     DocumentType,

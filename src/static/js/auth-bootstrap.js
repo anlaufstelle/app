@@ -16,16 +16,38 @@
 
     if (!window.crypto_session || !window.crypto_session.isSupported()) return;
 
-    function csrfFromCookie() {
-        var m = document.cookie.match(/csrftoken=([^;]+)/);
-        return m ? m[1] : null;
+    function csrfFromMeta() {
+        // Refs #602: CSRF_COOKIE_HTTPONLY schließt JS aus dem Cookie aus, der
+        // Token kommt aus dem <meta name="csrf-token">-Tag im Login-Template.
+        if (typeof window.getCsrfToken === "function") {
+            return window.getCsrfToken() || null;
+        }
+        var meta = document.querySelector('meta[name="csrf-token"]');
+        return meta ? meta.getAttribute("content") || null : null;
     }
 
-    async function fetchSaltAndDeriveKey(password) {
+    async function fetchFreshCsrfToken(location) {
+        // Refs #602/#613: CSRF_COOKIE_HTTPONLY blocks JS from reading the rotated
+        // post-login cookie, and the meta tag on the login page still holds the
+        // pre-login token. Fetch the redirect target (authenticated page) and
+        // parse its <meta name="csrf-token"> to obtain the fresh token.
+        try {
+            var resp = await fetch(location, { method: "GET", credentials: "same-origin" });
+            if (!resp.ok) return null;
+            var html = await resp.text();
+            var match = html.match(/<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i);
+            return match ? match[1] : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    async function fetchSaltAndDeriveKey(password, location) {
+        var token = (await fetchFreshCsrfToken(location)) || csrfFromMeta() || "";
         var saltResp = await fetch("/auth/offline-key-salt/", {
             method: "POST",
             credentials: "same-origin",
-            headers: { "X-CSRFToken": csrfFromCookie() || "" },
+            headers: { "X-CSRFToken": token },
         });
         if (!saltResp.ok) return;
         var json = await saltResp.json();
@@ -63,7 +85,7 @@
                     var beforePromise = before ? before() : Promise.resolve();
                     return beforePromise
                         .then(function () {
-                            return fetchSaltAndDeriveKey(password);
+                            return fetchSaltAndDeriveKey(password, location);
                         })
                         .then(function () {
                             return location;
