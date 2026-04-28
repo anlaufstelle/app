@@ -146,8 +146,8 @@ def track_client_visit(user, client, facility):
         client=client,
         defaults={"facility": facility},
     )
-    # Prune: keep only the 20 most recent visits
-    visits = RecentClientVisit.objects.filter(user=user).order_by("-visited_at")
-    ids_to_keep = list(visits[:20].values_list("pk", flat=True))
-    if ids_to_keep:
-        RecentClientVisit.objects.filter(user=user).exclude(pk__in=ids_to_keep).delete()
+    # Prune: keep only the 20 most recent visits. Subquery-Variante spart
+    # einen Roundtrip gegenüber "erst SELECT LIMIT 20 holen, dann DELETE"
+    # — Refs #642.
+    keep_qs = RecentClientVisit.objects.filter(user=user).order_by("-visited_at").values("pk")[:20]
+    RecentClientVisit.objects.filter(user=user).exclude(pk__in=keep_qs).delete()

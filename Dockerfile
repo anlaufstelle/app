@@ -54,4 +54,13 @@ RUN adduser --disabled-password --gecos '' --uid 1000 appuser && chown -R appuse
 USER appuser
 
 EXPOSE 8000
+
+# Healthcheck gegen /health/ — 30s Intervall, 5s Timeout, 10s Grace für
+# Startup. Für Deployments ohne docker-compose (plain docker run, k8s,
+# Coolify etc.), wo der Compose-Healthcheck nicht greift. Refs #654.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request, sys; \
+urllib.request.urlopen('http://localhost:8000/health/', timeout=5).read(); \
+sys.exit(0)" || exit 1
+
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

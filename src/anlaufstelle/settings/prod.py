@@ -67,6 +67,11 @@ CSRF_COOKIE_SAMESITE = "Strict"
 # gerenderten HTML gelesen, nicht aus dem Cookie. Refs #602.
 CSRF_COOKIE_HTTPONLY = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
+# Explizit Referrer-Policy setzen — Django-Default wäre "same-origin", aber
+# Caddy liefert "strict-origin-when-cross-origin". Wir setzen hier den
+# strengeren Wert auch auf Django-Ebene, damit der Header auch bei direktem
+# Zugriff ohne Caddy (z.B. lokale Prod-Simulation) gesetzt ist. Refs #635.
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 X_FRAME_OPTIONS = "DENY"
 
 # --- E-Mail (SMTP) ---

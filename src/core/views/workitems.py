@@ -111,26 +111,51 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, View):
 
         base_qs = self._apply_filters(base_qs, request)
 
-        open_items = base_qs.filter(
+        # Jede der drei Listen wird auf INBOX_LIST_LIMIT begrenzt, damit
+        # Facilities mit Hunderten offener Aufgaben die Inbox nicht langsam
+        # machen. Das *_has_more-Flag signalisiert dem Template, dass
+        # weitere Einträge über Filter oder die Detail-Suche erreichbar sind.
+        # Listen werden evaluiert (list(...)), damit {{ list|length }} im
+        # Template keine zusätzliche COUNT-Query auslöst.
+        # Refs #639 #640.
+        INBOX_LIST_LIMIT = 50
+
+        open_qs = base_qs.filter(
             status=WorkItem.Status.OPEN,
         ).filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
+        open_items = list(open_qs[:INBOX_LIST_LIMIT + 1])
+        open_has_more = len(open_items) > INBOX_LIST_LIMIT
+        if open_has_more:
+            open_items = open_items[:INBOX_LIST_LIMIT]
 
-        in_progress_items = base_qs.filter(
+        in_progress_qs = base_qs.filter(
             status=WorkItem.Status.IN_PROGRESS,
         ).filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
+        in_progress_items = list(in_progress_qs[:INBOX_LIST_LIMIT + 1])
+        in_progress_has_more = len(in_progress_items) > INBOX_LIST_LIMIT
+        if in_progress_has_more:
+            in_progress_items = in_progress_items[:INBOX_LIST_LIMIT]
 
         seven_days_ago = timezone.now() - timedelta(days=7)
-        done_items = base_qs.filter(
+        done_qs = base_qs.filter(
             status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED],
             updated_at__gte=seven_days_ago,
         )
+        done_items = list(done_qs[:INBOX_LIST_LIMIT + 1])
+        done_has_more = len(done_items) > INBOX_LIST_LIMIT
+        if done_has_more:
+            done_items = done_items[:INBOX_LIST_LIMIT]
 
         facility_users = User.objects.filter(facility=facility).order_by("last_name", "first_name", "username")
 
         context = {
             "open_items": open_items,
+            "open_has_more": open_has_more,
             "in_progress_items": in_progress_items,
+            "in_progress_has_more": in_progress_has_more,
             "done_items": done_items,
+            "done_has_more": done_has_more,
+            "inbox_list_limit": INBOX_LIST_LIMIT,
             "item_type_choices": WorkItem.ItemType.choices,
             "priority_choices": WorkItem.Priority.choices,
             "status_choices": WorkItem.Status.choices,
