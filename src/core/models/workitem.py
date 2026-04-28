@@ -106,7 +106,7 @@ class WorkItem(models.Model):
         blank=True,
         db_index=True,
         verbose_name=_("Wiedervorlage am"),
-        help_text=_("Optional. Wann soll das Workitem wieder aufpoppen?"),
+        help_text=_("Optional. Wann soll die Aufgabe wieder aufpoppen?"),
     )
     recurrence = models.CharField(
         max_length=20,

@@ -48,3 +48,132 @@ class TestEventAccessPolicyGuard:
                     "use core.services.sensitivity.get_visible_event_or_404 instead"
                 )
         assert not violations, f"Event access policy violations: {violations}"
+
+
+class TestUserFacingEntryPointGuard:
+    """Jede user-facing Route muss irgendwo als ``{% url '<name>' %}`` auftauchen.
+
+    Wenn ein Feature hinzugefügt wird, aber kein Template einen Link/Button
+    rendert, ist es ein halb-eingebauter Zustand — genau das Muster, das
+    [#605](https://github.com/tobiasnix/anlaufstelle/issues/605) vermeiden
+    soll. Die Allowlist enthält nur solche URLs, die bewusst nur per Deep-
+    Link, aus dem Code oder aus HTMX-Partials heraus aufgerufen werden.
+    """
+
+    _TEMPLATES_DIR = Path("src/templates")
+    # URL-Names, für die mindestens ein ``{% url '<name>' ... %}`` in einem
+    # Template existieren muss.  Wächst mit neuen Features.
+    _REQUIRED_URL_NAMES = {
+        "core:zeitstrom",
+        "core:client_list",
+        "core:client_create",
+        "core:case_list",
+        "core:case_create",
+        "core:workitem_inbox",
+        "core:workitem_create",
+        "core:event_create",
+        "core:attachment_list",
+        "core:retention_dashboard",
+        "core:deletion_request_list",
+        "core:audit_log",
+        "core:statistics",
+        "core:global_search",
+        "core:account_profile",
+        "core:dsgvo_package",
+    }
+    # Routes, die bewusst nur deep-verlinkt / HTMX-getrieben sind.
+    _ALLOWLIST: set[str] = {
+        # HTMX-Partials werden über `{% url %}` in dem Template des Parents
+        # aufgerufen — das ist keine user-facing Seite, aber der Test zählt
+        # beides sowieso als Link.
+    }
+
+    def test_all_required_url_names_have_template_link(self):
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        templates_text = ""
+        for template_file in self._TEMPLATES_DIR.rglob("*.html"):
+            templates_text += template_file.read_text(errors="ignore") + "\n"
+
+        missing = []
+        for url_name in self._REQUIRED_URL_NAMES:
+            if url_name in self._ALLOWLIST:
+                continue
+            # `{% url 'name' ... %}` oder `{% url "name" ... %}`
+            pattern = re.compile(rf"""\{{%\s*url\s+['"]{re.escape(url_name)}['"]""")
+            if not pattern.search(templates_text):
+                missing.append(url_name)
+        assert not missing, (
+            "Diese URL-Names haben keinen sichtbaren Einstieg in irgendeinem Template — "
+            "das Feature ist halb-eingebaut. Entweder Template-Link ergänzen oder "
+            "URL-Name aus _REQUIRED_URL_NAMES entfernen (falls bewusst deep-linked). "
+            f"Fehlend: {sorted(missing)}"
+        )
+
+
+class TestDocumentedRoutesGuard:
+    """Alle im Handbuch erwähnten URL-Pfade müssen im URL-Router auflösbar sein.
+
+    Verhindert Doku-Drift bei Route-Renames (Refs #605). Scannt
+    ``docs/user-guide.md`` nach Inline-Code-Pfaden, ersetzt Platzhalter
+    (``<uuid>`` usw.) durch valide Beispielwerte und ruft
+    :func:`django.urls.resolve`. Schlägt der Resolver fehl, ist der Pfad
+    entweder veraltet oder nicht existent.
+    """
+
+    _DOC = Path("docs/user-guide.md")
+    # `/…/` in Inline-Code, aber keine äußeren URLs (https://…), keine leeren
+    # Segmente und keine Code-Fences (``` ``` ```). Muss mit `/` anfangen.
+    _PATH_PATTERN = re.compile(r"`(/[A-Za-z0-9_\-./<>:]*)`")
+    # Platzhalter → valide Beispielwerte für den URL-Resolver.
+    _PLACEHOLDERS = {
+        "<uuid>": "00000000-0000-0000-0000-000000000000",
+        "<id>": "00000000-0000-0000-0000-000000000000",
+        "<pk>": "00000000-0000-0000-0000-000000000000",
+        "<uidb64>": "Mg",
+        "<token>": "abcd-efgh-ijkl",
+        "<int>": "1",
+    }
+    # Bewusste Ausnahmen — Pfade, die Beispiele im Guide sind, aber nicht
+    # vom Router beansprucht werden (z.B. Django-Admin-Subpfade, externer
+    # Host im Beispiel).
+    _ALLOWLIST = {
+        "/static/foo.css",  # Beispielpfad für statische Dateien
+        "/admin-mgmt/",  # Django-Admin (nicht über core.urls erreichbar, aber registriert)
+    }
+
+    def _substitute(self, path: str) -> str:
+        for needle, replacement in self._PLACEHOLDERS.items():
+            path = path.replace(needle, replacement)
+        return path
+
+    def test_all_documented_paths_resolve(self):
+        from django.urls import Resolver404, resolve
+
+        if not self._DOC.exists():
+            pytest.skip(f"{self._DOC} nicht vorhanden")
+        text = self._DOC.read_text()
+        candidates: set[str] = set()
+        for match in self._PATH_PATTERN.finditer(text):
+            candidate = match.group(1)
+            # Nur sinnvolle Pfade (beginnen mit bekannten Prefixes).
+            # Heuristik: am ersten Slash geteilte Pfade mit nicht-leerem Kopf.
+            parts = [p for p in candidate.split("/") if p]
+            if not parts:
+                continue
+            candidates.add(candidate)
+
+        unresolved = []
+        for raw in sorted(candidates):
+            if raw in self._ALLOWLIST:
+                continue
+            path = self._substitute(raw)
+            try:
+                resolve(path)
+            except Resolver404:
+                unresolved.append(raw)
+        assert not unresolved, (
+            "Pfade in docs/user-guide.md sind nicht mehr im URL-Router auflösbar — "
+            "entweder Doku anpassen oder Route wiederherstellen: "
+            f"{unresolved}"
+        )

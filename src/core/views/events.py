@@ -24,7 +24,6 @@ from core.services.event import (
     update_event,
 )
 from core.services.file_vault import (
-    delete_attachment_file,
     get_original_filename,
     store_encrypted_file,
 )
@@ -373,6 +372,26 @@ class EventDetailView(AssistantOrAboveRequiredMixin, View):
             if isinstance(value, dict) and value.get("__file__"):
                 attachment = EventAttachment.objects.filter(pk=value.get("attachment_id"), event=event).first()
                 if attachment:
+                    # Vorversionen der gleichen Eintragskette (Refs #587, Stufe A):
+                    # Kette über superseded_by rückwärts aufsammeln.
+                    prior_versions = []
+                    current_attachment = attachment
+                    seen = {current_attachment.pk}
+                    predecessor = EventAttachment.objects.filter(event=event, superseded_by=current_attachment).first()
+                    while predecessor is not None and predecessor.pk not in seen:
+                        seen.add(predecessor.pk)
+                        prior_versions.append(
+                            {
+                                "attachment_id": str(predecessor.pk),
+                                "original_filename": get_original_filename(predecessor),
+                                "file_size_display": format_file_size(predecessor.file_size),
+                                "superseded_at": predecessor.superseded_at,
+                            }
+                        )
+                        current_attachment = predecessor
+                        predecessor = EventAttachment.objects.filter(
+                            event=event, superseded_by=current_attachment
+                        ).first()
                     fields_display.append(
                         {
                             "label": ft.name if ft else key,
@@ -381,6 +400,7 @@ class EventDetailView(AssistantOrAboveRequiredMixin, View):
                             "original_filename": get_original_filename(attachment),
                             "file_size_display": format_file_size(attachment.file_size),
                             "is_sensitive": bool(field_sensitivity),
+                            "prior_versions": prior_versions,
                         }
                     )
                     continue
@@ -512,10 +532,10 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                         merged[slug] = existing_marker
 
             expected_updated_at = request.POST.get("expected_updated_at")
-            # Event-Update + Attachment-Replacement atomar (Refs #584). Beim
-            # Update speichern wir die neue Datei ZUERST und löschen die alte
-            # erst nach erfolgreichem Commit — scheitert der neue Upload,
-            # bleibt die alte Datei vollständig erhalten.
+            # Event-Update + Attachment-Versionierung atomar (Refs #584/#587).
+            # Vorversionen werden NICHT mehr gelöscht, sondern per
+            # store_encrypted_file(..., supersedes=old) als superseded markiert.
+            # Disk-Cleanup läuft erst beim Event-Delete/Anonymize.
             try:
                 with transaction.atomic():
                     update_event(event, request.user, merged, expected_updated_at=expected_updated_at)
@@ -525,17 +545,18 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                             ft = field_templates.get(slug)
                             if not ft:
                                 continue
-                            old = event.attachments.filter(field_template=ft).first()
+                            old = event.attachments.filter(field_template=ft, is_current=True).first()
                             # Neue Datei FIRST — scheitert das, rollen wir
                             # das Event und das alte Attachment unverändert zurück.
-                            attachment = store_encrypted_file(facility, uploaded_file, ft, event, request.user)
+                            attachment = store_encrypted_file(
+                                facility,
+                                uploaded_file,
+                                ft,
+                                event,
+                                request.user,
+                                supersedes=old,
+                            )
                             event.data_json[slug] = {"__file__": True, "attachment_id": str(attachment.pk)}
-                            if old:
-                                old_for_cleanup = old
-                                old.delete()
-                                # Physisches File erst nach Commit löschen —
-                                # sonst wäre die alte Datei bei Rollback weg.
-                                transaction.on_commit(lambda a=old_for_cleanup: delete_attachment_file(a))
                         event.save(update_fields=["data_json"])
             except ValidationError as e:
                 # Stage 3 (#575): JSON/HTMX clients receive a 409 with the

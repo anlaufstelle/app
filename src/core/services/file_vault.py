@@ -6,6 +6,7 @@ from pathlib import Path
 
 from django.conf import settings as django_settings
 from django.core.exceptions import ValidationError
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models.attachment import EventAttachment
@@ -164,7 +165,7 @@ def _enforce_magic_bytes(facility, uploaded_file, event, user):
     )
 
 
-def store_encrypted_file(facility, uploaded_file, field_template, event, user):
+def store_encrypted_file(facility, uploaded_file, field_template, event, user, supersedes=None):
     """Encrypt and store an uploaded file. Returns EventAttachment instance.
 
     1. Enforce ``Settings.allowed_file_types`` extension whitelist (Refs #610).
@@ -178,6 +179,11 @@ def store_encrypted_file(facility, uploaded_file, field_template, event, user):
     5. Create facility subdirectory
     6. Encrypt file stream to disk
     7. Create EventAttachment record
+
+    If ``supersedes`` is given, the referenced prior attachment is not deleted:
+    it gets ``is_current=False``, ``superseded_by`` pointing at the new record,
+    and ``superseded_at`` set. Disk file stays until the event itself is deleted
+    or anonymized (Refs #587, Stufe A — Versionshistorie).
     """
     _enforce_allowed_file_types(facility, uploaded_file, event, user)
     _run_virus_scan(facility, uploaded_file, event, user)
@@ -188,7 +194,7 @@ def store_encrypted_file(facility, uploaded_file, field_template, event, user):
 
     encrypt_file(uploaded_file, output_path)
 
-    return EventAttachment.objects.create(
+    new_attachment = EventAttachment.objects.create(
         event=event,
         field_template=field_template,
         storage_filename=storage_name,
@@ -196,7 +202,16 @@ def store_encrypted_file(facility, uploaded_file, field_template, event, user):
         file_size=uploaded_file.size,
         mime_type=uploaded_file.content_type or "application/octet-stream",
         created_by=user,
+        is_current=True,
     )
+
+    if supersedes is not None:
+        supersedes.is_current = False
+        supersedes.superseded_by = new_attachment
+        supersedes.superseded_at = timezone.now()
+        supersedes.save(update_fields=["is_current", "superseded_by", "superseded_at"])
+
+    return new_attachment
 
 
 def get_attachment_path(attachment):

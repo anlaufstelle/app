@@ -34,17 +34,23 @@ class WorkItemForm(forms.ModelForm):
                 }
             ),
             "priority": forms.Select(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
+            # Explizites ISO-Format (Refs #619): HTML5 `<input type="date">`
+            # akzeptiert nur `YYYY-MM-DD`; ohne `format=` nimmt Django den
+            # ersten Eintrag aus DATE_INPUT_FORMATS — unter LANGUAGE_CODE=de-DE
+            # ist das `%d.%m.%Y`, wodurch der Prefill beim Edit leer bliebe.
             "due_date": forms.DateInput(
+                format="%Y-%m-%d",
                 attrs={
                     "type": "date",
                     "class": "w-full border border-gray-300 rounded-md px-3 py-2",
-                }
+                },
             ),
             "remind_at": forms.DateInput(
+                format="%Y-%m-%d",
                 attrs={
                     "type": "date",
                     "class": "w-full border border-gray-300 rounded-md px-3 py-2",
-                }
+                },
             ),
             "recurrence": forms.Select(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
             "assigned_to": forms.Select(attrs={"class": "w-full border border-gray-300 rounded-md px-3 py-2"}),
