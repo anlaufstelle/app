@@ -316,6 +316,125 @@ def stage_index(stage):
         return -1
 
 
+def split_file_and_text_data(cleaned_data):
+    """Split a form's ``cleaned_data`` into ``(file_fields, text_data)``.
+
+    ``MultipleFileField`` liefert eine Liste von ``UploadedFile``, klassische
+    ``FileField`` eine einzelne ``UploadedFile``. Beide werden auf eine Liste
+    pro Slug normalisiert. Text-/Auswahl-Werte landen unverändert in
+    ``text_data`` (Refs FND-A001 — DRY zwischen ``EventCreateView`` und
+    ``EventUpdateView``).
+    """
+    from django.core.files.uploadedfile import UploadedFile
+
+    file_fields = {}
+    text_data = {}
+    for key, value in cleaned_data.items():
+        if isinstance(value, list) and value and all(isinstance(v, UploadedFile) for v in value):
+            file_fields[key] = value
+        elif isinstance(value, UploadedFile):
+            file_fields[key] = [value]
+        else:
+            text_data[key] = value
+    return file_fields, text_data
+
+
+def attach_files_to_new_event(event, user, file_fields, document_type):
+    """Speichere File-Uploads für ein frisch erzeugtes Event.
+
+    Erwartet die UploadedFile-Listen aus :func:`split_file_and_text_data` und
+    erzeugt pro Slug einen Stufe-B-Marker (``__files__``). Der Aufrufer ist
+    dafür zuständig, den umliegenden ``transaction.atomic``-Block zu setzen,
+    damit das Event und die Anhänge gemeinsam roll-back-fähig bleiben
+    (Refs #584).
+    """
+    from core.services.file_vault import store_encrypted_file
+
+    if not file_fields:
+        return
+    field_templates = build_field_template_lookup(document_type)
+    for slug, uploaded_list in file_fields.items():
+        ft = field_templates.get(slug)
+        if not ft or not uploaded_list:
+            continue
+        entries = []
+        for idx, uploaded_file in enumerate(uploaded_list):
+            attachment = store_encrypted_file(event.facility, uploaded_file, ft, event, user, sort_order=idx)
+            entries.append({"id": str(attachment.pk), "sort": idx})
+        # Stufe B (#622): Neue Events nutzen immer ``__files__``, auch bei
+        # einem einzigen Eintrag — das spart einen zweiten Code-Pfad beim
+        # Auslesen.
+        event.data_json[slug] = {"__files__": True, "entries": entries}
+    event.save(update_fields=["data_json"])
+
+
+def apply_attachment_changes(event, user, request_post, request_files, file_fields, document_type):
+    """Applizieren von REMOVE/REPLACE/ADD auf die FILE-Felder eines Events.
+
+    - **REMOVE**: hidden CSV ``<slug>__remove`` listet zu löschende
+      ``entry_id``-Werte → ``soft_delete_attachment_chain``.
+    - **REPLACE**: pro bestehendem Entry ein File-Input
+      ``<slug>__replace__<entry_id>`` → ``store_encrypted_file(supersedes=…)``.
+    - **ADD**: alle Files aus dem Multi-Upload-Feld werden mit frischen
+      ``entry_id`` angehängt.
+
+    Aktualisiert anschließend den Marker im ``event.data_json`` (Stufe-B-
+    Format) bzw. entfernt ihn, wenn keine Entries mehr übrig sind. Aufrufer
+    müssen den umgebenden ``transaction.atomic``-Block setzen — siehe Doku
+    zu :func:`attach_files_to_new_event`.
+    """
+    from core.services.file_vault import soft_delete_attachment_chain, store_encrypted_file
+
+    field_templates = build_field_template_lookup(document_type)
+    facility = event.facility
+    for slug, ft in field_templates.items():
+        if ft.field_type != "file":
+            continue
+
+        existing_marker = (event.data_json or {}).get(slug)
+        current_entries = normalize_file_marker(existing_marker)
+
+        # 1) REMOVE
+        remove_raw = request_post.get(f"{slug}__remove", "")
+        remove_ids = {x.strip() for x in remove_raw.split(",") if x.strip()}
+        if remove_ids:
+            filtered = []
+            for entry in current_entries:
+                att = event.attachments.filter(pk=entry["id"]).first()
+                if att and str(att.entry_id) in remove_ids:
+                    soft_delete_attachment_chain(event, att.entry_id, user)
+                    continue
+                filtered.append(entry)
+            current_entries = filtered
+
+        # 2) REPLACE
+        updated_entries = []
+        for entry in current_entries:
+            att = event.attachments.filter(pk=entry["id"]).first()
+            if not att:
+                continue
+            replace_file = request_files.get(f"{slug}__replace__{att.entry_id}")
+            if replace_file is not None:
+                new_att = store_encrypted_file(facility, replace_file, ft, event, user, supersedes=att)
+                updated_entries.append({"id": str(new_att.pk), "sort": att.sort_order})
+            else:
+                updated_entries.append(entry)
+
+        # 3) ADD
+        add_files = file_fields.get(slug) or []
+        base_sort = (max((e.get("sort", 0) for e in updated_entries), default=-1)) + 1
+        for idx, uploaded_file in enumerate(add_files):
+            new_att = store_encrypted_file(facility, uploaded_file, ft, event, user, sort_order=base_sort + idx)
+            updated_entries.append({"id": str(new_att.pk), "sort": base_sort + idx})
+
+        if updated_entries:
+            event.data_json[slug] = {"__files__": True, "entries": updated_entries}
+        elif slug in event.data_json:
+            del event.data_json[slug]
+
+    event.save(update_fields=["data_json"])
+
+
 @transaction.atomic
 def create_event(facility, user, document_type, occurred_at, data_json, client=None, is_anonymous=False, case=None):
     """Create an event + EventHistory(CREATE)."""
