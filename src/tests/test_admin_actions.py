@@ -79,8 +79,12 @@ class TestUnlockSelectedUsersAction:
 @pytest.mark.django_db
 class TestFieldTemplateAdminActions:
     def test_deactivate_selected_sets_is_active_false(self, rf, admin_user, facility):
-        ft1 = FieldTemplate.objects.create(facility=facility, name="FT1", field_type=FieldTemplate.FieldType.TEXT, is_active=True)
-        ft2 = FieldTemplate.objects.create(facility=facility, name="FT2", field_type=FieldTemplate.FieldType.TEXT, is_active=True)
+        ft1 = FieldTemplate.objects.create(
+            facility=facility, name="FT1", field_type=FieldTemplate.FieldType.TEXT, is_active=True
+        )
+        ft2 = FieldTemplate.objects.create(
+            facility=facility, name="FT2", field_type=FieldTemplate.FieldType.TEXT, is_active=True
+        )
 
         request = _make_admin_request(rf, admin_user)
         admin_cls = FieldTemplateAdmin(FieldTemplate, AdminSite())
@@ -92,8 +96,12 @@ class TestFieldTemplateAdminActions:
         assert ft2.is_active is False
 
     def test_activate_selected_sets_is_active_true(self, rf, admin_user, facility):
-        ft1 = FieldTemplate.objects.create(facility=facility, name="FT-A", field_type=FieldTemplate.FieldType.TEXT, is_active=False)
-        ft2 = FieldTemplate.objects.create(facility=facility, name="FT-B", field_type=FieldTemplate.FieldType.TEXT, is_active=False)
+        ft1 = FieldTemplate.objects.create(
+            facility=facility, name="FT-A", field_type=FieldTemplate.FieldType.TEXT, is_active=False
+        )
+        ft2 = FieldTemplate.objects.create(
+            facility=facility, name="FT-B", field_type=FieldTemplate.FieldType.TEXT, is_active=False
+        )
 
         request = _make_admin_request(rf, admin_user)
         admin_cls = FieldTemplateAdmin(FieldTemplate, AdminSite())

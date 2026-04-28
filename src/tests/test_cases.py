@@ -67,14 +67,24 @@ class TestCaseService:
             update_case(case_open, staff_user, status="closed")
 
     def test_close_case(self, facility, staff_user, case_open):
+        from core.models import AuditLog
+
         closed = close_case(case_open, staff_user)
         assert closed.status == Case.Status.CLOSED
         assert closed.closed_at is not None
+        log = AuditLog.objects.get(target_id=str(case_open.pk), action=AuditLog.Action.CASE_CLOSE)
+        assert log.user == staff_user
+        assert log.target_type == "Case"
 
     def test_reopen_case(self, facility, staff_user, case_closed):
+        from core.models import AuditLog
+
         reopened = reopen_case(case_closed, staff_user)
         assert reopened.status == Case.Status.OPEN
         assert reopened.closed_at is None
+        log = AuditLog.objects.get(target_id=str(case_closed.pk), action=AuditLog.Action.CASE_REOPEN)
+        assert log.user == staff_user
+        assert log.target_type == "Case"
 
     def test_assign_event_to_case(self, facility, staff_user, case_open, sample_event):
         result = assign_event_to_case(case_open, sample_event, staff_user)

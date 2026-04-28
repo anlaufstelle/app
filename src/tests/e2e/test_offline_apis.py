@@ -43,9 +43,7 @@ def _do_real_login(page, base_url, username="miriam", password="anlaufstelle2026
     )
 
 
-_UUID_RE = re.compile(
-    r"/clients/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/"
-)
+_UUID_RE = re.compile(r"/clients/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/")
 
 
 def _first_client_pk(page, base_url):
@@ -55,9 +53,7 @@ def _first_client_pk(page, base_url):
     daher filtert der UUID-RegEx auf das konkrete Format.
     """
     page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
-    hrefs = page.locator("a[href^='/clients/']").evaluate_all(
-        "els => els.map(e => e.getAttribute('href'))"
-    )
+    hrefs = page.locator("a[href^='/clients/']").evaluate_all("els => els.map(e => e.getAttribute('href'))")
     for href in hrefs:
         m = _UUID_RE.match(href or "")
         if m:

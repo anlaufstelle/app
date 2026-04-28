@@ -123,7 +123,7 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, View):
         open_qs = base_qs.filter(
             status=WorkItem.Status.OPEN,
         ).filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
-        open_items = list(open_qs[:INBOX_LIST_LIMIT + 1])
+        open_items = list(open_qs[: INBOX_LIST_LIMIT + 1])
         open_has_more = len(open_items) > INBOX_LIST_LIMIT
         if open_has_more:
             open_items = open_items[:INBOX_LIST_LIMIT]
@@ -131,7 +131,7 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, View):
         in_progress_qs = base_qs.filter(
             status=WorkItem.Status.IN_PROGRESS,
         ).filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
-        in_progress_items = list(in_progress_qs[:INBOX_LIST_LIMIT + 1])
+        in_progress_items = list(in_progress_qs[: INBOX_LIST_LIMIT + 1])
         in_progress_has_more = len(in_progress_items) > INBOX_LIST_LIMIT
         if in_progress_has_more:
             in_progress_items = in_progress_items[:INBOX_LIST_LIMIT]
@@ -141,7 +141,7 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, View):
             status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED],
             updated_at__gte=seven_days_ago,
         )
-        done_items = list(done_qs[:INBOX_LIST_LIMIT + 1])
+        done_items = list(done_qs[: INBOX_LIST_LIMIT + 1])
         done_has_more = len(done_items) > INBOX_LIST_LIMIT
         if done_has_more:
             done_items = done_items[:INBOX_LIST_LIMIT]

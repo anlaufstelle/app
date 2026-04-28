@@ -1,4 +1,2 @@
-{% load i18n %}
-<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {% if case.status == 'open' %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
-    {{ case.get_status_display }}
-</span>
+{% load core_tags %}
+{% status_badge case.status case.get_status_display %}

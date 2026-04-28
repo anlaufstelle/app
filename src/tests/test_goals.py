@@ -95,10 +95,20 @@ class TestGoalService:
         assert toggled.is_completed is False
         assert toggled.completed_at is None
 
-    def test_delete_milestone(self, milestone):
+    def test_delete_milestone(self, milestone, staff_user):
+        from core.models import AuditLog
+
         pk = milestone.pk
-        delete_milestone(milestone)
+        title = milestone.title
+        case_id = milestone.goal.case.pk
+        delete_milestone(milestone, staff_user)
         assert not Milestone.objects.filter(pk=pk).exists()
+        log = AuditLog.objects.get(target_id=str(pk))
+        assert log.action == AuditLog.Action.MILESTONE_DELETE
+        assert log.user == staff_user
+        assert log.target_type == "Milestone"
+        assert log.detail["title"] == title
+        assert log.detail["case_id"] == str(case_id)
 
 
 @pytest.mark.django_db

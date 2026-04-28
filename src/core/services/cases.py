@@ -7,7 +7,8 @@ from django.db import transaction
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from core.models import AuditLog, Case
+from core.models import Activity, AuditLog, Case
+from core.services.activity import log_activity
 from core.services.locking import check_version_conflict
 from core.services.sensitivity import user_can_see_event
 
@@ -75,20 +76,48 @@ def update_case(case, user, *, expected_updated_at=None, **fields):
 
 
 @transaction.atomic
-def close_case(case, user):  # user reserved for future audit trail
-    """Close a case."""
+def close_case(case, user):
+    """Close a case + AuditLog + Activity."""
     case.status = Case.Status.CLOSED
     case.closed_at = timezone.now()
     case.save()
+    AuditLog.objects.create(
+        facility=case.facility,
+        user=user,
+        action=AuditLog.Action.CASE_CLOSE,
+        target_type="Case",
+        target_id=str(case.pk),
+    )
+    log_activity(
+        facility=case.facility,
+        actor=user,
+        verb=Activity.Verb.UPDATED,
+        target=case,
+        summary=f'Fall "{case.title}" geschlossen',
+    )
     return case
 
 
 @transaction.atomic
-def reopen_case(case, user):  # user reserved for future audit trail
-    """Reopen a previously closed case."""
+def reopen_case(case, user):
+    """Reopen a previously closed case + AuditLog + Activity."""
     case.status = Case.Status.OPEN
     case.closed_at = None
     case.save()
+    AuditLog.objects.create(
+        facility=case.facility,
+        user=user,
+        action=AuditLog.Action.CASE_REOPEN,
+        target_type="Case",
+        target_id=str(case.pk),
+    )
+    log_activity(
+        facility=case.facility,
+        actor=user,
+        verb=Activity.Verb.REOPENED,
+        target=case,
+        summary=f'Fall "{case.title}" wiedereröffnet',
+    )
     return case
 
 

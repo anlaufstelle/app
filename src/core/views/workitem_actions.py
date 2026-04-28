@@ -13,6 +13,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_FREQUENT, RATELIMIT_MUTATION
 from core.forms.workitems import WorkItemForm
 from core.models import WorkItem
 from core.services.clients import get_client_or_none
@@ -28,7 +29,7 @@ from core.views.workitems import can_user_mutate_workitem
 class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
     """HTMX: update WorkItem status."""
 
-    @method_decorator(ratelimit(key="user", rate="120/h", method="POST", block=True))
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, pk):
         workitem = get_object_or_404(
             WorkItem,
@@ -81,7 +82,7 @@ class WorkItemCreateView(StaffRequiredMixin, View):
         }
         return render(request, "core/workitems/form.html", context)
 
-    @method_decorator(ratelimit(key="user", rate="60/h", method="POST", block=True))
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request):
         facility = request.current_facility
         form = WorkItemForm(request.POST, facility=facility)

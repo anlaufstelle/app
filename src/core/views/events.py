@@ -12,6 +12,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
 from core.models import Client, DocumentType, FieldTemplate
 from core.services.clients import get_client_or_none
@@ -163,7 +164,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
 
         return render(request, "core/events/create.html", context)
 
-    @method_decorator(ratelimit(key="user", rate="60/h", method="POST", block=True))
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request):
         facility = request.current_facility
         meta_form = EventMetaForm(request.POST, facility=facility, user=request.user)
@@ -500,9 +501,7 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                                 request.user,
                                 sort_order=base_sort + idx,
                             )
-                            updated_entries.append(
-                                {"id": str(new_att.pk), "sort": base_sort + idx}
-                            )
+                            updated_entries.append({"id": str(new_att.pk), "sort": base_sort + idx})
 
                         # Marker in das neue Format bringen — oder (keine Entries) entfernen.
                         if updated_entries:

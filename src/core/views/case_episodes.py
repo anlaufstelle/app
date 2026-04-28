@@ -10,6 +10,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_MUTATION
 from core.forms.episodes import EpisodeForm
 from core.models import Case
 from core.models.episode import Episode
@@ -31,7 +32,7 @@ class EpisodeCreateView(StaffRequiredMixin, View):
         context = {"form": form, "case": case, "is_edit": False}
         return render(request, "core/cases/episode_form.html", context)
 
-    @method_decorator(ratelimit(key="user", rate="60/h", method="POST", block=True))
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, case_pk):
         facility = request.current_facility
         case = get_object_or_404(Case, pk=case_pk, facility=facility)
