@@ -196,6 +196,33 @@ class TestCreateProposal:
         assert c2 is False
         assert p1.pk == p2.pk
 
+    def test_idempotent_with_deferred_proposal(self, facility, old_anonymous_event):
+        """DEFERRED ist laut Model-Constraint aktiv. create_proposal muss den
+        bestehenden DEFERRED-Proposal erkennen, nicht in IntegrityError laufen
+        oder einen zweiten anlegen (Refs #585)."""
+        p1, _ = create_proposal(
+            facility=facility,
+            target_type="Event",
+            target_id=old_anonymous_event.pk,
+            deletion_due_at=date.today(),
+            details={},
+            category="anonymous",
+        )
+        p1.status = RetentionProposal.Status.DEFERRED
+        p1.save(update_fields=["status"])
+
+        p2, created = create_proposal(
+            facility=facility,
+            target_type="Event",
+            target_id=old_anonymous_event.pk,
+            deletion_due_at=date.today(),
+            details={},
+            category="anonymous",
+        )
+        assert created is False
+        assert p2.pk == p1.pk
+        assert p2.status == RetentionProposal.Status.DEFERRED
+
 
 @pytest.mark.django_db
 class TestApproveProposal:

@@ -10,13 +10,22 @@ from core.models import AuditLog, LegalHold, RetentionProposal
 
 
 def create_proposal(facility, target_type, target_id, deletion_due_at, details, category):
-    """Create a retention proposal idempotently (skip if active proposal exists)."""
+    """Create a retention proposal idempotently (skip if active proposal exists).
+
+    „Aktiv" umfasst PENDING, HELD und DEFERRED — dieselbe Menge, die die
+    `unique_active_retention_proposal`-Constraint im Model abbildet (Refs #585).
+    """
+    active_statuses = [
+        RetentionProposal.Status.PENDING,
+        RetentionProposal.Status.HELD,
+        RetentionProposal.Status.DEFERRED,
+    ]
     try:
         proposal, created = RetentionProposal.objects.get_or_create(
             facility=facility,
             target_type=target_type,
             target_id=target_id,
-            status__in=[RetentionProposal.Status.PENDING, RetentionProposal.Status.HELD],
+            status__in=active_statuses,
             defaults={
                 "deletion_due_at": deletion_due_at,
                 "details": details,
@@ -31,7 +40,7 @@ def create_proposal(facility, target_type, target_id, deletion_due_at, details, 
             facility=facility,
             target_type=target_type,
             target_id=target_id,
-            status__in=[RetentionProposal.Status.PENDING, RetentionProposal.Status.HELD],
+            status__in=active_statuses,
         )
         return proposal, False
 
