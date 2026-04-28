@@ -6,9 +6,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.10.2] - 2026-04-28
+
+### Changed
+
+- **CSP-Migration auf `@alpinejs/csp` finalisiert** — vendored Alpine-Build durch CSP-Variante ersetzt, alle Inline-`x-data="{..}"`-Objekte auf registrierte `Alpine.data()`-Komponenten umgestellt, komplexe Expressions in Component-Methoden ausgelagert. `script-src 'unsafe-eval'` ist damit endgültig aus der globalen CSP entfernt.
+
 ### Fixed
 
 - **CSP-Folgefehler nach `@alpinejs/csp`-Migration** — Time-Filter-Tab-Highlight auf Zeitstrom-Feed (`hx-on::before-request` durch JS-Listener ersetzt), 11 Alpine-Expressions auf Computed-Getter / pre-formatierte Properties umgestellt (Toast-Farbe, Klientel-Autocomplete-Highlight, Aktivitätskarten-Pfeil, Offline-Toggle-Label, Konflikt-Diff-Tabelle, Offline-Detail-Sichtbarkeit). Architektur-Test verbietet zukünftig Ternaries, `||`/`&&`, Method-Calls und Object-Literale in `:class`/`x-text`/`x-show`/`x-if`/`x-bind:`/`x-model`-Direktiven sowie HTMX-Inline-Handler `hx-on::`.
+- **Django-Admin Modal-Overlay blockt Action-Klicks** — django-unfold lädt seinen eigenen Alpine-Build, der für die Cmd+K-Suche-Modal `new AsyncFunction()`-basierte Expression-Auswertung nutzt. Globale CSP `script-src 'self'` (ohne `unsafe-eval`) blockt das, Component initialisiert nicht, `<div x-show="openCommandResults">` bleibt mit `display: flex` sichtbar und blockt Klicks. Neue `AdminCSPRelaxMiddleware` ergänzt `'unsafe-eval'` per-Request nur für `/admin-mgmt/*` (privilegierte Routes mit MFA-Gate).
+- **Retention Bulk-Toolbar reagiert nicht auf Selektion** — Inline-`@change="$dispatch('retention-bulk-change')"` ist im `@alpinejs/csp`-Build verboten (Function-Calls mit String-Argumenten). Neue `notifyBulkChange()`-Method auf `proposalCard`-Component, Template nutzt `@change="notifyBulkChange"`.
+- **`autosave-discard` Race-Condition** — `wait_for_url`-Test-Helper erkannte Same-URL-Reload nicht als Navigation; nachfolgende `page.evaluate` scheiterte mit "Execution context was destroyed". Test nutzt `expect_navigation`-Context-Manager, der auf `framenavigated`-Event auch bei identischer Target-URL synchronisiert.
+- **`python-magic` fehlte in `requirements-dev.txt`** — `make deps-lock` regeneriert Lock-Files (drift gegenüber `.in`-Files); ohne `python-magic` scheiterten Test-Job (`ModuleNotFoundError`) und E2E-`seed --flush` (transitiv über `core.services.file_vault`).
+- **CI `Test/check`-Job schlägt fehl** — Workflow-env setzte `SECRET_KEY`, `prod.py`/`base.py` lesen aber `DJANGO_SECRET_KEY`. Variable umbenannt.
+- **CI `lock-check`-Job schlägt fehl** — siehe `python-magic`-Fix oben (regeneriertes Lock-File matcht jetzt `pip-compile`-Output).
+- **E2E-Test-Helpers ignorieren xdist-Worker-DB** — vier Subprocess-Helper (`_seed_failed_logins_and_check_lock`, `_clear_lockout_for`, `_enable_totp_and_generate_codes`, `_cleanup_totp` in 3 Test-Files) nutzten `os.environ` als Subprocess-Env ohne `E2E_DATABASE_NAME`; Subprocess landete in default-DB `anlaufstelle_e2e` statt worker-spezifischer `anlaufstelle_e2e_1`. Helpers nehmen jetzt `e2e_env` aus der gleichnamigen Fixture als Parameter.
+- **`TestZZAccountLockout` ohne Cleanup** — Tests sperrten `miriam`/`lena` per 10× LOGIN_FAILED-AuditLog ohne Cleanup; nachfolgende `_staff_storage_state`/`_assistant_storage_state`-Fixtures scheiterten weil User auf `/login/` hängenblieben. Autouse-Teardown-Fixture `_cleanup_lockout_state` ruft `login_lockout.unlock()` für miriam + lena nach jedem Test der Klasse auf (Cleanup über `LOGIN_UNLOCK`-AuditLog-Eintrag, weil `core_auditlog` einen `auditlog_immutable`-DB-Trigger hat).
+- **`test_event_save_and_appears_in_detail` synchrones `is_visible()`** — `wait_for_url`-Match nach Server-Redirect kehrt sofort zurück, aber Detail-Template rendert `<dl>`/`<dd>`-Sektionen unter Last (xdist + 2 Worker auf gleicher VM) noch nicht im DOM. Asserts auf `wait_for(state="visible")` umgestellt.
+- **`_ensure_proposals` Test-Helper unzuverlässig** — `RetentionProposal.objects.get_or_create(.. status__in=[..])` matched approved-Proposals als unique-Constraint-Konflikt; im parallelen Run scheiterte `assert n >= 2 false`. Helper neu geschrieben: zählt pending, holt fehlende Anzahl Events ohne existierende Proposal-Verknüpfung, legt frische pending-Proposals an.
 
 ## [0.10.1] - 2026-04-26
 
