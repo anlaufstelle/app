@@ -15,8 +15,9 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.forms.workitems import WorkItemForm
-from core.models import Client, WorkItem
+from core.models import WorkItem
 from core.models.user import User
+from core.services.clients import get_client_or_none
 from core.services.workitems import (
     bulk_assign_workitems,
     bulk_update_workitem_priority,
@@ -198,10 +199,10 @@ class WorkItemCreateView(StaffRequiredMixin, View):
         client_id = request.GET.get("client")
         client_pseudonym = ""
         if client_id:
-            try:
-                client = Client.objects.get(pk=client_id, facility=facility)
+            client = get_client_or_none(facility, client_id)
+            if client:
                 client_pseudonym = client.pseudonym
-            except (Client.DoesNotExist, ValueError):
+            else:
                 client_id = ""
 
         context = {

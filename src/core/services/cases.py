@@ -32,6 +32,13 @@ def create_case(facility, user, client, title, description="", lead_user=None):
         lead_user=lead_user,
     )
     case.save()
+    AuditLog.objects.create(
+        facility=facility,
+        user=user,
+        action=AuditLog.Action.CASE_CREATE,
+        target_type="Case",
+        target_id=str(case.pk),
+    )
     return case
 
 

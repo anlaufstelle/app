@@ -294,8 +294,18 @@ class TestGenerateInitialPassword:
 class TestRateLimiting:
     @pytest.fixture(autouse=True)
     def _enable_ratelimit(self, settings):
-        """Rate-Limiting explizit aktivieren (in Test-Settings deaktiviert)."""
+        """Rate-Limiting explizit aktivieren (in Test-Settings deaktiviert).
+
+        Cache muss pro Test geleert werden — django-ratelimit nutzt den
+        Django-Cache (LocMem), der zwischen Tests persistiert und sonst
+        Zähler aus vorherigen Tests mitschleppt.
+        """
+        from django.core.cache import cache
+
         settings.RATELIMIT_ENABLE = True
+        cache.clear()
+        yield
+        cache.clear()
 
     def test_rate_limit_blocks_after_threshold(self, client, staff_user):
         """Nach 5 fehlerhaften POST-Requests von derselben IP → 403."""
@@ -315,4 +325,49 @@ class TestRateLimiting:
                 {"email": "test@example.com"},
                 REMOTE_ADDR="10.88.88.88",
             )
+        assert response.status_code == 403
+
+    def test_rate_limit_per_username_blocks_distributed_brute_force(self, client, staff_user):
+        """Refs #598 S-3: Nach 10 fehlgeschlagenen Login-Versuchen auf den
+        gleichen Usernamen — auch von unterschiedlichen IPs — greift der
+        User-basierte Ratelimit (10/h) und Versuch 11 liefert 403.
+
+        IP-Rate-Limit wird durch rotierende REMOTE_ADDR umgangen (simuliert
+        Botnet). User-Rate-Limit muss trotzdem greifen.
+        """
+        # 10 Versuche mit jeweils anderer IP — IP-Limit greift nie.
+        for i in range(10):
+            response = client.post(
+                "/login/",
+                {"username": "teststaff", "password": "wrong"},
+                REMOTE_ADDR=f"10.77.77.{i + 1}",
+            )
+            assert response.status_code == 200, (
+                f"Versuch {i + 1}: unerwarteter Status {response.status_code} "
+                f"(User-Limit sollte erst beim 11. Versuch greifen)."
+            )
+        # 11. Versuch: User-Limit greift.
+        response = client.post(
+            "/login/",
+            {"username": "teststaff", "password": "wrong"},
+            REMOTE_ADDR="10.77.77.250",
+        )
+        assert response.status_code == 403
+
+    def test_rate_limit_per_username_is_case_insensitive(self, client, staff_user):
+        """Die Lambda normalisiert Username (lowercase + strip) — sonst wäre
+        ``Alice`` vs. ``alice`` ein trivialer Bypass."""
+        for i in range(10):
+            response = client.post(
+                "/login/",
+                {"username": "TESTSTAFF", "password": "wrong"},
+                REMOTE_ADDR=f"10.66.66.{i + 1}",
+            )
+            assert response.status_code == 200
+        # Gleicher User, aber andere Schreibweise → muss in denselben Bucket.
+        response = client.post(
+            "/login/",
+            {"username": " teststaff ", "password": "wrong"},
+            REMOTE_ADDR="10.66.66.250",
+        )
         assert response.status_code == 403

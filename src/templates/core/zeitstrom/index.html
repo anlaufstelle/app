@@ -58,7 +58,7 @@
 </div>
 
 {# TimeFilter-Tabs #}
-{% include "components/_time_filter_dropdown.html" with feed_target_id="feed-list" %}
+{% include "components/_time_filter_dropdown.html" with feed_target_id="feed-list" events_partial_url="core:zeitstrom_feed_partial" %}
 
 {# Schichtübergabe-Zusammenfassung #}
 {% if handover_summary %}
