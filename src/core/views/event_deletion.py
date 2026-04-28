@@ -27,9 +27,13 @@ class DeletionRequestListView(LeadOrAdminRequiredMixin, View):
         facility = request.current_facility
         all_requests = DeletionRequest.objects.for_facility(facility).select_related("requested_by", "reviewed_by")
 
-        pending = all_requests.filter(status=DeletionRequest.Status.PENDING)
-        approved = all_requests.filter(status=DeletionRequest.Status.APPROVED)
-        rejected = all_requests.filter(status=DeletionRequest.Status.REJECTED)
+        # Querysets zu Listen evaluieren, damit das Template |length ohne
+        # zusätzliche COUNT-Queries aufrufen kann (Refs #640). Jede Liste
+        # ist per status gefiltert und hat typisch < 100 Einträge — keine
+        # Memory-Sorge.
+        pending = list(all_requests.filter(status=DeletionRequest.Status.PENDING))
+        approved = list(all_requests.filter(status=DeletionRequest.Status.APPROVED))
+        rejected = list(all_requests.filter(status=DeletionRequest.Status.REJECTED))
 
         context = {
             "pending_requests": pending,

@@ -92,6 +92,7 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
                 client=client,
                 status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS],
             )
+            .select_related("client", "assigned_to", "created_by")
             .annotate(
                 priority_order=Case(
                     When(priority=WorkItem.Priority.URGENT, then=Value(0)),

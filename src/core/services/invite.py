@@ -45,7 +45,10 @@ def send_invite_email(user, request=None) -> bool:
     Exceptions des Mail-Backends werden geloggt, aber nicht unterdrückt.
     """
     if not user.email:
-        logger.warning("Invite-Mail nicht versendet: User %s hat keine E-Mail", user.username)
+        # Keine PII im Log: Nur user-pk, nicht username/email.
+        # extra={"user_pk": ...} landet im JsonFormatter-Record separat und
+        # wird vom PII-Scrubber nicht aus msg/args gezogen. Refs #637.
+        logger.warning("Invite-Mail nicht versendet: User ohne E-Mail", extra={"user_pk": user.pk})
         return False
 
     uid = urlsafe_base64_encode(force_bytes(user.pk))
@@ -78,5 +81,7 @@ def send_invite_email(user, request=None) -> bool:
         recipient_list=[user.email],
         fail_silently=False,
     )
-    logger.info("Invite-Mail an %s (%s) versendet", user.username, user.email)
+    # Keine PII im Log-Message — user_pk in extra, kein username/email.
+    # Refs #637.
+    logger.info("Invite-Mail versendet", extra={"user_pk": user.pk})
     return True

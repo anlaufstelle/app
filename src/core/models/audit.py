@@ -89,6 +89,14 @@ class AuditLog(models.Model):
         verbose_name = _("Audit-Log")
         verbose_name_plural = _("Audit-Logs")
         ordering = ["-timestamp"]
+        # Composite-Indexe für AuditLogListView-Filter (facility × timestamp)
+        # und die häufigsten Zusatz-Filter action/user. Tabelle wächst
+        # append-only, Index-Wartung ist günstig. Refs #638.
+        indexes = [
+            models.Index(fields=["facility", "-timestamp"], name="auditlog_facility_ts_idx"),
+            models.Index(fields=["action", "-timestamp"], name="auditlog_action_ts_idx"),
+            models.Index(fields=["user", "-timestamp"], name="auditlog_user_ts_idx"),
+        ]
 
     def save(self, *args, **kwargs):
         """Prevent updates — only inserts are allowed."""
