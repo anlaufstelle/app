@@ -9,6 +9,7 @@ venv/
 htmlcov/
 .coverage
 coverage.xml
+coverage.json
 
 # Django
 *.sqlite3

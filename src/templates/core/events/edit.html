@@ -64,19 +64,8 @@
                                    name="__remove_checkbox__{{ field.name }}"
                                    value="{{ entry.entry_id }}"
                                    data-testid="attachment-remove-{{ entry.entry_id }}"
-                                   onchange="(function(cb){
-                                       var form = cb.form;
-                                       var hidden = form.querySelector('input[name=\'{{ field.name }}__remove\']');
-                                       if (!hidden) {
-                                           hidden = document.createElement('input');
-                                           hidden.type = 'hidden';
-                                           hidden.name = '{{ field.name }}__remove';
-                                           form.appendChild(hidden);
-                                       }
-                                       var ids = new Set((hidden.value || '').split(',').filter(Boolean));
-                                       if (cb.checked) { ids.add(cb.value); } else { ids.delete(cb.value); }
-                                       hidden.value = Array.from(ids).join(',');
-                                   })(this)">
+                                   data-attachment-remove
+                                   data-remove-target="{{ field.name }}__remove">
                             {% trans "Entfernen" %}
                         </label>
                     </li>
