@@ -172,14 +172,53 @@ class DocumentTypeAdmin(ModelAdmin):
 
 @admin.register(FieldTemplate)
 class FieldTemplateAdmin(ModelAdmin):
-    list_display = ("name", "slug", "field_type", "is_required", "is_encrypted", "sensitivity", "facility")
-    list_filter = ("field_type", "is_encrypted", "sensitivity", "is_required", "facility")
+    list_display = (
+        "name",
+        "slug",
+        "field_type",
+        "is_active",
+        "is_required",
+        "is_encrypted",
+        "sensitivity",
+        "facility",
+    )
+    list_filter = ("is_active", "field_type", "is_encrypted", "sensitivity", "is_required", "facility")
     search_fields = ("name",)
+    actions = ("deactivate_selected", "activate_selected")
 
     def get_readonly_fields(self, request, obj=None):
         if obj:
             return (*self.readonly_fields, "slug")
         return self.readonly_fields
+
+    def delete_model(self, request, obj):
+        """ProtectedError aus dem pre_delete-Signal abfangen und als Admin-Meldung anzeigen (Issue #356)."""
+        from django.db.models import ProtectedError
+
+        try:
+            super().delete_model(request, obj)
+        except ProtectedError as exc:
+            messages.error(request, str(exc.args[0]))
+
+    def delete_queryset(self, request, queryset):
+        """Bulk-Delete: ProtectedError pro FieldTemplate abfangen und in der Admin-UI zeigen."""
+        from django.db.models import ProtectedError
+
+        for obj in queryset:
+            try:
+                obj.delete()
+            except ProtectedError as exc:
+                messages.error(request, str(exc.args[0]))
+
+    @admin.action(description="Ausgewählte Feldvorlagen deaktivieren")
+    def deactivate_selected(self, request, queryset):
+        updated = queryset.update(is_active=False)
+        messages.success(request, f"{updated} Feldvorlage(n) deaktiviert.")
+
+    @admin.action(description="Ausgewählte Feldvorlagen aktivieren")
+    def activate_selected(self, request, queryset):
+        updated = queryset.update(is_active=True)
+        messages.success(request, f"{updated} Feldvorlage(n) aktiviert.")
 
 
 @admin.register(QuickTemplate)

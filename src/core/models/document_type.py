@@ -170,6 +170,14 @@ class FieldTemplate(models.Model):
         blank=True,
         verbose_name=_("Hilfetext"),
     )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name=_("Aktiv"),
+        help_text=_(
+            "Deaktivierte Feldvorlagen werden in Formularen nicht mehr angezeigt. "
+            "Bestehende Werte in Events bleiben erhalten (Soft-Delete-Alternative zum Hard-Delete)."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Feldvorlage")
