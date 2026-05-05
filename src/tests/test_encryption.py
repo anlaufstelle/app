@@ -380,3 +380,75 @@ def test_reencrypt_command_key_rotation(facility, client_identified, doc_type_cr
     with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
         plaintext = decrypt_field(stored)
     assert plaintext == "Rotationstest"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_reencrypt_command_rotates_event_history_and_attachments(
+    facility, client_identified, doc_type_crisis, staff_user
+):
+    """Refs #783: reencrypt_fields rotiert auch EventHistory + EventAttachment.
+
+    Vor dem Fix iterierte das Command nur Event.data_json. EventHistory.data_before/
+    data_after und EventAttachment.original_filename_encrypted blieben unter dem
+    alten Schluessel verschluesselt — Key-Rotation effektiv unmoeglich, weil der
+    alte Key fuer immer in ENCRYPTION_KEYS bleiben musste.
+    """
+    from io import StringIO
+
+    from django.core.management import call_command
+
+    from core.models import Event, EventHistory
+    from core.models.attachment import EventAttachment
+
+    old_key = generate_key()
+    new_key = generate_key()
+
+    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=old_key):
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_crisis,
+            occurred_at=timezone.now(),
+            data_json={"notiz-krise": "Geheim 1"},
+            created_by=staff_user,
+        )
+        # EventHistory mit verschluesseltem data_after
+        from core.services.event import _snapshot_field_metadata
+
+        EventHistory.objects.create(
+            event=event,
+            changed_by=staff_user,
+            action=EventHistory.Action.UPDATE,
+            data_before={"notiz-krise": encrypt_field("Vorher")},
+            data_after={"notiz-krise": encrypt_field("Nachher")},
+            field_metadata=_snapshot_field_metadata(doc_type_crisis),
+        )
+        # EventAttachment mit verschluesseltem Originalfilename
+        ft_crisis = doc_type_crisis.fields.first().field_template
+        att = EventAttachment.objects.create(
+            event=event,
+            field_template=ft_crisis,
+            storage_filename="test.enc",
+            original_filename_encrypted=encrypt_field("geheim-bescheid.pdf"),
+            file_size=42,
+            mime_type="application/pdf",
+            created_by=staff_user,
+        )
+
+    # Re-Encrypt mit New Primary + Old fuer Decrypt
+    keys = f"{new_key},{old_key}"
+    with override_settings(ENCRYPTION_KEYS=keys, ENCRYPTION_KEY=""):
+        out = StringIO()
+        call_command("reencrypt_fields", stdout=out)
+
+    # Mit Nur-New-Key dekryptieren — alle drei Modelle muessen lesbar sein.
+    with override_settings(ENCRYPTION_KEYS="", ENCRYPTION_KEY=new_key):
+        event.refresh_from_db()
+        assert decrypt_field(event.data_json["notiz-krise"]) == "Geheim 1"
+
+        h = EventHistory.objects.get(pk=event.history.first().pk)
+        assert decrypt_field(h.data_before["notiz-krise"]) == "Vorher"
+        assert decrypt_field(h.data_after["notiz-krise"]) == "Nachher"
+
+        att.refresh_from_db()
+        assert decrypt_field(att.original_filename_encrypted) == "geheim-bescheid.pdf"

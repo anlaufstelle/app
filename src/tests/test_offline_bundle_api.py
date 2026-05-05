@@ -182,6 +182,54 @@ class TestBuildClientOfflineBundleService:
         dt_pks = {dt["pk"] for dt in bundle["document_types"]}
         assert str(doc_type_contact.pk) in dt_pks
 
+    def test_bundle_normalizes_stage_b_files_marker(self, facility, client_identified, doc_type_contact, staff_user):
+        """Refs #786 (C-18): Stage-B-Multifile (`__files__`) muss zu einem
+        sicheren Marker minimiert werden — keine internen Attachment-IDs,
+        keine Sortier-Indizes im Offline-Bundle.
+        """
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={
+                "dauer": 5,
+                "notiz": "with attachments",
+                # Simuliert Stage-B-Marker: 3 Eintraege mit internen IDs
+                "anhang": {
+                    "__files__": True,
+                    "entries": [
+                        {"id": "11111111-1111-1111-1111-111111111111", "sort": 0},
+                        {"id": "22222222-2222-2222-2222-222222222222", "sort": 1},
+                        {"id": "33333333-3333-3333-3333-333333333333", "sort": 2},
+                    ],
+                },
+            },
+            created_by=staff_user,
+        )
+
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        ev = bundle["events"][0]
+        marker = ev["data_fields"].get("anhang")
+        # Marker existiert aber enthaelt KEINE entries-Liste oder IDs.
+        assert marker is not None
+        assert marker.get("__files__") is True
+        assert marker.get("count") == 3
+        assert "entries" not in marker, (
+            f"Stage-B-Marker im Offline-Bundle leakt entries (interne Attachment-IDs): {marker}"
+        )
+        # Defensive: das gesamte Bundle als JSON serialisieren und sicherstellen,
+        # dass keine der drei UUIDs auftaucht.
+        import json
+
+        body = json.dumps(bundle)
+        for uid in (
+            "11111111-1111-1111-1111-111111111111",
+            "22222222-2222-2222-2222-222222222222",
+            "33333333-3333-3333-3333-333333333333",
+        ):
+            assert uid not in body, f"Attachment-UUID {uid} darf nicht im Offline-Bundle stehen."
+
     def test_bundle_reports_field_metadata(
         self, facility, client_identified, doc_type_normal_with_high_field, lead_user, staff_user
     ):

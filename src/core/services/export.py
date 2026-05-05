@@ -189,8 +189,15 @@ def export_events_csv(facility, date_from, date_to, user=None):
         yield _stream_row(writer, output, row)
 
 
-def generate_report_pdf(facility, date_from, date_to, stats):
-    """Generate a PDF semi-annual report. Returns bytes."""
+def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=False):
+    """Generate a PDF semi-annual report. Returns bytes.
+
+    Refs #792 (C-24): Standard-PDF (``internal_mode=False``) rendert keine
+    ``Top 5 Personen``-Tabelle — Pseudonym-Rankings sind ein Re-Identifizierungs-
+    risiko bei Traeger-/Foerderberichten. Im Internal-Mode (Lead/Admin-Toggle)
+    wird das Ranking gerendert und der Report mit einem ``INTERN``-Banner
+    markiert.
+    """
     html = render_to_string(
         "core/export/report_pdf.html",
         {
@@ -198,6 +205,7 @@ def generate_report_pdf(facility, date_from, date_to, stats):
             "date_from": date_from,
             "date_to": date_to,
             "stats": stats,
+            "internal_mode": internal_mode,
             "generated_at": timezone.now(),
         },
     )

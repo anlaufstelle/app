@@ -282,6 +282,79 @@ class TestPDFExport:
 
 
 @pytest.mark.django_db
+class TestPDFTopPseudonymsToggle:
+    """Refs #792 (C-24): Standard-PDF ohne Top-Pseudonyme, internal=1 mit Banner."""
+
+    def test_default_pdf_has_no_top_clients_section(self, facility, sample_events):
+        from core.services.export import generate_report_pdf
+        from core.services.snapshot import get_statistics_hybrid
+
+        today = date.today()
+        stats = get_statistics_hybrid(facility, today - timedelta(days=30), today)
+        # Sanity: top_clients sind in stats vorhanden — der Schutz greift im PDF, nicht im Service.
+        assert stats.get("top_clients"), "Setup-Sanity: stats.top_clients darf nicht leer sein"
+
+        pdf_bytes = generate_report_pdf(facility, today - timedelta(days=30), today, stats)
+        # PDFs sind Bytes — wir rendern stattdessen das Template-Markup, um den
+        # Inhalt zuverlaessig zu pruefen.
+        from django.template.loader import render_to_string
+
+        html = render_to_string(
+            "core/export/report_pdf.html",
+            {
+                "facility_name": facility.name,
+                "date_from": today - timedelta(days=30),
+                "date_to": today,
+                "stats": stats,
+                "internal_mode": False,
+                "generated_at": timezone.now(),
+            },
+        )
+        assert "Top 5 Personen" not in html
+        assert "INTERN" not in html
+        # Sanity: PDF enthaelt %PDF-Header
+        assert pdf_bytes[:4] == b"%PDF"
+
+    def test_internal_pdf_has_top_clients_and_banner(self, facility, sample_events):
+        from core.services.snapshot import get_statistics_hybrid
+
+        today = date.today()
+        stats = get_statistics_hybrid(facility, today - timedelta(days=30), today)
+
+        from django.template.loader import render_to_string
+
+        html = render_to_string(
+            "core/export/report_pdf.html",
+            {
+                "facility_name": facility.name,
+                "date_from": today - timedelta(days=30),
+                "date_to": today,
+                "stats": stats,
+                "internal_mode": True,
+                "generated_at": timezone.now(),
+            },
+        )
+        assert "Top 5 Personen" in html
+        assert "INTERN" in html
+
+    def test_view_internal_query_param_propagates(self, admin_user, facility, sample_events):
+        client = DjangoClient()
+        client.force_login(admin_user)
+        today = date.today()
+        # Ohne internal=1
+        response = client.get(f"/statistics/export/pdf/?date_from={today - timedelta(days=30)}&date_to={today}")
+        assert response.status_code == 200
+        assert "_intern" not in response["Content-Disposition"]
+
+        # Mit internal=1
+        response2 = client.get(
+            f"/statistics/export/pdf/?date_from={today - timedelta(days=30)}&date_to={today}&internal=1"
+        )
+        assert response2.status_code == 200
+        assert "_intern" in response2["Content-Disposition"]
+
+
+@pytest.mark.django_db
 class TestJugendamtExport:
     """Jugendamt-Export: Kategorien-Mapping, ausgeschlossene Typen."""
 

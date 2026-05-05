@@ -38,15 +38,15 @@ Dieses Verzeichnis enthält die gesamte Projektdokumentation.
 
 ## DSGVO-Vorlagen
 
-Vorlagen für den Datenschutz in [`dsgvo-templates/`](dsgvo-templates/). Werden von der App aktiv genutzt.
+Vorlagen für den Datenschutz in [`src/core/dsgvo_templates/`](../src/core/dsgvo_templates/). Werden von der App aktiv genutzt — seit [#784](https://github.com/tobiasnix/anlaufstelle/issues/784) ins App-Paket verschoben, damit das Docker-Image sie enthält.
 
 | Dokument | Beschreibung |
 |----------|-------------|
-| [av-vertrag.md](dsgvo-templates/av-vertrag.md) | Auftragsverarbeitungsvertrag |
-| [dsfa.md](dsgvo-templates/dsfa.md) | Datenschutz-Folgenabschätzung |
-| [informationspflichten.md](dsgvo-templates/informationspflichten.md) | Informationspflichten nach Art. 13/14 DSGVO |
-| [toms.md](dsgvo-templates/toms.md) | Technische und organisatorische Maßnahmen |
-| [verarbeitungsverzeichnis.md](dsgvo-templates/verarbeitungsverzeichnis.md) | Verzeichnis von Verarbeitungstätigkeiten |
+| [av-vertrag.md](../src/core/dsgvo_templates/av-vertrag.md) | Auftragsverarbeitungsvertrag |
+| [dsfa.md](../src/core/dsgvo_templates/dsfa.md) | Datenschutz-Folgenabschätzung |
+| [informationspflichten.md](../src/core/dsgvo_templates/informationspflichten.md) | Informationspflichten nach Art. 13/14 DSGVO |
+| [toms.md](../src/core/dsgvo_templates/toms.md) | Technische und organisatorische Maßnahmen |
+| [verarbeitungsverzeichnis.md](../src/core/dsgvo_templates/verarbeitungsverzeichnis.md) | Verzeichnis von Verarbeitungstätigkeiten |
 
 ---
 

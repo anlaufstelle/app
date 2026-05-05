@@ -203,10 +203,15 @@ class PDFExportView(LeadOrAdminRequiredMixin, View):
             return HttpResponse(_("date_from und date_to erforderlich"), status=400)
 
         stats = get_statistics_hybrid(facility, date_from, date_to)
-        pdf_bytes = generate_report_pdf(facility, date_from, date_to, stats)
+        # Refs #792 (C-24): ``?internal=1`` aktiviert den internen Report-Modus
+        # mit Pseudonym-Ranking + INTERN-Banner. Standard ist der externe Modus
+        # ohne Top-Pseudonyme — DSGVO-Datenminimierung bei Traegerberichten.
+        internal_mode = request.GET.get("internal") in ("1", "true", "yes", "on")
+        pdf_bytes = generate_report_pdf(facility, date_from, date_to, stats, internal_mode=internal_mode)
 
+        filename_suffix = "_intern" if internal_mode else ""
         response = safe_download_response(
-            f"bericht_{date_from}_{date_to}.pdf",
+            f"bericht_{date_from}_{date_to}{filename_suffix}.pdf",
             "application/pdf",
             pdf_bytes,
         )

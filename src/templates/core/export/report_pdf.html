@@ -18,9 +18,19 @@
         th { background: #f5f5f5; font-weight: 600; }
         td.num { text-align: right; }
         .footer { margin-top: 40px; font-size: 10px; color: #999; border-top: 1px solid #ccc; padding-top: 8px; }
+        .internal-banner {
+            background: #fff3cd; border: 1px solid #ffc107; color: #664d03;
+            padding: 10px 12px; border-radius: 4px; margin-bottom: 20px;
+            font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+        }
     </style>
 </head>
 <body>
+    {% if internal_mode %}
+    <div class="internal-banner">
+        {% trans "INTERN — nicht zur Weitergabe. Enthält Pseudonym-Ranking." %}
+    </div>
+    {% endif %}
     <h1>{{ facility_name }}</h1>
     <p class="meta">{% trans "Halbjahresbericht" %} · {{ date_from|date:"d.m.Y" }} – {{ date_to|date:"d.m.Y" }}</p>
 
@@ -92,7 +102,10 @@
     <p>{% trans "Keine Daten im gewählten Zeitraum." %}</p>
     {% endif %}
 
-    {% if stats.top_clients %}
+    {# Refs #792 (C-24): Top-Pseudonyme nur im Internal-Mode rendern.
+       Standard-PDF (z.B. fuer Traegerberichte) bleibt ohne Re-Identifizierungs-
+       risiko. #}
+    {% if internal_mode and stats.top_clients %}
     <h2>{% trans "Top 5 Personen" %}</h2>
     <table>
         <thead>

@@ -8,7 +8,12 @@ from core.models import Settings
 
 logger = logging.getLogger(__name__)
 
-TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent.parent / "docs" / "dsgvo-templates"
+# Refs #784 — Templates leben jetzt im App-Paket (``core/dsgvo_templates/``),
+# damit sie im Docker-Image enthalten sind. Frueher zeigte TEMPLATE_DIR
+# auf ``<repo>/docs/dsgvo-templates``, das aber per ``.dockerignore``
+# nicht ins Image kopiert wurde — DSGVO-Paket-Download warf
+# ``FileNotFoundError`` in Produktion.
+TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "dsgvo_templates"
 
 DOCUMENTS = {
     "verarbeitungsverzeichnis": {

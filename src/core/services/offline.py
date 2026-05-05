@@ -79,9 +79,18 @@ def _visible_data_fields(user, event) -> dict[str, Any]:
             continue
         # Attachment markers are metadata (filename, content-type) — keep them
         # so the offline UI can indicate "Datei vorhanden", but never ship the
-        # file bytes offline.
+        # file bytes offline. Refs #786 (C-18): Stage-B-Multifile (``__files__``)
+        # wird genauso minimiert wie Stage-A — nur "Datei vorhanden" + Anzahl,
+        # KEINE internen Attachment-IDs oder Sortier-Indizes.
         if isinstance(value, dict) and value.get("__file__"):
             result[slug] = {"__file__": True, "name": value.get("name", "")}
+            continue
+        if isinstance(value, dict) and value.get("__files__"):
+            entries = value.get("entries") or []
+            result[slug] = {
+                "__files__": True,
+                "count": sum(1 for e in entries if isinstance(e, dict) and e.get("id")),
+            }
             continue
         # Encrypted fields (AES at rest on the server) are unusable offline
         # without the Fernet key. Decrypt here so the browser bundle is
