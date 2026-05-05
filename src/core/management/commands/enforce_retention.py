@@ -99,9 +99,7 @@ class Command(BaseCommand):
             # sobald die client_trash_days-Frist abgelaufen ist.
             from core.services.clients import anonymize_eligible_soft_deleted_clients
 
-            total_trash_anonymized += anonymize_eligible_soft_deleted_clients(
-                facility, settings_obj, dry_run=dry_run
-            )
+            total_trash_anonymized += anonymize_eligible_soft_deleted_clients(facility, settings_obj, dry_run=dry_run)
             total_auditlog_pruned += prune_auditlog(facility, settings_obj, now, dry_run)["count"]
 
             # Cleanup stale proposals after actual deletion
