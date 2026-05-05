@@ -85,13 +85,16 @@
                 </div>
             </div>
         </div>
-        {# AGPL §13: Source-Link für Network-Use-Disclosure. #}
+        {# AGPL §13: Source-Link für Network-Use-Disclosure. Refs #835. #}
         <footer class="text-center text-[11px] text-ink-muted mt-6">
             <span>Anlaufstelle</span>
             <span aria-hidden="true" class="mx-1.5">·</span>
-            <a href="https://github.com/anlaufstelle/app" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
+            <a href="{{ SOURCE_CODE_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
+            {% if SOURCE_CODE_VERSION %}
+            <span class="text-[10px] text-ink-muted">{{ SOURCE_CODE_VERSION|truncatechars:8 }}</span>
+            {% endif %}
             <span aria-hidden="true" class="mx-1.5">·</span>
-            <a href="https://github.com/anlaufstelle/app/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
+            <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
         </footer>
     </div>
     <script src="{% static 'js/csrf.js' %}"></script>

@@ -130,3 +130,22 @@ class TestHealthExtendedComponents:
         data = Client().get("/health/").json()
         assert data["disk_free_pct"] is not None
         assert 0 <= data["disk_free_pct"] <= 100
+
+
+# Refs #835 (C-68): SOURCE_CODE_URL ist im Footer ueber den Context-Processor.
+class TestAGPLFooter:
+    def test_default_source_code_url_in_footer(self, client, db):
+        response = client.get("/login/")
+        assert b"https://github.com/anlaufstelle/app" in response.content
+
+    def test_custom_source_code_url_renders(self, client, db, settings):
+        settings.SOURCE_CODE_URL = "https://git.example.org/fork/anlaufstelle"
+        response = client.get("/login/")
+        assert b"https://git.example.org/fork/anlaufstelle" in response.content
+        assert b"github.com/anlaufstelle" not in response.content
+
+    def test_source_code_version_truncated(self, client, db, settings):
+        settings.SOURCE_CODE_VERSION = "abcdef1234567890"
+        response = client.get("/login/")
+        # truncatechars:8 -> "abcdef1…" (7 Zeichen + Ellipsis)
+        assert b"abcdef1" in response.content

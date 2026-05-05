@@ -392,3 +392,60 @@ class TestStatisticsYearPeriod:
         content = response.content.decode()
         assert "Vorheriges Jahr" in content
         assert "Nächstes Jahr" not in content
+
+
+# Refs #816 (C-49): parse_statistics_period — Single Source of Truth.
+class TestParseStatisticsPeriod:
+    @staticmethod
+    def _today():
+        from datetime import date
+
+        return date(2026, 5, 1)
+
+    def _parse(self, **params):
+        from core.services.statistics import parse_statistics_period
+
+        return parse_statistics_period(params, self._today())
+
+    def test_default_is_month(self):
+        ps = self._parse()
+        assert ps.period == "month"
+        assert (self._today() - ps.date_from).days == 30
+        assert ps.date_to == self._today()
+        assert ps.selected_year is None
+
+    def test_quarter(self):
+        ps = self._parse(period="quarter")
+        assert ps.period == "quarter"
+        assert (self._today() - ps.date_from).days == 90
+
+    def test_half(self):
+        ps = self._parse(period="half")
+        assert (self._today() - ps.date_from).days == 182
+
+    def test_year_default_to_current(self):
+        from datetime import date
+
+        ps = self._parse(period="year")
+        assert ps.selected_year == 2026
+        assert ps.date_from == date(2026, 1, 1)
+        assert ps.date_to == self._today()  # current year
+
+    def test_year_past_year(self):
+        from datetime import date
+
+        ps = self._parse(period="year", year="2024")
+        assert ps.selected_year == 2024
+        assert ps.date_from == date(2024, 1, 1)
+        assert ps.date_to == date(2024, 12, 31)
+
+    def test_year_invalid_falls_back_to_current(self):
+        ps = self._parse(period="year", year="abc")
+        assert ps.selected_year == 2026
+
+    def test_custom_with_dates(self):
+        ps = self._parse(period="custom", date_from="2026-03-01", date_to="2026-03-31")
+        from datetime import date
+
+        assert ps.date_from == date(2026, 3, 1)
+        assert ps.date_to == date(2026, 3, 31)

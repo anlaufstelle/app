@@ -67,3 +67,35 @@ class TestAuthenticatedUserPreference:
         translation.activate("en")  # LocaleMiddleware-en wird ueberschrieben
         _call_middleware(request)
         assert request.LANGUAGE_CODE == "de"
+
+
+class TestHtmlLangAttribute:
+    """Refs #808 (C-41): ``<html lang="...">`` reflektiert die aktive Sprache,
+    nicht den hartkodierten Default ``de``.
+    """
+
+    def test_html_lang_de_default(self, client, db):
+        response = client.get("/login/")
+        assert b'<html lang="de"' in response.content
+
+    def test_html_lang_en_when_user_prefers_en(self, client, db):
+        """Authentifizierter User mit ``preferred_language=en`` sieht
+        ``<html lang="en">``. (UserLanguageMiddleware ignoriert
+        Accept-Language fuer anonyme Requests, daher Login.)"""
+        from core.models import Facility, Organization, User
+
+        org = Organization.objects.create(name="LangOrg")
+        facility = Facility.objects.create(organization=org, name="LangStelle")
+        user = User.objects.create_user(
+            username="enuser",
+            password="testpass-en-1234",
+            role=User.Role.ADMIN,
+            facility=facility,
+            is_staff=True,
+            preferred_language="en",
+        )
+        client.force_login(user)
+        response = client.get("/")
+        assert b'<html lang="en"' in response.content, (
+            f'Erwartet <html lang="en">, aber Body war: {response.content[:200]!r}. Refs #808.'
+        )

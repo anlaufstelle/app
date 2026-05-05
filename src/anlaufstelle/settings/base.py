@@ -23,6 +23,14 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 # DJANGO_AUDIT_HASH_KEY explizit gesetzt sein.
 AUDIT_HASH_KEY = os.environ.get("DJANGO_AUDIT_HASH_KEY", "")
 
+# AGPL §13 (Refs #835): Quellcode-Link im Footer. Forks/Self-Hoster MUESSEN
+# SOURCE_CODE_URL auf ihren eigenen Quellcode-Spiegel zeigen lassen, sonst
+# liefert der Footer eine technisch falsche § 13-Network-Use-Disclosure.
+# SOURCE_CODE_VERSION ist optional (Commit-SHA) und wird im Footer truncated
+# angezeigt — hilfreich fuer Forensik / Reproducible-Build-Hints.
+SOURCE_CODE_URL = os.environ.get("SOURCE_CODE_URL", "https://github.com/anlaufstelle/app")
+SOURCE_CODE_VERSION = os.environ.get("SOURCE_CODE_VERSION", "")
+
 DEBUG = False
 
 ALLOWED_HOSTS = []
@@ -95,9 +103,11 @@ TEMPLATES = [
             "context_processors": [
                 "django.template.context_processors.debug",
                 "django.template.context_processors.request",
+                "django.template.context_processors.i18n",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.workitem_counts",
+                "core.context_processors.source_code",
             ],
         },
     },

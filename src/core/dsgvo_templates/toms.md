@@ -1,7 +1,8 @@
 # Technische und Organisatorische Maßnahmen (Art. 32 DSGVO)
 
-**{{ facility_name }} — Dokumentationssystem „Anlaufstelle"**
-**Stand:** {{ date }} (Version 0.10, Stand 2026-04-19)
+**Verantwortlicher:** {{ facility_name }} — Dokumentationssystem „Anlaufstelle"
+**Erstellt:** {{ date }}
+**Version:** 1.1 (Softwarestand v0.10, 2026-04-19)
 
 ---
 

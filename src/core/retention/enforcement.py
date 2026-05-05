@@ -11,8 +11,14 @@ stdout-Formatierung, Argument-Parsing und Iteration ueber Facilities.
 
 from datetime import timedelta
 
-from core.models import AuditLog, RetentionProposal
+# Refs #818 — Inline-Imports an Modulkopf gehoben. Nach den Submodul-Schnitten
+# in #744/#778 entstehen keine Zirkular-Imports mehr; die fruheren Workarounds
+# in den Funktionsruempfen sind dafur ueberfluessig.
+from core.models import Activity, AuditLog, Case, Client, DocumentType, Event, EventHistory, RetentionProposal
 from core.retention.legal_holds import get_active_hold_target_ids
+from core.retention.strategies import iter_strategies
+from core.services.events import _snapshot_field_metadata, build_redacted_delete_history
+from core.services.file_vault import delete_event_attachments
 
 
 def collect_doomed_events(facility, settings_obj, now):
@@ -23,9 +29,6 @@ def collect_doomed_events(facility, settings_obj, now):
     Wrappern und in :func:`core.retention.proposals.create_proposals_for_facility`)
     parallel gepflegt werden muessen.
     """
-    from core.models import Event
-    from core.retention.strategies import iter_strategies
-
     held_ids = get_active_hold_target_ids(facility, "Event")
     combined = Event.objects.none()
     for strategy in iter_strategies(facility, settings_obj, now):
@@ -40,9 +43,6 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
     Callers must pre-compute ``qs.count()`` before calling and skip if zero.
     Keeps the identical behavior of the original private ``_enforce_*`` helpers.
     """
-    from core.models import EventHistory
-    from core.services.event import _snapshot_field_metadata, build_redacted_delete_history
-    from core.services.file_vault import delete_event_attachments
 
     deleted_event_ids = list(qs.values_list("pk", flat=True))
     history_entries = []
@@ -96,7 +96,6 @@ def enforce_anonymous(facility, settings_obj, now, dry_run):
 
     Returns ``{"count": N}``.
     """
-    from core.models import Event
 
     cutoff = now - timedelta(days=settings_obj.retention_anonymous_days)
     held_ids = get_active_hold_target_ids(facility, "Event")
@@ -122,7 +121,6 @@ def enforce_identified(facility, settings_obj, now, dry_run):
 
     Returns ``{"count": N}``.
     """
-    from core.models import Client, Event
 
     cutoff = now - timedelta(days=settings_obj.retention_identified_days)
     held_ids = get_active_hold_target_ids(facility, "Event")
@@ -152,7 +150,6 @@ def enforce_qualified(facility, settings_obj, now, dry_run):
 
     Returns ``{"count": N}``.
     """
-    from core.models import Case, Client, Event
 
     held_ids = get_active_hold_target_ids(facility, "Event")
     qualified_clients = Client.objects.filter(
@@ -190,7 +187,6 @@ def enforce_document_type_retention(facility, now, dry_run):
 
     Returns ``{"count": N}``.
     """
-    from core.models import DocumentType, Event
 
     held_ids = get_active_hold_target_ids(facility, "Event")
     doc_types_with_retention = DocumentType.objects.filter(
@@ -226,7 +222,6 @@ def enforce_activities(facility, settings_obj, now, dry_run):
 
     Returns ``{"count": N}``.
     """
-    from core.models import Activity
 
     cutoff = now - timedelta(days=settings_obj.retention_activities_days)
     qs = Activity.objects.filter(

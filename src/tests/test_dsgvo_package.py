@@ -159,3 +159,28 @@ class TestDSGVODocumentDownload:
         client.force_login(lead_user)
         response = client.get("/dsgvo/toms/")
         assert response.status_code == 403
+
+
+# Refs #840 (C-73): Versionsstempel-Footer in jedem gerenderten Dokument.
+class TestPackageVersionStamp:
+    def test_footer_contains_settings_hash_and_software_version(self, facility, settings):
+        settings.SOURCE_CODE_VERSION = "abc123def456"
+        content, _ = render_document("toms", facility)
+        assert "Settings-Hash:" in content
+        assert "Software-Version: abc123de" in content
+        assert "Generiert:" in content
+
+    def test_settings_change_changes_hash(self, facility):
+        content_before, _ = render_document("toms", facility)
+        # Settings aendern
+        s = facility.settings
+        s.retention_anonymous_days = 180
+        s.save()
+        content_after, _ = render_document("toms", facility)
+
+        # Beide enthalten einen Settings-Hash, aber unterschiedlich.
+        import re
+
+        h_before = re.search(r"Settings-Hash: ([0-9a-f]{8})", content_before).group(1)
+        h_after = re.search(r"Settings-Hash: ([0-9a-f]{8})", content_after).group(1)
+        assert h_before != h_after, "Settings-Aenderung muss Hash-Wechsel bewirken (Refs #840)."

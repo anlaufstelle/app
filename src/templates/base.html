@@ -1,6 +1,7 @@
 {% load i18n static %}
 <!DOCTYPE html>
-<html lang="de" class="h-full">
+{# Refs #808: lang dynamisch aus dem aktiven Sprach-Code (i18n-Context-Processor). #}
+<html lang="{{ LANGUAGE_CODE|default:'de' }}" class="h-full">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -221,13 +222,16 @@
             </div>
             {% block content %}{% endblock %}
         </div>
-        {# AGPL §13: Source-Link für Network-Use-Disclosure. #}
+        {# AGPL §13: Source-Link für Network-Use-Disclosure. Refs #835: Forks/Self-Hoster MUESSEN SOURCE_CODE_URL setzen. #}
         <footer class="text-center text-[11px] text-ink-muted py-4 mt-8 border-t border-subtle">
             <span>Anlaufstelle</span>
             <span aria-hidden="true" class="mx-1.5">·</span>
-            <a href="https://github.com/anlaufstelle/app" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
+            <a href="{{ SOURCE_CODE_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
+            {% if SOURCE_CODE_VERSION %}
+            <span class="text-[10px] text-ink-muted">{{ SOURCE_CODE_VERSION|truncatechars:8 }}</span>
+            {% endif %}
             <span aria-hidden="true" class="mx-1.5">·</span>
-            <a href="https://github.com/anlaufstelle/app/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
+            <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
         </footer>
     </main>
 

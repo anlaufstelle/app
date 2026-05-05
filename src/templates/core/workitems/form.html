@@ -9,6 +9,7 @@
 
     <form method="post" class="space-y-5">
         {% csrf_token %}
+        {% include "core/_form_errors.html" %}
         {% if workitem %}
         <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
         {% endif %}

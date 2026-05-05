@@ -21,6 +21,9 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Iterator
 
+# Refs #818 — Inline-Imports an Modulkopf gehoben.
+from core.models import Case, Client, DocumentType, Event
+
 
 @dataclass(frozen=True)
 class RetentionStrategy:
@@ -48,8 +51,6 @@ def iter_strategies(facility, settings_obj, now: datetime) -> Iterator[Retention
     (anonymous schlaegt identified usw.) — wichtig fuer die deterministische
     Categorisierung im Audit-Log.
     """
-    from core.models import Case, Client, DocumentType, Event
-
     cutoff_anon = now - timedelta(days=settings_obj.retention_anonymous_days)
     yield RetentionStrategy(
         category="anonymous",

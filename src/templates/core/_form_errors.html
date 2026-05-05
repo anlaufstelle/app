@@ -1,0 +1,9 @@
+{% load i18n %}
+{# Refs #805 (C-38): Sichtbarer Block fuer non_field_errors mit role="alert" — Screenreader-Ansage. #}
+{% if form.non_field_errors %}
+<div class="bg-red-50 border border-red-200 rounded-[10px] p-3 mb-3" role="alert">
+    {% for error in form.non_field_errors %}
+    <p class="text-[13px] text-red-700">{{ error }}</p>
+    {% endfor %}
+</div>
+{% endif %}

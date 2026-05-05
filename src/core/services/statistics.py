@@ -1,6 +1,8 @@
 """Statistics service: aggregations over events."""
 
 import logging
+from dataclasses import dataclass
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.db import connection
@@ -8,10 +10,64 @@ from django.db.models import Count, Q
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Event
+from core.utils.formatting import parse_date
 
 logger = logging.getLogger(__name__)
 
 STATISTICS_MV_NAME = "core_statistics_event_flat"
+
+
+@dataclass(frozen=True)
+class PeriodState:
+    """Refs #816 (C-49): Aufgeloeste Period-Konfiguration fuer Statistik-Sichten.
+
+    ``period`` ist der eingehende Schluessel (``month`` | ``quarter`` | ``half`` |
+    ``year`` | ``custom``); ``selected_year`` ist gesetzt, wenn ``period == "year"``,
+    sonst ``None``.
+    """
+
+    period: str
+    date_from: date
+    date_to: date
+    selected_year: int | None = None
+
+
+def _parse_year(value, default: int) -> int:
+    if not value:
+        return default
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return default
+
+
+def parse_statistics_period(query_params, today: date) -> PeriodState:
+    """Refs #816 (C-49): Single Source of Truth fuer Period-Parsing.
+
+    Frueher interpretierten ``StatisticsView`` und ``ChartDataView`` dieselben
+    Query-Parameter separat — Drift-Risiko zwischen Dashboard und Chart-API.
+    """
+    period = query_params.get("period", "month")
+    selected_year: int | None = None
+
+    if period == "custom":
+        date_from = parse_date(query_params.get("date_from"), today - timedelta(days=30))
+        date_to = parse_date(query_params.get("date_to"), today)
+    elif period == "year":
+        selected_year = _parse_year(query_params.get("year"), today.year)
+        date_from = date(selected_year, 1, 1)
+        date_to = today if selected_year == today.year else date(selected_year, 12, 31)
+    elif period == "quarter":
+        date_from = today - timedelta(days=90)
+        date_to = today
+    elif period == "half":
+        date_from = today - timedelta(days=182)
+        date_to = today
+    else:  # month (default)
+        date_from = today - timedelta(days=30)
+        date_to = today
+
+    return PeriodState(period=period, date_from=date_from, date_to=date_to, selected_year=selected_year)
 
 
 def get_statistics(facility, date_from, date_to):

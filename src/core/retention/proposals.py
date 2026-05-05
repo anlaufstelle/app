@@ -13,8 +13,11 @@ from django.db.utils import IntegrityError
 from django.utils.translation import gettext_lazy as _
 
 from core.constants import RETENTION_URGENCY_RED_DAYS, RETENTION_URGENCY_YELLOW_DAYS
-from core.models import AuditLog, LegalHold, RetentionProposal
+
+# Refs #818 — Inline-Imports an Modulkopf gehoben.
+from core.models import AuditLog, Event, LegalHold, RetentionProposal
 from core.retention.legal_holds import get_active_hold_target_ids
+from core.retention.strategies import iter_strategies
 
 # Category labels for the dashboard grouping. Lives next to the service
 # (not the view) because the context-builder needs them — Refs FND-A003.
@@ -362,8 +365,6 @@ def get_dashboard_proposals(facility):
 
 def cleanup_stale_proposals(facility):
     """Remove proposals for events that have already been deleted."""
-    from core.models import Event
-
     pending_proposals = RetentionProposal.objects.for_facility(facility).filter(
         target_type=RetentionProposal.TargetType.EVENT,
         status__in=[RetentionProposal.Status.PENDING, RetentionProposal.Status.APPROVED],
@@ -403,8 +404,6 @@ def create_proposals_for_facility(facility, settings_obj, now):
 
     Returns ``{"count": N}`` — number of newly created proposals.
     """
-    from core.retention.strategies import iter_strategies
-
     held_ids = get_active_hold_target_ids(facility, "Event")
     created_count = 0
 

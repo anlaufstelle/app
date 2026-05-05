@@ -2,9 +2,20 @@
 
 import datetime
 
+from django.conf import settings
 from django.db.models import Q
 
 from core.models import WorkItem
+
+
+def source_code(request):
+    """Refs #835 (C-68): exponiere SOURCE_CODE_URL/SOURCE_CODE_VERSION
+    fuer den AGPL-§13-Footer. Wird in jedem Template gerendert.
+    """
+    return {
+        "SOURCE_CODE_URL": settings.SOURCE_CODE_URL,
+        "SOURCE_CODE_VERSION": settings.SOURCE_CODE_VERSION,
+    }
 
 
 def workitem_counts(request):

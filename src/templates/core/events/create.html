@@ -61,7 +61,6 @@
                     <select name="document_type" id="id_document_type"
                             x-ref="docTypeSelect"
                             @change="onDocTypeChange"
-                            tabindex="1"
                             class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
                             hx-get="{% url 'core:event_fields_partial' %}"
                             hx-target="#dynamic-fields"
@@ -98,7 +97,6 @@
                 <div class="relative">
                     <input type="text"
                            :value="query" @input="setQuery"
-                           tabindex="2"
                            @input.debounce.150ms="onInput"
                            @focus="onFocus"
                            @keydown.arrow-down.prevent="moveHighlightDown"
@@ -172,11 +170,11 @@
         </div>
 
         <div class="flex flex-col sm:flex-row gap-2.5">
-            <button type="submit" id="event-submit-btn" tabindex="100"
+            <button type="submit" id="event-submit-btn"
                     class="w-full sm:w-auto px-4 py-2 bg-accent text-white text-[13px] font-semibold rounded-md transition-colors">
                 {% trans "Speichern" %}
             </button>
-            <a href="{% url 'core:zeitstrom' %}" tabindex="101" class="w-full sm:w-auto text-center px-4 py-2 bg-surface border border-subtle text-[13px] text-ink-soft rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
+            <a href="{% url 'core:zeitstrom' %}" class="w-full sm:w-auto text-center px-4 py-2 bg-surface border border-subtle text-[13px] text-ink-soft rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
         </div>
     </form>
 </div>

@@ -2,7 +2,8 @@
 
 **Verantwortlicher:** {{ facility_name }}
 **Datenschutzbeauftragte/r:** [Name und Kontakt eintragen]
-**Stand:** {{ date }}
+**Erstellt:** {{ date }}
+**Version:** 1.0 (Softwarestand v0.10, 2026-04-19)
 
 ---
 

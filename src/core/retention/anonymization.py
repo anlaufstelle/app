@@ -7,7 +7,8 @@ zwischen Event-Retention und der eigentlichen Anonymisierungs-Logik in
 
 from django.db.models import Count, Q
 
-from core.models import AuditLog
+# Refs #818 — Inline-Imports an Modulkopf gehoben.
+from core.models import AuditLog, Client
 
 
 def anonymize_clients(facility, dry_run):
@@ -19,8 +20,6 @@ def anonymize_clients(facility, dry_run):
 
     Returns ``{"count": N}``.
     """
-    from core.models import Client
-
     candidates = (
         Client.objects.filter(facility=facility)
         .exclude(Q(pseudonym__startswith="Gelöscht-") | Q(k_anonymized=True))

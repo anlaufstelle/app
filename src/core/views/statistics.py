@@ -1,7 +1,6 @@
 """Views for statistics dashboard and exports."""
 
 import logging
-from datetime import date, timedelta
 
 from django.http import HttpResponse, JsonResponse
 from django.utils import timezone
@@ -28,56 +27,32 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
     partial_template_name = "core/statistics/partials/full_content.html"
 
     def get(self, request):
-        facility = request.current_facility
-        period = request.GET.get("period", "month")
-        today = timezone.localdate()
-
-        if period == "custom":
-            date_from = parse_date(request.GET.get("date_from"), today - timedelta(days=30))
-            date_to = parse_date(request.GET.get("date_to"), today)
-        elif period == "year":
-            selected_year = self._parse_year(request.GET.get("year"), today.year)
-            date_from = date(selected_year, 1, 1)
-            date_to = today if selected_year == today.year else date(selected_year, 12, 31)
-        elif period == "quarter":
-            date_from = today - timedelta(days=90)
-            date_to = today
-        elif period == "half":
-            date_from = today - timedelta(days=182)
-            date_to = today
-        else:  # month
-            date_from = today - timedelta(days=30)
-            date_to = today
-
         from core.services.snapshot import is_multi_month_range
+        from core.services.statistics import parse_statistics_period
 
-        stats = get_statistics_hybrid(facility, date_from, date_to)
+        facility = request.current_facility
+        today = timezone.localdate()
+        # Refs #816 (C-49): Period-Parsing zentral in der Service-Schicht.
+        period_state = parse_statistics_period(request.GET, today)
+
+        stats = get_statistics_hybrid(facility, period_state.date_from, period_state.date_to)
 
         context = {
             "stats": stats,
-            "period": period,
-            "date_from": date_from,
-            "date_to": date_to,
+            "period": period_state.period,
+            "date_from": period_state.date_from,
+            "date_to": period_state.date_to,
             "can_export": True,
-            "selected_year": selected_year if period == "year" else None,
+            "selected_year": period_state.selected_year,
             "current_year": today.year,
             "document_types": DocumentType.objects.filter(facility=facility).order_by("name"),
             # #533: unique_clients is summed across monthly snapshots, so it
             # double-counts clients seen in multiple months. Surface that fact
             # to the template so it can render a "ca." prefix + tooltip.
-            "unique_clients_is_approximation": is_multi_month_range(date_from, date_to),
+            "unique_clients_is_approximation": is_multi_month_range(period_state.date_from, period_state.date_to),
         }
 
         return self.render_htmx_or_full(context)
-
-    @staticmethod
-    def _parse_year(value, default):
-        if not value:
-            return default
-        try:
-            return int(value)
-        except (ValueError, TypeError):
-            return default
 
 
 GERMAN_MONTHS = [
@@ -101,26 +76,14 @@ class ChartDataView(LeadOrAdminRequiredMixin, View):
     """JSON API endpoint returning chart-ready statistics data."""
 
     def get(self, request):
-        facility = request.current_facility
-        period = request.GET.get("period", "month")
-        today = timezone.localdate()
+        from core.services.statistics import parse_statistics_period
 
-        if period == "custom":
-            date_from = parse_date(request.GET.get("date_from"), today - timedelta(days=30))
-            date_to = parse_date(request.GET.get("date_to"), today)
-        elif period == "year":
-            selected_year = StatisticsView._parse_year(request.GET.get("year"), today.year)
-            date_from = date(selected_year, 1, 1)
-            date_to = today if selected_year == today.year else date(selected_year, 12, 31)
-        elif period == "quarter":
-            date_from = today - timedelta(days=90)
-            date_to = today
-        elif period == "half":
-            date_from = today - timedelta(days=182)
-            date_to = today
-        else:
-            date_from = today - timedelta(days=30)
-            date_to = today
+        facility = request.current_facility
+        today = timezone.localdate()
+        # Refs #816 (C-49): Period-Parsing zentral in der Service-Schicht.
+        period_state = parse_statistics_period(request.GET, today)
+        date_from = period_state.date_from
+        date_to = period_state.date_to
 
         segments = get_statistics_trend(facility, date_from, date_to)
 
