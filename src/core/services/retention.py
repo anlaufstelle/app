@@ -559,12 +559,17 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
     Keeps the identical behavior of the original private ``_enforce_*`` helpers.
     """
     from core.models import EventHistory
+    from core.services.event import _snapshot_field_metadata, build_redacted_delete_history
     from core.services.file_vault import delete_event_attachments
 
     deleted_event_ids = list(qs.values_list("pk", flat=True))
     history_entries = []
     for event in qs.iterator():
-        data_before = event.data_json.copy() if event.data_json else {}
+        # Refs #714: Beide Soft-Delete-Pfade muessen redaktiert sein —
+        # frueher kopierte Retention den Klartext in EventHistory und
+        # die append-only-Trigger machten ihn unloeschbar (DSGVO-Blocker).
+        history_payload = build_redacted_delete_history(event)
+        field_metadata = _snapshot_field_metadata(event.document_type)
         event.is_deleted = True
         event.data_json = {}
         delete_event_attachments(event)
@@ -574,7 +579,8 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
                 event=event,
                 changed_by=None,
                 action=EventHistory.Action.DELETE,
-                data_before=data_before,
+                data_before=history_payload,
+                field_metadata=field_metadata,
             )
         )
     EventHistory.objects.bulk_create(history_entries)

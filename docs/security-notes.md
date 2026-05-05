@@ -96,6 +96,126 @@ Wer kann von der CSP-Lockerung profitieren?
 
 ---
 
+## Klartext-Freitexte ausserhalb des Sensitivity-Modells (Issue [#716](https://github.com/tobiasnix/anlaufstelle/issues/716))
+
+**Status:** Inventarisierung + UI-Warnung umgesetzt; feldweise Encryption deferred bis post-v1.0 (Audit-Item 17).
+
+### Inventar (Master-Audit Blocker 3)
+
+Diese Freitext-Felder folgen **nicht** dem Sensitivity/Encryption/Retention-Modell der Event-`data_json`-Felder. Klartext liegt facility-gescoped in der DB und im Backup (Backup ist AES-256-CBC verschlüsselt; DB selbst nicht).
+
+| Feld | Modell | Typische Inhalte | Risiko |
+|---|---|---|---|
+| [`Client.notes`](../src/core/models/client.py#L54-L63) | `Client` | Freie Notizen über die Person | hoch (Klarname-Risiko) |
+| [`Case.description`](../src/core/models/case.py#L37-L46) | `Case` | Fall-Beschreibung | mittel |
+| [`Episode.description`](../src/core/models/episode.py#L21-L29) | `Episode` | Episoden-Verlauf | mittel |
+| [`WorkItem.description`](../src/core/models/workitem.py#L90-L98) | `WorkItem` | Aufgaben-Beschreibung | mittel |
+| [`AuditLog.detail`](../src/core/models/audit.py#L83) | `AuditLog` | JSON mit `username`, `pseudonym`, `changed_fields` | mittel (Pseudonym + username) |
+
+### Was bereits umgesetzt ist (Audit-Item 16)
+
+`help_text` aller fünf Felder warnt jetzt explizit: **"Nicht feldverschlüsselt — keine Klarnamen oder Art-9-Daten hier vermerken; sensible Inhalte gehören in ein FieldTemplate mit Sensitivity=HOCH."** Migration `0075_freetext_helptext_warnings` zieht das in alle Forms (Django renders `help_text` automatisch unter Form-Widgets).
+
+### Was bewusst nicht jetzt umgesetzt wird (Audit-Item 17)
+
+Feldweise Encryption (`Client.notes`, `Case.description` als verschlüsselte Felder) ist im Master-Audit als **§ B.5 Phase 3 Item 17, Aufwand M** klassifiziert. Voll-Implementation würde:
+- Schema-Migration (TextField → JSONField mit `{"__encrypted__": True, "value": ...}`)
+- Existing-Data-Migration (Bestand verschlüsseln)
+- Search/Sort/Export anpassen — `Client.notes` wird in Detail-Views, Exports und ggf. Volltext-Suche gerendert
+- Decrypt-Pfad in allen Views, die das Feld lesen
+
+### Trade-off
+
+**Aktueller Schutz:**
+- Backup-Encryption AES-256-CBC + PBKDF2 mit `BACKUP_ENCRYPTION_KEY`
+- RLS + Role-Mixin verhindern Cross-Facility-Reads
+- DSGVO-Anonymize-Cascade ([#715](https://github.com/tobiasnix/anlaufstelle/issues/715)) säubert auch diese Felder
+
+**Wenn jetzt durchgezogen:** ~1–2 Tage Arbeit + Risiko in Search/Export, ohne Live-Feedback aus Pilot zu haben.
+
+### Trigger für Re-Evaluation (Audit-Item 17 angehen)
+
+- Pilot-Einrichtung beginnt v1.0-Roll-Out — dann wird das Risiko real
+- Externer Audit fordert Encryption-at-Rest auch für freie Notizen
+- DPA mit Pilot-Träger fordert Field-Level-Encryption explizit
+- Backup-Storage wechselt zu System ohne Object-Lock/Encryption-at-Rest
+
+### Verifikation
+
+- Migration `0075` zeigt die neuen `help_text`-Werte in allen vier ModelForms (Client/Case/Episode/WorkItem). `make migrate` ohne Fehler.
+- Threat-Model-Eintrag: [`threat-model.md` § TB2/TB3, Zeile *I Sensitive Felder ohne Encryption*](threat-model.md#tb2tb3--django--postgresql)
+
+---
+
+## `Client.pseudonym` bleibt im Klartext bis post-v1.0 (Issue [#717](https://github.com/tobiasnix/anlaufstelle/issues/717))
+
+**Status:** Bewusste Defer-Entscheidung. Re-Evaluation per Trigger-Liste.
+
+### Beobachtung
+
+[`Client.pseudonym`](../src/core/models/client.py#L35-L39) ist ein
+`CharField(max_length=100, db_index=True)` mit zusätzlichem
+[`GinIndex` für `gin_trgm_ops`](../src/core/models/client.py#L89-L95).
+Trigram-Fuzzy-Search läuft über [`services/search.py`](../src/core/services/search.py#L100-L130)
+und ist eine zentrale UX-Funktion für Fachkräfte ("Marie" findet auch
+"Maria-23"). Bei einem **Backup-Diebstahl** mit Klartext-Pseudonymen ist
+direkte Wiedererkennung in Kontaktläden möglich — Master-Audit Blocker 4
+([Quelle](audits/anlaufstelle-audit-master.md)).
+
+### Was bereits umgesetzt ist
+
+[`FieldTemplate`-Validator `Sensitivity=HIGH ⇒ is_encrypted=True`](../src/core/models/document_type.py#L243-L256)
+erzwingt seit Tier-2 ([Commit `9b7d318`](https://github.com/tobiasnix/anlaufstelle/commit/9b7d318)),
+dass HIGH-Felder **immer** encrypted sind. Dieser Teil von Blocker 4 ist
+funktional + per Test verifiziert (siehe [`tests/test_field_template_validator.py`](../src/tests/test_field_template_validator.py)).
+
+### Was bewusst nicht jetzt umgesetzt wird
+
+`Client.pseudonym` per `EncryptedTextField` + HMAC-Lookup-Index. Das
+Master-Audit selbst stuft das in **§ B.5 Strukturell** als **Item 51,
+Aufwand L, post-v1.0** ein:
+
+> 51 | `Client.pseudonym`-Verschlüsselung mit HMAC-Lookup-Index | L | hoch
+
+### Trade-off
+
+**Wenn jetzt durchgezogen:**
+- Trigram-Fuzzy-Search bricht — entweder UX-Verlust oder HMAC-Bucket-
+  Fuzzy mit n-gram HMACs (deutlich teurere Implementierung)
+- Sortierung `ordering=["pseudonym"]` ([client.py:82](../src/core/models/client.py#L82))
+  liefert auf encrypted Bytes keine sinnvolle Reihenfolge
+- `unique_facility_pseudonym`-Constraint braucht HMAC-basierten Unique-Index
+- Sämtliche `pseudonym__icontains`-Filter quer durch Views/Forms/Tests
+  müssen umgestellt werden
+
+**Aktueller Schutz:**
+- Backup ist AES-256-CBC + PBKDF2-verschlüsselt mit `BACKUP_ENCRYPTION_KEY`
+  ([`backup.sh`](../scripts/backup.sh)) — Klartext-Pseudonyme nur bei
+  Schlüssel-Kompromittierung exponiert
+- Off-Site-Hook (Refs [#738](https://github.com/tobiasnix/anlaufstelle/issues/738))
+  empfiehlt Object-Lock gegen Ransomware
+- RLS + Role-Mixin verhindern Pseudonym-Leak via App-Schicht
+- Pseudonyme sind bereits Decoy-Namen, nicht Klarnamen — die Re-
+  Identifikations-Hürde ist UX-abhängig (Mitarbeiter müsste den Namen
+  in der Einrichtung wiedererkennen)
+
+### Trigger für Re-Evaluation (dann Item 51 angehen)
+
+- v1.1-Release-Planung erreicht — Item 51 ist explizit „post-v1.0"
+- Externe Compliance-Auditierung fordert Encryption-at-Rest auch für
+  Pseudonyme (Art.-9-Bias-Argument verschärft sich)
+- Backup-Storage wechselt zu einem System ohne starkes
+  Object-Lock/Encryption-at-Rest
+- Realistisches Backup-Diebstahl-Szenario in einer Pilot-Einrichtung
+  (Sicherheits-Vorfall reicht)
+
+### Verifikation
+
+- Validator-Test: [`tests/test_field_template_validator.py`](../src/tests/test_field_template_validator.py)
+- Threat-Model-Eintrag: [`threat-model.md` § TB2/TB3, Zeile *I Sensitive Felder ohne Encryption*](threat-model.md#tb2tb3--django--postgresql)
+
+---
+
 ## CSP-Reporting (Issue [#684](https://github.com/tobiasnix/anlaufstelle/issues/684))
 
 **Status:** Aktiv ab v0.11. Detection-Lücke L2 aus dem [Sicherheitsbericht 2026-04-26](audits/2026-04-26-security-bestand.md) geschlossen.

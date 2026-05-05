@@ -34,7 +34,16 @@ class Case(models.Model):
         verbose_name=_("Klientel"),
     )
     title = models.CharField(max_length=200, verbose_name=_("Titel"))
-    description = models.TextField(blank=True, verbose_name=_("Beschreibung"))
+    description = models.TextField(
+        blank=True,
+        verbose_name=_("Beschreibung"),
+        help_text=_(
+            "Frei-Text-Beschreibung des Falls. Nicht feldverschlüsselt — "
+            "keine Klarnamen oder Art-9-Daten hier vermerken; "
+            "sensible Inhalte gehören in ein Event-FieldTemplate "
+            "mit Sensitivity=HOCH."
+        ),
+    )
     status = models.CharField(
         max_length=20,
         choices=Status.choices,

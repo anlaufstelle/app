@@ -19,3 +19,18 @@ jobs:
       - run: pip install ruff==0.15.11
       - run: ruff check src/
       - run: ruff format --check src/
+
+  typecheck:
+    # Refs #741 / #713 (Audit-Massnahme #37): mypy auf core/services
+    # inkrementell. Eigener Job, damit lint + typecheck parallel laufen
+    # und ein Type-Fehler die ruff-Resultate nicht versteckt.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: pip install "mypy>=1.20" "django-stubs[compatible-mypy]>=6.0"
+      - run: mypy src/core/services

@@ -725,6 +725,17 @@ eigentuemer (`FORCE ROW LEVEL SECURITY`). Bypass nur fuer Superuser-DB-
 Rollen; der Django-DB-User darf deshalb in Produktion **kein** Superuser
 sein.
 
+**CI-Garantie (Refs [#718](https://github.com/tobiasnix/anlaufstelle/issues/718)):**
+[`src/tests/test_rls_functional.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/tests/test_rls_functional.py)
+laedt eine dedizierte Postgres-Rolle ``rls_test_role`` (``NOSUPERUSER``)
+und verifiziert per ``SET ROLE`` Cross-Tenant-0-Rows fuer Client, Event,
+AuditLog und Activity. Damit ist der RLS-Schutz seit v0.11 funktional
+in CI getestet — nicht nur die Existenz der Policies. Wenn der
+Produktions-DB-User versehentlich Superuser wird, schlaegt der Cross-
+Tenant-Test in CI **nicht** fehl (er nutzt die explizite Test-Rolle),
+aber die Smoke-Query aus § 9.2 unten muss in Prod liefern: ``rolsuper =
+false`` fuer den Django-DB-User.
+
 ### 9.1 Symptome eines RLS-Problems
 
 - UI zeigt leere Listen, obwohl in der DB Zeilen vorhanden sind.

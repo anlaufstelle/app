@@ -11,6 +11,7 @@ Dieses Verzeichnis enthält die gesamte Projektdokumentation.
 | Dokument | Beschreibung | Zielgruppe |
 |----------|-------------|------------|
 | [fachkonzept-anlaufstelle.md](fachkonzept-anlaufstelle.md) | Domänenkonzept, Produktvision, Architekturentscheidungen, nicht-funktionale Anforderungen, DSGVO | Stakeholder, Architekten, Entwickler |
+| [adr/](adr/) | Architecture Decision Records — warum die Architektur so aussieht, wie sie aussieht | Architekten, Entwickler |
 
 ---
 

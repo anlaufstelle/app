@@ -87,7 +87,14 @@ class WorkItem(models.Model):
         help_text=_("Dringend = sofortige Bearbeitung, Wichtig = zeitnah, Normal = regulär"),
     )
     title = models.CharField(max_length=200, verbose_name=_("Titel"))
-    description = models.TextField(blank=True, verbose_name=_("Beschreibung"))
+    description = models.TextField(
+        blank=True,
+        verbose_name=_("Beschreibung"),
+        help_text=_(
+            "Frei-Text-Beschreibung der Aufgabe. Nicht feldverschlüsselt — "
+            "keine Klarnamen oder Art-9-Daten hier vermerken."
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Erstellt am"))
     updated_at = models.DateTimeField(auto_now=True, verbose_name=_("Aktualisiert am"))
     completed_at = models.DateTimeField(

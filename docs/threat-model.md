@@ -37,15 +37,17 @@ Dieses Dokument macht das Sicherheitsmodell explizit. Es ergänzt — nicht erse
 | Asset | Schutzziel | Wo persistiert | Klassifikation |
 |---|---|---|---|
 | **Klientendaten** (Pseudonyme, Events mit `data_json`, Klartext-Notizen) | C, I | Postgres `core_client`, `core_event`, `core_case`, `core_episode`, `core_workitem` | Art.-9 DSGVO (sozial/medizinisch) |
-| **AuditLog** | I, A (Repudiation-Schutz) | Postgres `core_auditlog` (append-only via DB-Trigger) | hoch — gerichtsfest |
+| **AuditLog** | I, A (Repudiation-Schutz gegen nachträgliche Änderung/Löschung) | Postgres `core_auditlog` (UPDATE/DELETE per DB-Trigger blockiert; INSERT erlaubt; Retention-Pruning deaktiviert Trigger transaktional — siehe TB2/TB3-Tabelle) | hoch — gerichtsfest |
 | **Encryption-Keys** | C | `ENCRYPTION_KEYS` env, App-Speicher zur Laufzeit | kritisch — kompromittiert ⇒ Klartext |
 | **File-Vault-Anhänge** | C, I | `MEDIA_ROOT=/data/media`, Fernet-verschlüsselt ([`encryption.py`](../src/core/services/encryption.py)) | Art.-9 DSGVO |
 | **Backups** | C, I | `backups/`, AES-256-CBC verschlüsselt ([`backup.sh`](../scripts/backup.sh)) | kritisch — Offline-Kopie aller Klientendaten |
 | **Sessions** | C, I | Postgres `django_session`, HTTPOnly+Secure+SameSite-Cookie | mittel — Session-Hijack ⇒ Account-Übernahme |
 | **MFA-Secrets / Backup-Codes** | C | Postgres `otp_*` (django-otp) | hoch — kompromittiert ⇒ MFA-Bypass |
-| **Login-Lockout-State** | I, A | abgeleitet aus AuditLog ([`login_lockout.py`](../src/core/services/login_lockout.py)) | mittel — Manipulation ⇒ Brute-Force-Bypass |
+| **Login-Lockout-State** | I, A | nicht persistiert — zur Laufzeit aus AuditLog abgeleitet ([`login_lockout.py`](../src/core/services/login_lockout.py)) | mittel — Bypass-Vektoren: gefälschter `LOGIN_UNLOCK`-INSERT, Race-Window (Threshold+1), Retention-Prune |
 
 C = Confidentiality, I = Integrity, A = Availability
+
+> **Anmerkung zur Ableitung:** Wo eine Asset-Zeile als *abgeleitet* markiert ist, erbt sie nur die Schutzeigenschaften, die der Container im jeweiligen Scope tatsächlich liefert — d.h. der DB-Immutable-Trigger schützt die *Auswertung* nicht vor INSERT-Manipulation oder Pruning-Lücken.
 
 ---
 
@@ -106,9 +108,9 @@ Backups (`backup.sh`) verlassen das interne Netz nur **verschlüsselt** auf den 
 | **T** Verschlüsselungs-Bypass via `bulk_create`/`update(data_json=...)` | Verschlüsselung in `Event.save()`/`encrypt_field`; Architektur-Test gegen `bulk_create`/`update(data_json=...)` außerhalb Service-Layer | Master-Audit B.2.2 | Architektur-Test fehlt noch — Audit-Maßnahme #11 |
 | **R** Insider-Aktion ohne Spur | AuditLog mit ~30 Action-Typen + DB-Immutable; alle State-Transitions sollten loggen | [`audit.py`](../src/core/models/audit.py) | Lücken in `assign_event_to_case`/`remove_event_from_case` — Master-Audit B.2.4 |
 | **I** Cross-Facility-Read | RLS FORCE-Modus auf 21 Tabellen + Manager-Layer + Mixin-Layer (Defense-in-Depth) | Migration [`0047`](../src/core/migrations/0047_postgres_rls_setup.py) | Statistik-MV bewusst ohne RLS — siehe [`security-notes.md`](security-notes.md) |
-| **I** Sensitive Felder ohne Encryption | `is_encrypted=True` erzwungen für `Sensitivity=HIGH` — Tier-2 Refs [#733](https://github.com/tobiasnix/anlaufstelle/issues/733) | [`document_type.py`](../src/core/models/document_type.py) | Klartext-Freitexte (`Client.notes`, `Case.description`) — Master-Audit Blocker 3 |
+| **I** Sensitive Felder ohne Encryption | `is_encrypted=True` erzwungen für `Sensitivity=HIGH` — Tier-2 Refs [#733](https://github.com/tobiasnix/anlaufstelle/issues/733); `Client.pseudonym` bleibt bis post-v1.0 im Klartext (UX-Trade-off, [Defer-Begründung](security-notes.md#clientpseudonym-bleibt-im-klartext-bis-post-v10-issue-717)) | [`document_type.py`](../src/core/models/document_type.py), [`client.py`](../src/core/models/client.py) | Klartext-Freitexte (`Client.notes`, `Case.description`) — Master-Audit Blocker 3 [#716](https://github.com/tobiasnix/anlaufstelle/issues/716) |
 | **D** AuditLog-Tabelle wächst unbegrenzt | Composite-Indexes + 24-Monat-Retention via `enforce_retention` | [`audit.py`](../src/core/models/audit.py), [`retention.py`](../src/core/services/retention.py) | — |
-| **E** RLS-Bypass via Superuser-DB-Rolle | DB-User darf **kein** Superuser sein; FORCE-Modus aktiv | [`ops-runbook.md` § 9](ops-runbook.md) | Live-RLS-Test in CI mit Non-Superuser-Rolle fehlt — Master-Audit Blocker 5 |
+| **E** RLS-Bypass via Superuser-DB-Rolle | DB-User darf **kein** Superuser sein; FORCE-Modus aktiv; CI laedt ``rls_test_role`` (``NOSUPERUSER``) und verifiziert Cross-Tenant-0-Rows ([test_rls_functional.py](../src/tests/test_rls_functional.py)) | [`ops-runbook.md` § 9](ops-runbook.md) | — (Master-Audit Blocker 5 [#718](https://github.com/tobiasnix/anlaufstelle/issues/718) geschlossen) |
 
 ### TB4 — Django ↔ ClamAV
 

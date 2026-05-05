@@ -41,3 +41,55 @@ exclude_lines = [
     "if TYPE_CHECKING:",
     "if __name__ == .__main__.",
 ]
+
+# --- mypy (Refs #741, Audit-Massnahme #37) ---
+# Inkrementelle Einfuehrung: ``core/services/*`` wird strikt geprueft
+# (Service-Layer ist Single-Source-of-Truth fuer Business-Logik), der
+# Rest hat eine Baseline-Konfiguration ohne strict_optional. Erweiterung
+# modulweise — neuer ``[[tool.mypy.overrides]]``-Block pro Modul.
+[tool.mypy]
+python_version = "3.13"
+mypy_path = "src"
+plugins = ["mypy_django_plugin.main"]
+# Baseline (gesamtes Repo): warnen bei offensichtlichen Fehlern, aber
+# keine strict_optional/strict-Modi. Verhindert eine Wand von
+# Findings, die alle anderen Aenderungen blockieren wuerden.
+ignore_missing_imports = true
+warn_unused_ignores = false
+check_untyped_defs = false
+warn_redundant_casts = true
+
+[tool.django-stubs]
+django_settings_module = "anlaufstelle.settings.test"
+
+# Enforced strict zone: services-Layer ist die Stelle, wo Type-Bugs am
+# teuersten sind und wo wir die Annotations-Disziplin am hoechsten
+# halten wollen.
+#
+# Bewusst NICHT aktiviert (django-stubs liefert Any aus QuerySet/HttpRequest-
+# Hilfen — zu viel Noise fuer den ersten Schritt):
+# - ``warn_return_any``  → wuerde count(), build_absolute_uri u.a. flaggen
+# - ``disallow_untyped_defs`` → fuer Bestandscode zu strikt
+[[tool.mypy.overrides]]
+module = "core.services.*"
+strict_optional = true
+warn_unused_ignores = true
+
+# Migrations + tests sind grundsaetzlich ausgenommen — Migration-Dateien
+# sind Django-generiert, Tests duerfen mit Fixtures locker umgehen.
+[[tool.mypy.overrides]]
+module = "core.migrations.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "tests.*"
+ignore_errors = true
+
+# Settings-Module nutzen ``from .base import *`` und implizite Typen
+# (``ALLOWED_HOSTS = []``). django-stubs koennte das via Plugin
+# typisieren, aber wir wollen die Settings hier nicht mit Annotationen
+# zustellen — das ist ein eigener Sprint, falls jemand das mal sauber
+# typisieren will.
+[[tool.mypy.overrides]]
+module = "anlaufstelle.settings.*"
+ignore_errors = true

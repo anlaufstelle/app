@@ -246,6 +246,23 @@ def _snapshot_field_metadata(document_type):
     return result
 
 
+def build_redacted_delete_history(event):
+    """Return ``data_before``-Payload fuer EventHistory(DELETE) — redaktiert.
+
+    Refs #714: Beide Loesch-Pfade (manuelles ``soft_delete_event`` und
+    automatisches ``retention._soft_delete_events``) muessen denselben
+    redaktierten Payload schreiben — sonst leben Klartext-Werte in der
+    append-only EventHistory weiter und unterlaufen DSGVO Art. 17 + 5
+    Abs. 1 lit. e + § 67 SGB X.
+
+    Format: ``{"_redacted": True, "fields": [...slugs...]}`` — nur die
+    Feld-Namen (Schluessel von ``data_json``) bleiben erhalten, damit
+    der Audit nachvollziehen kann *was* es gab, nicht *welche Werte*.
+    """
+    field_names = list((event.data_json or {}).keys())
+    return {"_redacted": True, "fields": field_names}
+
+
 def _is_file_marker(value):
     """Return True if value is a Stufe-A (__file__) or Stufe-B (__files__) marker."""
     if not isinstance(value, dict):
@@ -587,7 +604,7 @@ def update_event(event, user, data_json, expected_updated_at=None, **kwargs):
 @transaction.atomic
 def soft_delete_event(event, user):
     """Soft-Delete + EventHistory(DELETE) + AuditLog."""
-    field_names = list((event.data_json or {}).keys())
+    history_payload = build_redacted_delete_history(event)
     event.is_deleted = True
     event.data_json = {}
     delete_event_attachments(event)
@@ -596,7 +613,7 @@ def soft_delete_event(event, user):
         event=event,
         changed_by=user,
         action=EventHistory.Action.DELETE,
-        data_before={"_redacted": True, "fields": field_names},
+        data_before=history_payload,
         field_metadata=_snapshot_field_metadata(event.document_type),
     )
     AuditLog.objects.create(

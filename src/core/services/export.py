@@ -85,8 +85,35 @@ def _resolve_field_value(value, ft):
     return value
 
 
+# OWASP CSV-Injection-Pattern (Refs #719, Master-Audit Blocker 6):
+# Werte, die mit einem dieser Zeichen beginnen, werden in Excel/LibreOffice
+# als Formel ausgewertet (``=cmd|'/c calc'!A1``, ``@SUM(...)``, ``-1234``,
+# ``+1234`` oder als Zellseparator-Smuggling via Tab/CR/LF). Das ``'`` als
+# Praefix neutralisiert das — die Zelle zeigt den Originalwert ohne das
+# fuehrende ``'`` an, fuehrt ihn aber nicht aus.
+_CSV_INJECTION_PREFIXES = ("=", "+", "-", "@", "\t", "\r", "\n")
+
+
+def _sanitize_csv_cell(value):
+    """Neutralisiere Formula-Injection in einer einzelnen CSV-Zelle.
+
+    ``None`` → ``""``, alles andere wird zu str konvertiert. Beginnt der
+    Wert mit einem der OWASP-Praefixe, wird ein Leading-``'`` vorangestellt.
+    """
+    if value is None:
+        return ""
+    text = str(value)
+    if text.startswith(_CSV_INJECTION_PREFIXES):
+        return "'" + text
+    return text
+
+
 def _build_event_row(event, all_field_templates, field_slugs, user):
-    """Build a single CSV row for an event, applying per-event sensitivity checks."""
+    """Build a single CSV row for an event, applying per-event sensitivity checks.
+
+    Refs #719: alle dynamischen Zellen laufen durch ``_sanitize_csv_cell``
+    gegen Formula-Injection beim Oeffnen in Excel/LibreOffice.
+    """
     client_name = event.client.pseudonym if event.client else (_("Anonym") if event.is_anonymous else "–")
     contact_stage = ""
     age_cluster = ""
@@ -97,10 +124,10 @@ def _build_event_row(event, all_field_templates, field_slugs, user):
     row = [
         event.occurred_at.strftime("%d.%m.%Y"),
         event.occurred_at.strftime("%H:%M"),
-        event.document_type.name,
-        client_name,
-        contact_stage,
-        age_cluster,
+        _sanitize_csv_cell(event.document_type.name),
+        _sanitize_csv_cell(client_name),
+        _sanitize_csv_cell(contact_stage),
+        _sanitize_csv_cell(age_cluster),
     ]
 
     doc_sensitivity = event.document_type.sensitivity
@@ -114,7 +141,7 @@ def _build_event_row(event, all_field_templates, field_slugs, user):
             continue
 
         value = data.get(field_slug, "")
-        row.append(_resolve_field_value(value, ft))
+        row.append(_sanitize_csv_cell(_resolve_field_value(value, ft)))
 
     return row
 
@@ -142,7 +169,10 @@ def export_events_csv(facility, date_from, date_to, user=None):
     writer = csv.writer(output, dialect="excel")
 
     user_name = user.get_full_name() if user else "System"
-    yield _stream_row(writer, output, [f"# Export: {facility.name} | {user_name} | {timezone.now().isoformat()}"])
+    # Metadaten-Zeile: facility.name + user_name fliessen aus User-Eingabe
+    # in die CSV — auch hier Formula-Injection-Praefix abfangen.
+    metadata = f"# Export: {facility.name} | {user_name} | {timezone.now().isoformat()}"
+    yield _stream_row(writer, output, [_sanitize_csv_cell(metadata)])
     yield _stream_row(writer, output, header)
 
     for event in events:

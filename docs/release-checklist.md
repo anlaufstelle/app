@@ -2,7 +2,7 @@
 
 Checkliste fuer Releases der Anlaufstelle-Anwendung.
 
-Stand: v0.10.0 (2026-04-19)
+Stand: v0.10.2 (2026-04-28)
 
 ## 1. Pre-Release
 
@@ -29,6 +29,27 @@ Release-Sync.
 damit dieselbe Datei in allen drei Repos liegt und nur GitHub das jeweils
 relevante Verhalten bestimmt. Wenn eines Tages Dev/Stage GHAS bekommen,
 genügt es, den `if:` zu entfernen — kein 3-Wege-Diff nötig.
+
+### 1.2 Doc-Sync
+
+Versionsabhängige Dokumentation **vor** dem Tag (Schritt 2) aktualisieren — sonst veraltet sie zwischen Releases unbemerkt.
+
+**Immer prüfen:**
+
+- [ ] [`SECURITY.md`](../SECURITY.md) — „Unterstützte Versionen"-Tabelle: aktuelle Minor-Reihe (`X.Y.x`) als unterstützt markieren, alte Reihen auf „Nicht unterstützt" setzen
+- [ ] [`docs/threat-model.md`](threat-model.md) — Header-Zeile `Version: vX.Y.x · Letzte Revision: YYYY-MM-DD` aktualisieren
+- [ ] [`docs/release-checklist.md`](release-checklist.md) — `Stand: vX.Y.Z (YYYY-MM-DD)` ganz oben aktualisieren
+- [ ] [`README.md`](../README.md) + [`README.en.md`](../README.en.md) — Pre-Release-Banner und `translation-version` (wird im Version-Bump-Commit Schritt 2 mit-comittet)
+
+**Bei Feature-/Pfad-Änderungen im Release zusätzlich prüfen:**
+
+- [ ] [`docs/admin-guide.md`](admin-guide.md) — neue Konfig-Optionen, Deploy-Schritte, Env-Vars
+- [ ] [`docs/user-guide.md`](user-guide.md) — neue UI-Flows, geänderte Berechtigungsmatrix
+- [ ] [`docs/ops-runbook.md`](ops-runbook.md) — neue Cron-Jobs, Migrations-Hinweise, Notfall-Prozeduren
+- [ ] [`docs/security-notes.md`](security-notes.md) — neue bewusste Security-Design-Entscheidungen oder Audit-Referenzen
+- [ ] [`docs/faq.md`](faq.md) — neue/geänderte FAQ-Antworten (synchron mit [Issue #474](https://github.com/tobiasnix/anlaufstelle/issues/474) halten)
+
+> **Tipp:** `git log <PREV_TAG>..HEAD --oneline -- docs/ SECURITY.md README*.md` zeigt alle Doc-relevanten Commits seit dem letzten Release.
 
 ## 2. Release
 

@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -78,6 +78,11 @@ seed:
 lint:
 	$(PYTHON) -m ruff check src/
 	$(PYTHON) -m ruff format --check src/
+
+# mypy auf core/services strikt, Rest mit permissiver Baseline (Refs #741).
+# Erweiterung modulweise via [[tool.mypy.overrides]] in pyproject.toml.
+typecheck:
+	$(PYTHON) -m mypy src/core/services
 
 test:
 	$(PYTHON) -m pytest -m "not e2e"

@@ -176,6 +176,7 @@ Der Server ist unter `https://localhost:8443` erreichbar (selbstsigniertes Zerti
 | `make tailwind`  | Tailwind CSS im Watch-Modus kompilieren                           |
 | `make tailwind-build` | Tailwind CSS für Produktion minifiziert kompilieren          |
 | `make lint`      | Code mit Ruff prüfen und Formatierung kontrollieren               |
+| `make typecheck` | mypy auf `core/services` (strikt) + Baseline-Check (Refs [#741](https://github.com/tobiasnix/anlaufstelle/issues/741)) |
 | `make test`      | Unit- und Integrationstests ausführen (ohne E2E)                  |
 | `make test-e2e`  | End-to-End-Tests mit Playwright ausführen                         |
 | `make check`     | Django-Systemcheck und Migrations-Konsistenz prüfen               |
