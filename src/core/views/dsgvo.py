@@ -8,6 +8,7 @@ from django.views import View
 
 from core.models import AuditLog
 from core.services.dsgvo_package import DOCUMENTS, get_document_list, render_document
+from core.services.sudo_mode import RequireSudoModeMixin
 from core.signals.audit import get_client_ip
 from core.utils.downloads import safe_download_response
 from core.views.mixins import AdminRequiredMixin
@@ -15,7 +16,7 @@ from core.views.mixins import AdminRequiredMixin
 logger = logging.getLogger(__name__)
 
 
-class DSGVOPackageView(AdminRequiredMixin, View):
+class DSGVOPackageView(AdminRequiredMixin, RequireSudoModeMixin, View):
     """Overview page listing all DSGVO document templates."""
 
     def get(self, request):
@@ -23,7 +24,7 @@ class DSGVOPackageView(AdminRequiredMixin, View):
         return render(request, "core/dsgvo/package.html", {"documents": documents})
 
 
-class DSGVODocumentDownloadView(AdminRequiredMixin, View):
+class DSGVODocumentDownloadView(AdminRequiredMixin, RequireSudoModeMixin, View):
     """Download a single DSGVO document template, filled with facility data."""
 
     def get(self, request, document):

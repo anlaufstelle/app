@@ -45,6 +45,7 @@ class AuditLog(models.Model):
         BACKUP_CODES_GENERATED = "backup_codes_generated", _("2FA Backup-Codes generiert")
         BACKUP_CODES_USED = "backup_codes_used", _("2FA Backup-Code verwendet")
         BACKUP_CODES_REGENERATED = "backup_codes_regenerated", _("2FA Backup-Codes neu generiert")
+        SUDO_MODE_ENTERED = "sudo_mode_entered", _("Sudo-Mode aktiviert (Re-Auth)")
 
     objects = FacilityScopedManager()
 

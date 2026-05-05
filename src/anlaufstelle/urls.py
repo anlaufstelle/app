@@ -21,6 +21,7 @@ from core.views.mfa import (
     MFAVerifyView,
 )
 from core.views.pwa import ManifestView, OfflineFallbackView, ServiceWorkerView
+from core.views.sudo_mode import SudoModeView
 
 urlpatterns = [
     path("admin-mgmt/", admin.site.urls),
@@ -79,5 +80,6 @@ urlpatterns = [
     path("sw.js", ServiceWorkerView.as_view(), name="service_worker"),
     path("manifest.json", ManifestView.as_view(), name="manifest"),
     path("offline/", OfflineFallbackView.as_view(), name="offline_fallback"),
+    path("sudo/", SudoModeView.as_view(), name="sudo_mode"),
     path("", include("core.urls")),
 ]

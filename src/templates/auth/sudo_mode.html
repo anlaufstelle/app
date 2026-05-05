@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Re-Authentifizierung erforderlich" %}{% endblock %}
+
+{% block content %}
+<div class="max-w-md mx-auto mt-12 p-6 bg-surface border border-subtle rounded-lg">
+    <h1 class="text-xl font-semibold text-ink mb-2">{% trans "Re-Authentifizierung erforderlich" %}</h1>
+    <p class="text-sm text-ink-muted mb-4">
+        {% trans "Diese Aktion ist sicherheitskritisch (z.B. 2FA deaktivieren oder Daten exportieren). Bitte bestätigen Sie Ihr Passwort, um fortzufahren." %}
+    </p>
+    <p class="text-xs text-ink-muted mb-6">
+        {% trans "Die Bestätigung gilt fuer 15 Minuten innerhalb dieser Sitzung." %}
+    </p>
+
+    {% if messages %}
+    <div class="mb-4">
+        {% for message in messages %}
+        <div class="p-3 rounded-md text-sm {% if message.tags == 'error' %}bg-red-100 text-red-800{% else %}bg-blue-100 text-blue-800{% endif %}">
+            {{ message }}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next }}">
+        <div>
+            <label for="id_password" class="block text-sm font-medium text-ink-soft">{% trans "Passwort" %}</label>
+            <input type="password" name="password" id="id_password" required autofocus
+                class="mt-1 block w-full rounded-md border border-subtle shadow-sm focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 bg-canvas">
+        </div>
+        <button type="submit"
+            class="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-md text-sm font-medium text-white bg-accent hover:bg-accent">
+            {% trans "Bestätigen und fortfahren" %}
+        </button>
+    </form>
+
+    <p class="mt-4 text-xs text-ink-muted text-center">
+        {% trans "Brechen Sie ab und kehren Sie zurück:" %} <a href="{% url 'core:zeitstrom' %}" class="text-accent hover:underline">{% trans "Zur Startseite" %}</a>
+    </p>
+</div>
+{% endblock %}

@@ -133,6 +133,20 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # --- Session ---
 
+# --- SudoMode (Refs #683) ---
+# Re-Auth-Fenster fuer sensible Aktionen (MFA-Disable, DSGVO-Export).
+# In Tests deaktiviert (settings/test.py setzt False), in Prod/Dev aktiv.
+SUDO_MODE_ENABLED = True
+SUDO_MODE_TTL_SECONDS = int(os.environ.get("SUDO_MODE_TTL_SECONDS", "900"))
+
+# --- Breach-Detection (Refs #685) ---
+BREACH_DETECTION_WINDOW_MINUTES = int(os.environ.get("BREACH_DETECTION_WINDOW_MINUTES", "60"))
+BREACH_FAILED_LOGIN_THRESHOLD = int(os.environ.get("BREACH_FAILED_LOGIN_THRESHOLD", "20"))
+BREACH_EXPORT_THRESHOLD = int(os.environ.get("BREACH_EXPORT_THRESHOLD", "10"))
+BREACH_DELETE_THRESHOLD = int(os.environ.get("BREACH_DELETE_THRESHOLD", "50"))
+# Optional: Webhook fuer externe Eskalation. Leer = kein Webhook.
+BREACH_NOTIFICATION_WEBHOOK_URL = os.environ.get("BREACH_NOTIFICATION_WEBHOOK_URL") or None
+
 # --- CSRF (Refs #699) ---
 # Custom CSRF-Failure-View liefert ``403_csrf.html`` (Tailwind, deutsch)
 # statt Djangos Built-in-Default-Seite.

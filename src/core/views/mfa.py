@@ -41,6 +41,7 @@ from core.services.mfa import (
     remaining_backup_codes,
     verify_backup_code,
 )
+from core.services.sudo_mode import RequireSudoModeMixin
 from core.signals.audit import get_client_ip
 
 logger = logging.getLogger(__name__)
@@ -254,8 +255,12 @@ class MFARegenerateBackupCodesView(LoginRequiredMixin, View):
     ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
     name="post",
 )
-class MFADisableView(LoginRequiredMixin, View):
-    """Deaktiviert 2FA für den aktuellen Nutzer, sofern nicht erzwungen."""
+class MFADisableView(LoginRequiredMixin, RequireSudoModeMixin, View):
+    """Deaktiviert 2FA für den aktuellen Nutzer, sofern nicht erzwungen.
+
+    Refs #683: ``RequireSudoModeMixin`` zwingt Re-Auth-Pruefung — eine
+    gestohlene Session reicht nicht zum 2FA-Disable.
+    """
 
     def post(self, request, *args, **kwargs):
         user = request.user

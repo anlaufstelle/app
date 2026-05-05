@@ -160,6 +160,7 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 | Job | Empfohlene Zeit | Zweck |
 |-----|----------------|-------|
 | `backup.sh` | Taeglich 02:00 | Verschluesseltes DB- und Medien-Backup mit Rotation; optionaler Off-Site-Sync (Refs [#720](https://github.com/tobiasnix/anlaufstelle/issues/720), [#738](https://github.com/tobiasnix/anlaufstelle/issues/738)) |
+| `detect_breaches` | Stuendlich :30 | Heuristik-basierte Breach-Detection (failed-login-burst / mass-export / mass-delete) → AuditLog SECURITY_VIOLATION + optionaler Webhook (Refs [#685](https://github.com/tobiasnix/anlaufstelle/issues/685)) |
 | `enforce_retention` | Taeglich 03:00 | Abgelaufene Events soft-loeschen, Clients anonymisieren |
 | `create_statistics_snapshots` | Monatlich 1. Tag 04:00 | Monats-Aggregate sichern bevor Events geloescht werden |
 | `refresh_statistics_view` | Stuendlich :15 | Materialized View `core_statistics_event_flat` aktualisieren (Statistik-Dashboard) |
@@ -486,6 +487,34 @@ Falls `SENTRY_DSN` in `.env` konfiguriert ist, werden unbehandelte Exceptions au
 ```dotenv
 SENTRY_DSN=https://...@sentry.io/...
 SENTRY_TRACES_SAMPLE_RATE=0.1
+```
+
+### 6.5b DSGVO Art. 33/34 — Breach-Notification (Refs [#685](https://github.com/tobiasnix/anlaufstelle/issues/685))
+
+Anlaufstelle muss Datenschutzverletzungen innerhalb **72 Stunden** an die Aufsichtsbehoerde melden (Art. 33) und betroffene Personen direkt informieren, wenn ein hohes Risiko vorliegt (Art. 34). Der Code unterstuetzt das durch:
+
+1. **Detection** — `python manage.py detect_breaches` laeuft stuendlich (Cron) und schreibt fuer jedes Finding einen `AuditLog.Action.SECURITY_VIOLATION`-Eintrag.
+2. **Heuristiken** (alle konfigurierbar via Settings):
+   - `failed_login_burst` — > `BREACH_FAILED_LOGIN_THRESHOLD` (Default 20) Fehlversuche pro User in `BREACH_DETECTION_WINDOW_MINUTES` (Default 60 min)
+   - `mass_export` — > `BREACH_EXPORT_THRESHOLD` (Default 10) Exports pro User im Fenster
+   - `mass_delete` — > `BREACH_DELETE_THRESHOLD` (Default 50) Deletes facility-weit im Fenster
+3. **Optionaler Webhook** — `BREACH_NOTIFICATION_WEBHOOK_URL` env-Var; bekommt POST mit JSON-Payload (kind, count, threshold, audit_id) bei jedem neuen Finding.
+4. **Deduplikation** — innerhalb von 24h wird derselbe Tatbestand (kind + user) nur einmal in `AuditLog` gemeldet.
+
+#### Manueller Prozess bei SECURITY_VIOLATION
+
+1. **T+0** — `AuditLog`-Detail pruefen, betroffene User/Daten identifizieren.
+2. **T+24h** — Vorgang an [DPO/Datenschutzbeauftragten](https://github.com/tobiasnix/anlaufstelle/blob/main/SECURITY.md) eskalieren, Risiko-Einschaetzung erstellen.
+3. **T+72h** — Meldung an Aufsichtsbehoerde (Bayern: BayLDA; andere Bundeslaender analog) + ggf. Betroffenenmeldung.
+4. **Post-Incident** — Lessons-Learned + Anpassung der Heuristik-Schwellen.
+
+Cron-Eintrag (siehe § 3 Cron-Jobs):
+
+```cron
+30 * * * * cd /opt/anlaufstelle && \
+    .venv/bin/python src/manage.py detect_breaches \
+    --settings=anlaufstelle.settings.prod \
+    >> /var/log/anlaufstelle-breach-detection.log 2>&1
 ```
 
 ### 6.5a Maintenance-Mode (Refs [#700](https://github.com/tobiasnix/anlaufstelle/issues/700))
