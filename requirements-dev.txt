@@ -97,9 +97,9 @@ pluggy==1.6.0
     # via
     #   pytest
     #   pytest-cov
-psycopg[binary]==3.3.3
+psycopg[binary]==3.3.4
     # via -r requirements.in
-psycopg-binary==3.3.3
+psycopg-binary==3.3.4
     # via psycopg
 pyclamd==0.4.0
     # via -r requirements.in
