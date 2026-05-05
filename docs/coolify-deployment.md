@@ -49,7 +49,11 @@ Initial-Admin anlegen über `http://<server-ip>:8000`.
 > - **Kompletter Verzicht:** `CLAMAV_ENABLED=false` (z.B. minimaler Dev-Server).
 >   **Nicht für produktive Einrichtungen empfohlen** — Upload-Malware-Scanning entfällt.
 > - **Healthcheck:** `curl https://anlaufstelle.app/health/` liefert u.a. `clamav: ok`
->   bzw. `clamav: error`, solange `CLAMAV_ENABLED=true`.
+>   bzw. `clamav: error`, solange `CLAMAV_ENABLED=true`. Das Feld ist ein Alias
+>   auf das kanonische `virus_scanner` (Werte `connected`/`unavailable`/`disabled`).
+>   Bei Scanner-Ausfall wird `status: degraded` gesetzt — der Container-Healthcheck
+>   im Dockerfile liefert dann ungesund, das HTTP bleibt aber 200, damit der
+>   Last-Balancer den Pod nicht direkt rauswirft.
 
 ### 4. Environment-Variablen
 

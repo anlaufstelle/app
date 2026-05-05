@@ -66,9 +66,15 @@ EXPOSE 8000
 # Healthcheck gegen /health/ — 30s Intervall, 5s Timeout, 10s Grace für
 # Startup. Für Deployments ohne docker-compose (plain docker run, k8s,
 # Coolify etc.), wo der Compose-Healthcheck nicht greift. Refs #654.
+#
+# Refs #798 (C-30): wir lesen jetzt zusaetzlich den JSON-``status``-Schluessel.
+# Bei ``status=degraded`` (z.B. ClamAV ausgefallen) liefert /health/ HTTP 200,
+# damit Last-Balancer den Pod nicht direkt rauswerfen — der Container-Healthcheck
+# soll das aber trotzdem als ungesund markieren, damit Operator-Tooling
+# (Coolify, k8s) den Vorfall sieht.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request, sys; \
-urllib.request.urlopen('http://localhost:8000/health/', timeout=5).read(); \
-sys.exit(0)" || exit 1
+    CMD python -c "import urllib.request, json, sys; \
+body = urllib.request.urlopen('http://localhost:8000/health/', timeout=5).read(); \
+sys.exit(0 if json.loads(body).get('status') == 'ok' else 1)" || exit 1
 
 ENTRYPOINT ["/app/docker-entrypoint.sh"]

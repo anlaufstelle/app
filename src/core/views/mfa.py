@@ -145,11 +145,16 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
         facility = getattr(request.user, "facility", None)
 
         if mode == "backup":
-            # Backup-Code-Eingabe: Leerzeichen und Bindestriche sind kosmetisch,
-            # Token intern immer im Format „xxxx-xxxx".
-            candidate = token.lower()
-            if candidate and "-" not in candidate and len(candidate) == 8:
-                candidate = f"{candidate[:4]}-{candidate[4:]}"
+            # Backup-Code-Eingabe: Refs #790 — neue Codes sind 22 Zeichen
+            # URL-safe Base64 (case-sensitive!). Legacy-Codes waren ``xxxx-xxxx``
+            # (8 Hex-Chars + Dash) — fuer die ist Lowercase+Dash-Reinsertion
+            # tolerant. Wir behandeln beide Formate hier.
+            candidate = token
+            # Legacy-Heuristik: rein-hex und 8-9 Zeichen -> alter Code, normalisieren.
+            stripped = candidate.replace("-", "")
+            if stripped and len(stripped) == 8 and all(c in "0123456789abcdefABCDEF" for c in stripped):
+                candidate = f"{stripped[:4]}-{stripped[4:]}".lower()
+            # Neue 22-Zeichen-Codes bleiben unveraendert (case-sensitive!).
             if candidate and verify_backup_code(request.user, candidate):
                 request.session["mfa_verified"] = True
                 AuditLog.objects.create(

@@ -102,9 +102,7 @@
     <p>{% trans "Keine Daten im gewählten Zeitraum." %}</p>
     {% endif %}
 
-    {# Refs #792 (C-24): Top-Pseudonyme nur im Internal-Mode rendern.
-       Standard-PDF (z.B. fuer Traegerberichte) bleibt ohne Re-Identifizierungs-
-       risiko. #}
+    {# Refs #792 (C-24): Top-Pseudonyme nur im Internal-Mode rendern. #}
     {% if internal_mode and stats.top_clients %}
     <h2>{% trans "Top 5 Personen" %}</h2>
     <table>

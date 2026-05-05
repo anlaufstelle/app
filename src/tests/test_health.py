@@ -51,3 +51,82 @@ class TestHealthEndpoint:
         data = response.json()
         assert data["virus_scanner"] == "unavailable"
         assert data["status"] == "degraded"
+
+    def test_clamav_alias_disabled(self):
+        """Refs #798 (C-30): ``clamav``-Alias spiegelt ``virus_scanner`` —
+        die Doku (release-checklist.md / coolify-deployment.md) nutzt
+        ``jq '.clamav'`` und erwartet ``ok``/``error``/``disabled``."""
+        response = Client().get("/health/")
+        data = response.json()
+        assert data["clamav"] == "disabled"
+
+    def test_clamav_alias_ok_when_connected(self, settings):
+        settings.CLAMAV_ENABLED = True
+        with patch("core.views.health.clamav_ping", return_value=True):
+            response = Client().get("/health/")
+        assert response.json()["clamav"] == "ok"
+
+    def test_clamav_alias_error_when_unavailable(self, settings):
+        settings.CLAMAV_ENABLED = True
+        with patch("core.views.health.clamav_ping", return_value=False):
+            response = Client().get("/health/")
+        assert response.json()["clamav"] == "error"
+
+
+@pytest.mark.django_db
+class TestHealthExtendedComponents:
+    """Refs #796 (C-28): SMTP, Encryption-Key, Backup-Alter, Disk-Frei."""
+
+    def test_encryption_key_ok_in_test_env(self):
+        data = Client().get("/health/").json()
+        assert data["encryption_key"] == "ok"
+
+    def test_encryption_key_error_critical(self):
+        with patch("core.services.encryption.encrypt_field", side_effect=RuntimeError("no key")):
+            response = Client().get("/health/")
+        data = response.json()
+        assert data["encryption_key"] == "error"
+        assert data["status"] == "error"
+        assert response.status_code == 503
+
+    def test_smtp_disabled_for_locmem_backend(self, settings):
+        settings.EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+        data = Client().get("/health/").json()
+        assert data["smtp"]["status"] == "disabled"
+
+    def test_smtp_unreachable_degrades(self, settings):
+        settings.EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+        settings.EMAIL_HOST = "smtp.invalid.example"
+        settings.EMAIL_PORT = 25
+        # socket.create_connection wird ausgehebelt, damit der Test offline laeuft.
+        with patch("socket.create_connection", side_effect=OSError("offline")):
+            data = Client().get("/health/").json()
+        assert data["smtp"]["status"] == "unreachable"
+        assert data["status"] == "degraded"
+
+    def test_backup_age_field_populated_when_files_exist(self, tmp_path, settings):
+        settings.BACKUP_DIR = tmp_path
+        (tmp_path / "anlaufstelle_2026-01-01.sql.gz.enc").write_bytes(b"x")
+        data = Client().get("/health/").json()
+        assert data["last_backup_age_hours"] is not None
+
+    def test_backup_age_warns_above_48h(self, tmp_path, settings):
+        import os as os_mod
+        from datetime import datetime, timedelta
+
+        settings.BACKUP_DIR = tmp_path
+        old_file = tmp_path / "anlaufstelle_2026-01-01.sql.gz.enc"
+        old_file.write_bytes(b"x")
+        ancient = (datetime.now() - timedelta(hours=72)).timestamp()
+        os_mod.utime(old_file, (ancient, ancient))
+
+        data = Client().get("/health/").json()
+        assert data["last_backup_age_hours"] is not None
+        assert data["last_backup_age_hours"] > 48
+        assert data["status"] == "degraded"
+
+    def test_disk_free_pct_field_populated(self, tmp_path, settings):
+        settings.MEDIA_ROOT = str(tmp_path)
+        data = Client().get("/health/").json()
+        assert data["disk_free_pct"] is not None
+        assert 0 <= data["disk_free_pct"] <= 100

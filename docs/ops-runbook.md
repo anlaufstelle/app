@@ -556,7 +556,9 @@ BACKUP_OFFSITE_TARGET=backup-user@offsite.example.com:/backups/anlaufstelle
 
 **Empfohlen:** Object-Lock / Write-Once-Policy am Bucket aktivieren — Ransomware kann verschluesselte Backups dann nicht ueberschreiben.
 
-**Failure-Mode:** Wenn der Off-Site-Sync fehlschlaegt (Netz weg, Credentials ungueltig, Disk voll am Off-Site-Host), loggt `backup.sh` einen `ERROR` und beendet das Skript trotzdem mit Exit-Code 0 — das lokale Backup darf nicht abgewertet werden, weil das Off-Site-Ziel kurzfristig nicht erreichbar ist. Das Cron-Wrapper-Log (`/var/log/anlaufstelle-backup.log`) muss daher monitored werden, damit eine wiederholte ERROR-Meldung nicht uebersehen wird.
+**Failure-Mode** (Refs [#797](https://github.com/tobiasnix/anlaufstelle/issues/797)): Wenn der Off-Site-Sync fehlschlaegt (Netz weg, Credentials ungueltig, Disk voll am Off-Site-Host), loggt `backup.sh` einen `ERROR`. Ein **State-File** `$BACKUP_STATE_DIR/.offsite_state` (Default: neben den Backups) zaehlt aufeinanderfolgende Fehler. Beim **zweiten** Fehler in Folge endet das Skript mit Exit-Code 1 — der Cron-/Coolify-Job wird damit rot und der Operator sieht den Vorfall sofort, ohne die Logs scannen zu muessen. Erfolgreiche Laeufe setzen den Counter zurueck.
+
+**Sentry-Hook (optional):** Wenn `SENTRY_DSN` UND ein `BACKUP_SENTRY_HOOK`-Skript gesetzt sind, ruft `backup.sh` den Hook bei jedem Off-Site-Fehler auf (Argumente: Beschreibung, Off-Site-Ziel). Der Hook ist freie Operator-Wahl — z.B. `sentry-cli send-event` oder ein eigenes `curl`-Skript. Ohne Hook bleibt es bei Log + Exit-Code.
 
 ### 6.6 Backup-Restore-Drill (Refs [#720](https://github.com/tobiasnix/anlaufstelle/issues/720), [#739](https://github.com/tobiasnix/anlaufstelle/issues/739))
 
@@ -649,10 +651,13 @@ Funde werden mit `reason=virus_detected` und der gemeldeten Signatur geloggt.
 
 ### 7.3 Healthcheck
 
-`GET /health/` liefert zusätzlich `"virus_scanner": "connected"|"unavailable"|"disabled"`.
+`GET /health/` liefert zusätzlich `"virus_scanner": "connected"|"unavailable"|"disabled"`
+sowie den Alias `"clamav": "ok"|"error"|"disabled"` (Refs [#798](https://github.com/tobiasnix/anlaufstelle/issues/798)).
 Bei aktivem Scanner und unerreichbarem Daemon wird der Gesamtstatus auf
 `"degraded"` gesetzt, der HTTP-Status bleibt 200 (die harte Sperre erfolgt
-beim Upload, nicht am Healthcheck).
+beim Upload, nicht am Healthcheck). Der Container-Healthcheck im Dockerfile
+liest den JSON-`status` und meldet bei `degraded` ungesund — Coolify/k8s sehen
+den Vorfall, der Last-Balancer reisst den Pod aber nicht raus.
 
 ### 7.4 Datenbank-Updates (Signaturen)
 

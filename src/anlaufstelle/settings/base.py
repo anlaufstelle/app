@@ -232,6 +232,13 @@ STORAGES = {
 MEDIA_ROOT = BASE_DIR / "media"
 MEDIA_URL = "/media/"
 
+# --- Backup-Verzeichnis (Refs #796) ---
+# Pfad, in dem ``scripts/backup.sh`` die Daily-Files (.sql.gz.enc) ablegt.
+# Wird vom Health-Endpoint zur Berechnung von ``last_backup_age_hours``
+# gelesen. Default = ``<repo>/backups`` passend zur Default-Convention im
+# Backup-Script.
+BACKUP_DIR = Path(os.environ.get("BACKUP_DIR", BASE_DIR.parent / "backups"))
+
 # --- Encryption ---
 # MultiFernet key rotation: ENCRYPTION_KEYS is a comma-separated list of Fernet keys.
 # The first key is used for encrypting, all keys are tried for decrypting.

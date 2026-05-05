@@ -178,11 +178,16 @@ find "$MONTHLY_DIR" -name "*_media.tar.gz.enc" -mtime +90 -delete
 
 echo "Rotation abgeschlossen."
 
-# Off-Site-Sync (Refs #738, Audit-Massnahme #22) — best-effort.
+# Off-Site-Sync (Refs #738, Audit-Massnahme #22; State-File + Sentry: Refs #797).
 # BACKUP_OFFSITE_TARGET: rclone-Remote ("rclone:remote:bucket"),
 # S3-URL ("s3://bucket/path") oder SCP-Target ("user@host:/path").
-# Failure-Mode: ERROR ins Log, **kein** Skript-Abbruch — lokales Backup
-# ist gerettet, Off-Site darf beim naechsten Run nachziehen.
+#
+# Failure-Mode: jeder Fehler erhoeht einen persistenten Counter im
+# State-File ``$BACKUP_STATE_DIR/.offsite_state``. Erst beim ZWEITEN
+# aufeinanderfolgenden Fehler beendet das Skript mit Exit-Code 1 — das
+# fuehrt zu einer sichtbaren Cron-/Coolify-Warnung. Einzelne transiente
+# Fehler werden weiterhin nur geloggt, das lokale Backup ist gerettet
+# und Off-Site darf beim naechsten Run nachziehen.
 if [[ -n "${BACKUP_OFFSITE_TARGET:-}" ]]; then
     echo "Synce Tagesbackups nach: ${BACKUP_OFFSITE_TARGET}"
     OFFSITE_OK=true
@@ -213,7 +218,35 @@ if [[ -n "${BACKUP_OFFSITE_TARGET:-}" ]]; then
             OFFSITE_OK=false
             ;;
     esac
+
+    # State-File: Counter aufeinanderfolgender Fehler. Default-Pfad liegt
+    # neben den Backups (BACKUP_DIR), kann aber per BACKUP_STATE_DIR
+    # ueberschrieben werden (z.B. /var/lib/anlaufstelle).
+    OFFSITE_STATE_FILE="${BACKUP_STATE_DIR:-$BACKUP_DIR}/.offsite_state"
+    mkdir -p "$(dirname "$OFFSITE_STATE_FILE")"
+    PREV_FAIL_COUNT=0
+    if [[ -f "$OFFSITE_STATE_FILE" ]]; then
+        PREV_FAIL_COUNT=$(cat "$OFFSITE_STATE_FILE" 2>/dev/null || echo 0)
+    fi
+
     if [[ "$OFFSITE_OK" == true ]]; then
         echo "Off-Site-Sync erfolgreich."
+        echo 0 > "$OFFSITE_STATE_FILE"
+    else
+        FAIL_COUNT=$((PREV_FAIL_COUNT + 1))
+        echo "$FAIL_COUNT" > "$OFFSITE_STATE_FILE"
+        echo "ERROR: Off-Site-Fehler #${FAIL_COUNT} — State persisted: ${OFFSITE_STATE_FILE}"
+        # Sentry-Hook (optional) — wenn ein Hook-Skript hinterlegt ist und
+        # SENTRY_DSN gesetzt ist, leiten wir den Fehler an den Operator weiter.
+        # Kein hartes Bash-Sentry-SDK notwendig — der Operator kann z.B.
+        # ``sentry-cli send-event`` oder ein eigenes curl-Skript einhaengen.
+        if [[ -n "${SENTRY_DSN:-}" && -n "${BACKUP_SENTRY_HOOK:-}" && -x "${BACKUP_SENTRY_HOOK}" ]]; then
+            "$BACKUP_SENTRY_HOOK" "Off-Site-Backup fehlgeschlagen (#${FAIL_COUNT})" \
+                "${BACKUP_OFFSITE_TARGET}" || true
+        fi
+        if (( FAIL_COUNT >= 2 )); then
+            echo "FATAL: Off-Site-Sync seit ${FAIL_COUNT} aufeinanderfolgenden Laeufen kaputt — Skript bricht ab."
+            exit 1
+        fi
     fi
 fi
