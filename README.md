@@ -10,13 +10,13 @@
 
 ## So sieht Anlaufstelle aus
 
-| Zeitstrom — Ihr digitales Dienstbuch | Klientelliste |
+| Zeitstrom — Ihr digitales Dienstbuch | Personenliste |
 |:---:|:---:|
-| ![Zeitstrom](docs/screenshots/zeitstrom.png) | ![Klientelliste](docs/screenshots/klientenliste.png) |
+| ![Zeitstrom](docs/screenshots/zeitstrom.png) | ![Personenliste](docs/screenshots/personenliste.png) |
 
-| Statistiken auf Knopfdruck | Klientelverlauf |
+| Statistiken auf Knopfdruck | Personenverlauf |
 |:---:|:---:|
-| ![Statistiken](docs/screenshots/statistiken.png) | ![Klientelverlauf](docs/screenshots/klientendetail.png) |
+| ![Statistiken](docs/screenshots/statistiken.png) | ![Personenverlauf](docs/screenshots/personendetail.png) |
 
 <details>
 <summary>Mobile Ansicht</summary>
@@ -45,7 +45,7 @@ Typische Teamgröße: 5–20 Mitarbeitende. Typische Situation: Dokumentation mi
 
 ## Was ist Anlaufstelle?
 
-Anlaufstelle ist eine Software für die tägliche Arbeit in der niedrigschwelligen Sozialarbeit. Sie unterstützt Ihr Team bei der Dokumentation, der Informationsweitergabe zwischen Diensten und der Erstellung von Berichten und Statistiken — ohne dass Klientel einen bürgerlichen Namen angeben müssen.
+Anlaufstelle ist eine Software für die tägliche Arbeit in der niedrigschwelligen Sozialarbeit. Sie unterstützt Ihr Team bei der Dokumentation, der Informationsweitergabe zwischen Diensten und der Erstellung von Berichten und Statistiken — ohne dass Personen einen bürgerlichen Namen angeben müssen.
 
 Etablierte kommerzielle Sozialbereichssoftware richtet sich an große Träger, ist für kleine Einrichtungen zu teuer und setzt voraus, dass jede Person mit Name und Adresse erfasst wird. Anlaufstelle füllt diese Lücke: niedrigschwellig, finanzierbar, datenschutzgerecht.
 
@@ -55,7 +55,7 @@ Etablierte kommerzielle Sozialbereichssoftware richtet sich an große Träger, i
 
 ### 1. Ohne Klarnamen — von Anfang an
 
-Es gibt kein Namensfeld. Ihre Klientel werden unter einem Pseudonym geführt, das Ihr Team vergibt. Das System kennt drei Kontaktstufen:
+Es gibt kein Namensfeld. Personen werden unter einem Pseudonym geführt, das Ihr Team vergibt. Das System kennt drei Kontaktstufen:
 
 - **Anonym** — kein Pseudonym, keine Wiedererkennung (z. B. Kurzbesuche, Spritzentausch)
 - **Identifiziert** — Pseudonym vergeben, Person ist wiedererkennbar
@@ -88,7 +88,7 @@ Die Konfiguration bestimmt auch den Datenschutz:
 
 - **Kontakte dokumentieren** — in 30 Sekunden, auch vom Smartphone
 - **Hinweise und Aufgaben** — Informationen zwischen Diensten weitergeben, Aufgaben nachverfolgen
-- **Klientel-Register** — Pseudonyme, Kontaktstufen, Verlaufschronik
+- **Personen-Register** — Pseudonyme, Kontaktstufen, Verlaufschronik
 - **Tippfehler-tolerante Suche** — schnell finden, was Sie suchen
 - **Offline-Modus für Streetwork** — Erfassung auch ohne Netz, lokal verschlüsselt
 - **Deutsch und Englisch** — Sprachumschaltung im System
@@ -111,7 +111,7 @@ Anlaufstelle ist von Grund auf für den Umgang mit besonders schützenswerten Da
 - **Aufbewahrungsfristen** — automatische Löschung nach konfigurierbarer Frist (Art. 17 DSGVO)
 - **Löschanträge mit 4-Augen-Prinzip** — Löschung nur nach Genehmigung durch Leitung/Admin
 - **Prüfprotokoll** — unveränderliches Audit-Log aller sicherheitsrelevanten Aktionen
-- **Betroffenenrechte** — Datenauskunft und -export für Klientel (Art. 15, 20 DSGVO)
+- **Betroffenenrechte** — Datenauskunft und -export für Personen (Art. 15, 20 DSGVO)
 - **DSGVO-Vorlagen** — Muster für AV-Vertrag, DSFA, TOMs, Verarbeitungsverzeichnis und Informationspflichten mitgeliefert
 
 ---

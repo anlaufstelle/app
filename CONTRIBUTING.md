@@ -392,6 +392,10 @@ Diese Pipeline muss vor jedem Pull Request lokal grün sein.
    - Screenshot oder Demo, wenn UI-Änderungen enthalten sind
    - Verlinkung des zugehörigen GitHub-Issues
 
+### Code of Conduct
+
+Alle Mitwirkenden verpflichten sich auf den [Contributor Covenant 2.1](CODE_OF_CONDUCT.md). Belästigungsfälle melden Mitwirkende vertraulich an `kontakt@anlaufstelle.app` (Refs [#836](https://github.com/tobiasnix/anlaufstelle/issues/836)).
+
 5. **Review:** Mindestens ein Approval erforderlich. Feedback sachlich und konstruktiv.
 
 6. **Mergen:** Squash-Merge auf `main`, sobald CI grün und Approval vorhanden.

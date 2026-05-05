@@ -12,11 +12,11 @@
 
 | Timeline — your digital logbook | Client list |
 |:---:|:---:|
-| ![Timeline](docs/screenshots/zeitstrom-en.png) | ![Client list](docs/screenshots/klientenliste-en.png) |
+| ![Timeline](docs/screenshots/zeitstrom-en.png) | ![Client list](docs/screenshots/personenliste-en.png) |
 
 | Statistics at the push of a button | Client history |
 |:---:|:---:|
-| ![Statistics](docs/screenshots/statistiken-en.png) | ![Client history](docs/screenshots/klientendetail-en.png) |
+| ![Statistics](docs/screenshots/statistiken-en.png) | ![Client history](docs/screenshots/personendetail-en.png) |
 
 <details>
 <summary>Mobile view</summary>

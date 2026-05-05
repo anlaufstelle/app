@@ -45,6 +45,9 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-011](011-three-repo-release-pipeline.md) | 3-Repo-Release-Pipeline (dev → stage → app) | Accepted |
 | [ADR-012](012-incremental-mypy.md) | Inkrementelles mypy mit Strict-Zone für Services | Accepted |
 | [ADR-013](013-dsgvo-art16-no-selfservice.md) | DSGVO Art. 16 ohne App-Self-Service | Accepted |
+| [ADR-014](014-encrypted-file-vault.md) | Encrypted File Vault | Accepted |
+| [ADR-015](015-mfa-totp.md) | MFA-Verfahren — TOTP + Hash-Backup-Codes | Accepted |
+| [ADR-016](016-search-postgres-only.md) | Volltextsuche bleibt in PostgreSQL | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
@@ -52,9 +55,6 @@ Entscheidungen, die im Code bereits sichtbar sind, deren Begründung aber noch n
 
 | Kandidat | Worum es geht | Warum noch keine ADR |
 |----------|---------------|----------------------|
-| Encrypted File Vault | Verschlüsselte Datei-Anhänge an Events ([`src/core/services/file_vault.py`](../../src/core/services/file_vault.py), Commit `c609e86`) — Speicherpfad, Schlüsselableitung, Streaming-Decrypt, Virus-Scan-Anbindung. | Schreibstand und Schlüssel­strategie noch in Bewegung — ADR macht erst nach Stabilisierung Sinn. |
-| MFA-Verfahren | Wahl von TOTP, Backup-Codes, Recovery-Flow ([`src/core/services/mfa.py`](../../src/core/services/mfa.py)) — warum TOTP statt WebAuthn als Default, Pflicht/Opt-in pro Rolle. | Roll-out-Policy (Pflicht ab Rolle X?) ist noch in Diskussion. |
-| Volltextsuche-Backend | PostgreSQL-`tsvector` + Trigram statt externem Suchindex ([`src/core/services/search.py`](../../src/core/services/search.py)) — Wörterbuch-Konfiguration, Sprache, Pseudonym-Handling. | Sprach-Konfiguration und Indexierungs-Trigger noch nicht final. |
 | Deployment-Target | Coolify als primärer Deployment-Pfad ([`docs/coolify-deployment.md`](../coolify-deployment.md)) statt reiner Compose-/Kubernetes-Anleitung. | Abhängig von tatsächlichen Erfahrungen im ersten Pilot-Deployment. |
 | Retention-Modell | Retention-Fristen, Legal-Hold, AuditLog-Pruning ([`src/core/services/retention.py`](../../src/core/services/retention.py)) — wer setzt welche Frist, wer darf Hold setzen, was passiert mit Historie. | Modell ist im Code, aber die Begründung der Default-Fristen sollte noch mit Datenschutz­vorlagen abgeglichen werden. |
 | Offline-Snapshot / Offline-Keys | Offline-Bundle für Außeneinsätze ([`src/core/services/offline.py`](../../src/core/services/offline.py), [`offline_keys.py`](../../src/core/services/offline_keys.py)) — Bedrohungsmodell, Schlüsselableitung, Synchronisations­semantik. | Feature ist noch nicht stabil genug, um Annahmen festzuschreiben. |
