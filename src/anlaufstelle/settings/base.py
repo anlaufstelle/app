@@ -45,6 +45,11 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # MaintenanceModeMiddleware liegt direkt nach SecurityMiddleware,
+    # damit sie 503 antworten kann, BEVOR Sessions/Auth/CSP geprueft
+    # werden — ein laufendes Deploy darf nicht an einer Auth-Pruefung
+    # haengen bleiben. Refs #700.
+    "core.middleware.maintenance.MaintenanceModeMiddleware",
     # AdminCSPRelaxMiddleware muss VOR CSPMiddleware stehen, damit sie in
     # Outbound-Reihenfolge den von CSPMiddleware gesetzten Header noch ändern
     # kann (Django ruft Response-Verarbeitung in umgekehrter Listen-Reihenfolge).
@@ -127,6 +132,25 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # --- Session ---
+
+# --- CSRF (Refs #699) ---
+# Custom CSRF-Failure-View liefert ``403_csrf.html`` (Tailwind, deutsch)
+# statt Djangos Built-in-Default-Seite.
+CSRF_FAILURE_VIEW = "core.views.errors.csrf_failure"
+
+# --- Maintenance-Mode (Refs #700) ---
+# Solange diese Datei existiert, antwortet MaintenanceModeMiddleware mit 503.
+# Aktivieren: ``touch $MAINTENANCE_FLAG_FILE``. Default ``None`` =
+# Middleware ist No-Op (kein Disk-Check).
+MAINTENANCE_FLAG_FILE = os.environ.get("MAINTENANCE_FLAG_FILE") or None
+# Komma-separierte IP-Liste fuer Ops-Zugriff waehrend der Wartung.
+MAINTENANCE_ALLOW_IPS = [
+    ip.strip() for ip in os.environ.get("MAINTENANCE_ALLOW_IPS", "").split(",") if ip.strip()
+]
+# Caching der Flag-Datei-Pruefung (Sekunden).
+MAINTENANCE_CACHE_TTL = int(os.environ.get("MAINTENANCE_CACHE_TTL", "5"))
+# Retry-After-Header-Wert (Sekunden).
+MAINTENANCE_RETRY_AFTER = int(os.environ.get("MAINTENANCE_RETRY_AFTER", "600"))
 
 SESSION_COOKIE_AGE = 1800  # 30 Minuten
 # False reduziert DB-Write-Amplifikation bei HTMX-Microrequests

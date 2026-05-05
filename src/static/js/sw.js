@@ -15,13 +15,18 @@
 
 importScripts("/static/js/url-patterns.js");
 
-const CACHE_NAME = "anlaufstelle-v7";
+const CACHE_NAME = "anlaufstelle-v8";
+// Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
+// ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
+// auch beim ersten Offline-Aufruf garantiert verfuegbar ist.
+const OFFLINE_FALLBACK_URL = "/offline/";
 const APP_SHELL = [
     "/static/css/styles.css",
     "/static/icons/icon-192.png",
     "/static/icons/icon-512.png",
     "/static/icons/icon-192.svg",
     "/static/icons/icon-512.svg",
+    OFFLINE_FALLBACK_URL,
 ];
 
 self.addEventListener("install", (event) => {
@@ -212,10 +217,13 @@ self.addEventListener("fetch", (event) => {
     }
 
     if (request.headers.get("Accept")?.includes("text/html") || request.headers.get("HX-Request")) {
-        // Offline-Fallback für Klientel-Detail: Wenn Netz weg ist, auf die
-        // Offline-Viewer-Seite umleiten, die per JS aus IndexedDB rendert.
-        // Der Viewer liefert "Nicht offline verfügbar", wenn kein Bundle
-        // im Cache liegt — dadurch bleibt die UX konsistent (kein 502).
+        // Offline-Fallback-Kette (Refs #701):
+        // 1. Versuch: Netz
+        // 2. Klientel-Detail-Sonderfall: auf /offline/clients/<pk>/ umleiten
+        //    (der Viewer rendert aus IndexedDB)
+        // 3. Sonst: gecachte Version dieser URL
+        // 4. Sonst: dediziertes /offline/-Fallback-Template (statt
+        //    Browser-Default „Sie sind offline / Chrome-Dino")
         event.respondWith(
             fetch(request).catch(() => {
                 const clientPk =
@@ -225,7 +233,7 @@ self.addEventListener("fetch", (event) => {
                     const offlineUrl = "/offline/clients/" + clientPk + "/";
                     return Response.redirect(offlineUrl, 302);
                 }
-                return caches.match(request);
+                return caches.match(request).then((cached) => cached || caches.match(OFFLINE_FALLBACK_URL));
             })
         );
     }

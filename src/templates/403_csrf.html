@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}403 – {% trans "Sicherheits-Token abgelaufen" %}{% endblock %}
+
+{% block content %}
+<div class="min-h-[70vh] flex items-center justify-center">
+    <div class="text-center max-w-lg px-4">
+        <p class="text-6xl font-bold text-accent">403</p>
+        <h1 class="mt-4 text-2xl font-semibold text-ink">{% trans "Sicherheits-Token abgelaufen" %}</h1>
+        <p class="mt-2 text-ink-muted">
+            {% trans "Ihre Sitzung ist abgelaufen oder das Sicherheitstoken ist ungültig. Bitte laden Sie die Seite neu und versuchen Sie es erneut." %}
+        </p>
+        <p class="mt-2 text-sm text-ink-muted">
+            {% trans "Häufiger Grund: Sie waren längere Zeit inaktiv oder haben sich in einem anderen Tab abgemeldet." %}
+        </p>
+        <div class="mt-6 flex gap-3 justify-center flex-wrap">
+            <a href="javascript:location.reload()"
+               class="inline-flex items-center px-4 py-2 bg-accent text-white rounded-md hover:bg-accent text-sm font-medium transition-colors">
+                {% trans "Seite neu laden" %}
+            </a>
+            <a href="{% url 'core:zeitstrom' %}"
+               class="inline-flex items-center px-4 py-2 bg-canvas border border-subtle text-ink rounded-md hover:bg-surface text-sm font-medium transition-colors">
+                {% trans "Zur Startseite" %}
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

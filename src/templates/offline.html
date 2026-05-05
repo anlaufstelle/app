@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Offline — Anlaufstelle</title>
+<style>
+    /* Inline-CSS, weil der Service-Worker dieses Template direkt
+       ausliefert (kein Django-Rendering, kein /static/css/-Lookup
+       moeglich, wenn das Netz weg ist). Refs #701. */
+    :root {
+        color-scheme: light dark;
+        --ink: #0f172a;
+        --ink-soft: #475569;
+        --canvas: #f8fafc;
+        --surface: #ffffff;
+        --border: #e2e8f0;
+        --accent: #2563eb;
+    }
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --ink: #e2e8f0;
+            --ink-soft: #94a3b8;
+            --canvas: #0f172a;
+            --surface: #1e293b;
+            --border: #334155;
+            --accent: #60a5fa;
+        }
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--canvas);
+        color: var(--ink);
+        min-height: 100dvh;
+        display: grid;
+        place-items: center;
+        padding: 2rem 1rem;
+    }
+    main {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 2rem 1.75rem;
+        max-width: 520px;
+        width: 100%;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, .04);
+    }
+    h1 {
+        margin: 0 0 .5rem;
+        font-size: 1.35rem;
+        line-height: 1.3;
+    }
+    .badge {
+        display: inline-block;
+        font-size: .75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        padding: .15rem .55rem;
+        border-radius: 999px;
+        background: var(--canvas);
+        color: var(--ink-soft);
+        border: 1px solid var(--border);
+        margin-bottom: 1rem;
+    }
+    p {
+        margin: 0 0 1rem;
+        color: var(--ink-soft);
+        font-size: .95rem;
+        line-height: 1.55;
+    }
+    ul {
+        margin: 0 0 1.5rem;
+        padding-left: 1.25rem;
+        color: var(--ink-soft);
+        font-size: .9rem;
+    }
+    li { margin-bottom: .35rem; }
+    .actions {
+        display: flex;
+        gap: .75rem;
+        flex-wrap: wrap;
+    }
+    a.btn {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+        padding: .55rem 1rem;
+        border-radius: 8px;
+        font-size: .9rem;
+        font-weight: 500;
+        text-decoration: none;
+        border: 1px solid var(--border);
+        color: var(--ink);
+        background: var(--surface);
+    }
+    a.btn.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: white;
+    }
+    .hint {
+        margin-top: 1.5rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border);
+        font-size: .85rem;
+        color: var(--ink-soft);
+    }
+</style>
+</head>
+<body>
+    <main>
+        <span class="badge">Offline</span>
+        <h1>Sie sind aktuell offline.</h1>
+        <p>Diese Seite ist nicht im Offline-Cache verfügbar. Sobald die Verbindung wiederhergestellt ist, lädt sie normal.</p>
+        <ul>
+            <li>Eingegebene Daten werden zwischengespeichert und beim Wiederverbinden gesendet.</li>
+            <li>Bereits geladene Klientel-Detailseiten sind weiterhin lesbar.</li>
+            <li>Datei-Uploads benötigen eine aktive Verbindung.</li>
+        </ul>
+        <div class="actions">
+            <a href="/" class="btn primary">Zur Startseite</a>
+            <a href="javascript:location.reload()" class="btn">Erneut versuchen</a>
+        </div>
+        <p class="hint">Sobald die Verbindung wieder steht, schließt der Service-Worker offene Aufgaben automatisch ab. Refs <a href="https://github.com/tobiasnix/anlaufstelle/issues/701">#701</a>.</p>
+    </main>
+</body>
+</html>

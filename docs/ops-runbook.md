@@ -488,6 +488,30 @@ SENTRY_DSN=https://...@sentry.io/...
 SENTRY_TRACES_SAMPLE_RATE=0.1
 ```
 
+### 6.5a Maintenance-Mode (Refs [#700](https://github.com/tobiasnix/anlaufstelle/issues/700))
+
+Vor und waehrend Migrations/Deploys den Stack auf 503 schalten, damit
+User eine konsistente Custom-Page sehen statt Connection-Errors.
+
+```bash
+# Aktivieren (File-Flag wird angelegt)
+make maintenance-on
+
+# Deploy / Migration ausfuehren
+docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+
+# Deaktivieren (File-Flag entfernen)
+make maintenance-off
+```
+
+`make maintenance-on/off` nutzt `$MAINTENANCE_FLAG_FILE` (Env-Var) oder Default `/tmp/anlaufstelle.maintenance`. Whitelist:
+
+- `/health/` und `/static/...` bleiben erreichbar (Loadbalancer / Reverse-Proxy)
+- `MAINTENANCE_ALLOW_IPS` (komma-separiert) erlaubt Ops-Zugriff via `X-Forwarded-For` — z.B. fuer den eigenen Admin-Laptop waehrend des Wartungsfensters
+
+`Retry-After`-Header (Default 600s) hilft Browsern + Loadbalancern, sinnvoll zu reagieren. Die Flag-Datei wird pro Worker max alle `MAINTENANCE_CACHE_TTL` Sekunden geprueft (Default 5s) — Per-Request-Kosten praktisch null wenn aus.
+
 ### 6.6a Off-Site-Backup-Sync (Refs [#738](https://github.com/tobiasnix/anlaufstelle/issues/738))
 
 Lokale Backups in `backups/daily/` ueberleben Container-Recreates, aber nicht den vollstaendigen Verlust des Prod-Hosts (Hardware-Defekt, Ransomware, Provider-Ausfall). `backup.sh` synct optional nach jeder Rotation in ein Off-Site-Ziel.

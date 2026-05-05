@@ -20,7 +20,7 @@ from core.views.mfa import (
     MFASetupView,
     MFAVerifyView,
 )
-from core.views.pwa import ManifestView, ServiceWorkerView
+from core.views.pwa import ManifestView, OfflineFallbackView, ServiceWorkerView
 
 urlpatterns = [
     path("admin-mgmt/", admin.site.urls),
@@ -78,5 +78,6 @@ urlpatterns = [
     ),
     path("sw.js", ServiceWorkerView.as_view(), name="service_worker"),
     path("manifest.json", ManifestView.as_view(), name="manifest"),
+    path("offline/", OfflineFallbackView.as_view(), name="offline_fallback"),
     path("", include("core.urls")),
 ]
