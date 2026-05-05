@@ -36,22 +36,13 @@ def test_service_worker_registered(authenticated_page, base_url):
     page = authenticated_page
     page.goto(base_url, wait_until="domcontentloaded")
 
-    # Warten bis Service Worker registriert ist
+    # ``navigator.serviceWorker.ready`` resolved erst, wenn die Registration
+    # einen aktiven Worker hat — eliminiert Race-Condition mit
+    # ``getRegistration`` direkt nach ``domcontentloaded`` (Refs #762).
     sw_state = page.evaluate("""
         async () => {
-            const reg = await navigator.serviceWorker.getRegistration('/');
-            if (!reg) return 'none';
-            // Warten bis der SW aktiv ist
-            const sw = reg.active || reg.installing || reg.waiting;
-            if (!sw) return 'no-worker';
-            if (sw.state === 'activated' || sw.state === 'activating') return 'active';
-            // Auf Aktivierung warten
-            return new Promise((resolve) => {
-                sw.addEventListener('statechange', () => {
-                    if (sw.state === 'activated') resolve('active');
-                });
-                setTimeout(() => resolve(sw.state), 5000);
-            });
+            const reg = await navigator.serviceWorker.ready;
+            return reg && reg.active ? 'active' : 'none';
         }
     """)
     assert sw_state == "active", f"Service Worker Status: {sw_state}"
@@ -255,7 +246,7 @@ class TestOfflineEntrypointsMobile:
         overflow.click()
 
         offline_btn = page.locator("[data-testid='mobile-take-offline-btn']")
-        offline_btn.wait_for(state="visible", timeout=3000)
+        offline_btn.wait_for(state="visible", timeout=10000)
         # Einer der beiden Labels muss im Button stecken. Alpine togglet die Spans
         # via x-show; text_content liest das DOM und ist deshalb nicht von der
         # aktuellen Sichtbarkeit abhängig.

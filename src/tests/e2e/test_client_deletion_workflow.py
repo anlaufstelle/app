@@ -12,18 +12,20 @@ import pytest
 pytestmark = pytest.mark.e2e
 
 
-def _click_first_client_link(page):
+def _click_first_client_link(page, base_url):
     """Klickt den ersten Personen-Link in der Liste und wartet auf Detail."""
-    page.goto(f"{page.url.split('/clients')[0]}/clients/")
+    page.goto(f"{base_url}/clients/")
     page.wait_for_load_state("domcontentloaded")
-    page.locator("a[href^='/clients/']").filter(has_text=re.compile(r"^[A-Za-z]+-\d+$")).first.click()
+    # ``.client-list``-Scope vermeidet Sidebar/Nav-Links und ist gegenueber
+    # Pseudonym-Format (Umlaute, neue Spitznamen-Pools) robust — Refs #761.
+    page.locator(".client-list a[href^='/clients/']").first.click()
     page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
 
 
 def test_staff_can_request_client_deletion(staff_page, base_url):
     """Fachkraft sieht den Löschen-Beantragen-Button und kann einen Antrag stellen."""
     page = staff_page
-    _click_first_client_link(page)
+    _click_first_client_link(page, base_url)
 
     # Button via data-testid (stabil gegenüber Layout-Änderungen).
     page.locator("[data-testid='client-delete-request-btn']").first.click()
@@ -43,7 +45,7 @@ def test_staff_can_request_client_deletion(staff_page, base_url):
 def test_assistant_does_not_see_delete_request_button(assistant_page, base_url):
     """Assistenten-Rolle hat den Löschen-Beantragen-Button nicht."""
     page = assistant_page
-    _click_first_client_link(page)
+    _click_first_client_link(page, base_url)
     assert page.locator("[data-testid='client-delete-request-btn']").count() == 0
 
 
@@ -56,7 +58,11 @@ def test_full_four_eyes_workflow(staff_page, lead_page, authenticated_page, base
     # 1. Fachkraft beantragt Löschung
     page = staff_page
     page.goto(f"{base_url}/clients/")
-    page.locator("a[href^='/clients/']").filter(has_text=re.compile(r"^[A-Za-z]+-\d+$")).nth(1).click()
+    page.wait_for_load_state("domcontentloaded")
+    # Zweite Person aus der Liste — die erste wird bereits in
+    # ``test_staff_can_request_client_deletion`` angefasst (parallele E2E-Workers
+    # haben separate DBs, der Index hier dient nur der Variation).
+    page.locator(".client-list a[href^='/clients/']").nth(1).click()
     page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
     client_url = page.url
     client_pseudonym_match = page.locator("h1").first.text_content()

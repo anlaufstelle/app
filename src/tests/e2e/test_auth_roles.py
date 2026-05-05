@@ -217,9 +217,10 @@ class TestZZAccountLockout:
 
             # Weiterhin auf /login/ — kein Redirect auf /
             assert page.url.endswith("/login/"), f"Unerwartete Weiterleitung: {page.url}"
-            # Sichtbare Sperr-Meldung
+            # Sichtbare Sperr-Meldung — Timeout grosszuegig, um unter Parallel-Last
+            # nicht falsch-rot zu werden (Refs #761).
             locked_msg = page.locator("text=gesperrt")
-            locked_msg.wait_for(state="visible", timeout=3000)
+            locked_msg.wait_for(state="visible", timeout=10000)
             assert locked_msg.is_visible(), f"Seiten-HTML ohne Lockout-Text:\n{page.content()[:2000]}"
         finally:
             context.close()

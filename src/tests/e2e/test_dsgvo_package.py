@@ -2,6 +2,8 @@
 
 import pytest
 
+from ._helpers import enter_sudo_mode
+
 pytestmark = pytest.mark.e2e
 
 
@@ -22,6 +24,7 @@ class TestDSGVOPackageNavigation:
 
     def test_admin_can_access_page(self, authenticated_page, base_url):
         """Admin kann DSGVO-Paket-Seite aufrufen."""
+        enter_sudo_mode(authenticated_page, base_url)
         authenticated_page.goto(f"{base_url}/dsgvo/")
         heading = authenticated_page.locator("h1:has-text('DSGVO-Dokumentationspaket')")
         assert heading.count() == 1
@@ -32,6 +35,7 @@ class TestDSGVODocumentDownload:
 
     def test_admin_can_download_document(self, authenticated_page, base_url):
         """Admin kann ein DSGVO-Dokument herunterladen."""
+        enter_sudo_mode(authenticated_page, base_url)
         authenticated_page.goto(f"{base_url}/dsgvo/")
 
         with authenticated_page.expect_download() as download_info:
@@ -41,6 +45,7 @@ class TestDSGVODocumentDownload:
 
     def test_document_contains_facility_data(self, authenticated_page, base_url):
         """Heruntergeladenes Dokument enthält Einrichtungsdaten."""
+        enter_sudo_mode(authenticated_page, base_url)
         authenticated_page.goto(f"{base_url}/dsgvo/")
 
         with authenticated_page.expect_download() as download_info:
@@ -52,6 +57,7 @@ class TestDSGVODocumentDownload:
 
     def test_page_shows_5_documents(self, authenticated_page, base_url):
         """Seite zeigt 5 Dokumente."""
+        enter_sudo_mode(authenticated_page, base_url)
         authenticated_page.goto(f"{base_url}/dsgvo/")
         rows = authenticated_page.locator("tbody tr")
         assert rows.count() == 5

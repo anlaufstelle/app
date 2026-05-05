@@ -57,7 +57,7 @@ class TestSchnellerfassung:
 
         # Warten bis Dropdown sichtbar und mindestens ein Ergebnis da ist.
         page.locator("#client-autocomplete-list").wait_for(state="visible", timeout=5000)
-        page.locator("#client-autocomplete-list button").first.wait_for(state="visible", timeout=3000)
+        page.locator("#client-autocomplete-list button").first.wait_for(state="visible", timeout=10000)
         # Dokumentierter Ausnahmefall zur „kein wait_for_timeout"-Regel (Refs
         # #598 T-1): Alpine refetched intern nach dem 150ms-Debounce und
         # rerendert den Dropdown-Inhalt — ohne UI-Signal dafür ist eine
@@ -67,11 +67,11 @@ class TestSchnellerfassung:
 
         # Pfeil-runter + warten bis Alpine highlightet + Enter
         autocomplete.press("ArrowDown")
-        page.locator("#client-autocomplete-list button.bg-accent-light").wait_for(state="visible", timeout=3000)
+        page.locator("#client-autocomplete-list button.bg-accent-light").wait_for(state="visible", timeout=10000)
         autocomplete.press("Enter")
 
         # Dropdown sollte geschlossen sein
-        page.locator("#client-autocomplete-list").wait_for(state="hidden", timeout=3000)
+        page.locator("#client-autocomplete-list").wait_for(state="hidden", timeout=10000)
 
         # Hidden input sollte einen Wert haben
         client_value = page.locator("input[name='client']").input_value()
@@ -238,7 +238,7 @@ class TestAutoSave:
             # Banner has two buttons after #625 (Verwerfen/Schließen) — hit
             # „Schließen" explicitly so the dismiss path is tested, not discard.
             page.locator('#autosave-restored-banner button:has-text("Schließen")').click()
-            page.locator("#autosave-restored-banner").wait_for(state="hidden", timeout=3000)
+            page.locator("#autosave-restored-banner").wait_for(state="hidden", timeout=10000)
 
         page.evaluate(self._JS_CLEAR)
 

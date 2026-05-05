@@ -23,6 +23,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 
 **C. Rollen & Datenschutz**
 13. [Wie funktionieren Zugriffsberechtigungen?](#13-wie-funktionieren-zugriffsberechtigungen)
+13a. [Was ist Sudo-Mode (Re-Auth-Fenster)?](#13a-was-ist-sudo-mode-re-auth-fenster)
 14. [Was bedeutet die Sensitivitätsstufe?](#14-was-bedeutet-die-sensitivitätsstufe-niedrigmittelhoch)
 15. [Wie funktioniert das Löschsystem (4-Augen-Prinzip)?](#15-wie-funktioniert-das-löschsystem-4-augen-prinzip)
 16. [Was hat KEINEN Löschmechanismus?](#16-was-hat-keinen-löschmechanismus)
@@ -386,6 +387,58 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 - [`src/core/models/managers.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/managers.py) — `FacilityScopedManager` für automatische Query-Filterung
 - [`src/core/middleware/password_change.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/middleware/password_change.py) — Passwort-Pflicht-Middleware
 - [`src/templates/base.html`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/templates/base.html) — Navigations-Sichtbarkeit nach Rolle
+
+---
+
+### 13a. Was ist Sudo-Mode (Re-Auth-Fenster)?
+
+**Sudo-Mode** ist ein zeitlich begrenztes Re-Authentifizierungs-Fenster für besonders sensible Aktionen. Bevor solche Aktionen ausgeführt werden können, muss der User sein **aktuelles Passwort erneut** eingeben — auch wenn er schon angemeldet ist. Nach erfolgreicher Eingabe ist die Aktion für **15 Minuten** ohne weitere Re-Auth möglich.
+
+#### Was wird geschützt?
+
+| Bereich | View | Warum sensibel |
+|---------|------|----------------|
+| **DSGVO-Paket** (Übersicht + Download) | `DSGVOPackageView`, `DSGVODocumentDownloadView` | Vollständige Datenschutz-Dokumentation der Einrichtung — TOM, Verfahrensverzeichnis, Datenschutzerklärung etc. |
+| **Personen-Datenexport** (JSON + PDF, DSGVO Art. 15) | `ClientDataExportJSONView`, `ClientDataExportPDFView` | Komplettes Datenpaket einer Person inkl. aller verschlüsselten Felder |
+| **2FA deaktivieren** | `MFADisableView` | Entzieht den eigenen 2FA-Schutz — Account wäre danach nur noch passwort-geschützt |
+
+Andere Aktionen (Klient-Detail anzeigen, Kontakte anlegen, Aufgaben bearbeiten …) brauchen **keinen** Sudo-Mode — die normale Session reicht.
+
+#### Wozu — was ist das Bedrohungsmodell?
+
+Schutz gegen **Session-Hijack**. Wenn jemandem das Session-Cookie geklaut wird (Browser ungesperrt liegen gelassen, XSS, gekapertes Geräte-Backup …), darf der Angreifer mit der Session zwar lesen, aber **keine destruktiven oder massendaten-exportierenden Aktionen** ausführen. Dafür müsste er zusätzlich das aktuelle Klartext-Passwort kennen — und das hat er per Annahme nicht.
+
+Sudo-Mode ergänzt damit die normale Session-Authentifizierung, ohne sie zu ersetzen.
+
+#### Wie läuft der Flow ab?
+
+1. User klickt z.B. „DSGVO-Paket" in der Navigation
+2. `RequireSudoModeMixin` prüft `is_in_sudo(request)` → `False`
+3. Redirect auf `/sudo/?next=/dsgvo/`
+4. Sudo-Form: einzelnes Passwort-Feld + Submit-Button
+5. POST → Server prüft Passwort via `authenticate(...)` → bei Erfolg:
+   - Setzt `session['sudo_until'] = now + 900s`
+   - Schreibt `AuditLog`-Eintrag `SUDO_MODE_ENTERED`
+   - Redirect zurück auf `/dsgvo/`
+6. Innerhalb von 15 Minuten kann der User beliebig viele DSGVO-Dokumente runterladen, ohne erneut prompten zu müssen
+7. Nach Ablauf: nächste sensible Aktion löst erneut den Re-Auth-Prompt aus
+
+Bei falschem Passwort: HTTP 403, Form bleibt sichtbar, **5 Versuche pro Minute** sind erlaubt (Rate-Limit gegen Brute-Force über die gestohlene Session).
+
+#### Konfiguration
+
+| Parameter | Default | Wirkung |
+|-----------|---------|---------|
+| `SUDO_MODE_ENABLED` | `True` | Toggle pro Umgebung. In `settings/test.py` auf `False`, damit RBAC-Tests ohne Sudo durchlaufen |
+| `SUDO_MODE_TTL_SECONDS` | `900` (15 min) | Dauer des Re-Auth-Fensters |
+
+**Relevante Dateien:**
+- [`src/core/services/sudo_mode.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/sudo_mode.py) — `enter_sudo`, `is_in_sudo`, `clear_sudo`, `RequireSudoModeMixin`
+- [`src/core/views/sudo_mode.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/sudo_mode.py) — `SudoModeView` (Re-Auth-Form), Rate-Limit
+- [`src/templates/auth/sudo_mode.html`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/templates/auth/sudo_mode.html) — Form-Template
+- [`src/core/views/dsgvo.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/dsgvo.py), [`src/core/views/clients.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/clients.py), [`src/core/views/mfa.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/mfa.py) — Verwendung des Mixins
+
+Refs [#683](https://github.com/tobiasnix/anlaufstelle/issues/683).
 
 ---
 

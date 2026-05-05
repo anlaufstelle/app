@@ -5,8 +5,25 @@ Refs #382, #418.
 """
 
 import pytest
+from django.utils import timezone
 
 pytestmark = pytest.mark.e2e
+
+# Deutscher Monatsname für Datums-Asserts (locale-frei, Refs #761).
+_MONTHS_DE = {
+    1: "Januar",
+    2: "Februar",
+    3: "März",
+    4: "April",
+    5: "Mai",
+    6: "Juni",
+    7: "Juli",
+    8: "August",
+    9: "September",
+    10: "Oktober",
+    11: "November",
+    12: "Dezember",
+}
 
 
 @pytest.fixture
@@ -46,7 +63,7 @@ class TestMobileNavMore:
         # Click opens dropdown with Aufgaben, Klientel
         more_btn.click()
         aufgaben_link = page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Aufgaben')")
-        aufgaben_link.wait_for(state="visible", timeout=3000)
+        aufgaben_link.wait_for(state="visible", timeout=10000)
         assert aufgaben_link.is_visible()
         assert page.locator("nav[aria-label='Mobile Navigation'] a[href='/clients/']").is_visible()
 
@@ -67,7 +84,7 @@ class TestMobileNavMore:
         more_btn.click()
         # Menü geöffnet — auf ein immer-vorhandenes Element warten.
         page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Aufgaben')").wait_for(
-            state="visible", timeout=3000
+            state="visible", timeout=10000
         )
 
         assert page.locator("nav[aria-label='Mobile Navigation'] a:has-text('Statistik')").count() == 0
@@ -160,7 +177,7 @@ class TestMobileNavigation:
 
         page.locator("[data-testid='mobile-nav-more']").click()
         uebergabe_link = page.locator("nav[aria-label='Mobile Navigation'] a[href='/uebergabe/']")
-        uebergabe_link.wait_for(state="visible", timeout=3000)
+        uebergabe_link.wait_for(state="visible", timeout=10000)
         assert uebergabe_link.is_visible(), "Uebergabe-Link im Mehr-Menue nicht sichtbar"
 
     def test_mobile_nav_clients_navigates(self, mobile_page, base_url):
@@ -170,7 +187,7 @@ class TestMobileNavigation:
 
         page.locator("[data-testid='mobile-nav-clients']").click()
         page.wait_for_url("**/clients/")
-        assert page.locator("h1").inner_text() == "Klientel"
+        assert page.locator("h1").inner_text() == "Personen"
 
     def test_mobile_nav_workitems_navigates(self, mobile_page, base_url):
         page = mobile_page
@@ -188,7 +205,7 @@ class TestMobileNavigation:
 
         page.locator("[data-testid='mobile-nav-create']").click()
         dropdown = page.locator("[data-testid='mobile-create-dropdown']")
-        dropdown.wait_for(state="visible", timeout=3000)
+        dropdown.wait_for(state="visible", timeout=10000)
         assert dropdown.is_visible(), "Create-Dropdown sollte sichtbar sein"
         assert dropdown.locator("a:has-text('Kontakt')").is_visible()
 
@@ -201,7 +218,7 @@ class TestMobileNavigation:
         page.locator("[data-testid='mobile-nav-more']").click()
         page.locator("[data-testid='mobile-nav-search']").click()
         overlay = page.locator("[data-testid='mobile-search-overlay']")
-        overlay.wait_for(state="visible", timeout=3000)
+        overlay.wait_for(state="visible", timeout=10000)
         assert overlay.is_visible(), "Such-Overlay sollte sichtbar sein"
 
 
@@ -227,8 +244,11 @@ class TestMobileZeitstrom:
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Datums-Navigation sollte sichtbar und nutzbar sein (Heute-Datum als h2-aehnliches Element)
-        date_nav = page.locator("text=" + "April")
+        # Datums-Navigation sollte sichtbar und nutzbar sein (Heute-Datum als h2-aehnliches Element).
+        # Monatsnamen aus der aktuellen Server-Zeit ableiten — sonst wird der Test
+        # am 1. eines Monats rot, sobald sich der Server-Monat dreht (Refs #761).
+        current_month = _MONTHS_DE[timezone.localdate().month]
+        date_nav = page.locator(f"text={current_month}")
         assert date_nav.first.is_visible()
 
     def test_mobile_zeitstrom_filter_selects_visible(self, mobile_page, base_url):
@@ -250,7 +270,7 @@ class TestMobileClientList:
         page.goto(f"{base_url}/clients/")
         page.wait_for_load_state("domcontentloaded")
 
-        assert page.locator("h1").inner_text() == "Klientel"
+        assert page.locator("h1").inner_text() == "Personen"
 
     def test_mobile_client_list_no_overflow(self, mobile_page, base_url):
         page = mobile_page
@@ -436,7 +456,7 @@ class TestMobileDetailOverflowMenu:
 
         # Aktionen im Menü prüfen — auf Menu-Panel warten.
         menu = page.locator("[data-testid='mobile-overflow-menu'] + div")
-        menu.locator("a:has-text('Neue Aufgabe')").wait_for(state="visible", timeout=3000)
+        menu.locator("a:has-text('Neue Aufgabe')").wait_for(state="visible", timeout=10000)
         assert menu.locator("a:has-text('Neue Aufgabe')").is_visible()
         assert menu.locator("a:has-text('Neuer Kontakt')").is_visible()
 
@@ -448,7 +468,7 @@ class TestMobileNoHorizontalScroll:
         "path,title",
         [
             ("/", "Zeitstrom"),
-            ("/clients/", "Klientel"),
+            ("/clients/", "Personen"),
             ("/workitems/", "Aufgaben"),
             ("/events/new/", "Neuer Kontakt"),
             ("/uebergabe/", "Übergabe"),

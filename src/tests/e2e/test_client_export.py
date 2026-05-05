@@ -2,6 +2,8 @@
 
 import pytest
 
+from tests.e2e._helpers import enter_sudo_mode
+
 pytestmark = pytest.mark.e2e
 
 
@@ -30,6 +32,9 @@ class TestClientExportJSON:
 
     def test_lead_can_download_json(self, lead_page, base_url):
         """Leitung kann JSON-Export herunterladen."""
+        # Datenauskunft ist sudo-pflichtig (Refs #683) — vor dem Download einmal aktivieren.
+        enter_sudo_mode(lead_page, base_url)
+
         lead_page.goto(f"{base_url}/clients/")
         lead_page.locator("a:has-text('Stern-42')").first.click()
         lead_page.wait_for_url(lambda url: "/clients/" in url)
@@ -49,6 +54,9 @@ class TestClientExportPDF:
     @pytest.mark.smoke
     def test_lead_can_download_pdf(self, lead_page, base_url):
         """Leitung kann PDF-Export herunterladen."""
+        # Datenauskunft ist sudo-pflichtig (Refs #683) — vor dem Download einmal aktivieren.
+        enter_sudo_mode(lead_page, base_url)
+
         lead_page.goto(f"{base_url}/clients/")
         lead_page.locator("a:has-text('Stern-42')").first.click()
         lead_page.wait_for_url(lambda url: "/clients/" in url)

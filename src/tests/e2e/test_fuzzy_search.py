@@ -43,7 +43,7 @@ class TestFuzzySearch:
         page.goto(f"{base_url}/search/?q={pseudo}")
         page.wait_for_load_state("domcontentloaded")
         content = page.content()
-        assert "Klientel (1)" in content
+        assert "Personen (1)" in content
         assert "Ähnliche Pseudonyme" not in content
 
     def test_global_dropdown_shows_similar(self, authenticated_page, base_url):

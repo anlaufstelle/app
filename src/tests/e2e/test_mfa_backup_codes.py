@@ -93,7 +93,7 @@ class TestZZMFABackupCodeLogin:
                 # Umschalten auf Backup-Code-Eingabe
                 page.locator("[data-testid='mfa-toggle-mode']").click()
                 backup_input = page.locator("[data-testid='mfa-backup-input']")
-                backup_input.wait_for(state="visible", timeout=3000)
+                backup_input.wait_for(state="visible", timeout=10000)
                 backup_input.fill(codes[0])
                 page.locator("[data-testid='mfa-verify-button']").click()
 
@@ -125,7 +125,7 @@ class TestZZMFABackupCodeLogin:
                 # Settings zeigt verbleibende Codes (10 generiert, 1 verbraucht → 9)
                 page.goto(f"{base_url}/mfa/settings/")
                 counter = page.locator("[data-testid='backup-codes-counter']")
-                counter.wait_for(state="visible", timeout=3000)
+                counter.wait_for(state="visible", timeout=10000)
                 assert "9" in counter.inner_text()
             finally:
                 context.close()

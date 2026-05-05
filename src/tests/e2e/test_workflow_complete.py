@@ -38,6 +38,11 @@ class TestCompleteWorkflow:
         page.fill('input[name="title"]', f"WF-Fall-{tag}")
         page.fill('textarea[name="description"]', "Workflow-Test")
         page.select_option('select[name="lead_user"]', index=1)
+        # Refs #748: Case.client ist Pflichtfeld — Person via Autocomplete auswählen
+        autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
+        autocomplete.click()
+        page.locator("[role='listbox']").wait_for(state="visible", timeout=5000)
+        page.locator("[role='option']").first.click()
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
         case_url = page.url

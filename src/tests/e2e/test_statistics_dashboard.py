@@ -1,6 +1,9 @@
 """E2E-Tests: Statistik-Dashboard — Navigation, KPIs, HTMX, Jahresnavigation."""
 
+import re
+
 import pytest
+from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -48,16 +51,18 @@ class TestStatisticsHTMX:
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
 
-        # Zeitraum-Text vor Wechsel merken
-        zeitraum_text = page.locator("text=Zeitraum:").inner_text()
+        zeitraum_locator = page.locator("text=Zeitraum:")
+        zeitraum_text = zeitraum_locator.inner_text()
 
-        # Auf Halbjahr klicken (HTMX aktualisiert den Content asynchron)
+        # Auf Halbjahr klicken (HTMX aktualisiert den Content asynchron). Der
+        # ``expect_response``-Block wartet nur auf den Server-Response, nicht
+        # auf den anschliessenden DOM-Swap — unter Parallel-Last entstand sonst
+        # eine Race-Condition zwischen Response und ``inner_text`` (Refs #761).
         with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
             page.locator("button:has-text('Halbjahr')").click()
 
-        # Nach HTMX-Swap den neuen Text prüfen
-        new_text = page.locator("text=Zeitraum:").inner_text()
-        assert new_text != zeitraum_text
+        # ``not_to_have_text`` pollt automatisch bis der Swap durch ist.
+        expect(zeitraum_locator).not_to_have_text(zeitraum_text, timeout=10000)
 
 
 class TestStatisticsYearNavigation:
@@ -77,8 +82,8 @@ class TestStatisticsYearNavigation:
         with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
             page.get_by_role("button", name="Jahr", exact=True).click()
 
-        zeitraum = page.locator("text=Zeitraum:").inner_text()
-        assert "01.01." in zeitraum
+        # ``expect`` pollt bis der HTMX-DOM-Swap durch ist (Refs #849).
+        expect(page.locator("text=Zeitraum:")).to_contain_text("01.01.", timeout=10000)
 
     def test_year_nav_prev_arrow(self, authenticated_page, base_url):
         """Pfeil links → Jahr dekrementiert, Zeitraum = ganzes Vorjahr."""
@@ -89,20 +94,21 @@ class TestStatisticsYearNavigation:
         with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
             page.get_by_role("button", name="Jahr", exact=True).click()
 
-        # Aktuelles Jahr merken
+        # Auf DOM-Swap warten, bevor wir das Jahr lesen — ohne ``expect``
+        # liest ``inner_text`` evtl. den alten Wert (Refs #849).
         year_label = page.locator("[aria-label='Vorheriges Jahr']").locator("..").locator("span")
+        expect(year_label).to_have_text(re.compile(r"^\d{4}$"), timeout=10000)
         current_year_text = year_label.inner_text()
 
         # Pfeil links klicken
         with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
             page.locator("[aria-label='Vorheriges Jahr']").click()
 
-        new_year_text = page.locator("[aria-label='Vorheriges Jahr']").locator("..").locator("span")
-        assert int(new_year_text.inner_text()) == int(current_year_text) - 1
+        # ``expect``-Locator pollt bis zum DOM-Swap nach dem HTMX-Response (Refs #761).
+        expect(year_label).to_have_text(str(int(current_year_text) - 1), timeout=10000)
 
         # Zeitraum muss 01.01. – 31.12. des Vorjahres zeigen
-        zeitraum = page.locator("text=Zeitraum:").inner_text()
-        assert "31.12." in zeitraum
+        expect(page.locator("text=Zeitraum:")).to_contain_text("31.12.", timeout=10000)
 
     def test_year_nav_next_arrow_for_past_year(self, authenticated_page, base_url):
         """Im Vorjahr: Pfeil rechts sichtbar, Klick → Jahr inkrementiert."""
@@ -117,7 +123,8 @@ class TestStatisticsYearNavigation:
             page.locator("[aria-label='Nächstes Jahr']").click()
 
         year_label = page.locator("[aria-label='Vorheriges Jahr']").locator("..").locator("span")
-        assert int(year_label.inner_text()) == 2026
+        # ``expect`` pollt automatisch bis zum DOM-Swap (Refs #761).
+        expect(year_label).to_have_text("2026", timeout=10000)
 
     def test_no_next_arrow_for_current_year(self, authenticated_page, base_url):
         """Im aktuellen Jahr: kein Pfeil rechts."""
@@ -127,4 +134,7 @@ class TestStatisticsYearNavigation:
         with page.expect_response(lambda r: "/statistics/" in r.url and "chart-data" not in r.url):
             page.get_by_role("button", name="Jahr", exact=True).click()
 
-        assert page.locator("[aria-label='Nächstes Jahr']").count() == 0
+        # ``expect`` pollt bis zum DOM-Swap — ``count() == 0`` direkt nach
+        # ``expect_response`` kann unter Parallel-Last den Vor-Swap-Stand
+        # sehen (Refs #849).
+        expect(page.locator("[aria-label='Nächstes Jahr']")).to_have_count(0, timeout=10000)

@@ -86,11 +86,11 @@ class TestNeuDropdown:
 
         page.locator("[data-testid='sidebar-create-btn']").click()
         dropdown = page.locator("[data-testid='sidebar-create-dropdown']")
-        dropdown.wait_for(state="visible", timeout=3000)
+        dropdown.wait_for(state="visible", timeout=10000)
 
         text = dropdown.inner_text()
         assert "Kontakt" in text
-        assert "Klientel" in text
+        assert "Person anlegen" in text
         assert "Aufgabe" in text
         assert "Fall" in text
 
@@ -101,7 +101,7 @@ class TestNeuDropdown:
 
         page.locator("[data-testid='sidebar-create-btn']").click()
         dropdown = page.locator("[data-testid='sidebar-create-dropdown']")
-        dropdown.wait_for(state="visible", timeout=3000)
+        dropdown.wait_for(state="visible", timeout=10000)
 
         text = dropdown.inner_text()
         assert "Kontakt" in text

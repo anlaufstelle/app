@@ -8,6 +8,19 @@ import pytest
 pytestmark = pytest.mark.e2e
 
 
+def _select_first_client_in_form(page):
+    """Klickt das Pseudonym-Autocomplete an und wählt die erste Person aus.
+
+    Refs #748: Case.client ist Pflichtfeld — das Cases-Formular muss eine
+    Person ausgewählt haben, sonst schlägt der Submit fehl.
+    """
+    autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
+    autocomplete.click()
+    dropdown = page.locator("[role='listbox']")
+    dropdown.wait_for(state="visible", timeout=5000)
+    page.locator("[role='option']").first.click()
+
+
 class TestCaseNavigation:
     """Navigation: Fälle-Link in Sidebar sichtbar und funktional."""
 
@@ -40,6 +53,7 @@ class TestCaseCRUD:
         page.fill('input[name="title"]', unique_title)
         page.fill('textarea[name="description"]', "Automatisch erstellt durch E2E-Test")
         page.select_option('select[name="lead_user"]', index=1)
+        _select_first_client_in_form(page)
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
 
@@ -111,6 +125,7 @@ class TestCaseCRUD:
         page.goto(f"{base_url}/cases/new/")
         page.fill('input[name="title"]', unique_title)
         page.select_option('select[name="lead_user"]', index=1)
+        _select_first_client_in_form(page)
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
 
@@ -137,6 +152,7 @@ class TestCaseCRUD:
         page.goto(f"{base_url}/cases/new/")
         page.fill('input[name="title"]', unique_title)
         page.select_option('select[name="lead_user"]', index=1)
+        _select_first_client_in_form(page)
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
 
@@ -164,6 +180,7 @@ class TestCaseCRUD:
         page.goto(f"{base_url}/cases/new/")
         page.fill('input[name="title"]', unique_title)
         page.select_option('select[name="lead_user"]', index=1)
+        _select_first_client_in_form(page)
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
 
@@ -198,6 +215,7 @@ class TestEpisodes:
         page.goto(f"{base_url}/cases/new/")
         page.fill('input[name="title"]', unique_title)
         page.select_option('select[name="lead_user"]', index=1)
+        _select_first_client_in_form(page)
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
 
@@ -228,6 +246,7 @@ class TestEpisodes:
         page.goto(f"{base_url}/cases/new/")
         page.fill('input[name="title"]', unique_title)
         page.select_option('select[name="lead_user"]', index=1)
+        _select_first_client_in_form(page)
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
 
@@ -258,6 +277,7 @@ class TestGoalsAndMilestones:
         page.goto(f"{base_url}/cases/new/")
         page.fill('input[name="title"]', unique_title)
         page.select_option('select[name="lead_user"]', index=1)
+        _select_first_client_in_form(page)
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
         return page.url
@@ -353,6 +373,7 @@ class TestCasePermissions:
         page.goto(f"{base_url}/cases/new/")
         page.fill('input[name="title"]', unique_title)
         page.select_option('select[name="lead_user"]', index=1)
+        _select_first_client_in_form(page)
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
 

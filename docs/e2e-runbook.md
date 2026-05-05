@@ -196,6 +196,58 @@ def _create_own_client(self, page, base_url):
 | `runserver` statt gunicorn | Single-threaded, blockiert bei Last | conftest startet gunicorn automatisch |
 | `stdout=subprocess.PIPE` für gunicorn | Pipe-Buffer füllt sich nach ~25 Requests | `stdout=subprocess.DEVNULL` |
 
+### Drei Parallel-Last-Anti-Patterns (Refs [#849](https://github.com/tobiasnix/anlaufstelle/issues/849))
+
+Diese Patterns sind im seriellen Lauf meist grün, fallen aber unter `make test-e2e-parallel` (4 Worker, gunicorn 2x2 Slots) reproduzierbar um. Vermeiden — alternative Patterns nutzen.
+
+**1. `inner_text() / count() / assert` direkt nach `expect_response(...)`**
+
+`page.expect_response` wartet nur auf den Server-Response, **nicht** auf den anschließenden HTMX-DOM-Swap. Unter Last liest die Folge-Assertion den alten Wert.
+
+```python
+# ✗ Race
+with page.expect_response(...):
+    page.locator("button").click()
+text = locator.inner_text()         # evtl. Pre-Swap-Wert
+assert "Neu" in text
+
+# ✓ Auto-wartendes expect()
+with page.expect_response(...):
+    page.locator("button").click()
+expect(locator).to_contain_text("Neu", timeout=10000)
+expect(locator).to_have_count(0, timeout=10000)
+```
+
+**2. Hartkodierte enge Timeouts (3s) für Zustandsübergänge**
+
+Unter Parallel-Last reagiert der Server langsamer. 3s ist zu knapp für HTMX-/Alpine-Übergänge.
+
+```python
+# ✗ Zu knapp
+locator.wait_for(state="visible", timeout=3000)
+
+# ✓ Standardwert für State-Transitions
+locator.wait_for(state="visible", timeout=10000)
+```
+
+**3. `.first.click()` / `.nth(N).click()` ohne deterministische Vorbedingung**
+
+Bei kleiner, zufälliger Seed-Menge ist Listen-Sortierung nicht garantiert.
+
+```python
+# ✗ Wer ist „first"?
+page.locator("#inbox-content a").first.click()
+
+# ✓ Eigene Test-Fixture anlegen
+unique_title = f"E2E-{uuid.uuid4().hex[:6]}"
+page.goto(f"{base_url}/workitems/new/")
+page.fill("input[name='title']", unique_title)
+page.locator(SUBMIT).click()
+page.locator(f"a:has-text('{unique_title}')").click()
+```
+
+`.first.click()` ist nur dann zulässig, wenn der Selektor bereits eindeutig (z.B. `a:has-text('Stern-42')` mit Unique-Pseudonym) ist oder die Test-Assertion für jedes Listenelement gilt (z.B. Berechtigungsprüfung über alle Rollen hinweg).
+
 ---
 
 ## 5. Fixture-Referenz

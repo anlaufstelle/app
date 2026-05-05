@@ -131,7 +131,7 @@ class TestRetentionBulkFlow:
         checkboxes.nth(1).check()
 
         counter = page.locator("[data-testid='retention-bulk-count']")
-        counter.wait_for(state="visible", timeout=3000)
+        counter.wait_for(state="visible", timeout=10000)
         assert "2" in counter.inner_text()
 
         page.on("dialog", lambda dialog: dialog.accept())
@@ -159,12 +159,12 @@ class TestRetentionBulkFlow:
 
         page.locator("[data-testid='retention-select-all']").check()
         counter = page.locator("[data-testid='retention-bulk-count']")
-        counter.wait_for(state="visible", timeout=3000)
+        counter.wait_for(state="visible", timeout=10000)
         assert str(total) in counter.inner_text()
 
         page.locator("[data-testid='retention-select-all']").uncheck()
         # Nach dem Abwählen muss die Toolbar wieder verschwinden
-        page.locator("[data-testid='retention-bulk-count']").wait_for(state="hidden", timeout=3000)
+        page.locator("[data-testid='retention-bulk-count']").wait_for(state="hidden", timeout=10000)
 
 
 class TestRetentionHoldFlow:

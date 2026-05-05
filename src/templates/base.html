@@ -105,20 +105,20 @@
             </button>
             <div x-show="createOpen" @click.away="close" x-cloak x-transition
                  class="absolute left-4 right-4 top-[calc(100%-4px)] bg-surface rounded-lg shadow-lg border border-subtle z-50 overflow-hidden" data-testid="sidebar-create-dropdown">
-                <a href="{% url 'core:event_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle">
+                <a href="{% url 'core:event_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle" data-testid="sidebar-create-event">
                     <div class="text-[13px] font-semibold text-ink">{% trans "Kontakt dokumentieren" %}</div>
                     <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Eintrag im Zeitstrom" %}</div>
                 </a>
                 {% if user.is_staff_or_above %}
-                <a href="{% url 'core:client_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle">
+                <a href="{% url 'core:client_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle" data-testid="sidebar-create-client">
                     <div class="text-[13px] font-semibold text-ink">{% trans "Person anlegen" %}</div>
                     <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Neues Pseudonym vergeben" %}</div>
                 </a>
-                <a href="{% url 'core:workitem_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle">
+                <a href="{% url 'core:workitem_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle" data-testid="sidebar-create-workitem">
                     <div class="text-[13px] font-semibold text-ink">{% trans "Aufgabe erstellen" %}</div>
                     <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Für Team oder Person" %}</div>
                 </a>
-                <a href="{% url 'core:case_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas">
+                <a href="{% url 'core:case_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas" data-testid="sidebar-create-case">
                     <div class="text-[13px] font-semibold text-ink">{% trans "Fall anlegen" %}</div>
                     <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Längere Begleitung dokumentieren" %}</div>
                 </a>
@@ -242,17 +242,17 @@
                 </button>
                 <div x-show="createOpen" @click.away="close" x-cloak x-transition
                      class="absolute bottom-full left-0 mb-2 w-52 bg-surface rounded-lg shadow-lg border border-subtle py-1 z-50" data-testid="mobile-create-dropdown">
-                    <a href="{% url 'core:event_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle">
+                    <a href="{% url 'core:event_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle" data-testid="mobile-create-event">
                         <div class="text-[13px] font-semibold text-ink">{% trans "Kontakt dokumentieren" %}</div>
                     </a>
                     {% if user.is_staff_or_above %}
-                    <a href="{% url 'core:client_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle">
+                    <a href="{% url 'core:client_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle" data-testid="mobile-create-client">
                         <div class="text-[13px] font-semibold text-ink">{% trans "Person anlegen" %}</div>
                     </a>
-                    <a href="{% url 'core:workitem_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle">
+                    <a href="{% url 'core:workitem_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle" data-testid="mobile-create-workitem">
                         <div class="text-[13px] font-semibold text-ink">{% trans "Aufgabe erstellen" %}</div>
                     </a>
-                    <a href="{% url 'core:case_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas">
+                    <a href="{% url 'core:case_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas" data-testid="mobile-create-case">
                         <div class="text-[13px] font-semibold text-ink">{% trans "Fall anlegen" %}</div>
                     </a>
                     {% endif %}

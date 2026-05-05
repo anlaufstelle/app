@@ -88,7 +88,7 @@ class TestClientAutocompleteRecency:
         # Feld befüllt, Dropdown geschlossen
         assert autocomplete.input_value() == "Blitz-08"
         dropdown = page.locator("[role='listbox']")
-        expect(dropdown).not_to_be_visible(timeout=3000)
+        expect(dropdown).not_to_be_visible(timeout=10000)
 
     def test_cases_form_focus_dropdown(self, authenticated_page, base_url):
         """Cases-Formular zeigt ebenfalls Dropdown beim Fokus."""

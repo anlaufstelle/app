@@ -76,9 +76,28 @@ class TestWorkItemDetailPermissions:
         expect(edit_link).not_to_be_visible()
 
     def test_staff_sees_edit_button_on_workitem_detail(self, staff_page, base_url):
-        """Fachkraft sieht den 'Bearbeiten'-Link auf der WorkItem-Detail-Seite."""
+        """Fachkraft sieht den 'Bearbeiten'-Link auf einem selbst erstellten WorkItem.
+
+        Vorher klickte der Test auf den ersten WorkItem-Link in der Inbox — bei
+        kleiner Seed-Menge (5 WorkItems, 60% mit Assignee) hatte Miriam aber
+        nicht zwingend Edit-Rechte auf das oberste Element, was im
+        Parallellauf reproduzierbar zu Flakes fuehrte (Refs #761).
+        """
         page = staff_page
-        _navigate_to_first_workitem_detail(page, base_url)
+
+        # Eigenes WorkItem anlegen, damit die Fachkraft garantiert
+        # Edit-Rechte hat (created_by == user, siehe can_user_mutate_workitem).
+        unique_title = f"E2E-Perm-Edit-{uuid.uuid4().hex[:6]}"
+        page.goto(f"{base_url}/workitems/new/", wait_until="domcontentloaded")
+        page.fill("input[name='title']", unique_title)
+        page.select_option("select[name='item_type']", index=1)
+        page.locator(SUBMIT).click()
+        page.wait_for_url(f"{base_url}/workitems/")
+        page.wait_for_load_state("domcontentloaded")
+
+        page.locator(f"a:has-text('{unique_title}')").click()
+        page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/"))
+        page.wait_for_load_state("domcontentloaded")
 
         edit_link = page.locator("a:has-text('Bearbeiten')")
         expect(edit_link).to_be_visible()
