@@ -4,7 +4,7 @@
 
 **Documentation, statistics, and team communication for drop-in centers, shelters, and street outreach — open source, GDPR-compliant, pseudonymized, free.**
 
-> ⚠️ **Pre-Release (v0.10.2)** — Anlaufstelle is functional but not yet cleared for production use. Quality assurance and stabilization are ongoing. We are looking for pilot facilities to test and co-develop the system — [get in touch](mailto:kontakt@anlaufstelle.app).
+> ⚠️ **Pre-Release (v0.11.0)** — Anlaufstelle is functional but not yet cleared for production use. Quality assurance and stabilization are ongoing. We are looking for pilot facilities to test and co-develop the system — [get in touch](mailto:kontakt@anlaufstelle.app).
 
 ---
 
@@ -199,5 +199,5 @@ docker compose exec web python src/manage.py seed
 </details>
 
 <!-- translation-source: README.md -->
-<!-- translation-version: v0.10.2 -->
-<!-- translation-date: 2026-03-27 -->
+<!-- translation-version: v0.11.0 -->
+<!-- translation-date: 2026-05-05 -->

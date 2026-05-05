@@ -117,7 +117,7 @@ check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
-ci: lint check test-parallel
+ci: lint check deps-check test-parallel
 
 # Dependencies: Lock-Files aus requirements*.in neu erzeugen (pip-tools).
 # Nach Änderungen an requirements.in oder requirements-dev.in ausführen.

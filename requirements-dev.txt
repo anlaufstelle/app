@@ -36,6 +36,8 @@ django==6.0.4
     #   django-csp
     #   django-htmx
     #   django-otp
+    #   django-stubs
+    #   django-stubs-ext
     #   django-unfold
     #   sentry-sdk
 django-csp==4.0
@@ -46,6 +48,10 @@ django-otp==1.7.0
     # via -r requirements.in
 django-ratelimit==4.1.0
     # via -r requirements.in
+django-stubs[compatible-mypy]==6.0.3
+    # via -r requirements-dev.in
+django-stubs-ext==6.0.3
+    # via django-stubs
 django-unfold==0.91.0
     # via -r requirements.in
 execnet==2.1.2
@@ -62,6 +68,14 @@ idna==3.11
     # via requests
 iniconfig==2.3.0
     # via pytest
+librt==0.9.0
+    # via mypy
+mypy==1.20.2
+    # via
+    #   -r requirements-dev.in
+    #   django-stubs
+mypy-extensions==1.1.0
+    # via mypy
 packaging==26.1
     # via
     #   build
@@ -69,6 +83,8 @@ packaging==26.1
     #   gunicorn
     #   pytest
     #   wheel
+pathspec==1.1.1
+    # via mypy
 pillow==12.2.0
     # via weasyprint
 pip-tools==7.5.3
@@ -146,8 +162,14 @@ tinycss2==1.5.1
     #   weasyprint
 tinyhtml5==2.1.0
     # via weasyprint
+types-pyyaml==6.0.12.20260408
+    # via django-stubs
 typing-extensions==4.15.0
-    # via pyee
+    # via
+    #   django-stubs
+    #   django-stubs-ext
+    #   mypy
+    #   pyee
 urllib3==2.6.3
     # via
     #   requests

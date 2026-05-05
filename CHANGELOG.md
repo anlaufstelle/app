@@ -6,19 +6,107 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-05-05
+
+Großer Sicherheits- und Hardening-Release. Hauptthemen: Wechsel auf Django 6.0 inkl. fünf CVE-Fixes, Sudo-Mode-Re-Auth für sensible Aktionen, DSGVO-Art.-33/34-Breach-Detection, Vier-Augen-Lösch-Workflow, Maintenance-Mode, neue Health-Checks, sowie ein A11y- und i18n-Sweep, der die Sprachleitlinie „Person" flächig durchzieht.
+
 ### Security
 
-- **Django 5.1 → 6.0 Migration** — Wechsel von Django 5.1.15 auf 6.0.4. Django 5.1 ist EOL, kein 5.1.16 ist geplant. Mit dem Sprung kommen die Sicherheits-Fixes CVE-2026-33034 (`DATA_UPLOAD_MAX_MEMORY_SIZE` enforcement), CVE-2026-33033 (`MultiPartParser`-DoS), CVE-2026-4292 (`ModelAdmin.list_editable`), CVE-2026-4277 (`GenericInlineModelAdmin`) und CVE-2026-3902 (Header mit Underscores in `ASGIRequest`). `django-unfold` auf 0.91.0 gehoben (6.0-Kompatibilität). Plugin-Stack (`django-csp`, `django-htmx`, `django-otp`, `django-ratelimit`, `sentry-sdk`) unverändert kompatibel — kein Plugin-Bump nötig. `django.contrib.postgres` zu `INSTALLED_APPS` hinzugefügt (in 6.0 strikt für `GinIndex` auf `Client.pseudonym` erforderlich, postgres.E005). Alle E2E-Test-Helper, die `manage.py shell -c` mit \`stdout\`-Parsing nutzen, auf `--no-imports` umgestellt — verhindert, dass die in 5.2/6.0 neue Auto-Import-Banner-Zeile in subprocess-Output landet.
+- **Django 5.1 → 6.0 Migration** — Wechsel von Django 5.1.15 auf 6.0.4. Django 5.1 ist EOL. Mit dem Sprung kommen die Sicherheits-Fixes CVE-2026-33034 (`DATA_UPLOAD_MAX_MEMORY_SIZE` enforcement), CVE-2026-33033 (`MultiPartParser`-DoS), CVE-2026-4292 (`ModelAdmin.list_editable`), CVE-2026-4277 (`GenericInlineModelAdmin`) und CVE-2026-3902 (Header mit Underscores in `ASGIRequest`). `django-unfold` auf 0.91.0 gehoben (6.0-Kompatibilität). Plugin-Stack (`django-csp`, `django-htmx`, `django-otp`, `django-ratelimit`, `sentry-sdk`) unverändert kompatibel. `django.contrib.postgres` zu `INSTALLED_APPS` hinzugefügt (in 6.0 strikt für `GinIndex` auf `Client.pseudonym` erforderlich, postgres.E005).
+- **Sudo-Mode Re-Auth für sensible Aktionen** — Zeitlich begrenztes Re-Authentifizierungs-Fenster (15 min) vor besonders sensiblen Aktionen wie MFA-Disable, Passwort-Änderung, Daten-Export. `RequireSudoModeMixin` + neue Form mit Rate-Limit. Details in [`docs/faq.md` § 13a](https://github.com/anlaufstelle/app/blob/main/docs/faq.md#13a-was-ist-sudo-mode-re-auth-fenster).
+- **DSGVO Art. 33/34 Breach-Detection** — Heuristik-basiertes `detect_breaches`-Cron-Kommando (stündlich :30) für Failed-Login-Burst, Mass-Export und Mass-Delete. Schreibt `SECURITY_VIOLATION`-AuditLog und liefert optional einen Webhook für SIEM/Pager. Runbook-Eintrag in [`docs/ops-runbook.md` § 6.5b](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md).
+- **Klartext-Freitexte: UI-Warnung + Inventar** — `Client.notes`, `Case.description`, `Episode.description` sind weiterhin nicht feldverschlüsselt. Sicht- und Editfelder zeigen jetzt eine UI-Warnung, dass dort keine Klarnamen oder Art-9-Daten gehören. Klartext-Inventar dokumentiert in [`docs/security-notes.md`](https://github.com/anlaufstelle/app/blob/main/docs/security-notes.md).
+- **CSP-Reporting via `report-uri`** — neuer lokaler `/csp-report/`-Endpoint speichert Browser-CSP-Verstöße als `AuditLog` (Typ `CSP_VIOLATION`). Trade-off-Diskussion zu `report-to` vs. `report-uri` in [`docs/security-notes.md`](https://github.com/anlaufstelle/app/blob/main/docs/security-notes.md).
+- **MFA-Backup-Codes auf 128 Bit + Hash-Storage** — Codes werden mit `secrets.token_urlsafe(16)` (128 Bit Entropie) erzeugt und nur als HMAC-SHA-256-Hash gespeichert. Vorher: 80 Bit, Klartext in DB. Bestandsdaten werden beim nächsten Login pro User automatisch migriert.
+- **Passwort-Reset-AuditLog: E-Mail durch HMAC-Hash ersetzt** — Anonyme Reset-Anfragen schrieben die E-Mail-Adresse im Klartext ins AuditLog. Jetzt landet nur noch ein HMAC-SHA-256-Hash dort — Wiederbenutzbarkeit bleibt für die Forensik (Burst-Erkennung), Klartext-Leak ist weg.
+- **Passwort-Mindestlänge auf 12 Zeichen** — `MinimumLengthValidator` von 8 auf 12 angehoben. Bestandsuser werden beim nächsten Login zur Änderung gezwungen.
+- **CSV-Export auf `Event.objects.visible_to(user)`** — Der CSV-Export ging am Rollen-Filter vorbei und exportierte Events, die der User in der UI nicht sehen durfte. Jetzt einheitlich über den `visible_to`-Manager.
+- **q-Suchbegriffe nicht mehr in `sessionStorage`** — `data-filter-persist` enthielt das `q`-Feld, sodass eingegebene Pseudonyme nach Logout im Browser-`sessionStorage` zurückblieben. Filter-Persistenz schließt `q` jetzt explizit aus.
+- **DSGVO-Top-Pseudonyme aus Standard-PDFs entfernt** — Standard-Auswertungen listeten die häufigsten Pseudonyme. Mit Internal-Mode-Banner getrennt: nur Admin-Internal-PDFs zeigen Pseudonyme, alle anderen aggregieren.
+- **CSV-Formula-Injection neutralisiert** — `services/export.py` prefixt führende `=`, `+`, `-`, `@`, `\t`, `\r` mit `'`, damit Excel/LibreOffice die Felder nicht als Formel auswertet.
+- **Retention löscht jetzt wirklich** — `EventHistory`-DELETE wurde im Retention-Pfad nicht mitgenommen, sodass „gelöschte" Events über die History weiter rekonstruierbar waren. Pfad ist jetzt durchgängig redaktiert; `audit_pruning` läuft ohne `DISABLE TRIGGER` (, ).
+- **`Client.anonymize()` schließt zugehörige Daten ein** — bei k-Anonymisierung wurden `EventHistory`, `EventAttachment` und `DeletionRequest` nicht mitgewandert. Jetzt atomar in einer Transaktion.
+- **Login-Lockout `select_for_update` + Autocomplete `block=True`** — Race zwischen parallelen Failed-Login-Threads konnte den 10-Versuche-Trigger umgehen; `select_for_update` macht den Counter monoton. Autocomplete-Endpoint blockt unauthentifizierte Requests jetzt explizit, neuer Architektur-Test verbietet künftige Sensible-GETs ohne Auth-Check.
+- **`WorkItemUpdateView`-Permission-Check** — die Edit-View verließ sich auf den Form-Layer für die Permission-Prüfung; jetzt zentral über `can_user_mutate_workitem`.
+- **`FacilityScopeMiddleware` leert `app.current_facility_id` für anonyme Requests** — Login-, Health- und statische Requests sahen je nach Worker-Zustand das `facility_id` des vorherigen Requests im Connection-Pool, was RLS-relevant ist. Anonyme Requests schreiben jetzt explizit `NULL`.
+- **Service-Layer-Konsistenz-Sweep** — vier Stellen aus Audit B.2.2 (RLS-Lücke bei Bulk-Aktionen, fehlende `select_for_update` auf zwei Counter-Updates) abgeräumt.
+- **Validator erzwingt `is_encrypted=True` für FieldTemplate-Sensitivity HIGH** — bisher nur Form-Hint, jetzt Schema-Constraint im Save-Pfad.
+- **SBOM (CycloneDX) als CI-Artefakt** — `release.yml` veröffentlicht jetzt eine `cyclonedx-bom.json` als Build-Asset; SCA-Scanner können den Stand pro Release direkt vom GitHub-Release ziehen.
+- **CodeQL-Workflow** — neuer `codeql.yml` mit Python + JavaScript-Sprache, Cron + PR-Trigger; Sichtbarkeit Dev/Stage/App in [`docs/release-checklist.md`](https://github.com/anlaufstelle/app/blob/main/docs/release-checklist.md) dokumentiert.
+- **Dev-Postgres an `127.0.0.1`** — `docker-compose.yml` band Postgres an `0.0.0.0:5432`, was lokal auf Multi-User-Maschinen beobachtbar war. Jetzt `127.0.0.1:5432`.
 
 ### Added
 
-- **Aufklappbare Kontakte im Zeitstrom** — Event-Cards lassen sich jetzt per Chevron-Toggle inline aufklappen, gleiches Pattern wie Aktivitäts-Cards. Im aufgeklappten Bereich werden alle Felder inkl. textarea-Notizen angezeigt — die müssen nicht mehr per Detail-Klick gelesen werden. Neuer Service-Vertrag: `enrich_events_with_preview` befüllt zusätzlich `event.expanded_fields` (alle Felder, ohne 3-Limit, mit textarea). Generische `expandableCard`-Alpine-Komponente in [`src/static/js/alpine-components.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/alpine-components.js).
+- **Vier-Augen-Lösch-Workflow für Personen mit Papierkorb-Frist** — Lösch-Anträge gehen erst nach Genehmigung durch Leitung/Admin in den Papierkorb, dort konfigurierbare Frist bis zur Hard-Deletion. Vor Ablauf ist Restore möglich.
+- **Maintenance-Mode mit 503-Page** — Admin-toggelbarer Wartungsmodus mit IP-Allowlist; 503-Template im Design-System. Runbook: [`docs/ops-runbook.md` § 6.5a](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md).
+- **Custom CSRF-Failure-Page** — Eigene 403-CSRF-Seite im App-Layout statt Django-Default; klare Handlungsanweisung („Bitte neu laden, Cookies prüfen").
+- **PWA Offline-Fallback-Page für Navigation-Requests** — Service-Worker liefert eine eigene Offline-Seite für Navigation-Fetches statt der Default-Browser-Fehlerseite.
+- **Aufklappbare Event-Cards im Zeitstrom** — Event-Cards lassen sich per Chevron inline aufklappen; alle Felder inkl. Textarea-Notizen direkt sichtbar. Generische `expandableCard`-Alpine-Komponente, identisches Pattern für Übergabe-Highlights.
+- **Health-Checks SMTP / Encryption-Key / Backup-Alter / Disk-Frei** — `/health/` prüft jetzt zusätzlich SMTP-Erreichbarkeit, Encryption-Key-Verfügbarkeit, Backup-Alter und Disk-Frei. Kompatibler Health-Vertrag (clamav-Alias, `status`-Feld), Container-Healthcheck liest direkt das `status`-Feld.
+- **DSGVO-Versionsstempel + AGPL-Footer in Templates** — DSGVO-Paket-Footer trägt App-Version, Generierungszeitpunkt und AGPL-Hinweis; in DSGVO-Template-Sektion versioniert.
+- **Threat Model (STRIDE-Lite)** — neues [`docs/threat-model.md`](https://github.com/anlaufstelle/app/blob/main/docs/threat-model.md) mit Assets, Akteuren, Vertrauensgrenzen und STRIDE-Tabellen je Boundary inkl. Mitigation und offenen Lücken.
+- **Architecture Decision Records (ADRs)** — drei ADRs nachgezogen: File Vault, MFA, Suche.
+- **`reencrypt_fields` rotiert auch EventHistory + EventAttachment** — Schlüssel-Rotation deckt jetzt den vollständigen Daten-Pfad ab, nicht nur die Live-Events.
+- **Off-Site-Backup-Hook in `scripts/backup.sh`** — optionaler Sync-Hook nach erfolgreichem Backup; State-File und Exit-Code für wiederholte Fehlversuche.
+- **Backup-Restore-Drill als ausführbares Skript** — `scripts/restore-drill.sh` führt den 7-Schritt-Drill aus, prüft RLS und AuditLog-Trigger.
+- **Übergabe-Highlights aufklappbar** — gleiches Toggle-Pattern wie Event-Cards in der Schichtübergabe.
+
+### Changed
+
+- **Sprachleitlinie „Klientel" → „Person"** — flächig durchgezogen: UI-Strings, Form-Labels, Fehlermeldungen, Handbuch, FAQ, admin-guide, README + Screenshots, Übersetzungs-Coverage-Wachhund in CI. Datums-/Zeitformate auf Django-L10N umgestellt (langes Format mit Wochentag).
+- **Migrationen als One-Shot-Job vor Rolling-Restart** — `docker-compose.prod.yml` führt Migrationen jetzt in einem Init-Container aus, der vor dem Web-Service läuft. Lange RunPython-Migrationen blockieren keine Worker mehr.
+- **Caddy: www-Redirect, Access-Log, Rate-Limit-Hinweis** — `www.anlaufstelle.app` redirected jetzt 301 auf Apex; Access-Log JSON-formatiert, Rate-Limit-Header dokumentiert.
+- **DSGVO-Vorlagen ins App-Paket verschoben** — Templates wandern aus dem Repo-Root in `src/core/templates/dsgvo/`, sind im Paket und beim Deployment automatisch dabei.
+- **Persistentes `media:`-Volume in `docker-compose.prod.yml`** — vorher Bind-Mount, das bei Coolify-Deploys verloren ging. Jetzt named volume mit Backup-/Restore-Pfad.
+- **Service-Aufteilungen** — `services/event.py` in `services/events/` zerlegt (`crud.py`, `context.py`, `fields.py`, `attachments.py`, ). Retention-Strategien in `core/retention/strategies.py` konsolidiert. Statistik-Periodenparser extrahiert. `audit_pruning` ohne `DISABLE TRIGGER`.
+- **`PaginatedListMixin` + `FEED_MAX_PER_TYPE` konsolidiert** — Pagination-Logik aus drei Listen-Views zusammengezogen, Feed-Maximum zentral.
+- **`log_audit_event` in 8 View-Callsites** — direkter `AuditLog.objects.create`-Aufruf durch zentralen Service ersetzt; einheitliche Felder + IP-Hashing.
+- **Codex-Plan-1 Quickwins R-001/R-005/R-006/R-007/R-008** — fünf kleine Refactorings aus dem Audit-Plan.
+- **Inline-Imports an Modulkopf** — Retention-Hot-Path bekam Imports zentral, Modul-Lade-Zeit deterministisch.
+- **`DocumentType.UniqueConstraint(facility, name, category)`** — vorher nur `(facility, name)`; jetzt erlaubt eine Einrichtung denselben Namen in unterschiedlichen Kategorien.
 
 ### Fixed
 
-- **HTML5-Date-Validation in App-Sprache** — Der Browser-Tooltip beim Validation-Fehler an `<input type="date">` folgte bisher der Browser-Locale (z. B. „Value must be 2026-04-29 or later"). `WorkItemForm` setzt jetzt lokalisierte `data-msg-too-early`/`data-msg-too-late`-Attribute auf den Date-Inputs; ein DOMContentLoaded-Listener in [`src/static/js/alpine-components.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/alpine-components.js) ruft damit `setCustomValidity()` auf — die Tooltip-Meldung kommt damit aus den `gettext`-Übersetzungen der App.
-- **WorkItem Quick-Date-Buttons funktionieren wieder** — Die Buttons „Heute / Morgen / Nächste Woche / In 2 Wochen" über den `due_date`/`remind_at`-Feldern setzten kein Datum, weil `setDate('today')` ein Method-Call mit String-Argument ist und der `@alpinejs/csp`-Build solche Aufrufe nicht ausführt. Vier dedizierte Methoden ohne Argumente (`setToday`, `setTomorrow`, `setNextFriday`, `setIn2Weeks`) sowie `toLocaleDateString('en-CA')` statt `toISOString().slice(0,10)` (verhindert Timezone-Drift in den Vortag).
-- **WorkItem-Datumsvalidierung** — `due_date` und `remind_at` lassen sich nicht mehr beliebig in die Zukunft setzen (z. B. `05.05.3345`, was praktisch aus dem Zeitstrom verschwand) **und** nicht mehr in die Vergangenheit anlegen (Aufgabe wäre sofort überfällig). Neue Schranken: min = heute, max = 31. Dezember Folgejahr — sowohl als HTML5-`min`/`max`-Attribut (Browser-Side) als auch in `WorkItemForm.clean()` (Server-Side, Schutz vor Bypass). Längere Zeiträume sind über `recurrence` weiterhin möglich. Edit eines bereits überfälligen Items bleibt möglich, solange `due_date` unverändert bleibt (`changed_data`-Check).
+- **Datums-/Zeit-Tooltips in App-Sprache** — HTML5-Validation-Tooltip an `<input type="date">` folgte der Browser-Locale; jetzt lokalisierte Meldungen aus den App-Translations.
+- **WorkItem Quick-Date-Buttons + Min-Date-Validierung** — „Heute / Morgen / Nächste Woche / In 2 Wochen" funktionieren wieder unter `@alpinejs/csp`.
+- **WorkItem-Datumsvalidierung max. 31.12. Folgejahr** — `due_date`/`remind_at` müssen ≥ heute und ≤ 31.12. Folgejahr sein, sowohl HTML5 als auch Server-Side; verhindert versehentliche „Aufgabe verschwindet im Jahr 3345".
+- **A11y-Cluster** (–) — `aria-invalid` + `aria-describedby` in fünf Form-Templates, Touch-Target ≥ 44 px für Sidebar + Datum-Arrows, stabile `aria-live`-Region für HTMX-Erfolge, `role=table/row/columnheader/cell` auf Personen-Liste, `html lang` dynamisch aus `LANGUAGE_CODE`, sekundärer Text ≥ 12 px, `non_field_errors`-Block in clients/cases/workitems-Forms, `tabindex`-Anti-Pattern aus Event-Create entfernt.
+- **EN-Übersetzungen entfuzzt + fehlende msgids** — 27 fuzzy-markierte Übersetzungen finalisiert, fehlende msgids für neue Features ergänzt.
+- **Datei-Download nicht mehr durch Service-Worker als Offline-Fallback abgefangen** — Download-Routes werden im SW-Match jetzt explizit ausgeschlossen.
+- **Download liefert 404 statt Connection-Reset bei fehlender Datei** — vorher reset-by-peer, jetzt sauberer 404 mit AuditLog-Eintrag.
+- **Zeitstrom-Dienstübersicht zeigt Kennzahlen statt leerer Karten** — KPI-Berechnung griff vor Time-Filter, Cards waren leer; Reihenfolge korrigiert.
+- **Aufgaben-Bearbeiten-Button nur bei Berechtigung** — Button war für alle Rollen sichtbar, scheiterte aber serverseitig; jetzt im Template gegated.
+- **Auswahlwerte in „Erfasste Daten" als Labels** — Multi-Select-Werte wurden als Python-Listen-Repr gerendert; jetzt komma-separierte Labels.
+- **Fälle müssen einer Person zugeordnet sein** — `Case.client` von `null=True` auf `null=False, on_delete=PROTECT`; Bestandsdaten in Migration `0080` gegen Anonym-Marker referenziert.
+- **Aufgaben-Quickbutton „Nächste Woche" = heute+7** — vorher der nächste Freitag, jetzt konsistent zu Buchungssystem-Konventionen.
+- **Statistik-Begriffe verständlicher + PDF-Export Halbjahresbericht** — Labels „Eindeutige Personen / Top-Personen / Verlauf"; PDF-Export liefert jetzt einen Halbjahresbericht statt nur Jahres-Summen.
+- **Login-Footer mit Anlaufstelle-Marke** — Footer fehlte auf der Login-Seite, jetzt konsistent.
+- **WorkItem-Status-Race + Idempotenz-Guard** — paralleles Toggle „Done"/“Reopen" konnte zwei AuditLog-Einträge schreiben; `select_for_update` + Idempotency-Token.
+- **Healthcheck-Vertrag stabilisiert** — `clamav`-Alias und Container-Healthcheck lesen jetzt das `status`-Feld einheitlich; vorher Inkompatibilität bei Coolify-Deploys.
+- **Off-Site-Sync State-File + Exit-Code bei wiederholtem Fehler** — wiederholtes Sync-Scheitern bricht jetzt die Backup-Rotation hart ab statt silent zu loggen.
+- **Offline `escapejs` aus `data-pk`-Attributen entfernt** — `escapejs` ist für JS-Strings, nicht HTML-Attributwerte; PK-Vergleich scheiterte bei UUIDs mit `-`.
+- **Offline-Marker `__files__` minimieren** — vorher kompletter Filename + Mime im Marker, jetzt nur Anzahl.
+
+### Performance
+
+- **Explizites `Event.search_text` + GIN-trgm-Index** — Volltextsuche aus dem Trigger generierten Index zieht jetzt auf eine pre-computed `search_text`-Spalte; Fuzzy-Suche skaliert deutlich besser bei großen Facilities.
+- **Locust-Last-Tests + Nightly-Workflow + Budgets** — `locustfile.py` mit realen Routes, Nightly-CI führt Last-Tests gegen ein E2E-Setup, Budgets in der Pipeline schlagen Alarm.
+- **Query-Count-Schutz für 4 Detail-Views** — `assertNumQueries` für Klient-, Fall-, Episode-, Event-Detail; verhindert N+1-Regressionen bei künftigen Refactorings.
+- **`apply_attachment_changes` Bulk-Load** — pro Event-Speicherung eine Query statt N (eine pro Anhang).
+- **`SESSION_SAVE_EVERY_REQUEST=False`** — HTMX-Polls und statische Routes schreiben keine Session-Update mehr; reduziert DB-Writes spürbar.
+- **Pagination-Cap auf 500** — `cases`/`clients`/`audit` haben jetzt einen Server-Side-Cap, verhindert versehentliche `?page_size=10000`-Requests.
+- **`AuditLog`-Retention-Pruning in `enforce_retention`** — eigener Pruning-Pfad fürs Audit-Log; Tabelle wuchs vorher unbegrenzt.
+- **`select_related` für Zeitstrom-Sidebar-Workitems** — sechs Queries pro Render → eine.
+
+### Tooling / Internal
+
+- **pre-commit-Config** — `.pre-commit-config.yaml` mit Ruff (Lint+Format), mypy, end-of-file-fixer, trailing-whitespace.
+- **Ruff-Regelsatz erweitert** — `B` (bugbear), `UP` (pyupgrade), `SIM` (simplify), `N` (naming), `S` (security) aktiviert; Bestand auf 0 gebracht.
+- **mypy-Strict-Zone für `core/forms`** — strikt typisierte Zone wächst weiter; Forms-Layer komplett getypt.
+- **pip-licenses Allowlist als CI-Lint** — Build bricht bei nicht-allowlisted Lizenzen; verhindert versehentliche AGPL-fremde Dependencies.
+- **Translation-Coverage-Wachhund** — CI prüft, dass alle msgids übersetzt sind; verhindert untranslated-strings-Drift.
+- **Coverage-Gate `--cov-fail-under=93`** — Coverage darf nicht mehr unter 93 % fallen.
+- **CHANGELOG-relevant: Tag-Signing verbindlich** — Release-Tags müssen GPG-signiert sein, in der Release-Checkliste festgeschrieben.
 
 ## [0.10.2] - 2026-04-28
 
