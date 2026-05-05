@@ -16,6 +16,18 @@
         WORKITEM_NEW: /\/workitems\/new\//,
         WORKITEM_EDIT: new RegExp("/workitems/" + UUID + "/edit/", "i"),
         CLIENT_DETAIL: CLIENT_DETAIL_RE,
+        // Refs #751: Attachment-Downloads liefern Binärdaten, dürfen nicht
+        // durch die HTML-Offline-Fallback-Kette ersetzt werden (sonst sieht
+        // der User die /offline/-Seite statt einer Datei oder eines
+        // Berechtigungs-/404-Fehlers).
+        ATTACHMENT_DOWNLOAD: new RegExp(
+            "/events/" + UUID + "/attachments/" + UUID + "/download/",
+            "i"
+        ),
+        // Auch Datenauskunft-Exporte (Art. 15 PDF / Art. 20 JSON) und
+        // Statistik-Exporte sind Downloads, die offline nicht sinnvoll
+        // ersetzbar sind.
+        EXPORT_DOWNLOAD: /\/(?:export|statistics\/export|clients\/[^/]+\/export)/i,
     };
     self.URL_PATTERNS.QUEUE_PATTERNS = [
         self.URL_PATTERNS.EVENT_NEW,

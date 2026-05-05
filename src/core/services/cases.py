@@ -18,7 +18,10 @@ logger = logging.getLogger(__name__)
 @transaction.atomic
 def create_case(facility, user, client, title, description="", lead_user=None):
     """Create a new Case with status OPEN."""
-    if client and client.facility_id != facility.pk:
+    if client is None:
+        # Refs #748: Fälle sind fachlich Vorgänge zu konkreten Personen.
+        raise ValidationError(_("Fälle müssen einer Person zugeordnet sein."))
+    if client.facility_id != facility.pk:
         raise ValueError(_("Klientel gehört nicht zur Einrichtung."))
     if lead_user and lead_user.facility_id != facility.pk:
         raise ValueError(_("Fallverantwortlicher gehört nicht zur Einrichtung."))

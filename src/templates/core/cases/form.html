@@ -28,7 +28,7 @@
                  data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
                  data-initial-client-id="{{ client_id|default:'' }}"
                  data-autocomplete-url="{% url 'core:client_autocomplete' %}">
-                <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Person" %}</label>
+                <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Person" %} *</label>
                 <div class="relative">
                     <input type="text"
                            :value="query" @input="setQuery"

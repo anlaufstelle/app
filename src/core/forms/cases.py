@@ -12,9 +12,12 @@ class CaseForm(forms.ModelForm):
     """Form for creating and editing cases."""
 
     client = forms.UUIDField(
-        required=False,
+        required=True,
         widget=forms.HiddenInput(),
         label=_("Klientel"),
+        error_messages={
+            "required": _("Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."),
+        },
     )
 
     class Meta:
@@ -44,7 +47,7 @@ class CaseForm(forms.ModelForm):
     def clean_client(self):
         client_id = self.cleaned_data.get("client")
         if not client_id:
-            return None
+            raise ValidationError(_("Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."))
         try:
             client_obj = Client.objects.get(pk=client_id)
         except Client.DoesNotExist:

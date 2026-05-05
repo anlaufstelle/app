@@ -31,14 +31,14 @@ class TestPDFExportE2E:
     def test_pdf_export_button_visible(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
-        assert page.locator("a:has-text('PDF-Bericht')").is_visible()
+        assert page.locator("a:has-text('Halbjahresbericht (PDF)')").is_visible()
 
     def test_pdf_download(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
 
         with page.expect_download() as download_info:
-            page.locator("a:has-text('PDF-Bericht')").click()
+            page.locator("a:has-text('Halbjahresbericht (PDF)')").click()
         download = download_info.value
         assert download.suggested_filename.endswith(".pdf")
 

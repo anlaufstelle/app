@@ -40,15 +40,16 @@
         {% else %}
         <div class="text-[28px] font-bold text-ink font-mono leading-none">{{ stats.unique_clients }}</div>
         {% endif %}
-        <div class="text-[13px] font-semibold text-ink-soft mt-2">{% trans "Einzigartige Personen" %}</div>
+        <div class="text-[13px] font-semibold text-ink-soft mt-2">{% trans "Unterschiedliche Personen" %}</div>
+        <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Personen mit mindestens einem Kontakt im Zeitraum" %}</div>
     </div>
     <div class="bg-surface rounded-[10px] border border-subtle p-5">
         {% if stats.top_clients %}
-        <div class="text-[20px] font-bold text-ink leading-tight">{{ stats.top_clients.0.pseudonym }} <span class="text-ink-muted font-mono text-[16px]">({{ stats.top_clients.0.count }})</span></div>
+        <div class="text-[20px] font-bold text-ink leading-tight">{{ stats.top_clients.0.pseudonym }} <span class="text-ink-muted font-mono text-[16px]">({% blocktrans count count=stats.top_clients.0.count %}{{ count }} Kontakt{% plural %}{{ count }} Kontakte{% endblocktrans %})</span></div>
         {% else %}
         <div class="text-[20px] font-bold text-ink-muted">–</div>
         {% endif %}
-        <div class="text-[13px] font-semibold text-ink-soft mt-2">{% trans "Top-Person" %}</div>
+        <div class="text-[13px] font-semibold text-ink-soft mt-2">{% trans "Person mit den meisten Kontakten" %}</div>
     </div>
 </div>
 
@@ -211,9 +212,10 @@
         {% trans "CSV-Export" %}
     </a>
     <a href="{% url 'core:statistics_pdf_export' %}?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}"
-       class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
+       class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas"
+       title="{% trans 'Verwendet den oben gewählten Zeitraum als Berichtszeitraum.' %}">
         <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-        {% trans "PDF-Bericht" %}
+        {% trans "Halbjahresbericht (PDF)" %}
     </a>
     <a href="{% url 'core:statistics_jugendamt_export' %}?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}"
        class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">

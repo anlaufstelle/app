@@ -182,4 +182,11 @@ class WorkItemDetailView(AssistantOrAboveRequiredMixin, View):
             pk=pk,
             facility=request.current_facility,
         )
-        return render(request, "core/workitems/detail.html", {"workitem": workitem})
+        # Edit-Button-Sichtbarkeit folgt derselben Policy wie WorkItemUpdateView
+        # (StaffRequiredMixin + can_user_mutate_workitem). Refs #753.
+        can_edit = request.user.is_staff_or_above and can_user_mutate_workitem(request.user, workitem)
+        return render(
+            request,
+            "core/workitems/detail.html",
+            {"workitem": workitem, "can_edit": can_edit},
+        )

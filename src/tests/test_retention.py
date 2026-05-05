@@ -348,8 +348,14 @@ def test_events_survive_client_deletion(facility_with_settings, client_identifie
 
 
 @pytest.mark.django_db
-def test_cases_survive_client_deletion(facility_with_settings, client_identified, staff_user):
-    """Cases with SET_NULL FK survive when their client is deleted."""
+def test_client_deletion_protected_when_cases_exist(facility_with_settings, client_identified, staff_user):
+    """Refs #748: Case.client uses on_delete=PROTECT — Personen mit aktiven
+    Fällen können nicht versehentlich gelöscht werden. Ein Lösch-Versuch
+    wirft ``ProtectedError`` und der Fall bleibt mit Klientel-Zuordnung
+    erhalten.
+    """
+    from django.db.models.deletion import ProtectedError
+
     case = Case.objects.create(
         facility=facility_with_settings,
         client=client_identified,
@@ -358,10 +364,11 @@ def test_cases_survive_client_deletion(facility_with_settings, client_identified
         created_by=staff_user,
     )
 
-    client_identified.delete()
+    with pytest.raises(ProtectedError):
+        client_identified.delete()
 
     case.refresh_from_db()
-    assert case.client is None
+    assert case.client_id == client_identified.pk
 
 
 @pytest.mark.django_db

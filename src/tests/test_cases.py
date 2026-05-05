@@ -229,8 +229,16 @@ class TestCaseDetailView:
         assert "Offener Fall" in response.content.decode()
 
     def test_case_detail_facility_scoping(self, client, staff_user, other_facility):
+        from core.models import Client
+
+        other_client = Client.objects.create(
+            facility=other_facility,
+            pseudonym="Andere-Person-01",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+        )
         other_case = Case.objects.create(
             facility=other_facility,
+            client=other_client,
             title="Anderer Fall",
             status=Case.Status.OPEN,
         )

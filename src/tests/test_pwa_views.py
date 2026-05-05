@@ -76,7 +76,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v8"' in body, "CACHE_NAME muss bei APP_SHELL-Aenderung gebumpt sein."
+        assert 'CACHE_NAME = "anlaufstelle-v9"' in body, "CACHE_NAME muss bei APP_SHELL-Aenderung gebumpt sein."
 
 
 @pytest.mark.django_db

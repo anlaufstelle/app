@@ -1,6 +1,6 @@
 {% load i18n %}
 
-{% include "core/handover/partials/_stats_grid.html" %}
+{% include "core/handover/partials/_stats_grid.html" with summary=handover_summary %}
 
 {% if handover_summary.highlights %}
 <h3 class="text-sm font-semibold text-ink-soft mt-4 mb-2">{% trans "Wichtige Ereignisse" %}</h3>

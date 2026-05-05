@@ -7,7 +7,7 @@
 <div class="max-w-2xl">
     <div class="flex items-center justify-between mb-6">
         <h1 class="text-[22px] font-bold text-ink">{{ workitem.title }}</h1>
-        {% if user.is_staff_or_above %}
+        {% if can_edit %}
         <a href="{% url 'core:workitem_update' pk=workitem.pk %}" class="inline-flex items-center px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">
             {% trans "Bearbeiten" %}
         </a>

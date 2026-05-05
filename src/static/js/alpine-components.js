@@ -603,11 +603,11 @@ document.addEventListener("alpine:init", () => {
             d.setDate(d.getDate() + 1);
             this._commit(d);
         },
-        setNextFriday() {
+        setNextWeek() {
+            // Refs #746: "Nächste Woche" = heute + 7 Tage (intuitiver als
+            // "Freitag der nächsten Woche" mit variabler Distanz 8–14 Tage).
             const d = new Date();
-            const day = d.getDay();
-            const daysUntilNextFriday = ((5 - day + 7) % 7) + 7;
-            d.setDate(d.getDate() + daysUntilNextFriday);
+            d.setDate(d.getDate() + 7);
             this._commit(d);
         },
         setIn2Weeks() {

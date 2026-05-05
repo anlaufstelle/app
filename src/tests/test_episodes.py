@@ -6,9 +6,28 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Case
+from core.models import Case, Client
 from core.models.episode import Episode
 from core.services.episodes import close_episode, create_episode, update_episode
+
+
+def _other_facility_case(other_facility):
+    """Create a Case in ``other_facility`` together with a matching Client.
+
+    Refs #748: Case.client is now mandatory, so cross-facility scoping
+    tests need a client in the other facility too.
+    """
+    other_client = Client.objects.create(
+        facility=other_facility,
+        pseudonym="Fremd-Person-01",
+        contact_stage=Client.ContactStage.IDENTIFIED,
+    )
+    return Case.objects.create(
+        facility=other_facility,
+        client=other_client,
+        title="Anderer Fall",
+        status=Case.Status.OPEN,
+    )
 
 
 @pytest.mark.django_db
@@ -89,11 +108,7 @@ class TestEpisodeCreateView:
         assert response.status_code == 403
 
     def test_episode_create_facility_scoping(self, client, staff_user, other_facility):
-        other_case = Case.objects.create(
-            facility=other_facility,
-            title="Anderer Fall",
-            status=Case.Status.OPEN,
-        )
+        other_case = _other_facility_case(other_facility)
         client.force_login(staff_user)
         response = client.get(reverse("core:episode_create", kwargs={"case_pk": other_case.pk}))
         assert response.status_code == 404
@@ -135,11 +150,7 @@ class TestEpisodeUpdateView:
         assert episode.title == "Aktualisierte Episode"
 
     def test_episode_update_facility_scoping(self, client, staff_user, other_facility):
-        other_case = Case.objects.create(
-            facility=other_facility,
-            title="Anderer Fall",
-            status=Case.Status.OPEN,
-        )
+        other_case = _other_facility_case(other_facility)
         other_episode = Episode.objects.create(
             case=other_case,
             title="Andere Episode",
@@ -182,11 +193,7 @@ class TestEpisodeCloseView:
         assert episode.ended_at == timezone.now().date()
 
     def test_episode_close_facility_scoping(self, client, staff_user, other_facility):
-        other_case = Case.objects.create(
-            facility=other_facility,
-            title="Anderer Fall",
-            status=Case.Status.OPEN,
-        )
+        other_case = _other_facility_case(other_facility)
         other_episode = Episode.objects.create(
             case=other_case,
             title="Andere Episode",

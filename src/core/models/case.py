@@ -28,11 +28,13 @@ class Case(SoftDeletableModel):
     )
     client = models.ForeignKey(
         "core.Client",
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
+        on_delete=models.PROTECT,
         related_name="cases",
         verbose_name=_("Klientel"),
+        help_text=_(
+            "Pflichtfeld: Jeder Fall ist einer Person zugeordnet. "
+            "PROTECT verhindert versehentliches Löschen einer Person mit aktiven Fällen."
+        ),
     )
     title = models.CharField(max_length=200, verbose_name=_("Titel"))
     description = models.TextField(

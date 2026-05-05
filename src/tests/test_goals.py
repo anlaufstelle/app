@@ -4,7 +4,7 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Case
+from core.models import Case, Client
 from core.models.outcome import Milestone, OutcomeGoal
 from core.services.goals import (
     achieve_goal,
@@ -15,6 +15,21 @@ from core.services.goals import (
     unachieve_goal,
     update_goal,
 )
+
+
+def _other_facility_case(other_facility):
+    """Refs #748: Case.client is mandatory — create matching client too."""
+    other_client = Client.objects.create(
+        facility=other_facility,
+        pseudonym="Fremd-Goal-01",
+        contact_stage=Client.ContactStage.IDENTIFIED,
+    )
+    return Case.objects.create(
+        facility=other_facility,
+        client=other_client,
+        title="Anderer Fall",
+        status=Case.Status.OPEN,
+    )
 
 
 @pytest.mark.django_db
@@ -141,11 +156,7 @@ class TestGoalCreateView:
         assert response.status_code == 403
 
     def test_create_goal_facility_scoping(self, client, staff_user, other_facility):
-        other_case = Case.objects.create(
-            facility=other_facility,
-            title="Anderer Fall",
-            status=Case.Status.OPEN,
-        )
+        other_case = _other_facility_case(other_facility)
         client.force_login(staff_user)
         response = client.post(
             reverse("core:goal_create", kwargs={"case_pk": other_case.pk}),
@@ -189,11 +200,7 @@ class TestGoalUpdateView:
         assert response.status_code in (302, 403)
 
     def test_goal_update_facility_scoping(self, client, staff_user, other_facility, outcome_goal):
-        other_case = Case.objects.create(
-            facility=other_facility,
-            title="Anderer Fall",
-            status=Case.Status.OPEN,
-        )
+        other_case = _other_facility_case(other_facility)
         client.force_login(staff_user)
         response = client.post(
             reverse(
@@ -233,11 +240,7 @@ class TestGoalToggleView:
         assert outcome_goal.is_achieved is False
 
     def test_toggle_goal_facility_scoping(self, client, staff_user, other_facility, outcome_goal):
-        other_case = Case.objects.create(
-            facility=other_facility,
-            title="Anderer Fall",
-            status=Case.Status.OPEN,
-        )
+        other_case = _other_facility_case(other_facility)
         client.force_login(staff_user)
         response = client.post(
             reverse(
@@ -287,11 +290,7 @@ class TestMilestoneCreateView:
         assert not Milestone.objects.filter(goal=outcome_goal).exists()
 
     def test_create_milestone_facility_scoping(self, client, staff_user, other_facility, outcome_goal):
-        other_case = Case.objects.create(
-            facility=other_facility,
-            title="Anderer Fall",
-            status=Case.Status.OPEN,
-        )
+        other_case = _other_facility_case(other_facility)
         client.force_login(staff_user)
         response = client.post(
             reverse(
@@ -332,11 +331,7 @@ class TestMilestoneToggleView:
         assert milestone.is_completed is False
 
     def test_toggle_milestone_facility_scoping(self, client, staff_user, other_facility, milestone):
-        other_case = Case.objects.create(
-            facility=other_facility,
-            title="Anderer Fall",
-            status=Case.Status.OPEN,
-        )
+        other_case = _other_facility_case(other_facility)
         client.force_login(staff_user)
         response = client.post(
             reverse(
@@ -372,11 +367,7 @@ class TestMilestoneDeleteView:
         assert 'id="goals-section"' in content
 
     def test_delete_milestone_facility_scoping(self, client, staff_user, other_facility, milestone):
-        other_case = Case.objects.create(
-            facility=other_facility,
-            title="Anderer Fall",
-            status=Case.Status.OPEN,
-        )
+        other_case = _other_facility_case(other_facility)
         client.force_login(staff_user)
         response = client.post(
             reverse(

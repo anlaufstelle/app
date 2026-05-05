@@ -97,6 +97,29 @@ def remove_restricted_fields(user, document_type, data_form):
     return restricted
 
 
+def _format_field_display_value(value, ft):
+    """Format a ``data_json`` value for human-readable detail display.
+
+    Wandelt SELECT/MULTI_SELECT-Slugs in Labels (``['beratung']`` →
+    ``Beratung``) und BOOLEAN-Werte in ``Ja``/``Nein`` um. Refs #749.
+    """
+    if ft is None:
+        return value
+
+    if ft.field_type == ft.FieldType.BOOLEAN:
+        return _("Ja") if value else _("Nein")
+
+    if ft.field_type == ft.FieldType.SELECT and ft.options_json:
+        label_map = {o["slug"]: o["label"] for o in ft.options_json if isinstance(o, dict) and "slug" in o}
+        return label_map.get(value, value)
+
+    if ft.field_type == ft.FieldType.MULTI_SELECT and ft.options_json and isinstance(value, list):
+        label_map = {o["slug"]: o["label"] for o in ft.options_json if isinstance(o, dict) and "slug" in o}
+        return ", ".join(label_map.get(v, str(v)) for v in value)
+
+    return value
+
+
 def _build_prior_versions(attachment, predecessor_index):
     """Walk the ``superseded_by`` chain backwards for an attachment.
 
@@ -212,10 +235,11 @@ def build_event_detail_context(event, user):
                 )
                 continue
 
+        decrypted = safe_decrypt(value, default=_("[verschlüsselt]"))
         fields_display.append(
             {
                 "label": ft.name if ft else key.replace("-", " ").title(),
-                "value": safe_decrypt(value, default=_("[verschlüsselt]")),
+                "value": _format_field_display_value(decrypted, ft),
                 "is_encrypted": is_encrypted,
                 "is_sensitive": bool(field_sensitivity),
             }

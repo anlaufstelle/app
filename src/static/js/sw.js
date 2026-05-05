@@ -15,7 +15,7 @@
 
 importScripts("/static/js/url-patterns.js");
 
-const CACHE_NAME = "anlaufstelle-v8";
+const CACHE_NAME = "anlaufstelle-v9";
 // Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
 // ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
 // auch beim ersten Offline-Aufruf garantiert verfuegbar ist.
@@ -191,6 +191,18 @@ self.addEventListener("fetch", (event) => {
     }
 
     if (request.method !== "GET") return;
+
+    // Refs #751: Datei-/Export-Downloads laufen network-only und werden
+    // weder gecacht noch durch die HTML-Offline-Fallback-Kette ersetzt.
+    // Andernfalls bekäme der User für einen Download-Klick die
+    // /offline/-Seite statt der Datei oder einer fachlichen
+    // Fehlermeldung (404, 403, 500).
+    if (
+        self.URL_PATTERNS.ATTACHMENT_DOWNLOAD.test(request.url) ||
+        self.URL_PATTERNS.EXPORT_DOWNLOAD.test(request.url)
+    ) {
+        return;
+    }
 
     if (request.url.includes("/static/")) {
         // Stale-while-revalidate: sofort aus dem Cache servieren, im
