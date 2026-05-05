@@ -15,6 +15,14 @@ load_dotenv(BASE_DIR.parent / ".env")
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 
+# AUDIT_HASH_KEY (Refs #791) — separater HMAC-Schluessel fuer Audit-Hashes
+# (z.B. ``hmac_hash_email`` in Passwort-Reset-Audits). Bewusst getrennt von
+# SECRET_KEY, damit ein potenzieller SECRET_KEY-Leak nicht ruckwirkend
+# Audit-Hashes knacken laesst. Fallback in services.audit_hash:
+# SHA256(SECRET_KEY) — funktional, aber operatorseitig sollte
+# DJANGO_AUDIT_HASH_KEY explizit gesetzt sein.
+AUDIT_HASH_KEY = os.environ.get("DJANGO_AUDIT_HASH_KEY", "")
+
 DEBUG = False
 
 ALLOWED_HOSTS = []
@@ -126,7 +134,13 @@ OTP_TOTP_ISSUER = "Anlaufstelle"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+        # 12 Zeichen passend zu BSI/NIST-Empfehlung fuer §203-/Art.-9-Daten
+        # (Refs #789). services/password.py Initial-Passwort-Generator nutzt
+        # bereits 12 Zeichen — der Validator zog vorher den Django-Default 8.
+        "OPTIONS": {"min_length": 12},
+    },
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]

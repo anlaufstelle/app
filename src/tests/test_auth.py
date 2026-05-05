@@ -499,3 +499,74 @@ class TestLoginLockoutIntegration:
         )
         assert response.status_code == 302
         assert response.url == "/"
+
+
+@pytest.mark.django_db
+class TestPasswordResetAuditHash:
+    """Refs #791 (C-23): Reset-Anfragen schreiben HMAC-Hash, keinen Klartext."""
+
+    def test_existing_user_email_logged_as_hash(self, client, staff_user):
+        from core.services.audit_hash import hmac_hash_email
+
+        staff_user.email = "miriam@example.org"
+        staff_user.save(update_fields=["email"])
+        response = client.post(
+            "/password-reset/",
+            {"email": "miriam@example.org"},
+            REMOTE_ADDR="10.55.55.10",
+        )
+        assert response.status_code in (200, 302), response.status_code
+        entry = AuditLog.objects.filter(action=AuditLog.Action.PASSWORD_RESET_REQUESTED).latest("timestamp")
+        assert "email" not in entry.detail, (
+            f"Klartext-E-Mail darf nicht im AuditLog stehen, gemessen: {entry.detail}. Refs #791."
+        )
+        assert entry.detail.get("email_hash") == hmac_hash_email("miriam@example.org")
+
+    def test_unknown_email_logged_as_hash_only(self, client, db):
+        response = client.post(
+            "/password-reset/",
+            {"email": "tippfehler@nirgendwo.example"},
+            REMOTE_ADDR="10.55.55.11",
+        )
+        assert response.status_code in (200, 302)
+        entry = AuditLog.objects.filter(action=AuditLog.Action.PASSWORD_RESET_REQUESTED).latest("timestamp")
+        assert "email" not in entry.detail
+        # Kein Match → user/target leer, aber Hash trotzdem da fuer Forensik.
+        assert entry.user is None
+        assert isinstance(entry.detail.get("email_hash"), str)
+        assert len(entry.detail["email_hash"]) == 64  # Hex-SHA256
+
+    def test_hash_is_stable_across_case_and_whitespace(self):
+        from core.services.audit_hash import hmac_hash_email
+
+        assert hmac_hash_email("Alice@Example.org") == hmac_hash_email("alice@example.org ")
+        assert hmac_hash_email("") == ""
+
+
+class TestPasswordMinLengthValidator:
+    """Refs #789: Mindestlaenge 12 Zeichen (BSI/NIST-Aligned)."""
+
+    @pytest.mark.parametrize("password", ["abcDEF1234!", "12345678901"])
+    def test_short_passwords_rejected(self, password):
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        with pytest.raises(DjangoValidationError) as excinfo:
+            validate_password(password)
+        # Mindestens eine der Validation-Errors muss von der Mindestlaenge stammen.
+        assert any("12" in str(msg) or "lang" in str(msg).lower() for msg in excinfo.value.messages), (
+            f"Erwartete Mindestlaengen-Fehlermeldung, gemessen: {excinfo.value.messages}"
+        )
+
+    def test_twelve_char_password_passes_length_check(self):
+        from django.contrib.auth.password_validation import validate_password
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        # Wir testen nur, dass die Mindestlaenge >= 12 nicht greift; andere
+        # Validatoren (CommonPassword, Numeric) duerfen weiterhin ablehnen.
+        try:
+            validate_password("Korrekt-Pferd-Batterie-Heftklammer-12")
+        except DjangoValidationError as exc:
+            assert not any("12" in str(m) or "lang" in str(m).lower() for m in exc.messages), (
+                f"12+-Zeichen-PW darf nicht an MinimumLengthValidator scheitern: {exc.messages}"
+            )

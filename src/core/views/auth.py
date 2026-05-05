@@ -14,6 +14,7 @@ from django.views.i18n import set_language
 from django_ratelimit.decorators import ratelimit
 
 from core.models import AuditLog, User
+from core.services.audit_hash import hmac_hash_email
 from core.services.login_lockout import is_locked
 from core.services.offline_keys import ensure_offline_key_salt
 from core.signals.audit import get_client_ip
@@ -127,13 +128,17 @@ class RateLimitedPasswordResetView(auth_views.PasswordResetView):
             # Auth-Signal-Receiver dürfen den Flow nie kippen.
             logger.exception("Password-Reset User-Lookup fehlgeschlagen")
 
+        # Refs #791: Klartext-E-Mails im append-only AuditLog widersprechen
+        # DSGVO-Datenminimierung. Stattdessen HMAC-Hash schreiben — Lookup
+        # bei bekannter E-Mail bleibt moeglich (gleiche E-Mail -> gleicher
+        # Hash), eingegebene Adressen leben aber nicht 24 Monate weiter.
         AuditLog.objects.create(
             facility=facility,
             user=matched_user,
             action=AuditLog.Action.PASSWORD_RESET_REQUESTED,
             target_type="User" if matched_user else "",
             target_id=str(matched_user.pk) if matched_user else "",
-            detail={"email": email} if email else {},
+            detail={"email_hash": hmac_hash_email(email)} if email else {},
             ip_address=get_client_ip(self.request),
         )
         return super().form_valid(form)

@@ -19,8 +19,10 @@
 <div class="mb-4 flex flex-col sm:flex-row gap-2.5 no-print" data-filter-persist>
     <div class="relative flex-1">
         <svg aria-hidden="true" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        {# Refs #787: Suchbegriff (Pseudonym) wird explizit nicht persistiert. #}
         <input type="text"
                name="q"
+               data-filter-persist-exclude
                value="{{ q }}"
                placeholder="{% trans 'Pseudonym suchen...' %}"
                class="w-full bg-surface border border-subtle rounded-[10px] pl-8 pr-3 py-2 text-[13px] text-ink"

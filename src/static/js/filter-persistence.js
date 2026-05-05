@@ -19,6 +19,12 @@
 
   /**
    * Collect all named filter elements inside [data-filter-persist] containers.
+   *
+   * Refs #787: Felder, die Klartext-Suchbegriffe (Pseudonyme, Notizen)
+   * aufnehmen, werden ausgeschlossen. Mechanik:
+   *   1. ``data-filter-persist-exclude``-Attribut auf dem Input.
+   *   2. ``name="q"``-Konvention — Suchfelder werden niemals persistiert.
+   * Kategoriale Filter (Stage, Age, Status) bleiben weiterhin erhalten.
    */
   function getFilterElements() {
     var containers = document.querySelectorAll("[data-filter-persist]");
@@ -26,6 +32,8 @@
     containers.forEach(function (container) {
       var inputs = container.querySelectorAll("select[name], input[name]");
       inputs.forEach(function (el) {
+        if (el.hasAttribute("data-filter-persist-exclude")) return;
+        if (el.getAttribute("name") === "q") return;
         elements.push(el);
       });
     });

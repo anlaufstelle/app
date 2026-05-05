@@ -14,7 +14,10 @@ services:
       - internal
 
   web:
-    image: ghcr.io/anlaufstelle/app:v0.10.2
+    # Image-Tag via APP_VERSION parametrisieren (Refs #800), Fallback auf
+    # den zuletzt gepinnten Release-Tag — Operator-Setups ohne explizite
+    # .env bleiben reproduzierbar.
+    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.10.2}
     env_file: .env
     environment:
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
