@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Löschen beantragen" %} – {{ client.pseudonym }}{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+    <h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Person löschen beantragen" %}</h1>
+    <p class="text-sm text-ink-muted mb-6">
+        {% blocktrans with pseudonym=client.pseudonym %}Vier-Augen-Prinzip — Ihr Antrag geht zur Genehmigung an die Leitung. Nach Genehmigung wird <strong>{{ pseudonym }}</strong> in den Papierkorb verschoben und nach Ablauf der Aufbewahrungsfrist automatisch anonymisiert.{% endblocktrans %}
+    </p>
+
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        <div>
+            <label for="reason" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">
+                {% trans "Begründung" %}
+            </label>
+            <textarea
+                id="reason"
+                name="reason"
+                rows="4"
+                required
+                class="w-full px-3 py-2 border border-subtle rounded-md text-sm focus:ring-2 focus:ring-accent focus:border-accent"
+                placeholder="{% trans 'z.B. Widerruf der Einwilligung, Verarbeitung nicht mehr erforderlich' %}"></textarea>
+        </div>
+
+        <div class="flex items-center space-x-3 pt-2">
+            <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700">
+                {% trans "Löschantrag stellen" %}
+            </button>
+            <a href="{% url 'core:client_detail' pk=client.pk %}" class="px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">
+                {% trans "Abbrechen" %}
+            </a>
+        </div>
+    </form>
+</div>
+{% endblock %}

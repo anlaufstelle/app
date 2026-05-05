@@ -89,10 +89,10 @@
                 </div>
             </div>
 
-            {# Klientel-Autocomplete mit Tastatur-Navigation #}
+            {# Person-Autocomplete mit Tastatur-Navigation #}
             <div>
                 <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
-                    {% trans "Klientel" %}
+                    {% trans "Person" %}
                     <span x-show="notAnonymousAllowed" x-cloak class="text-red-500">*</span>
                 </label>
                 <div class="relative">
@@ -107,7 +107,7 @@
                            @keydown.escape="hideResults"
                            @click.away="hideResults"
                            placeholder="{% trans 'Pseudonym eingeben...' %}"
-                           aria-label="{% trans 'Klientel suchen' %}"
+                           aria-label="{% trans 'Person suchen' %}"
                            role="combobox"
                            aria-expanded="false"
                            :aria-expanded="ariaExpanded"
@@ -141,7 +141,7 @@
                     {% trans "Pflichtfeld: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe." %}
                 </p>
                 <p x-show="showAnonymousHint" x-cloak class="mt-1 text-[11px] text-ink-muted">
-                    {% trans "Ohne Klientel wird der Kontakt als anonym gespeichert." %}
+                    {% trans "Ohne Person wird der Kontakt als anonym gespeichert." %}
                 </p>
             </div>
 
@@ -158,11 +158,11 @@
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>
                 {% endfor %}
                 <p class="mt-1 text-[11px] text-ink-muted">
-                    {% trans "Optional: Kontakt einem offenen Fall des ausgewählten Klientels zuordnen." %}
+                    {% trans "Optional: Kontakt einem offenen Fall der ausgewählten Person zuordnen." %}
                 </p>
             </div>
             <p x-show="showNoCasesHint" x-cloak class="text-[11px] text-ink-muted" data-testid="no-cases-for-client">
-                {% trans "Kein offener Fall für dieses Klientel vorhanden." %}
+                {% trans "Kein offener Fall für diese Person vorhanden." %}
             </p>
         </div>
 

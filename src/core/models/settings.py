@@ -52,6 +52,15 @@ class Settings(models.Model):
         default=365,
         verbose_name=_("Aufbewahrung Aktivitäten (Tage)"),
     )
+    client_trash_days = models.PositiveIntegerField(
+        default=30,
+        verbose_name=_("Papierkorb-Frist (Tage)"),
+        help_text=_(
+            "Wie lange soft-deletete Personen im Papierkorb verbleiben, "
+            "bevor enforce_retention sie automatisch anonymisiert. "
+            "Während dieser Frist kann ein Admin den Datensatz wiederherstellen."
+        ),
+    )
     auditlog_retention_months = models.PositiveIntegerField(
         default=24,
         verbose_name=_("AuditLog-Aufbewahrung (Monate)"),

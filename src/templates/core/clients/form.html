@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 {% load i18n %}
 
-{% block title %}{% if is_edit %}{% trans "Klientel bearbeiten" %}{% else %}{% trans "Neues Klientel" %}{% endif %} – Anlaufstelle{% endblock %}
+{% block title %}{% if is_edit %}{% trans "Person bearbeiten" %}{% else %}{% trans "Neue Person" %}{% endif %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <div class="max-w-lg">
-    <h1 class="text-[22px] font-bold text-ink mb-6">{% if is_edit %}{% trans "Klientel bearbeiten" %}{% else %}{% trans "Neues Klientel" %}{% endif %}</h1>
+    <h1 class="text-[22px] font-bold text-ink mb-6">{% if is_edit %}{% trans "Person bearbeiten" %}{% else %}{% trans "Neue Person" %}{% endif %}</h1>
 
     <form method="post" class="space-y-4">
         {% csrf_token %}
@@ -36,7 +36,7 @@
 
         <div class="flex flex-col sm:flex-row gap-2.5 pt-2">
             <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-accent text-white text-[13px] font-semibold rounded-md">
-                {% if is_edit %}{% trans "Speichern" %}{% else %}{% trans "Klientel erstellen" %}{% endif %}
+                {% if is_edit %}{% trans "Speichern" %}{% else %}{% trans "Person anlegen" %}{% endif %}
             </button>
             {% if is_edit %}
             <a href="{% url 'core:client_detail' client.pk %}" class="w-full sm:w-auto text-center px-4 py-2 bg-surface border border-subtle text-[13px] text-ink-soft rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>

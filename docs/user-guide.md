@@ -10,7 +10,7 @@ Dieses Handbuch richtet sich an Fachkräfte, Leitungen und Assistenzen in Kontak
 2. [Startseite – Zeitstrom](#2-startseite--zeitstrom)
 3. [Kontakt dokumentieren (Event erstellen)](#3-kontakt-dokumentieren-event-erstellen)
    - [Dateien-Übersicht](#3a-dateien-übersicht)
-4. [Klientel verwalten](#4-klienten-verwalten)
+4. [Personen verwalten](#4-personen-verwalten)
 5. [Hinweise und Aufgaben (WorkItems)](#5-hinweise-und-aufgaben-workitems)
 6. [Suche](#6-suche)
 7. [Statistik und Export](#7-statistik-und-export)
@@ -138,15 +138,15 @@ Ein **Event** ist ein einzelner dokumentierter Kontakt – z. B. ein Beratungsge
 2. **Dokumentationstyp wählen:** Wählen Sie aus der Liste den passenden Typ (z. B. „Kontakt", „Krisengespräch", „Spritzentausch"). Die verfügbaren Typen sind von Ihrer Einrichtung konfiguriert.
 3. **Felder ausfüllen:** Nach der Typauswahl werden die zugehörigen Eingabefelder geladen. Füllen Sie alle relevanten Felder aus.
 4. **Zeitpunkt:** Das Feld „Zeitpunkt" ist automatisch auf die aktuelle Uhrzeit gesetzt. Sie können es anpassen, wenn Sie einen Kontakt nachträglich erfassen.
-5. **Klientel zuordnen (optional):**
-   - Für einen **anonymen Kontakt** (ohne Pseudonym): Aktivieren Sie die Option „Anonym". Es wird kein Klientel verknüpft.
-   - Für einen **identifizierten Klientel**: Beginnen Sie im Klientel-Feld mit der Eingabe des Pseudonyms. Es erscheint eine Vorschlagsliste – wählen Sie den passenden Klientel aus.
-   - Wenn der Klientel noch nicht erfasst ist, legen Sie ihn zuerst unter **Klientel** an (siehe [Abschnitt 4](#4-klienten-verwalten)).
+5. **Person zuordnen (optional):**
+   - Für einen **anonymen Kontakt** (ohne Pseudonym): Aktivieren Sie die Option „Anonym". Es wird keine Person verknüpft.
+   - Für eine **Person mit Pseudonym**: Beginnen Sie im Personen-Feld mit der Eingabe des Pseudonyms. Es erscheint eine Vorschlagsliste – wählen Sie die passende Person aus.
+   - Wenn die Person noch nicht erfasst ist, legen Sie sie zuerst unter **Personen** an (siehe [Abschnitt 4](#4-personen-verwalten)).
 6. Klicken Sie auf **Speichern**.
 
 Sie werden zur Detailansicht des neu erstellten Eintrags weitergeleitet. Eine Erfolgsmeldung bestätigt die Speicherung.
 
-> **Tipp:** Wenn Sie von der Klientel-Detailseite aus einen Kontakt erfassen, ist der Klientel bereits vorausgefüllt.
+> **Tipp:** Wenn Sie von der Detailseite der Person aus einen Kontakt erfassen, ist die Person bereits vorausgefüllt.
 
 ### Schnell-Vorlagen (Quick-Templates)
 
@@ -178,7 +178,7 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 
 ### Kontakt bearbeiten
 
-1. Öffnen Sie das Ereignis (über den Zeitstrom oder die Klientel-Chronik).
+1. Öffnen Sie das Ereignis (über den Zeitstrom oder die Chronik der Person).
 2. Klicken Sie auf **Bearbeiten**.
 3. Ändern Sie die gewünschten Felder und klicken Sie auf **Speichern**.
 
@@ -193,7 +193,7 @@ An jedes Ereignis kann eine Datei angehängt werden – z. B. ein eingescanntes 
 3. Geben Sie eine Begründung ein.
 4. Bestätigen Sie die Löschung.
 
-> **Wichtig:** Wenn der Kontakt einem **qualifizierten Klientel** zugeordnet ist, wird kein sofortiges Löschen durchgeführt. Stattdessen wird automatisch ein **Löschantrag** gestellt, der von einer Leitung oder Administration genehmigt werden muss (4-Augen-Prinzip). Sie erhalten eine entsprechende Rückmeldung.
+> **Wichtig:** Wenn der Kontakt einer **Person mit qualifizierter Dokumentation** zugeordnet ist, wird kein sofortiges Löschen durchgeführt. Stattdessen wird automatisch ein **Löschantrag** gestellt, der von einer Leitung oder Administration genehmigt werden muss (4-Augen-Prinzip). Sie erhalten eine entsprechende Rückmeldung.
 
 ---
 
@@ -219,7 +219,7 @@ Sie sehen nur Dateien, deren Ereignis **und** Feld Ihre Sensitivitätsrolle erre
 Zwei Filter oberhalb der Tabelle:
 
 - **Dokumentationstyp** — nur Anhänge zu Ereignissen eines bestimmten Typs (z. B. „Beratungsgespräch").
-- **Klientel** — alle Anhänge zu einem bestimmten Pseudonym.
+- **Personen** — alle Anhänge zu einem bestimmten Pseudonym.
 
 Die Filter sind kombinierbar und aktualisieren die Liste via HTMX ohne kompletten Seitenreload.
 
@@ -237,53 +237,53 @@ Ersetzte Dateien bleiben als Vorversionen erhalten (siehe [Abschnitt 3 – Datei
 
 ---
 
-## 4. Klientel verwalten
+## 4. Personen verwalten
 
-Klientel werden in Anlaufstelle **ausschließlich mit Pseudonymen** erfasst – keine Klarnamen. Das Pseudonym ist der primäre Identifikator.
+Personen werden in Anlaufstelle **ausschließlich mit Pseudonymen** erfasst – keine Klarnamen. Das Pseudonym ist der primäre Identifikator.
 
 ### Kontaktstufen
 
-Jeder Klientel hat eine **Kontaktstufe**:
+Jede Person hat eine **Kontaktstufe**:
 
 | Stufe | Beschreibung |
 |---|---|
 | **Identifiziert** | Pseudonym bekannt, grundlegende Daten (Altersgruppe) vorhanden |
 | **Qualifiziert** | Zusätzliche persönliche Daten vorhanden (eingeschränkter Zugriff, Audit-Log) |
 
-> **Hinweis:** Der Zugriff auf qualifizierte Klientelprofile wird automatisch im Audit-Log protokolliert.
+> **Hinweis:** Der Zugriff auf Personenprofile in qualifizierter Kontaktstufe wird automatisch im Audit-Log protokolliert.
 
-### Neuen Klientel anlegen
+### Neue Person anlegen
 
-1. Navigieren Sie zu **Klientel** (`/clients/`) und klicken Sie auf **Neues Klientel** (oder direkt zu `/clients/new/`).
+1. Navigieren Sie zu **Personen** (`/clients/`) und klicken Sie auf **Neue Person** (oder direkt zu `/clients/new/`).
 2. Füllen Sie das Formular aus:
    - **Pseudonym:** Einzigartiger Name innerhalb Ihrer Einrichtung (z. B. ein selbstgewählter Spitzname). Das Pseudonym darf innerhalb einer Einrichtung nur einmal vorkommen.
    - **Kontaktstufe:** Wählen Sie „Identifiziert" oder „Qualifiziert".
    - **Altersgruppe:** „Unter 18", „18–26", „27+" oder „Unbekannt".
-   - **Notizen:** Interne Anmerkungen zum Klientel (optional).
+   - **Notizen:** Interne Anmerkungen zur Person (optional).
 3. Klicken Sie auf **Speichern**.
 
-### Klientel suchen
+### Personen suchen
 
-1. Navigieren Sie zu **Klientel** (`/clients/`).
+1. Navigieren Sie zu **Personen** (`/clients/`).
 2. Geben Sie im Suchfeld ein Teil des Pseudonyms ein. Die Liste filtert sich automatisch.
 3. Optional können Sie zusätzlich nach **Kontaktstufe** oder **Altersgruppe** filtern.
 4. Klicken Sie auf einen Eintrag, um die Detailansicht zu öffnen.
 
-> **Tipp:** Die Schnellsuche über das globale Suchfeld (Lupe oben) findet Klientel und Ereignisse gleichzeitig.
+> **Tipp:** Die Schnellsuche über das globale Suchfeld (Lupe oben) findet Personen und Ereignisse gleichzeitig.
 
-### Klientel-Detailseite und Chronik
+### Detailseite der Person und Chronik
 
-Die Detailseite eines Klientel (`/clients/<id>/`) zeigt:
+Die Detailseite einer Person (`/clients/<id>/`) zeigt:
 
 - **Stammdaten:** Pseudonym, Kontaktstufe, Altersgruppe, Notizen
-- **Chronik:** Alle bisherigen dokumentierten Kontakte dieses Klientel, neueste zuerst
-- **Offene WorkItems:** Aufgaben und Hinweise, die diesem Klientel zugeordnet sind
+- **Chronik:** Alle bisherigen dokumentierten Kontakte dieser Person, neueste zuerst
+- **Offene WorkItems:** Aufgaben und Hinweise, die dieser Person zugeordnet sind
 
-Von der Detailseite aus können Sie direkt einen neuen Kontakt für diesen Klientel erfassen oder eine neue Aufgabe anlegen.
+Von der Detailseite aus können Sie direkt einen neuen Kontakt für diese Person erfassen oder eine neue Aufgabe anlegen.
 
-### Klientel bearbeiten
+### Person bearbeiten
 
-1. Öffnen Sie die Klientel-Detailseite.
+1. Öffnen Sie die Detailseite der Person.
 2. Klicken Sie auf **Bearbeiten**.
 3. Ändern Sie die gewünschten Felder (z. B. Kontaktstufe hochsetzen).
 4. Klicken Sie auf **Speichern**.
@@ -340,10 +340,10 @@ Die Liste aktualisiert sich ohne Seitenneuladung.
    - **Beschreibung:** Ausführlichere Details (optional)
    - **Priorität:** Normal, Wichtig oder Dringend
    - **Zugewiesen an:** Eine bestimmte Person aus Ihrer Einrichtung (optional – leer lassen, wenn die Aufgabe für alle gilt)
-   - **Klientel:** Falls die Aufgabe ein bestimmtes Klientel betrifft (optional)
+   - **Person:** Falls die Aufgabe eine bestimmte Person betrifft (optional)
 3. Klicken Sie auf **Speichern**.
 
-> **Tipp:** Wenn Sie von der Klientel-Detailseite aus eine neue Aufgabe erstellen, ist der Klientel bereits vorausgefüllt.
+> **Tipp:** Wenn Sie von der Detailseite der Person aus eine neue Aufgabe erstellen, ist die Person bereits vorausgefüllt.
 
 ### Aufgabe bearbeiten
 
@@ -391,14 +391,14 @@ Sobald Sie eine solche Aufgabe auf Status **„Erledigt"** setzen, wird automati
 
 ## 6. Suche
 
-Die **Suche** durchsucht gleichzeitig Klientel (nach Pseudonym) und Ereignisse (nach Klientel-Pseudonym und Inhaltsfeldern). Sie ist auf zwei Wegen erreichbar:
+Die **Suche** durchsucht gleichzeitig Personen (nach Pseudonym) und Ereignisse (nach Personen-Pseudonym und Inhaltsfeldern). Sie ist auf zwei Wegen erreichbar:
 
 ### Globale Suche (Schnellsuche)
 
 Das Suchfeld ist **permanent in der Sidebar** sichtbar (Desktop). Auf dem Smartphone öffnet sich über das Such-Icon in der unteren Navigation ein Overlay.
 
 1. Beginnen Sie mit der Eingabe im Suchfeld. Nach einer kurzen Verzögerung erscheinen Ergebnisse als Dropdown.
-2. Es werden maximal **5 Klientel** und **5 Ereignisse** angezeigt.
+2. Es werden maximal **5 Personen** und **5 Ereignisse** angezeigt.
 3. Klicken Sie auf einen Treffer, um direkt zur Detailseite zu springen.
 4. Über **„Alle Ergebnisse anzeigen"** gelangen Sie zur vollständigen Suchseite.
 
@@ -406,7 +406,7 @@ Das Suchfeld ist **permanent in der Sidebar** sichtbar (Desktop). Auf dem Smartp
 
 ### Vollständige Suchseite
 
-Für umfangreichere Recherchen steht weiterhin die Suchseite unter `/search/` zur Verfügung. Sie zeigt alle Treffer (bis zu 20 Klientel und 20 Ereignisse) und ist auch über den Link „Alle Ergebnisse anzeigen" in der Schnellsuche erreichbar.
+Für umfangreichere Recherchen steht weiterhin die Suchseite unter `/search/` zur Verfügung. Sie zeigt alle Treffer (bis zu 20 Personen und 20 Ereignisse) und ist auch über den Link „Alle Ergebnisse anzeigen" in der Schnellsuche erreichbar.
 
 > **Hinweis:** Felder, die als verschlüsselt konfiguriert sind, werden in der Suche nicht durchsucht.
 
@@ -435,7 +435,7 @@ Technisch basiert das auf einer Trigramm-Ähnlichkeit der PostgreSQL-Datenbank (
    - **Letztes Quartal** (90 Tage)
    - **Letztes Halbjahr** (182 Tage)
    - **Benutzerdefiniert:** Geben Sie Start- und Enddatum manuell ein.
-3. Das Dashboard aktualisiert sich automatisch und zeigt aggregierte Kennzahlen zu Kontaktzahlen, Dokumentationstypen und Klientelgruppen.
+3. Das Dashboard aktualisiert sich automatisch und zeigt aggregierte Kennzahlen zu Kontaktzahlen, Dokumentationstypen und Personengruppen.
 
 ### Jahresnavigation
 
@@ -493,7 +493,7 @@ Der Jugendamt-Export erstellt einen standardisierten Sachbericht im Jugendamt-Fo
 
 ### Löschanträge prüfen (Leitung / Admin)
 
-Wenn eine Fachkraft oder Assistenz einen Kontakt eines qualifizierten Klientel löschen möchte, entsteht ein **Löschantrag**, der von einer Leitung oder Administration genehmigt werden muss.
+Wenn eine Fachkraft oder Assistenz einen Kontakt einer Person mit qualifizierter Dokumentation löschen möchte, entsteht ein **Löschantrag**, der von einer Leitung oder Administration genehmigt werden muss.
 
 1. Offene Löschanträge sehen Sie unter `/deletion-requests/`.
 2. Klicken Sie auf einen Antrag, um Details und das betroffene Ereignis einzusehen.
@@ -541,8 +541,8 @@ Für Einsätze ohne verlässliche Internetverbindung — etwa bei aufsuchender A
 
 **Vor dem Einsatz (online):**
 
-1. Öffnen Sie die Klientel-Liste.
-2. Klicken Sie auf **„Klientel für Offline laden"**, um die relevanten Klientel-Profile in den Offline-Cache Ihres Geräts zu laden. So sind die Pseudonyme und Stammdaten auch ohne Netz verfügbar.
+1. Öffnen Sie die Personenliste.
+2. Klicken Sie auf **„Personen für Offline laden"**, um die relevanten Personenprofile in den Offline-Cache Ihres Geräts zu laden. So sind die Pseudonyme und Stammdaten auch ohne Netz verfügbar.
 
 **Während des Einsatzes (offline):**
 
@@ -578,7 +578,7 @@ Anlaufstelle unterscheidet vier Rollen. Ihre Rolle wird von der Administration f
 | `admin` | Administrator | Vollzugriff auf alle Bereiche und Einstellungen |
 | `lead` | Leitung | Alle Fachkraft-Funktionen plus Auswertungen und Leitungsaufgaben |
 | `staff` | Fachkraft | Standardrolle für Mitarbeitende in der Dokumentation |
-| `assistant` | Assistenz | Eingeschränkte Erfassung ohne Zugriff auf qualifizierte Klienteldaten |
+| `assistant` | Assistenz | Eingeschränkte Erfassung ohne Zugriff auf qualifizierte Personendaten |
 
 ### Was darf wer?
 
@@ -587,14 +587,14 @@ Anlaufstelle unterscheidet vier Rollen. Ihre Rolle wird von der Administration f
 | Zeitstrom / Startseite einsehen | Ja | Ja | Ja | Ja |
 | Anonyme Kontakte dokumentieren | Ja | Ja | Ja | Ja |
 | Identifizierte Kontakte dokumentieren | Ja | Ja | Ja | Ja |
-| Klientel anlegen und suchen | Ja | Ja | Ja | Ja |
-| Qualifizierte Klienteldetails einsehen | Nein | Ja (eigene Einrichtung) | Ja | Ja |
+| Personen anlegen und suchen | Ja | Ja | Ja | Ja |
+| Qualifizierte Personendaten einsehen | Nein | Ja (eigene Einrichtung) | Ja | Ja |
 | Eigene Ereignisse bearbeiten | Ja | Ja | Ja | Ja |
 | Fremde Ereignisse bearbeiten | Nein | Ja | Ja | Ja |
 | WorkItems erstellen und bearbeiten | Ja | Ja | Ja | Ja |
 | Suche verwenden | Ja | Ja | Ja | Ja |
 | Statistik und Export | Nein | Nein | Ja | Ja |
-| Klienteldaten exportieren (Art. 15 / 20 DSGVO) | Nein | Nein | Ja | Ja |
+| Personendaten exportieren (Art. 15 / 20 DSGVO) | Nein | Nein | Ja | Ja |
 | DSGVO-Dokumentationspaket herunterladen | Nein | Nein | Nein | Ja |
 | Löschanträge stellen | Ja | Ja | Ja | Ja |
 | Löschanträge genehmigen | Nein | Nein | Ja | Ja |
@@ -614,7 +614,7 @@ Das Audit-Log (`/audit/`) protokolliert automatisch sicherheitsrelevante Aktione
 
 ## 10. Fallmanagement
 
-Nicht jeder Kontakt mit einem Klientel steht für sich allein. Wenn die Zusammenarbeit mit einer Person über einen längeren Zeitraum läuft – z. B. ein Beratungsprozess, eine Krisenbegleitung oder eine Wohnungsvermittlung – können Sie diese Arbeit in einem **Fall** bündeln.
+Nicht jeder Kontakt mit einer Person steht für sich allein. Wenn die Zusammenarbeit mit einer Person über einen längeren Zeitraum läuft – z. B. ein Beratungsprozess, eine Krisenbegleitung oder eine Wohnungsvermittlung – können Sie diese Arbeit in einem **Fall** bündeln.
 
 Ein Fall ist eine **Klammer** um thematisch zusammengehörige Kontakte. Das Fallmanagement ist **optional**: Sie können Anlaufstelle genauso ohne Fälle nutzen, wenn Ihre Einrichtung keine laufenden Beratungsprozesse dokumentiert.
 
@@ -632,14 +632,14 @@ Ein Fall ist eine **Klammer** um thematisch zusammengehörige Kontakte. Das Fall
 1. Klicken Sie auf der Fallliste auf **Neuer Fall** (oder navigieren Sie zu `/cases/new/`).
 2. Füllen Sie das Formular aus:
    - **Titel** (Pflichtfeld): Eine kurze Bezeichnung für den Fall (z. B. „Wohnungssuche", „Suchtberatung").
-   - **Klientel:** Beginnen Sie mit der Eingabe des Pseudonyms – es erscheint eine Vorschlagsliste. Wählen Sie das passende Klientel aus. Ein Fall kann auch ohne Klientel erstellt werden.
+   - **Person:** Beginnen Sie mit der Eingabe des Pseudonyms – es erscheint eine Vorschlagsliste. Wählen Sie die passende Person aus. Ein Fall kann auch ohne Person erstellt werden.
    - **Beschreibung:** Ausführlichere Informationen zum Fall (optional).
    - **Fallverantwortlich:** Wählen Sie die zuständige Person aus dem Dropdown (optional). Nur Fachkräfte, Leitungen und Administratoren Ihrer Einrichtung stehen zur Auswahl.
 3. Klicken Sie auf **Fall erstellen**.
 
 Sie werden zur Detailseite des neuen Falls weitergeleitet.
 
-> **Tipp:** Wenn Sie von der Klientel-Detailseite aus einen neuen Fall erstellen, ist der Klientel bereits vorausgefüllt.
+> **Tipp:** Wenn Sie von der Detailseite der Person aus einen neuen Fall erstellen, ist die Person bereits vorausgefüllt.
 
 ### Fall-Detailseite
 
@@ -647,14 +647,14 @@ Die Detailseite eines Falls (`/cases/<id>/`) gliedert sich in drei Bereiche:
 
 **Kopfbereich:**
 - Titel und Status-Badge (Offen / Geschlossen)
-- Link zum zugehörigen Klientel
+- Link zur zugehörigen Person
 - Fallverantwortlicher, Erstellt am, Erstellt von
 - Beschreibung (falls vorhanden)
 - Buttons: **Bearbeiten**, **Schließen** bzw. **Wiedereröffnen**
 
 **Linke Spalte – Kontakte:**
 - Alle dem Fall zugeordneten Kontakte (Events), chronologisch sortiert
-- Möglichkeit, weitere Kontakte des Klientel zuzuordnen oder bestehende zu entfernen
+- Möglichkeit, weitere Kontakte der Person zuzuordnen oder bestehende zu entfernen
 
 **Rechte Spalte – Episoden und Wirkungsziele:**
 - Liste der Episoden (Phasen innerhalb des Falls)
@@ -664,7 +664,7 @@ Die Detailseite eines Falls (`/cases/<id>/`) gliedert sich in drei Bereiche:
 
 1. Öffnen Sie die Fall-Detailseite.
 2. Klicken Sie auf **Bearbeiten**.
-3. Ändern Sie Titel, Klientel, Beschreibung oder Fallverantwortlichen.
+3. Ändern Sie Titel, Person, Beschreibung oder Fallverantwortlichen.
 4. Klicken Sie auf **Speichern**.
 
 ### Fall schließen und wiedereröffnen
@@ -683,7 +683,7 @@ Ein geschlossener Fall kann jederzeit wieder geöffnet werden:
 
 ### Kontakte zuordnen und entfernen
 
-Auf der Fall-Detailseite sehen Sie unterhalb der zugeordneten Kontakte eine Liste der **nicht zugeordneten Kontakte** des Klientel. So ordnen Sie einen Kontakt zu:
+Auf der Fall-Detailseite sehen Sie unterhalb der zugeordneten Kontakte eine Liste der **nicht zugeordneten Kontakte** der Person. So ordnen Sie einen Kontakt zu:
 
 1. Klicken Sie bei dem gewünschten Kontakt auf die Zuordnen-Schaltfläche.
 2. Der Kontakt wird sofort in die Fallliste verschoben (ohne Seitenneuladen).
@@ -697,7 +697,7 @@ Um einen Kontakt wieder aus dem Fall zu entfernen:
 
 ### Episoden
 
-Eine **Episode** ist eine abgrenzbare Phase innerhalb eines Falls. Wenn z. B. ein Klientel dreimal im Jahr in eine Krisensituation gerät, können diese als drei separate Episoden innerhalb desselben Falls dokumentiert werden.
+Eine **Episode** ist eine abgrenzbare Phase innerhalb eines Falls. Wenn z. B. eine Person dreimal im Jahr in eine Krisensituation gerät, können diese als drei separate Episoden innerhalb desselben Falls dokumentiert werden.
 
 **Neue Episode erstellen:**
 

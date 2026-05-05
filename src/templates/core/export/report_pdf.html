@@ -44,7 +44,7 @@
         </div>
     </div>
 
-    <p><strong>{% trans "Einzigartige Klientel:" %}</strong> {{ stats.unique_clients }}</p>
+    <p><strong>{% trans "Einzigartige Personen:" %}</strong> {{ stats.unique_clients }}</p>
 
     <h2>{% trans "Kontakte nach Dokumentationstyp" %}</h2>
     {% if stats.by_document_type %}
@@ -93,7 +93,7 @@
     {% endif %}
 
     {% if stats.top_clients %}
-    <h2>{% trans "Top 5 Klientel" %}</h2>
+    <h2>{% trans "Top 5 Personen" %}</h2>
     <table>
         <thead>
             <tr>

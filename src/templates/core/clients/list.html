@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 {% load i18n static %}
 
-{% block title %}{% trans "Klientel" %} – Anlaufstelle{% endblock %}
+{% block title %}{% trans "Personen" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
 {# PageHeader (Design: als-screens.jsx PageHeader) #}
 <div class="flex items-center justify-between mb-6">
-    <h1 class="text-[22px] font-bold text-ink">{% trans "Klientel" %}</h1>
+    <h1 class="text-[22px] font-bold text-ink">{% trans "Personen" %}</h1>
     <div class="hidden md:block">
         <a href="{% url 'core:client_create' %}" class="inline-flex items-center gap-1.5 bg-accent text-white text-[13px] font-semibold rounded-md px-3.5 py-2">
             <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-            {% trans "Neues Klientel" %}
+            {% trans "Neue Person" %}
         </a>
     </div>
 </div>

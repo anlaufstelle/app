@@ -6,8 +6,10 @@ from django.conf import settings
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from core.models.mixins import SoftDeletableModel
 
-class Episode(models.Model):
+
+class Episode(SoftDeletableModel):
     """Abgrenzbare Phase innerhalb eines Falls."""
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

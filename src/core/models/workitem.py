@@ -7,9 +7,10 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from core.models.managers import FacilityScopedManager
+from core.models.mixins import SoftDeletableModel
 
 
-class WorkItem(models.Model):
+class WorkItem(SoftDeletableModel):
     """Work item or hint for the team."""
 
     class ItemType(models.TextChoices):
@@ -156,6 +157,7 @@ class DeletionRequest(models.Model):
 
     class TargetType(models.TextChoices):
         EVENT = "Event", _("Event")
+        CLIENT = "Client", _("Person")
 
     objects = FacilityScopedManager()
 

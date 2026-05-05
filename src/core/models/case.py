@@ -7,9 +7,10 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from core.models.managers import FacilityScopedManager
+from core.models.mixins import SoftDeletableModel
 
 
-class Case(models.Model):
+class Case(SoftDeletableModel):
     """Case/file for a client."""
 
     class Status(models.TextChoices):

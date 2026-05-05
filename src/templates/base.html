@@ -42,7 +42,7 @@
              data-testid="offline-banner">
             {% trans "Offline — Daten werden bei Verbindung gespeichert" %}
             <span x-show="hasCachedClients" x-cloak class="ml-2 text-xs" data-testid="offline-cached-count">
-                (<span x-text="cachedClients"></span> {% trans "Klientel lokal verfügbar" %})
+                (<span x-text="cachedClients"></span> {% trans "Personen lokal verfügbar" %})
             </span>
             <span x-show="hasUnsynced" x-cloak class="ml-2 text-xs" data-testid="offline-unsynced-count">
                 · <span x-text="unsyncedCount"></span> {% trans "nicht synchronisiert" %}
@@ -111,7 +111,7 @@
                 </a>
                 {% if user.is_staff_or_above %}
                 <a href="{% url 'core:client_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle">
-                    <div class="text-[13px] font-semibold text-ink">{% trans "Klientel anlegen" %}</div>
+                    <div class="text-[13px] font-semibold text-ink">{% trans "Person anlegen" %}</div>
                     <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Neues Pseudonym vergeben" %}</div>
                 </a>
                 <a href="{% url 'core:workitem_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle">
@@ -136,7 +136,7 @@
             </a>
             <a href="{% url 'core:client_list' %}" class="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'client_list,client_detail,client_create,client_update' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"/></svg>
-                {% trans "Klientel" %}
+                {% trans "Personen" %}
             </a>
             {% if user.is_staff_or_above %}
             <a href="{% url 'core:case_list' %}" class="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'case_list,case_detail,case_create,case_update' %}bg-accent-light text-accent font-semibold{% endif %}">
@@ -231,7 +231,7 @@
         </footer>
     </main>
 
-    {# --- Mobile Bottom-Nav: 5 Slots (Neu / Zeitstrom / Klientel / Aufgaben / Mehr) --- #}
+    {# --- Mobile Bottom-Nav: 5 Slots (Neu / Zeitstrom / Personen / Aufgaben / Mehr) --- #}
     <nav class="fixed bottom-0 inset-x-0 md:hidden bg-surface border-t border-subtle z-40" aria-label="{% trans 'Mobile Navigation' %}">
         <div class="flex justify-around py-1 pb-2">
             {# Slot 1: Neu (+) Dropdown #}
@@ -247,7 +247,7 @@
                     </a>
                     {% if user.is_staff_or_above %}
                     <a href="{% url 'core:client_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle">
-                        <div class="text-[13px] font-semibold text-ink">{% trans "Klientel anlegen" %}</div>
+                        <div class="text-[13px] font-semibold text-ink">{% trans "Person anlegen" %}</div>
                     </a>
                     <a href="{% url 'core:workitem_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle">
                         <div class="text-[13px] font-semibold text-ink">{% trans "Aufgabe erstellen" %}</div>
@@ -263,10 +263,10 @@
                 <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
                 <span class="text-[10px] font-medium">{% trans "Zeitstrom" %}</span>
             </a>
-            {# Slot 3: Klientel #}
+            {# Slot 3: Personen #}
             <a href="{% url 'core:client_list' %}" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'client_list,client_detail,client_create,client_update' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-clients">
                 <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"/></svg>
-                <span class="text-[10px] font-medium">{% trans "Klientel" %}</span>
+                <span class="text-[10px] font-medium">{% trans "Personen" %}</span>
             </a>
             {# Slot 4: Aufgaben #}
             <a href="{% url 'core:workitem_inbox' %}" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center relative {% if request.resolver_match.url_name in 'workitem_inbox,workitem_detail,workitem_create,workitem_update' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-workitems">

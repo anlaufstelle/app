@@ -4,21 +4,45 @@ from django.db import models
 
 
 class FacilityScopedQuerySet(models.QuerySet):
-    """QuerySet with .for_facility() convenience method."""
+    """QuerySet with .for_facility() and soft-delete convenience methods."""
 
     def for_facility(self, facility):
         """Return only objects belonging to the given facility."""
         return self.filter(facility=facility)
 
+    def active(self):
+        """Return only non-soft-deleted rows.
+
+        Convenience method for models using
+        :class:`core.models.mixins.SoftDeletableModel`. Equivalent to
+        ``.filter(is_deleted=False)``.
+        """
+        return self.filter(is_deleted=False)
+
+    def deleted(self):
+        """Return only soft-deleted rows (for restore/papierkorb views)."""
+        return self.filter(is_deleted=True)
+
 
 class FacilityScopedManager(models.Manager):
-    """Manager that uses FacilityScopedQuerySet."""
+    """Manager that uses FacilityScopedQuerySet.
+
+    Does not filter soft-deleted rows by default — consistent with the
+    existing :class:`Event` pattern. Use ``.active()`` on querysets to
+    exclude soft-deleted rows in list views and forms.
+    """
 
     def get_queryset(self):
         return FacilityScopedQuerySet(self.model, using=self._db)
 
     def for_facility(self, facility):
         return self.get_queryset().for_facility(facility)
+
+    def active(self):
+        return self.get_queryset().active()
+
+    def deleted(self):
+        return self.get_queryset().deleted()
 
 
 class EventQuerySet(FacilityScopedQuerySet):

@@ -358,7 +358,7 @@ class TestMobileActionButtonsHidden:
         assert not buttons_wrapper.is_visible(), "Create-Buttons sollten auf Mobile versteckt sein"
 
     def test_client_list_create_button_hidden(self, mobile_page, base_url):
-        """Klientelliste: 'Neues Klientel'-Button auf Mobile unsichtbar."""
+        """Personenliste: 'Neue Person'-Button auf Mobile unsichtbar."""
         page = mobile_page
         page.goto(f"{base_url}/clients/")
         page.wait_for_load_state("domcontentloaded")
@@ -366,7 +366,7 @@ class TestMobileActionButtonsHidden:
         # Der Wrapper-Div (hidden md:block) im Main-Bereich
         main = page.locator("main")
         create_wrapper = main.locator(".hidden.md\\:block").first
-        assert not create_wrapper.is_visible(), "Neues-Klientel-Button sollte auf Mobile versteckt sein"
+        assert not create_wrapper.is_visible(), "Neue-Person-Button sollte auf Mobile versteckt sein"
 
     def test_case_list_create_button_hidden(self, mobile_page, base_url):
         """Fälle-Liste: 'Neuer Fall'-Button auf Mobile unsichtbar."""

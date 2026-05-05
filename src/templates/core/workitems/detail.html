@@ -113,7 +113,7 @@
 
         {% if workitem.client %}
         <div>
-            <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Klientel" %}</span>
+            <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Person" %}</span>
             <p class="text-sm"><a href="{% url 'core:client_detail' pk=workitem.client.pk %}" class="text-accent hover:underline">{{ workitem.client.pseudonym }}</a></p>
         </div>
         {% endif %}

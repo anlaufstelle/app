@@ -26,7 +26,7 @@ class TestClientManagement:
         page = authenticated_page
         page.goto(f"{base_url}/clients/")
 
-        assert page.locator("h1").inner_text() == "Klientel"
+        assert page.locator("h1").inner_text() == "Personen"
 
         # HTMX-Suche nach Seed-Client
         page.fill("input[name='q']", "Blitz")
@@ -54,11 +54,11 @@ class TestClientManagement:
         page = authenticated_page
         page.goto(f"{base_url}/clients/new/")
 
-        assert page.locator("h1").inner_text() == "Neues Klientel"
+        assert page.locator("h1").inner_text() == "Neue Person"
 
         # Doppeltes Pseudonym
         page.fill("input[name='pseudonym']", "Stern-42")
-        page.click("button:has-text('Klientel erstellen')")
+        page.click("button:has-text('Person anlegen')")
         page.wait_for_load_state("domcontentloaded")
 
         assert page.locator("text=existiert bereits").is_visible()
@@ -66,7 +66,7 @@ class TestClientManagement:
         # Neues Pseudonym → Erfolg
         unique_name = f"E2E-{uuid.uuid4().hex[:6]}"
         page.fill("input[name='pseudonym']", unique_name)
-        page.click("button:has-text('Klientel erstellen')")
+        page.click("button:has-text('Person anlegen')")
         page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
         assert page.locator("h1").inner_text() == unique_name
 
@@ -78,11 +78,11 @@ class TestSuche:
         page = authenticated_page
         page.goto(f"{base_url}/search/?q=Stern")
 
-        # Klientel gefunden
-        assert page.locator("h2:has-text('Klientel')").is_visible()
+        # Personen gefunden
+        assert page.locator("h2:has-text('Personen')").is_visible()
         assert page.locator("#search-results a:has-text('Stern-42')").first.is_visible()
 
-        # Events des Klientel gefunden
+        # Events der Person gefunden
         assert page.locator("h2:has-text('Ereignisse')").is_visible()
 
     def test_search_no_results(self, authenticated_page, base_url):

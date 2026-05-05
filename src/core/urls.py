@@ -30,6 +30,11 @@ from core.views.cases import (
     CasesForClientView,
     CaseUpdateView,
 )
+from core.views.client_deletion import (
+    ClientDeleteRequestView,
+    ClientRestoreView,
+    ClientTrashView,
+)
 from core.views.clients import (
     ClientAutocompleteView,
     ClientCreateView,
@@ -105,6 +110,10 @@ urlpatterns = [
     path("clients/<uuid:pk>/edit/", ClientUpdateView.as_view(), name="client_update"),
     path("clients/<uuid:pk>/export/json/", ClientDataExportJSONView.as_view(), name="client_export_json"),
     path("clients/<uuid:pk>/export/pdf/", ClientDataExportPDFView.as_view(), name="client_export_pdf"),
+    # Client-Lösch-Workflow (#626) — Vier-Augen-Antrag, Wiederherstellung, Papierkorb
+    path("clients/trash/", ClientTrashView.as_view(), name="client_trash"),
+    path("clients/<uuid:pk>/delete/", ClientDeleteRequestView.as_view(), name="client_delete_request"),
+    path("clients/<uuid:pk>/restore/", ClientRestoreView.as_view(), name="client_restore"),
     # Cases
     path("cases/", CaseListView.as_view(), name="case_list"),
     path("cases/new/", CaseCreateView.as_view(), name="case_create"),

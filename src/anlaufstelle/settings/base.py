@@ -158,9 +158,7 @@ CSRF_FAILURE_VIEW = "core.views.errors.csrf_failure"
 # Middleware ist No-Op (kein Disk-Check).
 MAINTENANCE_FLAG_FILE = os.environ.get("MAINTENANCE_FLAG_FILE") or None
 # Komma-separierte IP-Liste fuer Ops-Zugriff waehrend der Wartung.
-MAINTENANCE_ALLOW_IPS = [
-    ip.strip() for ip in os.environ.get("MAINTENANCE_ALLOW_IPS", "").split(",") if ip.strip()
-]
+MAINTENANCE_ALLOW_IPS = [ip.strip() for ip in os.environ.get("MAINTENANCE_ALLOW_IPS", "").split(",") if ip.strip()]
 # Caching der Flag-Datei-Pruefung (Sekunden).
 MAINTENANCE_CACHE_TTL = int(os.environ.get("MAINTENANCE_CACHE_TTL", "5"))
 # Retry-After-Header-Wert (Sekunden).

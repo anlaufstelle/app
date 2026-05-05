@@ -34,13 +34,13 @@
     <div class="bg-surface rounded-[10px] border border-subtle p-5">
         {% if unique_clients_is_approximation %}
         <div class="text-[28px] font-bold text-ink font-mono leading-none"
-           title="{% trans 'Approximation: Für Zeiträume über einen Monat hinaus werden Klientel über Monatssnapshots summiert. Klientel, die in mehreren Monaten erscheinen, werden mehrfach gezählt.' %}">
+           title="{% trans 'Approximation: Für Zeiträume über einen Monat hinaus werden Personen über Monatssnapshots summiert. Personen, die in mehreren Monaten erscheinen, werden mehrfach gezählt.' %}">
             <span class="text-ink-muted text-[18px] mr-1">ca.</span>{{ stats.unique_clients }}
         </div>
         {% else %}
         <div class="text-[28px] font-bold text-ink font-mono leading-none">{{ stats.unique_clients }}</div>
         {% endif %}
-        <div class="text-[13px] font-semibold text-ink-soft mt-2">{% trans "Einzigartige Klientel" %}</div>
+        <div class="text-[13px] font-semibold text-ink-soft mt-2">{% trans "Einzigartige Personen" %}</div>
     </div>
     <div class="bg-surface rounded-[10px] border border-subtle p-5">
         {% if stats.top_clients %}
@@ -48,7 +48,7 @@
         {% else %}
         <div class="text-[20px] font-bold text-ink-muted">–</div>
         {% endif %}
-        <div class="text-[13px] font-semibold text-ink-soft mt-2">{% trans "Top-Klientel" %}</div>
+        <div class="text-[13px] font-semibold text-ink-soft mt-2">{% trans "Top-Person" %}</div>
     </div>
 </div>
 

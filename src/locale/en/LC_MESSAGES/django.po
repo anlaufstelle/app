@@ -2,4039 +2,2949 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-04-30 09:12+0200\n"
+"POT-Creation-Date: 2026-04-30 10:48+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: core/constants.py:8 core/models/client.py:17 core/services/retention.py:18
-#: templates/core/export/report_pdf.html:39
-#: templates/core/retention/partials/dashboard_content.html:27
-#: templates/core/statistics/partials/dashboard_content.html:22
 msgid "Identifiziert"
 msgstr "Identified"
 
-#: core/constants.py:9 core/models/client.py:18 core/services/retention.py:19
-#: templates/core/export/report_pdf.html:43
-#: templates/core/retention/partials/dashboard_content.html:28
-#: templates/core/statistics/partials/dashboard_content.html:27
 msgid "Qualifiziert"
 msgstr "Qualified"
 
-#: core/forms/cases.py:17 core/forms/events.py:64 core/models/case.py:34
-#: core/models/client.py:85 core/models/client.py:86 core/models/event.py:30
-#: core/models/workitem.py:52 core/services/export.py:64
-#: templates/base.html:140 templates/base.html:270
-#: templates/core/cases/form.html:31
-#: templates/core/cases/partials/table.html:10
-#: templates/core/clients/detail.html:11 templates/core/clients/list.html:4
-#: templates/core/clients/list.html:9 templates/core/events/create.html:95
-#: templates/core/events/delete_confirm.html:32
-#: templates/core/events/deletion_review.html:41
-#: templates/core/events/detail.html:58 templates/core/events/edit.html:22
-#: templates/core/search/partials/global_results.html:6
-#: templates/core/search/partials/results.html:8
-#: templates/core/workitems/detail.html:116
-#: templates/core/workitems/form.html:102
-#| msgid "Klienten"
 msgid "Klientel"
 msgstr "Clients"
 
-#: core/forms/cases.py:51
-#| msgid "Klient existiert nicht."
 msgid "Klientel existiert nicht."
 msgstr "Client does not exist."
 
-#: core/forms/cases.py:53 core/services/cases.py:22
-#| msgid "Klient gehört nicht zur Einrichtung."
 msgid "Klientel gehört nicht zur Einrichtung."
 msgstr "Client does not belong to this facility."
 
-#: core/forms/clients.py:34
-#| msgid ""
-#| "Ein Klient mit diesem Pseudonym existiert bereits in dieser Einrichtung."
 msgid ""
 "Ein Klientel mit diesem Pseudonym existiert bereits in dieser Einrichtung."
 msgstr "A client with this pseudonym already exists in this facility."
 
-#: core/forms/episodes.py:42 core/models/episode.py:29
 msgid "Beginn"
 msgstr "Start"
 
-#: core/forms/episodes.py:43 core/models/episode.py:30
 msgid "Ende"
 msgstr "End"
 
-#: core/forms/events.py:52 core/models/document_type.py:101
-#: core/models/document_type.py:377 core/models/event.py:36
-#: core/models/quick_template.py:41 core/services/export.py:63
-#: templates/core/attachments/partials/attachment_table.html:12
-#: templates/core/events/delete_confirm.html:24
-#: templates/core/events/deletion_review.html:33
-#: templates/core/events/detail.html:70 templates/core/events/edit.html:14
-#: templates/core/export/client_data_pdf.html:72
 msgid "Dokumentationstyp"
 msgstr "Document type"
 
-#: core/forms/events.py:68 core/models/event.py:62
-#: templates/core/events/delete_confirm.html:28
-#: templates/core/events/deletion_review.html:37
-#: templates/core/events/edit.html:18
-#: templates/core/export/client_data_pdf.html:73
 msgid "Zeitpunkt"
 msgstr "Timestamp"
 
-#: core/forms/events.py:80 core/models/case.py:80 core/models/episode.py:18
-#: core/models/event.py:44 templates/core/cases/episode_form.html:11
-#: templates/core/events/create.html:149 templates/core/events/detail.html:83
 msgid "Fall"
 msgstr "Case"
 
-#: core/forms/events.py:81 templates/core/events/create.html:152
 msgid "– Keinem Fall zuordnen –"
 msgstr "– Do not assign to any case –"
 
-#: core/forms/events.py:218
 #, python-format
 msgid "Dateityp .%(ext)s nicht erlaubt. Erlaubt: %(allowed)s"
 msgstr "File type .%(ext)s not allowed. Allowed: %(allowed)s"
 
-#: core/forms/events.py:224
 #, python-format
 msgid "Datei zu groß (%(size)d MB). Maximum: %(max)d MB"
 msgstr "File too large (%(size)d MB). Maximum: %(max)d MB"
 
-#: core/forms/workitems.py:106
 #, python-format
 msgid "Das Datum darf höchstens am %(max)s liegen."
 msgstr "The date must be on or before %(max)s."
 
-#: core/forms/workitems.py:107
 msgid "Das Datum darf nicht in der Vergangenheit liegen."
 msgstr "The date must not be in the past."
 
-#: core/forms/workitems.py:123
-#| msgid "Ungültige Klient-ID"
 msgid "Ungültige Klientel-ID"
 msgstr "Invalid client ID"
 
-#: core/forms/workitems.py:130
 msgid "Die Erinnerung muss vor oder am Fälligkeitstag liegen."
 msgstr "The reminder must be on or before the due date."
 
-#: core/forms/workitems.py:136
 #, python-format
 msgid "Das Fälligkeitsdatum darf höchstens am %(max)s liegen."
 msgstr "The due date must be on or before %(max)s."
 
-#: core/forms/workitems.py:140
 #, python-format
 msgid "Die Erinnerung darf höchstens am %(max)s liegen."
 msgstr "The reminder must be on or before %(max)s."
 
-#: core/forms/workitems.py:148
 msgid "Das Fälligkeitsdatum darf nicht in der Vergangenheit liegen."
 msgstr "The due date must not be in the past."
 
-#: core/forms/workitems.py:150
 msgid "Die Erinnerung darf nicht in der Vergangenheit liegen."
 msgstr "The reminder must not be in the past."
 
-#: core/models/activity.py:21
 msgid "erstellt"
 msgstr "created"
 
-#: core/models/activity.py:22
 msgid "aktualisiert"
 msgstr "updated"
 
-#: core/models/activity.py:23
 msgid "gelöscht"
 msgstr "deleted"
 
-#: core/models/activity.py:24
 msgid "qualifiziert"
 msgstr "qualified"
 
-#: core/models/activity.py:25
 msgid "erledigt"
 msgstr "completed"
 
-#: core/models/activity.py:26
 msgid "wiedereröffnet"
 msgstr "reopened"
 
-#: core/models/activity.py:58 templates/components/_activity_card.html:10
 msgid "Aktivität"
 msgstr "Activity"
 
-#: core/models/activity.py:59 core/views/zeitstrom.py:121
-#: templates/core/handover/partials/_stats_grid.html:11
 msgid "Aktivitäten"
 msgstr "Activities"
 
-#: core/models/attachment.py:18 core/models/retention.py:24
-#: core/models/workitem.py:158
 msgid "Event"
 msgstr "Event"
 
-#: core/models/attachment.py:27
 msgid "Entry-ID (Versionskette)"
 msgstr "Entry ID (version chain)"
 
-#: core/models/attachment.py:31 core/models/document_type.py:88
-#: core/models/document_type.py:385 core/models/quick_template.py:56
-#: core/models/time_filter.py:38
 msgid "Sortierung"
 msgstr "Sort order"
 
-#: core/models/attachment.py:32
 msgid "Reihenfolge der Einträge innerhalb eines Feldes (0-indexed)."
 msgstr "Order of entries within a field (0-indexed)."
 
-#: core/models/attachment.py:37
 msgid "Soft-deleted am"
 msgstr "Soft-deleted at"
 
-#: core/models/attachment.py:38
 msgid ""
 "Markiert den Eintrag als vom User entfernt. Physischer Delete erst beim "
 "Event-Delete/Anonymize."
-msgstr "Marks the entry as removed by the user. Physical deletion only on event delete/anonymize."
+msgstr ""
+"Marks the entry as removed by the user. Physical deletion only on event "
+"delete/anonymize."
 
-#: core/models/attachment.py:44 core/models/document_type.py:210
-#: core/models/document_type.py:383
 msgid "Feldvorlage"
 msgstr "Field template"
 
-#: core/models/attachment.py:48
-#| msgid "Speichern"
 msgid "Speicherdateiname"
 msgstr "Save"
 
-#: core/models/attachment.py:49
 msgid "UUID-basierter Dateiname auf Disk (z.B. abcd1234.enc)"
 msgstr "UUID-based filename on disk (e.g. abcd1234.enc)"
 
-#: core/models/attachment.py:52
 msgid "Originaldateiname (verschlüsselt)"
 msgstr "Original filename (encrypted)"
 
-#: core/models/attachment.py:53
 msgid "Verschlüsselt via encrypt_field()"
 msgstr "Encrypted via encrypt_field()"
 
-#: core/models/attachment.py:56
 msgid "Dateigröße (Bytes)"
 msgstr "File size (bytes)"
 
-#: core/models/attachment.py:60
 msgid "MIME-Typ"
 msgstr "MIME type"
 
-#: core/models/attachment.py:67 core/models/case.py:60 core/models/client.py:81
-#: core/models/episode.py:36 core/models/event.py:60
-#: core/models/quick_template.py:68 core/models/retention.py:107
-#: core/models/workitem.py:58 templates/core/cases/detail.html:100
-#: templates/core/events/detail.html:74
-#: templates/core/export/client_data_pdf.html:34
-#: templates/core/export/client_data_pdf.html:47
-#: templates/core/export/client_data_pdf.html:74
-#: templates/core/workitems/detail.html:122
 msgid "Erstellt von"
 msgstr "Created by"
 
-#: core/models/attachment.py:69 core/models/case.py:71 core/models/client.py:73
-#: core/models/episode.py:38 core/models/event.py:66
-#: core/models/organization.py:14 core/models/organization.py:38
-#: core/models/quick_template.py:72 core/models/retention.py:109
-#: core/models/workitem.py:98 core/models/workitem.py:192
-#: templates/core/cases/detail.html:96 templates/core/events/detail.html:78
-#: templates/core/export/client_data_pdf.html:33
-#: templates/core/export/client_data_pdf.html:44
-#: templates/core/export/client_data_pdf.html:130
-#: templates/core/export/client_data_pdf.html:160
-#: templates/core/workitems/detail.html:109
 msgid "Erstellt am"
 msgstr "Created on"
 
-#: core/models/attachment.py:78
-#| msgid "Aktuelles Passwort"
 msgid "Aktuelle Version"
 msgstr "Current password"
 
-#: core/models/attachment.py:86
 msgid "Ersetzt durch"
 msgstr "Superseded by"
 
-#: core/models/attachment.py:91
-#| msgid "Erstellt am"
 msgid "Ersetzt am"
 msgstr "Created on"
 
-#: core/models/attachment.py:95
-#| msgid "Daten"
 msgid "Dateianhang"
 msgstr "Data"
 
-#: core/models/attachment.py:96
 msgid "Dateianhänge"
 msgstr "Attachments"
 
-#: core/models/audit.py:16
 msgid "Anmeldung"
 msgstr "Login"
 
-#: core/models/audit.py:17
 msgid "Abmeldung"
 msgstr "Logout"
 
-#: core/models/audit.py:18
 msgid "Anmeldung fehlgeschlagen"
 msgstr "Login failed"
 
-#: core/models/audit.py:19
 msgid "Account-Sperre aufgehoben"
 msgstr "Account unlocked"
 
-#: core/models/audit.py:20
 msgid "Qualifizierte Daten eingesehen"
 msgstr "Qualified data viewed"
 
-#: core/models/audit.py:21
 msgid "Export"
 msgstr "Export"
 
-#: core/models/audit.py:22
 msgid "Löschung"
 msgstr "Deletion"
 
-#: core/models/audit.py:23
 msgid "Stufenwechsel"
 msgstr "Stage change"
 
-#: core/models/audit.py:24
 msgid "Einstellungen geändert"
 msgstr "Settings changed"
 
-#: core/models/audit.py:25
 msgid "Download"
 msgstr "Download"
 
-#: core/models/audit.py:26 core/models/retention.py:19
-#: core/models/retention.py:134
 msgid "Legal Hold"
 msgstr "Legal hold"
 
-#: core/models/audit.py:27
 msgid "Offline-Schlüssel abgerufen"
 msgstr "Offline key fetched"
 
-#: core/models/audit.py:28
-#| msgid "Klient erstellen"
 msgid "Klientel angelegt"
 msgstr "Create Client"
 
-#: core/models/audit.py:29
-#| msgid "Klient wurde aktualisiert."
 msgid "Klientel aktualisiert"
 msgstr "Client has been updated."
 
-#: core/models/audit.py:30
 msgid "Fall angelegt"
 msgstr "Case created"
 
-#: core/models/audit.py:31
-#| msgid "Fall wurde aktualisiert."
 msgid "Fall aktualisiert"
 msgstr "Case has been updated."
 
-#: core/models/audit.py:32
-#| msgid "abgeschlossen"
 msgid "Fall geschlossen"
 msgstr "closed"
 
-#: core/models/audit.py:33
-#| msgid "wiedereröffnet"
 msgid "Fall wiedereröffnet"
 msgstr "reopened"
 
-#: core/models/audit.py:34
-#| msgid "Meilenstein löschen"
 msgid "Meilenstein gelöscht"
 msgstr "Delete Milestone"
 
-#: core/models/audit.py:35
-#| msgid "Ereignis bearbeiten"
 msgid "Ereignis angelegt"
 msgstr "Edit Event"
 
-#: core/models/audit.py:36
-#| msgid "Aufgaben gesamt"
 msgid "Aufgabe angelegt"
 msgstr "Total tasks"
 
-#: core/models/audit.py:37
-#| msgid "Aufgabe wurde aktualisiert."
 msgid "Aufgabe aktualisiert"
 msgstr "Task has been updated."
 
-#: core/models/audit.py:38
-#| msgid "Einstellungen geändert"
 msgid "Benutzerrolle geändert"
 msgstr "Settings changed"
 
-#: core/models/audit.py:39
-#| msgid "Benutzername"
 msgid "Benutzer deaktiviert"
 msgstr "Username"
 
-#: core/models/audit.py:40
-#| msgid "Passwort geändert"
 msgid "Passwort-Reset angefordert"
 msgstr "Password changed"
 
-#: core/models/audit.py:41
 msgid "Sicherheitsverletzung"
 msgstr "Security violation"
 
-#: core/models/audit.py:42
-#| msgid "aktualisiert"
 msgid "2FA aktiviert"
 msgstr "updated"
 
-#: core/models/audit.py:43
-#| msgid "Fall wurde aktualisiert."
 msgid "2FA deaktiviert"
 msgstr "Case has been updated."
 
-#: core/models/audit.py:44
-#| msgid "Anmeldung fehlgeschlagen"
 msgid "2FA-Verifikation fehlgeschlagen"
 msgstr "Login failed"
 
-#: core/models/audit.py:45
 msgid "2FA Backup-Codes generiert"
 msgstr "2FA backup codes generated"
 
-#: core/models/audit.py:46
 msgid "2FA Backup-Code verwendet"
 msgstr "2FA backup code used"
 
-#: core/models/audit.py:47
 msgid "2FA Backup-Codes neu generiert"
 msgstr "2FA backup codes regenerated"
 
-#: core/models/audit.py:58 core/models/case.py:26 core/models/client.py:33
-#: core/models/document_type.py:50 core/models/document_type.py:151
-#: core/models/event.py:22 core/models/organization.py:41
-#: core/models/quick_template.py:35 core/models/retention.py:33
-#: core/models/retention.py:93 core/models/settings.py:20
-#: core/models/time_filter.py:21 core/models/user.py:30
-#: core/models/workitem.py:44 core/models/workitem.py:167
-#: templates/core/account/profile.html:31
+msgid "Sudo-Mode aktiviert (Re-Auth)"
+msgstr ""
+
 msgid "Einrichtung"
 msgstr "Facility"
 
-#: core/models/audit.py:66 core/models/user.py:78 core/models/user.py:79
-#: templates/core/audit/detail.html:19 templates/core/audit/list.html:30
-#: templates/core/audit/partials/table.html:9
 msgid "Benutzer"
 msgstr "User"
 
-#: core/models/audit.py:71 core/models/event_history.py:41
-#: templates/core/attachments/partials/attachment_table.html:15
-#: templates/core/audit/detail.html:25 templates/core/audit/list.html:18
-#: templates/core/audit/partials/table.html:10
-#: templates/core/dsgvo/package.html:27
-#: templates/core/export/client_data_pdf.html:102
 msgid "Aktion"
 msgstr "Action"
 
-#: core/models/audit.py:76 core/models/retention.py:38
-#: core/models/retention.py:95 core/models/workitem.py:169
-#: templates/core/audit/detail.html:37
-#: templates/core/audit/partials/table.html:11
 msgid "Zieltyp"
 msgstr "Target type"
 
-#: core/models/audit.py:81 core/models/retention.py:40
-#: core/models/retention.py:96 core/models/workitem.py:170
-#: templates/core/audit/detail.html:41
-#: templates/core/audit/partials/table.html:12
 msgid "Ziel-ID"
 msgstr "Target ID"
 
-#: core/models/audit.py:83 core/models/retention.py:49
-#: templates/core/audit/detail.html:47
-#: templates/core/audit/partials/table.html:13
-#: templates/core/events/detail.html:170
 msgid "Details"
 msgstr "Details"
 
-#: core/models/audit.py:87 templates/core/audit/detail.html:33
 msgid "IP-Adresse"
 msgstr "IP address"
 
-#: core/models/audit.py:89 templates/core/audit/detail.html:15
-#: templates/core/audit/partials/table.html:8
 msgid "Zeitstempel"
 msgstr "Timestamp"
 
-#: core/models/audit.py:92 templates/base.html:175 templates/base.html:303
-#: templates/core/audit/list.html:4 templates/core/audit/list.html:7
 msgid "Audit-Log"
 msgstr "Audit log"
 
-#: core/models/audit.py:93
 msgid "Audit-Logs"
 msgstr "Audit logs"
 
-#: core/models/case.py:16 core/models/workitem.py:20
-#: templates/core/workitems/partials/inbox_content.html:5
 msgid "Offen"
 msgstr "Open"
 
-#: core/models/case.py:17
 msgid "Geschlossen"
 msgstr "Closed"
 
-#: core/models/case.py:36 core/models/episode.py:20 core/models/outcome.py:15
-#: core/models/outcome.py:41 core/models/workitem.py:89
-#: templates/core/cases/partials/goals_section.html:35
-#: templates/core/cases/partials/table.html:9
-#: templates/core/export/client_data_pdf.html:42
-#: templates/core/export/client_data_pdf.html:156
 msgid "Titel"
 msgstr "Title"
 
-#: core/models/case.py:39 core/models/document_type.py:86
-#: core/models/episode.py:23 core/models/organization.py:36
-#: core/models/outcome.py:16 core/models/workitem.py:92
-#: templates/core/cases/detail.html:112
-#: templates/core/export/client_data_pdf.html:157
-#: templates/core/workitems/detail.html:135
 msgid "Beschreibung"
 msgstr "Description"
 
-#: core/models/case.py:41
 msgid ""
 "Frei-Text-Beschreibung des Falls. Nicht feldverschlüsselt — keine Klarnamen "
 "oder Art-9-Daten hier vermerken; sensible Inhalte gehören in ein Event-"
 "FieldTemplate mit Sensitivity=HOCH."
-msgstr "Free-text description of the case. Not field-encrypted — do not enter clear names or Art. 9 data; sensitive content belongs in an event FieldTemplate with sensitivity=HIGH."
+msgstr ""
+"Free-text description of the case. Not field-encrypted — do not enter clear "
+"names or Art. 9 data; sensitive content belongs in an event FieldTemplate "
+"with sensitivity=HIGH."
 
-#: core/models/case.py:51 core/models/retention.py:47
-#: core/models/workitem.py:79 core/models/workitem.py:176
-#: templates/core/cases/partials/table.html:11
-#: templates/core/export/client_data_pdf.html:43
-#: templates/core/export/client_data_pdf.html:126
-#: templates/core/export/client_data_pdf.html:158
-#: templates/core/workitems/detail.html:24
-#: templates/core/workitems/inbox.html:105
 msgid "Status"
 msgstr "Status"
 
-#: core/models/case.py:52
 msgid "Offen = aktiver Fall, Geschlossen = abgeschlossen"
 msgstr "Open = active case, Closed = completed"
 
-#: core/models/case.py:68 templates/core/cases/detail.html:92
-#: templates/core/cases/partials/table.html:12
-#: templates/core/export/client_data_pdf.html:46
 msgid "Fallverantwortlich"
 msgstr "Case responsible"
 
-#: core/models/case.py:69
 msgid "Hauptverantwortliche Fachkraft für diesen Fall"
 msgstr "Primary caseworker for this case"
 
-#: core/models/case.py:72 core/models/client.py:74 core/models/event.py:67
-#: core/models/settings.py:130 core/models/workitem.py:99
 msgid "Aktualisiert am"
 msgstr "Updated on"
 
-#: core/models/case.py:76 templates/core/cases/detail.html:105
-#: templates/core/export/client_data_pdf.html:45
 msgid "Geschlossen am"
 msgstr "Closed on"
 
-#: core/models/case.py:81 templates/base.html:145 templates/base.html:294
-#: templates/core/cases/detail.html:11 templates/core/cases/list.html:4
-#: templates/core/cases/list.html:9 templates/core/clients/detail.html:196
-#: templates/core/clients/offline_detail.html:101
 msgid "Fälle"
 msgstr "Cases"
 
-#: core/models/client.py:21 core/services/export.py:239
-#: core/services/statistics.py:65
 msgid "Unter 18"
 msgstr "Under 18"
 
-#: core/models/client.py:22 core/services/export.py:240
-#: core/services/statistics.py:66
 msgid "18–26"
 msgstr "18–26"
 
-#: core/models/client.py:23 core/services/export.py:241
-#: core/services/statistics.py:67
 msgid "27+"
 msgstr "27+"
 
-#: core/models/client.py:24 core/services/export.py:242
-#: core/services/statistics.py:68 templates/core/zeitstrom/index.html:36
 msgid "Unbekannt"
 msgstr "Unknown"
 
-#: core/models/client.py:38 templates/core/clients/partials/table.html:15
-#: templates/core/export/client_data_pdf.html:29
-#: templates/core/export/report_pdf.html:100
 msgid "Pseudonym"
 msgstr "Pseudonym"
 
-#: core/models/client.py:44 core/services/export.py:65
-#: templates/core/export/client_data_pdf.html:30
 msgid "Kontaktstufe"
 msgstr "Contact stage"
 
-#: core/models/client.py:45
 msgid ""
 "Identifiziert = Pseudonym bekannt, Qualifiziert = vollständige Identität "
 "bekannt"
 msgstr "Identified = pseudonym known, Qualified = full identity known"
 
-#: core/models/client.py:51 core/services/export.py:66
-#: templates/core/export/client_data_pdf.html:31
-#: templates/core/export/jugendamt_pdf.html:74
-#: templates/core/export/report_pdf.html:78
-#: templates/core/statistics/partials/dashboard_content.html:177
 msgid "Altersgruppe"
 msgstr "Age group"
 
-#: core/models/client.py:52
-#| msgid "Altersgruppe des Klienten zum Zeitpunkt der Erfassung"
 msgid "Altersgruppe des Klientel zum Zeitpunkt der Erfassung"
 msgstr "Client's age group at time of registration"
 
-#: core/models/client.py:56 core/models/user.py:44
-#: templates/core/clients/detail.html:153
-#: templates/core/clients/offline_detail.html:49
 msgid "Notizen"
 msgstr "Notes"
 
-#: core/models/client.py:58
 msgid ""
 "Interne Notizen, nur für Fachkräfte sichtbar. **Nicht feldverschlüsselt** — "
 "keine Klarnamen / Art-9-Daten (Gesundheit, Suchtdiagnosen, Klarname-Adresse) "
 "hier vermerken. Sensible Inhalte gehören in ein FieldTemplate mit "
 "Sensitivity=HOCH."
-msgstr "Internal notes, visible to staff only. **Not field-encrypted** — do not enter clear names / Art. 9 data (health, addiction diagnoses, clear-name address) here. Sensitive content belongs in a FieldTemplate with sensitivity=HIGH."
+msgstr ""
+"Internal notes, visible to staff only. **Not field-encrypted** — do not "
+"enter clear names / Art. 9 data (health, addiction diagnoses, clear-name "
+"address) here. Sensitive content belongs in a FieldTemplate with "
+"sensitivity=HIGH."
 
-#: core/models/client.py:64 core/models/document_type.py:87
-#: core/models/document_type.py:202 core/models/organization.py:37
-#: core/models/quick_template.py:60 core/models/time_filter.py:37
-#: templates/core/export/client_data_pdf.html:32
 msgid "Aktiv"
 msgstr "Active"
 
-#: core/models/client.py:67
 msgid "K-anonymisiert"
 msgstr "K-anonymized"
 
-#: core/models/client.py:69
 msgid ""
 "Kennzeichnet, ob der Datensatz per K-Anonymisierung generalisiert wurde "
 "(Alternative zu Hard-Delete für Langzeit-Statistik)."
-msgstr "Indicates whether the record has been generalized via K-anonymization (alternative to hard delete for long-term statistics)."
+msgstr ""
+"Indicates whether the record has been generalized via K-anonymization "
+"(alternative to hard delete for long-term statistics)."
 
-#: core/models/document_type.py:22 core/models/document_type.py:34
-#: templates/components/_event_card.html:13
 msgid "Kontakt"
 msgstr "Contact"
 
-#: core/models/document_type.py:23
 msgid "Leistung"
 msgstr "Service"
 
-#: core/models/document_type.py:24
 msgid "Verwaltung"
 msgstr "Administration"
 
-#: core/models/document_type.py:25 core/models/document_type.py:41
 msgid "Notiz"
 msgstr "Note"
 
-#: core/models/document_type.py:28 core/models/workitem.py:26
 msgid "Normal"
 msgstr "Normal"
 
-#: core/models/document_type.py:29
 msgid "Erhöht"
 msgstr "Elevated"
 
-#: core/models/document_type.py:30
 msgid "Hoch"
 msgstr "High"
 
-#: core/models/document_type.py:33 templates/components/_ban_feed_card.html:8
-#: templates/core/clients/detail.html:31 templates/core/clients/detail.html:142
-#: templates/core/handover/partials/_highlights.html:20
 msgid "Hausverbot"
 msgstr "Facility ban"
 
-#: core/models/document_type.py:35
-#: templates/core/handover/partials/_highlights.html:18
 msgid "Krisengespräch"
 msgstr "Crisis counseling"
 
-#: core/models/document_type.py:36
 msgid "Medizinische Versorgung"
 msgstr "Medical care"
 
-#: core/models/document_type.py:37
 msgid "Spritzentausch"
 msgstr "Needle exchange"
 
-#: core/models/document_type.py:38
 msgid "Begleitung"
 msgstr "Support"
 
-#: core/models/document_type.py:39
 msgid "Beratungsgespräch"
 msgstr "Counseling session"
 
-#: core/models/document_type.py:40
 msgid "Vermittlung"
 msgstr "Referral"
 
-#: core/models/document_type.py:52 core/models/document_type.py:153
-#: core/models/organization.py:13 core/models/organization.py:35
-#: templates/core/account/profile.html:14
 msgid "Name"
 msgstr "Name"
 
-#: core/models/document_type.py:57 core/models/retention.py:52
-#: templates/core/export/jugendamt_pdf.html:52
-#: templates/core/export/report_pdf.html:55
-#: templates/core/statistics/partials/dashboard_content.html:136
 msgid "Kategorie"
 msgstr "Category"
 
-#: core/models/document_type.py:59
 msgid ""
 "Reine UI-Gruppierung für Statistik-Anzeige und Admin-Filter. Beeinflusst "
 "weder Export noch Bann-/Krisen-Logik — dafür ist der Systemtyp zuständig."
-msgstr "UI grouping for statistics display and admin filters only. Does not affect export or ban/crisis logic — that is governed by the system type."
+msgstr ""
+"UI grouping for statistics display and admin filters only. Does not affect "
+"export or ban/crisis logic — that is governed by the system type."
 
-#: core/models/document_type.py:68 core/models/document_type.py:172
 msgid "Sensibilität"
 msgstr "Sensitivity"
 
-#: core/models/document_type.py:69
 msgid "Steuert Zugriffsrechte: ELEVATED/HIGH erfordern höhere Berechtigungen"
 msgstr "Controls access rights: ELEVATED/HIGH require higher permissions"
 
-#: core/models/document_type.py:76
 msgid "Mindest-Kontaktstufe"
 msgstr "Minimum contact stage"
 
-#: core/models/document_type.py:77
-#| msgid "Mindest-Kontaktstufe des Klienten für diesen Dokumentationstyp"
 msgid "Mindest-Kontaktstufe des Klientel für diesen Dokumentationstyp"
 msgstr "Minimum contact stage of the client for this documentation type"
 
-#: core/models/document_type.py:82
 msgid "Aufbewahrungsfrist (Tage)"
 msgstr "Retention period (days)"
 
-#: core/models/document_type.py:84
 msgid "Icon"
 msgstr "Icon"
 
-#: core/models/document_type.py:85
 msgid "Farbe"
 msgstr "Color"
 
-#: core/models/document_type.py:94
 msgid "Systemtyp"
 msgstr "System type"
 
-#: core/models/document_type.py:96
-#| msgid ""
-#| "Stabiler Identifier — wird als Key in data_json verwendet. Nach "
-#| "Erstellung unveränderbar."
 msgid ""
 "Stabile Kennung für Bann-Logik, Krisen-Highlight und Jugendamt-Export. Nach "
 "Erstellung unveränderbar."
-msgstr "Stable identifier for ban logic, crisis highlight, and youth-welfare export. Cannot be changed after creation."
-"Stable identifier — used as key in data_json. Immutable after creation."
+msgstr ""
+"Stable identifier for ban logic, crisis highlight, and youth-welfare export. "
+"Cannot be changed after creation.Stable identifier — used as key in "
+"data_json. Immutable after creation."
 
-#: core/models/document_type.py:102
-#: templates/core/statistics/partials/dashboard_content.html:109
 msgid "Dokumentationstypen"
 msgstr "Document types"
 
-#: core/models/document_type.py:121
 msgid "system_type kann nach Erstellung nicht geändert werden."
 msgstr "system_type cannot be changed after creation."
 
-#: core/models/document_type.py:134
 msgid "Text"
 msgstr "Text"
 
-#: core/models/document_type.py:135
 msgid "Textbereich"
 msgstr "Text area"
 
-#: core/models/document_type.py:136
 msgid "Zahl"
 msgstr "Number"
 
-#: core/models/document_type.py:137 core/services/export.py:61
-#: templates/core/attachments/partials/attachment_table.html:14
 msgid "Datum"
 msgstr "Date"
 
-#: core/models/document_type.py:138 core/services/export.py:62
 msgid "Uhrzeit"
 msgstr "Time"
 
-#: core/models/document_type.py:139
 msgid "Ja/Nein"
 msgstr "Yes/No"
 
-#: core/models/document_type.py:140
-#: templates/core/events/conflict_review.html:54
 msgid "Auswahl"
 msgstr "Selection"
 
-#: core/models/document_type.py:141
 msgid "Mehrfachauswahl"
 msgstr "Multi-select"
 
-#: core/models/document_type.py:142
-#| msgid "Daten"
 msgid "Datei"
 msgstr "Data"
 
-#: core/models/document_type.py:156
 msgid "Slug"
 msgstr "Slug"
 
-#: core/models/document_type.py:157
 msgid ""
 "Stabiler Identifier — wird als Key in data_json verwendet. Nach Erstellung "
 "unveränderbar."
-msgstr "Stable identifier — used as key in data_json. Cannot be changed after creation."
-"Stable identifier — used as key in data_json. Immutable after creation."
+msgstr ""
+"Stable identifier — used as key in data_json. Cannot be changed after "
+"creation.Stable identifier — used as key in data_json. Immutable after "
+"creation."
 
-#: core/models/document_type.py:163
 msgid "Feldtyp"
 msgstr "Field type"
 
-#: core/models/document_type.py:165
 msgid "Pflichtfeld"
 msgstr "Required field"
 
-#: core/models/document_type.py:166
 msgid "Verschlüsselt"
 msgstr "Encrypted"
 
-#: core/models/document_type.py:173
 msgid "Feld-Level Sichtbarkeit. Leer = erbt vom Dokumentationstyp."
 msgstr "Field-level visibility. Empty = inherits from document type."
 
-#: core/models/document_type.py:178
 msgid "Optionen (JSON)"
 msgstr "Options (JSON)"
 
-#: core/models/document_type.py:183
 msgid "Default-Wert"
 msgstr "Default value"
 
-#: core/models/document_type.py:185
 msgid ""
 "Wird beim Neu-Anlegen eines Ereignisses vorgeblendet. Leer lassen = kein "
 "Default. Für SELECT/MULTI_SELECT: Option-Slug(s) (mehrere durch Komma "
 "trennen). Für FILE nicht unterstützt."
-msgstr "Pre-filled when creating a new event. Leave empty = no default. For SELECT/MULTI_SELECT: option slug(s), comma-separated. Not supported for FILE."
+msgstr ""
+"Pre-filled when creating a new event. Leave empty = no default. For SELECT/"
+"MULTI_SELECT: option slug(s), comma-separated. Not supported for FILE."
 
-#: core/models/document_type.py:193
 msgid "Statistik-Kategorie"
 msgstr "Statistics category"
 
-#: core/models/document_type.py:198
 msgid "Hilfetext"
 msgstr "Help text"
 
-#: core/models/document_type.py:204
 msgid ""
 "Deaktivierte Feldvorlagen werden in Formularen nicht mehr angezeigt. "
 "Bestehende Werte in Events bleiben erhalten (Soft-Delete-Alternative zum "
 "Hard-Delete)."
-msgstr "Disabled field templates are no longer shown in forms. Existing values in events are preserved (soft-delete alternative to hard delete)."
+msgstr ""
+"Disabled field templates are no longer shown in forms. Existing values in "
+"events are preserved (soft-delete alternative to hard delete)."
 
-#: core/models/document_type.py:211
 msgid "Feldvorlagen"
 msgstr "Field templates"
 
-#: core/models/document_type.py:228
 msgid "Name ergibt keinen gültigen Slug."
 msgstr "Name does not produce a valid slug."
 
-#: core/models/document_type.py:239
 msgid "Nur a-z, 0-9 und Bindestriche erlaubt."
 msgstr "Only a-z, 0-9, and hyphens allowed."
 
-#: core/models/document_type.py:248
 msgid "Felder mit Sensibilität=Hoch müssen verschlüsselt sein."
 msgstr "Fields with sensitivity=High must be encrypted."
 
-#: core/models/document_type.py:256
 msgid "Für Datei-Felder ist kein Default-Wert zulässig."
 msgstr "Default value is not allowed for file fields."
 
-#: core/models/document_type.py:261
 msgid "Default-Wert muss eine ganze Zahl sein."
 msgstr "Default value must be an integer."
 
-#: core/models/document_type.py:269
 msgid "Default-Wert muss ein ISO-Datum sein (YYYY-MM-DD)."
 msgstr "Default value must be an ISO date (YYYY-MM-DD)."
 
-#: core/models/document_type.py:278
 msgid "Default-Wert muss eine ISO-Uhrzeit sein (HH:MM oder HH:MM:SS)."
 msgstr "Default value must be an ISO time (HH:MM or HH:MM:SS)."
 
-#: core/models/document_type.py:282
 msgid "Default-Wert muss 'true' oder 'false' sein."
 msgstr "Default value must be 'true' or 'false'."
 
-#: core/models/document_type.py:289
 #, python-format
 msgid "Default-Wert '%(value)s' ist kein aktiver Options-Slug."
 msgstr "Default value '%(value)s' is not an active option slug."
 
-#: core/models/document_type.py:304
 msgid "Slug ist nicht gültig (nur a-z, 0-9, Bindestriche)."
 msgstr "Slug is not valid (only a-z, 0-9, hyphens)."
 
-#: core/models/document_type.py:322
 msgid "Slug kann nach Erstellung nicht geändert werden."
 msgstr "Slug cannot be changed after creation."
 
-#: core/models/document_type.py:388
 msgid "Dokumentationstyp-Feld"
 msgstr "Document type field"
 
-#: core/models/document_type.py:389
 msgid "Dokumentationstyp-Felder"
 msgstr "Document type fields"
 
-#: core/models/episode.py:25
 msgid ""
 "Frei-Text-Beschreibung der Episode. Nicht feldverschlüsselt — keine "
 "Klarnamen oder Art-9-Daten hier vermerken."
-msgstr "Free-text description of the episode. Not field-encrypted — do not enter clear names or Art. 9 data here."
+msgstr ""
+"Free-text description of the episode. Not field-encrypted — do not enter "
+"clear names or Art. 9 data here."
 
-#: core/models/episode.py:41 core/models/event.py:52
 msgid "Episode"
 msgstr "Episode"
 
-#: core/models/episode.py:42 templates/core/cases/partials/episode_list.html:4
 msgid "Episoden"
 msgstr "Episodes"
 
-#: core/models/event.py:63
 msgid "Daten (JSON)"
 msgstr "Data (JSON)"
 
-#: core/models/event.py:64 core/services/export.py:117
-#: core/services/retention.py:17 templates/components/_ban_feed_card.html:12
-#: templates/components/_event_card.html:17
-#: templates/core/events/delete_confirm.html:34
-#: templates/core/events/detail.html:61 templates/core/events/edit.html:24
-#: templates/core/export/report_pdf.html:35
-#: templates/core/retention/partials/dashboard_content.html:26
-#: templates/core/statistics/partials/dashboard_content.html:17
 msgid "Anonym"
 msgstr "Anonymous"
 
-#: core/models/event.py:65 core/models/event_history.py:20
 msgid "Gelöscht"
 msgstr "Deleted"
 
-#: core/models/event.py:70 core/models/event_history.py:27
 msgid "Ereignis"
 msgstr "Event"
 
-#: core/models/event.py:71 templates/core/search/partials/results.html:25
 msgid "Ereignisse"
 msgstr "Events"
 
-#: core/models/event_history.py:18 templates/core/cases/partials/table.html:13
 msgid "Erstellt"
 msgstr "Created"
 
-#: core/models/event_history.py:19
 msgid "Aktualisiert"
 msgstr "Updated"
 
-#: core/models/event_history.py:35
-#: templates/core/export/client_data_pdf.html:104
 msgid "Geändert von"
 msgstr "Modified by"
 
-#: core/models/event_history.py:37
-#: templates/core/export/client_data_pdf.html:103
 msgid "Geändert am"
 msgstr "Modified on"
 
-#: core/models/event_history.py:43
 msgid "Daten vorher"
 msgstr "Data before"
 
-#: core/models/event_history.py:44
 msgid "Daten nachher"
 msgstr "Data after"
 
-#: core/models/event_history.py:55
 msgid "Ereignis-Historie"
 msgstr "Event history"
 
-#: core/models/event_history.py:56
 msgid "Ereignis-Historien"
 msgstr "Event histories"
 
-#: core/models/organization.py:17 core/models/organization.py:33
 msgid "Organisation"
 msgstr "Organization"
 
-#: core/models/organization.py:18
 msgid "Organisationen"
 msgstr "Organizations"
 
-#: core/models/organization.py:42
 msgid "Einrichtungen"
 msgstr "Facilities"
 
-#: core/models/outcome.py:17
 msgid "Erreicht"
 msgstr "Achieved"
 
-#: core/models/outcome.py:18
 msgid "Erreicht am"
 msgstr "Achieved on"
 
-#: core/models/outcome.py:28
 msgid "Wirkungsziel"
 msgstr "Impact goal"
 
-#: core/models/outcome.py:29 templates/core/cases/partials/goals_section.html:4
 msgid "Wirkungsziele"
 msgstr "Impact goals"
 
-#: core/models/outcome.py:42
 msgid "Abgeschlossen"
 msgstr "Completed"
 
-#: core/models/outcome.py:43 core/models/workitem.py:103
 msgid "Abgeschlossen am"
 msgstr "Completed on"
 
-#: core/models/outcome.py:44
 msgid "Reihenfolge"
 msgstr "Order"
 
-#: core/models/outcome.py:48
 msgid "Meilenstein"
 msgstr "Milestone"
 
-#: core/models/outcome.py:49
 msgid "Meilensteine"
 msgstr "Milestones"
 
-#: core/models/quick_template.py:45 core/models/user.py:35
 msgid "Anzeigename"
 msgstr "Display name"
 
-#: core/models/quick_template.py:46
-#| msgid "Beratungsgespräch"
 msgid "Beispiel: 'Beratungsgespräch 30 Min'."
 msgstr "Counseling session"
 
-#: core/models/quick_template.py:51
 msgid "Vorbefüllte Werte"
 msgstr "Pre-filled values"
 
-#: core/models/quick_template.py:52
 msgid "Slug → Wert. Wird vor Speicherung auf NORMAL-Felder gefiltert."
 msgstr "Slug → value. Filtered to NORMAL-sensitivity fields before saving."
 
-#: core/models/quick_template.py:76
 msgid "Quick-Template"
 msgstr "Quick template"
 
-#: core/models/quick_template.py:77
 msgid "Quick-Templates"
 msgstr "Quick templates"
 
-#: core/models/recent_client_visit.py:37
-#| msgid "Klienten-Besuch"
 msgid "Klientel-Besuch"
 msgstr "Client visit"
 
-#: core/models/recent_client_visit.py:38
-#| msgid "Klienten-Besuche"
 msgid "Klientel-Besuche"
 msgstr "Client visits"
 
-#: core/models/retention.py:17 core/models/workitem.py:153
-#: templates/core/deletion_requests/list.html:11
-#: templates/core/deletion_requests/list.html:19
-#: templates/core/retention/partials/dashboard_content.html:7
-#: templates/core/retention/partials/proposal_card.html:19
 msgid "Ausstehend"
 msgstr "Pending"
 
-#: core/models/retention.py:18
-#: templates/core/retention/partials/dashboard_content.html:17
-#: templates/core/retention/partials/proposal_card.html:23
 msgid "Freigegeben"
 msgstr "Released"
 
-#: core/models/retention.py:20
-#| msgid "Zurücksetzen"
 msgid "Zurückgestellt"
 msgstr "Reset"
 
-#: core/models/retention.py:21 core/models/workitem.py:155
-#: templates/core/deletion_requests/list.html:60
-#: templates/core/deletion_requests/list.html:67
 msgid "Abgelehnt"
 msgstr "Rejected"
 
-#: core/models/retention.py:41
-#| msgid "Abgeschlossen am"
 msgid "Vorgeschlagen am"
 msgstr "Completed on"
 
-#: core/models/retention.py:42
-#| msgid "Löschen"
 msgid "Löschfrist"
 msgstr "Delete"
 
-#: core/models/retention.py:53
 msgid "anonymous, identified, qualified oder document_type"
 msgstr "anonymous, identified, qualified, or document_type"
 
-#: core/models/retention.py:58 core/models/workitem.py:115
-#: templates/core/workitems/detail.html:97
-#| msgid "Feldvorlage"
 msgid "Wiedervorlage am"
 msgstr "Field template"
 
-#: core/models/retention.py:59
 msgid "Datum, ab dem ein zurückgestellter Vorschlag wieder vorgelegt wird."
 msgstr "Date when a deferred proposal will be re-presented."
 
-#: core/models/retention.py:63
 msgid "Anzahl Zurückstellungen"
 msgstr "Number of deferrals"
 
-#: core/models/retention.py:64
 msgid "Wie oft wurde der Vorschlag bereits zurückgestellt."
 msgstr "How many times the proposal has been deferred."
 
-#: core/models/retention.py:68
-#| msgid "Löschantrag"
 msgid "Löschvorschlag"
 msgstr "Deletion request"
 
-#: core/models/retention.py:69
-#| msgid "Löschanträge"
 msgid "Löschvorschläge"
 msgstr "Deletion Requests"
 
-#: core/models/retention.py:97 core/models/workitem.py:171
-#: templates/core/events/delete_confirm.html:45
-#: templates/core/events/deletion_review.html:22
-#: templates/core/export/client_data_pdf.html:127
-#: templates/core/retention/partials/proposal_card.html:67
 msgid "Begründung"
 msgstr "Reason"
 
-#: core/models/retention.py:101
-#: templates/core/retention/partials/proposal_card.html:73
 msgid "Ablaufdatum"
 msgstr "Expiration date"
 
-#: core/models/retention.py:113
-#| msgid "Aufgaben gesamt"
 msgid "Aufgehoben am"
 msgstr "Total tasks"
 
-#: core/models/retention.py:121
-#| msgid "Aufgaben"
 msgid "Aufgehoben von"
 msgstr "Tasks"
 
-#: core/models/retention.py:135
 msgid "Legal Holds"
 msgstr "Legal holds"
 
-#: core/models/retention.py:139
-#: templates/core/cases/partials/episode_list.html:37
 msgid "aktiv"
 msgstr "active"
 
-#: core/models/retention.py:139
-#| msgid "aktiv"
 msgid "inaktiv"
 msgstr "active"
 
-#: core/models/settings.py:25
 msgid "Vollständiger Name"
 msgstr "Full name"
 
-#: core/models/settings.py:33
 msgid "Standard-Dokumentationstyp"
 msgstr "Default document type"
 
-#: core/models/settings.py:37
 msgid "Session-Timeout (Minuten)"
 msgstr "Session timeout (minutes)"
 
-#: core/models/settings.py:41
 msgid "Aufbewahrung anonym (Tage)"
 msgstr "Retention anonymous (days)"
 
-#: core/models/settings.py:45
 msgid "Aufbewahrung identifiziert (Tage)"
 msgstr "Retention identified (days)"
 
-#: core/models/settings.py:49
 msgid "Aufbewahrung qualifiziert (Tage)"
 msgstr "Retention qualified (days)"
 
-#: core/models/settings.py:53
 msgid "Aufbewahrung Aktivitäten (Tage)"
 msgstr "Activity retention (days)"
 
-#: core/models/settings.py:57
-#| msgid "Aufbewahrung anonym (Tage)"
 msgid "AuditLog-Aufbewahrung (Monate)"
 msgstr "Retention anonymous (days)"
 
-#: core/models/settings.py:59
 msgid ""
 "Wie lange AuditLog-Eintraege aufbewahrt werden, bevor das enforce_retention-"
 "Kommando sie loescht. 0 = deaktiviert (unbegrenzte Aufbewahrung)."
-msgstr "How long AuditLog entries are kept before enforce_retention deletes them. 0 = disabled (unlimited retention)."
+msgstr ""
+"How long AuditLog entries are kept before enforce_retention deletes them. 0 "
+"= disabled (unlimited retention)."
 
-#: core/models/settings.py:68
-#| msgid "Erfasste Daten"
 msgid "Erlaubte Dateitypen"
 msgstr "Recorded data"
 
-#: core/models/settings.py:69
 msgid "Kommagetrennte Dateiendungen (z.B. pdf,jpg,png,docx)"
 msgstr "Comma-separated file extensions (e.g. pdf,jpg,png,docx)"
 
-#: core/models/settings.py:73
 msgid "Max. Dateigröße (MB)"
 msgstr "Max file size (MB)"
 
-#: core/models/settings.py:77
 msgid "2FA-Pflicht für alle Nutzer"
 msgstr "2FA enforced for all users"
 
-#: core/models/settings.py:79
 msgid ""
 "Wenn aktiv, gilt MFA-Zwang (TOTP) automatisch für alle Nutzer dieser "
 "Einrichtung — unabhängig vom einzelnen Benutzerfeld mfa_required."
-msgstr "If active, MFA (TOTP) is enforced for all users of this facility — independent of the per-user mfa_required field."
+msgstr ""
+"If active, MFA (TOTP) is enforced for all users of this facility — "
+"independent of the per-user mfa_required field."
 
-#: core/models/settings.py:85
 msgid "Auto-Freigabe nach mehrfacher Zurückstellung"
 msgstr "Auto-release after repeated deferrals"
 
-#: core/models/settings.py:87
 msgid ""
 "Wenn aktiv, werden Löschvorschläge nach Überschreiten der maximalen "
 "Zurückstellungszahl automatisch freigegeben, statt manuelle Entscheidung zu "
 "erzwingen."
-msgstr "If active, deletion proposals are auto-released after exceeding the maximum deferral count, instead of forcing manual decision."
+msgstr ""
+"If active, deletion proposals are auto-released after exceeding the maximum "
+"deferral count, instead of forcing manual decision."
 
-#: core/models/settings.py:94
 msgid "Maximale Zurückstellungen"
 msgstr "Maximum deferrals"
 
-#: core/models/settings.py:96
 msgid ""
 "Nach wie vielen Zurückstellungen eine endgültige Entscheidung erzwungen oder "
 "(bei Auto-Freigabe) automatisch freigegeben wird."
-msgstr "After how many deferrals a final decision is enforced or (with auto-release) is automatically released."
+msgstr ""
+"After how many deferrals a final decision is enforced or (with auto-release) "
+"is automatically released."
 
-#: core/models/settings.py:102
 msgid "K-Anonymisierung statt Hard-Delete"
 msgstr "K-anonymization instead of hard delete"
 
-#: core/models/settings.py:104
 msgid ""
 "Wenn aktiv, wird bei DSGVO-Löschung statt Hard-Delete eine K-Anonymisierung "
 "durchgeführt. Der Datensatz bleibt statistisch auswertbar, ist aber nicht "
 "mehr re-identifizierbar."
-msgstr "If active, GDPR deletions perform K-anonymization instead of hard delete. The record stays statistically usable but can no longer be re-identified."
+msgstr ""
+"If active, GDPR deletions perform K-anonymization instead of hard delete. "
+"The record stays statistically usable but can no longer be re-identified."
 
-#: core/models/settings.py:111
 msgid "K-Anonymitäts-Schwelle"
 msgstr "K-anonymity threshold"
 
-#: core/models/settings.py:113
 msgid ""
 "Mindest-Gruppengröße für K-Anonymität (z.B. k=5 → mindestens 5 Datensätze "
 "pro Bucket). Je höher der Wert, desto stärker die Anonymisierung."
-msgstr "Minimum group size for K-anonymity (e.g. k=5 → at least 5 records per bucket). Higher value = stronger anonymization."
+msgstr ""
+"Minimum group size for K-anonymity (e.g. k=5 → at least 5 records per "
+"bucket). Higher value = stronger anonymization."
 
-#: core/models/settings.py:121
 msgid "Fuzzy-Search-Schwelle"
 msgstr "Fuzzy search threshold"
 
-#: core/models/settings.py:123
 msgid ""
 "Mindest-Ähnlichkeit (0.0–1.0) für Fuzzy-Treffer im Pseudonym. Kleinere Werte "
 "liefern mehr, aber ungenauere Treffer; größere Werte sind strenger. "
 "Standard: 0.3."
-msgstr "Minimum similarity (0.0–1.0) for fuzzy matches on pseudonyms. Lower = more but less accurate matches; higher = stricter. Default: 0.3."
+msgstr ""
+"Minimum similarity (0.0–1.0) for fuzzy matches on pseudonyms. Lower = more "
+"but less accurate matches; higher = stricter. Default: 0.3."
 
-#: core/models/settings.py:134 core/models/settings.py:135
 msgid "Einstellungen"
 msgstr "Settings"
 
-#: core/models/statistics_snapshot.py:33
 msgid "Statistik-Snapshot"
 msgstr "Statistics snapshot"
 
-#: core/models/statistics_snapshot.py:34
 msgid "Statistik-Snapshots"
 msgstr "Statistics snapshots"
 
-#: core/models/time_filter.py:23
 msgid "Bezeichnung"
 msgstr "Label"
 
-#: core/models/time_filter.py:25
 msgid "Startzeit"
 msgstr "Start time"
 
-#: core/models/time_filter.py:26
 msgid "Schichtbeginn (z.B. 08:00)"
 msgstr "Shift start (e.g. 08:00)"
 
-#: core/models/time_filter.py:29
 msgid "Endzeit"
 msgstr "End time"
 
-#: core/models/time_filter.py:30
 msgid ""
 "Schichtende (z.B. 16:00). Bei Nachtschicht: Ende nach Mitternacht möglich"
 msgstr "Shift end (e.g. 16:00). For night shifts: end after midnight possible"
 
-#: core/models/time_filter.py:34
 msgid "Standard"
 msgstr "Default"
 
-#: core/models/time_filter.py:35
 msgid ""
 "Wird als Standard-Schicht vorausgewählt, wenn keine aktive Schicht erkannt "
 "wird"
 msgstr "Pre-selected as default shift when no active shift is detected"
 
-#: core/models/time_filter.py:41 core/models/time_filter.py:42
-#: templates/components/_time_filter_dropdown.html:6
 msgid "Zeitfilter"
 msgstr "Time filter"
 
-#: core/models/user.py:13
 msgid "Administrator"
 msgstr "Administrator"
 
-#: core/models/user.py:14
 msgid "Leitung"
 msgstr "Manager"
 
-#: core/models/user.py:15
 msgid "Fachkraft"
 msgstr "Social worker"
 
-#: core/models/user.py:16
 msgid "Assistenz"
 msgstr "Assistant"
 
-#: core/models/user.py:22 templates/core/account/profile.html:22
 msgid "Rolle"
 msgstr "Role"
 
-#: core/models/user.py:40
 msgid "Telefon"
 msgstr "Phone"
 
-#: core/models/user.py:48
 msgid "Passwort muss geändert werden"
 msgstr "Password must be changed"
 
-#: core/models/user.py:52
 msgid "2FA erforderlich"
 msgstr "2FA required"
 
-#: core/models/user.py:54
 msgid ""
 "Wenn aktiv, muss der Nutzer ein TOTP-Gerät einrichten, bevor er die "
 "Anwendung weiter nutzen kann. Wird automatisch gesetzt, wenn die Einrichtung "
 "2FA für alle verlangt."
-msgstr "If active, the user must set up a TOTP device before they can continue using the application. Automatically set when the facility requires 2FA for all users."
+msgstr ""
+"If active, the user must set up a TOTP device before they can continue using "
+"the application. Automatically set when the facility requires 2FA for all "
+"users."
 
-#: core/models/user.py:63
 msgid "Bevorzugte Sprache"
 msgstr "Preferred Language"
 
-#: core/models/user.py:69
 msgid "Offline-Schlüssel-Salt"
 msgstr "Offline key salt"
 
-#: core/models/user.py:71
 msgid ""
 "Base64URL-Salt für die client-seitige PBKDF2-Ableitung. Lazy generiert beim "
 "ersten Salt-Endpoint-Aufruf, rotiert bei Passwort-Änderung."
-msgstr "Base64URL salt for client-side PBKDF2 derivation. Lazily generated on first salt endpoint call, rotated on password change."
+msgstr ""
+"Base64URL salt for client-side PBKDF2 derivation. Lazily generated on first "
+"salt endpoint call, rotated on password change."
 
-#: core/models/workitem.py:16
 msgid "Hinweis"
 msgstr "Note"
 
-#: core/models/workitem.py:17 templates/components/_workitem_feed_card.html:8
 msgid "Aufgabe"
 msgstr "Task"
 
-#: core/models/workitem.py:21
-#: templates/core/account/partials/_tasks_widget.html:10
-#: templates/core/workitems/partials/inbox_content.html:22
 msgid "In Bearbeitung"
 msgstr "In progress"
 
-#: core/models/workitem.py:22 templates/components/_workitem_row.html:100
-#: templates/components/_workitem_row.html:110
-#: templates/core/workitems/detail.html:54
 msgid "Erledigt"
 msgstr "Completed"
 
-#: core/models/workitem.py:23 templates/components/_workitem_row.html:115
 msgid "Verworfen"
 msgstr "Discarded"
 
-#: core/models/workitem.py:27 templates/auth/mfa_backup_codes.html:11
-#: templates/components/_workitem_feed_card.html:13
-#: templates/components/_workitem_row.html:23
-#: templates/components/_workitem_row.html:57
-#: templates/core/handover/index.html:78
-#: templates/core/workitems/detail.html:75
 msgid "Wichtig"
 msgstr "Important"
 
-#: core/models/workitem.py:28 templates/components/_workitem_feed_card.html:11
-#: templates/components/_workitem_row.html:21
-#: templates/components/_workitem_row.html:55
-#: templates/core/handover/index.html:76
-#: templates/core/workitems/detail.html:73
 msgid "Dringend"
 msgstr "Urgent"
 
-#: core/models/workitem.py:31
-#| msgid "Keine Frist"
 msgid "Keine"
 msgstr "No deadline"
 
-#: core/models/workitem.py:32
-#| msgid "Löschen"
 msgid "Wöchentlich"
 msgstr "Delete"
 
-#: core/models/workitem.py:33
-#| msgid "Monat"
 msgid "Monatlich"
 msgstr "Month"
 
-#: core/models/workitem.py:34
 msgid "Vierteljährlich"
 msgstr "Quarterly"
 
-#: core/models/workitem.py:35
 msgid "Jährlich"
 msgstr "Yearly"
 
-#: core/models/workitem.py:66 templates/core/workitems/detail.html:128
-#: templates/core/workitems/inbox.html:51
 msgid "Zugewiesen an"
 msgstr "Assigned to"
 
-#: core/models/workitem.py:72
-#: templates/core/attachments/partials/attachment_table.html:11
-#: templates/core/export/report_pdf.html:54
-#: templates/core/statistics/partials/dashboard_content.html:135
-#: templates/core/workitems/detail.html:20
-#: templates/core/workitems/inbox.html:21
 msgid "Typ"
 msgstr "Type"
 
-#: core/models/workitem.py:73
 msgid "Aufgabe = aktiv zu erledigen, Hinweis = informativ."
 msgstr "Task = action required, Note = informational."
 
-#: core/models/workitem.py:80
 msgid ""
 "Offen = noch nicht begonnen, In Bearbeitung = aktiv, Erledigt = abgeschlossen"
 msgstr "Open = not yet started, In progress = active, Completed = finished"
 
-#: core/models/workitem.py:86 templates/core/export/client_data_pdf.html:159
-#: templates/core/workitems/detail.html:70
-#: templates/core/workitems/inbox.html:36
-#: templates/core/workitems/inbox.html:121
 msgid "Priorität"
 msgstr "Priority"
 
-#: core/models/workitem.py:87
 msgid "Dringend = sofortige Bearbeitung, Wichtig = zeitnah, Normal = regulär"
 msgstr "Urgent = immediate attention, Important = timely, Normal = regular"
 
-#: core/models/workitem.py:94
 msgid ""
 "Frei-Text-Beschreibung der Aufgabe. Nicht feldverschlüsselt — keine "
 "Klarnamen oder Art-9-Daten hier vermerken."
-msgstr "Free-text description of the task. Not field-encrypted — do not enter clear names or Art. 9 data here."
+msgstr ""
+"Free-text description of the task. Not field-encrypted — do not enter clear "
+"names or Art. 9 data here."
 
-#: core/models/workitem.py:109 templates/core/workitems/detail.html:82
 msgid "Zu erledigen bis"
 msgstr "Due by"
 
-#: core/models/workitem.py:116
 msgid "Optional. Wann soll die Aufgabe wieder aufpoppen?"
 msgstr "Optional. When should the task pop up again?"
 
-#: core/models/workitem.py:122
 msgid "Wiederholung"
 msgstr "Recurrence"
 
-#: core/models/workitem.py:123
 msgid ""
 "Bei Erledigung wird automatisch eine Folgeaufgabe mit neuer Frist erstellt."
-msgstr "On completion, a follow-up task with a new due date is automatically created."
+msgstr ""
+"On completion, a follow-up task with a new due date is automatically created."
 
-#: core/models/workitem.py:128
-#| msgid "Aufgabe wurde erstellt."
 msgid "Folgeaufgabe erstellt am"
 msgstr "Task has been created."
 
-#: core/models/workitem.py:130
 msgid ""
 "Zeitpunkt, an dem für dieses Item bereits eine wiederkehrende Folgeaufgabe "
 "erzeugt wurde. Verhindert doppelte Duplikate beim erneuten Setzen auf "
 "'Erledigt'."
-msgstr "Timestamp at which a recurring follow-up has already been created for this item. Prevents duplicates when re-setting to 'Done'."
+msgstr ""
+"Timestamp at which a recurring follow-up has already been created for this "
+"item. Prevents duplicates when re-setting to 'Done'."
 
-#: core/models/workitem.py:136
 msgid "Arbeitsauftrag"
 msgstr "Work item"
 
-#: core/models/workitem.py:137
 msgid "Arbeitsaufträge"
 msgstr "Work items"
 
-#: core/models/workitem.py:154 templates/core/deletion_requests/list.html:37
-#: templates/core/deletion_requests/list.html:44
 msgid "Genehmigt"
 msgstr "Approved"
 
-#: core/models/workitem.py:182 templates/core/events/deletion_review.html:14
-#: templates/core/export/client_data_pdf.html:128
 msgid "Beantragt von"
 msgstr "Requested by"
 
-#: core/models/workitem.py:190 templates/core/export/client_data_pdf.html:129
 msgid "Geprüft von"
 msgstr "Reviewed by"
 
-#: core/models/workitem.py:196 templates/core/export/client_data_pdf.html:131
 msgid "Geprüft am"
 msgstr "Reviewed on"
 
-#: core/models/workitem.py:200
 msgid "Löschantrag"
 msgstr "Deletion request"
 
-#: core/models/workitem.py:201 templates/base.html:165 templates/base.html:299
-#: templates/core/deletion_requests/list.html:4
-#: templates/core/deletion_requests/list.html:7
 msgid "Löschanträge"
 msgstr "Deletion Requests"
 
-#: core/services/cases.py:24
 msgid "Fallverantwortlicher gehört nicht zur Einrichtung."
 msgstr "Case manager does not belong to the facility."
 
-#: core/services/cases.py:135
 msgid "Ereignis gehört nicht zur selben Einrichtung wie der Fall."
 msgstr "Event does not belong to the same facility as the case."
 
-#: core/services/cases.py:137
 msgid "Ereignis ist für diese Rolle nicht sichtbar."
 msgstr "Event is not visible to this role."
 
-#: core/services/cases.py:140
 msgid ""
 "Anonyme Ereignisse können nicht an einen klientelbezogenen Fall gehängt "
 "werden."
 msgstr "Anonymous events cannot be attached to a client-bound case."
 
-#: core/services/cases.py:142 core/services/event.py:483
 msgid "Klientel des Ereignisses passt nicht zum Klientel des Falls."
 msgstr "Event client does not match case client."
 
-#: core/services/episodes.py:19 core/views/case_episodes.py:28
-#: core/views/case_episodes.py:40
 msgid "Episoden können nur für offene Fälle erstellt werden."
 msgstr "Episodes can only be created for open cases."
 
-#: core/services/event.py:163 core/services/export.py:140
 msgid "[Eingeschränkt]"
 msgstr "[Restricted]"
 
-#: core/services/event.py:218
 msgid "[verschlüsselt]"
 msgstr "[encrypted]"
 
-#: core/services/event.py:481
-#| msgid "Ereignis gehört nicht zur selben Einrichtung wie der Fall."
 msgid "Fall gehört nicht zur selben Einrichtung wie das Ereignis."
 msgstr "Event does not belong to the same facility as the case."
 
-#: core/services/event.py:485
 msgid ""
 "Anonyme Ereignisse dürfen nicht an klientelbezogene Fälle gehängt werden."
 msgstr "Anonymous events must not be attached to client-bound cases."
 
-#: core/services/event.py:491
 msgid "Diese Dokumentation darf von Ihrer Rolle nicht erstellt werden."
 msgstr "Your role is not permitted to create this documentation."
 
-#: core/services/event.py:502
 msgid ""
 "Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, da eine "
 "Mindest-Kontaktstufe vorausgesetzt wird."
-msgstr "Anonymous contacts are not permitted for this document type because a minimum contact stage is required."
-"Anonymous contacts are not allowed for this document type, as a minimum "
-"contact stage is required."
+msgstr ""
+"Anonymous contacts are not permitted for this document type because a "
+"minimum contact stage is required.Anonymous contacts are not allowed for "
+"this document type, as a minimum contact stage is required."
 
-#: core/services/event.py:511
-#| msgid ""
-#| "Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, da eine "
-#| "Mindest-Kontaktstufe vorausgesetzt wird."
 msgid ""
 "Für diesen Dokumentationstyp muss ein Klientel ausgewählt werden, da eine "
 "Mindest-Kontaktstufe vorausgesetzt wird."
-msgstr "A client must be selected for this document type because a minimum contact stage is required."
-"Anonymous contacts are not allowed for this document type, as a minimum "
-"contact stage is required."
+msgstr ""
+"A client must be selected for this document type because a minimum contact "
+"stage is required.Anonymous contacts are not allowed for this document type, "
+"as a minimum contact stage is required."
 
-#: core/services/event.py:523
-#| msgid ""
-#| "Klient muss mindestens die Kontaktstufe '%(required_stage)s' haben, "
-#| "aktuelle Stufe ist '%(actual_stage)s'."
+#, python-format
 msgid ""
 "Klientel muss mindestens die Kontaktstufe '%(required_stage)s' haben, "
 "aktuelle Stufe ist '%(actual_stage)s'."
-msgstr "Client must have at least contact stage '%(required_stage)s', current stage is '%(actual_stage)s'."
-"Client must have at least contact stage '%(required_stage)s', current stage: "
-"'%(actual_stage)s'"
+msgstr ""
+"Client must have at least contact stage '%(required_stage)s', current stage "
+"is '%(actual_stage)s'.Client must have at least contact stage "
+"'%(required_stage)s', current stage: '%(actual_stage)s'"
 
-#: core/services/feed.py:146
-#| msgid "Daten"
 msgid "[Datei]"
 msgstr "Data"
 
-#: core/services/feed.py:149
 #, python-format
 msgid "[%(n)d Datei]"
 msgid_plural "[%(n)d Dateien]"
 msgstr[0] ""
 msgstr[1] ""
 
-#: core/services/file_vault.py:88
 msgid "Datei-Upload abgelehnt: Virenscanner ist nicht erreichbar."
 msgstr "File upload rejected: virus scanner is unreachable."
 
-#: core/services/file_vault.py:100
 #, python-format
 msgid "Datei wurde von Virenscanner abgewiesen: %(signature)s"
 msgstr "File rejected by virus scanner: %(signature)s"
 
-#: core/services/file_vault.py:158
 #, python-format
 msgid "Dateityp .%(ext)s ist nicht erlaubt. Erlaubt: %(allowed)s"
 msgstr "File type .%(ext)s is not allowed. Allowed: %(allowed)s"
 
-#: core/services/file_vault.py:253
 #, python-format
 msgid ""
 "Datei-Inhalt stimmt nicht mit dem angegebenen Typ überein (erkannt: "
 "%(detected)s, erwartet: %(declared)s)."
-msgstr "File content does not match the declared type (detected: %(detected)s, expected: %(declared)s)."
+msgstr ""
+"File content does not match the declared type (detected: %(detected)s, "
+"expected: %(declared)s)."
 
-#: core/services/locking.py:45
-#| msgid ""
-#| "Das Ereignis wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite "
-#| "neu."
 msgid ""
 "Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite "
 "neu."
 msgstr "This event has been modified in the meantime. Please reload the page."
 
-#: core/services/retention.py:20
-#| msgid "Dokument"
 msgid "Dokumenttyp"
 msgstr "Document"
 
-#: core/signals/field_template.py:47
 #, python-format
 msgid ""
 "Feldvorlage „%(name)s“ kann nicht gelöscht werden — es existieren Events mit "
 "Daten unter dem Slug „%(slug)s“. Alternativ: Feldvorlage deaktivieren "
 "(is_active=False)."
-msgstr "Field template \"%(name)s\" cannot be deleted — events exist with data under slug \"%(slug)s\". Alternative: deactivate the field template (is_active=False)."
+msgstr ""
+"Field template \"%(name)s\" cannot be deleted — events exist with data under "
+"slug \"%(slug)s\". Alternative: deactivate the field template "
+"(is_active=False)."
 
-#: core/utils/dates.py:60 core/utils/dates.py:67
-#| msgid "Überfällig"
 msgid "Heute fällig"
 msgstr "Overdue"
 
-#: core/utils/dates.py:74
-#| msgid "Überfällig"
 msgid "Morgen fällig"
 msgstr "Overdue"
 
-#: core/utils/dates.py:110
 #, python-format
 msgid "Fällig am %(date)s"
 msgstr "Due on %(date)s"
 
-#: core/utils/dates.py:127
 #, python-format
 msgid "Überfällig (seit %(days)d Tag)"
 msgid_plural "Überfällig (seit %(days)d Tagen)"
 msgstr[0] "Overdue (for %(days)d day)"
 msgstr[1] "Overdue (for %(days)d days)"
 
-#: core/utils/dates.py:140 core/views/workitems.py:41
-#: templates/core/handover/index.html:20 templates/core/workitems/form.html:58
-#: templates/core/zeitstrom/index.html:53
 msgid "Heute"
 msgstr "Today"
 
-#: core/utils/dates.py:148 templates/core/workitems/form.html:59
-#: templates/core/workitems/form.html:76
 msgid "Morgen"
 msgstr "Tomorrow"
 
-#: core/utils/dates.py:156
 msgid "Übermorgen"
 msgstr "Day after tomorrow"
 
-#: core/utils/dates.py:176
 #, python-format
 msgid "Diese Woche (%(weekday)s)"
 msgstr "This week (%(weekday)s)"
 
-#: core/utils/dates.py:180
 #, python-format
 msgid "Nächste Woche (%(weekday)s)"
 msgstr "Next week (%(weekday)s)"
 
-#: core/utils/dates.py:184
 #, python-format
 msgid "Dieser Monat (%(date)s)"
 msgstr "This month (%(date)s)"
 
-#: core/utils/dates.py:190
 #, python-format
 msgid "Nächster Monat (%(date)s)"
 msgstr "Next month (%(date)s)"
 
-#: core/views/auth.py:71
 msgid ""
 "Ihr Konto ist nach mehreren fehlgeschlagenen Versuchen temporär gesperrt. "
 "Bitte später erneut versuchen oder Administration kontaktieren."
-msgstr "Your account is temporarily locked after multiple failed attempts. Please try again later or contact administration."
+msgstr ""
+"Your account is temporarily locked after multiple failed attempts. Please "
+"try again later or contact administration."
 
-#: core/views/case_episodes.py:52
 msgid "Episode wurde erstellt."
 msgstr "Episode has been created."
 
-#: core/views/case_episodes.py:87
 msgid "Episode wurde aktualisiert."
 msgstr "Episode has been updated."
 
-#: core/views/case_episodes.py:105
 msgid "Episode wurde abgeschlossen."
 msgstr "Episode has been completed."
 
-#: core/views/cases.py:140
 msgid "Fall wurde erstellt."
 msgstr "Case has been created."
 
-#: core/views/cases.py:216
 msgid "Fall wurde aktualisiert."
 msgstr "Case has been updated."
 
-#: core/views/cases.py:239
 msgid "Fall wurde geschlossen."
 msgstr "Case has been closed."
 
-#: core/views/cases.py:254
 msgid "Fall wurde wiedereröffnet."
 msgstr "Case has been reopened."
 
-#: core/views/cases.py:270
 msgid "Kein Ereignis ausgewählt."
 msgstr "No event selected."
 
-#: core/views/clients.py:158
-#| msgid "Klient wurde erstellt."
-msgid "Klientel wurde erstellt."
-msgstr "Client has been created."
+#, fuzzy
+#| msgid "Löschantrag wurde abgelehnt."
+msgid "Person wurde angelegt."
+msgstr "Deletion request has been rejected."
 
-#: core/views/clients.py:192
-#| msgid "Klient wurde aktualisiert."
-msgid "Klientel wurde aktualisiert."
-msgstr "Client has been updated."
+#, fuzzy
+#| msgid "Episode wurde aktualisiert."
+msgid "Person wurde aktualisiert."
+msgstr "Episode has been updated."
 
-#: core/views/event_deletion.py:87
 msgid "Sie können Ihren eigenen Löschantrag nicht genehmigen."
 msgstr "You cannot approve your own deletion request."
 
-#: core/views/event_deletion.py:93
 msgid "Löschantrag wurde genehmigt."
 msgstr "Deletion request has been approved."
 
-#: core/views/event_deletion.py:96
 msgid "Löschantrag wurde abgelehnt."
 msgstr "Deletion request has been rejected."
 
-#: core/views/events.py:247
 msgid "Kontakt wurde dokumentiert."
 msgstr "Contact has been documented."
 
-#: core/views/events.py:427
 msgid "Ereignis wurde aktualisiert."
 msgstr "Event has been updated."
 
-#: core/views/events.py:467
 msgid "Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."
 msgstr "Deletion request has been submitted and must be approved by a manager."
 
-#: core/views/events.py:470
 msgid "Ereignis wurde gelöscht."
 msgstr "Event has been deleted."
 
-#: core/views/mfa.py:119
 msgid "Zwei-Faktor-Authentifizierung aktiviert."
 msgstr "Two-factor authentication enabled."
 
-#: core/views/mfa.py:121 core/views/mfa.py:177
 msgid "Der Code ist ungültig. Bitte erneut versuchen."
 msgstr "The code is invalid. Please try again."
 
-#: core/views/mfa.py:214
 msgid ""
 "Die Codes werden nur einmal angezeigt. Neue Codes lassen sich in den 2FA-"
 "Einstellungen generieren."
-msgstr "The codes are shown only once. New codes can be generated in the 2FA settings."
+msgstr ""
+"The codes are shown only once. New codes can be generated in the 2FA "
+"settings."
 
-#: core/views/mfa.py:236
 msgid "TOTP-Code fehlt oder ist ungültig."
 msgstr "TOTP code is missing or invalid."
 
-#: core/views/mfa.py:265
 msgid "Zwei-Faktor-Authentifizierung ist für dein Konto verpflichtend."
 msgstr "Two-factor authentication is required for your account."
 
-#: core/views/mfa.py:281
 msgid "Zwei-Faktor-Authentifizierung deaktiviert."
 msgstr "Two-factor authentication disabled."
 
-#: core/views/retention.py:77
-#| msgid "date_from und date_to erforderlich"
 msgid "Begründung ist erforderlich."
 msgstr "date_from and date_to required"
 
-#: core/views/retention.py:85
-#| msgid "Ungültiger Status"
 msgid "Ungültiges Datum."
 msgstr "Invalid status"
 
-#: core/views/retention.py:136
-#| msgid "Kein Ereignis ausgewählt."
 msgid "Keine Vorschläge ausgewählt."
 msgstr "No event selected."
 
-#: core/views/retention.py:140
-#| msgid "Keine Einträge gefunden."
 msgid "Keine gültigen Vorschläge gefunden."
 msgstr "No entries found."
 
-#: core/views/statistics.py:174 core/views/statistics.py:203
-#: core/views/statistics.py:235
 msgid "date_from und date_to erforderlich"
 msgstr "date_from and date_to required"
 
-#: core/views/workitem_actions.py:38 core/views/workitem_bulk.py:96
+#, fuzzy
+#| msgid "Passwort-Reset angefordert"
+msgid "Passwort ist nicht korrekt."
+msgstr "Password changed"
+
 msgid "Ungültiger Status"
 msgstr "Invalid status"
 
-#: core/views/workitem_actions.py:51 core/views/workitem_actions.py:138
-#: core/views/workitem_actions.py:155
 msgid "Keine Berechtigung für diese Aufgabe."
 msgstr "No permission for this task."
 
-#: core/views/workitem_actions.py:60
 msgid "Status aktualisiert."
 msgstr "Status updated."
 
-#: core/views/workitem_actions.py:109
 msgid "Aufgabe wurde erstellt."
 msgstr "Task has been created."
 
-#: core/views/workitem_actions.py:178
 msgid "Aufgabe wurde aktualisiert."
 msgstr "Task has been updated."
 
-#: core/views/workitem_bulk.py:61
-#| msgid "Kein Ereignis ausgewählt."
 msgid "Keine Aufgaben ausgewählt."
 msgstr "No event selected."
 
-#: core/views/workitem_bulk.py:65
-#| msgid "Keine Klienten gefunden"
 msgid "Keine gültigen Aufgaben gefunden."
 msgstr "No clients found"
 
-#: core/views/workitem_bulk.py:73
-#| msgid "Keine Berechtigung für diese Aufgabe."
 msgid "Keine Berechtigung für ausgewählte Aufgaben."
 msgstr "No permission for this task."
 
-#: core/views/workitem_bulk.py:80
-#| msgid "Aufgabe wurde aktualisiert."
+#, fuzzy, python-format
+#| msgid "%(count)d Aufgaben aktualisiert."
 msgid "%(count)d Aufgaben aktualisiert."
 msgstr "Task has been updated."
 
-#: core/views/workitem_bulk.py:106
-#| msgid "Ungültiger Status"
 msgid "Ungültige Priorität"
 msgstr "Invalid status"
 
-#: core/views/workitem_bulk.py:123
 msgid "Unbekannte Benutzerin/Benutzer"
 msgstr "Unknown user"
 
-#: core/views/workitems.py:40
 msgid "Überfällig"
 msgstr "Overdue"
 
-#: core/views/workitems.py:42
 msgid "Diese Woche"
 msgstr "This week"
 
-#: core/views/workitems.py:43
 msgid "Ohne Frist"
 msgstr "No deadline"
 
-#: core/views/zeitstrom.py:119
-#: templates/components/_time_filter_dropdown.html:15
-#: templates/core/workitems/inbox.html:29
-#: templates/core/workitems/inbox.html:44
-#: templates/core/workitems/inbox.html:60
-#: templates/core/workitems/inbox.html:75
 msgid "Alle"
 msgstr "All"
 
-#: core/views/zeitstrom.py:120 templates/core/cases/detail.html:121
-#: templates/core/export/report_pdf.html:101
-#: templates/core/handover/partials/_stats_grid.html:7
-#: templates/core/search/partials/global_results.html:20
-#: templates/core/zeitstrom/index.html:71
 msgid "Kontakte"
 msgstr "Contacts"
 
-#: core/views/zeitstrom.py:122 templates/base.html:150 templates/base.html:275
-#: templates/core/clients/detail.html:184
-#: templates/core/clients/offline_detail.html:116
-#: templates/core/workitems/inbox.html:4 templates/core/workitems/inbox.html:9
 msgid "Aufgaben"
 msgstr "Tasks"
 
-#: core/views/zeitstrom.py:123
 msgid "Hausverbote"
 msgstr "Facility bans"
 
-#: templates/403.html:4 templates/403.html:10
 msgid "Zugriff verweigert"
 msgstr "Access denied"
 
-#: templates/403.html:11
 msgid "Sie haben keine Berechtigung, diese Seite aufzurufen."
 msgstr "You do not have permission to access this page."
 
-#: templates/403.html:15 templates/404.html:15 templates/500.html:58
 msgid "Zurück zur Startseite"
 msgstr "Back to home page"
 
-#: templates/404.html:4 templates/404.html:10
+#, fuzzy
+#| msgid "Sicherheitsverletzung"
+msgid "Sicherheits-Token abgelaufen"
+msgstr "Security violation"
+
+msgid ""
+"Ihre Sitzung ist abgelaufen oder das Sicherheitstoken ist ungültig. Bitte "
+"laden Sie die Seite neu und versuchen Sie es erneut."
+msgstr ""
+
+msgid ""
+"Häufiger Grund: Sie waren längere Zeit inaktiv oder haben sich in einem "
+"anderen Tab abgemeldet."
+msgstr ""
+
+#, fuzzy
+#| msgid "Seite nicht gefunden"
+msgid "Seite neu laden"
+msgstr "Page not found"
+
+#, fuzzy
+#| msgid "Startseite"
+msgid "Zur Startseite"
+msgstr "Home"
+
 msgid "Seite nicht gefunden"
 msgstr "Page not found"
 
-#: templates/404.html:11
 msgid "Die angeforderte Seite existiert nicht oder wurde verschoben."
 msgstr "The requested page does not exist or has been moved."
 
-#: templates/500.html:7 templates/500.html:55
 msgid "Serverfehler"
 msgstr "Server error"
 
-#: templates/500.html:56
 msgid ""
 "Ein interner Fehler ist aufgetreten. Bitte versuchen Sie es später erneut."
 msgstr "An internal error occurred. Please try again later."
 
-#: templates/auth/login.html:8 templates/auth/login.html:62
-#: templates/auth/mfa_login.html:69
+msgid "Wartungsmodus"
+msgstr ""
+
+#, fuzzy
+#| msgid "Ereignis bearbeiten"
+msgid "Wartungsarbeiten"
+msgstr "Edit Event"
+
+msgid ""
+"Anlaufstelle ist gerade kurz nicht erreichbar — wir spielen ein Update ein "
+"oder fuehren eine Migration durch."
+msgstr ""
+
+msgid ""
+"Bitte in wenigen Minuten erneut versuchen. Eingegebene Daten werden vom "
+"Service-Worker zwischengespeichert und automatisch gesendet, sobald die App "
+"wieder online ist."
+msgstr ""
+
+msgid "Erneut versuchen"
+msgstr ""
+
 msgid "Anmelden"
 msgstr "Log in"
 
-#: templates/auth/login.html:30
 msgid "Open Source · DSGVO-konform · Selbst gehostet"
 msgstr "Open source · GDPR-compliant · Self-hosted"
 
-#: templates/auth/login.html:43
 msgid "Benutzername oder Passwort falsch."
 msgstr "Invalid username or password."
 
-#: templates/auth/login.html:51 templates/core/account/profile.html:18
 msgid "Benutzername"
 msgstr "Username"
 
-#: templates/auth/login.html:56
 msgid "Passwort"
 msgstr "Password"
 
-#: templates/auth/login.html:66
 msgid "Passwort vergessen?"
 msgstr "Forgot password?"
 
-#: templates/auth/login.html:76
 msgid "Als App installieren"
 msgstr "Install as app"
 
-#: templates/auth/login.html:78 templates/auth/login.html:84
 msgid "Für schnelleren Zugriff"
 msgstr "For faster access"
 
-#: templates/auth/login.html:82
 msgid ""
 "Teilen <span class=\"inline-block\">&#x2191;</span> → „Zum Home-Bildschirm\" "
 "tippen"
-msgstr "Share <span class=\"inline-block\">&#x2191;</span> → tap \"Add to Home Screen\""
-"Tap Share <span class=\"inline-block\">&#x2191;</span> → \"Add to Home "
-"Screen\""
+msgstr ""
+"Share <span class=\"inline-block\">&#x2191;</span> → tap \"Add to Home "
+"Screen\"Tap Share <span class=\"inline-block\">&#x2191;</span> → \"Add to "
+"Home Screen\""
 
-#: templates/auth/login.html:90 templates/base.html:229
 msgid "Quellcode"
 msgstr "Source code"
 
-#: templates/auth/mfa_backup_codes.html:4 templates/auth/mfa_settings.html:45
 msgid "Backup-Codes"
 msgstr "Backup codes"
 
-#: templates/auth/mfa_backup_codes.html:8
 msgid "Backup-Codes für 2FA"
 msgstr "2FA backup codes"
 
-#: templates/auth/mfa_backup_codes.html:13
 msgid "Die Codes werden nur einmal angezeigt."
 msgstr "The codes are shown only once."
 
-#: templates/auth/mfa_backup_codes.html:14
 msgid "Bewahre sie so sicher auf wie dein Passwort."
 msgstr "Store them as securely as your password."
 
-#: templates/auth/mfa_backup_codes.html:15
 msgid "Jeder Code ist nur einmal verwendbar."
 msgstr "Each code can only be used once."
 
-#: templates/auth/mfa_backup_codes.html:16
 msgid ""
 "Neue Codes kannst du später in den 2FA-Einstellungen generieren – der alte "
 "Satz wird dann ungültig."
-msgstr "You can generate new codes later in the 2FA settings — the old set will become invalid."
+msgstr ""
+"You can generate new codes later in the 2FA settings — the old set will "
+"become invalid."
 
-#: templates/auth/mfa_backup_codes.html:33
 msgid "In die Zwischenablage kopieren"
 msgstr "Copy to clipboard"
 
-#: templates/auth/mfa_backup_codes.html:39
-#| msgid "Herunterladen"
 msgid "Als Datei herunterladen"
 msgstr "Download"
 
-#: templates/auth/mfa_backup_codes.html:43
 msgid "Drucken"
 msgstr "Print"
 
-#: templates/auth/mfa_backup_codes.html:51
 msgid "Ich habe die Codes sicher gespeichert."
 msgstr "I have stored the codes safely."
 
-#: templates/auth/mfa_backup_codes.html:57
-#| msgid "Widget-Einstellungen"
 msgid "Zu den 2FA-Einstellungen"
 msgstr "Settings"
 
-#: templates/auth/mfa_login.html:9
 msgid "2FA-Code eingeben"
 msgstr "Enter 2FA code"
 
-#: templates/auth/mfa_login.html:20
 msgid "Zwei-Faktor-Code"
 msgstr "Two-factor code"
 
-#: templates/auth/mfa_login.html:32
 msgid "Gib den 6-stelligen Code aus deiner Authenticator-App ein."
 msgstr "Enter the 6-digit code from your authenticator app."
 
-#: templates/auth/mfa_login.html:35
 msgid "Gib einen deiner einmaligen Backup-Codes ein (Format xxxx-xxxx)."
 msgstr "Enter one of your single-use backup codes (format xxxx-xxxx)."
 
-#: templates/auth/mfa_login.html:44
 msgid "Code"
 msgstr "Code"
 
-#: templates/auth/mfa_login.html:56
 msgid "Backup-Code"
 msgstr "Backup code"
 
-#: templates/auth/mfa_login.html:77
 msgid "Backup-Code verwenden"
 msgstr "Use backup code"
 
-#: templates/auth/mfa_login.html:78
-#| msgid "Zurück zur Startseite"
 msgid "Zurück zur Authenticator-App"
 msgstr "Back to home page"
 
-#: templates/auth/mfa_login.html:84 templates/base.html:209
-#: templates/base.html:316
 msgid "Abmelden"
 msgstr "Log out"
 
-#: templates/auth/mfa_settings.html:4 templates/auth/mfa_settings.html:8
-#: templates/auth/mfa_setup.html:13
 msgid "Zwei-Faktor-Authentifizierung"
 msgstr "Two-factor authentication"
 
-#: templates/auth/mfa_settings.html:21
 msgid "Aktiv: Zweiter Faktor per Authenticator-App."
 msgstr "Active: second factor via authenticator app."
 
-#: templates/auth/mfa_settings.html:25
 msgid ""
 "Zwei-Faktor-Authentifizierung ist für dein Konto verpflichtend und kann "
 "nicht deaktiviert werden."
-msgstr "Two-factor authentication is mandatory for your account and cannot be disabled."
+msgstr ""
+"Two-factor authentication is mandatory for your account and cannot be "
+"disabled."
 
-#: templates/auth/mfa_settings.html:29
 msgid ""
 "Du kannst die 2FA jederzeit deaktivieren. Bei wichtigen Rollen empfehlen wir "
 "die Aktivierung."
-msgstr "You can disable 2FA at any time. We recommend keeping it active for privileged roles."
+msgstr ""
+"You can disable 2FA at any time. We recommend keeping it active for "
+"privileged roles."
 
-#: templates/auth/mfa_settings.html:38
 msgid "2FA deaktivieren"
 msgstr "Disable 2FA"
 
-#: templates/auth/mfa_settings.html:47
 msgid ""
 "Ersatz-Codes für den Fall, dass dein Authenticator-Gerät nicht verfügbar "
 "ist. Jeder Code ist einmalig."
-msgstr "Backup codes in case your authenticator device is unavailable. Each code is single-use."
+msgstr ""
+"Backup codes in case your authenticator device is unavailable. Each code is "
+"single-use."
 
-#: templates/auth/mfa_settings.html:50
 #, python-format
 msgid ""
 "\n"
 "                        Noch <strong>%(remaining)s</strong> von %(total)s "
 "Codes verfügbar.\n"
 "                    "
-msgstr "\n                        <strong>%(remaining)s</strong> of %(total)s codes remaining.\n                    "
+msgstr ""
+"\n"
+"                        <strong>%(remaining)s</strong> of %(total)s codes "
+"remaining.\n"
+"                    "
 
-#: templates/auth/mfa_settings.html:56
 msgid "Wenige Backup-Codes übrig. Am besten jetzt einen neuen Satz generieren."
 msgstr "Few backup codes left. Generate a fresh set now."
 
-#: templates/auth/mfa_settings.html:62
 msgid "Neue Backup-Codes generieren"
 msgstr "Generate new backup codes"
 
-#: templates/auth/mfa_settings.html:67
 msgid ""
 "Zur Bestätigung einen aktuellen 6-stelligen TOTP-Code eingeben. Der "
 "bisherige Satz wird sofort ungültig."
-msgstr "Enter a current 6-digit TOTP code to confirm. The previous set becomes invalid immediately."
+msgstr ""
+"Enter a current 6-digit TOTP code to confirm. The previous set becomes "
+"invalid immediately."
 
-#: templates/auth/mfa_settings.html:72
 msgid "TOTP-Code"
 msgstr "TOTP code"
 
-#: templates/auth/mfa_settings.html:81
-#| msgid "Genehmigen"
 msgid "Generieren"
 msgstr "Approve"
 
-#: templates/auth/mfa_settings.html:88
 msgid "Zwei-Faktor-Authentifizierung ist derzeit nicht aktiv."
 msgstr "Two-factor authentication is currently inactive."
 
-#: templates/auth/mfa_settings.html:92 templates/auth/mfa_setup.html:7
-#| msgid "Einrichtungen"
 msgid "2FA einrichten"
 msgstr "Facilities"
 
-#: templates/auth/mfa_settings.html:99
-#| msgid "Zurück zur Liste"
 msgid "Zurück zum Profil"
 msgstr "Back to list"
 
-#: templates/auth/mfa_setup.html:16
 msgid ""
 "Scanne den QR-Code mit deiner Authenticator-App (z.&nbsp;B. Google "
 "Authenticator, Authy oder FreeOTP) und gib den angezeigten 6-stelligen Code "
 "zur Bestätigung ein."
-msgstr "Scan the QR code with your authenticator app (e.g.&nbsp;Google Authenticator, Authy, or FreeOTP) and enter the displayed 6-digit code to confirm."
+msgstr ""
+"Scan the QR code with your authenticator app (e.g.&nbsp;Google "
+"Authenticator, Authy, or FreeOTP) and enter the displayed 6-digit code to "
+"confirm."
 
-#: templates/auth/mfa_setup.html:32
 msgid "QR-Code für Authenticator-App"
 msgstr "QR code for authenticator app"
 
-#: templates/auth/mfa_setup.html:37
 msgid "Secret manuell eingeben"
 msgstr "Enter secret manually"
 
-#: templates/auth/mfa_setup.html:45
 msgid "6-stelliger Code"
 msgstr "6-digit code"
 
-#: templates/auth/mfa_setup.html:55
 msgid "Bestätigen & aktivieren"
 msgstr "Confirm & enable"
 
-#: templates/auth/mfa_setup.html:61
 msgid "Abbrechen und abmelden"
 msgstr "Cancel and sign out"
 
-#: templates/auth/password_change.html:8 templates/auth/password_change.html:17
-#: templates/auth/password_change.html:51
-#: templates/core/account/profile.html:42
 msgid "Passwort ändern"
 msgstr "Change Password"
 
-#: templates/auth/password_change.html:35
 msgid "Aktuelles Passwort"
 msgstr "Current password"
 
-#: templates/auth/password_change.html:40
-#: templates/registration/password_reset_confirm.html:31
 msgid "Neues Passwort"
 msgstr "New password"
 
-#: templates/auth/password_change.html:45
-#: templates/registration/password_reset_confirm.html:36
 msgid "Neues Passwort bestätigen"
 msgstr "Confirm new password"
 
-#: templates/base.html:29
+#, fuzzy
+#| msgid "Zwei-Faktor-Authentifizierung deaktiviert."
+msgid "Re-Authentifizierung erforderlich"
+msgstr "Two-factor authentication disabled."
+
+msgid ""
+"Diese Aktion ist sicherheitskritisch (z.B. 2FA deaktivieren oder Daten "
+"exportieren). Bitte bestätigen Sie Ihr Passwort, um fortzufahren."
+msgstr ""
+
+msgid "Die Bestätigung gilt fuer 15 Minuten innerhalb dieser Sitzung."
+msgstr ""
+
+#, fuzzy
+#| msgid "Bestätigen & aktivieren"
+msgid "Bestätigen und fortfahren"
+msgstr "Confirm & enable"
+
+msgid "Brechen Sie ab und kehren Sie zurück:"
+msgstr ""
+
 msgid "Zum Inhalt springen"
 msgstr "Skip to content"
 
-#: templates/base.html:44
 msgid "Offline — Daten werden bei Verbindung gespeichert"
 msgstr "Offline — Data will be saved when connected"
 
-#: templates/base.html:46
-msgid "Klientel lokal verfügbar"
+#, fuzzy
+#| msgid "Klientel lokal verfügbar"
+msgid "Personen lokal verfügbar"
 msgstr "Client available locally"
 
-#: templates/base.html:49
 msgid "nicht synchronisiert"
 msgstr "not synced"
 
-#: templates/base.html:55
 msgid "Aenderung(en) werden synchronisiert..."
 msgstr "Change(s) are being synced..."
 
-#: templates/base.html:61
 msgid "Konflikt(e) — bitte auflösen"
 msgstr "Conflict(s) — please resolve"
 
-#: templates/base.html:67
 msgid "Hauptnavigation"
 msgstr "Main navigation"
 
-#: templates/base.html:82 templates/base.html:328
 msgid "Suche..."
 msgstr "Search..."
 
-#: templates/base.html:95
-#| msgid "Keine Ergebnisse"
 msgid "Suchergebnisse"
 msgstr "No results"
 
-#: templates/base.html:102 templates/base.html:104 templates/base.html:240
 msgid "Neu erstellen"
 msgstr "Create new"
 
-#: templates/base.html:110 templates/base.html:247
-#| msgid "Kontakt wurde dokumentiert."
 msgid "Kontakt dokumentieren"
 msgstr "Contact has been documented."
 
-#: templates/base.html:111
-#| msgid "Zeitstrom"
 msgid "Eintrag im Zeitstrom"
 msgstr "Timeline"
 
-#: templates/base.html:115 templates/base.html:251
-#| msgid "Klient bearbeiten"
-msgid "Klientel anlegen"
+#, fuzzy
+#| msgid "Klientel anlegen"
+msgid "Person anlegen"
 msgstr "Edit Client"
 
-#: templates/base.html:116
-#| msgid "Pseudonym eingeben..."
 msgid "Neues Pseudonym vergeben"
 msgstr "Enter pseudonym..."
 
-#: templates/base.html:119 templates/base.html:254
-#| msgid "Aufgabe wurde erstellt."
 msgid "Aufgabe erstellen"
 msgstr "Task has been created."
 
-#: templates/base.html:120
 msgid "Für Team oder Person"
 msgstr "For team or person"
 
-#: templates/base.html:123 templates/base.html:257
-#| msgid "Fall bearbeiten"
 msgid "Fall anlegen"
 msgstr "Edit Case"
 
-#: templates/base.html:124
 msgid "Längere Begleitung dokumentieren"
 msgstr "Document longer-term support"
 
-#: templates/base.html:132 templates/base.html:265
-#: templates/core/zeitstrom/index.html:4 templates/core/zeitstrom/index.html:9
 msgid "Zeitstrom"
 msgstr "Timeline"
 
-#: templates/base.html:136 templates/base.html:292
-#: templates/core/handover/index.html:4 templates/core/handover/index.html:9
 msgid "Übergabe"
 msgstr "Handover"
 
-#: templates/base.html:156 templates/base.html:296
-#: templates/core/attachments/list.html:4
-#: templates/core/attachments/list.html:8
-#| msgid "Daten"
+msgid "Personen"
+msgstr "People"
+
 msgid "Dateien"
 msgstr "Data"
 
-#: templates/base.html:161 templates/base.html:298
-#: templates/core/statistics/index.html:4
-#: templates/core/statistics/index.html:12
 msgid "Statistik"
 msgstr "Statistics"
 
-#: templates/base.html:169 templates/base.html:300
-#: templates/core/retention/dashboard.html:4
-#: templates/core/retention/dashboard.html:7
-#| msgid "Löschen"
 msgid "Löschfristen"
 msgstr "Delete"
 
-#: templates/base.html:179 templates/base.html:304
 msgid "DSGVO-Paket"
 msgstr "GDPR Package"
 
-#: templates/base.html:183 templates/base.html:305
 msgid "Administration"
 msgstr "Administration"
 
-#: templates/base.html:236
 msgid "Mobile Navigation"
 msgstr "Mobile navigation"
 
-#: templates/base.html:242
 msgid "Neu"
 msgstr "New"
 
-#: templates/base.html:282
 msgid "Mehr"
 msgstr "More"
 
-#: templates/base.html:289 templates/core/search/index.html:4
-#: templates/core/search/index.html:7
 msgid "Suche"
 msgstr "Search"
 
-#: templates/base.html:310
-#| msgid "Mein Profil"
 msgid "Profil"
 msgstr "My Profile"
 
-#: templates/components/_activity_card.html:22
-#: templates/components/_event_card.html:31
-#| msgid "Alle anzeigen"
 msgid "Details anzeigen"
 msgstr "Show all"
 
-#: templates/components/_activity_card.html:33
-#| msgid "Benutzer"
 msgid "Benutzer:"
 msgstr "User"
 
-#: templates/components/_activity_card.html:40
 msgid "Objekttyp:"
 msgstr "Object type:"
 
-#: templates/components/_activity_card.html:46
-#| msgid "Zeitpunkt"
 msgid "Zeitpunkt:"
 msgstr "Timestamp"
 
-#: templates/components/_activity_card.html:52
 msgid "Zum Objekt"
 msgstr "Go to object"
 
-#: templates/components/_confirm_modal.html:17
-#: templates/core/cases/episode_form.html:35 templates/core/cases/form.html:98
-#: templates/core/cases/form.html:100
-#: templates/core/cases/partials/goals_section.html:44
-#: templates/core/clients/form.html:42 templates/core/clients/form.html:44
-#: templates/core/events/create.html:179
-#: templates/core/events/delete_confirm.html:62
-#: templates/core/events/edit.html:97
-#: templates/core/retention/partials/proposal_card.html:84
-#: templates/core/workitems/form.html:141
 msgid "Abbrechen"
 msgstr "Cancel"
 
-#: templates/components/_event_card.html:59
-#| msgid "Keine erledigten Aufgaben."
 msgid "Keine weiteren Angaben."
 msgstr "No recently completed tasks."
 
-#: templates/components/_event_card.html:63
 msgid "Zum Eintrag"
 msgstr "Go to entry"
 
-#: templates/components/_pagination.html:6
 #, python-format
 msgid ""
 "\n"
 "        %(start)s–%(end)s von %(total)s Einträgen\n"
 "        "
-msgstr "\n        %(start)s–%(end)s of %(total)s entries\n        "
+msgstr ""
 "\n"
+"        %(start)s–%(end)s of %(total)s entries\n"
+"        \n"
 "        %(start)s–%(end)s of %(total)s entries\n"
 "        "
 
-#: templates/components/_workitem_row.html:15
-#: templates/components/_workitem_row.html:49
-#| msgid "Feldvorlage"
 msgid "Wiedervorlage"
 msgstr "Field template"
 
-#: templates/components/_workitem_row.html:15
-#: templates/components/_workitem_row.html:49
 msgid "WV"
 msgstr "FU"
 
-#: templates/components/_workitem_row.html:18
-#: templates/components/_workitem_row.html:52
-#: templates/core/workitems/detail.html:92
-#| msgid "Wiedereröffnen"
 msgid "Wiederkehrend"
 msgstr "Reopen"
 
-#: templates/components/_workitem_row.html:36
-#: templates/core/retention/partials/proposal_card.html:10
-#| msgid "Auswahl"
 msgid "Auswählen"
 msgstr "Selection"
 
-#: templates/components/_workitem_row.html:68
 msgid "Zugewiesen:"
 msgstr "Assigned:"
 
-#: templates/components/_workitem_row.html:85
-#: templates/core/workitems/detail.html:37
 msgid "Annehmen"
 msgstr "Accept"
 
-#: templates/components/_workitem_row.html:92
-#: templates/core/workitems/detail.html:45
 msgid "Verwerfen"
 msgstr "Discard"
 
-#: templates/components/_workitem_row.html:107
-#: templates/core/audit/list.html:62 templates/core/workitems/detail.html:62
 msgid "Zurücksetzen"
 msgstr "Reset"
 
-#: templates/core/account/partials/_recent_clients_widget.html:17
-#| msgid "Noch keine besuchten Klienten"
-msgid "Noch keine besuchten Klientel"
+#, fuzzy
+#| msgid "Noch keine besuchten Klientel"
+msgid "Noch keine zuletzt besuchten Personen"
 msgstr "No recently visited clients"
 
-#: templates/core/account/partials/_stats_widget.html:4
 msgid "Kontakte heute"
 msgstr "Contacts today"
 
-#: templates/core/account/partials/_stats_widget.html:8
 msgid "Offene Fälle"
 msgstr "Open Cases"
 
-#: templates/core/account/partials/_stats_widget.html:12
 msgid "Meine Aufgaben"
 msgstr "My Tasks"
 
-#: templates/core/account/partials/_stats_widget.html:16
 msgid "Aufgaben gesamt"
 msgstr "Total tasks"
 
-#: templates/core/account/partials/_tasks_widget.html:28
-#: templates/core/clients/detail.html:192
-#: templates/core/clients/offline_detail.html:118
-#: templates/core/workitems/partials/inbox_content.html:16
-#: templates/core/zeitstrom/index.html:122
 msgid "Keine offenen Aufgaben"
 msgstr "No open tasks"
 
-#: templates/core/account/profile.html:4 templates/core/account/profile.html:8
 msgid "Mein Profil"
 msgstr "My Profile"
 
-#: templates/core/account/profile.html:36
 msgid "Sprache"
 msgstr "Language"
 
-#: templates/core/account/profile.html:46
-#| msgid "Verwaltung"
 msgid "2FA verwalten"
 msgstr "Administration"
 
-#: templates/core/account/profile.html:60
-#| msgid "Letzte Klienten"
-msgid "Letzte Klientel"
-msgstr "Recent Clients"
+msgid "Zuletzt besuchte Personen"
+msgstr "Recently visited people"
 
-#: templates/core/account/profile.html:61
 msgid "Alle anzeigen"
 msgstr "Show all"
 
-#: templates/core/account/profile.html:69
 msgid "Letzte Ereignisse"
 msgstr "Recent Events"
 
-#: templates/core/account/profile.html:85
 msgid "Keine Ereignisse vorhanden."
 msgstr "No events available."
 
-#: templates/core/account/profile.html:91 templates/core/handover/index.html:69
-#: templates/core/zeitstrom/index.html:114
 msgid "Offene Aufgaben"
 msgstr "Open Tasks"
 
-#: templates/core/account/profile.html:106
 msgid "Keine offenen Aufgaben."
 msgstr "No open tasks."
 
-#: templates/core/account/profile.html:112
-#: templates/core/workitems/partials/inbox_content.html:39
 msgid "Kürzlich erledigt"
 msgstr "Recently completed"
 
-#: templates/core/account/profile.html:127
 msgid "Keine erledigten Aufgaben."
 msgstr "No recently completed tasks."
 
-#: templates/core/attachments/list.html:14
-#| msgid "Dokumentationstypen"
 msgid "Dokumentationstyp filtern"
 msgstr "Document types"
 
-#: templates/core/attachments/list.html:20
-#: templates/core/statistics/partials/dashboard_content.html:64
-#: templates/core/zeitstrom/index.html:100
 msgid "Alle Dokumentationstypen"
 msgstr "All document types"
 
-#: templates/core/attachments/list.html:28
 msgid "Klient-ID filtern..."
 msgstr "Filter client ID…"
 
-#: templates/core/attachments/partials/attachment_table.html:9
-#| msgid "Daten"
 msgid "Dateiname"
 msgstr "Data"
 
-#: templates/core/attachments/partials/attachment_table.html:10
 msgid "Größe"
 msgstr "Size"
 
-#: templates/core/attachments/partials/attachment_table.html:13
 msgid "Klient"
 msgstr "Client"
 
-#: templates/core/attachments/partials/attachment_table.html:35
-#: templates/core/attachments/partials/attachment_table.html:56
-#: templates/core/dsgvo/package.html:38
 msgid "Herunterladen"
 msgstr "Download"
 
-#: templates/core/attachments/partials/attachment_table.html:71
-#| msgid "Keine Klienten gefunden"
 msgid "Keine Dateien gefunden"
 msgstr "No clients found"
 
-#: templates/core/audit/detail.html:4 templates/core/audit/detail.html:9
 msgid "Audit-Log Detail"
 msgstr "Audit Log Detail"
 
-#: templates/core/audit/detail.html:55
 msgid "Zurück zur Liste"
 msgstr "Back to list"
 
-#: templates/core/audit/list.html:21
 msgid "Alle Aktionen"
 msgstr "All actions"
 
-#: templates/core/audit/list.html:33
 msgid "Alle Benutzer"
 msgstr "All users"
 
-#: templates/core/audit/list.html:42
-#: templates/core/statistics/partials/full_content.html:34
 msgid "Von"
 msgstr "From"
 
-#: templates/core/audit/list.html:49
-#: templates/core/statistics/partials/full_content.html:39
 msgid "Bis"
 msgstr "To"
 
-#: templates/core/audit/list.html:58
 msgid "Filtern"
 msgstr "Filter"
 
-#: templates/core/audit/partials/table.html:14
 msgid "IP"
 msgstr "IP"
 
-#: templates/core/audit/partials/table.html:62
 msgid "Keine Einträge gefunden."
 msgstr "No entries found."
 
-#: templates/core/cases/detail.html:35 templates/core/cases/detail.html:55
-#: templates/core/cases/partials/episode_list.html:50
-#: templates/core/cases/partials/goals_section.html:15
-#: templates/core/clients/detail.html:66 templates/core/clients/detail.html:91
-#: templates/core/events/detail.html:20 templates/core/events/detail.html:32
-#: templates/core/workitems/detail.html:12
 msgid "Bearbeiten"
 msgstr "Edit"
 
-#: templates/core/cases/detail.html:41 templates/core/cases/detail.html:69
 msgid "Schließen"
 msgstr "Close"
 
-#: templates/core/cases/detail.html:48 templates/core/cases/detail.html:76
 msgid "Wiedereröffnen"
 msgstr "Reopen"
 
-#: templates/core/cases/detail.html:60 templates/core/clients/detail.html:96
-#: templates/core/events/detail.html:38
-#| msgid "Alle Aktionen"
 msgid "Weitere Aktionen"
 msgstr "All actions"
 
-#: templates/core/cases/episode_form.html:4
-#: templates/core/cases/episode_form.html:8
 msgid "Episode bearbeiten"
 msgstr "Edit Episode"
 
-#: templates/core/cases/episode_form.html:4
-#: templates/core/cases/episode_form.html:8
-#: templates/core/cases/partials/episode_list.html:9
 msgid "Neue Episode"
 msgstr "New Episode"
 
-#: templates/core/cases/episode_form.html:33 templates/core/cases/form.html:95
-#: templates/core/cases/partials/goals_section.html:41
-#: templates/core/clients/form.html:39 templates/core/events/create.html:177
-#: templates/core/workitems/form.html:139
 msgid "Speichern"
 msgstr "Save"
 
-#: templates/core/cases/episode_form.html:33
 msgid "Episode erstellen"
 msgstr "Create Episode"
 
-#: templates/core/cases/form.html:4 templates/core/cases/form.html:8
 msgid "Fall bearbeiten"
 msgstr "Edit Case"
 
-#: templates/core/cases/form.html:4 templates/core/cases/form.html:8
-#: templates/core/cases/list.html:13 templates/core/clients/detail.html:218
 msgid "Neuer Fall"
 msgstr "New Case"
 
-#: templates/core/cases/form.html:42 templates/core/events/create.html:109
-#: templates/core/workitems/form.html:109
+msgid "Person"
+msgstr "Person"
+
 msgid "Pseudonym eingeben..."
 msgstr "Enter pseudonym..."
 
-#: templates/core/cases/form.html:43 templates/core/events/create.html:110
-#| msgid "Klient suchen"
-msgid "Klientel suchen"
-msgstr "Search client"
+#, fuzzy
+#| msgid "Pseudonym suchen..."
+msgid "Person suchen"
+msgstr "Search pseudonym..."
 
-#: templates/core/cases/form.html:95
 msgid "Fall erstellen"
 msgstr "Create Case"
 
-#: templates/core/cases/list.html:25
 msgid "Titel suchen..."
 msgstr "Search title..."
 
-#: templates/core/cases/list.html:33
 msgid "Status filtern"
 msgstr "Filter by status"
 
-#: templates/core/cases/list.html:38
 msgid "Alle Status"
 msgstr "All statuses"
 
-#: templates/core/cases/partials/episode_list.html:26
 msgid "laufend"
 msgstr "ongoing"
 
-#: templates/core/cases/partials/episode_list.html:33
 msgid "abgeschlossen"
 msgstr "closed"
 
-#: templates/core/cases/partials/episode_list.html:56
 msgid "Abschließen"
 msgstr "Complete"
 
-#: templates/core/cases/partials/episode_list.html:65
 msgid "Noch keine Episoden vorhanden."
 msgstr "No episodes yet."
 
-#: templates/core/cases/partials/event_list.html:21
-#: templates/core/clients/partials/table.html:90
-#: templates/core/events/edit.html:69
 msgid "Entfernen"
 msgstr "Remove"
 
-#: templates/core/cases/partials/event_list.html:29
 msgid "Keine Kontakte zugeordnet."
 msgstr "No contacts assigned."
 
-#: templates/core/cases/partials/event_list.html:47
 msgid "Zuordnen"
 msgstr "Assign"
 
-#: templates/core/cases/partials/goals_section.html:38
 msgid "Beschreibung (optional)"
 msgstr "Description (optional)"
 
-#: templates/core/cases/partials/goals_section.html:52
 msgid "erreicht"
 msgstr "achieved"
 
-#: templates/core/cases/partials/goals_section.html:56
 msgid "offen"
 msgstr "open"
 
-#: templates/core/cases/partials/goals_section.html:71
 msgid "Nicht erreicht"
 msgstr "Not achieved"
 
-#: templates/core/cases/partials/goals_section.html:81
 msgid "Ziel erreicht"
 msgstr "Goal achieved"
 
-#: templates/core/cases/partials/goals_section.html:99
-#| msgid "Meilenstein löschen"
 msgid "Meilenstein umschalten"
 msgstr "Delete Milestone"
 
-#: templates/core/cases/partials/goals_section.html:119
 msgid "Meilenstein löschen"
 msgstr "Delete Milestone"
 
-#: templates/core/cases/partials/goals_section.html:137
 msgid "Neuer Meilenstein"
 msgstr "New Milestone"
 
-#: templates/core/cases/partials/goals_section.html:146
 msgid "Noch keine Wirkungsziele vorhanden."
 msgstr "No impact goals yet."
 
-#: templates/core/cases/partials/goals_section.html:157
 msgid "Neues Wirkungsziel"
 msgstr "New Impact Goal"
 
-#: templates/core/cases/partials/goals_section.html:160
 msgid "Hinzufügen"
 msgstr "Add"
 
-#: templates/core/cases/partials/table.html:61
 msgid "Keine Fälle gefunden"
 msgstr "No cases found"
 
-#: templates/core/clients/detail.html:37
-#: templates/core/clients/partials/table.html:39
 msgid "Lokal verfügbar"
 msgstr "Available locally"
 
-#: templates/core/clients/detail.html:51 templates/core/clients/detail.html:117
-#: templates/core/clients/partials/table.html:26
 msgid "Offline mitnehmen"
 msgstr "Take offline"
 
-#: templates/core/clients/detail.html:52 templates/core/clients/detail.html:118
-#: templates/core/clients/partials/table.html:27
 msgid "Aus Offline-Cache entfernen"
 msgstr "Remove from offline cache"
 
-#: templates/core/clients/detail.html:57 templates/core/clients/detail.html:104
-#: templates/core/workitems/form.html:4 templates/core/workitems/form.html:8
-#: templates/core/workitems/inbox.html:13
-#: templates/core/zeitstrom/index.html:17
 msgid "Neue Aufgabe"
 msgstr "New Task"
 
-#: templates/core/clients/detail.html:62 templates/core/clients/detail.html:109
-#: templates/core/events/create.html:4 templates/core/events/create.html:8
-#: templates/core/zeitstrom/index.html:13
 msgid "Neuer Kontakt"
 msgstr "New Contact"
 
-#: templates/core/clients/detail.html:73
-#: templates/core/export/client_data_pdf.html:6
 msgid "Datenauskunft"
 msgstr "Data Disclosure"
 
-#: templates/core/clients/detail.html:79 templates/core/clients/detail.html:123
 msgid "JSON-Export (Art. 20)"
 msgstr "JSON Export (Art. 20)"
 
-#: templates/core/clients/detail.html:82 templates/core/clients/detail.html:126
 msgid "PDF-Export (Art. 15)"
 msgstr "PDF Export (Art. 15)"
 
-#: templates/core/clients/detail.html:144
-#: templates/core/zeitstrom/index.html:39
 msgid "Bis:"
 msgstr "To:"
 
-#: templates/core/clients/detail.html:161
-#: templates/core/clients/offline_detail.html:57
 msgid "Kontakt-Chronik"
 msgstr "Contact Chronicle"
 
-#: templates/core/clients/detail.html:178
-#: templates/core/clients/offline_detail.html:60
 msgid "Noch keine Kontakte dokumentiert."
 msgstr "No contacts documented yet."
 
-#: templates/core/clients/detail.html:212
 msgid "Keine offenen Fälle"
 msgstr "No open cases"
 
-#: templates/core/clients/form.html:4 templates/core/clients/form.html:8
-#| msgid "Klient bearbeiten"
-msgid "Klientel bearbeiten"
-msgstr "Edit Client"
+#, fuzzy
+#| msgid "Episode bearbeiten"
+msgid "Person bearbeiten"
+msgstr "Edit Episode"
 
-#: templates/core/clients/form.html:4 templates/core/clients/form.html:8
-#: templates/core/clients/list.html:13 templates/core/zeitstrom/index.html:20
-#| msgid "Neue Klienten"
-msgid "Neues Klientel"
-msgstr "New Clients"
+#, fuzzy
+#| msgid "Neues Passwort"
+msgid "Neue Person"
+msgstr "New password"
 
-#: templates/core/clients/form.html:39
-#| msgid "Klient erstellen"
-msgid "Klientel erstellen"
-msgstr "Create Client"
-
-#: templates/core/clients/list.html:25
 msgid "Pseudonym suchen..."
 msgstr "Search pseudonym..."
 
-#: templates/core/clients/list.html:33
 msgid "Kontaktstufe filtern"
 msgstr "Filter by contact stage"
 
-#: templates/core/clients/list.html:38
 msgid "Alle Stufen"
 msgstr "All stages"
 
-#: templates/core/clients/list.html:43
 msgid "Altersgruppe filtern"
 msgstr "Filter by age group"
 
-#: templates/core/clients/list.html:48
 msgid "Alle Altersgruppen"
 msgstr "All age groups"
 
-#: templates/core/clients/offline_detail.html:4
-#: templates/core/clients/offline_detail.html:12
 msgid "Offline-Ansicht"
 msgstr "Offline view"
 
-#: templates/core/clients/offline_detail.html:15
 msgid "Synchronisiert:"
 msgstr "Synced:"
 
-#: templates/core/clients/offline_detail.html:21
 msgid "Lade Offline-Daten..."
 msgstr "Loading offline data…"
 
-#: templates/core/clients/offline_detail.html:28
+#, fuzzy
+#| msgid ""
+#| "Dieses Klientel wurde nicht für die Offline-Nutzung vorbereitet oder der "
+#| "lokale Cache ist leer."
 msgid ""
-"Dieses Klientel wurde nicht für die Offline-Nutzung vorbereitet oder der "
-"lokale Cache ist leer."
-msgstr "This client has not been prepared for offline use or the local cache is empty."
+"Diese Person wurde nicht für die Offline-Nutzung vorbereitet oder der lokale "
+"Cache ist leer."
+msgstr ""
+"This client has not been prepared for offline use or the local cache is "
+"empty."
 
-#: templates/core/clients/offline_detail.html:31
-#| msgid "Wiedereröffnen"
 msgid "Online öffnen"
 msgstr "Reopen"
 
-#: templates/core/clients/offline_detail.html:72
 msgid "Nicht synchronisiert"
 msgstr "Not synced"
 
-#: templates/core/clients/offline_detail.html:79
-#: templates/core/events/conflict_list.html:37
-#: templates/core/events/conflict_review.html:12
 msgid "Konflikt"
 msgstr "Conflict"
 
-#: templates/core/clients/offline_detail.html:103
-#| msgid "Offene Fälle"
 msgid "Keine Fälle"
 msgstr "Open Cases"
 
-#: templates/core/clients/partials/table.html:16
 msgid "Stufe"
 msgstr "Stage"
 
-#: templates/core/clients/partials/table.html:17
 msgid "Alter"
 msgstr "Age"
 
-#: templates/core/clients/partials/table.html:18
 msgid "Letzter Kontakt"
 msgstr "Last contact"
 
-#: templates/core/clients/partials/table.html:19
-#: templates/core/clients/partials/table.html:40
 msgid "Offline"
 msgstr "Offline"
 
-#: templates/core/clients/partials/table.html:89
-#| msgid "Annehmen"
 msgid "Mitnehmen"
 msgstr "Accept"
 
-#: templates/core/clients/partials/table.html:102
-#| msgid "Keine Klienten gefunden"
-msgid "Keine Klientel gefunden"
+#, fuzzy
+#| msgid "Keine Dateien gefunden"
+msgid "Keine Personen gefunden"
 msgstr "No clients found"
 
-#: templates/core/deletion_requests/list.html:21
 msgid "Prüfen"
 msgstr "Review"
 
-#: templates/core/deletion_requests/list.html:25
 msgid "Beantragt von:"
 msgstr "Requested by:"
 
-#: templates/core/deletion_requests/list.html:31
 msgid "Keine ausstehenden Löschanträge"
 msgstr "No pending deletion requests"
 
-#: templates/core/deletion_requests/list.html:48
-#: templates/core/deletion_requests/list.html:71
 msgid "Geprüft von:"
 msgstr "Reviewed by:"
 
-#: templates/core/deletion_requests/list.html:54
 msgid "Keine genehmigten Löschanträge"
 msgstr "No approved deletion requests"
 
-#: templates/core/deletion_requests/list.html:77
 msgid "Keine abgelehnten Löschanträge"
 msgstr "No rejected deletion requests"
 
-#: templates/core/dsgvo/package.html:4 templates/core/dsgvo/package.html:8
 msgid "DSGVO-Dokumentationspaket"
 msgstr "GDPR Documentation Package"
 
-#: templates/core/dsgvo/package.html:9
 msgid ""
 "Compliance-Vorlagen gemäß DSGVO, automatisch mit Ihren Einrichtungsdaten "
 "befüllt."
-msgstr "GDPR compliance templates, automatically filled with your facility's data."
-"Compliance templates per GDPR, automatically filled with your facility data."
+msgstr ""
+"GDPR compliance templates, automatically filled with your facility's "
+"data.Compliance templates per GDPR, automatically filled with your facility "
+"data."
 
-#: templates/core/dsgvo/package.html:17
 msgid ""
 "Diese Vorlagen werden automatisch mit den Daten Ihrer Einrichtung befüllt "
 "(Name, Löschfristen). Bitte prüfen und ergänzen Sie die Dokumente vor der "
 "Verwendung."
-msgstr "These templates are automatically filled with your facility's data (name, retention periods). Please review and complete the documents before use."
-"These templates are automatically filled with your facility data (name, "
+msgstr ""
+"These templates are automatically filled with your facility's data (name, "
+"retention periods). Please review and complete the documents before "
+"use.These templates are automatically filled with your facility data (name, "
 "retention periods). Please review and complete the documents before use."
 
-#: templates/core/dsgvo/package.html:25
 msgid "Dokument"
 msgstr "Document"
 
-#: templates/core/dsgvo/package.html:26
 msgid "DSGVO-Artikel"
 msgstr "GDPR Article"
 
-#: templates/core/events/conflict_list.html:4
 msgid "Konflikte"
 msgstr "Conflicts"
 
-#: templates/core/events/conflict_list.html:11
 msgid "Offline-Konflikte"
 msgstr "Offline conflicts"
 
-#: templates/core/events/conflict_list.html:13
 msgid ""
 "Ereignisse, bei denen lokale Änderungen mit dem Server abgeglichen werden "
 "müssen."
 msgstr "Events with local changes that need to be synced with the server."
 
-#: templates/core/events/conflict_list.html:19
 msgid "Lade Konflikte..."
 msgstr "Loading conflicts…"
 
-#: templates/core/events/conflict_list.html:24
 msgid "Keine ungelösten Konflikte."
 msgstr "No unresolved conflicts."
 
-#: templates/core/events/conflict_review.html:4
 msgid "Konflikt auflösen"
 msgstr "Resolve conflict"
 
-#: templates/core/events/conflict_review.html:19
 msgid "Konflikt wird geladen..."
 msgstr "Loading conflict…"
 
-#: templates/core/events/conflict_review.html:27
-#: templates/core/events/conflict_review.html:36
-#| msgid "Übersicht"
 msgid "Zur Konflikt-Übersicht"
 msgstr "Overview"
 
-#: templates/core/events/conflict_review.html:34
 msgid "Konflikt aufgelöst."
 msgstr "Conflict resolved."
 
-#: templates/core/events/conflict_review.html:45
 msgid "Feldweise Gegenüberstellung"
 msgstr "Field-by-field comparison"
 
-#: templates/core/events/conflict_review.html:46
 msgid "Vergleichen Sie Ihre lokale Version mit dem aktuellen Server-Stand."
 msgstr "Compare your local version with the current server state."
 
-#: templates/core/events/conflict_review.html:51
-#: templates/core/events/detail.html:192
 msgid "Feld"
 msgstr "Field"
 
-#: templates/core/events/conflict_review.html:52
-#| msgid "Medizinische Versorgung"
 msgid "Meine Version"
 msgstr "Medical care"
 
-#: templates/core/events/conflict_review.html:53
 msgid "Server-Version"
 msgstr "Server version"
 
-#: templates/core/events/conflict_review.html:65
 msgid "Meine"
 msgstr "Mine"
 
-#: templates/core/events/conflict_review.html:66
 msgid "Server"
 msgstr "Server"
 
-#: templates/core/events/conflict_review.html:79
-#| msgid "Meilenstein löschen"
 msgid "Meine Version behalten"
 msgstr "Delete Milestone"
 
-#: templates/core/events/conflict_review.html:84
 msgid "Server-Version übernehmen"
 msgstr "Use server version"
 
-#: templates/core/events/conflict_review.html:89
 msgid "Manuell mergen"
 msgstr "Merge manually"
 
-#: templates/core/events/create.html:21
-#| msgid "Feldvorlagen"
 msgid "Schnell-Vorlagen"
 msgstr "Field templates"
 
-#: templates/core/events/create.html:24
 #, python-format
 msgid "Vorlage angewendet: <strong>%(name)s</strong>"
 msgstr "Template applied: <strong>%(name)s</strong>"
 
-#: templates/core/events/create.html:25
-#| msgid "Entfernen"
 msgid "Vorlage entfernen"
 msgstr "Remove"
 
-#: templates/core/events/create.html:28
 msgid "Wählen Sie eine Vorlage, um Felder automatisch vorzubefüllen."
 msgstr "Choose a template to auto-fill fields."
 
-#: templates/core/events/create.html:46
 msgid "Basis-Daten"
 msgstr "Basic data"
 
-#: templates/core/events/create.html:141
-#| msgid ""
-#| "Nicht verfügbar: Dieser Dokumentationstyp erfordert eine Mindest-"
-#| "Kontaktstufe."
 msgid ""
 "Pflichtfeld: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe."
 msgstr "Not available: This document type requires a minimum contact stage."
 
-#: templates/core/events/create.html:144
-#| msgid "Klient wurde aktualisiert."
-msgid "Ohne Klientel wird der Kontakt als anonym gespeichert."
+#, fuzzy
+#| msgid "Ohne Klientel wird der Kontakt als anonym gespeichert."
+msgid "Ohne Person wird der Kontakt als anonym gespeichert."
 msgstr "Client has been updated."
 
-#: templates/core/events/create.html:161
-msgid ""
-"Optional: Kontakt einem offenen Fall des ausgewählten Klientels zuordnen."
+#, fuzzy
+#| msgid ""
+#| "Optional: Kontakt einem offenen Fall des ausgewählten Klientels zuordnen."
+msgid "Optional: Kontakt einem offenen Fall der ausgewählten Person zuordnen."
 msgstr "Optional: assign the contact to an open case of the selected client."
 
-#: templates/core/events/create.html:165
-msgid "Kein offener Fall für dieses Klientel vorhanden."
+#, fuzzy
+#| msgid "Kein offener Fall für dieses Klientel vorhanden."
+msgid "Kein offener Fall für diese Person vorhanden."
 msgstr "No open case for this client."
 
-#: templates/core/events/delete_confirm.html:4
-#: templates/core/events/delete_confirm.html:8
 msgid "Ereignis löschen"
 msgstr "Delete Event"
 
-#: templates/core/events/delete_confirm.html:13
+#, fuzzy
 #| msgid ""
-#| "Dieses Ereignis gehört zu einem qualifizierten Klienten. Es wird ein "
+#| "Dieses Ereignis gehört zu einem qualifizierten Klientel. Es wird ein "
 #| "Löschantrag erstellt, der von einer Leitung genehmigt werden muss (4-"
 #| "Augen-Prinzip)."
 msgid ""
-"Dieses Ereignis gehört zu einem qualifizierten Klientel. Es wird ein "
-"Löschantrag erstellt, der von einer Leitung genehmigt werden muss (4-Augen-"
-"Prinzip)."
-msgstr "This event belongs to a qualified client. A deletion request will be created and must be approved by a lead (four-eyes principle)."
+"Dieses Ereignis gehört zu einer Person mit qualifizierter Dokumentation. Es "
+"wird ein Löschantrag erstellt, der von einer Leitung genehmigt werden muss "
+"(4-Augen-Prinzip)."
+msgstr ""
 "This event belongs to a qualified client. A deletion request will be created "
-"that must be approved by a manager (four-eyes principle)."
+"and must be approved by a lead (four-eyes principle).This event belongs to a "
+"qualified client. A deletion request will be created that must be approved "
+"by a manager (four-eyes principle)."
 
-#: templates/core/events/delete_confirm.html:15
 msgid ""
 "Möchten Sie dieses Ereignis wirklich löschen? Diese Aktion kann nicht "
 "rückgängig gemacht werden."
-msgstr "Do you really want to delete this event? This action cannot be undone."
-"Are you sure you want to delete this event? This action cannot be undone."
+msgstr ""
+"Do you really want to delete this event? This action cannot be undone.Are "
+"you sure you want to delete this event? This action cannot be undone."
 
-#: templates/core/events/delete_confirm.html:48
 msgid "Grund für die Löschung..."
 msgstr "Reason for deletion..."
 
-#: templates/core/events/delete_confirm.html:55
 msgid "Löschantrag stellen"
 msgstr "Submit Deletion Request"
 
-#: templates/core/events/delete_confirm.html:59
 msgid "Endgültig löschen"
 msgstr "Delete permanently"
 
-#: templates/core/events/deletion_review.html:4
-#: templates/core/events/deletion_review.html:8
 msgid "Löschantrag prüfen"
 msgstr "Review Deletion Request"
 
-#: templates/core/events/deletion_review.html:18
 msgid "Beantragt am"
 msgstr "Requested on"
 
-#: templates/core/events/deletion_review.html:30
 msgid "Betroffenes Ereignis"
 msgstr "Affected event"
 
-#: templates/core/events/deletion_review.html:50
 msgid "Genehmigen"
 msgstr "Approve"
 
-#: templates/core/events/deletion_review.html:53
-#: templates/core/retention/partials/dashboard_content.html:73
 msgid "Ablehnen"
 msgstr "Reject"
 
-#: templates/core/events/detail.html:25 templates/core/events/detail.html:44
 msgid "Löschen"
 msgstr "Delete"
 
-#: templates/core/events/detail.html:95
 msgid "Erfasste Daten"
 msgstr "Recorded data"
 
-#: templates/core/events/detail.html:117
 #, python-format
 msgid "%(count)s Vorversion"
 msgid_plural "%(count)s Vorversionen"
 msgstr[0] ""
 msgstr[1] ""
 
-#: templates/core/events/detail.html:128
 msgid "ersetzt"
 msgstr "replaced"
 
-#: templates/core/events/detail.html:157
 msgid "Änderungshistorie"
 msgstr "Change History"
 
-#: templates/core/events/detail.html:171
 msgid "Ausblenden"
 msgstr "Hide"
 
-#: templates/core/events/detail.html:193
 msgid "Vorher"
 msgstr "Before"
 
-#: templates/core/events/detail.html:194
 msgid "Nachher"
 msgstr "After"
 
-#: templates/core/events/edit.html:4 templates/core/events/edit.html:8
 msgid "Ereignis bearbeiten"
 msgstr "Edit Event"
 
-#: templates/core/events/edit.html:37
-#: templates/core/events/partials/dynamic_fields.html:5
 msgid "Felder"
 msgstr "Fields"
 
-#: templates/core/events/edit.html:58
-#| msgid "Zurücksetzen"
 msgid "Ersetzen"
 msgstr "Reset"
 
-#: templates/core/events/edit.html:75
 msgid "Weitere Dateien hinzufügen (mehrere möglich):"
 msgstr "Add more files (multiple possible):"
 
-#: templates/core/events/edit.html:95
 msgid "Änderungen speichern"
 msgstr "Save changes"
 
-#: templates/core/events/edit.html:102
 msgid ""
 "Alle Felder dieses Ereignisses sind für Ihre Rolle eingeschränkt. Eine "
 "Bearbeitung ist nicht möglich."
-msgstr "All fields of this event are restricted for your role. Editing is not possible."
+msgstr ""
+"All fields of this event are restricted for your role. Editing is not "
+"possible."
 
-#: templates/core/events/edit.html:106
-#| msgid "Zurücksetzen"
 msgid "Zurück"
 msgstr "Reset"
 
-#: templates/core/export/client_data_pdf.html:21
 msgid "Datenauskunft gemäß Art. 15 DSGVO"
 msgstr "Data disclosure pursuant to Art. 15 GDPR"
 
-#: templates/core/export/client_data_pdf.html:24
 msgid ""
 "Dieses Dokument enthält alle zu Ihrer Person gespeicherten Daten gemäß Art. "
 "15 DSGVO (Auskunftsrecht) und Art. 20 DSGVO (Datenübertragbarkeit)."
-msgstr "This document contains all personal data stored about you under Art. 15 GDPR (right of access) and Art. 20 GDPR (data portability)."
-"This document contains all data stored about you pursuant to Art. 15 GDPR "
-"(right of access) and Art. 20 GDPR (data portability)."
+msgstr ""
+"This document contains all personal data stored about you under Art. 15 GDPR "
+"(right of access) and Art. 20 GDPR (data portability).This document contains "
+"all data stored about you pursuant to Art. 15 GDPR (right of access) and "
+"Art. 20 GDPR (data portability)."
 
-#: templates/core/export/client_data_pdf.html:27
 msgid "1. Stammdaten"
 msgstr "1. Basic Data"
 
-#: templates/core/export/client_data_pdf.html:32
 msgid "Ja"
 msgstr "Yes"
 
-#: templates/core/export/client_data_pdf.html:32
 msgid "Nein"
 msgstr "No"
 
-#: templates/core/export/client_data_pdf.html:37
 msgid "2. Fälle"
 msgstr "2. Cases"
 
-#: templates/core/export/client_data_pdf.html:64
 msgid "Keine Fälle vorhanden."
 msgstr "No cases available."
 
-#: templates/core/export/client_data_pdf.html:67
 msgid "3. Kontakte"
 msgstr "3. Contacts"
 
-#: templates/core/export/client_data_pdf.html:75
 msgid "Daten"
 msgstr "Data"
 
-#: templates/core/export/client_data_pdf.html:94
 msgid "Keine Kontakte vorhanden."
 msgstr "No contacts available."
 
-#: templates/core/export/client_data_pdf.html:97
 msgid "4. Änderungshistorie"
 msgstr "4. Change History"
 
-#: templates/core/export/client_data_pdf.html:118
 msgid "Keine Änderungshistorie vorhanden."
 msgstr "No change history available."
 
-#: templates/core/export/client_data_pdf.html:121
 msgid "5. Löschanträge"
 msgstr "5. Deletion Requests"
 
-#: templates/core/export/client_data_pdf.html:148
 msgid "Keine Löschanträge vorhanden."
 msgstr "No deletion requests available."
 
-#: templates/core/export/client_data_pdf.html:151
 msgid "6. Aufgaben"
 msgstr "6. Tasks"
 
-#: templates/core/export/client_data_pdf.html:161
 msgid "Fällig am"
 msgstr "Due on"
 
-#: templates/core/export/client_data_pdf.html:178
 msgid "Keine Aufgaben vorhanden."
 msgstr "No tasks available."
 
-#: templates/core/export/client_data_pdf.html:182
-#: templates/core/export/jugendamt_pdf.html:96
-#: templates/core/export/report_pdf.html:116
 #, python-format
 msgid "Erstellt am %(date)s · Anlaufstelle"
 msgstr "Generated on %(date)s · Anlaufstelle"
 
-#: templates/core/export/jugendamt_pdf.html:6
-#: templates/core/export/jugendamt_pdf.html:27
 msgid "Sachbericht an das Jugendamt"
 msgstr "Report to the Youth Welfare Office"
 
-#: templates/core/export/jugendamt_pdf.html:32
 msgid "Einrichtung:"
 msgstr "Facility:"
 
-#: templates/core/export/jugendamt_pdf.html:36
 msgid "Berichtszeitraum:"
 msgstr "Reporting period:"
 
-#: templates/core/export/jugendamt_pdf.html:42
-#: templates/core/export/report_pdf.html:27
 msgid "Zusammenfassung"
 msgstr "Summary"
 
-#: templates/core/export/jugendamt_pdf.html:43
 msgid "Gesamtkontakte (ohne Notizen/Hausverbote):"
 msgstr "Total contacts (excluding notes/bans):"
 
-#: templates/core/export/jugendamt_pdf.html:44
-#: templates/core/export/report_pdf.html:47
-#| msgid "Einzigartige Klienten:"
-msgid "Einzigartige Klientel:"
+#, fuzzy
+#| msgid "Einzigartige Klientel:"
+msgid "Einzigartige Personen:"
 msgstr "Unique clients:"
 
-#: templates/core/export/jugendamt_pdf.html:47
 msgid "Leistungen nach Kategorie"
 msgstr "Services by Category"
 
-#: templates/core/export/jugendamt_pdf.html:53
-#: templates/core/export/jugendamt_pdf.html:75
-#: templates/core/export/report_pdf.html:56
-#: templates/core/export/report_pdf.html:79
-#: templates/core/statistics/partials/dashboard_content.html:137
-#: templates/core/statistics/partials/dashboard_content.html:178
 msgid "Anzahl"
 msgstr "Count"
 
-#: templates/core/export/jugendamt_pdf.html:66
 msgid "Keine relevanten Kontakte im Berichtszeitraum."
 msgstr "No relevant contacts in the reporting period."
 
-#: templates/core/export/jugendamt_pdf.html:69
 msgid "Altersverteilung"
 msgstr "Age Distribution"
 
-#: templates/core/export/jugendamt_pdf.html:88
 msgid "Keine Altersdaten vorhanden."
 msgstr "No age data available."
 
-#: templates/core/export/jugendamt_pdf.html:92
 msgid "Ort, Datum, Unterschrift"
 msgstr "Place, date, signature"
 
-#: templates/core/export/report_pdf.html:6
-#: templates/core/export/report_pdf.html:25
 msgid "Halbjahresbericht"
 msgstr "Semi-Annual Report"
 
-#: templates/core/export/report_pdf.html:31
-#: templates/core/statistics/partials/dashboard_content.html:12
 msgid "Gesamtkontakte"
 msgstr "Total contacts"
 
-#: templates/core/export/report_pdf.html:49
-#: templates/core/statistics/partials/dashboard_content.html:128
 msgid "Kontakte nach Dokumentationstyp"
 msgstr "Contacts by Document Type"
 
-#: templates/core/export/report_pdf.html:70
-#: templates/core/export/report_pdf.html:92
-#: templates/core/statistics/partials/dashboard_content.html:164
-#: templates/core/statistics/partials/dashboard_content.html:201
 msgid "Keine Daten im gewählten Zeitraum."
 msgstr "No data in the selected period."
 
-#: templates/core/export/report_pdf.html:73
-#: templates/core/statistics/partials/dashboard_content.html:170
 msgid "Kontakte nach Altersgruppe"
 msgstr "Contacts by Age Group"
 
-#: templates/core/export/report_pdf.html:96
-#| msgid "Top 5 Klienten"
-msgid "Top 5 Klientel"
+#, fuzzy
+#| msgid "Top 5 Klientel"
+msgid "Top 5 Personen"
 msgstr "Top 5 Clients"
 
-#: templates/core/handover/index.html:33
 msgid "Ganzer Tag"
 msgstr "All day"
 
-#: templates/core/handover/index.html:56
 msgid "Statistiken"
 msgstr "Statistics"
 
-#: templates/core/handover/index.html:62
-#: templates/core/handover/partials/_summary_compact.html:6
 msgid "Wichtige Ereignisse"
 msgstr "Notable Events"
 
-#: templates/core/handover/index.html:86
 msgid "Fällig:"
 msgstr "Due:"
 
-#: templates/core/handover/index.html:97
 msgid "Keine Daten für diesen Zeitraum"
 msgstr "No data for this period"
 
-#: templates/core/handover/partials/_highlights.html:43
 msgid "Keine besonderen Vorkommnisse"
 msgstr "No notable incidents"
 
-#: templates/core/handover/partials/_stats_grid.html:15
 msgid "Neue Aufgaben"
 msgstr "New Tasks"
 
-#: templates/core/handover/partials/_stats_grid.html:19
-#| msgid "Neue Klienten"
-msgid "Neue Klientel"
-msgstr "New Clients"
+#, fuzzy
+#| msgid "Neue Episode"
+msgid "Neue Personen"
+msgstr "New Episode"
 
-#: templates/core/index.html:4
 msgid "Startseite"
 msgstr "Home"
 
-#: templates/core/index.html:7
 msgid "Willkommen bei Anlaufstelle"
 msgstr "Welcome to Anlaufstelle"
 
-#: templates/core/index.html:8
 msgid "Die Aktivitätslog-Ansicht wird in Stream C implementiert."
 msgstr "The activity log view will be implemented in Stream C."
 
-#: templates/core/retention/partials/dashboard_content.html:12
-#: templates/core/retention/partials/proposal_card.html:21
-#| msgid "Abgeschlossen"
 msgid "Aufgeschoben"
 msgstr "Completed"
 
-#: templates/core/retention/partials/dashboard_content.html:24
-#| msgid "Aufbewahrungsfrist (Tage)"
 msgid "Aufbewahrungsfristen"
 msgstr "Retention period (days)"
 
-#: templates/core/retention/partials/dashboard_content.html:26
-#: templates/core/retention/partials/dashboard_content.html:27
-#: templates/core/retention/partials/dashboard_content.html:28
 msgid "Tage"
 msgstr "Days"
 
-#: templates/core/retention/partials/dashboard_content.html:40
 msgid "Massenaktionen für Löschvorschläge"
 msgstr "Bulk actions for deletion proposals"
 
-#: templates/core/retention/partials/dashboard_content.html:42
-#: templates/core/workitems/inbox.html:96
 msgid "ausgewählt"
 msgstr "selected"
 
-#: templates/core/retention/partials/dashboard_content.html:49
 msgid "Ausgewählte Vorschläge wirklich freigeben?"
 msgstr "Really release selected proposals?"
 
-#: templates/core/retention/partials/dashboard_content.html:51
-#: templates/core/retention/partials/proposal_card.html:53
 msgid "Freigeben"
 msgstr "Release"
 
-#: templates/core/retention/partials/dashboard_content.html:54
 msgid "Tage:"
 msgstr "Days:"
 
-#: templates/core/retention/partials/dashboard_content.html:57
 msgid "Tage bis zur erneuten Prüfung"
 msgstr "Days until re-review"
 
-#: templates/core/retention/partials/dashboard_content.html:63
 msgid "Ausgewählte Vorschläge zurückstellen?"
 msgstr "Defer selected proposals?"
 
-#: templates/core/retention/partials/dashboard_content.html:65
 msgid "Aufschieben"
 msgstr "Defer"
 
-#: templates/core/retention/partials/dashboard_content.html:71
 msgid "Ausgewählte Vorschläge ablehnen (keine Löschung)?"
 msgstr "Reject selected proposals (no deletion)?"
 
-#: templates/core/retention/partials/dashboard_content.html:77
-#| msgid "Auswahl"
 msgid "Auswahl aufheben"
 msgstr "Selection"
 
-#: templates/core/retention/partials/dashboard_content.html:86
 msgid "Alle auswählbaren Vorschläge markieren"
 msgstr "Mark all selectable proposals"
 
-#: templates/core/retention/partials/dashboard_content.html:100
 msgid "Keine Vorschläge in dieser Kategorie"
 msgstr "No proposals in this category"
 
-#: templates/core/retention/partials/dashboard_content.html:104
-#| msgid "Keine Löschanträge vorhanden."
 msgid "Keine Löschvorschläge vorhanden"
 msgstr "No deletion requests available."
 
-#: templates/core/retention/partials/proposal_card.html:26
-#| msgid "Ohne Frist"
 msgid "Frist:"
 msgstr "No deadline"
 
-#: templates/core/retention/partials/proposal_card.html:32
-#| msgid "Pseudonym"
 msgid "Pseudonym:"
 msgstr "Pseudonym"
 
-#: templates/core/retention/partials/proposal_card.html:35
-#| msgid "Dokument"
 msgid "Dokumenttyp:"
 msgstr "Document"
 
-#: templates/core/retention/partials/proposal_card.html:38
-#| msgid "Datum"
 msgid "Datum:"
 msgstr "Date"
 
-#: templates/core/retention/partials/proposal_card.html:51
-#| msgid "Löschung"
 msgid "Löschung freigeben?"
 msgstr "Deletion"
 
-#: templates/core/retention/partials/proposal_card.html:57
-#| msgid "Passwort setzen"
 msgid "Hold setzen"
 msgstr "Set password"
 
-#: templates/core/retention/partials/proposal_card.html:70
-#| msgid "Grund für die Löschung..."
 msgid "Grund für den Hold..."
 msgstr "Reason for deletion..."
 
-#: templates/core/retention/partials/proposal_card.html:73
 msgid "optional"
 msgstr "optional"
 
-#: templates/core/retention/partials/proposal_card.html:80
-#| msgid "Fall erstellen"
 msgid "Hold erstellen"
 msgstr "Create Case"
 
-#: templates/core/retention/partials/proposal_card.html:94
-#| msgid "Begründung"
 msgid "Begründung:"
 msgstr "Reason"
 
-#: templates/core/retention/partials/proposal_card.html:96
 msgid "Läuft ab:"
 msgstr "Expires:"
 
-#: templates/core/retention/partials/proposal_card.html:98
-#| msgid "Erstellt von"
 msgid "Erstellt von:"
 msgstr "Created by"
 
-#: templates/core/retention/partials/proposal_card.html:104
 msgid "Hold aufheben?"
 msgstr "Lift hold?"
 
-#: templates/core/retention/partials/proposal_card.html:106
 msgid "Hold aufheben"
 msgstr "Lift hold"
 
-#: templates/core/retention/partials/proposal_card.html:111
 msgid "Wird beim nächsten Lauf gelöscht"
 msgstr "Will be deleted on next run"
 
-#: templates/core/search/index.html:13
 msgid "Pseudonym oder Suchbegriff eingeben..."
 msgstr "Enter pseudonym or search term..."
 
-#: templates/core/search/index.html:14
 msgid "Suchfeld"
 msgstr "Search field"
 
-#: templates/core/search/partials/global_results.html:34
-#: templates/core/search/partials/results.html:37
-#| msgid "Pseudonym"
 msgid "Ähnliche Pseudonyme"
 msgstr "Pseudonym"
 
-#: templates/core/search/partials/global_results.html:40
 msgid "ähnlich"
 msgstr "similar"
 
-#: templates/core/search/partials/global_results.html:48
 msgid "Alle Ergebnisse anzeigen"
 msgstr "Show all results"
 
-#: templates/core/search/partials/global_results.html:54
 msgid "Keine Ergebnisse"
 msgstr "No results"
 
-#: templates/core/search/partials/results.html:38
 msgid "Tippfehler-tolerante Treffer – könnten gemeint sein."
 msgstr "Typo-tolerant matches – might be what you meant."
 
-#: templates/core/search/partials/results.html:54
 #, python-format
 msgid "Keine Ergebnisse für „%(term)s\""
 msgstr "No results for \"%(term)s\""
 
-#: templates/core/search/partials/results.html:58
-#| msgid "Suchbegriff eingeben, um Klienten und Ereignisse zu finden."
-msgid "Suchbegriff eingeben, um Klientel und Ereignisse zu finden."
+#, fuzzy
+#| msgid "Suchbegriff eingeben, um Klientel und Ereignisse zu finden."
+msgid "Suchbegriff eingeben, um Personen und Ereignisse zu finden."
 msgstr "Enter a search term to find clients and events."
 
-#: templates/core/statistics/partials/dashboard_content.html:5
 msgid "Zeitraum"
 msgstr "Period"
 
-#: templates/core/statistics/partials/dashboard_content.html:13
-#| msgid "Dokumentationstypen"
 msgid "Dokumentierte Einträge"
 msgstr "Document types"
 
-#: templates/core/statistics/partials/dashboard_content.html:18
-#| msgid "Pseudonym"
 msgid "Ohne Pseudonym"
 msgstr "Pseudonym"
 
-#: templates/core/statistics/partials/dashboard_content.html:23
-#| msgid "Pseudonym"
 msgid "Mit Pseudonym"
 msgstr "Pseudonym"
 
-#: templates/core/statistics/partials/dashboard_content.html:28
-#| msgid "Keine erledigten Aufgaben."
 msgid "Mit erweit. Angaben"
 msgstr "No recently completed tasks."
 
-#: templates/core/statistics/partials/dashboard_content.html:37
+#, fuzzy
+#| msgid ""
+#| "Approximation: Für Zeiträume über einen Monat hinaus werden Klientel über "
+#| "Monatssnapshots summiert. Klientel, die in mehreren Monaten erscheinen, "
+#| "werden mehrfach gezählt."
 msgid ""
-"Approximation: Für Zeiträume über einen Monat hinaus werden Klientel über "
-"Monatssnapshots summiert. Klientel, die in mehreren Monaten erscheinen, "
+"Approximation: Für Zeiträume über einen Monat hinaus werden Personen über "
+"Monatssnapshots summiert. Personen, die in mehreren Monaten erscheinen, "
 "werden mehrfach gezählt."
-msgstr "Approximation: for ranges beyond one month, clients are summed across monthly snapshots. Clients appearing in multiple months are counted multiple times."
+msgstr ""
+"Approximation: for ranges beyond one month, clients are summed across "
+"monthly snapshots. Clients appearing in multiple months are counted multiple "
+"times."
 
-#: templates/core/statistics/partials/dashboard_content.html:43
-#| msgid "Einzigartige Klienten"
-msgid "Einzigartige Klientel"
+#, fuzzy
+#| msgid "Einzigartige Klientel"
+msgid "Einzigartige Personen"
 msgstr "Unique clients"
 
-#: templates/core/statistics/partials/dashboard_content.html:51
-#| msgid "Top-Klient"
-msgid "Top-Klientel"
-msgstr "Top client"
+msgid "Top-Person"
+msgstr "Top person"
 
-#: templates/core/statistics/partials/dashboard_content.html:90
-#| msgid "Kontakte heute"
 msgid "Kontakte im Zeitverlauf"
 msgstr "Contacts today"
 
-#: templates/core/statistics/partials/dashboard_content.html:97
-#| msgid "Basis-Daten"
 msgid "Live-Daten"
 msgstr "Basic data"
 
-#: templates/core/statistics/partials/dashboard_content.html:101
-#| msgid "Statistik-Snapshot"
 msgid "Snapshot"
 msgstr "Statistics snapshot"
 
-#: templates/core/statistics/partials/dashboard_content.html:117
-#| msgid "Altersgruppe"
 msgid "Altersgruppen"
 msgstr "Age group"
 
-#: templates/core/statistics/partials/dashboard_content.html:211
 msgid "CSV-Export"
 msgstr "CSV export"
 
-#: templates/core/statistics/partials/dashboard_content.html:216
 msgid "PDF-Bericht"
 msgstr "PDF report"
 
-#: templates/core/statistics/partials/dashboard_content.html:221
 msgid "Jugendamt-Bericht"
 msgstr "Youth Welfare Office Report"
 
-#: templates/core/statistics/partials/full_content.html:10
 msgid "Monat"
 msgstr "Month"
 
-#: templates/core/statistics/partials/full_content.html:16
 msgid "Quartal"
 msgstr "Quarter"
 
-#: templates/core/statistics/partials/full_content.html:22
 msgid "Halbjahr"
 msgstr "Half-year"
 
-#: templates/core/statistics/partials/full_content.html:28
 msgid "Jahr"
 msgstr "Year"
 
-#: templates/core/statistics/partials/full_content.html:49
-#: templates/core/workitems/inbox.html:112
-#: templates/core/workitems/inbox.html:128
-#: templates/core/workitems/inbox.html:144
 msgid "Anwenden"
 msgstr "Apply"
 
-#: templates/core/statistics/partials/full_content.html:60
 msgid "Vorheriges Jahr"
 msgstr "Previous year"
 
-#: templates/core/statistics/partials/full_content.html:71
-#| msgid "Nächste Woche"
 msgid "Nächstes Jahr"
 msgstr "Next week"
 
-#: templates/core/workitems/detail.html:27
 msgid "Abgeschlossen am:"
 msgstr "Completed on:"
 
-#: templates/core/workitems/detail.html:88
 msgid "Keine Frist"
 msgstr "No deadline"
 
-#: templates/core/workitems/detail.html:92
-#| msgid "Wiedereröffnen"
 msgid "Wiederkehrend:"
 msgstr "Reopen"
 
-#: templates/core/workitems/detail.html:105
-#| msgid "Feldvorlage"
 msgid "Keine Wiedervorlage"
 msgstr "Field template"
 
-#: templates/core/workitems/detail.html:142
 msgid "Zurück zur Inbox"
 msgstr "Back to inbox"
 
-#: templates/core/workitems/form.html:4 templates/core/workitems/form.html:8
 msgid "Aufgabe bearbeiten"
 msgstr "Edit Task"
 
-#: templates/core/workitems/form.html:60 templates/core/workitems/form.html:77
 msgid "Nächste Woche"
 msgstr "Next week"
 
-#: templates/core/workitems/form.html:61 templates/core/workitems/form.html:78
 msgid "In 2 Wochen"
 msgstr "In 2 weeks"
 
-#: templates/core/workitems/inbox.html:59
-#| msgid "Zugewiesen:"
 msgid "Mir zugewiesen"
 msgstr "Assigned:"
 
-#: templates/core/workitems/inbox.html:67
 msgid "Fälligkeit"
 msgstr "Due date"
 
-#: templates/core/workitems/inbox.html:107
-#| msgid "Status filtern"
 msgid "Status ändern..."
 msgstr "Filter by status"
 
-#: templates/core/workitems/inbox.html:123
-#| msgid "Passwort ändern"
 msgid "Priorität ändern..."
 msgstr "Change Password"
 
-#: templates/core/workitems/inbox.html:137
 msgid "Zuweisen"
 msgstr "Assign"
 
-#: templates/core/workitems/inbox.html:139
 msgid "Zuweisung entfernen"
 msgstr "Remove assignment"
 
-#: templates/core/workitems/inbox.html:147
-#| msgid "Auswahl"
 msgid "Auswahl löschen"
 msgstr "Selection"
 
-#: templates/core/workitems/inbox.html:155
 msgid "Alle sichtbaren auswählen"
 msgstr "Select all visible"
 
-#: templates/core/workitems/partials/inbox_content.html:13
-#: templates/core/workitems/partials/inbox_content.html:30
-#: templates/core/workitems/partials/inbox_content.html:47
 #, python-format
 msgid ""
 "Weitere Einträge vorhanden — Anzeige auf %(limit)s begrenzt. Nutze Filter, "
 "um die Liste einzuschränken."
-msgstr "More entries exist — display capped at %(limit)s. Use filters to narrow the list."
+msgstr ""
+"More entries exist — display capped at %(limit)s. Use filters to narrow the "
+"list."
 
-#: templates/core/workitems/partials/inbox_content.html:33
 msgid "Keine Aufgaben in Bearbeitung"
 msgstr "No tasks in progress"
 
-#: templates/core/workitems/partials/inbox_content.html:50
 msgid "Keine kürzlich erledigten Aufgaben"
 msgstr "No recently completed tasks"
 
-#: templates/core/zeitstrom/index.html:32
 msgid "Hausverbot:"
 msgstr "Facility ban:"
 
-#: templates/core/zeitstrom/index.html:107
-#| msgid "Zeitstrom"
 msgid "Zeitstrom Feed"
 msgstr "Timeline"
 
-#: templates/core/zeitstrom/partials/feed_list.html:17
 msgid "Keine Einträge für diesen Zeitraum"
 msgstr "No entries for this period"
 
-#: templates/registration/invite_email.html:2
-#: templates/registration/password_reset_email.html:2
 msgid "Hallo"
 msgstr "Hello"
 
-#: templates/registration/invite_email.html:4
 msgid "für Sie wurde ein Konto bei Anlaufstelle angelegt."
 msgstr "an account has been created for you on Anlaufstelle."
 
-#: templates/registration/invite_email.html:6
-#| msgid "Klicken Sie auf den folgenden Link, um Ihr Passwort zurückzusetzen:"
 msgid ""
 "Bitte setzen Sie über den folgenden Link Ihr Passwort, um Ihr Konto zu "
 "aktivieren:"
 msgstr "Click the following link to reset your password:"
 
-#: templates/registration/invite_email.html:10
-#| msgid "Benutzername"
 msgid "Ihr Benutzername:"
 msgstr "Username"
 
-#: templates/registration/invite_email.html:12
 msgid ""
 "Der Link ist aus Sicherheitsgründen zeitlich begrenzt gültig. Falls der Link "
 "abgelaufen ist, kann ein Administrator eine neue Einladung versenden."
-msgstr "For security reasons the link is valid only for a limited time. If the link has expired, an administrator can send a new invitation."
+msgstr ""
+"For security reasons the link is valid only for a limited time. If the link "
+"has expired, an administrator can send a new invitation."
 
-#: templates/registration/invite_email.html:14
 msgid ""
 "Falls Sie diese E-Mail unerwartet erhalten haben, können Sie sie ignorieren "
 "— das Konto bleibt ohne gesetztes Passwort unzugänglich."
-msgstr "If you received this email unexpectedly, you can ignore it — the account remains inaccessible without a set password."
+msgstr ""
+"If you received this email unexpectedly, you can ignore it — the account "
+"remains inaccessible without a set password."
 
-#: templates/registration/invite_email.html:16
-#: templates/registration/password_reset_email.html:12
 msgid "Mit freundlichen Grüßen"
 msgstr "Kind regards"
 
-#: templates/registration/invite_email.html:17
-#: templates/registration/password_reset_email.html:13
 msgid "Ihr Anlaufstelle-Team"
 msgstr "Your Anlaufstelle Team"
 
-#: templates/registration/invite_subject.txt:1
 msgid "Einladung zu Anlaufstelle — Passwort setzen"
 msgstr "Invitation to Anlaufstelle — set your password"
 
-#: templates/registration/password_reset_complete.html:7
-#: templates/registration/password_reset_complete.html:12
 msgid "Passwort geändert"
 msgstr "Password changed"
 
-#: templates/registration/password_reset_complete.html:15
 msgid ""
 "Ihr Passwort wurde erfolgreich geändert. Sie können sich jetzt mit Ihrem "
 "neuen Passwort anmelden."
-msgstr "Your password has been changed successfully. You can now sign in with your new password."
-"Your password has been changed successfully. You can now log in with your "
-"new password."
+msgstr ""
+"Your password has been changed successfully. You can now sign in with your "
+"new password.Your password has been changed successfully. You can now log in "
+"with your new password."
 
-#: templates/registration/password_reset_complete.html:21
 msgid "Zur Anmeldung"
 msgstr "Go to login"
 
-#: templates/registration/password_reset_confirm.html:7
-#: templates/registration/password_reset_confirm.html:12
 msgid "Neues Passwort setzen"
 msgstr "Set new password"
 
-#: templates/registration/password_reset_confirm.html:42
 msgid "Passwort setzen"
 msgstr "Set password"
 
-#: templates/registration/password_reset_confirm.html:47
 msgid ""
 "Der Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen. Bitte "
 "fordern Sie einen neuen Link an."
-msgstr "The password reset link is invalid or expired. Please request a new link."
-"The password reset link is invalid or has expired. Please request a new link."
+msgstr ""
+"The password reset link is invalid or expired. Please request a new link.The "
+"password reset link is invalid or has expired. Please request a new link."
 
-#: templates/registration/password_reset_confirm.html:51
 msgid "Neuen Link anfordern"
 msgstr "Request new link"
 
-#: templates/registration/password_reset_done.html:7
-#: templates/registration/password_reset_done.html:12
 msgid "E-Mail gesendet"
 msgstr "Email sent"
 
-#: templates/registration/password_reset_done.html:15
 msgid ""
 "Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde eine Nachricht "
 "mit einem Link zum Zurücksetzen des Passworts gesendet."
-msgstr "If an account with this email address exists, a message with a password reset link has been sent."
+msgstr ""
 "If an account with this email address exists, a message with a password "
-"reset link has been sent."
+"reset link has been sent.If an account with this email address exists, a "
+"message with a password reset link has been sent."
 
-#: templates/registration/password_reset_done.html:18
 msgid "Bitte prüfen Sie Ihren Posteingang und ggf. Ihren Spam-Ordner."
 msgstr "Please check your inbox and spam folder."
 
-#: templates/registration/password_reset_done.html:23
-#: templates/registration/password_reset_form.html:46
 msgid "Zurück zur Anmeldung"
 msgstr "Back to login"
 
-#: templates/registration/password_reset_email.html:4
 msgid ""
 "Sie erhalten diese E-Mail, weil jemand das Zurücksetzen des Passworts für "
 "Ihr Konto bei Anlaufstelle angefordert hat."
-msgstr "You are receiving this email because someone requested a password reset for your Anlaufstelle account."
-"You are receiving this email because someone has requested a password reset "
-"for your account."
+msgstr ""
+"You are receiving this email because someone requested a password reset for "
+"your Anlaufstelle account.You are receiving this email because someone has "
+"requested a password reset for your account."
 
-#: templates/registration/password_reset_email.html:6
 msgid "Klicken Sie auf den folgenden Link, um Ihr Passwort zurückzusetzen:"
 msgstr "Click the following link to reset your password:"
 
-#: templates/registration/password_reset_email.html:10
 msgid ""
 "Falls Sie diese Anforderung nicht gestellt haben, können Sie diese E-Mail "
 "ignorieren."
 msgstr "If you did not make this request, you can ignore this email."
 
-#: templates/registration/password_reset_form.html:7
-#: templates/registration/password_reset_form.html:12
 msgid "Passwort zurücksetzen"
 msgstr "Reset password"
 
-#: templates/registration/password_reset_form.html:15
 msgid ""
 "Geben Sie Ihre E-Mail-Adresse ein. Sie erhalten einen Link zum Zurücksetzen "
 "Ihres Passworts."
-msgstr "Enter your email address. You will receive a link to reset your password."
-"Enter your email address. You will receive a link to reset your password."
+msgstr ""
+"Enter your email address. You will receive a link to reset your "
+"password.Enter your email address. You will receive a link to reset your "
+"password."
 
-#: templates/registration/password_reset_form.html:34
 msgid "E-Mail-Adresse"
 msgstr "Email address"
 
-#: templates/registration/password_reset_form.html:40
 msgid "Link senden"
 msgstr "Send link"

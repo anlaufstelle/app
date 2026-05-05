@@ -25,7 +25,7 @@
     <template x-if="showUnavailable">
         <div class="bg-yellow-50 border border-yellow-200 rounded-[10px] p-4" data-testid="offline-not-available">
             <p class="text-sm text-yellow-900">
-                {% trans "Dieses Klientel wurde nicht für die Offline-Nutzung vorbereitet oder der lokale Cache ist leer." %}
+                {% trans "Diese Person wurde nicht für die Offline-Nutzung vorbereitet oder der lokale Cache ist leer." %}
             </p>
             <a href="/clients/{{ client_pk }}/" class="mt-2 inline-flex items-center text-sm text-accent hover:underline">
                 {% trans "Online öffnen" %}

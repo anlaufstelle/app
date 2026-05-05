@@ -34,7 +34,7 @@ class ClientListView(AssistantOrAboveRequiredMixin, View):
 
     def get(self, request):
         facility = request.current_facility
-        qs = Client.objects.for_facility(facility).filter(is_active=True)
+        qs = Client.objects.for_facility(facility).filter(is_active=True, is_deleted=False)
 
         q = request.GET.get("q", "").strip()
         if q:
@@ -80,7 +80,9 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
 
     def get(self, request, pk):
         facility = request.current_facility
-        client = get_object_or_404(Client, pk=pk, facility=facility)
+        # Soft-deletete Personen werden in der Detail-View nicht ausgespielt;
+        # Admins kommen ueber die Papierkorb-Ansicht (#626) an den Datensatz.
+        client = get_object_or_404(Client, pk=pk, facility=facility, is_deleted=False)
         track_client_visit(request.user, client, facility)
 
         events = (
@@ -156,7 +158,7 @@ class ClientCreateView(StaffRequiredMixin, View):
                 age_cluster=form.cleaned_data["age_cluster"],
                 notes=form.cleaned_data["notes"],
             )
-            messages.success(request, _("Klientel wurde erstellt."))
+            messages.success(request, _("Person wurde angelegt."))
             return redirect("core:client_detail", pk=client.pk)
         return render(request, "core/clients/form.html", {"form": form, "is_edit": False})
 
@@ -190,7 +192,7 @@ class ClientUpdateView(StaffRequiredMixin, View):
             except ValidationError as e:
                 messages.error(request, e.message if hasattr(e, "message") else str(e))
                 return redirect("core:client_update", pk=client.pk)
-            messages.success(request, _("Klientel wurde aktualisiert."))
+            messages.success(request, _("Person wurde aktualisiert."))
             return redirect("core:client_detail", pk=client.pk)
         return render(request, "core/clients/form.html", {"form": form, "client": client, "is_edit": True})
 

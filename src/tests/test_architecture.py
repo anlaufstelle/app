@@ -127,6 +127,46 @@ class TestEventEncryptionBypassGuard:
         )
 
 
+class TestServiceLayerDirectionGuard:
+    """Models dürfen nicht modul-weit aus ``core.services`` importieren.
+
+    Schichtregel aus [`CLAUDE.md`](https://github.com/tobiasnix/anlaufstelle/blob/main/CLAUDE.md):
+    Business-Logik gehört in ``services/``, nicht in Models. Modul-Level-
+    Imports von Services in Models drehen die Schicht-Richtung um und
+    schaffen zirkuläre Import-Risiken.
+
+    Function-local Imports (innerhalb von Methoden) sind erlaubt und
+    notwendig, um Zirkular-Imports zu vermeiden — z. B.
+    [`Client.anonymize()`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/client.py)
+    delegiert an ``services/clients.py:anonymize_client``.
+
+    Refs #743 (Audit-Befund: ``Client.anonymize`` durchbrach Aggregat-Grenzen).
+    """
+
+    _MODELS_DIR = Path("src/core/models")
+    # Top-of-file region: alles bis zur ersten ``class ``/``def `` Zeile.
+    _SERVICE_IMPORT = re.compile(r"^\s*(from core\.services|import core\.services)", re.MULTILINE)
+
+    def test_no_module_level_service_imports_in_models(self):
+        violations = []
+        for py_file in self._MODELS_DIR.glob("*.py"):
+            if py_file.name == "__init__.py":
+                continue
+            source = py_file.read_text()
+            # Truncate at first top-level class/def to ignore function-local imports.
+            top_match = re.search(r"^(class|def) ", source, re.MULTILINE)
+            top_region = source[: top_match.start()] if top_match else source
+            if self._SERVICE_IMPORT.search(top_region):
+                violations.append(py_file.name)
+        assert not violations, (
+            "Diese Model-Dateien importieren ``core.services`` auf Modul-Ebene. "
+            "Das verstößt gegen die Schichtregel (Models ⟵ Services, nicht "
+            "umgekehrt). Imports in Methoden verschieben oder Logik in den "
+            "Service-Layer ziehen.\n"
+            f"Betroffen: {violations}"
+        )
+
+
 class TestNoInlineScriptBlocksGuard:
     """Templates dürfen keine Inline-``<script>``-Blöcke enthalten.
 

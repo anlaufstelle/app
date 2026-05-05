@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Papierkorb — Personen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl">
+    <h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Papierkorb — Personen" %}</h1>
+    <p class="text-sm text-ink-muted mb-6">
+        {% trans "Soft-deletete Personen. Nach Ablauf der Aufbewahrungsfrist (Settings.client_trash_days) anonymisiert enforce_retention diese automatisch." %}
+    </p>
+
+    {% if clients %}
+        <table class="w-full text-sm border border-subtle rounded-[10px] overflow-hidden">
+            <thead class="bg-canvas">
+                <tr class="text-left">
+                    <th class="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Pseudonym" %}</th>
+                    <th class="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Gelöscht am" %}</th>
+                    <th class="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Gelöscht von" %}</th>
+                    <th class="px-3 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktion" %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for client in clients %}
+                <tr class="border-t border-subtle">
+                    <td class="px-3 py-2 font-medium">{{ client.pseudonym }}</td>
+                    <td class="px-3 py-2">{{ client.deleted_at|date:"d.m.Y H:i" }}</td>
+                    <td class="px-3 py-2">{{ client.deleted_by.display_name|default:client.deleted_by.username|default:"–" }}</td>
+                    <td class="px-3 py-2 text-right">
+                        <form method="post" action="{% url 'core:client_restore' pk=client.pk %}" class="inline">
+                            {% csrf_token %}
+                            <button type="submit" class="text-accent text-sm font-medium hover:underline">
+                                {% trans "Wiederherstellen" %}
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% else %}
+        <p class="text-sm text-ink-muted italic">{% trans "Papierkorb ist leer." %}</p>
+    {% endif %}
+</div>
+{% endblock %}

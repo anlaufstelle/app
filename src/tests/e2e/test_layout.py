@@ -20,10 +20,10 @@ class TestUnifiedLayout:
         page = authenticated_page
         page.set_viewport_size({"width": 1280, "height": 800})
         page.goto(f"{base_url}/clients/")
-        assert page.locator("h1:has-text('Klientel')").is_visible()
-        # Klientel-Liste seit Refs #643 als CSS-Grid statt <table>; bei 1280px greift sm:grid.
+        assert page.locator("h1:has-text('Personen')").is_visible()
+        # Personen-Liste seit Refs #643 als CSS-Grid statt <table>; bei 1280px greift sm:grid.
         assert page.locator(".client-list").is_visible()
-        # Mindestens ein Klientel-Row als Link
+        # Mindestens eine Person als Link
         assert page.locator(".client-list a[href^='/clients/']").first.is_visible()
 
     def test_desktop_statistics_visible(self, authenticated_page, base_url):
@@ -44,8 +44,8 @@ class TestUnifiedLayout:
         page.set_viewport_size({"width": 375, "height": 812})
         page.goto(f"{base_url}/clients/")
         assert page.locator("main#main-content h1").is_visible()
-        # Mobile card layout: zumindest ein Klientel-Detail-Link (UUID-href, nicht "/clients/new/")
-        # Der "Neues Klientel"-Button ist auf Mobile via hidden md:block versteckt.
+        # Mobile card layout: zumindest ein Personen-Detail-Link (UUID-href, nicht "/clients/new/")
+        # Der "Neue Person"-Button ist auf Mobile via hidden md:block versteckt.
         assert page.locator(".client-list a[href^='/clients/']").first.is_visible()
 
     def test_mobile_statistics_visible(self, authenticated_page, base_url):

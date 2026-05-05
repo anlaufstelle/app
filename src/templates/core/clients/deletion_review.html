@@ -5,7 +5,7 @@
 
 {% block content %}
 <div class="max-w-lg">
-    <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Löschantrag prüfen" %}</h1>
+    <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Person-Löschantrag prüfen" %}</h1>
 
     {# Antrag-Info #}
     <div class="bg-surface border border-subtle rounded-[10px] p-4 mb-4">
@@ -25,23 +25,26 @@
         </dl>
     </div>
 
-    {# Event-Zusammenfassung #}
+    {# Person-Zusammenfassung #}
     <div class="bg-surface border border-subtle rounded-[10px] p-4 mb-5">
-        <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Betroffenes Ereignis" %}</h2>
+        <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Betroffene Person" %}</h2>
         <dl class="space-y-2 text-sm">
             <div class="flex justify-between">
-                <dt class="text-ink-muted">{% trans "Dokumentationstyp" %}</dt>
-                <dd class="font-medium">{{ event.document_type.name }}</dd>
+                <dt class="text-ink-muted">{% trans "Pseudonym" %}</dt>
+                <dd class="font-medium">{{ client.pseudonym }}</dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-ink-muted">{% trans "Zeitpunkt" %}</dt>
-                <dd class="font-medium">{{ event.occurred_at|date:"d.m.Y H:i" }}</dd>
+                <dt class="text-ink-muted">{% trans "Kontaktstufe" %}</dt>
+                <dd class="font-medium">{{ client.get_contact_stage_display }}</dd>
             </div>
             <div class="flex justify-between">
-                <dt class="text-ink-muted">{% trans "Person" %}</dt>
-                <dd class="font-medium">{% if event.client %}{{ event.client.pseudonym }}{% else %}–{% endif %}</dd>
+                <dt class="text-ink-muted">{% trans "Angelegt am" %}</dt>
+                <dd class="font-medium">{{ client.created_at|date:"d.m.Y" }}</dd>
             </div>
         </dl>
+        <p class="text-xs text-ink-muted mt-3">
+            {% trans "Bei Genehmigung wird die Person in den Papierkorb verschoben. Nach Ablauf der Aufbewahrungsfrist wird sie automatisch anonymisiert; Statistik-Aggregate bleiben erhalten." %}
+        </p>
     </div>
 
     <form method="post" class="flex items-center space-x-3">

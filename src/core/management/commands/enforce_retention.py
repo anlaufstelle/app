@@ -66,6 +66,7 @@ class Command(BaseCommand):
 
         total_deleted = 0
         total_anonymized = 0
+        total_trash_anonymized = 0
         total_activities = 0
         total_auditlog_pruned = 0
 
@@ -94,6 +95,13 @@ class Command(BaseCommand):
             total_deleted += process_facility_retention(facility, settings_obj, now, dry_run)["count"]
             total_activities += enforce_activities(facility, settings_obj, now, dry_run)["count"]
             total_anonymized += anonymize_clients(facility, dry_run)["count"]
+            # Refs #626: Soft-deletete Personen aus dem Papierkorb anonymisieren,
+            # sobald die client_trash_days-Frist abgelaufen ist.
+            from core.services.clients import anonymize_eligible_soft_deleted_clients
+
+            total_trash_anonymized += anonymize_eligible_soft_deleted_clients(
+                facility, settings_obj, dry_run=dry_run
+            )
             total_auditlog_pruned += prune_auditlog(facility, settings_obj, now, dry_run)["count"]
 
             # Cleanup stale proposals after actual deletion
@@ -109,12 +117,20 @@ class Command(BaseCommand):
             )
             self.stdout.write(self.style.WARNING(f"[dry-run] Would anonymize {total_anonymized} client(s) in total."))
             self.stdout.write(
+                self.style.WARNING(
+                    f"[dry-run] Would anonymize {total_trash_anonymized} trash-expired client(s) in total."
+                )
+            )
+            self.stdout.write(
                 self.style.WARNING(f"[dry-run] Would prune {total_auditlog_pruned} audit-log entry/entries in total.")
             )
         else:
             self.stdout.write(self.style.SUCCESS(f"Soft-deleted {total_deleted} event(s) in total."))
             self.stdout.write(self.style.SUCCESS(f"Hard-deleted {total_activities} activity/activities in total."))
             self.stdout.write(self.style.SUCCESS(f"Anonymized {total_anonymized} client(s) in total."))
+            self.stdout.write(
+                self.style.SUCCESS(f"Anonymized {total_trash_anonymized} trash-expired client(s) in total.")
+            )
             self.stdout.write(self.style.SUCCESS(f"Pruned {total_auditlog_pruned} audit-log entry/entries in total."))
 
     def _handle_propose(self, facilities, now):

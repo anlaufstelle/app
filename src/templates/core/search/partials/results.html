@@ -2,10 +2,10 @@
 
 {% if q %}
     {% if has_results %}
-        {# Klientel #}
+        {# Personen #}
         {% if clients %}
         <div class="mb-6">
-            <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Klientel" %} ({{ clients|length }})</h2>
+            <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Personen" %} ({{ clients|length }})</h2>
             <div class="bg-surface border border-subtle rounded-[10px] divide-y divide-subtle">
                 {% for client in clients %}
                 <a href="{% url 'core:client_detail' client.pk %}" class="block px-4 py-3 hover:bg-canvas">
@@ -55,5 +55,5 @@
     </div>
     {% endif %}
 {% else %}
-{% include "components/_empty_state.html" with icon="search" message=_("Suchbegriff eingeben, um Klientel und Ereignisse zu finden.") %}
+{% include "components/_empty_state.html" with icon="search" message=_("Suchbegriff eingeben, um Personen und Ereignisse zu finden.") %}
 {% endif %}

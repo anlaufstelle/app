@@ -19,7 +19,7 @@
                 <dd class="font-medium">{{ event.occurred_at|date:"d.m.Y H:i" }}</dd>
             </div>
             <div>
-                <dt class="text-ink-muted">{% trans "Klientel" %}</dt>
+                <dt class="text-ink-muted">{% trans "Person" %}</dt>
                 <dd class="font-medium">
                     {% if event.is_anonymous %}{% trans "Anonym" %}{% elif event.client %}{{ event.client.pseudonym }}{% else %}–{% endif %}
                 </dd>

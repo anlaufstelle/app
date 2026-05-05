@@ -21,7 +21,7 @@ class TestSidebarCreateButtons:
         dropdown.wait_for(state="visible", timeout=3000)
         assert dropdown.locator("a:has-text('Kontakt')").is_visible()
         assert dropdown.locator("a:has-text('Aufgabe')").is_visible()
-        assert dropdown.locator("a:has-text('Klientel')").is_visible()
+        assert dropdown.locator("a:has-text('Person')").is_visible()
 
     def test_aufgabe_navigates_to_workitem_create(self, authenticated_page, base_url):
         """Klick auf 'Aufgabe' im Sidebar-Dropdown navigiert zur WorkItem-Erstellungsseite."""
@@ -35,12 +35,12 @@ class TestSidebarCreateButtons:
         assert "/workitems/new/" in page.url
 
     def test_klient_navigates_to_client_create(self, authenticated_page, base_url):
-        """Klick auf 'Klientel' im Sidebar-Dropdown navigiert zur Klientel-Erstellungsseite."""
+        """Klick auf 'Person' im Sidebar-Dropdown navigiert zur Personen-Erstellungsseite."""
         page = authenticated_page
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
 
         page.locator("[data-testid='sidebar-create-btn']").click()
-        page.locator("[data-testid='sidebar-create-dropdown'] a:has-text('Klientel')").click()
+        page.locator("[data-testid='sidebar-create-dropdown'] a:has-text('Person')").click()
         page.wait_for_url(re.compile(r"/clients/new/"), timeout=10000)
 
         assert "/clients/new/" in page.url

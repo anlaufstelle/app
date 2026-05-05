@@ -8,7 +8,7 @@
 <div class="flex items-center gap-2.5 mb-5">
     <a href="{% url 'core:client_list' %}" class="flex items-center gap-1 text-[13px] text-ink-muted hover:text-ink">
         <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
-        {% trans "Klientel" %}
+        {% trans "Personen" %}
     </a>
     <span class="text-subtle">/</span>
     <span class="text-[13px] text-ink-soft font-medium">{{ client.pseudonym }}</span>
@@ -65,6 +65,9 @@
                 <a href="{% url 'core:client_update' client.pk %}" class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">
                     {% trans "Bearbeiten" %}
                 </a>
+                <a href="{% url 'core:client_delete_request' client.pk %}" class="inline-flex items-center bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas" data-testid="client-delete-request-btn">
+                    {% trans "Löschen beantragen" %}
+                </a>
                 {% endif %}
                 {% if user.is_lead_or_admin %}
                 <div x-data="simpleDropdown" class="relative">
@@ -117,6 +120,12 @@
                         <span x-show="notOffline">{% trans "Offline mitnehmen" %}</span>
                         <span x-show="isOffline" x-cloak>{% trans "Aus Offline-Cache entfernen" %}</span>
                     </button>
+                    {% if user.is_staff_or_above %}
+                    <div class="border-t border-subtle my-1"></div>
+                    <a href="{% url 'core:client_delete_request' client.pk %}" class="flex items-center px-4 py-2 text-[13px] text-ink hover:bg-canvas">
+                        {% trans "Löschen beantragen" %}
+                    </a>
+                    {% endif %}
                     {% if user.is_lead_or_admin %}
                     <div class="border-t border-subtle my-1"></div>
                     <a href="{% url 'core:client_export_json' client.pk %}" class="flex items-center px-4 py-2 text-[13px] text-ink hover:bg-canvas">
@@ -130,6 +139,18 @@
             </div>
             </div>
         </div>
+    </div>
+
+    {# Offline-Feedback-Toast in offlineClientBadge-Scope (Refs #750). #}
+    <div x-show="message" x-cloak x-transition
+         role="status"
+         aria-live="polite"
+         class="fixed bottom-6 right-6 z-50 max-w-sm border-2 rounded-md shadow-lg p-4 text-sm flex items-start gap-3"
+         :class="toastClass"
+         data-testid="offline-toast">
+        <svg x-show="isMessageNotError" class="w-5 h-5 flex-shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+        <svg x-show="isMessageError" x-cloak class="w-5 h-5 flex-shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+        <span x-text="message" class="flex-1 font-medium"></span>
     </div>
 </div>
 
@@ -220,17 +241,6 @@
         </div>
         {% endif %}
     </div>
-</div>
-
-<div x-show="message" x-cloak x-transition
-     role="status"
-     aria-live="polite"
-     class="fixed bottom-6 right-6 z-50 max-w-sm border-2 rounded-md shadow-lg p-4 text-sm flex items-start gap-3"
-     :class="toastClass"
-     data-testid="offline-toast">
-    <svg x-show="isMessageNotError" class="w-5 h-5 flex-shrink-0 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-    <svg x-show="isMessageError" x-cloak class="w-5 h-5 flex-shrink-0 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
-    <span x-text="message" class="flex-1 font-medium"></span>
 </div>
 
 {% endblock %}

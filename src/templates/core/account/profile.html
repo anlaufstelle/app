@@ -53,11 +53,11 @@
         {% include "core/account/partials/_stats_widget.html" %}
     </div>
 
-    {# Letzte Klientel #}
+    {# Zuletzt besuchte Personen #}
     {% if recent_clients %}
     <div class="bg-surface border border-subtle rounded-[10px] p-5 mb-5">
         <div class="flex items-center justify-between mb-3">
-            <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Letzte Klientel" %}</h2>
+            <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zuletzt besuchte Personen" %}</h2>
             <a href="{% url 'core:client_list' %}" class="text-[12px] text-accent hover:underline font-semibold">{% trans "Alle anzeigen" %}</a>
         </div>
         {% include "core/account/partials/_recent_clients_widget.html" %}

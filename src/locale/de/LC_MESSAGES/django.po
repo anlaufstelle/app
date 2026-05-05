@@ -2,1421 +2,1862 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-03-28 16:36+0100\n"
+"POT-Creation-Date: 2026-04-30 10:46+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: src/core/constants.py:8 src/core/models/client.py:16
-#: src/templates/core/export/report_pdf.html:39
-#: src/templates/core/statistics/partials/dashboard_content.html:19
 msgid "Identifiziert"
 msgstr "Identifiziert"
 
-#: src/core/constants.py:9 src/core/models/client.py:17
-#: src/templates/core/export/report_pdf.html:43
-#: src/templates/core/statistics/partials/dashboard_content.html:23
 msgid "Qualifiziert"
 msgstr "Qualifiziert"
 
-#: src/core/forms/cases.py:16 src/core/forms/events.py:27
-#: src/core/models/case.py:34 src/core/models/client.py:70
-#: src/core/models/client.py:71 src/core/models/event.py:30
-#: src/core/models/workitem.py:45 src/core/services/export.py:60
-#: src/templates/base.html:87 src/templates/base.html:112
-#: src/templates/base.html:199 src/templates/base.html:260
-#: src/templates/core/cases/form.html:47
-#: src/templates/core/cases/partials/table.html:10
-#: src/templates/core/clients/list.html:4
-#: src/templates/core/clients/list.html:8
-#: src/templates/core/events/create.html:95
-#: src/templates/core/events/delete_confirm.html:32
-#: src/templates/core/events/deletion_review.html:41
-#: src/templates/core/events/detail.html:58
-#: src/templates/core/events/edit.html:22
-#: src/templates/core/search/partials/global_results.html:6
-#: src/templates/core/search/partials/results.html:8
-#: src/templates/core/workitems/detail.html:99
-#: src/templates/core/workitems/form.html:89
-#, fuzzy
-#| msgid "Klienten"
 msgid "Klientel"
-msgstr "Klienten"
+msgstr "Klientel"
 
-#: src/core/forms/cases.py:50
-#, fuzzy
-#| msgid "Klient existiert nicht."
 msgid "Klientel existiert nicht."
-msgstr "Klient existiert nicht."
+msgstr "Klientel existiert nicht."
 
-#: src/core/forms/cases.py:52 src/core/services/cases.py:18
-#, fuzzy
-#| msgid "Klient gehört nicht zur Einrichtung."
 msgid "Klientel gehört nicht zur Einrichtung."
-msgstr "Klient gehört nicht zur Einrichtung."
+msgstr "Klientel gehört nicht zur Einrichtung."
 
-#: src/core/forms/clients.py:33
-#, fuzzy
-#| msgid "Ein Klient mit diesem Pseudonym existiert bereits in dieser Einrichtung."
-msgid "Ein Klientel mit diesem Pseudonym existiert bereits in dieser Einrichtung."
-msgstr "Ein Klient mit diesem Pseudonym existiert bereits in dieser Einrichtung."
+msgid ""
+"Ein Klientel mit diesem Pseudonym existiert bereits in dieser Einrichtung."
+msgstr ""
+"Ein Klientel mit diesem Pseudonym existiert bereits in dieser Einrichtung."
 
-#: src/core/forms/episodes.py:41 src/core/models/episode.py:22
 msgid "Beginn"
 msgstr "Beginn"
 
-#: src/core/forms/episodes.py:42 src/core/models/episode.py:23
 msgid "Ende"
 msgstr "Ende"
 
-#: src/core/forms/events.py:15 src/core/models/document_type.py:95
-#: src/core/models/document_type.py:247 src/core/models/event.py:36
-#: src/core/services/export.py:59
-#: src/templates/core/events/delete_confirm.html:24
-#: src/templates/core/events/deletion_review.html:33
-#: src/templates/core/events/detail.html:70
-#: src/templates/core/events/edit.html:14
-#: src/templates/core/export/client_data_pdf.html:72
 msgid "Dokumentationstyp"
 msgstr "Dokumentationstyp"
 
-#: src/core/forms/events.py:31 src/core/models/event.py:62
-#: src/templates/core/events/delete_confirm.html:28
-#: src/templates/core/events/deletion_review.html:37
-#: src/templates/core/events/edit.html:18
-#: src/templates/core/export/client_data_pdf.html:73
 msgid "Zeitpunkt"
 msgstr "Zeitpunkt"
 
-#: src/core/forms/events.py:42 src/templates/core/events/create.html:149
-msgid "Anonymer Kontakt"
-msgstr "Anonymer Kontakt"
-
-#: src/core/forms/events.py:48 src/core/models/case.py:70
-#: src/core/models/episode.py:18 src/core/models/event.py:44
-#: src/templates/base.html:95 src/templates/base.html:207
-#: src/templates/core/cases/episode_form.html:11
 msgid "Fall"
 msgstr "Fall"
 
-#: src/core/forms/workitems.py:59
-#, fuzzy
-#| msgid "Ungültige Klient-ID"
-msgid "Ungültige Klientel-ID"
-msgstr "Ungültige Klient-ID"
+msgid "– Keinem Fall zuordnen –"
+msgstr ""
 
-#: src/core/models/activity.py:21
+#, python-format
+msgid "Dateityp .%(ext)s nicht erlaubt. Erlaubt: %(allowed)s"
+msgstr ""
+
+#, python-format
+msgid "Datei zu groß (%(size)d MB). Maximum: %(max)d MB"
+msgstr ""
+
+#, python-format
+msgid "Das Datum darf höchstens am %(max)s liegen."
+msgstr ""
+
+msgid "Das Datum darf nicht in der Vergangenheit liegen."
+msgstr ""
+
+msgid "Ungültige Klientel-ID"
+msgstr "Ungültige Klientel-ID"
+
+msgid "Die Erinnerung muss vor oder am Fälligkeitstag liegen."
+msgstr ""
+
+#, python-format
+msgid "Das Fälligkeitsdatum darf höchstens am %(max)s liegen."
+msgstr ""
+
+#, python-format
+msgid "Die Erinnerung darf höchstens am %(max)s liegen."
+msgstr ""
+
+msgid "Das Fälligkeitsdatum darf nicht in der Vergangenheit liegen."
+msgstr ""
+
+msgid "Die Erinnerung darf nicht in der Vergangenheit liegen."
+msgstr ""
+
 msgid "erstellt"
 msgstr "erstellt"
 
-#: src/core/models/activity.py:22
 msgid "aktualisiert"
 msgstr "aktualisiert"
 
-#: src/core/models/activity.py:23
 msgid "gelöscht"
 msgstr "gelöscht"
 
-#: src/core/models/activity.py:24
 msgid "qualifiziert"
 msgstr "qualifiziert"
 
-#: src/core/models/activity.py:25
 msgid "erledigt"
 msgstr "erledigt"
 
-#: src/core/models/activity.py:26
 msgid "wiedereröffnet"
 msgstr "wiedereröffnet"
 
-#: src/core/models/activity.py:58
 msgid "Aktivität"
 msgstr "Aktivität"
 
-#: src/core/models/activity.py:59
-#: src/templates/core/handover/partials/_stats_grid.html:10
-#: src/templates/core/zeitstrom/index.html:95
 msgid "Aktivitäten"
 msgstr "Aktivitäten"
 
-#: src/core/models/audit.py:16
-msgid "Anmeldung"
-msgstr "Anmeldung"
-
-#: src/core/models/audit.py:17
-msgid "Abmeldung"
-msgstr "Abmeldung"
-
-#: src/core/models/audit.py:18
-msgid "Anmeldung fehlgeschlagen"
-msgstr "Anmeldung fehlgeschlagen"
-
-#: src/core/models/audit.py:19
-msgid "Qualifizierte Daten eingesehen"
-msgstr "Qualifizierte Daten eingesehen"
-
-#: src/core/models/audit.py:20
-msgid "Export"
-msgstr "Export"
-
-#: src/core/models/audit.py:21
-msgid "Löschung"
-msgstr "Löschung"
-
-#: src/core/models/audit.py:22
-msgid "Stufenwechsel"
-msgstr "Stufenwechsel"
-
-#: src/core/models/audit.py:23
-msgid "Einstellungen geändert"
-msgstr "Einstellungen geändert"
-
-#: src/core/models/audit.py:34 src/core/models/case.py:26
-#: src/core/models/client.py:32 src/core/models/document_type.py:50
-#: src/core/models/document_type.py:133 src/core/models/event.py:22
-#: src/core/models/organization.py:41 src/core/models/settings.py:19
-#: src/core/models/time_filter.py:21 src/core/models/user.py:29
-#: src/core/models/workitem.py:37 src/core/models/workitem.py:125
-#: src/templates/core/account/profile.html:31
-msgid "Einrichtung"
-msgstr "Einrichtung"
-
-#: src/core/models/audit.py:42 src/core/models/user.py:51
-#: src/core/models/user.py:52 src/templates/core/audit/detail.html:19
-#: src/templates/core/audit/list.html:30
-#: src/templates/core/audit/partials/table.html:9
-msgid "Benutzer"
-msgstr "Benutzer"
-
-#: src/core/models/audit.py:47 src/core/models/event_history.py:41
-#: src/templates/core/audit/detail.html:25
-#: src/templates/core/audit/list.html:18
-#: src/templates/core/audit/partials/table.html:10
-#: src/templates/core/dsgvo/package.html:27
-#: src/templates/core/export/client_data_pdf.html:102
-msgid "Aktion"
-msgstr "Aktion"
-
-#: src/core/models/audit.py:52 src/core/models/workitem.py:127
-#: src/templates/core/audit/detail.html:37
-#: src/templates/core/audit/partials/table.html:11
-msgid "Zieltyp"
-msgstr "Zieltyp"
-
-#: src/core/models/audit.py:57 src/core/models/workitem.py:128
-#: src/templates/core/audit/detail.html:41
-#: src/templates/core/audit/partials/table.html:12
-msgid "Ziel-ID"
-msgstr "Ziel-ID"
-
-#: src/core/models/audit.py:59 src/templates/core/audit/detail.html:47
-#: src/templates/core/audit/partials/table.html:13
-#: src/templates/core/events/detail.html:117
-msgid "Details"
-msgstr "Details"
-
-#: src/core/models/audit.py:63 src/templates/core/audit/detail.html:33
-msgid "IP-Adresse"
-msgstr "IP-Adresse"
-
-#: src/core/models/audit.py:65 src/templates/core/audit/detail.html:15
-#: src/templates/core/audit/partials/table.html:8
-msgid "Zeitstempel"
-msgstr "Zeitstempel"
-
-#: src/core/models/audit.py:68 src/templates/base.html:139
-#: src/templates/base.html:282 src/templates/core/audit/list.html:4
-#: src/templates/core/audit/list.html:7
-msgid "Audit-Log"
-msgstr "Audit-Log"
-
-#: src/core/models/audit.py:69
-msgid "Audit-Logs"
-msgstr "Audit-Logs"
-
-#: src/core/models/case.py:16 src/core/models/workitem.py:20
-#: src/templates/core/workitems/partials/inbox_content.html:5
-msgid "Offen"
-msgstr "Offen"
-
-#: src/core/models/case.py:17
-msgid "Geschlossen"
-msgstr "Geschlossen"
-
-#: src/core/models/case.py:36 src/core/models/episode.py:20
-#: src/core/models/outcome.py:15 src/core/models/outcome.py:41
-#: src/core/models/workitem.py:82
-#: src/templates/core/cases/partials/goals_section.html:35
-#: src/templates/core/cases/partials/table.html:9
-#: src/templates/core/export/client_data_pdf.html:42
-#: src/templates/core/export/client_data_pdf.html:156
-msgid "Titel"
-msgstr "Titel"
-
-#: src/core/models/case.py:37 src/core/models/document_type.py:82
-#: src/core/models/episode.py:21 src/core/models/organization.py:36
-#: src/core/models/outcome.py:16 src/core/models/workitem.py:83
-#: src/templates/core/cases/detail.html:102
-#: src/templates/core/export/client_data_pdf.html:157
-#: src/templates/core/workitems/detail.html:118
-msgid "Beschreibung"
-msgstr "Beschreibung"
-
-#: src/core/models/case.py:42 src/core/models/workitem.py:72
-#: src/core/models/workitem.py:134
-#: src/templates/core/cases/partials/table.html:11
-#: src/templates/core/export/client_data_pdf.html:43
-#: src/templates/core/export/client_data_pdf.html:126
-#: src/templates/core/export/client_data_pdf.html:158
-#: src/templates/core/workitems/detail.html:24
-msgid "Status"
-msgstr "Status"
-
-#: src/core/models/case.py:43
-msgid "Offen = aktiver Fall, Geschlossen = abgeschlossen"
-msgstr "Offen = aktiver Fall, Geschlossen = abgeschlossen"
-
-#: src/core/models/case.py:51 src/core/models/client.py:66
-#: src/core/models/episode.py:29 src/core/models/event.py:60
-#: src/core/models/workitem.py:51 src/templates/core/cases/detail.html:90
-#: src/templates/core/events/detail.html:74
-#: src/templates/core/export/client_data_pdf.html:34
-#: src/templates/core/export/client_data_pdf.html:47
-#: src/templates/core/export/client_data_pdf.html:74
-#: src/templates/core/workitems/detail.html:105
-msgid "Erstellt von"
-msgstr "Erstellt von"
-
-#: src/core/models/case.py:59 src/templates/core/cases/detail.html:82
-#: src/templates/core/cases/partials/table.html:12
-#: src/templates/core/export/client_data_pdf.html:46
-msgid "Fallverantwortlich"
-msgstr "Fallverantwortlich"
-
-#: src/core/models/case.py:60
-msgid "Hauptverantwortliche Fachkraft für diesen Fall"
-msgstr "Hauptverantwortliche Fachkraft für diesen Fall"
-
-#: src/core/models/case.py:62 src/core/models/client.py:59
-#: src/core/models/episode.py:31 src/core/models/event.py:66
-#: src/core/models/organization.py:14 src/core/models/organization.py:38
-#: src/core/models/workitem.py:84 src/core/models/workitem.py:150
-#: src/templates/core/cases/detail.html:86
-#: src/templates/core/events/detail.html:78
-#: src/templates/core/export/client_data_pdf.html:33
-#: src/templates/core/export/client_data_pdf.html:44
-#: src/templates/core/export/client_data_pdf.html:130
-#: src/templates/core/export/client_data_pdf.html:160
-#: src/templates/core/workitems/detail.html:92
-msgid "Erstellt am"
-msgstr "Erstellt am"
-
-#: src/core/models/case.py:66 src/templates/core/cases/detail.html:95
-#: src/templates/core/export/client_data_pdf.html:45
-msgid "Geschlossen am"
-msgstr "Geschlossen am"
-
-#: src/core/models/case.py:71 src/templates/base.html:117
-#: src/templates/base.html:264 src/templates/core/cases/list.html:4
-#: src/templates/core/cases/list.html:8
-#: src/templates/core/clients/detail.html:158
-msgid "Fälle"
-msgstr "Fälle"
-
-#: src/core/models/client.py:20 src/core/services/export.py:186
-#: src/core/services/statistics.py:61
-msgid "Unter 18"
-msgstr "Unter 18"
-
-#: src/core/models/client.py:21 src/core/services/export.py:187
-#: src/core/services/statistics.py:62
-msgid "18–26"
-msgstr "18–26"
-
-#: src/core/models/client.py:22 src/core/services/export.py:188
-#: src/core/services/statistics.py:63
-msgid "27+"
-msgstr "27+"
-
-#: src/core/models/client.py:23 src/core/services/export.py:189
-#: src/core/services/statistics.py:64
-#: src/templates/core/zeitstrom/index.html:35
-msgid "Unbekannt"
-msgstr "Unbekannt"
-
-#: src/core/models/client.py:37
-#: src/templates/core/clients/partials/table.html:9
-#: src/templates/core/export/client_data_pdf.html:29
-#: src/templates/core/export/report_pdf.html:100
-msgid "Pseudonym"
-msgstr "Pseudonym"
-
-#: src/core/models/client.py:43 src/core/services/export.py:61
-#: src/templates/core/export/client_data_pdf.html:30
-msgid "Kontaktstufe"
-msgstr "Kontaktstufe"
-
-#: src/core/models/client.py:44
-msgid "Identifiziert = Pseudonym bekannt, Qualifiziert = vollständige Identität bekannt"
-msgstr "Identifiziert = Pseudonym bekannt, Qualifiziert = vollständige Identität bekannt"
-
-#: src/core/models/client.py:50 src/core/services/export.py:62
-#: src/templates/core/export/client_data_pdf.html:31
-#: src/templates/core/export/jugendamt_pdf.html:74
-#: src/templates/core/export/report_pdf.html:78
-#: src/templates/core/statistics/partials/dashboard_content.html:95
-msgid "Altersgruppe"
-msgstr "Altersgruppe"
-
-#: src/core/models/client.py:51
-#, fuzzy
-#| msgid "Altersgruppe des Klienten zum Zeitpunkt der Erfassung"
-msgid "Altersgruppe des Klientel zum Zeitpunkt der Erfassung"
-msgstr "Altersgruppe des Klienten zum Zeitpunkt der Erfassung"
-
-#: src/core/models/client.py:55 src/core/models/user.py:43
-#: src/templates/core/clients/detail.html:112
-msgid "Notizen"
-msgstr "Notizen"
-
-#: src/core/models/client.py:56
-msgid "Interne Notizen, nur für Fachkräfte sichtbar"
-msgstr "Interne Notizen, nur für Fachkräfte sichtbar"
-
-#: src/core/models/client.py:58 src/core/models/document_type.py:83
-#: src/core/models/organization.py:37 src/core/models/time_filter.py:37
-#: src/templates/core/export/client_data_pdf.html:32
-msgid "Aktiv"
-msgstr "Aktiv"
-
-#: src/core/models/dashboard_preference.py:31
-msgid "Dashboard-Einstellung"
-msgstr "Dashboard-Einstellung"
-
-#: src/core/models/dashboard_preference.py:32
-msgid "Dashboard-Einstellungen"
-msgstr "Dashboard-Einstellungen"
-
-#: src/core/models/document_type.py:22 src/core/models/document_type.py:34
-#: src/templates/base.html:82 src/templates/base.html:194
-msgid "Kontakt"
-msgstr "Kontakt"
-
-#: src/core/models/document_type.py:23
-msgid "Leistung"
-msgstr "Leistung"
-
-#: src/core/models/document_type.py:24
-msgid "Verwaltung"
-msgstr "Verwaltung"
-
-#: src/core/models/document_type.py:25 src/core/models/document_type.py:41
-msgid "Notiz"
-msgstr "Notiz"
-
-#: src/core/models/document_type.py:28 src/core/models/workitem.py:26
-msgid "Normal"
-msgstr "Normal"
-
-#: src/core/models/document_type.py:29
-msgid "Erhöht"
-msgstr "Erhöht"
-
-#: src/core/models/document_type.py:30
-msgid "Hoch"
-msgstr "Hoch"
-
-#: src/core/models/document_type.py:33
-#: src/templates/components/_ban_feed_card.html:7
-#: src/templates/core/clients/detail.html:101
-#: src/templates/core/handover/partials/_highlights.html:20
-msgid "Hausverbot"
-msgstr "Hausverbot"
-
-#: src/core/models/document_type.py:35
-#: src/templates/core/handover/partials/_highlights.html:18
-msgid "Krisengespräch"
-msgstr "Krisengespräch"
-
-#: src/core/models/document_type.py:36
-msgid "Medizinische Versorgung"
-msgstr "Medizinische Versorgung"
-
-#: src/core/models/document_type.py:37
-msgid "Spritzentausch"
-msgstr "Spritzentausch"
-
-#: src/core/models/document_type.py:38
-msgid "Begleitung"
-msgstr "Begleitung"
-
-#: src/core/models/document_type.py:39
-msgid "Beratungsgespräch"
-msgstr "Beratungsgespräch"
-
-#: src/core/models/document_type.py:40
-msgid "Vermittlung"
-msgstr "Vermittlung"
-
-#: src/core/models/document_type.py:52 src/core/models/document_type.py:135
-#: src/core/models/organization.py:13 src/core/models/organization.py:35
-#: src/templates/core/account/profile.html:14
-msgid "Name"
-msgstr "Name"
-
-#: src/core/models/document_type.py:57
-#: src/templates/core/export/jugendamt_pdf.html:52
-#: src/templates/core/export/report_pdf.html:55
-#: src/templates/core/statistics/partials/dashboard_content.html:54
-msgid "Kategorie"
-msgstr "Kategorie"
-
-#: src/core/models/document_type.py:58
-msgid "Gruppiert Dokumentationstypen für Filter und Auswertungen"
-msgstr "Gruppiert Dokumentationstypen für Filter und Auswertungen"
-
-#: src/core/models/document_type.py:64
-msgid "Sensibilität"
-msgstr "Sensibilität"
-
-#: src/core/models/document_type.py:65
-msgid "Steuert Zugriffsrechte: ELEVATED/HIGH erfordern höhere Berechtigungen"
-msgstr "Steuert Zugriffsrechte: ELEVATED/HIGH erfordern höhere Berechtigungen"
-
-#: src/core/models/document_type.py:72
-msgid "Mindest-Kontaktstufe"
-msgstr "Mindest-Kontaktstufe"
-
-#: src/core/models/document_type.py:73
-#, fuzzy
-#| msgid "Mindest-Kontaktstufe des Klienten für diesen Dokumentationstyp"
-msgid "Mindest-Kontaktstufe des Klientel für diesen Dokumentationstyp"
-msgstr "Mindest-Kontaktstufe des Klienten für diesen Dokumentationstyp"
-
-#: src/core/models/document_type.py:78
-msgid "Aufbewahrungsfrist (Tage)"
-msgstr "Aufbewahrungsfrist (Tage)"
-
-#: src/core/models/document_type.py:80
-msgid "Icon"
-msgstr "Icon"
-
-#: src/core/models/document_type.py:81
-msgid "Farbe"
-msgstr "Farbe"
-
-#: src/core/models/document_type.py:84 src/core/models/document_type.py:255
-#: src/core/models/time_filter.py:38
-msgid "Sortierung"
-msgstr "Sortierung"
-
-#: src/core/models/document_type.py:90
-msgid "Systemtyp"
-msgstr "Systemtyp"
-
-#: src/core/models/document_type.py:91
-msgid "Interner Typ für systemgesteuerte Logik (Hausverbot, Export etc.)"
-msgstr "Interner Typ für systemgesteuerte Logik (Hausverbot, Export etc.)"
-
-#: src/core/models/document_type.py:96
-msgid "Dokumentationstypen"
-msgstr "Dokumentationstypen"
-
-#: src/core/models/document_type.py:104
-msgid "system_type kann nach Erstellung nicht geändert werden."
-msgstr "system_type kann nach Erstellung nicht geändert werden."
-
-#: src/core/models/document_type.py:117
-msgid "Text"
-msgstr "Text"
-
-#: src/core/models/document_type.py:118
-msgid "Textbereich"
-msgstr "Textbereich"
-
-#: src/core/models/document_type.py:119
-msgid "Zahl"
-msgstr "Zahl"
-
-#: src/core/models/document_type.py:120 src/core/services/export.py:57
-msgid "Datum"
-msgstr "Datum"
-
-#: src/core/models/document_type.py:121 src/core/services/export.py:58
-msgid "Uhrzeit"
-msgstr "Uhrzeit"
-
-#: src/core/models/document_type.py:122
-msgid "Ja/Nein"
-msgstr "Ja/Nein"
-
-#: src/core/models/document_type.py:123
-msgid "Auswahl"
-msgstr "Auswahl"
-
-#: src/core/models/document_type.py:124
-msgid "Mehrfachauswahl"
-msgstr "Mehrfachauswahl"
-
-#: src/core/models/document_type.py:138
-msgid "Slug"
-msgstr "Slug"
-
-#: src/core/models/document_type.py:139
-msgid "Stabiler Identifier — wird als Key in data_json verwendet. Nach Erstellung unveränderbar."
-msgstr "Stabiler Identifier — wird als Key in data_json verwendet. Nach Erstellung unveränderbar."
-
-#: src/core/models/document_type.py:145
-msgid "Feldtyp"
-msgstr "Feldtyp"
-
-#: src/core/models/document_type.py:147
-msgid "Pflichtfeld"
-msgstr "Pflichtfeld"
-
-#: src/core/models/document_type.py:148
-msgid "Verschlüsselt"
-msgstr "Verschlüsselt"
-
-#: src/core/models/document_type.py:152
-msgid "Optionen (JSON)"
-msgstr "Optionen (JSON)"
-
-#: src/core/models/document_type.py:157
-msgid "Statistik-Kategorie"
-msgstr "Statistik-Kategorie"
-
-#: src/core/models/document_type.py:162
-msgid "Hilfetext"
-msgstr "Hilfetext"
-
-#: src/core/models/document_type.py:166 src/core/models/document_type.py:253
-msgid "Feldvorlage"
-msgstr "Feldvorlage"
-
-#: src/core/models/document_type.py:167
-msgid "Feldvorlagen"
-msgstr "Feldvorlagen"
-
-#: src/core/models/document_type.py:184
-msgid "Name ergibt keinen gültigen Slug."
-msgstr "Name ergibt keinen gültigen Slug."
-
-#: src/core/models/document_type.py:195
-msgid "Nur a-z, 0-9 und Bindestriche erlaubt."
-msgstr "Nur a-z, 0-9 und Bindestriche erlaubt."
-
-#: src/core/models/document_type.py:205
-msgid "Slug ist nicht gültig (nur a-z, 0-9, Bindestriche)."
-msgstr "Slug ist nicht gültig (nur a-z, 0-9, Bindestriche)."
-
-#: src/core/models/document_type.py:223
-msgid "Slug kann nach Erstellung nicht geändert werden."
-msgstr "Slug kann nach Erstellung nicht geändert werden."
-
-#: src/core/models/document_type.py:258
-msgid "Dokumentationstyp-Feld"
-msgstr "Dokumentationstyp-Feld"
-
-#: src/core/models/document_type.py:259
-msgid "Dokumentationstyp-Felder"
-msgstr "Dokumentationstyp-Felder"
-
-#: src/core/models/episode.py:34 src/core/models/event.py:52
-msgid "Episode"
-msgstr "Episode"
-
-#: src/core/models/episode.py:35
-#: src/templates/core/cases/partials/episode_list.html:4
-msgid "Episoden"
-msgstr "Episoden"
-
-#: src/core/models/event.py:63
-msgid "Daten (JSON)"
-msgstr "Daten (JSON)"
-
-#: src/core/models/event.py:64 src/core/services/export.py:81
-#: src/templates/components/_ban_feed_card.html:12
-#: src/templates/components/_event_card.html:16
-#: src/templates/core/events/delete_confirm.html:34
-#: src/templates/core/events/detail.html:61
-#: src/templates/core/events/edit.html:24
-#: src/templates/core/export/report_pdf.html:35
-#: src/templates/core/statistics/partials/dashboard_content.html:15
-msgid "Anonym"
-msgstr "Anonym"
-
-#: src/core/models/event.py:65 src/core/models/event_history.py:20
-msgid "Gelöscht"
-msgstr "Gelöscht"
-
-#: src/core/models/event.py:67 src/core/models/workitem.py:85
-msgid "Aktualisiert am"
-msgstr "Aktualisiert am"
-
-#: src/core/models/event.py:70 src/core/models/event_history.py:27
-msgid "Ereignis"
-msgstr "Ereignis"
-
-#: src/core/models/event.py:71
-#: src/templates/core/search/partials/results.html:25
-msgid "Ereignisse"
-msgstr "Ereignisse"
-
-#: src/core/models/event_history.py:18
-#: src/templates/core/cases/partials/table.html:13
-msgid "Erstellt"
-msgstr "Erstellt"
-
-#: src/core/models/event_history.py:19
-msgid "Aktualisiert"
-msgstr "Aktualisiert"
-
-#: src/core/models/event_history.py:35
-#: src/templates/core/export/client_data_pdf.html:104
-msgid "Geändert von"
-msgstr "Geändert von"
-
-#: src/core/models/event_history.py:37
-#: src/templates/core/export/client_data_pdf.html:103
-msgid "Geändert am"
-msgstr "Geändert am"
-
-#: src/core/models/event_history.py:43
-msgid "Daten vorher"
-msgstr "Daten vorher"
-
-#: src/core/models/event_history.py:44
-msgid "Daten nachher"
-msgstr "Daten nachher"
-
-#: src/core/models/event_history.py:47
-msgid "Ereignis-Historie"
-msgstr "Ereignis-Historie"
-
-#: src/core/models/event_history.py:48
-msgid "Ereignis-Historien"
-msgstr "Ereignis-Historien"
-
-#: src/core/models/organization.py:17 src/core/models/organization.py:33
-msgid "Organisation"
-msgstr "Organisation"
-
-#: src/core/models/organization.py:18
-msgid "Organisationen"
-msgstr "Organisationen"
-
-#: src/core/models/organization.py:42
-msgid "Einrichtungen"
-msgstr "Einrichtungen"
-
-#: src/core/models/outcome.py:17
-msgid "Erreicht"
-msgstr "Erreicht"
-
-#: src/core/models/outcome.py:18
-msgid "Erreicht am"
-msgstr "Erreicht am"
-
-#: src/core/models/outcome.py:28
-msgid "Wirkungsziel"
-msgstr "Wirkungsziel"
-
-#: src/core/models/outcome.py:29
-#: src/templates/core/cases/partials/goals_section.html:4
-msgid "Wirkungsziele"
-msgstr "Wirkungsziele"
-
-#: src/core/models/outcome.py:42
-msgid "Abgeschlossen"
-msgstr "Abgeschlossen"
-
-#: src/core/models/outcome.py:43 src/core/models/workitem.py:89
-msgid "Abgeschlossen am"
-msgstr "Abgeschlossen am"
-
-#: src/core/models/outcome.py:44
-msgid "Reihenfolge"
-msgstr "Reihenfolge"
-
-#: src/core/models/outcome.py:48
-msgid "Meilenstein"
-msgstr "Meilenstein"
-
-#: src/core/models/outcome.py:49
-msgid "Meilensteine"
-msgstr "Meilensteine"
-
-#: src/core/models/recent_client_visit.py:37
-#, fuzzy
-#| msgid "Klienten-Besuch"
-msgid "Klientel-Besuch"
-msgstr "Klienten-Besuch"
-
-#: src/core/models/recent_client_visit.py:38
-#, fuzzy
-#| msgid "Klienten-Besuche"
-msgid "Klientel-Besuche"
-msgstr "Klienten-Besuche"
-
-#: src/core/models/settings.py:24
-msgid "Vollständiger Name"
-msgstr "Vollständiger Name"
-
-#: src/core/models/settings.py:32
-msgid "Standard-Dokumentationstyp"
-msgstr "Standard-Dokumentationstyp"
-
-#: src/core/models/settings.py:36
-msgid "Session-Timeout (Minuten)"
-msgstr "Session-Timeout (Minuten)"
-
-#: src/core/models/settings.py:40
-msgid "Aufbewahrung anonym (Tage)"
-msgstr "Aufbewahrung anonym (Tage)"
-
-#: src/core/models/settings.py:44
-msgid "Aufbewahrung identifiziert (Tage)"
-msgstr "Aufbewahrung identifiziert (Tage)"
-
-#: src/core/models/settings.py:48
-msgid "Aufbewahrung qualifiziert (Tage)"
-msgstr "Aufbewahrung qualifiziert (Tage)"
-
-#: src/core/models/settings.py:52
-msgid "Aufbewahrung Aktivitäten (Tage)"
-msgstr "Aufbewahrung Aktivitäten (Tage)"
-
-#: src/core/models/settings.py:56 src/core/models/settings.py:57
-msgid "Einstellungen"
-msgstr "Einstellungen"
-
-#: src/core/models/statistics_snapshot.py:33
-msgid "Statistik-Snapshot"
-msgstr "Statistik-Snapshot"
-
-#: src/core/models/statistics_snapshot.py:34
-msgid "Statistik-Snapshots"
-msgstr "Statistik-Snapshots"
-
-#: src/core/models/time_filter.py:23
-msgid "Bezeichnung"
-msgstr "Bezeichnung"
-
-#: src/core/models/time_filter.py:25
-msgid "Startzeit"
-msgstr "Startzeit"
-
-#: src/core/models/time_filter.py:26
-msgid "Schichtbeginn (z.B. 08:00)"
-msgstr "Schichtbeginn (z.B. 08:00)"
-
-#: src/core/models/time_filter.py:29
-msgid "Endzeit"
-msgstr "Endzeit"
-
-#: src/core/models/time_filter.py:30
-msgid "Schichtende (z.B. 16:00). Bei Nachtschicht: Ende nach Mitternacht möglich"
-msgstr "Schichtende (z.B. 16:00). Bei Nachtschicht: Ende nach Mitternacht möglich"
-
-#: src/core/models/time_filter.py:34
-msgid "Standard"
-msgstr "Standard"
-
-#: src/core/models/time_filter.py:35
-msgid "Wird als Standard-Schicht vorausgewählt, wenn keine aktive Schicht erkannt wird"
-msgstr "Wird als Standard-Schicht vorausgewählt, wenn keine aktive Schicht erkannt wird"
-
-#: src/core/models/time_filter.py:41 src/core/models/time_filter.py:42
-#: src/templates/components/_time_filter_dropdown.html:6
-msgid "Zeitfilter"
-msgstr "Zeitfilter"
-
-#: src/core/models/user.py:12
-msgid "Administrator"
-msgstr "Administrator"
-
-#: src/core/models/user.py:13
-msgid "Leitung"
-msgstr "Leitung"
-
-#: src/core/models/user.py:14
-msgid "Fachkraft"
-msgstr "Fachkraft"
-
-#: src/core/models/user.py:15
-msgid "Assistenz"
-msgstr "Assistenz"
-
-#: src/core/models/user.py:21 src/templates/core/account/profile.html:22
-msgid "Rolle"
-msgstr "Rolle"
-
-#: src/core/models/user.py:34
-msgid "Anzeigename"
-msgstr "Anzeigename"
-
-#: src/core/models/user.py:39
-msgid "Telefon"
-msgstr "Telefon"
-
-#: src/core/models/user.py:47
-msgid "Passwort muss geändert werden"
-msgstr "Passwort muss geändert werden"
-
-#: src/core/models/workitem.py:16
-msgid "Hinweis"
-msgstr "Hinweis"
-
-#: src/core/models/workitem.py:17 src/templates/base.html:91
-#: src/templates/base.html:203
-#: src/templates/components/_workitem_feed_card.html:7
-msgid "Aufgabe"
-msgstr "Aufgabe"
-
-#: src/core/models/workitem.py:21
-#: src/templates/core/account/partials/_tasks_widget.html:10
-#: src/templates/core/workitems/partials/inbox_content.html:19
-msgid "In Bearbeitung"
-msgstr "In Bearbeitung"
-
-#: src/core/models/workitem.py:22
-#: src/templates/components/_workitem_row.html:76
-#: src/templates/components/_workitem_row.html:86
-#: src/templates/core/workitems/detail.html:54
-msgid "Erledigt"
-msgstr "Erledigt"
-
-#: src/core/models/workitem.py:23
-#: src/templates/components/_workitem_row.html:91
-msgid "Verworfen"
-msgstr "Verworfen"
-
-#: src/core/models/workitem.py:27
-#: src/templates/components/_workitem_feed_card.html:15
-#: src/templates/components/_workitem_row.html:16
-#: src/templates/components/_workitem_row.html:33
-#: src/templates/core/handover/index.html:77
-#: src/templates/core/workitems/detail.html:75
-msgid "Wichtig"
-msgstr "Wichtig"
-
-#: src/core/models/workitem.py:28
-#: src/templates/components/_workitem_feed_card.html:13
-#: src/templates/components/_workitem_row.html:14
-#: src/templates/components/_workitem_row.html:31
-#: src/templates/core/handover/index.html:75
-#: src/templates/core/workitems/detail.html:73
-msgid "Dringend"
-msgstr "Dringend"
-
-#: src/core/models/workitem.py:59 src/templates/core/workitems/detail.html:111
-#: src/templates/core/workitems/inbox.html:50
-msgid "Zugewiesen an"
-msgstr "Zugewiesen an"
-
-#: src/core/models/workitem.py:65 src/templates/core/export/report_pdf.html:54
-#: src/templates/core/statistics/partials/dashboard_content.html:53
-#: src/templates/core/workitems/detail.html:20
-#: src/templates/core/workitems/inbox.html:20
-msgid "Typ"
-msgstr "Typ"
-
-#: src/core/models/workitem.py:66
-msgid "Kategorisierung der Aufgabe (Aufgabe, Telefonat, Termin etc.)"
-msgstr "Kategorisierung der Aufgabe (Aufgabe, Telefonat, Termin etc.)"
-
-#: src/core/models/workitem.py:73
-msgid "Offen = noch nicht begonnen, In Bearbeitung = aktiv, Erledigt = abgeschlossen"
-msgstr "Offen = noch nicht begonnen, In Bearbeitung = aktiv, Erledigt = abgeschlossen"
-
-#: src/core/models/workitem.py:79
-#: src/templates/core/export/client_data_pdf.html:159
-#: src/templates/core/workitems/detail.html:70
-#: src/templates/core/workitems/inbox.html:35
-msgid "Priorität"
-msgstr "Priorität"
-
-#: src/core/models/workitem.py:80
-msgid "Dringend = sofortige Bearbeitung, Wichtig = zeitnah, Normal = regulär"
-msgstr "Dringend = sofortige Bearbeitung, Wichtig = zeitnah, Normal = regulär"
-
-#: src/core/models/workitem.py:95 src/templates/core/workitems/detail.html:82
-msgid "Zu erledigen bis"
-msgstr "Zu erledigen bis"
-
-#: src/core/models/workitem.py:99
-msgid "Arbeitsauftrag"
-msgstr "Arbeitsauftrag"
-
-#: src/core/models/workitem.py:100
-msgid "Arbeitsaufträge"
-msgstr "Arbeitsaufträge"
-
-#: src/core/models/workitem.py:111
-#: src/templates/core/deletion_requests/list.html:11
-#: src/templates/core/deletion_requests/list.html:19
-msgid "Ausstehend"
-msgstr "Ausstehend"
-
-#: src/core/models/workitem.py:112
-#: src/templates/core/deletion_requests/list.html:37
-#: src/templates/core/deletion_requests/list.html:44
-msgid "Genehmigt"
-msgstr "Genehmigt"
-
-#: src/core/models/workitem.py:113
-#: src/templates/core/deletion_requests/list.html:60
-#: src/templates/core/deletion_requests/list.html:67
-msgid "Abgelehnt"
-msgstr "Abgelehnt"
-
-#: src/core/models/workitem.py:116
 msgid "Event"
 msgstr "Event"
 
-#: src/core/models/workitem.py:129
-#: src/templates/core/events/delete_confirm.html:45
-#: src/templates/core/events/deletion_review.html:22
-#: src/templates/core/export/client_data_pdf.html:127
+msgid "Entry-ID (Versionskette)"
+msgstr ""
+
+msgid "Sortierung"
+msgstr "Sortierung"
+
+msgid "Reihenfolge der Einträge innerhalb eines Feldes (0-indexed)."
+msgstr ""
+
+msgid "Soft-deleted am"
+msgstr ""
+
+msgid ""
+"Markiert den Eintrag als vom User entfernt. Physischer Delete erst beim "
+"Event-Delete/Anonymize."
+msgstr ""
+
+msgid "Feldvorlage"
+msgstr "Feldvorlage"
+
+#, fuzzy
+#| msgid "Speichern"
+msgid "Speicherdateiname"
+msgstr "Speichern"
+
+msgid "UUID-basierter Dateiname auf Disk (z.B. abcd1234.enc)"
+msgstr ""
+
+msgid "Originaldateiname (verschlüsselt)"
+msgstr ""
+
+msgid "Verschlüsselt via encrypt_field()"
+msgstr ""
+
+msgid "Dateigröße (Bytes)"
+msgstr ""
+
+msgid "MIME-Typ"
+msgstr ""
+
+msgid "Erstellt von"
+msgstr "Erstellt von"
+
+msgid "Erstellt am"
+msgstr "Erstellt am"
+
+#, fuzzy
+#| msgid "Aktuelles Passwort"
+msgid "Aktuelle Version"
+msgstr "Aktuelles Passwort"
+
+msgid "Ersetzt durch"
+msgstr ""
+
+#, fuzzy
+#| msgid "Erstellt am"
+msgid "Ersetzt am"
+msgstr "Erstellt am"
+
+#, fuzzy
+#| msgid "Daten"
+msgid "Dateianhang"
+msgstr "Daten"
+
+msgid "Dateianhänge"
+msgstr ""
+
+msgid "Anmeldung"
+msgstr "Anmeldung"
+
+msgid "Abmeldung"
+msgstr "Abmeldung"
+
+msgid "Anmeldung fehlgeschlagen"
+msgstr "Anmeldung fehlgeschlagen"
+
+msgid "Account-Sperre aufgehoben"
+msgstr ""
+
+msgid "Qualifizierte Daten eingesehen"
+msgstr "Qualifizierte Daten eingesehen"
+
+msgid "Export"
+msgstr "Export"
+
+msgid "Löschung"
+msgstr "Löschung"
+
+msgid "Stufenwechsel"
+msgstr "Stufenwechsel"
+
+msgid "Einstellungen geändert"
+msgstr "Einstellungen geändert"
+
+msgid "Download"
+msgstr ""
+
+msgid "Legal Hold"
+msgstr ""
+
+msgid "Offline-Schlüssel abgerufen"
+msgstr ""
+
+msgid "Klientel angelegt"
+msgstr "Klientel angelegt"
+
+msgid "Klientel aktualisiert"
+msgstr "Klientel aktualisiert"
+
+msgid "Fall angelegt"
+msgstr ""
+
+#, fuzzy
+#| msgid "Fall wurde aktualisiert."
+msgid "Fall aktualisiert"
+msgstr "Fall wurde aktualisiert."
+
+#, fuzzy
+#| msgid "abgeschlossen"
+msgid "Fall geschlossen"
+msgstr "abgeschlossen"
+
+#, fuzzy
+#| msgid "wiedereröffnet"
+msgid "Fall wiedereröffnet"
+msgstr "wiedereröffnet"
+
+#, fuzzy
+#| msgid "Meilenstein löschen"
+msgid "Meilenstein gelöscht"
+msgstr "Meilenstein löschen"
+
+#, fuzzy
+#| msgid "Ereignis bearbeiten"
+msgid "Ereignis angelegt"
+msgstr "Ereignis bearbeiten"
+
+#, fuzzy
+#| msgid "Aufgaben gesamt"
+msgid "Aufgabe angelegt"
+msgstr "Aufgaben gesamt"
+
+#, fuzzy
+#| msgid "Aufgabe wurde aktualisiert."
+msgid "Aufgabe aktualisiert"
+msgstr "Aufgabe wurde aktualisiert."
+
+#, fuzzy
+#| msgid "Einstellungen geändert"
+msgid "Benutzerrolle geändert"
+msgstr "Einstellungen geändert"
+
+#, fuzzy
+#| msgid "Benutzername"
+msgid "Benutzer deaktiviert"
+msgstr "Benutzername"
+
+#, fuzzy
+#| msgid "Passwort geändert"
+msgid "Passwort-Reset angefordert"
+msgstr "Passwort geändert"
+
+msgid "Sicherheitsverletzung"
+msgstr ""
+
+#, fuzzy
+#| msgid "aktualisiert"
+msgid "2FA aktiviert"
+msgstr "aktualisiert"
+
+#, fuzzy
+#| msgid "Fall wurde aktualisiert."
+msgid "2FA deaktiviert"
+msgstr "Fall wurde aktualisiert."
+
+#, fuzzy
+#| msgid "Anmeldung fehlgeschlagen"
+msgid "2FA-Verifikation fehlgeschlagen"
+msgstr "Anmeldung fehlgeschlagen"
+
+msgid "2FA Backup-Codes generiert"
+msgstr ""
+
+msgid "2FA Backup-Code verwendet"
+msgstr ""
+
+msgid "2FA Backup-Codes neu generiert"
+msgstr ""
+
+msgid "Sudo-Mode aktiviert (Re-Auth)"
+msgstr ""
+
+msgid "Einrichtung"
+msgstr "Einrichtung"
+
+msgid "Benutzer"
+msgstr "Benutzer"
+
+msgid "Aktion"
+msgstr "Aktion"
+
+msgid "Zieltyp"
+msgstr "Zieltyp"
+
+msgid "Ziel-ID"
+msgstr "Ziel-ID"
+
+msgid "Details"
+msgstr "Details"
+
+msgid "IP-Adresse"
+msgstr "IP-Adresse"
+
+msgid "Zeitstempel"
+msgstr "Zeitstempel"
+
+msgid "Audit-Log"
+msgstr "Audit-Log"
+
+msgid "Audit-Logs"
+msgstr "Audit-Logs"
+
+msgid "Offen"
+msgstr "Offen"
+
+msgid "Geschlossen"
+msgstr "Geschlossen"
+
+msgid "Titel"
+msgstr "Titel"
+
+msgid "Beschreibung"
+msgstr "Beschreibung"
+
+msgid ""
+"Frei-Text-Beschreibung des Falls. Nicht feldverschlüsselt — keine Klarnamen "
+"oder Art-9-Daten hier vermerken; sensible Inhalte gehören in ein Event-"
+"FieldTemplate mit Sensitivity=HOCH."
+msgstr ""
+
+msgid "Status"
+msgstr "Status"
+
+msgid "Offen = aktiver Fall, Geschlossen = abgeschlossen"
+msgstr "Offen = aktiver Fall, Geschlossen = abgeschlossen"
+
+msgid "Fallverantwortlich"
+msgstr "Fallverantwortlich"
+
+msgid "Hauptverantwortliche Fachkraft für diesen Fall"
+msgstr "Hauptverantwortliche Fachkraft für diesen Fall"
+
+msgid "Aktualisiert am"
+msgstr "Aktualisiert am"
+
+msgid "Geschlossen am"
+msgstr "Geschlossen am"
+
+msgid "Fälle"
+msgstr "Fälle"
+
+msgid "Unter 18"
+msgstr "Unter 18"
+
+msgid "18–26"
+msgstr "18–26"
+
+msgid "27+"
+msgstr "27+"
+
+msgid "Unbekannt"
+msgstr "Unbekannt"
+
+msgid "Pseudonym"
+msgstr "Pseudonym"
+
+msgid "Kontaktstufe"
+msgstr "Kontaktstufe"
+
+msgid ""
+"Identifiziert = Pseudonym bekannt, Qualifiziert = vollständige Identität "
+"bekannt"
+msgstr ""
+"Identifiziert = Pseudonym bekannt, Qualifiziert = vollständige Identität "
+"bekannt"
+
+msgid "Altersgruppe"
+msgstr "Altersgruppe"
+
+msgid "Altersgruppe des Klientel zum Zeitpunkt der Erfassung"
+msgstr "Altersgruppe des Klientel zum Zeitpunkt der Erfassung"
+
+msgid "Notizen"
+msgstr "Notizen"
+
+msgid ""
+"Interne Notizen, nur für Fachkräfte sichtbar. **Nicht feldverschlüsselt** — "
+"keine Klarnamen / Art-9-Daten (Gesundheit, Suchtdiagnosen, Klarname-Adresse) "
+"hier vermerken. Sensible Inhalte gehören in ein FieldTemplate mit "
+"Sensitivity=HOCH."
+msgstr ""
+
+msgid "Aktiv"
+msgstr "Aktiv"
+
+msgid "K-anonymisiert"
+msgstr ""
+
+msgid ""
+"Kennzeichnet, ob der Datensatz per K-Anonymisierung generalisiert wurde "
+"(Alternative zu Hard-Delete für Langzeit-Statistik)."
+msgstr ""
+
+msgid "Kontakt"
+msgstr "Kontakt"
+
+msgid "Leistung"
+msgstr "Leistung"
+
+msgid "Verwaltung"
+msgstr "Verwaltung"
+
+msgid "Notiz"
+msgstr "Notiz"
+
+msgid "Normal"
+msgstr "Normal"
+
+msgid "Erhöht"
+msgstr "Erhöht"
+
+msgid "Hoch"
+msgstr "Hoch"
+
+msgid "Hausverbot"
+msgstr "Hausverbot"
+
+msgid "Krisengespräch"
+msgstr "Krisengespräch"
+
+msgid "Medizinische Versorgung"
+msgstr "Medizinische Versorgung"
+
+msgid "Spritzentausch"
+msgstr "Spritzentausch"
+
+msgid "Begleitung"
+msgstr "Begleitung"
+
+msgid "Beratungsgespräch"
+msgstr "Beratungsgespräch"
+
+msgid "Vermittlung"
+msgstr "Vermittlung"
+
+msgid "Name"
+msgstr "Name"
+
+msgid "Kategorie"
+msgstr "Kategorie"
+
+msgid ""
+"Reine UI-Gruppierung für Statistik-Anzeige und Admin-Filter. Beeinflusst "
+"weder Export noch Bann-/Krisen-Logik — dafür ist der Systemtyp zuständig."
+msgstr ""
+
+msgid "Sensibilität"
+msgstr "Sensibilität"
+
+msgid "Steuert Zugriffsrechte: ELEVATED/HIGH erfordern höhere Berechtigungen"
+msgstr "Steuert Zugriffsrechte: ELEVATED/HIGH erfordern höhere Berechtigungen"
+
+msgid "Mindest-Kontaktstufe"
+msgstr "Mindest-Kontaktstufe"
+
+msgid "Mindest-Kontaktstufe des Klientel für diesen Dokumentationstyp"
+msgstr "Mindest-Kontaktstufe des Klientel für diesen Dokumentationstyp"
+
+msgid "Aufbewahrungsfrist (Tage)"
+msgstr "Aufbewahrungsfrist (Tage)"
+
+msgid "Icon"
+msgstr "Icon"
+
+msgid "Farbe"
+msgstr "Farbe"
+
+msgid "Systemtyp"
+msgstr "Systemtyp"
+
+#, fuzzy
+#| msgid ""
+#| "Stabiler Identifier — wird als Key in data_json verwendet. Nach "
+#| "Erstellung unveränderbar."
+msgid ""
+"Stabile Kennung für Bann-Logik, Krisen-Highlight und Jugendamt-Export. Nach "
+"Erstellung unveränderbar."
+msgstr ""
+"Stabiler Identifier — wird als Key in data_json verwendet. Nach Erstellung "
+"unveränderbar."
+
+msgid "Dokumentationstypen"
+msgstr "Dokumentationstypen"
+
+msgid "system_type kann nach Erstellung nicht geändert werden."
+msgstr "system_type kann nach Erstellung nicht geändert werden."
+
+msgid "Text"
+msgstr "Text"
+
+msgid "Textbereich"
+msgstr "Textbereich"
+
+msgid "Zahl"
+msgstr "Zahl"
+
+msgid "Datum"
+msgstr "Datum"
+
+msgid "Uhrzeit"
+msgstr "Uhrzeit"
+
+msgid "Ja/Nein"
+msgstr "Ja/Nein"
+
+msgid "Auswahl"
+msgstr "Auswahl"
+
+msgid "Mehrfachauswahl"
+msgstr "Mehrfachauswahl"
+
+#, fuzzy
+#| msgid "Daten"
+msgid "Datei"
+msgstr "Daten"
+
+msgid "Slug"
+msgstr "Slug"
+
+msgid ""
+"Stabiler Identifier — wird als Key in data_json verwendet. Nach Erstellung "
+"unveränderbar."
+msgstr ""
+"Stabiler Identifier — wird als Key in data_json verwendet. Nach Erstellung "
+"unveränderbar."
+
+msgid "Feldtyp"
+msgstr "Feldtyp"
+
+msgid "Pflichtfeld"
+msgstr "Pflichtfeld"
+
+msgid "Verschlüsselt"
+msgstr "Verschlüsselt"
+
+msgid "Feld-Level Sichtbarkeit. Leer = erbt vom Dokumentationstyp."
+msgstr ""
+
+msgid "Optionen (JSON)"
+msgstr "Optionen (JSON)"
+
+msgid "Default-Wert"
+msgstr ""
+
+msgid ""
+"Wird beim Neu-Anlegen eines Ereignisses vorgeblendet. Leer lassen = kein "
+"Default. Für SELECT/MULTI_SELECT: Option-Slug(s) (mehrere durch Komma "
+"trennen). Für FILE nicht unterstützt."
+msgstr ""
+
+msgid "Statistik-Kategorie"
+msgstr "Statistik-Kategorie"
+
+msgid "Hilfetext"
+msgstr "Hilfetext"
+
+msgid ""
+"Deaktivierte Feldvorlagen werden in Formularen nicht mehr angezeigt. "
+"Bestehende Werte in Events bleiben erhalten (Soft-Delete-Alternative zum "
+"Hard-Delete)."
+msgstr ""
+
+msgid "Feldvorlagen"
+msgstr "Feldvorlagen"
+
+msgid "Name ergibt keinen gültigen Slug."
+msgstr "Name ergibt keinen gültigen Slug."
+
+msgid "Nur a-z, 0-9 und Bindestriche erlaubt."
+msgstr "Nur a-z, 0-9 und Bindestriche erlaubt."
+
+msgid "Felder mit Sensibilität=Hoch müssen verschlüsselt sein."
+msgstr ""
+
+msgid "Für Datei-Felder ist kein Default-Wert zulässig."
+msgstr ""
+
+msgid "Default-Wert muss eine ganze Zahl sein."
+msgstr ""
+
+msgid "Default-Wert muss ein ISO-Datum sein (YYYY-MM-DD)."
+msgstr ""
+
+msgid "Default-Wert muss eine ISO-Uhrzeit sein (HH:MM oder HH:MM:SS)."
+msgstr ""
+
+msgid "Default-Wert muss 'true' oder 'false' sein."
+msgstr ""
+
+#, python-format
+msgid "Default-Wert '%(value)s' ist kein aktiver Options-Slug."
+msgstr ""
+
+msgid "Slug ist nicht gültig (nur a-z, 0-9, Bindestriche)."
+msgstr "Slug ist nicht gültig (nur a-z, 0-9, Bindestriche)."
+
+msgid "Slug kann nach Erstellung nicht geändert werden."
+msgstr "Slug kann nach Erstellung nicht geändert werden."
+
+msgid "Dokumentationstyp-Feld"
+msgstr "Dokumentationstyp-Feld"
+
+msgid "Dokumentationstyp-Felder"
+msgstr "Dokumentationstyp-Felder"
+
+msgid ""
+"Frei-Text-Beschreibung der Episode. Nicht feldverschlüsselt — keine "
+"Klarnamen oder Art-9-Daten hier vermerken."
+msgstr ""
+
+msgid "Episode"
+msgstr "Episode"
+
+msgid "Episoden"
+msgstr "Episoden"
+
+msgid "Daten (JSON)"
+msgstr "Daten (JSON)"
+
+msgid "Anonym"
+msgstr "Anonym"
+
+msgid "Gelöscht"
+msgstr "Gelöscht"
+
+msgid "Ereignis"
+msgstr "Ereignis"
+
+msgid "Ereignisse"
+msgstr "Ereignisse"
+
+msgid "Erstellt"
+msgstr "Erstellt"
+
+msgid "Aktualisiert"
+msgstr "Aktualisiert"
+
+msgid "Geändert von"
+msgstr "Geändert von"
+
+msgid "Geändert am"
+msgstr "Geändert am"
+
+msgid "Daten vorher"
+msgstr "Daten vorher"
+
+msgid "Daten nachher"
+msgstr "Daten nachher"
+
+msgid "Ereignis-Historie"
+msgstr "Ereignis-Historie"
+
+msgid "Ereignis-Historien"
+msgstr "Ereignis-Historien"
+
+msgid "Organisation"
+msgstr "Organisation"
+
+msgid "Organisationen"
+msgstr "Organisationen"
+
+msgid "Einrichtungen"
+msgstr "Einrichtungen"
+
+msgid "Erreicht"
+msgstr "Erreicht"
+
+msgid "Erreicht am"
+msgstr "Erreicht am"
+
+msgid "Wirkungsziel"
+msgstr "Wirkungsziel"
+
+msgid "Wirkungsziele"
+msgstr "Wirkungsziele"
+
+msgid "Abgeschlossen"
+msgstr "Abgeschlossen"
+
+msgid "Abgeschlossen am"
+msgstr "Abgeschlossen am"
+
+msgid "Reihenfolge"
+msgstr "Reihenfolge"
+
+msgid "Meilenstein"
+msgstr "Meilenstein"
+
+msgid "Meilensteine"
+msgstr "Meilensteine"
+
+msgid "Anzeigename"
+msgstr "Anzeigename"
+
+#, fuzzy
+#| msgid "Beratungsgespräch"
+msgid "Beispiel: 'Beratungsgespräch 30 Min'."
+msgstr "Beratungsgespräch"
+
+msgid "Vorbefüllte Werte"
+msgstr ""
+
+msgid "Slug → Wert. Wird vor Speicherung auf NORMAL-Felder gefiltert."
+msgstr ""
+
+msgid "Quick-Template"
+msgstr ""
+
+msgid "Quick-Templates"
+msgstr ""
+
+msgid "Klientel-Besuch"
+msgstr "Klientel-Besuch"
+
+msgid "Klientel-Besuche"
+msgstr "Klientel-Besuche"
+
+msgid "Ausstehend"
+msgstr "Ausstehend"
+
+msgid "Freigegeben"
+msgstr ""
+
+#, fuzzy
+#| msgid "Zurücksetzen"
+msgid "Zurückgestellt"
+msgstr "Zurücksetzen"
+
+msgid "Abgelehnt"
+msgstr "Abgelehnt"
+
+#, fuzzy
+#| msgid "Abgeschlossen am"
+msgid "Vorgeschlagen am"
+msgstr "Abgeschlossen am"
+
+#, fuzzy
+#| msgid "Löschen"
+msgid "Löschfrist"
+msgstr "Löschen"
+
+msgid "anonymous, identified, qualified oder document_type"
+msgstr ""
+
+#, fuzzy
+#| msgid "Feldvorlage"
+msgid "Wiedervorlage am"
+msgstr "Feldvorlage"
+
+msgid "Datum, ab dem ein zurückgestellter Vorschlag wieder vorgelegt wird."
+msgstr ""
+
+msgid "Anzahl Zurückstellungen"
+msgstr ""
+
+msgid "Wie oft wurde der Vorschlag bereits zurückgestellt."
+msgstr ""
+
+#, fuzzy
+#| msgid "Löschantrag"
+msgid "Löschvorschlag"
+msgstr "Löschantrag"
+
+#, fuzzy
+#| msgid "Löschanträge"
+msgid "Löschvorschläge"
+msgstr "Löschanträge"
+
 msgid "Begründung"
 msgstr "Begründung"
 
-#: src/core/models/workitem.py:140
-#: src/templates/core/events/deletion_review.html:14
-#: src/templates/core/export/client_data_pdf.html:128
+msgid "Ablaufdatum"
+msgstr ""
+
+#, fuzzy
+#| msgid "Aufgaben gesamt"
+msgid "Aufgehoben am"
+msgstr "Aufgaben gesamt"
+
+#, fuzzy
+#| msgid "Aufgaben"
+msgid "Aufgehoben von"
+msgstr "Aufgaben"
+
+msgid "Legal Holds"
+msgstr ""
+
+msgid "aktiv"
+msgstr "aktiv"
+
+#, fuzzy
+#| msgid "aktiv"
+msgid "inaktiv"
+msgstr "aktiv"
+
+msgid "Vollständiger Name"
+msgstr "Vollständiger Name"
+
+msgid "Standard-Dokumentationstyp"
+msgstr "Standard-Dokumentationstyp"
+
+msgid "Session-Timeout (Minuten)"
+msgstr "Session-Timeout (Minuten)"
+
+msgid "Aufbewahrung anonym (Tage)"
+msgstr "Aufbewahrung anonym (Tage)"
+
+msgid "Aufbewahrung identifiziert (Tage)"
+msgstr "Aufbewahrung identifiziert (Tage)"
+
+msgid "Aufbewahrung qualifiziert (Tage)"
+msgstr "Aufbewahrung qualifiziert (Tage)"
+
+msgid "Aufbewahrung Aktivitäten (Tage)"
+msgstr "Aufbewahrung Aktivitäten (Tage)"
+
+#, fuzzy
+#| msgid "Aufbewahrung anonym (Tage)"
+msgid "AuditLog-Aufbewahrung (Monate)"
+msgstr "Aufbewahrung anonym (Tage)"
+
+msgid ""
+"Wie lange AuditLog-Eintraege aufbewahrt werden, bevor das enforce_retention-"
+"Kommando sie loescht. 0 = deaktiviert (unbegrenzte Aufbewahrung)."
+msgstr ""
+
+#, fuzzy
+#| msgid "Erfasste Daten"
+msgid "Erlaubte Dateitypen"
+msgstr "Erfasste Daten"
+
+msgid "Kommagetrennte Dateiendungen (z.B. pdf,jpg,png,docx)"
+msgstr ""
+
+msgid "Max. Dateigröße (MB)"
+msgstr ""
+
+msgid "2FA-Pflicht für alle Nutzer"
+msgstr ""
+
+msgid ""
+"Wenn aktiv, gilt MFA-Zwang (TOTP) automatisch für alle Nutzer dieser "
+"Einrichtung — unabhängig vom einzelnen Benutzerfeld mfa_required."
+msgstr ""
+
+msgid "Auto-Freigabe nach mehrfacher Zurückstellung"
+msgstr ""
+
+msgid ""
+"Wenn aktiv, werden Löschvorschläge nach Überschreiten der maximalen "
+"Zurückstellungszahl automatisch freigegeben, statt manuelle Entscheidung zu "
+"erzwingen."
+msgstr ""
+
+msgid "Maximale Zurückstellungen"
+msgstr ""
+
+msgid ""
+"Nach wie vielen Zurückstellungen eine endgültige Entscheidung erzwungen oder "
+"(bei Auto-Freigabe) automatisch freigegeben wird."
+msgstr ""
+
+msgid "K-Anonymisierung statt Hard-Delete"
+msgstr ""
+
+msgid ""
+"Wenn aktiv, wird bei DSGVO-Löschung statt Hard-Delete eine K-Anonymisierung "
+"durchgeführt. Der Datensatz bleibt statistisch auswertbar, ist aber nicht "
+"mehr re-identifizierbar."
+msgstr ""
+
+msgid "K-Anonymitäts-Schwelle"
+msgstr ""
+
+msgid ""
+"Mindest-Gruppengröße für K-Anonymität (z.B. k=5 → mindestens 5 Datensätze "
+"pro Bucket). Je höher der Wert, desto stärker die Anonymisierung."
+msgstr ""
+
+msgid "Fuzzy-Search-Schwelle"
+msgstr ""
+
+msgid ""
+"Mindest-Ähnlichkeit (0.0–1.0) für Fuzzy-Treffer im Pseudonym. Kleinere Werte "
+"liefern mehr, aber ungenauere Treffer; größere Werte sind strenger. "
+"Standard: 0.3."
+msgstr ""
+
+msgid "Einstellungen"
+msgstr "Einstellungen"
+
+msgid "Statistik-Snapshot"
+msgstr "Statistik-Snapshot"
+
+msgid "Statistik-Snapshots"
+msgstr "Statistik-Snapshots"
+
+msgid "Bezeichnung"
+msgstr "Bezeichnung"
+
+msgid "Startzeit"
+msgstr "Startzeit"
+
+msgid "Schichtbeginn (z.B. 08:00)"
+msgstr "Schichtbeginn (z.B. 08:00)"
+
+msgid "Endzeit"
+msgstr "Endzeit"
+
+msgid ""
+"Schichtende (z.B. 16:00). Bei Nachtschicht: Ende nach Mitternacht möglich"
+msgstr ""
+"Schichtende (z.B. 16:00). Bei Nachtschicht: Ende nach Mitternacht möglich"
+
+msgid "Standard"
+msgstr "Standard"
+
+msgid ""
+"Wird als Standard-Schicht vorausgewählt, wenn keine aktive Schicht erkannt "
+"wird"
+msgstr ""
+"Wird als Standard-Schicht vorausgewählt, wenn keine aktive Schicht erkannt "
+"wird"
+
+msgid "Zeitfilter"
+msgstr "Zeitfilter"
+
+msgid "Administrator"
+msgstr "Administrator"
+
+msgid "Leitung"
+msgstr "Leitung"
+
+msgid "Fachkraft"
+msgstr "Fachkraft"
+
+msgid "Assistenz"
+msgstr "Assistenz"
+
+msgid "Rolle"
+msgstr "Rolle"
+
+msgid "Telefon"
+msgstr "Telefon"
+
+msgid "Passwort muss geändert werden"
+msgstr "Passwort muss geändert werden"
+
+msgid "2FA erforderlich"
+msgstr ""
+
+msgid ""
+"Wenn aktiv, muss der Nutzer ein TOTP-Gerät einrichten, bevor er die "
+"Anwendung weiter nutzen kann. Wird automatisch gesetzt, wenn die Einrichtung "
+"2FA für alle verlangt."
+msgstr ""
+
+msgid "Bevorzugte Sprache"
+msgstr ""
+
+msgid "Offline-Schlüssel-Salt"
+msgstr ""
+
+msgid ""
+"Base64URL-Salt für die client-seitige PBKDF2-Ableitung. Lazy generiert beim "
+"ersten Salt-Endpoint-Aufruf, rotiert bei Passwort-Änderung."
+msgstr ""
+
+msgid "Hinweis"
+msgstr "Hinweis"
+
+msgid "Aufgabe"
+msgstr "Aufgabe"
+
+msgid "In Bearbeitung"
+msgstr "In Bearbeitung"
+
+msgid "Erledigt"
+msgstr "Erledigt"
+
+msgid "Verworfen"
+msgstr "Verworfen"
+
+msgid "Wichtig"
+msgstr "Wichtig"
+
+msgid "Dringend"
+msgstr "Dringend"
+
+#, fuzzy
+#| msgid "Keine Frist"
+msgid "Keine"
+msgstr "Keine Frist"
+
+#, fuzzy
+#| msgid "Löschen"
+msgid "Wöchentlich"
+msgstr "Löschen"
+
+#, fuzzy
+#| msgid "Monat"
+msgid "Monatlich"
+msgstr "Monat"
+
+msgid "Vierteljährlich"
+msgstr ""
+
+msgid "Jährlich"
+msgstr ""
+
+msgid "Zugewiesen an"
+msgstr "Zugewiesen an"
+
+msgid "Typ"
+msgstr "Typ"
+
+msgid "Aufgabe = aktiv zu erledigen, Hinweis = informativ."
+msgstr ""
+
+msgid ""
+"Offen = noch nicht begonnen, In Bearbeitung = aktiv, Erledigt = abgeschlossen"
+msgstr ""
+"Offen = noch nicht begonnen, In Bearbeitung = aktiv, Erledigt = abgeschlossen"
+
+msgid "Priorität"
+msgstr "Priorität"
+
+msgid "Dringend = sofortige Bearbeitung, Wichtig = zeitnah, Normal = regulär"
+msgstr "Dringend = sofortige Bearbeitung, Wichtig = zeitnah, Normal = regulär"
+
+msgid ""
+"Frei-Text-Beschreibung der Aufgabe. Nicht feldverschlüsselt — keine "
+"Klarnamen oder Art-9-Daten hier vermerken."
+msgstr ""
+
+msgid "Zu erledigen bis"
+msgstr "Zu erledigen bis"
+
+msgid "Optional. Wann soll die Aufgabe wieder aufpoppen?"
+msgstr ""
+
+msgid "Wiederholung"
+msgstr ""
+
+msgid ""
+"Bei Erledigung wird automatisch eine Folgeaufgabe mit neuer Frist erstellt."
+msgstr ""
+
+#, fuzzy
+#| msgid "Aufgabe wurde erstellt."
+msgid "Folgeaufgabe erstellt am"
+msgstr "Aufgabe wurde erstellt."
+
+msgid ""
+"Zeitpunkt, an dem für dieses Item bereits eine wiederkehrende Folgeaufgabe "
+"erzeugt wurde. Verhindert doppelte Duplikate beim erneuten Setzen auf "
+"'Erledigt'."
+msgstr ""
+
+msgid "Arbeitsauftrag"
+msgstr "Arbeitsauftrag"
+
+msgid "Arbeitsaufträge"
+msgstr "Arbeitsaufträge"
+
+msgid "Genehmigt"
+msgstr "Genehmigt"
+
 msgid "Beantragt von"
 msgstr "Beantragt von"
 
-#: src/core/models/workitem.py:148
-#: src/templates/core/export/client_data_pdf.html:129
 msgid "Geprüft von"
 msgstr "Geprüft von"
 
-#: src/core/models/workitem.py:154
-#: src/templates/core/export/client_data_pdf.html:131
 msgid "Geprüft am"
 msgstr "Geprüft am"
 
-#: src/core/models/workitem.py:158
 msgid "Löschantrag"
 msgstr "Löschantrag"
 
-#: src/core/models/workitem.py:159 src/templates/base.html:133
-#: src/templates/base.html:277 src/templates/core/deletion_requests/list.html:4
-#: src/templates/core/deletion_requests/list.html:7
 msgid "Löschanträge"
 msgstr "Löschanträge"
 
-#: src/core/services/cases.py:20
 msgid "Fallverantwortlicher gehört nicht zur Einrichtung."
 msgstr "Fallverantwortlicher gehört nicht zur Einrichtung."
 
-#: src/core/services/cases.py:69
 msgid "Ereignis gehört nicht zur selben Einrichtung wie der Fall."
 msgstr "Ereignis gehört nicht zur selben Einrichtung wie der Fall."
 
-#: src/core/services/episodes.py:19 src/core/views/cases.py:308
-#: src/core/views/cases.py:320
+msgid "Ereignis ist für diese Rolle nicht sichtbar."
+msgstr ""
+
+msgid ""
+"Anonyme Ereignisse können nicht an einen klientelbezogenen Fall gehängt "
+"werden."
+msgstr ""
+
+msgid "Klientel des Ereignisses passt nicht zum Klientel des Falls."
+msgstr "Klientel des Ereignisses passt nicht zum Klientel des Falls."
+
 msgid "Episoden können nur für offene Fälle erstellt werden."
 msgstr "Episoden können nur für offene Fälle erstellt werden."
 
-#: src/core/services/event.py:54
-msgid "Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, da eine Mindest-Kontaktstufe vorausgesetzt wird."
-msgstr "Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, da eine Mindest-Kontaktstufe vorausgesetzt wird."
-
-#: src/core/services/event.py:63
-#, fuzzy
-#| msgid "Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, da eine Mindest-Kontaktstufe vorausgesetzt wird."
-msgid "Für diesen Dokumentationstyp muss ein Klientel ausgewählt werden, da eine Mindest-Kontaktstufe vorausgesetzt wird."
-msgstr "Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, da eine Mindest-Kontaktstufe vorausgesetzt wird."
-
-#: src/core/services/event.py:75
-#, fuzzy, python-format
-#| msgid "Klient muss mindestens die Kontaktstufe '%(required_stage)s' haben, aktuelle Stufe ist '%(actual_stage)s'."
-msgid "Klientel muss mindestens die Kontaktstufe '%(required_stage)s' haben, aktuelle Stufe ist '%(actual_stage)s'."
-msgstr "Klient muss mindestens die Kontaktstufe '%(required_stage)s' haben, aktuelle Stufe ist '%(actual_stage)s'."
-
-#: src/core/services/event.py:124
-msgid "Das Ereignis wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."
-msgstr "Das Ereignis wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."
-
-#: src/core/services/export.py:105 src/core/views/events.py:232
 msgid "[Eingeschränkt]"
 msgstr "[Eingeschränkt]"
 
-#: src/core/utils/dates.py:52
+msgid "[verschlüsselt]"
+msgstr "[verschlüsselt]"
+
+#, fuzzy
+#| msgid "Ereignis gehört nicht zur selben Einrichtung wie der Fall."
+msgid "Fall gehört nicht zur selben Einrichtung wie das Ereignis."
+msgstr "Ereignis gehört nicht zur selben Einrichtung wie der Fall."
+
+msgid ""
+"Anonyme Ereignisse dürfen nicht an klientelbezogene Fälle gehängt werden."
+msgstr ""
+
+msgid "Diese Dokumentation darf von Ihrer Rolle nicht erstellt werden."
+msgstr ""
+
+msgid ""
+"Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, da eine "
+"Mindest-Kontaktstufe vorausgesetzt wird."
+msgstr ""
+"Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, da eine "
+"Mindest-Kontaktstufe vorausgesetzt wird."
+
+msgid ""
+"Für diesen Dokumentationstyp muss ein Klientel ausgewählt werden, da eine "
+"Mindest-Kontaktstufe vorausgesetzt wird."
+msgstr ""
+"Für diesen Dokumentationstyp muss ein Klientel ausgewählt werden, da eine "
+"Mindest-Kontaktstufe vorausgesetzt wird."
+
+#, fuzzy, python-format
+msgid ""
+"Klientel muss mindestens die Kontaktstufe '%(required_stage)s' haben, "
+"aktuelle Stufe ist '%(actual_stage)s'."
+msgstr ""
+"Klientel muss mindestens die Kontaktstufe '%(required_stage)s' haben, "
+"aktuelle Stufe ist '%(actual_stage)s'."
+
+#, fuzzy
+#| msgid "Daten"
+msgid "[Datei]"
+msgstr "Daten"
+
+#, python-format
+msgid "[%(n)d Datei]"
+msgid_plural "[%(n)d Dateien]"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "Datei-Upload abgelehnt: Virenscanner ist nicht erreichbar."
+msgstr ""
+
+#, python-format
+msgid "Datei wurde von Virenscanner abgewiesen: %(signature)s"
+msgstr ""
+
+#, python-format
+msgid "Dateityp .%(ext)s ist nicht erlaubt. Erlaubt: %(allowed)s"
+msgstr ""
+
+#, python-format
+msgid ""
+"Datei-Inhalt stimmt nicht mit dem angegebenen Typ überein (erkannt: "
+"%(detected)s, erwartet: %(declared)s)."
+msgstr ""
+
+#, fuzzy
+#| msgid ""
+#| "Das Ereignis wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite "
+#| "neu."
+msgid ""
+"Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite "
+"neu."
+msgstr ""
+"Das Ereignis wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite "
+"neu."
+
+#, fuzzy
+#| msgid "Dokument"
+msgid "Dokumenttyp"
+msgstr "Dokument"
+
+#, python-format
+msgid ""
+"Feldvorlage „%(name)s“ kann nicht gelöscht werden — es existieren Events mit "
+"Daten unter dem Slug „%(slug)s“. Alternativ: Feldvorlage deaktivieren "
+"(is_active=False)."
+msgstr ""
+
+#, fuzzy
+#| msgid "Überfällig"
+msgid "Heute fällig"
+msgstr "Überfällig"
+
+#, fuzzy
+#| msgid "Überfällig"
+msgid "Morgen fällig"
+msgstr "Überfällig"
+
 #, python-format
 msgid "Fällig am %(date)s"
 msgstr "Fällig am %(date)s"
 
-#: src/core/utils/dates.py:69
 #, python-format
 msgid "Überfällig (seit %(days)d Tag)"
 msgid_plural "Überfällig (seit %(days)d Tagen)"
 msgstr[0] "Überfällig (seit %(days)d Tag)"
 msgstr[1] "Überfällig (seit %(days)d Tagen)"
 
-#: src/core/utils/dates.py:82 src/core/views/workitems.py:30
-#: src/templates/core/account/partials/_widget_settings.html:16
-#: src/templates/core/handover/index.html:19
-#: src/templates/core/workitems/form.html:71
-#: src/templates/core/zeitstrom/index.html:52
 msgid "Heute"
 msgstr "Heute"
 
-#: src/core/utils/dates.py:90 src/templates/core/workitems/form.html:72
 msgid "Morgen"
 msgstr "Morgen"
 
-#: src/core/utils/dates.py:98
 msgid "Übermorgen"
 msgstr "Übermorgen"
 
-#: src/core/utils/dates.py:118
 #, python-format
 msgid "Diese Woche (%(weekday)s)"
 msgstr "Diese Woche (%(weekday)s)"
 
-#: src/core/utils/dates.py:122
 #, python-format
 msgid "Nächste Woche (%(weekday)s)"
 msgstr "Nächste Woche (%(weekday)s)"
 
-#: src/core/utils/dates.py:126
 #, python-format
 msgid "Dieser Monat (%(date)s)"
 msgstr "Dieser Monat (%(date)s)"
 
-#: src/core/utils/dates.py:132
 #, python-format
 msgid "Nächster Monat (%(date)s)"
 msgstr "Nächster Monat (%(date)s)"
 
-#: src/core/views/cases.py:150
-msgid "Fall wurde erstellt."
-msgstr "Fall wurde erstellt."
+msgid ""
+"Ihr Konto ist nach mehreren fehlgeschlagenen Versuchen temporär gesperrt. "
+"Bitte später erneut versuchen oder Administration kontaktieren."
+msgstr ""
 
-#: src/core/views/cases.py:216
-msgid "Fall wurde aktualisiert."
-msgstr "Fall wurde aktualisiert."
-
-#: src/core/views/cases.py:235
-msgid "Fall wurde geschlossen."
-msgstr "Fall wurde geschlossen."
-
-#: src/core/views/cases.py:246
-msgid "Fall wurde wiedereröffnet."
-msgstr "Fall wurde wiedereröffnet."
-
-#: src/core/views/cases.py:258
-msgid "Kein Ereignis ausgewählt."
-msgstr "Kein Ereignis ausgewählt."
-
-#: src/core/views/cases.py:332
 msgid "Episode wurde erstellt."
 msgstr "Episode wurde erstellt."
 
-#: src/core/views/cases.py:363
 msgid "Episode wurde aktualisiert."
 msgstr "Episode wurde aktualisiert."
 
-#: src/core/views/cases.py:377
 msgid "Episode wurde abgeschlossen."
 msgstr "Episode wurde abgeschlossen."
 
-#: src/core/views/clients.py:155
-#, fuzzy
-#| msgid "Klient wurde erstellt."
-msgid "Klientel wurde erstellt."
-msgstr "Klient wurde erstellt."
+msgid "Fall wurde erstellt."
+msgstr "Fall wurde erstellt."
 
-#: src/core/views/clients.py:183
-#, fuzzy
-#| msgid "Klient wurde aktualisiert."
-msgid "Klientel wurde aktualisiert."
-msgstr "Klient wurde aktualisiert."
+msgid "Fall wurde aktualisiert."
+msgstr "Fall wurde aktualisiert."
 
-#: src/core/views/events.py:174
-msgid "Kontakt wurde dokumentiert."
-msgstr "Kontakt wurde dokumentiert."
+msgid "Fall wurde geschlossen."
+msgstr "Fall wurde geschlossen."
 
-#: src/core/views/events.py:224
-msgid "[verschlüsselt]"
-msgstr "[verschlüsselt]"
+msgid "Fall wurde wiedereröffnet."
+msgstr "Fall wurde wiedereröffnet."
 
-#: src/core/views/events.py:315
-msgid "Ereignis wurde aktualisiert."
-msgstr "Ereignis wurde aktualisiert."
+msgid "Kein Ereignis ausgewählt."
+msgstr "Kein Ereignis ausgewählt."
 
-#: src/core/views/events.py:351
-msgid "Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."
-msgstr "Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."
+msgid "Person wurde angelegt."
+msgstr "Person wurde angelegt."
 
-#: src/core/views/events.py:354
-msgid "Ereignis wurde gelöscht."
-msgstr "Ereignis wurde gelöscht."
+msgid "Person wurde aktualisiert."
+msgstr "Person wurde aktualisiert."
 
-#: src/core/views/events.py:412
 msgid "Sie können Ihren eigenen Löschantrag nicht genehmigen."
 msgstr "Sie können Ihren eigenen Löschantrag nicht genehmigen."
 
-#: src/core/views/events.py:418
 msgid "Löschantrag wurde genehmigt."
 msgstr "Löschantrag wurde genehmigt."
 
-#: src/core/views/events.py:421
 msgid "Löschantrag wurde abgelehnt."
 msgstr "Löschantrag wurde abgelehnt."
 
-#: src/core/views/statistics.py:92 src/core/views/statistics.py:122
-#: src/core/views/statistics.py:152
+msgid "Kontakt wurde dokumentiert."
+msgstr "Kontakt wurde dokumentiert."
+
+msgid "Ereignis wurde aktualisiert."
+msgstr "Ereignis wurde aktualisiert."
+
+msgid "Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."
+msgstr ""
+"Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."
+
+msgid "Ereignis wurde gelöscht."
+msgstr "Ereignis wurde gelöscht."
+
+msgid "Zwei-Faktor-Authentifizierung aktiviert."
+msgstr ""
+
+msgid "Der Code ist ungültig. Bitte erneut versuchen."
+msgstr ""
+
+msgid ""
+"Die Codes werden nur einmal angezeigt. Neue Codes lassen sich in den 2FA-"
+"Einstellungen generieren."
+msgstr ""
+
+msgid "TOTP-Code fehlt oder ist ungültig."
+msgstr ""
+
+msgid "Zwei-Faktor-Authentifizierung ist für dein Konto verpflichtend."
+msgstr ""
+
+msgid "Zwei-Faktor-Authentifizierung deaktiviert."
+msgstr ""
+
+#, fuzzy
+#| msgid "date_from und date_to erforderlich"
+msgid "Begründung ist erforderlich."
+msgstr "date_from und date_to erforderlich"
+
+#, fuzzy
+#| msgid "Ungültiger Status"
+msgid "Ungültiges Datum."
+msgstr "Ungültiger Status"
+
+#, fuzzy
+#| msgid "Kein Ereignis ausgewählt."
+msgid "Keine Vorschläge ausgewählt."
+msgstr "Kein Ereignis ausgewählt."
+
+#, fuzzy
+#| msgid "Keine Einträge gefunden."
+msgid "Keine gültigen Vorschläge gefunden."
+msgstr "Keine Einträge gefunden."
+
 msgid "date_from und date_to erforderlich"
 msgstr "date_from und date_to erforderlich"
 
-#: src/core/views/workitems.py:29
-msgid "Überfällig"
-msgstr "Überfällig"
+msgid "Passwort ist nicht korrekt."
+msgstr ""
 
-#: src/core/views/workitems.py:31
-msgid "Diese Woche"
-msgstr "Diese Woche"
-
-#: src/core/views/workitems.py:32
-msgid "Ohne Frist"
-msgstr "Ohne Frist"
-
-#: src/core/views/workitems.py:150
-msgid "Keine Berechtigung für diese Aufgabe."
-msgstr "Keine Berechtigung für diese Aufgabe."
-
-#: src/core/views/workitems.py:155
 msgid "Ungültiger Status"
 msgstr "Ungültiger Status"
 
-#: src/core/views/workitems.py:164
+msgid "Keine Berechtigung für diese Aufgabe."
+msgstr "Keine Berechtigung für diese Aufgabe."
+
 msgid "Status aktualisiert."
 msgstr "Status aktualisiert."
 
-#: src/core/views/workitems.py:211
 msgid "Aufgabe wurde erstellt."
 msgstr "Aufgabe wurde erstellt."
 
-#: src/core/views/workitems.py:252
 msgid "Aufgabe wurde aktualisiert."
 msgstr "Aufgabe wurde aktualisiert."
 
-#: src/templates/403.html:4 src/templates/403.html:10
+#, fuzzy
+#| msgid "Kein Ereignis ausgewählt."
+msgid "Keine Aufgaben ausgewählt."
+msgstr "Kein Ereignis ausgewählt."
+
+msgid "Keine gültigen Aufgaben gefunden."
+msgstr "Keine Klienten gefunden"
+
+#, fuzzy
+#| msgid "Keine Berechtigung für diese Aufgabe."
+msgid "Keine Berechtigung für ausgewählte Aufgaben."
+msgstr "Keine Berechtigung für diese Aufgabe."
+
+#, fuzzy, python-format
+#| msgid "Aufgabe wurde aktualisiert."
+msgid "%(count)d Aufgaben aktualisiert."
+msgstr "Aufgabe wurde aktualisiert."
+
+#, fuzzy
+#| msgid "Ungültiger Status"
+msgid "Ungültige Priorität"
+msgstr "Ungültiger Status"
+
+msgid "Unbekannte Benutzerin/Benutzer"
+msgstr ""
+
+msgid "Überfällig"
+msgstr "Überfällig"
+
+msgid "Diese Woche"
+msgstr "Diese Woche"
+
+msgid "Ohne Frist"
+msgstr "Ohne Frist"
+
+msgid "Alle"
+msgstr "Alle"
+
+msgid "Kontakte"
+msgstr "Kontakte"
+
+msgid "Aufgaben"
+msgstr "Aufgaben"
+
+msgid "Hausverbote"
+msgstr "Hausverbote"
+
 msgid "Zugriff verweigert"
 msgstr "Zugriff verweigert"
 
-#: src/templates/403.html:11
 msgid "Sie haben keine Berechtigung, diese Seite aufzurufen."
 msgstr "Sie haben keine Berechtigung, diese Seite aufzurufen."
 
-#: src/templates/403.html:15 src/templates/404.html:15
-#: src/templates/500.html:58
 msgid "Zurück zur Startseite"
 msgstr "Zurück zur Startseite"
 
-#: src/templates/404.html:4 src/templates/404.html:10
+msgid "Sicherheits-Token abgelaufen"
+msgstr ""
+
+msgid ""
+"Ihre Sitzung ist abgelaufen oder das Sicherheitstoken ist ungültig. Bitte "
+"laden Sie die Seite neu und versuchen Sie es erneut."
+msgstr ""
+
+msgid ""
+"Häufiger Grund: Sie waren längere Zeit inaktiv oder haben sich in einem "
+"anderen Tab abgemeldet."
+msgstr ""
+
+#, fuzzy
+#| msgid "Seite nicht gefunden"
+msgid "Seite neu laden"
+msgstr "Seite nicht gefunden"
+
+#, fuzzy
+#| msgid "Startseite"
+msgid "Zur Startseite"
+msgstr "Startseite"
+
 msgid "Seite nicht gefunden"
 msgstr "Seite nicht gefunden"
 
-#: src/templates/404.html:11
 msgid "Die angeforderte Seite existiert nicht oder wurde verschoben."
 msgstr "Die angeforderte Seite existiert nicht oder wurde verschoben."
 
-#: src/templates/500.html:7 src/templates/500.html:55
 msgid "Serverfehler"
 msgstr ""
 
-#: src/templates/500.html:56
-msgid "Ein interner Fehler ist aufgetreten. Bitte versuchen Sie es später erneut."
+msgid ""
+"Ein interner Fehler ist aufgetreten. Bitte versuchen Sie es später erneut."
 msgstr ""
 
-#: src/templates/auth/login.html:7 src/templates/auth/login.html:39
+msgid "Wartungsmodus"
+msgstr ""
+
+#, fuzzy
+#| msgid "Ereignis bearbeiten"
+msgid "Wartungsarbeiten"
+msgstr "Ereignis bearbeiten"
+
+msgid ""
+"Anlaufstelle ist gerade kurz nicht erreichbar — wir spielen ein Update ein "
+"oder fuehren eine Migration durch."
+msgstr ""
+
+msgid ""
+"Bitte in wenigen Minuten erneut versuchen. Eingegebene Daten werden vom "
+"Service-Worker zwischengespeichert und automatisch gesendet, sobald die App "
+"wieder online ist."
+msgstr ""
+
+msgid "Erneut versuchen"
+msgstr ""
+
 msgid "Anmelden"
 msgstr "Anmelden"
 
-#: src/templates/auth/login.html:21
+msgid "Open Source · DSGVO-konform · Selbst gehostet"
+msgstr ""
+
 msgid "Benutzername oder Passwort falsch."
 msgstr "Benutzername oder Passwort falsch."
 
-#: src/templates/auth/login.html:28 src/templates/core/account/profile.html:18
 msgid "Benutzername"
 msgstr "Benutzername"
 
-#: src/templates/auth/login.html:33
 msgid "Passwort"
 msgstr "Passwort"
 
-#: src/templates/auth/login.html:43
 msgid "Passwort vergessen?"
 msgstr "Passwort vergessen?"
 
-#: src/templates/auth/login.html:58
 msgid "Als App installieren"
 msgstr "Als App installieren"
 
-#: src/templates/auth/login.html:60 src/templates/auth/login.html:66
 msgid "Für schnelleren Zugriff"
 msgstr "Für schnelleren Zugriff"
 
-#: src/templates/auth/login.html:64
-msgid "Teilen <span class=\"inline-block\">&#x2191;</span> → „Zum Home-Bildschirm\" tippen"
-msgstr "Teilen <span class=\"inline-block\">&#x2191;</span> → „Zum Home-Bildschirm\" tippen"
+msgid ""
+"Teilen <span class=\"inline-block\">&#x2191;</span> → „Zum Home-Bildschirm\" "
+"tippen"
+msgstr ""
+"Teilen <span class=\"inline-block\">&#x2191;</span> → „Zum Home-Bildschirm\" "
+"tippen"
 
-#: src/templates/auth/password_change.html:7
-#: src/templates/auth/password_change.html:12
-#: src/templates/auth/password_change.html:46
-#: src/templates/core/account/profile.html:38
+msgid "Quellcode"
+msgstr ""
+
+msgid "Backup-Codes"
+msgstr ""
+
+msgid "Backup-Codes für 2FA"
+msgstr ""
+
+msgid "Die Codes werden nur einmal angezeigt."
+msgstr ""
+
+msgid "Bewahre sie so sicher auf wie dein Passwort."
+msgstr ""
+
+msgid "Jeder Code ist nur einmal verwendbar."
+msgstr ""
+
+msgid ""
+"Neue Codes kannst du später in den 2FA-Einstellungen generieren – der alte "
+"Satz wird dann ungültig."
+msgstr ""
+
+msgid "In die Zwischenablage kopieren"
+msgstr ""
+
+#, fuzzy
+#| msgid "Herunterladen"
+msgid "Als Datei herunterladen"
+msgstr "Herunterladen"
+
+msgid "Drucken"
+msgstr ""
+
+msgid "Ich habe die Codes sicher gespeichert."
+msgstr ""
+
+#, fuzzy
+#| msgid "Widget-Einstellungen"
+msgid "Zu den 2FA-Einstellungen"
+msgstr "Widget-Einstellungen"
+
+msgid "2FA-Code eingeben"
+msgstr ""
+
+msgid "Zwei-Faktor-Code"
+msgstr ""
+
+msgid "Gib den 6-stelligen Code aus deiner Authenticator-App ein."
+msgstr ""
+
+msgid "Gib einen deiner einmaligen Backup-Codes ein (Format xxxx-xxxx)."
+msgstr ""
+
+msgid "Code"
+msgstr ""
+
+msgid "Backup-Code"
+msgstr ""
+
+msgid "Backup-Code verwenden"
+msgstr ""
+
+#, fuzzy
+#| msgid "Zurück zur Startseite"
+msgid "Zurück zur Authenticator-App"
+msgstr "Zurück zur Startseite"
+
+msgid "Abmelden"
+msgstr "Abmelden"
+
+msgid "Zwei-Faktor-Authentifizierung"
+msgstr ""
+
+msgid "Aktiv: Zweiter Faktor per Authenticator-App."
+msgstr ""
+
+msgid ""
+"Zwei-Faktor-Authentifizierung ist für dein Konto verpflichtend und kann "
+"nicht deaktiviert werden."
+msgstr ""
+
+msgid ""
+"Du kannst die 2FA jederzeit deaktivieren. Bei wichtigen Rollen empfehlen wir "
+"die Aktivierung."
+msgstr ""
+
+msgid "2FA deaktivieren"
+msgstr ""
+
+msgid ""
+"Ersatz-Codes für den Fall, dass dein Authenticator-Gerät nicht verfügbar "
+"ist. Jeder Code ist einmalig."
+msgstr ""
+
+#, python-format
+msgid ""
+"\n"
+"                        Noch <strong>%(remaining)s</strong> von %(total)s "
+"Codes verfügbar.\n"
+"                    "
+msgstr ""
+
+msgid "Wenige Backup-Codes übrig. Am besten jetzt einen neuen Satz generieren."
+msgstr ""
+
+msgid "Neue Backup-Codes generieren"
+msgstr ""
+
+msgid ""
+"Zur Bestätigung einen aktuellen 6-stelligen TOTP-Code eingeben. Der "
+"bisherige Satz wird sofort ungültig."
+msgstr ""
+
+msgid "TOTP-Code"
+msgstr ""
+
+#, fuzzy
+#| msgid "Genehmigen"
+msgid "Generieren"
+msgstr "Genehmigen"
+
+msgid "Zwei-Faktor-Authentifizierung ist derzeit nicht aktiv."
+msgstr ""
+
+#, fuzzy
+#| msgid "Einrichtungen"
+msgid "2FA einrichten"
+msgstr "Einrichtungen"
+
+#, fuzzy
+#| msgid "Zurück zur Liste"
+msgid "Zurück zum Profil"
+msgstr "Zurück zur Liste"
+
+msgid ""
+"Scanne den QR-Code mit deiner Authenticator-App (z.&nbsp;B. Google "
+"Authenticator, Authy oder FreeOTP) und gib den angezeigten 6-stelligen Code "
+"zur Bestätigung ein."
+msgstr ""
+
+msgid "QR-Code für Authenticator-App"
+msgstr ""
+
+msgid "Secret manuell eingeben"
+msgstr ""
+
+msgid "6-stelliger Code"
+msgstr ""
+
+msgid "Bestätigen & aktivieren"
+msgstr ""
+
+msgid "Abbrechen und abmelden"
+msgstr ""
+
 msgid "Passwort ändern"
 msgstr "Passwort ändern"
 
-#: src/templates/auth/password_change.html:30
 msgid "Aktuelles Passwort"
 msgstr "Aktuelles Passwort"
 
-#: src/templates/auth/password_change.html:35
-#: src/templates/registration/password_reset_confirm.html:31
 msgid "Neues Passwort"
 msgstr "Neues Passwort"
 
-#: src/templates/auth/password_change.html:40
-#: src/templates/registration/password_reset_confirm.html:36
 msgid "Neues Passwort bestätigen"
 msgstr "Neues Passwort bestätigen"
 
-#: src/templates/base.html:21
+msgid "Re-Authentifizierung erforderlich"
+msgstr ""
+
+msgid ""
+"Diese Aktion ist sicherheitskritisch (z.B. 2FA deaktivieren oder Daten "
+"exportieren). Bitte bestätigen Sie Ihr Passwort, um fortzufahren."
+msgstr ""
+
+msgid "Die Bestätigung gilt fuer 15 Minuten innerhalb dieser Sitzung."
+msgstr ""
+
+msgid "Bestätigen und fortfahren"
+msgstr ""
+
+msgid "Brechen Sie ab und kehren Sie zurück:"
+msgstr ""
+
 msgid "Zum Inhalt springen"
 msgstr "Zum Inhalt springen"
 
-#: src/templates/base.html:33
 msgid "Offline — Daten werden bei Verbindung gespeichert"
 msgstr "Offline — Daten werden bei Verbindung gespeichert"
 
-#: src/templates/base.html:38
+msgid "Personen lokal verfügbar"
+msgstr "Personen lokal verfügbar"
+
+msgid "nicht synchronisiert"
+msgstr ""
+
 msgid "Aenderung(en) werden synchronisiert..."
 msgstr "Aenderung(en) werden synchronisiert..."
 
-#: src/templates/base.html:43
+msgid "Konflikt(e) — bitte auflösen"
+msgstr ""
+
 msgid "Hauptnavigation"
 msgstr "Hauptnavigation"
 
-#: src/templates/base.html:54 src/templates/base.html:231
 msgid "Suche..."
 msgstr "Suche..."
 
-#: src/templates/base.html:67
 #, fuzzy
 #| msgid "Keine Ergebnisse"
 msgid "Suchergebnisse"
 msgstr "Keine Ergebnisse"
 
-#: src/templates/base.html:75 src/templates/base.html:187
 msgid "Neu erstellen"
 msgstr "Neu erstellen"
 
-#: src/templates/base.html:104 src/templates/base.html:215
-#: src/templates/core/zeitstrom/index.html:4
-#: src/templates/core/zeitstrom/index.html:8
+#, fuzzy
+#| msgid "Kontakt wurde dokumentiert."
+msgid "Kontakt dokumentieren"
+msgstr "Kontakt wurde dokumentiert."
+
+#, fuzzy
+#| msgid "Zeitstrom"
+msgid "Eintrag im Zeitstrom"
+msgstr "Zeitstrom"
+
+msgid "Person anlegen"
+msgstr "Person anlegen"
+
+#, fuzzy
+#| msgid "Pseudonym eingeben..."
+msgid "Neues Pseudonym vergeben"
+msgstr "Pseudonym eingeben..."
+
+#, fuzzy
+#| msgid "Aufgabe wurde erstellt."
+msgid "Aufgabe erstellen"
+msgstr "Aufgabe wurde erstellt."
+
+msgid "Für Team oder Person"
+msgstr "Für Team oder Person"
+
+#, fuzzy
+#| msgid "Fall bearbeiten"
+msgid "Fall anlegen"
+msgstr "Fall bearbeiten"
+
+msgid "Längere Begleitung dokumentieren"
+msgstr ""
+
 msgid "Zeitstrom"
 msgstr "Zeitstrom"
 
-#: src/templates/base.html:108 src/templates/base.html:257
-#: src/templates/core/handover/index.html:4
-#: src/templates/core/handover/index.html:8
 msgid "Übergabe"
 msgstr "Übergabe"
 
-#: src/templates/base.html:122 src/templates/base.html:268
-#: src/templates/core/clients/detail.html:146
-#: src/templates/core/workitems/inbox.html:4
-#: src/templates/core/workitems/inbox.html:8
-#: src/templates/core/zeitstrom/index.html:96
-msgid "Aufgaben"
-msgstr "Aufgaben"
+msgid "Personen"
+msgstr "Personen"
 
-#: src/templates/base.html:129 src/templates/base.html:274
-#: src/templates/core/statistics/index.html:4
-#: src/templates/core/statistics/index.html:7
+#, fuzzy
+#| msgid "Daten"
+msgid "Dateien"
+msgstr "Daten"
+
 msgid "Statistik"
 msgstr "Statistik"
 
-#: src/templates/base.html:143 src/templates/base.html:285
+#, fuzzy
+#| msgid "Löschen"
+msgid "Löschfristen"
+msgstr "Löschen"
+
 msgid "DSGVO-Paket"
 msgstr "DSGVO-Paket"
 
-#: src/templates/base.html:147 src/templates/base.html:288
 msgid "Administration"
 msgstr "Administration"
 
-#: src/templates/base.html:157 src/templates/base.html:301
-msgid "Abmelden"
-msgstr "Abmelden"
-
-#: src/templates/base.html:183
 msgid "Mobile Navigation"
 msgstr "Mobile Navigation"
 
-#: src/templates/base.html:221 src/templates/core/search/index.html:4
-#: src/templates/core/search/index.html:7
-msgid "Suche"
-msgstr "Suche"
+msgid "Neu"
+msgstr ""
 
-#: src/templates/base.html:252
 msgid "Mehr"
 msgstr "Mehr"
 
-#: src/templates/base.html:295
+msgid "Suche"
+msgstr "Suche"
+
 #, fuzzy
 #| msgid "Mein Profil"
 msgid "Profil"
 msgstr "Mein Profil"
 
-#: src/templates/components/_activity_card.html:22
 #, fuzzy
 #| msgid "Alle anzeigen"
 msgid "Details anzeigen"
 msgstr "Alle anzeigen"
 
-#: src/templates/components/_activity_card.html:33
 #, fuzzy
 #| msgid "Benutzer"
 msgid "Benutzer:"
 msgstr "Benutzer"
 
-#: src/templates/components/_activity_card.html:40
 msgid "Objekttyp:"
 msgstr ""
 
-#: src/templates/components/_activity_card.html:46
 #, fuzzy
 #| msgid "Zeitpunkt"
 msgid "Zeitpunkt:"
 msgstr "Zeitpunkt"
 
-#: src/templates/components/_activity_card.html:52
 msgid "Zum Objekt"
 msgstr ""
 
-#: src/templates/components/_confirm_modal.html:17
-#: src/templates/core/cases/episode_form.html:33
-#: src/templates/core/cases/form.html:112
-#: src/templates/core/cases/form.html:114
-#: src/templates/core/cases/partials/goals_section.html:44
-#: src/templates/core/clients/form.html:37
-#: src/templates/core/clients/form.html:39
-#: src/templates/core/events/create.html:167
-#: src/templates/core/events/delete_confirm.html:62
-#: src/templates/core/events/edit.html:59
-#: src/templates/core/workitems/form.html:128
 msgid "Abbrechen"
 msgstr "Abbrechen"
 
-#: src/templates/components/_pagination.html:6
+#, fuzzy
+#| msgid "Keine erledigten Aufgaben."
+msgid "Keine weiteren Angaben."
+msgstr "Keine erledigten Aufgaben."
+
+msgid "Zum Eintrag"
+msgstr ""
+
 #, python-format
 msgid ""
 "\n"
@@ -1427,1075 +1868,1190 @@ msgstr ""
 "        %(start)s–%(end)s von %(total)s Einträgen\n"
 "        "
 
-#: src/templates/components/_time_filter_dropdown.html:23
-#: src/templates/core/workitems/inbox.html:28
-#: src/templates/core/workitems/inbox.html:43
-#: src/templates/core/workitems/inbox.html:58
-#: src/templates/core/workitems/inbox.html:73
-#: src/templates/core/zeitstrom/index.html:93
-msgid "Alle"
-msgstr "Alle"
+#, fuzzy
+#| msgid "Feldvorlage"
+msgid "Wiedervorlage"
+msgstr "Feldvorlage"
 
-#: src/templates/components/_workitem_row.html:44
+msgid "WV"
+msgstr ""
+
+#, fuzzy
+#| msgid "Wiedereröffnen"
+msgid "Wiederkehrend"
+msgstr "Wiedereröffnen"
+
+#, fuzzy
+#| msgid "Auswahl"
+msgid "Auswählen"
+msgstr "Auswahl"
+
 msgid "Zugewiesen:"
 msgstr "Zugewiesen:"
 
-#: src/templates/components/_workitem_row.html:61
-#: src/templates/core/workitems/detail.html:37
 msgid "Annehmen"
 msgstr "Annehmen"
 
-#: src/templates/components/_workitem_row.html:68
-#: src/templates/core/workitems/detail.html:45
 msgid "Verwerfen"
 msgstr "Verwerfen"
 
-#: src/templates/components/_workitem_row.html:83
-#: src/templates/core/audit/list.html:62
-#: src/templates/core/workitems/detail.html:62
 msgid "Zurücksetzen"
 msgstr "Zurücksetzen"
 
-#: src/templates/core/account/partials/_recent_clients_widget.html:17
-#, fuzzy
-#| msgid "Noch keine besuchten Klienten"
-msgid "Noch keine besuchten Klientel"
-msgstr "Noch keine besuchten Klienten"
+msgid "Noch keine zuletzt besuchten Personen"
+msgstr "Noch keine zuletzt besuchten Personen"
 
-#: src/templates/core/account/partials/_stats_widget.html:5
 msgid "Kontakte heute"
 msgstr "Kontakte heute"
 
-#: src/templates/core/account/partials/_stats_widget.html:9
 msgid "Offene Fälle"
 msgstr "Offene Fälle"
 
-#: src/templates/core/account/partials/_stats_widget.html:13
-#: src/templates/core/account/partials/_widget_settings.html:4
 msgid "Meine Aufgaben"
 msgstr "Meine Aufgaben"
 
-#: src/templates/core/account/partials/_stats_widget.html:17
 msgid "Aufgaben gesamt"
 msgstr "Aufgaben gesamt"
 
-#: src/templates/core/account/partials/_tasks_widget.html:28
-#: src/templates/core/clients/detail.html:154
-#: src/templates/core/workitems/partials/inbox_content.html:13
-#: src/templates/core/zeitstrom/index.html:130
 msgid "Keine offenen Aufgaben"
 msgstr "Keine offenen Aufgaben"
 
-#: src/templates/core/account/partials/_widget_settings.html:10
-msgid "Übersicht"
-msgstr "Übersicht"
-
-#: src/templates/core/account/partials/_widget_settings.html:22
-#: src/templates/core/account/profile.html:52
-#, fuzzy
-#| msgid "Letzte Klienten"
-msgid "Letzte Klientel"
-msgstr "Letzte Klienten"
-
-#: src/templates/core/account/profile.html:4
-#: src/templates/core/account/profile.html:8
 msgid "Mein Profil"
 msgstr "Mein Profil"
 
-#: src/templates/core/account/profile.html:53
+msgid "Sprache"
+msgstr ""
+
+#, fuzzy
+#| msgid "Verwaltung"
+msgid "2FA verwalten"
+msgstr "Verwaltung"
+
+msgid "Zuletzt besuchte Personen"
+msgstr "Zuletzt besuchte Personen"
+
 msgid "Alle anzeigen"
 msgstr "Alle anzeigen"
 
-#: src/templates/core/account/profile.html:61
 msgid "Letzte Ereignisse"
 msgstr "Letzte Ereignisse"
 
-#: src/templates/core/account/profile.html:76
 msgid "Keine Ereignisse vorhanden."
 msgstr "Keine Ereignisse vorhanden."
 
-#: src/templates/core/account/profile.html:82
-#: src/templates/core/handover/index.html:68
-#: src/templates/core/zeitstrom/index.html:122
 msgid "Offene Aufgaben"
 msgstr "Offene Aufgaben"
 
-#: src/templates/core/account/profile.html:97
 msgid "Keine offenen Aufgaben."
 msgstr "Keine offenen Aufgaben."
 
-#: src/templates/core/account/profile.html:103
-#: src/templates/core/workitems/partials/inbox_content.html:33
 msgid "Kürzlich erledigt"
 msgstr "Kürzlich erledigt"
 
-#: src/templates/core/account/profile.html:118
 msgid "Keine erledigten Aufgaben."
 msgstr "Keine erledigten Aufgaben."
 
-#: src/templates/core/audit/detail.html:4
-#: src/templates/core/audit/detail.html:9
+#, fuzzy
+#| msgid "Dokumentationstypen"
+msgid "Dokumentationstyp filtern"
+msgstr "Dokumentationstypen"
+
+msgid "Alle Dokumentationstypen"
+msgstr "Alle Dokumentationstypen"
+
+msgid "Klient-ID filtern..."
+msgstr "Klient-ID filtern..."
+
+#, fuzzy
+#| msgid "Daten"
+msgid "Dateiname"
+msgstr "Daten"
+
+msgid "Größe"
+msgstr ""
+
+msgid "Klient"
+msgstr "Klient"
+
+msgid "Herunterladen"
+msgstr "Herunterladen"
+
+msgid "Keine Dateien gefunden"
+msgstr "Keine Klienten gefunden"
+
 msgid "Audit-Log Detail"
 msgstr "Audit-Log Detail"
 
-#: src/templates/core/audit/detail.html:55
 msgid "Zurück zur Liste"
 msgstr "Zurück zur Liste"
 
-#: src/templates/core/audit/list.html:21
 msgid "Alle Aktionen"
 msgstr "Alle Aktionen"
 
-#: src/templates/core/audit/list.html:33
 msgid "Alle Benutzer"
 msgstr "Alle Benutzer"
 
-#: src/templates/core/audit/list.html:42
-#: src/templates/core/statistics/partials/full_content.html:30
 msgid "Von"
 msgstr "Von"
 
-#: src/templates/core/audit/list.html:49
-#: src/templates/core/statistics/partials/full_content.html:35
 msgid "Bis"
 msgstr "Bis"
 
-#: src/templates/core/audit/list.html:58
 msgid "Filtern"
 msgstr "Filtern"
 
-#: src/templates/core/audit/partials/table.html:14
 msgid "IP"
 msgstr "IP"
 
-#: src/templates/core/audit/partials/table.html:62
 msgid "Keine Einträge gefunden."
 msgstr "Keine Einträge gefunden."
 
-#: src/templates/core/cases/detail.html:25
-#: src/templates/core/cases/detail.html:45
-#: src/templates/core/cases/partials/episode_list.html:50
-#: src/templates/core/cases/partials/goals_section.html:15
-#: src/templates/core/clients/detail.html:34
-#: src/templates/core/clients/detail.html:59
-#: src/templates/core/events/detail.html:20
-#: src/templates/core/events/detail.html:32
-#: src/templates/core/workitems/detail.html:12
 msgid "Bearbeiten"
 msgstr "Bearbeiten"
 
-#: src/templates/core/cases/detail.html:31
-#: src/templates/core/cases/detail.html:59
 msgid "Schließen"
 msgstr "Schließen"
 
-#: src/templates/core/cases/detail.html:38
-#: src/templates/core/cases/detail.html:66
 msgid "Wiedereröffnen"
 msgstr "Wiedereröffnen"
 
-#: src/templates/core/cases/detail.html:50
-#: src/templates/core/clients/detail.html:64
-#: src/templates/core/events/detail.html:38
 #, fuzzy
 #| msgid "Alle Aktionen"
 msgid "Weitere Aktionen"
 msgstr "Alle Aktionen"
 
-#: src/templates/core/cases/detail.html:111
-#: src/templates/core/export/report_pdf.html:101
-#: src/templates/core/handover/partials/_stats_grid.html:6
-#: src/templates/core/search/partials/global_results.html:20
-#: src/templates/core/zeitstrom/index.html:71
-msgid "Kontakte"
-msgstr "Kontakte"
-
-#: src/templates/core/cases/episode_form.html:4
-#: src/templates/core/cases/episode_form.html:8
 msgid "Episode bearbeiten"
 msgstr "Episode bearbeiten"
 
-#: src/templates/core/cases/episode_form.html:4
-#: src/templates/core/cases/episode_form.html:8
-#: src/templates/core/cases/partials/episode_list.html:9
 msgid "Neue Episode"
 msgstr "Neue Episode"
 
-#: src/templates/core/cases/episode_form.html:31
-#: src/templates/core/cases/form.html:109
-#: src/templates/core/cases/partials/goals_section.html:41
-#: src/templates/core/clients/form.html:34
-#: src/templates/core/events/create.html:165
-#: src/templates/core/workitems/form.html:126
 msgid "Speichern"
 msgstr "Speichern"
 
-#: src/templates/core/cases/episode_form.html:31
 msgid "Episode erstellen"
 msgstr "Episode erstellen"
 
-#: src/templates/core/cases/form.html:4 src/templates/core/cases/form.html:8
 msgid "Fall bearbeiten"
 msgstr "Fall bearbeiten"
 
-#: src/templates/core/cases/form.html:4 src/templates/core/cases/form.html:8
-#: src/templates/core/cases/list.html:12
-#: src/templates/core/clients/detail.html:180
 msgid "Neuer Fall"
 msgstr "Neuer Fall"
 
-#: src/templates/core/cases/form.html:58
-#: src/templates/core/events/create.html:107
-#: src/templates/core/workitems/form.html:96
+msgid "Person"
+msgstr "Person"
+
 msgid "Pseudonym eingeben..."
 msgstr "Pseudonym eingeben..."
 
-#: src/templates/core/cases/form.html:59
-#: src/templates/core/events/create.html:108
-#, fuzzy
-#| msgid "Klient suchen"
-msgid "Klientel suchen"
-msgstr "Klient suchen"
+msgid "Person suchen"
+msgstr "Person suchen"
 
-#: src/templates/core/cases/form.html:109
 msgid "Fall erstellen"
 msgstr "Fall erstellen"
 
-#: src/templates/core/cases/list.html:22
 msgid "Titel suchen..."
 msgstr "Titel suchen..."
 
-#: src/templates/core/cases/list.html:29
 msgid "Status filtern"
 msgstr "Status filtern"
 
-#: src/templates/core/cases/list.html:34
 msgid "Alle Status"
 msgstr "Alle Status"
 
-#: src/templates/core/cases/partials/episode_list.html:26
 msgid "laufend"
 msgstr "laufend"
 
-#: src/templates/core/cases/partials/episode_list.html:33
 msgid "abgeschlossen"
 msgstr "abgeschlossen"
 
-#: src/templates/core/cases/partials/episode_list.html:37
-msgid "aktiv"
-msgstr "aktiv"
-
-#: src/templates/core/cases/partials/episode_list.html:56
 msgid "Abschließen"
 msgstr "Abschließen"
 
-#: src/templates/core/cases/partials/episode_list.html:65
 msgid "Noch keine Episoden vorhanden."
 msgstr "Noch keine Episoden vorhanden."
 
-#: src/templates/core/cases/partials/event_list.html:21
 msgid "Entfernen"
 msgstr "Entfernen"
 
-#: src/templates/core/cases/partials/event_list.html:29
 msgid "Keine Kontakte zugeordnet."
 msgstr "Keine Kontakte zugeordnet."
 
-#: src/templates/core/cases/partials/event_list.html:47
 msgid "Zuordnen"
 msgstr "Zuordnen"
 
-#: src/templates/core/cases/partials/goals_section.html:38
 msgid "Beschreibung (optional)"
 msgstr "Beschreibung (optional)"
 
-#: src/templates/core/cases/partials/goals_section.html:52
 msgid "erreicht"
 msgstr "erreicht"
 
-#: src/templates/core/cases/partials/goals_section.html:56
 msgid "offen"
 msgstr "offen"
 
-#: src/templates/core/cases/partials/goals_section.html:71
 msgid "Nicht erreicht"
 msgstr "Nicht erreicht"
 
-#: src/templates/core/cases/partials/goals_section.html:81
 msgid "Ziel erreicht"
 msgstr "Ziel erreicht"
 
-#: src/templates/core/cases/partials/goals_section.html:99
 #, fuzzy
 #| msgid "Meilenstein löschen"
 msgid "Meilenstein umschalten"
 msgstr "Meilenstein löschen"
 
-#: src/templates/core/cases/partials/goals_section.html:119
 msgid "Meilenstein löschen"
 msgstr "Meilenstein löschen"
 
-#: src/templates/core/cases/partials/goals_section.html:137
 msgid "Neuer Meilenstein"
 msgstr "Neuer Meilenstein"
 
-#: src/templates/core/cases/partials/goals_section.html:146
 msgid "Noch keine Wirkungsziele vorhanden."
 msgstr "Noch keine Wirkungsziele vorhanden."
 
-#: src/templates/core/cases/partials/goals_section.html:157
 msgid "Neues Wirkungsziel"
 msgstr "Neues Wirkungsziel"
 
-#: src/templates/core/cases/partials/goals_section.html:160
 msgid "Hinzufügen"
 msgstr "Hinzufügen"
 
-#: src/templates/core/cases/partials/table.html:61
 msgid "Keine Fälle gefunden"
 msgstr "Keine Fälle gefunden"
 
-#: src/templates/core/clients/detail.html:25
-#: src/templates/core/clients/detail.html:72
-#: src/templates/core/workitems/form.html:4
-#: src/templates/core/workitems/form.html:8
-#: src/templates/core/workitems/inbox.html:12
-#: src/templates/core/zeitstrom/index.html:16
+msgid "Lokal verfügbar"
+msgstr ""
+
+msgid "Offline mitnehmen"
+msgstr ""
+
+msgid "Aus Offline-Cache entfernen"
+msgstr ""
+
 msgid "Neue Aufgabe"
 msgstr "Neue Aufgabe"
 
-#: src/templates/core/clients/detail.html:30
-#: src/templates/core/clients/detail.html:77
-#: src/templates/core/events/create.html:4
-#: src/templates/core/events/create.html:8
-#: src/templates/core/zeitstrom/index.html:12
 msgid "Neuer Kontakt"
 msgstr "Neuer Kontakt"
 
-#: src/templates/core/clients/detail.html:41
-#: src/templates/core/export/client_data_pdf.html:6
 msgid "Datenauskunft"
 msgstr "Datenauskunft"
 
-#: src/templates/core/clients/detail.html:47
-#: src/templates/core/clients/detail.html:82
 msgid "JSON-Export (Art. 20)"
 msgstr "JSON-Export (Art. 20)"
 
-#: src/templates/core/clients/detail.html:50
-#: src/templates/core/clients/detail.html:85
 msgid "PDF-Export (Art. 15)"
 msgstr "PDF-Export (Art. 15)"
 
-#: src/templates/core/clients/detail.html:103
-#: src/templates/core/zeitstrom/index.html:38
 msgid "Bis:"
 msgstr "Bis:"
 
-#: src/templates/core/clients/detail.html:120
 msgid "Kontakt-Chronik"
 msgstr "Kontakt-Chronik"
 
-#: src/templates/core/clients/detail.html:140
 msgid "Noch keine Kontakte dokumentiert."
 msgstr "Noch keine Kontakte dokumentiert."
 
-#: src/templates/core/clients/detail.html:174
 msgid "Keine offenen Fälle"
 msgstr "Keine offenen Fälle"
 
-#: src/templates/core/clients/form.html:4
-#: src/templates/core/clients/form.html:8
-#, fuzzy
-#| msgid "Klient bearbeiten"
-msgid "Klientel bearbeiten"
-msgstr "Klient bearbeiten"
+msgid "Person bearbeiten"
+msgstr "Person bearbeiten"
 
-#: src/templates/core/clients/form.html:4
-#: src/templates/core/clients/form.html:8
-#: src/templates/core/clients/list.html:12
-#: src/templates/core/zeitstrom/index.html:19
-#, fuzzy
-#| msgid "Neue Klienten"
-msgid "Neues Klientel"
-msgstr "Neue Klienten"
+msgid "Neue Person"
+msgstr "Neue Person"
 
-#: src/templates/core/clients/form.html:34
-#, fuzzy
-#| msgid "Klient erstellen"
-msgid "Klientel erstellen"
-msgstr "Klient erstellen"
-
-#: src/templates/core/clients/list.html:22
 msgid "Pseudonym suchen..."
 msgstr "Pseudonym suchen..."
 
-#: src/templates/core/clients/list.html:29
 msgid "Kontaktstufe filtern"
 msgstr "Kontaktstufe filtern"
 
-#: src/templates/core/clients/list.html:34
 msgid "Alle Stufen"
 msgstr "Alle Stufen"
 
-#: src/templates/core/clients/list.html:39
 msgid "Altersgruppe filtern"
 msgstr "Altersgruppe filtern"
 
-#: src/templates/core/clients/list.html:44
 msgid "Alle Altersgruppen"
 msgstr "Alle Altersgruppen"
 
-#: src/templates/core/clients/partials/table.html:10
+msgid "Offline-Ansicht"
+msgstr ""
+
+msgid "Synchronisiert:"
+msgstr ""
+
+msgid "Lade Offline-Daten..."
+msgstr ""
+
+msgid ""
+"Diese Person wurde nicht für die Offline-Nutzung vorbereitet oder der "
+"lokale Cache ist leer."
+msgstr ""
+"Diese Person wurde nicht für die Offline-Nutzung vorbereitet oder der "
+"lokale Cache ist leer."
+
+#, fuzzy
+#| msgid "Wiedereröffnen"
+msgid "Online öffnen"
+msgstr "Wiedereröffnen"
+
+msgid "Nicht synchronisiert"
+msgstr ""
+
+msgid "Konflikt"
+msgstr ""
+
+#, fuzzy
+#| msgid "Offene Fälle"
+msgid "Keine Fälle"
+msgstr "Offene Fälle"
+
 msgid "Stufe"
 msgstr "Stufe"
 
-#: src/templates/core/clients/partials/table.html:11
 msgid "Alter"
 msgstr "Alter"
 
-#: src/templates/core/clients/partials/table.html:12
 msgid "Letzter Kontakt"
 msgstr "Letzter Kontakt"
 
-#: src/templates/core/clients/partials/table.html:55
-#, fuzzy
-#| msgid "Keine Klienten gefunden"
-msgid "Keine Klientel gefunden"
-msgstr "Keine Klienten gefunden"
+msgid "Offline"
+msgstr ""
 
-#: src/templates/core/deletion_requests/list.html:21
+#, fuzzy
+#| msgid "Annehmen"
+msgid "Mitnehmen"
+msgstr "Annehmen"
+
+msgid "Keine Personen gefunden"
+msgstr "Keine Personen gefunden"
+
 msgid "Prüfen"
 msgstr "Prüfen"
 
-#: src/templates/core/deletion_requests/list.html:25
 msgid "Beantragt von:"
 msgstr "Beantragt von:"
 
-#: src/templates/core/deletion_requests/list.html:31
 msgid "Keine ausstehenden Löschanträge"
 msgstr "Keine ausstehenden Löschanträge"
 
-#: src/templates/core/deletion_requests/list.html:48
-#: src/templates/core/deletion_requests/list.html:71
 msgid "Geprüft von:"
 msgstr "Geprüft von:"
 
-#: src/templates/core/deletion_requests/list.html:54
 msgid "Keine genehmigten Löschanträge"
 msgstr "Keine genehmigten Löschanträge"
 
-#: src/templates/core/deletion_requests/list.html:77
 msgid "Keine abgelehnten Löschanträge"
 msgstr "Keine abgelehnten Löschanträge"
 
-#: src/templates/core/dsgvo/package.html:4
-#: src/templates/core/dsgvo/package.html:8
 msgid "DSGVO-Dokumentationspaket"
 msgstr "DSGVO-Dokumentationspaket"
 
-#: src/templates/core/dsgvo/package.html:9
-msgid "Compliance-Vorlagen gemäß DSGVO, automatisch mit Ihren Einrichtungsdaten befüllt."
-msgstr "Compliance-Vorlagen gemäß DSGVO, automatisch mit Ihren Einrichtungsdaten befüllt."
+msgid ""
+"Compliance-Vorlagen gemäß DSGVO, automatisch mit Ihren Einrichtungsdaten "
+"befüllt."
+msgstr ""
+"Compliance-Vorlagen gemäß DSGVO, automatisch mit Ihren Einrichtungsdaten "
+"befüllt."
 
-#: src/templates/core/dsgvo/package.html:17
-msgid "Diese Vorlagen werden automatisch mit den Daten Ihrer Einrichtung befüllt (Name, Löschfristen). Bitte prüfen und ergänzen Sie die Dokumente vor der Verwendung."
-msgstr "Diese Vorlagen werden automatisch mit den Daten Ihrer Einrichtung befüllt (Name, Löschfristen). Bitte prüfen und ergänzen Sie die Dokumente vor der Verwendung."
+msgid ""
+"Diese Vorlagen werden automatisch mit den Daten Ihrer Einrichtung befüllt "
+"(Name, Löschfristen). Bitte prüfen und ergänzen Sie die Dokumente vor der "
+"Verwendung."
+msgstr ""
+"Diese Vorlagen werden automatisch mit den Daten Ihrer Einrichtung befüllt "
+"(Name, Löschfristen). Bitte prüfen und ergänzen Sie die Dokumente vor der "
+"Verwendung."
 
-#: src/templates/core/dsgvo/package.html:25
 msgid "Dokument"
 msgstr "Dokument"
 
-#: src/templates/core/dsgvo/package.html:26
 msgid "DSGVO-Artikel"
 msgstr "DSGVO-Artikel"
 
-#: src/templates/core/dsgvo/package.html:38
-msgid "Herunterladen"
-msgstr "Herunterladen"
+msgid "Konflikte"
+msgstr ""
 
-#: src/templates/core/events/create.html:47
-msgid "Basis-Daten"
-msgstr "Basis-Daten"
+msgid "Offline-Konflikte"
+msgstr ""
 
-#: src/templates/core/events/create.html:152
-msgid "Nicht verfügbar: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe."
-msgstr "Nicht verfügbar: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe."
+msgid ""
+"Ereignisse, bei denen lokale Änderungen mit dem Server abgeglichen werden "
+"müssen."
+msgstr ""
 
-#: src/templates/core/events/delete_confirm.html:4
-#: src/templates/core/events/delete_confirm.html:8
-msgid "Ereignis löschen"
-msgstr "Ereignis löschen"
+msgid "Lade Konflikte..."
+msgstr ""
 
-#: src/templates/core/events/delete_confirm.html:13
+msgid "Keine ungelösten Konflikte."
+msgstr ""
+
+msgid "Konflikt auflösen"
+msgstr ""
+
+msgid "Konflikt wird geladen..."
+msgstr ""
+
 #, fuzzy
-#| msgid "Dieses Ereignis gehört zu einem qualifizierten Klienten. Es wird ein Löschantrag erstellt, der von einer Leitung genehmigt werden muss (4-Augen-Prinzip)."
-msgid "Dieses Ereignis gehört zu einem qualifizierten Klientel. Es wird ein Löschantrag erstellt, der von einer Leitung genehmigt werden muss (4-Augen-Prinzip)."
-msgstr "Dieses Ereignis gehört zu einem qualifizierten Klienten. Es wird ein Löschantrag erstellt, der von einer Leitung genehmigt werden muss (4-Augen-Prinzip)."
+#| msgid "Übersicht"
+msgid "Zur Konflikt-Übersicht"
+msgstr "Übersicht"
 
-#: src/templates/core/events/delete_confirm.html:15
-msgid "Möchten Sie dieses Ereignis wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden."
-msgstr "Möchten Sie dieses Ereignis wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden."
+msgid "Konflikt aufgelöst."
+msgstr ""
 
-#: src/templates/core/events/delete_confirm.html:48
-msgid "Grund für die Löschung..."
-msgstr "Grund für die Löschung..."
+msgid "Feldweise Gegenüberstellung"
+msgstr ""
 
-#: src/templates/core/events/delete_confirm.html:55
-msgid "Löschantrag stellen"
-msgstr "Löschantrag stellen"
+msgid "Vergleichen Sie Ihre lokale Version mit dem aktuellen Server-Stand."
+msgstr ""
 
-#: src/templates/core/events/delete_confirm.html:59
-msgid "Endgültig löschen"
-msgstr "Endgültig löschen"
-
-#: src/templates/core/events/deletion_review.html:4
-#: src/templates/core/events/deletion_review.html:8
-msgid "Löschantrag prüfen"
-msgstr "Löschantrag prüfen"
-
-#: src/templates/core/events/deletion_review.html:18
-msgid "Beantragt am"
-msgstr "Beantragt am"
-
-#: src/templates/core/events/deletion_review.html:30
-msgid "Betroffenes Ereignis"
-msgstr "Betroffenes Ereignis"
-
-#: src/templates/core/events/deletion_review.html:50
-msgid "Genehmigen"
-msgstr "Genehmigen"
-
-#: src/templates/core/events/deletion_review.html:53
-msgid "Ablehnen"
-msgstr "Ablehnen"
-
-#: src/templates/core/events/detail.html:25
-#: src/templates/core/events/detail.html:44
-msgid "Löschen"
-msgstr "Löschen"
-
-#: src/templates/core/events/detail.html:87
-msgid "Erfasste Daten"
-msgstr "Erfasste Daten"
-
-#: src/templates/core/events/detail.html:104
-msgid "Änderungshistorie"
-msgstr "Änderungshistorie"
-
-#: src/templates/core/events/detail.html:118
-msgid "Ausblenden"
-msgstr "Ausblenden"
-
-#: src/templates/core/events/detail.html:139
 msgid "Feld"
 msgstr "Feld"
 
-#: src/templates/core/events/detail.html:140
+#, fuzzy
+#| msgid "Medizinische Versorgung"
+msgid "Meine Version"
+msgstr "Medizinische Versorgung"
+
+msgid "Server-Version"
+msgstr ""
+
+msgid "Meine"
+msgstr ""
+
+msgid "Server"
+msgstr ""
+
+#, fuzzy
+#| msgid "Meilenstein löschen"
+msgid "Meine Version behalten"
+msgstr "Meilenstein löschen"
+
+msgid "Server-Version übernehmen"
+msgstr ""
+
+msgid "Manuell mergen"
+msgstr ""
+
+#, fuzzy
+#| msgid "Feldvorlagen"
+msgid "Schnell-Vorlagen"
+msgstr "Feldvorlagen"
+
+#, python-format
+msgid "Vorlage angewendet: <strong>%(name)s</strong>"
+msgstr ""
+
+#, fuzzy
+#| msgid "Entfernen"
+msgid "Vorlage entfernen"
+msgstr "Entfernen"
+
+msgid "Wählen Sie eine Vorlage, um Felder automatisch vorzubefüllen."
+msgstr ""
+
+msgid "Basis-Daten"
+msgstr "Basis-Daten"
+
+#, fuzzy
+#| msgid ""
+#| "Nicht verfügbar: Dieser Dokumentationstyp erfordert eine Mindest-"
+#| "Kontaktstufe."
+msgid ""
+"Pflichtfeld: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe."
+msgstr ""
+"Nicht verfügbar: Dieser Dokumentationstyp erfordert eine Mindest-"
+"Kontaktstufe."
+
+msgid "Ohne Person wird der Kontakt als anonym gespeichert."
+msgstr "Ohne Person wird der Kontakt als anonym gespeichert."
+
+msgid "Optional: Kontakt einem offenen Fall der ausgewählten Person zuordnen."
+msgstr "Optional: Kontakt einem offenen Fall der ausgewählten Person zuordnen."
+
+msgid "Kein offener Fall für diese Person vorhanden."
+msgstr "Kein offener Fall für diese Person vorhanden."
+
+msgid "Ereignis löschen"
+msgstr "Ereignis löschen"
+
+msgid ""
+"Dieses Ereignis gehört zu einer Person mit qualifizierter Dokumentation. Es "
+"wird ein Löschantrag erstellt, der von einer Leitung genehmigt werden muss "
+"(4-Augen-Prinzip)."
+msgstr ""
+"Dieses Ereignis gehört zu einer Person mit qualifizierter Dokumentation. Es "
+"wird ein Löschantrag erstellt, der von einer Leitung genehmigt werden muss "
+"(4-Augen-Prinzip)."
+
+msgid ""
+"Möchten Sie dieses Ereignis wirklich löschen? Diese Aktion kann nicht "
+"rückgängig gemacht werden."
+msgstr ""
+"Möchten Sie dieses Ereignis wirklich löschen? Diese Aktion kann nicht "
+"rückgängig gemacht werden."
+
+msgid "Grund für die Löschung..."
+msgstr "Grund für die Löschung..."
+
+msgid "Löschantrag stellen"
+msgstr "Löschantrag stellen"
+
+msgid "Endgültig löschen"
+msgstr "Endgültig löschen"
+
+msgid "Löschantrag prüfen"
+msgstr "Löschantrag prüfen"
+
+msgid "Beantragt am"
+msgstr "Beantragt am"
+
+msgid "Betroffenes Ereignis"
+msgstr "Betroffenes Ereignis"
+
+msgid "Genehmigen"
+msgstr "Genehmigen"
+
+msgid "Ablehnen"
+msgstr "Ablehnen"
+
+msgid "Löschen"
+msgstr "Löschen"
+
+msgid "Erfasste Daten"
+msgstr "Erfasste Daten"
+
+#, python-format
+msgid "%(count)s Vorversion"
+msgid_plural "%(count)s Vorversionen"
+msgstr[0] ""
+msgstr[1] ""
+
+msgid "ersetzt"
+msgstr ""
+
+msgid "Änderungshistorie"
+msgstr "Änderungshistorie"
+
+msgid "Ausblenden"
+msgstr "Ausblenden"
+
 msgid "Vorher"
 msgstr "Vorher"
 
-#: src/templates/core/events/detail.html:141
 msgid "Nachher"
 msgstr "Nachher"
 
-#: src/templates/core/events/edit.html:4 src/templates/core/events/edit.html:8
 msgid "Ereignis bearbeiten"
 msgstr "Ereignis bearbeiten"
 
-#: src/templates/core/events/edit.html:37
-#: src/templates/core/events/partials/dynamic_fields.html:5
 msgid "Felder"
 msgstr "Felder"
 
-#: src/templates/core/events/edit.html:57
+#, fuzzy
+#| msgid "Zurücksetzen"
+msgid "Ersetzen"
+msgstr "Zurücksetzen"
+
+msgid "Weitere Dateien hinzufügen (mehrere möglich):"
+msgstr ""
+
 msgid "Änderungen speichern"
 msgstr "Änderungen speichern"
 
-#: src/templates/core/events/edit.html:64
-msgid "Alle Felder dieses Ereignisses sind für Ihre Rolle eingeschränkt. Eine Bearbeitung ist nicht möglich."
+msgid ""
+"Alle Felder dieses Ereignisses sind für Ihre Rolle eingeschränkt. Eine "
+"Bearbeitung ist nicht möglich."
 msgstr ""
 
-#: src/templates/core/events/edit.html:68
 #, fuzzy
 #| msgid "Zurücksetzen"
 msgid "Zurück"
 msgstr "Zurücksetzen"
 
-#: src/templates/core/export/client_data_pdf.html:21
 msgid "Datenauskunft gemäß Art. 15 DSGVO"
 msgstr "Datenauskunft gemäß Art. 15 DSGVO"
 
-#: src/templates/core/export/client_data_pdf.html:24
-msgid "Dieses Dokument enthält alle zu Ihrer Person gespeicherten Daten gemäß Art. 15 DSGVO (Auskunftsrecht) und Art. 20 DSGVO (Datenübertragbarkeit)."
-msgstr "Dieses Dokument enthält alle zu Ihrer Person gespeicherten Daten gemäß Art. 15 DSGVO (Auskunftsrecht) und Art. 20 DSGVO (Datenübertragbarkeit)."
+msgid ""
+"Dieses Dokument enthält alle zu Ihrer Person gespeicherten Daten gemäß Art. "
+"15 DSGVO (Auskunftsrecht) und Art. 20 DSGVO (Datenübertragbarkeit)."
+msgstr ""
+"Dieses Dokument enthält alle zu Ihrer Person gespeicherten Daten gemäß Art. "
+"15 DSGVO (Auskunftsrecht) und Art. 20 DSGVO (Datenübertragbarkeit)."
 
-#: src/templates/core/export/client_data_pdf.html:27
 msgid "1. Stammdaten"
 msgstr "1. Stammdaten"
 
-#: src/templates/core/export/client_data_pdf.html:32
 msgid "Ja"
 msgstr "Ja"
 
-#: src/templates/core/export/client_data_pdf.html:32
 msgid "Nein"
 msgstr "Nein"
 
-#: src/templates/core/export/client_data_pdf.html:37
 msgid "2. Fälle"
 msgstr "2. Fälle"
 
-#: src/templates/core/export/client_data_pdf.html:64
 msgid "Keine Fälle vorhanden."
 msgstr "Keine Fälle vorhanden."
 
-#: src/templates/core/export/client_data_pdf.html:67
 msgid "3. Kontakte"
 msgstr "3. Kontakte"
 
-#: src/templates/core/export/client_data_pdf.html:75
 msgid "Daten"
 msgstr "Daten"
 
-#: src/templates/core/export/client_data_pdf.html:94
 msgid "Keine Kontakte vorhanden."
 msgstr "Keine Kontakte vorhanden."
 
-#: src/templates/core/export/client_data_pdf.html:97
 msgid "4. Änderungshistorie"
 msgstr "4. Änderungshistorie"
 
-#: src/templates/core/export/client_data_pdf.html:118
 msgid "Keine Änderungshistorie vorhanden."
 msgstr "Keine Änderungshistorie vorhanden."
 
-#: src/templates/core/export/client_data_pdf.html:121
 msgid "5. Löschanträge"
 msgstr "5. Löschanträge"
 
-#: src/templates/core/export/client_data_pdf.html:148
 msgid "Keine Löschanträge vorhanden."
 msgstr "Keine Löschanträge vorhanden."
 
-#: src/templates/core/export/client_data_pdf.html:151
 msgid "6. Aufgaben"
 msgstr "6. Aufgaben"
 
-#: src/templates/core/export/client_data_pdf.html:161
 msgid "Fällig am"
 msgstr "Fällig am"
 
-#: src/templates/core/export/client_data_pdf.html:178
 msgid "Keine Aufgaben vorhanden."
 msgstr "Keine Aufgaben vorhanden."
 
-#: src/templates/core/export/client_data_pdf.html:182
-#: src/templates/core/export/jugendamt_pdf.html:96
-#: src/templates/core/export/report_pdf.html:116
 #, python-format
 msgid "Erstellt am %(date)s · Anlaufstelle"
 msgstr "Erstellt am %(date)s · Anlaufstelle"
 
-#: src/templates/core/export/jugendamt_pdf.html:6
-#: src/templates/core/export/jugendamt_pdf.html:27
 msgid "Sachbericht an das Jugendamt"
 msgstr "Sachbericht an das Jugendamt"
 
-#: src/templates/core/export/jugendamt_pdf.html:32
 msgid "Einrichtung:"
 msgstr "Einrichtung:"
 
-#: src/templates/core/export/jugendamt_pdf.html:36
 msgid "Berichtszeitraum:"
 msgstr "Berichtszeitraum:"
 
-#: src/templates/core/export/jugendamt_pdf.html:42
-#: src/templates/core/export/report_pdf.html:27
 msgid "Zusammenfassung"
 msgstr "Zusammenfassung"
 
-#: src/templates/core/export/jugendamt_pdf.html:43
 msgid "Gesamtkontakte (ohne Notizen/Hausverbote):"
 msgstr "Gesamtkontakte (ohne Notizen/Hausverbote):"
 
-#: src/templates/core/export/jugendamt_pdf.html:44
-#: src/templates/core/export/report_pdf.html:47
-#, fuzzy
-#| msgid "Einzigartige Klienten:"
-msgid "Einzigartige Klientel:"
-msgstr "Einzigartige Klienten:"
+msgid "Einzigartige Personen:"
+msgstr "Einzigartige Personen:"
 
-#: src/templates/core/export/jugendamt_pdf.html:47
 msgid "Leistungen nach Kategorie"
 msgstr "Leistungen nach Kategorie"
 
-#: src/templates/core/export/jugendamt_pdf.html:53
-#: src/templates/core/export/jugendamt_pdf.html:75
-#: src/templates/core/export/report_pdf.html:56
-#: src/templates/core/export/report_pdf.html:79
-#: src/templates/core/statistics/partials/dashboard_content.html:55
-#: src/templates/core/statistics/partials/dashboard_content.html:96
 msgid "Anzahl"
 msgstr "Anzahl"
 
-#: src/templates/core/export/jugendamt_pdf.html:66
 msgid "Keine relevanten Kontakte im Berichtszeitraum."
 msgstr "Keine relevanten Kontakte im Berichtszeitraum."
 
-#: src/templates/core/export/jugendamt_pdf.html:69
 msgid "Altersverteilung"
 msgstr "Altersverteilung"
 
-#: src/templates/core/export/jugendamt_pdf.html:88
 msgid "Keine Altersdaten vorhanden."
 msgstr "Keine Altersdaten vorhanden."
 
-#: src/templates/core/export/jugendamt_pdf.html:92
 msgid "Ort, Datum, Unterschrift"
 msgstr "Ort, Datum, Unterschrift"
 
-#: src/templates/core/export/report_pdf.html:6
-#: src/templates/core/export/report_pdf.html:25
 msgid "Halbjahresbericht"
 msgstr "Halbjahresbericht"
 
-#: src/templates/core/export/report_pdf.html:31
-#: src/templates/core/statistics/partials/dashboard_content.html:11
 msgid "Gesamtkontakte"
 msgstr "Gesamtkontakte"
 
-#: src/templates/core/export/report_pdf.html:49
-#: src/templates/core/statistics/partials/dashboard_content.html:46
 msgid "Kontakte nach Dokumentationstyp"
 msgstr "Kontakte nach Dokumentationstyp"
 
-#: src/templates/core/export/report_pdf.html:70
-#: src/templates/core/export/report_pdf.html:92
-#: src/templates/core/statistics/partials/dashboard_content.html:82
-#: src/templates/core/statistics/partials/dashboard_content.html:119
 msgid "Keine Daten im gewählten Zeitraum."
 msgstr "Keine Daten im gewählten Zeitraum."
 
-#: src/templates/core/export/report_pdf.html:73
-#: src/templates/core/statistics/partials/dashboard_content.html:88
 msgid "Kontakte nach Altersgruppe"
 msgstr "Kontakte nach Altersgruppe"
 
-#: src/templates/core/export/report_pdf.html:96
-#, fuzzy
-#| msgid "Top 5 Klienten"
-msgid "Top 5 Klientel"
-msgstr "Top 5 Klienten"
+msgid "Top 5 Personen"
+msgstr "Top 5 Personen"
 
-#: src/templates/core/handover/index.html:32
 msgid "Ganzer Tag"
 msgstr "Ganzer Tag"
 
-#: src/templates/core/handover/index.html:55
 msgid "Statistiken"
 msgstr "Statistiken"
 
-#: src/templates/core/handover/index.html:61
-#: src/templates/core/handover/partials/_summary_compact.html:6
 msgid "Wichtige Ereignisse"
 msgstr "Wichtige Ereignisse"
 
-#: src/templates/core/handover/index.html:86
 msgid "Fällig:"
 msgstr "Fällig:"
 
-#: src/templates/core/handover/index.html:97
 msgid "Keine Daten für diesen Zeitraum"
 msgstr "Keine Daten für diesen Zeitraum"
 
-#: src/templates/core/handover/partials/_highlights.html:43
 msgid "Keine besonderen Vorkommnisse"
 msgstr "Keine besonderen Vorkommnisse"
 
-#: src/templates/core/handover/partials/_stats_grid.html:14
 msgid "Neue Aufgaben"
 msgstr "Neue Aufgaben"
 
-#: src/templates/core/handover/partials/_stats_grid.html:18
-#, fuzzy
-#| msgid "Neue Klienten"
-msgid "Neue Klientel"
-msgstr "Neue Klienten"
+msgid "Neue Personen"
+msgstr "Neue Personen"
 
-#: src/templates/core/index.html:4
 msgid "Startseite"
 msgstr "Startseite"
 
-#: src/templates/core/index.html:7
 msgid "Willkommen bei Anlaufstelle"
 msgstr "Willkommen bei Anlaufstelle"
 
-#: src/templates/core/index.html:8
 msgid "Die Aktivitätslog-Ansicht wird in Stream C implementiert."
 msgstr "Die Aktivitätslog-Ansicht wird in Stream C implementiert."
 
-#: src/templates/core/search/index.html:13
+#, fuzzy
+#| msgid "Abgeschlossen"
+msgid "Aufgeschoben"
+msgstr "Abgeschlossen"
+
+#, fuzzy
+#| msgid "Aufbewahrungsfrist (Tage)"
+msgid "Aufbewahrungsfristen"
+msgstr "Aufbewahrungsfrist (Tage)"
+
+msgid "Tage"
+msgstr ""
+
+msgid "Massenaktionen für Löschvorschläge"
+msgstr ""
+
+msgid "ausgewählt"
+msgstr ""
+
+msgid "Ausgewählte Vorschläge wirklich freigeben?"
+msgstr ""
+
+msgid "Freigeben"
+msgstr ""
+
+msgid "Tage:"
+msgstr ""
+
+msgid "Tage bis zur erneuten Prüfung"
+msgstr ""
+
+msgid "Ausgewählte Vorschläge zurückstellen?"
+msgstr ""
+
+msgid "Aufschieben"
+msgstr ""
+
+msgid "Ausgewählte Vorschläge ablehnen (keine Löschung)?"
+msgstr ""
+
+#, fuzzy
+#| msgid "Auswahl"
+msgid "Auswahl aufheben"
+msgstr "Auswahl"
+
+msgid "Alle auswählbaren Vorschläge markieren"
+msgstr ""
+
+msgid "Keine Vorschläge in dieser Kategorie"
+msgstr ""
+
+#, fuzzy
+#| msgid "Keine Löschanträge vorhanden."
+msgid "Keine Löschvorschläge vorhanden"
+msgstr "Keine Löschanträge vorhanden."
+
+#, fuzzy
+#| msgid "Ohne Frist"
+msgid "Frist:"
+msgstr "Ohne Frist"
+
+#, fuzzy
+#| msgid "Pseudonym"
+msgid "Pseudonym:"
+msgstr "Pseudonym"
+
+#, fuzzy
+#| msgid "Dokument"
+msgid "Dokumenttyp:"
+msgstr "Dokument"
+
+#, fuzzy
+#| msgid "Datum"
+msgid "Datum:"
+msgstr "Datum"
+
+#, fuzzy
+#| msgid "Löschung"
+msgid "Löschung freigeben?"
+msgstr "Löschung"
+
+#, fuzzy
+#| msgid "Passwort setzen"
+msgid "Hold setzen"
+msgstr "Passwort setzen"
+
+#, fuzzy
+#| msgid "Grund für die Löschung..."
+msgid "Grund für den Hold..."
+msgstr "Grund für die Löschung..."
+
+msgid "optional"
+msgstr ""
+
+#, fuzzy
+#| msgid "Fall erstellen"
+msgid "Hold erstellen"
+msgstr "Fall erstellen"
+
+#, fuzzy
+#| msgid "Begründung"
+msgid "Begründung:"
+msgstr "Begründung"
+
+msgid "Läuft ab:"
+msgstr ""
+
+#, fuzzy
+#| msgid "Erstellt von"
+msgid "Erstellt von:"
+msgstr "Erstellt von"
+
+msgid "Hold aufheben?"
+msgstr ""
+
+msgid "Hold aufheben"
+msgstr ""
+
+msgid "Wird beim nächsten Lauf gelöscht"
+msgstr ""
+
 msgid "Pseudonym oder Suchbegriff eingeben..."
 msgstr "Pseudonym oder Suchbegriff eingeben..."
 
-#: src/templates/core/search/index.html:14
 msgid "Suchfeld"
 msgstr "Suchfeld"
 
-#: src/templates/core/search/partials/global_results.html:34
+#, fuzzy
+#| msgid "Pseudonym"
+msgid "Ähnliche Pseudonyme"
+msgstr "Pseudonym"
+
+msgid "ähnlich"
+msgstr ""
+
 msgid "Alle Ergebnisse anzeigen"
 msgstr "Alle Ergebnisse anzeigen"
 
-#: src/templates/core/search/partials/global_results.html:40
 msgid "Keine Ergebnisse"
 msgstr "Keine Ergebnisse"
 
-#: src/templates/core/search/partials/results.html:36
+msgid "Tippfehler-tolerante Treffer – könnten gemeint sein."
+msgstr ""
+
 #, python-format
 msgid "Keine Ergebnisse für „%(term)s\""
 msgstr "Keine Ergebnisse für „%(term)s\""
 
-#: src/templates/core/search/partials/results.html:40
-#, fuzzy
-#| msgid "Suchbegriff eingeben, um Klienten und Ereignisse zu finden."
-msgid "Suchbegriff eingeben, um Klientel und Ereignisse zu finden."
-msgstr "Suchbegriff eingeben, um Klienten und Ereignisse zu finden."
+msgid "Suchbegriff eingeben, um Personen und Ereignisse zu finden."
+msgstr "Suchbegriff eingeben, um Personen und Ereignisse zu finden."
 
-#: src/templates/core/statistics/partials/dashboard_content.html:5
 msgid "Zeitraum"
 msgstr "Zeitraum"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:31
 #, fuzzy
-#| msgid "Einzigartige Klienten"
-msgid "Einzigartige Klientel"
-msgstr "Einzigartige Klienten"
+#| msgid "Dokumentationstypen"
+msgid "Dokumentierte Einträge"
+msgstr "Dokumentationstypen"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:35
 #, fuzzy
-#| msgid "Top-Klient"
-msgid "Top-Klientel"
-msgstr "Top-Klient"
+#| msgid "Pseudonym"
+msgid "Ohne Pseudonym"
+msgstr "Pseudonym"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:129
+#, fuzzy
+#| msgid "Pseudonym"
+msgid "Mit Pseudonym"
+msgstr "Pseudonym"
+
+#, fuzzy
+#| msgid "Keine erledigten Aufgaben."
+msgid "Mit erweit. Angaben"
+msgstr "Keine erledigten Aufgaben."
+
+msgid ""
+"Approximation: Für Zeiträume über einen Monat hinaus werden Personen "
+"über Monatssnapshots summiert. Personen, die in mehreren Monaten "
+"erscheinen, werden mehrfach gezählt."
+msgstr ""
+"Approximation: Für Zeiträume über einen Monat hinaus werden Personen "
+"über Monatssnapshots summiert. Personen, die in mehreren Monaten "
+"erscheinen, werden mehrfach gezählt."
+
+msgid "Einzigartige Personen"
+msgstr "Einzigartige Personen"
+
+msgid "Top-Person"
+msgstr "Top-Person"
+
+#, fuzzy
+#| msgid "Kontakte heute"
+msgid "Kontakte im Zeitverlauf"
+msgstr "Kontakte heute"
+
+#, fuzzy
+#| msgid "Basis-Daten"
+msgid "Live-Daten"
+msgstr "Basis-Daten"
+
+#, fuzzy
+#| msgid "Statistik-Snapshot"
+msgid "Snapshot"
+msgstr "Statistik-Snapshot"
+
+#, fuzzy
+#| msgid "Altersgruppe"
+msgid "Altersgruppen"
+msgstr "Altersgruppe"
+
 msgid "CSV-Export"
 msgstr "CSV-Export"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:134
 msgid "PDF-Bericht"
 msgstr "PDF-Bericht"
 
-#: src/templates/core/statistics/partials/dashboard_content.html:139
 msgid "Jugendamt-Bericht"
 msgstr "Jugendamt-Bericht"
 
-#: src/templates/core/statistics/partials/full_content.html:9
 msgid "Monat"
 msgstr "Monat"
 
-#: src/templates/core/statistics/partials/full_content.html:14
 msgid "Quartal"
 msgstr "Quartal"
 
-#: src/templates/core/statistics/partials/full_content.html:19
 msgid "Halbjahr"
 msgstr "Halbjahr"
 
-#: src/templates/core/statistics/partials/full_content.html:24
 msgid "Jahr"
 msgstr ""
 
-#: src/templates/core/statistics/partials/full_content.html:44
 msgid "Anwenden"
 msgstr "Anwenden"
 
-#: src/templates/core/statistics/partials/full_content.html:54
 msgid "Vorheriges Jahr"
 msgstr ""
 
-#: src/templates/core/statistics/partials/full_content.html:64
 #, fuzzy
 #| msgid "Nächste Woche"
 msgid "Nächstes Jahr"
 msgstr "Nächste Woche"
 
-#: src/templates/core/workitems/detail.html:27
 msgid "Abgeschlossen am:"
 msgstr "Abgeschlossen am:"
 
-#: src/templates/core/workitems/detail.html:88
 msgid "Keine Frist"
 msgstr "Keine Frist"
 
-#: src/templates/core/workitems/detail.html:125
+#, fuzzy
+#| msgid "Wiedereröffnen"
+msgid "Wiederkehrend:"
+msgstr "Wiedereröffnen"
+
+#, fuzzy
+#| msgid "Feldvorlage"
+msgid "Keine Wiedervorlage"
+msgstr "Feldvorlage"
+
 msgid "Zurück zur Inbox"
 msgstr "Zurück zur Inbox"
 
-#: src/templates/core/workitems/form.html:4
-#: src/templates/core/workitems/form.html:8
 msgid "Aufgabe bearbeiten"
 msgstr "Aufgabe bearbeiten"
 
-#: src/templates/core/workitems/form.html:73
 msgid "Nächste Woche"
 msgstr "Nächste Woche"
 
-#: src/templates/core/workitems/form.html:74
 msgid "In 2 Wochen"
 msgstr "In 2 Wochen"
 
-#: src/templates/core/workitems/inbox.html:65
+#, fuzzy
+#| msgid "Zugewiesen:"
+msgid "Mir zugewiesen"
+msgstr "Zugewiesen:"
+
 msgid "Fälligkeit"
 msgstr "Fälligkeit"
 
-#: src/templates/core/workitems/partials/inbox_content.html:27
+#, fuzzy
+#| msgid "Status filtern"
+msgid "Status ändern..."
+msgstr "Status filtern"
+
+#, fuzzy
+#| msgid "Passwort ändern"
+msgid "Priorität ändern..."
+msgstr "Passwort ändern"
+
+msgid "Zuweisen"
+msgstr ""
+
+msgid "Zuweisung entfernen"
+msgstr ""
+
+#, fuzzy
+#| msgid "Auswahl"
+msgid "Auswahl löschen"
+msgstr "Auswahl"
+
+msgid "Alle sichtbaren auswählen"
+msgstr ""
+
+#, python-format
+msgid ""
+"Weitere Einträge vorhanden — Anzeige auf %(limit)s begrenzt. Nutze Filter, "
+"um die Liste einzuschränken."
+msgstr ""
+
 msgid "Keine Aufgaben in Bearbeitung"
 msgstr "Keine Aufgaben in Bearbeitung"
 
-#: src/templates/core/workitems/partials/inbox_content.html:41
 msgid "Keine kürzlich erledigten Aufgaben"
 msgstr "Keine kürzlich erledigten Aufgaben"
 
-#: src/templates/core/zeitstrom/index.html:31
 msgid "Hausverbot:"
 msgstr "Hausverbot:"
 
-#: src/templates/core/zeitstrom/index.html:69
-msgid "Schichtübergabe:"
-msgstr "Schichtübergabe:"
-
-#: src/templates/core/zeitstrom/index.html:94
-msgid "Events"
-msgstr "Events"
-
-#: src/templates/core/zeitstrom/index.html:97
-msgid "Hausverbote"
-msgstr "Hausverbote"
-
-#: src/templates/core/zeitstrom/index.html:108
-msgid "Alle Dokumentationstypen"
-msgstr "Alle Dokumentationstypen"
-
-#: src/templates/core/zeitstrom/index.html:115
 #, fuzzy
 #| msgid "Zeitstrom"
 msgid "Zeitstrom Feed"
 msgstr "Zeitstrom"
 
-#: src/templates/core/zeitstrom/partials/feed_list.html:17
 msgid "Keine Einträge für diesen Zeitraum"
 msgstr "Keine Einträge für diesen Zeitraum"
 
-#: src/templates/registration/password_reset_complete.html:7
-#: src/templates/registration/password_reset_complete.html:12
-msgid "Passwort geändert"
-msgstr "Passwort geändert"
-
-#: src/templates/registration/password_reset_complete.html:15
-msgid "Ihr Passwort wurde erfolgreich geändert. Sie können sich jetzt mit Ihrem neuen Passwort anmelden."
-msgstr "Ihr Passwort wurde erfolgreich geändert. Sie können sich jetzt mit Ihrem neuen Passwort anmelden."
-
-#: src/templates/registration/password_reset_complete.html:21
-msgid "Zur Anmeldung"
-msgstr "Zur Anmeldung"
-
-#: src/templates/registration/password_reset_confirm.html:7
-#: src/templates/registration/password_reset_confirm.html:12
-msgid "Neues Passwort setzen"
-msgstr "Neues Passwort setzen"
-
-#: src/templates/registration/password_reset_confirm.html:42
-msgid "Passwort setzen"
-msgstr "Passwort setzen"
-
-#: src/templates/registration/password_reset_confirm.html:47
-msgid "Der Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen. Bitte fordern Sie einen neuen Link an."
-msgstr "Der Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen. Bitte fordern Sie einen neuen Link an."
-
-#: src/templates/registration/password_reset_confirm.html:51
-msgid "Neuen Link anfordern"
-msgstr "Neuen Link anfordern"
-
-#: src/templates/registration/password_reset_done.html:7
-#: src/templates/registration/password_reset_done.html:12
-msgid "E-Mail gesendet"
-msgstr "E-Mail gesendet"
-
-#: src/templates/registration/password_reset_done.html:15
-msgid "Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde eine Nachricht mit einem Link zum Zurücksetzen des Passworts gesendet."
-msgstr "Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde eine Nachricht mit einem Link zum Zurücksetzen des Passworts gesendet."
-
-#: src/templates/registration/password_reset_done.html:18
-msgid "Bitte prüfen Sie Ihren Posteingang und ggf. Ihren Spam-Ordner."
-msgstr "Bitte prüfen Sie Ihren Posteingang und ggf. Ihren Spam-Ordner."
-
-#: src/templates/registration/password_reset_done.html:23
-#: src/templates/registration/password_reset_form.html:46
-msgid "Zurück zur Anmeldung"
-msgstr "Zurück zur Anmeldung"
-
-#: src/templates/registration/password_reset_email.html:2
 msgid "Hallo"
 msgstr "Hallo"
 
-#: src/templates/registration/password_reset_email.html:4
-msgid "Sie erhalten diese E-Mail, weil jemand das Zurücksetzen des Passworts für Ihr Konto bei Anlaufstelle angefordert hat."
-msgstr "Sie erhalten diese E-Mail, weil jemand das Zurücksetzen des Passworts für Ihr Konto bei Anlaufstelle angefordert hat."
+msgid "für Sie wurde ein Konto bei Anlaufstelle angelegt."
+msgstr ""
 
-#: src/templates/registration/password_reset_email.html:6
-msgid "Klicken Sie auf den folgenden Link, um Ihr Passwort zurückzusetzen:"
+#, fuzzy
+#| msgid "Klicken Sie auf den folgenden Link, um Ihr Passwort zurückzusetzen:"
+msgid ""
+"Bitte setzen Sie über den folgenden Link Ihr Passwort, um Ihr Konto zu "
+"aktivieren:"
 msgstr "Klicken Sie auf den folgenden Link, um Ihr Passwort zurückzusetzen:"
 
-#: src/templates/registration/password_reset_email.html:10
-msgid "Falls Sie diese Anforderung nicht gestellt haben, können Sie diese E-Mail ignorieren."
-msgstr "Falls Sie diese Anforderung nicht gestellt haben, können Sie diese E-Mail ignorieren."
+#, fuzzy
+#| msgid "Benutzername"
+msgid "Ihr Benutzername:"
+msgstr "Benutzername"
 
-#: src/templates/registration/password_reset_email.html:12
+msgid ""
+"Der Link ist aus Sicherheitsgründen zeitlich begrenzt gültig. Falls der Link "
+"abgelaufen ist, kann ein Administrator eine neue Einladung versenden."
+msgstr ""
+
+msgid ""
+"Falls Sie diese E-Mail unerwartet erhalten haben, können Sie sie ignorieren "
+"— das Konto bleibt ohne gesetztes Passwort unzugänglich."
+msgstr ""
+
 msgid "Mit freundlichen Grüßen"
 msgstr "Mit freundlichen Grüßen"
 
-#: src/templates/registration/password_reset_email.html:13
 msgid "Ihr Anlaufstelle-Team"
 msgstr "Ihr Anlaufstelle-Team"
 
-#: src/templates/registration/password_reset_form.html:7
-#: src/templates/registration/password_reset_form.html:12
+msgid "Einladung zu Anlaufstelle — Passwort setzen"
+msgstr ""
+
+msgid "Passwort geändert"
+msgstr "Passwort geändert"
+
+msgid ""
+"Ihr Passwort wurde erfolgreich geändert. Sie können sich jetzt mit Ihrem "
+"neuen Passwort anmelden."
+msgstr ""
+"Ihr Passwort wurde erfolgreich geändert. Sie können sich jetzt mit Ihrem "
+"neuen Passwort anmelden."
+
+msgid "Zur Anmeldung"
+msgstr "Zur Anmeldung"
+
+msgid "Neues Passwort setzen"
+msgstr "Neues Passwort setzen"
+
+msgid "Passwort setzen"
+msgstr "Passwort setzen"
+
+msgid ""
+"Der Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen. Bitte "
+"fordern Sie einen neuen Link an."
+msgstr ""
+"Der Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen. Bitte "
+"fordern Sie einen neuen Link an."
+
+msgid "Neuen Link anfordern"
+msgstr "Neuen Link anfordern"
+
+msgid "E-Mail gesendet"
+msgstr "E-Mail gesendet"
+
+msgid ""
+"Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde eine Nachricht "
+"mit einem Link zum Zurücksetzen des Passworts gesendet."
+msgstr ""
+"Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde eine Nachricht "
+"mit einem Link zum Zurücksetzen des Passworts gesendet."
+
+msgid "Bitte prüfen Sie Ihren Posteingang und ggf. Ihren Spam-Ordner."
+msgstr "Bitte prüfen Sie Ihren Posteingang und ggf. Ihren Spam-Ordner."
+
+msgid "Zurück zur Anmeldung"
+msgstr "Zurück zur Anmeldung"
+
+msgid ""
+"Sie erhalten diese E-Mail, weil jemand das Zurücksetzen des Passworts für "
+"Ihr Konto bei Anlaufstelle angefordert hat."
+msgstr ""
+"Sie erhalten diese E-Mail, weil jemand das Zurücksetzen des Passworts für "
+"Ihr Konto bei Anlaufstelle angefordert hat."
+
+msgid "Klicken Sie auf den folgenden Link, um Ihr Passwort zurückzusetzen:"
+msgstr "Klicken Sie auf den folgenden Link, um Ihr Passwort zurückzusetzen:"
+
+msgid ""
+"Falls Sie diese Anforderung nicht gestellt haben, können Sie diese E-Mail "
+"ignorieren."
+msgstr ""
+"Falls Sie diese Anforderung nicht gestellt haben, können Sie diese E-Mail "
+"ignorieren."
+
 msgid "Passwort zurücksetzen"
 msgstr "Passwort zurücksetzen"
 
-#: src/templates/registration/password_reset_form.html:15
-msgid "Geben Sie Ihre E-Mail-Adresse ein. Sie erhalten einen Link zum Zurücksetzen Ihres Passworts."
-msgstr "Geben Sie Ihre E-Mail-Adresse ein. Sie erhalten einen Link zum Zurücksetzen Ihres Passworts."
+msgid ""
+"Geben Sie Ihre E-Mail-Adresse ein. Sie erhalten einen Link zum Zurücksetzen "
+"Ihres Passworts."
+msgstr ""
+"Geben Sie Ihre E-Mail-Adresse ein. Sie erhalten einen Link zum Zurücksetzen "
+"Ihres Passworts."
 
-#: src/templates/registration/password_reset_form.html:34
 msgid "E-Mail-Adresse"
 msgstr "E-Mail-Adresse"
 
-#: src/templates/registration/password_reset_form.html:40
 msgid "Link senden"
 msgstr "Link senden"
-
-#~ msgid "Klient"
-#~ msgstr "Klient"
-
-#~ msgid "Neuer Klient"
-#~ msgstr "Neuer Klient"
-
-#~ msgid "Widget-Einstellungen"
-#~ msgstr "Widget-Einstellungen"
-
-#~ msgid "Keine Einträge heute"
-#~ msgstr "Keine Einträge heute"
-
-#~ msgid "Keine Ereignisse in diesem Zeitraum"
-#~ msgstr "Keine Ereignisse in diesem Zeitraum"
-
-#~ msgid "Erfassen"
-#~ msgstr "Erfassen"
-
-#~ msgid "Keine Internetverbindung"
-#~ msgstr "Keine Internetverbindung"
-
-#~ msgid "Personen"
-#~ msgstr "Personen"

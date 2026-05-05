@@ -156,7 +156,7 @@ CASE_TITLES = [
 ]
 
 CASE_DESCRIPTIONS = {
-    "Wohnungssuche": "Klientel ist seit mehreren Monaten obdachlos. Ziel: stabile Wohnsituation finden.",
+    "Wohnungssuche": "Person ist seit mehreren Monaten wohnungslos. Ziel: stabile Wohnsituation finden.",
     "Gesundheitsversorgung": ("Chronische Erkrankung ohne regelmäßige Behandlung. Zugang zum Gesundheitssystem."),
     "Berufliche Integration": "Wünscht sich Tagesstruktur und Einkommen. Qualifikation und Möglichkeiten klären.",
     "Familienkonflikt": "Kontaktabbruch zur Familie nach Eskalation. Vermittlung und Stabilisierung.",
