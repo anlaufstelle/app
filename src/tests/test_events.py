@@ -1081,19 +1081,21 @@ class TestEventAttachmentAtomicity:
         # ``store_encrypted_file`` wird jetzt aus ``core.services.event.
         # attach_files_to_new_event`` heraus gerufen — den Lazy-Import-Alias
         # in dem Service-Modul patchen, damit der Mock greift.
-        with patch(
-            "core.services.file_vault.store_encrypted_file",
-            side_effect=RuntimeError("Simulierter Fernet-Fail"),
+        with (
+            patch(
+                "core.services.file_vault.store_encrypted_file",
+                side_effect=RuntimeError("Simulierter Fernet-Fail"),
+            ),
+            pytest.raises(RuntimeError, match="Simulierter Fernet-Fail"),
         ):
-            with pytest.raises(RuntimeError, match="Simulierter Fernet-Fail"):
-                client.post(
-                    reverse("core:event_create"),
-                    {
-                        "document_type": str(doc_type_with_file.pk),
-                        "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
-                        "anhang": uploaded,
-                    },
-                )
+            client.post(
+                reverse("core:event_create"),
+                {
+                    "document_type": str(doc_type_with_file.pk),
+                    "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                    "anhang": uploaded,
+                },
+            )
 
         # Transaktion rollt zurück → kein neues Event, keine EventHistory.
         assert Event.objects.count() == events_before

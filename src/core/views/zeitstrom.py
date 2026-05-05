@@ -47,10 +47,7 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                         target_date = target_date - timedelta(days=1)
                     break
 
-        if selected_filter:
-            selected_filter_id = str(selected_filter.pk)
-        else:
-            selected_filter_id = "all"
+        selected_filter_id = str(selected_filter.pk) if selected_filter else "all"
 
         # Build feed items
         feed_items = build_feed_items(

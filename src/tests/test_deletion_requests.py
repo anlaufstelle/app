@@ -119,15 +119,14 @@ class TestRequestDeletion:
         from django.db import IntegrityError, transaction
 
         request_deletion(event_qualified, staff_user, "Grund 1")
-        with pytest.raises(IntegrityError):
-            with transaction.atomic():
-                DeletionRequest.objects.create(
-                    facility=event_qualified.facility,
-                    target_type="Event",
-                    target_id=event_qualified.pk,
-                    reason="Spoofed",
-                    requested_by=staff_user,
-                )
+        with pytest.raises(IntegrityError), transaction.atomic():
+            DeletionRequest.objects.create(
+                facility=event_qualified.facility,
+                target_type="Event",
+                target_id=event_qualified.pk,
+                reason="Spoofed",
+                requested_by=staff_user,
+            )
 
     def test_reviewed_by_initially_null(self, event_qualified, staff_user):
         dr = request_deletion(event_qualified, staff_user, "Grund")

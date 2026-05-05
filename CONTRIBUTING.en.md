@@ -48,7 +48,7 @@ Welcome! This guide explains how to set up the development environment, how the 
 
 ```bash
 git clone https://github.com/anlaufstelle/app.git
-cd anlaufstelle
+cd app
 ```
 
 **2. Set up the Python environment**
@@ -56,8 +56,17 @@ cd anlaufstelle
 ```bash
 python3.13 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt   # includes runtime + test/lint tools
+# Or runtime only (e.g. for prod Docker build):
+# pip install -r requirements.txt
 ```
+
+> **Lock files:** `requirements.txt` / `requirements-dev.txt` are generated
+> lock files with pinned transitive dependencies (via
+> [pip-tools](https://github.com/jazzband/pip-tools)). Direct dependencies
+> live in `requirements.in` / `requirements-dev.in`. After changing those:
+> run `make deps-lock`. Details:
+> [docs/ops-runbook.md § 8](docs/ops-runbook.md#8-dependencies-aktualisieren).
 
 **3. Start the database**
 
@@ -124,6 +133,8 @@ python src/manage.py seed --flush          # flush existing data first
 | Milestones / goal | — | 3 | 4 |
 | WorkItems | 5 | 25 | 100 |
 | DeletionRequests | — | 5 | 15 |
+| RetentionProposals | 4 | 6 | 12 |
+| Attachments (approx.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) |
 | Time span | 80 days | 365 days | 3 years |
 
 > **Note:** `small` does not include case management (no episodes, goals). Use `medium` when developing case management features.
@@ -165,10 +176,17 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 | `make tailwind`  | Compile Tailwind CSS in watch mode                                |
 | `make tailwind-build` | Compile minified Tailwind CSS for production                 |
 | `make lint`      | Check code with Ruff and verify formatting                        |
+| `make typecheck` | mypy on `core/services` (strict) + baseline check (Refs [#741](https://github.com/tobiasnix/anlaufstelle/issues/741)) |
 | `make test`      | Run unit and integration tests (excluding E2E)                    |
 | `make test-e2e`  | Run end-to-end tests with Playwright                              |
 | `make check`     | Run Django system checks and verify migration consistency         |
-| `make ci`        | Full CI pipeline locally: `lint` + `check` + `test`              |
+| `make ci`        | Full CI pipeline locally: `lint` + `check` + `test-parallel`      |
+| `make test-focus T=<path>` | Single test file with fail-fast                          |
+| `make test-parallel` | Unit and integration tests in parallel (pytest-xdist)         |
+| `make test-e2e-parallel` | E2E tests in parallel (default 2 workers, configurable)   |
+| `make test-e2e-smoke` | Smoke-tagged E2E tests only (~2-3 min)                       |
+| `make deps-lock` | Regenerate lock files from `requirements*.in` (pip-tools)         |
+| `make deps-check` | Verify lock files match `.in` (drift detection)                  |
 | `make dev`       | Start database, run migrations, and start server (combined)       |
 
 `make ci` should pass locally before every commit.
@@ -185,6 +203,20 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 - Models are split up: one model (or closely related models) per file under `core/models/`.
 - Role-based access control via mixins from `core/views/mixins.py`.
 - Do not introduce new dependencies without prior discussion.
+
+### Facility Scoping & Row Level Security
+
+Every new facility-scoped model must be protected on **both** defense lines:
+
+1. **Django layer (first line):**
+   - `facility = models.ForeignKey(Facility, ...)` on the model
+   - `objects = FacilityScopedManager()` (from [`src/core/models/managers.py`](src/core/models/managers.py))
+   - Views/services filter via `.for_facility(request.current_facility)`
+2. **PostgreSQL RLS (second line, defense in depth):**
+   - New migration following the pattern of [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): add the table to `DIRECT_TABLES` (or `JOIN_TABLES` if no direct `facility_id` column exists). The migration sets `ENABLE + FORCE ROW LEVEL SECURITY` plus a `facility_isolation` policy.
+   - Add the table to `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) so the RLS setup test guarantees coverage.
+
+Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS only takes effect in production when the Django DB user is **not** a superuser (see [docs/coolify-deployment.md](docs/coolify-deployment.md)).
 
 ### Linting and Formatting
 
@@ -259,6 +291,8 @@ make test
 
 Tests are located under `src/tests/`. New tests go into the appropriate file or a new file following the pattern `test_<feature>.py`.
 
+**Parallel:** `make test-parallel` uses pytest-xdist to run on all available CPU cores. `make ci` uses the parallel variant automatically.
+
 ### End-to-End Tests (Playwright)
 
 ```bash
@@ -274,11 +308,15 @@ E2E tests are located under `src/tests/e2e/`. They are marked with `@pytest.mark
 
 Fixtures for login, server setup, etc. are located in `src/tests/e2e/conftest.py`. Comprehensive runbook with checklists and troubleshooting: [docs/e2e-runbook.md](docs/e2e-runbook.md).
 
+**Parallel E2E tests:** `make test-e2e-parallel` starts a separate gunicorn process per xdist worker on its own port with its own database. Default: 2 workers (`E2E_WORKERS=4 make test-e2e-parallel` for more). `--dist loadfile` keeps tests from the same file on the same worker.
+
+**Smoke tests:** `make test-e2e-smoke` runs only E2E tests marked with `@pytest.mark.smoke` (~40 critical flows, ~2-3 min). Ideal for fast validation after feature implementation.
+
 ### Full CI Pipeline Locally
 
 ```bash
 make ci
-# equivalent to: lint + check + test
+# equivalent to: lint + check + test-parallel
 ```
 
 This pipeline must pass locally before every pull request.
@@ -380,6 +418,6 @@ src/
 - **Service layer:** Views delegate logic to services — this makes testing easier and keeps views lean.
 
 <!-- translation-source: CONTRIBUTING.md -->
-<!-- translation-version: v0.9.0 -->
-<!-- translation-date: 2026-03-28 -->
-<!-- source-hash: d749493 -->
+<!-- translation-version: v0.10.2 -->
+<!-- translation-date: 2026-05-01 -->
+<!-- source-hash: 18c5c32 -->

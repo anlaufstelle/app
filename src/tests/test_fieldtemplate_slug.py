@@ -108,10 +108,9 @@ class TestSlugRetryOnRaceCondition:
         def fail_save(self_inner, *args, **kwargs):
             raise IntegrityError("some constraint")
 
-        with patch.object(Model, "save", fail_save):
-            with pytest.raises(IntegrityError):
-                ft.name = "Updated"
-                ft.save()
+        with patch.object(Model, "save", fail_save), pytest.raises(IntegrityError):
+            ft.name = "Updated"
+            ft.save()
 
 
 @pytest.mark.django_db

@@ -60,9 +60,7 @@ def _wants_json_response(request) -> bool:
     if "application/json" in accept:
         return True
     # HTMX requests implicitly want a partial/data response, not a full redirect.
-    if request.headers.get("HX-Request"):
-        return True
-    return False
+    return bool(request.headers.get("HX-Request"))
 
 
 def _conflict_response(user, event, client_expected):

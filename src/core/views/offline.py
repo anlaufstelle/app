@@ -17,8 +17,8 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_BULK_ACTION
 from core.models import AuditLog, Client
+from core.services.audit import log_audit_event
 from core.services.offline import build_client_offline_bundle
-from core.signals.audit import get_client_ip
 from core.views.mixins import AssistantOrAboveRequiredMixin
 
 
@@ -39,18 +39,16 @@ class OfflineClientBundleView(AssistantOrAboveRequiredMixin, View):
 
         bundle = build_client_offline_bundle(request.user, facility, client)
 
-        AuditLog.objects.create(
-            facility=facility,
-            user=request.user,
-            action=AuditLog.Action.EXPORT,
+        log_audit_event(
+            request,
+            AuditLog.Action.EXPORT,
+            target_obj=client,
             target_type="Client-OfflineBundle",
-            target_id=str(client.pk),
             detail={
                 "event": "offline_bundle_fetched",
                 "pseudonym": client.pseudonym,
                 "event_count": len(bundle.get("events", [])),
             },
-            ip_address=get_client_ip(request),
         )
 
         return JsonResponse(bundle)

@@ -1,0 +1,40 @@
+# Pre-commit hooks for Anlaufstelle (Refs #820).
+#
+# Install:  pre-commit install
+# Run:      pre-commit run --all-files
+#
+# Hooks mirror the CI lint + check stages so that obvious failures are
+# caught before they hit GitHub Actions. They do *not* run the full test
+# suite — that stays in CI to keep the pre-commit fast.
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  - repo: local
+    hooks:
+      - id: missing-migrations
+        name: makemigrations --check
+        entry: .venv/bin/python src/manage.py makemigrations --check --dry-run --noinput
+        language: system
+        pass_filenames: false
+        files: ^src/.*\.py$
+        types: [python]
+
+      - id: mypy-services
+        name: mypy src/core/services
+        entry: .venv/bin/mypy src/core/services
+        language: system
+        pass_filenames: false
+        files: ^src/core/services/.*\.py$
+        types: [python]
+
+      - id: translation-versions
+        name: EN-Doku translation-version drift
+        entry: .venv/bin/python scripts/check_translation_versions.py
+        language: system
+        pass_filenames: false
+        files: ^(.*\.en\.md|docs/en/.*\.md|pyproject\.toml)$

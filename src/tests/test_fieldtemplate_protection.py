@@ -29,9 +29,8 @@ class TestFieldTemplateDeleteProtection:
             created_by=staff_user,
         )
 
-        with pytest.raises(ProtectedError) as excinfo:
-            with transaction.atomic():
-                ft.delete()
+        with pytest.raises(ProtectedError) as excinfo, transaction.atomic():
+            ft.delete()
 
         assert "Dauer" in str(excinfo.value.args[0])
         assert "dauer" in str(excinfo.value.args[0])
@@ -107,9 +106,8 @@ class TestFieldTemplateDeleteProtection:
             created_by=staff_user,
         )
 
-        with pytest.raises(ProtectedError):
-            with transaction.atomic():
-                FieldTemplate.objects.filter(pk=ft.pk).delete()
+        with pytest.raises(ProtectedError), transaction.atomic():
+            FieldTemplate.objects.filter(pk=ft.pk).delete()
 
         assert FieldTemplate.objects.filter(pk=ft.pk).exists()
 

@@ -71,9 +71,7 @@ def _is_file_marker(value):
         return False
     if value.get("__file__") is True and "attachment_id" in value:
         return True
-    if value.get("__files__") is True and isinstance(value.get("entries"), list):
-        return True
-    return False
+    return value.get("__files__") is True and isinstance(value.get("entries"), list)
 
 
 def is_singleton_file_marker(value):

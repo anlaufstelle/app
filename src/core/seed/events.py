@@ -20,10 +20,10 @@ def random_time_of_day(max_hour: int | None = None, max_minute: int | None = Non
     hours = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
     weights = [5, 8, 15, 15, 10, 8, 12, 12, 10, 8, 5, 3]
     if max_hour is not None:
-        filtered = [(h, w) for h, w in zip(hours, weights) if h <= max_hour]
+        filtered = [(h, w) for h, w in zip(hours, weights, strict=True) if h <= max_hour]
         if not filtered:
             return 8, 0
-        hours, weights = zip(*filtered)
+        hours, weights = zip(*filtered, strict=True)
         hours, weights = list(hours), list(weights)
     hour = random.choices(hours, weights=weights, k=1)[0]
     if max_hour is not None and hour == max_hour and max_minute is not None:

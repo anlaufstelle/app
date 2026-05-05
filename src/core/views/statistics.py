@@ -10,9 +10,9 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.models import AuditLog, DocumentType
+from core.services.audit import log_audit_event
 from core.services.export import export_events_csv, generate_jugendamt_pdf, generate_report_pdf
 from core.services.snapshot import _merge_stats, get_statistics_hybrid, get_statistics_trend
-from core.signals.audit import get_client_ip
 from core.utils.downloads import safe_download_response
 from core.utils.formatting import parse_date
 from core.views.mixins import HTMXPartialMixin, LeadOrAdminRequiredMixin
@@ -142,13 +142,11 @@ class CSVExportView(LeadOrAdminRequiredMixin, View):
             export_events_csv(facility, date_from, date_to, user=request.user),
         )
 
-        AuditLog.objects.create(
-            facility=facility,
-            user=request.user,
-            action=AuditLog.Action.EXPORT,
+        log_audit_event(
+            request,
+            AuditLog.Action.EXPORT,
             target_type="CSV",
             detail={"format": "CSV", "date_from": str(date_from), "date_to": str(date_to)},
-            ip_address=get_client_ip(request),
         )
 
         return response
@@ -179,13 +177,11 @@ class PDFExportView(LeadOrAdminRequiredMixin, View):
             pdf_bytes,
         )
 
-        AuditLog.objects.create(
-            facility=facility,
-            user=request.user,
-            action=AuditLog.Action.EXPORT,
+        log_audit_event(
+            request,
+            AuditLog.Action.EXPORT,
             target_type="PDF",
             detail={"format": "PDF", "date_from": str(date_from), "date_to": str(date_to)},
-            ip_address=get_client_ip(request),
         )
 
         return response
@@ -210,13 +206,11 @@ class JugendamtExportView(LeadOrAdminRequiredMixin, View):
             pdf_bytes,
         )
 
-        AuditLog.objects.create(
-            facility=facility,
-            user=request.user,
-            action=AuditLog.Action.EXPORT,
+        log_audit_event(
+            request,
+            AuditLog.Action.EXPORT,
             target_type="Jugendamt-PDF",
             detail={"format": "Jugendamt-PDF", "date_from": str(date_from), "date_to": str(date_to)},
-            ip_address=get_client_ip(request),
         )
 
         return response

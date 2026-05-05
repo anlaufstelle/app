@@ -38,7 +38,7 @@ class CaseForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.facility = facility
         if facility:
-            self.fields["lead_user"].queryset = User.objects.filter(
+            self.fields["lead_user"].queryset = User.objects.filter(  # type: ignore[attr-defined]
                 facility=facility,
                 role__in=[User.Role.STAFF, User.Role.LEAD, User.Role.ADMIN],
             )
@@ -50,8 +50,8 @@ class CaseForm(forms.ModelForm):
             raise ValidationError(_("Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."))
         try:
             client_obj = Client.objects.get(pk=client_id)
-        except Client.DoesNotExist:
-            raise ValidationError(_("Klientel existiert nicht."))
+        except Client.DoesNotExist as exc:
+            raise ValidationError(_("Klientel existiert nicht.")) from exc
         if self.facility and client_obj.facility_id != self.facility.pk:
             raise ValidationError(_("Klientel gehört nicht zur Einrichtung."))
         return client_obj

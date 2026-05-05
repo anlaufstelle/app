@@ -31,21 +31,19 @@ class TestAuditLogImmutableTrigger:
 
     def test_raw_update_is_blocked(self, facility):
         log = self._create_log(facility)
-        with pytest.raises(DatabaseError) as excinfo:
-            with transaction.atomic(), connection.cursor() as cur:
-                cur.execute(
-                    "UPDATE core_auditlog SET action = %s WHERE id = %s",
-                    ["logout", str(log.pk)],
-                )
+        with pytest.raises(DatabaseError) as excinfo, transaction.atomic(), connection.cursor() as cur:
+            cur.execute(
+                "UPDATE core_auditlog SET action = %s WHERE id = %s",
+                ["logout", str(log.pk)],
+            )
         assert "immutable" in str(excinfo.value).lower(), (
             f"Erwartet 'immutable' im Trigger-Fehler, erhalten: {excinfo.value!r}"
         )
 
     def test_raw_delete_is_blocked(self, facility):
         log = self._create_log(facility)
-        with pytest.raises(DatabaseError) as excinfo:
-            with transaction.atomic(), connection.cursor() as cur:
-                cur.execute("DELETE FROM core_auditlog WHERE id = %s", [str(log.pk)])
+        with pytest.raises(DatabaseError) as excinfo, transaction.atomic(), connection.cursor() as cur:
+            cur.execute("DELETE FROM core_auditlog WHERE id = %s", [str(log.pk)])
         assert "immutable" in str(excinfo.value).lower(), (
             f"Erwartet 'immutable' im Trigger-Fehler, erhalten: {excinfo.value!r}"
         )
@@ -55,9 +53,8 @@ class TestAuditLogImmutableTrigger:
         # DB-Trigger scheitern. Damit ist der Schutz unabhaengig von
         # Python-Override.
         self._create_log(facility)
-        with pytest.raises(DatabaseError) as excinfo:
-            with transaction.atomic():
-                AuditLog.objects.filter(facility=facility).delete()
+        with pytest.raises(DatabaseError) as excinfo, transaction.atomic():
+            AuditLog.objects.filter(facility=facility).delete()
         assert "immutable" in str(excinfo.value).lower()
 
     def test_insert_is_allowed(self, facility):

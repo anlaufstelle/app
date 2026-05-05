@@ -65,8 +65,8 @@ class DeletionRequestReviewView(LeadOrAdminRequiredMixin, View):
         if dr.target_type == DeletionRequest.TargetType.CLIENT:
             try:
                 client = Client.objects.get(pk=dr.target_id, facility=request.current_facility)
-            except Client.DoesNotExist:
-                raise Http404
+            except Client.DoesNotExist as exc:
+                raise Http404 from exc
             return render(
                 request,
                 "core/clients/deletion_review.html",
@@ -77,8 +77,8 @@ class DeletionRequestReviewView(LeadOrAdminRequiredMixin, View):
             event = Event.objects.select_related("document_type", "client").get(
                 pk=dr.target_id, facility=request.current_facility
             )
-        except Event.DoesNotExist:
-            raise Http404
+        except Event.DoesNotExist as exc:
+            raise Http404 from exc
 
         return render(
             request,

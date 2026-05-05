@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Union
 
 from django.http import HttpResponse, StreamingHttpResponse
 from django.utils.http import content_disposition_header
@@ -12,7 +11,7 @@ from django.utils.http import content_disposition_header
 def safe_download_response(
     filename: str,
     content_type: str,
-    content: Union[bytes, str, Iterator],
+    content: bytes | str | Iterator,
     *,
     as_attachment: bool = True,
 ) -> HttpResponse | StreamingHttpResponse:

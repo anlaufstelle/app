@@ -35,9 +35,8 @@ MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", BASE_DIR / "media"))  # noqa: F40
 DEBUG = False
 
 # Fail-closed: Prod darf nicht mit unsicheren Defaults oder leerer Konfiguration starten.
-if "collectstatic" not in sys.argv:
-    if not SECRET_KEY:  # noqa: F405
-        raise ImproperlyConfigured("DJANGO_SECRET_KEY muss in Produktion gesetzt sein.")
+if "collectstatic" not in sys.argv and not SECRET_KEY:  # noqa: F405
+    raise ImproperlyConfigured("DJANGO_SECRET_KEY muss in Produktion gesetzt sein.")
 
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
 if "collectstatic" not in sys.argv and not ALLOWED_HOSTS:

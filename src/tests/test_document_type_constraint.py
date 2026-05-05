@@ -21,13 +21,12 @@ class TestDocumentTypeUniqueConstraint:
             name="Beratungsgespräch",
             category=DocumentType.Category.SERVICE,
         )
-        with pytest.raises(IntegrityError):
-            with transaction.atomic():
-                DocumentType.objects.create(
-                    facility=facility,
-                    name="Beratungsgespräch",
-                    category=DocumentType.Category.SERVICE,
-                )
+        with pytest.raises(IntegrityError), transaction.atomic():
+            DocumentType.objects.create(
+                facility=facility,
+                name="Beratungsgespräch",
+                category=DocumentType.Category.SERVICE,
+            )
 
     def test_same_name_different_category_allowed(self, facility):
         # Zwei DocumentTypes mit gleichem Namen aber unterschiedlicher

@@ -7,9 +7,9 @@ from django.shortcuts import render
 from django.views import View
 
 from core.models import AuditLog
+from core.services.audit import log_audit_event
 from core.services.dsgvo_package import DOCUMENTS, get_document_list, render_document
 from core.services.sudo_mode import RequireSudoModeMixin
-from core.signals.audit import get_client_ip
 from core.utils.downloads import safe_download_response
 from core.views.mixins import AdminRequiredMixin
 
@@ -34,14 +34,12 @@ class DSGVODocumentDownloadView(AdminRequiredMixin, RequireSudoModeMixin, View):
         facility = request.current_facility
         content, filename = render_document(document, facility)
 
-        AuditLog.objects.create(
-            facility=facility,
-            user=request.user,
-            action=AuditLog.Action.EXPORT,
+        log_audit_event(
+            request,
+            AuditLog.Action.EXPORT,
             target_type="DSGVO-Dokument",
             target_id=document,
             detail={"document": document, "name": DOCUMENTS[document]["name"]},
-            ip_address=get_client_ip(request),
         )
 
         return safe_download_response(

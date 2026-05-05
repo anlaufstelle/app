@@ -44,11 +44,10 @@ class MFAEnforcementMiddleware:
 
     def __call__(self, request):
         user = getattr(request, "user", None)
-        if user is not None and user.is_authenticated:
-            if not any(request.path.startswith(url) for url in EXEMPT_URLS):
-                redirect_url = self._required_redirect(request, user)
-                if redirect_url is not None:
-                    return redirect(redirect_url)
+        if user is not None and user.is_authenticated and not any(request.path.startswith(url) for url in EXEMPT_URLS):
+            redirect_url = self._required_redirect(request, user)
+            if redirect_url is not None:
+                return redirect(redirect_url)
         return self.get_response(request)
 
     @staticmethod

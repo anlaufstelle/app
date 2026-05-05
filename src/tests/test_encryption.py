@@ -170,18 +170,16 @@ def test_safe_decrypt_passes_through_plain_value():
 
 def test_missing_key_raises():
     """Empty ENCRYPTION_KEY raises EncryptionKeyMissing."""
-    with override_settings(ENCRYPTION_KEY=""):
-        with pytest.raises(EncryptionKeyMissing):
-            from core.services.encryption import get_fernet
+    with override_settings(ENCRYPTION_KEY=""), pytest.raises(EncryptionKeyMissing):
+        from core.services.encryption import get_fernet
 
-            get_fernet()
+        get_fernet()
 
 
 def test_encrypt_field_without_key_raises_error():
     """encrypt_field raises EncryptionError when ENCRYPTION_KEY is empty (fail-closed)."""
-    with override_settings(ENCRYPTION_KEY=""):
-        with pytest.raises(EncryptionError, match="no encryption key configured"):
-            encrypt_field("Klartext")
+    with override_settings(ENCRYPTION_KEY=""), pytest.raises(EncryptionError, match="no encryption key configured"):
+        encrypt_field("Klartext")
 
 
 def test_generate_key_format():

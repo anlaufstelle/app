@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import socket
 from io import BytesIO
 from unittest.mock import MagicMock, patch
 
@@ -141,12 +140,14 @@ class TestScannerErrors:
         settings.CLAMAV_ENABLED = True
         uploaded = SimpleUploadedFile("ok.pdf", b"x", content_type="application/pdf")
 
-        with patch(
-            "core.services.virus_scan._build_client",
-            side_effect=OSError("cannot resolve clamav"),
+        with (
+            patch(
+                "core.services.virus_scan._build_client",
+                side_effect=OSError("cannot resolve clamav"),
+            ),
+            pytest.raises(VirusScannerUnavailableError),
         ):
-            with pytest.raises(VirusScannerUnavailableError):
-                scan_file(uploaded)
+            scan_file(uploaded)
 
 
 class TestStreamlikeObjects:
@@ -183,7 +184,7 @@ class TestScannerNetworkFailures:
         uploaded = SimpleUploadedFile("x.pdf", b"payload", content_type="application/pdf")
 
         client = MagicMock()
-        client.ping.side_effect = socket.timeout("clamav ping timeout")
+        client.ping.side_effect = TimeoutError("clamav ping timeout")
 
         with patch("core.services.virus_scan._build_client", return_value=client):
             with pytest.raises(VirusScannerUnavailableError) as exc_info:
@@ -198,7 +199,7 @@ class TestScannerNetworkFailures:
 
         client = MagicMock()
         client.ping.return_value = True
-        client.scan_stream.side_effect = socket.timeout("clamav scan timeout")
+        client.scan_stream.side_effect = TimeoutError("clamav scan timeout")
 
         with patch("core.services.virus_scan._build_client", return_value=client):
             with pytest.raises(VirusScannerUnavailableError):
@@ -209,12 +210,14 @@ class TestScannerNetworkFailures:
         settings.CLAMAV_ENABLED = True
         uploaded = SimpleUploadedFile("x.pdf", b"payload", content_type="application/pdf")
 
-        with patch(
-            "core.services.virus_scan._build_client",
-            side_effect=ConnectionRefusedError("clamd: connection refused"),
+        with (
+            patch(
+                "core.services.virus_scan._build_client",
+                side_effect=ConnectionRefusedError("clamd: connection refused"),
+            ),
+            pytest.raises(VirusScannerUnavailableError) as exc_info,
         ):
-            with pytest.raises(VirusScannerUnavailableError) as exc_info:
-                scan_file(uploaded)
+            scan_file(uploaded)
         assert "refused" in str(exc_info.value).lower() or "initialis" in str(exc_info.value)
 
     def test_connection_refused_during_scan_stream_is_wrapped(self, settings):
@@ -237,14 +240,16 @@ class TestScannerNetworkFailures:
         settings.CLAMAV_ENABLED = True
         uploaded = SimpleUploadedFile("x.pdf", b"payload", content_type="application/pdf")
 
-        with patch(
-            "core.services.virus_scan._build_client",
-            side_effect=socket.timeout("clamav socket timeout"),
+        with (
+            patch(
+                "core.services.virus_scan._build_client",
+                side_effect=TimeoutError("clamav socket timeout"),
+            ),
+            pytest.raises(VirusScannerUnavailableError),
         ):
-            with pytest.raises(VirusScannerUnavailableError):
-                result = scan_file(uploaded)
-                # Darf nicht erreicht werden.
-                assert False, f"Expected exception, got {result!r}"
+            result = scan_file(uploaded)
+            # Darf nicht erreicht werden.
+            assert False, f"Expected exception, got {result!r}"
 
 
 class TestPing:

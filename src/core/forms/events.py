@@ -1,5 +1,7 @@
 """Forms for event recording."""
 
+from typing import Any
+
 from django import forms
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -97,10 +99,10 @@ class EventMetaForm(forms.Form):
                 from core.services.sensitivity import allowed_sensitivities_for_user
 
                 qs = qs.filter(sensitivity__in=allowed_sensitivities_for_user(user))
-            self.fields["document_type"].queryset = qs
+            self.fields["document_type"].queryset = qs  # type: ignore[attr-defined]
             case_qs = Case.objects.for_facility(facility).filter(status=Case.Status.OPEN).select_related("client")
-            self.fields["case"].queryset = case_qs
-            self.fields["case"].label_from_instance = _case_label
+            self.fields["case"].queryset = case_qs  # type: ignore[attr-defined]
+            self.fields["case"].label_from_instance = _case_label  # type: ignore[attr-defined]
 
     def clean(self):
         cleaned = super().clean()
@@ -110,7 +112,7 @@ class EventMetaForm(forms.Form):
 class DynamicEventDataForm(forms.Form):
     """Dynamic form based on DocumentType fields."""
 
-    FIELD_TYPE_MAP = {
+    FIELD_TYPE_MAP: dict[str, tuple[type[forms.Field], dict[str, Any]]] = {
         FieldTemplate.FieldType.TEXT: (forms.CharField, {"widget": forms.TextInput}),
         FieldTemplate.FieldType.TEXTAREA: (forms.CharField, {"widget": forms.Textarea}),
         FieldTemplate.FieldType.NUMBER: (forms.IntegerField, {"widget": forms.NumberInput}),
@@ -180,7 +182,7 @@ class DynamicEventDataForm(forms.Form):
 
                 kwargs_copy["choices"] = choices
 
-            field = field_cls(**kwargs_copy)
+            field = field_cls(**kwargs_copy)  # type: ignore[arg-type]
 
             if initial_data and ft.slug in initial_data:
                 field.initial = initial_data[ft.slug]
@@ -192,7 +194,7 @@ class DynamicEventDataForm(forms.Form):
             self.fields[ft.slug] = field
 
     def clean(self):
-        cleaned = super().clean()
+        cleaned = super().clean() or {}
         if not self.facility:
             return cleaned
         # Refs #771 — fail-closed: fehlende Settings oder leere Whitelist greifen
@@ -232,7 +234,7 @@ class DynamicEventDataForm(forms.Form):
                         _("Datei zu gro\u00df (%(size)d MB). Maximum: %(max)d MB")
                         % {
                             "size": uploaded.size // (1024 * 1024),
-                            "max": facility_settings.max_file_size_mb,
+                            "max": max_mb,
                         },
                     )
         return cleaned

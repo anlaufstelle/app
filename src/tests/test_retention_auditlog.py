@@ -91,12 +91,11 @@ class TestPruneAuditlog:
 
         # Trigger muss wieder aktiv sein — Raw UPDATE muss scheitern.
         new_log = AuditLog.objects.create(facility=facility, action=AuditLog.Action.LOGIN)
-        with pytest.raises(DatabaseError) as excinfo:
-            with transaction.atomic(), connection.cursor() as cur:
-                cur.execute(
-                    "UPDATE core_auditlog SET action = %s WHERE id = %s",
-                    ["logout", str(new_log.pk)],
-                )
+        with pytest.raises(DatabaseError) as excinfo, transaction.atomic(), connection.cursor() as cur:
+            cur.execute(
+                "UPDATE core_auditlog SET action = %s WHERE id = %s",
+                ["logout", str(new_log.pk)],
+            )
         assert "immutable" in str(excinfo.value).lower()
 
     def test_trigger_tgenabled_stays_origin_after_pruning(self, facility, settings_obj):

@@ -28,8 +28,8 @@ def _make_admin_request(rf, user, method="POST"):
     request.user = user
     request.META["REMOTE_ADDR"] = "127.0.0.1"
     # Messages-Framework braucht Session + Storage
-    setattr(request, "session", {})
-    setattr(request, "_messages", FallbackStorage(request))
+    request.session = {}
+    request._messages = FallbackStorage(request)
     return request
 
 

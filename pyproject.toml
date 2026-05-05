@@ -12,7 +12,40 @@ src = ["src"]
 extend-exclude = ["src/core/migrations"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "W"]
+# Refs #821: Regelumfang um bugbear (B), pyupgrade (UP), simplify (SIM),
+# pep8-naming (N) und bandit (S) erweitert.
+select = ["E", "F", "I", "W", "B", "UP", "SIM", "N", "S"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests duerfen assert-Anweisungen, harte Test-Passwoerter und random()
+# verwenden; pytest.raises(Exception) und assert-False sind gebraeuchliche
+# Test-Patterns; nested-with kommt durch viele patch()-Schichten zustande.
+"src/tests/*" = [
+    "S101",  # assert in tests
+    "S104",  # bind 0.0.0.0 (Test-Server)
+    "S105",  # hardcoded password string (test fixtures)
+    "S106",  # hardcoded password kwarg (test fixtures)
+    "S107",  # hardcoded password default
+    "S110",  # try/except/pass in Test-Cleanup
+    "S311",  # random in tests/seed
+    "S603",  # subprocess (Test-Helper)
+    "S607",  # subprocess partial path (Test-Helper)
+    "S608",  # SQL aus konstanten Identifiern (MV-Namen) in Tests
+    "B007",  # ungenutzte Loop-Variable
+    "B011",  # assert False
+    "B017",  # blind Exception in pytest.raises
+    "SIM117",  # nested with-Statements (in patch-Stacks oft klarer)
+    "SIM108",  # ternary
+    "SIM102",  # nested if (Tests sind expliziter)
+    "SIM105",  # try/except/pass im Test-Cleanup statt contextlib.suppress
+    "N802",  # Test-Hilfsmethoden duerfen camelCase
+    "N806",  # CONSTANT_INSIDE_FUNCTION
+    "N817",  # Import-Alias als Akronym
+    "N818",  # Exception-Naming
+]
+# Seeds nutzen random() bewusst zur Verteilung — kein crypto-Pfad.
+"src/core/seed/*" = ["S311"]
+"src/core/management/commands/seed*.py" = ["S311", "S106"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "anlaufstelle.settings.test"
@@ -73,6 +106,15 @@ django_settings_module = "anlaufstelle.settings.test"
 [[tool.mypy.overrides]]
 module = "core.services.*"
 strict_optional = true
+warn_unused_ignores = true
+
+# Refs #822 (C-55): Forms sind die Grenze zwischen unsauberem HTTP-Input und
+# der typisierten Service-Schicht. Strict_optional + check_untyped_defs
+# verhindert, dass None-Werte aus cleaned_data unbemerkt durchrutschen.
+[[tool.mypy.overrides]]
+module = "core.forms.*"
+strict_optional = true
+check_untyped_defs = true
 warn_unused_ignores = true
 
 # Migrations + tests sind grundsaetzlich ausgenommen — Migration-Dateien

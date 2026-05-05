@@ -540,12 +540,14 @@ class TestVirusScanIntegration:
         event, ft_file = self._event(facility, staff_user, doc_type_with_file)
         uploaded = SimpleUploadedFile("malware.pdf", b"bad", content_type="application/pdf")
 
-        with patch(
-            "core.services.file_vault.scan_file",
-            return_value=ScanResult(clean=False, infected=True, signature="Eicar-Test-Signature"),
+        with (
+            patch(
+                "core.services.file_vault.scan_file",
+                return_value=ScanResult(clean=False, infected=True, signature="Eicar-Test-Signature"),
+            ),
+            pytest.raises(ValidationError) as exc_info,
         ):
-            with pytest.raises(ValidationError) as exc_info:
-                store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
+            store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
 
         assert "Eicar-Test-Signature" in str(exc_info.value)
         # Keine Attachment-Zeile, keine verschlüsselte Datei auf Platte.
@@ -555,12 +557,14 @@ class TestVirusScanIntegration:
         event, ft_file = self._event(facility, staff_user, doc_type_with_file)
         uploaded = SimpleUploadedFile("malware.pdf", b"bad", content_type="application/pdf")
 
-        with patch(
-            "core.services.file_vault.scan_file",
-            return_value=ScanResult(clean=False, infected=True, signature="Eicar-Test-Signature"),
+        with (
+            patch(
+                "core.services.file_vault.scan_file",
+                return_value=ScanResult(clean=False, infected=True, signature="Eicar-Test-Signature"),
+            ),
+            pytest.raises(ValidationError),
         ):
-            with pytest.raises(ValidationError):
-                store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
+            store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
 
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
         assert log.user == staff_user
@@ -573,12 +577,14 @@ class TestVirusScanIntegration:
         event, ft_file = self._event(facility, staff_user, doc_type_with_file)
         uploaded = SimpleUploadedFile("ok.pdf", b"ok", content_type="application/pdf")
 
-        with patch(
-            "core.services.file_vault.scan_file",
-            side_effect=VirusScannerUnavailableError("connection refused"),
+        with (
+            patch(
+                "core.services.file_vault.scan_file",
+                side_effect=VirusScannerUnavailableError("connection refused"),
+            ),
+            pytest.raises(ValidationError),
         ):
-            with pytest.raises(ValidationError):
-                store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
+            store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
 
         assert EventAttachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")

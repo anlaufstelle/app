@@ -17,9 +17,9 @@ auszufuehren (Soft-Delete, Proposal-Anlage usw.).
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Iterator
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
 from core.models import Case, Client, DocumentType, Event
@@ -106,6 +106,8 @@ def iter_strategies(facility, settings_obj, now: datetime) -> Iterator[Retention
         retention_days__isnull=False,
     )
     for dt in doc_types_with_retention:
+        # retention_days__isnull=False im Filter — None ist hier ausgeschlossen.
+        assert dt.retention_days is not None  # noqa: S101
         cutoff_dt = now - timedelta(days=dt.retention_days)
         yield RetentionStrategy(
             category="document_type",

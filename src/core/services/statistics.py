@@ -51,8 +51,10 @@ def parse_statistics_period(query_params, today: date) -> PeriodState:
     selected_year: int | None = None
 
     if period == "custom":
-        date_from = parse_date(query_params.get("date_from"), today - timedelta(days=30))
-        date_to = parse_date(query_params.get("date_to"), today)
+        # parse_date faellt auf den Default zurueck — der ist hier ein
+        # konkretes date, also ist None nicht erreichbar.
+        date_from = parse_date(query_params.get("date_from"), today - timedelta(days=30)) or (today - timedelta(days=30))
+        date_to = parse_date(query_params.get("date_to"), today) or today
     elif period == "year":
         selected_year = _parse_year(query_params.get("year"), today.year)
         date_from = date(selected_year, 1, 1)
@@ -189,18 +191,15 @@ def get_event_counts_by_month(facility, year):
     counts = {month: 0 for month in range(1, 13)}
 
     if _flat_view_enabled():
+        # STATISTICS_MV_NAME ist eine Modul-Konstante, kein User-Input.
+        sql = (
+            f"SELECT EXTRACT(MONTH FROM month)::int AS m, COUNT(*)::bigint "  # noqa: S608 — kein User-Input
+            f"FROM {STATISTICS_MV_NAME} "
+            f"WHERE facility_id = %s AND EXTRACT(YEAR FROM month)::int = %s "
+            f"GROUP BY m ORDER BY m"
+        )
         with connection.cursor() as cursor:
-            cursor.execute(
-                f"""
-                SELECT EXTRACT(MONTH FROM month)::int AS m, COUNT(*)::bigint
-                FROM {STATISTICS_MV_NAME}
-                WHERE facility_id = %s
-                  AND EXTRACT(YEAR FROM month)::int = %s
-                GROUP BY m
-                ORDER BY m
-                """,
-                [facility.pk, year],
-            )
+            cursor.execute(sql, [facility.pk, year])
             for month, count in cursor.fetchall():
                 counts[int(month)] = int(count)
     else:

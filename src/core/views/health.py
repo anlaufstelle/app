@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import shutil
@@ -71,10 +72,8 @@ def _check_smtp() -> dict:
         with socket.create_connection((host, port), timeout=SMTP_TIMEOUT_SECONDS) as sock:
             # Banner lesen, damit wir wissen, dass es kein leerer TCP-Listen ist.
             sock.settimeout(SMTP_TIMEOUT_SECONDS)
-            try:
+            with contextlib.suppress(TimeoutError, OSError):
                 sock.recv(64)
-            except (TimeoutError, OSError):
-                pass
         latency_ms = int((time.monotonic() - started) * 1000)
         return {"status": "ok", "latency_ms": latency_ms}
     except (TimeoutError, OSError, smtplib.SMTPException):

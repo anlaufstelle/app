@@ -175,10 +175,7 @@ def _already_reported(facility, finding: dict) -> bool:
     )
     if finding["user_id"] is not None:
         qs = qs.filter(user_id=finding["user_id"])
-    for entry in qs.iterator():
-        if (entry.detail or {}).get("kind") == finding["kind"]:
-            return True
-    return False
+    return any((entry.detail or {}).get("kind") == finding["kind"] for entry in qs.iterator())
 
 
 def _post_webhook(payload: dict) -> bool:
@@ -198,7 +195,7 @@ def _post_webhook(payload: dict) -> bool:
         logger.warning("breach_webhook_url_rejected: %s", exc)
         return False
     try:
-        req = urllib.request.Request(
+        req = urllib.request.Request(  # noqa: S310 — _validate_webhook_url SSRF-haerten
             url,
             data=json.dumps(payload).encode("utf-8"),
             headers={"Content-Type": "application/json"},

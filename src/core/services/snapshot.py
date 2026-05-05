@@ -130,10 +130,7 @@ def _split_into_segments(date_from, date_to):
         segments.append((seg_from, seg_to, is_full_month and is_past_month))
 
         # Advance cursor to the first day of the next month
-        if month == 12:
-            cursor = date(year + 1, 1, 1)
-        else:
-            cursor = date(year, month + 1, 1)
+        cursor = date(year + 1, 1, 1) if month == 12 else date(year, month + 1, 1)
 
     return segments
 

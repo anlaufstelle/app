@@ -94,6 +94,6 @@ def seed_work_items(facility: Facility, users: list[User], clients: list[Client]
         WorkItem.objects.bulk_create(to_create, batch_size=1000)
         # Fix auto_now_add: set realistic created_at timestamps
         created_items = list(WorkItem.objects.filter(facility=facility).order_by("pk")[existing:])
-        for wi, ts in zip(created_items, timestamps):
+        for wi, ts in zip(created_items, timestamps, strict=False):
             WorkItem.objects.filter(pk=wi.pk).update(created_at=ts)
     return len(to_create)

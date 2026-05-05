@@ -88,7 +88,7 @@ class WorkItemForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.facility = facility
         if facility:
-            self.fields["assigned_to"].queryset = User.objects.filter(
+            self.fields["assigned_to"].queryset = User.objects.filter(  # type: ignore[attr-defined]
                 facility=facility,
                 is_active=True,
                 role__in=[User.Role.ADMIN, User.Role.LEAD, User.Role.STAFF],
@@ -119,11 +119,11 @@ class WorkItemForm(forms.ModelForm):
                 pk=client_id,
                 facility=self.facility,
             ).get()
-        except Client.DoesNotExist:
-            raise forms.ValidationError(_("Ungültige Klientel-ID"))
+        except Client.DoesNotExist as exc:
+            raise forms.ValidationError(_("Ungültige Klientel-ID")) from exc
 
     def clean(self):
-        cleaned = super().clean()
+        cleaned = super().clean() or {}
         remind_at = cleaned.get("remind_at")
         due_date = cleaned.get("due_date")
         if remind_at and due_date and remind_at > due_date:

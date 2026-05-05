@@ -14,10 +14,10 @@ from django.views.i18n import set_language
 from django_ratelimit.decorators import ratelimit
 
 from core.models import AuditLog, User
+from core.services.audit import log_audit_event
 from core.services.audit_hash import hmac_hash_email
 from core.services.login_lockout import is_locked
 from core.services.offline_keys import ensure_offline_key_salt
-from core.signals.audit import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -55,16 +55,16 @@ class CustomLoginView(auth_views.LoginView):
         # existiert also noch keine gebundene Session, die wir revoken müssten.
         user = form.get_user()
         if is_locked(user):
-            AuditLog.objects.create(
-                facility=getattr(user, "facility", None),
+            log_audit_event(
+                self.request,
+                AuditLog.Action.LOGIN_FAILED,
                 user=user,
-                action=AuditLog.Action.LOGIN_FAILED,
+                facility=getattr(user, "facility", None),
                 detail={
                     "message": "Login blockiert durch Account-Lockout",
                     "username": user.username,
                     "reason": "locked",
                 },
-                ip_address=get_client_ip(self.request),
             )
             form.add_error(
                 None,
@@ -132,14 +132,14 @@ class RateLimitedPasswordResetView(auth_views.PasswordResetView):
         # DSGVO-Datenminimierung. Stattdessen HMAC-Hash schreiben — Lookup
         # bei bekannter E-Mail bleibt moeglich (gleiche E-Mail -> gleicher
         # Hash), eingegebene Adressen leben aber nicht 24 Monate weiter.
-        AuditLog.objects.create(
-            facility=facility,
+        log_audit_event(
+            self.request,
+            AuditLog.Action.PASSWORD_RESET_REQUESTED,
             user=matched_user,
-            action=AuditLog.Action.PASSWORD_RESET_REQUESTED,
+            facility=facility,
             target_type="User" if matched_user else "",
             target_id=str(matched_user.pk) if matched_user else "",
             detail={"email_hash": hmac_hash_email(email)} if email else {},
-            ip_address=get_client_ip(self.request),
         )
         return super().form_valid(form)
 
@@ -172,14 +172,12 @@ class OfflineKeySaltView(LoginRequiredMixin, View):
     @method_decorator(ratelimit(key="user", rate="10/m", method="POST", block=True))
     def post(self, request, *args, **kwargs):
         salt = ensure_offline_key_salt(request.user)
-        AuditLog.objects.create(
+        log_audit_event(
+            request,
+            AuditLog.Action.OFFLINE_KEY_FETCH,
+            target_obj=request.user,
             facility=request.user.facility,
-            user=request.user,
-            action=AuditLog.Action.OFFLINE_KEY_FETCH,
-            target_type="User",
-            target_id=str(request.user.pk),
             detail={"event": "offline_key_salt_fetched"},
-            ip_address=get_client_ip(request),
         )
         return JsonResponse({"salt": salt})
 

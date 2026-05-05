@@ -19,7 +19,7 @@ class EncryptionError(Exception):
     """General encryption error."""
 
 
-class EncryptionKeyMissing(EncryptionError):
+class EncryptionKeyMissing(EncryptionError):  # noqa: N818 — historischer Name, oeffentlich exportiert
     """ENCRYPTION_KEY is not configured."""
 
 
@@ -79,8 +79,10 @@ def encrypt_field(value):
         f = get_fernet()
         token = f.encrypt(str(value).encode("utf-8")).decode("utf-8")
         return {"__encrypted__": True, "value": token}
-    except EncryptionKeyMissing:
-        raise EncryptionError("Cannot encrypt field: no encryption key configured. Set ENCRYPTION_KEY in environment.")
+    except EncryptionKeyMissing as exc:
+        raise EncryptionError(
+            "Cannot encrypt field: no encryption key configured. Set ENCRYPTION_KEY in environment."
+        ) from exc
     except Exception as exc:
         raise EncryptionError(f"Encryption failed: {exc}") from exc
 

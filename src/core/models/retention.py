@@ -126,9 +126,7 @@ class LegalHold(models.Model):
         """A hold is active if not dismissed and not expired."""
         if self.dismissed_at:
             return False
-        if self.expires_at and self.expires_at < date.today():
-            return False
-        return True
+        return not (self.expires_at and self.expires_at < date.today())
 
     class Meta:
         verbose_name = _("Legal Hold")

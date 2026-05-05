@@ -121,7 +121,7 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
         # Listen werden evaluiert (list(...)), damit {{ list|length }} im
         # Template keine zusätzliche COUNT-Query auslöst.
         # Refs #639 #640.
-        INBOX_LIST_LIMIT = 50
+        INBOX_LIST_LIMIT = 50  # noqa: N806 — Konstante, semantisch bewusst SCREAMING_SNAKE
 
         open_qs = base_qs.filter(
             status=WorkItem.Status.OPEN,

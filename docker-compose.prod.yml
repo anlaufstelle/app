@@ -66,6 +66,8 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+      # Access-Log persistent — Refs #801.
+      - caddy_logs:/var/log/caddy
     env_file: .env
     depends_on:
       web:
@@ -78,6 +80,7 @@ volumes:
   pgdata:
   caddy_data:
   caddy_config:
+  caddy_logs:
   clamav-db:
   media:
 

@@ -77,10 +77,7 @@ def search_clients_and_events(facility, user, query, max_clients=20, max_events=
                 continue
             if isinstance(value, dict):
                 continue
-            if isinstance(value, list):
-                text = ", ".join(str(v) for v in value)
-            else:
-                text = str(value)
+            text = ", ".join(str(v) for v in value) if isinstance(value, list) else str(value)
             if q_lower in text.lower():
                 events_by_data.append(event)
                 break

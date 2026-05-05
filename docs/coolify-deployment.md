@@ -128,6 +128,38 @@ und Edge-Versionen erfüllen das).
    gespeicherten, lokal verschlüsselten Daten **unrettbar** — Recovery-Flows für
    Offline-Daten sind nicht möglich.
 
+## Caddy-Konfiguration
+
+Die mitgelieferte [`Caddyfile`](../Caddyfile) (Refs [#801](https://github.com/tobiasnix/anlaufstelle/issues/801)) enthält:
+
+- **www-Redirect** — `www.{$DOMAIN}` wird permanent (`301`) auf den Apex umgeleitet, damit Backlinks und Cookies eindeutig auf eine Origin gehen.
+- **HTTPS + HSTS** — Caddy beantragt automatisch Let's-Encrypt-Zertifikate, HSTS mit `max-age=31536000` ist gesetzt.
+- **Access-Log** — JSON-Log nach `/var/log/caddy/access.log` mit Rotation (10 MiB, 10 Files, 30 Tage). Persistiert über das `caddy_logs`-Volume in [`docker-compose.prod.yml`](../docker-compose.prod.yml). Auswertung z. B. via `docker compose exec caddy cat /var/log/caddy/access.log | jq`.
+- **CSP** — Content-Security-Policy wird **ausschließlich in Django** über `django-csp` gesetzt (`anlaufstelle.settings.base.CONTENT_SECURITY_POLICY`); im Caddyfile bewusst nicht doppelt, damit App- und Proxy-Policy nicht auseinanderlaufen.
+
+### Optionaler Rate-Limit
+
+Caddy 2 unterstützt Rate-Limits **nur** über das nicht offizielle Modul [caddy-ratelimit](https://github.com/mholt/caddy-ratelimit). Wer Brute-Force-Schutz auf Reverse-Proxy-Ebene möchte, baut ein eigenes Caddy-Image mit dem Modul (`xcaddy build --with github.com/mholt/caddy-ratelimit`) und ergänzt im `{$DOMAIN}`-Block z. B.:
+
+```caddy
+rate_limit {
+    zone login_zone {
+        key {http.request.remote_host}
+        events 10
+        window 1m
+    }
+    match {
+        path /login/* /accounts/* /api/*
+    }
+}
+```
+
+Im Default-Setup ist die Rate-Limit-Stanza im `Caddyfile` als Kommentar dokumentiert. Defense-in-Depth: Django selbst hat einen Login-Throttle (siehe `core/views/auth.py`), die Caddy-Stufe ist optional.
+
+### Staging
+
+[`Caddyfile.staging`](../Caddyfile.staging) ist strukturgleich, hat aber zusätzlich einen Hinweis auf `tls internal` — falls die Stage-Domain nicht öffentlich auflösbar ist (interner Reverse-Proxy oder CDN davor), kann Caddy auf seine eigene CA wechseln statt LE.
+
 ## Nach Go-Live
 
 - Gesundheitsprüfung: `curl https://anlaufstelle.app/health/` → `{"status":"ok",...}`

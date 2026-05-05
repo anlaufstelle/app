@@ -3,7 +3,7 @@
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 # Regex-Muster für PII-Scrub. Absichtlich konservativ: lieber false-positiv
 # maskieren als Credential-Leaks durch den Formatter lassen. Reihenfolge
@@ -50,7 +50,7 @@ class JsonFormatter(logging.Formatter):
 
     def format(self, record):
         entry = {
-            "ts": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "ts": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "module": record.module,

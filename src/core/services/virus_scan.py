@@ -7,6 +7,7 @@ klare Exception erzeugt, die der Aufrufer als abgewiesenen Upload behandelt.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -63,12 +64,10 @@ def _read_all_bytes(file_obj: Any) -> bytes:
     chunkweise, damit große In-Memory-Uploads nicht doppelt kopiert werden.
     """
     # Zuerst an den Anfang spulen, falls der Stream bereits konsumiert wurde.
+    # Manche Streams sind nicht seekbar — akzeptieren, weiterlesen.
     if hasattr(file_obj, "seek"):
-        try:
+        with contextlib.suppress(OSError, ValueError):
             file_obj.seek(0)
-        except (OSError, ValueError):
-            # Manche Streams sind nicht seekbar — akzeptieren, weiterlesen.
-            pass
 
     chunks: list[bytes] = []
     if hasattr(file_obj, "chunks"):
@@ -82,10 +81,8 @@ def _read_all_bytes(file_obj: Any) -> bytes:
     # Zeiger zurücksetzen, damit nachgelagerter Code (Verschlüsselung) wieder
     # von vorn lesen kann.
     if hasattr(file_obj, "seek"):
-        try:
+        with contextlib.suppress(OSError, ValueError):
             file_obj.seek(0)
-        except (OSError, ValueError):
-            pass
 
     return data
 

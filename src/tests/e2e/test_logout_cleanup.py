@@ -58,30 +58,29 @@ def _seed_offline_client(page):
     (`clients`, `cases`, `events`) that the real UI path writes to.
     """
     return page.evaluate(
-        """async () => {
+        f"""async () => {{
             // If the storage-state fixture path was used the derive step
             // will already have run; otherwise make sure we have a key.
-            if (!window.crypto_session.hasSessionKey()) {
-                await window.crypto_session.deriveSessionKey('seedpw', '%s');
-            }
-            await window.offlineStore.saveClientBundle({
-                client: {pk: 'test-pk-logout-cleanup', pseudonym: 'PS-LOGOUT-001'},
-                cases: [{pk: 'case-1', clientPk: 'test-pk-logout-cleanup'}],
-                events: [{pk: 'event-1', clientPk: 'test-pk-logout-cleanup', occurred_at: '2026-01-01T00:00:00Z'}],
+            if (!window.crypto_session.hasSessionKey()) {{
+                await window.crypto_session.deriveSessionKey('seedpw', '{_DUMMY_SALT}');
+            }}
+            await window.offlineStore.saveClientBundle({{
+                client: {{pk: 'test-pk-logout-cleanup', pseudonym: 'PS-LOGOUT-001'}},
+                cases: [{{pk: 'case-1', clientPk: 'test-pk-logout-cleanup'}}],
+                events: [{{pk: 'event-1', clientPk: 'test-pk-logout-cleanup', occurred_at: '2026-01-01T00:00:00Z'}}],
                 document_types: [],
                 workitems: [],
                 generated_at: new Date().toISOString(),
                 expires_at: new Date(Date.now() + 48 * 3600 * 1000).toISOString(),
                 ttl: 48 * 3600,
                 schema_version: 2,
-            });
-            return {
+            }});
+            return {{
                 clients: await window.offlineStore.countOfflineClients(),
                 cases: await window.offlineStore.count('cases'),
                 events: await window.offlineStore.count('events'),
-            };
-        }"""
-        % _DUMMY_SALT
+            }};
+        }}"""
     )
 
 

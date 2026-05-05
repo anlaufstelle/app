@@ -231,12 +231,11 @@ class TestEventHistoryDBTrigger:
             action=EventHistory.Action.CREATE,
             data_after={"test": "data"},
         )
-        with pytest.raises(Exception):
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "UPDATE core_eventhistory SET action = 'update' WHERE id = %s",
-                    [str(history.pk)],
-                )
+        with pytest.raises(Exception), connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE core_eventhistory SET action = 'update' WHERE id = %s",
+                [str(history.pk)],
+            )
 
     def test_db_trigger_prevents_delete(self, sample_event, admin_user):
         from django.db import connection
@@ -247,12 +246,11 @@ class TestEventHistoryDBTrigger:
             action=EventHistory.Action.CREATE,
             data_after={"test": "data"},
         )
-        with pytest.raises(Exception):
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "DELETE FROM core_eventhistory WHERE id = %s",
-                    [str(history.pk)],
-                )
+        with pytest.raises(Exception), connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM core_eventhistory WHERE id = %s",
+                [str(history.pk)],
+            )
 
 
 @pytest.mark.django_db

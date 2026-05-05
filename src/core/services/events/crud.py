@@ -142,9 +142,8 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
     if user is not None and not user_can_see_document_type(user, document_type):
         raise PermissionDenied(_("Diese Dokumentation darf von Ihrer Rolle nicht erstellt werden."))
 
-    if client is None and not is_anonymous:
-        if not document_type.min_contact_stage:
-            is_anonymous = True
+    if client is None and not is_anonymous and not document_type.min_contact_stage:
+        is_anonymous = True
 
     if document_type.min_contact_stage and is_anonymous:
         raise ValidationError(

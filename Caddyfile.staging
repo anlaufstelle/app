@@ -1,6 +1,11 @@
 staging.{$DOMAIN} {
     reverse_proxy web:8000
 
+    # Staging-TLS: Falls die Stage-Domain nicht oeffentlich aufloesbar ist
+    # (z. B. interne Reverse-Proxy-Kette mit Self-Hosted-LE), `tls internal`
+    # aktivieren — Caddy nutzt dann seine eigene CA statt Let's Encrypt.
+    # tls internal
+
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options "nosniff"
@@ -8,5 +13,13 @@ staging.{$DOMAIN} {
         Referrer-Policy "strict-origin-when-cross-origin"
         # CSP wird ausschließlich über Django-CSP-Middleware gesteuert
         # (settings/base.py) — gleichartig zu prod. Refs #636.
+    }
+
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10MiB
+            roll_keep 5
+        }
+        format json
     }
 }

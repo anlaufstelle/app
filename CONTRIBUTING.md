@@ -191,6 +191,18 @@ Der Server ist unter `https://localhost:8443` erreichbar (selbstsigniertes Zerti
 
 Vor jedem Commit sollte `make ci` lokal erfolgreich durchlaufen.
 
+### Pre-Commit-Hooks (optional)
+
+Für die schnelle Drift-Detektion vor dem Commit ist eine [`.pre-commit-config.yaml`](.pre-commit-config.yaml) hinterlegt (Refs [#820](https://github.com/tobiasnix/anlaufstelle/issues/820)). Sie prüft `ruff` (lint + format), `makemigrations --check`, `mypy core/services` und den Translation-Version-Header.
+
+```bash
+.venv/bin/pip install pre-commit
+pre-commit install                  # einmalig: Git-Hook installieren
+pre-commit run --all-files          # Alle Hooks gegen das Repo laufen lassen
+```
+
+Die Hooks decken nur das ab, was lokal in unter 5 s läuft — Tests bleiben in `make ci`. Der Hook ist optional; CI ist die Quelle der Wahrheit.
+
 ### Port-Übersicht und Prozess-Hygiene
 
 | Port | Prozess | Gestartet von | Zweck |

@@ -1,3 +1,8 @@
+# www-Variante auf Apex umleiten (Refs #801).
+www.{$DOMAIN} {
+    redir https://{$DOMAIN}{uri} permanent
+}
+
 {$DOMAIN} {
     reverse_proxy web:8000
 
@@ -8,4 +13,35 @@
         Referrer-Policy "strict-origin-when-cross-origin"
         # CSP wird ausschließlich über Django-CSP-Middleware gesteuert (settings/base.py)
     }
+
+    # Access-Log nach /var/log/caddy/access.log (Container-Pfad). Der
+    # Operator mountet das Verzeichnis als Volume in docker-compose.prod.yml,
+    # damit Logs den Container-Restart ueberleben. Refs #801.
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 10MiB
+            roll_keep 10
+            roll_keep_for 720h
+        }
+        format json
+    }
+
+    # Optionaler Rate-Limit (Defense-in-Depth gegen Login-/API-Brute-Force).
+    # Standardmaessig nicht aktiv, da Caddy ohne Plugin keine Rate-Limits
+    # unterstuetzt. Operatoren, die einen Limit benoetigen, koennen
+    # caddy-ratelimit (https://github.com/mholt/caddy-ratelimit) als Modul
+    # in ein eigenes Caddy-Image bauen und z. B. folgendes ergaenzen:
+    #
+    #     rate_limit {
+    #         zone login_zone {
+    #             key {http.request.remote_host}
+    #             events 10
+    #             window 1m
+    #         }
+    #         match {
+    #             path /login/* /accounts/* /api/*
+    #         }
+    #     }
+    #
+    # Siehe docs/coolify-deployment.md.
 }

@@ -21,8 +21,8 @@ class Command(BaseCommand):
 
         try:
             facility = Facility.objects.select_related("settings").get(name=facility_name)
-        except Facility.DoesNotExist:
-            raise CommandError(f'Facility "{facility_name}" not found.')
+        except Facility.DoesNotExist as exc:
+            raise CommandError(f'Facility "{facility_name}" not found.') from exc
 
         output_dir.mkdir(parents=True, exist_ok=True)
 

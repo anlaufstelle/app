@@ -38,10 +38,9 @@ def rls_test_role(django_db_setup, django_db_blocker):
     if connection.vendor != "postgresql":
         pytest.skip("Non-Superuser-Test erfordert PostgreSQL")
 
-    with django_db_blocker.unblock():
-        with connection.cursor() as cur:
-            cur.execute(
-                """
+    with django_db_blocker.unblock(), connection.cursor() as cur:
+        cur.execute(
+            """
                 DO $do$ BEGIN
                     CREATE ROLE rls_test_role NOSUPERUSER NOREPLICATION
                         INHERIT NOLOGIN;
@@ -49,10 +48,10 @@ def rls_test_role(django_db_setup, django_db_blocker):
                     NULL;
                 END $do$;
                 """
-            )
-            cur.execute("GRANT USAGE ON SCHEMA public TO rls_test_role")
-            cur.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO rls_test_role")
-            cur.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO rls_test_role")
+        )
+        cur.execute("GRANT USAGE ON SCHEMA public TO rls_test_role")
+        cur.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO rls_test_role")
+        cur.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO rls_test_role")
     return "rls_test_role"
 
 
