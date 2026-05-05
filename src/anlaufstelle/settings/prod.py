@@ -45,6 +45,13 @@ if "collectstatic" not in sys.argv and not ALLOWED_HOSTS:
 
 # --- Security ---
 
+# Trust-Boundary (Refs #841): Caddy als Reverse-Proxy strippt eingehendes
+# X-Forwarded-Proto vom Client und setzt den Header selbst auf den tatsaechlich
+# beobachteten Verbindungs-Status. Wenn Anlaufstelle direkt exponiert wird
+# (ohne Reverse-Proxy), MUSS dieses Setting entfernt werden — sonst koennte
+# ein Angreifer ``X-Forwarded-Proto: https`` setzen und HTTPS faken (request.is_secure()
+# wuerde True liefern, obwohl die Verbindung Klartext ist).
+# Siehe docs/ops-runbook.md § Trust-Boundary.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True

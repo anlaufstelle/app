@@ -3,7 +3,7 @@
 Extrahiert aggregierbare Event-Spalten vorab in eine flache Tabelle,
 damit Statistik-Querys keine JSON-Parsings oder komplexe Joins mehr
 benötigen. Aktualisiert per Management-Command
-(`refresh_statistics_view`) täglich.
+(`refresh_statistics_view`) stündlich :15 (Refs #830, ops-runbook.md).
 
 Materialized Views existieren nur in PostgreSQL. Bei anderen Backends
 (z.B. SQLite in Unit-Tests einzelner Entwickler-Setups) ist die

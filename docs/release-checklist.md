@@ -49,18 +49,32 @@ Versionsabhängige Dokumentation **vor** dem Tag (Schritt 2) aktualisieren — s
 - [ ] [`docs/security-notes.md`](security-notes.md) — neue bewusste Security-Design-Entscheidungen oder Audit-Referenzen
 - [ ] [`docs/faq.md`](faq.md) — neue/geänderte FAQ-Antworten (synchron mit [Issue #474](https://github.com/tobiasnix/anlaufstelle/issues/474) halten)
 
+**Bei Django-Update zusätzlich prüfen** (Refs [#829](https://github.com/tobiasnix/anlaufstelle/issues/829)):
+
+- [ ] [`requirements.txt`](../requirements.txt) — primäre Quelle (`django==X.Y.Z`)
+- [ ] [`README.md`](../README.md):190 — Tech-Stack-Zeile
+- [ ] [`CONTRIBUTING.md`](../CONTRIBUTING.md):11 — Badge `Django-X.Y`
+- [ ] [`CONTRIBUTING.md`](../CONTRIBUTING.md):226 — Tech-Stack-Sektion
+- [ ] [`CLAUDE.md`](../CLAUDE.md):9 — `Django X.Y / Python …`-Zeile
+- [ ] [`docs/ops-runbook.md`](ops-runbook.md):5 — Versions-Header
+
 > **Tipp:** `git log <PREV_TAG>..HEAD --oneline -- docs/ SECURITY.md README*.md` zeigt alle Doc-relevanten Commits seit dem letzten Release.
 
 ## 2. Release
 
+Tags werden **signiert** (Refs [#838](https://github.com/tobiasnix/anlaufstelle/issues/838)) — Lieferketten-Sicherheit. ED25519 oder GPG, je nachdem was die `git config user.signingkey` hergibt.
+
 ```bash
-# Tag setzen und pushen — loest release.yml aus
-git tag vX.Y.Z
+# Signed Tag setzen und pushen — loest release.yml aus
+git tag -s vX.Y.Z -m "Release vX.Y.Z"
 git push origin vX.Y.Z
 ```
 
-- [ ] Git-Tag `vX.Y.Z` gesetzt (muss mit `v` in `pyproject.toml` uebereinstimmen)
+- [ ] Git-Tag `vX.Y.Z` **signiert** (`git tag -s`, nicht `git tag` allein) und mit `v` in `pyproject.toml` uebereinstimmend
 - [ ] Tag gepusht — Release-Workflow ([release.yml](../.github/workflows/release.yml)) baut Docker-Image
+- [ ] Tag-Signatur ueberpruefbar (`git tag -v vX.Y.Z`) — bei Mismatch sofort revoken
+
+> **Legacy-Tags** (`v0.9.0`, `v0.9.1` lightweight; `v0.10.0`, `v0.10.1` annotated unsigniert): bleiben als „pre-signing baseline" stehen. Ab `v0.10.2` (ED25519) ist die Signatur Pflicht.
 - [ ] GitHub Actions: Build erfolgreich, Image unter `ghcr.io/tobiasnix/anlaufstelle:vX.Y.Z` und `:latest` verfuegbar
 - [ ] Image auf Staging deployen (`docker compose pull && docker compose up -d`)
 - [ ] Staging-Smoke-Test:

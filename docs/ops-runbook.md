@@ -967,6 +967,40 @@ Refs [#544](https://github.com/tobiasnix/anlaufstelle/issues/544).
 
 ---
 
+## 12. Trust-Boundary (Refs [#841](https://github.com/tobiasnix/anlaufstelle/issues/841))
+
+### 12.1 SECURE_PROXY_SSL_HEADER
+
+`settings/prod.py:48` setzt:
+
+```python
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+```
+
+Damit erkennt Django HTTPS auch hinter dem Caddy-Proxy. Voraussetzung: **Caddy strippt eingehende `X-Forwarded-Proto`-Header vom Client und setzt sie selbst** auf den tatsaechlichen Verbindungsstatus.
+
+**Wichtig:** Wenn die App **direkt** exponiert wird (ohne Reverse-Proxy), MUSS dieses Setting entfernt werden. Sonst kann ein Angreifer `X-Forwarded-Proto: https` selbst setzen — `request.is_secure()` liefert dann `True`, obwohl die Verbindung Klartext ist; HSTS-/Secure-Cookie-Logik wird ausgehebelt.
+
+Caddy in `Caddyfile` ist so konfiguriert, dass es diesen Header beim Forwarden ueberschreibt:
+
+```
+reverse_proxy web:8000 {
+    header_up X-Forwarded-Proto {scheme}
+}
+```
+
+### 12.2 TRUSTED_PROXY_HOPS
+
+Ergaenzend setzt `.env` (Default `1`):
+
+```
+TRUSTED_PROXY_HOPS=1
+```
+
+Erklaerung in `.env.example`. Bei CDN+Caddy auf `2` setzen, sonst greift der IP-Spoof-Schutz aus [`signals.audit.get_client_ip`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/signals/audit.py) den falschen Eintrag.
+
+---
+
 ## Kurzreferenz
 
 ```text

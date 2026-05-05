@@ -42,7 +42,7 @@ Dieses Handbuch richtet sich an IT-Administratoren sozialer Einrichtungen, die A
 
 ```bash
 git clone https://github.com/anlaufstelle/app.git
-cd anlaufstelle
+cd app
 ```
 
 Alternativ: Nur die benötigten Produktionsdateien herunterladen:

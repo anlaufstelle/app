@@ -48,7 +48,7 @@ Willkommen! Diese Anleitung erklärt, wie du die Entwicklungsumgebung einrichtes
 
 ```bash
 git clone https://github.com/anlaufstelle/app.git
-cd anlaufstelle
+cd app
 ```
 
 **2. Python-Umgebung einrichten**
