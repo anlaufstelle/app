@@ -191,6 +191,71 @@ class TestCSVExport:
 
 
 @pytest.mark.django_db
+class TestCSVExportVisibilityFilter:
+    """Refs #779 (C-11): ``export_events_csv`` muss bei wiederverwendeter
+    Service-Schicht Events ausserhalb der Sensitivity des Users heraushalten —
+    nicht erst pro Feld filtern.
+    """
+
+    def _high_event(self, facility, admin_user):
+        from core.models import DocumentType, Event
+
+        high_dt = DocumentType.objects.create(
+            facility=facility,
+            name="HighSecret-RF779",
+            category=DocumentType.Category.NOTE,
+            sensitivity=DocumentType.Sensitivity.HIGH,
+        )
+        return Event.objects.create(
+            facility=facility,
+            document_type=high_dt,
+            occurred_at=timezone.now() - timedelta(days=1),
+            data_json={},
+            is_anonymous=True,
+            created_by=admin_user,
+        )
+
+    def test_assistant_does_not_see_high_event_row(self, facility, admin_user):
+        from core.services.export import export_events_csv
+
+        self._high_event(facility, admin_user)
+        assistant = User.objects.create_user(
+            username="rf779_assistant",
+            role=User.Role.ASSISTANT,
+            facility=facility,
+            is_staff=True,
+        )
+        today = date.today()
+        chunks = list(export_events_csv(facility, today - timedelta(days=30), today, user=assistant))
+        body = "".join(chunks)
+        assert "HighSecret-RF779" not in body, (
+            "Assistant darf keine HIGH-Event-Zeilen im CSV sehen — der Service "
+            "muss visible_to(user) auf den QuerySet anwenden, nicht erst auf Feld-Ebene."
+        )
+
+    def test_admin_sees_high_event_row(self, facility, admin_user):
+        from core.services.export import export_events_csv
+
+        self._high_event(facility, admin_user)
+        today = date.today()
+        chunks = list(export_events_csv(facility, today - timedelta(days=30), today, user=admin_user))
+        body = "".join(chunks)
+        assert "HighSecret-RF779" in body
+
+    def test_user_none_keeps_system_mode(self, facility, admin_user):
+        """Service ohne ``user`` (System-Mode) liefert weiterhin alle Events
+        — explizit dokumentiert. Aufrufer (z.B. Cron-Reports) muessen das
+        Privileg-Risiko bewusst tragen."""
+        from core.services.export import export_events_csv
+
+        self._high_event(facility, admin_user)
+        today = date.today()
+        chunks = list(export_events_csv(facility, today - timedelta(days=30), today, user=None))
+        body = "".join(chunks)
+        assert "HighSecret-RF779" in body
+
+
+@pytest.mark.django_db
 class TestPDFExport:
     """PDF-Export: content-type, AuditLog."""
 

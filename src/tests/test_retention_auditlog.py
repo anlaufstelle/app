@@ -79,7 +79,7 @@ class TestPruneAuditlog:
         assert AuditLog.objects.filter(pk=old.pk).exists()
 
     def test_trigger_active_after_pruning(self, facility, settings_obj):
-        # Sicherheitsrelevant: prune_auditlog deaktiviert den Trigger
+        # Sicherheitsrelevant: prune_auditlog umgeht den Trigger
         # transaktional. Nach dem Lauf MUSS er wieder greifen — sonst
         # waere AuditLog-Immutability-Schutz weg.
         settings_obj.auditlog_retention_months = 24
@@ -98,3 +98,35 @@ class TestPruneAuditlog:
                     ["logout", str(new_log.pk)],
                 )
         assert "immutable" in str(excinfo.value).lower()
+
+    def test_trigger_tgenabled_stays_origin_after_pruning(self, facility, settings_obj):
+        """Refs #781 (C-13): Health-Check-aequivalenter Test —
+        ``pg_trigger.tgenabled`` muss immer ``'O'`` sein.
+
+        Vor dem Fix lief ``ALTER TABLE ... DISABLE TRIGGER`` und
+        ``... ENABLE TRIGGER`` als Klammer. Bei SIGKILL zwischen den
+        Statements blieb der Trigger disabled.
+
+        Mit ``bypass_replication_triggers()`` veraendert nur
+        ``session_replication_role`` die Trigger-Sicht — auf Tabellen-Ebene
+        bleibt ``tgenabled='O'`` durchgaengig erhalten.
+        """
+        settings_obj.auditlog_retention_months = 24
+        settings_obj.save()
+        now = timezone.now()
+        self._create_log_with_timestamp(facility, now - timedelta(days=24 * 30 + 1))
+
+        prune_auditlog(facility, settings_obj, now=now, dry_run=False)
+
+        with connection.cursor() as cur:
+            cur.execute(
+                "SELECT tgenabled FROM pg_trigger WHERE tgname = %s",
+                ["auditlog_immutable"],
+            )
+            row = cur.fetchone()
+        assert row is not None, "Trigger 'auditlog_immutable' fehlt"
+        assert row[0] == "O", (
+            f"pg_trigger.tgenabled fuer auditlog_immutable ist '{row[0]}', "
+            "erwartet 'O' (origin/local). Refs #781 — der neue Pfad nutzt "
+            "session_replication_role, nicht ALTER TABLE DISABLE TRIGGER."
+        )

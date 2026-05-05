@@ -395,112 +395,30 @@ def build_proposal_details(event):
 def create_proposals_for_facility(facility, settings_obj, now):
     """Create RetentionProposal entries for events that would be deleted under the four strategies.
 
+    Refs #778: nutzt :func:`core.retention.strategies.iter_strategies`, damit
+    die Strategie-Definitionen mit ``enforcement.collect_doomed_events`` synchron
+    bleiben. ``create_proposal`` ist idempotent ueber ``unique_active_retention_proposal``,
+    sodass ein Event, das mehrere Kategorien matcht, genau einen Vorschlag bekommt
+    (Cross-Strategy-Deduplikation).
+
     Returns ``{"count": N}`` — number of newly created proposals.
     """
-    from core.models import Case, Client, DocumentType, Event
+    from core.retention.strategies import iter_strategies
 
     held_ids = get_active_hold_target_ids(facility, "Event")
     created_count = 0
 
-    # Strategy 1: Anonymous events
-    cutoff_anon = now - timedelta(days=settings_obj.retention_anonymous_days)
-    anon_qs = Event.objects.filter(
-        facility=facility,
-        is_anonymous=True,
-        is_deleted=False,
-        occurred_at__lt=cutoff_anon,
-    ).exclude(pk__in=held_ids)
-    for event in anon_qs.select_related("client", "document_type").iterator():
-        details = build_proposal_details(event)
-        _, was_created = create_proposal(
-            facility=facility,
-            target_type="Event",
-            target_id=event.pk,
-            deletion_due_at=cutoff_anon.date(),
-            details=details,
-            category="anonymous",
-        )
-        if was_created:
-            created_count += 1
-
-    # Strategy 2: Identified events
-    cutoff_ident = now - timedelta(days=settings_obj.retention_identified_days)
-    identified_clients = Client.objects.filter(
-        facility=facility,
-        contact_stage=Client.ContactStage.IDENTIFIED,
-    )
-    ident_qs = Event.objects.filter(
-        facility=facility,
-        client__in=identified_clients,
-        is_deleted=False,
-        occurred_at__lt=cutoff_ident,
-    ).exclude(pk__in=held_ids)
-    for event in ident_qs.select_related("client", "document_type").iterator():
-        details = build_proposal_details(event)
-        _, was_created = create_proposal(
-            facility=facility,
-            target_type="Event",
-            target_id=event.pk,
-            deletion_due_at=cutoff_ident.date(),
-            details=details,
-            category="identified",
-        )
-        if was_created:
-            created_count += 1
-
-    # Strategy 3: Qualified events with closed case
-    case_cutoff = now - timedelta(days=settings_obj.retention_qualified_days)
-    qualified_clients = Client.objects.filter(
-        facility=facility,
-        contact_stage=Client.ContactStage.QUALIFIED,
-    )
-    expired_cases = Case.objects.filter(
-        facility=facility,
-        client__in=qualified_clients,
-        status=Case.Status.CLOSED,
-        closed_at__lt=case_cutoff,
-    )
-    qual_qs = Event.objects.filter(
-        facility=facility,
-        client__in=qualified_clients,
-        case__in=expired_cases,
-        is_deleted=False,
-    ).exclude(pk__in=held_ids)
-    for event in qual_qs.select_related("client", "document_type").iterator():
-        details = build_proposal_details(event)
-        _, was_created = create_proposal(
-            facility=facility,
-            target_type="Event",
-            target_id=event.pk,
-            deletion_due_at=case_cutoff.date(),
-            details=details,
-            category="qualified",
-        )
-        if was_created:
-            created_count += 1
-
-    # Strategy 4: DocumentType-specific retention
-    doc_types_with_retention = DocumentType.objects.filter(
-        facility=facility,
-        retention_days__isnull=False,
-    )
-    for dt in doc_types_with_retention:
-        cutoff_dt = now - timedelta(days=dt.retention_days)
-        dt_qs = Event.objects.filter(
-            facility=facility,
-            document_type=dt,
-            is_deleted=False,
-            occurred_at__lt=cutoff_dt,
-        ).exclude(pk__in=held_ids)
-        for event in dt_qs.select_related("client", "document_type").iterator():
+    for strategy in iter_strategies(facility, settings_obj, now):
+        qs = strategy.queryset.exclude(pk__in=held_ids).select_related("client", "document_type")
+        for event in qs.iterator():
             details = build_proposal_details(event)
             _, was_created = create_proposal(
                 facility=facility,
                 target_type="Event",
                 target_id=event.pk,
-                deletion_due_at=cutoff_dt.date(),
+                deletion_due_at=strategy.cutoff.date(),
                 details=details,
-                category="document_type",
+                category=strategy.category,
             )
             if was_created:
                 created_count += 1

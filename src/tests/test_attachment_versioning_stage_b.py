@@ -383,3 +383,62 @@ class TestEventDetailContextQueryCount:
             f"Versionskette laesst Query-Count wachsen: ohne = {without_chain_queries}, "
             f"mit 4 Vorgaengern = {with_chain_queries}."
         )
+
+
+@pytest.mark.django_db
+class TestApplyAttachmentChangesQueryCount:
+    """Refs #782 (C-17): ``apply_attachment_changes`` lud pro Entry eine
+    eigene ``event.attachments.filter(pk=...).first()``-Query — N+1.
+    """
+
+    def _build_event_with_entries(self, facility, staff_user, dt, ft, *, entries: int):
+        event = Event.objects.create(
+            facility=facility, document_type=dt, occurred_at=timezone.now(), created_by=staff_user
+        )
+        marker = []
+        for i in range(entries):
+            att = store_encrypted_file(facility, _upload(f"v{i}".encode()), ft, event, staff_user, sort_order=i)
+            marker.append({"id": str(att.pk), "sort": i})
+        event.data_json = {"anhang": {"__files__": True, "entries": marker}}
+        event.save(update_fields=["data_json"])
+        return event
+
+    def test_remove_only_uses_constant_lookup_queries(self, facility, staff_user, doc_type_with_file):
+        """Beim Bulk-REMOVE darf die Anzahl Lookup-Queries (filter pk=...) nicht
+        linear mit der Entry-Zahl wachsen."""
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from core.services.event import apply_attachment_changes
+
+        dt, ft = doc_type_with_file
+        event = self._build_event_with_entries(facility, staff_user, dt, ft, entries=5)
+        all_atts = list(event.attachments.filter(is_current=True))
+        remove_csv = ",".join(str(a.entry_id) for a in all_atts)
+
+        request_post = {"anhang__remove": remove_csv}
+        with CaptureQueriesContext(connection) as ctx:
+            apply_attachment_changes(
+                event=event,
+                user=staff_user,
+                request_post=request_post,
+                request_files={},
+                file_fields={},
+                document_type=dt,
+            )
+
+        # Vor dem Fix lief je Entry ein eigenes ``filter(pk=...).first()``-SELECT —
+        # also mind. 5 SELECTs auf ``core_eventattachment``. Nach dem Fix bleibt
+        # die Lookup-Phase konstant: 1 Bulk-SELECT (``pk__in=ids``).
+        # Die UPDATEs aus ``soft_delete_attachment_chain`` sind unabhaengig
+        # davon und sind nicht Teil des N+1.
+        attachment_selects = [
+            q["sql"]
+            for q in ctx.captured_queries
+            if "core_eventattachment" in q["sql"].lower() and q["sql"].lower().lstrip().startswith("select")
+        ]
+        assert len(attachment_selects) <= 2, (
+            f"REMOVE darf keinen SELECT-N+1 verursachen — gemessen: "
+            f"{len(attachment_selects)} SELECTs auf core_eventattachment bei 5 Entries.\n"
+            f"Queries: {attachment_selects}"
+        )

@@ -18,18 +18,27 @@ from core.services.sensitivity import user_can_see_field
 logger = logging.getLogger(__name__)
 
 
-def _get_events_queryset(facility, date_from, date_to):
-    """Events in the given period, ordered descending by occurrence."""
-    return (
-        Event.objects.filter(
-            facility=facility,
-            is_deleted=False,
-            occurred_at__date__gte=date_from,
-            occurred_at__date__lte=date_to,
-        )
-        .select_related("document_type", "client")
-        .order_by("-occurred_at")
+def _get_events_queryset(facility, date_from, date_to, user=None):
+    """Events in the given period, ordered descending by occurrence.
+
+    Refs #779 (C-11): wenn ``user`` gesetzt ist, wird der QuerySet ueber
+    :meth:`EventQuerySet.visible_to` auf die Sensitivity-Stufen
+    eingeschraenkt, die die Rolle sehen darf. Vorher filterte der Service
+    erst pro Feld und liess Zeilen hoch sensitiver DocumentTypes durch —
+    bei Wiederverwendung des Service durch Staff/Assistant ein Leak.
+
+    ``user=None`` bleibt der Systemmodus (z.B. Cron-Reports). Aufrufer im
+    Systemmodus tragen das Privileg-Risiko bewusst.
+    """
+    qs = Event.objects.filter(
+        facility=facility,
+        is_deleted=False,
+        occurred_at__date__gte=date_from,
+        occurred_at__date__lte=date_to,
     )
+    if user is not None:
+        qs = qs & Event.objects.visible_to(user)
+    return qs.select_related("document_type", "client").order_by("-occurred_at")
 
 
 def _collect_field_templates(facility, user):
@@ -161,7 +170,7 @@ def export_events_csv(facility, date_from, date_to, user=None):
     When *user* is provided, fields are filtered by the user's role and the
     field's sensitivity level (same logic as EventDetailView).
     """
-    events = _get_events_queryset(facility, date_from, date_to)
+    events = _get_events_queryset(facility, date_from, date_to, user=user)
     all_field_templates, field_slugs = _collect_field_templates(facility, user)
     header = _build_header(all_field_templates, field_slugs)
 

@@ -18,69 +18,18 @@ from core.retention.legal_holds import get_active_hold_target_ids
 def collect_doomed_events(facility, settings_obj, now):
     """Build queryset of events that will be soft-deleted by the four strategies.
 
-    IMPORTANT: Keep in sync with ``enforce_anonymous``, ``enforce_identified``,
-    ``enforce_qualified``, and ``enforce_document_type_retention``.
+    Refs #778: nutzt :func:`core.retention.strategies.iter_strategies`, damit
+    die Strategie-Definitionen nicht mehr dreifach (hier, in den ``enforce_*``-
+    Wrappern und in :func:`core.retention.proposals.create_proposals_for_facility`)
+    parallel gepflegt werden muessen.
     """
-    from core.models import Case, Client, DocumentType, Event
+    from core.models import Event
+    from core.retention.strategies import iter_strategies
 
     held_ids = get_active_hold_target_ids(facility, "Event")
     combined = Event.objects.none()
-
-    # Strategy 1: Anonymous
-    cutoff_anon = now - timedelta(days=settings_obj.retention_anonymous_days)
-    combined = combined | Event.objects.filter(
-        facility=facility,
-        is_anonymous=True,
-        is_deleted=False,
-        occurred_at__lt=cutoff_anon,
-    )
-
-    # Strategy 2: Identified
-    cutoff_ident = now - timedelta(days=settings_obj.retention_identified_days)
-    identified_clients = Client.objects.filter(
-        facility=facility,
-        contact_stage=Client.ContactStage.IDENTIFIED,
-    )
-    combined = combined | Event.objects.filter(
-        facility=facility,
-        client__in=identified_clients,
-        is_deleted=False,
-        occurred_at__lt=cutoff_ident,
-    )
-
-    # Strategy 3: Qualified
-    case_cutoff = now - timedelta(days=settings_obj.retention_qualified_days)
-    qualified_clients = Client.objects.filter(
-        facility=facility,
-        contact_stage=Client.ContactStage.QUALIFIED,
-    )
-    expired_cases = Case.objects.filter(
-        facility=facility,
-        client__in=qualified_clients,
-        status=Case.Status.CLOSED,
-        closed_at__lt=case_cutoff,
-    )
-    combined = combined | Event.objects.filter(
-        facility=facility,
-        client__in=qualified_clients,
-        case__in=expired_cases,
-        is_deleted=False,
-    )
-
-    # Strategy 4: DocumentType-specific
-    doc_types_with_retention = DocumentType.objects.filter(
-        facility=facility,
-        retention_days__isnull=False,
-    )
-    for dt in doc_types_with_retention:
-        cutoff_dt = now - timedelta(days=dt.retention_days)
-        combined = combined | Event.objects.filter(
-            facility=facility,
-            document_type=dt,
-            is_deleted=False,
-            occurred_at__lt=cutoff_dt,
-        )
-
+    for strategy in iter_strategies(facility, settings_obj, now):
+        combined = combined | strategy.queryset
     return combined.exclude(pk__in=held_ids).distinct()
 
 
