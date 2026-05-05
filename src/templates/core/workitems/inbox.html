@@ -18,7 +18,7 @@
 {# Filter-Leiste (Card mit Selects, Tokens) #}
 <div class="flex flex-wrap gap-3 mb-5 px-4 py-3 bg-surface rounded-[10px] border border-subtle" data-filter-persist>
     <div>
-        <label for="filter-item-type" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Typ" %}</label>
+        <label for="filter-item-type" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Typ" %}</label>
         <select id="filter-item-type" name="item_type"
             class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
             hx-get="{% url 'core:workitem_inbox' %}"
@@ -33,7 +33,7 @@
         </select>
     </div>
     <div>
-        <label for="filter-priority" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Priorität" %}</label>
+        <label for="filter-priority" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Priorität" %}</label>
         <select id="filter-priority" name="priority"
             class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
             hx-get="{% url 'core:workitem_inbox' %}"
@@ -48,7 +48,7 @@
         </select>
     </div>
     <div>
-        <label for="filter-assigned-to" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Zugewiesen an" %}</label>
+        <label for="filter-assigned-to" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Zugewiesen an" %}</label>
         <select id="filter-assigned-to" name="assigned_to"
             class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
             hx-get="{% url 'core:workitem_inbox' %}"
@@ -64,7 +64,7 @@
         </select>
     </div>
     <div>
-        <label for="filter-due" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Fälligkeit" %}</label>
+        <label for="filter-due" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Fälligkeit" %}</label>
         <select id="filter-due" name="due"
             class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
             hx-get="{% url 'core:workitem_inbox' %}"

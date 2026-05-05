@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-04-30 10:48+0200\n"
+"POT-Creation-Date: 2026-05-01 22:48+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14,17 +14,28 @@ msgstr "Identified"
 msgid "Qualifiziert"
 msgstr "Qualified"
 
-msgid "Klientel"
-msgstr "Clients"
-
-msgid "Klientel existiert nicht."
-msgstr "Client does not exist."
-
-msgid "Klientel gehört nicht zur Einrichtung."
-msgstr "Client does not belong to this facility."
+msgid "Person"
+msgstr "Person"
 
 msgid ""
-"Ein Klientel mit diesem Pseudonym existiert bereits in dieser Einrichtung."
+"Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."
+msgstr ""
+
+#, fuzzy
+#| msgid "Klientel existiert nicht."
+msgid "Person existiert nicht."
+msgstr "Client does not exist."
+
+#, fuzzy
+#| msgid "Klientel gehört nicht zur Einrichtung."
+msgid "Person gehört nicht zur Einrichtung."
+msgstr "Client does not belong to this facility."
+
+#, fuzzy
+#| msgid ""
+#| "Ein Klientel mit diesem Pseudonym existiert bereits in dieser Einrichtung."
+msgid ""
+"Eine Person mit diesem Pseudonym existiert bereits in dieser Einrichtung."
 msgstr "A client with this pseudonym already exists in this facility."
 
 msgid "Beginn"
@@ -60,7 +71,9 @@ msgstr "The date must be on or before %(max)s."
 msgid "Das Datum darf nicht in der Vergangenheit liegen."
 msgstr "The date must not be in the past."
 
-msgid "Ungültige Klientel-ID"
+#, fuzzy
+#| msgid "Ungültige Klientel-ID"
+msgid "Ungültige Person-ID"
 msgstr "Invalid client ID"
 
 msgid "Die Erinnerung muss vor oder am Fälligkeitstag liegen."
@@ -204,11 +217,28 @@ msgstr "Legal hold"
 msgid "Offline-Schlüssel abgerufen"
 msgstr "Offline key fetched"
 
-msgid "Klientel angelegt"
-msgstr "Create Client"
+#, fuzzy
+#| msgid "Klientel anlegen"
+msgid "Person angelegt"
+msgstr "Edit Client"
 
-msgid "Klientel aktualisiert"
-msgstr "Client has been updated."
+#, fuzzy
+#| msgid "Episode wurde aktualisiert."
+msgid "Person aktualisiert"
+msgstr "Episode has been updated."
+
+msgid "Person in Papierkorb"
+msgstr ""
+
+#, fuzzy
+#| msgid "Löschantrag wurde abgelehnt."
+msgid "Person wiederhergestellt"
+msgstr "Deletion request has been rejected."
+
+#, fuzzy
+#| msgid "K-anonymisiert"
+msgid "Person anonymisiert"
+msgstr "K-anonymized"
 
 msgid "Fall angelegt"
 msgstr "Case created"
@@ -303,6 +333,11 @@ msgstr "Open"
 msgid "Geschlossen"
 msgstr "Closed"
 
+msgid ""
+"Pflichtfeld: Jeder Fall ist einer Person zugeordnet. PROTECT verhindert "
+"versehentliches Löschen einer Person mit aktiven Fällen."
+msgstr ""
+
 msgid "Titel"
 msgstr "Title"
 
@@ -365,7 +400,9 @@ msgstr "Identified = pseudonym known, Qualified = full identity known"
 msgid "Altersgruppe"
 msgstr "Age group"
 
-msgid "Altersgruppe des Klientel zum Zeitpunkt der Erfassung"
+#, fuzzy
+#| msgid "Altersgruppe des Klientel zum Zeitpunkt der Erfassung"
+msgid "Altersgruppe der Person zum Zeitpunkt der Erfassung"
 msgstr "Client's age group at time of registration"
 
 msgid "Notizen"
@@ -459,7 +496,9 @@ msgstr "Controls access rights: ELEVATED/HIGH require higher permissions"
 msgid "Mindest-Kontaktstufe"
 msgstr "Minimum contact stage"
 
-msgid "Mindest-Kontaktstufe des Klientel für diesen Dokumentationstyp"
+#, fuzzy
+#| msgid "Mindest-Kontaktstufe des Klientel für diesen Dokumentationstyp"
+msgid "Mindest-Kontaktstufe der Person für diesen Dokumentationstyp"
 msgstr "Minimum contact stage of the client for this documentation type"
 
 msgid "Aufbewahrungsfrist (Tage)"
@@ -625,6 +664,11 @@ msgstr "Episodes"
 msgid "Daten (JSON)"
 msgstr "Data (JSON)"
 
+#, fuzzy
+#| msgid "Suche"
+msgid "Suchindex"
+msgstr "Search"
+
 msgid "Anonym"
 msgstr "Anonymous"
 
@@ -660,6 +704,16 @@ msgstr "Event history"
 
 msgid "Ereignis-Historien"
 msgstr "Event histories"
+
+#, fuzzy
+#| msgid "Gelöscht"
+msgid "Gelöscht am"
+msgstr "Deleted"
+
+#, fuzzy
+#| msgid "Gelöscht"
+msgid "Gelöscht von"
+msgstr "Deleted"
 
 msgid "Organisation"
 msgstr "Organization"
@@ -715,11 +769,15 @@ msgstr "Quick template"
 msgid "Quick-Templates"
 msgstr "Quick templates"
 
-msgid "Klientel-Besuch"
-msgstr "Client visit"
+#, fuzzy
+#| msgid "Pseudonym suchen..."
+msgid "Personen-Besuch"
+msgstr "Search pseudonym..."
 
-msgid "Klientel-Besuche"
-msgstr "Client visits"
+#, fuzzy
+#| msgid "Pseudonym suchen..."
+msgid "Personen-Besuche"
+msgstr "Search pseudonym..."
 
 msgid "Ausstehend"
 msgstr "Pending"
@@ -801,6 +859,15 @@ msgstr "Retention qualified (days)"
 
 msgid "Aufbewahrung Aktivitäten (Tage)"
 msgstr "Activity retention (days)"
+
+msgid "Papierkorb-Frist (Tage)"
+msgstr ""
+
+msgid ""
+"Wie lange soft-deletete Personen im Papierkorb verbleiben, bevor "
+"enforce_retention sie automatisch anonymisiert. Während dieser Frist kann "
+"ein Admin den Datensatz wiederherstellen."
+msgstr ""
 
 msgid "AuditLog-Aufbewahrung (Monate)"
 msgstr "Retention anonymous (days)"
@@ -1077,6 +1144,12 @@ msgstr "Deletion request"
 msgid "Löschanträge"
 msgstr "Deletion Requests"
 
+msgid "Dokumenttyp"
+msgstr "Document"
+
+msgid "Fälle müssen einer Person zugeordnet sein."
+msgstr ""
+
 msgid "Fallverantwortlicher gehört nicht zur Einrichtung."
 msgstr "Case manager does not belong to the facility."
 
@@ -1091,11 +1164,19 @@ msgid ""
 "werden."
 msgstr "Anonymous events cannot be attached to a client-bound case."
 
-msgid "Klientel des Ereignisses passt nicht zum Klientel des Falls."
+#, fuzzy
+#| msgid "Klientel des Ereignisses passt nicht zum Klientel des Falls."
+msgid "Person des Ereignisses passt nicht zur Person des Falls."
 msgstr "Event client does not match case client."
 
 msgid "Episoden können nur für offene Fälle erstellt werden."
 msgstr "Episodes can only be created for open cases."
+
+msgid "Ja"
+msgstr "Yes"
+
+msgid "Nein"
+msgstr "No"
 
 msgid "[Eingeschränkt]"
 msgstr "[Restricted]"
@@ -1121,18 +1202,25 @@ msgstr ""
 "minimum contact stage is required.Anonymous contacts are not allowed for "
 "this document type, as a minimum contact stage is required."
 
+#, fuzzy
+#| msgid ""
+#| "Für diesen Dokumentationstyp muss ein Klientel ausgewählt werden, da eine "
+#| "Mindest-Kontaktstufe vorausgesetzt wird."
 msgid ""
-"Für diesen Dokumentationstyp muss ein Klientel ausgewählt werden, da eine "
+"Für diesen Dokumentationstyp muss eine Person ausgewählt werden, da eine "
 "Mindest-Kontaktstufe vorausgesetzt wird."
 msgstr ""
 "A client must be selected for this document type because a minimum contact "
 "stage is required.Anonymous contacts are not allowed for this document type, "
 "as a minimum contact stage is required."
 
-#, python-format
+#, fuzzy, python-format
+#| msgid ""
+#| "Klientel muss mindestens die Kontaktstufe '%(required_stage)s' haben, "
+#| "aktuelle Stufe ist '%(actual_stage)s'."
 msgid ""
-"Klientel muss mindestens die Kontaktstufe '%(required_stage)s' haben, "
-"aktuelle Stufe ist '%(actual_stage)s'."
+"Person muss mindestens die Kontaktstufe '%(required_stage)s' haben, aktuelle "
+"Stufe ist '%(actual_stage)s'."
 msgstr ""
 "Client must have at least contact stage '%(required_stage)s', current stage "
 "is '%(actual_stage)s'.Client must have at least contact stage "
@@ -1170,9 +1258,6 @@ msgid ""
 "Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite "
 "neu."
 msgstr "This event has been modified in the meantime. Please reload the page."
-
-msgid "Dokumenttyp"
-msgstr "Document"
 
 #, python-format
 msgid ""
@@ -1255,6 +1340,17 @@ msgstr "Case has been reopened."
 
 msgid "Kein Ereignis ausgewählt."
 msgstr "No event selected."
+
+msgid "Bitte eine Begruendung angeben."
+msgstr ""
+
+msgid "Loeschantrag gestellt — Leitung wird benachrichtigt."
+msgstr ""
+
+#, fuzzy
+#| msgid "Löschantrag wurde abgelehnt."
+msgid "Person wiederhergestellt."
+msgstr "Deletion request has been rejected."
 
 #, fuzzy
 #| msgid "Löschantrag wurde abgelehnt."
@@ -1896,7 +1992,9 @@ msgstr "Document types"
 msgid "Alle Dokumentationstypen"
 msgstr "All document types"
 
-msgid "Klient-ID filtern..."
+#, fuzzy
+#| msgid "Klient-ID filtern..."
+msgid "Person-ID filtern..."
 msgstr "Filter client ID…"
 
 msgid "Dateiname"
@@ -1904,9 +2002,6 @@ msgstr "Data"
 
 msgid "Größe"
 msgstr "Size"
-
-msgid "Klient"
-msgstr "Client"
 
 msgid "Herunterladen"
 msgstr "Download"
@@ -1970,9 +2065,6 @@ msgstr "Edit Case"
 
 msgid "Neuer Fall"
 msgstr "New Case"
-
-msgid "Person"
-msgstr "Person"
 
 msgid "Pseudonym eingeben..."
 msgstr "Enter pseudonym..."
@@ -2050,6 +2142,62 @@ msgstr "Add"
 
 msgid "Keine Fälle gefunden"
 msgstr "No cases found"
+
+#, fuzzy
+#| msgid "Löschantrag"
+msgid "Löschen beantragen"
+msgstr "Deletion request"
+
+#, fuzzy
+#| msgid "Pseudonym suchen..."
+msgid "Person löschen beantragen"
+msgstr "Search pseudonym..."
+
+#, python-format
+msgid ""
+"Vier-Augen-Prinzip — Ihr Antrag geht zur Genehmigung an die Leitung. Nach "
+"Genehmigung wird <strong>%(pseudonym)s</strong> in den Papierkorb verschoben "
+"und nach Ablauf der Aufbewahrungsfrist automatisch anonymisiert."
+msgstr ""
+
+msgid "z.B. Widerruf der Einwilligung, Verarbeitung nicht mehr erforderlich"
+msgstr ""
+
+msgid "Löschantrag stellen"
+msgstr "Submit Deletion Request"
+
+msgid "Löschantrag prüfen"
+msgstr "Review Deletion Request"
+
+#, fuzzy
+#| msgid "Löschantrag prüfen"
+msgid "Person-Löschantrag prüfen"
+msgstr "Review Deletion Request"
+
+msgid "Beantragt am"
+msgstr "Requested on"
+
+#, fuzzy
+#| msgid "Betroffenes Ereignis"
+msgid "Betroffene Person"
+msgstr "Affected event"
+
+#, fuzzy
+#| msgid "Abgelehnt"
+msgid "Angelegt am"
+msgstr "Rejected"
+
+msgid ""
+"Bei Genehmigung wird die Person in den Papierkorb verschoben. Nach Ablauf "
+"der Aufbewahrungsfrist wird sie automatisch anonymisiert; Statistik-"
+"Aggregate bleiben erhalten."
+msgstr ""
+
+msgid "Genehmigen"
+msgstr "Approve"
+
+msgid "Ablehnen"
+msgstr "Reject"
 
 msgid "Lokal verfügbar"
 msgstr "Available locally"
@@ -2163,6 +2311,23 @@ msgstr "Accept"
 #| msgid "Keine Dateien gefunden"
 msgid "Keine Personen gefunden"
 msgstr "No clients found"
+
+msgid "Papierkorb — Personen"
+msgstr ""
+
+msgid ""
+"Soft-deletete Personen. Nach Ablauf der Aufbewahrungsfrist "
+"(Settings.client_trash_days) anonymisiert enforce_retention diese "
+"automatisch."
+msgstr ""
+
+#, fuzzy
+#| msgid "Episode erstellen"
+msgid "Wiederherstellen"
+msgstr "Create Episode"
+
+msgid "Papierkorb ist leer."
+msgstr ""
 
 msgid "Prüfen"
 msgstr "Review"
@@ -2332,26 +2497,11 @@ msgstr ""
 msgid "Grund für die Löschung..."
 msgstr "Reason for deletion..."
 
-msgid "Löschantrag stellen"
-msgstr "Submit Deletion Request"
-
 msgid "Endgültig löschen"
 msgstr "Delete permanently"
 
-msgid "Löschantrag prüfen"
-msgstr "Review Deletion Request"
-
-msgid "Beantragt am"
-msgstr "Requested on"
-
 msgid "Betroffenes Ereignis"
 msgstr "Affected event"
-
-msgid "Genehmigen"
-msgstr "Approve"
-
-msgid "Ablehnen"
-msgstr "Reject"
 
 msgid "Löschen"
 msgstr "Delete"
@@ -2419,12 +2569,6 @@ msgstr ""
 
 msgid "1. Stammdaten"
 msgstr "1. Basic Data"
-
-msgid "Ja"
-msgstr "Yes"
-
-msgid "Nein"
-msgstr "No"
 
 msgid "2. Fälle"
 msgstr "2. Cases"
@@ -2506,6 +2650,9 @@ msgstr "Place, date, signature"
 
 msgid "Halbjahresbericht"
 msgstr "Semi-Annual Report"
+
+msgid "INTERN — nicht zur Weitergabe. Enthält Pseudonym-Ranking."
+msgstr ""
 
 msgid "Gesamtkontakte"
 msgstr "Total contacts"
@@ -2712,12 +2859,22 @@ msgstr ""
 "times."
 
 #, fuzzy
-#| msgid "Einzigartige Klientel"
-msgid "Einzigartige Personen"
-msgstr "Unique clients"
+#| msgid "Zuletzt besuchte Personen"
+msgid "Unterschiedliche Personen"
+msgstr "Recently visited people"
 
-msgid "Top-Person"
-msgstr "Top person"
+msgid "Personen mit mindestens einem Kontakt im Zeitraum"
+msgstr ""
+
+#, fuzzy, python-format
+#| msgid "Neuer Kontakt"
+msgid "%(count)s Kontakt"
+msgid_plural "%(count)s Kontakte"
+msgstr[0] "New Contact"
+msgstr[1] "New Contact"
+
+msgid "Person mit den meisten Kontakten"
+msgstr ""
 
 msgid "Kontakte im Zeitverlauf"
 msgstr "Contacts today"
@@ -2734,8 +2891,15 @@ msgstr "Age group"
 msgid "CSV-Export"
 msgstr "CSV export"
 
-msgid "PDF-Bericht"
-msgstr "PDF report"
+#, fuzzy
+#| msgid "Keine relevanten Kontakte im Berichtszeitraum."
+msgid "Verwendet den oben gewählten Zeitraum als Berichtszeitraum."
+msgstr "No relevant contacts in the reporting period."
+
+#, fuzzy
+#| msgid "Halbjahresbericht"
+msgid "Halbjahresbericht (PDF)"
+msgstr "Semi-Annual Report"
 
 msgid "Jugendamt-Bericht"
 msgstr "Youth Welfare Office Report"
@@ -2948,3 +3112,32 @@ msgstr "Email address"
 
 msgid "Link senden"
 msgstr "Send link"
+
+#~ msgid "Klientel"
+#~ msgstr "Clients"
+
+#~ msgid "Klientel angelegt"
+#~ msgstr "Create Client"
+
+#~ msgid "Klientel aktualisiert"
+#~ msgstr "Client has been updated."
+
+#~ msgid "Klientel-Besuch"
+#~ msgstr "Client visit"
+
+#~ msgid "Klientel-Besuche"
+#~ msgstr "Client visits"
+
+#~ msgid "Klient"
+#~ msgstr "Client"
+
+#, fuzzy
+#~| msgid "Einzigartige Klientel"
+#~ msgid "Einzigartige Personen"
+#~ msgstr "Unique clients"
+
+#~ msgid "Top-Person"
+#~ msgstr "Top person"
+
+#~ msgid "PDF-Bericht"
+#~ msgstr "PDF report"

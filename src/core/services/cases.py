@@ -22,7 +22,7 @@ def create_case(facility, user, client, title, description="", lead_user=None):
         # Refs #748: Fälle sind fachlich Vorgänge zu konkreten Personen.
         raise ValidationError(_("Fälle müssen einer Person zugeordnet sein."))
     if client.facility_id != facility.pk:
-        raise ValueError(_("Klientel gehört nicht zur Einrichtung."))
+        raise ValueError(_("Person gehört nicht zur Einrichtung."))
     if lead_user and lead_user.facility_id != facility.pk:
         raise ValueError(_("Fallverantwortlicher gehört nicht zur Einrichtung."))
 
@@ -142,7 +142,7 @@ def assign_event_to_case(case, event, user):  # user reserved for future audit t
         if event.is_anonymous or event.client_id is None:
             raise ValidationError(_("Anonyme Ereignisse können nicht an einen klientelbezogenen Fall gehängt werden."))
         if event.client_id != case.client_id:
-            raise ValidationError(_("Klientel des Ereignisses passt nicht zum Klientel des Falls."))
+            raise ValidationError(_("Person des Ereignisses passt nicht zur Person des Falls."))
     event.case = case
     event.save()
     return event

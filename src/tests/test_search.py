@@ -73,17 +73,20 @@ class TestSearch:
         """Searching for a JSON key name must NOT match; only values count."""
         from core.services.search import search_clients_and_events
 
+        # Refs #827 (C-60): Suchindex enthaelt nur Werte zu existierenden,
+        # unverschluesselten und nicht-erhoehten FieldTemplates. "notiz" ist
+        # so ein Slug (siehe doc_type_contact-Fixture).
         Event.objects.create(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
             occurred_at=timezone.now(),
-            data_json={"vorname": "Max"},
+            data_json={"notiz": "Max"},
             created_by=staff_user,
         )
 
-        # "vorname" is a key but not a value → no event match
-        _, events = search_clients_and_events(facility, staff_user, "vorname")
+        # "notiz" is a key but not a value → no event match
+        _, events = search_clients_and_events(facility, staff_user, "notiz")
         assert len(events) == 0
 
         # "Max" is a value → should match

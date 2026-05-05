@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n core_tags %}
 
 {% block title %}{% if is_edit %}{% trans "Person bearbeiten" %}{% else %}{% trans "Neue Person" %}{% endif %} – Anlaufstelle{% endblock %}
 
@@ -20,16 +20,16 @@
                 <label for="{{ field.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
                     {{ field.label }}{% if field.field.required %} *{% endif %}
                 </label>
-                {{ field }}
+                {% aria_field field %}
                 {% if field.errors %}
-                <ul class="mt-1 text-sm text-red-600">
+                <ul id="{{ field.id_for_label }}-error" class="mt-1 text-sm text-red-600" role="alert">
                     {% for error in field.errors %}
                     <li>{{ error }}</li>
                     {% endfor %}
                 </ul>
                 {% endif %}
                 {% if field.help_text %}
-                <p class="mt-1 text-[11px] text-ink-muted">{{ field.help_text }}</p>
+                <p id="{{ field.id_for_label }}-help" class="mt-1 text-[12px] text-ink-muted">{{ field.help_text }}</p>
                 {% endif %}
             </div>
             {% endfor %}

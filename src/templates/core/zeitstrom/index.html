@@ -36,7 +36,7 @@
         <span class="font-semibold">{% trans "Unbekannt" %}</span>
         {% endif %}
         {% if ban.grund %}&nbsp;– {{ ban.grund|truncatewords:10 }}{% endif %}
-        {% if ban.bis_datum %}<span class="ml-auto text-[11px]">{% trans "Bis:" %} {{ ban.bis_datum|date }}</span>{% endif %}
+        {% if ban.bis_datum %}<span class="ml-auto text-[12px]">{% trans "Bis:" %} {{ ban.bis_datum|date }}</span>{% endif %}
     </div>
     {% endfor %}
 </div>
@@ -44,16 +44,16 @@
 
 {# Datums-Navigation (zentriert, Card-Buttons + Heute-Link) #}
 <div class="flex items-center justify-center gap-4 mb-5">
-    <a href="?date={{ prev_date|date:'Y-m-d' }}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_filter_id != 'all' %}&time_filter={{ selected_filter_id }}{% endif %}" class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink">
+    <a href="?date={{ prev_date|date:'Y-m-d' }}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_filter_id != 'all' %}&time_filter={{ selected_filter_id }}{% endif %}" class="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink">
         <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
     </a>
     <div class="text-center">
         <span class="font-semibold text-[15px] text-ink">{{ target_date|date:"l, j. F Y" }}</span>
         {% if target_date != today %}
-        <a href="{% url 'core:zeitstrom' %}" class="ml-2 text-[11px] font-semibold text-accent hover:underline">{% trans "Heute" %}</a>
+        <a href="{% url 'core:zeitstrom' %}" class="ml-2 text-[12px] font-semibold text-accent hover:underline">{% trans "Heute" %}</a>
         {% endif %}
     </div>
-    <a href="?date={{ next_date|date:'Y-m-d' }}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_filter_id != 'all' %}&time_filter={{ selected_filter_id }}{% endif %}" class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink {% if next_date > today %}opacity-30 pointer-events-none{% endif %}">
+    <a href="?date={{ next_date|date:'Y-m-d' }}{% if selected_type %}&type={{ selected_type }}{% endif %}{% if selected_filter_id != 'all' %}&time_filter={{ selected_filter_id }}{% endif %}" class="p-1.5 min-h-[44px] min-w-[44px] flex items-center justify-center bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink {% if next_date > today %}opacity-30 pointer-events-none{% endif %}">
         <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
     </a>
 </div>
@@ -111,7 +111,7 @@
 
     {# Right-Sidebar: Offene Aufgaben (Design: rechte 220px-Spalte) #}
     <aside class="hidden lg:block">
-        <h2 class="text-[11px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Offene Aufgaben" %}</h2>
+        <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Offene Aufgaben" %}</h2>
         {% if workitems %}
         <div class="space-y-1.5">
             {% for wi in workitems %}

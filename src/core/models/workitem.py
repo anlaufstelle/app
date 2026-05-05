@@ -50,7 +50,7 @@ class WorkItem(SoftDeletableModel):
         null=True,
         blank=True,
         related_name="work_items",
-        verbose_name=_("Klientel"),
+        verbose_name=_("Person"),
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

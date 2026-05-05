@@ -2,7 +2,7 @@
 
 {% if data_form and data_form.fields %}
 <div class="bg-surface border border-subtle rounded-[10px] p-5 space-y-4">
-    <h2 class="text-[11px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Felder" %}</h2>
+    <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Felder" %}</h2>
     {% for field in data_form %}
     <div>
         <label for="{{ field.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
@@ -17,7 +17,7 @@
         </ul>
         {% endif %}
         {% if field.help_text %}
-        <p class="mt-1 text-[11px] text-ink-muted">{{ field.help_text }}</p>
+        <p class="mt-1 text-[12px] text-ink-muted">{{ field.help_text }}</p>
         {% endif %}
     </div>
     {% endfor %}

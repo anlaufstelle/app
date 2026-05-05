@@ -5,15 +5,15 @@
     <div class="flex-1 px-3.5 py-3 min-w-0">
         <div class="flex flex-wrap items-center gap-2">
             <span class="font-mono text-[13px] font-medium text-ink-muted flex-shrink-0">{{ workitem.created_at|time:"H:i" }}</span>
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-workitem-soft text-workitem-deep">{% trans "Aufgabe" %}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-workitem-soft text-workitem-deep">{% trans "Aufgabe" %}</span>
             <span class="text-[13px] font-semibold text-ink truncate min-w-0">{{ workitem.title|truncatewords:8 }}</span>
             {% if workitem.priority == "urgent" %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">{% trans "Dringend" %}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-red-100 text-red-700">{% trans "Dringend" %}</span>
             {% elif workitem.priority == "important" %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-yellow-100 text-yellow-700">{% trans "Wichtig" %}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-yellow-100 text-yellow-700">{% trans "Wichtig" %}</span>
             {% endif %}
             {% if workitem.assigned_to %}
-            <span class="ml-auto text-[11px] text-ink-muted whitespace-nowrap">{{ workitem.assigned_to.display_name|default:workitem.assigned_to.username }}</span>
+            <span class="ml-auto text-[12px] text-ink-muted whitespace-nowrap">{{ workitem.assigned_to.display_name|default:workitem.assigned_to.username }}</span>
             {% endif %}
         </div>
     </div>

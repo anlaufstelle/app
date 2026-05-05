@@ -90,8 +90,13 @@ def compute_diff(entry, user=None):
         DELETE:  [{label, value}]
     """
     # Prefer frozen metadata snapshot; fall back to live FieldTemplates for legacy entries.
+    # Refs #824 (C-57): build_event_detail_context haengt einmalig
+    # ``_slug_info`` an alle Entries — Template-Tag spart so pro Entry
+    # einen Field-Query.
     if entry.field_metadata:
         slug_info = _build_slug_info_from_metadata(entry.field_metadata)
+    elif getattr(entry, "_slug_info", None):
+        slug_info = entry._slug_info
     else:
         slug_info = _build_slug_info(entry.event)
     doc_type_sensitivity = entry.event.document_type.sensitivity

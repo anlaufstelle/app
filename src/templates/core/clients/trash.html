@@ -14,17 +14,17 @@
         <table class="w-full text-sm border border-subtle rounded-[10px] overflow-hidden">
             <thead class="bg-canvas">
                 <tr class="text-left">
-                    <th class="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Pseudonym" %}</th>
-                    <th class="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Gelöscht am" %}</th>
-                    <th class="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Gelöscht von" %}</th>
-                    <th class="px-3 py-2 text-right text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktion" %}</th>
+                    <th class="px-3 py-2 text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Pseudonym" %}</th>
+                    <th class="px-3 py-2 text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Gelöscht am" %}</th>
+                    <th class="px-3 py-2 text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Gelöscht von" %}</th>
+                    <th class="px-3 py-2 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktion" %}</th>
                 </tr>
             </thead>
             <tbody>
                 {% for client in clients %}
                 <tr class="border-t border-subtle">
                     <td class="px-3 py-2 font-medium">{{ client.pseudonym }}</td>
-                    <td class="px-3 py-2">{{ client.deleted_at|date:"d.m.Y H:i" }}</td>
+                    <td class="px-3 py-2">{{ client.deleted_at|date:"DATETIME_FORMAT" }}</td>
                     <td class="px-3 py-2">{{ client.deleted_by.display_name|default:client.deleted_by.username|default:"–" }}</td>
                     <td class="px-3 py-2 text-right">
                         <form method="post" action="{% url 'core:client_restore' pk=client.pk %}" class="inline">

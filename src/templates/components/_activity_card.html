@@ -7,12 +7,12 @@
     <div class="flex-1 px-3.5 py-2.5 min-w-0">
         <div class="flex items-center gap-2">
             <span class="font-mono text-[13px] font-medium text-ink-muted flex-shrink-0 whitespace-nowrap">{{ activity.occurred_at|time:"H:i" }}</span>
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-activity-soft text-activity-deep flex-shrink-0">{% trans "Aktivität" %}</span>
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-canvas border border-subtle text-ink-soft flex-shrink-0">{{ activity.get_verb_display }}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-activity-soft text-activity-deep flex-shrink-0">{% trans "Aktivität" %}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-ink-soft flex-shrink-0">{{ activity.get_verb_display }}</span>
             <span class="text-[13px] text-ink-soft truncate min-w-0">{{ activity.summary }}</span>
             <div class="flex items-center gap-2 ml-auto shrink-0">
                 {% if activity.actor %}
-                <span class="text-[11px] text-ink-muted hidden sm:inline whitespace-nowrap">{{ activity.actor.get_short_name|default:activity.actor.username }}</span>
+                <span class="text-[12px] text-ink-muted hidden sm:inline whitespace-nowrap">{{ activity.actor.get_short_name|default:activity.actor.username }}</span>
                 {% endif %}
                 <button type="button"
                         @click="toggle"
@@ -44,7 +44,7 @@
                 {% endwith %}
                 <div>
                     <span class="font-semibold text-ink">{% trans "Zeitpunkt:" %}</span>
-                    {{ activity.occurred_at|date:"d.m.Y H:i" }}
+                    {{ activity.occurred_at|date:"DATETIME_FORMAT" }}
                 </div>
                 {% if target_url %}
                 <div class="pt-1">

@@ -25,17 +25,17 @@
             <div class="flex items-center gap-2 flex-wrap">
                 {% include "components/_client_badge.html" with client=client %}
                 {% if client.get_age_cluster_display %}
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-canvas border border-subtle text-ink-soft">{{ client.get_age_cluster_display }}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-ink-soft">{{ client.get_age_cluster_display }}</span>
                 {% endif %}
                 {% if active_bans %}
-                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-ban text-white">{% trans "Hausverbot" %}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-ban text-white">{% trans "Hausverbot" %}</span>
                 {% endif %}
                 <span x-show="isOffline" x-cloak
-                      class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-yellow-100 text-yellow-800"
+                      class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-yellow-100 text-yellow-800"
                       data-testid="offline-available-badge">
                     <svg aria-hidden="true" class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     <span>{% trans "Lokal verfügbar" %}</span>
-                    <span x-show="expiresAtDisplay" class="ml-1 text-[10px]">(<span x-text="expiresAtDisplay"></span>)</span>
+                    <span x-show="expiresAtDisplay" class="ml-1 text-[12px]">(<span x-text="expiresAtDisplay"></span>)</span>
                 </span>
             </div>
         </div>
@@ -162,7 +162,7 @@
         <svg aria-hidden="true" class="w-4 h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
         <span class="font-semibold">{% trans "Hausverbot" %}</span>
         {% if ban.grund %}&nbsp;– {{ ban.grund|truncatewords:10 }}{% endif %}
-        {% if ban.bis_datum %}<span class="ml-auto text-[11px]">{% trans "Bis:" %} {{ ban.bis_datum|date }}</span>{% endif %}
+        {% if ban.bis_datum %}<span class="ml-auto text-[12px]">{% trans "Bis:" %} {{ ban.bis_datum|date }}</span>{% endif %}
     </div>
     {% endfor %}
 </div>
@@ -171,7 +171,7 @@
 {# Notizen #}
 {% if client.notes %}
 <div class="bg-surface border border-subtle rounded-[10px] px-4 py-3.5 mb-5">
-    <h2 class="text-[11px] font-bold text-ink-muted uppercase tracking-wider mb-2">{% trans "Notizen" %}</h2>
+    <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2">{% trans "Notizen" %}</h2>
     <p class="text-[13px] text-ink-soft leading-relaxed whitespace-pre-wrap">{{ client.notes }}</p>
 </div>
 {% endif %}
@@ -179,16 +179,16 @@
 <div class="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-6 items-start">
     {# Event-Timeline (Design: Kontakt-Chronik) #}
     <div>
-        <h2 class="text-[11px] font-bold text-ink-muted uppercase tracking-wider mb-3">{% trans "Kontakt-Chronik" %}</h2>
+        <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-3">{% trans "Kontakt-Chronik" %}</h2>
         {% if events %}
         <div class="space-y-2">
             {% for event in events %}
             <a href="{% url 'core:event_detail' event.pk %}" class="block bg-surface border border-subtle rounded-[10px] px-3.5 py-3 hover:shadow-sm transition">
                 <div class="flex items-center gap-3 flex-wrap">
-                    <span class="font-mono text-[12px] text-ink-muted">{{ event.occurred_at|date:"d.m.Y H:i" }}</span>
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-canvas border border-subtle text-ink-soft">{{ event.document_type.name }}</span>
+                    <span class="font-mono text-[12px] text-ink-muted">{{ event.occurred_at|date:"DATETIME_FORMAT" }}</span>
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-ink-soft">{{ event.document_type.name }}</span>
                     {% if event.created_by %}
-                    <span class="ml-auto text-[11px] text-ink-muted">{{ event.created_by.display_name|default:event.created_by.username }}</span>
+                    <span class="ml-auto text-[12px] text-ink-muted">{{ event.created_by.display_name|default:event.created_by.username }}</span>
                     {% endif %}
                     <svg aria-hidden="true" class="w-3.5 h-3.5 text-ink-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
                 </div>
@@ -202,7 +202,7 @@
 
     {# Side: Tasks + Cases #}
     <div>
-        <h2 class="text-[11px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Aufgaben" %}</h2>
+        <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Aufgaben" %}</h2>
         {% if workitems %}
         <div class="space-y-1.5">
             {% for wi in workitems %}
@@ -214,7 +214,7 @@
         {% endif %}
 
         {# Fälle #}
-        <h2 class="text-[11px] font-bold text-ink-muted uppercase tracking-wider mb-2.5 mt-5">{% trans "Fälle" %}</h2>
+        <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2.5 mt-5">{% trans "Fälle" %}</h2>
         {% if open_cases %}
         <div class="space-y-1.5">
             {% for case in open_cases %}
@@ -224,7 +224,7 @@
                     {% include "core/cases/partials/status_badge.html" with case=case %}
                 </div>
                 {% if case.lead_user %}
-                <div class="mt-1 text-[11px] text-ink-muted">{{ case.lead_user }}</div>
+                <div class="mt-1 text-[12px] text-ink-muted">{{ case.lead_user }}</div>
                 {% endif %}
             </a>
             {% endfor %}

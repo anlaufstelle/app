@@ -64,7 +64,7 @@ class EventMetaForm(forms.Form):
     )
     client = forms.UUIDField(
         required=False,
-        label=_("Klientel"),
+        label=_("Person"),
         widget=forms.HiddenInput(),
     )
     occurred_at = forms.DateTimeField(

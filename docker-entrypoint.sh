@@ -1,18 +1,10 @@
 #!/bin/sh
+# Refs #802 (C-34): Web-Container ist nur noch Web-Server.
+# Migrationen laufen vor dem Rolling-Restart als separater One-Shot-Job
+# (siehe ``docker-migrate.sh`` und ``docs/ops-runbook.md`` § 1.2).
+# Lange RunPython-Schritte blockieren so keine Worker mehr und parallele
+# Web-Replicas warten nicht beim Start auf den Migrate-Lock.
 set -e
-
-# Migrate with advisory lock (prevents race conditions with multiple replicas)
-python -c "
-import subprocess, sys, os, django
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'anlaufstelle.settings.prod')
-django.setup()
-from django.db import connection
-with connection.cursor() as cursor:
-    cursor.execute('SELECT pg_advisory_lock(1)')
-    result = subprocess.run([sys.executable, 'manage.py', 'migrate', '--noinput'])
-    cursor.execute('SELECT pg_advisory_unlock(1)')
-    sys.exit(result.returncode)
-"
 
 python manage.py collectstatic --noinput
 

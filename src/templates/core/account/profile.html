@@ -11,29 +11,29 @@
     <div class="bg-surface border border-subtle rounded-[10px] p-5 mb-5">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-                <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Name" %}</div>
+                <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Name" %}</div>
                 <p class="text-[14px] font-semibold text-ink mt-1" data-testid="profile-name">{{ user.get_full_name|default:user.username }}</p>
             </div>
             <div>
-                <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Benutzername" %}</div>
+                <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Benutzername" %}</div>
                 <p class="text-[14px] font-semibold text-ink mt-1">{{ user.username }}</p>
             </div>
             <div>
-                <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Rolle" %}</div>
+                <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Rolle" %}</div>
                 <p class="mt-1">
-                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-accent-light text-accent" data-testid="profile-role">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-accent-light text-accent" data-testid="profile-role">
                         {{ user.get_role_display }}
                     </span>
                 </p>
             </div>
             {% if user.facility %}
             <div>
-                <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Einrichtung" %}</div>
+                <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Einrichtung" %}</div>
                 <p class="text-[14px] font-semibold text-ink mt-1" data-testid="profile-facility">{{ user.facility }}</p>
             </div>
             {% endif %}
             <div>
-                <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Sprache" %}</div>
+                <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Sprache" %}</div>
                 <p class="text-[14px] font-semibold text-ink mt-1" data-testid="profile-language">{{ user.get_preferred_language_display }}</p>
             </div>
         </div>
@@ -57,7 +57,7 @@
     {% if recent_clients %}
     <div class="bg-surface border border-subtle rounded-[10px] p-5 mb-5">
         <div class="flex items-center justify-between mb-3">
-            <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zuletzt besuchte Personen" %}</h2>
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zuletzt besuchte Personen" %}</h2>
             <a href="{% url 'core:client_list' %}" class="text-[12px] text-accent hover:underline font-semibold">{% trans "Alle anzeigen" %}</a>
         </div>
         {% include "core/account/partials/_recent_clients_widget.html" %}
@@ -66,17 +66,17 @@
 
     {# Letzte Events #}
     <div class="bg-surface border border-subtle rounded-[10px] p-5 mb-5">
-        <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Letzte Ereignisse" %}</h2>
+        <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Letzte Ereignisse" %}</h2>
         {% if recent_events %}
         <ul class="divide-y divide-subtle">
             {% for event in recent_events %}
             <li class="py-2.5 flex items-center gap-2 flex-wrap">
-                <span class="font-mono text-[12px] text-ink-muted">{{ event.occurred_at|date:"d.m.Y H:i" }}</span>
+                <span class="font-mono text-[12px] text-ink-muted">{{ event.occurred_at|date:"DATETIME_FORMAT" }}</span>
                 <a href="{% url 'core:event_detail' pk=event.pk %}" class="text-[13px] text-accent hover:underline font-semibold">
                     {{ event.document_type }}
                 </a>
                 {% if event.client %}
-                <span class="text-[11px] text-ink-muted">({{ event.client }})</span>
+                <span class="text-[12px] text-ink-muted">({{ event.client }})</span>
                 {% endif %}
             </li>
             {% endfor %}
@@ -88,7 +88,7 @@
 
     {# Offene Aufgaben #}
     <div class="bg-surface border border-subtle rounded-[10px] p-5 mb-5">
-        <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Offene Aufgaben" %}</h2>
+        <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Offene Aufgaben" %}</h2>
         {% if open_workitems %}
         <ul class="divide-y divide-subtle">
             {% for item in open_workitems %}
@@ -96,7 +96,7 @@
                 <a href="{% url 'core:workitem_detail' pk=item.pk %}" class="text-[13px] text-accent hover:underline font-semibold">
                     {{ item.title }}
                 </a>
-                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold {% if item.status == 'in_progress' %}bg-yellow-100 text-yellow-700{% else %}bg-blue-100 text-blue-700{% endif %}">
+                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold {% if item.status == 'in_progress' %}bg-yellow-100 text-yellow-700{% else %}bg-blue-100 text-blue-700{% endif %}">
                     {{ item.get_status_display }}
                 </span>
             </li>
@@ -109,7 +109,7 @@
 
     {# Erledigte Aufgaben #}
     <div class="bg-surface border border-subtle rounded-[10px] p-5">
-        <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Kürzlich erledigt" %}</h2>
+        <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Kürzlich erledigt" %}</h2>
         {% if done_workitems %}
         <ul class="divide-y divide-subtle">
             {% for item in done_workitems %}
@@ -117,7 +117,7 @@
                 <a href="{% url 'core:workitem_detail' pk=item.pk %}" class="text-[13px] text-accent hover:underline font-semibold">
                     {{ item.title }}
                 </a>
-                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">
+                <span class="ml-auto inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-green-100 text-green-700">
                     {{ item.get_status_display }}
                 </span>
             </li>

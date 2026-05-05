@@ -14,7 +14,7 @@ class CaseForm(forms.ModelForm):
     client = forms.UUIDField(
         required=True,
         widget=forms.HiddenInput(),
-        label=_("Klientel"),
+        label=_("Person"),
         error_messages={
             "required": _("Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."),
         },
@@ -48,10 +48,11 @@ class CaseForm(forms.ModelForm):
         client_id = self.cleaned_data.get("client")
         if not client_id:
             raise ValidationError(_("Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."))
+        # Refs #819 (R-006): scoped Query — eine Person aus einer fremden
+        # Facility liefert direkt DoesNotExist statt der nachgelagerten
+        # Facility-Pruefung. Defense-in-Depth gegen ID-Erraten.
+        scoped = Client.objects.for_facility(self.facility) if self.facility else Client.objects.all()
         try:
-            client_obj = Client.objects.get(pk=client_id)
+            return scoped.get(pk=client_id)
         except Client.DoesNotExist as exc:
-            raise ValidationError(_("Klientel existiert nicht.")) from exc
-        if self.facility and client_obj.facility_id != self.facility.pk:
-            raise ValidationError(_("Klientel gehört nicht zur Einrichtung."))
-        return client_obj
+            raise ValidationError(_("Person existiert nicht.")) from exc

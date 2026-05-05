@@ -6,12 +6,12 @@
     <div class="flex-1 px-3.5 py-3 min-w-0">
         <div class="flex flex-wrap items-center gap-2">
             {% if show_date %}
-            <span class="font-mono text-[13px] font-medium text-ink-muted flex-shrink-0">{{ event.occurred_at|date:"d.m.Y H:i" }}</span>
+            <span class="font-mono text-[13px] font-medium text-ink-muted flex-shrink-0">{{ event.occurred_at|date:"DATETIME_FORMAT" }}</span>
             {% else %}
             <span class="font-mono text-[13px] font-medium text-ink-muted flex-shrink-0">{{ event.occurred_at|time:"H:i" }}</span>
             {% endif %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-event-soft text-event-deep">{% trans "Kontakt" %}</span>
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-canvas border border-subtle text-ink-soft">{{ event.document_type.name }}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-event-soft text-event-deep">{% trans "Kontakt" %}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-ink-soft">{{ event.document_type.name }}</span>
             {% if show_client %}
                 {% if event.is_anonymous %}
                 <span class="text-[12px] text-ink-muted italic">{% trans "Anonym" %}</span>
@@ -21,7 +21,7 @@
             {% endif %}
             <div class="flex items-center gap-2 ml-auto shrink-0">
                 {% if event.created_by %}
-                <span class="text-[11px] text-ink-muted whitespace-nowrap">{{ event.created_by.display_name|default:event.created_by.username }}</span>
+                <span class="text-[12px] text-ink-muted whitespace-nowrap">{{ event.created_by.display_name|default:event.created_by.username }}</span>
                 {% endif %}
                 <button type="button"
                         @click="toggle"

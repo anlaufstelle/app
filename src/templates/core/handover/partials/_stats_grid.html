@@ -4,26 +4,26 @@
 <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
     <div class="bg-surface border border-subtle rounded-[10px] px-5 py-4 text-center">
         <div class="text-[28px] font-bold text-ink font-mono leading-none">{{ summary.stats.events_total }}</div>
-        <div class="text-[11px] text-ink-muted mt-1">{% trans "Kontakte" %}</div>
+        <div class="text-[12px] text-ink-muted mt-1">{% trans "Kontakte" %}</div>
     </div>
     <div class="bg-surface border border-subtle rounded-[10px] px-5 py-4 text-center">
         <div class="text-[28px] font-bold text-ink font-mono leading-none">{{ summary.stats.activities_total }}</div>
-        <div class="text-[11px] text-ink-muted mt-1">{% trans "Aktivitäten" %}</div>
+        <div class="text-[12px] text-ink-muted mt-1">{% trans "Aktivitäten" %}</div>
     </div>
     <div class="bg-surface border border-subtle rounded-[10px] px-5 py-4 text-center">
         <div class="text-[28px] font-bold text-ink font-mono leading-none">{{ summary.stats.workitems_new }}</div>
-        <div class="text-[11px] text-ink-muted mt-1">{% trans "Neue Aufgaben" %}</div>
+        <div class="text-[12px] text-ink-muted mt-1">{% trans "Neue Aufgaben" %}</div>
     </div>
     <div class="bg-surface border border-subtle rounded-[10px] px-5 py-4 text-center">
         <div class="text-[28px] font-bold text-ink font-mono leading-none">{{ summary.stats.clients_new }}</div>
-        <div class="text-[11px] text-ink-muted mt-1">{% trans "Neue Personen" %}</div>
+        <div class="text-[12px] text-ink-muted mt-1">{% trans "Neue Personen" %}</div>
     </div>
 </div>
 
 {% if summary.stats.events_by_type %}
 <div class="mt-3 flex flex-wrap gap-2">
     {% for et in summary.stats.events_by_type %}
-    <span class="inline-flex items-center px-2 py-1 rounded-full text-[11px] font-semibold bg-canvas border border-subtle text-ink-soft">
+    <span class="inline-flex items-center px-2 py-1 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-ink-soft">
         {{ et.document_type__name }}: <span class="font-mono ml-1">{{ et.count }}</span>
     </span>
     {% endfor %}

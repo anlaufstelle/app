@@ -277,6 +277,14 @@ Die Ruff-Konfiguration befindet sich in `pyproject.toml`.
 - Tailwind CSS für Styling — keine eigenen CSS-Klassen anlegen, soweit möglich.
 - Barrierefreiheit (WCAG 2.1 AA) beachten.
 
+#### HTMX & Live-Regions (Refs [#811](https://github.com/tobiasnix/eq=anlaufstelle/issues/811))
+
+Damit HTMX-Erfolgsmeldungen Screen-Reader-Nutzer*innen erreichen, gilt:
+
+- Es existiert genau eine **stabile Live-Region** in [`base.html`](src/templates/base.html): `#flash-messages` mit `role="status" aria-live="polite" aria-atomic="true"`.
+- HTMX-Antworten, die einen Erfolg ankündigen sollen, schwingen entweder per `hx-target="#flash-messages" hx-swap="innerHTML"` oder per `hx-swap-oob="innerHTML:#flash-messages"`. Den Wrapper-`<div>` selbst **nie** per `outerHTML` ersetzen — sonst wird die Live-Region neu instanziiert und der Announcement-Trigger verloren.
+- Wenn ein Bulk-Endpoint einen vollständigen Reload erzwingen muss (z. B. WorkItem-Bulk, Retention-Bulk), läuft das über `HX-Redirect` — die Folge-Page rendert das Django-`messages`-Framework wieder in `#flash-messages`.
+
 ### Conventional Commits
 
 Commit-Messages folgen dem [Conventional Commits](https://www.conventionalcommits.org/)-Standard:

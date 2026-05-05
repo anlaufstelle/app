@@ -14,13 +14,14 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
-from core.models import Activity, AuditLog, Event, EventHistory
+from core.models import Activity, AuditLog, Event, EventHistory, FieldTemplate
 from core.services.activity import log_activity
 from core.services.events.fields import (
     _snapshot_field_metadata,
     _validate_data_json,
     build_field_template_lookup,
     build_redacted_delete_history,
+    compute_event_search_text,
     normalize_file_marker,
     stage_index,
 )
@@ -69,7 +70,7 @@ def apply_attachment_changes(event, user, request_post, request_files, file_fiel
     field_templates = build_field_template_lookup(document_type)
     facility = event.facility
     for slug, ft in field_templates.items():
-        if ft.field_type != "file":
+        if ft.field_type != FieldTemplate.FieldType.FILE:
             continue
 
         existing_marker = (event.data_json or {}).get(slug)
@@ -135,7 +136,7 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
         if case.facility_id != facility.pk:
             raise ValidationError(_("Fall gehört nicht zur selben Einrichtung wie das Ereignis."))
         if case.client_id is not None and client is not None and case.client_id != client.pk:
-            raise ValidationError(_("Klientel des Ereignisses passt nicht zum Klientel des Falls."))
+            raise ValidationError(_("Person des Ereignisses passt nicht zur Person des Falls."))
         if case.client_id is not None and (client is None or is_anonymous):
             raise ValidationError(_("Anonyme Ereignisse dürfen nicht an klientelbezogene Fälle gehängt werden."))
 
@@ -156,7 +157,7 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
     if document_type.min_contact_stage and client is None and not is_anonymous:
         raise ValidationError(
             _(
-                "Für diesen Dokumentationstyp muss ein Klientel ausgewählt werden, "
+                "Für diesen Dokumentationstyp muss eine Person ausgewählt werden, "
                 "da eine Mindest-Kontaktstufe vorausgesetzt wird."
             )
         )
@@ -167,7 +168,7 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
         if actual < required:
             raise ValidationError(
                 _(
-                    "Klientel muss mindestens die Kontaktstufe "
+                    "Person muss mindestens die Kontaktstufe "
                     "'%(required_stage)s' "
                     "haben, aktuelle Stufe ist "
                     "'%(actual_stage)s'."
@@ -186,6 +187,7 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
         document_type=document_type,
         occurred_at=occurred_at,
         data_json=data_json,
+        search_text=compute_event_search_text(data_json, document_type),
         is_anonymous=is_anonymous,
         created_by=user,
         case=case,
@@ -232,6 +234,7 @@ def update_event(event, user, data_json, expected_updated_at=None, **kwargs):
     data_json = _validate_data_json(event.document_type, data_json)
     data_before = event.data_json.copy() if event.data_json else {}
     event.data_json = data_json
+    event.search_text = compute_event_search_text(data_json, event.document_type)
     for k, v in kwargs.items():
         setattr(event, k, v)
     event.save()

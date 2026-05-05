@@ -16,7 +16,9 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      - run: pip install ruff==0.15.11
+      # Refs #819 (R-001): Ruff-Version aus dem Lockfile ziehen, damit lokale
+      # ``make lint`` und CI dieselbe Version nutzen.
+      - run: pip install -r requirements-dev.txt
       - run: ruff check src/
       - run: ruff format --check src/
 
@@ -49,6 +51,18 @@ jobs:
         with:
           python-version: "3.13"
       - run: python scripts/check_translation_versions.py
+
+  translations-coverage:
+    # Refs #813 (C-46): Wachhund gegen fuzzy/untranslated-Regression in
+    # de.po + en.po. Faellt wenn Werte oberhalb der Baseline klettern.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: sudo apt-get update && sudo apt-get install -y gettext
+      - run: python scripts/check_translations.py
 
   typecheck:
     # Refs #741 / #713 (Audit-Massnahme #37): mypy auf core/services

@@ -106,7 +106,7 @@ def create_client(facility, user, **data):
         actor=user,
         verb=Activity.Verb.CREATED,
         target=client,
-        summary=f"Klientel {client.pseudonym} angelegt",
+        summary=f"Person {client.pseudonym} angelegt",
     )
     AuditLog.objects.create(
         facility=facility,
@@ -197,7 +197,7 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
         actor=user,
         verb=Activity.Verb.UPDATED,
         target=client,
-        summary=f"Klientel {client.pseudonym} aktualisiert",
+        summary=f"Person {client.pseudonym} aktualisiert",
     )
 
     return client

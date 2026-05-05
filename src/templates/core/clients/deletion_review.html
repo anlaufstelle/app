@@ -16,7 +16,7 @@
             </div>
             <div class="flex justify-between">
                 <dt class="text-ink-muted">{% trans "Beantragt am" %}</dt>
-                <dd class="font-medium">{{ deletion_request.created_at|date:"d.m.Y H:i" }}</dd>
+                <dd class="font-medium">{{ deletion_request.created_at|date:"DATETIME_FORMAT" }}</dd>
             </div>
             <div>
                 <dt class="text-ink-muted mb-1">{% trans "Begründung" %}</dt>
@@ -27,7 +27,7 @@
 
     {# Person-Zusammenfassung #}
     <div class="bg-surface border border-subtle rounded-[10px] p-4 mb-5">
-        <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Betroffene Person" %}</h2>
+        <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Betroffene Person" %}</h2>
         <dl class="space-y-2 text-sm">
             <div class="flex justify-between">
                 <dt class="text-ink-muted">{% trans "Pseudonym" %}</dt>
@@ -39,7 +39,7 @@
             </div>
             <div class="flex justify-between">
                 <dt class="text-ink-muted">{% trans "Angelegt am" %}</dt>
-                <dd class="font-medium">{{ client.created_at|date:"d.m.Y" }}</dd>
+                <dd class="font-medium">{{ client.created_at|date:"DATE_FORMAT" }}</dd>
             </div>
         </dl>
         <p class="text-xs text-ink-muted mt-3">

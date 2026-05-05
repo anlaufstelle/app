@@ -16,7 +16,7 @@
             </div>
             <div>
                 <dt class="text-ink-muted">{% trans "Zeitpunkt" %}</dt>
-                <dd class="font-medium">{{ event.occurred_at|date:"d.m.Y H:i" }}</dd>
+                <dd class="font-medium">{{ event.occurred_at|date:"DATETIME_FORMAT" }}</dd>
             </div>
             <div>
                 <dt class="text-ink-muted">{% trans "Person" %}</dt>
@@ -34,7 +34,7 @@
 
         {% if data_form.fields %}
         <div class="bg-surface border border-subtle rounded-[10px] p-4 space-y-4">
-            <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Felder" %}</h2>
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Felder" %}</h2>
             {% for field in data_form %}
             <div>
                 <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-ink-soft mb-1">
@@ -73,14 +73,17 @@
                 </ul>
                 {% endif %}
                 <p class="text-xs text-ink-muted mb-1">{% trans "Weitere Dateien hinzufügen (mehrere möglich):" %}</p>
-                {{ field }}
+                {% aria_field field %}
                 {% endwith %}
                 {% else %}
-                {{ field }}
+                {% aria_field field %}
                 {% endif %}
 
+                {% if field.help_text %}
+                <p id="{{ field.id_for_label }}-help" class="mt-1 text-[12px] text-ink-muted">{{ field.help_text }}</p>
+                {% endif %}
                 {% if field.errors %}
-                <ul class="mt-1 text-sm text-red-600">
+                <ul id="{{ field.id_for_label }}-error" class="mt-1 text-sm text-red-600" role="alert">
                     {% for error in field.errors %}
                     <li>{{ error }}</li>
                     {% endfor %}

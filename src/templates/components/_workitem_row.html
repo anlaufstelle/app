@@ -8,21 +8,21 @@
     <div class="flex flex-wrap items-center gap-1">
         {% due_date_info wi as ddi %}
         {% if ddi %}
-        <span class="inline-flex items-center px-1.5 py-px rounded-full text-[10px] leading-tight font-semibold {{ ddi.css_class }}">{{ ddi.text }}</span>
+        <span class="inline-flex items-center px-1.5 py-px rounded-full text-[12px] leading-tight font-semibold {{ ddi.css_class }}">{{ ddi.text }}</span>
         {% endif %}
         {% remind_at_info wi as rai %}
         {% if rai %}
-        <span class="inline-flex items-center px-1.5 py-px rounded-full text-[10px] leading-tight font-semibold {{ rai.css_class }}" title="{% trans 'Wiedervorlage' %}">{% trans "WV" %}: {{ rai.text }}</span>
+        <span class="inline-flex items-center px-1.5 py-px rounded-full text-[12px] leading-tight font-semibold {{ rai.css_class }}" title="{% trans 'Wiedervorlage' %}">{% trans "WV" %}: {{ rai.text }}</span>
         {% endif %}
         {% if wi.recurrence and wi.recurrence != "none" %}
-        <span class="inline-flex items-center px-1.5 py-px rounded-full text-[10px] leading-tight font-semibold bg-accent-light text-accent" title="{% trans 'Wiederkehrend' %}">&#x21bb; {{ wi.get_recurrence_display }}</span>
+        <span class="inline-flex items-center px-1.5 py-px rounded-full text-[12px] leading-tight font-semibold bg-accent-light text-accent" title="{% trans 'Wiederkehrend' %}">&#x21bb; {{ wi.get_recurrence_display }}</span>
         {% endif %}
         {% if wi.priority == "urgent" %}
-        <span class="inline-flex items-center px-1.5 py-px rounded-full text-[10px] leading-tight font-semibold bg-red-100 text-red-700">{% trans "Dringend" %}</span>
+        <span class="inline-flex items-center px-1.5 py-px rounded-full text-[12px] leading-tight font-semibold bg-red-100 text-red-700">{% trans "Dringend" %}</span>
         {% elif wi.priority == "important" %}
-        <span class="inline-flex items-center px-1.5 py-px rounded-full text-[10px] leading-tight font-semibold bg-yellow-100 text-yellow-700">{% trans "Wichtig" %}</span>
+        <span class="inline-flex items-center px-1.5 py-px rounded-full text-[12px] leading-tight font-semibold bg-yellow-100 text-yellow-700">{% trans "Wichtig" %}</span>
         {% endif %}
-        <span class="inline-flex items-center px-1.5 py-px rounded-full text-[10px] leading-tight font-semibold bg-canvas border border-subtle text-ink-muted">{{ wi.get_item_type_display }}</span>
+        <span class="inline-flex items-center px-1.5 py-px rounded-full text-[12px] leading-tight font-semibold bg-canvas border border-subtle text-ink-muted">{{ wi.get_item_type_display }}</span>
     </div>
 </a>
 {% else %}
@@ -42,21 +42,21 @@
         <div class="flex items-center gap-2">
             {% due_date_info wi as ddi %}
             {% if ddi %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold {{ ddi.css_class }}">{{ ddi.text }}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold {{ ddi.css_class }}">{{ ddi.text }}</span>
             {% endif %}
             {% remind_at_info wi as rai %}
             {% if rai %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold {{ rai.css_class }}" title="{% trans 'Wiedervorlage' %}">{% trans "WV" %}: {{ rai.text }}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold {{ rai.css_class }}" title="{% trans 'Wiedervorlage' %}">{% trans "WV" %}: {{ rai.text }}</span>
             {% endif %}
             {% if wi.recurrence and wi.recurrence != "none" %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-accent-light text-accent" title="{% trans 'Wiederkehrend' %}">&#x21bb; {{ wi.get_recurrence_display }}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-accent-light text-accent" title="{% trans 'Wiederkehrend' %}">&#x21bb; {{ wi.get_recurrence_display }}</span>
             {% endif %}
             {% if wi.priority == "urgent" %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-red-100 text-red-700">{% trans "Dringend" %}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-red-100 text-red-700">{% trans "Dringend" %}</span>
             {% elif wi.priority == "important" %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-yellow-100 text-yellow-700">{% trans "Wichtig" %}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-yellow-100 text-yellow-700">{% trans "Wichtig" %}</span>
             {% endif %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-canvas border border-subtle text-ink-muted">{{ wi.get_item_type_display }}</span>
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-ink-muted">{{ wi.get_item_type_display }}</span>
         </div>
     </div>
 
@@ -67,7 +67,7 @@
         {% if wi.assigned_to %}
         <span>{% trans "Zugewiesen:" %} {{ wi.assigned_to.get_full_name|default:wi.assigned_to.username }}</span>
         {% endif %}
-        <span class="font-mono">{{ wi.created_at|date:"d.m.Y H:i" }}</span>
+        <span class="font-mono">{{ wi.created_at|date:"DATETIME_FORMAT" }}</span>
     </div>
 
     {% if wi.description %}
@@ -107,14 +107,14 @@
             {% trans "Zurücksetzen" %}
         </button>
         {% elif wi.status == "done" %}
-        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-700">{% trans "Erledigt" %}</span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-green-100 text-green-700">{% trans "Erledigt" %}</span>
         {% if wi.completed_at %}
-        <span class="text-[11px] text-ink-muted font-mono">{{ wi.completed_at|date:"d.m.Y H:i" }}</span>
+        <span class="text-[12px] text-ink-muted font-mono">{{ wi.completed_at|date:"DATETIME_FORMAT" }}</span>
         {% endif %}
         {% elif wi.status == "dismissed" %}
-        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-canvas border border-subtle text-ink-muted">{% trans "Verworfen" %}</span>
+        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-ink-muted">{% trans "Verworfen" %}</span>
         {% if wi.completed_at %}
-        <span class="text-[11px] text-ink-muted font-mono">{{ wi.completed_at|date:"d.m.Y H:i" }}</span>
+        <span class="text-[12px] text-ink-muted font-mono">{{ wi.completed_at|date:"DATETIME_FORMAT" }}</span>
         {% endif %}
         {% endif %}
     </div>

@@ -72,7 +72,7 @@
             </div>
             <div class="min-w-0 flex-1">
                 <div class="text-sm font-bold text-ink leading-tight truncate">{{ current_facility.organization.name|default:"Anlaufstelle" }}</div>
-                {% if current_facility %}<div class="text-[11px] text-ink-muted mt-0.5 truncate">{{ current_facility.name }}</div>{% endif %}
+                {% if current_facility %}<div class="text-[12px] text-ink-muted mt-0.5 truncate">{{ current_facility.name }}</div>{% endif %}
             </div>
         </a>
         {# Global Search #}
@@ -106,79 +106,79 @@
             </button>
             <div x-show="createOpen" @click.away="close" x-cloak x-transition
                  class="absolute left-4 right-4 top-[calc(100%-4px)] bg-surface rounded-lg shadow-lg border border-subtle z-50 overflow-hidden" data-testid="sidebar-create-dropdown">
-                <a href="{% url 'core:event_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle" data-testid="sidebar-create-event">
+                <a href="{% url 'core:event_create' %}" class="block px-3.5 py-2.5 min-h-[44px] hover:bg-canvas border-b border-subtle" data-testid="sidebar-create-event">
                     <div class="text-[13px] font-semibold text-ink">{% trans "Kontakt dokumentieren" %}</div>
-                    <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Eintrag im Zeitstrom" %}</div>
+                    <div class="text-[12px] text-ink-muted mt-0.5">{% trans "Eintrag im Zeitstrom" %}</div>
                 </a>
                 {% if user.is_staff_or_above %}
-                <a href="{% url 'core:client_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle" data-testid="sidebar-create-client">
+                <a href="{% url 'core:client_create' %}" class="block px-3.5 py-2.5 min-h-[44px] hover:bg-canvas border-b border-subtle" data-testid="sidebar-create-client">
                     <div class="text-[13px] font-semibold text-ink">{% trans "Person anlegen" %}</div>
-                    <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Neues Pseudonym vergeben" %}</div>
+                    <div class="text-[12px] text-ink-muted mt-0.5">{% trans "Neues Pseudonym vergeben" %}</div>
                 </a>
-                <a href="{% url 'core:workitem_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle" data-testid="sidebar-create-workitem">
+                <a href="{% url 'core:workitem_create' %}" class="block px-3.5 py-2.5 min-h-[44px] hover:bg-canvas border-b border-subtle" data-testid="sidebar-create-workitem">
                     <div class="text-[13px] font-semibold text-ink">{% trans "Aufgabe erstellen" %}</div>
-                    <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Für Team oder Person" %}</div>
+                    <div class="text-[12px] text-ink-muted mt-0.5">{% trans "Für Team oder Person" %}</div>
                 </a>
-                <a href="{% url 'core:case_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas" data-testid="sidebar-create-case">
+                <a href="{% url 'core:case_create' %}" class="block px-3.5 py-2.5 min-h-[44px] hover:bg-canvas" data-testid="sidebar-create-case">
                     <div class="text-[13px] font-semibold text-ink">{% trans "Fall anlegen" %}</div>
-                    <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Längere Begleitung dokumentieren" %}</div>
+                    <div class="text-[12px] text-ink-muted mt-0.5">{% trans "Längere Begleitung dokumentieren" %}</div>
                 </a>
                 {% endif %}
             </div>
         </div>
         <div class="flex-1 overflow-y-auto px-2.5 py-2 space-y-px">
-            <a href="{% url 'core:zeitstrom' %}" class="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'zeitstrom' %}bg-accent-light text-accent font-semibold{% endif %}">
+            <a href="{% url 'core:zeitstrom' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'zeitstrom' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
                 {% trans "Zeitstrom" %}
             </a>
-            <a href="{% url 'core:handover' %}" class="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'handover' %}bg-accent-light text-accent font-semibold{% endif %}" data-testid="nav-handover">
+            <a href="{% url 'core:handover' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'handover' %}bg-accent-light text-accent font-semibold{% endif %}" data-testid="nav-handover">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0-4-4m4 4-4 4m0 6H4m0 0 4 4m-4-4 4-4"/></svg>
                 {% trans "Übergabe" %}
             </a>
-            <a href="{% url 'core:client_list' %}" class="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'client_list,client_detail,client_create,client_update' %}bg-accent-light text-accent font-semibold{% endif %}">
+            <a href="{% url 'core:client_list' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'client_list,client_detail,client_create,client_update' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"/></svg>
                 {% trans "Personen" %}
             </a>
             {% if user.is_staff_or_above %}
-            <a href="{% url 'core:case_list' %}" class="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'case_list,case_detail,case_create,case_update' %}bg-accent-light text-accent font-semibold{% endif %}">
+            <a href="{% url 'core:case_list' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'case_list,case_detail,case_create,case_update' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                 {% trans "Fälle" %}
             </a>
             {% endif %}
-            <a href="{% url 'core:workitem_inbox' %}" class="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'workitem_inbox,workitem_detail,workitem_create,workitem_update' %}bg-accent-light text-accent font-semibold{% endif %}">
+            <a href="{% url 'core:workitem_inbox' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'workitem_inbox,workitem_detail,workitem_create,workitem_update' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
                 {% trans "Aufgaben" %}
-                {% if overdue_workitems_count %}<span class="ml-auto inline-flex items-center justify-center px-1.5 py-px rounded-full text-[10px] font-bold bg-red-500 text-white">{{ overdue_workitems_count }}!</span>{% endif %}
-                {% if open_workitems_count %}<span class="{% if not overdue_workitems_count %}ml-auto {% endif %}inline-flex items-center justify-center px-1.5 py-px rounded-full text-[10px] font-bold bg-accent-light text-accent">{{ open_workitems_count }}</span>{% endif %}
+                {% if overdue_workitems_count %}<span class="ml-auto inline-flex items-center justify-center px-1.5 py-px rounded-full text-[12px] font-bold bg-red-500 text-white">{{ overdue_workitems_count }}!</span>{% endif %}
+                {% if open_workitems_count %}<span class="{% if not overdue_workitems_count %}ml-auto {% endif %}inline-flex items-center justify-center px-1.5 py-px rounded-full text-[12px] font-bold bg-accent-light text-accent">{{ open_workitems_count }}</span>{% endif %}
             </a>
-            <a href="{% url 'core:attachment_list' %}" class="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'attachment_list' %}bg-accent-light text-accent font-semibold{% endif %}" data-testid="nav-attachments">
+            <a href="{% url 'core:attachment_list' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'attachment_list' %}bg-accent-light text-accent font-semibold{% endif %}" data-testid="nav-attachments">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
                 {% trans "Dateien" %}
             </a>
             {% if user.is_lead_or_admin %}
-            <a href="{% url 'core:statistics' %}" class="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'statistics,statistics_csv_export,statistics_pdf_export,statistics_jugendamt_export' %}bg-accent-light text-accent font-semibold{% endif %}">
+            <a href="{% url 'core:statistics' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'statistics,statistics_csv_export,statistics_pdf_export,statistics_jugendamt_export' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z"/></svg>
                 {% trans "Statistik" %}
             </a>
-            <a href="{% url 'core:deletion_request_list' %}" class="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'deletion_request_list,deletion_review' %}bg-accent-light text-accent font-semibold{% endif %}">
+            <a href="{% url 'core:deletion_request_list' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'deletion_request_list,deletion_review' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                 {% trans "Löschanträge" %}
             </a>
-            <a href="{% url 'core:retention_dashboard' %}" class="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'retention_dashboard' %}bg-accent-light text-accent font-semibold{% endif %}">
+            <a href="{% url 'core:retention_dashboard' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'retention_dashboard' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 {% trans "Löschfristen" %}
             </a>
             {% endif %}
             {% if user.is_admin %}
-            <a href="{% url 'core:audit_log' %}" class="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'audit_log' %}bg-accent-light text-accent font-semibold{% endif %}">
+            <a href="{% url 'core:audit_log' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'audit_log' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 {% trans "Audit-Log" %}
             </a>
-            <a href="{% url 'core:dsgvo_package' %}" class="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'dsgvo_package,dsgvo_document' %}bg-accent-light text-accent font-semibold{% endif %}">
+            <a href="{% url 'core:dsgvo_package' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'dsgvo_package,dsgvo_document' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 {% trans "DSGVO-Paket" %}
             </a>
-            <a href="/admin-mgmt/" class="flex items-center gap-2.5 px-2.5 py-2 rounded-md text-[13px] font-medium text-ink hover:bg-canvas" target="_blank" rel="noopener">
+            <a href="/admin-mgmt/" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas" target="_blank" rel="noopener">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                 {% trans "Administration" %}
             </a>
@@ -190,23 +190,23 @@
                 <a href="{% url 'core:account_profile' %}" class="flex items-center gap-2.5 flex-1 min-w-0 hover:opacity-80">
                     {# Avatar mit Initialen #}
                     {% with full_name=user.get_full_name|default:user.username %}
-                    <div class="w-[30px] h-[30px] rounded-full bg-accent text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">{{ full_name|slice:":1"|upper }}{% if user.last_name %}{{ user.last_name|slice:":1"|upper }}{% endif %}</div>
+                    <div class="w-[30px] h-[30px] rounded-full bg-accent text-white flex items-center justify-center text-[12px] font-bold flex-shrink-0">{{ full_name|slice:":1"|upper }}{% if user.last_name %}{{ user.last_name|slice:":1"|upper }}{% endif %}</div>
                     <div class="min-w-0 flex-1">
                         <div class="text-[12px] font-semibold text-ink truncate">{{ full_name }}</div>
-                        <div class="text-[11px] text-ink-muted">{{ user.get_role_display|default:user.username }}</div>
+                        <div class="text-[12px] text-ink-muted">{{ user.get_role_display|default:user.username }}</div>
                     </div>
                     {% endwith %}
                 </a>
                 <form action="{% url 'set_language' %}" method="post" class="inline-flex gap-1 flex-shrink-0">
                     {% csrf_token %}
                     <input type="hidden" name="next" value="{{ request.path }}">
-                    <button type="submit" name="language" value="de" class="px-1.5 py-px rounded text-[10px] font-bold {% if LANGUAGE_CODE == 'de' %}bg-accent text-white{% else %}text-ink-muted border border-subtle{% endif %}">DE</button>
-                    <button type="submit" name="language" value="en" class="px-1.5 py-px rounded text-[10px] font-bold {% if LANGUAGE_CODE == 'en' %}bg-accent text-white{% else %}text-ink-muted border border-subtle{% endif %}">EN</button>
+                    <button type="submit" name="language" value="de" class="px-1.5 py-px rounded text-[12px] font-bold {% if LANGUAGE_CODE == 'de' %}bg-accent text-white{% else %}text-ink-muted border border-subtle{% endif %}">DE</button>
+                    <button type="submit" name="language" value="en" class="px-1.5 py-px rounded text-[12px] font-bold {% if LANGUAGE_CODE == 'en' %}bg-accent text-white{% else %}text-ink-muted border border-subtle{% endif %}">EN</button>
                 </form>
             </div>
             <form method="post" action="{% url 'logout' %}" class="mt-2">
                 {% csrf_token %}
-                <button type="submit" class="text-[11px] text-ink-muted hover:text-red-600">{% trans "Abmelden" %}</button>
+                <button type="submit" class="text-[12px] text-ink-muted hover:text-red-600">{% trans "Abmelden" %}</button>
             </form>
         </div>
         {% endif %}
@@ -215,7 +215,8 @@
     {# --- Main Content: always visible, offset on desktop --- #}
     <main id="main-content" class="md:ml-60 min-h-screen pb-20 md:pb-0 overflow-x-hidden">
         <div class="max-w-[1140px] mx-auto px-4 py-5 md:px-8 md:py-7">
-            <div id="flash-messages">
+            {# Refs #811 (C-44): stabile Live-Region — siehe CONTRIBUTING.md "Templates und Frontend". #}
+            <div id="flash-messages" role="status" aria-live="polite" aria-atomic="true">
             {% block messages %}
             {% include "components/_flash_message.html" %}
             {% endblock %}
@@ -223,12 +224,12 @@
             {% block content %}{% endblock %}
         </div>
         {# AGPL §13: Source-Link für Network-Use-Disclosure. Refs #835: Forks/Self-Hoster MUESSEN SOURCE_CODE_URL setzen. #}
-        <footer class="text-center text-[11px] text-ink-muted py-4 mt-8 border-t border-subtle">
+        <footer class="text-center text-[12px] text-ink-muted py-4 mt-8 border-t border-subtle">
             <span>Anlaufstelle</span>
             <span aria-hidden="true" class="mx-1.5">·</span>
             <a href="{{ SOURCE_CODE_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
             {% if SOURCE_CODE_VERSION %}
-            <span class="text-[10px] text-ink-muted">{{ SOURCE_CODE_VERSION|truncatechars:8 }}</span>
+            <span class="text-[12px] text-ink-muted">{{ SOURCE_CODE_VERSION|truncatechars:8 }}</span>
             {% endif %}
             <span aria-hidden="true" class="mx-1.5">·</span>
             <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
@@ -242,21 +243,21 @@
             <div class="relative" x-data="createMenu">
                 <button @click="toggle" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center text-ink-muted hover:text-accent" aria-label="{% trans 'Neu erstellen' %}" data-testid="mobile-nav-create">
                     <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
-                    <span class="text-[10px] font-medium">{% trans "Neu" %}</span>
+                    <span class="text-[12px] font-medium">{% trans "Neu" %}</span>
                 </button>
                 <div x-show="createOpen" @click.away="close" x-cloak x-transition
                      class="absolute bottom-full left-0 mb-2 w-52 bg-surface rounded-lg shadow-lg border border-subtle py-1 z-50" data-testid="mobile-create-dropdown">
-                    <a href="{% url 'core:event_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle" data-testid="mobile-create-event">
+                    <a href="{% url 'core:event_create' %}" class="block px-3.5 py-2.5 min-h-[44px] hover:bg-canvas border-b border-subtle" data-testid="mobile-create-event">
                         <div class="text-[13px] font-semibold text-ink">{% trans "Kontakt dokumentieren" %}</div>
                     </a>
                     {% if user.is_staff_or_above %}
-                    <a href="{% url 'core:client_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle" data-testid="mobile-create-client">
+                    <a href="{% url 'core:client_create' %}" class="block px-3.5 py-2.5 min-h-[44px] hover:bg-canvas border-b border-subtle" data-testid="mobile-create-client">
                         <div class="text-[13px] font-semibold text-ink">{% trans "Person anlegen" %}</div>
                     </a>
-                    <a href="{% url 'core:workitem_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas border-b border-subtle" data-testid="mobile-create-workitem">
+                    <a href="{% url 'core:workitem_create' %}" class="block px-3.5 py-2.5 min-h-[44px] hover:bg-canvas border-b border-subtle" data-testid="mobile-create-workitem">
                         <div class="text-[13px] font-semibold text-ink">{% trans "Aufgabe erstellen" %}</div>
                     </a>
-                    <a href="{% url 'core:case_create' %}" class="block px-3.5 py-2.5 hover:bg-canvas" data-testid="mobile-create-case">
+                    <a href="{% url 'core:case_create' %}" class="block px-3.5 py-2.5 min-h-[44px] hover:bg-canvas" data-testid="mobile-create-case">
                         <div class="text-[13px] font-semibold text-ink">{% trans "Fall anlegen" %}</div>
                     </a>
                     {% endif %}
@@ -265,24 +266,24 @@
             {# Slot 2: Zeitstrom #}
             <a href="{% url 'core:zeitstrom' %}" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name == 'zeitstrom' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-zeitstrom">
                 <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
-                <span class="text-[10px] font-medium">{% trans "Zeitstrom" %}</span>
+                <span class="text-[12px] font-medium">{% trans "Zeitstrom" %}</span>
             </a>
             {# Slot 3: Personen #}
             <a href="{% url 'core:client_list' %}" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'client_list,client_detail,client_create,client_update' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-clients">
                 <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"/></svg>
-                <span class="text-[10px] font-medium">{% trans "Personen" %}</span>
+                <span class="text-[12px] font-medium">{% trans "Personen" %}</span>
             </a>
             {# Slot 4: Aufgaben #}
             <a href="{% url 'core:workitem_inbox' %}" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center relative {% if request.resolver_match.url_name in 'workitem_inbox,workitem_detail,workitem_create,workitem_update' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-workitems">
                 <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
-                <span class="text-[10px] font-medium">{% trans "Aufgaben" %}</span>
-                {% if overdue_workitems_count %}<span class="absolute top-1 right-1.5 inline-flex items-center justify-center px-1 py-px rounded-full text-[9px] font-bold bg-red-500 text-white">{{ overdue_workitems_count }}!</span>{% endif %}
+                <span class="text-[12px] font-medium">{% trans "Aufgaben" %}</span>
+                {% if overdue_workitems_count %}<span class="absolute top-1 right-1.5 inline-flex items-center justify-center px-1 py-px rounded-full text-[12px] font-bold bg-red-500 text-white">{{ overdue_workitems_count }}!</span>{% endif %}
             </a>
             {# Slot 5: Mehr (inkl. Suche, Übergabe und sonstiger Items) #}
             <div class="relative" x-data="mobileMore">
                 <button @click="toggleMore" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'handover,case_list,case_detail,case_create,case_update,attachment_list,search,statistics,deletion_request_list,deletion_review,retention_dashboard,audit_log,dsgvo_package,dsgvo_document,account_profile' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-more">
                     <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
-                    <span class="text-[10px] font-medium">{% trans "Mehr" %}</span>
+                    <span class="text-[12px] font-medium">{% trans "Mehr" %}</span>
                 </button>
                 <div x-show="moreOpen" @click.away="closeAll" x-cloak x-transition
                      class="absolute bottom-full right-0 mb-2 w-52 bg-surface rounded-lg shadow-lg border border-subtle py-1 z-50">

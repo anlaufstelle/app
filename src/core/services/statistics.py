@@ -51,9 +51,10 @@ def parse_statistics_period(query_params, today: date) -> PeriodState:
     selected_year: int | None = None
 
     if period == "custom":
-        # parse_date faellt auf den Default zurueck — der ist hier ein
+        # parse_date faellt auf den Default zurueck — das ist hier ein
         # konkretes date, also ist None nicht erreichbar.
-        date_from = parse_date(query_params.get("date_from"), today - timedelta(days=30)) or (today - timedelta(days=30))
+        custom_default_from = today - timedelta(days=30)
+        date_from = parse_date(query_params.get("date_from"), custom_default_from) or custom_default_from
         date_to = parse_date(query_params.get("date_to"), today) or today
     elif period == "year":
         selected_year = _parse_year(query_params.get("year"), today.year)

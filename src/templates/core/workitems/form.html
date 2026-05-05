@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n core_tags %}
 
 {% block title %}{% if workitem %}{% trans "Aufgabe bearbeiten" %}{% else %}{% trans "Neue Aufgabe" %}{% endif %} – Anlaufstelle{% endblock %}
 
@@ -18,81 +18,95 @@
             {# Typ #}
             <div>
                 <label for="id_item_type" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.item_type.label }}</label>
-                {{ form.item_type }}
-                {% for error in form.item_type.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
+                {% aria_field form.item_type %}
+                {% if form.item_type.errors %}
+                <ul id="id_item_type-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in form.item_type.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
             </div>
 
             {# Titel #}
             <div>
                 <label for="id_title" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.title.label }} *</label>
-                {{ form.title }}
-                {% for error in form.title.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
+                {% aria_field form.title %}
+                {% if form.title.errors %}
+                <ul id="id_title-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in form.title.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
             </div>
 
             {# Beschreibung #}
             <div>
                 <label for="id_description" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.description.label }}</label>
-                {{ form.description }}
-                {% for error in form.description.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
+                {% aria_field form.description %}
+                {% if form.description.errors %}
+                <ul id="id_description-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in form.description.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
             </div>
 
             {# Priorität #}
             <div>
                 <label for="id_priority" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.priority.label }}</label>
-                {{ form.priority }}
-                {% for error in form.priority.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
+                {% aria_field form.priority %}
+                {% if form.priority.errors %}
+                <ul id="id_priority-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in form.priority.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
             </div>
 
             {# Zu erledigen bis #}
             <div x-data="dateQuickButtons" data-target-input="id_due_date">
                 <label for="id_due_date" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.due_date.label }}</label>
-                {{ form.due_date }}
+                {% aria_field form.due_date %}
                 <div class="mt-1.5 flex flex-wrap gap-1">
-                    <button type="button" @click="setToday" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Heute" %}</button>
-                    <button type="button" @click="setTomorrow" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Morgen" %}</button>
-                    <button type="button" @click="setNextWeek" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Nächste Woche" %}</button>
-                    <button type="button" @click="setIn2Weeks" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "In 2 Wochen" %}</button>
+                    <button type="button" @click="setToday" class="px-2.5 py-0.5 text-[12px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Heute" %}</button>
+                    <button type="button" @click="setTomorrow" class="px-2.5 py-0.5 text-[12px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Morgen" %}</button>
+                    <button type="button" @click="setNextWeek" class="px-2.5 py-0.5 text-[12px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Nächste Woche" %}</button>
+                    <button type="button" @click="setIn2Weeks" class="px-2.5 py-0.5 text-[12px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "In 2 Wochen" %}</button>
                 </div>
-                {% for error in form.due_date.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
+                {% if form.due_date.errors %}
+                <ul id="id_due_date-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in form.due_date.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
             </div>
 
             {# Wiedervorlage am #}
             <div x-data="dateQuickButtons" data-target-input="id_remind_at">
                 <label for="id_remind_at" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.remind_at.label }}</label>
-                {{ form.remind_at }}
+                {% aria_field form.remind_at %}
                 {% if form.remind_at.help_text %}
-                <p class="mt-1 text-[11px] text-ink-muted">{{ form.remind_at.help_text }}</p>
+                <p id="id_remind_at-help" class="mt-1 text-[12px] text-ink-muted">{{ form.remind_at.help_text }}</p>
                 {% endif %}
                 <div class="mt-1.5 flex flex-wrap gap-1">
-                    <button type="button" @click="setTomorrow" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Morgen" %}</button>
-                    <button type="button" @click="setNextWeek" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Nächste Woche" %}</button>
-                    <button type="button" @click="setIn2Weeks" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "In 2 Wochen" %}</button>
+                    <button type="button" @click="setTomorrow" class="px-2.5 py-0.5 text-[12px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Morgen" %}</button>
+                    <button type="button" @click="setNextWeek" class="px-2.5 py-0.5 text-[12px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Nächste Woche" %}</button>
+                    <button type="button" @click="setIn2Weeks" class="px-2.5 py-0.5 text-[12px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "In 2 Wochen" %}</button>
                 </div>
-                {% for error in form.remind_at.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
+                {% if form.remind_at.errors %}
+                <ul id="id_remind_at-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in form.remind_at.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
             </div>
 
             {# Wiederholung #}
             <div>
                 <label for="id_recurrence" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.recurrence.label }}</label>
-                {{ form.recurrence }}
+                {% aria_field form.recurrence %}
                 {% if form.recurrence.help_text %}
-                <p class="mt-1 text-[11px] text-ink-muted">{{ form.recurrence.help_text }}</p>
+                <p id="id_recurrence-help" class="mt-1 text-[12px] text-ink-muted">{{ form.recurrence.help_text }}</p>
                 {% endif %}
-                {% for error in form.recurrence.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
+                {% if form.recurrence.errors %}
+                <ul id="id_recurrence-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in form.recurrence.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
             </div>
 
             {# Person-Autocomplete #}
@@ -118,7 +132,7 @@
                                     :data-idx="idx" @click="selectByEvent"
                                     class="w-full text-left px-3 py-2 text-[13px] text-ink hover:bg-accent-light flex items-center justify-between">
                                 <span class="font-semibold" x-text="c.pseudonym"></span>
-                                <span class="text-[11px] text-ink-muted" x-text="c.stage"></span>
+                                <span class="text-[12px] text-ink-muted" x-text="c.stage"></span>
                             </button>
                         </template>
                     </div>
@@ -128,10 +142,12 @@
             {# Zugewiesen an #}
             <div>
                 <label for="id_assigned_to" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.assigned_to.label }}</label>
-                {{ form.assigned_to }}
-                {% for error in form.assigned_to.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
+                {% aria_field form.assigned_to %}
+                {% if form.assigned_to.errors %}
+                <ul id="id_assigned_to-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in form.assigned_to.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
             </div>
         </div>
 

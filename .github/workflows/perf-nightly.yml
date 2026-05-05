@@ -1,0 +1,83 @@
+name: Perf Nightly
+
+# Refs #825: Last-Test-Schicht — Locust gegen die Seed-large-DB. Schlaegt
+# fehl, wenn ein Endpoint sein 95-Perzentil-Budget aus
+# docs/performance-budgets.json reisst, und legt automatisch ein Issue
+# an.
+on:
+  schedule:
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  locust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: anlaufstelle
+          POSTGRES_USER: anlaufstelle
+          POSTGRES_PASSWORD: anlaufstelle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U anlaufstelle"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      POSTGRES_HOST: localhost
+      DJANGO_SETTINGS_MODULE: anlaufstelle.settings.dev
+      ENCRYPTION_KEY: P2N8yY4cVt1BmHZSvNrkSfkDYIJwEFcftRmO4bE-nZM=
+      ANLAUFSTELLE_HOST: http://localhost:8000
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - run: pip install locust
+      - run: python src/manage.py migrate
+      - run: python src/manage.py seed --scale large --flush
+      - name: Run server
+        run: |
+          python src/manage.py runserver 0.0.0.0:8000 --noreload &
+          for i in {1..30}; do
+            if curl -fs http://localhost:8000/health/ >/dev/null; then break; fi
+            sleep 2
+          done
+      - name: Locust headless
+        run: |
+          locust -f locustfile.py \
+            --host="$ANLAUFSTELLE_HOST" \
+            --users 5 --spawn-rate 1 --run-time 2m \
+            --csv=perf --headless --only-summary
+      - name: Check budgets
+        id: budgets
+        run: |
+          python scripts/check_perf_budgets.py perf_stats.csv | tee budget-report.md
+        continue-on-error: true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-results
+          path: |
+            perf_stats.csv
+            perf_failures.csv
+            perf_stats_history.csv
+            budget-report.md
+      - name: Open issue on regression
+        if: steps.budgets.outcome == 'failure'
+        env:
+          TODAY: ${{ github.run_id }}
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "perf: nightly budget regression"
+          content-filepath: budget-report.md
+          labels: perf,test
+      - name: Fail job on regression
+        if: steps.budgets.outcome == 'failure'
+        run: exit 1

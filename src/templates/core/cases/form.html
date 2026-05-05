@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n core_tags %}
 
 {% block title %}{% if is_edit %}{% trans "Fall bearbeiten" %}{% else %}{% trans "Neuer Fall" %}{% endif %} – Anlaufstelle{% endblock %}
 
@@ -18,10 +18,12 @@
             {# Titel #}
             <div>
                 <label for="id_title" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.title.label }} *</label>
-                {{ form.title }}
-                {% for error in form.title.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
+                {% aria_field form.title %}
+                {% if form.title.errors %}
+                <ul id="id_title-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in form.title.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
             </div>
 
             {# Person-Autocomplete #}
@@ -42,6 +44,8 @@
                            @click.away="hideResults"
                            placeholder="{% trans 'Pseudonym eingeben...' %}"
                            aria-label="{% trans 'Person suchen' %}"
+                           aria-required="true"
+                           {% if form.client.errors %}aria-invalid="true" aria-describedby="id_client-error"{% endif %}
                            role="combobox"
                            aria-expanded="false"
                            :aria-expanded="ariaExpanded"
@@ -62,32 +66,38 @@
                                     :class="c.highlightClass"
                                     class="w-full text-left px-3 py-2 text-[13px] text-ink hover:bg-accent-light flex items-center justify-between">
                                 <span class="font-semibold" x-text="c.pseudonym"></span>
-                                <span class="text-[11px] text-ink-muted" x-text="c.stage"></span>
+                                <span class="text-[12px] text-ink-muted" x-text="c.stage"></span>
                             </button>
                         </template>
                     </div>
                 </div>
-                {% for error in form.client.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
+                {% if form.client.errors %}
+                <ul id="id_client-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in form.client.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
             </div>
 
             {# Beschreibung #}
             <div>
                 <label for="id_description" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.description.label }}</label>
-                {{ form.description }}
-                {% for error in form.description.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
+                {% aria_field form.description %}
+                {% if form.description.errors %}
+                <ul id="id_description-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in form.description.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
             </div>
 
             {# Fallverantwortlich #}
             <div>
                 <label for="id_lead_user" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.lead_user.label }}</label>
-                {{ form.lead_user }}
-                {% for error in form.lead_user.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
+                {% aria_field form.lead_user %}
+                {% if form.lead_user.errors %}
+                <ul id="id_lead_user-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in form.lead_user.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
             </div>
         </div>
 

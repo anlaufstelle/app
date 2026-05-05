@@ -45,20 +45,23 @@ docker compose -f docker-compose.prod.yml images web
 
 ### 1.2 Deploy-Schritte
 
+Refs [#802](https://github.com/tobiasnix/anlaufstelle/issues/802) (C-34): Migrationen laufen als separater One-Shot-Job **vor** dem Rolling-Restart. Der Web-Entrypoint macht nur noch `collectstatic` + `gunicorn` — keine Migrationen mehr.
+
 ```bash
 # 1. Neues Image ziehen
 docker compose -f docker-compose.prod.yml pull web
 
-# 2. Stack neu starten (web + caddy, DB bleibt)
-docker compose -f docker-compose.prod.yml up -d web caddy
+# 2. Migrationen als One-Shot-Job ausfuehren (advisory lock haelt
+#    parallele Jobs zurueck, lange RunPython blockiert keine Worker).
+docker compose -f docker-compose.prod.yml run --rm \
+    --entrypoint=/app/docker-migrate.sh web
 
-# Entrypoint fuehrt automatisch aus:
-#   - pg_advisory_lock(1) → migrate --noinput → pg_advisory_unlock(1)
-#   - collectstatic --noinput
-#   - gunicorn start
+# 3. Stack neu starten (web + caddy, DB bleibt).
+#    Entrypoint laeuft jetzt nur noch collectstatic + gunicorn.
+docker compose -f docker-compose.prod.yml up -d web caddy
 ```
 
-**Erwartete Downtime:** ~10-30 Sekunden (Migrationen + Gunicorn-Start).
+**Erwartete Downtime:** ~3-5 Sekunden (nur Gunicorn-Restart). Migrationen laufen vorab im One-Shot-Job — der Web-Container faehrt erst hoch, wenn das Schema bereit ist. Bei mehreren Web-Replicas wartet keine mehr auf den Migrate-Lock.
 
 ### 1.3 Post-Deploy-Verifizierung
 

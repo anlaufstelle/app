@@ -31,12 +31,12 @@
     <form class="flex gap-2 items-end ml-4">
         <input type="hidden" name="period" value="custom">
         <div>
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Von" %}</label>
+            <label class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Von" %}</label>
             <input type="date" name="date_from" value="{{ date_from|date:'Y-m-d' }}"
                    class="bg-surface border border-subtle rounded-[10px] px-2.5 py-1.5 text-[13px] text-ink">
         </div>
         <div>
-            <label class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bis" %}</label>
+            <label class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bis" %}</label>
             <input type="date" name="date_to" value="{{ date_to|date:'Y-m-d' }}"
                    class="bg-surface border border-subtle rounded-[10px] px-2.5 py-1.5 text-[13px] text-ink">
         </div>

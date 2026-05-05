@@ -62,6 +62,28 @@ class FacilityScopedViewMixin:
         return self.request.current_facility
 
 
+class PaginatedListMixin:
+    """Refs #803 (C-36): Eine Stelle fuer ``Paginator(qs, N).get_page(...)``.
+
+    Vorher haben drei Listen-Views (clients, cases, audit) den Paginator
+    direkt gebaut, mit unterschiedlichen Page-Sizes (25 vs. 50) und
+    teilweise inline-importiertem ``safe_page_param``. Mit dem Mixin
+    haengt die Page-Size am View, der Paginator wird einmal gebaut und
+    durch ``safe_page_param`` gegen ``page=999999``-Angriffe geschuetzt.
+    """
+
+    page_size: int | None = None
+
+    def paginate(self, queryset, request):
+        from django.core.paginator import Paginator
+
+        from core.constants import DEFAULT_PAGE_SIZE
+        from core.views.utils import safe_page_param
+
+        size = self.page_size if self.page_size is not None else DEFAULT_PAGE_SIZE
+        return Paginator(queryset, size).get_page(safe_page_param(request))
+
+
 class HTMXPartialMixin:
     """Rendert je nach ``HX-Request``-Header ein Partial- oder Full-Page-
     Template. Erwartet ``partial_template_name`` und ``template_name`` als

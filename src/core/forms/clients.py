@@ -31,5 +31,5 @@ class ClientForm(forms.ModelForm):
         if self.instance and self.instance.pk:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
-            raise ValidationError(_("Ein Klientel mit diesem Pseudonym existiert bereits in dieser Einrichtung."))
+            raise ValidationError(_("Eine Person mit diesem Pseudonym existiert bereits in dieser Einrichtung."))
         return pseudonym

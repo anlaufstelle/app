@@ -74,7 +74,7 @@ class DocumentType(models.Model):
         null=True,
         choices=CONTACT_STAGE_CHOICES,
         verbose_name=_("Mindest-Kontaktstufe"),
-        help_text=_("Mindest-Kontaktstufe des Klientel für diesen Dokumentationstyp"),
+        help_text=_("Mindest-Kontaktstufe der Person für diesen Dokumentationstyp"),
     )
     retention_days = models.IntegerField(
         blank=True,

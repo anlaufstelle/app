@@ -9,6 +9,31 @@ from django.utils.html import format_html
 register = template.Library()
 
 
+@register.simple_tag
+def aria_field(field):
+    """Refs #809 (C-42): rendert ein Form-Feld mit ARIA-Fehler-Annotation.
+
+    Setzt ``aria-invalid="true"`` falls Validierungsfehler vorliegen und
+    verknuepft via ``aria-describedby`` mit den Help-/Error-Spans, deren
+    IDs ``<field-id>-help`` und ``<field-id>-error`` sind. Bei
+    Pflichtfeldern setzt das Tag zusaetzlich ``aria-required="true"`` —
+    das `*`-Sternchen im Label bleibt visuell, ist aber nicht der
+    einzige Indikator (WCAG 1.3.1).
+    """
+    attrs: dict[str, str] = {}
+    described_by: list[str] = []
+    if getattr(field.field, "help_text", ""):
+        described_by.append(f"{field.id_for_label}-help")
+    if field.errors:
+        described_by.append(f"{field.id_for_label}-error")
+        attrs["aria-invalid"] = "true"
+    if described_by:
+        attrs["aria-describedby"] = " ".join(described_by)
+    if field.field.required:
+        attrs["aria-required"] = "true"
+    return field.as_widget(attrs=attrs)
+
+
 @register.filter
 def get_item(container, key):
     """Dict-Lookup via Key im Template (z.B. ``existing_attachments|get_item:slug``).
@@ -154,7 +179,7 @@ def verb_badge_classes(verb):
 
 # --- Activity target type label (German) ---
 _TARGET_TYPE_LABEL_MAP = {
-    "client": "Klientel",
+    "client": "Person",
     "event": "Kontakt",
     "workitem": "Aufgabe",
     "case": "Fall",

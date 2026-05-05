@@ -3,24 +3,24 @@
 import logging
 from urllib.parse import urlencode
 
-from django.core.paginator import Paginator
 from django.shortcuts import get_object_or_404, render
 from django.views import View
 
+from core.constants import AUDIT_PAGE_SIZE
 from core.models import AuditLog
 from core.models.user import User
 from core.utils.formatting import parse_date
-from core.views.mixins import AdminRequiredMixin, HTMXPartialMixin
-from core.views.utils import safe_page_param
+from core.views.mixins import AdminRequiredMixin, HTMXPartialMixin, PaginatedListMixin
 
 logger = logging.getLogger(__name__)
 
 
-class AuditLogListView(AdminRequiredMixin, HTMXPartialMixin, View):
+class AuditLogListView(AdminRequiredMixin, PaginatedListMixin, HTMXPartialMixin, View):
     """Audit log list for admins with filters and pagination."""
 
     template_name = "core/audit/list.html"
     partial_template_name = "core/audit/partials/table.html"
+    page_size = AUDIT_PAGE_SIZE
 
     def get(self, request):
         facility = request.current_facility
@@ -48,9 +48,7 @@ class AuditLogListView(AdminRequiredMixin, HTMXPartialMixin, View):
         if date_to:
             queryset = queryset.filter(timestamp__date__lte=date_to)
 
-        # Pagination
-        paginator = Paginator(queryset, 50)
-        page = paginator.get_page(safe_page_param(request))
+        page = self.paginate(queryset, request)
 
         # Users of the facility for dropdown
         facility_users = User.objects.filter(facility=facility).order_by("last_name", "first_name", "username")

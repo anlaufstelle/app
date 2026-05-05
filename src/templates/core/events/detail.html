@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load i18n core_tags history_tags %}
 
-{% block title %}{{ event.document_type.name }} – {{ event.occurred_at|date:"d.m.Y H:i" }} – Anlaufstelle{% endblock %}
+{% block title %}{{ event.document_type.name }} – {{ event.occurred_at|date:"DATETIME_FORMAT" }} – Anlaufstelle{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl">
@@ -9,7 +9,7 @@
     <div class="flex items-center justify-between mb-6">
         <div>
             <h1 class="text-[22px] font-bold text-ink">{{ event.document_type.name }}</h1>
-            <p class="text-sm text-ink-muted mt-1">{{ event.occurred_at|date:"d.m.Y H:i" }}</p>
+            <p class="text-sm text-ink-muted mt-1">{{ event.occurred_at|date:"DATETIME_FORMAT" }}</p>
         </div>
         {% if user.is_staff_or_above or event.created_by == user or user.is_lead_or_admin %}
         <div class="flex space-x-2">
@@ -76,7 +76,7 @@
             </div>
             <div>
                 <dt class="text-ink-muted">{% trans "Erstellt am" %}</dt>
-                <dd class="font-medium">{{ event.created_at|date:"d.m.Y H:i" }}</dd>
+                <dd class="font-medium">{{ event.created_at|date:"DATETIME_FORMAT" }}</dd>
             </div>
             {% if event.case %}
             <div>
@@ -92,7 +92,7 @@
     {# Felder #}
     {% if fields_display %}
     <div class="bg-surface border border-subtle rounded-[10px] p-4 mb-4">
-        <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Erfasste Daten" %}</h2>
+        <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Erfasste Daten" %}</h2>
         <dl class="space-y-3">
             {% for field in fields_display %}
             <div>
@@ -125,7 +125,7 @@
                                         </a>
                                         <span class="text-ink-muted">({{ prev.file_size_display }})</span>
                                         {% if prev.superseded_at %}
-                                        <span class="text-ink-muted">— {% trans "ersetzt" %} {{ prev.superseded_at|date:"d.m.Y H:i" }}</span>
+                                        <span class="text-ink-muted">— {% trans "ersetzt" %} {{ prev.superseded_at|date:"DATETIME_FORMAT" }}</span>
                                         {% endif %}
                                     </li>
                                     {% endfor %}
@@ -154,13 +154,13 @@
     {# History #}
     {% if history %}
     <div class="bg-surface border border-subtle rounded-[10px] p-4">
-        <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Änderungshistorie" %}</h2>
+        <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Änderungshistorie" %}</h2>
         <div class="space-y-3">
             {% for entry in history %}
             {% compute_diff entry user=request.user as diff %}
             <div x-data="historyEntryDetails">
                 <div class="flex items-start space-x-3 text-sm">
-                    <span class="text-ink-muted font-mono whitespace-nowrap">{{ entry.changed_at|date:"d.m.Y H:i" }}</span>
+                    <span class="text-ink-muted font-mono whitespace-nowrap">{{ entry.changed_at|date:"DATETIME_FORMAT" }}</span>
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {% if entry.action == 'create' %}bg-green-100 text-green-800{% elif entry.action == 'update' %}bg-blue-100 text-blue-800{% else %}bg-red-100 text-red-800{% endif %}">
                         {{ entry.get_action_display }}
                     </span>
@@ -188,7 +188,7 @@
                     {% elif diff.action == "update" %}
                     <table class="w-full text-left">
                         <thead>
-                            <tr class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">
+                            <tr class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">
                                 <th class="pb-1 pr-2">{% trans "Feld" %}</th>
                                 <th class="pb-1 pr-2">{% trans "Vorher" %}</th>
                                 <th class="pb-1">{% trans "Nachher" %}</th>

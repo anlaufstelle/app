@@ -30,7 +30,7 @@ class Case(SoftDeletableModel):
         "core.Client",
         on_delete=models.PROTECT,
         related_name="cases",
-        verbose_name=_("Klientel"),
+        verbose_name=_("Person"),
         help_text=_(
             "Pflichtfeld: Jeder Fall ist einer Person zugeordnet. "
             "PROTECT verhindert versehentliches Löschen einer Person mit aktiven Fällen."

@@ -34,8 +34,8 @@ class RecentClientVisit(models.Model):
         indexes = [
             models.Index(fields=["user", "facility", "-visited_at"]),
         ]
-        verbose_name = _("Klientel-Besuch")
-        verbose_name_plural = _("Klientel-Besuche")
+        verbose_name = _("Personen-Besuch")
+        verbose_name_plural = _("Personen-Besuche")
 
     def __str__(self):
         return f"RecentClientVisit({self.user}, {self.client})"

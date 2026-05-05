@@ -26,7 +26,7 @@
             </div>
             <div class="flex justify-between">
                 <dt class="text-ink-muted">{% trans "Zeitpunkt" %}</dt>
-                <dd class="font-medium">{{ event.occurred_at|date:"d.m.Y H:i" }}</dd>
+                <dd class="font-medium">{{ event.occurred_at|date:"DATETIME_FORMAT" }}</dd>
             </div>
             <div class="flex justify-between">
                 <dt class="text-ink-muted">{% trans "Person" %}</dt>

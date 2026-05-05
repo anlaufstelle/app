@@ -5,7 +5,7 @@
         {# Personen #}
         {% if clients %}
         <div class="mb-6">
-            <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Personen" %} ({{ clients|length }})</h2>
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Personen" %} ({{ clients|length }})</h2>
             <div class="bg-surface border border-subtle rounded-[10px] divide-y divide-subtle">
                 {% for client in clients %}
                 <a href="{% url 'core:client_detail' client.pk %}" class="block px-4 py-3 hover:bg-canvas">
@@ -22,7 +22,7 @@
         {# Ereignisse #}
         {% if events %}
         <div class="mb-6">
-            <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Ereignisse" %} ({{ events|length }})</h2>
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Ereignisse" %} ({{ events|length }})</h2>
             <div class="space-y-2">
                 {% for event in events %}
                 {% include "components/_event_card.html" with event=event show_date=True show_client=True %}
@@ -34,7 +34,7 @@
         {# Ähnliche Pseudonyme (Fuzzy) #}
         {% if similar_clients %}
         <div class="mb-6">
-            <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Ähnliche Pseudonyme" %} ({{ similar_clients|length }})</h2>
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Ähnliche Pseudonyme" %} ({{ similar_clients|length }})</h2>
             <p class="text-xs text-ink-muted mb-2">{% trans "Tippfehler-tolerante Treffer – könnten gemeint sein." %}</p>
             <div class="bg-surface border border-subtle rounded-[10px] divide-y divide-subtle">
                 {% for client in similar_clients %}

@@ -2,7 +2,7 @@
 
 {# Zeitraum-Anzeige #}
 <p class="text-[13px] text-ink-muted mb-4">
-    {% trans "Zeitraum" %}: <span class="font-mono">{{ date_from|date:"d.m.Y" }} – {{ date_to|date:"d.m.Y" }}</span>
+    {% trans "Zeitraum" %}: <span class="font-mono">{{ date_from|date:"DATE_FORMAT" }} – {{ date_to|date:"DATE_FORMAT" }}</span>
 </p>
 
 {# KPI-Karten (Design: 4 Mono-Number-Cards) #}
@@ -10,22 +10,22 @@
     <div class="bg-surface rounded-[10px] border border-subtle p-5">
         <div class="text-[32px] font-bold text-ink font-mono leading-none">{{ stats.total_contacts }}</div>
         <div class="text-[13px] font-semibold text-ink-soft mt-2">{% trans "Gesamtkontakte" %}</div>
-        <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Dokumentierte Einträge" %}</div>
+        <div class="text-[12px] text-ink-muted mt-0.5">{% trans "Dokumentierte Einträge" %}</div>
     </div>
     <div class="bg-surface rounded-[10px] border border-subtle p-5">
         <div class="text-[32px] font-bold text-ink font-mono leading-none">{{ stats.by_contact_stage.anonym }}</div>
         <div class="text-[13px] font-semibold text-ink-soft mt-2">{% trans "Anonym" %}</div>
-        <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Ohne Pseudonym" %}</div>
+        <div class="text-[12px] text-ink-muted mt-0.5">{% trans "Ohne Pseudonym" %}</div>
     </div>
     <div class="bg-surface rounded-[10px] border border-subtle p-5">
         <div class="text-[32px] font-bold text-ink font-mono leading-none">{{ stats.by_contact_stage.identifiziert }}</div>
         <div class="text-[13px] font-semibold text-ink-soft mt-2">{% trans "Identifiziert" %}</div>
-        <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Mit Pseudonym" %}</div>
+        <div class="text-[12px] text-ink-muted mt-0.5">{% trans "Mit Pseudonym" %}</div>
     </div>
     <div class="bg-surface rounded-[10px] border border-subtle p-5">
         <div class="text-[32px] font-bold text-ink font-mono leading-none">{{ stats.by_contact_stage.qualifiziert }}</div>
         <div class="text-[13px] font-semibold text-ink-soft mt-2">{% trans "Qualifiziert" %}</div>
-        <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Mit erweit. Angaben" %}</div>
+        <div class="text-[12px] text-ink-muted mt-0.5">{% trans "Mit erweit. Angaben" %}</div>
     </div>
 </div>
 
@@ -41,7 +41,7 @@
         <div class="text-[28px] font-bold text-ink font-mono leading-none">{{ stats.unique_clients }}</div>
         {% endif %}
         <div class="text-[13px] font-semibold text-ink-soft mt-2">{% trans "Unterschiedliche Personen" %}</div>
-        <div class="text-[11px] text-ink-muted mt-0.5">{% trans "Personen mit mindestens einem Kontakt im Zeitraum" %}</div>
+        <div class="text-[12px] text-ink-muted mt-0.5">{% trans "Personen mit mindestens einem Kontakt im Zeitraum" %}</div>
     </div>
     <div class="bg-surface rounded-[10px] border border-subtle p-5">
         {% if stats.top_clients %}
@@ -92,7 +92,7 @@
             <div class="relative" style="height: 300px;">
                 <canvas id="chart-contacts"></canvas>
             </div>
-            <div class="flex gap-4 mt-2 text-[11px] text-ink-muted" x-show="hasSources">
+            <div class="flex gap-4 mt-2 text-[12px] text-ink-muted" x-show="hasSources">
                 <span class="flex items-center gap-1">
                     <span class="inline-block w-2 h-2 rounded-full bg-accent"></span>
                     {% trans "Live-Daten" %}
@@ -133,9 +133,9 @@
         <table class="min-w-full divide-y divide-subtle">
             <thead class="bg-canvas">
                 <tr>
-                    <th class="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Typ" %}</th>
-                    <th class="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Kategorie" %}</th>
-                    <th class="px-4 py-2.5 text-right text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Anzahl" %}</th>
+                    <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Typ" %}</th>
+                    <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Kategorie" %}</th>
+                    <th class="px-4 py-2.5 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Anzahl" %}</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-subtle">
@@ -157,7 +157,7 @@
                 <span class="text-[13px] font-semibold text-ink">{{ row.name }}</span>
                 <span class="text-[13px] font-bold text-ink font-mono">{{ row.count }}</span>
             </div>
-            <p class="text-[11px] text-ink-muted mt-0.5">{{ row.category }}</p>
+            <p class="text-[12px] text-ink-muted mt-0.5">{{ row.category }}</p>
         </div>
         {% endfor %}
     </div>
@@ -175,8 +175,8 @@
         <table class="min-w-full divide-y divide-subtle">
             <thead class="bg-canvas">
                 <tr>
-                    <th class="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Altersgruppe" %}</th>
-                    <th class="px-4 py-2.5 text-right text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Anzahl" %}</th>
+                    <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Altersgruppe" %}</th>
+                    <th class="px-4 py-2.5 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Anzahl" %}</th>
                 </tr>
             </thead>
             <tbody class="divide-y divide-subtle">

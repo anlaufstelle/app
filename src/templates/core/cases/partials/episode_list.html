@@ -1,7 +1,7 @@
 {% load i18n %}
 
 <div>
-    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Episoden" %}</h2>
+    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Episoden" %}</h2>
 
     {% if case.status == 'open' %}
     <a href="{% url 'core:episode_create' case_pk=case.pk %}"
@@ -18,10 +18,10 @@
                 <div>
                     <h3 class="font-medium text-ink">{{ episode.title }}</h3>
                     <p class="text-sm text-ink-muted mt-1">
-                        {{ episode.started_at|date:"d.m.Y" }}
+                        {{ episode.started_at|date:"DATE_FORMAT" }}
                         –
                         {% if episode.ended_at %}
-                            {{ episode.ended_at|date:"d.m.Y" }}
+                            {{ episode.ended_at|date:"DATE_FORMAT" }}
                         {% else %}
                             <span class="text-green-600">{% trans "laufend" %}</span>
                         {% endif %}

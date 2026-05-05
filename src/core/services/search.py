@@ -4,8 +4,8 @@ import logging
 
 from django.contrib.postgres.search import TrigramSimilarity
 
-from core.models import Client, DocumentTypeField, Event, FieldTemplate
-from core.services.sensitivity import allowed_sensitivities_for_user, user_can_see_field
+from core.models import Client, Event
+from core.services.sensitivity import allowed_sensitivities_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +14,12 @@ DEFAULT_TRIGRAM_THRESHOLD = 0.3
 
 def search_clients_and_events(facility, user, query, max_clients=20, max_events=20):
     """Search clients and events within a facility.
+
+    Refs #827 (C-60): Volltextsuche laeuft gegen die ``Event.search_text``-
+    Spalte (im create/update-Pfad gepflegt, GIN-trgm-Index), nicht mehr
+    gegen ``data_json__icontains``. Verschluesselte und ELEVATED/HIGH-
+    Felder sind im Suchindex bewusst nicht enthalten — der Sensitivity-
+    Filter geschieht damit beim Schreiben, nicht beim Lesen.
 
     Returns (clients, events) tuple.
     """
@@ -37,52 +43,14 @@ def search_clients_and_events(facility, user, query, max_clients=20, max_events=
         document_type__sensitivity__in=allowed_sens,
     ).select_related("document_type", "client")[:max_events]
 
-    encrypted_field_slugs = set(
-        FieldTemplate.objects.for_facility(facility).filter(is_encrypted=True).values_list("slug", flat=True)
-    )
-
-    # Build slug → field sensitivity mapping for each document type
-    # so we can exclude fields the user may not see.
-    _dt_field_sensitivity_cache: dict[str, dict[str, str]] = {}
-
-    def _get_field_sensitivities(doc_type):
-        dt_id = str(doc_type.pk)
-        if dt_id not in _dt_field_sensitivity_cache:
-            _dt_field_sensitivity_cache[dt_id] = dict(
-                DocumentTypeField.objects.filter(document_type=doc_type)
-                .select_related("field_template")
-                .values_list("field_template__slug", "field_template__sensitivity")
-            )
-        return _dt_field_sensitivity_cache[dt_id]
-
-    events_by_data = []
-    candidates = list(
+    events_by_data = list(
         Event.objects.filter(
             facility=facility,
             is_deleted=False,
-            data_json__icontains=query,
+            search_text__icontains=query,
             document_type__sensitivity__in=allowed_sens,
-        ).select_related("document_type", "client")[: max_events * 3]
+        ).select_related("document_type", "client")[:max_events]
     )
-    q_lower = query.lower()
-    for event in candidates:
-        data = event.data_json or {}
-        field_sensitivities = _get_field_sensitivities(event.document_type)
-        for key, value in data.items():
-            if key in encrypted_field_slugs:
-                continue
-            # Check field-level sensitivity: skip fields the user may not see
-            field_sens = field_sensitivities.get(key, "")
-            if not user_can_see_field(user, event.document_type.sensitivity, field_sens):
-                continue
-            if isinstance(value, dict):
-                continue
-            text = ", ".join(str(v) for v in value) if isinstance(value, list) else str(value)
-            if q_lower in text.lower():
-                events_by_data.append(event)
-                break
-        if len(events_by_data) >= max_events:
-            break
 
     seen_ids = set()
     combined = []

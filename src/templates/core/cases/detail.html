@@ -22,7 +22,7 @@
             <div class="flex items-center gap-2 flex-wrap">
                 {% include "core/cases/partials/status_badge.html" with case=case %}
                 {% if case.client %}
-                <a href="{% url 'core:client_detail' case.client.pk %}" class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-canvas border border-subtle text-accent hover:underline">
+                <a href="{% url 'core:client_detail' case.client.pk %}" class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-accent hover:underline">
                     {{ case.client.pseudonym }}
                 </a>
                 {% endif %}
@@ -89,27 +89,27 @@
 <div class="bg-surface border border-subtle rounded-[10px] p-4 mb-5">
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div>
-            <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Fallverantwortlich" %}</div>
+            <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Fallverantwortlich" %}</div>
             <p class="text-[13px] font-semibold text-ink mt-1">{{ case.lead_user|default:"–" }}</p>
         </div>
         <div>
-            <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt am" %}</div>
-            <p class="text-[13px] font-mono text-ink mt-1">{{ case.created_at|date:"d.m.Y H:i" }}</p>
+            <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt am" %}</div>
+            <p class="text-[13px] font-mono text-ink mt-1">{{ case.created_at|date:"DATETIME_FORMAT" }}</p>
         </div>
         <div>
-            <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt von" %}</div>
+            <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt von" %}</div>
             <p class="text-[13px] font-semibold text-ink mt-1">{{ case.created_by|default:"–" }}</p>
         </div>
         {% if case.closed_at %}
         <div>
-            <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Geschlossen am" %}</div>
-            <p class="text-[13px] font-mono text-ink mt-1">{{ case.closed_at|date:"d.m.Y H:i" }}</p>
+            <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Geschlossen am" %}</div>
+            <p class="text-[13px] font-mono text-ink mt-1">{{ case.closed_at|date:"DATETIME_FORMAT" }}</p>
         </div>
         {% endif %}
     </div>
     {% if case.description %}
     <div class="mt-4 pt-4 border-t border-subtle">
-        <div class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Beschreibung" %}</div>
+        <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Beschreibung" %}</div>
         <p class="mt-1 text-[13px] text-ink-soft leading-relaxed whitespace-pre-wrap">{{ case.description }}</p>
     </div>
     {% endif %}
@@ -118,7 +118,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     {# Events #}
     <div class="lg:col-span-2">
-        <h2 class="text-[11px] font-bold text-ink-muted uppercase tracking-wider mb-3">{% trans "Kontakte" %}</h2>
+        <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-3">{% trans "Kontakte" %}</h2>
         <div id="case-event-list" aria-live="polite" role="region">
             {% include "core/cases/partials/event_list.html" %}
         </div>

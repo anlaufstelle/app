@@ -14,7 +14,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
-from core.constants import DEFAULT_PAGE_SIZE, RATELIMIT_MUTATION
+from core.constants import RATELIMIT_MUTATION
 from core.forms.clients import ClientForm
 from core.models import AuditLog, Client, Event, WorkItem
 from core.models import Case as CaseModel
@@ -28,13 +28,14 @@ from core.views.mixins import (
     AssistantOrAboveRequiredMixin,
     HTMXPartialMixin,
     LeadOrAdminRequiredMixin,
+    PaginatedListMixin,
     StaffRequiredMixin,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class ClientListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
+class ClientListView(AssistantOrAboveRequiredMixin, PaginatedListMixin, HTMXPartialMixin, View):
     """Client list with search, filtering and pagination."""
 
     template_name = "core/clients/list.html"
@@ -58,13 +59,7 @@ class ClientListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
 
         qs = qs.annotate(last_contact=Max("events__occurred_at")).order_by("pseudonym")
 
-        # Pagination
-        from django.core.paginator import Paginator
-
-        from core.views.utils import safe_page_param
-
-        paginator = Paginator(qs, DEFAULT_PAGE_SIZE)
-        clients = paginator.get_page(safe_page_param(request))
+        clients = self.paginate(qs, request)
 
         pagination_params = urlencode({k: v for k, v in [("q", q), ("stage", stage), ("age", age)] if v})
 
@@ -214,10 +209,8 @@ class ClientAutocompleteView(AssistantOrAboveRequiredMixin, View):
 
         q = request.GET.get("q", "").strip()
 
-        qs = Client.objects.filter(
-            facility=request.current_facility,
-            is_active=True,
-        )
+        # Refs #819 (R-005): FacilityScopedManager statt Inline-Facility-Filter.
+        qs = Client.objects.for_facility(request.current_facility).filter(is_active=True)
         if q:
             qs = qs.filter(pseudonym__icontains=q)
 

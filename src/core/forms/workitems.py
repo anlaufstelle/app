@@ -3,6 +3,7 @@
 from datetime import date
 
 from django import forms
+from django.utils.formats import date_format
 from django.utils.translation import gettext_lazy as _
 
 from core.forms.widgets import INPUT_CSS
@@ -102,7 +103,7 @@ class WorkItemForm(forms.ModelForm):
         # Browser-Sprache. Wir reichen lokalisierte Custom-Messages als
         # data-Attribute durch, ein DOMContentLoaded-Listener in
         # ``alpine-components.js`` ruft damit ``setCustomValidity`` auf.
-        max_str = max_workitem_date().strftime("%d.%m.%Y")
+        max_str = date_format(max_workitem_date(), "DATE_FORMAT")
         too_late = _("Das Datum darf höchstens am %(max)s liegen.") % {"max": max_str}
         too_early = _("Das Datum darf nicht in der Vergangenheit liegen.")
         for field_name in ("due_date", "remind_at"):
@@ -120,7 +121,7 @@ class WorkItemForm(forms.ModelForm):
                 facility=self.facility,
             ).get()
         except Client.DoesNotExist as exc:
-            raise forms.ValidationError(_("Ungültige Klientel-ID")) from exc
+            raise forms.ValidationError(_("Ungültige Person-ID")) from exc
 
     def clean(self):
         cleaned = super().clean() or {}
@@ -130,7 +131,7 @@ class WorkItemForm(forms.ModelForm):
             raise forms.ValidationError({"remind_at": _("Die Erinnerung muss vor oder am Fälligkeitstag liegen.")})
 
         max_date = max_workitem_date()
-        max_str = max_date.strftime("%d.%m.%Y")
+        max_str = date_format(max_date, "DATE_FORMAT")
         if due_date and due_date > max_date:
             raise forms.ValidationError(
                 {"due_date": _("Das Fälligkeitsdatum darf höchstens am %(max)s liegen.") % {"max": max_str}}

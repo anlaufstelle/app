@@ -847,7 +847,7 @@ class TestMinContactStageGate:
             category=DocumentType.Category.SERVICE,
             min_contact_stage="qualified",
         )
-        with pytest.raises(Exception, match="Klientel ausgewählt werden"):
+        with pytest.raises(Exception, match="Person ausgewählt werden"):
             create_event(
                 facility=facility,
                 user=staff_user,

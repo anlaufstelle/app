@@ -101,6 +101,66 @@ def _build_prior_versions(attachment, predecessor_index):
     return prior_versions
 
 
+def build_attachment_context(event):
+    """Refs #804 (C-37): pro File-Slug eine Liste aktiver Anhaenge bauen.
+
+    Frueher inline in :class:`EventUpdateView.get` (~26 LOC). Service-Layer-
+    Move nach ADR-002 — Views sind nur Orchestrierung. Liefert ein Dict
+    ``{slug: [{entry_id, attachment_id, filename, size, sort_order}, ...]}``,
+    wobei legacy ``__file__``-Marker via :func:`normalize_file_marker` zu
+    Single-Entry-Listen aufgeloest werden. Geloeschte Anhaenge
+    (``deleted_at``) werden gefiltert.
+    """
+    if not event.data_json:
+        return {}
+
+    existing_attachments_by_slug: dict[str, list[dict]] = {}
+    for slug, value in event.data_json.items():
+        entries_meta = normalize_file_marker(value)
+        if not entries_meta:
+            continue
+        entries = []
+        for entry in entries_meta:
+            att = event.attachments.filter(pk=entry["id"]).first()
+            if not att or att.deleted_at is not None:
+                continue
+            entries.append(
+                {
+                    "entry_id": str(att.entry_id),
+                    "attachment_id": str(att.pk),
+                    "filename": get_original_filename(att),
+                    "size": format_file_size(att.file_size),
+                    "sort_order": att.sort_order,
+                }
+            )
+        if entries:
+            existing_attachments_by_slug[slug] = entries
+    return existing_attachments_by_slug
+
+
+def resolve_default_document_type(facility):
+    """Refs #804 (C-37): Default-DocumentType einer Facility.
+
+    Liefert ``(default_doc_type, initial)`` — ``default_doc_type`` ist die
+    aktive Standard-Dokumentart der Facility-Settings (oder ``None``, wenn
+    keine gesetzt ist oder sie zwischenzeitlich deaktiviert/verschoben
+    wurde). ``initial`` ist ein Dict, das in das ``EventMetaForm`` geht
+    (``{"document_type": <pk>}`` oder leer).
+    """
+    initial: dict = {}
+    try:
+        settings = facility.settings
+    except facility._meta.get_field("settings").related_model.DoesNotExist:
+        return None, initial
+    if not settings.default_document_type_id:
+        return None, initial
+    default_doc_type = settings.default_document_type
+    if not default_doc_type.is_active or default_doc_type.facility != facility:
+        return None, initial
+    initial["document_type"] = default_doc_type.pk
+    return default_doc_type, initial
+
+
 def build_event_detail_context(event, user):
     """Build the template context dict for :class:`EventDetailView`.
 
@@ -180,7 +240,25 @@ def build_event_detail_context(event, user):
             }
         )
 
-    history = event.history.select_related("changed_by").order_by("-changed_at")
+    # Refs #824 (C-57): Alle History-Entries gehoeren zum selben Event und
+    # damit zum selben DocumentType. Wir bauen den Slug-Info-Lookup einmal
+    # vor und haengen ihn an jeden Entry — das Template-Tag ``compute_diff``
+    # nutzt ``entry._slug_info`` per Vorrang vor seinem eigenen
+    # ``_build_slug_info``-Fallback und spart pro Entry einen Field-Query.
+    shared_slug_info = {}
+    for dtf in event.document_type.fields.select_related("field_template"):
+        ft = dtf.field_template
+        shared_slug_info[ft.slug] = {
+            "name": ft.name,
+            "is_encrypted": ft.is_encrypted,
+            "sensitivity": ft.sensitivity,
+        }
+    history = list(
+        event.history.select_related("changed_by").order_by("-changed_at")
+    )
+    for entry in history:
+        entry.event = event
+        entry._slug_info = shared_slug_info
 
     return {
         "event": event,

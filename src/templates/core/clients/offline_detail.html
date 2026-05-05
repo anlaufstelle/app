@@ -46,14 +46,14 @@
 
             <template x-if="data.client.notes">
                 <div class="bg-surface border border-subtle rounded-[10px] p-4 mb-5">
-                    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Notizen" %}</h2>
+                    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Notizen" %}</h2>
                     <p class="text-sm text-ink-soft whitespace-pre-wrap" x-text="data.client.notes"></p>
                 </div>
             </template>
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="lg:col-span-2">
-                    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">
+                    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">
                         {% trans "Kontakt-Chronik" %}
                     </h2>
                     <template x-if="noEvents">
@@ -98,7 +98,7 @@
                 </div>
 
                 <div>
-                    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Fälle" %}</h2>
+                    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Fälle" %}</h2>
                     <template x-if="noCases">
                         <p class="text-sm text-ink-muted">{% trans "Keine Fälle" %}</p>
                     </template>
@@ -113,7 +113,7 @@
                         </template>
                     </div>
 
-                    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3 mt-6">{% trans "Aufgaben" %}</h2>
+                    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3 mt-6">{% trans "Aufgaben" %}</h2>
                     <template x-if="noWorkitems">
                         <p class="text-sm text-ink-muted">{% trans "Keine offenen Aufgaben" %}</p>
                     </template>

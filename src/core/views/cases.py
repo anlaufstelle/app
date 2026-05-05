@@ -9,7 +9,6 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
@@ -17,7 +16,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
-from core.constants import DEFAULT_PAGE_SIZE, RATELIMIT_MUTATION
+from core.constants import RATELIMIT_MUTATION
 from core.forms.cases import CaseForm
 from core.models import Case, Event
 from core.services.cases import (
@@ -30,8 +29,12 @@ from core.services.cases import (
 )
 from core.services.clients import get_client_or_none
 from core.services.sensitivity import get_visible_event_or_404
-from core.views.mixins import HTMXPartialMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
-from core.views.utils import safe_page_param
+from core.views.mixins import (
+    HTMXPartialMixin,
+    LeadOrAdminRequiredMixin,
+    PaginatedListMixin,
+    StaffRequiredMixin,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +68,7 @@ def _get_case_event_context(case, facility, user):
     return {"events": events, "unassigned_events": unassigned_events}
 
 
-class CaseListView(StaffRequiredMixin, HTMXPartialMixin, View):
+class CaseListView(StaffRequiredMixin, PaginatedListMixin, HTMXPartialMixin, View):
     """Case list with search, filter by status and pagination."""
 
     template_name = "core/cases/list.html"
@@ -85,8 +88,7 @@ class CaseListView(StaffRequiredMixin, HTMXPartialMixin, View):
 
         qs = qs.select_related("client", "lead_user").order_by("-created_at")
 
-        paginator = Paginator(qs, DEFAULT_PAGE_SIZE)
-        cases = paginator.get_page(safe_page_param(request))
+        cases = self.paginate(qs, request)
 
         pagination_params = urlencode({k: v for k, v in [("q", q), ("status", status)] if v})
 

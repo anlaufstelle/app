@@ -6,7 +6,7 @@
     <div class="flex items-center justify-between bg-surface border border-subtle rounded-[10px] p-3">
         <a href="{% url 'core:event_detail' event.pk %}" class="flex-1 hover:text-accent">
             <div class="flex items-center space-x-3">
-                <span class="text-sm text-ink-muted font-mono">{{ event.occurred_at|date:"d.m.Y H:i" }}</span>
+                <span class="text-sm text-ink-muted font-mono">{{ event.occurred_at|date:"DATETIME_FORMAT" }}</span>
                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-accent-light text-accent">
                     {{ event.document_type.name }}
                 </span>
@@ -40,7 +40,7 @@
         {% csrf_token %}
         <select name="event_id" class="flex-1 border border-subtle rounded-[10px] px-3 py-2 text-sm">
             {% for event in unassigned_events %}
-            <option value="{{ event.pk }}">{{ event.occurred_at|date:"d.m.Y H:i" }} – {{ event.document_type.name }}</option>
+            <option value="{{ event.pk }}">{{ event.occurred_at|date:"DATETIME_FORMAT" }} – {{ event.document_type.name }}</option>
             {% endfor %}
         </select>
         <button type="submit" class="inline-flex items-center px-3 py-2 bg-accent text-white text-sm rounded-md hover:bg-accent">

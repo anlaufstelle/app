@@ -17,14 +17,14 @@
     <div class="bg-surface border border-subtle rounded-[10px] p-4 space-y-4">
         <div class="grid grid-cols-2 gap-4">
             <div>
-                <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Typ" %}</span>
+                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Typ" %}</span>
                 <p class="text-sm font-medium">{{ workitem.get_item_type_display }}</p>
             </div>
             <div>
-                <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Status" %}</span>
+                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Status" %}</span>
                 <p class="text-sm font-medium">{{ workitem.get_status_display }}</p>
                 {% if workitem.completed_at %}
-                <p class="text-xs text-ink-muted mt-1">{% trans "Abgeschlossen am:" %} {{ workitem.completed_at|date:"d.m.Y H:i" }}</p>
+                <p class="text-xs text-ink-muted mt-1">{% trans "Abgeschlossen am:" %} {{ workitem.completed_at|date:"DATETIME_FORMAT" }}</p>
                 {% endif %}
                 {% if user.is_lead_or_admin or workitem.created_by == user or workitem.assigned_to == user %}
                 <div class="flex items-center space-x-2 mt-2">
@@ -67,7 +67,7 @@
                 {% endif %}
             </div>
             <div>
-                <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Priorität" %}</span>
+                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Priorität" %}</span>
                 <p class="text-sm font-medium">
                     {% if workitem.priority == "urgent" %}
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">{% trans "Dringend" %}</span>
@@ -79,11 +79,11 @@
                 </p>
             </div>
             <div>
-                <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zu erledigen bis" %}</span>
+                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zu erledigen bis" %}</span>
                 {% due_date_info workitem as ddi %}
                 {% if ddi %}
                 <p class="text-sm font-medium {{ ddi.css_class }}">{{ ddi.text }}</p>
-                <p class="text-xs text-ink-muted">{{ ddi.raw_date|date:"d.m.Y" }}</p>
+                <p class="text-xs text-ink-muted">{{ ddi.raw_date|date:"DATE_FORMAT" }}</p>
                 {% else %}
                 <p class="text-sm text-ink-muted">{% trans "Keine Frist" %}</p>
                 {% endif %}
@@ -94,45 +94,45 @@
                 {% endif %}
             </div>
             <div>
-                <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Wiedervorlage am" %}</span>
+                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Wiedervorlage am" %}</span>
                 {% if workitem.remind_at %}
                 {% remind_at_info workitem as rai %}
                 {% if rai %}
                 <p class="text-sm font-medium"><span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ rai.css_class }}">{{ rai.text }}</span></p>
                 {% endif %}
-                <p class="text-xs text-ink-muted">{{ workitem.remind_at|date:"d.m.Y" }}</p>
+                <p class="text-xs text-ink-muted">{{ workitem.remind_at|date:"DATE_FORMAT" }}</p>
                 {% else %}
                 <p class="text-sm text-ink-muted">{% trans "Keine Wiedervorlage" %}</p>
                 {% endif %}
             </div>
             <div>
-                <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt am" %}</span>
-                <p class="text-sm font-medium">{{ workitem.created_at|date:"d.m.Y H:i" }}</p>
+                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt am" %}</span>
+                <p class="text-sm font-medium">{{ workitem.created_at|date:"DATETIME_FORMAT" }}</p>
             </div>
         </div>
 
         {% if workitem.client %}
         <div>
-            <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Person" %}</span>
+            <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Person" %}</span>
             <p class="text-sm"><a href="{% url 'core:client_detail' pk=workitem.client.pk %}" class="text-accent hover:underline">{{ workitem.client.pseudonym }}</a></p>
         </div>
         {% endif %}
 
         <div>
-            <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt von" %}</span>
+            <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt von" %}</span>
             <p class="text-sm font-medium">{{ workitem.created_by.get_full_name|default:workitem.created_by.username }}</p>
         </div>
 
         {% if workitem.assigned_to %}
         <div>
-            <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zugewiesen an" %}</span>
+            <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zugewiesen an" %}</span>
             <p class="text-sm font-medium">{{ workitem.assigned_to.get_full_name|default:workitem.assigned_to.username }}</p>
         </div>
         {% endif %}
 
         {% if workitem.description %}
         <div>
-            <span class="text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Beschreibung" %}</span>
+            <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Beschreibung" %}</span>
             <p class="text-sm text-ink-soft whitespace-pre-wrap">{{ workitem.description }}</p>
         </div>
         {% endif %}

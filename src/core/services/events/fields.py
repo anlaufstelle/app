@@ -26,6 +26,52 @@ CONTACT_STAGE_ORDER = [
 ]
 
 
+def compute_event_search_text(data_json, document_type):
+    """Refs #827 (C-60): Plain-text-Suchindex fuer ``Event.search_text``.
+
+    Sammelt alle ``data_json``-Werte, deren ``FieldTemplate``
+    **unverschluesselt** ist und keine erhoehte Feld-Sensitivity hat
+    (Sensitivity == NORMAL bzw. erbt vom DocumentType). Verschluesselte
+    und ELEVATED/HIGH-Felder werden absichtlich nicht in den Index
+    aufgenommen — der Index soll keine Daten exponieren, die ein User
+    ueber das normale Detail-View nicht sehen darf.
+
+    File-Marker (``__file__``/``__files__``) werden uebersprungen; ihr
+    Klartext-Dateiname kommt nicht in den Suchindex (Refs #622).
+    """
+    if not data_json:
+        return ""
+    if document_type is None:
+        return ""
+
+    # Field-Templates des DocumentType einmalig laden.
+    from core.models import DocumentType
+
+    elevated = {DocumentType.Sensitivity.ELEVATED, DocumentType.Sensitivity.HIGH}
+    field_meta = {
+        dtf.field_template.slug: dtf.field_template
+        for dtf in document_type.fields.select_related("field_template").all()
+    }
+
+    parts: list[str] = []
+    for slug, value in data_json.items():
+        ft = field_meta.get(slug)
+        if ft is None:
+            continue
+        if ft.is_encrypted:
+            continue
+        if ft.sensitivity in elevated:
+            continue
+        if isinstance(value, dict):
+            # File-Marker oder altes encrypted-Marker-Dict — nicht aufnehmen.
+            continue
+        if isinstance(value, list):
+            parts.extend(str(v) for v in value if v is not None and not isinstance(v, dict))
+        elif value is not None and value != "":
+            parts.append(str(value))
+    return " ".join(parts)
+
+
 def stage_index(stage):
     """Return numeric index for a contact stage (higher = more qualified)."""
     try:
@@ -111,9 +157,12 @@ def _validate_data_json(document_type, data_json):
     if not data_json:
         return {}
     allowed_slugs = set(document_type.fields.values_list("field_template__slug", flat=True))
+    # Refs #819 (R-007): Choice-Konstante statt Magic-String.
+    from core.models import FieldTemplate
+
     file_slugs = set(
         document_type.fields.filter(
-            field_template__field_type="file",
+            field_template__field_type=FieldTemplate.FieldType.FILE,
         ).values_list("field_template__slug", flat=True)
     )
     unknown = set(data_json.keys()) - allowed_slugs

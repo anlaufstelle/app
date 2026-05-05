@@ -75,23 +75,23 @@
                             class="text-[13px] text-accent hover:underline font-semibold">
                         {% trans "Als App installieren" %}
                     </button>
-                    <p class="text-[11px] text-ink-muted mt-1">{% trans "Für schnelleren Zugriff" %}</p>
+                    <p class="text-[12px] text-ink-muted mt-1">{% trans "Für schnelleren Zugriff" %}</p>
                 </div>
                 <div x-show="showIos" class="mt-6 border-t border-subtle pt-4 text-center">
                     <p class="text-[13px] text-ink-soft">
                         {% blocktrans %}Teilen <span class="inline-block">&#x2191;</span> → „Zum Home-Bildschirm" tippen{% endblocktrans %}
                     </p>
-                    <p class="text-[11px] text-ink-muted mt-1">{% trans "Für schnelleren Zugriff" %}</p>
+                    <p class="text-[12px] text-ink-muted mt-1">{% trans "Für schnelleren Zugriff" %}</p>
                 </div>
             </div>
         </div>
         {# AGPL §13: Source-Link für Network-Use-Disclosure. Refs #835. #}
-        <footer class="text-center text-[11px] text-ink-muted mt-6">
+        <footer class="text-center text-[12px] text-ink-muted mt-6">
             <span>Anlaufstelle</span>
             <span aria-hidden="true" class="mx-1.5">·</span>
             <a href="{{ SOURCE_CODE_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
             {% if SOURCE_CODE_VERSION %}
-            <span class="text-[10px] text-ink-muted">{{ SOURCE_CODE_VERSION|truncatechars:8 }}</span>
+            <span class="text-[12px] text-ink-muted">{{ SOURCE_CODE_VERSION|truncatechars:8 }}</span>
             {% endif %}
             <span aria-hidden="true" class="mx-1.5">·</span>
             <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>

@@ -15,7 +15,7 @@
     <div class="flex flex-wrap gap-4 items-end">
         {# Action filter #}
         <div>
-            <label for="filter-action" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Aktion" %}</label>
+            <label for="filter-action" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Aktion" %}</label>
             <select id="filter-action" name="action"
                     class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
                 <option value="">{% trans "Alle Aktionen" %}</option>
@@ -27,7 +27,7 @@
 
         {# User filter #}
         <div>
-            <label for="filter-user" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Benutzer" %}</label>
+            <label for="filter-user" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Benutzer" %}</label>
             <select id="filter-user" name="user"
                     class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
                 <option value="">{% trans "Alle Benutzer" %}</option>
@@ -39,14 +39,14 @@
 
         {# Date from #}
         <div>
-            <label for="filter-date-from" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Von" %}</label>
+            <label for="filter-date-from" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Von" %}</label>
             <input type="date" id="filter-date-from" name="date_from" value="{{ filter_date_from }}"
                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
         </div>
 
         {# Date to #}
         <div>
-            <label for="filter-date-to" class="block text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bis" %}</label>
+            <label for="filter-date-to" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bis" %}</label>
             <input type="date" id="filter-date-to" name="date_to" value="{{ filter_date_to }}"
                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
         </div>

@@ -19,8 +19,10 @@ Kompatibilitaets-Stub :mod:`core.services.event`) das alte Singular.
 from core.services.events.context import (
     _build_prior_versions,
     _format_field_display_value,
+    build_attachment_context,
     build_event_detail_context,
     filtered_server_data_json,
+    resolve_default_document_type,
 )
 from core.services.events.crud import (
     apply_attachment_changes,
@@ -59,6 +61,7 @@ __all__ = [
     "apply_attachment_changes",
     "approve_deletion",
     "attach_files_to_new_event",
+    "build_attachment_context",
     "build_event_detail_context",
     "build_field_template_lookup",
     "build_redacted_delete_history",
@@ -70,6 +73,7 @@ __all__ = [
     "reject_deletion",
     "remove_restricted_fields",
     "request_deletion",
+    "resolve_default_document_type",
     "soft_delete_event",
     "split_file_and_text_data",
     "stage_index",

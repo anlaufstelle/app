@@ -8,7 +8,7 @@
 
 {# Ausstehend #}
 <section class="mb-8">
-    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Ausstehend" %} ({{ pending_requests|length }})</h2>
+    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Ausstehend" %} ({{ pending_requests|length }})</h2>
     {% if pending_requests %}
     <div class="space-y-3">
         {% for dr in pending_requests %}
@@ -22,7 +22,7 @@
             </div>
             <p class="text-sm text-ink-muted mb-1">{{ dr.reason|truncatewords:30 }}</p>
             <div class="text-xs text-ink-muted">
-                {% trans "Beantragt von:" %} {{ dr.requested_by.get_full_name|default:dr.requested_by.username }} – {{ dr.created_at|date:"d.m.Y H:i" }}
+                {% trans "Beantragt von:" %} {{ dr.requested_by.get_full_name|default:dr.requested_by.username }} – {{ dr.created_at|date:"DATETIME_FORMAT" }}
             </div>
         </div>
         {% endfor %}
@@ -34,7 +34,7 @@
 
 {# Genehmigt #}
 <section class="mb-8">
-    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Genehmigt" %} ({{ approved_requests|length }})</h2>
+    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Genehmigt" %} ({{ approved_requests|length }})</h2>
     {% if approved_requests %}
     <div class="space-y-3">
         {% for dr in approved_requests %}
@@ -45,7 +45,7 @@
             </div>
             <p class="text-sm text-ink-muted mb-1">{{ dr.reason|truncatewords:30 }}</p>
             <div class="text-xs text-ink-muted">
-                {% trans "Geprüft von:" %} {{ dr.reviewed_by.get_full_name|default:dr.reviewed_by.username }} – {{ dr.reviewed_at|date:"d.m.Y H:i" }}
+                {% trans "Geprüft von:" %} {{ dr.reviewed_by.get_full_name|default:dr.reviewed_by.username }} – {{ dr.reviewed_at|date:"DATETIME_FORMAT" }}
             </div>
         </div>
         {% endfor %}
@@ -57,7 +57,7 @@
 
 {# Abgelehnt #}
 <section>
-    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Abgelehnt" %} ({{ rejected_requests|length }})</h2>
+    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Abgelehnt" %} ({{ rejected_requests|length }})</h2>
     {% if rejected_requests %}
     <div class="space-y-3">
         {% for dr in rejected_requests %}
@@ -68,7 +68,7 @@
             </div>
             <p class="text-sm text-ink-muted mb-1">{{ dr.reason|truncatewords:30 }}</p>
             <div class="text-xs text-ink-muted">
-                {% trans "Geprüft von:" %} {{ dr.reviewed_by.get_full_name|default:dr.reviewed_by.username }} – {{ dr.reviewed_at|date:"d.m.Y H:i" }}
+                {% trans "Geprüft von:" %} {{ dr.reviewed_by.get_full_name|default:dr.reviewed_by.username }} – {{ dr.reviewed_at|date:"DATETIME_FORMAT" }}
             </div>
         </div>
         {% endfor %}

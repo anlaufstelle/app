@@ -50,7 +50,7 @@ class Client(SoftDeletableModel):
         choices=AgeCluster.choices,
         default=AgeCluster.UNKNOWN,
         verbose_name=_("Altersgruppe"),
-        help_text=_("Altersgruppe des Klientel zum Zeitpunkt der Erfassung"),
+        help_text=_("Altersgruppe der Person zum Zeitpunkt der Erfassung"),
     )
     notes = models.TextField(
         blank=True,
@@ -83,8 +83,8 @@ class Client(SoftDeletableModel):
     )
 
     class Meta:
-        verbose_name = _("Klientel")
-        verbose_name_plural = _("Klientel")
+        verbose_name = _("Person")
+        verbose_name_plural = _("Person")
         ordering = ["pseudonym"]
         constraints = [
             models.UniqueConstraint(

@@ -34,8 +34,8 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, pk):
         new_status = request.POST.get("status")
-        valid_statuses = [s.value for s in WorkItem.Status]
-        if new_status not in valid_statuses:
+        # Refs #819 (R-008): Django bietet Status.values als Liste an.
+        if new_status not in WorkItem.Status.values:
             return HttpResponseBadRequest(_("Ungültiger Status"))
 
         # Permission-Check + Service-Call innerhalb derselben Transaktion,

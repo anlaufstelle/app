@@ -17,7 +17,7 @@
     <div class="text-center">
         <span class="font-semibold text-[15px] text-ink">{{ target_date|date:"l, j. F Y" }}</span>
         {% if target_date != today %}
-        <a href="{% url 'core:handover' %}" class="ml-2 text-[11px] font-semibold text-accent hover:underline">{% trans "Heute" %}</a>
+        <a href="{% url 'core:handover' %}" class="ml-2 text-[12px] font-semibold text-accent hover:underline">{% trans "Heute" %}</a>
         {% endif %}
     </div>
     <a href="?date={{ next_date|date:'Y-m-d' }}{% if selected_filter %}&time_filter={{ selected_filter.pk }}{% endif %}" class="p-1.5 bg-surface border border-subtle rounded-[10px] text-ink-muted hover:text-ink {% if next_date > today %}opacity-30 pointer-events-none{% endif %}">
@@ -35,7 +35,7 @@
     {% for tf in time_filters %}
     <a href="?date={{ target_date|date:'Y-m-d' }}&time_filter={{ tf.pk }}"
        class="inline-flex items-center px-3 py-1 rounded-full text-[12px] font-medium border {% if selected_filter.pk == tf.pk %}bg-accent text-white border-accent font-semibold{% else %}bg-surface text-ink-muted border-subtle hover:bg-canvas{% endif %}">
-        {{ tf.label }} <span class="font-mono text-[11px] ml-1 opacity-80">{{ tf.start_time|time:"H:i" }}–{{ tf.end_time|time:"H:i" }}</span>
+        {{ tf.label }} <span class="font-mono text-[12px] ml-1 opacity-80">{{ tf.start_time|time:"H:i" }}–{{ tf.end_time|time:"H:i" }}</span>
     </a>
     {% endfor %}
 </div>
@@ -53,32 +53,32 @@
 
 {# Statistiken (KPI-Cards) #}
 <div class="mb-6">
-    <h2 class="text-[11px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Statistiken" %}</h2>
+    <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Statistiken" %}</h2>
     {% include "core/handover/partials/_stats_grid.html" %}
 </div>
 
 {# Highlights #}
 <div class="mb-6">
-    <h2 class="text-[11px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Wichtige Ereignisse" %}</h2>
+    <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Wichtige Ereignisse" %}</h2>
     {% include "core/handover/partials/_highlights.html" %}
 </div>
 
 {# Offene Aufgaben #}
 {% if summary.open_tasks %}
 <div class="mb-6">
-    <h2 class="text-[11px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Offene Aufgaben" %}</h2>
+    <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Offene Aufgaben" %}</h2>
     <div class="space-y-2">
         {% for wi in summary.open_tasks %}
         <a href="{% url 'core:workitem_detail' wi.pk %}" class="block bg-surface border border-subtle rounded-[10px] px-3.5 py-2.5 hover:shadow-sm transition">
             <div class="flex items-center gap-2.5 flex-wrap">
                 <div class="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0"></div>
                 {% if wi.priority == "urgent" %}
-                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700">{% trans "Dringend" %}</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[12px] font-semibold bg-red-100 text-red-700">{% trans "Dringend" %}</span>
                 {% elif wi.priority == "important" %}
-                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-yellow-100 text-yellow-700">{% trans "Wichtig" %}</span>
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[12px] font-semibold bg-yellow-100 text-yellow-700">{% trans "Wichtig" %}</span>
                 {% endif %}
                 <span class="text-[13px] font-medium text-ink truncate">{{ wi.title|truncatewords:10 }}</span>
-                <div class="ml-auto flex items-center gap-2.5 text-[11px] text-ink-muted">
+                <div class="ml-auto flex items-center gap-2.5 text-[12px] text-ink-muted">
                     {% if wi.assigned_to %}
                     <span>{{ wi.assigned_to.display_name|default:wi.assigned_to.username }}</span>
                     {% endif %}

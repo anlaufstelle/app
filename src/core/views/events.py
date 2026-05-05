@@ -20,18 +20,17 @@ from core.services.encryption import safe_decrypt
 from core.services.event import (
     apply_attachment_changes,
     attach_files_to_new_event,
+    build_attachment_context,
     build_event_detail_context,
     build_field_template_lookup,
     create_event,
     filtered_server_data_json,
     remove_restricted_fields,
     request_deletion,
+    resolve_default_document_type,
     soft_delete_event,
     split_file_and_text_data,
     update_event,
-)
-from core.services.file_vault import (
-    get_original_filename,
 )
 from core.services.quick_templates import (
     apply_template,
@@ -43,7 +42,6 @@ from core.services.sensitivity import (
     get_visible_event_or_404,
     user_can_see_document_type,
 )
-from core.utils.formatting import format_file_size
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -94,20 +92,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
     def get(self, request):
         facility = request.current_facility
 
-        # Load default document type from settings
-        default_doc_type = None
-        initial = {}
-        try:
-            settings = facility.settings
-            if settings.default_document_type_id:
-                default_doc_type = settings.default_document_type
-                if default_doc_type.is_active and default_doc_type.facility == facility:
-                    initial["document_type"] = default_doc_type.pk
-                else:
-                    default_doc_type = None
-        except facility._meta.get_field("settings").related_model.DoesNotExist:
-            pass
-
+        default_doc_type, initial = resolve_default_document_type(facility)
         meta_form = EventMetaForm(facility=facility, user=request.user, initial=initial)
 
         # Pre-select client
@@ -329,38 +314,10 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         # Remove sensitive fields from the form
         remove_restricted_fields(request.user, event.document_type, data_form)
 
-        # Build attachment info for file fields — jetzt pro Slug eine Liste
-        # von Einträgen (Refs #622). Rückwärtskompatibel: legacy __file__
-        # wird per normalize_file_marker auch als Liste mit einem Eintrag
-        # gerendert.
-        from core.services.event import normalize_file_marker
-
-        existing_attachments_by_slug = {}
-        for slug, value in (event.data_json or {}).items():
-            entries_meta = normalize_file_marker(value)
-            if not entries_meta:
-                continue
-            entries = []
-            for entry in entries_meta:
-                att = event.attachments.filter(pk=entry["id"]).first()
-                if not att or att.deleted_at is not None:
-                    continue
-                entries.append(
-                    {
-                        "entry_id": str(att.entry_id),
-                        "attachment_id": str(att.pk),
-                        "filename": get_original_filename(att),
-                        "size": format_file_size(att.file_size),
-                        "sort_order": att.sort_order,
-                    }
-                )
-            if entries:
-                existing_attachments_by_slug[slug] = entries
-
         context = {
             "event": event,
             "data_form": data_form,
-            "existing_attachments": existing_attachments_by_slug,
+            "existing_attachments": build_attachment_context(event),
         }
         return render(request, "core/events/edit.html", context)
 

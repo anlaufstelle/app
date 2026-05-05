@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n static %}
+{% load i18n static core_tags %}
 
 {% block title %}{% trans "Neuer Kontakt" %} – Anlaufstelle{% endblock %}
 
@@ -18,7 +18,7 @@
         {# Schnell-Vorlagen (Quick-Templates, Refs #494) #}
         {% if quick_templates %}
         <div class="bg-accent-light border border-accent/20 rounded-[10px] p-4 space-y-2" data-testid="quick-templates">
-            <h2 class="text-[11px] font-bold text-accent uppercase tracking-wider">{% trans "Schnell-Vorlagen" %}</h2>
+            <h2 class="text-[12px] font-bold text-accent uppercase tracking-wider">{% trans "Schnell-Vorlagen" %}</h2>
             {% if applied_template %}
             <p class="text-[12px] text-accent">
                 {% blocktrans with name=applied_template.name %}Vorlage angewendet: <strong>{{ name }}</strong>{% endblocktrans %}
@@ -34,7 +34,7 @@
                    data-template-id="{{ tpl.pk }}"
                    data-template-name="{{ tpl.name }}">
                     <span class="font-semibold">{{ tpl.name }}</span>
-                    <span class="ml-2 text-[11px] text-accent opacity-70">{{ tpl.document_type.name }}</span>
+                    <span class="ml-2 text-[12px] text-accent opacity-70">{{ tpl.document_type.name }}</span>
                 </a>
                 {% endfor %}
             </div>
@@ -43,7 +43,7 @@
 
         {# Sektion 1: Meta — kompaktes Layout #}
         <div class="bg-surface border border-subtle rounded-[10px] p-4 space-y-3">
-            <h2 class="text-[11px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Basis-Daten" %}</h2>
+            <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Basis-Daten" %}</h2>
 
             {% if meta_form.non_field_errors %}
             <div class="bg-red-50 border border-red-200 rounded-[10px] p-3">
@@ -61,6 +61,8 @@
                     <select name="document_type" id="id_document_type"
                             x-ref="docTypeSelect"
                             @change="onDocTypeChange"
+                            aria-required="true"
+                            {% if meta_form.document_type.errors %}aria-invalid="true" aria-describedby="id_document_type-error"{% endif %}
                             class="w-full bg-canvas border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink"
                             hx-get="{% url 'core:event_fields_partial' %}"
                             hx-target="#dynamic-fields"
@@ -73,18 +75,22 @@
                                 {% if meta_form.document_type.value|stringformat:"s" == dt.pk|stringformat:"s" %}selected{% endif %}>{{ dt.name }}</option>
                         {% endfor %}
                     </select>
-                    {% for error in meta_form.document_type.errors %}
-                    <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                    {% endfor %}
+                    {% if meta_form.document_type.errors %}
+                    <ul id="id_document_type-error" class="mt-1 text-sm text-red-600" role="alert">
+                        {% for error in meta_form.document_type.errors %}<li>{{ error }}</li>{% endfor %}
+                    </ul>
+                    {% endif %}
                 </div>
 
                 {# Zeitpunkt #}
                 <div>
                     <label for="id_occurred_at" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ meta_form.occurred_at.label }} *</label>
-                    {{ meta_form.occurred_at }}
-                    {% for error in meta_form.occurred_at.errors %}
-                    <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                    {% endfor %}
+                    {% aria_field meta_form.occurred_at %}
+                    {% if meta_form.occurred_at.errors %}
+                    <ul id="id_occurred_at-error" class="mt-1 text-sm text-red-600" role="alert">
+                        {% for error in meta_form.occurred_at.errors %}<li>{{ error }}</li>{% endfor %}
+                    </ul>
+                    {% endif %}
                 </div>
             </div>
 
@@ -127,18 +133,20 @@
                                     :class="c.highlightClass"
                                     class="w-full text-left px-3 py-2 text-[13px] text-ink hover:bg-accent-light flex items-center justify-between">
                                 <span class="font-semibold" x-text="c.pseudonym"></span>
-                                <span class="text-[11px] text-ink-muted" x-text="c.stage"></span>
+                                <span class="text-[12px] text-ink-muted" x-text="c.stage"></span>
                             </button>
                         </template>
                     </div>
                 </div>
-                {% for error in meta_form.client.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
-                <p x-show="notAnonymousAllowed" x-cloak class="mt-1 text-[11px] text-yellow-700">
+                {% if meta_form.client.errors %}
+                <ul id="id_client-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in meta_form.client.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+                <p x-show="notAnonymousAllowed" x-cloak class="mt-1 text-[12px] text-yellow-700">
                     {% trans "Pflichtfeld: Dieser Dokumentationstyp erfordert eine Mindest-Kontaktstufe." %}
                 </p>
-                <p x-show="showAnonymousHint" x-cloak class="mt-1 text-[11px] text-ink-muted">
+                <p x-show="showAnonymousHint" x-cloak class="mt-1 text-[12px] text-ink-muted">
                     {% trans "Ohne Person wird der Kontakt als anonym gespeichert." %}
                 </p>
             </div>
@@ -152,14 +160,16 @@
                         <option :value="c.id" x-text="c.title"></option>
                     </template>
                 </select>
-                {% for error in meta_form.case.errors %}
-                <p class="mt-1 text-sm text-red-600">{{ error }}</p>
-                {% endfor %}
-                <p class="mt-1 text-[11px] text-ink-muted">
+                {% if meta_form.case.errors %}
+                <ul id="id_case-error" class="mt-1 text-sm text-red-600" role="alert">
+                    {% for error in meta_form.case.errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+                {% endif %}
+                <p class="mt-1 text-[12px] text-ink-muted">
                     {% trans "Optional: Kontakt einem offenen Fall der ausgewählten Person zuordnen." %}
                 </p>
             </div>
-            <p x-show="showNoCasesHint" x-cloak class="text-[11px] text-ink-muted" data-testid="no-cases-for-client">
+            <p x-show="showNoCasesHint" x-cloak class="text-[12px] text-ink-muted" data-testid="no-cases-for-client">
                 {% trans "Kein offener Fall für diese Person vorhanden." %}
             </p>
         </div>

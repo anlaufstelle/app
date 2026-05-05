@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-04-30 10:46+0200\n"
+"POT-Creation-Date: 2026-05-01 22:48+0200\n"
 "Language: de\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -14,17 +14,28 @@ msgstr "Identifiziert"
 msgid "Qualifiziert"
 msgstr "Qualifiziert"
 
-msgid "Klientel"
-msgstr "Klientel"
-
-msgid "Klientel existiert nicht."
-msgstr "Klientel existiert nicht."
-
-msgid "Klientel gehört nicht zur Einrichtung."
-msgstr "Klientel gehört nicht zur Einrichtung."
+msgid "Person"
+msgstr "Person"
 
 msgid ""
-"Ein Klientel mit diesem Pseudonym existiert bereits in dieser Einrichtung."
+"Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."
+msgstr ""
+
+#, fuzzy
+#| msgid "Klientel existiert nicht."
+msgid "Person existiert nicht."
+msgstr "Klientel existiert nicht."
+
+#, fuzzy
+#| msgid "Klientel gehört nicht zur Einrichtung."
+msgid "Person gehört nicht zur Einrichtung."
+msgstr "Klientel gehört nicht zur Einrichtung."
+
+#, fuzzy
+#| msgid ""
+#| "Ein Klientel mit diesem Pseudonym existiert bereits in dieser Einrichtung."
+msgid ""
+"Eine Person mit diesem Pseudonym existiert bereits in dieser Einrichtung."
 msgstr ""
 "Ein Klientel mit diesem Pseudonym existiert bereits in dieser Einrichtung."
 
@@ -61,7 +72,9 @@ msgstr ""
 msgid "Das Datum darf nicht in der Vergangenheit liegen."
 msgstr ""
 
-msgid "Ungültige Klientel-ID"
+#, fuzzy
+#| msgid "Ungültige Klientel-ID"
+msgid "Ungültige Person-ID"
 msgstr "Ungültige Klientel-ID"
 
 msgid "Die Erinnerung muss vor oder am Fälligkeitstag liegen."
@@ -211,11 +224,28 @@ msgstr ""
 msgid "Offline-Schlüssel abgerufen"
 msgstr ""
 
-msgid "Klientel angelegt"
-msgstr "Klientel angelegt"
+#, fuzzy
+#| msgid "Person anlegen"
+msgid "Person angelegt"
+msgstr "Person anlegen"
 
-msgid "Klientel aktualisiert"
-msgstr "Klientel aktualisiert"
+#, fuzzy
+#| msgid "Person wurde aktualisiert."
+msgid "Person aktualisiert"
+msgstr "Person wurde aktualisiert."
+
+msgid "Person in Papierkorb"
+msgstr ""
+
+#, fuzzy
+#| msgid "Person wurde angelegt."
+msgid "Person wiederhergestellt"
+msgstr "Person wurde angelegt."
+
+#, fuzzy
+#| msgid "Person wurde aktualisiert."
+msgid "Person anonymisiert"
+msgstr "Person wurde aktualisiert."
 
 msgid "Fall angelegt"
 msgstr ""
@@ -336,6 +366,11 @@ msgstr "Offen"
 msgid "Geschlossen"
 msgstr "Geschlossen"
 
+msgid ""
+"Pflichtfeld: Jeder Fall ist einer Person zugeordnet. PROTECT verhindert "
+"versehentliches Löschen einer Person mit aktiven Fällen."
+msgstr ""
+
 msgid "Titel"
 msgstr "Titel"
 
@@ -397,7 +432,9 @@ msgstr ""
 msgid "Altersgruppe"
 msgstr "Altersgruppe"
 
-msgid "Altersgruppe des Klientel zum Zeitpunkt der Erfassung"
+#, fuzzy
+#| msgid "Altersgruppe des Klientel zum Zeitpunkt der Erfassung"
+msgid "Altersgruppe der Person zum Zeitpunkt der Erfassung"
 msgstr "Altersgruppe des Klientel zum Zeitpunkt der Erfassung"
 
 msgid "Notizen"
@@ -483,7 +520,9 @@ msgstr "Steuert Zugriffsrechte: ELEVATED/HIGH erfordern höhere Berechtigungen"
 msgid "Mindest-Kontaktstufe"
 msgstr "Mindest-Kontaktstufe"
 
-msgid "Mindest-Kontaktstufe des Klientel für diesen Dokumentationstyp"
+#, fuzzy
+#| msgid "Mindest-Kontaktstufe des Klientel für diesen Dokumentationstyp"
+msgid "Mindest-Kontaktstufe der Person für diesen Dokumentationstyp"
 msgstr "Mindest-Kontaktstufe des Klientel für diesen Dokumentationstyp"
 
 msgid "Aufbewahrungsfrist (Tage)"
@@ -647,6 +686,11 @@ msgstr "Episoden"
 msgid "Daten (JSON)"
 msgstr "Daten (JSON)"
 
+#, fuzzy
+#| msgid "Suche"
+msgid "Suchindex"
+msgstr "Suche"
+
 msgid "Anonym"
 msgstr "Anonym"
 
@@ -682,6 +726,16 @@ msgstr "Ereignis-Historie"
 
 msgid "Ereignis-Historien"
 msgstr "Ereignis-Historien"
+
+#, fuzzy
+#| msgid "Gelöscht"
+msgid "Gelöscht am"
+msgstr "Gelöscht"
+
+#, fuzzy
+#| msgid "Gelöscht"
+msgid "Gelöscht von"
+msgstr "Gelöscht"
 
 msgid "Organisation"
 msgstr "Organisation"
@@ -739,11 +793,15 @@ msgstr ""
 msgid "Quick-Templates"
 msgstr ""
 
-msgid "Klientel-Besuch"
-msgstr "Klientel-Besuch"
+#, fuzzy
+#| msgid "Person suchen"
+msgid "Personen-Besuch"
+msgstr "Person suchen"
 
-msgid "Klientel-Besuche"
-msgstr "Klientel-Besuche"
+#, fuzzy
+#| msgid "Person suchen"
+msgid "Personen-Besuche"
+msgstr "Person suchen"
 
 msgid "Ausstehend"
 msgstr "Ausstehend"
@@ -843,6 +901,15 @@ msgstr "Aufbewahrung qualifiziert (Tage)"
 
 msgid "Aufbewahrung Aktivitäten (Tage)"
 msgstr "Aufbewahrung Aktivitäten (Tage)"
+
+msgid "Papierkorb-Frist (Tage)"
+msgstr ""
+
+msgid ""
+"Wie lange soft-deletete Personen im Papierkorb verbleiben, bevor "
+"enforce_retention sie automatisch anonymisiert. Während dieser Frist kann "
+"ein Admin den Datensatz wiederherstellen."
+msgstr ""
 
 #, fuzzy
 #| msgid "Aufbewahrung anonym (Tage)"
@@ -1111,6 +1178,14 @@ msgstr "Löschantrag"
 msgid "Löschanträge"
 msgstr "Löschanträge"
 
+#, fuzzy
+#| msgid "Dokument"
+msgid "Dokumenttyp"
+msgstr "Dokument"
+
+msgid "Fälle müssen einer Person zugeordnet sein."
+msgstr ""
+
 msgid "Fallverantwortlicher gehört nicht zur Einrichtung."
 msgstr "Fallverantwortlicher gehört nicht zur Einrichtung."
 
@@ -1125,11 +1200,19 @@ msgid ""
 "werden."
 msgstr ""
 
-msgid "Klientel des Ereignisses passt nicht zum Klientel des Falls."
+#, fuzzy
+#| msgid "Klientel des Ereignisses passt nicht zum Klientel des Falls."
+msgid "Person des Ereignisses passt nicht zur Person des Falls."
 msgstr "Klientel des Ereignisses passt nicht zum Klientel des Falls."
 
 msgid "Episoden können nur für offene Fälle erstellt werden."
 msgstr "Episoden können nur für offene Fälle erstellt werden."
+
+msgid "Ja"
+msgstr "Ja"
+
+msgid "Nein"
+msgstr "Nein"
 
 msgid "[Eingeschränkt]"
 msgstr "[Eingeschränkt]"
@@ -1156,8 +1239,12 @@ msgstr ""
 "Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, da eine "
 "Mindest-Kontaktstufe vorausgesetzt wird."
 
+#, fuzzy
+#| msgid ""
+#| "Für diesen Dokumentationstyp muss ein Klientel ausgewählt werden, da eine "
+#| "Mindest-Kontaktstufe vorausgesetzt wird."
 msgid ""
-"Für diesen Dokumentationstyp muss ein Klientel ausgewählt werden, da eine "
+"Für diesen Dokumentationstyp muss eine Person ausgewählt werden, da eine "
 "Mindest-Kontaktstufe vorausgesetzt wird."
 msgstr ""
 "Für diesen Dokumentationstyp muss ein Klientel ausgewählt werden, da eine "
@@ -1165,8 +1252,8 @@ msgstr ""
 
 #, fuzzy, python-format
 msgid ""
-"Klientel muss mindestens die Kontaktstufe '%(required_stage)s' haben, "
-"aktuelle Stufe ist '%(actual_stage)s'."
+"Person muss mindestens die Kontaktstufe '%(required_stage)s' haben, aktuelle "
+"Stufe ist '%(actual_stage)s'."
 msgstr ""
 "Klientel muss mindestens die Kontaktstufe '%(required_stage)s' haben, "
 "aktuelle Stufe ist '%(actual_stage)s'."
@@ -1209,11 +1296,6 @@ msgid ""
 msgstr ""
 "Das Ereignis wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite "
 "neu."
-
-#, fuzzy
-#| msgid "Dokument"
-msgid "Dokumenttyp"
-msgstr "Dokument"
 
 #, python-format
 msgid ""
@@ -1295,6 +1377,17 @@ msgstr "Fall wurde wiedereröffnet."
 
 msgid "Kein Ereignis ausgewählt."
 msgstr "Kein Ereignis ausgewählt."
+
+msgid "Bitte eine Begruendung angeben."
+msgstr ""
+
+msgid "Loeschantrag gestellt — Leitung wird benachrichtigt."
+msgstr ""
+
+#, fuzzy
+#| msgid "Person wurde angelegt."
+msgid "Person wiederhergestellt."
+msgstr "Person wurde angelegt."
 
 msgid "Person wurde angelegt."
 msgstr "Person wurde angelegt."
@@ -1959,7 +2052,9 @@ msgstr "Dokumentationstypen"
 msgid "Alle Dokumentationstypen"
 msgstr "Alle Dokumentationstypen"
 
-msgid "Klient-ID filtern..."
+#, fuzzy
+#| msgid "Klient-ID filtern..."
+msgid "Person-ID filtern..."
 msgstr "Klient-ID filtern..."
 
 #, fuzzy
@@ -1969,9 +2064,6 @@ msgstr "Daten"
 
 msgid "Größe"
 msgstr ""
-
-msgid "Klient"
-msgstr "Klient"
 
 msgid "Herunterladen"
 msgstr "Herunterladen"
@@ -2037,9 +2129,6 @@ msgstr "Fall bearbeiten"
 
 msgid "Neuer Fall"
 msgstr "Neuer Fall"
-
-msgid "Person"
-msgstr "Person"
 
 msgid "Pseudonym eingeben..."
 msgstr "Pseudonym eingeben..."
@@ -2118,6 +2207,62 @@ msgstr "Hinzufügen"
 msgid "Keine Fälle gefunden"
 msgstr "Keine Fälle gefunden"
 
+#, fuzzy
+#| msgid "Löschantrag"
+msgid "Löschen beantragen"
+msgstr "Löschantrag"
+
+#, fuzzy
+#| msgid "Person suchen"
+msgid "Person löschen beantragen"
+msgstr "Person suchen"
+
+#, python-format
+msgid ""
+"Vier-Augen-Prinzip — Ihr Antrag geht zur Genehmigung an die Leitung. Nach "
+"Genehmigung wird <strong>%(pseudonym)s</strong> in den Papierkorb verschoben "
+"und nach Ablauf der Aufbewahrungsfrist automatisch anonymisiert."
+msgstr ""
+
+msgid "z.B. Widerruf der Einwilligung, Verarbeitung nicht mehr erforderlich"
+msgstr ""
+
+msgid "Löschantrag stellen"
+msgstr "Löschantrag stellen"
+
+msgid "Löschantrag prüfen"
+msgstr "Löschantrag prüfen"
+
+#, fuzzy
+#| msgid "Löschantrag prüfen"
+msgid "Person-Löschantrag prüfen"
+msgstr "Löschantrag prüfen"
+
+msgid "Beantragt am"
+msgstr "Beantragt am"
+
+#, fuzzy
+#| msgid "Betroffenes Ereignis"
+msgid "Betroffene Person"
+msgstr "Betroffenes Ereignis"
+
+#, fuzzy
+#| msgid "Abgelehnt"
+msgid "Angelegt am"
+msgstr "Abgelehnt"
+
+msgid ""
+"Bei Genehmigung wird die Person in den Papierkorb verschoben. Nach Ablauf "
+"der Aufbewahrungsfrist wird sie automatisch anonymisiert; Statistik-"
+"Aggregate bleiben erhalten."
+msgstr ""
+
+msgid "Genehmigen"
+msgstr "Genehmigen"
+
+msgid "Ablehnen"
+msgstr "Ablehnen"
+
 msgid "Lokal verfügbar"
 msgstr ""
 
@@ -2185,11 +2330,11 @@ msgid "Lade Offline-Daten..."
 msgstr ""
 
 msgid ""
-"Diese Person wurde nicht für die Offline-Nutzung vorbereitet oder der "
-"lokale Cache ist leer."
+"Diese Person wurde nicht für die Offline-Nutzung vorbereitet oder der lokale "
+"Cache ist leer."
 msgstr ""
-"Diese Person wurde nicht für die Offline-Nutzung vorbereitet oder der "
-"lokale Cache ist leer."
+"Diese Person wurde nicht für die Offline-Nutzung vorbereitet oder der lokale "
+"Cache ist leer."
 
 #, fuzzy
 #| msgid "Wiedereröffnen"
@@ -2226,6 +2371,23 @@ msgstr "Annehmen"
 
 msgid "Keine Personen gefunden"
 msgstr "Keine Personen gefunden"
+
+msgid "Papierkorb — Personen"
+msgstr ""
+
+msgid ""
+"Soft-deletete Personen. Nach Ablauf der Aufbewahrungsfrist "
+"(Settings.client_trash_days) anonymisiert enforce_retention diese "
+"automatisch."
+msgstr ""
+
+#, fuzzy
+#| msgid "Episode erstellen"
+msgid "Wiederherstellen"
+msgstr "Episode erstellen"
+
+msgid "Papierkorb ist leer."
+msgstr ""
 
 msgid "Prüfen"
 msgstr "Prüfen"
@@ -2396,26 +2558,11 @@ msgstr ""
 msgid "Grund für die Löschung..."
 msgstr "Grund für die Löschung..."
 
-msgid "Löschantrag stellen"
-msgstr "Löschantrag stellen"
-
 msgid "Endgültig löschen"
 msgstr "Endgültig löschen"
 
-msgid "Löschantrag prüfen"
-msgstr "Löschantrag prüfen"
-
-msgid "Beantragt am"
-msgstr "Beantragt am"
-
 msgid "Betroffenes Ereignis"
 msgstr "Betroffenes Ereignis"
-
-msgid "Genehmigen"
-msgstr "Genehmigen"
-
-msgid "Ablehnen"
-msgstr "Ablehnen"
 
 msgid "Löschen"
 msgstr "Löschen"
@@ -2483,12 +2630,6 @@ msgstr ""
 
 msgid "1. Stammdaten"
 msgstr "1. Stammdaten"
-
-msgid "Ja"
-msgstr "Ja"
-
-msgid "Nein"
-msgstr "Nein"
 
 msgid "2. Fälle"
 msgstr "2. Fälle"
@@ -2568,6 +2709,9 @@ msgstr "Ort, Datum, Unterschrift"
 
 msgid "Halbjahresbericht"
 msgstr "Halbjahresbericht"
+
+msgid "INTERN — nicht zur Weitergabe. Enthält Pseudonym-Ranking."
+msgstr ""
 
 msgid "Gesamtkontakte"
 msgstr "Gesamtkontakte"
@@ -2792,19 +2936,31 @@ msgid "Mit erweit. Angaben"
 msgstr "Keine erledigten Aufgaben."
 
 msgid ""
-"Approximation: Für Zeiträume über einen Monat hinaus werden Personen "
-"über Monatssnapshots summiert. Personen, die in mehreren Monaten "
-"erscheinen, werden mehrfach gezählt."
+"Approximation: Für Zeiträume über einen Monat hinaus werden Personen über "
+"Monatssnapshots summiert. Personen, die in mehreren Monaten erscheinen, "
+"werden mehrfach gezählt."
 msgstr ""
-"Approximation: Für Zeiträume über einen Monat hinaus werden Personen "
-"über Monatssnapshots summiert. Personen, die in mehreren Monaten "
-"erscheinen, werden mehrfach gezählt."
+"Approximation: Für Zeiträume über einen Monat hinaus werden Personen über "
+"Monatssnapshots summiert. Personen, die in mehreren Monaten erscheinen, "
+"werden mehrfach gezählt."
 
-msgid "Einzigartige Personen"
-msgstr "Einzigartige Personen"
+#, fuzzy
+#| msgid "Zuletzt besuchte Personen"
+msgid "Unterschiedliche Personen"
+msgstr "Zuletzt besuchte Personen"
 
-msgid "Top-Person"
-msgstr "Top-Person"
+msgid "Personen mit mindestens einem Kontakt im Zeitraum"
+msgstr ""
+
+#, fuzzy, python-format
+#| msgid "Neuer Kontakt"
+msgid "%(count)s Kontakt"
+msgid_plural "%(count)s Kontakte"
+msgstr[0] "Neuer Kontakt"
+msgstr[1] "Neuer Kontakt"
+
+msgid "Person mit den meisten Kontakten"
+msgstr ""
 
 #, fuzzy
 #| msgid "Kontakte heute"
@@ -2829,8 +2985,15 @@ msgstr "Altersgruppe"
 msgid "CSV-Export"
 msgstr "CSV-Export"
 
-msgid "PDF-Bericht"
-msgstr "PDF-Bericht"
+#, fuzzy
+#| msgid "Keine relevanten Kontakte im Berichtszeitraum."
+msgid "Verwendet den oben gewählten Zeitraum als Berichtszeitraum."
+msgstr "Keine relevanten Kontakte im Berichtszeitraum."
+
+#, fuzzy
+#| msgid "Halbjahresbericht"
+msgid "Halbjahresbericht (PDF)"
+msgstr "Halbjahresbericht"
 
 msgid "Jugendamt-Bericht"
 msgstr "Jugendamt-Bericht"
@@ -3055,3 +3218,30 @@ msgstr "E-Mail-Adresse"
 
 msgid "Link senden"
 msgstr "Link senden"
+
+#~ msgid "Klientel"
+#~ msgstr "Klientel"
+
+#~ msgid "Klientel angelegt"
+#~ msgstr "Klientel angelegt"
+
+#~ msgid "Klientel aktualisiert"
+#~ msgstr "Klientel aktualisiert"
+
+#~ msgid "Klientel-Besuch"
+#~ msgstr "Klientel-Besuch"
+
+#~ msgid "Klientel-Besuche"
+#~ msgstr "Klientel-Besuche"
+
+#~ msgid "Klient"
+#~ msgstr "Klient"
+
+#~ msgid "Einzigartige Personen"
+#~ msgstr "Einzigartige Personen"
+
+#~ msgid "Top-Person"
+#~ msgstr "Top-Person"
+
+#~ msgid "PDF-Bericht"
+#~ msgstr "PDF-Bericht"

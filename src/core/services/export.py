@@ -70,7 +70,7 @@ def _build_header(all_field_templates, field_slugs):
         _("Datum"),
         _("Uhrzeit"),
         _("Dokumentationstyp"),
-        _("Klientel"),
+        _("Person"),
         _("Kontaktstufe"),
         _("Altersgruppe"),
     ] + [all_field_templates[s].name for s in field_slugs]

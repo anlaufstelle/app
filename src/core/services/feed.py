@@ -8,6 +8,7 @@ from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
 
+from core.constants import FEED_MAX_PER_TYPE
 from core.models import Activity, DocumentTypeField, Event, WorkItem
 from core.services.encryption import safe_decrypt
 from core.services.sensitivity import user_can_see_field
@@ -61,7 +62,10 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
         )
         if include_all:
             events_qs = events_qs.exclude(document_type__system_type="ban")
-        events = events_qs.select_related("document_type", "client", "created_by").order_by("-occurred_at")[:200]
+        events = (
+            events_qs.select_related("document_type", "client", "created_by")
+            .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
+        )
         events_list = [{"type": "event", "occurred_at": e.occurred_at, "object": e} for e in events]
 
     # Activities
@@ -85,7 +89,7 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
                 Q(target_type=event_ct) & ~Q(target_id__in=visible_event_ids),
             )
 
-        activities = activities_qs.select_related("actor", "target_type").order_by("-occurred_at")[:200]
+        activities = activities_qs.select_related("actor", "target_type").order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
         activities_list = [{"type": "activity", "occurred_at": a.occurred_at, "object": a} for a in activities]
 
     # Work items
@@ -97,7 +101,7 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
                 created_at__lte=end_dt,
             )
             .select_related("client", "assigned_to")
-            .order_by("-created_at")[:200]
+            .order_by("-created_at")[:FEED_MAX_PER_TYPE]
         )
         workitems_list = [{"type": "workitem", "occurred_at": wi.created_at, "object": wi} for wi in workitems]
 
@@ -113,7 +117,7 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
                 occurred_at__lte=end_dt,
             )
             .select_related("document_type", "client", "created_by")
-            .order_by("-occurred_at")[:200]
+            .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
         )
         bans_list = [{"type": "ban", "occurred_at": e.occurred_at, "object": e} for e in bans]
 
@@ -121,7 +125,7 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
         events_list + activities_list + workitems_list + bans_list,
         key=lambda x: x["occurred_at"],
         reverse=True,
-    )[:200]
+    )[:FEED_MAX_PER_TYPE]
 
 
 def _format_preview_value(value, ft):

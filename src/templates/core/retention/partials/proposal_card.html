@@ -23,7 +23,7 @@
             <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">{% trans "Freigegeben" %}</span>
             {% endif %}
         </div>
-        <span class="text-xs text-ink-muted">{% trans "Frist:" %} {{ proposal.deletion_due_at|date:"d.m.Y" }}</span>
+        <span class="text-xs text-ink-muted">{% trans "Frist:" %} {{ proposal.deletion_due_at|date:"DATE_FORMAT" }}</span>
     </div>
 
     {# Details #}
@@ -93,9 +93,9 @@
         <div class="text-sm text-blue-800 space-y-1">
             <div><span class="font-medium">{% trans "Begründung:" %}</span> {{ proposal.active_hold.reason }}</div>
             {% if proposal.active_hold.expires_at %}
-            <div><span class="font-medium">{% trans "Läuft ab:" %}</span> {{ proposal.active_hold.expires_at|date:"d.m.Y" }}</div>
+            <div><span class="font-medium">{% trans "Läuft ab:" %}</span> {{ proposal.active_hold.expires_at|date:"DATE_FORMAT" }}</div>
             {% endif %}
-            <div class="text-xs text-blue-600">{% trans "Erstellt von:" %} {{ proposal.active_hold.created_by.get_full_name|default:proposal.active_hold.created_by.username }} – {{ proposal.active_hold.created_at|date:"d.m.Y H:i" }}</div>
+            <div class="text-xs text-blue-600">{% trans "Erstellt von:" %} {{ proposal.active_hold.created_by.get_full_name|default:proposal.active_hold.created_by.username }} – {{ proposal.active_hold.created_at|date:"DATETIME_FORMAT" }}</div>
         </div>
     </div>
     <button hx-post="{% url 'core:retention_dismiss_hold' pk=proposal.active_hold.pk %}"

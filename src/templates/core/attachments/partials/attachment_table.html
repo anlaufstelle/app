@@ -6,13 +6,13 @@
     <table class="min-w-full divide-y divide-subtle">
         <thead class="bg-canvas">
             <tr>
-                <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Dateiname" %}</th>
-                <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Größe" %}</th>
-                <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-ink-muted hidden md:table-cell">{% trans "Typ" %}</th>
-                <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-ink-muted hidden md:table-cell">{% trans "Dokumentationstyp" %}</th>
-                <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-ink-muted hidden lg:table-cell">{% trans "Klient" %}</th>
-                <th class="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-ink-muted hidden lg:table-cell">{% trans "Datum" %}</th>
-                <th class="px-4 py-3 text-right text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktion" %}</th>
+                <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Dateiname" %}</th>
+                <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Größe" %}</th>
+                <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted hidden md:table-cell">{% trans "Typ" %}</th>
+                <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted hidden md:table-cell">{% trans "Dokumentationstyp" %}</th>
+                <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted hidden lg:table-cell">{% trans "Person" %}</th>
+                <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted hidden lg:table-cell">{% trans "Datum" %}</th>
+                <th class="px-4 py-3 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktion" %}</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-subtle">
@@ -28,7 +28,7 @@
                 <td class="px-4 py-3 text-sm text-ink-muted hidden md:table-cell">{{ item.attachment.mime_type }}</td>
                 <td class="px-4 py-3 text-sm text-ink-muted hidden md:table-cell">{{ item.doc_type_name }}</td>
                 <td class="px-4 py-3 text-sm text-ink-muted hidden lg:table-cell">{{ item.client_pseudonym }}</td>
-                <td class="px-4 py-3 text-sm text-ink-muted hidden lg:table-cell"><span class="font-mono">{{ item.attachment.created_at|date:"d.m.Y H:i" }}</span></td>
+                <td class="px-4 py-3 text-sm text-ink-muted hidden lg:table-cell"><span class="font-mono">{{ item.attachment.created_at|date:"DATETIME_FORMAT" }}</span></td>
                 <td class="px-4 py-3 text-right">
                     <a href="{% url 'core:attachment_download' item.event.pk item.attachment.pk %}"
                        class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium text-accent hover:text-accent"
@@ -61,7 +61,7 @@
             {{ item.file_size_display }} · {{ item.doc_type_name }} · {{ item.client_pseudonym }}
         </div>
         <div class="mt-0.5 text-xs text-ink-muted">
-            <span class="font-mono">{{ item.attachment.created_at|date:"d.m.Y H:i" }}</span>
+            <span class="font-mono">{{ item.attachment.created_at|date:"DATETIME_FORMAT" }}</span>
         </div>
     </div>
     {% endfor %}

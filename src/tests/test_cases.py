@@ -50,7 +50,7 @@ class TestCaseService:
             pseudonym="Anderer-01",
             contact_stage=Client.ContactStage.IDENTIFIED,
         )
-        with pytest.raises(ValueError, match="Klientel"):
+        with pytest.raises(ValueError, match="Person"):
             create_case(
                 facility=facility,
                 user=staff_user,

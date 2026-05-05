@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 
+from core.constants import WORKITEM_INBOX_CAP
 from core.models import WorkItem
 from core.models.user import User
 from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin
@@ -120,34 +121,34 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
         # weitere Einträge über Filter oder die Detail-Suche erreichbar sind.
         # Listen werden evaluiert (list(...)), damit {{ list|length }} im
         # Template keine zusätzliche COUNT-Query auslöst.
-        # Refs #639 #640.
-        INBOX_LIST_LIMIT = 50  # noqa: N806 — Konstante, semantisch bewusst SCREAMING_SNAKE
+        # Refs #639 #640, #803.
+        cap = WORKITEM_INBOX_CAP
 
         open_qs = base_qs.filter(
             status=WorkItem.Status.OPEN,
         ).filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
-        open_items = list(open_qs[: INBOX_LIST_LIMIT + 1])
-        open_has_more = len(open_items) > INBOX_LIST_LIMIT
+        open_items = list(open_qs[: cap + 1])
+        open_has_more = len(open_items) > cap
         if open_has_more:
-            open_items = open_items[:INBOX_LIST_LIMIT]
+            open_items = open_items[:cap]
 
         in_progress_qs = base_qs.filter(
             status=WorkItem.Status.IN_PROGRESS,
         ).filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
-        in_progress_items = list(in_progress_qs[: INBOX_LIST_LIMIT + 1])
-        in_progress_has_more = len(in_progress_items) > INBOX_LIST_LIMIT
+        in_progress_items = list(in_progress_qs[: cap + 1])
+        in_progress_has_more = len(in_progress_items) > cap
         if in_progress_has_more:
-            in_progress_items = in_progress_items[:INBOX_LIST_LIMIT]
+            in_progress_items = in_progress_items[:cap]
 
         seven_days_ago = timezone.now() - timedelta(days=7)
         done_qs = base_qs.filter(
             status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED],
             updated_at__gte=seven_days_ago,
         )
-        done_items = list(done_qs[: INBOX_LIST_LIMIT + 1])
-        done_has_more = len(done_items) > INBOX_LIST_LIMIT
+        done_items = list(done_qs[: cap + 1])
+        done_has_more = len(done_items) > cap
         if done_has_more:
-            done_items = done_items[:INBOX_LIST_LIMIT]
+            done_items = done_items[:cap]
 
         facility_users = User.objects.filter(facility=facility).order_by("last_name", "first_name", "username")
 
@@ -158,7 +159,7 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
             "in_progress_has_more": in_progress_has_more,
             "done_items": done_items,
             "done_has_more": done_has_more,
-            "inbox_list_limit": INBOX_LIST_LIMIT,
+            "inbox_list_limit": cap,
             "item_type_choices": WorkItem.ItemType.choices,
             "priority_choices": WorkItem.Priority.choices,
             "status_choices": WorkItem.Status.choices,

@@ -89,7 +89,7 @@
 <div id="retention-proposals">
 {% for category in categories %}
 <section id="retention-category-{{ category.key }}" class="mb-8 scroll-mt-4">
-    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{{ category.label }} ({{ category.count }})</h2>
+    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{{ category.label }} ({{ category.count }})</h2>
     {% if category.proposals %}
     <div class="space-y-3">
         {% for proposal in category.proposals %}

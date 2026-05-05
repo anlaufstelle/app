@@ -6,11 +6,11 @@
     <table class="min-w-full divide-y divide-subtle">
         <thead class="bg-canvas">
             <tr>
-                <th class="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Titel" %}</th>
-                <th class="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Person" %}</th>
-                <th class="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Status" %}</th>
-                <th class="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-ink-muted hidden md:table-cell">{% trans "Fallverantwortlich" %}</th>
-                <th class="px-4 py-2.5 text-left text-[11px] font-bold uppercase tracking-wider text-ink-muted hidden md:table-cell">{% trans "Erstellt" %}</th>
+                <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Titel" %}</th>
+                <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Person" %}</th>
+                <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Status" %}</th>
+                <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted hidden md:table-cell">{% trans "Fallverantwortlich" %}</th>
+                <th class="px-4 py-2.5 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted hidden md:table-cell">{% trans "Erstellt" %}</th>
             </tr>
         </thead>
         <tbody class="divide-y divide-subtle">
@@ -31,7 +31,7 @@
                     {{ case.lead_user|default:"–" }}
                 </td>
                 <td class="px-4 py-2.5 text-[13px] font-mono text-ink-muted hidden md:table-cell">
-                    {{ case.created_at|date:"d.m.Y" }}
+                    {{ case.created_at|date:"DATE_FORMAT" }}
                 </td>
             </tr>
             {% endfor %}
@@ -47,9 +47,9 @@
             <span class="text-[13px] font-semibold text-accent truncate">{{ case.title }}</span>
             {% include "core/cases/partials/status_badge.html" with case=case %}
         </div>
-        <div class="mt-1 text-[11px] text-ink-muted">
+        <div class="mt-1 text-[12px] text-ink-muted">
             {% if case.client %}{{ case.client.pseudonym }} · {% endif %}
-            <span class="font-mono">{{ case.created_at|date:"d.m.Y" }}</span>
+            <span class="font-mono">{{ case.created_at|date:"DATE_FORMAT" }}</span>
         </div>
     </a>
     {% endfor %}

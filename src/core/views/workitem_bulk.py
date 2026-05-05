@@ -92,7 +92,8 @@ class WorkItemBulkStatusView(_BulkActionMixin, View):
 
     def perform_action(self, request, workitems):
         status = request.POST.get("status", "").strip()
-        if status not in {s.value for s in WorkItem.Status}:
+        # Refs #819 (R-008): Django bietet Status.values als Liste an.
+        if status not in WorkItem.Status.values:
             raise ValueError(_("Ungültiger Status"))
         return bulk_update_workitem_status(workitems, request.user, status)
 
@@ -102,7 +103,7 @@ class WorkItemBulkPriorityView(_BulkActionMixin, View):
 
     def perform_action(self, request, workitems):
         priority = request.POST.get("priority", "").strip()
-        if priority not in {p.value for p in WorkItem.Priority}:
+        if priority not in WorkItem.Priority.values:
             raise ValueError(_("Ungültige Priorität"))
         return bulk_update_workitem_priority(workitems, request.user, priority)
 

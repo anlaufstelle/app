@@ -40,7 +40,7 @@
                 {% endif %}
             </div>
             {% if h.type != "task" and h.object.preview_fields %}
-            <div class="mt-0.5 text-[11px] text-ink-muted">
+            <div class="mt-0.5 text-[12px] text-ink-muted">
                 {% for pf in h.object.preview_fields %}
                 <span>{{ pf.label }}: {{ pf.value }}{% if not forloop.last %} · {% endif %}</span>
                 {% endfor %}
@@ -77,7 +77,7 @@
             </div>
             {% endif %}
             {% if h.type == "task" and h.object.assigned_to %}
-            <div class="mt-0.5 text-[11px] text-ink-muted">→ {{ h.object.assigned_to.display_name|default:h.object.assigned_to.username }}</div>
+            <div class="mt-0.5 text-[12px] text-ink-muted">→ {{ h.object.assigned_to.display_name|default:h.object.assigned_to.username }}</div>
             {% endif %}
         </div>
     </div>

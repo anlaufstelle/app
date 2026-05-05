@@ -27,7 +27,7 @@ class Event(models.Model):
         null=True,
         blank=True,
         related_name="events",
-        verbose_name=_("Klientel"),
+        verbose_name=_("Person"),
     )
     document_type = models.ForeignKey(
         "core.DocumentType",
@@ -61,6 +61,11 @@ class Event(models.Model):
     )
     occurred_at = models.DateTimeField(verbose_name=_("Zeitpunkt"))
     data_json = models.JSONField(default=dict, verbose_name=_("Daten (JSON)"))
+    # Refs #827 (C-60): expliziter Suchindex statt JSONB-icontains.
+    # Enthaelt nur unverschluesselte Felder mit Default-Sensitivity (ohne
+    # ELEVATED/HIGH). Wird im create_event/update_event-Pfad gepflegt und
+    # ueber einen GIN-trgm-Index angefragt — in services/search.py.
+    search_text = models.TextField(default="", blank=True, verbose_name=_("Suchindex"))
     is_anonymous = models.BooleanField(default=False, verbose_name=_("Anonym"))
     is_deleted = models.BooleanField(default=False, verbose_name=_("Gelöscht"))
     created_at = models.DateTimeField(auto_now_add=True, verbose_name=_("Erstellt am"))

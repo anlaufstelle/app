@@ -48,7 +48,8 @@ RUN DJANGO_SECRET_KEY=$DJANGO_SECRET_KEY python manage.py collectstatic --noinpu
 ENV DJANGO_SECRET_KEY=
 
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+COPY docker-migrate.sh /app/docker-migrate.sh
+RUN chmod +x /app/docker-entrypoint.sh /app/docker-migrate.sh
 
 RUN adduser --disabled-password --gecos '' --uid 1000 appuser && chown -R appuser:appuser /app
 

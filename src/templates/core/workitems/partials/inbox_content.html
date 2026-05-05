@@ -2,7 +2,7 @@
 
 {# Offen #}
 <section class="mb-8">
-    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Offen" %} ({{ open_items|length }}{% if open_has_more %}+{% endif %})</h2>
+    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Offen" %} ({{ open_items|length }}{% if open_has_more %}+{% endif %})</h2>
     {% if open_items %}
     <div class="space-y-3">
         {% for wi in open_items %}
@@ -19,7 +19,7 @@
 
 {# In Bearbeitung #}
 <section class="mb-8">
-    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "In Bearbeitung" %} ({{ in_progress_items|length }}{% if in_progress_has_more %}+{% endif %})</h2>
+    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "In Bearbeitung" %} ({{ in_progress_items|length }}{% if in_progress_has_more %}+{% endif %})</h2>
     {% if in_progress_items %}
     <div class="space-y-3">
         {% for wi in in_progress_items %}
@@ -36,7 +36,7 @@
 
 {# Kürzlich Erledigt #}
 <section>
-    <h2 class="text-[11px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Kürzlich erledigt" %} ({{ done_items|length }}{% if done_has_more %}+{% endif %})</h2>
+    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Kürzlich erledigt" %} ({{ done_items|length }}{% if done_has_more %}+{% endif %})</h2>
     {% if done_items %}
     <div class="space-y-3">
         {% for wi in done_items %}
