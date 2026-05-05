@@ -241,5 +241,6 @@ class TestEventCreateValidation:
         page.wait_for_load_state("domcontentloaded")
 
         # Expect a validation error about requiring a client for this document type
-        error_text = page.locator(".text-red-600:has-text('Klientel')")
+        # (Sprachleitlinie #604: "Klientel" -> "Person")
+        error_text = page.locator(".text-red-600:has-text('Person')")
         expect(error_text).to_be_visible(timeout=5000)

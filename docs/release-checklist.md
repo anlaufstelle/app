@@ -2,7 +2,7 @@
 
 Checkliste fuer Releases der Anlaufstelle-Anwendung.
 
-Stand: v0.10.2 (2026-04-28)
+Stand: v0.11.0 (2026-05-05)
 
 ## 1. Pre-Release
 

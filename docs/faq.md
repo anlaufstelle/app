@@ -260,8 +260,8 @@ Beim Anlegen oder Bearbeiten eines Ereignisses gibt es ein **Datei-Upload-Feld**
 Ja — seit v0.10 gibt es einen sicheren **Offline-Modus** für Streetwork und mobile Einsätze.
 
 **Ablauf:**
-1. **Vor dem Verlassen des Büros:** Klientel in den Offline-Cache laden (Schaltfläche in der Klientel-Liste).
-2. **Unterwegs:** Ereignisse erfassen, Klienteldaten ansehen und bearbeiten — auch ohne Netz.
+1. **Vor dem Verlassen des Büros:** Personen in den Offline-Cache laden (Schaltfläche in der Personen-Liste).
+2. **Unterwegs:** Ereignisse erfassen, Personendaten ansehen und bearbeiten — auch ohne Netz.
 3. **Zurück im Büro:** Synchronisieren, damit lokale Änderungen in die Datenbank übernommen werden.
 
 **Sicherheit:** Alle Offline-Daten liegen **verschlüsselt im Browser** (IndexedDB). Der Schlüssel wird aus Ihrem Passwort abgeleitet — der Browser allein kann die Daten nicht entschlüsseln.
@@ -304,8 +304,8 @@ Jeder User hat genau eine Rolle. Die Rollen bilden eine aufsteigende Hierarchie 
 
 | Rolle | DB-Wert | Beschreibung |
 |-------|---------|-------------|
-| **Assistenz** | `assistant` | Grundzugriff: Kontakte anlegen, Zeitstrom und Klientel einsehen |
-| **Fachkraft** | `staff` | Vollzugriff auf Fallarbeit: Klienten, Fälle, Episoden, Ziele anlegen und bearbeiten |
+| **Assistenz** | `assistant` | Grundzugriff: Kontakte anlegen, Zeitstrom und Personen einsehen |
+| **Fachkraft** | `staff` | Vollzugriff auf Fallarbeit: Personen, Fälle, Episoden, Ziele anlegen und bearbeiten |
 | **Leitung** | `lead` | Zusätzlich: Fälle schließen, Statistiken, Löschanträge genehmigen, Datenexport |
 | **Administrator** | `admin` | Vollzugriff: Audit-Log, DSGVO-Paket, Administrationsoberfläche |
 
@@ -316,7 +316,7 @@ Die Rolle wird direkt auf dem User-Modell gespeichert (`User.role`). Die View-Sc
 Jeder User gehört zu genau einer **Einrichtung** (Facility). Datenisolation ist automatisch:
 
 - Die Middleware `FacilityScopeMiddleware` setzt pro Request `request.current_facility`
-- Alle Datenmodelle (Klientel, Kontakte, Fälle, Arbeitsaufträge, Audit-Logs …) verwenden den `FacilityScopedManager`
+- Alle Datenmodelle (Personen, Kontakte, Fälle, Arbeitsaufträge, Audit-Logs …) verwenden den `FacilityScopedManager`
 - Queries werden über `.for_facility(facility)` gefiltert — ein User sieht **ausschließlich Daten seiner eigenen Einrichtung**
 - Es gibt keine einrichtungsübergreifende Sicht, auch nicht für Administratoren
 
@@ -326,9 +326,9 @@ Jeder User gehört zu genau einer **Einrichtung** (Facility). Datenisolation ist
 |---------|--------|--------------|
 | Zeitstrom, Übergabe | Anzeigen | Assistenz |
 | Suche | Volltextsuche | Assistenz |
-| Klientel | Anzeigen, Suchen | Assistenz |
-| Klientel | Anlegen, Bearbeiten | Fachkraft |
-| Klientel | Datenexport (JSON/PDF) | Leitung |
+| Personen | Anzeigen, Suchen | Assistenz |
+| Personen | Anlegen, Bearbeiten | Fachkraft |
+| Personen | Datenexport (JSON/PDF) | Leitung |
 | Kontakte (Events) | Anlegen, Anzeigen | Assistenz |
 | Kontakte | Bearbeiten | Assistenz (eigene) / Fachkraft (alle) |
 | Kontakte | Löschen | Fachkraft (eigene) / Leitung (alle) |

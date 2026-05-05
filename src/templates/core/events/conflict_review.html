@@ -4,7 +4,7 @@
 {% block title %}{% trans "Konflikt auflösen" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-<div x-data="conflictResolver" data-event-pk="{{ event_pk|escapejs }}" x-init="load"
+<div x-data="conflictResolver" data-event-pk="{{ event_pk }}" x-init="load"
      data-testid="conflict-resolver-view" class="space-y-6">
 
     <div class="flex items-center space-x-2">

@@ -1,10 +1,10 @@
 {
-  "GET /zeitstrom": 500,
-  "GET /clients/": 500,
-  "GET /cases/": 500,
-  "GET /workitems/": 500,
-  "GET /search?q=Kontakt": 500,
-  "GET /statistik": 1000,
-  "GET /statistik/exports/pdf": 5000,
-  "GET /statistik/exports/csv": 2000
+  "/zeitstrom": 500,
+  "/clients/": 500,
+  "/cases/": 500,
+  "/workitems/": 500,
+  "/search?q=Kontakt": 500,
+  "/statistics": 1000,
+  "/statistics/export/pdf": 5000,
+  "/statistics/export/csv": 2000
 }

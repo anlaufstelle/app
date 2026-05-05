@@ -84,7 +84,7 @@ class Client(SoftDeletableModel):
 
     class Meta:
         verbose_name = _("Person")
-        verbose_name_plural = _("Person")
+        verbose_name_plural = _("Personen")
         ordering = ["pseudonym"]
         constraints = [
             models.UniqueConstraint(

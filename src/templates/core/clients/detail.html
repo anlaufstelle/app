@@ -16,7 +16,7 @@
 
 {# Profil-Header #}
 <div class="mb-5"
-     x-data="offlineClientBadge" data-pk="{{ client.pk|escapejs }}"
+     x-data="offlineClientBadge" data-pk="{{ client.pk }}"
      x-init="refresh"
      @offline-clients-count.window="refresh">
     <div class="flex items-start justify-between gap-3 flex-wrap">

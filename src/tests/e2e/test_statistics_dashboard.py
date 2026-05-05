@@ -75,7 +75,7 @@ class TestStatisticsYearNavigation:
         assert page.get_by_role("button", name="Jahr", exact=True).is_visible()
 
     def test_jahr_button_switches_period(self, authenticated_page, base_url):
-        """Klick auf Jahr → Zeitraum zeigt 01.01. bis heute."""
+        """Klick auf Jahr → Zeitraum zeigt 1. Januar bis heute."""
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
 
@@ -83,7 +83,8 @@ class TestStatisticsYearNavigation:
             page.get_by_role("button", name="Jahr", exact=True).click()
 
         # ``expect`` pollt bis der HTMX-DOM-Swap durch ist (Refs #849).
-        expect(page.locator("text=Zeitraum:")).to_contain_text("01.01.", timeout=10000)
+        # Langformat-Datum seit i18n-L10N-Umstellung (Refs #815).
+        expect(page.locator("text=Zeitraum:")).to_contain_text("1. Januar", timeout=10000)
 
     def test_year_nav_prev_arrow(self, authenticated_page, base_url):
         """Pfeil links → Jahr dekrementiert, Zeitraum = ganzes Vorjahr."""
@@ -107,8 +108,9 @@ class TestStatisticsYearNavigation:
         # ``expect``-Locator pollt bis zum DOM-Swap nach dem HTMX-Response (Refs #761).
         expect(year_label).to_have_text(str(int(current_year_text) - 1), timeout=10000)
 
-        # Zeitraum muss 01.01. – 31.12. des Vorjahres zeigen
-        expect(page.locator("text=Zeitraum:")).to_contain_text("31.12.", timeout=10000)
+        # Zeitraum muss bis 31. Dezember des Vorjahres reichen
+        # (Langformat-Datum seit i18n-L10N-Umstellung, Refs #815).
+        expect(page.locator("text=Zeitraum:")).to_contain_text("31. Dezember", timeout=10000)
 
     def test_year_nav_next_arrow_for_past_year(self, authenticated_page, base_url):
         """Im Vorjahr: Pfeil rechts sichtbar, Klick → Jahr inkrementiert."""

@@ -5,13 +5,13 @@ Schwellen für die nächtliche Last-Tests-Schicht ([Locust](https://locust.io/) 
 | Endpoint | Aufruf | Budget (p95) | Begründung |
 |---|---|---|---|
 | Zeitstrom | `GET /` | **500 ms** | Hauptlandeseite — Refs [#740](https://github.com/tobiasnix/anlaufstelle/issues/740) Sidebar-Prefetch |
-| Klientel-Liste | `GET /clients/` | **500 ms** | Pagination + Annotation `last_contact=Max(...)` |
+| Personen-Liste | `GET /clients/` | **500 ms** | Pagination + Annotation `last_contact=Max(...)` |
 | Fall-Liste | `GET /cases/` | **500 ms** | Select-related auf `client` und `lead_user` |
 | WorkItem-Inbox | `GET /workitems/` | **500 ms** | Drei Listen, jeweils auf `WORKITEM_INBOX_CAP` |
 | Suche | `GET /search/?q=...` | **500 ms** | seit Refs [#827](https://github.com/tobiasnix/anlaufstelle/issues/827) auf `search_text`-GIN-Index |
-| Statistik-Dashboard | `GET /statistik/?period=month` | **1000 ms** | MV-Hybrid — Refs [#683](https://github.com/tobiasnix/anlaufstelle/issues/683) |
-| PDF-Export | `GET /statistik/exports/pdf/...` | **5000 ms** | WeasyPrint — synchron |
-| CSV-Export | `GET /statistik/exports/csv/...` | **2000 ms** | Stream, aber alle Events ein Halbjahr |
+| Statistik-Dashboard | `GET /statistics/?period=month` | **1000 ms** | MV-Hybrid — Refs [#683](https://github.com/tobiasnix/anlaufstelle/issues/683) |
+| PDF-Export | `GET /statistics/export/pdf/...` | **5000 ms** | WeasyPrint — synchron |
+| CSV-Export | `GET /statistics/export/csv/...` | **2000 ms** | Stream, aber alle Events ein Halbjahr |
 
 ## Workflow
 

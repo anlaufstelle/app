@@ -4,11 +4,12 @@ import logging
 
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
+from django.http import Http404
 from django.views import View
 
 from core.models import AuditLog, DocumentType
 from core.models.attachment import EventAttachment
-from core.services.file_vault import get_decrypted_file_stream, get_original_filename
+from core.services.file_vault import get_attachment_path, get_decrypted_file_stream, get_original_filename
 from core.services.sensitivity import allowed_sensitivities_for_user, get_visible_attachment_or_404, user_can_see_field
 from core.utils.downloads import safe_download_response
 from core.utils.formatting import format_file_size
@@ -130,6 +131,21 @@ class AttachmentDownloadView(AssistantOrAboveRequiredMixin, View):
         doc_sensitivity = event.document_type.sensitivity
         if not user_can_see_field(request.user, doc_sensitivity, ft.sensitivity):
             raise PermissionDenied
+
+        # Verify the encrypted file still exists on disk before streaming.
+        # Without this check, a missing file raises FileNotFoundError inside
+        # the streaming generator after response headers are already sent —
+        # the browser then sees the connection being reset mid-stream
+        # ("Secure Connection Failed" in Firefox) instead of a proper 404.
+        file_path = get_attachment_path(attachment)
+        if not file_path.exists():
+            logger.error(
+                "Attachment file missing on disk: attachment_id=%s event_id=%s path=%s",
+                attachment.pk,
+                event.pk,
+                file_path,
+            )
+            raise Http404("Attachment file not found")
 
         # Audit log
         AuditLog.objects.create(

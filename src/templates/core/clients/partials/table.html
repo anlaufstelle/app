@@ -24,7 +24,7 @@
         {% for client in clients %}
         <div role="row"
              class="bg-surface border border-subtle rounded-[10px] p-3 sm:p-0 sm:border-0 sm:rounded-none hover:shadow-sm sm:hover:shadow-none sm:hover:bg-canvas transition-colors"
-             x-data="clientRowOffline" data-pk="{{ client.pk|escapejs }}"
+             x-data="clientRowOffline" data-pk="{{ client.pk }}"
              data-label-take="{% trans 'Offline mitnehmen' %}"
              data-label-remove="{% trans 'Aus Offline-Cache entfernen' %}"
              x-init="refresh"

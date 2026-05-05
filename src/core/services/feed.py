@@ -62,10 +62,9 @@ def build_feed_items(facility, target_date, feed_type, time_filter=None, user=No
         )
         if include_all:
             events_qs = events_qs.exclude(document_type__system_type="ban")
-        events = (
-            events_qs.select_related("document_type", "client", "created_by")
-            .order_by("-occurred_at")[:FEED_MAX_PER_TYPE]
-        )
+        events = events_qs.select_related("document_type", "client", "created_by").order_by("-occurred_at")[
+            :FEED_MAX_PER_TYPE
+        ]
         events_list = [{"type": "event", "occurred_at": e.occurred_at, "object": e} for e in events]
 
     # Activities

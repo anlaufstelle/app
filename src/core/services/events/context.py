@@ -253,9 +253,7 @@ def build_event_detail_context(event, user):
             "is_encrypted": ft.is_encrypted,
             "sensitivity": ft.sensitivity,
         }
-    history = list(
-        event.history.select_related("changed_by").order_by("-changed_at")
-    )
+    history = list(event.history.select_related("changed_by").order_by("-changed_at"))
     for entry in history:
         entry.event = event
         entry._slug_info = shared_slug_info

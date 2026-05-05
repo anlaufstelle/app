@@ -4,7 +4,7 @@
 {% block title %}{% trans "Offline-Ansicht" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-<div x-data="offlineClientView" data-pk="{{ client_pk|escapejs }}" x-init="load"
+<div x-data="offlineClientView" data-pk="{{ client_pk }}" x-init="load"
      data-testid="offline-client-view">
 
     <div class="mb-4 flex items-center space-x-2">

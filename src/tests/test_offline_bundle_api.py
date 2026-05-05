@@ -357,3 +357,45 @@ class TestOfflineClientDetailShellView:
         response = client.get(self._url("00000000-0000-0000-0000-000000000000"))
         assert response.status_code == 200
         assert b"offline-client-view" in response.content
+
+
+@pytest.mark.django_db
+class TestClientPkRenderedAsBareUuid:
+    """Regression: ``data-pk`` must contain the literal UUID, not ``\\u002D``-
+    escaped hyphens. ``escapejs`` is for inline ``<script>`` strings; in HTML
+    attributes the browser reads the escape sequence verbatim, so JS appends
+    a malformed UUID to ``/api/offline/bundle/client/...`` → 404.
+    """
+
+    def _bare_pk_html(self, pk):
+        return f'data-pk="{pk}"'.encode()
+
+    def test_client_list_renders_bare_uuid(self, client, client_identified, staff_user):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:client_list"))
+        assert response.status_code == 200
+        assert self._bare_pk_html(client_identified.pk) in response.content
+        assert b"\\u002D" not in response.content
+
+    def test_client_detail_renders_bare_uuid(self, client, client_identified, staff_user):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk}))
+        assert response.status_code == 200
+        assert self._bare_pk_html(client_identified.pk) in response.content
+        assert b"\\u002D" not in response.content
+
+    def test_offline_detail_shell_renders_bare_uuid(self, client, staff_user):
+        pk = "6b70767f-9143-43a9-8908-feccc4a94a9f"
+        client.force_login(staff_user)
+        response = client.get(reverse("core:offline_client_detail", kwargs={"pk": pk}))
+        assert response.status_code == 200
+        assert self._bare_pk_html(pk) in response.content
+        assert b"\\u002D" not in response.content
+
+    def test_conflict_review_renders_bare_uuid(self, client, staff_user):
+        pk = "6b70767f-9143-43a9-8908-feccc4a94a9f"
+        client.force_login(staff_user)
+        response = client.get(reverse("core:offline_conflict_review", kwargs={"pk": pk}))
+        assert response.status_code == 200
+        assert f'data-event-pk="{pk}"'.encode() in response.content
+        assert b"\\u002D" not in response.content

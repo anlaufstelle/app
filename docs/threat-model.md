@@ -1,6 +1,6 @@
 # Threat Model — Anlaufstelle (STRIDE-Lite)
 
-**Version:** v0.10.x · **Letzte Revision:** 2026-04-29 · **Quelle:** [Issue #691](https://github.com/tobiasnix/anlaufstelle/issues/691)
+**Version:** v0.11.x · **Letzte Revision:** 2026-05-05 · **Quelle:** [Issue #691](https://github.com/tobiasnix/anlaufstelle/issues/691)
 
 Dieses Dokument macht das Sicherheitsmodell explizit. Es ergänzt — nicht ersetzt — die zeilengenauen Audits unter [`docs/audits/`](audits/) und die Design-Entscheidungen in [`docs/security-notes.md`](security-notes.md).
 

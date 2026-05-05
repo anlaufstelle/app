@@ -230,7 +230,7 @@ Die globale CSP enthält jetzt `report-uri /csp-report/` ([`base.py:266-275`](..
 
 **Detection-Pfad:** Wenn `SENTRY_DSN` gesetzt ist ([`prod.py`](../src/anlaufstelle/settings/prod.py)), nimmt Sentry's Logging-Integration die WARNINGs automatisch mit — Violations erscheinen mit `csp_violation`-Tag und allen Feldern (`blocked-uri`, `violated-directive`, `source-file`, ...) im Sentry-Dashboard. Ohne Sentry landen sie in der lokalen Log-Datei und können per Caddy/Filebeat/Loki nachgelesen werden.
 
-**Bewusste Lücke:** `report-to` (Reporting API + `Reporting-Endpoints`-Header) ist noch nicht konfiguriert — `report-uri` allein deckt alle relevanten Browser ab. Falls die Browser-Spezifikation `report-uri` deprecaten sollte, muss `report-to` ergänzt werden.
+**Bewusste Trade-off-Entscheidung:** `report-to` (Reporting API + `Reporting-Endpoints`-Header) ist nicht konfiguriert — `report-uri` deckt alle relevanten Browser ab und wurde in [#684](https://github.com/tobiasnix/anlaufstelle/issues/684) bewusst als ausreichende Implementierung gewählt. Falls die Browser-Spezifikation `report-uri` deprecaten sollte, muss `report-to` ergänzt werden.
 
 ---
 

@@ -314,7 +314,7 @@ Die Kategorie gruppiert Dokumentationstypen für Filter und die **Statistik-Seit
 
 | Kategorie | Bedeutung | Beispiel |
 |-----------|-----------|----------|
-| **Kontakt** | Direkte Kontakte mit Klientel | Beratungsgespräch, Krisengespräch |
+| **Kontakt** | Direkte Kontakte mit Personen | Beratungsgespräch, Krisengespräch |
 | **Leistung** | Erbrachte Leistungen | Spritzentausch, Begleitung |
 | **Verwaltung** | Administrative Vorgänge | Hausverbot, Vermittlung |
 | **Notiz** | Freie Notizen | Beobachtungen, Vermerke |
@@ -343,7 +343,7 @@ Aktuell hat der Systemtyp zwei Funktionen:
 
 | Systemtyp | Auswirkung |
 |-----------|------------|
-| **Hausverbot** | Aktiviert Hausverbot-Banner auf der Klientelseite, eigener Filter im Zeitstrom, Zählung und Highlight in der Übergabe |
+| **Hausverbot** | Aktiviert Hausverbot-Banner auf der Personenseite, eigener Filter im Zeitstrom, Zählung und Highlight in der Übergabe |
 | **Krisengespräch** | Wird als Highlight in der Übergabe angezeigt (letzte Krisen-Events) |
 
 **2. Jugendamt-Export** (Zuordnung zu Berichtskategorien):
@@ -365,7 +365,7 @@ Aktuell hat der Systemtyp zwei Funktionen:
 
 #### Mindest-Kontaktstufe
 
-Legt fest, welche Kontaktstufe ein Klientel mindestens haben muss, damit ein Ereignis dieses Typs erstellt werden kann. Beispiel: Beratungsgespräche erfordern mindestens „Qualifiziert", weil die Identität des Klientel bekannt sein muss.
+Legt fest, welche Kontaktstufe eine Person mindestens haben muss, damit ein Ereignis dieses Typs erstellt werden kann. Beispiel: Beratungsgespräche erfordern mindestens „Qualifiziert", weil die Identität der Person bekannt sein muss.
 
 #### Feldebenen-Sensibilität (`FieldTemplate.sensitivity`)
 
@@ -441,7 +441,7 @@ Wenn eine Option nicht mehr benötigt wird, setzen Sie `is_active` auf `false` s
 
 ### 2.6b Fuzzy-Suche (pg_trgm)
 
-Die globale Suche nach Klientel (Pseudonymen) nutzt zusätzlich zur exakten Teilstring-Suche eine **Trigramm-basierte Fuzzy-Suche** — tolerant gegenüber Tippfehlern und phonetischen Varianten (z. B. „Schmidt" ↔ „Schmitt"). Implementierung: [`src/core/services/search.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/search.py), Funktion `search_similar_clients`.
+Die globale Suche nach Personen (Pseudonymen) nutzt zusätzlich zur exakten Teilstring-Suche eine **Trigramm-basierte Fuzzy-Suche** — tolerant gegenüber Tippfehlern und phonetischen Varianten (z. B. „Schmidt" ↔ „Schmitt"). Implementierung: [`src/core/services/search.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/search.py), Funktion `search_similar_clients`.
 
 **Schwelle pro Einrichtung:** Unter **Core → Einstellungen → *Einrichtung*** → Feld **„Fuzzy-Search-Schwelle"** (`Settings.search_trigram_threshold`):
 
@@ -625,7 +625,7 @@ Quelle: [`src/static/js/crypto.js`](https://github.com/tobiasnix/anlaufstelle/bl
 
 #### Streetwork-Stufen
 
-- **Stufe 2 (Read-Cache):** Ausgewählte Klientel-Dossiers werden vor dem Streetwork-Einsatz lokal verschlüsselt gecacht, damit sie offline eingesehen werden können.
+- **Stufe 2 (Read-Cache):** Ausgewählte Personen-Dossiers werden vor dem Streetwork-Einsatz lokal verschlüsselt gecacht, damit sie offline eingesehen werden können.
 - **Stufe 3 (Offline-Edit):** Ereignisse und Notizen können offline erfasst werden und synchronisieren beim nächsten Online-Gang. Konflikte zwischen Offline-Edit und zwischenzeitlicher Server-Änderung werden per **Side-by-Side-Diff** dem Nutzer zur manuellen Auflösung präsentiert.
 
 ---
@@ -961,9 +961,9 @@ Sensible Felder in der Datenbank werden mit dem `ENCRYPTION_KEY` verschlüsselt 
 
 ### 7.2 Pseudonymisierung
 
-Die Anwendung speichert **keine Klarnamen** in der Datenbank. Klienteldaten werden pseudonymisiert erfasst:
+Die Anwendung speichert **keine Klarnamen** in der Datenbank. Personendaten werden pseudonymisiert erfasst:
 
-- Klientel werden über interne IDs referenziert.
+- Personen werden über interne IDs referenziert.
 - Anzeigenamen in der Oberfläche sind konfigurierbare Pseudonyme.
 - Qualifizierte (identifizierbare) Daten sind nur für berechtigte Rollen (Leitung, Admin) sichtbar.
 
@@ -1040,10 +1040,10 @@ Das Audit-Log ist **append-only** und unveränderlich. Es protokolliert automati
 |---|---|
 | Anmeldung / Abmeldung | Jeder Login/Logout |
 | Fehlgeschlagene Anmeldung | Falsches Passwort |
-| Qualifizierte Daten eingesehen | Zugriff auf identifizierbare Klienteldaten |
+| Qualifizierte Daten eingesehen | Zugriff auf identifizierbare Personendaten |
 | Export | Datenexport durch Benutzer |
 | Löschung | Manuell oder durch `enforce_retention` |
-| Stufenwechsel | Änderung des Kontaktstatus eines Klientel |
+| Stufenwechsel | Änderung des Kontaktstatus einer Person |
 | Einstellungen geändert | Änderungen an Einrichtungseinstellungen |
 
 **Im Admin einsehen:**
@@ -1054,7 +1054,7 @@ Unter **Core → Audit-Logs** können Logs nach Aktion, Einrichtung, Benutzer un
 
 ### 7.5 Löschanträge (4-Augen-Prinzip)
 
-Löschanträge für Klienteldaten werden im Vier-Augen-Prinzip bearbeitet: Ein Antrag muss von Leitung oder Admin genehmigt werden, bevor Daten endgültig gelöscht werden. Dies schützt vor versehentlicher oder unberechtigter Löschung.
+Löschanträge für Personendaten werden im Vier-Augen-Prinzip bearbeitet: Ein Antrag muss von Leitung oder Admin genehmigt werden, bevor Daten endgültig gelöscht werden. Dies schützt vor versehentlicher oder unberechtigter Löschung.
 
 ### 7.6 Betroffenenrechte (Art. 15–20 DSGVO)
 
@@ -1062,7 +1062,7 @@ Für die Bearbeitung von Anfragen betroffener Personen stehen folgende administr
 
 | Recht | Maßnahme |
 |---|---|
-| Auskunft (Art. 15) | Audit-Log und Klienteldaten im Admin einsehen, ggf. exportieren |
+| Auskunft (Art. 15) | Audit-Log und Personendaten im Admin einsehen, ggf. exportieren |
 | Berichtigung (Art. 16) | Felder im Admin direkt bearbeiten |
 | Löschung (Art. 17) | Löschantrag über die Anwendung stellen (4-Augen-Prinzip) |
 | Datenportabilität (Art. 20) | Export-Funktion in der Anwendung |
@@ -1204,8 +1204,8 @@ python manage.py create_statistics_snapshots --year 2026 --month 2
 ### Einschränkungen
 
 - **CSV-Export:** Der CSV-Export enthält weiterhin nur vorhandene Events (keine Snapshot-Daten), da er Einzelzeilen exportiert.
-- **Top-Klientel:** Die Rangliste der aktivsten Klientel wird immer live berechnet und kann sich nach einer Löschung verändern.
-- **Eindeutige Klientel:** Die Zählung über mehrere Monate ist eine Näherung (Summe statt exakte Distinct-Zählung).
+- **Top-Personen:** Die Rangliste der aktivsten Personen wird immer live berechnet und kann sich nach einer Löschung verändern.
+- **Eindeutige Personen:** Die Zählung über mehrere Monate ist eine Näherung (Summe statt exakte Distinct-Zählung).
 
 ### Admin-Oberfläche
 

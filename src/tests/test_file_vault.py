@@ -325,6 +325,21 @@ class TestFileUploadView:
         assert response.status_code == 200
         assert response["Content-Disposition"] == 'attachment; filename="evil.html"'
 
+    def test_download_returns_404_when_file_missing_on_disk(self, client, staff_user, event_with_file):
+        """If the encrypted file is missing on disk, the view returns 404
+        instead of crashing the streaming response (which would manifest as
+        a connection reset / "Secure Connection Failed" in the browser).
+        """
+        from core.services.file_vault import get_attachment_path
+
+        event, attachment = event_with_file
+        get_attachment_path(attachment).unlink()
+
+        client.force_login(staff_user)
+        url = reverse("core:attachment_download", kwargs={"pk": event.pk, "attachment_pk": attachment.pk})
+        response = client.get(url)
+        assert response.status_code == 404
+
     def test_download_creates_audit_log(self, client, staff_user, event_with_file):
         from core.models import AuditLog
 

@@ -53,29 +53,31 @@ class StaffUser(HttpUser):
             headers={"Referer": f"{self.host}/login/"},
         )
 
+    # Locust prefixt das HTTP-Verb automatisch — ``name=`` darf nur den
+    # Pfad enthalten, sonst entsteht "GET GET /xyz" im Stats-CSV.
     @task(5)
     def zeitstrom(self):
-        self.client.get("/", name="GET /zeitstrom")
+        self.client.get("/", name="/zeitstrom")
 
     @task(3)
     def client_list(self):
-        self.client.get("/clients/", name="GET /clients/")
+        self.client.get("/clients/", name="/clients/")
 
     @task(3)
     def case_list(self):
-        self.client.get("/cases/", name="GET /cases/")
+        self.client.get("/cases/", name="/cases/")
 
     @task(2)
     def workitem_inbox(self):
-        self.client.get("/workitems/", name="GET /workitems/")
+        self.client.get("/workitems/", name="/workitems/")
 
     @task(2)
     def search(self):
-        self.client.get("/search/?q=Kontakt", name="GET /search?q=Kontakt")
+        self.client.get("/search/?q=Kontakt", name="/search?q=Kontakt")
 
     @task(1)
     def statistics(self):
-        self.client.get("/statistik/?period=month", name="GET /statistik")
+        self.client.get("/statistics/?period=month", name="/statistics")
 
 
 class HeavyExportUser(HttpUser):
@@ -101,15 +103,15 @@ class HeavyExportUser(HttpUser):
     def pdf_export(self):
         # date_from/date_to als heutiges Halbjahr (siehe statistics-View).
         self.client.get(
-            "/statistik/exports/pdf/?date_from=2026-01-01&date_to=2026-06-30",
-            name="GET /statistik/exports/pdf",
+            "/statistics/export/pdf/?date_from=2026-01-01&date_to=2026-06-30",
+            name="/statistics/export/pdf",
         )
 
     @task
     def csv_export(self):
         self.client.get(
-            "/statistik/exports/csv/?date_from=2026-01-01&date_to=2026-06-30",
-            name="GET /statistik/exports/csv",
+            "/statistics/export/csv/?date_from=2026-01-01&date_to=2026-06-30",
+            name="/statistics/export/csv",
         )
 
 
