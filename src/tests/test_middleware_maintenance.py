@@ -114,6 +114,31 @@ class TestMaintenanceModeWhitelist:
             response = MaintenanceModeMiddleware(lambda r: r)(request)
         assert response.status_code == 503
 
+    def test_xff_spoof_attempt_blocked(self, flag_file):
+        """Refs #773: Angreifer setzt ``X-Forwarded-For: <ops-ip>, <attacker>``,
+        um die IP-Allowlist zu umgehen. Vor dem Fix nahm ``_client_ip`` das
+        **erste** Element (vom Client setzbar) — Wartungsmauer faellt.
+
+        Mit dem ``get_client_ip``-Helper aus ``signals/audit`` wird der
+        rechtsbuendige Eintrag (TRUSTED_PROXY_HOPS=1) genommen — der
+        attacker-Eintrag wird sichtbar, der Spoof haelt die Mauer.
+        """
+        open(flag_file, "w").close()
+        with override_settings(
+            MAINTENANCE_FLAG_FILE=flag_file,
+            MAINTENANCE_ALLOW_IPS=["10.0.0.42"],
+            TRUSTED_PROXY_HOPS=1,
+        ):
+            rf = RequestFactory()
+            # Angreifer: client setzt XFF mit Ops-IP an erster Stelle.
+            request = rf.get("/clients/", HTTP_X_FORWARDED_FOR="10.0.0.42, 203.0.113.99")
+            response = MaintenanceModeMiddleware(lambda r: r)(request)
+        assert response.status_code == 503, (
+            "XFF-Spoof darf die IP-Allowlist nicht umgehen — die ops-IP an "
+            "erster Stelle ist client-kontrolliert; nur der rechte Eintrag "
+            "stammt vom vertrauenswuerdigen Reverse-Proxy."
+        )
+
 
 class TestMaintenanceModeCache:
     """File-Exists-Check ist gecached, damit hohe Last den Disk nicht hammert."""

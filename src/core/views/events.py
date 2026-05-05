@@ -178,16 +178,25 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
             client_pseudonym = client_obj.pseudonym if client_obj else ""
 
             # Re-render dynamic fields for selected document type
+            #
+            # Refs #774 — Sensitivity-Guard: ohne diesen Check konnte ein
+            # Assistant durch invaliden POST mit ``document_type=<HIGH-id>``
+            # die Feldlabels/Help-Texte des HIGH-Typs in der Re-Render-Antwort
+            # sichtbar machen. Wir spiegeln deshalb die Pruefung aus
+            # ``EventFieldsPartialView``: ist ``user_can_see_document_type``
+            # False, rendern wir ein leeres ``DynamicEventDataForm``.
             doc_type_id = request.POST.get("document_type")
             data_form = DynamicEventDataForm()
             if doc_type_id:
                 try:
                     doc_type = DocumentType.objects.get(pk=doc_type_id, facility=facility, is_active=True)
+                except (DocumentType.DoesNotExist, ValueError):
+                    doc_type = None
+                if doc_type is not None and user_can_see_document_type(request.user, doc_type):
                     data_form = DynamicEventDataForm(
                         request.POST, request.FILES, document_type=doc_type, facility=facility
                     )
-                except (DocumentType.DoesNotExist, ValueError):
-                    pass
+                    remove_restricted_fields(request.user, doc_type, data_form)
 
             return render(
                 request,

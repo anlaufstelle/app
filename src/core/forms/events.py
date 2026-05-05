@@ -4,6 +4,7 @@ from django import forms
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from core.constants import DEFAULT_ALLOWED_FILE_TYPES, DEFAULT_MAX_FILE_SIZE_MB
 from core.forms.widgets import INPUT_CSS
 from core.models import Case, DocumentType, DocumentTypeField, FieldTemplate
 from core.models.settings import Settings
@@ -194,12 +195,19 @@ class DynamicEventDataForm(forms.Form):
         cleaned = super().clean()
         if not self.facility:
             return cleaned
+        # Refs #771 — fail-closed: fehlende Settings oder leere Whitelist greifen
+        # auf DEFAULT_ALLOWED_FILE_TYPES / DEFAULT_MAX_FILE_SIZE_MB zurueck,
+        # statt jeden Upload stillschweigend durchzulassen.
         try:
             facility_settings = Settings.objects.get(facility=self.facility)
         except Settings.DoesNotExist:
-            return cleaned
-        allowed = {ext.strip().lower() for ext in facility_settings.allowed_file_types.split(",") if ext.strip()}
-        max_bytes = facility_settings.max_file_size_mb * 1024 * 1024
+            facility_settings = None
+        raw = (facility_settings.allowed_file_types or "") if facility_settings else ""
+        allowed = {ext.strip().lower().lstrip(".") for ext in raw.split(",") if ext.strip()}
+        if not allowed:
+            allowed = set(DEFAULT_ALLOWED_FILE_TYPES)
+        max_mb = facility_settings.max_file_size_mb if facility_settings else DEFAULT_MAX_FILE_SIZE_MB
+        max_bytes = max_mb * 1024 * 1024
         for field_name, field_obj in self.fields.items():
             if not isinstance(field_obj, forms.FileField):
                 continue

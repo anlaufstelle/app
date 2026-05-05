@@ -238,6 +238,53 @@ class TestEventCreateView:
         assert event is not None
         assert event.case_id == case_open.pk
 
+    def test_invalid_meta_post_does_not_leak_high_field_labels_to_assistant(self, client, assistant_user, facility):
+        """Refs #774 — Sensitivity-Guard im invalid-meta-Branch.
+
+        Vor dem Fix konnte ein Assistant durch invaliden POST mit
+        ``document_type=<HIGH-id>`` die Feldlabels/Help-Texte des HIGH-
+        DocumentTypes in der Re-Render-Antwort sichtbar machen, weil der
+        Code ``DocumentType.objects.get(pk=...)`` aufrief, ohne
+        ``user_can_see_document_type`` zu pruefen.
+
+        Test:
+        1. HIGH-DocumentType mit eindeutig benanntem Feld anlegen.
+        2. Assistant POSTs mit fehlendem ``occurred_at`` (=> meta_form invalid)
+           und ``document_type=<HIGH-id>``.
+        3. Response darf den Feldnamen NICHT enthalten.
+        """
+        from core.models import DocumentType, DocumentTypeField, FieldTemplate
+
+        unique_label = "Suizidrisiko-Klassifizierung-RF774"
+        high_dt = DocumentType.objects.create(
+            facility=facility,
+            name="Krisen-Hochsensibel",
+            sensitivity=DocumentType.Sensitivity.HIGH,
+        )
+        ft_secret = FieldTemplate.objects.create(
+            facility=facility,
+            name=unique_label,
+            field_type=FieldTemplate.FieldType.TEXTAREA,
+            sensitivity="high",
+        )
+        DocumentTypeField.objects.create(document_type=high_dt, field_template=ft_secret, sort_order=0)
+
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(high_dt.pk),
+                # occurred_at fehlt → meta_form ist invalid
+            },
+        )
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert unique_label not in body, (
+            "Assistant darf bei invalidem POST keine HIGH-Feldlabels sehen — "
+            "der Validierungsfehler-Pfad darf user_can_see_document_type nicht "
+            "umgehen (Refs #774)."
+        )
+
     def test_event_create_rejects_case_of_other_client(self, client, staff_user, facility, doc_type_contact, case_open):
         """Case is bound to client_identified; picking a different client must fail."""
         from core.models import Client as ClientModel

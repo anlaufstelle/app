@@ -732,6 +732,93 @@ class TestNoMultilineDjangoCommentsGuard:
         )
 
 
+class TestProdSettingsSudoModeRequiredGuard:
+    """Refs #775: ``settings/prod.py`` muss verhindern, dass
+    ``SUDO_MODE_ENABLED=False`` in Produktion stillschweigend MFA-Disable,
+    DSGVO-Export und Pseudonym-Daten-Download oeffnet.
+
+    Test-Settings (``settings/test.py``) setzen das Flag bewusst auf False,
+    damit Tests nicht jedes Re-Auth-Form passieren muessen — wenn das
+    Test-Setting versehentlich nach Prod uebernommen wird, schlaegt der
+    Server-Start frueh fehl statt stille Defense-Erosion.
+    """
+
+    _PROD_SETTINGS = Path("src/anlaufstelle/settings/prod.py")
+    _TEST_SETTINGS = Path("src/anlaufstelle/settings/test.py")
+
+    def test_prod_settings_raises_on_sudo_mode_disabled(self):
+        if not self._PROD_SETTINGS.exists():
+            pytest.skip(f"{self._PROD_SETTINGS} nicht vorhanden")
+        source = self._PROD_SETTINGS.read_text()
+        assert "SUDO_MODE_ENABLED" in source, (
+            "settings/prod.py muss SUDO_MODE_ENABLED explizit pruefen — sonst "
+            "kippt ein versehentlich uebernommenes Test-Setting MFA-Disable, "
+            "DSGVO-Export und Pseudonym-Download in einem Schritt. Refs #775."
+        )
+        assert "ImproperlyConfigured" in source
+        # Der Guard muss tatsaechlich eine Exception werfen, nicht nur erwaehnen.
+        # Heuristik: zwischen ``SUDO_MODE_ENABLED`` und dem naechsten ``raise``-
+        # Statement duerfen keine 500 Zeichen liegen.
+        for match in re.finditer(r"SUDO_MODE_ENABLED", source):
+            tail = source[match.end() : match.end() + 500]
+            if "raise ImproperlyConfigured" in tail:
+                return
+        pytest.fail("SUDO_MODE_ENABLED-Pruefung in prod.py wirft kein ImproperlyConfigured. Refs #775.")
+
+    def test_test_settings_keep_sudo_mode_disabled(self):
+        """Sanity: settings/test.py darf weiterhin SUDO_MODE_ENABLED=False
+        setzen — sonst muesste jeder Test das Re-Auth-Form passieren."""
+        if not self._TEST_SETTINGS.exists():
+            pytest.skip(f"{self._TEST_SETTINGS} nicht vorhanden")
+        source = self._TEST_SETTINGS.read_text()
+        assert "SUDO_MODE_ENABLED = False" in source, (
+            "settings/test.py muss SUDO_MODE_ENABLED=False behalten — sonst "
+            "muss jeder Test-Flow das Re-Auth-Form passieren."
+        )
+
+
+class TestNoUncheckedNextRedirectGuard:
+    """Refs #770: ``redirect(request.POST/GET.get("next"))`` muss durch
+    ``safe_redirect_path`` laufen.
+
+    ``startswith("/")`` allein laesst ``//evil.example/login`` durch — der
+    Browser interpretiert das als protokoll-relative URL und springt auf
+    eine fremde Origin (Phishing-Vektor). Der zentrale Helper
+    ``core.views.utils.safe_redirect_path`` schliesst die Luecke.
+
+    Heuristik: Jede View-Datei, in der ``request.POST/GET.get('next')``
+    auftaucht und ein ``redirect(...)`` aufgerufen wird, muss auch
+    ``safe_redirect_path`` importieren/nutzen. Verhindert Wiederauferstehen
+    der naiven ``startswith('/')``-Pruefung in neuen Views.
+    """
+
+    _VIEWS_DIR = Path("src/core/views")
+    _NEXT_FETCH = re.compile(r"""request\.(POST|GET)\.get\(\s*["']next["']""")
+    _REDIRECT_CALL = re.compile(r"\bredirect\s*\(")
+
+    def test_no_unchecked_next_redirect(self):
+        if not self._VIEWS_DIR.exists():
+            pytest.skip(f"{self._VIEWS_DIR} nicht vorhanden")
+        violations = []
+        for py_file in self._VIEWS_DIR.glob("*.py"):
+            if py_file.name == "__init__.py":
+                continue
+            source = py_file.read_text()
+            if not (self._NEXT_FETCH.search(source) and self._REDIRECT_CALL.search(source)):
+                continue
+            if "safe_redirect_path" not in source:
+                violations.append(py_file.name)
+        assert not violations, (
+            "Diese Views lesen ``next`` aus Request und rufen ``redirect()`` "
+            "auf, ohne ``safe_redirect_path`` zu nutzen. ``startswith('/')`` "
+            "allein laesst protokoll-relative URLs (``//evil/``) durch. Bitte "
+            "``from core.views.utils import safe_redirect_path`` importieren "
+            "und ``redirect(safe_redirect_path(...))`` nutzen.\n"
+            "Refs #770.\n"
+            f"Betroffen: {violations}"
+        )
+
+
 class TestUserFacingEntryPointGuard:
     """Jede user-facing Route muss irgendwo als ``{% url '<name>' %}`` auftauchen.
 

@@ -9,3 +9,4 @@ class CoreConfig(AppConfig):
     def ready(self):
         import core.signals.audit  # noqa: F401
         import core.signals.field_template  # noqa: F401
+        import core.signals.settings_seed  # noqa: F401

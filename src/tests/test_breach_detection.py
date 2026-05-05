@@ -161,6 +161,8 @@ class TestWebhook:
             return None
 
         monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+        # Refs #772 — DNS-Lookup mocken, damit der Test offline laeuft.
+        monkeypatch.setattr("socket.gethostbyname", lambda host: "93.184.216.34")
         settings.BREACH_NOTIFICATION_WEBHOOK_URL = "https://example.com/webhook"
         record_finding(
             facility,

@@ -26,6 +26,8 @@ from django.conf import settings
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 
+from core.signals.audit import get_client_ip
+
 # Default-Whitelist — Pfade, die auch im Wartungsmodus erreichbar bleiben muessen.
 _DEFAULT_WHITELIST_PREFIXES = ("/health/", "/static/")
 
@@ -80,7 +82,9 @@ class MaintenanceModeMiddleware:
 
     @staticmethod
     def _client_ip(request) -> str:
-        forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR", "")
+        """Refs #773 — delegiert an ``signals.audit.get_client_ip``, das
+        ``TRUSTED_PROXY_HOPS`` respektiert. Vorher las die Methode das
+        **erste** Element aus ``X-Forwarded-For`` und war damit gegen
+        Spoofing offen (``X-Forwarded-For: <ops-ip>, <attacker>``).
+        """
+        return get_client_ip(request) or ""

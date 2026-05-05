@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from core.constants import DEFAULT_ALLOWED_FILE_TYPES
 from core.models.attachment import EventAttachment
 from core.models.audit import AuditLog
 from core.models.settings import Settings
@@ -127,19 +128,21 @@ def _enforce_allowed_file_types(facility, uploaded_file, event, user):
     is the final authority — direct/programmatic callers bypass the form, so
     we re-check here and log every violation as ``SECURITY_VIOLATION``
     (Refs #610).
+
+    Refs #771 — fail-closed: fehlt die ``Settings``-Row oder ist
+    ``allowed_file_types`` leer/whitespace-only, greift
+    :data:`core.constants.DEFAULT_ALLOWED_FILE_TYPES` (statt jeder Datei
+    Tor und Tuer zu oeffnen).
     """
     try:
         facility_settings = Settings.objects.get(facility=facility)
     except Settings.DoesNotExist:
-        return  # No settings yet → no whitelist to enforce.
+        facility_settings = None
 
-    allowed = {
-        ext.strip().lower().lstrip(".")
-        for ext in (facility_settings.allowed_file_types or "").split(",")
-        if ext.strip()
-    }
+    raw = (facility_settings.allowed_file_types or "") if facility_settings else ""
+    allowed = {ext.strip().lower().lstrip(".") for ext in raw.split(",") if ext.strip()}
     if not allowed:
-        return
+        allowed = set(DEFAULT_ALLOWED_FILE_TYPES)
 
     name = uploaded_file.name or ""
     ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""

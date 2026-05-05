@@ -26,3 +26,11 @@ RATELIMIT_FREQUENT = "120/h"
 # `yellow`: Löschung in <= RETENTION_URGENCY_YELLOW_DAYS Tagen fällig
 RETENTION_URGENCY_RED_DAYS = 7
 RETENTION_URGENCY_YELLOW_DAYS = 30
+
+# File-Upload — fail-closed Defaults (Refs #771).
+# Greifen, wenn die Facility keine ``Settings``-Row hat oder
+# ``allowed_file_types`` leer/whitespace-only ist. Verhindert das stille
+# Oeffnen jedes Dateityps in unkonfigurierten Mandanten. Werte spiegeln
+# die produktiven Default-Settings (vgl. ``Settings.allowed_file_types``).
+DEFAULT_ALLOWED_FILE_TYPES = frozenset({"pdf", "jpg", "jpeg", "png", "docx", "odt"})
+DEFAULT_MAX_FILE_SIZE_MB = 10

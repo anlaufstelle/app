@@ -29,11 +29,14 @@ betroffener Subject + 24h-Fenster) bereits ein Eintrag existiert.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
+import socket
 import urllib.error
 import urllib.request
 from datetime import timedelta
+from urllib.parse import urlparse
 
 from django.conf import settings
 from django.db.models import Count
@@ -42,6 +45,32 @@ from django.utils import timezone
 from core.models import AuditLog
 
 logger = logging.getLogger(__name__)
+
+
+def _validate_webhook_url(url: str) -> None:
+    """Refs #772 — SSRF-Schutz fuer ``BREACH_NOTIFICATION_WEBHOOK_URL``.
+
+    Wirft ``ValueError``, wenn:
+
+    - Schema nicht ``https`` ist (kein ``http``, ``file``, ``gopher``, ``ftp``);
+    - der Hostname nicht aufloesbar ist;
+    - die aufgeloeste IP privat / loopback / link-local ist (Cloud-Metadata
+      ``169.254.169.254``, RFC1918, ``127.0.0.0/8``).
+
+    Die DNS-Aufloesung kostet ~50 ms, schliesst aber genau die SSRF-Wege,
+    die die operatorseitige URL-Konfiguration sonst offen liesse.
+    """
+    parsed = urlparse(url)
+    if parsed.scheme != "https":
+        raise ValueError(f"Webhook scheme {parsed.scheme!r} not allowed (https only).")
+    if not parsed.hostname:
+        raise ValueError(f"Webhook URL has no hostname: {url!r}")
+    try:
+        ip = ipaddress.ip_address(socket.gethostbyname(parsed.hostname))
+    except (socket.gaierror, ValueError) as exc:
+        raise ValueError(f"Webhook host unresolvable: {parsed.hostname!r}") from exc
+    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
+        raise ValueError(f"Webhook target {ip} is private/loopback/link-local — refused (SSRF).")
 
 
 def _get_threshold(name: str, default: int) -> int:
@@ -153,9 +182,20 @@ def _already_reported(facility, finding: dict) -> bool:
 
 
 def _post_webhook(payload: dict) -> bool:
-    """Optional: Webhook-Notification bei aktiver ``BREACH_NOTIFICATION_WEBHOOK_URL``."""
+    """Optional: Webhook-Notification bei aktiver ``BREACH_NOTIFICATION_WEBHOOK_URL``.
+
+    Refs #772 — vor jedem Aufruf wird die URL durch ``_validate_webhook_url``
+    geprueft (https-only + public-IP). Verstoesse werden geloggt und
+    fuehren zu ``return False`` statt einem stillen Aufruf gegen Cloud-
+    Metadata oder den loopback.
+    """
     url = getattr(settings, "BREACH_NOTIFICATION_WEBHOOK_URL", None)
     if not url:
+        return False
+    try:
+        _validate_webhook_url(url)
+    except ValueError as exc:
+        logger.warning("breach_webhook_url_rejected: %s", exc)
         return False
     try:
         req = urllib.request.Request(
@@ -164,7 +204,7 @@ def _post_webhook(payload: dict) -> bool:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        urllib.request.urlopen(req, timeout=5)  # noqa: S310 — vom Operator konfigurierte URL
+        urllib.request.urlopen(req, timeout=5)  # noqa: S310 — durch _validate_webhook_url gegen SSRF gehaertet
         return True
     except (urllib.error.URLError, OSError) as exc:
         logger.warning("breach_webhook_failed: %s", exc)

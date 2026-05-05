@@ -278,6 +278,12 @@ class TestFileUploadView:
     def test_download_zip_falls_back_to_attachment(self, client, staff_user, facility, doc_type_with_file):
         """Non-whitelisted MIME types are served as attachment (#508)."""
         dt, _, ft_file = doc_type_with_file
+        # ``zip`` ist nicht in der Default-Whitelist (Refs #771); explizit
+        # zulassen, damit der Download-Pfad geprueft werden kann.
+        Settings.objects.update_or_create(
+            facility=facility,
+            defaults={"allowed_file_types": "pdf,zip", "max_file_size_mb": 10},
+        )
         event = Event.objects.create(
             facility=facility,
             document_type=dt,
@@ -297,6 +303,12 @@ class TestFileUploadView:
     def test_download_html_does_not_render_inline(self, client, staff_user, facility, doc_type_with_file):
         """text/html is NOT inline-renderable — XSS risk (#508)."""
         dt, _, ft_file = doc_type_with_file
+        # ``html`` ist nicht in der Default-Whitelist (Refs #771); explizit
+        # zulassen, damit der Download-Pfad geprueft werden kann.
+        Settings.objects.update_or_create(
+            facility=facility,
+            defaults={"allowed_file_types": "pdf,html", "max_file_size_mb": 10},
+        )
         event = Event.objects.create(
             facility=facility,
             document_type=dt,

@@ -11,6 +11,7 @@ from django_ratelimit.decorators import ratelimit
 
 from core.models import AuditLog
 from core.services.sudo_mode import enter_sudo
+from core.views.utils import safe_redirect_path
 
 
 @method_decorator(ratelimit(key="user", rate="5/m", method="POST", block=True), name="post")
@@ -23,23 +24,15 @@ class SudoModeView(LoginRequiredMixin, View):
 
     template_name = "auth/sudo_mode.html"
 
-    def _safe_next(self, raw: str | None) -> str:
-        """Open-Redirect-Schutz: nur same-origin Pfade akzeptieren."""
-        if not raw:
-            return "/"
-        if raw.startswith("/") and not raw.startswith("//"):
-            return raw
-        return "/"
-
     def get(self, request):
         return render(
             request,
             self.template_name,
-            {"next": self._safe_next(request.GET.get("next"))},
+            {"next": safe_redirect_path(request.GET.get("next"))},
         )
 
     def post(self, request):
-        next_url = self._safe_next(request.POST.get("next"))
+        next_url = safe_redirect_path(request.POST.get("next"))
         password = request.POST.get("password", "")
         user = authenticate(request, username=request.user.username, password=password)
         if user is None or user.pk != request.user.pk:

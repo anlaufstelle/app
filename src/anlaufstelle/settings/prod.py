@@ -104,3 +104,14 @@ if "collectstatic" not in sys.argv and not (ENCRYPTION_KEY or ENCRYPTION_KEYS): 
 # In Produktion ist der Virenscan standardmäßig aktiv und kann nur durch explizite
 # Setzung von CLAMAV_ENABLED=false deaktiviert werden.
 CLAMAV_ENABLED = os.environ.get("CLAMAV_ENABLED", "true").lower() in ("true", "1", "yes")
+
+# --- Sudo-Mode (Refs #775) ---
+# settings/test.py setzt SUDO_MODE_ENABLED=False, damit Tests nicht jedes
+# Re-Auth-Form passieren muessen. Wenn dieses Test-Setting versehentlich nach
+# Produktion uebernommen wird, kippt es MFA-Disable, DSGVO-Export und
+# Pseudonym-Daten-Download in einem Schritt. Hier explizit fail-fast: lieber
+# Server-Start-Fehler als stille Defense-Erosion.
+if os.environ.get("SUDO_MODE_ENABLED", "true").lower() not in ("true", "1", "yes"):
+    raise ImproperlyConfigured(
+        "SUDO_MODE_ENABLED muss in Produktion True sein. Test-Setting versehentlich uebernommen?"
+    )

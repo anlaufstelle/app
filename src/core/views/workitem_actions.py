@@ -24,6 +24,7 @@ from core.services.workitems import (
     update_workitem_status,
 )
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
+from core.views.utils import safe_redirect_path
 from core.views.workitems import can_user_mutate_workitem
 
 
@@ -58,8 +59,8 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
             return render(request, "core/workitems/partials/item_card.html", {"wi": workitem})
 
         messages.success(request, _("Status aktualisiert."))
-        next_url = request.POST.get("next")
-        if next_url and next_url.startswith("/"):
+        next_url = safe_redirect_path(request.POST.get("next"))
+        if next_url != "/":
             return redirect(next_url)
         return redirect("core:workitem_inbox")
 

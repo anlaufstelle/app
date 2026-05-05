@@ -55,6 +55,7 @@ from core.retention.proposals import (
 
 __all__ = [
     "DASHBOARD_CATEGORY_LABELS",
+    "_soft_delete_events",
     "annotate_urgency",
     "anonymize_clients",
     "approve_proposal",
