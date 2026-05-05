@@ -141,6 +141,7 @@ def _seed_failed_logins_and_check_lock(username, e2e_env, n=10):
             sys.executable,
             "src/manage.py",
             "shell",
+            "--no-imports",
             "-c",
             (
                 "from core.models import AuditLog, User; "
@@ -179,7 +180,7 @@ def _clear_lockout_for(usernames, e2e_env):
         "[unlock(u, unlocked_by=u) for u in users]"
     )
     subprocess.run(
-        [sys.executable, "src/manage.py", "shell", "-c", code],
+        [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
         env=e2e_env,
         check=False,
         capture_output=True,

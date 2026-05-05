@@ -19,7 +19,7 @@ def _run_shell(script, env):
     """Django-Shell-Befehl mit worker-aware Environment ausfuehren."""
     python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
     subprocess.run(
-        [python, "src/manage.py", "shell", "-c", script],
+        [python, "src/manage.py", "shell", "--no-imports", "-c", script],
         check=True,
         capture_output=True,
         env=env,

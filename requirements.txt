@@ -16,11 +16,11 @@ cffi==2.0.0
     # via
     #   cryptography
     #   weasyprint
-cryptography==46.0.7
+cryptography==47.0.0
     # via -r requirements.in
 cssselect2==0.9.0
     # via weasyprint
-django==5.1.15
+django==6.0.4
     # via
     #   -r requirements.in
     #   django-csp
@@ -36,7 +36,7 @@ django-otp==1.7.0
     # via -r requirements.in
 django-ratelimit==4.1.0
     # via -r requirements.in
-django-unfold==0.90.0
+django-unfold==0.91.0
     # via -r requirements.in
 fonttools[woff]==4.62.1
     # via weasyprint

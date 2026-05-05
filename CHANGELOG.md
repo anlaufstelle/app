@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **Django 5.1 → 6.0 Migration** — Wechsel von Django 5.1.15 auf 6.0.4. Django 5.1 ist EOL, kein 5.1.16 ist geplant. Mit dem Sprung kommen die Sicherheits-Fixes CVE-2026-33034 (`DATA_UPLOAD_MAX_MEMORY_SIZE` enforcement), CVE-2026-33033 (`MultiPartParser`-DoS), CVE-2026-4292 (`ModelAdmin.list_editable`), CVE-2026-4277 (`GenericInlineModelAdmin`) und CVE-2026-3902 (Header mit Underscores in `ASGIRequest`). `django-unfold` auf 0.91.0 gehoben (6.0-Kompatibilität). Plugin-Stack (`django-csp`, `django-htmx`, `django-otp`, `django-ratelimit`, `sentry-sdk`) unverändert kompatibel — kein Plugin-Bump nötig. `django.contrib.postgres` zu `INSTALLED_APPS` hinzugefügt (in 6.0 strikt für `GinIndex` auf `Client.pseudonym` erforderlich, postgres.E005). Alle E2E-Test-Helper, die `manage.py shell -c` mit \`stdout\`-Parsing nutzen, auf `--no-imports` umgestellt — verhindert, dass die in 5.2/6.0 neue Auto-Import-Banner-Zeile in subprocess-Output landet.
+
 ### Added
 
 - **Aufklappbare Kontakte im Zeitstrom** — Event-Cards lassen sich jetzt per Chevron-Toggle inline aufklappen, gleiches Pattern wie Aktivitäts-Cards. Im aufgeklappten Bereich werden alle Felder inkl. textarea-Notizen angezeigt — die müssen nicht mehr per Detail-Klick gelesen werden. Neuer Service-Vertrag: `enrich_events_with_preview` befüllt zusätzlich `event.expanded_fields` (alle Felder, ohne 3-Limit, mit textarea). Generische `expandableCard`-Alpine-Komponente in [`src/static/js/alpine-components.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/alpine-components.js).

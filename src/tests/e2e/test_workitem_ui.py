@@ -195,7 +195,7 @@ class TestWorkItemCompletedAt:
             "print(wi.pk)"
         )
         result = subprocess.run(
-            [python, "src/manage.py", "shell", "-c", script],
+            [python, "src/manage.py", "shell", "--no-imports", "-c", script],
             capture_output=True,
             text=True,
             env=e2e_env,

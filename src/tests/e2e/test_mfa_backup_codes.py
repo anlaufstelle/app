@@ -27,6 +27,7 @@ def _enable_totp_and_generate_codes(username: str, e2e_env) -> list[str]:
             sys.executable,
             "src/manage.py",
             "shell",
+            "--no-imports",
             "-c",
             (
                 "from core.models import User; "
@@ -55,6 +56,7 @@ def _cleanup_totp(username: str, e2e_env) -> None:
             sys.executable,
             "src/manage.py",
             "shell",
+            "--no-imports",
             "-c",
             (
                 "from core.models import User; "

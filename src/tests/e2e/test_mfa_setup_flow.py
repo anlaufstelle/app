@@ -54,6 +54,7 @@ def _cleanup_totp(username: str, e2e_env) -> None:
             sys.executable,
             "src/manage.py",
             "shell",
+            "--no-imports",
             "-c",
             (
                 "from core.models import User; "

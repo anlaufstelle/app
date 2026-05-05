@@ -26,11 +26,11 @@ click==8.3.2
     # via pip-tools
 coverage[toml]==7.13.5
     # via pytest-cov
-cryptography==46.0.7
+cryptography==47.0.0
     # via -r requirements.in
 cssselect2==0.9.0
     # via weasyprint
-django==5.1.15
+django==6.0.4
     # via
     #   -r requirements.in
     #   django-csp
@@ -46,11 +46,11 @@ django-otp==1.7.0
     # via -r requirements.in
 django-ratelimit==4.1.0
     # via -r requirements.in
-django-unfold==0.90.0
+django-unfold==0.91.0
     # via -r requirements.in
 execnet==2.1.2
     # via pytest-xdist
-filelock==3.28.0
+filelock==3.29.0
     # via -r requirements-dev.in
 fonttools[woff]==4.62.1
     # via weasyprint
@@ -73,7 +73,7 @@ pillow==12.2.0
     # via weasyprint
 pip-tools==7.5.3
     # via -r requirements-dev.in
-playwright==1.58.0
+playwright==1.59.0
     # via
     #   -r requirements-dev.in
     #   pytest-playwright
@@ -132,7 +132,7 @@ qrcode==8.2
     # via -r requirements.in
 requests==2.33.1
     # via pytest-base-url
-ruff==0.15.11
+ruff==0.15.12
     # via -r requirements-dev.in
 sentry-sdk[django]==2.58.0
     # via -r requirements.in

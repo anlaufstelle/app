@@ -38,7 +38,7 @@ def _create_doc_type_with_file(e2e_env, name_suffix):
         " print(ft.slug)"
     )
     out = subprocess.run(
-        [_python(), "src/manage.py", "shell", "-c", script],
+        [_python(), "src/manage.py", "shell", "--no-imports", "-c", script],
         capture_output=True,
         text=True,
         env=e2e_env,

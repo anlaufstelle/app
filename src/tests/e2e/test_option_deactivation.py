@@ -24,6 +24,7 @@ def _find_event_with_sachspenden(e2e_env):
             sys.executable,
             "src/manage.py",
             "shell",
+            "--no-imports",
             "-c",
             "from core.models import Event\n"
             "e = Event.objects.filter(data_json__leistungen__contains=['sachspenden']).first()\n"

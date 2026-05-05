@@ -29,6 +29,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # Notwendig für GinIndex auf Client.pseudonym (Trigram-Suche). Seit
+    # Django 6.0 prüft postgres.E005 strikt, dass diese App registriert ist.
+    "django.contrib.postgres",
     # Third-party
     "django_htmx",
     "django_otp",

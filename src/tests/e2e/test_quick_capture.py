@@ -300,6 +300,7 @@ class TestAutoSave:
                 python,
                 "src/manage.py",
                 "shell",
+                "--no-imports",
                 "-c",
                 (
                     "from core.models import DocumentType, Facility, QuickTemplate;"
@@ -366,6 +367,7 @@ class TestAutoSave:
                 python,
                 "src/manage.py",
                 "shell",
+                "--no-imports",
                 "-c",
                 (
                     "from core.models import DocumentType, Facility, QuickTemplate;"

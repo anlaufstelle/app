@@ -38,6 +38,9 @@ def _select_qualified_client(page, base_url, e2e_env):
             python,
             "src/manage.py",
             "shell",
+            # --no-imports: unterdrückt die Django-6-Auto-Import-Banner-Zeile,
+            # die sonst in stdout landet und client_pk korrumpiert.
+            "--no-imports",
             "-c",
             "from core.models import Client; "
             "c = Client.objects.filter(contact_stage='qualified').first(); "
@@ -151,6 +154,7 @@ class TestFileUploadAndDownload:
                 python,
                 "src/manage.py",
                 "shell",
+                "--no-imports",
                 "-c",
                 "from core.models import AuditLog; "
                 "log = AuditLog.objects.filter(action='download').order_by('-timestamp').first(); "

@@ -47,7 +47,7 @@ def _ensure_proposals(e2e_env, min_pending=3):
         "print(f'pending={RetentionProposal.objects.filter(facility=f, status=\"pending\").count()}')"
     )
     result = subprocess.run(
-        [sys.executable, "src/manage.py", "shell", "-c", code],
+        [sys.executable, "src/manage.py", "shell", "--no-imports", "-c", code],
         env=e2e_env,
         capture_output=True,
         text=True,

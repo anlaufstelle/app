@@ -1,13 +1,13 @@
-Django>=5.1,<5.2
+Django>=6.0,<6.1
 psycopg[binary]>=3.1
 gunicorn>=21.2
 whitenoise>=6.5
 django-htmx>=1.17
 django-ratelimit>=4.1
-cryptography>=41.0
+cryptography>=47.0.0
 python-dotenv>=1.0
 weasyprint>=60.0
-django-unfold>=0.61
+django-unfold>=0.91
 django-csp>=4.0
 sentry-sdk[django]>=2.0
 pyclamd>=0.4.0
