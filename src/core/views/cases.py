@@ -30,7 +30,7 @@ from core.services.cases import (
 )
 from core.services.clients import get_client_or_none
 from core.services.sensitivity import get_visible_event_or_404
-from core.views.mixins import LeadOrAdminRequiredMixin, StaffRequiredMixin
+from core.views.mixins import HTMXPartialMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
 from core.views.utils import safe_page_param
 
 logger = logging.getLogger(__name__)
@@ -65,8 +65,11 @@ def _get_case_event_context(case, facility, user):
     return {"events": events, "unassigned_events": unassigned_events}
 
 
-class CaseListView(StaffRequiredMixin, View):
+class CaseListView(StaffRequiredMixin, HTMXPartialMixin, View):
     """Case list with search, filter by status and pagination."""
+
+    template_name = "core/cases/list.html"
+    partial_template_name = "core/cases/partials/table.html"
 
     def get(self, request):
         facility = request.current_facility
@@ -95,9 +98,7 @@ class CaseListView(StaffRequiredMixin, View):
             "pagination_params": pagination_params,
         }
 
-        if request.headers.get("HX-Request"):
-            return render(request, "core/cases/partials/table.html", context)
-        return render(request, "core/cases/list.html", context)
+        return self.render_htmx_or_full(context)
 
 
 class CaseCreateView(StaffRequiredMixin, View):

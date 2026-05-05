@@ -18,7 +18,7 @@ from django.views import View
 
 from core.models import WorkItem
 from core.models.user import User
-from core.views.mixins import AssistantOrAboveRequiredMixin
+from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +33,11 @@ def can_user_mutate_workitem(user, workitem):
     return user.is_lead_or_admin or workitem.created_by == user or workitem.assigned_to == user
 
 
-class WorkItemInboxView(AssistantOrAboveRequiredMixin, View):
+class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
     """Personal WorkItem inbox with filtering by type, priority, assignment and due date."""
+
+    template_name = "core/workitems/inbox.html"
+    partial_template_name = "core/workitems/partials/inbox_content.html"
 
     DUE_FILTER_CHOICES = [
         ("overdue", _("Überfällig")),
@@ -167,10 +170,7 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, View):
             "selected_due": request.GET.get("due", ""),
         }
 
-        if request.headers.get("HX-Request"):
-            return render(request, "core/workitems/partials/inbox_content.html", context)
-
-        return render(request, "core/workitems/inbox.html", context)
+        return self.render_htmx_or_full(context)
 
 
 class WorkItemDetailView(AssistantOrAboveRequiredMixin, View):

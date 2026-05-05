@@ -21,17 +21,18 @@ from core.services.retention import (
     create_legal_hold,
     dismiss_legal_hold,
 )
-from core.views.mixins import LeadOrAdminRequiredMixin
+from core.views.mixins import HTMXPartialMixin, LeadOrAdminRequiredMixin
 
 
-class RetentionDashboardView(LeadOrAdminRequiredMixin, View):
+class RetentionDashboardView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
     """Retention dashboard showing proposals grouped by category."""
+
+    template_name = "core/retention/dashboard.html"
+    partial_template_name = "core/retention/partials/dashboard_content.html"
 
     def get(self, request):
         context = build_retention_dashboard_context(request.current_facility, request.user)
-        if request.headers.get("HX-Request"):
-            return render(request, "core/retention/partials/dashboard_content.html", context)
-        return render(request, "core/retention/dashboard.html", context)
+        return self.render_htmx_or_full(context)
 
 
 @method_decorator(

@@ -127,6 +127,33 @@ class TestEventEncryptionBypassGuard:
         )
 
 
+class TestRetentionSubmoduleDirectionGuard:
+    """``core/retention/`` darf nicht aus ``core/views/`` importieren.
+
+    Refs #744 — Submodul-Schnitt fuer Retention-Logik. Das Submodul ist
+    Service-Layer; Views duerfen es benutzen, aber nicht andersrum.
+    """
+
+    _RETENTION_DIR = Path("src/core/retention")
+    _VIEW_IMPORT = re.compile(r"^\s*(from core\.views|import core\.views)", re.MULTILINE)
+
+    def test_no_view_imports_in_retention_submodule(self):
+        if not self._RETENTION_DIR.exists():
+            pytest.skip(f"{self._RETENTION_DIR} nicht vorhanden")
+        violations = []
+        for py_file in self._RETENTION_DIR.glob("*.py"):
+            if py_file.name == "__init__.py":
+                continue
+            source = py_file.read_text()
+            if self._VIEW_IMPORT.search(source):
+                violations.append(py_file.name)
+        assert not violations, (
+            "Diese core/retention/-Module importieren aus core/views/. "
+            "Service-Layer darf keine View-Abhaengigkeiten haben.\n"
+            f"Betroffen: {violations}"
+        )
+
+
 class TestServiceLayerDirectionGuard:
     """Models dürfen nicht modul-weit aus ``core.services`` importieren.
 

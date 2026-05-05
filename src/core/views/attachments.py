@@ -4,7 +4,6 @@ import logging
 
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
-from django.shortcuts import render
 from django.views import View
 
 from core.models import AuditLog, DocumentType
@@ -13,7 +12,7 @@ from core.services.file_vault import get_decrypted_file_stream, get_original_fil
 from core.services.sensitivity import allowed_sensitivities_for_user, get_visible_attachment_or_404, user_can_see_field
 from core.utils.downloads import safe_download_response
 from core.utils.formatting import format_file_size
-from core.views.mixins import AssistantOrAboveRequiredMixin
+from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +45,11 @@ def _attachment_disposition(mime_type, force_download):
     return "attachment"
 
 
-class AttachmentListView(AssistantOrAboveRequiredMixin, View):
+class AttachmentListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
     """Central file attachment overview for a facility."""
+
+    template_name = "core/attachments/list.html"
+    partial_template_name = "core/attachments/partials/attachment_table.html"
 
     def get(self, request):
         facility = request.current_facility
@@ -108,10 +110,7 @@ class AttachmentListView(AssistantOrAboveRequiredMixin, View):
             "selected_client": client_id or "",
         }
 
-        # HTMX partial support
-        if request.headers.get("HX-Request"):
-            return render(request, "core/attachments/partials/attachment_table.html", context)
-        return render(request, "core/attachments/list.html", context)
+        return self.render_htmx_or_full(context)
 
 
 class AttachmentDownloadView(AssistantOrAboveRequiredMixin, View):

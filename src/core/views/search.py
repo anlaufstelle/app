@@ -8,13 +8,16 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.services.search import search_clients_and_events, search_similar_clients
-from core.views.mixins import AssistantOrAboveRequiredMixin
+from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin
 
 logger = logging.getLogger(__name__)
 
 
-class SearchView(AssistantOrAboveRequiredMixin, View):
+class SearchView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
     """Search across clients and events."""
+
+    template_name = "core/search/index.html"
+    partial_template_name = "core/search/partials/results.html"
 
     @method_decorator(ratelimit(key="user", rate="30/m", method="GET", block=True))
     def get(self, request):
@@ -32,9 +35,7 @@ class SearchView(AssistantOrAboveRequiredMixin, View):
             "has_results": bool(clients or events or similar_clients),
         }
 
-        if request.headers.get("HX-Request"):
-            return render(request, "core/search/partials/results.html", context)
-        return render(request, "core/search/index.html", context)
+        return self.render_htmx_or_full(context)
 
 
 class GlobalSearchPartialView(AssistantOrAboveRequiredMixin, View):

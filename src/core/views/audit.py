@@ -10,14 +10,17 @@ from django.views import View
 from core.models import AuditLog
 from core.models.user import User
 from core.utils.formatting import parse_date
-from core.views.mixins import AdminRequiredMixin
+from core.views.mixins import AdminRequiredMixin, HTMXPartialMixin
 from core.views.utils import safe_page_param
 
 logger = logging.getLogger(__name__)
 
 
-class AuditLogListView(AdminRequiredMixin, View):
+class AuditLogListView(AdminRequiredMixin, HTMXPartialMixin, View):
     """Audit log list for admins with filters and pagination."""
+
+    template_name = "core/audit/list.html"
+    partial_template_name = "core/audit/partials/table.html"
 
     def get(self, request):
         facility = request.current_facility
@@ -76,9 +79,7 @@ class AuditLogListView(AdminRequiredMixin, View):
             "pagination_params": pagination_params,
         }
 
-        if request.headers.get("HX-Request"):
-            return render(request, "core/audit/partials/table.html", context)
-        return render(request, "core/audit/list.html", context)
+        return self.render_htmx_or_full(context)
 
 
 class AuditLogDetailView(AdminRequiredMixin, View):

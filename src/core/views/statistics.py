@@ -4,7 +4,6 @@ import logging
 from datetime import date, timedelta
 
 from django.http import HttpResponse, JsonResponse
-from django.shortcuts import render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
@@ -17,13 +16,16 @@ from core.services.snapshot import _merge_stats, get_statistics_hybrid, get_stat
 from core.signals.audit import get_client_ip
 from core.utils.downloads import safe_download_response
 from core.utils.formatting import parse_date
-from core.views.mixins import LeadOrAdminRequiredMixin
+from core.views.mixins import HTMXPartialMixin, LeadOrAdminRequiredMixin
 
 logger = logging.getLogger(__name__)
 
 
-class StatisticsView(LeadOrAdminRequiredMixin, View):
+class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
     """Statistics dashboard with period selection."""
+
+    template_name = "core/statistics/index.html"
+    partial_template_name = "core/statistics/partials/full_content.html"
 
     def get(self, request):
         facility = request.current_facility
@@ -66,9 +68,7 @@ class StatisticsView(LeadOrAdminRequiredMixin, View):
             "unique_clients_is_approximation": is_multi_month_range(date_from, date_to),
         }
 
-        if request.headers.get("HX-Request"):
-            return render(request, "core/statistics/partials/full_content.html", context)
-        return render(request, "core/statistics/index.html", context)
+        return self.render_htmx_or_full(context)
 
     @staticmethod
     def _parse_year(value, default):

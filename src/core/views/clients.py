@@ -24,13 +24,21 @@ from core.services.client_export import export_client_data, export_client_data_p
 from core.services.clients import create_client, track_client_visit, update_client
 from core.services.sudo_mode import RequireSudoModeMixin
 from core.utils.downloads import safe_download_response
-from core.views.mixins import AssistantOrAboveRequiredMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
+from core.views.mixins import (
+    AssistantOrAboveRequiredMixin,
+    HTMXPartialMixin,
+    LeadOrAdminRequiredMixin,
+    StaffRequiredMixin,
+)
 
 logger = logging.getLogger(__name__)
 
 
-class ClientListView(AssistantOrAboveRequiredMixin, View):
+class ClientListView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
     """Client list with search, filtering and pagination."""
+
+    template_name = "core/clients/list.html"
+    partial_template_name = "core/clients/partials/table.html"
 
     def get(self, request):
         facility = request.current_facility
@@ -70,9 +78,7 @@ class ClientListView(AssistantOrAboveRequiredMixin, View):
             "pagination_params": pagination_params,
         }
 
-        if request.headers.get("HX-Request"):
-            return render(request, "core/clients/partials/table.html", context)
-        return render(request, "core/clients/list.html", context)
+        return self.render_htmx_or_full(context)
 
 
 class ClientDetailView(AssistantOrAboveRequiredMixin, View):

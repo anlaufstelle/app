@@ -35,11 +35,15 @@ class AdminRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
         return self.request.user.is_admin
 
 
-# --- Facility/HTMX Helper-Mixins (Refs #598 R-2/R-3) --------------------
+# --- Facility/HTMX Helper-Mixins (Refs #598 R-2/R-3, #745) --------------
 #
-# Eingeführt für neue Views und den Event-God-Object-Split (#603). Alte
-# Views bleiben unverändert — eine Komplett-Migration aller ~87/11
-# Call-Sites brächte kaum Gewinn gegenüber dem Risiko breiter Edits.
+# ``FacilityScopedViewMixin`` ist als Convenience für neue Views gedacht,
+# eine systematische Migration der ~87 ``request.current_facility``-Sites
+# wäre kosmetisch.
+#
+# ``HTMXPartialMixin`` ist seit #745 in allen Listen-Views mit echtem
+# Partial/Full-Branching umgesetzt; verbleibende ``HX-Request``-Checks im
+# Code sind bewusste Sonderfälle (s. Docstring von ``HTMXPartialMixin``).
 
 
 class FacilityScopedViewMixin:
@@ -63,9 +67,19 @@ class HTMXPartialMixin:
     Template. Erwartet ``partial_template_name`` und ``template_name`` als
     Klassenattribute.
 
-    Nur für den einfachen Fall (ein Partial, ein Full-Page-Template).
-    Bulk-Action-Views mit ``HX-Redirect``-Response bleiben besser inline,
-    weil ihr HTMX-Pfad eine ganz andere Response-Form liefert.
+    Nur für den einfachen Render-Branch ("ein Partial vs. ein Full-Page-
+    Template"). Folgende Fälle bleiben bewusst inline und nutzen den
+    Mixin **nicht** — die Sonderfälle nicht versehentlich migrieren:
+
+    * **Bulk-Actions mit ``HX-Redirect``-Response** (z. B.
+      ``RetentionBulkApproveView``, ``WorkItemBulkStatusView``): der HTMX-
+      Pfad antwortet mit ``HX-Redirect``-Header statt einem Partial.
+    * **API-Format-Negotiation** zwischen JSON und HTML (z. B.
+      ``_wants_json_response`` in :file:`views/events.py`): hier ist die
+      Abzweigung kein Render-Branch, sondern ein Format-Branch.
+    * **Mehrere Partials pro View** oder bedingtes Rendern abhängig vom
+      Request-Pfad: bleibt explizit, weil der Mixin nur ein einziges
+      Partial-Template kennt.
     """
 
     template_name = None

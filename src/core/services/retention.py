@@ -1,15 +1,71 @@
-"""Service layer for retention proposals and legal holds."""
+"""Service layer for retention proposals and enforcement.
+
+Drei thematisch eigenstaendige Bloecke wurden in das Submodul
+:mod:`core.retention` ausgekoppelt (#744 Phase 1):
+
+- LegalHold-Lifecycle → :mod:`core.retention.legal_holds`
+- AuditLog-Pruning → :mod:`core.retention.audit_pruning`
+- Klient-Anonymisierungs-Trigger → :mod:`core.retention.anonymization`
+
+Diese Symbole werden hier weiterhin re-exportiert, damit Bestands-
+Aufrufer (Command, Tests, andere Services) unveraendert weiterlaufen.
+Neue Aufrufer sollen direkt aus :mod:`core.retention.<modul>` importieren.
+
+Die uebrigen ~800 LOC (Vorschlags-Lifecycle und Enforce-Strategien)
+behalten ihre API ueber :mod:`core.retention.proposals` und
+:mod:`core.retention.enforcement` (Re-Export-Stubs); ihre physische
+Verschiebung folgt in Phase 2.
+"""
 
 from datetime import date, timedelta
 
-from django.db import connection, transaction
-from django.db.models import Count, Q
+from django.db import transaction
 from django.db.utils import IntegrityError
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.constants import RETENTION_URGENCY_RED_DAYS, RETENTION_URGENCY_YELLOW_DAYS
 from core.models import AuditLog, LegalHold, RetentionProposal
+from core.retention.anonymization import anonymize_clients
+from core.retention.audit_pruning import prune_auditlog
+from core.retention.legal_holds import (
+    create_legal_hold,
+    dismiss_legal_hold,
+    get_active_hold_target_ids,
+    has_active_hold,
+)
+
+__all__ = [
+    # Re-exports aus core.retention.* — fuer Rueckwaertskompatibilitaet
+    "anonymize_clients",
+    "prune_auditlog",
+    "create_legal_hold",
+    "dismiss_legal_hold",
+    "get_active_hold_target_ids",
+    "has_active_hold",
+    # Hier weiterhin definiert (Phase 2)
+    "DASHBOARD_CATEGORY_LABELS",
+    "annotate_urgency",
+    "approve_proposal",
+    "build_proposal_details",
+    "build_retention_dashboard_context",
+    "bulk_approve_proposals",
+    "bulk_defer_proposals",
+    "bulk_reject_proposals",
+    "cleanup_stale_proposals",
+    "collect_doomed_events",
+    "create_proposal",
+    "create_proposals_for_facility",
+    "defer_proposal",
+    "enforce_activities",
+    "enforce_anonymous",
+    "enforce_document_type_retention",
+    "enforce_identified",
+    "enforce_qualified",
+    "get_dashboard_proposals",
+    "process_facility_retention",
+    "reactivate_deferred_proposals",
+    "reject_proposal",
+]
 
 # Category labels for the dashboard grouping. Lives next to the service
 # (not the view) because the context-builder needs them — Refs FND-A003.
@@ -342,91 +398,6 @@ def reactivate_deferred_proposals(facility):
 
 
 @transaction.atomic
-def create_legal_hold(proposal, user, reason, expires_at=None):
-    """Create a legal hold and set the proposal to held status."""
-    hold = LegalHold.objects.create(
-        facility=proposal.facility,
-        target_type=proposal.target_type,
-        target_id=proposal.target_id,
-        reason=reason,
-        expires_at=expires_at,
-        created_by=user,
-    )
-    proposal.status = RetentionProposal.Status.HELD
-    proposal.save(update_fields=["status"])
-    AuditLog.objects.create(
-        facility=proposal.facility,
-        user=user,
-        action=AuditLog.Action.LEGAL_HOLD,
-        target_type=proposal.target_type,
-        target_id=str(proposal.target_id),
-        detail={
-            "category": "legal_hold_created",
-            "reason": reason,
-            "expires_at": str(expires_at) if expires_at else None,
-            "hold_id": str(hold.pk),
-        },
-    )
-    return hold
-
-
-@transaction.atomic
-def dismiss_legal_hold(hold, user):
-    """Dismiss a legal hold and revert the proposal to pending."""
-    hold.dismissed_at = timezone.now()
-    hold.dismissed_by = user
-    hold.save(update_fields=["dismissed_at", "dismissed_by"])
-
-    # Revert associated proposal to pending
-    RetentionProposal.objects.filter(
-        facility=hold.facility,
-        target_type=hold.target_type,
-        target_id=hold.target_id,
-        status=RetentionProposal.Status.HELD,
-    ).update(status=RetentionProposal.Status.PENDING)
-
-    AuditLog.objects.create(
-        facility=hold.facility,
-        user=user,
-        action=AuditLog.Action.LEGAL_HOLD,
-        target_type=hold.target_type,
-        target_id=str(hold.target_id),
-        detail={
-            "category": "legal_hold_dismissed",
-            "hold_id": str(hold.pk),
-            "reason": hold.reason,
-        },
-    )
-
-
-def has_active_hold(facility, target_type, target_id):
-    """Check if a target has an active (not dismissed, not expired) legal hold."""
-    return (
-        LegalHold.objects.filter(
-            facility=facility,
-            target_type=target_type,
-            target_id=target_id,
-            dismissed_at__isnull=True,
-        )
-        .exclude(
-            expires_at__lt=date.today(),
-        )
-        .exists()
-    )
-
-
-def get_active_hold_target_ids(facility, target_type="Event"):
-    """Return set of target_ids with active legal holds for a facility."""
-    qs = LegalHold.objects.filter(
-        facility=facility,
-        target_type=target_type,
-        dismissed_at__isnull=True,
-    ).exclude(
-        expires_at__lt=date.today(),
-    )
-    return set(qs.values_list("target_id", flat=True))
-
-
 def get_dashboard_proposals(facility):
     """Get proposals grouped by retention_category for the dashboard."""
     proposals = RetentionProposal.objects.for_facility(facility).select_related("facility").order_by("deletion_due_at")
@@ -768,44 +739,6 @@ def enforce_activities(facility, settings_obj, now, dry_run):
     return {"count": count}
 
 
-def anonymize_clients(facility, dry_run):
-    """Anonymize clients whose events have all been soft-deleted.
-
-    A client is anonymized when they have at least one event and all of them have
-    ``is_deleted=True``. Already anonymized clients (pseudonym starts with
-    ``Gelöscht-`` or ``k_anonymized=True``) are skipped.
-
-    Returns ``{"count": N}``.
-    """
-    from core.models import Client
-
-    candidates = (
-        Client.objects.filter(facility=facility)
-        .exclude(Q(pseudonym__startswith="Gelöscht-") | Q(k_anonymized=True))
-        .annotate(
-            total_events=Count("events"),
-            active_events=Count("events", filter=Q(events__is_deleted=False)),
-        )
-        .filter(total_events__gt=0, active_events=0)
-    )
-
-    count = candidates.count()
-    if count and not dry_run:
-        for client in candidates.iterator():
-            client.anonymize()
-        AuditLog.objects.create(
-            facility=facility,
-            action=AuditLog.Action.DELETE,
-            target_type="Client",
-            detail={
-                "command": "enforce_retention",
-                "category": "client_anonymized",
-                "count": count,
-            },
-        )
-    return {"count": count}
-
-
 def process_facility_retention(facility, settings_obj, now, dry_run):
     """Run all four event-soft-delete strategies for a single facility.
 
@@ -816,45 +749,6 @@ def process_facility_retention(facility, settings_obj, now, dry_run):
     count += enforce_identified(facility, settings_obj, now, dry_run)["count"]
     count += enforce_qualified(facility, settings_obj, now, dry_run)["count"]
     count += enforce_document_type_retention(facility, now, dry_run)["count"]
-    return {"count": count}
-
-
-def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
-    """Loescht AuditLog-Eintraege aelter als ``settings_obj.auditlog_retention_months``.
-
-    AuditLog ist append-only (siehe ``AuditLog.delete()``-Override + DB-
-    Trigger ``auditlog_immutable`` in Migration 0024). Fuer das Retention-
-    Pruning deaktivieren wir den Trigger transaktional und nutzen
-    ``QuerySet.delete()`` (umgeht den Python-``delete()``-Override). Das
-    DISABLE/ENABLE-Paar laeuft in derselben ``transaction.atomic()`` —
-    bricht der COMMIT, wird auch das DISABLE TRIGGER zurueckgerollt.
-
-    ``settings_obj.auditlog_retention_months == 0`` -> No-op (deaktiviert).
-
-    Refs #129 Teil B, Refs #733 (Tier-2-Sprint, Audit-Massnahme #14).
-    """
-    months = getattr(settings_obj, "auditlog_retention_months", 0) or 0
-    if months <= 0:
-        return {"count": 0}
-    now = now or timezone.now()
-    cutoff = now - timedelta(days=months * 30)
-    qs = AuditLog.objects.filter(facility=facility, timestamp__lt=cutoff)
-    count = qs.count()
-    if count == 0 or dry_run:
-        return {"count": count}
-    if connection.vendor == "postgresql":
-        # Trigger temporaer deaktivieren — sonst blockt der DB-Trigger
-        # die DELETE-Statements. ENABLE im finally, damit ein Fehler
-        # waehrend QuerySet.delete() den Trigger nicht abgeschaltet laesst.
-        with transaction.atomic(), connection.cursor() as cur:
-            cur.execute("ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable")
-            try:
-                qs.delete()
-            finally:
-                cur.execute("ALTER TABLE core_auditlog ENABLE TRIGGER auditlog_immutable")
-    else:
-        # SQLite/Tests ohne Trigger — direkt loeschen.
-        qs.delete()
     return {"count": count}
 
 
