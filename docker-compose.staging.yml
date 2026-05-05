@@ -22,7 +22,7 @@ services:
       - internal
 
   web:
-    image: ghcr.io/anlaufstelle/app:latest
+    image: ghcr.io/anlaufstelle/app:v0.10.2
     env_file: .env.staging
     environment:
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod

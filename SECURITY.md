@@ -8,10 +8,10 @@ Anlaufstelle verarbeitet sensible Sozialdaten gemäß Art. 9 DSGVO. Sicherheitsm
 
 Sicherheitsupdates werden für die folgende Version bereitgestellt:
 
-| Version  | Status                |
-|----------|-----------------------|
-| `0.9.x`  | Unterstützt (Pre-Release) |
-| `< 0.9`  | Nicht unterstützt    |
+| Version   | Status                       |
+|-----------|------------------------------|
+| `0.10.x`  | Unterstützt (Pre-Release)    |
+| `< 0.10`  | Nicht unterstützt            |
 
 Das Projekt befindet sich derzeit in einer Pre-Release-Phase. Sobald `1.0` veröffentlicht ist, werden mindestens die jeweils aktuelle und die vorherige Minor-Version mit Sicherheitsupdates versorgt.
 
@@ -21,8 +21,8 @@ Das Projekt befindet sich derzeit in einer Pre-Release-Phase. Sobald `1.0` verö
 
 Bevorzugter Weg:
 
-1. **GitHub Security Advisory** (privat): [Neue Meldung erstellen](https://github.com/tobiasnix/anlaufstelle/security/advisories/new)
-2. **E-Mail** mit verschlüsselter Übertragung an die Maintainer (Kontakt siehe [README.md](README.md)).
+1. **GitHub Security Advisory** (privat): [Neue Meldung erstellen](https://github.com/anlaufstelle/app/security/advisories/new)
+2. **E-Mail** an [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app). Auf Wunsch stellen wir vor dem Austausch sensibler Details einen verschlüsselten Kanal bereit (PGP-Key auf Anfrage).
 
 Bitte gib in deiner Meldung folgende Informationen an:
 
@@ -34,19 +34,19 @@ Bitte gib in deiner Meldung folgende Informationen an:
 
 Bei Bedarf unterstützen wir bei einer koordinierten Offenlegung (Coordinated Disclosure).
 
-## Bearbeitungs-SLA
+## Bearbeitungs-SLA (Best Effort, Pre-Release)
 
-Wir bemühen uns um folgende Reaktionszeiten:
+Anlaufstelle wird derzeit von einem Solo-Maintainer gepflegt. Die folgenden Zeiten sind **Richtwerte als Best-Effort-Ziel**, keine vertraglich zugesicherten Reaktionszeiten — sobald `1.0` erreicht ist und ein Maintainer-Team etabliert ist, werden sie verbindlicher gefasst:
 
-| Schritt                       | Zeit          |
-|-------------------------------|---------------|
-| Eingangsbestätigung           | 3 Werktage    |
-| Erste Einschätzung            | 7 Werktage    |
-| Korrektur (kritisch / hoch)   | 14 Tage       |
-| Korrektur (mittel / niedrig)  | 30 Tage       |
+| Schritt                       | Zielwert                       |
+|-------------------------------|--------------------------------|
+| Eingangsbestätigung           | ≤ 5 Werktage                   |
+| Erste Einschätzung            | ≤ 10 Werktage                  |
+| Korrektur (kritisch / hoch)   | priorisiert, in der Regel 14–30 Tage |
+| Korrektur (mittel / niedrig)  | im nächsten regulären Release  |
 | Veröffentlichung des Advisory | nach Patch + 7 Tage Schonfrist |
 
-Bei Pre-Release-Status kann die tatsächliche Bearbeitungszeit von der angegebenen abweichen — wir werden in dem Fall transparent kommunizieren.
+Wenn ein Zielwert nicht eingehalten werden kann, kommunizieren wir das transparent — bei kritischen Funden zuerst.
 
 ## Anerkennung (Hall of Fame)
 
@@ -73,10 +73,10 @@ Anlaufstelle processes sensitive social data under GDPR Art. 9. Security reports
 
 ## Supported Versions
 
-| Version  | Status                       |
-|----------|------------------------------|
-| `0.9.x`  | Supported (pre-release)      |
-| `< 0.9`  | Not supported                |
+| Version   | Status                       |
+|-----------|------------------------------|
+| `0.10.x`  | Supported (pre-release)      |
+| `< 0.10`  | Not supported                |
 
 After the `1.0` release we will support at least the current and the previous minor version with security updates.
 
@@ -86,8 +86,8 @@ After the `1.0` release we will support at least the current and the previous mi
 
 Preferred channels:
 
-1. **GitHub Security Advisory** (private): [Create a new report](https://github.com/tobiasnix/anlaufstelle/security/advisories/new)
-2. **Encrypted e-mail** to the maintainers (contact details in [README.md](README.md))
+1. **GitHub Security Advisory** (private): [Create a new report](https://github.com/anlaufstelle/app/security/advisories/new)
+2. **E-mail** to [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app). On request we will set up an encrypted channel before any sensitive details are exchanged (PGP key available on request).
 
 Please include:
 
@@ -99,17 +99,19 @@ Please include:
 
 We support coordinated disclosure on request.
 
-## Response SLA
+## Response SLA (best effort, pre-release)
 
-| Step                          | Target            |
-|-------------------------------|-------------------|
-| Acknowledgement               | 3 business days   |
-| Initial assessment            | 7 business days   |
-| Fix for critical / high       | 14 days           |
-| Fix for medium / low          | 30 days           |
-| Public advisory               | patch + 7 days    |
+Anlaufstelle is currently maintained by a single person. The targets below are **best-effort goals**, not contractually guaranteed response times — they will be tightened once `1.0` ships and a maintainer team is in place:
 
-While the project is in pre-release status, real response times may differ — we will communicate transparently in that case.
+| Step                          | Target                                    |
+|-------------------------------|-------------------------------------------|
+| Acknowledgement               | ≤ 5 business days                         |
+| Initial assessment            | ≤ 10 business days                        |
+| Fix for critical / high       | prioritized, typically 14–30 days         |
+| Fix for medium / low          | in the next regular release               |
+| Public advisory               | patch + 7 days                            |
+
+If a target cannot be met we will communicate transparently — critical findings first.
 
 ## Hall of Fame
 

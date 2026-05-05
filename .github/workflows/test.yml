@@ -91,6 +91,14 @@ jobs:
           cache: pip
       - run: pip install pip-audit
       - run: pip-audit -r requirements.txt
+      - name: SBOM (CycloneDX) generieren
+        run: pip-audit -r requirements.txt --format cyclonedx-json -o sbom.json
+      - name: SBOM als Artefakt
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-cyclonedx
+          path: sbom.json
+          retention-days: 90
 
   lock-check:
     # Stellt sicher, dass requirements*.txt (Lock-Files) synchron zu

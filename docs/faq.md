@@ -77,17 +77,35 @@ Wenn keine der Punkte hilft, wenden Sie sich an Ihren Administrator — fehlgesc
 
 ### 4. Ich habe mein Handy verloren — wie komme ich wieder rein?
 
-Aktuell gibt es **keinen Self-Service-Recovery-Pfad**. Bitten Sie einen Administrator, Ihr TOTP-Gerät zu löschen:
+**Erste Wahl: Backup-Code verwenden.** Bei der 2FA-Einrichtung haben Sie 10 einmalig nutzbare Codes erhalten (seit v0.10.1, [Issue #588](https://github.com/tobiasnix/anlaufstelle/issues/588)). Geben Sie am 2FA-Login statt eines TOTP-Codes einen davon ein — verbrauchte Codes sind danach ungültig und werden im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Nach dem Login richten Sie unter `/mfa/settings/` ein neues TOTP-Gerät und neue Backup-Codes ein.
+
+**Wenn alle Codes verbraucht oder verloren sind:** Bitten Sie eine Administratorin, Ihr TOTP-Gerät zurückzusetzen.
 
 1. Admin-Bereich → **OTP → TOTP-Geräte**.
 2. Gerät des betroffenen Users auswählen → löschen.
 3. Beim nächsten Login werden Sie automatisch auf die Neu-Einrichtung (`/mfa/setup/`) geleitet, sofern 2FA für Ihr Konto/Ihre Einrichtung verpflichtend ist.
 
-Einmalige Backup-Codes als Self-Service-Recovery sind geplant: [Issue #588](https://github.com/tobiasnix/anlaufstelle/issues/588).
-
 **Relevante Dateien:**
 - [`src/core/models/user.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/user.py) — `User.is_mfa_enforced`
-- [`src/core/views/mfa.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/mfa.py) — `MFADisableView`, `MFASetupView`
+- [`src/core/views/mfa.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/mfa.py) — `MFADisableView`, `MFASetupView`, Backup-Code-Verifikation
+
+---
+
+### 4a. Mein Konto ist nach mehreren Login-Fehlversuchen gesperrt — was tun?
+
+Nach **10 fehlgeschlagenen Anmeldungen** wird das Konto automatisch gesperrt (Schwelle in [`src/core/services/login_lockout.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/login_lockout.py), seit v0.10.1). Auch korrekte Eingaben funktionieren in der Sperrphase nicht — Sie sehen eine Hinweis-Seite.
+
+**Vorgehen:**
+
+1. Wenden Sie sich an eine Administratorin Ihrer Einrichtung.
+2. Sie öffnet Ihr User-Profil im Admin (Core → Benutzer → User auswählen) und klickt auf **Sperre aufheben** — die Aktion wird im AuditLog als `LOGIN_UNLOCK` protokolliert.
+3. Versuchen Sie sich danach erneut anzumelden. Falls Sie das Passwort vergessen haben, nutzen Sie unter `/password-reset/` den Reset-Link.
+
+**Hinweis für Admins:** Die `LOGIN_FAILED`-Einträge im AuditLog sind durch einen DB-Trigger (`auditlog_immutable`) unveränderbar — der Cleanup erfolgt deshalb über einen `LOGIN_UNLOCK`-Eintrag, nicht durch Löschen.
+
+**Relevante Dateien:**
+- [`src/core/services/login_lockout.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/login_lockout.py) — `is_locked()`, `unlock()`, Schwellenwert
+- [`src/core/views/account.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/account.py) — Lockout-Check beim Login
 
 ---
 
@@ -498,5 +516,5 @@ So gehen weder Ihre noch die parallelen Änderungen verloren.
 
 ---
 
-*Konsolidiert aus [#105](https://github.com/tobiasnix/anlaufstelle/issues/105), [#429](https://github.com/tobiasnix/anlaufstelle/issues/429), [#471](https://github.com/tobiasnix/anlaufstelle/issues/471), [#506](https://github.com/tobiasnix/anlaufstelle/issues/506). Alle Inhalte am 25.04.2026 gegen den Code verifiziert. v0.10-Ergänzungen ([#589](https://github.com/tobiasnix/anlaufstelle/issues/589)): File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking. Ergänzung 25.04.2026: WorkItem-Hinweis-vs-Aufgabe und Wiedervorlage (FAQ #7, #8).*
+*Konsolidiert aus [#105](https://github.com/tobiasnix/anlaufstelle/issues/105), [#429](https://github.com/tobiasnix/anlaufstelle/issues/429), [#471](https://github.com/tobiasnix/anlaufstelle/issues/471), [#506](https://github.com/tobiasnix/anlaufstelle/issues/506). Alle Inhalte am 29.04.2026 gegen den Code verifiziert (v0.10.2). v0.10.0-Ergänzungen ([#589](https://github.com/tobiasnix/anlaufstelle/issues/589)): File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking. Ergänzung 25.04.2026: WorkItem-Hinweis-vs-Aufgabe und Wiedervorlage (FAQ #7, #8). Ergänzung 29.04.2026 ([#703](https://github.com/tobiasnix/anlaufstelle/issues/703)): MFA-Backup-Codes als Self-Service-Recovery (FAQ #4) und Account-Lockout nach 10 Fehlversuchen (FAQ #4a) — beide seit v0.10.1.*
 

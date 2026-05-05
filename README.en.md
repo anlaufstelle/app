@@ -89,7 +89,8 @@ The configuration also governs data protection:
 - **Document contacts** — in 30 seconds, including from a smartphone
 - **Notes and tasks** — share information between shifts, track follow-ups
 - **Client registry** — pseudonyms, contact levels, history timeline
-- **Full-text search** — quickly find what you need
+- **Typo-tolerant search** — quickly find what you need
+- **Offline mode for streetwork** — capture entries without network, encrypted on-device
 - **German and English** — language switcher built in
 
 ### For management
@@ -105,6 +106,8 @@ Anlaufstelle is designed from the ground up for handling particularly sensitive 
 
 - **Pseudonymization** — no name field in the database (Art. 25 GDPR, Privacy by Design)
 - **Field encryption** — sensitive data encrypted per field with AES-128 (Art. 32 GDPR)
+- **Encrypted file attachments** — file vault with AES-GCM and ClamAV virus scanning before storage
+- **Two-factor authentication** — TOTP with backup codes, can be enforced facility-wide
 - **Retention periods** — automatic deletion after configurable period (Art. 17 GDPR)
 - **Deletion requests with four-eyes principle** — deletion only after approval by management/admin
 - **Audit trail** — immutable log of all security-relevant actions

@@ -69,6 +69,46 @@ class TestEnrichEventsWithPreview:
         assert "Notiz" not in labels
         assert "Dauer" in labels
 
+    def test_expanded_fields_include_textarea(self, facility, staff_user, client_identified, doc_type_contact):
+        """Refs #707: expanded_fields zeigt alle Felder inkl. textarea, damit
+        Notizen ohne Detail-Klick im Feed lesbar sind."""
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 10, "notiz": "Krise eskaliert, RD verständigt"},
+            created_by=staff_user,
+        )
+        feed_items = [{"type": "event", "occurred_at": event.occurred_at, "object": event}]
+        enrich_events_with_preview(feed_items, staff_user)
+        assert hasattr(event, "expanded_fields")
+        labels = {f["label"] for f in event.expanded_fields}
+        assert {"Dauer", "Notiz"} <= labels
+        notiz_entry = next(f for f in event.expanded_fields if f["label"] == "Notiz")
+        assert notiz_entry["is_textarea"] is True
+        assert notiz_entry["value"] == "Krise eskaliert, RD verständigt"
+
+    def test_expanded_fields_no_three_field_limit(self, facility, staff_user, client_identified):
+        """Refs #707: expanded_fields hat kein Limit von 3 (anders als preview_fields)."""
+        dt = DocumentType.objects.create(facility=facility, name="MultiExpand", category="contact")
+        for i in range(5):
+            ft = FieldTemplate.objects.create(facility=facility, name=f"Feld{i}", field_type="text")
+            DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=i)
+        data = {f"feld{i}": f"val{i}" for i in range(5)}
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json=data,
+            created_by=staff_user,
+        )
+        feed_items = [{"type": "event", "occurred_at": event.occurred_at, "object": event}]
+        enrich_events_with_preview(feed_items, staff_user)
+        assert len(event.preview_fields) == 3
+        assert len(event.expanded_fields) == 5
+
     def test_encrypted_field_hidden_for_assistant(self, facility, assistant_user, client_identified):
         # ELEVATED doc type with encrypted field
         dt = DocumentType.objects.create(

@@ -13,6 +13,23 @@ Stand: v0.10.0 (2026-04-19)
 - [ ] Keine offenen Issues mit Label `critical` oder `high`
 - [ ] Migrations-Kompatibilitaet pruefen: Vorwaerts-Migration sicher? Kein Datenverlust bei `migrate --plan`?
 
+### 1.1 Workflow-Sichtbarkeit zwischen Dev / Stage / App
+
+Die 3-Repo-Pipeline (`tobiasnix/anlaufstelle` privat → `anlaufstelle/stage`
+privat → `anlaufstelle/app` public) syncen `.github/workflows/` 1:1 mit dem
+Release-Sync.
+
+| Workflow | Dev (privat) | Stage (privat) | App (public) | Bemerkung |
+|---|---|---|---|---|
+| `test.yml`, `lint.yml`, `e2e.yml` | aktiv | aktiv | aktiv | Standard-CI |
+| `release.yml` | nur auf `v*`-Tag | nur auf `v*`-Tag | nur auf `v*`-Tag | baut + published Image |
+| `codeql.yml` | **skipped** | **skipped** | **aktiv** | Job-Level-Guard `if: github.event.repository.private == false` — auf privaten Repos wäre GitHub Advanced Security kostenpflichtig, im public App-Repo läuft CodeQL kostenfrei und meldet ans Security-Tab. Refs [#687](https://github.com/tobiasnix/anlaufstelle/issues/687). |
+
+**Beim Sync nichts patchen:** Der Guard ist absichtlich workflow-intern,
+damit dieselbe Datei in allen drei Repos liegt und nur GitHub das jeweils
+relevante Verhalten bestimmt. Wenn eines Tages Dev/Stage GHAS bekommen,
+genügt es, den `if:` zu entfernen — kein 3-Wege-Diff nötig.
+
 ## 2. Release
 
 ```bash

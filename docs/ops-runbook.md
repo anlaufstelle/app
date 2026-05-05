@@ -596,7 +596,32 @@ Job CVEs, folgendes Vorgehen:
 # 4. Commit mit "security:"-Prefix, Referenz aufs Advisory
 ```
 
-### 8.4 Troubleshooting
+### 8.4 SBOM (Software Bill of Materials)
+
+Der `audit`-Job erzeugt zusätzlich eine SBOM im CycloneDX-JSON-Format
+(`sbom.json`) und lädt sie als Workflow-Artefakt hoch. Aufbewahrung: 90 Tage.
+
+Die SBOM wird für Compliance-Anforderungen benötigt (NLnet-Förderung,
+öffentliche Beschaffung, Lieferanten-Audits) und listet alle direkten und
+transitiven Python-Dependencies mit Versionen, Lizenzen und CVE-Status zum
+Build-Zeitpunkt.
+
+```bash
+# SBOM des letzten erfolgreichen Test-Workflow-Runs herunterladen
+gh run download --name sbom-cyclonedx --dir /tmp/sbom-latest
+
+# Inhalt prüfen
+jq '.bomFormat, .specVersion, (.components | length)' /tmp/sbom-latest/sbom.json
+```
+
+Lokale Generierung (ohne CI):
+
+```bash
+pip install pip-audit
+pip-audit -r requirements.txt --format cyclonedx-json -o sbom.json
+```
+
+### 8.5 Troubleshooting
 
 | Problem | Ursache | Lösung |
 |---------|---------|--------|

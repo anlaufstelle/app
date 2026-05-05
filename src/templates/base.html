@@ -221,6 +221,14 @@
             </div>
             {% block content %}{% endblock %}
         </div>
+        {# AGPL §13: Source-Link für Network-Use-Disclosure. #}
+        <footer class="text-center text-[11px] text-ink-muted py-4 mt-8 border-t border-subtle">
+            <span>Anlaufstelle</span>
+            <span aria-hidden="true" class="mx-1.5">·</span>
+            <a href="https://github.com/anlaufstelle/app" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
+            <span aria-hidden="true" class="mx-1.5">·</span>
+            <a href="https://github.com/anlaufstelle/app/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
+        </footer>
     </main>
 
     {# --- Mobile Bottom-Nav: 5 Slots (Neu / Zeitstrom / Klientel / Aufgaben / Mehr) --- #}

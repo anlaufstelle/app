@@ -170,6 +170,17 @@ document.addEventListener("alpine:init", () => {
     }));
 
     /** Aktivitaetskarten-Expandable (components/_activity_card.html). */
+    /** Generischer Expand/Collapse-Toggle für Feed-Cards (Activities, Events, …). */
+    Alpine.data("expandableCard", () => ({
+        expanded: false,
+        toggle() {
+            this.expanded = !this.expanded;
+        },
+        get rotateClass() {
+            return this.expanded ? "rotate-180" : "";
+        },
+    }));
+    // Alias — alte Templates verwendeten den activity-spezifischen Namen.
     Alpine.data("expandableActivityCard", () => ({
         expanded: false,
         toggle() {
@@ -561,28 +572,48 @@ document.addEventListener("alpine:init", () => {
      * ``$el`` ist im Click-Handler nicht mehr der x-data-Container,
      * deshalb merken wir uns die Target-ID in init().
      */
+    /**
+     * Quick-Date-Buttons (Heute / Morgen / Nächste Woche / In 2 Wochen).
+     *
+     * Refs #709: Im ``@alpinejs/csp``-Build sind Method-Calls mit String-
+     * Argumenten verboten (``setDate('today')`` lieferte stillschweigend
+     * keine Reaktion → Date-Input blieb leer). Stattdessen vier benannte
+     * Methoden ohne Argumente, die ein lokales Datum setzen
+     * (``toLocaleDateString('en-CA')`` statt ``toISOString().slice(0,10)``,
+     * damit Mitternachts-Cases nicht in den Vortag rutschen).
+     */
     Alpine.data("dateQuickButtons", () => ({
         _targetId: "",
         init() {
             this._targetId = this.$el.dataset.targetInput || "";
         },
-        setDate(offset) {
-            const d = new Date();
-            if (offset === "tomorrow") {
-                d.setDate(d.getDate() + 1);
-            } else if (offset === "next_friday") {
-                const day = d.getDay();
-                const daysUntilNextFriday = ((5 - day + 7) % 7) + 7;
-                d.setDate(d.getDate() + daysUntilNextFriday);
-            } else if (offset === "2weeks") {
-                d.setDate(d.getDate() + 14);
-            }
-            const val = d.toISOString().slice(0, 10);
+        _commit(d) {
+            const val = d.toLocaleDateString("en-CA"); // YYYY-MM-DD in local TZ
             const input = document.getElementById(this._targetId);
-            if (input) {
-                input.value = val;
-                input.dispatchEvent(new Event("change"));
-            }
+            if (!input) return;
+            input.value = val;
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+            input.dispatchEvent(new Event("change", { bubbles: true }));
+        },
+        setToday() {
+            this._commit(new Date());
+        },
+        setTomorrow() {
+            const d = new Date();
+            d.setDate(d.getDate() + 1);
+            this._commit(d);
+        },
+        setNextFriday() {
+            const d = new Date();
+            const day = d.getDay();
+            const daysUntilNextFriday = ((5 - day + 7) % 7) + 7;
+            d.setDate(d.getDate() + daysUntilNextFriday);
+            this._commit(d);
+        },
+        setIn2Weeks() {
+            const d = new Date();
+            d.setDate(d.getDate() + 14);
+            this._commit(d);
         },
     }));
 
@@ -696,4 +727,33 @@ document.addEventListener("alpine:init", () => {
             return !this.editing;
         },
     }));
+});
+
+/**
+ * Date-Input Custom-Validity-Messages (Refs #710).
+ *
+ * HTML5-Native-Validation für ``<input type="date" min="…" max="…">`` zeigt
+ * ihren Tooltip in der Browser-Sprache, nicht in der App-Sprache — bei
+ * englischer Browser-Locale also "Value must be 2026-04-29 or later".
+ * Wir lesen optional ``data-msg-too-early`` / ``data-msg-too-late`` vom
+ * Input und überschreiben damit ``setCustomValidity`` — die Meldung kommt
+ * dann aus den ``gettext``-Übersetzungen der App-Sprache, nicht aus dem
+ * Browser. ``input``-Listener resettet die Custom-Validity, sobald der
+ * User korrigiert hat.
+ */
+document.addEventListener("DOMContentLoaded", () => {
+    document.querySelectorAll('input[type="date"]').forEach((input) => {
+        const tooEarly = input.dataset.msgTooEarly;
+        const tooLate = input.dataset.msgTooLate;
+        if (!tooEarly && !tooLate) return;
+        input.addEventListener("invalid", () => {
+            const v = input.validity;
+            if (v.rangeUnderflow && tooEarly) {
+                input.setCustomValidity(tooEarly);
+            } else if (v.rangeOverflow && tooLate) {
+                input.setCustomValidity(tooLate);
+            }
+        });
+        input.addEventListener("input", () => input.setCustomValidity(""));
+    });
 });

@@ -564,6 +564,139 @@ class TestWorkItemRemindAt:
         assert workitem_open.remind_at == remind
         assert workitem_open.due_date is None
 
+    def test_workitem_form_rejects_due_date_far_future(self, client, staff_user, facility):
+        """Refs #708: due_date > 31.12. Folgejahr wird vom Form abgelehnt."""
+        far_future = datetime.date(datetime.date.today().year + 5, 5, 5)
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_create"),
+            {
+                "item_type": "task",
+                "title": "Aufgabe in ferner Zukunft",
+                "priority": "normal",
+                "due_date": far_future.isoformat(),
+                "recurrence": "none",
+            },
+        )
+        assert response.status_code == 200
+        assert not WorkItem.objects.filter(title="Aufgabe in ferner Zukunft").exists()
+
+    def test_workitem_form_accepts_due_date_at_max(self, client, staff_user, facility):
+        """Refs #708: due_date = 31.12. Folgejahr wird akzeptiert (Grenzwert)."""
+        max_date = datetime.date(datetime.date.today().year + 1, 12, 31)
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_create"),
+            {
+                "item_type": "task",
+                "title": "Aufgabe am Stichtag",
+                "priority": "normal",
+                "due_date": max_date.isoformat(),
+                "recurrence": "none",
+            },
+        )
+        assert response.status_code == 302
+        wi = WorkItem.objects.get(title="Aufgabe am Stichtag")
+        assert wi.due_date == max_date
+
+    def test_workitem_form_rejects_remind_at_far_future(self, client, staff_user, facility):
+        """Refs #708: remind_at > 31.12. Folgejahr wird vom Form abgelehnt."""
+        far_future = datetime.date(datetime.date.today().year + 5, 5, 5)
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_create"),
+            {
+                "item_type": "task",
+                "title": "Erinnerung in ferner Zukunft",
+                "priority": "normal",
+                "remind_at": far_future.isoformat(),
+                "recurrence": "none",
+            },
+        )
+        assert response.status_code == 200
+        assert not WorkItem.objects.filter(title="Erinnerung in ferner Zukunft").exists()
+
+    def test_workitem_form_rejects_due_date_in_past(self, client, staff_user, facility):
+        """Refs #711: due_date in der Vergangenheit wird beim Anlegen abgelehnt."""
+        past = datetime.date.today() - datetime.timedelta(days=1)
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_create"),
+            {
+                "item_type": "task",
+                "title": "Aufgabe in Vergangenheit",
+                "priority": "normal",
+                "due_date": past.isoformat(),
+                "recurrence": "none",
+            },
+        )
+        assert response.status_code == 200
+        assert not WorkItem.objects.filter(title="Aufgabe in Vergangenheit").exists()
+
+    def test_workitem_form_rejects_remind_at_in_past(self, client, staff_user, facility):
+        """Refs #711: remind_at in der Vergangenheit wird beim Anlegen abgelehnt."""
+        past = datetime.date.today() - datetime.timedelta(days=1)
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_create"),
+            {
+                "item_type": "task",
+                "title": "Erinnerung in Vergangenheit",
+                "priority": "normal",
+                "remind_at": past.isoformat(),
+                "recurrence": "none",
+            },
+        )
+        assert response.status_code == 200
+        assert not WorkItem.objects.filter(title="Erinnerung in Vergangenheit").exists()
+
+    def test_workitem_form_accepts_due_date_today(self, client, staff_user, facility):
+        """Refs #711: heute als due_date ist erlaubt (Grenzwert)."""
+        today = datetime.date.today()
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_create"),
+            {
+                "item_type": "task",
+                "title": "Aufgabe heute",
+                "priority": "normal",
+                "due_date": today.isoformat(),
+                "recurrence": "none",
+            },
+        )
+        assert response.status_code == 302
+        wi = WorkItem.objects.get(title="Aufgabe heute")
+        assert wi.due_date == today
+
+    def test_workitem_form_edit_keeps_existing_past_due_date(self, client, staff_user, facility):
+        """Refs #711: Edit eines überfälligen Items darf nicht durch die
+        Vergangenheits-Validierung blockieren, solange due_date unverändert
+        bleibt (sonst kann der User das Item nie wieder bearbeiten)."""
+        past = datetime.date.today() - datetime.timedelta(days=10)
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            title="Bereits überfällig",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+            due_date=past,
+        )
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": wi.pk}),
+            {
+                "item_type": "task",
+                "title": "Bereits überfällig — Beschreibung ergänzt",
+                "priority": "normal",
+                "due_date": past.isoformat(),
+                "recurrence": "none",
+            },
+        )
+        assert response.status_code == 302
+        wi.refresh_from_db()
+        assert wi.title == "Bereits überfällig — Beschreibung ergänzt"
+        assert wi.due_date == past
+
 
 @pytest.mark.django_db
 class TestOptimisticLockingWorkItem:

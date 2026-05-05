@@ -267,15 +267,24 @@ class TestZZRateLimiting:
     def test_five_failed_logins_trigger_block(self, base_url, browser):
         context = browser.new_context()
         page = context.new_page()
+        aborted_by_block = False
         try:
             for _ in range(6):
-                page.goto(f"{base_url}/login/")
-                page.fill('input[name="username"]', "admin")
-                page.fill('input[name="password"]', "falschespasswort")
-                page.click('button[type="submit"]')
-                page.wait_for_load_state("domcontentloaded")
+                try:
+                    page.goto(f"{base_url}/login/")
+                    page.fill('input[name="username"]', "admin")
+                    page.fill('input[name="password"]', "falschespasswort")
+                    page.click('button[type="submit"]')
+                    page.wait_for_load_state("domcontentloaded")
+                except Exception as exc:
+                    # Hard-Block durch Rate-Limit-Middleware kann die Connection
+                    # abrupt schließen → Playwright meldet ERR_ABORTED.
+                    if "ERR_ABORTED" in str(exc) or "ERR_CONNECTION" in str(exc):
+                        aborted_by_block = True
+                        break
+                    raise
 
-            is_blocked = (
+            is_blocked = aborted_by_block or (
                 page.url.endswith("/login/")
                 or page.locator("text=403").count() > 0
                 or page.locator("text=Too Many").count() > 0

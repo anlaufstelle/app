@@ -1,0 +1,38 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 5 * * 1"
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    # CodeQL ist auf privaten Repos nur mit GitHub Advanced Security verfügbar.
+    # Im Dev-Repo (tobiasnix/anlaufstelle, privat) und im Stage-Repo
+    # (anlaufstelle/stage, privat) wird der Job geskippt; im App-Repo
+    # (anlaufstelle/app, public) läuft er kostenfrei und meldet Findings
+    # ans Security-Tab. Refs Issue #687.
+    if: github.event.repository.private == false
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          queries: security-and-quality
+      - uses: github/codeql-action/autobuild@v3
+      - uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"

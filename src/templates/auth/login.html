@@ -85,6 +85,12 @@
                 </div>
             </div>
         </div>
+        {# AGPL §13: Source-Link für Network-Use-Disclosure. #}
+        <footer class="text-center text-[11px] text-ink-muted mt-6">
+            <a href="https://github.com/anlaufstelle/app" rel="noopener" target="_blank" class="hover:underline">{% trans "Quellcode" %}</a>
+            <span aria-hidden="true" class="mx-1.5">·</span>
+            <a href="https://github.com/anlaufstelle/app/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
+        </footer>
     </div>
     <script src="{% static 'js/csrf.js' %}"></script>
     <script src="{% static 'js/sw-register.js' %}" defer></script>

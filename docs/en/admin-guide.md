@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> The German version is the authoritative source. Last synced: 2026-04-19 (v0.10.0).
+> The German version is the authoritative source. Last synced: 2026-04-28 (v0.10.2).
 
 # Anlaufstelle -- Admin Guide
 
@@ -385,6 +385,25 @@ Fields that already have values stored in events **cannot simply be deleted**. A
 
 Under **Core > Field templates**, you can edit the options of selection and multi-selection fields (Select / Multi-Select). Options are stored in the **Options json** field as a JSON array.
 
+> **Applies only to Select / Multi-Select.** For other field types (Text, Textarea, Number, Date, Time, Yes/No, File), `options_json` is not evaluated -- please leave the field empty (`[]`).
+
+#### Default Values (`default_value`)
+
+In the **Default value** field of a field template, you can store a default that is pre-filled when **creating** a new event. When **editing** an existing event, the stored value always takes precedence.
+
+| Field type | Format | Example |
+|---|---|---|
+| Text / Textarea | any string | `Standard note` |
+| Number | integer | `15` |
+| Date | ISO format `YYYY-MM-DD` | `2026-01-01` |
+| Time | ISO format `HH:MM` or `HH:MM:SS` | `09:30` |
+| Yes/No | `true` or `false` | `true` |
+| Select | slug of an active option | `beratung` |
+| Multi-Select | comma-separated list of active option slugs | `beratung, essen` |
+| File | not supported | -- |
+
+Precedence on create: **Quick template > Default value > empty**. Invalid values are rejected by `FieldTemplate.clean()` when saved in the admin.
+
 **Schema of an option:**
 
 ```json
@@ -464,7 +483,17 @@ If a staff member loses their authenticator device, an administrator has to dele
 2. Select the affected user's device and delete it.
 3. Inform the user: on their next login they will be redirected to `/mfa/setup/` (if `is_mfa_enforced=True`) or can re-enable 2FA voluntarily.
 
-Self-service recovery via one-time backup codes is planned and tracked in [Issue #588](https://github.com/tobiasnix/anlaufstelle/issues/588).
+Since v0.10.1 there are also **backup codes as a second factor** for exactly this recovery case (Refs [#588](https://github.com/tobiasnix/anlaufstelle/issues/588)). On 2FA setup the user receives 10 single-use codes that should be printed or stored in a password manager -- at the 2FA login prompt the user can enter a backup code instead of a TOTP code. Used codes are invalidated and recorded in the AuditLog (`MFA_BACKUP_CODE_USED`). If all 10 codes have been spent or lost, the admin reset above remains the fallback.
+
+#### Account Lockout
+
+After **10 failed login attempts** the account is automatically locked (the login service reads the threshold from [`src/core/services/login_lockout.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/login_lockout.py)). The locked user sees an information page and can no longer sign in until an admin unlocks the account:
+
+1. **Admin > Core > Users** -- select the affected user.
+2. In the user profile under "Account status" click **Unlock account**.
+3. The unlock is recorded in the AuditLog as `LOGIN_UNLOCK` (the `LOGIN_FAILED` log itself is immutable thanks to the `auditlog_immutable` DB trigger).
+
+Lock, unlock, and any attempts during the lock window are all written to the AuditLog -- use the "Login failed" / "Account unlocked" filter for retrospective analysis.
 
 #### Audit Trail
 
@@ -795,11 +824,15 @@ The Content Security Policy (CSP) is set **centrally in Django** via [`django-cs
 
 **Inline scripts are not allowed.** All JavaScript logic lives in external files under `src/static/js/`, included via `<script src=…>` or through nonce-aware template tags.
 
+**`script-src` global without `'unsafe-eval'`.** With the migration to the `@alpinejs/csp` build (v0.10.2), `'unsafe-eval'` has been removed from the global policy. All Alpine components are registered as `Alpine.data()` components in [`src/static/js/alpine-components.js`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/static/js/alpine-components.js); architecture tests forbid inline `x-data="{...}"` and complex expressions (ternaries, `||`/`&&`, method calls, object literals) in Alpine and HTMX directives.
+
+**Exception `/admin-mgmt/*` (Django admin):** django-unfold loads its own Alpine build that uses `new AsyncFunction()`-based evaluation for the Cmd+K search and therefore cannot initialize without `'unsafe-eval'`. The [`AdminCSPRelaxMiddleware`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/middleware/) therefore appends `'unsafe-eval'` **per request only for admin routes** -- which are additionally protected by the MFA gate and the `admin` role. Outside the admin, the strict global policy stays active.
+
 **Typical error patterns in the browser console:**
 
 - `Refused to execute inline script because it violates the following Content Security Policy directive` -- inline `<script>` block in a template. Move the script to a static JS file or include it via a nonce-aware template tag.
-- `Refused to load the script … because it violates … directive: "script-src 'self' 'unsafe-eval'"` -- external script CDNs are not supported; all scripts must come from `self`.
-- Alpine.js expressions work because `'unsafe-eval'` is explicitly allowed (Alpine requires dynamic expression evaluation internally).
+- `Refused to load the script … because it violates … directive: "script-src 'self'"` -- external script CDNs are not supported; all scripts must come from `self`.
+- `Refused to evaluate a string as JavaScript because 'unsafe-eval' is not an allowed source` -- expected on regular routes (architecture violation); inside the admin area this indicates that the relax middleware did not match (check the route pattern in [`AdminCSPRelaxMiddleware`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/middleware/)).
 
 If CSP errors appear after an update: check the browser console for the **specific blocked URL/source** and decide whether to move the source into the template or adjust the CSP directive.
 
@@ -1178,5 +1211,5 @@ python manage.py create_statistics_snapshots --year 2026 --month 2
 Snapshots are visible in the Django admin under **Statistics snapshots** (read-only). You can check which months have been captured and when the last update took place.
 
 <!-- translation-source: docs/admin-guide.md -->
-<!-- translation-version: v0.10.0 -->
-<!-- translation-date: 2026-04-19 -->
+<!-- translation-version: v0.10.2 -->
+<!-- translation-date: 2026-04-28 -->

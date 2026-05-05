@@ -31,6 +31,8 @@ Dieses Handbuch richtet sich an Fachkräfte, Leitungen und Assistenzen in Kontak
 
 > **Hinweis:** Wenn Ihnen beim ersten Login mitgeteilt wurde, dass Sie das Passwort ändern müssen, werden Sie direkt nach der Anmeldung auf die Passwort-Änderungsseite weitergeleitet.
 
+> **Konto gesperrt nach mehreren Fehlversuchen?** Nach **10 fehlgeschlagenen Anmeldungen** wird Ihr Konto automatisch gesperrt. Sie sehen dann eine entsprechende Hinweis-Seite und können sich nicht mehr anmelden. Bitten Sie eine Administratorin um Entsperrung — die Sperre wird im Audit-Log protokolliert.
+
 ### Passwort ändern
 
 1. Klicken Sie oben rechts auf Ihren Namen oder das Benutzer-Menü.
@@ -71,7 +73,11 @@ Die Anlaufstelle unterstützt zeitbasierte Einmalcodes (TOTP) als zweiten Faktor
 
 Unter `/mfa/settings/` → **2FA deaktivieren**. Dies ist **nicht möglich**, wenn Ihre Einrichtung 2FA verpflichtend vorschreibt oder Ihr Konto individuell als 2FA-pflichtig markiert ist — in diesem Fall wenden Sie sich an Ihre Administration.
 
-> **Handy verloren / Authenticator zurückgesetzt?** Aktuell ist eine Admin-Intervention nötig (2FA im Admin-Bereich zurücksetzen). Self-Service-Recovery über Backup-Codes ist geplant ([Issue #588](https://github.com/tobiasnix/anlaufstelle/issues/588)).
+**Backup-Codes (für den Notfall):**
+
+Bei der 2FA-Einrichtung erhalten Sie **10 einmalig nutzbare Backup-Codes**. Bewahren Sie diese sicher auf — z. B. ausgedruckt im Geldbeutel oder im Passwort-Manager. Falls Sie Ihr Telefon verlieren oder die Authenticator-App zurückgesetzt wurde, können Sie am 2FA-Login einen Backup-Code statt eines TOTP-Codes eingeben. Jeder Code funktioniert nur einmal.
+
+> **Alle Codes verbraucht oder verloren?** Wenden Sie sich an Ihre Administration — sie kann Ihr TOTP-Gerät zurücksetzen, danach richten Sie 2FA und neue Backup-Codes ein.
 
 ### Abmelden
 

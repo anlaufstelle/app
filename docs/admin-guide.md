@@ -480,7 +480,17 @@ Wenn eine Mitarbeiterin ihr Authenticator-Gerät verliert, muss ein Administrato
 2. Das Gerät des betroffenen Users auswählen und löschen.
 3. User informieren: nach dem nächsten Login wird automatisch auf `/mfa/setup/` umgeleitet (bei `is_mfa_enforced=True`) oder der User kann 2FA freiwillig neu einrichten.
 
-Self-Service-Recovery über einmalige Backup-Codes ist geplant und wird unter [Issue #588](https://github.com/tobiasnix/anlaufstelle/issues/588) umgesetzt.
+Seit v0.10.1 gibt es zusätzlich **Backup-Codes als zweiten Faktor** für genau diesen Recovery-Fall (Refs [#588](https://github.com/tobiasnix/anlaufstelle/issues/588)). Bei der 2FA-Einrichtung erhält der User 10 einmalig nutzbare Codes, die er ausgedruckt oder im Passwort-Manager hinterlegen sollte — am Login-2FA-Prompt kann er statt eines TOTP-Codes einen Backup-Code eingeben. Verbrauchte Codes werden invalidiert und im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Sind alle 10 Codes verbraucht oder verloren, bleibt der Admin-Reset oben der Fallback.
+
+#### Account-Lockout
+
+Nach **10 fehlgeschlagenen Login-Versuchen** wird das Konto automatisch gesperrt (Login-Service liest die Schwelle aus [`src/core/services/login_lockout.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/login_lockout.py)). Der gesperrte User sieht eine Hinweis-Seite und kann sich nicht mehr anmelden, bis ein Admin entsperrt:
+
+1. **Admin → Core → Benutzer** → betroffenen User auswählen.
+2. Im User-Profil unter „Account-Status" auf **Sperre aufheben** klicken.
+3. Cleanup wird im AuditLog als `LOGIN_UNLOCK` protokolliert (das `LOGIN_FAILED`-Log selbst ist dank `auditlog_immutable`-DB-Trigger unveränderbar).
+
+Sperre, Entsperre und alle Versuche während der Sperrphase werden im AuditLog mitprotokolliert — nutzen Sie den Filter „Anmeldung fehlgeschlagen" / „Sperre aufgehoben" für eine retroaktive Auswertung.
 
 #### Audit-Spur
 
@@ -542,7 +552,7 @@ Schnell-Vorlagen werden pro User über [`user_can_see_document_type`](https://gi
 
 ### 2.9 Encrypted File Vault & Virus-Scanning
 
-Dateianhänge (Fotos, Scans, Dokumente) an Ereignissen werden in einem **verschlüsselten Vault** abgelegt: vor dem Schreiben in `MEDIA_ROOT` auf Viren geprüft und anschließend per AES-GCM mit dem `ENCRYPTION_KEYS`-Schlüsselmaterial symmetrisch verschlüsselt. Refs [#524](https://github.com/tobiasnix/anlaufstelle/issues/524).
+Dateianhänge (Fotos, Scans, Dokumente) an Ereignissen werden in einem **verschlüsselten Vault** abgelegt: vor dem Schreiben in `MEDIA_ROOT` auf Viren geprüft und anschließend chunk-weise per **Fernet** (AES-128-CBC mit HMAC-SHA256, [`cryptography.fernet`](https://cryptography.io/en/latest/fernet/)) mit dem `ENCRYPTION_KEYS`-Schlüsselmaterial verschlüsselt. Implementierung: [`encrypt_file()` in `src/core/services/encryption.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/encryption.py). Refs [#524](https://github.com/tobiasnix/anlaufstelle/issues/524).
 
 #### Upload-Flow
 
@@ -551,7 +561,7 @@ Dateianhänge (Fotos, Scans, Dokumente) an Ereignissen werden in einem **verschl
 3. **ClamAV-Scan** vor Verschlüsselung:
    - Standard: fail-closed. Ist der Daemon nicht erreichbar (`CLAMAV_ENABLED=true`, aber kein TCP-Connect möglich), wird der Upload **abgelehnt**.
    - Erkannter Virus → Upload wird verworfen, ein Audit-Log-Eintrag wird geschrieben.
-4. Inhalt wird mit AES-GCM verschlüsselt (Write-Key = erster Eintrag aus `ENCRYPTION_KEYS`) und in `MEDIA_ROOT` gespeichert.
+4. Inhalt wird chunk-weise mit Fernet (MultiFernet) verschlüsselt (Write-Key = erster Eintrag aus `ENCRYPTION_KEYS`) und in `MEDIA_ROOT` gespeichert.
 5. Download erfolgt ausschließlich über die geschützte Django-View (kein direkter Webserver-Zugriff auf `MEDIA_ROOT`).
 
 #### ClamAV-Service (`docker-compose.prod.yml`)
@@ -811,11 +821,15 @@ Die Content-Security-Policy (CSP) wird **zentral in Django** über [`django-csp`
 
 **Inline-Skripte sind nicht erlaubt.** Alle JavaScript-Logik liegt in externen Dateien unter `src/static/js/`, eingebunden per `<script src=…>` oder über Nonce-Aware-Template-Tags.
 
+**`script-src` global ohne `'unsafe-eval'`.** Mit der Migration auf den `@alpinejs/csp`-Build (v0.10.2) ist `'unsafe-eval'` aus der globalen Policy entfernt. Alle Alpine-Komponenten sind als `Alpine.data()`-Komponenten in [`src/static/js/alpine-components.js`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/static/js/alpine-components.js) registriert; Architektur-Tests verbieten Inline-`x-data="{...}"` und komplexe Expressions (Ternaries, `||`/`&&`, Method-Calls, Object-Literale) in Alpine-/HTMX-Direktiven.
+
+**Ausnahme `/admin-mgmt/*` (Django-Admin):** django-unfold lädt einen eigenen Alpine-Build, der für die Cmd+K-Suche `new AsyncFunction()`-basierte Auswertung nutzt und damit ohne `'unsafe-eval'` nicht initialisiert. Die [`AdminCSPRelaxMiddleware`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/middleware/) ergänzt `'unsafe-eval'` deshalb **per Request nur für Admin-Routen** — diese sind durch MFA-Gate und Rolle `admin` zusätzlich geschützt. Außerhalb des Admins bleibt die strenge globale Policy aktiv.
+
 **Typische Fehlerbilder im Browser-Console:**
 
 - `Refused to execute inline script because it violates the following Content Security Policy directive` — Inline-`<script>`-Block im Template. Auslagern in eine statische JS-Datei oder über ein Nonce-Aware-Template-Tag einbinden.
-- `Refused to load the script … because it violates … directive: "script-src 'self' 'unsafe-eval'"` — externes Script-CDN wird nicht unterstützt; alle Skripte müssen aus `self` stammen.
-- Alpine.js-Ausdrücke funktionieren, weil `'unsafe-eval'` explizit erlaubt ist (Alpine benötigt dynamische Ausdrucksauswertung intern).
+- `Refused to load the script … because it violates … directive: "script-src 'self'"` — externes Script-CDN wird nicht unterstützt; alle Skripte müssen aus `self` stammen.
+- `Refused to evaluate a string as JavaScript because 'unsafe-eval' is not an allowed source` — auf normalen Routen erwartet (Architektur-Bruch); im Admin-Bereich Hinweis darauf, dass die Relax-Middleware nicht greift (Route-Pattern in [`AdminCSPRelaxMiddleware`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/middleware/) prüfen).
 
 Bei CSP-Fehlern nach einem Update: Browser-Console auf **konkret blockierte URL/Quelle** prüfen und entscheiden, ob die Quelle ins Template verschoben oder die CSP-Richtlinie angepasst werden muss.
 

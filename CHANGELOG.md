@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Aufklappbare Kontakte im Zeitstrom** — Event-Cards lassen sich jetzt per Chevron-Toggle inline aufklappen, gleiches Pattern wie Aktivitäts-Cards. Im aufgeklappten Bereich werden alle Felder inkl. textarea-Notizen angezeigt — die müssen nicht mehr per Detail-Klick gelesen werden. Neuer Service-Vertrag: `enrich_events_with_preview` befüllt zusätzlich `event.expanded_fields` (alle Felder, ohne 3-Limit, mit textarea). Generische `expandableCard`-Alpine-Komponente in [`src/static/js/alpine-components.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/alpine-components.js).
+
+### Fixed
+
+- **HTML5-Date-Validation in App-Sprache** — Der Browser-Tooltip beim Validation-Fehler an `<input type="date">` folgte bisher der Browser-Locale (z. B. „Value must be 2026-04-29 or later"). `WorkItemForm` setzt jetzt lokalisierte `data-msg-too-early`/`data-msg-too-late`-Attribute auf den Date-Inputs; ein DOMContentLoaded-Listener in [`src/static/js/alpine-components.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/alpine-components.js) ruft damit `setCustomValidity()` auf — die Tooltip-Meldung kommt damit aus den `gettext`-Übersetzungen der App.
+- **WorkItem Quick-Date-Buttons funktionieren wieder** — Die Buttons „Heute / Morgen / Nächste Woche / In 2 Wochen" über den `due_date`/`remind_at`-Feldern setzten kein Datum, weil `setDate('today')` ein Method-Call mit String-Argument ist und der `@alpinejs/csp`-Build solche Aufrufe nicht ausführt. Vier dedizierte Methoden ohne Argumente (`setToday`, `setTomorrow`, `setNextFriday`, `setIn2Weeks`) sowie `toLocaleDateString('en-CA')` statt `toISOString().slice(0,10)` (verhindert Timezone-Drift in den Vortag).
+- **WorkItem-Datumsvalidierung** — `due_date` und `remind_at` lassen sich nicht mehr beliebig in die Zukunft setzen (z. B. `05.05.3345`, was praktisch aus dem Zeitstrom verschwand) **und** nicht mehr in die Vergangenheit anlegen (Aufgabe wäre sofort überfällig). Neue Schranken: min = heute, max = 31. Dezember Folgejahr — sowohl als HTML5-`min`/`max`-Attribut (Browser-Side) als auch in `WorkItemForm.clean()` (Server-Side, Schutz vor Bypass). Längere Zeiträume sind über `recurrence` weiterhin möglich. Edit eines bereits überfälligen Items bleibt möglich, solange `due_date` unverändert bleibt (`changed_data`-Check).
+
 ## [0.10.2] - 2026-04-28
 
 ### Changed

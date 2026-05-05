@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-04-19 (v0.10.0).
+> The German version is the authoritative source. Last synced: 2026-04-28 (v0.10.2).
 
 # Anlaufstelle -- User Guide
 
@@ -12,6 +12,7 @@ This guide is intended for social workers, managers, and assistants working in d
 1. [Login and Password](#1-login-and-password)
 2. [Home -- Zeitstrom](#2-home--zeitstrom)
 3. [Documenting a Contact (Creating an Event)](#3-documenting-a-contact-creating-an-event)
+   - [Files Overview](#3a-files-overview)
 4. [Managing Clients](#4-managing-clients)
 5. [Hints and Tasks (Work Items)](#5-hints-and-tasks-work-items)
 6. [Search](#6-search)
@@ -32,6 +33,8 @@ This guide is intended for social workers, managers, and assistants working in d
 4. Click **Sign In**.
 
 > **Note:** If you were told to change your password on first login, you will be redirected to the password change page immediately after signing in.
+
+> **Account locked after multiple failed attempts?** After **10 failed sign-in attempts**, your account is automatically locked. You will then see a corresponding notice page and can no longer sign in. Ask an administrator to unlock the account -- the lockout is recorded in the audit log.
 
 ### Changing Your Password
 
@@ -73,7 +76,11 @@ Anlaufstelle supports time-based one-time passwords (TOTP) as a second login fac
 
 Under `/mfa/settings/` > **Disable 2FA**. This is **not possible** if your facility enforces 2FA or your account is individually marked as 2FA-required -- contact your administrator in that case.
 
-> **Lost phone / authenticator reset?** Currently, an administrator has to reset 2FA from the admin panel. Self-service recovery via backup codes is planned ([Issue #588](https://github.com/tobiasnix/anlaufstelle/issues/588)).
+**Backup codes (for emergencies):**
+
+When setting up 2FA, you receive **10 single-use backup codes**. Store them safely -- e.g., printed and kept in your wallet, or in your password manager. If you lose your phone or your authenticator app has been reset, you can enter a backup code instead of a TOTP code at the 2FA login screen. Each code only works once.
+
+> **All codes used up or lost?** Contact your administrator -- they can reset your TOTP device, after which you set up 2FA and new backup codes again.
 
 ### Signing Out
 
@@ -166,9 +173,11 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 - **Maximum size:** By default, **up to 10 MiB per file** are allowed. Your administrator can adjust this limit.
 - **Supported formats:** PDF, Office documents, and images. Ask your administrator for the exact list allowed in your facility.
 - **Download:** Open the detail view of the event and click the file link. The file is automatically decrypted on retrieval and delivered in the browser.
-- **Replacing:** When editing an event, you can replace the existing file with a new one. The old file is only deleted after the new upload has finished successfully -- so nothing is lost if the upload is aborted.
+- **Replacing (with version history):** When editing an event, you can replace the existing file with a new one. The old file is **not** deleted -- it is preserved as a **previous version** and remains downloadable from the event detail page via an expandable accordion. Previous versions are only removed when the event itself is fully deleted.
 
 > **Offline note:** Events with file attachments currently **cannot** be saved offline. If you work offline, attaching a file shows an explicit hint. See [Section 8](#8-installing-the-pwa-and-working-offline).
+
+> **Central files overview:** All file attachments in your facility can be browsed and filtered as a single list via the **Files page** -- see [Section 3a: Files Overview](#3a-files-overview).
 
 ### Editing a Contact
 
@@ -188,6 +197,46 @@ A file can be attached to each event -- for example, a scanned form, a photo of 
 4. Confirm the deletion.
 
 > **Important:** If the contact is associated with a **qualified client**, it will not be deleted immediately. Instead, a **deletion request** is automatically created, which must be approved by a lead or administrator (four-eyes principle). You will receive a corresponding notification.
+
+---
+
+## 3a. Files Overview
+
+The **Files page** (`/attachments/`, sidebar entry **Files**) shows all attachments in your facility as a searchable list -- without having to open each event individually first.
+
+### Access
+
+- **Sidebar navigation -> Files**
+- Available to assistants, social workers, leads, and administrators.
+
+### Visibility
+
+You only see files whose event **and** field reach your sensitivity role:
+
+- Fields with "high" sensitivity remain hidden for social workers at a lower level -- the same gate as in the event detail view.
+- Attachments of deleted events are not included.
+- Facility scoping: you only see files from your own facility.
+
+### Filters
+
+Two filters above the table:
+
+- **Documentation type** -- only attachments belonging to events of a specific type (e.g., "Counseling").
+- **Client** -- all attachments for a specific pseudonym.
+
+The filters can be combined and update the list via HTMX without a full page reload.
+
+### Download
+
+Each row shows the original filename. Clicking it delivers the decrypted file -- exactly as in the event detail view. Downloads are recorded in the audit log.
+
+### Encryption
+
+All files are stored encrypted on the server (AES-GCM). Decryption only happens at download request time inside the Django process; admins with direct disk access only see the encrypted binary data.
+
+### Previous versions
+
+Replaced files are preserved as previous versions (see [Section 3 -- File Attachments](#file-attachments)). The Files overview currently only shows the latest version per entry; previous versions are accessible via the entry on the event detail page.
 
 ---
 
@@ -722,7 +771,7 @@ Each episode shows its status:
 *Anlaufstelle -- Documentation system for low-threshold social services*
 
 <!-- translation-source: docs/user-guide.md -->
-<!-- translation-version: v0.10.0 -->
-<!-- translation-date: 2026-04-19 -->
-<!-- source-hash: 96720ec -->
+<!-- translation-version: v0.10.2 -->
+<!-- translation-date: 2026-04-28 -->
+<!-- source-hash: 12bb0c2 -->
 

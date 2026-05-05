@@ -55,10 +55,10 @@
                 <label for="id_due_date" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.due_date.label }}</label>
                 {{ form.due_date }}
                 <div class="mt-1.5 flex flex-wrap gap-1">
-                    <button type="button" @click="setDate('today')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Heute" %}</button>
-                    <button type="button" @click="setDate('tomorrow')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Morgen" %}</button>
-                    <button type="button" @click="setDate('next_friday')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Nächste Woche" %}</button>
-                    <button type="button" @click="setDate('2weeks')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "In 2 Wochen" %}</button>
+                    <button type="button" @click="setToday" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Heute" %}</button>
+                    <button type="button" @click="setTomorrow" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Morgen" %}</button>
+                    <button type="button" @click="setNextFriday" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Nächste Woche" %}</button>
+                    <button type="button" @click="setIn2Weeks" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "In 2 Wochen" %}</button>
                 </div>
                 {% for error in form.due_date.errors %}
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>
@@ -73,9 +73,9 @@
                 <p class="mt-1 text-[11px] text-ink-muted">{{ form.remind_at.help_text }}</p>
                 {% endif %}
                 <div class="mt-1.5 flex flex-wrap gap-1">
-                    <button type="button" @click="setDate('tomorrow')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Morgen" %}</button>
-                    <button type="button" @click="setDate('next_friday')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Nächste Woche" %}</button>
-                    <button type="button" @click="setDate('2weeks')" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "In 2 Wochen" %}</button>
+                    <button type="button" @click="setTomorrow" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Morgen" %}</button>
+                    <button type="button" @click="setNextFriday" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "Nächste Woche" %}</button>
+                    <button type="button" @click="setIn2Weeks" class="px-2.5 py-0.5 text-[11px] font-semibold text-ink-soft bg-canvas border border-subtle hover:bg-accent-light hover:text-accent hover:border-accent-light rounded-full">{% trans "In 2 Wochen" %}</button>
                 </div>
                 {% for error in form.remind_at.errors %}
                 <p class="mt-1 text-sm text-red-600">{{ error }}</p>

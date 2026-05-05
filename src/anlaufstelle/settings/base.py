@@ -240,23 +240,21 @@ LOGGING = {
 CONTENT_SECURITY_POLICY = {
     "DIRECTIVES": {
         "default-src": ["'self'"],
-        # 'unsafe-eval' wird benoetigt, weil Alpine.js (Standard-Build) `x-show`/
-        # `x-bind`/`@event`-Expressions per dyn-Funktionsauswertung evaluiert.
-        # Audit-Finding S-6 (docs/audits/2026-04-21-tiefenanalyse-v0.10.md)
-        # forderte den Wechsel auf @alpinejs/csp. Erste Phase (alle Inline-
-        # `x-data="{...}"` zu registrierten Alpine.data()-Komponenten) ist
-        # umgesetzt (Refs #669); der CSP-Build erlaubt aber nur sehr
-        # einfache Expressions (kein `&&`, kein `> 0`, kein `$event.detail.x`),
-        # was praktisch alle bestehenden Templates brechen wuerde. Volle
-        # Migration ist als Folge-Issue #672 dokumentiert; bis dahin akzeptieren
-        # wir 'unsafe-eval' bewusst — Defense-in-Depth besteht durch:
-        #   - PostgreSQL Row Level Security (Migration 0047_postgres_rls_setup)
-        #   - Audit-Logging aller Schreib-Aktionen (AuditLog)
-        #   - CSRF (HttpOnly + SameSite=Strict)
-        #   - Rate-Limit auf Login + sensiblen Endpoints
-        #   - Pflicht-MFA (TOTP) fuer Admin / Lead
-        #   - keine `unsafe-inline` (Inline-Scripts und -Event-Handler durch
-        #     Architektur-Tests verboten — Refs #618, #662 FND-01)
+        # script-src ist seit v0.10.2 strikt: kein 'unsafe-eval', kein
+        # 'unsafe-inline'. Die @alpinejs/csp-Migration (Refs #672, PR #690)
+        # ist abgeschlossen — alle Alpine.js-Komponenten sind als
+        # Alpine.data()-Registrierungen in src/static/js/alpine-components.js
+        # gebündelt, Templates nutzen ausschließlich Komponenten-Namen wie
+        # `x-data="globalSearch"` (kein Inline-Object).
+        #
+        # Ausnahme: die Django-Admin-UI (`/admin-mgmt/`) lädt das gevendor'te
+        # django-unfold mit klassischem Alpine.js-Build, das `unsafe-eval`
+        # benötigt. Statt die globale CSP aufzuweichen, ergänzt
+        # `core.middleware.admin_csp_relax.AdminCSPRelaxMiddleware` per
+        # Response-Header-Rewrite `unsafe-eval` nur für Admin-Routes.
+        # Defense-in-Depth dort: MFA-Pflicht für Admin/Lead, Rate-Limit,
+        # AuditLog auf Schreib-Aktionen, RLS gegen Cross-Facility-Leaks.
+        # Folgemigration auf reinen `@alpinejs/csp`-Build im Admin: Issue #695.
         "script-src": ["'self'"],
         "style-src": ["'self'", "'unsafe-inline'"],
         "img-src": ["'self'", "data:"],

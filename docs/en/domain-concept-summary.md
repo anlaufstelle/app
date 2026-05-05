@@ -115,13 +115,25 @@ Release v0.10.0 (2026-04-19) extends the domain concept with several capabilitie
 - **File vault.** Attachments on events are no longer stored in the clear. They are scanned by ClamAV before acceptance and encrypted at rest, extending field-level encryption to binary material.
 - **Two-factor authentication.** TOTP-based second factor, configurable per user or enforced facility-wide, hardens login for facilities handling qualified data.
 - **Fuzzy search.** Pseudonyms are often misremembered or misspelled. A typo-tolerant search based on PostgreSQL `pg_trgm` trigrams, with a per-facility similarity threshold, helps staff find known persons without resorting to broader disclosures.
-- **Row Level Security.** PostgreSQL RLS policies on sixteen facility-scoped tables add a database-level safety net beneath the middleware filter. Session variables carry the current facility identity into the database, so even a bypassed ORM layer cannot cross tenants.
+- **Row Level Security.** PostgreSQL RLS policies on all facility-scoped tables (23 as of v0.10.2, including transitive scopes such as `OutcomeGoal`, `Milestone`, and `DocumentTypeField`) add a database-level safety net beneath the middleware filter. A session variable carries the current facility identity into the database, set per request and explicitly cleared on anonymous requests, so even a bypassed ORM layer cannot cross tenants.
 - **Optimistic locking.** Client, Case, WorkItem, Settings, and Event records use version counters to prevent silent overwrites when two users edit the same record concurrently -- a realistic scenario in shift-based work.
 - **Retention dashboard and legal hold.** The automated retention workflow gains a review surface: leads bulk approve, defer, or reject deletion proposals. A Legal Hold flag excludes individual records from deletion when investigations or disputes require preservation. K-anonymization is available as an alternative to hard deletion, preserving statistics while removing identifying detail.
 - **Quick templates.** Admins maintain pre-filled event templates for recurring situations; templates are filtered by the user's role and the sensitivity of their fields so that assistants never see templates containing qualified-level content.
 - **Token invite flow.** New users receive a one-time token link instead of a plaintext initial password. Invitees choose their own password on first use, closing a long-standing onboarding weak spot.
 
+### v0.10.1 (2026-04-26)
+
+- **Backup codes for 2FA.** When enabling TOTP, users receive ten single-use backup codes that may be entered at the 2FA login prompt instead of an authenticator code. Consumed codes are invalidated and recorded in the audit log. This closes a recovery gap that previously required an admin reset whenever a user lost their authenticator device.
+- **Account lockout.** After ten consecutive failed login attempts, the account is locked. Admins unlock affected users from the profile screen; both events appear in the audit log. Combined with the per-route rate limits on every mutating endpoint (added systematically in v0.10.1), this raises the cost of credential-stuffing attacks against pseudonymized client lists.
+- **Visual refresh.** The interface moved to a green-themed design with self-hosted DM Sans/Mono fonts (no Google CDN), consistent card patterns, KPI cards with monospaced numbers, and a mobile bottom navigation. The client list collapsed from a duplicated desktop/mobile render path into a single responsive grid.
+- **Composite indexes** on AuditLog, Case, Event, and WorkItem accelerate the most common list filters (status combined with date).
+
+### v0.10.2 (2026-04-28)
+
+- **CSP migration to `@alpinejs/csp`.** The vendored Alpine build was replaced with the CSP variant; all inline `x-data="{...}"` objects became registered `Alpine.data()` components. With this change, `script-src 'unsafe-eval'` is removed from the global Content Security Policy. An architectural test prevents future regressions (no inline `x-data`, no ternaries / `||` / `&&` / method calls / object literals inside Alpine and HTMX directives).
+- **AdminCSPRelaxMiddleware.** django-unfold ships its own Alpine build that uses `new AsyncFunction()` for the Cmd+K command palette and therefore needs `'unsafe-eval'` to initialize. A dedicated middleware now adds `'unsafe-eval'` only on `/admin-mgmt/*` routes — the privileged Django admin area, which is additionally protected by the MFA gate and the `admin` role. The strict global policy stays in place everywhere else.
+
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.10.0 -->
-<!-- translation-date: 2026-04-19 -->
+<!-- translation-version: v0.10.2 -->
+<!-- translation-date: 2026-04-28 -->
 <!-- source-hash: cd5148b -->

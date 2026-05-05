@@ -1,0 +1,44 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    reviewers:
+      - tobiasnix
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      django-stack:
+        patterns:
+          - "django"
+          - "django-*"
+      security-stack:
+        patterns:
+          - "cryptography"
+          - "django-csp"
+          - "django-otp"
+          - "django-ratelimit"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+    reviewers:
+      - tobiasnix
+    commit-message:
+      prefix: chore
+      include: scope
