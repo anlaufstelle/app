@@ -52,6 +52,15 @@ class Settings(models.Model):
         default=365,
         verbose_name=_("Aufbewahrung Aktivitäten (Tage)"),
     )
+    auditlog_retention_months = models.PositiveIntegerField(
+        default=24,
+        verbose_name=_("AuditLog-Aufbewahrung (Monate)"),
+        help_text=_(
+            "Wie lange AuditLog-Eintraege aufbewahrt werden, bevor das "
+            "enforce_retention-Kommando sie loescht. 0 = deaktiviert "
+            "(unbegrenzte Aufbewahrung)."
+        ),
+    )
     allowed_file_types = models.CharField(
         max_length=500,
         blank=True,

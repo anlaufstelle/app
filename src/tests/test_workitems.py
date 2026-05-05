@@ -227,6 +227,105 @@ class TestWorkItemStatusUpdateOwnership:
 
 
 @pytest.mark.django_db
+class TestWorkItemUpdateOwnership:
+    """Refs #735: Voller Edit-Pfad muss dieselbe Owner/Assignee/Lead/Admin-
+    Policy wie der Status-Pfad erzwingen. Frueher prueften wir nur StaffMixin —
+    Staff konnte fremde WorkItems editieren.
+    """
+
+    def test_staff_cannot_edit_others_workitem_get(self, client, staff_user, facility):
+        # Erzeuge einen zweiten Staff-User in derselben Facility und ein
+        # WorkItem fuer ihn — staff_user ist weder owner noch assignee.
+        from core.models import User
+
+        other_staff = User.objects.create_user(
+            username="otherstaff",
+            password="x",
+            facility=facility,
+            role=User.Role.STAFF,
+        )
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=other_staff,
+            title="Fremde Edit-Aufgabe",
+            status=WorkItem.Status.OPEN,
+        )
+        client.force_login(staff_user)
+        response = client.get(reverse("core:workitem_update", kwargs={"pk": wi.pk}))
+        assert response.status_code == 403
+
+    def test_staff_cannot_edit_others_workitem_post(self, client, staff_user, facility):
+        from core.models import User
+
+        other_staff = User.objects.create_user(
+            username="otherstaff2",
+            password="x",
+            facility=facility,
+            role=User.Role.STAFF,
+        )
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=other_staff,
+            title="Fremde Edit-Aufgabe POST",
+            status=WorkItem.Status.OPEN,
+        )
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": wi.pk}),
+            {
+                "item_type": "task",
+                "title": "Veraendert!",
+                "priority": "normal",
+            },
+        )
+        assert response.status_code == 403
+        wi.refresh_from_db()
+        assert wi.title == "Fremde Edit-Aufgabe POST"
+
+    def test_staff_can_edit_own_workitem(self, client, staff_user, facility):
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            title="Eigene Edit-Aufgabe",
+            status=WorkItem.Status.OPEN,
+        )
+        client.force_login(staff_user)
+        response = client.get(reverse("core:workitem_update", kwargs={"pk": wi.pk}))
+        assert response.status_code == 200
+
+    def test_staff_can_edit_assigned_workitem(self, client, staff_user, facility):
+        from core.models import User
+
+        creator = User.objects.create_user(
+            username="creator",
+            password="x",
+            facility=facility,
+            role=User.Role.STAFF,
+        )
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=creator,
+            assigned_to=staff_user,
+            title="Zugewiesene Edit-Aufgabe",
+            status=WorkItem.Status.OPEN,
+        )
+        client.force_login(staff_user)
+        response = client.get(reverse("core:workitem_update", kwargs={"pk": wi.pk}))
+        assert response.status_code == 200
+
+    def test_lead_can_edit_any_workitem(self, client, lead_user, staff_user, facility):
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            title="Lead-Edit-Aufgabe",
+            status=WorkItem.Status.OPEN,
+        )
+        client.force_login(lead_user)
+        response = client.get(reverse("core:workitem_update", kwargs={"pk": wi.pk}))
+        assert response.status_code == 200
+
+
+@pytest.mark.django_db
 class TestWorkItemCRUD:
     def test_create_get(self, client, staff_user):
         client.force_login(staff_user)

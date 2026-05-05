@@ -6,6 +6,7 @@ bleiben dort, weil sie reine Read-Pfade sind.
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
+from django.db import transaction
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
@@ -31,21 +32,25 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, pk):
-        workitem = get_object_or_404(
-            WorkItem,
-            pk=pk,
-            facility=request.current_facility,
-        )
-
-        if not can_user_mutate_workitem(request.user, workitem):
-            return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
-
         new_status = request.POST.get("status")
         valid_statuses = [s.value for s in WorkItem.Status]
         if new_status not in valid_statuses:
             return HttpResponseBadRequest(_("Ungültiger Status"))
 
-        update_workitem_status(workitem, new_status, request.user)
+        # Permission-Check + Service-Call innerhalb derselben Transaktion,
+        # damit das gelockte Objekt aus dem Service-Layer zurueckgegeben
+        # wird und kein parallel laufender Request den Stand zwischen
+        # Check und Update veraendern kann (Refs #129 Teil A, Refs #733).
+        with transaction.atomic():
+            workitem = get_object_or_404(
+                WorkItem.objects.select_for_update(),
+                pk=pk,
+                facility=request.current_facility,
+            )
+            if not can_user_mutate_workitem(request.user, workitem):
+                return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
+
+            workitem = update_workitem_status(workitem, new_status, request.user)
 
         if request.htmx:
             if request.POST.get("hide"):
@@ -125,6 +130,12 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
             pk=pk,
             facility=request.current_facility,
         )
+        # Refs #735: Edit-Pfad richtet sich nach derselben Owner/Assignee-
+        # Policy wie der Status-Pfad. Staff-User sehen das Form nur fuer
+        # eigene oder zugewiesene WorkItems; Lead/Admin uneingeschraenkt
+        # innerhalb ihrer Facility.
+        if not can_user_mutate_workitem(request.user, workitem):
+            return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
         form = WorkItemForm(instance=workitem, facility=request.current_facility)
         context = {
             "form": form,
@@ -140,6 +151,8 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
             pk=pk,
             facility=request.current_facility,
         )
+        if not can_user_mutate_workitem(request.user, workitem):
+            return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
         form = WorkItemForm(request.POST, instance=workitem, facility=request.current_facility)
 
         if form.is_valid():

@@ -2,7 +2,7 @@
 
 from datetime import date, timedelta
 
-from django.db import transaction
+from django.db import connection, transaction
 from django.db.models import Count, Q
 from django.db.utils import IntegrityError
 from django.utils import timezone
@@ -810,6 +810,45 @@ def process_facility_retention(facility, settings_obj, now, dry_run):
     count += enforce_identified(facility, settings_obj, now, dry_run)["count"]
     count += enforce_qualified(facility, settings_obj, now, dry_run)["count"]
     count += enforce_document_type_retention(facility, now, dry_run)["count"]
+    return {"count": count}
+
+
+def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
+    """Loescht AuditLog-Eintraege aelter als ``settings_obj.auditlog_retention_months``.
+
+    AuditLog ist append-only (siehe ``AuditLog.delete()``-Override + DB-
+    Trigger ``auditlog_immutable`` in Migration 0024). Fuer das Retention-
+    Pruning deaktivieren wir den Trigger transaktional und nutzen
+    ``QuerySet.delete()`` (umgeht den Python-``delete()``-Override). Das
+    DISABLE/ENABLE-Paar laeuft in derselben ``transaction.atomic()`` —
+    bricht der COMMIT, wird auch das DISABLE TRIGGER zurueckgerollt.
+
+    ``settings_obj.auditlog_retention_months == 0`` -> No-op (deaktiviert).
+
+    Refs #129 Teil B, Refs #733 (Tier-2-Sprint, Audit-Massnahme #14).
+    """
+    months = getattr(settings_obj, "auditlog_retention_months", 0) or 0
+    if months <= 0:
+        return {"count": 0}
+    now = now or timezone.now()
+    cutoff = now - timedelta(days=months * 30)
+    qs = AuditLog.objects.filter(facility=facility, timestamp__lt=cutoff)
+    count = qs.count()
+    if count == 0 or dry_run:
+        return {"count": count}
+    if connection.vendor == "postgresql":
+        # Trigger temporaer deaktivieren — sonst blockt der DB-Trigger
+        # die DELETE-Statements. ENABLE im finally, damit ein Fehler
+        # waehrend QuerySet.delete() den Trigger nicht abgeschaltet laesst.
+        with transaction.atomic(), connection.cursor() as cur:
+            cur.execute("ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable")
+            try:
+                qs.delete()
+            finally:
+                cur.execute("ALTER TABLE core_auditlog ENABLE TRIGGER auditlog_immutable")
+    else:
+        # SQLite/Tests ohne Trigger — direkt loeschen.
+        qs.delete()
     return {"count": count}
 
 

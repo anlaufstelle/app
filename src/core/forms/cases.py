@@ -4,10 +4,8 @@ from django import forms
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
+from core.forms.widgets import INPUT_CSS
 from core.models import Case, Client, User
-
-# Tailwind-Klassen fuer Form-Inputs (Theme Gruen, siehe Plan #663)
-INPUT_CSS = "w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink"
 
 
 class CaseForm(forms.ModelForm):

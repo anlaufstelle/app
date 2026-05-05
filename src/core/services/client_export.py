@@ -38,10 +38,18 @@ def _serialize_event(event):
     }
 
 
-def _gather_events(client):
-    """Return (events_data, event_ids) for all non-deleted events of the client."""
+def _gather_events(client, user):
+    """Return (events_data, event_ids) for non-deleted events visible to ``user``.
+
+    Refs #734: ``user`` ist Pflicht, damit ``visible_to(user)`` greift.
+    Ohne den Filter wuerden HIGH-Sensitivity-Events auch bei einem
+    Staff-Triggered-Export landen (heute durch Lead/Admin-Mixin auf der
+    View entschaerft, aber Service-Layer muss sich nicht auf den Caller
+    verlassen).
+    """
     events = (
-        Event.objects.filter(client=client, is_deleted=False)
+        Event.objects.visible_to(user)
+        .filter(client=client, is_deleted=False)
         .select_related("document_type", "created_by")
         .order_by("-occurred_at")
     )
@@ -130,9 +138,15 @@ def _build_export_meta(facility):
     }
 
 
-def export_client_data(client, facility):
-    """Collect all personal data for a client. Returns a dict."""
-    events_data, event_ids = _gather_events(client)
+def export_client_data(client, facility, user):
+    """Collect all personal data for a client visible to ``user``.
+
+    Refs #734: ``user`` ist Pflicht-Parameter — die Sensitivity-
+    Filterung greift via ``Event.objects.visible_to(user)`` in
+    ``_gather_events``. Lead/Admin sehen alles, Staff sieht
+    NORMAL+ELEVATED, Assistant nur NORMAL.
+    """
+    events_data, event_ids = _gather_events(client, user)
     return {
         "client": _gather_client_fields(client),
         "events": events_data,
@@ -144,9 +158,9 @@ def export_client_data(client, facility):
     }
 
 
-def export_client_data_pdf(client, facility):
+def export_client_data_pdf(client, facility, user):
     """Generate PDF from client data. Returns bytes."""
-    data = export_client_data(client, facility)
+    data = export_client_data(client, facility, user)
     html = render_to_string(
         "core/export/client_data_pdf.html",
         {

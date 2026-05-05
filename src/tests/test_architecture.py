@@ -50,6 +50,83 @@ class TestEventAccessPolicyGuard:
         assert not violations, f"Event access policy violations: {violations}"
 
 
+class TestEventEncryptionBypassGuard:
+    """Refs #736 / #713 (Audit-Massnahme #11): Verhindert, dass irgendein
+    Code-Pfad die Encryption-Pipeline in ``Event.save()``/``encryption.py``
+    umgeht.
+
+    Drei Patterns sind verboten:
+    - ``Event.objects.bulk_create(...)`` — kein ``save()``-Hook
+    - ``Event.objects.filter(...).update(data_json=...)`` — Raw-Update
+    - ``Event.objects.update_or_create(defaults={"data_json": ...})`` — auch ohne ``save()``-Hook
+
+    Allowlist (legitime Bypaesse):
+    - ``src/core/services/encryption.py`` — die Encryption-Pipeline selbst
+    - ``src/core/seed/`` — Seed-Daten sind deterministische Test-Fixtures
+      ohne reale Art-9-Inhalte
+    - ``src/core/migrations/`` — Schema-Migrationen
+    - ``src/tests/`` — Testfixtures duerfen direkt schreiben
+
+    Erweiterung der Allowlist erfordert separaten Commit + Begruendung.
+    """
+
+    _CORE_DIR = Path("src/core")
+    _ALLOWLIST = (
+        Path("src/core/services/encryption.py"),
+        Path("src/core/seed"),
+        Path("src/core/migrations"),
+    )
+    # Drei Bypass-Patterns:
+    # 1) Event.objects.bulk_create(...) — direkt
+    # 2) Event.objects[.filter(...)|.exclude(...)|...].update(data_json=...)
+    # 3) Event.objects.update_or_create(..., data_json=...)
+    # Pattern 2 erlaubt chained QuerySet-Methoden zwischen ``objects`` und
+    # ``update(``; ``[^=\n]{0,200}?`` schliesst Multi-line-Statements aus
+    # und limitiert das Matching auf eine sinnvolle Distanz.
+    _BYPASS_BULK_CREATE = re.compile(r"Event\.objects\.bulk_create\b")
+    # Erlaubt chained QuerySet-Methoden zwischen ``objects`` und ``update(`` —
+    # ``Event.objects.filter(...).update(data_json=...)`` ist der haeufigste
+    # Bypass-Pfad. Die ``\.update\(``-Klausel matcht ``update`` exakt (nicht
+    # ``update_or_create``, weil dort ``_or_create`` zwischen ``update`` und
+    # ``(`` steht).
+    _BYPASS_UPDATE = re.compile(
+        r"Event\.objects(?:\.[a-zA-Z_]+\([^)]*\))*\.update\([^)]*\bdata_json\b",
+    )
+    _BYPASS_UPDATE_OR_CREATE = re.compile(
+        r"Event\.objects\.update_or_create\([^)]*\bdata_json\b",
+    )
+
+    def _is_allowlisted(self, path: Path) -> bool:
+        return any(path == allow or allow in path.parents for allow in self._ALLOWLIST)
+
+    _BYPASS_PATTERNS = (
+        ("bulk_create", _BYPASS_BULK_CREATE),
+        ("update(data_json=...)", _BYPASS_UPDATE),
+        ("update_or_create(data_json=...)", _BYPASS_UPDATE_OR_CREATE),
+    )
+
+    def test_no_event_encryption_bypass(self):
+        if not self._CORE_DIR.exists():
+            pytest.skip(f"{self._CORE_DIR} nicht vorhanden")
+        violations = []
+        for py_file in self._CORE_DIR.rglob("*.py"):
+            if self._is_allowlisted(py_file):
+                continue
+            source = py_file.read_text(errors="ignore")
+            for label, pattern in self._BYPASS_PATTERNS:
+                for match in pattern.finditer(source):
+                    line = source[: match.start()].count("\n") + 1
+                    violations.append(f"{py_file}:{line} [{label}] — {match.group(0)[:120]}")
+        assert not violations, (
+            "Folgende Stellen umgehen die Event-Encryption-Pipeline. Encryption "
+            "lebt in services/encryption.py und wird per Event.save() angewendet — "
+            "bulk_create / .update(data_json=...) / .update_or_create(data_json=...) "
+            "schreiben Klartext direkt in JSONB.\n"
+            "Refs #736 / #713 (Audit-Massnahme #11).\n"
+            f"Verstoesse: {violations}"
+        )
+
+
 class TestNoInlineScriptBlocksGuard:
     """Templates dürfen keine Inline-``<script>``-Blöcke enthalten.
 
@@ -356,6 +433,117 @@ class TestRateLimitOnAllMutations:
             "mit Begruendung eintragen.\n"
             "Refs #669 (Phase F), #670 FND-14.\n"
             f"Betroffen: {violations}"
+        )
+
+
+class TestRateLimitOnSensitiveGetEndpoints:
+    """Refs #737 / #713 (Audit-Massnahme #13): GET-Endpoints mit
+    Pseudonym-/Schluessel-/Detection-Bezug muessen rate-limited sein.
+
+    Anders als ``TestRateLimitOnAllMutations`` (das alle POST-Handler
+    erzwingt) ist dieser Test eine **Allowlist** sensibler GET-Pfade —
+    Endpoints, die zwar nur lesen, aber bei Spam Information leaken oder
+    eine Probing-Surface bilden:
+
+    - ``ClientAutocompleteView`` — leakt Pseudonyme bei iteriertem Spam
+
+    Bewusst nicht in der Liste:
+    - ``OfflineKeySaltView`` ist POST-only — abgedeckt durch
+      ``TestRateLimitOnAllMutations``
+    - ``CSPReportView`` ist POST-only — abgedeckt durch
+      ``TestRateLimitOnAllMutations``
+
+    Jeder Eintrag muss einen ``@ratelimit(..., method=\"GET\", block=True)``-
+    Decorator (oder mehrteilig per Class-Decorator) tragen. ``block=True``
+    ist wichtig — ohne den Flag liefert django-ratelimit weiter 200, der
+    Limit ist effektiv unwirksam.
+    """
+
+    _VIEWS_DIR = Path("src/core/views")
+    # Liste sensibler GET-Endpoints. Format: (datei, klasse).
+    _SENSITIVE_GET_VIEWS = (("clients.py", "ClientAutocompleteView"),)
+
+    def _collect_decorators_above(self, lines: list[str], def_idx: int) -> str:
+        """Sammelt zusammenhaengende ``@...``-Zeilen oberhalb ``def_idx``.
+
+        Linienbasiert (kein Regex-Backtracking). Multi-line-Decorators
+        ``@method_decorator(\\n    ratelimit(...),\\n    name='post',\\n)``
+        werden ueber das Klammer-Ende erkannt.
+        """
+        collected: list[str] = []
+        i = def_idx - 1
+        while i >= 0:
+            line = lines[i]
+            stripped = line.lstrip()
+            if stripped.startswith("@"):
+                # Pruefe, ob der Decorator multi-line ist — naechste Zeilen
+                # zwischen i und def_idx sammeln.
+                collected.insert(0, "\n".join(lines[i:def_idx]))
+                def_idx = i
+                i -= 1
+                continue
+            if stripped == "" or stripped.startswith("#"):
+                i -= 1
+                continue
+            # Eingerueckte Continuation-Zeile eines Multi-line-Decorators
+            # weiter oben — schon eingesammelt, skippen.
+            if line.startswith(" ") and not stripped.startswith("def ") and not stripped.startswith("class "):
+                i -= 1
+                continue
+            break
+        return "\n".join(collected)
+
+    def test_sensitive_get_endpoints_are_rate_limited_with_block(self):
+        if not self._VIEWS_DIR.exists():
+            pytest.skip(f"{self._VIEWS_DIR} nicht vorhanden")
+        violations = []
+        for filename, cls_name in self._SENSITIVE_GET_VIEWS:
+            py_file = self._VIEWS_DIR / filename
+            if not py_file.exists():
+                violations.append(f"{filename}: Datei nicht gefunden")
+                continue
+            source = py_file.read_text()
+            lines = source.split("\n")
+            # Klassengrenze finden.
+            cls_line_idx = None
+            for idx, line in enumerate(lines):
+                if line.startswith(f"class {cls_name}("):
+                    cls_line_idx = idx
+                    break
+            if cls_line_idx is None:
+                violations.append(f"{filename}:{cls_name}: Klasse nicht gefunden")
+                continue
+            # Naechste class-Definition als Ende-Marker.
+            cls_end_idx = len(lines)
+            for idx in range(cls_line_idx + 1, len(lines)):
+                if lines[idx].startswith("class "):
+                    cls_end_idx = idx
+                    break
+            # def get(self, ...) innerhalb der Klasse suchen.
+            get_idx = None
+            for idx in range(cls_line_idx + 1, cls_end_idx):
+                if re.match(r"\s+def get\(self", lines[idx]):
+                    get_idx = idx
+                    break
+            if get_idx is None:
+                violations.append(f"{filename}:{cls_name}: kein def get(self, ...) gefunden")
+                continue
+            method_decos = self._collect_decorators_above(lines, get_idx)
+            class_decos = self._collect_decorators_above(lines, cls_line_idx)
+            full_decos = method_decos + "\n" + class_decos
+            if "ratelimit" not in full_decos:
+                violations.append(f"{filename}:{cls_name}: kein @ratelimit auf GET")
+                continue
+            if "block=True" not in full_decos:
+                violations.append(
+                    f"{filename}:{cls_name}: @ratelimit ohne block=True — "
+                    "Limit ist ohne block=True effektiv unwirksam (Refs #737)"
+                )
+        assert not violations, (
+            "Sensible GET-Endpoints muessen @ratelimit(..., method='GET', block=True) "
+            "tragen. Ohne block=True liefert django-ratelimit weiter 200 trotz Verstoss.\n"
+            "Refs #737 / #713 (Audit-Massnahme #13).\n"
+            f"Verstoesse: {violations}"
         )
 
 

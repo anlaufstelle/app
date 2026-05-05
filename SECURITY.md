@@ -4,6 +4,8 @@
 
 Anlaufstelle verarbeitet sensible Sozialdaten gemäß Art. 9 DSGVO. Sicherheitsmeldungen werden ernst genommen und mit hoher Priorität bearbeitet.
 
+> **Sicherheitsmodell:** Ein expliziter Threat Model (STRIDE-Lite) liegt unter [`docs/threat-model.md`](docs/threat-model.md) — Assets, Akteure, Vertrauensgrenzen, Bedrohungen je Boundary mit Mitigation und offenen Lücken.
+
 ## Unterstützte Versionen
 
 Sicherheitsupdates werden für die folgende Version bereitgestellt:
@@ -70,6 +72,8 @@ Folgende Punkte werden ohne Rücksprache nicht als Sicherheitslücke akzeptiert:
 # Security Policy (English)
 
 Anlaufstelle processes sensitive social data under GDPR Art. 9. Security reports are taken seriously and handled with high priority.
+
+> **Threat model:** An explicit STRIDE-Lite threat model lives at [`docs/threat-model.md`](docs/threat-model.md) (German) — assets, actors, trust boundaries, and per-boundary STRIDE tables with mitigation and open gaps.
 
 ## Supported Versions
 

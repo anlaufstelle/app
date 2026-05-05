@@ -120,6 +120,7 @@ def update_workitem(workitem, user, *, expected_updated_at=None, **fields):
     return workitem
 
 
+@transaction.atomic
 def update_workitem_status(workitem, new_status, user):
     """Perform a status transition including auto-assign and completed_at management.
 
@@ -128,40 +129,58 @@ def update_workitem_status(workitem, new_status, user):
     - On back-transition: reset completed_at.
     - On DONE with ``recurrence != NONE``: auto-duplicate the work item
       with the next due date (Refs #266).
-    """
-    old_status = workitem.status
-    workitem.status = new_status
 
-    if new_status == WorkItem.Status.IN_PROGRESS and not workitem.assigned_to:
-        workitem.assigned_to = user
+    Concurrency (Refs #129 Teil A, Refs #733): Das WorkItem wird unter
+    ``select_for_update()`` neu geladen, damit zwei zeitgleiche Klicks
+    nicht denselben ``old_status`` lesen und beide einen Activity-/
+    Recurrence-Folgeeintrag erzeugen. Wenn ``new_status == aktueller
+    Status`` ist (Idempotenz-Guard), kehrt die Funktion sofort ohne
+    ``save()`` und ohne Activity-Log zurueck.
+    """
+    # Innerhalb der Transaktion neu laden + locken — Facility-Filter
+    # explizit, damit RLS- und Tenant-Isolation greifen.
+    locked = WorkItem.objects.select_for_update().get(pk=workitem.pk, facility_id=workitem.facility_id)
+
+    old_status = locked.status
+
+    # Idempotenz-Guard: erneuter Klick auf denselben Status ist No-op.
+    # Verhindert doppelte COMPLETED/REOPENED-Activity-Eintraege bei
+    # Doppel-POST-Race ohne Statuswechsel.
+    if new_status == old_status:
+        return locked
+
+    locked.status = new_status
+
+    if new_status == WorkItem.Status.IN_PROGRESS and not locked.assigned_to:
+        locked.assigned_to = user
 
     if new_status in (WorkItem.Status.DONE, WorkItem.Status.DISMISSED):
-        workitem.completed_at = timezone.now()
-    elif workitem.completed_at:
-        workitem.completed_at = None
+        locked.completed_at = timezone.now()
+    elif locked.completed_at:
+        locked.completed_at = None
 
-    workitem.save()
+    locked.save()
 
     if new_status == WorkItem.Status.DONE:
         log_activity(
-            facility=workitem.facility,
+            facility=locked.facility,
             actor=user,
             verb=Activity.Verb.COMPLETED,
-            target=workitem,
-            summary=f"Aufgabe erledigt: {workitem.title}",
+            target=locked,
+            summary=f"Aufgabe erledigt: {locked.title}",
         )
-        if workitem.recurrence and workitem.recurrence != WorkItem.Recurrence.NONE:
-            duplicate_recurring_workitem(workitem, user)
+        if locked.recurrence and locked.recurrence != WorkItem.Recurrence.NONE:
+            duplicate_recurring_workitem(locked, user)
     elif new_status == WorkItem.Status.OPEN and old_status == WorkItem.Status.DONE:
         log_activity(
-            facility=workitem.facility,
+            facility=locked.facility,
             actor=user,
             verb=Activity.Verb.REOPENED,
-            target=workitem,
-            summary=f"Aufgabe wiedereröffnet: {workitem.title}",
+            target=locked,
+            summary=f"Aufgabe wiedereröffnet: {locked.title}",
         )
 
-    return workitem
+    return locked
 
 
 @transaction.atomic

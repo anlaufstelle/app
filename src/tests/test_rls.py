@@ -205,16 +205,17 @@ class TestRLSFunctional:
             value = cursor.fetchone()[0]
         assert value == "", "Anonymous Request darf die facility-Variable nicht setzen."
 
-    def test_anonymous_request_does_not_clobber_preset_value(self):
-        """Begleitcheck: Ein anonymer Request darf auch einen vorhandenen
-        Wert (aus Sicht der Middleware) nicht neu setzen — die Middleware
-        überspringt den SET-Call bei anonymen Requests komplett. Damit ist
-        kein zusätzlicher Round-Trip oder Overwrite nötig.
+    def test_anonymous_request_clears_stale_facility_id(self):
+        """Defense-in-Depth (Audit-Massnahme #9, Refs #733): Ein anonymer
+        Request muss eine aus einer fruehren authentifizierten Request
+        stehengebliebene ``app.current_facility_id`` explizit auf '' leeren,
+        damit Connection-Pooling den Wert nicht in eine RLS-Anfrage
+        eines anderen Tenants leakt.
 
-        Prüfung: Wir setzen vor dem Request eine Marker-UUID als
-        ``app.current_facility_id``. Nach dem Middleware-Lauf muss der
-        Wert unverändert sein — denn die Middleware hat den Cursor nicht
-        angefasst.
+        Pruefung: Wir setzen vor dem Request eine Marker-UUID als
+        ``app.current_facility_id`` (simuliert Connection-Reuse aus einer
+        fruehren Request). Nach dem Middleware-Lauf muss der Wert leer
+        sein.
         """
         import uuid
 
@@ -235,6 +236,7 @@ class TestRLSFunctional:
         with connection.cursor() as cursor:
             cursor.execute("SELECT current_setting('app.current_facility_id', true)")
             value = cursor.fetchone()[0]
-        assert value == marker, (
-            "Anonymous Request darf bestehende Variable nicht umschreiben (Middleware muss den Cursor-Aufruf skippen)."
+        assert value == "", (
+            f"Anonyme Request muss app.current_facility_id leeren — sonst Connection-Pool-Leak. "
+            f"Erwartet: '', erhalten: {value!r}"
         )

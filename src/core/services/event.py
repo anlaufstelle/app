@@ -557,11 +557,16 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
 
 @transaction.atomic
 def update_event(event, user, data_json, expected_updated_at=None, **kwargs):
-    """Update an event + EventHistory(UPDATE)."""
-    if expected_updated_at is not None:
-        current = Event.objects.filter(pk=event.pk).values_list("updated_at", flat=True).first()
-        if current and str(current.isoformat()) != str(expected_updated_at):
-            raise ValidationError(_("Das Ereignis wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."))
+    """Update an event + EventHistory(UPDATE).
+
+    Refs #734: nutzt zentrale ``check_version_conflict`` statt eigenem
+    ``str(updated_at)``-Vergleich. Der eigene Vergleich war offset-
+    sensitiv (gleicher Instant mit anderem Timezone-Offset wuerde als
+    Konflikt gewertet) und drift-anfaellig.
+    """
+    from core.services.locking import check_version_conflict
+
+    check_version_conflict(event, expected_updated_at)
     data_json = _validate_data_json(event.document_type, data_json)
     data_before = event.data_json.copy() if event.data_json else {}
     event.data_json = data_json

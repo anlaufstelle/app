@@ -52,9 +52,10 @@ class ClientListView(AssistantOrAboveRequiredMixin, View):
         # Pagination
         from django.core.paginator import Paginator
 
+        from core.views.utils import safe_page_param
+
         paginator = Paginator(qs, DEFAULT_PAGE_SIZE)
-        page = request.GET.get("page")
-        clients = paginator.get_page(page)
+        clients = paginator.get_page(safe_page_param(request))
 
         pagination_params = urlencode({k: v for k, v in [("q", q), ("stage", stage), ("age", age)] if v})
 
@@ -196,7 +197,9 @@ class ClientUpdateView(StaffRequiredMixin, View):
 class ClientAutocompleteView(AssistantOrAboveRequiredMixin, View):
     """JSON endpoint for client autocomplete."""
 
-    @method_decorator(ratelimit(key="user", rate="30/m", method="GET"))
+    # Refs #737: block=True liefert 429 bei Limit-Verstoss (sonst 200 trotz
+    # Ueberschreitung — der Limit waere effektiv unwirksam).
+    @method_decorator(ratelimit(key="user", rate="30/m", method="GET", block=True))
     def get(self, request):
         from core.services.event import CONTACT_STAGE_ORDER, stage_index
 
@@ -242,7 +245,7 @@ class ClientDataExportJSONView(LeadOrAdminRequiredMixin, View):
         facility = request.current_facility
         client = get_object_or_404(Client, pk=pk, facility=facility)
 
-        data = export_client_data(client, facility)
+        data = export_client_data(client, facility, request.user)
 
         log_audit_event(
             request,
@@ -267,7 +270,7 @@ class ClientDataExportPDFView(LeadOrAdminRequiredMixin, View):
         facility = request.current_facility
         client = get_object_or_404(Client, pk=pk, facility=facility)
 
-        pdf_bytes = export_client_data_pdf(client, facility)
+        pdf_bytes = export_client_data_pdf(client, facility, request.user)
 
         log_audit_event(
             request,

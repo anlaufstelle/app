@@ -11,6 +11,10 @@ CONTACT_STAGE_CHOICES = [
 
 # Pagination — Listenseiten (Klient*innen, Fälle, Aufgaben)
 DEFAULT_PAGE_SIZE = 25
+# Maximale Seitenzahl — verhindert Seq-Scans bei ?page=99999. Postgres-OFFSET
+# waechst linear, daher cappen wir den Page-Index in den Listenviews
+# (clients/cases/audit). Refs #733, Audit-Massnahme #32.
+MAX_PAGE = 500
 
 # Rate-Limits (django-ratelimit) — pro User, sliding window
 RATELIMIT_BULK_ACTION = "30/h"

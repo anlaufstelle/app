@@ -55,7 +55,11 @@ class DocumentType(models.Model):
         choices=Category.choices,
         default=Category.CONTACT,
         verbose_name=_("Kategorie"),
-        help_text=_("Gruppiert Dokumentationstypen für Filter und Auswertungen"),
+        help_text=_(
+            "Reine UI-Gruppierung für Statistik-Anzeige und Admin-Filter. "
+            "Beeinflusst weder Export noch Bann-/Krisen-Logik — dafür ist "
+            "der Systemtyp zuständig."
+        ),
     )
     sensitivity = models.CharField(
         max_length=20,
@@ -88,13 +92,26 @@ class DocumentType(models.Model):
         null=True,
         blank=True,
         verbose_name=_("Systemtyp"),
-        help_text=_("Interner Typ für systemgesteuerte Logik (Hausverbot, Export etc.)"),
+        help_text=_(
+            "Stabile Kennung für Bann-Logik, Krisen-Highlight und Jugendamt-Export. Nach Erstellung unveränderbar."
+        ),
     )
 
     class Meta:
         verbose_name = _("Dokumentationstyp")
         verbose_name_plural = _("Dokumentationstypen")
         ordering = ["sort_order", "name"]
+        constraints = [
+            # Snapshot-Lookup in services/snapshot.py rekonstruiert
+            # DocumentType ueber (facility, name, category) — ohne
+            # UniqueConstraint koennten zwei DocumentTypes mit gleichem
+            # Tripel den Lookup mit MultipleObjectsReturned auf einen
+            # 500er fallen lassen. Refs #434, Refs #733.
+            models.UniqueConstraint(
+                fields=["facility", "name", "category"],
+                name="unique_facility_documenttype_name_category",
+            ),
+        ]
 
     def save(self, *args, **kwargs):
         if not self._state.adding:
@@ -221,6 +238,14 @@ class FieldTemplate(models.Model):
         if self.slug and not _SLUG_RE.fullmatch(self.slug):
             raise ValidationError({"slug": _("Nur a-z, 0-9 und Bindestriche erlaubt.")})
         self._validate_default_value()
+        self._validate_high_sensitivity_requires_encryption()
+
+    def _validate_high_sensitivity_requires_encryption(self):
+        # Audit-Massnahme #10 (Refs #733): HIGH-Sensitivity-Felder muessen
+        # verschluesselt sein — sonst landet Art.-9-relevanter Inhalt im
+        # Klartext-JSONB und entgegen der Sensitivity-Logik im Backup.
+        if self.sensitivity == DocumentType.Sensitivity.HIGH and not self.is_encrypted:
+            raise ValidationError({"is_encrypted": _("Felder mit Sensibilität=Hoch müssen verschlüsselt sein.")})
 
     def _validate_default_value(self):
         raw = (self.default_value or "").strip()

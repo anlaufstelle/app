@@ -27,6 +27,10 @@ services:
     environment:
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
       POSTGRES_HOST: db
+    volumes:
+      # Persistenter Mount fuer MEDIA_ROOT (=/data/media) — analog prod.
+      # Refs #720.
+      - media_staging:/data
     depends_on:
       db:
         condition: service_healthy
@@ -61,6 +65,7 @@ volumes:
   pgdata_staging:
   caddy_data_staging:
   caddy_config_staging:
+  media_staging:
 
 networks:
   internal:

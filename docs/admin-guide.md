@@ -319,7 +319,9 @@ Die Kategorie gruppiert Dokumentationstypen für Filter und die **Statistik-Seit
 | **Verwaltung** | Administrative Vorgänge | Hausverbot, Vermittlung |
 | **Notiz** | Freie Notizen | Beobachtungen, Vermerke |
 
-> **Hinweis:** Die Kategorie wird auf der Statistik-Seite zur Gruppierung nach Dokumentationstyp verwendet. Für den Jugendamt-Export ist dagegen der **Systemtyp** maßgeblich (siehe unten).
+> **Hinweis:** Die Kategorie ist eine **reine UI-Gruppierung** für Statistik-Anzeige und Admin-Filter. Sie beeinflusst weder den Jugendamt-Export noch die Bann-/Krisen-Logik — dafür ist der **Systemtyp** maßgeblich (siehe unten).
+>
+> Der Tripel `(Einrichtung, Name, Kategorie)` ist eindeutig: Pro Einrichtung kann derselbe Dokumentationstyp-Name nur einmal pro Kategorie existieren. Gleiche Namen unter unterschiedlichen Kategorien (z.B. „Notiz" als Verwaltung *und* als Notiz) sind erlaubt.
 
 #### Sensibilitätsstufe
 
@@ -358,6 +360,8 @@ Aktuell hat der Systemtyp zwei Funktionen:
 | **Notiz** | *(wird ausgeschlossen)* |
 
 > **Hinweis:** Nicht jeder Dokumentationstyp benötigt einen Systemtyp. Typen ohne Systemtyp haben keine spezielle interne Logik und werden vom Jugendamt-Export ausgeschlossen, funktionieren aber ganz normal für die Dokumentation.
+>
+> Systemtypen wie `note`, `contact`, `counseling` oder `medical` haben **keine sichtbare UI-Logik** (anders als `ban` und `crisis`). Sie dienen ausschließlich als Whitelist für den Jugendamt-Export — die Kategorie alleine entscheidet nicht, ob ein Eintrag exportiert wird.
 
 #### Mindest-Kontaktstufe
 

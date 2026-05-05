@@ -31,6 +31,7 @@ from core.services.cases import (
 from core.services.clients import get_client_or_none
 from core.services.sensitivity import get_visible_event_or_404
 from core.views.mixins import LeadOrAdminRequiredMixin, StaffRequiredMixin
+from core.views.utils import safe_page_param
 
 logger = logging.getLogger(__name__)
 
@@ -82,8 +83,7 @@ class CaseListView(StaffRequiredMixin, View):
         qs = qs.select_related("client", "lead_user").order_by("-created_at")
 
         paginator = Paginator(qs, DEFAULT_PAGE_SIZE)
-        page = request.GET.get("page")
-        cases = paginator.get_page(page)
+        cases = paginator.get_page(safe_page_param(request))
 
         pagination_params = urlencode({k: v for k, v in [("q", q), ("status", status)] if v})
 

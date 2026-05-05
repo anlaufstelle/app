@@ -5,6 +5,7 @@ from datetime import date
 from django import forms
 from django.utils.translation import gettext_lazy as _
 
+from core.forms.widgets import INPUT_CSS
 from core.models import User, WorkItem
 from core.models.client import Client
 
@@ -28,10 +29,6 @@ def min_workitem_date() -> date:
     wurde (vgl. ``Form.changed_data``).
     """
     return date.today()
-
-
-# Tailwind-Klassen fuer Form-Inputs (Theme Gruen, siehe Plan #663)
-INPUT_CSS = "w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink"
 
 
 class WorkItemForm(forms.ModelForm):

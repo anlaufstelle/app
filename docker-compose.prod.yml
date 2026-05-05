@@ -20,6 +20,11 @@ services:
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
       POSTGRES_HOST: db
       CLAMAV_HOST: clamav
+    volumes:
+      # Persistenter Mount fuer MEDIA_ROOT (=/data/media) — verhindert
+      # stillen Datenverlust bei docker compose pull && up -d.
+      # Refs #720.
+      - media:/data
     depends_on:
       db:
         condition: service_healthy
@@ -71,6 +76,7 @@ volumes:
   caddy_data:
   caddy_config:
   clamav-db:
+  media:
 
 networks:
   internal:

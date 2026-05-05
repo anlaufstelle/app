@@ -16,6 +16,7 @@ from core.services.retention import (
     create_proposals_for_facility,
     enforce_activities,
     process_facility_retention,
+    prune_auditlog,
     reactivate_deferred_proposals,
 )
 from core.services.snapshot import ensure_snapshots_for_months
@@ -66,6 +67,7 @@ class Command(BaseCommand):
         total_deleted = 0
         total_anonymized = 0
         total_activities = 0
+        total_auditlog_pruned = 0
 
         for facility in facilities:
             try:
@@ -92,6 +94,7 @@ class Command(BaseCommand):
             total_deleted += process_facility_retention(facility, settings_obj, now, dry_run)["count"]
             total_activities += enforce_activities(facility, settings_obj, now, dry_run)["count"]
             total_anonymized += anonymize_clients(facility, dry_run)["count"]
+            total_auditlog_pruned += prune_auditlog(facility, settings_obj, now, dry_run)["count"]
 
             # Cleanup stale proposals after actual deletion
             if not dry_run:
@@ -105,10 +108,14 @@ class Command(BaseCommand):
                 self.style.WARNING(f"[dry-run] Would hard-delete {total_activities} activity/activities in total.")
             )
             self.stdout.write(self.style.WARNING(f"[dry-run] Would anonymize {total_anonymized} client(s) in total."))
+            self.stdout.write(
+                self.style.WARNING(f"[dry-run] Would prune {total_auditlog_pruned} audit-log entry/entries in total.")
+            )
         else:
             self.stdout.write(self.style.SUCCESS(f"Soft-deleted {total_deleted} event(s) in total."))
             self.stdout.write(self.style.SUCCESS(f"Hard-deleted {total_activities} activity/activities in total."))
             self.stdout.write(self.style.SUCCESS(f"Anonymized {total_anonymized} client(s) in total."))
+            self.stdout.write(self.style.SUCCESS(f"Pruned {total_auditlog_pruned} audit-log entry/entries in total."))
 
     def _handle_propose(self, facilities, now):
         """Create RetentionProposal entries for events that would be deleted."""

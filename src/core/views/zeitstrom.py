@@ -83,11 +83,15 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
         )
 
         # Sidebar: open workitems (from Aktivitätslog)
+        # Refs #740: select_related fuer client + assigned_to — Template
+        # iteriert wi.client.pseudonym in _workitem_row.html → ohne
+        # Prefetch ein Query pro Sidebar-WorkItem.
         workitems = (
             WorkItem.objects.filter(
                 facility=facility,
                 status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS],
             )
+            .select_related("client", "assigned_to")
             .annotate(
                 priority_order=DBCase(
                     When(priority=WorkItem.Priority.URGENT, then=Value(0)),

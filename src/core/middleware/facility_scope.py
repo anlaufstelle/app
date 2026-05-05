@@ -24,8 +24,10 @@ class FacilityScopeMiddleware:
     des Middleware-Cursors, also noch bevor nachfolgende ORM-Queries in
     einem Request ueberhaupt liefen (Refs #586). Jetzt wird die Variable
     session-weit gesetzt (``is_local=false``) und pro Request stets neu —
-    auch fuer anonyme User explizit geleert, damit Connection-Pooling
-    keinen stehengebliebenen Wert aus einer frueheren Request leaken kann.
+    auch fuer anonyme User explizit auf '' geleert, damit Connection-
+    Pooling keinen stehengebliebenen Wert aus einer frueheren
+    authentifizierten Request leaken kann (Defense-in-Depth, Audit-
+    Massnahme #9, Refs #733).
     """
 
     def __init__(self, get_response):
@@ -38,14 +40,12 @@ class FacilityScopeMiddleware:
         else:
             request.current_facility = None
 
-        # Nur bei authentifizierten Requests DB-Cursor oeffnen — Anonymous-
-        # Routes (Login, Health, Static) greifen ohnehin nicht auf
-        # facility-scoped Tabellen zu. Fuer authentifizierte User wird die
-        # Variable stets neu gesetzt (auch auf leer, falls der User keine
-        # Facility hat), damit eine recyclte Connection keinen
-        # stehengebliebenen Wert aus einer frueheren Request leakt.
-        if is_authenticated and connection.vendor == "postgresql":
-            facility_id = str(request.current_facility.pk) if request.current_facility else ""
+        # Variable pro Request stets neu setzen — auch fuer anonyme User
+        # explizit auf '' leeren, damit Connection-Pooling keinen
+        # stehengebliebenen Wert aus einer frueheren authentifizierten
+        # Request leaken kann (Defense-in-Depth, Audit-Massnahme #9, Refs #733).
+        if connection.vendor == "postgresql":
+            facility_id = str(request.current_facility.pk) if (is_authenticated and request.current_facility) else ""
             # ``is_local=false`` -> SET auf Session-Ebene, bleibt ueber
             # nachfolgende ORM-Queries dieses Requests hinweg gueltig.
             with connection.cursor() as cursor:

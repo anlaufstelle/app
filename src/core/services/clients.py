@@ -74,9 +74,15 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     if old_stage is None:
         old_stage = client.contact_stage
 
+    # Allowlist (Refs #734): Verhindert Mass-Assignment durch versehentlich
+    # durchgereichte Felder (z.B. ``facility``, ``id``, ``created_at``). Liste
+    # spiegelt die Felder von ``ClientForm`` wider.
+    allowed = {"pseudonym", "contact_stage", "age_cluster", "notes"}
     # Diff erfassen — nur Feldnamen, keine PII-Werte selbst
     changed_fields = []
     for key, value in fields.items():
+        if key not in allowed:
+            raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
         if getattr(client, key) != value:
             changed_fields.append(key)
         setattr(client, key, value)

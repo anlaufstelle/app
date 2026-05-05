@@ -121,8 +121,8 @@ def sample_workitem(facility, admin_user, sample_client):
 class TestClientExportService:
     """Service-level tests for export_client_data()."""
 
-    def test_returns_correct_structure(self, sample_client, facility):
-        data = export_client_data(sample_client, facility)
+    def test_returns_correct_structure(self, sample_client, facility, admin_user):
+        data = export_client_data(sample_client, facility, admin_user)
         assert "client" in data
         assert "events" in data
         assert "cases" in data
@@ -131,24 +131,24 @@ class TestClientExportService:
         assert "work_items" in data
         assert "export_meta" in data
 
-    def test_client_master_data(self, sample_client, facility):
-        data = export_client_data(sample_client, facility)
+    def test_client_master_data(self, sample_client, facility, admin_user):
+        data = export_client_data(sample_client, facility, admin_user)
         assert data["client"]["pseudonym"] == "Export-Klientel"
         assert data["client"]["contact_stage"] == "Identifiziert"
         assert data["client"]["age_cluster"] == "18–26"
 
-    def test_events_included(self, sample_client, facility, sample_event):
-        data = export_client_data(sample_client, facility)
+    def test_events_included(self, sample_client, facility, sample_event, admin_user):
+        data = export_client_data(sample_client, facility, admin_user)
         assert len(data["events"]) == 1
         assert data["events"][0]["document_type"] == "Kontakt"
 
-    def test_cases_included(self, sample_client, facility, sample_case):
-        data = export_client_data(sample_client, facility)
+    def test_cases_included(self, sample_client, facility, sample_case, admin_user):
+        data = export_client_data(sample_client, facility, admin_user)
         assert len(data["cases"]) == 1
         assert data["cases"][0]["title"] == "Testfall"
 
-    def test_workitems_included(self, sample_client, facility, sample_workitem):
-        data = export_client_data(sample_client, facility)
+    def test_workitems_included(self, sample_client, facility, sample_workitem, admin_user):
+        data = export_client_data(sample_client, facility, admin_user)
         assert len(data["work_items"]) == 1
         assert data["work_items"][0]["title"] == "Test-Aufgabe"
 
@@ -162,11 +162,11 @@ class TestClientExportService:
             is_deleted=True,
             created_by=admin_user,
         )
-        data = export_client_data(sample_client, facility)
+        data = export_client_data(sample_client, facility, admin_user)
         assert len(data["events"]) == 0
 
-    def test_export_meta_contains_facility_name(self, sample_client, facility):
-        data = export_client_data(sample_client, facility)
+    def test_export_meta_contains_facility_name(self, sample_client, facility, admin_user):
+        data = export_client_data(sample_client, facility, admin_user)
         assert data["export_meta"]["facility_name"] == "Anlaufstelle Teststadt"
 
 

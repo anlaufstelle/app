@@ -11,6 +11,7 @@ from core.models import AuditLog
 from core.models.user import User
 from core.utils.formatting import parse_date
 from core.views.mixins import AdminRequiredMixin
+from core.views.utils import safe_page_param
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,7 @@ class AuditLogListView(AdminRequiredMixin, View):
 
         # Pagination
         paginator = Paginator(queryset, 50)
-        page = paginator.get_page(request.GET.get("page"))
+        page = paginator.get_page(safe_page_param(request))
 
         # Users of the facility for dropdown
         facility_users = User.objects.filter(facility=facility).order_by("last_name", "first_name", "username")

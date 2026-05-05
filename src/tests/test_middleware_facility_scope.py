@@ -105,11 +105,41 @@ class TestFacilityScopeDbVariable:
 
 @pytest.mark.django_db
 class TestFacilityScopeCursorHygiene:
-    """Regression #591 (ffb5666): Anonyme Requests sollen keinen DB-Cursor
-    öffnen, damit Anonymous-Routes (Login, Static, Health) keinen
-    SET-Round-Trip verursachen."""
+    """Defense-in-Depth (Audit-Massnahme #9, Refs #733): Variable pro Request
+    stets neu setzen — auch fuer anonyme Requests, damit Connection-Pooling
+    keinen stehengebliebenen Wert aus einer frueheren authentifizierten
+    Request leaken kann.
 
-    def test_anonymous_request_does_not_open_cursor(self):
+    Ersetzt die fruehere Perf-Optimierung aus #591 (ffb5666), die anonymen
+    Requests den SET-Roundtrip ersparte. Der Connection-Pool-Leak wiegt
+    schwerer als ein zusaetzlicher SET-Statement pro anonymer Request.
+    """
+
+    def test_anonymous_request_clears_stale_facility_id(self):
+        if connection.vendor != "postgresql":
+            pytest.skip("Variable-Clearing erfordert PostgreSQL")
+        # Stale-Wert simulieren, wie ihn eine frühere authentifizierte
+        # Request bei Connection-Reuse hinterlassen koennte.
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT set_config('app.current_facility_id', 'stale-leak', false)")
+
+        rf = RequestFactory()
+        request = rf.get("/login/")
+        request.user = AnonymousUser()
+
+        _call_middleware(request)
+
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_setting('app.current_facility_id', true)")
+            value = cursor.fetchone()[0]
+        assert value == "", (
+            "Anonyme Request muss app.current_facility_id leeren, "
+            "sonst leakt Connection-Pool den Wert einer fruehren authentifizierten Request."
+        )
+
+    def test_anonymous_request_opens_cursor_for_clearing(self):
+        if connection.vendor != "postgresql":
+            pytest.skip("Cursor-Open-Check nur auf PostgreSQL relevant")
         rf = RequestFactory()
         request = rf.get("/login/")
         request.user = AnonymousUser()
@@ -117,8 +147,9 @@ class TestFacilityScopeCursorHygiene:
         with patch.object(connection, "cursor", wraps=connection.cursor) as cursor_spy:
             _call_middleware(request)
 
-        assert cursor_spy.call_count == 0, (
-            "Anonymous Request sollte keinen DB-Cursor öffnen (Regression-Schutz gegen unnötige SET-Roundtrips)."
+        assert cursor_spy.call_count >= 1, (
+            "Anonyme Request muss Cursor oeffnen, um app.current_facility_id "
+            "explizit auf '' zu setzen (Defense-in-Depth gegen Connection-Pool-Leak)."
         )
 
     def test_authenticated_request_opens_cursor(self, facility, staff_user):

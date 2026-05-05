@@ -129,8 +129,10 @@ Letzter Ausweg, wenn Migration-Rollback nicht moeglich:
 # 1. Stack stoppen
 docker compose -f docker-compose.prod.yml down
 
-# 2. Backup wiederherstellen
-./scripts/restore.sh backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc
+# 2. Backup wiederherstellen — DB plus optional Medien
+./scripts/restore.sh \
+    backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc \
+    backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc
 
 # 3. Altes Image-Tag in docker-compose.prod.yml setzen
 
@@ -141,6 +143,14 @@ docker compose -f docker-compose.prod.yml up -d
 curl -sf https://$DOMAIN/health/
 ```
 
+**Hinweis Medien (Refs #720):** Das `media:`-Volume in
+[`docker-compose.prod.yml`](https://github.com/tobiasnix/anlaufstelle/blob/main/docker-compose.prod.yml)
+persistiert `MEDIA_ROOT` ueber Container-Recreates hinweg. Beim
+DB-Rollback muessen ggf. Medien (`*_media.tar.gz.enc`) mitwiederhergestellt
+werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
+`media:`-Volume. Bei reinem Image-Rollback ohne DB-Aenderung bleibt
+`media:` typischerweise gueltig — dann kein Medien-Restore noetig.
+
 ---
 
 ## 3. Cron-Jobs
@@ -149,7 +159,7 @@ curl -sf https://$DOMAIN/health/
 
 | Job | Empfohlene Zeit | Zweck |
 |-----|----------------|-------|
-| `backup.sh` | Taeglich 02:00 | Verschluesseltes DB-Backup mit Rotation |
+| `backup.sh` | Taeglich 02:00 | Verschluesseltes DB- und Medien-Backup mit Rotation; optionaler Off-Site-Sync (Refs [#720](https://github.com/tobiasnix/anlaufstelle/issues/720), [#738](https://github.com/tobiasnix/anlaufstelle/issues/738)) |
 | `enforce_retention` | Taeglich 03:00 | Abgelaufene Events soft-loeschen, Clients anonymisieren |
 | `create_statistics_snapshots` | Monatlich 1. Tag 04:00 | Monats-Aggregate sichern bevor Events geloescht werden |
 | `refresh_statistics_view` | Stuendlich :15 | Materialized View `core_statistics_event_flat` aktualisieren (Statistik-Dashboard) |
@@ -477,6 +487,75 @@ Falls `SENTRY_DSN` in `.env` konfiguriert ist, werden unbehandelte Exceptions au
 SENTRY_DSN=https://...@sentry.io/...
 SENTRY_TRACES_SAMPLE_RATE=0.1
 ```
+
+### 6.6a Off-Site-Backup-Sync (Refs [#738](https://github.com/tobiasnix/anlaufstelle/issues/738))
+
+Lokale Backups in `backups/daily/` ueberleben Container-Recreates, aber nicht den vollstaendigen Verlust des Prod-Hosts (Hardware-Defekt, Ransomware, Provider-Ausfall). `backup.sh` synct optional nach jeder Rotation in ein Off-Site-Ziel.
+
+```bash
+# .env: Off-Site-Ziel konfigurieren (eines von drei Formaten)
+BACKUP_OFFSITE_TARGET=rclone:hetzner-bucket:anlaufstelle/backups
+# oder
+BACKUP_OFFSITE_TARGET=s3://anlaufstelle-backups/prod
+# oder
+BACKUP_OFFSITE_TARGET=backup-user@offsite.example.com:/backups/anlaufstelle
+```
+
+**Empfohlen:** Object-Lock / Write-Once-Policy am Bucket aktivieren — Ransomware kann verschluesselte Backups dann nicht ueberschreiben.
+
+**Failure-Mode:** Wenn der Off-Site-Sync fehlschlaegt (Netz weg, Credentials ungueltig, Disk voll am Off-Site-Host), loggt `backup.sh` einen `ERROR` und beendet das Skript trotzdem mit Exit-Code 0 — das lokale Backup darf nicht abgewertet werden, weil das Off-Site-Ziel kurzfristig nicht erreichbar ist. Das Cron-Wrapper-Log (`/var/log/anlaufstelle-backup.log`) muss daher monitored werden, damit eine wiederholte ERROR-Meldung nicht uebersehen wird.
+
+### 6.6 Backup-Restore-Drill (Refs [#720](https://github.com/tobiasnix/anlaufstelle/issues/720), [#739](https://github.com/tobiasnix/anlaufstelle/issues/739))
+
+Verifiziert, dass das aktuellste Backup vollstaendig wiederherstellbar ist und alle Verteidigungslinien (RLS, AuditLog-Trigger, Medien-Volume) erhalten bleiben. **Empfehlung: quartalsweise per Cron + Alert-Mail bei Fehlschlag.**
+
+```bash
+./scripts/restore-drill.sh
+```
+
+Das Skript laeuft 7 Schritte gegen das neueste DB- und Medien-Backup in `backups/daily/`:
+
+| Schritt | Pruefung |
+|---|---|
+| 1 | Frische Temp-DB (`anlaufstelle_drill_<pid>`) anlegen |
+| 2 | Neuestes `*.sql.gz.enc` decrypten + restoren |
+| 3 | Stichproben pro Tabelle (`core_facility`, `core_client`, `core_event`, `core_auditlog`, `core_workitem`) — Counts pruefen |
+| 4 | RLS-Policy-Check — `SELECT COUNT FROM pg_class WHERE relrowsecurity = true` muss `>= 18` ergeben |
+| 5 | `auditlog_immutable`-Trigger existiert UND blockt Raw UPDATE |
+| 6 | Neuestes `*_media.tar.gz.enc` enthaelt mindestens 1 Eintrag |
+| 7 | Cleanup: Temp-DB drop |
+
+Output: ein `OK` / `FAIL`-Eintrag pro Schritt. Exit-Code != 0 bei jedem `FAIL`. Bei `FAIL` sofort auf Backup-Integritaet pruefen — Trigger-Check fehlgeschlagen (Schritt 5) ist kritisch, weil die AuditLog-Immutability dann nach Restore nicht mehr greift.
+
+**Cron-Vorschlag:**
+
+```cron
+# Quartalsweise (1. Monat im Quartal, 03:30 nach Backup um 02:00):
+30 3 1 1,4,7,10 * cd /opt/anlaufstelle && ./scripts/restore-drill.sh \
+    >> /var/log/anlaufstelle-restore-drill.log 2>&1 \
+    || mail -s "Restore-Drill FAIL" ops@example.com < /var/log/anlaufstelle-restore-drill.log
+```
+
+#### Manueller Sentinel-Drill fuer Medien-Volume-Persistenz
+
+Ergaenzt `restore-drill.sh` um den Container-Recreate-Aspekt:
+
+```bash
+# 1. Sentinel-Datei in MEDIA_ROOT anlegen
+docker compose -f docker-compose.prod.yml exec web \
+    sh -c 'echo "drill-$(date +%s)" > /data/media/.restore-drill'
+
+# 2. Stack neu erzeugen (Containers loeschen — Volume bleibt)
+docker compose -f docker-compose.prod.yml down
+docker compose -f docker-compose.prod.yml up -d
+
+# 3. Sentinel ueberprueft Volume-Persistenz
+docker compose -f docker-compose.prod.yml exec web \
+    cat /data/media/.restore-drill
+# -> erwarteter Output: drill-<timestamp>
+```
+
+Sentinel danach loeschen: `rm /data/media/.restore-drill` im Container.
 
 ---
 

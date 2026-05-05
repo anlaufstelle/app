@@ -107,8 +107,19 @@ def _collect_highlights(facility, visible_events, time_range, user):
     return highlights
 
 
-def _collect_open_tasks(facility):
-    """Return up to 10 open/in-progress work items ordered by priority and due date."""
+def _collect_open_tasks(facility, user):
+    """Return up to 10 open/in-progress work items ordered by priority and due date.
+
+    Refs #734: ``user``-Parameter erzwingt Sichtbarkeitsprueung analog
+    ``can_user_mutate_workitem`` — Lead/Admin sehen alle WorkItems der
+    Facility, Staff/Assistant nur eigene + zugewiesene. Verhindert, dass
+    der Handover-Summary Pseudonyme von WorkItems anzeigt, die der
+    aktuelle User nicht oeffnen darf.
+    """
+    from django.db.models import Q
+
+    from core.models import User as UserModel
+
     priority_order = DBCase(
         When(priority="urgent", then=Value(0)),
         When(priority="important", then=Value(1)),
@@ -116,12 +127,16 @@ def _collect_open_tasks(facility):
         default=Value(2),
         output_field=IntegerField(),
     )
+    qs = WorkItem.objects.filter(
+        facility=facility,
+        status__in=["open", "in_progress"],
+    )
+    # Lead/Admin sehen alles in der Facility, Staff/Assistant filtern auf
+    # owner/assignee — analog can_user_mutate_workitem().
+    if user is not None and getattr(user, "role", None) not in (UserModel.Role.LEAD, UserModel.Role.ADMIN):
+        qs = qs.filter(Q(created_by=user) | Q(assigned_to=user))
     return (
-        WorkItem.objects.filter(
-            facility=facility,
-            status__in=["open", "in_progress"],
-        )
-        .annotate(priority_rank=priority_order)
+        qs.annotate(priority_rank=priority_order)
         .select_related("client", "assigned_to")
         .order_by("priority_rank", "due_date", "-created_at")[:10]
     )
@@ -150,7 +165,7 @@ def build_handover_summary(facility, target_date, time_filter, user):
 
     stats = _collect_stats(facility, visible_events, time_range)
     highlights = _collect_highlights(facility, visible_events, time_range, user)
-    open_tasks = _collect_open_tasks(facility)
+    open_tasks = _collect_open_tasks(facility, user)
 
     return {
         "shift_label": shift_label,

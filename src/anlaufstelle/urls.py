@@ -10,6 +10,7 @@ from core.views.auth import (
     RateLimitedPasswordResetView,
     set_user_language,
 )
+from core.views.csp_report import CSPReportView
 from core.views.health import HealthView
 from core.views.mfa import (
     MFABackupCodesView,
@@ -26,6 +27,7 @@ urlpatterns = [
     path("i18n/setlang/", set_user_language, name="set_language"),
     path("i18n/", include("django.conf.urls.i18n")),
     path("health/", HealthView.as_view(), name="health"),
+    path("csp-report/", CSPReportView.as_view(), name="csp_report"),
     path("login/", CustomLoginView.as_view(), name="login"),
     path("logout/", CustomLogoutView.as_view(), name="logout"),
     path("password-change/", CustomPasswordChangeView.as_view(), name="password_change"),

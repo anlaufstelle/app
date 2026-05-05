@@ -4,11 +4,9 @@ from django import forms
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
+from core.forms.widgets import INPUT_CSS
 from core.models import Case, DocumentType, DocumentTypeField, FieldTemplate
 from core.models.settings import Settings
-
-# Tailwind-Klassen fuer Form-Inputs (Theme Gruen, siehe Plan #663)
-INPUT_CSS = "w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink"
 
 
 class MultipleFileInput(forms.ClearableFileInput):

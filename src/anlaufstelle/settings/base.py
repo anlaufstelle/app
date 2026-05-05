@@ -129,7 +129,12 @@ AUTH_PASSWORD_VALIDATORS = [
 # --- Session ---
 
 SESSION_COOKIE_AGE = 1800  # 30 Minuten
-SESSION_SAVE_EVERY_REQUEST = True
+# False reduziert DB-Write-Amplifikation bei HTMX-Microrequests
+# (Polling, Autocomplete) — Session wird nur bei tatsaechlichen
+# Aenderungen geschrieben. Inaktivitaets-Timeout bleibt erhalten:
+# der Cookie laeuft 30 Min nach der letzten Modifikation ab. Refs #733,
+# Audit-Massnahme #35.
+SESSION_SAVE_EVERY_REQUEST = False
 
 # --- Trusted Proxy Hops (Client-IP-Ermittlung) ---
 # Anzahl der vertrauenswürdigen Proxy-Hops vor der Django-App. Bestimmt, welcher
@@ -264,6 +269,11 @@ CONTENT_SECURITY_POLICY = {
         "font-src": ["'self'"],
         "connect-src": ["'self'"],
         "frame-ancestors": ["'none'"],
+        # CSP-Reporting (Refs #684, Refs #733): Browser POSTet Violations
+        # an /csp-report/ — strukturiertes Logging als WARNING fuer
+        # Detection. Der Endpoint ist rate-limited (10/min/IP) und
+        # csrf_exempt, weil Reports vom Browser-CSP-Layer kommen.
+        "report-uri": ["/csp-report/"],
     }
 }
 
