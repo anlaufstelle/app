@@ -193,15 +193,21 @@ Vor jedem Commit sollte `make ci` lokal erfolgreich durchlaufen.
 
 ### Pre-Commit-Hooks (optional)
 
-Für die schnelle Drift-Detektion vor dem Commit ist eine [`.pre-commit-config.yaml`](.pre-commit-config.yaml) hinterlegt (Refs [#820](https://github.com/tobiasnix/anlaufstelle/issues/820)). Sie prüft `ruff` (lint + format), `makemigrations --check`, `mypy core/services` und den Translation-Version-Header.
+Für die schnelle Drift-Detektion vor dem Commit ist eine [`.pre-commit-config.yaml`](.pre-commit-config.yaml) hinterlegt (Refs [#820](https://github.com/tobiasnix/anlaufstelle/issues/820), [#860](https://github.com/tobiasnix/anlaufstelle/issues/860)). Sie prüft `ruff` (lint + format), `makemigrations --check`, `mypy core/services`, den Translation-Version-Header und automatisches `pip-compile` bei `requirements*.in`-Änderungen.
 
 ```bash
 .venv/bin/pip install pre-commit
-pre-commit install                  # einmalig: Git-Hook installieren
-pre-commit run --all-files          # Alle Hooks gegen das Repo laufen lassen
+pre-commit install                       # einmalig: commit-stage Hooks
+pre-commit install --hook-type pre-push  # einmalig: pre-push Schnell-CI (Refs #860)
+pre-commit run --all-files               # alle commit-stage Hooks gegen das Repo
 ```
 
-Die Hooks decken nur das ab, was lokal in unter 5 s läuft — Tests bleiben in `make ci`. Der Hook ist optional; CI ist die Quelle der Wahrheit.
+**Zwei Stufen:**
+
+- **Commit-Stage:** Ruff lint+format, `makemigrations --check`, `mypy`, Translation-Version, `pip-compile` bei Lock-File-Drift. Läuft in unter 5 s.
+- **Pre-Push:** `make lint && make deps-check && make check` — der Solo-Maintainer-Ersatz für Required Status Checks. Branch Protection mit Required Status Checks greift bei direktem `git push` auf `main` nicht; der pre-push-Hook fängt deshalb genau das ab, was sonst rote CI nach Push produzieren würde (Lock-Drift, Format-Drift, Migrations-Drift). Läuft in ~10 s. Tests bleiben in CI.
+
+CI auf [`tobiasnix/anlaufstelle`](https://github.com/tobiasnix/anlaufstelle/actions) ist die letztgültige Quelle der Wahrheit; der pre-push-Hook reduziert nur die Wahrscheinlichkeit roter CI nach Push.
 
 ### Port-Übersicht und Prozess-Hygiene
 

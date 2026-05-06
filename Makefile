@@ -75,9 +75,11 @@ seed:
 	$(PYTHON) src/manage.py seed
 
 # CI lokal
+# Refs #860: scripts/ mitgescannt — die check_*.py-Helfer landeten sonst nur
+# im pre-commit-Hook, nicht im 'make ci' / Pre-Push-Pfad.
 lint:
-	$(PYTHON) -m ruff check src/
-	$(PYTHON) -m ruff format --check src/
+	$(PYTHON) -m ruff check src/ scripts/
+	$(PYTHON) -m ruff format --check src/ scripts/
 
 # mypy auf core/services strikt, Rest mit permissiver Baseline (Refs #741).
 # Erweiterung modulweise via [[tool.mypy.overrides]] in pyproject.toml.

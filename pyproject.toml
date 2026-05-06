@@ -47,6 +47,13 @@ select = ["E", "F", "I", "W", "B", "UP", "SIM", "N", "S"]
 "src/core/seed/*" = ["S311"]
 "src/core/management/commands/seed*.py" = ["S311", "S106"]
 
+# Dev-/CI-Skripte rufen System-Tools (msgfmt, pip-licenses) als Subprocess
+# auf — kein untrusted input. Refs #860.
+"scripts/*" = [
+    "S603",  # subprocess
+    "S607",  # subprocess partial executable path
+]
+
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "anlaufstelle.settings.test"
 pythonpath = ["src"]

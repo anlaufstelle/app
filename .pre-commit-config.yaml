@@ -1,11 +1,19 @@
-# Pre-commit hooks for Anlaufstelle (Refs #820).
+# Pre-commit hooks for Anlaufstelle (Refs #820, #860).
 #
-# Install:  pre-commit install
-# Run:      pre-commit run --all-files
+# Install:
+#   pre-commit install                       # commit-stage hooks (Ruff, mypy, lock-files)
+#   pre-commit install --hook-type pre-push  # push-stage Schnell-CI (lint + deps-check + check)
+# Run:
+#   pre-commit run --all-files               # alle commit-stage Hooks
+#   pre-commit run --all-files --hook-stage pre-push  # pre-push-Hook manuell auslösen
 #
 # Hooks mirror the CI lint + check stages so that obvious failures are
 # caught before they hit GitHub Actions. They do *not* run the full test
 # suite — that stays in CI to keep the pre-commit fast.
+#
+# Der pre-push-Hook ist Solo-Maintainer-Schutz: er ersetzt Branch Protection
+# mit Required Status Checks (die bei direktem git push auf main eh nicht
+# greifen würden). Lehre aus v0.11.0 (Refs #860).
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.12
@@ -38,3 +46,39 @@ repos:
         language: system
         pass_filenames: false
         files: ^(.*\.en\.md|docs/en/.*\.md|pyproject\.toml)$
+
+      # Lock-File-Drift-Schutz (Refs #860). Wenn requirements*.in geändert
+      # wird, regeneriert dieser Hook die zugehörigen Lock-Files. Drift kann
+      # damit gar nicht erst commit-bar werden — derselbe Drift, der v0.11.0
+      # erst auf Stage-CI aufgefallen ist (django-stubs + mypy fehlten im
+      # Lock-File).
+      - id: pip-compile
+        name: pip-compile requirements*.txt
+        entry: .venv/bin/python -m piptools compile --quiet --no-strip-extras --resolver=backtracking --output-file=requirements.txt requirements.in
+        language: system
+        pass_filenames: false
+        files: ^requirements\.in$
+
+      - id: pip-compile-dev
+        name: pip-compile requirements-dev.txt
+        entry: .venv/bin/python -m piptools compile --quiet --no-strip-extras --resolver=backtracking --output-file=requirements-dev.txt requirements-dev.in
+        language: system
+        pass_filenames: false
+        files: ^requirements-dev\.in$
+
+      # Pre-Push-Schnell-CI (Refs #860). Solo-Maintainer-Schutz: vor jedem
+      # push auf main werden die schnellen Checks ausgeführt, die im CI rot
+      # gehen würden. Tests bleiben in CI — Tests lokal pre-push würden
+      # 3-5 min dauern und niemand würde mehr pushen.
+      #
+      # Reichweite: lint (Ruff), deps-check (Lock-File-Drift), check (Django
+      # system check + makemigrations --check). Erfasst alle Failure-Modi,
+      # die uns vor v0.11.0 lokal verborgen geblieben sind (Lock-Drift,
+      # Format-Drift, Migrations-Drift).
+      - id: pre-push-fast-ci
+        name: Pre-Push Fast-CI (lint + deps-check + check)
+        entry: bash -c 'make lint && make deps-check && make check'
+        language: system
+        pass_filenames: false
+        stages: [pre-push]
+        always_run: true

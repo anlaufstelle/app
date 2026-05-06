@@ -16,6 +16,7 @@ PyPI-supplied and not always SPDX-clean; we therefore work with a
 deny-by-default allowlist of strings plus per-package overrides for
 known-good packages whose metadata is unusual but verified.
 """
+
 from __future__ import annotations
 
 import json
@@ -86,8 +87,7 @@ PACKAGE_OVERRIDES: dict[str, str] = {
     # text-unidecode is dual GPLv2+/Artistic — GPLv2+ option is AGPLv3-compat.
     # https://github.com/kmike/text-unidecode/blob/master/LICENSE
     "text-unidecode": (
-        "Artistic License; GNU General Public License (GPL); "
-        "GNU General Public License v2 or later (GPLv2+)"
+        "Artistic License; GNU General Public License (GPL); GNU General Public License v2 or later (GPLv2+)"
     ),
 }
 

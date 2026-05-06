@@ -6,8 +6,15 @@ Stand: v0.11.0 (2026-05-05)
 
 ## 1. Pre-Release
 
+- [ ] **Workflow-Health-Check** — alle Test-Workflows auf `tobiasnix/anlaufstelle` müssen `state: active` sein, sonst läuft die CI auf `main` nicht (Lehre aus v0.11.0, Refs [#860](https://github.com/tobiasnix/anlaufstelle/issues/860)):
+  ```bash
+  gh api /repos/tobiasnix/anlaufstelle/actions/workflows \
+    --jq '.workflows[] | select(.path | startswith(".github/workflows/")) | "\(.state)\t\(.name)"' | grep -v active
+  ```
+  Output muss leer sein. Falls ein Workflow `disabled_manually` zeigt: `gh workflow enable <NAME> --repo tobiasnix/anlaufstelle`.
 - [ ] CI gruen auf `main` (Test, Check, Audit — siehe [test.yml](../.github/workflows/test.yml))
 - [ ] Coverage nicht gesunken (Report in CI: `pytest --cov=core --cov-report=term-missing`)
+- [ ] **Lock-File-Drift-Check** — `make ci` enthält den `deps-check`-Step seit v0.11.0; bei Drift `make deps-lock` ausführen und Lock-Files committen
 - [ ] `CHANGELOG.md` aktualisiert — `[Unreleased]` in `[X.Y.Z] - YYYY-MM-DD` umwandeln
 - [ ] `version` in `pyproject.toml` auf `X.Y.Z` gesetzt
 - [ ] Keine offenen Issues mit Label `critical` oder `high`

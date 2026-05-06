@@ -3,6 +3,7 @@
 header, and it must be no more than two minor versions behind the
 current project version (`pyproject.toml`). Refs #832.
 """
+
 from __future__ import annotations
 
 import re
@@ -59,15 +60,11 @@ def main() -> int:
         major, minor, _patch = version
         if (major, minor) > (cur_major, cur_minor):
             errors.append(
-                f"{rel}: translation-version v{major}.{minor} ahead of "
-                f"pyproject.toml v{cur_major}.{cur_minor}"
+                f"{rel}: translation-version v{major}.{minor} ahead of pyproject.toml v{cur_major}.{cur_minor}"
             )
             continue
         if major != cur_major:
-            errors.append(
-                f"{rel}: translation-version major v{major} != "
-                f"current v{cur_major}"
-            )
+            errors.append(f"{rel}: translation-version major v{major} != current v{cur_major}")
             continue
         behind = cur_minor - minor
         if behind > MAX_MINOR_BEHIND:

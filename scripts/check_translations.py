@@ -6,6 +6,7 @@ bei Werten oberhalb der gepinnten Baseline. Senken sich die Werte,
 muss die Baseline mit angepasst werden — sonst ist die Schwelle wieder
 zu hoch und der naechste Drift bleibt unsichtbar.
 """
+
 from __future__ import annotations
 
 import re
