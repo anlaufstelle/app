@@ -40,7 +40,7 @@ django-unfold==0.91.0
     # via -r requirements.in
 fonttools[woff]==4.62.1
     # via weasyprint
-gunicorn==25.3.0
+gunicorn==26.0.0
     # via -r requirements.in
 packaging==26.1
     # via

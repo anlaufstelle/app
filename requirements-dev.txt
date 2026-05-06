@@ -62,7 +62,7 @@ fonttools[woff]==4.62.1
     # via weasyprint
 greenlet==3.4.0
     # via playwright
-gunicorn==25.3.0
+gunicorn==26.0.0
     # via -r requirements.in
 idna==3.11
     # via requests

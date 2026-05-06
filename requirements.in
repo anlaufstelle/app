@@ -1,6 +1,6 @@
 Django>=6.0,<6.1
 psycopg[binary]>=3.3.4
-gunicorn>=21.2
+gunicorn>=26.0.0
 whitenoise>=6.5
 django-htmx>=1.17
 django-ratelimit>=4.1
