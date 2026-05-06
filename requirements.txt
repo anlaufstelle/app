@@ -48,9 +48,9 @@ packaging==26.1
     #   gunicorn
 pillow==12.2.0
     # via weasyprint
-psycopg[binary]==3.3.3
+psycopg[binary]==3.3.4
     # via -r requirements.in
-psycopg-binary==3.3.3
+psycopg-binary==3.3.4
     # via psycopg
 pyclamd==0.4.0
     # via -r requirements.in

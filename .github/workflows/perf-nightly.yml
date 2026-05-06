@@ -34,7 +34,7 @@ jobs:
       ANLAUFSTELLE_HOST: http://localhost:8000
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -73,7 +73,7 @@ jobs:
         if: steps.budgets.outcome == 'failure'
         env:
           TODAY: ${{ github.run_id }}
-        uses: peter-evans/create-issue-from-file@v5
+        uses: peter-evans/create-issue-from-file@v6
         with:
           title: "perf: nightly budget regression"
           content-filepath: budget-report.md
