@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-05-05
+
+Patch-Release: Dependency-Bumps und CI-Hardening als Folge zum v0.11.0 Stage-CI Lock-Drift-Befund. Keine Code-Änderungen am App-Verhalten.
+
+### Changed
+
+- **Dependencies aktualisiert** — `psycopg` 3.3.3 → 3.3.4, `mypy` ≥1.20 → ≥1.20.2.
+- **GitHub-Actions aktualisiert** — `actions/setup-python` 5 → 6, `actions/setup-node` 4 → 6, `github/codeql-action` 3 → 4, `docker/build-push-action` 6 → 7, `peter-evans/create-issue-from-file` 5 → 6.
+- **`make lint`-Scope** auf `scripts/` erweitert — die `check_*.py`-Helfer waren bisher nur im pre-commit-Hook erfasst, nicht in `make ci`. Drei Format-Drifts in `scripts/` mit gefixt; `pyproject.toml` hat per-file-ignores für Subprocess-Aufrufe in Dev-/CI-Tools.
+
+### Fixed
+
+- **Lock-File-Drift-Schutz** — `make ci` ruft `deps-check` auf, `.pre-commit-config.yaml` hat `pip-compile`-Hooks für `requirements*.in` und einen `pre-push-fast-ci`-Hook (`make lint && make deps-check && make check`). Ersetzt Branch Protection mit Required Status Checks, die bei direktem `git push` auf `main` nicht greifen würden.
+- **Workflow-Health-Check als Pre-Flight-Schritt** in [`docs/release-checklist.md`](https://github.com/anlaufstelle/app/blob/main/docs/release-checklist.md) — verhindert, dass deaktivierte Workflows unbemerkt bleiben. Hintergrund: Test/E2E/Lint/CodeQL/Release auf `tobiasnix/anlaufstelle` waren von 2026-04-29 bis 2026-05-05 manuell deaktiviert, sodass v0.11.0 ohne CI auf `main` durchging und der Lock-Drift erst auf Stage-CI auffiel.
+
 ## [0.11.0] - 2026-05-05
 
 Großer Sicherheits- und Hardening-Release. Hauptthemen: Wechsel auf Django 6.0 inkl. fünf CVE-Fixes, Sudo-Mode-Re-Auth für sensible Aktionen, DSGVO-Art.-33/34-Breach-Detection, Vier-Augen-Lösch-Workflow, Maintenance-Mode, neue Health-Checks, sowie ein A11y- und i18n-Sweep, der die Sprachleitlinie „Person" flächig durchzieht.
