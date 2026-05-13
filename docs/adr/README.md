@@ -48,6 +48,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-014](014-encrypted-file-vault.md) | Encrypted File Vault | Accepted |
 | [ADR-015](015-mfa-totp.md) | MFA-Verfahren — TOTP + Hash-Backup-Codes | Accepted |
 | [ADR-016](016-search-postgres-only.md) | Volltextsuche bleibt in PostgreSQL | Accepted |
+| [ADR-017](017-deployment-topology.md) | Deployment-Topologie — Plain Docker Compose primär, Multi-Stage als parallele Stacks | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
@@ -55,9 +56,8 @@ Entscheidungen, die im Code bereits sichtbar sind, deren Begründung aber noch n
 
 | Kandidat | Worum es geht | Warum noch keine ADR |
 |----------|---------------|----------------------|
-| Deployment-Target | Coolify als primärer Deployment-Pfad ([`docs/coolify-deployment.md`](../coolify-deployment.md)) statt reiner Compose-/Kubernetes-Anleitung. | Abhängig von tatsächlichen Erfahrungen im ersten Pilot-Deployment. |
-| Retention-Modell | Retention-Fristen, Legal-Hold, AuditLog-Pruning ([`src/core/services/retention.py`](../../src/core/services/retention.py)) — wer setzt welche Frist, wer darf Hold setzen, was passiert mit Historie. | Modell ist im Code, aber die Begründung der Default-Fristen sollte noch mit Datenschutz­vorlagen abgeglichen werden. |
-| Offline-Snapshot / Offline-Keys | Offline-Bundle für Außeneinsätze ([`src/core/services/offline.py`](../../src/core/services/offline.py), [`offline_keys.py`](../../src/core/services/offline_keys.py)) — Bedrohungsmodell, Schlüsselableitung, Synchronisations­semantik. | Feature ist noch nicht stabil genug, um Annahmen festzuschreiben. |
-| K-Anonymisierung für Statistik | Schwellenwerte und Fallback-Bucketing in der Statistik­auswertung ([`src/core/services/k_anonymization.py`](../../src/core/services/k_anonymization.py)). | Schwellen­wahl ist eher Policy als Architektur — wird ggf. lieber im Fachkonzept verankert als als ADR. |
+| Retention-Modell | Retention-Fristen, Legal-Hold, AuditLog-Pruning ([`src/core/services/retention.py`](././src/core/services/retention.py)) — wer setzt welche Frist, wer darf Hold setzen, was passiert mit Historie. | Modell ist im Code, aber die Begründung der Default-Fristen sollte noch mit Datenschutz­vorlagen abgeglichen werden. |
+| Offline-Snapshot / Offline-Keys | Offline-Bundle für Außeneinsätze ([`src/core/services/offline.py`](././src/core/services/offline.py), [`offline_keys.py`](././src/core/services/offline_keys.py)) — Bedrohungsmodell, Schlüsselableitung, Synchronisations­semantik. | Feature ist noch nicht stabil genug, um Annahmen festzuschreiben. |
+| K-Anonymisierung für Statistik | Schwellenwerte und Fallback-Bucketing in der Statistik­auswertung ([`src/core/services/k_anonymization.py`](././src/core/services/k_anonymization.py)). | Schwellen­wahl ist eher Policy als Architektur — wird ggf. lieber im Fachkonzept verankert als als ADR. |
 
 **Vorgehen:** Wenn eines der Themen sich stabilisiert oder eine echte Entwicklungs­alternative ansteht, wird die nächste freie ADR-Nummer vergeben. Bei Verwerfen einer ADR-Idee bleibt der Eintrag hier kurz mit „verworfen, weil …" stehen, damit die Diskussion nicht verloren geht.

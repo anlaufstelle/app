@@ -1,6 +1,6 @@
 name: Perf Nightly
 
-# Refs #825: Last-Test-Schicht — Locust gegen die Seed-large-DB. Schlaegt
+#: Last-Test-Schicht — Locust gegen die Seed-large-DB. Schlaegt
 # fehl, wenn ein Endpoint sein 95-Perzentil-Budget aus
 # docs/performance-budgets.json reisst, und legt automatisch ein Issue
 # an.

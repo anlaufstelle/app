@@ -16,14 +16,14 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      # Refs #819 (R-001): Ruff-Version aus dem Lockfile ziehen, damit lokale
+      # (R-001): Ruff-Version aus dem Lockfile ziehen, damit lokale
       # ``make lint`` und CI dieselbe Version nutzen.
       - run: pip install -r requirements-dev.txt
       - run: ruff check src/
       - run: ruff format --check src/
 
   licenses:
-    # Refs #839: pip-licenses prueft jede installierte Dependency gegen die
+    #: pip-licenses prueft jede installierte Dependency gegen die
     # AGPLv3-kompatible Allowlist in scripts/check_licenses.py.
     runs-on: ubuntu-latest
     steps:
@@ -42,7 +42,7 @@ jobs:
           path: thirdparty-licenses.md
 
   translation-versions:
-    # Refs #832: EN-Translations duerfen nicht mehr als 2 Minor-Releases
+    #: EN-Translations duerfen nicht mehr als 2 Minor-Releases
     # hinter pyproject.toml zuruckliegen.
     runs-on: ubuntu-latest
     steps:
@@ -53,7 +53,7 @@ jobs:
       - run: python scripts/check_translation_versions.py
 
   translations-coverage:
-    # Refs #813 (C-46): Wachhund gegen fuzzy/untranslated-Regression in
+    # (C-46): Wachhund gegen fuzzy/untranslated-Regression in
     # de.po + en.po. Faellt wenn Werte oberhalb der Baseline klettern.
     runs-on: ubuntu-latest
     steps:
@@ -65,7 +65,7 @@ jobs:
       - run: python scripts/check_translations.py
 
   typecheck:
-    # Refs #741 / #713 (Audit-Massnahme #37): mypy auf core/services
+    # / #713 (Audit-Massnahme #37): mypy auf core/services
     # inkrementell. Eigener Job, damit lint + typecheck parallel laufen
     # und ein Type-Fehler die ruff-Resultate nicht versteckt.
     runs-on: ubuntu-latest

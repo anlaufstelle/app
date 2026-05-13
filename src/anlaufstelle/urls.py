@@ -20,6 +20,7 @@ from core.views.mfa import (
     MFASetupView,
     MFAVerifyView,
 )
+from core.views.misc import RobotsTxtView
 from core.views.pwa import ManifestView, OfflineFallbackView, ServiceWorkerView
 from core.views.sudo_mode import SudoModeView
 
@@ -28,6 +29,7 @@ urlpatterns = [
     path("i18n/setlang/", set_user_language, name="set_language"),
     path("i18n/", include("django.conf.urls.i18n")),
     path("health/", HealthView.as_view(), name="health"),
+    path("robots.txt", RobotsTxtView.as_view(), name="robots_txt"),
     path("csp-report/", CSPReportView.as_view(), name="csp_report"),
     path("login/", CustomLoginView.as_view(), name="login"),
     path("logout/", CustomLogoutView.as_view(), name="logout"),

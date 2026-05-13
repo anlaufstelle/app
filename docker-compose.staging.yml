@@ -29,7 +29,7 @@ services:
       POSTGRES_HOST: db
     volumes:
       # Persistenter Mount fuer MEDIA_ROOT (=/data/media) — analog prod.
-      # Refs #720.
+      #.
       - media_staging:/data
     depends_on:
       db:

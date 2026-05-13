@@ -1,4 +1,4 @@
-> This document summarizes the German domain concept ([Fachkonzept](../fachkonzept-anlaufstelle.md)).
+> This document summarizes the German domain concept ([Fachkonzept](./fachkonzept-anlaufstelle.md)).
 > It is not a 1:1 translation. For the complete specification, refer to the German original.
 > See also the [Glossary](glossary.md) for domain term translations.
 
@@ -109,7 +109,7 @@ Access is not purely role-based but context-dependent: what a user can see also 
 
 ## v0.10 Additions
 
-Release v0.10.0 (2026-04-19) extends the domain concept with several capabilities that sharpen the low-threshold fit and strengthen the privacy architecture. Configuration details live in the [admin guide](../admin-guide.md); this section summarizes the conceptual intent.
+Release v0.10.0 (2026-04-19) extends the domain concept with several capabilities that sharpen the low-threshold fit and strengthen the privacy architecture. Configuration details live in the [admin guide](./admin-guide.md); this section summarizes the conceptual intent.
 
 - **Offline mode (M6A).** Street work teams frequently operate without connectivity. An optional offline mode provides a client-side capture and read cache encrypted with AES-GCM-256. The encryption key is derived from the user password via PBKDF2, lives only in browser memory, and is destroyed on logout -- no plaintext cache ever touches disk.
 - **File vault.** Attachments on events are no longer stored in the clear. They are scanned by ClamAV before acceptance and encrypted at rest, extending field-level encryption to binary material.
@@ -130,7 +130,7 @@ Release v0.10.0 (2026-04-19) extends the domain concept with several capabilitie
 
 ### v0.10.2 (2026-04-28)
 
-- **CSP migration to `@alpinejs/csp`.** The vendored Alpine build was replaced with the CSP variant; all inline `x-data="{...}"` objects became registered `Alpine.data()` components. With this change, `script-src 'unsafe-eval'` is removed from the global Content Security Policy. An architectural test prevents future regressions (no inline `x-data`, no ternaries / `||` / `&&` / method calls / object literals inside Alpine and HTMX directives).
+- **CSP migration to `@alpinejs/csp`.** The vendored Alpine build was replaced with the CSP variant; all inline `x-data="{..}"` objects became registered `Alpine.data()` components. With this change, `script-src 'unsafe-eval'` is removed from the global Content Security Policy. An architectural test prevents future regressions (no inline `x-data`, no ternaries / `||` / `&&` / method calls / object literals inside Alpine and HTMX directives).
 - **AdminCSPRelaxMiddleware.** django-unfold ships its own Alpine build that uses `new AsyncFunction()` for the Cmd+K command palette and therefore needs `'unsafe-eval'` to initialize. A dedicated middleware now adds `'unsafe-eval'` only on `/admin-mgmt/*` routes — the privileged Django admin area, which is additionally protected by the MFA gate and the `admin` role. The strict global policy stays in place everywhere else.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->

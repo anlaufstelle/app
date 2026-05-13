@@ -15,7 +15,7 @@ Für den Anwendungs­kontext (kleine Einrichtungen, oft mit gemeinsamem NAT-Gate
 
 ## Decision
 
-Lockout greift per **Tupel (Username, IP)** — nicht pro Username allein und nicht pro IP allein. Implementiert in [`src/core/services/login_lockout.py`](../../src/core/services/login_lockout.py).
+Lockout greift per **Tupel (Username, IP)** — nicht pro Username allein und nicht pro IP allein. Implementiert in [`src/core/services/login_lockout.py`](././src/core/services/login_lockout.py).
 
 - Schwelle und Sperrdauer sind in Settings konfigurierbar.
 - Jede Lockout-Aktivierung erzeugt einen AuditLog-Eintrag (Action `security_violation`).
@@ -37,5 +37,5 @@ Lockout greift per **Tupel (Username, IP)** — nicht pro Username allein und ni
 
 ## References
 
-- [`src/core/services/login_lockout.py`](../../src/core/services/login_lockout.py)
-- [`docs/threat-model.md`](../threat-model.md) (Asset-Tabelle, Lockout-Scope)
+- [`src/core/services/login_lockout.py`](././src/core/services/login_lockout.py)
+- [`docs/threat-model.md`](./threat-model.md) (Asset-Tabelle, Lockout-Scope)

@@ -16,7 +16,7 @@ Die App soll eine schnelle Such-UX über Pseudonyme, Fall-Titel und Ereignis-Inh
 ## Decision
 
 - **PostgreSQL `pg_trgm`** als einziges Suchbackend. Trigram-Similarity auf `Client.pseudonym` liefert die Tippfehlertoleranz; ein zusätzlicher GIN-`gin_trgm_ops`-Index macht die `icontains`-Substring-Suche schnell.
-- **Eigene `Event.search_text`-Spalte** ([Refs #827](https://github.com/tobiasnix/anlaufstelle/issues/827)) statt `data_json__icontains` — gepflegt im `pre_save`-Signal aus `compute_event_search_text()`. Sie enthält nur Felder mit `is_encrypted=False` und `sensitivity=NORMAL`. Damit wandert der Sensitivity-Filter vom Read-Pfad in den Write-Pfad — die Suche kann nichts treffen, was der Nutzer nicht sehen darf.
+- **Eigene `Event.search_text`-Spalte** ([]()) statt `data_json__icontains` — gepflegt im `pre_save`-Signal aus `compute_event_search_text()`. Sie enthält nur Felder mit `is_encrypted=False` und `sensitivity=NORMAL`. Damit wandert der Sensitivity-Filter vom Read-Pfad in den Write-Pfad — die Suche kann nichts treffen, was der Nutzer nicht sehen darf.
 - **Trigram-Threshold pro Facility** in `Settings.search_trigram_threshold` (Default 0.3) — kleine Facilities mit ungewöhnlichen Pseudonymen können den Schwellwert anheben.
 - **Kein WebSocket-Live-Search**: HTMX-Debounce-Endpoints reichen für die UI-Anforderungen aus.
 
@@ -37,7 +37,7 @@ Die App soll eine schnelle Such-UX über Pseudonyme, Fall-Titel und Ereignis-Inh
 
 ## References
 
-- [`src/core/services/search.py`](../../src/core/services/search.py)
-- [`src/core/services/events/fields.py`](../../src/core/services/events/fields.py) (`compute_event_search_text`)
-- [`src/core/migrations/0081_add_event_search_text.py`](../../src/core/migrations/0081_add_event_search_text.py) (TrigramExtension + GIN-Index)
-- Refs [#580](https://github.com/tobiasnix/anlaufstelle/issues/580) (Trigram-Similarity), [#827](https://github.com/tobiasnix/anlaufstelle/issues/827) (Suchindex-Spalte)
+- [`src/core/services/search.py`](././src/core/services/search.py)
+- [`src/core/services/events/fields.py`](././src/core/services/events/fields.py) (`compute_event_search_text`)
+- [`src/core/migrations/0081_add_event_search_text.py`](././src/core/migrations/0081_add_event_search_text.py) (TrigramExtension + GIN-Index)
+- (Trigram-Similarity) (Suchindex-Spalte)

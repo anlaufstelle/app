@@ -54,9 +54,9 @@ cd app
 **2. Set up the Python environment**
 
 ```bash
-python3.13 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-dev.txt   # includes runtime + test/lint tools
+python3.13 -m venv.venv
+source.venv/bin/activate
+pip install -r requirements-dev.txt # includes runtime + test/lint tools
 # Or runtime only (e.g. for prod Docker build):
 # pip install -r requirements.txt
 ```
@@ -78,12 +78,12 @@ make db
 
 This starts a PostgreSQL 16 container with the following credentials:
 
-| Variable  | Value         |
+| Variable | Value |
 |-----------|---------------|
-| DB name   | anlaufstelle  |
-| User      | anlaufstelle  |
-| Password  | anlaufstelle  |
-| Port      | 5432          |
+| DB name | anlaufstelle |
+| User | anlaufstelle |
+| Password | anlaufstelle |
+| Port | 5432 |
 
 Alternatively, a locally installed PostgreSQL instance can be used. The connection URL must then be set in the `DATABASE_URL` environment variable.
 
@@ -113,10 +113,10 @@ make migrate
 **6. Load seed data** (optional, for local development)
 
 ```bash
-make seed                              # Default: small
-python src/manage.py seed --scale medium   # more data including case management
-python src/manage.py seed --scale large    # load-testing volume
-python src/manage.py seed --flush          # flush existing data first
+make seed # Default: small
+python src/manage.py seed --scale medium # more data including case management
+python src/manage.py seed --scale large # load-testing volume
+python src/manage.py seed --flush # flush existing data first
 ```
 
 **Scale profiles overview:**
@@ -165,29 +165,29 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 
 ## Make Targets
 
-| Target           | Description                                                       |
+| Target | Description |
 |------------------|-------------------------------------------------------------------|
-| `make db`        | Start PostgreSQL 16 container                                     |
-| `make db-stop`   | Stop and remove PostgreSQL container                              |
-| `make migrate`   | Run Django migrations                                             |
-| `make run`       | Start dev server (gunicorn + HTTPS on `0.0.0.0:8443`)           |
-| `make run-http`  | Fallback: Django runserver without HTTPS (`0.0.0.0:8000`)        |
-| `make seed`      | Load seed data into the database                                  |
-| `make tailwind`  | Compile Tailwind CSS in watch mode                                |
-| `make tailwind-build` | Compile minified Tailwind CSS for production                 |
-| `make lint`      | Check code with Ruff and verify formatting                        |
-| `make typecheck` | mypy on `core/services` (strict) + baseline check (Refs [#741](https://github.com/tobiasnix/anlaufstelle/issues/741)) |
-| `make test`      | Run unit and integration tests (excluding E2E)                    |
-| `make test-e2e`  | Run end-to-end tests with Playwright                              |
-| `make check`     | Run Django system checks and verify migration consistency         |
-| `make ci`        | Full CI pipeline locally: `lint` + `check` + `test-parallel`      |
-| `make test-focus T=<path>` | Single test file with fail-fast                          |
-| `make test-parallel` | Unit and integration tests in parallel (pytest-xdist)         |
-| `make test-e2e-parallel` | E2E tests in parallel (default 2 workers, configurable)   |
-| `make test-e2e-smoke` | Smoke-tagged E2E tests only (~2-3 min)                       |
-| `make deps-lock` | Regenerate lock files from `requirements*.in` (pip-tools)         |
-| `make deps-check` | Verify lock files match `.in` (drift detection)                  |
-| `make dev`       | Start database, run migrations, and start server (combined)       |
+| `make db` | Start PostgreSQL 16 container |
+| `make db-stop` | Stop and remove PostgreSQL container |
+| `make migrate` | Run Django migrations |
+| `make run` | Start dev server (gunicorn + HTTPS on `0.0.0.0:8443`) |
+| `make run-http` | Fallback: Django runserver without HTTPS (`0.0.0.0:8000`) |
+| `make seed` | Load seed data into the database |
+| `make tailwind` | Compile Tailwind CSS in watch mode |
+| `make tailwind-build` | Compile minified Tailwind CSS for production |
+| `make lint` | Check code with Ruff and verify formatting |
+| `make typecheck` | mypy on `core/services` (strict) + baseline check |
+| `make test` | Run unit and integration tests (excluding E2E) |
+| `make test-e2e` | Run end-to-end tests with Playwright |
+| `make check` | Run Django system checks and verify migration consistency |
+| `make ci` | Full CI pipeline locally: `lint` + `check` + `test-parallel` |
+| `make test-focus T=<path>` | Single test file with fail-fast |
+| `make test-parallel` | Unit and integration tests in parallel (pytest-xdist) |
+| `make test-e2e-parallel` | E2E tests in parallel (default 2 workers, configurable) |
+| `make test-e2e-smoke` | Smoke-tagged E2E tests only (~2-3 min) |
+| `make deps-lock` | Regenerate lock files from `requirements*.in` (pip-tools) |
+| `make deps-check` | Verify lock files match `.in` (drift detection) |
+| `make dev` | Start database, run migrations, and start server (combined) |
 
 `make ci` should pass locally before every commit.
 
@@ -209,7 +209,7 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 Every new facility-scoped model must be protected on **both** defense lines:
 
 1. **Django layer (first line):**
-   - `facility = models.ForeignKey(Facility, ...)` on the model
+   - `facility = models.ForeignKey(Facility,..)` on the model
    - `objects = FacilityScopedManager()` (from [`src/core/models/managers.py`](src/core/models/managers.py))
    - Views/services filter via `.for_facility(request.current_facility)`
 2. **PostgreSQL RLS (second line, defense in depth):**
@@ -254,15 +254,15 @@ Refs #<issue-number>
 
 **Types:**
 
-| Type       | Usage                                           |
+| Type | Usage |
 |------------|-------------------------------------------------|
-| `feat`     | New feature                                     |
-| `fix`      | Bug fix                                         |
-| `test`     | Add or update tests                             |
-| `docs`     | Documentation                                   |
-| `chore`    | Maintenance, configuration, dependencies        |
-| `refactor` | Refactoring without behavior change             |
-| `style`    | Formatting, no logic change                     |
+| `feat` | New feature |
+| `fix` | Bug fix |
+| `test` | Add or update tests |
+| `docs` | Documentation |
+| `chore` | Maintenance, configuration, dependencies |
+| `refactor` | Refactoring without behavior change |
+| `style` | Formatting, no logic change |
 
 **Examples:**
 
@@ -272,8 +272,6 @@ feat(clients): add duplicate-detection on import
 fix(events): prevent deletion of locked events
 
 test(security): add field-sensitivity E2E tests
-
-Refs #42
 ```
 
 Commits are atomic: one logical change per commit. Push immediately after completing each task.
@@ -336,13 +334,13 @@ This pipeline must pass locally before every pull request.
 
 3. **Verify locally:**
    ```bash
-   make ci          # Lint, check, tests
-   make test-e2e    # E2E tests
+   make ci # Lint, check, tests
+   make test-e2e # E2E tests
    ```
    Also manually verify in the browser that the change works as expected.
 
 4. **Open a pull request:**
-   - Title in Conventional Commits style (`feat: ...`, `fix: ...`)
+   - Title in Conventional Commits style (`feat:..`, `fix:..`)
    - Description: What was changed and why? Which issues are being closed?
    - Screenshot or demo if UI changes are included
    - Link to the associated GitHub issue
@@ -357,56 +355,56 @@ This pipeline must pass locally before every pull request.
 
 ### Roles
 
-| Role        | Description                                        |
+| Role | Description |
 |-------------|----------------------------------------------------|
-| `admin`     | Full access, system configuration                  |
-| `leitung`   | Lead level, extended reports                       |
-| `fachkraft` | Staff, core work with clients and events           |
-| `assistenz` | Restricted access, supporting tasks                |
+| `admin` | Full access, system configuration |
+| `leitung` | Lead level, extended reports |
+| `fachkraft` | Staff, core work with clients and events |
+| `assistenz` | Restricted access, supporting tasks |
 
 ### Project Structure
 
 ```
 src/
   manage.py
-  anlaufstelle/          # Django project settings (settings, urls, wsgi)
+  anlaufstelle/ # Django project settings (settings, urls, wsgi)
   core/
-    models/              # One model (or closely related models) per file
-      organization.py    # Organization, Facility
-      user.py            # User (extends AbstractUser)
-      client.py          # Client
-      document_type.py   # DocumentType, FieldTemplate, DocumentTypeField
-      event.py           # Event
-      event_history.py   # EventHistory
-      workitem.py        # WorkItem, DeletionRequest
-      time_filter.py     # TimeFilter
-      case.py            # Case
-      audit.py           # AuditLog
-      settings.py        # Settings
-    views/               # Class-based views, split by feature area
-      aktivitaetslog.py  # AktivitaetslogView (home page)
-      timeline.py        # TimelineView (event timeline)
-      clients.py         # Client CRUD
-      events.py          # Event CRUD + deletion workflow
-      workitems.py       # WorkItem CRUD
-      search.py          # Full-text search
-      statistics.py      # Statistics + exports
-      audit.py           # AuditLogListView
-      auth.py            # Login/Logout/Password
-      account.py         # User profile
-      health.py          # HealthView
-      mixins.py          # Role mixins
-      pwa.py             # Service Worker
-    services/            # Business logic (encryption, retention, ...)
-  templates/             # Django templates (HTMX partials included)
+    models/ # One model (or closely related models) per file
+      organization.py # Organization, Facility
+      user.py # User (extends AbstractUser)
+      client.py # Client
+      document_type.py # DocumentType, FieldTemplate, DocumentTypeField
+      event.py # Event
+      event_history.py # EventHistory
+      workitem.py # WorkItem, DeletionRequest
+      time_filter.py # TimeFilter
+      case.py # Case
+      audit.py # AuditLog
+      settings.py # Settings
+    views/ # Class-based views, split by feature area
+      aktivitaetslog.py # AktivitaetslogView (home page)
+      timeline.py # TimelineView (event timeline)
+      clients.py # Client CRUD
+      events.py # Event CRUD + deletion workflow
+      workitems.py # WorkItem CRUD
+      search.py # Full-text search
+      statistics.py # Statistics + exports
+      audit.py # AuditLogListView
+      auth.py # Login/Logout/Password
+      account.py # User profile
+      health.py # HealthView
+      mixins.py # Role mixins
+      pwa.py # Service Worker
+    services/ # Business logic (encryption, retention,..)
+  templates/ # Django templates (HTMX partials included)
   static/
     css/
-      input.css          # Tailwind input file
-      styles.css         # Compiled CSS (do not commit)
+      input.css # Tailwind input file
+      styles.css # Compiled CSS (do not commit)
   tests/
-    e2e/                 # Playwright E2E tests
-      conftest.py        # Shared fixtures
-      test_<feature>.py  # Tests per feature
+    e2e/ # Playwright E2E tests
+      conftest.py # Shared fixtures
+      test_<feature>.py # Tests per feature
 ```
 
 ### Key Design Decisions

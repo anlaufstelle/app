@@ -31,7 +31,7 @@ jobs:
           python-version: "3.13"
           cache: pip
       - run: pip install -r requirements-dev.txt
-      # Refs #823 (C-56): --cov-fail-under erzwingt die Coverage-Schwelle.
+      # (C-56): --cov-fail-under erzwingt die Coverage-Schwelle.
       # Aktueller Stand 2026-05-01: 93 %. Folge-PRs duerfen den Wert schrittweise
       # anheben, aber nicht mehr unter 93 % fallen lassen.
       - run: python -m pytest -m "not e2e" --ignore=src/tests/e2e -n auto --cov=core --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=93

@@ -17,7 +17,7 @@ Sensitive Felder (verschlüsselbare Anteile von Klientel- und Ereignisdaten, Fil
 
 - **Cryptography-Library `Fernet`** (AES-128-CBC + HMAC-SHA256 + URL-safe Base64) als Verschlüsselungsprimitive.
 - **`MultiFernet`** für Key-Rotation: `ENCRYPTION_KEYS` nimmt eine kommaseparierte Liste; der **erste** Key verschlüsselt, alle Keys können entschlüsseln. Single-Key-`ENCRYPTION_KEY` bleibt als Backward-Compat erhalten.
-- **Fail-closed**: fehlt der Key, wirft [`get_fernet()`](../../src/core/services/encryption.py) `EncryptionKeyMissing`. Beschädigte Tokens werfen `InvalidToken` — kein Stillschweigen.
+- **Fail-closed**: fehlt der Key, wirft [`get_fernet()`](././src/core/services/encryption.py) `EncryptionKeyMissing`. Beschädigte Tokens werfen `InvalidToken` — kein Stillschweigen.
 - **`lru_cache`** auf `get_fernet()` für Bulk-Decrypt-Pfade (Datenexport, Retention).
 - Architektur-Test stellt sicher, dass Models verschlüsselte Felder nicht über `bulk_create` an der Encryption vorbeispeichern können.
 
@@ -37,6 +37,6 @@ Sensitive Felder (verschlüsselbare Anteile von Klientel- und Ereignisdaten, Fil
 
 ## References
 
-- [`src/core/services/encryption.py`](../../src/core/services/encryption.py)
-- [`docs/admin-guide.md`](../admin-guide.md) (AES-GCM/Fernet-Hinweis)
+- [`src/core/services/encryption.py`](././src/core/services/encryption.py)
+- [`docs/admin-guide.md`](./admin-guide.md) (AES-GCM/Fernet-Hinweis)
 - Commits: `a4a323e` (Einführung), `b568691` (fail-closed), `61e3200` (lru_cache)

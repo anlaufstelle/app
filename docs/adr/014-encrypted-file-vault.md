@@ -11,14 +11,14 @@ Anhänge an Ereignisse (PDFs, Fotos, Scans) enthalten häufig die sensibelsten P
 - **At-Rest-Verschlüsselung** identisch zur Feld-Encryption: ein Backup oder Disk-Diebstahl darf den Klartext nicht freigeben.
 - **Streaming statt Vollkopie** beim Decrypt — ein 30-MB-Dokument darf den Web-Worker nicht für Sekunden blockieren.
 - **Virus-Scan vor der Verschlüsselung** — ein verschlüsselter Anhang ist für ClamAV opak. Fail-closed: ist der Scanner aktiv und unerreichbar, wird der Upload abgelehnt.
-- **Soft-Delete + Versionierung** — Refs [#622](https://github.com/tobiasnix/anlaufstelle/issues/622) Stage B verlangt mehrere Versionen pro Slot, damit Korrekturen nachvollziehbar sind.
+- **Soft-Delete + Versionierung** — Stage B verlangt mehrere Versionen pro Slot, damit Korrekturen nachvollziehbar sind.
 - **Pfad-Isolation pro Facility** — eine Mehrmandanten-Installation darf nicht versehentlich Anhänge zwischen Trägern teilen.
 
 ## Decision
 
-- **Speicherpfad** unter `MEDIA_ROOT/<facility-uuid>/<attachment-uuid>` (siehe `_facility_dir` in [`src/core/services/file_vault.py`](../../src/core/services/file_vault.py)). Pro Facility ein eigenes Verzeichnis; das Facility-Scoping ist im Pfad selbst kodiert.
-- **Verschlüsselung** über dieselbe Fernet-Toolchain wie für Felder ([ADR-006](006-fernet-field-encryption.md)) — `encrypt_file`/`decrypt_file_stream` in [`src/core/services/encryption.py`](../../src/core/services/encryption.py). Kein separater Schlüssel, keine separaten Rotations-Pfade.
-- **Reihenfolge beim Upload:** `safe_filename` → MIME-Magic-Bytes-Check → Virus-Scan → Verschlüsseln → Schreiben. Schlägt einer der Schritte fehl, bleibt nichts auf der Disk; der Service-Layer wickelt das in `transaction.atomic` ab (Refs [#584](https://github.com/tobiasnix/anlaufstelle/issues/584)).
+- **Speicherpfad** unter `MEDIA_ROOT/<facility-uuid>/<attachment-uuid>` (siehe `_facility_dir` in [`src/core/services/file_vault.py`](././src/core/services/file_vault.py)). Pro Facility ein eigenes Verzeichnis; das Facility-Scoping ist im Pfad selbst kodiert.
+- **Verschlüsselung** über dieselbe Fernet-Toolchain wie für Felder ([ADR-006](006-fernet-field-encryption.md)) — `encrypt_file`/`decrypt_file_stream` in [`src/core/services/encryption.py`](././src/core/services/encryption.py). Kein separater Schlüssel, keine separaten Rotations-Pfade.
+- **Reihenfolge beim Upload:** `safe_filename` → MIME-Magic-Bytes-Check → Virus-Scan → Verschlüsseln → Schreiben. Schlägt einer der Schritte fehl, bleibt nichts auf der Disk; der Service-Layer wickelt das in `transaction.atomic` ab.
 - **Streaming-Decrypt** liefert einen Iterator von Klartext-Chunks (`get_decrypted_file_stream`), den `safe_download_response` direkt an Django reicht — kein Vollkopie-RAM-Profil.
 - **Stage B Versionierung:** ein Marker `__files__` in `Event.data_json` listet `entry_id`-UUIDs; jeder Entry zeigt auf einen Anhang plus optional eine `superseded_by`-Kette. Soft-Delete via `deleted_at` statt physischer Löschung — Retention räumt später auf.
 
@@ -39,8 +39,8 @@ Anhänge an Ereignisse (PDFs, Fotos, Scans) enthalten häufig die sensibelsten P
 
 ## References
 
-- [`src/core/services/file_vault.py`](../../src/core/services/file_vault.py)
-- [`src/core/services/encryption.py`](../../src/core/services/encryption.py)
-- [`src/core/services/virus_scan.py`](../../src/core/services/virus_scan.py)
+- [`src/core/services/file_vault.py`](././src/core/services/file_vault.py)
+- [`src/core/services/encryption.py`](././src/core/services/encryption.py)
+- [`src/core/services/virus_scan.py`](././src/core/services/virus_scan.py)
 - [ADR-006](006-fernet-field-encryption.md) (gemeinsame Fernet-Toolchain)
 - Commit `c609e86` (Einführung)

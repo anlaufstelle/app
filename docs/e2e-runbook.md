@@ -13,9 +13,9 @@ Die `conftest.py` erledigt DB-Erstellung, Migration, Seed und `collectstatic` au
 | # | Schritt | Befehl | Prüfung |
 |---|---------|--------|---------|
 | 1 | PostgreSQL läuft | `sudo docker compose up -d` | `pg_isready -h localhost` → Exit 0 |
-| 2 | Port 8844 frei | `lsof -i :8844` | Keine Ausgabe |
-| 3 | Alte Prozesse beenden | `pkill -f 'gunicorn.*8844'` | `lsof -i :8844` danach leer |
-| 4 | Venv aktiv | `source .venv/bin/activate` | `which python` zeigt `.venv/` |
+| 2 | Port 8844 frei | `lsof -i:8844` | Keine Ausgabe |
+| 3 | Alte Prozesse beenden | `pkill -f 'gunicorn.*8844'` | `lsof -i:8844` danach leer |
+| 4 | Venv aktiv | `source.venv/bin/activate` | `which python` zeigt `.venv/` |
 | 5 | Playwright installiert | `python -m playwright install chromium` | Kein „browser not found" |
 | 6 | Tailwind gebaut | `make tailwind-build` | `src/static/css/styles.css` existiert |
 | 7 | Tests starten | `make test-e2e` | Grüne Ausgabe |
@@ -30,15 +30,15 @@ Die `conftest.py` erledigt DB-Erstellung, Migration, Seed und `collectstatic` au
 
 | Symptom | Ursache | Fix |
 |---------|---------|-----|
-| `RuntimeError: gunicorn-Server konnte nicht gestartet werden` | Port 8844 belegt | `lsof -i :8844` → `kill <PID>` oder `pkill -f 'gunicorn.*8844'` |
-| `RuntimeError: gunicorn...` + DB-Connection-Error | PostgreSQL nicht gestartet | `sudo docker compose up -d` → `pg_isready -h localhost` |
+| `RuntimeError: gunicorn-Server konnte nicht gestartet werden` | Port 8844 belegt | `lsof -i:8844` → `kill <PID>` oder `pkill -f 'gunicorn.*8844'` |
+| `RuntimeError: gunicorn..` + DB-Connection-Error | PostgreSQL nicht gestartet | `sudo docker compose up -d` → `pg_isready -h localhost` |
 | `psycopg.OperationalError: database "anlaufstelle_e2e" does not exist` | conftest-Erstellung fehlgeschlagen | `PGPASSWORD=anlaufstelle psql -h localhost -U anlaufstelle -c "CREATE DATABASE anlaufstelle_e2e;"` |
-| Login-Redirect zurück zu `/login/` | Passwörter durch MD5 korrumpiert | `DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e .venv/bin/python src/manage.py seed --flush` |
+| Login-Redirect zurück zu `/login/` | Passwörter durch MD5 korrumpiert | `DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e.venv/bin/python src/manage.py seed --flush` |
 | Login-Redirect + Rate-Limit-Meldung | Falsches Settings-Modul (Rate-Limit aktiv) | `DJANGO_SETTINGS_MODULE` muss `anlaufstelle.settings.e2e` sein |
 | `TimeoutError` bei `page.goto()` | `networkidle` als Wait-Strategie | `grep -r "networkidle" src/tests/e2e/` → ersetzen durch `domcontentloaded` |
 | `TimeoutError` nach Form-Submit | Kein `wait_for_url()` nach `.click()` | `page.wait_for_url(re.compile(r"/expected/path/"))` ergänzen |
 | `strict mode violation` | Locator matcht mehrere Elemente | Container scopen (`#main-content`) oder `.first` nutzen |
-| 404 auf CSS/JS (Seite ohne Styling) | `collectstatic` nicht gelaufen | Manuell: `DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e .venv/bin/python src/manage.py collectstatic --noinput` |
+| 404 auf CSS/JS (Seite ohne Styling) | `collectstatic` nicht gelaufen | Manuell: `DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e.venv/bin/python src/manage.py collectstatic --noinput` |
 | Seed-Client nicht gefunden (Stern-42 etc.) | Alte Daten nicht geflusht, Pagination | conftest nutzt `--flush`. Manuell: `seed --flush`. In Tests: per Filter suchen statt `.is_visible()` |
 | `button[type="submit"]` matcht mehrere | Selektor greift Navigation-Buttons mit | `#main-content button[type='submit']` verwenden |
 | HTMX-Swap nicht sichtbar nach Klick | Kein Wait nach Response | `page.wait_for_load_state("domcontentloaded")` oder `page.wait_for_timeout(500)` |
@@ -70,7 +70,6 @@ pytestmark = pytest.mark.e2e
 
 SUBMIT = "#main-content button[type='submit']"
 
-
 class TestFeatureName:
     """Beschreibung der Test-Klasse."""
 
@@ -78,7 +77,7 @@ class TestFeatureName:
         page = authenticated_page
         page.goto(f"{base_url}/path/")
         page.wait_for_load_state("domcontentloaded")
-        # ...
+        #..
 ```
 
 ### 3.2 Formular absenden + Redirect prüfen
@@ -108,7 +107,7 @@ def test_htmx_filter(self, authenticated_page, base_url):
 
     # HTMX-Trigger (z.B. Select-Änderung)
     page.select_option("select[name='status']", value="closed")
-    page.wait_for_timeout(500)  # HTMX-Swap abwarten
+    page.wait_for_timeout(500) # HTMX-Swap abwarten
     page.wait_for_load_state("domcontentloaded")
 
     # Element im aktualisierten Container prüfen
@@ -126,7 +125,7 @@ def test_autocomplete(self, authenticated_page, base_url):
     page.wait_for_load_state("domcontentloaded")
 
     page.fill("input[name='q']", "Stern")
-    page.wait_for_timeout(500)  # Alpine.js Debounce 200ms + Fetch
+    page.wait_for_timeout(500) # Alpine.js Debounce 200ms + Fetch
     expect(page.locator("[data-testid='suggestions']")).to_be_visible()
 ```
 
@@ -189,30 +188,30 @@ def _create_own_client(self, page, base_url):
 | `wait_until="networkidle"` | Session-Saves und HTMX resetten den Timer endlos | `wait_until="domcontentloaded"` |
 | `page.wait_for_load_state("networkidle")` | Gleicher Grund | `page.wait_for_load_state("domcontentloaded")` |
 | `button[type="submit"]` ohne Container | Matcht Logout-, Sprach-, Such-Buttons | `#main-content button[type='submit']` |
-| `DJANGO_SETTINGS_MODULE=...test` für E2E | MD5-Hasher korrumpiert Passwörter | `...settings.e2e` |
+| `DJANGO_SETTINGS_MODULE=..test` für E2E | MD5-Hasher korrumpiert Passwörter | `..settings.e2e` |
 | Seed-Daten direkt mutieren | Andere Tests erwarten den Originalzustand | Eigene Objekte erstellen mit `uuid.uuid4().hex[:6]` |
-| `locator("text=...")` ohne Scope | Kann Desktop + Mobile Navigation matchen | Scopen auf `#main-content` oder `nav[aria-label='...']` |
+| `locator("text=..")` ohne Scope | Kann Desktop + Mobile Navigation matchen | Scopen auf `#main-content` oder `nav[aria-label='..']` |
 | `time.sleep()` | Nicht deterministisch | `page.wait_for_timeout()`, `wait_for_url()`, `expect().to_be_visible()` |
 | `runserver` statt gunicorn | Single-threaded, blockiert bei Last | conftest startet gunicorn automatisch |
 | `stdout=subprocess.PIPE` für gunicorn | Pipe-Buffer füllt sich nach ~25 Requests | `stdout=subprocess.DEVNULL` |
 
-### Drei Parallel-Last-Anti-Patterns (Refs [#849](https://github.com/tobiasnix/anlaufstelle/issues/849))
+### Drei Parallel-Last-Anti-Patterns
 
 Diese Patterns sind im seriellen Lauf meist grün, fallen aber unter `make test-e2e-parallel` (4 Worker, gunicorn 2x2 Slots) reproduzierbar um. Vermeiden — alternative Patterns nutzen.
 
-**1. `inner_text() / count() / assert` direkt nach `expect_response(...)`**
+**1. `inner_text() / count() / assert` direkt nach `expect_response(..)`**
 
 `page.expect_response` wartet nur auf den Server-Response, **nicht** auf den anschließenden HTMX-DOM-Swap. Unter Last liest die Folge-Assertion den alten Wert.
 
 ```python
 # ✗ Race
-with page.expect_response(...):
+with page.expect_response(..):
     page.locator("button").click()
-text = locator.inner_text()         # evtl. Pre-Swap-Wert
+text = locator.inner_text() # evtl. Pre-Swap-Wert
 assert "Neu" in text
 
 # ✓ Auto-wartendes expect()
-with page.expect_response(...):
+with page.expect_response(..):
     page.locator("button").click()
 expect(locator).to_contain_text("Neu", timeout=10000)
 expect(locator).to_have_count(0, timeout=10000)
@@ -279,22 +278,22 @@ pkill -f 'gunicorn.*8844' 2>/dev/null || true
 
 # 2. Migrieren + Seeden
 DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e \
-  .venv/bin/python src/manage.py migrate --run-syncdb
+.venv/bin/python src/manage.py migrate --run-syncdb
 
 DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e \
-  .venv/bin/python src/manage.py seed --flush
+.venv/bin/python src/manage.py seed --flush
 
 # 3. Static Files
 DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e \
-  .venv/bin/python src/manage.py collectstatic --noinput
+.venv/bin/python src/manage.py collectstatic --noinput
 
 # 4. Server starten
 DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e \
-  .venv/bin/gunicorn anlaufstelle.wsgi:application \
+.venv/bin/gunicorn anlaufstelle.wsgi:application \
   --bind 127.0.0.1:8844 --workers 2 --threads 2 --chdir src --timeout 120
 
 # 5. Browser öffnen: http://127.0.0.1:8844/login/
-#    Login: admin / anlaufstelle2026
+# Login: admin / anlaufstelle2026
 ```
 
 ---
@@ -319,8 +318,8 @@ make test-e2e ARGS="-x src/tests/e2e/test_cases.py::TestCaseCRUD::test_create_ca
 
 ### Dreistufige Verifikation neuer Tests
 
-1. **Einzeln:** Jeden neuen Test einzeln ausführen bis grün (`pytest -x ...::test_name`)
-2. **Gruppe:** Alle neuen Tests als Gruppe zusammen (`pytest -x .../test_file.py`)
+1. **Einzeln:** Jeden neuen Test einzeln ausführen bis grün (`pytest -x..::test_name`)
+2. **Gruppe:** Alle neuen Tests als Gruppe zusammen (`pytest -x../test_file.py`)
 3. **Gesamt:** Gesamtlauf über alle Tests (`make test-e2e`)
 
 Bei Fehlern: fixen, prüfen ob verwandte Tests denselben Root Cause teilen, dann Stufe erneut.
@@ -332,19 +331,19 @@ Bei Fehlern: fixen, prüfen ob verwandte Tests denselben Root Cause teilen, dann
 ```
 Situation?
 ├── Nach page.goto()
-│   └── page.wait_for_load_state("domcontentloaded")
+│ └── page.wait_for_load_state("domcontentloaded")
 │
 ├── Nach Formular-Submit (URL wechselt)
-│   └── page.wait_for_url(re.compile(r"/expected/path/"))
+│ └── page.wait_for_url(re.compile(r"/expected/path/"))
 │
 ├── Nach HTMX-Aktion (URL bleibt gleich)
-│   ├── Spezifisches Element erwartet?
-│   │   └── expect(page.locator("...")).to_be_visible()
-│   └── Allgemein?
-│       └── page.wait_for_load_state("domcontentloaded")
+│ ├── Spezifisches Element erwartet?
+│ │ └── expect(page.locator("..")).to_be_visible()
+│ └── Allgemein?
+│ └── page.wait_for_load_state("domcontentloaded")
 │
 ├── Alpine.js Debounce (Autocomplete, Suche)
-│   └── page.wait_for_timeout(500)
+│ └── page.wait_for_timeout(500)
 │
 └── Alpine.js Transition (Dropdown, Modal)
     └── page.wait_for_timeout(300)
@@ -372,4 +371,4 @@ E2E-Tests nutzen standardmäßig `--scale=small` (via conftest.py):
 
 **Passwort (alle User):** `anlaufstelle2026`
 
-Scale-Profile: [CONTRIBUTING.md § Seed-Daten](../CONTRIBUTING.md#seed-daten-laden).
+Scale-Profile: [CONTRIBUTING.md § Seed-Daten](./CONTRIBUTING.md#seed-daten-laden).

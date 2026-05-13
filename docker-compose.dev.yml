@@ -1,0 +1,111 @@
+# dev.anlaufstelle.app — Live-Dev-Deployment.
+#
+# Image-Quelle: ghcr.io/anlaufstelle/app:main, gebaut von
+# .github/workflows/dev-image.yml auf jedem Push gegen main.
+#
+# Verwendung am Server (/opt/anlaufstelle):
+#   docker compose -f docker-compose.dev.yml --env-file .env.dev pull
+#   docker compose -f docker-compose.dev.yml --env-file .env.dev up -d
+#
+# .env.dev wird NICHT committed; Vorlage: .env.dev.example.
+
+services:
+  db:
+    image: postgres:16-alpine
+    # KEIN env_file: .env.dev hier — der db-Container nutzt
+    # POSTGRES_USER=postgres als Bootstrap-Superuser (Postgres-Image-Convention).
+    # Der App-User (anlaufstelle, NOSUPERUSER) wird im Init-Script angelegt.
+    #, ADR-017 § RLS-Pflicht.
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_BOOTSTRAP_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      APP_DB_USER: ${POSTGRES_USER}
+      APP_DB_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - pgdata_dev:/var/lib/postgresql/data
+      - ./deploy/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - internal
+
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 5m
+    networks:
+      - internal
+
+  web:
+    image: ghcr.io/anlaufstelle/app:main
+    pull_policy: always
+    env_file: .env.dev
+    environment:
+      DJANGO_SETTINGS_MODULE: anlaufstelle.settings.devlive
+      POSTGRES_HOST: db
+      CLAMAV_HOST: clamav
+    volumes:
+      - media_dev:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import urllib.request, json, sys;
+          body = urllib.request.urlopen('http://localhost:8000/health/', timeout=5).read();
+          sys.exit(0 if json.loads(body).get('status') == 'ok' else 1)
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # 6 min Grace: /health/ ist erst dann "ok", wenn ClamAV-DB syncronisiert
+      # ist (Initial-Download dauert 3-5 min). Solange ist der Status
+      # "degraded" und Container-Healthcheck wuerde sonst zu frueh failen
+      # und Caddy's depends_on: service_healthy haengt.
+      start_period: 6m
+    restart: unless-stopped
+    networks:
+      - internal
+      - frontend
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - caddy_data_dev:/data
+      - caddy_config_dev:/config
+    env_file: .env.dev
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - frontend
+
+volumes:
+  pgdata_dev:
+  caddy_data_dev:
+  caddy_config_dev:
+  media_dev:
+
+networks:
+  internal:
+    internal: true
+  frontend:

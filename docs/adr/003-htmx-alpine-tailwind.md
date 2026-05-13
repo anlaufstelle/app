@@ -38,4 +38,4 @@ Gleichzeitig braucht das UI durchaus Interaktivität (Inline-Editing, Filter, Mo
 
 ## References
 
-- [`src/templates/`](../../src/templates), [`pyproject.toml`](../../pyproject.toml) (django-htmx, django-template-partials)
+- [`src/templates/`](././src/templates), [`pyproject.toml`](././pyproject.toml) (django-htmx, django-template-partials)

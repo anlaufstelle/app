@@ -1,7 +1,16 @@
 # Coolify-Deployment (Hetzner CX22)
 
+> ℹ️ **Alternative, kein primaerer Pfad.** Primaerer Deployment-Pfad ist
+> Plain Docker Compose ([ADR-017](adr/017-deployment-topology.md),
+> [docs/dev-deployment.md](dev-deployment.md)) — verankert in
+> Fachkonzept §1009 (`docker compose up` als harte Anforderung).
+> Diese Coolify-Anleitung bleibt erhalten als **unterstuetzte Alternative**
+> fuer Trager, die Coolify bereits einsetzen, oder fuer kuenftige
+> Bedarfsfaelle, die Plain Compose nachweislich nicht abdeckt — sie ist
+> nicht abgekuendigt, sondern nicht-primaer.
+
 Leitfaden für das erste Produktiv-Deployment auf einem selbstgehosteten Coolify
-auf Hetzner CX22 (2 vCPU, 4 GB RAM, 40 GB SSD, ~€5/Monat). Refs [#554](https://github.com/tobiasnix/anlaufstelle/issues/554).
+auf Hetzner CX22 (2 vCPU, 4 GB RAM, 40 GB SSD, ~€5/Monat).
 
 ## Voraussetzungen
 
@@ -33,7 +42,7 @@ Initial-Admin anlegen über `http://<server-ip>:8000`.
 ### 3. Projekt anlegen
 
 - **Typ:** Docker Compose
-- **Git-Repo:** `https://github.com/tobiasnix/anlaufstelle`
+- **Git-Repo:** `https://github.com/anlaufstelle/app`
 - **Branch:** `main`
 - **Compose-File:** `docker-compose.prod.yml`
 - **Domain:** `anlaufstelle.app` (Coolify kümmert sich um TLS via Traefik)
@@ -42,22 +51,22 @@ Initial-Admin anlegen über `http://<server-ip>:8000`.
 > (Image `clamav/clamav:stable`, Volume `clamav-db`, Healthcheck via `clamdcheck.sh`).
 > Coolify startet ihn beim Compose-Deploy automatisch mit — der `web`-Service
 > verbindet via `CLAMAV_HOST=clamav` und wartet per `depends_on: service_healthy`
-> auf die Signaturdatenbank. Refs [#524](https://github.com/tobiasnix/anlaufstelle/issues/524).
+> auf die Signaturdatenbank.
 >
 > - **Separater ClamAV-Host:** `CLAMAV_HOST`/`CLAMAV_PORT` in den ENVs auf den
->   externen Host setzen, `CLAMAV_ENABLED=true` belassen.
+> externen Host setzen, `CLAMAV_ENABLED=true` belassen.
 > - **Kompletter Verzicht:** `CLAMAV_ENABLED=false` (z.B. minimaler Dev-Server).
->   **Nicht für produktive Einrichtungen empfohlen** — Upload-Malware-Scanning entfällt.
+> **Nicht für produktive Einrichtungen empfohlen** — Upload-Malware-Scanning entfällt.
 > - **Healthcheck:** `curl https://anlaufstelle.app/health/` liefert u.a. `clamav: ok`
->   bzw. `clamav: error`, solange `CLAMAV_ENABLED=true`. Das Feld ist ein Alias
->   auf das kanonische `virus_scanner` (Werte `connected`/`unavailable`/`disabled`).
->   Bei Scanner-Ausfall wird `status: degraded` gesetzt — der Container-Healthcheck
->   im Dockerfile liefert dann ungesund, das HTTP bleibt aber 200, damit der
->   Last-Balancer den Pod nicht direkt rauswirft.
+> bzw. `clamav: error`, solange `CLAMAV_ENABLED=true`. Das Feld ist ein Alias
+> auf das kanonische `virus_scanner` (Werte `connected`/`unavailable`/`disabled`).
+> Bei Scanner-Ausfall wird `status: degraded` gesetzt — der Container-Healthcheck
+> im Dockerfile liefert dann ungesund, das HTTP bleibt aber 200, damit der
+> Last-Balancer den Pod nicht direkt rauswirft.
 
 ### 4. Environment-Variablen
 
-In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.env.example):
+In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](./.env.example):
 
 **Pflicht:**
 - `DJANGO_SECRET_KEY` — frisch generiert (`python -c "import secrets; print(secrets.token_urlsafe(50))"`)
@@ -82,7 +91,7 @@ In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.en
 
 ### 5. Ersten Deploy anstoßen
 
-Coolify zieht das Image automatisch aus `ghcr.io/tobiasnix/anlaufstelle:latest`.
+Coolify zieht das Image automatisch aus `ghcr.io/anlaufstelle/app:latest`.
 
 ### 6. Initial-Setup
 
@@ -90,12 +99,12 @@ Einmalig auf dem Server in der Web-Container-Shell:
 
 ```bash
 python manage.py migrate
-python manage.py setup_facility   # Admin-User + Facility anlegen
+python manage.py setup_facility # Admin-User + Facility anlegen
 ```
 
-Der Admin erhält eine Einladungs-E-Mail mit Setup-Link (Token-Invite-Flow, [#528](https://github.com/tobiasnix/anlaufstelle/issues/528)).
+Der Admin erhält eine Einladungs-E-Mail mit Setup-Link (Token-Invite-Flow).
 
-> **⚠️ PostgreSQL-Rolle: NOSUPERUSER erforderlich.** Der in `POSTGRES_USER` konfigurierte DB-User darf **kein** PostgreSQL-Superuser sein — sonst wird Row Level Security (Migration [`0047_postgres_rls_setup.py`](../src/core/migrations/0047_postgres_rls_setup.py)) per Postgres-Default **bypasst** und das Facility-Isolations-Safety-Net ist wirkungslos. Im offiziellen `postgres:16`-Image wird der initial via `POSTGRES_USER` angelegte User standardmäßig als Superuser erstellt. Nach dem ersten `migrate` daher einmalig als Postgres-Admin per `psql` anpassen:
+> **⚠️ PostgreSQL-Rolle: NOSUPERUSER erforderlich.** Der in `POSTGRES_USER` konfigurierte DB-User darf **kein** PostgreSQL-Superuser sein — sonst wird Row Level Security (Migration [`0047_postgres_rls_setup.py`](./src/core/migrations/0047_postgres_rls_setup.py)) per Postgres-Default **bypasst** und das Facility-Isolations-Safety-Net ist wirkungslos. Im offiziellen `postgres:16`-Image wird der initial via `POSTGRES_USER` angelegte User standardmäßig als Superuser erstellt. Nach dem ersten `migrate` daher einmalig als Postgres-Admin per `psql` anpassen:
 >
 > ```sql
 > ALTER ROLE anlaufstelle_user NOSUPERUSER;
@@ -106,12 +115,12 @@ Der Admin erhält eine Einladungs-E-Mail mit Setup-Link (Token-Invite-Flow, [#52
 ### 7. 2FA aktivieren
 
 Nach erstem Login sollte der Admin unter `/mfa/settings/` sofort TOTP einrichten
-(Refs [#521](https://github.com/tobiasnix/anlaufstelle/issues/521)). Für Einrichtungen
+(). Für Einrichtungen
 mit hohem Sicherheitsbedarf in `Settings.mfa_enforced_facility_wide = True` setzen.
 
 ### 7.5 Offline-Modus (Streetwork)
 
-Der Offline-Modus (M6A, Refs [#573](https://github.com/tobiasnix/anlaufstelle/issues/573))
+Der Offline-Modus (M6A)
 ist ein reines Client-Feature — **keine Server-ENVs, keine zusätzliche Infrastruktur nötig**.
 
 **Voraussetzung an Endgeräte:** Mitarbeiter-Geräte brauchen einen modernen Browser
@@ -130,11 +139,11 @@ und Edge-Versionen erfüllen das).
 
 ## Caddy-Konfiguration
 
-Die mitgelieferte [`Caddyfile`](../Caddyfile) (Refs [#801](https://github.com/tobiasnix/anlaufstelle/issues/801)) enthält:
+Die mitgelieferte [`Caddyfile`](./Caddyfile) enthält:
 
 - **www-Redirect** — `www.{$DOMAIN}` wird permanent (`301`) auf den Apex umgeleitet, damit Backlinks und Cookies eindeutig auf eine Origin gehen.
 - **HTTPS + HSTS** — Caddy beantragt automatisch Let's-Encrypt-Zertifikate, HSTS mit `max-age=31536000` ist gesetzt.
-- **Access-Log** — JSON-Log nach `/var/log/caddy/access.log` mit Rotation (10 MiB, 10 Files, 30 Tage). Persistiert über das `caddy_logs`-Volume in [`docker-compose.prod.yml`](../docker-compose.prod.yml). Auswertung z. B. via `docker compose exec caddy cat /var/log/caddy/access.log | jq`.
+- **Access-Log** — JSON-Log nach `/var/log/caddy/access.log` mit Rotation (10 MiB, 10 Files, 30 Tage). Persistiert über das `caddy_logs`-Volume in [`docker-compose.prod.yml`](./docker-compose.prod.yml). Auswertung z. B. via `docker compose exec caddy cat /var/log/caddy/access.log | jq`.
 - **CSP** — Content-Security-Policy wird **ausschließlich in Django** über `django-csp` gesetzt (`anlaufstelle.settings.base.CONTENT_SECURITY_POLICY`); im Caddyfile bewusst nicht doppelt, damit App- und Proxy-Policy nicht auseinanderlaufen.
 
 ### Optionaler Rate-Limit
@@ -158,11 +167,11 @@ Im Default-Setup ist die Rate-Limit-Stanza im `Caddyfile` als Kommentar dokument
 
 ### Staging
 
-[`Caddyfile.staging`](../Caddyfile.staging) ist strukturgleich, hat aber zusätzlich einen Hinweis auf `tls internal` — falls die Stage-Domain nicht öffentlich auflösbar ist (interner Reverse-Proxy oder CDN davor), kann Caddy auf seine eigene CA wechseln statt LE.
+[`Caddyfile.staging`](./Caddyfile.staging) ist strukturgleich, hat aber zusätzlich einen Hinweis auf `tls internal` — falls die Stage-Domain nicht öffentlich auflösbar ist (interner Reverse-Proxy oder CDN davor), kann Caddy auf seine eigene CA wechseln statt LE.
 
 ## Nach Go-Live
 
-- Gesundheitsprüfung: `curl https://anlaufstelle.app/health/` → `{"status":"ok",...}`
+- Gesundheitsprüfung: `curl https://anlaufstelle.app/health/` → `{"status":"ok",..}`
 - ClamAV-Verbindung prüfen: `curl https://anlaufstelle.app/health/` → `clamav: ok`
   (sonst Service-Logs von `clamav` in Coolify checken, Signatur-Download kann
   nach Kaltstart bis zu 5 Minuten dauern).
@@ -179,4 +188,4 @@ Im Default-Setup ist die Rate-Limit-Stanza im `Caddyfile` als Kommentar dokument
 
 - Ops-Runbook: [`docs/ops-runbook.md`](ops-runbook.md)
 - Release-Checkliste: [`docs/release-checklist.md`](release-checklist.md)
-- Security-Review: [`SECURITY.md`](../SECURITY.md)
+- Security-Review: [`SECURITY.md`](./SECURITY.md)

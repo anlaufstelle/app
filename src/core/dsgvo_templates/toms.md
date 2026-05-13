@@ -30,7 +30,7 @@
 - [x] Passwort-Komplexitätsanforderungen
 - [x] Kontosperrung nach 10 Fehlversuchen (30 Min)
 - [x] Erzwungener Passwortwechsel bei Erstanmeldung
-- [x] Zwei-Faktor-Authentifizierung (TOTP) pro Benutzer oder facility-weit erzwingbar; zeitbasierte Einmalcodes (30 s) via Authenticator-App (Ref. [#521](https://github.com/tobiasnix/anlaufstelle/issues/521))
+- [x] Zwei-Faktor-Authentifizierung (TOTP) pro Benutzer oder facility-weit erzwingbar; zeitbasierte Einmalcodes (30 s) via Authenticator-App (Ref. )
 
 **Session-Management:**
 - [x] Automatische Abmeldung nach Inaktivität
@@ -53,7 +53,7 @@
 - [x] Template-seitige Sichtbarkeitssteuerung
 - [x] 4-Augen-Prinzip für Löschungen qualifizierter Daten
 - [x] Sensitivitätsstufen pro Dokumentationstyp und Feld
-- [x] PostgreSQL Row Level Security (RLS) als Defense-in-Depth: 18 Facility-gescopte Tabellen mit Policies, Session-Variable `app.current_facility_id`, fail-closed bei NULL (Ref. [#542](https://github.com/tobiasnix/anlaufstelle/issues/542))
+- [x] PostgreSQL Row Level Security (RLS) als Defense-in-Depth: 18 Facility-gescopte Tabellen mit Policies, Session-Variable `app.current_facility_id`, fail-closed bei NULL (Ref. )
 
 ### 1.4 Trennungskontrolle
 *Maßnahmen zur getrennten Verarbeitung verschiedener Zwecke*
@@ -74,7 +74,7 @@
 - [x] Feldverschlüsselung für sensible Daten (AES/Fernet)
 - [x] Schlüssel getrennt von Datenbank (Umgebungsvariable)
 - [x] Schlüsselrotation ohne Datenverlust (MultiFernet)
-- [x] Browser-seitige Verschlüsselung offline erfasster Daten mit AES-GCM-256; Schlüsselableitung per PBKDF2 (600 000 Iterationen, SHA-256) aus Passwort und User-Salt; Schlüssel ist non-extractable und existiert ausschließlich in-memory. Logout, Passwortwechsel oder Schließen des Tabs machen alle offline gehaltenen Daten unlesbar (Ref. [#573](https://github.com/tobiasnix/anlaufstelle/issues/573))
+- [x] Browser-seitige Verschlüsselung offline erfasster Daten mit AES-GCM-256; Schlüsselableitung per PBKDF2 (600 000 Iterationen, SHA-256) aus Passwort und User-Salt; Schlüssel ist non-extractable und existiert ausschließlich in-memory. Logout, Passwortwechsel oder Schließen des Tabs machen alle offline gehaltenen Daten unlesbar (Ref. )
 
 ### 2.2 Eingabekontrolle
 *Nachvollziehbarkeit von Dateneingaben*
@@ -82,9 +82,9 @@
 - [x] Audit-Log für sicherheitsrelevante Aktionen
 - [x] Event-History (append-only) für Änderungsnachverfolgung
 - [x] Benutzer- und Zeitstempel bei allen Datensätzen
-- [x] Malware-Scanning aller Datei-Uploads (ClamAV) vor der Verschlüsselung — fail-closed bei nicht erreichbarem Scanner (Ref. [#524](https://github.com/tobiasnix/anlaufstelle/issues/524))
+- [x] Malware-Scanning aller Datei-Uploads (ClamAV) vor der Verschlüsselung — fail-closed bei nicht erreichbarem Scanner (Ref. )
 - [x] Protokollierung aller Datei-Uploads, -Downloads und -Ersetzungen im AuditLog (Action-Codes `FILE_UPLOAD`, `FILE_DOWNLOAD`, `FILE_REPLACE`)
-- [x] Optimistic Locking für Client, Case, WorkItem, Settings und Event — verhindert stilles Überschreiben bei parallelen Bearbeitungen (Ref. [#531](https://github.com/tobiasnix/anlaufstelle/issues/531))
+- [x] Optimistic Locking für Client, Case, WorkItem, Settings und Event — verhindert stilles Überschreiben bei parallelen Bearbeitungen (Ref. )
 
 ---
 

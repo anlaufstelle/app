@@ -79,10 +79,10 @@ Die Software „Anlaufstelle" dient der Dokumentation von Kontakten mit Jugendli
 - Passwort-Policy (min. 12 Zeichen)
 - Account-Sperrung nach 10 Fehlversuchen
 - Schlüsselrotation ohne Datenverlust (MultiFernet)
-- Malware-Schutzschicht: ClamAV scannt sämtliche Datei-Uploads vor der serverseitigen Verschlüsselung; infizierte Dateien werden abgelehnt (fail-closed) (Ref. [#524](https://github.com/tobiasnix/anlaufstelle/issues/524))
-- Defense-in-Depth auf Datenbankebene: PostgreSQL Row Level Security (RLS) bildet eine zweite Verteidigungslinie gegen facility-übergreifende Datenabflüsse. Auch bei Fehlern im ORM-Layer verhindert RLS einen Cross-Tenant-Zugriff (Ref. [#542](https://github.com/tobiasnix/anlaufstelle/issues/542))
-- Endgeräteschutz durch Offline-Kryptografie: Im Browser offline erfasste Daten werden mit AES-GCM-256 verschlüsselt abgelegt. Bei Verlust des Endgeräts sind die Daten ohne Kenntnis des Benutzerpassworts nicht entschlüsselbar; der Schlüssel existiert ausschließlich in-memory und wird bei Logout zerstört (Ref. [#573](https://github.com/tobiasnix/anlaufstelle/issues/573))
-- Zwei-Faktor-Authentifizierung: TOTP-basierte 2FA ist technisch umgesetzt und kann pro Benutzer oder facility-weit **erzwungen** werden (zuvor ausschließlich optional). Senkt das Risiko bei kompromittierten Passwörtern erheblich (Ref. [#521](https://github.com/tobiasnix/anlaufstelle/issues/521))
+- Malware-Schutzschicht: ClamAV scannt sämtliche Datei-Uploads vor der serverseitigen Verschlüsselung; infizierte Dateien werden abgelehnt (fail-closed) (Ref. )
+- Defense-in-Depth auf Datenbankebene: PostgreSQL Row Level Security (RLS) bildet eine zweite Verteidigungslinie gegen facility-übergreifende Datenabflüsse. Auch bei Fehlern im ORM-Layer verhindert RLS einen Cross-Tenant-Zugriff (Ref. )
+- Endgeräteschutz durch Offline-Kryptografie: Im Browser offline erfasste Daten werden mit AES-GCM-256 verschlüsselt abgelegt. Bei Verlust des Endgeräts sind die Daten ohne Kenntnis des Benutzerpassworts nicht entschlüsselbar; der Schlüssel existiert ausschließlich in-memory und wird bei Logout zerstört (Ref. )
+- Zwei-Faktor-Authentifizierung: TOTP-basierte 2FA ist technisch umgesetzt und kann pro Benutzer oder facility-weit **erzwungen** werden (zuvor ausschließlich optional). Senkt das Risiko bei kompromittierten Passwörtern erheblich (Ref. )
 
 ### 4.2 Organisatorische Maßnahmen
 - Rollenbasierte Zugriffskontrolle (4 Stufen)

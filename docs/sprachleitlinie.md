@@ -1,6 +1,6 @@
 # Sprachleitlinie — Klientel → Person
 
-> **Quelle:** [Issue #604](https://github.com/tobiasnix/anlaufstelle/issues/604) (RFC adoptiert).
+> **Quelle:** Issue #604 (RFC adoptiert).
 > **Geltung:** UI-Texte, Handbuch, Fachkonzept; **nicht** Modell-/API-Code (`Client` bleibt intern).
 
 ## Kurzfazit
@@ -75,17 +75,17 @@ Die folgenden Stellen sind per `grep` verifiziert und kommen in einem eigenen Re
 
 **UI-Templates:**
 
-- [`src/templates/core/clients/form.html`](../src/templates/core/clients/form.html) — _Klientel bearbeiten_ / _Neues Klientel_ → _Person bearbeiten_ / _Neue Person_
-- [`src/templates/core/clients/list.html`](../src/templates/core/clients/list.html) — _Klientel_ → _Personen_
-- [`src/templates/core/clients/partials/table.html`](../src/templates/core/clients/partials/table.html) — _Keine Klientel gefunden_ → _Keine Personen gefunden_
-- [`src/templates/core/clients/detail.html`](../src/templates/core/clients/detail.html) — Offline-Snackbar
-- [`src/templates/core/clients/offline_detail.html`](../src/templates/core/clients/offline_detail.html) — _Dieses Klientel wurde nicht …_ → _Diese Person wurde nicht …_
-- [`src/templates/core/events/create.html`](../src/templates/core/events/create.html) — _Klientel_-Autocomplete-Label, aria-label, Anonym-Hinweis → _Person_ bzw. _Person suchen_
-- [`src/templates/core/events/edit.html`](../src/templates/core/events/edit.html), [`detail.html`](../src/templates/core/events/detail.html), [`deletion_review.html`](../src/templates/core/events/deletion_review.html), [`delete_confirm.html`](../src/templates/core/events/delete_confirm.html) — Detail-`<dt>`-Label _Klientel_ → _Person_; _qualifizierten Klientel_ → _Person mit qualifizierter Dokumentation_
+- [`src/templates/core/clients/form.html`](./src/templates/core/clients/form.html) — _Klientel bearbeiten_ / _Neues Klientel_ → _Person bearbeiten_ / _Neue Person_
+- [`src/templates/core/clients/list.html`](./src/templates/core/clients/list.html) — _Klientel_ → _Personen_
+- [`src/templates/core/clients/partials/table.html`](./src/templates/core/clients/partials/table.html) — _Keine Klientel gefunden_ → _Keine Personen gefunden_
+- [`src/templates/core/clients/detail.html`](./src/templates/core/clients/detail.html) — Offline-Snackbar
+- [`src/templates/core/clients/offline_detail.html`](./src/templates/core/clients/offline_detail.html) — _Dieses Klientel wurde nicht …_ → _Diese Person wurde nicht …_
+- [`src/templates/core/events/create.html`](./src/templates/core/events/create.html) — _Klientel_-Autocomplete-Label, aria-label, Anonym-Hinweis → _Person_ bzw. _Person suchen_
+- [`src/templates/core/events/edit.html`](./src/templates/core/events/edit.html), [`detail.html`](./src/templates/core/events/detail.html), [`deletion_review.html`](./src/templates/core/events/deletion_review.html), [`delete_confirm.html`](./src/templates/core/events/delete_confirm.html) — Detail-`<dt>`-Label _Klientel_ → _Person_; _qualifizierten Klientel_ → _Person mit qualifizierter Dokumentation_
 
 **View-Texte / Messages:**
 
-- [`src/core/views/clients.py`](../src/core/views/clients.py) — Erfolgsmeldungen _Klientel wurde erstellt/aktualisiert_ → _Person wurde angelegt/aktualisiert_
+- [`src/core/views/clients.py`](./src/core/views/clients.py) — Erfolgsmeldungen _Klientel wurde erstellt/aktualisiert_ → _Person wurde angelegt/aktualisiert_
 
 **Handbuch:**
 
@@ -93,8 +93,8 @@ Die folgenden Stellen sind per `grep` verifiziert und kommen in einem eigenen Re
 
 **Seed / Übersetzung:**
 
-- [`src/core/management/commands/seed.py`](../src/core/management/commands/seed.py) — _obdachlos_ nur dort verwenden, wo wirklich Straßenobdachlosigkeit gemeint ist; sonst _wohnungslos_ / _von Wohnungslosigkeit betroffen_.
-- [`src/locale/de/LC_MESSAGES/django.po`](../src/locale/de/LC_MESSAGES/django.po) — bestehende Inkonsistenz (`msgid "Klientel"` → `msgstr "Klienten"`) entschärfen. Nach UI-Umbenennung werden die msgids ohnehin neu erzeugt; auf Kohärenz von _msgid_ und _msgstr_ auf _Person_ / _Personen_ achten.
+- [`src/core/management/commands/seed.py`](./src/core/management/commands/seed.py) — _obdachlos_ nur dort verwenden, wo wirklich Straßenobdachlosigkeit gemeint ist; sonst _wohnungslos_ / _von Wohnungslosigkeit betroffen_.
+- [`src/locale/de/LC_MESSAGES/django.po`](./src/locale/de/LC_MESSAGES/django.po) — bestehende Inkonsistenz (`msgid "Klientel"` → `msgstr "Klienten"`) entschärfen. Nach UI-Umbenennung werden die msgids ohnehin neu erzeugt; auf Kohärenz von _msgid_ und _msgstr_ auf _Person_ / _Personen_ achten.
 
 ## Diskutable Begriffe
 

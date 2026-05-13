@@ -7,8 +7,7 @@ license-allowlist policy and how to inspect the active inventory.
 ## Allowlist Policy
 
 CI enforces the policy via [`scripts/check_licenses.py`](scripts/check_licenses.py)
-(wired into [`.github/workflows/lint.yml`](.github/workflows/lint.yml) — Refs
-[#839](https://github.com/tobiasnix/anlaufstelle/issues/839)). A build fails if
+(wired into [`.github/workflows/lint.yml`](.github/workflows/lint.yml) —). A build fails if
 any installed package declares a license that is neither on the global
 allowlist nor on the per-package override list.
 

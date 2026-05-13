@@ -44,8 +44,8 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 **Administration → Einstellungen → Feld „Standard-Dokumentationstyp"** auswählen. Der gewählte Typ wird beim Öffnen von „Neuer Kontakt" automatisch vorausgewählt und die dynamischen Felder direkt geladen.
 
 **Relevante Dateien:**
-- [`src/core/models/settings.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/settings.py) — `default_document_type` ForeignKey
-- [`src/core/views/events.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/events.py) — `EventCreateView.get()` liest den Default
+- [`src/core/models/settings.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/settings.py) — `default_document_type` ForeignKey
+- [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) — `EventCreateView.get()` liest den Default
 
 ---
 
@@ -56,7 +56,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 Ausführliche Anleitung inkl. manuelle Eingabe: [User-Guide § 1 — Zwei-Faktor-Authentifizierung](user-guide.md#zwei-faktor-authentifizierung-2fa). Admin-seitige Erzwingung: [Admin-Guide § 2.7](admin-guide.md#27-zwei-faktor-authentifizierung-2fa).
 
 **Relevante Dateien:**
-- [`src/core/views/mfa.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/mfa.py) — `MFASetupView`, `MFAVerifyView`, `MFASettingsView`
+- [`src/core/views/mfa.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mfa.py) — `MFASetupView`, `MFAVerifyView`, `MFASettingsView`
 
 ---
 
@@ -68,7 +68,7 @@ TOTP-Codes sind 30 Sekunden gültig; auf beiden Seiten (Server und Telefon) muss
 |---------|-----------|--------|
 | **Code bereits abgelaufen** | Code wechselt in der App, während Sie tippen | Den neuen Code eingeben |
 | **Zeit-Drift auf dem Telefon** | App-Einstellungen → „Zeitkorrektur für Codes" / „Time sync" | In der App einmal Zeit neu synchronisieren |
-| **Zeit-Drift auf dem Server** | Bestätigt durch Administrator | Administrator: NTP-Sync prüfen ([`docs/ops-runbook.md`](https://github.com/tobiasnix/anlaufstelle/blob/main/docs/ops-runbook.md)) |
+| **Zeit-Drift auf dem Server** | Bestätigt durch Administrator | Administrator: NTP-Sync prüfen ([`docs/ops-runbook.md`](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md)) |
 | **Secret manuell falsch eingegeben** | QR-Code wurde nicht gescannt, sondern Zeichenkette getippt | **Base32** ohne Leerzeichen eingeben; in der App Typ „TOTP / zeitbasiert", 30 Sekunden, 6 Ziffern wählen. Am besten QR-Code erneut scannen. |
 | **Alter Setup-Versuch** | Mehrere ungültige Versuche kurz nach Einrichtung | Einrichtung unter `/mfa/settings/` abbrechen, erneut starten — dabei den QR-Code **aus dem frischen Formular** scannen |
 
@@ -78,7 +78,7 @@ Wenn keine der Punkte hilft, wenden Sie sich an Ihren Administrator — fehlgesc
 
 ### 4. Ich habe mein Handy verloren — wie komme ich wieder rein?
 
-**Erste Wahl: Backup-Code verwenden.** Bei der 2FA-Einrichtung haben Sie 10 einmalig nutzbare Codes erhalten (seit v0.10.1, [Issue #588](https://github.com/tobiasnix/anlaufstelle/issues/588)). Geben Sie am 2FA-Login statt eines TOTP-Codes einen davon ein — verbrauchte Codes sind danach ungültig und werden im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Nach dem Login richten Sie unter `/mfa/settings/` ein neues TOTP-Gerät und neue Backup-Codes ein.
+**Erste Wahl: Backup-Code verwenden.** Bei der 2FA-Einrichtung haben Sie 10 einmalig nutzbare Codes erhalten (seit v0.10.1, Issue #588). Geben Sie am 2FA-Login statt eines TOTP-Codes einen davon ein — verbrauchte Codes sind danach ungültig und werden im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Nach dem Login richten Sie unter `/mfa/settings/` ein neues TOTP-Gerät und neue Backup-Codes ein.
 
 **Wenn alle Codes verbraucht oder verloren sind:** Bitten Sie eine Administratorin, Ihr TOTP-Gerät zurückzusetzen.
 
@@ -87,14 +87,14 @@ Wenn keine der Punkte hilft, wenden Sie sich an Ihren Administrator — fehlgesc
 3. Beim nächsten Login werden Sie automatisch auf die Neu-Einrichtung (`/mfa/setup/`) geleitet, sofern 2FA für Ihr Konto/Ihre Einrichtung verpflichtend ist.
 
 **Relevante Dateien:**
-- [`src/core/models/user.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/user.py) — `User.is_mfa_enforced`
-- [`src/core/views/mfa.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/mfa.py) — `MFADisableView`, `MFASetupView`, Backup-Code-Verifikation
+- [`src/core/models/user.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) — `User.is_mfa_enforced`
+- [`src/core/views/mfa.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mfa.py) — `MFADisableView`, `MFASetupView`, Backup-Code-Verifikation
 
 ---
 
 ### 4a. Mein Konto ist nach mehreren Login-Fehlversuchen gesperrt — was tun?
 
-Nach **10 fehlgeschlagenen Anmeldungen** wird das Konto automatisch gesperrt (Schwelle in [`src/core/services/login_lockout.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/login_lockout.py), seit v0.10.1). Auch korrekte Eingaben funktionieren in der Sperrphase nicht — Sie sehen eine Hinweis-Seite.
+Nach **10 fehlgeschlagenen Anmeldungen** wird das Konto automatisch gesperrt (Schwelle in [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py), seit v0.10.1). Auch korrekte Eingaben funktionieren in der Sperrphase nicht — Sie sehen eine Hinweis-Seite.
 
 **Vorgehen:**
 
@@ -105,8 +105,8 @@ Nach **10 fehlgeschlagenen Anmeldungen** wird das Konto automatisch gesperrt (Sc
 **Hinweis für Admins:** Die `LOGIN_FAILED`-Einträge im AuditLog sind durch einen DB-Trigger (`auditlog_immutable`) unveränderbar — der Cleanup erfolgt deshalb über einen `LOGIN_UNLOCK`-Eintrag, nicht durch Löschen.
 
 **Relevante Dateien:**
-- [`src/core/services/login_lockout.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/login_lockout.py) — `is_locked()`, `unlock()`, Schwellenwert
-- [`src/core/views/account.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/account.py) — Lockout-Check beim Login
+- [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py) — `is_locked()`, `unlock()`, Schwellenwert
+- [`src/core/views/account.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/account.py) — Lockout-Check beim Login
 
 ---
 
@@ -151,9 +151,9 @@ Die rechte Spalte zeigt die **5 dringendsten offenen Arbeitsaufträge** (Status 
 Filter-Änderungen (Schicht, Typ, Dokumentationstyp) lösen einen HTMX-Request aus. Nur der Feed-Container wird ersetzt — kein Full-Page-Reload.
 
 **Relevante Dateien:**
-- [`src/core/views/zeitstrom.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/zeitstrom.py) — `ZeitstromView`, `ZeitstromFeedPartialView`
-- [`src/core/services/feed.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/feed.py) — `build_feed_items()`, `enrich_events_with_preview()`
-- [`src/core/services/handover.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/handover.py) — `build_handover_summary()`
+- [`src/core/views/zeitstrom.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/zeitstrom.py) — `ZeitstromView`, `ZeitstromFeedPartialView`
+- [`src/core/services/feed.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/feed.py) — `build_feed_items()`, `enrich_events_with_preview()`
+- [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary()`
 
 ---
 
@@ -185,10 +185,10 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 - Kompakte Version erscheint auch im Zeitstrom, wenn ein Schichtfilter aktiv ist
 
 **Relevante Dateien:**
-- [`src/core/views/handover.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/handover.py) — `HandoverView`
-- [`src/core/services/handover.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/handover.py) — `build_handover_summary()`
-- [`src/core/models/time_filter.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/time_filter.py) — `TimeFilter` (Schichtdefinition)
-- [`src/templates/core/handover/index.html`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/templates/core/handover/index.html) — Haupttemplate
+- [`src/core/views/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/handover.py) — `HandoverView`
+- [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary()`
+- [`src/core/models/time_filter.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/time_filter.py) — `TimeFilter` (Schichtdefinition)
+- [`src/templates/core/handover/index.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/core/handover/index.html) — Haupttemplate
 
 ---
 
@@ -207,8 +207,8 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 | **Default beim Anlegen** | „Aufgabe" |
 
 **Relevante Dateien:**
-- [`src/core/models/workitem.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/workitem.py) — `ItemType.HINT` / `ItemType.TASK`
-- [`src/core/views/workitems.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/workitems.py) — Filter in `WorkItemInboxView`
+- [`src/core/models/workitem.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/workitem.py) — `ItemType.HINT` / `ItemType.TASK`
+- [`src/core/views/workitems.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/workitems.py) — Filter in `WorkItemInboxView`
 
 ---
 
@@ -231,10 +231,10 @@ Die **Wiedervorlage** (Feld `remind_at`) ist ein **optionales Frühwarn-Datum**,
 **Beispiel:** Eine Aufgabe ist fällig am 30.04., Wiedervorlage am 28.04. Bis zum 27.04. ist sie unauffällig in der Inbox. Am 28.04. erscheint das gelbe „Morgen fällig"-Badge, am 29.04. das orangene „Heute fällig"-Badge.
 
 **Relevante Dateien:**
-- [`src/core/models/workitem.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/workitem.py) — Feld `remind_at`
-- [`src/core/utils/dates.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/utils/dates.py) — `describe_remind_at()` (Badge-Logik)
-- [`src/core/forms/workitems.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/forms/workitems.py) — Validierung `remind_at ≤ due_date`
-- [`src/core/services/workitems.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/workitems.py) — Offset-Erhalt bei Wiederholung
+- [`src/core/models/workitem.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/workitem.py) — Feld `remind_at`
+- [`src/core/utils/dates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/dates.py) — `describe_remind_at()` (Badge-Logik)
+- [`src/core/forms/workitems.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/workitems.py) — Validierung `remind_at ≤ due_date`
+- [`src/core/services/workitems.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/workitems.py) — Offset-Erhalt bei Wiederholung
 
 ---
 
@@ -381,12 +381,12 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 | `FacilitySettings.session_timeout_minutes` | Einrichtungs-Settings | Session-Dauer pro Einrichtung |
 
 **Relevante Dateien:**
-- [`src/core/models/user.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/user.py) — `Role`-Enum, Rollen-Properties (`is_admin`, `is_staff_or_above` …)
-- [`src/core/views/mixins.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/mixins.py) — Zugriffs-Mixins für Views
-- [`src/core/middleware/facility_scope.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/middleware/facility_scope.py) — Einrichtungs-Scoping per Middleware
-- [`src/core/models/managers.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/managers.py) — `FacilityScopedManager` für automatische Query-Filterung
-- [`src/core/middleware/password_change.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/middleware/password_change.py) — Passwort-Pflicht-Middleware
-- [`src/templates/base.html`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/templates/base.html) — Navigations-Sichtbarkeit nach Rolle
+- [`src/core/models/user.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) — `Role`-Enum, Rollen-Properties (`is_admin`, `is_staff_or_above` …)
+- [`src/core/views/mixins.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mixins.py) — Zugriffs-Mixins für Views
+- [`src/core/middleware/facility_scope.py`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/facility_scope.py) — Einrichtungs-Scoping per Middleware
+- [`src/core/models/managers.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/managers.py) — `FacilityScopedManager` für automatische Query-Filterung
+- [`src/core/middleware/password_change.py`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/password_change.py) — Passwort-Pflicht-Middleware
+- [`src/templates/base.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/base.html) — Navigations-Sichtbarkeit nach Rolle
 
 ---
 
@@ -416,7 +416,7 @@ Sudo-Mode ergänzt damit die normale Session-Authentifizierung, ohne sie zu erse
 2. `RequireSudoModeMixin` prüft `is_in_sudo(request)` → `False`
 3. Redirect auf `/sudo/?next=/dsgvo/`
 4. Sudo-Form: einzelnes Passwort-Feld + Submit-Button
-5. POST → Server prüft Passwort via `authenticate(...)` → bei Erfolg:
+5. POST → Server prüft Passwort via `authenticate(..)` → bei Erfolg:
    - Setzt `session['sudo_until'] = now + 900s`
    - Schreibt `AuditLog`-Eintrag `SUDO_MODE_ENTERED`
    - Redirect zurück auf `/dsgvo/`
@@ -433,12 +433,10 @@ Bei falschem Passwort: HTTP 403, Form bleibt sichtbar, **5 Versuche pro Minute**
 | `SUDO_MODE_TTL_SECONDS` | `900` (15 min) | Dauer des Re-Auth-Fensters |
 
 **Relevante Dateien:**
-- [`src/core/services/sudo_mode.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/sudo_mode.py) — `enter_sudo`, `is_in_sudo`, `clear_sudo`, `RequireSudoModeMixin`
-- [`src/core/views/sudo_mode.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/sudo_mode.py) — `SudoModeView` (Re-Auth-Form), Rate-Limit
-- [`src/templates/auth/sudo_mode.html`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/templates/auth/sudo_mode.html) — Form-Template
-- [`src/core/views/dsgvo.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/dsgvo.py), [`src/core/views/clients.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/clients.py), [`src/core/views/mfa.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/mfa.py) — Verwendung des Mixins
-
-Refs [#683](https://github.com/tobiasnix/anlaufstelle/issues/683).
+- [`src/core/services/sudo_mode.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/sudo_mode.py) — `enter_sudo`, `is_in_sudo`, `clear_sudo`, `RequireSudoModeMixin`
+- [`src/core/views/sudo_mode.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/sudo_mode.py) — `SudoModeView` (Re-Auth-Form), Rate-Limit
+- [`src/templates/auth/sudo_mode.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/auth/sudo_mode.html) — Form-Template
+- [`src/core/views/dsgvo.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/dsgvo.py), [`src/core/views/clients.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/clients.py), [`src/core/views/mfa.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mfa.py) — Verwendung des Mixins.
 
 ---
 
@@ -460,8 +458,8 @@ Die **Sensitivitätsstufe** steuert, welche Benutzerrolle welche Dokumentationse
 - **POST-Schutz:** Beim Speichern werden eingeschränkte Feldwerte nicht überschrieben
 
 **Relevante Dateien:**
-- [`src/core/models/document_type.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/document_type.py) — `Sensitivity`-Choices
-- [`src/core/services/sensitivity.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/sensitivity.py) — Zentrale Logik für Rollen-/Feldprüfung
+- [`src/core/models/document_type.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/document_type.py) — `Sensitivity`-Choices
+- [`src/core/services/sensitivity.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/sensitivity.py) — Zentrale Logik für Rollen-/Feldprüfung
 
 ### 15. Wie funktioniert das Löschsystem (4-Augen-Prinzip)?
 
@@ -491,9 +489,9 @@ Die Entscheidung ob direkt gelöscht oder ein Löschantrag erstellt wird, hängt
 | AuditLog | Neuer immutabler Eintrag |
 
 **Relevante Dateien:**
-- [`src/core/models/workitem.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/workitem.py) — `DeletionRequest`
-- [`src/core/services/event.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/event.py) — `soft_delete_event`, `request_deletion`, `approve_deletion`, `reject_deletion`
-- [`src/core/views/events.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/events.py) — `EventDeleteView`, `DeletionRequestReviewView`
+- [`src/core/models/workitem.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/workitem.py) — `DeletionRequest`
+- [`src/core/services/event.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/event.py) — `soft_delete_event`, `request_deletion`, `approve_deletion`, `reject_deletion`
+- [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) — `EventDeleteView`, `DeletionRequestReviewView`
 
 ### 16. Was hat KEINEN Löschmechanismus?
 
@@ -523,18 +521,18 @@ Zusätzlich: Per-DocumentType-Override via `DocumentType.retention_days`.
 **Automatische Durchsetzung:** Das Management Command `enforce_retention` läuft täglich per Cron und löscht/anonymisiert abgelaufene Daten.
 
 **Relevante Dateien:**
-- [`src/core/models/settings.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/settings.py) — Retention-Felder
-- [`src/core/management/commands/enforce_retention.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/management/commands/enforce_retention.py) — `--dry-run`, `--facility`
+- [`src/core/models/settings.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/settings.py) — Retention-Felder
+- [`src/core/management/commands/enforce_retention.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/enforce_retention.py) — `--dry-run`, `--facility`
 
 ### 18. Welche automatisierten Scripts gibt es?
 
 #### Cron-Schedule (Host-Level)
 
 ```
-02:00 UTC  backup.sh                     ← Backup zuerst
-03:00 UTC  enforce_retention             ← dann Retention
-04:00 UTC  create_statistics_snapshots   ← dann Snapshots (monatlich am 1.)
-*/5 min    Health Check (curl /health/)
+02:00 UTC backup.sh ← Backup zuerst
+03:00 UTC enforce_retention ← dann Retention
+04:00 UTC create_statistics_snapshots ← dann Snapshots (monatlich am 1.)
+*/5 min Health Check (curl /health/)
 ```
 
 **Reihenfolge kritisch:** Backup → Retention → Snapshots
@@ -543,14 +541,14 @@ Zusätzlich: Per-DocumentType-Override via `DocumentType.retention_days`.
 
 | Command | Zweck | Ausführung |
 |---------|-------|------------|
-| [`enforce_retention`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/management/commands/enforce_retention.py) | Aufbewahrungsfristen durchsetzen | Cron täglich |
-| [`create_statistics_snapshots`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/management/commands/create_statistics_snapshots.py) | Monatliche Statistik-Snapshots | Cron monatlich |
-| [`setup_facility`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/management/commands/setup_facility.py) | Ersteinrichtung einer Einrichtung | Manuell |
-| [`generate_dsgvo_package`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/management/commands/generate_dsgvo_package.py) | DSGVO-Dokumentation generieren | Manuell |
-| [`reencrypt_fields`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/management/commands/reencrypt_fields.py) | Key-Rotation für verschlüsselte Felder | Manuell |
-| [`seed`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/management/commands/seed.py) | Demo-/Testdaten erzeugen | Nur Dev |
+| [`enforce_retention`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/enforce_retention.py) | Aufbewahrungsfristen durchsetzen | Cron täglich |
+| [`create_statistics_snapshots`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/create_statistics_snapshots.py) | Monatliche Statistik-Snapshots | Cron monatlich |
+| [`setup_facility`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/setup_facility.py) | Ersteinrichtung einer Einrichtung | Manuell |
+| [`generate_dsgvo_package`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/generate_dsgvo_package.py) | DSGVO-Dokumentation generieren | Manuell |
+| [`reencrypt_fields`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py) | Key-Rotation für verschlüsselte Felder | Manuell |
+| [`seed`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/seed.py) | Demo-/Testdaten erzeugen | Nur Dev |
 
-**Dokumentation:** [`docs/ops-runbook.md`](https://github.com/tobiasnix/anlaufstelle/blob/main/docs/ops-runbook.md)
+**Dokumentation:** [`docs/ops-runbook.md`](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md)
 
 ---
 
@@ -569,5 +567,5 @@ So gehen weder Ihre noch die parallelen Änderungen verloren.
 
 ---
 
-*Konsolidiert aus [#105](https://github.com/tobiasnix/anlaufstelle/issues/105), [#429](https://github.com/tobiasnix/anlaufstelle/issues/429), [#471](https://github.com/tobiasnix/anlaufstelle/issues/471), [#506](https://github.com/tobiasnix/anlaufstelle/issues/506). Alle Inhalte am 29.04.2026 gegen den Code verifiziert (v0.10.2). v0.10.0-Ergänzungen ([#589](https://github.com/tobiasnix/anlaufstelle/issues/589)): File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking. Ergänzung 25.04.2026: WorkItem-Hinweis-vs-Aufgabe und Wiedervorlage (FAQ #7, #8). Ergänzung 29.04.2026 ([#703](https://github.com/tobiasnix/anlaufstelle/issues/703)): MFA-Backup-Codes als Self-Service-Recovery (FAQ #4) und Account-Lockout nach 10 Fehlversuchen (FAQ #4a) — beide seit v0.10.1.*
+*Konsolidiert aus. Alle Inhalte am 29.04.2026 gegen den Code verifiziert (v0.10.2). v0.10.0-Ergänzungen: File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking. Ergänzung 25.04.2026: WorkItem-Hinweis-vs-Aufgabe und Wiedervorlage (FAQ #7, #8). Ergänzung 29.04.2026: MFA-Backup-Codes als Self-Service-Recovery (FAQ #4) und Account-Lockout nach 10 Fehlversuchen (FAQ #4a) — beide seit v0.10.1.*
 

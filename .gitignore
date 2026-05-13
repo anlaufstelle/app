@@ -52,6 +52,8 @@ Thumbs.db
 # Environment & Secrets
 .env
 *.env.local
+.env.dev
+.env.deploy
 *.pem
 *.key
 *.crt

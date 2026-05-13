@@ -43,21 +43,19 @@ curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 docker compose -f docker-compose.prod.yml images web
 ```
 
-### 1.2 Deploy-Schritte
-
-Refs [#802](https://github.com/tobiasnix/anlaufstelle/issues/802) (C-34): Migrationen laufen als separater One-Shot-Job **vor** dem Rolling-Restart. Der Web-Entrypoint macht nur noch `collectstatic` + `gunicorn` — keine Migrationen mehr.
+### 1.2 Deploy-Schritte (C-34): Migrationen laufen als separater One-Shot-Job **vor** dem Rolling-Restart. Der Web-Entrypoint macht nur noch `collectstatic` + `gunicorn` — keine Migrationen mehr.
 
 ```bash
 # 1. Neues Image ziehen
 docker compose -f docker-compose.prod.yml pull web
 
 # 2. Migrationen als One-Shot-Job ausfuehren (advisory lock haelt
-#    parallele Jobs zurueck, lange RunPython blockiert keine Worker).
+# parallele Jobs zurueck, lange RunPython blockiert keine Worker).
 docker compose -f docker-compose.prod.yml run --rm \
     --entrypoint=/app/docker-migrate.sh web
 
 # 3. Stack neu starten (web + caddy, DB bleibt).
-#    Entrypoint laeuft jetzt nur noch collectstatic + gunicorn.
+# Entrypoint laeuft jetzt nur noch collectstatic + gunicorn.
 docker compose -f docker-compose.prod.yml up -d web caddy
 ```
 
@@ -74,7 +72,7 @@ docker compose -f docker-compose.prod.yml logs web --tail=50
 
 # Health-Check
 curl -sf https://$DOMAIN/health/
-# Erwartete Antwort: {"status": "ok", "database": "connected", "version": "..."}
+# Erwartete Antwort: {"status": "ok", "database": "connected", "version": ".."}
 
 # Migrations-Status verifizieren
 docker compose -f docker-compose.prod.yml exec web \
@@ -96,7 +94,7 @@ Wenn die neue Version Anwendungsfehler hat, aber die Migrationen rueckwaertskomp
 
 ```bash
 # 1. In docker-compose.prod.yml das Image-Tag pinnen
-#    image: ghcr.io/anlaufstelle/app:v1.2.3   (vorherige Version)
+# image: ghcr.io/anlaufstelle/app:v1.2.3 (vorherige Version)
 
 # 2. Stack neu starten
 docker compose -f docker-compose.prod.yml up -d web
@@ -115,7 +113,7 @@ docker compose -f docker-compose.prod.yml exec web \
   python manage.py showmigrations core
 
 # 2. Auf eine bestimmte Migration zurueckrollen
-#    Beispiel: zurueck auf Migration 0042
+# Beispiel: zurueck auf Migration 0042
 docker compose -f docker-compose.prod.yml exec web \
   python manage.py migrate core 0042
 
@@ -146,8 +144,8 @@ docker compose -f docker-compose.prod.yml up -d
 curl -sf https://$DOMAIN/health/
 ```
 
-**Hinweis Medien (Refs #720):** Das `media:`-Volume in
-[`docker-compose.prod.yml`](https://github.com/tobiasnix/anlaufstelle/blob/main/docker-compose.prod.yml)
+**Hinweis Medien:** Das `media:`-Volume in
+[`docker-compose.prod.yml`](https://github.com/anlaufstelle/app/blob/main/docker-compose.prod.yml)
 persistiert `MEDIA_ROOT` ueber Container-Recreates hinweg. Beim
 DB-Rollback muessen ggf. Medien (`*_media.tar.gz.enc`) mitwiederhergestellt
 werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
@@ -162,11 +160,11 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 
 | Job | Empfohlene Zeit | Zweck |
 |-----|----------------|-------|
-| `backup.sh` | Taeglich 02:00 | Verschluesseltes DB- und Medien-Backup mit Rotation; optionaler Off-Site-Sync (Refs [#720](https://github.com/tobiasnix/anlaufstelle/issues/720), [#738](https://github.com/tobiasnix/anlaufstelle/issues/738)) |
-| `detect_breaches` | Stuendlich :30 | Heuristik-basierte Breach-Detection (failed-login-burst / mass-export / mass-delete) → AuditLog SECURITY_VIOLATION + optionaler Webhook (Refs [#685](https://github.com/tobiasnix/anlaufstelle/issues/685)) |
+| `backup.sh` | Taeglich 02:00 | Verschluesseltes DB- und Medien-Backup mit Rotation; optionaler Off-Site-Sync |
+| `detect_breaches` | Stuendlich:30 | Heuristik-basierte Breach-Detection (failed-login-burst / mass-export / mass-delete) → AuditLog SECURITY_VIOLATION + optionaler Webhook |
 | `enforce_retention` | Taeglich 03:00 | Abgelaufene Events soft-loeschen, Clients anonymisieren |
 | `create_statistics_snapshots` | Monatlich 1. Tag 04:00 | Monats-Aggregate sichern bevor Events geloescht werden |
-| `refresh_statistics_view` | Stuendlich :15 | Materialized View `core_statistics_event_flat` aktualisieren (Statistik-Dashboard) |
+| `refresh_statistics_view` | Stuendlich:15 | Materialized View `core_statistics_event_flat` aktualisieren (Statistik-Dashboard) |
 | Invite-Token-Audit | Woechentlich So 05:00 | Verwaiste Invite-User-Konten aufspueren (siehe [10](#10-invite-token-hygiene)) |
 | Health-Check | Alle 5 Minuten | Verfuegbarkeit pruefen |
 
@@ -177,7 +175,7 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 # In /etc/crontab oder via `crontab -e` auf dem Host einrichten
 
 # Backup (taeglich 02:00, vor Retention)
-0 2 * * * cd /opt/anlaufstelle && ./scripts/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
+0 2 * * * cd /opt/anlaufstelle &&./scripts/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
 
 # Retention-Durchsetzung (taeglich 03:00)
 0 3 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py enforce_retention >> /var/log/anlaufstelle-retention.log 2>&1
@@ -258,11 +256,11 @@ Mit `LOG_FORMAT=json` in `.env` gibt Django strukturierte JSON-Logs aus:
   "level": "INFO",
   "logger": "core",
   "module": "views",
-  "message": "...",
+  "message": "..",
   "request_id": "abc123",
   "user_id": 42,
   "facility_id": 1,
-  "exception": "Traceback ..."
+  "exception": "Traceback.."
 }
 ```
 
@@ -362,14 +360,14 @@ docker compose -f docker-compose.prod.yml restart web
 docker compose -f docker-compose.prod.yml logs caddy --tail=50
 
 # 2. Haeufige Ursachen:
-#    - DNS zeigt nicht auf Server-IP:
+# - DNS zeigt nicht auf Server-IP:
 nslookup $DOMAIN
 
-#    - Ports 80/443 blockiert:
+# - Ports 80/443 blockiert:
 curl -v http://$DOMAIN 2>&1 | head -20
 
-#    - Let's Encrypt Rate Limit (max 5/Woche/Domain):
-#      → 1 Woche warten oder Staging-CA nutzen
+# - Let's Encrypt Rate Limit (max 5/Woche/Domain):
+# → 1 Woche warten oder Staging-CA nutzen
 
 # 3. Caddy TLS-Daten zuruecksetzen (erzwingt Neubeantragung)
 docker compose -f docker-compose.prod.yml exec caddy \
@@ -387,11 +385,11 @@ docker compose -f docker-compose.prod.yml exec web \
 
 # Defaults: GUNICORN_WORKERS=3, GUNICORN_TIMEOUT=30
 
-# 2. Timeout erhoehen (in .env)
-#    GUNICORN_TIMEOUT=60
+# 2. Timeout erhoehen (in.env)
+# GUNICORN_TIMEOUT=60
 
 # 3. Worker-Anzahl anpassen (Faustregel: 2 * CPU-Kerne + 1)
-#    GUNICORN_WORKERS=5
+# GUNICORN_WORKERS=5
 
 # 4. Neustart
 docker compose -f docker-compose.prod.yml restart web
@@ -423,9 +421,9 @@ docker compose -f docker-compose.prod.yml ps
 docker compose -f docker-compose.prod.yml logs web --tail=100
 
 # 2. Haeufige Fehler
-#    "ImproperlyConfigured" → Fehlende Env-Vars in .env
-#    "ENCRYPTION_KEY must be set" → ENCRYPTION_KEY in .env fehlt
-#    "connection refused" → DB noch nicht ready
+# "ImproperlyConfigured" → Fehlende Env-Vars in.env
+# "ENCRYPTION_KEY must be set" → ENCRYPTION_KEY in.env fehlt
+# "connection refused" → DB noch nicht ready
 
 # 3. Env-Vars verifizieren
 docker compose -f docker-compose.prod.yml exec web printenv | sort
@@ -488,11 +486,11 @@ docker compose -f docker-compose.prod.yml exec web \
 Falls `SENTRY_DSN` in `.env` konfiguriert ist, werden unbehandelte Exceptions automatisch an Sentry gemeldet. Konfiguration:
 
 ```dotenv
-SENTRY_DSN=https://...@sentry.io/...
+SENTRY_DSN=https://..@sentry.io/..
 SENTRY_TRACES_SAMPLE_RATE=0.1
 ```
 
-### 6.5b DSGVO Art. 33/34 — Breach-Notification (Refs [#685](https://github.com/tobiasnix/anlaufstelle/issues/685))
+### 6.5b DSGVO Art. 33/34 — Breach-Notification
 
 Anlaufstelle muss Datenschutzverletzungen innerhalb **72 Stunden** an die Aufsichtsbehoerde melden (Art. 33) und betroffene Personen direkt informieren, wenn ein hohes Risiko vorliegt (Art. 34). Der Code unterstuetzt das durch:
 
@@ -507,7 +505,7 @@ Anlaufstelle muss Datenschutzverletzungen innerhalb **72 Stunden** an die Aufsic
 #### Manueller Prozess bei SECURITY_VIOLATION
 
 1. **T+0** — `AuditLog`-Detail pruefen, betroffene User/Daten identifizieren.
-2. **T+24h** — Vorgang an [DPO/Datenschutzbeauftragten](https://github.com/tobiasnix/anlaufstelle/blob/main/SECURITY.md) eskalieren, Risiko-Einschaetzung erstellen.
+2. **T+24h** — Vorgang an [DPO/Datenschutzbeauftragten](https://github.com/anlaufstelle/app/blob/main/SECURITY.md) eskalieren, Risiko-Einschaetzung erstellen.
 3. **T+72h** — Meldung an Aufsichtsbehoerde (Bayern: BayLDA; andere Bundeslaender analog) + ggf. Betroffenenmeldung.
 4. **Post-Incident** — Lessons-Learned + Anpassung der Heuristik-Schwellen.
 
@@ -515,12 +513,12 @@ Cron-Eintrag (siehe § 3 Cron-Jobs):
 
 ```cron
 30 * * * * cd /opt/anlaufstelle && \
-    .venv/bin/python src/manage.py detect_breaches \
+.venv/bin/python src/manage.py detect_breaches \
     --settings=anlaufstelle.settings.prod \
     >> /var/log/anlaufstelle-breach-detection.log 2>&1
 ```
 
-### 6.5a Maintenance-Mode (Refs [#700](https://github.com/tobiasnix/anlaufstelle/issues/700))
+### 6.5a Maintenance-Mode
 
 Vor und waehrend Migrations/Deploys den Stack auf 503 schalten, damit
 User eine konsistente Custom-Page sehen statt Connection-Errors.
@@ -539,17 +537,17 @@ make maintenance-off
 
 `make maintenance-on/off` nutzt `$MAINTENANCE_FLAG_FILE` (Env-Var) oder Default `/tmp/anlaufstelle.maintenance`. Whitelist:
 
-- `/health/` und `/static/...` bleiben erreichbar (Loadbalancer / Reverse-Proxy)
+- `/health/` und `/static/..` bleiben erreichbar (Loadbalancer / Reverse-Proxy)
 - `MAINTENANCE_ALLOW_IPS` (komma-separiert) erlaubt Ops-Zugriff via `X-Forwarded-For` — z.B. fuer den eigenen Admin-Laptop waehrend des Wartungsfensters
 
 `Retry-After`-Header (Default 600s) hilft Browsern + Loadbalancern, sinnvoll zu reagieren. Die Flag-Datei wird pro Worker max alle `MAINTENANCE_CACHE_TTL` Sekunden geprueft (Default 5s) — Per-Request-Kosten praktisch null wenn aus.
 
-### 6.6a Off-Site-Backup-Sync (Refs [#738](https://github.com/tobiasnix/anlaufstelle/issues/738))
+### 6.6a Off-Site-Backup-Sync
 
 Lokale Backups in `backups/daily/` ueberleben Container-Recreates, aber nicht den vollstaendigen Verlust des Prod-Hosts (Hardware-Defekt, Ransomware, Provider-Ausfall). `backup.sh` synct optional nach jeder Rotation in ein Off-Site-Ziel.
 
 ```bash
-# .env: Off-Site-Ziel konfigurieren (eines von drei Formaten)
+#.env: Off-Site-Ziel konfigurieren (eines von drei Formaten)
 BACKUP_OFFSITE_TARGET=rclone:hetzner-bucket:anlaufstelle/backups
 # oder
 BACKUP_OFFSITE_TARGET=s3://anlaufstelle-backups/prod
@@ -559,11 +557,11 @@ BACKUP_OFFSITE_TARGET=backup-user@offsite.example.com:/backups/anlaufstelle
 
 **Empfohlen:** Object-Lock / Write-Once-Policy am Bucket aktivieren — Ransomware kann verschluesselte Backups dann nicht ueberschreiben.
 
-**Failure-Mode** (Refs [#797](https://github.com/tobiasnix/anlaufstelle/issues/797)): Wenn der Off-Site-Sync fehlschlaegt (Netz weg, Credentials ungueltig, Disk voll am Off-Site-Host), loggt `backup.sh` einen `ERROR`. Ein **State-File** `$BACKUP_STATE_DIR/.offsite_state` (Default: neben den Backups) zaehlt aufeinanderfolgende Fehler. Beim **zweiten** Fehler in Folge endet das Skript mit Exit-Code 1 — der Cron-/Coolify-Job wird damit rot und der Operator sieht den Vorfall sofort, ohne die Logs scannen zu muessen. Erfolgreiche Laeufe setzen den Counter zurueck.
+**Failure-Mode**: Wenn der Off-Site-Sync fehlschlaegt (Netz weg, Credentials ungueltig, Disk voll am Off-Site-Host), loggt `backup.sh` einen `ERROR`. Ein **State-File** `$BACKUP_STATE_DIR/.offsite_state` (Default: neben den Backups) zaehlt aufeinanderfolgende Fehler. Beim **zweiten** Fehler in Folge endet das Skript mit Exit-Code 1 — der Cron-/Coolify-Job wird damit rot und der Operator sieht den Vorfall sofort, ohne die Logs scannen zu muessen. Erfolgreiche Laeufe setzen den Counter zurueck.
 
 **Sentry-Hook (optional):** Wenn `SENTRY_DSN` UND ein `BACKUP_SENTRY_HOOK`-Skript gesetzt sind, ruft `backup.sh` den Hook bei jedem Off-Site-Fehler auf (Argumente: Beschreibung, Off-Site-Ziel). Der Hook ist freie Operator-Wahl — z.B. `sentry-cli send-event` oder ein eigenes `curl`-Skript. Ohne Hook bleibt es bei Log + Exit-Code.
 
-### 6.6 Backup-Restore-Drill (Refs [#720](https://github.com/tobiasnix/anlaufstelle/issues/720), [#739](https://github.com/tobiasnix/anlaufstelle/issues/739))
+### 6.6 Backup-Restore-Drill
 
 Verifiziert, dass das aktuellste Backup vollstaendig wiederherstellbar ist und alle Verteidigungslinien (RLS, AuditLog-Trigger, Medien-Volume) erhalten bleiben. **Empfehlung: quartalsweise per Cron + Alert-Mail bei Fehlschlag.**
 
@@ -589,7 +587,7 @@ Output: ein `OK` / `FAIL`-Eintrag pro Schritt. Exit-Code != 0 bei jedem `FAIL`. 
 
 ```cron
 # Quartalsweise (1. Monat im Quartal, 03:30 nach Backup um 02:00):
-30 3 1 1,4,7,10 * cd /opt/anlaufstelle && ./scripts/restore-drill.sh \
+30 3 1 1,4,7,10 * cd /opt/anlaufstelle &&./scripts/restore-drill.sh \
     >> /var/log/anlaufstelle-restore-drill.log 2>&1 \
     || mail -s "Restore-Drill FAIL" ops@example.com < /var/log/anlaufstelle-restore-drill.log
 ```
@@ -620,8 +618,8 @@ Sentinel danach loeschen: `rm /data/media/.restore-drill` im Container.
 ## 7. ClamAV-Virenscan
 
 Jeder Datei-Upload in den Encrypted File Vault wird **vor** der Verschlüsselung
-gegen einen ClamAV-Daemon gescannt ([Issue #524](https://github.com/tobiasnix/anlaufstelle/issues/524)).
-Die Produktions-Compose-Datei [`docker-compose.prod.yml`](../docker-compose.prod.yml)
+gegen einen ClamAV-Daemon gescannt (Issue #524).
+Die Produktions-Compose-Datei [`docker-compose.prod.yml`](./docker-compose.prod.yml)
 startet den Scanner automatisch mit:
 
 ```yaml
@@ -633,13 +631,13 @@ clamav:
 
 ### 7.1 Konfiguration
 
-Env-Vars (Defaults siehe [`src/anlaufstelle/settings/base.py`](../src/anlaufstelle/settings/base.py)):
+Env-Vars (Defaults siehe [`src/anlaufstelle/settings/base.py`](./src/anlaufstelle/settings/base.py)):
 
 ```dotenv
-CLAMAV_ENABLED=true        # Default in prod.py
-CLAMAV_HOST=clamav         # Service-Name im Compose-Netzwerk
+CLAMAV_ENABLED=true # Default in prod.py
+CLAMAV_HOST=clamav # Service-Name im Compose-Netzwerk
 CLAMAV_PORT=3310
-CLAMAV_TIMEOUT=30          # Sekunden
+CLAMAV_TIMEOUT=30 # Sekunden
 ```
 
 In Entwicklung/Test ist der Scan deaktiviert (`CLAMAV_ENABLED=false`), damit
@@ -655,7 +653,7 @@ Funde werden mit `reason=virus_detected` und der gemeldeten Signatur geloggt.
 ### 7.3 Healthcheck
 
 `GET /health/` liefert zusätzlich `"virus_scanner": "connected"|"unavailable"|"disabled"`
-sowie den Alias `"clamav": "ok"|"error"|"disabled"` (Refs [#798](https://github.com/tobiasnix/anlaufstelle/issues/798)).
+sowie den Alias `"clamav": "ok"|"error"|"disabled"`.
 Bei aktivem Scanner und unerreichbarem Daemon wird der Gesamtstatus auf
 `"degraded"` gesetzt, der HTTP-Status bleibt 200 (die harte Sperre erfolgt
 beim Upload, nicht am Healthcheck). Der Container-Healthcheck im Dockerfile
@@ -693,27 +691,27 @@ werden daraus generiert und committed.
 
 ```bash
 # 1. Abhängigkeit in requirements.in (Runtime) oder requirements-dev.in (Dev/Test)
-#    eintragen — mit offener Range, z.B. "Django>=5.1,<5.2".
+# eintragen — mit offener Range, z.B. "Django>=5.1,<5.2".
 
 # 2. Lock-Files neu erzeugen (pip-tools muss installiert sein):
 make deps-lock
 
 # 3. Diff prüfen (welche transitiven Pakete kamen hinzu, welche Versionen wurden
-#    angehoben?), auf bekannte Breaking Changes sichten.
+# angehoben?), auf bekannte Breaking Changes sichten.
 git diff requirements.txt requirements-dev.txt
 
 # 4. Lokal verifizieren
 pip install -r requirements-dev.txt
 make ci
 
-# 5. .in- und .txt-Dateien zusammen committen (atomar).
+# 5.in- und.txt-Dateien zusammen committen (atomar).
 git add requirements.in requirements-dev.in requirements.txt requirements-dev.txt
 git commit -m "chore: bump <paket> auf <version>"
 ```
 
 ### 8.2 CI-Drift-Check
 
-Der GitHub-Workflow [`test.yml`](../.github/workflows/test.yml) enthält einen
+Der GitHub-Workflow [`test.yml`](./.github/workflows/test.yml) enthält einen
 `lock-check`-Job, der `pip-compile` für beide Lock-Files ausführt und bei
 Drift fehlschlägt — so kann niemand versehentlich `requirements.in` ändern,
 ohne das Lock-File nachzuziehen.
@@ -751,7 +749,7 @@ Build-Zeitpunkt.
 gh run download --name sbom-cyclonedx --dir /tmp/sbom-latest
 
 # Inhalt prüfen
-jq '.bomFormat, .specVersion, (.components | length)' /tmp/sbom-latest/sbom.json
+jq '.bomFormat,.specVersion, (.components | length)' /tmp/sbom-latest/sbom.json
 ```
 
 Lokale Generierung (ohne CI):
@@ -777,8 +775,8 @@ Seit v0.10.0 sind **19 facility-gescopte Tabellen** per PostgreSQL-RLS gegen
 Cross-Facility-Leaks abgesichert (Defense-in-Depth unterhalb der Django-
 Scoping-Schicht). Jede Policy vergleicht `facility_id` gegen die Session-
 Variable `app.current_facility_id`, die von der
-[`FacilityScopeMiddleware`](../src/core/middleware/facility_scope.py) pro
-Request via `set_config(..., is_local=false)` gesetzt wird.
+[`FacilityScopeMiddleware`](./src/core/middleware/facility_scope.py) pro
+Request via `set_config(.., is_local=false)` gesetzt wird.
 
 **Fail-closed:** Ist die Variable nicht gesetzt oder leer (`NULL`),
 liefern die Policies **keine Zeilen** — auch nicht fuer den Tabellen-
@@ -786,8 +784,8 @@ eigentuemer (`FORCE ROW LEVEL SECURITY`). Bypass nur fuer Superuser-DB-
 Rollen; der Django-DB-User darf deshalb in Produktion **kein** Superuser
 sein.
 
-**CI-Garantie (Refs [#718](https://github.com/tobiasnix/anlaufstelle/issues/718)):**
-[`src/tests/test_rls_functional.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/tests/test_rls_functional.py)
+**CI-Garantie:**
+[`src/tests/test_rls_functional.py`](https://github.com/anlaufstelle/app/blob/main/src/tests/test_rls_functional.py)
 laedt eine dedizierte Postgres-Rolle ``rls_test_role`` (``NOSUPERUSER``)
 und verifiziert per ``SET ROLE`` Cross-Tenant-0-Rows fuer Client, Event,
 AuditLog und Activity. Damit ist der RLS-Schutz seit v0.11 funktional
@@ -830,8 +828,8 @@ gesetzt wird nur fuer die laufende Transaktion:
 BEGIN;
 SET LOCAL app.current_facility_id = '<facility-uuid-oder-pk>';
 SELECT count(*) FROM core_client;
--- ... weitere Queries ...
-COMMIT;  -- oder ROLLBACK, SET LOCAL endet mit der Transaktion
+--.. weitere Queries..
+COMMIT; -- oder ROLLBACK, SET LOCAL endet mit der Transaktion
 ```
 
 **Vorsicht:** Niemals `SET app.current_facility_id` (ohne `LOCAL`) in
@@ -842,19 +840,16 @@ nachfolgende Queries dieser Session gueltig.
 
 | Befund | Ursache | Fix |
 |--------|---------|-----|
-| `current_setting(...)` liefert `NULL` | Request kam ohne Auth-User durch (z.B. Management-Command, Cron) | Bewusstes Setzen via `set_config` oder `SET LOCAL` vor Query |
+| `current_setting(..)` liefert `NULL` | Request kam ohne Auth-User durch (z.B. Management-Command, Cron) | Bewusstes Setzen via `set_config` oder `SET LOCAL` vor Query |
 | Variable ist gesetzt, aber Liste trotzdem leer | User ist auf falsche Facility gescopt | `SELECT facility_id FROM core_user WHERE id=<user_id>` pruefen |
 | Migration `0047` nicht angewandt | `showmigrations core` zeigt `[ ]` | `python manage.py migrate core 0047` |
-| Admin-Query ueber `./manage.py shell` liefert 0 Rows | Shell-Session setzt die Variable nicht | Vor Queries `connection.cursor().execute("SET app.current_facility_id = %s", [fid])` |
-
-Refs [#542](https://github.com/tobiasnix/anlaufstelle/issues/542),
-[#586](https://github.com/tobiasnix/anlaufstelle/issues/586).
+| Admin-Query ueber `./manage.py shell` liefert 0 Rows | Shell-Session setzt die Variable nicht | Vor Queries `connection.cursor().execute("SET app.current_facility_id = %s", [fid])` |.
 
 ---
 
 ## 10. Invite-Token-Hygiene
 
-Der Invite-Flow ([`src/core/services/invite.py`](../src/core/services/invite.py))
+Der Invite-Flow ([`src/core/services/invite.py`](./src/core/services/invite.py))
 nutzt Djangos `default_token_generator` — **keine** persistente Token-Tabelle.
 Der Setup-Link reitet auf `password_reset_confirm` und ist an
 `PASSWORD_RESET_TIMEOUT` (Default: 3 Tage) gebunden. Nach Ablauf wird der
@@ -875,7 +870,7 @@ bleiben mit unusable Password liegen.
 SELECT id, username, email, date_joined, facility_id
 FROM core_user
 WHERE last_login IS NULL
-  AND NOT (password LIKE 'pbkdf2_%')  -- unusable = set_unusable_password()
+  AND NOT (password LIKE 'pbkdf2_%') -- unusable = set_unusable_password()
   AND date_joined < now() - interval '7 days'
 ORDER BY date_joined;
 ```
@@ -908,8 +903,6 @@ User.objects.filter(username='<username>').delete()
 [3.2](#32-crontab-eintraege)) — kein automatisches Loeschen, da ein nicht
 zugestellter Invite auch ein Mail-Problem sein kann.
 
-Refs [#528](https://github.com/tobiasnix/anlaufstelle/issues/528).
-
 ---
 
 ## 11. Statistics Materialized View
@@ -918,7 +911,7 @@ Seit v0.10.0 aggregiert die Materialized View `core_statistics_event_flat`
 alle Event-Fakten fuer das Statistik-Dashboard vor. Der Refresh laeuft per
 Management-Command und nutzt `REFRESH MATERIALIZED VIEW CONCURRENTLY`, damit
 laufende Leser nicht blockiert werden
-([`refresh_statistics_view.py`](../src/core/management/commands/refresh_statistics_view.py)).
+([`refresh_statistics_view.py`](./src/core/management/commands/refresh_statistics_view.py)).
 
 ### 11.1 Manueller Refresh
 
@@ -964,13 +957,11 @@ WHERE matviewname = 'core_statistics_event_flat';
 
 -- Zeilenzahl pruefen (sollte ungefaehr core_event count entsprechen)
 SELECT count(*) FROM core_statistics_event_flat;
-```
-
-Refs [#544](https://github.com/tobiasnix/anlaufstelle/issues/544).
+```.
 
 ---
 
-## 12. Trust-Boundary (Refs [#841](https://github.com/tobiasnix/anlaufstelle/issues/841))
+## 12. Trust-Boundary
 
 ### 12.1 SECURE_PROXY_SSL_HEADER
 
@@ -1000,26 +991,26 @@ Ergaenzend setzt `.env` (Default `1`):
 TRUSTED_PROXY_HOPS=1
 ```
 
-Erklaerung in `.env.example`. Bei CDN+Caddy auf `2` setzen, sonst greift der IP-Spoof-Schutz aus [`signals.audit.get_client_ip`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/signals/audit.py) den falschen Eintrag.
+Erklaerung in `.env.example`. Bei CDN+Caddy auf `2` setzen, sonst greift der IP-Spoof-Schutz aus [`signals.audit.get_client_ip`](https://github.com/anlaufstelle/app/blob/main/src/core/signals/audit.py) den falschen Eintrag.
 
 ---
 
 ## Kurzreferenz
 
 ```text
-Backup erstellen          ./scripts/backup.sh
-Backup wiederherstellen   ./scripts/restore.sh <datei.sql.gz.enc>
-Health-Check              curl -sf https://$DOMAIN/health/
-Container-Status          docker compose -f docker-compose.prod.yml ps
-Live-Logs                 docker compose -f docker-compose.prod.yml logs -f web
-Migrations-Status         docker compose -f docker-compose.prod.yml exec web python manage.py showmigrations
-Django Deploy-Check       docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
-Retention Testlauf        docker compose -f docker-compose.prod.yml exec web python manage.py enforce_retention --dry-run
-Snapshot Testlauf         docker compose -f docker-compose.prod.yml exec web python manage.py create_statistics_snapshots --dry-run
-MV-Refresh                docker compose -f docker-compose.prod.yml exec web python manage.py refresh_statistics_view
-RLS-Session-Var pruefen   psql -c "SELECT current_setting('app.current_facility_id', true);"
-Stack stoppen             docker compose -f docker-compose.prod.yml down
-Stack starten             docker compose -f docker-compose.prod.yml up -d
-Lock-Files regenerieren   make deps-lock
-Lock-File-Drift prüfen    make deps-check
+Backup erstellen./scripts/backup.sh
+Backup wiederherstellen./scripts/restore.sh <datei.sql.gz.enc>
+Health-Check curl -sf https://$DOMAIN/health/
+Container-Status docker compose -f docker-compose.prod.yml ps
+Live-Logs docker compose -f docker-compose.prod.yml logs -f web
+Migrations-Status docker compose -f docker-compose.prod.yml exec web python manage.py showmigrations
+Django Deploy-Check docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
+Retention Testlauf docker compose -f docker-compose.prod.yml exec web python manage.py enforce_retention --dry-run
+Snapshot Testlauf docker compose -f docker-compose.prod.yml exec web python manage.py create_statistics_snapshots --dry-run
+MV-Refresh docker compose -f docker-compose.prod.yml exec web python manage.py refresh_statistics_view
+RLS-Session-Var pruefen psql -c "SELECT current_setting('app.current_facility_id', true);"
+Stack stoppen docker compose -f docker-compose.prod.yml down
+Stack starten docker compose -f docker-compose.prod.yml up -d
+Lock-Files regenerieren make deps-lock
+Lock-File-Drift prüfen make deps-check
 ```

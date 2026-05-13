@@ -3,7 +3,7 @@
 # Diese Datei nutzt triviale Default-Credentials (anlaufstelle/anlaufstelle/anlaufstelle)
 # und stellt Ports zur lokalen Entwicklung bereit. Postgres ist deshalb explizit auf
 # 127.0.0.1 gebunden, sonst wuerde ``docker compose up`` auf 0.0.0.0:5432 lauschen
-# und die DB mit Trivialpasswort aus dem Internet erreichbar machen (Refs #799).
+# und die DB mit Trivialpasswort aus dem Internet erreichbar machen.
 #
 # Fuer den produktiven Einsatz bitte ``docker-compose.prod.yml`` verwenden.
 services:
@@ -14,7 +14,7 @@ services:
       POSTGRES_USER: anlaufstelle
       POSTGRES_PASSWORD: anlaufstelle
     ports:
-      # Loopback-Binding — DB ist nur lokal erreichbar (Refs #799).
+      # Loopback-Binding — DB ist nur lokal erreichbar.
       - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data

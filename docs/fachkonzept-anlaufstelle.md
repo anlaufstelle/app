@@ -259,7 +259,7 @@ Selin sitzt am PC im Büro. Eine Besucherin kommt herein, nimmt einen Kaffee und
 1. Selin öffnet die Startseite — sie sieht den aktuellen Zeitstrom (gefiltert auf den Zeitraum „Nachtdienst 21:30–09:00", den die Einrichtung als benannten Zeitfilter konfiguriert hat).
 2. Sie klickt „Neuer Kontakt".
 3. Sie tippt das Pseudonym: „Maus". Autocomplete schlägt vor: „Maus (identifiziert, 27+)".
-4. Sie wählt den Dokumentationstyp „Kontakt" — die Felder erscheinen: Dauer (Kurz/Mittel/Lang), Leistungen (Mehrfachauswahl: Aufenthalt, Verpflegung, Gespräch, ...).
+4. Sie wählt den Dokumentationstyp „Kontakt" — die Felder erscheinen: Dauer (Kurz/Mittel/Lang), Leistungen (Mehrfachauswahl: Aufenthalt, Verpflegung, Gespräch,..).
 5. Sie wählt „Kurz" und „Aufenthalt, Verpflegung". Klick auf Speichern.
 6. Der Eintrag erscheint sofort in der Übersicht.
 
@@ -295,7 +295,7 @@ Selin möchte nachschauen, wann „Maus" zuletzt da war und was dokumentiert wur
 - 14.03.2026: Kontakt (Aufenthalt, Verpflegung, Spritzentausch)
 - 12.03.2026: Kontakt (Aufenthalt, Krisengespräch — 45 Min.)
 - 08.03.2026: Kontakt (Aufenthalt)
-- ...
+-..
 
 Ein Klick auf einen Eintrag zeigt die Details. Verschlüsselte Felder (z.B. Gesprächsinhalte) sind nur für berechtigte Rollen sichtbar.
 
@@ -419,22 +419,22 @@ Anlaufstelle ist in vier Ebenen gegliedert, die aufeinander aufbauen. Die Reihen
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│                     Ecosystem                             │
-│  API · Export/Import · Behördenreports · Dokumenten-      │
-│  bibliotheken · optionale Module                          │
+│ Ecosystem │
+│ API · Export/Import · Behördenreports · Dokumenten- │
+│ bibliotheken · optionale Module │
 ├──────────────────────────────────────────────────────────┤
-│                  Case & Outcomes                          │
-│  Fälle/Episoden · Zuständigkeiten · Ziele ·               │
-│  Meilensteine · Wirkungsberichte                          │
+│ Case & Outcomes │
+│ Fälle/Episoden · Zuständigkeiten · Ziele · │
+│ Meilensteine · Wirkungsberichte │
 ├──────────────────────────────────────────────────────────┤
-│                    Operations                             │
-│  Hinweise · Aufgaben · Inbox ·                            │
-│  Arbeitsübersicht · mobile-first Erfassung                │
+│ Operations │
+│ Hinweise · Aufgaben · Inbox · │
+│ Arbeitsübersicht · mobile-first Erfassung │
 ├──────────────────────────────────────────────────────────┤
-│                       Core                                │
-│  Einrichtung · Nutzer · Rollen · Person · Ereignis ·      │
-│  Dokumenttypen · Semantische Felder · Zeitfilter ·        │
-│  Suche · Audit · Basisstatistik                           │
+│ Core │
+│ Einrichtung · Nutzer · Rollen · Person · Ereignis · │
+│ Dokumenttypen · Semantische Felder · Zeitfilter · │
+│ Suche · Audit · Basisstatistik │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -499,7 +499,7 @@ Anlaufstelle v1.0 umfasst:
 - Audit-Trail, Löschfristen, 4-Augen-Löschprinzip
 - PWA, Mobile-first, Docker-Deployment
 
-Für den vollständigen Implementierungsstand siehe [CHANGELOG](../CHANGELOG.md).
+Für den vollständigen Implementierungsstand siehe [CHANGELOG](./CHANGELOG.md).
 
 ### Roadmap
 
@@ -577,7 +577,7 @@ Dokumentationstypen sind konfigurierbar. Eine Einrichtung kann eigene Typen defi
 
 #### FieldTemplate — Die Feldvorlage
 
-Ein FieldTemplate definiert ein Feld innerhalb eines Dokumentationstyps: Name, Datentyp (Text, Zahl, Datum, Auswahl, Mehrfachauswahl, Boolean, ...), ob es ein Pflichtfeld ist, welche Optionen zur Auswahl stehen, ob es verschlüsselt gespeichert wird (`is_encrypted`), welche Sichtbarkeitsstufe es hat (`sensitivity`), welcher Statistik-Kategorie es zugeordnet ist.
+Ein FieldTemplate definiert ein Feld innerhalb eines Dokumentationstyps: Name, Datentyp (Text, Zahl, Datum, Auswahl, Mehrfachauswahl, Boolean,..), ob es ein Pflichtfeld ist, welche Optionen zur Auswahl stehen, ob es verschlüsselt gespeichert wird (`is_encrypted`), welche Sichtbarkeitsstufe es hat (`sensitivity`), welcher Statistik-Kategorie es zugeordnet ist.
 
 FieldTemplates sind die Bausteine des semantischen Feldsystems. Sie tragen Bedeutung: Das System weiß, dass das Feld „Vermittlung an" ein Freitextfeld ist, das zur Statistik-Kategorie „Vermittlungen" gehört und als nicht-sensibel eingestuft ist.
 
@@ -617,45 +617,45 @@ Das AuditLog protokolliert alle sicherheitsrelevanten Aktionen: Zugriffe auf qua
 
 ```mermaid
 erDiagram
-    Organization ||--o{ Facility : "betreibt"
-    Facility ||--o{ TimeFilter : "hat"
-    Facility ||--o{ DocumentType : "konfiguriert"
-    Facility ||--o{ Client : "betreut"
+    Organization ||--o{ Facility: "betreibt"
+    Facility ||--o{ TimeFilter: "hat"
+    Facility ||--o{ DocumentType: "konfiguriert"
+    Facility ||--o{ Client: "betreut"
 
-    Organization ||--o{ Client : "org-FK (vorbereitet)"
+    Organization ||--o{ Client: "org-FK (vorbereitet)"
 
-    User }o--|| Facility : "gehört zu"
-    User }o--|| Role : "hat Rolle"
+    User }o--|| Facility: "gehört zu"
+    User }o--|| Role: "hat Rolle"
 
-    Client ||--o{ Event : "hat Chronik"
-    Client ||--o{ WorkItem : "verknüpft mit"
-    Client ||--o{ Case : "hat"
+    Client ||--o{ Event: "hat Chronik"
+    Client ||--o{ WorkItem: "verknüpft mit"
+    Client ||--o{ Case: "hat"
 
-    Event }o--|| DocumentType : "vom Typ"
-    Event }o--o| User : "erstellt von"
-    Event }o--|| Facility : "gehört zu"
+    Event }o--|| DocumentType: "vom Typ"
+    Event }o--o| User: "erstellt von"
+    Event }o--|| Facility: "gehört zu"
 
-    DocumentType ||--o{ DocumentTypeField : "hat Felder"
-    DocumentTypeField }o--|| FieldTemplate : "nutzt"
+    DocumentType ||--o{ DocumentTypeField: "hat Felder"
+    DocumentTypeField }o--|| FieldTemplate: "nutzt"
 
-    Case ||--o{ Episode : "enthält"
-    Case ||--o{ Event : "umfasst"
-    Episode ||--o{ Event : "enthält"
+    Case ||--o{ Episode: "enthält"
+    Case ||--o{ Event: "umfasst"
+    Episode ||--o{ Event: "enthält"
 
-    Case ||--o{ OutcomeGoal : "verfolgt"
-    OutcomeGoal ||--o{ Milestone : "hat"
+    Case ||--o{ OutcomeGoal: "verfolgt"
+    OutcomeGoal ||--o{ Milestone: "hat"
 
-    WorkItem }o--o| User : "erstellt von"
-    WorkItem }o--o| User : "zugewiesen an"
+    WorkItem }o--o| User: "erstellt von"
+    WorkItem }o--o| User: "zugewiesen an"
 
-    User ||--o{ AuditLog : "erzeugt"
+    User ||--o{ AuditLog: "erzeugt"
 ```
 
 ### Scope-Regeln
 
 Scope-Regeln bestimmen, welche Daten für wen sichtbar sind:
 
-**Einrichtungsebene (v1.0):** Mitarbeitende sehen nur die Daten der Einrichtung, der sie zugeordnet sind. Da es in v1.0 nur eine Einrichtung gibt, ist der Scope-Filter technisch vorhanden (`WHERE facility_id = :current`), aber für den Nutzer unsichtbar. Jede Datenbankabfrage filtert auf `facility_id` — das ist die Vorbereitung für eine spätere Mehrmandantenfähigkeit.
+**Einrichtungsebene (v1.0):** Mitarbeitende sehen nur die Daten der Einrichtung, der sie zugeordnet sind. Da es in v1.0 nur eine Einrichtung gibt, ist der Scope-Filter technisch vorhanden (`WHERE facility_id =:current`), aber für den Nutzer unsichtbar. Jede Datenbankabfrage filtert auf `facility_id` — das ist die Vorbereitung für eine spätere Mehrmandantenfähigkeit.
 
 **Organisationsebene (vorbereitet, nicht aktiv):** Die Organisation existiert als Hintergrund-Entität. In v1.0 gibt es keinen Org-Admin, keinen Facility-Switcher, keine einrichtungsübergreifenden Statistiken. Wenn ein Träger als Nutzer dazukommt, werden diese Features auf Basis der bestehenden Datenstruktur ergänzt.
 
@@ -693,7 +693,7 @@ Jede Architekturentscheidung wird als strukturierter Block dokumentiert. Offene 
 - Jede Entität (Client, Event, DocumentType, WorkItem) hat `facility_id` als Pflicht-FK.
 - Client hat zusätzlich `organization_id` als vorbereiteten FK (in v1.0 redundant, da es nur eine Organization gibt).
 - Beim Setup wird automatisch eine Organization + eine Facility angelegt. Die UI zeigt die Organisationsebene nicht.
-- Jede Datenbankabfrage filtert auf `facility_id = :current_facility`. Da es nur eine Facility gibt, ist das ein transparenter Filter.
+- Jede Datenbankabfrage filtert auf `facility_id =:current_facility`. Da es nur eine Facility gibt, ist das ein transparenter Filter.
 
 **Begründung:** Der Mehraufwand gegenüber einer Struktur ohne Fremdschlüssel ist gering (ca. 10–15%): ein FK pro Model, ein Scope-Filter als Middleware. Aber die Migrationsfähigkeit ist real: Wenn ein Träger als Nutzer dazukommt, werden eine zweite Facility, ein Facility-Switcher und Scope-Regeln ergänzt — ohne jede Tabelle umbauen zu müssen. Das ist dieselbe Logik wie Entscheidung 5 (Case-FK von Anfang an).
 
@@ -1014,18 +1014,18 @@ Das Fachkonzept beschreibt Domäne und Architektur konzeptionell, nennt aber den
 
 ```
 ┌─────────────────────────────────────────────┐
-│  Docker Host (VPS / lokaler Server / RPi)   │
-│                                             │
-│  ┌──────────┐  ┌──────────┐  ┌───────────┐ │
-│  │  Caddy /  │  │  Django   │  │ PostgreSQL│ │
-│  │  Nginx    │──│  (Gunicorn│──│           │ │
-│  │  (HTTPS)  │  │  + HTMX) │  │           │ │
-│  └──────────┘  └──────────┘  └───────────┘ │
-│                     │                       │
-│              ┌──────┴──────┐                │
-│              │ Static Files│                │
-│              │ (WhiteNoise)│                │
-│              └─────────────┘                │
+│ Docker Host (VPS / lokaler Server / RPi) │
+│ │
+│ ┌──────────┐ ┌──────────┐ ┌───────────┐ │
+│ │ Caddy / │ │ Django │ │ PostgreSQL│ │
+│ │ Nginx │──│ (Gunicorn│──│ │ │
+│ │ (HTTPS) │ │ + HTMX) │ │ │ │
+│ └──────────┘ └──────────┘ └───────────┘ │
+│ │ │
+│ ┌──────┴──────┐ │
+│ │ Static Files│ │
+│ │ (WhiteNoise)│ │
+│ └─────────────┘ │
 └─────────────────────────────────────────────┘
 ```
 
@@ -1316,7 +1316,7 @@ v1.0 setzt auf Django-eigene Authentifizierung (Benutzername + Passwort, bcrypt/
 
 ### Scope-Filter als Middleware
 
-Da das Datenmodell von Anfang an `facility_id` auf allen Entitäten hat (Entscheidung 2), wird der Scope-Filter als Django-Middleware implementiert: Jede Datenbankabfrage filtert automatisch auf `facility_id = :current_facility`. In v1.0 gibt es nur eine Facility, also ist der Filter transparent. Wenn ein Träger dazukommt, wird ein Facility-Switcher ergänzt — der Scope-Filter funktioniert bereits.
+Da das Datenmodell von Anfang an `facility_id` auf allen Entitäten hat (Entscheidung 2), wird der Scope-Filter als Django-Middleware implementiert: Jede Datenbankabfrage filtert automatisch auf `facility_id =:current_facility`. In v1.0 gibt es nur eine Facility, also ist der Filter transparent. Wenn ein Träger dazukommt, wird ein Facility-Switcher ergänzt — der Scope-Filter funktioniert bereits.
 
 ### Monitoring und Betrieb
 

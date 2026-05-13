@@ -19,7 +19,7 @@ Drei Repositories mit klarer Aufgabentrennung:
 
 | Repo | Sichtbarkeit | Zweck |
 |------|--------------|-------|
-| `tobiasnix/anlaufstelle` (**dev**) | privat | Tägliche Entwicklung, Issues, Pläne, Audits, alle Commits. |
+| `anlaufstelle/app` (**dev**) | privat | Tägliche Entwicklung, Issues, Pläne, Audits, alle Commits. |
 | `anlaufstelle/stage` | privat | Release-Kandidaten — vollständig getestet, vor finaler Freigabe. |
 | `anlaufstelle/app` | öffentlich | Freigegebene Releases — nur das, was für die Öffentlichkeit bestimmt ist. |
 
@@ -47,4 +47,4 @@ Pipeline (vereinfacht):
 ## References
 
 - Release-Runbook (intern, dev-Repo Issue #502)
-- [`docs/release-checklist.md`](../release-checklist.md)
+- [`docs/release-checklist.md`](./release-checklist.md)

@@ -25,7 +25,7 @@ Das Ziel von E2E ist explizit, **Produktions-nahe** zu testen. Eine Abweichung i
 - Datenbank `anlaufstelle_e2e` (separate Instanz, kein Conflict mit Dev).
 - E2E-Server läuft auf Port **8844**, klar abgegrenzt von Dev (8000).
 
-Die Konsequenz im Test-Setup ist explizit dokumentiert in [`docs/e2e-architecture.md`](../e2e-architecture.md) und [`docs/e2e-runbook.md`](../e2e-runbook.md).
+Die Konsequenz im Test-Setup ist explizit dokumentiert in [`docs/e2e-architecture.md`](./e2e-architecture.md) und [`docs/e2e-runbook.md`](./e2e-runbook.md).
 
 ## Consequences
 
@@ -41,5 +41,5 @@ Die Konsequenz im Test-Setup ist explizit dokumentiert in [`docs/e2e-architectur
 
 ## References
 
-- [`src/anlaufstelle/settings/e2e.py`](../../src/anlaufstelle/settings/e2e.py)
-- [`docs/e2e-architecture.md`](../e2e-architecture.md)
+- [`src/anlaufstelle/settings/e2e.py`](././src/anlaufstelle/settings/e2e.py)
+- [`docs/e2e-architecture.md`](./e2e-architecture.md)

@@ -12,7 +12,7 @@ Gleichzeitig ist es **wertvoll**, Typdisziplin gerade dort zu haben, wo Bugs am 
 
 ## Decision
 
-Inkrementelle Einführung in zwei Geschwindigkeiten, konfiguriert in [`pyproject.toml`](../../pyproject.toml):
+Inkrementelle Einführung in zwei Geschwindigkeiten, konfiguriert in [`pyproject.toml`](././pyproject.toml):
 
 - **Baseline (gesamtes Repo):** `ignore_missing_imports`, `warn_redundant_casts`, **kein** `strict_optional`, **kein** `disallow_untyped_defs`. Findet offensichtliche Fehler, ohne Wand zu produzieren.
 - **Strict-Zone (`core.services.*`):** `strict_optional`, `warn_unused_ignores`. Hier muss jede neue Funktion typsauber sein.
@@ -37,5 +37,5 @@ Erweiterung erfolgt **modulweise** über zusätzliche `[[tool.mypy.overrides]]`-
 
 ## References
 
-- [`pyproject.toml`](../../pyproject.toml) (`[tool.mypy]` und `[[tool.mypy.overrides]]`)
-- Audit-Maßnahme #37 / Refs #741
+- [`pyproject.toml`](././pyproject.toml) (`[tool.mypy]` und `[[tool.mypy.overrides]]`)
+- Audit-Maßnahme #37 /

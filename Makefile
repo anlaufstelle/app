@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -151,3 +151,40 @@ deps-check:
 
 # Alles zusammen
 dev: db migrate run
+
+# === dev.anlaufstelle.app deploy-Targets (Refs #671) ===
+# DEV_HOST darf in .env.deploy (gitignored) gesetzt werden, damit
+# nicht jedes Make-Aufruf das Argument mitschleppt.
+-include .env.deploy
+DEV_HOST ?= anlaufstelle@dev.anlaufstelle.app
+
+# Erstmaliges Server-Hardening (idempotent): laeuft als root und legt den
+# anlaufstelle-User an. Ab dem zweiten Aufruf laeuft es als anlaufstelle@.
+dev-bootstrap:
+	scp deploy/bootstrap.sh root@$(word 2,$(subst @, ,$(DEV_HOST))):/root/bootstrap.sh
+	ssh root@$(word 2,$(subst @, ,$(DEV_HOST))) bash /root/bootstrap.sh
+
+# Hauptdeploy: sync compose+caddy+deploy/, dann pull/migrate/up.
+deploy-dev:
+	DEV_HOST=$(DEV_HOST) ./deploy/deploy-dev.sh
+
+# Live-Logs vom web- und caddy-Container.
+dev-logs:
+	ssh $(DEV_HOST) 'cd /opt/anlaufstelle && docker compose -f docker-compose.dev.yml --env-file .env.dev logs -f --tail=200 web caddy'
+
+# Django-Shell auf dev (interaktiv).
+dev-shell:
+	ssh -t $(DEV_HOST) 'cd /opt/anlaufstelle && docker compose -f docker-compose.dev.yml --env-file .env.dev exec web python manage.py shell'
+
+# Einmalig nach dem Initial-Deploy: Demo-Daten einspielen.
+dev-seed:
+	ssh -t $(DEV_HOST) 'cd /opt/anlaufstelle && docker compose -f docker-compose.dev.yml --env-file .env.dev run --rm web python manage.py seed'
+
+# Manueller Backup-Snapshot (Cron macht das eigenstaendig).
+dev-backup:
+	ssh -t $(DEV_HOST) 'sudo /opt/anlaufstelle/deploy/backup.sh'
+
+# Compose-Status + Healthcheck.
+dev-status:
+	ssh $(DEV_HOST) 'cd /opt/anlaufstelle && docker compose -f docker-compose.dev.yml --env-file .env.dev ps'
+	curl -sS -I https://dev.anlaufstelle.app/health/ | head -5

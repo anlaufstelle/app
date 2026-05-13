@@ -1,4 +1,4 @@
-> This is the English translation of [user-guide.md](../user-guide.md).
+> This is the English translation of [user-guide.md](./user-guide.md).
 > The German version is the authoritative source. Last synced: 2026-04-28 (v0.10.2).
 
 # Anlaufstelle -- User Guide
@@ -99,7 +99,7 @@ The feed combines four sources for the current day:
 | Source | What is shown |
 |--------|---------------|
 | **Contacts** (Events) | Documentation entries with preview fields |
-| **Activities** | System operations (created, edited, deleted ...) |
+| **Activities** | System operations (created, edited, deleted..) |
 | **Tasks** (Work Items) | Hints and tasks with priority and status |
 | **Entry Bans** | Active entry bans -- additionally shown as a red banner on top |
 
@@ -764,7 +764,7 @@ Each episode shows its status:
 
 ---
 
-> **More questions?** The [FAQ](../faq.md) (German only) answers common questions about data protection, 2FA, offline mode, retention periods, and more.
+> **More questions?** The [FAQ](./faq.md) (German only) answers common questions about data protection, 2FA, offline mode, retention periods, and more.
 
 ---
 

@@ -35,4 +35,4 @@ PostgreSQL 16 ist die einzige unterstützte Datenbank — in Entwicklung, Test, 
 
 ## References
 
-- [`docs/ops-runbook.md`](../ops-runbook.md), [`src/core/migrations/0047_postgres_rls_setup.py`](../../src/core/migrations/0047_postgres_rls_setup.py)
+- [`docs/ops-runbook.md`](./ops-runbook.md), [`src/core/migrations/0047_postgres_rls_setup.py`](././src/core/migrations/0047_postgres_rls_setup.py)

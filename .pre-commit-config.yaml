@@ -1,4 +1,4 @@
-# Pre-commit hooks for Anlaufstelle (Refs #820, #860).
+# Pre-commit hooks for Anlaufstelle.
 #
 # Install:
 #   pre-commit install                       # commit-stage hooks (Ruff, mypy, lock-files)
@@ -13,7 +13,7 @@
 #
 # Der pre-push-Hook ist Solo-Maintainer-Schutz: er ersetzt Branch Protection
 # mit Required Status Checks (die bei direktem git push auf main eh nicht
-# greifen würden). Lehre aus v0.11.0 (Refs #860).
+# greifen würden). Lehre aus v0.11.0.
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.12
@@ -47,7 +47,7 @@ repos:
         pass_filenames: false
         files: ^(.*\.en\.md|docs/en/.*\.md|pyproject\.toml)$
 
-      # Lock-File-Drift-Schutz (Refs #860). Wenn requirements*.in geändert
+      # Lock-File-Drift-Schutz. Wenn requirements*.in geändert
       # wird, regeneriert dieser Hook die zugehörigen Lock-Files. Drift kann
       # damit gar nicht erst commit-bar werden — derselbe Drift, der v0.11.0
       # erst auf Stage-CI aufgefallen ist (django-stubs + mypy fehlten im
@@ -66,7 +66,7 @@ repos:
         pass_filenames: false
         files: ^requirements-dev\.in$
 
-      # Pre-Push-Schnell-CI (Refs #860). Solo-Maintainer-Schutz: vor jedem
+      # Pre-Push-Schnell-CI. Solo-Maintainer-Schutz: vor jedem
       # push auf main werden die schnellen Checks ausgeführt, die im CI rot
       # gehen würden. Tests bleiben in CI — Tests lokal pre-push würden
       # 3-5 min dauern und niemand würde mehr pushen.

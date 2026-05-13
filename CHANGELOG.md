@@ -19,7 +19,7 @@ Patch-Release: Dependency-Bumps und CI-Hardening als Folge zum v0.11.0 Stage-CI 
 ### Fixed
 
 - **Lock-File-Drift-Schutz** — `make ci` ruft `deps-check` auf, `.pre-commit-config.yaml` hat `pip-compile`-Hooks für `requirements*.in` und einen `pre-push-fast-ci`-Hook (`make lint && make deps-check && make check`). Ersetzt Branch Protection mit Required Status Checks, die bei direktem `git push` auf `main` nicht greifen würden.
-- **Workflow-Health-Check als Pre-Flight-Schritt** in [`docs/release-checklist.md`](https://github.com/anlaufstelle/app/blob/main/docs/release-checklist.md) — verhindert, dass deaktivierte Workflows unbemerkt bleiben. Hintergrund: Test/E2E/Lint/CodeQL/Release auf `tobiasnix/anlaufstelle` waren von 2026-04-29 bis 2026-05-05 manuell deaktiviert, sodass v0.11.0 ohne CI auf `main` durchging und der Lock-Drift erst auf Stage-CI auffiel.
+- **Workflow-Health-Check als Pre-Flight-Schritt** in [`docs/release-checklist.md`](https://github.com/anlaufstelle/app/blob/main/docs/release-checklist.md) — verhindert, dass deaktivierte Workflows unbemerkt bleiben. Hintergrund: Test/E2E/Lint/CodeQL/Release auf `anlaufstelle/app` waren von 2026-04-29 bis 2026-05-05 manuell deaktiviert, sodass v0.11.0 ohne CI auf `main` durchging und der Lock-Drift erst auf Stage-CI auffiel.
 
 ## [0.11.0] - 2026-05-05
 
@@ -29,7 +29,7 @@ Großer Sicherheits- und Hardening-Release. Hauptthemen: Wechsel auf Django 6.0 
 
 - **Django 5.1 → 6.0 Migration** — Wechsel von Django 5.1.15 auf 6.0.4. Django 5.1 ist EOL. Mit dem Sprung kommen die Sicherheits-Fixes CVE-2026-33034 (`DATA_UPLOAD_MAX_MEMORY_SIZE` enforcement), CVE-2026-33033 (`MultiPartParser`-DoS), CVE-2026-4292 (`ModelAdmin.list_editable`), CVE-2026-4277 (`GenericInlineModelAdmin`) und CVE-2026-3902 (Header mit Underscores in `ASGIRequest`). `django-unfold` auf 0.91.0 gehoben (6.0-Kompatibilität). Plugin-Stack (`django-csp`, `django-htmx`, `django-otp`, `django-ratelimit`, `sentry-sdk`) unverändert kompatibel. `django.contrib.postgres` zu `INSTALLED_APPS` hinzugefügt (in 6.0 strikt für `GinIndex` auf `Client.pseudonym` erforderlich, postgres.E005).
 - **Sudo-Mode Re-Auth für sensible Aktionen** — Zeitlich begrenztes Re-Authentifizierungs-Fenster (15 min) vor besonders sensiblen Aktionen wie MFA-Disable, Passwort-Änderung, Daten-Export. `RequireSudoModeMixin` + neue Form mit Rate-Limit. Details in [`docs/faq.md` § 13a](https://github.com/anlaufstelle/app/blob/main/docs/faq.md#13a-was-ist-sudo-mode-re-auth-fenster).
-- **DSGVO Art. 33/34 Breach-Detection** — Heuristik-basiertes `detect_breaches`-Cron-Kommando (stündlich :30) für Failed-Login-Burst, Mass-Export und Mass-Delete. Schreibt `SECURITY_VIOLATION`-AuditLog und liefert optional einen Webhook für SIEM/Pager. Runbook-Eintrag in [`docs/ops-runbook.md` § 6.5b](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md).
+- **DSGVO Art. 33/34 Breach-Detection** — Heuristik-basiertes `detect_breaches`-Cron-Kommando (stündlich:30) für Failed-Login-Burst, Mass-Export und Mass-Delete. Schreibt `SECURITY_VIOLATION`-AuditLog und liefert optional einen Webhook für SIEM/Pager. Runbook-Eintrag in [`docs/ops-runbook.md` § 6.5b](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md).
 - **Klartext-Freitexte: UI-Warnung + Inventar** — `Client.notes`, `Case.description`, `Episode.description` sind weiterhin nicht feldverschlüsselt. Sicht- und Editfelder zeigen jetzt eine UI-Warnung, dass dort keine Klarnamen oder Art-9-Daten gehören. Klartext-Inventar dokumentiert in [`docs/security-notes.md`](https://github.com/anlaufstelle/app/blob/main/docs/security-notes.md).
 - **CSP-Reporting via `report-uri`** — neuer lokaler `/csp-report/`-Endpoint speichert Browser-CSP-Verstöße als `AuditLog` (Typ `CSP_VIOLATION`). Trade-off-Diskussion zu `report-to` vs. `report-uri` in [`docs/security-notes.md`](https://github.com/anlaufstelle/app/blob/main/docs/security-notes.md).
 - **MFA-Backup-Codes auf 128 Bit + Hash-Storage** — Codes werden mit `secrets.token_urlsafe(16)` (128 Bit Entropie) erzeugt und nur als HMAC-SHA-256-Hash gespeichert. Vorher: 80 Bit, Klartext in DB. Bestandsdaten werden beim nächsten Login pro User automatisch migriert.
@@ -39,7 +39,7 @@ Großer Sicherheits- und Hardening-Release. Hauptthemen: Wechsel auf Django 6.0 
 - **q-Suchbegriffe nicht mehr in `sessionStorage`** — `data-filter-persist` enthielt das `q`-Feld, sodass eingegebene Pseudonyme nach Logout im Browser-`sessionStorage` zurückblieben. Filter-Persistenz schließt `q` jetzt explizit aus.
 - **DSGVO-Top-Pseudonyme aus Standard-PDFs entfernt** — Standard-Auswertungen listeten die häufigsten Pseudonyme. Mit Internal-Mode-Banner getrennt: nur Admin-Internal-PDFs zeigen Pseudonyme, alle anderen aggregieren.
 - **CSV-Formula-Injection neutralisiert** — `services/export.py` prefixt führende `=`, `+`, `-`, `@`, `\t`, `\r` mit `'`, damit Excel/LibreOffice die Felder nicht als Formel auswertet.
-- **Retention löscht jetzt wirklich** — `EventHistory`-DELETE wurde im Retention-Pfad nicht mitgenommen, sodass „gelöschte" Events über die History weiter rekonstruierbar waren. Pfad ist jetzt durchgängig redaktiert; `audit_pruning` läuft ohne `DISABLE TRIGGER` (, ).
+- **Retention löscht jetzt wirklich** — `EventHistory`-DELETE wurde im Retention-Pfad nicht mitgenommen, sodass „gelöschte" Events über die History weiter rekonstruierbar waren. Pfad ist jetzt durchgängig redaktiert; `audit_pruning` läuft ohne `DISABLE TRIGGER`.
 - **`Client.anonymize()` schließt zugehörige Daten ein** — bei k-Anonymisierung wurden `EventHistory`, `EventAttachment` und `DeletionRequest` nicht mitgewandert. Jetzt atomar in einer Transaktion.
 - **Login-Lockout `select_for_update` + Autocomplete `block=True`** — Race zwischen parallelen Failed-Login-Threads konnte den 10-Versuche-Trigger umgehen; `select_for_update` macht den Counter monoton. Autocomplete-Endpoint blockt unauthentifizierte Requests jetzt explizit, neuer Architektur-Test verbietet künftige Sensible-GETs ohne Auth-Check.
 - **`WorkItemUpdateView`-Permission-Check** — die Edit-View verließ sich auf den Form-Layer für die Permission-Prüfung; jetzt zentral über `can_user_mutate_workitem`.
@@ -73,7 +73,7 @@ Großer Sicherheits- und Hardening-Release. Hauptthemen: Wechsel auf Django 6.0 
 - **Caddy: www-Redirect, Access-Log, Rate-Limit-Hinweis** — `www.anlaufstelle.app` redirected jetzt 301 auf Apex; Access-Log JSON-formatiert, Rate-Limit-Header dokumentiert.
 - **DSGVO-Vorlagen ins App-Paket verschoben** — Templates wandern aus dem Repo-Root in `src/core/templates/dsgvo/`, sind im Paket und beim Deployment automatisch dabei.
 - **Persistentes `media:`-Volume in `docker-compose.prod.yml`** — vorher Bind-Mount, das bei Coolify-Deploys verloren ging. Jetzt named volume mit Backup-/Restore-Pfad.
-- **Service-Aufteilungen** — `services/event.py` in `services/events/` zerlegt (`crud.py`, `context.py`, `fields.py`, `attachments.py`, ). Retention-Strategien in `core/retention/strategies.py` konsolidiert. Statistik-Periodenparser extrahiert. `audit_pruning` ohne `DISABLE TRIGGER`.
+- **Service-Aufteilungen** — `services/event.py` in `services/events/` zerlegt (`crud.py`, `context.py`, `fields.py`, `attachments.py`). Retention-Strategien in `core/retention/strategies.py` konsolidiert. Statistik-Periodenparser extrahiert. `audit_pruning` ohne `DISABLE TRIGGER`.
 - **`PaginatedListMixin` + `FEED_MAX_PER_TYPE` konsolidiert** — Pagination-Logik aus drei Listen-Views zusammengezogen, Feed-Maximum zentral.
 - **`log_audit_event` in 8 View-Callsites** — direkter `AuditLog.objects.create`-Aufruf durch zentralen Service ersetzt; einheitliche Felder + IP-Hashing.
 - **Codex-Plan-1 Quickwins R-001/R-005/R-006/R-007/R-008** — fünf kleine Refactorings aus dem Audit-Plan.
@@ -197,7 +197,7 @@ Großer Sicherheits- und Hardening-Release. Hauptthemen: Wechsel auf Django 6.0 
 
 - **Doppel-Rendering Klientel-Liste** auf Single-Loop reduziert (responsive Grid statt Desktop+Mobile-Render).
 - **`enrich_events_with_preview`** N+1 entfernt — `select_related("field_template")` statt pro Event eigene Query ( FND-05).
-- **WorkItemInbox-Pagination** auf 50 Einträge pro Liste begrenzt; Querysets nicht mehr pauschal in Templates evaluiert (, ).
+- **WorkItemInbox-Pagination** auf 50 Einträge pro Liste begrenzt; Querysets nicht mehr pauschal in Templates evaluiert.
 
 ## [0.10.0] - 2026-04-19
 

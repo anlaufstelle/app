@@ -14,7 +14,7 @@ services:
       - internal
 
   web:
-    # Image-Tag via APP_VERSION parametrisieren (Refs #800), Fallback auf
+    # Image-Tag via APP_VERSION parametrisieren, Fallback auf
     # den zuletzt gepinnten Release-Tag — Operator-Setups ohne explizite
     # .env bleiben reproduzierbar.
     image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.10.2}
@@ -26,7 +26,7 @@ services:
     volumes:
       # Persistenter Mount fuer MEDIA_ROOT (=/data/media) — verhindert
       # stillen Datenverlust bei docker compose pull && up -d.
-      # Refs #720.
+      #.
       - media:/data
     depends_on:
       db:
@@ -66,7 +66,7 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
-      # Access-Log persistent — Refs #801.
+      # Access-Log persistent —.
       - caddy_logs:/var/log/caddy
     env_file: .env
     depends_on:

@@ -12,7 +12,7 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     # CodeQL ist auf privaten Repos nur mit GitHub Advanced Security verfügbar.
-    # Im Dev-Repo (tobiasnix/anlaufstelle, privat) und im Stage-Repo
+    # Im Dev-Repo (anlaufstelle/app, privat) und im Stage-Repo
     # (anlaufstelle/stage, privat) wird der Job geskippt; im App-Repo
     # (anlaufstelle/app, public) läuft er kostenfrei und meldet Findings
     # ans Security-Tab. Refs Issue #687.

@@ -6,7 +6,7 @@
 
 ## Context
 
-Es existierte ein lauffähiger Prototyp ([`tobiasnix/anlaufstelle-prototyp`](https://github.com/tobiasnix/anlaufstelle-prototyp)) mit Code, ~30 Issues, Seed-Daten und DSGVO-Vorlagen. Bei einer Architektur­bestandsaufnahme zeigten sich fünf strukturelle Schulden, die einen produktiven Einsatz für eine niedrigschwellige soziale Einrichtung gefährdet hätten:
+Es existierte ein lauffähiger Prototyp ([`anlaufstelle/app-prototyp`](https://github.com/anlaufstelle/app-prototyp)) mit Code, ~30 Issues, Seed-Daten und DSGVO-Vorlagen. Bei einer Architektur­bestandsaufnahme zeigten sich fünf strukturelle Schulden, die einen produktiven Einsatz für eine niedrigschwellige soziale Einrichtung gefährdet hätten:
 
 1. Kein konsistentes Mandanten-/Facility-Scoping auf Datenbankebene.
 2. Ad-hoc-Verschlüsselung ohne Key-Rotation und ohne klare Failure-Semantik.
@@ -35,5 +35,5 @@ Greenfield-Rewrite. Das neue Repo `anlaufstelle` startet mit Django 5.1 / Python
 
 ## References
 
-- [docs/fachkonzept-anlaufstelle.md](../fachkonzept-anlaufstelle.md)
+- [docs/fachkonzept-anlaufstelle.md](./fachkonzept-anlaufstelle.md)
 - Erste Commits ab 2026-03-19 (`5b35b40 feat: initialize Django project structure`)

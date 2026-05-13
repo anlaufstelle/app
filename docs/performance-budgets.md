@@ -1,17 +1,17 @@
-# Performance Budgets (Refs [#825](https://github.com/tobiasnix/anlaufstelle/issues/825))
+# Performance Budgets
 
 Schwellen für die nächtliche Last-Tests-Schicht ([Locust](https://locust.io/) auf der Seed-`large`-Datenbasis). Werte sind 95-Perzentil-Antwortzeiten in Millisekunden — überschreitet ein Endpoint sein Budget, scheitert der `perf-nightly`-Workflow.
 
 | Endpoint | Aufruf | Budget (p95) | Begründung |
 |---|---|---|---|
-| Zeitstrom | `GET /` | **500 ms** | Hauptlandeseite — Refs [#740](https://github.com/tobiasnix/anlaufstelle/issues/740) Sidebar-Prefetch |
-| Personen-Liste | `GET /clients/` | **500 ms** | Pagination + Annotation `last_contact=Max(...)` |
+| Zeitstrom | `GET /` | **500 ms** | Hauptlandeseite — Sidebar-Prefetch |
+| Personen-Liste | `GET /clients/` | **500 ms** | Pagination + Annotation `last_contact=Max(..)` |
 | Fall-Liste | `GET /cases/` | **500 ms** | Select-related auf `client` und `lead_user` |
 | WorkItem-Inbox | `GET /workitems/` | **500 ms** | Drei Listen, jeweils auf `WORKITEM_INBOX_CAP` |
-| Suche | `GET /search/?q=...` | **500 ms** | seit Refs [#827](https://github.com/tobiasnix/anlaufstelle/issues/827) auf `search_text`-GIN-Index |
-| Statistik-Dashboard | `GET /statistics/?period=month` | **1000 ms** | MV-Hybrid — Refs [#683](https://github.com/tobiasnix/anlaufstelle/issues/683) |
-| PDF-Export | `GET /statistics/export/pdf/...` | **5000 ms** | WeasyPrint — synchron |
-| CSV-Export | `GET /statistics/export/csv/...` | **2000 ms** | Stream, aber alle Events ein Halbjahr |
+| Suche | `GET /search/?q=..` | **500 ms** | seit auf `search_text`-GIN-Index |
+| Statistik-Dashboard | `GET /statistics/?period=month` | **1000 ms** | MV-Hybrid — |
+| PDF-Export | `GET /statistics/export/pdf/..` | **5000 ms** | WeasyPrint — synchron |
+| CSV-Export | `GET /statistics/export/csv/..` | **2000 ms** | Stream, aber alle Events ein Halbjahr |
 
 ## Workflow
 

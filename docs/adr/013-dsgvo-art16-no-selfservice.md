@@ -29,7 +29,7 @@ Berichtigung nach DSGVO Art. 16 läuft **organisatorisch** über Mitarbeiter und
 - **+** Fachliche Verantwortung bleibt bei Mitarbeitern und Leitung.
 - **+** AuditLog dokumentiert *wer* berichtigt hat, mit welcher fachlichen Begründung.
 - **−** Keine technische Skalierung — bei großen Trägern könnte ein Self-Service Personal entlasten. Für die Zielgruppe (kleine Einrichtungen) nicht relevant.
-- **−** Einrichtungen müssen den organisatorischen Prozess dokumentieren (Vorlagen in [`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/)).
+- **−** Einrichtungen müssen den organisatorischen Prozess dokumentieren (Vorlagen in [`src/core/dsgvo_templates/`](././src/core/dsgvo_templates/)).
 
 ## Alternatives considered
 
@@ -39,5 +39,5 @@ Berichtigung nach DSGVO Art. 16 läuft **organisatorisch** über Mitarbeiter und
 
 ## References
 
-- [`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/)
-- [`docs/admin-guide.md`](../admin-guide.md)
+- [`src/core/dsgvo_templates/`](././src/core/dsgvo_templates/)
+- [`docs/admin-guide.md`](./admin-guide.md)

@@ -1,4 +1,4 @@
-> This is the English translation of [admin-guide.md](../admin-guide.md).
+> This is the English translation of [admin-guide.md](./admin-guide.md).
 > The German version is the authoritative source. Last synced: 2026-04-28 (v0.10.2).
 
 # Anlaufstelle -- Admin Guide
@@ -32,7 +32,7 @@ This guide is intended for IT administrators of social service facilities who in
 
 ## 1. Installation (Docker Compose)
 
-> **Alternative: Coolify on Hetzner CX22** -- For the recommended deployment via [Coolify](https://coolify.io/) (including TLS, backups, and ClamAV), see the separate guide [`docs/coolify-deployment.md`](https://github.com/tobiasnix/anlaufstelle/blob/main/docs/coolify-deployment.md). The following Docker Compose instructions still apply for manual deployments.
+> **Alternative: Coolify on Hetzner CX22** -- For the recommended deployment via [Coolify](https://coolify.io/) (including TLS, backups, and ClamAV), see the separate guide [`docs/coolify-deployment.md`](https://github.com/anlaufstelle/app/blob/main/docs/coolify-deployment.md). The following Docker Compose instructions still apply for manual deployments.
 
 ### Prerequisites
 
@@ -60,7 +60,7 @@ curl -O https://raw.githubusercontent.com/anlaufstelle/app/main/Caddyfile
 Create a `.env` file in the same directory as `docker-compose.prod.yml`:
 
 ```bash
-cp .env.example .env   # if available, otherwise create manually
+cp.env.example.env # if available, otherwise create manually
 ```
 
 Minimal `.env` for production operation:
@@ -100,7 +100,7 @@ python3 -c "import secrets; print(secrets.token_urlsafe(50))"
 
 #### Full Environment Variable Reference
 
-All environment variables that the application evaluates at runtime (see [`src/anlaufstelle/settings/base.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/anlaufstelle/settings/base.py) and [`prod.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/anlaufstelle/settings/prod.py)):
+All environment variables that the application evaluates at runtime (see [`src/anlaufstelle/settings/base.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/base.py) and [`prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py)):
 
 **Django & Hosts**
 
@@ -128,7 +128,7 @@ All environment variables that the application evaluates at runtime (see [`src/a
 | `ENCRYPTION_KEYS` | -- | Comma-separated list of Fernet keys. The **first** key is the write key (new data is encrypted with it); all others are read-only (decrypt fallback during rotation). |
 | `ENCRYPTION_KEY` | -- | Legacy single key. At least one of the two variables must be set in production; otherwise the app refuses to start. |
 
-**Virus Scanning (ClamAV, [#524](https://github.com/tobiasnix/anlaufstelle/issues/524))**
+**Virus Scanning (ClamAV)**
 
 | Name | Default (prod) | Description |
 |---|---|---|
@@ -141,7 +141,7 @@ All environment variables that the application evaluates at runtime (see [`src/a
 
 | Name | Default | Description |
 |---|---|---|
-| `LOG_FORMAT` | `text` | `json` enables structured logging via [`core.logging.JsonFormatter`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/logging.py) -- recommended for production with log aggregation. |
+| `LOG_FORMAT` | `text` | `json` enables structured logging via [`core.logging.JsonFormatter`](https://github.com/anlaufstelle/app/blob/main/src/core/logging.py) -- recommended for production with log aggregation. |
 
 **Sentry (optional)**
 
@@ -174,7 +174,7 @@ The included `Caddyfile` automatically handles TLS certificates via Let's Encryp
 ```
 {$DOMAIN} {
     reverse_proxy web:8000
-    ...
+..
 }
 ```
 
@@ -278,12 +278,12 @@ Under **Core > Users > Add user** in the admin:
 - **Role:** One of the four roles (see below)
 - **Facility:** Assignment to a facility
 
-#### Token Invite Flow (Refs [#528](https://github.com/tobiasnix/anlaufstelle/issues/528))
+#### Token Invite Flow
 
 New accounts are created **without** a clear-text password. Instead, the application sends an **invitation email** containing a personalized setup link to the email address on file. The link takes the new user to the standard password-reset form, where they set a password themselves.
 
 1. Admin creates a user with an email address in the admin.
-2. The system calls [`send_invite_email`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/invite.py) and generates a token (Django's `default_token_generator`, based on `uidb64` + token hash).
+2. The system calls [`send_invite_email`](https://github.com/anlaufstelle/app/blob/main/src/core/services/invite.py) and generates a token (Django's `default_token_generator`, based on `uidb64` + token hash).
 3. The user receives the email, clicks the link, sets a password, and is logged in.
 
 **Token validity:** Django's default is `PASSWORD_RESET_TIMEOUT = 259200` seconds (3 days). In Anlaufstelle this can be raised up to 7 days via the Django setting -- the token generator also invalidates the token automatically once the user has set their first password.
@@ -370,7 +370,7 @@ Defines the minimum contact stage a client must have for an event of this type t
 
 In addition to the document type's sensitivity, each individual field of a field template can receive its **own** sensitivity level (`FieldTemplate.sensitivity`). For field visibility the **maximum** of the document-type and field sensitivity applies -- a field flagged `HIGH` stays invisible to staff even if the document type itself is only `NORMAL`.
 
-**Decoupling Encryption ↔ Visibility** (Refs [#356](https://github.com/tobiasnix/anlaufstelle/issues/356)): The two flags `is_encrypted` (at-rest encryption of the value in the database) and `sensitivity` (visibility in the UI) are configurable **independently**:
+**Decoupling Encryption ↔ Visibility**: The two flags `is_encrypted` (at-rest encryption of the value in the database) and `sensitivity` (visibility in the UI) are configurable **independently**:
 
 - A field may be stored encrypted on disk while still being visible in the UI at `NORMAL` sensitivity (e.g. contact data that all roles are allowed to see but that should not be stored in clear text).
 - A non-encrypted field can still be restricted to Lead/Admin (e.g. statistical markers that are sensitive, but do not need to be stored encrypted).
@@ -440,7 +440,7 @@ When an option is no longer needed, set `is_active` to `false` instead of removi
 
 ### 2.6b Fuzzy Search (pg_trgm)
 
-In addition to exact substring matching, the global client (pseudonym) search uses a **trigram-based fuzzy search** -- tolerant of typos and phonetic variants (e.g. "Schmidt" ↔ "Schmitt"). Implementation: [`src/core/services/search.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/search.py), function `search_similar_clients`.
+In addition to exact substring matching, the global client (pseudonym) search uses a **trigram-based fuzzy search** -- tolerant of typos and phonetic variants (e.g. "Schmidt" ↔ "Schmitt"). Implementation: [`src/core/services/search.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/search.py), function `search_similar_clients`.
 
 **Per-facility threshold:** Under **Core > Settings > *Facility*** > field **"Fuzzy search threshold"** (`Settings.search_trigram_threshold`):
 
@@ -458,7 +458,7 @@ The PostgreSQL extension `pg_trgm` must be enabled. The standard deployment sets
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 ```
 
-References: [#536](https://github.com/tobiasnix/anlaufstelle/issues/536), [#581](https://github.com/tobiasnix/anlaufstelle/issues/581).
+References:.
 
 ### 2.7 Two-Factor Authentication (2FA)
 
@@ -473,7 +473,7 @@ Anlaufstelle supports TOTP-based 2FA via [`django-otp`](https://django-otp-offic
 | **Single user** | `User.mfa_required` | Core > Users > *User* > "MFA required" field | 2FA mandatory for this user, disabling is blocked |
 | **Facility-wide** | `Settings.mfa_enforced_facility_wide` | Core > Settings > *Facility* > "Facility-wide 2FA enforcement" field | 2FA mandatory for **all** users of this facility |
 
-Evaluation happens via [`User.is_mfa_enforced`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/user.py) -- a user is considered enforced if **either** level applies. The MFA middleware blocks access to protected areas until a TOTP code has been verified in the session.
+Evaluation happens via [`User.is_mfa_enforced`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) -- a user is considered enforced if **either** level applies. The MFA middleware blocks access to protected areas until a TOTP code has been verified in the session.
 
 #### Reset 2FA for a User
 
@@ -483,11 +483,11 @@ If a staff member loses their authenticator device, an administrator has to dele
 2. Select the affected user's device and delete it.
 3. Inform the user: on their next login they will be redirected to `/mfa/setup/` (if `is_mfa_enforced=True`) or can re-enable 2FA voluntarily.
 
-Since v0.10.1 there are also **backup codes as a second factor** for exactly this recovery case (Refs [#588](https://github.com/tobiasnix/anlaufstelle/issues/588)). On 2FA setup the user receives 10 single-use codes that should be printed or stored in a password manager -- at the 2FA login prompt the user can enter a backup code instead of a TOTP code. Used codes are invalidated and recorded in the AuditLog (`MFA_BACKUP_CODE_USED`). If all 10 codes have been spent or lost, the admin reset above remains the fallback.
+Since v0.10.1 there are also **backup codes as a second factor** for exactly this recovery case. On 2FA setup the user receives 10 single-use codes that should be printed or stored in a password manager -- at the 2FA login prompt the user can enter a backup code instead of a TOTP code. Used codes are invalidated and recorded in the AuditLog (`MFA_BACKUP_CODE_USED`). If all 10 codes have been spent or lost, the admin reset above remains the fallback.
 
 #### Account Lockout
 
-After **10 failed login attempts** the account is automatically locked (the login service reads the threshold from [`src/core/services/login_lockout.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/login_lockout.py)). The locked user sees an information page and can no longer sign in until an admin unlocks the account:
+After **10 failed login attempts** the account is automatically locked (the login service reads the threshold from [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py)). The locked user sees an information page and can no longer sign in until an admin unlocks the account:
 
 1. **Admin > Core > Users** -- select the affected user.
 2. In the user profile under "Account status" click **Unlock account**.
@@ -501,9 +501,9 @@ All 2FA events are recorded in the `AuditLog` (actions: `MFA_ENABLED`, `MFA_DISA
 
 #### Relevant Files
 
-- Models: [`src/core/models/user.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/user.py), [`src/core/models/settings.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/settings.py)
-- Views: [`src/core/views/mfa.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/mfa.py)
-- Middleware: [`src/core/middleware/`](https://github.com/tobiasnix/anlaufstelle/tree/main/src/core/middleware)
+- Models: [`src/core/models/user.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py), [`src/core/models/settings.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/settings.py)
+- Views: [`src/core/views/mfa.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mfa.py)
+- Middleware: [`src/core/middleware/`](https://github.com/anlaufstelle/app/tree/main/src/core/middleware)
 
 ### 2.8 Quick Templates
 
@@ -527,7 +527,7 @@ Templates are maintained in the Django admin under **Core > Quick Templates**.
 
 #### `prefilled_data` -- Filter Rules
 
-The service layer applies a **whitelist filter** before writing and again before applying a template ([`src/core/services/quick_templates.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/quick_templates.py)). Values are kept only if:
+The service layer applies a **whitelist filter** before writing and again before applying a template ([`src/core/services/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/quick_templates.py)). Values are kept only if:
 
 - the slug belongs to the selected documentation type,
 - the effective sensitivity of the field is `NORMAL` (no `ELEVATED`/`HIGH` prefill),
@@ -538,7 +538,7 @@ This makes templates **self-healing**: if an admin later deactivates a select op
 
 #### Role and Sensitivity Visibility
 
-Quick templates are filtered per user using [`user_can_see_document_type`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/sensitivity.py). An assistant, who cannot see `ELEVATED`/`HIGH` documentation types, will not see templates for those types either. This guarantees the button list never exposes a template a user cannot actually apply.
+Quick templates are filtered per user using [`user_can_see_document_type`](https://github.com/anlaufstelle/app/blob/main/src/core/services/sensitivity.py). An assistant, who cannot see `ELEVATED`/`HIGH` documentation types, will not see templates for those types either. This guarantees the button list never exposes a template a user cannot actually apply.
 
 #### Operational Notes
 
@@ -548,18 +548,18 @@ Quick templates are filtered per user using [`user_can_see_document_type`](https
 
 #### Relevant Files
 
-- Model: [`src/core/models/quick_template.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/quick_template.py)
-- Service: [`src/core/services/quick_templates.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/quick_templates.py)
-- View integration: [`src/core/views/events.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/events.py) (`EventCreateView`)
-- Tracking issue: [#494](https://github.com/tobiasnix/anlaufstelle/issues/494)
+- Model: [`src/core/models/quick_template.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/quick_template.py)
+- Service: [`src/core/services/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/quick_templates.py)
+- View integration: [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) (`EventCreateView`)
+- Tracking issue: 
 
 ### 2.9 Encrypted File Vault & Virus Scanning
 
-File attachments (photos, scans, documents) on events are stored in an **encrypted vault**: scanned for viruses before being written to `MEDIA_ROOT`, then symmetrically encrypted with the `ENCRYPTION_KEYS` key material using AES-GCM. Refs [#524](https://github.com/tobiasnix/anlaufstelle/issues/524).
+File attachments (photos, scans, documents) on events are stored in an **encrypted vault**: scanned for viruses before being written to `MEDIA_ROOT`, then symmetrically encrypted with the `ENCRYPTION_KEYS` key material using AES-GCM.
 
 #### Upload Flow
 
-1. A staff member picks a file in the event form ([`src/core/forms/events.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/forms/events.py)).
+1. A staff member picks a file in the event form ([`src/core/forms/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/events.py)).
 2. The server validates file type and size (see `allowed_file_types` and `max_file_size_mb` in the facility settings -- default **10 MB**).
 3. **ClamAV scan** before encryption:
    - Default: fail-closed. If the daemon is unreachable (`CLAMAV_ENABLED=true`, but no TCP connect), the upload is **rejected**.
@@ -569,7 +569,7 @@ File attachments (photos, scans, documents) on events are stored in an **encrypt
 
 #### ClamAV Service (`docker-compose.prod.yml`)
 
-The production Compose file includes a dedicated `clamav` container with a healthcheck (`clamdcheck.sh`). The web service waits for `service_healthy` before starting. Reference: [`docker-compose.prod.yml`](https://github.com/tobiasnix/anlaufstelle/blob/main/docker-compose.prod.yml). Configurable via `CLAMAV_ENABLED` / `CLAMAV_HOST` / `CLAMAV_PORT` / `CLAMAV_TIMEOUT` (see [ENV reference in § 1](#full-environment-variable-reference)).
+The production Compose file includes a dedicated `clamav` container with a healthcheck (`clamdcheck.sh`). The web service waits for `service_healthy` before starting. Reference: [`docker-compose.prod.yml`](https://github.com/anlaufstelle/app/blob/main/docker-compose.prod.yml). Configurable via `CLAMAV_ENABLED` / `CLAMAV_HOST` / `CLAMAV_PORT` / `CLAMAV_TIMEOUT` (see [ENV reference in § 1](#full-environment-variable-reference)).
 
 #### Health Check
 
@@ -580,23 +580,23 @@ In production the `/health/` endpoint checks ClamAV daemon reachability in addit
 MultiFernet accepts a list of keys. To rotate:
 
 1. **Generate a new key** and add it as the **first** entry in `ENCRYPTION_KEYS`: `ENCRYPTION_KEYS=new,old`. Newly written data is encrypted with `new`; existing data stays readable via `old`.
-2. Optional: run `python manage.py reencrypt_fields` to re-encrypt existing fields with the new key (see [`src/core/management/commands/reencrypt_fields.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/management/commands/reencrypt_fields.py)).
+2. Optional: run `python manage.py reencrypt_fields` to re-encrypt existing fields with the new key (see [`src/core/management/commands/reencrypt_fields.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/reencrypt_fields.py)).
 3. After successful re-encryption, remove the old key from the list.
 
 > **Important:** Never **replace** the old key instead of **appending** the new one -- any still-unrotated data would become unreadable.
 
 #### Upload Limit
 
-- Per facility: `Settings.max_file_size_mb` (default **10 MB**) -- see [`src/core/models/settings.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/settings.py).
+- Per facility: `Settings.max_file_size_mb` (default **10 MB**) -- see [`src/core/models/settings.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/settings.py).
 - Global: Django's `DATA_UPLOAD_MAX_MEMORY_SIZE` applies as an additional hard limit. Raise it via ENV or settings override if larger uploads must be allowed.
 
 #### Safe Downloads (RFC 5987)
 
-All file downloads are delivered via the central helper [`safe_download_response`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/utils/downloads.py). The helper sets `Content-Disposition` with RFC-5987-encoded file names (Unicode-safe, no reverse-path traversal) and prevents browser MIME sniffing.
+All file downloads are delivered via the central helper [`safe_download_response`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/downloads.py). The helper sets `Content-Disposition` with RFC-5987-encoded file names (Unicode-safe, no reverse-path traversal) and prevents browser MIME sniffing.
 
 ### 2.10 Offline Mode & Streetwork (M6A)
 
-For field work (e.g. streetwork), Anlaufstelle offers a **secure offline mode** with **client-side** end-to-end encryption of all data cached on the device. Refs [#573](https://github.com/tobiasnix/anlaufstelle/issues/573), [#576](https://github.com/tobiasnix/anlaufstelle/issues/576).
+For field work (e.g. streetwork), Anlaufstelle offers a **secure offline mode** with **client-side** end-to-end encryption of all data cached on the device.
 
 #### Cryptographic Design
 
@@ -608,7 +608,7 @@ For field work (e.g. streetwork), Anlaufstelle offers a **secure offline mode** 
 | KDF input | User password + `User.offline_key_salt` (16 bytes, per-user, stored server-side) |
 | Key lifetime | In-memory only (`CryptoKey` with `extractable: false`) |
 
-Source: [`src/static/js/crypto.js`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/static/js/crypto.js), [`src/core/services/offline_keys.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/offline_keys.py).
+Source: [`src/static/js/crypto.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/crypto.js), [`src/core/services/offline_keys.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/offline_keys.py).
 
 #### Consequences for Admins
 
@@ -820,19 +820,19 @@ docker stats
 
 ### 5.4 CSP Debugging
 
-The Content Security Policy (CSP) is set **centrally in Django** via [`django-csp`](https://django-csp.readthedocs.io/) (see [`src/anlaufstelle/settings/base.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/anlaufstelle/settings/base.py), `CONTENT_SECURITY_POLICY`). The previously redundant CSP configuration in the Caddyfile has been removed -- this is the only way to ensure that app and reverse-proxy policies do not drift apart.
+The Content Security Policy (CSP) is set **centrally in Django** via [`django-csp`](https://django-csp.readthedocs.io/) (see [`src/anlaufstelle/settings/base.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/base.py), `CONTENT_SECURITY_POLICY`). The previously redundant CSP configuration in the Caddyfile has been removed -- this is the only way to ensure that app and reverse-proxy policies do not drift apart.
 
 **Inline scripts are not allowed.** All JavaScript logic lives in external files under `src/static/js/`, included via `<script src=…>` or through nonce-aware template tags.
 
-**`script-src` global without `'unsafe-eval'`.** With the migration to the `@alpinejs/csp` build (v0.10.2), `'unsafe-eval'` has been removed from the global policy. All Alpine components are registered as `Alpine.data()` components in [`src/static/js/alpine-components.js`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/static/js/alpine-components.js); architecture tests forbid inline `x-data="{...}"` and complex expressions (ternaries, `||`/`&&`, method calls, object literals) in Alpine and HTMX directives.
+**`script-src` global without `'unsafe-eval'`.** With the migration to the `@alpinejs/csp` build (v0.10.2), `'unsafe-eval'` has been removed from the global policy. All Alpine components are registered as `Alpine.data()` components in [`src/static/js/alpine-components.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/alpine-components.js); architecture tests forbid inline `x-data="{..}"` and complex expressions (ternaries, `||`/`&&`, method calls, object literals) in Alpine and HTMX directives.
 
-**Exception `/admin-mgmt/*` (Django admin):** django-unfold loads its own Alpine build that uses `new AsyncFunction()`-based evaluation for the Cmd+K search and therefore cannot initialize without `'unsafe-eval'`. The [`AdminCSPRelaxMiddleware`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/middleware/) therefore appends `'unsafe-eval'` **per request only for admin routes** -- which are additionally protected by the MFA gate and the `admin` role. Outside the admin, the strict global policy stays active.
+**Exception `/admin-mgmt/*` (Django admin):** django-unfold loads its own Alpine build that uses `new AsyncFunction()`-based evaluation for the Cmd+K search and therefore cannot initialize without `'unsafe-eval'`. The [`AdminCSPRelaxMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/) therefore appends `'unsafe-eval'` **per request only for admin routes** -- which are additionally protected by the MFA gate and the `admin` role. Outside the admin, the strict global policy stays active.
 
 **Typical error patterns in the browser console:**
 
 - `Refused to execute inline script because it violates the following Content Security Policy directive` -- inline `<script>` block in a template. Move the script to a static JS file or include it via a nonce-aware template tag.
 - `Refused to load the script … because it violates … directive: "script-src 'self'"` -- external script CDNs are not supported; all scripts must come from `self`.
-- `Refused to evaluate a string as JavaScript because 'unsafe-eval' is not an allowed source` -- expected on regular routes (architecture violation); inside the admin area this indicates that the relax middleware did not match (check the route pattern in [`AdminCSPRelaxMiddleware`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/middleware/)).
+- `Refused to evaluate a string as JavaScript because 'unsafe-eval' is not an allowed source` -- expected on regular routes (architecture violation); inside the admin area this indicates that the relax middleware did not match (check the route pattern in [`AdminCSPRelaxMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/)).
 
 If CSP errors appear after an update: check the browser console for the **specific blocked URL/source** and decide whether to move the source into the template or adjust the CSP directive.
 
@@ -1006,7 +1006,7 @@ Every execution that deletes records is automatically logged in the audit log.
 
 #### Retention Dashboard
 
-A **retention dashboard** is available under [`/retention/`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/views/retention.py) where Lead and Admin roles can efficiently process deletion proposals generated by `enforce_retention`. Refs [#514](https://github.com/tobiasnix/anlaufstelle/issues/514), [#515](https://github.com/tobiasnix/anlaufstelle/issues/515).
+A **retention dashboard** is available under [`/retention/`](https://github.com/anlaufstelle/app/blob/main/src/core/views/retention.py) where Lead and Admin roles can efficiently process deletion proposals generated by `enforce_retention`.
 
 | Bulk Action | Effect |
 |---|---|
@@ -1018,11 +1018,11 @@ A **retention dashboard** is available under [`/retention/`](https://github.com/
 
 Individual records can be protected from automatic deletion via **Legal Hold** (e.g. during ongoing investigations, audits, or data subject requests). The flag is tracked on the record or in a `LegalHold` entry and is respected by the retention job -- a record with an active Legal Hold is **never** proposed for deletion, even if its retention period has expired.
 
-Legal Holds are managed in the retention dashboard and in the Django admin (see [`src/core/models/retention.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/retention.py)).
+Legal Holds are managed in the retention dashboard and in the Django admin (see [`src/core/models/retention.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/retention.py)).
 
 #### K-Anonymization Instead of Hard Delete
 
-As an alternative to hard deletion, **k-anonymization** can be enabled per facility (Refs [#535](https://github.com/tobiasnix/anlaufstelle/issues/535)).
+As an alternative to hard deletion, **k-anonymization** can be enabled per facility.
 
 | Field in `Settings` | Default | Description |
 |---|---|---|
@@ -1077,11 +1077,11 @@ The following administrative capabilities are available for handling requests fr
 
 ### 7.8 Optimistic Locking
 
-To protect against **silent overwrites** when two users edit the same record in parallel (two staff members have the same client/case open at the same time and save one after another), Anlaufstelle applies **optimistic locking** at the service layer. Refs [#531](https://github.com/tobiasnix/anlaufstelle/issues/531).
+To protect against **silent overwrites** when two users edit the same record in parallel (two staff members have the same client/case open at the same time and save one after another), Anlaufstelle applies **optimistic locking** at the service layer.
 
 **Affected models:** Client, Case, WorkItem, Settings, Event.
 
-**Mechanics** ([`src/core/services/locking.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/services/locking.py)):
+**Mechanics** ([`src/core/services/locking.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/locking.py)):
 
 - Every form renders the current `updated_at` as a hidden field.
 - On save, the helper `check_version_conflict(instance, expected_updated_at)` verifies whether the record has been modified in the meantime.
@@ -1094,13 +1094,13 @@ To protect against **silent overwrites** when two users edit the same record in 
 
 ### 7.9 Row Level Security (RLS)
 
-In addition to ORM-side facility scoping, **PostgreSQL row-level security** is enabled on **18 facility-scoped tables** as **defense-in-depth**. A buggy ORM query that forgets facility scoping still returns no foreign data, thanks to RLS. Refs [#542](https://github.com/tobiasnix/anlaufstelle/issues/542), [#586](https://github.com/tobiasnix/anlaufstelle/issues/586).
+In addition to ORM-side facility scoping, **PostgreSQL row-level security** is enabled on **18 facility-scoped tables** as **defense-in-depth**. A buggy ORM query that forgets facility scoping still returns no foreign data, thanks to RLS.
 
 #### How It Works
 
-- The middleware [`FacilityScopeMiddleware`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/middleware/facility_scope.py) sets the Postgres session variable `app.current_facility_id` per request via `SELECT set_config('app.current_facility_id', <id>, false)` (session scope, not transaction scope).
-- The RLS policies (migration [`0047_postgres_rls_setup`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/migrations/0047_postgres_rls_setup.py)) filter every row via `facility_id = current_setting('app.current_facility_id', true)`.
-- **Fail-closed:** if the variable is empty or unset, `current_setting(..., true)` returns NULL, the comparison fails, and **no rows** are returned.
+- The middleware [`FacilityScopeMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/facility_scope.py) sets the Postgres session variable `app.current_facility_id` per request via `SELECT set_config('app.current_facility_id', <id>, false)` (session scope, not transaction scope).
+- The RLS policies (migration [`0047_postgres_rls_setup`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0047_postgres_rls_setup.py)) filter every row via `facility_id = current_setting('app.current_facility_id', true)`.
+- **Fail-closed:** if the variable is empty or unset, `current_setting(.., true)` returns NULL, the comparison fails, and **no rows** are returned.
 - The middleware opens the DB cursor **only for authenticated requests**; anonymous routes (login, health check, static files) remain unaffected.
 - On every request the value is set fresh (including empty), so connection pooling cannot leak a leftover value from an earlier request.
 
@@ -1124,7 +1124,7 @@ Without the variable set, the protected tables visibly return **no rows** in `ps
 
 Statistics reporting in Anlaufstelle uses **two different acceleration layers**:
 
-1. **Materialized view** (`core_statistics_event_flat`) -- pre-aggregates current event data so the statistics page does not have to scan all events on every request. Refs [#544](https://github.com/tobiasnix/anlaufstelle/issues/544).
+1. **Materialized view** (`core_statistics_event_flat`) -- pre-aggregates current event data so the statistics page does not have to scan all events on every request.
 2. **Statistics snapshots** -- monthly, persisted aggregates that are captured **before** automatic deletion of old events. Historical reports stay correct even after GDPR-mandated deletion.
 
 ### Refresh the Materialized View
@@ -1141,7 +1141,7 @@ docker compose -f docker-compose.prod.yml exec web \
   python manage.py refresh_statistics_view --no-concurrent
 ```
 
-Implementation: [`src/core/management/commands/refresh_statistics_view.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/management/commands/refresh_statistics_view.py).
+Implementation: [`src/core/management/commands/refresh_statistics_view.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/refresh_statistics_view.py).
 
 **Recommended cron cadence:**
 

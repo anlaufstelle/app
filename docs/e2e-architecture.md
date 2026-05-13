@@ -68,7 +68,7 @@ E2E-Tests prüfen **Verhalten aus Nutzersicht** (Klick → Ergebnis), nicht Auss
 assert page.locator("button:has-text('Annehmen')").is_visible()
 
 # Schlecht: Prüft Aussehen (fragil, bricht bei CSS-Refactoring)
-assert page.locator("button").get_attribute("class") == "px-3 py-1..."
+assert page.locator("button").get_attribute("class") == "px-3 py-1.."
 ```
 
 ---
@@ -158,7 +158,7 @@ expect(page.locator("button:has-text('Erledigt')")).to_be_visible()
 
 ```python
 page.fill("input[name='q']", "Blitz")
-page.wait_for_timeout(500)  # Alpine.js Debounce 200ms + Fetch
+page.wait_for_timeout(500) # Alpine.js Debounce 200ms + Fetch
 ```
 
 Nur fuer clientseitige Debounce-Timer noetig, nicht fuer Server-Waits.
@@ -187,7 +187,7 @@ Nur fuer clientseitige Debounce-Timer noetig, nicht fuer Server-Waits.
 ### Server startet nicht (RuntimeError)
 
 - **Ursache:** Port 8844 belegt oder gunicorn-Fehler
-- **Fix:** `lsof -i :8844` pruefen, ggf. alten Prozess beenden. gunicorn-Logs in `stderr` des Subprozesses pruefen.
+- **Fix:** `lsof -i:8844` pruefen, ggf. alten Prozess beenden. gunicorn-Logs in `stderr` des Subprozesses pruefen.
 
 ### Login schlaegt fehl nach test-Settings
 

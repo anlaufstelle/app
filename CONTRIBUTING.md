@@ -54,9 +54,9 @@ cd app
 **2. Python-Umgebung einrichten**
 
 ```bash
-python3.13 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements-dev.txt   # enthält Runtime + Test/Lint-Tools
+python3.13 -m venv.venv
+source.venv/bin/activate
+pip install -r requirements-dev.txt # enthält Runtime + Test/Lint-Tools
 # Alternativ nur Runtime (z.B. für Prod-Docker-Build):
 # pip install -r requirements.txt
 ```
@@ -78,12 +78,12 @@ make db
 
 Das startet einen PostgreSQL-16-Container mit folgenden Zugangsdaten:
 
-| Variable  | Wert          |
+| Variable | Wert |
 |-----------|---------------|
-| DB-Name   | anlaufstelle  |
-| User      | anlaufstelle  |
-| Passwort  | anlaufstelle  |
-| Port      | 5432          |
+| DB-Name | anlaufstelle |
+| User | anlaufstelle |
+| Passwort | anlaufstelle |
+| Port | 5432 |
 
 Alternativ kann eine lokal installierte PostgreSQL-Instanz verwendet werden. Die Verbindungs-URL muss dann in der Umgebungsvariable `DATABASE_URL` gesetzt werden.
 
@@ -113,10 +113,10 @@ make migrate
 **6. Seed-Daten laden** (optional, für lokale Entwicklung)
 
 ```bash
-make seed                              # Standard: small
-python src/manage.py seed --scale medium   # mehr Daten inkl. Fallmanagement
-python src/manage.py seed --scale large    # Lasttest-Volumen
-python src/manage.py seed --flush          # vorhandene Daten vorher löschen
+make seed # Standard: small
+python src/manage.py seed --scale medium # mehr Daten inkl. Fallmanagement
+python src/manage.py seed --scale large # Lasttest-Volumen
+python src/manage.py seed --flush # vorhandene Daten vorher löschen
 ```
 
 **Scale-Profile im Überblick:**
@@ -165,41 +165,41 @@ Der Server ist unter `https://localhost:8443` erreichbar (selbstsigniertes Zerti
 
 ## Make-Targets
 
-| Target           | Beschreibung                                                      |
+| Target | Beschreibung |
 |------------------|-------------------------------------------------------------------|
-| `make db`        | PostgreSQL-16-Container starten                                   |
-| `make db-stop`   | PostgreSQL-Container stoppen und entfernen                        |
-| `make migrate`   | Django-Migrationen ausführen                                      |
-| `make run`       | Dev-Server starten (gunicorn + HTTPS auf `0.0.0.0:8443`)        |
-| `make run-http`  | Fallback: Django runserver ohne HTTPS (`0.0.0.0:8000`)           |
-| `make seed`      | Seed-Daten in die Datenbank laden                                 |
-| `make tailwind`  | Tailwind CSS im Watch-Modus kompilieren                           |
-| `make tailwind-build` | Tailwind CSS für Produktion minifiziert kompilieren          |
-| `make lint`      | Code mit Ruff prüfen und Formatierung kontrollieren               |
-| `make typecheck` | mypy auf `core/services` (strikt) + Baseline-Check (Refs [#741](https://github.com/tobiasnix/anlaufstelle/issues/741)) |
-| `make test`      | Unit- und Integrationstests ausführen (ohne E2E)                  |
-| `make test-e2e`  | End-to-End-Tests mit Playwright ausführen                         |
-| `make check`     | Django-Systemcheck und Migrations-Konsistenz prüfen               |
-| `make ci`        | Vollständige CI-Pipeline lokal: `lint` + `check` + `test-parallel` |
-| `make test-focus T=<pfad>` | Einzelne Testdatei mit Fail-Fast                         |
-| `make test-parallel` | Unit- und Integrationstests parallel (pytest-xdist)            |
-| `make test-e2e-parallel` | E2E-Tests parallel (Default 2 Worker, konfigurierbar)     |
-| `make test-e2e-smoke` | Nur Smoke-markierte E2E-Tests (~2-3 min)                    |
-| `make deps-lock` | Lock-Files aus `requirements*.in` neu erzeugen (pip-tools)        |
-| `make deps-check` | Prüft, ob Lock-Files aktuell zu `.in` sind (Drift-Detektion)     |
-| `make dev`       | Datenbank starten, migrieren und Server starten (kombiniert)      |
+| `make db` | PostgreSQL-16-Container starten |
+| `make db-stop` | PostgreSQL-Container stoppen und entfernen |
+| `make migrate` | Django-Migrationen ausführen |
+| `make run` | Dev-Server starten (gunicorn + HTTPS auf `0.0.0.0:8443`) |
+| `make run-http` | Fallback: Django runserver ohne HTTPS (`0.0.0.0:8000`) |
+| `make seed` | Seed-Daten in die Datenbank laden |
+| `make tailwind` | Tailwind CSS im Watch-Modus kompilieren |
+| `make tailwind-build` | Tailwind CSS für Produktion minifiziert kompilieren |
+| `make lint` | Code mit Ruff prüfen und Formatierung kontrollieren |
+| `make typecheck` | mypy auf `core/services` (strikt) + Baseline-Check |
+| `make test` | Unit- und Integrationstests ausführen (ohne E2E) |
+| `make test-e2e` | End-to-End-Tests mit Playwright ausführen |
+| `make check` | Django-Systemcheck und Migrations-Konsistenz prüfen |
+| `make ci` | Vollständige CI-Pipeline lokal: `lint` + `check` + `test-parallel` |
+| `make test-focus T=<pfad>` | Einzelne Testdatei mit Fail-Fast |
+| `make test-parallel` | Unit- und Integrationstests parallel (pytest-xdist) |
+| `make test-e2e-parallel` | E2E-Tests parallel (Default 2 Worker, konfigurierbar) |
+| `make test-e2e-smoke` | Nur Smoke-markierte E2E-Tests (~2-3 min) |
+| `make deps-lock` | Lock-Files aus `requirements*.in` neu erzeugen (pip-tools) |
+| `make deps-check` | Prüft, ob Lock-Files aktuell zu `.in` sind (Drift-Detektion) |
+| `make dev` | Datenbank starten, migrieren und Server starten (kombiniert) |
 
 Vor jedem Commit sollte `make ci` lokal erfolgreich durchlaufen.
 
 ### Pre-Commit-Hooks (optional)
 
-Für die schnelle Drift-Detektion vor dem Commit ist eine [`.pre-commit-config.yaml`](.pre-commit-config.yaml) hinterlegt (Refs [#820](https://github.com/tobiasnix/anlaufstelle/issues/820), [#860](https://github.com/tobiasnix/anlaufstelle/issues/860)). Sie prüft `ruff` (lint + format), `makemigrations --check`, `mypy core/services`, den Translation-Version-Header und automatisches `pip-compile` bei `requirements*.in`-Änderungen.
+Für die schnelle Drift-Detektion vor dem Commit ist eine [`.pre-commit-config.yaml`](.pre-commit-config.yaml) hinterlegt. Sie prüft `ruff` (lint + format), `makemigrations --check`, `mypy core/services`, den Translation-Version-Header und automatisches `pip-compile` bei `requirements*.in`-Änderungen.
 
 ```bash
 .venv/bin/pip install pre-commit
-pre-commit install                       # einmalig: commit-stage Hooks
-pre-commit install --hook-type pre-push  # einmalig: pre-push Schnell-CI (Refs #860)
-pre-commit run --all-files               # alle commit-stage Hooks gegen das Repo
+pre-commit install # einmalig: commit-stage Hooks
+pre-commit install --hook-type pre-push # einmalig: pre-push Schnell-CI
+pre-commit run --all-files # alle commit-stage Hooks gegen das Repo
 ```
 
 **Zwei Stufen:**
@@ -207,7 +207,7 @@ pre-commit run --all-files               # alle commit-stage Hooks gegen das Rep
 - **Commit-Stage:** Ruff lint+format, `makemigrations --check`, `mypy`, Translation-Version, `pip-compile` bei Lock-File-Drift. Läuft in unter 5 s.
 - **Pre-Push:** `make lint && make deps-check && make check` — der Solo-Maintainer-Ersatz für Required Status Checks. Branch Protection mit Required Status Checks greift bei direktem `git push` auf `main` nicht; der pre-push-Hook fängt deshalb genau das ab, was sonst rote CI nach Push produzieren würde (Lock-Drift, Format-Drift, Migrations-Drift). Läuft in ~10 s. Tests bleiben in CI.
 
-CI auf [`tobiasnix/anlaufstelle`](https://github.com/tobiasnix/anlaufstelle/actions) ist die letztgültige Quelle der Wahrheit; der pre-push-Hook reduziert nur die Wahrscheinlichkeit roter CI nach Push.
+CI auf [`anlaufstelle/app`](https://github.com/anlaufstelle/app/actions) ist die letztgültige Quelle der Wahrheit; der pre-push-Hook reduziert nur die Wahrscheinlichkeit roter CI nach Push.
 
 ### Port-Übersicht und Prozess-Hygiene
 
@@ -228,7 +228,7 @@ CI auf [`tobiasnix/anlaufstelle`](https://github.com/tobiasnix/anlaufstelle/acti
 ps aux | grep -E 'gunicorn|runserver' | grep -v grep
 
 # Bestimmten Port freigeben
-lsof -ti :8443 | xargs kill
+lsof -ti:8443 | xargs kill
 
 # Alle gunicorn-Prozesse beenden
 pkill -f gunicorn
@@ -252,14 +252,14 @@ pkill -f gunicorn
 Jedes neue facility-gescopte Model muss auf **beiden** Verteidigungslinien abgesichert sein:
 
 1. **Django-Layer (erste Linie):**
-   - `facility = models.ForeignKey(Facility, ...)` am Model
+   - `facility = models.ForeignKey(Facility,..)` am Model
    - `objects = FacilityScopedManager()` (aus [`src/core/models/managers.py`](src/core/models/managers.py))
    - Views/Services filtern via `.for_facility(request.current_facility)`
 2. **PostgreSQL-RLS (zweite Linie, Defense-in-Depth):**
    - Neue Migration nach dem Muster von [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): Tabelle zu `DIRECT_TABLES` hinzufügen (oder `JOIN_TABLES`, falls kein direktes `facility_id`-Feld vorhanden ist). Die Migration setzt `ENABLE + FORCE ROW LEVEL SECURITY` plus eine `facility_isolation`-Policy.
    - Tabelle in `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) ergänzen, damit der RLS-Setup-Test die Abdeckung garantiert.
 
-Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS greift in Produktion nur, wenn der Django-DB-User **kein** Superuser ist (siehe [docs/coolify-deployment.md](docs/coolify-deployment.md)).
+Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS greift in Produktion nur, wenn der Django-DB-User **kein** Superuser ist (siehe [docs/dev-deployment.md](docs/dev-deployment.md), primaerer Pfad nach [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) ist eine alternative Plattform-Anleitung).
 
 ### Linting und Formatierung
 
@@ -305,15 +305,15 @@ Refs #<issue-nummer>
 
 **Typen:**
 
-| Typ        | Verwendung                                      |
+| Typ | Verwendung |
 |------------|-------------------------------------------------|
-| `feat`     | Neues Feature                                   |
-| `fix`      | Bugfix                                          |
-| `test`     | Tests hinzufügen oder anpassen                  |
-| `docs`     | Dokumentation                                   |
-| `chore`    | Wartungsarbeiten, Konfiguration, Dependencies   |
-| `refactor` | Refactoring ohne Verhaltensänderung             |
-| `style`    | Formatierung, kein Logik-Unterschied            |
+| `feat` | Neues Feature |
+| `fix` | Bugfix |
+| `test` | Tests hinzufügen oder anpassen |
+| `docs` | Dokumentation |
+| `chore` | Wartungsarbeiten, Konfiguration, Dependencies |
+| `refactor` | Refactoring ohne Verhaltensänderung |
+| `style` | Formatierung, kein Logik-Unterschied |
 
 **Beispiele:**
 
@@ -323,8 +323,6 @@ feat(clients): add duplicate-detection on import
 fix(events): prevent deletion of locked events
 
 test(security): add field-sensitivity E2E tests
-
-Refs #42
 ```
 
 Commits sind atomar: eine logische Änderung pro Commit. Direkt nach jeder Aufgabe zu pushen.
@@ -387,20 +385,20 @@ Diese Pipeline muss vor jedem Pull Request lokal grün sein.
 
 3. **Lokal verifizieren:**
    ```bash
-   make ci          # Lint, Check, Tests
-   make test-e2e    # E2E-Tests
+   make ci # Lint, Check, Tests
+   make test-e2e # E2E-Tests
    ```
    Außerdem manuell im Browser prüfen, dass die Änderung wie erwartet funktioniert.
 
 4. **Pull Request öffnen:**
-   - Titel im Conventional-Commits-Stil (`feat: ...`, `fix: ...`)
+   - Titel im Conventional-Commits-Stil (`feat:..`, `fix:..`)
    - Beschreibung: Was wurde geändert und warum? Welche Issues werden geschlossen?
    - Screenshot oder Demo, wenn UI-Änderungen enthalten sind
    - Verlinkung des zugehörigen GitHub-Issues
 
 ### Code of Conduct
 
-Alle Mitwirkenden verpflichten sich auf den [Contributor Covenant 2.1](CODE_OF_CONDUCT.md). Belästigungsfälle melden Mitwirkende vertraulich an `kontakt@anlaufstelle.app` (Refs [#836](https://github.com/tobiasnix/anlaufstelle/issues/836)).
+Alle Mitwirkenden verpflichten sich auf den [Contributor Covenant 2.1](CODE_OF_CONDUCT.md). Belästigungsfälle melden Mitwirkende vertraulich an `kontakt@anlaufstelle.app`.
 
 5. **Review:** Mindestens ein Approval erforderlich. Feedback sachlich und konstruktiv.
 
@@ -412,59 +410,59 @@ Alle Mitwirkenden verpflichten sich auf den [Contributor Covenant 2.1](CODE_OF_C
 
 ### Rollen
 
-| Rolle       | Beschreibung                                       |
+| Rolle | Beschreibung |
 |-------------|----------------------------------------------------|
-| `admin`     | Vollzugriff, Systemkonfiguration                   |
-| `leitung`   | Leitungsebene, erweiterte Auswertungen             |
-| `fachkraft` | Fachkräfte, Kernarbeit mit Klientel und Events     |
-| `assistenz` | Eingeschränkter Zugriff, unterstützende Aufgaben   |
+| `admin` | Vollzugriff, Systemkonfiguration |
+| `leitung` | Leitungsebene, erweiterte Auswertungen |
+| `fachkraft` | Fachkräfte, Kernarbeit mit Klientel und Events |
+| `assistenz` | Eingeschränkter Zugriff, unterstützende Aufgaben |
 
 ### Projektstruktur
 
 ```
 src/
   manage.py
-  anlaufstelle/          # Django-Projekteinstellungen (settings, urls, wsgi)
+  anlaufstelle/ # Django-Projekteinstellungen (settings, urls, wsgi)
   core/
-    models/              # Ein Model (oder eng verwandte Models) pro Datei
-      organization.py    # Organization, Facility
-      user.py            # User (erweitert AbstractUser)
-      client.py          # Client
-      document_type.py   # DocumentType, FieldTemplate, DocumentTypeField
-      event.py           # Event
-      event_history.py   # EventHistory
-      workitem.py        # WorkItem, DeletionRequest
-      time_filter.py     # TimeFilter
-      case.py            # Case
-      episode.py         # Episode
-      outcome.py         # OutcomeGoal, Milestone
-      audit.py           # AuditLog
-      settings.py        # Settings
-    views/               # Class-based Views, aufgeteilt nach Funktionsbereich
-      aktivitaetslog.py  # AktivitaetslogView (Startseite)
-      timeline.py        # TimelineView (Event-Timeline)
-      clients.py         # Client CRUD
-      events.py          # Event CRUD + Löschworkflow
-      workitems.py       # WorkItem CRUD
-      cases.py           # Case, Episode, Goal, Milestone
-      search.py          # Volltextsuche
-      statistics.py      # Statistiken + Exporte
-      audit.py           # AuditLogListView
-      auth.py            # Login/Logout/Passwort
-      account.py         # Benutzerprofil
-      health.py          # HealthView
-      mixins.py          # Rollen-Mixins
-      pwa.py             # Service Worker
-    services/            # Business-Logik (Verschlüsselung, Retention, …)
-  templates/             # Django-Templates (HTMX-Partials eingeschlossen)
+    models/ # Ein Model (oder eng verwandte Models) pro Datei
+      organization.py # Organization, Facility
+      user.py # User (erweitert AbstractUser)
+      client.py # Client
+      document_type.py # DocumentType, FieldTemplate, DocumentTypeField
+      event.py # Event
+      event_history.py # EventHistory
+      workitem.py # WorkItem, DeletionRequest
+      time_filter.py # TimeFilter
+      case.py # Case
+      episode.py # Episode
+      outcome.py # OutcomeGoal, Milestone
+      audit.py # AuditLog
+      settings.py # Settings
+    views/ # Class-based Views, aufgeteilt nach Funktionsbereich
+      aktivitaetslog.py # AktivitaetslogView (Startseite)
+      timeline.py # TimelineView (Event-Timeline)
+      clients.py # Client CRUD
+      events.py # Event CRUD + Löschworkflow
+      workitems.py # WorkItem CRUD
+      cases.py # Case, Episode, Goal, Milestone
+      search.py # Volltextsuche
+      statistics.py # Statistiken + Exporte
+      audit.py # AuditLogListView
+      auth.py # Login/Logout/Passwort
+      account.py # Benutzerprofil
+      health.py # HealthView
+      mixins.py # Rollen-Mixins
+      pwa.py # Service Worker
+    services/ # Business-Logik (Verschlüsselung, Retention, …)
+  templates/ # Django-Templates (HTMX-Partials eingeschlossen)
   static/
     css/
-      input.css          # Tailwind-Eingabedatei
-      styles.css         # Kompiliertes CSS (nicht committen)
+      input.css # Tailwind-Eingabedatei
+      styles.css # Kompiliertes CSS (nicht committen)
   tests/
-    e2e/                 # Playwright E2E-Tests
-      conftest.py        # Shared Fixtures
-      test_<feature>.py  # Tests pro Feature
+    e2e/ # Playwright E2E-Tests
+      conftest.py # Shared Fixtures
+      test_<feature>.py # Tests pro Feature
 ```
 
 ### Wichtige Designentscheidungen
