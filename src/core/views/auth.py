@@ -45,6 +45,25 @@ class CustomLoginView(auth_views.LoginView):
     def post(self, request, *args, **kwargs):
         return super().post(request, *args, **kwargs)
 
+    def get_success_url(self):
+        """Refs #867: super_admin landet im /system/-Dashboard.
+
+        Default-Verhalten (``LOGIN_REDIRECT_URL`` bzw. ``?next=``) bleibt
+        fuer alle anderen Rollen erhalten — nur super_admin hat keinen
+        Facility-Kontext, wuerde also auf einer Facility-gescopten
+        Default-Seite (Zeitstrom) eine leere Sicht sehen.
+        """
+        user = self.request.user
+        if user.is_authenticated and getattr(user, "is_super_admin", False):
+            # ``?next=...`` darf das ueberstimmen — der User koennte
+            # einen Deep-Link zum System-Bereich oder einer
+            # eingebetteten Ressource haben.
+            redirect_to = self.get_redirect_url()
+            if redirect_to:
+                return redirect_to
+            return "/system/"
+        return super().get_success_url()
+
     def form_valid(self, form):
         # Account-Lockout (Refs #612): Nach 10 Fehlversuchen in 15 Minuten
         # auch bei korrektem Passwort sperren. Der View-Level-Ratelimit
@@ -179,7 +198,13 @@ class OfflineKeySaltView(LoginRequiredMixin, View):
             facility=request.user.facility,
             detail={"event": "offline_key_salt_fetched"},
         )
-        return JsonResponse({"salt": salt})
+        # Refs #867: super_admin landet im /system/-Bereich, andere Rollen
+        # auf der Default-Startseite (Zeitstrom). Wird hier mitgegeben, weil
+        # auth-bootstrap.js den Login-Redirect mit ``redirect: "manual"``
+        # liest und der Location-Header bei opaqueredirect-Responses nicht
+        # auslesbar ist (Fetch-API-Spec, same-origin). Vorher: Fallback ""/"".
+        home_url = "/system/" if getattr(request.user, "is_super_admin", False) else "/"
+        return JsonResponse({"salt": salt, "home_url": home_url})
 
 
 @require_POST

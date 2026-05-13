@@ -23,7 +23,7 @@ ROLE_MAX_SENSITIVITY = {
     User.Role.ASSISTANT: 0,  # NORMAL only
     User.Role.STAFF: 1,  # up to ELEVATED
     User.Role.LEAD: 2,  # all
-    User.Role.ADMIN: 2,  # all
+    User.Role.FACILITY_ADMIN: 2,  # all
 }
 
 

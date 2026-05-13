@@ -569,20 +569,25 @@ Wurde ein Ereignis gleichzeitig online (durch jemand anderen) und offline (durch
 
 ## 9. Rollen und Berechtigungen
 
-Anlaufstelle unterscheidet vier Rollen. Ihre Rolle wird von der Administration festgelegt.
+Anlaufstelle unterscheidet fünf Rollen. Ihre Rolle wird von der Anwendungsbetreuung Ihrer Einrichtung festgelegt.
 
 ### Rollenübersicht
 
 | Rolle | Anzeigename | Kurzbeschreibung |
 |---|---|---|
-| `admin` | Administrator | Vollzugriff auf alle Bereiche und Einstellungen |
-| `lead` | Leitung | Alle Fachkraft-Funktionen plus Auswertungen und Leitungsaufgaben |
-| `staff` | Fachkraft | Standardrolle für Mitarbeitende in der Dokumentation |
 | `assistant` | Assistenz | Eingeschränkte Erfassung ohne Zugriff auf qualifizierte Personendaten |
+| `staff` | Fachkraft | Standardrolle für Mitarbeitende in der Dokumentation |
+| `lead` | Leitung | Alle Fachkraft-Funktionen plus Auswertungen und Leitungsaufgaben |
+| `facility_admin` | Anwendungsbetreuung | Vollzugriff auf alle Bereiche und Einstellungen **Ihrer Einrichtung** (Audit-Log, DSGVO-Paket, Benutzerverwaltung) |
+| `super_admin` | Systemadministration | Träger-/Hosting-Konzept: facility-übergreifend, Bootstrap-Tools, getrennter `/system/`-Bereich. **In der normalen Fach-UI nicht sichtbar** — Endnutzer interagieren nicht mit ihm. |
+
+> **Hinweis:** Die Systemadministration (`super_admin`) ist eine Hosting-/Träger-Rolle. Sie hostet die Installation und legt die erste Einrichtung sowie die erste Anwendungsbetreuung an. Im fachlichen Tagesgeschäft begegnen Sie ihr in der Regel nicht — sie arbeitet ausschließlich im `/system/`-Bereich, der Ihnen als facility-gebundener User nicht zugänglich ist.
 
 ### Was darf wer?
 
-| Funktion | Assistenz | Fachkraft | Leitung | Admin |
+Tabelle nur für die vier facility-gebundenen Rollen — `super_admin` ist hier ausgeklammert, weil er nicht im Fach-UI arbeitet:
+
+| Funktion | Assistenz | Fachkraft | Leitung | Anwendungsbetreuung |
 |---|---|---|---|---|
 | Zeitstrom / Startseite einsehen | Ja | Ja | Ja | Ja |
 | Anonyme Kontakte dokumentieren | Ja | Ja | Ja | Ja |
@@ -599,16 +604,16 @@ Anlaufstelle unterscheidet vier Rollen. Ihre Rolle wird von der Administration f
 | Löschanträge stellen | Ja | Ja | Ja | Ja |
 | Löschanträge genehmigen | Nein | Nein | Ja | Ja |
 | Pseudonyme verwalten / Kontaktstufe ändern | Nein | Nein | Ja | Ja |
-| Audit-Log einsehen | Nein | Nein | Nein | Ja |
+| Audit-Log einsehen (eigene Einrichtung) | Nein | Nein | Nein | Ja |
 | Fallmanagement (Fälle, Episoden, Ziele) | Nein | Ja | Ja | Ja |
 | Fälle schließen / wiedereröffnen | Nein | Nein | Ja | Ja |
 | Benutzer und Einstellungen verwalten | Nein | Nein | Nein | Ja |
 
-> **Hinweis:** Der Zugriff ist immer auf die eigene Einrichtung beschränkt. Mitarbeitende einer Einrichtung können keine Daten anderer Einrichtungen derselben Organisation sehen.
+> **Hinweis:** Der Zugriff ist immer auf die eigene Einrichtung beschränkt. Mitarbeitende einer Einrichtung können keine Daten anderer Einrichtungen derselben Organisation sehen — auch die Anwendungsbetreuung (`facility_admin`) sieht nur die eigene Einrichtung.
 
-### Audit-Log (nur Admin)
+### Audit-Log (nur Anwendungsbetreuung)
 
-Das Audit-Log (`/audit/`) protokolliert automatisch sicherheitsrelevante Aktionen: Anmeldungen, Zugriffe auf qualifizierte Daten, Exporte, Löschungen und Stufenwechsel. Es kann nicht verändert werden und dient der Nachvollziehbarkeit im Sinne der DSGVO.
+Das Audit-Log (`/audit/`) protokolliert automatisch sicherheitsrelevante Aktionen: Anmeldungen, Zugriffe auf qualifizierte Daten, Exporte, Löschungen und Stufenwechsel. Es kann nicht verändert werden und dient der Nachvollziehbarkeit im Sinne der DSGVO. Zugriff hat die Anwendungsbetreuung (`facility_admin`) für die eigene Einrichtung.
 
 ---
 
@@ -750,7 +755,7 @@ Jede Episode zeigt ihren Status:
 
 ### Berechtigungen im Fallmanagement
 
-| Funktion | Assistenz | Fachkraft | Leitung | Admin |
+| Funktion | Assistenz | Fachkraft | Leitung | Anwendungsbetreuung |
 |---|---|---|---|---|
 | Fallliste einsehen | Nein | Ja | Ja | Ja |
 | Fall erstellen und bearbeiten | Nein | Ja | Ja | Ja |

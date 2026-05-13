@@ -65,8 +65,8 @@
 
     {# --- Desktop Sidebar: hidden below md, fixed left --- #}
     <nav class="hidden md:fixed md:inset-y-0 md:flex md:w-60 md:flex-col bg-surface border-r border-subtle" aria-label="{% trans 'Hauptnavigation' %}">
-        {# Org-Header: Logo-Box + Name + Facility #}
-        <a href="{% url 'core:zeitstrom' %}" class="p-4 border-b border-subtle flex items-center gap-2.5 hover:bg-canvas transition-colors">
+        {# Org-Header: super_admin -> /system/, sonst /zeitstrom/. Refs #867. #}
+        <a href="{% if user.is_super_admin %}{% url 'core:system_dashboard' %}{% else %}{% url 'core:zeitstrom' %}{% endif %}" class="p-4 border-b border-subtle flex items-center gap-2.5 hover:bg-canvas transition-colors">
             <div class="w-8 h-8 rounded-lg bg-accent flex items-center justify-center flex-shrink-0">
                 <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="#fff" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>
             </div>
@@ -75,7 +75,8 @@
                 {% if current_facility %}<div class="text-[12px] text-ink-muted mt-0.5 truncate">{{ current_facility.name }}</div>{% endif %}
             </div>
         </a>
-        {# Global Search #}
+        {# Global Search — facility-scoped, daher fuer super_admin nicht sinnvoll. #}
+        {% if user.is_assistant_or_above %}
         <div class="px-4 py-3 border-b border-subtle relative" x-data="globalSearch" :aria-expanded="ariaExpanded">
             <div class="relative">
                 <svg aria-hidden="true" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -97,7 +98,9 @@
                  data-testid="global-search-results">
             </div>
         </div>
+        {% endif %}
         {# --- "Neu erstellen" Create-Button: full-width mit Dropdown --- #}
+        {% if user.is_assistant_or_above %}
         <div class="px-4 py-3 border-b border-subtle relative" x-data="createMenu">
             <button @click="toggle" class="flex items-center gap-2 w-full bg-accent text-white rounded-md px-3 py-2 text-[13px] font-semibold" aria-label="{% trans 'Neu erstellen' %}" data-testid="sidebar-create-btn">
                 <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
@@ -126,7 +129,9 @@
                 {% endif %}
             </div>
         </div>
+        {% endif %}
         <div class="flex-1 overflow-y-auto px-2.5 py-2 space-y-px">
+            {% if user.is_assistant_or_above %}
             <a href="{% url 'core:zeitstrom' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'zeitstrom' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
                 {% trans "Zeitstrom" %}
@@ -139,12 +144,14 @@
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"/></svg>
                 {% trans "Personen" %}
             </a>
+            {% endif %}
             {% if user.is_staff_or_above %}
             <a href="{% url 'core:case_list' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'case_list,case_detail,case_create,case_update' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
                 {% trans "Fälle" %}
             </a>
             {% endif %}
+            {% if user.is_assistant_or_above %}
             <a href="{% url 'core:workitem_inbox' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'workitem_inbox,workitem_detail,workitem_create,workitem_update' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
                 {% trans "Aufgaben" %}
@@ -155,6 +162,7 @@
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"/></svg>
                 {% trans "Dateien" %}
             </a>
+            {% endif %}
             {% if user.is_lead_or_admin %}
             <a href="{% url 'core:statistics' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'statistics,statistics_csv_export,statistics_pdf_export,statistics_jugendamt_export' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 0 1 3 19.875v-6.75ZM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V8.625ZM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 0 1-1.125-1.125V4.125Z"/></svg>
@@ -169,7 +177,7 @@
                 {% trans "Löschfristen" %}
             </a>
             {% endif %}
-            {% if user.is_admin %}
+            {% if user.is_facility_admin %}
             <a href="{% url 'core:audit_log' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'audit_log' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 {% trans "Audit-Log" %}
@@ -179,6 +187,16 @@
                 {% trans "DSGVO-Paket" %}
             </a>
             <a href="/admin-mgmt/" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas" target="_blank" rel="noopener">
+                <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                {% trans "Administration" %}
+            </a>
+            {% endif %}
+            {% if user.is_super_admin %}
+            <a href="{% url 'core:system_dashboard' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'system_dashboard,system_organization,system_audit_list,system_audit_detail' %}bg-accent-light text-accent font-semibold{% endif %}" data-testid="nav-system">
+                <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12V7a2 2 0 012-2h10a2 2 0 012 2v5M5 12h14M5 12v5a2 2 0 002 2h10a2 2 0 002-2v-5M9 8.5h.01M9 15.5h.01"/></svg>
+                {% trans "Systembereich" %}
+            </a>
+            <a href="/admin-mgmt/" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas" target="_blank" rel="noopener" data-testid="nav-admin-super">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
                 {% trans "Administration" %}
             </a>
@@ -236,9 +254,18 @@
         </footer>
     </main>
 
-    {# --- Mobile Bottom-Nav: 5 Slots (Neu / Zeitstrom / Personen / Aufgaben / Mehr) --- #}
+    {# --- Mobile Bottom-Nav --- #}
+    {# Refs #867: super_admin sieht nur System-Slots (kein Facility-Kontext). #}
     <nav class="fixed bottom-0 inset-x-0 md:hidden bg-surface border-t border-subtle z-40" aria-label="{% trans 'Mobile Navigation' %}">
         <div class="flex justify-around py-1 pb-2">
+            {% if user.is_super_admin %}
+            {# Super-Admin-Layout: Systembereich + Mehr. #}
+            <a href="{% url 'core:system_dashboard' %}" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'system_dashboard,system_organization,system_audit_list,system_audit_detail' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-system">
+                <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12V7a2 2 0 012-2h10a2 2 0 012 2v5M5 12h14M5 12v5a2 2 0 002 2h10a2 2 0 002-2v-5M9 8.5h.01M9 15.5h.01"/></svg>
+                <span class="text-[12px] font-medium">{% trans "Systembereich" %}</span>
+            </a>
+            {% else %}
+            {# 5-Slot-Standard-Layout fuer Facility-User (Neu / Zeitstrom / Personen / Aufgaben / Mehr). #}
             {# Slot 1: Neu (+) Dropdown #}
             <div class="relative" x-data="createMenu">
                 <button @click="toggle" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center text-ink-muted hover:text-accent" aria-label="{% trans 'Neu erstellen' %}" data-testid="mobile-nav-create">
@@ -279,6 +306,7 @@
                 <span class="text-[12px] font-medium">{% trans "Aufgaben" %}</span>
                 {% if overdue_workitems_count %}<span class="absolute top-1 right-1.5 inline-flex items-center justify-center px-1 py-px rounded-full text-[12px] font-bold bg-red-500 text-white">{{ overdue_workitems_count }}!</span>{% endif %}
             </a>
+            {% endif %}
             {# Slot 5: Mehr (inkl. Suche, Übergabe und sonstiger Items) #}
             <div class="relative" x-data="mobileMore">
                 <button @click="toggleMore" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'handover,case_list,case_detail,case_create,case_update,attachment_list,search,statistics,deletion_request_list,deletion_review,retention_dashboard,audit_log,dsgvo_package,dsgvo_document,account_profile' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-more">
@@ -287,6 +315,7 @@
                 </button>
                 <div x-show="moreOpen" @click.away="closeAll" x-cloak x-transition
                      class="absolute bottom-full right-0 mb-2 w-52 bg-surface rounded-lg shadow-lg border border-subtle py-1 z-50">
+                    {% if user.is_assistant_or_above %}
                     {# Suche im Mehr-Dropdown (vorher eigener Slot) #}
                     <button @click="toggleSearch" class="w-full flex items-center gap-2.5 px-4 py-2 text-[13px] text-ink hover:bg-canvas" data-testid="mobile-nav-search">
                         <svg aria-hidden="true" class="w-4 h-4 text-ink-muted" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -298,14 +327,19 @@
                     <a href="{% url 'core:case_list' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "Fälle" %}</a>
                     {% endif %}
                     <a href="{% url 'core:attachment_list' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "Dateien" %}</a>
+                    {% endif %}
                     {% if user.is_lead_or_admin %}
                     <a href="{% url 'core:statistics' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "Statistik" %}</a>
                     <a href="{% url 'core:deletion_request_list' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "Löschanträge" %}</a>
                     <a href="{% url 'core:retention_dashboard' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "Löschfristen" %}</a>
                     {% endif %}
-                    {% if user.is_admin %}
+                    {% if user.is_facility_admin %}
                     <a href="{% url 'core:audit_log' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "Audit-Log" %}</a>
                     <a href="{% url 'core:dsgvo_package' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "DSGVO-Paket" %}</a>
+                    <a href="/admin-mgmt/" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas" target="_blank" rel="noopener">{% trans "Administration" %}</a>
+                    {% endif %}
+                    {% if user.is_super_admin %}
+                    <a href="{% url 'core:system_dashboard' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas" data-testid="mobile-nav-system">{% trans "Systembereich" %}</a>
                     <a href="/admin-mgmt/" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas" target="_blank" rel="noopener">{% trans "Administration" %}</a>
                     {% endif %}
                     <div class="border-t border-subtle my-1"></div>

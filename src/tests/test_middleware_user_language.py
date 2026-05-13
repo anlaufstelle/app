@@ -89,7 +89,7 @@ class TestHtmlLangAttribute:
         user = User.objects.create_user(
             username="enuser",
             password="testpass-en-1234",
-            role=User.Role.ADMIN,
+            role=User.Role.FACILITY_ADMIN,
             facility=facility,
             is_staff=True,
             preferred_language="en",

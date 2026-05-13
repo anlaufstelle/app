@@ -211,9 +211,42 @@ Erwartete Antwort:
 
 ## 2. Erstkonfiguration
 
-### 2.1 Einrichtung und Admin-Benutzer anlegen
+### 2.1 Erstinstallation: Super-Admin anlegen (Bootstrap)
 
-Führen Sie das interaktive Setup-Skript aus:
+**Vor jeder anderen Konfiguration** — direkt nach dem ersten `docker compose up` — wird ein **Super-Admin** (`role=super_admin`, „Systemadministration") angelegt. Diese Rolle ist der einzige facility-übergreifende Account und betreibt die Installation. Sie wird **nicht** über das normale Admin-UI angelegt, sondern über einen dedizierten interaktiven Befehl ohne Default-Passwort:
+
+```bash
+docker compose -f docker-compose.prod.yml exec web \
+  python manage.py create_super_admin
+```
+
+Das Skript fragt interaktiv nach:
+
+1. **Benutzername** (frei wählbar — Empfehlung: nicht `admin`)
+2. **E-Mail-Adresse** (Pflicht — wird für Recovery-Mails genutzt)
+3. **Passwort** (zweimal eingeben — keinen Default, keinen Demo-Wert)
+4. **Anzeigename**
+
+Nach erfolgreichem Abschluss existiert genau ein User mit Rolle `super_admin`. Mit diesem Account melden Sie sich anschließend unter `/login/` an und legen über den `/system/`-Bereich die erste Einrichtung und den ersten `facility_admin` an.
+
+> **Wichtig — kein Default-Passwort:** Aus DSGVO- und Sicherheits-Gründen liefert die Anwendung **kein** Default-Passwort und keinen Default-Benutzernamen aus (anders als der frühere `make seed`-Workflow für Entwicklungs-Demos). Wer den Befehl überspringt, erhält **keinen** anmeldungsfähigen Account.
+
+> **Hinweis:** Der Befehl ist idempotent in dem Sinn, dass ein bestehender `super_admin` nicht überschrieben wird. Soll ein zweiter Super-Admin angelegt werden, wird der Befehl erneut ausgeführt — bestehende Accounts bleiben unangetastet.
+
+#### Account-Sperre aufheben (CLI)
+
+Wird ein `super_admin` durch fehlgeschlagene Logins gesperrt (Standard: 10 Versuche, siehe [§ 2.7 Account-Lockout](#account-lockout)) und es gibt **keinen** zweiten Super-Admin, kann die Sperre nur per CLI aufgehoben werden — kein anderer User hat Zugriff auf das Bootstrap-Tool:
+
+```bash
+docker compose -f docker-compose.prod.yml exec web \
+  python manage.py unlock <username>
+```
+
+Der Befehl entsperrt den angegebenen User, schreibt einen `LOGIN_UNLOCK`-AuditLog-Eintrag und ist auf alle Rollen anwendbar (auch `facility_admin`, `lead`, `staff`, `assistant`). Für facility-gebundene User bleibt zusätzlich der UI-Pfad über die Anwendungsbetreuung möglich (siehe [§ 2.7 Account-Lockout](#account-lockout)).
+
+### 2.2 Einrichtung und Anwendungsbetreuung anlegen
+
+Nach dem Login als `super_admin` legen Sie über den `/system/`-Bereich die erste Einrichtung und einen `facility_admin` (Anwendungsbetreuung) für sie an. Alternativ steht das interaktive Setup-Skript zur Verfügung — geeignet für reine Single-Tenant-Installationen, in denen Systemadministration und Anwendungsbetreuung dieselbe Person sind:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec web \
@@ -224,12 +257,14 @@ Das Skript fragt interaktiv nach:
 
 1. **Name der Organisation** – z. B. `Diakonie Musterstadt e.V.`
 2. **Name der Einrichtung** – z. B. `Beratungsstelle Nord`
-3. **Admin-Benutzername** – Standard: `admin`
-4. **Admin-Passwort** (zweimal eingeben)
+3. **Benutzername der Anwendungsbetreuung** (`facility_admin`)
+4. **Passwort der Anwendungsbetreuung** (zweimal eingeben)
 
-Anschließend sind Organisation, Einrichtung, Standardeinstellungen und der erste Admin-Benutzer angelegt.
+Anschließend sind Organisation, Einrichtung, Standardeinstellungen und der erste `facility_admin`-Benutzer angelegt.
 
 > **Hinweis:** Sollte eine Organisation oder Einrichtung mit dem angegebenen Namen bereits existieren, wird sie wiederverwendet. Ein bestehender Benutzername wird nicht überschrieben.
+
+> **Organization als Branding-Hülse:** Die Organisation dient nur dem Träger-Branding (Logo, Name in Berichten). Es gibt keinen Org-Admin und keinen Cross-Facility-Effekt durch sie — facility-übergreifender Zugriff läuft ausschließlich über `super_admin` und `/system/`. Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md).
 
 ### 2.2 Django-Adminoberfläche
 
@@ -272,7 +307,7 @@ Im Admin unter **Core → Benutzer → Benutzer hinzufügen**:
 - **Benutzername:** Anmeldename (keine Klarnamen)
 - **E-Mail:** Pflicht für den Invite-Flow (siehe unten)
 - **Anzeigename:** Name für die Benutzeroberfläche
-- **Rolle:** Eine der vier Rollen (siehe unten)
+- **Rolle:** Eine der fünf Rollen (siehe unten)
 - **Einrichtung:** Zuweisung zu einer Einrichtung
 
 #### Token-Invite-Flow
@@ -293,12 +328,17 @@ Neue Konten werden **ohne** Klartext-Passwort angelegt. Stattdessen versendet di
 
 #### Rollenbeschreibung
 
-| Rolle | Bezeichnung | Berechtigungen |
-|---|---|---|
-| `admin` | Administrator | Vollzugriff auf alle Bereiche und Einstellungen |
-| `lead` | Leitung | Auswertungen, Löschanträge genehmigen, alle Fälle einsehen |
-| `staff` | Fachkraft | Kontakte, Fälle, Dokumentation erfassen und bearbeiten |
-| `assistant` | Assistenz | Eingeschränkte Erfassung, kein Zugriff auf qualifizierte Daten |
+Anlaufstelle kennt fünf Rollen — vier facility-gebunden, eine facility-übergreifend:
+
+| Rolle | Bezeichnung | Scope | Berechtigungen |
+|---|---|---|---|
+| `super_admin` | Systemadministration | facility-übergreifend (`/system/`) | Bootstrap, Einrichtungen anlegen, Pre-Auth-AuditLogs, Backup-Einsicht. Wird über `manage.py create_super_admin` angelegt — **nicht** über das Admin-UI. Jeder Aufruf einer `/system/`-View erzeugt einen `SYSTEM_VIEW`-AuditLog-Eintrag. |
+| `facility_admin` | Anwendungsbetreuung | eine Einrichtung | Vollzugriff in der eigenen Einrichtung: Benutzerverwaltung, Typ-/Sensitivitätskonfiguration, Audit-Log (`/audit/`), DSGVO-Paket. Kann **nicht** in andere Einrichtungen schauen. |
+| `lead` | Leitung | eine Einrichtung | Auswertungen, Löschanträge genehmigen, alle Fälle der Einrichtung einsehen, Datenexport |
+| `staff` | Fachkraft | eine Einrichtung | Kontakte, Fälle, Dokumentation erfassen und bearbeiten |
+| `assistant` | Assistenz | eine Einrichtung | Eingeschränkte Erfassung, kein Zugriff auf qualifizierte Daten |
+
+> **Trennung System ↔ Anwendung:** `super_admin` betreut Hosting und Bootstrap, `facility_admin` betreut Konfiguration und Nutzer **innerhalb** einer Einrichtung. Diese Trennung ist DSGVO-relevant: Der Super-Admin sieht keine fachlichen Inhalte einer Einrichtung, ohne dass dies im AuditLog (`SYSTEM_VIEW`) auftaucht. Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md).
 
 ### 2.5 Dokumentationstypen konfigurieren
 
@@ -330,8 +370,8 @@ Die Sensibilitätsstufe steuert, welche Rollen auf Einträge dieses Typs zugreif
 | Stufe | Zugriff | Verwendung |
 |-------|---------|------------|
 | **Normal** | Alle Rollen (inkl. Assistenz) | Allgemeine Kontakte, Leistungen |
-| **Erhöht** | Fachkraft, Leitung, Admin | Beratungsgespräche, medizinische Versorgung |
-| **Hoch** | Leitung und Admin | Krisengespräche, besonders sensible Daten |
+| **Erhöht** | Fachkraft, Leitung, Anwendungsbetreuung | Beratungsgespräche, medizinische Versorgung |
+| **Hoch** | Leitung und Anwendungsbetreuung | Krisengespräche, besonders sensible Daten |
 
 #### Systemtyp
 
@@ -488,11 +528,22 @@ Seit v0.10.1 gibt es zusätzlich **Backup-Codes als zweiten Faktor** für genau 
 
 #### Account-Lockout
 
-Nach **10 fehlgeschlagenen Login-Versuchen** wird das Konto automatisch gesperrt (Login-Service liest die Schwelle aus [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py)). Der gesperrte User sieht eine Hinweis-Seite und kann sich nicht mehr anmelden, bis ein Admin entsperrt:
+Nach **10 fehlgeschlagenen Login-Versuchen** wird das Konto automatisch gesperrt (Login-Service liest die Schwelle aus [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py)). Der gesperrte User sieht eine Hinweis-Seite und kann sich nicht mehr anmelden. Es gibt zwei Recovery-Pfade:
 
-1. **Admin → Core → Benutzer** → betroffenen User auswählen.
+**Pfad A — UI (für facility-gebundene User):** Die Anwendungsbetreuung (`facility_admin`) der Einrichtung kann den Account ihrer eigenen User entsperren:
+
+1. **Admin-mgmt → Core → Benutzer** → betroffenen User der eigenen Einrichtung auswählen.
 2. Im User-Profil unter „Account-Status" auf **Sperre aufheben** klicken.
 3. Cleanup wird im AuditLog als `LOGIN_UNLOCK` protokolliert (das `LOGIN_FAILED`-Log selbst ist dank `auditlog_immutable`-DB-Trigger unveränderbar).
+
+**Pfad B — CLI (für Recovery, insbesondere Super-Admins):** Wenn kein anderer User im System Zugriff hat (Single-Super-Admin-Sperre, oder gesperrter `facility_admin` und kein zweiter `facility_admin`), entsperrt der Hosting-Operator den Account direkt am Server:
+
+```bash
+docker compose -f docker-compose.prod.yml exec web \
+  python manage.py unlock <username>
+```
+
+Der Befehl ist auf alle Rollen anwendbar (`super_admin`, `facility_admin`, `lead`, `staff`, `assistant`), schreibt einen `LOGIN_UNLOCK`-AuditLog-Eintrag und ist die einzige Recovery-Option für gesperrte Super-Admins.
 
 Sperre, Entsperre und alle Versuche während der Sperrphase werden im AuditLog mitprotokolliert — nutzen Sie den Filter „Anmeldung fehlgeschlagen" / „Sperre aufgehoben" für eine retroaktive Auswertung.
 
@@ -545,7 +596,7 @@ Schnell-Vorlagen werden pro User über [`user_can_see_document_type`](https://gi
 
 - Vorlagen sind ein **Bequemlichkeits-Layer**, keine Datenquelle — das Ereignis wird weiter explizit vom User gespeichert, alle Felder bleiben editierbar.
 - Anwenden einer Vorlage **überschreibt bestehende Werte nicht**; gefüllt werden nur leere Felder.
-- Aktuell gibt es **keine Custom-UI** für die Vorlagen-Verwaltung außerhalb des Django-Admin. Nur User mit der Rolle `admin` können Vorlagen pflegen.
+- Aktuell gibt es **keine Custom-UI** für die Vorlagen-Verwaltung außerhalb des Django-Admin. Nur User mit der Rolle `facility_admin` können Vorlagen pflegen (in der eigenen Einrichtung).
 
 #### Relevante Dateien
 
@@ -827,7 +878,7 @@ Die Content-Security-Policy (CSP) wird **zentral in Django** über [`django-csp`
 
 **`script-src` global ohne `'unsafe-eval'`.** Mit der Migration auf den `@alpinejs/csp`-Build (v0.10.2) ist `'unsafe-eval'` aus der globalen Policy entfernt. Alle Alpine-Komponenten sind als `Alpine.data()`-Komponenten in [`src/static/js/alpine-components.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/alpine-components.js) registriert; Architektur-Tests verbieten Inline-`x-data="{..}"` und komplexe Expressions (Ternaries, `||`/`&&`, Method-Calls, Object-Literale) in Alpine-/HTMX-Direktiven.
 
-**Ausnahme `/admin-mgmt/*` (Django-Admin):** django-unfold lädt einen eigenen Alpine-Build, der für die Cmd+K-Suche `new AsyncFunction()`-basierte Auswertung nutzt und damit ohne `'unsafe-eval'` nicht initialisiert. Die [`AdminCSPRelaxMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/) ergänzt `'unsafe-eval'` deshalb **per Request nur für Admin-Routen** — diese sind durch MFA-Gate und Rolle `admin` zusätzlich geschützt. Außerhalb des Admins bleibt die strenge globale Policy aktiv.
+**Ausnahme `/admin-mgmt/*` (Django-Admin):** django-unfold lädt einen eigenen Alpine-Build, der für die Cmd+K-Suche `new AsyncFunction()`-basierte Auswertung nutzt und damit ohne `'unsafe-eval'` nicht initialisiert. Die [`AdminCSPRelaxMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/) ergänzt `'unsafe-eval'` deshalb **per Request nur für Admin-Routen** — diese sind durch MFA-Gate und Rolle `facility_admin` (bzw. `super_admin`) zusätzlich geschützt. Außerhalb des Admins bleibt die strenge globale Policy aktiv.
 
 **Typische Fehlerbilder im Browser-Console:**
 
@@ -965,7 +1016,7 @@ Die Anwendung speichert **keine Klarnamen** in der Datenbank. Personendaten werd
 
 - Personen werden über interne IDs referenziert.
 - Anzeigenamen in der Oberfläche sind konfigurierbare Pseudonyme.
-- Qualifizierte (identifizierbare) Daten sind nur für berechtigte Rollen (Leitung, Admin) sichtbar.
+- Qualifizierte (identifizierbare) Daten sind nur für berechtigte Rollen (Leitung, Anwendungsbetreuung) sichtbar. Die Systemadministration (`super_admin`) sieht qualifizierte Daten nur über den `/system/`-Bereich, jeder solche Zugriff wird im AuditLog (`SYSTEM_VIEW`) protokolliert.
 
 ### 7.3 Löschfristen und `enforce_retention`
 
@@ -1048,13 +1099,13 @@ Das Audit-Log ist **append-only** und unveränderlich. Es protokolliert automati
 
 **Im Admin einsehen:**
 
-Unter **Core → Audit-Logs** können Logs nach Aktion, Einrichtung, Benutzer und Zeitraum gefiltert werden. Nur Administratoren haben Zugriff.
+Unter **Core → Audit-Logs** (bzw. `/audit/`) können Logs nach Aktion, Einrichtung, Benutzer und Zeitraum gefiltert werden. Zugriff hat die Anwendungsbetreuung (`facility_admin`) für die eigene Einrichtung. Pre-Auth-AuditLogs ohne Facility-Bezug (z. B. `LOGIN_FAILED` bei unbekanntem Username) sind ausschließlich für die Systemadministration (`super_admin`) im `/system/`-Bereich sichtbar — siehe [ADR-007 Update 2026-05-10](adr/007-auditlog-append-only.md).
 
 **Aufbewahrung des Audit-Logs:** Das Audit-Log selbst unterliegt keiner automatischen Löschfrist innerhalb der Anwendung. Gemäß Ihrer internen Dokumentationspflicht (z. B. nach Empfehlung des BSI oder Ihrer Datenschutz-Folgenabschätzung) sollten Sie eine externe Archivierungsstrategie festlegen.
 
 ### 7.5 Löschanträge (4-Augen-Prinzip)
 
-Löschanträge für Personendaten werden im Vier-Augen-Prinzip bearbeitet: Ein Antrag muss von Leitung oder Admin genehmigt werden, bevor Daten endgültig gelöscht werden. Dies schützt vor versehentlicher oder unberechtigter Löschung.
+Löschanträge für Personendaten werden im Vier-Augen-Prinzip bearbeitet: Ein Antrag muss von Leitung oder Anwendungsbetreuung (`facility_admin`) genehmigt werden, bevor Daten endgültig gelöscht werden. Dies schützt vor versehentlicher oder unberechtigter Löschung.
 
 ### 7.6 Betroffenenrechte (Art. 15–20 DSGVO)
 
@@ -1062,8 +1113,8 @@ Für die Bearbeitung von Anfragen betroffener Personen stehen folgende administr
 
 | Recht | Maßnahme |
 |---|---|
-| Auskunft (Art. 15) | Audit-Log und Personendaten im Admin einsehen, ggf. exportieren |
-| Berichtigung (Art. 16) | Felder im Admin direkt bearbeiten |
+| Auskunft (Art. 15) | Audit-Log und Personendaten als Anwendungsbetreuung (`facility_admin`) einsehen, ggf. exportieren |
+| Berichtigung (Art. 16) | Felder als Anwendungsbetreuung im Admin-UI direkt bearbeiten |
 | Löschung (Art. 17) | Löschantrag über die Anwendung stellen (4-Augen-Prinzip) |
 | Datenportabilität (Art. 20) | Export-Funktion in der Anwendung |
 

@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Retention (System)" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+{% include "core/system/_banner.html" %}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-[22px] font-bold text-ink">{% trans "Retention (alle Einrichtungen)" %}</h1>
+</div>
+
+{% include "core/system/_subnav.html" %}
+
+<section class="mb-4 bg-surface border border-subtle rounded-[10px] p-4 text-[13px] text-ink-muted">
+    {% blocktrans %}
+    Cross-Facility-Aggregation der Löschvorschläge je Status. Read-Only — Aktionen
+    (Freigabe, Zurückstellen, Ablehnen) laufen weiterhin im Facility-Kontext der
+    jeweiligen Einrichtung.
+    {% endblocktrans %}
+    {% if critical_count %}
+    <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-red-100 text-red-800">
+        {% blocktrans count counter=critical_count %}1 Einrichtung mit überfälligen Vorschlägen{% plural %}{{ counter }} Einrichtungen mit überfälligen Vorschlägen{% endblocktrans %}
+    </span>
+    {% endif %}
+</section>
+
+<section class="bg-surface border border-subtle rounded-[10px] overflow-hidden" data-testid="system-retention-overview">
+    {% if rows %}
+    <table class="min-w-full divide-y divide-subtle">
+        <thead class="bg-canvas">
+            <tr>
+                <th class="px-4 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Einrichtung" %}</th>
+                <th class="px-4 py-2 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Ausstehend" %}</th>
+                <th class="px-4 py-2 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Freigegeben" %}</th>
+                <th class="px-4 py-2 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Legal Hold" %}</th>
+                <th class="px-4 py-2 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zurückgestellt" %}</th>
+                <th class="px-4 py-2 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Abgelehnt" %}</th>
+                <th class="px-4 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Nächste Frist" %}</th>
+                <th class="px-4 py-2 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Überfällig" %}</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-subtle">
+            {% for row in rows %}
+            <tr class="hover:bg-canvas {% if row.is_critical %}bg-red-50{% endif %}"
+                data-testid="system-retention-row-{{ row.facility.pk }}">
+                <td class="px-4 py-2.5 text-sm font-medium text-ink">{{ row.facility.name }}</td>
+                <td class="px-4 py-2.5 text-sm font-mono text-right text-ink-soft">{{ row.count_pending }}</td>
+                <td class="px-4 py-2.5 text-sm font-mono text-right text-ink-soft">{{ row.count_approved }}</td>
+                <td class="px-4 py-2.5 text-sm font-mono text-right text-ink-soft">{{ row.count_held }}</td>
+                <td class="px-4 py-2.5 text-sm font-mono text-right text-ink-soft">{{ row.count_deferred }}</td>
+                <td class="px-4 py-2.5 text-sm font-mono text-right text-ink-soft">{{ row.count_rejected }}</td>
+                <td class="px-4 py-2.5 text-sm text-ink-soft whitespace-nowrap">
+                    {% if row.next_due_date %}
+                        {{ row.next_due_date|date:"DATE_FORMAT" }}
+                    {% else %}
+                        <span class="text-ink-muted">–</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-2.5 text-sm font-mono text-right whitespace-nowrap">
+                    {% if row.overdue_count > 0 %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-red-100 text-red-800"
+                              data-testid="system-retention-overdue-{{ row.facility.pk }}">
+                            {{ row.overdue_count }}
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-green-100 text-green-800">
+                            0
+                        </span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot class="bg-canvas">
+            <tr class="font-semibold" data-testid="system-retention-totals">
+                <td class="px-4 py-2.5 text-sm text-ink">{% trans "Summe" %}</td>
+                <td class="px-4 py-2.5 text-sm font-mono text-right text-ink">{{ totals.count_pending }}</td>
+                <td class="px-4 py-2.5 text-sm font-mono text-right text-ink">{{ totals.count_approved }}</td>
+                <td class="px-4 py-2.5 text-sm font-mono text-right text-ink">{{ totals.count_held }}</td>
+                <td class="px-4 py-2.5 text-sm font-mono text-right text-ink">{{ totals.count_deferred }}</td>
+                <td class="px-4 py-2.5 text-sm font-mono text-right text-ink">{{ totals.count_rejected }}</td>
+                <td class="px-4 py-2.5 text-sm text-ink-muted">—</td>
+                <td class="px-4 py-2.5 text-sm font-mono text-right whitespace-nowrap">
+                    {% if totals.overdue_count > 0 %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-red-100 text-red-800">
+                            {{ totals.overdue_count }}
+                        </span>
+                    {% else %}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-green-100 text-green-800">
+                            0
+                        </span>
+                    {% endif %}
+                </td>
+            </tr>
+        </tfoot>
+    </table>
+    {% else %}
+    {% include "components/_empty_state.html" with icon="check" message=_("Keine Einrichtungen vorhanden.") %}
+    {% endif %}
+</section>
+{% endblock %}

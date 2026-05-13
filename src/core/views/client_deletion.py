@@ -20,7 +20,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.models import Client
 from core.services.clients import request_client_deletion, restore_client
-from core.views.mixins import AdminRequiredMixin, StaffRequiredMixin
+from core.views.mixins import FacilityAdminRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class ClientDeleteRequestView(StaffRequiredMixin, View):
     ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
     name="post",
 )
-class ClientRestoreView(AdminRequiredMixin, View):
+class ClientRestoreView(FacilityAdminRequiredMixin, View):
     """Admin stellt eine soft-geloeschte Person aus dem Papierkorb wieder her."""
 
     def post(self, request, pk):
@@ -71,7 +71,7 @@ class ClientRestoreView(AdminRequiredMixin, View):
         return redirect("core:client_detail", pk=pk)
 
 
-class ClientTrashView(AdminRequiredMixin, View):
+class ClientTrashView(FacilityAdminRequiredMixin, View):
     """Papierkorb-Liste: alle soft-deleteten Personen einer Einrichtung."""
 
     def get(self, request):

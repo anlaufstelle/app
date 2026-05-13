@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Verzeichnis Verarbeitungstätigkeiten (System)" %} – Anlaufstelle{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Print-CSS: Banner/Subnav verstecken, Cards zusammenhalten. */
+    @media print {
+        nav[aria-label], .no-print, [data-testid="system-cross-facility-banner"] {
+            display: none !important;
+        }
+        article {
+            page-break-inside: avoid;
+            border: 1px solid #ccc !important;
+            margin-bottom: 12px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="no-print">
+    {% include "core/system/_banner.html" %}
+</div>
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-[22px] font-bold text-ink">{% trans "Verzeichnis Verarbeitungstätigkeiten" %}</h1>
+    <button type="button"
+            data-action="print"
+            class="no-print px-4 py-2 rounded-md text-[13px] font-semibold bg-accent text-white hover:bg-accent/90"
+            data-testid="system-vvt-print-button">
+        {% trans "Drucken" %}
+    </button>
+</div>
+
+<div class="no-print">
+    {% include "core/system/_subnav.html" %}
+</div>
+
+<section class="mb-6 bg-surface border border-subtle rounded-[10px] p-4 text-[13px] text-ink-muted">
+    {% blocktrans %}
+    Verzeichnis der Verarbeitungstätigkeiten gemäß DSGVO Art. 30 Abs. 1. Zweck, Rechtsgrundlage,
+    Datenkategorien, Empfänger, Speicherfristen sowie technisch-organisatorische Maßnahmen pro Tätigkeit.
+    Read-Only — der Inhalt wird im Quellcode der Installation gepflegt.
+    {% endblocktrans %}
+</section>
+
+<div class="space-y-4 print:space-y-2" data-testid="system-vvt-list">
+    {% for activity in activities %}
+    <article id="vvt-{{ activity.id }}"
+             class="bg-surface border border-subtle rounded-[10px] p-5 print:p-3 print:break-inside-avoid"
+             data-testid="system-vvt-card-{{ activity.id }}">
+        <header class="mb-3 print:mb-2">
+            <h2 class="text-[16px] font-semibold text-ink">{{ activity.title }}</h2>
+            <p class="text-[12px] font-mono text-ink-muted mt-0.5">#{{ activity.id }}</p>
+        </header>
+
+        <dl class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 print:grid-cols-2 print:gap-y-2">
+            <div class="md:col-span-2 print:col-span-2">
+                <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zweck" %}</dt>
+                <dd class="text-sm text-ink mt-1">{{ activity.purpose }}</dd>
+            </div>
+
+            <div class="md:col-span-2 print:col-span-2">
+                <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Rechtsgrundlage" %}</dt>
+                <dd class="text-sm text-ink mt-1">{{ activity.legal_basis }}</dd>
+            </div>
+
+            <div>
+                <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Datenkategorien" %}</dt>
+                <dd class="mt-1">
+                    <ul class="list-disc list-inside text-sm text-ink space-y-0.5">
+                        {% for cat in activity.data_categories %}
+                        <li>{{ cat }}</li>
+                        {% endfor %}
+                    </ul>
+                </dd>
+            </div>
+
+            <div>
+                <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Empfänger" %}</dt>
+                <dd class="mt-1">
+                    <ul class="list-disc list-inside text-sm text-ink space-y-0.5">
+                        {% for r in activity.recipients %}
+                        <li>{{ r }}</li>
+                        {% endfor %}
+                    </ul>
+                </dd>
+            </div>
+
+            <div class="md:col-span-2 print:col-span-2">
+                <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Speicherfrist" %}</dt>
+                <dd class="text-sm text-ink mt-1">{{ activity.retention_period }}</dd>
+            </div>
+
+            <div class="md:col-span-2 print:col-span-2">
+                <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Technisch-organisatorische Maßnahmen (TOMs)" %}</dt>
+                <dd class="mt-1">
+                    <ul class="list-disc list-inside text-sm text-ink space-y-0.5">
+                        {% for tom in activity.toms %}
+                        <li>{{ tom }}</li>
+                        {% endfor %}
+                    </ul>
+                </dd>
+            </div>
+        </dl>
+    </article>
+    {% empty %}
+    {% include "components/_empty_state.html" with icon="check" message=_("Keine Verarbeitungstätigkeiten registriert.") %}
+    {% endfor %}
+</div>
+{% endblock %}

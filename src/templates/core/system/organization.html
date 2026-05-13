@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Organisation (System)" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+{% include "core/system/_banner.html" %}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-[22px] font-bold text-ink">{% trans "Organisation" %}</h1>
+</div>
+
+{# Sub-Navigation innerhalb /system/ #}
+{% include "core/system/_subnav.html" %}
+
+{% if organization %}
+<section class="mb-6 bg-surface border border-subtle rounded-[10px] p-4">
+    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+            <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Name" %}</dt>
+            <dd class="text-sm text-ink mt-1">{{ organization.name }}</dd>
+        </div>
+        <div>
+            <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt am" %}</dt>
+            <dd class="text-sm text-ink mt-1">{{ organization.created_at|date:"DATETIME_FORMAT" }}</dd>
+        </div>
+    </dl>
+</section>
+
+<section class="bg-surface border border-subtle rounded-[10px] overflow-hidden">
+    <h2 class="text-[15px] font-semibold text-ink px-4 py-3 border-b border-subtle">{% trans "Einrichtungen" %}</h2>
+    {% if facilities %}
+    <table class="min-w-full divide-y divide-subtle">
+        <thead class="bg-canvas">
+            <tr>
+                <th class="px-4 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Name" %}</th>
+                <th class="px-4 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Beschreibung" %}</th>
+                <th class="px-4 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktiv" %}</th>
+                <th class="px-4 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt am" %}</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-subtle">
+            {% for facility in facilities %}
+            <tr class="hover:bg-canvas">
+                <td class="px-4 py-2.5 text-sm font-medium text-ink">{{ facility.name }}</td>
+                <td class="px-4 py-2.5 text-sm text-ink-soft">{{ facility.description|default:"–" }}</td>
+                <td class="px-4 py-2.5 text-sm text-ink-soft">
+                    {% if facility.is_active %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-green-100 text-green-800">{% trans "Aktiv" %}</span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-gray-100 text-gray-800">{% trans "Inaktiv" %}</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-2.5 text-sm text-ink-soft">{{ facility.created_at|date:"DATETIME_FORMAT" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    {% include "components/_empty_state.html" with icon="users" message=_("Keine Einrichtungen vorhanden.") %}
+    {% endif %}
+</section>
+{% else %}
+<div class="bg-surface border border-subtle rounded-[10px] p-6">
+    <p class="text-sm text-ink-muted">{{ no_organization_hint }}</p>
+</div>
+{% endif %}
+{% endblock %}

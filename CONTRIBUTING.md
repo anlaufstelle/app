@@ -124,7 +124,8 @@ python src/manage.py seed --flush # vorhandene Daten vorher löschen
 | Daten | `small` (Default) | `medium` | `large` |
 |---|---|---|---|
 | Einrichtungen | 1 | 2 | 5 |
-| Users / Einrichtung | 4 | 4 | 4 |
+| Users (gesamt) | 5 (1 super_admin + 4 facility-User) | 9 (1 super_admin + 2×4) | 21 (1 super_admin + 5×4) |
+| Users / Einrichtung | 4 (`facility_admin`/`leitung`/`fachkraft`/`assistenz`) | 4 | 4 |
 | Clients / Einrichtung | 7 | 40 | 500 |
 | Events / Einrichtung | 25 | 750 | 10.000 |
 | Cases | 3 | 12 | 50 |
@@ -139,7 +140,9 @@ python src/manage.py seed --flush # vorhandene Daten vorher löschen
 
 > **Hinweis:** `small` enthält kein Fallmanagement (keine Episoden, Ziele). Für die Entwicklung am Fallmanagement `medium` verwenden.
 
-Seed-Zugangsdaten: Passwort `anlaufstelle2026`, Rollen `admin` / `leitung` / `fachkraft` / `assistenz`.
+Seed-Zugangsdaten: Passwort `anlaufstelle2026`, Rollen `superadmin` / `facility_admin` / `leitung` / `fachkraft` / `assistenz` (5 Logins). Der `superadmin` hat Rolle `super_admin` und keine `facility`-Zuordnung; alle anderen hängen an der Default-Einrichtung.
+
+> **Production:** In Produktion gibt es **kein** Default-Passwort und keinen Default-`super_admin`. Die Erstinstallation läuft über `manage.py create_super_admin` (interaktiv, ohne Default). Details: [docs/dev-deployment.md § Production-Bootstrap](docs/dev-deployment.md), [docs/admin-guide.md § 2.1 Erstinstallation](docs/admin-guide.md). Lockout-Recovery: `manage.py unlock <username>`.
 
 **7. Node-Abhängigkeiten installieren** (für Tailwind CSS)
 
@@ -244,7 +247,7 @@ pkill -f gunicorn
 - **Django 5.1+** — Class-based Views bevorzugt, Funktions-Views nur für einfache Fälle.
 - Business-Logik gehört in `core/services/`, nicht in Views oder Models.
 - Models sind aufgeteilt: ein Model (oder eng verwandte Models) pro Datei unter `core/models/`.
-- Rollen-Zugriffsschutz über Mixins aus `core/views/mixins.py`.
+- Rollen-Zugriffsschutz über Mixins aus `core/views/mixins.py` — verfügbar: `SuperAdminRequiredMixin` (nur `/system/`), `FacilityAdminRequiredMixin` (Admin der eigenen Facility), `LeadOrAdminRequiredMixin`, `StaffRequiredMixin`, `AssistantOrAboveRequiredMixin`.
 - Keine neuen Abhängigkeiten ohne vorherige Absprache einführen.
 
 ### Facility-Scoping & Row Level Security
@@ -410,12 +413,17 @@ Alle Mitwirkenden verpflichten sich auf den [Contributor Covenant 2.1](CODE_OF_C
 
 ### Rollen
 
-| Rolle | Beschreibung |
-|-------------|----------------------------------------------------|
-| `admin` | Vollzugriff, Systemkonfiguration |
-| `leitung` | Leitungsebene, erweiterte Auswertungen |
-| `fachkraft` | Fachkräfte, Kernarbeit mit Klientel und Events |
-| `assistenz` | Eingeschränkter Zugriff, unterstützende Aufgaben |
+Anlaufstelle kennt fünf Rollen — vier facility-gebunden, eine facility-übergreifend:
+
+| Rolle | DB-Wert | Scope | Beschreibung |
+|-------|---------|-------|--------------|
+| Systemadministration | `super_admin` | facility-übergreifend (`/system/`) | Hosting, Bootstrap, Pre-Auth-AuditLogs. Wird über `manage.py create_super_admin` angelegt. |
+| Anwendungsbetreuung | `facility_admin` | eine Einrichtung | Vollzugriff in der eigenen Facility (Audit-Log, DSGVO-Paket, Benutzerverwaltung). |
+| Leitung | `lead` | eine Einrichtung | Leitungsebene, erweiterte Auswertungen, Löschanträge genehmigen. |
+| Fachkraft | `staff` | eine Einrichtung | Kernarbeit mit Personen und Events. |
+| Assistenz | `assistant` | eine Einrichtung | Eingeschränkter Zugriff, unterstützende Aufgaben. |
+
+Architektur-Entscheidung: [ADR-018](docs/adr/018-rollenmodell-superadmin.md). Details zum RLS-Bypass für `super_admin`: [ADR-005 Update 2026-05-10](docs/adr/005-facility-scoping-and-rls.md).
 
 ### Projektstruktur
 

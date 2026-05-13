@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% load i18n core_tags %}
+
+{% block title %}{% trans "Audit-Log Detail (System)" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+{% include "core/system/_banner.html" %}
+
+<div class="max-w-2xl">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-[22px] font-bold text-ink">{% trans "Audit-Log Detail (System)" %}</h1>
+    </div>
+
+    <div class="bg-surface border border-subtle rounded-[10px] p-4 space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zeitstempel" %}</span>
+                <p class="text-sm font-medium">{{ entry.timestamp|date:"DATETIME_FORMAT" }}</p>
+            </div>
+            <div>
+                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Benutzer" %}</span>
+                <p class="text-sm font-medium">
+                    {% if entry.user %}{{ entry.user }}{% else %}<span class="text-ink-muted">–</span>{% endif %}
+                </p>
+            </div>
+            <div>
+                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktion" %}</span>
+                <p class="text-sm font-medium">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-accent-light text-accent">
+                        {{ entry.get_action_display }}
+                    </span>
+                </p>
+            </div>
+            <div>
+                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Einrichtung" %}</span>
+                <p class="text-sm font-medium">
+                    {% if entry.facility %}{{ entry.facility.name }}{% else %}<span class="text-ink-muted">{% trans "(System / ohne Einrichtung)" %}</span>{% endif %}
+                </p>
+            </div>
+            <div>
+                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "IP-Adresse" %}</span>
+                <p class="text-sm font-mono">{{ entry.ip_address|default:"–" }}</p>
+            </div>
+            <div>
+                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zieltyp" %}</span>
+                <p class="text-sm font-medium">{{ entry.target_type|default:"–" }}</p>
+            </div>
+            <div>
+                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Ziel-ID" %}</span>
+                <p class="text-sm font-mono text-ink-muted">{{ entry.target_id|default:"–" }}</p>
+            </div>
+        </div>
+
+        <div>
+            <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Details" %}</span>
+            <div class="mt-1">
+                {{ entry.detail|pretty_json }}
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <a href="{% url 'core:system_audit_list' %}" class="text-sm text-accent hover:underline">{% trans "Zurück zur Liste" %}</a>
+    </div>
+</div>
+{% endblock %}

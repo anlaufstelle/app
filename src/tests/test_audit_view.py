@@ -96,6 +96,50 @@ def test_audit_log_filter_by_date(client, admin_user, facility):
     assert str(old_entry.pk) not in ids
 
 
+@pytest.mark.django_db
+def test_facility_admin_audit_view_excludes_null_facility_entries(client, admin_user, facility):
+    """Refs #867: Die facility-scoped Audit-View (``core:audit_log``)
+    nutzt ``AuditLog.objects.for_facility(facility)`` — diese Filterung
+    auf ``facility=<concrete>`` schliesst NULL-Facility-Eintraege per
+    Definition aus.
+
+    Komplement zum ``/system/audit/``-Test: der facility-Admin sieht
+    NUR seine eigenen Eintraege; System-Events (NULL-Facility, z.B.
+    Pre-Auth-LOGIN_FAILED, SYSTEM_VIEW) bleiben in der Cross-Facility-
+    Sicht des super_admin reserviert.
+    """
+    import uuid
+
+    # Eigener Facility-Eintrag.
+    own_entry = AuditLog.objects.create(facility=facility, user=admin_user, action=AuditLog.Action.LOGIN)
+
+    # NULL-Facility-Eintrag (z.B. Pre-Auth-Loggen). Raw-SQL, weil der
+    # Manager-Default-Pfad ``facility`` NICHT explizit auf NULL setzt
+    # und WITH-CHECK-Policies in Produktion sonst greifen.
+    null_marker = "fac-admin-null-" + uuid.uuid4().hex[:8]
+    from django.db import connection as conn
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO core_auditlog (id, facility_id, user_id, action, "
+            "target_type, target_id, detail, ip_address, timestamp) "
+            "VALUES (%s, NULL, %s, %s, '', %s, '{}', NULL, NOW())",
+            [uuid.uuid4(), admin_user.pk, "login_failed", null_marker],
+        )
+
+    client.force_login(admin_user)
+    response = client.get(reverse("core:audit_log"))
+    assert response.status_code == 200
+
+    target_ids = [entry.target_id for entry in response.context["page_obj"].object_list]
+    ids = [str(entry.pk) for entry in response.context["page_obj"].object_list]
+    assert str(own_entry.pk) in ids, "Facility-Admin sieht eigenen Audit-Eintrag nicht."
+    assert null_marker not in target_ids, (
+        f"Facility-Admin sieht NULL-Facility-Audit (target_id={null_marker!r}). "
+        "Erwartet: NULL-Eintraege sind ausschliesslich in /system/audit/ sichtbar."
+    )
+
+
 class TestGetClientIp:
     """Tests für die konfigurierbare Client-IP-Ermittlung via TRUSTED_PROXY_HOPS."""
 

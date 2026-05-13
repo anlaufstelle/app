@@ -52,3 +52,34 @@ Postgres macht den per `POSTGRES_USER` angelegten Login-User automatisch zum Boo
 - **Admin-User** `anlaufstelle_admin` (`NOSUPERUSER BYPASSRLS`) — Operator-Tasks (`seed`, `migrate`, `retention-pruning`). Wird vom postgres-Init-Script angelegt.
 
 Operator-Tasks laufen via `compose run` mit `POSTGRES_USER`/`POSTGRES_PASSWORD`-ENV-Override (siehe [`deploy/deploy-dev.sh`](././deploy/deploy-dev.sh) und [`Makefile`](././Makefile) `dev-seed`-Target). App-Code nutzt ausschließlich den Runtime-User; kein BYPASSRLS-Toggling am Runtime-User.
+
+## Update 2026-05-10: Anwendungsrollen-Schicht für Superadmin
+
+Mit Einführung des 5-Rollen-Modells ([ADR-018](018-rollenmodell-superadmin.md)) braucht der `super_admin` einen facility-übergreifenden Lese-Pfad — und zwar bewusst **ohne** dafür einen weiteren DB-User mit `BYPASSRLS` einzuführen, weil der Runtime-User die einzige Verbindung in den Connection-Pool von gunicorn ist.
+
+**Lösung:** Eine **zweite Schicht oberhalb der DB-Rollen** (`anlaufstelle` / `anlaufstelle_admin`):
+
+- Migration [0085](././src/core/migrations/0085_rls_super_admin_branch.py) erweitert jede `facility_isolation`-Policy um einen OR-Branch:
+
+  ```sql
+  USING (
+      facility_id::text = current_setting('app.current_facility_id', true)
+      OR current_setting('app.is_super_admin', true) = 'true'
+  )
+  ```
+
+- Die [`FacilityScopeMiddleware`](././src/core/middleware/facility_scope.py) setzt **pro Request** entweder `app.current_facility_id` (für facility-gebundene User) oder `app.is_super_admin='true'` (für `super_admin`). Beides ist eine Postgres-Session-Variable, gesetzt via `SELECT set_config('app.is_super_admin', 'true', false)` (transaction-scoped via `false`-Flag, oder session-scoped — siehe Middleware).
+
+- **Always-Reset-Pattern (Pool-Leak-Schutz):** Vor jedem Request wird `app.is_super_admin` explizit auf `'false'` zurückgesetzt — auch wenn der vorige Request auf der gleichen DB-Connection ein `super_admin`-Request war. Damit kann ein lecker Pool-Connection nicht ausversehen einem nachfolgenden facility-User Cross-Tenant-Sicht geben. Der Test [`test_rls_super_admin.py`](././src/tests/test_rls_super_admin.py) verifiziert das Reset-Verhalten.
+
+**Architektur-Schichtung:**
+
+| Schicht | Mechanismus | Wer steuert? |
+|---|---|---|
+| 1 (Anwendung) | `FacilityScopedManager.for_facility()` + Mixin-Gating | Django-Code |
+| 2 (DB-User) | Runtime-User `anlaufstelle` ist `NOSUPERUSER NOBYPASSRLS` | Init-Script |
+| 3 (Anwendungsrolle) | `app.is_super_admin`-Session-Var als OR-Branch in Policies | Middleware (per Request neu gesetzt) |
+
+Schicht 3 ist die neue Ebene, Schichten 1+2 bleiben unverändert. Der Bootstrap-Superuser `postgres` und der Operator-User `anlaufstelle_admin` (BYPASSRLS) bleiben für Init/Wartung; sie sind kein Pfad für `super_admin`-Application-Logic.
+
+**Abgrenzung gegenüber „eigener DB-User":** Der erwogene Alternativ-Weg „dritter DB-User mit `BYPASSRLS` für `super_admin`-Requests" wurde verworfen, weil (a) Django-Connection-Pools pro Worker einen festen User haben, (b) ein dynamischer User-Wechsel per Request einen kompletten neuen Connection-Pool für `super_admin`-Sessions bräuchte, (c) das DSGVO-Audit aufwändiger wird (mehr DB-User = mehr `pg_user`-Rotation), und (d) die Anwendungsrollen-Schicht den gleichen Schutz mit weniger Komplexität bringt.

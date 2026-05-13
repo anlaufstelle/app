@@ -40,7 +40,7 @@ class CaseForm(forms.ModelForm):
         if facility:
             self.fields["lead_user"].queryset = User.objects.filter(  # type: ignore[attr-defined]
                 facility=facility,
-                role__in=[User.Role.STAFF, User.Role.LEAD, User.Role.ADMIN],
+                role__in=[User.Role.STAFF, User.Role.LEAD, User.Role.FACILITY_ADMIN],
             )
         self.fields["lead_user"].required = False
 

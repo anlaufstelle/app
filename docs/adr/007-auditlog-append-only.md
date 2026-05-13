@@ -52,3 +52,26 @@ Diese Einträge sind:
 - via RLS-WITH-CHECK explizit als gültiger INSERT erlaubt (Migration [0083](././src/core/migrations/0083_auditlog_rls_with_check.py))
 - durch den Append-Only-Trigger (Migration 0024) gegen UPDATE/DELETE geschützt
 - nur über Admin-User (`anlaufstelle_admin`, BYPASSRLS) oder Bootstrap-Superuser (`postgres`) auswertbar — Forensik-Pfad
+
+## Update 2026-05-10: Pre-Auth-AuditLog-Sichtbarkeit über /system/
+
+Die in der vorigen Iteration als „nur über psql sichtbar" deklarierten NULL-Facility-Audit-Einträge (`LOGIN_FAILED` ohne Facility-Bezug, Breach-Detection-Events, frühe Maintenance-Tasks) waren ein operativer Schmerzpunkt: Eine DSGVO-Auskunftsanfrage zu „Wer hat sich erfolglos mit meinem Username angemeldet?" verlangt einen Forensik-Pfad, der nicht mehr per psql-Login auf den Postgres-Container läuft. Issue verlangt explizit ein UI für diese Auswertung.
+
+**Entscheidung:** Mit dem 5-Rollen-Modell aus [ADR-018](018-rollenmodell-superadmin.md) erhält der `super_admin` einen `/system/`-Bereich mit AuditLog-Browser für **NULL-Facility-Einträge sowie facility-übergreifende Sicht aller Audit-Logs**:
+
+- Die View [`SystemAuditLogView`](././src/core/views/system.py) zeigt AuditLog-Einträge inklusive `facility IS NULL`-Treffer. Sie ist gekapselt durch `SuperAdminRequiredMixin` und nutzt RLS-Bypass via `app.is_super_admin`-Session-Variable (siehe [ADR-005 Update 2026-05-10](005-facility-scoping-and-rls.md)).
+- **Neue Action `SYSTEM_VIEW`:** Jeder Aufruf einer beliebigen `/system/`-View schreibt einen `SYSTEM_VIEW`-AuditLog-Eintrag mit Detail (`view_name`, Filter-Parameter, Anzahl angezeigter Einträge). Damit ist DSGVO-Rechenschaftspflicht (Art. 5(2) DSGVO) erfüllt: Auch der hochprivilegierte `super_admin` hinterlässt eine Spur, wenn er auf nicht-eigene Facility-Daten schaut.
+- **Banner im UI:** Permanenter Hinweis im `/system/`-Layout: „Sie greifen auf Daten facility-übergreifend zu — dieser Zugriff wird im Audit-Log protokolliert." Übersetzbar via `django.po`.
+
+**Was unverändert bleibt:**
+
+- DB-Trigger gegen UPDATE/DELETE (Migration 0024) greift auch für `SYSTEM_VIEW`-Einträge — ein Super-Admin kann seinen eigenen Zugriff nicht verstecken.
+- `anlaufstelle_admin` (BYPASSRLS, CLI-only) bleibt für Forensik-Tasks ohne UI bestehen — kein Verlust des direkten DB-Pfads.
+- NULL-Facility-Einträge sind weiterhin für reguläre App-User unsichtbar (RLS-USING-Policy unverändert).
+
+**Konsequenzen:**
+
+- **+** Issue gelöst: Forensik im UI statt nur in psql.
+- **+** DSGVO-Rechenschaftspflicht über `SYSTEM_VIEW` durchgängig erfüllt.
+- **−** `super_admin` ist jetzt eine *aktive* Rolle mit eigener UI-Surface — Wartungsaufwand für `/system/`-Views steigt.
+- **−** Ein kompromittierter `super_admin`-Account hat direkten UI-Zugriff auf alle Audit-Daten der Installation. Mitigation: MFA-Pflicht auf `super_admin` durch [ADR-015](015-mfa-totp.md), Lockout-Recovery nur via CLI (`manage.py unlock`).

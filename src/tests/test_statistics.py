@@ -22,7 +22,7 @@ def admin_user(facility):
     return User.objects.create_user(
         username="stat_admin",
         password="test1234",
-        role=User.Role.ADMIN,
+        role=User.Role.FACILITY_ADMIN,
         facility=facility,
     )
 

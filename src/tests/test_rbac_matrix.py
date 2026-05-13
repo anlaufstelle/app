@@ -1,8 +1,16 @@
-"""Systematic RBAC matrix tests across all 4 roles.
+"""Systematic RBAC matrix tests across all 5 roles.
 
-Tests every restricted view against all roles (Admin, Lead, Staff, Assistant)
-to ensure correct access/denial. Complements test_permissions.py by covering
-views not yet tested there and providing full 4-role matrix coverage.
+Tests every restricted view against all roles (FacilityAdmin, Lead, Staff,
+Assistant, SuperAdmin) to ensure correct access/denial. Complements
+test_permissions.py by covering views not yet tested there and providing
+full 5-role matrix coverage.
+
+Refs #867: SUPER_ADMIN ist die installations-weite Top-Rolle (Persona Jonas).
+Sie lebt ausschliesslich im ``/system/``-Bereich und hat *keinen* Zugriff
+auf facility-scoped Views — selbst Assistenz-only Views (z.B. Handover,
+Search) lehnen super_admin ab, weil ``is_assistant_or_above`` False ist.
+Die super_admin-spezifische ``/system/``-Test-Suite liegt separat in
+``test_system_views.py``.
 """
 
 import uuid
@@ -41,6 +49,9 @@ class TestCaseCloseViewRBAC:
             ("lead_user", 302),
             ("staff_user", 403),
             ("assistant_user", 403),
+            # Refs #867: super_admin lebt nur im /system/-Bereich — kein
+            # Zutritt zu Facility-scoped Views (is_lead_or_admin=False).
+            ("super_admin_user", 403),
         ],
     )
     def test_case_close(self, client, case_open, user_fixture, expected_status, request):
@@ -61,6 +72,7 @@ class TestCaseReopenViewRBAC:
             ("lead_user", 302),
             ("staff_user", 403),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_case_reopen(self, client, case_closed, user_fixture, expected_status, request):
@@ -81,6 +93,7 @@ class TestStatisticsViewRBAC:
             ("lead_user", 200),
             ("staff_user", 403),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_statistics_dashboard(self, client, user_fixture, expected_status, request):
@@ -100,6 +113,7 @@ class TestCSVExportViewRBAC:
             ("lead_user", True),
             ("staff_user", False),
             ("assistant_user", False),
+            ("super_admin_user", False),
         ],
     )
     def test_csv_export(self, client, user_fixture, allowed, request):
@@ -124,6 +138,7 @@ class TestPDFExportViewRBAC:
             ("lead_user", True),
             ("staff_user", False),
             ("assistant_user", False),
+            ("super_admin_user", False),
         ],
     )
     def test_pdf_export(self, client, user_fixture, allowed, request):
@@ -148,6 +163,7 @@ class TestJugendamtExportViewRBAC:
             ("lead_user", True),
             ("staff_user", False),
             ("assistant_user", False),
+            ("super_admin_user", False),
         ],
     )
     def test_jugendamt_export(self, client, user_fixture, allowed, request):
@@ -172,6 +188,7 @@ class TestDeletionRequestListViewRBAC:
             ("lead_user", 200),
             ("staff_user", 403),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_deletion_request_list(self, client, user_fixture, expected_status, request):
@@ -191,6 +208,7 @@ class TestDeletionRequestReviewViewRBAC:
             ("lead_user", 404),
             ("staff_user", 403),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_deletion_review_nonexistent(self, client, user_fixture, expected_status, request):
@@ -212,6 +230,7 @@ class TestClientDataExportJSONViewRBAC:
             ("lead_user", True),
             ("staff_user", False),
             ("assistant_user", False),
+            ("super_admin_user", False),
         ],
     )
     def test_client_export_json(self, client, client_identified, user_fixture, allowed, request):
@@ -235,6 +254,7 @@ class TestClientDataExportPDFViewRBAC:
             ("lead_user", True),
             ("staff_user", False),
             ("assistant_user", False),
+            ("super_admin_user", False),
         ],
     )
     def test_client_export_pdf(self, client, client_identified, user_fixture, allowed, request):
@@ -248,13 +268,13 @@ class TestClientDataExportPDFViewRBAC:
 
 
 # ---------------------------------------------------------------------------
-# AdminRequiredMixin views
+# FacilityAdminRequiredMixin views
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
 class TestDSGVOPackageViewRBAC:
-    """DSGVOPackageView — GET, AdminRequiredMixin."""
+    """DSGVOPackageView — GET, FacilityAdminRequiredMixin."""
 
     @pytest.mark.parametrize(
         "user_fixture,expected_status",
@@ -263,6 +283,7 @@ class TestDSGVOPackageViewRBAC:
             ("lead_user", 403),
             ("staff_user", 403),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_dsgvo_package(self, client, user_fixture, expected_status, request):
@@ -273,7 +294,7 @@ class TestDSGVOPackageViewRBAC:
 
 @pytest.mark.django_db
 class TestDSGVODocumentDownloadViewRBAC:
-    """DSGVODocumentDownloadView — GET, AdminRequiredMixin."""
+    """DSGVODocumentDownloadView — GET, FacilityAdminRequiredMixin."""
 
     @pytest.mark.parametrize(
         "user_fixture,expected_status",
@@ -282,6 +303,7 @@ class TestDSGVODocumentDownloadViewRBAC:
             ("lead_user", 403),
             ("staff_user", 403),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_dsgvo_document_download(self, client, user_fixture, expected_status, request):
@@ -293,7 +315,7 @@ class TestDSGVODocumentDownloadViewRBAC:
 
 @pytest.mark.django_db
 class TestAuditLogListViewRBAC:
-    """AuditLogListView — GET, AdminRequiredMixin."""
+    """AuditLogListView — GET, FacilityAdminRequiredMixin."""
 
     @pytest.mark.parametrize(
         "user_fixture,expected_status",
@@ -302,6 +324,7 @@ class TestAuditLogListViewRBAC:
             ("lead_user", 403),
             ("staff_user", 403),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_audit_log_list(self, client, user_fixture, expected_status, request):
@@ -312,7 +335,7 @@ class TestAuditLogListViewRBAC:
 
 @pytest.mark.django_db
 class TestAuditLogDetailViewRBAC:
-    """AuditLogDetailView — GET, AdminRequiredMixin."""
+    """AuditLogDetailView — GET, FacilityAdminRequiredMixin."""
 
     @pytest.fixture()
     def audit_entry(self, facility, admin_user):
@@ -330,6 +353,7 @@ class TestAuditLogDetailViewRBAC:
             ("lead_user", 403),
             ("staff_user", 403),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_audit_log_detail(self, client, audit_entry, user_fixture, expected_status, request):
@@ -355,6 +379,7 @@ class TestCaseListViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_case_list(self, client, user_fixture, expected_status, request):
@@ -374,6 +399,7 @@ class TestCaseCreateViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_case_create_get(self, client, user_fixture, expected_status, request):
@@ -393,6 +419,7 @@ class TestCaseDetailViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_case_detail(self, client, case_open, user_fixture, expected_status, request):
@@ -413,6 +440,7 @@ class TestCaseUpdateViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_case_update_get(self, client, case_open, user_fixture, expected_status, request):
@@ -433,6 +461,7 @@ class TestClientCreateViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_client_create_get(self, client, user_fixture, expected_status, request):
@@ -452,6 +481,7 @@ class TestClientUpdateViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_client_update_get(self, client, client_identified, user_fixture, expected_status, request):
@@ -472,6 +502,7 @@ class TestWorkItemCreateViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_workitem_create_get(self, client, user_fixture, expected_status, request):
@@ -491,6 +522,7 @@ class TestWorkItemUpdateViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 403),
+            ("super_admin_user", 403),
         ],
     )
     def test_workitem_update_get(self, client, sample_workitem, user_fixture, expected_status, request):
@@ -502,7 +534,18 @@ class TestWorkItemUpdateViewRBAC:
 
 @pytest.mark.django_db
 class TestEventDeleteViewRBAC:
-    """EventDeleteView — GET, StaffRequiredMixin (plus owner-or-lead check)."""
+    """EventDeleteView — GET, StaffRequiredMixin (plus owner-or-lead check).
+
+    Refs #867: ``EventDeleteView.dispatch`` ruft ``get_visible_event_or_404``
+    *vor* ``super().dispatch()`` (also vor dem StaffRequiredMixin-Test).
+    Fuer super_admin (``facility=None``) liefert der Event-Lookup
+    ``Http404``, *bevor* der 403-Branch greift. Ergebnis ist eine Form von
+    Denial — 404 statt 403 — weil die Existenz des Events nicht
+    durchsickern darf. Wichtig fuers Test-Mapping: super_admin ist denied,
+    der genaue Status (404/403) haengt am Dispatch-Order der jeweiligen
+    View. Fuer reine Mixin-only-Views ist es 403; fuer Views, die Daten vor
+    dem Mixin-Check laden, kann es 404 sein.
+    """
 
     @pytest.mark.parametrize(
         "user_fixture,expected_status",
@@ -512,6 +555,9 @@ class TestEventDeleteViewRBAC:
             # staff_user is the creator of sample_event, so they pass the owner check
             ("staff_user", 200),
             ("assistant_user", 403),
+            # super_admin: 404 (Event-Lookup vor Mixin-Check). Trotzdem
+            # eindeutig "Denial" — Datenexistenz wird nicht offenbart.
+            ("super_admin_user", 404),
         ],
     )
     def test_event_delete_get(self, client, sample_event, user_fixture, expected_status, request):
@@ -537,6 +583,7 @@ class TestHandoverViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 200),
+            ("super_admin_user", 403),
         ],
     )
     def test_handover(self, client, user_fixture, expected_status, request):
@@ -556,6 +603,7 @@ class TestZeitstromViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 200),
+            ("super_admin_user", 403),
         ],
     )
     def test_zeitstrom(self, client, user_fixture, expected_status, request):
@@ -575,6 +623,7 @@ class TestClientListViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 200),
+            ("super_admin_user", 403),
         ],
     )
     def test_client_list(self, client, user_fixture, expected_status, request):
@@ -594,6 +643,7 @@ class TestClientDetailViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 200),
+            ("super_admin_user", 403),
         ],
     )
     def test_client_detail(self, client, client_identified, user_fixture, expected_status, request):
@@ -614,6 +664,7 @@ class TestEventCreateViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 200),
+            ("super_admin_user", 403),
         ],
     )
     def test_event_create_get(self, client, user_fixture, expected_status, request):
@@ -633,6 +684,7 @@ class TestWorkItemInboxViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 200),
+            ("super_admin_user", 403),
         ],
     )
     def test_workitem_inbox(self, client, user_fixture, expected_status, request):
@@ -652,6 +704,7 @@ class TestWorkItemDetailViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 200),
+            ("super_admin_user", 403),
         ],
     )
     def test_workitem_detail(self, client, sample_workitem, user_fixture, expected_status, request):
@@ -672,6 +725,7 @@ class TestSearchViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 200),
+            ("super_admin_user", 403),
         ],
     )
     def test_search(self, client, user_fixture, expected_status, request):
@@ -691,6 +745,7 @@ class TestAccountProfileViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 200),
+            ("super_admin_user", 403),
         ],
     )
     def test_account_profile(self, client, user_fixture, expected_status, request):

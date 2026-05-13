@@ -13,26 +13,33 @@ from core.models import AuditLog
 logger = logging.getLogger(__name__)
 
 
-def _set_facility_session_var(facility):
-    """Setzt ``app.current_facility_id`` fuer die laufende Postgres-Session.
+def _set_session_vars(facility, is_super_admin=False):
+    """Setzt ``app.current_facility_id`` und ``app.is_super_admin`` fuer die
+    laufende Postgres-Session.
 
     Notwendig fuer Auth-Signal-Handler (login/logout/login_failed): die
     feuern zwischen FacilityScopeMiddleware-Pre und -Post, in einem Request,
-    der zu Beginn als ``anonymous`` registriert war (Setting=''). Damit
-    der nachfolgende ``AuditLog`` -INSERT die RLS-WITH-CHECK-Policy
-    erfuellt, muss das Setting hier auf die jetzt bekannte Facility
-    aktualisiert werden. Refs #863.
+    der zu Beginn als ``anonymous`` registriert war (beide Settings='').
+    Damit der nachfolgende ``AuditLog``-INSERT die RLS-WITH-CHECK-Policy
+    erfuellt, muessen die Settings hier auf den jetzt bekannten User
+    aktualisiert werden. Refs #863, #867.
 
-    Bei ``facility=None`` (System-Event, NULL-AuditLog) wird auf '' geleert
-    — der WITH-CHECK-Branch ``facility_id IS NULL`` greift dann.
+    - ``facility=None`` (System-Event, NULL-AuditLog) -> facility_id=''.
+      Der WITH-CHECK-Branch ``facility_id IS NULL`` (Migration 0083)
+      greift dann.
+    - ``is_super_admin=True`` -> ``app.is_super_admin='true'``. Der
+      WITH-CHECK-Branch ``current_setting('app.is_super_admin', true) =
+      'true'`` (Migration 0085) greift dann fuer non-NULL facility.
     """
     if connection.vendor != "postgresql":
         return
     facility_id = str(facility.pk) if facility is not None else ""
+    is_super = "true" if is_super_admin else ""
     with connection.cursor() as cursor:
         cursor.execute(
-            "SELECT set_config('app.current_facility_id', %s, false)",
-            [facility_id],
+            "SELECT set_config('app.current_facility_id', %s, false), "
+            "       set_config('app.is_super_admin', %s, false)",
+            [facility_id, is_super],
         )
 
 
@@ -74,12 +81,15 @@ def get_client_ip(request):
 
 @receiver(user_logged_in)
 def on_user_logged_in(sender, request, user, **kwargs):
-    """Create an audit entry on successful login."""
+    """Create an audit entry on successful login.
+
+    Refs #867: super_admin hat kein ``facility`` — AuditLog-Eintrag wird
+    trotzdem geschrieben (facility=NULL). Migration 0083 erlaubt INSERT
+    mit NULL-facility via WITH CHECK.
+    """
     facility = getattr(user, "facility", None)
-    if facility is None:
-        logger.warning("Login ohne Facility: user=%s", user.username)
-        return
-    _set_facility_session_var(facility)
+    is_super = bool(getattr(user, "is_super_admin", False))
+    _set_session_vars(facility, is_super_admin=is_super)
     AuditLog.objects.create(
         facility=facility,
         user=user,
@@ -90,13 +100,15 @@ def on_user_logged_in(sender, request, user, **kwargs):
 
 @receiver(user_logged_out)
 def on_user_logged_out(sender, request, user, **kwargs):
-    """Create an audit entry on logout."""
+    """Create an audit entry on logout.
+
+    Refs #867: super_admin (facility=None) wird ebenfalls geloggt.
+    """
     if user is None:
         return
     facility = getattr(user, "facility", None)
-    if facility is None:
-        return
-    _set_facility_session_var(facility)
+    is_super = bool(getattr(user, "is_super_admin", False))
+    _set_session_vars(facility, is_super_admin=is_super)
     AuditLog.objects.create(
         facility=facility,
         user=user,
@@ -113,18 +125,20 @@ def on_user_login_failed(sender, credentials, request, **kwargs):
     username = credentials.get("username", "")
     ip_address = get_client_ip(request)
 
-    # Try to find the user to determine the facility
+    # Try to find the user to determine the facility / super_admin status
     try:
         user = User.objects.select_related("facility").get(username=username)
         facility = user.facility
+        is_super = bool(getattr(user, "is_super_admin", False))
     except User.DoesNotExist:
         user = None
         facility = None
+        is_super = False
 
-    # facility kann None sein (unknown user / user ohne Facility) — dann
-    # leeren Session-Var, damit der WITH-CHECK-Branch ``facility_id IS NULL``
-    # in der RLS-Policy greift.
-    _set_facility_session_var(facility)
+    # facility kann None sein (unknown user / super_admin) — Settings
+    # entsprechend setzen, damit WITH-CHECK greift (NULL-Branch oder
+    # is_super_admin-Branch).
+    _set_session_vars(facility, is_super_admin=is_super)
 
     if facility is None:
         logger.info("Login fehlgeschlagen ohne Facility: username=%s", username)

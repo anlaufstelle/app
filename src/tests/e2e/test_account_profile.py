@@ -36,7 +36,8 @@ class TestAccountProfile:
         page.goto(f"{base_url}/account/", wait_until="domcontentloaded")
         role_badge = page.locator("[data-testid='profile-role']")
         assert role_badge.is_visible()
-        assert role_badge.inner_text().strip() == "Administrator"
+        # Refs #867: Rolle ``admin`` -> ``facility_admin`` (UI-Label „Anwendungsbetreuung").
+        assert role_badge.inner_text().strip() == "Anwendungsbetreuung"
 
     def test_profile_shows_facility(self, authenticated_page, base_url):
         """Profilseite zeigt die Einrichtung."""

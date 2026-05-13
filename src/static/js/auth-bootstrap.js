@@ -28,18 +28,30 @@
 
     async function fetchFreshCsrfToken(location) {
         // Refs #602/#613: CSRF_COOKIE_HTTPONLY blocks JS from reading the rotated
-        // post-login cookie, and the meta tag on the login page still holds the
-        // pre-login token. Fetch the redirect target (authenticated page) and
-        // parse its <meta name="csrf-token"> to obtain the fresh token.
-        try {
-            var resp = await fetch(location, { method: "GET", credentials: "same-origin" });
-            if (!resp.ok) return null;
-            var html = await resp.text();
-            var match = html.match(/<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i);
-            return match ? match[1] : null;
-        } catch (e) {
-            return null;
+        // post-login cookie, und das Meta-Tag auf der Login-Page haelt nur
+        // den Pre-Login-Token. Das Redirect-Ziel hat den frischen Token,
+        // ist aber rollenabhaengig (super_admin sieht z.B. ``/`` nicht).
+        // Refs #867: faellt auf ``/login/`` zurueck — diese Seite ist fuer
+        // jede authentifizierte Rolle erreichbar (200 OK) und enthaelt das
+        // ``<meta name="csrf-token">`` mit dem aktuellen (post-login) Token.
+        async function tryFetch(url) {
+            try {
+                var resp = await fetch(url, { method: "GET", credentials: "same-origin" });
+                if (!resp.ok) return null;
+                var html = await resp.text();
+                var match = html.match(
+                    /<meta[^>]+name=["']csrf-token["'][^>]+content=["']([^"']+)["']/i
+                );
+                return match ? match[1] : null;
+            } catch (e) {
+                return null;
+            }
         }
+        var token = await tryFetch(location);
+        if (token) return token;
+        // Fallback: /login/ ist immer erreichbar (auch fuer super_admin
+        // ohne Facility-Kontext) und liefert nach Login den rotierten Token.
+        return await tryFetch("/login/");
     }
 
     async function fetchSaltAndDeriveKey(password, location) {
@@ -49,9 +61,14 @@
             credentials: "same-origin",
             headers: { "X-CSRFToken": token },
         });
-        if (!saltResp.ok) return;
+        if (!saltResp.ok) return null;
         var json = await saltResp.json();
         await window.crypto_session.deriveSessionKey(password, json.salt);
+        // Refs #867: Server-seitig bestimmter Post-Login-Redirect (z.B.
+        // ``/system/`` fuer super_admin). Wird zurueckgegeben, weil der
+        // POST /login/-Response mit ``redirect: "manual"`` als
+        // opaqueredirect kommt und der Location-Header nicht auslesbar ist.
+        return json.home_url || null;
     }
 
     function attach(formId, passwordField, before) {
@@ -81,14 +98,19 @@
                         form.submit();
                         return null;
                     }
-                    var location = resp.headers.get("Location") || "/";
+                    // Refs #867: Location-Header ist bei
+                    // ``redirect: "manual"`` nicht auslesbar (opaqueredirect).
+                    // Server-seitige Bestimmung kommt zurueck via salt-Endpoint
+                    // unten; "/" ist der Fallback fuer alle Nicht-super_admin-User
+                    // (entspricht LOGIN_REDIRECT_URL).
+                    var fallbackLocation = "/";
                     var beforePromise = before ? before() : Promise.resolve();
                     return beforePromise
                         .then(function () {
-                            return fetchSaltAndDeriveKey(password, location);
+                            return fetchSaltAndDeriveKey(password, fallbackLocation);
                         })
-                        .then(function () {
-                            return location;
+                        .then(function (homeUrl) {
+                            return homeUrl || fallbackLocation;
                         });
                 })
                 .then(function (location) {

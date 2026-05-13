@@ -50,7 +50,7 @@ class Command(BaseCommand):
         user, created = User.objects.get_or_create(
             username=admin_username,
             defaults={
-                "role": User.Role.ADMIN,
+                "role": User.Role.FACILITY_ADMIN,
                 "facility": facility,
                 "is_staff": True,
                 "is_superuser": True,

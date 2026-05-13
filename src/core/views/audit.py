@@ -10,12 +10,12 @@ from core.constants import AUDIT_PAGE_SIZE
 from core.models import AuditLog
 from core.models.user import User
 from core.utils.formatting import parse_date
-from core.views.mixins import AdminRequiredMixin, HTMXPartialMixin, PaginatedListMixin
+from core.views.mixins import FacilityAdminRequiredMixin, HTMXPartialMixin, PaginatedListMixin
 
 logger = logging.getLogger(__name__)
 
 
-class AuditLogListView(AdminRequiredMixin, PaginatedListMixin, HTMXPartialMixin, View):
+class AuditLogListView(FacilityAdminRequiredMixin, PaginatedListMixin, HTMXPartialMixin, View):
     """Audit log list for admins with filters and pagination."""
 
     template_name = "core/audit/list.html"
@@ -80,7 +80,7 @@ class AuditLogListView(AdminRequiredMixin, PaginatedListMixin, HTMXPartialMixin,
         return self.render_htmx_or_full(context)
 
 
-class AuditLogDetailView(AdminRequiredMixin, View):
+class AuditLogDetailView(FacilityAdminRequiredMixin, View):
     """Detail view for a single audit log entry."""
 
     def get(self, request, pk):

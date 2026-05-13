@@ -97,7 +97,7 @@ Die Konfiguration bestimmt auch den Datenschutz:
 
 - **Statistiken und Berichte** — Auswertungen auf Knopfdruck, Export als CSV und PDF
 - **Jugendamtsbericht** — fertig formatiert
-- **4-Stufen-Rollenmodell** — Admin, Leitung, Fachkraft, Assistenz
+- **5-Stufen-Rollenmodell** — Systemadministration (`super_admin`), Anwendungsbetreuung (`facility_admin`), Leitung, Fachkraft, Assistenz
 - **Einrichtungstrennung** — Daten sind vollständig getrennt, kein Datenmix zwischen Standorten
 
 ### Datenschutz und DSGVO

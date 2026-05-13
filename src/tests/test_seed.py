@@ -108,7 +108,7 @@ def test_seed_small_creates_four_users():
     assert users.count() == 4
 
     roles = set(users.values_list("role", flat=True))
-    assert roles == {User.Role.ADMIN, User.Role.LEAD, User.Role.STAFF, User.Role.ASSISTANT}
+    assert roles == {User.Role.FACILITY_ADMIN, User.Role.LEAD, User.Role.STAFF, User.Role.ASSISTANT}
 
 
 @pytest.mark.django_db
@@ -181,10 +181,17 @@ def test_seed_medium_creates_two_facilities():
 @pytest.mark.slow
 @pytest.mark.django_db
 def test_seed_medium_creates_users_per_facility():
-    """Medium scale creates 4 users per facility (8 total for 2 facilities)."""
+    """Medium scale creates 4 users per facility + 1 installation-wide super-admin.
+
+    Refs #867: ``seed_super_admin()`` legt zusaetzlich zur Per-Facility-User-
+    Liste einen installation-weiten ``superadmin`` an (Persona Jonas).
+    Daher 4 (Hauptstelle) + 4 (Zweigstelle Nord) + 1 (super-admin) = 9.
+    """
     call_command("seed", scale="medium")
 
-    assert User.objects.count() == 8
+    assert User.objects.count() == 9
+    # Sicherheitsprobe: genau ein super_admin, der Rest sind facility-User.
+    assert User.objects.filter(role=User.Role.SUPER_ADMIN).count() == 1
 
 
 @pytest.mark.slow
@@ -269,7 +276,11 @@ def test_seed_idempotent_facility_count():
 
 @pytest.mark.django_db
 def test_seed_flush_recreates_data():
-    """--flush deletes existing data and recreates from scratch."""
+    """--flush deletes existing data and recreates from scratch.
+
+    Refs #867: small seed legt 4 Facility-User + 1 installation-weiten
+    super_admin an = 5.
+    """
     call_command("seed")
     first_user_ids = set(User.objects.values_list("id", flat=True))
 
@@ -278,8 +289,8 @@ def test_seed_flush_recreates_data():
 
     # After flush+recreate, IDs differ (new objects)
     assert first_user_ids != second_user_ids
-    # But counts are the same
-    assert User.objects.count() == 4
+    # But counts are the same — 4 Facility-User + 1 super_admin.
+    assert User.objects.count() == 5
 
 
 # ---------------------------------------------------------------------------
@@ -307,7 +318,7 @@ def test_seed_admin_has_superuser_flag():
     admin = User.objects.get(username="admin")
     assert admin.is_superuser is True
     assert admin.is_staff is True
-    assert admin.role == User.Role.ADMIN
+    assert admin.role == User.Role.FACILITY_ADMIN
 
 
 @pytest.mark.django_db
@@ -315,5 +326,30 @@ def test_seed_non_admin_users_are_not_superusers():
     """Non-admin seeded users do not have is_superuser."""
     call_command("seed")
 
-    for user in User.objects.exclude(role=User.Role.ADMIN):
+    for user in User.objects.exclude(role=User.Role.FACILITY_ADMIN).exclude(role=User.Role.SUPER_ADMIN):
         assert user.is_superuser is False
+
+
+# ---------------------------------------------------------------------------
+# Super-Admin (Refs #867)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_seed_creates_super_admin():
+    """Seed legt einen installation-weiten Super-Admin (Persona Jonas) an."""
+    call_command("seed")
+
+    super_admin = User.objects.get(username="superadmin")
+    assert super_admin.role == User.Role.SUPER_ADMIN
+    assert super_admin.facility is None
+    assert super_admin.is_superuser is True
+
+
+@pytest.mark.django_db
+def test_seed_super_admin_idempotent():
+    """Doppelter Seed-Lauf erzeugt keinen zweiten Super-Admin."""
+    call_command("seed")
+    call_command("seed")
+
+    assert User.objects.filter(username="superadmin").count() == 1

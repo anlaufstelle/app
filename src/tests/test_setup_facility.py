@@ -38,7 +38,7 @@ class TestSetupFacilitySuccess:
         assert settings.facility_full_name == "Testorg – Teststelle"
 
         user = User.objects.get(username="myadmin")
-        assert user.role == User.Role.ADMIN
+        assert user.role == User.Role.FACILITY_ADMIN
         assert user.is_superuser is True
         assert user.is_staff is True
         assert user.facility == facility

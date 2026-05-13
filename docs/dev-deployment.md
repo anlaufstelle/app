@@ -107,10 +107,49 @@ Daten/Backups.
 
 ```bash
 make deploy-dev # synct compose-files, pullt:main-image, migrate
-make dev-seed # einmalig: Demo-Daten + Login-Konten anlegen
+make dev-seed # einmalig: Demo-Daten + Login-Konten anlegen (NUR DEV)
 ```
 
+`make dev-seed` legt für die DEV-Umgebung 5 Login-Konten mit Passwort `anlaufstelle2026` an: `superadmin` (Rolle `super_admin`), `facility_admin`, `leitung`, `fachkraft`, `assistenz`. Der `superadmin`-Account hat keine `facility`-Zuordnung und sieht den `/system/`-Bereich.
+
+> **Achtung — nur DEV/Demo:** `make dev-seed` ist ausschließlich für die öffentliche Demo (`dev.anlaufstelle.app`) gedacht. Default-Passwörter sind in einer Produktion-Installation ein DSGVO- und Sicherheits-Risiko. Für Produktions-Erstinstallationen siehe nächsten Abschnitt.
+
 Verifikation Schritt 7 (siehe unten) durchgehen.
+
+## Production-Bootstrap (kein Seed!)
+
+In einer **Produktion-Installation** (eigener Träger, eigener Server, kein `dev.anlaufstelle.app`) gibt es **keinen** Default-Account und kein Seed. Stattdessen läuft der Bootstrap interaktiv über zwei Befehle:
+
+### 1. Super-Admin anlegen (Pflicht-Schritt nach erstem Deploy)
+
+```bash
+docker compose -f docker-compose.prod.yml exec web \
+    python manage.py create_super_admin
+```
+
+Der Befehl ist interaktiv — er fragt nach Username, E-Mail, Passwort (zweimal) und Anzeigename. **Es gibt kein Default-Passwort.** Wer den Schritt überspringt, erhält keinen anmeldungsfähigen Account.
+
+Der Super-Admin (`role=super_admin`) ist der einzige facility-übergreifende Account. Er sieht den `/system/`-Bereich und legt darüber die erste Einrichtung sowie die erste Anwendungsbetreuung (`facility_admin`) an. Er sieht **nicht** das normale Fach-UI — dafür braucht er ein zweites, facility-gebundenes Konto, falls er auch fachlich arbeiten will.
+
+### 2. Erste Einrichtung + Anwendungsbetreuung anlegen
+
+Zwei Wege:
+
+- **Per `/system/`-UI:** Anmelden als `super_admin`, Einrichtung anlegen, ersten `facility_admin` der Einrichtung zuweisen. Empfohlen, weil über die UI auditierbar (`SYSTEM_VIEW`-Einträge).
+- **Per CLI:** `python manage.py setup_facility` — interaktiver Fallback für reine Single-Tenant-Installationen, in denen System- und Anwendungsbetreuung dieselbe Person sind. Details: [docs/admin-guide.md § 2.2](admin-guide.md).
+
+### 3. Lockout-Recovery (CLI)
+
+Wenn ein User (insbesondere der `super_admin`) sich aussperrt:
+
+```bash
+docker compose -f docker-compose.prod.yml exec web \
+    python manage.py unlock <username>
+```
+
+Der Befehl entsperrt den Account und schreibt einen `LOGIN_UNLOCK`-AuditLog-Eintrag. Er ist die einzige Recovery-Option für den letzten verbleibenden `super_admin` — kein anderer User hat Bootstrap-Rechte.
+
+**Architektur-Hintergrund:** [ADR-018 — 5-Rollen-Modell mit Super-Admin](adr/018-rollenmodell-superadmin.md).
 
 ## Tagesgeschaeft
 

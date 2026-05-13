@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Sperrkonten (System)" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+{% include "core/system/_banner.html" %}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-[22px] font-bold text-ink">{% trans "Sperrkonten" %}</h1>
+</div>
+
+{# Sub-Navigation innerhalb /system/ #}
+{% include "core/system/_subnav.html" %}
+
+<section class="mb-4 bg-surface border border-subtle rounded-[10px] p-4 text-[13px] text-ink-muted">
+    {% blocktrans with threshold=lockout_threshold window=lockout_window_minutes %}
+    Konten gelten als gesperrt, sobald in den letzten {{ window }} Minuten {{ threshold }} oder mehr Fehlanmeldungen seit der letzten Entsperrung registriert wurden. Die Entsperrung wird im Audit-Log protokolliert.
+    {% endblocktrans %}
+</section>
+
+<section class="bg-surface border border-subtle rounded-[10px] overflow-hidden" data-testid="system-lockout-list">
+    {% if locked_rows %}
+    <table class="min-w-full divide-y divide-subtle">
+        <thead class="bg-canvas">
+            <tr>
+                <th class="px-4 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Benutzer" %}</th>
+                <th class="px-4 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Einrichtung" %}</th>
+                <th class="px-4 py-2 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Fehlversuche" %}</th>
+                <th class="px-4 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Letzter Versuch" %}</th>
+                <th class="px-4 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "IP" %}</th>
+                <th class="px-4 py-2 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktion" %}</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-subtle">
+            {% for row in locked_rows %}
+            <tr class="hover:bg-canvas" data-testid="system-lockout-row-{{ row.user.username }}">
+                <td class="px-4 py-2.5 text-sm font-medium text-ink">{{ row.user.username }}</td>
+                <td class="px-4 py-2.5 text-sm text-ink-soft">
+                    {% if row.facility %}{{ row.facility.name }}{% else %}<span class="text-ink-muted">{% trans "(ohne Einrichtung)" %}</span>{% endif %}
+                </td>
+                <td class="px-4 py-2.5 text-sm font-mono text-right text-ink-soft">{{ row.fail_count }}</td>
+                <td class="px-4 py-2.5 text-sm text-ink-soft whitespace-nowrap">{{ row.last_attempt|date:"DATETIME_FORMAT" }}</td>
+                <td class="px-4 py-2.5 text-[12px] font-mono text-ink-muted">{{ row.last_ip|default:"–" }}</td>
+                <td class="px-4 py-2.5 text-right">
+                    <form method="post" action="{% url 'core:system_unlock' %}" class="inline-block"
+                          data-confirm="{% trans 'Sperre wirklich aufheben?' %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="username" value="{{ row.user.username }}">
+                        <button type="submit"
+                                class="px-3 py-1.5 rounded-md text-[12px] font-semibold bg-accent text-white hover:bg-accent/90"
+                                data-testid="system-unlock-button-{{ row.user.username }}">
+                            {% trans "Entsperren" %}
+                        </button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    {% include "components/_empty_state.html" with icon="check" message=_("Aktuell sind keine Konten gesperrt.") %}
+    {% endif %}
+</section>
+{% endblock %}

@@ -28,11 +28,28 @@ class LeadOrAdminRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
         return self.request.user.is_lead_or_admin
 
 
-class AdminRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
-    """Access for Admin only."""
+class FacilityAdminRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
+    """Access for Anwendungsbetreuung (facility_admin) only.
+
+    Refs #867: bisheriger ``AdminRequiredMixin`` umbenannt — die Rolle ist
+    auf eine Einrichtung beschraenkt. Fuer installations-weiten Zugriff
+    siehe ``SuperAdminRequiredMixin``.
+    """
 
     def test_func(self):
-        return self.request.user.is_admin
+        return self.request.user.is_facility_admin
+
+
+class SuperAdminRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
+    """Access for Systemadministration (super_admin) only.
+
+    Refs #867: oberste Rolle, installations-weit, kein Facility-Bezug.
+    Persona Jonas (hostet die Installation). Wird fuer den
+    ``/system/``-Bereich verwendet.
+    """
+
+    def test_func(self):
+        return self.request.user.is_super_admin
 
 
 # --- Facility/HTMX Helper-Mixins (Refs #598 R-2/R-3, #745) --------------

@@ -1,0 +1,65 @@
+{% load i18n core_tags %}
+<div id="system-audit-table">
+    {% if page_obj.object_list %}
+    <div class="hidden sm:block bg-surface border border-subtle rounded-[10px] overflow-hidden">
+        <table class="min-w-full divide-y divide-subtle">
+            <thead class="bg-canvas">
+                <tr>
+                    <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zeitstempel" %}</th>
+                    <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Benutzer" %}</th>
+                    <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktion" %}</th>
+                    <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Einrichtung" %}</th>
+                    <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zieltyp" %}</th>
+                    <th class="px-4 py-3 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "IP" %}</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-subtle">
+                {% for entry in page_obj %}
+                <tr class="hover:bg-canvas">
+                    <td class="px-4 py-2.5 whitespace-nowrap">
+                        <a href="{% url 'core:system_audit_detail' pk=entry.pk %}" class="text-[13px] font-mono text-accent hover:underline">{{ entry.timestamp|date:"DATETIME_FORMAT" }}</a>
+                    </td>
+                    <td class="px-4 py-2.5 text-[13px] text-ink-soft whitespace-nowrap">
+                        {% if entry.user %}{{ entry.user }}{% else %}<span class="text-ink-muted">–</span>{% endif %}
+                    </td>
+                    <td class="px-4 py-2.5 whitespace-nowrap">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-accent-light text-accent">
+                            {{ entry.get_action_display }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-2.5 text-[13px] text-ink-soft">
+                        {% if entry.facility %}{{ entry.facility.name }}{% else %}<span class="text-ink-muted">{% trans "(System)" %}</span>{% endif %}
+                    </td>
+                    <td class="px-4 py-2.5 text-[13px] text-ink-soft">{{ entry.target_type|default:"–" }}</td>
+                    <td class="px-4 py-2.5 text-[12px] font-mono text-ink-muted whitespace-nowrap">{{ entry.ip_address|default:"–" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    {# Mobile Cards #}
+    <div class="sm:hidden space-y-2">
+        {% for entry in page_obj %}
+        <a href="{% url 'core:system_audit_detail' pk=entry.pk %}" class="block bg-surface border border-subtle rounded-[10px] p-3 hover:border-accent/30">
+            <div class="flex items-center justify-between">
+                <span class="text-sm font-medium text-accent">{{ entry.timestamp|date:"DATETIME_FORMAT" }}</span>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-accent-light text-accent">
+                    {{ entry.get_action_display }}
+                </span>
+            </div>
+            <div class="mt-1 text-xs text-ink-muted">
+                {% if entry.user %}{{ entry.user }}{% else %}–{% endif %}
+                · {% if entry.facility %}{{ entry.facility.name }}{% else %}{% trans "(System)" %}{% endif %}
+                · {{ entry.target_type|default:"–" }}
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+
+    {% include "components/_pagination.html" with page=page_obj extra_params=pagination_params %}
+
+    {% else %}
+    {% include "components/_empty_state.html" with icon="check" message=_("Keine Einträge gefunden.") %}
+    {% endif %}
+</div>

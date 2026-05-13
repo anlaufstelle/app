@@ -10,12 +10,21 @@ import pytest
 class TestFacilityScopingGuard:
     """Ensure views always scope queries to the current facility."""
 
+    # Refs #867: ``system.py`` ist der Superadmin-/System-Bereich. Cross-
+    # facility-Lookups sind dort *die Aufgabe* — RLS-Bypass via
+    # ``app.is_super_admin`` (Migration 0085) gibt super_admin alle Zeilen
+    # frei, der Manager-Filter waere kontraproduktiv. Whitelist statt
+    # Manager-Workaround, damit die Absicht der View-Datei explizit bleibt.
+    _OBJECTS_ALL_WHITELIST = {"system.py"}
+
     def test_no_unfiltered_objects_all_in_views(self):
         """Views must not use Model.objects.all() without facility filter."""
         views_dir = Path("src/core/views")
         violations = []
         for py_file in views_dir.glob("*.py"):
             if py_file.name == "__init__.py":
+                continue
+            if py_file.name in self._OBJECTS_ALL_WHITELIST:
                 continue
             source = py_file.read_text()
             # Check for .objects.all() which could be cross-facility

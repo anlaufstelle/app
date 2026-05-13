@@ -106,26 +106,101 @@ def test_event_ordering(facility, client_identified, doc_type_contact, staff_use
 
 @pytest.mark.django_db
 def test_user_role_properties(admin_user, lead_user, staff_user, assistant_user):
-    """Test is_admin, is_lead_or_admin, is_staff_or_above for all 4 roles."""
-    # ADMIN
-    assert admin_user.is_admin is True
+    """Verifiziere is_facility_admin/is_lead_or_admin/is_staff_or_above/is_assistant_or_above.
+
+    Pruefung der vier facility-gebundenen Rollen (FACILITY_ADMIN, LEAD,
+    STAFF, ASSISTANT). Refs #867: Die Lower-Properties (``is_lead_or_admin``,
+    ``is_staff_or_above``, ``is_assistant_or_above``) referenzieren explizit
+    ``FACILITY_ADMIN`` — NICHT ``SUPER_ADMIN``. Der Super-Admin lebt
+    ausserhalb dieser Hierarchie und nur im ``/system/``-Bereich.
+    """
+    # FACILITY_ADMIN
+    assert admin_user.is_facility_admin is True
+    assert admin_user.is_super_admin is False
     assert admin_user.is_lead_or_admin is True
     assert admin_user.is_staff_or_above is True
+    assert admin_user.is_assistant_or_above is True
 
     # LEAD
-    assert lead_user.is_admin is False
+    assert lead_user.is_facility_admin is False
+    assert lead_user.is_super_admin is False
     assert lead_user.is_lead_or_admin is True
     assert lead_user.is_staff_or_above is True
+    assert lead_user.is_assistant_or_above is True
 
     # STAFF
-    assert staff_user.is_admin is False
+    assert staff_user.is_facility_admin is False
+    assert staff_user.is_super_admin is False
     assert staff_user.is_lead_or_admin is False
     assert staff_user.is_staff_or_above is True
+    assert staff_user.is_assistant_or_above is True
 
     # ASSISTANT
-    assert assistant_user.is_admin is False
+    assert assistant_user.is_facility_admin is False
+    assert assistant_user.is_super_admin is False
     assert assistant_user.is_lead_or_admin is False
     assert assistant_user.is_staff_or_above is False
+    assert assistant_user.is_assistant_or_above is True
+
+
+@pytest.mark.django_db
+def test_is_super_admin_property():
+    """Refs #867: SUPER_ADMIN steht *ausserhalb* der Facility-Hierarchie.
+
+    Ein User mit ``role=SUPER_ADMIN`` liefert:
+
+    * ``is_super_admin`` True (einziger True-Branch),
+    * ``is_facility_admin`` False (verschiedene Rollen),
+    * ``is_lead_or_admin`` False — die Property listet nur FACILITY_ADMIN +
+      LEAD; super_admin ist NICHT enthalten,
+    * ``is_staff_or_above`` False (analog),
+    * ``is_assistant_or_above`` False (analog).
+
+    Damit ist sichergestellt, dass alle facility-gescopten Mixins
+    (``AssistantOrAboveRequiredMixin``, ``StaffRequiredMixin``,
+    ``LeadOrAdminRequiredMixin``, ``FacilityAdminRequiredMixin``) den
+    Super-Admin am Zutritt zu Facility-Views hindern.
+    """
+    from core.models import User
+
+    super_admin = User.objects.create_user(
+        username="props_super",
+        role=User.Role.SUPER_ADMIN,
+        facility=None,
+    )
+
+    assert super_admin.is_super_admin is True
+    assert super_admin.is_facility_admin is False
+    # Schluessel-Invariante (Refs #867): super_admin ist NICHT in den
+    # Lower-Properties.
+    assert super_admin.is_lead_or_admin is False
+    assert super_admin.is_staff_or_above is False
+    assert super_admin.is_assistant_or_above is False
+
+
+@pytest.mark.django_db
+def test_legacy_is_admin_property_removed(admin_user):
+    """Refs #867: Das alte ``is_admin``-Property existiert nach dem
+    Rename auf ``is_facility_admin`` nicht mehr.
+
+    Wir greifen direkt aufs Klassen-Dict zu (``hasattr`` allein wuerde
+    durch Django-AbstractUser-Mechanismen u.U. False liefern), um
+    sicherzustellen, dass kein altes Property im User-Model uebrig
+    geblieben ist. Schutz gegen schleichende Re-Adds bei zukuenftigen
+    Refactors.
+    """
+    from core.models import User
+
+    # Es gibt kein ``is_admin`` als (custom) Property auf der User-Klasse.
+    assert "is_admin" not in vars(User), "Property 'is_admin' soll seit Refs #867 entfernt sein."
+    # Defensive Zweitprobe: Direkter Zugriff auf der Instanz darf das alte
+    # Attribut nicht liefern. Falls Django ein Default-Attribut ``is_admin``
+    # erfindet, soll dieser Test laut werden, weil dann RBAC-Logik wieder
+    # geraten werden koennte.
+    assert not hasattr(admin_user, "is_admin"), (
+        "Instanz hat ein 'is_admin'-Attribut — unerwartet seit Refs #867. "
+        "Bitte pruefen, ob ein Property/AbstractUser-Mixin reaktiviert wurde."
+    )
 
 
 @pytest.mark.django_db

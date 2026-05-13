@@ -156,7 +156,7 @@ class TestStaffEventDeletion:
 
 @pytest.mark.django_db
 class TestStaffPermissions:
-    """Staff role is denied access to LeadOrAdminRequiredMixin and AdminRequiredMixin views."""
+    """Staff role is denied access to LeadOrAdminRequiredMixin and FacilityAdminRequiredMixin views."""
 
     def test_staff_cannot_access_statistics(self, client, staff_user):
         client.force_login(staff_user)
@@ -182,7 +182,7 @@ class TestStaffPermissions:
 
 @pytest.mark.django_db
 class TestLeadPermissions:
-    """Lead role is denied access to AdminRequiredMixin views."""
+    """Lead role is denied access to FacilityAdminRequiredMixin views."""
 
     def test_lead_cannot_access_audit_log(self, client, lead_user):
         client.force_login(lead_user)

@@ -1,0 +1,36 @@
+{% load i18n %}
+{# Sub-Navigation des /system/-Bereichs. Refs #867. #}
+<nav class="mb-6 flex flex-wrap gap-2 text-[13px]" aria-label="{% trans 'Systembereich-Navigation' %}">
+    <a href="{% url 'core:system_dashboard' %}"
+       class="px-3 py-1.5 rounded-md font-medium {% if request.resolver_match.url_name == 'system_dashboard' %}bg-accent text-white{% else %}bg-surface border border-subtle text-ink-soft hover:bg-canvas{% endif %}">
+        {% trans "Übersicht" %}
+    </a>
+    <a href="{% url 'core:system_organization' %}"
+       class="px-3 py-1.5 rounded-md font-medium {% if request.resolver_match.url_name == 'system_organization' %}bg-accent text-white{% else %}bg-surface border border-subtle text-ink-soft hover:bg-canvas{% endif %}">
+        {% trans "Organisation" %}
+    </a>
+    <a href="{% url 'core:system_audit_list' %}"
+       class="px-3 py-1.5 rounded-md font-medium {% if request.resolver_match.url_name == 'system_audit_list' or request.resolver_match.url_name == 'system_audit_detail' %}bg-accent text-white{% else %}bg-surface border border-subtle text-ink-soft hover:bg-canvas{% endif %}">
+        {% trans "Audit-Log" %}
+    </a>
+    <a href="{% url 'core:system_lockout_list' %}"
+       class="px-3 py-1.5 rounded-md font-medium {% if request.resolver_match.url_name == 'system_lockout_list' or request.resolver_match.url_name == 'system_unlock' %}bg-accent text-white{% else %}bg-surface border border-subtle text-ink-soft hover:bg-canvas{% endif %}">
+        {% trans "Sperrkonten" %}
+    </a>
+    <a href="{% url 'core:system_maintenance' %}"
+       class="px-3 py-1.5 rounded-md font-medium {% if request.resolver_match.url_name == 'system_maintenance' %}bg-accent text-white{% else %}bg-surface border border-subtle text-ink-soft hover:bg-canvas{% endif %}">
+        {% trans "Wartung" %}
+    </a>
+    <a href="{% url 'core:system_retention' %}"
+       class="px-3 py-1.5 rounded-md font-medium {% if request.resolver_match.url_name == 'system_retention' %}bg-accent text-white{% else %}bg-surface border border-subtle text-ink-soft hover:bg-canvas{% endif %}">
+        {% trans "Retention" %}
+    </a>
+    <a href="{% url 'core:system_vvt' %}"
+       class="px-3 py-1.5 rounded-md font-medium {% if request.resolver_match.url_name == 'system_vvt' %}bg-accent text-white{% else %}bg-surface border border-subtle text-ink-soft hover:bg-canvas{% endif %}">
+        {% trans "VVT" %}
+    </a>
+    <a href="{% url 'core:system_legal_hold_list' %}"
+       class="px-3 py-1.5 rounded-md font-medium {% if request.resolver_match.url_name == 'system_legal_hold_list' %}bg-accent text-white{% else %}bg-surface border border-subtle text-ink-soft hover:bg-canvas{% endif %}">
+        {% trans "Legal Holds" %}
+    </a>
+</nav>

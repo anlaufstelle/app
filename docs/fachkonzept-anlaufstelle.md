@@ -242,13 +242,15 @@ Heike ist 48, leitet eine niedrigschwellige Einrichtung eines freien Trägers. I
 
 **Was sie braucht:** Auf Knopfdruck wissen, wie viele Kontakte es im letzten Halbjahr gab, aufgeschlüsselt nach Leistungsart und Alterscluster. Einen druckfertigen Bericht für das Jugendamt. Überblick über den Verlauf einzelner Klientel. DSGVO-Sicherheit.
 
-#### Jonas — Träger-Administrator
+#### Jonas — Systemadministration (`super_admin`)
 
-Jonas ist 41, zuständig für die IT bei einem Trägerverband, der fünf niedrigschwellige Einrichtungen betreibt. Er ist kein Softwareentwickler, aber er kann Linux-Server administrieren, Docker-Container starten und Backups einrichten. Er hat kein Budget für externe IT-Dienstleister. Jede neue Software bedeutet für ihn: Installation, Datensicherung, Benutzerverwaltung, DSGVO-Dokumentation.
+Jonas ist 41, zuständig für die IT bei einem Trägerverband, der fünf niedrigschwellige Einrichtungen betreibt. Er hostet die Anlaufstelle-Installation auf einem eigenen Server. Er ist kein Softwareentwickler, aber er kann Linux-Server administrieren, Docker-Container starten und Backups einrichten. Er hat kein Budget für externe IT-Dienstleister. Jede neue Software bedeutet für ihn: Installation, Datensicherung, Benutzerverwaltung, DSGVO-Dokumentation.
 
-**Was er braucht:** Ein System, das mit `docker compose up` läuft. Automatische Backups. Zentrale Benutzerverwaltung für alle fünf Einrichtungen. DSGVO-Vorlagen, die er nur noch ausfüllen muss.
+**Rolle im System:** Jonas trägt die Rolle `super_admin` — die einzige Rolle, die facility-übergreifend arbeitet. Er sieht den `/system/`-Bereich (alle Einrichtungen, Pre-Auth-AuditLogs, Bootstrap-Tools), interagiert aber im Tagesgeschäft nicht mit der fachlichen Dokumentation. Mitarbeitende einer Einrichtung kommen mit ihm nur indirekt in Berührung — über das Anlegen neuer Anwendungsbetreuungs-Konten (`facility_admin`) oder bei Recovery-Fällen.
 
-> **Hinweis:** Jonas repräsentiert einen Ausbau-Use-Case für die Falllogik (siehe Roadmap). Die aktuelle Version (v1.0) fokussiert auf Selin, Deniz und Heike — eine einzelne Einrichtung. Das Datenmodell ist so angelegt, dass Jonas' Anforderungen (einrichtungsübergreifende Verwaltung, standortübergreifende Statistiken) ohne Architekturumbau ergänzt werden können, wenn ein Träger als konkreter Nutzer dazukommt.
+**Was er braucht:** Ein System, das mit `docker compose up` läuft. Automatische Backups. Eine Bootstrap-Routine, die ohne Default-Passwörter den ersten Super-Admin-Account anlegt (`manage.py create_super_admin`). DSGVO-Vorlagen, die er nur noch ausfüllen muss.
+
+> **Hinweis:** Jonas repräsentiert die Systemadministrations-Rolle. Während Selin, Deniz und Heike facility-gebunden arbeiten, wirkt Jonas oberhalb der Einrichtungsgrenze. Auch in einer Single-Tenant-Installation existiert mindestens ein `super_admin` — er legt die erste Einrichtung und den ersten `facility_admin` an. Die Erstinstallation läuft nicht über Seed-Daten, sondern über den interaktiven Befehl `manage.py create_super_admin`.
 
 ### Typische Workflows
 
@@ -311,7 +313,7 @@ Ein Klick auf „PDF-Export" erzeugt einen druckfertigen Bericht — anonymisier
 
 ### Einstiegshürde: Erlernbar in 2–3 Stunden
 
-Das Versprechen „Erlernbar in 2–3 Stunden" ist bewusst ambitioniert. Es bezieht sich auf die Grundfunktionen: Kontakt dokumentieren, offene Hinweise und Aufgaben lesen, Person suchen. Erweiterte Funktionen wie Statistik-Export, Typ-Konfiguration und Benutzerverwaltung richten sich an die Einrichtungsleitung und den Administrator und erfordern zusätzliche Einarbeitung.
+Das Versprechen „Erlernbar in 2–3 Stunden" ist bewusst ambitioniert. Es bezieht sich auf die Grundfunktionen: Kontakt dokumentieren, offene Hinweise und Aufgaben lesen, Person suchen. Erweiterte Funktionen wie Statistik-Export, Typ-Konfiguration und Benutzerverwaltung richten sich an die Einrichtungsleitung und die Anwendungsbetreuung (`facility_admin`) und erfordern zusätzliche Einarbeitung.
 
 Die Einstiegshürde wird niedrig gehalten durch:
 
@@ -408,7 +410,7 @@ Datenschutz ist kein nachträgliches Feature, sondern strukturgebendes Element d
 - **Audit-Trail.** Jeder Zugriff auf qualifizierte Daten wird protokolliert: Wer hat wann was gelesen, geändert oder gelöscht.
 - **Löschfristen.** Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Anonyme Kontakte werden nach 12 Monaten aggregiert (nur Zählung behalten, Einzeleinträge löschen). Identifizierte Kontakte nach konfigurierter Frist (z.B. 36 Monate nach letztem Kontakt). Qualifizierte Kontakte nach Beendigung plus Aufbewahrungsfrist.
 - **Verschlüsselung.** Besonders sensible Felder (Gesundheitsdaten, Beratungsinhalte) werden verschlüsselt gespeichert. Der Schlüssel liegt nicht in der Datenbank.
-- **Berechtigungsmodell.** Vier Rollen (Administration, Leitung, Fachkraft, Assistenz) mit kontextabhängigen Zugriffsrechten. Löschung qualifizierter Daten nur mit 4-Augen-Prinzip.
+- **Berechtigungsmodell.** Fünf Rollen (Systemadministration, Anwendungsbetreuung, Leitung, Fachkraft, Assistenz) mit kontextabhängigen Zugriffsrechten. Nur die Systemadministration arbeitet facility-übergreifend; alle anderen Rollen bleiben strikt auf ihre Einrichtung beschränkt. Löschung qualifizierter Daten nur mit 4-Augen-Prinzip.
 - **DSGVO-Konformität.** Betroffenenrechte (Auskunft, Berichtigung, Löschung, Portabilität) sind als Funktionen im System umgesetzt. DSGVO-Dokumentation (Verarbeitungsverzeichnis, Datenschutz-Folgenabschätzung, AV-Vertrag-Vorlage, TOMs) wird mitgeliefert.
 
 ---
@@ -489,7 +491,7 @@ Die Ökosystem-Ebene öffnet Anlaufstelle nach außen:
 Anlaufstelle v1.0 umfasst:
 
 - Einrichtungsstruktur mit Facility-Scoping und Organisationshierarchie
-- 4-stufiges Rollenmodell (Admin, Leitung, Fachkraft, Assistenz)
+- 5-stufiges Rollenmodell (Systemadministration, Anwendungsbetreuung, Leitung, Fachkraft, Assistenz)
 - Pseudonymisierte Klientelverwaltung mit Kontaktstufen
 - Konfigurierbare Dokumentationstypen mit JSONB-Feldsystem
 - Zeitstrombasierte Dokumentation mit benannten Zeitfiltern
@@ -548,12 +550,15 @@ Ein User ist eine Person, die mit dem System arbeitet. User haben eine Identitä
 
 #### Role — Die Rolle
 
-Rollen definieren, welche Aktionen ein User ausführen darf. Anlaufstelle kennt vier Rollen:
+Rollen definieren, welche Aktionen ein User ausführen darf. Anlaufstelle kennt fünf Rollen — vier davon sind strikt facility-gebunden, die fünfte (Systemadministration) wirkt facility-übergreifend:
 
-- **Admin:** Volle Systemkontrolle — Benutzerverwaltung, Typ-Konfiguration, Systemeinstellungen, Audit-Log.
-- **Lead:** Fachliche Leitung — alles, was Fachkräfte können, plus Pseudonym-Verwaltung, Kontaktstufen-Änderung, Statistiken, Export.
-- **Staff:** Fachkraft — Kontakterfassung, Hinweise und Aufgaben, Suche, Zugriff auf qualifizierte Daten eigener Einrichtung.
-- **Assistant:** Assistenz — wie Staff, aber kein Zugriff auf qualifizierte Kontakt-Details und keine Bearbeitung fremder Einträge.
+- **Super-Admin (`super_admin`, „Systemadministration"):** Facility-übergreifend. Hostet und betreibt die Installation. Sieht den `/system/`-Bereich (alle Einrichtungen, Bootstrap-Tools, Pre-Auth-AuditLogs ohne Facility-Bezug). Wird nicht über Seed-Daten oder das Admin-UI angelegt, sondern über den Bootstrap-Befehl `manage.py create_super_admin`. Jeder Aufruf einer `/system/`-View wird im Audit-Log mit der Action `SYSTEM_VIEW` protokolliert; das System-UI zeigt einen permanenten Banner über die facility-übergreifende Sicht.
+- **Facility-Admin (`facility_admin`, „Anwendungsbetreuung"):** Pro Einrichtung. Volle administrative Kontrolle über genau eine Facility — Benutzerverwaltung in der Einrichtung, Typ-Konfiguration, Sensitivitätsprofile, Audit-Log und DSGVO-Paket der eigenen Einrichtung. Kann **nicht** in andere Einrichtungen schauen, kein Bootstrap-Recht.
+- **Lead (`lead`, „Leitung"):** Fachliche Leitung — alles, was Fachkräfte können, plus Pseudonym-Verwaltung, Kontaktstufen-Änderung, Statistiken, Export, Genehmigung von Löschanträgen. Facility-gebunden.
+- **Staff (`staff`, „Fachkraft"):** Kontakterfassung, Hinweise und Aufgaben, Suche, Zugriff auf qualifizierte Daten eigener Einrichtung. Facility-gebunden.
+- **Assistant (`assistant`, „Assistenz"):** Wie Staff, aber kein Zugriff auf qualifizierte Kontakt-Details und keine Bearbeitung fremder Einträge. Facility-gebunden.
+
+> **Trennung Systemadministration ↔ Anwendungsbetreuung:** Die Systemadministration kümmert sich um Hosting, Updates und Bootstrap; die Anwendungsbetreuung kümmert sich um Konfiguration und Nutzerverwaltung **innerhalb** einer Einrichtung. Diese Trennung schützt das DSGVO-Zweckbindungsprinzip: Auch der Super-Admin sieht keine fachlichen Inhalte einer Einrichtung, ohne dass dieser Zugriff im AuditLog (`SYSTEM_VIEW`) auftaucht.
 
 #### Client — Die Person / Klientel
 
@@ -657,12 +662,12 @@ Scope-Regeln bestimmen, welche Daten für wen sichtbar sind:
 
 **Einrichtungsebene (v1.0):** Mitarbeitende sehen nur die Daten der Einrichtung, der sie zugeordnet sind. Da es in v1.0 nur eine Einrichtung gibt, ist der Scope-Filter technisch vorhanden (`WHERE facility_id =:current`), aber für den Nutzer unsichtbar. Jede Datenbankabfrage filtert auf `facility_id` — das ist die Vorbereitung für eine spätere Mehrmandantenfähigkeit.
 
-**Organisationsebene (vorbereitet, nicht aktiv):** Die Organisation existiert als Hintergrund-Entität. In v1.0 gibt es keinen Org-Admin, keinen Facility-Switcher, keine einrichtungsübergreifenden Statistiken. Wenn ein Träger als Nutzer dazukommt, werden diese Features auf Basis der bestehenden Datenstruktur ergänzt.
+**Organisationsebene (Branding-Hülse):** Die Organisation existiert als reine Verwaltungs-Hülse für Träger-Branding (Logo, Trägername in Berichten). Es gibt **keinen** Org-Admin und **keine** Cross-Facility-Sichtbarkeit über die Organisation — die einzige facility-übergreifende Rolle ist die Systemadministration (`super_admin`), und auch sie sieht nur den `/system/`-Bereich, nicht das normale Fach-UI mehrerer Einrichtungen gleichzeitig. Diese Architektur-Entscheidung ist bewusst gewählt (Variante b1: Org als Branding-Hülse) und in [ADR-018](adr/018-rollenmodell-superadmin.md) festgehalten.
 
 **Kontaktstufe:** Innerhalb einer Einrichtung regelt die Kontaktstufe den Detailgrad:
 - Anonyme Kontakte: Für alle Rollen sichtbar (nur Zählung, kein Personenbezug).
 - Identifizierte Kontakte: Für alle Rollen sichtbar (Pseudonym, Kontaktliste, Basisinformationen).
-- Qualifizierte Kontakte: Details (Beratungsnotizen, Gesundheitsdaten, verschlüsselte Felder) nur für Staff, Lead und Admin sichtbar. Assistant sieht nur das Pseudonym und den letzten Kontakt.
+- Qualifizierte Kontakte: Details (Beratungsnotizen, Gesundheitsdaten, verschlüsselte Felder) nur für Staff, Lead und Facility-Admin sichtbar. Assistant sieht nur das Pseudonym und den letzten Kontakt. Der Super-Admin sieht qualifizierte Kontakte ausschließlich über den `/system/`-Bereich; jeder solche Aufruf wird im AuditLog (`SYSTEM_VIEW`) protokolliert.
 
 **Sensitivität:** Einzelne Felder können über `FieldTemplate.sensitivity` eine eigene Sichtbarkeitsstufe erhalten, die den Dokumentationstyp-Level nach oben überschreibt. Unabhängig davon steuert `is_encrypted`, ob Feldwerte verschlüsselt gespeichert werden.
 
@@ -974,11 +979,11 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 | **JSONB** | PostgreSQL-Datentyp für binäres JSON. Wird in Anlaufstelle verwendet, um die Feldwerte eines Ereignisses zusammen mit dem Ereignis zu speichern. Indexierbar (GIN-Index), abfragbar, performant. |
 | **Kontaktstufe** | Dreistufiges Modell, das den Identifizierungsgrad einer Person im System beschreibt: anonym (nur Zählung), identifiziert (Pseudonym), qualifiziert (Beratungsprozess). Bestimmt Zugriffsrechte, zulässige Dokumentationstypen und Löschfristen. |
 | **Milestone** | Meilenstein — ein konkreter Schritt auf dem Weg zu einem Wirkungsziel. |
-| **Organization** | Träger — die oberste Ebene der Hierarchie. In v1.0 existiert genau eine Organisation, automatisch angelegt und in der UI ausgeblendet. Dient als vorbereiteter Scope für spätere Träger-Erweiterung. |
+| **Organization** | Träger — eine reine Verwaltungs-Hülse für Branding (Logo, Trägername in Berichten). Keine Cross-Facility-Sichtbarkeit über die Organisation. Facility-übergreifender Zugriff ausschließlich über die Rolle `super_admin` und den `/system/`-Bereich. Architektur-Entscheidung: [ADR-018](adr/018-rollenmodell-superadmin.md), Variante b1 („Branding-Hülse"). |
 | **Outcome** | Wirkung — das Ergebnis der Arbeit mit einer Person. Nicht die Aktivität („347 Kontakte"), sondern die Veränderung („stabile Wohnsituation erreicht"). |
 | **OutcomeGoal** | Wirkungsziel — was durch die Arbeit erreicht werden soll. Zugeordnet zu einem Fall. |
 | **Pseudonym** | Vom Team vergebener Name für eine Person im System. Primärer Identifikator in Anlaufstelle. Die Zuordnung zum realen Namen existiert nur im Wissen der Mitarbeitenden, nicht im System. |
-| **Role** | Rolle — bestimmt, welche Aktionen ein User ausführen darf. Vier Rollen: Admin (Systemkontrolle), Lead (fachliche Leitung), Staff (Fachkraft), Assistant (Assistenz). |
+| **Role** | Rolle — bestimmt, welche Aktionen ein User ausführen darf. Fünf Rollen: `super_admin` (Systemadministration, facility-übergreifend, `/system/`-Bereich), `facility_admin` (Anwendungsbetreuung, Vollkontrolle einer Einrichtung), `lead` (fachliche Leitung), `staff` (Fachkraft), `assistant` (Assistenz). Nur `super_admin` arbeitet facility-übergreifend; alle anderen sind strikt facility-gebunden. Details: [ADR-018](adr/018-rollenmodell-superadmin.md). |
 | **Scope** | Sichtbarkeitsbereich. Bestimmt, welche Daten für einen User zugänglich sind — abhängig von Einrichtung, Rolle und Kontaktstufe. |
 | **Sensitivität** | Einstufung eines Dokumentationstyps oder Feldes hinsichtlich des Schutzbedarfs. Steuert, welche Rollen auf Feldwerte zugreifen dürfen. Konfigurierbar pro Dokumentationstyp und pro Feld (`FieldTemplate.sensitivity`). Unabhängig von der Feldverschlüsselung (`is_encrypted`). |
 | **TimeFilter** | Technischer Begriff für einen benannten Zeitfilter. Gehört zu einer Einrichtung und definiert ein Zeitfenster (Startzeit, Endzeit) mit einem Label. |
@@ -1036,7 +1041,7 @@ Das Fachkonzept beschreibt Domäne und Architektur konzeptionell, nennt aber den
 
 ### Backup-Strategie
 
-Jonas (Träger-Administrator) bzw. die Einrichtungsleitung braucht ein funktionierendes Backup ohne Datenbankexpertise:
+Jonas (Systemadministration, `super_admin`) bzw. die Einrichtungsleitung braucht ein funktionierendes Backup ohne Datenbankexpertise:
 
 - **Automatisches tägliches Backup:** Ein mitgeliefertes Skript (`backup.sh`) erstellt einen PostgreSQL-Dump, verschlüsselt ihn mit einem konfigurierbaren Schlüssel und speichert ihn lokal. Rotation: 7 tägliche, 4 wöchentliche, 3 monatliche Backups.
 - **Externes Backup (optional):** Dokumentierte Integration mit rclone für die Ablage auf einem S3-kompatiblen Speicher oder einem zweiten Server.
@@ -1178,8 +1183,8 @@ Das Hauptdokument beschreibt Datenschutz-Grundlagen in v1.0 und Datenschutz-Reif
 | Verschlüsselung sensibler Felder | ✓ implementiert | Key-Rotation hinzugefügt |
 | Pseudonymisierung by Design | ✓ implementiert | — |
 | Löschfristen | Konfigurierbar, aber manuelle Ausführung | Automatisierte Löschung per Cronjob |
-| Betroffenenrechte (Auskunft) | Manuelle Abfrage durch Admin | Self-Service-Funktion für Lead-Rolle |
-| Betroffenenrechte (Löschung) | Manuell durch Admin | 4-Augen-Prinzip, protokolliert |
+| Betroffenenrechte (Auskunft) | Manuelle Abfrage durch Anwendungsbetreuung (`facility_admin`) | Self-Service-Funktion für Lead-Rolle |
+| Betroffenenrechte (Löschung) | Manuell durch Anwendungsbetreuung (`facility_admin`) | 4-Augen-Prinzip, protokolliert |
 | Betroffenenrechte (Portabilität) | Nicht verfügbar | JSON/CSV-Export der personenbezogenen Daten |
 | DSGVO-Dokumentation | Nicht mitgeliefert | Verarbeitungsverzeichnis, DSFA, AV-Vertrag, TOMs als Vorlagen |
 | Datenschutz-Folgenabschätzung | Nicht durchgeführt | Vorlage mitgeliefert, auf Anlaufstelle zugeschnitten |
@@ -1320,10 +1325,11 @@ Da das Datenmodell von Anfang an `facility_id` auf allen Entitäten hat (Entsche
 
 ### Monitoring und Betrieb
 
-Für die Einrichtungsleitung oder den Administrator sollte das System folgende Betriebsinformationen liefern:
+Für die Einrichtungsleitung, die Anwendungsbetreuung (`facility_admin`) oder die Systemadministration (`super_admin`) sollte das System folgende Betriebsinformationen liefern:
 
 - **Health-Endpoint** (`/health/`): Gibt Status von Datenbank, Festplattenspeicher und letztem Backup zurück. Integrierbar in Uptime-Monitoring (z.B. Uptime Kuma).
-- **System-Status-Seite** (nur für Admins sichtbar): Anzahl Nutzer, Datenbank-Größe, letztes Backup-Datum, letzte Audit-Log-Einträge.
+- **System-Status-Seite** (nur für `super_admin` über `/system/` sichtbar): Anzahl Nutzer, Datenbank-Größe, letztes Backup-Datum, letzte Audit-Log-Einträge — alle Aufrufe erzeugen einen `SYSTEM_VIEW`-AuditLog-Eintrag.
+- **Audit-Log einer Einrichtung** (für `facility_admin` unter `/audit/`): rein auf die eigene Facility gefiltert.
 - **E-Mail-Benachrichtigung** bei fehlgeschlagenem Backup oder vollem Speicher (konfigurierbar).
 
 ---

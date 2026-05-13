@@ -45,7 +45,9 @@ Wenn wir den Token-Link-Flow (Invite, Passwort-Reset, 2FA-Backup-Download) jemal
 
 ## AuditLog `facility_id` ist nullable (Design)
 
-`AuditLog.facility` ist `null=True` (siehe [`models/audit.py`](./src/core/models/audit.py)), weil System-weite Events (z.B. fehlgeschlagene Logins vor dem Facility-Context) keine Facility haben. Diese Zeilen matchen die `facility_isolation`-Policy **nicht** — sie sind nur für RLS-bypassende Rollen (Superuser, direkte DB-Admins) sichtbar. Application-Code ruft NULL-Audit-Logs ohnehin nicht über facility-scoped Views ab.
+`AuditLog.facility` ist `null=True` (siehe [`models/audit.py`](./src/core/models/audit.py)), weil System-weite Events (z.B. fehlgeschlagene Logins vor dem Facility-Context) keine Facility haben. Diese Zeilen matchen die `facility_isolation`-Policy **nicht** — sie sind für reguläre App-User (`assistant`/`staff`/`lead`/`facility_admin`) unsichtbar.
+
+**Update 2026-05-10 (, schließt ):** Mit Einführung der Rolle `super_admin` ist die NULL-Facility-Sichtbarkeit jetzt zusätzlich über das UI verfügbar — der `/system/`-Bereich ([`SystemAuditLogView`](./src/core/views/system.py)) zeigt Pre-Auth- und systemweite Einträge für die Systemadministration, gekapselt durch `SuperAdminRequiredMixin` und durch eine zusätzliche Session-Variable `app.is_super_admin='true'` (OR-Branch in den RLS-Policies). Jeder dieser Aufrufe wird im AuditLog mit der Action `SYSTEM_VIEW` protokolliert (DSGVO-Rechenschaftspflicht). Direkter psql-Pfad über `anlaufstelle_admin` (BYPASSRLS) bleibt für Forensik bestehen. Details: [ADR-007 Update 2026-05-10](adr/007-auditlog-append-only.md), [ADR-018](adr/018-rollenmodell-superadmin.md).
 
 ---
 

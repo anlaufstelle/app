@@ -23,6 +23,8 @@
 |---|---|
 | Pseudonym | Primärer Identifikator, nicht ersetzen |
 | Fachkraft, Leitung, Assistenz | Rollenbegriffe, unverändert |
+| Anwendungsbetreuung | UI-Label für Rolle `facility_admin`. Vollzugriff in der eigenen Einrichtung. Ablöser des bisherigen UI-Labels „Administrator". |
+| Systemadministration | UI-Label für Rolle `super_admin`. Facility-übergreifende Hosting-/Bootstrap-Rolle, sichtbar im `/system/`-Bereich. Begriff bewusst gewählt, um die Hosting-Ebene von der inhaltlichen Anwendungsbetreuung zu trennen. |
 | Einrichtung | Facility-Begriff |
 | Kontakt | Für einzelne Begegnung / Event-Kontext |
 | Ereignis | Wenn technisch bei _Event_ geblieben wird |

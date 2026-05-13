@@ -42,7 +42,7 @@ def facility(organization):
 def admin_user(facility):
     user = User.objects.create_user(
         username="testadmin",
-        role=User.Role.ADMIN,
+        role=User.Role.FACILITY_ADMIN,
         facility=facility,
         is_superuser=True,
         is_staff=True,
@@ -84,6 +84,25 @@ def assistant_user(facility):
         username="testassistant",
         role=User.Role.ASSISTANT,
         facility=facility,
+        is_staff=True,
+    )
+    user.set_password("testpass123")
+    user.save()
+    return user
+
+
+@pytest.fixture
+def super_admin_user(db):
+    """Refs #867: SUPER_ADMIN ohne Facility-Bindung (Persona Jonas).
+
+    Bewusst ohne ``facility``-Bindung — der super_admin bedient die gesamte
+    Installation. ``is_superuser=False``, weil die Rolle nicht mit Djangos
+    Auth-Superuser-Flag gleichgesetzt werden darf (RBAC-Property entscheidet).
+    """
+    user = User.objects.create_user(
+        username="testsuperadmin",
+        role=User.Role.SUPER_ADMIN,
+        facility=None,
         is_staff=True,
     )
     user.set_password("testpass123")

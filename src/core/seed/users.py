@@ -30,3 +30,29 @@ def seed_users(facility: Facility, facility_idx: int) -> list[User]:
             user.save()
         created_users.append(user)
     return created_users
+
+
+def seed_super_admin() -> User:
+    """Create (or return existing) installation-wide super-admin user.
+
+    Refs #867: Persona Jonas — installation-weiter Systemadministrator,
+    nicht an eine Einrichtung gebunden. Idempotent: nur anlegen, falls
+    der Username noch nicht existiert.
+    """
+    user, created = User.objects.get_or_create(
+        username="superadmin",
+        defaults={
+            "first_name": "Super",
+            "last_name": "Admin",
+            "email": "superadmin@example.org",
+            "role": User.Role.SUPER_ADMIN,
+            "facility": None,
+            "is_staff": True,
+            "is_superuser": True,
+            "display_name": "Super Admin",
+        },
+    )
+    if created:
+        user.set_password("anlaufstelle2026")
+        user.save()
+    return user

@@ -4,7 +4,7 @@ from core.models import Client, User
 
 # User templates (reused per facility).
 USER_TEMPLATES = [
-    ("admin", "Admin", "User", User.Role.ADMIN, True),
+    ("admin", "Admin", "User", User.Role.FACILITY_ADMIN, True),
     ("thomas", "Thomas", "Müller", User.Role.LEAD, False),
     ("miriam", "Miriam", "Schmidt", User.Role.STAFF, False),
     ("lena", "Lena", "Weber", User.Role.ASSISTANT, False),

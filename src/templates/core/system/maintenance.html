@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Wartungsmodus (System)" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+{% include "core/system/_banner.html" %}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-[22px] font-bold text-ink">{% trans "Wartungsmodus" %}</h1>
+</div>
+
+{# Sub-Navigation innerhalb /system/ #}
+{% include "core/system/_subnav.html" %}
+
+<section class="mb-4 bg-surface border border-subtle rounded-[10px] p-4 text-[13px] text-ink-muted">
+    {% blocktrans %}
+    Im Wartungsmodus antwortet die Anwendung mit HTTP 503 und einer Wartungsseite.
+    Whitelist-Pfade (Health-Endpoint, statische Dateien) und ggf. konfigurierte Ops-IPs
+    bleiben weiterhin erreichbar. Der Toggle wirkt sofort, sobald die Flag-Datei geschrieben wurde.
+    {% endblocktrans %}
+</section>
+
+{% if not configured %}
+<section class="bg-orange-50 border border-orange-200 rounded-[10px] p-4 text-sm text-orange-800" data-testid="system-maintenance-not-configured">
+    <p class="font-semibold mb-1">{% trans "MAINTENANCE_FLAG_FILE nicht konfiguriert" %}</p>
+    <p class="text-[13px]">
+        {% trans "Setze die Umgebungsvariable MAINTENANCE_FLAG_FILE auf einen schreibbaren Pfad, um den Wartungsmodus zu nutzen. Toggle ist aktuell nicht möglich." %}
+    </p>
+</section>
+{% else %}
+<section class="bg-surface border border-subtle rounded-[10px] overflow-hidden" data-testid="system-maintenance-card">
+    <div class="px-4 py-3 border-b border-subtle flex items-center justify-between">
+        <div class="flex items-center gap-3">
+            {% if is_active %}
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-orange-500" aria-hidden="true"></span>
+            <span class="text-sm font-semibold text-ink" data-testid="system-maintenance-status">{% trans "Wartungsmodus ist aktiv" %}</span>
+            {% else %}
+            <span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500" aria-hidden="true"></span>
+            <span class="text-sm font-semibold text-ink" data-testid="system-maintenance-status">{% trans "Wartungsmodus ist inaktiv" %}</span>
+            {% endif %}
+        </div>
+        <span class="text-[12px] font-mono text-ink-muted">{{ flag_path }}</span>
+    </div>
+
+    {% if is_active %}
+    <div class="p-4 space-y-3">
+        {% if activated_at %}
+        <div>
+            <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktiviert am" %}</span>
+            <p class="text-sm text-ink">{{ activated_at|date:"DATETIME_FORMAT" }}</p>
+        </div>
+        {% endif %}
+        {% if note %}
+        <div>
+            <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Notiz" %}</span>
+            <p class="text-sm text-ink whitespace-pre-line">{{ note }}</p>
+        </div>
+        {% endif %}
+        <form method="post" action="{% url 'core:system_maintenance' %}"
+              data-confirm="{% trans 'Wartungsmodus wirklich deaktivieren?' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="disable">
+            <button type="submit"
+                    class="px-4 py-2 rounded-md text-[13px] font-semibold bg-accent text-white hover:bg-accent/90"
+                    data-testid="system-maintenance-disable">
+                {% trans "Wartungsmodus deaktivieren" %}
+            </button>
+        </form>
+    </div>
+    {% else %}
+    <div class="p-4">
+        <form method="post" action="{% url 'core:system_maintenance' %}" class="space-y-3"
+              data-confirm="{% trans 'Wartungsmodus wirklich aktivieren? Anwender werden ausgesperrt.' %}">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="enable">
+            <div>
+                <label for="maintenance-note" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">
+                    {% trans "Notiz (optional)" %}
+                </label>
+                <textarea id="maintenance-note" name="note" rows="3"
+                          class="w-full bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent"
+                          placeholder="{% trans 'z.B. Datenbankmigration, voraussichtliche Dauer ...' %}"
+                          data-testid="system-maintenance-note"></textarea>
+            </div>
+            <button type="submit"
+                    class="px-4 py-2 rounded-md text-[13px] font-semibold bg-orange-600 text-white hover:bg-orange-700"
+                    data-testid="system-maintenance-enable">
+                {% trans "Wartungsmodus aktivieren" %}
+            </button>
+        </form>
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+{% endblock %}

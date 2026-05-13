@@ -49,6 +49,15 @@ class AuditLog(models.Model):
         BACKUP_CODES_USED = "backup_codes_used", _("2FA Backup-Code verwendet")
         BACKUP_CODES_REGENERATED = "backup_codes_regenerated", _("2FA Backup-Codes neu generiert")
         SUDO_MODE_ENTERED = "sudo_mode_entered", _("Sudo-Mode aktiviert (Re-Auth)")
+        # Refs #867: protokolliert facility-uebergreifende Lese-Zugriffe
+        # durch super_admin im /system/-Bereich (DSGVO-Rechenschaftspflicht).
+        SYSTEM_VIEW = "system_view", _("Systembereich aufgerufen")
+        # Refs #873: AuditLog-Export im /system/-Bereich (DSGVO-Spur, da
+        # potentiell qualifizierte Daten in Massen exportiert werden).
+        AUDIT_EXPORT = "audit_export", _("Audit-Log exportiert")
+        # Refs #874: Wartungsmodus-Toggle ueber den Systembereich.
+        MAINTENANCE_ENABLED = "maintenance_enabled", _("Wartungsmodus aktiviert")
+        MAINTENANCE_DISABLED = "maintenance_disabled", _("Wartungsmodus deaktiviert")
 
     objects = FacilityScopedManager()
 

@@ -248,6 +248,12 @@ def _assistant_storage_state(base_url, browser):
     return _create_storage_state(browser, base_url, "lena")
 
 
+@pytest.fixture(scope="session")
+def _super_admin_storage_state(base_url, browser):
+    """Storage-State für Super-Admin (superadmin) — Refs #867."""
+    return _create_storage_state(browser, base_url, "superadmin")
+
+
 def _setup_page(context):
     """Page mit Timeouts für lokalen Server erstellen."""
     page = context.new_page()
@@ -342,6 +348,22 @@ def assistant_page(base_url, browser, _assistant_storage_state):
     context = browser.new_context(storage_state=_assistant_storage_state, locale="de-DE")
     page = _setup_page(context)
     page.goto(f"{base_url}/")
+    yield page
+    _cleanup_browser_state(page)
+    context.close()
+
+
+@pytest.fixture
+def super_admin_page(base_url, browser, _super_admin_storage_state):
+    """Playwright-Page mit eingeloggtem Super-Admin (superadmin) — Refs #867.
+
+    Landet nach Login auf ``/system/`` (siehe ``CustomLoginView.get_success_url``).
+    Hier startet die Fixture trotzdem auf ``/system/`` direkt fuer
+    deterministisches Verhalten.
+    """
+    context = browser.new_context(storage_state=_super_admin_storage_state, locale="de-DE")
+    page = _setup_page(context)
+    page.goto(f"{base_url}/system/")
     yield page
     _cleanup_browser_state(page)
     context.close()

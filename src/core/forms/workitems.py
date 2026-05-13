@@ -92,7 +92,7 @@ class WorkItemForm(forms.ModelForm):
             self.fields["assigned_to"].queryset = User.objects.filter(  # type: ignore[attr-defined]
                 facility=facility,
                 is_active=True,
-                role__in=[User.Role.ADMIN, User.Role.LEAD, User.Role.STAFF],
+                role__in=[User.Role.FACILITY_ADMIN, User.Role.LEAD, User.Role.STAFF],
             ).order_by("username")
         self.fields["assigned_to"].required = False
         self.fields["description"].required = False

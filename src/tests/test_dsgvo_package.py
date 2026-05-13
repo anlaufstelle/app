@@ -26,7 +26,7 @@ def admin_user(facility):
     return User.objects.create_user(
         username="dsgvo_admin",
         password="test1234",
-        role=User.Role.ADMIN,
+        role=User.Role.FACILITY_ADMIN,
         facility=facility,
         is_staff=True,
     )

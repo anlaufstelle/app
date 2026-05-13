@@ -21,7 +21,7 @@ from core.seed.flush import flush_seed_data
 from core.seed.organization import seed_facility, seed_organization
 from core.seed.scale import FACILITY_NAMES, SCALE_CONFIG
 from core.seed.settings_seed import seed_settings, seed_time_filters
-from core.seed.users import seed_users
+from core.seed.users import seed_super_admin, seed_users
 from core.seed.workitems import seed_work_items
 
 
@@ -52,6 +52,7 @@ class Command(BaseCommand):
             flush_seed_data()
 
         org = seed_organization()
+        seed_super_admin()
 
         for idx in range(cfg["facilities"]):
             facility_name = FACILITY_NAMES[idx]

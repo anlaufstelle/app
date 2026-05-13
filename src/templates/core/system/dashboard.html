@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Systembereich" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+{% include "core/system/_banner.html" %}
+
+<div class="flex items-center justify-between mb-6">
+    <h1 class="text-[22px] font-bold text-ink">{% trans "Systembereich" %}</h1>
+</div>
+
+{# Sub-Navigation innerhalb /system/ #}
+{% include "core/system/_subnav.html" %}
+
+{# Health-Card (Refs #871) — DB, Migrations, Disk, Backup, Versionen. #}
+<section class="mb-6 bg-surface border border-subtle rounded-[10px] overflow-hidden" data-testid="system-health-card">
+    <h2 class="text-[15px] font-semibold text-ink px-4 py-3 border-b border-subtle">{% trans "System-Status" %}</h2>
+    <div class="divide-y divide-subtle">
+        {# Datenbank #}
+        <div class="px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                {% if health.db %}
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500" aria-hidden="true"></span>
+                {% else %}
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-red-500" aria-hidden="true"></span>
+                {% endif %}
+                <div>
+                    <div class="text-sm font-medium text-ink">{% trans "Datenbank" %}</div>
+                    <div class="text-[12px] text-ink-muted">
+                        {% if health.db %}{% trans "Verbindung erreichbar" %}{% else %}{% trans "Verbindung fehlgeschlagen" %}{% endif %}
+                    </div>
+                </div>
+            </div>
+            <span class="text-[12px] font-semibold uppercase tracking-wider {% if health.db %}text-green-700{% else %}text-red-700{% endif %}">
+                {% if health.db %}{% trans "OK" %}{% else %}{% trans "Fehler" %}{% endif %}
+            </span>
+        </div>
+
+        {# Migrations #}
+        <div class="px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                {% if health.migrations_pending_count == 0 %}
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500" aria-hidden="true"></span>
+                {% else %}
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-orange-500" aria-hidden="true"></span>
+                {% endif %}
+                <div>
+                    <div class="text-sm font-medium text-ink">{% trans "Migrationen" %}</div>
+                    <div class="text-[12px] text-ink-muted">
+                        {% if health.migrations_pending_count == 0 %}
+                        {% trans "Alle Migrationen angewendet" %}
+                        {% else %}
+                        {% blocktrans count counter=health.migrations_pending_count %}{{ counter }} ausstehende Migration{% plural %}{{ counter }} ausstehende Migrationen{% endblocktrans %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <span class="text-[12px] font-semibold uppercase tracking-wider {% if health.migrations_pending_count == 0 %}text-green-700{% else %}text-orange-700{% endif %}">
+                {% if health.migrations_pending_count == 0 %}{% trans "OK" %}{% else %}{% trans "Warnung" %}{% endif %}
+            </span>
+        </div>
+
+        {# Disk #}
+        <div class="px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                {% if health.disk.percent_used == None %}
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-orange-500" aria-hidden="true"></span>
+                {% elif health.disk.percent_used < 80 %}
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500" aria-hidden="true"></span>
+                {% elif health.disk.percent_used < 90 %}
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-orange-500" aria-hidden="true"></span>
+                {% else %}
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-red-500" aria-hidden="true"></span>
+                {% endif %}
+                <div>
+                    <div class="text-sm font-medium text-ink">{% trans "Festplatte" %}</div>
+                    <div class="text-[12px] text-ink-muted">
+                        {% if health.disk.percent_used == None %}
+                        {% trans "Status nicht verfügbar" %}
+                        {% else %}
+                        {% blocktrans with used=health.disk.used_gb total=health.disk.total_gb pct=health.disk.percent_used %}{{ used }} GB / {{ total }} GB ({{ pct }}% belegt){% endblocktrans %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <span class="text-[12px] font-semibold uppercase tracking-wider {% if health.disk.percent_used == None %}text-orange-700{% elif health.disk.percent_used < 80 %}text-green-700{% elif health.disk.percent_used < 90 %}text-orange-700{% else %}text-red-700{% endif %}">
+                {% if health.disk.percent_used == None %}{% trans "Unbekannt" %}{% elif health.disk.percent_used < 80 %}{% trans "OK" %}{% elif health.disk.percent_used < 90 %}{% trans "Warnung" %}{% else %}{% trans "Kritisch" %}{% endif %}
+            </span>
+        </div>
+
+        {# Backup #}
+        <div class="px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                {% if health.backup == None %}
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-orange-500" aria-hidden="true"></span>
+                {% elif health.backup.is_stale %}
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-orange-500" aria-hidden="true"></span>
+                {% else %}
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500" aria-hidden="true"></span>
+                {% endif %}
+                <div>
+                    <div class="text-sm font-medium text-ink">{% trans "Letztes Backup" %}</div>
+                    <div class="text-[12px] text-ink-muted">
+                        {% if health.backup == None %}
+                        {% trans "Kein Backup gefunden" %}
+                        {% else %}
+                        {% blocktrans with hours=health.backup.age_hours %}vor {{ hours }} Stunden{% endblocktrans %}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <span class="text-[12px] font-semibold uppercase tracking-wider {% if health.backup == None or health.backup.is_stale %}text-orange-700{% else %}text-green-700{% endif %}">
+                {% if health.backup == None %}{% trans "Fehlt" %}{% elif health.backup.is_stale %}{% trans "Veraltet" %}{% else %}{% trans "OK" %}{% endif %}
+            </span>
+        </div>
+
+        {# Versionen #}
+        <div class="px-4 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <span class="inline-block w-2.5 h-2.5 rounded-full bg-green-500" aria-hidden="true"></span>
+                <div>
+                    <div class="text-sm font-medium text-ink">{% trans "Versionen" %}</div>
+                    <div class="text-[12px] text-ink-muted">
+                        {% blocktrans with app=health.versions.app_version py=health.versions.python_version dj=health.versions.django_version %}App {{ app }} · Python {{ py }} · Django {{ dj }}{% endblocktrans %}
+                    </div>
+                </div>
+            </div>
+            <span class="text-[12px] font-semibold uppercase tracking-wider text-green-700">{% trans "Info" %}</span>
+        </div>
+    </div>
+</section>
+
+{# Organisation #}
+<section class="mb-6 bg-surface border border-subtle rounded-[10px] p-4">
+    <h2 class="text-[15px] font-semibold text-ink mb-3">{% trans "Organisation" %}</h2>
+    {% if organization %}
+    <dl class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div>
+            <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Name" %}</dt>
+            <dd class="text-sm text-ink mt-1">{{ organization.name }}</dd>
+        </div>
+        <div>
+            <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt am" %}</dt>
+            <dd class="text-sm text-ink mt-1">{{ organization.created_at|date:"DATETIME_FORMAT" }}</dd>
+        </div>
+        <div>
+            <dt class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Einrichtungen" %}</dt>
+            <dd class="text-sm text-ink mt-1">{{ facilities_count }}</dd>
+        </div>
+    </dl>
+    {% else %}
+    <p class="text-sm text-ink-muted">{% trans "Es ist noch keine Organisation angelegt." %}</p>
+    {% endif %}
+</section>
+
+{# Counts #}
+<section class="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="bg-surface border border-subtle rounded-[10px] p-4">
+        <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Einrichtungen" %}</div>
+        <div class="mt-2 text-2xl font-bold text-ink">{{ facilities_count }}</div>
+    </div>
+    <div class="bg-surface border border-subtle rounded-[10px] p-4">
+        <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Benutzer (gesamt)" %}</div>
+        <div class="mt-2 text-2xl font-bold text-ink">{{ total_users }}</div>
+    </div>
+    <div class="bg-surface border border-subtle rounded-[10px] p-4">
+        <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Audit-Log-Einträge" %}</div>
+        <div class="mt-2 text-2xl font-bold text-ink">{{ auditlog_total }}</div>
+    </div>
+</section>
+
+{# User pro Rolle #}
+<section class="mb-6 bg-surface border border-subtle rounded-[10px] overflow-hidden">
+    <h2 class="text-[15px] font-semibold text-ink px-4 py-3 border-b border-subtle">{% trans "Benutzer pro Rolle" %}</h2>
+    <table class="min-w-full divide-y divide-subtle">
+        <thead class="bg-canvas">
+            <tr>
+                <th class="px-4 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Rolle" %}</th>
+                <th class="px-4 py-2 text-right text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Anzahl" %}</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-subtle">
+            {% for row in role_counts %}
+            <tr>
+                <td class="px-4 py-2.5 text-sm text-ink">{{ row.label }}</td>
+                <td class="px-4 py-2.5 text-sm font-mono text-ink-soft text-right">{{ row.count }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+{# Einrichtungen #}
+<section class="bg-surface border border-subtle rounded-[10px] overflow-hidden">
+    <h2 class="text-[15px] font-semibold text-ink px-4 py-3 border-b border-subtle">{% trans "Einrichtungen" %}</h2>
+    {% if facilities %}
+    <table class="min-w-full divide-y divide-subtle">
+        <thead class="bg-canvas">
+            <tr>
+                <th class="px-4 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Name" %}</th>
+                <th class="px-4 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktiv" %}</th>
+                <th class="px-4 py-2 text-left text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt am" %}</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-subtle">
+            {% for facility in facilities %}
+            <tr class="hover:bg-canvas">
+                <td class="px-4 py-2.5 text-sm font-medium text-ink">{{ facility.name }}</td>
+                <td class="px-4 py-2.5 text-sm text-ink-soft">
+                    {% if facility.is_active %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-green-100 text-green-800">{% trans "Aktiv" %}</span>
+                    {% else %}
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-gray-100 text-gray-800">{% trans "Inaktiv" %}</span>
+                    {% endif %}
+                </td>
+                <td class="px-4 py-2.5 text-sm text-ink-soft">{{ facility.created_at|date:"DATETIME_FORMAT" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    {% include "components/_empty_state.html" with icon="users" message=_("Keine Einrichtungen vorhanden.") %}
+    {% endif %}
+</section>
+{% endblock %}

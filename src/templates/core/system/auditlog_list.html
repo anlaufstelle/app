@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Audit-Log (alle Einrichtungen)" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+{% include "core/system/_banner.html" %}
+
+<div class="flex items-center justify-between mb-6 gap-3 flex-wrap">
+    <h1 class="text-[22px] font-bold text-ink">{% trans "Audit-Log (alle Einrichtungen)" %}</h1>
+    {# Refs #873: Export-Buttons mit aktuellen Filter-Params. #}
+    <div class="flex gap-2" data-testid="system-audit-export-buttons">
+        <a href="{% url 'core:system_audit_export' %}?format=csv{% if pagination_params %}&{{ pagination_params }}{% endif %}"
+           class="px-3 py-2 rounded-md text-[13px] font-semibold bg-surface border border-subtle text-ink-soft hover:bg-canvas"
+           data-testid="system-audit-export-csv">
+            {% trans "CSV-Export" %}
+        </a>
+        <a href="{% url 'core:system_audit_export' %}?format=json{% if pagination_params %}&{{ pagination_params }}{% endif %}"
+           class="px-3 py-2 rounded-md text-[13px] font-semibold bg-surface border border-subtle text-ink-soft hover:bg-canvas"
+           data-testid="system-audit-export-json">
+            {% trans "JSON-Export" %}
+        </a>
+    </div>
+</div>
+
+{# Sub-Navigation innerhalb /system/ #}
+{% include "core/system/_subnav.html" %}
+
+{# Filter form #}
+<form id="system-audit-filter-form"
+      hx-get="{% url 'core:system_audit_list' %}"
+      hx-target="#system-audit-table"
+      hx-push-url="true"
+      class="mb-5 bg-surface rounded-[10px] border border-subtle p-4">
+    <div class="flex flex-wrap gap-4 items-end">
+        {# Action filter #}
+        <div>
+            <label for="filter-action" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Aktion" %}</label>
+            <select id="filter-action" name="action"
+                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
+                <option value="">{% trans "Alle Aktionen" %}</option>
+                {% for value, label in action_choices %}
+                <option value="{{ value }}" {% if filter_action == value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {# User filter #}
+        <div>
+            <label for="filter-user" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Benutzer" %}</label>
+            <select id="filter-user" name="user"
+                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
+                <option value="">{% trans "Alle Benutzer" %}</option>
+                {% for u in all_users %}
+                <option value="{{ u.pk }}" {% if filter_user == u.pk|stringformat:"s" %}selected{% endif %}>{{ u }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {# Facility filter (mit NULL-Sentinel fuer System-Events) #}
+        <div>
+            <label for="filter-facility" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Einrichtung" %}</label>
+            <select id="filter-facility" name="facility"
+                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
+                <option value="">{% trans "Alle Einrichtungen" %}</option>
+                <option value="{{ facility_null_sentinel }}" {% if filter_facility == facility_null_sentinel %}selected{% endif %}>
+                    {% trans "(System / ohne Einrichtung)" %}
+                </option>
+                {% for facility in all_facilities %}
+                <option value="{{ facility.pk }}" {% if filter_facility == facility.pk|stringformat:"s" %}selected{% endif %}>{{ facility.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        {# Date from #}
+        <div>
+            <label for="filter-date-from" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Von" %}</label>
+            <input type="date" id="filter-date-from" name="date_from" value="{{ filter_date_from }}"
+                   class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
+        </div>
+
+        {# Date to #}
+        <div>
+            <label for="filter-date-to" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bis" %}</label>
+            <input type="date" id="filter-date-to" name="date_to" value="{{ filter_date_to }}"
+                   class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
+        </div>
+
+        {# Submit #}
+        <div class="flex gap-2">
+            <button type="submit"
+                    class="px-4 py-2 rounded-md text-[13px] font-semibold bg-accent text-white">
+                {% trans "Filtern" %}
+            </button>
+            <a href="{% url 'core:system_audit_list' %}"
+               class="px-4 py-2 rounded-md text-[13px] font-medium bg-surface border border-subtle text-ink-soft hover:bg-canvas">
+                {% trans "Zurücksetzen" %}
+            </a>
+        </div>
+    </div>
+</form>
+
+{# Table (swapped by HTMX) #}
+{% include "core/system/partials/auditlog_table.html" %}
+
+{% endblock %}

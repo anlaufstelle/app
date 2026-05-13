@@ -11,7 +11,7 @@ from core.middleware.facility_scope import FacilityScopeMiddleware
 from core.middleware.password_change import ForcePasswordChangeMiddleware
 from core.models import AuditLog, User
 from core.services.password import generate_initial_password
-from core.views.mixins import AdminRequiredMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
+from core.views.mixins import FacilityAdminRequiredMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
 
 # --- Fixtures ---
 
@@ -155,15 +155,15 @@ class TestRoleMixins:
         assert view.test_func() is False
 
     def test_admin_mixin_allows_admin(self, rf, admin_user):
-        view = self._make_view(AdminRequiredMixin, admin_user, rf)
+        view = self._make_view(FacilityAdminRequiredMixin, admin_user, rf)
         assert view.test_func() is True
 
     def test_admin_mixin_denies_lead(self, rf, lead_user):
-        view = self._make_view(AdminRequiredMixin, lead_user, rf)
+        view = self._make_view(FacilityAdminRequiredMixin, lead_user, rf)
         assert view.test_func() is False
 
     def test_admin_mixin_denies_staff(self, rf, staff_user):
-        view = self._make_view(AdminRequiredMixin, staff_user, rf)
+        view = self._make_view(FacilityAdminRequiredMixin, staff_user, rf)
         assert view.test_func() is False
 
 

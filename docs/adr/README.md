@@ -49,6 +49,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-015](015-mfa-totp.md) | MFA-Verfahren — TOTP + Hash-Backup-Codes | Accepted |
 | [ADR-016](016-search-postgres-only.md) | Volltextsuche bleibt in PostgreSQL | Accepted |
 | [ADR-017](017-deployment-topology.md) | Deployment-Topologie — Plain Docker Compose primär, Multi-Stage als parallele Stacks | Accepted |
+| [ADR-018](018-rollenmodell-superadmin.md) | 5-Rollen-Modell mit Super-Admin (Systemadministration / Anwendungsbetreuung / Leitung / Fachkraft / Assistenz) | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 

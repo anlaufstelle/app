@@ -298,27 +298,35 @@ Schnell-Vorlagen beschleunigen das Erfassen wiederkehrender Dokumentationen. Akt
 
 Zugriffsberechtigungen werden über drei Ebenen gesteuert: **Rolle**, **Einrichtung** und **Sensitivitätsstufe**. Zusammen bestimmen sie, welcher User welche Daten sehen und welche Aktionen ausführen darf.
 
-#### Die vier Rollen
+#### Die fünf Rollen
 
-Jeder User hat genau eine Rolle. Die Rollen bilden eine aufsteigende Hierarchie — höhere Rollen umfassen alle Rechte der niedrigeren:
+Jeder User hat genau eine Rolle. Vier Rollen sind strikt facility-gebunden und bilden eine aufsteigende Hierarchie — höhere Rollen umfassen alle Rechte der niedrigeren. Die fünfte Rolle (`super_admin`) wirkt facility-übergreifend und ist außerhalb der Hierarchie:
 
-| Rolle | DB-Wert | Beschreibung |
-|-------|---------|-------------|
-| **Assistenz** | `assistant` | Grundzugriff: Kontakte anlegen, Zeitstrom und Personen einsehen |
-| **Fachkraft** | `staff` | Vollzugriff auf Fallarbeit: Personen, Fälle, Episoden, Ziele anlegen und bearbeiten |
-| **Leitung** | `lead` | Zusätzlich: Fälle schließen, Statistiken, Löschanträge genehmigen, Datenexport |
-| **Administrator** | `admin` | Vollzugriff: Audit-Log, DSGVO-Paket, Administrationsoberfläche |
+| Rolle | DB-Wert | Anzeigename | Beschreibung |
+|-------|---------|-------------|-------------|
+| **Assistenz** | `assistant` | Assistenz | Grundzugriff: Kontakte anlegen, Zeitstrom und Personen einsehen |
+| **Fachkraft** | `staff` | Fachkraft | Vollzugriff auf Fallarbeit: Personen, Fälle, Episoden, Ziele anlegen und bearbeiten |
+| **Leitung** | `lead` | Leitung | Zusätzlich: Fälle schließen, Statistiken, Löschanträge genehmigen, Datenexport |
+| **Anwendungsbetreuung** | `facility_admin` | Anwendungsbetreuung | Vollzugriff einer Einrichtung: Audit-Log (Facility), DSGVO-Paket, Benutzer- und Typ-Konfiguration. Strikt facility-gebunden. |
+| **Systemadministration** | `super_admin` | Systemadministration | Facility-übergreifend. `/system/`-Bereich, Bootstrap-Tools, Pre-Auth-AuditLogs. Wird über `manage.py create_super_admin` angelegt — nicht über das normale UI. |
 
-Die Rolle wird direkt auf dem User-Modell gespeichert (`User.role`). Die View-Schicht prüft Rollen über Properties wie `user.is_staff_or_above` oder `user.is_lead_or_admin`.
+Die Rolle wird direkt auf dem User-Modell gespeichert (`User.role`). Die View-Schicht prüft Rollen über Properties wie `user.is_staff_or_above`, `user.is_facility_admin` oder `user.is_super_admin`.
 
 #### Einrichtungs-Scoping (Datenisolation)
 
-Jeder User gehört zu genau einer **Einrichtung** (Facility). Datenisolation ist automatisch:
+Jeder User mit Rolle `assistant` / `staff` / `lead` / `facility_admin` gehört zu genau einer **Einrichtung** (Facility). Datenisolation ist automatisch:
 
 - Die Middleware `FacilityScopeMiddleware` setzt pro Request `request.current_facility`
 - Alle Datenmodelle (Personen, Kontakte, Fälle, Arbeitsaufträge, Audit-Logs …) verwenden den `FacilityScopedManager`
 - Queries werden über `.for_facility(facility)` gefiltert — ein User sieht **ausschließlich Daten seiner eigenen Einrichtung**
-- Es gibt keine einrichtungsübergreifende Sicht, auch nicht für Administratoren
+- Es gibt keine einrichtungsübergreifende Sicht, auch nicht für die Anwendungsbetreuung (`facility_admin`)
+
+**Ausnahme `super_admin`:** Die Rolle Systemadministration arbeitet bewusst facility-übergreifend. Sie sieht Daten ausschließlich über den separaten `/system/`-Bereich (nicht über das normale Fach-UI). Technisch gibt es zwei Schichten:
+
+1. **Anwendungsschicht:** Die `FacilityScopeMiddleware` setzt für `super_admin` keine implizite Facility — der User wählt im `/system/`-Bereich explizit aus.
+2. **Datenbankschicht:** Eine zusätzliche Postgres-Session-Variable `app.is_super_admin='true'` wird als OR-Branch in jede RLS-Policy eingewoben (Migration 0085). Das Always-Reset-Pattern in der `FacilityScopeMiddleware` setzt diese Variable für jeden Request neu (oder löscht sie), damit kein Pool-Connection-Leak entsteht. Details: [ADR-005 Update 2026-05-10](adr/005-facility-scoping-and-rls.md), [ADR-018](adr/018-rollenmodell-superadmin.md).
+
+**DSGVO-Rechenschaftspflicht:** Jeder Aufruf einer `/system/`-View schreibt einen `SYSTEM_VIEW`-AuditLog-Eintrag. Das System-UI zeigt einen permanenten Banner: „Sie greifen auf Daten facility-übergreifend zu — dieser Zugriff wird im Audit-Log protokolliert."
 
 #### Zugriffstabelle: Wer darf was?
 
@@ -339,17 +347,23 @@ Jeder User gehört zu genau einer **Einrichtung** (Facility). Datenisolation ist
 | Arbeitsaufträge | Anlegen, Bearbeiten | Fachkraft |
 | Arbeitsaufträge | Status ändern | Ersteller, Zugewiesener oder Leitung |
 | Statistiken & Exports | Anzeigen, CSV/PDF/Jugendamt-Export | Leitung |
-| Audit-Log | Anzeigen | Administrator |
-| DSGVO-Paket | Generieren, Herunterladen | Administrator |
-| Administration | Zugang | Administrator |
+| Audit-Log (eigene Einrichtung, `/audit/`) | Anzeigen | Anwendungsbetreuung (`facility_admin`) |
+| DSGVO-Paket | Generieren, Herunterladen | Anwendungsbetreuung (`facility_admin`) |
+| Administration (`/admin-mgmt/`) | Zugang | Anwendungsbetreuung (`facility_admin`) |
+| Systembereich (`/system/`) | Anzeigen, Bootstrap, Pre-Auth-AuditLogs | Systemadministration (`super_admin`) |
 
 #### Sichtbarkeit in der Oberfläche
 
 Navigation und Aktions-Buttons passen sich automatisch der Rolle an:
 
-- **Sidebar/Navigation:** „Fälle" erscheint erst ab Fachkraft, „Statistiken" und „Löschanträge" ab Leitung, „Audit-Log", „DSGVO" und „Administration" nur für Administratoren
-- **Erstellen-Menü:** „Neuer Klient", „Neuer Arbeitsauftrag" und „Neuer Fall" erst ab Fachkraft sichtbar
+- **Sidebar/Navigation:**
+  - „Fälle" erscheint erst ab Fachkraft
+  - „Statistiken" und „Löschanträge" ab Leitung
+  - „Audit-Log", „DSGVO" und „Administration" für `facility_admin` (nur eigene Einrichtung)
+  - „Systembereich" (`/system/`) ausschließlich für `super_admin`
+- **Erstellen-Menü:** „Neue Person", „Neuer Arbeitsauftrag" und „Neuer Fall" erst ab Fachkraft sichtbar
 - **Detail-Seiten:** „Bearbeiten"- und „Löschen"-Buttons je nach Rolle und Eigentümerschaft ein-/ausgeblendet
+- **Banner im `/system/`-Bereich:** Permanenter Hinweis auf facility-übergreifenden Zugriff und Audit-Protokollierung (`SYSTEM_VIEW`)
 
 #### Feingranulare Sonderregeln
 
@@ -362,29 +376,38 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 | **Sensitivitätsstufe** | Zusätzlich zur Rolle steuern `DocumentType.sensitivity` und `FieldTemplate.sensitivity` den Feldzugriff. `FieldTemplate.sensitivity` überschreibt den DocumentType-Level nach oben (→ [FAQ #14](#14-was-bedeutet-die-sensitivitätsstufe-niedrigmittelhoch)) |
 | **Passwort-Pflicht** | Bei gesetztem `must_change_password`-Flag wird der User vor jeder Aktion zum Passwortwechsel gezwungen |
 | **Session-Timeout** | Konfigurierbar pro Einrichtung (Standard: 30 Min.), nach Ablauf automatischer Logout |
+| **Account-Sperre (Lockout)** | Nach 10 fehlgeschlagenen Logins wird der Account gesperrt. Recovery: `manage.py unlock <username>` (CLI) oder `facility_admin` für User der eigenen Einrichtung |
 
 #### Technische Steuerungsparameter
 
 | Parameter | Wo | Wirkung |
 |-----------|----|--------|
-| `User.role` | User-Modell | Bestimmt die Grundrolle |
-| `User.facility` | User-Modell (FK) | Ordnet den User einer Einrichtung zu |
+| `User.role` | User-Modell | Bestimmt die Grundrolle (eine von 5: `super_admin`, `facility_admin`, `lead`, `staff`, `assistant`) |
+| `User.facility` | User-Modell (FK) | Ordnet den User einer Einrichtung zu (NULL nur bei `super_admin`) |
+| `User.is_super_admin` | Property | Gibt `True` zurück, wenn `role == super_admin` |
+| `User.is_facility_admin` | Property | Gibt `True` zurück, wenn `role == facility_admin` |
 | `request.current_facility` | Middleware | Wird pro Request gesetzt, steuert alle Queries |
 | `FacilityScopedManager` | Model-Manager | Filtert Querysets automatisch nach Einrichtung |
-| `AdminRequiredMixin` | View-Mixin | Erlaubt nur Administratoren |
-| `LeadOrAdminRequiredMixin` | View-Mixin | Erlaubt Leitung und Administrator |
-| `StaffRequiredMixin` | View-Mixin | Erlaubt Fachkraft, Leitung, Administrator |
-| `AssistantOrAboveRequiredMixin` | View-Mixin | Erlaubt alle authentifizierten Rollen |
+| `SuperAdminRequiredMixin` | View-Mixin | Erlaubt nur Systemadministration (`/system/`-Bereich) |
+| `FacilityAdminRequiredMixin` | View-Mixin | Erlaubt Anwendungsbetreuung der eigenen Einrichtung |
+| `LeadOrAdminRequiredMixin` | View-Mixin | Erlaubt Leitung und Anwendungsbetreuung |
+| `StaffRequiredMixin` | View-Mixin | Erlaubt Fachkraft, Leitung, Anwendungsbetreuung |
+| `AssistantOrAboveRequiredMixin` | View-Mixin | Erlaubt alle authentifizierten facility-gebundenen Rollen |
+| `app.is_super_admin` (Postgres-Session-Var) | Datenbank | OR-Branch in allen RLS-Policies — `super_admin` darf facility-übergreifend lesen (Migration 0085) |
 | `DocumentType.sensitivity` | Dokumentationstyp | Steuert Feld-Sichtbarkeit nach Rolle |
 | `FieldTemplate.sensitivity` | Feldvorlage | Feld-Level Sichtbarkeits-Override (leer = erbt vom Dokumentationstyp) |
 | `FieldTemplate.is_encrypted` | Feldvorlage | Steuert nur Verschlüsselung at rest, nicht Sichtbarkeit |
 | `FacilitySettings.session_timeout_minutes` | Einrichtungs-Settings | Session-Dauer pro Einrichtung |
+| `AuditLog.action == SYSTEM_VIEW` | AuditLog | Protokolliert jeden Aufruf einer `/system/`-View (Rechenschaftspflicht) |
 
 **Relevante Dateien:**
-- [`src/core/models/user.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) — `Role`-Enum, Rollen-Properties (`is_admin`, `is_staff_or_above` …)
-- [`src/core/views/mixins.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mixins.py) — Zugriffs-Mixins für Views
-- [`src/core/middleware/facility_scope.py`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/facility_scope.py) — Einrichtungs-Scoping per Middleware
+- [`src/core/models/user.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) — `Role`-Enum mit 5 Werten, Properties (`is_super_admin`, `is_facility_admin`, `is_staff_or_above` …)
+- [`src/core/views/mixins.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mixins.py) — Zugriffs-Mixins inkl. `SuperAdminRequiredMixin` und `FacilityAdminRequiredMixin`
+- [`src/core/views/system.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/system.py) — `/system/`-Bereich für `super_admin`
+- [`src/core/middleware/facility_scope.py`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/facility_scope.py) — Einrichtungs-Scoping + Always-Reset für `app.is_super_admin`
 - [`src/core/models/managers.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/managers.py) — `FacilityScopedManager` für automatische Query-Filterung
+- [`src/core/management/commands/create_super_admin.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/create_super_admin.py) — Bootstrap-Befehl
+- [`src/core/management/commands/unlock.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/unlock.py) — CLI-Recovery für gesperrte Accounts
 - [`src/core/middleware/password_change.py`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/password_change.py) — Passwort-Pflicht-Middleware
 - [`src/templates/base.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/base.html) — Navigations-Sichtbarkeit nach Rolle
 

@@ -1,4 +1,4 @@
-"""Custom User model with 4 roles."""
+"""Custom User model with 5 roles."""
 
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
@@ -10,7 +10,10 @@ class User(AbstractUser):
     """Custom User for Anlaufstelle with role and facility assignment."""
 
     class Role(models.TextChoices):
-        ADMIN = "admin", _("Administrator")
+        # Refs #867: super_admin operiert installation-weit (Persona Jonas);
+        # facility_admin (frueher 'admin') ist auf eine Einrichtung beschraenkt.
+        SUPER_ADMIN = "super_admin", _("Systemadministration")
+        FACILITY_ADMIN = "facility_admin", _("Anwendungsbetreuung")
         LEAD = "lead", _("Leitung")
         STAFF = "staff", _("Fachkraft")
         ASSISTANT = "assistant", _("Assistenz")
@@ -82,20 +85,24 @@ class User(AbstractUser):
         return self.display_name or self.get_full_name() or self.username
 
     @property
-    def is_admin(self):
-        return self.role == self.Role.ADMIN
+    def is_super_admin(self):
+        return self.role == self.Role.SUPER_ADMIN
+
+    @property
+    def is_facility_admin(self):
+        return self.role == self.Role.FACILITY_ADMIN
 
     @property
     def is_lead_or_admin(self):
-        return self.role in (self.Role.ADMIN, self.Role.LEAD)
+        return self.role in (self.Role.FACILITY_ADMIN, self.Role.LEAD)
 
     @property
     def is_staff_or_above(self):
-        return self.role in (self.Role.ADMIN, self.Role.LEAD, self.Role.STAFF)
+        return self.role in (self.Role.FACILITY_ADMIN, self.Role.LEAD, self.Role.STAFF)
 
     @property
     def is_assistant_or_above(self):
-        return self.role in (self.Role.ADMIN, self.Role.LEAD, self.Role.STAFF, self.Role.ASSISTANT)
+        return self.role in (self.Role.FACILITY_ADMIN, self.Role.LEAD, self.Role.STAFF, self.Role.ASSISTANT)
 
     @property
     def has_confirmed_totp_device(self):

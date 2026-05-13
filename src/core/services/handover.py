@@ -133,7 +133,7 @@ def _collect_open_tasks(facility, user):
     )
     # Lead/Admin sehen alles in der Facility, Staff/Assistant filtern auf
     # owner/assignee — analog can_user_mutate_workitem().
-    if user is not None and getattr(user, "role", None) not in (UserModel.Role.LEAD, UserModel.Role.ADMIN):
+    if user is not None and getattr(user, "role", None) not in (UserModel.Role.LEAD, UserModel.Role.FACILITY_ADMIN):
         qs = qs.filter(Q(created_by=user) | Q(assigned_to=user))
     return (
         qs.annotate(priority_rank=priority_order)
