@@ -17,7 +17,7 @@ import csv
 import json
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime
 from urllib.parse import urlencode
 
 from django.conf import settings

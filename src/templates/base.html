@@ -192,7 +192,7 @@
             </a>
             {% endif %}
             {% if user.is_super_admin %}
-            <a href="{% url 'core:system_dashboard' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'system_dashboard,system_organization,system_audit_list,system_audit_detail' %}bg-accent-light text-accent font-semibold{% endif %}" data-testid="nav-system">
+            <a href="{% url 'core:system_dashboard' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name in 'system_dashboard,system_organization,system_audit_list,system_audit_detail,system_lockout_list,system_unlock,system_maintenance' %}bg-accent-light text-accent font-semibold{% endif %}" data-testid="nav-system">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12V7a2 2 0 012-2h10a2 2 0 012 2v5M5 12h14M5 12v5a2 2 0 002 2h10a2 2 0 002-2v-5M9 8.5h.01M9 15.5h.01"/></svg>
                 {% trans "Systembereich" %}
             </a>
@@ -260,7 +260,7 @@
         <div class="flex justify-around py-1 pb-2">
             {% if user.is_super_admin %}
             {# Super-Admin-Layout: Systembereich + Mehr. #}
-            <a href="{% url 'core:system_dashboard' %}" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'system_dashboard,system_organization,system_audit_list,system_audit_detail' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-system">
+            <a href="{% url 'core:system_dashboard' %}" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'system_dashboard,system_organization,system_audit_list,system_audit_detail,system_lockout_list,system_unlock,system_maintenance' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-system">
                 <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12V7a2 2 0 012-2h10a2 2 0 012 2v5M5 12h14M5 12v5a2 2 0 002 2h10a2 2 0 002-2v-5M9 8.5h.01M9 15.5h.01"/></svg>
                 <span class="text-[12px] font-medium">{% trans "Systembereich" %}</span>
             </a>
@@ -395,6 +395,7 @@
     <script src="{% static 'js/offline-client.js' %}"></script>
     <script src="{% static 'js/offline-edit.js' %}"></script>
     <script src="{% static 'js/attachment-remove.js' %}" defer></script>
+    <script src="{% static 'js/confirm-action.js' %}" defer></script>
     <script src="{% static 'js/sw-register.js' %}" defer></script>
 </body>
 </html>
