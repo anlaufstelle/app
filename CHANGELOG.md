@@ -6,6 +6,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-05-12
+
+Minor-Release. Hauptthemen: Einführung des 5-Rollen-Modells mit Superadmin und neuem `/system/`-Bereich (cross-facility Sicht für Betriebsverantwortliche), produktive Deployment-Topologie für `dev.anlaufstelle.app` (Plain Docker Compose auf Hetzner CX22) als Coolify-Ablöse, RLS-Hardening rund um Bootstrap und Pre-Auth-AuditLogs, sowie eine vollständige manuelle Test-Matrix (Funktionalität, DSGVO, Sicherheit). Zusätzlich drei Django-CVE-Fixes (6.0.5).
+
+### Security
+
+- **Django 6.0.4 → 6.0.5** — drei CVE-Fixes: CVE-2026-6907 (Caching von Requests bei gesetztem `Vary`-Header), CVE-2026-35192 (`Vary`-Header bei Session-Setzung), CVE-2026-5766 (`DATA_UPLOAD_MAX_MEMORY_SIZE`-Enforcement im `MemoryUploadHandler`). Patch-Bump im Stack: `django-unfold` 0.91.0 → 0.92.0, `django-stubs` 6.0.3 → 6.0.4.
+- **`cryptography` 47.0.0 → 48.0.0** — Hardening: strikte X.509-CRL-Validierung (`TBSCertList.signature` ≠ `signatureAlgorithm` löst jetzt `ValueError` aus). Außerdem Post-Quantum-Support (ML-KEM/ML-DSA) via OpenSSL 3.5+, AWS-LC, BoringSSL.
+- **`urllib3` 2.6.3 → 2.7.0** — CVE-2026-44431, CVE-2026-44432. Transitive Dependency über `sentry-sdk`, jetzt explizit in `requirements.in` gepinnt.
+
+### Added
+
+- **5-Rollen-Modell mit Superadmin** — Neue Rollen-Hierarchie `SUPER_ADMIN > FACILITY_ADMIN > LEAD > STAFF > ASSISTANT`. Superadmin ist facility-übergreifend (RLS-Bypass via Postgres-Session-Setting, nicht via BYPASSRLS-Role), wird per neuer `manage.py create_super_admin`-CLI angelegt (kein Seed-Default in Production). Migrationen [`0084_user_role_super_admin.py`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0084_user_role_super_admin.py) und [`0085_rls_superadmin_bypass.py`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0085_rls_superadmin_bypass.py). Bestehende `ADMIN`-User werden als `FACILITY_ADMIN` migriert (Rename). ADRs [017](https://github.com/anlaufstelle/app/blob/main/docs/adr/017-deployment-topology.md) und [018](https://github.com/anlaufstelle/app/blob/main/docs/adr/018-rollenmodell-superadmin.md), FAQ und Fachkonzept v1.5 aktualisiert.
+- **`/system/`-Bereich für Superadmin** — Login-Redirect, eigene Sidebar, cross-facility Dashboard. Tier 1: System-Health-Card im Dashboard, Sperrkonten-Liste mit Unlock-Button, AuditLog-Export CSV/JSON cross-facility, Maintenance-Mode-Toggle. Tier 2: Cross-Facility-Retention-Übersicht, Verzeichnis Verarbeitungstätigkeiten (Art. 30) read-only, Cross-Facility-Legal-Hold-Übersicht. Facility-gescopte Menü-Einträge werden im `/system/`-Kontext ausgeblendet.
+- **`dev.anlaufstelle.app` Live-Deployment** — Plain Docker Compose auf Hetzner CX22 ablösend Coolify (ADR-017). Liefert [`docker-compose.dev.yml`](https://github.com/anlaufstelle/app/blob/main/docker-compose.dev.yml), [`Caddyfile.dev`](https://github.com/anlaufstelle/app/blob/main/Caddyfile.dev), [`deploy/bootstrap.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/bootstrap.sh) (UFW als letzter Schritt, damit die SSH-Session nicht kappt), [`deploy/deploy-dev.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/deploy-dev.sh), [`deploy/backup.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/backup.sh), neues [`devlive`-Settings-Modul](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/devlive.py), `make deploy-dev`-Target und einen [`dev-image`-Workflow](https://github.com/anlaufstelle/app/blob/main/.github/workflows/dev-image.yml), der bei jedem Push auf `main` ein `:main`-Image baut. Coolify ist als deprecated dokumentiert.
+- **`RobotsTxtView`** für `dev.anlaufstelle.app` — `Disallow: /` auf der Dev-Instanz, damit Suchmaschinen die Vorab-Instanz nicht indexieren.
+- **`manage.py unlock <username>`-CLI** — Recovery-Pfad für Lockouts auf Production-Instanzen, in denen kein Superadmin verfügbar ist.
+- **Vollständige manuelle Test-Matrix** — [`docs/testing/manual-test-matrix.md`](https://github.com/anlaufstelle/app/blob/main/docs/testing/manual-test-matrix.md) deckt Funktionalität, DSGVO und Sicherheit ab; Setup einmalig pro Test-Tag gegen `dev.anlaufstelle.app`.
+
+### Changed
+
+- **Bootstrap-Superuser vom App-User getrennt** — Postgres-Init legt jetzt einen separaten Admin-User mit `BYPASSRLS` an, Migrationen verbinden als `POSTGRES_ADMIN_USER`. App-Worker laufen weiterhin als nicht-bypass-fähiger App-User. `GRANT app_user TO admin_user` für DDL-Permissions in Migrationen. 2-User-Modell in [`docs/dev-deployment.md`](https://github.com/anlaufstelle/app/blob/main/docs/dev-deployment.md) und ADR-005/007 dokumentiert.
+- **Dev-Deployment-Runbook + Coolify-Deprecation** — [`docs/dev-deployment.md`](https://github.com/anlaufstelle/app/blob/main/docs/dev-deployment.md) löst `docs/coolify-deployment.md` als Standard-Runbook ab.
+- **i18n: `/system/`-Bereich und Tier-1/Tier-2-Funktionen vollständig übersetzt** — DE + EN, `.po`/`.mo` aktualisiert.
+- **CSP-Hygiene** — `data-confirm` und `data-action` ersetzen verbliebene inline-`onclick`/`onsubmit`-Handler; neuer [`confirm-action.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/confirm-action.js)-Wireup.
+- **Dependencies** — `sentry-sdk` 2.58.0 → 2.59.0, `docker/setup-qemu-action` v3 → v4 in `release.yml`.
+
+### Fixed
+
+- **RLS: `WITH CHECK` auf `core_auditlog` erlaubt NULL-Facility** — Pre-Auth-AuditLogs (Login-Versuche, Lockout-Trigger, anonyme Reset-Anfragen) konnten wegen `WITH CHECK (facility_id = current_facility())` nicht geschrieben werden. Policy lässt jetzt explizit NULL-Facility-INSERTs zu; Migration [`0083`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0083_auditlog_rls_with_check.py). Pre-Auth-Audits sind nur für Superadmin im `/system/`-Bereich sichtbar.
+- **Auth-Signals setzen `app.current_facility_id` vor `AuditLog`-INSERT** — `user_logged_in` und `user_login_failed` schrieben AuditLogs, bevor `FacilityScopeMiddleware` die Session-Variable setzte; Race konnte unter RLS-Policy zum Fehler führen. Signals setzen den Session-Wert jetzt selbst, bevor sie auditieren.
+- **Seed-Command an `FORCE ROW LEVEL SECURITY` gefixt** — `make seed` schlug an dem RLS-Bootstrap-Henne-Ei fehl; Seed läuft jetzt als `POSTGRES_ADMIN_USER` (BYPASSRLS).
+- **Bootstrap-UFW-Reihenfolge** — UFW-Aktivierung im `bootstrap.sh` als allerletzter Schritt; vorher konnte das Skript die laufende SSH-Session kappen, wenn `ufw allow OpenSSH` noch nicht durch war.
+- **`SECURE_REDIRECT_EXEMPT` für `/health/`** — Health-Check antwortet jetzt auch ohne TLS-Termination am Container (Caddy macht TLS davor); `migrate` läuft via [`docker-migrate.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/docker-migrate.sh) als Admin-User.
+
+### Removed
+
+- Keine.
+
 ## [0.11.1] - 2026-05-05
 
 Patch-Release: Dependency-Bumps und CI-Hardening als Folge zum v0.11.0 Stage-CI Lock-Drift-Befund. Keine Code-Änderungen am App-Verhalten.

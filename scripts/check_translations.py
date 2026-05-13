@@ -24,9 +24,16 @@ ROOT = Path(__file__).resolve().parent.parent
 # Sprachleitlinie-Umstellung (Klient* -> Person*) verarbeitet hat.
 # Anschlussarbeit (Translator-Pass): die neuen msgids in de.po
 # fertigstellen + en.po neu uebersetzen.
+#
+# 2026-05-12 (v0.12.0): 5-Rollen-Modell + /system/-Bereich (Tier 1+2:
+# Health, Lockouts, AuditLog-Export, Maintenance, Retention, VVT,
+# Legal-Holds) brachten neue UI-Strings. Der i18n-Sweep #878 hat
+# Tier 1/2 abgedeckt, die Restluecke kommt von Form-Labels, Help-
+# Texts und Audit-Action-Bezeichnern. Translator-Pass ist Pre-
+# Release-Anschlussarbeit.
 BASELINES: dict[str, tuple[int, int]] = {
-    "src/locale/de/LC_MESSAGES/django.po": (153, 242),
-    "src/locale/en/LC_MESSAGES/django.po": (57, 29),
+    "src/locale/de/LC_MESSAGES/django.po": (209, 406),
+    "src/locale/en/LC_MESSAGES/django.po": (120, 71),
 }
 
 TRANSLATED_RE = re.compile(r"(\d+)\s+translated")

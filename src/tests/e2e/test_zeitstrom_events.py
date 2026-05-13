@@ -198,15 +198,17 @@ class TestEventErstellung:
         # Detail-Seite prüfen — explizite Waits, weil ``wait_for_url`` direkt
         # nach dem URL-Match weitergeht und die Detail-Sektionen unter Last
         # noch nicht im DOM stehen müssen (synchrones ``is_visible()`` traf
-        # mehrfach in CI auf ``False``).
+        # mehrfach in CI auf ``False``). 15s statt 5s, weil dieser Test
+        # unter Stage-CI-Last (2 Worker, 367 Tests) mit dem dd:notiz-Wait
+        # in v0.12.0 zugeschlagen hat.
         page.locator("[role='alert']:has-text('Kontakt wurde dokumentiert.')").first.wait_for(
-            state="visible", timeout=5000
+            state="visible", timeout=15000
         )
-        page.locator("dd:has-text('E2E-Test Kontakt')").first.wait_for(state="visible", timeout=5000)
-        page.locator("dd:has-text('Anonym')").wait_for(state="visible", timeout=5000)
+        page.locator("dd:has-text('E2E-Test Kontakt')").first.wait_for(state="visible", timeout=15000)
+        page.locator("dd:has-text('Anonym')").wait_for(state="visible", timeout=15000)
 
         # EventHistory-Eintrag CREATE
-        page.locator("h2:has-text('Änderungshistorie')").wait_for(state="visible", timeout=5000)
+        page.locator("h2:has-text('Änderungshistorie')").wait_for(state="visible", timeout=15000)
 
 
 class TestEventEditAndDelete:
