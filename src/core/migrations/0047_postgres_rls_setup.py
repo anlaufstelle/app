@@ -64,10 +64,11 @@ JOIN_TABLES = [
 ]
 
 # Hinweis zu ``core_auditlog``: ``facility_id`` ist nullable. NULL-Zeilen
-# (z.B. globale Systemereignisse vor dem ersten Login) matchen die Policy
-# nicht und sind damit ausschliesslich fuer RLS-bypassende Rollen
-# (Superuser) sichtbar. Das ist bewusst so — Application-Code ruft
-# NULL-Audit-Logs ohnehin nicht ueber facility-scoped Views ab.
+# (z.B. globale Systemereignisse vor dem ersten Login) matchen die
+# USING-Policy nicht und sind damit ausschliesslich fuer RLS-bypassende
+# Rollen (Superuser/BYPASSRLS) sichtbar. INSERTs mit facility=NULL werden
+# in Migration 0083 explizit ueber WITH CHECK erlaubt — siehe
+# ``0083_auditlog_rls_with_check.py``.
 
 _DIRECT_POLICY = (
     "facility_id::text = current_setting('app.current_facility_id', true)"

@@ -4,12 +4,36 @@ import logging
 
 from django.conf import settings
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
+from django.db import connection
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
 
 from core.models import AuditLog
 
 logger = logging.getLogger(__name__)
+
+
+def _set_facility_session_var(facility):
+    """Setzt ``app.current_facility_id`` fuer die laufende Postgres-Session.
+
+    Notwendig fuer Auth-Signal-Handler (login/logout/login_failed): die
+    feuern zwischen FacilityScopeMiddleware-Pre und -Post, in einem Request,
+    der zu Beginn als ``anonymous`` registriert war (Setting=''). Damit
+    der nachfolgende ``AuditLog`` -INSERT die RLS-WITH-CHECK-Policy
+    erfuellt, muss das Setting hier auf die jetzt bekannte Facility
+    aktualisiert werden. Refs #863.
+
+    Bei ``facility=None`` (System-Event, NULL-AuditLog) wird auf '' geleert
+    — der WITH-CHECK-Branch ``facility_id IS NULL`` greift dann.
+    """
+    if connection.vendor != "postgresql":
+        return
+    facility_id = str(facility.pk) if facility is not None else ""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            "SELECT set_config('app.current_facility_id', %s, false)",
+            [facility_id],
+        )
 
 
 def get_client_ip(request):
@@ -55,6 +79,7 @@ def on_user_logged_in(sender, request, user, **kwargs):
     if facility is None:
         logger.warning("Login ohne Facility: user=%s", user.username)
         return
+    _set_facility_session_var(facility)
     AuditLog.objects.create(
         facility=facility,
         user=user,
@@ -71,6 +96,7 @@ def on_user_logged_out(sender, request, user, **kwargs):
     facility = getattr(user, "facility", None)
     if facility is None:
         return
+    _set_facility_session_var(facility)
     AuditLog.objects.create(
         facility=facility,
         user=user,
@@ -94,6 +120,11 @@ def on_user_login_failed(sender, credentials, request, **kwargs):
     except User.DoesNotExist:
         user = None
         facility = None
+
+    # facility kann None sein (unknown user / user ohne Facility) — dann
+    # leeren Session-Var, damit der WITH-CHECK-Branch ``facility_id IS NULL``
+    # in der RLS-Policy greift.
+    _set_facility_session_var(facility)
 
     if facility is None:
         logger.info("Login fehlgeschlagen ohne Facility: username=%s", username)

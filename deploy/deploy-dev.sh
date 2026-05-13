@@ -23,12 +23,21 @@ scp -q docker-compose.dev.yml Caddyfile.dev "$DEV_HOST:$REMOTE_DIR/"
 rsync -a --delete deploy/ "$DEV_HOST:$REMOTE_DIR/deploy/"
 
 log "pull, migrate, up"
-ssh "$DEV_HOST" bash -se <<EOF
+ssh "$DEV_HOST" bash -se <<'EOF'
 set -euo pipefail
-cd "$REMOTE_DIR"
+cd /opt/anlaufstelle
+COMPOSE='docker compose -f docker-compose.dev.yml --env-file .env.dev'
+# .env.dev laden, damit POSTGRES_ADMIN_USER/PASSWORD verfuegbar sind.
+set -a; . ./.env.dev; set +a
 $COMPOSE pull
-# Migrate als One-Shot-Job mit pg_advisory_lock (docker-migrate.sh, Refs #802)
-$COMPOSE run --rm --entrypoint=/app/docker-migrate.sh web
+# Migrate als One-Shot-Job mit pg_advisory_lock (docker-migrate.sh, Refs #802).
+# Connection als Admin-User (BYPASSRLS), damit Migrationen mit RunPython-
+# Default-Daten in RLS-geschuetzte Tabellen schreiben koennen (Refs #863).
+$COMPOSE run --rm \
+    --entrypoint=/app/docker-migrate.sh \
+    -e POSTGRES_USER="$POSTGRES_ADMIN_USER" \
+    -e POSTGRES_PASSWORD="$POSTGRES_ADMIN_PASSWORD" \
+    web
 $COMPOSE up -d --remove-orphans
 $COMPOSE ps
 EOF

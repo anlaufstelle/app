@@ -179,12 +179,35 @@ curl https://dev.anlaufstelle.app/robots.txt
 nmap dev.anlaufstelle.app -p- # nur 22/80/443
 ssh root@dev.anlaufstelle.app # → Permission denied
 
-# RLS-Pflicht: DB-User kein Superuser
+# RLS-Pflicht: DB-User kein Superuser, NOBYPASSRLS, Admin-User getrennt
 ssh anlaufstelle@dev.anlaufstelle.app \
   'cd /opt/anlaufstelle && docker compose -f docker-compose.dev.yml --env-file.env.dev \
-   exec db psql -U postgres -tAc "SELECT usesuper FROM pg_user WHERE usename = '\''anlaufstelle'\'';"'
-# erwartet: f
+   exec db psql -U postgres -tAc "SELECT usename, usesuper, usebypassrls FROM pg_user WHERE usename IN ('\''anlaufstelle'\'', '\''anlaufstelle_admin'\'') ORDER BY usename"'
+# erwartet:
+# anlaufstelle|f|f
+# anlaufstelle_admin|f|t
 ```
+
+## DB-User-Modell (ADR-005 Update 2026-05-09)
+
+Drei DB-User-Rollen:
+
+| User | Rechte | Wofür |
+|---|---|---|
+| `postgres` | Bootstrap-Superuser | Init-Script, Notfall-Wartung. **Nicht** für Runtime/Operator-Tasks. |
+| `anlaufstelle` | NOSUPERUSER, NOBYPASSRLS | Django-Runtime. RLS-Policies greifen scharf. |
+| `anlaufstelle_admin` | NOSUPERUSER, BYPASSRLS | `seed`, `migrate`, künftige Wartungs-Tasks. Wird vom Init-Script angelegt. |
+
+Operator-Tasks connecten als `anlaufstelle_admin` über ENV-Override:
+
+```bash
+docker compose -f docker-compose.dev.yml --env-file.env.dev run --rm \
+    -e POSTGRES_USER="$POSTGRES_ADMIN_USER" \
+    -e POSTGRES_PASSWORD="$POSTGRES_ADMIN_PASSWORD" \
+    web python manage.py <command>
+```
+
+Die Make-Targets `make dev-seed` und der `migrate`-Schritt in [`deploy/deploy-dev.sh`](./deploy/deploy-dev.sh) machen das automatisch.
 
 ## Sentry / Monitoring (optional)
 

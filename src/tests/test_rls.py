@@ -162,6 +162,23 @@ class TestRLSSetup:
             cursor.execute("SELECT current_setting('app.current_facility_id', true)")
             assert cursor.fetchone()[0] == ""
 
+    def test_auditlog_policy_has_with_check_for_null_facility(self):
+        """Migration 0083: WITH CHECK erlaubt NULL-Facility-Inserts (Pre-Auth)."""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT qual, with_check FROM pg_policies "
+                "WHERE policyname='facility_isolation' AND tablename='core_auditlog'"
+            )
+            row = cursor.fetchone()
+        assert row is not None, "Policy facility_isolation auf core_auditlog fehlt"
+        qual, with_check = row
+        # USING bleibt strikt — kein NULL-Match.
+        assert "current_setting" in (qual or "").lower(), f"USING-Klausel fehlt set_config-Check: {qual}"
+        # WITH CHECK muss NULL erlauben (Pre-Auth-Audits).
+        assert with_check is not None, "WITH CHECK fehlt — Migration 0083 nicht angewendet?"
+        assert "is null" in with_check.lower(), f"WITH CHECK erlaubt NULL nicht: {with_check}"
+        assert "current_setting" in with_check.lower(), f"WITH CHECK fehlt scope-match: {with_check}"
+
 
 @pytest.mark.django_db
 class TestRLSFunctional:

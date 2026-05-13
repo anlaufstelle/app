@@ -42,3 +42,13 @@ Ergänzungen für neue facility-gescopte Models sind verbindlich:
 - [`docs/ops-runbook.md`](./ops-runbook.md) § 9 (RLS-Pflege)
 - [CONTRIBUTING.md § Facility-Scoping & Row Level Security](././CONTRIBUTING.md)
 - Commits: `f8ef338` (RLS-Einführung), `b2dbc6a` (session-weite Variable), `4f4273a` (Cross-Tenant-Test)
+
+## Update 2026-05-09: 2-User-Modell für Operator-Tasks
+
+Postgres macht den per `POSTGRES_USER` angelegten Login-User automatisch zum Bootstrap-Superuser. Der kann sich nicht selbst entrechten. Damit RLS als ehrliche Defense-in-Depth wirkt:
+
+- Bootstrap-User bleibt `postgres` (Superuser, nur Init/Notfall — nicht für Runtime/Wartung).
+- **App-User** `anlaufstelle` (`NOSUPERUSER NOBYPASSRLS`) — Django-Runtime; RLS-Policies greifen.
+- **Admin-User** `anlaufstelle_admin` (`NOSUPERUSER BYPASSRLS`) — Operator-Tasks (`seed`, `migrate`, `retention-pruning`). Wird vom postgres-Init-Script angelegt.
+
+Operator-Tasks laufen via `compose run` mit `POSTGRES_USER`/`POSTGRES_PASSWORD`-ENV-Override (siehe [`deploy/deploy-dev.sh`](././deploy/deploy-dev.sh) und [`Makefile`](././Makefile) `dev-seed`-Target). App-Code nutzt ausschließlich den Runtime-User; kein BYPASSRLS-Toggling am Runtime-User.

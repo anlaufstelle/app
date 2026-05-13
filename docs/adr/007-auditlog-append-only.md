@@ -37,3 +37,18 @@ Das AuditLog ist die einzige nachhaltige Spur über sensitive Operationen (Daten
 - [`src/core/services/audit.py`](././src/core/services/audit.py)
 - [`src/core/migrations/0024_auditlog_immutable_trigger.py`](././src/core/migrations/0024_auditlog_immutable_trigger.py)
 - [`docs/threat-model.md`](./threat-model.md)
+
+## Update 2026-05-09: NULL-Facility-Semantik
+
+`AuditLog.facility` ist `nullable`. NULL-Einträge repräsentieren **system-wide events** ohne oder vor Auth-Kontext:
+
+- `LOGIN_FAILED` bei unbekanntem Username (siehe [`core/signals/audit.py`](././src/core/signals/audit.py))
+- Breach-Detection-Events ohne Facility-Bezug
+- Künftige Maintenance-Tasks, die DB-Änderungen ohne Trägerbezug protokollieren
+
+Diese Einträge sind:
+
+- via RLS-USING-Policy für reguläre App-User unsichtbar (kein NULL-Match)
+- via RLS-WITH-CHECK explizit als gültiger INSERT erlaubt (Migration [0083](././src/core/migrations/0083_auditlog_rls_with_check.py))
+- durch den Append-Only-Trigger (Migration 0024) gegen UPDATE/DELETE geschützt
+- nur über Admin-User (`anlaufstelle_admin`, BYPASSRLS) oder Bootstrap-Superuser (`postgres`) auswertbar — Forensik-Pfad

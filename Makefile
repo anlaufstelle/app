@@ -177,8 +177,16 @@ dev-shell:
 	ssh -t $(DEV_HOST) 'cd /opt/anlaufstelle && docker compose -f docker-compose.dev.yml --env-file .env.dev exec web python manage.py shell'
 
 # Einmalig nach dem Initial-Deploy: Demo-Daten einspielen.
+# Connection als POSTGRES_ADMIN_USER (BYPASSRLS), damit seed in
+# RLS-geschuetzte Tabellen schreiben kann ohne app.current_facility_id-
+# Bootstrap-Henne-Ei. Refs #863.
 dev-seed:
-	ssh -t $(DEV_HOST) 'cd /opt/anlaufstelle && docker compose -f docker-compose.dev.yml --env-file .env.dev run --rm web python manage.py seed'
+	ssh -t $(DEV_HOST) 'cd /opt/anlaufstelle && \
+	  set -a && . ./.env.dev && set +a && \
+	  docker compose -f docker-compose.dev.yml --env-file .env.dev run --rm \
+	    -e POSTGRES_USER="$$POSTGRES_ADMIN_USER" \
+	    -e POSTGRES_PASSWORD="$$POSTGRES_ADMIN_PASSWORD" \
+	    web python manage.py seed'
 
 # Manueller Backup-Snapshot (Cron macht das eigenstaendig).
 dev-backup:
