@@ -4,7 +4,7 @@
 PENDING-Antraege), ``approve_deletion`` und ``reject_deletion`` schliessen
 ihn.
 
-Aufgeteilt aus dem alten ``services/event.py`` (Phase 1 von [#777](https://github.com/tobiasnix/anlaufstelle/issues/777)).
+Aufgeteilt aus dem alten ``services/event.py`` (Phase 1 von #777).
 """
 
 from __future__ import annotations

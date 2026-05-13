@@ -1,7 +1,7 @@
 """Event-Services-Paket — Re-Export-Hub (Refs #777).
 
 Frueher lebten alle Funktionen in einem 715-LOC-Modul ``services/event.py``
-mit fuenf Concerns. Phase 1 von [#777](https://github.com/tobiasnix/anlaufstelle/issues/777)
+mit fuenf Concerns. Phase 1 von #777
 schneidet sie in vier fokussierte Submodule:
 
 - :mod:`.fields` — reine Helfer (Field-Template-Lookup, Marker-Parsing,

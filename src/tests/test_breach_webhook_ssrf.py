@@ -1,7 +1,7 @@
 """RF-T07: SSRF-Validator fuer Breach-Notification-Webhook (Refs #772).
 
 Die Webhook-URL kommt aus der operatorseitig gesetzten Env-Var
-``BREACH_NOTIFICATION_WEBHOOK_URL``. Vor [#772](https://github.com/tobiasnix/anlaufstelle/issues/772)
+``BREACH_NOTIFICATION_WEBHOOK_URL``. Vor #772
 prueftet :func:`core.services.breach_detection._post_webhook` weder Schema
 noch Ziel-IP — der Aufruf konnte daher gegen Cloud-Metadata-Adressen
 (``169.254.169.254``), interne Hosts (``127.0.0.1``, ``10.0.0.1``,

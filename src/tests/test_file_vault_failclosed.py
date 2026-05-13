@@ -1,6 +1,6 @@
 """RF-T05: Fail-closed-Tests fuer File-Vault Default-Whitelist (Refs #771).
 
-Bevor [#771](https://github.com/tobiasnix/anlaufstelle/issues/771) geschlossen
+Bevor #771 geschlossen
 wurde, lieferte ``_enforce_allowed_file_types`` ``return`` (also fail-open),
 wenn die ``Settings``-Row der Facility fehlte oder ``allowed_file_types`` leer
 war — jede Datei wurde akzeptiert.

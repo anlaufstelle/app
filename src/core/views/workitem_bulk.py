@@ -2,7 +2,7 @@
 
 Abgeteilt von :file:`views/workitems.py`, damit die Single-Item-Views und
 die Inbox nicht mit Bulk-Semantik vermischt sind. Der gemeinsame
-Ownership-Check (pro-Item!) ist aus [`fd140d0`](https://github.com/tobiasnix/anlaufstelle/commit/fd140d0)
+Ownership-Check (pro-Item!) ist aus Commit fd140d0
 und bleibt hier zentral — ein Bulk-Endpoint darf nicht feiner erlauben
 als die Single-Route.
 """

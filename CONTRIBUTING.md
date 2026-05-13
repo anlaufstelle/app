@@ -286,7 +286,7 @@ Die Ruff-Konfiguration befindet sich in `pyproject.toml`.
 - Tailwind CSS für Styling — keine eigenen CSS-Klassen anlegen, soweit möglich.
 - Barrierefreiheit (WCAG 2.1 AA) beachten.
 
-#### HTMX & Live-Regions (Refs [#811](https://github.com/tobiasnix/eq=anlaufstelle/issues/811))
+#### HTMX & Live-Regions
 
 Damit HTMX-Erfolgsmeldungen Screen-Reader-Nutzer*innen erreichen, gilt:
 

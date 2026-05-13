@@ -36,7 +36,7 @@ def _active_option_slugs(field_template):
 def _filter_active_choices(field_template, value):
     """Entfernt deaktivierte SELECT/MULTI_SELECT-Werte.
 
-    Siehe Codex-Finding #2 in #494: Templates sollen sich bei Option-
+    Siehe Audit-Finding #2 in #494: Templates sollen sich bei Option-
     Deaktivierung automatisch "heilen".
     """
     from core.models import FieldTemplate

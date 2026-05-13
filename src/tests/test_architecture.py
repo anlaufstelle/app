@@ -166,14 +166,14 @@ class TestRetentionSubmoduleDirectionGuard:
 class TestServiceLayerDirectionGuard:
     """Models dürfen nicht modul-weit aus ``core.services`` importieren.
 
-    Schichtregel aus [`CLAUDE.md`](https://github.com/tobiasnix/anlaufstelle/blob/main/CLAUDE.md):
+    Schichtregel aus der Projekt-Architektur (siehe CONTRIBUTING.md):
     Business-Logik gehört in ``services/``, nicht in Models. Modul-Level-
     Imports von Services in Models drehen die Schicht-Richtung um und
     schaffen zirkuläre Import-Risiken.
 
     Function-local Imports (innerhalb von Methoden) sind erlaubt und
     notwendig, um Zirkular-Imports zu vermeiden — z. B.
-    [`Client.anonymize()`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/models/client.py)
+    ``Client.anonymize()`` (``src/core/models/client.py``)
     delegiert an ``services/clients.py:anonymize_client``.
 
     Refs #743 (Audit-Befund: ``Client.anonymize`` durchbrach Aggregat-Grenzen).
@@ -206,10 +206,10 @@ class TestServiceLayerDirectionGuard:
 class TestNoInlineScriptBlocksGuard:
     """Templates dürfen keine Inline-``<script>``-Blöcke enthalten.
 
-    Die produktive CSP ([`base.py:240`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/anlaufstelle/settings/base.py#L240))
+    Die produktive CSP (``src/anlaufstelle/settings/base.py:240``)
     setzt ``script-src 'self' 'unsafe-eval'`` ohne ``unsafe-inline``.
     Inline-Scripts werden vom Browser stumm blockiert — genau der Bug
-    aus [#618](https://github.com/tobiasnix/anlaufstelle/issues/618):
+    aus #618:
     Alpine-Komponenten, die in einem Inline-Script definiert waren,
     standen nicht zur Verfügung und Buttons sahen für den Nutzer wie
     funktionslos aus. Fix: alle JS-Funktionen in eigene Dateien
@@ -269,7 +269,7 @@ class TestAlpineCspCompatibilityGuard:
     Hintergrund: Standard-Alpine wertet ``x-data="{ ... }"``-Inline-Objekte
     per dynamischer Funktionsauswertung aus und benoetigt deshalb
     ``script-src 'unsafe-eval'`` (Audit-Finding S-6 aus
-    [`docs/audits/2026-04-21-tiefenanalyse-v0.10.md`](https://github.com/tobiasnix/anlaufstelle/blob/main/docs/audits/2026-04-21-tiefenanalyse-v0.10.md)).
+    internem Audit-Dokument 2026-04-21).
     Die offizielle CSP-Variante (``@alpinejs/csp``) verzichtet auf
     Eval, laesst dafuer nur registrierte Komponenten zu — also
     ``x-data="myComponent"`` mit ``Alpine.data('myComponent', () => ({ ... }))``
@@ -278,7 +278,7 @@ class TestAlpineCspCompatibilityGuard:
     Dieser Guard verbietet neue Inline-Objekt-x-data-Stellen, sodass
     der spaetere Build-Wechsel nicht von neuen Verstoessen blockiert wird.
 
-    Refs [#669](https://github.com/tobiasnix/anlaufstelle/issues/669)
+    Refs #669
     """
 
     _TEMPLATES_DIR = Path("src/templates")
@@ -713,7 +713,7 @@ class TestNoMultilineDjangoCommentsGuard:
     ([Django-Docs](https://docs.djangoproject.com/en/5.1/ref/templates/language/#comments)).
     Mehrzeilige Formen werden ohne Fehlermeldung als Text ausgegeben und
     erscheinen im gerenderten HTML — Meldung aus
-    [#618](https://github.com/tobiasnix/anlaufstelle/issues/618): der Kommentartext
+    #618: der Kommentartext
     stand roh zwischen Tabelle und Toast auf der Klientel-Liste. Für
     mehrzeilige Kommentare ``{% comment %} ... {% endcomment %}`` nutzen —
     oder den Kommentar ganz weglassen, da Commit-Message und Code-Historie
@@ -833,7 +833,7 @@ class TestUserFacingEntryPointGuard:
 
     Wenn ein Feature hinzugefügt wird, aber kein Template einen Link/Button
     rendert, ist es ein halb-eingebauter Zustand — genau das Muster, das
-    [#605](https://github.com/tobiasnix/anlaufstelle/issues/605) vermeiden
+    #605 vermeiden
     soll. Die Allowlist enthält nur solche URLs, die bewusst nur per Deep-
     Link, aus dem Code oder aus HTMX-Partials heraus aufgerufen werden.
     """

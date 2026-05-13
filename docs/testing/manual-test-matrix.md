@@ -1,7 +1,7 @@
 # Manuelle Test-Matrix — Anlaufstelle
 
 **Stand:** 2026-05-09 · **Version:** 1.0 · **Geltungsbereich:** Anlaufstelle ≥ v0.10  
-**GitHub-Issue:** · **Plan:** [continue-peaceful-grove.md](./././home/agent/.claude/plans/continue-peaceful-grove.md) (intern)
+**GitHub-Issue:** 
 
 > Diese Datei ist die **Single-Source-of-Truth** für manuelles Testen. Sie ist ein **paralleler Artefakt** zur automatisierten E2E-Suite (~280 Tests in `src/tests/e2e/`) — kein Code-Klon. Manuelle Tests sind erforderlich für (a) DSGVO-Audit-Sign-Off, (b) Pilotbetrieb mit echten Sozialarbeiter:innen und (c) Release-Candidate-Verifikation auf Browser-/Mobile-Spezifika.
 >

@@ -1,8 +1,8 @@
 """E2E: Vier-Augen-Lösch-Workflow für Personen (Refs #626).
 
 Manuell verifiziert per Playwright am 2026-04-30 — Tests aus den
-beobachteten Schritten abgeleitet (CLAUDE.md "E2E-Tests aus
-manueller Verifikation ableiten").
+beobachteten Schritten abgeleitet (Projekt-Konvention: E2E-Tests
+aus manueller Verifikation ableiten, nicht vorab schreiben).
 """
 
 import re

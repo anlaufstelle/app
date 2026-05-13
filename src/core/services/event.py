@@ -1,7 +1,7 @@
 """Re-Export-Stub fuer Bestands-Aufrufer (Refs #777).
 
 Die Event-Services wurden in das Paket :mod:`core.services.events`
-verschoben (Phase 1 von [#777](https://github.com/tobiasnix/anlaufstelle/issues/777)) — fuenf Concerns liegen jetzt in
+verschoben (Phase 1 von #777) — fuenf Concerns liegen jetzt in
 ``crud.py``, ``context.py``, ``deletion.py`` und ``fields.py``.
 
 Diese Datei re-exportiert alle public Symbole, damit

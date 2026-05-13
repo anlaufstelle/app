@@ -4,7 +4,7 @@ Reine Lese-Helfer ohne DB-Writes. Diese Funktionen werden von ``crud.py``
 und ``context.py`` gemeinsam genutzt; um Zirkular-Imports zu vermeiden
 liegen sie in einem eigenen Modul.
 
-Aufgeteilt aus dem alten ``services/event.py`` (Phase 1 von [#777](https://github.com/tobiasnix/anlaufstelle/issues/777)).
+Aufgeteilt aus dem alten ``services/event.py`` (Phase 1 von #777).
 """
 
 from __future__ import annotations

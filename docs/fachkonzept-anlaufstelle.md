@@ -1119,7 +1119,7 @@ Das Fachkonzept definiert funktionale Anforderungen detailliert, aber keine nich
 Anlaufstelle ist für Einrichtungen mit 5–30 gleichzeitigen Nutzern konzipiert. Das ist eine bewusste Designentscheidung, kein Mangel. Konkret bedeutet das:
 
 - **Zieldatenmenge pro Einrichtung:** Bis zu 50.000 Ereignisse/Jahr (≈ 140/Tag bei einer mittelgroßen Einrichtung). Bei 5 Jahren Betrieb: 250.000 Ereignisse.
-- **Skalierung über 30 Nutzer:** Für Träger mit mehreren Standorten oder höherem Volumen sind Anpassungen möglich: Zeitstrom-Pagination, Redis-Caching, PostgreSQL-Tuning und dedizierte Instanzen pro Standort. Bei Interesse an einer skalierten Lösung: [tobias-nix.de](https://tobias-nix.de).
+- **Skalierung über 30 Nutzer:** Für Träger mit mehreren Standorten oder höherem Volumen sind Anpassungen möglich: Zeitstrom-Pagination, Redis-Caching, PostgreSQL-Tuning und dedizierte Instanzen pro Standort. Bei Interesse an einer skalierten Lösung: [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app).
 
 ### Verfügbarkeit
 

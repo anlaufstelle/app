@@ -12,7 +12,7 @@ Dieser Test laedt eine dedizierte Postgres-Rolle ``rls_test_role``
 unterbindet — 0-Rows-Assertion ueber alle ``core_*``-Tabellen mit
 ``app.current_facility_id`` einer fremden Facility.
 
-Statistik-Materialized-View ([`0049_statistics_event_flat_mv.py`](https://github.com/tobiasnix/anlaufstelle/blob/main/src/core/migrations/0049_statistics_event_flat_mv.py))
+Statistik-Materialized-View (``src/core/migrations/0049_statistics_event_flat_mv.py``)
 ist bewusst ohne RLS modelliert (Aggregat-Lese, keine Pseudonyme) —
 out of scope fuer diesen Test.
 """
