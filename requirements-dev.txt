@@ -52,7 +52,7 @@ django-stubs[compatible-mypy]==6.0.4
     # via -r requirements-dev.in
 django-stubs-ext==6.0.3
     # via django-stubs
-django-unfold==0.92.0
+django-unfold==0.93.0
     # via -r requirements.in
 execnet==2.1.2
     # via pytest-xdist
@@ -62,7 +62,7 @@ fonttools[woff]==4.62.1
     # via weasyprint
 greenlet==3.4.0
     # via playwright
-gunicorn==25.3.0
+gunicorn==26.0.0
     # via -r requirements.in
 idna==3.11
     # via requests

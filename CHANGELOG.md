@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [0.12.0] - 2026-05-12
 
-Minor-Release. Schwerpunkte: 5-Rollen-Modell mit Superadmin und cross-facility `/system/`-Bereich; produktive `dev.anlaufstelle.app`-Topologie auf Hetzner als Coolify-Ablöse; RLS-Hardening rund um Bootstrap und Pre-Auth-AuditLogs. Zusätzlich vier CVE-Fixes (Django 6.0.5, urllib3 2.7.0, plus cryptography-Hardening).
+Minor-Release. Schwerpunkte: 5-Rollen-Modell mit Superadmin und cross-facility `/system/`-Bereich; produktive `dev.anlaufstelle.app`-Topologie auf Hetzner als Coolify-Ablöse; RLS-Hardening rund um Bootstrap und Pre-Auth-AuditLogs. Zusätzlich Sicherheits-Bumps (Django 6.0.5 mit drei CVEs, urllib3 2.7.0, cryptography 48 mit X.509-Hardening, gunicorn 26 mit HTTP/1.1-RFC-9112-Validierung).
 
 ### Security
 
@@ -16,9 +16,10 @@ Minor-Release. Schwerpunkte: 5-Rollen-Modell mit Superadmin und cross-facility `
   - CVE-2026-6907 — Caching von Requests bei gesetztem `Vary`-Header
   - CVE-2026-35192 — `Vary`-Header beim Setzen einer Session
   - CVE-2026-5766 — `DATA_UPLOAD_MAX_MEMORY_SIZE`-Enforcement im `MemoryUploadHandler`
-  - Im Django-Stack mit aktualisiert: `django-unfold` 0.91.0 → 0.92.0, `django-stubs` 6.0.3 → 6.0.4.
+  - Im Django-Stack mit aktualisiert: `django-stubs` 6.0.3 → 6.0.4.
 - **`urllib3` 2.6.3 → 2.7.0** — CVE-2026-44431, CVE-2026-44432. Transitive Dependency über `sentry-sdk`, jetzt explizit in `requirements.in` gepinnt.
 - **`cryptography` 47.0.0 → 48.0.0** — Hardening: strikte X.509-CRL-Validierung (Mismatch zwischen `TBSCertList.signature` und `signatureAlgorithm` löst jetzt `ValueError`). Post-Quantum-Support (ML-KEM/ML-DSA) via OpenSSL 3.5+, AWS-LC, BoringSSL.
+- **`gunicorn` 25.3.0 → 26.0.0** — Hardening: strikte HTTP/1.1-Request-Target-Validierung nach RFC 9112 § 3.2.3/3.2.4. Breaking-Change „Eventlet-Worker entfernt" betrifft uns nicht (wir nutzen Sync-Worker).
 
 ### Added
 
@@ -47,7 +48,7 @@ Minor-Release. Schwerpunkte: 5-Rollen-Modell mit Superadmin und cross-facility `
 - **2-User-DB-Modell für RLS-Bootstrap** — Postgres-Init legt einen separaten Admin-User mit `BYPASSRLS` an; Migrationen und Seed verbinden als `POSTGRES_ADMIN_USER`. App-Worker laufen weiterhin auf einem nicht-bypass-fähigen App-User. Self-Hoster brauchen die neuen Env-Vars (siehe [`.env.dev.example`](https://github.com/anlaufstelle/app/blob/main/.env.dev.example)). Das Pattern ist in [`docs/dev-deployment.md`](https://github.com/anlaufstelle/app/blob/main/docs/dev-deployment.md) und ADRs [005](https://github.com/anlaufstelle/app/blob/main/docs/adr/005-facility-scoping-and-rls.md) + [007](https://github.com/anlaufstelle/app/blob/main/docs/adr/007-auditlog-append-only.md) dokumentiert.
 - **i18n** — `/system/`-Bereich und Tier-1/2-Funktionen vollständig DE + EN übersetzt.
 - **CSP-Hygiene** — `data-confirm`/`data-action`-Attribute ersetzen verbliebene inline-`onclick`/`onsubmit`-Handler. Wireup in neuem [`confirm-action.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/confirm-action.js).
-- **Routine-Dependency-Bumps** — `sentry-sdk` 2.58.0 → 2.59.0, `docker/setup-qemu-action` v3 → v4 in `release.yml`.
+- **Routine-Dependency-Bumps** — `sentry-sdk` 2.58.0 → 2.59.0, `django-unfold` 0.91.0 → 0.93.0 (Admin-Theme), `docker/setup-qemu-action` v3 → v4 und `actions/upload-artifact` v4 → v7 in den GitHub-Workflows.
 
 ### Fixed
 

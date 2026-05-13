@@ -36,11 +36,11 @@ django-otp==1.7.0
     # via -r requirements.in
 django-ratelimit==4.1.0
     # via -r requirements.in
-django-unfold==0.92.0
+django-unfold==0.93.0
     # via -r requirements.in
 fonttools[woff]==4.62.1
     # via weasyprint
-gunicorn==25.3.0
+gunicorn==26.0.0
     # via -r requirements.in
 packaging==26.1
     # via

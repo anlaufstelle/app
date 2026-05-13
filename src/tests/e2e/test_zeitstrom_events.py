@@ -194,21 +194,25 @@ class TestEventErstellung:
 
         page.click("button:has-text('Speichern')")
         page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
+        # ``wait_for_url`` triggert bereits am URL-Wechsel, nicht am Render-Ende.
+        # Unter Stage-CI-Last (2 Worker, 367 Tests) ist der DOM-Aufbau auf der
+        # Detail-Seite noch im Gang, wenn die folgenden Locator-Waits starten —
+        # ohne diesen Load-State-Sync wird einer der dd:notiz-Waits zur Flake.
+        page.wait_for_load_state("domcontentloaded")
 
-        # Detail-Seite prüfen — explizite Waits, weil ``wait_for_url`` direkt
-        # nach dem URL-Match weitergeht und die Detail-Sektionen unter Last
-        # noch nicht im DOM stehen müssen (synchrones ``is_visible()`` traf
-        # mehrfach in CI auf ``False``). 15s statt 5s, weil dieser Test
-        # unter Stage-CI-Last (2 Worker, 367 Tests) mit dem dd:notiz-Wait
-        # in v0.12.0 zugeschlagen hat.
+        # Strukturelle Anker: erst auf dt:Notiz warten, dann den dazugehoerigen
+        # dd-Inhalt pruefen. Anchor-then-content statt ungebundene dd:has-text-
+        # Suche, weil letztere unter parallelem CI-Lauf zugeschlagen hat.
         page.locator("[role='alert']:has-text('Kontakt wurde dokumentiert.')").first.wait_for(
-            state="visible", timeout=15000
+            state="visible", timeout=30000
         )
-        page.locator("dd:has-text('E2E-Test Kontakt')").first.wait_for(state="visible", timeout=15000)
-        page.locator("dd:has-text('Anonym')").wait_for(state="visible", timeout=15000)
+        page.locator("dt:has-text('Notiz')").first.wait_for(state="visible", timeout=30000)
+        page.locator("dt:has-text('Notiz') + dd").first.wait_for(state="visible", timeout=5000)
+        page.locator("dl").get_by_text("E2E-Test Kontakt").first.wait_for(state="visible", timeout=5000)
+        page.locator("dl").get_by_text("Anonym").first.wait_for(state="visible", timeout=5000)
 
         # EventHistory-Eintrag CREATE
-        page.locator("h2:has-text('Änderungshistorie')").wait_for(state="visible", timeout=15000)
+        page.locator("h2:has-text('Änderungshistorie')").wait_for(state="visible", timeout=10000)
 
 
 class TestEventEditAndDelete:
