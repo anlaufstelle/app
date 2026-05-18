@@ -148,7 +148,7 @@ qrcode==8.2
     # via -r requirements.in
 requests==2.33.1
     # via pytest-base-url
-ruff==0.15.12
+ruff==0.15.13
     # via -r requirements-dev.in
 sentry-sdk[django]==2.59.0
     # via -r requirements.in
