@@ -89,7 +89,7 @@ pillow==12.2.0
     # via weasyprint
 pip-tools==7.5.3
     # via -r requirements-dev.in
-playwright==1.59.0
+playwright==1.60.0
     # via
     #   -r requirements-dev.in
     #   pytest-playwright
