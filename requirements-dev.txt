@@ -132,7 +132,7 @@ pytest-cov==7.1.0
     # via -r requirements-dev.in
 pytest-django==4.12.0
     # via -r requirements-dev.in
-pytest-playwright==0.7.2
+pytest-playwright==0.8.0
     # via -r requirements-dev.in
 pytest-timeout==2.4.0
     # via -r requirements-dev.in
