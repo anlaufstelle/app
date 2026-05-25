@@ -36,7 +36,7 @@ django-otp==1.7.0
     # via -r requirements.in
 django-ratelimit==4.1.0
     # via -r requirements.in
-django-unfold==0.93.0
+django-unfold==0.94.0
     # via -r requirements.in
 fonttools[woff]==4.62.1
     # via weasyprint
