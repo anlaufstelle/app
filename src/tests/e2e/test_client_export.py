@@ -3,6 +3,7 @@
 import pytest
 
 from tests.e2e._helpers import enter_sudo_mode
+from tests.e2e._selectors import find_client_link
 
 pytestmark = pytest.mark.e2e
 
@@ -13,7 +14,7 @@ class TestClientExportDropdown:
     def test_lead_sees_dropdown(self, lead_page, base_url):
         """Leitung sieht den Datenauskunft-Button."""
         lead_page.goto(f"{base_url}/clients/")
-        lead_page.locator("a:has-text('Stern-42')").first.click()
+        find_client_link(lead_page, "Stern-42").click()
         lead_page.wait_for_url(lambda url: "/clients/" in url and "Stern-42" not in url or "/clients/" in url)
         btn = lead_page.locator("button:has-text('Datenauskunft')")
         assert btn.count() == 1
@@ -21,7 +22,7 @@ class TestClientExportDropdown:
     def test_staff_does_not_see_dropdown(self, staff_page, base_url):
         """Fachkraft sieht keinen Datenauskunft-Button."""
         staff_page.goto(f"{base_url}/clients/")
-        staff_page.locator("a:has-text('Stern-42')").first.click()
+        find_client_link(staff_page, "Stern-42").click()
         staff_page.wait_for_url(lambda url: "/clients/" in url)
         btn = staff_page.locator("button:has-text('Datenauskunft')")
         assert btn.count() == 0
@@ -36,7 +37,7 @@ class TestClientExportJSON:
         enter_sudo_mode(lead_page, base_url)
 
         lead_page.goto(f"{base_url}/clients/")
-        lead_page.locator("a:has-text('Stern-42')").first.click()
+        find_client_link(lead_page, "Stern-42").click()
         lead_page.wait_for_url(lambda url: "/clients/" in url)
         desktop = lead_page.locator(".hidden.md\\:flex")
         desktop.locator("button:has-text('Datenauskunft')").click()
@@ -58,7 +59,7 @@ class TestClientExportPDF:
         enter_sudo_mode(lead_page, base_url)
 
         lead_page.goto(f"{base_url}/clients/")
-        lead_page.locator("a:has-text('Stern-42')").first.click()
+        find_client_link(lead_page, "Stern-42").click()
         lead_page.wait_for_url(lambda url: "/clients/" in url)
         desktop = lead_page.locator(".hidden.md\\:flex")
         desktop.locator("button:has-text('Datenauskunft')").click()
@@ -77,7 +78,7 @@ class TestClientExportAccessControl:
         """Fachkraft bekommt 403 bei direktem JSON-Zugriff."""
         staff_page.goto(f"{base_url}/clients/")
         # Click first client to get a valid client detail URL
-        staff_page.locator("a:has-text('Stern-42')").first.click()
+        find_client_link(staff_page, "Stern-42").click()
         staff_page.wait_for_url(lambda url: "/clients/" in url)
         client_url = staff_page.url
         resp = staff_page.goto(f"{client_url}export/json/")
