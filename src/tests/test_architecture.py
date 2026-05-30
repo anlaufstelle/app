@@ -955,3 +955,79 @@ class TestDocumentedRoutesGuard:
             "entweder Doku anpassen oder Route wiederherstellen: "
             f"{unresolved}"
         )
+
+
+class TestSettingsAuditCompletenessGuard:
+    """Refs #900 (FND-001): jedes Feld auf ``Settings`` muss entweder
+    auditiert (``_AUDIT_FIELDS``) oder explizit ausgenommen sein
+    (``_AUDIT_EXEMPT``). Verhindert, dass ein neues verhaltensrelevantes
+    Setting unauditiert gemerged wird.
+    """
+
+    def _settings_fields(self):
+        from core.models import Settings
+
+        names = []
+        for f in Settings._meta.get_fields():
+            # Reverse-Relationen (related_name-Zugriffe) zaehlen nicht — sie
+            # haben kein Datenbank-Spaltenpendant auf Settings.
+            if not getattr(f, "concrete", False):
+                continue
+            # M2M-Through und virtuelle Felder ueberspringen — sie haben
+            # entweder keine ``column`` oder sind reine Manager-Konstrukte.
+            if getattr(f, "column", None) is None:
+                continue
+            names.append(f.name)
+        return set(names)
+
+    def test_no_overlap_between_audit_fields_and_exempt(self):
+        from core.services.settings import _AUDIT_EXEMPT, _AUDIT_FIELDS
+
+        overlap = set(_AUDIT_FIELDS) & set(_AUDIT_EXEMPT)
+        assert not overlap, (
+            f"_AUDIT_FIELDS und _AUDIT_EXEMPT duerfen nicht ueberlappen — "
+            f"sonst wird ein 'auditiertes' Feld gleichzeitig als 'irrelevant' "
+            f"deklariert. Konflikt: {sorted(overlap)}"
+        )
+
+    def test_audit_fields_reference_existing_model_fields(self):
+        from core.services.settings import _AUDIT_FIELDS
+
+        existing = self._settings_fields()
+        missing = [name for name in _AUDIT_FIELDS if name not in existing]
+        assert not missing, (
+            f"_AUDIT_FIELDS verweist auf nicht-existierende Settings-Felder: "
+            f"{missing}. Wahrscheinlich Tippfehler oder veralteter Eintrag — "
+            f"existierende Felder: {sorted(existing)}"
+        )
+
+    def test_audit_exempt_references_existing_model_fields(self):
+        from core.services.settings import _AUDIT_EXEMPT
+
+        existing = self._settings_fields()
+        missing = [name for name in _AUDIT_EXEMPT if name not in existing]
+        assert not missing, (
+            f"_AUDIT_EXEMPT verweist auf nicht-existierende Settings-Felder: "
+            f"{missing}. Existierende Felder: {sorted(existing)}"
+        )
+
+    def test_every_settings_field_is_classified(self):
+        """Jedes konkrete Feld auf Settings muss explizit klassifiziert sein.
+
+        Failt, wenn jemand ein neues Feld zu Settings hinzufuegt, aber
+        weder in ``_AUDIT_FIELDS`` noch in ``_AUDIT_EXEMPT`` deklariert.
+        Dann muss bewusst entschieden werden: auditieren oder begruendet
+        ausnehmen — beides ist ok, aber stillschweigendes Uebergehen nicht.
+        """
+        from core.services.settings import _AUDIT_EXEMPT, _AUDIT_FIELDS
+
+        classified = set(_AUDIT_FIELDS) | set(_AUDIT_EXEMPT)
+        existing = self._settings_fields()
+        unclassified = sorted(existing - classified)
+        assert not unclassified, (
+            f"Unklassifizierte Settings-Felder: {unclassified}. "
+            f"Bitte zu ``_AUDIT_FIELDS`` in src/core/services/settings.py "
+            f"hinzufuegen (verhaltensrelevant — DSGVO/MFA/Retention/Suche/"
+            f"Datei-Policy) oder zu ``_AUDIT_EXEMPT`` mit Kommentar "
+            f"(z.B. PrimaryKey, auto_now). Refs #893 / FND-001."
+        )
