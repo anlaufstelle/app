@@ -9,6 +9,8 @@
 > - **Sektion A** — Anwender-Smoke (Sozialarbeiter:in, Klartext-Workflows)
 > - **Sektion B** — Entwickler-Komplett (Tobias, alle Bereiche systematisch)
 > - **Sektion C** — Auditor-DSGVO/Security (Compliance, RLS-Penetration)
+>
+> **Welche TC-IDs gehören in welchen Testlauf?** Siehe [`release-test-profiles.md`](release-test-profiles.md) (PR-Smoke, RC-Smoke, Security-RC, Mobile-PWA-RC, Ops-RC, Major-Release). Lauf-Ergebnisse werden in [`runs/`](runs/) abgelegt, nicht hier.
 
 ---
 
