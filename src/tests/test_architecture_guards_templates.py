@@ -106,7 +106,7 @@ class TestAlpineCspCompatibilityGuard:
             "(base-layout/widgets/auth/forms/dashboards) per "
             "Alpine.data('name', () => ({ ... })) registrieren und im "
             "Template als 'x-data=\"name\"' referenzieren. "
-            "Refs #669 (Phase 1, S-6), #911 (Subpackage-Split)\n"
+            "Refs #669, #911 (Subpackage-Split)\n"
             f"Betroffen: {violations}"
         )
 
@@ -246,7 +246,7 @@ class TestAlpineCspCompatibilityGuard:
             "ausgeschlossen.\n"
             f"Verbotene Tokens: {violations}\n"
             f"Aktueller script-src: {script_src}\n"
-            "Refs #672 (CSP-Migration), #669 (Phase 1A), #618, #662."
+            "Refs #672 (CSP-Migration), #669, #618, #662."
         )
 
 

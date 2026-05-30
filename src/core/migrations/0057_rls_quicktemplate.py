@@ -9,7 +9,7 @@ wird gegen die Session-Variable ``app.current_facility_id`` verglichen, die
 die ``FacilityScopeMiddleware`` pro Request via ``set_config(..., false)``
 setzt.
 
-Refs #598 (Audit 2026-04-21, Finding S-1), #599 (Phase-1-Umsetzung),
+Refs #598 (Audit 2026-04-21), #599,
 #600 (Retro-Audit weiterer Modelle).
 """
 

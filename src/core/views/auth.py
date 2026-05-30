@@ -30,7 +30,7 @@ def _login_username_key(group, request):
 class CustomLoginView(auth_views.LoginView):
     """Login with session timeout from facility settings.
 
-    Zwei-Ebenen-Ratelimit (Refs #598 S-3):
+    Zwei-Ebenen-Ratelimit (Refs #598):
     - IP-Limit (5/m): schützt vor klassischem Brute-Force von einer IP.
     - Username-Limit (10/h): schützt vor verteilten Angriffen auf einen Account
       (Botnet mit rotierenden IPs). Ein echter Nutzer tippt nicht 10× in einer
@@ -134,7 +134,7 @@ class RateLimitedPasswordResetView(auth_views.PasswordResetView):
         return super().post(request, *args, **kwargs)
 
     def form_valid(self, form):
-        """Audit each accepted reset request (Refs #598 S-9).
+        """Audit each accepted reset request (Refs #598).
 
         Response-Verhalten bleibt identisch: gleiche Antwort egal ob die Email
         einem Account zugeordnet ist (Anti-Enumeration). Im Audit-Log wird der

@@ -48,7 +48,7 @@ class CaseForm(forms.ModelForm):
         client_id = self.cleaned_data.get("client")
         if not client_id:
             raise ValidationError(_("Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."))
-        # Refs #819 (R-006): scoped Query — eine Person aus einer fremden
+        # Refs #819: scoped Query — eine Person aus einer fremden
         # Facility liefert direkt DoesNotExist statt der nachgelagerten
         # Facility-Pruefung. Defense-in-Depth gegen ID-Erraten.
         scoped = Client.objects.for_facility(self.facility) if self.facility else Client.objects.all()

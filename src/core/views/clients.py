@@ -214,7 +214,7 @@ class ClientAutocompleteView(AssistantOrAboveRequiredMixin, View):
 
         q = request.GET.get("q", "").strip()
 
-        # Refs #819 (R-005): FacilityScopedManager statt Inline-Facility-Filter.
+        # Refs #819: FacilityScopedManager statt Inline-Facility-Filter.
         qs = Client.objects.for_facility(request.current_facility).filter(is_active=True)
         if q:
             qs = qs.filter(pseudonym__icontains=q)

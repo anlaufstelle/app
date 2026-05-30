@@ -1,5 +1,5 @@
 """Audit logging regression tests for CREATE actions, role changes,
-deactivation and password-reset requests (Refs #598 S-9)."""
+deactivation and password-reset requests (Refs #598)."""
 
 import pytest
 from django.urls import reverse

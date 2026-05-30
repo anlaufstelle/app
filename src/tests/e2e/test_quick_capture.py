@@ -59,7 +59,7 @@ class TestSchnellerfassung:
         page.locator("#client-autocomplete-list").wait_for(state="visible", timeout=5000)
         page.locator("#client-autocomplete-list button").first.wait_for(state="visible", timeout=10000)
         # Dokumentierter Ausnahmefall zur „kein wait_for_timeout"-Regel (Refs
-        # #598 T-1): Alpine refetched intern nach dem 150ms-Debounce und
+        # #598): Alpine refetched intern nach dem 150ms-Debounce und
         # rerendert den Dropdown-Inhalt — ohne UI-Signal dafür ist eine
         # kurze Stabilisierungs-Pause nötig, sonst geht das ArrowDown an
         # ein DOM, das Alpine gleich neu aufbaut.

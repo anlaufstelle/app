@@ -1,4 +1,4 @@
-"""Tests for PII-Scrub im JsonFormatter (Refs #598 S-8)."""
+"""Tests for PII-Scrub im JsonFormatter (Refs #598)."""
 
 import json
 import logging

@@ -308,7 +308,7 @@ class TestRateLimiting:
         assert response.status_code == 403
 
     def test_rate_limit_per_username_blocks_distributed_brute_force(self, client, staff_user):
-        """Refs #598 S-3: Nach 10 fehlgeschlagenen Login-Versuchen auf den
+        """Refs #598: Nach 10 fehlgeschlagenen Login-Versuchen auf den
         gleichen Usernamen — auch von unterschiedlichen IPs — greift der
         User-basierte Ratelimit (10/h) und Versuch 11 liefert 403.
 

@@ -157,7 +157,7 @@ def _validate_data_json(document_type, data_json):
     if not data_json:
         return {}
     allowed_slugs = set(document_type.fields.values_list("field_template__slug", flat=True))
-    # Refs #819 (R-007): Choice-Konstante statt Magic-String.
+    # Refs #819: Choice-Konstante statt Magic-String.
     from core.models import FieldTemplate
 
     file_slugs = set(

@@ -1,4 +1,4 @@
-"""Dedizierte Unit-Tests für HtmxSessionMiddleware (Refs #598 T-5).
+"""Dedizierte Unit-Tests für HtmxSessionMiddleware (Refs #598).
 
 Prüft die Übersetzung von 302-Redirects zur Login-Page in HX-Redirect-
 Header bei HTMX-Requests — und dass alle anderen Fälle unverändert

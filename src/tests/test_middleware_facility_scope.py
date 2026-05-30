@@ -1,4 +1,4 @@
-"""Dedizierte Unit-Tests für FacilityScopeMiddleware (Refs #598 T-5).
+"""Dedizierte Unit-Tests für FacilityScopeMiddleware (Refs #598).
 
 Ergänzt die Coverage aus ``test_rls.py::TestRLSFunctional`` um explizite
 Behavioral-Tests auf der Middleware-Grenze (request.current_facility,

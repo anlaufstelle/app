@@ -1,4 +1,4 @@
-"""Dedizierte Unit-Tests für ForcePasswordChangeMiddleware (Refs #598 T-5).
+"""Dedizierte Unit-Tests für ForcePasswordChangeMiddleware (Refs #598).
 
 Prüft: Ein User mit ``must_change_password=True`` wird auf die Password-
 Change-Seite umgeleitet — außer auf einer Whitelist von Exempt-URLs

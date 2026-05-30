@@ -25,7 +25,7 @@ class TestCaseForm:
     """Validierung des ``CaseForm`` — Hidden-UUID-Field + facility-gescopter Client-Lookup."""
 
     def test_happy_path_returns_client_instance(self, facility, client_identified, lead_user):
-        """Refs #819 (R-006): ``clean_client`` resolved die UUID zum Model.
+        """Refs #819: ``clean_client`` resolved die UUID zum Model.
 
         Wichtig: ``cleaned_data['client']`` ist eine ``Client``-Instanz, kein
         UUID-String — die View kann den Client direkt an den Service geben.
@@ -55,7 +55,7 @@ class TestCaseForm:
         assert_field_error(form, "client", "Bitte eine Person auswählen")
 
     def test_client_from_other_facility_raises_does_not_exist(self, facility, second_facility, staff_user):
-        """Refs #819 (R-006): Cross-Facility-Client darf nicht zugeordnet werden.
+        """Refs #819: Cross-Facility-Client darf nicht zugeordnet werden.
 
         Der scoped Query liefert direkt ``DoesNotExist`` — die Form maskiert
         das als generisches "Person existiert nicht.", damit kein

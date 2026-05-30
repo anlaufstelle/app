@@ -64,7 +64,7 @@ SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = True
 # CSRF-Cookie "Strict": Token wird nur bei same-origin-Form-Submits
-# mitgesendet. Refs #598 S-5, Phase-2-Entscheidung 2026-04-21.
+# mitgesendet. Refs #598, Entscheidung 2026-04-21.
 CSRF_COOKIE_SAMESITE = "Strict"
 # CSRF-Cookie HTTPOnly: Verhindert, dass JavaScript den Token aus dem Cookie
 # lesen kann — XSS-Mitigation. Der CSRF-Token wird für HTMX (via

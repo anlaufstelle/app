@@ -92,7 +92,7 @@ class WorkItemBulkStatusView(_BulkActionMixin, View):
 
     def perform_action(self, request, workitems):
         status = request.POST.get("status", "").strip()
-        # Refs #819 (R-008): Django bietet Status.values als Liste an.
+        # Refs #819: Django bietet Status.values als Liste an.
         if status not in WorkItem.Status.values:
             raise ValueError(_("Ungültiger Status"))
         return bulk_update_workitem_status(workitems, request.user, status)

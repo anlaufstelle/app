@@ -187,7 +187,7 @@ def test_dry_run_writes_no_marker(facility, settings_obj):
 
 @pytest.mark.django_db
 def test_create_snapshot_is_not_n_plus_1(facility, client_identified, staff_user, settings_obj):
-    """Regression (Refs #598 T-3): Snapshot-Erstellung darf nicht pro
+    """Regression (Refs #598): Snapshot-Erstellung darf nicht pro
     DocumentType eine Extra-Query absetzen.
 
     Messung mit zwei verschiedenen N; die Kern-Invariante lautet: die
