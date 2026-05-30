@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Admin-Arbeitszentrale" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-[22px] font-bold text-ink">{% trans "Admin-Arbeitszentrale" %}</h1>
+        <p class="text-[13px] text-ink-muted mt-1">{% trans "Benutzer, Sicherheit und Konfiguration auf einen Blick." %}</p>
+    </div>
+    <a href="{% url 'core:zeitstrom' %}" class="text-[13px] text-accent hover:underline">{% trans "Zum Zeitstrom" %} →</a>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" data-testid="facility-admin-dashboard-cards">
+    <div class="bg-surface border border-subtle rounded-[10px] p-4">
+        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Benutzer ohne MFA" %}</div>
+        <div class="text-[28px] font-bold {% if users_without_mfa > 0 %}text-orange-600{% else %}text-ink{% endif %} mt-1" data-testid="card-users-without-mfa">{{ users_without_mfa }}</div>
+        <div class="text-[12px] text-ink-soft mt-1">{% trans "von" %} {{ users_total }} {% trans "aktiven Benutzern" %}</div>
+    </div>
+    <div class="bg-surface border border-subtle rounded-[10px] p-4">
+        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Konfigurations-Warnungen" %}</div>
+        <div class="text-[28px] font-bold {% if settings_warnings %}text-orange-600{% else %}text-ink{% endif %} mt-1" data-testid="card-settings-warnings">{{ settings_warnings|length }}</div>
+        <div class="text-[12px] text-ink-soft mt-1">{% trans "aktive Hinweise" %}</div>
+    </div>
+</div>
+
+{% if settings_warnings %}
+<section class="bg-surface border border-subtle rounded-[10px] overflow-hidden mb-6" data-testid="settings-warnings-list">
+    <h2 class="text-[15px] font-semibold text-ink px-4 py-3 border-b border-subtle">{% trans "Konfigurations-Warnungen" %}</h2>
+    <ul class="divide-y divide-subtle">
+        {% for warning in settings_warnings %}
+        <li class="px-4 py-3 text-[13px] text-ink flex items-start gap-2">
+            <span aria-hidden="true" class="inline-block w-2.5 h-2.5 rounded-full bg-orange-500 mt-1.5 flex-shrink-0"></span>
+            <span>{{ warning }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+{% endblock %}

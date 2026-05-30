@@ -106,6 +106,7 @@ from core.views.workitems import (
     WorkItemDetailView,
     WorkItemInboxView,
 )
+from core.views.dashboard import RoleDashboardView
 from core.views.zeitstrom import ZeitstromFeedPartialView, ZeitstromView
 
 app_name = "core"
@@ -113,6 +114,8 @@ app_name = "core"
 urlpatterns = [
     # Zeitstrom (Startseite)
     path("", ZeitstromView.as_view(), name="zeitstrom"),
+    # Rollenbezogene Arbeitszentrale (Refs #920)
+    path("start/", RoleDashboardView.as_view(), name="dashboard"),
     # Übergabe
     path("uebergabe/", HandoverView.as_view(), name="handover"),
     # Redirects (alte URLs)

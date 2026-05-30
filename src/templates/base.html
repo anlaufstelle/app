@@ -131,6 +131,10 @@
         </div>
         {% endif %}
         <div class="flex-1 overflow-y-auto px-2.5 py-2 space-y-px">
+            <a href="{% url 'core:dashboard' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'dashboard' %}bg-accent-light text-accent font-semibold{% endif %}" data-testid="nav-dashboard">
+                <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9.75 12 3l9 6.75v10.5a1.5 1.5 0 0 1-1.5 1.5h-3v-7.5h-9V21h-3a1.5 1.5 0 0 1-1.5-1.5V9.75Z"/></svg>
+                {% trans "Arbeitszentrale" %}
+            </a>
             {% if user.is_assistant_or_above %}
             <a href="{% url 'core:zeitstrom' %}" class="flex items-center gap-2.5 px-2.5 py-2 min-h-[44px] rounded-md text-[13px] font-medium text-ink hover:bg-canvas {% if request.resolver_match.url_name == 'zeitstrom' %}bg-accent-light text-accent font-semibold{% endif %}">
                 <svg aria-hidden="true" class="w-[18px] h-[18px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>

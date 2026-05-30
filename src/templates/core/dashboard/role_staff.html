@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Arbeitszentrale" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-[22px] font-bold text-ink">{% trans "Arbeitszentrale" %}</h1>
+        <p class="text-[13px] text-ink-muted mt-1">{% trans "Heutige Aufgaben und Kontakte auf einen Blick." %}</p>
+    </div>
+    <a href="{% url 'core:zeitstrom' %}" class="text-[13px] text-accent hover:underline">{% trans "Zum Zeitstrom" %} →</a>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" data-testid="staff-dashboard-cards">
+    <a href="{% url 'core:zeitstrom' %}" class="bg-surface border border-subtle rounded-[10px] p-4 hover:border-accent transition-colors block">
+        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Heutige Kontakte" %}</div>
+        <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-today-events">{{ today_events_count }}</div>
+        <div class="text-[12px] text-ink-soft mt-1">{% trans "Ereignisse heute" %}</div>
+    </a>
+    <a href="{% url 'core:workitem_inbox' %}" class="bg-surface border border-subtle rounded-[10px] p-4 hover:border-accent transition-colors block">
+        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Meine Aufgaben" %}</div>
+        <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-my-workitems">{{ my_open_workitems_count }}</div>
+        <div class="text-[12px] text-ink-soft mt-1">{% trans "Offen / In Bearbeitung" %}</div>
+    </a>
+    <a href="{% url 'core:client_list' %}" class="bg-surface border border-subtle rounded-[10px] p-4 hover:border-accent transition-colors block">
+        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Zuletzt bearbeitet" %}</div>
+        <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-recent-clients">{{ recent_clients|length }}</div>
+        <div class="text-[12px] text-ink-soft mt-1">{% trans "Personen kürzlich aktualisiert" %}</div>
+    </a>
+</div>
+
+{% if my_open_workitems %}
+<section class="bg-surface border border-subtle rounded-[10px] overflow-hidden mb-6">
+    <h2 class="text-[15px] font-semibold text-ink px-4 py-3 border-b border-subtle">{% trans "Meine offenen Aufgaben" %}</h2>
+    <ul class="divide-y divide-subtle">
+        {% for wi in my_open_workitems %}
+        <li class="px-4 py-3 flex items-center justify-between">
+            <a href="{% url 'core:workitem_detail' wi.pk %}" class="text-[13px] text-ink hover:text-accent">
+                {{ wi.title }}
+            </a>
+            <span class="text-[12px] text-ink-muted">{% if wi.due_date %}{{ wi.due_date|date:"d.m.Y" }}{% else %}{% trans "ohne Termin" %}{% endif %}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+
+{% if recent_clients %}
+<section class="bg-surface border border-subtle rounded-[10px] overflow-hidden">
+    <h2 class="text-[15px] font-semibold text-ink px-4 py-3 border-b border-subtle">{% trans "Zuletzt bearbeitete Personen" %}</h2>
+    <ul class="divide-y divide-subtle">
+        {% for c in recent_clients %}
+        <li class="px-4 py-3">
+            <a href="{% url 'core:client_detail' c.pk %}" class="text-[13px] text-ink hover:text-accent">{{ c.pseudonym }}</a>
+        </li>
+        {% endfor %}
+    </ul>
+</section>
+{% endif %}
+{% endblock %}

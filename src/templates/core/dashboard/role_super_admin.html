@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "System-Arbeitszentrale" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-[22px] font-bold text-ink">{% trans "System-Arbeitszentrale" %}</h1>
+        <p class="text-[13px] text-ink-muted mt-1">{% trans "Cross-Facility-Status und Audit-Aktivität." %}</p>
+    </div>
+    <a href="{% url 'core:system_dashboard' %}" class="text-[13px] text-accent hover:underline">{% trans "Detail: Systembereich" %} →</a>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" data-testid="super-admin-dashboard-cards">
+    <a href="{% url 'core:system_dashboard' %}" class="bg-surface border border-subtle rounded-[10px] p-4 hover:border-accent transition-colors block">
+        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Mandanten" %}</div>
+        <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-facilities">{{ facilities_count }}</div>
+        <div class="text-[12px] text-ink-soft mt-1">{% trans "Einrichtungen" %}</div>
+    </a>
+    <div class="bg-surface border border-subtle rounded-[10px] p-4">
+        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Benutzer aktiv" %}</div>
+        <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-users-total">{{ users_total }}</div>
+        <div class="text-[12px] text-ink-soft mt-1">{% trans "über alle Mandanten" %}</div>
+    </div>
+    <a href="{% url 'core:audit_log' %}" class="bg-surface border border-subtle rounded-[10px] p-4 hover:border-accent transition-colors block">
+        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Audit-Events 24h" %}</div>
+        <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-audit-events">{{ recent_audit_events_count }}</div>
+        <div class="text-[12px] text-ink-soft mt-1">{% trans "in den letzten 24 Stunden" %}</div>
+    </a>
+    <a href="{% url 'core:audit_log' %}" class="bg-surface border border-subtle rounded-[10px] p-4 hover:border-accent transition-colors block">
+        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Kritische Events" %}</div>
+        <div class="text-[28px] font-bold {% if critical_recent > 0 %}text-orange-600{% else %}text-ink{% endif %} mt-1" data-testid="card-critical-events">{{ critical_recent }}</div>
+        <div class="text-[12px] text-ink-soft mt-1">{% trans "in den letzten 24 Stunden" %}</div>
+    </a>
+</div>
+{% endblock %}
