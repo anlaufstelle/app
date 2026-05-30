@@ -94,13 +94,18 @@ omit = [
 # Welle 0 (#923) hatte den String-Wert als regression eingeführt.
 paths_to_mutate = ["src/core/services/", "src/core/forms/"]
 # Welle 7 (#930) — Files mit reiner Ops/IO-Logik: ``system_health.py`` ist
-# ``shutil``-/``importlib``-Wrapper; ``invite.py`` ist ``send_mail``-Wrapper.
+# ``shutil``-/``importlib``-Wrapper; ``invite.py`` ist ``send_mail``-Wrapper;
+# ``virus_scan.py`` ist ClamAV-``clamd``-Wrapper (Subprocess-IO).
 # Mutationen dort produzieren Survivors, die nur durch tiefes Mocking
 # erschlagbar wären — Mehrwert minimal gegenüber Ops-Monitoring (Sentry,
-# Healthcheck-Endpoint, real-world Ops-RC-Tests).
+# Healthcheck-Endpoint, real-world Ops-RC-Tests). ``virus_scan.py``
+# zusätzlich, weil mutmut-Runs mit Tests gegen den realen ClamAV-Container
+# 240s-Timeouts pro Mutation produzieren — Crash-Risiko bei
+# Container-Verlust (siehe 2026-05-18-Run-Abbruch in Baseline-Doc).
 do_not_mutate = [
     "src/core/services/system_health.py",
     "src/core/services/invite.py",
+    "src/core/services/virus_scan.py",
 ]
 # Auch ``tests_dir`` wird in mutmut 3.x als iterable behandelt — String führt
 # zur selben Zeichen-für-Zeichen-Iteration im pytest-Argv. TOML-Liste nötig.
