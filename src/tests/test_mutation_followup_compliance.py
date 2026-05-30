@@ -10,7 +10,7 @@ Werte ab (z.B. 7/8 Tage, 5/6 Events, 80/100 %).
 
 AuditLog-Einträge sind per Datenbank-Trigger (Migration 0024) immutable —
 ``UPDATE timestamp`` ist nicht möglich. Stattdessen patchen wir
-``core.services.compliance.datetime`` so, dass die Check-Funktion eine
+``core.services.compliance._clock.now`` so, dass die Check-Funktion eine
 relative "jetzt"-Zeit sieht; reale ``auto_now_add``-Timestamps der
 Audit-Entries bleiben unverändert.
 """
@@ -33,20 +33,13 @@ from core.services.compliance import (
 )
 
 
-class _FakeDatetime:
-    """Mock-Hülle: ``.now(tz=...)`` liefert ``fixed``, alles andere delegiert
-    an das echte ``datetime``."""
-
-    def __init__(self, fixed: datetime):
-        self._fixed = fixed
-
-    def now(self, tz=None):  # noqa: D401, ARG002
-        return self._fixed
-
-
 def _patch_compliance_now(fixed: datetime):
-    """Kontext-Manager: ``core.services.compliance.datetime.now`` → ``fixed``."""
-    return patch.object(compliance, "datetime", _FakeDatetime(fixed))
+    """Kontext-Manager: ``core.services.compliance._clock.now`` → ``fixed``.
+
+    Refs #958-M3: ``_clock.now`` ist die zentrale Time-Source aller Submodule
+    (backup, retention, audit_events). Ein Patch hier deckt alle Branches ab.
+    """
+    return patch("core.services.compliance._clock.now", return_value=fixed)
 
 
 def _create_retention_audit(facility) -> AuditLog:
