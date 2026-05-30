@@ -8,7 +8,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.constants import DEFAULT_ALLOWED_FILE_TYPES, DEFAULT_MAX_FILE_SIZE_MB
 from core.forms.widgets import INPUT_CSS
-from core.models import Case, DocumentType, DocumentTypeField, FieldTemplate
+from core.models import Case, DocumentType, DocumentTypeField
 from core.models.settings import Settings
 
 
@@ -110,25 +110,28 @@ class EventMetaForm(forms.Form):
 
 
 class DynamicEventDataForm(forms.Form):
-    """Dynamic form based on DocumentType fields."""
+    """Dynamic form based on DocumentType fields.
 
-    FIELD_TYPE_MAP: dict[str, tuple[type[forms.Field], dict[str, Any]]] = {
-        FieldTemplate.FieldType.TEXT: (forms.CharField, {"widget": forms.TextInput}),
-        FieldTemplate.FieldType.TEXTAREA: (forms.CharField, {"widget": forms.Textarea}),
-        FieldTemplate.FieldType.NUMBER: (forms.IntegerField, {"widget": forms.NumberInput}),
-        FieldTemplate.FieldType.DATE: (forms.DateField, {"widget": forms.DateInput(attrs={"type": "date"})}),
-        FieldTemplate.FieldType.TIME: (forms.TimeField, {"widget": forms.TimeInput(attrs={"type": "time"})}),
-        FieldTemplate.FieldType.BOOLEAN: (forms.BooleanField, {"widget": forms.CheckboxInput}),
-        FieldTemplate.FieldType.SELECT: (forms.ChoiceField, {"widget": forms.Select}),
-        FieldTemplate.FieldType.MULTI_SELECT: (forms.MultipleChoiceField, {"widget": forms.CheckboxSelectMultiple}),
-        FieldTemplate.FieldType.FILE: (MultipleFileField, {"widget": MultipleFileInput}),
-    }
+    Refs #907 / FND-006: Form-Field-, Widget-, Default-Auswahl pro Feldtyp
+    laeuft ueber :data:`core.services.field_types.FIELD_TYPE_REGISTRY` —
+    die alte ``FIELD_TYPE_MAP`` ist ersetzt. SELECT/MULTI_SELECT-Choices
+    und die FILE-Sonderlogik bleiben in dieser Form, da sie auf Form-State
+    (``initial_data``, deaktivierte Options) zugreifen.
+    """
 
     def __init__(self, *args, document_type=None, initial_data=None, facility=None, **kwargs):
         self.facility = facility
         super().__init__(*args, **kwargs)
         if not document_type:
             return
+
+        from core.services.field_types import (
+            FILE,
+            MULTI_SELECT,
+            SELECT,
+            get_form_field_cls_for_file,
+            get_spec,
+        )
 
         dtf_qs = (
             DocumentTypeField.objects.filter(
@@ -140,18 +143,17 @@ class DynamicEventDataForm(forms.Form):
 
         for dtf in dtf_qs:
             ft = dtf.field_template
-            field_cls, field_kwargs = self.FIELD_TYPE_MAP.get(
-                ft.field_type, (forms.CharField, {"widget": forms.TextInput})
-            )
+            spec = get_spec(ft.field_type)
 
-            kwargs_copy = {}
-            widget = field_kwargs.get("widget")
-            if isinstance(widget, type):
-                widget = widget()
-            elif widget is None:
-                widget = forms.TextInput()
+            # FILE bekommt den MultipleFileField — der unterstuetzt
+            # Multi-Upload (Refs #622). Der Registry-Eintrag fuer FILE
+            # nennt nur ``forms.FileField`` als generischen Marker.
+            if ft.field_type == FILE:
+                field_cls: type[forms.Field] = get_form_field_cls_for_file()
             else:
-                widget = widget.__class__(attrs=widget.attrs.copy() if hasattr(widget, "attrs") else {})
+                field_cls = spec.form_field_cls
+
+            widget = spec.widget_factory()
 
             css = INPUT_CSS
             if not isinstance(widget, (forms.CheckboxInput, forms.CheckboxSelectMultiple)):
@@ -159,17 +161,16 @@ class DynamicEventDataForm(forms.Form):
             else:
                 widget.attrs.setdefault("class", "rounded border-subtle text-accent")
 
-            kwargs_copy["widget"] = widget
-            kwargs_copy["required"] = ft.is_required
-            kwargs_copy["label"] = ft.name
+            kwargs_copy: dict[str, Any] = {
+                "widget": widget,
+                "required": ft.is_required,
+                "label": ft.name,
+            }
             if ft.help_text:
                 kwargs_copy["help_text"] = ft.help_text
 
-            if ft.field_type in (FieldTemplate.FieldType.SELECT, FieldTemplate.FieldType.MULTI_SELECT):
-                if ft.field_type == FieldTemplate.FieldType.SELECT:
-                    choices = [("", "---------")] + list(ft.choices)
-                else:
-                    choices = list(ft.choices)
+            if ft.field_type in (SELECT, MULTI_SELECT):
+                choices = [("", "---------")] + list(ft.choices) if ft.field_type == SELECT else list(ft.choices)
 
                 # Bei Bearbeitung: inaktive Werte des Events beibehalten
                 if initial_data and ft.slug in initial_data:
@@ -186,7 +187,7 @@ class DynamicEventDataForm(forms.Form):
 
             if initial_data and ft.slug in initial_data:
                 field.initial = initial_data[ft.slug]
-            elif ft.field_type != FieldTemplate.FieldType.FILE:
+            elif spec.allows_default:
                 default_initial = ft.get_default_initial()
                 if default_initial is not None:
                     field.initial = default_initial
