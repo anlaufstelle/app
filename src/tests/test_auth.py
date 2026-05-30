@@ -486,7 +486,7 @@ class TestPasswordResetAuditHash:
     """Refs #791 (C-23): Reset-Anfragen schreiben HMAC-Hash, keinen Klartext."""
 
     def test_existing_user_email_logged_as_hash(self, client, staff_user):
-        from core.services.audit_hash import hmac_hash_email
+        from core.services.audit import hmac_hash_email
 
         staff_user.email = "miriam@example.org"
         staff_user.save(update_fields=["email"])
@@ -517,7 +517,7 @@ class TestPasswordResetAuditHash:
         assert len(entry.detail["email_hash"]) == 64  # Hex-SHA256
 
     def test_hash_is_stable_across_case_and_whitespace(self):
-        from core.services.audit_hash import hmac_hash_email
+        from core.services.audit import hmac_hash_email
 
         assert hmac_hash_email("Alice@Example.org") == hmac_hash_email("alice@example.org ")
         assert hmac_hash_email("") == ""

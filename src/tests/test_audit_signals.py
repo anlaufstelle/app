@@ -171,7 +171,7 @@ def test_password_reset_request_is_audited_for_known_email(client, staff_user):
     assert entry.target_id == str(staff_user.pk)
     # Refs #791 (C-23): kein Klartext-E-Mail mehr im AuditLog. Statt dessen
     # ein stabiler HMAC-Hash, der bei bekannter Adresse wieder reproduzierbar ist.
-    from core.services.audit_hash import hmac_hash_email
+    from core.services.audit import hmac_hash_email
 
     assert "email" not in entry.detail
     assert entry.detail.get("email_hash") == hmac_hash_email("tester@example.com")

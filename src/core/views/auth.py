@@ -14,8 +14,7 @@ from django.views.i18n import set_language
 from django_ratelimit.decorators import ratelimit
 
 from core.models import AuditLog, User
-from core.services.audit import log_audit_event
-from core.services.audit_hash import hmac_hash_email
+from core.services.audit import hmac_hash_email, log_audit_event
 from core.services.login_lockout import is_locked
 from core.services.login_lockout import unlock as unlock_user
 

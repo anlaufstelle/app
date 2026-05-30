@@ -95,7 +95,7 @@ class TestAuditLogCreationAllowlist:
 
     Die Allowlist enthaelt aktuell drei Kategorien:
 
-    1. **Helper-Bodies** in ``services/audit.py`` und ``services/settings.py``
+    1. **Helper-Bodies** in ``services/audit/helpers.py`` und ``services/settings.py``
        — die Helper selbst muessen am Ende ``.objects.create(...)`` rufen.
     2. **Signal-Handler** in ``signals/audit.py`` — laufen in Post-Save-
        Signalen ohne Request-Objekt und setzen RLS-Session-Variablen
@@ -114,7 +114,10 @@ class TestAuditLogCreationAllowlist:
     # der Test wieder einen "Verstoss".
     _ALLOWED_DIRECT_CALLS: dict[str, dict[int, str]] = {
         # Helper-Bodies — by design.
-        "core/services/audit.py": {
+        "core/services/audit/__init__.py": {
+            25: "Docstring-Hinweis — kein echter Call (Refs #959)",
+        },
+        "core/services/audit/helpers.py": {
             4: "Docstring-Beispiel — kein echter Call",
             85: "log_audit_event-Body — zentraler View-Helper",
             126: "audit_event-Body — generischer Service-/Cron-Helper",

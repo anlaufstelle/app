@@ -18,7 +18,7 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 # AUDIT_HASH_KEY (Refs #791) — separater HMAC-Schluessel fuer Audit-Hashes
 # (z.B. ``hmac_hash_email`` in Passwort-Reset-Audits). Bewusst getrennt von
 # SECRET_KEY, damit ein potenzieller SECRET_KEY-Leak nicht ruckwirkend
-# Audit-Hashes knacken laesst. Fallback in services.audit_hash:
+# Audit-Hashes knacken laesst. Fallback in services.audit.hash:
 # SHA256(SECRET_KEY) — funktional, aber operatorseitig sollte
 # DJANGO_AUDIT_HASH_KEY explizit gesetzt sein.
 AUDIT_HASH_KEY = os.environ.get("DJANGO_AUDIT_HASH_KEY", "")
