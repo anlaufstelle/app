@@ -106,9 +106,7 @@ class TestSystemMaintenanceView:
         msgs = self._messages_for(response)
         assert any("konnte nicht deaktiviert" in m for m in msgs)
 
-    def test_get_with_unreadable_flag_file_returns_empty_note(
-        self, client, super_admin_user, settings, tmp_path
-    ):
+    def test_get_with_unreadable_flag_file_returns_empty_note(self, client, super_admin_user, settings, tmp_path):
         """Lines 105-106, 110-111: ``os.stat``/``open(...)`` OSError -> activated_at=None, note=''."""
         from unittest.mock import patch
 

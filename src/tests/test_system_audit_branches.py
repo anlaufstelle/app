@@ -43,9 +43,7 @@ class TestSystemAuditLogListViewFilters:
 
         self._create_entry(action=AuditLog.Action.LOGIN)
         self._create_entry(action=AuditLog.Action.LOGIN_FAILED)
-        response = client.get(
-            reverse("core:system_audit_list") + f"?action={AuditLog.Action.LOGIN_FAILED}"
-        )
+        response = client.get(reverse("core:system_audit_list") + f"?action={AuditLog.Action.LOGIN_FAILED}")
         assert response.status_code == 200
 
     def test_filter_by_user(self, client, super_admin_user, staff_user):
@@ -72,9 +70,7 @@ class TestSystemAuditLogListViewFilters:
         """Lines 67-76: date_from + date_to Filter."""
         self._login(client, super_admin_user)
         self._create_entry()
-        response = client.get(
-            reverse("core:system_audit_list") + "?date_from=2020-01-01&date_to=2099-12-31"
-        )
+        response = client.get(reverse("core:system_audit_list") + "?date_from=2020-01-01&date_to=2099-12-31")
         assert response.status_code == 200
 
 
@@ -133,9 +129,7 @@ class TestSystemAuditLogExportView:
         self._login(client, super_admin_user)
         from core.models import AuditLog
 
-        AuditLog.objects.create(
-            action=AuditLog.Action.LOGIN, facility=facility
-        )
+        AuditLog.objects.create(action=AuditLog.Action.LOGIN, facility=facility)
         response = client.get(reverse("core:system_audit_export") + "?format=json")
         assert response.status_code == 200
         assert "json" in response["Content-Type"]

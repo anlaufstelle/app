@@ -36,9 +36,7 @@ class TestHandoverViewEdges:
         """Lines 30: ``filter(pk=...)`` mit ungueltigem PK -> None statt 500."""
         client.force_login(staff_user)
         # UUID-kompatible aber nicht existente ID
-        response = client.get(
-            reverse("core:handover") + "?time_filter=00000000-0000-0000-0000-000000000000"
-        )
+        response = client.get(reverse("core:handover") + "?time_filter=00000000-0000-0000-0000-000000000000")
         assert response.status_code == 200
         assert response.context["selected_filter"] is None
 
