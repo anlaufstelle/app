@@ -200,8 +200,11 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 ### 3.3 Dev (systemd-Timer)
 
 Auf `dev.anlaufstelle.app` laufen die Jobs **nicht** per Host-Crontab, sondern als
-systemd-Timer, die [`deploy/bootstrap.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/bootstrap.sh)
-(Sektion 9b) installiert — bewusst kein Compose-Sidecar (, siehe #794).
+systemd-Timer, die [`deploy/install-timers.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/install-timers.sh)
+installiert — aufgerufen bei **jedem** Deploy durch [`deploy/deploy-dev.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/deploy-dev.sh)
+(idempotent). Bewusst kein Compose-Sidecar (, siehe #794).
+
+> **Hinweis (Refs #980):** Frueher installierte `bootstrap.sh` die Timer inline. Da `bootstrap.sh` nur beim Erst-Provisioning laeuft, kamen nachtraeglich ergaenzte Timer nie auf den laufenden Host (Backup-Cron blieb aus). Die Installation liegt jetzt in `install-timers.sh` und laeuft bei jedem `deploy-dev.sh`.
 
 | Timer | OnCalendar | Command |
 |-------|-----------|---------|
@@ -211,12 +214,13 @@ systemd-Timer, die [`deploy/bootstrap.sh`](https://github.com/anlaufstelle/app/b
 | `anlaufstelle-breach.timer` | `*-*-* *:30` | `… exec -T web python manage.py detect_breaches` |
 | `anlaufstelle-mv-refresh.timer` | `*-*-* *:15` | `… exec -T web python manage.py refresh_statistics_view` |
 
-**Aktivierung auf bereits laufenden Servern:** `bootstrap.sh` ist idempotent — erneut als
-root ausfuehren, dann verifizieren:
+**Aktivierung auf bereits laufenden Servern:** Ein regulaerer `deploy-dev.sh`-Lauf
+installiert die Timer mit. Einmalig sofort nachziehen geht auch direkt:
 
 ```bash
-systemctl list-timers "anlaufstelle-*"          # 5 Timer mit NEXT-Zeit
-systemctl start anlaufstelle-mv-refresh.service  # einmal manuell anstossen
+sudo bash /opt/anlaufstelle/deploy/install-timers.sh  # idempotent, als root
+systemctl list-timers "anlaufstelle-*"                # 5 Timer mit NEXT-Zeit
+systemctl start anlaufstelle-mv-refresh.service        # einmal manuell anstossen
 journalctl -u anlaufstelle-mv-refresh.service -n 20
 ```
 
@@ -591,46 +595,47 @@ BACKUP_OFFSITE_TARGET=backup-user@offsite.example.com:/backups/anlaufstelle
 
 ### 6.6 Backup-Restore-Drill (Refs #720, #739)
 
-Verifiziert, dass das aktuellste Backup vollstaendig wiederherstellbar ist und alle Verteidigungslinien (RLS, AuditLog-Trigger, Medien-Volume) erhalten bleiben. **Empfehlung: quartalsweise per Cron + Alert-Mail bei Fehlschlag.**
+Verifiziert, dass das aktuellste Backup vollstaendig wiederherstellbar ist und die Verteidigungslinien (RLS, AuditLog-Immutability-Trigger) erhalten bleiben. **Empfehlung: quartalsweise per Cron + Alert-Mail bei Fehlschlag.**
+
+Das Skript ist auf das **`deploy/backup.sh`**-Format ausgerichtet, das auf `dev.anlaufstelle.app` tatsaechlich laeuft (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, Quelle `$BACKUP_DIR/dump-*.pgc.enc` (Default `/var/backups/anl`), Stack `docker-compose.dev.yml`, Restore als `POSTGRES_ADMIN_USER` (BYPASSRLS). Das alte `scripts/backup.sh`/`scripts/restore.sh`-Schema (`backups/daily/*.sql.gz.enc`, plain SQL) ist davon unberuehrt.
+
+Die Dump-Dateien sind `0600` und gehoeren root — daher **als root** ausfuehren:
 
 ```bash
-./scripts/restore-drill.sh
+sudo bash /opt/anlaufstelle/scripts/restore-drill.sh
 ```
-
-Das Skript laeuft 7 Schritte gegen das neueste DB- und Medien-Backup in `backups/daily/`:
 
 | Schritt | Pruefung |
 |---|---|
-| 1 | Frische Temp-DB (`anlaufstelle_drill_<pid>`) anlegen |
-| 2 | Neuestes `*.sql.gz.enc` decrypten + restoren |
+| 0 | Neuestes `dump-*.pgc.enc` in `$BACKUP_DIR` finden |
+| 1 | Frische Wegwerf-DB (`anlaufstelle_drill_<pid>`) anlegen |
+| 2 | Backup decrypten + `pg_restore` (custom format) in die Wegwerf-DB |
 | 3 | Stichproben pro Tabelle (`core_facility`, `core_client`, `core_event`, `core_auditlog`, `core_workitem`) — Counts pruefen |
 | 4 | RLS-Policy-Check — `SELECT COUNT FROM pg_class WHERE relrowsecurity = true` muss `>= 18` ergeben |
 | 5 | `auditlog_immutable`-Trigger existiert UND blockt Raw UPDATE |
-| 6 | Neuestes `*_media.tar.gz.enc` enthaelt mindestens 1 Eintrag |
-| 7 | Cleanup: Temp-DB drop |
+| 6 | Cleanup: Wegwerf-DB drop (via trap) |
+| 7 | **Bei vollem Erfolg:** `mark_restore_verified` im web-Container → Compliance-Marker |
 
 Output: ein `OK` / `FAIL`-Eintrag pro Schritt. Exit-Code != 0 bei jedem `FAIL`. Bei `FAIL` sofort auf Backup-Integritaet pruefen — Trigger-Check fehlgeschlagen (Schritt 5) ist kritisch, weil die AuditLog-Immutability dann nach Restore nicht mehr greift.
 
-**Nach erfolgreichem Drill — Compliance-Marker setzen (Refs #919):**
-
-```bash
-docker compose exec web python manage.py mark_restore_verified \
-    --note "Quartals-Drill $(date +%Y-%m-%d), restore-drill.sh OK"
-```
-
-Schreibt einen `RESTORE_VERIFIED`-AuditLog-Eintrag, den das Compliance-Dashboard (`/system/compliance/`) als Alter-Indikator nutzt:
+**Compliance-Marker (Refs #919):** Schritt 7 schreibt bei Erfolg automatisch einen `RESTORE_VERIFIED`-AuditLog-Eintrag (`manage.py mark_restore_verified`), den das Compliance-Dashboard (`/system/compliance/`) als Alter-Indikator nutzt:
 
 - ≤ 90 Tage → `ok`
 - ≤ 180 Tage → `warning`
 - älter → `critical` (DSGVO Art. 32 Abs. 1 lit. c verletzt — Wiederherstellbarkeit nicht mehr nachgewiesen).
 
-Ohne den Marker bleibt das Dashboard auf `unknown`, weil es nicht erkennen kann, ob jemals ein Restore-Test stattfand.
+Ohne je gelaufenen Drill bleibt das Dashboard auf `unknown`. Manuell nachziehen (z.B. nach einem dokumentierten Out-of-Band-Restore) geht weiterhin:
+
+```bash
+docker compose -f docker-compose.dev.yml --env-file .env.dev exec web \
+    python manage.py mark_restore_verified --note "Out-of-Band-Restore $(date +%Y-%m-%d)"
+```
 
 **Cron-Vorschlag:**
 
 ```cron
 # Quartalsweise (1. Monat im Quartal, 03:30 nach Backup um 02:00):
-30 3 1 1,4,7,10 * cd /opt/anlaufstelle && ./scripts/restore-drill.sh \
+30 3 1 1,4,7,10 * cd /opt/anlaufstelle && bash scripts/restore-drill.sh \
     >> /var/log/anlaufstelle-restore-drill.log 2>&1 \
     || mail -s "Restore-Drill FAIL" ops@example.com < /var/log/anlaufstelle-restore-drill.log
 ```

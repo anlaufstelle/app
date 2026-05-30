@@ -12,13 +12,7 @@ from pathlib import Path
 
 import pytest
 
-PO_PATH = (
-    Path(__file__).resolve().parent.parent
-    / "locale"
-    / "en"
-    / "LC_MESSAGES"
-    / "django.po"
-)
+PO_PATH = Path(__file__).resolve().parent.parent / "locale" / "en" / "LC_MESSAGES" / "django.po"
 
 
 def _parse_active_entries(text: str):

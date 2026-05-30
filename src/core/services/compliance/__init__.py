@@ -86,32 +86,20 @@ logger = logging.getLogger(__name__)
 # ----------------------------------------------------------------------------
 
 
-def aggregate_checks() -> list[ComplianceCheck]:
-    """Sammle alle Compliance-Checks fuer das Dashboard.
+def _run_helpers(helpers) -> list[ComplianceCheck]:
+    """Ruft Check-Helper defensiv auf und sammelt ihre Ergebnisse.
 
-    Defensiv: jeder Helper schluckt seine eigenen Exceptions und liefert
-    bei Fehler einen ``unknown``-ComplianceCheck mit der Exception als
-    detail. Damit kippt ein Single-Failure das Dashboard nicht.
+    Jeder Helper schluckt seine eigenen Exceptions; faengt er doch eine,
+    liefert ``_run_helpers`` einen ``unknown``-ComplianceCheck mit der
+    Exception als detail. Damit kippt ein Single-Failure weder das
+    Compliance-Dashboard noch die /system/-Uebersicht.
 
-    Helper werden ueber den Modul-Namespace aufgerufen (``_db_role_checks``
-    etc.), damit Tests ``patch.object(compliance, "_db_role_checks", ...)``
-    weiterhin nutzen koennen.
+    Aufrufer uebergeben die Helper als Tuple, das **zur Aufrufzeit** aus
+    dem Modul-Namespace gebildet wird — so greifen
+    ``patch.object(compliance, "_db_role_checks", ...)`` in Tests weiterhin.
     """
     checks: list[ComplianceCheck] = []
-    for helper in (
-        _db_role_checks,
-        _backup_checks,
-        _clamav_checks,
-        _retention_checks,
-        _snapshot_checks,
-        _breach_scan_checks,
-        _mv_refresh_checks,
-        _restore_checks,
-        _mfa_checks,
-        _migration_checks,
-        _version_checks,
-        _audit_event_checks,
-    ):
+    for helper in helpers:
         name = getattr(helper, "__name__", "unknown_helper")
         try:
             checks.extend(helper())
@@ -129,6 +117,56 @@ def aggregate_checks() -> list[ComplianceCheck]:
                 )
             )
     return checks
+
+
+def aggregate_checks() -> list[ComplianceCheck]:
+    """Sammle alle Compliance-Checks fuer das Dashboard.
+
+    Defensiv via :func:`_run_helpers` — ein Single-Failure kippt das
+    Dashboard nicht. Helper werden ueber den Modul-Namespace aufgerufen
+    (``_db_role_checks`` etc.), damit Tests
+    ``patch.object(compliance, "_db_role_checks", ...)`` weiterhin nutzen.
+    """
+    return _run_helpers(
+        (
+            _db_role_checks,
+            _backup_checks,
+            _clamav_checks,
+            _retention_checks,
+            _snapshot_checks,
+            _breach_scan_checks,
+            _mv_refresh_checks,
+            _restore_checks,
+            _mfa_checks,
+            _migration_checks,
+            _version_checks,
+            _audit_event_checks,
+        )
+    )
+
+
+def cron_job_checks() -> list[ComplianceCheck]:
+    """Gebuendelte Last-Run-Checks der Hintergrundjobs (Refs #977).
+
+    Teilmenge von :func:`aggregate_checks` — nur die fuenf per
+    systemd-Timer laufenden Jobs (Backup, Retention, Snapshots,
+    Breach-Scan, MV-Refresh). Der Restore-Test bleibt bewusst aussen vor:
+    er ist ein manueller Operator-Workflow, kein Cron-Job, und gehoert
+    aufs Compliance-Dashboard.
+
+    Wiederverwendung der bestehenden Helper haelt /system/-Uebersicht und
+    Compliance-Dashboard DRY. Tuple wird zur Aufrufzeit gebildet, damit
+    ``patch.object`` in Tests greift.
+    """
+    return _run_helpers(
+        (
+            _backup_checks,
+            _retention_checks,
+            _snapshot_checks,
+            _breach_scan_checks,
+            _mv_refresh_checks,
+        )
+    )
 
 
 __all__ = [
@@ -155,6 +193,7 @@ __all__ = [
     "_validate_webhook_url",
     "_version_checks",
     "aggregate_checks",
+    "cron_job_checks",
     "allowed_sensitivities_for_user",
     "count_clients_in_bucket",
     "detect_failed_login_burst",

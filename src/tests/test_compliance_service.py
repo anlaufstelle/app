@@ -54,6 +54,33 @@ class TestAggregateChecks:
 
 
 @pytest.mark.django_db
+class TestCronJobChecks:
+    """Refs #977: gebuendelte Last-Run-Checks der Hintergrundjobs fuer die /system/-Uebersicht."""
+
+    def test_returns_list_of_compliance_checks(self):
+        result = compliance.cron_job_checks()
+        assert isinstance(result, list)
+        assert all(isinstance(c, compliance.ComplianceCheck) for c in result)
+
+    def test_contains_the_five_cron_job_keys(self):
+        keys = {c.key for c in compliance.cron_job_checks()}
+        assert {
+            "backup_age",
+            "retention_last_run",
+            "snapshot_last_run",
+            "breach_scan_last_run",
+            "mv_refresh_last_run",
+        } <= keys
+
+    def test_single_helper_failure_does_not_crash(self):
+        with patch.object(compliance, "_snapshot_checks", side_effect=RuntimeError("boom")):
+            result = compliance.cron_job_checks()
+        assert any(c.key.startswith("_internal_") for c in result)
+        internal = [c for c in result if c.key.startswith("_internal_")][0]
+        assert internal.status == compliance.ComplianceStatus.UNKNOWN
+
+
+@pytest.mark.django_db
 class TestDbRoleChecks:
     def test_ok_when_app_role_correct(self):
         app = _make_role_check("App", "anlaufstelle", actual_super=False, actual_bypassrls=False)

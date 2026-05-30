@@ -12,6 +12,7 @@ Enthaelt die Cluster:
 """
 
 import uuid
+from unittest.mock import patch
 
 import pytest
 from django.db import connection
@@ -259,6 +260,97 @@ class TestSystemDashboardHealthCard:
         response = client.get(reverse("core:system_dashboard"))
         content = response.content.decode("utf-8", errors="replace")
         assert 'data-testid="system-health-card"' in content
+
+
+# ---------------------------------------------------------------------------
+# Tier 1: Hintergrundjobs-/Cronjob-Status-Block (Refs #977)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestSystemDashboardCronCard:
+    """Refs #977: /system/-Uebersicht zeigt einen kompakten Hintergrundjobs-Block."""
+
+    def test_cron_jobs_dict_in_context(self, client, super_admin_user):
+        """Context enthaelt ``cron_jobs`` mit Summary + Checks (5 Jobs)."""
+        client.force_login(super_admin_user)
+        response = client.get(reverse("core:system_dashboard"))
+        assert response.status_code == 200
+        cron = response.context["cron_jobs"]
+        for key in ("checks", "total", "ok", "overdue", "unknown", "worst"):
+            assert key in cron, f"cron_jobs-Key {key!r} fehlt"
+        # Fuenf systemd-Timer-Jobs: backup/retention/snapshot/breach/mv-refresh.
+        assert cron["total"] == 5
+        assert cron["ok"] + cron["overdue"] + cron["unknown"] == 5
+
+    def test_cron_card_rendered_in_template(self, client, super_admin_user):
+        """Template enthaelt den Test-Selektor-Marker fuer den Cron-Block."""
+        client.force_login(super_admin_user)
+        response = client.get(reverse("core:system_dashboard"))
+        content = response.content.decode("utf-8", errors="replace")
+        assert 'data-testid="system-cron-card"' in content
+
+    def test_cron_card_lists_job_rows(self, client, super_admin_user):
+        """Pro Job eine Status-Zeile — der Breach-Scan-Label ist cron-spezifisch."""
+        client.force_login(super_admin_user)
+        response = client.get(reverse("core:system_dashboard"))
+        content = response.content.decode("utf-8", errors="replace")
+        assert "Breach-Detection-Scan" in content
+        assert "Statistik-View-Refresh" in content
+
+
+class TestCronJobSummaryWorstStatus:
+    """Refs #977: Gesamt-Indikator-Logik (worst-Status + overdue-Zaehler)."""
+
+    @staticmethod
+    def _checks(*statuses):
+        from core.services.compliance import ComplianceCheck, ComplianceStatus
+
+        return [
+            ComplianceCheck(
+                key=f"job_{i}",
+                label=f"Job {i}",
+                category="Hintergrundjobs",
+                status=ComplianceStatus(s),
+                message="x",
+            )
+            for i, s in enumerate(statuses)
+        ]
+
+    def test_all_ok_is_green(self):
+        from core.views.system import dashboard
+
+        with patch.object(dashboard, "cron_job_checks", return_value=self._checks("ok", "ok", "ok")):
+            summary = dashboard._cron_job_summary()
+        assert summary["worst"] == "ok"
+        assert summary["ok"] == 3
+        assert summary["overdue"] == 0
+
+    def test_warning_makes_worst_warning_and_counts_overdue(self):
+        from core.views.system import dashboard
+
+        with patch.object(dashboard, "cron_job_checks", return_value=self._checks("ok", "warning")):
+            summary = dashboard._cron_job_summary()
+        assert summary["worst"] == "warning"
+        assert summary["overdue"] == 1
+
+    def test_critical_beats_warning(self):
+        from core.views.system import dashboard
+
+        with patch.object(dashboard, "cron_job_checks", return_value=self._checks("warning", "critical")):
+            summary = dashboard._cron_job_summary()
+        assert summary["worst"] == "critical"
+        # overdue = warning + critical
+        assert summary["overdue"] == 2
+
+    def test_unknown_only_is_unknown(self):
+        from core.views.system import dashboard
+
+        with patch.object(dashboard, "cron_job_checks", return_value=self._checks("unknown", "unknown")):
+            summary = dashboard._cron_job_summary()
+        assert summary["worst"] == "unknown"
+        assert summary["unknown"] == 2
+        assert summary["overdue"] == 0
 
 
 # ---------------------------------------------------------------------------

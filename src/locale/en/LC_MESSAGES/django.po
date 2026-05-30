@@ -6036,3 +6036,30 @@ msgstr ""
 "Enter your email address. You will receive a link to reset your "
 "password.Enter your email address. You will receive a link to reset your "
 "password."
+
+#: src/templates/core/system/dashboard.html:137
+msgid "Hintergrundjobs"
+msgstr "Background jobs"
+
+#: src/templates/core/system/dashboard.html:142
+#, python-format
+msgid "%(ok)s/%(total)s laufen"
+msgstr "%(ok)s/%(total)s running"
+
+#: src/templates/core/system/dashboard.html:147
+#, python-format
+msgid "⚠ %(overdue)s überfällig"
+msgid_plural "⚠ %(overdue)s überfällig"
+msgstr[0] "⚠ %(overdue)s overdue"
+msgstr[1] "⚠ %(overdue)s overdue"
+
+#: src/templates/core/system/dashboard.html:152
+#, python-format
+msgid "%(unknown)s ohne Lauf-Marker"
+msgid_plural "%(unknown)s ohne Lauf-Marker"
+msgstr[0] "%(unknown)s without run marker"
+msgstr[1] "%(unknown)s without run markers"
+
+#: src/templates/core/system/dashboard.html:180
+msgid "Details im Compliance-Dashboard"
+msgstr "Details in the compliance dashboard"

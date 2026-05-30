@@ -5,6 +5,7 @@ from django.views.generic import TemplateView
 import core.services.system.health as system_health
 from core.models import AuditLog, Facility, Organization
 from core.models.user import User
+from core.services.compliance import ComplianceStatus, cron_job_checks
 from core.views.system.mixins import SystemAuditMixin
 
 
@@ -60,6 +61,41 @@ class SystemDashboardView(SystemAuditMixin, TemplateView):
                 "total_users": User.objects.count(),
                 "auditlog_total": AuditLog.objects.count(),
                 "health": health,
+                "cron_jobs": _cron_job_summary(),
             }
         )
         return context
+
+
+def _cron_job_summary() -> dict:
+    """Refs #977: kompakte Aggregat-Sicht der Hintergrundjob-Last-Run-Checks.
+
+    Buendelt die fuenf Cron-Checks aus :func:`core.services.compliance.
+    cron_job_checks` und liefert pro Status einen Zaehler plus den
+    schlechtesten Gesamt-Status fuer die Ampel auf der /system/-Uebersicht.
+    """
+    checks = cron_job_checks()
+    counts = {status.value: 0 for status in ComplianceStatus}
+    for check in checks:
+        counts[check.status.value] += 1
+
+    # Worst-Status nach Prioritaet (critical > warning > unknown > ok) —
+    # bestimmt die Farbe des Gesamt-Indikators.
+    if counts[ComplianceStatus.CRITICAL.value]:
+        worst = ComplianceStatus.CRITICAL.value
+    elif counts[ComplianceStatus.WARNING.value]:
+        worst = ComplianceStatus.WARNING.value
+    elif counts[ComplianceStatus.UNKNOWN.value]:
+        worst = ComplianceStatus.UNKNOWN.value
+    else:
+        worst = ComplianceStatus.OK.value
+
+    return {
+        "checks": checks,
+        "total": len(checks),
+        "ok": counts[ComplianceStatus.OK.value],
+        # „ueberfaellig" = warning + critical (ein Job laeuft nicht wie erwartet).
+        "overdue": counts[ComplianceStatus.WARNING.value] + counts[ComplianceStatus.CRITICAL.value],
+        "unknown": counts[ComplianceStatus.UNKNOWN.value],
+        "worst": worst,
+    }

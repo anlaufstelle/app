@@ -339,6 +339,26 @@ class TestSignatureInfo:
 
         assert info == {"version": "ClamAV 1.4.0", "signature_date": None, "age_days": None}
 
+    def test_falls_back_to_version_string_date(self, settings):
+        """Refs #979: ``stats()`` ohne parsbare Build-Time, aber ``version()``
+        enthaelt das Signatur-Datum (``ClamAV X/NNNNN/<date>``). Das Datum
+        muss daraus geparst werden statt ``unknown`` zu liefern."""
+        settings.CLAMAV_ENABLED = True
+        client = MagicMock()
+        client.stats.return_value = "POOLS: 1\nSTATE: VALID PRIMARY\nEND\n"
+        client.version.return_value = "ClamAV 1.5.2/28010/Sun May 24 06:24:46 2026"
+
+        with patch("core.services.file_vault.virus_scan._build_client", return_value=client):
+            info = signature_info()
+
+        assert info is not None
+        assert info["signature_date"] is not None
+        assert info["signature_date"].year == 2026
+        assert info["signature_date"].month == 5
+        assert info["signature_date"].day == 24
+        assert isinstance(info["age_days"], int)
+        assert info["age_days"] >= 0
+
     def test_returns_none_when_stats_is_empty(self, settings):
         settings.CLAMAV_ENABLED = True
         client = MagicMock()

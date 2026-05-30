@@ -168,6 +168,27 @@ def ping() -> bool:
         return False
 
 
+def _parse_version_date(version_raw: str):
+    """Signatur-Build-Datum aus dem ClamAV-``version()``-String parsen (Refs #979).
+
+    Format: ``ClamAV 1.5.2/28010/Sun May 24 06:24:46 2026`` — das dritte
+    ``/``-getrennte Feld ist das Build-Datum der Signaturen (UTC, naiv).
+    Liefert ein timezone-aware ``datetime`` (UTC) oder ``None``, wenn das
+    Feld fehlt oder nicht parsbar ist.
+    """
+    from datetime import datetime
+
+    if not version_raw:
+        return None
+    parts = version_raw.split("/")
+    if len(parts) < 3:
+        return None
+    date_raw = parts[2].strip()
+    with contextlib.suppress(ValueError):
+        return datetime.strptime(date_raw, "%a %b %d %H:%M:%S %Y").replace(tzinfo=UTC)
+    return None
+
+
 def signature_info() -> dict | None:
     """ClamAV-Signaturversion + Datum aus ``stats()`` ableiten.
 
@@ -235,8 +256,16 @@ def signature_info() -> dict | None:
                 latest_build = parsed
 
     if latest_build is None:
-        # Konservative Variante: keine Build-Time gefunden, aber wir haben
-        # zumindest ``version_raw`` und wissen, dass der Daemon antwortet.
+        # Fallback (Refs #979): manche ClamAV-Builds liefern in ``stats()``
+        # keine parsbare ``Build time:``-Zeile, fuehren das Signatur-Datum
+        # aber im ``version()``-String mit. Erst diesen Fallback versuchen,
+        # bevor wir ``unknown`` zurueckgeben.
+        latest_build = _parse_version_date(version_raw)
+
+    if latest_build is None:
+        # Konservative Variante: weder Stats-Build-Time noch Version-Datum
+        # parsbar — aber wir haben ``version_raw`` und wissen, dass der
+        # Daemon antwortet.
         return {"version": version_raw or None, "signature_date": None, "age_days": None}
 
     now_utc = datetime.now(tz=UTC)

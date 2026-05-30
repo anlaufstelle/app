@@ -131,6 +131,57 @@
     </div>
 </section>
 
+{# Hintergrundjobs / Cronjobs (Refs #977) — kompakter Last-Run-Status je Job. #}
+<section class="mb-6 bg-surface border border-subtle rounded-[10px] overflow-hidden" data-testid="system-cron-card">
+    <div class="flex items-center justify-between px-4 py-3 border-b border-subtle">
+        <h2 class="text-[15px] font-semibold text-ink">{% trans "Hintergrundjobs" %}</h2>
+        {# Gesamt-Indikator: gruen = alle laufen, sonst Warn/Krit/Unbekannt. #}
+        {% if cron_jobs.worst == "ok" %}
+        <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-[12px] font-semibold bg-green-50 border border-green-200 text-green-800" data-testid="cron-overall" data-status="ok">
+            <span class="inline-block w-2 h-2 rounded-full bg-green-500" aria-hidden="true"></span>
+            {% blocktrans with ok=cron_jobs.ok total=cron_jobs.total %}{{ ok }}/{{ total }} laufen{% endblocktrans %}
+        </span>
+        {% elif cron_jobs.worst == "warning" or cron_jobs.worst == "critical" %}
+        <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-[12px] font-semibold {% if cron_jobs.worst == 'critical' %}bg-red-50 border border-red-200 text-red-800{% else %}bg-yellow-50 border border-yellow-200 text-yellow-800{% endif %}" data-testid="cron-overall" data-status="{{ cron_jobs.worst }}">
+            <span class="inline-block w-2 h-2 rounded-full {% if cron_jobs.worst == 'critical' %}bg-red-500{% else %}bg-yellow-500{% endif %}" aria-hidden="true"></span>
+            {% blocktrans count overdue=cron_jobs.overdue %}⚠ {{ overdue }} überfällig{% plural %}⚠ {{ overdue }} überfällig{% endblocktrans %}
+        </span>
+        {% else %}
+        <span class="inline-flex items-center gap-2 px-2.5 py-1 rounded-md text-[12px] font-semibold bg-gray-50 border border-gray-200 text-gray-700" data-testid="cron-overall" data-status="unknown">
+            <span class="inline-block w-2 h-2 rounded-full bg-gray-400" aria-hidden="true"></span>
+            {% blocktrans count unknown=cron_jobs.unknown %}{{ unknown }} ohne Lauf-Marker{% plural %}{{ unknown }} ohne Lauf-Marker{% endblocktrans %}
+        </span>
+        {% endif %}
+    </div>
+    <div class="divide-y divide-subtle">
+        {% for check in cron_jobs.checks %}
+        <div class="px-4 py-3 flex items-start gap-3" data-testid="cron-check-{{ check.key }}" data-status="{{ check.status }}">
+            {% if check.status == "ok" %}
+            <span class="mt-1.5 inline-block w-2.5 h-2.5 rounded-full bg-green-500 shrink-0" aria-label="{% trans 'OK' %}"></span>
+            {% elif check.status == "warning" %}
+            <span class="mt-1.5 inline-block w-2.5 h-2.5 rounded-full bg-yellow-500 shrink-0" aria-label="{% trans 'Warnung' %}"></span>
+            {% elif check.status == "critical" %}
+            <span class="mt-1.5 inline-block w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" aria-label="{% trans 'Kritisch' %}"></span>
+            {% else %}
+            <span class="mt-1.5 inline-block w-2.5 h-2.5 rounded-full bg-gray-400 shrink-0" aria-label="{% trans 'Unbekannt' %}"></span>
+            {% endif %}
+            <div class="flex-1 min-w-0">
+                <div class="text-sm font-medium text-ink">{{ check.label }}</div>
+                <div class="text-[13px] text-ink-soft mt-0.5">{{ check.message }}</div>
+                {% if check.detail %}
+                <div class="text-[12px] text-ink-muted mt-1 font-mono">{{ check.detail }}</div>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <div class="px-4 py-2.5 border-t border-subtle bg-canvas">
+        <a href="{% url 'core:system_compliance' %}" class="text-[12px] font-medium text-accent hover:underline" data-testid="cron-compliance-link">
+            {% trans "Details im Compliance-Dashboard" %} →
+        </a>
+    </div>
+</section>
+
 {# Organisation #}
 <section class="mb-6 bg-surface border border-subtle rounded-[10px] p-4">
     <h2 class="text-[15px] font-semibold text-ink mb-3">{% trans "Organisation" %}</h2>
