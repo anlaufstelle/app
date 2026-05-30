@@ -104,13 +104,17 @@ python manage.py setup_facility   # Admin-User + Facility anlegen
 
 Der Admin erhält eine Einladungs-E-Mail mit Setup-Link (Token-Invite-Flow, #528).
 
-> **⚠️ PostgreSQL-Rolle: NOSUPERUSER erforderlich.** Der in `POSTGRES_USER` konfigurierte DB-User darf **kein** PostgreSQL-Superuser sein — sonst wird Row Level Security (Migration [`0047_postgres_rls_setup.py`](../src/core/migrations/0047_postgres_rls_setup.py)) per Postgres-Default **bypasst** und das Facility-Isolations-Safety-Net ist wirkungslos. Im offiziellen `postgres:16`-Image wird der initial via `POSTGRES_USER` angelegte User standardmäßig als Superuser erstellt. Nach dem ersten `migrate` daher einmalig als Postgres-Admin per `psql` anpassen:
+> **⚠️ PostgreSQL-Rolle: NOSUPERUSER ist Pflicht.** Der in `POSTGRES_USER` konfigurierte DB-User darf **kein** PostgreSQL-Superuser sein — sonst wird Row Level Security (Migration [`0047_postgres_rls_setup.py`](../src/core/migrations/0047_postgres_rls_setup.py)) per Postgres-Default **bypasst** und das Facility-Isolations-Safety-Net ist wirkungslos.
 >
-> ```sql
-> ALTER ROLE anlaufstelle_user NOSUPERUSER;
+> Seit #902 übernimmt das Init-Script [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) die korrekte Rollenanlage automatisch: Bootstrap-Superuser (`postgres`), App-Rolle (`NOSUPERUSER NOBYPASSRLS`) und Admin-Rolle (`NOSUPERUSER BYPASSRLS`). Voraussetzung: `POSTGRES_BOOTSTRAP_PASSWORD`, `POSTGRES_ADMIN_USER` und `POSTGRES_ADMIN_PASSWORD` in `.env` setzen (siehe `.env.example`).
+>
+> Prüfen nach dem ersten Hochfahren:
+>
+> ```bash
+> docker compose exec web python manage.py check_db_roles
 > ```
 >
-> Prüfen mit `\du` oder `SELECT rolsuper FROM pg_roles WHERE rolname='anlaufstelle_user';` → `f`. Hintergrund: [docs/ops-runbook.md § 9](ops-runbook.md).
+> Erwartetes Ergebnis: ``OK App-Rolle... rolsuper=False, rolbypassrls=False`` und ``OK Admin-Rolle... rolsuper=False, rolbypassrls=True``. Hintergrund: [docs/ops-runbook.md § 9](ops-runbook.md).
 
 ### 7. 2FA aktivieren
 
@@ -177,9 +181,7 @@ Im Default-Setup ist die Rate-Limit-Stanza im `Caddyfile` als Kommentar dokument
  nach Kaltstart bis zu 5 Minuten dauern).
 - RLS aktiv prüfen: per `psql` in der App-DB
  `SELECT relrowsecurity FROM pg_class WHERE relname='core_client';` → `t`.
-- RLS-Wirksamkeit prüfen: Django-DB-User darf **kein** Superuser sein (sonst wird RLS bypasst).
- `SELECT rolsuper FROM pg_roles WHERE rolname='<POSTGRES_USER>';` → `f`.
- Falls `t`: `ALTER ROLE <POSTGRES_USER> NOSUPERUSER;` (siehe Schritt 6).
+- RLS-Wirksamkeit prüfen: `docker compose exec web python manage.py check_db_roles` (Refs #902) — verifiziert App-Rolle = `NOSUPERUSER NOBYPASSRLS` und Admin-Rolle = `NOSUPERUSER BYPASSRLS`. Exit-Code 0 = ok.
 - Sentry-Events in den ersten 24h prüfen
 - Backup-Job erstmalig manuell triggern und restore auf Staging testen
 - Monitoring-Alerts (Uptime + Disk + RAM) einrichten
