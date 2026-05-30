@@ -4154,7 +4154,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Routen:** `/search/`, Header-Typeahead via HTMX (`/search/typeahead/`) 
 **Views:** `src/core/views/search.py` 
 **Services:** `src/core/services/search.py` 
-**E2E-Coverage:** `test_clients_search.py`, `test_filter_persistence_q.py`, `test_fuzzy_search.py`
+**E2E-Coverage:** `test_clients_search.py`, `test_filters.py`, `test_fuzzy_search.py`
 
 ---
 
@@ -4249,7 +4249,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Suche | fachkraft | C | ⚪ | `test_filter_persistence_q.py` |
+| Suche | fachkraft | C | ⚪ | `test_filters.py` |
 
 **Voraussetzung:** ≥ 30 passende Treffer (für Pagination)
 
