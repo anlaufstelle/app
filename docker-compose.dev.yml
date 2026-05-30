@@ -86,13 +86,8 @@ services:
       start_period: 6m
     restart: unless-stopped
     networks:
-      internal:
-      frontend:
-        # Feste IP gegen Race-Condition mit Caddys IP-Pinning (172.19.0.2):
-        # ohne explizite IP holt IPAM dem web-Container die naechste freie .2,
-        # bevor Caddy gestartet wird -- Caddy schlaegt dann mit
-        # "Address already in use" fehl. Fest auf .3 vermeidet das.
-        ipv4_address: 172.19.0.3
+      - internal
+      - frontend
 
   caddy:
     image: caddy:2-alpine
