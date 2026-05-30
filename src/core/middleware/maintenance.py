@@ -29,7 +29,9 @@ from django.template.loader import render_to_string
 from core.signals.audit import get_client_ip
 
 # Default-Whitelist — Pfade, die auch im Wartungsmodus erreichbar bleiben muessen.
-_DEFAULT_WHITELIST_PREFIXES = ("/health/", "/static/")
+# /system/maintenance/ gehoert dazu: sonst kann ein Admin den Modus nicht per
+# UI wieder deaktivieren, sobald die Flag-Datei einmal liegt.
+_DEFAULT_WHITELIST_PREFIXES = ("/health/", "/static/", "/system/maintenance/")
 
 
 class MaintenanceModeMiddleware:
