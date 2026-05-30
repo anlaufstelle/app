@@ -120,6 +120,35 @@ class TestSettingsChangeAudit:
         assert "Geheime Einrichtung XYZ" not in str(entry.detail)
         assert "facility_full_name" in entry.detail.get("changed_fields", [])
 
+    @pytest.mark.parametrize(
+        ("field", "new_value"),
+        [
+            # Refs #893 / FND-001: verhaltensrelevante Felder, die vor der Audit-
+            # Erweiterung 2026-05-15 nicht im Diff erschienen sind.
+            ("client_trash_days", 60),
+            ("auditlog_retention_months", 36),
+            ("mfa_enforced_facility_wide", True),
+            ("retention_auto_approve_after_defer", True),
+            ("retention_max_defer_count", 5),
+            ("retention_use_k_anonymization", True),
+            ("k_anonymity_threshold", 10),
+            ("search_trigram_threshold", 0.5),
+        ],
+    )
+    def test_compliance_fields_are_audited(self, settings_obj, staff_user, field, new_value):
+        """DSGVO-/MFA-/Anonymisierungs-Settings muessen im Audit-Diff auftauchen."""
+        # Falls der Default schon dem new_value entspricht, ueberspringen wir den Case.
+        if getattr(settings_obj, field) == new_value:
+            pytest.skip(f"Default fuer {field} entspricht bereits new_value={new_value}")
+        update_settings(settings_obj, staff_user, **{field: new_value})
+        entry = AuditLog.objects.filter(
+            action=AuditLog.Action.SETTINGS_CHANGE,
+            target_id=str(settings_obj.pk),
+        ).latest("timestamp")
+        assert field in entry.detail.get("changed_fields", []), (
+            f"Feld '{field}' wurde geaendert, aber nicht auditiert. detail={entry.detail!r}"
+        )
+
 
 @pytest.mark.django_db
 class TestOptimisticLockingSettings:

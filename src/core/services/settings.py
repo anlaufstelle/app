@@ -10,18 +10,44 @@ from core.services.locking import check_version_conflict
 logger = logging.getLogger(__name__)
 
 
-# Felder, die im Diff berücksichtigt werden — PrimaryKey (facility) wird ausgelassen.
+# Felder, die im Settings-Diff auditiert werden (Refs #893 / FND-001).
+#
+# Erweiterung 2026-05-15: zusaetzlich zu Stammdaten/Retention-Basisfristen/
+# Datei-Upload-Policy werden jetzt auch DSGVO-/MFA-/Anonymisierungs-/Such-
+# Settings auditiert. Aenderungen an MFA-Pflicht, Trash-Frist, AuditLog-
+# Retention, K-Anonymisierung und Trigram-Schwelle koennen ohne Audit-Diff
+# nicht unbemerkt bleiben.
 _AUDIT_FIELDS = (
+    # Stammdaten
     "facility_full_name",
     "default_document_type",
+    # Session / MFA
     "session_timeout_minutes",
+    "mfa_enforced_facility_wide",
+    # Retention-Basisfristen
     "retention_anonymous_days",
     "retention_identified_days",
     "retention_qualified_days",
     "retention_activities_days",
+    # Retention-Workflow
+    "client_trash_days",
+    "auditlog_retention_months",
+    "retention_auto_approve_after_defer",
+    "retention_max_defer_count",
+    # K-Anonymisierung
+    "retention_use_k_anonymization",
+    "k_anonymity_threshold",
+    # Suche
+    "search_trigram_threshold",
+    # Datei-Upload-Policy
     "allowed_file_types",
     "max_file_size_mb",
 )
+
+# Bewusst ausgeschlossen — keine verhaltensrelevanten Settings (#893):
+# - "facility": PrimaryKey, identifiziert die Settings-Row, kein Verhalten.
+# - "updated_at": auto_now-Zeitstempel, technisch.
+_AUDIT_EXEMPT = ("facility", "updated_at")
 
 
 def _snapshot(settings_obj):
