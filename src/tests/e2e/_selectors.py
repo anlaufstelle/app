@@ -94,3 +94,17 @@ def find_deletion_review_link(page: Page, dr_pk: str) -> Locator:
 def find_first_deletion_review_link(page: Page) -> Locator:
     """First pending deletion-review link on the page."""
     return page.locator("[data-testid='deletion-review-link']").first
+
+
+def find_deletion_approve_button(page: Page) -> Locator:
+    """Approve button on a deletion-review page.
+
+    The form uses ``<button type='submit' name='action' value='approve'>`` —
+    eindeutig per ``name+value`` matchen, kein ``.first`` nötig.
+    """
+    return page.locator("button[name='action'][value='approve']")
+
+
+def find_deletion_reject_button(page: Page) -> Locator:
+    """Reject button on a deletion-review page (siehe find_deletion_approve_button)."""
+    return page.locator("button[name='action'][value='reject']")

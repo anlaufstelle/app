@@ -4,6 +4,12 @@ import re
 
 import pytest
 
+from tests.e2e._selectors import (
+    find_deletion_approve_button,
+    find_deletion_reject_button,
+    find_first_deletion_review_link,
+)
+
 pytestmark = pytest.mark.e2e
 
 SUBMIT = "#main-content button[type='submit']"
@@ -53,13 +59,12 @@ class TestFourEyesPrincipleReview:
 
         assert lead_page.locator("h1").inner_text() == "Löschanträge"
 
-        review_link = lead_page.locator("a:has-text('Prüfen')").first
+        review_link = find_first_deletion_review_link(lead_page)
         assert review_link.is_visible()
         review_link.click()
         lead_page.wait_for_url(re.compile(r"/deletion-requests/[0-9a-f-]+/review/$"))
 
-        approve_btn = lead_page.locator("button[value='approve'], button:has-text('Genehmigen')")
-        approve_btn.first.click()
+        find_deletion_approve_button(lead_page).click()
         lead_page.wait_for_load_state("domcontentloaded")
 
         assert lead_page.locator("text=genehmigt").count() > 0 or lead_page.url == f"{base_url}/"
@@ -71,13 +76,12 @@ class TestFourEyesPrincipleReview:
         lead_page.goto(f"{base_url}/deletion-requests/")
         lead_page.wait_for_load_state("domcontentloaded")
 
-        review_link = lead_page.locator("a:has-text('Prüfen')").first
+        review_link = find_first_deletion_review_link(lead_page)
         assert review_link.is_visible()
         review_link.click()
         lead_page.wait_for_url(re.compile(r"/deletion-requests/[0-9a-f-]+/review/$"))
 
-        reject_btn = lead_page.locator("button[value='reject'], button:has-text('Ablehnen')")
-        reject_btn.first.click()
+        find_deletion_reject_button(lead_page).click()
         lead_page.wait_for_load_state("domcontentloaded")
 
         assert lead_page.locator("text=abgelehnt").count() > 0 or lead_page.url == f"{base_url}/"
@@ -94,16 +98,16 @@ class TestReviewerNotRequester:
         authenticated_page.goto(f"{base_url}/deletion-requests/")
         authenticated_page.wait_for_load_state("domcontentloaded")
 
-        review_link = authenticated_page.locator("a:has-text('Prüfen')").first
+        review_link = find_first_deletion_review_link(authenticated_page)
         if review_link.count() == 0:
             return  # Kein Link = korrekt blockiert
 
         review_link.click()
         authenticated_page.wait_for_url(re.compile(r"/deletion-requests/[0-9a-f-]+/review/$"))
 
-        approve_btn = authenticated_page.locator("button[value='approve'], button:has-text('Genehmigen')")
+        approve_btn = find_deletion_approve_button(authenticated_page)
         if approve_btn.count() > 0:
-            approve_btn.first.click()
+            approve_btn.click()
             authenticated_page.wait_for_load_state("domcontentloaded")
             assert (
                 authenticated_page.locator("text=eigenen").count() > 0
@@ -118,7 +122,7 @@ class TestReviewerNotRequester:
         lead_page.goto(f"{base_url}/deletion-requests/")
         lead_page.wait_for_load_state("domcontentloaded")
 
-        review_link = lead_page.locator("a:has-text('Prüfen')").first
+        review_link = find_first_deletion_review_link(lead_page)
         assert review_link.is_visible()
         review_link.click()
         lead_page.wait_for_url(re.compile(r"/deletion-requests/[0-9a-f-]+/review/$"))
