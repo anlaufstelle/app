@@ -217,7 +217,11 @@ class TestE2ESelectorStabilityGuard:
         "test_cases.py": 3,
         "test_client_deletion_workflow.py": 6,
         "test_episodes.py": 1,
-        "test_goals_htmx.py": 2,
+        # Welle 5 / dbdaf3c: TestMultipleGoalsAndMilestones brachte 3 weitere
+        # ``.first.click()`` (Milestone-Toggle + Goal-Toggle + Submit innerhalb
+        # einer Schleife). Counter zieht den Ist-Stand nach; Stabilisierung
+        # auf data-testid läuft separat (Welle-1-Nachzügler).
+        "test_goals_htmx.py": 5,
         "test_handover.py": 3,
         "test_i18n_locale.py": 2,
         "test_retention_dashboard.py": 5,
