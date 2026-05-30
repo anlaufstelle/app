@@ -6824,6 +6824,195 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 ---
 
+#### AUD-SEC-AUDIT-04 — Settings-Audit-Diff vollständig (jedes auditpflichtige Feld)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | facility_admin | C || `src/tests/test_audit_coverage.py::TestSettingsChangeAudit::test_compliance_fields_are_audited`, `src/tests/test_architecture.py::TestSettingsAuditCompletenessGuard` |
+
+**Code-Referenz:** [src/core/services/settings.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/settings.py) (`_AUDIT_FIELDS`, `_AUDIT_EXEMPT`)
+
+**Schritte:**
+1. Als `facility_admin` in `/admin-mgmt/` einloggen.
+2. Settings öffnen (`/admin-mgmt/core/settings/<facility-pk>/`).
+3. Pro auditpflichtigem Feld (siehe Liste unten) ändern und speichern.
+4. Aus AuditLog (`/audit/`) den `SETTINGS_CHANGE`-Eintrag holen.
+5. `detail.changed_fields` muss exakt das geänderte Feld enthalten.
+
+**Felder zum Durchspielen:**
+
+Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, Suche, Datei-Policy — Referenzliste in `_AUDIT_FIELDS`. Refs #893.
+
+**Erwartetes Ergebnis:**
+- Jedes Feld erzeugt genau einen Audit-Diff mit Feldnamen.
+- Bewusst ausgeschlossen sind nur `facility` (PK) und `updated_at` (auto_now); diese stehen in `_AUDIT_EXEMPT`.
+
+**DSGVO/Security-Note:** Art. 5 Abs. 1 lit. f (Integrität) — nicht-auditiert geänderte Settings sind ein Nachvollziehbarkeitsmangel.
+
+**Status:** ☐ Offen
+
+---
+
+#### AUD-SEC-AUDIT-05 — AuditLog-Payload enthält keine PII
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | facility_admin | C/F || `src/tests/test_audit_coverage.py::TestSettingsChangeAudit::test_settings_audit_does_not_leak_values` |
+
+**Code-Referenz:** Helper-Familie in [src/core/services/audit.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/audit.py) (Refs #901)
+
+**Schritte:**
+1. Klient bearbeiten: `notes`-Feld auf einen kompletten Satz „Frau Mustermann, Tel. 0123-456789" setzen, speichern.
+2. AuditLog filtern auf `Action=CLIENT_UPDATE` für diesen Klient.
+3. `detail`-Feld prüfen: nur `{"changed_fields": ["notes"]}`, **kein** Wert.
+4. Settings ändern: Stadtname in `facility_full_name` auf einen „echten" Namen setzen.
+5. SETTINGS_CHANGE-Eintrag prüfen: keine Werte im Detail.
+6. Stichprobe in `SECURITY_VIOLATION` (Virus-Treffer, Extension-Block): nur `reason`, `filename`, keine User-Klartext-Daten.
+
+**Erwartetes Ergebnis:**
+- AuditLog-`detail`-JSON enthält Feldnamen, Kategorien, technische Werte — niemals PII (Namen, Adressen, Notizen, Telefonnummern).
+
+**DSGVO/Security-Note:** Art. 5 Abs. 1 lit. c (Datenminimierung) auf Meta-Ebene — AuditLog soll Vorgänge belegen, nicht Inhalte protokollieren.
+
+**Status:** ☐ Offen
+
+---
+
+#### AUD-SEC-AUDIT-06 — Super-Admin-Systembereich loggt jeden Zugriff
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | super_admin | C || `src/tests/test_system_views.py` |
+
+**Code-Referenz:** [src/core/views/system.py](https://github.com/anlaufstelle/app/blob/main/src/core/views/system.py) `SystemAuditMixin.dispatch`; nutzt `audit_system_view` aus [src/core/services/audit.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/audit.py) (Refs #901 S6).
+
+**Schritte:**
+1. Als `super_admin` einloggen.
+2. Nacheinander aufrufen: `/system/`, `/system/audit/`, `/system/lockouts/`, `/system/retention/`, `/system/legal-holds/`, `/system/vvt/`, `/system/maintenance/`.
+3. Im System-Audit (`/system/audit/`) auf `Action=SYSTEM_VIEW` filtern.
+4. Pro Aufruf muss ein Eintrag erscheinen mit `target_type=<View-Klassenname>` und `ip_address` aus dem Request.
+
+**Erwartetes Ergebnis:**
+- Jeder System-View-Zugriff ist auditiert.
+- `facility=NULL` (system-wide), `user=super_admin`.
+
+**DSGVO/Security-Note:** Art. 32 (TOM) + interne Compliance — privilegierte Operationen brauchen lückenlose Spur.
+
+**Status:** ☐ Offen
+
+---
+
+### Security: Sudo/Session-Invalidation
+
+#### AUD-SEC-AUTH-03 — Sudo-Mode-Invalidierung nach Passwort-/MFA-Änderung
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | facility_admin | C || `src/tests/test_sudo_mode.py` |
+
+**Code-Referenz:** [src/core/services/sudo_mode.py](https://github.com/anlaufstelle/app/blob/main/src/core/services/sudo_mode.py), [src/core/views/sudo_mode.py](https://github.com/anlaufstelle/app/blob/main/src/core/views/sudo_mode.py)
+
+**Schritte:**
+1. Als `facility_admin` einloggen.
+2. Sudo-Mode betreten (per Re-Auth), `Action=SUDO_MODE_ENTERED` im AuditLog erscheint.
+3. **Variante A — Passwort-Wechsel:** Im selben Tab unter Account-Settings das eigene Passwort ändern.
+4. Eine Sudo-pflichtige View aufrufen (z.B. MFA deaktivieren) → erwartet Redirect nach `/sudo/`.
+5. **Variante B — MFA-Wechsel:** Frischer Re-Auth + Sudo, dann MFA-Setting wechseln (aktivieren/deaktivieren).
+6. Sudo-pflichtige View → erwartet erneuter Re-Auth-Prompt.
+
+**Erwartetes Ergebnis:**
+- Sicherheitskritische Account-Änderungen invalidieren Sudo-Mode sofort, nicht erst nach Timeout.
+- Falls aktuell nicht durchgesetzt: Issue eröffnen (`security` + `sudo`).
+
+**Status:** ☐ Offen
+
+---
+
+#### AUD-SEC-AUTH-04 — User-Deaktivierung beendet bestehende Sessions
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | facility_admin + zweiter User | C (2 Browser-Profile) |||
+
+**Schritte:**
+1. User A: als Fachkraft im Profil 1 (z.B. Chrome) einloggen.
+2. User B: als `facility_admin` im Profil 2 (Chrome Incognito oder Firefox).
+3. User B: in `/admin-mgmt/` den User A deaktivieren (`is_active=False`).
+4. User A: Seite neu laden, beliebige geschützte URL aufrufen.
+
+**Erwartetes Ergebnis:**
+- User A wird sofort ausgeloggt und sieht den Login-Screen.
+- Existierende Session bleibt nicht „sticky" bis zum Cookie-Timeout.
+
+**Hinweis:** Django prüft `is_active` bei jedem Request über `AuthenticationMiddleware`+`SessionAuthenticationMiddleware`. Verifiziert die Standardverhalten unserer Custom-User.
+
+**Status:** ☐ Offen
+
+---
+
+### Security: Export-/Bericht-Sicherheit
+
+#### AUD-SEC-EXPORT-01 — Export-Service filtert Zeilen und Felder nach Rolle
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | assistenz vs. leitung | C |||
+
+**Schritte:**
+1. Als `assistenz` einloggen, einen Klient/Case mit `HIGH`-Sensitivity-Events anlegen oder laden.
+2. CSV-Export via `/clients/<uuid>/export.csv` oder Statistik-Export.
+3. Datei prüfen: keine `HIGH`-Felder enthalten.
+4. Als `leitung` selber Export erneut → `HIGH`-Felder sichtbar.
+5. Stichprobe Audit-Export: `assistenz` darf System-Audit-Export gar nicht aufrufen.
+
+**Erwartetes Ergebnis:**
+- Export-Inhalte respektieren `user_can_see_field` / Sensitivity-Regeln.
+- Zeilen anderer Facilities sind nie enthalten (RLS).
+
+**DSGVO/Security-Note:** Art. 25 (Privacy-by-Default) — Export ist die häufigste Side-Channel-Quelle.
+
+**Status:** ☐ Offen
+
+---
+
+#### AUD-SEC-EXPORT-02 — Externe Berichte ohne Pseudonyme
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | leitung | C |||
+
+**Forward-looking:** Feature kommt mit #921 (datenschutzfreundliche externe Berichte). Case-Skelett:
+
+- Vor #921: aktueller CSV/PDF-Statistik-Export darf keine Pseudonym-Spalten in „externer" Variante exportieren (zur Zeit gibt es nur intern → manuell Stichprobe).
+- Nach #921: Vorlagen mit Datenschutzprofil, kleine Gruppen unterdrücken, K-Anonymity-Schwelle aktiv.
+
+**Status:** ☐ Offen
+
+---
+
+#### AUD-SEC-EXPORT-03 — CSV/PDF-Exports gegen Formula Injection und Dateinamen-Leak abgesichert
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | leitung | C || `src/tests/test_export_statistics.py` |
+
+**Schritte:**
+1. Klient mit Pseudonym `=cmd|' /C calc'!A0` anlegen (Excel-Formula-Injection-Payload).
+2. CSV-Statistik exportieren.
+3. Datei in LibreOffice/Excel öffnen → Zelle muss als String anzeigen, **nicht** als Formel ausgeführt.
+4. Dateinamen prüfen: enthält keinen Klient-Pseudonym oder andere PII (z.B. nur `auditlog-20260516-103000.csv`).
+5. PDF-Export prüfen: Pseudonym wird escaped, kein Markup-Injection.
+
+**Erwartetes Ergebnis:**
+- Werte mit `=`, `+`, `-`, `@` werden mit führendem `'` (Apostroph) escaped oder als Text-Zelle markiert.
+- Dateinamen enthalten keine personenbezogenen Daten.
+
+**DSGVO/Security-Note:** OWASP CSV-Injection (CWE-1236). Bei Klient-Daten besonders kritisch.
+
+**Status:** ☐ Offen
+
+---
+
 ### Security: Verschlüsselung und Key-Rotation
 
 > Alle Tests zu „Security: Verschlüsselung und Key-Rotation“ sind in [SEKTION D](#sektion-d--entwickler-probes-lokalssh) gelistet (LOKAL/SSH-Probes).
@@ -6832,7 +7021,28 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 ### Security: HTTP-Header
 
-> Alle Tests zu „Security: HTTP-Header“ sind in [SEKTION D](#sektion-d--entwickler-probes-lokalssh) gelistet (LOKAL/SSH-Probes).
+> Header-Smoke gegen Prod-Mirror ist in [SEKTION D](#sektion-d--entwickler-probes-lokalssh) (`DEV-SEC-HEAD-01`, LOKAL/SSH).
+
+#### AUD-SEC-HEAD-02 — CSP-Report-Endpoint Payload-Limit
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | unauthentifiziert | C || `src/tests/test_security_hardening.py` |
+
+**Code-Referenz:** `core.views.csp_report` (oder Pendant), CSP-Setting `CONTENT_SECURITY_POLICY_REPORT_ONLY` in `anlaufstelle.settings.base`.
+
+**Schritte:**
+1. Manuell oder per `curl` einen kleinen, validen CSP-Report posten (`Content-Type: application/csp-report`, kleiner JSON-Body).
+2. Endpoint nimmt 204 zurück.
+3. Großen Payload simulieren (>1 MB random JSON).
+4. Endpoint lehnt mit 4xx (413 Payload Too Large) ab, **nicht** 5xx.
+5. Logs prüfen: kein Memory-Spike, keine Disk-Files.
+
+**Erwartetes Ergebnis:**
+- Endpoint limitiert Body-Size (z.B. via Caddy oder Django `DATA_UPLOAD_MAX_MEMORY_SIZE`).
+- Kein DoS-Vektor.
+
+**Status:** ☐ Offen
 
 ---
 
