@@ -52,7 +52,7 @@ django-otp==1.7.0
     # via -r requirements.in
 django-ratelimit==4.1.0
     # via -r requirements.in
-django-stubs[compatible-mypy]==6.0.4
+django-stubs[compatible-mypy]==6.0.5
     # via -r requirements-dev.in
 django-stubs-ext==6.0.3
     # via django-stubs
