@@ -3171,7 +3171,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Events | fachkraft | C | ⚪ ||
+| Events | fachkraft | C | ⚪ | `test_zeitstrom_events.py` |
 
 **Voraussetzung:** ENT-EVT-01 (bestehendes Event vom selben User).
 
@@ -3203,7 +3203,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Events | fachkraft | C/F/S | ⚪ ||
+| Events | fachkraft | C/F/S | ⚪ | `test_zeitstrom_events.py` |
 
 **Voraussetzung:** ENT-EVT-05 (existierendes Event).
 
@@ -3235,7 +3235,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Events | leitung + fachkraft | C | ⚪ ||
+| Events | leitung + fachkraft | C | ⚪ | `test_zeitstrom_events.py` |
 
 **Voraussetzung:** DocumentType mit `sensitivity=high`.
 
@@ -3267,7 +3267,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Events | fachkraft | C | ⚪ ||
+| Events | fachkraft | C | ⚪ | `test_zeitstrom_events.py` |
 
 **Voraussetzung:** ENT-CLIENT-02 (Klient:in qualifiziert), Case zur Klient:in vorhanden.
 
@@ -3324,7 +3324,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Events | fachkraft | C | ⚪ ||
+| Events | fachkraft | C | ⚪ | `test_zeitstrom_events.py` |
 
 **Voraussetzung:** DocumentType mit gemischten Sensitivities (z.B. DocumentType `normal` mit FieldTemplates `normal`/`elevated`/`high`).
 
@@ -8614,7 +8614,7 @@ Methodik:
 | B | DeletionRequests | 5 | 5 | 0 | 100 % |
 | B | Episoden | 4 | 4 | 0 | 100 % |
 | B | Episoden / Permissions | 1 | 1 | 0 | 100 % |
-| B | Events | 10 | 5 | 5 | 50 % |
+| B | Events | 10 | 10 | 0 | 100 % |
 | B | Fälle | 9 | 9 | 0 | 100 % |
 | B | Fälle / API | 1 | 1 | 0 | 100 % |
 | B | Fälle / Events | 2 | 2 | 0 | 100 % |
@@ -8650,10 +8650,10 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 12 | 0 | 100 % |
-| B | 181 | 160 | 21 | 88 % |
+| B | 181 | 165 | 16 | 91 % |
 | C | 31 | 28 | 3 | 90 % |
 | D | 39 | 34 | 5 | 87 % |
-| **Gesamt** | **263** | **234** | **29** | **89 %** |
+| **Gesamt** | **263** | **239** | **24** | **91 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->

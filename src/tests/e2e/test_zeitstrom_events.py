@@ -373,3 +373,137 @@ class TestQualifiedClientEventDeletion:
 
         assert page.locator("h1").inner_text() == "Löschanträge"
         assert page.locator("text=Ausstehend").first.is_visible()
+
+
+def _create_event_for_blitz08(page, base_url, doc_type_label: str = "Kontakt") -> str:
+    """Hilfsroutine: Event für identified Klient Blitz-08 anlegen, liefert Detail-URL."""
+    page.goto(f"{base_url}/events/new/")
+    page.select_option("select[name='document_type']", label=doc_type_label)
+    page.wait_for_load_state("domcontentloaded")
+    autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
+    autocomplete.fill("Blitz")
+    option = page.locator("button:has-text('Blitz-08')").first
+    option.wait_for(state="visible", timeout=5000)
+    option.click()
+    # „Kontakt" hat ein Pflicht-Number-Feld ``dauer``; bei anderen DocTypes
+    # ggf. fülen via if-vorhanden.
+    dauer = page.locator("input[name='dauer']")
+    if dauer.count() > 0:
+        dauer.first.fill("15")
+    page.click("button:has-text('Speichern')")
+    page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
+    return page.url
+
+
+class TestEventOptimisticLocking:
+    """Refs Matrix ENT-EVT-06 — Two-Session-Konflikt beim Event-Edit."""
+
+    def test_concurrent_edit_triggers_conflict_message(
+        self, authenticated_page, base_url, browser, _login_storage_state
+    ):
+        page_a = authenticated_page
+        detail_url = _create_event_for_blitz08(page_a, base_url)
+        event_pk = re.search(r"/events/([0-9a-f-]+)/$", detail_url).group(1)
+        edit_url = f"{base_url}/events/{event_pk}/edit/"
+
+        # Session A: Edit-Form laden (snapshot v1).
+        page_a.goto(edit_url, wait_until="domcontentloaded")
+        v1 = page_a.locator("input[name='expected_updated_at']").get_attribute("value")
+        assert v1, "Hidden expected_updated_at muss in Session A gesetzt sein."
+
+        # Session B: zweiter Browser-Kontext mit derselben Login-Session.
+        context_b = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page_b = context_b.new_page()
+        page_b.set_default_timeout(30000)
+        try:
+            page_b.goto(edit_url, wait_until="domcontentloaded")
+            v1_b = page_b.locator("input[name='expected_updated_at']").get_attribute("value")
+            assert v1_b == v1, "Beide Sessions müssen denselben v1-Timestamp sehen."
+
+            # Session B speichert eine Änderung → updated_at rückt vor.
+            page_b.fill("input[name='dauer']", "33")
+            page_b.click("button:has-text('Änderungen speichern')")
+            page_b.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"), timeout=10000)
+
+            # Session A submittet mit altem v1-Snapshot → Konflikt-Flash.
+            page_a.fill("input[name='dauer']", "44")
+            page_a.click("button:has-text('Änderungen speichern')")
+            page_a.wait_for_load_state("domcontentloaded")
+
+            # Erwartung: Flash/Banner mit „zwischenzeitlich bearbeitet" sichtbar.
+            conflict = page_a.locator(":text-matches('zwischenzeitlich bearbeitet', 'i')").first
+            conflict.wait_for(state="visible", timeout=10000)
+        finally:
+            context_b.close()
+
+
+class TestEventHighSensitivityHidden:
+    """Refs Matrix ENT-EVT-07 — Staff sieht HIGH-Sensitivity-Event nicht.
+
+    Lead legt eine ``Medizinische Versorgung``-Event (DocType-Sensitivity HIGH)
+    an; Staff (ROLE_MAX_SENSITIVITY=ELEVATED) bekommt beim Detail-Aufruf 404
+    (nicht 403, damit die Existenz nicht geleakt wird) und sieht das Event
+    weder im Zeitstrom noch im Detail.
+    """
+
+    def test_staff_gets_404_on_high_sensitivity_event(self, lead_page, staff_page, base_url):
+        page = lead_page
+        # Lead legt das HIGH-DocType-Event an.
+        detail_url = _create_event_for_blitz08(page, base_url, doc_type_label="Medizinische Versorgung")
+        event_pk = re.search(r"/events/([0-9a-f-]+)/$", detail_url).group(1)
+
+        # Staff versucht Direct-Access auf das Detail.
+        response = staff_page.goto(f"{base_url}/events/{event_pk}/")
+        assert response is not None
+        assert response.status == 404, (
+            f"Staff darf HIGH-Sensitivity-Event nicht sehen — erwartet 404, bekomme {response.status}."
+        )
+
+        # Im Zeitstrom darf das Event nicht in der Liste auftauchen.
+        staff_page.goto(f"{base_url}/", wait_until="domcontentloaded")
+        # Detail-Link mit dieser PK ist nicht im DOM.
+        assert staff_page.locator(f"a[href='/events/{event_pk}/']").count() == 0, (
+            "HIGH-Sensitivity-Event darf im Zeitstrom für Staff nicht erscheinen."
+        )
+
+
+class TestEventFieldSensitivityHidden:
+    """Refs Matrix ENT-EVT-10 — Felder oberhalb der Role-Sensitivity werden ausgeblendet.
+
+    ``Krisengespräch`` hat DocType-Sensitivity ELEVATED (für Staff sichtbar),
+    aber das Feld ``Notiz (Krise)`` ist ``encrypted=True`` → field_sensitivity
+    HIGH. Für Staff darf das Feld auf der Detail-Seite NICHT auftauchen.
+    """
+
+    def test_staff_does_not_see_high_field_on_elevated_event(self, lead_page, staff_page, base_url):
+        page = lead_page
+        page.goto(f"{base_url}/events/new/")
+        page.select_option("select[name='document_type']", label="Krisengespräch")
+        page.wait_for_load_state("domcontentloaded")
+        autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
+        autocomplete.fill("Blitz")
+        page.locator("button:has-text('Blitz-08')").first.wait_for(state="visible", timeout=5000)
+        page.locator("button:has-text('Blitz-08')").first.click()
+
+        secret_marker = "GEHEIM-NOTIZ-HIGH"
+        # „Notiz (Krise)" hat slug ``notiz-krise`` — HIGH-Feld.
+        page.fill("textarea[name='notiz-krise']", secret_marker)
+        page.fill("input[name='dauer']", "20")
+        # „Art der Krise" (select) auswählen, sonst Form-Fehler.
+        page.select_option("select[name='art-der-krise']", value="psychische-krise")
+        page.click("button:has-text('Speichern')")
+        page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
+        detail_url = page.url
+        event_pk = re.search(r"/events/([0-9a-f-]+)/$", detail_url).group(1)
+
+        # Staff darf das Event sehen (DocType ist ELEVATED, Staff-Rolle erlaubt das),
+        # aber das HIGH-Feld muss aus dem DOM raus sein.
+        response = staff_page.goto(f"{base_url}/events/{event_pk}/")
+        assert response is not None and response.status == 200, (
+            f"Staff darf das ELEVATED-Event sehen, bekomme {response.status if response else 'None'}."
+        )
+        body = staff_page.content()
+        assert secret_marker not in body, (
+            f"HIGH-Field-Wert ({secret_marker!r}) darf im Staff-Detail NICHT auftauchen — "
+            f"field_sensitivity-Filter greift nicht."
+        )
