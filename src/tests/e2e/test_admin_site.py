@@ -1,7 +1,9 @@
-"""E2E-Smoke-Tests fuer Custom AdminSite (Refs #785).
+"""E2E-Smoke-Tests fuer Custom AdminSite (Refs #785, Refs #992).
 
 Abgeleitet aus manueller Playwright-Verifikation 2026-05-21 auf E2E-Server
-Port 8844. Wait-Strategie: wait_for_url(), nie networkidle.
+Port 8844. Wait-Strategie: wait_for_load_state("domcontentloaded") +
+Element-Anker; nie networkidle, nie wait_for_url() mit kurzem Timeout
+(racet unter playwright 1.60 und Worker-Last).
 
 Beobachtetes Verhalten:
 - super_admin/facility_admin -> /admin-mgmt/ -> /sudo/?next=/admin-mgmt/login/?next=/admin-mgmt/
@@ -19,12 +21,13 @@ pytestmark = pytest.mark.e2e
 
 
 def _login(page: Page, base_url: str, username: str, password: str = "anlaufstelle2026") -> None:
-    """Login via /login/-Form. Wartet, bis Login-Page verlassen ist."""
+    """Login via /login/-Form. Wartet auf Logout-Button als Login-Anker."""
     page.goto(f"{base_url}/login/")
     page.locator("input[name='username']").fill(username)
     page.locator("input[name='password']").fill(password)
     page.get_by_role("button", name="Anmelden").click()
-    page.wait_for_url(lambda url: "/login/" not in url, timeout=5000)
+    page.wait_for_load_state("domcontentloaded")
+    page.get_by_role("button", name="Abmelden").first.wait_for(timeout=30_000)
 
 
 def _do_sudo(page: Page, password: str = "anlaufstelle2026") -> None:
@@ -38,12 +41,14 @@ def test_superadmin_accesses_admin_via_sudo(page: Page, base_url: str) -> None:
     _login(page, base_url, "superadmin")
 
     page.goto(f"{base_url}/admin-mgmt/")
-    # Erwartet: Redirect-Chain endet auf /sudo/ (mit verschachteltem next).
-    page.wait_for_url(lambda url: "/sudo/" in url, timeout=5000)
+    page.wait_for_load_state("domcontentloaded")
+    # Sudo-Form: Password-Input + Bestaetigen-Button als Anker.
+    page.locator("input[name='password']").wait_for(timeout=30_000)
 
     _do_sudo(page)
-    # Nach Sudo: zurueck auf /admin-mgmt/.
-    page.wait_for_url(lambda url: url.endswith("/admin-mgmt/"), timeout=5000)
+    # Nach Sudo: zurueck auf /admin-mgmt/ (URL-Anker, 30s gegen Worker-Last).
+    page.wait_for_url(lambda url: url.rstrip("/").endswith("/admin-mgmt"), timeout=30_000)
+    page.wait_for_load_state("domcontentloaded")
     assert "Anlaufstelle" in page.title()
 
 
@@ -52,10 +57,12 @@ def test_facility_admin_accesses_admin_via_sudo(page: Page, base_url: str) -> No
     _login(page, base_url, "admin")
 
     page.goto(f"{base_url}/admin-mgmt/")
-    page.wait_for_url(lambda url: "/sudo/" in url, timeout=5000)
+    page.wait_for_load_state("domcontentloaded")
+    page.locator("input[name='password']").wait_for(timeout=30_000)
 
     _do_sudo(page)
-    page.wait_for_url(lambda url: url.endswith("/admin-mgmt/"), timeout=5000)
+    page.wait_for_url(lambda url: url.rstrip("/").endswith("/admin-mgmt"), timeout=30_000)
+    page.wait_for_load_state("domcontentloaded")
 
 
 def test_lead_blocked_from_admin(page: Page, base_url: str) -> None:
@@ -63,7 +70,10 @@ def test_lead_blocked_from_admin(page: Page, base_url: str) -> None:
     _login(page, base_url, "thomas")
 
     page.goto(f"{base_url}/admin-mgmt/")
-    page.wait_for_url(lambda url: "/admin-mgmt/login/" in url, timeout=5000)
+    page.wait_for_load_state("domcontentloaded")
+    # AdminSite-Login-Form als Anker (Rollen-Block landet hier statt /sudo/).
+    page.locator("input[name='username']").wait_for(timeout=30_000)
+    assert "/admin-mgmt/login/" in page.url
 
 
 def test_staff_blocked_from_admin(page: Page, base_url: str) -> None:
@@ -71,7 +81,9 @@ def test_staff_blocked_from_admin(page: Page, base_url: str) -> None:
     _login(page, base_url, "miriam")
 
     page.goto(f"{base_url}/admin-mgmt/")
-    page.wait_for_url(lambda url: "/admin-mgmt/login/" in url, timeout=5000)
+    page.wait_for_load_state("domcontentloaded")
+    page.locator("input[name='username']").wait_for(timeout=30_000)
+    assert "/admin-mgmt/login/" in page.url
 
 
 def test_assistant_blocked_from_admin(page: Page, base_url: str) -> None:
@@ -79,4 +91,6 @@ def test_assistant_blocked_from_admin(page: Page, base_url: str) -> None:
     _login(page, base_url, "lena")
 
     page.goto(f"{base_url}/admin-mgmt/")
-    page.wait_for_url(lambda url: "/admin-mgmt/login/" in url, timeout=5000)
+    page.wait_for_load_state("domcontentloaded")
+    page.locator("input[name='username']").wait_for(timeout=30_000)
+    assert "/admin-mgmt/login/" in page.url
