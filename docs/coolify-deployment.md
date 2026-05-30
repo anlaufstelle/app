@@ -133,7 +133,7 @@ und Edge-Versionen erfüllen das).
 
 **Admins sollten Mitarbeiter vor Rollout auf drei Punkte hinweisen:**
 
-1. **Vor Offline-Einsatz Klientel-Cache füllen** — Onboarding-Schritt am Arbeitsplatz,
+1. **Vor Offline-Einsatz Personen-Cache füllen** — Onboarding-Schritt am Arbeitsplatz,
  damit die benötigten Datensätze lokal verschlüsselt verfügbar sind.
 2. **Nach Rückkehr synchronisieren, bevor der Logout erfolgt** — sonst bleiben
  Änderungen nur lokal liegen und gehen beim Cache-Verlust verloren.
