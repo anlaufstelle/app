@@ -1,7 +1,8 @@
-"""E2E-Smoke-Tests fuer Externe Berichte (Refs #921).
+"""E2E-Smoke-Tests fuer Externe Berichte (Refs #921, gehärtet Refs #992).
 
 Abgeleitet aus manueller Playwright-Verifikation 2026-05-21 auf E2E-Server
-Port 8844. Wait-Strategie: wait_for_url(), nie networkidle.
+Port 8844. Wait-Strategie: domcontentloaded + Anchor-First (locator.wait_for),
+nie networkidle, nie wait_for_url mit kurzem Timeout.
 
 Beobachtetes Verhalten:
 - lead (thomas) -> HTML-Bericht 200 mit Datenschutzprofil-Block, K-Anon=5,
@@ -19,12 +20,14 @@ pytestmark = pytest.mark.e2e
 
 
 def _login(page: Page, base_url: str, username: str, password: str = "anlaufstelle2026") -> None:
-    """Login via /login/-Form."""
+    """Login via /login/-Form. Wartet auf Navigations-Abmelden-Button als Login-Anker."""
     page.goto(f"{base_url}/login/")
     page.locator("input[name='username']").fill(username)
     page.locator("input[name='password']").fill(password)
     page.get_by_role("button", name="Anmelden").click()
-    page.wait_for_url(lambda url: "/login/" not in url, timeout=5000)
+    page.wait_for_load_state("domcontentloaded")
+    # Abmelden-Button in Desktop-Navigation erscheint nur nach erfolgreichem Login.
+    page.get_by_role("button", name="Abmelden").first.wait_for(timeout=30_000)
 
 
 def test_lead_can_view_external_report_html(page: Page, base_url: str) -> None:
@@ -32,11 +35,12 @@ def test_lead_can_view_external_report_html(page: Page, base_url: str) -> None:
     _login(page, base_url, "thomas")
 
     page.goto(f"{base_url}/statistics/external/")
-    page.wait_for_url(lambda url: "/statistics/external/" in url, timeout=5000)
+    page.wait_for_load_state("domcontentloaded")
 
-    # Page-Title und Datenschutzprofil-Heading (H2) sind sichtbar:
-    assert "Externer Bericht" in page.title()
+    # Datenschutzprofil-Heading (H2) als Anker — danach Title-Assertion.
     heading = page.get_by_role("heading", name="Datenschutzprofil", exact=True)
+    heading.wait_for(timeout=30_000)
+    assert "Externer Bericht" in page.title()
     assert heading.is_visible()
 
 
@@ -45,6 +49,7 @@ def test_external_report_json_endpoint(page: Page, base_url: str) -> None:
     _login(page, base_url, "thomas")
 
     page.goto(f"{base_url}/statistics/external/?format=json")
+    page.wait_for_load_state("domcontentloaded")
     body_text = page.evaluate("() => document.body.innerText")
 
     # Wichtige Strukturen muessen drin sein:
@@ -60,5 +65,6 @@ def test_staff_blocked_from_external_report(page: Page, base_url: str) -> None:
     _login(page, base_url, "miriam")
 
     page.goto(f"{base_url}/statistics/external/")
+    page.wait_for_load_state("domcontentloaded")
     # Erwartet: 403-Page mit "Zugriff verweigert"-Title.
     assert "403" in page.title() or "verweigert" in page.title().lower()
