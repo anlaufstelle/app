@@ -202,7 +202,7 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 Auf `dev.anlaufstelle.app` laufen die Jobs **nicht** per Host-Crontab, sondern als
 systemd-Timer, die [`deploy/install-timers.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/install-timers.sh)
 installiert — aufgerufen bei **jedem** Deploy durch [`deploy/deploy-dev.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/deploy-dev.sh)
-(idempotent). Bewusst kein Compose-Sidecar (, siehe #794).
+(idempotent). Bewusst kein Compose-Sidecar (geplantes One-Command-Startup, siehe #794).
 
 > **Hinweis (Refs #980):** Frueher installierte `bootstrap.sh` die Timer inline. Da `bootstrap.sh` nur beim Erst-Provisioning laeuft, kamen nachtraeglich ergaenzte Timer nie auf den laufenden Host (Backup-Cron blieb aus). Die Installation liegt jetzt in `install-timers.sh` und laeuft bei jedem `deploy-dev.sh`.
 
@@ -789,8 +789,8 @@ Job CVEs, folgendes Vorgehen:
 Der `audit`-Job erzeugt zusätzlich eine SBOM im CycloneDX-JSON-Format
 (`sbom.json`) und lädt sie als Workflow-Artefakt hoch. Aufbewahrung: 90 Tage.
 
-Die SBOM wird für Compliance-Anforderungen benötigt (-Förderung,
-öffentliche Beschaffung, Lieferanten-Audits) und listet alle direkten und
+Die SBOM wird für Compliance-Anforderungen benötigt (öffentliche
+Förderung, öffentliche Beschaffung, Lieferanten-Audits) und listet alle direkten und
 transitiven Python-Dependencies mit Versionen, Lizenzen und CVE-Status zum
 Build-Zeitpunkt.
 

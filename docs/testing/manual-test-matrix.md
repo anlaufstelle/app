@@ -6143,7 +6143,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 ### SETUP — Einrichtungs-/Konfigurationsassistent
 
-> **Forward-looking Bereich (Refs #908).** Feature wird in #917 implementiert und ist aktuell **-blocked** (M0 Custom Admin UI + M2 Config-Loader). Cases werden mit dem Feature ergänzt. Vorgesehenes Schema gemäß Codex-Audit §4.5:
+> **Forward-looking Bereich (Refs #908).** Feature wird in #917 implementiert und ist aktuell **roadmap-blocked** (geplante Custom-Admin-UI + Config-Loader). Cases werden mit dem Feature ergänzt. Vorgesehenes Schema gemäß Codex-Audit §4.5:
 >
 > - `ENT-SETUP-01` — Neue Facility per Assistent vollständig anlegen (End-to-End ohne Shell)
 > - `ENT-SETUP-02` — Dokumentationsbibliothek auswählen (Template-Übernahme und Anpassung)
@@ -6283,7 +6283,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 ### A11Y — Accessibility (WCAG-Stichproben)
 
-> **🔒:** Die A11Y-TCs `ENT-A11Y-01..08` sind gesperrt durch [-Milestone M3](https://github.com/anlaufstelle/app/issues/470) (systematisches WCAG 2.1 AA mit axe-core / Pa11y / Screen-Reader-Tests). Die Cases bleiben hier **bewusst als Stichproben-Spezifikation dokumentiert** — sie sind der Startpunkt für die spätere axe-core-Integration und die systematischen Audits, die im M3 implementiert werden. Bis dahin laufen sie als manuelle Smoke-Tests vor Releases (siehe [`release-test-profiles.md`](release-test-profiles.md) Sektion KEEP-MANUAL).
+> **🔒 WCAG-Audit-Pending:** Die A11Y-TCs `ENT-A11Y-01..08` sind gesperrt durch die [geplante WCAG-2.1-AA-Audit-Initiative](https://github.com/anlaufstelle/app/issues/470) (systematisches WCAG 2.1 AA mit axe-core / Pa11y / Screen-Reader-Tests). Die Cases bleiben hier **bewusst als Stichproben-Spezifikation dokumentiert** — sie sind der Startpunkt für die spätere axe-core-Integration und die systematischen Audits. Bis dahin laufen sie als manuelle Smoke-Tests vor Releases (siehe [`release-test-profiles.md`](release-test-profiles.md) Sektion KEEP-MANUAL).
 >
 > **Bereich (Refs #912).** Manuelle Stichproben — **kein** systematischer WCAG 2.1 AA-Audit, kein axe-core / Pa11y. Ziel: Regressionen in häufig genutzten Flows erkennen, nicht Compliance-Zertifizierung.
 

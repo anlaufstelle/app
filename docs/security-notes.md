@@ -87,7 +87,7 @@ Wer kann von der CSP-Lockerung profitieren?
 
 - `django-unfold` liefert upstream einen `@alpinejs/csp`-kompatiblen Build (Wartungs-Tax fällt weg)
 - Externer Audit fordert „strict CSP überall" als verbindliches Akzeptanzkriterium
-- Admin-UI-Surface wächst signifikant (z.B. Custom Admin) — dann lohnt sich der Override-Pfad ohnehin
+- Admin-UI-Surface wächst signifikant (z.B. geplante Custom-Admin-UI) — dann lohnt sich der Override-Pfad ohnehin
 - Architektur-Tests, die die XSS-Vorbedingungen verhindern (`|safe`, `mark_safe`, Inline-`<script>`), würden für Admin-Templates aufgeweicht
 
 ### Verifikation
@@ -249,7 +249,7 @@ Am 11. Mai 2026 veröffentlichte ein Angreifer **84 bösartige Versionen** über
 | [`requirements.txt`](../requirements.txt) / [`requirements-dev.txt`](../requirements-dev.txt) | Django-/Playwright-Stack | keine |
 | `.github/workflows/*` | kein `pull_request_target`, kein `id-token: write` | nicht ausnutzbar |
 
-Trotzdem sind die folgenden drei Härtungen als Defense-in-Depth umgesetzt — sie greifen, sobald das Repo öffentlich wird (-Roadmap, Demo-Instanz).
+Trotzdem sind die folgenden drei Härtungen als Defense-in-Depth umgesetzt — sie greifen, sobald das Repo öffentlich wird (geplante Demo-Instanz).
 
 ### Umgesetzt: Minimal-`permissions:`-Blocks
 
