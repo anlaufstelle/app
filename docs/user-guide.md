@@ -9,7 +9,7 @@ Dieses Handbuch richtet sich an Fachkräfte, Leitungen und Assistenzen in Kontak
 1. [Login und Passwort](#1-login-und-passwort)
 2. [Startseite – Zeitstrom](#2-startseite--zeitstrom)
 3. [Kontakt dokumentieren (Event erstellen)](#3-kontakt-dokumentieren-event-erstellen)
-   - [Dateien-Übersicht](#3a-dateien-übersicht)
+ - [Dateien-Übersicht](#3a-dateien-übersicht)
 4. [Personen verwalten](#4-personen-verwalten)
 5. [Hinweise und Aufgaben (WorkItems)](#5-hinweise-und-aufgaben-workitems)
 6. [Suche](#6-suche)
@@ -54,11 +54,11 @@ Die Anlaufstelle unterstützt zeitbasierte Einmalcodes (TOTP) als zweiten Faktor
 1. Oben rechts auf Ihren Namen → **Zwei-Faktor-Authentifizierung** (URL: `/mfa/settings/`).
 2. **2FA einrichten** klicken → QR-Code wird angezeigt.
 3. Eine Authenticator-App installieren und den QR-Code scannen. Getestete Apps:
-   - **Google Authenticator** (Android/iOS)
-   - **Microsoft Authenticator** (Android/iOS)
-   - **Authy** (Android/iOS/Desktop)
-   - **FreeOTP / FreeOTP+** (Android, Open Source)
-   - **1Password**, **Bitwarden**, **Proton Pass** (als integrierter Authenticator)
+ - **Google Authenticator** (Android/iOS)
+ - **Microsoft Authenticator** (Android/iOS)
+ - **Authy** (Android/iOS/Desktop)
+ - **FreeOTP / FreeOTP+** (Android, Open Source)
+ - **1Password**, **Bitwarden**, **Proton Pass** (als integrierter Authenticator)
 4. Den 6-stelligen Code aus der App eingeben und **Bestätigen & aktivieren** klicken.
 
 > **Tipp:** Falls der QR-Code nicht scannbar ist, tippen Sie auf **Secret manuell eingeben** und übertragen die Zeichenkette in die App (Feld „Secret" / „Schlüssel" — Base32, ohne Leerzeichen). Wählen Sie in der App den Typ **TOTP / zeitbasiert**.
@@ -139,9 +139,9 @@ Ein **Event** ist ein einzelner dokumentierter Kontakt – z. B. ein Beratungsge
 3. **Felder ausfüllen:** Nach der Typauswahl werden die zugehörigen Eingabefelder geladen. Füllen Sie alle relevanten Felder aus.
 4. **Zeitpunkt:** Das Feld „Zeitpunkt" ist automatisch auf die aktuelle Uhrzeit gesetzt. Sie können es anpassen, wenn Sie einen Kontakt nachträglich erfassen.
 5. **Person zuordnen (optional):**
-   - Für einen **anonymen Kontakt** (ohne Pseudonym): Aktivieren Sie die Option „Anonym". Es wird keine Person verknüpft.
-   - Für eine **Person mit Pseudonym**: Beginnen Sie im Personen-Feld mit der Eingabe des Pseudonyms. Es erscheint eine Vorschlagsliste – wählen Sie die passende Person aus.
-   - Wenn die Person noch nicht erfasst ist, legen Sie sie zuerst unter **Personen** an (siehe [Abschnitt 4](#4-personen-verwalten)).
+ - Für einen **anonymen Kontakt** (ohne Pseudonym): Aktivieren Sie die Option „Anonym". Es wird keine Person verknüpft.
+ - Für eine **Person mit Pseudonym**: Beginnen Sie im Personen-Feld mit der Eingabe des Pseudonyms. Es erscheint eine Vorschlagsliste – wählen Sie die passende Person aus.
+ - Wenn die Person noch nicht erfasst ist, legen Sie sie zuerst unter **Personen** an (siehe [Abschnitt 4](#4-personen-verwalten)).
 6. Klicken Sie auf **Speichern**.
 
 Sie werden zur Detailansicht des neu erstellten Eintrags weitergeleitet. Eine Erfolgsmeldung bestätigt die Speicherung.
@@ -256,10 +256,10 @@ Jede Person hat eine **Kontaktstufe**:
 
 1. Navigieren Sie zu **Personen** (`/clients/`) und klicken Sie auf **Neue Person** (oder direkt zu `/clients/new/`).
 2. Füllen Sie das Formular aus:
-   - **Pseudonym:** Einzigartiger Name innerhalb Ihrer Einrichtung (z. B. ein selbstgewählter Spitzname). Das Pseudonym darf innerhalb einer Einrichtung nur einmal vorkommen.
-   - **Kontaktstufe:** Wählen Sie „Identifiziert" oder „Qualifiziert".
-   - **Altersgruppe:** „Unter 18", „18–26", „27+" oder „Unbekannt".
-   - **Notizen:** Interne Anmerkungen zur Person (optional).
+ - **Pseudonym:** Einzigartiger Name innerhalb Ihrer Einrichtung (z. B. ein selbstgewählter Spitzname). Das Pseudonym darf innerhalb einer Einrichtung nur einmal vorkommen.
+ - **Kontaktstufe:** Wählen Sie „Identifiziert" oder „Qualifiziert".
+ - **Altersgruppe:** „Unter 18", „18–26", „27+" oder „Unbekannt".
+ - **Notizen:** Interne Anmerkungen zur Person (optional).
 3. Klicken Sie auf **Speichern**.
 
 ### Personen suchen
@@ -335,12 +335,12 @@ Die Liste aktualisiert sich ohne Seitenneuladung.
 
 1. Klicken Sie in der Inbox auf **Neue Aufgabe** (oder navigieren Sie zu `/workitems/new/`).
 2. Füllen Sie das Formular aus:
-   - **Typ:** „Aufgabe" oder „Hinweis"
-   - **Titel:** Kurze, prägnante Beschreibung
-   - **Beschreibung:** Ausführlichere Details (optional)
-   - **Priorität:** Normal, Wichtig oder Dringend
-   - **Zugewiesen an:** Eine bestimmte Person aus Ihrer Einrichtung (optional – leer lassen, wenn die Aufgabe für alle gilt)
-   - **Person:** Falls die Aufgabe eine bestimmte Person betrifft (optional)
+ - **Typ:** „Aufgabe" oder „Hinweis"
+ - **Titel:** Kurze, prägnante Beschreibung
+ - **Beschreibung:** Ausführlichere Details (optional)
+ - **Priorität:** Normal, Wichtig oder Dringend
+ - **Zugewiesen an:** Eine bestimmte Person aus Ihrer Einrichtung (optional – leer lassen, wenn die Aufgabe für alle gilt)
+ - **Person:** Falls die Aufgabe eine bestimmte Person betrifft (optional)
 3. Klicken Sie auf **Speichern**.
 
 > **Tipp:** Wenn Sie von der Detailseite der Person aus eine neue Aufgabe erstellen, ist die Person bereits vorausgefüllt.
@@ -431,10 +431,10 @@ Technisch basiert das auf einer Trigramm-Ähnlichkeit der PostgreSQL-Datenbank (
 
 1. Navigieren Sie zu **Statistik** (`/statistics/`).
 2. Wählen Sie einen Zeitraum:
-   - **Letzter Monat** (Standard)
-   - **Letztes Quartal** (90 Tage)
-   - **Letztes Halbjahr** (182 Tage)
-   - **Benutzerdefiniert:** Geben Sie Start- und Enddatum manuell ein.
+ - **Letzter Monat** (Standard)
+ - **Letztes Quartal** (90 Tage)
+ - **Letztes Halbjahr** (182 Tage)
+ - **Benutzerdefiniert:** Geben Sie Start- und Enddatum manuell ein.
 3. Das Dashboard aktualisiert sich automatisch und zeigt aggregierte Kennzahlen zu Kontaktzahlen, Dokumentationstypen und Personengruppen.
 
 ### Jahresnavigation
@@ -636,10 +636,10 @@ Ein Fall ist eine **Klammer** um thematisch zusammengehörige Kontakte. Das Fall
 
 1. Klicken Sie auf der Fallliste auf **Neuer Fall** (oder navigieren Sie zu `/cases/new/`).
 2. Füllen Sie das Formular aus:
-   - **Titel** (Pflichtfeld): Eine kurze Bezeichnung für den Fall (z. B. „Wohnungssuche", „Suchtberatung").
-   - **Person:** Beginnen Sie mit der Eingabe des Pseudonyms – es erscheint eine Vorschlagsliste. Wählen Sie die passende Person aus. Ein Fall kann auch ohne Person erstellt werden.
-   - **Beschreibung:** Ausführlichere Informationen zum Fall (optional).
-   - **Fallverantwortlich:** Wählen Sie die zuständige Person aus dem Dropdown (optional). Nur Fachkräfte, Leitungen und Administratoren Ihrer Einrichtung stehen zur Auswahl.
+ - **Titel** (Pflichtfeld): Eine kurze Bezeichnung für den Fall (z. B. „Wohnungssuche", „Suchtberatung").
+ - **Person:** Beginnen Sie mit der Eingabe des Pseudonyms – es erscheint eine Vorschlagsliste. Wählen Sie die passende Person aus. Ein Fall kann auch ohne Person erstellt werden.
+ - **Beschreibung:** Ausführlichere Informationen zum Fall (optional).
+ - **Fallverantwortlich:** Wählen Sie die zuständige Person aus dem Dropdown (optional). Nur Fachkräfte, Leitungen und Administratoren Ihrer Einrichtung stehen zur Auswahl.
 3. Klicken Sie auf **Fall erstellen**.
 
 Sie werden zur Detailseite des neuen Falls weitergeleitet.
@@ -708,10 +708,10 @@ Eine **Episode** ist eine abgrenzbare Phase innerhalb eines Falls. Wenn z. B. ei
 
 1. Klicken Sie auf der Fall-Detailseite (rechte Spalte) auf **Neue Episode**.
 2. Füllen Sie das Formular aus:
-   - **Titel** (Pflichtfeld): Bezeichnung der Phase (z. B. „Krisenepisode März 2026").
-   - **Beginn** (Pflichtfeld): Startdatum der Episode.
-   - **Beschreibung:** Zusätzliche Details (optional).
-   - **Ende:** Enddatum (optional – leer lassen, wenn die Episode noch läuft).
+ - **Titel** (Pflichtfeld): Bezeichnung der Phase (z. B. „Krisenepisode März 2026").
+ - **Beginn** (Pflichtfeld): Startdatum der Episode.
+ - **Beschreibung:** Zusätzliche Details (optional).
+ - **Ende:** Enddatum (optional – leer lassen, wenn die Episode noch läuft).
 3. Klicken Sie auf **Speichern**.
 
 > **Hinweis:** Episoden können nur für **offene** Fälle erstellt werden.

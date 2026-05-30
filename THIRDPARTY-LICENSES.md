@@ -7,7 +7,8 @@ license-allowlist policy and how to inspect the active inventory.
 ## Allowlist Policy
 
 CI enforces the policy via [`scripts/check_licenses.py`](scripts/check_licenses.py)
-(wired into [`.github/workflows/lint.yml`](.github/workflows/lint.yml) —). A build fails if
+(wired into [`.github/workflows/lint.yml`](.github/workflows/lint.yml) — Refs
+#839). A build fails if
 any installed package declares a license that is neither on the global
 allowlist nor on the per-package override list.
 
@@ -29,13 +30,13 @@ allowlist nor on the per-package override list.
 unusual but whose actual upstream license has been verified manually:
 
 - `pyphen` — tri-licensed GPLv2+ / LGPLv2+ / MPL 1.1; we use the LGPLv2+
-  branch. ([source](https://github.com/Kozea/Pyphen/blob/master/LICENSE))
+ branch. ([source](https://github.com/Kozea/Pyphen/blob/master/LICENSE))
 - `qrcode` — BSD-3-Clause; the `Other/Proprietary License` suffix in the
-  PyPI metadata is an artefact.
-  ([source](https://github.com/lincolnloop/python-qrcode))
+ PyPI metadata is an artefact.
+ ([source](https://github.com/lincolnloop/python-qrcode))
 - `text-unidecode` — dual GPLv2+ / Artistic; the GPLv2+ branch is
-  AGPLv3-compatible.
-  ([source](https://github.com/kmike/text-unidecode/blob/master/LICENSE))
+ AGPLv3-compatible.
+ ([source](https://github.com/kmike/text-unidecode/blob/master/LICENSE))
 
 Adding a license to the allowlist or a package to the override list requires
 linking the upstream license text in the source comment in

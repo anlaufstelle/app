@@ -8,21 +8,21 @@ Dieses Handbuch richtet sich an IT-Administratoren sozialer Einrichtungen, die A
 
 1. [Installation (Docker Compose)](#1-installation-docker-compose)
 2. [Erstkonfiguration](#2-erstkonfiguration)
-   - 2.5 [Dokumentationstypen konfigurieren](#25-dokumentationstypen-konfigurieren)
-   - 2.6 [Auswahloptionen verwalten](#26-auswahloptionen-verwalten-feldvorlagen)
-   - 2.6b [Fuzzy-Suche (pg_trgm)](#26b-fuzzy-suche-pg_trgm)
-   - 2.7 [Zwei-Faktor-Authentifizierung (2FA)](#27-zwei-faktor-authentifizierung-2fa)
-   - 2.8 [Schnell-Vorlagen (Quick-Templates)](#28-schnell-vorlagen-quick-templates)
-   - 2.9 [Encrypted File Vault & Virus-Scanning](#29-encrypted-file-vault--virus-scanning)
-   - 2.10 [Offline-Modus & Streetwork (M6A)](#210-offline-modus--streetwork-m6a)
+ - 2.5 [Dokumentationstypen konfigurieren](#25-dokumentationstypen-konfigurieren)
+ - 2.6 [Auswahloptionen verwalten](#26-auswahloptionen-verwalten-feldvorlagen)
+ - 2.6b [Fuzzy-Suche (pg_trgm)](#26b-fuzzy-suche-pg_trgm)
+ - 2.7 [Zwei-Faktor-Authentifizierung (2FA)](#27-zwei-faktor-authentifizierung-2fa)
+ - 2.8 [Schnell-Vorlagen (Quick-Templates)](#28-schnell-vorlagen-quick-templates)
+ - 2.9 [Encrypted File Vault & Virus-Scanning](#29-encrypted-file-vault--virus-scanning)
+ - 2.10 [Offline-Modus & Streetwork (M6A)](#210-offline-modus--streetwork-m6a)
 3. [Backup und Wiederherstellung](#3-backup-und-wiederherstellung)
 4. [Updates](#4-updates)
 5. [Monitoring](#5-monitoring)
-   - 5.4 [CSP-Debugging](#54-csp-debugging)
+ - 5.4 [CSP-Debugging](#54-csp-debugging)
 6. [Troubleshooting](#6-troubleshooting)
 7. [DSGVO-Hinweise](#7-dsgvo-hinweise)
-   - 7.8 [Optimistic Locking](#78-optimistic-locking)
-   - 7.9 [Row Level Security (RLS)](#79-row-level-security-rls)
+ - 7.8 [Optimistic Locking](#78-optimistic-locking)
+ - 7.9 [Row Level Security (RLS)](#79-row-level-security-rls)
 8. [Statistik-Snapshots & Materialized View](#8-statistik-snapshots--materialized-view)
 
 ---
@@ -57,7 +57,7 @@ curl -O https://raw.githubusercontent.com/anlaufstelle/app/main/Caddyfile
 Erstellen Sie eine `.env`-Datei im selben Verzeichnis wie `docker-compose.prod.yml`:
 
 ```bash
-cp.env.example.env # falls vorhanden, sonst manuell anlegen
+cp .env.example .env   # falls vorhanden, sonst manuell anlegen
 ```
 
 Minimale `.env` für den Produktionsbetrieb:
@@ -104,7 +104,7 @@ Alle ENV-Variablen, die die Anwendung zur Laufzeit auswertet (siehe [`src/anlauf
 | Name | Default | Beschreibung |
 |---|---|---|
 | `DJANGO_SECRET_KEY` | — (Pflicht in prod) | Signierung von Sessions/CSRF. Mit `secrets.token_urlsafe(50)` generieren. |
-| `DJANGO_SETTINGS_MODULE` | — | In Produktion `anlaufstelle.settings.prod`. |
+| `DJANGO_SETTINGS_MODULE` || In Produktion `anlaufstelle.settings.prod`. |
 | `ALLOWED_HOSTS` | — (Pflicht in prod) | Komma-separierte Hostnamen, z. B. `anlaufstelle.example.de`. |
 | `TRUSTED_PROXY_HOPS` | `1` | Anzahl vertrauenswürdiger Proxies vor der App (X-Forwarded-For-Auswertung). `0` = kein Proxy, `1` = nur Caddy, `2` = CDN + Caddy. |
 
@@ -122,10 +122,10 @@ Alle ENV-Variablen, die die Anwendung zur Laufzeit auswertet (siehe [`src/anlauf
 
 | Name | Default | Beschreibung |
 |---|---|---|
-| `ENCRYPTION_KEYS` | — | Komma-separierte Liste von Fernet-Keys. Der **erste** Key ist Write-Key (neue Daten werden damit verschlüsselt), alle weiteren sind Read-Only (Decrypt-Fallback für Rotation). |
-| `ENCRYPTION_KEY` | — | Legacy-Single-Key (Einzelkey). Mindestens eine der beiden Variablen muss in Produktion gesetzt sein, sonst verweigert die App den Start. |
+| `ENCRYPTION_KEYS` || Komma-separierte Liste von Fernet-Keys. Der **erste** Key ist Write-Key (neue Daten werden damit verschlüsselt), alle weiteren sind Read-Only (Decrypt-Fallback für Rotation). |
+| `ENCRYPTION_KEY` || Legacy-Single-Key (Einzelkey). Mindestens eine der beiden Variablen muss in Produktion gesetzt sein, sonst verweigert die App den Start. |
 
-**Virus-Scan (ClamAV)**
+**Virus-Scan (ClamAV, #524)**
 
 | Name | Default (prod) | Beschreibung |
 |---|---|---|
@@ -144,7 +144,7 @@ Alle ENV-Variablen, die die Anwendung zur Laufzeit auswertet (siehe [`src/anlauf
 
 | Name | Default | Beschreibung |
 |---|---|---|
-| `SENTRY_DSN` | — | Wenn gesetzt, wird Sentry initialisiert (PII wird **nicht** gesendet, `send_default_pii=False`). |
+| `SENTRY_DSN` || Wenn gesetzt, wird Sentry initialisiert (PII wird **nicht** gesendet, `send_default_pii=False`). |
 | `SENTRY_TRACES_SAMPLE_RATE` | `0.1` | Sample-Rate für Performance-Traces (0.0–1.0). |
 
 **E-Mail (SMTP, Produktion)**
@@ -153,8 +153,8 @@ Alle ENV-Variablen, die die Anwendung zur Laufzeit auswertet (siehe [`src/anlauf
 |---|---|---|
 | `EMAIL_HOST` | `localhost` | SMTP-Host für Password-Reset- und Invite-Mails. |
 | `EMAIL_PORT` | `587` | SMTP-Port. |
-| `EMAIL_HOST_USER` | — | SMTP-Benutzer. |
-| `EMAIL_HOST_PASSWORD` | — | SMTP-Passwort. |
+| `EMAIL_HOST_USER` || SMTP-Benutzer. |
+| `EMAIL_HOST_PASSWORD` || SMTP-Passwort. |
 | `EMAIL_USE_TLS` | `True` | STARTTLS aktivieren. |
 | `DEFAULT_FROM_EMAIL` | `noreply@anlaufstelle.app` | Absenderadresse. |
 
@@ -171,7 +171,7 @@ Die mitgelieferte `Caddyfile` übernimmt automatisch TLS-Zertifikate via Let's E
 ```
 {$DOMAIN} {
     reverse_proxy web:8000
-..
+    ...
 }
 ```
 
@@ -292,8 +292,8 @@ Im Admin unter **Core → Einstellungen** können Sie für jede Einrichtung konf
 
 | Feld | Standardwert | Beschreibung |
 |---|---|---|
-| Vollständiger Name | – | Wird in Berichten angezeigt |
-| Standard-Dokumentationstyp | – | Vorausgewählter Typ bei neuem Eintrag |
+| Vollständiger Name || Wird in Berichten angezeigt |
+| Standard-Dokumentationstyp || Vorausgewählter Typ bei neuem Eintrag |
 | Session-Timeout (Minuten) | 30 | Automatischer Logout nach Inaktivität |
 | Aufbewahrung anonym (Tage) | 90 | Löschfrist für anonyme Kontakte |
 | Aufbewahrung identifiziert (Tage) | 365 | Löschfrist für identifizierte Kontakte |
@@ -310,7 +310,7 @@ Im Admin unter **Core → Benutzer → Benutzer hinzufügen**:
 - **Rolle:** Eine der fünf Rollen (siehe unten)
 - **Einrichtung:** Zuweisung zu einer Einrichtung
 
-#### Token-Invite-Flow
+#### Token-Invite-Flow (Refs #528)
 
 Neue Konten werden **ohne** Klartext-Passwort angelegt. Stattdessen versendet die Anwendung eine **Einladungs-E-Mail** mit einem personalisierten Setup-Link an die hinterlegte E-Mail-Adresse. Der Link führt den neuen Nutzer auf das Standard-Password-Reset-Formular, wo er eigenhändig ein Passwort setzt.
 
@@ -411,7 +411,7 @@ Legt fest, welche Kontaktstufe eine Person mindestens haben muss, damit ein Erei
 
 Neben der Sensibilität des Dokumenttyps kann jedes einzelne Feld einer Feldvorlage eine **eigene** Sensibilitätsstufe erhalten (`FieldTemplate.sensitivity`). Effektiv gilt für die Sichtbarkeit des Feldes das **Maximum** aus Dokumenttyp- und Feld-Sensibilität — ein als `HIGH` markiertes Feld bleibt für Fachkräfte unsichtbar, auch wenn der Dokumenttyp selbst nur `NORMAL` ist.
 
-**Entkopplung Verschlüsselung ↔ Sichtbarkeit**: Die beiden Flags `is_encrypted` (Ruhe-Verschlüsselung des Werts in der Datenbank) und `sensitivity` (Sichtbarkeit im UI) sind **unabhängig** voneinander konfigurierbar:
+**Entkopplung Verschlüsselung ↔ Sichtbarkeit** (Refs #356): Die beiden Flags `is_encrypted` (Ruhe-Verschlüsselung des Werts in der Datenbank) und `sensitivity` (Sichtbarkeit im UI) sind **unabhängig** voneinander konfigurierbar:
 
 - Ein Feld kann verschlüsselt auf der Platte liegen, aber für `NORMAL`-Sensibilität im UI sichtbar sein (z. B. Kontaktdaten, die alle Rollen sehen dürfen, die aber nicht im Klartext gespeichert werden sollen).
 - Ein nicht-verschlüsseltes Feld kann trotzdem auf Leitung/Admin beschränkt werden (z. B. statistische Marker, die sensitiv sind, aber nicht verschlüsselt gespeichert werden müssen).
@@ -441,9 +441,9 @@ Im Feld **Default-Wert** einer Feldvorlage kann ein Vorgabewert hinterlegt werde
 | Ja/Nein | `true` oder `false` | `true` |
 | Auswahl | Slug einer aktiven Option | `beratung` |
 | Mehrfachauswahl | Komma-getrennte Liste aktiver Options-Slugs | `beratung, essen` |
-| Datei | nicht unterstützt | — |
+| Datei | nicht unterstützt ||
 
-Vorrangregel beim Neu-Anlegen: **Quick-Template > Default-Wert > leer**. Ungültige Werte werden in `FieldTemplate.clean()` beim Speichern im Admin abgelehnt.
+Vorrangregel beim Neu-Anlegen: **Quick-Template > Default-Wert > leer**. Ungültige Werte werden in `FieldTemplate.clean` beim Speichern im Admin abgelehnt.
 
 **Schema einer Option:**
 
@@ -499,7 +499,7 @@ Die PostgreSQL-Extension `pg_trgm` muss aktiviert sein. Beim Standard-Deployment
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 ```
 
-Referenzen:.
+Referenzen: #536, #581.
 
 ### 2.7 Zwei-Faktor-Authentifizierung (2FA)
 
@@ -524,7 +524,7 @@ Wenn eine Mitarbeiterin ihr Authenticator-Gerät verliert, muss ein Administrato
 2. Das Gerät des betroffenen Users auswählen und löschen.
 3. User informieren: nach dem nächsten Login wird automatisch auf `/mfa/setup/` umgeleitet (bei `is_mfa_enforced=True`) oder der User kann 2FA freiwillig neu einrichten.
 
-Seit v0.10.1 gibt es zusätzlich **Backup-Codes als zweiten Faktor** für genau diesen Recovery-Fall. Bei der 2FA-Einrichtung erhält der User 10 einmalig nutzbare Codes, die er ausgedruckt oder im Passwort-Manager hinterlegen sollte — am Login-2FA-Prompt kann er statt eines TOTP-Codes einen Backup-Code eingeben. Verbrauchte Codes werden invalidiert und im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Sind alle 10 Codes verbraucht oder verloren, bleibt der Admin-Reset oben der Fallback.
+Seit v0.10.1 gibt es zusätzlich **Backup-Codes als zweiten Faktor** für genau diesen Recovery-Fall (Refs #588). Bei der 2FA-Einrichtung erhält der User 10 einmalig nutzbare Codes, die er ausgedruckt oder im Passwort-Manager hinterlegen sollte — am Login-2FA-Prompt kann er statt eines TOTP-Codes einen Backup-Code eingeben. Verbrauchte Codes werden invalidiert und im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Sind alle 10 Codes verbraucht oder verloren, bleibt der Admin-Reset oben der Fallback.
 
 #### Account-Lockout
 
@@ -603,19 +603,19 @@ Schnell-Vorlagen werden pro User über [`user_can_see_document_type`](https://gi
 - Modell: [`src/core/models/quick_template.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/quick_template.py)
 - Service: [`src/core/services/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/quick_templates.py)
 - View-Integration: [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) (`EventCreateView`)
-- Tracking-Issue: 
+- Tracking-Issue: #494
 
 ### 2.9 Encrypted File Vault & Virus-Scanning
 
-Dateianhänge (Fotos, Scans, Dokumente) an Ereignissen werden in einem **verschlüsselten Vault** abgelegt: vor dem Schreiben in `MEDIA_ROOT` auf Viren geprüft und anschließend chunk-weise per **Fernet** (AES-128-CBC mit HMAC-SHA256, [`cryptography.fernet`](https://cryptography.io/en/latest/fernet/)) mit dem `ENCRYPTION_KEYS`-Schlüsselmaterial verschlüsselt. Implementierung: [`encrypt_file()` in `src/core/services/encryption.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/encryption.py).
+Dateianhänge (Fotos, Scans, Dokumente) an Ereignissen werden in einem **verschlüsselten Vault** abgelegt: vor dem Schreiben in `MEDIA_ROOT` auf Viren geprüft und anschließend chunk-weise per **Fernet** (AES-128-CBC mit HMAC-SHA256, [`cryptography.fernet`](https://cryptography.io/en/latest/fernet/)) mit dem `ENCRYPTION_KEYS`-Schlüsselmaterial verschlüsselt. Implementierung: [`encrypt_file` in `src/core/services/encryption.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/encryption.py). Refs #524.
 
 #### Upload-Flow
 
 1. Fachkraft wählt Datei im Event-Formular aus ([`src/core/forms/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/events.py)).
 2. Server prüft Dateityp und Größe (siehe `allowed_file_types` und `max_file_size_mb` in den Einrichtungseinstellungen — Default **10 MB**).
 3. **ClamAV-Scan** vor Verschlüsselung:
-   - Standard: fail-closed. Ist der Daemon nicht erreichbar (`CLAMAV_ENABLED=true`, aber kein TCP-Connect möglich), wird der Upload **abgelehnt**.
-   - Erkannter Virus → Upload wird verworfen, ein Audit-Log-Eintrag wird geschrieben.
+ - Standard: fail-closed. Ist der Daemon nicht erreichbar (`CLAMAV_ENABLED=true`, aber kein TCP-Connect möglich), wird der Upload **abgelehnt**.
+ - Erkannter Virus → Upload wird verworfen, ein Audit-Log-Eintrag wird geschrieben.
 4. Inhalt wird chunk-weise mit Fernet (MultiFernet) verschlüsselt (Write-Key = erster Eintrag aus `ENCRYPTION_KEYS`) und in `MEDIA_ROOT` gespeichert.
 5. Download erfolgt ausschließlich über die geschützte Django-View (kein direkter Webserver-Zugriff auf `MEDIA_ROOT`).
 
@@ -644,11 +644,11 @@ MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 
 #### Sichere Downloads (RFC 5987)
 
-Alle File-Downloads werden über den zentralen Helper [`safe_download_response`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/downloads.py) ausgeliefert. Der Helper setzt `Content-Disposition` mit RFC-5987-kodierten Dateinamen (Unicode-sicher, kein Reverse-Path-Traversal) und verhindert Browser-MIME-Sniffing.
+Alle File-Downloads werden über den zentralen Helper [`safe_download_response`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/downloads.py) ausgeliefert. Der Helper setzt `Content-Disposition` mit RF-kodierten Dateinamen (Unicode-sicher, kein Reverse-Path-Traversal) und verhindert Browser-MIME-Sniffing.
 
 ### 2.10 Offline-Modus & Streetwork (M6A)
 
-Für Außeneinsätze (z. B. Streetwork) bietet die Anlaufstelle einen **sicheren Offline-Modus** mit **client-seitiger** Ende-zu-Ende-Verschlüsselung aller auf dem Gerät zwischengespeicherten Daten.
+Für Außeneinsätze (z. B. Streetwork) bietet die Anlaufstelle einen **sicheren Offline-Modus** mit **client-seitiger** Ende-zu-Ende-Verschlüsselung aller auf dem Gerät zwischengespeicherten Daten. Refs #573, #576.
 
 #### Kryptographie-Design
 
@@ -876,9 +876,9 @@ Die Content-Security-Policy (CSP) wird **zentral in Django** über [`django-csp`
 
 **Inline-Skripte sind nicht erlaubt.** Alle JavaScript-Logik liegt in externen Dateien unter `src/static/js/`, eingebunden per `<script src=…>` oder über Nonce-Aware-Template-Tags.
 
-**`script-src` global ohne `'unsafe-eval'`.** Mit der Migration auf den `@alpinejs/csp`-Build (v0.10.2) ist `'unsafe-eval'` aus der globalen Policy entfernt. Alle Alpine-Komponenten sind als `Alpine.data()`-Komponenten in [`src/static/js/alpine-components.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/alpine-components.js) registriert; Architektur-Tests verbieten Inline-`x-data="{..}"` und komplexe Expressions (Ternaries, `||`/`&&`, Method-Calls, Object-Literale) in Alpine-/HTMX-Direktiven.
+**`script-src` global ohne `'unsafe-eval'`.** Mit der Migration auf den `@alpinejs/csp`-Build (v0.10.2) ist `'unsafe-eval'` aus der globalen Policy entfernt. Alle Alpine-Komponenten sind als `Alpine.data`-Komponenten in [`src/static/js/alpine-components.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/alpine-components.js) registriert; Architektur-Tests verbieten Inline-`x-data="{...}"` und komplexe Expressions (Ternaries, `||`/`&&`, Method-Calls, Object-Literale) in Alpine-/HTMX-Direktiven.
 
-**Ausnahme `/admin-mgmt/*` (Django-Admin):** django-unfold lädt einen eigenen Alpine-Build, der für die Cmd+K-Suche `new AsyncFunction()`-basierte Auswertung nutzt und damit ohne `'unsafe-eval'` nicht initialisiert. Die [`AdminCSPRelaxMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/) ergänzt `'unsafe-eval'` deshalb **per Request nur für Admin-Routen** — diese sind durch MFA-Gate und Rolle `facility_admin` (bzw. `super_admin`) zusätzlich geschützt. Außerhalb des Admins bleibt die strenge globale Policy aktiv.
+**Ausnahme `/admin-mgmt/*` (Django-Admin):** django-unfold lädt einen eigenen Alpine-Build, der für die Cmd+K-Suche `new AsyncFunction`-basierte Auswertung nutzt und damit ohne `'unsafe-eval'` nicht initialisiert. Die [`AdminCSPRelaxMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/) ergänzt `'unsafe-eval'` deshalb **per Request nur für Admin-Routen** — diese sind durch MFA-Gate und Rolle `facility_admin` (bzw. `super_admin`) zusätzlich geschützt. Außerhalb des Admins bleibt die strenge globale Policy aktiv.
 
 **Typische Fehlerbilder im Browser-Console:**
 
@@ -1058,7 +1058,7 @@ Jede Ausführung, die Datensätze löscht, wird automatisch im Audit-Log protoko
 
 #### Retention-Dashboard
 
-Unter [`/retention/`](https://github.com/anlaufstelle/app/blob/main/src/core/views/retention.py) steht ein **Retention-Dashboard** bereit, über das Leitung und Admin Löschvorschläge (generiert durch `enforce_retention`) effizient abarbeiten können.
+Unter [`/retention/`](https://github.com/anlaufstelle/app/blob/main/src/core/views/retention.py) steht ein **Retention-Dashboard** bereit, über das Leitung und Admin Löschvorschläge (generiert durch `enforce_retention`) effizient abarbeiten können. Refs #514, #515.
 
 | Bulk-Aktion | Wirkung |
 |---|---|
@@ -1074,7 +1074,7 @@ Legal Holds werden im Retention-Dashboard sowie im Django-Admin verwaltet (siehe
 
 #### K-Anonymisierung statt Hard-Delete
 
-Als Alternative zur Hart-Löschung kann pro Einrichtung die **K-Anonymisierung** aktiviert werden.
+Als Alternative zur Hart-Löschung kann pro Einrichtung die **K-Anonymisierung** aktiviert werden (Refs #535).
 
 | Feld in `Settings` | Default | Beschreibung |
 |---|---|---|
@@ -1129,7 +1129,7 @@ Für die Bearbeitung von Anfragen betroffener Personen stehen folgende administr
 
 ### 7.8 Optimistic Locking
 
-Zum Schutz vor **stillen Überschreibungen** bei parallelem Bearbeiten desselben Datensatzes (zwei Mitarbeitende haben den gleichen Client/Fall gleichzeitig offen und speichern nacheinander) setzt die Anlaufstelle **Optimistic Locking** auf Service-Ebene ein.
+Zum Schutz vor **stillen Überschreibungen** bei parallelem Bearbeiten desselben Datensatzes (zwei Mitarbeitende haben den gleichen Client/Fall gleichzeitig offen und speichern nacheinander) setzt die Anlaufstelle **Optimistic Locking** auf Service-Ebene ein. Refs #531.
 
 **Betroffene Modelle:** Client, Case, WorkItem, Settings, Event.
 
@@ -1138,7 +1138,7 @@ Zum Schutz vor **stillen Überschreibungen** bei parallelem Bearbeiten desselben
 - Jedes Formular rendert das aktuelle `updated_at` als Hidden-Field.
 - Beim Speichern prüft der Helper `check_version_conflict(instance, expected_updated_at)`, ob der Datensatz in der Zwischenzeit verändert wurde.
 - Bei Konflikt wird eine `ValidationError` geworfen; der View leitet den Nutzer zurück mit der Meldung:
-  > *„Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."*
+ > *„Der Datensatz wurde zwischenzeitlich bearbeitet. Bitte laden Sie die Seite neu."*
 
 **Administrative Hinweise:**
 - Es gibt keinen Admin-Schalter, um das Locking abzuschalten — der Schutz ist systemweit aktiv.
@@ -1146,13 +1146,13 @@ Zum Schutz vor **stillen Überschreibungen** bei parallelem Bearbeiten desselben
 
 ### 7.9 Row Level Security (RLS)
 
-Zusätzlich zum ORM-seitigen Facility-Scoping ist **PostgreSQL Row-Level-Security** auf **18 facility-scoped Tabellen** als **Defense-in-Depth** aktiviert. Ein fehlerhafter ORM-Query, der das Facility-Scoping vergisst, liefert dank RLS trotzdem keine fremden Daten.
+Zusätzlich zum ORM-seitigen Facility-Scoping ist **PostgreSQL Row-Level-Security** auf **18 facility-scoped Tabellen** als **Defense-in-Depth** aktiviert. Ein fehlerhafter ORM-Query, der das Facility-Scoping vergisst, liefert dank RLS trotzdem keine fremden Daten. Refs #542, #586.
 
 #### Funktionsweise
 
 - Die Middleware [`FacilityScopeMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/facility_scope.py) setzt pro Request die Postgres-Session-Variable `app.current_facility_id` via `SELECT set_config('app.current_facility_id', <id>, false)` (Session-Scope, nicht Transaction-Scope).
 - Die RLS-Policies (Migration [`0047_postgres_rls_setup`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0047_postgres_rls_setup.py)) filtern jede Zeile über `facility_id = current_setting('app.current_facility_id', true)`.
-- **Fail-closed:** Ist die Variable leer oder nicht gesetzt, liefert `current_setting(.., true)` NULL, der Vergleich schlägt fehl und es werden **keine Zeilen** zurückgegeben.
+- **Fail-closed:** Ist die Variable leer oder nicht gesetzt, liefert `current_setting(..., true)` NULL, der Vergleich schlägt fehl und es werden **keine Zeilen** zurückgegeben.
 - Die Middleware öffnet den DB-Cursor **nur für authentifizierte Requests**; anonyme Routen (Login, Health-Check, statische Dateien) bleiben unbeeinflusst.
 - Bei jedem Request wird der Wert frisch gesetzt (auch leer), damit Connection-Pooling keinen stehengebliebenen Wert aus einem früheren Request leakt.
 
@@ -1176,7 +1176,7 @@ Ohne gesetzte Variable liefern die geschützten Tabellen in `psql` sichtbar **ke
 
 Statistik-Auswertungen in der Anlaufstelle nutzen **zwei unterschiedliche Beschleunigungs-Ebenen**:
 
-1. **Materialized View** (`core_statistics_event_flat`) — aggregiert die aktuellen Event-Daten vor, damit die Statistik-Seite nicht bei jedem Aufruf alle Events neu scannen muss.
+1. **Materialized View** (`core_statistics_event_flat`) — aggregiert die aktuellen Event-Daten vor, damit die Statistik-Seite nicht bei jedem Aufruf alle Events neu scannen muss. Refs #544.
 2. **Statistik-Snapshots** — monatliche, persistierte Aggregate, die **vor** der automatischen Löschung alter Events gesichert werden. Dadurch bleiben historische Auswertungen auch nach DSGVO-Löschung korrekt.
 
 ### Materialized View aktualisieren

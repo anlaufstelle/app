@@ -10,7 +10,7 @@
 > nicht abgekuendigt, sondern nicht-primaer.
 
 Leitfaden für das erste Produktiv-Deployment auf einem selbstgehosteten Coolify
-auf Hetzner CX22 (2 vCPU, 4 GB RAM, 40 GB SSD, ~€5/Monat).
+auf Hetzner CX22 (2 vCPU, 4 GB RAM, 40 GB SSD, ~€5/Monat). Refs #554.
 
 ## Voraussetzungen
 
@@ -51,7 +51,7 @@ Initial-Admin anlegen über `http://<server-ip>:8000`.
 > (Image `clamav/clamav:stable`, Volume `clamav-db`, Healthcheck via `clamdcheck.sh`).
 > Coolify startet ihn beim Compose-Deploy automatisch mit — der `web`-Service
 > verbindet via `CLAMAV_HOST=clamav` und wartet per `depends_on: service_healthy`
-> auf die Signaturdatenbank.
+> auf die Signaturdatenbank. Refs #524.
 >
 > - **Separater ClamAV-Host:** `CLAMAV_HOST`/`CLAMAV_PORT` in den ENVs auf den
 > externen Host setzen, `CLAMAV_ENABLED=true` belassen.
@@ -66,12 +66,12 @@ Initial-Admin anlegen über `http://<server-ip>:8000`.
 
 ### 4. Environment-Variablen
 
-In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](./.env.example):
+In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.env.example):
 
 **Pflicht:**
 - `DJANGO_SECRET_KEY` — frisch generiert (`python -c "import secrets; print(secrets.token_urlsafe(50))"`)
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
-- `ENCRYPTION_KEY` oder `ENCRYPTION_KEYS` — Fernet-Key (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
+- `ENCRYPTION_KEY` oder `ENCRYPTION_KEYS` — Fernet-Key (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key.decode)"`)
 - `ALLOWED_HOSTS=anlaufstelle.app,www.anlaufstelle.app`
 - `DOMAIN=anlaufstelle.app`
 - `BACKUP_ENCRYPTION_KEY` — separater Fernet-Key für Backups
@@ -82,10 +82,10 @@ In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](./.env
 - `SENTRY_DSN` — für Error-Tracking
 - `LOG_FORMAT=json` — strukturiertes Logging
 - `CLAMAV_ENABLED=true` — Default. Zum aktiven Scannen muss zusätzlich ein
-  ClamAV-Container erreichbar sein (siehe Hinweiskasten in Schritt 3). Nur
-  deaktivieren, wenn bewusst kein ClamAV betrieben wird.
+ ClamAV-Container erreichbar sein (siehe Hinweiskasten in Schritt 3). Nur
+ deaktivieren, wenn bewusst kein ClamAV betrieben wird.
 - `CLAMAV_HOST` — default `clamav` (Service-Name aus `docker-compose.prod.yml`).
-  Bei externem ClamAV auf dessen Hostname/IP setzen.
+ Bei externem ClamAV auf dessen Hostname/IP setzen.
 - `CLAMAV_PORT` — default `3310` (clamd TCP-Port).
 - `CLAMAV_TIMEOUT` — Timeout in Sekunden für Scan-Requests (optional).
 
@@ -99,12 +99,12 @@ Einmalig auf dem Server in der Web-Container-Shell:
 
 ```bash
 python manage.py migrate
-python manage.py setup_facility # Admin-User + Facility anlegen
+python manage.py setup_facility   # Admin-User + Facility anlegen
 ```
 
-Der Admin erhält eine Einladungs-E-Mail mit Setup-Link (Token-Invite-Flow).
+Der Admin erhält eine Einladungs-E-Mail mit Setup-Link (Token-Invite-Flow, #528).
 
-> **⚠️ PostgreSQL-Rolle: NOSUPERUSER erforderlich.** Der in `POSTGRES_USER` konfigurierte DB-User darf **kein** PostgreSQL-Superuser sein — sonst wird Row Level Security (Migration [`0047_postgres_rls_setup.py`](./src/core/migrations/0047_postgres_rls_setup.py)) per Postgres-Default **bypasst** und das Facility-Isolations-Safety-Net ist wirkungslos. Im offiziellen `postgres:16`-Image wird der initial via `POSTGRES_USER` angelegte User standardmäßig als Superuser erstellt. Nach dem ersten `migrate` daher einmalig als Postgres-Admin per `psql` anpassen:
+> **⚠️ PostgreSQL-Rolle: NOSUPERUSER erforderlich.** Der in `POSTGRES_USER` konfigurierte DB-User darf **kein** PostgreSQL-Superuser sein — sonst wird Row Level Security (Migration [`0047_postgres_rls_setup.py`](../src/core/migrations/0047_postgres_rls_setup.py)) per Postgres-Default **bypasst** und das Facility-Isolations-Safety-Net ist wirkungslos. Im offiziellen `postgres:16`-Image wird der initial via `POSTGRES_USER` angelegte User standardmäßig als Superuser erstellt. Nach dem ersten `migrate` daher einmalig als Postgres-Admin per `psql` anpassen:
 >
 > ```sql
 > ALTER ROLE anlaufstelle_user NOSUPERUSER;
@@ -115,12 +115,12 @@ Der Admin erhält eine Einladungs-E-Mail mit Setup-Link (Token-Invite-Flow).
 ### 7. 2FA aktivieren
 
 Nach erstem Login sollte der Admin unter `/mfa/settings/` sofort TOTP einrichten
-(). Für Einrichtungen
+(Refs #521). Für Einrichtungen
 mit hohem Sicherheitsbedarf in `Settings.mfa_enforced_facility_wide = True` setzen.
 
 ### 7.5 Offline-Modus (Streetwork)
 
-Der Offline-Modus (M6A)
+Der Offline-Modus (M6A, Refs #573)
 ist ein reines Client-Feature — **keine Server-ENVs, keine zusätzliche Infrastruktur nötig**.
 
 **Voraussetzung an Endgeräte:** Mitarbeiter-Geräte brauchen einen modernen Browser
@@ -130,20 +130,20 @@ und Edge-Versionen erfüllen das).
 **Admins sollten Mitarbeiter vor Rollout auf drei Punkte hinweisen:**
 
 1. **Vor Offline-Einsatz Klientel-Cache füllen** — Onboarding-Schritt am Arbeitsplatz,
-   damit die benötigten Datensätze lokal verschlüsselt verfügbar sind.
+ damit die benötigten Datensätze lokal verschlüsselt verfügbar sind.
 2. **Nach Rückkehr synchronisieren, bevor der Logout erfolgt** — sonst bleiben
-   Änderungen nur lokal liegen und gehen beim Cache-Verlust verloren.
+ Änderungen nur lokal liegen und gehen beim Cache-Verlust verloren.
 3. **Passwort-Verlust = Datenverlust:** Bei vergessenem Passwort sind die offline
-   gespeicherten, lokal verschlüsselten Daten **unrettbar** — Recovery-Flows für
-   Offline-Daten sind nicht möglich.
+ gespeicherten, lokal verschlüsselten Daten **unrettbar** — Recovery-Flows für
+ Offline-Daten sind nicht möglich.
 
 ## Caddy-Konfiguration
 
-Die mitgelieferte [`Caddyfile`](./Caddyfile) enthält:
+Die mitgelieferte [`Caddyfile`](../Caddyfile) (Refs #801) enthält:
 
 - **www-Redirect** — `www.{$DOMAIN}` wird permanent (`301`) auf den Apex umgeleitet, damit Backlinks und Cookies eindeutig auf eine Origin gehen.
 - **HTTPS + HSTS** — Caddy beantragt automatisch Let's-Encrypt-Zertifikate, HSTS mit `max-age=31536000` ist gesetzt.
-- **Access-Log** — JSON-Log nach `/var/log/caddy/access.log` mit Rotation (10 MiB, 10 Files, 30 Tage). Persistiert über das `caddy_logs`-Volume in [`docker-compose.prod.yml`](./docker-compose.prod.yml). Auswertung z. B. via `docker compose exec caddy cat /var/log/caddy/access.log | jq`.
+- **Access-Log** — JSON-Log nach `/var/log/caddy/access.log` mit Rotation (10 MiB, 10 Files, 30 Tage). Persistiert über das `caddy_logs`-Volume in [`docker-compose.prod.yml`](../docker-compose.prod.yml). Auswertung z. B. via `docker compose exec caddy cat /var/log/caddy/access.log | jq`.
 - **CSP** — Content-Security-Policy wird **ausschließlich in Django** über `django-csp` gesetzt (`anlaufstelle.settings.base.CONTENT_SECURITY_POLICY`); im Caddyfile bewusst nicht doppelt, damit App- und Proxy-Policy nicht auseinanderlaufen.
 
 ### Optionaler Rate-Limit
@@ -167,19 +167,19 @@ Im Default-Setup ist die Rate-Limit-Stanza im `Caddyfile` als Kommentar dokument
 
 ### Staging
 
-[`Caddyfile.staging`](./Caddyfile.staging) ist strukturgleich, hat aber zusätzlich einen Hinweis auf `tls internal` — falls die Stage-Domain nicht öffentlich auflösbar ist (interner Reverse-Proxy oder CDN davor), kann Caddy auf seine eigene CA wechseln statt LE.
+[`Caddyfile.staging`](../Caddyfile.staging) ist strukturgleich, hat aber zusätzlich einen Hinweis auf `tls internal` — falls die Stage-Domain nicht öffentlich auflösbar ist (interner Reverse-Proxy oder CDN davor), kann Caddy auf seine eigene CA wechseln statt LE.
 
 ## Nach Go-Live
 
-- Gesundheitsprüfung: `curl https://anlaufstelle.app/health/` → `{"status":"ok",..}`
+- Gesundheitsprüfung: `curl https://anlaufstelle.app/health/` → `{"status":"ok",...}`
 - ClamAV-Verbindung prüfen: `curl https://anlaufstelle.app/health/` → `clamav: ok`
-  (sonst Service-Logs von `clamav` in Coolify checken, Signatur-Download kann
-  nach Kaltstart bis zu 5 Minuten dauern).
+ (sonst Service-Logs von `clamav` in Coolify checken, Signatur-Download kann
+ nach Kaltstart bis zu 5 Minuten dauern).
 - RLS aktiv prüfen: per `psql` in der App-DB
-  `SELECT relrowsecurity FROM pg_class WHERE relname='core_client';` → `t`.
+ `SELECT relrowsecurity FROM pg_class WHERE relname='core_client';` → `t`.
 - RLS-Wirksamkeit prüfen: Django-DB-User darf **kein** Superuser sein (sonst wird RLS bypasst).
-  `SELECT rolsuper FROM pg_roles WHERE rolname='<POSTGRES_USER>';` → `f`.
-  Falls `t`: `ALTER ROLE <POSTGRES_USER> NOSUPERUSER;` (siehe Schritt 6).
+ `SELECT rolsuper FROM pg_roles WHERE rolname='<POSTGRES_USER>';` → `f`.
+ Falls `t`: `ALTER ROLE <POSTGRES_USER> NOSUPERUSER;` (siehe Schritt 6).
 - Sentry-Events in den ersten 24h prüfen
 - Backup-Job erstmalig manuell triggern und restore auf Staging testen
 - Monitoring-Alerts (Uptime + Disk + RAM) einrichten
@@ -188,4 +188,4 @@ Im Default-Setup ist die Rate-Limit-Stanza im `Caddyfile` als Kommentar dokument
 
 - Ops-Runbook: [`docs/ops-runbook.md`](ops-runbook.md)
 - Release-Checkliste: [`docs/release-checklist.md`](release-checklist.md)
-- Security-Review: [`SECURITY.md`](./SECURITY.md)
+- Security-Review: [`SECURITY.md`](../SECURITY.md)

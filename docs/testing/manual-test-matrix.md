@@ -1,7 +1,7 @@
 # Manuelle Test-Matrix — Anlaufstelle
 
-**Stand:** 2026-05-09 · **Version:** 1.0 · **Geltungsbereich:** Anlaufstelle ≥ v0.10  
-**GitHub-Issue:** 
+**Stand:** 2026-05-09 · **Version:** 1.0 · **Geltungsbereich:** Anlaufstelle ≥ v0.10 
+**GitHub-Issue:** #864
 
 > Diese Datei ist die **Single-Source-of-Truth** für manuelles Testen. Sie ist ein **paralleler Artefakt** zur automatisierten E2E-Suite (~280 Tests in `src/tests/e2e/`) — kein Code-Klon. Manuelle Tests sind erforderlich für (a) DSGVO-Audit-Sign-Off, (b) Pilotbetrieb mit echten Sozialarbeiter:innen und (c) Release-Candidate-Verifikation auf Browser-/Mobile-Spezifika.
 >
@@ -19,54 +19,54 @@
 - [TC-ID-Schema](#tc-id-schema)
 - [Browser- & Mobile-Konventionen](#browser--und-mobile-konventionen)
 - [SEKTION A — Anwender-Smoke](#sektion-a--anwender-smoke)
-  - [Vormittag (VORM)](#vormittag-vorm)
-  - [Mittag (MITT)](#mittag-mitt)
-  - [Nachmittag (NACH)](#nachmittag-nach)
-  - [Abend (ABEND)](#abend-abend)
-  - [Krise (CRIS)](#krise-cris)
-  - [Streetwork-Offline (OFFL)](#streetwork-offline-offl)
-  - [Mobile-Smoke (MOBI)](#mobile-smoke-mobi)
+ - [Vormittag (VORM)](#vormittag-vorm)
+ - [Mittag (MITT)](#mittag-mitt)
+ - [Nachmittag (NACH)](#nachmittag-nach)
+ - [Abend (ABEND)](#abend-abend)
+ - [Krise (CRIS)](#krise-cris)
+ - [Streetwork-Offline (OFFL)](#streetwork-offline-offl)
+ - [Mobile-Smoke (MOBI)](#mobile-smoke-mobi)
 - [SEKTION B — Entwickler-Komplett](#sektion-b--entwickler-komplett)
-  - [AUTH — Authentifizierung](#auth--authentifizierung)
-  - [MFA — Multi-Faktor-Authentifizierung](#mfa--multi-faktor-authentifizierung)
-  - [ACCT — Account & Profil](#acct--account-und-profil)
-  - [SUDO — Sudo-Mode](#sudo--sudo-mode)
-  - [PWA — Progressive Web App](#pwa--progressive-web-app)
-  - [CLIENT — Klient:innen-Management](#client--klientinnen-management)
-  - [CASE — Fallmanagement](#case--fallmanagement)
-  - [EPI — Episoden](#epi--episoden)
-  - [GOAL — Goals & Milestones](#goal--goals-und-milestones)
-  - [EVT — Events / Dokumentation](#evt--events-und-dokumentation)
-  - [ATT — Anhänge / Datei-Vault](#att--anhaenge-und-datei-vault)
-  - [WI — WorkItems / Aufgaben](#wi--workitems-und-aufgaben)
-  - [DEL — Lösch-Anträge](#del--loesch-antraege)
-  - [RET — Aufbewahrungsrichtlinien](#ret--aufbewahrungsrichtlinien)
-  - [SRCH — Suche](#srch--suche)
-  - [ZS — Zeitstrom](#zs--zeitstrom)
-  - [HOV — Übergabe](#hov--uebergabe)
-  - [STAT — Statistik & Reporting](#stat--statistik-und-reporting)
-  - [AUDIT — Audit-Log](#audit--audit-log)
-  - [DSGVO — DSGVO-Paket](#dsgvo--dsgvo-paket)
-  - [OFFL — Offline-Modus](#offl--offline-modus)
-  - [SYS — Sys / Health / Monitoring](#sys--sys--health--monitoring)
+ - [AUTH — Authentifizierung](#auth--authentifizierung)
+ - [MFA — Multi-Faktor-Authentifizierung](#mfa--multi-faktor-authentifizierung)
+ - [ACCT — Account & Profil](#acct--account-und-profil)
+ - [SUDO — Sudo-Mode](#sudo--sudo-mode)
+ - [PWA — Progressive Web App](#pwa--progressive-web-app)
+ - [CLIENT — Klient:innen-Management](#client--klientinnen-management)
+ - [CASE — Fallmanagement](#case--fallmanagement)
+ - [EPI — Episoden](#epi--episoden)
+ - [GOAL — Goals & Milestones](#goal--goals-und-milestones)
+ - [EVT — Events / Dokumentation](#evt--events-und-dokumentation)
+ - [ATT — Anhänge / Datei-Vault](#att--anhaenge-und-datei-vault)
+ - [WI — WorkItems / Aufgaben](#wi--workitems-und-aufgaben)
+ - [DEL — Lösch-Anträge](#del--loesch-antraege)
+ - [RET — Aufbewahrungsrichtlinien](#ret--aufbewahrungsrichtlinien)
+ - [SRCH — Suche](#srch--suche)
+ - [ZS — Zeitstrom](#zs--zeitstrom)
+ - [HOV — Übergabe](#hov--uebergabe)
+ - [STAT — Statistik & Reporting](#stat--statistik-und-reporting)
+ - [AUDIT — Audit-Log](#audit--audit-log)
+ - [DSGVO — DSGVO-Paket](#dsgvo--dsgvo-paket)
+ - [OFFL — Offline-Modus](#offl--offline-modus)
+ - [SYS — Sys / Health / Monitoring](#sys--sys--health--monitoring)
 - [SEKTION C — Auditor-DSGVO/Security](#sektion-c--auditor-dsgvosecurity)
-  - [DSGVO Art. 5 — Grundsätze](#dsgvo-art-5--grundsaetze)
-  - [DSGVO Art. 7 — Einwilligung](#dsgvo-art-7--einwilligung)
-  - [DSGVO Art. 15 — Auskunftsrecht](#dsgvo-art-15--auskunftsrecht)
-  - [DSGVO Art. 16 — Berichtigung](#dsgvo-art-16--berichtigung)
-  - [DSGVO Art. 17 — Löschung](#dsgvo-art-17--loeschung)
-  - [DSGVO Art. 18 — Einschränkung](#dsgvo-art-18--einschraenkung)
-  - [DSGVO Art. 20 — Datenübertragbarkeit](#dsgvo-art-20--datenuebertragbarkeit)
-  - [DSGVO Art. 25 — Privacy by Design](#dsgvo-art-25--privacy-by-design)
-  - [DSGVO Art. 30 — Verarbeitungsverzeichnis](#dsgvo-art-30--verarbeitungsverzeichnis)
-  - [DSGVO Art. 32 — Sicherheit der Verarbeitung](#dsgvo-art-32--sicherheit-der-verarbeitung)
-  - [DSGVO Art. 33-34 — Meldepflichten bei Datenpannen](#dsgvo-art-33-34--meldepflichten-bei-datenpannen)
-  - [DSGVO Art. 35 — DSFA](#dsgvo-art-35--dsfa)
-  - [Security: RLS-Penetration](#security-rls-penetration)
-  - [Security: MFA-Härtung](#security-mfa-haertung)
-  - [Security: Audit-Log-Integrität](#security-audit-log-integritaet)
-  - [Security: Verschlüsselung & Key-Rotation](#security-verschluesselung-und-key-rotation)
-  - [Security: HTTP-Header](#security-http-header)
+ - [DSGVO Art. 5 — Grundsätze](#dsgvo-art-5--grundsaetze)
+ - [DSGVO Art. 7 — Einwilligung](#dsgvo-art-7--einwilligung)
+ - [DSGVO Art. 15 — Auskunftsrecht](#dsgvo-art-15--auskunftsrecht)
+ - [DSGVO Art. 16 — Berichtigung](#dsgvo-art-16--berichtigung)
+ - [DSGVO Art. 17 — Löschung](#dsgvo-art-17--loeschung)
+ - [DSGVO Art. 18 — Einschränkung](#dsgvo-art-18--einschraenkung)
+ - [DSGVO Art. 20 — Datenübertragbarkeit](#dsgvo-art-20--datenuebertragbarkeit)
+ - [DSGVO Art. 25 — Privacy by Design](#dsgvo-art-25--privacy-by-design)
+ - [DSGVO Art. 30 — Verarbeitungsverzeichnis](#dsgvo-art-30--verarbeitungsverzeichnis)
+ - [DSGVO Art. 32 — Sicherheit der Verarbeitung](#dsgvo-art-32--sicherheit-der-verarbeitung)
+ - [DSGVO Art. 33-34 — Meldepflichten bei Datenpannen](#dsgvo-art-33-34--meldepflichten-bei-datenpannen)
+ - [DSGVO Art. 35 — DSFA](#dsgvo-art-35--dsfa)
+ - [Security: RLS-Penetration](#security-rls-penetration)
+ - [Security: MFA-Härtung](#security-mfa-haertung)
+ - [Security: Audit-Log-Integrität](#security-audit-log-integritaet)
+ - [Security: Verschlüsselung & Key-Rotation](#security-verschluesselung-und-key-rotation)
+ - [Security: HTTP-Header](#security-http-header)
 - [Anhang A — Browser/Mobile-Matrix](#anhang-a--browsermobile-matrix)
 - [Anhang B — Bekannte Risiken & Test-Lücken](#anhang-b--bekannte-risiken-und-test-luecken)
 - [Anhang C — E2E-Coverage-Bilanz](#anhang-c--e2e-coverage-bilanz)
@@ -223,6 +223,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Tagesablauf | fachkraft | C/F/S | ⚪ | `test_workflow_complete.py`, `test_dashboard.py` |
+
 
 **Vorbereitung:**
 - Privates Browser-Fenster, kein aktiver Login.
@@ -418,7 +419,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Tagesablauf | leitung | C/F/S | — | `test_export_statistics.py`, `test_statistics_dashboard.py` |
+| Tagesablauf | leitung | C/F/S || `test_export_statistics.py`, `test_statistics_dashboard.py` |
 
 **Voraussetzung:** SMK-A-VORM-01 (mit `leitung`-Login)
 
@@ -486,7 +487,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Tagesablauf | fachkraft | C/F/S | ✓ | — |
+| Tagesablauf | fachkraft | C/F/S | ✓ ||
 
 **Voraussetzung:** SMK-A-VORM-01
 
@@ -522,6 +523,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 |---------|-------|---------|--------|-----|
 | Tagesablauf | fachkraft | C/S | ✓ | `test_offline_apis.py`, `test_offline_login_bootstrap.py` |
 
+
 **Vorbereitung:**
 - Smartphone oder Tablet mit Browser, mobil ins WLAN.
 
@@ -555,6 +557,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 |---------|-------|---------|--------|-----|
 | Tagesablauf | fachkraft | C | ✓ | `test_mobile.py`, `test_layout.py` |
 
+
 **Vorbereitung:**
 - Browser auf iPhone-Viewport umgestellt.
 
@@ -577,7 +580,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Tagesablauf | fachkraft | C | ✓ | — |
+| Tagesablauf | fachkraft | C | ✓ ||
 
 **Voraussetzung:** Case mit Episode aus NACH-01.
 
@@ -611,13 +614,13 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>🔐 AUTH — Authentifizierung (10 Cases)</strong></summary>
 
-**Routen:** `/login/`, `/logout/`, `/password-change/`, `/password-reset/`, `/password-reset/done/`, `/password-reset/<uidb64>/<token>/`, `/password-reset/complete/`  
-**Views:** `src/core/views/auth.py` (`CustomLoginView`, `CustomLogoutView`, `RateLimitedPasswordResetView`, `CustomPasswordChangeView`)  
-**Services:** `src/core/services/login_lockout.py` (`is_locked`, `unlock`, Schwelle 10/15min), `src/core/services/password.py` (12-Zeichen-Initial-Generator), `src/core/services/audit_hash.py` (`hmac_hash_email`), `src/core/services/offline_keys.py`  
-**Middleware:** `core.middleware.password_change.ForcePasswordChangeMiddleware`  
-**Settings:** `AUTH_PASSWORD_VALIDATORS` (min_length=12, BSI/NIST), `SESSION_COOKIE_AGE=1800`, `SESSION_SAVE_EVERY_REQUEST=False`, `AUDIT_HASH_KEY`, Audit-Action-Choices in `src/core/models/audit.py`  
-**Signals:** `src/core/signals/audit.py` (LOGIN/LOGOUT/LOGIN_FAILED via Django-Auth-Signals)  
-**E2E-Coverage:** `test_auth_roles.py`, `test_password_reset.py`, `test_logout_cleanup.py`, `test_security_hardening.py`  
+**Routen:** `/login/`, `/logout/`, `/password-change/`, `/password-reset/`, `/password-reset/done/`, `/password-reset/<uidb64>/<token>/`, `/password-reset/complete/` 
+**Views:** `src/core/views/auth.py` (`CustomLoginView`, `CustomLogoutView`, `RateLimitedPasswordResetView`, `CustomPasswordChangeView`) 
+**Services:** `src/core/services/login_lockout.py` (`is_locked`, `unlock`, Schwelle 10/15min), `src/core/services/password.py` (12-Zeichen-Initial-Generator), `src/core/services/audit_hash.py` (`hmac_hash_email`), `src/core/services/offline_keys.py` 
+**Middleware:** `core.middleware.password_change.ForcePasswordChangeMiddleware` 
+**Settings:** `AUTH_PASSWORD_VALIDATORS` (min_length=12, BSI/NIST), `SESSION_COOKIE_AGE=1800`, `SESSION_SAVE_EVERY_REQUEST=False`, `AUDIT_HASH_KEY`, Audit-Action-Choices in `src/core/models/audit.py` 
+**Signals:** `src/core/signals/audit.py` (LOGIN/LOGOUT/LOGIN_FAILED via Django-Auth-Signals) 
+**E2E-Coverage:** `test_auth_roles.py`, `test_password_reset.py`, `test_logout_cleanup.py`, `test_security_hardening.py` 
 **Spezial-Setup:**
 - Login-Lockout-Test braucht 10 sequenzielle Fehlversuche innerhalb von 15 Min — IP-Rate-Limit (5/m) muss vorher umgangen werden (z.B. Cookie-Reset zwischen Bursts oder Limit per Settings hochsetzen).
 - Pwd-Reset-Test braucht `EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend` (dev/e2e-Default) oder MailHog für Token-Capture.
@@ -630,6 +633,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Auth | fachkraft (`miriam`) | C/F/S | ✓ | `test_auth_roles.py` |
+
 
 **Vorbereitung:**
 - Privates Browser-Fenster öffnen, kein aktiver Login.
@@ -661,6 +665,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 |---------|-------|---------|--------|-----|
 | Auth | fachkraft (`miriam`) | C/F/S | ⚪ | `test_auth_roles.py` |
 
+
 **Vorbereitung:**
 - Privates Fenster, kein aktiver Login.
 - AuditLog vor dem Test mit `LOGIN_FAILED`-Count notieren (Baseline).
@@ -688,7 +693,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | fachkraft (`miriam`) | C | — | `test_security_hardening.py` |
+| Auth | fachkraft (`miriam`) | C || `test_security_hardening.py` |
 
 **Voraussetzung:** IP-Rate-Limit (5/m) vorübergehend deaktiviert ODER `RATELIMIT_ENABLE=False` in Test-Settings.
 
@@ -703,15 +708,15 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Erwartetes Ergebnis:**
 - Versuche 1–10: jeweils `LOGIN_FAILED`-AuditLog-Eintrag.
 - Versuch 11: trotz korrektem Passwort kein Login. Form-Fehler:
-  `"Ihr Konto ist nach mehreren fehlgeschlagenen Versuchen temporär gesperrt. Bitte später erneut versuchen oder Administration kontaktieren."`
+ `"Ihr Konto ist nach mehreren fehlgeschlagenen Versuchen temporär gesperrt. Bitte später erneut versuchen oder Administration kontaktieren."`
 - Zusätzlicher AuditLog-Eintrag `LOGIN_FAILED` mit `detail.reason="locked"` und `detail.message="Login blockiert durch Account-Lockout"`.
 - Kein `LOGIN`-Erfolgs-Eintrag, kein Session-Cookie.
 - `is_locked(miriam)` gibt `True` zurück (Schwelle erreicht innerhalb 15-Minuten-Fenster).
-- Admin kann via `unlock()` / `LOGIN_UNLOCK`-Audit den Cutoff setzen, danach werden die alten FAILED-Einträge ignoriert.
+- Admin kann via `unlock` / `LOGIN_UNLOCK`-Audit den Cutoff setzen, danach werden die alten FAILED-Einträge ignoriert.
 
 **DSGVO/Security-Note:**
 - Lockout-Konstanten: `LOCKOUT_THRESHOLD = 10`, `LOCKOUT_WINDOW = timedelta(minutes=15)` in `src/core/services/login_lockout.py`.
-- Concurrency-Schutz via `transaction.atomic()` + `User.objects.select_for_update()`.
+- Concurrency-Schutz via `transaction.atomic` + `User.objects.select_for_update` (Refs #737).
 
 **Status:** ☐ Offen
 
@@ -721,7 +726,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | unauthentifiziert | C | — | `test_security_hardening.py` |
+| Auth | unauthentifiziert | C || `test_security_hardening.py` |
 
 **Voraussetzung:** `django_ratelimit` aktiv (Default in dev/e2e).
 
@@ -741,7 +746,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **DSGVO/Security-Note:**
 - Decorator: `@method_decorator(ratelimit(key="ip", rate="5/m", method="POST", block=True))` in `CustomLoginView.post`.
-- Schützt vor klassischem Brute-Force von einer IP ( S-3).
+- Schützt vor klassischem Brute-Force von einer IP (Refs #598).
 
 **Status:** ☐ Offen
 
@@ -751,7 +756,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | unauthentifiziert | C | — | `test_security_hardening.py` |
+| Auth | unauthentifiziert | C || `test_security_hardening.py` |
 
 **Voraussetzung:** mindestens 2 Quell-IPs simulierbar (z.B. via `X-Forwarded-For` mit `TRUSTED_PROXY_HOPS=1`) oder Direkt-Cache-Manipulation.
 
@@ -772,7 +777,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **DSGVO/Security-Note:**
 - Decorator: `@method_decorator(ratelimit(key=_login_username_key, rate="10/h", method="POST", block=True))`.
-- Schützt vor verteilten Angriffen mit rotierenden IPs (Botnet) — echter User würde nach max. 10 falschen Eingaben in 1h auf Pwd-Reset gehen ( S-3).
+- Schützt vor verteilten Angriffen mit rotierenden IPs (Botnet) — echter User würde nach max. 10 falschen Eingaben in 1h auf Pwd-Reset gehen (Refs #598).
 
 **Status:** ☐ Offen
 
@@ -814,7 +819,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Auth | fachkraft (`miriam`) | C | — | `test_security_hardening.py` |
+| Auth | fachkraft (`miriam`) | C || `test_security_hardening.py` |
 
 **Voraussetzung:** Test-Setting `SESSION_COOKIE_AGE=10` (Sekunden) ODER Cookie manuell ablaufen lassen.
 
@@ -835,7 +840,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **DSGVO/Security-Note:**
 - Setting `SESSION_COOKIE_AGE=1800` in `src/anlaufstelle/settings/base.py`.
-- `SESSION_SAVE_EVERY_REQUEST=False` reduziert DB-Write-Amplifikation, lässt Inaktivitäts-Timeout aber wirken.
+- `SESSION_SAVE_EVERY_REQUEST=False` reduziert DB-Write-Amplifikation, lässt Inaktivitäts-Timeout aber wirken (Refs #733).
 - Login speichert ggf. `session.set_expiry(facility.settings.session_timeout_minutes * 60)` (override).
 
 **Status:** ☐ Offen
@@ -857,9 +862,9 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Schritte:**
 1. `/password-change/` aufrufen.
 2. Test A — Validierung (negativ):
-   - Altes Pwd: `anlaufstelle2026`
-   - Neues Pwd: `kurz` (zu kurz, < 12 Zeichen)
-   - Submit → Form-Fehler `"Dieses Passwort ist zu kurz."` (MinimumLengthValidator, min_length=12).
+ - Altes Pwd: `anlaufstelle2026`
+ - Neues Pwd: `kurz` (zu kurz, < 12 Zeichen)
+ - Submit → Form-Fehler `"Dieses Passwort ist zu kurz."` (MinimumLengthValidator, min_length=12).
 3. Test B — Validierung (negativ): neues Pwd `123456789012` (rein-numerisch) → `NumericPasswordValidator` schlägt an.
 4. Test C — Validierung (negativ): neues Pwd `password1234` (häufig) → `CommonPasswordValidator` schlägt an.
 5. Test D — Validierung (negativ): neues Pwd ähnlich wie Username/Email → `UserAttributeSimilarityValidator` greift.
@@ -869,13 +874,13 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - A–D: HTTP 200, Form mit Validator-Fehlermeldung re-rendert.
 - E: HTTP 302 Redirect auf `/` (`success_url="/"`).
 - Nach E:
-  - `user.must_change_password` ist auf `False` zurückgesetzt (siehe `CustomPasswordChangeView.form_valid`).
-  - `user.offline_key_salt` ist auf `""` (leer) zurückgesetzt → wird beim nächsten `/auth/offline-key-salt/`-Aufruf neu generiert.
-  - Session bleibt gültig (Django-Standard `update_session_auth_hash`).
+ - `user.must_change_password` ist auf `False` zurückgesetzt (siehe `CustomPasswordChangeView.form_valid`).
+ - `user.offline_key_salt` ist auf `""` (leer) zurückgesetzt → wird beim nächsten `/auth/offline-key-salt/`-Aufruf neu generiert.
+ - Session bleibt gültig (Django-Standard `update_session_auth_hash`).
 - Validatoren-Reihenfolge laut `AUTH_PASSWORD_VALIDATORS` in `base.py`.
 
 **DSGVO/Security-Note:**
-- Min-Length=12 entspricht BSI/NIST für §203/Art.-9-Daten.
+- Min-Length=12 entspricht BSI/NIST für §203/Art.-9-Daten (Refs #789).
 - Salt-Rotation invalidiert alte client-seitige IndexedDB-Schlüssel — alte verschlüsselte Records werden beim nächsten Login als „garbage" verworfen.
 
 **Status:** ☐ Offen
@@ -911,7 +916,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Rate-Limit `5/m IP POST` auf `/password-reset/` greift bei Spam (HTTP 429 ab dem 6. Versuch).
 
 **DSGVO/Security-Note:**
-- Klartext-E-Mails im append-only AuditLog widersprächen DSGVO-Datenminimierung → HMAC-Hash via `hmac_hash_email` in `services/audit_hash.py`.
+- Klartext-E-Mails im append-only AuditLog widersprächen DSGVO-Datenminimierung (Refs #791) → HMAC-Hash via `hmac_hash_email` in `services/audit_hash.py`.
 - Gleiche E-Mail → gleicher Hash (Lookup für Forensik möglich), aber keine PII in 24-Monats-Retention.
 - Anti-Enumeration: identische Response-Page egal ob E-Mail bekannt oder nicht (Decorator `try/except`-geschützt).
 
@@ -956,15 +961,15 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>🔑 MFA — Zwei-Faktor-Authentifizierung (9 Cases)</strong></summary>
 
-**Routen:** `/mfa/setup/`, `/mfa/verify/`, `/mfa/settings/`, `/mfa/disable/`, `/mfa/backup-codes/`, `/mfa/backup-codes/regenerate/`  
-**Views:** `src/core/views/mfa.py` (`MFASetupView`, `MFAVerifyView`, `MFASettingsView`, `MFADisableView`, `MFABackupCodesView`, `MFARegenerateBackupCodesView`)  
-**Services:** `src/core/services/mfa.py` (`generate_backup_codes`, `verify_backup_code`, `remaining_backup_codes`, SHA-256-Hash, 128-bit Entropie via `secrets.token_urlsafe(16)`)  
-**Middleware:** `core.middleware.mfa.MFAEnforcementMiddleware` (EXEMPT_URLS für /login/, /logout/, /mfa/, /static/, /sw.js, /manifest.json, /auth/offline-key-salt/, /health/)  
-**Settings:** `OTP_TOTP_ISSUER="Anlaufstelle"`; Apps: `django_otp`, `django_otp.plugins.otp_totp`, `django_otp.plugins.otp_static`  
-**E2E-Coverage:** `test_mfa_setup_flow.py`, `test_mfa_backup_codes.py`, `test_security_hardening.py`  
+**Routen:** `/mfa/setup/`, `/mfa/verify/`, `/mfa/settings/`, `/mfa/disable/`, `/mfa/backup-codes/`, `/mfa/backup-codes/regenerate/` 
+**Views:** `src/core/views/mfa.py` (`MFASetupView`, `MFAVerifyView`, `MFASettingsView`, `MFADisableView`, `MFABackupCodesView`, `MFARegenerateBackupCodesView`) 
+**Services:** `src/core/services/mfa.py` (`generate_backup_codes`, `verify_backup_code`, `remaining_backup_codes`, SHA-256-Hash, 128-bit Entropie via `secrets.token_urlsafe(16)`) 
+**Middleware:** `core.middleware.mfa.MFAEnforcementMiddleware` (EXEMPT_URLS für /login/, /logout/, /mfa/, /static/, /sw.js, /manifest.json, /auth/offline-key-salt/, /health/) 
+**Settings:** `OTP_TOTP_ISSUER="Anlaufstelle"`; Apps: `django_otp`, `django_otp.plugins.otp_totp`, `django_otp.plugins.otp_static` 
+**E2E-Coverage:** `test_mfa_setup_flow.py`, `test_mfa_backup_codes.py`, `test_security_hardening.py` 
 **Spezial-Setup:**
 - TOTP-Code-Generierung im Test: `pyotp` mit gleichem Secret wie QR-Code (Base32-decoded aus `device.bin_key`).
-- Backup-Codes: 22-Zeichen URL-safe Base64 (case-sensitive!) ab. Legacy-Format `xxxx-xxxx` (8 Hex + Dash) wird beim Verify toleriert.
+- Backup-Codes: 22-Zeichen URL-safe Base64 (case-sensitive!) ab Refs #790. Legacy-Format `xxxx-xxxx` (8 Hex + Dash) wird beim Verify toleriert.
 - `MFADisableView` ist `RequireSudoModeMixin` — vor Disable muss Sudo-Mode aktiv sein.
 - `request.user.is_mfa_enforced` = `True`, wenn `User.mfa_required=True` ODER `facility.settings.mfa_enforced_facility_wide=True`.
 
@@ -980,7 +985,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Vorbereitung:**
 - Login als `miriam`.
-- DB-Check: `TOTPDevice.objects.filter(user=miriam, confirmed=True).exists() == False`.
+- DB-Check: `TOTPDevice.objects.filter(user=miriam, confirmed=True).exists == False`.
 
 **Schritte:**
 1. `/mfa/settings/` aufrufen → Status „2FA nicht aktiv".
@@ -999,7 +1004,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **DSGVO/Security-Note:**
 - TOTP-Secret ist 160-bit per django-otp-Default; QR-Code via `qrcode`-Lib gerendert, kein externer Service.
-- Backup-Codes ab: 128 Bit Entropie, in DB SHA-256-Hash truncated auf 16 Hex (Pre-Image-Schutz).
+- Backup-Codes ab Refs #790: 128 Bit Entropie, in DB SHA-256-Hash truncated auf 16 Hex (Pre-Image-Schutz).
 
 **Status:** ☐ Offen
 
@@ -1027,10 +1032,10 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Schritt 3: HTTP 302 auf `LOGIN_REDIRECT_URL=/`. Session `mfa_verified=True`. Anwendung nutzbar.
 - Schritt 4: HTTP 200, Form mit Fehlermeldung `"Der Code ist ungültig. Bitte erneut versuchen."`. AuditLog `MFA_FAILED` mit `detail.event="mfa_token_invalid"`, `detail.mode="totp"`.
 - Rate-Limit `5/min/User` auf `MFAVerifyView.post`. Bei 6+ Versuchen → HTTP 429.
-- Eingegebene Token werden mit `.strip().replace(" ", "")` normalisiert (Toleranz für Leerzeichen).
+- Eingegebene Token werden mit `.strip.replace(" ", "")` normalisiert (Toleranz für Leerzeichen).
 
 **DSGVO/Security-Note:**
--: Session-Hijack-Schutz — auch mit gestohlenem Session-Cookie braucht Angreifer den TOTP-Code.
+- Refs #683: Session-Hijack-Schutz — auch mit gestohlenem Session-Cookie braucht Angreifer den TOTP-Code.
 - AuditLog für jeden fehlgeschlagenen Verify-Versuch (Forensik).
 
 **Status:** ☐ Offen
@@ -1047,7 +1052,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Vorbereitung:**
 - Login + MFA-Verify.
-- DB-Check: `StaticDevice` mit `name="backup"` für `miriam`, `StaticToken.objects.filter(device=..).count()` notieren.
+- DB-Check: `StaticDevice` mit `name="backup"` für `miriam`, `StaticToken.objects.filter(device=...).count` notieren.
 
 **Schritte:**
 1. Auf `/mfa/backup-codes/` (über Setup-Flow oder Regenerate-Action) — 10 Codes anzeigen lassen.
@@ -1057,12 +1062,12 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Erwartetes Ergebnis:**
 - UI zeigt **genau 10** Codes als Liste/Card, mit Druck-/Copy-Hint.
 - Code-Format: `^[A-Za-z0-9_-]{22}$`, jedes Codes 128 Bit Entropie (`secrets.token_urlsafe(16)`).
-- DB: Pro Code ein `StaticToken`-Eintrag; **`token`-Feld enthält nicht den Klartext**, sondern SHA-256-Hex-Digest, truncated auf 16 Hex-Zeichen (`hashlib.sha256(code).hexdigest()[:16]`).
-- Bestehender `StaticDevice` für `miriam` wird wiederverwendet, alte Tokens werden gelöscht (`device.token_set.all().delete()`).
+- DB: Pro Code ein `StaticToken`-Eintrag; **`token`-Feld enthält nicht den Klartext**, sondern SHA-256-Hex-Digest, truncated auf 16 Hex-Zeichen (`hashlib.sha256(code).hexdigest[:16]`).
+- Bestehender `StaticDevice` für `miriam` wird wiederverwendet, alte Tokens werden gelöscht (`device.token_set.all.delete`).
 - AuditLog: `BACKUP_CODES_GENERATED` (Setup) bzw. `BACKUP_CODES_REGENERATED` (Regenerate) mit `detail.count=10`.
 
 **DSGVO/Security-Note:**
-- (C-22): DB-Leak != Backup-Code-Kompromittierung (Pre-Image-Angriff gegen 128-Bit-Eingabe = 2^64 Trial, infeasibel).
+- Refs #790 (C-22): DB-Leak != Backup-Code-Kompromittierung (Pre-Image-Angriff gegen 128-Bit-Eingabe = 2^64 Trial, infeasibel).
 - Codes werden NUR EINMAL angezeigt — Anzeige-Seite konsumiert `request.session.pop("mfa_backup_codes")`.
 
 **Status:** ☐ Offen
@@ -1089,7 +1094,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Erwartetes Ergebnis:**
 - HTTP 302 auf `LOGIN_REDIRECT_URL=/`.
 - Session `mfa_verified=True`.
-- DB: `StaticToken` für genutzten Code wurde via `match.delete()` entfernt → `remaining_backup_codes(miriam) == 9`.
+- DB: `StaticToken` für genutzten Code wurde via `match.delete` entfernt → `remaining_backup_codes(miriam) == 9`.
 - AuditLog: `BACKUP_CODES_USED` mit `detail.remaining=9`.
 - `device.set_last_used_timestamp(commit=False)` setzt Timestamp; `throttle_reset` wird ausgeführt.
 
@@ -1105,7 +1110,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| MFA | fachkraft (`miriam`) | C | — | `test_mfa_backup_codes.py` |
+| MFA | fachkraft (`miriam`) | C || `test_mfa_backup_codes.py` |
 
 **Voraussetzung:** ENT-MFA-04; ein Code wurde bereits einmal genutzt und in DB gelöscht.
 
@@ -1122,11 +1127,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - HTTP 200, Form mit Fehler `"Der Code ist ungültig. Bitte erneut versuchen."`.
 - Session bleibt `mfa_verified=False`.
 - AuditLog: neuer `MFA_FAILED`-Eintrag mit `detail.event="mfa_token_invalid"`, `detail.mode="backup"`.
-- `device.throttle_increment()` wurde aufgerufen — wiederholte Misses verzögern weitere Verifies (django-otp ThrottlingMixin).
-- `verify_backup_code` returnt `False`, da `device.token_set.filter(token__in=[hashed, token]).first()` kein Match findet (Token wurde gelöscht).
+- `device.throttle_increment` wurde aufgerufen — wiederholte Misses verzögern weitere Verifies (django-otp ThrottlingMixin).
+- `verify_backup_code` returnt `False`, da `device.token_set.filter(token__in=[hashed, token]).first` kein Match findet (Token wurde gelöscht).
 
 **DSGVO/Security-Note:**
-- Single-use ist Pflicht: — Match in EINER Query gegen Hash UND Cleartext (Legacy), aber Treffer wird direkt deleted.
+- Single-use ist Pflicht: Refs #790 — Match in EINER Query gegen Hash UND Cleartext (Legacy), aber Treffer wird direkt deleted.
 
 **Status:** ☐ Offen
 
@@ -1188,13 +1193,13 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 7. Versuch B: User mit `is_mfa_enforced=True` versucht Disable.
 
 **Erwartetes Ergebnis:**
-- Schritt 6: `TOTPDevice.objects.filter(user=miriam).delete()` löscht alle Devices, `request.session.pop("mfa_verified")`. Redirect `/mfa/settings/`. Status zeigt „2FA nicht aktiv". Success-Message: „Zwei-Faktor-Authentifizierung deaktiviert."
+- Schritt 6: `TOTPDevice.objects.filter(user=miriam).delete` löscht alle Devices, `request.session.pop("mfa_verified")`. Redirect `/mfa/settings/`. Status zeigt „2FA nicht aktiv". Success-Message: „Zwei-Faktor-Authentifizierung deaktiviert."
 - AuditLog: `MFA_DISABLED` mit `detail.event="mfa_disabled"`.
 - Rate-Limit `RATELIMIT_MUTATION` (Default: z.B. 30/h) auf `MFADisableView.post`.
 - Versuch B: Error-Message „Zwei-Faktor-Authentifizierung ist für dein Konto verpflichtend.", Redirect auf `/mfa/settings/`, Devices unverändert. Kein AuditLog `MFA_DISABLED`.
 
 **DSGVO/Security-Note:**
-- `RequireSudoModeMixin` erzwingt Re-Auth — gestohlene Session reicht nicht.
+- `RequireSudoModeMixin` (Refs #683) erzwingt Re-Auth — gestohlene Session reicht nicht.
 - Backup-Codes (`StaticDevice`) bleiben in DB — werden beim nächsten MFA-Setup überschrieben.
 
 **Status:** ☐ Offen
@@ -1205,13 +1210,13 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| MFA | leitung (`thomas`) | C | — | `test_mfa_setup_flow.py` |
+| MFA | leitung (`thomas`) | C || `test_mfa_setup_flow.py` |
 
 **Voraussetzung:** `thomas` (LEAD), `mfa_required=True` per Admin-UI gesetzt; bisher kein TOTPDevice.
 
 **Vorbereitung:**
 - Admin setzt `User.mfa_required=True` für `thomas`.
-- DB: `TOTPDevice.objects.filter(user=thomas, confirmed=True).exists() == False`.
+- DB: `TOTPDevice.objects.filter(user=thomas, confirmed=True).exists == False`.
 
 **Schritte:**
 1. `/login/` mit `thomas` + Pwd → Submit.
@@ -1234,12 +1239,12 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| MFA | fachkraft (`miriam`), assistenz (`lena`), leitung (`thomas`) | C | — | `test_mfa_setup_flow.py` |
+| MFA | fachkraft (`miriam`), assistenz (`lena`), leitung (`thomas`) | C || `test_mfa_setup_flow.py` |
 
 **Voraussetzung:** Facility-Settings `mfa_enforced_facility_wide=True` (über Admin-UI oder Shell gesetzt). Keiner der drei Test-User hat ein Device.
 
 **Vorbereitung:**
-- `facility.settings.mfa_enforced_facility_wide = True; facility.settings.save()`.
+- `facility.settings.mfa_enforced_facility_wide = True; facility.settings.save`.
 - Alle User der Facility ohne TOTPDevice.
 
 **Schritte:**
@@ -1266,12 +1271,12 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>👤 ACCT — Account & Profil (5 Cases)</strong></summary>
 
-**Routen:** `/account/`, `/i18n/setlang/`, `/auth/offline-key-salt/`  
-**Views:** `src/core/views/account.py` (`AccountProfileView`), `src/core/views/auth.py` (`OfflineKeySaltView`, `set_user_language`)  
-**Mixin:** `AssistantOrAboveRequiredMixin` (Account ist für Assistenz und höher)  
-**Services:** `src/core/services/offline_keys.py` (`ensure_offline_key_salt`)  
-**Modelfelder:** `User.preferred_language`, `User.phone`, `User.notes`, `User.offline_key_salt`  
-**E2E-Coverage:** `test_account_profile.py`  
+**Routen:** `/account/`, `/i18n/setlang/`, `/auth/offline-key-salt/` 
+**Views:** `src/core/views/account.py` (`AccountProfileView`), `src/core/views/auth.py` (`OfflineKeySaltView`, `set_user_language`) 
+**Mixin:** `AssistantOrAboveRequiredMixin` (Account ist für Assistenz und höher) 
+**Services:** `src/core/services/offline_keys.py` (`ensure_offline_key_salt`) 
+**Modelfelder:** `User.preferred_language`, `User.phone`, `User.notes`, `User.offline_key_salt` 
+**E2E-Coverage:** `test_account_profile.py` 
 **Spezial-Setup:**
 - Profil-Edit ist (Stand: aktueller Code) READ-ONLY-Dashboard mit Stats-Widget; Stamm-Pflege (Telefon/Notes) läuft über die Admin-UI (`/admin-mgmt/`) — TC-ACCT-03 entsprechend.
 - Sprache wird beim Setlang-Endpoint sowohl in Session/Cookie (Django-Default) ALS AUCH auf `User.preferred_language` persistiert.
@@ -1383,7 +1388,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Acct | fachkraft (`miriam`) | C | — | `test_account_profile.py` |
+| Acct | fachkraft (`miriam`) | C || `test_account_profile.py` |
 
 **Voraussetzung:** eingeloggt.
 
@@ -1421,7 +1426,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Acct | fachkraft (`miriam`) | C | — | `test_account_profile.py` |
+| Acct | fachkraft (`miriam`) | C || `test_account_profile.py` |
 
 **Voraussetzung:** ENT-ACCT-04 lief; `miriam.offline_key_salt` enthält einen Wert.
 
@@ -1454,12 +1459,12 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>🛡️ SUDO — Re-Authentication (4 Cases)</strong></summary>
 
-**Routen:** `/sudo/`  
-**Views:** `src/core/views/sudo_mode.py` (`SudoModeView`)  
-**Services:** `src/core/services/sudo_mode.py` (`enter_sudo`, `is_in_sudo`, `clear_sudo`, `RequireSudoModeMixin`)  
-**Settings:** `SUDO_MODE_ENABLED=True` (Prod/Dev), `SUDO_MODE_TTL_SECONDS=900` (15 Min)  
-**Genutzt von:** `MFADisableView` (LoginRequired+RequireSudoMode); ggf. DSGVO-Export, Pseudonym-Daten-Download  
-**E2E-Coverage:** `test_security_hardening.py` (indirekt über MFA-Disable-Flow), Unit-Tests in `src/tests/test_sudo_mode.py`  
+**Routen:** `/sudo/` 
+**Views:** `src/core/views/sudo_mode.py` (`SudoModeView`) 
+**Services:** `src/core/services/sudo_mode.py` (`enter_sudo`, `is_in_sudo`, `clear_sudo`, `RequireSudoModeMixin`) 
+**Settings:** `SUDO_MODE_ENABLED=True` (Prod/Dev), `SUDO_MODE_TTL_SECONDS=900` (15 Min) 
+**Genutzt von:** `MFADisableView` (LoginRequired+RequireSudoMode); ggf. DSGVO-Export, Pseudonym-Daten-Download (Refs #683) 
+**E2E-Coverage:** `test_security_hardening.py` (indirekt über MFA-Disable-Flow), Unit-Tests in `src/tests/test_sudo_mode.py` 
 **Spezial-Setup:**
 - In Tests deaktiviert: `settings/test.py` setzt `SUDO_MODE_ENABLED=False`. Für E2E-Tests bleibt es aktiv.
 - AuditAction `SUDO_MODE_ENTERED` existiert; `SUDO_MODE_EXIT` existiert **nicht** im Code (kein expliziter Exit-Audit beim Logout — `clear_sudo` ist still). Entsprechend testen wir nur `SUDO_MODE_ENTERED`.
@@ -1486,14 +1491,14 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 4. Session-State und Redirect prüfen.
 
 **Erwartetes Ergebnis:**
-- Schritt 3: `authenticate(request, username="miriam", password="anlaufstelle2026")` returnt User; `enter_sudo(request)` setzt `session["sudo_until"] = int(time.time()) + 900`.
+- Schritt 3: `authenticate(request, username="miriam", password="anlaufstelle2026")` returnt User; `enter_sudo(request)` setzt `session["sudo_until"] = int(time.time) + 900`.
 - AuditLog: `SUDO_MODE_ENTERED` mit `user=miriam`, `target_type="User"`, `target_id=miriam.pk`, `detail.next="/mfa/disable/"`.
 - HTTP 302 Redirect auf `safe_redirect_path("/mfa/disable/")`.
 - Folge-POST auf `/mfa/disable/` ist jetzt erlaubt (`is_in_sudo==True`).
 - Falsches Pwd → HTTP 403 mit gerendertem `auth/sudo_mode.html` und Error-Message „Passwort ist nicht korrekt.", **kein** `enter_sudo`-Aufruf.
 
 **DSGVO/Security-Note:**
-- Schutz gegen Session-Hijack: gestohlenes Cookie reicht nicht ohne aktuelles Pwd.
+- Schutz gegen Session-Hijack (Refs #683): gestohlenes Cookie reicht nicht ohne aktuelles Pwd.
 - `safe_redirect_path` blockiert offene Redirects auf externe URLs.
 - Rate-Limit `5/m/User` auf `SudoModeView.post` (Brute-Force-Schutz).
 
@@ -1505,7 +1510,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sudo | fachkraft (`miriam`) | C | — | `test_security_hardening.py` |
+| Sudo | fachkraft (`miriam`) | C || `test_security_hardening.py` |
 
 **Voraussetzung:** ENT-SUDO-01; aktive Session mit Sudo-Mode.
 
@@ -1515,12 +1520,12 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Schritte:**
 1. Direkt nach Sudo-Entry erste sudo-pflichtige Aktion ausführen → erfolgreich.
-2. 16 Min warten (oder mit gemockter `time.time()` / Setting).
+2. 16 Min warten (oder mit gemockter `time.time` / Setting).
 3. Erneut sudo-pflichtige Aktion versuchen.
 
 **Erwartetes Ergebnis:**
 - Schritt 1: erfolgreich (Sudo-Window noch offen).
-- Schritt 3: `is_in_sudo(request)` returnt `False`, da `time.time() >= session["sudo_until"]`.
+- Schritt 3: `is_in_sudo(request)` returnt `False`, da `time.time >= session["sudo_until"]`.
 - 302 Redirect auf `/sudo/?next=<originalpfad>` — User muss erneut sein Pwd eingeben.
 - Nach erneuter Re-Auth: AuditLog hat einen ZWEITEN `SUDO_MODE_ENTERED`-Eintrag.
 - Setting `SUDO_MODE_TTL_SECONDS` aus `os.environ.get("SUDO_MODE_TTL_SECONDS", "900")`.
@@ -1566,7 +1571,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sudo | fachkraft (`miriam`) | C | — | `test_security_hardening.py` |
+| Sudo | fachkraft (`miriam`) | C || `test_security_hardening.py` |
 
 **Voraussetzung:** ENT-SUDO-01 lief.
 
@@ -1580,12 +1585,12 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Erwartetes Ergebnis:**
 - Schritt 2: ein neuer Eintrag mit:
-  - `action="sudo_mode_entered"`
-  - `user=miriam`
-  - `facility=miriam.facility`
-  - `target_type="User"`, `target_id=str(miriam.pk)`
-  - `detail={"next": "<safe redirect path>"}`
-  - `timestamp` ~ jetzt
+ - `action="sudo_mode_entered"`
+ - `user=miriam`
+ - `facility=miriam.facility`
+ - `target_type="User"`, `target_id=str(miriam.pk)`
+ - `detail={"next": "<safe redirect path>"}`
+ - `timestamp` ~ jetzt
 - Schritt 3: `AuditLog.Action`-TextChoices enthält `SUDO_MODE_ENTERED`, **NICHT** `SUDO_MODE_EXIT`. Das ist eine bewusste Aktualisierung der Aufgabenstellung — der Code-Status ist Truth Source. `clear_sudo(request)` läuft still (z.B. beim Logout via Session-Pop), erzeugt **keinen** dedizierten Audit-Eintrag.
 
 **DSGVO/Security-Note:**
@@ -1601,18 +1606,18 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>📲 PWA — Progressive Web App (5 Cases)</strong></summary>
 
-**Routen:** `/sw.js`, `/manifest.json`, `/offline/`  
-**Views:** `src/core/views/pwa.py` (`ServiceWorkerView`, `ManifestView`, `OfflineFallbackView`)  
-**Statisch:** `src/static/manifest.json`, `src/static/js/sw.js`, `src/templates/offline.html`  
-**Cache-Versionierung:** `CACHE_NAME = "anlaufstelle-v9"` in `sw.js`  
-**App-Shell:** `/static/css/styles.css`, Icons (192/512 PNG+SVG), `/offline/`  
+**Routen:** `/sw.js`, `/manifest.json`, `/offline/` 
+**Views:** `src/core/views/pwa.py` (`ServiceWorkerView`, `ManifestView`, `OfflineFallbackView`) 
+**Statisch:** `src/static/manifest.json`, `src/static/js/sw.js`, `src/templates/offline.html` 
+**Cache-Versionierung:** `CACHE_NAME = "anlaufstelle-v9"` in `sw.js` 
+**App-Shell:** `/static/css/styles.css`, Icons (192/512 PNG+SVG), `/offline/` 
 **Strategien (laut sw.js):**
-- Static-Assets: stale-while-revalidate
-- HTML/HTMX-Navigation: network-first → Cache-Fallback → `/offline/`-Template
-- POST/PUT auf URL_PATTERNS.QUEUE_PATTERNS bei Netzausfall: IndexedDB-Queue via `requestQueueAck`
+- Static-Assets: stale-while-revalidate (Refs #618)
+- HTML/HTMX-Navigation: network-first → Cache-Fallback → `/offline/`-Template (Refs #701)
+- POST/PUT auf URL_PATTERNS.QUEUE_PATTERNS bei Netzausfall: IndexedDB-Queue via `requestQueueAck` (Refs #573, #662)
 - Multipart-POST: kein Queue, sofortiger 503 mit „Datei-Upload erfordert Internetverbindung"
-- Attachment-/Export-Downloads: network-only
-**E2E-Coverage:** `test_pwa_offline.py`  
+- Attachment-/Export-Downloads: network-only (Refs #751)
+**E2E-Coverage:** `test_pwa_offline.py` 
 **Spezial-Setup:**
 - Service-Worker registriert sich nur über HTTPS (oder localhost). E2E-Server auf `https://localhost:8844/` ist OK.
 - Manifest muss von `/manifest.json` (Root-Scope!) geliefert werden, nicht aus `/static/`. Begründung im View-Docstring: Android Chrome akzeptiert sonst Scope `/` nicht.
@@ -1642,11 +1647,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - HTTP 200, MIME `application/manifest+json`.
 - Body parst als JSON ohne Fehler.
 - Pflichtfelder vorhanden:
-  - `"name": "Anlaufstelle"`, `"short_name": "Anlaufstelle"`
-  - `"id": "/"`, `"start_url": "/"`, `"scope": "/"`
-  - `"display": "standalone"`
-  - `"background_color": "#f9fafb"`, `"theme_color": "#4f46e5"`
-  - `"icons"` mit ≥ 4 Einträgen, mind. ein 192×192 und ein 512×512 PNG.
+ - `"name": "Anlaufstelle"`, `"short_name": "Anlaufstelle"`
+ - `"id": "/"`, `"start_url": "/"`, `"scope": "/"`
+ - `"display": "standalone"`
+ - `"background_color": "#f9fafb"`, `"theme_color": "#4f46e5"`
+ - `"icons"` mit ≥ 4 Einträgen, mind. ein 192×192 und ein 512×512 PNG.
 - Datei wird mit `lru_cache(maxsize=1)` aus dem Filesystem gelesen — Performance-Test: 2. Aufruf ohne Disk-I/O.
 
 **DSGVO/Security-Note:**
@@ -1679,12 +1684,12 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Schritt 2: SW ist `activated and is running`, Scope `/`.
 - Schritt 3: HTTP 200, `Content-Type: application/javascript`, `Service-Worker-Allowed: /`.
 - Schritt 4: Cache `anlaufstelle-v9` enthält App-Shell aus `APP_SHELL`:
-  - `/static/css/styles.css`
-  - `/static/icons/icon-192.png`, `/static/icons/icon-512.png`
-  - `/static/icons/icon-192.svg`, `/static/icons/icon-512.svg`
-  - `/offline/`
-- Schritt 5: zweiter Reload servert aus Cache (Cache-Hit), gleichzeitig Hintergrund-Fetch der neuen Version → Cache-Update.
-- Bei `caches.keys()`-Wechsel werden alte CACHE_NAMEs (v8 etc.) im `activate`-Event gelöscht.
+ - `/static/css/styles.css`
+ - `/static/icons/icon-192.png`, `/static/icons/icon-512.png`
+ - `/static/icons/icon-192.svg`, `/static/icons/icon-512.svg`
+ - `/offline/`
+- Schritt 5: zweiter Reload servert aus Cache (Cache-Hit), gleichzeitig Hintergrund-Fetch der neuen Version → Cache-Update (Refs #618).
+- Bei `caches.keys`-Wechsel werden alte CACHE_NAMEs (v8 etc.) im `activate`-Event gelöscht.
 
 **DSGVO/Security-Note:**
 - SW-Scope-Restriction (Service-Worker-Allowed) verhindert, dass aus `/static/`-Pfaden Root-Skripte registriert werden.
@@ -1754,7 +1759,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Schritt 5: HTTP 200, Content-Type `text/html; charset=utf-8`, Body aus `render_to_string("offline.html")`.
 
 **DSGVO/Security-Note:**
-- Inline-CSS in `offline.html` notwendig, da SW im Offline-Fall nicht auf Static-Assets-Pipeline zugreifen kann.
+- Inline-CSS in `offline.html` notwendig, da SW im Offline-Fall nicht auf Static-Assets-Pipeline zugreifen kann (Refs #701).
 - Offline-Klienten-Viewer rendert nur was lokal verschlüsselt vorliegt — kein Server-Round-Trip → keine ungewollte Re-Connect-Lecks.
 
 **Status:** ☐ Offen
@@ -1776,19 +1781,19 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Schritte:**
 1. App neu laden (Hard-Reload sind nicht nötig; Browser prüft SW automatisch).
 2. DevTools → Application → Service Workers: „waiting to activate"-Status für die neue SW-Version sehen.
-3. „skipWaiting"-Verhalten: laut Code ruft `install`-Handler `self.skipWaiting()` auf — alte SW wird sofort durch neue ersetzt.
-4. `activate`-Handler löscht alte Caches via `caches.keys() … filter(k !== CACHE_NAME).delete()`.
+3. „skipWaiting"-Verhalten: laut Code ruft `install`-Handler `self.skipWaiting` auf — alte SW wird sofort durch neue ersetzt.
+4. `activate`-Handler löscht alte Caches via `caches.keys … filter(k !== CACHE_NAME).delete`.
 5. App reloaden — beobachte Cache-Liste in DevTools (nur `anlaufstelle-v10` übrig).
 6. Static-Assets werden bei Bedarf via stale-while-revalidate aus dem neuen Cache geliefert.
 
 **Erwartetes Ergebnis:**
-- Neue SW installiert + aktiviert sich automatisch (Refs `self.skipWaiting()` + `self.clients.claim()` im Code).
+- Neue SW installiert + aktiviert sich automatisch (Refs `self.skipWaiting` + `self.clients.claim` im Code).
 - Alte Cache-Stores (`anlaufstelle-v9`, ältere) sind entfernt.
 - Nutzer-sichtbar: keine UI-Banner-Implementierung im aktuellen Code (Update-Toast wäre Custom-JS) — Reload reicht.
 - Anmerkung: Aktuell **kein expliziter** „Update verfügbar"-Banner im Frontend — wenn die Aufgabe einen User-Hinweis fordert, ist das ein offener Punkt (manuell verifizierbar: kein Banner sichtbar, aber Update funktioniert silent).
 
 **DSGVO/Security-Note:**
-- Stale-while-revalidate verhindert, dass alter Bug-Code über Cache-Lock festgehalten wird.
+- Stale-while-revalidate (Refs #618) verhindert, dass alter Bug-Code über Cache-Lock festgehalten wird.
 - Keine PII in SW-Cache, deshalb ist Cache-Wipe bei Version-Bump unkritisch.
 
 **Status:** ☐ Offen
@@ -1800,11 +1805,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>👥 CLIENT — Klient:innen-Management (14 Cases)</strong></summary>
 
-**Routen:** `/clients/`, `/clients/new/`, `/clients/<uuid>/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/export/json/`, `/clients/<uuid>/export/pdf/`, `/clients/<uuid>/delete/`, `/clients/trash/`, `/clients/<uuid>/restore/`, `/api/clients/autocomplete/`  
-**Views:** `src/core/views/clients.py` (`ClientListView`, `ClientCreateView`, `ClientDetailView`, `ClientUpdateView`, `ClientAutocompleteView`, `ClientDataExportJSONView`, `ClientDataExportPDFView`) + `src/core/views/client_deletion.py` (`ClientDeleteRequestView`, `ClientTrashView`, `ClientRestoreView`)  
-**Services:** `src/core/services/clients.py` (`create_client`, `update_client`, `request_client_deletion`, `restore_client`, `track_client_visit`)  
-**E2E-Coverage:** `test_clients_search.py`, `test_client_edit.py`, `test_client_deletion_workflow.py`, `test_client_autocomplete_recency.py`, `test_client_export.py`, `test_min_contact_stage_anonymous.py`, `test_contact_stage.py`, `test_fuzzy_search.py`  
-**Spezial-Setup:** Cross-Facility-Tests benötigen `make seed FACILITIES=2` und 2 parallele Browser-Profile (`admin` in Facility 1, `admin_2` in Facility 2). DSGVO-Exporte erfordern Sudo-Re-Auth.
+**Routen:** `/clients/`, `/clients/new/`, `/clients/<uuid>/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/export/json/`, `/clients/<uuid>/export/pdf/`, `/clients/<uuid>/delete/`, `/clients/trash/`, `/clients/<uuid>/restore/`, `/api/clients/autocomplete/` 
+**Views:** `src/core/views/clients.py` (`ClientListView`, `ClientCreateView`, `ClientDetailView`, `ClientUpdateView`, `ClientAutocompleteView`, `ClientDataExportJSONView`, `ClientDataExportPDFView`) + `src/core/views/client_deletion.py` (`ClientDeleteRequestView`, `ClientTrashView`, `ClientRestoreView`) 
+**Services:** `src/core/services/clients.py` (`create_client`, `update_client`, `request_client_deletion`, `restore_client`, `track_client_visit`) 
+**E2E-Coverage:** `test_clients_search.py`, `test_client_edit.py`, `test_client_deletion_workflow.py`, `test_client_autocomplete_recency.py`, `test_client_export.py`, `test_min_contact_stage_anonymous.py`, `test_contact_stage.py`, `test_fuzzy_search.py` 
+**Spezial-Setup:** Cross-Facility-Tests benötigen `make seed FACILITIES=2` und 2 parallele Browser-Profile (`admin` in Facility 1, `admin_2` in Facility 2). DSGVO-Exporte erfordern Sudo-Re-Auth (Refs #683).
 
 ---
 
@@ -1813,6 +1818,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Klient:innen | fachkraft | C/F/S | ✓ | `test_clients_search.py` |
+
 
 **Vorbereitung:**
 - Mit `fachkraft` / `anlaufstelle2026` einloggen.
@@ -1831,7 +1837,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **DSGVO/Security-Note:**
 - Liste enthält nur Pseudonyme (Art. 5 Datenminimierung).
-- Cross-Facility-Daten unsichtbar dank `Client.objects.for_facility()` + RLS.
+- Cross-Facility-Daten unsichtbar dank `Client.objects.for_facility` + RLS.
 
 **Status:** ☐ Offen
 
@@ -1842,6 +1848,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Klient:innen | fachkraft | C/F/S | ✓ | `test_clients_search.py::test_client_create_pseudonym_uniqueness` |
+
 
 **Vorbereitung:**
 - Mit `fachkraft` einloggen.
@@ -1875,6 +1882,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 |---------|-------|---------|--------|-----|
 | Klient:innen | fachkraft | C/F/S | ⚪ | `test_min_contact_stage_anonymous.py` |
 
+
 **Vorbereitung:**
 - Mit `fachkraft` einloggen.
 
@@ -1892,7 +1900,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **DSGVO/Security-Note:**
 - Anonyme Events haben keine `client`-FK und sind nicht über Personenfilter rückführbar (Art. 5 Datenminimierung).
--.
+- Refs #394, #472, #486.
 
 **Status:** ☐ Offen
 
@@ -1959,7 +1967,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **DSGVO/Security-Note:**
 - `track_client_visit` legt `RecentClientVisit`-Eintrag an (für Recency-Sortierung im Autocomplete).
 - Bei `contact_stage=qualified` wird `AuditLog.VIEW_QUALIFIED` geschrieben.
-- Events höherer Sensitivity sind über `Event.objects.visible_to(user)` für niedrigere Rollen unsichtbar.
+- Events höherer Sensitivity sind über `Event.objects.visible_to(user)` für niedrigere Rollen unsichtbar (Refs #522).
 
 **Status:** ☐ Offen
 
@@ -1970,6 +1978,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Klient:innen | fachkraft | C/F/S | ⚪ | `test_clients_search.py::test_client_list_search`, `test_fuzzy_search.py::test_global_dropdown_shows_similar` |
+
 
 **Vorbereitung:**
 - Mit `fachkraft` einloggen, auf Dashboard `/`.
@@ -1983,7 +1992,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Erwartetes Ergebnis:**
 - Dropdown öffnet via HTMX nach ~150 ms Debounce.
 - Sektion „Personen" zeigt Substring-Match (`Stern-42`).
-- Bei Tippfehler erscheint zusätzliche Sektion „Ähnliche Pseudonyme" (pg_trgm Similarity > 0.3).
+- Bei Tippfehler erscheint zusätzliche Sektion „Ähnliche Pseudonyme" (pg_trgm Similarity > 0.3, Refs #536).
 - Klick auf Treffer navigiert zu `/clients/<uuid>/`.
 
 **DSGVO/Security-Note:**
@@ -1999,12 +2008,13 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 |---------|-------|---------|--------|-----|
 | Klient:innen | fachkraft | C/F/S | ⚪ | `test_client_autocomplete_recency.py` |
 
+
 **Vorbereitung:**
 - Mit `fachkraft` einloggen.
 
 **Schritte:**
 1. `/events/new/` aufrufen.
-2. Klient:innen-Feld (`input[placeholder='Pseudonym eingeben..']`) anklicken — ohne Tippen.
+2. Klient:innen-Feld (`input[placeholder='Pseudonym eingeben...']`) anklicken — ohne Tippen.
 3. Dropdown (`[role='listbox']`) erscheint mit `[role='option']`-Einträgen.
 4. Reihenfolge mit `/api/clients/autocomplete/?q=` (Browser-Devtools) abgleichen.
 5. `Stern` eintippen — Filter aktiv, Recency-Order bleibt.
@@ -2017,8 +2027,8 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Klick auf Treffer befüllt Feld mit Pseudonym, Dropdown schließt.
 
 **DSGVO/Security-Note:**
-- Autocomplete ist rate-limited mit 30/Min/User (, `block=True` → 429 statt schweigender Drop).
-- `min_stage`-Param filtert Personen unterhalb der DocumentType-Mindeststufe.
+- Autocomplete ist rate-limited mit 30/Min/User (Refs #737, `block=True` → 429 statt schweigender Drop).
+- `min_stage`-Param filtert Personen unterhalb der DocumentType-Mindeststufe (Refs #507).
 
 **Status:** ☐ Offen
 
@@ -2051,7 +2061,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **DSGVO/Security-Note:**
 - Art. 20 DSGVO Datenportabilität.
-- Sudo-Mode verhindert, dass eine gestohlene Session den Export auslösen kann.
+- Sudo-Mode (Refs #683) verhindert, dass eine gestohlene Session den Export auslösen kann.
 - Rate-Limit 10/h/User schützt vor Massenexport.
 
 **Status:** ☐ Offen
@@ -2095,6 +2105,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 |---------|-------|---------|--------|-----|
 | Klient:innen | fachkraft | C/F/S | ⚪ | `test_client_deletion_workflow.py::test_staff_can_request_client_deletion`, `test_full_four_eyes_workflow` |
 
+
 **Vorbereitung:**
 - Mit `fachkraft` einloggen.
 
@@ -2114,7 +2125,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Direktaufruf der Detail-URL nach Genehmigung → 404 (Detail-View filtert `is_deleted=False`).
 
 **DSGVO/Security-Note:**
-- Art. 17 DSGVO „Recht auf Löschung" mit Vier-Augen-Prinzip.
+- Art. 17 DSGVO „Recht auf Löschung" mit Vier-Augen-Prinzip (Refs #626).
 - Reviewer ≠ Antragsteller — sonst `ValidationError` „Reviewer darf nicht der Antragsteller sein".
 
 **Status:** ☐ Offen
@@ -2186,7 +2197,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / RLS | admin (F1) + admin_2 (F2) | C | — | — (manueller Cross-Facility-Test) |
+| Klient:innen / RLS | admin (F1) + admin_2 (F2) | C || — (manueller Cross-Facility-Test) |
 
 **Voraussetzung:** `make seed FACILITIES=2` — zwei parallele Facilities mit getrennten Admins.
 
@@ -2201,7 +2212,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 4. Profil 2: `/api/clients/autocomplete/?q=Stern` aufrufen.
 
 **Erwartetes Ergebnis:**
-- Direkter Detail-Aufruf in Profil 2 → 404 (`get_object_or_404(.., facility=request.current_facility)`).
+- Direkter Detail-Aufruf in Profil 2 → 404 (`get_object_or_404(..., facility=request.current_facility)`).
 - Edit-URL → 404 vor Permission-Check (Facility-Scoping ist erste Hürde).
 - Autocomplete liefert keine F1-Pseudonyme.
 
@@ -2217,7 +2228,8 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | fachkraft | C | ✓ | — |
+| Klient:innen | fachkraft | C | ✓ ||
+
 
 **Vorbereitung:**
 - Chrome DevTools → Device-Toolbar → iPhone 14 (390 × 844).
@@ -2249,11 +2261,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>📁 CASE — Fall-Lebenszyklus (12 Cases)</strong></summary>
 
-**Routen:** `/cases/`, `/cases/new/`, `/cases/<uuid>/`, `/cases/<uuid>/edit/`, `/cases/<uuid>/close/`, `/cases/<uuid>/reopen/`, `/cases/<uuid>/assign-event/`, `/cases/<uuid>/remove-event/<uuid>/`, `/api/cases/for-client/`  
-**Views:** `src/core/views/cases.py` (`CaseListView`, `CaseCreateView`, `CaseDetailView`, `CaseUpdateView`, `CaseCloseView`, `CaseReopenView`, `CaseAssignEventView`, `CaseRemoveEventView`, `CasesForClientView`)  
-**Services:** `src/core/services/cases.py` (`create_case`, `update_case`, `close_case`, `reopen_case`, `assign_event_to_case`, `remove_event_from_case`)  
-**E2E-Coverage:** `test_cases.py` (TestCaseCRUD, TestCasePermissions)  
-**Spezial-Setup:** Cases sind `Pflichtfeld client`. Schließen/Wiedereröffnen erfordert LEAD+. Assistenz-Rolle hat 0 Zugriff (`StaffRequiredMixin`).
+**Routen:** `/cases/`, `/cases/new/`, `/cases/<uuid>/`, `/cases/<uuid>/edit/`, `/cases/<uuid>/close/`, `/cases/<uuid>/reopen/`, `/cases/<uuid>/assign-event/`, `/cases/<uuid>/remove-event/<uuid>/`, `/api/cases/for-client/` 
+**Views:** `src/core/views/cases.py` (`CaseListView`, `CaseCreateView`, `CaseDetailView`, `CaseUpdateView`, `CaseCloseView`, `CaseReopenView`, `CaseAssignEventView`, `CaseRemoveEventView`, `CasesForClientView`) 
+**Services:** `src/core/services/cases.py` (`create_case`, `update_case`, `close_case`, `reopen_case`, `assign_event_to_case`, `remove_event_from_case`) 
+**E2E-Coverage:** `test_cases.py` (TestCaseCRUD, TestCasePermissions) 
+**Spezial-Setup:** Cases sind `Pflichtfeld client` (Refs #748). Schließen/Wiedereröffnen erfordert LEAD+. Assistenz-Rolle hat 0 Zugriff (`StaffRequiredMixin`).
 
 ---
 
@@ -2262,6 +2274,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Fälle | fachkraft | C/F/S | ✓ | `test_cases.py::test_case_list_filter_by_status` |
+
 
 **Vorbereitung:**
 - Mit `fachkraft` einloggen.
@@ -2292,6 +2305,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 |---------|-------|---------|--------|-----|
 | Fälle | fachkraft | C/F/S | ✓ | `test_cases.py::test_create_case` |
 
+
 **Vorbereitung:**
 - Mit `fachkraft` einloggen.
 - Eindeutigen Titel `TC02-Case-<random>` vorbereiten.
@@ -2311,7 +2325,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - `AuditLog` `CASE_CREATE`.
 
 **DSGVO/Security-Note:**
-- `client` ist Pflichtfeld. Ohne Person → `ValidationError` „Fälle müssen einer Person zugeordnet sein.".
+- `client` ist Pflichtfeld (Refs #748). Ohne Person → `ValidationError` „Fälle müssen einer Person zugeordnet sein.".
 
 **Status:** ☐ Offen
 
@@ -2322,6 +2336,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Fälle | fachkraft | C/F/S | ⚪ | `test_cases.py::TestEpisodes::test_create_episode` |
+
 
 **Vorbereitung:**
 - Mit `fachkraft` einloggen.
@@ -2358,10 +2373,10 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Schritte:**
 1. `/cases/` öffnen, ersten Fall klicken.
 2. Detail-Layout sichten:
-   - Headline = Titel.
-   - Status-Badge (Offen/Geschlossen).
-   - Meta-Info „Fallverantwortlich", „Erstellt am", „Person".
-   - Sektionen Episoden, Goals, Events (zugeordnet/nicht zugeordnet).
+ - Headline = Titel.
+ - Status-Badge (Offen/Geschlossen).
+ - Meta-Info „Fallverantwortlich", „Erstellt am", „Person".
+ - Sektionen Episoden, Goals, Events (zugeordnet/nicht zugeordnet).
 
 **Erwartetes Ergebnis:**
 - `select_related("client", "lead_user", "created_by")` in `CaseDetailView` — keine N+1-Queries (in Devtools-Performance-Profile sichtbar).
@@ -2370,7 +2385,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - „Nicht zugeordnete Events" füllen sich mit Events derselben Person ohne `case`.
 
 **DSGVO/Security-Note:**
-- Events werden via `Event.objects.visible_to(user)` gefiltert (Sensitivity-Layer).
+- Events werden via `Event.objects.visible_to(user)` gefiltert (Sensitivity-Layer, Refs #522).
 
 **Status:** ☐ Offen
 
@@ -2401,7 +2416,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - `AuditLog` `CASE_UPDATE` mit `detail.changed_fields=["title","description","lead_user"]` (PII-frei).
 
 **DSGVO/Security-Note:**
-- Optimistic Locking: `expected_updated_at` wird beim POST geprüft. Bei Konflikt → Toast-Fehlermeldung.
+- Optimistic Locking (Refs #531): `expected_updated_at` wird beim POST geprüft. Bei Konflikt → Toast-Fehlermeldung.
 
 **Status:** ☐ Offen
 
@@ -2430,7 +2445,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Status-Badge wechselt von „Offen" auf „Geschlossen".
 - „Wiedereröffnen"-Button erscheint.
 - `AuditLog` `CASE_CLOSE`.
-- `Case.closed_at` gesetzt auf `timezone.now()`.
+- `Case.closed_at` gesetzt auf `timezone.now`.
 
 **DSGVO/Security-Note:**
 - Fachkraft (`StaffRequiredMixin` reicht für CRUD, aber Close erfordert `LeadOrAdminRequiredMixin`) → Schließen-Button bei Fachkraft nicht sichtbar (Test in `test_staff_cannot_close_case`).
@@ -2473,7 +2488,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle / Events | fachkraft | C/F/S | ⚪ | — |
+| Fälle / Events | fachkraft | C/F/S | ⚪ ||
 
 **Voraussetzung:** Fall + nicht zugeordnetes Event derselben Person
 
@@ -2504,7 +2519,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle / Events | fachkraft | C/F/S | ⚪ | — |
+| Fälle / Events | fachkraft | C/F/S | ⚪ ||
 
 **Voraussetzung:** Fall mit zugeordnetem Event (TC08)
 
@@ -2532,7 +2547,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle / API | fachkraft | C | — | — |
+| Fälle / API | fachkraft | C |||
 
 **Voraussetzung:** Person mit ≥ 2 offenen Fällen
 
@@ -2547,11 +2562,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Erwartetes Ergebnis:**
 - Detail listet alle offenen (`status=OPEN`) Fälle absteigend nach `created_at`.
-- API JSON `[{"id": "<uuid>", "title": ".."}]`.
+- API JSON `[{"id": "<uuid>", "title": "..."}]`.
 - Rate-Limit 30/Min (Refs `RATELIMIT_FREQUENT`-Pendant; hier `30/m`).
 
 **DSGVO/Security-Note:**
-- Endpoint facility-gescoped (`Case.objects.filter(facility=request.current_facility,..)`).
+- Endpoint facility-gescoped (`Case.objects.filter(facility=request.current_facility,...)`).
 
 **Status:** ☐ Offen
 
@@ -2561,7 +2576,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle | fachkraft | C/F/S | ⚪ | — |
+| Fälle | fachkraft | C/F/S | ⚪ ||
 
 **Voraussetzung:** eigener Test-Fall
 
@@ -2581,7 +2596,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Kein 500-Error.
 
 **DSGVO/Security-Note:**
-- Optimistic Locking verhindert Lost-Updates bei zwei Bearbeiter:innen.
+- Optimistic Locking verhindert Lost-Updates bei zwei Bearbeiter:innen (Refs #531).
 
 **Status:** ☐ Offen
 
@@ -2591,7 +2606,8 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle | fachkraft | C | ✓ | — |
+| Fälle | fachkraft | C | ✓ ||
+
 
 **Vorbereitung:**
 - Chrome Devtools → Device-Toolbar iPhone 14.
@@ -2621,10 +2637,10 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>🔄 EPI — Episoden (5 Cases)</strong></summary>
 
-**Routen:** `/cases/<case_pk>/episodes/new/`, `/cases/<case_pk>/episodes/<pk>/edit/`, `/cases/<case_pk>/episodes/<pk>/close/`  
-**Views:** `src/core/views/case_episodes.py` (`EpisodeCreateView`, `EpisodeUpdateView`, `EpisodeCloseView`)  
-**Services:** `src/core/services/episodes.py` (`create_episode`, `update_episode`, `close_episode`)  
-**E2E-Coverage:** `test_cases.py::TestEpisodes`  
+**Routen:** `/cases/<case_pk>/episodes/new/`, `/cases/<case_pk>/episodes/<pk>/edit/`, `/cases/<case_pk>/episodes/<pk>/close/` 
+**Views:** `src/core/views/case_episodes.py` (`EpisodeCreateView`, `EpisodeUpdateView`, `EpisodeCloseView`) 
+**Services:** `src/core/services/episodes.py` (`create_episode`, `update_episode`, `close_episode`) 
+**E2E-Coverage:** `test_cases.py::TestEpisodes` 
 **Spezial-Setup:** Episoden sind nur für `Case.Status=OPEN` anlegbar. Idempotenz beim Schließen (zweimal close → no-op).
 
 ---
@@ -2656,7 +2672,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **DSGVO/Security-Note:**
 - `started_at` ist Pflichtfeld (DateField); bei leerem POST → Form-Error.
-- Default falls Service direkt aufgerufen: `timezone.now().date()`.
+- Default falls Service direkt aufgerufen: `timezone.now.date`.
 
 **Status:** ☐ Offen
 
@@ -2666,7 +2682,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Episoden | fachkraft | C/F/S | ⚪ | — |
+| Episoden | fachkraft | C/F/S | ⚪ ||
 
 **Voraussetzung:** Fall mit aktiver Episode (TC-ID ENT-EPI-01)
 
@@ -2712,7 +2728,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Erwartetes Ergebnis:**
 - Toast „Episode wurde abgeschlossen.".
 - Episode-Status wechselt von „aktiv" auf „abgeschlossen".
-- `ended_at = timezone.now().date()` (Default falls nicht übergeben).
+- `ended_at = timezone.now.date` (Default falls nicht übergeben).
 - Idempotenz: erneuter Klick auf „Abschließen" hat keinen Effekt (`if episode.ended_at is not None: return`).
 
 **DSGVO/Security-Note:**
@@ -2726,7 +2742,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Episoden / Permissions | assistenz | C | — | `test_cases.py::test_assistant_cannot_access_cases` (verwandt) |
+| Episoden / Permissions | assistenz | C || `test_cases.py::test_assistant_cannot_access_cases` (verwandt) |
 
 **Voraussetzung:** offener Fall mit bekannter UUID
 
@@ -2755,7 +2771,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Episoden | fachkraft | C/F/S | ⚪ | — |
+| Episoden | fachkraft | C/F/S | ⚪ ||
 
 **Voraussetzung:** offener Fall
 
@@ -2786,10 +2802,10 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>🎯 GOAL — Wirkungsziele & Meilensteine (7 Cases)</strong></summary>
 
-**Routen:** `/cases/<case_pk>/goals/new/`, `/cases/<case_pk>/goals/<pk>/edit/`, `/cases/<case_pk>/goals/<pk>/toggle/`, `/cases/<case_pk>/goals/<goal_pk>/milestones/new/`, `/cases/<case_pk>/milestones/<pk>/toggle/`, `/cases/<case_pk>/milestones/<pk>/delete/`  
-**Views:** `src/core/views/case_goals.py` (`GoalCreateView`, `GoalUpdateView`, `GoalToggleView`, `MilestoneCreateView`, `MilestoneToggleView`, `MilestoneDeleteView`)  
-**Services:** `src/core/services/goals.py` (`create_goal`, `update_goal`, `achieve_goal`, `unachieve_goal`, `create_milestone`, `toggle_milestone`, `delete_milestone`)  
-**E2E-Coverage:** `test_cases.py::TestGoalsAndMilestones`  
+**Routen:** `/cases/<case_pk>/goals/new/`, `/cases/<case_pk>/goals/<pk>/edit/`, `/cases/<case_pk>/goals/<pk>/toggle/`, `/cases/<case_pk>/goals/<goal_pk>/milestones/new/`, `/cases/<case_pk>/milestones/<pk>/toggle/`, `/cases/<case_pk>/milestones/<pk>/delete/` 
+**Views:** `src/core/views/case_goals.py` (`GoalCreateView`, `GoalUpdateView`, `GoalToggleView`, `MilestoneCreateView`, `MilestoneToggleView`, `MilestoneDeleteView`) 
+**Services:** `src/core/services/goals.py` (`create_goal`, `update_goal`, `achieve_goal`, `unachieve_goal`, `create_milestone`, `toggle_milestone`, `delete_milestone`) 
+**E2E-Coverage:** `test_cases.py::TestGoalsAndMilestones` 
 **Spezial-Setup:** Alle Endpoints sind HTMX-only und rendern `core/cases/partials/goals_section.html`. Rate-Limit `RATELIMIT_FREQUENT` (60/min/User).
 
 ---
@@ -2828,7 +2844,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Wirkungsziele | fachkraft | C/F/S | ⚪ | — |
+| Wirkungsziele | fachkraft | C/F/S | ⚪ ||
 
 **Voraussetzung:** vorhandenes Ziel (TC-ID ENT-GOAL-01)
 
@@ -2857,7 +2873,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Wirkungsziele | fachkraft | C/F/S | ✓ | — |
+| Wirkungsziele | fachkraft | C/F/S | ✓ ||
 
 **Voraussetzung:** vorhandenes Ziel
 
@@ -2870,7 +2886,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 3. Erneut klicken → zurück auf „offen".
 
 **Erwartetes Ergebnis:**
-- Erste Klick: `goal.is_achieved=True`, `goal.achieved_at=timezone.localdate()`.
+- Erste Klick: `goal.is_achieved=True`, `goal.achieved_at=timezone.localdate`.
 - Zweite Klick: `is_achieved=False`, `achieved_at=None` (`unachieve_goal`).
 - HTMX-Partial-Refresh ohne Reload.
 - Idempotenz: Wenn `is_achieved=True` und `achieve_goal` erneut aufgerufen → no-op (Service-Return).
@@ -2928,7 +2944,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 3. Erneut klicken — wieder rückgängig.
 
 **Erwartetes Ergebnis:**
-- Erste Klick: `is_completed=True`, `completed_at=timezone.localdate()`, `<span class="line-through">`.
+- Erste Klick: `is_completed=True`, `completed_at=timezone.localdate`, `<span class="line-through">`.
 - Zweite Klick: `is_completed=False`, `completed_at=None`.
 - HTMX rendert Partial mit korrektem CSS-State.
 
@@ -2943,7 +2959,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Meilensteine | fachkraft | C/F/S | ⚪ | — |
+| Meilensteine | fachkraft | C/F/S | ⚪ ||
 
 **Voraussetzung:** vorhandener Meilenstein
 
@@ -2971,7 +2987,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Wirkungsziele / Meilensteine | fachkraft | C/F/S | ✓ | — |
+| Wirkungsziele / Meilensteine | fachkraft | C/F/S | ✓ ||
 
 **Voraussetzung:** leerer Fall (oder ausreichend Ziel-Slots)
 
@@ -3003,10 +3019,10 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>📝 EVT — Events / Dokumentation (10 Cases)</strong></summary>
 
-**Routen:** `/events/new/`, `/events/<uuid>/`, `/events/<uuid>/edit/`, `/events/<uuid>/delete/`, `/api/events/fields/`  
-**Views:** `src/core/views/events.py` (`EventCreateView`, `EventDetailView`, `EventUpdateView`, `EventDeleteView`, `EventFieldsPartialView`)  
-**Services:** `src/core/services/events/crud.py` (`create_event`, `update_event`, `soft_delete_event`, `attach_files_to_new_event`), `src/core/services/event.py` (Re-Export-Stub), `src/core/services/sensitivity.py` (`user_can_see_event`, `get_visible_event_or_404`, `remove_restricted_fields`), `src/core/services/quick_templates.py`  
-**E2E-Coverage:** `test_quick_capture.py`, `test_fieldtemplate_default_value.py`, `test_min_contact_stage_anonymous.py`  
+**Routen:** `/events/new/`, `/events/<uuid>/`, `/events/<uuid>/edit/`, `/events/<uuid>/delete/`, `/api/events/fields/` 
+**Views:** `src/core/views/events.py` (`EventCreateView`, `EventDetailView`, `EventUpdateView`, `EventDeleteView`, `EventFieldsPartialView`) 
+**Services:** `src/core/services/events/crud.py` (`create_event`, `update_event`, `soft_delete_event`, `attach_files_to_new_event`), `src/core/services/event.py` (Re-Export-Stub Refs #777), `src/core/services/sensitivity.py` (`user_can_see_event`, `get_visible_event_or_404`, `remove_restricted_fields`), `src/core/services/quick_templates.py` 
+**E2E-Coverage:** `test_quick_capture.py`, `test_fieldtemplate_default_value.py`, `test_min_contact_stage_anonymous.py` 
 **Spezial-Setup:** Anonyme Events benötigen DocumentType ohne `min_contact_stage`. Sensitivity-Tests benötigen DocumentTypes der Stufen `normal` / `elevated` / `high`. Optimistic-Concurrency-Test braucht zwei parallele Browser-Tabs oder Inkognito-Fenster.
 
 ---
@@ -3062,7 +3078,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 2. Erstes DocumentType A im Dropdown wählen.
 3. HTMX-Request `GET /api/events/fields/?document_type=<A>` beobachten → Antwort 200, Partial `dynamic_fields.html` mit 3 Inputs.
 4. DocumentType-Dropdown auf B wechseln.
-5. Zweiter HTMX-Request `GET /api/events/fields/?document_type=<B>` → 200, 5 Inputs, Default-Wert sichtbar im entsprechenden Feld (`field.initial = ft.get_default_initial()`).
+5. Zweiter HTMX-Request `GET /api/events/fields/?document_type=<B>` → 200, 5 Inputs, Default-Wert sichtbar im entsprechenden Feld (`field.initial = ft.get_default_initial`).
 6. Felder umschalten und prüfen, dass das `#dynamic-fields-target` durch HTMX-Swap ersetzt wird (kein voller Reload).
 
 **Erwartetes Ergebnis:**
@@ -3071,7 +3087,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Bei Auswahl eines `HIGH`-DocumentType durch fachkraft (`STAFF`-Rolle) → 403 Forbidden, weil `user_can_see_document_type` False liefert (`PermissionDenied` in `EventFieldsPartialView.get`).
 
 **DSGVO/Security-Note:**
-- Sensitivity-Guard auf Partial-Endpoint verhindert, dass Assistant/Staff Feldlabels für höhere Stufen sehen.
+- Sensitivity-Guard auf Partial-Endpoint verhindert, dass Assistant/Staff Feldlabels für höhere Stufen sehen (Refs #774).
 
 **Status:** ☐ Offen
 
@@ -3140,7 +3156,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Events | fachkraft | C | ⚪ | — |
+| Events | fachkraft | C | ⚪ ||
 
 **Voraussetzung:** ENT-EVT-01 (bestehendes Event vom selben User).
 
@@ -3172,7 +3188,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Events | fachkraft | C/F/S | ⚪ | — |
+| Events | fachkraft | C/F/S | ⚪ ||
 
 **Voraussetzung:** ENT-EVT-05 (existierendes Event).
 
@@ -3194,7 +3210,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - AuditLog: kein `event_update` für den Konflikt-Versuch.
 
 **DSGVO/Security-Note:**
-- `filtered_server_data_json` blendet Felder aus, die der Konflikt-Resolver-User nicht sehen darf — kein Leak höher klassifizierter Inhalte über die 409-Response.
+- `filtered_server_data_json` blendet Felder aus, die der Konflikt-Resolver-User nicht sehen darf — kein Leak höher klassifizierter Inhalte über die 409-Response (Refs #575).
 
 **Status:** ☐ Offen
 
@@ -3204,7 +3220,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Events | leitung + fachkraft | C | ⚪ | — |
+| Events | leitung + fachkraft | C | ⚪ ||
 
 **Voraussetzung:** DocumentType mit `sensitivity=high`.
 
@@ -3236,7 +3252,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Events | fachkraft | C | ⚪ | — |
+| Events | fachkraft | C | ⚪ ||
 
 **Voraussetzung:** ENT-CLIENT-02 (Klient:in qualifiziert), Case zur Klient:in vorhanden.
 
@@ -3293,7 +3309,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Events | fachkraft | C | ⚪ | — |
+| Events | fachkraft | C | ⚪ ||
 
 **Voraussetzung:** DocumentType mit gemischten Sensitivities (z.B. DocumentType `normal` mit FieldTemplates `normal`/`elevated`/`high`).
 
@@ -3322,10 +3338,10 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>📎 ATT — Datei-Anhänge / File-Vault (9 Cases)</strong></summary>
 
-**Routen:** `/attachments/`, `/events/<event-uuid>/attachments/<attachment-uuid>/download/`  
-**Views:** `src/core/views/attachments.py` (`AttachmentListView`, `AttachmentDownloadView`)  
-**Services:** `src/core/services/file_vault.py` (`store_encrypted_file`, `get_decrypted_file_stream`, `soft_delete_attachment_chain`, `_enforce_allowed_file_types`, `_enforce_magic_bytes`, `_run_virus_scan`), `src/core/services/virus_scan.py`, `src/core/services/encryption.py` (Fernet/MultiFernet)  
-**E2E-Coverage:** `test_attachment_versioning_stage_b.py`, `test_file_vault.py`, `test_crypto_session.py`  
+**Routen:** `/attachments/`, `/events/<event-uuid>/attachments/<attachment-uuid>/download/` 
+**Views:** `src/core/views/attachments.py` (`AttachmentListView`, `AttachmentDownloadView`) 
+**Services:** `src/core/services/file_vault.py` (`store_encrypted_file`, `get_decrypted_file_stream`, `soft_delete_attachment_chain`, `_enforce_allowed_file_types`, `_enforce_magic_bytes`, `_run_virus_scan`), `src/core/services/virus_scan.py`, `src/core/services/encryption.py` (Fernet/MultiFernet) 
+**E2E-Coverage:** `test_attachment_versioning_stage_b.py`, `test_file_vault.py`, `test_crypto_session.py` 
 **Spezial-Setup:** ClamAV-Daemon muss erreichbar sein (`CLAMAV_ENABLED=True`). EICAR-String als Datei vorbereiten: `echo -n 'X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*' > eicar.txt`. DocumentType muss FILE-FieldTemplate haben.
 
 ---
@@ -3357,7 +3373,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **DSGVO/Security-Note:**
 - Original-Filename verschlüsselt persistiert (Art. 32 DSGVO).
-- Disk-Cleanup bei DB-Fehler in `store_encrypted_file` via `output_path.unlink(missing_ok=True)` (#662 FND-03).
+- Disk-Cleanup bei DB-Fehler in `store_encrypted_file` via `output_path.unlink(missing_ok=True)` (#662).
 
 **Status:** ☐ Offen
 
@@ -3414,7 +3430,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Form rendert mit ValidationError „Datei wurde von Virenscanner abgewiesen: Eicar-Test-Signature".
 - KEIN `EventAttachment` angelegt, KEINE `.enc`-Datei auf Disk (rollback durch fehlgeschlagene Validation, bevor `encrypt_file` läuft).
 - AuditLog `security_violation` mit `detail={reason: "virus_detected", filename: "eicar.txt", signature: "Eicar-Test-Signature"}`.
-- Atomare Transaktion: Auch das Event wird NICHT angelegt (Rollback durch `transaction.atomic` in `EventCreateView.post`).
+- Atomare Transaktion: Auch das Event wird NICHT angelegt (Rollback durch `transaction.atomic` in `EventCreateView.post`, Refs #584).
 
 **DSGVO/Security-Note:**
 - Fail-closed: `VirusScannerUnavailableError` (z.B. ClamAV down) → Upload ebenfalls abgewiesen, AuditLog mit `reason="virus_scanner_unavailable"` (Issue #524).
@@ -3487,7 +3503,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Attachments | fachkraft | C | ⚪ | — |
+| Attachments | fachkraft | C | ⚪ ||
 
 **Voraussetzung:** `Settings.allowed_file_types` enthält pdf, jpg, png, docx (kein exe).
 
@@ -3501,12 +3517,12 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Erwartetes Ergebnis:**
 - Form-Validation (`DynamicEventDataForm.clean`) lehnt ab: „Dateityp.exe nicht erlaubt. Erlaubt: pdf, jpg, png, docx".
-- Falls über Form vorbei direkt der Service aufgerufen wird (programmatisch): `_enforce_allowed_file_types` wirft `ValidationError` und schreibt AuditLog `security_violation` mit `reason="extension_not_allowed"`, `detail={extension: "exe", allowed: [..]}`.
+- Falls über Form vorbei direkt der Service aufgerufen wird (programmatisch): `_enforce_allowed_file_types` wirft `ValidationError` und schreibt AuditLog `security_violation` mit `reason="extension_not_allowed"`, `detail={extension: "exe", allowed: [...]}`.
 - HTTP-Status: bleibt auf der Form (200 mit Fehler), nicht 415 — das Test-Schema beschreibt 415 für direkten Service-Bypass.
-- Fail-closed: Bei leerer/fehlender Settings-Row → Default-Whitelist `DEFAULT_ALLOWED_FILE_TYPES` aus `core.constants`.
+- Fail-closed: Bei leerer/fehlender Settings-Row → Default-Whitelist `DEFAULT_ALLOWED_FILE_TYPES` aus `core.constants` (Refs #771).
 
 **DSGVO/Security-Note:**
-- Doppelte Validierung (Form + Service) — direkter Service-Aufruf umgeht Form, Service-Layer ist letzte Instanz.
+- Doppelte Validierung (Form + Service) — direkter Service-Aufruf umgeht Form, Service-Layer ist letzte Instanz (Refs #610).
 
 **Status:** ☐ Offen
 
@@ -3516,7 +3532,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Attachments | fachkraft | C | ⚪ | — |
+| Attachments | fachkraft | C | ⚪ ||
 
 **Voraussetzung:** `Settings.max_file_size_mb=10` (oder Default 10 MB), DocumentType mit FILE-Feld.
 
@@ -3544,7 +3560,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Attachments | fachkraft | — | — | `test_crypto_session.py` |
+| Attachments | fachkraft ||| `test_crypto_session.py` |
 
 **Voraussetzung:** `ENCRYPTION_KEYS` mit 2 Keys (Comma-separated).
 
@@ -3577,7 +3593,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Attachments | fachkraft | C/F/S | ✓ | — |
+| Attachments | fachkraft | C/F/S | ✓ ||
 
 **Voraussetzung:** mehrere Events mit Anhängen (mind. 5).
 
@@ -3607,10 +3623,10 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>📋 WI — WorkItems / Inbox (10 Cases)</strong></summary>
 
-**Routen:** `/workitems/`, `/workitems/new/`, `/workitems/<uuid>/`, `/workitems/<uuid>/edit/`, `/workitems/bulk-status/`, `/workitems/bulk-priority/`, `/workitems/bulk-assign/`, `/api/workitems/<uuid>/status/`  
-**Views:** `src/core/views/workitems.py` (`WorkItemInboxView`, `WorkItemDetailView`), `src/core/views/workitem_actions.py` (`WorkItemCreateView`, `WorkItemUpdateView`, `WorkItemStatusUpdateView`), `src/core/views/workitem_bulk.py` (`WorkItemBulkStatusView`, `WorkItemBulkPriorityView`, `WorkItemBulkAssignView`)  
-**Services:** `src/core/services/workitems.py` (`create_workitem`, `update_workitem`, `update_workitem_status`, `duplicate_recurring_workitem`, `bulk_update_workitem_status`, `bulk_update_workitem_priority`, `bulk_assign_workitems`), `src/core/services/locking.py` (`check_version_conflict`)  
-**E2E-Coverage:** `test_workitem_ui.py`, `test_workitem_edit.py`, `test_workitem_due_filter.py`, `test_workitems_deletion.py`  
+**Routen:** `/workitems/`, `/workitems/new/`, `/workitems/<uuid>/`, `/workitems/<uuid>/edit/`, `/workitems/bulk-status/`, `/workitems/bulk-priority/`, `/workitems/bulk-assign/`, `/api/workitems/<uuid>/status/` 
+**Views:** `src/core/views/workitems.py` (`WorkItemInboxView`, `WorkItemDetailView`), `src/core/views/workitem_actions.py` (`WorkItemCreateView`, `WorkItemUpdateView`, `WorkItemStatusUpdateView`), `src/core/views/workitem_bulk.py` (`WorkItemBulkStatusView`, `WorkItemBulkPriorityView`, `WorkItemBulkAssignView`) 
+**Services:** `src/core/services/workitems.py` (`create_workitem`, `update_workitem`, `update_workitem_status`, `duplicate_recurring_workitem`, `bulk_update_workitem_status`, `bulk_update_workitem_priority`, `bulk_assign_workitems`), `src/core/services/locking.py` (`check_version_conflict`) 
+**E2E-Coverage:** `test_workitem_ui.py`, `test_workitem_edit.py`, `test_workitem_due_filter.py`, `test_workitems_deletion.py` 
 **Spezial-Setup:** Inbox-Cap = `WORKITEM_INBOX_CAP` (Constants). Mobile-Inbox via Viewport-Resize (Playwright `iPhone 12`).
 
 ---
@@ -3647,6 +3663,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | WorkItems | fachkraft | C/F/S | ✓ | `test_workitem_ui.py` |
+
 
 **Schritte:**
 1. `/workitems/new/` aufrufen.
@@ -3689,7 +3706,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Optimistic-Locking via `expected_updated_at` aus Hidden-Input.
 
 **DSGVO/Security-Note:**
-- Auch Edit ist auf StaffRequiredMixin — Assistants haben Read-only auf Detail-View, aber Edit-Button erscheint nur bei `can_edit=True`.
+- Auch Edit ist auf StaffRequiredMixin — Assistants haben Read-only auf Detail-View, aber Edit-Button erscheint nur bei `can_edit=True` (Refs #753).
 
 **Status:** ☐ Offen
 
@@ -3711,7 +3728,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Erwartetes Ergebnis:**
 - Schritt 2: `update_workitem_status` lockt Row via `select_for_update`, setzt `status=IN_PROGRESS` UND `assigned_to=user` (Auto-Assign), HTMX-Response 200 mit Partial `item_card.html`.
 - Schritt 3: `status=DONE`, `completed_at=now`, Activity `COMPLETED`. Wenn `recurrence != NONE` → Folge-WorkItem via `duplicate_recurring_workitem` (siehe WI-09).
-- Idempotenz-Guard: Doppel-Klick auf denselben Status → no-op (kein doppelter Activity-Eintrag/#733).
+- Idempotenz-Guard: Doppel-Klick auf denselben Status → no-op (kein doppelter Activity-Eintrag, Refs #129/#733).
 - Permission: `can_user_mutate_workitem` (Lead/Admin/Creator/Assignee). Andere → 403.
 - Ungültiger Status → 400 Bad Request.
 
@@ -3738,8 +3755,8 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - `bulk_update_workitem_status` setzt `status=DONE`, `completed_at=now` für alle 3 Items.
 - 3 AuditLog-Einträge `workitem_update` mit `detail.changed_fields=["status"]`, `detail.bulk=true`.
 - Flash „3 Aufgaben aktualisiert."
-- Bei wiederkehrenden Items (recurrence != NONE): `duplicate_recurring_workitem` läuft pro Item (Idempotenz via `recurrence_duplicated_at`-Marker).
-- **Negativer Pfad:** Wenn nur 1 von 3 Items nicht mutierbar (z.B. fremdes Lead-Item) → HTTP 403 für gesamten Bulk-Call (kein Partial-Update).
+- Bei wiederkehrenden Items (recurrence != NONE): `duplicate_recurring_workitem` läuft pro Item (Idempotenz via `recurrence_duplicated_at`-Marker, Refs #596).
+- **Negativer Pfad:** Wenn nur 1 von 3 Items nicht mutierbar (z.B. fremdes Lead-Item) → HTTP 403 für gesamten Bulk-Call (kein Partial-Update, Refs #583).
 - Rate-Limit: `RATELIMIT_BULK_ACTION`.
 
 **DSGVO/Security-Note:**
@@ -3753,7 +3770,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| WorkItems | fachkraft | C | ⚪ | — |
+| WorkItems | fachkraft | C | ⚪ ||
 
 **Voraussetzung:** 3 WorkItems mit Priorität `normal`, alle mutierbar.
 
@@ -3778,7 +3795,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| WorkItems | leitung | C | ⚪ | — |
+| WorkItems | leitung | C | ⚪ ||
 
 **Voraussetzung:** 3 unzugewiesene WorkItems.
 
@@ -3839,7 +3856,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| WorkItems | fachkraft | C | ⚪ | — |
+| WorkItems | fachkraft | C | ⚪ ||
 
 **Voraussetzung:** WorkItem mit `recurrence=WEEKLY`, `due_date=today`, `status=OPEN`.
 
@@ -3852,7 +3869,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Neues WorkItem entsteht: gleiche Felder (`title`, `description`, `priority`, `assigned_to`, `client`, `item_type`, `recurrence`), neue `due_date = today + 7d` (für WEEKLY), `status=OPEN`.
 - `remind_at`-Offset bleibt erhalten (relativ zur due_date).
 - Activity-Log mit Verb `CREATED`, Summary „Wiederkehrende Folgeaufgabe: \<title\>".
-- **Idempotenz:** Quelle bekommt `recurrence_duplicated_at=now`. Ein zweites DONE→OPEN→DONE-Toggle erzeugt KEIN drittes Item.
+- **Idempotenz (Refs #596):** Quelle bekommt `recurrence_duplicated_at=now`. Ein zweites DONE→OPEN→DONE-Toggle erzeugt KEIN drittes Item.
 - Recurrence-Optionen: NONE, WEEKLY, MONTHLY (calendar-aware via `_add_months`, 31.01. + 1 Monat = 28./29.02.), QUARTERLY, YEARLY.
 
 **DSGVO/Security-Note:**
@@ -3866,7 +3883,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| WorkItems | fachkraft | C/S | ✓ | — |
+| WorkItems | fachkraft | C/S | ✓ ||
 
 **Voraussetzung:** WorkItems vorhanden, Playwright mit `iPhone 12`-Device-Profil.
 
@@ -3896,10 +3913,10 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>🗑️ DEL — Lösch-Anträge / Vier-Augen (6 Cases)</strong></summary>
 
-**Routen:** `/deletion-requests/`, `/deletion-requests/<uuid>/review/`  
-**Views:** `src/core/views/event_deletion.py` (`DeletionRequestListView`, `DeletionRequestReviewView`), `src/core/views/client_deletion.py` (Verzweigung über `target_type`)  
-**Services:** `src/core/services/events/deletion.py` (`request_deletion`, `approve_deletion`, `reject_deletion`), `src/core/services/clients.py` (`approve_client_deletion`, `reject_client_deletion`), `src/core/services/events/crud.py` (`soft_delete_event`)  
-**E2E-Coverage:** `test_workitems_deletion.py`, `test_client_deletion_workflow.py`  
+**Routen:** `/deletion-requests/`, `/deletion-requests/<uuid>/review/` 
+**Views:** `src/core/views/event_deletion.py` (`DeletionRequestListView`, `DeletionRequestReviewView`), `src/core/views/client_deletion.py` (Verzweigung über `target_type`) 
+**Services:** `src/core/services/events/deletion.py` (`request_deletion`, `approve_deletion`, `reject_deletion`), `src/core/services/clients.py` (`approve_client_deletion`, `reject_client_deletion`), `src/core/services/events/crud.py` (`soft_delete_event`) 
+**E2E-Coverage:** `test_workitems_deletion.py`, `test_client_deletion_workflow.py` 
 **Spezial-Setup:** Vier-Augen-Test braucht 2 separate Sessions (Antragsteller + Reviewer). DeletionRequest existiert pro `target_type` (Event vs. Client).
 
 ---
@@ -3947,7 +3964,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Drei Listen: PENDING, APPROVED, REJECTED.
 - Pro Eintrag: Antragsteller, Datum, Reason, Target-Type (Event/Client), Link zu Review-Page.
 - `select_related("requested_by", "reviewed_by")` → keine N+1.
-- Listen sind als `list(..)` evaluiert für `|length`-Tag ohne extra COUNT.
+- Listen sind als `list(...)` evaluiert für `|length`-Tag ohne extra COUNT (Refs #640).
 
 **DSGVO/Security-Note:**
 - Mandantentrennung via `for_facility`.
@@ -3971,8 +3988,8 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Erwartetes Ergebnis:**
 - `approve_deletion(dr, reviewer)` (atomar):
-  - `soft_delete_event(event, reviewer)` → `event.is_deleted=True`, `event.data_json={}`, alle Attachments via `delete_event_attachments` (Disk-Cleanup), `EventHistory(action=DELETE, data_before=<redacted>)`, AuditLog `delete`.
-  - `dr.status=APPROVED`, `dr.reviewed_by=reviewer`, `dr.reviewed_at=now`.
+ - `soft_delete_event(event, reviewer)` → `event.is_deleted=True`, `event.data_json={}`, alle Attachments via `delete_event_attachments` (Disk-Cleanup), `EventHistory(action=DELETE, data_before=<redacted>)`, AuditLog `delete`.
+ - `dr.status=APPROVED`, `dr.reviewed_by=reviewer`, `dr.reviewed_at=now`.
 - Flash „Löschantrag wurde genehmigt."
 - Redirect → `/` (Event) bzw. `/deletion-requests/` (Client).
 - Bei `target_type=Client`: `approve_client_deletion` (eigener Service-Pfad in `services/clients.py`).
@@ -3989,7 +4006,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| DeletionRequests | leitung | C | ⚪ | — |
+| DeletionRequests | leitung | C | ⚪ ||
 
 **Voraussetzung:** DEL-01 (PENDING-Request).
 
@@ -4046,16 +4063,16 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| DeletionRequests | leitung + fachkraft | — | — | — |
+| DeletionRequests | leitung + fachkraft ||||
 
 **Voraussetzung:** DEL-01 + DEL-03 + DEL-04 durchgeführt.
 
 **Schritte:**
 1. `/audit/?action=delete` aufrufen (AuditLogListView).
 2. Suchen nach den Lifecycle-Events:
-   - DEL-01 (Antrag): Aktuell schreibt `request_deletion` KEINEN dedizierten `deletion_requested`-AuditLog — der Code legt nur einen `DeletionRequest`-DB-Record an. Audit-Trail entsteht erst bei Approve/Reject.
-   - DEL-03 (Approve → Soft-Delete): AuditLog `delete` mit `target_type=Event`, `detail={document_type, client_pseudonym, occurred_at}` (via `soft_delete_event`).
-   - DEL-04 (Reject): KEIN AuditLog im Reject-Pfad — der Status-Change am DeletionRequest ist selbst der Audit-Trail (DeletionRequest-Tabelle ist append-only-artig).
+ - DEL-01 (Antrag): Aktuell schreibt `request_deletion` KEINEN dedizierten `deletion_requested`-AuditLog — der Code legt nur einen `DeletionRequest`-DB-Record an. Audit-Trail entsteht erst bei Approve/Reject.
+ - DEL-03 (Approve → Soft-Delete): AuditLog `delete` mit `target_type=Event`, `detail={document_type, client_pseudonym, occurred_at}` (via `soft_delete_event`).
+ - DEL-04 (Reject): KEIN AuditLog im Reject-Pfad — der Status-Change am DeletionRequest ist selbst der Audit-Trail (DeletionRequest-Tabelle ist append-only-artig).
 
 **Erwartetes Ergebnis:**
 - AuditLog für Approve = action `delete` (von `soft_delete_event`).
@@ -4075,12 +4092,12 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>📦 RET — Aufbewahrungsrichtlinien (10 Cases)</strong></summary>
 
-**Routen:** `/retention/`, `/api/retention/<uuid>/approve/`, `/api/retention/<uuid>/hold/`, `/retention/bulk-approve/`, `/retention/bulk-defer/`, `/retention/bulk-reject/`  
-**Views:** `src/core/views/retention.py`  
-**Services:** `src/core/services/retention.py`  
-**Management-Commands:** `enforce_retention`, `reencrypt_fields`  
-**E2E-Coverage:** `test_retention_dashboard.py`  
-**Spezial-Setup:** Backdate-Daten via SQL (`UPDATE core_event SET created_at = NOW() - INTERVAL '400 days'`); `enforce_retention --simulate-date=` für Trockenlauf.
+**Routen:** `/retention/`, `/api/retention/<uuid>/approve/`, `/api/retention/<uuid>/hold/`, `/retention/bulk-approve/`, `/retention/bulk-defer/`, `/retention/bulk-reject/` 
+**Views:** `src/core/views/retention.py` 
+**Services:** `src/core/services/retention.py` 
+**Management-Commands:** `enforce_retention`, `reencrypt_fields` 
+**E2E-Coverage:** `test_retention_dashboard.py` 
+**Spezial-Setup:** Backdate-Daten via SQL (`UPDATE core_event SET created_at = NOW - INTERVAL '400 days'`); `enforce_retention --simulate-date=` für Trockenlauf.
 
 ---
 
@@ -4280,7 +4297,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Voraussetzung:** Settings `retention_anonymous_days = 90`; Anonymous-Klient:in (kein Echtname, nur Pseudonym) seit 91 Tagen.
 
 **Vorbereitung:**
-- DB-Backdate: `UPDATE core_client SET created_at = NOW() - INTERVAL '91 days' WHERE sensitivity = 'anonymous';`
+- DB-Backdate: `UPDATE core_client SET created_at = NOW - INTERVAL '91 days' WHERE sensitivity = 'anonymous';`
 - `python manage.py enforce_retention --dry-run`.
 
 **Schritte:**
@@ -4370,7 +4387,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Aufbewahrung | admin (CLI) | — | ⚪ | `test_retention_dashboard.py` |
+| Aufbewahrung | admin (CLI) || ⚪ | `test_retention_dashboard.py` |
 
 **Voraussetzung:** ENT-RET-07/08/09 (mehrere ablaufende Datensätze in DB)
 
@@ -4398,9 +4415,9 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>🔎 SRCH — Suche (6 Cases)</strong></summary>
 
-**Routen:** `/search/`, Header-Typeahead via HTMX (`/search/typeahead/`)  
-**Views:** `src/core/views/search.py`  
-**Services:** `src/core/services/search.py`  
+**Routen:** `/search/`, Header-Typeahead via HTMX (`/search/typeahead/`) 
+**Views:** `src/core/views/search.py` 
+**Services:** `src/core/services/search.py` 
 **E2E-Coverage:** `test_clients_search.py`, `test_filter_persistence_q.py`, `test_fuzzy_search.py`
 
 ---
@@ -4440,6 +4457,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Suche | fachkraft | C/F/S | ⚪ | `test_clients_search.py` |
+
 
 **Vorbereitung:**
 - `/search/` aufrufen.
@@ -4584,9 +4602,9 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>📰 ZS — Zeitstrom (5 Cases)</strong></summary>
 
-**Routen:** `/` (Home/Zeitstrom), `/zeitstrom/feed/` (HTMX-Partial)  
-**Views:** `src/core/views/zeitstrom.py`  
-**Services:** `src/core/services/feed.py`  
+**Routen:** `/` (Home/Zeitstrom), `/zeitstrom/feed/` (HTMX-Partial) 
+**Views:** `src/core/views/zeitstrom.py` 
+**Services:** `src/core/services/feed.py` 
 **E2E-Coverage:** `test_zeitstrom_enrichment.py`, `test_zeitstrom_events.py`, `test_zeitstrom_filter_bug.py`
 
 ---
@@ -4738,9 +4756,9 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>🤝 HOV — Übergabe (5 Cases)</strong></summary>
 
-**Routen:** `/uebergabe/`, `/uebergabe/print/`  
-**Views:** `src/core/views/handover.py`  
-**Services:** `src/core/services/handover.py`  
+**Routen:** `/uebergabe/`, `/uebergabe/print/` 
+**Views:** `src/core/views/handover.py` 
+**Services:** `src/core/services/handover.py` 
 **E2E-Coverage:** `test_handover.py`
 
 ---
@@ -4895,10 +4913,10 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>📊 STAT — Statistik (10 Cases)</strong></summary>
 
-**Routen:** `/statistics/`, `/statistics/chart-data/`, `/statistics/export/csv/`, `/statistics/export/pdf/`, `/statistics/export/jugendamt/`  
-**Views:** `src/core/views/statistics.py`  
-**Services:** `src/core/services/statistics.py`, `src/core/services/export.py`  
-**Management-Commands:** `create_statistics_snapshots`  
+**Routen:** `/statistics/`, `/statistics/chart-data/`, `/statistics/export/csv/`, `/statistics/export/pdf/`, `/statistics/export/jugendamt/` 
+**Views:** `src/core/views/statistics.py` 
+**Services:** `src/core/services/statistics.py`, `src/core/services/export.py` 
+**Management-Commands:** `create_statistics_snapshots` 
 **E2E-Coverage:** `test_export_statistics.py`, `test_statistics_charts.py`, `test_statistics_dashboard.py`, `test_statistics_snapshot.py`
 
 ---
@@ -4967,7 +4985,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Statistik | admin (CLI) | — | ⚪ | `test_statistics_snapshot.py` |
+| Statistik | admin (CLI) || ⚪ | `test_statistics_snapshot.py` |
 
 **Voraussetzung:** Mindestens 1 Monat Aktivitätshistorie
 
@@ -5094,7 +5112,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Schritte:**
 1. Filter ändern → Chart re-rendert.
-2. Im Network-Tab den Request `/statistics/chart-data/?..` finden.
+2. Im Network-Tab den Request `/statistics/chart-data/?...` finden.
 3. Response prüfen (JSON-Struktur).
 4. Direkt aufrufen ohne Auth (Logout) — sollte 302/403 zurückgeben.
 
@@ -5115,6 +5133,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Statistik | assistenz | C | ⚪ | `test_statistics_dashboard.py` |
+
 
 **Vorbereitung:**
 - Mit `assistenz` einloggen.
@@ -5201,11 +5220,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>🔍 AUDIT — Audit-Log (7 Cases)</strong></summary>
 
-**Routen:** `/audit/`, `/audit/<uuid>/`  
-**Views:** `src/core/views/audit.py` (AuditLogListView, AuditLogDetailView)  
-**Services:** `src/core/services/audit.py`, `src/core/services/audit_hash.py`  
-**Models:** `src/core/models/audit.py` (AuditLog, append-only, immutable)  
-**E2E-Coverage:** `test_audit.py`, `test_audit_detail.py`  
+**Routen:** `/audit/`, `/audit/<uuid>/` 
+**Views:** `src/core/views/audit.py` (AuditLogListView, AuditLogDetailView) 
+**Services:** `src/core/services/audit.py`, `src/core/services/audit_hash.py` 
+**Models:** `src/core/models/audit.py` (AuditLog, append-only, immutable) 
+**E2E-Coverage:** `test_audit.py`, `test_audit_detail.py` 
 **Spezial-Setup:** Append-Only-Probe via `python manage.py shell`. HMAC-Key aus Settings (`AUDIT_HMAC_KEY`).
 
 ---
@@ -5309,7 +5328,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Audit | admin (Shell) | — | ⚪ | — |
+| Audit | admin (Shell) || ⚪ ||
 
 **Voraussetzung:** mindestens ein AuditLog-Eintrag in der DB.
 
@@ -5319,14 +5338,14 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Schritte:**
 1. `python manage.py shell` ausführen.
 2. `from core.models.audit import AuditLog`
-3. `entry = AuditLog.objects.first()`
-4. `entry.action = "TAMPERED"; entry.save()` versuchen → erwartet `ValueError` oder `IntegrityError`.
-5. `entry.delete()` versuchen → erwartet `ValueError` oder gleiche Exception.
-6. DB-Direktzugriff: `psql` → `UPDATE core_auditlog SET action='X' WHERE id=..;` → Trigger blockiert (PG-Exception).
+3. `entry = AuditLog.objects.first`
+4. `entry.action = "TAMPERED"; entry.save` versuchen → erwartet `ValueError` oder `IntegrityError`.
+5. `entry.delete` versuchen → erwartet `ValueError` oder gleiche Exception.
+6. DB-Direktzugriff: `psql` → `UPDATE core_auditlog SET action='X' WHERE id=...;` → Trigger blockiert (PG-Exception).
 
 **Erwartetes Ergebnis:**
-- Schritt 4: ValueError mit Message wie „AuditLog ist append-only, save() nicht erlaubt".
-- Schritt 5: ValueError beim delete().
+- Schritt 4: ValueError mit Message wie „AuditLog ist append-only, save nicht erlaubt".
+- Schritt 5: ValueError beim delete.
 - Schritt 6: PostgreSQL-Trigger wirft Exception, UPDATE/DELETE rollt zurück.
 
 **DSGVO/Security-Note:**
@@ -5380,7 +5399,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Voraussetzung:** > 1000 AuditLog-Einträge in DB (per Seed/Skript).
 
 **Vorbereitung:**
-- Skript: `for i in range(1100): AuditLog.objects.create(..)` oder `make seed --scale large`.
+- Skript: `for i in range(1100): AuditLog.objects.create(...)` oder `make seed --scale large`.
 
 **Schritte:**
 1. `/audit/` aufrufen.
@@ -5441,11 +5460,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>📜 DSGVO — DSGVO-Paket (8 Cases)</strong></summary>
 
-**Routen:** `/dsgvo/`, `/dsgvo/download/<slug>/`  
-**Views:** `src/core/views/dsgvo.py` (DSGVOPackageView, DSGVODocumentDownloadView)  
-**Services:** `src/core/services/dsgvo_package.py`  
-**Command:** `src/core/management/commands/generate_dsgvo_package.py`  
-**E2E-Coverage:** `test_dsgvo_package.py`  
+**Routen:** `/dsgvo/`, `/dsgvo/download/<slug>/` 
+**Views:** `src/core/views/dsgvo.py` (DSGVOPackageView, DSGVODocumentDownloadView) 
+**Services:** `src/core/services/dsgvo_package.py` 
+**Command:** `src/core/management/commands/generate_dsgvo_package.py` 
+**E2E-Coverage:** `test_dsgvo_package.py` 
 **Spezial-Setup:** Sudo-Mode aktiv (Re-Auth innerhalb 15 Min). Markdown-Templates in `src/templates/dsgvo/`.
 
 ---
@@ -5529,11 +5548,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 1. Auf „Art. 30 — Verarbeitungsverzeichnis" Download klicken.
 2. Datei `verarbeitungsverzeichnis-art-30.md` (oder PDF) wird heruntergeladen.
 3. Datei öffnen — Markdown-Struktur:
-   - Verantwortlicher (Facility-Name, Adresse, Email aus Facility-Settings)
-   - Datenschutzbeauftragter (DPO aus Settings)
-   - Verarbeitungstätigkeiten (Klientenverwaltung, Fallakte, …)
-   - Kategorien betroffener Personen + Daten
-   - Empfänger, Drittländer, Löschfristen, TOMs-Verweis
+ - Verantwortlicher (Facility-Name, Adresse, Email aus Facility-Settings)
+ - Datenschutzbeauftragter (DPO aus Settings)
+ - Verarbeitungstätigkeiten (Klientenverwaltung, Fallakte, …)
+ - Kategorien betroffener Personen + Daten
+ - Empfänger, Drittländer, Löschfristen, TOMs-Verweis
 4. Generierungs-Timestamp im Footer.
 
 **Erwartetes Ergebnis:**
@@ -5564,11 +5583,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 1. Auf „Art. 35 — DSFA (Datenschutz-Folgenabschätzung)" Download klicken.
 2. Datei `dsfa-art-35.md` herunterladen.
 3. Inhalt prüfen:
-   - Beschreibung der Verarbeitung
-   - Notwendigkeit + Verhältnismäßigkeit
-   - Risiken für Betroffene (Diskriminierung, Identitätsdiebstahl, …)
-   - Abhilfemaßnahmen (TOMs, Pseudonymisierung, RLS)
-   - Bewertung (Risiko hoch/mittel/niedrig)
+ - Beschreibung der Verarbeitung
+ - Notwendigkeit + Verhältnismäßigkeit
+ - Risiken für Betroffene (Diskriminierung, Identitätsdiebstahl, …)
+ - Abhilfemaßnahmen (TOMs, Pseudonymisierung, RLS)
+ - Bewertung (Risiko hoch/mittel/niedrig)
 4. Verweis auf Art. 35 Abs. 7 (Pflichtfelder).
 
 **Erwartetes Ergebnis:**
@@ -5599,12 +5618,12 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 1. Auf „Art. 28 — AV-Vertrag (Auftragsverarbeitung)" klicken.
 2. Datei `av-vertrag-art-28.md` herunterladen.
 3. Inhalt prüfen:
-   - Auftraggeber (Verantwortlicher) + Auftragsverarbeiter (z.B. Hosting-Provider)
-   - Gegenstand, Dauer, Art der Verarbeitung
-   - Pflichten des Auftragsverarbeiters (Art. 28 Abs. 3 a-h)
-   - Subunternehmer-Klausel
-   - Weisungsrecht
-   - Haftung + Vertragsstrafen
+ - Auftraggeber (Verantwortlicher) + Auftragsverarbeiter (z.B. Hosting-Provider)
+ - Gegenstand, Dauer, Art der Verarbeitung
+ - Pflichten des Auftragsverarbeiters (Art. 28 Abs. 3 a-h)
+ - Subunternehmer-Klausel
+ - Weisungsrecht
+ - Haftung + Vertragsstrafen
 4. Unterschriftsfelder beider Parteien.
 
 **Erwartetes Ergebnis:**
@@ -5635,11 +5654,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 1. Auf „Art. 32 — Technische und organisatorische Maßnahmen (TOMs)" klicken.
 2. Datei `toms-art-32.md` herunterladen.
 3. Inhalt prüfen:
-   - Vertraulichkeit (Zutritts-, Zugangs-, Zugriffskontrolle)
-   - Integrität (Eingabe-, Weitergabekontrolle)
-   - Verfügbarkeit (Verfügbarkeits-, Wiederherstellbarkeitskontrolle)
-   - Belastbarkeit (Pen-Tests, Notfallplan)
-   - Pseudonymisierung + Verschlüsselung (HMAC-Hash, AES-GCM, RLS)
+ - Vertraulichkeit (Zutritts-, Zugangs-, Zugriffskontrolle)
+ - Integrität (Eingabe-, Weitergabekontrolle)
+ - Verfügbarkeit (Verfügbarkeits-, Wiederherstellbarkeitskontrolle)
+ - Belastbarkeit (Pen-Tests, Notfallplan)
+ - Pseudonymisierung + Verschlüsselung (HMAC-Hash, AES-GCM, RLS)
 4. Konkrete App-Maßnahmen vorausgefüllt (Argon2id, MFA, Audit-Log, Backup-Verschlüsselung).
 
 **Erwartetes Ergebnis:**
@@ -5670,13 +5689,13 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 1. Auf „Art. 13/14 — Informationspflichten" klicken.
 2. Datei `informationspflichten-art-13-14.md` herunterladen.
 3. Inhalt prüfen:
-   - Identität + Kontakt des Verantwortlichen
-   - Kontaktdaten DPO
-   - Zwecke der Verarbeitung + Rechtsgrundlage (z.B. SGB VIII § 61)
-   - Empfänger / Empfängerkategorien
-   - Drittlandtransfers (i.d.R. „nein")
-   - Speicherdauer (Aktenführung-Fristen aus SGB)
-   - Betroffenenrechte (Art. 15-22, Beschwerderecht Art. 77)
+ - Identität + Kontakt des Verantwortlichen
+ - Kontaktdaten DPO
+ - Zwecke der Verarbeitung + Rechtsgrundlage (z.B. SGB VIII § 61)
+ - Empfänger / Empfängerkategorien
+ - Drittlandtransfers (i.d.R. „nein")
+ - Speicherdauer (Aktenführung-Fristen aus SGB)
+ - Betroffenenrechte (Art. 15-22, Beschwerderecht Art. 77)
 4. Zwei Varianten: Erhebung beim Betroffenen (Art. 13) vs. Dritter (Art. 14).
 
 **Erwartetes Ergebnis:**
@@ -5707,11 +5726,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 1. `/audit/` aufrufen.
 2. Filter „Action-Type = EXPORT" oder „DSGVO_EXPORT" anwenden.
 3. Pro Download ein Audit-Eintrag mit:
-   - User (admin-Username)
-   - Action = `DSGVO_EXPORT`
-   - Target = Slug (z.B. `verarbeitungsverzeichnis-art-30`)
-   - Timestamp
-   - IP + User-Agent
+ - User (admin-Username)
+ - Action = `DSGVO_EXPORT`
+ - Target = Slug (z.B. `verarbeitungsverzeichnis-art-30`)
+ - Timestamp
+ - IP + User-Agent
 4. Detail-View `/audit/<uuid>/` zeigt vollständige Metadaten.
 
 **Erwartetes Ergebnis:**
@@ -5731,10 +5750,10 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>📡 OFFL — Offline & PWA (12 Cases)</strong></summary>
 
-**Routen:** `/offline/`, `/offline/clients/<uuid>/`, `/offline/conflicts/`, `/api/offline/bundle/client/<uuid>/`, `/auth/offline-key-salt/`, `/manifest.json`, `/sw.js`  
-**Views:** `src/core/views/offline.py` (OfflineBootstrapView, OfflineBundleView, OfflineClientDetailView, OfflineConflictListView)  
-**Services:** `src/core/services/offline.py`, `src/core/services/offline_keys.py`  
-**E2E-Coverage:** `test_offline_apis.py`, `test_offline_login_bootstrap.py`, `test_offline_store.py`, `test_pwa_offline.py`  
+**Routen:** `/offline/`, `/offline/clients/<uuid>/`, `/offline/conflicts/`, `/api/offline/bundle/client/<uuid>/`, `/auth/offline-key-salt/`, `/manifest.json`, `/sw.js` 
+**Views:** `src/core/views/offline.py` (OfflineBootstrapView, OfflineBundleView, OfflineClientDetailView, OfflineConflictListView) 
+**Services:** `src/core/services/offline.py`, `src/core/services/offline_keys.py` 
+**E2E-Coverage:** `test_offline_apis.py`, `test_offline_login_bootstrap.py`, `test_offline_store.py`, `test_pwa_offline.py` 
 **Spezial-Setup:** Service Worker im Browser, IndexedDB, DevTools → Application-Tab. Streetwork-Geräte simulieren (mobile Viewport 375x667).
 
 ---
@@ -5787,12 +5806,12 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 1. `/api/offline/bundle/client/<uuid>/` direkt aufrufen.
 2. Response: `Content-Type: application/json`.
 3. JSON-Struktur prüfen:
-   - `client`: Stammdaten (Name, Geburtsdatum, …)
-   - `cases`: Liste der Fälle
-   - `events`: Termine
-   - `notes`: Notizen
-   - `documents_meta`: Metadaten Dokumente (ohne Binärinhalt)
-   - `_version`: Sync-Token / Timestamp
+ - `client`: Stammdaten (Name, Geburtsdatum, …)
+ - `cases`: Liste der Fälle
+ - `events`: Termine
+ - `notes`: Notizen
+ - `documents_meta`: Metadaten Dokumente (ohne Binärinhalt)
+ - `_version`: Sync-Token / Timestamp
 4. Versuch mit fremder UUID (nicht zugewiesen) → 404 oder 403.
 
 **Erwartetes Ergebnis:**
@@ -6046,7 +6065,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Schritte:**
 1. Pwd-Wechsel via `/accounts/password_change/` durchführen.
-2. Im Backend wird neuer Salt generiert und gespeichert (`offline_keys.rotate_salt()`).
+2. Im Backend wird neuer Salt generiert und gespeichert (`offline_keys.rotate_salt`).
 3. Logout, dann erneuter Login mit neuem Pwd.
 4. Salt-Endpoint liefert neuen Salt → neuer abgeleiteter Key.
 5. IndexedDB-Decrypt-Versuch alter Eintrag mit neuem Key → Fehler (alte Daten nicht entschlüsselbar).
@@ -6140,9 +6159,9 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 <details open>
 <summary><strong>⚙️ SYS — System & Operations (6 Cases)</strong></summary>
 
-**Routen:** `/health/`, `/csp-report/`, `/robots.txt`, `/manifest.json`, `/?lang=de`  
-**Views:** `src/core/views/health.py`, `src/core/views/csp_report.py`, `src/core/views/robots.py`, `src/core/views/pwa.py`  
-**E2E-Coverage:** `test_security_hardening.py`  
+**Routen:** `/health/`, `/csp-report/`, `/robots.txt`, `/manifest.json`, `/?lang=de` 
+**Views:** `src/core/views/health.py`, `src/core/views/csp_report.py`, `src/core/views/robots.py`, `src/core/views/pwa.py` 
+**E2E-Coverage:** `test_security_hardening.py` 
 **Spezial-Setup:** Health prüft externe Dienste (ClamAV, Redis, Backup-Status). CSP-Report-Endpoint mit Rate-Limit.
 
 ---
@@ -6163,13 +6182,13 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 2. Response-Code `200`.
 3. `Content-Type: application/json`.
 4. JSON-Struktur prüfen:
-   - `status: "healthy"`
-   - `db: "ok"`
-   - `redis: "ok"` oder `redis_status: "connected"`
-   - `clamav: "ok"` oder `clamav_status: "running"`
-   - `last_backup_age_hours: <number>` (z.B. 6)
-   - `version: "0.9.1"`
-   - `timestamp: ISO-8601`
+ - `status: "healthy"`
+ - `db: "ok"`
+ - `redis: "ok"` oder `redis_status: "connected"`
+ - `clamav: "ok"` oder `clamav_status: "running"`
+ - `last_backup_age_hours: <number>` (z.B. 6)
+ - `version: "0.9.1"`
+ - `timestamp: ISO-8601`
 5. `SECURE_REDIRECT_EXEMPT` prüfen — Endpoint erreichbar ohne HTTPS-Redirect.
 
 **Erwartetes Ergebnis:**
@@ -6191,6 +6210,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
 | Sys | öffentlich | C/F/S | ⚪ | `test_security_hardening.py` |
+
 
 **Vorbereitung:**
 - ClamAV-Container stoppen: `sudo docker compose stop clamav`.
@@ -6222,6 +6242,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 |---------|-------|---------|--------|-----|
 | Sys | öffentlich | C/F/S | ⚪ | `test_security_hardening.py` |
 
+
 **Vorbereitung:**
 - Keine.
 
@@ -6229,14 +6250,14 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 1. `/robots.txt` aufrufen.
 2. Response-Code 200, `Content-Type: text/plain`.
 3. Inhalt prüfen — `Disallow:`-Einträge für:
-   - `/admin/`
-   - `/clients/`
-   - `/cases/`
-   - `/dsgvo/`
-   - `/audit/`
-   - `/api/`
-   - `/sudo/`
-   - `/login/` (optional)
+ - `/admin/`
+ - `/clients/`
+ - `/cases/`
+ - `/dsgvo/`
+ - `/audit/`
+ - `/api/`
+ - `/sudo/`
+ - `/login/` (optional)
 4. `Allow:` ggf. für `/`, `/about/`, `/impressum/`, `/datenschutz/`.
 5. `Sitemap:`-Eintrag (falls vorhanden).
 
@@ -6263,10 +6284,10 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Voraussetzung:** CSP-Header in Responses gesetzt mit `report-uri /csp-report/`.
 
 **Vorbereitung:**
-- `curl` zur Hand, oder Playwright mit `request.fetch()`.
+- `curl` zur Hand, oder Playwright mit `request.fetch`.
 
 **Schritte:**
-1. POST `/csp-report/` mit `Content-Type: application/csp-report` und valider JSON-Payload (`{"csp-report": {"document-uri": "..", "violated-directive": ".."}}`) → Status 204.
+1. POST `/csp-report/` mit `Content-Type: application/csp-report` und valider JSON-Payload (`{"csp-report": {"document-uri": "...", "violated-directive": "..."}}`) → Status 204.
 2. POST mit `Content-Type: application/json` (falsch) → Status 400 oder 415.
 3. POST ohne Body → 400.
 4. Rate-Limit-Test: 11 POSTs in unter 1 Minute von gleicher IP → 11. Request liefert 429 (Too Many Requests).
@@ -6292,7 +6313,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sys | öffentlich | C/F/S | ⚪ | — |
+| Sys | öffentlich | C/F/S | ⚪ ||
 
 **Voraussetzung:** beide Locale-Dateien (de, en) kompiliert.
 
@@ -6373,13 +6394,14 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S | — | `src/tests/test_audit_signals.py`, `src/tests/test_audit_view.py` |
+| Compliance | admin | C/F/S || `src/tests/test_audit_signals.py`, `src/tests/test_audit_view.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 5 Abs. 1 lit. b — Personenbezogene Daten müssen für festgelegte, eindeutige und legitime Zwecke erhoben werden.*
 
 **Code-Referenz:**
 - `src/core/models/audit.py` (`AuditLog` — append-only, 30+ Action-Types)
 - `src/core/services/audit.py` (Logging-Helfer)
+
 
 **Schritte:**
 1. Mit `admin` einloggen, `/audit/` öffnen.
@@ -6401,7 +6423,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | fachkraft | C/F/S | — | `src/tests/test_min_contact_stage_anonymous.py`, `src/tests/test_k_anonymization.py` |
+| Compliance | fachkraft | C/F/S || `src/tests/test_min_contact_stage_anonymous.py`, `src/tests/test_k_anonymization.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 5 Abs. 1 lit. c — Daten müssen dem Zweck angemessen, erheblich und auf das notwendige Maß beschränkt sein.*
 
@@ -6431,7 +6453,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S | — | — |
+| Compliance | admin | C/F/S |||
 
 **DSGVO-Artikel-Zitat:** *Art. 7 — Bedingungen für die Einwilligung. Nachweis und Widerruflichkeit müssen sichergestellt sein.*
 
@@ -6465,7 +6487,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | leitung | C/F/S | — | `test_client_export.py`, `src/tests/test_client_export.py` |
+| Compliance | leitung | C/F/S || `test_client_export.py`, `src/tests/test_client_export.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 15 — Betroffene Person hat Recht auf Auskunft über alle gespeicherten personenbezogenen Daten.*
 
@@ -6480,10 +6502,10 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 2. Klient:in aus Liste wählen, Detail öffnen.
 3. Auf **„Datenauskunft (JSON)"** klicken → Download startet.
 4. JSON öffnen und prüfen:
-   - Alle Klient:innen-Stammdaten enthalten.
-   - Alle Events mit Inhalten enthalten.
-   - Alle Cases / Episoden / Goals enthalten.
-   - Alle Anhänge (Metadaten, nicht Binary) enthalten.
+ - Alle Klient:innen-Stammdaten enthalten.
+ - Alle Events mit Inhalten enthalten.
+ - Alle Cases / Episoden / Goals enthalten.
+ - Alle Anhänge (Metadaten, nicht Binary) enthalten.
 5. AuditLog `/audit/` filtern auf `Action=EXPORT` → Eintrag für diesen Export sichtbar.
 
 **Erwartetes Ergebnis:**
@@ -6500,7 +6522,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | leitung | C/F/S | — | `test_client_export.py` |
+| Compliance | leitung | C/F/S || `test_client_export.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 15 — Auskunft in lesbarer Form.*
 
@@ -6527,7 +6549,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | fachkraft | C/F/S | — | `test_client_edit.py` |
+| Compliance | fachkraft | C/F/S || `test_client_edit.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 16 — Recht auf Berichtigung unrichtiger personenbezogener Daten.*
 
@@ -6561,7 +6583,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | fachkraft + leitung | C/F/S | — | `test_client_deletion_workflow.py` |
+| Compliance | fachkraft + leitung | C/F/S || `test_client_deletion_workflow.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 17 — Recht auf Löschung („Recht auf Vergessenwerden").*
 
@@ -6594,7 +6616,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S | — | `test_client_deletion_workflow.py` |
+| Compliance | admin | C/F/S || `test_client_deletion_workflow.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 17 — Löschung muss erfolgen, sofern keine Aufbewahrungspflicht entgegensteht.*
 
@@ -6626,7 +6648,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S | — | `src/tests/test_k_anonymization.py`, `src/tests/test_anonymize_residue.py` |
+| Compliance | admin | C/F/S || `src/tests/test_k_anonymization.py`, `src/tests/test_anonymize_residue.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 17 — Tatsächliche Löschung oder Anonymisierung nach Ablauf der Aufbewahrungsfrist.*
 
@@ -6638,7 +6660,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Voraussetzung:** Backdate-Daten (Klient:in mit `created_at` vor 400 Tagen).
 
 **Schritte:**
-1. SQL: `UPDATE core_client SET created_at = NOW() - INTERVAL '400 days' WHERE id = '<uuid>'`.
+1. SQL: `UPDATE core_client SET created_at = NOW - INTERVAL '400 days' WHERE id = '<uuid>'`.
 2. `python manage.py enforce_retention --dry-run` ausführen → zeigt geplante Anonymisierungen.
 3. `python manage.py enforce_retention` ausführen.
 4. Klient:in in DB prüfen: `pseudonym` ist auf k-anon-Cluster gesetzt, alle direkt identifizierenden Felder leer.
@@ -6663,7 +6685,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | leitung | C/F/S | — | `test_retention_dashboard.py` |
+| Compliance | leitung | C/F/S || `test_retention_dashboard.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 18 — Recht auf Einschränkung der Verarbeitung (z.B. bei Streit um Richtigkeit).*
 
@@ -6693,7 +6715,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | leitung | C/F/S | — | `test_client_export.py` |
+| Compliance | leitung | C/F/S || `test_client_export.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 20 — Daten in einem strukturierten, gängigen und maschinenlesbaren Format erhalten.*
 
@@ -6723,7 +6745,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | — | — | `src/tests/test_rls.py` |
+| Compliance | admin ||| `src/tests/test_rls.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 25 — Datenschutz durch Technik („Privacy by Design").*
 
@@ -6733,6 +6755,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - `src/tests/test_rls.py` (`EXPECTED_TABLES`)
 
 **Migrations-Referenz:** `0047_postgres_rls_setup`, ggf. Folge-Migrationen für neue Tabellen.
+
 
 **Schritte:**
 1. PostgreSQL Connect: `sudo docker compose exec db psql -U postgres anlaufstelle`.
@@ -6753,7 +6776,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S | — | `src/tests/test_mfa_login.py` |
+| Compliance | admin | C/F/S || `src/tests/test_mfa_login.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 25 — Voreinstellungen so wählen, dass nur erforderliche Daten verarbeitet werden.*
 
@@ -6783,7 +6806,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S | — | `test_dsgvo_package.py` |
+| Compliance | admin | C/F/S || `test_dsgvo_package.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 30 — Verzeichnis von Verarbeitungstätigkeiten.*
 
@@ -6798,12 +6821,12 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 2. Mit `admin` einloggen, Sudo-Mode betreten, `/dsgvo/` öffnen.
 3. **„Verarbeitungsverzeichnis"** herunterladen.
 4. Inhalt prüfen:
-   - Verarbeitungszwecke benannt (Soziale Beratung, Falldokumentation).
-   - Rechtsgrundlage (Art. 6 Abs. 1 lit. e — öffentliches Interesse).
-   - Datenkategorien aufgeführt.
-   - Empfänger benannt (intern/extern).
-   - Speicherdauer aus `settings.retention_*_days`.
-   - TOMs verlinkt (siehe Art. 32-Template).
+ - Verarbeitungszwecke benannt (Soziale Beratung, Falldokumentation).
+ - Rechtsgrundlage (Art. 6 Abs. 1 lit. e — öffentliches Interesse).
+ - Datenkategorien aufgeführt.
+ - Empfänger benannt (intern/extern).
+ - Speicherdauer aus `settings.retention_*_days`.
+ - TOMs verlinkt (siehe Art. 32-Template).
 
 **Erwartetes Ergebnis:**
 - Template ist vollständig, Facility-spezifisch gerendert.
@@ -6820,7 +6843,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | — | C | — | `src/tests/test_security_hardening.py`, `src/tests/test_csp_report.py` |
+| Compliance || C || `src/tests/test_security_hardening.py`, `src/tests/test_csp_report.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 32 — Geeignete TOMs zur Gewährleistung der Sicherheit (Verschlüsselung, Vertraulichkeit, Integrität, Verfügbarkeit, Belastbarkeit).*
 
@@ -6833,12 +6856,12 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Schritte:**
 1. `curl -I https://localhost:8443/login/` (oder vergleichbar gegen Prod-Mirror).
 2. Header prüfen:
-   - `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
-   - `Content-Security-Policy: default-src 'self'; …` (kein `unsafe-eval`)
-   - `X-Frame-Options: DENY`
-   - `X-Content-Type-Options: nosniff`
-   - `Referrer-Policy: strict-origin-when-cross-origin`
-   - Cookies: `Secure; HttpOnly; SameSite=Strict` (CSRF) bzw. `SameSite=Lax` (Session)
+ - `Strict-Transport-Security: max-age=31536000; includeSubDomains; preload`
+ - `Content-Security-Policy: default-src 'self'; …` (kein `unsafe-eval`)
+ - `X-Frame-Options: DENY`
+ - `X-Content-Type-Options: nosniff`
+ - `Referrer-Policy: strict-origin-when-cross-origin`
+ - Cookies: `Secure; HttpOnly; SameSite=Strict` (CSRF) bzw. `SameSite=Lax` (Session)
 
 **Erwartetes Ergebnis:** Alle Header gesetzt, Werte korrekt.
 
@@ -6852,7 +6875,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | — | — | — | `src/tests/test_encryption.py` |
+| Compliance |||| `src/tests/test_encryption.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 32 — Verschlüsselung als TOM.*
 
@@ -6879,7 +6902,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | — | C | — | — |
+| Compliance || C |||
 
 **DSGVO-Artikel-Zitat:** *Art. 32 — Vertraulichkeit der Übertragung.*
 
@@ -6905,13 +6928,14 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | — | C/F/S | — | `src/tests/test_auth.py` |
+| Compliance || C/F/S || `src/tests/test_auth.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 32 — Schutz vor Brute-Force und schwachen Passwörtern.*
 
 **Code-Referenz:**
 - `src/anlaufstelle/settings/base.py` (`AUTH_PASSWORD_VALIDATORS`)
 - `src/core/services/login_lockout.py`
+
 
 **Schritte:**
 1. Pwd-Wechsel-Versuch mit schwachem Passwort `12345678` → Fehler (zu kurz, < 12 Zeichen).
@@ -6938,7 +6962,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | — | — | `src/tests/test_breach_detection.py`, `src/tests/test_breach_webhook_ssrf.py` |
+| Compliance | admin ||| `src/tests/test_breach_detection.py`, `src/tests/test_breach_webhook_ssrf.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 33 — Meldung an Aufsichtsbehörde binnen 72h. Art. 34 — Benachrichtigung der Betroffenen bei hohem Risiko.*
 
@@ -6968,7 +6992,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S | — | — |
+| Compliance | admin | C/F/S |||
 
 **DSGVO-Artikel-Zitat:** *Art. 34 — Benachrichtigung der betroffenen Person bei hohem Risiko.*
 
@@ -6995,7 +7019,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Compliance | admin | C/F/S | — | `test_dsgvo_package.py` |
+| Compliance | admin | C/F/S || `test_dsgvo_package.py` |
 
 **DSGVO-Artikel-Zitat:** *Art. 35 — Datenschutz-Folgenabschätzung bei voraussichtlich hohem Risiko.*
 
@@ -7006,11 +7030,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Schritte:**
 1. `/dsgvo/` öffnen, **„DSFA"** herunterladen.
 2. Template prüfen:
-   - Beschreibung der Verarbeitung.
-   - Notwendigkeit + Verhältnismäßigkeit.
-   - Risiken für Betroffene (Re-Identifikation, Stigmatisierung).
-   - Geplante Abhilfemaßnahmen (k-Anonymität, Sensitivity-Filter, RLS).
-   - Vorab-Konsultation der Aufsichtsbehörde, falls Risiko nicht reduzierbar.
+ - Beschreibung der Verarbeitung.
+ - Notwendigkeit + Verhältnismäßigkeit.
+ - Risiken für Betroffene (Re-Identifikation, Stigmatisierung).
+ - Geplante Abhilfemaßnahmen (k-Anonymität, Sensitivity-Filter, RLS).
+ - Vorab-Konsultation der Aufsichtsbehörde, falls Risiko nicht reduzierbar.
 
 **Erwartetes Ergebnis:**
 - DSFA-Template ist vollständig, Facility-spezifische Werte eingesetzt.
@@ -7027,7 +7051,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin + admin_2 | C | — | `src/tests/test_rls.py`, `src/tests/test_scope.py` |
+| Security | admin + admin_2 | C || `src/tests/test_rls.py`, `src/tests/test_scope.py` |
 
 **Code-Referenz:**
 - `src/core/middleware/facility_scope.py`
@@ -7053,7 +7077,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin + admin_2 | C | — | `src/tests/test_rls.py` |
+| Security | admin + admin_2 | C || `src/tests/test_rls.py` |
 
 **Schritte:** Wie AUD-SEC-RLS-01, aber mit Case statt Client.
 
@@ -7067,7 +7091,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin + admin_2 | C | — | `src/tests/test_rls.py` |
+| Security | admin + admin_2 | C || `src/tests/test_rls.py` |
 
 **Schritte:** Wie AUD-SEC-RLS-01, aber mit Event.
 
@@ -7079,7 +7103,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin + admin_2 | C | — | `src/tests/test_rls.py` |
+| Security | admin + admin_2 | C || `src/tests/test_rls.py` |
 
 **Schritte:** Wie AUD-SEC-RLS-01, aber mit WorkItem.
 
@@ -7093,16 +7117,17 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | — | — | — | `src/tests/test_rls.py` |
+| Security |||| `src/tests/test_rls.py` |
 
 **Code-Referenz:** `src/core/middleware/facility_scope.py`
+
 
 **Schritte:**
 1. PostgreSQL Connect.
 2. SQL: `SET app.current_facility_id TO '<facility-2-uuid>'; SELECT count(*) FROM core_client;`
 3. Erwartung: nur Klient:innen aus Facility 2 sichtbar — gemäß RLS-Policy (basierend auf Session-Variable).
 4. Test: Facility-1-Admin mit `SET app.current_facility_id TO '<facility-2-uuid>'` → kann er Facility-2-Daten sehen?
-   - **Erwartung:** RLS-Policy sollte Owner-Check über `users.facility_id == app.current_facility_id` erzwingen — ggf. nicht direkt möglich, prüfen.
+ - **Erwartung:** RLS-Policy sollte Owner-Check über `users.facility_id == app.current_facility_id` erzwingen — ggf. nicht direkt möglich, prüfen.
 
 **Status:** ☐ Offen
 
@@ -7112,7 +7137,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | fachkraft | C | — | `src/tests/test_security_hardening.py` |
+| Security | fachkraft | C || `src/tests/test_security_hardening.py` |
 
 **Schritte:**
 1. Suche-Query mit SQL-Pattern: `'; DROP TABLE core_client;--`.
@@ -7130,7 +7155,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | fachkraft | C/F/S | — | `test_mfa_backup_codes.py` |
+| Security | fachkraft | C/F/S || `test_mfa_backup_codes.py` |
 
 **Code-Referenz:** `src/core/services/mfa.py` (`StaticToken`, One-Time-Use)
 
@@ -7154,7 +7179,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | fachkraft | C/F/S | — | — |
+| Security | fachkraft | C/F/S |||
 
 **Schritte:**
 1. Aktiviertes MFA, Login mit korrektem Pwd.
@@ -7175,7 +7200,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | fachkraft + admin | C/F/S | — | — |
+| Security | fachkraft + admin | C/F/S |||
 
 **Schritte:**
 1. Fachkraft hat alle Backup-Codes verloren + TOTP-App weg.
@@ -7198,16 +7223,16 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin | — | — | `src/tests/test_audit_signals.py`, `src/tests/test_audit_trigger.py` |
+| Security | admin ||| `src/tests/test_audit_signals.py`, `src/tests/test_audit_trigger.py` |
 
-**Code-Referenz:** `src/core/models/audit.py` (`AuditLog.save()` raises on update, `delete()` raises)
+**Code-Referenz:** `src/core/models/audit.py` (`AuditLog.save` raises on update, `delete` raises)
 
 **Schritte:**
 1. `python manage.py shell` öffnen.
 2. `from core.models import AuditLog`
-3. `log = AuditLog.objects.first()`
-4. `log.action = 'TAMPERED'; log.save()` → erwarte `ValueError` (Append-Only).
-5. `log.delete()` → erwarte `ValueError`.
+3. `log = AuditLog.objects.first`
+4. `log.action = 'TAMPERED'; log.save` → erwarte `ValueError` (Append-Only).
+5. `log.delete` → erwarte `ValueError`.
 6. Direkt-SQL: `UPDATE core_auditlog SET action='X' WHERE id='<uuid>'` — falls DB-Trigger vorhanden: blockiert. Falls nur App-Layer: SQL umgeht App-Schutz, dann RLS+DB-Trigger ergänzen.
 
 **Erwartetes Ergebnis:**
@@ -7224,16 +7249,16 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin | — | — | `src/tests/test_audit_service.py` |
+| Security | admin ||| `src/tests/test_audit_service.py` |
 
 **Code-Referenz:** `src/core/services/audit_hash.py`
 
 **Schritte:**
 1. `python manage.py shell` öffnen.
 2. `from core.services.audit_hash import verify_chain`
-3. `verify_chain()` → erwartet `True` (alle Einträge konsistent).
+3. `verify_chain` → erwartet `True` (alle Einträge konsistent).
 4. Direkt-SQL: ein älteres `hash_self`-Feld manipulieren.
-5. `verify_chain()` erneut → erwartet `False` mit Position des Bruchs.
+5. `verify_chain` erneut → erwartet `False` mit Position des Bruchs.
 
 **Erwartetes Ergebnis:**
 - Hash-Kette erkennt nachträgliche Manipulationen.
@@ -7246,7 +7271,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin | C/F/S | — | `src/tests/test_audit_view.py` |
+| Security | admin | C/F/S || `src/tests/test_audit_view.py` |
 
 **Code-Referenz:** `src/core/views/auth.py` (`RateLimitedPasswordResetView`)
 
@@ -7272,7 +7297,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | admin | — | — | `src/tests/test_encryption.py` |
+| Security | admin ||| `src/tests/test_encryption.py` |
 
 **Code-Referenz:**
 - `src/core/services/encryption.py` (MultiFernet-Rotation)
@@ -7303,11 +7328,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | — | — | — | `src/tests/test_security_hardening.py` |
+| Security |||| `src/tests/test_security_hardening.py` |
 
 **Schritte:**
 1. `curl -sI https://anlaufstelle-prod-mirror.example/` → alle Sicherheits-Header gesetzt.
-2. `curl -sI -H "Origin: http://evil.example" https://..` → CORS-Antwort prüfen (kein `Access-Control-Allow-Origin: *`).
+2. `curl -sI -H "Origin: http://evil.example" https://...` → CORS-Antwort prüfen (kein `Access-Control-Allow-Origin: *`).
 3. Browser-DevTools → Security-Panel → kein „mixed content".
 4. Optional: securityheaders.com gegen Prod (extern).
 
@@ -7328,7 +7353,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 | AUTH | ✓ | ✓ | ✓ | ⚪ |
 | MFA | ✓ | ✓ | ✓ | ⚪ |
 | ACCT | ✓ | ⚪ | ⚪ | ⚪ |
-| SUDO | ✓ | ⚪ | ⚪ | — |
+| SUDO | ✓ | ⚪ | ⚪ ||
 | PWA | ✓ | ⚪ | ✓ | ✓ |
 | CLIENT | ✓ | ⚪ | ⚪ | ✓ |
 | CASE | ✓ | ⚪ | ⚪ | ⚪ |
@@ -7337,16 +7362,16 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 | EVT | ✓ | ✓ | ⚪ | ✓ |
 | ATT | ✓ | ✓ | ⚪ | ✓ |
 | WI | ✓ | ⚪ | ⚪ | ✓ |
-| DEL | ✓ | ⚪ | ⚪ | — |
+| DEL | ✓ | ⚪ | ⚪ ||
 | RET | ✓ | ⚪ | ⚪ | ⚪ |
 | SRCH | ✓ | ⚪ | ⚪ | ✓ |
 | ZS | ✓ | ⚪ | ⚪ | ✓ |
 | HOV | ✓ | ⚪ | ⚪ | ✓ |
 | STAT | ✓ | ⚪ | ⚪ | ⚪ |
-| AUDIT | ✓ | ⚪ | ⚪ | — |
-| DSGVO | ✓ | ⚪ | ⚪ | — |
+| AUDIT | ✓ | ⚪ | ⚪ ||
+| DSGVO | ✓ | ⚪ | ⚪ ||
 | OFFL | ✓ | ⚪ | ✓ | ✓ |
-| SYS | ✓ | ⚪ | ⚪ | — |
+| SYS | ✓ | ⚪ | ⚪ ||
 | HTMX-Toasts (siehe Anhang B) | ✓ | ✓ | ⚪ | ⚪ |
 
 **Konvention:** Jeder Bereich wird **mindestens** in Chromium komplett durchgespielt. Firefox/Safari/Mobile-Stichproben (`⚪`) bedeuten: einmal pro Release prüfen, nicht jeden Test-Lauf.
@@ -7481,7 +7506,7 @@ Quick-Übersicht zur Sichtbarmachung von Lücken zwischen manueller und automati
 grep -c "E2E.*test_" docs/testing/manual-test-matrix.md
 
 # Manuell-only Cases (E2E-Spalte enthält "—")
-grep -c "| —" docs/testing/manual-test-matrix.md # konservativ
+grep -c "| —" docs/testing/manual-test-matrix.md  # konservativ
 ```
 
 **Datenbasis für Folge-Tickets:** Manuell-only-Cases mit hoher Frequenz (jeder Release-Lauf) sind Kandidaten für Auto­matisierung. Tickets im Issue-Tracker mit Label `automate-manual-test` anlegen.
@@ -7504,7 +7529,7 @@ Passwort für alle Seed-User: `anlaufstelle2026`
 | `assistenz` (Seed-Variante: `lena`) | ASSISTANT | 1 | Niedrigste Rolle, RBAC-Negativtests |
 | `admin_2`, `leitung_2`, `fachkraft_2`, `assistenz_2` | je 1 | 2 | Cross-Facility-/RLS-Tests (`make seed FACILITIES=2`) |
 
-> **Hinweis:** Die genauen Seed-Usernamen können je nach `seed.py`-Variante abweichen (`admin`/`thomas`/`miriam`/`lena` vs. `admin`/`leitung`/`fachkraft`/`assistenz`). Vor Test-Lauf kurz `python manage.py shell -c "from django.contrib.auth import get_user_model; print(list(get_user_model().objects.values_list('username', flat=True)))"` ausführen.
+> **Hinweis:** Die genauen Seed-Usernamen können je nach `seed.py`-Variante abweichen (`admin`/`thomas`/`miriam`/`lena` vs. `admin`/`leitung`/`fachkraft`/`assistenz`). Vor Test-Lauf kurz `python manage.py shell -c "from django.contrib.auth import get_user_model; print(list(get_user_model.objects.values_list('username', flat=True)))"` ausführen.
 
 ### D.2 — Seed-Skalierung
 
@@ -7514,7 +7539,7 @@ Passwort für alle Seed-User: `anlaufstelle2026`
 | Medium | ~50 | ~100 | ~20 | ~50 | `make seed SCALE=medium` |
 | Large (Last-Smoke) | ~1000 | ~5000 | ~200 | ~500 | `make seed SCALE=large` |
 
-Quelle: `src/core/management/commands/seed.py` und Helper-Funktionen `seed_clients_small/bulk()`, `seed_events_small/bulk()`, etc.
+Quelle: `src/core/management/commands/seed.py` und Helper-Funktionen `seed_clients_small/bulk`, `seed_events_small/bulk`, etc.
 
 ### D.3 — Stamm-Daten (Document-Types, Activities, FieldTemplates)
 
@@ -7549,4 +7574,4 @@ make seed
 
 ---
 
-**Letzte Aktualisierung:** 2026-05-09 · Pflege durch: Tobias Nix · Issue: 
+**Letzte Aktualisierung:** 2026-05-09 · Pflege durch: Tobias Nix · Issue: #864

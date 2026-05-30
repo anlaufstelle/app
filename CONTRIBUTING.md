@@ -54,9 +54,9 @@ cd app
 **2. Python-Umgebung einrichten**
 
 ```bash
-python3.13 -m venv.venv
-source.venv/bin/activate
-pip install -r requirements-dev.txt # enthält Runtime + Test/Lint-Tools
+python3.13 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt   # enthält Runtime + Test/Lint-Tools
 # Alternativ nur Runtime (z.B. für Prod-Docker-Build):
 # pip install -r requirements.txt
 ```
@@ -113,10 +113,10 @@ make migrate
 **6. Seed-Daten laden** (optional, für lokale Entwicklung)
 
 ```bash
-make seed # Standard: small
-python src/manage.py seed --scale medium # mehr Daten inkl. Fallmanagement
-python src/manage.py seed --scale large # Lasttest-Volumen
-python src/manage.py seed --flush # vorhandene Daten vorher löschen
+make seed                              # Standard: small
+python src/manage.py seed --scale medium   # mehr Daten inkl. Fallmanagement
+python src/manage.py seed --scale large    # Lasttest-Volumen
+python src/manage.py seed --flush          # vorhandene Daten vorher löschen
 ```
 
 **Scale-Profile im Überblick:**
@@ -129,11 +129,11 @@ python src/manage.py seed --flush # vorhandene Daten vorher löschen
 | Clients / Einrichtung | 7 | 40 | 500 |
 | Events / Einrichtung | 25 | 750 | 10.000 |
 | Cases | 3 | 12 | 50 |
-| Episoden | — | 20 | 80 |
-| Wirkungsziele | — | 15 | 60 |
-| Meilensteine / Ziel | — | 3 | 4 |
+| Episoden || 20 | 80 |
+| Wirkungsziele || 15 | 60 |
+| Meilensteine / Ziel || 3 | 4 |
 | WorkItems | 5 | 25 | 100 |
-| DeletionRequests | — | 5 | 15 |
+| DeletionRequests || 5 | 15 |
 | RetentionProposals | 4 | 6 | 12 |
 | Dateianhänge (ca.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) |
 | Zeitraum | 80 Tage | 365 Tage | 3 Jahre |
@@ -179,7 +179,7 @@ Der Server ist unter `https://localhost:8443` erreichbar (selbstsigniertes Zerti
 | `make tailwind` | Tailwind CSS im Watch-Modus kompilieren |
 | `make tailwind-build` | Tailwind CSS für Produktion minifiziert kompilieren |
 | `make lint` | Code mit Ruff prüfen und Formatierung kontrollieren |
-| `make typecheck` | mypy auf `core/services` (strikt) + Baseline-Check |
+| `make typecheck` | mypy auf `core/services` (strikt) + Baseline-Check (Refs #741) |
 | `make test` | Unit- und Integrationstests ausführen (ohne E2E) |
 | `make test-e2e` | End-to-End-Tests mit Playwright ausführen |
 | `make check` | Django-Systemcheck und Migrations-Konsistenz prüfen |
@@ -196,13 +196,13 @@ Vor jedem Commit sollte `make ci` lokal erfolgreich durchlaufen.
 
 ### Pre-Commit-Hooks (optional)
 
-Für die schnelle Drift-Detektion vor dem Commit ist eine [`.pre-commit-config.yaml`](.pre-commit-config.yaml) hinterlegt. Sie prüft `ruff` (lint + format), `makemigrations --check`, `mypy core/services`, den Translation-Version-Header und automatisches `pip-compile` bei `requirements*.in`-Änderungen.
+Für die schnelle Drift-Detektion vor dem Commit ist eine [`.pre-commit-config.yaml`](.pre-commit-config.yaml) hinterlegt (Refs #820, #860). Sie prüft `ruff` (lint + format), `makemigrations --check`, `mypy core/services`, den Translation-Version-Header und automatisches `pip-compile` bei `requirements*.in`-Änderungen.
 
 ```bash
 .venv/bin/pip install pre-commit
-pre-commit install # einmalig: commit-stage Hooks
-pre-commit install --hook-type pre-push # einmalig: pre-push Schnell-CI
-pre-commit run --all-files # alle commit-stage Hooks gegen das Repo
+pre-commit install                       # einmalig: commit-stage Hooks
+pre-commit install --hook-type pre-push  # einmalig: pre-push Schnell-CI (Refs #860)
+pre-commit run --all-files               # alle commit-stage Hooks gegen das Repo
 ```
 
 **Zwei Stufen:**
@@ -231,7 +231,7 @@ CI auf [`anlaufstelle/app`](https://github.com/anlaufstelle/app/actions) ist die
 ps aux | grep -E 'gunicorn|runserver' | grep -v grep
 
 # Bestimmten Port freigeben
-lsof -ti:8443 | xargs kill
+lsof -ti :8443 | xargs kill
 
 # Alle gunicorn-Prozesse beenden
 pkill -f gunicorn
@@ -255,12 +255,12 @@ pkill -f gunicorn
 Jedes neue facility-gescopte Model muss auf **beiden** Verteidigungslinien abgesichert sein:
 
 1. **Django-Layer (erste Linie):**
-   - `facility = models.ForeignKey(Facility,..)` am Model
-   - `objects = FacilityScopedManager()` (aus [`src/core/models/managers.py`](src/core/models/managers.py))
-   - Views/Services filtern via `.for_facility(request.current_facility)`
+ - `facility = models.ForeignKey(Facility,...)` am Model
+ - `objects = FacilityScopedManager` (aus [`src/core/models/managers.py`](src/core/models/managers.py))
+ - Views/Services filtern via `.for_facility(request.current_facility)`
 2. **PostgreSQL-RLS (zweite Linie, Defense-in-Depth):**
-   - Neue Migration nach dem Muster von [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): Tabelle zu `DIRECT_TABLES` hinzufügen (oder `JOIN_TABLES`, falls kein direktes `facility_id`-Feld vorhanden ist). Die Migration setzt `ENABLE + FORCE ROW LEVEL SECURITY` plus eine `facility_isolation`-Policy.
-   - Tabelle in `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) ergänzen, damit der RLS-Setup-Test die Abdeckung garantiert.
+ - Neue Migration nach dem Muster von [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): Tabelle zu `DIRECT_TABLES` hinzufügen (oder `JOIN_TABLES`, falls kein direktes `facility_id`-Feld vorhanden ist). Die Migration setzt `ENABLE + FORCE ROW LEVEL SECURITY` plus eine `facility_isolation`-Policy.
+ - Tabelle in `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) ergänzen, damit der RLS-Setup-Test die Abdeckung garantiert.
 
 Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS greift in Produktion nur, wenn der Django-DB-User **kein** Superuser ist (siehe [docs/dev-deployment.md](docs/dev-deployment.md), primaerer Pfad nach [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) ist eine alternative Plattform-Anleitung).
 
@@ -286,7 +286,7 @@ Die Ruff-Konfiguration befindet sich in `pyproject.toml`.
 - Tailwind CSS für Styling — keine eigenen CSS-Klassen anlegen, soweit möglich.
 - Barrierefreiheit (WCAG 2.1 AA) beachten.
 
-#### HTMX & Live-Regions
+#### HTMX & Live-Regions (Refs #811)
 
 Damit HTMX-Erfolgsmeldungen Screen-Reader-Nutzer*innen erreichen, gilt:
 
@@ -326,6 +326,8 @@ feat(clients): add duplicate-detection on import
 fix(events): prevent deletion of locked events
 
 test(security): add field-sensitivity E2E tests
+
+Refs #42
 ```
 
 Commits sind atomar: eine logische Änderung pro Commit. Direkt nach jeder Aufgabe zu pushen.
@@ -378,7 +380,7 @@ Diese Pipeline muss vor jedem Pull Request lokal grün sein.
 ## Pull-Request-Prozess
 
 1. **Branch erstellen** — von `main` branchen, sprechenden Branch-Namen verwenden:
-   ```bash
+ ```bash
    git checkout -b feature/kurze-beschreibung
    # oder
    git checkout -b fix/was-repariert-wird
@@ -387,21 +389,21 @@ Diese Pipeline muss vor jedem Pull Request lokal grün sein.
 2. **Entwickeln** — kleine, atomare Commits; Issue-Nummern referenzieren (`Refs #N`).
 
 3. **Lokal verifizieren:**
-   ```bash
-   make ci # Lint, Check, Tests
-   make test-e2e # E2E-Tests
+ ```bash
+   make ci          # Lint, Check, Tests
+   make test-e2e    # E2E-Tests
    ```
-   Außerdem manuell im Browser prüfen, dass die Änderung wie erwartet funktioniert.
+ Außerdem manuell im Browser prüfen, dass die Änderung wie erwartet funktioniert.
 
 4. **Pull Request öffnen:**
-   - Titel im Conventional-Commits-Stil (`feat:..`, `fix:..`)
-   - Beschreibung: Was wurde geändert und warum? Welche Issues werden geschlossen?
-   - Screenshot oder Demo, wenn UI-Änderungen enthalten sind
-   - Verlinkung des zugehörigen GitHub-Issues
+ - Titel im Conventional-Commits-Stil (`feat:...`, `fix:...`)
+ - Beschreibung: Was wurde geändert und warum? Welche Issues werden geschlossen?
+ - Screenshot oder Demo, wenn UI-Änderungen enthalten sind
+ - Verlinkung des zugehörigen GitHub-Issues
 
 ### Code of Conduct
 
-Alle Mitwirkenden verpflichten sich auf den [Contributor Covenant 2.1](CODE_OF_CONDUCT.md). Belästigungsfälle melden Mitwirkende vertraulich an `kontakt@anlaufstelle.app`.
+Alle Mitwirkenden verpflichten sich auf den [Contributor Covenant 2.1](CODE_OF_CONDUCT.md). Belästigungsfälle melden Mitwirkende vertraulich an `kontakt@anlaufstelle.app` (Refs #836).
 
 5. **Review:** Mindestens ein Approval erforderlich. Feedback sachlich und konstruktiv.
 
@@ -430,47 +432,47 @@ Architektur-Entscheidung: [ADR-018](docs/adr/018-rollenmodell-superadmin.md). De
 ```
 src/
   manage.py
-  anlaufstelle/ # Django-Projekteinstellungen (settings, urls, wsgi)
+  anlaufstelle/          # Django-Projekteinstellungen (settings, urls, wsgi)
   core/
-    models/ # Ein Model (oder eng verwandte Models) pro Datei
-      organization.py # Organization, Facility
-      user.py # User (erweitert AbstractUser)
-      client.py # Client
-      document_type.py # DocumentType, FieldTemplate, DocumentTypeField
-      event.py # Event
-      event_history.py # EventHistory
-      workitem.py # WorkItem, DeletionRequest
-      time_filter.py # TimeFilter
-      case.py # Case
-      episode.py # Episode
-      outcome.py # OutcomeGoal, Milestone
-      audit.py # AuditLog
-      settings.py # Settings
-    views/ # Class-based Views, aufgeteilt nach Funktionsbereich
-      aktivitaetslog.py # AktivitaetslogView (Startseite)
-      timeline.py # TimelineView (Event-Timeline)
-      clients.py # Client CRUD
-      events.py # Event CRUD + Löschworkflow
-      workitems.py # WorkItem CRUD
-      cases.py # Case, Episode, Goal, Milestone
-      search.py # Volltextsuche
-      statistics.py # Statistiken + Exporte
-      audit.py # AuditLogListView
-      auth.py # Login/Logout/Passwort
-      account.py # Benutzerprofil
-      health.py # HealthView
-      mixins.py # Rollen-Mixins
-      pwa.py # Service Worker
-    services/ # Business-Logik (Verschlüsselung, Retention, …)
-  templates/ # Django-Templates (HTMX-Partials eingeschlossen)
+    models/              # Ein Model (oder eng verwandte Models) pro Datei
+      organization.py    # Organization, Facility
+      user.py            # User (erweitert AbstractUser)
+      client.py          # Client
+      document_type.py   # DocumentType, FieldTemplate, DocumentTypeField
+      event.py           # Event
+      event_history.py   # EventHistory
+      workitem.py        # WorkItem, DeletionRequest
+      time_filter.py     # TimeFilter
+      case.py            # Case
+      episode.py         # Episode
+      outcome.py         # OutcomeGoal, Milestone
+      audit.py           # AuditLog
+      settings.py        # Settings
+    views/               # Class-based Views, aufgeteilt nach Funktionsbereich
+      aktivitaetslog.py  # AktivitaetslogView (Startseite)
+      timeline.py        # TimelineView (Event-Timeline)
+      clients.py         # Client CRUD
+      events.py          # Event CRUD + Löschworkflow
+      workitems.py       # WorkItem CRUD
+      cases.py           # Case, Episode, Goal, Milestone
+      search.py          # Volltextsuche
+      statistics.py      # Statistiken + Exporte
+      audit.py           # AuditLogListView
+      auth.py            # Login/Logout/Passwort
+      account.py         # Benutzerprofil
+      health.py          # HealthView
+      mixins.py          # Rollen-Mixins
+      pwa.py             # Service Worker
+    services/            # Business-Logik (Verschlüsselung, Retention, …)
+  templates/             # Django-Templates (HTMX-Partials eingeschlossen)
   static/
     css/
-      input.css # Tailwind-Eingabedatei
-      styles.css # Kompiliertes CSS (nicht committen)
+      input.css          # Tailwind-Eingabedatei
+      styles.css         # Kompiliertes CSS (nicht committen)
   tests/
-    e2e/ # Playwright E2E-Tests
-      conftest.py # Shared Fixtures
-      test_<feature>.py # Tests pro Feature
+    e2e/                 # Playwright E2E-Tests
+      conftest.py        # Shared Fixtures
+      test_<feature>.py  # Tests pro Feature
 ```
 
 ### Wichtige Designentscheidungen

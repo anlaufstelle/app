@@ -1,4 +1,4 @@
-> This is the English translation of [admin-guide.md](./admin-guide.md).
+> This is the English translation of [admin-guide.md](../admin-guide.md).
 > The German version is the authoritative source. Last synced: 2026-04-28 (v0.10.2).
 
 # Anlaufstelle -- Admin Guide
@@ -11,21 +11,21 @@ This guide is intended for IT administrators of social service facilities who in
 
 1. [Installation (Docker Compose)](#1-installation-docker-compose)
 2. [Initial Configuration](#2-initial-configuration)
-   - 2.5 [Configure Documentation Types](#25-configure-documentation-types)
-   - 2.6 [Manage Selection Options (Field Templates)](#26-manage-selection-options-field-templates)
-   - 2.6b [Fuzzy Search (pg_trgm)](#26b-fuzzy-search-pg_trgm)
-   - 2.7 [Two-Factor Authentication (2FA)](#27-two-factor-authentication-2fa)
-   - 2.8 [Quick Templates](#28-quick-templates)
-   - 2.9 [Encrypted File Vault & Virus Scanning](#29-encrypted-file-vault--virus-scanning)
-   - 2.10 [Offline Mode & Streetwork (M6A)](#210-offline-mode--streetwork-m6a)
+ - 2.5 [Configure Documentation Types](#25-configure-documentation-types)
+ - 2.6 [Manage Selection Options (Field Templates)](#26-manage-selection-options-field-templates)
+ - 2.6b [Fuzzy Search (pg_trgm)](#26b-fuzzy-search-pg_trgm)
+ - 2.7 [Two-Factor Authentication (2FA)](#27-two-factor-authentication-2fa)
+ - 2.8 [Quick Templates](#28-quick-templates)
+ - 2.9 [Encrypted File Vault & Virus Scanning](#29-encrypted-file-vault--virus-scanning)
+ - 2.10 [Offline Mode & Streetwork (M6A)](#210-offline-mode--streetwork-m6a)
 3. [Backup and Recovery](#3-backup-and-recovery)
 4. [Updates](#4-updates)
 5. [Monitoring](#5-monitoring)
-   - 5.4 [CSP Debugging](#54-csp-debugging)
+ - 5.4 [CSP Debugging](#54-csp-debugging)
 6. [Troubleshooting](#6-troubleshooting)
 7. [GDPR Notes](#7-gdpr-notes)
-   - 7.8 [Optimistic Locking](#78-optimistic-locking)
-   - 7.9 [Row Level Security (RLS)](#79-row-level-security-rls)
+ - 7.8 [Optimistic Locking](#78-optimistic-locking)
+ - 7.9 [Row Level Security (RLS)](#79-row-level-security-rls)
 8. [Statistics Snapshots & Materialized View](#8-statistics-snapshots--materialized-view)
 
 ---
@@ -60,7 +60,7 @@ curl -O https://raw.githubusercontent.com/anlaufstelle/app/main/Caddyfile
 Create a `.env` file in the same directory as `docker-compose.prod.yml`:
 
 ```bash
-cp.env.example.env # if available, otherwise create manually
+cp .env.example .env   # if available, otherwise create manually
 ```
 
 Minimal `.env` for production operation:
@@ -128,7 +128,7 @@ All environment variables that the application evaluates at runtime (see [`src/a
 | `ENCRYPTION_KEYS` | -- | Comma-separated list of Fernet keys. The **first** key is the write key (new data is encrypted with it); all others are read-only (decrypt fallback during rotation). |
 | `ENCRYPTION_KEY` | -- | Legacy single key. At least one of the two variables must be set in production; otherwise the app refuses to start. |
 
-**Virus Scanning (ClamAV)**
+**Virus Scanning (ClamAV, #524)**
 
 | Name | Default (prod) | Description |
 |---|---|---|
@@ -174,7 +174,7 @@ The included `Caddyfile` automatically handles TLS certificates via Let's Encryp
 ```
 {$DOMAIN} {
     reverse_proxy web:8000
-..
+    ...
 }
 ```
 
@@ -278,7 +278,7 @@ Under **Core > Users > Add user** in the admin:
 - **Role:** One of the four roles (see below)
 - **Facility:** Assignment to a facility
 
-#### Token Invite Flow
+#### Token Invite Flow (Refs #528)
 
 New accounts are created **without** a clear-text password. Instead, the application sends an **invitation email** containing a personalized setup link to the email address on file. The link takes the new user to the standard password-reset form, where they set a password themselves.
 
@@ -370,7 +370,7 @@ Defines the minimum contact stage a client must have for an event of this type t
 
 In addition to the document type's sensitivity, each individual field of a field template can receive its **own** sensitivity level (`FieldTemplate.sensitivity`). For field visibility the **maximum** of the document-type and field sensitivity applies -- a field flagged `HIGH` stays invisible to staff even if the document type itself is only `NORMAL`.
 
-**Decoupling Encryption ↔ Visibility**: The two flags `is_encrypted` (at-rest encryption of the value in the database) and `sensitivity` (visibility in the UI) are configurable **independently**:
+**Decoupling Encryption ↔ Visibility** (Refs #356): The two flags `is_encrypted` (at-rest encryption of the value in the database) and `sensitivity` (visibility in the UI) are configurable **independently**:
 
 - A field may be stored encrypted on disk while still being visible in the UI at `NORMAL` sensitivity (e.g. contact data that all roles are allowed to see but that should not be stored in clear text).
 - A non-encrypted field can still be restricted to Lead/Admin (e.g. statistical markers that are sensitive, but do not need to be stored encrypted).
@@ -402,7 +402,7 @@ In the **Default value** field of a field template, you can store a default that
 | Multi-Select | comma-separated list of active option slugs | `beratung, essen` |
 | File | not supported | -- |
 
-Precedence on create: **Quick template > Default value > empty**. Invalid values are rejected by `FieldTemplate.clean()` when saved in the admin.
+Precedence on create: **Quick template > Default value > empty**. Invalid values are rejected by `FieldTemplate.clean` when saved in the admin.
 
 **Schema of an option:**
 
@@ -458,7 +458,7 @@ The PostgreSQL extension `pg_trgm` must be enabled. The standard deployment sets
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 ```
 
-References:.
+References: #536, #581.
 
 ### 2.7 Two-Factor Authentication (2FA)
 
@@ -483,7 +483,7 @@ If a staff member loses their authenticator device, an administrator has to dele
 2. Select the affected user's device and delete it.
 3. Inform the user: on their next login they will be redirected to `/mfa/setup/` (if `is_mfa_enforced=True`) or can re-enable 2FA voluntarily.
 
-Since v0.10.1 there are also **backup codes as a second factor** for exactly this recovery case. On 2FA setup the user receives 10 single-use codes that should be printed or stored in a password manager -- at the 2FA login prompt the user can enter a backup code instead of a TOTP code. Used codes are invalidated and recorded in the AuditLog (`MFA_BACKUP_CODE_USED`). If all 10 codes have been spent or lost, the admin reset above remains the fallback.
+Since v0.10.1 there are also **backup codes as a second factor** for exactly this recovery case (Refs #588). On 2FA setup the user receives 10 single-use codes that should be printed or stored in a password manager -- at the 2FA login prompt the user can enter a backup code instead of a TOTP code. Used codes are invalidated and recorded in the AuditLog (`MFA_BACKUP_CODE_USED`). If all 10 codes have been spent or lost, the admin reset above remains the fallback.
 
 #### Account Lockout
 
@@ -551,19 +551,19 @@ Quick templates are filtered per user using [`user_can_see_document_type`](https
 - Model: [`src/core/models/quick_template.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/quick_template.py)
 - Service: [`src/core/services/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/quick_templates.py)
 - View integration: [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) (`EventCreateView`)
-- Tracking issue: 
+- Tracking issue: #494
 
 ### 2.9 Encrypted File Vault & Virus Scanning
 
-File attachments (photos, scans, documents) on events are stored in an **encrypted vault**: scanned for viruses before being written to `MEDIA_ROOT`, then symmetrically encrypted with the `ENCRYPTION_KEYS` key material using AES-GCM.
+File attachments (photos, scans, documents) on events are stored in an **encrypted vault**: scanned for viruses before being written to `MEDIA_ROOT`, then symmetrically encrypted with the `ENCRYPTION_KEYS` key material using AES-GCM. Refs #524.
 
 #### Upload Flow
 
 1. A staff member picks a file in the event form ([`src/core/forms/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/events.py)).
 2. The server validates file type and size (see `allowed_file_types` and `max_file_size_mb` in the facility settings -- default **10 MB**).
 3. **ClamAV scan** before encryption:
-   - Default: fail-closed. If the daemon is unreachable (`CLAMAV_ENABLED=true`, but no TCP connect), the upload is **rejected**.
-   - Virus detected → the upload is discarded and an audit-log entry is written.
+ - Default: fail-closed. If the daemon is unreachable (`CLAMAV_ENABLED=true`, but no TCP connect), the upload is **rejected**.
+ - Virus detected → the upload is discarded and an audit-log entry is written.
 4. The payload is encrypted with AES-GCM (write key = first entry in `ENCRYPTION_KEYS`) and stored under `MEDIA_ROOT`.
 5. Downloads happen exclusively through the protected Django view (no direct webserver access to `MEDIA_ROOT`).
 
@@ -592,11 +592,11 @@ MultiFernet accepts a list of keys. To rotate:
 
 #### Safe Downloads (RFC 5987)
 
-All file downloads are delivered via the central helper [`safe_download_response`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/downloads.py). The helper sets `Content-Disposition` with RFC-5987-encoded file names (Unicode-safe, no reverse-path traversal) and prevents browser MIME sniffing.
+All file downloads are delivered via the central helper [`safe_download_response`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/downloads.py). The helper sets `Content-Disposition` with RF-encoded file names (Unicode-safe, no reverse-path traversal) and prevents browser MIME sniffing.
 
 ### 2.10 Offline Mode & Streetwork (M6A)
 
-For field work (e.g. streetwork), Anlaufstelle offers a **secure offline mode** with **client-side** end-to-end encryption of all data cached on the device.
+For field work (e.g. streetwork), Anlaufstelle offers a **secure offline mode** with **client-side** end-to-end encryption of all data cached on the device. Refs #573, #576.
 
 #### Cryptographic Design
 
@@ -824,9 +824,9 @@ The Content Security Policy (CSP) is set **centrally in Django** via [`django-cs
 
 **Inline scripts are not allowed.** All JavaScript logic lives in external files under `src/static/js/`, included via `<script src=…>` or through nonce-aware template tags.
 
-**`script-src` global without `'unsafe-eval'`.** With the migration to the `@alpinejs/csp` build (v0.10.2), `'unsafe-eval'` has been removed from the global policy. All Alpine components are registered as `Alpine.data()` components in [`src/static/js/alpine-components.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/alpine-components.js); architecture tests forbid inline `x-data="{..}"` and complex expressions (ternaries, `||`/`&&`, method calls, object literals) in Alpine and HTMX directives.
+**`script-src` global without `'unsafe-eval'`.** With the migration to the `@alpinejs/csp` build (v0.10.2), `'unsafe-eval'` has been removed from the global policy. All Alpine components are registered as `Alpine.data` components in [`src/static/js/alpine-components.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/alpine-components.js); architecture tests forbid inline `x-data="{...}"` and complex expressions (ternaries, `||`/`&&`, method calls, object literals) in Alpine and HTMX directives.
 
-**Exception `/admin-mgmt/*` (Django admin):** django-unfold loads its own Alpine build that uses `new AsyncFunction()`-based evaluation for the Cmd+K search and therefore cannot initialize without `'unsafe-eval'`. The [`AdminCSPRelaxMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/) therefore appends `'unsafe-eval'` **per request only for admin routes** -- which are additionally protected by the MFA gate and the `admin` role. Outside the admin, the strict global policy stays active.
+**Exception `/admin-mgmt/*` (Django admin):** django-unfold loads its own Alpine build that uses `new AsyncFunction`-based evaluation for the Cmd+K search and therefore cannot initialize without `'unsafe-eval'`. The [`AdminCSPRelaxMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/) therefore appends `'unsafe-eval'` **per request only for admin routes** -- which are additionally protected by the MFA gate and the `admin` role. Outside the admin, the strict global policy stays active.
 
 **Typical error patterns in the browser console:**
 
@@ -1006,7 +1006,7 @@ Every execution that deletes records is automatically logged in the audit log.
 
 #### Retention Dashboard
 
-A **retention dashboard** is available under [`/retention/`](https://github.com/anlaufstelle/app/blob/main/src/core/views/retention.py) where Lead and Admin roles can efficiently process deletion proposals generated by `enforce_retention`.
+A **retention dashboard** is available under [`/retention/`](https://github.com/anlaufstelle/app/blob/main/src/core/views/retention.py) where Lead and Admin roles can efficiently process deletion proposals generated by `enforce_retention`. Refs #514, #515.
 
 | Bulk Action | Effect |
 |---|---|
@@ -1022,7 +1022,7 @@ Legal Holds are managed in the retention dashboard and in the Django admin (see 
 
 #### K-Anonymization Instead of Hard Delete
 
-As an alternative to hard deletion, **k-anonymization** can be enabled per facility.
+As an alternative to hard deletion, **k-anonymization** can be enabled per facility (Refs #535).
 
 | Field in `Settings` | Default | Description |
 |---|---|---|
@@ -1077,7 +1077,7 @@ The following administrative capabilities are available for handling requests fr
 
 ### 7.8 Optimistic Locking
 
-To protect against **silent overwrites** when two users edit the same record in parallel (two staff members have the same client/case open at the same time and save one after another), Anlaufstelle applies **optimistic locking** at the service layer.
+To protect against **silent overwrites** when two users edit the same record in parallel (two staff members have the same client/case open at the same time and save one after another), Anlaufstelle applies **optimistic locking** at the service layer. Refs #531.
 
 **Affected models:** Client, Case, WorkItem, Settings, Event.
 
@@ -1086,7 +1086,7 @@ To protect against **silent overwrites** when two users edit the same record in 
 - Every form renders the current `updated_at` as a hidden field.
 - On save, the helper `check_version_conflict(instance, expected_updated_at)` verifies whether the record has been modified in the meantime.
 - On conflict a `ValidationError` is raised; the view redirects the user with the message:
-  > *"The record has been modified in the meantime. Please reload the page."*
+ > *"The record has been modified in the meantime. Please reload the page."*
 
 **Administrative notes:**
 - There is no admin toggle to disable locking -- the protection is system-wide.
@@ -1094,13 +1094,13 @@ To protect against **silent overwrites** when two users edit the same record in 
 
 ### 7.9 Row Level Security (RLS)
 
-In addition to ORM-side facility scoping, **PostgreSQL row-level security** is enabled on **18 facility-scoped tables** as **defense-in-depth**. A buggy ORM query that forgets facility scoping still returns no foreign data, thanks to RLS.
+In addition to ORM-side facility scoping, **PostgreSQL row-level security** is enabled on **18 facility-scoped tables** as **defense-in-depth**. A buggy ORM query that forgets facility scoping still returns no foreign data, thanks to RLS. Refs #542, #586.
 
 #### How It Works
 
 - The middleware [`FacilityScopeMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/facility_scope.py) sets the Postgres session variable `app.current_facility_id` per request via `SELECT set_config('app.current_facility_id', <id>, false)` (session scope, not transaction scope).
 - The RLS policies (migration [`0047_postgres_rls_setup`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0047_postgres_rls_setup.py)) filter every row via `facility_id = current_setting('app.current_facility_id', true)`.
-- **Fail-closed:** if the variable is empty or unset, `current_setting(.., true)` returns NULL, the comparison fails, and **no rows** are returned.
+- **Fail-closed:** if the variable is empty or unset, `current_setting(..., true)` returns NULL, the comparison fails, and **no rows** are returned.
 - The middleware opens the DB cursor **only for authenticated requests**; anonymous routes (login, health check, static files) remain unaffected.
 - On every request the value is set fresh (including empty), so connection pooling cannot leak a leftover value from an earlier request.
 
@@ -1124,7 +1124,7 @@ Without the variable set, the protected tables visibly return **no rows** in `ps
 
 Statistics reporting in Anlaufstelle uses **two different acceleration layers**:
 
-1. **Materialized view** (`core_statistics_event_flat`) -- pre-aggregates current event data so the statistics page does not have to scan all events on every request.
+1. **Materialized view** (`core_statistics_event_flat`) -- pre-aggregates current event data so the statistics page does not have to scan all events on every request. Refs #544.
 2. **Statistics snapshots** -- monthly, persisted aggregates that are captured **before** automatic deletion of old events. Historical reports stay correct even after GDPR-mandated deletion.
 
 ### Refresh the Materialized View

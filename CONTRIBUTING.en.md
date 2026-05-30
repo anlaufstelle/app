@@ -54,9 +54,9 @@ cd app
 **2. Set up the Python environment**
 
 ```bash
-python3.13 -m venv.venv
-source.venv/bin/activate
-pip install -r requirements-dev.txt # includes runtime + test/lint tools
+python3.13 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements-dev.txt   # includes runtime + test/lint tools
 # Or runtime only (e.g. for prod Docker build):
 # pip install -r requirements.txt
 ```
@@ -113,10 +113,10 @@ make migrate
 **6. Load seed data** (optional, for local development)
 
 ```bash
-make seed # Default: small
-python src/manage.py seed --scale medium # more data including case management
-python src/manage.py seed --scale large # load-testing volume
-python src/manage.py seed --flush # flush existing data first
+make seed                              # Default: small
+python src/manage.py seed --scale medium   # more data including case management
+python src/manage.py seed --scale large    # load-testing volume
+python src/manage.py seed --flush          # flush existing data first
 ```
 
 **Scale profiles overview:**
@@ -128,11 +128,11 @@ python src/manage.py seed --flush # flush existing data first
 | Clients / facility | 7 | 40 | 500 |
 | Events / facility | 25 | 750 | 10,000 |
 | Cases | 3 | 12 | 50 |
-| Episodes | — | 20 | 80 |
-| Impact goals | — | 15 | 60 |
-| Milestones / goal | — | 3 | 4 |
+| Episodes || 20 | 80 |
+| Impact goals || 15 | 60 |
+| Milestones / goal || 3 | 4 |
 | WorkItems | 5 | 25 | 100 |
-| DeletionRequests | — | 5 | 15 |
+| DeletionRequests || 5 | 15 |
 | RetentionProposals | 4 | 6 | 12 |
 | Attachments (approx.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) |
 | Time span | 80 days | 365 days | 3 years |
@@ -176,7 +176,7 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 | `make tailwind` | Compile Tailwind CSS in watch mode |
 | `make tailwind-build` | Compile minified Tailwind CSS for production |
 | `make lint` | Check code with Ruff and verify formatting |
-| `make typecheck` | mypy on `core/services` (strict) + baseline check |
+| `make typecheck` | mypy on `core/services` (strict) + baseline check (Refs #741) |
 | `make test` | Run unit and integration tests (excluding E2E) |
 | `make test-e2e` | Run end-to-end tests with Playwright |
 | `make check` | Run Django system checks and verify migration consistency |
@@ -209,12 +209,12 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 Every new facility-scoped model must be protected on **both** defense lines:
 
 1. **Django layer (first line):**
-   - `facility = models.ForeignKey(Facility,..)` on the model
-   - `objects = FacilityScopedManager()` (from [`src/core/models/managers.py`](src/core/models/managers.py))
-   - Views/services filter via `.for_facility(request.current_facility)`
+ - `facility = models.ForeignKey(Facility,...)` on the model
+ - `objects = FacilityScopedManager` (from [`src/core/models/managers.py`](src/core/models/managers.py))
+ - Views/services filter via `.for_facility(request.current_facility)`
 2. **PostgreSQL RLS (second line, defense in depth):**
-   - New migration following the pattern of [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): add the table to `DIRECT_TABLES` (or `JOIN_TABLES` if no direct `facility_id` column exists). The migration sets `ENABLE + FORCE ROW LEVEL SECURITY` plus a `facility_isolation` policy.
-   - Add the table to `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) so the RLS setup test guarantees coverage.
+ - New migration following the pattern of [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): add the table to `DIRECT_TABLES` (or `JOIN_TABLES` if no direct `facility_id` column exists). The migration sets `ENABLE + FORCE ROW LEVEL SECURITY` plus a `facility_isolation` policy.
+ - Add the table to `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) so the RLS setup test guarantees coverage.
 
 Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS only takes effect in production when the Django DB user is **not** a superuser (see [docs/coolify-deployment.md](docs/coolify-deployment.md)).
 
@@ -272,6 +272,8 @@ feat(clients): add duplicate-detection on import
 fix(events): prevent deletion of locked events
 
 test(security): add field-sensitivity E2E tests
+
+Refs #42
 ```
 
 Commits are atomic: one logical change per commit. Push immediately after completing each task.
@@ -324,7 +326,7 @@ This pipeline must pass locally before every pull request.
 ## Pull Request Process
 
 1. **Create a branch** — branch off `main`, use a descriptive branch name:
-   ```bash
+ ```bash
    git checkout -b feature/short-description
    # or
    git checkout -b fix/what-is-being-fixed
@@ -333,17 +335,17 @@ This pipeline must pass locally before every pull request.
 2. **Develop** — small, atomic commits; reference issue numbers (`Refs #N`).
 
 3. **Verify locally:**
-   ```bash
-   make ci # Lint, check, tests
-   make test-e2e # E2E tests
+ ```bash
+   make ci          # Lint, check, tests
+   make test-e2e    # E2E tests
    ```
-   Also manually verify in the browser that the change works as expected.
+ Also manually verify in the browser that the change works as expected.
 
 4. **Open a pull request:**
-   - Title in Conventional Commits style (`feat:..`, `fix:..`)
-   - Description: What was changed and why? Which issues are being closed?
-   - Screenshot or demo if UI changes are included
-   - Link to the associated GitHub issue
+ - Title in Conventional Commits style (`feat:...`, `fix:...`)
+ - Description: What was changed and why? Which issues are being closed?
+ - Screenshot or demo if UI changes are included
+ - Link to the associated GitHub issue
 
 5. **Review:** At least one approval required. Feedback should be objective and constructive.
 
@@ -367,44 +369,44 @@ This pipeline must pass locally before every pull request.
 ```
 src/
   manage.py
-  anlaufstelle/ # Django project settings (settings, urls, wsgi)
+  anlaufstelle/          # Django project settings (settings, urls, wsgi)
   core/
-    models/ # One model (or closely related models) per file
-      organization.py # Organization, Facility
-      user.py # User (extends AbstractUser)
-      client.py # Client
-      document_type.py # DocumentType, FieldTemplate, DocumentTypeField
-      event.py # Event
-      event_history.py # EventHistory
-      workitem.py # WorkItem, DeletionRequest
-      time_filter.py # TimeFilter
-      case.py # Case
-      audit.py # AuditLog
-      settings.py # Settings
-    views/ # Class-based views, split by feature area
-      aktivitaetslog.py # AktivitaetslogView (home page)
-      timeline.py # TimelineView (event timeline)
-      clients.py # Client CRUD
-      events.py # Event CRUD + deletion workflow
-      workitems.py # WorkItem CRUD
-      search.py # Full-text search
-      statistics.py # Statistics + exports
-      audit.py # AuditLogListView
-      auth.py # Login/Logout/Password
-      account.py # User profile
-      health.py # HealthView
-      mixins.py # Role mixins
-      pwa.py # Service Worker
-    services/ # Business logic (encryption, retention,..)
-  templates/ # Django templates (HTMX partials included)
+    models/              # One model (or closely related models) per file
+      organization.py    # Organization, Facility
+      user.py            # User (extends AbstractUser)
+      client.py          # Client
+      document_type.py   # DocumentType, FieldTemplate, DocumentTypeField
+      event.py           # Event
+      event_history.py   # EventHistory
+      workitem.py        # WorkItem, DeletionRequest
+      time_filter.py     # TimeFilter
+      case.py            # Case
+      audit.py           # AuditLog
+      settings.py        # Settings
+    views/               # Class-based views, split by feature area
+      aktivitaetslog.py  # AktivitaetslogView (home page)
+      timeline.py        # TimelineView (event timeline)
+      clients.py         # Client CRUD
+      events.py          # Event CRUD + deletion workflow
+      workitems.py       # WorkItem CRUD
+      search.py          # Full-text search
+      statistics.py      # Statistics + exports
+      audit.py           # AuditLogListView
+      auth.py            # Login/Logout/Password
+      account.py         # User profile
+      health.py          # HealthView
+      mixins.py          # Role mixins
+      pwa.py             # Service Worker
+    services/            # Business logic (encryption, retention, ...)
+  templates/             # Django templates (HTMX partials included)
   static/
     css/
-      input.css # Tailwind input file
-      styles.css # Compiled CSS (do not commit)
+      input.css          # Tailwind input file
+      styles.css         # Compiled CSS (do not commit)
   tests/
-    e2e/ # Playwright E2E tests
-      conftest.py # Shared fixtures
-      test_<feature>.py # Tests per feature
+    e2e/                 # Playwright E2E tests
+      conftest.py        # Shared fixtures
+      test_<feature>.py  # Tests per feature
 ```
 
 ### Key Design Decisions

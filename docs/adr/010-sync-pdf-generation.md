@@ -15,7 +15,7 @@ Naheliegende Lösung: Task-Queue (Celery/RQ/Dramatiq) mit Worker-Prozessen, asyn
 - Async-Statusseite, Polling, Token-Lifecycle, eventueller Re-Auth bei langem Job.
 - Operativer Aufwand für jede Zielinstallation (oft kleine Träger ohne Ops-Team).
 
-Detaillierte Aufwands- und Nutzen-Analyse in [`docs/async-pdf-evaluation.md`](./async-pdf-evaluation.md).
+Detaillierte Aufwands- und Nutzen-Analyse in [`docs/async-pdf-evaluation.md`](../async-pdf-evaluation.md).
 
 ## Decision
 
@@ -23,7 +23,7 @@ PDF-Generierung bleibt **synchron**. Mitigationen statt Async-Queue:
 
 - **Rate-Limiting** auf den teuren Endpunkten (`@ratelimit(rate="10/h")` pro User).
 - **Hybrid-Statistiken** (vorberechnete Aggregate für Jugendamt-Bericht), wo möglich.
-- **Decryption-Caching** (`lru_cache` auf `get_fernet()`, `iter_records` statt Volladung).
+- **Decryption-Caching** (`lru_cache` auf `get_fernet`, `iter_records` statt Volladung).
 - **WSGI/Gunicorn**-Tuning: ausreichend Worker, Timeouts an den realistischen Worst-Case angepasst.
 
 Ein Wechsel auf Async-Queue ist eine spätere Option, falls Lastprofil oder Featureumfang es erzwingt. Diese ADR wird dann durch eine Folge-ADR superseded.
@@ -44,5 +44,5 @@ Ein Wechsel auf Async-Queue ist eine spätere Option, falls Lastprofil oder Feat
 
 ## References
 
-- [`docs/async-pdf-evaluation.md`](./async-pdf-evaluation.md)
-- [`src/core/services/client_export.py`](././src/core/services/client_export.py), [`src/core/services/export.py`](././src/core/services/export.py)
+- [`docs/async-pdf-evaluation.md`](../async-pdf-evaluation.md)
+- [`src/core/services/client_export.py`](../../src/core/services/client_export.py), [`src/core/services/export.py`](../../src/core/services/export.py)

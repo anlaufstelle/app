@@ -45,7 +45,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 
 **Relevante Dateien:**
 - [`src/core/models/settings.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/settings.py) — `default_document_type` ForeignKey
-- [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) — `EventCreateView.get()` liest den Default
+- [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) — `EventCreateView.get` liest den Default
 
 ---
 
@@ -78,7 +78,7 @@ Wenn keine der Punkte hilft, wenden Sie sich an Ihren Administrator — fehlgesc
 
 ### 4. Ich habe mein Handy verloren — wie komme ich wieder rein?
 
-**Erste Wahl: Backup-Code verwenden.** Bei der 2FA-Einrichtung haben Sie 10 einmalig nutzbare Codes erhalten (seit v0.10.1, Issue #588). Geben Sie am 2FA-Login statt eines TOTP-Codes einen davon ein — verbrauchte Codes sind danach ungültig und werden im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Nach dem Login richten Sie unter `/mfa/settings/` ein neues TOTP-Gerät und neue Backup-Codes ein.
+**Erste Wahl: Backup-Code verwenden.** Bei der 2FA-Einrichtung haben Sie 10 einmalig nutzbare Codes erhalten (seit v0.10.1, [Issue #588](https://github.com/anlaufstelle/app/issues/588)). Geben Sie am 2FA-Login statt eines TOTP-Codes einen davon ein — verbrauchte Codes sind danach ungültig und werden im AuditLog (`MFA_BACKUP_CODE_USED`) protokolliert. Nach dem Login richten Sie unter `/mfa/settings/` ein neues TOTP-Gerät und neue Backup-Codes ein.
 
 **Wenn alle Codes verbraucht oder verloren sind:** Bitten Sie eine Administratorin, Ihr TOTP-Gerät zurückzusetzen.
 
@@ -105,7 +105,7 @@ Nach **10 fehlgeschlagenen Anmeldungen** wird das Konto automatisch gesperrt (Sc
 **Hinweis für Admins:** Die `LOGIN_FAILED`-Einträge im AuditLog sind durch einen DB-Trigger (`auditlog_immutable`) unveränderbar — der Cleanup erfolgt deshalb über einen `LOGIN_UNLOCK`-Eintrag, nicht durch Löschen.
 
 **Relevante Dateien:**
-- [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py) — `is_locked()`, `unlock()`, Schwellenwert
+- [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py) — `is_locked`, `unlock`, Schwellenwert
 - [`src/core/views/account.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/account.py) — Lockout-Check beim Login
 
 ---
@@ -152,8 +152,8 @@ Filter-Änderungen (Schicht, Typ, Dokumentationstyp) lösen einen HTMX-Request a
 
 **Relevante Dateien:**
 - [`src/core/views/zeitstrom.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/zeitstrom.py) — `ZeitstromView`, `ZeitstromFeedPartialView`
-- [`src/core/services/feed.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/feed.py) — `build_feed_items()`, `enrich_events_with_preview()`
-- [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary()`
+- [`src/core/services/feed.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/feed.py) — `build_feed_items`, `enrich_events_with_preview`
+- [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary`
 
 ---
 
@@ -166,7 +166,7 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 | Schicht | Zeitraum | Besonderheit |
 |---------|----------|-------------|
 | Frühdienst | 08:00–16:00 | Standard-Schicht |
-| Spätdienst | 16:00–22:00 | — |
+| Spätdienst | 16:00–22:00 ||
 | Nachtdienst | 22:00–08:00 | Mitternachts-Wraparound |
 
 **Was zeigt die Seite?**
@@ -181,12 +181,12 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 **Automatisches Verhalten:**
 - Öffnet man die Übergabe **heute**, wird automatisch die **vorherige Schicht** vorausgewählt
 - Datums-Navigation (vor/zurück) + Tab-Wechsel zwischen Schichten und „Ganzer Tag"
-- Nachtschichten über Mitternacht werden korrekt via `covers_time()`-Logik behandelt
+- Nachtschichten über Mitternacht werden korrekt via `covers_time`-Logik behandelt
 - Kompakte Version erscheint auch im Zeitstrom, wenn ein Schichtfilter aktiv ist
 
 **Relevante Dateien:**
 - [`src/core/views/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/handover.py) — `HandoverView`
-- [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary()`
+- [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary`
 - [`src/core/models/time_filter.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/time_filter.py) — `TimeFilter` (Schichtdefinition)
 - [`src/templates/core/handover/index.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/core/handover/index.html) — Haupttemplate
 
@@ -232,7 +232,7 @@ Die **Wiedervorlage** (Feld `remind_at`) ist ein **optionales Frühwarn-Datum**,
 
 **Relevante Dateien:**
 - [`src/core/models/workitem.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/workitem.py) — Feld `remind_at`
-- [`src/core/utils/dates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/dates.py) — `describe_remind_at()` (Badge-Logik)
+- [`src/core/utils/dates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/dates.py) — `describe_remind_at` (Badge-Logik)
 - [`src/core/forms/workitems.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/workitems.py) — Validierung `remind_at ≤ due_date`
 - [`src/core/services/workitems.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/workitems.py) — Offset-Erhalt bei Wiederholung
 
@@ -357,10 +357,10 @@ Jeder User mit Rolle `assistant` / `staff` / `lead` / `facility_admin` gehört z
 Navigation und Aktions-Buttons passen sich automatisch der Rolle an:
 
 - **Sidebar/Navigation:**
-  - „Fälle" erscheint erst ab Fachkraft
-  - „Statistiken" und „Löschanträge" ab Leitung
-  - „Audit-Log", „DSGVO" und „Administration" für `facility_admin` (nur eigene Einrichtung)
-  - „Systembereich" (`/system/`) ausschließlich für `super_admin`
+ - „Fälle" erscheint erst ab Fachkraft
+ - „Statistiken" und „Löschanträge" ab Leitung
+ - „Audit-Log", „DSGVO" und „Administration" für `facility_admin` (nur eigene Einrichtung)
+ - „Systembereich" (`/system/`) ausschließlich für `super_admin`
 - **Erstellen-Menü:** „Neue Person", „Neuer Arbeitsauftrag" und „Neuer Fall" erst ab Fachkraft sichtbar
 - **Detail-Seiten:** „Bearbeiten"- und „Löschen"-Buttons je nach Rolle und Eigentümerschaft ein-/ausgeblendet
 - **Banner im `/system/`-Bereich:** Permanenter Hinweis auf facility-übergreifenden Zugriff und Audit-Protokollierung (`SYSTEM_VIEW`)
@@ -439,10 +439,10 @@ Sudo-Mode ergänzt damit die normale Session-Authentifizierung, ohne sie zu erse
 2. `RequireSudoModeMixin` prüft `is_in_sudo(request)` → `False`
 3. Redirect auf `/sudo/?next=/dsgvo/`
 4. Sudo-Form: einzelnes Passwort-Feld + Submit-Button
-5. POST → Server prüft Passwort via `authenticate(..)` → bei Erfolg:
-   - Setzt `session['sudo_until'] = now + 900s`
-   - Schreibt `AuditLog`-Eintrag `SUDO_MODE_ENTERED`
-   - Redirect zurück auf `/dsgvo/`
+5. POST → Server prüft Passwort via `authenticate(...)` → bei Erfolg:
+ - Setzt `session['sudo_until'] = now + 900s`
+ - Schreibt `AuditLog`-Eintrag `SUDO_MODE_ENTERED`
+ - Redirect zurück auf `/dsgvo/`
 6. Innerhalb von 15 Minuten kann der User beliebig viele DSGVO-Dokumente runterladen, ohne erneut prompten zu müssen
 7. Nach Ablauf: nächste sensible Aktion löst erneut den Re-Auth-Prompt aus
 
@@ -459,7 +459,9 @@ Bei falschem Passwort: HTTP 403, Form bleibt sichtbar, **5 Versuche pro Minute**
 - [`src/core/services/sudo_mode.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/sudo_mode.py) — `enter_sudo`, `is_in_sudo`, `clear_sudo`, `RequireSudoModeMixin`
 - [`src/core/views/sudo_mode.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/sudo_mode.py) — `SudoModeView` (Re-Auth-Form), Rate-Limit
 - [`src/templates/auth/sudo_mode.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/auth/sudo_mode.html) — Form-Template
-- [`src/core/views/dsgvo.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/dsgvo.py), [`src/core/views/clients.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/clients.py), [`src/core/views/mfa.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mfa.py) — Verwendung des Mixins.
+- [`src/core/views/dsgvo.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/dsgvo.py), [`src/core/views/clients.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/clients.py), [`src/core/views/mfa.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mfa.py) — Verwendung des Mixins
+
+Refs #683.
 
 ---
 
@@ -552,10 +554,10 @@ Zusätzlich: Per-DocumentType-Override via `DocumentType.retention_days`.
 #### Cron-Schedule (Host-Level)
 
 ```
-02:00 UTC backup.sh ← Backup zuerst
-03:00 UTC enforce_retention ← dann Retention
-04:00 UTC create_statistics_snapshots ← dann Snapshots (monatlich am 1.)
-*/5 min Health Check (curl /health/)
+02:00 UTC  backup.sh                     ← Backup zuerst
+03:00 UTC  enforce_retention             ← dann Retention
+04:00 UTC  create_statistics_snapshots   ← dann Snapshots (monatlich am 1.)
+*/5 min    Health Check (curl /health/)
 ```
 
 **Reihenfolge kritisch:** Backup → Retention → Snapshots
@@ -590,5 +592,5 @@ So gehen weder Ihre noch die parallelen Änderungen verloren.
 
 ---
 
-*Konsolidiert aus. Alle Inhalte am 29.04.2026 gegen den Code verifiziert (v0.10.2). v0.10.0-Ergänzungen: File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking. Ergänzung 25.04.2026: WorkItem-Hinweis-vs-Aufgabe und Wiedervorlage (FAQ #7, #8). Ergänzung 29.04.2026: MFA-Backup-Codes als Self-Service-Recovery (FAQ #4) und Account-Lockout nach 10 Fehlversuchen (FAQ #4a) — beide seit v0.10.1.*
+*Konsolidiert aus #105, #429, #471, #506. Alle Inhalte am 29.04.2026 gegen den Code verifiziert (v0.10.2). v0.10.0-Ergänzungen (#589): File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking. Ergänzung 25.04.2026: WorkItem-Hinweis-vs-Aufgabe und Wiedervorlage (FAQ #7, #8). Ergänzung 29.04.2026 (#703): MFA-Backup-Codes als Self-Service-Recovery (FAQ #4) und Account-Lockout nach 10 Fehlversuchen (FAQ #4a) — beide seit v0.10.1.*
 

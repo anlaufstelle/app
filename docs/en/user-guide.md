@@ -1,4 +1,4 @@
-> This is the English translation of [user-guide.md](./user-guide.md).
+> This is the English translation of [user-guide.md](../user-guide.md).
 > The German version is the authoritative source. Last synced: 2026-04-28 (v0.10.2).
 
 # Anlaufstelle -- User Guide
@@ -12,7 +12,7 @@ This guide is intended for social workers, managers, and assistants working in d
 1. [Login and Password](#1-login-and-password)
 2. [Home -- Zeitstrom](#2-home--zeitstrom)
 3. [Documenting a Contact (Creating an Event)](#3-documenting-a-contact-creating-an-event)
-   - [Files Overview](#3a-files-overview)
+ - [Files Overview](#3a-files-overview)
 4. [Managing Clients](#4-managing-clients)
 5. [Hints and Tasks (Work Items)](#5-hints-and-tasks-work-items)
 6. [Search](#6-search)
@@ -57,11 +57,11 @@ Anlaufstelle supports time-based one-time passwords (TOTP) as a second login fac
 1. Click your name in the top-right corner > **Two-Factor Authentication** (URL: `/mfa/settings/`).
 2. Click **Set up 2FA** -- a QR code is displayed.
 3. Install an authenticator app and scan the QR code. Tested apps:
-   - **Google Authenticator** (Android/iOS)
-   - **Microsoft Authenticator** (Android/iOS)
-   - **Authy** (Android/iOS/Desktop)
-   - **FreeOTP / FreeOTP+** (Android, open source)
-   - **1Password**, **Bitwarden**, **Proton Pass** (as built-in authenticator)
+ - **Google Authenticator** (Android/iOS)
+ - **Microsoft Authenticator** (Android/iOS)
+ - **Authy** (Android/iOS/Desktop)
+ - **FreeOTP / FreeOTP+** (Android, open source)
+ - **1Password**, **Bitwarden**, **Proton Pass** (as built-in authenticator)
 4. Enter the 6-digit code shown by the app and click **Confirm & activate**.
 
 > **Tip:** If the QR code cannot be scanned, click **Enter secret manually** and copy the string into the app (field "Secret" / "Key" -- Base32, no spaces). In the app, pick type **TOTP / time-based**.
@@ -99,7 +99,7 @@ The feed combines four sources for the current day:
 | Source | What is shown |
 |--------|---------------|
 | **Contacts** (Events) | Documentation entries with preview fields |
-| **Activities** | System operations (created, edited, deleted..) |
+| **Activities** | System operations (created, edited, deleted...) |
 | **Tasks** (Work Items) | Hints and tasks with priority and status |
 | **Entry Bans** | Active entry bans -- additionally shown as a red banner on top |
 
@@ -142,9 +142,9 @@ An **event** is a single documented contact -- for example, a counseling session
 3. **Fill in the fields:** After selecting the type, the corresponding input fields are loaded. Fill in all relevant fields.
 4. **Timestamp:** The "Timestamp" field is automatically set to the current time. You can adjust it if you are recording a contact retroactively.
 5. **Assign a client (optional):**
-   - For an **anonymous contact** (without a pseudonym): Enable the "Anonymous" option. No client will be linked.
-   - For an **identified client**: Start typing the pseudonym in the client field. A suggestion list appears -- select the matching client.
-   - If the client has not been registered yet, create them first under **Clients** (see [Section 4](#4-managing-clients)).
+ - For an **anonymous contact** (without a pseudonym): Enable the "Anonymous" option. No client will be linked.
+ - For an **identified client**: Start typing the pseudonym in the client field. A suggestion list appears -- select the matching client.
+ - If the client has not been registered yet, create them first under **Clients** (see [Section 4](#4-managing-clients)).
 6. Click **Save**.
 
 You will be redirected to the detail view of the newly created entry. A success message confirms the save.
@@ -259,10 +259,10 @@ Each client has a **contact level**:
 
 1. Navigate to **Clients** (`/clients/`) and click **New Client** (or go directly to `/clients/new/`).
 2. Fill in the form:
-   - **Pseudonym:** A unique name within your facility (e.g., a self-chosen nickname). The pseudonym must be unique within a facility.
-   - **Contact level:** Select "Identified" or "Qualified".
-   - **Age group:** "Under 18", "18--26", "27+", or "Unknown".
-   - **Notes:** Internal remarks about the client (optional).
+ - **Pseudonym:** A unique name within your facility (e.g., a self-chosen nickname). The pseudonym must be unique within a facility.
+ - **Contact level:** Select "Identified" or "Qualified".
+ - **Age group:** "Under 18", "18--26", "27+", or "Unknown".
+ - **Notes:** Internal remarks about the client (optional).
 3. Click **Save**.
 
 ### Searching for Clients
@@ -338,12 +338,12 @@ The list updates without a page reload.
 
 1. Click **New Task** in the inbox (or navigate to `/workitems/new/`).
 2. Fill in the form:
-   - **Type:** "Task" or "Hint"
-   - **Title:** A brief, concise description
-   - **Description:** More detailed information (optional)
-   - **Priority:** Normal, Important, or Urgent
-   - **Assigned to:** A specific person from your facility (optional -- leave blank if the task applies to everyone)
-   - **Client:** If the task concerns a specific client (optional)
+ - **Type:** "Task" or "Hint"
+ - **Title:** A brief, concise description
+ - **Description:** More detailed information (optional)
+ - **Priority:** Normal, Important, or Urgent
+ - **Assigned to:** A specific person from your facility (optional -- leave blank if the task applies to everyone)
+ - **Client:** If the task concerns a specific client (optional)
 3. Click **Save**.
 
 > **Tip:** If you create a new task from the client detail page, the client is already pre-filled.
@@ -434,10 +434,10 @@ Technically this is based on trigram similarity in the PostgreSQL database (pg_t
 
 1. Navigate to **Statistics** (`/statistics/`).
 2. Select a time period:
-   - **Last month** (default)
-   - **Last quarter** (90 days)
-   - **Last half-year** (182 days)
-   - **Custom:** Enter start and end dates manually.
+ - **Last month** (default)
+ - **Last quarter** (90 days)
+ - **Last half-year** (182 days)
+ - **Custom:** Enter start and end dates manually.
 3. The dashboard updates automatically and displays aggregated key figures for contact numbers, documentation types, and client groups.
 
 ### Year Navigation
@@ -634,10 +634,10 @@ A case is a **bracket** around thematically related contacts. Case management is
 
 1. Click **New Case** on the case list (or navigate to `/cases/new/`).
 2. Fill in the form:
-   - **Title** (required): A short label for the case (e.g., "Housing search", "Addiction counseling").
-   - **Client:** Start typing the pseudonym -- a suggestion list appears. Select the matching client. A case can also be created without a client.
-   - **Description:** More detailed information about the case (optional).
-   - **Case owner:** Select the responsible person from the dropdown (optional). Only social workers, leads, and administrators from your facility are available.
+ - **Title** (required): A short label for the case (e.g., "Housing search", "Addiction counseling").
+ - **Client:** Start typing the pseudonym -- a suggestion list appears. Select the matching client. A case can also be created without a client.
+ - **Description:** More detailed information about the case (optional).
+ - **Case owner:** Select the responsible person from the dropdown (optional). Only social workers, leads, and administrators from your facility are available.
 3. Click **Create Case**.
 
 You will be redirected to the detail page of the new case.
@@ -706,10 +706,10 @@ An **episode** is a distinct phase within a case. For example, if a client enter
 
 1. On the case detail page (right column), click **New Episode**.
 2. Fill in the form:
-   - **Title** (required): A label for the phase (e.g., "Crisis episode March 2026").
-   - **Start** (required): The start date of the episode.
-   - **Description:** Additional details (optional).
-   - **End:** End date (optional -- leave blank if the episode is still ongoing).
+ - **Title** (required): A label for the phase (e.g., "Crisis episode March 2026").
+ - **Start** (required): The start date of the episode.
+ - **Description:** Additional details (optional).
+ - **End:** End date (optional -- leave blank if the episode is still ongoing).
 3. Click **Save**.
 
 > **Note:** Episodes can only be created for **open** cases.
@@ -764,7 +764,7 @@ Each episode shows its status:
 
 ---
 
-> **More questions?** The [FAQ](./faq.md) (German only) answers common questions about data protection, 2FA, offline mode, retention periods, and more.
+> **More questions?** The [FAQ](../faq.md) (German only) answers common questions about data protection, 2FA, offline mode, retention periods, and more.
 
 ---
 

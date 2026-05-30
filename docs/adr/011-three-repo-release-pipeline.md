@@ -47,4 +47,4 @@ Pipeline (vereinfacht):
 ## References
 
 - Release-Runbook (intern, dev-Repo Issue #502)
-- [`docs/release-checklist.md`](./release-checklist.md)
+- [`docs/release-checklist.md`](../release-checklist.md)

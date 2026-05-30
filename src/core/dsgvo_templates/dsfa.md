@@ -45,9 +45,9 @@ Die Software „Anlaufstelle" dient der Dokumentation von Kontakten mit Jugendli
 
 ### 2.3 Speicherbegrenzung
 - Automatische Löschfristen nach Kontaktstufe:
-  - Anonym: {{ retention_anonymous_days }} Tage
-  - Identifiziert: {{ retention_identified_days }} Tage
-  - Qualifiziert: {{ retention_qualified_days }} Tage
+ - Anonym: {{ retention_anonymous_days }} Tage
+ - Identifiziert: {{ retention_identified_days }} Tage
+ - Qualifiziert: {{ retention_qualified_days }} Tage
 - 4-Augen-Prinzip für manuelle Löschungen
 
 ---

@@ -15,15 +15,15 @@ Das AuditLog ist die einzige nachhaltige Spur über sensitive Operationen (Daten
 ## Decision
 
 - AuditLog wird ausschließlich aus dem Service-Layer geschrieben (`core/services/audit.py`). Inline-Schreibvorgänge in Views sind verboten und werden im Code-Review zurückgewiesen (Refactoring-Commit `ef4fddc`).
-- **Datenbank-Trigger** verhindert `UPDATE` und `DELETE` auf der `core_auditlog`-Tabelle ([`0024_auditlog_immutable_trigger.py`](././src/core/migrations/0024_auditlog_immutable_trigger.py)). Versuche werfen einen Error, kein Stillschweigen.
+- **Datenbank-Trigger** verhindert `UPDATE` und `DELETE` auf der `core_auditlog`-Tabelle ([`0024_auditlog_immutable_trigger.py`](../../src/core/migrations/0024_auditlog_immutable_trigger.py)). Versuche werfen einen Error, kein Stillschweigen.
 - **Ausnahme Retention:** Die Retention-Pruning-Logik (`enforce_retention`, Refs commit `444ed8f`) darf alte AuditLog-Einträge nach Ablauf der Aufbewahrungsfrist löschen — über einen explizit privilegierten Pfad mit eigenem Audit-Eintrag über die Löschung selbst.
-- `detail` ist `JSONField` — strukturierte Daten, keine `repr()`-Strings ([`0022_audit_detail_jsonfield.py`](././src/core/migrations/0022_audit_detail_jsonfield.py)).
+- `detail` ist `JSONField` — strukturierte Daten, keine `repr`-Strings ([`0022_audit_detail_jsonfield.py`](../../src/core/migrations/0022_audit_detail_jsonfield.py)).
 
 ## Consequences
 
 - **+** Selbst kompromittierte Anwendungs­zugänge können das AuditLog nicht nachträglich säubern — sie bräuchten DB-Superuser-Rechte und müssten den Trigger entfernen.
 - **+** JSONB-Detail erlaubt gezielte SQL-Abfragen für Auditierung („alle Exporte einer bestimmten Klientel").
-- **+** Regression-Tests gegen den Trigger ([`29ad3ef`](https://github.com/anlaufstelle/app/commit/29ad3ef)) verhindern das versehentliche Entfernen.
+- **+** Regression-Tests gegen den Trigger verhindern das versehentliche Entfernen.
 - **−** Schema-Änderungen am AuditLog brauchen Trigger-Awareness in der Migration.
 - **−** Bug-Fixes in alten Einträgen sind nicht mehr „eben in der DB korrigieren" — falsche Einträge werden mit einem Korrektur-Eintrag ergänzt, nicht überschrieben.
 
@@ -34,32 +34,32 @@ Das AuditLog ist die einzige nachhaltige Spur über sensitive Operationen (Daten
 
 ## References
 
-- [`src/core/services/audit.py`](././src/core/services/audit.py)
-- [`src/core/migrations/0024_auditlog_immutable_trigger.py`](././src/core/migrations/0024_auditlog_immutable_trigger.py)
-- [`docs/threat-model.md`](./threat-model.md)
+- [`src/core/services/audit.py`](../../src/core/services/audit.py)
+- [`src/core/migrations/0024_auditlog_immutable_trigger.py`](../../src/core/migrations/0024_auditlog_immutable_trigger.py)
+- [`docs/threat-model.md`](../threat-model.md)
 
-## Update 2026-05-09: NULL-Facility-Semantik
+## Update 2026-05-09: NULL-Facility-Semantik (Refs #863)
 
 `AuditLog.facility` ist `nullable`. NULL-Einträge repräsentieren **system-wide events** ohne oder vor Auth-Kontext:
 
-- `LOGIN_FAILED` bei unbekanntem Username (siehe [`core/signals/audit.py`](././src/core/signals/audit.py))
+- `LOGIN_FAILED` bei unbekanntem Username (siehe [`core/signals/audit.py`](../../src/core/signals/audit.py))
 - Breach-Detection-Events ohne Facility-Bezug
 - Künftige Maintenance-Tasks, die DB-Änderungen ohne Trägerbezug protokollieren
 
 Diese Einträge sind:
 
 - via RLS-USING-Policy für reguläre App-User unsichtbar (kein NULL-Match)
-- via RLS-WITH-CHECK explizit als gültiger INSERT erlaubt (Migration [0083](././src/core/migrations/0083_auditlog_rls_with_check.py))
+- via RLS-WITH-CHECK explizit als gültiger INSERT erlaubt (Migration [0083](../../src/core/migrations/0083_auditlog_rls_with_check.py))
 - durch den Append-Only-Trigger (Migration 0024) gegen UPDATE/DELETE geschützt
 - nur über Admin-User (`anlaufstelle_admin`, BYPASSRLS) oder Bootstrap-Superuser (`postgres`) auswertbar — Forensik-Pfad
 
-## Update 2026-05-10: Pre-Auth-AuditLog-Sichtbarkeit über /system/
+## Update 2026-05-10: Pre-Auth-AuditLog-Sichtbarkeit über /system/ (Refs #867)
 
-Die in der vorigen Iteration als „nur über psql sichtbar" deklarierten NULL-Facility-Audit-Einträge (`LOGIN_FAILED` ohne Facility-Bezug, Breach-Detection-Events, frühe Maintenance-Tasks) waren ein operativer Schmerzpunkt: Eine DSGVO-Auskunftsanfrage zu „Wer hat sich erfolglos mit meinem Username angemeldet?" verlangt einen Forensik-Pfad, der nicht mehr per psql-Login auf den Postgres-Container läuft. Issue verlangt explizit ein UI für diese Auswertung.
+Die in der vorigen Iteration als „nur über psql sichtbar" deklarierten NULL-Facility-Audit-Einträge (`LOGIN_FAILED` ohne Facility-Bezug, Breach-Detection-Events, frühe Maintenance-Tasks) waren ein operativer Schmerzpunkt: Eine DSGVO-Auskunftsanfrage zu „Wer hat sich erfolglos mit meinem Username angemeldet?" verlangt einen Forensik-Pfad, der nicht mehr per psql-Login auf den Postgres-Container läuft. Issue #866 verlangt explizit ein UI für diese Auswertung.
 
 **Entscheidung:** Mit dem 5-Rollen-Modell aus [ADR-018](018-rollenmodell-superadmin.md) erhält der `super_admin` einen `/system/`-Bereich mit AuditLog-Browser für **NULL-Facility-Einträge sowie facility-übergreifende Sicht aller Audit-Logs**:
 
-- Die View [`SystemAuditLogView`](././src/core/views/system.py) zeigt AuditLog-Einträge inklusive `facility IS NULL`-Treffer. Sie ist gekapselt durch `SuperAdminRequiredMixin` und nutzt RLS-Bypass via `app.is_super_admin`-Session-Variable (siehe [ADR-005 Update 2026-05-10](005-facility-scoping-and-rls.md)).
+- Die View [`SystemAuditLogView`](../../src/core/views/system.py) zeigt AuditLog-Einträge inklusive `facility IS NULL`-Treffer. Sie ist gekapselt durch `SuperAdminRequiredMixin` und nutzt RLS-Bypass via `app.is_super_admin`-Session-Variable (siehe [ADR-005 Update 2026-05-10](005-facility-scoping-and-rls.md)).
 - **Neue Action `SYSTEM_VIEW`:** Jeder Aufruf einer beliebigen `/system/`-View schreibt einen `SYSTEM_VIEW`-AuditLog-Eintrag mit Detail (`view_name`, Filter-Parameter, Anzahl angezeigter Einträge). Damit ist DSGVO-Rechenschaftspflicht (Art. 5(2) DSGVO) erfüllt: Auch der hochprivilegierte `super_admin` hinterlässt eine Spur, wenn er auf nicht-eigene Facility-Daten schaut.
 - **Banner im UI:** Permanenter Hinweis im `/system/`-Layout: „Sie greifen auf Daten facility-übergreifend zu — dieser Zugriff wird im Audit-Log protokolliert." Übersetzbar via `django.po`.
 
@@ -71,7 +71,7 @@ Die in der vorigen Iteration als „nur über psql sichtbar" deklarierten NULL-F
 
 **Konsequenzen:**
 
-- **+** Issue gelöst: Forensik im UI statt nur in psql.
+- **+** Issue #866 gelöst: Forensik im UI statt nur in psql.
 - **+** DSGVO-Rechenschaftspflicht über `SYSTEM_VIEW` durchgängig erfüllt.
 - **−** `super_admin` ist jetzt eine *aktive* Rolle mit eigener UI-Surface — Wartungsaufwand für `/system/`-Views steigt.
 - **−** Ein kompromittierter `super_admin`-Account hat direkten UI-Zugriff auf alle Audit-Daten der Installation. Mitigation: MFA-Pflicht auf `super_admin` durch [ADR-015](015-mfa-totp.md), Lockout-Recovery nur via CLI (`manage.py unlock`).

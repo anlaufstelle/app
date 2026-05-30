@@ -1,4 +1,4 @@
-# dev.anlaufstelle.app — Live-Dev-Deployment.
+# dev.anlaufstelle.app — Live-Dev-Deployment (Refs #671).
 #
 # Image-Quelle: ghcr.io/anlaufstelle/app:main, gebaut von
 # .github/workflows/dev-image.yml auf jedem Push gegen main.
@@ -15,7 +15,7 @@ services:
     # KEIN env_file: .env.dev hier — der db-Container nutzt
     # POSTGRES_USER=postgres als Bootstrap-Superuser (Postgres-Image-Convention).
     # Der App-User (anlaufstelle, NOSUPERUSER) wird im Init-Script angelegt.
-    #, ADR-017 § RLS-Pflicht.
+    # Refs #671, ADR-017 § RLS-Pflicht.
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_BOOTSTRAP_PASSWORD}

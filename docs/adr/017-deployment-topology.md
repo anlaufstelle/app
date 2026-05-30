@@ -10,13 +10,13 @@ Das Projekt steht vor seiner ersten oeffentlichen Live-Schaltung (`dev.anlaufste
 
 Die Frage war nicht trivial:
 
-- Eine Recherche-Empfehlung aus Issue #320 (2026-03-23, geschlossen) hatte **Hetzner + Coolify Cloud** vorgeschlagen — wegen PR-Previews, Web-UI fuer Env-Vars und minimalem DevOps-Aufwand. Issue #554 sollte das umsetzen, wurde aber nie durchgezogen.
+- Eine Recherche-Empfehlung aus [Issue #320](https://github.com/anlaufstelle/app/issues/320) (2026-03-23, geschlossen) hatte **Hetzner + Coolify Cloud** vorgeschlagen — wegen PR-Previews, Web-UI fuer Env-Vars und minimalem DevOps-Aufwand. [Issue #554](https://github.com/anlaufstelle/app/issues/554) sollte das umsetzen, wurde aber nie durchgezogen.
 - Das ADR-Backlog hat „Deployment-Target" explizit als offen gefuehrt, abhaengig von „Erfahrungen im ersten Pilot-Deployment". Das Pilot ist nie gelaufen, die ADR nie geschrieben.
 - Das **Fachkonzept** ist an mehreren Stellen klar gegenlaeufig:
-  - §163: „Anlaufstelle muss mit `docker compose up` installierbar sein."
-  - §247 (Persona Jonas): Trager-IT, kann Docker, kein Coolify.
-  - §928: „Keine SaaS-Plattform … Cloud-Lock-in ist ein Anti-Pattern."
-  - §1009: „Docker Compose als primaerer Deployment-Pfad. Das Versprechen `docker compose up` ist eine **harte Anforderung**."
+ - §163: „Anlaufstelle muss mit `docker compose up` installierbar sein."
+ - §247 (Persona Jonas): Trager-IT, kann Docker, kein Coolify.
+ - §928: „Keine SaaS-Plattform … Cloud-Lock-in ist ein Anti-Pattern."
+ - §1009: „Docker Compose als primaerer Deployment-Pfad. Das Versprechen `docker compose up` ist eine **harte Anforderung**."
 - Ein PaaS-Layer haette unser internes Live-Setup vom Self-Host-Pfad **entkoppelt**, den wir Tragern empfehlen — wir wuerden nicht mehr leben, was wir verkaufen.
 
 Gleichzeitig ist die Multi-Stage-Welt nicht hypothetisch, sondern in unmittelbarer Sicht. Eine Topologie, die heute fuer `dev` funktioniert und morgen fuer `stage`/Feature-Branches umgebaut werden muesste, waere falsch.
@@ -29,7 +29,7 @@ Gleichzeitig ist die Multi-Stage-Welt nicht hypothetisch, sondern in unmittelbar
 2. **Solange nur eine Stage existiert (heute):** Caddy laeuft als Service im jeweiligen Compose-Stack, eigenes `Caddyfile.<stage>` daneben — minimal, ohne Reverse-Proxy-Plumbing.
 3. **Sobald >1 Stage gleichzeitig auf derselben Maschine laeuft:** Caddy wird in einen eigenen `docker-compose.proxy.yml`-Stack ausgegliedert, mit zentralem `Caddyfile` und `import sites.d/*.caddy`. Jeder Stage-Stack legt sein File in `sites.d/` ab. Reverse-Proxy zielt ueber das gemeinsame Docker-Netzwerk auf den jeweiligen `web`-Container der Stage. Diese Migration ist Bestandteil des `stage`-Plans, **nicht** dieses ADRs.
 4. **Live-Demo (`anlaufstelle.app`)** laeuft als isolierter Single-Stack auf einer **eigenen Maschine**. Architektur identisch zum Self-Host-Setup, das wir Tragern empfehlen — Demo dient als Live-Referenz fuer das Versprechen aus §1009.
-5. **Coolify** bleibt als **alternativer**, nicht-primaerer Pfad in [`docs/coolify-deployment.md`](./coolify-deployment.md) dokumentiert: fuer Trager, die Coolify bereits einsetzen, oder fuer kuenftige Bedarfsfaelle, die Plain Compose nachweislich nicht abdeckt. Der Pfad waechst und schrumpft mit nachgewiesenem Nutzen, nicht mit Bequemlichkeit.
+5. **Coolify** bleibt als **alternativer**, nicht-primaerer Pfad in [`docs/coolify-deployment.md`](../coolify-deployment.md) dokumentiert: fuer Trager, die Coolify bereits einsetzen, oder fuer kuenftige Bedarfsfaelle, die Plain Compose nachweislich nicht abdeckt. Der Pfad waechst und schrumpft mit nachgewiesenem Nutzen, nicht mit Bequemlichkeit.
 
 ## Consequences
 
@@ -52,13 +52,13 @@ Gleichzeitig ist die Multi-Stage-Welt nicht hypothetisch, sondern in unmittelbar
 
 - **Coolify Cloud (Empfehlung aus #320):** Verworfen — `docker compose up`-Versprechen aus §1009 wuerde nicht mehr im internen Live-Setup gelebt; Cloud-Lock-in entgegen §928.
 - **Coolify Self-Hosted (Plan in #554):** Selbe Beisser zu §1009 + §163 (Persona-Lernkurve), zusaetzlich Coolify-RAM-Footprint und eigene Update/Patch-Verantwortung fuer den Coolify-Layer.
-- **Plain Compose + Traefik** (Reverse-Proxy mit Auto-Discovery via Container-Labels): Caddy-Replacement waere ein paralleler Konzept-Wechsel ohne Mehrwert gegenueber Caddy-mit-`import sites.d/*.caddy`; nicht im Stack-Vokabular der bestehenden Doku ([`Caddyfile`](././Caddyfile), [`Caddyfile.staging`](././Caddyfile.staging), [`docs/ops-runbook.md`](./ops-runbook.md)).
+- **Plain Compose + Traefik** (Reverse-Proxy mit Auto-Discovery via Container-Labels): Caddy-Replacement waere ein paralleler Konzept-Wechsel ohne Mehrwert gegenueber Caddy-mit-`import sites.d/*.caddy`; nicht im Stack-Vokabular der bestehenden Doku ([`Caddyfile`](../../Caddyfile), [`Caddyfile.staging`](../../Caddyfile.staging), [`docs/ops-runbook.md`](../ops-runbook.md)).
 - **Dokploy:** Junges Projekt (2023+), kleine Community, Compose-first — aber gleiche prinzipielle Beisser wie Coolify gegenueber dem Selbsthosting-Versprechen.
 - **Dokku:** Single-Container-orientiert; Anlaufstelle ist Multi-Service (web + db + clamav + caddy) — schlechter Fit.
 
 ## References
 
-- Fachkonzept: [`docs/fachkonzept-anlaufstelle.md`](./fachkonzept-anlaufstelle.md) §163, §247, §844, §928, §1009
-- Issues: (Recherche) (Coolify-Pivot, geschlossen mit diesem ADR) (Plain-Compose-Pivot) (Plan-Issue dieses ADRs)
-- Begleitende Doku: [`docs/dev-deployment.md`](./dev-deployment.md), [`docs/coolify-deployment.md`](./coolify-deployment.md) (alternativer Pfad), [`docs/ops-runbook.md`](./ops-runbook.md)
+- Fachkonzept: [`docs/fachkonzept-anlaufstelle.md`](../fachkonzept-anlaufstelle.md) §163, §247, §844, §928, §1009
+- Issues: #320 (Recherche), #554 (Coolify-Pivot, geschlossen mit diesem ADR), #671 (Plain-Compose-Pivot), #862 (Plan-Issue dieses ADRs)
+- Begleitende Doku: [`docs/dev-deployment.md`](../dev-deployment.md), [`docs/coolify-deployment.md`](../coolify-deployment.md) (alternativer Pfad), [`docs/ops-runbook.md`](../ops-runbook.md)
 - Verwandte ADRs: [ADR-009](009-settings-inheritance.md) (Settings-Vererbung), [ADR-011](011-three-repo-release-pipeline.md) (3-Repo-Pipeline)

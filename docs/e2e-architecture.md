@@ -37,7 +37,7 @@ Jede Test-Art nutzt eine eigene Datenbank — Dev-Daten bleiben immer unberührt
 
 | Test-Art | Datenbank | Verwaltet durch | Isolation |
 |----------|-----------|-----------------|-----------|
-| Entwicklung | `anlaufstelle` | Manuell (`make seed`) | — |
+| Entwicklung | `anlaufstelle` | Manuell (`make seed`) ||
 | Unit/Integration | `test_anlaufstelle` | pytest-django (automatisch) | Vollständig, transaktional |
 | E2E | `anlaufstelle_e2e` | conftest.py (flush + seed) | Eigene DB, pro Session |
 
@@ -68,7 +68,7 @@ E2E-Tests prüfen **Verhalten aus Nutzersicht** (Klick → Ergebnis), nicht Auss
 assert page.locator("button:has-text('Annehmen')").is_visible()
 
 # Schlecht: Prüft Aussehen (fragil, bricht bei CSS-Refactoring)
-assert page.locator("button").get_attribute("class") == "px-3 py-1.."
+assert page.locator("button").get_attribute("class") == "px-3 py-1..."
 ```
 
 ---
@@ -82,7 +82,7 @@ base.py → dev.py → e2e.py
 | Setting | base.py | dev.py | e2e.py | Grund |
 |---------|---------|--------|--------|-------|
 | `DATABASES.NAME` | `anlaufstelle` | geerbt | `anlaufstelle_e2e` | Dev-Daten schützen |
-| `DEBUG` | — | `True` | geerbt | Dev-Verhalten |
+| `DEBUG` || `True` | geerbt | Dev-Verhalten |
 | `PASSWORD_HASHERS` | PBKDF2 (Default) | geerbt | geerbt | **Nicht** MD5 wie in test.py |
 | `RATELIMIT_ENABLE` | `True` | geerbt | `False` | E2E macht viele Logins |
 | `SESSION_SAVE_EVERY_REQUEST` | `True` | geerbt | `False` | Reduziert DB-Writes |
@@ -97,24 +97,24 @@ base.py → dev.py → e2e.py
 ### Session-scoped (einmal pro Test-Suite)
 
 1. **`base_url`** — Startet gunicorn-Server:
-   - `migrate --run-syncdb`
-   - `seed` (Testdaten laden)
-   - `collectstatic --noinput`
-   - gunicorn starten + Health-Check (`GET /login/`)
-   - Am Ende: `SIGTERM` + `wait(timeout=10)`
+ - `migrate --run-syncdb`
+ - `seed` (Testdaten laden)
+ - `collectstatic --noinput`
+ - gunicorn starten + Health-Check (`GET /login/`)
+ - Am Ende: `SIGTERM` + `wait(timeout=10)`
 
 2. **Storage-States** — Login einmal pro Rolle, Session-Cookies cachen:
-   - `_login_storage_state` → Admin (admin)
-   - `_lead_storage_state` → Lead (thomas)
-   - `_staff_storage_state` → Staff (miriam)
-   - `_assistant_storage_state` → Assistant (lena)
-   - Passwort: `anlaufstelle2026` (Seed-Default)
+ - `_login_storage_state` → Admin (admin)
+ - `_lead_storage_state` → Lead (thomas)
+ - `_staff_storage_state` → Staff (miriam)
+ - `_assistant_storage_state` → Assistant (lena)
+ - Passwort: `anlaufstelle2026` (Seed-Default)
 
 ### Function-scoped (pro Test)
 
 - **`authenticated_page`** — Admin-Context mit gecachter Session
 - **`lead_page`** / **`staff_page`** / **`assistant_page`** — analog
-- Jeder Test bekommt einen frischen `browser.new_context()` mit Storage-State
+- Jeder Test bekommt einen frischen `browser.new_context` mit Storage-State
 - Timeouts: 30s (Default), 30s (Navigation)
 
 ### Helfer
@@ -127,7 +127,7 @@ base.py → dev.py → e2e.py
 
 **Niemals `networkidle` verwenden.** Es wartet auf 500ms ohne Netzwerkaktivitaet — jeder Background-Request (Session-Save, HTMX) resettet den Timer und verursacht Timeouts.
 
-### Nach `page.goto()` — `domcontentloaded`
+### Nach `page.goto` — `domcontentloaded`
 
 ```python
 page.goto(f"{base_url}/clients/new/")
@@ -136,7 +136,7 @@ page.wait_for_load_state("domcontentloaded")
 
 DOM ist geparsed und interaktionsfaehig. Reicht fuer die meisten Seiten.
 
-### Nach Formular-Submit — `wait_for_url()`
+### Nach Formular-Submit — `wait_for_url`
 
 ```python
 page.locator(SUBMIT).click()
@@ -154,11 +154,11 @@ page.wait_for_load_state("domcontentloaded")
 expect(page.locator("button:has-text('Erledigt')")).to_be_visible()
 ```
 
-### Alpine.js Debounce — `wait_for_timeout()`
+### Alpine.js Debounce — `wait_for_timeout`
 
 ```python
 page.fill("input[name='q']", "Blitz")
-page.wait_for_timeout(500) # Alpine.js Debounce 200ms + Fetch
+page.wait_for_timeout(500)  # Alpine.js Debounce 200ms + Fetch
 ```
 
 Nur fuer clientseitige Debounce-Timer noetig, nicht fuer Server-Waits.
@@ -169,7 +169,7 @@ Nur fuer clientseitige Debounce-Timer noetig, nicht fuer Server-Waits.
 
 1. **Serielle Ausfuehrung:** E2E-Tests laufen seriell (kein pytest-xdist). Playwright/Chromium braucht ~200-400 MB RAM pro Instanz. Auf CI-Runnern mit begrenztem RAM wuerde Parallelisierung zu OOM fuehren.
 
-2. **Shared Database:** Alle E2E-Tests teilen sich `anlaufstelle_e2e` mit Seed-Daten. Keine Test-Isolation untereinander — Tests koennen Daten sehen, die andere Tests erstellt haben. Eindeutige Bezeichner (`uuid.uuid4().hex[:8]`) verwenden. Dev-Daten (`anlaufstelle`) sind nicht betroffen.
+2. **Shared Database:** Alle E2E-Tests teilen sich `anlaufstelle_e2e` mit Seed-Daten. Keine Test-Isolation untereinander — Tests koennen Daten sehen, die andere Tests erstellt haben. Eindeutige Bezeichner (`uuid.uuid4.hex[:8]`) verwenden. Dev-Daten (`anlaufstelle`) sind nicht betroffen.
 
 3. **Rate-Limiting deaktiviert:** `RATELIMIT_ENABLE = False` in e2e.py. Ausnahme: `TestZZRateLimiting` in `test_auth_roles.py` testet explizit das Rate-Limiting (muss als letzter Test laufen, ZZ-Prefix).
 

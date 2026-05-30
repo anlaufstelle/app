@@ -14,10 +14,10 @@ Version: 1.5
 |---|---|---|
 | 1.0 | Dezember 2025 | Erstfassung |
 | 1.1 | Februar 2026 | Schichtkonzept durch benannte Zeitfilter ersetzt. Übergabe-Konzept aufgelöst — abgedeckt durch Arbeitsinfos (Hinweise, Aufgaben). Organisationshierarchie als offene Entscheidung markiert. |
-| 1.2 | März 2026 | Alle offenen Entscheidungen geschlossen: Organisationshierarchie (Option 2: Klein + vorbereitet), JSONB (bedingt entschieden für Phase 1–3), Lizenz (AGPL v3). Phasenplan: Phase 1 gesplittet in 1a (zeigbarer Kern) und 1b (Fundament komplett). |
+| 1.2 | März 2026 | Alle offenen Entscheidungen geschlossen: Organisationshierarchie (Option 2: Klein + vorbereitet), JSONB (bedingt entschieden für–3), Lizenz (AGPL v3). Phasenplan: gesplittet in 1a (zeigbarer Kern) und 1b (Fundament komplett). |
 | 1.3 | April 2026 | Feld-Level-Sensitivität: Verschlüsselung und Sichtbarkeit entkoppelt (`FieldTemplate.sensitivity`). |
 | 1.4 | April 2026 (2026-04-19) | Mobile-/Offline-Strategie (§ 16) auf Ist-Stand v0.10 aktualisiert; Sicherheitskonzept um 2FA, File Vault, RLS erweitert. |
-| 1.5 | Mai 2026 (2026-05-10) | 5-Rollen-Modell mit `super_admin` als oberster, facility-übergreifender Rolle (Persona Jonas). Bisherige `admin`-Rolle in `facility_admin` umbenannt (UI-Label „Anwendungsbetreuung"). § 5 (Persona Jonas), § 6 (Berechtigungsmodell), § 9 (Role + Organization), § 14 (Glossar), § 18 (DSGVO-Tabelle), § 25 (Monitoring/Backup) entsprechend aktualisiert. Organisation explizit als reine Branding-Hülse formuliert (Variante b1, [ADR-018](adr/018-rollenmodell-superadmin.md)). DSGVO-Rechenschaftspflicht: jeder Cross-Facility-Lese-Zugriff erzeugt `SYSTEM_VIEW`-AuditLog., löst. |
+| 1.5 | Mai 2026 (2026-05-10) | 5-Rollen-Modell mit `super_admin` als oberster, facility-übergreifender Rolle (Persona Jonas). Bisherige `admin`-Rolle in `facility_admin` umbenannt (UI-Label „Anwendungsbetreuung"). § 5 (Persona Jonas), § 6 (Berechtigungsmodell), § 9 (Role + Organization), § 14 (Glossar), § 18 (DSGVO-Tabelle), § 25 (Monitoring/Backup) entsprechend aktualisiert. Organisation explizit als reine Branding-Hülse formuliert (Variante b1, [ADR-018](adr/018-rollenmodell-superadmin.md)). DSGVO-Rechenschaftspflicht: jeder Cross-Facility-Lese-Zugriff erzeugt `SYSTEM_VIEW`-AuditLog. Refs #867, löst #866. |
 
 ---
 
@@ -262,7 +262,7 @@ Selin sitzt am PC im Büro. Eine Besucherin kommt herein, nimmt einen Kaffee und
 1. Selin öffnet die Startseite — sie sieht den aktuellen Zeitstrom (gefiltert auf den Zeitraum „Nachtdienst 21:30–09:00", den die Einrichtung als benannten Zeitfilter konfiguriert hat).
 2. Sie klickt „Neuer Kontakt".
 3. Sie tippt das Pseudonym: „Maus". Autocomplete schlägt vor: „Maus (identifiziert, 27+)".
-4. Sie wählt den Dokumentationstyp „Kontakt" — die Felder erscheinen: Dauer (Kurz/Mittel/Lang), Leistungen (Mehrfachauswahl: Aufenthalt, Verpflegung, Gespräch,..).
+4. Sie wählt den Dokumentationstyp „Kontakt" — die Felder erscheinen: Dauer (Kurz/Mittel/Lang), Leistungen (Mehrfachauswahl: Aufenthalt, Verpflegung, Gespräch,...).
 5. Sie wählt „Kurz" und „Aufenthalt, Verpflegung". Klick auf Speichern.
 6. Der Eintrag erscheint sofort in der Übersicht.
 
@@ -298,7 +298,7 @@ Selin möchte nachschauen, wann „Maus" zuletzt da war und was dokumentiert wur
 - 14.03.2026: Kontakt (Aufenthalt, Verpflegung, Spritzentausch)
 - 12.03.2026: Kontakt (Aufenthalt, Krisengespräch — 45 Min.)
 - 08.03.2026: Kontakt (Aufenthalt)
--..
+-...
 
 Ein Klick auf einen Eintrag zeigt die Details. Verschlüsselte Felder (z.B. Gesprächsinhalte) sind nur für berechtigte Rollen sichtbar.
 
@@ -422,22 +422,22 @@ Anlaufstelle ist in vier Ebenen gegliedert, die aufeinander aufbauen. Die Reihen
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│ Ecosystem │
-│ API · Export/Import · Behördenreports · Dokumenten- │
-│ bibliotheken · optionale Module │
+│                     Ecosystem                             │
+│  API · Export/Import · Behördenreports · Dokumenten-      │
+│  bibliotheken · optionale Module                          │
 ├──────────────────────────────────────────────────────────┤
-│ Case & Outcomes │
-│ Fälle/Episoden · Zuständigkeiten · Ziele · │
-│ Meilensteine · Wirkungsberichte │
+│                  Case & Outcomes                          │
+│  Fälle/Episoden · Zuständigkeiten · Ziele ·               │
+│  Meilensteine · Wirkungsberichte                          │
 ├──────────────────────────────────────────────────────────┤
-│ Operations │
-│ Hinweise · Aufgaben · Inbox · │
-│ Arbeitsübersicht · mobile-first Erfassung │
+│                    Operations                             │
+│  Hinweise · Aufgaben · Inbox ·                            │
+│  Arbeitsübersicht · mobile-first Erfassung                │
 ├──────────────────────────────────────────────────────────┤
-│ Core │
-│ Einrichtung · Nutzer · Rollen · Person · Ereignis · │
-│ Dokumenttypen · Semantische Felder · Zeitfilter · │
-│ Suche · Audit · Basisstatistik │
+│                       Core                                │
+│  Einrichtung · Nutzer · Rollen · Person · Ereignis ·      │
+│  Dokumenttypen · Semantische Felder · Zeitfilter ·        │
+│  Suche · Audit · Basisstatistik                           │
 └──────────────────────────────────────────────────────────┘
 ```
 
@@ -502,7 +502,7 @@ Anlaufstelle v1.0 umfasst:
 - Audit-Trail, Löschfristen, 4-Augen-Löschprinzip
 - PWA, Mobile-first, Docker-Deployment
 
-Für den vollständigen Implementierungsstand siehe [CHANGELOG](./CHANGELOG.md).
+Für den vollständigen Implementierungsstand siehe [CHANGELOG](../CHANGELOG.md).
 
 ### Roadmap
 
@@ -583,7 +583,7 @@ Dokumentationstypen sind konfigurierbar. Eine Einrichtung kann eigene Typen defi
 
 #### FieldTemplate — Die Feldvorlage
 
-Ein FieldTemplate definiert ein Feld innerhalb eines Dokumentationstyps: Name, Datentyp (Text, Zahl, Datum, Auswahl, Mehrfachauswahl, Boolean,..), ob es ein Pflichtfeld ist, welche Optionen zur Auswahl stehen, ob es verschlüsselt gespeichert wird (`is_encrypted`), welche Sichtbarkeitsstufe es hat (`sensitivity`), welcher Statistik-Kategorie es zugeordnet ist.
+Ein FieldTemplate definiert ein Feld innerhalb eines Dokumentationstyps: Name, Datentyp (Text, Zahl, Datum, Auswahl, Mehrfachauswahl, Boolean,...), ob es ein Pflichtfeld ist, welche Optionen zur Auswahl stehen, ob es verschlüsselt gespeichert wird (`is_encrypted`), welche Sichtbarkeitsstufe es hat (`sensitivity`), welcher Statistik-Kategorie es zugeordnet ist.
 
 FieldTemplates sind die Bausteine des semantischen Feldsystems. Sie tragen Bedeutung: Das System weiß, dass das Feld „Vermittlung an" ein Freitextfeld ist, das zur Statistik-Kategorie „Vermittlungen" gehört und als nicht-sensibel eingestuft ist.
 
@@ -623,38 +623,38 @@ Das AuditLog protokolliert alle sicherheitsrelevanten Aktionen: Zugriffe auf qua
 
 ```mermaid
 erDiagram
-    Organization ||--o{ Facility: "betreibt"
-    Facility ||--o{ TimeFilter: "hat"
-    Facility ||--o{ DocumentType: "konfiguriert"
-    Facility ||--o{ Client: "betreut"
+    Organization ||--o{ Facility : "betreibt"
+    Facility ||--o{ TimeFilter : "hat"
+    Facility ||--o{ DocumentType : "konfiguriert"
+    Facility ||--o{ Client : "betreut"
 
-    Organization ||--o{ Client: "org-FK (vorbereitet)"
+    Organization ||--o{ Client : "org-FK (vorbereitet)"
 
-    User }o--|| Facility: "gehört zu"
-    User }o--|| Role: "hat Rolle"
+    User }o--|| Facility : "gehört zu"
+    User }o--|| Role : "hat Rolle"
 
-    Client ||--o{ Event: "hat Chronik"
-    Client ||--o{ WorkItem: "verknüpft mit"
-    Client ||--o{ Case: "hat"
+    Client ||--o{ Event : "hat Chronik"
+    Client ||--o{ WorkItem : "verknüpft mit"
+    Client ||--o{ Case : "hat"
 
-    Event }o--|| DocumentType: "vom Typ"
-    Event }o--o| User: "erstellt von"
-    Event }o--|| Facility: "gehört zu"
+    Event }o--|| DocumentType : "vom Typ"
+    Event }o--o| User : "erstellt von"
+    Event }o--|| Facility : "gehört zu"
 
-    DocumentType ||--o{ DocumentTypeField: "hat Felder"
-    DocumentTypeField }o--|| FieldTemplate: "nutzt"
+    DocumentType ||--o{ DocumentTypeField : "hat Felder"
+    DocumentTypeField }o--|| FieldTemplate : "nutzt"
 
-    Case ||--o{ Episode: "enthält"
-    Case ||--o{ Event: "umfasst"
-    Episode ||--o{ Event: "enthält"
+    Case ||--o{ Episode : "enthält"
+    Case ||--o{ Event : "umfasst"
+    Episode ||--o{ Event : "enthält"
 
-    Case ||--o{ OutcomeGoal: "verfolgt"
-    OutcomeGoal ||--o{ Milestone: "hat"
+    Case ||--o{ OutcomeGoal : "verfolgt"
+    OutcomeGoal ||--o{ Milestone : "hat"
 
-    WorkItem }o--o| User: "erstellt von"
-    WorkItem }o--o| User: "zugewiesen an"
+    WorkItem }o--o| User : "erstellt von"
+    WorkItem }o--o| User : "zugewiesen an"
 
-    User ||--o{ AuditLog: "erzeugt"
+    User ||--o{ AuditLog : "erzeugt"
 ```
 
 ### Scope-Regeln
@@ -813,7 +813,7 @@ Domänenbibliotheken sind keine fest eingebauten Typen. Sie sind Seed-Daten — 
 | **Begleitung** | Leistung | Identifiziert | Mittel | Begleitungen | 36 Monate |
 | **Beratungsgespräch** | Leistung | Qualifiziert | Hoch (verschlüsselt) | Beratungsgespräche | 60 Monate |
 | **Vermittlung** | Leistung | Identifiziert | Mittel | Vermittlungen | 36 Monate |
-| **Hausverbot** | Administration | Identifiziert | Niedrig | — | 36 Monate |
+| **Hausverbot** | Administration | Identifiziert | Niedrig || 36 Monate |
 
 ### Erläuterung der Zuordnungen
 
@@ -935,7 +935,7 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 
 **Kein Ersatz für klinische Dokumentation.** Anlaufstelle dokumentiert niedrigschwellige soziale Arbeit, nicht medizinische Behandlung. Für Substitutionsambulanzen, Therapieeinrichtungen oder psychiatrische Dienste gibt es spezialisierte Systeme mit eigenen regulatorischen Anforderungen (z.B. § 630f BGB für Patientendokumentation).
 
-**Kein starres Formular-Framework.** Das Typ-Feld-System ist konfigurierbar, aber es ist kein allgemeiner Formular-Builder wie Google Forms oder Typeform. Die Felder haben Semantik — Sensitivität, Statistik-Zuordnung, Löschfrist —, die über reine Formularerfassung hinausgeht. Anlaufstelle baut auf fachlichen Konzepten auf, nicht auf generischer Datensammlung.
+**Kein starres Formular-Framework.** Das Typ-Feld-System ist konfigurierbar, aber es ist kein allgemeiner Formular-Builder wie Google Forms oder Typeform. Die Felder haben Semantik — Sensitivität, Statistik-Zuordnung, Löschfrist, die über reine Formularerfassung hinausgeht. Anlaufstelle baut auf fachlichen Konzepten auf, nicht auf generischer Datensammlung.
 
 ### Was bewusst nicht im Kern ist
 
@@ -1020,18 +1020,18 @@ Das Fachkonzept beschreibt Domäne und Architektur konzeptionell, nennt aber den
 
 ```
 ┌─────────────────────────────────────────────┐
-│ Docker Host (VPS / lokaler Server / RPi) │
-│ │
-│ ┌──────────┐ ┌──────────┐ ┌───────────┐ │
-│ │ Caddy / │ │ Django │ │ PostgreSQL│ │
-│ │ Nginx │──│ (Gunicorn│──│ │ │
-│ │ (HTTPS) │ │ + HTMX) │ │ │ │
-│ └──────────┘ └──────────┘ └───────────┘ │
-│ │ │
-│ ┌──────┴──────┐ │
-│ │ Static Files│ │
-│ │ (WhiteNoise)│ │
-│ └─────────────┘ │
+│  Docker Host (VPS / lokaler Server / RPi)   │
+│                                             │
+│  ┌──────────┐  ┌──────────┐  ┌───────────┐ │
+│  │  Caddy /  │  │  Django   │  │ PostgreSQL│ │
+│  │  Nginx    │──│  (Gunicorn│──│           │ │
+│  │  (HTTPS)  │  │  + HTMX) │  │           │ │
+│  └──────────┘  └──────────┘  └───────────┘ │
+│                     │                       │
+│              ┌──────┴──────┐                │
+│              │ Static Files│                │
+│              │ (WhiteNoise)│                │
+│              └─────────────┘                │
 └─────────────────────────────────────────────┘
 ```
 
@@ -1178,11 +1178,11 @@ Das Hauptdokument beschreibt Datenschutz-Grundlagen in v1.0 und Datenschutz-Reif
 
 | Maßnahme | v1.0 (Fundament) | Roadmap: Datenschutz-Reife |
 |---|---|---|
-| Rollenbasierte Zugriffskontrolle | ✓ implementiert | — |
-| Kontaktstufen-abhängige Sichtbarkeit | ✓ implementiert | — |
-| Audit-Trail (Append-Only-Log) | ✓ implementiert | — |
+| Rollenbasierte Zugriffskontrolle | ✓ implementiert ||
+| Kontaktstufen-abhängige Sichtbarkeit | ✓ implementiert ||
+| Audit-Trail (Append-Only-Log) | ✓ implementiert ||
 | Verschlüsselung sensibler Felder | ✓ implementiert | Key-Rotation hinzugefügt |
-| Pseudonymisierung by Design | ✓ implementiert | — |
+| Pseudonymisierung by Design | ✓ implementiert ||
 | Löschfristen | Konfigurierbar, aber manuelle Ausführung | Automatisierte Löschung per Cronjob |
 | Betroffenenrechte (Auskunft) | Manuelle Abfrage durch Anwendungsbetreuung (`facility_admin`) | Self-Service-Funktion für Lead-Rolle |
 | Betroffenenrechte (Löschung) | Manuell durch Anwendungsbetreuung (`facility_admin`) | 4-Augen-Prinzip, protokolliert |

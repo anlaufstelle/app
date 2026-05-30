@@ -9,7 +9,7 @@
 | Deutsch | English | Definition |
 |---------|---------|------------|
 | Account-Lockout | Account lockout | Automatic account lock after 10 failed login attempts (since v0.10.1). Lock is logged via `LOGIN_LOCKED` AuditLog entry; admins unlock affected users from the profile screen, which writes a `LOGIN_UNLOCK` entry. Implemented in [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py). |
-| AdminCSPRelaxMiddleware | Admin CSP relax middleware | Per-request CSP relaxation that injects `'unsafe-eval'` only on `/admin-mgmt/*` routes (since v0.10.2). Required because django-unfold's bundled Alpine build uses `new AsyncFunction()` for the Cmd+K command palette. The global CSP stays strict (no `unsafe-eval`); admin routes are additionally protected by MFA-Gate and the `admin` role. See [`src/core/middleware/admin_csp_relax.py`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/admin_csp_relax.py). |
+| AdminCSPRelaxMiddleware | Admin CSP relax middleware | Per-request CSP relaxation that injects `'unsafe-eval'` only on `/admin-mgmt/*` routes (since v0.10.2). Required because django-unfold's bundled Alpine build uses `new AsyncFunction` for the Cmd+K command palette. The global CSP stays strict (no `unsafe-eval`); admin routes are additionally protected by MFA-Gate and the `admin` role. See [`src/core/middleware/admin_csp_relax.py`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/admin_csp_relax.py). |
 | Alterscluster | Age cluster | Coarse age group for a person (e.g. under 18, 18–26, 27+, unknown). Configurable per facility. Used for statistics without requiring an exact date of birth. |
 | Anlaufstelle | Drop-in center | Name of the application. Also colloquial for the facility itself — the place where people come for help. |
 | Arbeitsinfo | Work item | Collective term for notes and tasks — operational entries that are separate from case documentation. See: WorkItem. |
@@ -33,7 +33,7 @@
 | Event | Event | Technical term for an occurrence record (Ereignis). See: Ereignis. |
 | Facility | Facility | Technical term for an institution or site (Einrichtung). The primary scope boundary for staff. All entities carry a foreign key to Facility. |
 | FieldTemplate | Field template | Defines a field within a document type: name, data type, required flag, options, encryption, statistics mapping. |
-| File Vault | Encrypted file vault | File attachments stored encrypted at rest (AES-GCM). Files are scanned by ClamAV before encryption. Downloads use a central safe-download helper with RFC-5987 Content-Disposition. |
+| File Vault | Encrypted file vault | File attachments stored encrypted at rest (AES-GCM). Files are scanned by ClamAV before encryption. Downloads use a central safe-download helper with RF Content-Disposition. |
 | Fuzzy-Schwellwert | Fuzzy threshold / Trigram threshold | Per-facility similarity cutoff (`Settings.search_trigram_threshold`, 0.0–1.0, default ~0.3). Lower = more matches, more noise. |
 | Fuzzy-Suche | Fuzzy search | Typo-tolerant search using PostgreSQL `pg_trgm` trigram similarity. Finds "Müller" when searching for "Muller". |
 | Hausverbot | Site ban | A ban prohibiting a person from entering a facility, with reason, validity period, and issuer. Modeled in Anlaufstelle as a document type in the "Administration" category. |
@@ -43,7 +43,7 @@
 | K-Anonymisierung | K-anonymization | Retention strategy that aggregates/pseudonymizes records instead of hard-deleting them, so statistical reports remain possible after the retention window expires. |
 | Kontaktstufe | Contact level | Three-tier model describing a person's identification status in the system: anonymous (count only), identified (pseudonym), qualified (counseling process). Determines access rights, permitted document types, and retention periods. |
 | Legal Hold | Legal hold | Flag on individual records that excludes them from automated retention deletion. |
-| Materialized View | Materialized view | Pre-aggregated PostgreSQL view (`core_statistics_event_flat`) that backs the statistics dashboard so reports do not re-scan the entire event table on every request (since v0.10.0). Refreshed periodically via management command, ideally `CONCURRENTLY` (requires the unique index that the migration provides). |
+| Materialized View | Materialized view | Pre-aggregated PostgreSQL view (`core_statistics_event_flat`) that backs the statistics dashboard so reports do not re-scan the entire event table on every request (since v0.10.0, #544). Refreshed periodically via management command, ideally `CONCURRENTLY` (requires the unique index that the migration provides). |
 | Milestone | Milestone | A concrete step toward an outcome goal. |
 | Offline-Modus (M6A) | Offline mode (M6A) | Client-side encrypted offline capture for streetwork. Uses AES-GCM-256 with PBKDF2-derived (600 000 iterations, SHA-256) non-extractable keys that live only in memory. Logout, password change, or tab close render the offline data unreadable. |
 | Optimistic Locking | Optimistic locking | Concurrency-control mechanism using a `version` field per record. Prevents silent overwrites on Client, Case, WorkItem, Settings, and Event. Conflicting saves return an error requiring the user to reload. |

@@ -35,5 +35,5 @@ Greenfield-Rewrite. Das neue Repo `anlaufstelle` startet mit Django 5.1 / Python
 
 ## References
 
-- [docs/fachkonzept-anlaufstelle.md](./fachkonzept-anlaufstelle.md)
+- [docs/fachkonzept-anlaufstelle.md](../fachkonzept-anlaufstelle.md)
 - Erste Commits ab 2026-03-19 (`5b35b40 feat: initialize Django project structure`)
