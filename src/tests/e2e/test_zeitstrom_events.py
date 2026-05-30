@@ -185,10 +185,21 @@ class TestEventErstellung:
 
         # Formular ausfüllen
         page.select_option("select[name='document_type']", label="Kontakt")
-        # Warten bis HTMX dynamische Felder geladen hat
-        page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
-        page.fill("input[name='dauer']", "20")
-        page.fill("textarea[name='notiz']", "E2E-Test Kontakt")
+        # HTMX kann mehrfach swappen (erst Default-Felder, dann FieldTemplate-
+        # spezifische). `attached` matcht den ersten Mount und ist deshalb
+        # race-anfaellig: fill schreibt in das alte Element, das direkt danach
+        # ausgetauscht wird (auf Stage-CI-Runner reproduzierbar, lokal grün).
+        # Anker: `visible` auf BEIDEN Feldern, plus Round-Trip-Verify durch
+        # input_value nach fill, damit ein verlorenes fill sofort auffällt.
+        notiz = page.locator("textarea[name='notiz']")
+        dauer = page.locator("input[name='dauer']")
+        notiz.wait_for(state="visible", timeout=10_000)
+        dauer.wait_for(state="visible", timeout=10_000)
+        dauer.fill("20")
+        notiz.fill("E2E-Test Kontakt")
+        # Verify: wenn HTMX nochmal swappt, ist input_value leer.
+        assert notiz.input_value() == "E2E-Test Kontakt", "HTMX-Swap hat textarea ueberschrieben"
+        assert dauer.input_value() == "20", "HTMX-Swap hat dauer ueberschrieben"
 
         # Kein Klientel ausgewählt → wird automatisch anonym
 
