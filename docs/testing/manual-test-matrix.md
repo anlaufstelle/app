@@ -6601,9 +6601,15 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 ---
 
+### Security: Ops-/Self-Hosting-Härtung
+
+> Alle Tests zu „Security: Ops-/Self-Hosting-Härtung“ — DB-Rollen, Backup, Restore, Media-Volume, Migrations-Drift, Retention-Cron, Healthcheck — sind in [SEKTION D](#sektion-d--entwickler-probes-lokalssh) unter `D.OPS` gelistet. DSGVO-Bezug: Art. 5 Abs. 1 lit. e (Speicherbegrenzung) für `DEV-OPS-07`, Art. 32 (TOM) für `DEV-OPS-01`/`DEV-OPS-03`. Tracking-Issue: #903.
+
+---
+
 ## SEKTION D — Entwickler-Probes (LOKAL/SSH)
 
-> **Zielgruppe:** Tobias / Server-Admin. Diese 31 Tests erfordern direkten Zugriff auf den Server (`docker compose exec web python manage.py …`, `psql`, lokale `manage.py`-Befehle). Auf [`dev.anlaufstelle.app`](https://dev.anlaufstelle.app) nur durch Tobias oder per SSH durchführbar. Sie verifizieren Schema-Constraints (`on_delete`-Verhalten, RLS-Force, Encryption-at-Rest, Hash-Ketten), die in Anwender-Tests nicht prüfbar sind.
+> **Zielgruppe:** Tobias / Server-Admin. Diese Tests erfordern direkten Zugriff auf den Server (`docker compose exec web python manage.py …`, `psql`, lokale `manage.py`-Befehle). Auf [`dev.anlaufstelle.app`](https://dev.anlaufstelle.app) nur durch Tobias oder per SSH durchführbar. Sie verifizieren Schema-Constraints (`on_delete`-Verhalten, RLS-Force, Encryption-at-Rest, Hash-Ketten) und Betriebsfähigkeit (DB-Rollen, Backup/Restore, Retention-Cron), die in Anwender-Tests nicht prüfbar sind. Aktuelle Fallzahl: siehe [`test-matrix-index.md`](test-matrix-index.md).
 
 ### D.CLIENT
 
@@ -7555,10 +7561,219 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Status:** ☐ Offen
 
+---
+
+### D.OPS
+
+> Refs #903 ( + §4.6): Ops-/Self-Hosting-Härtung. DSGVO-relevant über Art. 5 (Speicherbegrenzung) und Art. 32 (TOM) — werden aus Sektion C verlinkt, leben aber als LOKAL/SSH-Probes hier.
+
+#### DEV-OPS-01 — DB-Rollen-Check (App NOSUPERUSER, kein BYPASSRLS; Admin BYPASSRLS)
+
+> 🔧 **LOKAL/SSH erforderlich.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Ops | admin ||||
+
+**Code-Referenz:**
+- [`docker-compose.dev.yml`](https://github.com/anlaufstelle/app/blob/main/docker-compose.dev.yml) — Bootstrap/App/Admin-Rollen
+- [`deploy/postgres-init/01-app-role.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/postgres-init/01-app-role.sh)
+- Prod-Pfad: #902 (docker-compose.prod auf gleiches Modell)
+
+**Schritte:**
+1. `docker compose exec db psql -U $POSTGRES_USER $POSTGRES_DB`
+2. `\du` ausführen — App-Rolle und Admin-Rolle prüfen.
+3. App-Rolle: `Attributes` enthält **nicht** `Superuser`, **nicht** `Bypass RLS`.
+4. Admin-Rolle: `Attributes` enthält `Bypass RLS` (für Maintenance/Migrationen).
+5. Optional per SQL: `SELECT rolname, rolsuper, rolbypassrls FROM pg_roles WHERE rolname IN ('<app>', '<admin>');`.
+
+**Erwartetes Ergebnis:**
+- App-Rolle: `rolsuper=f`, `rolbypassrls=f`.
+- Admin-Rolle: `rolbypassrls=t`.
+- Bei Abweichung: Healthcheck/Compliance-Dashboard (#919) muss `critical` melden.
+
+**Status:** ☐ Offen
 
 ---
 
-## Anhang A — Browser/Mobile-Matrix
+#### DEV-OPS-02 — Backup-Frische (jünger als 24h)
+
+> 🔧 **LOKAL/SSH erforderlich.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Ops | admin ||||
+
+**Code-Referenz:** [`deploy/backup.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/backup.sh), [`docs/ops-runbook.md`](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md)
+
+**Schritte:**
+1. SSH auf Host: `ssh anlaufstelle@dev.anlaufstelle.app`.
+2. Backup-Verzeichnis prüfen (per Runbook): `ls -lh /var/backups/anlaufstelle/ | head`.
+3. Neuestes Backup: `find /var/backups/anlaufstelle/ -mtime -1 -type f`.
+4. Optional: Backup-Cron-Log einsehen (z.B. `journalctl -u anlaufstelle-backup` oder `/var/log/syslog`).
+
+**Erwartetes Ergebnis:**
+- Mindestens ein Backup jünger als 24 h.
+- Dateigröße plausibel (≥ Vortagswert ± 30 %).
+- Compliance-Dashboard (#919) zeigt `ok`.
+
+**Status:** ☐ Offen
+
+---
+
+#### DEV-OPS-03 — Restore-Test gegen frische DB
+
+> 🔧 **LOKAL/SSH erforderlich.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Ops | admin ||||
+
+**Code-Referenz:** [`deploy/restore.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/restore.sh) (falls vorhanden), Runbook „Disaster Recovery".
+
+**Voraussetzung:** dedizierte Test-DB (z.B. `anlaufstelle_restore_test`), niemals gegen Produktiv-DB.
+
+**Schritte:**
+1. Frisches Backup auswählen (z.B. `*.sql.gz` aus DEV-OPS-02).
+2. Leere Test-DB anlegen.
+3. Backup einspielen (`pg_restore` oder `psql < dump.sql`).
+4. Smoke-Query: `SELECT count(*) FROM core_client;`, `SELECT count(*) FROM core_event;`.
+5. Optional Django-Side: `DATABASE_URL=...test_db python manage.py check`.
+
+**Erwartetes Ergebnis:**
+- Restore läuft ohne Fehler.
+- Zählungen entsprechen Erwartung.
+- Datum/Zeit des letzten erfolgreichen Restore-Tests wird im Compliance-Dashboard angezeigt.
+- **DSGVO-Beleg:** Art. 32 Abs. 1 lit. c (Wiederherstellbarkeit).
+
+**Status:** ☐ Offen
+
+---
+
+#### DEV-OPS-04 — Media-Volume Persistenz
+
+> 🔧 **LOKAL/SSH erforderlich.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Ops | admin ||||
+
+**Code-Referenz:** [`docker-compose.prod.yml`](https://github.com/anlaufstelle/app/blob/main/docker-compose.prod.yml) — Volume-Konfiguration für `src/media/`.
+
+**Schritte:**
+1. In App: Datei hochladen (z.B. via Klient-Detail → Attachment).
+2. SSH: Datei im Host-Volume sichtbar (`docker compose exec web ls /app/src/media/...`).
+3. `docker compose restart web` ausführen.
+4. Datei in App weiterhin abrufbar (Download-Link funktioniert).
+5. `docker compose down && docker compose up -d`.
+6. Datei nach erneutem Up immer noch da.
+
+**Erwartetes Ergebnis:**
+- Anhänge überleben Container-Restart und Stack-Restart.
+- Volume ist im Compose als persistenter Named-Volume oder Bind-Mount konfiguriert.
+
+**Status:** ☐ Offen
+
+---
+
+#### DEV-OPS-05 — collectstatic nach Image-Pull erfolgreich
+
+> 🔧 **LOKAL/SSH erforderlich.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Ops | admin ||||
+
+**Code-Referenz:** [`deploy/deploy-dev.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/deploy-dev.sh) oder Entrypoint im App-Container.
+
+**Schritte:**
+1. Neues Image pullen: `docker compose pull web`.
+2. Stack hochfahren: `docker compose up -d`.
+3. Statics prüfen: `curl -I https://dev.anlaufstelle.app/static/css/styles.css` → 200.
+4. Whitenoise-Manifest existiert: `docker compose exec web ls staticfiles/staticfiles.json` oder Pendant.
+5. App lädt im Browser ohne fehlende Assets (DevTools-Network).
+
+**Erwartetes Ergebnis:**
+- Statics werden nach Pull automatisch eingesammelt (Entrypoint oder Compose-Command).
+- Keine 404-Spam in Caddy-Logs.
+
+**Status:** ☐ Offen
+
+---
+
+#### DEV-OPS-06 — Migrations-Drift (`migrate --check`)
+
+> 🔧 **LOKAL/SSH erforderlich.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Ops | admin ||| `src/tests/test_migrations.py` (falls vorhanden) |
+
+**Schritte:**
+1. SSH: `docker compose exec web python manage.py migrate --check` → Exit-Code 0.
+2. `docker compose exec web python manage.py makemigrations --check --dry-run` → keine ausstehenden Migrationen.
+3. Optional `django_migrations`-Tabelle einsehen — neuestes Datum stimmt mit Code-Stand überein.
+
+**Erwartetes Ergebnis:**
+- Beide Checks Exit 0.
+- Bei Drift: Deploy ist unvollständig — neu deployen oder manuell `migrate` ausführen.
+
+**Status:** ☐ Offen
+
+---
+
+#### DEV-OPS-07 — Retention-Cron Output
+
+> 🔧 **LOKAL/SSH erforderlich.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Ops | admin ||| `src/tests/test_retention_*.py` |
+
+**Code-Referenz:**
+- [`src/core/management/commands/enforce_retention.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/enforce_retention.py)
+- Cron/systemd-Timer-Konfiguration im Runbook.
+
+**Schritte:**
+1. SSH: Cron-Log einsehen — `enforce_retention` lief in den letzten 24 h.
+2. Letzter erfolgreicher Lauf: Audit-Eintrag `RETENTION_EXECUTED` in AuditLog vorhanden.
+3. `docker compose exec web python manage.py enforce_retention --dry-run` → zeigt aktuelle Pipeline.
+4. Bei Fehlerfall: Audit-Eintrag `RETENTION_FAILED` mit Begründung.
+
+**Erwartetes Ergebnis:**
+- Cron läuft, Audit ist vollständig.
+- Compliance-Dashboard (#919) zeigt Datum des letzten erfolgreichen Laufs.
+- **DSGVO-Beleg:** Art. 5 Abs. 1 lit. e (Speicherbegrenzung).
+
+**Status:** ☐ Offen
+
+---
+
+#### DEV-OPS-08 — Healthcheck unterscheidet ok/degraded/critical
+
+> 🔧 **LOKAL/SSH erforderlich.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Ops |||| `src/tests/test_health_endpoint.py` (falls vorhanden) |
+
+**Code-Referenz:** Health-View (siehe `ENT-SYS-01`, `ENT-SYS-02`).
+
+**Schritte:**
+1. `curl -s https://dev.anlaufstelle.app/health/` → JSON mit Status `ok`.
+2. ClamAV-Container stoppen: `docker compose stop clamav`.
+3. Health-Endpoint erneut → erwartet `degraded` (App läuft, aber ClamAV down).
+4. DB-Container stoppen: `docker compose stop db`.
+5. Health-Endpoint erneut → erwartet `critical` (App nicht funktionsfähig).
+6. Container wieder hochfahren, Status zurück auf `ok`.
+
+**Erwartetes Ergebnis:**
+- Drei Stufen sind unterscheidbar.
+- Externes Monitoring (UptimeRobot o.ä.) kann auf `degraded` warnen statt erst auf hartem 5xx.
+
+**Status:** ☐ Offen
+
+---
 
 Übersicht: pro Bereich, in welchen Browsern und auf Mobile getestet werden muss. `✓` = Pflicht, `⚪` = Stichprobe, `—` = nicht relevant.
 
