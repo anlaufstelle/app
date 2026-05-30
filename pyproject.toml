@@ -87,7 +87,11 @@ omit = [
 # Runner schliesst e2e und slow aus, damit ein Mutation-Run nicht Stunden
 # laeuft. Das Ziel ist ein nightly-Job ueber Cron, kein PR-Gate.
 [tool.mutmut]
-paths_to_mutate = "src/core/services/,src/core/forms/"
+# Refs Welle 7 (#930): ``paths_to_mutate`` muss in mutmut 3.x eine TOML-
+# Liste sein. Ein String wird zeichenweise iteriert (jeder ``/`` triggert
+# Filesystem-Root-Walk → Crash mit ``/etc/vconsole.conf``-FileNotFoundError).
+# Welle 0 (#923) hatte den String-Wert als regression eingeführt.
+paths_to_mutate = ["src/core/services/", "src/core/forms/"]
 tests_dir = "src/tests/"
 runner = ".venv/bin/python -m pytest -x -m 'not e2e and not slow'"
 backup = false
