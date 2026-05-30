@@ -197,7 +197,33 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 
 **Reihenfolge beachten:** Backup (02:00) → Retention (03:00) → Snapshots (04:00, monatlich) → MV-Refresh (stuendlich). Backup muss vor Retention laufen, damit geloeschte Daten im Backup enthalten sind. Der MV-Refresh nutzt `CONCURRENTLY` und blockiert laufende Reader nicht.
 
-### 3.3 Manuelle Ausfuehrung
+### 3.3 Dev (systemd-Timer)
+
+Auf `dev.anlaufstelle.app` laufen die Jobs **nicht** per Host-Crontab, sondern als
+systemd-Timer, die [`deploy/bootstrap.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/bootstrap.sh)
+(Sektion 9b) installiert — bewusst kein Compose-Sidecar (, siehe #794).
+
+| Timer | OnCalendar | Command |
+|-------|-----------|---------|
+| `anlaufstelle-backup.timer` | `*-*-* 02:00` | `deploy/backup.sh` |
+| `anlaufstelle-retention.timer` | `*-*-* 03:00` | `… exec -T web python manage.py enforce_retention` |
+| `anlaufstelle-snapshots.timer` | `*-*-01 04:00` | `… exec -T web python manage.py create_statistics_snapshots` |
+| `anlaufstelle-breach.timer` | `*-*-* *:30` | `… exec -T web python manage.py detect_breaches` |
+| `anlaufstelle-mv-refresh.timer` | `*-*-* *:15` | `… exec -T web python manage.py refresh_statistics_view` |
+
+**Aktivierung auf bereits laufenden Servern:** `bootstrap.sh` ist idempotent — erneut als
+root ausfuehren, dann verifizieren:
+
+```bash
+systemctl list-timers "anlaufstelle-*"          # 5 Timer mit NEXT-Zeit
+systemctl start anlaufstelle-mv-refresh.service  # einmal manuell anstossen
+journalctl -u anlaufstelle-mv-refresh.service -n 20
+```
+
+Den Lauf-Status je Job zeigt zusaetzlich das Compliance-Dashboard (`/system/compliance/`,
+Kategorie „Hintergrundjobs") — `unknown`/`warning`/`critical`, wenn ein Timer nicht laeuft.
+
+### 3.4 Manuelle Ausfuehrung
 
 ```bash
 # Retention Testlauf (kein Loeschen)

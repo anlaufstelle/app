@@ -16,6 +16,7 @@ _CATEGORY_ORDER = (
     "Backup",
     "Virus-Scan",
     "Retention",
+    "Hintergrundjobs",
     "MFA",
     "Audit",
     "System",

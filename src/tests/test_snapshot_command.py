@@ -9,7 +9,7 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from core.models import Client, DocumentType, Event, StatisticsSnapshot
+from core.models import AuditLog, Client, DocumentType, Event, StatisticsSnapshot
 from core.services.dashboard import create_or_update_snapshot
 
 
@@ -164,6 +164,25 @@ def test_facility_filter(
     assert StatisticsSnapshot.objects.count() == 1
     assert StatisticsSnapshot.objects.filter(facility=facility).exists()
     assert not StatisticsSnapshot.objects.filter(facility=other_facility).exists()
+
+
+@pytest.mark.django_db
+def test_command_writes_run_marker(facility, settings_obj):
+    """Refs #794: nach erfolgreichem (non-dry-run) Lauf entsteht genau ein
+    SNAPSHOT_RUN_COMPLETED-Marker mit facility=None."""
+    AuditLog.objects.filter(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED).delete()
+    call_command("create_statistics_snapshots")
+    markers = AuditLog.objects.filter(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED)
+    assert markers.count() == 1
+    assert markers.first().facility_id is None
+
+
+@pytest.mark.django_db
+def test_dry_run_writes_no_marker(facility, settings_obj):
+    """Refs #794: --dry-run schreibt keinen Last-Run-Marker."""
+    AuditLog.objects.filter(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED).delete()
+    call_command("create_statistics_snapshots", year=2025, month=1, dry_run=True)
+    assert not AuditLog.objects.filter(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED).exists()
 
 
 @pytest.mark.django_db

@@ -74,6 +74,12 @@ class AuditLog(models.Model):
         DELETION_REQUESTED = "deletion_requested", _("Löschung beantragt")
         DELETION_APPROVED = "deletion_approved", _("Löschung genehmigt")
         DELETION_REJECTED = "deletion_rejected", _("Löschung abgelehnt")
+        # Refs #794 / #919: Last-Run-Marker für die per systemd-Timer
+        # laufenden Cron-Jobs. Das Compliance-Dashboard liest den jüngsten
+        # Eintrag je Action, um zu zeigen, ob der Job wirklich läuft.
+        SNAPSHOT_RUN_COMPLETED = "snapshot_run_completed", _("Statistik-Snapshot-Lauf abgeschlossen")
+        BREACH_SCAN_COMPLETED = "breach_scan_completed", _("Breach-Detection-Scan abgeschlossen")
+        MV_REFRESH_COMPLETED = "mv_refresh_completed", _("Statistik-View-Refresh abgeschlossen")
 
     objects = FacilityScopedManager()
 

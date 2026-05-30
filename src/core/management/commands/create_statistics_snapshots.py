@@ -3,7 +3,8 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from core.models import Event, Facility, Settings
+from core.models import AuditLog, Event, Facility, Settings
+from core.services.audit import audit_event
 from core.services.dashboard import create_or_update_snapshot
 
 
@@ -66,6 +67,17 @@ class Command(BaseCommand):
 
         label = "[dry-run] Would create" if dry_run else "Created"
         self.stdout.write(self.style.SUCCESS(f"{label} {total} snapshot(s) in total."))
+
+        # Refs #794: Last-Run-Marker fürs Compliance-Dashboard. Nur nach echtem
+        # (non-dry-run) Lauf — facility=None, da der Cron installationsweit läuft.
+        if not dry_run:
+            audit_event(
+                AuditLog.Action.SNAPSHOT_RUN_COMPLETED,
+                user=None,
+                facility=None,
+                target_type="SnapshotRun",
+                detail={"snapshots": total},
+            )
 
     def _determine_months(self, facility, today, backfill, year, month):
         """Return list of (year, month) tuples to snapshot."""

@@ -15,6 +15,9 @@ import logging
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 
+from core.models import AuditLog
+from core.services.audit import audit_event
+
 logger = logging.getLogger(__name__)
 
 MV_NAME = "core_statistics_event_flat"
@@ -59,3 +62,13 @@ class Command(BaseCommand):
                 cursor.execute(f"REFRESH MATERIALIZED VIEW {MV_NAME};")
 
         self.stdout.write(self.style.SUCCESS(f"Refreshed materialized view: {MV_NAME}"))
+
+        # Refs #794: Last-Run-Marker fürs Compliance-Dashboard. Wird nur erreicht,
+        # wenn der Refresh nicht via early-return (non-PostgreSQL) übersprungen wurde.
+        audit_event(
+            AuditLog.Action.MV_REFRESH_COMPLETED,
+            user=None,
+            facility=None,
+            target_type="MVRefreshRun",
+            detail={"view": MV_NAME},
+        )

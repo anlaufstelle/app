@@ -43,6 +43,11 @@ from core.services.compliance.breach_detection import (
     run_all_detections,
 )
 from core.services.compliance.clamav import _clamav_checks
+from core.services.compliance.cron import (
+    _breach_scan_checks,
+    _mv_refresh_checks,
+    _snapshot_checks,
+)
 from core.services.compliance.db_roles import (
     _db_role_admin_check,
     _db_role_attribute_check,
@@ -98,6 +103,9 @@ def aggregate_checks() -> list[ComplianceCheck]:
         _backup_checks,
         _clamav_checks,
         _retention_checks,
+        _snapshot_checks,
+        _breach_scan_checks,
+        _mv_refresh_checks,
         _restore_checks,
         _mfa_checks,
         _migration_checks,
@@ -133,7 +141,9 @@ __all__ = [
     "_PRIVILEGED_ROLES",
     "_audit_event_checks",
     "_backup_checks",
+    "_breach_scan_checks",
     "_clamav_checks",
+    "_mv_refresh_checks",
     "_db_role_admin_check",
     "_db_role_attribute_check",
     "_db_role_checks",
@@ -141,6 +151,7 @@ __all__ = [
     "_migration_checks",
     "_restore_checks",
     "_retention_checks",
+    "_snapshot_checks",
     "_validate_webhook_url",
     "_version_checks",
     "aggregate_checks",

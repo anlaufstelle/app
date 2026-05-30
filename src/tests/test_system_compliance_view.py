@@ -121,8 +121,24 @@ class TestSystemComplianceRender:
         backup_pos = content.find("compliance-group-backup")
         audit_pos = content.find("compliance-group-audit")
         system_pos = content.find("compliance-group-system")
-        # _CATEGORY_ORDER: Datenbank, Backup, Virus-Scan, Retention, MFA, Audit, System
+        # _CATEGORY_ORDER: Datenbank, Backup, Virus-Scan, Retention, Hintergrundjobs, MFA, Audit, System
         assert 0 <= db_pos < backup_pos < audit_pos < system_pos
+
+    def test_hintergrundjobs_category_renders_after_retention(self, client, super_admin_user, make_check):
+        """Refs #794: Kategorie 'Hintergrundjobs' erscheint zwischen Retention und MFA."""
+        client.force_login(super_admin_user)
+        fake_checks = [
+            make_check(key="mfa1", category="MFA"),
+            make_check(key="job1", category="Hintergrundjobs"),
+            make_check(key="ret1", category="Retention"),
+        ]
+        with patch("core.views.system.compliance.aggregate_checks", return_value=fake_checks):
+            response = client.get(reverse("core:system_compliance"))
+        content = response.content.decode("utf-8")
+        ret_pos = content.find("compliance-group-retention")
+        jobs_pos = content.find("compliance-group-hintergrundjobs")
+        mfa_pos = content.find("compliance-group-mfa")
+        assert 0 <= ret_pos < jobs_pos < mfa_pos
 
     def test_writes_audit_log_on_access(self, client, super_admin_user):
         from core.models import AuditLog

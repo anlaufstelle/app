@@ -44,6 +44,17 @@ class TestRefreshStatisticsView:
         call_command("refresh_statistics_view", "--no-concurrent", stdout=out)
         assert "Refreshed materialized view" in out.getvalue()
 
+    @pytest.mark.django_db
+    def test_writes_marker(self, facility, doc_type_contact):
+        """Refs #794: nach erfolgreichem Refresh entsteht ein MV_REFRESH_COMPLETED-Marker."""
+        from core.models import AuditLog
+
+        AuditLog.objects.filter(action=AuditLog.Action.MV_REFRESH_COMPLETED).delete()
+        call_command("refresh_statistics_view", "--no-concurrent")
+        markers = AuditLog.objects.filter(action=AuditLog.Action.MV_REFRESH_COMPLETED)
+        assert markers.count() == 1
+        assert markers.first().facility_id is None
+
     def test_non_postgres_backend_emits_warning_and_returns(self):
         """Lines 35-38: non-PG-Backend ueberspringt MV-Refresh mit Warning."""
         out = StringIO()
@@ -52,11 +63,15 @@ class TestRefreshStatisticsView:
             call_command("refresh_statistics_view", stdout=out)
         assert "nicht PostgreSQL" in out.getvalue()
 
+    @pytest.mark.django_db
     def test_concurrently_exception_falls_back_to_blocking(self, caplog):
         """Lines 50-59: CONCURRENTLY-Refresh wirft -> Fallback ohne CONCURRENTLY.
 
         Der ``core``-Logger hat ``propagate=False`` (settings/base.py), deshalb
         haengen wir den ``caplog``-Handler explizit an den Modul-Logger.
+
+        ``django_db`` noetig, seit der Command nach erfolgreichem (Fallback-)
+        Refresh einen MV_REFRESH_COMPLETED-Marker schreibt (Refs #794).
         """
         import logging
 

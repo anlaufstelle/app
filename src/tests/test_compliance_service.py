@@ -364,3 +364,94 @@ class TestAuditEventChecks:
             AuditLog.objects.filter(pk=old.pk).update(timestamp=timezone.now() - timedelta(hours=48))
         checks = compliance._audit_event_checks()
         assert checks[0].status == compliance.ComplianceStatus.OK
+
+
+@pytest.mark.django_db
+class TestCronChecks:
+    """Last-Run-Checks für die per systemd-Timer laufenden Cron-Jobs (Refs #794)."""
+
+    def _backdate(self, entry, **delta):
+        from core.services.system import bypass_replication_triggers
+
+        with bypass_replication_triggers():
+            AuditLog.objects.filter(pk=entry.pk).update(timestamp=timezone.now() - timedelta(**delta))
+
+    # --- Snapshots (monatlich) ---
+    def test_snapshot_unknown_when_no_entry(self):
+        AuditLog.objects.filter(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED).delete()
+        assert compliance._snapshot_checks()[0].status == compliance.ComplianceStatus.UNKNOWN
+
+    def test_snapshot_ok_within_35d(self):
+        AuditLog.objects.filter(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED).delete()
+        AuditLog.objects.create(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED, facility=None, target_type="SnapshotRun")
+        assert compliance._snapshot_checks()[0].status == compliance.ComplianceStatus.OK
+
+    def test_snapshot_warning_35_to_65d(self):
+        AuditLog.objects.filter(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED).delete()
+        e = AuditLog.objects.create(
+            action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED, facility=None, target_type="SnapshotRun"
+        )
+        self._backdate(e, days=50)
+        assert compliance._snapshot_checks()[0].status == compliance.ComplianceStatus.WARNING
+
+    def test_snapshot_critical_over_65d(self):
+        AuditLog.objects.filter(action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED).delete()
+        e = AuditLog.objects.create(
+            action=AuditLog.Action.SNAPSHOT_RUN_COMPLETED, facility=None, target_type="SnapshotRun"
+        )
+        self._backdate(e, days=80)
+        assert compliance._snapshot_checks()[0].status == compliance.ComplianceStatus.CRITICAL
+
+    # --- Breach-Scan (stündlich) ---
+    def test_breach_unknown_when_no_entry(self):
+        AuditLog.objects.filter(action=AuditLog.Action.BREACH_SCAN_COMPLETED).delete()
+        assert compliance._breach_scan_checks()[0].status == compliance.ComplianceStatus.UNKNOWN
+
+    def test_breach_ok_within_3h(self):
+        AuditLog.objects.filter(action=AuditLog.Action.BREACH_SCAN_COMPLETED).delete()
+        AuditLog.objects.create(
+            action=AuditLog.Action.BREACH_SCAN_COMPLETED, facility=None, target_type="BreachScanRun"
+        )
+        assert compliance._breach_scan_checks()[0].status == compliance.ComplianceStatus.OK
+
+    def test_breach_warning_3_to_24h(self):
+        AuditLog.objects.filter(action=AuditLog.Action.BREACH_SCAN_COMPLETED).delete()
+        e = AuditLog.objects.create(
+            action=AuditLog.Action.BREACH_SCAN_COMPLETED, facility=None, target_type="BreachScanRun"
+        )
+        self._backdate(e, hours=10)
+        assert compliance._breach_scan_checks()[0].status == compliance.ComplianceStatus.WARNING
+
+    def test_breach_critical_over_24h(self):
+        AuditLog.objects.filter(action=AuditLog.Action.BREACH_SCAN_COMPLETED).delete()
+        e = AuditLog.objects.create(
+            action=AuditLog.Action.BREACH_SCAN_COMPLETED, facility=None, target_type="BreachScanRun"
+        )
+        self._backdate(e, hours=30)
+        assert compliance._breach_scan_checks()[0].status == compliance.ComplianceStatus.CRITICAL
+
+    # --- MV-Refresh (stündlich) ---
+    def test_mv_unknown_when_no_entry(self):
+        AuditLog.objects.filter(action=AuditLog.Action.MV_REFRESH_COMPLETED).delete()
+        assert compliance._mv_refresh_checks()[0].status == compliance.ComplianceStatus.UNKNOWN
+
+    def test_mv_ok_within_2h(self):
+        AuditLog.objects.filter(action=AuditLog.Action.MV_REFRESH_COMPLETED).delete()
+        AuditLog.objects.create(action=AuditLog.Action.MV_REFRESH_COMPLETED, facility=None, target_type="MVRefreshRun")
+        assert compliance._mv_refresh_checks()[0].status == compliance.ComplianceStatus.OK
+
+    def test_mv_warning_2_to_6h(self):
+        AuditLog.objects.filter(action=AuditLog.Action.MV_REFRESH_COMPLETED).delete()
+        e = AuditLog.objects.create(
+            action=AuditLog.Action.MV_REFRESH_COMPLETED, facility=None, target_type="MVRefreshRun"
+        )
+        self._backdate(e, hours=4)
+        assert compliance._mv_refresh_checks()[0].status == compliance.ComplianceStatus.WARNING
+
+    def test_mv_critical_over_6h(self):
+        AuditLog.objects.filter(action=AuditLog.Action.MV_REFRESH_COMPLETED).delete()
+        e = AuditLog.objects.create(
+            action=AuditLog.Action.MV_REFRESH_COMPLETED, facility=None, target_type="MVRefreshRun"
+        )
+        self._backdate(e, hours=10)
+        assert compliance._mv_refresh_checks()[0].status == compliance.ComplianceStatus.CRITICAL

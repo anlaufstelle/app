@@ -175,3 +175,21 @@ class TestWebhook:
             },
         )
         assert called == ["https://example.com/webhook"]
+
+
+@pytest.mark.django_db(transaction=True)
+class TestBreachScanMarker:
+    """Refs #794: detect_breaches schreibt nach jedem Lauf einen Last-Run-Marker."""
+
+    def setup_method(self):
+        if connection.vendor != "postgresql":
+            pytest.skip("AuditLog-Trigger erfordert PostgreSQL")
+
+    def test_command_writes_scan_marker(self, facility):
+        from django.core.management import call_command
+
+        AuditLog.objects.filter(action=AuditLog.Action.BREACH_SCAN_COMPLETED).delete()
+        call_command("detect_breaches")
+        markers = AuditLog.objects.filter(action=AuditLog.Action.BREACH_SCAN_COMPLETED)
+        assert markers.count() == 1
+        assert markers.first().facility_id is None
