@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status clean test-matrix-index test-matrix-index-check
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status clean test-matrix-index test-matrix-index-check verify-matrix-drift mutation mutation-report ci-coverage
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -119,7 +119,29 @@ check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
-ci: lint check deps-check test-parallel
+ci: lint check deps-check verify-matrix-drift test-parallel
+
+# Lokale Coverage-HTML: praktisch zum gezielten Lücken-Suchen.
+# CI nutzt --cov-fail-under in test.yml; dieses Target rendert
+# zusätzlich einen HTML-Report unter htmlcov/.
+ci-coverage:
+	$(PYTHON) -m pytest -m "not e2e" --cov=core --cov-report=term-missing --cov-report=html
+
+# Verifiziert, dass alle in docs/testing/manual-test-matrix.md
+# referenzierten Test-Files in src/tests/ oder src/tests/e2e/ existieren.
+# Refs #922 Welle 0.
+verify-matrix-drift:
+	$(PYTHON) scripts/verify_test_matrix_drift.py
+
+# Mutation-Testing für core/services + core/forms (Refs #922 / #923).
+# Konfiguration in pyproject.toml [tool.mutmut].
+# Erwartete Laufzeit: 30-60 Minuten — daher nightly per Cron, nicht PR-Pflicht.
+mutation:
+	$(PYTHON) -m mutmut run
+
+# Ergebnisse des letzten Mutation-Runs anzeigen (textuell, nicht-interaktiv).
+mutation-report:
+	$(PYTHON) -m mutmut results
 
 # Dependencies: Lock-Files aus requirements*.in neu erzeugen (pip-tools).
 # Nach Änderungen an requirements.in oder requirements-dev.in ausführen.
