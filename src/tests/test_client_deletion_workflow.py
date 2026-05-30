@@ -183,3 +183,71 @@ class TestRetentionTrashAnonymization:
 
         assert count == 1
         assert not client.pseudonym.startswith("Gelöscht-")
+
+
+# ---------------------------------------------------------------------------
+# View-Layer Tests (Refs #922 — Welle 10 Coverage-Lift)
+# ---------------------------------------------------------------------------
+
+from django.urls import reverse  # noqa: E402
+
+
+class TestClientDeleteRequestViewLayer:
+    def test_get_renders_confirm_template(self, client, staff_user, client_identified):
+        client.force_login(staff_user)
+        url = reverse("core:client_delete_request", args=[client_identified.pk])
+        response = client.get(url)
+        assert response.status_code == 200
+
+    def test_post_empty_reason_redirects_with_error(self, client, staff_user, client_identified):
+        client.force_login(staff_user)
+        url = reverse("core:client_delete_request", args=[client_identified.pk])
+        response = client.post(url, {"reason": "   "})
+        assert response.status_code == 302
+        msgs = [m.message for m in response.wsgi_request._messages]
+        assert any("Begruendung" in m or "Begründung" in m for m in msgs)
+
+    def test_post_with_reason_creates_deletion_request(self, client, staff_user, client_identified):
+        client.force_login(staff_user)
+        before = DeletionRequest.objects.count()
+        url = reverse("core:client_delete_request", args=[client_identified.pk])
+        response = client.post(url, {"reason": "Inaktiv seit >2 Jahren"})
+        assert response.status_code == 302
+        assert DeletionRequest.objects.count() == before + 1
+
+
+class TestClientRestoreViewLayer:
+    def test_restore_brings_back_deleted_client(self, client, admin_user, client_identified):
+        client_identified.is_deleted = True
+        client_identified.save(update_fields=["is_deleted"])
+        client.force_login(admin_user)
+        url = reverse("core:client_restore", args=[client_identified.pk])
+        response = client.post(url)
+        assert response.status_code == 302
+        client_identified.refresh_from_db()
+        assert client_identified.is_deleted is False
+
+    def test_restore_404_for_non_deleted(self, client, admin_user, client_identified):
+        client.force_login(admin_user)
+        url = reverse("core:client_restore", args=[client_identified.pk])
+        response = client.post(url)
+        assert response.status_code == 404
+
+
+class TestClientTrashView:
+    def test_lists_deleted_clients(self, client, admin_user, client_identified):
+        client_identified.is_deleted = True
+        client_identified.deleted_at = timezone.now()
+        client_identified.deleted_by = admin_user
+        client_identified.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
+        client.force_login(admin_user)
+        url = reverse("core:client_trash")
+        response = client.get(url)
+        assert response.status_code == 200
+        assert client_identified in list(response.context["clients"])
+
+    def test_does_not_list_non_deleted(self, client, admin_user, client_identified):
+        client.force_login(admin_user)
+        url = reverse("core:client_trash")
+        response = client.get(url)
+        assert client_identified not in list(response.context["clients"])
