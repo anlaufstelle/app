@@ -51,7 +51,11 @@ class TestFeedQueryCount:
     def test_build_feed_items_query_count_constant(self, facility, normal_doc_type, admin_user):
         from django.db import connection
 
-        when = timezone.now()
+        # ``timezone.localtime()`` statt ``.now()``: ``build_feed_items``
+        # konvertiert ``target_date`` in ``settings.TIME_ZONE`` (Berlin),
+        # ``when.date()`` muss daher auch Berlin-Date sein — sonst fallen
+        # die um 23-24 UTC erzeugten Events aus dem Range (#939).
+        when = timezone.localtime()
         # Baseline: 5 Events
         _create_events(facility, normal_doc_type, admin_user, 5, when)
         with CaptureQueriesContext(connection) as ctx_small:
