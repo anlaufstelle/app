@@ -187,10 +187,13 @@ Status-Symbole gelten gleichermassen im Run-Log:
 | CASE | Fälle | DSGVO | DSGVO-Paket |
 | EPI | Episoden | OFFL | Offline-Modus |
 | GOAL | Goals & Milestones | SYS | Sys / Health / Monitoring |
-| EVT | Events (Dokumentation) | | |
-| ATT | Anhänge | | |
-| WI | WorkItems | | |
-| DEL | Lösch-Anträge | | |
+| EVT | Events (Dokumentation) | A11Y | Accessibility (WCAG-Stichproben) |
+| ATT | Anhänge | SETUP | Einrichtungs-/Konfigurationsassistent |
+| WI | WorkItems | COMP | Betriebs-/Compliance-Dashboard |
+| DEL | Lösch-Anträge | PRIV | Datenschutz-Review (Freitext) |
+| | | REPORT | Datenschutzfreundliche externe Berichte |
+
+**Forward-looking Bereiche (Refs #908):** `SETUP`, `COMP`, `PRIV`, `REPORT` und `A11Y` sind aufgenommen, damit die jeweiligen Feature-Issues (#917 Einrichtungsassistent, #919 Compliance-Dashboard, #918 Freitext-Review, #921 Externe Berichte) ihre Cases unter einheitlichem Schema ablegen können, sobald das Feature implementiert ist. A11Y (Refs #912) bekommt einen eigenen Cases-Block.
 
 ---
 
@@ -5979,6 +5982,55 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Status:** ☐ Offen
 
 </details>
+
+---
+
+### SETUP — Einrichtungs-/Konfigurationsassistent
+
+> **Forward-looking Bereich (Refs #908).** Feature wird in #917 implementiert und ist aktuell **-blocked** (M0 Custom Admin UI + M2 Config-Loader). Cases werden mit dem Feature ergänzt. Vorgesehenes Schema gemäß Codex-Audit §4.5:
+>
+> - `ENT-SETUP-01` — Neue Facility per Assistent vollständig anlegen (End-to-End ohne Shell)
+> - `ENT-SETUP-02` — Dokumentationsbibliothek auswählen (Template-Übernahme und Anpassung)
+> - `ENT-SETUP-03` — Riskante Einstellung wird gewarnt (Guardrails)
+> - `ENT-SETUP-04` — Setup schreibt AuditLog (Nachvollziehbarkeit)
+
+---
+
+### COMP — Betriebs-/Compliance-Dashboard
+
+> **Forward-looking Bereich (Refs #908).** Feature wird in #919 implementiert. Baut auf #902 (`check_db_roles`-Kommando) auf. Cases werden mit dem Feature ergänzt. Vorgesehenes Schema:
+>
+> - `ENT-COMP-01` — DB-Rollencheck zeigt sichere App-Rolle (`NOSUPERUSER`, kein `BYPASSRLS`)
+> - `ENT-COMP-02` — Backup veraltet erzeugt Warnung
+> - `ENT-COMP-03` — ClamAV down ist critical
+> - `ENT-COMP-04` — Retention-Job überfällig ist warning/critical
+
+> **Verwandtes LOKAL/SSH-Pendant:** Die `D.OPS`-Cases (#903) prüfen dieselben Zustände manuell per `psql` / SSH; das Dashboard zeigt sie für Betreiber:innen ohne Server-Zugriff.
+
+---
+
+### PRIV — Datenschutz-Review (Freitext)
+
+> **Forward-looking Bereich (Refs #908).** Feature wird in #918 implementiert. Cases werden mit dem Feature ergänzt. Vorgesehenes Schema:
+>
+> - `ENT-PRIV-01` — Freitext-Review listet riskante Inhalte (`Client.notes`, `Case.description`, `Episode.description`, `WorkItem.description`)
+> - `ENT-PRIV-02` — Review respektiert Rollen-Sichtbarkeit (kein neuer Leak)
+> - `ENT-PRIV-03` — Review-Aktion wird auditiert
+
+---
+
+### REPORT — Datenschutzfreundliche externe Berichte
+
+> **Forward-looking Bereich (Refs #908).** Feature wird in #921 implementiert. Cases werden mit dem Feature ergänzt. Vorgesehenes Schema:
+>
+> - `ENT-REPORT-01` — Externer Bericht unterdrückt kleine Gruppen (K-Anonymity)
+> - `ENT-REPORT-02` — Externer Bericht enthält keine Pseudonym-Rankings
+
+---
+
+### A11Y — Accessibility (WCAG-Stichproben)
+
+> **Bereich (Refs #912).** Manuelle Stichproben — **kein** systematischer WCAG 2.1 AA-Audit ( gesperrt; siehe #470), kein axe-core / Pa11y. Cases werden in #912 als eigener Commit ergänzt.
 
 ---
 
