@@ -1006,7 +1006,7 @@ Open Source schließt wirtschaftliche Tragfähigkeit nicht aus. Folgende Modelle
 
 Das Fachkonzept beschreibt Domäne und Architektur konzeptionell, nennt aber den technischen Stack nicht explizit. Für Transparenz gegenüber Selbst-Hostern, Contributors und IT-Dienstleistern:
 
-**Backend:** Django 5.1 (Python), gewählt wegen ausgereiftem ORM, eingebauter Admin-Oberfläche, starkem Sicherheitsmodell und breiter Python-Kompetenz in der Open-Source-Community.
+**Backend:** Django 6.0 (Python), gewählt wegen ausgereiftem ORM, eingebauter Admin-Oberfläche, starkem Sicherheitsmodell und breiter Python-Kompetenz in der Open-Source-Community.
 
 **Frontend-Interaktion:** HTMX für serverseitige Interaktivität ohne Full-Stack-JavaScript-Framework. Reduziert die Frontend-Komplexität erheblich — ein bewusster Trade-off zugunsten der Wartbarkeit durch einen Einzelentwickler und Community-Contributors.
 

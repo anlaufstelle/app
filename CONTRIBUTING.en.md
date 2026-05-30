@@ -8,7 +8,7 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
-[![Django 5.1](https://img.shields.io/badge/django-5.1-green.svg)](https://www.djangoproject.com/)
+[![Django 6.0](https://img.shields.io/badge/django-6.0-green.svg)](https://www.djangoproject.com/)
 [![PostgreSQL 16](https://img.shields.io/badge/postgresql-16-blue.svg)](https://www.postgresql.org/)
 [![HTMX](https://img.shields.io/badge/htmx-%E2%9C%93-blue.svg)](https://htmx.org/)
 [![Alpine.js](https://img.shields.io/badge/alpine.js-%E2%9C%93-blue.svg)](https://alpinejs.dev/)
@@ -198,7 +198,7 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 ### Python / Django
 
 - **Python 3.13** with full type hints where appropriate.
-- **Django 5.1+** — class-based views preferred, function views only for simple cases.
+- **Django 6.0+** — class-based views preferred, function views only for simple cases.
 - Business logic belongs in `core/services/`, not in views or models.
 - Models are split up: one model (or closely related models) per file under `core/models/`.
 - Role-based access control via mixins from `core/views/mixins.py`.

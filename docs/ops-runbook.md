@@ -2,7 +2,7 @@
 
 Betriebshandbuch fuer Anlaufstelle. Ergaenzt das [Admin-Handbuch](admin-guide.md) um operative Prozeduren fuer Deployment, Rollback, Cron-Jobs, Log-Analyse und Troubleshooting.
 
-**Stack:** Django 5.1 / Gunicorn / PostgreSQL 16 / Caddy 2 / Docker Compose
+**Stack:** Django 6.0 / Gunicorn / PostgreSQL 16 / Caddy 2 / Docker Compose
 
 ---
 

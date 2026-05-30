@@ -8,7 +8,7 @@
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
-[![Django 5.1](https://img.shields.io/badge/django-5.1-green.svg)](https://www.djangoproject.com/)
+[![Django 6.0](https://img.shields.io/badge/django-6.0-green.svg)](https://www.djangoproject.com/)
 [![PostgreSQL 16](https://img.shields.io/badge/postgresql-16-blue.svg)](https://www.postgresql.org/)
 [![HTMX](https://img.shields.io/badge/htmx-%E2%9C%93-blue.svg)](https://htmx.org/)
 [![Alpine.js](https://img.shields.io/badge/alpine.js-%E2%9C%93-blue.svg)](https://alpinejs.dev/)
@@ -244,7 +244,7 @@ pkill -f gunicorn
 ### Python / Django
 
 - **Python 3.13** mit vollständigen Type Hints wo sinnvoll.
-- **Django 5.1+** — Class-based Views bevorzugt, Funktions-Views nur für einfache Fälle.
+- **Django 6.0+** — Class-based Views bevorzugt, Funktions-Views nur für einfache Fälle.
 - Business-Logik gehört in `core/services/`, nicht in Views oder Models.
 - Models sind aufgeteilt: ein Model (oder eng verwandte Models) pro Datei unter `core/models/`.
 - Rollen-Zugriffsschutz über Mixins aus `core/views/mixins.py` — verfügbar: `SuperAdminRequiredMixin` (nur `/system/`), `FacilityAdminRequiredMixin` (Admin der eigenen Facility), `LeadOrAdminRequiredMixin`, `StaffRequiredMixin`, `AssistantOrAboveRequiredMixin`.
