@@ -103,10 +103,11 @@ class TestAlpineCspCompatibilityGuard:
                 violations.append(f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line}")
         assert not violations, (
             "Inline-Objekt-x-data ('x-data=\"{ ... }\"') ist nicht CSP-kompatibel. "
-            "Bitte Komponente in src/static/js/alpine-components.js (oder eigener "
-            "Datei) per Alpine.data('name', () => ({ ... })) registrieren und im "
+            "Bitte Komponente in einem Modul unter src/static/js/alpine/ "
+            "(base-layout/widgets/auth/forms/dashboards) per "
+            "Alpine.data('name', () => ({ ... })) registrieren und im "
             "Template als 'x-data=\"name\"' referenzieren. "
-            "Refs #669 (Phase 1, S-6)\n"
+            "Refs #669 (Phase 1, S-6), #911 (Subpackage-Split)\n"
             f"Betroffen: {violations}"
         )
 

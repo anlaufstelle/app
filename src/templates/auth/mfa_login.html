@@ -8,8 +8,13 @@
     <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% trans "2FA-Code eingeben" %} — Anlaufstelle</title>
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
-    {# Siehe base.html zur Script-Reihenfolge. #}
-    <script defer src="{% static 'js/alpine-components.js' %}"></script>
+    {# Siehe base.html zur Script-Reihenfolge. Refs #911: featureweise Alpine-Module. #}
+    <script defer src="{% static 'js/alpine/base-layout.js' %}"></script>
+    <script defer src="{% static 'js/alpine/widgets.js' %}"></script>
+    <script defer src="{% static 'js/alpine/auth.js' %}"></script>
+    <script defer src="{% static 'js/alpine/forms.js' %}"></script>
+    <script defer src="{% static 'js/alpine/dashboards.js' %}"></script>
+    <script defer src="{% static 'js/date-input-i18n.js' %}"></script>
     <script defer src="{% static 'js/alpine-csp.min.js' %}"></script>
 </head>
 <body class="h-full bg-canvas flex items-center justify-center">

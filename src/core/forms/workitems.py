@@ -102,7 +102,8 @@ class WorkItemForm(forms.ModelForm):
         # Refs #710: Browser-native HTML5-Validation-Tooltips folgen der
         # Browser-Sprache. Wir reichen lokalisierte Custom-Messages als
         # data-Attribute durch, ein DOMContentLoaded-Listener in
-        # ``alpine-components.js`` ruft damit ``setCustomValidity`` auf.
+        # ``src/static/js/date-input-i18n.js`` (vor #911: ``alpine-components.js``)
+        # ruft damit ``setCustomValidity`` auf.
         max_str = date_format(max_workitem_date(), "DATE_FORMAT")
         too_late = _("Das Datum darf höchstens am %(max)s liegen.") % {"max": max_str}
         too_early = _("Das Datum darf nicht in der Vergangenheit liegen.")

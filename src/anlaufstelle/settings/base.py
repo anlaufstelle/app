@@ -318,9 +318,10 @@ CONTENT_SECURITY_POLICY = {
         # script-src ist seit v0.10.2 strikt: kein 'unsafe-eval', kein
         # 'unsafe-inline'. Die @alpinejs/csp-Migration (Refs #672, PR #690)
         # ist abgeschlossen — alle Alpine.js-Komponenten sind als
-        # Alpine.data()-Registrierungen in src/static/js/alpine-components.js
-        # gebündelt, Templates nutzen ausschließlich Komponenten-Namen wie
-        # `x-data="globalSearch"` (kein Inline-Object).
+        # Alpine.data()-Registrierungen unter src/static/js/alpine/ gebündelt
+        # (Refs #911: featureweise gesplittet in base-layout/widgets/auth/
+        # forms/dashboards), Templates nutzen ausschließlich Komponenten-
+        # Namen wie `x-data="globalSearch"` (kein Inline-Object).
         #
         # Ausnahme: die Django-Admin-UI (`/admin-mgmt/`) lädt das gevendor'te
         # django-unfold mit klassischem Alpine.js-Build, das `unsafe-eval`
