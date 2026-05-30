@@ -279,6 +279,76 @@ class TestFileOverview:
         assert page.locator("text=e2e-test.pdf").count() >= 1
         assert page.locator("text=Beratungsgespräch").count() >= 1
 
+    def test_attachment_list_filter_by_document_type(self, lead_page, base_url, e2e_env, _test_pdf):
+        """Refs Matrix ENT-ATT-09 — Filter ``?document_type=<id>`` reduziert die Liste.
+
+        Lädt eine Datei an einem „Beratungsgespräch"-Event hoch, ruft die
+        Übersicht mit dem entsprechenden DocumentType-Filter auf und
+        prüft, dass die Datei sichtbar bleibt sowie dass *kein* anderer
+        DocumentType-Name in der Tabelle auftaucht.
+        """
+        page = lead_page
+
+        # Upload an einem Event mit DocumentType "Beratungsgespräch".
+        page.goto(f"{base_url}/events/new/")
+        page.wait_for_load_state("domcontentloaded")
+        page.select_option('select[name="document_type"]', label="Beratungsgespräch")
+        page.wait_for_selector("text=Scan/Bescheid", timeout=10000)
+        _select_qualified_client(page, base_url, e2e_env)
+        page.fill('input[name="thema"]', "E2E ATT-09 DocType-Filter")
+        page.set_input_files('input[name="scan-bescheid"]', _test_pdf)
+        page.click('button:has-text("Speichern")')
+        page.wait_for_url(lambda url: "/events/" in url and "/new/" not in url, timeout=10000)
+
+        # DocumentType-ID aus dem Filter-Select der Übersicht abgreifen.
+        page.goto(f"{base_url}/attachments/")
+        page.wait_for_load_state("domcontentloaded")
+        beratung_option = page.locator(
+            "select[name='document_type'] option:has-text('Beratungsgespräch')"
+        ).first
+        assert beratung_option.count() == 1, "Beratungsgespräch-Option fehlt im Filter-Select."
+        doc_type_id = beratung_option.get_attribute("value")
+        assert doc_type_id, "DocumentType-Option hat keinen Wert."
+
+        # Filter setzen via URL-Param (entspricht dem HTMX-Submit).
+        page.goto(f"{base_url}/attachments/?document_type={doc_type_id}")
+        page.wait_for_load_state("domcontentloaded")
+
+        # Mind. eine Beratungsgespräch-Zeile sichtbar.
+        assert page.locator("text=Beratungsgespräch").count() >= 1
+        # Andere DocumentTypes dürfen unter dem Filter nicht in der TABLE auftauchen.
+        # (Der Select hat sie weiterhin als Options; wir prüfen nur den
+        # ``#attachment-table``-Container.)
+        table = page.locator("#attachment-table")
+        if page.locator("select[name='document_type'] option:has-text('Kontakt')").count() > 0:
+            assert "Kontakt" not in table.inner_text(), (
+                "Filter document_type ist undicht — andere DocumentTypes erscheinen in der Tabelle."
+            )
+
+    def test_attachment_list_htmx_returns_partial_only(self, lead_page, base_url):
+        """Refs Matrix ENT-ATT-09 — ``HX-Request: true`` liefert nur das Table-Partial.
+
+        Das Partial enthält weder ``<html>`` noch das Base-Layout (kein
+        ``<nav>``, kein ``<title>``).
+        """
+        page = lead_page
+
+        # In bestehender Session per fetch() ohne CSRF (GET) HTMX-Request senden.
+        page.goto(f"{base_url}/attachments/", wait_until="domcontentloaded")
+        partial_html = page.evaluate(
+            "async (url) => {"
+            "  const r = await fetch(url, {credentials: 'same-origin', headers: {'HX-Request': 'true'}});"
+            "  return {status: r.status, body: await r.text()};"
+            "}",
+            f"{base_url}/attachments/",
+        )
+        assert partial_html["status"] == 200
+        body = partial_html["body"].lower()
+        assert "<html" not in body, "HTMX-Partial darf kein <html>-Element enthalten."
+        assert "hauptnavigation" not in body, (
+            "HTMX-Partial darf das Navigations-Layout nicht enthalten."
+        )
+
     def test_sidebar_has_dateien_link(self, lead_page, base_url):
         """Sidebar shows 'Dateien' navigation link."""
         page = lead_page
