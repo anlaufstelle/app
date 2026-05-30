@@ -119,11 +119,11 @@ def aggregate_checks() -> list[ComplianceCheck]:
                 ComplianceCheck(
                     key=f"_internal_{name}",
                     label=f"Interner Fehler: {name}",
-                    category="System",
+                    category="System",  # pragma: no mutate
                     status=ComplianceStatus.UNKNOWN,
-                    message="Check konnte nicht ausgefuehrt werden.",
+                    message="Check konnte nicht ausgefuehrt werden.",  # pragma: no mutate
                     detail=str(exc),
-                    action_hint="Server-Log einsehen.",
+                    action_hint="Server-Log einsehen.",  # pragma: no mutate
                 )
             )
     return checks
@@ -158,12 +158,12 @@ def _db_role_checks() -> list[ComplianceCheck]:
         out.append(
             ComplianceCheck(
                 key="db_role_admin_missing",
-                label="Admin-DB-Rolle",
-                category="Datenbank",
+                label="Admin-DB-Rolle",  # pragma: no mutate
+                category="Datenbank",  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
-                message="Admin-/Maintenance-Rolle nicht konfiguriert.",
+                message="Admin-/Maintenance-Rolle nicht konfiguriert.",  # pragma: no mutate
                 detail="; ".join(config_errors),
-                action_hint="POSTGRES_ADMIN_USER + POSTGRES_ADMIN_PASSWORD in .env setzen (siehe #902).",
+                action_hint="POSTGRES_ADMIN_USER + POSTGRES_ADMIN_PASSWORD in .env setzen (siehe #902).",  # pragma: no mutate  # noqa: E501
             )
         )
 
@@ -178,28 +178,28 @@ def _db_role_attribute_check(role_check, attr: str, key: str, label: str) -> Com
         return ComplianceCheck(
             key=key,
             label=label,
-            category="Datenbank",
+            category="Datenbank",  # pragma: no mutate
             status=ComplianceStatus.UNKNOWN,
             message=f"Rolle '{role_check.role}' nicht in pg_roles gefunden.",
-            action_hint="DB-Rollen-Setup pruefen — siehe deploy/postgres-init/01-app-role.sh.",
+            action_hint="DB-Rollen-Setup pruefen — siehe deploy/postgres-init/01-app-role.sh.",  # pragma: no mutate
         )
     if actual == expected:
         return ComplianceCheck(
             key=key,
             label=label,
-            category="Datenbank",
+            category="Datenbank",  # pragma: no mutate
             status=ComplianceStatus.OK,
-            message="Korrekt konfiguriert.",
+            message="Korrekt konfiguriert.",  # pragma: no mutate
             detail=f"{role_check.role}: {attr}={actual}",
         )
     return ComplianceCheck(
         key=key,
         label=label,
-        category="Datenbank",
+        category="Datenbank",  # pragma: no mutate
         status=ComplianceStatus.CRITICAL,
         message=f"Rolle '{role_check.role}' hat falsches Attributprofil.",
         detail=f"{attr}={actual} (erwartet: {expected})",
-        action_hint="manage.py check_db_roles + Rollen-Init-Script pruefen (Refs #902).",
+        action_hint="manage.py check_db_roles + Rollen-Init-Script pruefen (Refs #902).",  # pragma: no mutate
     )
 
 
@@ -208,29 +208,29 @@ def _db_role_admin_check(role_check) -> ComplianceCheck:
     if role_check.actual_super is None:
         return ComplianceCheck(
             key="db_role_admin",
-            label="Admin-DB-Rolle",
-            category="Datenbank",
+            label="Admin-DB-Rolle",  # pragma: no mutate
+            category="Datenbank",  # pragma: no mutate
             status=ComplianceStatus.UNKNOWN,
             message=f"Admin-Rolle '{role_check.role}' nicht in pg_roles gefunden.",
-            action_hint="DB-Rollen-Setup pruefen — siehe deploy/postgres-init/01-app-role.sh.",
+            action_hint="DB-Rollen-Setup pruefen — siehe deploy/postgres-init/01-app-role.sh.",  # pragma: no mutate
         )
     if role_check.ok:
         return ComplianceCheck(
             key="db_role_admin",
-            label="Admin-DB-Rolle",
-            category="Datenbank",
+            label="Admin-DB-Rolle",  # pragma: no mutate
+            category="Datenbank",  # pragma: no mutate
             status=ComplianceStatus.OK,
-            message="Admin-Rolle korrekt (NOSUPERUSER, BYPASSRLS).",
+            message="Admin-Rolle korrekt (NOSUPERUSER, BYPASSRLS).",  # pragma: no mutate
             detail=f"{role_check.role}: rolsuper={role_check.actual_super}, rolbypassrls={role_check.actual_bypassrls}",
         )
     return ComplianceCheck(
         key="db_role_admin",
-        label="Admin-DB-Rolle",
-        category="Datenbank",
+        label="Admin-DB-Rolle",  # pragma: no mutate
+        category="Datenbank",  # pragma: no mutate
         status=ComplianceStatus.CRITICAL,
-        message="Admin-Rolle hat falsches Attributprofil.",
+        message="Admin-Rolle hat falsches Attributprofil.",  # pragma: no mutate
         detail="; ".join(role_check.problems()),
-        action_hint="deploy/postgres-init/01-app-role.sh pruefen (Refs #902).",
+        action_hint="deploy/postgres-init/01-app-role.sh pruefen (Refs #902).",  # pragma: no mutate
     )
 
 
@@ -241,11 +241,11 @@ def _backup_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="backup_age",
-                label="Letztes Backup",
-                category="Backup",
+                label="Letztes Backup",  # pragma: no mutate
+                category="Backup",  # pragma: no mutate
                 status=ComplianceStatus.UNKNOWN,
-                message="Kein Backup gefunden oder BACKUP_DIR nicht konfiguriert.",
-                action_hint="settings.BACKUP_DIR pruefen, Cron-Job 'backup.sh' aktivieren.",
+                message="Kein Backup gefunden oder BACKUP_DIR nicht konfiguriert.",  # pragma: no mutate
+                action_hint="settings.BACKUP_DIR pruefen, Cron-Job 'backup.sh' aktivieren.",  # pragma: no mutate
             )
         ]
     age_hours = info["age_hours"]
@@ -254,8 +254,8 @@ def _backup_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="backup_age",
-                label="Letztes Backup",
-                category="Backup",
+                label="Letztes Backup",  # pragma: no mutate
+                category="Backup",  # pragma: no mutate
                 status=ComplianceStatus.OK,
                 message=f"Backup juenger als 24h ({age_hours:.0f}h).",
                 detail=detail,
@@ -265,23 +265,23 @@ def _backup_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="backup_age",
-                label="Letztes Backup",
-                category="Backup",
+                label="Letztes Backup",  # pragma: no mutate
+                category="Backup",  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
                 message=f"Backup ist {age_hours:.0f}h alt (Schwelle: 72h).",
                 detail=detail,
-                action_hint="Backup-Cron pruefen, evtl. manuell ausloesen.",
+                action_hint="Backup-Cron pruefen, evtl. manuell ausloesen.",  # pragma: no mutate
             )
         ]
     return [
         ComplianceCheck(
             key="backup_age",
-            label="Letztes Backup",
-            category="Backup",
+            label="Letztes Backup",  # pragma: no mutate
+            category="Backup",  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
             message=f"Backup ist {age_hours:.0f}h alt — Cron ausgefallen?",
             detail=detail,
-            action_hint="Backup-Cron + Disk-Speicher pruefen, Restore-Test nachholen.",
+            action_hint="Backup-Cron + Disk-Speicher pruefen, Restore-Test nachholen.",  # pragma: no mutate
         )
     ]
 
@@ -298,11 +298,11 @@ def _restore_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="restore_verified",
-                label="Restore-Test",
-                category="Backup",
+                label="Restore-Test",  # pragma: no mutate
+                category="Backup",  # pragma: no mutate
                 status=ComplianceStatus.UNKNOWN,
-                message="Noch nie ein Restore-Test dokumentiert.",
-                action_hint="manage.py mark_restore_verified --note '...' nach jedem Test ausfuehren.",
+                message="Noch nie ein Restore-Test dokumentiert.",  # pragma: no mutate
+                action_hint="manage.py mark_restore_verified --note '...' nach jedem Test ausfuehren.",  # pragma: no mutate # noqa: E501
             )
         ]
     now = datetime.now(tz=UTC)
@@ -312,8 +312,8 @@ def _restore_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="restore_verified",
-                label="Restore-Test",
-                category="Backup",
+                label="Restore-Test",  # pragma: no mutate
+                category="Backup",  # pragma: no mutate
                 status=ComplianceStatus.OK,
                 message=f"Letzter Test vor {age_days} Tagen.",
                 detail=detail,
@@ -323,23 +323,23 @@ def _restore_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="restore_verified",
-                label="Restore-Test",
-                category="Backup",
+                label="Restore-Test",  # pragma: no mutate
+                category="Backup",  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
                 message=f"Letzter Test vor {age_days} Tagen — Auffrischung empfohlen.",
                 detail=detail,
-                action_hint="Restore gegen frische DB testen, dann mark_restore_verified ausfuehren.",
+                action_hint="Restore gegen frische DB testen, dann mark_restore_verified ausfuehren.",  # pragma: no mutate # noqa: E501
             )
         ]
     return [
         ComplianceCheck(
             key="restore_verified",
-            label="Restore-Test",
-            category="Backup",
+            label="Restore-Test",  # pragma: no mutate
+            category="Backup",  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
             message=f"Letzter Test vor {age_days} Tagen — DSGVO Art. 32 verletzt.",
             detail=detail,
-            action_hint="Restore-Test sofort nachholen und dokumentieren.",
+            action_hint="Restore-Test sofort nachholen und dokumentieren.",  # pragma: no mutate
         )
     ]
 
@@ -349,8 +349,8 @@ def _clamav_checks() -> list[ComplianceCheck]:
     ping_ok = virus_scan_service.ping()
     reachability = ComplianceCheck(
         key="clamav_reachable",
-        label="ClamAV erreichbar",
-        category="Virus-Scan",
+        label="ClamAV erreichbar",  # pragma: no mutate
+        category="Virus-Scan",  # pragma: no mutate
         status=ComplianceStatus.OK if ping_ok else ComplianceStatus.CRITICAL,
         message="Daemon antwortet." if ping_ok else "Daemon nicht erreichbar oder deaktiviert.",
         action_hint=None if ping_ok else "docker compose ps clamav; CLAMAV_ENABLED in .env pruefen.",
@@ -359,10 +359,10 @@ def _clamav_checks() -> list[ComplianceCheck]:
     if sig is None:
         signature = ComplianceCheck(
             key="clamav_signature",
-            label="ClamAV-Signatur",
-            category="Virus-Scan",
+            label="ClamAV-Signatur",  # pragma: no mutate
+            category="Virus-Scan",  # pragma: no mutate
             status=ComplianceStatus.UNKNOWN,
-            message="Signatur-Daten nicht abrufbar.",
+            message="Signatur-Daten nicht abrufbar.",  # pragma: no mutate
             action_hint=None if not ping_ok else "ClamAV-Container neu starten, dann erneut pruefen.",
         )
     else:
@@ -371,17 +371,17 @@ def _clamav_checks() -> list[ComplianceCheck]:
         if age is None:
             signature = ComplianceCheck(
                 key="clamav_signature",
-                label="ClamAV-Signatur",
-                category="Virus-Scan",
+                label="ClamAV-Signatur",  # pragma: no mutate
+                category="Virus-Scan",  # pragma: no mutate
                 status=ComplianceStatus.UNKNOWN,
-                message="Signatur-Datum nicht ermittelbar.",
+                message="Signatur-Datum nicht ermittelbar.",  # pragma: no mutate
                 detail=f"Version: {version}",
             )
         elif age <= 7:
             signature = ComplianceCheck(
                 key="clamav_signature",
-                label="ClamAV-Signatur",
-                category="Virus-Scan",
+                label="ClamAV-Signatur",  # pragma: no mutate
+                category="Virus-Scan",  # pragma: no mutate
                 status=ComplianceStatus.OK,
                 message=f"Signatur ist {age} Tag(e) alt.",
                 detail=f"Version: {version}",
@@ -389,12 +389,12 @@ def _clamav_checks() -> list[ComplianceCheck]:
         else:
             signature = ComplianceCheck(
                 key="clamav_signature",
-                label="ClamAV-Signatur",
-                category="Virus-Scan",
+                label="ClamAV-Signatur",  # pragma: no mutate
+                category="Virus-Scan",  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
                 message=f"Signatur ist {age} Tage alt (Schwelle: 7).",
                 detail=f"Version: {version}",
-                action_hint="freshclam-Cron im ClamAV-Container pruefen.",
+                action_hint="freshclam-Cron im ClamAV-Container pruefen.",  # pragma: no mutate
             )
     return [reachability, signature]
 
@@ -411,11 +411,11 @@ def _retention_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="retention_last_run",
-                label="Retention-Lauf",
-                category="Retention",
+                label="Retention-Lauf",  # pragma: no mutate
+                category="Retention",  # pragma: no mutate
                 status=ComplianceStatus.UNKNOWN,
-                message="Noch kein RETENTION_RUN_COMPLETED-Eintrag — Cron lief vielleicht nie.",
-                action_hint="enforce_retention-Cron pruefen (Ops-Runbook §6).",
+                message="Noch kein RETENTION_RUN_COMPLETED-Eintrag — Cron lief vielleicht nie.",  # pragma: no mutate
+                action_hint="enforce_retention-Cron pruefen (Ops-Runbook §6).",  # pragma: no mutate
             )
         ]
     now = datetime.now(tz=UTC)
@@ -436,8 +436,8 @@ def _retention_checks() -> list[ComplianceCheck]:
     return [
         ComplianceCheck(
             key="retention_last_run",
-            label="Retention-Lauf",
-            category="Retention",
+            label="Retention-Lauf",  # pragma: no mutate
+            category="Retention",  # pragma: no mutate
             status=status,
             message=message,
             detail=detail,
@@ -456,10 +456,10 @@ def _mfa_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="mfa_privileged_quote",
-                label="MFA-Quote (privilegierte Rollen)",
-                category="MFA",
+                label="MFA-Quote (privilegierte Rollen)",  # pragma: no mutate
+                category="MFA",  # pragma: no mutate
                 status=ComplianceStatus.UNKNOWN,
-                message="Keine privilegierten User vorhanden.",
+                message="Keine privilegierten User vorhanden.",  # pragma: no mutate
             )
         ]
     privileged_with_mfa = (
@@ -485,8 +485,8 @@ def _mfa_checks() -> list[ComplianceCheck]:
     return [
         ComplianceCheck(
             key="mfa_privileged_quote",
-            label="MFA-Quote (privilegierte Rollen)",
-            category="MFA",
+            label="MFA-Quote (privilegierte Rollen)",  # pragma: no mutate
+            category="MFA",  # pragma: no mutate
             status=status,
             message=message,
             detail=detail,
@@ -502,10 +502,10 @@ def _migration_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="migrations_pending",
-                label="Migrationen",
-                category="System",
+                label="Migrationen",  # pragma: no mutate
+                category="System",  # pragma: no mutate
                 status=ComplianceStatus.OK,
-                message="Alle Migrationen angewendet.",
+                message="Alle Migrationen angewendet.",  # pragma: no mutate
             )
         ]
     listing = ", ".join(f"{app}.{name}" for app, name in pending[:5])
@@ -514,12 +514,12 @@ def _migration_checks() -> list[ComplianceCheck]:
     return [
         ComplianceCheck(
             key="migrations_pending",
-            label="Migrationen",
-            category="System",
+            label="Migrationen",  # pragma: no mutate
+            category="System",  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
             message=f"{len(pending)} ausstehende Migration(en).",
             detail=listing,
-            action_hint="docker compose exec web python manage.py migrate ausfuehren.",
+            action_hint="docker compose exec web python manage.py migrate ausfuehren.",  # pragma: no mutate
         )
     ]
 
@@ -531,8 +531,8 @@ def _version_checks() -> list[ComplianceCheck]:
     return [
         ComplianceCheck(
             key="versions",
-            label="Versionen",
-            category="System",
+            label="Versionen",  # pragma: no mutate
+            category="System",  # pragma: no mutate
             status=ComplianceStatus.OK,
             message=message,
         )
@@ -547,10 +547,10 @@ def _audit_event_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="critical_audit_events_24h",
-                label="Kritische Audit-Events (24h)",
-                category="Audit",
+                label="Kritische Audit-Events (24h)",  # pragma: no mutate
+                category="Audit",  # pragma: no mutate
                 status=ComplianceStatus.OK,
-                message="Keine kritischen Events in den letzten 24h.",
+                message="Keine kritischen Events in den letzten 24h.",  # pragma: no mutate
                 detail=f"Gemonitorte Aktionen: {', '.join(a.value for a in _CRITICAL_AUDIT_ACTIONS)}",
             )
         ]
@@ -558,26 +558,26 @@ def _audit_event_checks() -> list[ComplianceCheck]:
         return [
             ComplianceCheck(
                 key="critical_audit_events_24h",
-                label="Kritische Audit-Events (24h)",
-                category="Audit",
+                label="Kritische Audit-Events (24h)",  # pragma: no mutate
+                category="Audit",  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
                 message=f"{count} kritische Event(s) in 24h.",
                 detail=(
                     "Im System-Audit-Log (/system/audit/) auf "
                     "SECURITY_VIOLATION / MFA_FAILED / USER_DEACTIVATED filtern."
                 ),
-                action_hint="Pro Eintrag den Kontext pruefen, ggf. Issue mit Label security eroeffnen.",
+                action_hint="Pro Eintrag den Kontext pruefen, ggf. Issue mit Label security eroeffnen.",  # pragma: no mutate  # noqa: E501
             )
         ]
     return [
         ComplianceCheck(
             key="critical_audit_events_24h",
-            label="Kritische Audit-Events (24h)",
-            category="Audit",
+            label="Kritische Audit-Events (24h)",  # pragma: no mutate
+            category="Audit",  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
             message=f"{count} kritische Event(s) in 24h — moeglicher Vorfall.",
             detail="Im System-Audit-Log dringend pruefen.",
-            action_hint="Vorfall-Triage starten, ggf. DSGVO Art. 33 Meldung an Aufsichtsbehoerde.",
+            action_hint="Vorfall-Triage starten, ggf. DSGVO Art. 33 Meldung an Aufsichtsbehoerde.",  # pragma: no mutate
         )
     ]
 
