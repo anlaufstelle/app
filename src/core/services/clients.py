@@ -12,6 +12,7 @@ from core.models.recent_client_visit import RecentClientVisit
 from core.models.workitem import DeletionRequest
 from core.services._db_admin import bypass_replication_triggers
 from core.services.activity import log_activity
+from core.services.audit import audit_client_event
 from core.services.locking import check_version_conflict
 
 logger = logging.getLogger(__name__)
@@ -108,13 +109,7 @@ def create_client(facility, user, **data):
         target=client,
         summary=f"Person {client.pseudonym} angelegt",
     )
-    AuditLog.objects.create(
-        facility=facility,
-        user=user,
-        action=AuditLog.Action.CLIENT_CREATE,
-        target_type="Client",
-        target_id=str(client.pk),
-    )
+    audit_client_event(client, user, AuditLog.Action.CLIENT_CREATE)
     return client
 
 
@@ -122,17 +117,13 @@ def update_client_stage(client, old_stage, new_stage, facility, user):
     """Log a stage change if the contact stage has changed."""
     if old_stage == new_stage:
         return
-    AuditLog.objects.create(
-        facility=facility,
-        user=user,
-        action=AuditLog.Action.STAGE_CHANGE,
-        target_type="Client",
-        target_id=str(client.pk),
-        detail={
-            "old_stage": old_stage,
-            "new_stage": new_stage,
-            "client_pseudonym": client.pseudonym,
-        },
+    audit_client_event(
+        client,
+        user,
+        AuditLog.Action.STAGE_CHANGE,
+        old_stage=old_stage,
+        new_stage=new_stage,
+        client_pseudonym=client.pseudonym,
     )
 
 
@@ -183,13 +174,11 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
         )
 
     if changed_fields:
-        AuditLog.objects.create(
-            facility=client.facility,
-            user=user,
-            action=AuditLog.Action.CLIENT_UPDATE,
-            target_type="Client",
-            target_id=str(client.pk),
-            detail={"changed_fields": changed_fields},
+        audit_client_event(
+            client,
+            user,
+            AuditLog.Action.CLIENT_UPDATE,
+            changed_fields=changed_fields,
         )
 
     log_activity(
@@ -290,17 +279,13 @@ def approve_client_deletion(deletion_request, reviewer):
     deletion_request.reviewed_at = timezone.now()
     deletion_request.save()
 
-    AuditLog.objects.create(
-        facility=client.facility,
-        user=reviewer,
-        action=AuditLog.Action.CLIENT_SOFT_DELETED,
-        target_type="Client",
-        target_id=str(client.pk),
-        detail={
-            "pseudonym": client.pseudonym,
-            "requested_by": deletion_request.requested_by.username,
-            "reason": deletion_request.reason,
-        },
+    audit_client_event(
+        client,
+        reviewer,
+        AuditLog.Action.CLIENT_SOFT_DELETED,
+        pseudonym=client.pseudonym,
+        requested_by=deletion_request.requested_by.username,
+        reason=deletion_request.reason,
     )
     log_activity(
         facility=client.facility,
@@ -329,13 +314,11 @@ def restore_client(client, user):
     if not client.is_deleted:
         raise ValidationError("Person ist nicht im Papierkorb.")
     client.restore()
-    AuditLog.objects.create(
-        facility=client.facility,
-        user=user,
-        action=AuditLog.Action.CLIENT_RESTORED,
-        target_type="Client",
-        target_id=str(client.pk),
-        detail={"pseudonym": client.pseudonym},
+    audit_client_event(
+        client,
+        user,
+        AuditLog.Action.CLIENT_RESTORED,
+        pseudonym=client.pseudonym,
     )
 
 
@@ -362,15 +345,12 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
     count = 0
     for client in qs:
         anonymize_client(client, user=None)
-        AuditLog.objects.create(
-            facility=facility,
-            action=AuditLog.Action.CLIENT_ANONYMIZED,
-            target_type="Client",
-            target_id=str(client.pk),
-            detail={
-                "trigger": "trash_days_expired",
-                "deleted_at": str(client.deleted_at),
-            },
+        audit_client_event(
+            client,
+            None,
+            AuditLog.Action.CLIENT_ANONYMIZED,
+            trigger="trash_days_expired",
+            deleted_at=str(client.deleted_at),
         )
         count += 1
     return count

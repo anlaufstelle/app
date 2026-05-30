@@ -1080,16 +1080,7 @@ class TestAuditLogCreationAllowlist:
             198: "post_save User — role change detection",
             212: "post_save User — deactivation detection",
         },
-        # --- Migrations-Etappen (#901): werden in S2-S8 entfernt. ---
-        # S3 Client-CRUD-Migration:
-        "core/services/clients.py": {
-            111: "Migration zu audit_client_event geplant (#901 S3)",
-            125: "Migration zu audit_client_event geplant (#901 S3)",
-            186: "Migration zu audit_client_event geplant (#901 S3)",
-            293: "Migration zu audit_client_event geplant (#901 S3)",
-            332: "Migration zu audit_client_event geplant (#901 S3)",
-            365: "Migration zu audit_client_event geplant (#901 S3)",
-        },
+        # --- Migrations-Etappen (#901): werden in S4-S8 entfernt. ---
         # S4 Retention-Migration:
         "core/retention/proposals.py": {
             189: "Migration zu audit_retention_decision geplant (#901 S4)",
