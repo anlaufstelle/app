@@ -79,3 +79,7 @@ certs/
 
 # Screenshots (temporär)
 admin-overview.png
+
+# mutmut working tree (Welle 0/7)
+mutants/
+.mutmut-cache*

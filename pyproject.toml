@@ -92,9 +92,52 @@ omit = [
 # Filesystem-Root-Walk → Crash mit ``/etc/vconsole.conf``-FileNotFoundError).
 # Welle 0 (#923) hatte den String-Wert als regression eingeführt.
 paths_to_mutate = ["src/core/services/", "src/core/forms/"]
-tests_dir = "src/tests/"
-runner = ".venv/bin/python -m pytest -x -m 'not e2e and not slow'"
+# Auch ``tests_dir`` wird in mutmut 3.x als iterable behandelt — String führt
+# zur selben Zeichen-für-Zeichen-Iteration im pytest-Argv. TOML-Liste nötig.
+tests_dir = ["src/tests/"]
+# In mutmut 3.x ist das Feld ``runner`` ein Dead-Letter — es gibt einen
+# eingebauten ``PytestRunner``. Marker- und Flag-Konfiguration läuft über
+# ``pytest_add_cli_args`` (Liste, NICHT String).
+#
+# ``--ignore`` für ``test_architecture_guards_*``: diese Meta-Tests zählen
+# Strings (z.B. ``AuditLog.objects.create()``-Vorkommen) und der mutierte
+# Code multipliziert diese Zähler künstlich — die Guards würden im
+# Mutation-Run reproduzierbar scheitern. Sie laufen weiter in ``make ci``,
+# nur nicht im Mutmut-Sub-Lauf. Genauso ``test_matrix_drift.py`` und
+# ``test_rls.py`` (DB-Rolle-spezifisch, in mutmut-Subprozess fragil).
+pytest_add_cli_args = [
+    "-x",
+    "-m",
+    "not e2e and not slow",
+    # ``--override-ini=addopts=`` neutralisiert das projektweite
+    # ``--reuse-db``; mutmut kopiert ``pyproject.toml`` nach ``mutants/``,
+    # die Test-DB existiert aber im mutants-Lauf nicht und ``--reuse-db``
+    # ohne vorherigen ``--create-db`` führt zu ``DB access not allowed``.
+    "--override-ini=addopts=--create-db",
+    "--ignore=src/tests/test_architecture_guards_models.py",
+    "--ignore=src/tests/test_architecture_guards_services.py",
+    "--ignore=src/tests/test_architecture_guards_views.py",
+    "--ignore=src/tests/test_architecture_guards_templates.py",
+    "--ignore=src/tests/test_architecture_guards_audit.py",
+    "--ignore=src/tests/test_matrix_drift.py",
+]
 backup = false
+# Damit der Mutmut-Runner pytest-django booten kann, müssen Django-Projekt,
+# Tests und der nicht-mutierte Teil von ``core`` ebenfalls nach
+# ``mutants/`` kopiert werden. ``copy_also_copy_files`` läuft nach
+# ``copy_src_dir``, aber ``create_mutants`` überschreibt die mutierten
+# Dateien danach wieder mit den generierten Mutationen — d.h. die
+# Overlap-Files in ``src/core/`` (services/forms) werden korrekt mutiert.
+also_copy = [
+    "src/anlaufstelle/",
+    "src/manage.py",
+    "src/core/",
+    "src/tests/",
+    "src/templates/",
+    "src/locale/",
+    "src/static/",
+    "pyproject.toml",
+]
 
 [tool.coverage.report]
 show_missing = true

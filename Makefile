@@ -136,8 +136,10 @@ verify-matrix-drift:
 # Mutation-Testing für core/services + core/forms (Refs #922 / #923).
 # Konfiguration in pyproject.toml [tool.mutmut].
 # Erwartete Laufzeit: 30-60 Minuten — daher nightly per Cron, nicht PR-Pflicht.
+# scripts/run_mutmut.py umgeht den ``set_start_method``-Konflikt aus
+# mutmut 3.5 (Refs Welle 7 #930).
 mutation:
-	$(PYTHON) -m mutmut run
+	$(PYTHON) scripts/run_mutmut.py run
 
 # Ergebnisse des letzten Mutation-Runs anzeigen (textuell, nicht-interaktiv).
 mutation-report:
