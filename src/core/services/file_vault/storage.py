@@ -1,7 +1,14 @@
-"""Service for encrypted file storage."""
+"""Hot-Path-Storage fuer encrypted File-Vault-Attachments.
+
+Enthaelt die produktiv aufgerufenen Funktionen rund um Upload, Replace,
+Soft-Delete und Read-Pfade. Validation-Policy haengt an
+:mod:`core.services.file_vault.policy`; physischer Cleanup (Orphans,
+Event-Loeschung) liegt in :mod:`core.services.file_vault.cleanup`.
+"""
+
+from __future__ import annotations
 
 import logging
-import time
 import uuid
 from pathlib import Path
 
@@ -9,17 +16,11 @@ from django.conf import settings as django_settings
 from django.utils import timezone
 
 from core.models.attachment import EventAttachment
-from core.models.audit import AuditLog  # noqa: F401 — re-exported for legacy callers / tests
 from core.services.encryption import decrypt_file_stream, encrypt_field, encrypt_file, safe_decrypt
-
-# Welle 9 (#944): Validation-Pipeline extrahiert nach ``file_vault_validation``
-# — diese Funktionen produzieren wegen langsamer pytest-Suite (15-30 s pro
-# Encryption-Test) viele Mutmut-Timeouts. Separate Datei ermöglicht
-# ``do_not_mutate`` ohne den Hot-Path zu blockieren.
-from core.services.file_vault_validation import (
-    _enforce_allowed_file_types,
-    _enforce_magic_bytes,
-    _run_virus_scan,
+from core.services.file_vault.policy import (
+    enforce_allowed_file_types,
+    enforce_magic_bytes,
+    run_virus_scan,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,44 +29,6 @@ logger = logging.getLogger(__name__)
 def _facility_dir(facility):
     """Return the storage directory for a facility."""
     return Path(django_settings.MEDIA_ROOT) / str(facility.pk)
-
-
-def cleanup_orphan_storage_files(min_age_seconds: int = 3600):
-    """Loesche ``.enc``-Dateien ohne ``EventAttachment``-Record.
-
-    Auch nach dem Direct-Cleanup in :func:`store_encrypted_file` bleibt
-    ein Restrisiko: schlaegt eine spaetere Operation in der umgebenden
-    ``transaction.atomic``-Transaktion fehl (z. B. ``EventHistory``-Save),
-    rollt der DB-Record zurueck — die bereits geschriebene ``.enc``-Datei
-    bleibt jedoch ohne Referenz liegen (#662 FND-03).
-
-    Dieser Helper findet solche Orphans, indem er alle ``.enc``-Dateien
-    im Media-Root mit den aktuell registrierten ``storage_filename``-
-    Werten der DB abgleicht. ``min_age_seconds`` schuetzt vor Race
-    Conditions: eine Datei, die gerade frisch geschrieben wird, hat
-    eventuell noch keinen DB-Eintrag (Default 1h ist konservativ).
-
-    Vorgesehen fuer einen periodischen Management-Command/Cron, nicht
-    fuer den Hot-Path. Returns: Anzahl der geloeschten Dateien.
-    """
-    media_root = Path(django_settings.MEDIA_ROOT)
-    if not media_root.exists():
-        return 0
-    cutoff = time.time() - min_age_seconds
-    known = set(EventAttachment.objects.values_list("storage_filename", flat=True))
-    deleted = 0
-    for enc_file in media_root.rglob("*.enc"):
-        try:
-            if enc_file.name in known:
-                continue
-            if enc_file.stat().st_mtime >= cutoff:
-                continue
-            enc_file.unlink()
-            deleted += 1
-            logger.info("cleanup_orphan_storage_files removed orphan: %s", enc_file)
-        except OSError as exc:
-            logger.warning("cleanup_orphan_storage_files: %s -> %s", enc_file, exc)
-    return deleted
 
 
 def store_encrypted_file(
@@ -100,9 +63,9 @@ def store_encrypted_file(
     Disk file stays until the event itself is deleted or anonymized
     (Refs #587/622 — Versionshistorie + Stufe-B Multi-Entry).
     """
-    _enforce_allowed_file_types(facility, uploaded_file, event, user)
-    _run_virus_scan(facility, uploaded_file, event, user)
-    _enforce_magic_bytes(facility, uploaded_file, event, user)
+    enforce_allowed_file_types(facility, uploaded_file, event, user)
+    run_virus_scan(facility, uploaded_file, event, user)
+    enforce_magic_bytes(facility, uploaded_file, event, user)
 
     storage_name = f"{uuid.uuid4()}.enc"
     output_path = _facility_dir(facility) / storage_name
@@ -199,10 +162,3 @@ def delete_attachment_file(attachment):
         path.unlink(missing_ok=True)
     except OSError:
         logger.warning("Failed to delete attachment file: %s", path)
-
-
-def delete_event_attachments(event):
-    """Delete all attachments for an event (files + DB records)."""
-    for attachment in event.attachments.all():
-        delete_attachment_file(attachment)
-    event.attachments.all().delete()

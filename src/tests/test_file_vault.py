@@ -557,7 +557,7 @@ class TestVirusScanIntegration:
 
         with (
             patch(
-                "core.services.file_vault_validation.scan_file",
+                "core.services.file_vault.policy.scan_file",
                 return_value=ScanResult(clean=False, infected=True, signature="Eicar-Test-Signature"),
             ),
             pytest.raises(ValidationError) as exc_info,
@@ -574,7 +574,7 @@ class TestVirusScanIntegration:
 
         with (
             patch(
-                "core.services.file_vault_validation.scan_file",
+                "core.services.file_vault.policy.scan_file",
                 return_value=ScanResult(clean=False, infected=True, signature="Eicar-Test-Signature"),
             ),
             pytest.raises(ValidationError),
@@ -594,7 +594,7 @@ class TestVirusScanIntegration:
 
         with (
             patch(
-                "core.services.file_vault_validation.scan_file",
+                "core.services.file_vault.policy.scan_file",
                 side_effect=VirusScannerUnavailableError("connection refused"),
             ),
             pytest.raises(ValidationError),
@@ -610,7 +610,7 @@ class TestVirusScanIntegration:
         uploaded = SimpleUploadedFile("ok.pdf", PDF_HEADER, content_type="application/pdf")
 
         with patch(
-            "core.services.file_vault_validation.scan_file",
+            "core.services.file_vault.policy.scan_file",
             return_value=ScanResult(clean=True, infected=False),
         ):
             attachment = store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
