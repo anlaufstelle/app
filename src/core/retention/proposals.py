@@ -18,6 +18,7 @@ from core.constants import RETENTION_URGENCY_RED_DAYS, RETENTION_URGENCY_YELLOW_
 from core.models import AuditLog, Event, LegalHold, RetentionProposal
 from core.retention.legal_holds import get_active_hold_target_ids
 from core.retention.strategies import iter_strategies
+from core.services.audit import audit_retention_decision
 
 # Category labels for the dashboard grouping. Lives next to the service
 # (not the view) because the context-builder needs them — Refs FND-A003.
@@ -186,17 +187,15 @@ def approve_proposal(proposal, user):
     """Approve a retention proposal for deletion on next enforce_retention run."""
     proposal.status = RetentionProposal.Status.APPROVED
     proposal.save(update_fields=["status"])
-    AuditLog.objects.create(
-        facility=proposal.facility,
-        user=user,
-        action=AuditLog.Action.DELETE,
+    audit_retention_decision(
+        proposal.facility,
         target_type=proposal.target_type,
-        target_id=str(proposal.target_id),
-        detail={
-            "category": "retention_proposal_approved",
-            "retention_category": proposal.retention_category,
-            "deletion_due_at": str(proposal.deletion_due_at),
-        },
+        target_id=proposal.target_id,
+        action=AuditLog.Action.DELETE,
+        category="retention_proposal_approved",
+        user=user,
+        retention_category=proposal.retention_category,
+        deletion_due_at=str(proposal.deletion_due_at),
     )
     return proposal
 
@@ -209,19 +208,17 @@ def defer_proposal(proposal, user, days=30):
     proposal.deferred_until = deferred_until
     proposal.defer_count = (proposal.defer_count or 0) + 1
     proposal.save(update_fields=["status", "deferred_until", "defer_count"])
-    AuditLog.objects.create(
-        facility=proposal.facility,
-        user=user,
-        action=AuditLog.Action.DELETE,
+    audit_retention_decision(
+        proposal.facility,
         target_type=proposal.target_type,
-        target_id=str(proposal.target_id),
-        detail={
-            "category": "retention_proposal_deferred",
-            "retention_category": proposal.retention_category,
-            "deferred_until": str(deferred_until),
-            "defer_count": proposal.defer_count,
-            "days": days,
-        },
+        target_id=proposal.target_id,
+        action=AuditLog.Action.DELETE,
+        category="retention_proposal_deferred",
+        user=user,
+        retention_category=proposal.retention_category,
+        deferred_until=str(deferred_until),
+        defer_count=proposal.defer_count,
+        days=days,
     )
     return proposal
 
@@ -231,16 +228,14 @@ def reject_proposal(proposal, user):
     """Reject a retention proposal — marks it as REJECTED, no deletion will occur."""
     proposal.status = RetentionProposal.Status.REJECTED
     proposal.save(update_fields=["status"])
-    AuditLog.objects.create(
-        facility=proposal.facility,
-        user=user,
-        action=AuditLog.Action.DELETE,
+    audit_retention_decision(
+        proposal.facility,
         target_type=proposal.target_type,
-        target_id=str(proposal.target_id),
-        detail={
-            "category": "retention_proposal_rejected",
-            "retention_category": proposal.retention_category,
-        },
+        target_id=proposal.target_id,
+        action=AuditLog.Action.DELETE,
+        category="retention_proposal_rejected",
+        user=user,
+        retention_category=proposal.retention_category,
     )
     return proposal
 
@@ -317,32 +312,28 @@ def reactivate_deferred_proposals(facility):
         if auto_approve and proposal.defer_count >= max_defer_count:
             proposal.status = RetentionProposal.Status.APPROVED
             proposal.save(update_fields=["status"])
-            AuditLog.objects.create(
-                facility=proposal.facility,
-                action=AuditLog.Action.DELETE,
+            audit_retention_decision(
+                proposal.facility,
                 target_type=proposal.target_type,
-                target_id=str(proposal.target_id),
-                detail={
-                    "category": "retention_proposal_auto_approved",
-                    "retention_category": proposal.retention_category,
-                    "defer_count": proposal.defer_count,
-                    "max_defer_count": max_defer_count,
-                },
+                target_id=proposal.target_id,
+                action=AuditLog.Action.DELETE,
+                category="retention_proposal_auto_approved",
+                retention_category=proposal.retention_category,
+                defer_count=proposal.defer_count,
+                max_defer_count=max_defer_count,
             )
             auto_approved += 1
         else:
             proposal.status = RetentionProposal.Status.PENDING
             proposal.save(update_fields=["status"])
-            AuditLog.objects.create(
-                facility=proposal.facility,
-                action=AuditLog.Action.DELETE,
+            audit_retention_decision(
+                proposal.facility,
                 target_type=proposal.target_type,
-                target_id=str(proposal.target_id),
-                detail={
-                    "category": "retention_proposal_reactivated",
-                    "retention_category": proposal.retention_category,
-                    "defer_count": proposal.defer_count,
-                },
+                target_id=proposal.target_id,
+                action=AuditLog.Action.DELETE,
+                category="retention_proposal_reactivated",
+                retention_category=proposal.retention_category,
+                defer_count=proposal.defer_count,
             )
             reactivated += 1
 

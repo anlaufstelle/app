@@ -17,6 +17,7 @@ from datetime import timedelta
 from core.models import Activity, AuditLog, Case, Client, DocumentType, Event, EventHistory, RetentionProposal
 from core.retention.legal_holds import get_active_hold_target_ids
 from core.retention.strategies import iter_strategies
+from core.services.audit import audit_retention_decision
 from core.services.events import _snapshot_field_metadata, build_redacted_delete_history
 from core.services.file_vault import delete_event_attachments
 
@@ -67,19 +68,16 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
         )
     EventHistory.objects.bulk_create(history_entries)
 
-    detail = {
-        "command": "enforce_retention",
-        "category": category,
-        "count": len(deleted_event_ids),
-        "retention_days": retention_days,
-    }
-    if extra_detail:
-        detail.update(extra_detail)
-    AuditLog.objects.create(
-        facility=facility,
-        action=AuditLog.Action.DELETE,
+    extra = dict(extra_detail) if extra_detail else {}
+    audit_retention_decision(
+        facility,
         target_type="Event",
-        detail=detail,
+        action=AuditLog.Action.DELETE,
+        category=category,
+        command="enforce_retention",
+        count=len(deleted_event_ids),
+        retention_days=retention_days,
+        **extra,
     )
     # Cleanup approved proposals for deleted events
     RetentionProposal.objects.filter(
@@ -231,16 +229,14 @@ def enforce_activities(facility, settings_obj, now, dry_run):
     count = qs.count()
     if count and not dry_run:
         qs.delete()
-        AuditLog.objects.create(
-            facility=facility,
-            action=AuditLog.Action.DELETE,
+        audit_retention_decision(
+            facility,
             target_type="Activity",
-            detail={
-                "command": "enforce_retention",
-                "category": "activities",
-                "count": count,
-                "retention_days": settings_obj.retention_activities_days,
-            },
+            action=AuditLog.Action.DELETE,
+            category="activities",
+            command="enforce_retention",
+            count=count,
+            retention_days=settings_obj.retention_activities_days,
         )
     return {"count": count}
 

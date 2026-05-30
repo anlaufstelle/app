@@ -10,6 +10,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.models import AuditLog, LegalHold, RetentionProposal
+from core.services.audit import audit_retention_decision
 
 
 def create_legal_hold(proposal, user, reason, expires_at=None):
@@ -24,18 +25,16 @@ def create_legal_hold(proposal, user, reason, expires_at=None):
     )
     proposal.status = RetentionProposal.Status.HELD
     proposal.save(update_fields=["status"])
-    AuditLog.objects.create(
-        facility=proposal.facility,
-        user=user,
-        action=AuditLog.Action.LEGAL_HOLD,
+    audit_retention_decision(
+        proposal.facility,
         target_type=proposal.target_type,
-        target_id=str(proposal.target_id),
-        detail={
-            "category": "legal_hold_created",
-            "reason": reason,
-            "expires_at": str(expires_at) if expires_at else None,
-            "hold_id": str(hold.pk),
-        },
+        target_id=proposal.target_id,
+        action=AuditLog.Action.LEGAL_HOLD,
+        category="legal_hold_created",
+        user=user,
+        reason=reason,
+        expires_at=str(expires_at) if expires_at else None,
+        hold_id=str(hold.pk),
     )
     return hold
 
@@ -55,17 +54,15 @@ def dismiss_legal_hold(hold, user):
         status=RetentionProposal.Status.HELD,
     ).update(status=RetentionProposal.Status.PENDING)
 
-    AuditLog.objects.create(
-        facility=hold.facility,
-        user=user,
-        action=AuditLog.Action.LEGAL_HOLD,
+    audit_retention_decision(
+        hold.facility,
         target_type=hold.target_type,
-        target_id=str(hold.target_id),
-        detail={
-            "category": "legal_hold_dismissed",
-            "hold_id": str(hold.pk),
-            "reason": hold.reason,
-        },
+        target_id=hold.target_id,
+        action=AuditLog.Action.LEGAL_HOLD,
+        category="legal_hold_dismissed",
+        user=user,
+        hold_id=str(hold.pk),
+        reason=hold.reason,
     )
 
 

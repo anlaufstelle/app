@@ -1080,26 +1080,7 @@ class TestAuditLogCreationAllowlist:
             198: "post_save User — role change detection",
             212: "post_save User — deactivation detection",
         },
-        # --- Migrations-Etappen (#901): werden in S4-S8 entfernt. ---
-        # S4 Retention-Migration:
-        "core/retention/proposals.py": {
-            189: "Migration zu audit_retention_decision geplant (#901 S4)",
-            212: "Migration zu audit_retention_decision geplant (#901 S4)",
-            234: "Migration zu audit_retention_decision geplant (#901 S4)",
-            320: "Migration zu audit_retention_decision geplant (#901 S4)",
-            336: "Migration zu audit_retention_decision geplant (#901 S4)",
-        },
-        "core/retention/legal_holds.py": {
-            27: "Migration zu audit_retention_decision geplant (#901 S4)",
-            58: "Migration zu audit_retention_decision geplant (#901 S4)",
-        },
-        "core/retention/enforcement.py": {
-            78: "Migration zu audit_retention_decision geplant (#901 S4)",
-            234: "Migration zu audit_retention_decision geplant (#901 S4)",
-        },
-        "core/retention/anonymization.py": {
-            37: "Migration zu audit_retention_decision geplant (#901 S4)",
-        },
+        # --- Migrations-Etappen (#901): werden in S5-S8 entfernt. ---
         # S5 Security-Violation-Migration:
         "core/services/file_vault.py": {
             114: "Migration zu audit_security_violation geplant (#901 S5)",

@@ -160,9 +160,9 @@ def audit_retention_decision(
     facility,
     *,
     target_type: str,
-    target_id,
     action: str,
     category: str,
+    target_id=None,
     user=None,
     **detail,
 ):
@@ -173,8 +173,8 @@ def audit_retention_decision(
     Operationen und Anonymisierungs-Runs. ``action`` ist meist
     ``AuditLog.Action.DELETE`` oder ``LEGAL_HOLD``. ``category`` erzwingt
     semantische Differenzierung (z.B. ``retention_approved``,
-    ``legal_hold_created``, ``client_anonymized``). ``user=None`` ist
-    legitim für Cron-/Bulk-Pfade.
+    ``legal_hold_created``, ``client_anonymized``). ``user=None`` und
+    ``target_id=None`` sind legitim für Cron-/Bulk-Pfade.
 
     Refs #901 / FND-002.
     """
@@ -185,7 +185,7 @@ def audit_retention_decision(
         user=user,
         facility=facility,
         target_type=target_type,
-        target_id=str(target_id),
+        target_id=target_id,
         detail=payload,
     )
 

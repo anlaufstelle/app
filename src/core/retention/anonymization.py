@@ -9,6 +9,7 @@ from django.db.models import Count, Q
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
 from core.models import AuditLog, Client
+from core.services.audit import audit_retention_decision
 
 
 def anonymize_clients(facility, dry_run):
@@ -34,14 +35,12 @@ def anonymize_clients(facility, dry_run):
     if count and not dry_run:
         for client in candidates.iterator():
             client.anonymize()
-        AuditLog.objects.create(
-            facility=facility,
-            action=AuditLog.Action.DELETE,
+        audit_retention_decision(
+            facility,
             target_type="Client",
-            detail={
-                "command": "enforce_retention",
-                "category": "client_anonymized",
-                "count": count,
-            },
+            action=AuditLog.Action.DELETE,
+            category="client_anonymized",
+            command="enforce_retention",
+            count=count,
         )
     return {"count": count}
