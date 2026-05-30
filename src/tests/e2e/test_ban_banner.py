@@ -21,8 +21,8 @@ pytestmark = pytest.mark.e2e
 
 _SEED_BAN_SHELL = r"""
 from datetime import date
+from django.utils import timezone
 from core.models import Client, DocumentType, Event, Facility, User
-from core.services.crypto import encrypt as enc
 
 facility = Facility.objects.first()
 admin = User.objects.filter(facility=facility, role="facility_admin").first() or User.objects.first()
@@ -37,25 +37,29 @@ ban_dt = DocumentType.objects.filter(facility=facility, system_type="ban", is_ac
 assert ban_dt is not None, "Ban-DocumentType fehlt in der E2E-DB"
 
 ban_payload = {
-    "aktiv": enc("true"),
-    "grund": enc("E2E-Test: temporary ban"),
-    "bis": enc(str(date(2099, 12, 31))),
+    "aktiv": "true",
+    "grund": "E2E-Test: temporary ban",
+    "bis": str(date(2099, 12, 31)),
 }
 
 # Idempotent: aktiven Ban erzeugen oder bestehenden reaktivieren.
+# Event.save() verschluesselt sensitive Felder automatisch ueber den
+# Pre-Save-Hook in core.models.event — direkter Plaintext-Set ist OK.
 event = Event.objects.filter(facility=facility, client=client, document_type=ban_dt, is_deleted=False).first()
 if event is None:
-    event = Event.objects.create(
+    event = Event(
         facility=facility,
         client=client,
         document_type=ban_dt,
         created_by=admin,
+        occurred_at=timezone.now(),
         data_json=ban_payload,
     )
+    event.save()
 else:
     event.data_json = ban_payload
     event.is_deleted = False
-    event.save(update_fields=["data_json", "is_deleted"])
+    event.save()
 
 print(f"BAN_EVENT_PK={event.pk}")
 print(f"BAN_CLIENT_PSEUDONYM={client.pseudonym}")
@@ -63,13 +67,14 @@ print(f"BAN_CLIENT_PSEUDONYM={client.pseudonym}")
 
 _CLEANUP_BAN_SHELL = r"""
 from core.models import Event
-from core.services.crypto import encrypt as enc
 e = Event.objects.filter(pk='{pk}').first()
 if e is not None:
     data = e.data_json or {{}}
-    data['aktiv'] = enc('false')
+    # Plaintext zurücksetzen — Event.save() verschlüsselt erneut über den
+    # Pre-Save-Hook (encrypted Schema bleibt konsistent).
+    data['aktiv'] = 'false'
     e.data_json = data
-    e.save(update_fields=['data_json'])
+    e.save()
 """
 
 
