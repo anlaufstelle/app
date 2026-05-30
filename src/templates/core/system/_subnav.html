@@ -33,4 +33,8 @@
        class="px-3 py-1.5 rounded-md font-medium {% if request.resolver_match.url_name == 'system_legal_hold_list' %}bg-accent text-white{% else %}bg-surface border border-subtle text-ink-soft hover:bg-canvas{% endif %}">
         {% trans "Legal Holds" %}
     </a>
+    <a href="{% url 'core:system_compliance' %}"
+       class="px-3 py-1.5 rounded-md font-medium {% if request.resolver_match.url_name == 'system_compliance' %}bg-accent text-white{% else %}bg-surface border border-subtle text-ink-soft hover:bg-canvas{% endif %}">
+        {% trans "Compliance" %}
+    </a>
 </nav>

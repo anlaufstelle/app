@@ -81,6 +81,7 @@ from core.views.system import (
     SystemAuditLogDetailView,
     SystemAuditLogExportView,
     SystemAuditLogListView,
+    SystemComplianceView,
     SystemDashboardView,
     SystemLegalHoldListView,
     SystemLockoutListView,
@@ -202,6 +203,8 @@ urlpatterns = [
     path("system/vvt/", SystemVVTView.as_view(), name="system_vvt"),
     # Refs #877: Cross-Facility-Legal-Holds.
     path("system/legal-holds/", SystemLegalHoldListView.as_view(), name="system_legal_hold_list"),
+    # Refs #919: Compliance-Dashboard (DB-Rollen, Backup, ClamAV, Retention, MFA, Audit-Events).
+    path("system/compliance/", SystemComplianceView.as_view(), name="system_compliance"),
     # Statistics
     path("statistics/", StatisticsView.as_view(), name="statistics"),
     path("statistics/export/csv/", CSVExportView.as_view(), name="statistics_csv_export"),

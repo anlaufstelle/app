@@ -23,6 +23,7 @@ from core.views.system.audit import (
     SystemAuditLogExportView,
     SystemAuditLogListView,
 )
+from core.views.system.compliance import SystemComplianceView
 from core.views.system.dashboard import SystemDashboardView
 from core.views.system.legal_holds import SystemLegalHoldListView
 from core.views.system.lockouts import SystemLockoutListView, SystemUnlockView
@@ -37,6 +38,7 @@ __all__ = [
     "SystemAuditLogExportView",
     "SystemAuditLogListView",
     "SystemAuditMixin",
+    "SystemComplianceView",
     "SystemDashboardView",
     "SystemLegalHoldListView",
     "SystemLockoutListView",
