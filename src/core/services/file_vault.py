@@ -12,8 +12,9 @@ from django.utils.translation import gettext_lazy as _
 
 from core.constants import DEFAULT_ALLOWED_FILE_TYPES
 from core.models.attachment import EventAttachment
-from core.models.audit import AuditLog
+from core.models.audit import AuditLog  # noqa: F401 — re-exported for legacy callers / tests
 from core.models.settings import Settings
+from core.services.audit import audit_security_violation
 from core.services.encryption import decrypt_file_stream, encrypt_field, encrypt_file, safe_decrypt
 from core.services.virus_scan import VirusScannerUnavailableError, scan_file
 
@@ -78,46 +79,48 @@ def _run_virus_scan(facility, uploaded_file, event, user):
             "Virenscanner nicht erreichbar — Upload wird abgewiesen (fail-closed): %s",
             exc,
         )
-        _log_security_violation(
+        _log_attachment_violation(
             facility,
             user,
             event,
             reason="virus_scanner_unavailable",
             filename=uploaded_file.name,
-            extra={"error": str(exc)},
+            error=str(exc),
         )
         raise ValidationError(_("Datei-Upload abgelehnt: Virenscanner ist nicht erreichbar.")) from exc
 
     if result.infected:
-        _log_security_violation(
+        _log_attachment_violation(
             facility,
             user,
             event,
             reason="virus_detected",
             filename=uploaded_file.name,
-            extra={"signature": result.signature or ""},
+            signature=result.signature or "",
         )
         raise ValidationError(
             _("Datei wurde von Virenscanner abgewiesen: %(signature)s") % {"signature": result.signature or "unknown"}
         )
 
 
-def _log_security_violation(facility, user, event, *, reason, filename, extra=None):
-    """Create an ``AuditLog`` entry for a file-upload security violation.
+def _log_attachment_violation(facility, user, event, *, reason, filename, **extra):
+    """Dünner Wrapper um ``audit_security_violation`` für File-Vault-Pfade.
 
-    Central helper reused by virus-scan, MIME-mismatch and whitelist-breach
-    paths so the AuditLog payload stays consistent (Refs #610).
+    Zieht ``target_type="EventAttachment"`` und ``target_id`` aus dem Event
+    (``""`` wenn ``event`` keine PK hat — passiert bei Pre-Save-Rejects).
+    Detail-Payload bleibt schema-stabil: ``reason``, ``filename`` plus
+    optionale Extras (signature/extension/declared/detected/error).
+    Refs #610 / #901.
     """
-    detail = {"reason": reason, "filename": filename}
-    if extra:
-        detail.update(extra)
-    AuditLog.objects.create(
-        facility=facility,
-        user=user,
-        action=AuditLog.Action.SECURITY_VIOLATION,
+    target_id = event.pk if getattr(event, "pk", None) else None
+    return audit_security_violation(
+        facility,
+        user,
         target_type="EventAttachment",
-        target_id=str(event.pk) if getattr(event, "pk", None) else "",
-        detail=detail,
+        target_id=target_id,
+        reason=reason,
+        filename=filename,
+        **extra,
     )
 
 
@@ -149,13 +152,14 @@ def _enforce_allowed_file_types(facility, uploaded_file, event, user):
     if ext in allowed:
         return
 
-    _log_security_violation(
+    _log_attachment_violation(
         facility,
         user,
         event,
         reason="extension_not_allowed",
         filename=name,
-        extra={"extension": ext, "allowed": sorted(allowed)},
+        extension=ext,
+        allowed=sorted(allowed),
     )
     raise ValidationError(
         _("Dateityp .%(ext)s ist nicht erlaubt. Erlaubt: %(allowed)s")
@@ -244,13 +248,14 @@ def _enforce_magic_bytes(facility, uploaded_file, event, user):
     if _mime_equivalent(extension, declared_mime, detected_mime):
         return
 
-    _log_security_violation(
+    _log_attachment_violation(
         facility,
         user,
         event,
         reason="mime_mismatch",
         filename=uploaded_file.name,
-        extra={"declared": declared_mime, "detected": detected_mime},
+        declared=declared_mime,
+        detected=detected_mime,
     )
     raise ValidationError(
         _("Datei-Inhalt stimmt nicht mit dem angegebenen Typ überein (erkannt: %(detected)s, erwartet: %(declared)s).")

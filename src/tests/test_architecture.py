@@ -1080,14 +1080,7 @@ class TestAuditLogCreationAllowlist:
             198: "post_save User — role change detection",
             212: "post_save User — deactivation detection",
         },
-        # --- Migrations-Etappen (#901): werden in S5-S8 entfernt. ---
-        # S5 Security-Violation-Migration:
-        "core/services/file_vault.py": {
-            114: "Migration zu audit_security_violation geplant (#901 S5)",
-        },
-        "core/services/breach_detection.py": {
-            219: "Migration zu audit_security_violation geplant (#901 S5)",
-        },
+        # --- Migrations-Etappen (#901): werden in S6-S8 entfernt. ---
         # S6 System-View-Migration:
         "core/views/system.py": {
             81: "Migration zu audit_system_view geplant (#901 S6)",

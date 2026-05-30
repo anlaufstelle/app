@@ -43,6 +43,7 @@ from django.db.models import Count
 from django.utils import timezone
 
 from core.models import AuditLog
+from core.services.audit import audit_security_violation
 
 logger = logging.getLogger(__name__)
 
@@ -213,21 +214,28 @@ def record_finding(facility, finding: dict) -> AuditLog | None:
 
     Idempotent: deduplicate ueber 24h gegen denselben (kind, user)-
     Tatbestand. Returns None, wenn bereits gemeldet.
+
+    Refs #901: nutzt den typed ``audit_security_violation``-Helper. Die
+    User-Referenz wird ueber einen leichten ``filter(pk=…).first()``-Lookup
+    aufgeloest — Findings sind selten genug, dass der Round-Trip
+    unproblematisch ist; der Helper akzeptiert ``user=None``, falls der
+    User zwischenzeitlich geloescht wurde.
     """
+    from core.models import User
+
     if _already_reported(facility, finding):
         return None
-    entry = AuditLog.objects.create(
-        facility=facility,
-        user_id=finding["user_id"],
-        action=AuditLog.Action.SECURITY_VIOLATION,
+    user = User.objects.filter(pk=finding["user_id"]).first()
+    entry = audit_security_violation(
+        facility,
+        user,
         target_type="Facility",
-        target_id=str(facility.pk),
-        detail={
-            "kind": finding["kind"],
-            "count": finding["count"],
-            "threshold": finding["threshold"],
-            "window_minutes": finding["window_minutes"],
-        },
+        target_id=facility.pk,
+        reason=finding["kind"],
+        kind=finding["kind"],
+        count=finding["count"],
+        threshold=finding["threshold"],
+        window_minutes=finding["window_minutes"],
     )
     _post_webhook(
         {
