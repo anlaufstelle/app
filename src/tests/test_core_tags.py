@@ -73,3 +73,170 @@ def test_audit_detail_view_escapes_xss_in_detail(client, admin_user, facility):
     assert payload not in content
     # Escaped form must appear (Django's escape() uses &lt;)
     assert "&lt;script&gt;" in content
+
+
+# ---------------------------------------------------------------------------
+# Coverage-Lift fuer die uebrigen Filter/Tags (Refs #922, Welle 10 / Bucket B)
+# ---------------------------------------------------------------------------
+
+from unittest.mock import MagicMock  # noqa: E402  — Section-Import nach Trenn-Kommentar
+
+from core.templatetags.core_tags import (  # noqa: E402
+    activity_target_url,
+    aria_field,
+    decrypt,
+    doctype_badge_classes,
+    get_item,
+    json_summary,
+    status_badge,
+    target_type_label,
+    verb_badge_classes,
+)
+
+
+class TestGetItem:
+    def test_returns_value_for_dict_key(self):
+        assert get_item({"a": 1}, "a") == 1
+
+    def test_returns_none_for_missing_key(self):
+        assert get_item({}, "missing") is None
+
+    def test_returns_none_for_non_dict_container(self):
+        # Lists haben kein ``get`` -> AttributeError -> None.
+        assert get_item([1, 2, 3], "anything") is None
+
+    def test_returns_none_for_none_container(self):
+        assert get_item(None, "any") is None
+
+
+class TestDecryptFilter:
+    def test_returns_value_when_not_encrypted(self):
+        assert decrypt("plain-text") == "plain-text"
+
+    def test_handles_none(self):
+        assert decrypt(None) is None
+
+
+class TestJsonSummary:
+    def test_empty_returns_dash(self):
+        assert json_summary(None) == "–"
+        assert json_summary({}) == "–"
+
+    def test_dict_renders_one_line(self):
+        result = json_summary({"a": 1, "b": "x"})
+        assert "a: 1" in result and "b: x" in result
+
+    def test_non_dict_str(self):
+        # Non-dict, non-empty -> ``str(value)``.
+        assert "hello" in json_summary("hello")
+
+
+class TestDoctypeBadgeClasses:
+    @pytest.mark.parametrize(
+        "color,expected_substr",
+        [
+            ("indigo", "indigo"),
+            ("rose", "rose"),
+            ("unknown-color", "indigo"),
+            ("", "indigo"),
+            (None, "indigo"),
+        ],
+    )
+    def test_color_mapping(self, color, expected_substr):
+        assert expected_substr in doctype_badge_classes(color)
+
+
+class TestStatusBadge:
+    def test_known_status_uses_color(self):
+        result = status_badge("open", "Offen")
+        assert "Offen" in result
+        assert "green" in result
+
+    def test_unknown_status_falls_back_to_gray(self):
+        result = status_badge("zzz-unknown", "Unbekannt")
+        assert "gray" in result
+
+
+class TestVerbBadgeClasses:
+    @pytest.mark.parametrize(
+        "verb,expected",
+        [
+            ("deleted", "red"),
+            ("qualified", "indigo"),
+            ("unknown_verb", "gray"),
+        ],
+    )
+    def test_verb_color(self, verb, expected):
+        assert expected in verb_badge_classes(verb)
+
+
+class TestTargetTypeLabel:
+    def test_known_model_returns_german_label(self):
+        activity = MagicMock()
+        activity.target_type.model = "client"
+        assert target_type_label(activity) == "Person"
+
+    def test_unknown_model_capitalized(self):
+        activity = MagicMock()
+        activity.target_type.model = "foobar"
+        assert target_type_label(activity) == "Foobar"
+
+    def test_none_target_type_returns_empty(self):
+        activity = MagicMock()
+        activity.target_type = None
+        assert target_type_label(activity) == ""
+
+
+class TestActivityTargetUrl:
+    def test_deleted_verb_returns_empty(self):
+        activity = MagicMock()
+        activity.verb = "deleted"
+        assert activity_target_url(activity) == ""
+
+    def test_unknown_model_returns_empty(self):
+        activity = MagicMock()
+        activity.verb = "updated"
+        activity.target_type.model = "nonexistent"
+        assert activity_target_url(activity) == ""
+
+    def test_no_target_type_returns_empty(self):
+        activity = MagicMock()
+        activity.verb = "updated"
+        activity.target_type = None
+        assert activity_target_url(activity) == ""
+
+
+class TestAriaField:
+    def test_required_field_sets_aria_required(self):
+        field = MagicMock()
+        field.field.help_text = ""
+        field.errors = []
+        field.field.required = True
+        field.id_for_label = "id_email"
+        field.as_widget.return_value = "<input>"
+        aria_field(field)
+        kwargs = field.as_widget.call_args.kwargs
+        assert kwargs["attrs"]["aria-required"] == "true"
+
+    def test_field_with_errors_sets_invalid(self):
+        field = MagicMock()
+        field.field.help_text = ""
+        field.errors = ["err"]
+        field.field.required = False
+        field.id_for_label = "id_x"
+        field.as_widget.return_value = "<input>"
+        aria_field(field)
+        kwargs = field.as_widget.call_args.kwargs
+        assert kwargs["attrs"]["aria-invalid"] == "true"
+        assert "id_x-error" in kwargs["attrs"]["aria-describedby"]
+
+    def test_field_with_help_links_describedby(self):
+        field = MagicMock()
+        field.field.help_text = "Hinweis"
+        field.errors = []
+        field.field.required = False
+        field.id_for_label = "id_x"
+        field.as_widget.return_value = "<input>"
+        aria_field(field)
+        kwargs = field.as_widget.call_args.kwargs
+        assert "id_x-help" in kwargs["attrs"]["aria-describedby"]
