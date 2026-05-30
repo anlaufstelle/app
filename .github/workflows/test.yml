@@ -39,9 +39,10 @@ jobs:
       - name: Verify manual-test-matrix drift
         run: python scripts/verify_test_matrix_drift.py
       # Refs #823 (C-56): --cov-fail-under erzwingt die Coverage-Schwelle.
-      # Aktueller Stand 2026-05-01: 93 %. Folge-PRs duerfen den Wert schrittweise
-      # anheben, aber nicht mehr unter 93 % fallen lassen.
-      - run: python -m pytest -m "not e2e" --ignore=src/tests/e2e -n auto --cov=core --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=93
+      # Stand 2026-05-20 (Welle 10, #945/#949): 96 % erreicht durch gezielte
+      # Top-Lücken-Tests (Buckets A+B+C+D). Folge-PRs dürfen den Wert anheben,
+      # aber nicht senken.
+      - run: python -m pytest -m "not e2e" --ignore=src/tests/e2e -n auto --cov=core --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=96
         env:
           POSTGRES_HOST: localhost
           ENCRYPTION_KEY: P2N8yY4cVt1BmHZSvNrkSfkDYIJwEFcftRmO4bE-nZM=

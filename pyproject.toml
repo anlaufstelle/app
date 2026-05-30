@@ -156,6 +156,9 @@ also_copy = [
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
+# Refs #945/#949 (Welle 10): Coverage-Floor symmetrisch zur CI (test.yml).
+# Lokales ``coverage report`` faillt unter 96 %, ebenso wie der CI-Run.
+fail_under = 96
 exclude_lines = [
     "pragma: no cover",
     "if TYPE_CHECKING:",
