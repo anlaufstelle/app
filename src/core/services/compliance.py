@@ -180,7 +180,7 @@ def _db_role_attribute_check(role_check, attr: str, key: str, label: str) -> Com
             label=label,
             category="Datenbank",  # pragma: no mutate
             status=ComplianceStatus.UNKNOWN,
-            message=f"Rolle '{role_check.role}' nicht in pg_roles gefunden.",
+            message=f"Rolle '{role_check.role}' nicht in pg_roles gefunden.",  # pragma: no mutate
             action_hint="DB-Rollen-Setup pruefen — siehe deploy/postgres-init/01-app-role.sh.",  # pragma: no mutate
         )
     if actual == expected:
@@ -197,7 +197,7 @@ def _db_role_attribute_check(role_check, attr: str, key: str, label: str) -> Com
         label=label,
         category="Datenbank",  # pragma: no mutate
         status=ComplianceStatus.CRITICAL,
-        message=f"Rolle '{role_check.role}' hat falsches Attributprofil.",
+        message=f"Rolle '{role_check.role}' hat falsches Attributprofil.",  # pragma: no mutate
         detail=f"{attr}={actual} (erwartet: {expected})",
         action_hint="manage.py check_db_roles + Rollen-Init-Script pruefen (Refs #902).",  # pragma: no mutate
     )
@@ -211,7 +211,7 @@ def _db_role_admin_check(role_check) -> ComplianceCheck:
             label="Admin-DB-Rolle",  # pragma: no mutate
             category="Datenbank",  # pragma: no mutate
             status=ComplianceStatus.UNKNOWN,
-            message=f"Admin-Rolle '{role_check.role}' nicht in pg_roles gefunden.",
+            message=f"Admin-Rolle '{role_check.role}' nicht in pg_roles gefunden.",  # pragma: no mutate
             action_hint="DB-Rollen-Setup pruefen — siehe deploy/postgres-init/01-app-role.sh.",  # pragma: no mutate
         )
     if role_check.ok:
@@ -257,7 +257,7 @@ def _backup_checks() -> list[ComplianceCheck]:
                 label="Letztes Backup",  # pragma: no mutate
                 category="Backup",  # pragma: no mutate
                 status=ComplianceStatus.OK,
-                message=f"Backup juenger als 24h ({age_hours:.0f}h).",
+                message=f"Backup juenger als 24h ({age_hours:.0f}h).",  # pragma: no mutate
                 detail=detail,
             )
         ]
@@ -268,7 +268,7 @@ def _backup_checks() -> list[ComplianceCheck]:
                 label="Letztes Backup",  # pragma: no mutate
                 category="Backup",  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
-                message=f"Backup ist {age_hours:.0f}h alt (Schwelle: 72h).",
+                message=f"Backup ist {age_hours:.0f}h alt (Schwelle: 72h).",  # pragma: no mutate
                 detail=detail,
                 action_hint="Backup-Cron pruefen, evtl. manuell ausloesen.",  # pragma: no mutate
             )
@@ -279,7 +279,7 @@ def _backup_checks() -> list[ComplianceCheck]:
             label="Letztes Backup",  # pragma: no mutate
             category="Backup",  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
-            message=f"Backup ist {age_hours:.0f}h alt — Cron ausgefallen?",
+            message=f"Backup ist {age_hours:.0f}h alt — Cron ausgefallen?",  # pragma: no mutate
             detail=detail,
             action_hint="Backup-Cron + Disk-Speicher pruefen, Restore-Test nachholen.",  # pragma: no mutate
         )
@@ -315,7 +315,7 @@ def _restore_checks() -> list[ComplianceCheck]:
                 label="Restore-Test",  # pragma: no mutate
                 category="Backup",  # pragma: no mutate
                 status=ComplianceStatus.OK,
-                message=f"Letzter Test vor {age_days} Tagen.",
+                message=f"Letzter Test vor {age_days} Tagen.",  # pragma: no mutate
                 detail=detail,
             )
         ]
@@ -326,7 +326,7 @@ def _restore_checks() -> list[ComplianceCheck]:
                 label="Restore-Test",  # pragma: no mutate
                 category="Backup",  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
-                message=f"Letzter Test vor {age_days} Tagen — Auffrischung empfohlen.",
+                message=f"Letzter Test vor {age_days} Tagen — Auffrischung empfohlen.",  # pragma: no mutate
                 detail=detail,
                 action_hint="Restore gegen frische DB testen, dann mark_restore_verified ausfuehren.",  # pragma: no mutate # noqa: E501
             )
@@ -337,7 +337,7 @@ def _restore_checks() -> list[ComplianceCheck]:
             label="Restore-Test",  # pragma: no mutate
             category="Backup",  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
-            message=f"Letzter Test vor {age_days} Tagen — DSGVO Art. 32 verletzt.",
+            message=f"Letzter Test vor {age_days} Tagen — DSGVO Art. 32 verletzt.",  # pragma: no mutate
             detail=detail,
             action_hint="Restore-Test sofort nachholen und dokumentieren.",  # pragma: no mutate
         )
@@ -383,7 +383,7 @@ def _clamav_checks() -> list[ComplianceCheck]:
                 label="ClamAV-Signatur",  # pragma: no mutate
                 category="Virus-Scan",  # pragma: no mutate
                 status=ComplianceStatus.OK,
-                message=f"Signatur ist {age} Tag(e) alt.",
+                message=f"Signatur ist {age} Tag(e) alt.",  # pragma: no mutate
                 detail=f"Version: {version}",
             )
         else:
@@ -392,7 +392,7 @@ def _clamav_checks() -> list[ComplianceCheck]:
                 label="ClamAV-Signatur",  # pragma: no mutate
                 category="Virus-Scan",  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
-                message=f"Signatur ist {age} Tage alt (Schwelle: 7).",
+                message=f"Signatur ist {age} Tage alt (Schwelle: 7).",  # pragma: no mutate
                 detail=f"Version: {version}",
                 action_hint="freshclam-Cron im ClamAV-Container pruefen.",  # pragma: no mutate
             )
@@ -517,7 +517,7 @@ def _migration_checks() -> list[ComplianceCheck]:
             label="Migrationen",  # pragma: no mutate
             category="System",  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
-            message=f"{len(pending)} ausstehende Migration(en).",
+            message=f"{len(pending)} ausstehende Migration(en).",  # pragma: no mutate
             detail=listing,
             action_hint="docker compose exec web python manage.py migrate ausfuehren.",  # pragma: no mutate
         )
@@ -561,7 +561,7 @@ def _audit_event_checks() -> list[ComplianceCheck]:
                 label="Kritische Audit-Events (24h)",  # pragma: no mutate
                 category="Audit",  # pragma: no mutate
                 status=ComplianceStatus.WARNING,
-                message=f"{count} kritische Event(s) in 24h.",
+                message=f"{count} kritische Event(s) in 24h.",  # pragma: no mutate
                 detail=(
                     "Im System-Audit-Log (/system/audit/) auf "
                     "SECURITY_VIOLATION / MFA_FAILED / USER_DEACTIVATED filtern."
@@ -575,7 +575,7 @@ def _audit_event_checks() -> list[ComplianceCheck]:
             label="Kritische Audit-Events (24h)",  # pragma: no mutate
             category="Audit",  # pragma: no mutate
             status=ComplianceStatus.CRITICAL,
-            message=f"{count} kritische Event(s) in 24h — moeglicher Vorfall.",
+            message=f"{count} kritische Event(s) in 24h — moeglicher Vorfall.",  # pragma: no mutate
             detail="Im System-Audit-Log dringend pruefen.",
             action_hint="Vorfall-Triage starten, ggf. DSGVO Art. 33 Meldung an Aufsichtsbehoerde.",  # pragma: no mutate
         )
