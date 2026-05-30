@@ -83,3 +83,5 @@ admin-overview.png
 # mutmut working tree (Welle 0/7)
 mutants/
 .mutmut-cache*
+# mutmut run-logs (Forensik nur, gehören nicht ins Repo)
+mutmut-*.log
