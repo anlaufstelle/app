@@ -1031,3 +1031,184 @@ class TestSettingsAuditCompletenessGuard:
             f"Datei-Policy) oder zu ``_AUDIT_EXEMPT`` mit Kommentar "
             f"(z.B. PrimaryKey, auto_now). Refs #893 / FND-001."
         )
+
+
+class TestAuditLogCreationAllowlist:
+    """Refs #901 / FND-002: direkte ``AuditLog.objects.create(...)``-Aufrufe
+    sind nur an dokumentierten Stellen erlaubt. Alles andere muss ueber die
+    typed Helper aus ``core.services.audit`` laufen
+    (``log_audit_event``, ``audit_event``, ``audit_client_event``,
+    ``audit_retention_decision``, ``audit_security_violation``,
+    ``audit_system_view``).
+
+    Die Allowlist enthaelt aktuell drei Kategorien:
+
+    1. **Helper-Bodies** in ``services/audit.py`` und ``services/settings.py``
+       — die Helper selbst muessen am Ende ``.objects.create(...)`` rufen.
+    2. **Signal-Handler** in ``signals/audit.py`` — laufen in Post-Save-
+       Signalen ohne Request-Objekt und setzen RLS-Session-Variablen
+       manuell. Migration auf Helper waere Schein-Aufwand.
+    3. **Migrationsstandorte** waehrend des #901-Refactors — werden in
+       atomaren Schritten in 8 Commits abgeraeumt. Endzustand siehe S9
+       des Plans.
+    """
+
+    _CORE_DIR = Path("src/core")
+    _PATTERN = re.compile(r"AuditLog\.objects\.create\(")
+
+    # Allowlist: { relative-to-src/-path: { line_number: "Begruendung" } }.
+    # Aenderungen am Code, die die Zeilennummern eines erlaubten Eintrags
+    # verschieben, MUESSEN die Allowlist mit aktualisieren — sonst meldet
+    # der Test wieder einen "Verstoss".
+    _ALLOWED_DIRECT_CALLS: dict[str, dict[int, str]] = {
+        # Helper-Bodies — by design.
+        "core/services/audit.py": {
+            4: "Docstring-Beispiel — kein echter Call",
+            85: "log_audit_event-Body — zentraler View-Helper",
+            126: "audit_event-Body — generischer Service-/Cron-Helper",
+        },
+        "core/services/settings.py": {
+            85: "log_settings_change-Body — Settings-Diff-Helper",
+            105: "log_settings_change-Body — zweite create-Stelle",
+        },
+        # Signal-Handler: kein Request, RLS-Session-State explizit gesetzt.
+        "core/signals/audit.py": {
+            93: "on_user_logged_in — auth signal, kein Request",
+            112: "on_user_logged_out — auth signal",
+            145: "on_user_login_failed — no-facility branch",
+            153: "on_user_login_failed — with-facility branch",
+            198: "post_save User — role change detection",
+            212: "post_save User — deactivation detection",
+        },
+        # --- Migrations-Etappen (#901): werden in S2-S8 entfernt. ---
+        # S3 Client-CRUD-Migration:
+        "core/services/clients.py": {
+            111: "Migration zu audit_client_event geplant (#901 S3)",
+            125: "Migration zu audit_client_event geplant (#901 S3)",
+            186: "Migration zu audit_client_event geplant (#901 S3)",
+            293: "Migration zu audit_client_event geplant (#901 S3)",
+            332: "Migration zu audit_client_event geplant (#901 S3)",
+            365: "Migration zu audit_client_event geplant (#901 S3)",
+        },
+        # S4 Retention-Migration:
+        "core/retention/proposals.py": {
+            189: "Migration zu audit_retention_decision geplant (#901 S4)",
+            212: "Migration zu audit_retention_decision geplant (#901 S4)",
+            234: "Migration zu audit_retention_decision geplant (#901 S4)",
+            320: "Migration zu audit_retention_decision geplant (#901 S4)",
+            336: "Migration zu audit_retention_decision geplant (#901 S4)",
+        },
+        "core/retention/legal_holds.py": {
+            27: "Migration zu audit_retention_decision geplant (#901 S4)",
+            58: "Migration zu audit_retention_decision geplant (#901 S4)",
+        },
+        "core/retention/enforcement.py": {
+            78: "Migration zu audit_retention_decision geplant (#901 S4)",
+            234: "Migration zu audit_retention_decision geplant (#901 S4)",
+        },
+        "core/retention/anonymization.py": {
+            37: "Migration zu audit_retention_decision geplant (#901 S4)",
+        },
+        # S5 Security-Violation-Migration:
+        "core/services/file_vault.py": {
+            114: "Migration zu audit_security_violation geplant (#901 S5)",
+        },
+        "core/services/breach_detection.py": {
+            219: "Migration zu audit_security_violation geplant (#901 S5)",
+        },
+        # S6 System-View-Migration:
+        "core/views/system.py": {
+            81: "Migration zu audit_system_view geplant (#901 S6)",
+            530: "Migration zu audit_system_view geplant (#901 S6)",
+            642: "Migration zu audit_system_view geplant (#901 S6)",
+            663: "Migration zu audit_system_view geplant (#901 S6)",
+        },
+        # S7 Service-Layer-Rest (cases, workitems, events/crud, goals, login_lockout):
+        "core/services/cases.py": {
+            39: "Migration zu audit_event geplant (#901 S7)",
+            70: "Migration zu audit_event geplant (#901 S7)",
+            87: "Migration zu audit_event geplant (#901 S7)",
+            110: "Migration zu audit_event geplant (#901 S7)",
+        },
+        "core/services/workitems.py": {
+            49: "Migration zu audit_event geplant (#901 S7)",
+            71: "Migration zu audit_event geplant (#901 S7)",
+            103: "Migration zu audit_event geplant (#901 S7)",
+        },
+        "core/services/events/crud.py": {
+            213: "Migration zu audit_event geplant (#901 S7)",
+            267: "Migration zu audit_event geplant (#901 S7)",
+        },
+        "core/services/goals.py": {
+            96: "Migration zu audit_event geplant (#901 S7)",
+        },
+        "core/services/login_lockout.py": {
+            72: "Migration zu audit_event geplant (#901 S7)",
+        },
+        # S8 View-Layer-Rest (mfa, attachments, sudo_mode):
+        "core/views/mfa.py": {
+            102: "Migration zu log_audit_event geplant (#901 S8)",
+            111: "Migration zu log_audit_event geplant (#901 S8)",
+            160: "Migration zu log_audit_event geplant (#901 S8)",
+            174: "Migration zu log_audit_event geplant (#901 S8)",
+            247: "Migration zu log_audit_event geplant (#901 S8)",
+            282: "Migration zu log_audit_event geplant (#901 S8)",
+        },
+        "core/views/attachments.py": {
+            151: "Migration zu log_audit_event geplant (#901 S8)",
+        },
+        "core/views/sudo_mode.py": {
+            48: "Migration zu log_audit_event geplant (#901 S8)",
+        },
+    }
+
+    def test_only_allowlisted_direct_auditlog_creates(self):
+        if not self._CORE_DIR.exists():
+            pytest.skip(f"{self._CORE_DIR} nicht vorhanden")
+
+        violations: list[str] = []
+        for py_file in self._CORE_DIR.rglob("*.py"):
+            rel = str(py_file.relative_to("src"))
+            allowed_for_file = self._ALLOWED_DIRECT_CALLS.get(rel, {})
+            source = py_file.read_text(errors="ignore")
+            for match in self._PATTERN.finditer(source):
+                line = source[: match.start()].count("\n") + 1
+                if line in allowed_for_file:
+                    continue
+                violations.append(f"{rel}:{line}")
+
+        assert not violations, (
+            "Direkte AuditLog.objects.create()-Calls ausserhalb der Allowlist. "
+            "Bitte stattdessen einen typed Helper aus core.services.audit "
+            "verwenden (audit_event, audit_client_event, "
+            "audit_retention_decision, audit_security_violation, "
+            "audit_system_view) oder die Stelle in "
+            "_ALLOWED_DIRECT_CALLS mit Begruendung dokumentieren.\n"
+            "Refs #901 / FND-002.\n"
+            f"Verstoesse: {violations}"
+        )
+
+    def test_allowlist_lines_actually_have_creates(self):
+        """Schutz vor stale Eintraegen: jede Allowlist-Zeile muss
+        tatsaechlich auf eine ``AuditLog.objects.create``-Stelle zeigen.
+        Sonst altert die Allowlist still — wenn der Code refactored wird,
+        verschiebt sich die Zeile und der alte Eintrag verstummt."""
+        stale: list[str] = []
+        for rel, lines in self._ALLOWED_DIRECT_CALLS.items():
+            path = Path("src") / rel
+            if not path.exists():
+                stale.append(f"{rel} (Datei existiert nicht)")
+                continue
+            src_lines = path.read_text(errors="ignore").splitlines()
+            for line_no in lines:
+                if line_no < 1 or line_no > len(src_lines):
+                    stale.append(f"{rel}:{line_no} (Zeile ausserhalb der Datei)")
+                    continue
+                if "AuditLog.objects.create" not in src_lines[line_no - 1]:
+                    stale.append(f"{rel}:{line_no} (kein 'AuditLog.objects.create' an dieser Zeile)")
+        assert not stale, (
+            "Allowlist-Eintraege zeigen ins Leere — wahrscheinlich verschoben "
+            "sich Zeilennummern durch Refactoring. Bitte _ALLOWED_DIRECT_CALLS "
+            "auf die aktuellen Zeilen aktualisieren.\n"
+            f"Verstoesse: {stale}"
+        )
