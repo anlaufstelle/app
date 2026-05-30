@@ -50,6 +50,11 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-016](016-search-postgres-only.md) | Volltextsuche bleibt in PostgreSQL | Accepted |
 | [ADR-017](017-deployment-topology.md) | Deployment-Topologie — Plain Docker Compose primär, Multi-Stage als parallele Stacks | Accepted |
 | [ADR-018](018-rollenmodell-superadmin.md) | 5-Rollen-Modell mit Super-Admin (Systemadministration / Anwendungsbetreuung / Leitung / Fachkraft / Assistenz) | Accepted |
+| [ADR-019](019-custom-admin-site-sudo.md) | Custom AdminSite mit Rollen-Gate und Sudo-Mode | Accepted |
+| [ADR-020](020-three-role-postgres-model.md) | Drei-Rollen-Postgres-Modell (Bootstrap / App / Admin) | Accepted |
+| [ADR-021](021-retention-modell.md) | Retention-Modell (Fristen, Legal-Hold, AuditLog-Pruning) | Accepted |
+| [ADR-022](022-offline-snapshot-keys.md) | Offline-Snapshot und Offline-Keys | Proposed |
+| [ADR-023](023-k-anonymization-statistik.md) | K-Anonymisierung für externe Statistik | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
@@ -57,8 +62,6 @@ Entscheidungen, die im Code bereits sichtbar sind, deren Begründung aber noch n
 
 | Kandidat | Worum es geht | Warum noch keine ADR |
 |----------|---------------|----------------------|
-| Retention-Modell | Retention-Fristen, Legal-Hold, AuditLog-Pruning ([`src/core/services/retention.py`](../../src/core/services/retention.py)) — wer setzt welche Frist, wer darf Hold setzen, was passiert mit Historie. | Modell ist im Code, aber die Begründung der Default-Fristen sollte noch mit Datenschutz­vorlagen abgeglichen werden. |
-| Offline-Snapshot / Offline-Keys | Offline-Bundle für Außeneinsätze ([`src/core/services/system/offline.py`](../../src/core/services/system/offline.py), `offline_keys.py`) — Bedrohungsmodell, Schlüsselableitung, Synchronisations­semantik. | Feature ist noch nicht stabil genug, um Annahmen festzuschreiben. |
-| K-Anonymisierung für Statistik | Schwellenwerte und Fallback-Bucketing in der Statistik­auswertung ([`src/core/services/compliance/k_anonymization.py`](../../src/core/services/compliance/k_anonymization.py)). | Schwellen­wahl ist eher Policy als Architektur — wird ggf. lieber im Fachkonzept verankert als als ADR. |
+| _(aktuell keine offenen Kandidaten)_ | Retention, Offline-Snapshot und K-Anonymisierung sind nach [ADR-021](021-retention-modell.md), [ADR-022](022-offline-snapshot-keys.md) und [ADR-023](023-k-anonymization-statistik.md) verschriftlicht. ||
 
 **Vorgehen:** Wenn eines der Themen sich stabilisiert oder eine echte Entwicklungs­alternative ansteht, wird die nächste freie ADR-Nummer vergeben. Bei Verwerfen einer ADR-Idee bleibt der Eintrag hier kurz mit „verworfen, weil …" stehen, damit die Diskussion nicht verloren geht.
