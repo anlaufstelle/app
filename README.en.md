@@ -106,7 +106,7 @@ Anlaufstelle is designed from the ground up for handling particularly sensitive 
 
 - **Pseudonymization** — no name field in the database (Art. 25 GDPR, Privacy by Design)
 - **Field encryption** — sensitive data encrypted per field with AES-128 (Art. 32 GDPR)
-- **Encrypted file attachments** — file vault with Fernet / AES-128 and ClamAV virus scanning before storage
+- **Encrypted file attachments** — file vault with AES-128 encryption and ClamAV virus scanning before storage
 - **Two-factor authentication** — TOTP with backup codes, can be enforced facility-wide
 - **Retention periods** — automatic deletion after configurable period (Art. 17 GDPR)
 - **Deletion requests with four-eyes principle** — deletion only after approval by management/admin
@@ -190,7 +190,7 @@ docker compose exec web python src/manage.py seed
 | Backend | Django 6.0+, Python 3.13 |
 | Frontend | HTMX + Alpine.js + Tailwind CSS |
 | Database | PostgreSQL 16 |
-| Encryption | Fernet / AES-128 |
+| Encryption | AES-128 (Fernet/MultiFernet, details in ADR-006/014) |
 | Deployment | Docker Compose |
 | Tests | pytest + Playwright (E2E) |
 | Linting | ruff |

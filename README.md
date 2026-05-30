@@ -106,7 +106,7 @@ Anlaufstelle ist von Grund auf für den Umgang mit besonders schützenswerten Da
 
 - **Pseudonymisierung** — kein Namensfeld in der Datenbank (Art. 25 DSGVO, Privacy by Design)
 - **Feldverschlüsselung** — sensible Angaben werden einzeln mit AES-128 verschlüsselt (Art. 32 DSGVO)
-- **Verschlüsselte Dateianhänge** — File Vault mit Fernet / AES-128 und ClamAV-Virenscan vor der Ablage
+- **Verschlüsselte Dateianhänge** — File Vault mit AES-128-Verschlüsselung und ClamAV-Virenscan vor der Ablage
 - **Zwei-Faktor-Authentifizierung** — TOTP mit Backup-Codes, einrichtungsweite Erzwingung möglich
 - **Aufbewahrungsfristen** — automatische Löschung nach konfigurierbarer Frist (Art. 17 DSGVO)
 - **Löschanträge mit 4-Augen-Prinzip** — Löschung nur nach Genehmigung durch Leitung/Admin
@@ -190,7 +190,7 @@ docker compose exec web python src/manage.py seed
 | Backend | Django 6.0+, Python 3.13 |
 | Frontend | HTMX + Alpine.js + Tailwind CSS |
 | Datenbank | PostgreSQL 16 |
-| Verschlüsselung | Fernet / AES-128 |
+| Verschlüsselung | AES-128 (Fernet/MultiFernet, Detail in ADR-006/014) |
 | Deployment | Docker Compose |
 | Tests | pytest + Playwright (E2E) |
 | Linting | ruff |
