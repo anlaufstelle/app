@@ -376,6 +376,30 @@ make ci
 
 Diese Pipeline muss vor jedem Pull Request lokal grün sein.
 
+### Mutation-Testing (mutmut)
+
+Mutation-Testing prüft, wie viele synthetische Code-Mutationen die Test-Suite tatsächlich erkennt. Konfiguration in `pyproject.toml` (`[tool.mutmut]`). Erwartete Laufzeit: 3–6 h auf `core.services` + `core.forms`. Daher nicht PR-Pflicht, sondern punktuell pro Wellen-Issue.
+
+```bash
+make mutation           # mutmut run via scripts/run_mutmut.py
+make mutation-report    # Survivors-Liste, nicht-interaktiv
+```
+
+`make mutation` ist resume-fähig (mutmut speichert State in `mutants/**/*.py.meta` und springt bei Neustart automatisch dort weiter, wo der Vorlauf stehengeblieben ist).
+
+Für längere Runs auf einer Sandbox, die OOM-Killer / Idle-Killer mitbringt, gibt es [`scripts/run_mutmut_watchdog.sh`](scripts/run_mutmut_watchdog.sh):
+
+```bash
+# Default: 3 zusätzliche Restarts, Stall-Threshold 5 min, 2 mutmut-Worker
+scripts/run_mutmut_watchdog.sh
+
+# Aggressiveres Profil
+MAX_RESTARTS=5 STALL_THRESHOLD=600 MUTMUT_MAX_CHILDREN=4 \
+    scripts/run_mutmut_watchdog.sh
+```
+
+Der Watchdog erkennt stillstehende oder gestorbene Master-Prozesse und startet `make mutation` neu — der Resume-Mechanismus übernimmt. Exit 0, sobald `mutants/mutmut-stats.json` während der Watchdog-Session geschrieben wurde. Aufruf-Hintergrund: Refs #937.
+
 ---
 
 ## Pull-Request-Prozess
