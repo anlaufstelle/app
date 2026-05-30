@@ -128,7 +128,7 @@ class WorkItemForm(forms.ModelForm):
         remind_at = cleaned.get("remind_at")
         due_date = cleaned.get("due_date")
         if remind_at and due_date and remind_at > due_date:
-            raise forms.ValidationError({"remind_at": _("Die Erinnerung muss vor oder am Fälligkeitstag liegen.")})  # pragma: no mutate  # noqa: E501
+            raise forms.ValidationError({"remind_at": _("Die Erinnerung muss vor oder am Fälligkeitstag liegen.")})  # pragma: no mutate  # noqa: E501  # fmt: skip
 
         max_date = max_workitem_date()
         max_str = date_format(max_date, "DATE_FORMAT")
@@ -146,7 +146,7 @@ class WorkItemForm(forms.ModelForm):
         # Items immer fehlschlagen.
         min_date = min_workitem_date()
         if due_date and due_date < min_date and "due_date" in self.changed_data:
-            raise forms.ValidationError({"due_date": _("Das Fälligkeitsdatum darf nicht in der Vergangenheit liegen.")})  # pragma: no mutate  # noqa: E501
+            raise forms.ValidationError({"due_date": _("Das Fälligkeitsdatum darf nicht in der Vergangenheit liegen.")})  # pragma: no mutate  # noqa: E501  # fmt: skip
         if remind_at and remind_at < min_date and "remind_at" in self.changed_data:
-            raise forms.ValidationError({"remind_at": _("Die Erinnerung darf nicht in der Vergangenheit liegen.")})  # pragma: no mutate  # noqa: E501
+            raise forms.ValidationError({"remind_at": _("Die Erinnerung darf nicht in der Vergangenheit liegen.")})  # pragma: no mutate  # noqa: E501  # fmt: skip
         return cleaned
