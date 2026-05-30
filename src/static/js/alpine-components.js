@@ -158,17 +158,6 @@ document.addEventListener("alpine:init", () => {
         },
     }));
 
-    /** Bestaetigungs-Modal-Wrapper (components/_confirm_modal.html). */
-    Alpine.data("confirmModal", () => ({
-        open: false,
-        show() {
-            this.open = true;
-        },
-        hide() {
-            this.open = false;
-        },
-    }));
-
     /** Aktivitaetskarten-Expandable (components/_activity_card.html). */
     /** Generischer Expand/Collapse-Toggle für Feed-Cards (Activities, Events, …). */
     Alpine.data("expandableCard", () => ({
