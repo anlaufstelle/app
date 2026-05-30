@@ -40,6 +40,35 @@ class TestCustomLoginViewSuperAdminRedirect:
         assert response.status_code == 302
         assert response.url == "/system/"
 
+    def test_super_admin_with_next_root_lands_on_system(self, client, super_admin_user):
+        """Refs #970: ``?next=/`` gilt nicht als gezielter Deep-Link.
+
+        Im Normal-Login-Flow ruft ein unauth User ``/`` auf -> Django
+        redirected zu ``/login/?next=/`` -> Login -> der ``?next=/`` waere
+        ein implizit gesetztes Ziel. Frueher (Refs #867 Original) flog der
+        super_admin damit auf Zeitstrom (facility-gescoped, fuer ihn leer).
+        Erwartung: super_admin landet auch hier auf /system/.
+        """
+        super_admin_user.set_password("testpass123")
+        super_admin_user.save()
+        response = client.post(
+            reverse("login") + "?next=/",
+            {"username": super_admin_user.username, "password": "testpass123"},
+        )
+        assert response.status_code == 302
+        assert response.url == "/system/"
+
+    def test_non_super_admin_with_next_root_honors_next(self, client, staff_user):
+        """Non-super_admin-Rollen bleiben unveraendert: ``?next=/`` -> ``/``."""
+        staff_user.set_password("testpass123")
+        staff_user.save()
+        response = client.post(
+            reverse("login") + "?next=/",
+            {"username": staff_user.username, "password": "testpass123"},
+        )
+        assert response.status_code == 302
+        assert response.url == "/"
+
 
 @pytest.mark.django_db
 class TestCustomLoginViewSessionTimeout:

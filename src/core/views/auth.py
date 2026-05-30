@@ -46,20 +46,26 @@ class CustomLoginView(auth_views.LoginView):
         return super().post(request, *args, **kwargs)
 
     def get_success_url(self):
-        """Refs #867: super_admin landet im /system/-Dashboard.
+        """Refs #867 + #970: super_admin landet im /system/-Dashboard.
 
         Default-Verhalten (``LOGIN_REDIRECT_URL`` bzw. ``?next=``) bleibt
         fuer alle anderen Rollen erhalten — nur super_admin hat keinen
         Facility-Kontext, wuerde also auf einer Facility-gescopten
         Default-Seite (Zeitstrom) eine leere Sicht sehen.
+
+        Refs #970: ``?next=/`` (bzw. ``LOGIN_REDIRECT_URL``) gilt NICHT als
+        gezielter Deep-Link, sondern als impliziter Default. Hintergrund:
+        ein unauth super_admin, der ``/`` aufruft, wird auf
+        ``/login/?next=/`` umgeleitet (ZeitstromView ist LoginRequiredMixin).
+        Ohne diese Sonderbehandlung uebersteuert das implizite ``?next=/``
+        die ``/system/``-Logik systematisch im Normal-Login.
         """
         user = self.request.user
         if user.is_authenticated and getattr(user, "is_super_admin", False):
-            # ``?next=...`` darf das ueberstimmen — der User koennte
-            # einen Deep-Link zum System-Bereich oder einer
-            # eingebetteten Ressource haben.
+            # ``?next=...`` darf das ueberstimmen NUR bei echten Deep-Links —
+            # "/" und der LOGIN_REDIRECT_URL gelten nicht als gezielter Wunsch.
             redirect_to = self.get_redirect_url()
-            if redirect_to:
+            if redirect_to and redirect_to not in ("/", settings.LOGIN_REDIRECT_URL):
                 return redirect_to
             return "/system/"
         return super().get_success_url()
