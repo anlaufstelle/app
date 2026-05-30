@@ -43,6 +43,11 @@ jobs:
       # versehentlich). Erfordert Repo-Secret GHCR_VISIBILITY_TOKEN
       # (PAT classic mit admin:packages-Scope; write:packages reicht nicht).
       - name: Ensure package visibility is public
+        # Optional: scheitert leise, wenn das Secret GHCR_VISIBILITY_TOKEN
+        # noch nicht gesetzt ist (Refs #886). Image-Push selbst ist davon
+        # unabhängig — Visibility kann manuell über die Package-Settings
+        # geflippt werden, solange dieser Step nicht greift.
+        continue-on-error: true
         if: github.event.repository.private == false
         env:
           GH_TOKEN: ${{ secrets.GHCR_VISIBILITY_TOKEN }}
