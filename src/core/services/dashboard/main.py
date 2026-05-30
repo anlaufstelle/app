@@ -9,7 +9,7 @@ bestehende Daten verdichtet aggregiert.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, time, timedelta
 
 from django.utils import timezone
 from django.utils.translation import gettext as _
@@ -36,7 +36,7 @@ def staff_dashboard_context(user, facility) -> dict:
     bearbeitete Personen.
     """
     today = timezone.localdate()
-    today_start = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
+    today_start = timezone.make_aware(datetime.combine(today, time.min))
     today_end = today_start + timedelta(days=1)
 
     today_events_count = Event.objects.filter(

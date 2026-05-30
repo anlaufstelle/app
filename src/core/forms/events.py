@@ -183,7 +183,7 @@ class DynamicEventDataForm(forms.Form):
 
                 kwargs_copy["choices"] = choices
 
-            field = field_cls(**kwargs_copy)  # type: ignore[arg-type]
+            field = field_cls(**kwargs_copy)
 
             if initial_data and ft.slug in initial_data:
                 field.initial = initial_data[ft.slug]

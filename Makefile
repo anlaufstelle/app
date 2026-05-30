@@ -119,7 +119,7 @@ check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
-ci: lint check deps-check verify-matrix-drift test-parallel
+ci: lint check deps-check verify-matrix-drift typecheck test-parallel
 
 # Lokale Coverage-HTML: praktisch zum gezielten Lücken-Suchen.
 # CI nutzt --cov-fail-under in test.yml; dieses Target rendert
