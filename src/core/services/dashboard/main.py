@@ -36,9 +36,7 @@ def staff_dashboard_context(user, facility) -> dict:
     bearbeitete Personen.
     """
     today = timezone.localdate()
-    today_start = timezone.make_aware(
-        timezone.datetime.combine(today, timezone.datetime.min.time())
-    )
+    today_start = timezone.make_aware(timezone.datetime.combine(today, timezone.datetime.min.time()))
     today_end = today_start + timedelta(days=1)
 
     today_events_count = Event.objects.filter(
@@ -58,10 +56,7 @@ def staff_dashboard_context(user, facility) -> dict:
         .order_by("due_date", "-created_at")[:5]
     )
 
-    recent_clients = list(
-        Client.objects.filter(facility=facility, is_active=True)
-        .order_by("-updated_at")[:5]
-    )
+    recent_clients = list(Client.objects.filter(facility=facility, is_active=True).order_by("-updated_at")[:5])
 
     return {
         "today_events_count": today_events_count,
@@ -91,11 +86,7 @@ def lead_dashboard_context(user, facility) -> dict:
         1 for h in LegalHold.objects.filter(facility=facility, dismissed_at__isnull=True) if h.is_active
     )
 
-    last_snapshot = (
-        StatisticsSnapshot.objects.filter(facility=facility)
-        .order_by("-year", "-month")
-        .first()
-    )
+    last_snapshot = StatisticsSnapshot.objects.filter(facility=facility).order_by("-year", "-month").first()
 
     return {
         "pending_deletion_requests": pending_deletion_requests,

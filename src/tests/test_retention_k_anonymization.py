@@ -50,9 +50,7 @@ class TestKAnonymity:
         target = _make_client(facility, pseudonym="P-target")
         assert is_k_anonymous(target, k=5) is False
 
-    def test_setting_disabled_uses_hard_anonymize(
-        self, facility, staff_user, doc_type_contact, client_identified
-    ):
+    def test_setting_disabled_uses_hard_anonymize(self, facility, staff_user, doc_type_contact, client_identified):
         """Setting=False (Default) → ``client.anonymize()``-Pfad (Refs #780)."""
         Settings.objects.create(
             facility=facility,
@@ -76,9 +74,7 @@ class TestKAnonymity:
         assert not client_identified.pseudonym.startswith("anon-")
         assert client_identified.k_anonymized is False
 
-    def test_setting_enabled_uses_k_anonymize(
-        self, facility, staff_user, doc_type_contact, client_identified
-    ):
+    def test_setting_enabled_uses_k_anonymize(self, facility, staff_user, doc_type_contact, client_identified):
         """Setting=True → ``k_anonymize_client()``-Pfad mit Schwelle aus
         ``k_anonymity_threshold`` (Refs #780, Pfad A im Issue-Body)."""
         Settings.objects.create(
@@ -99,9 +95,7 @@ class TestKAnonymity:
         anonymize_clients(facility, dry_run=False)
 
         client_identified.refresh_from_db()
-        assert client_identified.pseudonym.startswith("anon-"), (
-            "K-Anon-Pfad muss greifen, sobald Setting aktiv ist."
-        )
+        assert client_identified.pseudonym.startswith("anon-"), "K-Anon-Pfad muss greifen, sobald Setting aktiv ist."
         assert not client_identified.pseudonym.startswith("Gelöscht-")
         assert client_identified.k_anonymized is True
         assert client_identified.notes == ""

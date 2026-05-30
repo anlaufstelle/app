@@ -80,12 +80,20 @@ class TestStaffDashboardContext:
         c2 = Client.objects.create(facility=facility, pseudonym="B2", created_by=staff_user)
         # Beide bekommen Events vom staff_user — c2 zuletzt
         Event.objects.create(
-            facility=facility, client=c1, document_type=doc_type_contact,
-            occurred_at=timezone.now() - timedelta(days=2), data_json={"dauer": 1}, created_by=staff_user,
+            facility=facility,
+            client=c1,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now() - timedelta(days=2),
+            data_json={"dauer": 1},
+            created_by=staff_user,
         )
         Event.objects.create(
-            facility=facility, client=c2, document_type=doc_type_contact,
-            occurred_at=timezone.now(), data_json={"dauer": 1}, created_by=staff_user,
+            facility=facility,
+            client=c2,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 1},
+            created_by=staff_user,
         )
 
         ctx = staff_dashboard_context(staff_user, facility)
