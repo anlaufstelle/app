@@ -113,7 +113,7 @@ Tester:innen arbeiten gegen **[https://dev.anlaufstelle.app](https://dev.anlaufs
 
 ### Test-Umgebung: lokal (nur für 🔧 LOKAL/SSH-Cases)
 
-26 der 222 Cases benötigen **direkten Server-Zugriff** (z.B. `manage.py shell`, `psql`, Backdate-SQL, `enforce_retention`-Cron). Diese sind im Header der jeweiligen Cases mit `🔧 LOKAL/SSH` markiert und werden:
+Die Cases in **Sektion D** (LOKAL/SSH) benötigen **direkten Server-Zugriff** (z.B. `manage.py shell`, `psql`, Backdate-SQL, `enforce_retention`-Cron). Die jeweils aktuelle Zahl steht im generierten Index ([`test-matrix-index.md`](test-matrix-index.md)). Cases sind im Header mit `🔧 LOKAL/SSH` markiert und werden:
 
 - **lokal** auf Tobias' Maschine durchgeführt (Setup unten), oder
 - per **SSH auf dev-Server** (`ssh anlaufstelle@dev.anlaufstelle.app`, dann `docker compose exec web python manage.py …`)
@@ -7677,49 +7677,15 @@ Nach erfolgreichem Submit eines Forms: Browser-Back-Button drücken.
 
 ## Anhang C — E2E-Coverage-Bilanz
 
-Quick-Übersicht zur Sichtbarmachung von Lücken zwischen manueller und automatisierter Coverage. Wird **am Ende eines Test-Durchlaufs** aktualisiert.
+> **Aktuelle Coverage-Bilanz:** [`test-matrix-index.md`](test-matrix-index.md) — wird per `python scripts/build_test_matrix_index.py` aus dieser Matrix generiert. Die Zahlen pro Sektion (gesamt, mit/ohne E2E, Quote) sind dort sektionsweise tabelliert.
 
-| Bereich | Cases gesamt (manuell) | Doppelt abgedeckt (manuell + E2E) | Manuell-only |
-|---------|------------------------|-----------------------------------|--------------|
-| AUTH | 10 | _zu erfassen_ | _zu erfassen_ |
-| MFA | 9 | _zu erfassen_ | _zu erfassen_ |
-| ACCT | 5 | _zu erfassen_ | _zu erfassen_ |
-| SUDO | 4 | _zu erfassen_ | _zu erfassen_ |
-| PWA | 5 | _zu erfassen_ | _zu erfassen_ |
-| CLIENT | 14 | _zu erfassen_ | _zu erfassen_ |
-| CASE | 12 | _zu erfassen_ | _zu erfassen_ |
-| EPI | 5 | _zu erfassen_ | _zu erfassen_ |
-| GOAL | 7 | _zu erfassen_ | _zu erfassen_ |
-| EVT | 10 | _zu erfassen_ | _zu erfassen_ |
-| ATT | 9 | _zu erfassen_ | _zu erfassen_ |
-| WI | 10 | _zu erfassen_ | _zu erfassen_ |
-| DEL | 6 | _zu erfassen_ | _zu erfassen_ |
-| RET | 10 | _zu erfassen_ | _zu erfassen_ |
-| SRCH | 6 | _zu erfassen_ | _zu erfassen_ |
-| ZS | 5 | _zu erfassen_ | _zu erfassen_ |
-| HOV | 5 | _zu erfassen_ | _zu erfassen_ |
-| STAT | 10 | _zu erfassen_ | _zu erfassen_ |
-| AUDIT | 7 | _zu erfassen_ | _zu erfassen_ |
-| DSGVO | 8 | _zu erfassen_ | _zu erfassen_ |
-| OFFL | 12 | _zu erfassen_ | _zu erfassen_ |
-| SYS | 6 | _zu erfassen_ | _zu erfassen_ |
-| **Sektion B Total** | **175** | | |
-| **Sektion A Smoke** | **12** | | |
-| **Sektion C Auditor** | **35** | | |
-| **Gesamt** | **222** | | |
+Methodik:
 
-**Berechnung „Doppelt abgedeckt":** Pro Case die `E2E`-Spalte prüfen — falls nicht `—`, gilt der Case als doppelt abgedeckt.
+- **„Doppelt abgedeckt":** Pro Case die `E2E`-Spalte prüfen — falls nicht `—`, gilt der Case als doppelt abgedeckt.
+- **Manuell-only:** Cases mit `—` in der `E2E`-Spalte.
+- **Datenbasis für Folge-Tickets:** Manuell-only-Cases mit hoher Frequenz (jeder Release-Lauf) sind Kandidaten für Automatisierung. Tickets im Issue-Tracker mit Label `automate-manual-test` anlegen — die Liste wird voraussichtlich mit #916 und #909 ergänzt.
 
-**Auto-Befüllung möglich:**
-```bash
-# Cases mit E2E-Coverage (nicht-leere E2E-Spalte)
-grep -c "E2E.*test_" docs/testing/manual-test-matrix.md
-
-# Manuell-only Cases (E2E-Spalte enthält "—")
-grep -c "| —" docs/testing/manual-test-matrix.md  # konservativ
-```
-
-**Datenbasis für Folge-Tickets:** Manuell-only-Cases mit hoher Frequenz (jeder Release-Lauf) sind Kandidaten für Auto­matisierung. Tickets im Issue-Tracker mit Label `automate-manual-test` anlegen.
+> Hinweis: Bis #909 (auto-befüllter Anhang C) umgesetzt ist, sind die per-Bereich-Zahlen nicht in dieser Datei gepflegt — nur die Sektions-Gesamtzahlen im Index sind aktuell.
 
 ---
 
