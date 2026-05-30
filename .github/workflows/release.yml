@@ -36,3 +36,21 @@ jobs:
           build-args: |
             DJANGO_SECRET_KEY=build-only-collectstatic
             APP_VERSION=${{ github.ref_name }}
+      # Refs #886: GHCR-Pakete sind by-default privat, auch wenn das Source-Repo
+      # public ist. Dieser Step setzt die Package-Visibility nach jedem Push
+      # idempotent auf public — aber nur, wenn das Repo selbst public ist
+      # (so läuft der Step im privaten Dev-Repo anlaufstelle/app nicht
+      # versehentlich). Erfordert Repo-Secret GHCR_VISIBILITY_TOKEN
+      # (PAT classic mit admin:packages-Scope; write:packages reicht nicht).
+      - name: Ensure package visibility is public
+        if: github.event.repository.private == false
+        env:
+          GH_TOKEN: ${{ secrets.GHCR_VISIBILITY_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          ORG="${REPOSITORY%%/*}"
+          PKG="${REPOSITORY##*/}"
+          gh api -X PATCH \
+            -H "Accept: application/vnd.github+json" \
+            "/orgs/${ORG}/packages/container/${PKG}" \
+            -f visibility=public
