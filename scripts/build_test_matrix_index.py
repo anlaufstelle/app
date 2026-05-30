@@ -29,9 +29,9 @@ TARGET = ROOT / "docs" / "testing" / "test-matrix-index.md"
 AUTOGEN_START = "<!-- INDEX-AUTOGEN:START -->"
 AUTOGEN_END = "<!-- INDEX-AUTOGEN:END -->"
 
-# Section A and C use ``#### <TC-ID> — <Title>``.
+# Section A, C and D use ``#### <TC-ID> — <Title>``.
 # Section B uses ``### TC-ID: <TC-ID> — <Title>``.
-HEADING_A_C = re.compile(r"^####\s+(?P<tcid>(?:SMK-A|AUD)-[A-Za-z0-9_-]+)\s+[—-]\s+(?P<title>.+?)\s*$")
+HEADING_A_C_D = re.compile(r"^####\s+(?P<tcid>(?:SMK-A|AUD|DEV)-[A-Za-z0-9_-]+)\s+[—-]\s+(?P<title>.+?)\s*$")
 HEADING_B = re.compile(r"^###\s+TC-ID:\s+(?P<tcid>ENT-[A-Za-z0-9_-]+)\s+[—-]\s+(?P<title>.+?)\s*$")
 
 META_HEADER = re.compile(r"^\|\s*Bereich\s*\|\s*Rolle\s*\|\s*Browser\s*\|\s*Mobile\s*\|\s*E2E\s*\|\s*$")
@@ -39,8 +39,9 @@ LOKAL_MARK = re.compile(r"^>\s*🔧\s*\*\*LOKAL/SSH")
 
 SECTIONS = {
     "A": "Sektion A — Anwender-Smoke (SMK-A)",
-    "B": "Sektion B — Entwickler-Komplett (ENT)",
+    "B": "Sektion B — Anwender-Komplett (ENT, systematisch)",
     "C": "Sektion C — Auditor-DSGVO/Security (AUD)",
+    "D": "Sektion D — Entwickler-Probes (DEV, LOKAL/SSH)",
 }
 
 
@@ -69,6 +70,8 @@ def section_for(tcid: str) -> str:
         return "B"
     if tcid.startswith("AUD-"):
         return "C"
+    if tcid.startswith("DEV-"):
+        return "D"
     raise ValueError(f"Cannot derive section from TC-ID {tcid!r}")
 
 
@@ -99,7 +102,7 @@ def parse_matrix(src: Path) -> list[Test]:
     i = 0
     while i < len(lines):
         line = lines[i]
-        m = HEADING_A_C.match(line) or HEADING_B.match(line)
+        m = HEADING_A_C_D.match(line) or HEADING_B.match(line)
         if not m:
             i += 1
             continue
@@ -173,7 +176,7 @@ def render_table(tests: list[Test]) -> list[str]:
         "|-------|-------------|---------|-------|---------|:------:|-----|-------|",
     ]
     for t in tests:
-        anchor_text = f"{t.tcid} — {t.title}" if t.section in {"A", "C"} else f"TC-ID: {t.tcid} — {t.title}"
+        anchor_text = f"{t.tcid} — {t.title}" if t.section in {"A", "C", "D"} else f"TC-ID: {t.tcid} — {t.title}"
         anchor = github_slug(anchor_text)
         link = f"[`{t.tcid}`](manual-test-matrix.md#{anchor})"
         # Escape pipe characters that would break the markdown table.
@@ -184,7 +187,7 @@ def render_table(tests: list[Test]) -> list[str]:
 
 
 def render_index(tests: list[Test]) -> str:
-    by_section: dict[str, list[Test]] = {"A": [], "B": [], "C": []}
+    by_section: dict[str, list[Test]] = {"A": [], "B": [], "C": [], "D": []}
     for t in tests:
         by_section[t.section].append(t)
 
@@ -198,24 +201,26 @@ def render_index(tests: list[Test]) -> str:
     a_total, a_e2e, a_no, a_quote = stats(by_section["A"])
     b_total, b_e2e, b_no, b_quote = stats(by_section["B"])
     c_total, c_e2e, c_no, c_quote = stats(by_section["C"])
+    d_total, d_e2e, d_no, d_quote = stats(by_section["D"])
     g_total, g_e2e, g_no, g_quote = stats(tests)
 
     lines: list[str] = []
     lines.append("## Gesamt-Statistik")
     lines.append("")
-    lines.append(f"- **{g_total} Tests** in drei Sektionen")
+    lines.append(f"- **{g_total} Tests** in vier Sektionen")
     lines.append(f"- **mit E2E-Coverage:** {g_e2e} ({g_quote})")
     lines.append(f"- **ohne E2E (`—`):** {g_no}")
     lines.append("")
     lines.append("| Sektion | Tests | mit E2E | ohne E2E | E2E-Quote |")
     lines.append("|---------|------:|--------:|---------:|----------:|")
     lines.append(f"| A – Anwender-Smoke (SMK-A) | {a_total} | {a_e2e} | {a_no} | {a_quote} |")
-    lines.append(f"| B – Entwickler-Komplett (ENT) | {b_total} | {b_e2e} | {b_no} | {b_quote} |")
+    lines.append(f"| B – Anwender-Komplett (ENT) | {b_total} | {b_e2e} | {b_no} | {b_quote} |")
     lines.append(f"| C – Auditor-DSGVO/Security (AUD) | {c_total} | {c_e2e} | {c_no} | {c_quote} |")
+    lines.append(f"| D – Entwickler-Probes (DEV, LOKAL/SSH) | {d_total} | {d_e2e} | {d_no} | {d_quote} |")
     lines.append(f"| **Gesamt** | **{g_total}** | **{g_e2e}** | **{g_no}** | **{g_quote}** |")
     lines.append("")
 
-    for sec_key in ("A", "B", "C"):
+    for sec_key in ("A", "B", "C", "D"):
         lines.append(f"## {SECTIONS[sec_key]}")
         lines.append("")
         lines.extend(render_table(by_section[sec_key]))
