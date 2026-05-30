@@ -403,7 +403,7 @@ Neben der Grundrolle gibt es situationsabhängige Berechtigungen:
 **Relevante Dateien:**
 - [`src/core/models/user.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) — `Role`-Enum mit 5 Werten, Properties (`is_super_admin`, `is_facility_admin`, `is_staff_or_above` …)
 - [`src/core/views/mixins.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mixins.py) — Zugriffs-Mixins inkl. `SuperAdminRequiredMixin` und `FacilityAdminRequiredMixin`
-- [`src/core/views/system.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/system.py) — `/system/`-Bereich für `super_admin`
+- [`src/core/views/system/`](https://github.com/anlaufstelle/app/tree/main/src/core/views/system) — `/system/`-Bereich für `super_admin`
 - [`src/core/middleware/facility_scope.py`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/facility_scope.py) — Einrichtungs-Scoping + Always-Reset für `app.is_super_admin`
 - [`src/core/models/managers.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/managers.py) — `FacilityScopedManager` für automatische Query-Filterung
 - [`src/core/management/commands/create_super_admin.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/create_super_admin.py) — Bootstrap-Befehl

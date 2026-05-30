@@ -611,7 +611,7 @@ sudo bash /opt/anlaufstelle/scripts/restore-drill.sh
 | 1 | Frische Wegwerf-DB (`anlaufstelle_drill_<pid>`) anlegen |
 | 2 | Backup decrypten + `pg_restore` (custom format) in die Wegwerf-DB |
 | 3 | Stichproben pro Tabelle (`core_facility`, `core_client`, `core_event`, `core_auditlog`, `core_workitem`) — Counts pruefen |
-| 4 | RLS-Policy-Check — `SELECT COUNT FROM pg_class WHERE relrowsecurity = true` muss `>= 18` ergeben |
+| 4 | RLS-Policy-Check — `SELECT COUNT FROM pg_class WHERE relrowsecurity = true` muss `>= 22` ergeben |
 | 5 | `auditlog_immutable`-Trigger existiert UND blockt Raw UPDATE |
 | 6 | Cleanup: Wegwerf-DB drop (via trap) |
 | 7 | **Bei vollem Erfolg:** `mark_restore_verified` im web-Container → Compliance-Marker |
@@ -821,7 +821,7 @@ pip-audit -r requirements.txt --format cyclonedx-json -o sbom.json
 
 ## 9. Row Level Security (RLS)
 
-Seit v0.10.0 sind **19 facility-gescopte Tabellen** per PostgreSQL-RLS gegen
+Seit v0.10.0 sind **22 facility-gescopte Tabellen** per PostgreSQL-RLS gegen
 Cross-Facility-Leaks abgesichert (Defense-in-Depth unterhalb der Django-
 Scoping-Schicht). Jede Policy vergleicht `facility_id` gegen die Session-
 Variable `app.current_facility_id`, die von der

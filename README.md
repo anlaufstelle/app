@@ -106,7 +106,7 @@ Anlaufstelle ist von Grund auf für den Umgang mit besonders schützenswerten Da
 
 - **Pseudonymisierung** — kein Namensfeld in der Datenbank (Art. 25 DSGVO, Privacy by Design)
 - **Feldverschlüsselung** — sensible Angaben werden einzeln mit AES-128 verschlüsselt (Art. 32 DSGVO)
-- **Verschlüsselte Dateianhänge** — File Vault mit AES-GCM und ClamAV-Virenscan vor der Ablage
+- **Verschlüsselte Dateianhänge** — File Vault mit Fernet / AES-128 und ClamAV-Virenscan vor der Ablage
 - **Zwei-Faktor-Authentifizierung** — TOTP mit Backup-Codes, einrichtungsweite Erzwingung möglich
 - **Aufbewahrungsfristen** — automatische Löschung nach konfigurierbarer Frist (Art. 17 DSGVO)
 - **Löschanträge mit 4-Augen-Prinzip** — Löschung nur nach Genehmigung durch Leitung/Admin
