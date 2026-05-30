@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from core.models import Activity, AuditLog, WorkItem
 from core.services.activity import log_activity
+from core.services.audit import audit_event
 
 logger = logging.getLogger(__name__)
 
@@ -46,12 +47,11 @@ def _next_due_date(current: date, recurrence: str) -> date | None:
 
 def _log_workitem_update(workitem, user, changed_fields):
     """Write a single AuditLog entry for a WorkItem bulk field update."""
-    AuditLog.objects.create(
-        facility=workitem.facility,
+    audit_event(
+        AuditLog.Action.WORKITEM_UPDATE,
         user=user,
-        action=AuditLog.Action.WORKITEM_UPDATE,
-        target_type="WorkItem",
-        target_id=str(workitem.pk),
+        facility=workitem.facility,
+        target_obj=workitem,
         detail={"changed_fields": list(changed_fields), "bulk": True},
     )
 
@@ -68,12 +68,11 @@ def create_workitem(facility, user, *, client=None, **data):
         target=workitem,
         summary=f"Aufgabe: {workitem.title}",
     )
-    AuditLog.objects.create(
-        facility=facility,
+    audit_event(
+        AuditLog.Action.WORKITEM_CREATE,
         user=user,
-        action=AuditLog.Action.WORKITEM_CREATE,
-        target_type="WorkItem",
-        target_id=str(workitem.pk),
+        facility=facility,
+        target_obj=workitem,
     )
     return workitem
 
@@ -100,12 +99,11 @@ def update_workitem(workitem, user, *, expected_updated_at=None, **fields):
     workitem.save()
 
     if changed_fields:
-        AuditLog.objects.create(
-            facility=workitem.facility,
+        audit_event(
+            AuditLog.Action.WORKITEM_UPDATE,
             user=user,
-            action=AuditLog.Action.WORKITEM_UPDATE,
-            target_type="WorkItem",
-            target_id=str(workitem.pk),
+            facility=workitem.facility,
+            target_obj=workitem,
             detail={"changed_fields": changed_fields},
         )
 

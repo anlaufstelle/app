@@ -9,6 +9,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, Case
 from core.services.activity import log_activity
+from core.services.audit import audit_event
 from core.services.locking import check_version_conflict
 from core.services.sensitivity import user_can_see_event
 
@@ -36,12 +37,11 @@ def create_case(facility, user, client, title, description="", lead_user=None):
         lead_user=lead_user,
     )
     case.save()
-    AuditLog.objects.create(
-        facility=facility,
+    audit_event(
+        AuditLog.Action.CASE_CREATE,
         user=user,
-        action=AuditLog.Action.CASE_CREATE,
-        target_type="Case",
-        target_id=str(case.pk),
+        facility=facility,
+        target_obj=case,
     )
     return case
 
@@ -67,12 +67,11 @@ def update_case(case, user, *, expected_updated_at=None, **fields):
     case.save()
 
     if changed_fields:
-        AuditLog.objects.create(
-            facility=case.facility,
+        audit_event(
+            AuditLog.Action.CASE_UPDATE,
             user=user,
-            action=AuditLog.Action.CASE_UPDATE,
-            target_type="Case",
-            target_id=str(case.pk),
+            facility=case.facility,
+            target_obj=case,
             detail={"changed_fields": changed_fields},
         )
     return case
@@ -84,12 +83,11 @@ def close_case(case, user):
     case.status = Case.Status.CLOSED
     case.closed_at = timezone.now()
     case.save()
-    AuditLog.objects.create(
-        facility=case.facility,
+    audit_event(
+        AuditLog.Action.CASE_CLOSE,
         user=user,
-        action=AuditLog.Action.CASE_CLOSE,
-        target_type="Case",
-        target_id=str(case.pk),
+        facility=case.facility,
+        target_obj=case,
     )
     log_activity(
         facility=case.facility,
@@ -107,12 +105,11 @@ def reopen_case(case, user):
     case.status = Case.Status.OPEN
     case.closed_at = None
     case.save()
-    AuditLog.objects.create(
-        facility=case.facility,
+    audit_event(
+        AuditLog.Action.CASE_REOPEN,
         user=user,
-        action=AuditLog.Action.CASE_REOPEN,
-        target_type="Case",
-        target_id=str(case.pk),
+        facility=case.facility,
+        target_obj=case,
     )
     log_activity(
         facility=case.facility,

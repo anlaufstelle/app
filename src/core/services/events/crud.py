@@ -16,6 +16,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, Event, EventHistory, FieldTemplate
 from core.services.activity import log_activity
+from core.services.audit import audit_event
 from core.services.events.fields import (
     _snapshot_field_metadata,
     _validate_data_json,
@@ -210,12 +211,11 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
         target=event,
         summary=summary,
     )
-    AuditLog.objects.create(
-        facility=facility,
+    audit_event(
+        AuditLog.Action.EVENT_CREATE,
         user=user,
-        action=AuditLog.Action.EVENT_CREATE,
-        target_type="Event",
-        target_id=str(event.pk),
+        facility=facility,
+        target_obj=event,
         detail={"document_type": document_type.name, "is_anonymous": is_anonymous},
     )
     return event
@@ -264,12 +264,11 @@ def soft_delete_event(event, user):
         data_before=history_payload,
         field_metadata=_snapshot_field_metadata(event.document_type),
     )
-    AuditLog.objects.create(
-        facility=event.facility,
+    audit_event(
+        AuditLog.Action.DELETE,
         user=user,
-        action=AuditLog.Action.DELETE,
-        target_type="Event",
-        target_id=str(event.pk),
+        facility=event.facility,
+        target_obj=event,
         detail={
             "document_type": event.document_type.name,
             "client_pseudonym": (event.client.pseudonym if event.client else None),

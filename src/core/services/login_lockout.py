@@ -23,6 +23,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.models import AuditLog, User
+from core.services.audit import audit_event
 
 # Schwelle und Zeitfenster (Issue #612): 10 Fehlversuche in 15 Minuten
 # lösen die Sperre aus; sie wirkt, bis das Fenster leer ist — also 15 Min
@@ -69,10 +70,10 @@ def unlock(user, unlocked_by, ip_address=None) -> AuditLog:
     Subsequent `is_locked(user)` calls ignore LOGIN_FAILED entries with
     `timestamp <= this_entry.timestamp`.
     """
-    return AuditLog.objects.create(
-        facility=getattr(user, "facility", None),
+    return audit_event(
+        AuditLog.Action.LOGIN_UNLOCK,
         user=user,
-        action=AuditLog.Action.LOGIN_UNLOCK,
+        facility=getattr(user, "facility", None),
         target_type="User",
         target_id=str(user.pk),
         detail={"unlocked_by": str(unlocked_by.pk) if unlocked_by else None},

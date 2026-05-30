@@ -8,6 +8,7 @@ from django.utils import timezone
 from core.models import Activity, AuditLog
 from core.models.outcome import Milestone, OutcomeGoal
 from core.services.activity import log_activity
+from core.services.audit import audit_event
 
 logger = logging.getLogger(__name__)
 
@@ -93,10 +94,10 @@ def delete_milestone(milestone, user):
     title = milestone.title
     milestone_pk = str(milestone.pk)
     milestone.delete()
-    AuditLog.objects.create(
-        facility=facility,
+    audit_event(
+        AuditLog.Action.MILESTONE_DELETE,
         user=user,
-        action=AuditLog.Action.MILESTONE_DELETE,
+        facility=facility,
         target_type="Milestone",
         target_id=milestone_pk,
         detail={"title": title, "case_id": str(case.pk)},
