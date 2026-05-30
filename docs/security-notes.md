@@ -72,7 +72,7 @@ Die saubere Alternative wäre Option 2 aus dem Issue: 20+ Unfold-Templates in [`
 **Was wir behalten:**
 - `script-src` bleibt `'self'` — kein Remote-Script-Loading
 - Architektur-Tests verbieten weiterhin `csrf_exempt`, `|safe`, `mark_safe`, Inline-`<script>`-Blöcke im gesamten Repo (siehe [`src/tests/test_architecture.py`](../src/tests/test_architecture.py))
-- `/admin-mgmt/` ist Admin/Lead-only, MFA-pflichtig, rate-limited, AuditLog auf alle Schreib-Aktionen, RLS gegen Cross-Facility-Leaks
+- `/admin-mgmt/` ist nur fuer Rollen `super_admin` und `facility_admin` erreichbar (Custom `AnlaufstelleAdminSite`, Refs #785). `lead`/`staff`/`assistant` werden geblockt — auch wenn `is_staff=True` gesetzt ist. Sudo-Mode-Pflicht: erster Zugriff redirected zu `/sudo/?next=/admin-mgmt/`. Facility-Scoping in ModelAdmin: `facility_admin` sieht nur Daten der eigenen Facility, `super_admin` sieht alle. Plus AuditLog auf alle Schreib-Aktionen, RLS gegen Cross-Facility-Leaks. MFA-Pflicht ist separates Issue #788.
 
 ### Threat-Model-Bewertung
 
