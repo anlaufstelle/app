@@ -1,4 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
-  <circle cx="256" cy="256" r="240" fill="#4f46e5"/>
-  <text x="256" y="320" text-anchor="middle" font-family="system-ui, sans-serif" font-size="280" font-weight="bold" fill="white">A</text>
+  <!-- PWA-Icon: vollflaechiges gruenes Quadrat (Akzentfarbe #006547) mit weissem
+       Haus (Heroicons "home", wie Login-Logo). Vollflaechig wegen purpose
+       "maskable" - Haus zentriert in der Safe-Zone. -->
+  <rect width="512" height="512" fill="#006547"/>
+  <g transform="translate(128 128) scale(10.6667)" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2.25 12l8.954-8.955c.44-.439 1.152-.439 1.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75"/>
+  </g>
 </svg>
