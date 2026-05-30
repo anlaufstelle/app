@@ -1,5 +1,8 @@
 """Django admin configuration for all core models."""
 
+import secrets
+import string
+
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from unfold.admin import ModelAdmin, TabularInline
@@ -29,7 +32,9 @@ from core.models.attachment import EventAttachment
 from core.services.invite import send_invite_email
 from core.services.login_lockout import is_locked as user_is_locked
 from core.services.login_lockout import unlock as unlock_user
-from core.services.password import generate_initial_password
+
+_INITIAL_PASSWORD_ALPHABET = string.ascii_letters + string.digits
+_INITIAL_PASSWORD_LENGTH = 12
 
 # --- Custom AdminSite + Facility-Scoping (Refs #785) ---
 
@@ -174,7 +179,7 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
                 f"Einladungslink wurde an {obj.email} gesendet.",
             )
         else:
-            password = generate_initial_password()
+            password = "".join(secrets.choice(_INITIAL_PASSWORD_ALPHABET) for _ in range(_INITIAL_PASSWORD_LENGTH))
             obj.set_password(password)
             super().save_model(request, obj, form, change)
             messages.warning(

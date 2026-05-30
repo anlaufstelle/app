@@ -1,5 +1,8 @@
 """Custom User model with 5 roles."""
 
+import base64
+import secrets
+
 from django.conf import settings
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -123,3 +126,20 @@ class User(AbstractUser):
             return bool(facility.settings.mfa_enforced_facility_wide)
         except facility._meta.model.settings.RelatedObjectDoesNotExist:
             return False
+
+    def ensure_offline_key_salt(self) -> str:
+        """Return the user's offline salt, lazily generating one on first access.
+
+        Base64URL-Salt (16 Byte Entropie aus ``secrets.token_bytes``, padding-frei)
+        fuer die client-seitige PBKDF2-Ableitung des AES-GCM-256-Session-Keys.
+        Der Salt wird nicht rotiert ausser bei Passwort-Aenderung (gesetzt in
+        ``CustomPasswordChangeView.form_valid``), damit ein aktiver Session-Tab
+        nach Reload denselben Key re-derivieren kann.
+
+        Refs #958 — ersetzt den frueheren ``services/offline_keys``-Service.
+        """
+        if not self.offline_key_salt:
+            salt_bytes = secrets.token_bytes(16)
+            self.offline_key_salt = base64.urlsafe_b64encode(salt_bytes).decode().rstrip("=")
+            self.save(update_fields=["offline_key_salt"])
+        return self.offline_key_salt

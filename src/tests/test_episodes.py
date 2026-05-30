@@ -1,4 +1,4 @@
-"""Tests for Episode model, service layer, and views."""
+"""Tests for Episode model methods and views."""
 
 import datetime
 
@@ -8,7 +8,6 @@ from django.utils import timezone
 
 from core.models import Case, Client
 from core.models.episode import Episode
-from core.services.episodes import close_episode, create_episode, update_episode
 
 
 def _other_facility_case(other_facility):
@@ -31,10 +30,11 @@ def _other_facility_case(other_facility):
 
 
 @pytest.mark.django_db
-class TestEpisodeService:
+class TestCaseCreateEpisode:
+    """``Case.create_episode`` ersetzt ``services/episodes.create_episode`` (Refs #958)."""
+
     def test_create_episode(self, case_open, staff_user):
-        episode = create_episode(
-            case=case_open,
+        episode = case_open.create_episode(
             user=staff_user,
             title="Erste Episode",
             description="Beschreibung",
@@ -48,37 +48,34 @@ class TestEpisodeService:
 
     def test_create_episode_validates_case_open(self, case_closed, staff_user):
         with pytest.raises(ValueError, match="offene Fälle"):
-            create_episode(
-                case=case_closed,
+            case_closed.create_episode(
                 user=staff_user,
                 title="Ungültig",
                 started_at=timezone.now().date(),
             )
 
     def test_create_episode_default_started_at(self, case_open, staff_user):
-        episode = create_episode(
-            case=case_open,
-            user=staff_user,
-            title="Default-Datum",
-        )
+        episode = case_open.create_episode(user=staff_user, title="Default-Datum")
         assert episode.started_at == timezone.now().date()
 
-    def test_update_episode(self, episode, staff_user):
-        updated = update_episode(episode, staff_user, title="Neuer Titel")
-        assert updated.title == "Neuer Titel"
 
-    def test_update_episode_rejects_unknown_field(self, episode, staff_user):
-        with pytest.raises(ValueError, match="Feld"):
-            update_episode(episode, staff_user, case="invalid")
+@pytest.mark.django_db
+class TestEpisodeClose:
+    """``Episode.close`` ersetzt ``services/episodes.close_episode`` (Refs #958)."""
 
-    def test_close_episode(self, episode, staff_user):
-        closed = close_episode(episode, staff_user)
+    def test_close_sets_ended_at_to_today(self, episode):
+        closed = episode.close()
         assert closed.ended_at == timezone.now().date()
 
-    def test_close_episode_with_date(self, episode, staff_user):
+    def test_close_with_explicit_date(self, episode):
         custom_date = datetime.date(2025, 6, 15)
-        closed = close_episode(episode, staff_user, ended_at=custom_date)
+        closed = episode.close(ended_at=custom_date)
         assert closed.ended_at == custom_date
+
+    def test_close_is_idempotent(self, episode):
+        first = episode.close(ended_at=datetime.date(2025, 6, 1))
+        second = first.close(ended_at=datetime.date(2025, 7, 1))
+        assert second.ended_at == datetime.date(2025, 6, 1)
 
 
 @pytest.mark.django_db

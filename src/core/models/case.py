@@ -4,6 +4,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models.managers import FacilityScopedManager
@@ -91,3 +92,23 @@ class Case(SoftDeletableModel):
 
     def __str__(self):
         return f"{self.title} ({self.get_status_display()})"
+
+    def create_episode(self, *, user, title, description="", started_at=None):
+        """Create an :class:`Episode` for this case.
+
+        Refs #958 — ersetzt den frueheren ``services/episodes.create_episode``-
+        Service-Aufruf. Status-Guard bleibt am Modell (Defense-in-Depth gegen
+        direkte ORM-Zugriffe), View-Layer redirected zusaetzlich mit User-
+        freundlicher Meldung.
+        """
+        from core.models.episode import Episode
+
+        if self.status != self.Status.OPEN:
+            raise ValueError(_("Episoden können nur für offene Fälle erstellt werden."))
+        return Episode.objects.create(
+            case=self,
+            title=title,
+            description=description,
+            started_at=started_at or timezone.now().date(),
+            created_by=user,
+        )

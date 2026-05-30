@@ -4,6 +4,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models.mixins import SoftDeletableModel
@@ -46,3 +47,15 @@ class Episode(SoftDeletableModel):
 
     def __str__(self):
         return self.title
+
+    def close(self, ended_at=None):
+        """Set ``ended_at`` and persist. Idempotent — no-op if already closed.
+
+        Refs #958 — ersetzt den frueheren ``services/episodes.close_episode``-
+        Service-Aufruf.
+        """
+        if self.ended_at is not None:
+            return self
+        self.ended_at = ended_at or timezone.now().date()
+        self.save(update_fields=["ended_at"])
+        return self

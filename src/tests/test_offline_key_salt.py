@@ -1,30 +1,29 @@
-"""Tests for the offline_key_salt endpoint and password-change rotation (Refs #573, #576)."""
+"""Tests for the offline_key_salt endpoint and password-change rotation (Refs #573, #576, #958)."""
 
 import base64
 
 import pytest
 
 from core.models import AuditLog
-from core.services.offline_keys import ensure_offline_key_salt
 
 
 @pytest.mark.django_db
 class TestEnsureOfflineKeySalt:
-    """Service-level invariants of ensure_offline_key_salt()."""
+    """Model-level invariants of ``User.ensure_offline_key_salt()`` (Refs #958)."""
 
     def test_lazy_generates_on_first_call(self, staff_user):
         assert staff_user.offline_key_salt == ""
-        salt = ensure_offline_key_salt(staff_user)
+        salt = staff_user.ensure_offline_key_salt()
         assert salt
         assert staff_user.offline_key_salt == salt
 
     def test_returns_same_value_on_second_call(self, staff_user):
-        first = ensure_offline_key_salt(staff_user)
-        second = ensure_offline_key_salt(staff_user)
+        first = staff_user.ensure_offline_key_salt()
+        second = staff_user.ensure_offline_key_salt()
         assert first == second
 
     def test_salt_is_base64url(self, staff_user):
-        salt = ensure_offline_key_salt(staff_user)
+        salt = staff_user.ensure_offline_key_salt()
         # 16 random bytes → base64url without padding → 22 chars
         assert len(salt) == 22
         # Must round-trip after re-padding

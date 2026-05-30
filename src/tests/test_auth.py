@@ -1,7 +1,5 @@
 """Tests für Auth-Middleware und Rollen."""
 
-import string
-
 import pytest
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
@@ -10,7 +8,6 @@ from django.test import RequestFactory
 from core.middleware.facility_scope import FacilityScopeMiddleware
 from core.middleware.password_change import ForcePasswordChangeMiddleware
 from core.models import AuditLog, User
-from core.services.password import generate_initial_password
 from core.views.mixins import FacilityAdminRequiredMixin, LeadOrAdminRequiredMixin, StaffRequiredMixin
 
 # --- Fixtures ---
@@ -265,26 +262,9 @@ class TestForcePasswordChangeMiddleware:
         assert response == request
 
 
-# --- B.6: Auto-Initialpasswort ---
-
-
-class TestGenerateInitialPassword:
-    def test_default_length(self):
-        password = generate_initial_password()
-        assert len(password) == 12
-
-    def test_custom_length(self):
-        password = generate_initial_password(length=20)
-        assert len(password) == 20
-
-    def test_contains_only_alphanumeric(self):
-        password = generate_initial_password()
-        valid_chars = string.ascii_letters + string.digits
-        assert all(c in valid_chars for c in password)
-
-    def test_generates_unique_passwords(self):
-        passwords = {generate_initial_password() for _ in range(50)}
-        assert len(passwords) == 50
+# Refs #958: Auto-Initialpasswort-Tests entfernt — Inline-Logik in core.admin
+# wird durch ``test_admin_actions.TestUserAdminSaveModel.test_save_model_without_email_sets_initial_password``
+# end-to-end abgedeckt (prueft ``has_usable_password``).
 
 
 # --- B.7: Rate-Limiting ---

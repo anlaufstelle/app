@@ -14,7 +14,6 @@ from core.constants import RATELIMIT_MUTATION
 from core.forms.episodes import EpisodeForm
 from core.models import Case
 from core.models.episode import Episode
-from core.services.episodes import close_episode, create_episode, update_episode
 from core.views.mixins import StaffRequiredMixin
 
 
@@ -42,8 +41,7 @@ class EpisodeCreateView(StaffRequiredMixin, View):
 
         form = EpisodeForm(request.POST)
         if form.is_valid():
-            create_episode(
-                case=case,
+            case.create_episode(
                 user=request.user,
                 title=form.cleaned_data["title"],
                 description=form.cleaned_data.get("description", ""),
@@ -76,14 +74,7 @@ class EpisodeUpdateView(StaffRequiredMixin, View):
         episode = get_object_or_404(Episode, pk=pk, case=case)
         form = EpisodeForm(request.POST, instance=episode)
         if form.is_valid():
-            update_episode(
-                episode,
-                request.user,
-                title=form.cleaned_data["title"],
-                description=form.cleaned_data.get("description", ""),
-                started_at=form.cleaned_data["started_at"],
-                ended_at=form.cleaned_data.get("ended_at"),
-            )
+            form.save()
             messages.success(request, _("Episode wurde aktualisiert."))
             return redirect("core:case_detail", pk=case.pk)
         context = {"form": form, "case": case, "episode": episode, "is_edit": True}
@@ -101,6 +92,6 @@ class EpisodeCloseView(StaffRequiredMixin, View):
         facility = request.current_facility
         case = get_object_or_404(Case, pk=case_pk, facility=facility)
         episode = get_object_or_404(Episode, pk=pk, case=case)
-        close_episode(episode, request.user)
+        episode.close()
         messages.success(request, _("Episode wurde abgeschlossen."))
         return redirect("core:case_detail", pk=case.pk)

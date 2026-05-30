@@ -17,7 +17,6 @@ from core.models import AuditLog, User
 from core.services.audit import log_audit_event
 from core.services.audit_hash import hmac_hash_email
 from core.services.login_lockout import is_locked
-from core.services.offline_keys import ensure_offline_key_salt
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +189,7 @@ class OfflineKeySaltView(LoginRequiredMixin, View):
 
     @method_decorator(ratelimit(key="user", rate="10/m", method="POST", block=True))
     def post(self, request, *args, **kwargs):
-        salt = ensure_offline_key_salt(request.user)
+        salt = request.user.ensure_offline_key_salt()
         log_audit_event(
             request,
             AuditLog.Action.OFFLINE_KEY_FETCH,
