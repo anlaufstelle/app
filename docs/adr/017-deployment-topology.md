@@ -11,7 +11,7 @@ Das Projekt steht vor seiner ersten oeffentlichen Live-Schaltung (`dev.anlaufste
 Die Frage war nicht trivial:
 
 - Eine Recherche-Empfehlung aus [Issue #320](https://github.com/anlaufstelle/app/issues/320) (2026-03-23, geschlossen) hatte **Hetzner + Coolify Cloud** vorgeschlagen — wegen PR-Previews, Web-UI fuer Env-Vars und minimalem DevOps-Aufwand. [Issue #554](https://github.com/anlaufstelle/app/issues/554) sollte das umsetzen, wurde aber nie durchgezogen.
-- Das ADR-Backlog hat „Deployment-Target" explizit als offen gefuehrt, abhaengig von „Erfahrungen im ersten Pilot-Deployment". Das Pilot ist nie gelaufen, die ADR nie geschrieben.
+- Das ADR-Backlog hat „Deployment-Target" explizit als offen gefuehrt, abhaengig von „Erfahrungen im ersten Pilot-Deployment". Das damalige Pilot-Deployment ist nicht zustande gekommen, die geplante ADR blieb offen.
 - Das **Fachkonzept** ist an mehreren Stellen klar gegenlaeufig:
  - §163: „Anlaufstelle muss mit `docker compose up` installierbar sein."
  - §247 (Persona Jonas): Trager-IT, kann Docker, kein Coolify.

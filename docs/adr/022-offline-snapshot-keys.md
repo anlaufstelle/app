@@ -5,7 +5,7 @@
 - **Deciders:** Tobias Nix
 - **Refs:** #572, #574, #786
 
-> **Hinweis Status:** Das Feature ist im Code vorhanden und wird in Pilot-Einrichtungen genutzt, die Annahmen zu Bedrohungs-Modell, Schluessel-Lebenszyklus und Sync-Semantik sind aber noch nicht final festgeschrieben. Diese ADR dokumentiert den aktuellen Stand und ist **vor einem breiten Production-Rollout zu re-evaluieren**.
+> **Hinweis Status:** Das Feature ist als Code-Entwurf vorhanden, aber **nicht in Pilotbetrieb**. Vor einer breiten Freigabe sind eine Security-Review und ein Pen-Test gegen das Tablet-Diebstahl-Szenario erforderlich; die Annahmen zu Bedrohungs-Modell, Schluessel-Lebenszyklus und Sync-Semantik sind dann zu finalisieren. Diese ADR dokumentiert den aktuellen Stand und ist **vor einem breiten Production-Rollout zu re-evaluieren**.
 
 ## Context
 
@@ -29,8 +29,8 @@ Anlaufstelle baut **server-seitig vorgefilterte Snapshot-Bundles**, die client-s
 
 ## Consequences
 
-- **+** Aussendienst-Nutzung wird moeglich, ohne dass Plain-Text-Personendaten am Mobilgeraet liegen.
-- **+** Server-seitige Sichtbarkeitsregeln gelten weiter — ein Bundle kann nie mehr enthalten, als der User online sehen wuerde.
+- **+** **Soll** Aussendienst-Nutzung ermoeglichen, ohne dass Plain-Text-Personendaten am Mobilgeraet liegen.
+- **+** Server-seitige Sichtbarkeitsregeln greifen vor der Serialisierung — ein Bundle kann nicht mehr enthalten, als der User online sehen wuerde (im Code verifizierbar).
 - **+** Bundle-Groesse bleibt durch harte Caps (Anzahl Events, Lookback-Fenster) berechenbar; kein „ganze DB ins Tablet"-Risiko.
 - **+** TTL + Schema-Version verhindern lange lebende, veraltete Caches.
 - **+** Last-Write-Wins + Konflikt-Markierung ist einfach zu implementieren und liefert eine fachlich nachvollziehbare Spur, wo Re-Konvergenz noetig ist.
