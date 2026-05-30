@@ -75,6 +75,7 @@
 - [Anhang C — E2E-Coverage-Bilanz](#anhang-c--e2e-coverage-bilanz)
 - [Anhang D — Test-Daten-Cheatsheet](#anhang-d--test-daten-cheatsheet)
 - [Anhang E — Performance-Budgets](#anhang-e--performance-budgets)
+- [Anhang F — Sprachen×Rollen×Einrichtungen Cross-Coverage-Grid](#anhang-f--sprachenrolleneinrichtungen-cross-coverage-grid)
 
 ---
 
@@ -102,11 +103,14 @@ Tester:innen arbeiten gegen **[https://dev.anlaufstelle.app](https://dev.anlaufs
 
 | Username | Rolle | Facility | Typische Verwendung |
 |----------|-------|----------|----------------------|
-| `admin` | ADMIN | 1 | Admin-Workflows, Audit-Log, DSGVO-Paket |
-| `leitung` | LEAD | 1 | Cases schließen, Retention, Statistik |
-| `fachkraft` | STAFF | 1 | Standard-Sozialarbeit (CRUD, Events, Dokumentation) |
-| `assistenz` | ASSISTANT | 1 | Niedrigste Rolle, RBAC-Negativtests |
-| `admin_2`, `leitung_2`, `fachkraft_2`, `assistenz_2` | je 1 | 2 | Cross-Facility-/RLS-Tests (falls 2. Facility geseedet) |
+| `admin` | facility_admin | 1 (Hauptstelle) | Admin-Workflows, Audit-Log, DSGVO-Paket |
+| `thomas` | lead | 1 (Hauptstelle) | Cases schließen, Retention, Statistik |
+| `miriam` | staff | 1 (Hauptstelle) | Standard-Sozialarbeit (CRUD, Events, Dokumentation) |
+| `lena` | assistant | 1 (Hauptstelle) | Niedrigste Rolle, RBAC-Negativtests |
+| `superadmin` | super_admin | — (keine) | Systembereich `/system/`, facility-übergreifend |
+| `admin_1`, `thomas_1`, `miriam_1`, `lena_1` | je wie oben | 2 (Zweigstelle Nord) | Cross-Facility-/RLS-Tests (nur bei `--scale medium`+) |
+
+> **Hinweis (Refs #973):** Die Seed-Usernamen sind `admin`/`thomas`/`miriam`/`lena` (nicht `leitung`/`fachkraft`/`assistenz`) und der Suffix der 2.-Facility-User ist **`_1`** (0-indexierter `facility_idx`), nicht `_2`. Quelle: [`src/core/seed/constants.py`](https://github.com/anlaufstelle/app/blob/main/src/core/seed/constants.py) (`USER_TEMPLATES`) + [`src/core/seed/users.py`](https://github.com/anlaufstelle/app/blob/main/src/core/seed/users.py).
 
 > ⚠️ **Geteilte Accounts — Konflikt-Hinweise**
 > - Logins werden geteilt: parallele Tester:innen sollen sich abstimmen, wer wann mit welchem Account testet.
@@ -127,7 +131,7 @@ Lokales Setup nur falls 🔧 LOKAL/SSH-Cases anstehen:
 |---------|--------|
 | Repo aktuell | `git pull` |
 | DB & Container | `sudo docker compose up -d` |
-| Seed mit 2 Facilities | `make seed FACILITIES=2` |
+| Seed mit 2 Facilities | `python src/manage.py seed --flush --scale medium` (small=1, **medium=2**, large=5 Einrichtungen; ein `FACILITIES`-Argument existiert nicht — Refs #973) |
 | Dev-Server starten | `make runserver-e2e` (Port 8844, HTTP) oder `make runserver` (Port 8000) |
 | Migrationen | `make migrate` |
 
@@ -192,7 +196,7 @@ Status-Symbole gelten gleichermassen im Run-Log:
 | ATT | Anhänge | SETUP | Einrichtungs-/Konfigurationsassistent |
 | WI | WorkItems | COMP | Betriebs-/Compliance-Dashboard |
 | DEL | Lösch-Anträge | PRIV | Datenschutz-Review (Freitext) |
-| | | REPORT | Datenschutzfreundliche externe Berichte |
+| I18N | Sprachen (DE/EN) | REPORT | Datenschutzfreundliche externe Berichte |
 
 **Forward-looking Bereiche (Refs #908):** `SETUP`, `COMP`, `PRIV`, `REPORT` und `A11Y` sind aufgenommen, damit die jeweiligen Feature-Issues (#917 Einrichtungsassistent, #919 Compliance-Dashboard, #918 Freitext-Review, #921 Externe Berichte) ihre Cases unter einheitlichem Schema ablegen können, sobald das Feature implementiert ist. A11Y (Refs #912) bekommt einen eigenen Cases-Block.
 
@@ -6467,6 +6471,110 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 ---
 
+<details open>
+<summary><strong>🌐 I18N — Sprachen (DE/EN) (5 Cases)</strong></summary>
+
+**Routen:** alle (Sprachdimension) · `/i18n/setlang/` 
+**Views/Middleware:** `src/core/middleware/user_language.py` (`UserLanguageMiddleware`), `src/core/views/auth.py` (`set_user_language`) 
+**Kataloge:** `src/locale/de/LC_MESSAGES/django.po`, `src/locale/en/LC_MESSAGES/django.po` 
+**E2E-Coverage:** `test_i18n_locale.py`, `test_middleware_user_language.py` 
+**Zweck:** systematische Sprach-Cross-Coverage über alle Bereiche — ergänzt das bestehende [ENT-ACCT-02](#tc-id-ent-acct-02--sprache-wechseln-deen-session-cookie--user-pref) (Switch-Mechanik) um Katalog-Vollständigkeit, Persistenz und Lokalisierung. Refs #973.
+
+### TC-ID: ENT-I18N-01 — DE→EN-Umschaltung persistiert über Navigation & Re-Login
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| I18N | fachkraft (`miriam`) | C/F/S | ⚪ | `test_i18n_locale.py` |
+
+**Voraussetzung:** eingeloggt, Default-Sprache `de`.
+
+**Schritte:**
+1. Header-Sprachumschalter `EN` klicken.
+2. Über mehrere Bereiche navigieren (Zeitstrom → Personen → Fälle → Aufgaben).
+3. Logout, Re-Login, erneut Zeitstrom öffnen.
+
+**Erwartetes Ergebnis:**
+- Nach Schritt 1: UI-Titel/Navigation auf Englisch („Timeline", „People", „Cases", „Tasks").
+- Schritt 2: Sprache bleibt EN über alle Navigationen (kein Rückfall auf DE).
+- Schritt 3: EN bleibt nach Re-Login (Persistenz via `User.preferred_language`).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-I18N-02 — EN-Katalog-Vollständigkeit: keine deutschen Fallback-Strings in EN-UI
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| I18N | fachkraft (`miriam`) | C |||
+
+**Voraussetzung:** Sprache auf EN, alle Bereiche durchklicken.
+
+**Schritte:**
+1. Mit aktiver EN-Sprache Navigation + Hauptseiten durchgehen.
+2. Auf deutsche UI-Strings achten (keine DB-Daten — die bleiben sprachneutral).
+
+**Erwartetes Ergebnis:**
+- Alle **UI-Template-Strings** erscheinen auf Englisch.
+- **Bekannter Fehler:** Nav „Arbeitszentrale" und Button „Neue Person" bleiben deutsch; EN-Katalog hat 121 fuzzy + 122 leere Einträge → #974. Bis behoben: `❌ Fail #974` im Run-Log.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-I18N-03 — Anonyme Nutzer:innen erhalten DE-Default (Accept-Language ignoriert)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| I18N | anonym | C || `test_middleware_user_language.py` |
+
+**Schritte:**
+1. Ausgeloggt `/login/` mit `Accept-Language: en` aufrufen.
+
+**Erwartetes Ergebnis:**
+- Login-Seite auf Deutsch (Default `de`); `UserLanguageMiddleware` ignoriert den Browser-Header bewusst (Refs #670).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-I18N-04 — Sprachwechsel mitten im Workflow (offenes Formular)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| I18N | fachkraft (`miriam`) | C/F |||
+
+**Schritte:**
+1. Event-/Personen-Formular öffnen, Felder teilweise füllen.
+2. Sprache umschalten (EN↔DE).
+3. Formular erneut betrachten.
+
+**Erwartetes Ergebnis:**
+- Labels wechseln die Sprache; eingegebene Werte gehen nicht verloren bzw. Verhalten ist dokumentiert (Anhang B, Lücke #6).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-I18N-05 — Datums-/Zahlenlokalisierung DE vs. EN
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| I18N | fachkraft (`miriam`) | C |||
+
+**Schritte:**
+1. Personen-Liste in DE betrachten (Datum „25. Mai 2026").
+2. Auf EN umschalten (Datum „May 25, 2026").
+
+**Erwartetes Ergebnis:**
+- Datums-/Zeitformat folgt dem aktiven Locale (`L10N`); keine gemischten Formate.
+
+**Status:** ☐ Offen
+
+</details>
+
+---
+
 ## SEKTION C — Auditor-DSGVO/Security
 
 > **Zielgruppe:** Externe:r DSGVO-Auditor:in oder interne Compliance-Prüfung. Maximale Tiefe mit Verweis auf konkrete DSGVO-Artikel, Migrationen, Services, Settings.
@@ -6981,6 +7089,58 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 | Security | admin + admin_2 | C || `src/tests/test_rls.py` |
 
 **Schritte:** Wie AUD-SEC-RLS-01, aber mit WorkItem.
+
+**Status:** ☐ Offen
+
+---
+
+#### AUD-SEC-RLS-05 — Cross-Facility Audit-Log-Scope
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | admin + admin_1 | C || `src/tests/test_rls.py` |
+
+**Schritte:**
+1. Als `admin` (Hauptstelle) `/audit/` öffnen → nur eigene-Facility-Einträge.
+2. UUID eines Hauptstelle-Audit-Eintrags merken, als `admin_1` (Zweigstelle Nord) `/audit/<uuid>/` aufrufen.
+
+**Erwartetes Ergebnis:**
+- Jede:r facility_admin sieht in `/audit/` nur die eigene Facility (Live-Probe: beide `admin` und `admin_1` → 200 auf eigener Liste).
+- Detailzugriff auf fremde Facility → **404** (Live verifiziert: `admin_1` → 404 auf Hauptstelle-Audit-Detail). Keine Cross-Facility-Sichtbarkeit.
+
+**Status:** ☐ Offen
+
+---
+
+#### AUD-SEC-RLS-07 — Cross-Facility Retention- & Lösch-Antrag-Isolation
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | thomas + thomas_1 | C || `src/tests/test_rls.py` |
+
+**Schritte:**
+1. Als `thomas` (lead, Hauptstelle) Lösch-Antrag-/Retention-Detail-UUID merken.
+2. Als `thomas_1` (lead, Zweigstelle Nord) dieselbe `/deletion-requests/<uuid>/review/` aufrufen.
+
+**Erwartetes Ergebnis:**
+- Fremde Facility → **404** (Live verifiziert: `thomas_1` → 404 auf `deletion_review` der Hauptstelle). Retention-Dashboard zeigt nur eigene-Facility-Proposals.
+
+**Status:** ☐ Offen
+
+---
+
+#### AUD-SEC-RLS-08 — Cross-Facility Attachment-, Statistik- & Suche-Isolation
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | miriam + miriam_1 | C || `src/tests/test_rls.py` |
+
+**Schritte:**
+1. Als `miriam` (Hauptstelle) Event-Attachment-Download-URL + Personen-Pseudonym merken.
+2. Als `miriam_1` (Zweigstelle Nord) Attachment-URL aufrufen und nach dem Fremd-Pseudonym suchen.
+
+**Erwartetes Ergebnis:**
+- Attachment fremder Facility → 404; `/search/` liefert keine Fremd-Facility-Treffer; Statistik aggregiert nur eigene Facility (`thomas`/`admin` 200, scope-gebunden).
 
 **Status:** ☐ Offen
 
@@ -8620,6 +8780,7 @@ Methodik:
 | B | Fälle | 9 | 9 | 0 | 100 % |
 | B | Fälle / API | 1 | 1 | 0 | 100 % |
 | B | Fälle / Events | 2 | 2 | 0 | 100 % |
+| B | I18N | 5 | 2 | 3 | 40 % |
 | B | Klient:innen | 13 | 13 | 0 | 100 % |
 | B | Klient:innen / RLS | 1 | 1 | 0 | 100 % |
 | B | MFA | 9 | 9 | 0 | 100 % |
@@ -8636,7 +8797,7 @@ Methodik:
 | B | Zeitstrom | 5 | 5 | 0 | 100 % |
 | B | Übergabe | 5 | 5 | 0 | 100 % |
 | C | Compliance | 14 | 11 | 3 | 79 % |
-| C | Security | 17 | 17 | 0 | 100 % |
+| C | Security | 20 | 20 | 0 | 100 % |
 | D | Audit | 2 | 2 | 0 | 100 % |
 | D | Aufbewahrung | 9 | 9 | 0 | 100 % |
 | D | Compliance | 7 | 7 | 0 | 100 % |
@@ -8652,10 +8813,10 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 12 | 0 | 100 % |
-| B | 181 | 168 | 13 | 93 % |
-| C | 31 | 28 | 3 | 90 % |
+| B | 186 | 170 | 16 | 91 % |
+| C | 34 | 31 | 3 | 91 % |
 | D | 39 | 34 | 5 | 87 % |
-| **Gesamt** | **263** | **242** | **21** | **92 %** |
+| **Gesamt** | **271** | **247** | **24** | **91 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->
@@ -8768,4 +8929,48 @@ Im Profil **Major-Release** ([`release-test-profiles.md`](release-test-profiles.
 
 ---
 
-**Letzte Aktualisierung:** 2026-05-09 · Pflege durch: Tobias Nix · Issue: #864
+## Anhang F — Sprachen×Rollen×Einrichtungen Cross-Coverage-Grid
+
+> **Zweck (Refs #973):** Master-Referenz für die drei Querschnitts-Dimensionen. Statt jede Route × Rolle × Sprache × Facility als eigenen TC-ID zu duplizieren, fasst dieses Grid die **Anwendbarkeit** je Routengruppe zusammen — der exhaustive Lauf prüft pro Gruppe den Rollen-Vektor (erlaubt/Deny), beide Sprachen (DE/EN) und (bei datenführenden Routen) die Facility-2-Isolation. Verifiziert per HTTP-Authz-Probe (9 Seed-Accounts × alle Routen) + Playwright-Stichproben.
+
+### Rollen-Applicability-Legende (Mixin → Routengruppe)
+
+Quelle: [`src/core/views/mixins.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mixins.py) + [`src/core/urls.py`](https://github.com/anlaufstelle/app/blob/main/src/core/urls.py).
+
+| Mixin | Erlaubte Rollen | Routengruppe (Beispiele) |
+|-------|-----------------|--------------------------|
+| `SuperAdminRequiredMixin` | nur `super_admin` | `/system/*` (audit, organization, lockouts, maintenance, retention, vvt, legal-holds, compliance) |
+| `FacilityAdminRequiredMixin` | nur `facility_admin` | `/audit/`, `/audit/<pk>/` |
+| `LeadOrAdminRequiredMixin` | `facility_admin`, `lead` | Retention, Deletion-Requests, Statistik, Case-close/reopen, Client-Trash/Restore/Delete |
+| `StaffRequiredMixin` | `facility_admin`, `lead`, `staff` | Client-create/update, Case-CRUD, Event-create/update, Episoden/Goals |
+| `AssistantOrAboveRequiredMixin` | + `assistant` | Client-list/detail, Event-detail, Account, Zeitstrom/Handover, Suche, WorkItem-inbox/detail |
+
+> `super_admin` (facility=None) ist **bewusst aus dem Facility-App-Bereich ausgesperrt** (403 auf Zeitstrom/Clients/etc.) und lebt in `/system/*`. Ausnahme-Auffälligkeit: `/account/` liefert für super_admin 403 → #975.
+
+### Cross-Coverage-Grid
+
+Legende: ✅ erlaubt (200) · ⛔ Deny erwartet (403/redirect) · 🔒 Sudo-Redirect · 404 = facility-fremdes Objekt nicht sichtbar (RLS-Isolation OK). sA=super_admin, FA=facility_admin, Ld=lead, St=staff, As=assistant.
+
+| Routengruppe | sA | FA | Ld | St | As | DE/EN | Facility-2-Isolation |
+|--------------|----|----|----|----|----|-------|----------------------|
+| Auth / Login / Pwd-Reset / MFA / Sudo | ✅ | ✅ | ✅ | ✅ | ✅ | DE+EN | n/a |
+| Account `/account/` | ⛔ #975 | ✅ | ✅ | ✅ | ✅ | DE+EN | facility-scoped |
+| Zeitstrom / Dashboard / Handover | ⛔ | ✅ | ✅ | ✅ | ✅ | DE+EN | scoped |
+| Personen-Liste/-Detail / Suche | ⛔ | ✅ | ✅ | ✅ | ✅ | DE+EN | fac2→404 ✅ |
+| Personen create/update | ⛔ | ✅ | ✅ | ✅ | ⛔ | DE+EN | fac2→404 ✅ |
+| Fälle / Episoden / Goals (CRUD) | ⛔ | ✅ | ✅ | ✅ | ⛔ | DE+EN | fac2→404 ✅ |
+| Fall close/reopen, Client-Trash | ⛔ | ✅ | ✅ | ⛔ | ⛔ | DE+EN | scoped |
+| Events create/update | ⛔ | ✅ | ✅ | ✅ | ⛔ | DE+EN | fac2→404 ✅ |
+| Attachments / Dateien | ⛔ | ✅ | ✅ | ✅ | ✅ | DE+EN | fac2→404 ✅ |
+| WorkItems inbox/detail | ⛔ | ✅ | ✅ | ✅ | ✅ | DE+EN | fac2→404 ✅ |
+| WorkItems create | ⛔ | ✅ | ✅ | ✅ | ⛔ | DE+EN | scoped |
+| Retention / Deletion-Requests / Statistik | ⛔ | ✅ | ✅ | ⛔ | ⛔ | DE+EN | scoped |
+| Client-Export / DSGVO-Paket | ⛔ | 🔒 | 🔒 | ⛔ | ⛔ | DE+EN | scoped |
+| Audit-Log `/audit/` | ⛔ | ✅ | ⛔ | ⛔ | ⛔ | DE+EN | je facility-eigene Liste ✅ |
+| System `/system/*` | ✅ | ⛔ | ⛔ | ⛔ | ⛔ | DE+EN | facility-übergreifend (geloggt) |
+
+**Befund-Zusammenfassung der Live-Probe:** Rollen-Gating entspricht durchweg den Mixins; Cross-Facility-Isolation greift (Facility-2-User erhalten 404 auf alle Facility-1-Objekte); sensible Exporte sind sudo-gated. Offene Punkte: #974 (EN-i18n), #975 (super_admin `/account/`). Vollständige Zellen-Matrix im Run-Log [`runs/2026-05-25-major-release-v0.12.0.md`](runs/2026-05-25-major-release-v0.12.0.md) §3.X.
+
+---
+
+**Letzte Aktualisierung:** 2026-05-25 · Pflege durch: Tobias Nix · Issues: #864, #973
