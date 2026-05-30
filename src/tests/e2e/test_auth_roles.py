@@ -10,6 +10,8 @@ Deckt ab:
 
 import pytest
 
+from tests.e2e._selectors import find_client_link
+
 pytestmark = pytest.mark.e2e
 
 
@@ -115,7 +117,7 @@ class TestAssistantQualifiedClientAccess:
         # Admin holt die UUID von Stern-42 via Suchfilter
         authenticated_page.goto(f"{base_url}/clients/?q=Stern-42")
         authenticated_page.wait_for_load_state("domcontentloaded")
-        authenticated_page.locator("a:has-text('Stern-42')").first.click()
+        find_client_link(authenticated_page, "Stern-42").click()
         authenticated_page.wait_for_load_state("domcontentloaded")
         client_url = authenticated_page.url
 

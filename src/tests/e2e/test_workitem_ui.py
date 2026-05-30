@@ -4,6 +4,8 @@ import re
 
 import pytest
 
+from tests.e2e._selectors import find_client_link
+
 pytestmark = pytest.mark.e2e
 
 
@@ -156,7 +158,7 @@ class TestWorkItemClickableClientDetail:
         # Zum Klientel-Detail navigieren
         authenticated_page.goto(f"{base_url}/clients/")
         authenticated_page.wait_for_load_state("domcontentloaded")
-        authenticated_page.locator("a:has-text('Stern-42')").first.click()
+        find_client_link(authenticated_page, "Stern-42").click()
         authenticated_page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
 
         # Aufgabe sollte klickbar sein
