@@ -270,3 +270,251 @@ class TestMfaChecks:
         result = _mfa_checks()
         # 0 von 1 → 0 % → CRITICAL.
         assert result[0].status == ComplianceStatus.CRITICAL
+
+
+# ============================================================================
+# Welle 9 (#942): Follow-Up-Tests für Compliance-Logic-Survivors
+#
+# Pragmas auf Display-Strings (label/category/message/action_hint) haben
+# ~260 UI-String-Mutations entfernt. Verbleibende Survivors sind echte
+# Logic-Lücken, primär in den Status-Branches der Helper-Funktionen.
+# ============================================================================
+
+
+class _AdminRoleCheck:
+    """Mini-Helper für `_db_role_admin_check`-Tests ohne Postgres-Roundtrip.
+
+    Sieht aus wie ``core.management.commands.check_db_roles.RoleCheck``, hat
+    die Felder, die ``compliance._db_role_admin_check`` liest: ``role``,
+    ``actual_super``, ``actual_bypassrls``, ``ok``-Property, ``problems()``.
+    """
+
+    def __init__(self, role: str, actual_super: bool | None, actual_bypassrls: bool | None):
+        self.role = role
+        self.actual_super = actual_super
+        self.actual_bypassrls = actual_bypassrls
+
+    @property
+    def ok(self) -> bool:
+        return self.actual_super is False and self.actual_bypassrls is True
+
+    def problems(self) -> list[str]:
+        out: list[str] = []
+        if self.actual_super is not False:
+            out.append(f"actual_super={self.actual_super} (erwartet: False)")
+        if self.actual_bypassrls is not True:
+            out.append(f"actual_bypassrls={self.actual_bypassrls} (erwartet: True)")
+        return out
+
+
+class TestDbRoleAdminCheck:
+    """Branch-Grenzen für `_db_role_admin_check` (Refs Welle 9 #942).
+
+    Test_compliance_service.py:TestDbRoleChecks deckt den App-Pfad ab, aber
+    nicht den Admin-Pfad in `_db_role_admin_check` direkt. Mutmut findet
+    hier Logic-Survivors (z.B. ``actual_super is None`` → ``is not None``
+    Negation), die durch fehlende Branch-Tests nicht gekillt werden.
+    """
+
+    def test_unknown_when_admin_role_not_in_pg_roles(self):
+        """``actual_super is None`` → UNKNOWN (Admin-Rolle nicht angelegt)."""
+        admin = _AdminRoleCheck(role="ghost_admin", actual_super=None, actual_bypassrls=None)
+        result = compliance._db_role_admin_check(admin)
+        assert result.status == ComplianceStatus.UNKNOWN
+        assert result.key == "db_role_admin"
+        assert "ghost_admin" in result.message
+
+    def test_ok_when_admin_role_correct(self):
+        """NOSUPERUSER + BYPASSRLS → OK."""
+        admin = _AdminRoleCheck(role="anlaufstelle_admin", actual_super=False, actual_bypassrls=True)
+        result = compliance._db_role_admin_check(admin)
+        assert result.status == ComplianceStatus.OK
+        assert "anlaufstelle_admin" in (result.detail or "")
+        assert "rolsuper=False" in (result.detail or "")
+        assert "rolbypassrls=True" in (result.detail or "")
+
+    def test_critical_when_admin_is_superuser(self):
+        """Admin mit ``rolsuper=True`` → CRITICAL."""
+        admin = _AdminRoleCheck(role="bad_admin", actual_super=True, actual_bypassrls=True)
+        result = compliance._db_role_admin_check(admin)
+        assert result.status == ComplianceStatus.CRITICAL
+        assert "actual_super=True" in (result.detail or "")
+
+    def test_critical_when_admin_lacks_bypassrls(self):
+        """Admin mit ``rolbypassrls=False`` → CRITICAL."""
+        admin = _AdminRoleCheck(role="weak_admin", actual_super=False, actual_bypassrls=False)
+        result = compliance._db_role_admin_check(admin)
+        assert result.status == ComplianceStatus.CRITICAL
+        assert "actual_bypassrls=False" in (result.detail or "")
+
+
+class TestClamavSignatureBoundary:
+    """Branch-Grenzen für `_clamav_checks` Signatur-Alter (Refs Welle 9 #942).
+
+    Bestehende Tests in test_compliance_service.py decken `ping=True`+`age=3`
+    (OK) und `age=30` (WARNING) ab, lassen aber die exakte Schwelle (`age=7`
+    OK, `age=8` WARNING) und den `age_days is None`-Branch (UNKNOWN trotz
+    vorhandener sig) offen.
+    """
+
+    def test_age_seven_days_is_still_ok(self):
+        """Exakte Schwelle ``age <= 7`` → OK."""
+        with (
+            patch("core.services.virus_scan.ping", return_value=True),
+            patch(
+                "core.services.virus_scan.signature_info",
+                return_value={"version": "1.4.0", "signature_date": None, "age_days": 7},
+            ),
+        ):
+            checks = compliance._clamav_checks()
+        sig = next(c for c in checks if c.key == "clamav_signature")
+        assert sig.status == ComplianceStatus.OK
+
+    def test_age_eight_days_is_warning(self):
+        """Schwelle ``age > 7`` → WARNING (Boundary +1)."""
+        with (
+            patch("core.services.virus_scan.ping", return_value=True),
+            patch(
+                "core.services.virus_scan.signature_info",
+                return_value={"version": "1.4.0", "signature_date": None, "age_days": 8},
+            ),
+        ):
+            checks = compliance._clamav_checks()
+        sig = next(c for c in checks if c.key == "clamav_signature")
+        assert sig.status == ComplianceStatus.WARNING
+
+    def test_age_days_is_none_yields_unknown(self):
+        """sig vorhanden, aber ``age_days=None`` → UNKNOWN."""
+        with (
+            patch("core.services.virus_scan.ping", return_value=True),
+            patch(
+                "core.services.virus_scan.signature_info",
+                return_value={"version": "1.4.0", "signature_date": None, "age_days": None},
+            ),
+        ):
+            checks = compliance._clamav_checks()
+        sig = next(c for c in checks if c.key == "clamav_signature")
+        assert sig.status == ComplianceStatus.UNKNOWN
+        assert "1.4.0" in (sig.detail or "")
+
+    def test_version_unknown_when_missing(self):
+        """``sig.get("version")`` returns None → Default-String ``"unbekannt"``."""
+        with (
+            patch("core.services.virus_scan.ping", return_value=True),
+            patch(
+                "core.services.virus_scan.signature_info",
+                return_value={"version": None, "signature_date": None, "age_days": None},
+            ),
+        ):
+            checks = compliance._clamav_checks()
+        sig = next(c for c in checks if c.key == "clamav_signature")
+        assert "unbekannt" in (sig.detail or "")
+
+
+class TestBackupBoundary:
+    """Branch-Grenzen für `_backup_checks` Age-Hours (Refs Welle 9 #942).
+
+    Schwellen: ``<= 24`` OK, ``<= 72`` WARNING, ``> 72`` CRITICAL.
+    """
+
+    def test_age_24h_is_ok(self):
+        """Exakte Schwelle ``age <= 24`` → OK."""
+        with patch(
+            "core.services.system_health.last_backup_info",
+            return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 24.0, "is_stale": False},
+        ):
+            checks = compliance._backup_checks()
+        assert checks[0].status == ComplianceStatus.OK
+
+    def test_age_25h_is_warning(self):
+        """``age > 24`` → WARNING (Boundary +1)."""
+        with patch(
+            "core.services.system_health.last_backup_info",
+            return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 25.0, "is_stale": True},
+        ):
+            checks = compliance._backup_checks()
+        assert checks[0].status == ComplianceStatus.WARNING
+
+    def test_age_72h_is_still_warning(self):
+        """Exakte Schwelle ``age <= 72`` → WARNING."""
+        with patch(
+            "core.services.system_health.last_backup_info",
+            return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 72.0, "is_stale": True},
+        ):
+            checks = compliance._backup_checks()
+        assert checks[0].status == ComplianceStatus.WARNING
+
+    def test_age_73h_is_critical(self):
+        """``age > 72`` → CRITICAL (Boundary +1)."""
+        with patch(
+            "core.services.system_health.last_backup_info",
+            return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 73.0, "is_stale": True},
+        ):
+            checks = compliance._backup_checks()
+        assert checks[0].status == ComplianceStatus.CRITICAL
+
+
+class TestRestoreBoundary:
+    """Branch-Grenzen für `_restore_checks` Age-Days (Refs Welle 9 #942).
+
+    Schwellen: ``<= 90`` OK, ``<= 180`` WARNING, ``> 180`` CRITICAL.
+    Da AuditLog-Timestamps via Migration-0024 immutable sind, patchen wir
+    ``compliance.datetime`` für Boundary-präzise Tests.
+    """
+
+    @pytest.mark.django_db
+    def test_age_90d_is_ok(self):
+        AuditLog.objects.filter(action=AuditLog.Action.RESTORE_VERIFIED).delete()
+        entry = AuditLog.objects.create(
+            action=AuditLog.Action.RESTORE_VERIFIED,
+            facility=None,
+            target_type="RestoreVerification",
+            detail={"note": "test"},
+        )
+        # 90 Tage nach Erstellung — `age_days <= 90` greift → OK
+        fixed_now = entry.timestamp + timedelta(days=90)
+        with _patch_compliance_now(fixed_now):
+            checks = compliance._restore_checks()
+        assert checks[0].status == ComplianceStatus.OK
+
+    @pytest.mark.django_db
+    def test_age_91d_is_warning(self):
+        AuditLog.objects.filter(action=AuditLog.Action.RESTORE_VERIFIED).delete()
+        entry = AuditLog.objects.create(
+            action=AuditLog.Action.RESTORE_VERIFIED,
+            facility=None,
+            target_type="RestoreVerification",
+            detail={"note": "test"},
+        )
+        fixed_now = entry.timestamp + timedelta(days=91)
+        with _patch_compliance_now(fixed_now):
+            checks = compliance._restore_checks()
+        assert checks[0].status == ComplianceStatus.WARNING
+
+    @pytest.mark.django_db
+    def test_age_180d_is_still_warning(self):
+        AuditLog.objects.filter(action=AuditLog.Action.RESTORE_VERIFIED).delete()
+        entry = AuditLog.objects.create(
+            action=AuditLog.Action.RESTORE_VERIFIED,
+            facility=None,
+            target_type="RestoreVerification",
+            detail={"note": "test"},
+        )
+        fixed_now = entry.timestamp + timedelta(days=180)
+        with _patch_compliance_now(fixed_now):
+            checks = compliance._restore_checks()
+        assert checks[0].status == ComplianceStatus.WARNING
+
+    @pytest.mark.django_db
+    def test_age_181d_is_critical(self):
+        AuditLog.objects.filter(action=AuditLog.Action.RESTORE_VERIFIED).delete()
+        entry = AuditLog.objects.create(
+            action=AuditLog.Action.RESTORE_VERIFIED,
+            facility=None,
+            target_type="RestoreVerification",
+            detail={"note": "test"},
+        )
+        fixed_now = entry.timestamp + timedelta(days=181)
+        with _patch_compliance_now(fixed_now):
+            checks = compliance._restore_checks()
+        assert checks[0].status == ComplianceStatus.CRITICAL
