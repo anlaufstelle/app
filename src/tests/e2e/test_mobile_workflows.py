@@ -194,10 +194,8 @@ class TestMobileReflowAtZoom:
     aktivem Browser-Zoom 200% sieht. Erwartung: kein horizontaler
     Scrollbalken auf den Kern-Pfaden.
 
-    **NLnet-M3-Hinweis:** Hier wird KEIN axe-core-Audit gefahren —
-    systematisches WCAG-Testing ist Teil von Milestone M3
-    ([Issue #470](https://github.com/tobiasnix/anlaufstelle/issues/470))
-    und in Welle 5 bewusst out-of-scope.
+    **A11y-Hinweis:** Hier wird KEIN axe-core-Audit gefahren —
+    systematisches WCAG-Testing ist bewusst out-of-scope.
     """
 
     def test_reflow_dashboard(self, mobile_authenticated_page, base_url):
