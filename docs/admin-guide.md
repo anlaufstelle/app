@@ -545,7 +545,11 @@ docker compose -f docker-compose.prod.yml exec web \
 
 Der Befehl ist auf alle Rollen anwendbar (`super_admin`, `facility_admin`, `lead`, `staff`, `assistant`), schreibt einen `LOGIN_UNLOCK`-AuditLog-Eintrag und ist die einzige Recovery-Option für gesperrte Super-Admins.
 
-Sperre, Entsperre und alle Versuche während der Sperrphase werden im AuditLog mitprotokolliert — nutzen Sie den Filter „Anmeldung fehlgeschlagen" / „Sperre aufgehoben" für eine retroaktive Auswertung.
+**Pfad C — Self-Service per E-Mail (Refs #869):** Hat der User eine E-Mail-Adresse hinterlegt, kann er sich auf der Login-Seite über die Links „Konto entsperren per E-Mail" oder „Passwort vergessen?" selbst entsperren — beide Pfade schreiben einen `LOGIN_UNLOCK`-AuditLog. Der dedizierte Entsperr-Link unter `/account/recovery/` verschickt einen 30-Minuten-gültigen, signierten Token (kein neues Modell, `TimestampSigner` mit Salt `lockout-recovery.v1`). Anti-Enumeration: Die Bestätigungsseite ist identisch, ob die E-Mail einem Konto zugeordnet ist oder nicht.
+
+**Pfad D — Self-Service per MFA-Backup-Code:** Hat der User 2FA aktiviert und einen seiner Backup-Codes notiert, kann er sich unter `/account/recovery/backup-code/` mit Username + Code entsperren. Audit-Trail: `LOGIN_UNLOCK` (Trigger `backup_code`) + `BACKUP_CODES_USED` (Flow `lockout_recovery`). Jeder Code ist einmalig — der nächste Recovery-Vorgang verbraucht den nächsten Code.
+
+Sperre, Entsperre und alle Versuche während der Sperrphase werden im AuditLog mitprotokolliert — nutzen Sie den Filter „Anmeldung fehlgeschlagen" / „Sperre aufgehoben" für eine retroaktive Auswertung. Der `LOGIN_UNLOCK`-Detail-Block enthält ein `trigger`-Feld: `admin` (Admin-Action), `cli` (CLI-Command), `password_reset` (Pfad C via Standard-Reset), `recovery_token` (Pfad C via dedizierter Link), `backup_code` (Pfad D).
 
 #### Audit-Spur
 

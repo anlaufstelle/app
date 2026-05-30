@@ -31,7 +31,13 @@ Dieses Handbuch richtet sich an Fachkräfte, Leitungen und Assistenzen in Kontak
 
 > **Hinweis:** Wenn Ihnen beim ersten Login mitgeteilt wurde, dass Sie das Passwort ändern müssen, werden Sie direkt nach der Anmeldung auf die Passwort-Änderungsseite weitergeleitet.
 
-> **Konto gesperrt nach mehreren Fehlversuchen?** Nach **10 fehlgeschlagenen Anmeldungen** wird Ihr Konto automatisch gesperrt. Sie sehen dann eine entsprechende Hinweis-Seite und können sich nicht mehr anmelden. Bitten Sie eine Administratorin um Entsperrung — die Sperre wird im Audit-Log protokolliert.
+> **Konto gesperrt nach mehreren Fehlversuchen?** Nach **10 fehlgeschlagenen Anmeldungen** wird Ihr Konto automatisch gesperrt. Sie sehen dann eine entsprechende Hinweis-Seite und können sich nicht mehr anmelden. Auf der Login-Seite finden Sie drei Selbsthilfe-Wege ([Refs #869](https://github.com/anlaufstelle/app/issues/869)):
+>
+> - **Passwort vergessen?** — Klassischer Reset per E-Mail. Wenn Sie ein neues Passwort setzen, wird Ihr Konto automatisch entsperrt.
+> - **Konto entsperren per E-Mail** — Schickt Ihnen einen Entsperr-Link an Ihre hinterlegte E-Mail-Adresse, der 30 Minuten gültig ist. Kein neues Passwort nötig.
+> - **Backup-Code einlösen** — Wenn Sie 2FA aktiviert haben, geben Sie Username + einen Ihrer Backup-Codes ein. Jeder Code ist einmalig.
+>
+> Wenn keiner dieser Wege funktioniert, bitten Sie eine Administratorin um Entsperrung. Alle Vorgänge werden im Audit-Log protokolliert.
 
 ### Passwort ändern
 
