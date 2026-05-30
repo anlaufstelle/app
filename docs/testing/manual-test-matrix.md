@@ -1803,7 +1803,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 </details>
 
 <details open>
-<summary><strong>👥 CLIENT — Klient:innen-Management (14 Cases)</strong></summary>
+<summary><strong>👥 CLIENT — Klient:innen-Management (15 Cases)</strong></summary>
 
 **Routen:** `/clients/`, `/clients/new/`, `/clients/<uuid>/`, `/clients/<uuid>/edit/`, `/clients/<uuid>/export/json/`, `/clients/<uuid>/export/pdf/`, `/clients/<uuid>/delete/`, `/clients/trash/`, `/clients/<uuid>/restore/`, `/api/clients/autocomplete/` 
 **Views:** `src/core/views/clients.py` (`ClientListView`, `ClientCreateView`, `ClientDetailView`, `ClientUpdateView`, `ClientAutocompleteView`, `ClientDataExportJSONView`, `ClientDataExportPDFView`) + `src/core/views/client_deletion.py` (`ClientDeleteRequestView`, `ClientTrashView`, `ClientRestoreView`) 
@@ -2254,12 +2254,44 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Status:** ☐ Offen
 
+---
+
+### TC-ID: ENT-CLIENT-15 — PROTECT: Klient mit aktivem Fall lässt sich nicht direkt löschen
+
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Klient:innen / Kaskade | admin ||||
+
+**Voraussetzung:** Klient:in mit mindestens einem `Case` (Status egal — entscheidend ist die FK-Beziehung).
+
+**Code-Referenz:**
+- `src/core/models/case.py:29-38` — `Case.client on_delete=PROTECT` mit explizitem help_text: „PROTECT verhindert versehentliches Löschen einer Person mit aktiven Fällen."
+
+**Schritte:**
+1. `python manage.py shell`.
+2. `from django.db.models.deletion import ProtectedError`.
+3. `Client.objects.get(id=<uuid>).delete` direkt aufrufen.
+4. Den Fall zuerst löschen (`Case.objects.filter(client_id=<uuid>).delete`), dann erneut `Client.delete`.
+5. UI-Probe (optional): Versuch über Admin / DeletionRequest-Workflow — Fehlermeldung an User-Oberfläche prüfen.
+
+**Erwartetes Ergebnis:**
+- Schritt 3 wirft `ProtectedError` mit Verweis auf den blockierenden Case.
+- Schritt 4 funktioniert: nach Case-Löschung lässt sich der Klient löschen.
+- Über die UI führt der reguläre Pfad zu einem `DeletionRequest` (Soft-Delete), nicht zum Hard-Delete — der PROTECT-Constraint ist die letzte Verteidigungslinie.
+
+**DSGVO/Security-Note:**
+- Schützt vor unbeabsichtigtem Verlust von Fallhistorie (Art. 5 Abs. 1 lit. d Richtigkeit / lit. e Speicherbegrenzung) und vor Audit-Lücken (Art. 30 Verarbeitungsverzeichnis).
+
+**Status:** ☐ Offen
+
 </details>
 
 ---
 
 <details open>
-<summary><strong>📁 CASE — Fall-Lebenszyklus (12 Cases)</strong></summary>
+<summary><strong>📁 CASE — Fall-Lebenszyklus (14 Cases)</strong></summary>
 
 **Routen:** `/cases/`, `/cases/new/`, `/cases/<uuid>/`, `/cases/<uuid>/edit/`, `/cases/<uuid>/close/`, `/cases/<uuid>/reopen/`, `/cases/<uuid>/assign-event/`, `/cases/<uuid>/remove-event/<uuid>/`, `/api/cases/for-client/` 
 **Views:** `src/core/views/cases.py` (`CaseListView`, `CaseCreateView`, `CaseDetailView`, `CaseUpdateView`, `CaseCloseView`, `CaseReopenView`, `CaseAssignEventView`, `CaseRemoveEventView`, `CasesForClientView`) 
@@ -2627,6 +2659,70 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **DSGVO/Security-Note:**
 - Keine Layout-bedingten Änderungen an sichtbaren Pseudonymen / Sensitivity-Filtern.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CASE-13 — CASCADE: Fall löschen entfernt Goals und Milestones
+
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Fälle / Kaskade | admin ||||
+
+**Voraussetzung:** Fall mit ≥ 3 `OutcomeGoal` und je Goal ≥ 2 `Milestone` (Seed oder manuell anlegen).
+
+**Code-Referenz:**
+- `src/core/models/outcome.py:14` — `OutcomeGoal.case on_delete=CASCADE`.
+- `src/core/models/outcome.py:40` — `Milestone.goal on_delete=CASCADE`.
+
+**Schritte:**
+1. `python manage.py shell` öffnen.
+2. Case-UUID notieren, IDs der Goals/Milestones zählen (`Case.objects.get(...).goals.count`, `goal.milestones.count`).
+3. `Case.objects.get(id=<uuid>).delete` ausführen.
+4. Erneut `OutcomeGoal.objects.filter(case_id=<uuid>).count` und `Milestone.objects.filter(goal__case_id=<uuid>).count`.
+5. AuditLog prüfen: erfasst Lösch-Kette oder mindestens den Case-Delete?
+
+**Erwartetes Ergebnis:**
+- Alle abhängigen Goals + Milestones sind weg (Count = 0).
+- Keine `IntegrityError`; PostgreSQL räumt per CASCADE auf.
+- AuditLog: mindestens ein Eintrag für den Case-Delete (Cascade-Nebenwirkungen ggf. nicht protokolliert — Lücke dokumentieren).
+
+**DSGVO/Security-Note:**
+- Direktes `Case.delete` umgeht den Vier-Augen-Workflow. In Produktion nur über `DeletionRequest`-Service erlaubt — dieser Test prüft das Schema, nicht den User-Pfad.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-CASE-14 — SET_NULL: Fall löschen löst Events ab, behält sie aber
+
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Fälle / Kaskade | admin ||||
+
+**Voraussetzung:** Fall mit ≥ 2 zugeordneten `Event`s (`event.case = <fall>`).
+
+**Code-Referenz:**
+- `src/core/models/event.py:38-40` — `Event.case on_delete=SET_NULL, null=True`.
+
+**Schritte:**
+1. Shell: Event-UUIDs notieren, `Event.objects.filter(case_id=<uuid>).values_list('id', 'case_id')` ausgeben.
+2. `Case.objects.get(id=<uuid>).delete`.
+3. Erneut `Event.objects.filter(id__in=[…]).values_list('id', 'case_id')`.
+4. UI-Gegenprobe: Klient-Detail öffnen → Timeline zeigt die Events weiterhin (ohne Fall-Verlinkung).
+
+**Erwartetes Ergebnis:**
+- Events existieren weiter, `event.case_id` ist nun `NULL`.
+- Keine Daten-Verluste an den Events (Texte, Anhänge bleiben).
+- Klient-Timeline zeigt die Events ohne Fall-Badge.
+
+**DSGVO/Security-Note:**
+- Wichtig für Art. 5 Abs. 1 lit. e: Dokumentations-Inhalte (Beratungsverlauf) dürfen nicht durch Fall-Bereinigung verloren gehen.
 
 **Status:** ☐ Offen
 
@@ -4090,7 +4186,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 </details>
 
 <details open>
-<summary><strong>📦 RET — Aufbewahrungsrichtlinien (10 Cases)</strong></summary>
+<summary><strong>📦 RET — Aufbewahrungsrichtlinien (11 Cases)</strong></summary>
 
 **Routen:** `/retention/`, `/api/retention/<uuid>/approve/`, `/api/retention/<uuid>/hold/`, `/retention/bulk-approve/`, `/retention/bulk-defer/`, `/retention/bulk-reject/` 
 **Views:** `src/core/views/retention.py` 
@@ -4407,6 +4503,38 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **DSGVO/Security-Note:**
 - Trockenlauf = Vorab-Kontrolle vor unwiderruflicher Anonymisierung/Löschung (Risikofolgenabschätzung Art. 35).
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-RET-11 — Event-Sensitivity beeinflusst Aufbewahrung (HIGH vs. NORMAL)
+
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Aufbewahrung | admin | C |||
+
+**Voraussetzung:** Zwei Events am gleichen Klienten — eines mit `sensitivity=NORMAL`, eines mit `sensitivity=HIGH` (über DocumentType-Mindeststufe gesteuert).
+
+**Code-Referenz:**
+- `src/core/services/retention.py` — Frist-Berechnung pro Sensitivity.
+- `src/core/models/event.py` — `sensitivity`-Feld + Default-Logik.
+
+**Schritte:**
+1. DB-Backdate beide Events um genau das Maximum der NORMAL-Frist (z.B. `retention_event_normal_days`).
+2. `python manage.py enforce_retention --dry-run` ausführen.
+3. Output filtern auf die beiden Event-IDs.
+4. Backdate +1 Tag, erneut `--dry-run`.
+
+**Erwartetes Ergebnis:**
+- NORMAL-Event erscheint zur Anonymisierung, HIGH-Event nicht (längere Frist).
+- Falls Code nur eine einheitliche Frist kennt: TC dokumentiert die Lücke, Backlog-Eintrag mit Verweis auf SGB VIII §62 ff.
+- AuditLog enthält keine Anonymisierungs-Aktion (Dry-Run).
+
+**DSGVO/Security-Note:**
+- Art. 5 Abs. 1 lit. e (Speicherbegrenzung) — Sensitivität rechtfertigt unterschiedliche Aufbewahrungsdauern; Pflichtfristen (SGB VIII §62 Abs. 3, AO §147) überlagern Art. 17.
 
 **Status:** ☐ Offen
 
@@ -7144,6 +7272,40 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 2. Erwartung: Django ORM parametrisiert → keine SQL-Injection möglich.
 3. AuditLog: keine ungewöhnlichen Aktionen.
 4. Pen-Test: `sqlmap` gegen `/search/?q=…` (außerhalb dieser Matrix, separates Audit).
+
+**Status:** ☐ Offen
+
+---
+
+#### AUD-SEC-RLS-07 — Cross-Facility DeletionRequest unsichtbar (Mandantentrennung)
+
+> 🔧 **LOKAL/SSH erforderlich.** Dieser Case benötigt Server-Zugriff (`docker compose exec web python manage.py …`, `psql`, oder lokale `manage.py`-Befehle). **Auf dev.anlaufstelle.app nur durch Tobias / per SSH auf dev-Server durchführbar.**
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Security | leitung (F1) + leitung_2 (F2) | C |||
+
+**Voraussetzung:** zwei Facilities mit jeweils mindestens einem offenen `DeletionRequest`.
+
+**Code-Referenz:**
+- `src/core/views/deletion.py` — Listen/Genehmigen-Views.
+- `src/core/services/deletion.py` — `DeletionRequest.objects.for_facility(...)`.
+- `src/core/middleware/facility_scope.py` — `request.current_facility`.
+
+**Schritte:**
+1. F1: als `leitung` einloggen, in F1 ein neues `DeletionRequest` für einen F1-Klienten anlegen (`/clients/<uuid>/request-deletion/`).
+2. F2: als `leitung_2` einloggen.
+3. `/deletion-requests/` aufrufen → Liste prüfen.
+4. Direkt-URL des F1-Antrags aufrufen (`/deletion-requests/<F1-uuid>/`) — versuchen zu genehmigen.
+5. Optional in PostgreSQL: ohne `app.current_facility_id` `SELECT count(*) FROM core_deletionrequest;` → 0.
+
+**Erwartetes Ergebnis:**
+- Liste zeigt nur F2-Anträge, kein F1-Eintrag.
+- Direkt-URL liefert 404 (oder leere QuerySet-Antwort), niemals 200 mit fremden Daten.
+- AuditLog protokolliert keinen Zugriff auf F1-Datensatz durch F2-User.
+
+**DSGVO/Security-Note:**
+- Art. 5 Abs. 1 lit. f (Integrität & Vertraulichkeit) + Art. 32 (TOM). RLS-Layer auf `core_deletionrequest` muss FORCE-aktiv sein, App-Filter zusätzlich.
 
 **Status:** ☐ Offen
 
