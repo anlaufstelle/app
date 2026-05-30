@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`deploy/backup.sh`** — pg_dump verbindet jetzt als `POSTGRES_ADMIN_USER` (BYPASSRLS) statt als App-User. Hintergrund: das v0.12.0-RLS-Bootstrap-Trennungsmodell macht `pg_dump` aus dem App-User unmöglich (FORCE ROW LEVEL SECURITY auf `core_activity`). Aufgefallen beim v0.12.0-Pre-Deploy-Backup auf `dev.anlaufstelle.app`.
+
 ## [0.12.0] - 2026-05-12
 
 Minor-Release. Schwerpunkte: 5-Rollen-Modell mit Superadmin und cross-facility `/system/`-Bereich; produktive `dev.anlaufstelle.app`-Topologie auf Hetzner als Coolify-Ablöse; RLS-Hardening rund um Bootstrap und Pre-Auth-AuditLogs. Zusätzlich Sicherheits-Bumps (Django 6.0.5 mit drei CVEs, urllib3 2.7.0, cryptography 48 mit X.509-Hardening, gunicorn 26 mit HTTP/1.1-RF-Validierung).
