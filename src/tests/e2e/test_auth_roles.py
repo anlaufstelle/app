@@ -10,6 +10,7 @@ Deckt ab:
 
 import pytest
 
+from tests.e2e._helpers import enter_sudo_mode
 from tests.e2e._selectors import find_client_link
 
 pytestmark = pytest.mark.e2e
@@ -232,8 +233,11 @@ class TestZZAccountLockout:
         _seed_failed_logins_and_check_lock("lena", e2e_env, n=10)
 
         # Admin-Page (authenticated_page ist admin) navigiert zum User-Admin und
-        # ruft die Action „unlock_selected_users" auf.
+        # ruft die Action „unlock_selected_users" auf. Sudo-Mode (Refs #785) muss
+        # vor /admin-mgmt/-Navigation einmal aktiviert werden — sonst redirect
+        # zu /sudo/?next=... und die UserAdmin-Liste laedt nie. Refs #960.
         admin = authenticated_page
+        enter_sudo_mode(admin, base_url)
         admin.goto(f"{base_url}/admin-mgmt/core/user/")
         admin.wait_for_load_state("domcontentloaded")
         # Lena-Zeile selektieren
