@@ -6,6 +6,8 @@ from typing import ClassVar
 
 import pytest
 
+pytestmark = pytest.mark.architecture
+
 
 class TestRateLimitOnAllMutations:
     """Jede CBV-Klasse mit ``def post(...)`` in ``src/core/views/`` muss

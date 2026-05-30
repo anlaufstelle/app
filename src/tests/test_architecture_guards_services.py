@@ -6,6 +6,8 @@ from typing import ClassVar
 
 import pytest
 
+pytestmark = pytest.mark.architecture
+
 
 class TestEventEncryptionBypassGuard:
     """Refs #736 / #713 (Audit-Massnahme #11): Verhindert, dass irgendein

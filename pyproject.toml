@@ -64,6 +64,7 @@ markers = [
     "smoke: Kritische User-Flows für schnelle lokale Validierung",
     "slow: Tests mit Laufzeit > 2s (typisch: Seed-Läufe mit größerem Datensatz). Per `-m 'not slow'` deselektierbar.",
     "flaky_quarantine: Tests, die wegen Flakiness unter Beobachtung stehen (Refs #922 Welle 1).",
+    "architecture: Meta-Tests, die Source-Files scannen (z.B. ``AuditLog.objects.create()``-Vorkommen zählen). Werden in Mutmut-Runs (#930) deselektiert, weil mutmut die gezählten Patterns vervielfacht.",
 ]
 
 [tool.coverage.run]
@@ -99,27 +100,15 @@ tests_dir = ["src/tests/"]
 # eingebauten ``PytestRunner``. Marker- und Flag-Konfiguration läuft über
 # ``pytest_add_cli_args`` (Liste, NICHT String).
 #
-# ``--ignore`` für ``test_architecture_guards_*``: diese Meta-Tests zählen
-# Strings (z.B. ``AuditLog.objects.create()``-Vorkommen) und der mutierte
-# Code multipliziert diese Zähler künstlich — die Guards würden im
-# Mutation-Run reproduzierbar scheitern. Sie laufen weiter in ``make ci``,
-# nur nicht im Mutmut-Sub-Lauf. Genauso ``test_matrix_drift.py`` und
-# ``test_rls.py`` (DB-Rolle-spezifisch, in mutmut-Subprozess fragil).
+# ``not architecture`` schließt die ``test_architecture_guards_*``-Files aus.
+# Die Guards scannen Source-Files und zählen Vorkommen (z.B.
+# ``AuditLog.objects.create()``); im Mutmut-Tree multipliziert mutmut diese
+# Patterns künstlich. Marker statt ``--ignore``, damit ``make ci`` die
+# Guards weiterhin ausführt.
 pytest_add_cli_args = [
     "-x",
     "-m",
-    "not e2e and not slow",
-    # ``--override-ini=addopts=`` neutralisiert das projektweite
-    # ``--reuse-db``; mutmut kopiert ``pyproject.toml`` nach ``mutants/``,
-    # die Test-DB existiert aber im mutants-Lauf nicht und ``--reuse-db``
-    # ohne vorherigen ``--create-db`` führt zu ``DB access not allowed``.
-    "--override-ini=addopts=--create-db",
-    "--ignore=src/tests/test_architecture_guards_models.py",
-    "--ignore=src/tests/test_architecture_guards_services.py",
-    "--ignore=src/tests/test_architecture_guards_views.py",
-    "--ignore=src/tests/test_architecture_guards_templates.py",
-    "--ignore=src/tests/test_architecture_guards_audit.py",
-    "--ignore=src/tests/test_matrix_drift.py",
+    "not e2e and not slow and not architecture",
 ]
 backup = false
 # Damit der Mutmut-Runner pytest-django booten kann, müssen Django-Projekt,

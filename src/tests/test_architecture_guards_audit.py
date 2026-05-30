@@ -6,6 +6,8 @@ from typing import ClassVar
 
 import pytest
 
+pytestmark = pytest.mark.architecture
+
 
 class TestSettingsAuditCompletenessGuard:
     """Refs #900 (FND-001): jedes Feld auf ``Settings`` muss entweder

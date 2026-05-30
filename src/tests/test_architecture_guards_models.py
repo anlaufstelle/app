@@ -6,6 +6,8 @@ from typing import ClassVar
 
 import pytest
 
+pytestmark = pytest.mark.architecture
+
 
 @pytest.mark.django_db
 class TestFacilityScopingGuard:

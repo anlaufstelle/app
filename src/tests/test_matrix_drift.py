@@ -18,6 +18,11 @@ from pathlib import Path
 
 import pytest
 
+# Meta-Tests, die auf das Repo-Filesystem zugreifen (``docs/`` + ``scripts/``).
+# Im Mutmut-Subprozess läuft pytest aus ``mutants/`` und diese Pfade fehlen,
+# daher als ``architecture`` markiert und im Mutmut-Run deselektiert (#930).
+pytestmark = pytest.mark.architecture
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "verify_test_matrix_drift.py"
 

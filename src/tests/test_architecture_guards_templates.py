@@ -6,6 +6,8 @@ from typing import ClassVar
 
 import pytest
 
+pytestmark = pytest.mark.architecture
+
 
 class TestNoInlineScriptBlocksGuard:
     """Templates dürfen keine Inline-``<script>``-Blöcke enthalten.
