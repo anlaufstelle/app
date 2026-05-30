@@ -5,6 +5,7 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from unfold.admin import ModelAdmin, TabularInline
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
+from core.admin_site import anlaufstelle_admin_site
 from core.models import (
     AuditLog,
     Case,
@@ -30,6 +31,57 @@ from core.services.login_lockout import is_locked as user_is_locked
 from core.services.login_lockout import unlock as unlock_user
 from core.services.password import generate_initial_password
 
+# --- Custom AdminSite + Facility-Scoping (Refs #785) ---
+
+
+class RoleBasedPermissionMixin:
+    """Oeffnet ModelAdmin-Permissions fuer super_admin/facility_admin (Refs #785).
+
+    Default-Django prueft request.user.has_perm('app.view_model'), was nur
+    funktioniert, wenn der User is_superuser=True hat ODER konkrete Permissions
+    gepflegt sind. ``super_admin_user`` hat aber is_superuser=False (per Memory-
+    Direktive), und wir verwenden keine fein-granularen Django-Permissions im
+    Admin. Stattdessen entscheidet die Rolle: wenn die User-Rolle den Zugriff
+    zur AdminSite ueberhaupt erlaubt (siehe AnlaufstelleAdminSite.has_permission),
+    duerfen sie auch lesen/schreiben.
+
+    Einzelne ModelAdmins (EventHistoryAdmin, AuditLogAdmin, etc.) ueberschreiben
+    has_add/change/delete_permission explizit auf False — das gewinnt durch MRO
+    gegen diesen Mixin.
+    """
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_super_admin or request.user.is_facility_admin
+
+    def has_add_permission(self, request):
+        return request.user.is_super_admin or request.user.is_facility_admin
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_super_admin or request.user.is_facility_admin
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_super_admin or request.user.is_facility_admin
+
+
+class FacilityScopedAdminMixin(RoleBasedPermissionMixin):
+    """Filtert get_queryset() nach request.current_facility fuer facility_admin.
+
+    super_admin sieht alles (kein Filter). Konsistent mit FacilityScopedManager
+    in den Models. Erbt von RoleBasedPermissionMixin, damit Permissions
+    rollen-basiert sind. Verwendung als zusaetzliche Base-Klasse vor `ModelAdmin`:
+
+        @admin.register(Client, site=anlaufstelle_admin_site)
+        class ClientAdmin(FacilityScopedAdminMixin, ModelAdmin):
+            ...
+    """
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        if request.user.is_super_admin:
+            return qs
+        return qs.filter(facility=request.current_facility)
+
+
 # --- User ---
 
 
@@ -50,8 +102,8 @@ def unlock_selected_users(modeladmin, request, queryset):
         messages.info(request, "Keine der ausgewählten Accounts war gesperrt.")
 
 
-@admin.register(User)
-class UserAdmin(BaseUserAdmin, ModelAdmin):
+@admin.register(User, site=anlaufstelle_admin_site)
+class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
     form = UserChangeForm
     add_form = UserCreationForm
     change_password_form = AdminPasswordChangeForm
@@ -145,24 +197,31 @@ class UserAdmin(BaseUserAdmin, ModelAdmin):
 # --- Organization / Facility ---
 
 
-@admin.register(Organization)
-class OrganizationAdmin(ModelAdmin):
+@admin.register(Organization, site=anlaufstelle_admin_site)
+class OrganizationAdmin(RoleBasedPermissionMixin, ModelAdmin):
     list_display = ("name", "created_at")
     search_fields = ("name",)
 
 
-@admin.register(Facility)
-class FacilityAdmin(ModelAdmin):
+@admin.register(Facility, site=anlaufstelle_admin_site)
+class FacilityAdmin(RoleBasedPermissionMixin, ModelAdmin):
     list_display = ("name", "organization", "is_active", "created_at")
     list_filter = ("is_active", "organization")
     search_fields = ("name",)
+
+    def get_queryset(self, request):
+        """facility_admin sieht nur eigene Facility, super_admin alle (Refs #785)."""
+        qs = super().get_queryset(request)
+        if request.user.is_super_admin:
+            return qs
+        return qs.filter(pk=request.current_facility.pk if request.current_facility else None)
 
 
 # --- Client ---
 
 
-@admin.register(Client)
-class ClientAdmin(ModelAdmin):
+@admin.register(Client, site=anlaufstelle_admin_site)
+class ClientAdmin(FacilityScopedAdminMixin, ModelAdmin):
     list_display = ("pseudonym", "contact_stage", "age_cluster", "facility", "is_active")
     list_filter = ("contact_stage", "age_cluster", "is_active", "facility")
     search_fields = ("pseudonym",)
@@ -177,8 +236,8 @@ class DocumentTypeFieldInline(TabularInline):
     autocomplete_fields = ("field_template",)
 
 
-@admin.register(DocumentType)
-class DocumentTypeAdmin(ModelAdmin):
+@admin.register(DocumentType, site=anlaufstelle_admin_site)
+class DocumentTypeAdmin(FacilityScopedAdminMixin, ModelAdmin):
     list_display = ("name", "category", "sensitivity", "system_type", "facility", "is_active", "sort_order")
     list_filter = ("category", "sensitivity", "is_active", "facility", "system_type")
     search_fields = ("name",)
@@ -190,8 +249,8 @@ class DocumentTypeAdmin(ModelAdmin):
         return self.readonly_fields
 
 
-@admin.register(FieldTemplate)
-class FieldTemplateAdmin(ModelAdmin):
+@admin.register(FieldTemplate, site=anlaufstelle_admin_site)
+class FieldTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
     list_display = (
         "name",
         "slug",
@@ -255,8 +314,8 @@ class FieldTemplateAdmin(ModelAdmin):
         messages.success(request, f"{updated} Feldvorlage(n) aktiviert.")
 
 
-@admin.register(QuickTemplate)
-class QuickTemplateAdmin(ModelAdmin):
+@admin.register(QuickTemplate, site=anlaufstelle_admin_site)
+class QuickTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
     """Admin für Quick-Templates (vorbefüllte Event-Vorlagen).
 
     ``prefilled_data`` wird beim Speichern über den Service auf NORMAL-Felder
@@ -282,8 +341,8 @@ class QuickTemplateAdmin(ModelAdmin):
 # --- Event / EventHistory ---
 
 
-@admin.register(Event)
-class EventAdmin(ModelAdmin):
+@admin.register(Event, site=anlaufstelle_admin_site)
+class EventAdmin(FacilityScopedAdminMixin, ModelAdmin):
     list_display = ("document_type", "client", "occurred_at", "is_anonymous", "is_deleted", "facility")
     list_filter = ("is_anonymous", "is_deleted", "facility", "document_type")
     raw_id_fields = ("client", "created_by", "case")
@@ -291,11 +350,18 @@ class EventAdmin(ModelAdmin):
     search_fields = ("client__pseudonym",)
 
 
-@admin.register(EventHistory)
-class EventHistoryAdmin(ModelAdmin):
+@admin.register(EventHistory, site=anlaufstelle_admin_site)
+class EventHistoryAdmin(RoleBasedPermissionMixin, ModelAdmin):
     list_display = ("event", "action", "changed_by", "changed_at")
     list_filter = ("action",)
     readonly_fields = ("event", "changed_by", "changed_at", "action", "data_before", "data_after")
+
+    def get_queryset(self, request):
+        """EventHistory hat kein direktes facility-FK -> ueber event__facility (Refs #785)."""
+        qs = super().get_queryset(request)
+        if request.user.is_super_admin:
+            return qs
+        return qs.filter(event__facility=request.current_facility)
 
     def has_add_permission(self, request):
         return False
@@ -310,8 +376,8 @@ class EventHistoryAdmin(ModelAdmin):
 # --- EventAttachment ---
 
 
-@admin.register(EventAttachment)
-class EventAttachmentAdmin(ModelAdmin):
+@admin.register(EventAttachment, site=anlaufstelle_admin_site)
+class EventAttachmentAdmin(RoleBasedPermissionMixin, ModelAdmin):
     list_display = (
         "storage_filename",
         "event",
@@ -335,6 +401,13 @@ class EventAttachmentAdmin(ModelAdmin):
     )
     search_fields = ("storage_filename",)
 
+    def get_queryset(self, request):
+        """EventAttachment hat kein direktes facility-FK -> ueber event__facility (Refs #785)."""
+        qs = super().get_queryset(request)
+        if request.user.is_super_admin:
+            return qs
+        return qs.filter(event__facility=request.current_facility)
+
     def has_add_permission(self, request):
         return False
 
@@ -348,8 +421,8 @@ class EventAttachmentAdmin(ModelAdmin):
 # --- TimeFilter ---
 
 
-@admin.register(TimeFilter)
-class TimeFilterAdmin(ModelAdmin):
+@admin.register(TimeFilter, site=anlaufstelle_admin_site)
+class TimeFilterAdmin(FacilityScopedAdminMixin, ModelAdmin):
     list_display = ("label", "start_time", "end_time", "is_default", "is_active", "facility")
     list_filter = ("is_active", "is_default", "facility")
 
@@ -357,16 +430,16 @@ class TimeFilterAdmin(ModelAdmin):
 # --- WorkItem / DeletionRequest ---
 
 
-@admin.register(WorkItem)
-class WorkItemAdmin(ModelAdmin):
+@admin.register(WorkItem, site=anlaufstelle_admin_site)
+class WorkItemAdmin(FacilityScopedAdminMixin, ModelAdmin):
     list_display = ("title", "item_type", "status", "priority", "assigned_to", "facility")
     list_filter = ("status", "priority", "item_type", "facility")
     search_fields = ("title",)
     raw_id_fields = ("client", "created_by", "assigned_to")
 
 
-@admin.register(DeletionRequest)
-class DeletionRequestAdmin(ModelAdmin):
+@admin.register(DeletionRequest, site=anlaufstelle_admin_site)
+class DeletionRequestAdmin(FacilityScopedAdminMixin, ModelAdmin):
     list_display = ("target_type", "target_id", "status", "requested_by", "created_at")
     list_filter = ("status",)
     readonly_fields = (
@@ -391,8 +464,8 @@ class DeletionRequestAdmin(ModelAdmin):
 # --- Case ---
 
 
-@admin.register(Case)
-class CaseAdmin(ModelAdmin):
+@admin.register(Case, site=anlaufstelle_admin_site)
+class CaseAdmin(FacilityScopedAdminMixin, ModelAdmin):
     list_display = ("title", "client", "status", "created_by", "created_at")
     list_filter = ("status", "facility")
     search_fields = ("title", "client__pseudonym")
@@ -402,8 +475,8 @@ class CaseAdmin(ModelAdmin):
 # --- AuditLog ---
 
 
-@admin.register(AuditLog)
-class AuditLogAdmin(ModelAdmin):
+@admin.register(AuditLog, site=anlaufstelle_admin_site)
+class AuditLogAdmin(FacilityScopedAdminMixin, ModelAdmin):
     list_display = ("action", "user", "target_type", "target_id", "timestamp", "facility")
     list_filter = ("action", "facility")
     date_hierarchy = "timestamp"
@@ -432,8 +505,8 @@ class AuditLogAdmin(ModelAdmin):
 # --- Settings ---
 
 
-@admin.register(Settings)
-class SettingsAdmin(ModelAdmin):
+@admin.register(Settings, site=anlaufstelle_admin_site)
+class SettingsAdmin(FacilityScopedAdminMixin, ModelAdmin):
     list_display = (
         "facility",
         "facility_full_name",
@@ -465,8 +538,8 @@ class SettingsAdmin(ModelAdmin):
 # --- StatisticsSnapshot ---
 
 
-@admin.register(StatisticsSnapshot)
-class StatisticsSnapshotAdmin(ModelAdmin):
+@admin.register(StatisticsSnapshot, site=anlaufstelle_admin_site)
+class StatisticsSnapshotAdmin(FacilityScopedAdminMixin, ModelAdmin):
     list_display = ("facility", "year", "month", "updated_at")
     list_filter = ("facility", "year")
     readonly_fields = ("id", "facility", "year", "month", "data", "jugendamt_data", "created_at", "updated_at")

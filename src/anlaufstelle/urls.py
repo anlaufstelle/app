@@ -1,7 +1,7 @@
-from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path, reverse_lazy
 
+from core.admin_site import anlaufstelle_admin_site
 from core.views.auth import (
     CustomLoginView,
     CustomLogoutView,
@@ -25,7 +25,7 @@ from core.views.pwa import ManifestView, OfflineFallbackView, ServiceWorkerView
 from core.views.sudo_mode import SudoModeView
 
 urlpatterns = [
-    path("admin-mgmt/", admin.site.urls),
+    path("admin-mgmt/", anlaufstelle_admin_site.urls),
     path("i18n/setlang/", set_user_language, name="set_language"),
     path("i18n/", include("django.conf.urls.i18n")),
     path("health/", HealthView.as_view(), name="health"),
