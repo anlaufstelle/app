@@ -188,6 +188,7 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 | `make deps-lock` | Regenerate lock files from `requirements*.in` (pip-tools) |
 | `make deps-check` | Verify lock files match `.in` (drift detection) |
 | `make dev` | Start database, run migrations, and start server (combined) |
+| `make clean` | Remove generated artefacts (`__pycache__`, `*.pyc`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `src/staticfiles`) — `src/media/` is left untouched (data loss risk) |
 
 `make ci` should pass locally before every commit.
 

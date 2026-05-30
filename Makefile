@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status clean
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -148,6 +148,20 @@ deps-check:
 			echo "Lock-Files sind nicht aktuell — 'make deps-lock' ausführen."; \
 			exit 1; \
 		fi
+
+# Generated artefacts loswerden (Refs #896 / FND-012).
+# Nicht angefasst: src/media/ (Datenverlustrisiko) und .venv/.
+clean:
+	@echo "Räume generierte Artefakte auf…"
+	@find . -type d -name __pycache__ -not -path './.venv/*' -not -path './node_modules/*' -exec rm -rf {} + 2>/dev/null || true
+	@find . -type f -name '*.pyc' -not -path './.venv/*' -not -path './node_modules/*' -delete 2>/dev/null || true
+	@rm -rf .pytest_cache .ruff_cache .mypy_cache 2>/dev/null || true
+	@rm -rf src/staticfiles 2>/dev/null || true
+	@echo "  ✓ __pycache__ entfernt"
+	@echo "  ✓ *.pyc entfernt"
+	@echo "  ✓ .pytest_cache / .ruff_cache / .mypy_cache entfernt"
+	@echo "  ✓ src/staticfiles entfernt"
+	@echo "  • src/media bleibt unberührt (Datenverlustrisiko — manuell prüfen)"
 
 # Alles zusammen
 dev: db migrate run

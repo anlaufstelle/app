@@ -191,6 +191,7 @@ Der Server ist unter `https://localhost:8443` erreichbar (selbstsigniertes Zerti
 | `make deps-lock` | Lock-Files aus `requirements*.in` neu erzeugen (pip-tools) |
 | `make deps-check` | Prüft, ob Lock-Files aktuell zu `.in` sind (Drift-Detektion) |
 | `make dev` | Datenbank starten, migrieren und Server starten (kombiniert) |
+| `make clean` | Generierte Artefakte löschen (`__pycache__`, `*.pyc`, `.pytest_cache`, `.ruff_cache`, `.mypy_cache`, `src/staticfiles`) — `src/media/` bleibt unangetastet (Datenverlustrisiko) |
 
 Vor jedem Commit sollte `make ci` lokal erfolgreich durchlaufen.
 
