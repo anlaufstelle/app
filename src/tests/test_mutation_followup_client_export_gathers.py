@@ -1,37 +1,10 @@
-"""Follow-Up-Tests für Mutation-Survivors in ``core.services.client_export``.
+"""Mutation-Followup-Tests für ``core.services.client_export`` — Gather-Helfer.
 
-Refs Welle 7 (#930). Ziel: die ~91 überlebenden Mutationen im Service
-``export_client_data`` und seinen privaten ``_gather_*``-Helpern killen.
-Der Service ist DSGVO Art. 15/20-kritisch — jedes weggemutete Feld ist
-ein Datenleck oder eine Lücke im Auskunftsanspruch.
-
-Adressierte Mutationsklassen:
-
-1. **Field-Selection in jedem ``_gather_*``-Helper** (``_gather_client_fields``,
-   ``_serialize_event``, ``_gather_cases``, ``_gather_event_history``,
-   ``_gather_deletion_requests``, ``_gather_workitems``): Jedes Feld
-   wird einzeln verifiziert, sodass eine entfernte ``key=value``-Zeile
-   im Result-Dict sofort auffällt (DSGVO Art. 15 = Vollständigkeit).
-2. **Filter-Boundaries**: ``is_deleted=False`` für Events,
-   ``client=client`` für Cases/WorkItems, ``target_type="Event"`` für
-   DeletionRequests, ``event_id__in=event_ids`` für EventHistory.
-3. **Visibility-Filter** via ``Event.objects.visible_to(user)`` —
-   ELEVATED/HIGH-Doc-Events dürfen bei niedriger Rolle nicht im
-   Export landen (analog zum event-context-Pattern).
-4. **Sort-Order** (``order_by(...)``): jeder Helper sortiert DESC nach
-   ``-occurred_at`` / ``-changed_at`` / ``-created_at``. Wir verifizieren,
-   dass das neueste Element zuerst kommt.
-5. **Aggregat in ``_build_export_meta``**: ``timestamp`` ist ISO-formatiert,
-   ``facility_name`` fällt auf ``facility.name`` zurück, wenn
-   ``Settings.facility_full_name`` leer/None ist.
-6. **``_serialize_event``-Branches**: leeres ``data_json``,
-   verschlüsseltes Dict (``__encrypted__``-Marker) wird per
-   ``safe_decrypt`` abgefangen, non-dict values landen 1:1 im
-   ``data``-Subdict.
-7. **None-Handling für Foreign-Key-Username-Felder**: ``created_by``,
-   ``lead_user``, ``requested_by``, ``reviewed_by``, ``changed_by``
-   können ``None`` sein → der Helper darf nicht crashen, sondern
-   muss ``None`` zurückgeben (``X.username if X else None``).
+Refs Welle 7 (#930). Sub-File aus ``test_mutation_followup_client_export``;
+enthält die Test-Klassen für die privaten ``_gather_*``-Helfer
+(``_gather_client_fields``, ``_gather_events``, ``_gather_cases``,
+``_gather_event_history``, ``_gather_deletion_requests``,
+``_gather_workitems``).
 """
 
 from __future__ import annotations
@@ -47,65 +20,21 @@ from core.models import (
 from core.models import (
     DeletionRequest,
     DocumentType,
-    Event,
     EventHistory,
-    FieldTemplate,
-    Settings,
-    User,
     WorkItem,
 )
 from core.services.client_export import (
-    _build_export_meta,
     _gather_cases,
     _gather_client_fields,
     _gather_deletion_requests,
     _gather_event_history,
     _gather_events,
     _gather_workitems,
-    _serialize_event,
-    export_client_data,
 )
-from core.services.encryption import encrypt_field
-
-# ---------------------------------------------------------------------------
-# Helper / Factories
-# ---------------------------------------------------------------------------
-
-
-def _make_doc_type(
-    facility,
-    *,
-    name: str = "Doc",
-    sensitivity: str = DocumentType.Sensitivity.NORMAL,
-) -> DocumentType:
-    return DocumentType.objects.create(
-        facility=facility,
-        category=DocumentType.Category.CONTACT,
-        sensitivity=sensitivity,
-        name=name,
-    )
-
-
-def _make_event(
-    facility,
-    client,
-    doc_type,
-    user,
-    *,
-    data_json=None,
-    occurred_at=None,
-    is_deleted=False,
-) -> Event:
-    return Event.objects.create(
-        facility=facility,
-        client=client,
-        document_type=doc_type,
-        occurred_at=occurred_at or timezone.now(),
-        data_json=data_json or {},
-        created_by=user,
-        is_deleted=is_deleted,
-    )
-
+from tests._mutation_followup_client_export_helpers import (
+    _make_doc_type,
+    _make_event,
+)
 
 # ---------------------------------------------------------------------------
 # _gather_client_fields — DSGVO-vollständige Master-Daten
@@ -206,121 +135,6 @@ class TestGatherClientFields:
         )
         result = _gather_client_fields(c)
         assert result["created_by"] is None
-
-
-# ---------------------------------------------------------------------------
-# _serialize_event — pro-Event-Serialisierung inkl. Decryption
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestSerializeEvent:
-    """Refs Welle 7 — ``_serialize_event`` (Line 24).
-
-    Branches:
-    - ``if event.data_json:`` (truthy)
-    - ``isinstance(value, dict)`` → safe_decrypt
-    - else-Branch → 1:1 passthrough
-    - ``event.created_by`` ``None``-Fallback
-    """
-
-    def test_contains_all_four_keys(self, sample_event):
-        result = _serialize_event(sample_event)
-        assert set(result.keys()) == {
-            "document_type",
-            "occurred_at",
-            "created_by",
-            "data",
-        }
-
-    def test_document_type_uses_name_not_pk(self, sample_event):
-        """Mutation ``event.document_type.name`` → ``event.document_type_id``
-        würde eine UUID statt einem lesbaren Namen liefern."""
-        result = _serialize_event(sample_event)
-        assert result["document_type"] == sample_event.document_type.name
-        assert result["document_type"] == "Kontakt"
-
-    def test_occurred_at_is_isoformat(self, sample_event):
-        result = _serialize_event(sample_event)
-        assert isinstance(result["occurred_at"], str)
-        assert result["occurred_at"] == sample_event.occurred_at.isoformat()
-        assert "T" in result["occurred_at"]
-
-    def test_created_by_username(self, sample_event, staff_user):
-        result = _serialize_event(sample_event)
-        assert result["created_by"] == staff_user.username
-
-    def test_created_by_none_when_user_missing(self, facility, client_identified, doc_type_contact):
-        """Mutation ``if event.created_by else None`` → fester Wert würde
-        ``None``-Branch verändern."""
-        ev = Event.objects.create(
-            facility=facility,
-            client=client_identified,
-            document_type=doc_type_contact,
-            occurred_at=timezone.now(),
-            data_json={},
-            created_by=None,
-        )
-        result = _serialize_event(ev)
-        assert result["created_by"] is None
-
-    def test_empty_data_json_yields_empty_data_dict(self, facility, client_identified, doc_type_contact, staff_user):
-        """Mutation ``if event.data_json:`` (Negation) würde non-empty
-        Dicts überspringen oder leere durchwinken — hier prüfen wir den
-        Falsy-Branch explizit."""
-        ev = _make_event(facility, client_identified, doc_type_contact, staff_user, data_json={})
-        result = _serialize_event(ev)
-        assert result["data"] == {}
-
-    def test_plain_value_passes_through_untouched(self, facility, client_identified, doc_type_contact, staff_user):
-        """Non-dict-Werte landen 1:1 in ``data`` — der ``isinstance(value, dict)``-
-        Check ist die Boundary."""
-        ev = _make_event(
-            facility,
-            client_identified,
-            doc_type_contact,
-            staff_user,
-            data_json={"dauer": 42, "notiz": "hello"},
-        )
-        result = _serialize_event(ev)
-        assert result["data"]["dauer"] == 42
-        assert result["data"]["notiz"] == "hello"
-
-    def test_dict_value_without_encryption_marker_passes_through(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
-        """``safe_decrypt`` liefert das Dict unverändert zurück, wenn kein
-        ``__encrypted__``-Marker drin ist. So fangen wir den
-        ``isinstance(value, dict)``-Branch, ohne Fernet-Keys aufsetzen
-        zu müssen."""
-        payload = {"some": "nested", "n": 1}
-        ev = Event.objects.create(
-            facility=facility,
-            client=client_identified,
-            document_type=doc_type_contact,
-            occurred_at=timezone.now(),
-            data_json={"dauer": 5, "notiz": payload},
-            created_by=staff_user,
-        )
-        result = _serialize_event(ev)
-        assert result["data"]["notiz"] == payload
-
-    def test_encrypted_dict_value_is_decrypted(self, facility, client_identified, staff_user):
-        """Mutation ``safe_decrypt(value)`` → ``value`` würde den Ciphertext
-        statt Klartext im Export liefern — kritisch für DSGVO Art. 15."""
-        doc_type = _make_doc_type(facility, name="Krise", sensitivity=DocumentType.Sensitivity.HIGH)
-        # Verschlüsselter Marker; safe_decrypt → Klartext
-        encrypted_value = encrypt_field("geheimer-text")
-        ev = Event.objects.create(
-            facility=facility,
-            client=client_identified,
-            document_type=doc_type,
-            occurred_at=timezone.now(),
-            data_json={"krise-notiz": encrypted_value},
-            created_by=staff_user,
-        )
-        result = _serialize_event(ev)
-        assert result["data"]["krise-notiz"] == "geheimer-text"
 
 
 # ---------------------------------------------------------------------------
@@ -1063,154 +877,3 @@ class TestGatherWorkItems:
         result = _gather_workitems(client_identified)
         titles = [r["title"] for r in result]
         assert titles == ["Dritte", "Zweite", "Erst"]
-
-
-# ---------------------------------------------------------------------------
-# _build_export_meta — Timestamp + Facility-Fallback-Chain
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestBuildExportMeta:
-    """Refs Welle 7 — ``_build_export_meta`` (Line 132).
-
-    Boundary-Chain:
-    - Settings.facility_full_name nicht leer → vollständiger Name
-    - Settings.facility_full_name leer → facility.name als Fallback
-    - keine Settings vorhanden → facility.name als Fallback
-      (``getattr(facility, "settings", None)`` greift)
-    """
-
-    def test_contains_both_keys(self, facility):
-        result = _build_export_meta(facility)
-        assert set(result.keys()) == {"timestamp", "facility_name"}
-
-    def test_timestamp_is_isoformat_string(self, facility):
-        """Mutation ``timezone.now().isoformat()`` → ``.strftime(...)``
-        oder Entfernen würde non-ISO-Format liefern."""
-        result = _build_export_meta(facility)
-        assert isinstance(result["timestamp"], str)
-        # ISO-Format hat "T" und ist parseable.
-        assert "T" in result["timestamp"]
-
-    def test_uses_settings_facility_full_name_when_set(self, facility):
-        """Mutation ``getattr(..., facility_full_name, "")`` → ``"facility_name"``
-        würde den falschen Attribut-Namen lesen."""
-        Settings.objects.create(
-            facility=facility,
-            facility_full_name="Anlaufstelle Musterstadt e.V.",
-        )
-        # Re-fetch der Facility — settings-Reverse-Accessor cached.
-        facility.refresh_from_db()
-        result = _build_export_meta(facility)
-        assert result["facility_name"] == "Anlaufstelle Musterstadt e.V."
-
-    def test_falls_back_to_facility_name_when_settings_empty(self, facility):
-        """``Settings.facility_full_name=""`` → Fallback auf ``facility.name``.
-        Mutation ``or facility.name`` → ``and facility.name`` würde leeren
-        String zurückgeben."""
-        Settings.objects.create(facility=facility, facility_full_name="")
-        facility.refresh_from_db()
-        result = _build_export_meta(facility)
-        assert result["facility_name"] == facility.name
-        assert result["facility_name"] == "Teststelle"
-
-    def test_falls_back_to_facility_name_when_no_settings(self, facility):
-        """``getattr(facility, "settings", None)`` muss None liefern, wenn
-        keine Settings existiert → Fallback auf ``facility.name``."""
-        result = _build_export_meta(facility)
-        assert result["facility_name"] == "Teststelle"
-
-
-# ---------------------------------------------------------------------------
-# export_client_data — Top-Level-Komposition + Visibility-Pipeline
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestExportClientDataAggregate:
-    """Refs Welle 7 — ``export_client_data`` (Line 141).
-
-    Sicherstellen, dass das Top-Level-Dict alle sieben Aggregat-Keys
-    enthält UND dass Visibility-Filter den ``_gather_events``-Pfad
-    hochgereicht wird (Defense in Depth).
-    """
-
-    def test_top_level_dict_contains_all_seven_keys(self, client_identified, facility, staff_user):
-        result = export_client_data(client_identified, facility, staff_user)
-        assert set(result.keys()) == {
-            "client",
-            "events",
-            "cases",
-            "event_history",
-            "deletion_requests",
-            "work_items",
-            "export_meta",
-        }
-
-    def test_visibility_propagates_to_event_history_and_deletion(
-        self, facility, client_identified, doc_type_contact, staff_user, assistant_user
-    ):
-        """Wenn der ELEVATED-Event aus ``_gather_events`` rausgefiltert wird,
-        darf seine History/DeletionRequest auch nicht auftauchen — die
-        IDs werden ja gar nicht erst gesammelt.
-
-        Mutation ``event_ids.append(event.pk)`` → vor ``visible_to`` würde
-        das Loch öffnen."""
-        elevated_doc = _make_doc_type(facility, name="Krise", sensitivity=DocumentType.Sensitivity.ELEVATED)
-        elevated_event = _make_event(facility, client_identified, elevated_doc, staff_user)
-        EventHistory.objects.create(event=elevated_event, action=EventHistory.Action.CREATE, changed_by=staff_user)
-        DeletionRequest.objects.create(
-            facility=facility,
-            target_type=DeletionRequest.TargetType.EVENT,
-            target_id=elevated_event.pk,
-            reason="X",
-            requested_by=staff_user,
-        )
-        result = export_client_data(client_identified, facility, assistant_user)
-        assert result["events"] == []
-        assert result["event_history"] == [], "EventHistory eines unsichtbaren Events darf nicht im Export landen"
-        assert result["deletion_requests"] == [], (
-            "DeletionRequests eines unsichtbaren Events darf nicht im Export landen"
-        )
-
-    def test_aggregate_includes_independent_buckets(
-        self,
-        facility,
-        client_identified,
-        doc_type_contact,
-        staff_user,
-        sample_workitem,
-    ):
-        """Cases/WorkItems sind unabhängig von Event-Visibility — sie müssen
-        immer da sein, sofern sie auf dem Klienten hängen."""
-        CaseModel.objects.create(facility=facility, client=client_identified, title="Cs", created_by=staff_user)
-        _make_event(facility, client_identified, doc_type_contact, staff_user)
-        result = export_client_data(client_identified, facility, staff_user)
-        assert len(result["events"]) == 1
-        assert len(result["cases"]) == 1
-        assert len(result["work_items"]) == 1
-        # sample_workitem fixture aktiviert.
-        assert sample_workitem.title in [w["title"] for w in result["work_items"]]
-
-
-# ---------------------------------------------------------------------------
-# Sanity: ``FieldTemplate``- / ``Settings``-Modelle bleiben unmodifiziert
-# (Sentinel gegen schädliche Test-Seiteneffekte; gleichzeitig Lint gegen
-# F401 für Importe, die wir thematisch für Future-Boundary-Tests behalten).
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestImportSanity:
-    """Refs Welle 7 — Test-Datei-interner Sanity-Check.
-
-    Stellt sicher, dass die Test-Imports (``FieldTemplate``, ``User``,
-    ``timedelta``) tatsächlich verwendet werden — falls eine spätere
-    Refactoring-Welle das File splittet, wird so klar, was gebraucht wird.
-    """
-
-    def test_imports_resolvable(self):
-        assert FieldTemplate is not None
-        assert User is not None
-        assert timedelta(seconds=0) == timedelta(0)
