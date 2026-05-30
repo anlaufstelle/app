@@ -74,6 +74,7 @@
 - [Anhang B — Bekannte Risiken & Test-Lücken](#anhang-b--bekannte-risiken-und-test-luecken)
 - [Anhang C — E2E-Coverage-Bilanz](#anhang-c--e2e-coverage-bilanz)
 - [Anhang D — Test-Daten-Cheatsheet](#anhang-d--test-daten-cheatsheet)
+- [Anhang E — Performance-Budgets](#anhang-e--performance-budgets)
 
 ---
 
@@ -8200,6 +8201,51 @@ sudo docker compose exec db psql -U postgres -c 'CREATE DATABASE anlaufstelle'
 make migrate
 make seed
 ```
+
+---
+
+## Anhang E — Performance-Budgets
+
+> Refs #913 ( §4.8): Richtwerte, ab wann eine Seite als „zu langsam" gilt — auch wenn der Case funktional `✅ Pass` ist. Verletzungen werden im Run-Log unter „Performance-Beobachtungen" als `❌ Performance-Fail` mit Issue-Link festgehalten. Vorlage: [`run-template.md`](run-template.md) Abschnitt 4.
+
+### Budget-Tabelle
+
+| Bereich | Budget | Datenstand | Gemessen am |
+|---|---|---|---|
+| Dashboard/Home | TTI < 2 s | Medium-Seed (`make seed`) | Chrome DevTools-Lighthouse oder DjDT Footer-Zeit |
+| Client-Detail | < 1 s Serverzeit bei ~100 Events | dev-Daten, ein typischer Klient | DjDT, Tab „Time" |
+| Event-Edit mit 10 Attachments | keine N+1-Queries; < 500 ms Serverzeit | manuell vorbereitetes Event | DjDT, Tab „SQL" + „Time" |
+| Suche (`?q=...`) | < 500 ms bei ~1.000 Klient:innen | Large-Seed | DjDT, Tab „Time" |
+| AuditLog-Liste | < 500 ms pro Seite bei ~10.000 Einträgen | Large-Seed plus zusätzlicher Audit-Bulk | DjDT, Tab „SQL" (Pagination-Query darf einen Index nutzen) |
+| Retention-Dashboard | < 2 s bei ~1.000 Proposals | gesonderter Setup-Script | DjDT „Time" |
+| Statistik-Dashboard | < 3 s bei Large-Seed (~10.000 Events) | Large-Seed | DjDT „Time" + Chart-Render im Browser |
+
+### Wo messen?
+
+- **Lokal (dev-Server, Debug Toolbar aktiv):** primärer Messplatz. Footer-Zeit zeigt View-Time + Template-Render.
+- **Stage (`stage.anlaufstelle.app`):** für Realitätscheck nach Schema-Änderungen; Debug Toolbar dort nicht verfügbar, deshalb Chrome DevTools Performance Tab + `/health/`-Roundtrip als Smoke.
+- **Nicht in CI** — Performance ist umgebungsabhängig (Disk, CPU). CI prüft Query-Counts per pytest-Markern (`@pytest.mark.django_db` + `CaptureQueriesContext`), nicht Wallclock-Zeiten.
+
+### Query-Count-Tests für bekannte N+1-Risiken
+
+Bereits gegen Regression abgesichert:
+
+- `TestBuildAttachmentContextQueryCount` ([src/tests/test_attachment_versioning_stage_b.py](https://github.com/anlaufstelle/app/blob/main/src/tests/test_attachment_versioning_stage_b.py)) — 1 SELECT statt N (Refs #894).
+- `TestEventDetailContextQueryCount` (gleiche Datei) — konstante Query-Anzahl bei wachsender Versionskette (Refs #662).
+- `TestApplyAttachmentChangesQueryCount` (gleiche Datei) — Bulk-Remove ohne N+1 (Refs #782).
+
+Neue N+1-Verdachtsfälle bekommen einen analog gebauten Query-Count-Test in der jeweils zuständigen `test_*.py`-Datei. Pattern: `CaptureQueriesContext` um den Code-Pfad, Anzahl Queries gegen erwartetes Limit asserten, Code-Pointer im Docstring auf das Issue.
+
+### Run-Log-Status „Performance-Fail"
+
+Im Run-Template ([`run-template.md`](run-template.md) Abschnitt 4) ist eine eigene Performance-Tabelle. Wird ein Budget verletzt, vermerken:
+
+- TC-ID + Budget-Eintrag
+- Gemessener Wert
+- Datenstand + Hardware (z.B. „Stage-Container, Hetzner CPX21")
+- Issue-Link (neu eröffnen mit Label `perf`)
+
+Im Profil **Major-Release** ([`release-test-profiles.md`](release-test-profiles.md) §6) ist die volle Budget-Tabelle Pflicht. In den anderen Profilen Stichprobe (z.B. Dashboard + Client-Detail).
 
 ---
 
