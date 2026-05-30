@@ -250,6 +250,53 @@ class TestAllowedFileTypesWhitelist:
         assert log.detail["extension"] == "svg"
         assert log.detail["filename"] == "evil.svg"
 
+    def test_fake_pdf_header_with_exe_payload_rejected(
+        self, facility_with_settings, staff_user, doc_type_with_file, event
+    ):
+        """Refs Welle 4 (#927): EXE-Payload (MZ-Header) als ``.pdf`` deklariert →
+        Magic-Byte-Check schlägt fehl, weil libmagic ``application/x-dosexec``
+        o.ä. erkennt, nicht ``application/pdf``.
+
+        Die naive Variante (`PDF-Header gefolgt von Binär-Payload`) wäre
+        akzeptiert, weil libmagic den PDF-Header als entscheidend nimmt — das
+        ist eine konstruktive Grenze der MIME-Erkennung und kein Bug. Wir
+        testen daher gezielt den umgekehrten Fall: echter EXE-Header in einer
+        Datei mit PDF-Extension/PDF-Content-Type.
+        """
+        _, ft_file = doc_type_with_file
+        exe_bytes = b"MZ" + b"\x90" * 64 + b"PE\x00\x00" + b"\x00" * 200
+        uploaded = SimpleUploadedFile("payload.pdf", exe_bytes, content_type="application/pdf")
+
+        with pytest.raises(ValidationError):
+            store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
+
+        assert EventAttachment.objects.filter(event=event).count() == 0
+        log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
+        assert log.detail["reason"] == "mime_mismatch"
+        assert log.detail["declared"] == "application/pdf"
+        assert log.detail["filename"] == "payload.pdf"
+
+    def test_double_extension_attack_uses_last_extension(
+        self, facility_with_settings, staff_user, doc_type_with_file, event
+    ):
+        """Refs Welle 4 (#927): Filename ``report.exe.pdf`` mit echtem PDF-Header.
+
+        Aktuelles Verhalten: ``_enforce_allowed_file_types`` nimmt die *letzte*
+        Extension (``.pdf``) und akzeptiert; der Magic-Byte-Check bestätigt
+        PDF. Die innere ``.exe``-Andeutung im Namen hat keinen Sicherheits-
+        einfluss, weil der Storage-Pfad UUID.enc ist und die Datei beim
+        Download mit dem entschlüsselten Original-Namen (inklusive ``.exe``)
+        ausgeliefert wird. Dieser Test dokumentiert die Akzept-Grenze.
+        """
+        _, ft_file = doc_type_with_file
+        uploaded = SimpleUploadedFile("report.exe.pdf", VALID_PDF_BYTES, content_type="application/pdf")
+        attachment = store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
+        assert attachment.pk is not None
+        # Es entsteht KEIN SECURITY_VIOLATION-Eintrag — der Upload ist regulär gespeichert.
+        assert (
+            AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).count() == 0
+        ), "Double-Extension darf keinen Violation-Log auslösen (heutiges Verhalten)."
+
     def test_whitelist_applied_before_magic_check(self, facility, staff_user, doc_type_with_file):
         """Die Whitelist-Prüfung läuft VOR dem Magic-Byte-Check — so landet
         ein fremder Dateityp nicht im langsameren libmagic-Pfad, und der
