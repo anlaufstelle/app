@@ -589,7 +589,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Tagesablauf | fachkraft | C | ✓ ||
+| Tagesablauf | fachkraft | C | ✓ | `test_mobile_workflows.py` |
 
 **Voraussetzung:** Case mit Episode aus NACH-01.
 
@@ -2237,7 +2237,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen | fachkraft | C | ✓ ||
+| Klient:innen | fachkraft | C | ✓ | `test_mobile_workflows.py` |
 
 
 **Vorbereitung:**
@@ -2500,7 +2500,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle / Events | fachkraft | C/F/S | ⚪ ||
+| Fälle / Events | fachkraft | C/F/S | ⚪ | `test_cases.py` |
 
 **Voraussetzung:** Fall + nicht zugeordnetes Event derselben Person
 
@@ -2531,7 +2531,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle / Events | fachkraft | C/F/S | ⚪ ||
+| Fälle / Events | fachkraft | C/F/S | ⚪ | `test_cases.py` |
 
 **Voraussetzung:** Fall mit zugeordnetem Event (TC08)
 
@@ -2559,7 +2559,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle / API | fachkraft | C |||
+| Fälle / API | fachkraft | C || `test_cases.py` |
 
 **Voraussetzung:** Person mit ≥ 2 offenen Fällen
 
@@ -2588,7 +2588,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle | fachkraft | C/F/S | ⚪ ||
+| Fälle | fachkraft | C/F/S | ⚪ | `test_cases.py` |
 
 **Voraussetzung:** eigener Test-Fall
 
@@ -2618,7 +2618,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle | fachkraft | C | ✓ ||
+| Fälle | fachkraft | C | ✓ | `test_mobile_workflows.py` |
 
 
 **Vorbereitung:**
@@ -2697,7 +2697,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Episoden | fachkraft | C/F/S | ⚪ ||
+| Episoden | fachkraft | C/F/S | ⚪ | `test_episodes.py` |
 
 **Voraussetzung:** Fall mit aktiver Episode (TC-ID ENT-EPI-01)
 
@@ -2786,7 +2786,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Episoden | fachkraft | C/F/S | ⚪ ||
+| Episoden | fachkraft | C/F/S | ⚪ | `test_episodes.py` |
 
 **Voraussetzung:** offener Fall
 
@@ -2859,7 +2859,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Wirkungsziele | fachkraft | C/F/S | ⚪ ||
+| Wirkungsziele | fachkraft | C/F/S | ⚪ | `test_goals_htmx.py` |
 
 **Voraussetzung:** vorhandenes Ziel (TC-ID ENT-GOAL-01)
 
@@ -2888,7 +2888,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Wirkungsziele | fachkraft | C/F/S | ✓ ||
+| Wirkungsziele | fachkraft | C/F/S | ✓ | `test_goals_htmx.py` |
 
 **Voraussetzung:** vorhandenes Ziel
 
@@ -2974,7 +2974,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Meilensteine | fachkraft | C/F/S | ⚪ ||
+| Meilensteine | fachkraft | C/F/S | ⚪ | `test_goals_htmx.py` |
 
 **Voraussetzung:** vorhandener Meilenstein
 
@@ -3608,7 +3608,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Attachments | fachkraft | C/F/S | ✓ ||
+| Attachments | fachkraft | C/F/S | ✓ | `test_file_vault.py` |
 
 **Voraussetzung:** mehrere Events mit Anhängen (mind. 5).
 
@@ -3785,7 +3785,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| WorkItems | fachkraft | C | ⚪ ||
+| WorkItems | fachkraft | C | ⚪ | `test_workitems_bulk.py` |
 
 **Voraussetzung:** 3 WorkItems mit Priorität `normal`, alle mutierbar.
 
@@ -3810,7 +3810,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| WorkItems | leitung | C | ⚪ ||
+| WorkItems | leitung | C | ⚪ | `test_workitems_bulk.py` |
 
 **Voraussetzung:** 3 unzugewiesene WorkItems.
 
@@ -3871,7 +3871,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| WorkItems | fachkraft | C | ⚪ ||
+| WorkItems | fachkraft | C | ⚪ | `test_workitems_bulk.py` |
 
 **Voraussetzung:** WorkItem mit `recurrence=WEEKLY`, `due_date=today`, `status=OPEN`.
 
@@ -3898,7 +3898,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| WorkItems | fachkraft | C/S | ✓ ||
+| WorkItems | fachkraft | C/S | ✓ | `test_mobile_workflows.py` |
 
 **Voraussetzung:** WorkItems vorhanden, Playwright mit `iPhone 12`-Device-Profil.
 
@@ -4021,7 +4021,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| DeletionRequests | leitung | C | ⚪ ||
+| DeletionRequests | leitung | C | ⚪ | `test_workitems_deletion.py` |
 
 **Voraussetzung:** DEL-01 (PENDING-Request).
 
@@ -6072,7 +6072,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Sys | öffentlich | C/F/S | ⚪ ||
+| Sys | öffentlich | C/F/S | ⚪ | `test_i18n_locale.py` |
 
 **Voraussetzung:** beide Locale-Dateien (de, en) kompiliert.
 
@@ -6447,7 +6447,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Accessibility | fachkraft | C | ✓ ||
+| Accessibility | fachkraft | C | ✓ | `test_mobile_workflows.py` |
 
 **Schritte:**
 1. Mobile-Viewport (375×812, iPhone-SE-Size) in DevTools setzen.
@@ -8602,35 +8602,35 @@ Methodik:
 
 | Sektion | Bereich | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|---------|------:|--------:|-------------:|----------:|
-| A | Tagesablauf | 12 | 11 | 1 | 92 % |
-| B | Accessibility | 9 | 0 | 9 | 0 % |
+| A | Tagesablauf | 12 | 12 | 0 | 100 % |
+| B | Accessibility | 9 | 1 | 8 | 11 % |
 | B | Acct | 5 | 5 | 0 | 100 % |
-| B | Attachments | 9 | 6 | 3 | 67 % |
+| B | Attachments | 9 | 7 | 2 | 78 % |
 | B | Audit | 5 | 5 | 0 | 100 % |
 | B | Aufbewahrung | 2 | 2 | 0 | 100 % |
 | B | Auth | 10 | 10 | 0 | 100 % |
 | B | Compliance | 4 | 4 | 0 | 100 % |
 | B | DSGVO | 8 | 8 | 0 | 100 % |
-| B | DeletionRequests | 5 | 4 | 1 | 80 % |
-| B | Episoden | 4 | 2 | 2 | 50 % |
+| B | DeletionRequests | 5 | 5 | 0 | 100 % |
+| B | Episoden | 4 | 4 | 0 | 100 % |
 | B | Episoden / Permissions | 1 | 1 | 0 | 100 % |
 | B | Events | 10 | 5 | 5 | 50 % |
-| B | Fälle | 9 | 7 | 2 | 78 % |
-| B | Fälle / API | 1 | 0 | 1 | 0 % |
-| B | Fälle / Events | 2 | 0 | 2 | 0 % |
-| B | Klient:innen | 13 | 12 | 1 | 92 % |
+| B | Fälle | 9 | 9 | 0 | 100 % |
+| B | Fälle / API | 1 | 1 | 0 | 100 % |
+| B | Fälle / Events | 2 | 2 | 0 | 100 % |
+| B | Klient:innen | 13 | 13 | 0 | 100 % |
 | B | Klient:innen / RLS | 1 | 1 | 0 | 100 % |
 | B | MFA | 9 | 9 | 0 | 100 % |
-| B | Meilensteine | 3 | 2 | 1 | 67 % |
+| B | Meilensteine | 3 | 3 | 0 | 100 % |
 | B | Offline | 18 | 13 | 5 | 72 % |
 | B | Pwa | 5 | 5 | 0 | 100 % |
 | B | Statistik | 8 | 8 | 0 | 100 % |
 | B | Suche | 6 | 6 | 0 | 100 % |
 | B | Sudo | 4 | 4 | 0 | 100 % |
-| B | Sys | 6 | 5 | 1 | 83 % |
-| B | Wirkungsziele | 3 | 1 | 2 | 33 % |
+| B | Sys | 6 | 6 | 0 | 100 % |
+| B | Wirkungsziele | 3 | 3 | 0 | 100 % |
 | B | Wirkungsziele / Meilensteine | 1 | 0 | 1 | 0 % |
-| B | WorkItems | 10 | 6 | 4 | 60 % |
+| B | WorkItems | 10 | 10 | 0 | 100 % |
 | B | Zeitstrom | 5 | 5 | 0 | 100 % |
 | B | Übergabe | 5 | 5 | 0 | 100 % |
 | C | Compliance | 14 | 11 | 3 | 79 % |
@@ -8649,11 +8649,11 @@ Methodik:
 
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
-| A | 12 | 11 | 1 | 92 % |
-| B | 181 | 141 | 40 | 78 % |
+| A | 12 | 12 | 0 | 100 % |
+| B | 181 | 160 | 21 | 88 % |
 | C | 31 | 28 | 3 | 90 % |
 | D | 39 | 34 | 5 | 87 % |
-| **Gesamt** | **263** | **214** | **49** | **81 %** |
+| **Gesamt** | **263** | **234** | **29** | **89 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->
