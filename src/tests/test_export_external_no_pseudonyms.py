@@ -99,7 +99,10 @@ class TestExportExternalNoPseudonyms:
         Pseudonyme rendern. Ohne den Template-Gate landeten sie sonst aus
         ``stats.top_clients`` direkt im PDF.
         """
-        today = timezone.now().date()
+        # ``timezone.localdate()`` statt ``.now().date()``: Django wertet
+        # ``occurred_at__date`` in ``settings.TIME_ZONE`` aus — UTC-Date
+        # weicht zwischen 22-24 UTC um einen Kalendertag ab (#939).
+        today = timezone.localdate()
         date_from = today - timedelta(days=7)
         stats = get_statistics(populated_facility, date_from, today)
 
@@ -127,7 +130,7 @@ class TestExportExternalNoPseudonyms:
         HTML rendern. Ohne diese Probe wuerde der Positivtest trivial
         bestehen, falls das Template gar keine Pseudonyme mehr rendert.
         """
-        today = timezone.now().date()
+        today = timezone.localdate()
         date_from = today - timedelta(days=7)
         stats = get_statistics(populated_facility, date_from, today)
 
@@ -149,7 +152,7 @@ class TestExportExternalNoPseudonyms:
         keine Klient-PKs. Damit ist der Jugendamt-Bericht von Haus aus
         re-identifizierungs-frei.
         """
-        today = timezone.now().date()
+        today = timezone.localdate()
         date_from = today - timedelta(days=7)
 
         stats = get_jugendamt_statistics(populated_facility, date_from, today)
