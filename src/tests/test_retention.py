@@ -643,3 +643,63 @@ def test_collect_doomed_events_covers_all_strategies(
     assert ev_ident.pk in doomed_ids, "Identified expired event not in doomed set"
     assert ev_qual.pk in doomed_ids, "Qualified closed-case expired event not in doomed set"
     assert ev_doctype.pk in doomed_ids, "DocumentType custom-retention expired event not in doomed set"
+
+
+@pytest.mark.django_db
+class TestRetentionRunCompletedMarker:
+    """Refs #919: enforce_retention schreibt am Ende eines erfolgreichen
+    Laufs einen ``RETENTION_RUN_COMPLETED``-AuditLog-Eintrag, damit das
+    Compliance-Dashboard zeigen kann, ob der Cron wirklich laeuft.
+    """
+
+    def test_writes_marker_on_successful_run(self, facility_with_settings):
+        from core.models import AuditLog
+
+        before = AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).count()
+        call_command("enforce_retention")
+        after = AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).count()
+        assert after == before + 1
+
+    def test_dry_run_does_not_write_marker(self, facility_with_settings):
+        from core.models import AuditLog
+
+        before = AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).count()
+        call_command("enforce_retention", "--dry-run")
+        after = AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).count()
+        assert after == before, "Dry-run darf keinen LastRun-Marker schreiben."
+
+    def test_propose_does_not_write_marker(self, facility_with_settings):
+        from core.models import AuditLog
+
+        before = AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).count()
+        call_command("enforce_retention", "--propose")
+        after = AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).count()
+        # --propose-Lauf laeuft einen separaten Pfad (_handle_propose),
+        # schreibt keinen RETENTION_RUN_COMPLETED — Aenderung ist nicht
+        # die destruktive Pruning-Operation.
+        assert after == before
+
+    def test_marker_facility_is_null_system_event(self, facility_with_settings):
+        from core.models import AuditLog
+
+        call_command("enforce_retention")
+        entry = AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).latest("timestamp")
+        assert entry.facility is None
+        assert entry.user is None
+        assert entry.target_type == "RetentionRun"
+
+    def test_marker_detail_has_summary_keys(self, facility_with_settings):
+        from core.models import AuditLog
+
+        call_command("enforce_retention")
+        entry = AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).latest("timestamp")
+        # Pflichtfelder fuer das Compliance-Dashboard:
+        for key in (
+            "facilities",
+            "soft_deleted_events",
+            "hard_deleted_activities",
+            "anonymized_clients",
+            "anonymized_trash_clients",
+            "pruned_auditlog",
+        ):
+            assert key in entry.detail, f"Erwartetes detail-Feld {key} fehlt im LastRun-Marker."

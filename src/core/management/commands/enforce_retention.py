@@ -8,7 +8,8 @@ and ``stdout``/``stderr`` formatting (FND-A005).
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from core.models import Facility, Settings
+from core.models import AuditLog, Facility, Settings
+from core.services.audit import audit_event
 from core.services.retention import (
     anonymize_clients,
     cleanup_stale_proposals,
@@ -130,6 +131,24 @@ class Command(BaseCommand):
                 self.style.SUCCESS(f"Anonymized {total_trash_anonymized} trash-expired client(s) in total.")
             )
             self.stdout.write(self.style.SUCCESS(f"Pruned {total_auditlog_pruned} audit-log entry/entries in total."))
+
+            # Refs #919: persistenter LastRun-Marker fuer das Compliance-Dashboard.
+            # Geschrieben nur nach erfolgreichem (non-dry-run) Lauf. ``facility=None``
+            # — der Cron laeuft installationsweit, nicht pro Facility.
+            audit_event(
+                AuditLog.Action.RETENTION_RUN_COMPLETED,
+                user=None,
+                facility=None,
+                target_type="RetentionRun",
+                detail={
+                    "facilities": facilities.count(),
+                    "soft_deleted_events": total_deleted,
+                    "hard_deleted_activities": total_activities,
+                    "anonymized_clients": total_anonymized,
+                    "anonymized_trash_clients": total_trash_anonymized,
+                    "pruned_auditlog": total_auditlog_pruned,
+                },
+            )
 
     def _handle_propose(self, facilities, now):
         """Create RetentionProposal entries for events that would be deleted."""
