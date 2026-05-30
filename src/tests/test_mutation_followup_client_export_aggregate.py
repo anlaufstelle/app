@@ -173,8 +173,8 @@ class TestImportSanity:
     """Refs Test-Datei-interner Sanity-Check.
 
     Stellt sicher, dass die Test-Imports (``FieldTemplate``, ``User``,
-    ``timedelta``) tatsächlich verwendet werden — falls eine spätere
-    Refactoring-Welle das File splittet, wird so klar, was gebraucht wird.
+    ``timedelta``) tatsächlich verwendet werden — falls ein späteres
+    Refactoring das File splittet, wird so klar, was gebraucht wird.
     """
 
     def test_imports_resolvable(self):

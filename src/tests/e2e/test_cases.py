@@ -1,4 +1,4 @@
-"""E2E-Tests für Phase 3: Falllogik (Cases, Episoden, Wirkungsziele)."""
+"""E2E-Tests für Falllogik (Cases, Episoden, Wirkungsziele)."""
 
 import re
 import uuid
