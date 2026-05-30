@@ -3002,7 +3002,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Wirkungsziele / Meilensteine | fachkraft | C/F/S | ✓ ||
+| Wirkungsziele / Meilensteine | fachkraft | C/F/S | ✓ | `test_goals_htmx.py` |
 
 **Voraussetzung:** leerer Fall (oder ausreichend Ziel-Slots)
 
@@ -8631,7 +8631,7 @@ Methodik:
 | B | Sudo | 4 | 4 | 0 | 100 % |
 | B | Sys | 6 | 6 | 0 | 100 % |
 | B | Wirkungsziele | 3 | 3 | 0 | 100 % |
-| B | Wirkungsziele / Meilensteine | 1 | 0 | 1 | 0 % |
+| B | Wirkungsziele / Meilensteine | 1 | 1 | 0 | 100 % |
 | B | WorkItems | 10 | 10 | 0 | 100 % |
 | B | Zeitstrom | 5 | 5 | 0 | 100 % |
 | B | Übergabe | 5 | 5 | 0 | 100 % |
@@ -8652,10 +8652,10 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 12 | 0 | 100 % |
-| B | 181 | 167 | 14 | 92 % |
+| B | 181 | 168 | 13 | 93 % |
 | C | 31 | 28 | 3 | 90 % |
 | D | 39 | 34 | 5 | 87 % |
-| **Gesamt** | **263** | **241** | **22** | **92 %** |
+| **Gesamt** | **263** | **242** | **21** | **92 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->
