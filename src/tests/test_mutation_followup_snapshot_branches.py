@@ -24,7 +24,7 @@ from core.models import (
     Event,
     StatisticsSnapshot,
 )
-from core.services.snapshot import (
+from core.services.dashboard import (
     _split_into_segments,
     create_or_update_snapshot,
     ensure_snapshots_for_months,
@@ -410,7 +410,7 @@ class TestSplitIntoSegmentsBoundaries:
         """Dec→Jan Jahres-Übergang. Mutation ``year + 1`` → ``year`` würde
         in einer Endlosschleife oder falschen Segment-Sequenz enden.
         """
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2026, 3, 15)
             segments = _split_into_segments(date(2025, 12, 1), date(2026, 1, 31))
         assert len(segments) == 2
@@ -425,7 +425,7 @@ class TestSplitIntoSegmentsBoundaries:
         Mutation ``month == 12`` → ``month == 11`` würde hier fälschlich
         zu ``date(year+1, 1, 1)`` springen.
         """
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2026, 3, 15)
             segments = _split_into_segments(date(2025, 11, 1), date(2025, 12, 31))
         assert len(segments) == 2
@@ -436,7 +436,7 @@ class TestSplitIntoSegmentsBoundaries:
 
     def test_full_past_month_is_snapshot_eligible(self):
         """Beide Konjunkte True → use_snapshot True."""
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 6, 15)
             segments = _split_into_segments(date(2025, 3, 1), date(2025, 3, 31))
         assert segments[0][2] is True
@@ -446,7 +446,7 @@ class TestSplitIntoSegmentsBoundaries:
 
         Mutation ``and`` → ``or`` würde hier die ``True`` zurückgeben.
         """
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             segments = _split_into_segments(date(2025, 3, 1), date(2025, 3, 31))
         assert segments[0][2] is False, "Current month darf nie use_snapshot=True bekommen"
@@ -456,7 +456,7 @@ class TestSplitIntoSegmentsBoundaries:
 
         Auch das ``and`` würde durch ``or`` invertiert auf True flippen.
         """
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 6, 15)
             segments = _split_into_segments(date(2025, 3, 5), date(2025, 3, 25))
         assert segments[0][2] is False
@@ -467,7 +467,7 @@ class TestSplitIntoSegmentsBoundaries:
         Mutation ``calendar.monthrange`` → 28 würde 29.2. ausschließen
         und full_month=False liefern.
         """
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 1, 15)
             segments = _split_into_segments(date(2024, 2, 1), date(2024, 2, 29))
         assert len(segments) == 1
@@ -478,7 +478,7 @@ class TestSplitIntoSegmentsBoundaries:
 
         Mutation ``min`` → ``max`` würde seg_to über date_to hinausschießen.
         """
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 6, 15)
             segments = _split_into_segments(date(2025, 1, 1), date(2025, 1, 15))
         # Halber Januar
@@ -488,14 +488,14 @@ class TestSplitIntoSegmentsBoundaries:
 
     def test_future_month_not_snapshot(self):
         """``is_past_month`` für future month False → use_snapshot False."""
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             segments = _split_into_segments(date(2025, 6, 1), date(2025, 6, 30))
         assert segments[0][2] is False, "Future month darf nie use_snapshot=True bekommen"
 
     def test_single_day_range_correct_segment(self):
         """Range eines einzelnen Tages."""
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 6, 15)
             segments = _split_into_segments(date(2025, 3, 17), date(2025, 3, 17))
         assert len(segments) == 1
@@ -503,7 +503,7 @@ class TestSplitIntoSegmentsBoundaries:
 
     def test_year_rollover_with_current_in_new_year(self):
         """Dec/Jan-Rollover, current=Feb des neuen Jahres → beide Monate past."""
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2026, 2, 10)
             segments = _split_into_segments(date(2025, 12, 1), date(2026, 1, 31))
         assert segments[0] == (date(2025, 12, 1), date(2025, 12, 31), True)
@@ -511,7 +511,7 @@ class TestSplitIntoSegmentsBoundaries:
 
     def test_year_rollover_with_current_in_january_of_new_year(self):
         """Dec→Jan, current=Jan → Dec past, Jan current."""
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2026, 1, 15)
             segments = _split_into_segments(date(2025, 12, 1), date(2026, 1, 31))
         # December 2025: full past month

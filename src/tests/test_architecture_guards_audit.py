@@ -33,7 +33,7 @@ class TestSettingsAuditCompletenessGuard:
         return set(names)
 
     def test_no_overlap_between_audit_fields_and_exempt(self):
-        from core.services.settings import _AUDIT_EXEMPT, _AUDIT_FIELDS
+        from core.services.system import _AUDIT_EXEMPT, _AUDIT_FIELDS
 
         overlap = set(_AUDIT_FIELDS) & set(_AUDIT_EXEMPT)
         assert not overlap, (
@@ -43,7 +43,7 @@ class TestSettingsAuditCompletenessGuard:
         )
 
     def test_audit_fields_reference_existing_model_fields(self):
-        from core.services.settings import _AUDIT_FIELDS
+        from core.services.system import _AUDIT_FIELDS
 
         existing = self._settings_fields()
         missing = [name for name in _AUDIT_FIELDS if name not in existing]
@@ -54,7 +54,7 @@ class TestSettingsAuditCompletenessGuard:
         )
 
     def test_audit_exempt_references_existing_model_fields(self):
-        from core.services.settings import _AUDIT_EXEMPT
+        from core.services.system import _AUDIT_EXEMPT
 
         existing = self._settings_fields()
         missing = [name for name in _AUDIT_EXEMPT if name not in existing]
@@ -71,7 +71,7 @@ class TestSettingsAuditCompletenessGuard:
         Dann muss bewusst entschieden werden: auditieren oder begruendet
         ausnehmen — beides ist ok, aber stillschweigendes Uebergehen nicht.
         """
-        from core.services.settings import _AUDIT_EXEMPT, _AUDIT_FIELDS
+        from core.services.system import _AUDIT_EXEMPT, _AUDIT_FIELDS
 
         classified = set(_AUDIT_FIELDS) | set(_AUDIT_EXEMPT)
         existing = self._settings_fields()
@@ -122,7 +122,7 @@ class TestAuditLogCreationAllowlist:
             85: "log_audit_event-Body — zentraler View-Helper",
             126: "audit_event-Body — generischer Service-/Cron-Helper",
         },
-        "core/services/settings.py": {
+        "core/services/system/settings.py": {
             85: "log_settings_change-Body — Settings-Diff-Helper",
             105: "log_settings_change-Body — zweite create-Stelle",
         },

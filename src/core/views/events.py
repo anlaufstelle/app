@@ -20,6 +20,12 @@ from core.services.compliance import (
     get_visible_event_or_404,
     user_can_see_document_type,
 )
+from core.services.dashboard import (
+    apply_template,
+    get_template_for_user,
+    get_templates_for_document_type,
+    list_templates_for_user,
+)
 from core.services.events import (
     apply_attachment_changes,
     attach_files_to_new_event,
@@ -36,12 +42,6 @@ from core.services.events import (
     update_event,
 )
 from core.services.file_vault import safe_decrypt
-from core.services.quick_templates import (
-    apply_template,
-    get_template_for_user,
-    get_templates_for_document_type,
-    list_templates_for_user,
-)
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)

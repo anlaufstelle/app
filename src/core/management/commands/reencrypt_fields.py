@@ -5,8 +5,8 @@ from django.db import transaction
 
 from core.models import Event, EventHistory
 from core.models.attachment import EventAttachment
-from core.services._db_admin import bypass_replication_triggers
 from core.services.file_vault import encrypt_field, is_encrypted_value, safe_decrypt
+from core.services.system import bypass_replication_triggers
 
 
 def _reencrypt_data_json(payload):

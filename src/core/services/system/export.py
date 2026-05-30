@@ -285,7 +285,7 @@ def get_jugendamt_statistics(facility, date_from, date_to):
 
 def generate_jugendamt_pdf(facility, date_from, date_to):
     """Generate the youth welfare office report as PDF."""
-    from core.services.snapshot import get_jugendamt_statistics_hybrid
+    from core.services.dashboard import get_jugendamt_statistics_hybrid
 
     stats = get_jugendamt_statistics_hybrid(facility, date_from, date_to)
     html = render_to_string(

@@ -2,9 +2,9 @@
 
 from django.views.generic import TemplateView
 
+import core.services.system.health as system_health
 from core.models import AuditLog, Facility, Organization
 from core.models.user import User
-from core.services import system_health
 from core.views.system.mixins import SystemAuditMixin
 
 

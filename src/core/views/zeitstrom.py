@@ -9,9 +9,9 @@ from django.utils import timezone
 from django.views.generic import TemplateView
 
 from core.models import DocumentType, TimeFilter, WorkItem
-from core.services.bans import get_active_bans
 from core.services.case import build_handover_summary
 from core.services.events import build_feed_items, enrich_events_with_preview
+from core.services.system import get_active_bans
 from core.views.mixins import AssistantOrAboveRequiredMixin
 
 logger = logging.getLogger(__name__)

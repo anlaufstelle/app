@@ -38,8 +38,8 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 
 from core.models import Client, Event
-from core.services.export import get_jugendamt_statistics
-from core.services.statistics import get_statistics
+from core.services.dashboard import get_statistics
+from core.services.system import get_jugendamt_statistics
 
 # Eindeutige Pseudonyme — wenn sie irgendwo im HTML auftauchen, ist das
 # kein Zufall (kein Substring-Overlap mit Boilerplate).

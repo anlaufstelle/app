@@ -8,8 +8,8 @@ from django.db import transaction
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, WorkItem
-from core.services.activity import log_activity
 from core.services.audit import audit_event
+from core.services.dashboard import log_activity
 
 logger = logging.getLogger(__name__)
 

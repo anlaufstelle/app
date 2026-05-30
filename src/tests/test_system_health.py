@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from django.test import override_settings
 
-from core.services import system_health
+import core.services.system.health as system_health
 
 
 class TestCheckDatabase:
@@ -34,7 +34,7 @@ class TestCheckDatabase:
             raise RuntimeError("simulated DB outage")
 
         monkeypatch.setattr(
-            "core.services.system_health.connection.ensure_connection",
+            "core.services.system.health.connection.ensure_connection",
             boom,
         )
         assert system_health.check_database() is False
@@ -58,7 +58,7 @@ class TestPendingMigrations:
                 raise RuntimeError("simulated migration loader failure")
 
         monkeypatch.setattr(
-            "core.services.system_health.MigrationExecutor",
+            "core.services.system.health.MigrationExecutor",
             _BoomExecutor,
         )
         assert system_health.pending_migrations() == []
@@ -84,7 +84,7 @@ class TestDiskUsage:
         def boom(_path):
             raise OSError("simulated permission denied")
 
-        monkeypatch.setattr("core.services.system_health.shutil.disk_usage", boom)
+        monkeypatch.setattr("core.services.system.health.shutil.disk_usage", boom)
         result = system_health.disk_usage("/nope")
         assert result["total_gb"] is None
         assert result["used_gb"] is None
@@ -164,6 +164,6 @@ class TestAppVersions:
         def boom(_path):
             raise OSError("simulated read failure")
 
-        monkeypatch.setattr("core.services.system_health.tomllib.load", boom)
+        monkeypatch.setattr("core.services.system.health.tomllib.load", boom)
         result = system_health.app_versions()
         assert result["app_version"] in (os.environ.get("APP_VERSION", "unknown"), "unknown")

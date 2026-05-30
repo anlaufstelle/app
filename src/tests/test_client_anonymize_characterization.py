@@ -123,7 +123,7 @@ class TestClientAnonymizeCharacterization:
         assert EventHistory.objects.filter(event__client=client_identified).exists()
 
         called = []
-        from core.services._db_admin import bypass_replication_triggers as real_bypass
+        from core.services.system import bypass_replication_triggers as real_bypass
 
         @contextmanager
         def _spy():

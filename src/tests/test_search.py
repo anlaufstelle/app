@@ -71,7 +71,7 @@ class TestSearch:
         self, client, staff_user, facility, doc_type_contact, client_identified
     ):
         """Searching for a JSON key name must NOT match; only values count."""
-        from core.services.search import search_clients_and_events
+        from core.services.dashboard import search_clients_and_events
 
         # Refs #827 (C-60): Suchindex enthaelt nur Werte zu existierenden,
         # unverschluesselten und nicht-erhoehten FieldTemplates. "notiz" ist
@@ -97,7 +97,7 @@ class TestSearch:
         self, client, staff_user, facility, doc_type_contact, client_identified
     ):
         """Slug that appears only as a key and nowhere as a value → 0 data results."""
-        from core.services.search import search_clients_and_events
+        from core.services.dashboard import search_clients_and_events
 
         Event.objects.create(
             facility=facility,
@@ -118,7 +118,7 @@ class TestSearch:
         """Event with NORMAL doc_type but a HIGH-sensitivity field must not
         appear in results for a staff user when the match is only in the HIGH field."""
         from core.models import DocumentType, DocumentTypeField, FieldTemplate
-        from core.services.search import search_clients_and_events
+        from core.services.dashboard import search_clients_and_events
 
         doc_type = DocumentType.objects.create(
             facility=facility,
@@ -161,7 +161,7 @@ class TestSearch:
     def test_fuzzy_finds_typo_variant(self, client, staff_user, facility):
         """pg_trgm: 'Schmitt' findet 'Schmidt' (Tippfehler-Toleranz)."""
         from core.models import Client as ClientModel
-        from core.services.search import search_similar_clients
+        from core.services.dashboard import search_similar_clients
 
         ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
 
@@ -171,7 +171,7 @@ class TestSearch:
     def test_fuzzy_excludes_exact_matches(self, client, staff_user, facility):
         """exclude_pks verhindert Doppelung zwischen exakter und Fuzzy-Sektion."""
         from core.models import Client as ClientModel
-        from core.services.search import search_similar_clients
+        from core.services.dashboard import search_similar_clients
 
         exact = ClientModel.objects.create(facility=facility, pseudonym="Müller", created_by=staff_user)
 
@@ -183,7 +183,7 @@ class TestSearch:
         angezeigten (Refs #580). Sonst würden Overflow-Exact-Hits als Fuzzy
         mislabeled und echte Fuzzy-Kandidaten verdrängen."""
         from core.models import Client as ClientModel
-        from core.services.search import search_similar_clients
+        from core.services.dashboard import search_similar_clients
 
         # 10 exakte Treffer für "Batch"
         batch_pks = {
@@ -202,7 +202,7 @@ class TestSearch:
     def test_fuzzy_respects_threshold(self, client, staff_user, facility):
         """Hoher Threshold filtert ähnliche, aber nicht identische Pseudonyme."""
         from core.models import Client as ClientModel
-        from core.services.search import search_similar_clients
+        from core.services.dashboard import search_similar_clients
 
         ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
 
@@ -215,7 +215,7 @@ class TestSearch:
         """Fuzzy-Suche darf nur eigene Facility treffen."""
         from core.models import Client as ClientModel
         from core.models import Facility
-        from core.services.search import search_similar_clients
+        from core.services.dashboard import search_similar_clients
 
         other = Facility.objects.create(organization=organization, name="Andere")
         ClientModel.objects.create(facility=other, pseudonym="Schmidt", created_by=staff_user)
@@ -225,7 +225,7 @@ class TestSearch:
     def test_fuzzy_excludes_inactive(self, client, staff_user, facility):
         """Inaktive Klienten erscheinen nicht in Fuzzy-Ergebnissen."""
         from core.models import Client as ClientModel
-        from core.services.search import search_similar_clients
+        from core.services.dashboard import search_similar_clients
 
         ClientModel.objects.create(facility=facility, pseudonym="Schmidt", is_active=False, created_by=staff_user)
         assert search_similar_clients(facility, "Schmitt") == []
@@ -233,7 +233,7 @@ class TestSearch:
     def test_fuzzy_short_query_returns_empty(self, client, staff_user, facility):
         """Queries unter 2 Zeichen liefern keine Fuzzy-Treffer (Rauschen vermeiden)."""
         from core.models import Client as ClientModel
-        from core.services.search import search_similar_clients
+        from core.services.dashboard import search_similar_clients
 
         ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
         assert search_similar_clients(facility, "") == []
@@ -243,7 +243,7 @@ class TestSearch:
         """Threshold aus facility.settings wird genutzt, wenn kein Override."""
         from core.models import Client as ClientModel
         from core.models import Settings
-        from core.services.search import search_similar_clients
+        from core.services.dashboard import search_similar_clients
 
         ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
         Settings.objects.update_or_create(facility=facility, defaults={"search_trigram_threshold": 0.95})
@@ -295,7 +295,7 @@ class TestSearchThresholdBoundaries:
         nicht bereits durch den icontains-Filter ausgeschlossen sind.
         """
         from core.models import Client as ClientModel
-        from core.services.search import search_similar_clients
+        from core.services.dashboard import search_similar_clients
 
         ClientModel.objects.create(facility=facility, pseudonym="Anton", created_by=staff_user)
         ClientModel.objects.create(facility=facility, pseudonym="Zebra", created_by=staff_user)
@@ -318,7 +318,7 @@ class TestSearchThresholdBoundaries:
         "Schmidt" bei Query "Schmidt" fällt dadurch raus. Ergebnis also leer.
         """
         from core.models import Client as ClientModel
-        from core.services.search import search_similar_clients
+        from core.services.dashboard import search_similar_clients
 
         ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
         ClientModel.objects.create(facility=facility, pseudonym="Schmitt", created_by=staff_user)
@@ -331,7 +331,7 @@ class TestSearchThresholdBoundaries:
     def test_threshold_one_near_duplicate_rejected(self, facility, staff_user):
         """Bei threshold=1.0 werden sogar leichte Variationen zurückgewiesen."""
         from core.models import Client as ClientModel
-        from core.services.search import search_similar_clients
+        from core.services.dashboard import search_similar_clients
 
         ClientModel.objects.create(facility=facility, pseudonym="Mueller", created_by=staff_user)
         # Query "Muller" ist ähnlich, aber nicht identisch → bei threshold=1.0 leer.
@@ -342,7 +342,7 @@ class TestSearchThresholdBoundaries:
         ``len(query) < 2``). Der Service muss eine Liste zurückgeben, nie
         einen Fehler werfen."""
         from core.models import Client as ClientModel
-        from core.services.search import search_similar_clients
+        from core.services.dashboard import search_similar_clients
 
         ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
 
@@ -353,7 +353,7 @@ class TestSearchThresholdBoundaries:
     def test_query_length_one_returns_empty(self, facility, staff_user):
         """1-Zeichen-Queries werden vor pg_trgm abgefangen und sind leer."""
         from core.models import Client as ClientModel
-        from core.services.search import search_similar_clients
+        from core.services.dashboard import search_similar_clients
 
         ClientModel.objects.create(facility=facility, pseudonym="Schmidt", created_by=staff_user)
         assert search_similar_clients(facility, "S") == []
@@ -365,7 +365,7 @@ class TestSearchThresholdBoundaries:
         übergeben wird."""
         from core.models import Client as ClientModel
         from core.models import Settings
-        from core.services.search import search_similar_clients
+        from core.services.dashboard import search_similar_clients
 
         ClientModel.objects.create(facility=facility, pseudonym="Anton", created_by=staff_user)
         Settings.objects.update_or_create(facility=facility, defaults={"search_trigram_threshold": 0.0})

@@ -2,13 +2,17 @@
 
 from __future__ import annotations
 
-from core.services import system_health
 from core.services.compliance._types import ComplianceCheck, ComplianceStatus
 
 
 def _migration_checks() -> list[ComplianceCheck]:
     """Pending Django-Migrationen."""
-    pending = system_health.pending_migrations()
+    # Lazy import (Refs #959): umgeht circular import zwischen compliance/
+    # und system/, weil system/__init__.py die offline/bans/export-Module
+    # eager laedt, die wiederum auf core.services.compliance zugreifen.
+    from core.services.system.health import pending_migrations
+
+    pending = pending_migrations()
     if not pending:
         return [
             ComplianceCheck(
@@ -37,7 +41,9 @@ def _migration_checks() -> list[ComplianceCheck]:
 
 def _version_checks() -> list[ComplianceCheck]:
     """App-Version / Django-Version / Python-Version als Info-Karte."""
-    versions = system_health.app_versions()
+    from core.services.system.health import app_versions
+
+    versions = app_versions()
     message = f"App {versions['app_version']}, Django {versions['django_version']}, Python {versions['python_version']}"
     return [
         ComplianceCheck(

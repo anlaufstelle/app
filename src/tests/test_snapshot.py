@@ -6,7 +6,7 @@ import pytest
 from django.utils import timezone
 
 from core.models import DocumentType, Event, StatisticsSnapshot
-from core.services.snapshot import (
+from core.services.dashboard import (
     create_or_update_snapshot,
     ensure_snapshots_for_months,
 )

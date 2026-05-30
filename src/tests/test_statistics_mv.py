@@ -7,7 +7,7 @@ from django.test.utils import override_settings
 from django.utils import timezone
 
 from core.models import Event
-from core.services.statistics import (
+from core.services.dashboard import (
     STATISTICS_MV_NAME,
     get_event_counts_by_month,
 )

@@ -10,7 +10,7 @@ from django.db import connection, transaction
 from django.utils import timezone
 
 from core.models import AuditLog
-from core.services._db_admin import bypass_replication_triggers
+from core.services.system import bypass_replication_triggers
 
 
 def prune_auditlog(facility, settings_obj, now=None, dry_run=False):

@@ -18,7 +18,7 @@ from core.models import (
     Event,
 )
 from core.services.file_vault import encrypt_field
-from core.services.offline import (
+from core.services.system import (
     _visible_data_fields,
 )
 from tests._mutation_followup_offline_helpers import (

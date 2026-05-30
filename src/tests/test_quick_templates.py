@@ -7,7 +7,7 @@ import pytest
 from django.urls import reverse
 
 from core.models import DocumentType, DocumentTypeField, FieldTemplate, QuickTemplate
-from core.services.quick_templates import (
+from core.services.dashboard import (
     apply_template,
     filter_prefilled_data,
     get_template_for_user,

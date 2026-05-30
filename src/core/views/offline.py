@@ -18,7 +18,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_BULK_ACTION
 from core.models import AuditLog, Client
 from core.services.audit import log_audit_event
-from core.services.offline import build_client_offline_bundle
+from core.services.system import build_client_offline_bundle
 from core.views.mixins import AssistantOrAboveRequiredMixin
 
 

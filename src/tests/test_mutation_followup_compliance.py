@@ -413,7 +413,7 @@ class TestBackupBoundary:
     def test_age_24h_is_ok(self):
         """Exakte Schwelle ``age <= 24`` → OK."""
         with patch(
-            "core.services.system_health.last_backup_info",
+            "core.services.system.health.last_backup_info",
             return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 24.0, "is_stale": False},
         ):
             checks = compliance._backup_checks()
@@ -422,7 +422,7 @@ class TestBackupBoundary:
     def test_age_25h_is_warning(self):
         """``age > 24`` → WARNING (Boundary +1)."""
         with patch(
-            "core.services.system_health.last_backup_info",
+            "core.services.system.health.last_backup_info",
             return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 25.0, "is_stale": True},
         ):
             checks = compliance._backup_checks()
@@ -431,7 +431,7 @@ class TestBackupBoundary:
     def test_age_72h_is_still_warning(self):
         """Exakte Schwelle ``age <= 72`` → WARNING."""
         with patch(
-            "core.services.system_health.last_backup_info",
+            "core.services.system.health.last_backup_info",
             return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 72.0, "is_stale": True},
         ):
             checks = compliance._backup_checks()
@@ -440,7 +440,7 @@ class TestBackupBoundary:
     def test_age_73h_is_critical(self):
         """``age > 72`` → CRITICAL (Boundary +1)."""
         with patch(
-            "core.services.system_health.last_backup_info",
+            "core.services.system.health.last_backup_info",
             return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 73.0, "is_stale": True},
         ):
             checks = compliance._backup_checks()

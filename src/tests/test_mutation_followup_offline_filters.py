@@ -18,7 +18,7 @@ from core.models import (
     DocumentType,
     WorkItem,
 )
-from core.services.offline import (
+from core.services.system import (
     LOOKBACK_DAYS,
     MAX_EVENTS_PER_BUNDLE,
     build_client_offline_bundle,

@@ -10,7 +10,7 @@ from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from core.models import Client, DocumentType, Event, StatisticsSnapshot
-from core.services.snapshot import create_or_update_snapshot
+from core.services.dashboard import create_or_update_snapshot
 
 
 @pytest.fixture

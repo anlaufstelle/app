@@ -18,7 +18,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate
-from core.services.offline import BUNDLE_SCHEMA_VERSION, build_client_offline_bundle
+from core.services.system import BUNDLE_SCHEMA_VERSION, build_client_offline_bundle
 
 
 @pytest.fixture
@@ -153,7 +153,7 @@ class TestBuildClientOfflineBundleService:
         assert bundle["client"]["notes"] == "interne notiz"
 
     def test_bundle_event_limit_respected(self, facility, client_identified, doc_type_contact, staff_user):
-        from core.services.offline import MAX_EVENTS_PER_BUNDLE
+        from core.services.system import MAX_EVENTS_PER_BUNDLE
 
         # Create 5 events more than the cap to verify truncation.
         for i in range(MAX_EVENTS_PER_BUNDLE + 5):

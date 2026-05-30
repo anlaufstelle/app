@@ -87,7 +87,7 @@ class TestTrackClientVisit:
 @pytest.mark.django_db
 class TestSearchService:
     def test_search_clients_and_events(self, staff_user, facility, client_identified):
-        from core.services.search import search_clients_and_events
+        from core.services.dashboard import search_clients_and_events
 
         clients, events = search_clients_and_events(facility, staff_user, "ID-01")
         assert len(clients) > 0
@@ -95,7 +95,7 @@ class TestSearchService:
 
     def test_search_respects_max_limits(self, staff_user, facility):
         from core.models import Client as ClientModel
-        from core.services.search import search_clients_and_events
+        from core.services.dashboard import search_clients_and_events
 
         for i in range(10):
             ClientModel.objects.create(
@@ -107,7 +107,7 @@ class TestSearchService:
         assert len(clients) <= 3
 
     def test_search_empty_query(self, staff_user, facility):
-        from core.services.search import search_clients_and_events
+        from core.services.dashboard import search_clients_and_events
 
         clients, events = search_clients_and_events(facility, staff_user, "")
         assert clients == []

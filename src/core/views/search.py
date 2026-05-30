@@ -7,7 +7,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
-from core.services.search import search_clients_and_events, search_similar_clients
+from core.services.dashboard import search_clients_and_events, search_similar_clients
 from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin
 
 logger = logging.getLogger(__name__)

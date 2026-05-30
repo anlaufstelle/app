@@ -18,7 +18,7 @@ import pytest
 from core.models import (
     StatisticsSnapshot,
 )
-from core.services.snapshot import (
+from core.services.dashboard import (
     _empty_jugendamt_stats,
     _empty_stats,
     _merge_jugendamt_stats,
@@ -363,7 +363,7 @@ class TestGetStatisticsHybridCutoff:
             },
             jugendamt_data={},
         )
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 6, 15)
             result = get_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
         # Live-Query hätte 0 ergeben — wir lesen 999 aus Snapshot
@@ -378,7 +378,7 @@ class TestGetStatisticsHybridCutoff:
         jan = datetime(2025, 1, 15, 10, 0)
         _make_event(facility, client_identified, doc_type_contact, staff_user, jan)
         # KEIN Snapshot vorhanden
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 6, 15)
             result = get_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
         assert result["total_contacts"] == 1
@@ -400,7 +400,7 @@ class TestGetStatisticsHybridCutoff:
         )
         mar = datetime(2025, 3, 5, 10, 0)
         _make_event(facility, client_identified, doc_type_contact, staff_user, mar)
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_statistics_hybrid(facility, date(2025, 3, 1), date(2025, 3, 31))
         assert result["total_contacts"] == 1, "Current month muss live sein, nicht 999 aus Snapshot"
@@ -429,7 +429,7 @@ class TestGetStatisticsHybridCutoff:
         # Event in Januar
         jan = datetime(2025, 1, 15, 10, 0)
         _make_event(facility, client_identified, doc_type_contact, staff_user, jan)
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 6, 15)
             result = get_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
         # top_clients muss im Result-Dict landen (Key-Existenz)
@@ -456,7 +456,7 @@ class TestGetStatisticsHybridCutoff:
             },
             jugendamt_data={},
         )
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 6, 15)
             # darf nicht crashen
             result = get_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
@@ -487,7 +487,7 @@ class TestGetStatisticsHybridCutoff:
         # Live-Event in März (current month bei localdate=2025-03-15)
         mar = datetime(2025, 3, 10, 10, 0)
         _make_event(facility, client_identified, doc_type_contact, staff_user, mar)
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 3, 31))
         # 5 (Jan-Snapshot) + 0 (Feb live, leer) + 1 (Mar live) = 6

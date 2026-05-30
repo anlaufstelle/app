@@ -15,7 +15,7 @@ from core.models import (
     Organization,
     User,
 )
-from core.services.export import (
+from core.services.system import (
     JUGENDAMT_CATEGORY_MAP,
     get_jugendamt_statistics,
 )
@@ -216,7 +216,7 @@ class TestCSVExportVisibilityFilter:
         )
 
     def test_assistant_does_not_see_high_event_row(self, facility, admin_user):
-        from core.services.export import export_events_csv
+        from core.services.system import export_events_csv
 
         self._high_event(facility, admin_user)
         assistant = User.objects.create_user(
@@ -234,7 +234,7 @@ class TestCSVExportVisibilityFilter:
         )
 
     def test_admin_sees_high_event_row(self, facility, admin_user):
-        from core.services.export import export_events_csv
+        from core.services.system import export_events_csv
 
         self._high_event(facility, admin_user)
         today = date.today()
@@ -246,7 +246,7 @@ class TestCSVExportVisibilityFilter:
         """Service ohne ``user`` (System-Mode) liefert weiterhin alle Events
         — explizit dokumentiert. Aufrufer (z.B. Cron-Reports) muessen das
         Privileg-Risiko bewusst tragen."""
-        from core.services.export import export_events_csv
+        from core.services.system import export_events_csv
 
         self._high_event(facility, admin_user)
         today = date.today()
@@ -286,8 +286,8 @@ class TestPDFTopPseudonymsToggle:
     """Refs #792 (C-24): Standard-PDF ohne Top-Pseudonyme, internal=1 mit Banner."""
 
     def test_default_pdf_has_no_top_clients_section(self, facility, sample_events):
-        from core.services.export import generate_report_pdf
-        from core.services.snapshot import get_statistics_hybrid
+        from core.services.dashboard import get_statistics_hybrid
+        from core.services.system import generate_report_pdf
 
         today = date.today()
         stats = get_statistics_hybrid(facility, today - timedelta(days=30), today)
@@ -316,7 +316,7 @@ class TestPDFTopPseudonymsToggle:
         assert pdf_bytes[:4] == b"%PDF"
 
     def test_internal_pdf_has_top_clients_and_banner(self, facility, sample_events):
-        from core.services.snapshot import get_statistics_hybrid
+        from core.services.dashboard import get_statistics_hybrid
 
         today = date.today()
         stats = get_statistics_hybrid(facility, today - timedelta(days=30), today)

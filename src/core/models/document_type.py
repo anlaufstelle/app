@@ -253,7 +253,7 @@ class FieldTemplate(models.Model):
         Pre-Check ``allows_default=False`` (Datei) raised einen klaren
         Fehler, bevor der typspezifische Validator drankommt.
         """
-        from core.services.field_types import get_spec
+        from core.services.system import get_spec
 
         raw = (self.default_value or "").strip()
         if not raw:
@@ -312,7 +312,7 @@ class FieldTemplate(models.Model):
         jeder ``parse_default``-Helper ist fail-safe (liefert ``None``
         bei nicht-parsbarem Input).
         """
-        from core.services.field_types import get_spec
+        from core.services.system import get_spec
 
         raw = (self.default_value or "").strip()
         if not raw:

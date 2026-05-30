@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Event, StatisticsSnapshot
-from core.services.snapshot import get_statistics_trend
+from core.services.dashboard import get_statistics_trend
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -57,7 +57,7 @@ class TestTrendReturnsPerSegmentData:
 
     @pytest.mark.django_db
     def test_single_month(self, facility):
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_statistics_trend(facility, date(2025, 3, 1), date(2025, 3, 31))
 
@@ -69,7 +69,7 @@ class TestTrendReturnsPerSegmentData:
 
     @pytest.mark.django_db
     def test_quarter_returns_three_segments(self, facility):
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_statistics_trend(facility, date(2025, 1, 1), date(2025, 3, 31))
 
@@ -88,7 +88,7 @@ class TestTrendReturnsPerSegmentData:
             jugendamt_data={},
         )
 
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_statistics_trend(facility, date(2025, 1, 1), date(2025, 1, 31))
 
@@ -108,7 +108,7 @@ class TestTrendReturnsPerSegmentData:
             jugendamt_data={},
         )
 
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_statistics_trend(facility, date(2025, 3, 1), date(2025, 3, 31))
 
@@ -119,7 +119,7 @@ class TestTrendReturnsPerSegmentData:
     def test_source_live_fallback_without_snapshot(self, facility, client_identified, doc_type_contact, staff_user):
         _make_event(facility, client_identified, doc_type_contact, staff_user, datetime(2025, 1, 15, 10, 0))
 
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_statistics_trend(facility, date(2025, 1, 1), date(2025, 1, 31))
 
@@ -128,7 +128,7 @@ class TestTrendReturnsPerSegmentData:
 
     @pytest.mark.django_db
     def test_label_format(self, facility):
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 12, 15)
             result = get_statistics_trend(facility, date(2025, 1, 1), date(2025, 3, 31))
 

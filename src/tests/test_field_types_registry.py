@@ -8,8 +8,7 @@ import pytest
 from django import forms
 from django.core.exceptions import ValidationError
 
-from core.services import field_types
-from core.services.field_types import FIELD_TYPE_REGISTRY, FieldTypeSpec, get_spec
+from core.services.system import FIELD_TYPE_REGISTRY, FieldTypeSpec, field_types, get_spec
 
 
 class TestRegistryCompleteness:

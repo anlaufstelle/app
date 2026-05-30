@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from core.services.offline import (
+from core.services.system import (
     BUNDLE_SCHEMA_VERSION,
     BUNDLE_TTL_SECONDS,
     build_client_offline_bundle,

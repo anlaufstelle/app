@@ -12,7 +12,7 @@ import pytest
 from django.utils import timezone
 
 from core.models import Client, DocumentType, Event, FieldTemplate
-from core.services.export import _sanitize_csv_cell, export_events_csv
+from core.services.system import _sanitize_csv_cell, export_events_csv
 
 
 class TestSanitizeCsvCellUnit:

@@ -12,9 +12,8 @@ from django_ratelimit.decorators import ratelimit
 
 from core.models import AuditLog, DocumentType
 from core.services.audit import log_audit_event
-from core.services.export import export_events_csv, generate_jugendamt_pdf, generate_report_pdf
-from core.services.external_report import build_external_report
-from core.services.snapshot import _merge_stats, get_statistics_hybrid, get_statistics_trend
+from core.services.dashboard import _merge_stats, build_external_report, get_statistics_hybrid, get_statistics_trend
+from core.services.system import export_events_csv, generate_jugendamt_pdf, generate_report_pdf
 from core.utils.downloads import safe_download_response
 from core.utils.formatting import parse_date
 from core.views.mixins import HTMXPartialMixin, LeadOrAdminRequiredMixin
@@ -29,8 +28,7 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
     partial_template_name = "core/statistics/partials/full_content.html"
 
     def get(self, request):
-        from core.services.snapshot import is_multi_month_range
-        from core.services.statistics import parse_statistics_period
+        from core.services.dashboard import is_multi_month_range, parse_statistics_period
 
         facility = request.current_facility
         today = timezone.localdate()
@@ -78,7 +76,7 @@ class ChartDataView(LeadOrAdminRequiredMixin, View):
     """JSON API endpoint returning chart-ready statistics data."""
 
     def get(self, request):
-        from core.services.statistics import parse_statistics_period
+        from core.services.dashboard import parse_statistics_period
 
         facility = request.current_facility
         today = timezone.localdate()
@@ -221,7 +219,7 @@ class JugendamtExportView(LeadOrAdminRequiredMixin, View):
 class ExternalReportView(LeadOrAdminRequiredMixin, View):
     """Datenschutzfreundlicher externer Bericht (Refs #921).
 
-    Wrappt :func:`core.services.external_report.build_external_report`:
+    Wrappt :func:`core.services.dashboard.external_report.build_external_report`:
     keine Pseudonyme, K-Anon-Schwelle aus Settings, Datenschutzprofil-Metadaten.
 
     Output-Format wird ueber den ``format``-Query-Parameter gewaehlt:
@@ -232,7 +230,7 @@ class ExternalReportView(LeadOrAdminRequiredMixin, View):
     template_name = "core/statistics/external_report.html"
 
     def get(self, request):
-        from core.services.statistics import parse_statistics_period
+        from core.services.dashboard import parse_statistics_period
 
         facility = request.current_facility
         today = timezone.localdate()

@@ -9,8 +9,8 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.utils import timezone
 
 from core.models import DocumentType, StatisticsSnapshot
-from core.services.export import get_jugendamt_statistics
-from core.services.statistics import get_statistics
+from core.services.dashboard.statistics import get_statistics
+from core.services.system import get_jugendamt_statistics
 
 logger = logging.getLogger(__name__)
 

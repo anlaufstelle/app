@@ -113,7 +113,7 @@ class DynamicEventDataForm(forms.Form):
     """Dynamic form based on DocumentType fields.
 
     Refs #907 / FND-006: Form-Field-, Widget-, Default-Auswahl pro Feldtyp
-    laeuft ueber :data:`core.services.field_types.FIELD_TYPE_REGISTRY` —
+    laeuft ueber :data:`core.services.system.field_types.FIELD_TYPE_REGISTRY` —
     die alte ``FIELD_TYPE_MAP`` ist ersetzt. SELECT/MULTI_SELECT-Choices
     und die FILE-Sonderlogik bleiben in dieser Form, da sie auf Form-State
     (``initial_data``, deaktivierte Options) zugreifen.
@@ -125,7 +125,7 @@ class DynamicEventDataForm(forms.Form):
         if not document_type:
             return
 
-        from core.services.field_types import (
+        from core.services.system import (
             FILE,
             MULTI_SELECT,
             SELECT,

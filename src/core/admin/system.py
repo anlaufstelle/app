@@ -61,7 +61,7 @@ class SettingsAdmin(FacilityScopedAdminMixin, ModelAdmin):
 
     def save_model(self, request, obj, form, change):
         """Write a SETTINGS_CHANGE audit entry for every Settings update."""
-        from core.services.settings import log_settings_change, snapshot_settings
+        from core.services.system import log_settings_change, snapshot_settings
 
         before = snapshot_settings(obj) if change and obj.pk else {}
         super().save_model(request, obj, form, change)

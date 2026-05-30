@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate
-from core.services.bans import get_active_bans, get_active_bans_for_client
+from core.services.system import get_active_bans, get_active_bans_for_client
 
 
 @pytest.fixture

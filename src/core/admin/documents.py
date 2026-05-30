@@ -108,7 +108,7 @@ class QuickTemplateAdmin(FacilityScopedAdminMixin, ModelAdmin):
     readonly_fields = ("created_at",)
 
     def save_model(self, request, obj, form, change):
-        from core.services.quick_templates import filter_prefilled_data
+        from core.services.dashboard import filter_prefilled_data
 
         obj.prefilled_data = filter_prefilled_data(obj.document_type, obj.prefilled_data or {})
         if not change and obj.created_by_id is None:

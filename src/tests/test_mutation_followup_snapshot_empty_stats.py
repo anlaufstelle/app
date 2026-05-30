@@ -10,7 +10,7 @@ Constraint: Tests gegen Verify-DB (``POSTGRES_DB=anlaufstelle_verify``).
 
 from __future__ import annotations
 
-from core.services.snapshot import (
+from core.services.dashboard import (
     _empty_jugendamt_stats,
     _empty_stats,
 )

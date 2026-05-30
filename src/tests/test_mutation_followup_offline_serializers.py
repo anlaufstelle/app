@@ -19,7 +19,7 @@ from core.models import (
     Event,
     WorkItem,
 )
-from core.services.offline import (
+from core.services.system import (
     _serialize_case,
     _serialize_document_type,
     _serialize_event,

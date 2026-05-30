@@ -8,14 +8,16 @@
 from __future__ import annotations
 
 from core.models import AuditLog
-from core.services import system_health
 from core.services.compliance import _clock
 from core.services.compliance._types import ComplianceCheck, ComplianceStatus
 
 
 def _backup_checks() -> list[ComplianceCheck]:
     """Letzter Backup-Zeitpunkt aus settings.BACKUP_DIR."""
-    info = system_health.last_backup_info()
+    # Lazy import (Refs #959): siehe compliance/system_info.py.
+    from core.services.system.health import last_backup_info
+
+    info = last_backup_info()
     if info is None:
         return [
             ComplianceCheck(

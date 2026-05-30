@@ -4,7 +4,7 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from core.models import Event, Facility, Settings
-from core.services.snapshot import create_or_update_snapshot
+from core.services.dashboard import create_or_update_snapshot
 
 
 class Command(BaseCommand):

@@ -1,6 +1,6 @@
 """Datenschutzfreundliche externe Berichte (Refs #921).
 
-Wrappt :func:`core.services.statistics.get_statistics`:
+Wrappt :func:`core.services.dashboard.statistics.get_statistics`:
 
 - entfernt ``top_clients`` (Pseudonym-Ranking) komplett
 - wendet K-Anonymity-Schwelle auf Aggregate an: Werte < Schwelle werden auf
@@ -20,7 +20,7 @@ from typing import Any
 from django.utils import timezone
 
 from core.models import Settings
-from core.services.statistics import get_statistics
+from core.services.dashboard.statistics import get_statistics
 
 DEFAULT_K_THRESHOLD = 5
 

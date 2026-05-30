@@ -19,7 +19,6 @@ from core.forms.clients import ClientForm
 from core.models import AuditLog, Client, Event, WorkItem
 from core.models import Case as CaseModel
 from core.services.audit import log_audit_event
-from core.services.bans import get_active_bans_for_client
 from core.services.client import (
     create_client,
     export_client_data,
@@ -28,6 +27,7 @@ from core.services.client import (
     update_client,
 )
 from core.services.security import RequireSudoModeMixin
+from core.services.system import get_active_bans_for_client
 from core.utils.downloads import safe_download_response
 from core.views.mixins import (
     AssistantOrAboveRequiredMixin,

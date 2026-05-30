@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Client, DocumentType, Event, Facility, Organization, User
-from core.services.statistics import get_statistics
+from core.services.dashboard import get_statistics
 
 
 @pytest.fixture
@@ -249,7 +249,7 @@ class TestUniqueClientsApproximationFlag:
     def test_helper_returns_false_for_short_range(self):
         from datetime import date as _date
 
-        from core.services.snapshot import is_multi_month_range
+        from core.services.dashboard import is_multi_month_range
 
         assert is_multi_month_range(_date(2026, 1, 1), _date(2026, 1, 31)) is False
         assert is_multi_month_range(_date(2026, 3, 1), _date(2026, 3, 30)) is False
@@ -257,19 +257,19 @@ class TestUniqueClientsApproximationFlag:
     def test_helper_returns_true_for_quarter_range(self):
         from datetime import date as _date
 
-        from core.services.snapshot import is_multi_month_range
+        from core.services.dashboard import is_multi_month_range
 
         assert is_multi_month_range(_date(2026, 1, 1), _date(2026, 4, 1)) is True
 
     def test_helper_returns_true_for_full_year_range(self):
         from datetime import date as _date
 
-        from core.services.snapshot import is_multi_month_range
+        from core.services.dashboard import is_multi_month_range
 
         assert is_multi_month_range(_date(2026, 1, 1), _date(2026, 12, 31)) is True
 
     def test_helper_handles_none_inputs(self):
-        from core.services.snapshot import is_multi_month_range
+        from core.services.dashboard import is_multi_month_range
 
         assert is_multi_month_range(None, None) is False
 
@@ -403,7 +403,7 @@ class TestParseStatisticsPeriod:
         return date(2026, 5, 1)
 
     def _parse(self, **params):
-        from core.services.statistics import parse_statistics_period
+        from core.services.dashboard import parse_statistics_period
 
         return parse_statistics_period(params, self._today())
 

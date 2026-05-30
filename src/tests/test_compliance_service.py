@@ -100,13 +100,13 @@ class TestDbRoleChecks:
 @pytest.mark.django_db
 class TestBackupChecks:
     def test_unknown_when_no_backup_info(self):
-        with patch("core.services.system_health.last_backup_info", return_value=None):
+        with patch("core.services.system.health.last_backup_info", return_value=None):
             checks = compliance._backup_checks()
         assert checks[0].status == compliance.ComplianceStatus.UNKNOWN
 
     def test_ok_when_backup_under_24h(self):
         with patch(
-            "core.services.system_health.last_backup_info",
+            "core.services.system.health.last_backup_info",
             return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 6.0, "is_stale": False},
         ):
             checks = compliance._backup_checks()
@@ -114,7 +114,7 @@ class TestBackupChecks:
 
     def test_warning_when_backup_24_to_72h(self):
         with patch(
-            "core.services.system_health.last_backup_info",
+            "core.services.system.health.last_backup_info",
             return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 48.0, "is_stale": True},
         ):
             checks = compliance._backup_checks()
@@ -122,7 +122,7 @@ class TestBackupChecks:
 
     def test_critical_when_backup_over_72h(self):
         with patch(
-            "core.services.system_health.last_backup_info",
+            "core.services.system.health.last_backup_info",
             return_value={"path": "/var/backups/x.sql", "mtime": None, "age_hours": 96.0, "is_stale": True},
         ):
             checks = compliance._backup_checks()
@@ -155,7 +155,7 @@ class TestRestoreChecks:
             target_type="RestoreVerification",
             detail={},
         )
-        from core.services._db_admin import bypass_replication_triggers
+        from core.services.system import bypass_replication_triggers
 
         with bypass_replication_triggers():
             AuditLog.objects.filter(pk=old.pk).update(timestamp=timezone.now() - timedelta(days=120))
@@ -170,7 +170,7 @@ class TestRestoreChecks:
             target_type="RestoreVerification",
             detail={},
         )
-        from core.services._db_admin import bypass_replication_triggers
+        from core.services.system import bypass_replication_triggers
 
         with bypass_replication_triggers():
             AuditLog.objects.filter(pk=old.pk).update(timestamp=timezone.now() - timedelta(days=400))
@@ -254,7 +254,7 @@ class TestRetentionChecks:
         old = AuditLog.objects.create(
             action=AuditLog.Action.RETENTION_RUN_COMPLETED, facility=None, target_type="RetentionRun"
         )
-        from core.services._db_admin import bypass_replication_triggers
+        from core.services.system import bypass_replication_triggers
 
         with bypass_replication_triggers():
             AuditLog.objects.filter(pk=old.pk).update(timestamp=timezone.now() - timedelta(days=10))
@@ -266,7 +266,7 @@ class TestRetentionChecks:
         old = AuditLog.objects.create(
             action=AuditLog.Action.RETENTION_RUN_COMPLETED, facility=None, target_type="RetentionRun"
         )
-        from core.services._db_admin import bypass_replication_triggers
+        from core.services.system import bypass_replication_triggers
 
         with bypass_replication_triggers():
             AuditLog.objects.filter(pk=old.pk).update(timestamp=timezone.now() - timedelta(days=30))
@@ -298,12 +298,12 @@ class TestMfaChecks:
 @pytest.mark.django_db
 class TestMigrationChecks:
     def test_ok_when_no_pending(self):
-        with patch("core.services.system_health.pending_migrations", return_value=[]):
+        with patch("core.services.system.health.pending_migrations", return_value=[]):
             checks = compliance._migration_checks()
         assert checks[0].status == compliance.ComplianceStatus.OK
 
     def test_critical_when_pending(self):
-        with patch("core.services.system_health.pending_migrations", return_value=[("core", "0099_x")]):
+        with patch("core.services.system.health.pending_migrations", return_value=[("core", "0099_x")]):
             checks = compliance._migration_checks()
         assert checks[0].status == compliance.ComplianceStatus.CRITICAL
 
@@ -358,7 +358,7 @@ class TestAuditEventChecks:
             action=AuditLog.Action.MFA_FAILED,
             target_type="User",
         )
-        from core.services._db_admin import bypass_replication_triggers
+        from core.services.system import bypass_replication_triggers
 
         with bypass_replication_triggers():
             AuditLog.objects.filter(pk=old.pk).update(timestamp=timezone.now() - timedelta(hours=48))

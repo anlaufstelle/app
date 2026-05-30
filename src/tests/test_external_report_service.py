@@ -43,7 +43,7 @@ class TestExternalReportContent:
     def test_report_contains_no_pseudonyms(
         self, facility, client_qualified, doc_type_contact, staff_user, report_period
     ):
-        from core.services.external_report import build_external_report
+        from core.services.dashboard import build_external_report
 
         _make_events(facility, client_qualified, doc_type_contact, staff_user, 6)
 
@@ -58,7 +58,7 @@ class TestExternalReportContent:
     def test_report_includes_total_contacts(
         self, facility, client_qualified, doc_type_contact, staff_user, report_period
     ):
-        from core.services.external_report import build_external_report
+        from core.services.dashboard import build_external_report
 
         _make_events(facility, client_qualified, doc_type_contact, staff_user, 7)
 
@@ -71,7 +71,7 @@ class TestExternalReportContent:
         self, facility, client_qualified, doc_type_contact, staff_user, report_period
     ):
         """Aggregate >= k_anonymity_threshold (Default 5) bleiben unveraendert."""
-        from core.services.external_report import build_external_report
+        from core.services.dashboard import build_external_report
 
         _make_events(facility, client_qualified, doc_type_contact, staff_user, 8)
 
@@ -87,7 +87,7 @@ class TestExternalReportContent:
         self, facility, client_qualified, doc_type_contact, staff_user, report_period
     ):
         """Aggregate < k_anonymity_threshold werden unterdrueckt."""
-        from core.services.external_report import build_external_report
+        from core.services.dashboard import build_external_report
 
         # 3 Events -> unter Default-Schwelle 5
         _make_events(facility, client_qualified, doc_type_contact, staff_user, 3)
@@ -109,7 +109,7 @@ class TestExternalReportMetadata:
     """Datenschutzprofil-Metadaten im Report-Kopf."""
 
     def test_metadata_block_present(self, facility, report_period):
-        from core.services.external_report import build_external_report
+        from core.services.dashboard import build_external_report
 
         report = build_external_report(facility, *report_period)
 
@@ -123,7 +123,7 @@ class TestExternalReportMetadata:
 
     def test_metadata_uses_custom_threshold_from_settings(self, facility, report_period):
         from core.models import Settings
-        from core.services.external_report import build_external_report
+        from core.services.dashboard import build_external_report
 
         Settings.objects.update_or_create(
             facility=facility,
@@ -139,7 +139,7 @@ class TestExternalReportEdgeCases:
     """Edge-Cases: leere Periode, threshold=1."""
 
     def test_empty_period_returns_zero_totals(self, facility, report_period):
-        from core.services.external_report import build_external_report
+        from core.services.dashboard import build_external_report
 
         report = build_external_report(facility, *report_period)
 
@@ -151,7 +151,7 @@ class TestExternalReportEdgeCases:
     ):
         """Bei k=1 wird nichts unterdrueckt (alle Counts sichtbar)."""
         from core.models import Settings
-        from core.services.external_report import build_external_report
+        from core.services.dashboard import build_external_report
 
         Settings.objects.update_or_create(
             facility=facility,

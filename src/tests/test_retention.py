@@ -535,8 +535,7 @@ def test_statistics_correct_after_retention(facility_with_settings, doc_type_con
     import calendar
     from datetime import date
 
-    from core.services.snapshot import get_statistics_hybrid
-    from core.services.statistics import get_statistics
+    from core.services.dashboard import get_statistics, get_statistics_hybrid
 
     # Create an expired anonymous event in a past month
     old_date = timezone.now() - timedelta(days=100)

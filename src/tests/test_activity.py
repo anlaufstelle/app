@@ -4,7 +4,7 @@ import pytest
 from django.contrib.contenttypes.models import ContentType
 
 from core.models import Activity
-from core.services.activity import log_activity
+from core.services.dashboard import log_activity
 
 
 @pytest.mark.django_db

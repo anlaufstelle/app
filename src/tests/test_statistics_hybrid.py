@@ -7,7 +7,7 @@ import pytest
 from django.utils import timezone
 
 from core.models import DocumentType, Event, StatisticsSnapshot
-from core.services.snapshot import (
+from core.services.dashboard import (
     _merge_jugendamt_stats,
     _merge_stats,
     _split_into_segments,
@@ -74,7 +74,7 @@ class TestSplitIntoSegments:
 
     def test_single_full_past_month(self):
         """Full past month → single segment with use_snapshot=True."""
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             segments = _split_into_segments(date(2025, 1, 1), date(2025, 1, 31))
 
@@ -86,7 +86,7 @@ class TestSplitIntoSegments:
 
     def test_current_month_no_snapshot(self):
         """Current month → use_snapshot=False."""
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             segments = _split_into_segments(date(2025, 3, 1), date(2025, 3, 31))
 
@@ -95,7 +95,7 @@ class TestSplitIntoSegments:
 
     def test_partial_past_month_no_snapshot(self):
         """Partial past month (not starting on 1st) → use_snapshot=False."""
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             segments = _split_into_segments(date(2025, 1, 5), date(2025, 1, 31))
 
@@ -104,7 +104,7 @@ class TestSplitIntoSegments:
 
     def test_partial_end_no_snapshot(self):
         """Partial past month (not ending on last day) → use_snapshot=False."""
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             segments = _split_into_segments(date(2025, 1, 1), date(2025, 1, 20))
 
@@ -113,7 +113,7 @@ class TestSplitIntoSegments:
 
     def test_quarter_spanning_three_months(self):
         """Q1 2025 with current month March → Jan+Feb snapshot, Mar live."""
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             segments = _split_into_segments(date(2025, 1, 1), date(2025, 3, 31))
 
@@ -127,7 +127,7 @@ class TestSplitIntoSegments:
 
     def test_partial_first_and_last_month(self):
         """Mid-Jan to mid-Mar → 3 segments, all partial/current → no snapshots."""
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             segments = _split_into_segments(date(2025, 1, 10), date(2025, 3, 20))
 
@@ -141,7 +141,7 @@ class TestSplitIntoSegments:
 
     def test_single_day(self):
         """Single day range → one segment, no snapshot."""
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             segments = _split_into_segments(date(2025, 1, 15), date(2025, 1, 15))
 
@@ -311,7 +311,7 @@ class TestHybridUsesSnapshotForPastMonth:
         event.save()
 
         # Query January (a past month) — should use snapshot values
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
 
@@ -338,7 +338,7 @@ class TestHybridLiveForCurrentMonth:
             jugendamt_data=_jugendamt_snapshot_data(total=99),
         )
 
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_statistics_hybrid(facility, date(2025, 3, 1), date(2025, 3, 31))
 
@@ -364,7 +364,7 @@ class TestHybridMergesSnapshotAndLive:
         mar_dt = datetime(2025, 3, 12, 9, 0)
         _make_event(facility, client_identified, doc_type_contact, staff_user, mar_dt)
 
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 3, 31))
 
@@ -382,7 +382,7 @@ class TestHybridFallbackWithoutSnapshot:
         jan_dt = datetime(2025, 1, 20, 11, 0)
         _make_event(facility, client_identified, doc_type_contact, staff_user, jan_dt)
 
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
 
@@ -410,7 +410,7 @@ class TestJugendamtHybrid:
         mar_dt = datetime(2025, 3, 8, 10, 0)
         _make_event(facility, client_identified, doc_type_contact, staff_user, mar_dt)
 
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_jugendamt_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 3, 31))
 
@@ -450,7 +450,7 @@ class TestPartialEdgeMonthsUseLive:
         )
 
         # Query partial January (10th–25th) — snapshot should NOT be used
-        with patch("core.services.snapshot.timezone") as mock_tz:
+        with patch("core.services.dashboard.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_statistics_hybrid(facility, date(2025, 1, 10), date(2025, 1, 25))
 

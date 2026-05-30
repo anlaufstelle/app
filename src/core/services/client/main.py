@@ -10,10 +10,10 @@ from core.models import AuditLog, Client
 from core.models.activity import Activity
 from core.models.recent_client_visit import RecentClientVisit
 from core.models.workitem import DeletionRequest
-from core.services._db_admin import bypass_replication_triggers
-from core.services.activity import log_activity
 from core.services.audit import audit_client_event, audit_event
+from core.services.dashboard import log_activity
 from core.services.security import check_version_conflict
+from core.services.system import bypass_replication_triggers
 
 logger = logging.getLogger(__name__)
 

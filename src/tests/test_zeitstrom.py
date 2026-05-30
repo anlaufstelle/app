@@ -192,7 +192,7 @@ class TestZeitstromFeedPartial:
 
     def test_feed_partial_with_type_filter(self, client, staff_user, facility, sample_event, client_identified):
         from core.models import Activity
-        from core.services.activity import log_activity
+        from core.services.dashboard import log_activity
 
         log_activity(
             facility=facility,

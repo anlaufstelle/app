@@ -47,7 +47,7 @@ from core.models import (
     TimeFilter,
     WorkItem,
 )
-from core.services.activity import log_activity
+from core.services.dashboard import log_activity
 from core.services.events import (
     _format_preview_value,
     build_feed_items,

@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from core.models import AuditLog, Facility, Settings
 from core.services.audit import audit_event
+from core.services.dashboard import ensure_snapshots_for_months
 from core.services.retention import (
     anonymize_clients,
     cleanup_stale_proposals,
@@ -20,7 +21,6 @@ from core.services.retention import (
     prune_auditlog,
     reactivate_deferred_proposals,
 )
-from core.services.snapshot import ensure_snapshots_for_months
 
 
 class Command(BaseCommand):

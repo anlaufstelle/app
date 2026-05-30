@@ -33,7 +33,7 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from core.services.offline import (
+from core.services.system import (
     BUNDLE_TTL_SECONDS,
     build_client_offline_bundle,
 )
@@ -74,13 +74,13 @@ class TestBundleLeaseMetadata:
         first_time = timezone.now() - timedelta(seconds=BUNDLE_TTL_SECONDS + 60)
         second_time = timezone.now()
 
-        with patch("core.services.offline.timezone.now", return_value=first_time):
+        with patch("core.services.system.offline.timezone.now", return_value=first_time):
             old = build_client_offline_bundle(staff_user, facility, client_identified)
         old_exp = _parse_iso(old["expires_at"])
         # Das „alte" Bundle ist laut seinem eigenen expires_at bereits abgelaufen.
         assert old_exp < timezone.now()
 
-        with patch("core.services.offline.timezone.now", return_value=second_time):
+        with patch("core.services.system.offline.timezone.now", return_value=second_time):
             new = build_client_offline_bundle(staff_user, facility, client_identified)
         new_gen = _parse_iso(new["generated_at"])
         new_exp = _parse_iso(new["expires_at"])
@@ -119,7 +119,7 @@ class TestBundleLeaseHttp:
         # Minimaler Zeit-Patch im zweiten Fetch, damit auch bei sehr schnellem
         # Test-Lauf ein Unterschied entsteht.
         later = timezone.now() + timedelta(seconds=5)
-        with patch("core.services.offline.timezone.now", return_value=later):
+        with patch("core.services.system.offline.timezone.now", return_value=later):
             r2 = client.get(self._url(client_identified.pk))
         gen1 = _parse_iso(r1.json()["generated_at"])
         gen2 = _parse_iso(r2.json()["generated_at"])

@@ -12,7 +12,7 @@ from django.core.exceptions import ValidationError
 from core.models import AuditLog, Case
 from core.services.case import update_case, update_workitem
 from core.services.client import update_client
-from core.services.settings import log_settings_change, snapshot_settings, update_settings
+from core.services.system import log_settings_change, snapshot_settings, update_settings
 
 
 @pytest.mark.django_db

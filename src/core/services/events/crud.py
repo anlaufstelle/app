@@ -15,9 +15,9 @@ from django.db import transaction
 from django.utils.translation import gettext_lazy as _
 
 from core.models import Activity, AuditLog, Event, EventHistory, FieldTemplate
-from core.services.activity import log_activity
 from core.services.audit import audit_event
 from core.services.compliance import user_can_see_document_type
+from core.services.dashboard import log_activity
 from core.services.events.fields import (
     _snapshot_field_metadata,
     _validate_data_json,
