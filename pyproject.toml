@@ -93,6 +93,15 @@ omit = [
 # Filesystem-Root-Walk → Crash mit ``/etc/vconsole.conf``-FileNotFoundError).
 # Welle 0 (#923) hatte den String-Wert als regression eingeführt.
 paths_to_mutate = ["src/core/services/", "src/core/forms/"]
+# Welle 7 (#930) — Files mit reiner Ops/IO-Logik: ``system_health.py`` ist
+# ``shutil``-/``importlib``-Wrapper; ``invite.py`` ist ``send_mail``-Wrapper.
+# Mutationen dort produzieren Survivors, die nur durch tiefes Mocking
+# erschlagbar wären — Mehrwert minimal gegenüber Ops-Monitoring (Sentry,
+# Healthcheck-Endpoint, real-world Ops-RC-Tests).
+do_not_mutate = [
+    "src/core/services/system_health.py",
+    "src/core/services/invite.py",
+]
 # Auch ``tests_dir`` wird in mutmut 3.x als iterable behandelt — String führt
 # zur selben Zeichen-für-Zeichen-Iteration im pytest-Argv. TOML-Liste nötig.
 tests_dir = ["src/tests/"]
