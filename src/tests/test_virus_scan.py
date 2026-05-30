@@ -13,6 +13,7 @@ from core.services.virus_scan import (
     VirusScannerUnavailableError,
     ping,
     scan_file,
+    signature_info,
 )
 
 # EICAR-Test-String — harmloses Standard-Artefakt, das von jedem AV-Scanner
@@ -273,3 +274,74 @@ class TestPing:
             side_effect=ConnectionError("unreachable"),
         ):
             assert ping() is False
+
+
+class TestSignatureInfo:
+    """Refs #919: ClamAV-Signatur-Aktualitaet fuer das Compliance-Dashboard."""
+
+    def test_returns_none_when_disabled(self, settings):
+        settings.CLAMAV_ENABLED = False
+        assert signature_info() is None
+
+    def test_returns_none_on_connection_error(self, settings):
+        settings.CLAMAV_ENABLED = True
+        with patch(
+            "core.services.virus_scan._build_client",
+            side_effect=ConnectionError("unreachable"),
+        ):
+            assert signature_info() is None
+
+    def test_parses_build_time_from_stats(self, settings):
+        """``stats()`` liefert ein Mehrzeilen-Format mit ``Build time:``-Zeilen."""
+        settings.CLAMAV_ENABLED = True
+        stats_text = (
+            "POOLS: 1\n"
+            "STATE: VALID PRIMARY\n"
+            "DATABASE STATUS\n"
+            "  daily.cvd\n"
+            "    Build time: 16 May 2026 10-43 +0000\n"
+            "    Version: 27500\n"
+            "  main.cvd\n"
+            "    Build time: 12 March 2024 08-15 +0000\n"
+            "  bytecode.cvd\n"
+            "    Build time: 01 January 2025 12-00 +0000\n"
+            "END\n"
+        )
+        client = MagicMock()
+        client.stats.return_value = stats_text
+        client.version.return_value = "ClamAV 1.4.0/27500/Fri May 16 10:43:00 2026"
+
+        with patch("core.services.virus_scan._build_client", return_value=client):
+            info = signature_info()
+
+        assert info is not None
+        assert info["version"] and "1.4.0" in info["version"]
+        # Juengstes Datum aus dem Stats-Block — 2026-05-16
+        assert info["signature_date"] is not None
+        assert info["signature_date"].year == 2026
+        assert info["signature_date"].month == 5
+        assert info["signature_date"].day == 16
+        # age_days ist ein nicht-negativer Integer
+        assert isinstance(info["age_days"], int)
+        assert info["age_days"] >= 0
+
+    def test_returns_partial_info_when_build_time_missing(self, settings):
+        """Wenn ``stats()`` keine parsbare Build-Time hat, bleibt
+        ``signature_date`` / ``age_days`` ``None``, aber Version wird
+        weiter ausgewertet."""
+        settings.CLAMAV_ENABLED = True
+        client = MagicMock()
+        client.stats.return_value = "POOLS: 1\nSTATE: VALID PRIMARY\nEND\n"
+        client.version.return_value = "ClamAV 1.4.0"
+
+        with patch("core.services.virus_scan._build_client", return_value=client):
+            info = signature_info()
+
+        assert info == {"version": "ClamAV 1.4.0", "signature_date": None, "age_days": None}
+
+    def test_returns_none_when_stats_is_empty(self, settings):
+        settings.CLAMAV_ENABLED = True
+        client = MagicMock()
+        client.stats.return_value = ""
+        with patch("core.services.virus_scan._build_client", return_value=client):
+            assert signature_info() is None
