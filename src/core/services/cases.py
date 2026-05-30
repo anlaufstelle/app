@@ -10,8 +10,8 @@ from django.utils.translation import gettext_lazy as _
 from core.models import Activity, AuditLog, Case
 from core.services.activity import log_activity
 from core.services.audit import audit_event
+from core.services.compliance import user_can_see_event
 from core.services.security import check_version_conflict
-from core.services.sensitivity import user_can_see_event
 
 logger = logging.getLogger(__name__)
 

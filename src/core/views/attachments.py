@@ -10,8 +10,8 @@ from django.views import View
 from core.models import AuditLog, DocumentType
 from core.models.attachment import EventAttachment
 from core.services.audit import log_audit_event
+from core.services.compliance import allowed_sensitivities_for_user, get_visible_attachment_or_404, user_can_see_field
 from core.services.file_vault import get_attachment_path, get_decrypted_file_stream, get_original_filename
-from core.services.sensitivity import allowed_sensitivities_for_user, get_visible_attachment_or_404, user_can_see_field
 from core.utils.downloads import safe_download_response
 from core.utils.formatting import format_file_size
 from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin

@@ -17,6 +17,7 @@ from django.utils.translation import gettext_lazy as _
 from core.models import Activity, AuditLog, Event, EventHistory, FieldTemplate
 from core.services.activity import log_activity
 from core.services.audit import audit_event
+from core.services.compliance import user_can_see_document_type
 from core.services.events.fields import (
     _snapshot_field_metadata,
     _validate_data_json,
@@ -27,7 +28,6 @@ from core.services.events.fields import (
     stage_index,
 )
 from core.services.file_vault import delete_event_attachments
-from core.services.sensitivity import user_can_see_document_type
 
 
 def attach_files_to_new_event(event, user, file_fields, document_type):

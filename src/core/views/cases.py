@@ -28,7 +28,7 @@ from core.services.cases import (
     update_case,
 )
 from core.services.clients import get_client_or_none
-from core.services.sensitivity import get_visible_event_or_404
+from core.services.compliance import get_visible_event_or_404
 from core.views.mixins import (
     HTMXPartialMixin,
     LeadOrAdminRequiredMixin,

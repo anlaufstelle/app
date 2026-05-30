@@ -120,6 +120,6 @@ class Client(SoftDeletableModel):
         (age_cluster, contact_stage) while no longer being re-identifiable.
         This is additive to ``anonymize()`` and non-destructive to linked data.
         """
-        from core.services.k_anonymization import k_anonymize_client
+        from core.services.compliance import k_anonymize_client
 
         k_anonymize_client(self, k=k)

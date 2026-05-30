@@ -5,7 +5,7 @@ import logging
 from django.contrib.postgres.search import TrigramSimilarity
 
 from core.models import Client, Event
-from core.services.sensitivity import allowed_sensitivities_for_user
+from core.services.compliance import allowed_sensitivities_for_user
 
 logger = logging.getLogger(__name__)
 

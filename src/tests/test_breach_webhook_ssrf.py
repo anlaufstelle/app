@@ -2,7 +2,7 @@
 
 Die Webhook-URL kommt aus der operatorseitig gesetzten Env-Var
 ``BREACH_NOTIFICATION_WEBHOOK_URL``. Vor #772
-prueftet :func:`core.services.breach_detection._post_webhook` weder Schema
+prueftet :func:`core.services.compliance.breach_detection._post_webhook` weder Schema
 noch Ziel-IP — der Aufruf konnte daher gegen Cloud-Metadata-Adressen
 (``169.254.169.254``), interne Hosts (``127.0.0.1``, ``10.0.0.1``,
 ``192.168.0.1``) oder gegen ``file://``/``gopher://``/``ftp://``-Schemes
@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 import pytest
 
-from core.services.breach_detection import _validate_webhook_url
+from core.services.compliance import _validate_webhook_url
 
 
 @pytest.mark.parametrize(

@@ -56,7 +56,7 @@ class EventQuerySet(FacilityScopedQuerySet):
         Without this gate, lower roles see metadata (DocumentType name,
         timestamp, client link) of events they aren't supposed to know exist.
         """
-        from core.services.sensitivity import allowed_sensitivities_for_user
+        from core.services.compliance import allowed_sensitivities_for_user
 
         if user is None or not getattr(user, "is_authenticated", False):
             return self.none()

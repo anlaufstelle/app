@@ -8,7 +8,7 @@ neue Findings. Geeignet als Cron-Job (z.B. stuendlich).
 from django.core.management.base import BaseCommand
 
 from core.models import Facility
-from core.services.breach_detection import run_all_detections
+from core.services.compliance import run_all_detections
 
 
 class Command(BaseCommand):

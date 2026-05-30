@@ -7,7 +7,7 @@ from django.db import connection, transaction
 from django.utils import timezone
 
 from core.models import AuditLog
-from core.services.breach_detection import (
+from core.services.compliance import (
     detect_failed_login_burst,
     detect_mass_delete,
     detect_mass_export,

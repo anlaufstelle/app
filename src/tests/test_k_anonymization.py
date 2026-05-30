@@ -3,7 +3,7 @@
 import pytest
 
 from core.models import Client
-from core.services.k_anonymization import (
+from core.services.compliance import (
     count_clients_in_bucket,
     is_k_anonymous,
     k_anonymize_client,

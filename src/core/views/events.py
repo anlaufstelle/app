@@ -16,6 +16,10 @@ from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
 from core.models import Client, DocumentType, FieldTemplate
 from core.services.clients import get_client_or_none
+from core.services.compliance import (
+    get_visible_event_or_404,
+    user_can_see_document_type,
+)
 from core.services.encryption import safe_decrypt
 from core.services.event import (
     apply_attachment_changes,
@@ -37,10 +41,6 @@ from core.services.quick_templates import (
     get_template_for_user,
     get_templates_for_document_type,
     list_templates_for_user,
-)
-from core.services.sensitivity import (
-    get_visible_event_or_404,
-    user_can_see_document_type,
 )
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 

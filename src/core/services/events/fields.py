@@ -14,7 +14,7 @@ import logging
 from django.core.files.uploadedfile import UploadedFile
 
 from core.models import Client
-from core.services.sensitivity import user_can_see_field
+from core.services.compliance import user_can_see_field
 
 logger = logging.getLogger(__name__)
 

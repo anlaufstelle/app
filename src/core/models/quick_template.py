@@ -19,7 +19,7 @@ class QuickTemplate(models.Model):
     Dokumentationen (z.B. "Beratungsgespräch 30 Min", "Standard-Check-in").
 
     Sensitivitäts-Filter: Templates sind nur sichtbar, wenn
-    :func:`core.services.sensitivity.user_can_see_document_type` für den
+    :func:`core.services.compliance.sensitivity.user_can_see_document_type` für den
     zugehörigen DocumentType True liefert. Gespeicherte ``prefilled_data``
     enthalten daher per Service-Layer-Whitelist ausschließlich Werte von
     Feldern mit effektiver Sensitivität = NORMAL.

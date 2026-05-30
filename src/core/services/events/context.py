@@ -10,6 +10,7 @@ import uuid
 
 from django.utils.translation import gettext_lazy as _
 
+from core.services.compliance import user_can_see_field
 from core.services.encryption import safe_decrypt
 from core.services.events.fields import (
     _is_file_marker,
@@ -17,7 +18,6 @@ from core.services.events.fields import (
     normalize_file_marker,
 )
 from core.services.file_vault import get_original_filename
-from core.services.sensitivity import user_can_see_field
 from core.utils.formatting import format_file_size
 
 

@@ -3,7 +3,7 @@
 Anonymisiert Klienten, deren Events alle soft-geloescht sind — Bridge
 zwischen Event-Retention und der eigentlichen Anonymisierungs-Logik in
 :mod:`core.services.clients` (Hard-Anonymize) bzw.
-:mod:`core.services.k_anonymization` (K-Anonymize).
+:mod:`core.services.compliance.k_anonymization` (K-Anonymize).
 
 Welcher Pfad gewaehlt wird, haengt am Facility-Setting
 ``retention_use_k_anonymization`` (Refs #780): Default ``False`` = Hard,
@@ -15,7 +15,7 @@ from django.db.models import Count, Q
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
 from core.models import AuditLog, Client, Settings
 from core.services.audit import audit_retention_decision
-from core.services.k_anonymization import k_anonymize_client
+from core.services.compliance import k_anonymize_client
 
 
 def anonymize_clients(facility, dry_run):

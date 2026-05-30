@@ -68,7 +68,7 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                 if item["type"] != "event" or str(item["object"].document_type_id) == doc_type_id
             ]
 
-        from core.services.sensitivity import allowed_sensitivities_for_user
+        from core.services.compliance import allowed_sensitivities_for_user
 
         document_types = (
             DocumentType.objects.for_facility(facility)

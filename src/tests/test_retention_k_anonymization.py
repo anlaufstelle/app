@@ -20,7 +20,7 @@ from django.utils import timezone
 
 from core.models import Client, Event, Settings
 from core.retention.anonymization import anonymize_clients
-from core.services.k_anonymization import is_k_anonymous
+from core.services.compliance import is_k_anonymous
 
 
 def _make_client(

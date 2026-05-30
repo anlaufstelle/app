@@ -1,4 +1,4 @@
-"""Tests fuer ``core.services.vvt`` (Verzeichnis Verarbeitungstaetigkeiten).
+"""Tests fuer ``core.services.compliance.vvt`` (Verzeichnis Verarbeitungstaetigkeiten).
 
 Refs #876. Testet die statische Konstante ``PROCESSING_ACTIVITIES``:
 
@@ -11,7 +11,7 @@ Refs #876. Testet die statische Konstante ``PROCESSING_ACTIVITIES``:
 
 from django.utils.functional import Promise
 
-from core.services.vvt import (
+from core.services.compliance import (
     PROCESSING_ACTIVITIES,
     get_activity,
     get_processing_activities,

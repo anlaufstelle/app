@@ -4,7 +4,7 @@ Refs #494.
 """
 
 from core.models import DocumentType, QuickTemplate
-from core.services.sensitivity import effective_sensitivity, user_can_see_document_type
+from core.services.compliance import effective_sensitivity, user_can_see_document_type
 
 
 def list_templates_for_user(user, facility):

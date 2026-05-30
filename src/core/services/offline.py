@@ -20,8 +20,8 @@ from django.utils import timezone
 
 from core.models import Case as CaseModel
 from core.models import Event, WorkItem
+from core.services.compliance import user_can_see_field
 from core.services.encryption import safe_decrypt
-from core.services.sensitivity import user_can_see_field
 
 # Include at most this many events per client, or all events within the
 # lookback window — whichever is smaller. Caps the offline bundle size.

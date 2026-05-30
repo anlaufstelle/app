@@ -34,15 +34,44 @@ from core.services.compliance._types import (
 )
 from core.services.compliance.audit_events import _audit_event_checks
 from core.services.compliance.backup import _backup_checks, _restore_checks
+from core.services.compliance.breach_detection import (
+    _validate_webhook_url,
+    detect_failed_login_burst,
+    detect_mass_delete,
+    detect_mass_export,
+    record_finding,
+    run_all_detections,
+)
 from core.services.compliance.clamav import _clamav_checks
 from core.services.compliance.db_roles import (
     _db_role_admin_check,
     _db_role_attribute_check,
     _db_role_checks,
 )
+from core.services.compliance.k_anonymization import (
+    count_clients_in_bucket,
+    is_k_anonymous,
+    k_anonymize_client,
+)
 from core.services.compliance.mfa import _mfa_checks
 from core.services.compliance.retention import _retention_checks
+from core.services.compliance.sensitivity import (
+    ROLE_MAX_SENSITIVITY,
+    SENSITIVITY_RANK,
+    allowed_sensitivities_for_user,
+    effective_sensitivity,
+    get_visible_attachment_or_404,
+    get_visible_event_or_404,
+    user_can_see_document_type,
+    user_can_see_event,
+    user_can_see_field,
+)
 from core.services.compliance.system_info import _migration_checks, _version_checks
+from core.services.compliance.vvt import (
+    PROCESSING_ACTIVITIES,
+    get_activity,
+    get_processing_activities,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +126,9 @@ def aggregate_checks() -> list[ComplianceCheck]:
 __all__ = [
     "ComplianceCheck",
     "ComplianceStatus",
+    "PROCESSING_ACTIVITIES",
+    "ROLE_MAX_SENSITIVITY",
+    "SENSITIVITY_RANK",
     "_CRITICAL_AUDIT_ACTIONS",
     "_PRIVILEGED_ROLES",
     "_audit_event_checks",
@@ -109,6 +141,24 @@ __all__ = [
     "_migration_checks",
     "_restore_checks",
     "_retention_checks",
+    "_validate_webhook_url",
     "_version_checks",
     "aggregate_checks",
+    "allowed_sensitivities_for_user",
+    "count_clients_in_bucket",
+    "detect_failed_login_burst",
+    "detect_mass_delete",
+    "detect_mass_export",
+    "effective_sensitivity",
+    "get_activity",
+    "get_processing_activities",
+    "get_visible_attachment_or_404",
+    "get_visible_event_or_404",
+    "is_k_anonymous",
+    "k_anonymize_client",
+    "record_finding",
+    "run_all_detections",
+    "user_can_see_document_type",
+    "user_can_see_event",
+    "user_can_see_field",
 ]

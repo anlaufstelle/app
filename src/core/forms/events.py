@@ -96,7 +96,7 @@ class EventMetaForm(forms.Form):
         if facility:
             qs = DocumentType.objects.for_facility(facility).filter(is_active=True)
             if user is not None:
-                from core.services.sensitivity import allowed_sensitivities_for_user
+                from core.services.compliance import allowed_sensitivities_for_user
 
                 qs = qs.filter(sensitivity__in=allowed_sensitivities_for_user(user))
             self.fields["document_type"].queryset = qs  # type: ignore[attr-defined]

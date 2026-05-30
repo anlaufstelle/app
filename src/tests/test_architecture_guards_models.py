@@ -61,6 +61,6 @@ class TestEventAccessPolicyGuard:
             if self._EVENT_GET_PATTERN.search(source):
                 violations.append(
                     f"{py_file.name}: direct get_object_or_404(Event, ...) — "
-                    "use core.services.sensitivity.get_visible_event_or_404 instead"
+                    "use core.services.compliance.sensitivity.get_visible_event_or_404 instead"
                 )
         assert not violations, f"Event access policy violations: {violations}"
