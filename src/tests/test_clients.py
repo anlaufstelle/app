@@ -85,6 +85,51 @@ class TestClientDetail:
             target_type="Client",
         ).exists()
 
+    def test_staff_cannot_see_client_from_other_facility(
+        self, client, staff_user, second_facility, second_facility_user
+    ):
+        """Refs Matrix ENT-CLIENT-13: Eine Fachkraft aus Facility A darf
+        die Detail-Seite eines Clients aus Facility B nicht aufrufen
+        koennen. ``ClientDetailView`` filtert ueber
+        ``get_object_or_404(Client, pk=pk, facility=request.current_facility)``
+        — Cross-Facility-Zugriff muss 404 liefern (nicht 403, weil das
+        Pseudonym sonst durch die Fehlermeldung leakte).
+        """
+        # Client liegt in Facility B; eingeloggte Fachkraft in Facility A.
+        other_client = Client.objects.create(
+            facility=second_facility,
+            pseudonym="Fremd-Detail-01",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            created_by=second_facility_user,
+        )
+
+        client.force_login(staff_user)
+        response = client.get(reverse("core:client_detail", kwargs={"pk": other_client.pk}))
+        assert response.status_code == 404, (
+            f"Cross-Facility-Zugriff auf Client-Detail liefert "
+            f"{response.status_code} statt 404 — get_object_or_404-"
+            "Filter auf facility fehlt oder ist defekt."
+        )
+
+    def test_manager_for_facility_excludes_other_facility(self, facility, second_facility, second_facility_user):
+        """Refs Matrix ENT-CLIENT-13 (Manager-Schicht): Der
+        ``FacilityScopedManager.for_facility(facility)`` darf Clients
+        aus anderen Facilities NICHT enthalten — das ist die zentrale
+        Lookup-Schicht fuer Listen-/Detail-Views.
+        """
+        other_client = Client.objects.create(
+            facility=second_facility,
+            pseudonym="Fremd-Manager-01",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            created_by=second_facility_user,
+        )
+
+        ids = set(Client.objects.for_facility(facility).values_list("pk", flat=True))
+        assert other_client.pk not in ids, (
+            f"FacilityScopedManager.for_facility hat einen Cross-Facility-"
+            f"Client zurueckgeliefert. Sichtbare IDs: {ids}."
+        )
+
 
 @pytest.mark.django_db
 class TestClientCreate:

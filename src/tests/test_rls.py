@@ -455,3 +455,102 @@ class TestSuperAdminRLSBypass:
             f"Erwartet '', erhalten {value_after_anon!r}. "
             "Connection-Pool-Reuse koennte den Bypass an einen anderen Tenant vererben."
         )
+
+
+# ---------------------------------------------------------------------------
+# DeletionRequest cross-tenant isolation (Refs Matrix DEV-SEC-RLS-07)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db(transaction=True)
+class TestDeletionRequestRLSIsolation:
+    """Refs Matrix DEV-SEC-RLS-07: ``core_deletionrequest`` ist
+    facility-gescopt (siehe ``EXPECTED_TABLES`` oben + Migration
+    ``0047_postgres_rls_setup.py``). Loeschantraege duerfen Tenant-Grenzen
+    nicht ueberschreiten — sonst koennte Facility B sehen, dass in
+    Facility A ein Vier-Augen-Loeschantrag laeuft (Metadaten-Leak ueber
+    Pseudonyme + ``target_id``).
+
+    Im Unterschied zu den ``TestRLSSetup``-Tests (Policy-Existenz-Checks)
+    laeuft dieser Test als NOSUPERUSER-Rolle ``rls_test_role``, sodass
+    die ``facility_isolation``-Policy tatsaechlich greift. ``transaction
+    =True`` ist Pflicht — siehe Klassendoc in ``TestRLSCrossTenantIsolation``.
+    """
+
+    def setup_method(self):
+        if connection.vendor != "postgresql":
+            pytest.skip("RLS requires PostgreSQL")
+
+    def test_deletion_request_invisible_across_facility(
+        self,
+        rls_test_role,  # noqa: F811
+        facility,
+        second_facility,
+        admin_user,
+        second_facility_user,
+    ):
+        """Refs Matrix DEV-SEC-RLS-07: Je ein DeletionRequest in
+        Facility A und Facility B; unter ``app.current_facility_id=A``
+        ist nur A's Antrag sichtbar, unter B nur B's.
+        """
+        import uuid
+
+        from core.models import Client
+        from core.models.workitem import DeletionRequest
+        from tests.test_rls_functional import as_rls_role
+
+        # Je 1 Client + 1 DeletionRequest pro Facility. Client.create
+        # benoetigen wir, um eine realistische ``target_id`` einzutragen
+        # — die UUID ist im Test sonst beliebig.
+        client_a = Client.objects.create(
+            facility=facility,
+            pseudonym="A-Client-Del",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            created_by=admin_user,
+        )
+        client_b = Client.objects.create(
+            facility=second_facility,
+            pseudonym="B-Client-Del",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            created_by=second_facility_user,
+        )
+
+        dr_a = DeletionRequest.objects.create(
+            facility=facility,
+            target_type=DeletionRequest.TargetType.CLIENT,
+            target_id=client_a.pk,
+            requested_by=admin_user,
+            reason="A-Loeschantrag (Test)",
+        )
+        dr_b = DeletionRequest.objects.create(
+            facility=second_facility,
+            target_type=DeletionRequest.TargetType.CLIENT,
+            target_id=client_b.pk,
+            requested_by=second_facility_user,
+            reason="B-Loeschantrag (Test)",
+        )
+
+        # ---- Probe 1: Facility A sieht NUR A's DeletionRequest. ----
+        with as_rls_role(rls_test_role, facility_id=facility.pk) as cur:
+            cur.execute("SELECT id::text FROM core_deletionrequest ORDER BY created_at")
+            ids_a = {uuid.UUID(row[0]) for row in cur.fetchall()}
+
+        assert dr_a.pk in ids_a, (
+            "Facility A sieht den eigenen DeletionRequest nicht — Policy "
+            "ist zu strikt oder Daten fehlen (false negative)."
+        )
+        assert dr_b.pk not in ids_a, (
+            f"Cross-Tenant-Leak: Facility A sieht DeletionRequest aus "
+            f"Facility B. Sichtbare IDs: {ids_a}. Pruefe Migration "
+            "0047 (core_deletionrequest in DIRECT_TABLES) und FORCE RLS."
+        )
+
+        # ---- Probe 2: Facility B sieht NUR B's DeletionRequest. ----
+        with as_rls_role(rls_test_role, facility_id=second_facility.pk) as cur:
+            cur.execute("SELECT id::text FROM core_deletionrequest ORDER BY created_at")
+            ids_b = {uuid.UUID(row[0]) for row in cur.fetchall()}
+
+        assert dr_b.pk in ids_b, "Facility B sieht den eigenen DeletionRequest nicht — false negative im Test-Setup."
+        assert dr_a.pk not in ids_b, (
+            f"Cross-Tenant-Leak: Facility B sieht DeletionRequest aus Facility A. Sichtbare IDs: {ids_b}."
+        )
