@@ -1,6 +1,6 @@
 # Security Notes
 
-Dokumentiert bewusste Security-Entscheidungen, die beim Audit der Tiefenanalyse (siehe [docs/audits/2026-04-21-tiefenanalyse-v0.10.md](audits/2026-04-21-tiefenanalyse-v0.10.md)) verifiziert und für die Roadmap festgehalten wurden. Dieses Dokument ist das „Warum wir das so lassen"-Gegenstück zur RLS- und Facility-Scoping-Doku in [CONTRIBUTING.md](../CONTRIBUTING.md#facility-scoping--row-level-security) und zum Ops-Runbook [docs/ops-runbook.md](ops-runbook.md).
+Dokumentiert bewusste Security-Entscheidungen, die beim Audit der Tiefenanalyse (internes Code-Audit 2026-04-21, dev-only) verifiziert und für die Roadmap festgehalten wurden. Dieses Dokument ist das „Warum wir das so lassen"-Gegenstück zur RLS- und Facility-Scoping-Doku in [CONTRIBUTING.md](../CONTRIBUTING.md#facility-scoping--row-level-security) und zum Ops-Runbook [docs/ops-runbook.md](ops-runbook.md).
 
 ---
 
@@ -162,7 +162,7 @@ Trigram-Fuzzy-Search läuft über [`services/search.py`](../src/core/services/se
 und ist eine zentrale UX-Funktion für Fachkräfte ("Marie" findet auch
 "Maria-23"). Bei einem **Backup-Diebstahl** mit Klartext-Pseudonymen ist
 direkte Wiedererkennung in Kontaktläden möglich
-([Quelle](audits/anlaufstelle-audit-master.md)).
+(Quelle: internes, dev-only).
 
 ### Was bereits umgesetzt ist
 
@@ -219,7 +219,7 @@ Aufwand L, post-v1.0** ein:
 
 ## CSP-Reporting (Issue #684)
 
-**Status:** Aktiv ab v0.11. Detection-Lücke L2 aus dem [Sicherheitsbericht 2026-04-26](audits/2026-04-26-security-bestand.md) geschlossen.
+**Status:** Aktiv ab v0.11. Detection-Lücke L2 aus einem internen Sicherheitsbericht 2026-04-26 (dev-only) geschlossen.
 
 Die globale CSP enthält jetzt `report-uri /csp-report/` ([`base.py:266-275`](../src/anlaufstelle/settings/base.py#L266-L275)). Browser POSTen Verstöße als `application/csp-report` (CSP Level 2) oder `application/reports+json` (CSP Level 3) — die View [`CSPReportView`](../src/core/views/csp_report.py) parsed beide Formate, loggt strukturiert als WARNING auf dem `security.csp`-Logger und antwortet `204 No Content`.
 
@@ -307,4 +307,4 @@ Auf dem aktuellen privaten GitHub-Free-Repo sind Rulesets **nicht verfügbar** �
 
 - [CONTRIBUTING.md § Facility-Scoping & Row Level Security](../CONTRIBUTING.md#facility-scoping--row-level-security)
 - [docs/ops-runbook.md § 9](ops-runbook.md) — RLS-Runbook, Rollen, Kill-Switch
-- [docs/audits/2026-04-21-tiefenanalyse-v0.10.md](audits/2026-04-21-tiefenanalyse-v0.10.md) — Security-/DSGVO-/Perf-Audit mit zeilengenauer Verifikation
+- Tiefenanalyse-Audit 2026-04-21 (internes Code-Audit, dev-only) — Security-/DSGVO-/Perf-Audit mit zeilengenauer Verifikation

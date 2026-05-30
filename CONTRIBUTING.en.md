@@ -124,7 +124,8 @@ python src/manage.py seed --flush          # flush existing data first
 | Data | `small` (default) | `medium` | `large` |
 |---|---|---|---|
 | Facilities | 1 | 2 | 5 |
-| Users / facility | 4 | 4 | 4 |
+| Users (total) | 5 (1 super_admin + 4 facility users) | 9 (1 super_admin + 2×4) | 21 (1 super_admin + 5×4) |
+| Users / facility | 4 (`admin`/`thomas`/`miriam`/`lena`) | 4 | 4 |
 | Clients / facility | 7 | 40 | 500 |
 | Events / facility | 25 | 750 | 10,000 |
 | Cases | 3 | 12 | 50 |
@@ -139,7 +140,9 @@ python src/manage.py seed --flush          # flush existing data first
 
 > **Note:** `small` does not include case management (no episodes, goals). Use `medium` when developing case management features.
 
-Seed credentials: password `anlaufstelle2026`, roles `admin` / `leitung` / `fachkraft` / `assistenz`.
+Seed credentials: password `anlaufstelle2026`, 5 logins (username → role): `superadmin` → `super_admin` (no facility assignment), `admin` → `facility_admin`, `thomas` → `lead`, `miriam` → `staff`, `lena` → `assistant`. All except `superadmin` belong to the default facility.
+
+> **Production:** In production there is **no** default password and no default `super_admin`. Initial setup runs via `manage.py create_super_admin` (interactive, no default). Details: [docs/dev-deployment.md § Production-Bootstrap](docs/dev-deployment.md), [docs/admin-guide.md § 2.1 Erstinstallation](docs/admin-guide.md). Lockout recovery: `manage.py unlock <username>`.
 
 **7. Install Node dependencies** (for Tailwind CSS)
 
@@ -192,6 +195,49 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 
 `make ci` should pass locally before every commit.
 
+### Pre-Commit Hooks (optional)
+
+A [`.pre-commit-config.yaml`](.pre-commit-config.yaml) is provided for fast drift detection before committing (Refs #820, #860). It checks `ruff` (lint + format), `makemigrations --check`, `mypy core/services`, the translation version header, and automatic `pip-compile` on `requirements*.in` changes.
+
+```bash
+.venv/bin/pip install pre-commit
+pre-commit install                       # one-time: commit-stage hooks
+pre-commit install --hook-type pre-push  # one-time: pre-push quick-CI (Refs #860)
+pre-commit run --all-files               # run all commit-stage hooks against the repo
+```
+
+**Two stages:**
+
+- **Commit-stage:** Ruff lint+format, `makemigrations --check`, `mypy`, translation version, `pip-compile` on lock-file drift. Runs in under 5 s.
+- **Pre-push:** `make lint && make deps-check && make check` — the solo-maintainer replacement for required status checks. Branch protection with required status checks does not fire on a direct `git push` to `main`; the pre-push hook therefore catches exactly what would otherwise produce red CI after a push (lock drift, format drift, migration drift). Runs in ~10 s. Tests remain in CI.
+
+CI on [`anlaufstelle/app`](https://github.com/anlaufstelle/app/actions) is the definitive source of truth; the pre-push hook only reduces the likelihood of red CI after a push.
+
+### Port Overview and Process Hygiene
+
+| Port | Process | Started by | Purpose |
+|------|---------|------------|---------|
+| **8443** | gunicorn (HTTPS) | `make run` / `make dev` | Dev server (default) |
+| **8844** | gunicorn (HTTP) | `make test-e2e` / E2E conftest | E2E test server worker 0 (temporary) |
+| **8845+** | gunicorn (HTTP) | `make test-e2e-parallel` | E2E test server worker 1+ (temporary) |
+| **8000** | Django runserver | `make run-http` | Fallback without HTTPS |
+| **5432** | PostgreSQL | `make db` (Docker) | Database |
+
+**Collision protection:** `make run` and `make run-http` automatically terminate old processes on their port before starting. The E2E conftest also cleans up port 8844.
+
+**Troubleshooting a slow app:**
+
+```bash
+# Find duplicate server processes
+ps aux | grep -E 'gunicorn|runserver' | grep -v grep
+
+# Free a specific port
+lsof -ti :8443 | xargs kill
+
+# Kill all gunicorn processes
+pkill -f gunicorn
+```
+
 ---
 
 ## Coding Conventions
@@ -202,7 +248,7 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 - **Django 6.0+** — class-based views preferred, function views only for simple cases.
 - Business logic belongs in `core/services/`, not in views or models.
 - Models are split up: one model (or closely related models) per file under `core/models/`.
-- Role-based access control via mixins from `core/views/mixins.py`.
+- Role-based access control via mixins from `core/views/mixins.py` — available: `SuperAdminRequiredMixin` (only `/system/`), `FacilityAdminRequiredMixin` (admin of their own facility), `LeadOrAdminRequiredMixin`, `StaffRequiredMixin`, `AssistantOrAboveRequiredMixin`.
 - Do not introduce new dependencies without prior discussion.
 
 ### Facility Scoping & Row Level Security
@@ -217,7 +263,7 @@ Every new facility-scoped model must be protected on **both** defense lines:
  - New migration following the pattern of [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): add the table to `DIRECT_TABLES` (or `JOIN_TABLES` if no direct `facility_id` column exists). The migration sets `ENABLE + FORCE ROW LEVEL SECURITY` plus a `facility_isolation` policy.
  - Add the table to `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) so the RLS setup test guarantees coverage.
 
-Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS only takes effect in production when the Django DB user is **not** a superuser (see [docs/coolify-deployment.md](docs/coolify-deployment.md)).
+Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS only takes effect in production when the Django DB user is **not** a superuser (see [docs/dev-deployment.md](docs/dev-deployment.md), primary path per [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) is an alternative platform guide).
 
 ### Linting and Formatting
 
@@ -240,6 +286,23 @@ The Ruff configuration is located in `pyproject.toml`.
 - HTMX for dynamic interactions, Alpine.js for lightweight UI logic.
 - Tailwind CSS for styling — avoid creating custom CSS classes where possible.
 - Adhere to accessibility standards (WCAG 2.1 AA).
+
+#### HTMX & Live Regions (Refs #811)
+
+To ensure HTMX success messages reach screen-reader users:
+
+- There is exactly one **stable live region** in [`base.html`](src/templates/base.html): `#flash-messages` with `role="status" aria-live="polite" aria-atomic="true"`.
+- HTMX responses announcing a success either target it via `hx-target="#flash-messages" hx-swap="innerHTML"` or via `hx-swap-oob="innerHTML:#flash-messages"`. Never replace the wrapper `<div>` itself via `outerHTML` — doing so re-instantiates the live region and loses the announcement trigger.
+- When a bulk endpoint must force a full reload (e.g. WorkItem bulk, retention bulk), this happens via `HX-Redirect` — the subsequent page renders the Django `messages` framework back into `#flash-messages`.
+
+#### URL Schema: HTMX Fragments vs. JSON APIs (Refs #848)
+
+Endpoints are separated by response type — templates reference both exclusively via `{% url 'name' %}`:
+
+- **HTML fragments (HTMX partials):** Path `/partials/<feature>/<action>/`. Examples: `partials/clients/autocomplete/`, `partials/retention/<uuid:pk>/approve/`. Response is always HTML, rendered with a `partials/` template.
+- **JSON APIs:** Path `/api/v1/<feature>/<action>/`. Example: `api/v1/offline/bundle/client/<uuid:pk>/`. Response is JSON, consumed by service workers or JS `fetch` calls.
+
+New endpoints belong in one of these two path groups. URL names stay short and feature-specific (`client_autocomplete`, `offline_bundle`); path prefixes only change when the response form changes. Direct `fetch("/api/...")`-calls in JS may only target `/api/v1/` — HTMX partials are never consumed as JSON.
 
 ### Conventional Commits
 
@@ -283,6 +346,62 @@ Commits are atomic: one logical change per commit. Push immediately after comple
 
 ## Tests
 
+### Test-Driven Development (Unit/Service)
+
+As of 2026-05-20, test-driven development is mandatory for the unit/service layer. The required order **before** any service, form, model, or CBV change:
+
+1. **Red** — write a pytest test in the appropriate file under `src/tests/` that describes the desired behavior but fails today. Run it with `pytest -x` and confirm it fails with the expected `AssertionError`.
+2. **Green** — minimal implementation in `src/core/...` until exactly that test passes. No additional features, no premature generalization.
+3. **Refactor** — clean up code (and the test if needed) while the suite stays green. Run `pytest -x` after each cleanup step.
+
+Example (service layer, pseudonym hashing from [Issue #844](https://github.com/anlaufstelle/app/issues/844)):
+
+```python
+# Red — src/tests/test_pseudonym_hashing.py
+def test_client_pseudonym_hash_is_stable():
+    from django.conf import settings
+    settings.PSEUDONYM_HMAC_KEY = "test-key"
+
+    from core.services.audit_hash import hmac_pseudonym
+    assert hmac_pseudonym("anlauf-2026-0001") == hmac_pseudonym("anlauf-2026-0001")
+    assert hmac_pseudonym("anlauf-2026-0001") != hmac_pseudonym("anlauf-2026-0002")
+```
+
+```bash
+pytest src/tests/test_pseudonym_hashing.py -x
+# → ModuleNotFoundError / ImportError → expected Red.
+```
+
+```python
+# Green — src/core/services/audit_hash.py
+import hmac, hashlib
+from django.conf import settings
+
+def hmac_pseudonym(pseudonym: str) -> str:
+    key = settings.PSEUDONYM_HMAC_KEY.encode()
+    return hmac.new(key, pseudonym.encode(), hashlib.sha256).hexdigest()
+```
+
+```bash
+pytest src/tests/test_pseudonym_hashing.py -x
+# → 1 passed → Green.
+```
+
+**Refactor:** for example, extract key resolution into a helper once a second hash use case emerges — the test stays green.
+
+**Scope** (TDD required):
+
+- Service, form, model, helper, CBV/view unit tests — everything under `src/tests/` outside of `src/tests/e2e/`.
+
+**Exceptions** (manual-first / TDD-neutral):
+
+- **E2E tests** in `src/tests/e2e/` remain Playwright-driven as before — click through manually first (see `### End-to-End Tests (Playwright)`), then write tests from observation.
+- Django migration generation, squash migrations, tooling/config patches (CI thresholds, allowlists, `pyproject.toml`).
+- Pure Markdown/documentation changes.
+- One-shot hygiene scripts without reuse.
+
+Cross-references: [`CLAUDE.md § Tests & Verifikation`](CLAUDE.md#tests--verifikation) and skill `superpowers:test-driven-development`.
+
 ### Unit and Integration Tests
 
 ```bash
@@ -313,6 +432,20 @@ Fixtures for login, server setup, etc. are located in `src/tests/e2e/conftest.py
 
 **Smoke tests:** `make test-e2e-smoke` runs only E2E tests marked with `@pytest.mark.smoke` (~40 critical flows, ~2-3 min). Ideal for fast validation after feature implementation.
 
+### Test Layer Model During Development
+
+Never run the full suite during development — work in layers, always with fail-fast (`pytest -x`):
+
+1. **Focus:** `pytest src/tests/test_<affected_file>.py -x` — only tests in the changed area. E2E focused: `pytest src/tests/e2e/test_<feature>.py -x`.
+2. **Group:** Affected test files together: `pytest src/tests/test_a.py src/tests/test_b.py -x`.
+3. **Parallel:** `make test-parallel` — full unit suite in parallel, before committing.
+4. **Smoke:** `make test-e2e-smoke` — ~40 critical E2E flows (~2-3 min), once a feature is complete.
+5. **E2E:** `make test-e2e-parallel` — full E2E suite in parallel, before pushing.
+
+**Fail-fast always:** run tests with `pytest -x`. On failure, fix it, check whether related tests share the same root cause, then re-run the full suite. Re-runs: `pytest --lf -x` (last failed only) or `pytest --ff -x` (failed first).
+
+**Wait strategy (E2E):** `domcontentloaded` or `wait_for_url` — **never** `networkidle`.
+
 ### Full CI Pipeline Locally
 
 ```bash
@@ -321,6 +454,30 @@ make ci
 ```
 
 This pipeline must pass locally before every pull request.
+
+### Mutation Testing (mutmut)
+
+Mutation testing checks how many synthetic code mutations the test suite actually detects. Configuration in `pyproject.toml` (`[tool.mutmut]`). Expected runtime: 3–6 h on `core.services` + `core.forms`. Therefore not a PR requirement, but done selectively per wave issue.
+
+```bash
+make mutation           # mutmut run via scripts/run_mutmut.py
+make mutation-report    # survivors list, non-interactive
+```
+
+`make mutation` is resumable (mutmut stores state in `mutants/**/*.py.meta` and automatically picks up where a previous run stopped on restart).
+
+For longer runs on a sandbox with an OOM-killer or idle-killer, [`scripts/run_mutmut_watchdog.sh`](scripts/run_mutmut_watchdog.sh) is available:
+
+```bash
+# Default: 3 additional restarts, stall threshold 5 min, 2 mutmut workers
+scripts/run_mutmut_watchdog.sh
+
+# More aggressive profile
+MAX_RESTARTS=5 STALL_THRESHOLD=600 MUTMUT_MAX_CHILDREN=4 \
+    scripts/run_mutmut_watchdog.sh
+```
+
+The watchdog detects stalled or dead master processes and restarts `make mutation` — the resume mechanism takes over. Exits 0 as soon as `mutants/mutmut-stats.json` has been written during the watchdog session. Background: Refs #937.
 
 ---
 
@@ -348,6 +505,10 @@ This pipeline must pass locally before every pull request.
  - Screenshot or demo if UI changes are included
  - Link to the associated GitHub issue
 
+### Code of Conduct
+
+All contributors are bound by the [Contributor Covenant 2.1](CODE_OF_CONDUCT.md). Harassment incidents should be reported confidentially to `kontakt@anlaufstelle.app` (Refs #836).
+
 5. **Review:** At least one approval required. Feedback should be objective and constructive.
 
 6. **Merge:** Squash-merge to `main` once CI is green and approval is given.
@@ -358,12 +519,17 @@ This pipeline must pass locally before every pull request.
 
 ### Roles
 
-| Role | Description |
-|-------------|----------------------------------------------------|
-| `admin` | Full access, system configuration |
-| `leitung` | Lead level, extended reports |
-| `fachkraft` | Staff, core work with clients and events |
-| `assistenz` | Restricted access, supporting tasks |
+Anlaufstelle has five roles — four facility-bound, one facility-wide:
+
+| Role | DB value | Scope | Description |
+|------|----------|-------|-------------|
+| System administration | `super_admin` | facility-wide (`/system/`) | Hosting, bootstrap, pre-auth audit logs. Created via `manage.py create_super_admin`. |
+| Application management | `facility_admin` | one facility | Full access within their own facility (audit log, GDPR package, user management). |
+| Lead | `lead` | one facility | Lead level, extended reports, approve deletion requests. |
+| Staff | `staff` | one facility | Core work with clients and events. |
+| Assistant | `assistant` | one facility | Restricted access, supporting tasks. |
+
+Architecture decision: [ADR-018](docs/adr/018-rollenmodell-superadmin.md). Details on the RLS bypass for `super_admin`: [ADR-005 Update 2026-05-10](docs/adr/005-facility-scoping-and-rls.md).
 
 ### Project Structure
 
@@ -382,6 +548,8 @@ src/
       workitem.py        # WorkItem, DeletionRequest
       time_filter.py     # TimeFilter
       case.py            # Case
+      episode.py         # Episode
+      outcome.py         # OutcomeGoal, Milestone
       audit.py           # AuditLog
       settings.py        # Settings
     views/               # Class-based views, split by feature area
@@ -390,6 +558,7 @@ src/
       clients.py         # Client CRUD
       events.py          # Event CRUD + deletion workflow
       workitems.py       # WorkItem CRUD
+      cases.py           # Case, Episode, Goal, Milestone
       search.py          # Full-text search
       statistics.py      # Statistics + exports
       audit.py           # AuditLogListView
@@ -419,6 +588,6 @@ src/
 - **Service layer:** Views delegate logic to services — this makes testing easier and keeps views lean.
 
 <!-- translation-source: CONTRIBUTING.md -->
-<!-- translation-version: v0.10.2 -->
-<!-- translation-date: 2026-05-01 -->
-<!-- source-hash: 18c5c32 -->
+<!-- translation-version: v0.12.0 -->
+<!-- translation-date: 2026-05-26 -->
+<!-- source-hash: 4fe0c79 -->

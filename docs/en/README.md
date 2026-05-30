@@ -9,8 +9,8 @@
 
 | Document | Description | Audience |
 |----------|-------------|----------|
-| [admin-guide.md](admin-guide.md) | Operations manual: installation, backup, monitoring, GDPR | IT Admins |
-| [user-guide.md](user-guide.md) | User handbook: timeline, clients, events, search, export, roles | End users |
+| [admin-guide.md](admin-guide.md) | Operations manual: installation, backup, monitoring, MFA, compliance dashboard, GDPR | IT Admins |
+| [user-guide.md](user-guide.md) | User handbook: work center, timeline, persons, events, search, export, statistics, roles | End users |
 | [domain-concept-summary.md](domain-concept-summary.md) | Summary of the domain concept (not a 1:1 translation) | Stakeholders, Developers |
 | [glossary.md](glossary.md) | Bilingual glossary of domain terms (DE↔EN) | Everyone |
 | [../../README.en.md](../../README.en.md) | Project README | Everyone |
@@ -41,13 +41,23 @@ Templates included:
 
 | Document | Description |
 |----------|-------------|
+| [ops-runbook.md](../ops-runbook.md) | Operations runbook: monitoring, alerts, cron jobs, RLS, backup/restore, restore drill |
+| [faq.md](../faq.md) | Frequently asked questions — operations & troubleshooting |
+| [security-notes.md](../security-notes.md) | Deliberate security design decisions (2FA, Fernet, RLS, audit, lockout) |
+| [threat-model.md](../threat-model.md) | Security model, attack surface, known open gaps |
+| [audit-inventar.md](../audit-inventar.md) | Index of audit classification codes (FND-\*, S-\*, phases) |
+| [dev-deployment.md](../dev-deployment.md) | Dev/test environment deployment |
+| [coolify-deployment.md](../coolify-deployment.md) | Coolify deployment (supported alternative; primary is Docker Compose, see [ADR-017](../adr/017-deployment-topology.md)) |
+| [release-checklist.md](../release-checklist.md) | Release process, sanitize steps, hard-exclusion list |
+| [performance-budgets.md](../performance-budgets.md) | Performance targets and budgets |
 | [sprachleitlinie.md](../sprachleitlinie.md) | Language guideline for UI and handbook — _Klientel → Person_, terminology matrix, refactor priorities (Refs #604) |
 | [adr/](../adr/) | Architecture Decision Records — why the architecture looks the way it does |
+| [testing/](../testing/) | Test matrix, mutation testing, release test profiles |
 | [e2e-architecture.md](../e2e-architecture.md) | E2E testing infrastructure (developer-facing) |
 | [e2e-runbook.md](../e2e-runbook.md) | E2E test execution, debugging, checklists |
-| [async-pdf-evaluation.md](../async-pdf-evaluation.md) | Evaluation of async task queues for WeasyPrint PDF generation. |
+| [async-pdf-evaluation.md](../async-pdf-evaluation.md) | _Historical_ — async PDF queue evaluation, superseded by [ADR-010](../adr/010-sync-pdf-generation.md) |
 
 <!-- translation-source: docs/README.md -->
-<!-- translation-version: v0.10.2 -->
-<!-- translation-date: 2026-05-01 -->
-<!-- source-hash: b78e308 -->
+<!-- translation-version: v0.12.0 -->
+<!-- translation-date: 2026-05-26 -->
+<!-- source-hash: 4fe0c79 -->

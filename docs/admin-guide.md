@@ -19,6 +19,7 @@ Dieses Handbuch richtet sich an IT-Administratoren sozialer Einrichtungen, die A
 4. [Updates](#4-updates)
 5. [Monitoring](#5-monitoring)
  - 5.4 [CSP-Debugging](#54-csp-debugging)
+ - 5.5 [Compliance-Dashboard](#55-compliance-dashboard)
 6. [Troubleshooting](#6-troubleshooting)
 7. [DSGVO-Hinweise](#7-dsgvo-hinweise)
  - 7.8 [Optimistic Locking](#78-optimistic-locking)
@@ -71,10 +72,13 @@ DJANGO_SECRET_KEY=<langer-zufaelliger-string>
 DJANGO_SETTINGS_MODULE=anlaufstelle.settings.prod
 ALLOWED_HOSTS=anlaufstelle.meine-einrichtung.de
 
-# Datenbank
+# Datenbank (Drei-Rollen-Modell, Refs #902)
 POSTGRES_DB=anlaufstelle
-POSTGRES_USER=anlaufstelle
+POSTGRES_USER=anlaufstelle                         # App-Rolle (Django-Runtime): NOSUPERUSER, NOBYPASSRLS
 POSTGRES_PASSWORD=<sicheres-datenbankpasswort>
+POSTGRES_ADMIN_USER=anlaufstelle_admin             # Admin-Rolle (Migrationen/Seed/Retention): NOSUPERUSER, BYPASSRLS
+POSTGRES_ADMIN_PASSWORD=<sicheres-admin-passwort>
+POSTGRES_BOOTSTRAP_PASSWORD=<sicheres-bootstrap-passwort>  # postgres-Bootstrap-Superuser (nur Rollen-Setup)
 
 # Feldverschlüsselung (Pflicht in Produktion)
 # Empfohlen: Plural-Form für Rotation; der erste Key ist Write-Key, weitere sind Read-Only.
@@ -108,15 +112,22 @@ Alle ENV-Variablen, die die Anwendung zur Laufzeit auswertet (siehe [`src/anlauf
 | `ALLOWED_HOSTS` | — (Pflicht in prod) | Komma-separierte Hostnamen, z. B. `anlaufstelle.example.de`. |
 | `TRUSTED_PROXY_HOPS` | `1` | Anzahl vertrauenswürdiger Proxies vor der App (X-Forwarded-For-Auswertung). `0` = kein Proxy, `1` = nur Caddy, `2` = CDN + Caddy. |
 
-**Datenbank (PostgreSQL)**
+**Datenbank (PostgreSQL — Drei-Rollen-Modell, #902)**
+
+Seit v0.12 trennt Anlaufstelle drei DB-Rollen: einen hartkodierten `postgres`-Bootstrap-Superuser (legt beim ersten Start nur die App-Rollen an), die **App-Rolle** (`POSTGRES_USER`, `NOSUPERUSER NOBYPASSRLS` — Django-Runtime, RLS-geschützt) und die **Admin-Rolle** (`POSTGRES_ADMIN_USER`, `NOSUPERUSER BYPASSRLS` — Migrationen, Seed, Retention-Pruning). **Breaking-Change für Self-Hoster:** Die drei neuen `.env`-Variablen sind Pflicht.
 
 | Name | Default | Beschreibung |
 |---|---|---|
 | `POSTGRES_DB` | `anlaufstelle` | Datenbankname. |
-| `POSTGRES_USER` | `anlaufstelle` | DB-Benutzer. |
-| `POSTGRES_PASSWORD` | `anlaufstelle` | DB-Passwort (in Produktion sicher setzen!). |
+| `POSTGRES_USER` | `anlaufstelle` | App-Rolle (Django-Runtime), `NOSUPERUSER NOBYPASSRLS`. |
+| `POSTGRES_PASSWORD` | `anlaufstelle` | Passwort der App-Rolle (in Produktion sicher setzen!). |
+| `POSTGRES_ADMIN_USER` | `anlaufstelle_admin` | Admin-Rolle für Migrationen/Seed/Retention, `NOSUPERUSER BYPASSRLS`. |
+| `POSTGRES_ADMIN_PASSWORD` || Passwort der Admin-Rolle. |
+| `POSTGRES_BOOTSTRAP_PASSWORD` || Passwort des `postgres`-Bootstrap-Superusers (nur initiales Rollen-Setup). |
 | `POSTGRES_HOST` | `localhost` (via Compose: `db`) | DB-Host. |
 | `POSTGRES_PORT` | `5432` | DB-Port. |
+
+> **Tipp:** `python manage.py check_db_roles` verifiziert die Rollen-Topologie zur Laufzeit (Exit `0` = ok, `1` = falsches Attributprofil, `2` = Konfiguration unvollständig). Das [Compliance-Dashboard](#55-compliance-dashboard) nutzt dieselbe Prüfung.
 
 **Feldverschlüsselung (MultiFernet-Rotation)**
 
@@ -891,6 +902,12 @@ Die Content-Security-Policy (CSP) wird **zentral in Django** über [`django-csp`
 - `Refused to evaluate a string as JavaScript because 'unsafe-eval' is not an allowed source` — auf normalen Routen erwartet (Architektur-Bruch); im Admin-Bereich Hinweis darauf, dass die Relax-Middleware nicht greift (Route-Pattern in [`AdminCSPRelaxMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/) prüfen).
 
 Bei CSP-Fehlern nach einem Update: Browser-Console auf **konkret blockierte URL/Quelle** prüfen und entscheiden, ob die Quelle ins Template verschoben oder die CSP-Richtlinie angepasst werden muss.
+
+### 5.5 Compliance-Dashboard
+
+Der Superadmin-Bereich `/system/compliance/` (#919) bündelt typisierte Health-Checks in einem Dashboard: die drei DB-Rollen-Checks (über `check_db_roles`, siehe Datenbank-Variablen in [§ 1](#1-installation-docker-compose)), Backup-Alter, Restore-Verified-Alter, ClamAV-Ping + Signaturalter, Retention-Run-Alter, Frische der Hintergrundjobs (Statistik-Snapshot, Breach-Scan, Materialized-View-Refresh), MFA-Quote (Super-Admin/Facility-Admin/Leitung), ausstehende Django-Migrationen, App-/Django-/Python-Versionen sowie kritische Audit-Events der letzten 24 Stunden.
+
+Jeder Check liefert einen Status `ok` / `warning` / `critical` / `unknown`; ein einzelner Check-Fehler kippt das Dashboard nicht. Der Bereich ist **Super-Admins** vorbehalten (`facility_admin` erhält `403`). Die Frische-Schwellen der Hintergrundjobs und des Restore-Markers sind im [Ops-Runbook](ops-runbook.md) dokumentiert.
 
 ---
 

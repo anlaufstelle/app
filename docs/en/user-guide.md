@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-04-28 (v0.10.2).
+> The German version is the authoritative source. Last synced: 2026-05-26 (v0.12.0).
 
 # Anlaufstelle -- User Guide
 
@@ -11,6 +11,7 @@ This guide is intended for social workers, managers, and assistants working in d
 
 1. [Login and Password](#1-login-and-password)
 2. [Home -- Zeitstrom](#2-home--zeitstrom)
+ - [Work Center](#2a-work-center)
 3. [Documenting a Contact (Creating an Event)](#3-documenting-a-contact-creating-an-event)
  - [Files Overview](#3a-files-overview)
 4. [Managing Clients](#4-managing-clients)
@@ -34,7 +35,13 @@ This guide is intended for social workers, managers, and assistants working in d
 
 > **Note:** If you were told to change your password on first login, you will be redirected to the password change page immediately after signing in.
 
-> **Account locked after multiple failed attempts?** After **10 failed sign-in attempts**, your account is automatically locked. You will then see a corresponding notice page and can no longer sign in. Ask an administrator to unlock the account -- the lockout is recorded in the audit log.
+> **Account locked after multiple failed attempts?** After **10 failed sign-in attempts**, your account is automatically locked. You will then see a corresponding notice page and can no longer sign in. On the login page you will find three self-service options ([Refs #869](https://github.com/anlaufstelle/app/issues/869)):
+>
+> - **Forgot password?** -- Classic reset by email. Setting a new password automatically unlocks your account.
+> - **Unlock account by email** -- Sends an unlock link to your registered email address, valid for 30 minutes. No new password required.
+> - **Redeem a backup code** -- If you have 2FA enabled, enter your username plus one of your backup codes. Each code is single-use.
+>
+> If none of these options works, ask an administrator to unlock the account. All actions are recorded in the audit log.
 
 ### Changing Your Password
 
@@ -128,6 +135,40 @@ Filter changes reload only the feed (HTMX), without a full page refresh.
 ### Entry Ban banner
 
 If there are active entry bans in your facility, they are displayed as a red banner below the heading.
+
+---
+
+## 2a. Work Center
+
+Alongside the Zeitstrom there is the **Work Center** (`/start/`) -- a role-specific overview page that condenses existing data into compact tiles. You can reach it via the sidebar link **"Work Center"** (above the Zeitstrom). The Zeitstrom at `/` remains unchanged -- the Work Center is an additional entry point, not a replacement.
+
+Depending on your role, a different variant is shown:
+
+**Social Worker / Assistant** -- title "Work Center", today's tasks and contacts at a glance:
+
+- **Today's contacts** -- number of events recorded today (links to the Zeitstrom)
+- **My tasks** -- your own open or in-progress tasks (links to the task inbox)
+- **Recently edited** -- number of recently updated persons (links to the client list)
+- Below these tiles: the lists **"My open tasks"** (up to 5, with due dates) and **"Recently edited persons"** (up to 5)
+
+**Lead** -- title "Lead Work Center", GDPR workflows, retention, and statistics:
+
+- **Deletion requests** -- pending requests (links to the deletion-request list)
+- **Retention proposals** -- pending retention proposals (links to the retention dashboard)
+- **Legal holds** -- active retention locks
+- **Statistics** -- month/year of the last statistics snapshot
+
+**Facility Admin** -- title "Admin Work Center", users, security, and configuration:
+
+- **Users without MFA** -- active users with no confirmed 2FA (highlighted orange when > 0)
+- **Configuration warnings** -- e.g. MFA not enforced facility-wide or k-anonymization disabled; individual warnings are listed below the tile
+
+**Super Admin** -- title "System Work Center", cross-facility status and audit activity:
+
+- **Tenants** -- number of facilities
+- **Active users** -- across all tenants
+- **Audit events 24h** -- audit entries from the last 24 hours
+- **Critical events** -- security-relevant actions in the last 24 hours (failed logins, security violations, deletions, approved deletion requests; highlighted orange when > 0)
 
 ---
 
@@ -494,6 +535,16 @@ The youth welfare office export generates a standardized report in the official 
 
 > **Tip:** For semi-annual reports, select the "Last half-year" time period and manually adjust the start and end dates to 01/01 and 06/30 (or 07/01 -- 12/31) as needed.
 
+### Privacy-friendly External Reports (Lead / Admin)
+
+For sharing data with external parties (e.g., funding bodies or municipal authorities), an **external report with a privacy profile** is available at `/statistics/external/`. It uses the same time-period filters as the statistics dashboard but is deliberately data-minimal:
+
+- **No pseudonym ranking** -- the top-persons list from the internal dashboard is omitted entirely.
+- **K-anonymization** -- aggregates with fewer than *k* records (threshold from the facility settings, default 5) are shown as **"suppressed"** rather than as a concrete number. This applies to "Unique persons", "By documentation type", and "By age group".
+- **Privacy profile header** -- facility, profile (`external`), time period, k-anonymity threshold, and generation timestamp appear at the top of the report.
+
+Via **"Export as JSON"** (or by appending `?format=json` to the URL) you receive the same data in machine-readable form. Every request is logged as an `EXPORT` event in the audit log. The external report is accessible to **leads** and **administrators** only.
+
 ### Reviewing Deletion Requests (Lead / Admin)
 
 When a social worker or assistant wants to delete a contact belonging to a qualified client, a **deletion request** is created that must be approved by a lead or administrator.
@@ -572,20 +623,25 @@ If an event was edited online (by someone else) and offline (by you) at the same
 
 ## 9. Roles and Permissions
 
-Anlaufstelle distinguishes four roles. Your role is assigned by the administrator.
+Anlaufstelle distinguishes five roles. Your role is assigned by the facility administrator (Anwendungsbetreuung) of your facility.
 
 ### Role Overview
 
 | Role | Display Name | Brief Description |
 |---|---|---|
-| `admin` | Administrator | Full access to all areas and settings |
-| `lead` | Lead | All social worker functions plus reports and management tasks |
-| `staff` | Social Worker | Default role for employees doing documentation |
 | `assistant` | Assistant | Limited data entry without access to qualified client data |
+| `staff` | Social Worker | Default role for employees doing documentation |
+| `lead` | Lead | All social worker functions plus reports and management tasks |
+| `facility_admin` | Facility Admin | Full access to all areas and settings **of your facility** (audit log, GDPR package, user management) |
+| `super_admin` | System Admin | Hosting/carrier role: cross-facility, bootstrap tools, separate `/system/` area. **Not visible in the regular staff UI** -- end users do not interact with it. |
+
+> **Note:** The System Admin (`super_admin`) is a hosting/carrier role. It sets up the installation and creates the first facility and the first Facility Admin. You will not encounter it in day-to-day operations -- it works exclusively in the `/system/` area, which is not accessible to facility-bound users.
 
 ### Who Can Do What?
 
-| Function | Assistant | Social Worker | Lead | Admin |
+Table covers the four facility-bound roles only -- `super_admin` is excluded here because it does not work in the staff UI:
+
+| Function | Assistant | Social Worker | Lead | Facility Admin |
 |---|---|---|---|---|
 | View Zeitstrom / home page | Yes | Yes | Yes | Yes |
 | Document anonymous contacts | Yes | Yes | Yes | Yes |
@@ -602,16 +658,16 @@ Anlaufstelle distinguishes four roles. Your role is assigned by the administrato
 | Submit deletion requests | Yes | Yes | Yes | Yes |
 | Approve deletion requests | No | No | Yes | Yes |
 | Manage pseudonyms / change contact level | No | No | Yes | Yes |
-| View audit log | No | No | No | Yes |
+| View audit log (own facility) | No | No | No | Yes |
 | Case management (cases, episodes, goals) | No | Yes | Yes | Yes |
 | Close / reopen cases | No | No | Yes | Yes |
 | Manage users and settings | No | No | No | Yes |
 
-> **Note:** Access is always restricted to your own facility. Employees of one facility cannot see data from other facilities within the same organization.
+> **Note:** Access is always restricted to your own facility. Employees of one facility cannot see data from other facilities within the same organization -- this applies to the Facility Admin (`facility_admin`) as well.
 
-### Audit Log (Admin Only)
+### Audit Log (Facility Admin Only)
 
-The audit log (`/audit/`) automatically records security-relevant actions: sign-ins, access to qualified data, exports, deletions, and contact level changes. It cannot be modified and serves traceability purposes in accordance with the GDPR.
+The audit log (`/audit/`) automatically records security-relevant actions: sign-ins, access to qualified data, exports, deletions, and contact level changes. It cannot be modified and serves traceability purposes in accordance with the GDPR. Access is granted to the Facility Admin (`facility_admin`) for their own facility.
 
 ---
 
@@ -753,7 +809,7 @@ Each episode shows its status:
 
 ### Permissions in Case Management
 
-| Function | Assistant | Social Worker | Lead | Admin |
+| Function | Assistant | Social Worker | Lead | Facility Admin |
 |---|---|---|---|---|
 | View case list | No | Yes | Yes | Yes |
 | Create and edit cases | No | Yes | Yes | Yes |
@@ -771,7 +827,7 @@ Each episode shows its status:
 *Anlaufstelle -- Documentation system for low-threshold social services*
 
 <!-- translation-source: docs/user-guide.md -->
-<!-- translation-version: v0.10.2 -->
-<!-- translation-date: 2026-04-28 -->
-<!-- source-hash: 12bb0c2 -->
+<!-- translation-version: v0.12.0 -->
+<!-- translation-date: 2026-05-26 -->
+<!-- source-hash: 4fe0c79 -->
 

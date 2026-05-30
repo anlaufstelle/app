@@ -86,14 +86,15 @@ Anlaufstelle processes social data of highly vulnerable people. Privacy is not a
 
 ## Role Model
 
-Anlaufstelle uses four roles with increasing privileges:
+Anlaufstelle uses five roles with increasing privileges (Refs #867, [ADR-018](../adr/018-rollenmodell-superadmin.md)):
 
 | Role | German | Description |
 |---|---|---|
 | **Assistant** | Assistenz | Read access with limited documentation rights. Cannot view qualified contact details or edit other users' entries. |
 | **Staff** | Fachkraft | Core documentation role. Can capture contacts, manage work items, search, and access qualified data within their facility. |
 | **Lead** | Leitung | Supervisory role. Everything Staff can do, plus pseudonym management, contact level changes, statistics, exports, and deletion approvals. |
-| **Admin** | Admin | Full system control. User management, documentation type configuration, system settings, and audit log access. |
+| **Application manager** | Anwendungsbetreuung (`facility_admin`) | Full control within one facility: user management, document-type configuration, settings, audit log, GDPR package. |
+| **Super-Admin** | Super-Admin (`super_admin`) | Installation-wide system administration across all facilities; not bound to a single facility, system area (`/system/`) only. |
 
 Access is not purely role-based but context-dependent: what a user can see also depends on the contact level of the person, the sensitivity of the documentation type, and field-level sensitivity overrides.
 
@@ -134,6 +135,6 @@ Release v0.10.0 (2026-04-19) extends the domain concept with several capabilitie
 - **AdminCSPRelaxMiddleware.** django-unfold ships its own Alpine build that uses `new AsyncFunction` for the Cmd+K command palette and therefore needs `'unsafe-eval'` to initialize. A dedicated middleware now adds `'unsafe-eval'` only on `/admin-mgmt/*` routes — the privileged Django admin area, which is additionally protected by the MFA gate and the `admin` role. The strict global policy stays in place everywhere else.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.10.2 -->
-<!-- translation-date: 2026-04-28 -->
-<!-- source-hash: cd5148b -->
+<!-- translation-version: v0.12.0 -->
+<!-- translation-date: 2026-05-26 -->
+<!-- source-hash: 4fe0c79 -->

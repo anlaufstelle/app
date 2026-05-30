@@ -13,6 +13,7 @@
 | Alterscluster | Age cluster | Coarse age group for a person (e.g. under 18, 18–26, 27+, unknown). Configurable per facility. Used for statistics without requiring an exact date of birth. |
 | Anlaufstelle | Drop-in center | Name of the application. Also colloquial for the facility itself — the place where people come for help. |
 | Arbeitsinfo | Work item | Collective term for notes and tasks — operational entries that are separate from case documentation. See: WorkItem. |
+| Arbeitszentrale | Work Center | Role-specific landing page at `/start/` (Refs #920): condensed tiles over existing data — varies per role (staff, lead, facility admin, super-admin). Reachable via the sidebar; the Timeline (`/`) stays the default view. |
 | Audit-Trail | Audit trail | Immutable log of all security-relevant actions in the system: access, changes, deletions, login attempts. Serves GDPR compliance and traceability. See: AuditLog. |
 | AuditLog | Audit log | Technical term for the audit trail. A dedicated entity stored separately from case documentation. Immutable (append-only). |
 | Backup-Codes | Backup codes | Single-use recovery codes for 2FA emergencies (since v0.10.1). Users receive 10 codes when enabling TOTP; each works exactly once and may be entered at the 2FA login prompt instead of an authenticator code. Consumed codes are invalidated and logged via `MFA_BACKUP_CODE_USED`. Has its own rate limit (5/min). When all codes are exhausted, an admin reset is the fallback. |
@@ -31,6 +32,7 @@
 | Episode | Episode | A distinguishable phase within a case: e.g. a crisis phase, a referral process. |
 | Ereignis | Event | The central building block of documentation. A timestamped entry recording an occurrence. Belongs to a document type and optionally to a person. See: Event. |
 | Event | Event | Technical term for an occurrence record (Ereignis). See: Ereignis. |
+| Externer Bericht | External report | Privacy-friendly statistics report at `/statistics/external/` (Refs #921): no pseudonym ranking, K-anonymity suppression of small aggregates, privacy-profile header; HTML or JSON. Lead/Admin only; each call audit-logged as `EXPORT`. |
 | Facility | Facility | Technical term for an institution or site (Einrichtung). The primary scope boundary for staff. All entities carry a foreign key to Facility. |
 | FieldTemplate | Field template | Defines a field within a document type: name, data type, required flag, options, encryption, statistics mapping. |
 | File Vault | Encrypted file vault | File attachments stored encrypted at rest (AES-GCM). Files are scanned by ClamAV before encryption. Downloads use a central safe-download helper with RF Content-Disposition. |
@@ -54,7 +56,7 @@
 | PWA | Progressive Web App | Installable web app for smartphones and desktops. Provides home-screen install, an app-like shell, and offline behavior coordinated by the Service Worker. Used in Anlaufstelle for the streetwork quick-capture flow. |
 | Quick Template | Quick template | Pre-filled event template maintained by admins. Applied by clicking a button on "New Contact"; fills empty fields only; self-heals against deactivated select options. |
 | Retention Proposal | Retention proposal | Individual deletion/anonymization suggestion surfaced on the retention dashboard. Can be approved, deferred, or rejected in bulk. |
-| Role | Role | Determines which actions a user may perform. Four roles: Admin (system control), Lead (professional leadership), Staff (case worker), Assistant (support). |
+| Role | Role | Determines which actions a user may perform. Five roles (Refs #867, [ADR-018](../adr/018-rollenmodell-superadmin.md)): Super-Admin (installation-wide system control, no facility), Application manager (`facility_admin`, full access within one facility), Lead (professional leadership), Staff (case worker), Assistant (support). |
 | Row Level Security (RLS) | Row Level Security (RLS) | PostgreSQL defense-in-depth applied to all facility-scoped tables (23 as of v0.10.2). Policies read the session variable `app.current_facility_id` and fail closed when it is NULL. The variable is set per request session-wide (not via `SET LOCAL`) and explicitly cleared for anonymous requests. See [`src/core/migrations/0047_postgres_rls_setup.py`](https://github.com/anlaufstelle/app/blob/main/src/core/migrations/0047_postgres_rls_setup.py) and [`src/tests/test_rls.py`](https://github.com/anlaufstelle/app/blob/main/src/tests/test_rls.py). |
 | Scope | Scope | Visibility boundary. Determines which data is accessible to a user — based on facility, role, and contact level. |
 | Sensitivität | Sensitivity | Classification of a document type or field regarding its protection level. Controls which roles may access field values. Configurable per document type and per field (`FieldTemplate.sensitivity`). Independent of field encryption (`is_encrypted`). |
@@ -67,6 +69,6 @@
 | Zeitstrom | Timeline stream | The chronological flow of all events, unfiltered or filtered by time period, person, or document type. The core metaphor of documentation in Anlaufstelle. |
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md (chapter 14) -->
-<!-- translation-version: v0.10.2 -->
-<!-- translation-date: 2026-04-28 -->
-<!-- source-hash: d749493 -->
+<!-- translation-version: v0.12.0 -->
+<!-- translation-date: 2026-05-26 -->
+<!-- source-hash: 4fe0c79 -->

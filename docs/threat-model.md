@@ -2,7 +2,7 @@
 
 **Version:** v0.12.x · **Letzte Revision:** 2026-05-12 · **Quelle:** [Issue #691](https://github.com/anlaufstelle/app/issues/691)
 
-Dieses Dokument macht das Sicherheitsmodell explizit. Es ergänzt — nicht ersetzt — die zeilengenauen Audits unter [`docs/audits/`](audits/) und die Design-Entscheidungen in [`docs/security-notes.md`](security-notes.md).
+Dieses Dokument macht das Sicherheitsmodell explizit. Es ergänzt — nicht ersetzt — die zeilengenauen internen Code-Audits (dev-only) und die Design-Entscheidungen in [`docs/security-notes.md`](security-notes.md).
 
 > **Format:** STRIDE-Lite (Spoofing · Tampering · Repudiation · Information Disclosure · Denial of Service · Elevation of Privilege) je Vertrauensgrenze. Bewusst knapp; volle Befundliste in den Audit-Reports.
 
@@ -132,11 +132,9 @@ Backups (`backup.sh`) verlassen das interne Netz nur **verschlüsselt** auf den 
 
 ## 6. Bekannte offene Lücken (Verweis auf Audit-Reports)
 
-Diese Threat-Model-Tabelle nennt Lücken nur als Stichwort. Vollständige Befunde, Belegstellen und Priorisierung in:
-
-- [`docs/audits/anlaufstelle-audit-master.md`](audits/anlaufstelle-audit-master.md) — Konsolidiertes (50 priorisierte Maßnahmen, A.5 Blocker-Liste)
-- [`docs/audits/2026-04-26-security-bestand.md`](audits/2026-04-26-security-bestand.md) — Sicherheitsbericht mit Verteidigungslinien-Inventar
-- [`docs/audits/2026-04-25-vollanalyse.md`](audits/2026-04-25-vollanalyse.md) — Quer-Audit über Codequalität + Sicherheit
+Diese Threat-Model-Tabelle nennt Lücken nur als Stichwort. Vollständige Befunde, Belegstellen und Priorisierung in den internen Code-Audits (dev-only, nicht im Release-Snapshot): (internes Code-Audit, dev-only) — konsolidiert, 50 priorisierte Maßnahmen, A.5 Blocker-Liste
+- Sicherheitsbericht 2026-04-26 (internes Code-Audit, dev-only) — Verteidigungslinien-Inventar
+- Vollanalyse 2026-04-25 (internes Code-Audit, dev-only) — Quer-Audit über Codequalität + Sicherheit
 - Aktive Tracking-Issues: #681, #691, #684, #695
 
 ---

@@ -2,11 +2,13 @@
 
 > **[English Documentation](en/README.md)**
 
-Dieses Verzeichnis enthält die gesamte Projektdokumentation.
+Dieses Verzeichnis enthält die gesamte Projektdokumentation. Interne Artefakte
+(`docs/archive/`, `docs/superpowers/`, `docs/ai/`) sind dev-only und nicht Teil
+des Release-Snapshots.
 
 ---
 
-## Konzept
+## Konzept & Architektur
 
 | Dokument | Beschreibung | Zielgruppe |
 |----------|-------------|------------|
@@ -20,19 +22,43 @@ Dieses Verzeichnis enthält die gesamte Projektdokumentation.
 
 | Dokument | Beschreibung | Zielgruppe |
 |----------|-------------|------------|
-| [admin-guide.md](admin-guide.md) | Betriebshandbuch: Installation, Backup, Monitoring, DSGVO | IT-Admins |
-| [user-guide.md](user-guide.md) | Benutzerhandbuch: Zeitstrom, Klientel, Events, Suche, Export, Rollen | Endanwender |
+| [admin-guide.md](admin-guide.md) | Betriebshandbuch: Installation, Backup/Restore, Monitoring, MFA, Retention, DSGVO | IT-Admins |
+| [user-guide.md](user-guide.md) | Benutzerhandbuch: Arbeitszentrale, Zeitstrom, Personen, Events, Suche, Export, Statistik, Rollen | Endanwender |
+| [faq.md](faq.md) | Häufige Fragen — Betrieb, Troubleshooting, organisatorische Abläufe (synchron mit #474) | Admins, Endanwender |
+| [ops-runbook.md](ops-runbook.md) | Betriebs-Runbook: Monitoring, Alerts, Cron-Jobs, RLS, Backup/Restore, Restore-Drill | IT-Admins, DevOps |
 
 ---
 
-## Entwicklung
+## Deployment & Release
 
 | Dokument | Beschreibung | Zielgruppe |
 |----------|-------------|------------|
+| [dev-deployment.md](dev-deployment.md) | Deployment der Dev-/Test-Umgebung | DevOps |
+| [coolify-deployment.md](coolify-deployment.md) | Coolify-Deployment (unterstützte Alternative; primär ist plain Docker Compose, siehe [ADR-017](adr/017-deployment-topology.md)) | DevOps |
+| [release-checklist.md](release-checklist.md) | Release-Prozess, Sanitize-Schritte, Hart-Ausschluss-Liste | Release-Manager |
+
+---
+
+## Sicherheit & Compliance
+
+| Dokument | Beschreibung | Zielgruppe |
+|----------|-------------|------------|
+| [security-notes.md](security-notes.md) | Bewusste Security-Design-Entscheidungen (2FA, Fernet, RLS, Audit, Lockout) | Security-Officer, Entwickler |
+| [threat-model.md](threat-model.md) | Sicherheitsmodell, Angriffsfläche, bekannte offene Lücken | Security-Officer, Auditoren |
+| [audit-inventar.md](audit-inventar.md) | Index aller Audit-Klassifizierungs-Codes (FND-\*, S-\*, Phasen, Sprints); die zugrunde liegenden Multi-AI-Audits liegen archiviert unter `docs/archive/` (dev-only) | Entwickler, Auditoren |
+
+---
+
+## Entwicklung & Test
+
+| Dokument | Beschreibung | Zielgruppe |
+|----------|-------------|------------|
+| [../CONTRIBUTING.md](../CONTRIBUTING.md) | Dev-Setup, Make-Targets, Coding Conventions, Architektur, PR-Prozess | Entwickler |
 | [e2e-architecture.md](e2e-architecture.md) | E2E-Test-Infrastruktur: gunicorn, Playwright, Wait-Strategien, Fixtures | Entwickler, QA |
 | [e2e-runbook.md](e2e-runbook.md) | E2E-Test-Ausführung: Server starten, Tests laufen lassen, Debugging | Entwickler, QA |
-| [async-pdf-evaluation.md](async-pdf-evaluation.md) | Evaluierung asynchroner Task-Queues für WeasyPrint-PDF-Generierung. | Entwickler, Architekten |
-| [../CONTRIBUTING.md](../CONTRIBUTING.md) | Dev-Setup, Make-Targets, Coding Conventions, Architektur, PR-Prozess | Entwickler |
+| testing/test-matrix-index.md | Test-Matrix-Übersicht (manuelle Testfälle + E2E-Mapping); Detail in [testing/manual-test-matrix.md](testing/manual-test-matrix.md), Mutation-Testing in testing/mutation-testing.md | QA, Entwickler |
+| [performance-budgets.md](performance-budgets.md) | Performance-Ziele und Budget-Grenzen (perf-nightly) | Entwickler, QA |
+| [async-pdf-evaluation.md](async-pdf-evaluation.md) | _Historisch_ — Evaluierung asynchroner PDF-Generierung, abgelöst durch [ADR-010](adr/010-sync-pdf-generation.md) | Entwickler, Architekten |
 
 ---
 
@@ -47,6 +73,3 @@ Vorlagen für den Datenschutz in [`src/core/dsgvo_templates/`](../src/core/dsgvo
 | [informationspflichten.md](../src/core/dsgvo_templates/informationspflichten.md) | Informationspflichten nach Art. 13/14 DSGVO |
 | [toms.md](../src/core/dsgvo_templates/toms.md) | Technische und organisatorische Maßnahmen |
 | [verarbeitungsverzeichnis.md](../src/core/dsgvo_templates/verarbeitungsverzeichnis.md) | Verzeichnis von Verarbeitungstätigkeiten |
-
----
-

@@ -8,6 +8,7 @@ Dieses Handbuch richtet sich an Fachkräfte, Leitungen und Assistenzen in Kontak
 
 1. [Login und Passwort](#1-login-und-passwort)
 2. [Startseite – Zeitstrom](#2-startseite--zeitstrom)
+ - [Arbeitszentrale](#2a-arbeitszentrale)
 3. [Kontakt dokumentieren (Event erstellen)](#3-kontakt-dokumentieren-event-erstellen)
  - [Dateien-Übersicht](#3a-dateien-übersicht)
 4. [Personen verwalten](#4-personen-verwalten)
@@ -131,6 +132,40 @@ Filteränderungen laden nur den Feed neu (HTMX), ohne die ganze Seite zu aktuali
 ### Hausverbot-Banner
 
 Wenn aktive Hausverbote in Ihrer Einrichtung bestehen, werden diese als rotes Banner unterhalb der Überschrift angezeigt.
+
+---
+
+## 2a. Arbeitszentrale
+
+Neben dem Zeitstrom gibt es die **Arbeitszentrale** (`/start/`) — eine rollenspezifische Übersichtsseite, die bestehende Daten zu kompakten Kacheln verdichtet. Sie erreichen sie über den Sidebar-Link **„Arbeitszentrale"** (oberhalb des Zeitstroms). Der Zeitstrom unter `/` bleibt unverändert — die Arbeitszentrale ist ein zusätzlicher Einstieg, keine Verdrängung.
+
+Je nach Rolle erscheint eine andere Variante:
+
+**Fachkraft / Assistenz** — Titel „Arbeitszentrale", heutige Aufgaben und Kontakte auf einen Blick:
+
+- **Heutige Kontakte** — Anzahl der heute erfassten Ereignisse (führt zum Zeitstrom)
+- **Meine Aufgaben** — eigene offene bzw. in Bearbeitung befindliche Aufgaben (führt zum Aufgaben-Posteingang)
+- **Zuletzt bearbeitet** — Anzahl kürzlich aktualisierter Personen (führt zur Personenliste)
+- darunter die Listen **„Meine offenen Aufgaben"** (bis zu 5, mit Fälligkeit) und **„Zuletzt bearbeitete Personen"** (bis zu 5)
+
+**Leitung** — Titel „Leitungs-Arbeitszentrale", DSGVO-Workflows, Retention und Statistik:
+
+- **Löschanträge** — ausstehende Anträge (führt zur Löschantrags-Liste)
+- **Löschvorschläge** — ausstehende Retention-Vorschläge (führt zum Retention-Dashboard)
+- **Legal Holds** — aktive Aufbewahrungssperren
+- **Statistik** — Monat/Jahr des letzten Statistik-Snapshots
+
+**Facility-Admin** — Titel „Admin-Arbeitszentrale", Benutzer, Sicherheit und Konfiguration:
+
+- **Benutzer ohne MFA** — aktive Benutzer ohne bestätigte 2FA (orange hervorgehoben, sobald > 0)
+- **Konfigurations-Warnungen** — z. B. MFA nicht einrichtungsweit erzwungen oder K-Anonymisierung deaktiviert; die einzelnen Hinweise stehen darunter als Liste
+
+**Super-Admin** — Titel „System-Arbeitszentrale", Cross-Facility-Status und Audit-Aktivität:
+
+- **Mandanten** — Anzahl Einrichtungen
+- **Benutzer aktiv** — über alle Mandanten
+- **Audit-Events 24h** — Audit-Einträge der letzten 24 Stunden
+- **Kritische Events** — sicherheitsrelevante Aktionen der letzten 24 Stunden (fehlgeschlagene Logins, Sicherheitsverstöße, Löschungen, genehmigte Löschanträge; orange hervorgehoben, sobald > 0)
 
 ---
 
@@ -496,6 +531,16 @@ Der Jugendamt-Export erstellt einen standardisierten Sachbericht im Jugendamt-Fo
 3. Die PDF-Datei wird heruntergeladen (Dateiname: `jugendamt_YYYY-MM-DD_YYYY-MM-DD.pdf`).
 
 > **Tipp:** Für Halbjahresberichte wählen Sie den Zeitraum „Letztes Halbjahr" und passen Sie Start- und Enddatum bei Bedarf manuell auf den 01.01. bzw. 30.06. (oder 01.07. – 31.12.) an.
+
+### Datenschutzfreundliche externe Berichte (Leitung / Admin)
+
+Für die Weitergabe an externe Stellen (z. B. Fördermittelgeber oder Kommune) gibt es unter `/statistics/external/` einen **externen Bericht mit Datenschutzprofil**. Er nutzt dieselben Zeitraum-Filter wie das Statistik-Dashboard, ist aber bewusst datensparsam:
+
+- **Kein Pseudonym-Ranking** — die Top-Personen-Liste des internen Dashboards entfällt vollständig.
+- **K-Anonymität** — Aggregate mit weniger als *k* Datensätzen (Schwelle aus den Einrichtungs-Settings, Standard 5) werden als **„unterdrückt"** ausgewiesen statt mit konkreter Zahl. Das betrifft „Unterschiedliche Personen", „Nach Dokumentationstyp" und „Nach Altersgruppe".
+- **Datenschutzprofil-Kopf** — Einrichtung, Profil (`external`), Zeitraum, K-Anonymität-Schwelle und Erzeugungs-Zeitpunkt stehen oben im Bericht.
+
+Über **„Als JSON exportieren"** (bzw. `?format=json` an der URL) erhalten Sie dieselben Daten maschinenlesbar. Jeder Aufruf wird als `EXPORT` im Audit-Log protokolliert. Der externe Bericht ist nur für **Leitung** und **Administration** zugänglich.
 
 ### Löschanträge prüfen (Leitung / Admin)
 
