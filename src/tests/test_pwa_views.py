@@ -99,3 +99,25 @@ class TestManifestView:
         """Manifest muss public sein (PWA-Install-Prompt-Standard)."""
         response = client.get(reverse("manifest"))
         assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestHeadMetadata:
+    """Head-Metadaten-Hygiene: Favicon-Link + moderne PWA-Capable-Meta.
+
+    Refs #973 (Live-Verifikation): /favicon.ico lieferte auf jeder Seite 404,
+    und `apple-mobile-web-app-capable` war ohne modernes Pendant deprecated.
+    Geprüft auf der öffentlichen Login-Seite (eigenes <head>) und im base.html.
+    """
+
+    def test_login_page_has_favicon_link(self, client):
+        response = client.get(reverse("login"))
+        body = response.content.decode()
+        assert 'rel="icon"' in body, "Favicon-Link fehlt → /favicon.ico 404 auf jeder Seite"
+
+    def test_login_page_has_modern_web_app_capable_meta(self, client):
+        response = client.get(reverse("login"))
+        body = response.content.decode()
+        assert 'name="mobile-web-app-capable"' in body, (
+            "Modernes mobile-web-app-capable-Meta fehlt (apple-* ist deprecated)"
+        )

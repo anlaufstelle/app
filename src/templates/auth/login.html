@@ -9,7 +9,10 @@
     <link rel="stylesheet" href="{% static 'css/styles.css' %}">
     <link rel="manifest" href="/manifest.json">
     <meta name="theme-color" content="#2d6a4f">
+    <link rel="icon" href="{% static 'icons/icon-192.svg' %}" type="image/svg+xml">
     <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
+    {# Refs #973: modernes Pendant zum deprecateten apple-mobile-web-app-capable. #}
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     {# Siehe base.html zur Script-Reihenfolge. Refs #911: featureweise Alpine-Module. #}
     <script src="{% static 'js/alpine/base-layout.js' %}" defer></script>
