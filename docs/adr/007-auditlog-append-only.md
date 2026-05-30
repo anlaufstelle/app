@@ -34,7 +34,7 @@ Das AuditLog ist die einzige nachhaltige Spur über sensitive Operationen (Daten
 
 ## References
 
-- [`src/core/services/audit.py`](../../src/core/services/audit.py)
+- [`src/core/services/audit/`](../../src/core/services/audit/)
 - [`src/core/migrations/0024_auditlog_immutable_trigger.py`](../../src/core/migrations/0024_auditlog_immutable_trigger.py)
 - [`docs/threat-model.md`](../threat-model.md)
 
@@ -59,7 +59,7 @@ Die in der vorigen Iteration als „nur über psql sichtbar" deklarierten NULL-F
 
 **Entscheidung:** Mit dem 5-Rollen-Modell aus [ADR-018](018-rollenmodell-superadmin.md) erhält der `super_admin` einen `/system/`-Bereich mit AuditLog-Browser für **NULL-Facility-Einträge sowie facility-übergreifende Sicht aller Audit-Logs**:
 
-- Die View [`SystemAuditLogView`](../../src/core/views/system.py) zeigt AuditLog-Einträge inklusive `facility IS NULL`-Treffer. Sie ist gekapselt durch `SuperAdminRequiredMixin` und nutzt RLS-Bypass via `app.is_super_admin`-Session-Variable (siehe [ADR-005 Update 2026-05-10](005-facility-scoping-and-rls.md)).
+- Die View [`SystemAuditLogListView`](../../src/core/views/system/audit.py) zeigt AuditLog-Einträge inklusive `facility IS NULL`-Treffer. Sie ist gekapselt durch `SuperAdminRequiredMixin` und nutzt RLS-Bypass via `app.is_super_admin`-Session-Variable (siehe [ADR-005 Update 2026-05-10](005-facility-scoping-and-rls.md)).
 - **Neue Action `SYSTEM_VIEW`:** Jeder Aufruf einer beliebigen `/system/`-View schreibt einen `SYSTEM_VIEW`-AuditLog-Eintrag mit Detail (`view_name`, Filter-Parameter, Anzahl angezeigter Einträge). Damit ist DSGVO-Rechenschaftspflicht (Art. 5(2) DSGVO) erfüllt: Auch der hochprivilegierte `super_admin` hinterlässt eine Spur, wenn er auf nicht-eigene Facility-Daten schaut.
 - **Banner im UI:** Permanenter Hinweis im `/system/`-Layout: „Sie greifen auf Daten facility-übergreifend zu — dieser Zugriff wird im Audit-Log protokolliert." Übersetzbar via `django.po`.
 

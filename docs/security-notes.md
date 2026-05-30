@@ -47,7 +47,7 @@ Wenn wir den Token-Link-Flow (Invite, Passwort-Reset, 2FA-Backup-Download) jemal
 
 `AuditLog.facility` ist `null=True` (siehe [`models/audit.py`](../src/core/models/audit.py)), weil System-weite Events (z.B. fehlgeschlagene Logins vor dem Facility-Context) keine Facility haben. Diese Zeilen matchen die `facility_isolation`-Policy **nicht** — sie sind für reguläre App-User (`assistant`/`staff`/`lead`/`facility_admin`) unsichtbar.
 
-**Update 2026-05-10 (Refs #867, schließt #866):** Mit Einführung der Rolle `super_admin` ist die NULL-Facility-Sichtbarkeit jetzt zusätzlich über das UI verfügbar — der `/system/`-Bereich ([`SystemAuditLogView`](../src/core/views/system.py)) zeigt Pre-Auth- und systemweite Einträge für die Systemadministration, gekapselt durch `SuperAdminRequiredMixin` und durch eine zusätzliche Session-Variable `app.is_super_admin='true'` (OR-Branch in den RLS-Policies). Jeder dieser Aufrufe wird im AuditLog mit der Action `SYSTEM_VIEW` protokolliert (DSGVO-Rechenschaftspflicht). Direkter psql-Pfad über `anlaufstelle_admin` (BYPASSRLS) bleibt für Forensik bestehen. Details: [ADR-007 Update 2026-05-10](adr/007-auditlog-append-only.md), [ADR-018](adr/018-rollenmodell-superadmin.md).
+**Update 2026-05-10 (Refs #867, schließt #866):** Mit Einführung der Rolle `super_admin` ist die NULL-Facility-Sichtbarkeit jetzt zusätzlich über das UI verfügbar — der `/system/`-Bereich ([`src/core/views/system/`](../src/core/views/system/)) zeigt Pre-Auth- und systemweite Einträge für die Systemadministration, gekapselt durch `SuperAdminRequiredMixin` und durch eine zusätzliche Session-Variable `app.is_super_admin='true'` (OR-Branch in den RLS-Policies). Jeder dieser Aufrufe wird im AuditLog mit der Action `SYSTEM_VIEW` protokolliert (DSGVO-Rechenschaftspflicht). Direkter psql-Pfad über `anlaufstelle_admin` (BYPASSRLS) bleibt für Forensik bestehen. Details: [ADR-007 Update 2026-05-10](adr/007-auditlog-append-only.md), [ADR-018](adr/018-rollenmodell-superadmin.md).
 
 ---
 
@@ -71,7 +71,7 @@ Die saubere Alternative wäre Option 2 aus dem Issue: 20+ Unfold-Templates in [`
 
 **Was wir behalten:**
 - `script-src` bleibt `'self'` — kein Remote-Script-Loading
-- Architektur-Tests verbieten weiterhin `csrf_exempt`, `|safe`, `mark_safe`, Inline-`<script>`-Blöcke im gesamten Repo (siehe [`src/tests/test_architecture.py`](../src/tests/test_architecture.py))
+- Architektur-Tests verbieten weiterhin `csrf_exempt`, `|safe`, `mark_safe`, Inline-`<script>`-Blöcke im gesamten Repo (siehe `src/tests/test_architecture_guards_*.py`)
 - `/admin-mgmt/` ist nur fuer Rollen `super_admin` und `facility_admin` erreichbar (Custom `AnlaufstelleAdminSite`, Refs #785). `lead`/`staff`/`assistant` werden geblockt — auch wenn `is_staff=True` gesetzt ist. Sudo-Mode-Pflicht: erster Zugriff redirected zu `/sudo/?next=/admin-mgmt/`. Facility-Scoping in ModelAdmin: `facility_admin` sieht nur Daten der eigenen Facility, `super_admin` sieht alle. Plus AuditLog auf alle Schreib-Aktionen, RLS gegen Cross-Facility-Leaks. MFA-Pflicht ist separates Issue #788.
 
 ### Threat-Model-Bewertung
@@ -158,7 +158,7 @@ Feldweise Encryption (`Client.notes`, `Case.description` als verschlüsselte Fel
 [`Client.pseudonym`](../src/core/models/client.py#L35-L39) ist ein
 `CharField(max_length=100, db_index=True)` mit zusätzlichem
 [`GinIndex` für `gin_trgm_ops`](../src/core/models/client.py#L89-L95).
-Trigram-Fuzzy-Search läuft über [`services/search.py`](../src/core/services/search.py#L100-L130)
+Trigram-Fuzzy-Search läuft über [`src/core/services/dashboard/search.py`](../src/core/services/dashboard/search.py)
 und ist eine zentrale UX-Funktion für Fachkräfte ("Marie" findet auch
 "Maria-23"). Bei einem **Backup-Diebstahl** mit Klartext-Pseudonymen ist
 direkte Wiedererkennung in Kontaktläden möglich

@@ -40,8 +40,8 @@ Sozialarbeit verarbeitet besonders schutzbedürftige Personendaten (DSGVO Art. 9
 
 ## References
 
-- [`src/core/services/mfa.py`](../../src/core/services/mfa.py)
+- [`src/core/services/security/mfa.py`](../../src/core/services/security/mfa.py)
 - [`src/core/views/mfa.py`](../../src/core/views/mfa.py)
-- [`src/core/services/sudo_mode.py`](../../src/core/services/sudo_mode.py)
+- [`src/core/services/security/sudo_mode.py`](../../src/core/services/security/sudo_mode.py)
 - [`docs/admin-guide.md`](../admin-guide.md) (MFA-Setup-Anleitung)
 - Refs #521 (TOTP-Einführung), #612 (Account-Lockout-Kontext), #790 (Hash-Backup-Codes)

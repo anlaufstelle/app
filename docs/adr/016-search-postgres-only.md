@@ -37,7 +37,7 @@ Die App soll eine schnelle Such-UX über Pseudonyme, Fall-Titel und Ereignis-Inh
 
 ## References
 
-- [`src/core/services/search.py`](../../src/core/services/search.py)
+- [`src/core/services/dashboard/search.py`](../../src/core/services/dashboard/search.py)
 - [`src/core/services/events/fields.py`](../../src/core/services/events/fields.py) (`compute_event_search_text`)
 - [`src/core/migrations/0081_add_event_search_text.py`](../../src/core/migrations/0081_add_event_search_text.py) (TrigramExtension + GIN-Index)
 - Refs #580 (Trigram-Similarity), #827 (Suchindex-Spalte)

@@ -33,7 +33,7 @@ UI-Label: `facility_admin` heißt im UI „Anwendungsbetreuung", `super_admin` h
 
 **1. Organization als Branding-Hülse (Variante b1).** Die `Organization` bleibt als Modell bestehen, dient aber **nur** dem Träger-Branding (Logo, Trägername in Berichten). Es gibt **keinen** Org-Admin und **keinen** Cross-Facility-Effekt durch sie. Die einzige facility-übergreifende Rolle ist `super_admin`. Damit bleibt die Mandanten-Trennung scharf, ohne ein zusätzliches Hierarchiekonzept aufzubauen.
 
-**2. RLS-Bypass via Postgres-Session-Variable.** Statt einen dritten DB-User mit `BYPASSRLS` einzuführen, wird eine zusätzliche Session-Variable `app.is_super_admin='true'` gesetzt und in jede `facility_isolation`-Policy als OR-Branch eingewoben (Migration [0085](../../src/core/migrations/0085_rls_super_admin_branch.py)):
+**2. RLS-Bypass via Postgres-Session-Variable.** Statt einen dritten DB-User mit `BYPASSRLS` einzuführen, wird eine zusätzliche Session-Variable `app.is_super_admin='true'` gesetzt und in jede `facility_isolation`-Policy als OR-Branch eingewoben (Migration [`src/core/migrations/0085_rls_superadmin_bypass.py`](../../src/core/migrations/0085_rls_superadmin_bypass.py)):
 
 ```sql
 USING (

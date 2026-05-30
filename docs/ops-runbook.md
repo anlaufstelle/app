@@ -902,7 +902,7 @@ Refs #542,
 
 ## 10. Invite-Token-Hygiene
 
-Der Invite-Flow ([`src/core/services/invite.py`](../src/core/services/invite.py))
+Der Invite-Flow ([`src/core/services/security/invite.py`](../src/core/services/security/invite.py))
 nutzt Djangos `default_token_generator` — **keine** persistente Token-Tabelle.
 Der Setup-Link reitet auf `password_reset_confirm` und ist an
 `PASSWORD_RESET_TIMEOUT` (Default: 3 Tage) gebunden. Nach Ablauf wird der

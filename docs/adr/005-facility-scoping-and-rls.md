@@ -59,7 +59,7 @@ Mit Einführung des 5-Rollen-Modells ([ADR-018](018-rollenmodell-superadmin.md))
 
 **Lösung:** Eine **zweite Schicht oberhalb der DB-Rollen** (`anlaufstelle` / `anlaufstelle_admin`):
 
-- Migration [0085](../../src/core/migrations/0085_rls_super_admin_branch.py) erweitert jede `facility_isolation`-Policy um einen OR-Branch:
+- Migration [`src/core/migrations/0085_rls_superadmin_bypass.py`](../../src/core/migrations/0085_rls_superadmin_bypass.py) erweitert jede `facility_isolation`-Policy um einen OR-Branch:
 
  ```sql
   USING (
@@ -70,7 +70,7 @@ Mit Einführung des 5-Rollen-Modells ([ADR-018](018-rollenmodell-superadmin.md))
 
 - Die [`FacilityScopeMiddleware`](../../src/core/middleware/facility_scope.py) setzt **pro Request** entweder `app.current_facility_id` (für facility-gebundene User) oder `app.is_super_admin='true'` (für `super_admin`). Beides ist eine Postgres-Session-Variable, gesetzt via `SELECT set_config('app.is_super_admin', 'true', false)` (transaction-scoped via `false`-Flag, oder session-scoped — siehe Middleware).
 
-- **Always-Reset-Pattern (Pool-Leak-Schutz):** Vor jedem Request wird `app.is_super_admin` explizit auf `'false'` zurückgesetzt — auch wenn der vorige Request auf der gleichen DB-Connection ein `super_admin`-Request war. Damit kann ein lecker Pool-Connection nicht ausversehen einem nachfolgenden facility-User Cross-Tenant-Sicht geben. Der Test [`test_rls_super_admin.py`](../../src/tests/test_rls_super_admin.py) verifiziert das Reset-Verhalten.
+- **Always-Reset-Pattern (Pool-Leak-Schutz):** Vor jedem Request wird `app.is_super_admin` explizit auf `'false'` zurückgesetzt — auch wenn der vorige Request auf der gleichen DB-Connection ein `super_admin`-Request war. Damit kann ein lecker Pool-Connection nicht ausversehen einem nachfolgenden facility-User Cross-Tenant-Sicht geben. Der Test [`src/tests/test_rls.py`](../../src/tests/test_rls.py) verifiziert das Reset-Verhalten.
 
 **Architektur-Schichtung:**
 

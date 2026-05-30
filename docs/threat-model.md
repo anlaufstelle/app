@@ -39,11 +39,11 @@ Dieses Dokument macht das Sicherheitsmodell explizit. Es ergänzt — nicht erse
 | **Klientendaten** (Pseudonyme, Events mit `data_json`, Klartext-Notizen) | C, I | Postgres `core_client`, `core_event`, `core_case`, `core_episode`, `core_workitem` | Art.-9 DSGVO (sozial/medizinisch) |
 | **AuditLog** | I, A (Repudiation-Schutz gegen nachträgliche Änderung/Löschung) | Postgres `core_auditlog` (UPDATE/DELETE per DB-Trigger blockiert; INSERT erlaubt; Retention-Pruning deaktiviert Trigger transaktional — siehe TB2/TB3-Tabelle) | hoch — gerichtsfest |
 | **Encryption-Keys** | C | `ENCRYPTION_KEYS` env, App-Speicher zur Laufzeit | kritisch — kompromittiert ⇒ Klartext |
-| **File-Vault-Anhänge** | C, I | `MEDIA_ROOT=/data/media`, Fernet-verschlüsselt ([`encryption.py`](../src/core/services/encryption.py)) | Art.-9 DSGVO |
+| **File-Vault-Anhänge** | C, I | `MEDIA_ROOT=/data/media`, Fernet-verschlüsselt ([`src/core/services/file_vault/encryption.py`](../src/core/services/file_vault/encryption.py)) | Art.-9 DSGVO |
 | **Backups** | C, I | `backups/`, AES-256-CBC verschlüsselt ([`backup.sh`](../scripts/backup.sh)) | kritisch — Offline-Kopie aller Klientendaten |
 | **Sessions** | C, I | Postgres `django_session`, HTTPOnly+Secure+SameSite-Cookie | mittel — Session-Hijack ⇒ Account-Übernahme |
 | **MFA-Secrets / Backup-Codes** | C | Postgres `otp_*` (django-otp) | hoch — kompromittiert ⇒ MFA-Bypass |
-| **Login-Lockout-State** | I, A | nicht persistiert — zur Laufzeit aus AuditLog abgeleitet ([`login_lockout.py`](../src/core/services/login_lockout.py)) | mittel — Bypass-Vektoren: gefälschter `LOGIN_UNLOCK`-INSERT, Race-Window (Threshold+1), Retention-Prune |
+| **Login-Lockout-State** | I, A | nicht persistiert — zur Laufzeit aus AuditLog abgeleitet ([`src/core/services/security/login_lockout.py`](../src/core/services/security/login_lockout.py)) | mittel — Bypass-Vektoren: gefälschter `LOGIN_UNLOCK`-INSERT, Race-Window (Threshold+1), Retention-Prune |
 
 C = Confidentiality, I = Integrity, A = Availability
 
@@ -91,12 +91,12 @@ Backups (`backup.sh`) verlassen das interne Netz nur **verschlüsselt** auf den 
 
 | Threat | Mitigation (Bestand) | Quelle | Offene Lücke |
 |---|---|---|---|
-| **S** Session-Hijack via XSS | CSP `script-src 'self'` ohne `unsafe-eval`; Architektur-Test verbietet Inline-`<script>`/`x-data`-Objekte; `SESSION_COOKIE_HTTPONLY=True`; `report-uri /csp-report/` loggt Violations strukturiert ([CSPReportView](../src/core/views/csp_report.py)). **Bewusste Ausnahme:** `/admin-mgmt/` erhält `'unsafe-eval'` per [`AdminCSPRelaxMiddleware`](../src/core/middleware/admin_csp_relax.py) (django-unfold-Kompatibilität, [Trade-off in security-notes.md](security-notes.md#csp-unsafe-eval-auf-admin-mgmt-issue-695)) | [`base.py:236-263`](../src/anlaufstelle/settings/base.py#L236-L263), [`test_architecture.py`](../src/tests/test_architecture.py) | — (CSP-Reporting #684 geschlossen) |
-| **S** Login-Brute-Force | IP `5/m` + Username `10/h` Rate-Limit, Account-Lockout 10/15 Min, MFA optional/erzwingbar, Captcha-frei aber audit-getrackt | [`auth.py`](../src/core/views/auth.py), [`login_lockout.py`](../src/core/services/login_lockout.py) | Lockout race-anfällig — Maßnahme #13 |
+| **S** Session-Hijack via XSS | CSP `script-src 'self'` ohne `unsafe-eval`; Architektur-Test verbietet Inline-`<script>`/`x-data`-Objekte; `SESSION_COOKIE_HTTPONLY=True`; `report-uri /csp-report/` loggt Violations strukturiert ([CSPReportView](../src/core/views/csp_report.py)). **Bewusste Ausnahme:** `/admin-mgmt/` erhält `'unsafe-eval'` per [`AdminCSPRelaxMiddleware`](../src/core/middleware/admin_csp_relax.py) (django-unfold-Kompatibilität, [Trade-off in security-notes.md](security-notes.md#csp-unsafe-eval-auf-admin-mgmt-issue-695)) | [`base.py:236-263`](../src/anlaufstelle/settings/base.py#L236-L263), `src/tests/test_architecture_guards_*.py` | — (CSP-Reporting #684 geschlossen) |
+| **S** Login-Brute-Force | IP `5/m` + Username `10/h` Rate-Limit, Account-Lockout 10/15 Min, MFA optional/erzwingbar, Captcha-frei aber audit-getrackt | [`auth.py`](../src/core/views/auth.py), [`src/core/services/security/login_lockout.py`](../src/core/services/security/login_lockout.py) | Lockout race-anfällig — Maßnahme #13 |
 | **T** CSRF / Replay | `CsrfViewMiddleware` + `CSRF_COOKIE_HTTPONLY=True` + `SAMESITE="Strict"` (CSRF) / `"Lax"` (Session, [siehe security-notes](security-notes.md)) | [`prod.py`](../src/anlaufstelle/settings/prod.py) ||
 | **R** Password-Reset-Token-Replay | Django-Default-Tokens (signed, kurze TTL); Token-Verbrauch loggt AuditLog | [`auth.py`](../src/core/views/auth.py) ||
-| **I** Pseudonym-Leak via Suche | `services/search.py` filtert per Sensitivity + RLS | [`search.py`](../src/core/services/search.py) | `data_json__icontains` matcht verschlüsselte Tokens |
-| **D** Login-Flood / Bot-Spam | Rate-Limit auf alle POST-Handler (Architektur-Test 100 % Coverage) | [`test_architecture.py`](../src/tests/test_architecture.py) | GET-Endpunkte ohne Rate-Limit (Bestandsentscheidung) |
+| **I** Pseudonym-Leak via Suche | `services/search.py` filtert per Sensitivity + RLS | [`src/core/services/dashboard/search.py`](../src/core/services/dashboard/search.py) | `data_json__icontains` matcht verschlüsselte Tokens |
+| **D** Login-Flood / Bot-Spam | Rate-Limit auf alle POST-Handler (Architektur-Test 100 % Coverage) | `src/tests/test_architecture_guards_*.py` | GET-Endpunkte ohne Rate-Limit (Bestandsentscheidung) |
 | **E** Privilege-Escalation via Form-Tampering | Server-seitige Permission-Checks via Mixin-Hierarchie + `can_user_mutate_*`-Helper | [`mixins.py`](../src/core/views/mixins.py), [`workitem_actions.py`](../src/core/views/workitem_actions.py) | — (WorkItem-Race #129 Teil A geschlossen) |
 
 ### TB2/TB3 — Django ↔ PostgreSQL
@@ -117,7 +117,7 @@ Backups (`backup.sh`) verlassen das interne Netz nur **verschlüsselt** auf den 
 | Threat | Mitigation (Bestand) | Quelle | Offene Lücke |
 |---|---|---|---|
 | **S** ClamAV-Spoofing (falscher Sidecar) | Internes Compose-Netz `internal: internal=true`; kein Public-Mapping | [`docker-compose.prod.yml`](../docker-compose.prod.yml) ||
-| **T** Bypass durch ungescannte Datei | 4-stufige Pipeline: Extension-Whitelist → ClamAV → Magic-Bytes → Encryption; **fail-closed** wenn ClamAV nicht erreichbar | [`encryption.py`](../src/core/services/encryption.py), Healthcheck `/health/` ||
+| **T** Bypass durch ungescannte Datei | 4-stufige Pipeline: Extension-Whitelist → ClamAV → Magic-Bytes → Encryption; **fail-closed** wenn ClamAV nicht erreichbar | [`src/core/services/file_vault/encryption.py`](../src/core/services/file_vault/encryption.py), Healthcheck `/health/` ||
 | **D** ClamAV-Outage blockt Uploads | Fail-closed gewollt — Risiko: Service-Verfügbarkeit. Healthcheck flag in `/health/` | Refs #524 | Offene Frage Healthcheck differenziert (`503` bei ClamAV-Ausfall) |
 
 ### TB5 — Off-Site-Backups
