@@ -110,10 +110,15 @@ def build_attachment_context(event):
     wobei legacy ``__file__``-Marker via :func:`normalize_file_marker` zu
     Single-Entry-Listen aufgeloest werden. Geloeschte Anhaenge
     (``deleted_at``) werden gefiltert.
+
+    Refs #894 (FND-004): Anhaenge einmalig laden und per PK-Dict
+    aufloesen — bei N File-Markern entstand vorher pro Marker eine
+    separate Query.
     """
     if not event.data_json:
         return {}
 
+    attachments_by_pk = {att.pk: att for att in event.attachments.all()}
     existing_attachments_by_slug: dict[str, list[dict]] = {}
     for slug, value in event.data_json.items():
         entries_meta = normalize_file_marker(value)
@@ -121,7 +126,11 @@ def build_attachment_context(event):
             continue
         entries = []
         for entry in entries_meta:
-            att = event.attachments.filter(pk=entry["id"]).first()
+            try:
+                entry_pk = uuid.UUID(entry["id"]) if not isinstance(entry["id"], uuid.UUID) else entry["id"]
+            except (ValueError, TypeError):
+                continue
+            att = attachments_by_pk.get(entry_pk)
             if not att or att.deleted_at is not None:
                 continue
             entries.append(

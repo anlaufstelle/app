@@ -442,3 +442,96 @@ class TestApplyAttachmentChangesQueryCount:
             f"{len(attachment_selects)} SELECTs auf core_eventattachment bei 5 Entries.\n"
             f"Queries: {attachment_selects}"
         )
+
+
+@pytest.mark.django_db
+class TestBuildAttachmentContextQueryCount:
+    """Refs #894 (FND-004): ``build_attachment_context`` lud pro File-Marker
+    eine eigene ``event.attachments.filter(pk=...).first()``-Query — N+1.
+    Nach dem Fix laeuft ein einziger Bulk-SELECT auf ``core_eventattachment``,
+    egal wie viele Entries das Event hat.
+    """
+
+    def _build_event_with_entries(self, facility, staff_user, dt, ft, *, entries: int):
+        event = Event.objects.create(
+            facility=facility, document_type=dt, occurred_at=timezone.now(), created_by=staff_user
+        )
+        marker = []
+        for i in range(entries):
+            att = store_encrypted_file(facility, _upload(f"v{i}".encode()), ft, event, staff_user, sort_order=i)
+            marker.append({"id": str(att.pk), "sort": i})
+        event.data_json = {"anhang": {"__files__": True, "entries": marker}}
+        event.save(update_fields=["data_json"])
+        return event
+
+    def _attachment_selects(self, event):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        from core.services.events.context import build_attachment_context
+
+        with CaptureQueriesContext(connection) as ctx:
+            build_attachment_context(event)
+        return [
+            q["sql"]
+            for q in ctx.captured_queries
+            if "core_eventattachment" in q["sql"].lower() and q["sql"].lower().lstrip().startswith("select")
+        ]
+
+    def test_constant_select_count_regardless_of_entries(self, facility, staff_user, doc_type_with_file):
+        """Egal ob 1 oder 5 File-Entries — die Anzahl SELECTs auf
+        ``core_eventattachment`` bleibt konstant (1 Bulk-Load)."""
+        dt, ft = doc_type_with_file
+        small = self._build_event_with_entries(facility, staff_user, dt, ft, entries=1)
+        large = self._build_event_with_entries(facility, staff_user, dt, ft, entries=5)
+
+        small_selects = self._attachment_selects(small)
+        large_selects = self._attachment_selects(large)
+
+        # Vor dem Fix: 5 SELECTs bei 5 Entries (.filter(pk=...).first() pro Marker).
+        # Nach dem Fix: 1 SELECT (event.attachments.all()), egal wie viele Entries.
+        assert len(large_selects) == len(small_selects), (
+            f"Attachment-SELECT-Count waechst mit Entries: 1 Entry = "
+            f"{len(small_selects)} SELECTs, 5 Entries = {len(large_selects)} SELECTs.\n"
+            f"Erwartet: gleich (Bulk-Load).\nQueries (5 Entries): {large_selects}"
+        )
+        assert len(large_selects) <= 1, (
+            f"build_attachment_context sollte einen einzigen SELECT auf "
+            f"core_eventattachment ausloesen — gemessen: {len(large_selects)}.\n"
+            f"Queries: {large_selects}"
+        )
+
+    def test_returns_same_entries_after_fix(self, facility, staff_user, doc_type_with_file):
+        """Verhalten unveraendert: aktive Anhaenge erscheinen, geloeschte nicht."""
+        from core.services.events.context import build_attachment_context
+
+        dt, ft = doc_type_with_file
+        event = self._build_event_with_entries(facility, staff_user, dt, ft, entries=3)
+
+        ctx = build_attachment_context(event)
+        assert "anhang" in ctx
+        assert len(ctx["anhang"]) == 3
+
+        # Einen Anhang soft-deleten — er darf nicht mehr im Kontext erscheinen.
+        first = event.attachments.first()
+        first.deleted_at = timezone.now()
+        first.save(update_fields=["deleted_at"])
+
+        ctx_after = build_attachment_context(event)
+        assert len(ctx_after["anhang"]) == 2
+        assert all(e["attachment_id"] != str(first.pk) for e in ctx_after["anhang"])
+
+    def test_invalid_uuid_in_marker_is_skipped(self, facility, staff_user, doc_type_with_file):
+        """Ungueltige IDs im Marker werden uebersprungen statt zu crashen."""
+        from core.services.events.context import build_attachment_context
+
+        dt, ft = doc_type_with_file
+        event = Event.objects.create(
+            facility=facility, document_type=dt, occurred_at=timezone.now(), created_by=staff_user
+        )
+        event.data_json = {"anhang": {"__files__": True, "entries": [{"id": "not-a-uuid", "sort": 0}]}}
+        event.save(update_fields=["data_json"])
+
+        ctx = build_attachment_context(event)
+        # Kein Eintrag erkannt → slug taucht nicht im Ergebnis auf.
+        assert ctx == {}
