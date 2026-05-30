@@ -6,6 +6,7 @@ from core.views.auth import (
     CustomLoginView,
     CustomLogoutView,
     CustomPasswordChangeView,
+    CustomPasswordResetConfirmView,
     OfflineKeySaltView,
     RateLimitedPasswordResetView,
     set_user_language,
@@ -66,7 +67,7 @@ urlpatterns = [
     ),
     path(
         "password-reset/<uidb64>/<token>/",
-        auth_views.PasswordResetConfirmView.as_view(
+        CustomPasswordResetConfirmView.as_view(
             template_name="registration/password_reset_confirm.html",
             success_url=reverse_lazy("password_reset_complete"),
         ),

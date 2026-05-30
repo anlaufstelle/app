@@ -61,12 +61,25 @@
                     class="w-full flex justify-center py-2.5 px-4 rounded-md text-[14px] font-semibold text-white bg-accent min-h-[44px]">
                     {% trans "Anmelden" %}
                 </button>
-                <div class="text-center mt-2">
-                    <a href="{% url 'password_reset' %}" class="text-[13px] text-accent hover:underline">
+                <div class="text-center mt-2 space-y-1">
+                    <a href="{% url 'password_reset' %}" class="text-[13px] text-accent hover:underline block" data-testid="link-password-reset">
                         {% trans "Passwort vergessen?" %}
+                    </a>
+                    {# Refs #869: Recovery-Pfade bei Lockout sichtbar machen. #}
+                    <a href="{% url 'core:lockout_recovery_request' %}" class="text-[13px] text-ink-muted hover:underline block" data-testid="link-recovery-token">
+                        {% trans "Konto entsperren per E-Mail" %}
+                    </a>
+                    <a href="{% url 'core:lockout_recovery_backup_code' %}" class="text-[13px] text-ink-muted hover:underline block" data-testid="link-recovery-backup-code">
+                        {% trans "Backup-Code einlösen" %}
                     </a>
                 </div>
             </form>
+
+            {% if request.GET.recovered %}
+            <div class="mt-4 p-3 bg-green-100 text-green-800 rounded-md text-sm" role="status" data-testid="recovered-banner">
+                {% trans "Konto entsperrt. Bitte melden Sie sich jetzt an." %}
+            </div>
+            {% endif %}
 
             {# PWA Install-Prompt (Chrome/Edge/Android) #}
             <div x-data="pwaInstallPrompt" x-cloak>

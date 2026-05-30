@@ -44,6 +44,7 @@ from core.views.clients import (
     ClientListView,
     ClientUpdateView,
 )
+from core.views.dashboard import RoleDashboardView
 from core.views.dsgvo import DSGVODocumentDownloadView, DSGVOPackageView
 from core.views.event_deletion import DeletionRequestListView, DeletionRequestReviewView
 from core.views.events import (
@@ -54,6 +55,12 @@ from core.views.events import (
     EventUpdateView,
 )
 from core.views.handover import HandoverView
+from core.views.lockout_recovery import (
+    LockoutRecoveryBackupCodeView,
+    LockoutRecoveryConfirmView,
+    LockoutRecoveryRequestView,
+    LockoutRecoverySentView,
+)
 from core.views.offline import (
     OfflineClientBundleView,
     OfflineClientDetailView,
@@ -106,7 +113,6 @@ from core.views.workitems import (
     WorkItemDetailView,
     WorkItemInboxView,
 )
-from core.views.dashboard import RoleDashboardView
 from core.views.zeitstrom import ZeitstromFeedPartialView, ZeitstromView
 
 app_name = "core"
@@ -221,6 +227,27 @@ urlpatterns = [
     path("dsgvo/<slug:document>/", DSGVODocumentDownloadView.as_view(), name="dsgvo_document"),
     # Account
     path("account/", AccountProfileView.as_view(), name="account_profile"),
+    # Refs #869: Lockout-Recovery-Flows (Token-Mail + Backup-Code).
+    path(
+        "account/recovery/",
+        LockoutRecoveryRequestView.as_view(),
+        name="lockout_recovery_request",
+    ),
+    path(
+        "account/recovery/sent/",
+        LockoutRecoverySentView.as_view(),
+        name="lockout_recovery_sent",
+    ),
+    path(
+        "account/recovery/confirm/<str:token>/",
+        LockoutRecoveryConfirmView.as_view(),
+        name="lockout_recovery_confirm",
+    ),
+    path(
+        "account/recovery/backup-code/",
+        LockoutRecoveryBackupCodeView.as_view(),
+        name="lockout_recovery_backup_code",
+    ),
     # HTMX/API Endpoints
     path("api/workitems/<uuid:pk>/status/", WorkItemStatusUpdateView.as_view(), name="workitem_status_update"),
     path("api/clients/autocomplete/", ClientAutocompleteView.as_view(), name="client_autocomplete"),

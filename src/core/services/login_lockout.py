@@ -64,11 +64,16 @@ def is_locked(user) -> bool:
         return qs.count() >= LOCKOUT_THRESHOLD
 
 
-def unlock(user, unlocked_by, ip_address=None) -> AuditLog:
+def unlock(user, unlocked_by, ip_address=None, trigger: str = "admin") -> AuditLog:
     """Record a LOGIN_UNLOCK audit entry for the user.
 
     Subsequent `is_locked(user)` calls ignore LOGIN_FAILED entries with
     `timestamp <= this_entry.timestamp`.
+
+    ``trigger`` documents the recovery path (Refs #869): ``"admin"`` (Admin-
+    Action), ``"cli"`` (manage.py unlock), ``"password_reset"``,
+    ``"recovery_token"`` (dedizierter Token-Flow), ``"backup_code"``
+    (MFA-Recovery).
     """
     return audit_event(
         AuditLog.Action.LOGIN_UNLOCK,
@@ -76,6 +81,9 @@ def unlock(user, unlocked_by, ip_address=None) -> AuditLog:
         facility=getattr(user, "facility", None),
         target_type="User",
         target_id=str(user.pk),
-        detail={"unlocked_by": str(unlocked_by.pk) if unlocked_by else None},
+        detail={
+            "unlocked_by": str(unlocked_by.pk) if unlocked_by else None,
+            "trigger": trigger,
+        },
         ip_address=ip_address,
     )

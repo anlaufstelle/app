@@ -1,0 +1,54 @@
+{% load i18n static %}
+<!DOCTYPE html>
+<html lang="de" class="h-full">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% trans "Backup-Code einlösen" %} — Anlaufstelle</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body class="h-full bg-canvas flex items-center justify-center p-6">
+    <div class="w-full max-w-[380px] bg-surface border border-subtle rounded-[10px] p-7">
+        <h1 class="text-2xl font-bold text-ink mb-2">{% trans "Backup-Code einlösen" %}</h1>
+        <p class="text-sm text-ink-muted mb-6">
+            {% blocktrans %}Wenn Sie 2FA aktiviert haben, können Sie Ihr Konto mit einem Ihrer Backup-Codes entsperren. Jeder Code ist nur einmal gültig.{% endblocktrans %}
+        </p>
+
+        {% if form.errors %}
+        <div class="mb-4 p-3 bg-red-100 text-red-800 rounded-md text-sm" role="alert">
+            {% for field in form %}{% for error in field.errors %}<p>{{ error }}</p>{% endfor %}{% endfor %}
+            {% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}
+        </div>
+        {% endif %}
+
+        <form method="post" class="space-y-4" data-testid="recovery-backup-form">
+            {% csrf_token %}
+            <div>
+                <label for="id_username" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
+                    {% trans "Benutzername" %}
+                </label>
+                {{ form.username }}
+            </div>
+            <div>
+                <label for="id_backup_code" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
+                    {% trans "Backup-Code" %}
+                </label>
+                {{ form.backup_code }}
+            </div>
+            <button type="submit"
+                    class="w-full flex justify-center py-2.5 px-4 rounded-md text-[14px] font-semibold text-white bg-accent min-h-[44px]">
+                {% trans "Konto entsperren" %}
+            </button>
+        </form>
+
+        <div class="text-center mt-4 space-y-2">
+            <a href="{% url 'core:lockout_recovery_request' %}" class="text-[13px] text-ink-muted hover:underline block">
+                {% trans "Stattdessen Entsperr-Link per E-Mail" %}
+            </a>
+            <a href="{% url 'login' %}" class="text-[13px] text-accent hover:underline block">
+                {% trans "Zurück zur Anmeldung" %}
+            </a>
+        </div>
+    </div>
+</body>
+</html>

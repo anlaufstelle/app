@@ -1,0 +1,12 @@
+{% load i18n %}{% blocktrans with name=user.display_name|default:user.username %}Hallo {{ name }},{% endblocktrans %}
+
+{% blocktrans %}Sie (oder jemand mit Ihrer E-Mail-Adresse) hat um eine Entsperrung Ihres Anlaufstelle-Kontos gebeten.{% endblocktrans %}
+
+{% blocktrans %}Bitte klicken Sie den folgenden Link, um Ihr Konto zu entsperren:{% endblocktrans %}
+
+{{ confirm_url }}
+
+{% blocktrans %}Der Link ist 30 Minuten gültig. Wenn Sie diese Anfrage nicht gestellt haben, können Sie diese E-Mail ignorieren.{% endblocktrans %}
+
+—
+Anlaufstelle

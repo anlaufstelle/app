@@ -17,6 +17,7 @@ from core.models import AuditLog, User
 from core.services.audit import log_audit_event
 from core.services.audit_hash import hmac_hash_email
 from core.services.login_lockout import is_locked
+from core.services.login_lockout import unlock as unlock_user
 
 logger = logging.getLogger(__name__)
 
@@ -160,6 +161,24 @@ class RateLimitedPasswordResetView(auth_views.PasswordResetView):
             detail={"email_hash": hmac_hash_email(email)} if email else {},
         )
         return super().form_valid(form)
+
+
+class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
+    """Password-Reset, der zugleich einen aktiven Account-Lockout aufhebt (Refs #869).
+
+    Ein erfolgreich abgeschlossener Reset (gueltiges Token + neues Passwort)
+    ist ein starker Vertrauensanker: der User hat E-Mail-Kontrolle bewiesen
+    und ein neues Passwort gesetzt. Daher schreiben wir einen LOGIN_UNLOCK-
+    AuditLog — nachfolgende ``is_locked()``-Pruefungen ignorieren alle
+    LOGIN_FAILED-Eintraege bis zu diesem Zeitpunkt.
+    """
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        user = form.user
+        if user is not None and getattr(user, "pk", None):
+            unlock_user(user, unlocked_by=None, ip_address=None, trigger="password_reset")
+        return response
 
 
 class CustomPasswordChangeView(auth_views.PasswordChangeView):
