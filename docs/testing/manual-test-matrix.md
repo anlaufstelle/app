@@ -6030,7 +6030,189 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 ### A11Y — Accessibility (WCAG-Stichproben)
 
-> **Bereich (Refs #912).** Manuelle Stichproben — **kein** systematischer WCAG 2.1 AA-Audit ( gesperrt; siehe #470), kein axe-core / Pa11y. Cases werden in #912 als eigener Commit ergänzt.
+> **Bereich (Refs #912).** Manuelle Stichproben — **kein** systematischer WCAG 2.1 AA-Audit ( gesperrt; siehe #470), kein axe-core / Pa11y. Ziel: Regressionen in häufig genutzten Flows erkennen, nicht Compliance-Zertifizierung.
+
+<details open>
+
+### TC-ID: ENT-A11Y-01 — Tastaturbedienung Hauptnavigation
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Accessibility | fachkraft | C/F |||
+
+**Schritte:**
+1. Auf Dashboard einloggen.
+2. Ohne Maus, nur per `Tab` durch die Hauptnavigation tabben.
+3. Pro Navigationspunkt: `Enter` aktiviert den Link.
+4. `Shift+Tab` führt zurück.
+5. `Escape` schließt offene Dropdown-Menüs.
+
+**Erwartetes Ergebnis:**
+- Jeder Navigationspunkt ist per Tab erreichbar.
+- Tab-Reihenfolge entspricht der visuellen Reihenfolge (oben→unten, links→rechts).
+- Keine Fokus-Falle: man kann auch wieder rauf-tabben.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-A11Y-02 — Sichtbarer Fokus auf interaktiven Elementen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Accessibility | fachkraft | C/F/S |||
+
+**Schritte:**
+1. Per Tab durch ein Formular (z.B. Event anlegen).
+2. Pro Element prüfen: sichtbarer Fokus-Ring vorhanden?
+3. Auch bei Buttons, Links, Form-Feldern, Toggles.
+
+**Erwartetes Ergebnis:**
+- Jedes fokussierte Element zeigt einen erkennbaren Fokus-Indikator.
+- Kontrast Fokus-Indikator zum Hintergrund ist deutlich (≥ 3:1).
+- Kein `outline: none` ohne Ersatz-Indikator.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-A11Y-03 — Fokus-Reihenfolge in Formularen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Accessibility | fachkraft | C |||
+
+**Schritte:**
+1. Event-Edit-Formular öffnen mit dynamisch generierten Feldern.
+2. Per Tab durchgehen.
+3. Reihenfolge: oben→unten, niemals Sprünge.
+4. Auch HTMX-nachgeladene Felder müssen nach Sortierung tabbar sein.
+
+**Erwartetes Ergebnis:**
+- Tab-Reihenfolge folgt der visuellen Layout-Reihenfolge.
+- Nach HTMX-Swap: neuer Inhalt ist in Tab-Reihenfolge integriert.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-A11Y-04 — Modal/Dialog Fokusfalle
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Accessibility | fachkraft | C/F |||
+
+**Schritte:**
+1. Bestätigungsdialog öffnen (z.B. Klient soft-deleten).
+2. Per Tab durch die Dialog-Buttons.
+3. Tab nach letztem Button: springt zum ersten zurück (Fokusfalle).
+4. `Escape` schließt den Dialog, Fokus geht zurück zum Auslöser-Element.
+
+**Erwartetes Ergebnis:**
+- Tab-Fokus bleibt im offenen Dialog.
+- Escape funktioniert.
+- Hintergrund-Inhalt ist nicht per Tab erreichbar, solange der Dialog offen ist.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-A11Y-05 — Screen-Reader-Labels für Icon-Buttons
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Accessibility | fachkraft | C |||
+
+**Schritte:**
+1. DevTools-Accessibility-Tree öffnen oder VoiceOver/NVDA aktivieren.
+2. Icon-Buttons in Tabellen (Edit/Delete/Show) untersuchen.
+3. Jedes Icon hat ein `aria-label`, `title` oder sichtbaren Text.
+
+**Erwartetes Ergebnis:**
+- Kein Icon-Button ohne semantisches Label.
+- Screen-Reader liest sinnvolle Aktionen, nicht „Button-svg".
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-A11Y-06 — Fehlermeldungen mit Formularfeldern verknüpft
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Accessibility | fachkraft | C |||
+
+**Schritte:**
+1. Event-Form absenden mit leerem Pflichtfeld.
+2. Validierungsfehler wird angezeigt.
+3. DevTools: Fehler-Element ist per `aria-describedby` mit dem Feld verknüpft.
+4. Feld selbst hat `aria-invalid="true"`.
+
+**Erwartetes Ergebnis:**
+- Screen-Reader liest beim Fokussieren des Felds die Fehlermeldung.
+- Fehler-Text ist visuell beim Feld, nicht nur global im Toast.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-A11Y-07 — Farbkontrast Badges/Alerts/Buttons
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Accessibility | fachkraft | C |||
+
+**Schritte:**
+1. DevTools-Contrast-Checker auf Badges (Status, Priorität).
+2. Auf Alert-Toast-Hintergründe (success/warning/error).
+3. Auf Primary-Buttons.
+
+**Erwartetes Ergebnis:**
+- Text/Hintergrund-Kontrast für normale Schriftgröße ≥ 4.5:1 (WCAG AA).
+- Für große Schrift (≥ 18.66px bold) ≥ 3:1.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-A11Y-08 — Reduced-Motion-Verhalten
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Accessibility | fachkraft | C/F |||
+
+**Schritte:**
+1. OS-Setting `prefers-reduced-motion: reduce` aktivieren (macOS: Bedienungshilfen, Windows: Vereinfachte Darstellung, DevTools: Rendering-Panel).
+2. App-Animationen (Modal-Slide-In, Toast-Fade, HTMX-Transitions) auslösen.
+
+**Erwartetes Ergebnis:**
+- Animationen sind reduziert oder ausgeschaltet.
+- Keine schnellen Flicker oder Parallax-Effekte.
+- Funktionale Bewegung (Scroll-to-Element) bleibt erlaubt.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-A11Y-09 — Mobile Zoom 200 % ohne Layoutbruch
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Accessibility | fachkraft | C | ✓ ||
+
+**Schritte:**
+1. Mobile-Viewport (375×812, iPhone-SE-Size) in DevTools setzen.
+2. Browser-Zoom auf 200 % (Strg/Cmd+Plus mehrmals).
+3. Dashboard, Klient-Liste, Event-Form durchgehen.
+
+**Erwartetes Ergebnis:**
+- Kein horizontales Scrollen (Reflow funktioniert).
+- Buttons und Links sind weiterhin tap-fähig (Touch-Target ≥ 44×44 px).
+- Keine abgeschnittenen Texte.
+
+**Status:** ☐ Offen
+
+</details>
 
 ---
 
