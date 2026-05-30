@@ -58,6 +58,12 @@ services:
       CLAMAV_HOST: clamav
     volumes:
       - media_dev:/data
+      # Refs #871: BACKUP_DIR aus .env.dev (Default /var/backups/anl) muss
+      # fuer die Health-Card im /system/-Dashboard read-only erreichbar
+      # sein, sonst zeigt der ``last_backup_info``-Check immer
+      # "Kein Backup gefunden". Bind-Mount in denselben Pfad, damit
+      # ``settings.BACKUP_DIR`` ohne Pfad-Mapping greift.
+      - ${BACKUP_DIR:-/var/backups/anl}:${BACKUP_DIR:-/var/backups/anl}:ro
     depends_on:
       db:
         condition: service_healthy
