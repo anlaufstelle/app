@@ -5,6 +5,8 @@ import uuid
 
 import pytest
 
+from tests.e2e._selectors import find_client_link
+
 pytestmark = pytest.mark.e2e
 
 
@@ -24,7 +26,7 @@ class TestClientEdit:
         """Navigiert zum Edit-Formular eines bestimmten Clients."""
         page.goto(f"{base_url}/clients/?q={pseudonym}")
         page.wait_for_load_state("domcontentloaded")
-        page.locator(f"a:has-text('{pseudonym}')").first.click()
+        find_client_link(page, pseudonym).click()
         page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/"))
         page.click("a:has-text('Bearbeiten')")
         page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/edit/"))
@@ -89,7 +91,7 @@ class TestClientEditPermissions:
         admin = authenticated_page
         admin.goto(f"{base_url}/clients/?q=Sonne-99")
         admin.wait_for_load_state("domcontentloaded")
-        admin.locator("a:has-text('Sonne-99')").first.click()
+        find_client_link(admin, "Sonne-99").click()
         admin.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/"))
         client_pk = re.search(r"/clients/([0-9a-f-]+)/", admin.url).group(1)
 
