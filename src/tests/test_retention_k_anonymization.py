@@ -1,21 +1,21 @@
-"""RF-T06: Charakterisierungstests fuer K-Anonymisierung (Refs #776).
+"""RF-T06 + Wire-Up: K-Anonymisierung im Retention-Pfad (Refs #776, #780).
 
-Drei Cases:
+Vier Cases:
 
 1. ``k=5`` mit ≥5 Klienten in derselben Aequivalenzklasse → ``is_k_anonymous``
    liefert True.
 2. ``k=5`` mit <5 Klienten → ``is_k_anonymous`` liefert False.
-3. Negativtest: ``Settings.retention_use_k_anonymization=False`` (Default)
-   tut **nichts** im Retention-Pfad. Das Setting ist heute dead code; der
-   Pipeline ruft ``client.anonymize()`` (Hard-Anonymize) auf, nie
-   ``k_anonymize_client``. Dieser Test verankert den Status Quo, damit
-   ein zukuenftiger Aktivierungs-PR (Sprint 2/3) bewusst gegen das
-   Charakterisierungsverhalten arbeitet, statt es heimlich zu kippen.
+3. ``Settings.retention_use_k_anonymization=False`` (Default) → Pipeline ruft
+   ``client.anonymize()`` (Hard-Anonymize), Pseudonym beginnt mit ``Gelöscht-``.
+4. ``Settings.retention_use_k_anonymization=True`` → Pipeline ruft
+   ``k_anonymize_client(client, k=facility.settings.k_anonymity_threshold)``,
+   Pseudonym beginnt mit ``anon-`` und ``k_anonymized=True``.
 """
 
 from __future__ import annotations
 
 import pytest
+from django.core.management import call_command
 from django.utils import timezone
 
 from core.models import Client, Event, Settings
@@ -50,25 +50,13 @@ class TestKAnonymity:
         target = _make_client(facility, pseudonym="P-target")
         assert is_k_anonymous(target, k=5) is False
 
-    def test_setting_retention_use_k_anonymization_is_no_op_today(
+    def test_setting_disabled_uses_hard_anonymize(
         self, facility, staff_user, doc_type_contact, client_identified
     ):
-        """Charakterisierung: das Setting ``retention_use_k_anonymization``
-        wird heute vom Retention-Pfad nicht gelesen.
-
-        Setup: ein Klient mit einem soft-deleted Event → der
-        Anonymisierungs-Trigger feuert. Auch wenn das Setting auf False
-        steht (Default), wird der Klient via ``client.anonymize()``
-        anonymisiert (Pseudonym beginnt mit ``Gelöscht-``), nicht via
-        K-Anonymize (Pseudonym beginnt mit ``anon-``).
-
-        Dieser Test wird beim spaeteren Aktivierungs-PR wissentlich
-        umgestossen — er signalisiert, dass das Setting bisher dead code
-        ist, und zwingt eine bewusste Entscheidung.
-        """
+        """Setting=False (Default) → ``client.anonymize()``-Pfad (Refs #780)."""
         Settings.objects.create(
             facility=facility,
-            retention_use_k_anonymization=True,  # << heute irrelevant
+            retention_use_k_anonymization=False,
             k_anonymity_threshold=5,
         )
         Event.objects.create(
@@ -77,21 +65,70 @@ class TestKAnonymity:
             document_type=doc_type_contact,
             occurred_at=timezone.now(),
             data_json={"dauer": 1},
-            is_deleted=True,  # alle Events soft-deleted → Trigger greift
+            is_deleted=True,
             created_by=staff_user,
         )
 
         anonymize_clients(facility, dry_run=False)
 
         client_identified.refresh_from_db()
-        # Status Quo: Hard-Anonymize, nicht K-Anonymize.
-        assert client_identified.pseudonym.startswith("Gelöscht-"), (
-            "Aktueller Pfad: client.anonymize() → Pseudonym 'Gelöscht-...'"
-        )
-        assert not client_identified.pseudonym.startswith("anon-"), (
-            "K-Anonymize-Pfad ist nicht angeschlossen — wenn dieser Assert "
-            "kippt, hat ein PR den Aktivierungs-Schritt vorgenommen, ohne "
-            "RF-T06 mit zu aktualisieren. Refs #776."
-        )
-        # k_anonymized-Flag bleibt entsprechend False.
+        assert client_identified.pseudonym.startswith("Gelöscht-")
+        assert not client_identified.pseudonym.startswith("anon-")
         assert client_identified.k_anonymized is False
+
+    def test_setting_enabled_uses_k_anonymize(
+        self, facility, staff_user, doc_type_contact, client_identified
+    ):
+        """Setting=True → ``k_anonymize_client()``-Pfad mit Schwelle aus
+        ``k_anonymity_threshold`` (Refs #780, Pfad A im Issue-Body)."""
+        Settings.objects.create(
+            facility=facility,
+            retention_use_k_anonymization=True,
+            k_anonymity_threshold=5,
+        )
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 1},
+            is_deleted=True,
+            created_by=staff_user,
+        )
+
+        anonymize_clients(facility, dry_run=False)
+
+        client_identified.refresh_from_db()
+        assert client_identified.pseudonym.startswith("anon-"), (
+            "K-Anon-Pfad muss greifen, sobald Setting aktiv ist."
+        )
+        assert not client_identified.pseudonym.startswith("Gelöscht-")
+        assert client_identified.k_anonymized is True
+        assert client_identified.notes == ""
+        assert client_identified.is_active is False
+
+    def test_enforce_retention_command_uses_k_anon_when_enabled(
+        self, facility, staff_user, doc_type_contact, client_identified
+    ):
+        """End-to-End: ``call_command('enforce_retention')`` wendet den
+        K-Anon-Pfad an, wenn das Facility-Setting es verlangt (Refs #780)."""
+        Settings.objects.create(
+            facility=facility,
+            retention_use_k_anonymization=True,
+            k_anonymity_threshold=5,
+        )
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 1},
+            is_deleted=True,
+            created_by=staff_user,
+        )
+
+        call_command("enforce_retention")
+
+        client_identified.refresh_from_db()
+        assert client_identified.pseudonym.startswith("anon-")
+        assert client_identified.k_anonymized is True
