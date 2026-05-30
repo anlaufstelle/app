@@ -58,6 +58,15 @@ class AuditLog(models.Model):
         # Refs #874: Wartungsmodus-Toggle ueber den Systembereich.
         MAINTENANCE_ENABLED = "maintenance_enabled", _("Wartungsmodus aktiviert")
         MAINTENANCE_DISABLED = "maintenance_disabled", _("Wartungsmodus deaktiviert")
+        # Refs #919: persistenter LastRun-Marker fuer enforce_retention.
+        # Compliance-Dashboard liest den juengsten Eintrag, um zu zeigen,
+        # ob der Cron-Job wirklich laeuft.
+        RETENTION_RUN_COMPLETED = "retention_run_completed", _("Retention-Lauf abgeschlossen")
+        # Refs #919: persistenter Marker fuer einen erfolgreichen
+        # Restore-Test. Wird per ``manage.py mark_restore_verified``
+        # vom Operator manuell gesetzt, nachdem ein Restore gegen eine
+        # frische DB verifiziert wurde.
+        RESTORE_VERIFIED = "restore_verified", _("Restore-Test verifiziert")
 
     objects = FacilityScopedManager()
 
