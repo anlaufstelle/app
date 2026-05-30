@@ -337,6 +337,62 @@ Commits sind atomar: eine logische Änderung pro Commit. Direkt nach jeder Aufga
 
 ## Tests
 
+### Test-Driven Development (Unit/Service)
+
+Seit 2026-05-20 ist Test-Driven Development für die Unit-/Service-Schicht verpflichtend. Reihenfolge **vor** jeder Service-, Form-, Model- oder CBV-Änderung:
+
+1. **Red** — pytest-Test in der passenden Datei unter `src/tests/` schreiben, der das gewünschte Verhalten beschreibt, aber heute fehlschlägt. Test mit `pytest -x` ausführen und prüfen, dass er mit dem erwarteten `AssertionError` rot wird.
+2. **Green** — minimale Implementation in `src/core/...`, bis genau dieser Test grün wird. Keine zusätzlichen Features, keine vorgezogene Verallgemeinerung.
+3. **Refactor** — Code (und ggf. Test) aufräumen, während die Suite grün bleibt. `pytest -x` nach jedem Cleanup-Schritt.
+
+Beispiel (Service-Schicht, Pseudonym-Hashing aus [Issue #844](https://github.com/anlaufstelle/app/issues/844)):
+
+```python
+# Red — src/tests/test_pseudonym_hashing.py
+def test_client_pseudonym_hash_is_stable():
+    from django.conf import settings
+    settings.PSEUDONYM_HMAC_KEY = "test-key"
+
+    from core.services.audit_hash import hmac_pseudonym
+    assert hmac_pseudonym("anlauf-2026-0001") == hmac_pseudonym("anlauf-2026-0001")
+    assert hmac_pseudonym("anlauf-2026-0001") != hmac_pseudonym("anlauf-2026-0002")
+```
+
+```bash
+pytest src/tests/test_pseudonym_hashing.py -x
+# → ModuleNotFoundError / ImportError → erwartetes Red.
+```
+
+```python
+# Green — src/core/services/audit_hash.py
+import hmac, hashlib
+from django.conf import settings
+
+def hmac_pseudonym(pseudonym: str) -> str:
+    key = settings.PSEUDONYM_HMAC_KEY.encode()
+    return hmac.new(key, pseudonym.encode(), hashlib.sha256).hexdigest()
+```
+
+```bash
+pytest src/tests/test_pseudonym_hashing.py -x
+# → 1 passed → Green.
+```
+
+**Refactor:** etwa Auslagerung der Key-Auflösung in Helper, sobald ein zweiter Hash-Anwendungsfall existiert — Test bleibt grün.
+
+**Geltungsbereich** (TDD-Pflicht):
+
+- Service-, Form-, Model-, Helper-, CBV-/View-Unit-Tests, also alles unter `src/tests/` außerhalb von `src/tests/e2e/`.
+
+**Ausnahmen** (manuell-first / TDD-neutral):
+
+- **E2E-Tests** in `src/tests/e2e/` bleiben wie bisher Playwright-getrieben — erst manuell durchklicken (siehe `### End-to-End-Tests (Playwright)`), dann Tests aus der Beobachtung schreiben.
+- Django-Migrations-Generierung, Squash-Migrations, Tooling-/Konfig-Patches (CI-Schwellen, Whitelists, `pyproject.toml`).
+- Reine Markdown-/Doku-Änderungen.
+- One-Shot-Hygiene-Skripte ohne Wiederverwendung.
+
+Querverweise: [`CLAUDE.md § Tests & Verifikation`](CLAUDE.md#tests--verifikation) und Skill `superpowers:test-driven-development`.
+
 ### Unit- und Integrationstests
 
 ```bash
