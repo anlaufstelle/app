@@ -12,7 +12,7 @@ from core.models.recent_client_visit import RecentClientVisit
 from core.models.workitem import DeletionRequest
 from core.services._db_admin import bypass_replication_triggers
 from core.services.activity import log_activity
-from core.services.audit import audit_client_event
+from core.services.audit import audit_client_event, audit_event
 from core.services.locking import check_version_conflict
 
 logger = logging.getLogger(__name__)
@@ -283,6 +283,9 @@ def request_client_deletion(client, user, reason):
 
     Idempotent: wenn bereits ein PENDING-Antrag existiert, wird dieser
     zurückgegeben (analog zu Event-Pfad in services/event.request_deletion).
+    Im Idempotenz-Fall wird KEIN neues Audit-Event geschrieben
+    (Refs #932) — der DELETION_REQUESTED-Eintrag existiert bereits vom
+    ersten Aufruf.
 
     Aufruf: Fachkraft+ aus dem UI. Genehmigung erfolgt durch Leitung
     via :func:`approve_client_deletion`.
@@ -295,13 +298,22 @@ def request_client_deletion(client, user, reason):
     ).first()
     if existing is not None:
         return existing
-    return DeletionRequest.objects.create(
+    dr = DeletionRequest.objects.create(
         facility=client.facility,
         target_type=DeletionRequest.TargetType.CLIENT,
         target_id=client.pk,
         reason=reason,
         requested_by=user,
     )
+    audit_event(
+        action=AuditLog.Action.DELETION_REQUESTED,
+        user=user,
+        facility=client.facility,
+        target_type="DeletionRequest",
+        target_id=str(dr.pk),
+        detail={"reason": reason, "target_client": str(client.pk)},
+    )
+    return dr
 
 
 @transaction.atomic

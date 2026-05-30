@@ -67,6 +67,13 @@ class AuditLog(models.Model):
         # vom Operator manuell gesetzt, nachdem ein Restore gegen eine
         # frische DB verifiziert wurde.
         RESTORE_VERIFIED = "restore_verified", _("Restore-Test verifiziert")
+        # Refs #932: 4-Augen-Lösch-Workflow — pro Workflow-Stufe ein
+        # dedizierter AuditLog-Eintrag (DSGVO Art. 5(2) Rechenschaftspflicht).
+        # Generisch über target_type="DeletionRequest" — funktioniert sowohl
+        # für Event- als auch Client-Lösch-Anträge.
+        DELETION_REQUESTED = "deletion_requested", _("Löschung beantragt")
+        DELETION_APPROVED = "deletion_approved", _("Löschung genehmigt")
+        DELETION_REJECTED = "deletion_rejected", _("Löschung abgelehnt")
 
     objects = FacilityScopedManager()
 
