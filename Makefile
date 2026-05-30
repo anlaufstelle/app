@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status clean
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status clean test-matrix-index test-matrix-index-check
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -148,6 +148,16 @@ deps-check:
 			echo "Lock-Files sind nicht aktuell — 'make deps-lock' ausführen."; \
 			exit 1; \
 		fi
+
+# Manual-Test-Matrix-Index neu generieren + Anhang C der Matrix mit Per-
+# Bereich-Coverage befüllen (Refs #909, #916).
+test-matrix-index:
+	$(PYTHON) scripts/build_test_matrix_index.py
+
+# CI-Check: failt, wenn der Index oder Anhang C nicht mehr zur Matrix passen.
+# Ergänzt zu Pre-Commit-Hooks oder einem optionalen ci-Schritt.
+test-matrix-index-check:
+	$(PYTHON) scripts/build_test_matrix_index.py --check
 
 # Generated artefacts loswerden (Refs #896 / FND-012).
 # Nicht angefasst: src/media/ (Datenverlustrisiko) und .venv/.

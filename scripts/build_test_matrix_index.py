@@ -2,21 +2,33 @@
 """Generate ``docs/testing/test-matrix-index.md`` from the Manual-Test-Matrix.
 
 Parses ``docs/testing/manual-test-matrix.md`` and renders a compact
-overview table per section (A/B/C) plus a totals block. The output file
+overview table per section (A/B/C/D) plus a totals block. The output file
 is regenerated between ``<!-- INDEX-AUTOGEN:START -->`` and
 ``<!-- INDEX-AUTOGEN:END -->`` markers; any manual content above the
 start marker (e.g. introductions, notes) is preserved.
 
+Refs #909: Patcht zusätzlich den **Anhang C** in
+``manual-test-matrix.md`` zwischen ``<!-- ANHANG-C:START -->`` und
+``<!-- ANHANG-C:END -->`` mit einer per-Bereich-Coverage-Tabelle.
+Wenn die Marker fehlen, wird der Matrix-Patch übersprungen (Index
+bleibt erhalten).
+
+Refs #916: Erweitert den Index um Listen für Automatisierungs-
+kandidaten (Manuell-only nach Sektion), LOKAL/SSH-Cases und
+Security/DSGVO-Cases ohne E2E.
+
 Run via::
 
     python scripts/build_test_matrix_index.py
+    python scripts/build_test_matrix_index.py --check  # CI-Mode: Exit 1 wenn stale
 
-Idempotent: a second invocation produces a byte-identical file.
+Idempotent: a second invocation produces a byte-identical output.
 Stdlib only, no external dependencies. Refs #891.
 """
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from dataclasses import dataclass
@@ -28,6 +40,9 @@ TARGET = ROOT / "docs" / "testing" / "test-matrix-index.md"
 
 AUTOGEN_START = "<!-- INDEX-AUTOGEN:START -->"
 AUTOGEN_END = "<!-- INDEX-AUTOGEN:END -->"
+
+ANHANG_C_START = "<!-- ANHANG-C:START -->"
+ANHANG_C_END = "<!-- ANHANG-C:END -->"
 
 # Section A, C and D use ``#### <TC-ID> — <Title>``.
 # Section B uses ``### TC-ID: <TC-ID> — <Title>``.
@@ -49,7 +64,7 @@ SECTIONS = {
 class Test:
     tcid: str
     title: str
-    section: str  # "A" | "B" | "C"
+    section: str  # "A" | "B" | "C" | "D"
     bereich: str
     rolle: str
     browser: str
@@ -61,6 +76,10 @@ class Test:
     @property
     def has_e2e(self) -> bool:
         return self.e2e.strip() not in {"—", "-", ""}
+
+    @property
+    def is_local_ssh(self) -> bool:
+        return "LOKAL/SSH" in self.setup
 
 
 def section_for(tcid: str) -> str:
@@ -226,10 +245,135 @@ def render_index(tests: list[Test]) -> str:
         lines.extend(render_table(by_section[sec_key]))
         lines.append("")
 
+    # Refs #916: Zusatzlisten für Automatisierungskandidaten, LOKAL/SSH,
+    # Security/DSGVO ohne E2E.
+    lines.extend(render_extras(tests))
+
     return "\n".join(lines).rstrip() + "\n"
 
 
-def write_index(content: str, target: Path) -> None:
+def _row_link(t: Test) -> str:
+    anchor_text = f"{t.tcid} — {t.title}" if t.section in {"A", "C", "D"} else f"TC-ID: {t.tcid} — {t.title}"
+    anchor = github_slug(anchor_text)
+    return f"[`{t.tcid}`](manual-test-matrix.md#{anchor})"
+
+
+def render_extras(tests: list[Test]) -> list[str]:
+    """Refs #916: ergänzende Listen unter dem Index — gleicher Autogen-Block."""
+    lines: list[str] = []
+
+    # 1) Automatisierungskandidaten: Manuell-only nach Sektion.
+    manuell_only = sorted([t for t in tests if not t.has_e2e], key=lambda t: (t.section, t.tcid))
+    lines.append("## Automatisierungskandidaten (Manuell-only)")
+    lines.append("")
+    lines.append(
+        "> Refs [#916](https://github.com/tobiasnix/anlaufstelle/issues/916): Cases ohne E2E-Spiegelung "
+        "sind potenzielle Kandidaten zur Automatisierung. Sortiert nach Sektion + TC-ID."
+    )
+    lines.append("")
+    if not manuell_only:
+        lines.append("_Aktuell keine Manuell-only-Cases._")
+        lines.append("")
+    else:
+        lines.append("| TC-ID | Bezeichnung | Sektion | Bereich | Rolle | Setup |")
+        lines.append("|-------|-------------|---------|---------|-------|-------|")
+        for t in manuell_only:
+            title = t.title.replace("|", "\\|")
+            lines.append(f"| {_row_link(t)} | {title} | {t.section} | {t.bereich} | {t.rolle} | {t.setup} |")
+        lines.append("")
+
+    # 2) 🔧 LOKAL/SSH-Cases.
+    lokal = sorted([t for t in tests if t.is_local_ssh], key=lambda t: (t.section, t.tcid))
+    lines.append("## 🔧 LOKAL/SSH-Cases")
+    lines.append("")
+    lines.append(
+        "> Refs [#916](https://github.com/tobiasnix/anlaufstelle/issues/916): Cases, die direkten "
+        "Server-Zugriff brauchen (`docker compose exec web python manage.py …`, `psql`, …)."
+    )
+    lines.append("")
+    if not lokal:
+        lines.append("_Aktuell keine LOKAL/SSH-Cases._")
+        lines.append("")
+    else:
+        lines.append("| TC-ID | Bezeichnung | Sektion | Bereich |")
+        lines.append("|-------|-------------|---------|---------|")
+        for t in lokal:
+            title = t.title.replace("|", "\\|")
+            lines.append(f"| {_row_link(t)} | {title} | {t.section} | {t.bereich} |")
+        lines.append("")
+
+    # 3) Security/DSGVO ohne E2E.
+    sec_dsgvo = sorted(
+        [t for t in tests if t.section == "C" and not t.has_e2e],
+        key=lambda t: t.tcid,
+    )
+    lines.append("## Security/DSGVO-Cases ohne E2E-Coverage")
+    lines.append("")
+    lines.append(
+        "> Refs [#916](https://github.com/tobiasnix/anlaufstelle/issues/916): Sektion-C-Cases ohne "
+        "automatisierte Spiegelung — höchste Priorität für nachfolgende E2E-/Architekturtests."
+    )
+    lines.append("")
+    if not sec_dsgvo:
+        lines.append("_Alle Sektion-C-Cases haben E2E-Coverage._")
+        lines.append("")
+    else:
+        lines.append("| TC-ID | Bezeichnung | Bereich |")
+        lines.append("|-------|-------------|---------|")
+        for t in sec_dsgvo:
+            title = t.title.replace("|", "\\|")
+            lines.append(f"| {_row_link(t)} | {title} | {t.bereich} |")
+        lines.append("")
+
+    return lines
+
+
+def render_anhang_c(tests: list[Test]) -> str:
+    """Refs #909: Per-Bereich-Coverage-Tabelle für Matrix-Anhang C."""
+    by_section_bereich: dict[tuple[str, str], list[Test]] = {}
+    for t in tests:
+        by_section_bereich.setdefault((t.section, t.bereich), []).append(t)
+
+    lines: list[str] = []
+    lines.append("**Per-Bereich-Statistik (auto-generiert):**")
+    lines.append("")
+    lines.append("| Sektion | Bereich | Cases | mit E2E | Manuell-only | E2E-Quote |")
+    lines.append("|---------|---------|------:|--------:|-------------:|----------:|")
+    for (section, bereich), group in sorted(by_section_bereich.items()):
+        n = len(group)
+        with_e2e = sum(1 for t in group if t.has_e2e)
+        manuell = n - with_e2e
+        quote = f"{(with_e2e / n * 100):.0f} %" if n else "—"
+        lines.append(f"| {section} | {bereich} | {n} | {with_e2e} | {manuell} | {quote} |")
+
+    # Sektion-Totals + Gesamt.
+    lines.append("")
+    lines.append("**Sektion-Totals:**")
+    lines.append("")
+    lines.append("| Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |")
+    lines.append("|---------|------:|--------:|-------------:|----------:|")
+    for sec_key in ("A", "B", "C", "D"):
+        group = [t for t in tests if t.section == sec_key]
+        n = len(group)
+        with_e2e = sum(1 for t in group if t.has_e2e)
+        manuell = n - with_e2e
+        quote = f"{(with_e2e / n * 100):.0f} %" if n else "—"
+        lines.append(f"| {sec_key} | {n} | {with_e2e} | {manuell} | {quote} |")
+    total = len(tests)
+    total_e2e = sum(1 for t in tests if t.has_e2e)
+    total_manuell = total - total_e2e
+    total_quote = f"{(total_e2e / total * 100):.0f} %" if total else "—"
+    lines.append(f"| **Gesamt** | **{total}** | **{total_e2e}** | **{total_manuell}** | **{total_quote}** |")
+    lines.append("")
+    lines.append(
+        "> Auto-generiert per `python scripts/build_test_matrix_index.py` "
+        "([#909](https://github.com/tobiasnix/anlaufstelle/issues/909))."
+    )
+
+    return "\n".join(lines) + "\n"
+
+
+def write_index(content: str, target: Path) -> str:
     autogen_block = f"{AUTOGEN_START}\n{content}{AUTOGEN_END}\n"
 
     if target.exists():
@@ -242,7 +386,7 @@ def write_index(content: str, target: Path) -> None:
             if suffix.strip():
                 new += suffix if suffix.startswith("\n") else "\n" + suffix
             target.write_text(new, encoding="utf-8")
-            return
+            return new
 
     header = (
         "# Manual-Test-Matrix — Index\n"
@@ -252,10 +396,63 @@ def write_index(content: str, target: Path) -> None:
         "> Bei Änderungen an der Matrix neu generieren.\n"
         "\n"
     )
-    target.write_text(f"{header}{autogen_block}", encoding="utf-8")
+    out = f"{header}{autogen_block}"
+    target.write_text(out, encoding="utf-8")
+    return out
 
 
-def main() -> int:
+def patch_anhang_c(content: str, source: Path) -> tuple[bool, str | None]:
+    """Refs #909: Anhang-C-Block in der Matrix mit Per-Bereich-Stats füllen.
+
+    Returns ``(changed, error_or_None)``. Wenn die Marker fehlen,
+    wird die Matrix nicht angefasst und ``(False, None)`` zurückgegeben.
+    """
+    existing = source.read_text(encoding="utf-8")
+    if ANHANG_C_START not in existing or ANHANG_C_END not in existing:
+        return False, None
+    block = f"{ANHANG_C_START}\n{content}{ANHANG_C_END}"
+    prefix, _, rest = existing.partition(ANHANG_C_START)
+    _, _, suffix = rest.partition(ANHANG_C_END)
+    new = f"{prefix}{block}{suffix}"
+    if new == existing:
+        return False, None
+    source.write_text(new, encoding="utf-8")
+    return True, None
+
+
+def check_stale(tests: list[Test]) -> bool:
+    """Refs #916: True wenn Index bzw. Anhang C nicht zur Matrix passen."""
+    expected_index = render_index(tests)
+    if not TARGET.exists():
+        return True
+    existing_index = TARGET.read_text(encoding="utf-8")
+    if AUTOGEN_START not in existing_index or AUTOGEN_END not in existing_index:
+        return True
+    _, _, rest = existing_index.partition(AUTOGEN_START)
+    block, _, _ = rest.partition(AUTOGEN_END)
+    if block.strip() != expected_index.strip():
+        return True
+
+    expected_anhang = render_anhang_c(tests)
+    matrix_text = SOURCE.read_text(encoding="utf-8")
+    if ANHANG_C_START in matrix_text and ANHANG_C_END in matrix_text:
+        _, _, rest = matrix_text.partition(ANHANG_C_START)
+        block, _, _ = rest.partition(ANHANG_C_END)
+        # block ist normalisiert ohne Marker; expected_anhang endet auf "\n".
+        if block.strip("\n") != expected_anhang.strip("\n"):
+            return True
+    return False
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Generate Manual-Test-Matrix index.")
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Exit 1 if generated output differs from on-disk files (CI-Mode).",
+    )
+    args = parser.parse_args(argv)
+
     if not SOURCE.exists():
         print(f"ERROR: source matrix not found: {SOURCE}", file=sys.stderr)
         return 1
@@ -263,9 +460,26 @@ def main() -> int:
     if not tests:
         print("ERROR: no tests parsed — check matrix format", file=sys.stderr)
         return 1
+
+    if args.check:
+        if check_stale(tests):
+            print(
+                "STALE: test-matrix-index.md oder Anhang C in manual-test-matrix.md sind nicht aktuell. "
+                "Bitte `python scripts/build_test_matrix_index.py` ausführen und committen.",
+                file=sys.stderr,
+            )
+            return 1
+        print("OK: Index und Anhang C sind aktuell.")
+        return 0
+
     content = render_index(tests)
     write_index(content, TARGET)
-    print(f"Wrote {TARGET.relative_to(ROOT)} ({len(tests)} tests)")
+    anhang_content = render_anhang_c(tests)
+    changed, err = patch_anhang_c(anhang_content, SOURCE)
+    if err:
+        print(f"WARN: patch_anhang_c: {err}", file=sys.stderr)
+    suffix = f"; Anhang C {'aktualisiert' if changed else 'unverändert / keine Marker'}"
+    print(f"Wrote {TARGET.relative_to(ROOT)} ({len(tests)} tests){suffix}")
     return 0
 
 

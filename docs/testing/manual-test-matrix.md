@@ -8490,15 +8490,73 @@ Nach erfolgreichem Submit eines Forms: Browser-Back-Button drücken.
 
 ## Anhang C — E2E-Coverage-Bilanz
 
-> **Aktuelle Coverage-Bilanz:** [`test-matrix-index.md`](test-matrix-index.md) — wird per `python scripts/build_test_matrix_index.py` aus dieser Matrix generiert. Die Zahlen pro Sektion (gesamt, mit/ohne E2E, Quote) sind dort sektionsweise tabelliert.
+> **Aktuelle Coverage-Bilanz:** Die Per-Bereich-Tabelle unten wird per `python scripts/build_test_matrix_index.py` aus dieser Matrix generiert (Refs #909). Sektionsweite Zahlen plus Listen für Manuell-only, LOKAL/SSH und Security/DSGVO-ohne-E2E stehen im [`test-matrix-index.md`](test-matrix-index.md).
 
 Methodik:
 
 - **„Doppelt abgedeckt":** Pro Case die `E2E`-Spalte prüfen — falls nicht `—`, gilt der Case als doppelt abgedeckt.
 - **Manuell-only:** Cases mit `—` in der `E2E`-Spalte.
-- **Datenbasis für Folge-Tickets:** Manuell-only-Cases mit hoher Frequenz (jeder Release-Lauf) sind Kandidaten für Automatisierung. Tickets im Issue-Tracker mit Label `automate-manual-test` anlegen — die Liste wird voraussichtlich mit #916 und #909 ergänzt.
+- **Datenbasis für Folge-Tickets:** Manuell-only-Cases mit hoher Frequenz (jeder Release-Lauf) sind Kandidaten für Automatisierung. Tickets im Issue-Tracker mit Label `automate-manual-test` anlegen.
 
-> Hinweis: Bis #909 (auto-befüllter Anhang C) umgesetzt ist, sind die per-Bereich-Zahlen nicht in dieser Datei gepflegt — nur die Sektions-Gesamtzahlen im Index sind aktuell.
+<!-- ANHANG-C:START -->
+**Per-Bereich-Statistik (auto-generiert):**
+
+| Sektion | Bereich | Cases | mit E2E | Manuell-only | E2E-Quote |
+|---------|---------|------:|--------:|-------------:|----------:|
+| A | Tagesablauf | 12 | 10 | 2 | 83 % |
+| B | Accessibility | 9 | 0 | 9 | 0 % |
+| B | Acct | 5 | 5 | 0 | 100 % |
+| B | Attachments | 9 | 6 | 3 | 67 % |
+| B | Audit | 5 | 5 | 0 | 100 % |
+| B | Aufbewahrung | 2 | 2 | 0 | 100 % |
+| B | Auth | 10 | 10 | 0 | 100 % |
+| B | DSGVO | 8 | 8 | 0 | 100 % |
+| B | DeletionRequests | 5 | 4 | 1 | 80 % |
+| B | Episoden | 4 | 2 | 2 | 50 % |
+| B | Episoden / Permissions | 1 | 1 | 0 | 100 % |
+| B | Events | 10 | 5 | 5 | 50 % |
+| B | Fälle | 9 | 7 | 2 | 78 % |
+| B | Fälle / API | 1 | 0 | 1 | 0 % |
+| B | Fälle / Events | 2 | 0 | 2 | 0 % |
+| B | Klient:innen | 13 | 12 | 1 | 92 % |
+| B | Klient:innen / RLS | 1 | 1 | 0 | 100 % |
+| B | MFA | 9 | 9 | 0 | 100 % |
+| B | Meilensteine | 3 | 2 | 1 | 67 % |
+| B | Offline | 18 | 12 | 6 | 67 % |
+| B | Pwa | 5 | 5 | 0 | 100 % |
+| B | Statistik | 8 | 8 | 0 | 100 % |
+| B | Suche | 6 | 6 | 0 | 100 % |
+| B | Sudo | 4 | 4 | 0 | 100 % |
+| B | Sys | 6 | 5 | 1 | 83 % |
+| B | Wirkungsziele | 3 | 1 | 2 | 33 % |
+| B | Wirkungsziele / Meilensteine | 1 | 0 | 1 | 0 % |
+| B | WorkItems | 10 | 6 | 4 | 60 % |
+| B | Zeitstrom | 5 | 5 | 0 | 100 % |
+| B | Übergabe | 5 | 5 | 0 | 100 % |
+| C | Compliance | 14 | 11 | 3 | 79 % |
+| C | Security | 17 | 13 | 4 | 76 % |
+| D | Audit | 2 | 1 | 1 | 50 % |
+| D | Aufbewahrung | 9 | 8 | 1 | 89 % |
+| D | Compliance | 7 | 7 | 0 | 100 % |
+| D | DeletionRequests | 1 | 0 | 1 | 0 % |
+| D | Fälle / Kaskade | 2 | 0 | 2 | 0 % |
+| D | Klient:innen / Kaskade | 1 | 0 | 1 | 0 % |
+| D | Ops | 8 | 3 | 5 | 38 % |
+| D | Security | 7 | 5 | 2 | 71 % |
+| D | Statistik | 2 | 2 | 0 | 100 % |
+
+**Sektion-Totals:**
+
+| Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
+|---------|------:|--------:|-------------:|----------:|
+| A | 12 | 10 | 2 | 83 % |
+| B | 177 | 136 | 41 | 77 % |
+| C | 31 | 24 | 7 | 77 % |
+| D | 39 | 26 | 13 | 67 % |
+| **Gesamt** | **259** | **196** | **63** | **76 %** |
+
+> Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
+<!-- ANHANG-C:END -->
 
 ---
 
