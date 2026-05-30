@@ -126,7 +126,7 @@ class TestUserAdminSaveModel:
         request = _make_admin_request(rf, admin_user)
         admin_cls = UserAdmin(User, AdminSite())
 
-        with patch("core.admin.send_invite_email") as mock_send:
+        with patch("core.admin.users.send_invite_email") as mock_send:
             mock_send.return_value = True
             admin_cls.save_model(request, new_user, form=None, change=False)
 
@@ -157,7 +157,7 @@ class TestUserAdminSaveModel:
         request = _make_admin_request(rf, admin_user)
         admin_cls = UserAdmin(User, AdminSite())
 
-        with patch("core.admin.send_invite_email") as mock_send:
+        with patch("core.admin.users.send_invite_email") as mock_send:
             admin_cls.save_model(request, staff_user, form=None, change=True)
 
         mock_send.assert_not_called()
