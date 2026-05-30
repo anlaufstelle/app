@@ -235,6 +235,74 @@ Die globale CSP enthält jetzt `report-uri /csp-report/` ([`base.py:266-275`](..
 
 ---
 
+## GitHub-Repo-Härtung: Workflow-Permissions, SHA-Pinning, Branch Protection (Issue #888)
+
+**Status:** Permissions + SHA-Pinning umgesetzt; Branch-Protection-Ruleset wartet auf Repo-Public-Switch oder GitHub-Pro.
+
+### Hintergrund
+
+Am 11. Mai 2026 veröffentlichte ein Angreifer **84 bösartige Versionen** über 42 `@tanstack/*`-npm-Pakete, später ausgeweitet auf insgesamt ≈169 npm-Pakete und 4 PyPI-Pakete ([„Mini Shai-Hulud"](https://www.aikido.dev/blog/mini-shai-hulud-is-back-tanstack-compromised), [TanStack-Postmortem](https://tanstack.com/blog/npm-supply-chain-compromise-postmortem)). Anlaufstelle ist vom Vorfall selbst **nicht betroffen**:
+
+| Quelle | Geprüft | IoC-Treffer |
+|---|---|---|
+| [`package-lock.json`](../package-lock.json) | 73 Pakete, alle mit `integrity` | keine |
+| [`requirements.txt`](../requirements.txt) / [`requirements-dev.txt`](../requirements-dev.txt) | Django-/Playwright-Stack | keine |
+| `.github/workflows/*` | kein `pull_request_target`, kein `id-token: write` | nicht ausnutzbar |
+
+Trotzdem sind die folgenden drei Härtungen als Defense-in-Depth umgesetzt — sie greifen, sobald das Repo öffentlich wird (-Roadmap, Demo-Instanz).
+
+### Umgesetzt: Minimal-`permissions:`-Blocks
+
+Alle 7 Workflows haben jetzt einen expliziten `permissions:`-Block. Statt des Default-`GITHUB_TOKEN` mit Schreibrechten läuft jeder Workflow mit dem Minimum:
+
+| Workflow | Top-Level / Job | Permissions |
+|---|---|---|
+| [`codeql.yml`](../.github/workflows/codeql.yml) | Job | `actions: read`, `contents: read`, `security-events: write` |
+| [`dev-image.yml`](../.github/workflows/dev-image.yml) | Job | `contents: read`, `packages: write` (GHCR-Push) |
+| [`e2e.yml`](../.github/workflows/e2e.yml) | Top-Level | `contents: read` |
+| [`lint.yml`](../.github/workflows/lint.yml) | Top-Level | `contents: read` |
+| [`perf-nightly.yml`](../.github/workflows/perf-nightly.yml) | Top-Level | `contents: read`, `issues: write` |
+| [`release.yml`](../.github/workflows/release.yml) | Job | `contents: read`, `packages: write` (GHCR-Push) |
+| [`test.yml`](../.github/workflows/test.yml) | Top-Level | `contents: read` |
+
+`issues: write` in `perf-nightly` ist nötig, weil [`peter-evans/create-issue-from-file`](https://github.com/peter-evans/create-issue-from-file) bei einer Budget-Regression automatisch ein Issue anlegt.
+
+### Umgesetzt: SHA-Pinning aller Actions
+
+Alle 42 `uses:`-Referenzen über die 7 Workflows zeigen jetzt auf **40-stellige Commit-SHAs** statt auf Major-Tags. Format: `uses: <owner>/<action>@<sha> # vX.Y.Z`. Dependabot ist über das `github-actions`-Ökosystem in [`.github/dependabot.yml`](../.github/dependabot.yml) bereits konfiguriert (wöchentlich, Mo 06:00 Europe/Berlin) und aktualisiert SHA + Tag-Kommentar bei neuen Versionen automatisch.
+
+**Warum:** Tags sind mutierbar. Bei einer hypothetischen Action-Repo-Übernahme könnte ein Angreifer einen Tag auf einen bösartigen Commit verschieben — bei Anlaufstelle würde die nächste CI-Run dann den bösartigen Code ausführen. SHA-Pinning blockt diesen Vektor; Dependabot übernimmt das laufende Update.
+
+### Offen: Branch-Protection-Ruleset für `main`
+
+Auf dem aktuellen privaten GitHub-Free-Repo sind Rulesets **nicht verfügbar** — `gh api repos/anlaufstelle/app/rulesets` liefert `403 Upgrade to GitHub Pro or make this repository public`. Sobald das Repo öffentlich wird (oder vorher per Pro-Upgrade), muss folgendes Ruleset auf `main` aktiv sein:
+
+| Regel | Wert |
+|---|---|
+| Require a pull request before merging | aktiv |
+| Required reviewers | 0 (Solo-Repo) — anheben sobald Team-Repo |
+| Require status checks to pass | `lint`, `test`, `e2e` |
+| Strict status checks (up-to-date with base) | aktiv |
+| Block force pushes | aktiv |
+| Restrict deletions | aktiv |
+| Bypass-Berechtigte | nur Repo-Admin |
+
+**Verifikation nach Aktivierung:** `gh api repos/<owner>/anlaufstelle/rulesets` zeigt das Ruleset; ein Push mit `--force-with-lease` auf einen Test-Branch muss serverseitig abgelehnt werden (nicht auf `main` testen).
+
+### Trigger für Re-Evaluation
+
+- **Repo wird öffentlich** oder GitHub-Pro wird gebucht — Ruleset sofort aktivieren.
+- **Erster externer Contributor** öffnet einen Fork-PR — dann zusätzlich `pull_request_target` audit pflicht, `workflow_run`-Trigger meiden.
+- **CodeQL-Findings** zu Workflow-Hygiene — über [GitHub Security-Tab](https://github.com/anlaufstelle/app/security) tracken (CodeQL läuft nur auf dem public App-Repo, siehe [`codeql.yml`](../.github/workflows/codeql.yml) `if`-Bedingung).
+
+### Verifikation
+
+- `grep -rE 'uses: [^@]+@v[0-9]+\s*$'.github/workflows/` muss leer sein → kein Tag-Pinning übrig.
+- `grep -L 'permissions:'.github/workflows/*.yml` muss leer sein → jeder Workflow hat irgendwo Permissions (Top-Level oder Job-Level).
+- CHANGELOG-`[Unreleased]`-Eintrag dokumentiert beide Maßnahmen mit Issue-Referenz.
+
+---
+
 ## Weitere Einstiegspunkte
 
 - [CONTRIBUTING.md § Facility-Scoping & Row Level Security](../CONTRIBUTING.md#facility-scoping--row-level-security)

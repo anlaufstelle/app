@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Security
+
+- **GitHub-Actions-Härtung: Minimal-`permissions:`-Blocks** (#888) — Workflows `e2e`, `lint`, `test`, `perf-nightly` haben jetzt expliziten Top-Level-`permissions:`-Block (`contents: read`, plus `issues: write` für `perf-nightly` wegen `peter-evans/create-issue-from-file`). `codeql`, `dev-image`, `release` hatten bereits Job-level Permissions. Defense-in-Depth-Hygiene nach Mini-Shai-Hulud-Vorfall (npm/PyPI 2026-05-11) — Anlaufstelle ist vom Vorfall selbst **nicht betroffen** (keine kompromittierten Pakete in den Lockfiles, kein `pull_request_target`, Repo ist privat).
+- **GitHub-Actions-Härtung: SHA-Pinning aller Actions** (#888) — Alle 42 `uses:`-Referenzen über 7 Workflows verweisen jetzt auf 40-stellige Commit-SHAs statt Major-Tags. Schützt vor Tag-Verschiebung bei einer hypothetischen Action-Repo-Übernahme (vgl. TanStack-Postmortem: Tag-Mutation war ein Baustein des Angriffs). Dependabot ist über `github-actions`-Ökosystem in [`.github/dependabot.yml`](https://github.com/anlaufstelle/app/blob/main/.github/dependabot.yml) bereits konfiguriert und aktualisiert SHA + Tag-Kommentar bei neuen Versionen automatisch.
+
+### Docs
+
+- **Security-Notes: GitHub-Repo-Härtung dokumentiert** (#888) — Neuer Abschnitt in [`docs/security-notes.md`](https://github.com/anlaufstelle/app/blob/main/docs/security-notes.md) hält fest: (a) Diagnose der Mini-Shai-Hulud-Lage (nicht betroffen), (b) umgesetzte Permissions- und SHA-Pinning-Massnahmen, (c) Ziel-Branch-Protection-Ruleset für `main`, das beim Repo-Public-Switch oder GitHub-Pro aktiviert werden muss (auf privatem Free-Repo via `gh api` nicht zugänglich).
+
 ### Fixed
 
 - **`deploy/backup.sh`** — pg_dump verbindet jetzt als `POSTGRES_ADMIN_USER` (BYPASSRLS) statt als App-User. Hintergrund: das v0.12.0-RLS-Bootstrap-Trennungsmodell macht `pg_dump` aus dem App-User unmöglich (FORCE ROW LEVEL SECURITY auf `core_activity`). Aufgefallen beim v0.12.0-Pre-Deploy-Backup auf `dev.anlaufstelle.app`.
