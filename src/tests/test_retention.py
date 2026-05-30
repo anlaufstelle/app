@@ -269,11 +269,20 @@ def test_already_deleted_event_not_reprocessed(anon_event_expired):
     )
     anon_event_expired.refresh_from_db()
 
-    initial_audit_count = AuditLog.objects.count()
+    # Refs #919: ``enforce_retention`` schreibt am Lauf-Ende einen
+    # ``RETENTION_RUN_COMPLETED``-Marker — der ist *kein* per-event-Log
+    # und gehoert deshalb nicht zu dieser Pruefung. Wir messen daher
+    # nur die per-event Aktionen (``DELETE`` etc.) statt aller Eintraege.
+    per_event_actions = [
+        AuditLog.Action.DELETE,
+        AuditLog.Action.CLIENT_ANONYMIZED,
+    ]
+    initial_per_event = AuditLog.objects.filter(action__in=per_event_actions).count()
     call_command("enforce_retention")
 
-    # No new audit log entries should be created for an already-deleted event
-    assert AuditLog.objects.count() == initial_audit_count
+    # No new per-event audit log entries should be created for an
+    # already-deleted event.
+    assert AuditLog.objects.filter(action__in=per_event_actions).count() == initial_per_event
 
 
 @pytest.mark.django_db
