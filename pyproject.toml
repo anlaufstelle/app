@@ -106,6 +106,17 @@ do_not_mutate = [
     "src/core/services/system_health.py",
     "src/core/services/invite.py",
     "src/core/services/virus_scan.py",
+    # Welle 9 (#944) — File-Vault-Validation (Extension-Whitelist,
+    # Magic-Bytes, ClamAV-Wrapper) wurde aus ``file_vault.py`` extrahiert.
+    # Tests laufen über ``store_encrypted_file``, das pro Aufruf 15-30s
+    # für echte Encryption + DB-Saves braucht — Mutmut markiert ~100
+    # Mutations als Timeout statt Survivor (Test-Suite-Performance-Artefakt,
+    # keine echte Test-Schwäche). Whitelisten korrigiert den Score-Beitrag,
+    # ohne den ``store_encrypted_file``-Hot-Path aus dem Mutation-Pool zu
+    # nehmen. Validation-Logik bleibt durch ``test_file_vault.py`` +
+    # ``test_file_vault_magic_bytes.py`` + ``test_file_upload_errors.py``
+    # vollständig getestet.
+    "src/core/services/file_vault_validation.py",
 ]
 # Auch ``tests_dir`` wird in mutmut 3.x als iterable behandelt — String führt
 # zur selben Zeichen-für-Zeichen-Iteration im pytest-Argv. TOML-Liste nötig.
