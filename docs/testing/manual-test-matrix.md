@@ -3518,7 +3518,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Attachments | fachkraft | C | ⚪ ||
+| Attachments | fachkraft | C | ⚪ | `test_file_vault_magic_bytes.py` |
 
 **Voraussetzung:** `Settings.allowed_file_types` enthält pdf, jpg, png, docx (kein exe).
 
@@ -3547,7 +3547,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Attachments | fachkraft | C | ⚪ ||
+| Attachments | fachkraft | C | ⚪ | `test_file_upload_errors.py` |
 
 **Voraussetzung:** `Settings.max_file_size_mb=10` (oder Default 10 MB), DocumentType mit FILE-Feld.
 
@@ -6279,7 +6279,9 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 ### A11Y — Accessibility (WCAG-Stichproben)
 
-> **Bereich (Refs #912).** Manuelle Stichproben — **kein** systematischer WCAG 2.1 AA-Audit ( gesperrt; siehe #470), kein axe-core / Pa11y. Ziel: Regressionen in häufig genutzten Flows erkennen, nicht Compliance-Zertifizierung.
+> **🔒:** Die A11Y-TCs `ENT-A11Y-01..08` sind gesperrt durch [-Milestone M3](https://github.com/anlaufstelle/app/issues/470) (systematisches WCAG 2.1 AA mit axe-core / Pa11y / Screen-Reader-Tests). Die Cases bleiben hier **bewusst als Stichproben-Spezifikation dokumentiert** — sie sind der Startpunkt für die spätere axe-core-Integration und die systematischen Audits, die im M3 implementiert werden. Bis dahin laufen sie als manuelle Smoke-Tests vor Releases (siehe [`release-test-profiles.md`](release-test-profiles.md) Sektion KEEP-MANUAL).
+>
+> **Bereich (Refs #912).** Manuelle Stichproben — **kein** systematischer WCAG 2.1 AA-Audit, kein axe-core / Pa11y. Ziel: Regressionen in häufig genutzten Flows erkennen, nicht Compliance-Zertifizierung.
 
 <details open>
 
@@ -8605,7 +8607,7 @@ Methodik:
 | A | Tagesablauf | 12 | 12 | 0 | 100 % |
 | B | Accessibility | 9 | 1 | 8 | 11 % |
 | B | Acct | 5 | 5 | 0 | 100 % |
-| B | Attachments | 9 | 7 | 2 | 78 % |
+| B | Attachments | 9 | 9 | 0 | 100 % |
 | B | Audit | 5 | 5 | 0 | 100 % |
 | B | Aufbewahrung | 2 | 2 | 0 | 100 % |
 | B | Auth | 10 | 10 | 0 | 100 % |
@@ -8650,10 +8652,10 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 12 | 0 | 100 % |
-| B | 181 | 165 | 16 | 91 % |
+| B | 181 | 167 | 14 | 92 % |
 | C | 31 | 28 | 3 | 90 % |
 | D | 39 | 34 | 5 | 87 % |
-| **Gesamt** | **263** | **239** | **24** | **91 %** |
+| **Gesamt** | **263** | **241** | **22** | **92 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->
