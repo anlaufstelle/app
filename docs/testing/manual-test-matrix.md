@@ -147,18 +147,20 @@ Die Setup-Schritte oben gelten **implizit** und werden **nicht** pro Case wieder
 
 ## Status-Legende
 
-Jeder Case hat eine `Status`-Zeile. Beim Durchlauf eines Test-Zyklus den Status aktualisieren:
+> **Wichtig:** Die `Status:`-Zeilen pro Case sind **Default-Werte** im Testkatalog und sollen im Repo immer `☐ Offen` bleiben. Echte Lauf-Status werden in einem separaten Run-Log unter [`runs/`](runs/) erfasst — Vorlage in [`run-template.md`](run-template.md). Direkt in der Matrix Status zu setzen würde den Katalog für jeden Lauf neu schreiben und Audit-Drift erzeugen (#898).
+
+Status-Symbole gelten gleichermassen im Run-Log:
 
 | Symbol | Bedeutung |
 |--------|-----------|
-| ☐ | **Offen** — noch nicht getestet |
+| ☐ | **Offen** — noch nicht getestet (Default im Katalog) |
 | ✅ | **Pass** — Test bestanden |
 | ❌ | **Fail** — Test fehlgeschlagen, Issue eröffnen und referenzieren (`❌ Fail #1234`) |
 | `N/A` | **Not Applicable** — Case in dieser Umgebung nicht zutreffend (z.B. ClamAV-Test ohne Container) |
 | 🚧 | **Blockiert** — Voraussetzung nicht erfüllbar, blockiert durch Issue X |
 | ⏭ | **Skipped** — bewusst übersprungen (z.B. Mobile-Stichprobe in dieser Runde) |
 
-**Konvention für Fail:** Statuszeile wird zu `❌ Fail [#ISSUE](https://github.com/anlaufstelle/app/issues/ISSUE)`. Issue-Body enthält Reproduktion + erwartetes vs. tatsächliches Verhalten.
+**Konvention für Fail:** Im Run-Log wird der Eintrag zu `❌ Fail [#ISSUE](https://github.com/anlaufstelle/app/issues/ISSUE)`. Issue-Body enthält Reproduktion + erwartetes vs. tatsächliches Verhalten.
 
 ---
 
