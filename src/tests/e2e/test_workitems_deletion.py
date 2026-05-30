@@ -70,7 +70,24 @@ class TestFourEyesPrincipleReview:
         assert lead_page.locator("text=genehmigt").count() > 0 or lead_page.url == f"{base_url}/"
 
     def test_lead_can_reject_deletion_request(self, authenticated_page, lead_page, base_url):
-        """Lead (thomas) lehnt von admin gestellten Löschantrag ab."""
+        """Lead (thomas) lehnt von admin gestellten Löschantrag ab.
+
+        Refs Matrix ENT-DEL-04 (Sektion E — Endanwender DSGVO).
+
+        Verifiziert:
+        - Flash-Message ``Löschantrag wurde abgelehnt.``
+        - Antrag landet in der ``Abgelehnt``-Sektion der Liste mit
+          ``Geprüft von: <reviewer>``.
+        - Antragsbegründung (``dr.reason`` vom Antragsteller) bleibt sichtbar.
+
+        **Hinweis zur Spec:** Der Matrix-Titel lautet „Antrag ablehnen mit
+        Begründung". Die Schritte selbst (``POST mit action=reject``) und
+        ``reject_deletion(dr, reviewer)`` zeigen aber, dass keine separate
+        Reviewer-Begründung erwartet wird — gemeint ist die vorhandene
+        Antragsbegründung. Das aktuelle Template hat dementsprechend kein
+        eigenes Begründungs-Feld für die Ablehnung. Test deckt das
+        implementierte Verhalten ab.
+        """
         _create_qualified_event_and_request_deletion(authenticated_page, base_url)
 
         lead_page.goto(f"{base_url}/deletion-requests/")
@@ -84,7 +101,24 @@ class TestFourEyesPrincipleReview:
         find_deletion_reject_button(lead_page).click()
         lead_page.wait_for_load_state("domcontentloaded")
 
-        assert lead_page.locator("text=abgelehnt").count() > 0 or lead_page.url == f"{base_url}/"
+        # Flash-Message muss explizit „abgelehnt" enthalten.
+        flash = lead_page.locator("[role='status'] :text-matches('abgelehnt', 'i')").first
+        flash.wait_for(state="visible", timeout=5000)
+
+        # Antrag landet in der Abgelehnt-Sektion der Liste.
+        lead_page.goto(f"{base_url}/deletion-requests/")
+        lead_page.wait_for_load_state("domcontentloaded")
+        rejected_section = lead_page.locator("section:has(h2:has-text('Abgelehnt'))")
+        rejected_section.wait_for(state="visible", timeout=5000)
+        # Mind. ein Eintrag in der Abgelehnt-Sektion.
+        rejected_card = rejected_section.locator(".bg-surface").first
+        assert rejected_card.is_visible(), "Kein abgelehnter Antrag in der Liste sichtbar."
+        # Reviewer-Anzeige enthält den Reviewer-Namen oder Username.
+        assert "Geprüft von" in rejected_section.inner_text()
+        # Antragsbegründung bleibt sichtbar (vom Antragsteller bei Antrag gesetzt).
+        assert "E2E-Test" in rejected_section.inner_text(), (
+            "Antragsbegründung sollte in der Abgelehnt-Card sichtbar bleiben."
+        )
 
 
 class TestReviewerNotRequester:
