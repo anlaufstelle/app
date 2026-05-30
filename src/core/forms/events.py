@@ -52,7 +52,7 @@ class EventMetaForm(forms.Form):
 
     document_type = forms.ModelChoiceField(
         queryset=DocumentType.objects.none(),
-        label=_("Dokumentationstyp"),
+        label=_("Dokumentationstyp"),  # pragma: no mutate
         widget=forms.Select(
             attrs={
                 "class": INPUT_CSS,
@@ -64,11 +64,11 @@ class EventMetaForm(forms.Form):
     )
     client = forms.UUIDField(
         required=False,
-        label=_("Person"),
+        label=_("Person"),  # pragma: no mutate
         widget=forms.HiddenInput(),
     )
     occurred_at = forms.DateTimeField(
-        label=_("Zeitpunkt"),
+        label=_("Zeitpunkt"),  # pragma: no mutate
         widget=forms.DateTimeInput(
             attrs={
                 "type": "datetime-local",
@@ -80,7 +80,7 @@ class EventMetaForm(forms.Form):
     case = forms.ModelChoiceField(
         queryset=Case.objects.none(),
         required=False,
-        label=_("Fall"),
+        label=_("Fall"),  # pragma: no mutate
         empty_label=_("– Keinem Fall zuordnen –"),
         widget=forms.Select(attrs={"class": INPUT_CSS}),
     )

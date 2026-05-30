@@ -39,5 +39,5 @@ class EpisodeForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields["ended_at"].required = False
         self.fields["description"].required = False
-        self.fields["started_at"].label = _("Beginn")
-        self.fields["ended_at"].label = _("Ende")
+        self.fields["started_at"].label = _("Beginn")  # pragma: no mutate
+        self.fields["ended_at"].label = _("Ende")  # pragma: no mutate

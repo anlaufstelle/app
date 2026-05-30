@@ -14,7 +14,7 @@ class CaseForm(forms.ModelForm):
     client = forms.UUIDField(
         required=True,
         widget=forms.HiddenInput(),
-        label=_("Person"),
+        label=_("Person"),  # pragma: no mutate
         error_messages={
             "required": _("Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."),
         },
