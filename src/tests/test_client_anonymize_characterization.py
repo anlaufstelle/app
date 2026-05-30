@@ -139,3 +139,166 @@ class TestClientAnonymizeCharacterization:
         # verlassen — der append-only-Trigger der EventHistory-Tabelle wird
         # durch ``SET LOCAL session_replication_role = replica`` umgangen.
         assert called == ["entered", "exited"]
+
+
+@pytest.mark.django_db
+class TestAnonymizeClientHelpers:
+    """Refs #905: isolierte Tests für die internen ``_redact_*``-Helper.
+
+    Die Public API ``anonymize_client`` ruft die sechs Helper sequentiell;
+    diese Tests prüfen jeden Schritt einzeln gegen seine Verantwortung,
+    damit zukünftige Aenderungen einen klaren Bruchpunkt haben.
+    """
+
+    def test_redact_client_identity_only_touches_client_fields(self, facility, staff_user):
+        from core.services.clients import _redact_client_identity
+
+        client = Client.objects.create(
+            facility=facility,
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            pseudonym="Original-1",
+            notes="Geheimnotiz",
+            age_cluster=Client.AgeCluster.AGE_27_PLUS,
+            created_by=staff_user,
+        )
+
+        _redact_client_identity(client)
+        client.refresh_from_db()
+
+        assert client.pseudonym.startswith("Gelöscht-")
+        assert client.notes == ""
+        assert client.age_cluster == Client.AgeCluster.UNKNOWN
+        assert client.is_active is False
+        # contact_stage bleibt unangetastet — gehört nicht zur Identity-Redaktion.
+        assert client.contact_stage == Client.ContactStage.IDENTIFIED
+
+    def test_redact_cases_and_episodes_returns_case_ids(self, facility, staff_user, client_identified):
+        from core.models.case import Case
+        from core.models.episode import Episode
+        from core.services.clients import _redact_cases_and_episodes
+
+        case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Klartext-Titel",
+            description="Klartext-Beschreibung",
+            status=Case.Status.OPEN,
+            created_by=staff_user,
+        )
+        episode = Episode.objects.create(
+            case=case,
+            title="Klartext-Episode",
+            description="Klartext-Beschreibung-Episode",
+            started_at=timezone.now().date(),
+            created_by=staff_user,
+        )
+
+        case_ids = _redact_cases_and_episodes(client_identified)
+        case.refresh_from_db()
+        episode.refresh_from_db()
+
+        assert case.pk in case_ids
+        assert case.title.startswith("[Anonymisiert ")
+        assert case.description == ""
+        assert episode.title == "Episode (anonymisiert)"
+        assert episode.description == ""
+
+    def test_redact_cases_returns_empty_list_when_no_cases(self, client_identified):
+        from core.services.clients import _redact_cases_and_episodes
+
+        assert _redact_cases_and_episodes(client_identified) == []
+
+    def test_redact_workitems_anonymizes_all_states(self, facility, staff_user, client_identified):
+        from core.models import WorkItem
+        from core.services.clients import _redact_workitems
+
+        WorkItem.objects.create(
+            facility=facility,
+            client=client_identified,
+            item_type=WorkItem.ItemType.TASK,
+            status=WorkItem.Status.OPEN,
+            title="Offene Aufgabe",
+            description="Klartext",
+            created_by=staff_user,
+        )
+        WorkItem.objects.create(
+            facility=facility,
+            client=client_identified,
+            item_type=WorkItem.ItemType.TASK,
+            status=WorkItem.Status.DONE,
+            title="Erledigte Aufgabe",
+            description="Klartext",
+            created_by=staff_user,
+        )
+
+        _redact_workitems(client_identified)
+
+        for wi in client_identified.work_items.all():
+            assert wi.title == "Aufgabe (anonymisiert)"
+            assert wi.description == ""
+
+    def test_delete_event_attachments_for_client_returns_event_ids(
+        self, facility, staff_user, doc_type_contact, client_identified
+    ):
+        from core.services.clients import _delete_event_attachments_for_client
+
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 5},
+            created_by=staff_user,
+        )
+        with patch("core.services.file_vault.delete_event_attachments") as del_files:
+            event_ids = _delete_event_attachments_for_client(client_identified)
+
+        assert event.pk in event_ids
+        del_files.assert_called_once()
+
+    def test_delete_event_attachments_for_client_returns_empty_when_no_events(self, client_identified):
+        from core.services.clients import _delete_event_attachments_for_client
+
+        assert _delete_event_attachments_for_client(client_identified) == []
+
+    def test_redact_event_history_is_no_op_without_event_ids(self):
+        from core.services.clients import _redact_event_history
+
+        # Kein Event → kein Bypass-Trigger, kein UPDATE.
+        with patch("core.services.clients.bypass_replication_triggers") as bypass:
+            _redact_event_history([])
+        bypass.assert_not_called()
+
+    def test_redact_deletion_requests_only_touches_event_targets(
+        self, facility, staff_user, doc_type_contact, client_identified
+    ):
+        from core.services.clients import _redact_deletion_requests
+
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 5},
+            created_by=staff_user,
+        )
+        dr = DeletionRequest.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=str(event.pk),
+            reason="Klartext-Begruendung",
+            requested_by=staff_user,
+        )
+
+        _redact_deletion_requests([event.pk])
+        dr.refresh_from_db()
+        assert dr.reason == "[Anonymisiert]"
+        # Metadaten bleiben unangetastet — Vier-Augen-Audit-Trail.
+        assert dr.requested_by_id == staff_user.pk
+        assert dr.status == DeletionRequest.Status.PENDING
+
+    def test_redact_deletion_requests_is_no_op_without_event_ids(self):
+        from core.services.clients import _redact_deletion_requests
+
+        # Defensive: kein Crash, kein UPDATE, wenn keine Events vorhanden.
+        _redact_deletion_requests([])  # darf nicht raisen

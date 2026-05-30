@@ -21,6 +21,89 @@ logger = logging.getLogger(__name__)
 _REDACTED_HISTORY_MARKER = {"_redacted": True, "anonymized": True}
 
 
+def _redact_client_identity(client) -> None:
+    """Ersetze Klartext-Felder am Client durch anonyme Marker."""
+    client.pseudonym = f"Gelöscht-{str(client.pk)[:8]}"
+    client.notes = ""
+    client.age_cluster = client.AgeCluster.UNKNOWN
+    client.is_active = False
+    client.save(update_fields=["pseudonym", "notes", "age_cluster", "is_active"])
+
+
+def _redact_cases_and_episodes(client) -> list:
+    """Anonymisiere alle Cases + ihre Episoden. Returns case_ids für Folgeschritte."""
+    from core.models.case import Case
+    from core.models.episode import Episode
+
+    cases = Case.objects.filter(client=client)
+    case_ids = list(cases.values_list("pk", flat=True))
+    for case in cases:
+        case.title = f"[Anonymisiert {case.created_at:%Y-%m-%d}]"
+        case.description = ""
+        case.save(update_fields=["title", "description"])
+
+    Episode.objects.filter(case_id__in=case_ids).update(
+        title="Episode (anonymisiert)",
+        description="",
+    )
+    return case_ids
+
+
+def _redact_workitems(client) -> None:
+    """Anonymisiere alle WorkItems des Klienten (auch DONE/DISMISSED)."""
+    client.work_items.all().update(
+        title="Aufgabe (anonymisiert)",
+        description="",
+    )
+
+
+def _delete_event_attachments_for_client(client) -> list:
+    """Loescht Attachments aller Events des Klienten. Returns event_ids."""
+    from core.models.event import Event
+    from core.services.file_vault import delete_event_attachments
+
+    event_ids = list(Event.objects.filter(client=client).values_list("pk", flat=True))
+    for event in Event.objects.filter(pk__in=event_ids).iterator():
+        delete_event_attachments(event)
+    return event_ids
+
+
+def _redact_event_history(event_ids: list) -> None:
+    """Anonymisiere EventHistory-Eintraege per Trigger-Bypass.
+
+    Refs #905: ``EventHistory`` ist append-only via Migration 0012 — ein
+    direktes ``UPDATE`` wuerde blocken. ``bypass_replication_triggers``
+    deaktiviert den Trigger nur fuer die Dauer dieses Aufrufs.
+    """
+    from core.models.event_history import EventHistory
+
+    if not event_ids:
+        return
+    history_qs = EventHistory.objects.filter(event_id__in=event_ids)
+    if not history_qs.exists():
+        return
+    with bypass_replication_triggers():
+        history_qs.update(
+            data_before=_REDACTED_HISTORY_MARKER,
+            data_after=_REDACTED_HISTORY_MARKER,
+        )
+
+
+def _redact_deletion_requests(event_ids: list) -> None:
+    """Anonymisiere DeletionRequest.reason fuer Event-Targets dieses Klienten.
+
+    Antrags-Meta (status/requested_by/reviewed_by/timestamps) bleiben fuer
+    den Vier-Augen-Audit-Trail erhalten — nur der freitext ``reason``
+    wird redigiert.
+    """
+    if not event_ids:
+        return
+    DeletionRequest.objects.filter(
+        target_type="Event",
+        target_id__in=event_ids,
+    ).update(reason="[Anonymisiert]")
+
+
 @transaction.atomic
 def anonymize_client(client, user=None):
     """DSGVO-konforme Aggregat-Anonymisierung eines Klienten (Refs #715, #743).
@@ -42,54 +125,16 @@ def anonymize_client(client, user=None):
     - ``DeletionRequest.reason`` für Event-Targets dieses Klienten —
       Antrags-Meta (status/requested_by/...) bleibt für den 4-Augen-
       Audit-Trail erhalten.
+
+    Refs #905: Public API stabil; intern delegiert an sechs ``_redact_*``-
+    Helper, die einzeln testbar sind.
     """
-    from core.models.case import Case
-    from core.models.episode import Episode
-    from core.models.event import Event
-    from core.models.event_history import EventHistory
-    from core.models.workitem import DeletionRequest
-    from core.services.file_vault import delete_event_attachments
-
-    client.pseudonym = f"Gelöscht-{str(client.pk)[:8]}"
-    client.notes = ""
-    client.age_cluster = client.AgeCluster.UNKNOWN
-    client.is_active = False
-    client.save(update_fields=["pseudonym", "notes", "age_cluster", "is_active"])
-
-    cases = Case.objects.filter(client=client)
-    case_ids = list(cases.values_list("pk", flat=True))
-    for case in cases:
-        case.title = f"[Anonymisiert {case.created_at:%Y-%m-%d}]"
-        case.description = ""
-        case.save(update_fields=["title", "description"])
-
-    Episode.objects.filter(case_id__in=case_ids).update(
-        title="Episode (anonymisiert)",
-        description="",
-    )
-
-    client.work_items.all().update(
-        title="Aufgabe (anonymisiert)",
-        description="",
-    )
-
-    event_ids = list(Event.objects.filter(client=client).values_list("pk", flat=True))
-    if event_ids:
-        for event in Event.objects.filter(pk__in=event_ids).iterator():
-            delete_event_attachments(event)
-
-        history_qs = EventHistory.objects.filter(event_id__in=event_ids)
-        if history_qs.exists():
-            with bypass_replication_triggers():
-                history_qs.update(
-                    data_before=_REDACTED_HISTORY_MARKER,
-                    data_after=_REDACTED_HISTORY_MARKER,
-                )
-
-        DeletionRequest.objects.filter(
-            target_type="Event",
-            target_id__in=event_ids,
-        ).update(reason="[Anonymisiert]")
+    _redact_client_identity(client)
+    _redact_cases_and_episodes(client)
+    _redact_workitems(client)
+    event_ids = _delete_event_attachments_for_client(client)
+    _redact_event_history(event_ids)
+    _redact_deletion_requests(event_ids)
 
     logger.info(
         "client_anonymized",
