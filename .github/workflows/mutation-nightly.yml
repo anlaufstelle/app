@@ -1,0 +1,65 @@
+name: Mutation Testing (Nightly)
+
+# Refs #922 / #923 Welle 0:
+#
+# Mutmut auf core/services + core/forms nightly, kein PR-Gate.
+# Laufzeit ist mit ~30-60 Minuten zu hoch fuer die PR-Pipeline; daher
+# Cron + workflow_dispatch.
+#
+# Survivors werden als Artefakt hochgeladen und in Welle 7 triagiert.
+
+on:
+  schedule:
+    # 03:00 UTC = 04:00/05:00 Europe/Berlin (Sommer/Winterzeit).
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  mutation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: anlaufstelle
+          POSTGRES_USER: anlaufstelle
+          POSTGRES_PASSWORD: anlaufstelle
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U anlaufstelle"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Run mutmut
+        run: python -m mutmut run
+        env:
+          POSTGRES_HOST: localhost
+          ENCRYPTION_KEY: P2N8yY4cVt1BmHZSvNrkSfkDYIJwEFcftRmO4bE-nZM=
+        continue-on-error: true
+      - name: Collect mutation results
+        if: always()
+        run: |
+          python -m mutmut results > mutation-results.txt 2>&1 || true
+          python -m mutmut results --status survived > mutation-survivors.txt 2>&1 || true
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: mutation-report
+          path: |
+            mutation-results.txt
+            mutation-survivors.txt
+            mutants/
+          retention-days: 30
