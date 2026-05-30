@@ -3,18 +3,23 @@
 import logging
 from datetime import datetime, time
 
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.utils import timezone
 from django.views.generic import TemplateView
 
 from core.models import Case as CaseModel
 from core.models import Event, RecentClientVisit, WorkItem
-from core.views.mixins import AssistantOrAboveRequiredMixin
 
 logger = logging.getLogger(__name__)
 
 
-class AccountProfileView(AssistantOrAboveRequiredMixin, TemplateView):
-    """Profile page for the logged-in user with events and tasks."""
+class AccountProfileView(LoginRequiredMixin, TemplateView):
+    """Profile page for the logged-in user with events and tasks.
+
+    Jede:r authentifizierte Nutzer:in sieht das eigene Profil — inkl.
+    super_admin (Refs #975). Für super_admin ist ``current_facility`` ``None``,
+    wodurch die facility-gebundenen Widgets leer bleiben (kein 403, kein Crash).
+    """
 
     template_name = "core/account/profile.html"
 

@@ -30,6 +30,13 @@ class TestAccountProfileView:
         response = client.get(profile_url)
         assert response.status_code == 200
 
+    def test_profile_accessible_for_super_admin(self, client, super_admin_user, profile_url):
+        """Refs #975: super_admin (facility=None) sieht das eigene Profil — leere
+        facility-gebundene Widgets, aber kein 403 und kein Crash."""
+        client.force_login(super_admin_user)
+        response = client.get(profile_url)
+        assert response.status_code == 200
+
     @pytest.mark.django_db
     def test_profile_redirects_anonymous(self, client, profile_url):
         # FacilityScopeMiddleware oeffnet seit #733 (Tier-2) auch fuer

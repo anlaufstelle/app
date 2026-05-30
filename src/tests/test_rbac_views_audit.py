@@ -182,7 +182,9 @@ class TestAccountProfileViewRBAC:
             ("lead_user", 200),
             ("staff_user", 200),
             ("assistant_user", 200),
-            ("super_admin_user", 403),
+            # Refs #975: super_admin darf das eigene Profil sehen (facility-lose
+            # Widgets bleiben leer, kein Crash). Vorher 403.
+            ("super_admin_user", 200),
         ],
     )
     def test_account_profile(self, client, user_fixture, expected_status, request):
