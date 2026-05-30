@@ -51,7 +51,7 @@ def _login_via_form(page, base_url, username="miriam", password="anlaufstelle202
 def _seed_offline_client(page):
     """Write a full encrypted client bundle into `anlaufstelle-offline`.
 
-    We skip the real `/clients/` UI + `/api/offline/bundle/...` fetch because
+    We skip the real `/clients/` UI + `/api/v1/offline/bundle/...` fetch because
     the cleanup contract under test is purely client-side: if the in-memory
     store has records, does logout drop them? Using `saveClientBundle` keeps
     the test deterministic and fast, and exercises the exact same tables

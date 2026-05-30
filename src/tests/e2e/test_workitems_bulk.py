@@ -189,7 +189,7 @@ class TestRecurrence:
         page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
         token = _csrf_token(page)
         resp = page.request.post(
-            f"{base_url}/api/workitems/{wi_id}/status/",
+            f"{base_url}/partials/workitems/{wi_id}/status/",
             form={"status": "done"},
             headers={"X-CSRFToken": token, "Referer": f"{base_url}/workitems/"},
         )
@@ -211,7 +211,7 @@ class TestRecurrence:
         token = _csrf_token(page)
         for status in ("done", "open", "done"):
             r = page.request.post(
-                f"{base_url}/api/workitems/{wi_id}/status/",
+                f"{base_url}/partials/workitems/{wi_id}/status/",
                 form={"status": status},
                 headers={"X-CSRFToken": token, "Referer": f"{base_url}/workitems/"},
             )

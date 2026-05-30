@@ -250,7 +250,7 @@ class TestBuildClientOfflineBundleService:
 
 @pytest.mark.django_db
 class TestOfflineClientBundleView:
-    """HTTP contract of ``GET /api/offline/bundle/client/<uuid>/``."""
+    """HTTP contract of ``GET /api/v1/offline/bundle/client/<uuid>/``."""
 
     def _url(self, client_pk):
         return reverse("core:offline_bundle", kwargs={"pk": client_pk})
@@ -364,7 +364,7 @@ class TestClientPkRenderedAsBareUuid:
     """Regression: ``data-pk`` must contain the literal UUID, not ``\\u002D``-
     escaped hyphens. ``escapejs`` is for inline ``<script>`` strings; in HTML
     attributes the browser reads the escape sequence verbatim, so JS appends
-    a malformed UUID to ``/api/offline/bundle/client/...`` → 404.
+    a malformed UUID to ``/api/v1/offline/bundle/client/...`` → 404.
     """
 
     def _bare_pk_html(self, pk):

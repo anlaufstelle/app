@@ -23,7 +23,7 @@ from core.views.mixins import AssistantOrAboveRequiredMixin
 
 
 class OfflineClientBundleView(AssistantOrAboveRequiredMixin, View):
-    """``GET /api/offline/bundle/client/<uuid>/`` — serializer-filtered snapshot.
+    """``GET /api/v1/offline/bundle/client/<uuid>/`` — serializer-filtered snapshot.
 
     Rate-limited per user because building a bundle reads every event the user
     may see for a client; at scale that's cheap but a misbehaving SW could

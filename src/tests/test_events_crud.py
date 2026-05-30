@@ -216,9 +216,9 @@ class TestEventCreateView:
         assert response.status_code == 200
         content = response.content.decode()
         assert 'name="case"' in content
-        # Der Inhalt wird dynamisch über /api/cases/for-client/ nach Klientel-
+        # Der Inhalt wird dynamisch über /partials/cases/for-client/ nach Klientel-
         # Auswahl geladen — die URL muss im Rendering-Payload auftauchen.
-        assert "/api/cases/for-client/" in content
+        assert "/partials/cases/for-client/" in content
 
     def test_event_create_assigns_case(self, client, staff_user, doc_type_contact, client_identified, case_open):
         client.force_login(staff_user)

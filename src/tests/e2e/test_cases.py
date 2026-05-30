@@ -458,7 +458,7 @@ class TestCasesForClientAPI:
         # API-Aufruf in der bestehenden Session via fetch().
         result = page.evaluate(
             "async (clientId) => {"
-            "  const r = await fetch(`/api/cases/for-client/?client=${clientId}`, {credentials: 'same-origin'});"
+            "  const r = await fetch(`/partials/cases/for-client/?client=${clientId}`, {credentials: 'same-origin'});"
             "  return {status: r.status, body: await r.json()};"
             "}",
             client_id,

@@ -35,7 +35,7 @@
     }
 
     function _bundleUrl(clientPk) {
-        return "/api/offline/bundle/client/" + encodeURIComponent(clientPk) + "/";
+        return "/api/v1/offline/bundle/client/" + encodeURIComponent(clientPk) + "/";
     }
 
     async function _emitCountEvent() {

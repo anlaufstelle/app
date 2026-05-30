@@ -45,7 +45,7 @@ class TestClientAutocompleteRecency:
         # Nicht hardcoden: Seed-Events werden per Index auf UUID-sortierte Clients
         # gemappt, daher aendert sich die Reihenfolge bei jedem --flush.
         api_pseudonyms = page.evaluate("""async () => {
-            const resp = await fetch('/api/clients/autocomplete/?q=');
+            const resp = await fetch('/partials/clients/autocomplete/?q=');
             const data = await resp.json();
             return data.map(c => c.pseudonym);
         }""")

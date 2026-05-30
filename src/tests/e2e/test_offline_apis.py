@@ -86,7 +86,7 @@ class TestOfflineBundleRoundTrip:
             # Alpine-Komponente), dann via offlineStore verschlüsseln und ablegen.
             result = page.evaluate(
                 """async (pk) => {
-                    const resp = await fetch(`/api/offline/bundle/client/${pk}/`, {
+                    const resp = await fetch(`/api/v1/offline/bundle/client/${pk}/`, {
                         headers: {"Accept": "application/json"},
                     });
                     if (!resp.ok) return {status: resp.status, error: "fetch failed"};
@@ -135,8 +135,8 @@ class TestOfflineBundleRoundTrip:
 
             statuses = page.evaluate(
                 """async (pk) => {
-                    const r1 = await fetch(`/api/offline/bundle/client/${pk}/`);
-                    const r2 = await fetch(`/api/offline/bundle/client/${pk}/`);
+                    const r1 = await fetch(`/api/v1/offline/bundle/client/${pk}/`);
+                    const r2 = await fetch(`/api/v1/offline/bundle/client/${pk}/`);
                     return [r1.status, r2.status];
                 }""",
                 pk,
@@ -159,7 +159,7 @@ class TestOfflineApiAuthGates:
         try:
             # Dummy-UUID — ohne Login ist das egal, wir erwarten 302 vor Routing.
             response = page.goto(
-                f"{base_url}/api/offline/bundle/client/00000000-0000-0000-0000-000000000000/",
+                f"{base_url}/api/v1/offline/bundle/client/00000000-0000-0000-0000-000000000000/",
                 wait_until="domcontentloaded",
             )
             # Follow-Redirect zur Login-Seite.

@@ -248,19 +248,23 @@ urlpatterns = [
         LockoutRecoveryBackupCodeView.as_view(),
         name="lockout_recovery_backup_code",
     ),
-    # HTMX/API Endpoints
-    path("api/workitems/<uuid:pk>/status/", WorkItemStatusUpdateView.as_view(), name="workitem_status_update"),
-    path("api/clients/autocomplete/", ClientAutocompleteView.as_view(), name="client_autocomplete"),
-    path("api/events/fields/", EventFieldsPartialView.as_view(), name="event_fields_partial"),
-    path("api/zeitstrom/feed/", ZeitstromFeedPartialView.as_view(), name="zeitstrom_feed_partial"),
-    path("api/cases/for-client/", CasesForClientView.as_view(), name="cases_for_client"),
-    path("api/search/global/", GlobalSearchPartialView.as_view(), name="global_search"),
-    path("api/retention/<uuid:pk>/approve/", RetentionApproveView.as_view(), name="retention_approve"),
-    path("api/retention/<uuid:pk>/hold/", RetentionHoldView.as_view(), name="retention_hold"),
-    path("api/retention/hold/<uuid:pk>/dismiss/", RetentionDismissHoldView.as_view(), name="retention_dismiss_hold"),
-    # Offline (Streetwork Stage 2)
+    # HTMX-Fragmente unter /partials/<feature>/, JSON-APIs unter /api/v1/<feature>/ (Refs #848)
+    path("partials/workitems/<uuid:pk>/status/", WorkItemStatusUpdateView.as_view(), name="workitem_status_update"),
+    path("partials/clients/autocomplete/", ClientAutocompleteView.as_view(), name="client_autocomplete"),
+    path("partials/events/fields/", EventFieldsPartialView.as_view(), name="event_fields_partial"),
+    path("partials/zeitstrom/feed/", ZeitstromFeedPartialView.as_view(), name="zeitstrom_feed_partial"),
+    path("partials/cases/for-client/", CasesForClientView.as_view(), name="cases_for_client"),
+    path("partials/search/global/", GlobalSearchPartialView.as_view(), name="global_search"),
+    path("partials/retention/<uuid:pk>/approve/", RetentionApproveView.as_view(), name="retention_approve"),
+    path("partials/retention/<uuid:pk>/hold/", RetentionHoldView.as_view(), name="retention_hold"),
     path(
-        "api/offline/bundle/client/<uuid:pk>/",
+        "partials/retention/hold/<uuid:pk>/dismiss/",
+        RetentionDismissHoldView.as_view(),
+        name="retention_dismiss_hold",
+    ),
+    # Offline (Streetwork Stage 2) — JSON-API für Service Worker
+    path(
+        "api/v1/offline/bundle/client/<uuid:pk>/",
         OfflineClientBundleView.as_view(),
         name="offline_bundle",
     ),
