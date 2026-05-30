@@ -17,7 +17,7 @@ Das `User`-Model hat einen `facility`-FK (nullable, `on_delete=SET_NULL`) in [`s
 Zwei Use-Cases sind auf Cross-Facility-Zugriff angewiesen:
 
 1. **Login-Bootstrap.** Beim Anmelden ist die Session noch nicht an eine Facility gebunden — Django-`auth_login` sucht den User über `username` (oder E-Mail beim Password-Reset) und setzt erst danach die Facility in `request.session`. Eine facility-isolierte `core_user`-Policy würde den Login von **jedem** User scheitern lassen, solange der Session-Variablen-Setzer (die [`FacilityScopeMiddleware`](../src/core/middleware/facility_scope.py)) nicht schon läuft — klassischer Chicken-and-Egg.
-2. **Cross-Facility-Administration.** Administratoren können User mehrerer Facilities verwalten (Passwort-Reset senden, Rollen anpassen, Token-Invite neu generieren). Das ist explizit gewünscht (siehe [`core.admin.UserAdmin`](../src/core/admin.py)), und eine facility-isolierte Policy würde diesen Admin-Workflow unterbinden.
+2. **Cross-Facility-Administration.** Administratoren können User mehrerer Facilities verwalten (Passwort-Reset senden, Rollen anpassen, Token-Invite neu generieren). Das ist explizit gewünscht (siehe [`core.admin.users.UserAdmin`](../src/core/admin/users.py)), und eine facility-isolierte Policy würde diesen Admin-Workflow unterbinden.
 
 ### Andere Verteidigungslinien
 

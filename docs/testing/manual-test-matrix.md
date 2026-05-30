@@ -6160,7 +6160,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 |---------|-------|---------|--------|-----|
 | Compliance | super_admin | C || `src/tests/test_compliance_service.py::TestDbRoleChecks` |
 
-**Code-Referenz:** [`src/core/services/compliance.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/compliance.py) `_db_role_checks`, ruft `check_db_roles` aus #902.
+**Code-Referenz:** [`src/core/services/compliance/db_roles.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/compliance/db_roles.py) `_db_role_checks`, ruft `check_db_roles` aus #902.
 
 **Voraussetzung:** Drei-Rollen-Modell aus #902 aktiv (`POSTGRES_BOOTSTRAP_PASSWORD` + `POSTGRES_ADMIN_USER` + `POSTGRES_ADMIN_PASSWORD` gesetzt).
 
