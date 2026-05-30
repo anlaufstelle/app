@@ -19,7 +19,7 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.models import Client
-from core.services.clients import request_client_deletion, restore_client
+from core.services.client import request_client_deletion, restore_client
 from core.views.mixins import FacilityAdminRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)

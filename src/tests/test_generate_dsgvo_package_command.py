@@ -8,7 +8,7 @@ im angegebenen Output-Verzeichnis. Fehlerpfad: ungültiger Facility-Name
 import pytest
 from django.core.management import CommandError, call_command
 
-from core.services.dsgvo_package import DOCUMENTS
+from core.services.client import DOCUMENTS
 
 
 @pytest.mark.django_db

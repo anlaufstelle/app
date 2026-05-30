@@ -18,7 +18,9 @@ logger = logging.getLogger(__name__)
 # auf ``<repo>/docs/dsgvo-templates``, das aber per ``.dockerignore``
 # nicht ins Image kopiert wurde — DSGVO-Paket-Download warf
 # ``FileNotFoundError`` in Produktion.
-TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "dsgvo_templates"
+# Refs #959: dieses Modul ist jetzt unter ``services/client/`` — TEMPLATE_DIR
+# muss daher ``../../dsgvo_templates`` aufloesen, nicht ``../dsgvo_templates``.
+TEMPLATE_DIR = Path(__file__).resolve().parent.parent.parent / "dsgvo_templates"
 
 DOCUMENTS = {
     "verarbeitungsverzeichnis": {

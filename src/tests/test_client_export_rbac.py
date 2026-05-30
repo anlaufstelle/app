@@ -2,7 +2,7 @@
 
 Refs Matrix AUD-SEC-EXPORT-01 (Welle 3 / Master #922).
 
-Der Service :func:`core.services.client_export.export_client_data`
+Der Service :func:`core.services.client.export.export_client_data`
 sammelt alle personenbezogenen Daten zu einem Klienten und filtert
 Events ueber :meth:`Event.objects.visible_to(user)`. Damit gilt die
 zentrale Sensitivity-Matrix aus ``core.services.compliance.sensitivity``:
@@ -23,7 +23,7 @@ import pytest
 from django.utils import timezone
 
 from core.models import Event
-from core.services.client_export import export_client_data
+from core.services.client import export_client_data
 
 
 @pytest.fixture

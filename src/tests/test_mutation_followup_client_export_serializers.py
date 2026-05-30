@@ -1,4 +1,4 @@
-"""Mutation-Followup-Tests für ``core.services.client_export`` — Serializer.
+"""Mutation-Followup-Tests für ``core.services.client.export`` — Serializer.
 
 Refs Welle 7 (#930). Sub-File aus ``test_mutation_followup_client_export``;
 enthält die Test-Klasse ``TestSerializeEvent`` (Event-pro-Eintrag-
@@ -14,7 +14,7 @@ from core.models import (
     DocumentType,
     Event,
 )
-from core.services.client_export import (
+from core.services.client import (
     _serialize_event,
 )
 from core.services.file_vault import encrypt_field

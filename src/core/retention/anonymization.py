@@ -2,7 +2,7 @@
 
 Anonymisiert Klienten, deren Events alle soft-geloescht sind — Bridge
 zwischen Event-Retention und der eigentlichen Anonymisierungs-Logik in
-:mod:`core.services.clients` (Hard-Anonymize) bzw.
+:mod:`core.services.client.main` (Hard-Anonymize) bzw.
 :mod:`core.services.compliance.k_anonymization` (K-Anonymize).
 
 Welcher Pfad gewaehlt wird, haengt am Facility-Setting

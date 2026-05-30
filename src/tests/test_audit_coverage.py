@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 
 from core.models import AuditLog, Case
 from core.services.cases import update_case
-from core.services.clients import update_client
+from core.services.client import update_client
 from core.services.settings import log_settings_change, snapshot_settings, update_settings
 from core.services.workitems import update_workitem
 

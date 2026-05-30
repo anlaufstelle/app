@@ -1,4 +1,4 @@
-"""Mutation-Followup-Tests für ``core.services.client_export`` — Gather-Helfer.
+"""Mutation-Followup-Tests für ``core.services.client.export`` — Gather-Helfer.
 
 Refs Welle 7 (#930). Sub-File aus ``test_mutation_followup_client_export``;
 enthält die Test-Klassen für die privaten ``_gather_*``-Helfer
@@ -23,7 +23,7 @@ from core.models import (
     EventHistory,
     WorkItem,
 )
-from core.services.client_export import (
+from core.services.client import (
     _gather_cases,
     _gather_client_fields,
     _gather_deletion_requests,

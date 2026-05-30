@@ -20,7 +20,7 @@ def bypass_replication_triggers():
     so the protection re-engages even on errors.
 
     Used for redacting ``EventHistory`` rows during DSGVO Art. 17
-    aggregate-anonymization (see :func:`core.services.clients.anonymize_client`)
+    aggregate-anonymization (see :func:`core.services.client.main.anonymize_client`)
     where the append-only trigger from migration 0012 would otherwise
     block the ``UPDATE``.
 

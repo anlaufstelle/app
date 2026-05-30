@@ -1,7 +1,7 @@
 """RF-T02: Charakterisierungstests fuer ``Client.anonymize`` (Refs #776).
 
 Sicherheitsnetz fuer Sprint 2-Refactorings: dokumentieren das aktuelle
-Verhalten von :func:`core.services.clients.anonymize_client`. Wenn ein
+Verhalten von :func:`core.services.client.main.anonymize_client`. Wenn ein
 Refactoring eines dieser Tests umstoesst, ist das ein Verhaltensbruch
 (nicht ein Refactoring im engeren Sinne).
 
@@ -31,7 +31,7 @@ from core.models import (
     Event,
     EventHistory,
 )
-from core.services.clients import anonymize_client
+from core.services.client import anonymize_client
 
 
 @pytest.mark.django_db
@@ -132,7 +132,7 @@ class TestClientAnonymizeCharacterization:
                 yield
             called.append("exited")
 
-        with patch("core.services.clients.bypass_replication_triggers", _spy):
+        with patch("core.services.client.main.bypass_replication_triggers", _spy):
             anonymize_client(client_identified, user=staff_user)
 
         # Snapshot: der Bypass-Block wurde genau einmal betreten und sauber
@@ -151,7 +151,7 @@ class TestAnonymizeClientHelpers:
     """
 
     def test_redact_client_identity_only_touches_client_fields(self, facility, staff_user):
-        from core.services.clients import _redact_client_identity
+        from core.services.client import _redact_client_identity
 
         client = Client.objects.create(
             facility=facility,
@@ -175,7 +175,7 @@ class TestAnonymizeClientHelpers:
     def test_redact_cases_and_episodes_returns_case_ids(self, facility, staff_user, client_identified):
         from core.models.case import Case
         from core.models.episode import Episode
-        from core.services.clients import _redact_cases_and_episodes
+        from core.services.client import _redact_cases_and_episodes
 
         case = Case.objects.create(
             facility=facility,
@@ -204,13 +204,13 @@ class TestAnonymizeClientHelpers:
         assert episode.description == ""
 
     def test_redact_cases_returns_empty_list_when_no_cases(self, client_identified):
-        from core.services.clients import _redact_cases_and_episodes
+        from core.services.client import _redact_cases_and_episodes
 
         assert _redact_cases_and_episodes(client_identified) == []
 
     def test_redact_workitems_anonymizes_all_states(self, facility, staff_user, client_identified):
         from core.models import WorkItem
-        from core.services.clients import _redact_workitems
+        from core.services.client import _redact_workitems
 
         WorkItem.objects.create(
             facility=facility,
@@ -240,7 +240,7 @@ class TestAnonymizeClientHelpers:
     def test_delete_event_attachments_for_client_returns_event_ids(
         self, facility, staff_user, doc_type_contact, client_identified
     ):
-        from core.services.clients import _delete_event_attachments_for_client
+        from core.services.client import _delete_event_attachments_for_client
 
         event = Event.objects.create(
             facility=facility,
@@ -257,22 +257,22 @@ class TestAnonymizeClientHelpers:
         del_files.assert_called_once()
 
     def test_delete_event_attachments_for_client_returns_empty_when_no_events(self, client_identified):
-        from core.services.clients import _delete_event_attachments_for_client
+        from core.services.client import _delete_event_attachments_for_client
 
         assert _delete_event_attachments_for_client(client_identified) == []
 
     def test_redact_event_history_is_no_op_without_event_ids(self):
-        from core.services.clients import _redact_event_history
+        from core.services.client import _redact_event_history
 
         # Kein Event → kein Bypass-Trigger, kein UPDATE.
-        with patch("core.services.clients.bypass_replication_triggers") as bypass:
+        with patch("core.services.client.main.bypass_replication_triggers") as bypass:
             _redact_event_history([])
         bypass.assert_not_called()
 
     def test_redact_deletion_requests_only_touches_event_targets(
         self, facility, staff_user, doc_type_contact, client_identified
     ):
-        from core.services.clients import _redact_deletion_requests
+        from core.services.client import _redact_deletion_requests
 
         event = Event.objects.create(
             facility=facility,
@@ -298,7 +298,7 @@ class TestAnonymizeClientHelpers:
         assert dr.status == DeletionRequest.Status.PENDING
 
     def test_redact_deletion_requests_is_no_op_without_event_ids(self):
-        from core.services.clients import _redact_deletion_requests
+        from core.services.client import _redact_deletion_requests
 
         # Defensive: kein Crash, kein UPDATE, wenn keine Events vorhanden.
         _redact_deletion_requests([])  # darf nicht raisen

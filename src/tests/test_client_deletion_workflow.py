@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from core.models import AuditLog, Client
 from core.models.workitem import DeletionRequest
-from core.services.clients import (
+from core.services.client import (
     anonymize_eligible_soft_deleted_clients,
     approve_client_deletion,
     reject_client_deletion,

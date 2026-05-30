@@ -23,7 +23,7 @@ SOLL-Verhalten der AuditLog-Spur nach #932:
   ``Action.DELETE``-Eintrag auf das Event (nur Approve loescht).
 
 Das gleiche Audit-Pattern gilt fuer ``request_client_deletion`` aus
-:mod:`core.services.clients` (vgl. ``TestClientDeletionAudit``).
+:mod:`core.services.client.main` (vgl. ``TestClientDeletionAudit``).
 """
 
 from __future__ import annotations
@@ -180,7 +180,7 @@ class TestClientDeletionAudit:
         """request_client_deletion schreibt einen Action.DELETION_REQUESTED
         mit target_type='DeletionRequest' (Refs #932).
         """
-        from core.services.clients import request_client_deletion
+        from core.services.client import request_client_deletion
 
         dr = request_client_deletion(client_qualified, staff_user, "DSGVO-Antrag Klient")
 
@@ -196,7 +196,7 @@ class TestClientDeletionAudit:
 
     def test_request_client_deletion_is_idempotent(self, client_qualified, staff_user):
         """Zweiter request_client_deletion-Aufruf erzeugt kein zweites Audit-Event."""
-        from core.services.clients import request_client_deletion
+        from core.services.client import request_client_deletion
 
         dr1 = request_client_deletion(client_qualified, staff_user, "Erst")
         count_after_first = AuditLog.objects.filter(

@@ -1,4 +1,4 @@
-"""Mutation-Followup-Tests für ``core.services.client_export`` — Aggregate.
+"""Mutation-Followup-Tests für ``core.services.client.export`` — Aggregate.
 
 Refs Welle 7 (#930). Sub-File aus ``test_mutation_followup_client_export``;
 enthält die Top-Level-Komposition (``TestBuildExportMeta``,
@@ -23,7 +23,7 @@ from core.models import (
     Settings,
     User,
 )
-from core.services.client_export import (
+from core.services.client import (
     _build_export_meta,
     export_client_data,
 )

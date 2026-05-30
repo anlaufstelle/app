@@ -106,10 +106,10 @@ class Client(SoftDeletableModel):
     def anonymize(self, user=None):
         """DSGVO Art. 17 Aggregat-Anonymisierung — Wrapper auf Service.
 
-        Logik liegt in :func:`core.services.clients.anonymize_client`
+        Logik liegt in :func:`core.services.client.main.anonymize_client`
         (Refs #743 — Service-Layer-Trennung).
         """
-        from core.services.clients import anonymize_client
+        from core.services.client import anonymize_client
 
         anonymize_client(self, user=user)
 

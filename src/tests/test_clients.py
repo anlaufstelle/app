@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from core.models import AuditLog, Case, Client, Episode, WorkItem
 from core.models.activity import Activity
-from core.services.clients import get_client_or_none, update_client
+from core.services.client import get_client_or_none, update_client
 
 
 @pytest.mark.django_db

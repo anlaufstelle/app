@@ -5,7 +5,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 
 from core.models import Facility
-from core.services.dsgvo_package import DOCUMENTS, render_document
+from core.services.client import DOCUMENTS, render_document
 
 
 class Command(BaseCommand):

@@ -138,7 +138,7 @@ class TestAnonymizeClientServiceLayer:
         assert c.pk == original_pk  # Datensatz bleibt fuer Statistik
 
     def test_anonymize_via_service_directly(self, facility, lead_user):
-        from core.services.clients import anonymize_client
+        from core.services.client import anonymize_client
 
         c = _make_client(facility, notes="sensible notiz")
         anonymize_client(c, user=lead_user)

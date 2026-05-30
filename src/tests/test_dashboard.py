@@ -4,7 +4,7 @@ import pytest
 from django.urls import reverse
 
 from core.models import RecentClientVisit
-from core.services.clients import track_client_visit
+from core.services.client import track_client_visit
 
 
 @pytest.mark.django_db

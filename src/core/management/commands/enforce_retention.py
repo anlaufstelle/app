@@ -98,7 +98,7 @@ class Command(BaseCommand):
             total_anonymized += anonymize_clients(facility, dry_run)["count"]
             # Refs #626: Soft-deletete Personen aus dem Papierkorb anonymisieren,
             # sobald die client_trash_days-Frist abgelaufen ist.
-            from core.services.clients import anonymize_eligible_soft_deleted_clients
+            from core.services.client import anonymize_eligible_soft_deleted_clients
 
             total_trash_anonymized += anonymize_eligible_soft_deleted_clients(facility, settings_obj, dry_run=dry_run)
             total_auditlog_pruned += prune_auditlog(facility, settings_obj, now, dry_run)["count"]

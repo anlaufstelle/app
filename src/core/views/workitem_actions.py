@@ -17,7 +17,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_FREQUENT, RATELIMIT_MUTATION
 from core.forms.workitems import WorkItemForm
 from core.models import WorkItem
-from core.services.clients import get_client_or_none
+from core.services.client import get_client_or_none
 from core.services.workitems import (
     create_workitem,
     update_workitem,

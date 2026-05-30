@@ -18,7 +18,7 @@ from core.models import (
     WorkItem,
 )
 from core.models import Case as CaseModel
-from core.services.client_export import export_client_data
+from core.services.client import export_client_data
 
 
 @pytest.fixture

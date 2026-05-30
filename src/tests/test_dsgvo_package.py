@@ -4,7 +4,7 @@ import pytest
 from django.test import Client as DjangoClient
 
 from core.models import AuditLog, Facility, Organization, Settings, User
-from core.services.dsgvo_package import get_document_list, render_document
+from core.services.client import get_document_list, render_document
 
 
 @pytest.fixture
