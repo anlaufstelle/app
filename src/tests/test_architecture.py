@@ -10,26 +10,31 @@ import pytest
 class TestFacilityScopingGuard:
     """Ensure views always scope queries to the current facility."""
 
-    # Refs #867: ``system.py`` ist der Superadmin-/System-Bereich. Cross-
-    # facility-Lookups sind dort *die Aufgabe* — RLS-Bypass via
-    # ``app.is_super_admin`` (Migration 0085) gibt super_admin alle Zeilen
-    # frei, der Manager-Filter waere kontraproduktiv. Whitelist statt
-    # Manager-Workaround, damit die Absicht der View-Datei explizit bleibt.
-    _OBJECTS_ALL_WHITELIST = {"system.py"}
+    # Refs #867 / #904: das ``views/system/``-Subpackage ist der
+    # Superadmin-/System-Bereich. Cross-facility-Lookups sind dort *die
+    # Aufgabe* — RLS-Bypass via ``app.is_super_admin`` (Migration 0085)
+    # gibt super_admin alle Zeilen frei, der Manager-Filter waere
+    # kontraproduktiv. Whitelist statt Manager-Workaround, damit die
+    # Absicht des Subpackages explizit bleibt.
+    #
+    # Pfade relativ zu ``src/core/views/`` — alles unter ``system/``
+    # ist erlaubt; Top-Level-System-Datei gibt es nach #904 nicht mehr.
+    _OBJECTS_ALL_WHITELIST_PREFIXES = ("system/",)
 
     def test_no_unfiltered_objects_all_in_views(self):
         """Views must not use Model.objects.all() without facility filter."""
         views_dir = Path("src/core/views")
         violations = []
-        for py_file in views_dir.glob("*.py"):
+        for py_file in views_dir.rglob("*.py"):
             if py_file.name == "__init__.py":
                 continue
-            if py_file.name in self._OBJECTS_ALL_WHITELIST:
+            rel = py_file.relative_to(views_dir).as_posix()
+            if any(rel.startswith(prefix) for prefix in self._OBJECTS_ALL_WHITELIST_PREFIXES):
                 continue
             source = py_file.read_text()
             # Check for .objects.all() which could be cross-facility
             if ".objects.all()" in source:
-                violations.append(f"{py_file.name}: uses .objects.all()")
+                violations.append(f"{rel}: uses .objects.all()")
         assert not violations, f"Facility scoping violations: {violations}"
 
 
