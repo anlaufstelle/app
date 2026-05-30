@@ -1,20 +1,7 @@
 """Tests für Events — Event-Erstellungs-Defaults + Felder-Partial (HTMX) (Refs Welle 6 #929)."""
 
-from unittest.mock import patch
-
 import pytest
 from django.urls import reverse
-from django.utils import timezone
-
-from core.models import AuditLog, DeletionRequest, Event, EventHistory
-from core.services.event import (
-    approve_deletion,
-    create_event,
-    reject_deletion,
-    request_deletion,
-    soft_delete_event,
-    update_event,
-)
 
 
 @pytest.mark.django_db

@@ -122,9 +122,7 @@ class TestGetTimeRange:
         target = datetime(2026, 5, 17).date()
         start_dt, end_dt = get_time_range(target, time_filter=tf)
         assert start_dt.date() == target
-        assert end_dt.date() == target, (
-            "start == end darf NICHT als Midnight-Overlap behandelt werden"
-        )
+        assert end_dt.date() == target, "start == end darf NICHT als Midnight-Overlap behandelt werden"
 
 
 # ---------------------------------------------------------------------------
@@ -199,9 +197,7 @@ class TestBuildFeedItemsTypeBranches:
         for bid in ban_ids:
             assert bid not in event_ids, "Ban darf nicht zusätzlich als 'event' im Feed sein"
 
-    def test_all_string_triggers_include_all(
-        self, facility, staff_user, client_identified, ban_doc_type
-    ):
+    def test_all_string_triggers_include_all(self, facility, staff_user, client_identified, ban_doc_type):
         """``feed_type="all"`` → ``include_all=True`` → Bans-Bucket aktiv."""
         today = timezone.localdate()
         Event.objects.create(
@@ -252,8 +248,7 @@ class TestBuildFeedItemsTypeBranches:
         # Bei single-type 'events' KEIN Exclude des Ban-Typs
         all_event_dt_ids = {i["object"].document_type_id for i in items if i["type"] == "event"}
         assert ban_doc_type.id in all_event_dt_ids, (
-            "feed_type=events muss ALLE Events liefern, auch Ban-Typ "
-            "(Exclude greift nur bei include_all)"
+            "feed_type=events muss ALLE Events liefern, auch Ban-Typ (Exclude greift nur bei include_all)"
         )
 
 
@@ -261,9 +256,7 @@ class TestBuildFeedItemsTypeBranches:
 class TestBuildFeedItemsBoundary:
     """Zeitfenster-Boundaries (``__gte`` / ``__lte``)."""
 
-    def test_event_exactly_at_start_dt_included(
-        self, facility, staff_user, client_identified, normal_doc_type
-    ):
+    def test_event_exactly_at_start_dt_included(self, facility, staff_user, client_identified, normal_doc_type):
         """Event genau am Anfang der Range (``occurred_at == start_dt``)
         muss enthalten sein (``__gte``). Mutation ``__gte`` → ``__gt``
         würde diesen Event verlieren."""
@@ -280,9 +273,7 @@ class TestBuildFeedItemsBoundary:
         items = build_feed_items(facility, today, feed_type="events", user=staff_user)
         assert len([i for i in items if i["type"] == "event"]) == 1
 
-    def test_event_exactly_at_end_dt_included(
-        self, facility, staff_user, client_identified, normal_doc_type
-    ):
+    def test_event_exactly_at_end_dt_included(self, facility, staff_user, client_identified, normal_doc_type):
         """Event genau am Ende der Range (``occurred_at == end_dt``,
         also ``time.max``) muss enthalten sein (``__lte``). Mutation
         ``__lte`` → ``__lt`` würde diesen Event verlieren."""
@@ -306,9 +297,7 @@ class TestBuildFeedItemsBoundary:
         sein. Sichert, dass der Test oben nicht versehentlich alles
         durchwinkt."""
         today = timezone.localdate()
-        before_start = timezone.make_aware(
-            datetime.combine(today, time.min)
-        ) - timedelta(microseconds=1)
+        before_start = timezone.make_aware(datetime.combine(today, time.min)) - timedelta(microseconds=1)
         Event.objects.create(
             facility=facility,
             client=client_identified,
@@ -345,9 +334,7 @@ class TestBuildFeedItemsCap:
             items = build_feed_items(facility, today, feed_type="events", user=staff_user)
         assert len([i for i in items if i["type"] == "event"]) == 2
 
-    def test_cap_returns_newest_when_truncating(
-        self, facility, staff_user, client_identified, normal_doc_type
-    ):
+    def test_cap_returns_newest_when_truncating(self, facility, staff_user, client_identified, normal_doc_type):
         """Sentinel-Test: Bei Cap müssen die NEUESTEN Events drin sein
         (``order_by("-occurred_at")[:N]``). Mutation ``-occurred_at`` →
         ``occurred_at`` würde die ältesten zurückgeben."""
@@ -374,9 +361,7 @@ class TestBuildFeedItemsCap:
 class TestBuildFeedItemsCreatedExclude:
     """``exclude(verb=Activity.Verb.CREATED)`` nur bei ``include_all``."""
 
-    def test_created_visible_in_single_activities_feed(
-        self, facility, staff_user, client_identified
-    ):
+    def test_created_visible_in_single_activities_feed(self, facility, staff_user, client_identified):
         """``feed_type="activities"`` (include_all=False) → CREATED-
         Aktivitäten bleiben sichtbar."""
         today = timezone.localdate()
@@ -419,9 +404,7 @@ class TestBuildFeedItemsCreatedExclude:
         activity_items = [i for i in items if i["type"] == "activity"]
         verbs = [i["object"].verb for i in activity_items]
         assert Activity.Verb.UPDATED in verbs, "Sanity: UPDATED muss im all-Feed sein"
-        assert Activity.Verb.CREATED not in verbs, (
-            "include_all MUSS CREATED-Activities exkludieren"
-        )
+        assert Activity.Verb.CREATED not in verbs, "include_all MUSS CREATED-Activities exkludieren"
 
 
 @pytest.mark.django_db
@@ -432,9 +415,7 @@ class TestBuildFeedItemsSort:
     invertieren.
     """
 
-    def test_items_sorted_descending_by_occurred_at(
-        self, facility, staff_user, client_identified, normal_doc_type
-    ):
+    def test_items_sorted_descending_by_occurred_at(self, facility, staff_user, client_identified, normal_doc_type):
         today = timezone.localdate()
         # Drei Events mit unterschiedlichen Timestamps in zufälliger
         # Erstellungsreihenfolge, damit das Test-Ergebnis nicht durch
@@ -453,9 +434,7 @@ class TestBuildFeedItemsSort:
             )
         items = build_feed_items(facility, today, feed_type="events", user=staff_user)
         timestamps = [i["occurred_at"] for i in items if i["type"] == "event"]
-        assert timestamps == sorted(timestamps, reverse=True), (
-            f"Final sort muss DESC sein, bekam {timestamps}"
-        )
+        assert timestamps == sorted(timestamps, reverse=True), f"Final sort muss DESC sein, bekam {timestamps}"
         # Härtere Variante: NEUESTE muss an Position 0 stehen
         assert timestamps[0] == ts_late
 
@@ -551,9 +530,7 @@ class TestEnrichEventsPreviewLimit:
     Mutation ``< 3`` → ``< 2`` würde nur 2 Felder zulassen.
     """
 
-    def test_preview_capped_at_three_when_four_visible(
-        self, facility, staff_user, client_identified
-    ):
+    def test_preview_capped_at_three_when_four_visible(self, facility, staff_user, client_identified):
         dt = DocumentType.objects.create(
             facility=facility,
             name="VierFelder",
@@ -581,16 +558,10 @@ class TestEnrichEventsPreviewLimit:
         )
         feed_items = [{"type": "event", "occurred_at": event.occurred_at, "object": event}]
         enrich_events_with_preview(feed_items, staff_user)
-        assert len(event.preview_fields) == 3, (
-            f"preview_fields muss auf 3 cappen, bekam {len(event.preview_fields)}"
-        )
-        assert len(event.expanded_fields) == 4, (
-            "expanded_fields darf nicht cappen — Refs #707"
-        )
+        assert len(event.preview_fields) == 3, f"preview_fields muss auf 3 cappen, bekam {len(event.preview_fields)}"
+        assert len(event.expanded_fields) == 4, "expanded_fields darf nicht cappen — Refs #707"
 
-    def test_preview_includes_exactly_three_with_three_visible(
-        self, facility, staff_user, client_identified
-    ):
+    def test_preview_includes_exactly_three_with_three_visible(self, facility, staff_user, client_identified):
         """Boundary: bei genau 3 Feldern werden alle 3 in preview übernommen
         (``len(preview_fields) < 3`` ist erfüllt, solange noch < 3)."""
         dt = DocumentType.objects.create(
@@ -633,9 +604,7 @@ class TestBuildFeedItemsWorkItemBoundary:
     """Sicherheitsnetz für ``created_at__gte/lte``-Boundary im WorkItem-Bucket
     (analog zu Events). Mutmut mutiert beide Stellen einzeln."""
 
-    def test_workitem_exactly_at_start_included(
-        self, facility, staff_user, client_identified
-    ):
+    def test_workitem_exactly_at_start_included(self, facility, staff_user, client_identified):
         today = timezone.localdate()
         start_dt = timezone.make_aware(datetime.combine(today, time.min))
         # WorkItem.created_at ist auto_now_add — wir setzen es nachträglich

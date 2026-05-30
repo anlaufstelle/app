@@ -9,10 +9,8 @@ import uuid
 
 import pytest
 from django.urls import reverse
-from django.utils import timezone
 
 from core.models import AuditLog
-
 from tests._rbac_helpers import login_user_fixture as _login
 
 

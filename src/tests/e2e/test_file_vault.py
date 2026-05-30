@@ -303,9 +303,7 @@ class TestFileOverview:
         # DocumentType-ID aus dem Filter-Select der Übersicht abgreifen.
         page.goto(f"{base_url}/attachments/")
         page.wait_for_load_state("domcontentloaded")
-        beratung_option = page.locator(
-            "select[name='document_type'] option:has-text('Beratungsgespräch')"
-        ).first
+        beratung_option = page.locator("select[name='document_type'] option:has-text('Beratungsgespräch')").first
         assert beratung_option.count() == 1, "Beratungsgespräch-Option fehlt im Filter-Select."
         doc_type_id = beratung_option.get_attribute("value")
         assert doc_type_id, "DocumentType-Option hat keinen Wert."
@@ -345,9 +343,7 @@ class TestFileOverview:
         assert partial_html["status"] == 200
         body = partial_html["body"].lower()
         assert "<html" not in body, "HTMX-Partial darf kein <html>-Element enthalten."
-        assert "hauptnavigation" not in body, (
-            "HTMX-Partial darf das Navigations-Layout nicht enthalten."
-        )
+        assert "hauptnavigation" not in body, "HTMX-Partial darf das Navigations-Layout nicht enthalten."
 
     def test_sidebar_has_dateien_link(self, lead_page, base_url):
         """Sidebar shows 'Dateien' navigation link."""

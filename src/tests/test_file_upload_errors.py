@@ -147,9 +147,7 @@ class TestFilenameSafety:
         assert "\x00" not in attachment.storage_filename
         assert attachment.storage_filename.endswith(".enc")
 
-    def test_unicode_filename_accepted(
-        self, facility_with_settings, staff_user, doc_type_with_file, event
-    ):
+    def test_unicode_filename_accepted(self, facility_with_settings, staff_user, doc_type_with_file, event):
         """Filename mit Emoji + Umlaut: Upload geht durch, Storage ist UUID.enc."""
         _, ft_file = doc_type_with_file
         name = "Bericht_📝_Müller_2026.pdf"
@@ -161,9 +159,7 @@ class TestFilenameSafety:
         # Original-Filename ist verschlüsselt persistiert; nicht im Klartext lesbar.
         assert name not in (attachment.original_filename_encrypted or "")
 
-    def test_rtl_override_in_filename_accepted(
-        self, facility_with_settings, staff_user, doc_type_with_file, event
-    ):
+    def test_rtl_override_in_filename_accepted(self, facility_with_settings, staff_user, doc_type_with_file, event):
         """Filename mit RTL-Override (U+202E) — heute akzeptiert.
 
         RTL-Override ist ein bekannter Spoofing-Vektor (z.B. ``Bericht‮gpj.pdf``
@@ -214,9 +210,7 @@ class TestOversizeViaForm:
     ``store_encrypted_file`` bewusst nicht dupliziert (Refs #771).
     """
 
-    def test_oversize_via_form_rejected(
-        self, facility_with_settings, staff_user, doc_type_with_file
-    ):
+    def test_oversize_via_form_rejected(self, facility_with_settings, staff_user, doc_type_with_file):
         """Form mit Datei > max_file_size_mb → ValidationError im File-Feld."""
         from core.forms.events import DynamicEventDataForm
 
@@ -226,7 +220,9 @@ class TestOversizeViaForm:
             facility=facility_with_settings,
             defaults={"allowed_file_types": "pdf", "max_file_size_mb": 1},
         )
-        huge = SimpleUploadedFile("zu_gross.pdf", VALID_PDF_BYTES + b"a" * (2 * 1024 * 1024), content_type="application/pdf")
+        huge = SimpleUploadedFile(
+            "zu_gross.pdf", VALID_PDF_BYTES + b"a" * (2 * 1024 * 1024), content_type="application/pdf"
+        )
         form = DynamicEventDataForm(
             document_type=dt,
             facility=facility_with_settings,

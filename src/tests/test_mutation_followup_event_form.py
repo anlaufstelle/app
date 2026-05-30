@@ -359,9 +359,7 @@ class TestDynamicEventDataFormClean:
             [{"name": "Notiz", "field_type": FieldTemplate.FieldType.TEXT, "is_required": False}],
         )
         _set_file_settings(facility, allowed="pdf", max_mb=1)
-        form = DynamicEventDataForm(
-            document_type=dt, facility=facility, data={ft.slug: "egal"}
-        )
+        form = DynamicEventDataForm(document_type=dt, facility=facility, data={ft.slug: "egal"})
         assert form.is_valid(), form.errors
 
     # -- Settings-Fallback ------------------------------------------------
@@ -381,9 +379,7 @@ class TestDynamicEventDataFormClean:
             [{"name": "Datei", "field_type": FieldTemplate.FieldType.FILE}],
         )
         upload = _upload(f"anhang.{ext}", size_bytes=128)
-        form = DynamicEventDataForm(
-            document_type=dt, facility=facility, data={}, files={ft.slug: upload}
-        )
+        form = DynamicEventDataForm(document_type=dt, facility=facility, data={}, files={ft.slug: upload})
         assert form.is_valid(), form.errors
 
     def test_empty_allowed_file_types_falls_back_to_defaults(self, facility):
@@ -399,9 +395,7 @@ class TestDynamicEventDataFormClean:
             [{"name": "Datei", "field_type": FieldTemplate.FieldType.FILE}],
         )
         upload = _upload(f"a.{ext}", size_bytes=32)
-        form = DynamicEventDataForm(
-            document_type=dt, facility=facility, data={}, files={ft.slug: upload}
-        )
+        form = DynamicEventDataForm(document_type=dt, facility=facility, data={}, files={ft.slug: upload})
         assert form.is_valid(), form.errors
 
     def test_whitespace_only_allowed_file_types_falls_back(self, facility):
@@ -416,9 +410,7 @@ class TestDynamicEventDataFormClean:
             [{"name": "Datei", "field_type": FieldTemplate.FieldType.FILE}],
         )
         upload = _upload(f"a.{ext}", size_bytes=32)
-        form = DynamicEventDataForm(
-            document_type=dt, facility=facility, data={}, files={ft.slug: upload}
-        )
+        form = DynamicEventDataForm(document_type=dt, facility=facility, data={}, files={ft.slug: upload})
         assert form.is_valid(), form.errors
 
     def test_allowed_extension_passes(self, facility):
@@ -429,9 +421,7 @@ class TestDynamicEventDataFormClean:
             [{"name": "Datei", "field_type": FieldTemplate.FieldType.FILE}],
         )
         upload = _upload("scan.pdf", size_bytes=128)
-        form = DynamicEventDataForm(
-            document_type=dt, facility=facility, data={}, files={ft.slug: upload}
-        )
+        form = DynamicEventDataForm(document_type=dt, facility=facility, data={}, files={ft.slug: upload})
         assert form.is_valid(), form.errors
 
     def test_disallowed_extension_rejected(self, facility):
@@ -442,9 +432,7 @@ class TestDynamicEventDataFormClean:
             [{"name": "Datei", "field_type": FieldTemplate.FieldType.FILE}],
         )
         upload = _upload("script.exe", size_bytes=64)
-        form = DynamicEventDataForm(
-            document_type=dt, facility=facility, data={}, files={ft.slug: upload}
-        )
+        form = DynamicEventDataForm(document_type=dt, facility=facility, data={}, files={ft.slug: upload})
         assert not form.is_valid()
         assert ft.slug in form.errors
         msg = " ".join(str(e) for e in form.errors[ft.slug])
@@ -458,9 +446,7 @@ class TestDynamicEventDataFormClean:
             [{"name": "Datei", "field_type": FieldTemplate.FieldType.FILE}],
         )
         upload = _upload("SCAN.PDF", size_bytes=64)
-        form = DynamicEventDataForm(
-            document_type=dt, facility=facility, data={}, files={ft.slug: upload}
-        )
+        form = DynamicEventDataForm(document_type=dt, facility=facility, data={}, files={ft.slug: upload})
         assert form.is_valid(), form.errors
 
     def test_whitelist_entry_with_leading_dot_normalized(self, facility):
@@ -474,9 +460,7 @@ class TestDynamicEventDataFormClean:
             [{"name": "Datei", "field_type": FieldTemplate.FieldType.FILE}],
         )
         upload = _upload("a.pdf", size_bytes=32)
-        form = DynamicEventDataForm(
-            document_type=dt, facility=facility, data={}, files={ft.slug: upload}
-        )
+        form = DynamicEventDataForm(document_type=dt, facility=facility, data={}, files={ft.slug: upload})
         assert form.is_valid(), form.errors
 
     def test_file_without_dot_yields_empty_extension(self, facility):
@@ -490,9 +474,7 @@ class TestDynamicEventDataFormClean:
             [{"name": "Datei", "field_type": FieldTemplate.FieldType.FILE}],
         )
         upload = _upload("ohne_punkt", size_bytes=32)
-        form = DynamicEventDataForm(
-            document_type=dt, facility=facility, data={}, files={ft.slug: upload}
-        )
+        form = DynamicEventDataForm(document_type=dt, facility=facility, data={}, files={ft.slug: upload})
         assert not form.is_valid()
         assert ft.slug in form.errors
 
@@ -510,9 +492,7 @@ class TestDynamicEventDataFormClean:
         )
         exact = 1 * 1024 * 1024
         upload = _upload("a.pdf", size_bytes=exact)
-        form = DynamicEventDataForm(
-            document_type=dt, facility=facility, data={}, files={ft.slug: upload}
-        )
+        form = DynamicEventDataForm(document_type=dt, facility=facility, data={}, files={ft.slug: upload})
         assert form.is_valid(), form.errors
 
     def test_size_one_byte_over_limit_is_rejected(self, facility):
@@ -524,9 +504,7 @@ class TestDynamicEventDataFormClean:
         )
         over = 1 * 1024 * 1024 + 1
         upload = _upload("a.pdf", size_bytes=over)
-        form = DynamicEventDataForm(
-            document_type=dt, facility=facility, data={}, files={ft.slug: upload}
-        )
+        form = DynamicEventDataForm(document_type=dt, facility=facility, data={}, files={ft.slug: upload})
         assert not form.is_valid()
         msg = " ".join(str(e) for e in form.errors[ft.slug])
         assert "max" in msg.lower() or "groß" in msg.lower() or "gross" in msg.lower()
@@ -599,9 +577,7 @@ class TestDynamicEventDataFormClean:
             facility,
             [{"name": "Notiz", "field_type": FieldTemplate.FieldType.TEXT}],
         )
-        form = DynamicEventDataForm(
-            document_type=dt, facility=facility, data={ft.slug: "hack.exe"}
-        )
+        form = DynamicEventDataForm(document_type=dt, facility=facility, data={ft.slug: "hack.exe"})
         assert form.is_valid(), form.errors
 
     def test_returned_cleaned_data_contains_field_keys(self, facility):
@@ -610,8 +586,6 @@ class TestDynamicEventDataFormClean:
             facility,
             [{"name": "Notiz", "field_type": FieldTemplate.FieldType.TEXT}],
         )
-        form = DynamicEventDataForm(
-            document_type=dt, facility=facility, data={ft.slug: "hi"}
-        )
+        form = DynamicEventDataForm(document_type=dt, facility=facility, data={ft.slug: "hi"})
         assert form.is_valid(), form.errors
         assert form.cleaned_data.get(ft.slug) == "hi"

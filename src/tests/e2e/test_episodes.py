@@ -61,9 +61,7 @@ class TestEpisodeEdit:
         _create_episode(page, base_url, original_title, "2026-01-10")
 
         # Edit-Link der frisch erzeugten Episode klicken.
-        edit_link = page.locator(
-            f"a[href*='/episodes/'][href$='/edit/']:has-text('Bearbeiten')"
-        ).first
+        edit_link = page.locator("a[href*='/episodes/'][href$='/edit/']:has-text('Bearbeiten')").first
         edit_link.wait_for(state="visible", timeout=5000)
         edit_link.click()
         page.wait_for_url(re.compile(r"/episodes/[0-9a-f-]+/edit/"))

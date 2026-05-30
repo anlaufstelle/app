@@ -31,9 +31,7 @@ class TestEmptyDashboards:
         resp = client.get(reverse("core:client_list"))
         assert resp.status_code == 200
         content = resp.content.decode("utf-8")
-        assert "Keine Personen" in content, (
-            f"Erwartet 'Keine Personen' im Empty-State, im Content nicht gefunden."
-        )
+        assert "Keine Personen" in content, "Erwartet 'Keine Personen' im Empty-State, im Content nicht gefunden."
 
     def test_case_list_empty_renders_200(self, client, staff_user):
         """Fall-Liste ohne Fälle → 200."""
@@ -63,9 +61,7 @@ class TestEmptyStatistics:
         resp = client.get(reverse("core:statistics"), {"period": "quarter"})
         assert resp.status_code == 200
         content = resp.content.decode("utf-8")
-        assert "Keine Daten" in content, (
-            "Erwartet 'Keine Daten'-Hinweis im Statistik-Template bei leerer DB."
-        )
+        assert "Keine Daten" in content, "Erwartet 'Keine Daten'-Hinweis im Statistik-Template bei leerer DB."
 
 
 @pytest.mark.django_db
@@ -83,9 +79,7 @@ class TestEmptyAuditLog:
         resp = client.get(reverse("core:audit_log"), {"action": "XXXX_NONEXISTENT_ACTION"})
         assert resp.status_code == 200
         content = resp.content.decode("utf-8")
-        assert "Keine Einträge" in content, (
-            "Erwartet 'Keine Einträge'-Empty-State bei leerem Filter."
-        )
+        assert "Keine Einträge" in content, "Erwartet 'Keine Einträge'-Empty-State bei leerem Filter."
 
 
 @pytest.mark.django_db
@@ -103,9 +97,7 @@ class TestEmptySearch:
         resp = client.get(reverse("core:search"), {"q": "ZZZ-NICHT-VORHANDEN-9999"})
         assert resp.status_code == 200
         content = resp.content.decode("utf-8")
-        assert "Keine Ergebnisse" in content, (
-            "Erwartet 'Keine Ergebnisse'-Hinweis bei nicht-matchender Search-Query."
-        )
+        assert "Keine Ergebnisse" in content, "Erwartet 'Keine Ergebnisse'-Hinweis bei nicht-matchender Search-Query."
 
 
 @pytest.mark.django_db

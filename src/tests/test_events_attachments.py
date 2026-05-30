@@ -6,14 +6,9 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import AuditLog, DeletionRequest, Event, EventHistory
+from core.models import Event, EventHistory
 from core.services.event import (
-    approve_deletion,
-    create_event,
-    reject_deletion,
-    request_deletion,
     soft_delete_event,
-    update_event,
 )
 
 
@@ -339,8 +334,6 @@ class TestEventAttachmentVersioning:
             },
         )
         assert EventAttachment.objects.filter(event=event).count() == 2
-
-        from core.services.event import soft_delete_event
 
         soft_delete_event(event, staff_user)
         assert EventAttachment.objects.filter(event=event).count() == 0

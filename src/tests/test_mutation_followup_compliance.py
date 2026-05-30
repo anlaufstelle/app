@@ -79,9 +79,7 @@ class TestRetentionChecks:
         entry = _create_retention_audit(facility)
         with _patch_compliance_now(entry.timestamp + timedelta(days=7, hours=1)):
             result = _retention_checks()
-        assert result[0].status == ComplianceStatus.OK, (
-            f"Erwarte OK bei 7 Tagen, bekomme {result[0].status}"
-        )
+        assert result[0].status == ComplianceStatus.OK, f"Erwarte OK bei 7 Tagen, bekomme {result[0].status}"
 
     def test_age_eight_days_is_warning(self, facility):
         """Boundary: ``age_days > 7`` schaltet auf WARNING."""

@@ -293,9 +293,9 @@ class TestAllowedFileTypesWhitelist:
         attachment = store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
         assert attachment.pk is not None
         # Es entsteht KEIN SECURITY_VIOLATION-Eintrag — der Upload ist regulär gespeichert.
-        assert (
-            AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).count() == 0
-        ), "Double-Extension darf keinen Violation-Log auslösen (heutiges Verhalten)."
+        assert AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).count() == 0, (
+            "Double-Extension darf keinen Violation-Log auslösen (heutiges Verhalten)."
+        )
 
     def test_whitelist_applied_before_magic_check(self, facility, staff_user, doc_type_with_file):
         """Die Whitelist-Prüfung läuft VOR dem Magic-Byte-Check — so landet

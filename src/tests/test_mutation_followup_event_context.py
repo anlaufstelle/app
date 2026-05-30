@@ -79,9 +79,7 @@ def _make_doc_type(
 
 
 def _attach(doc_type: DocumentType, field_template: FieldTemplate, sort_order: int = 0) -> None:
-    DocumentTypeField.objects.create(
-        document_type=doc_type, field_template=field_template, sort_order=sort_order
-    )
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=field_template, sort_order=sort_order)
 
 
 def _make_event(facility, client_identified, doc_type, staff_user, *, data_json) -> Event:
@@ -124,9 +122,7 @@ class TestFilteredServerDataJson:
     gestrippt sein — sonst leakt der Merge-Diff verbotene Werte.
     """
 
-    def test_empty_data_json_returns_empty_dict(
-        self, facility, client_identified, staff_user
-    ):
+    def test_empty_data_json_returns_empty_dict(self, facility, client_identified, staff_user):
         """Mutation ``if event.data_json:`` (Negation) wird gefangen."""
         doc_type = _make_doc_type(facility)
         ft = _make_field_template(facility, name="Notiz")
@@ -135,9 +131,7 @@ class TestFilteredServerDataJson:
         result = filtered_server_data_json(staff_user, event)
         assert result == {}
 
-    def test_none_data_json_returns_empty_dict(
-        self, facility, client_identified, staff_user
-    ):
+    def test_none_data_json_returns_empty_dict(self, facility, client_identified, staff_user):
         """``data_json`` ist DB-seitig NOT NULL — wir simulieren den
         Falsy-Branch über In-Memory-Override nach dem Insert.
         """
@@ -146,35 +140,25 @@ class TestFilteredServerDataJson:
         event.data_json = None
         assert filtered_server_data_json(staff_user, event) == {}
 
-    def test_plain_value_kept_for_visible_field(
-        self, facility, client_identified, staff_user
-    ):
+    def test_plain_value_kept_for_visible_field(self, facility, client_identified, staff_user):
         doc_type = _make_doc_type(facility)
         ft = _make_field_template(facility, name="Notiz")
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "Hallo"}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "Hallo"})
         result = filtered_server_data_json(staff_user, event)
         assert result == {ft.slug: "Hallo"}
 
-    def test_assistant_cannot_see_elevated_doc_field(
-        self, facility, client_identified, staff_user, assistant_user
-    ):
+    def test_assistant_cannot_see_elevated_doc_field(self, facility, client_identified, staff_user, assistant_user):
         """Boundary: ASSISTANT (rank 0) vs. ELEVATED doc (rank 1) → strip."""
         doc_type = _make_doc_type(facility, sensitivity=DocumentType.Sensitivity.ELEVATED)
         ft = _make_field_template(facility, name="Diagnose")
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "X"}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "X"})
         result = filtered_server_data_json(assistant_user, event)
         assert ft.slug not in result, "ASSISTANT darf ELEVATED-Feld nicht sehen"
         assert result == {}
 
-    def test_staff_sees_elevated_but_not_high(
-        self, facility, client_identified, staff_user
-    ):
+    def test_staff_sees_elevated_but_not_high(self, facility, client_identified, staff_user):
         """STAFF (rank 1) sieht ELEVATED, aber nicht HIGH-Field-Override."""
         doc_type = _make_doc_type(facility, sensitivity=DocumentType.Sensitivity.ELEVATED)
         ft_normal = _make_field_template(facility, name="Notiz")
@@ -197,9 +181,7 @@ class TestFilteredServerDataJson:
         assert ft_normal.slug in result
         assert ft_high.slug not in result
 
-    def test_lead_sees_high_field(
-        self, facility, client_identified, staff_user, lead_user
-    ):
+    def test_lead_sees_high_field(self, facility, client_identified, staff_user, lead_user):
         """LEAD (rank 2) muss HIGH sehen — Boundary ``rank <= 2``."""
         doc_type = _make_doc_type(facility, sensitivity=DocumentType.Sensitivity.HIGH)
         ft = _make_field_template(
@@ -209,15 +191,11 @@ class TestFilteredServerDataJson:
             is_encrypted=True,
         )
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"})
         result = filtered_server_data_json(lead_user, event)
         assert ft.slug in result
 
-    def test_unknown_slug_inherits_doc_sensitivity(
-        self, facility, client_identified, staff_user, assistant_user
-    ):
+    def test_unknown_slug_inherits_doc_sensitivity(self, facility, client_identified, staff_user, assistant_user):
         """Feld ohne passendes FieldTemplate erbt doc-sensitivity (rank).
 
         Mutation ``field_sensitivity = ft.sensitivity if ft else ""`` → ``"normal"``
@@ -235,43 +213,31 @@ class TestFilteredServerDataJson:
         result = filtered_server_data_json(assistant_user, event)
         assert "ghost-slug" not in result
 
-    def test_single_file_marker_preserved(
-        self, facility, client_identified, staff_user
-    ):
+    def test_single_file_marker_preserved(self, facility, client_identified, staff_user):
         """``__file__``-Branch: nur ``__file__`` + ``name`` bleiben übrig."""
         doc_type = _make_doc_type(facility)
         ft = _make_field_template(facility, name="Anhang", field_type=FieldTemplate.FieldType.FILE)
         _attach(doc_type, ft)
         marker = {"__file__": True, "attachment_id": "1234", "name": "report.pdf"}
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: marker}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: marker})
         result = filtered_server_data_json(staff_user, event)
         assert result[ft.slug] == {"__file__": True, "name": "report.pdf"}
 
-    def test_single_file_marker_missing_name_uses_empty_string(
-        self, facility, client_identified, staff_user
-    ):
+    def test_single_file_marker_missing_name_uses_empty_string(self, facility, client_identified, staff_user):
         """Mutation ``value.get("name", "")`` → ``value.get("name")`` würde
         ``None`` produzieren; wir prüfen den Default-Branch explizit."""
         doc_type = _make_doc_type(facility)
         ft = _make_field_template(facility, name="Anhang2", field_type=FieldTemplate.FieldType.FILE)
         _attach(doc_type, ft)
         marker = {"__file__": True, "attachment_id": "abc"}
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: marker}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: marker})
         result = filtered_server_data_json(staff_user, event)
         assert result[ft.slug] == {"__file__": True, "name": ""}
 
-    def test_multi_file_marker_preserves_entry_id_and_sort(
-        self, facility, client_identified, staff_user
-    ):
+    def test_multi_file_marker_preserves_entry_id_and_sort(self, facility, client_identified, staff_user):
         """``__files__``-Branch: ID + Sort werden in Entries beibehalten."""
         doc_type = _make_doc_type(facility)
-        ft = _make_field_template(
-            facility, name="Mehrere", field_type=FieldTemplate.FieldType.FILE
-        )
+        ft = _make_field_template(facility, name="Mehrere", field_type=FieldTemplate.FieldType.FILE)
         _attach(doc_type, ft)
         marker = {
             "__files__": True,
@@ -280,9 +246,7 @@ class TestFilteredServerDataJson:
                 {"id": "b", "sort": 2},
             ],
         }
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: marker}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: marker})
         result = filtered_server_data_json(staff_user, event)
         assert result[ft.slug]["__files__"] is True
         assert result[ft.slug]["entries"] == [
@@ -290,26 +254,18 @@ class TestFilteredServerDataJson:
             {"id": "b", "sort": 2},
         ]
 
-    def test_multi_file_marker_sort_default_zero(
-        self, facility, client_identified, staff_user
-    ):
+    def test_multi_file_marker_sort_default_zero(self, facility, client_identified, staff_user):
         """Sort-Default ist 0, nicht None — fängt Mutation ``.get("sort", 0)``
         → ``.get("sort")`` und Konstantenmutation 0→1."""
         doc_type = _make_doc_type(facility)
-        ft = _make_field_template(
-            facility, name="Sortlos", field_type=FieldTemplate.FieldType.FILE
-        )
+        ft = _make_field_template(facility, name="Sortlos", field_type=FieldTemplate.FieldType.FILE)
         _attach(doc_type, ft)
         marker = {"__files__": True, "entries": [{"id": "x"}]}
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: marker}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: marker})
         result = filtered_server_data_json(staff_user, event)
         assert result[ft.slug]["entries"] == [{"id": "x", "sort": 0}]
 
-    def test_dict_value_without_encryption_marker_passes_through(
-        self, facility, client_identified, staff_user
-    ):
+    def test_dict_value_without_encryption_marker_passes_through(self, facility, client_identified, staff_user):
         """Boundary: ``safe_decrypt`` liefert das Dict unverändert zurück,
         wenn kein ``__encrypted__``-Marker drin ist (siehe
         ``services.encryption.safe_decrypt`` → ``is_encrypted_value``).
@@ -517,31 +473,23 @@ class TestBuildEventDetailContext:
         doc_type = _make_doc_type(facility)
         ft = _make_field_template(facility, name="Feld")
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"})
         ctx = build_event_detail_context(event, staff_user)
         assert set(ctx.keys()) == {"event", "fields_display", "history"}
         assert ctx["event"] is event
 
-    def test_empty_data_json_yields_empty_fields(
-        self, facility, client_identified, staff_user
-    ):
+    def test_empty_data_json_yields_empty_fields(self, facility, client_identified, staff_user):
         doc_type = _make_doc_type(facility)
         event = _make_event(facility, client_identified, doc_type, staff_user, data_json={})
         ctx = build_event_detail_context(event, staff_user)
         assert ctx["fields_display"] == []
         assert ctx["history"] == []
 
-    def test_visible_field_uses_template_name_as_label(
-        self, facility, client_identified, staff_user
-    ):
+    def test_visible_field_uses_template_name_as_label(self, facility, client_identified, staff_user):
         doc_type = _make_doc_type(facility)
         ft = _make_field_template(facility, name="Notiz-Label")
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "Hallo"}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "Hallo"})
         ctx = build_event_detail_context(event, staff_user)
         assert len(ctx["fields_display"]) == 1
         entry = ctx["fields_display"][0]
@@ -551,9 +499,7 @@ class TestBuildEventDetailContext:
         assert entry["is_sensitive"] is False
         assert "restricted" not in entry
 
-    def test_unknown_slug_label_titleizes_with_dash_replacement(
-        self, facility, client_identified, staff_user
-    ):
+    def test_unknown_slug_label_titleizes_with_dash_replacement(self, facility, client_identified, staff_user):
         """Mutation ``key.replace("-", " ")`` → ``key.replace("_", " ")``
         würde die Label-Generierung kippen."""
         doc_type = _make_doc_type(facility)
@@ -593,9 +539,7 @@ class TestBuildEventDetailContext:
         assert "geheim" not in str(entry["value"])
         assert "Eingeschränkt" in str(entry["value"])
 
-    def test_field_level_sensitivity_overrides_doc_for_visibility(
-        self, facility, client_identified, staff_user
-    ):
+    def test_field_level_sensitivity_overrides_doc_for_visibility(self, facility, client_identified, staff_user):
         """Field-Override HIGH auf NORMAL-doc → STAFF sieht den Wert nicht.
 
         Stellt sicher, dass ``effective_sensitivity`` das Maximum nimmt
@@ -609,15 +553,11 @@ class TestBuildEventDetailContext:
             is_encrypted=True,
         )
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "secret"}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "secret"})
         ctx = build_event_detail_context(event, staff_user)
         assert ctx["fields_display"][0].get("restricted") is True
 
-    def test_is_sensitive_flag_set_for_field_with_sensitivity(
-        self, facility, client_identified, staff_user, lead_user
-    ):
+    def test_is_sensitive_flag_set_for_field_with_sensitivity(self, facility, client_identified, staff_user, lead_user):
         """``bool(field_sensitivity)`` muss True liefern, sobald irgendein
         non-empty Sensitivity-String gesetzt ist."""
         doc_type = _make_doc_type(facility, sensitivity=DocumentType.Sensitivity.HIGH)
@@ -628,40 +568,28 @@ class TestBuildEventDetailContext:
             is_encrypted=True,
         )
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"})
         ctx = build_event_detail_context(event, lead_user)
         assert ctx["fields_display"][0]["is_sensitive"] is True
 
-    def test_is_sensitive_false_for_field_without_sensitivity(
-        self, facility, client_identified, staff_user
-    ):
+    def test_is_sensitive_false_for_field_without_sensitivity(self, facility, client_identified, staff_user):
         doc_type = _make_doc_type(facility)
         ft = _make_field_template(facility, name="Plain")
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"})
         ctx = build_event_detail_context(event, staff_user)
         assert ctx["fields_display"][0]["is_sensitive"] is False
 
-    def test_boolean_field_value_is_formatted(
-        self, facility, client_identified, staff_user
-    ):
+    def test_boolean_field_value_is_formatted(self, facility, client_identified, staff_user):
         """Integration: ``_format_field_display_value`` wird im Aggregat aufgerufen."""
         doc_type = _make_doc_type(facility)
         ft = _make_field_template(facility, name="Bestaetigt", field_type=FieldTemplate.FieldType.BOOLEAN)
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: True}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: True})
         ctx = build_event_detail_context(event, staff_user)
         assert str(ctx["fields_display"][0]["value"]) == "Ja"
 
-    def test_select_field_value_is_resolved_to_label(
-        self, facility, client_identified, staff_user
-    ):
+    def test_select_field_value_is_resolved_to_label(self, facility, client_identified, staff_user):
         doc_type = _make_doc_type(facility)
         ft = _make_field_template(
             facility,
@@ -670,15 +598,11 @@ class TestBuildEventDetailContext:
             options_json=[{"slug": "beratung", "label": "Beratung"}],
         )
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "beratung"}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "beratung"})
         ctx = build_event_detail_context(event, staff_user)
         assert ctx["fields_display"][0]["value"] == "Beratung"
 
-    def test_field_order_follows_sort_order(
-        self, facility, client_identified, staff_user
-    ):
+    def test_field_order_follows_sort_order(self, facility, client_identified, staff_user):
         """``build_field_template_lookup(ordered=True)`` — Reihenfolge folgt
         ``data_json`` (Python-Dict-Reihenfolge bleibt insertion-order).
 
@@ -702,27 +626,17 @@ class TestBuildEventDetailContext:
         labels = [e["label"] for e in ctx["fields_display"]]
         assert labels == ["Erstes", "Zweites"]
 
-    def test_history_sorted_descending_by_changed_at(
-        self, facility, client_identified, staff_user
-    ):
+    def test_history_sorted_descending_by_changed_at(self, facility, client_identified, staff_user):
         """Mutation ``order_by("-changed_at")`` → ``order_by("changed_at")``
         oder Negation würde die History-Reihenfolge kippen."""
         doc_type = _make_doc_type(facility)
         ft = _make_field_template(facility, name="Feld")
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"})
         # Drei History-Entries; auto_now_add setzt Timestamp ASC.
-        h1 = EventHistory.objects.create(
-            event=event, action=EventHistory.Action.CREATE, changed_by=staff_user
-        )
-        h2 = EventHistory.objects.create(
-            event=event, action=EventHistory.Action.UPDATE, changed_by=staff_user
-        )
-        h3 = EventHistory.objects.create(
-            event=event, action=EventHistory.Action.UPDATE, changed_by=staff_user
-        )
+        h1 = EventHistory.objects.create(event=event, action=EventHistory.Action.CREATE, changed_by=staff_user)
+        h2 = EventHistory.objects.create(event=event, action=EventHistory.Action.UPDATE, changed_by=staff_user)
+        h3 = EventHistory.objects.create(event=event, action=EventHistory.Action.UPDATE, changed_by=staff_user)
         ctx = build_event_detail_context(event, staff_user)
         ids = [h.pk for h in ctx["history"]]
         # Erwartet: neueste zuerst — h3, h2, h1.
@@ -731,9 +645,7 @@ class TestBuildEventDetailContext:
         # Belastbar gegen identische Timestamps: prüfe Menge + first/last.
         assert set(ids) == {h1.pk, h2.pk, h3.pk}
 
-    def test_history_entries_carry_event_and_slug_info(
-        self, facility, client_identified, staff_user
-    ):
+    def test_history_entries_carry_event_and_slug_info(self, facility, client_identified, staff_user):
         """Jeder History-Entry bekommt ``entry.event`` + ``entry._slug_info``
         injiziert (Refs #824, C-57). Mutation ``entry.event = event`` würde
         per ``entry.event is event`` failen.
@@ -741,12 +653,8 @@ class TestBuildEventDetailContext:
         doc_type = _make_doc_type(facility)
         ft = _make_field_template(facility, name="Notiz")
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"}
-        )
-        EventHistory.objects.create(
-            event=event, action=EventHistory.Action.CREATE, changed_by=staff_user
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"})
+        EventHistory.objects.create(event=event, action=EventHistory.Action.CREATE, changed_by=staff_user)
         ctx = build_event_detail_context(event, staff_user)
         assert len(ctx["history"]) == 1
         entry = ctx["history"][0]
@@ -771,12 +679,8 @@ class TestBuildEventDetailContext:
             is_encrypted=True,
         )
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"}
-        )
-        EventHistory.objects.create(
-            event=event, action=EventHistory.Action.UPDATE, changed_by=staff_user
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"})
+        EventHistory.objects.create(event=event, action=EventHistory.Action.UPDATE, changed_by=staff_user)
         ctx = build_event_detail_context(event, lead_user)
         info = ctx["history"][0]._slug_info[ft.slug]
         assert info == {
@@ -785,36 +689,26 @@ class TestBuildEventDetailContext:
             "sensitivity": DocumentType.Sensitivity.HIGH,
         }
 
-    def test_history_empty_when_no_changes(
-        self, facility, client_identified, staff_user
-    ):
+    def test_history_empty_when_no_changes(self, facility, client_identified, staff_user):
         doc_type = _make_doc_type(facility)
         ft = _make_field_template(facility, name="Feld")
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"})
         ctx = build_event_detail_context(event, staff_user)
         assert ctx["history"] == []
 
-    def test_assistant_sees_normal_doc_normal_field(
-        self, facility, client_identified, staff_user, assistant_user
-    ):
+    def test_assistant_sees_normal_doc_normal_field(self, facility, client_identified, staff_user, assistant_user):
         """Boundary: ASSISTANT (rank 0) sieht NORMAL doc + NORMAL field — der
         ``<=``-Vergleich muss True liefern."""
         doc_type = _make_doc_type(facility, sensitivity=DocumentType.Sensitivity.NORMAL)
         ft = _make_field_template(facility, name="Plain")
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "ok"}
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "ok"})
         ctx = build_event_detail_context(event, assistant_user)
         assert ctx["fields_display"][0].get("restricted") is not True
         assert ctx["fields_display"][0]["value"] == "ok"
 
-    def test_recent_history_changed_at_ordering_robust(
-        self, facility, client_identified, staff_user
-    ):
+    def test_recent_history_changed_at_ordering_robust(self, facility, client_identified, staff_user):
         """Falls auto_now_add identische Timestamps liefert: explizit
         ``changed_at`` setzen (umgeht den ``auto_now_add``-Default per
         ``update`` nach Insert, weil der EventHistory.save den Update
@@ -827,15 +721,9 @@ class TestBuildEventDetailContext:
         doc_type = _make_doc_type(facility)
         ft = _make_field_template(facility, name="Feld")
         _attach(doc_type, ft)
-        event = _make_event(
-            facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"}
-        )
-        first = EventHistory.objects.create(
-            event=event, action=EventHistory.Action.CREATE, changed_by=staff_user
-        )
-        last = EventHistory.objects.create(
-            event=event, action=EventHistory.Action.UPDATE, changed_by=staff_user
-        )
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"})
+        first = EventHistory.objects.create(event=event, action=EventHistory.Action.CREATE, changed_by=staff_user)
+        last = EventHistory.objects.create(event=event, action=EventHistory.Action.UPDATE, changed_by=staff_user)
         ctx = build_event_detail_context(event, staff_user)
         # Wenn timestamps identisch sind, fällt PostgreSQL auf einen
         # implementations-internen Tie-Break zurück — wir prüfen darum nur,
@@ -871,9 +759,7 @@ class TestSensitivityBoundaryMatrix:
     @pytest.fixture
     def matrix_event(self, facility, client_identified, staff_user, matrix_doc):
         ft_normal = _make_field_template(facility, name="A", sensitivity="")
-        ft_elevated = _make_field_template(
-            facility, name="B", sensitivity=DocumentType.Sensitivity.ELEVATED
-        )
+        ft_elevated = _make_field_template(facility, name="B", sensitivity=DocumentType.Sensitivity.ELEVATED)
         ft_high = _make_field_template(
             facility,
             name="C",
@@ -896,9 +782,7 @@ class TestSensitivityBoundaryMatrix:
         )
         return event, ft_normal, ft_elevated, ft_high
 
-    def test_assistant_sees_normal_only(
-        self, facility, matrix_event, assistant_user
-    ):
+    def test_assistant_sees_normal_only(self, facility, matrix_event, assistant_user):
         event, ft_normal, ft_elevated, ft_high = matrix_event
         result = filtered_server_data_json(assistant_user, event)
         assert set(result.keys()) == {ft_normal.slug}

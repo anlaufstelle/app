@@ -104,9 +104,7 @@ def _make_doc_type(
 
 
 def _attach(doc_type: DocumentType, field_template: FieldTemplate, sort_order: int = 0) -> None:
-    DocumentTypeField.objects.create(
-        document_type=doc_type, field_template=field_template, sort_order=sort_order
-    )
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=field_template, sort_order=sort_order)
 
 
 def _make_event(
@@ -160,9 +158,7 @@ class TestBundleEnvelope:
         assert bundle["ttl"] == BUNDLE_TTL_SECONDS
         assert bundle["ttl"] == 48 * 3600
 
-    def test_expires_at_is_generated_at_plus_ttl(
-        self, facility, client_identified, staff_user
-    ):
+    def test_expires_at_is_generated_at_plus_ttl(self, facility, client_identified, staff_user):
         """Mutation ``generated_at + timedelta(seconds=BUNDLE_TTL_SECONDS)``
         → ``-`` oder Vertauschung der Operanden würde den Abstand killen."""
         from datetime import datetime
@@ -198,9 +194,7 @@ class TestBundleEnvelope:
 class TestBundleClientFields:
     """``bundle["client"]`` enthält genau die acht spezifizierten Felder."""
 
-    def test_client_dict_contains_all_required_keys(
-        self, facility, client_identified, staff_user
-    ):
+    def test_client_dict_contains_all_required_keys(self, facility, client_identified, staff_user):
         """Mutation eines Feld-Keys (``pseudonym`` → ``pseudo`` etc.) wird
         gefangen, weil jeder Key explizit geprueft wird."""
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
@@ -221,15 +215,11 @@ class TestBundleClientFields:
         assert bundle["client"]["pk"] == str(client_identified.pk)
         assert isinstance(bundle["client"]["pk"], str)
 
-    def test_client_pseudonym_matches_source(
-        self, facility, client_identified, staff_user
-    ):
+    def test_client_pseudonym_matches_source(self, facility, client_identified, staff_user):
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
         assert bundle["client"]["pseudonym"] == client_identified.pseudonym
 
-    def test_client_contact_stage_and_display_both_set(
-        self, facility, client_qualified, staff_user
-    ):
+    def test_client_contact_stage_and_display_both_set(self, facility, client_qualified, staff_user):
         """Mutation ``get_contact_stage_display()`` → ``contact_stage`` würde
         identische Werte liefern."""
         bundle = build_client_offline_bundle(staff_user, facility, client_qualified)
@@ -250,9 +240,7 @@ class TestBundleClientFields:
         assert bundle["client"]["age_cluster"] == "18_26"
         assert bundle["client"]["age_cluster_display"] == "18–26"
 
-    def test_client_is_active_passes_through(
-        self, facility, client_identified, staff_user
-    ):
+    def test_client_is_active_passes_through(self, facility, client_identified, staff_user):
         client_identified.is_active = False
         client_identified.save(update_fields=["is_active"])
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
@@ -267,9 +255,7 @@ class TestNotesVisibilityGate:
     werden gefangen.
     """
 
-    def test_assistant_sees_empty_notes(
-        self, facility, client_identified, assistant_user
-    ):
+    def test_assistant_sees_empty_notes(self, facility, client_identified, assistant_user):
         client_identified.notes = "geheim"
         client_identified.save(update_fields=["notes"])
         bundle = build_client_offline_bundle(assistant_user, facility, client_identified)
@@ -288,17 +274,13 @@ class TestNotesVisibilityGate:
         bundle = build_client_offline_bundle(lead_user, facility, client_identified)
         assert bundle["client"]["notes"] == "Lead-Sicht"
 
-    def test_facility_admin_sees_notes(
-        self, facility, client_identified, admin_user
-    ):
+    def test_facility_admin_sees_notes(self, facility, client_identified, admin_user):
         client_identified.notes = "Admin-Sicht"
         client_identified.save(update_fields=["notes"])
         bundle = build_client_offline_bundle(admin_user, facility, client_identified)
         assert bundle["client"]["notes"] == "Admin-Sicht"
 
-    def test_user_without_property_falls_back_to_empty(
-        self, facility, client_identified
-    ):
+    def test_user_without_property_falls_back_to_empty(self, facility, client_identified):
         """Mutation ``hasattr(user, "is_staff_or_above")`` → ``True`` oder
         Removal des Fallbacks ``False`` würde den Branch killen."""
 
@@ -323,9 +305,7 @@ class TestNotesVisibilityGate:
 class TestEventFilter:
     """Cutoff (90 Tage), Slice (50), is_deleted=False, visible_to(user)."""
 
-    def test_slice_limits_events_to_max_per_bundle(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_slice_limits_events_to_max_per_bundle(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation ``[:50]`` → ``[:51]`` oder Removal wird gefangen."""
         for i in range(MAX_EVENTS_PER_BUNDLE + 3):
             _make_event(
@@ -338,9 +318,7 @@ class TestEventFilter:
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
         assert len(bundle["events"]) == MAX_EVENTS_PER_BUNDLE == 50
 
-    def test_lookback_cutoff_excludes_old_events(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_lookback_cutoff_excludes_old_events(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation ``timedelta(days=90)`` → 91/89 verschiebt den Cutoff —
         Event direkt jenseits 90 Tage muss draußen bleiben."""
         old = _make_event(
@@ -389,22 +367,16 @@ class TestEventFilter:
         assert str(ev_in.pk) in pks
         assert str(ev_out.pk) not in pks
 
-    def test_soft_deleted_events_are_excluded(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_soft_deleted_events_are_excluded(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation ``is_deleted=False`` → ``True`` würde nur Gelöschte zeigen."""
         alive = _make_event(facility, client_identified, doc_type_contact, staff_user)
-        dead = _make_event(
-            facility, client_identified, doc_type_contact, staff_user, is_deleted=True
-        )
+        dead = _make_event(facility, client_identified, doc_type_contact, staff_user, is_deleted=True)
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
         pks = {e["pk"] for e in bundle["events"]}
         assert str(alive.pk) in pks
         assert str(dead.pk) not in pks
 
-    def test_events_ordered_descending_by_occurred_at(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_events_ordered_descending_by_occurred_at(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation ``order_by("-occurred_at")`` → ``order_by("occurred_at")``
         oder Negation würde DESC kippen."""
         old = _make_event(
@@ -432,9 +404,7 @@ class TestEventFilter:
         pks = [e["pk"] for e in bundle["events"]]
         assert pks == [str(new.pk), str(mid.pk), str(old.pk)]
 
-    def test_events_for_other_client_excluded(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_events_for_other_client_excluded(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation ``filter(client=client)`` → kein client-Filter würde alle
         Facility-Events leaken."""
         from core.models import Client
@@ -461,9 +431,7 @@ class TestEventFilter:
         # passt nicht, also wir nehmen einen Client der anderen Facility.
         from core.models import Client
 
-        other_client = Client.objects.create(
-            facility=other_facility, pseudonym="OF-1", created_by=staff_user
-        )
+        other_client = Client.objects.create(facility=other_facility, pseudonym="OF-1", created_by=staff_user)
         other_dt = _make_doc_type(other_facility, name="Other DT")
         _make_event(other_facility, other_client, other_dt, staff_user)
 
@@ -472,15 +440,11 @@ class TestEventFilter:
         assert str(own.pk) in pks
         assert len(bundle["events"]) == 1
 
-    def test_high_sensitivity_event_hidden_from_staff(
-        self, facility, client_identified, staff_user
-    ):
+    def test_high_sensitivity_event_hidden_from_staff(self, facility, client_identified, staff_user):
         """visible_to(user) muss greifen — STAFF sieht HIGH-DocumentType-Event
         nicht. Mutation ``visible_to(user)`` → ``all()`` würde es leaken.
         """
-        dt = _make_doc_type(
-            facility, name="HIGH-DT", sensitivity=DocumentType.Sensitivity.HIGH
-        )
+        dt = _make_doc_type(facility, name="HIGH-DT", sensitivity=DocumentType.Sensitivity.HIGH)
         ev = _make_event(facility, client_identified, dt, staff_user)
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
         pks = {e["pk"] for e in bundle["events"]}
@@ -496,9 +460,7 @@ class TestEventFilter:
 class TestDocumentTypesAggregate:
     """Refs Welle 7 — ``doc_types`` dedup + Felder-Serialisierung."""
 
-    def test_document_types_deduped_across_events(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_document_types_deduped_across_events(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation des ``if ev.document_type_id not in doc_types:``-Branch
         würde doppelte DocumentType-Einträge produzieren."""
         for _ in range(3):
@@ -508,9 +470,7 @@ class TestDocumentTypesAggregate:
         assert len(dt_pks) == 1
         assert dt_pks == [str(doc_type_contact.pk)]
 
-    def test_document_types_multiple_distinct(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_document_types_multiple_distinct(self, facility, client_identified, doc_type_contact, staff_user):
         dt2 = _make_doc_type(facility, name="Zweiter DT")
         ft = _make_field_template(facility, name="F")
         _attach(dt2, ft)
@@ -520,9 +480,7 @@ class TestDocumentTypesAggregate:
         dt_pks = {dt["pk"] for dt in bundle["document_types"]}
         assert dt_pks == {str(doc_type_contact.pk), str(dt2.pk)}
 
-    def test_document_types_empty_when_no_events(
-        self, facility, client_identified, staff_user
-    ):
+    def test_document_types_empty_when_no_events(self, facility, client_identified, staff_user):
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
         assert bundle["document_types"] == []
 
@@ -548,9 +506,7 @@ class TestWorkitemFilter:
         pks = {w["pk"] for w in bundle["workitems"]}
         assert str(wi.pk) in pks
 
-    def test_in_progress_workitem_included(
-        self, facility, client_identified, staff_user
-    ):
+    def test_in_progress_workitem_included(self, facility, client_identified, staff_user):
         wi = WorkItem.objects.create(
             facility=facility,
             client=client_identified,
@@ -576,9 +532,7 @@ class TestWorkitemFilter:
         pks = {w["pk"] for w in bundle["workitems"]}
         assert str(done.pk) not in pks
 
-    def test_dismissed_workitem_excluded(
-        self, facility, client_identified, staff_user
-    ):
+    def test_dismissed_workitem_excluded(self, facility, client_identified, staff_user):
         dismissed = WorkItem.objects.create(
             facility=facility,
             client=client_identified,
@@ -590,14 +544,10 @@ class TestWorkitemFilter:
         pks = {w["pk"] for w in bundle["workitems"]}
         assert str(dismissed.pk) not in pks
 
-    def test_workitems_for_other_client_excluded(
-        self, facility, client_identified, staff_user
-    ):
+    def test_workitems_for_other_client_excluded(self, facility, client_identified, staff_user):
         from core.models import Client
 
-        other = Client.objects.create(
-            facility=facility, pseudonym="WIP-OTHER", created_by=staff_user
-        )
+        other = Client.objects.create(facility=facility, pseudonym="WIP-OTHER", created_by=staff_user)
         own = WorkItem.objects.create(
             facility=facility,
             client=client_identified,
@@ -616,9 +566,7 @@ class TestWorkitemFilter:
         pks = {w["pk"] for w in bundle["workitems"]}
         assert pks == {str(own.pk)}
 
-    def test_workitems_from_other_facility_excluded(
-        self, facility, client_identified, staff_user, other_facility
-    ):
+    def test_workitems_from_other_facility_excluded(self, facility, client_identified, staff_user, other_facility):
         from core.models import Client
 
         own = WorkItem.objects.create(
@@ -628,9 +576,7 @@ class TestWorkitemFilter:
             status=WorkItem.Status.OPEN,
             title="own",
         )
-        other_client = Client.objects.create(
-            facility=other_facility, pseudonym="OF-WIP", created_by=staff_user
-        )
+        other_client = Client.objects.create(facility=other_facility, pseudonym="OF-WIP", created_by=staff_user)
         WorkItem.objects.create(
             facility=other_facility,
             client=other_client,
@@ -642,9 +588,7 @@ class TestWorkitemFilter:
         pks = {w["pk"] for w in bundle["workitems"]}
         assert pks == {str(own.pk)}
 
-    def test_workitems_order_descending_by_created_at(
-        self, facility, client_identified, staff_user
-    ):
+    def test_workitems_order_descending_by_created_at(self, facility, client_identified, staff_user):
         """Mutation ``order_by("-created_at")`` → ``"created_at"`` würde
         ASC liefern."""
         first = WorkItem.objects.create(
@@ -705,30 +649,22 @@ class TestCasesFilter:
         pks = {x["pk"] for x in bundle["cases"]}
         assert str(c.pk) in pks
 
-    def test_cases_for_other_client_excluded(
-        self, facility, client_identified, staff_user
-    ):
+    def test_cases_for_other_client_excluded(self, facility, client_identified, staff_user):
         from core.models import Client
 
-        other = Client.objects.create(
-            facility=facility, pseudonym="CASE-OTHER", created_by=staff_user
-        )
+        other = Client.objects.create(facility=facility, pseudonym="CASE-OTHER", created_by=staff_user)
         own = Case.objects.create(
             facility=facility,
             client=client_identified,
             title="own",
             created_by=staff_user,
         )
-        Case.objects.create(
-            facility=facility, client=other, title="foreign", created_by=staff_user
-        )
+        Case.objects.create(facility=facility, client=other, title="foreign", created_by=staff_user)
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
         pks = {x["pk"] for x in bundle["cases"]}
         assert pks == {str(own.pk)}
 
-    def test_cases_order_descending_by_created_at(
-        self, facility, client_identified, staff_user
-    ):
+    def test_cases_order_descending_by_created_at(self, facility, client_identified, staff_user):
         first = Case.objects.create(
             facility=facility,
             client=client_identified,
@@ -762,9 +698,7 @@ class TestSerializeEvent:
         out = _serialize_event(staff_user, event)
         assert out["pk"] == str(event.pk)
 
-    def test_occurred_at_field_is_isoformat(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_occurred_at_field_is_isoformat(self, facility, client_identified, doc_type_contact, staff_user):
         when = timezone.now()
         event = _make_event(
             facility,
@@ -777,16 +711,12 @@ class TestSerializeEvent:
         # Mutation ``isoformat()`` → ``__str__()`` oder Removal würde failen.
         assert out["occurred_at"] == when.isoformat()
 
-    def test_document_type_pk_is_stringified(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_document_type_pk_is_stringified(self, facility, client_identified, doc_type_contact, staff_user):
         event = _make_event(facility, client_identified, doc_type_contact, staff_user)
         out = _serialize_event(staff_user, event)
         assert out["document_type_pk"] == str(doc_type_contact.pk)
 
-    def test_document_type_name_is_set(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_document_type_name_is_set(self, facility, client_identified, doc_type_contact, staff_user):
         event = _make_event(facility, client_identified, doc_type_contact, staff_user)
         out = _serialize_event(staff_user, event)
         assert out["document_type_name"] == doc_type_contact.name
@@ -801,9 +731,7 @@ class TestSerializeEvent:
         out = _serialize_event(staff_user, event)
         assert out["created_by_display"] == "Max Muster"
 
-    def test_created_by_display_falls_back_to_username(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_created_by_display_falls_back_to_username(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation ``or event.created_by.username`` → leerer String würde failen.
 
         ``staff_user`` hat per Fixture keinen full_name → Fallback greift.
@@ -813,9 +741,7 @@ class TestSerializeEvent:
         out = _serialize_event(staff_user, event)
         assert out["created_by_display"] == staff_user.username
 
-    def test_created_by_display_empty_when_user_none(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_created_by_display_empty_when_user_none(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation des ``if event.created_by else ""``-Fallbacks: None-User
         muss leeren String liefern, nicht AttributeError."""
         event = _make_event(
@@ -832,39 +758,29 @@ class TestSerializeEvent:
         out = _serialize_event(staff_user, event)
         assert out["created_by_display"] == ""
 
-    def test_case_pk_is_none_when_no_case(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_case_pk_is_none_when_no_case(self, facility, client_identified, doc_type_contact, staff_user):
         event = _make_event(facility, client_identified, doc_type_contact, staff_user)
         out = _serialize_event(staff_user, event)
         # Mutation ``None`` → ``""`` würde diese Variante killen.
         assert out["case_pk"] is None
 
-    def test_case_pk_set_when_event_has_case(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_case_pk_set_when_event_has_case(self, facility, client_identified, doc_type_contact, staff_user):
         case = Case.objects.create(
             facility=facility,
             client=client_identified,
             title="Case",
             created_by=staff_user,
         )
-        event = _make_event(
-            facility, client_identified, doc_type_contact, staff_user, case=case
-        )
+        event = _make_event(facility, client_identified, doc_type_contact, staff_user, case=case)
         out = _serialize_event(staff_user, event)
         assert out["case_pk"] == str(case.pk)
 
-    def test_episode_pk_is_none_when_no_episode(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_episode_pk_is_none_when_no_episode(self, facility, client_identified, doc_type_contact, staff_user):
         event = _make_event(facility, client_identified, doc_type_contact, staff_user)
         out = _serialize_event(staff_user, event)
         assert out["episode_pk"] is None
 
-    def test_episode_pk_set_when_event_has_episode(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_episode_pk_set_when_event_has_episode(self, facility, client_identified, doc_type_contact, staff_user):
         case = Case.objects.create(
             facility=facility,
             client=client_identified,
@@ -888,9 +804,7 @@ class TestSerializeEvent:
         out = _serialize_event(staff_user, event)
         assert out["episode_pk"] == str(episode.pk)
 
-    def test_is_anonymous_passes_through_true(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_is_anonymous_passes_through_true(self, facility, client_identified, doc_type_contact, staff_user):
         event = _make_event(
             facility,
             client_identified,
@@ -901,9 +815,7 @@ class TestSerializeEvent:
         out = _serialize_event(staff_user, event)
         assert out["is_anonymous"] is True
 
-    def test_is_anonymous_default_false(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_is_anonymous_default_false(self, facility, client_identified, doc_type_contact, staff_user):
         event = _make_event(facility, client_identified, doc_type_contact, staff_user)
         out = _serialize_event(staff_user, event)
         assert out["is_anonymous"] is False
@@ -917,9 +829,7 @@ class TestSerializeEvent:
         assert out["data_fields"] == {}
         assert isinstance(out["data_fields"], dict)
 
-    def test_serialized_keys_complete(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_serialized_keys_complete(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation eines Key-Strings (``case_pk`` → ``casepk``) wird durch
         Vergleich der erwarteten Schluesselmenge gefangen."""
         event = _make_event(facility, client_identified, doc_type_contact, staff_user)
@@ -954,9 +864,7 @@ class TestSerializeCase:
         out = _serialize_case(c)
         assert out["pk"] == str(c.pk)
 
-    def test_title_and_description_passthrough(
-        self, facility, client_identified, staff_user
-    ):
+    def test_title_and_description_passthrough(self, facility, client_identified, staff_user):
         c = Case.objects.create(
             facility=facility,
             client=client_identified,
@@ -968,9 +876,7 @@ class TestSerializeCase:
         assert out["title"] == "Mein Fall"
         assert out["description"] == "Beschreibung X"
 
-    def test_status_and_display_both_set(
-        self, facility, client_identified, staff_user
-    ):
+    def test_status_and_display_both_set(self, facility, client_identified, staff_user):
         c = Case.objects.create(
             facility=facility,
             client=client_identified,
@@ -983,9 +889,7 @@ class TestSerializeCase:
         assert out["status"] == "closed"
         assert out["status_display"] == "Geschlossen"
 
-    def test_created_at_is_isoformat(
-        self, facility, client_identified, staff_user
-    ):
+    def test_created_at_is_isoformat(self, facility, client_identified, staff_user):
         c = Case.objects.create(
             facility=facility,
             client=client_identified,
@@ -995,9 +899,7 @@ class TestSerializeCase:
         out = _serialize_case(c)
         assert out["created_at"] == c.created_at.isoformat()
 
-    def test_closed_at_none_for_open_case(
-        self, facility, client_identified, staff_user
-    ):
+    def test_closed_at_none_for_open_case(self, facility, client_identified, staff_user):
         """Mutation ``case.closed_at.isoformat() if case.closed_at else None``
         → leerer String wuerde failen."""
         c = Case.objects.create(
@@ -1010,9 +912,7 @@ class TestSerializeCase:
         out = _serialize_case(c)
         assert out["closed_at"] is None
 
-    def test_closed_at_isoformat_when_set(
-        self, facility, client_identified, staff_user
-    ):
+    def test_closed_at_isoformat_when_set(self, facility, client_identified, staff_user):
         when = timezone.now()
         c = Case.objects.create(
             facility=facility,
@@ -1028,9 +928,7 @@ class TestSerializeCase:
         c.refresh_from_db()
         assert out["closed_at"] == c.closed_at.isoformat()
 
-    def test_lead_user_display_empty_when_none(
-        self, facility, client_identified, staff_user
-    ):
+    def test_lead_user_display_empty_when_none(self, facility, client_identified, staff_user):
         c = Case.objects.create(
             facility=facility,
             client=client_identified,
@@ -1041,9 +939,7 @@ class TestSerializeCase:
         out = _serialize_case(c)
         assert out["lead_user_display"] == ""
 
-    def test_lead_user_display_falls_back_to_username(
-        self, facility, client_identified, staff_user, lead_user
-    ):
+    def test_lead_user_display_falls_back_to_username(self, facility, client_identified, staff_user, lead_user):
         """Mutation ``or lead_user.username``-Fallback: Lead ohne full_name
         muss username liefern."""
         assert lead_user.get_full_name() == ""
@@ -1057,9 +953,7 @@ class TestSerializeCase:
         out = _serialize_case(c)
         assert out["lead_user_display"] == lead_user.username
 
-    def test_lead_user_display_uses_full_name(
-        self, facility, client_identified, staff_user, lead_user
-    ):
+    def test_lead_user_display_uses_full_name(self, facility, client_identified, staff_user, lead_user):
         lead_user.first_name = "Lea"
         lead_user.last_name = "Direktorin"
         lead_user.save()
@@ -1073,9 +967,7 @@ class TestSerializeCase:
         out = _serialize_case(c)
         assert out["lead_user_display"] == "Lea Direktorin"
 
-    def test_case_serialized_keys_complete(
-        self, facility, client_identified, staff_user
-    ):
+    def test_case_serialized_keys_complete(self, facility, client_identified, staff_user):
         c = Case.objects.create(
             facility=facility,
             client=client_identified,
@@ -1133,9 +1025,7 @@ class TestSerializeWorkitem:
         )
         assert _serialize_workitem(wi)["pk"] == str(wi.pk)
 
-    def test_workitem_title_and_description(
-        self, facility, client_identified, staff_user
-    ):
+    def test_workitem_title_and_description(self, facility, client_identified, staff_user):
         wi = WorkItem.objects.create(
             facility=facility,
             client=client_identified,
@@ -1147,9 +1037,7 @@ class TestSerializeWorkitem:
         assert out["title"] == "MyTitle"
         assert out["description"] == "MyDesc"
 
-    def test_workitem_status_passthrough(
-        self, facility, client_identified, staff_user
-    ):
+    def test_workitem_status_passthrough(self, facility, client_identified, staff_user):
         wi = WorkItem.objects.create(
             facility=facility,
             client=client_identified,
@@ -1162,9 +1050,7 @@ class TestSerializeWorkitem:
         # würde "In Bearbeitung" liefern.
         assert out["status"] == "in_progress"
 
-    def test_workitem_priority_passthrough(
-        self, facility, client_identified, staff_user
-    ):
+    def test_workitem_priority_passthrough(self, facility, client_identified, staff_user):
         wi = WorkItem.objects.create(
             facility=facility,
             client=client_identified,
@@ -1175,9 +1061,7 @@ class TestSerializeWorkitem:
         out = _serialize_workitem(wi)
         assert out["priority"] == "urgent"
 
-    def test_workitem_item_type_passthrough(
-        self, facility, client_identified, staff_user
-    ):
+    def test_workitem_item_type_passthrough(self, facility, client_identified, staff_user):
         wi = WorkItem.objects.create(
             facility=facility,
             client=client_identified,
@@ -1201,9 +1085,7 @@ class TestSerializeWorkitem:
         out = _serialize_workitem(wi)
         assert out["due_date"] is None
 
-    def test_workitem_due_date_isoformat_when_set(
-        self, facility, client_identified, staff_user
-    ):
+    def test_workitem_due_date_isoformat_when_set(self, facility, client_identified, staff_user):
         when = timezone.now().date()
         wi = WorkItem.objects.create(
             facility=facility,
@@ -1249,9 +1131,7 @@ class TestSerializeDocumentType:
     def test_dt_sensitivity_passes_through_value_not_display(self, facility):
         """Mutation ``doc_type.sensitivity`` → ``.get_sensitivity_display()``
         wuerde "Hoch" statt "high" liefern."""
-        dt = _make_doc_type(
-            facility, name="HD", sensitivity=DocumentType.Sensitivity.HIGH
-        )
+        dt = _make_doc_type(facility, name="HD", sensitivity=DocumentType.Sensitivity.HIGH)
         out = _serialize_document_type(dt)
         assert out["sensitivity"] == "high"
 
@@ -1343,9 +1223,7 @@ class TestSerializeFieldTemplate:
         assert out["is_encrypted"] is False
 
     def test_name_and_slug_and_field_type(self):
-        out = _serialize_field_template(
-            self._make_ft_stub(slug="my-slug", name="My", field_type="number")
-        )
+        out = _serialize_field_template(self._make_ft_stub(slug="my-slug", name="My", field_type="number"))
         assert out["slug"] == "my-slug"
         assert out["name"] == "My"
         assert out["field_type"] == "number"
@@ -1364,17 +1242,11 @@ class TestVisibleDataFields:
     Marker, ``__encrypted__``-Branch via ``safe_decrypt``.
     """
 
-    def test_empty_data_returns_empty_dict(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
-        event = _make_event(
-            facility, client_identified, doc_type_contact, staff_user, data_json={}
-        )
+    def test_empty_data_returns_empty_dict(self, facility, client_identified, doc_type_contact, staff_user):
+        event = _make_event(facility, client_identified, doc_type_contact, staff_user, data_json={})
         assert _visible_data_fields(staff_user, event) == {}
 
-    def test_plain_value_kept_for_visible_field(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_plain_value_kept_for_visible_field(self, facility, client_identified, doc_type_contact, staff_user):
         event = _make_event(
             facility,
             client_identified,
@@ -1385,15 +1257,9 @@ class TestVisibleDataFields:
         result = _visible_data_fields(staff_user, event)
         assert result["notiz"] == "Hallo"
 
-    def test_field_stripped_when_user_cannot_see(
-        self, facility, client_identified, staff_user, assistant_user
-    ):
-        dt = _make_doc_type(
-            facility, name="HD", sensitivity=DocumentType.Sensitivity.HIGH
-        )
-        ft = _make_field_template(
-            facility, name="X", sensitivity="high", is_encrypted=True
-        )
+    def test_field_stripped_when_user_cannot_see(self, facility, client_identified, staff_user, assistant_user):
+        dt = _make_doc_type(facility, name="HD", sensitivity=DocumentType.Sensitivity.HIGH)
+        ft = _make_field_template(facility, name="X", sensitivity="high", is_encrypted=True)
         _attach(dt, ft)
         event = _make_event(
             facility,
@@ -1408,9 +1274,7 @@ class TestVisibleDataFields:
         # Assistant sieht weder HIGH doc noch HIGH field — Strip greift.
         assert ft.slug not in result
 
-    def test_single_file_marker_keeps_name_only(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_single_file_marker_keeps_name_only(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation ``"name": value.get("name", "")`` → ``"id"`` wuerde id leaken."""
         event = _make_event(
             facility,
@@ -1448,9 +1312,7 @@ class TestVisibleDataFields:
         result = _visible_data_fields(staff_user, event)
         assert result["notiz"] == {"__file__": True, "name": ""}
 
-    def test_multi_file_marker_returns_count_only(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_multi_file_marker_returns_count_only(self, facility, client_identified, doc_type_contact, staff_user):
         """Refs #786: ``__files__``-Branch reduziert auf count, KEINE entries/IDs."""
         event = _make_event(
             facility,
@@ -1531,9 +1393,7 @@ class TestVisibleDataFields:
         result = _visible_data_fields(staff_user, event)
         assert result["notiz"] == {"__files__": True, "count": 0}
 
-    def test_encrypted_value_is_decrypted(
-        self, facility, client_identified, staff_user
-    ):
+    def test_encrypted_value_is_decrypted(self, facility, client_identified, staff_user):
         """``__encrypted__``-Branch: ``safe_decrypt`` muss aufgerufen werden.
 
         Mit gueltigem ENCRYPTION_KEY laeuft decrypt durch — Klartext landet

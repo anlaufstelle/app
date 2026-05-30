@@ -31,7 +31,7 @@ from core.forms.cases import CaseForm
 from core.forms.clients import ClientForm
 from core.forms.episodes import EpisodeForm
 from core.forms.workitems import WorkItemForm
-from core.models import Case, Client, Episode, WorkItem
+from core.models import Case, Client, WorkItem
 from core.models.outcome import Milestone, OutcomeGoal
 from tests._form_helpers import (
     assert_clean_value,

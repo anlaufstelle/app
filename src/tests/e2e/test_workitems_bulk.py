@@ -102,9 +102,7 @@ class TestBulkPriority:
         for wi in ids:
             page.goto(f"{base_url}/workitems/{wi}/", wait_until="domcontentloaded")
             content = page.content().lower()
-            assert "dringend" in content or "urgent" in content, (
-                f"WorkItem {wi} sollte nach Bulk-Update urgent sein."
-            )
+            assert "dringend" in content or "urgent" in content, f"WorkItem {wi} sollte nach Bulk-Update urgent sein."
 
     def test_bulk_priority_invalid_returns_400(self, staff_page, base_url):
         page = staff_page
@@ -115,9 +113,7 @@ class TestBulkPriority:
             "/workitems/bulk-priority/",
             {"workitem_ids": ids, "priority": "nonsense"},
         )
-        assert result["status"] == 400, (
-            f"Ungültiger Priority-Value muss 400 liefern, ist {result['status']}"
-        )
+        assert result["status"] == 400, f"Ungültiger Priority-Value muss 400 liefern, ist {result['status']}"
 
 
 class TestBulkAssign:
@@ -157,9 +153,7 @@ class TestBulkAssign:
             "/workitems/bulk-assign/",
             {"workitem_ids": ids, "assigned_to": str(uuid.uuid4())},
         )
-        assert result["status"] == 400, (
-            f"Unbekannte User-ID muss 400 liefern, ist {result['status']}"
-        )
+        assert result["status"] == 400, f"Unbekannte User-ID muss 400 liefern, ist {result['status']}"
 
 
 def _distinct_workitem_ids_with_title(page, base_url, title: str) -> set[str]:
@@ -173,9 +167,9 @@ def _distinct_workitem_ids_with_title(page, base_url, title: str) -> set[str]:
     ids: set[str] = set()
     for status_filter in ("open", "in_progress", "done"):
         page.goto(f"{base_url}/workitems/?status={status_filter}", wait_until="domcontentloaded")
-        hrefs = page.locator(
-            f"a[href*='/workitems/']:has-text('{title}')"
-        ).evaluate_all("els => els.map(e => e.getAttribute('href'))")
+        hrefs = page.locator(f"a[href*='/workitems/']:has-text('{title}')").evaluate_all(
+            "els => els.map(e => e.getAttribute('href'))"
+        )
         for href in hrefs:
             m = re.search(r"/workitems/([0-9a-f-]{36})/", href or "")
             if m:
@@ -204,8 +198,7 @@ class TestRecurrence:
         ids = _distinct_workitem_ids_with_title(page, base_url, title)
         assert wi_id in ids, "Original-WorkItem fehlt nach DONE in der Liste."
         assert len(ids) >= 2, (
-            f"Erwarte mind. 2 distinkte WorkItems mit Title {title!r} (Original + Folge), "
-            f"gefunden: {len(ids)} ({ids})."
+            f"Erwarte mind. 2 distinkte WorkItems mit Title {title!r} (Original + Folge), gefunden: {len(ids)} ({ids})."
         )
 
     def test_weekly_done_is_idempotent(self, staff_page, base_url):

@@ -177,9 +177,7 @@ class TestGatherClientFields:
             created_by=staff_user,
         )
         result = _gather_client_fields(c)
-        assert result["is_active"] is False, (
-            "Bool muss 1:1 durchgereicht werden, nicht negiert"
-        )
+        assert result["is_active"] is False, "Bool muss 1:1 durchgereicht werden, nicht negiert"
 
     def test_created_at_is_isoformat_string(self, client_identified):
         """Mutation ``.isoformat()`` → ``.strftime(...)`` oder Entfernen würde
@@ -252,9 +250,7 @@ class TestSerializeEvent:
         result = _serialize_event(sample_event)
         assert result["created_by"] == staff_user.username
 
-    def test_created_by_none_when_user_missing(
-        self, facility, client_identified, doc_type_contact
-    ):
+    def test_created_by_none_when_user_missing(self, facility, client_identified, doc_type_contact):
         """Mutation ``if event.created_by else None`` → fester Wert würde
         ``None``-Branch verändern."""
         ev = Event.objects.create(
@@ -268,9 +264,7 @@ class TestSerializeEvent:
         result = _serialize_event(ev)
         assert result["created_by"] is None
 
-    def test_empty_data_json_yields_empty_data_dict(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_empty_data_json_yields_empty_data_dict(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation ``if event.data_json:`` (Negation) würde non-empty
         Dicts überspringen oder leere durchwinken — hier prüfen wir den
         Falsy-Branch explizit."""
@@ -278,9 +272,7 @@ class TestSerializeEvent:
         result = _serialize_event(ev)
         assert result["data"] == {}
 
-    def test_plain_value_passes_through_untouched(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_plain_value_passes_through_untouched(self, facility, client_identified, doc_type_contact, staff_user):
         """Non-dict-Werte landen 1:1 in ``data`` — der ``isinstance(value, dict)``-
         Check ist die Boundary."""
         ev = _make_event(
@@ -347,9 +339,7 @@ class TestGatherEvents:
     - Sort: ``-occurred_at`` (neueste zuerst)
     """
 
-    def test_returns_tuple_of_list_and_id_list(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_returns_tuple_of_list_and_id_list(self, facility, client_identified, doc_type_contact, staff_user):
         ev = _make_event(facility, client_identified, doc_type_contact, staff_user)
         events_data, event_ids = _gather_events(client_identified, staff_user)
         assert isinstance(events_data, list)
@@ -362,16 +352,12 @@ class TestGatherEvents:
         assert events_data == []
         assert event_ids == []
 
-    def test_excludes_soft_deleted_events(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_excludes_soft_deleted_events(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation ``is_deleted=False`` → ``is_deleted=True`` würde alle
         gelöschten Events im Export landen lassen. ``False`` → entfernt
         würde wiederum gelöschte mit-exportieren."""
         kept = _make_event(facility, client_identified, doc_type_contact, staff_user)
-        deleted = _make_event(
-            facility, client_identified, doc_type_contact, staff_user, is_deleted=True
-        )
+        deleted = _make_event(facility, client_identified, doc_type_contact, staff_user, is_deleted=True)
         events_data, event_ids = _gather_events(client_identified, staff_user)
         assert kept.pk in event_ids
         assert deleted.pk not in event_ids
@@ -396,9 +382,7 @@ class TestGatherEvents:
         nicht sehen. Mutation ``visible_to(user)`` → ``all()`` würde den
         Elevated-Event im Assistent:innen-Export auftauchen lassen.
         """
-        elevated_doc = _make_doc_type(
-            facility, name="Krise", sensitivity=DocumentType.Sensitivity.ELEVATED
-        )
+        elevated_doc = _make_doc_type(facility, name="Krise", sensitivity=DocumentType.Sensitivity.ELEVATED)
         normal_event = _make_event(facility, client_identified, doc_type_contact, staff_user)
         elevated_event = _make_event(facility, client_identified, elevated_doc, staff_user)
 
@@ -408,9 +392,7 @@ class TestGatherEvents:
             "ASSISTANT darf ELEVATED-Events nicht im Export sehen — Sensitivity-Matrix verletzt"
         )
 
-    def test_lead_sees_high_sensitivity_events(
-        self, facility, client_identified, staff_user, lead_user
-    ):
+    def test_lead_sees_high_sensitivity_events(self, facility, client_identified, staff_user, lead_user):
         """LEAD (rank 2) sieht HIGH-Events. Boundary auf der oberen Seite
         der Sensitivity-Matrix."""
         high_doc = _make_doc_type(facility, name="Hoch", sensitivity=DocumentType.Sensitivity.HIGH)
@@ -418,9 +400,7 @@ class TestGatherEvents:
         events_data, event_ids = _gather_events(client_identified, lead_user)
         assert ev.pk in event_ids
 
-    def test_order_descending_by_occurred_at(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_order_descending_by_occurred_at(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation ``order_by("-occurred_at")`` → ``order_by("occurred_at")``
         oder Entfernen würde die Sortierung kippen. Neueste Events
         müssen oben stehen."""
@@ -439,9 +419,7 @@ class TestGatherEvents:
             staff_user,
             occurred_at=now - timedelta(days=1),
         )
-        ev_new = _make_event(
-            facility, client_identified, doc_type_contact, staff_user, occurred_at=now
-        )
+        ev_new = _make_event(facility, client_identified, doc_type_contact, staff_user, occurred_at=now)
         events_data, event_ids = _gather_events(client_identified, staff_user)
         # Reihenfolge: neueste zuerst, dann mid, dann old.
         assert event_ids == [ev_new.pk, ev_mid.pk, ev_old.pk]
@@ -509,9 +487,7 @@ class TestGatherCases:
         }
 
     def test_title_preserved(self, facility, client_identified, staff_user):
-        CaseModel.objects.create(
-            facility=facility, client=client_identified, title="Mein Fall", created_by=staff_user
-        )
+        CaseModel.objects.create(facility=facility, client=client_identified, title="Mein Fall", created_by=staff_user)
         assert _gather_cases(client_identified)[0]["title"] == "Mein Fall"
 
     def test_description_preserved(self, facility, client_identified, staff_user):
@@ -548,9 +524,7 @@ class TestGatherCases:
         assert _gather_cases(client_identified)[0]["status"] == "Geschlossen"
 
     def test_created_at_isoformat(self, facility, client_identified, staff_user):
-        c = CaseModel.objects.create(
-            facility=facility, client=client_identified, title="X", created_by=staff_user
-        )
+        c = CaseModel.objects.create(facility=facility, client=client_identified, title="X", created_by=staff_user)
         result = _gather_cases(client_identified)[0]
         assert isinstance(result["created_at"], str)
         assert result["created_at"] == c.created_at.isoformat()
@@ -594,48 +568,32 @@ class TestGatherCases:
     def test_lead_user_none_when_unset(self, facility, client_identified, staff_user):
         """Mutation ``... if case.lead_user else None`` → fester Wert würde
         bei fehlendem Lead crashen oder falsche Werte liefern."""
-        CaseModel.objects.create(
-            facility=facility, client=client_identified, title="X", created_by=staff_user
-        )
+        CaseModel.objects.create(facility=facility, client=client_identified, title="X", created_by=staff_user)
         assert _gather_cases(client_identified)[0]["lead_user"] is None
 
     def test_created_by_username(self, facility, client_identified, staff_user):
-        CaseModel.objects.create(
-            facility=facility, client=client_identified, title="X", created_by=staff_user
-        )
+        CaseModel.objects.create(facility=facility, client=client_identified, title="X", created_by=staff_user)
         assert _gather_cases(client_identified)[0]["created_by"] == staff_user.username
 
     def test_created_by_none_when_unset(self, facility, client_identified):
         """``created_by`` ist optional (SET_NULL) — None muss durchgereicht werden."""
-        CaseModel.objects.create(
-            facility=facility, client=client_identified, title="X", created_by=None
-        )
+        CaseModel.objects.create(facility=facility, client=client_identified, title="X", created_by=None)
         assert _gather_cases(client_identified)[0]["created_by"] is None
 
-    def test_excludes_cases_of_other_clients(
-        self, facility, client_identified, client_qualified, staff_user
-    ):
+    def test_excludes_cases_of_other_clients(self, facility, client_identified, client_qualified, staff_user):
         """``filter(client=client)``-Boundary: Cross-Klient-Daten müssen
         unsichtbar bleiben."""
-        own = CaseModel.objects.create(
-            facility=facility, client=client_identified, title="Own", created_by=staff_user
-        )
-        CaseModel.objects.create(
-            facility=facility, client=client_qualified, title="Other", created_by=staff_user
-        )
+        own = CaseModel.objects.create(facility=facility, client=client_identified, title="Own", created_by=staff_user)
+        CaseModel.objects.create(facility=facility, client=client_qualified, title="Other", created_by=staff_user)
         results = _gather_cases(client_identified)
         assert len(results) == 1
         assert results[0]["title"] == "Own"
         assert own  # noqa: B015 — gegen Lint-Warning
 
-    def test_order_descending_by_created_at(
-        self, facility, client_identified, staff_user
-    ):
+    def test_order_descending_by_created_at(self, facility, client_identified, staff_user):
         """Mutation ``-created_at`` → ``created_at`` würde die Reihenfolge
         invertieren (ältester zuerst)."""
-        c1 = CaseModel.objects.create(
-            facility=facility, client=client_identified, title="Erst", created_by=staff_user
-        )
+        c1 = CaseModel.objects.create(facility=facility, client=client_identified, title="Erst", created_by=staff_user)
         c2 = CaseModel.objects.create(
             facility=facility, client=client_identified, title="Zweite", created_by=staff_user
         )
@@ -744,12 +702,8 @@ class TestGatherEventHistory:
     def test_order_descending_by_changed_at(self, sample_event, staff_user):
         """Mutation ``-changed_at`` → ``changed_at`` würde älteste zuerst
         zeigen. Wir verifizieren ID-Reihenfolge bei auto_now_add."""
-        EventHistory.objects.create(
-            event=sample_event, action=EventHistory.Action.CREATE, changed_by=staff_user
-        )
-        EventHistory.objects.create(
-            event=sample_event, action=EventHistory.Action.UPDATE, changed_by=staff_user
-        )
+        EventHistory.objects.create(event=sample_event, action=EventHistory.Action.CREATE, changed_by=staff_user)
+        EventHistory.objects.create(event=sample_event, action=EventHistory.Action.UPDATE, changed_by=staff_user)
         h_last = EventHistory.objects.create(
             event=sample_event, action=EventHistory.Action.UPDATE, changed_by=staff_user
         )
@@ -762,19 +716,13 @@ class TestGatherEventHistory:
         assert result[0]["changed_at"] >= result[-1]["changed_at"]
         assert h_last  # noqa: B015
 
-    def test_excludes_history_of_other_events(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_excludes_history_of_other_events(self, facility, client_identified, doc_type_contact, staff_user):
         """``filter(event_id__in=event_ids)``-Boundary: History eines
         anderen Events darf nicht im Export auftauchen."""
         ev_own = _make_event(facility, client_identified, doc_type_contact, staff_user)
         ev_other = _make_event(facility, client_identified, doc_type_contact, staff_user)
-        EventHistory.objects.create(
-            event=ev_own, action=EventHistory.Action.CREATE, changed_by=staff_user
-        )
-        EventHistory.objects.create(
-            event=ev_other, action=EventHistory.Action.UPDATE, changed_by=staff_user
-        )
+        EventHistory.objects.create(event=ev_own, action=EventHistory.Action.CREATE, changed_by=staff_user)
+        EventHistory.objects.create(event=ev_other, action=EventHistory.Action.UPDATE, changed_by=staff_user)
         result = _gather_event_history([ev_own.pk])
         assert len(result) == 1
         assert result[0]["action"] == "Erstellt"
@@ -855,9 +803,7 @@ class TestGatherDeletionRequests:
             reason="Klient hat Auskunft beantragt",
             requested_by=staff_user,
         )
-        assert _gather_deletion_requests([sample_event.pk])[0]["reason"] == (
-            "Klient hat Auskunft beantragt"
-        )
+        assert _gather_deletion_requests([sample_event.pk])[0]["reason"] == ("Klient hat Auskunft beantragt")
 
     def test_requested_by_username(self, facility, sample_event, staff_user):
         DeletionRequest.objects.create(
@@ -884,9 +830,7 @@ class TestGatherDeletionRequests:
         assert result["reviewed_by"] is None
         assert result["reviewed_at"] is None
 
-    def test_reviewed_by_username_when_approved(
-        self, facility, sample_event, staff_user, lead_user
-    ):
+    def test_reviewed_by_username_when_approved(self, facility, sample_event, staff_user, lead_user):
         t = timezone.now()
         DeletionRequest.objects.create(
             facility=facility,
@@ -913,9 +857,7 @@ class TestGatherDeletionRequests:
         result = _gather_deletion_requests([sample_event.pk])[0]
         assert result["created_at"] == dr.created_at.isoformat()
 
-    def test_filter_target_id_in_event_ids(
-        self, facility, client_identified, doc_type_contact, staff_user
-    ):
+    def test_filter_target_id_in_event_ids(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation ``target_id__in=event_ids`` → ohne Filter würde alle
         DeletionRequests laden — auch von anderen Events."""
         ev_own = _make_event(facility, client_identified, doc_type_contact, staff_user)
@@ -938,9 +880,7 @@ class TestGatherDeletionRequests:
         assert len(result) == 1
         assert result[0]["reason"] == "Own"
 
-    def test_filter_target_type_event_only(
-        self, facility, client_identified, sample_event, staff_user
-    ):
+    def test_filter_target_type_event_only(self, facility, client_identified, sample_event, staff_user):
         """Mutation ``target_type="Event"`` → ``"Client"`` würde komplett
         andere Records liefern. Wir legen einen CLIENT-DeletionRequest
         mit demselben ``target_id`` an und stellen sicher, dass er
@@ -965,9 +905,7 @@ class TestGatherDeletionRequests:
         assert len(result) == 1
         assert result[0]["reason"] == "Echter Event-DR"
 
-    def test_order_descending_by_created_at(
-        self, facility, sample_event, staff_user, lead_user
-    ):
+    def test_order_descending_by_created_at(self, facility, sample_event, staff_user, lead_user):
         """Mutation ``-created_at`` → ``created_at`` würde die Reihenfolge
         invertieren."""
         d1 = DeletionRequest.objects.create(
@@ -1042,9 +980,7 @@ class TestGatherWorkItems:
             title="X",
             description="Lange Workitem-Beschreibung",
         )
-        assert _gather_workitems(client_identified)[0]["description"] == (
-            "Lange Workitem-Beschreibung"
-        )
+        assert _gather_workitems(client_identified)[0]["description"] == ("Lange Workitem-Beschreibung")
 
     def test_status_uses_display_label(self, sample_workitem):
         """Mutation ``get_status_display()`` → ``status`` würde Slug
@@ -1099,9 +1035,7 @@ class TestGatherWorkItems:
         result = _gather_workitems(client_identified)[0]
         assert result["due_date"] == due.isoformat()
 
-    def test_excludes_workitems_of_other_clients(
-        self, facility, client_identified, client_qualified, staff_user
-    ):
+    def test_excludes_workitems_of_other_clients(self, facility, client_identified, client_qualified, staff_user):
         """``filter(client=client)``-Boundary: Cross-Klient-Daten dürfen
         nicht in den Export leaken."""
         WorkItem.objects.create(
@@ -1123,15 +1057,9 @@ class TestGatherWorkItems:
     def test_order_descending_by_created_at(self, facility, client_identified, staff_user):
         """Mutation ``-created_at`` → ``created_at`` würde älteste zuerst
         liefern."""
-        WorkItem.objects.create(
-            facility=facility, client=client_identified, created_by=staff_user, title="Erst"
-        )
-        WorkItem.objects.create(
-            facility=facility, client=client_identified, created_by=staff_user, title="Zweite"
-        )
-        WorkItem.objects.create(
-            facility=facility, client=client_identified, created_by=staff_user, title="Dritte"
-        )
+        WorkItem.objects.create(facility=facility, client=client_identified, created_by=staff_user, title="Erst")
+        WorkItem.objects.create(facility=facility, client=client_identified, created_by=staff_user, title="Zweite")
+        WorkItem.objects.create(facility=facility, client=client_identified, created_by=staff_user, title="Dritte")
         result = _gather_workitems(client_identified)
         titles = [r["title"] for r in result]
         assert titles == ["Dritte", "Zweite", "Erst"]
@@ -1208,9 +1136,7 @@ class TestExportClientDataAggregate:
     hochgereicht wird (Defense in Depth).
     """
 
-    def test_top_level_dict_contains_all_seven_keys(
-        self, client_identified, facility, staff_user
-    ):
+    def test_top_level_dict_contains_all_seven_keys(self, client_identified, facility, staff_user):
         result = export_client_data(client_identified, facility, staff_user)
         assert set(result.keys()) == {
             "client",
@@ -1231,13 +1157,9 @@ class TestExportClientDataAggregate:
 
         Mutation ``event_ids.append(event.pk)`` → vor ``visible_to`` würde
         das Loch öffnen."""
-        elevated_doc = _make_doc_type(
-            facility, name="Krise", sensitivity=DocumentType.Sensitivity.ELEVATED
-        )
+        elevated_doc = _make_doc_type(facility, name="Krise", sensitivity=DocumentType.Sensitivity.ELEVATED)
         elevated_event = _make_event(facility, client_identified, elevated_doc, staff_user)
-        EventHistory.objects.create(
-            event=elevated_event, action=EventHistory.Action.CREATE, changed_by=staff_user
-        )
+        EventHistory.objects.create(event=elevated_event, action=EventHistory.Action.CREATE, changed_by=staff_user)
         DeletionRequest.objects.create(
             facility=facility,
             target_type=DeletionRequest.TargetType.EVENT,
@@ -1247,9 +1169,7 @@ class TestExportClientDataAggregate:
         )
         result = export_client_data(client_identified, facility, assistant_user)
         assert result["events"] == []
-        assert result["event_history"] == [], (
-            "EventHistory eines unsichtbaren Events darf nicht im Export landen"
-        )
+        assert result["event_history"] == [], "EventHistory eines unsichtbaren Events darf nicht im Export landen"
         assert result["deletion_requests"] == [], (
             "DeletionRequests eines unsichtbaren Events darf nicht im Export landen"
         )
@@ -1264,9 +1184,7 @@ class TestExportClientDataAggregate:
     ):
         """Cases/WorkItems sind unabhängig von Event-Visibility — sie müssen
         immer da sein, sofern sie auf dem Klienten hängen."""
-        CaseModel.objects.create(
-            facility=facility, client=client_identified, title="Cs", created_by=staff_user
-        )
+        CaseModel.objects.create(facility=facility, client=client_identified, title="Cs", created_by=staff_user)
         _make_event(facility, client_identified, doc_type_contact, staff_user)
         result = export_client_data(client_identified, facility, staff_user)
         assert len(result["events"]) == 1

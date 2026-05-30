@@ -77,9 +77,7 @@ class TestSettingsHash:
         """
         h = _settings_hash(_make_stub())
         assert len(h) == 8, f"Erwarte 8 Zeichen, bekomme {len(h)}: {h!r}"
-        assert all(c in "0123456789abcdef" for c in h), (
-            f"Hash enthält Nicht-Hex-Zeichen: {h!r}"
-        )
+        assert all(c in "0123456789abcdef" for c in h), f"Hash enthält Nicht-Hex-Zeichen: {h!r}"
 
     def test_identical_settings_yield_identical_hash(self):
         """Determinismus: gleiche Eingabe → gleicher Hash, wiederholt.
@@ -112,9 +110,7 @@ class TestSettingsHash:
             "retention_qualified_days": 3650,
             "facility_full_name": "Anlaufstelle Musterstadt",
         }
-        expected = hashlib.sha256(
-            json.dumps(expected_payload, sort_keys=True).encode("utf-8")
-        ).hexdigest()[:8]
+        expected = hashlib.sha256(json.dumps(expected_payload, sort_keys=True).encode("utf-8")).hexdigest()[:8]
         assert _settings_hash(stub) == expected
 
     # ------------------------------------------------------------------
@@ -206,10 +202,7 @@ class TestSettingsHash:
         """
         h_none = _settings_hash(_make_stub(facility_full_name=None))
         h_empty = _settings_hash(_make_stub(facility_full_name=""))
-        assert h_none == h_empty, (
-            f"None und Leerstring müssen identisch hashen, sind aber "
-            f"{h_none} vs {h_empty}"
-        )
+        assert h_none == h_empty, f"None und Leerstring müssen identisch hashen, sind aber {h_none} vs {h_empty}"
 
     def test_none_facility_full_name_different_from_nonempty(self):
         """``None`` muss anderen Hash ergeben als ein realer Name —
@@ -272,6 +265,5 @@ class TestSettingsHash:
         s.refresh_from_db()
         h_after = _settings_hash(s)
         assert h_before == h_after, (
-            "session_timeout_minutes darf den Hash nicht beeinflussen, "
-            f"bekam aber {h_before} → {h_after}"
+            f"session_timeout_minutes darf den Hash nicht beeinflussen, bekam aber {h_before} → {h_after}"
         )

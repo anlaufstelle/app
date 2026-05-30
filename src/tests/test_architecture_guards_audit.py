@@ -1,4 +1,4 @@
-"""Architecture-Guards — Audit-Completeness, Settings-Allowlist und E2E-Selektor-Stabilitäts-Guard (Refs Welle 6 #929)."""
+"""Architecture-Guards — Audit-Completeness, Settings-Allowlist, E2E-Selektor-Stabilität (Refs Welle 6 #929)."""
 
 import re
 from pathlib import Path

@@ -424,17 +424,13 @@ class TestHTMXCaseEvents:
         container.locator("button:has-text('Zuordnen')").click()
         # HTMX-Swap: nach erfolgreicher Zuordnung taucht ein Event-Card mit
         # Remove-Form innerhalb des Containers auf.
-        page.locator("#case-event-list form[action*='/remove-event/']").first.wait_for(
-            state="visible", timeout=5000
-        )
+        page.locator("#case-event-list form[action*='/remove-event/']").first.wait_for(state="visible", timeout=5000)
         assert page.url == url_before, "HTMX-Assign darf nicht zu Voll-Navigation führen."
 
         # ENT-CASE-09: X-Button klicken → Event landet wieder im Select.
         remove_form = page.locator("#case-event-list form[action*='/remove-event/']").first
         remove_form.locator("button[type='submit']").click()
-        page.locator("#case-event-list select[name='event_id']").wait_for(
-            state="visible", timeout=5000
-        )
+        page.locator("#case-event-list select[name='event_id']").wait_for(state="visible", timeout=5000)
         assert page.url == url_before, "HTMX-Remove darf nicht zu Voll-Navigation führen."
 
 
@@ -454,9 +450,7 @@ class TestCasesForClientAPI:
         # Hidden ``input[name='client']`` ist Alpine-gebunden — Wert per
         # JavaScript abgreifen statt input_value() (Letzteres liest manchmal
         # leeren String bevor Alpine die Bindung committet).
-        client_id = page.evaluate(
-            "() => document.querySelector(\"input[name='client']\").value"
-        )
+        client_id = page.evaluate("() => document.querySelector(\"input[name='client']\").value")
         assert client_id, "client-Hidden-Input hat keinen Wert — Klient-Auswahl nicht committed."
         page.locator("#main-content button[type='submit']").click()
         page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
@@ -472,9 +466,7 @@ class TestCasesForClientAPI:
         assert result["status"] == 200, f"Erwarte 200, bekomme {result['status']}"
         assert isinstance(result["body"], list), "Response muss JSON-Liste sein."
         titles = [c["title"] for c in result["body"]]
-        assert unique_title in titles, (
-            f"Soeben angelegter Fall {unique_title!r} fehlt in API-Response: {titles}"
-        )
+        assert unique_title in titles, f"Soeben angelegter Fall {unique_title!r} fehlt in API-Response: {titles}"
         for entry in result["body"]:
             assert set(entry.keys()) >= {"id", "title"}
             assert isinstance(entry["id"], str) and len(entry["id"]) == 36
@@ -508,9 +500,7 @@ class TestCaseUpdateValidation:
         page.wait_for_load_state("domcontentloaded")
 
         # Form bleibt auf der Edit-URL (kein Redirect auf Detail).
-        assert "/edit/" in page.url, (
-            f"Bei leerem Titel darf nicht auf Detail weggeleitet werden, URL ist {page.url!r}."
-        )
+        assert "/edit/" in page.url, f"Bei leerem Titel darf nicht auf Detail weggeleitet werden, URL ist {page.url!r}."
         # Server-seitige Fehlermeldung sichtbar.
         error_count = page.locator(":text-matches('erforderlich|required', 'i')").count()
         assert error_count > 0, "Erwartete Pflichtfeld-Fehlermeldung wurde nicht gerendert."

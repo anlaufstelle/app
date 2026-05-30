@@ -42,8 +42,7 @@ def _assert_touch_target(locator, label: str, min_px: int = 44) -> None:
     box = locator.bounding_box()
     assert box is not None, f"Touch-Target {label!r} ist nicht sichtbar / hat keine Box."
     assert box["width"] >= min_px and box["height"] >= min_px, (
-        f"Touch-Target {label!r} zu klein: {box['width']:.0f}×{box['height']:.0f}px "
-        f"(erwartet ≥ {min_px}×{min_px}px)."
+        f"Touch-Target {label!r} zu klein: {box['width']:.0f}×{box['height']:.0f}px (erwartet ≥ {min_px}×{min_px}px)."
     )
 
 
@@ -58,9 +57,7 @@ def _open_first_qualified_case(page, base_url) -> str:
     # Auf Mobile rendert die Liste Cards in einem ``.sm:hidden``-Container; auf
     # Desktop die Tabelle in ``.hidden.sm:block``. ``visible``-Filter selektiert
     # automatisch die im aktuellen Viewport sichtbare Variante.
-    case_link = page.locator(
-        "main a[href^='/cases/']:not([href$='/new/'])"
-    ).filter(visible=True).first
+    case_link = page.locator("main a[href^='/cases/']:not([href$='/new/'])").filter(visible=True).first
     case_link.wait_for(state="visible", timeout=10000)
     case_link.click()
     page.wait_for_url(re.compile(r"/cases/[0-9a-f-]{36}/$"), timeout=10000)

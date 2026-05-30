@@ -24,7 +24,7 @@ from django.utils import timezone
 from core.models import Event
 
 BERLIN = ZoneInfo("Europe/Berlin")
-UTC = dt.timezone.utc
+UTC = dt.UTC
 
 
 class TestZoneInfoSpringForward:

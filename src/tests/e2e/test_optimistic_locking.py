@@ -88,16 +88,12 @@ class TestOptimisticLockingTwoSessions:
             page_a.wait_for_url(re.compile(r"/workitems/[0-9a-f-]{36}/edit/"), timeout=10000)
             page_a.wait_for_load_state("domcontentloaded")
 
-            conflict_banner = page_a.locator(
-                "[role='alert']:has-text('zwischenzeitlich bearbeitet')"
-            ).first
+            conflict_banner = page_a.locator("[role='alert']:has-text('zwischenzeitlich bearbeitet')").first
             conflict_banner.wait_for(state="visible", timeout=10000)
 
             # Verifikation: Session-B-Änderung bleibt persistiert, A-Änderung nicht.
             page_a.goto(edit_url, wait_until="domcontentloaded")
             persisted = page_a.locator("input[name='title']").get_attribute("value")
-            assert persisted == title_b, (
-                f"Erwartet Session-B-Titel persistiert ({title_b!r}), gefunden: {persisted!r}"
-            )
+            assert persisted == title_b, f"Erwartet Session-B-Titel persistiert ({title_b!r}), gefunden: {persisted!r}"
         finally:
             context_b.close()

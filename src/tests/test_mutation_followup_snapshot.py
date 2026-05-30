@@ -158,22 +158,16 @@ class TestCreateOrUpdateSnapshotBranches:
     - ``defaults={"data": stats, "jugendamt_data": jg_stats}`` — beide Keys.
     """
 
-    def test_creates_new_snapshot_when_none_exists(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_creates_new_snapshot_when_none_exists(self, facility, staff_user, client_identified, doc_type_contact):
         """Create-Branch des ``update_or_create``."""
         jan = datetime(2025, 1, 15, 10, 0)
         _make_event(facility, client_identified, doc_type_contact, staff_user, jan)
-        assert not StatisticsSnapshot.objects.filter(
-            facility=facility, year=2025, month=1
-        ).exists()
+        assert not StatisticsSnapshot.objects.filter(facility=facility, year=2025, month=1).exists()
         create_or_update_snapshot(facility, 2025, 1)
         snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
         assert snap.data["total_contacts"] == 1
 
-    def test_updates_existing_snapshot_in_place(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_updates_existing_snapshot_in_place(self, facility, staff_user, client_identified, doc_type_contact):
         """Update-Branch: gleiche PK bleibt erhalten, ``data`` ändert sich.
 
         Mutation ``update_or_create`` → ``create`` würde hier ``IntegrityError``
@@ -182,26 +176,18 @@ class TestCreateOrUpdateSnapshotBranches:
         jan = datetime(2025, 1, 15, 10, 0)
         _make_event(facility, client_identified, doc_type_contact, staff_user, jan)
         create_or_update_snapshot(facility, 2025, 1)
-        snap_before = StatisticsSnapshot.objects.get(
-            facility=facility, year=2025, month=1
-        )
+        snap_before = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
         pk_before = snap_before.pk
 
         _make_event(facility, client_identified, doc_type_contact, staff_user, jan)
         create_or_update_snapshot(facility, 2025, 1)
-        snap_after = StatisticsSnapshot.objects.get(
-            facility=facility, year=2025, month=1
-        )
+        snap_after = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
         assert snap_after.pk == pk_before, "Update muss dieselbe Row beibehalten"
         assert snap_after.data["total_contacts"] == 2
         # UniqueConstraint: nie zwei Snapshots
-        assert StatisticsSnapshot.objects.filter(
-            facility=facility, year=2025, month=1
-        ).count() == 1
+        assert StatisticsSnapshot.objects.filter(facility=facility, year=2025, month=1).count() == 1
 
-    def test_february_non_leap_year_28_days(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_february_non_leap_year_28_days(self, facility, staff_user, client_identified, doc_type_contact):
         """Boundary: Februar 2025 hat 28 Tage. Event am 28.2. muss drin sein.
 
         Mutation ``calendar.monthrange`` → konstantem 31 würde den 29.–31.2.
@@ -214,9 +200,7 @@ class TestCreateOrUpdateSnapshotBranches:
         snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=2)
         assert snap.data["total_contacts"] == 1
 
-    def test_february_leap_year_29_days_event_included(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_february_leap_year_29_days_event_included(self, facility, staff_user, client_identified, doc_type_contact):
         """Schaltjahr-Boundary: Februar 2024 hat 29 Tage.
 
         Event am 29.2.2024 muss im Snapshot enthalten sein — Mutation
@@ -228,13 +212,9 @@ class TestCreateOrUpdateSnapshotBranches:
         _make_event(facility, client_identified, doc_type_contact, staff_user, feb29)
         create_or_update_snapshot(facility, 2024, 2)
         snap = StatisticsSnapshot.objects.get(facility=facility, year=2024, month=2)
-        assert snap.data["total_contacts"] == 1, (
-            "Schaltjahr-29.2. muss im Snapshot zählen"
-        )
+        assert snap.data["total_contacts"] == 1, "Schaltjahr-29.2. muss im Snapshot zählen"
 
-    def test_30_day_month_event_on_last_day(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_30_day_month_event_on_last_day(self, facility, staff_user, client_identified, doc_type_contact):
         """30-Tage-Monat: April 2025. Event am 30.4. muss drin sein.
 
         Mutation ``date(year, month, last_day)`` → konstantem 28 würde
@@ -246,9 +226,7 @@ class TestCreateOrUpdateSnapshotBranches:
         snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=4)
         assert snap.data["total_contacts"] == 1
 
-    def test_31_day_month_event_on_last_day(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_31_day_month_event_on_last_day(self, facility, staff_user, client_identified, doc_type_contact):
         """31-Tage-Monat: Januar 2025. Event am 31.1. muss drin sein."""
         jan31 = datetime(2025, 1, 31, 14, 0)
         _make_event(facility, client_identified, doc_type_contact, staff_user, jan31)
@@ -256,9 +234,7 @@ class TestCreateOrUpdateSnapshotBranches:
         snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
         assert snap.data["total_contacts"] == 1
 
-    def test_event_on_first_day_of_month_included(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_event_on_first_day_of_month_included(self, facility, staff_user, client_identified, doc_type_contact):
         """Boundary: Event am 1. Tag des Monats.
 
         Mutation ``date(year, month, 1)`` → ``date(year, month, 2)`` würde
@@ -270,9 +246,7 @@ class TestCreateOrUpdateSnapshotBranches:
         snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=2)
         assert snap.data["total_contacts"] == 1
 
-    def test_top_clients_removed_from_snapshot(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_top_clients_removed_from_snapshot(self, facility, staff_user, client_identified, doc_type_contact):
         """``stats.pop("top_clients", None)`` muss greifen.
 
         Mutation ``pop`` → ``get`` würde top_clients in den Snapshot leaken
@@ -282,13 +256,9 @@ class TestCreateOrUpdateSnapshotBranches:
         _make_event(facility, client_identified, doc_type_contact, staff_user, jan)
         create_or_update_snapshot(facility, 2025, 1)
         snap = StatisticsSnapshot.objects.get(facility=facility, year=2025, month=1)
-        assert "top_clients" not in snap.data, (
-            "top_clients darf nicht in Snapshot landen (PII-Risiko)"
-        )
+        assert "top_clients" not in snap.data, "top_clients darf nicht in Snapshot landen (PII-Risiko)"
 
-    def test_jugendamt_data_persisted_separately(
-        self, facility, staff_user, client_identified
-    ):
+    def test_jugendamt_data_persisted_separately(self, facility, staff_user, client_identified):
         """``defaults={..., "jugendamt_data": jg_stats}`` — separater Feldlauf.
 
         Mutation ``jg_stats`` → ``{}`` oder Vertauschung mit ``data`` würde
@@ -309,9 +279,7 @@ class TestCreateOrUpdateSnapshotBranches:
         assert snap.data["total_contacts"] == 1
         assert snap.jugendamt_data != snap.data
 
-    def test_by_document_type_enriched_with_system_type(
-        self, facility, staff_user, client_identified
-    ):
+    def test_by_document_type_enriched_with_system_type(self, facility, staff_user, client_identified):
         """``entry["system_type"] = dt.system_type if dt and dt.system_type
         else ""`` — Enrichment greift.
 
@@ -372,14 +340,10 @@ class TestEnsureSnapshotsForMonthsBranches:
     - ``< current`` → ``> current`` würde nur future_months snapshotten.
     """
 
-    def test_current_month_skipped(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_current_month_skipped(self, facility, staff_user, client_identified, doc_type_contact):
         """Current-month-Event darf KEINEN Snapshot triggern."""
         today = timezone.localdate()
-        current_dt = timezone.make_aware(
-            datetime(today.year, today.month, max(1, min(today.day, 28)), 10, 0)
-        )
+        current_dt = timezone.make_aware(datetime(today.year, today.month, max(1, min(today.day, 28)), 10, 0))
         _make_event(
             facility,
             client_identified,
@@ -389,21 +353,17 @@ class TestEnsureSnapshotsForMonthsBranches:
         )
         events = Event.objects.filter(facility=facility)
         ensure_snapshots_for_months(facility, events)
-        assert not StatisticsSnapshot.objects.filter(
-            facility=facility, year=today.year, month=today.month
-        ).exists(), "Current month darf NICHT gesnapshottet werden"
+        assert not StatisticsSnapshot.objects.filter(facility=facility, year=today.year, month=today.month).exists(), (
+            "Current month darf NICHT gesnapshottet werden"
+        )
 
-    def test_past_month_creates_snapshot(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_past_month_creates_snapshot(self, facility, staff_user, client_identified, doc_type_contact):
         """Past-month-Event MUSS Snapshot triggern."""
         past_dt = datetime(2024, 6, 15, 10, 0)
         _make_event(facility, client_identified, doc_type_contact, staff_user, past_dt)
         events = Event.objects.filter(facility=facility)
         ensure_snapshots_for_months(facility, events)
-        assert StatisticsSnapshot.objects.filter(
-            facility=facility, year=2024, month=6
-        ).exists()
+        assert StatisticsSnapshot.objects.filter(facility=facility, year=2024, month=6).exists()
 
     def test_mixed_past_and_current_only_past_snapshotted(
         self, facility, staff_user, client_identified, doc_type_contact
@@ -411,9 +371,7 @@ class TestEnsureSnapshotsForMonthsBranches:
         """Zwei Events, einer past einer current → nur past wird snapshottet."""
         today = timezone.localdate()
         past_dt = datetime(2024, 6, 15, 10, 0)
-        current_dt = timezone.make_aware(
-            datetime(today.year, today.month, max(1, min(today.day, 28)), 10, 0)
-        )
+        current_dt = timezone.make_aware(datetime(today.year, today.month, max(1, min(today.day, 28)), 10, 0))
         _make_event(facility, client_identified, doc_type_contact, staff_user, past_dt)
         _make_event(
             facility,
@@ -459,24 +417,18 @@ class TestGetSnapshot:
         )
         result = get_snapshot(facility, 2025, 1)
         assert result is not None
-        assert result.get("marker_data") == "yes", (
-            "get_snapshot muss .data zurückgeben, nicht .jugendamt_data"
-        )
+        assert result.get("marker_data") == "yes", "get_snapshot muss .data zurückgeben, nicht .jugendamt_data"
         assert "marker_jg" not in result
 
     def test_other_year_returns_none(self, facility):
         """Year-Filter greift — Mutation ``year=year`` → ``year=year+1`` etc."""
-        StatisticsSnapshot.objects.create(
-            facility=facility, year=2025, month=1, data={"x": 1}, jugendamt_data={}
-        )
+        StatisticsSnapshot.objects.create(facility=facility, year=2025, month=1, data={"x": 1}, jugendamt_data={})
         assert get_snapshot(facility, 2024, 1) is None
         assert get_snapshot(facility, 2026, 1) is None
 
     def test_other_month_returns_none(self, facility):
         """Month-Filter greift."""
-        StatisticsSnapshot.objects.create(
-            facility=facility, year=2025, month=1, data={"x": 1}, jugendamt_data={}
-        )
+        StatisticsSnapshot.objects.create(facility=facility, year=2025, month=1, data={"x": 1}, jugendamt_data={})
         assert get_snapshot(facility, 2025, 2) is None
 
 
@@ -541,9 +493,7 @@ class TestSplitIntoSegmentsBoundaries:
         with patch("core.services.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             segments = _split_into_segments(date(2025, 3, 1), date(2025, 3, 31))
-        assert segments[0][2] is False, (
-            "Current month darf nie use_snapshot=True bekommen"
-        )
+        assert segments[0][2] is False, "Current month darf nie use_snapshot=True bekommen"
 
     def test_partial_past_month_not_snapshot(self):
         """``is_past_month=True`` aber ``is_full_month=False`` → False.
@@ -585,9 +535,7 @@ class TestSplitIntoSegmentsBoundaries:
         with patch("core.services.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             segments = _split_into_segments(date(2025, 6, 1), date(2025, 6, 30))
-        assert segments[0][2] is False, (
-            "Future month darf nie use_snapshot=True bekommen"
-        )
+        assert segments[0][2] is False, "Future month darf nie use_snapshot=True bekommen"
 
     def test_single_day_range_correct_segment(self):
         """Range eines einzelnen Tages."""
@@ -734,9 +682,7 @@ class TestMergeStatsPerField:
         s2 = _empty_stats()
         s2["total_contacts"] = 2
         result = _merge_stats([s1, s2])
-        assert result["total_contacts"] == 3, (
-            "1 + 2 = 3 (nicht -1, nicht 1, nicht 2)"
-        )
+        assert result["total_contacts"] == 3, "1 + 2 = 3 (nicht -1, nicht 1, nicht 2)"
 
     def test_unique_clients_summed_separately_from_total(self):
         """``unique_clients`` darf NICHT mit ``total_contacts`` getauscht sein."""
@@ -1003,9 +949,7 @@ class TestGetStatisticsHybridCutoff:
       top_clients IMMER live, nie aus Snapshot.
     """
 
-    def test_uses_snapshot_when_use_snapshot_true_and_snapshot_exists(
-        self, facility
-    ):
+    def test_uses_snapshot_when_use_snapshot_true_and_snapshot_exists(self, facility):
         """Snapshot-Branch greift bei use_snapshot=True UND vorhandenem Snapshot.
 
         Mutation ``if use_snapshot`` → ``if not use_snapshot`` würde nie
@@ -1031,9 +975,7 @@ class TestGetStatisticsHybridCutoff:
         # Live-Query hätte 0 ergeben — wir lesen 999 aus Snapshot
         assert result["total_contacts"] == 999
 
-    def test_fallback_to_live_when_snapshot_missing(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_fallback_to_live_when_snapshot_missing(self, facility, staff_user, client_identified, doc_type_contact):
         """``if stats is None: stats = get_statistics(...)`` Fallback-Branch.
 
         Mutation ``if stats is None`` → ``if stats is not None`` würde
@@ -1047,9 +989,7 @@ class TestGetStatisticsHybridCutoff:
             result = get_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
         assert result["total_contacts"] == 1
 
-    def test_current_month_uses_live_ignoring_snapshot(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_current_month_uses_live_ignoring_snapshot(self, facility, staff_user, client_identified, doc_type_contact):
         """Cutoff: aktueller Monat IMMER live, Snapshot ignoriert."""
         StatisticsSnapshot.objects.create(
             facility=facility,
@@ -1069,13 +1009,9 @@ class TestGetStatisticsHybridCutoff:
         with patch("core.services.snapshot.timezone") as mock_tz:
             mock_tz.localdate.return_value = date(2025, 3, 15)
             result = get_statistics_hybrid(facility, date(2025, 3, 1), date(2025, 3, 31))
-        assert result["total_contacts"] == 1, (
-            "Current month muss live sein, nicht 999 aus Snapshot"
-        )
+        assert result["total_contacts"] == 1, "Current month muss live sein, nicht 999 aus Snapshot"
 
-    def test_top_clients_always_from_live_full_range(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_top_clients_always_from_live_full_range(self, facility, staff_user, client_identified, doc_type_contact):
         """``merged["top_clients"] = live_full["top_clients"]``.
 
         Mutation ``live_full["top_clients"]`` → ``[]`` würde leere Liste
@@ -1103,13 +1039,9 @@ class TestGetStatisticsHybridCutoff:
             mock_tz.localdate.return_value = date(2025, 6, 15)
             result = get_statistics_hybrid(facility, date(2025, 1, 1), date(2025, 1, 31))
         # top_clients muss im Result-Dict landen (Key-Existenz)
-        assert "top_clients" in result, (
-            "top_clients muss vom live_full immer in den merged-Dict gesetzt werden"
-        )
+        assert "top_clients" in result, "top_clients muss vom live_full immer in den merged-Dict gesetzt werden"
 
-    def test_segment_pop_top_clients_does_not_crash(
-        self, facility, staff_user, client_identified, doc_type_contact
-    ):
+    def test_segment_pop_top_clients_does_not_crash(self, facility, staff_user, client_identified, doc_type_contact):
         """``stats.pop("top_clients", None)`` Segment-Branch.
 
         Mutation ``pop("top_clients", None)`` → ``pop("top_clients")``

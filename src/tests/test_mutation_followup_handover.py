@@ -159,9 +159,7 @@ class TestCollectHighlights:
 
     def test_task_outside_time_range_excluded(self, facility, lead_user):
         """Boundary: ``created_at__range=time_range`` filtert ausserhalb liegende Tasks."""
-        _make_workitem(
-            facility, lead_user, priority=WorkItem.Priority.URGENT, created_offset_minutes=-3 * 24 * 60
-        )
+        _make_workitem(facility, lead_user, priority=WorkItem.Priority.URGENT, created_offset_minutes=-3 * 24 * 60)
         visible_events = Event.objects.visible_to(lead_user).filter(facility=facility)
         result = _collect_highlights(facility, visible_events, _wide_time_range(), lead_user)
         assert result == []
