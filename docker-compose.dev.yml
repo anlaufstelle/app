@@ -105,7 +105,11 @@ services:
         condition: service_healthy
     restart: unless-stopped
     networks:
-      - frontend
+      frontend:
+        # Feste IP: die ufw-docker-Allow-Regeln sind auf diese IP gepinnt.
+        # Ohne Pinning kann Caddy nach einem Reboot eine andere Bridge-IP
+        # bekommen -> Allow zeigt ins Leere -> UFW droppt Public 80/443.
+        ipv4_address: 172.19.0.2
 
 volumes:
   pgdata_dev:
@@ -117,3 +121,9 @@ networks:
   internal:
     internal: true
   frontend:
+    # Subnet explizit pinnen, damit caddy.ipv4_address (172.19.0.2) deterministisch
+    # gueltig bleibt -- auch nach `compose down` / Reboot / Netz-Recreate.
+    ipam:
+      config:
+        - subnet: 172.19.0.0/16
+          gateway: 172.19.0.1
