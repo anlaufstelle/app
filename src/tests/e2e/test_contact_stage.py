@@ -6,15 +6,19 @@ im Django-Admin angezeigt wird und Validierung korrekt funktioniert.
 
 import pytest
 
+from ._helpers import enter_sudo_mode
+
 pytestmark = pytest.mark.e2e
 
 
 class TestContactStageDropdown:
     """Admin-Seite zeigt min_contact_stage als Dropdown."""
 
-    def test_min_contact_stage_is_select(self, authenticated_page, admin_url):
+    def test_min_contact_stage_is_select(self, authenticated_page, admin_url, base_url):
         """min_contact_stage wird als <select>-Element dargestellt, nicht als <input>."""
         page = authenticated_page
+        # /admin-mgmt/ ist seit #785 sudo-gated — ohne Sudo redirectet die Add-Seite (Refs #973).
+        enter_sudo_mode(page, base_url)
         page.goto(f"{admin_url}/core/documenttype/add/", wait_until="domcontentloaded")
 
         select = page.locator("select#id_min_contact_stage")
@@ -24,9 +28,10 @@ class TestContactStageDropdown:
         text_input = page.locator("input#id_min_contact_stage")
         assert text_input.count() == 0, "min_contact_stage sollte kein <input>-Element sein"
 
-    def test_dropdown_has_expected_options(self, authenticated_page, admin_url):
+    def test_dropdown_has_expected_options(self, authenticated_page, admin_url, base_url):
         """Das Dropdown enthaelt die erwarteten Kontaktstufen-Optionen."""
         page = authenticated_page
+        enter_sudo_mode(page, base_url)
         page.goto(f"{admin_url}/core/documenttype/add/", wait_until="domcontentloaded")
 
         select = page.locator("select#id_min_contact_stage")
@@ -38,9 +43,10 @@ class TestContactStageDropdown:
         assert "identified" in option_values, "Option 'identified' fehlt"
         assert "qualified" in option_values, "Option 'qualified' fehlt"
 
-    def test_dropdown_selection_saves_correctly(self, authenticated_page, admin_url):
+    def test_dropdown_selection_saves_correctly(self, authenticated_page, admin_url, base_url):
         """Ein ausgewaehlter Wert wird korrekt gespeichert."""
         page = authenticated_page
+        enter_sudo_mode(page, base_url)
         page.goto(f"{admin_url}/core/documenttype/add/", wait_until="domcontentloaded")
 
         # Formular ausfuellen
