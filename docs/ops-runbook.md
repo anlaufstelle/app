@@ -597,7 +597,7 @@ BACKUP_OFFSITE_TARGET=backup-user@offsite.example.com:/backups/anlaufstelle
 
 Verifiziert, dass das aktuellste Backup vollstaendig wiederherstellbar ist und die Verteidigungslinien (RLS, AuditLog-Immutability-Trigger) erhalten bleiben. **Empfehlung: quartalsweise per Cron + Alert-Mail bei Fehlschlag.**
 
-Das Skript ist auf das **`deploy/backup.sh`**-Format ausgerichtet, das auf `dev.anlaufstelle.app` tatsaechlich laeuft (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, Quelle `$BACKUP_DIR/dump-*.pgc.enc` (Default `/var/backups/anl`), Stack `docker-compose.dev.yml`, Restore als `POSTGRES_ADMIN_USER` (BYPASSRLS). Das alte `scripts/backup.sh`/`scripts/restore.sh`-Schema (`backups/daily/*.sql.gz.enc`, plain SQL) ist davon unberuehrt.
+Das Skript ist auf das **`deploy/backup.sh`**-Format ausgerichtet, das auf `dev.anlaufstelle.app` tatsaechlich laeuft (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, Quelle `$BACKUP_DIR/dump-*.pgc.enc` (Default `/var/backups/anl`), Stack `docker-compose.dev.yml`, Restore als Postgres-Superuser (`postgres`, via Local-Socket-Trust im db-Container — nötig für `CREATE DATABASE`, bypassed zugleich RLS). Das alte `scripts/backup.sh`/`scripts/restore.sh`-Schema (`backups/daily/*.sql.gz.enc`, plain SQL) ist davon unberuehrt.
 
 Die Dump-Dateien sind `0600` und gehoeren root — daher **als root** ausfuehren:
 
@@ -617,6 +617,8 @@ sudo bash /opt/anlaufstelle/scripts/restore-drill.sh
 | 7 | **Bei vollem Erfolg:** `mark_restore_verified` im web-Container → Compliance-Marker |
 
 Output: ein `OK` / `FAIL`-Eintrag pro Schritt. Exit-Code != 0 bei jedem `FAIL`. Bei `FAIL` sofort auf Backup-Integritaet pruefen — Trigger-Check fehlgeschlagen (Schritt 5) ist kritisch, weil die AuditLog-Immutability dann nach Restore nicht mehr greift.
+
+> **Benigne Ausnahme in Schritt 2:** Das Dump enthält ein `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, das beim Restore an `FORCE ROW LEVEL SECURITY` auf `core_event` scheitert (`pg_restore: errors ignored on restore: 1`). Das betrifft nur den Statistik-Cache, nicht die Nutzdaten — der mv-refresh-Timer baut ihn stündlich neu. Der Drill meldet das als `OK … MV-Refresh übersprungen (benigne)` und schlägt nur bei **anderen** Fehlern fehl.
 
 **Compliance-Marker (Refs #919):** Schritt 7 schreibt bei Erfolg automatisch einen `RESTORE_VERIFIED`-AuditLog-Eintrag (`manage.py mark_restore_verified`), den das Compliance-Dashboard (`/system/compliance/`) als Alter-Indikator nutzt:
 
