@@ -9,6 +9,11 @@ Default-Django-AdminSite prueft nur ``is_staff``. Anlaufstelle erweitert:
 Modelle werden mit dem Singleton ``anlaufstelle_admin_site`` registriert
 (``@admin.register(Model, site=anlaufstelle_admin_site)``). URL-Hookup in
 ``src/anlaufstelle/urls.py`` zeigt ``/admin-mgmt/`` auf diese Site.
+
+Refs #958 — ``has_role_permission`` und ``scope_to_facility`` zentralisieren
+die Rollen-/Facility-Logik, die vorher in den Mixins (``core/admin/mixins.py``)
+dupliziert war. Die Mixins delegieren jetzt an diese Site-Methoden, damit es
+nur eine Definition pro Regel gibt.
 """
 
 from __future__ import annotations
@@ -31,11 +36,35 @@ class AnlaufstelleAdminSite(UnfoldAdminSite):
     site_title = "Anlaufstelle"
     index_title = "Datenverwaltung"
 
+    @staticmethod
+    def _has_admin_role(user) -> bool:
+        """Single source of truth: hat der User eine Admin-Rolle?"""
+        if not user.is_authenticated:
+            return False
+        return user.is_super_admin or user.is_facility_admin
+
+    def has_role_permission(self, request) -> bool:
+        """Public API fuer ModelAdmin-Mixins.
+
+        ModelAdmin-Klassen rufen ``self.admin_site.has_role_permission(request)``
+        in ``has_view/add/change/delete_permission`` auf — so wird die Rollen-
+        Logik nur an einer Stelle gepflegt.
+        """
+        return self._has_admin_role(request.user)
+
+    def scope_to_facility(self, queryset, request):
+        """Public API fuer ModelAdmin.get_queryset() bei facility-gescopten Models.
+
+        super_admin sieht alles, facility_admin sieht nur ``request.current_facility``.
+        Konsistent mit ``FacilityScopedManager`` in den Models.
+        """
+        if request.user.is_super_admin:
+            return queryset
+        return queryset.filter(facility=request.current_facility)
+
     def has_permission(self, request):
         """Zugriff nur fuer super_admin/facility_admin mit aktivem Sudo-Mode."""
-        if not request.user.is_authenticated:
-            return False
-        if not (request.user.is_super_admin or request.user.is_facility_admin):
+        if not self._has_admin_role(request.user):
             return False
         if not getattr(settings, "SUDO_MODE_ENABLED", True):
             return True
@@ -44,8 +73,7 @@ class AnlaufstelleAdminSite(UnfoldAdminSite):
     def login(self, request, extra_context=None):
         """Login-View: wenn User eingeloggt + Rolle OK, aber Sudo fehlt -> /sudo/."""
         if (
-            request.user.is_authenticated
-            and (request.user.is_super_admin or request.user.is_facility_admin)
+            self._has_admin_role(request.user)
             and getattr(settings, "SUDO_MODE_ENABLED", True)
             and not is_in_sudo(request)
         ):
