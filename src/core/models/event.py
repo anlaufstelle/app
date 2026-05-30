@@ -94,7 +94,7 @@ class Event(models.Model):
 
     def _encrypt_sensitive_fields(self):
         """Encrypt fields that are marked as encrypted in the field template."""
-        from core.services.encryption import encrypt_field, is_encrypted_value
+        from core.services.file_vault import encrypt_field, is_encrypted_value
 
         if not self.document_type_id or not self.data_json:
             return

@@ -24,14 +24,15 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
 
 from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings  # noqa: E402
 from core.models.attachment import EventAttachment  # noqa: E402
-from core.services.file_vault import (  # noqa: E402
+from core.services.file_vault import (  # noqa: E402  # noqa: E402
+    ScanResult,
+    VirusScannerUnavailableError,
     delete_attachment_file,
     delete_event_attachments,
     get_attachment_path,
     get_original_filename,
     store_encrypted_file,
 )
-from core.services.virus_scan import ScanResult, VirusScannerUnavailableError  # noqa: E402
 
 # Echte Magic-Bytes für MIME-Prüfung (Refs #610).
 # ``store_encrypted_file`` lehnt seit #610 Dateien ab, deren Bytes nicht zum

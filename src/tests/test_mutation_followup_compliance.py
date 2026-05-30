@@ -353,9 +353,9 @@ class TestClamavSignatureBoundary:
     def test_age_seven_days_is_still_ok(self):
         """Exakte Schwelle ``age <= 7`` → OK."""
         with (
-            patch("core.services.virus_scan.ping", return_value=True),
+            patch("core.services.file_vault.virus_scan.ping", return_value=True),
             patch(
-                "core.services.virus_scan.signature_info",
+                "core.services.file_vault.virus_scan.signature_info",
                 return_value={"version": "1.4.0", "signature_date": None, "age_days": 7},
             ),
         ):
@@ -366,9 +366,9 @@ class TestClamavSignatureBoundary:
     def test_age_eight_days_is_warning(self):
         """Schwelle ``age > 7`` → WARNING (Boundary +1)."""
         with (
-            patch("core.services.virus_scan.ping", return_value=True),
+            patch("core.services.file_vault.virus_scan.ping", return_value=True),
             patch(
-                "core.services.virus_scan.signature_info",
+                "core.services.file_vault.virus_scan.signature_info",
                 return_value={"version": "1.4.0", "signature_date": None, "age_days": 8},
             ),
         ):
@@ -379,9 +379,9 @@ class TestClamavSignatureBoundary:
     def test_age_days_is_none_yields_unknown(self):
         """sig vorhanden, aber ``age_days=None`` → UNKNOWN."""
         with (
-            patch("core.services.virus_scan.ping", return_value=True),
+            patch("core.services.file_vault.virus_scan.ping", return_value=True),
             patch(
-                "core.services.virus_scan.signature_info",
+                "core.services.file_vault.virus_scan.signature_info",
                 return_value={"version": "1.4.0", "signature_date": None, "age_days": None},
             ),
         ):
@@ -393,9 +393,9 @@ class TestClamavSignatureBoundary:
     def test_version_unknown_when_missing(self):
         """``sig.get("version")`` returns None → Default-String ``"unbekannt"``."""
         with (
-            patch("core.services.virus_scan.ping", return_value=True),
+            patch("core.services.file_vault.virus_scan.ping", return_value=True),
             patch(
-                "core.services.virus_scan.signature_info",
+                "core.services.file_vault.virus_scan.signature_info",
                 return_value={"version": None, "signature_date": None, "age_days": None},
             ),
         ):

@@ -182,8 +182,8 @@ class TestRestoreChecks:
 class TestClamavChecks:
     def test_critical_when_ping_false(self):
         with (
-            patch("core.services.virus_scan.ping", return_value=False),
-            patch("core.services.virus_scan.signature_info", return_value=None),
+            patch("core.services.file_vault.virus_scan.ping", return_value=False),
+            patch("core.services.file_vault.virus_scan.signature_info", return_value=None),
         ):
             checks = compliance._clamav_checks()
         reach = next(c for c in checks if c.key == "clamav_reachable")
@@ -191,8 +191,8 @@ class TestClamavChecks:
 
     def test_ok_when_ping_true(self):
         with (
-            patch("core.services.virus_scan.ping", return_value=True),
-            patch("core.services.virus_scan.signature_info", return_value=None),
+            patch("core.services.file_vault.virus_scan.ping", return_value=True),
+            patch("core.services.file_vault.virus_scan.signature_info", return_value=None),
         ):
             checks = compliance._clamav_checks()
         reach = next(c for c in checks if c.key == "clamav_reachable")
@@ -200,8 +200,8 @@ class TestClamavChecks:
 
     def test_signature_unknown_when_none(self):
         with (
-            patch("core.services.virus_scan.ping", return_value=True),
-            patch("core.services.virus_scan.signature_info", return_value=None),
+            patch("core.services.file_vault.virus_scan.ping", return_value=True),
+            patch("core.services.file_vault.virus_scan.signature_info", return_value=None),
         ):
             checks = compliance._clamav_checks()
         sig = next(c for c in checks if c.key == "clamav_signature")
@@ -209,9 +209,9 @@ class TestClamavChecks:
 
     def test_signature_ok_when_fresh(self):
         with (
-            patch("core.services.virus_scan.ping", return_value=True),
+            patch("core.services.file_vault.virus_scan.ping", return_value=True),
             patch(
-                "core.services.virus_scan.signature_info",
+                "core.services.file_vault.virus_scan.signature_info",
                 return_value={"version": "1.4.0", "signature_date": None, "age_days": 3},
             ),
         ):
@@ -221,9 +221,9 @@ class TestClamavChecks:
 
     def test_signature_warning_when_old(self):
         with (
-            patch("core.services.virus_scan.ping", return_value=True),
+            patch("core.services.file_vault.virus_scan.ping", return_value=True),
             patch(
-                "core.services.virus_scan.signature_info",
+                "core.services.file_vault.virus_scan.signature_info",
                 return_value={"version": "1.4.0", "signature_date": None, "age_days": 30},
             ),
         ):

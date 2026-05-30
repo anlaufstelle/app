@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
-from core.services.virus_scan import (
+from core.services.file_vault import (
     ScanResult,
     VirusScannerUnavailableError,
     ping,
@@ -32,7 +32,7 @@ class TestScanBypass:
         settings.CLAMAV_ENABLED = False
         uploaded = SimpleUploadedFile("foo.pdf", b"harmless", content_type="application/pdf")
 
-        with patch("core.services.virus_scan._build_client") as build:
+        with patch("core.services.file_vault.virus_scan._build_client") as build:
             result = scan_file(uploaded)
 
         assert result == ScanResult(clean=True, infected=False)
@@ -54,7 +54,7 @@ class TestScanResults:
         uploaded = SimpleUploadedFile("ok.pdf", b"PDF bytes", content_type="application/pdf")
 
         with patch(
-            "core.services.virus_scan._build_client",
+            "core.services.file_vault.virus_scan._build_client",
             return_value=self._mock_client(scan_stream_return=None),
         ):
             result = scan_file(uploaded)
@@ -69,7 +69,7 @@ class TestScanResults:
 
         mock_response = {"stream": ("FOUND", "Eicar-Signature")}
         with patch(
-            "core.services.virus_scan._build_client",
+            "core.services.file_vault.virus_scan._build_client",
             return_value=self._mock_client(scan_stream_return=mock_response),
         ):
             result = scan_file(uploaded)
@@ -85,7 +85,7 @@ class TestScanResults:
 
         mock_response = {"stream": "Some-Signature FOUND"}
         with patch(
-            "core.services.virus_scan._build_client",
+            "core.services.file_vault.virus_scan._build_client",
             return_value=self._mock_client(scan_stream_return=mock_response),
         ):
             result = scan_file(uploaded)
@@ -101,7 +101,7 @@ class TestScanResults:
         uploaded = SimpleUploadedFile("ok.pdf", payload, content_type="application/pdf")
 
         with patch(
-            "core.services.virus_scan._build_client",
+            "core.services.file_vault.virus_scan._build_client",
             return_value=self._mock_client(scan_stream_return=None),
         ):
             scan_file(uploaded)
@@ -119,7 +119,7 @@ class TestScannerErrors:
         client = MagicMock()
         client.ping.return_value = False
 
-        with patch("core.services.virus_scan._build_client", return_value=client):
+        with patch("core.services.file_vault.virus_scan._build_client", return_value=client):
             with pytest.raises(VirusScannerUnavailableError):
                 scan_file(uploaded)
         # scan_stream darf bei nicht erreichbarem Daemon nicht aufgerufen werden.
@@ -133,7 +133,7 @@ class TestScannerErrors:
         client.ping.return_value = True
         client.scan_stream.side_effect = ConnectionError("refused")
 
-        with patch("core.services.virus_scan._build_client", return_value=client):
+        with patch("core.services.file_vault.virus_scan._build_client", return_value=client):
             with pytest.raises(VirusScannerUnavailableError):
                 scan_file(uploaded)
 
@@ -143,7 +143,7 @@ class TestScannerErrors:
 
         with (
             patch(
-                "core.services.virus_scan._build_client",
+                "core.services.file_vault.virus_scan._build_client",
                 side_effect=OSError("cannot resolve clamav"),
             ),
             pytest.raises(VirusScannerUnavailableError),
@@ -162,7 +162,7 @@ class TestStreamlikeObjects:
         client.ping.return_value = True
         client.scan_stream.return_value = None
 
-        with patch("core.services.virus_scan._build_client", return_value=client):
+        with patch("core.services.file_vault.virus_scan._build_client", return_value=client):
             result = scan_file(buf)
 
         assert result.clean is True
@@ -187,7 +187,7 @@ class TestScannerNetworkFailures:
         client = MagicMock()
         client.ping.side_effect = TimeoutError("clamav ping timeout")
 
-        with patch("core.services.virus_scan._build_client", return_value=client):
+        with patch("core.services.file_vault.virus_scan._build_client", return_value=client):
             with pytest.raises(VirusScannerUnavailableError) as exc_info:
                 scan_file(uploaded)
         assert "nicht erreichbar" in str(exc_info.value) or "ping" in str(exc_info.value).lower()
@@ -202,7 +202,7 @@ class TestScannerNetworkFailures:
         client.ping.return_value = True
         client.scan_stream.side_effect = TimeoutError("clamav scan timeout")
 
-        with patch("core.services.virus_scan._build_client", return_value=client):
+        with patch("core.services.file_vault.virus_scan._build_client", return_value=client):
             with pytest.raises(VirusScannerUnavailableError):
                 scan_file(uploaded)
 
@@ -213,7 +213,7 @@ class TestScannerNetworkFailures:
 
         with (
             patch(
-                "core.services.virus_scan._build_client",
+                "core.services.file_vault.virus_scan._build_client",
                 side_effect=ConnectionRefusedError("clamd: connection refused"),
             ),
             pytest.raises(VirusScannerUnavailableError) as exc_info,
@@ -230,7 +230,7 @@ class TestScannerNetworkFailures:
         client.ping.return_value = True
         client.scan_stream.side_effect = ConnectionRefusedError("clamd closed during scan")
 
-        with patch("core.services.virus_scan._build_client", return_value=client):
+        with patch("core.services.file_vault.virus_scan._build_client", return_value=client):
             with pytest.raises(VirusScannerUnavailableError):
                 scan_file(uploaded)
 
@@ -243,7 +243,7 @@ class TestScannerNetworkFailures:
 
         with (
             patch(
-                "core.services.virus_scan._build_client",
+                "core.services.file_vault.virus_scan._build_client",
                 side_effect=TimeoutError("clamav socket timeout"),
             ),
             pytest.raises(VirusScannerUnavailableError),
@@ -264,13 +264,13 @@ class TestPing:
         settings.CLAMAV_ENABLED = True
         client = MagicMock()
         client.ping.return_value = True
-        with patch("core.services.virus_scan._build_client", return_value=client):
+        with patch("core.services.file_vault.virus_scan._build_client", return_value=client):
             assert ping() is True
 
     def test_returns_false_on_error(self, settings):
         settings.CLAMAV_ENABLED = True
         with patch(
-            "core.services.virus_scan._build_client",
+            "core.services.file_vault.virus_scan._build_client",
             side_effect=ConnectionError("unreachable"),
         ):
             assert ping() is False
@@ -286,7 +286,7 @@ class TestSignatureInfo:
     def test_returns_none_on_connection_error(self, settings):
         settings.CLAMAV_ENABLED = True
         with patch(
-            "core.services.virus_scan._build_client",
+            "core.services.file_vault.virus_scan._build_client",
             side_effect=ConnectionError("unreachable"),
         ):
             assert signature_info() is None
@@ -311,7 +311,7 @@ class TestSignatureInfo:
         client.stats.return_value = stats_text
         client.version.return_value = "ClamAV 1.4.0/27500/Fri May 16 10:43:00 2026"
 
-        with patch("core.services.virus_scan._build_client", return_value=client):
+        with patch("core.services.file_vault.virus_scan._build_client", return_value=client):
             info = signature_info()
 
         assert info is not None
@@ -334,7 +334,7 @@ class TestSignatureInfo:
         client.stats.return_value = "POOLS: 1\nSTATE: VALID PRIMARY\nEND\n"
         client.version.return_value = "ClamAV 1.4.0"
 
-        with patch("core.services.virus_scan._build_client", return_value=client):
+        with patch("core.services.file_vault.virus_scan._build_client", return_value=client):
             info = signature_info()
 
         assert info == {"version": "ClamAV 1.4.0", "signature_date": None, "age_days": None}
@@ -343,5 +343,5 @@ class TestSignatureInfo:
         settings.CLAMAV_ENABLED = True
         client = MagicMock()
         client.stats.return_value = ""
-        with patch("core.services.virus_scan._build_client", return_value=client):
+        with patch("core.services.file_vault.virus_scan._build_client", return_value=client):
             assert signature_info() is None

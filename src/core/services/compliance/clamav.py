@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from core.services import virus_scan as virus_scan_service
 from core.services.compliance._types import ComplianceCheck, ComplianceStatus
+from core.services.file_vault import virus_scan as virus_scan_service
 
 
 def _clamav_checks() -> list[ComplianceCheck]:

@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from core.models import Client, DocumentType, Event, Facility, User
 from core.seed.constants import EVENT_DATA_POOLS
-from core.services.encryption import encrypt_event_data
+from core.services.file_vault import encrypt_event_data
 
 
 def random_time_of_day(max_hour: int | None = None, max_minute: int | None = None) -> tuple[int, int]:

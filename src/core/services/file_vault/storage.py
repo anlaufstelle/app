@@ -16,7 +16,7 @@ from django.conf import settings as django_settings
 from django.utils import timezone
 
 from core.models.attachment import EventAttachment
-from core.services.encryption import decrypt_file_stream, encrypt_field, encrypt_file, safe_decrypt
+from core.services.file_vault.encryption import decrypt_file_stream, encrypt_field, encrypt_file, safe_decrypt
 from core.services.file_vault.policy import (
     enforce_allowed_file_types,
     enforce_magic_bytes,

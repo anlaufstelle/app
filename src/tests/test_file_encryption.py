@@ -6,7 +6,7 @@ import struct
 import pytest
 from cryptography.fernet import Fernet
 
-from core.services.encryption import (
+from core.services.file_vault import (
     CHUNK_SIZE,
     FILE_FORMAT_VERSION,
     EncryptionError,

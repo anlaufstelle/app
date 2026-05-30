@@ -20,7 +20,6 @@ from core.services.compliance import (
     get_visible_event_or_404,
     user_can_see_document_type,
 )
-from core.services.encryption import safe_decrypt
 from core.services.events import (
     apply_attachment_changes,
     attach_files_to_new_event,
@@ -36,6 +35,7 @@ from core.services.events import (
     split_file_and_text_data,
     update_event,
 )
+from core.services.file_vault import safe_decrypt
 from core.services.quick_templates import (
     apply_template,
     get_template_for_user,

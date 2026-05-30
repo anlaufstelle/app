@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from core.models import Case as CaseModel
 from core.models import DeletionRequest, Event, EventHistory, WorkItem
-from core.services.encryption import safe_decrypt
+from core.services.file_vault import safe_decrypt
 
 
 def _gather_client_fields(client):

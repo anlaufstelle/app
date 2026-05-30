@@ -17,7 +17,7 @@ from core.models import (
 from core.services.client_export import (
     _serialize_event,
 )
-from core.services.encryption import encrypt_field
+from core.services.file_vault import encrypt_field
 from tests._mutation_followup_client_export_helpers import (
     _make_doc_type,
     _make_event,

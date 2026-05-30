@@ -23,7 +23,7 @@ from django.utils.translation import gettext_lazy as _
 from core.constants import DEFAULT_ALLOWED_FILE_TYPES
 from core.models.settings import Settings
 from core.services.file_vault.audit import log_attachment_violation
-from core.services.virus_scan import VirusScannerUnavailableError, scan_file
+from core.services.file_vault.virus_scan import VirusScannerUnavailableError, scan_file
 
 logger = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ from django.utils.translation import ngettext
 from core.constants import FEED_MAX_PER_TYPE
 from core.models import Activity, DocumentTypeField, Event, WorkItem
 from core.services.compliance import user_can_see_field
-from core.services.encryption import safe_decrypt
+from core.services.file_vault import safe_decrypt
 
 
 def get_time_range(target_date, time_filter=None):

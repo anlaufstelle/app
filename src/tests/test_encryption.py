@@ -5,7 +5,7 @@ from cryptography.fernet import Fernet
 from django.test import override_settings
 from django.utils import timezone
 
-from core.services.encryption import (
+from core.services.file_vault import (
     EncryptionError,
     EncryptionKeyMissing,
     decrypt_field,
@@ -171,7 +171,7 @@ def test_safe_decrypt_passes_through_plain_value():
 def test_missing_key_raises():
     """Empty ENCRYPTION_KEY raises EncryptionKeyMissing."""
     with override_settings(ENCRYPTION_KEY=""), pytest.raises(EncryptionKeyMissing):
-        from core.services.encryption import get_fernet
+        from core.services.file_vault import get_fernet
 
         get_fernet()
 

@@ -16,7 +16,7 @@ from django.db import connection
 from django.http import JsonResponse
 from django.views import View
 
-from core.services.virus_scan import ping as clamav_ping
+from core.services.file_vault import ping as clamav_ping
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def _check_encryption_key() -> str:
     Schreibvorgaenge auf verschluesselten Feldern) — kritisch.
     """
     try:
-        from core.services.encryption import decrypt_field, encrypt_field
+        from core.services.file_vault import decrypt_field, encrypt_field
 
         token = encrypt_field("health-roundtrip")
         decoded = decrypt_field(token)

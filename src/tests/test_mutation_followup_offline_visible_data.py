@@ -17,7 +17,7 @@ from core.models import (
     DocumentType,
     Event,
 )
-from core.services.encryption import encrypt_field
+from core.services.file_vault import encrypt_field
 from core.services.offline import (
     _visible_data_fields,
 )

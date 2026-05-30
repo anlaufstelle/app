@@ -82,7 +82,7 @@ class TestHealthExtendedComponents:
         assert data["encryption_key"] == "ok"
 
     def test_encryption_key_error_critical(self):
-        with patch("core.services.encryption.encrypt_field", side_effect=RuntimeError("no key")):
+        with patch("core.services.file_vault.encrypt_field", side_effect=RuntimeError("no key")):
             response = Client().get("/health/")
         data = response.json()
         assert data["encryption_key"] == "error"

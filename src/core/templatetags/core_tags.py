@@ -51,7 +51,7 @@ def get_item(container, key):
 @register.filter
 def decrypt(value):
     """Decrypt a field value, or return [encrypted] as fallback."""
-    from core.services.encryption import is_encrypted_value, safe_decrypt
+    from core.services.file_vault import is_encrypted_value, safe_decrypt
 
     if is_encrypted_value(value):
         return safe_decrypt(value, default="[verschlüsselt]")
