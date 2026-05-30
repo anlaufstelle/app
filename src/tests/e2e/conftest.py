@@ -321,6 +321,36 @@ def authenticated_page(base_url, browser, _login_storage_state):
 
 
 @pytest.fixture
+def mobile_authenticated_page(base_url, browser, _login_storage_state):
+    """Playwright-Page mit iPhone-Viewport (375x667) und Touch-Emulation.
+
+    Refs Welle 5 (#928). Nutzbar für Mobile-Workflow-Tests, die das
+    Card-Layout, Touch-Targets oder mobile Navigation prüfen.
+
+    Verwendet ``_login_storage_state`` (Admin-User) wie ``authenticated_page``;
+    Mobile-spezifische Rollen-Tests sollen weiterhin per ``login_as`` mit
+    dedizierter Rolle laufen.
+    """
+    context = browser.new_context(
+        storage_state=_login_storage_state,
+        locale="de-DE",
+        viewport={"width": 375, "height": 667},
+        is_mobile=True,
+        has_touch=True,
+        device_scale_factor=2,
+        user_agent=(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) "
+            "AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+        ),
+    )
+    page = _setup_page(context)
+    page.goto(f"{base_url}/")
+    yield page
+    _cleanup_browser_state(page)
+    context.close()
+
+
+@pytest.fixture
 def lead_page(base_url, browser, _lead_storage_state):
     """Playwright-Page mit eingeloggtem Lead-User (thomas)."""
     context = browser.new_context(storage_state=_lead_storage_state, locale="de-DE")
