@@ -43,6 +43,10 @@ select = ["E", "F", "I", "W", "B", "UP", "SIM", "N", "S"]
     "N817",  # Import-Alias als Akronym
     "N818",  # Exception-Naming
 ]
+# Refs #885: release/tests/* enthaelt Unit-Tests fuer das Release-Sanitize-Tool.
+"release/tests/*" = [
+    "S101",  # assert in tests
+]
 # Seeds nutzen random() bewusst zur Verteilung — kein crypto-Pfad.
 "src/core/seed/*" = ["S311"]
 "src/core/management/commands/seed*.py" = ["S311", "S106"]
@@ -57,7 +61,10 @@ select = ["E", "F", "I", "W", "B", "UP", "SIM", "N", "S"]
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "anlaufstelle.settings.test"
 pythonpath = ["src"]
-testpaths = ["src/tests"]
+# Refs #885: release/tests enthält Unit-Tests für das Release-Sanitize-Tool
+# (release/sanitize_release_tree.py). Beim Tree-Snapshot dev→stage→app wird
+# der release/-Ordner ausgeschlossen (Excludes in lokaler build-release.sh).
+testpaths = ["src/tests", "release/tests"]
 addopts = "--reuse-db"
 markers = [
     "e2e: End-to-End-Tests mit Playwright (benötigen laufenden Server)",
