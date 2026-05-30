@@ -2,6 +2,7 @@
 
 import re
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -1136,4 +1137,84 @@ class TestAuditLogCreationAllowlist:
             "sich Zeilennummern durch Refactoring. Bitte _ALLOWED_DIRECT_CALLS "
             "auf die aktuellen Zeilen aktualisieren.\n"
             f"Verstoesse: {stale}"
+        )
+
+
+class TestE2ESelectorStabilityGuard:
+    """Blockt brüchige Playwright-Selektoren in src/tests/e2e/.
+
+    Refs #922 / #924 (Welle 1): ``page.locator(...).first.click()`` und
+    ``.nth(<int>).click()`` auf nicht-deterministischer Reihenfolge führen
+    zu Flakes bei Seed-Drift und parallelisierten Runs. Stabile Alternativen
+    sind ``data-testid``-basierte Selektoren plus die Helper in
+    ``src/tests/e2e/_selectors.py``.
+
+    Bestehende Sünden, die in dieser Welle bewusst noch nicht migriert wurden,
+    sind per File-zentrierter Whitelist mit max. erlaubten Vorkommen erfasst.
+    Wenn ein File aufräumt, muss der Counter heruntergesetzt werden — das
+    erzwingt Bewegung in die richtige Richtung. Wenn die Zahl überschritten
+    wird, schlägt der Guard fehl.
+    """
+
+    _E2E_DIR = Path("src/tests/e2e")
+    _PATTERN = re.compile(r"\.(first|nth\(\d+\))\.click\(\)")
+
+    # File-Whitelist mit max. erlaubten Vorkommen. Beim Migrieren auf 0 setzen
+    # und den Eintrag entfernen, sobald der Counter 0 ist.
+    _WHITELIST_MAX: ClassVar[dict[str, int]] = {
+        "test_button_permissions.py": 2,
+        "test_cases.py": 2,
+        "test_client_deletion_workflow.py": 6,
+        "test_handover.py": 3,
+        "test_retention_dashboard.py": 5,
+        "test_workflow_complete.py": 1,
+        "test_workitem_edit.py": 2,
+        "test_zeitstrom_enrichment.py": 1,
+        "test_zeitstrom_events.py": 1,
+    }
+
+    def _count_in_file(self, path: Path) -> int:
+        if not path.exists():
+            return 0
+        return len(self._PATTERN.findall(path.read_text(errors="ignore")))
+
+    def test_no_new_unstable_selectors(self):
+        """Neue Files dürfen kein ``.first.click()``/``.nth(N).click()``."""
+        if not self._E2E_DIR.exists():
+            pytest.skip(f"{self._E2E_DIR} nicht vorhanden")
+
+        violations: list[str] = []
+        for py_file in sorted(self._E2E_DIR.glob("test_*.py")):
+            name = py_file.name
+            count = self._count_in_file(py_file)
+            allowed = self._WHITELIST_MAX.get(name, 0)
+            if count > allowed:
+                violations.append(f"{name}: {count} unstable Selektor(en), erlaubt sind {allowed}")
+
+        assert not violations, (
+            "Brüchige Playwright-Selektoren (.first.click() / .nth(N).click()) "
+            "über der Whitelist-Schwelle. Bitte stabile data-testid-basierte "
+            "Selektoren nutzen (siehe src/tests/e2e/_selectors.py) oder die "
+            "Whitelist im TestE2ESelectorStabilityGuard anpassen, falls eine "
+            "Migration den Counter reduziert hat.\n"
+            "Verstöße:\n  " + "\n  ".join(violations)
+        )
+
+    def test_whitelist_entries_are_still_needed(self):
+        """Schutz gegen veraltete Whitelist: wenn ein File migriert ist,
+        muss der Eintrag entfernt oder der Counter gesenkt werden."""
+        stale: list[str] = []
+        for name, allowed in self._WHITELIST_MAX.items():
+            path = self._E2E_DIR / name
+            if not path.exists():
+                stale.append(f"{name}: Datei existiert nicht mehr")
+                continue
+            count = self._count_in_file(path)
+            if count < allowed:
+                stale.append(f"{name}: Whitelist erlaubt {allowed}, aktuell nur {count} Vorkommen")
+        assert not stale, (
+            "Whitelist-Schwellen sind höher als der aktuelle Bestand — bitte "
+            "_WHITELIST_MAX auf die tatsächliche Anzahl senken (Ziel: 0 und "
+            "Eintrag entfernen).\n"
+            "Veraltete Einträge:\n  " + "\n  ".join(stale)
         )
