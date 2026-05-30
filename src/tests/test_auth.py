@@ -367,19 +367,19 @@ class TestLoginLockoutService:
         )
 
     def test_not_locked_without_failed_attempts(self, staff_user):
-        from core.services.login_lockout import is_locked
+        from core.services.security import is_locked
 
         assert is_locked(staff_user) is False
 
     def test_locked_after_threshold(self, staff_user):
-        from core.services.login_lockout import LOCKOUT_THRESHOLD, is_locked
+        from core.services.security import LOCKOUT_THRESHOLD, is_locked
 
         for _ in range(LOCKOUT_THRESHOLD):
             self._failed(staff_user)
         assert is_locked(staff_user) is True
 
     def test_not_locked_after_unlock(self, staff_user, admin_user):
-        from core.services.login_lockout import LOCKOUT_THRESHOLD, is_locked, unlock
+        from core.services.security import LOCKOUT_THRESHOLD, is_locked, unlock
 
         for _ in range(LOCKOUT_THRESHOLD):
             self._failed(staff_user)
@@ -388,7 +388,7 @@ class TestLoginLockoutService:
         assert is_locked(staff_user) is False
 
     def test_unlock_only_affects_prior_failures(self, staff_user, admin_user):
-        from core.services.login_lockout import LOCKOUT_THRESHOLD, is_locked, unlock
+        from core.services.security import LOCKOUT_THRESHOLD, is_locked, unlock
 
         for _ in range(LOCKOUT_THRESHOLD):
             self._failed(staff_user)
@@ -406,8 +406,7 @@ class TestLoginLockoutService:
 
         from django.utils import timezone
 
-        from core.services import login_lockout
-        from core.services.login_lockout import LOCKOUT_THRESHOLD, LOCKOUT_WINDOW, is_locked
+        from core.services.security import LOCKOUT_THRESHOLD, LOCKOUT_WINDOW, is_locked, login_lockout
 
         for _ in range(LOCKOUT_THRESHOLD + 2):
             self._failed(staff_user)
@@ -420,12 +419,12 @@ class TestLoginLockoutService:
             assert is_locked(staff_user) is False
 
     def test_none_user_is_not_locked(self, db):
-        from core.services.login_lockout import is_locked
+        from core.services.security import is_locked
 
         assert is_locked(None) is False
 
     def test_lockout_is_per_user(self, staff_user, lead_user):
-        from core.services.login_lockout import LOCKOUT_THRESHOLD, is_locked
+        from core.services.security import LOCKOUT_THRESHOLD, is_locked
 
         for _ in range(LOCKOUT_THRESHOLD):
             self._failed(staff_user)
@@ -438,7 +437,7 @@ class TestLoginLockoutIntegration:
     """Korrektes Passwort wird bei gesperrtem Account abgewiesen."""
 
     def test_correct_password_blocked_when_locked(self, client, staff_user):
-        from core.services.login_lockout import LOCKOUT_THRESHOLD
+        from core.services.security import LOCKOUT_THRESHOLD
 
         for _ in range(LOCKOUT_THRESHOLD):
             AuditLog.objects.create(
@@ -463,7 +462,7 @@ class TestLoginLockoutIntegration:
         assert locked_entry is not None
 
     def test_correct_password_works_after_unlock(self, client, staff_user, admin_user):
-        from core.services.login_lockout import LOCKOUT_THRESHOLD, unlock
+        from core.services.security import LOCKOUT_THRESHOLD, unlock
 
         for _ in range(LOCKOUT_THRESHOLD):
             AuditLog.objects.create(

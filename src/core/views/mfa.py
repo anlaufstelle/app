@@ -36,13 +36,13 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.models import AuditLog
 from core.services.audit import log_audit_event
-from core.services.mfa import (
+from core.services.security import (
     BACKUP_CODES_COUNT,
+    RequireSudoModeMixin,
     generate_backup_codes,
     remaining_backup_codes,
     verify_backup_code,
 )
-from core.services.sudo_mode import RequireSudoModeMixin
 
 logger = logging.getLogger(__name__)
 

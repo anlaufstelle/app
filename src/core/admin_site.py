@@ -22,7 +22,7 @@ from django.conf import settings
 from django.shortcuts import redirect
 from unfold.sites import UnfoldAdminSite
 
-from core.services.sudo_mode import is_in_sudo
+from core.services.security import is_in_sudo
 
 
 class AnlaufstelleAdminSite(UnfoldAdminSite):

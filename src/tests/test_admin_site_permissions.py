@@ -49,7 +49,7 @@ class TestAdminSiteRoleGate:
 
 def _enter_sudo(client):
     """Simuliert eine frische Re-Auth via Sudo-Mode-View."""
-    from core.services.sudo_mode import SUDO_SESSION_KEY
+    from core.services.security import SUDO_SESSION_KEY
 
     session = client.session
     session[SUDO_SESSION_KEY] = int(time.time()) + 3600

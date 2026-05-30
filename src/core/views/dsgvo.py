@@ -9,7 +9,7 @@ from django.views import View
 from core.models import AuditLog
 from core.services.audit import log_audit_event
 from core.services.dsgvo_package import DOCUMENTS, get_document_list, render_document
-from core.services.sudo_mode import RequireSudoModeMixin
+from core.services.security import RequireSudoModeMixin
 from core.utils.downloads import safe_download_response
 from core.views.mixins import FacilityAdminRequiredMixin
 

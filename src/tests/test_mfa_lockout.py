@@ -2,7 +2,7 @@
 
 Refs Matrix AUD-SEC-MFA-02 (Welle 3, Issue #926, Master #922).
 
-Verifiziert den IST-Zustand des ``core.services.login_lockout``-Services:
+Verifiziert den IST-Zustand des ``core.services.security.login_lockout``-Services:
 Nach N fehlgeschlagenen Logins (LOCKOUT_THRESHOLD, default 10) innerhalb des
 Zeitfensters (LOCKOUT_WINDOW) sperrt ``is_locked()`` den Account. Ein
 ``unlock()``-Eintrag (Action: ``LOGIN_UNLOCK``) hebt die Sperre auf, indem
@@ -19,7 +19,7 @@ unter der Matrix-TC-ID**, damit Audit-Tools den Test der TC zuordnen.
 import pytest
 
 from core.models import AuditLog
-from core.services.login_lockout import is_locked, unlock
+from core.services.security import is_locked, unlock
 
 
 @pytest.mark.django_db

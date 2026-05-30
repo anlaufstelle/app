@@ -7,7 +7,7 @@ einzelnen Model gehören:
 - Timezone-Edge-Case gegen ``check_version_conflict``
 - Sequenzielles "Race" (deterministisch, kein Thread)
 
-Das eigentliche Locking liegt in :mod:`core.services.locking` und
+Das eigentliche Locking liegt in :mod:`core.services.security.locking` und
 vergleicht den geparsten ``datetime``-Instant gegen den vom Client
 mitgelieferten Wert (Refs #595).
 """
@@ -18,7 +18,7 @@ import pytest
 from django.core.exceptions import ValidationError
 
 from core.models import AuditLog, WorkItem
-from core.services.locking import check_version_conflict
+from core.services.security import check_version_conflict
 from core.services.settings import update_settings
 from core.services.workitems import update_workitem
 

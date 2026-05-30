@@ -132,7 +132,7 @@ def update_workitem(workitem, user, *, expected_updated_at=None, **fields):
     ``expected_updated_at`` enables optimistic locking (Refs #531) — when the
     DB-side ``updated_at`` differs, a ``ValidationError`` is raised.
     """
-    from core.services.locking import check_version_conflict
+    from core.services.security import check_version_conflict
 
     check_version_conflict(workitem, expected_updated_at)
     changed_fields = []

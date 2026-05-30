@@ -228,7 +228,7 @@ def update_event(event, user, data_json, expected_updated_at=None, **kwargs):
     Refs #734: nutzt zentrale ``check_version_conflict`` statt eigenem
     ``str(updated_at)``-Vergleich.
     """
-    from core.services.locking import check_version_conflict
+    from core.services.security import check_version_conflict
 
     check_version_conflict(event, expected_updated_at)
     data_json = _validate_data_json(event.document_type, data_json)

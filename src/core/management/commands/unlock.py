@@ -9,7 +9,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.utils.translation import gettext_lazy as _
 
 from core.models import User
-from core.services import login_lockout
+from core.services.security import login_lockout
 
 
 class Command(BaseCommand):

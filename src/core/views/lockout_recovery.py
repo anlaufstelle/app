@@ -27,9 +27,8 @@ from django_ratelimit.decorators import ratelimit
 
 from core.models import AuditLog, User
 from core.services.audit import log_audit_event
-from core.services.lockout_recovery import build_recovery_token, verify_recovery_token
-from core.services.login_lockout import unlock as unlock_user
-from core.services.mfa import verify_backup_code
+from core.services.security import build_recovery_token, verify_backup_code, verify_recovery_token
+from core.services.security import unlock as unlock_user
 
 logger = logging.getLogger(__name__)
 

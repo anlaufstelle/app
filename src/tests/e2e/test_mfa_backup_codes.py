@@ -32,7 +32,7 @@ def _enable_totp_and_generate_codes(username: str, e2e_env) -> list[str]:
             (
                 "from core.models import User; "
                 "from django_otp.plugins.otp_totp.models import TOTPDevice; "
-                "from core.services.mfa import generate_backup_codes; "
+                "from core.services.security import generate_backup_codes; "
                 f"u = User.objects.get(username='{username}'); "
                 "TOTPDevice.objects.filter(user=u).delete(); "
                 "TOTPDevice.objects.create(user=u, name='default', confirmed=True); "

@@ -7,7 +7,7 @@ from django.test import RequestFactory
 from django.urls import reverse
 
 from core.models import AuditLog
-from core.services.sudo_mode import SUDO_SESSION_KEY, clear_sudo, enter_sudo, is_in_sudo
+from core.services.security import SUDO_SESSION_KEY, clear_sudo, enter_sudo, is_in_sudo
 
 
 class TestSudoModeService:

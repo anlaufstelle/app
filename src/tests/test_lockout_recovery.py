@@ -16,8 +16,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from core.models import AuditLog
-from core.services.login_lockout import is_locked
-from core.services.mfa import generate_backup_codes
+from core.services.security import generate_backup_codes, is_locked
 
 
 def _lock_account(user, count: int = 10):
@@ -124,7 +123,7 @@ class TestRecoveryTokenFlow:
         assert len(mail.outbox) == 0
 
     def test_recovery_confirm_unlocks_account(self, client, staff_user):
-        from core.services.lockout_recovery import build_recovery_token
+        from core.services.security import build_recovery_token
 
         staff_user.email = "locked@example.org"
         staff_user.save(update_fields=["email"])

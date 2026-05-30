@@ -148,7 +148,7 @@ def _seed_failed_logins_and_check_lock(username, e2e_env, n=10):
             "-c",
             (
                 "from core.models import AuditLog, User; "
-                "from core.services.login_lockout import is_locked; "
+                "from core.services.security import is_locked; "
                 f"u = User.objects.get(username='{username}'); "
                 f"[AuditLog.objects.create(facility=u.facility, user=u, "
                 f"action=AuditLog.Action.LOGIN_FAILED, "
@@ -178,7 +178,7 @@ def _clear_lockout_for(usernames, e2e_env):
 
     code = (
         "from core.models import User; "
-        "from core.services.login_lockout import unlock; "
+        "from core.services.security import unlock; "
         f"users = User.objects.filter(username__in={list(usernames)!r}); "
         "[unlock(u, unlocked_by=u) for u in users]"
     )

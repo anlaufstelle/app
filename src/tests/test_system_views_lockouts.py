@@ -33,7 +33,7 @@ class TestSystemLockoutListAccess:
 
     def test_super_admin_sees_locked_user(self, client, super_admin_user, staff_user, facility):
         """User mit >=THRESHOLD LOGIN_FAILED-Audits taucht in der Liste auf."""
-        from core.services.login_lockout import LOCKOUT_THRESHOLD
+        from core.services.security import LOCKOUT_THRESHOLD
 
         for _ in range(LOCKOUT_THRESHOLD):
             AuditLog.objects.create(
@@ -53,7 +53,7 @@ class TestSystemLockoutListAccess:
 
     def test_super_admin_sees_only_locked_users(self, client, super_admin_user, staff_user, facility):
         """User mit weniger als Threshold-Fehlversuchen erscheint NICHT."""
-        from core.services.login_lockout import LOCKOUT_THRESHOLD
+        from core.services.security import LOCKOUT_THRESHOLD
 
         # Threshold - 1 -> nicht gesperrt.
         for _ in range(LOCKOUT_THRESHOLD - 1):
@@ -73,7 +73,7 @@ class TestSystemLockoutListAccess:
     def test_super_admin_excluded_from_list(self, client, super_admin_user):
         """Refs #872: super_admin selbst taucht nie als Sperrkonto auf —
         auch wenn theoretisch viele Failed-Audits existieren."""
-        from core.services.login_lockout import LOCKOUT_THRESHOLD
+        from core.services.security import LOCKOUT_THRESHOLD
 
         for _ in range(LOCKOUT_THRESHOLD):
             AuditLog.objects.create(
@@ -89,7 +89,7 @@ class TestSystemLockoutListAccess:
     def test_unlock_resets_visibility(self, client, super_admin_user, staff_user, facility):
         """Nach einem LOGIN_UNLOCK ohne neue Failed-Audits ist der User
         nicht mehr in der Liste — Cutoff greift."""
-        from core.services.login_lockout import LOCKOUT_THRESHOLD, unlock
+        from core.services.security import LOCKOUT_THRESHOLD, unlock
 
         for _ in range(LOCKOUT_THRESHOLD):
             AuditLog.objects.create(
@@ -117,7 +117,7 @@ class TestSystemUnlockView:
     def test_super_admin_unlock_writes_audit(self, client, super_admin_user, staff_user, facility):
         """Refs #872: erfolgreicher Unlock schreibt LOGIN_UNLOCK mit
         ``unlocked_by=<super_admin.pk>``."""
-        from core.services.login_lockout import LOCKOUT_THRESHOLD
+        from core.services.security import LOCKOUT_THRESHOLD
 
         for _ in range(LOCKOUT_THRESHOLD):
             AuditLog.objects.create(

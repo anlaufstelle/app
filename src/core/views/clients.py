@@ -22,7 +22,7 @@ from core.services.audit import log_audit_event
 from core.services.bans import get_active_bans_for_client
 from core.services.client_export import export_client_data, export_client_data_pdf
 from core.services.clients import create_client, track_client_visit, update_client
-from core.services.sudo_mode import RequireSudoModeMixin
+from core.services.security import RequireSudoModeMixin
 from core.utils.downloads import safe_download_response
 from core.views.mixins import (
     AssistantOrAboveRequiredMixin,

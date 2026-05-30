@@ -7,7 +7,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 
 from core.models import User
-from core.services.invite import build_invite_url, send_invite_email
+from core.services.security import build_invite_url, send_invite_email
 
 
 @pytest.mark.django_db

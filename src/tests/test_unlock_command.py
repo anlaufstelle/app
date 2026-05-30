@@ -9,7 +9,7 @@ import pytest
 from django.core.management import CommandError, call_command
 
 from core.models import AuditLog, User
-from core.services import login_lockout
+from core.services.security import login_lockout
 
 
 @pytest.mark.django_db

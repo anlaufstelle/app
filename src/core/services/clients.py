@@ -13,7 +13,7 @@ from core.models.workitem import DeletionRequest
 from core.services._db_admin import bypass_replication_triggers
 from core.services.activity import log_activity
 from core.services.audit import audit_client_event, audit_event
-from core.services.locking import check_version_conflict
+from core.services.security import check_version_conflict
 
 logger = logging.getLogger(__name__)
 

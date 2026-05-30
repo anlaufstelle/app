@@ -11,9 +11,9 @@ from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationFo
 from core.admin.mixins import FacilityScopedAdminMixin
 from core.admin_site import anlaufstelle_admin_site
 from core.models import User
-from core.services.invite import send_invite_email
-from core.services.login_lockout import is_locked as user_is_locked
-from core.services.login_lockout import unlock as unlock_user
+from core.services.security import is_locked as user_is_locked
+from core.services.security import send_invite_email
+from core.services.security import unlock as unlock_user
 
 _INITIAL_PASSWORD_ALPHABET = string.ascii_letters + string.digits
 _INITIAL_PASSWORD_LENGTH = 12

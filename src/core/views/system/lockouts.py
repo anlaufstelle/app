@@ -13,7 +13,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.models import AuditLog
 from core.models.user import User
-from core.services import login_lockout
+from core.services.security import login_lockout
 from core.signals.audit import _set_session_vars, get_client_ip
 from core.views.system.mixins import SystemAuditMixin
 
@@ -21,7 +21,7 @@ from core.views.system.mixins import SystemAuditMixin
 class SystemLockoutListView(SystemAuditMixin, TemplateView):
     """Cross-Facility-Uebersicht der gesperrten Konten.
 
-    Heuristik analog ``core.services.login_lockout.is_locked``: ein User
+    Heuristik analog ``core.services.security.login_lockout.is_locked``: ein User
     gilt als gesperrt, wenn die Anzahl ``LOGIN_FAILED``-AuditLog-Eintraege
     seit dem letzten ``LOGIN_UNLOCK`` und innerhalb des aktiven
     ``LOCKOUT_WINDOW`` den ``LOCKOUT_THRESHOLD`` erreicht. ``super_admin``

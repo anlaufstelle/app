@@ -5,7 +5,7 @@ import logging
 from django.db import transaction
 
 from core.models import AuditLog, Settings
-from core.services.locking import check_version_conflict
+from core.services.security import check_version_conflict
 
 logger = logging.getLogger(__name__)
 

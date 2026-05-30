@@ -37,7 +37,7 @@ def _make_admin_request(rf, user, method="POST"):
 class TestUnlockSelectedUsersAction:
     def test_unlocks_locked_user_and_writes_audit_entry(self, rf, staff_user, admin_user):
         # Staff 10 Fehlversuche → gesperrt
-        from core.services.login_lockout import LOCKOUT_THRESHOLD
+        from core.services.security import LOCKOUT_THRESHOLD
 
         for _ in range(LOCKOUT_THRESHOLD):
             AuditLog.objects.create(

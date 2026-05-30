@@ -8,7 +8,7 @@ from django_otp.plugins.otp_static.models import StaticDevice
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
 from core.models import AuditLog
-from core.services.mfa import (
+from core.services.security import (
     BACKUP_CODES_COUNT,
     generate_backup_codes,
     remaining_backup_codes,
@@ -218,7 +218,7 @@ class TestMFARegenerate:
         assert response.status_code == 302
         assert response.url == "/mfa/settings/"
         # Refs #790: DB speichert SHA-256-Prefixes, ``first`` enthaelt Klartext-Codes.
-        from core.services.mfa import _hash_code
+        from core.services.security import _hash_code
 
         still = StaticDevice.objects.get(user=staff_user, name="backup").token_set.values_list("token", flat=True)
         assert set(still) == {_hash_code(c) for c in first}
