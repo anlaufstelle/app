@@ -432,6 +432,20 @@ Fixtures für Login, Server-Setup u. ä. liegen in `src/tests/e2e/conftest.py`. 
 
 **Smoke-Tests:** `make test-e2e-smoke` führt nur mit `@pytest.mark.smoke` markierte E2E-Tests aus (~40 kritische Flows, ~2-3 min). Ideal zur schnellen Validierung nach Feature-Implementierung.
 
+### Test-Schichten-Modell beim Entwickeln
+
+Während der Entwicklung nie die volle Suite laufen lassen — in Schichten vorgehen, jeweils mit Fail-Fast (`pytest -x`):
+
+1. **Fokus:** `pytest src/tests/test_<betroffene_datei>.py -x` — nur Tests im geänderten Bereich. E2E fokussiert: `pytest src/tests/e2e/test_<feature>.py -x`.
+2. **Gruppe:** Betroffene Testdateien zusammen: `pytest src/tests/test_a.py src/tests/test_b.py -x`.
+3. **Parallel:** `make test-parallel` — volle Unit-Suite parallel, vor dem Commit.
+4. **Smoke:** `make test-e2e-smoke` — ~40 kritische E2E-Flows (~2-3 min), nach Feature fertig.
+5. **E2E:** `make test-e2e-parallel` — volle E2E-Suite parallel, vor Push.
+
+**Fail-Fast immer:** Tests mit `pytest -x` ausführen. Bei Fehlern fixen, prüfen ob verwandte Tests denselben Root Cause teilen, erst dann wieder Gesamtlauf. Re-Runs: `pytest --lf -x` (nur zuletzt fehlgeschlagene) oder `pytest --ff -x` (fehlgeschlagene zuerst).
+
+**Wait-Strategie (E2E):** `domcontentloaded` oder `wait_for_url` — **niemals** `networkidle`.
+
 ### Vollständige CI-Pipeline lokal
 
 ```bash
