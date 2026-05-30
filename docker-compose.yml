@@ -56,8 +56,12 @@ services:
       - clamav-db:/var/lib/clamav
     # Port 3310 ist nur innerhalb des Compose-Netzwerks sichtbar — kein Host-Binding.
     # Aktivierung via CLAMAV_ENABLED=true im web-Container.
+    # Refs #938: Healthcheck via clamdscan --version (Smoke-Test des Binary).
+    # Der frühere clamdcheck.sh testet TCP 3310, aber clamd lauscht im
+    # Image-Default nicht auf TCP — führte zu permanent unhealthy-Status,
+    # obwohl clamd grundsätzlich funktioniert.
     healthcheck:
-      test: ["CMD", "clamdcheck.sh"]
+      test: ["CMD", "clamdscan", "--version"]
       interval: 60s
       timeout: 10s
       retries: 3
