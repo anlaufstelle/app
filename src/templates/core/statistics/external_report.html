@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Externer Bericht" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Externer Bericht (Datenschutzprofil)" %}</h1>
+
+<section aria-labelledby="report-metadata" class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+    <h2 id="report-metadata" class="text-lg font-semibold text-blue-900 mb-2">
+        {% trans "Datenschutzprofil" %}
+    </h2>
+    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
+        <div>
+            <dt class="font-semibold text-blue-800">{% trans "Einrichtung" %}</dt>
+            <dd class="text-blue-900">{{ report.metadata.facility }}</dd>
+        </div>
+        <div>
+            <dt class="font-semibold text-blue-800">{% trans "Profil" %}</dt>
+            <dd class="text-blue-900">{{ report.metadata.privacy_profile }}</dd>
+        </div>
+        <div>
+            <dt class="font-semibold text-blue-800">{% trans "Zeitraum" %}</dt>
+            <dd class="text-blue-900">{{ report.metadata.date_from }} – {{ report.metadata.date_to }}</dd>
+        </div>
+        <div>
+            <dt class="font-semibold text-blue-800">{% trans "K-Anonymität-Schwelle" %}</dt>
+            <dd class="text-blue-900">{{ report.metadata.k_anonymity_threshold }}</dd>
+        </div>
+        <div>
+            <dt class="font-semibold text-blue-800">{% trans "Erzeugt am" %}</dt>
+            <dd class="text-blue-900">{{ report.metadata.generated_at }}</dd>
+        </div>
+    </dl>
+    <p class="text-xs text-blue-700 mt-3">
+        {% blocktrans with threshold=report.metadata.k_anonymity_threshold %}
+        Aggregate mit weniger als {{ threshold }} Datensätzen werden zum Schutz der Anonymität unterdrückt (Anzeige als „unterdrückt").
+        {% endblocktrans %}
+    </p>
+</section>
+
+<section aria-labelledby="report-totals" class="mb-6">
+    <h2 id="report-totals" class="text-lg font-semibold text-ink mb-2">{% trans "Kennzahlen" %}</h2>
+    <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div class="bg-white border border-line rounded-lg p-4">
+            <dt class="text-sm text-muted">{% trans "Kontakte gesamt" %}</dt>
+            <dd class="text-2xl font-bold text-ink">{{ report.total_contacts }}</dd>
+        </div>
+        <div class="bg-white border border-line rounded-lg p-4">
+            <dt class="text-sm text-muted">{% trans "Unterschiedliche Personen" %}</dt>
+            <dd class="text-2xl font-bold text-ink">
+                {% if report.unique_clients is None %}
+                    <span class="text-muted italic">{% trans "unterdrückt" %}</span>
+                {% else %}
+                    {{ report.unique_clients }}
+                {% endif %}
+            </dd>
+        </div>
+    </dl>
+</section>
+
+<section aria-labelledby="report-document-types" class="mb-6">
+    <h2 id="report-document-types" class="text-lg font-semibold text-ink mb-2">{% trans "Nach Dokumentationstyp" %}</h2>
+    <table class="w-full text-sm bg-white border border-line rounded-lg">
+        <thead class="bg-line/50">
+            <tr>
+                <th class="px-4 py-2 text-left">{% trans "Typ" %}</th>
+                <th class="px-4 py-2 text-right">{% trans "Anzahl" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in report.by_document_type %}
+            <tr class="border-t border-line">
+                <td class="px-4 py-2">{{ row.name }}</td>
+                <td class="px-4 py-2 text-right">
+                    {% if row.suppressed %}
+                        <span class="text-muted italic">{% trans "unterdrückt" %}</span>
+                    {% else %}
+                        {{ row.count }}
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="2" class="px-4 py-2 text-muted italic">{% trans "Keine Daten im Zeitraum." %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<section aria-labelledby="report-age" class="mb-6">
+    <h2 id="report-age" class="text-lg font-semibold text-ink mb-2">{% trans "Nach Altersgruppe" %}</h2>
+    <table class="w-full text-sm bg-white border border-line rounded-lg">
+        <thead class="bg-line/50">
+            <tr>
+                <th class="px-4 py-2 text-left">{% trans "Altersgruppe" %}</th>
+                <th class="px-4 py-2 text-right">{% trans "Anzahl" %}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in report.by_age_cluster %}
+            <tr class="border-t border-line">
+                <td class="px-4 py-2">{{ row.label }}</td>
+                <td class="px-4 py-2 text-right">
+                    {% if row.suppressed %}
+                        <span class="text-muted italic">{% trans "unterdrückt" %}</span>
+                    {% else %}
+                        {{ row.count }}
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="2" class="px-4 py-2 text-muted italic">{% trans "Keine Daten im Zeitraum." %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+
+<aside class="mt-8 text-sm text-muted">
+    <p>
+        <a href="?format=json{% if date_from and date_to %}&date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}{% endif %}"
+           class="text-link underline">{% trans "Als JSON exportieren" %}</a>
+    </p>
+</aside>
+{% endblock %}

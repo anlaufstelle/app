@@ -3,6 +3,7 @@
 import logging
 
 from django.http import HttpResponse, JsonResponse
+from django.shortcuts import render
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
@@ -12,6 +13,7 @@ from django_ratelimit.decorators import ratelimit
 from core.models import AuditLog, DocumentType
 from core.services.audit import log_audit_event
 from core.services.export import export_events_csv, generate_jugendamt_pdf, generate_report_pdf
+from core.services.external_report import build_external_report
 from core.services.snapshot import _merge_stats, get_statistics_hybrid, get_statistics_trend
 from core.utils.downloads import safe_download_response
 from core.utils.formatting import parse_date
@@ -214,3 +216,55 @@ class JugendamtExportView(LeadOrAdminRequiredMixin, View):
         )
 
         return response
+
+
+class ExternalReportView(LeadOrAdminRequiredMixin, View):
+    """Datenschutzfreundlicher externer Bericht (Refs #921).
+
+    Wrappt :func:`core.services.external_report.build_external_report`:
+    keine Pseudonyme, K-Anon-Schwelle aus Settings, Datenschutzprofil-Metadaten.
+
+    Output-Format wird ueber den ``format``-Query-Parameter gewaehlt:
+    - ``html`` (Default): rendert Template ``core/statistics/external_report.html``
+    - ``json``: liefert JsonResponse mit demselben Datenmodell
+    """
+
+    template_name = "core/statistics/external_report.html"
+
+    def get(self, request):
+        from core.services.statistics import parse_statistics_period
+
+        facility = request.current_facility
+        today = timezone.localdate()
+        period_state = parse_statistics_period(request.GET, today)
+
+        report = build_external_report(facility, period_state.date_from, period_state.date_to)
+
+        # Audit-Log: jeder externe Bericht ist ein DSGVO-relevanter Export.
+        log_audit_event(
+            request,
+            AuditLog.Action.EXPORT,
+            target_type="ExternalReport",
+            detail={
+                "format": request.GET.get("format", "html"),
+                "date_from": str(period_state.date_from),
+                "date_to": str(period_state.date_to),
+                "k_threshold": report["metadata"]["k_anonymity_threshold"],
+            },
+        )
+
+        output_format = request.GET.get("format", "html")
+        if output_format == "json":
+            return JsonResponse(report)
+        return render(
+            request,
+            self.template_name,
+            {
+                "report": report,
+                "period": period_state.period,
+                "date_from": period_state.date_from,
+                "date_to": period_state.date_to,
+                "selected_year": period_state.selected_year,
+                "current_year": today.year,
+            },
+        )

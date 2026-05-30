@@ -1,0 +1,86 @@
+"""Datenschutzfreundliche externe Berichte (Refs #921).
+
+Wrappt :func:`core.services.statistics.get_statistics`:
+
+- entfernt ``top_clients`` (Pseudonym-Ranking) komplett
+- wendet K-Anonymity-Schwelle auf Aggregate an: Werte < Schwelle werden auf
+  ``None`` gesetzt und mit ``suppressed=True`` markiert
+- legt Datenschutzprofil-Metadaten am Report-Kopf ab (Zeitraum, Facility,
+  K-Anon-Schwelle, Generierungs-Timestamp)
+
+Re-uses ``Settings.k_anonymity_threshold`` (Default 5) als Schwelle —
+konsistent mit der K-Anon-Strategie aus #780.
+"""
+
+from __future__ import annotations
+
+from datetime import date
+from typing import Any
+
+from django.utils import timezone
+
+from core.models import Settings
+from core.services.statistics import get_statistics
+
+DEFAULT_K_THRESHOLD = 5
+
+
+def _get_threshold(facility) -> int:
+    """Holt die K-Anon-Schwelle aus den Facility-Settings, fallback auf Default."""
+    try:
+        settings = Settings.objects.get(facility=facility)
+        return settings.k_anonymity_threshold or DEFAULT_K_THRESHOLD
+    except Settings.DoesNotExist:
+        return DEFAULT_K_THRESHOLD
+
+
+def _suppress_small(rows: list[dict[str, Any]], threshold: int, count_key: str = "count") -> list[dict[str, Any]]:
+    """Markiert Aggregate < threshold als unterdrueckt (count=None, suppressed=True)."""
+    result = []
+    for row in rows:
+        row_copy = dict(row)
+        original_count = row_copy.get(count_key, 0)
+        if original_count < threshold:
+            row_copy[count_key] = None
+            row_copy["suppressed"] = True
+        else:
+            row_copy["suppressed"] = False
+        result.append(row_copy)
+    return result
+
+
+def _suppress_stage_dict(stage_dict: dict[str, int], threshold: int) -> dict[str, Any]:
+    """Suppress-Variante fuer den by_contact_stage-Dict."""
+    return {key: (None if value < threshold else value) for key, value in stage_dict.items()}
+
+
+def build_external_report(facility, date_from: date, date_to: date) -> dict[str, Any]:
+    """Baut einen datenschutzfreundlichen externen Bericht.
+
+    Reuses ``statistics.get_statistics()``, entfernt ``top_clients`` und
+    wendet die K-Anon-Schwelle aus ``Settings.k_anonymity_threshold`` an.
+    Fuegt einen ``metadata``-Block mit Datenschutzprofil-Informationen hinzu.
+    """
+    threshold = _get_threshold(facility)
+    raw = get_statistics(facility, date_from, date_to)
+
+    # by_document_type + by_age_cluster durch K-Anon-Filter
+    by_document_type = _suppress_small(raw["by_document_type"], threshold)
+    by_age_cluster = _suppress_small(raw["by_age_cluster"], threshold)
+    by_contact_stage = _suppress_stage_dict(raw["by_contact_stage"], threshold)
+
+    return {
+        "total_contacts": raw["total_contacts"],
+        "unique_clients": raw["unique_clients"] if raw["unique_clients"] >= threshold else None,
+        "by_contact_stage": by_contact_stage,
+        "by_document_type": by_document_type,
+        "by_age_cluster": by_age_cluster,
+        "metadata": {
+            "facility": facility.name,
+            "date_from": date_from.isoformat(),
+            "date_to": date_to.isoformat(),
+            "k_anonymity_threshold": threshold,
+            "generated_at": timezone.now().isoformat(),
+            "privacy_profile": "external",
+        },
+    }
