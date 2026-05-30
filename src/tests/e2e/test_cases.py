@@ -356,6 +356,166 @@ class TestGoalsAndMilestones:
         assert page.locator(f"span.line-through:has-text('{milestone_title}')").is_visible()
 
 
+class TestHTMXCaseEvents:
+    """HTMX-Workflows zum Event-Case-Mapping.
+
+    Refs Matrix ENT-CASE-08 (Event einem Fall zuordnen) und
+    ENT-CASE-09 (Event aus Fall entfernen). Der Mapping-Container
+    ``#case-event-list`` wird über den Partial
+    ``core/cases/partials/event_list.html`` per HTMX-``innerHTML``-Swap
+    aktualisiert — kein Full-Reload.
+    """
+
+    def _create_case_with_unassigned_event_for_same_client(self, page, base_url):
+        """Hilfsroutine: Fall + nicht zugeordnetes Event derselben Person anlegen.
+
+        Liefert die Fall-Detail-URL zurück.
+        """
+        unique_title = f"E2E-HTMX-{uuid.uuid4().hex[:6]}"
+
+        # Fall anlegen.
+        page.goto(f"{base_url}/cases/new/")
+        page.fill('input[name="title"]', unique_title)
+        page.select_option('select[name="lead_user"]', index=1)
+        _select_first_client_in_form(page)
+        # Pseudonym des gewählten Klienten merken, um das Event danach
+        # derselben Person zuzuordnen. Das Autocomplete-Widget hat ein
+        # ``role="combobox"``-Input, das nach der Auswahl das Pseudonym anzeigt.
+        chosen_pseudonym = page.locator("input[role='combobox']").input_value()
+        assert chosen_pseudonym, "Pseudonym wurde nach der Klient-Auswahl nicht im Autocomplete sichtbar."
+        page.locator("#main-content button[type='submit']").click()
+        page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
+        case_url = page.url
+
+        # Event für DENSELBEN Klienten erzeugen (ohne Case-Bindung).
+        page.goto(f"{base_url}/events/new/")
+        page.wait_for_load_state("domcontentloaded")
+        page.select_option("select[name='document_type']", label="Kontakt")
+        page.wait_for_load_state("domcontentloaded")
+        autocomplete = page.locator("input[placeholder='Pseudonym eingeben...']")
+        autocomplete.fill(chosen_pseudonym)
+        page.locator(f"button:has-text('{chosen_pseudonym}')").first.wait_for(state="visible", timeout=5000)
+        page.locator(f"button:has-text('{chosen_pseudonym}')").first.click()
+        page.locator("#main-content button[type='submit']").click()
+        page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
+
+        return case_url
+
+    def test_assign_event_via_htmx_then_remove(self, staff_page, base_url):
+        """Refs Matrix ENT-CASE-08 + ENT-CASE-09.
+
+        Ein einziger Flow deckt beide TCs ab: zuerst das nicht-zugeordnete
+        Event per HTMX an den Fall heften, dann per X-Button wieder lösen.
+        Beide Schritte dürfen die URL nicht wechseln (kein Full-Reload).
+        """
+        page = staff_page
+        case_url = self._create_case_with_unassigned_event_for_same_client(page, base_url)
+
+        page.goto(case_url, wait_until="domcontentloaded")
+        container = page.locator("#case-event-list")
+        container.wait_for(state="visible", timeout=5000)
+
+        # Vor dem Zuordnen: das Event steht im Select „Nicht zugeordnet".
+        select = container.locator("select[name='event_id']")
+        select.wait_for(state="visible", timeout=5000)
+        assert select.locator("option").count() >= 1
+
+        url_before = page.url
+        container.locator("button:has-text('Zuordnen')").click()
+        # HTMX-Swap: nach erfolgreicher Zuordnung taucht ein Event-Card mit
+        # Remove-Form innerhalb des Containers auf.
+        page.locator("#case-event-list form[action*='/remove-event/']").first.wait_for(
+            state="visible", timeout=5000
+        )
+        assert page.url == url_before, "HTMX-Assign darf nicht zu Voll-Navigation führen."
+
+        # ENT-CASE-09: X-Button klicken → Event landet wieder im Select.
+        remove_form = page.locator("#case-event-list form[action*='/remove-event/']").first
+        remove_form.locator("button[type='submit']").click()
+        page.locator("#case-event-list select[name='event_id']").wait_for(
+            state="visible", timeout=5000
+        )
+        assert page.url == url_before, "HTMX-Remove darf nicht zu Voll-Navigation führen."
+
+
+class TestCasesForClientAPI:
+    """Refs Matrix ENT-CASE-10 — JSON-Endpoint für offene Fälle einer Person."""
+
+    def test_endpoint_returns_open_cases_json(self, staff_page, base_url):
+        """Endpoint listet offene Fälle der Person als JSON."""
+        page = staff_page
+
+        # Fall mit Klient anlegen, damit garantiert mind. ein offener Fall existiert.
+        unique_title = f"E2E-API-{uuid.uuid4().hex[:6]}"
+        page.goto(f"{base_url}/cases/new/")
+        page.fill('input[name="title"]', unique_title)
+        page.select_option('select[name="lead_user"]', index=1)
+        _select_first_client_in_form(page)
+        # Hidden ``input[name='client']`` ist Alpine-gebunden — Wert per
+        # JavaScript abgreifen statt input_value() (Letzteres liest manchmal
+        # leeren String bevor Alpine die Bindung committet).
+        client_id = page.evaluate(
+            "() => document.querySelector(\"input[name='client']\").value"
+        )
+        assert client_id, "client-Hidden-Input hat keinen Wert — Klient-Auswahl nicht committed."
+        page.locator("#main-content button[type='submit']").click()
+        page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/"))
+
+        # API-Aufruf in der bestehenden Session via fetch().
+        result = page.evaluate(
+            "async (clientId) => {"
+            "  const r = await fetch(`/api/cases/for-client/?client=${clientId}`, {credentials: 'same-origin'});"
+            "  return {status: r.status, body: await r.json()};"
+            "}",
+            client_id,
+        )
+        assert result["status"] == 200, f"Erwarte 200, bekomme {result['status']}"
+        assert isinstance(result["body"], list), "Response muss JSON-Liste sein."
+        titles = [c["title"] for c in result["body"]]
+        assert unique_title in titles, (
+            f"Soeben angelegter Fall {unique_title!r} fehlt in API-Response: {titles}"
+        )
+        for entry in result["body"]:
+            assert set(entry.keys()) >= {"id", "title"}
+            assert isinstance(entry["id"], str) and len(entry["id"]) == 36
+
+
+class TestCaseUpdateValidation:
+    """Refs Matrix ENT-CASE-11 — Validierungsfehler statt 500."""
+
+    def test_empty_title_renders_validation_error(self, staff_page, base_url):
+        """Fall im Edit leeren und speichern → Form bleibt mit Fehler, kein 500."""
+        page = staff_page
+
+        # Fall anlegen, dann editieren.
+        unique_title = f"E2E-Val-{uuid.uuid4().hex[:6]}"
+        page.goto(f"{base_url}/cases/new/")
+        page.fill('input[name="title"]', unique_title)
+        page.select_option('select[name="lead_user"]', index=1)
+        _select_first_client_in_form(page)
+        page.locator("#main-content button[type='submit']").click()
+        page.wait_for_url(re.compile(r"/cases/[0-9a-f-]+/$"))
+        case_pk = re.search(r"/cases/([0-9a-f-]+)/", page.url).group(1)
+
+        page.goto(f"{base_url}/cases/{case_pk}/edit/", wait_until="domcontentloaded")
+        # Browser-Validation per ``required``-Attribut ausschalten, damit der
+        # Submit den Server erreicht und die Django-Form-Validierung greift.
+        page.evaluate(
+            "() => document.querySelectorAll('input[name=\"title\"]').forEach(el => el.removeAttribute('required'))"
+        )
+        page.fill('input[name="title"]', "")
+        page.locator("#main-content button[type='submit']").click()
+        page.wait_for_load_state("domcontentloaded")
+
+        # Form bleibt auf der Edit-URL (kein Redirect auf Detail).
+        assert "/edit/" in page.url, (
+            f"Bei leerem Titel darf nicht auf Detail weggeleitet werden, URL ist {page.url!r}."
+        )
+        # Server-seitige Fehlermeldung sichtbar.
+        error_count = page.locator(":text-matches('erforderlich|required', 'i')").count()
+        assert error_count > 0, "Erwartete Pflichtfeld-Fehlermeldung wurde nicht gerendert."
+
+
 class TestCasePermissions:
     """Berechtigungsprüfungen für Fälle."""
 
