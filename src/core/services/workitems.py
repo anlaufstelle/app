@@ -56,6 +56,50 @@ def _log_workitem_update(workitem, user, changed_fields):
     )
 
 
+def _apply_status_transition(workitem, new_status, user, *, auto_assign: bool) -> bool:
+    """Mutate ``workitem`` fields for a status transition.
+
+    Refs #906: Gemeinsame Kern-Logik fuer Single- (``update_workitem_status``)
+    und Bulk-Pfad (``bulk_update_workitem_status``). Verantwortlich nur fuer:
+    Statuswechsel, optionales Auto-Assign, ``completed_at``-Pflege. **Kein**
+    ``save()`` — der Caller entscheidet ueber ``update_fields`` und
+    ``select_for_update``-Kontext.
+
+    - ``auto_assign=True`` (Single-Pfad): IN_PROGRESS ohne Assignee → User
+      wird zugewiesen. ``auto_assign=False`` (Bulk-Pfad): keine Zuweisung.
+    - DONE/DISMISSED setzt ``completed_at = now``.
+    - Jede andere Transition setzt ``completed_at = None`` (Reopen).
+
+    Returns ``True``, wenn der Status sich tatsaechlich aendert. ``False``
+    fuer den Idempotenz-Guard (gleicher Status; Caller kann frueh
+    zurueckkehren ohne ``save()``).
+    """
+    if workitem.status == new_status:
+        return False
+    workitem.status = new_status
+    if auto_assign and new_status == WorkItem.Status.IN_PROGRESS and not workitem.assigned_to:
+        workitem.assigned_to = user
+    if new_status in (WorkItem.Status.DONE, WorkItem.Status.DISMISSED):
+        workitem.completed_at = timezone.now()
+    elif workitem.completed_at:
+        workitem.completed_at = None
+    return True
+
+
+def _maybe_duplicate_recurring(workitem, user, new_status) -> None:
+    """Falls Statuswechsel auf DONE + Recurrence != NONE: Folgeaufgabe anlegen.
+
+    Refs #906: Beide Pfade (Single + Bulk) brauchen dieselbe Bedingung —
+    Idempotenz wird in ``duplicate_recurring_workitem`` selbst durchgesetzt
+    (``recurrence_duplicated_at``-Marker, Refs #596).
+    """
+    if new_status != WorkItem.Status.DONE:
+        return
+    if not workitem.recurrence or workitem.recurrence == WorkItem.Recurrence.NONE:
+        return
+    duplicate_recurring_workitem(workitem, user)
+
+
 @transaction.atomic
 def create_workitem(facility, user, *, client=None, **data):
     """Create a work item with activity and audit logging."""
@@ -134,28 +178,18 @@ def update_workitem_status(workitem, new_status, user):
     Recurrence-Folgeeintrag erzeugen. Wenn ``new_status == aktueller
     Status`` ist (Idempotenz-Guard), kehrt die Funktion sofort ohne
     ``save()`` und ohne Activity-Log zurueck.
+
+    Refs #906: Status-/completed_at-/auto-assign-/Recurrence-Logik teilt
+    sich mit dem Bulk-Pfad ueber ``_apply_status_transition`` und
+    ``_maybe_duplicate_recurring``.
     """
     # Innerhalb der Transaktion neu laden + locken — Facility-Filter
     # explizit, damit RLS- und Tenant-Isolation greifen.
     locked = WorkItem.objects.select_for_update().get(pk=workitem.pk, facility_id=workitem.facility_id)
-
     old_status = locked.status
 
-    # Idempotenz-Guard: erneuter Klick auf denselben Status ist No-op.
-    # Verhindert doppelte COMPLETED/REOPENED-Activity-Eintraege bei
-    # Doppel-POST-Race ohne Statuswechsel.
-    if new_status == old_status:
+    if not _apply_status_transition(locked, new_status, user, auto_assign=True):
         return locked
-
-    locked.status = new_status
-
-    if new_status == WorkItem.Status.IN_PROGRESS and not locked.assigned_to:
-        locked.assigned_to = user
-
-    if new_status in (WorkItem.Status.DONE, WorkItem.Status.DISMISSED):
-        locked.completed_at = timezone.now()
-    elif locked.completed_at:
-        locked.completed_at = None
 
     locked.save()
 
@@ -167,8 +201,6 @@ def update_workitem_status(workitem, new_status, user):
             target=locked,
             summary=f"Aufgabe erledigt: {locked.title}",
         )
-        if locked.recurrence and locked.recurrence != WorkItem.Recurrence.NONE:
-            duplicate_recurring_workitem(locked, user)
     elif new_status == WorkItem.Status.OPEN and old_status == WorkItem.Status.DONE:
         log_activity(
             facility=locked.facility,
@@ -178,6 +210,7 @@ def update_workitem_status(workitem, new_status, user):
             summary=f"Aufgabe wiedereröffnet: {locked.title}",
         )
 
+    _maybe_duplicate_recurring(locked, user, new_status)
     return locked
 
 
@@ -266,21 +299,16 @@ def bulk_update_workitem_status(workitems, user, status):
 
     count = 0
     for workitem in workitems:
-        if workitem.status == status:
+        # Refs #906: gemeinsame Transition-Logik mit dem Single-Pfad. Bulk
+        # uebernimmt kein Auto-Assign (Designentscheidung, Refs #593).
+        if not _apply_status_transition(workitem, status, user, auto_assign=False):
             continue
-        workitem.status = status
-        if status in (WorkItem.Status.DONE, WorkItem.Status.DISMISSED):
-            workitem.completed_at = timezone.now()
-        elif workitem.completed_at:
-            workitem.completed_at = None
         workitem.save(update_fields=["status", "completed_at", "updated_at"])
         _log_workitem_update(workitem, user, ["status"])
-        # Refs #593: Align bulk DONE with single-update path — trigger
-        # recurrence duplication for recurring items. Idempotency (Refs #596)
-        # is enforced inside duplicate_recurring_workitem via the
-        # ``recurrence_duplicated_at`` marker.
-        if status == WorkItem.Status.DONE and workitem.recurrence and workitem.recurrence != WorkItem.Recurrence.NONE:
-            duplicate_recurring_workitem(workitem, user)
+        # Refs #593 / #596: Recurrence-Duplikation auch im Bulk-Pfad,
+        # Idempotenz via ``recurrence_duplicated_at``-Marker in
+        # ``duplicate_recurring_workitem``.
+        _maybe_duplicate_recurring(workitem, user, status)
         count += 1
     return count
 

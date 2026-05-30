@@ -834,3 +834,139 @@ class TestOptimisticLockingWorkItem:
         )
         workitem_open.refresh_from_db()
         assert workitem_open.title == "Legacy-Titel"
+
+
+@pytest.mark.django_db
+class TestApplyStatusTransitionHelper:
+    """Refs #906: isolierte Tests fuer ``_apply_status_transition``.
+
+    Die Funktion mutiert das ``workitem``-Objekt in-place, **ohne**
+    ``save()`` — der Caller (single oder bulk) entscheidet ueber
+    Persistenz. Tests verifizieren jede der gemeinsamen Regeln.
+    """
+
+    def _make(self, facility, user, *, status, assigned_to=None, completed_at=None, recurrence=None):
+        from core.models import WorkItem
+
+        return WorkItem.objects.create(
+            facility=facility,
+            created_by=user,
+            item_type=WorkItem.ItemType.TASK,
+            status=status,
+            assigned_to=assigned_to,
+            completed_at=completed_at,
+            recurrence=recurrence or WorkItem.Recurrence.NONE,
+            title="Test",
+        )
+
+    def test_returns_false_on_identical_status(self, facility, staff_user):
+        from core.models import WorkItem
+        from core.services.workitems import _apply_status_transition
+
+        wi = self._make(facility, staff_user, status=WorkItem.Status.OPEN)
+        changed = _apply_status_transition(wi, WorkItem.Status.OPEN, staff_user, auto_assign=True)
+        assert changed is False
+        # In-place keine Mutation.
+        assert wi.status == WorkItem.Status.OPEN
+        assert wi.assigned_to is None
+
+    def test_auto_assigns_to_user_on_in_progress(self, facility, staff_user):
+        from core.models import WorkItem
+        from core.services.workitems import _apply_status_transition
+
+        wi = self._make(facility, staff_user, status=WorkItem.Status.OPEN)
+        changed = _apply_status_transition(wi, WorkItem.Status.IN_PROGRESS, staff_user, auto_assign=True)
+        assert changed is True
+        assert wi.status == WorkItem.Status.IN_PROGRESS
+        assert wi.assigned_to == staff_user
+
+    def test_no_auto_assign_when_disabled(self, facility, staff_user):
+        from core.models import WorkItem
+        from core.services.workitems import _apply_status_transition
+
+        wi = self._make(facility, staff_user, status=WorkItem.Status.OPEN)
+        _apply_status_transition(wi, WorkItem.Status.IN_PROGRESS, staff_user, auto_assign=False)
+        assert wi.assigned_to is None
+
+    def test_preserves_existing_assignee_on_in_progress(self, facility, staff_user, lead_user):
+        from core.models import WorkItem
+        from core.services.workitems import _apply_status_transition
+
+        wi = self._make(facility, staff_user, status=WorkItem.Status.OPEN, assigned_to=lead_user)
+        _apply_status_transition(wi, WorkItem.Status.IN_PROGRESS, staff_user, auto_assign=True)
+        # Vorhandener Assignee bleibt — Auto-Assign nur, wenn noch keiner gesetzt.
+        assert wi.assigned_to == lead_user
+
+    def test_sets_completed_at_on_done(self, facility, staff_user):
+        from core.models import WorkItem
+        from core.services.workitems import _apply_status_transition
+
+        wi = self._make(facility, staff_user, status=WorkItem.Status.IN_PROGRESS)
+        assert wi.completed_at is None
+        _apply_status_transition(wi, WorkItem.Status.DONE, staff_user, auto_assign=True)
+        assert wi.completed_at is not None
+
+    def test_sets_completed_at_on_dismissed(self, facility, staff_user):
+        from core.models import WorkItem
+        from core.services.workitems import _apply_status_transition
+
+        wi = self._make(facility, staff_user, status=WorkItem.Status.OPEN)
+        _apply_status_transition(wi, WorkItem.Status.DISMISSED, staff_user, auto_assign=True)
+        assert wi.completed_at is not None
+
+    def test_clears_completed_at_on_reopen(self, facility, staff_user):
+        from django.utils import timezone as dj_timezone
+
+        from core.models import WorkItem
+        from core.services.workitems import _apply_status_transition
+
+        wi = self._make(facility, staff_user, status=WorkItem.Status.DONE, completed_at=dj_timezone.now())
+        _apply_status_transition(wi, WorkItem.Status.OPEN, staff_user, auto_assign=True)
+        assert wi.completed_at is None
+
+
+@pytest.mark.django_db
+class TestMaybeDuplicateRecurringHelper:
+    """Refs #906: isolierte Tests fuer ``_maybe_duplicate_recurring``."""
+
+    def _make(self, facility, user, *, recurrence, due_date=None):
+        from core.models import WorkItem
+
+        return WorkItem.objects.create(
+            facility=facility,
+            created_by=user,
+            item_type=WorkItem.ItemType.TASK,
+            status=WorkItem.Status.OPEN,
+            recurrence=recurrence,
+            due_date=due_date,
+            title="Test",
+        )
+
+    def test_no_duplicate_when_status_is_not_done(self, facility, staff_user):
+        from core.models import WorkItem
+        from core.services.workitems import _maybe_duplicate_recurring
+
+        wi = self._make(facility, staff_user, recurrence=WorkItem.Recurrence.WEEKLY)
+        before = WorkItem.objects.count()
+        _maybe_duplicate_recurring(wi, staff_user, WorkItem.Status.IN_PROGRESS)
+        assert WorkItem.objects.count() == before
+
+    def test_no_duplicate_when_recurrence_is_none(self, facility, staff_user):
+        from core.models import WorkItem
+        from core.services.workitems import _maybe_duplicate_recurring
+
+        wi = self._make(facility, staff_user, recurrence=WorkItem.Recurrence.NONE)
+        before = WorkItem.objects.count()
+        _maybe_duplicate_recurring(wi, staff_user, WorkItem.Status.DONE)
+        assert WorkItem.objects.count() == before
+
+    def test_duplicates_when_done_and_recurring(self, facility, staff_user):
+        from datetime import date
+
+        from core.models import WorkItem
+        from core.services.workitems import _maybe_duplicate_recurring
+
+        wi = self._make(facility, staff_user, recurrence=WorkItem.Recurrence.WEEKLY, due_date=date(2026, 1, 1))
+        before = WorkItem.objects.count()
+        _maybe_duplicate_recurring(wi, staff_user, WorkItem.Status.DONE)
+        assert WorkItem.objects.count() == before + 1
