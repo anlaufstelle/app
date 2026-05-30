@@ -10,6 +10,7 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.models import AuditLog
+from core.services.audit import log_audit_event
 from core.services.sudo_mode import enter_sudo
 from core.views.utils import safe_redirect_path
 
@@ -45,12 +46,10 @@ class SudoModeView(LoginRequiredMixin, View):
             )
 
         enter_sudo(request)
-        AuditLog.objects.create(
-            facility=getattr(request.user, "facility", None),
-            user=request.user,
-            action=AuditLog.Action.SUDO_MODE_ENTERED,
-            target_type="User",
-            target_id=str(request.user.pk),
+        log_audit_event(
+            request,
+            AuditLog.Action.SUDO_MODE_ENTERED,
+            target_obj=request.user,
             detail={"next": next_url},
         )
         return redirect(next_url)

@@ -9,6 +9,7 @@ from django.views import View
 
 from core.models import AuditLog, DocumentType
 from core.models.attachment import EventAttachment
+from core.services.audit import log_audit_event
 from core.services.file_vault import get_attachment_path, get_decrypted_file_stream, get_original_filename
 from core.services.sensitivity import allowed_sensitivities_for_user, get_visible_attachment_or_404, user_can_see_field
 from core.utils.downloads import safe_download_response
@@ -148,12 +149,10 @@ class AttachmentDownloadView(AssistantOrAboveRequiredMixin, View):
             raise Http404("Attachment file not found")
 
         # Audit log
-        AuditLog.objects.create(
-            facility=event.facility,
-            user=request.user,
-            action=AuditLog.Action.DOWNLOAD,
-            target_type="EventAttachment",
-            target_id=str(attachment.pk),
+        log_audit_event(
+            request,
+            AuditLog.Action.DOWNLOAD,
+            target_obj=attachment,
             detail={"event_id": str(event.pk), "field": ft.slug},
         )
 

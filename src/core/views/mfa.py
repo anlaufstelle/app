@@ -35,6 +35,7 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.models import AuditLog
+from core.services.audit import log_audit_event
 from core.services.mfa import (
     BACKUP_CODES_COUNT,
     generate_backup_codes,
@@ -42,7 +43,6 @@ from core.services.mfa import (
     verify_backup_code,
 )
 from core.services.sudo_mode import RequireSudoModeMixin
-from core.signals.audit import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -98,24 +98,19 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
             # werden gleich auf der nächsten Seite einmalig angezeigt.
             codes = generate_backup_codes(request.user)
             request.session["mfa_backup_codes"] = codes
-            facility = getattr(request.user, "facility", None)
-            AuditLog.objects.create(
-                facility=facility,
-                user=request.user,
-                action=AuditLog.Action.MFA_ENABLED,
-                target_type="User",
-                target_id=str(request.user.pk),
+            log_audit_event(
+                request,
+                AuditLog.Action.MFA_ENABLED,
+                target_obj=request.user,
                 detail={"event": "mfa_setup_confirmed"},
-                ip_address=get_client_ip(request),
+                facility=getattr(request.user, "facility", None),
             )
-            AuditLog.objects.create(
-                facility=facility,
-                user=request.user,
-                action=AuditLog.Action.BACKUP_CODES_GENERATED,
-                target_type="User",
-                target_id=str(request.user.pk),
+            log_audit_event(
+                request,
+                AuditLog.Action.BACKUP_CODES_GENERATED,
+                target_obj=request.user,
                 detail={"count": len(codes)},
-                ip_address=get_client_ip(request),
+                facility=getattr(request.user, "facility", None),
             )
             messages.success(request, _("Zwei-Faktor-Authentifizierung aktiviert."))
             return redirect("mfa_backup_codes")
@@ -157,28 +152,24 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
             # Neue 22-Zeichen-Codes bleiben unveraendert (case-sensitive!).
             if candidate and verify_backup_code(request.user, candidate):
                 request.session["mfa_verified"] = True
-                AuditLog.objects.create(
-                    facility=facility,
-                    user=request.user,
-                    action=AuditLog.Action.BACKUP_CODES_USED,
-                    target_type="User",
-                    target_id=str(request.user.pk),
+                log_audit_event(
+                    request,
+                    AuditLog.Action.BACKUP_CODES_USED,
+                    target_obj=request.user,
                     detail={"remaining": remaining_backup_codes(request.user)},
-                    ip_address=get_client_ip(request),
+                    facility=facility,
                 )
                 return redirect(django_settings.LOGIN_REDIRECT_URL)
         elif token and device.verify_token(token):
             request.session["mfa_verified"] = True
             return redirect(django_settings.LOGIN_REDIRECT_URL)
 
-        AuditLog.objects.create(
-            facility=facility,
-            user=request.user,
-            action=AuditLog.Action.MFA_FAILED,
-            target_type="User",
-            target_id=str(request.user.pk),
+        log_audit_event(
+            request,
+            AuditLog.Action.MFA_FAILED,
+            target_obj=request.user,
             detail={"event": "mfa_token_invalid", "mode": mode},
-            ip_address=get_client_ip(request),
+            facility=facility,
         )
         messages.error(request, _("Der Code ist ungültig. Bitte erneut versuchen."))
         return self.render_to_response(self.get_context_data(token_error=True, last_mode=mode))
@@ -243,15 +234,12 @@ class MFARegenerateBackupCodesView(LoginRequiredMixin, View):
             return redirect("mfa_settings")
         codes = generate_backup_codes(user)
         request.session["mfa_backup_codes"] = codes
-        facility = getattr(user, "facility", None)
-        AuditLog.objects.create(
-            facility=facility,
-            user=user,
-            action=AuditLog.Action.BACKUP_CODES_REGENERATED,
-            target_type="User",
-            target_id=str(user.pk),
+        log_audit_event(
+            request,
+            AuditLog.Action.BACKUP_CODES_REGENERATED,
+            target_obj=user,
             detail={"count": len(codes)},
-            ip_address=get_client_ip(request),
+            facility=getattr(user, "facility", None),
         )
         return redirect("mfa_backup_codes")
 
@@ -278,15 +266,12 @@ class MFADisableView(LoginRequiredMixin, RequireSudoModeMixin, View):
         deleted, _info = TOTPDevice.objects.filter(user=user).delete()
         request.session.pop("mfa_verified", None)
         if deleted:
-            facility = getattr(user, "facility", None)
-            AuditLog.objects.create(
-                facility=facility,
-                user=user,
-                action=AuditLog.Action.MFA_DISABLED,
-                target_type="User",
-                target_id=str(user.pk),
+            log_audit_event(
+                request,
+                AuditLog.Action.MFA_DISABLED,
+                target_obj=user,
                 detail={"event": "mfa_disabled"},
-                ip_address=get_client_ip(request),
+                facility=getattr(user, "facility", None),
             )
             messages.success(request, _("Zwei-Faktor-Authentifizierung deaktiviert."))
         return redirect("mfa_settings")

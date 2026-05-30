@@ -1080,22 +1080,6 @@ class TestAuditLogCreationAllowlist:
             198: "post_save User — role change detection",
             212: "post_save User — deactivation detection",
         },
-        # --- Migrations-Etappen (#901): werden in S8 entfernt. ---
-        # S8 View-Layer-Rest (mfa, attachments, sudo_mode):
-        "core/views/mfa.py": {
-            102: "Migration zu log_audit_event geplant (#901 S8)",
-            111: "Migration zu log_audit_event geplant (#901 S8)",
-            160: "Migration zu log_audit_event geplant (#901 S8)",
-            174: "Migration zu log_audit_event geplant (#901 S8)",
-            247: "Migration zu log_audit_event geplant (#901 S8)",
-            282: "Migration zu log_audit_event geplant (#901 S8)",
-        },
-        "core/views/attachments.py": {
-            151: "Migration zu log_audit_event geplant (#901 S8)",
-        },
-        "core/views/sudo_mode.py": {
-            48: "Migration zu log_audit_event geplant (#901 S8)",
-        },
     }
 
     def test_only_allowlisted_direct_auditlog_creates(self):
