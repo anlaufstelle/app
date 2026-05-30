@@ -225,7 +225,7 @@ class TestHandoverSummaryQueryCount:
         doc_type_contact,
         admin_user,
     ):
-        from core.services.handover import build_handover_summary
+        from core.services.case import build_handover_summary
 
         target = timezone.localdate()
 

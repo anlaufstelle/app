@@ -15,7 +15,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import close_old_connections, connection
 
 from core.models import Activity, WorkItem
-from core.services.workitems import update_workitem_status
+from core.services.case import update_workitem_status
 
 
 def _count_completed(workitem):

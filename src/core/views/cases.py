@@ -19,7 +19,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.forms.cases import CaseForm
 from core.models import Case, Event
-from core.services.cases import (
+from core.services.case import (
     assign_event_to_case,
     close_case,
     create_case,

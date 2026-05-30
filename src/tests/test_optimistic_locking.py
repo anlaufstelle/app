@@ -18,9 +18,9 @@ import pytest
 from django.core.exceptions import ValidationError
 
 from core.models import AuditLog, WorkItem
+from core.services.case import update_workitem
 from core.services.security import check_version_conflict
 from core.services.settings import update_settings
-from core.services.workitems import update_workitem
 
 
 @pytest.mark.django_db

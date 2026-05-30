@@ -6,10 +6,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog, Client, User
-from core.services.cases import create_case
+from core.services.case import create_case, create_workitem
 from core.services.client import create_client
 from core.services.events import create_event
-from core.services.workitems import create_workitem
 
 # --- CREATE actions via services -----------------------------------------
 

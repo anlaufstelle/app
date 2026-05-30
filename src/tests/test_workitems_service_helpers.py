@@ -1,4 +1,4 @@
-"""Tests fuer ``core.services.workitems`` und seine internen Helper.
+"""Tests fuer ``core.services.case.workitems`` und seine internen Helper.
 
 Enthaelt die Cluster (Split aus ``test_workitems.py``):
 
@@ -14,7 +14,7 @@ import pytest
 
 from core.models import WorkItem
 from core.models.activity import Activity
-from core.services.workitems import update_workitem
+from core.services.case import update_workitem
 
 
 @pytest.fixture
@@ -92,7 +92,7 @@ class TestApplyStatusTransitionHelper:
 
     def test_returns_false_on_identical_status(self, facility, staff_user):
         from core.models import WorkItem
-        from core.services.workitems import _apply_status_transition
+        from core.services.case import _apply_status_transition
 
         wi = self._make(facility, staff_user, status=WorkItem.Status.OPEN)
         changed = _apply_status_transition(wi, WorkItem.Status.OPEN, staff_user, auto_assign=True)
@@ -103,7 +103,7 @@ class TestApplyStatusTransitionHelper:
 
     def test_auto_assigns_to_user_on_in_progress(self, facility, staff_user):
         from core.models import WorkItem
-        from core.services.workitems import _apply_status_transition
+        from core.services.case import _apply_status_transition
 
         wi = self._make(facility, staff_user, status=WorkItem.Status.OPEN)
         changed = _apply_status_transition(wi, WorkItem.Status.IN_PROGRESS, staff_user, auto_assign=True)
@@ -113,7 +113,7 @@ class TestApplyStatusTransitionHelper:
 
     def test_no_auto_assign_when_disabled(self, facility, staff_user):
         from core.models import WorkItem
-        from core.services.workitems import _apply_status_transition
+        from core.services.case import _apply_status_transition
 
         wi = self._make(facility, staff_user, status=WorkItem.Status.OPEN)
         _apply_status_transition(wi, WorkItem.Status.IN_PROGRESS, staff_user, auto_assign=False)
@@ -121,7 +121,7 @@ class TestApplyStatusTransitionHelper:
 
     def test_preserves_existing_assignee_on_in_progress(self, facility, staff_user, lead_user):
         from core.models import WorkItem
-        from core.services.workitems import _apply_status_transition
+        from core.services.case import _apply_status_transition
 
         wi = self._make(facility, staff_user, status=WorkItem.Status.OPEN, assigned_to=lead_user)
         _apply_status_transition(wi, WorkItem.Status.IN_PROGRESS, staff_user, auto_assign=True)
@@ -130,7 +130,7 @@ class TestApplyStatusTransitionHelper:
 
     def test_sets_completed_at_on_done(self, facility, staff_user):
         from core.models import WorkItem
-        from core.services.workitems import _apply_status_transition
+        from core.services.case import _apply_status_transition
 
         wi = self._make(facility, staff_user, status=WorkItem.Status.IN_PROGRESS)
         assert wi.completed_at is None
@@ -139,7 +139,7 @@ class TestApplyStatusTransitionHelper:
 
     def test_sets_completed_at_on_dismissed(self, facility, staff_user):
         from core.models import WorkItem
-        from core.services.workitems import _apply_status_transition
+        from core.services.case import _apply_status_transition
 
         wi = self._make(facility, staff_user, status=WorkItem.Status.OPEN)
         _apply_status_transition(wi, WorkItem.Status.DISMISSED, staff_user, auto_assign=True)
@@ -149,7 +149,7 @@ class TestApplyStatusTransitionHelper:
         from django.utils import timezone as dj_timezone
 
         from core.models import WorkItem
-        from core.services.workitems import _apply_status_transition
+        from core.services.case import _apply_status_transition
 
         wi = self._make(facility, staff_user, status=WorkItem.Status.DONE, completed_at=dj_timezone.now())
         _apply_status_transition(wi, WorkItem.Status.OPEN, staff_user, auto_assign=True)
@@ -175,7 +175,7 @@ class TestMaybeDuplicateRecurringHelper:
 
     def test_no_duplicate_when_status_is_not_done(self, facility, staff_user):
         from core.models import WorkItem
-        from core.services.workitems import _maybe_duplicate_recurring
+        from core.services.case import _maybe_duplicate_recurring
 
         wi = self._make(facility, staff_user, recurrence=WorkItem.Recurrence.WEEKLY)
         before = WorkItem.objects.count()
@@ -184,7 +184,7 @@ class TestMaybeDuplicateRecurringHelper:
 
     def test_no_duplicate_when_recurrence_is_none(self, facility, staff_user):
         from core.models import WorkItem
-        from core.services.workitems import _maybe_duplicate_recurring
+        from core.services.case import _maybe_duplicate_recurring
 
         wi = self._make(facility, staff_user, recurrence=WorkItem.Recurrence.NONE)
         before = WorkItem.objects.count()
@@ -195,7 +195,7 @@ class TestMaybeDuplicateRecurringHelper:
         from datetime import date
 
         from core.models import WorkItem
-        from core.services.workitems import _maybe_duplicate_recurring
+        from core.services.case import _maybe_duplicate_recurring
 
         wi = self._make(facility, staff_user, recurrence=WorkItem.Recurrence.WEEKLY, due_date=date(2026, 1, 1))
         before = WorkItem.objects.count()

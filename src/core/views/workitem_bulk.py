@@ -18,7 +18,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_BULK_ACTION
 from core.models import WorkItem
 from core.models.user import User
-from core.services.workitems import (
+from core.services.case import (
     bulk_assign_workitems,
     bulk_update_workitem_priority,
     bulk_update_workitem_status,

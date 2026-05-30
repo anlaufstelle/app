@@ -5,7 +5,7 @@ from datetime import date, timedelta
 import pytest
 
 from core.models import WorkItem
-from core.services.workitems import (
+from core.services.case import (
     _add_months,
     _next_due_date,
     duplicate_recurring_workitem,

@@ -11,7 +11,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from core.models import Case, Client, DocumentType, Event
-from core.services.cases import assign_event_to_case
+from core.services.case import assign_event_to_case
 from core.services.events import create_event
 
 

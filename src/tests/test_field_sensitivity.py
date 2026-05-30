@@ -427,7 +427,7 @@ class TestHandoverHidesEventsBySensitivity:
     """Handover summary highlights and stats must filter by sensitivity (#522)."""
 
     def test_handover_summary_hides_high_events_for_staff(self, facility, staff_user, doc_type_high, client_identified):
-        from core.services.handover import build_handover_summary
+        from core.services.case import build_handover_summary
 
         # Mark the doc type as system_type='crisis' so it shows up in highlights
         doc_type_high.system_type = "crisis"
@@ -448,7 +448,7 @@ class TestHandoverHidesEventsBySensitivity:
     def test_handover_summary_shows_high_events_for_lead(
         self, facility, lead_user, staff_user, doc_type_high, client_identified
     ):
-        from core.services.handover import build_handover_summary
+        from core.services.case import build_handover_summary
 
         doc_type_high.system_type = "crisis"
         doc_type_high.save()

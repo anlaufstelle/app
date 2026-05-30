@@ -15,7 +15,7 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 
 from core.models import WorkItem
-from core.services.workitems import update_workitem
+from core.services.case import update_workitem
 
 
 @pytest.fixture

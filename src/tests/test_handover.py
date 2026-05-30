@@ -7,7 +7,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 
 from core.models import Activity, DocumentType, Event, TimeFilter, WorkItem
-from core.services.handover import build_handover_summary
+from core.services.case import build_handover_summary
 
 
 @pytest.fixture

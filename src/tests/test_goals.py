@@ -6,7 +6,7 @@ from django.utils import timezone
 
 from core.models import Case, Client
 from core.models.outcome import Milestone, OutcomeGoal
-from core.services.goals import (
+from core.services.case import (
     achieve_goal,
     create_goal,
     create_milestone,

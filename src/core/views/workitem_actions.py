@@ -17,12 +17,12 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_FREQUENT, RATELIMIT_MUTATION
 from core.forms.workitems import WorkItemForm
 from core.models import WorkItem
-from core.services.client import get_client_or_none
-from core.services.workitems import (
+from core.services.case import (
     create_workitem,
     update_workitem,
     update_workitem_status,
 )
+from core.services.client import get_client_or_none
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 from core.views.utils import safe_redirect_path
 from core.views.workitems import can_user_mutate_workitem

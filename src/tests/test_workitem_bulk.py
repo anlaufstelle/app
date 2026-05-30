@@ -6,7 +6,7 @@ import pytest
 from django.urls import reverse
 
 from core.models import AuditLog, WorkItem
-from core.services.workitems import (
+from core.services.case import (
     bulk_assign_workitems,
     bulk_update_workitem_priority,
     bulk_update_workitem_status,

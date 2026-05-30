@@ -1,4 +1,4 @@
-"""Follow-Up-Tests für Mutation-Survivors in ``core.services.handover``.
+"""Follow-Up-Tests für Mutation-Survivors in ``core.services.case.handover``.
 
 Refs Welle 7 (#930). Ziel: Mutationen in den Branch-Grenzen von
 ``_collect_highlights`` (33 Survivors) und ``_collect_open_tasks``
@@ -18,7 +18,7 @@ import pytest
 from django.utils import timezone
 
 from core.models import DocumentType, Event, WorkItem
-from core.services.handover import _collect_highlights, _collect_open_tasks
+from core.services.case import _collect_highlights, _collect_open_tasks
 
 # ---------------------------------------------------------------------------
 # Helper-Factories — bewusst klein, damit Tests nicht von komplexen

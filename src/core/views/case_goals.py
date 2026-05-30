@@ -12,7 +12,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_FREQUENT
 from core.models import Case
 from core.models.outcome import Milestone, OutcomeGoal
-from core.services.goals import (
+from core.services.case import (
     achieve_goal,
     create_goal,
     create_milestone,

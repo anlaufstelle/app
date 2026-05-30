@@ -6,7 +6,7 @@ from django.utils import timezone
 from django.views.generic import TemplateView
 
 from core.models import TimeFilter
-from core.services.handover import build_handover_summary
+from core.services.case import build_handover_summary
 from core.views.mixins import AssistantOrAboveRequiredMixin
 
 
