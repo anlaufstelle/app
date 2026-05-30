@@ -295,6 +295,15 @@ Damit HTMX-Erfolgsmeldungen Screen-Reader-Nutzer*innen erreichen, gilt:
 - HTMX-Antworten, die einen Erfolg ankündigen sollen, schwingen entweder per `hx-target="#flash-messages" hx-swap="innerHTML"` oder per `hx-swap-oob="innerHTML:#flash-messages"`. Den Wrapper-`<div>` selbst **nie** per `outerHTML` ersetzen — sonst wird die Live-Region neu instanziiert und der Announcement-Trigger verloren.
 - Wenn ein Bulk-Endpoint einen vollständigen Reload erzwingen muss (z. B. WorkItem-Bulk, Retention-Bulk), läuft das über `HX-Redirect` — die Folge-Page rendert das Django-`messages`-Framework wieder in `#flash-messages`.
 
+#### URL-Schema: HTMX-Fragmente vs. JSON-APIs (Refs #848)
+
+Endpunkte werden nach Response-Typ getrennt — Templates referenzieren beide ausschließlich über `{% url 'name' %}`:
+
+- **HTML-Fragmente (HTMX-Partials):** Pfad `/partials/<feature>/<action>/`. Beispiel: `partials/clients/autocomplete/`, `partials/retention/<uuid:pk>/approve/`. Antwort ist immer HTML, gerendert mit `partials/`-Template.
+- **JSON-APIs:** Pfad `/api/v1/<feature>/<action>/`. Beispiel: `api/v1/offline/bundle/client/<uuid:pk>/`. Antwort ist JSON, von Service-Workern oder JS-`fetch`-Calls konsumiert.
+
+Neue Endpunkte gehören entsprechend in eine der beiden Pfad-Gruppen. URL-Namen bleiben kurz und feature-spezifisch (`client_autocomplete`, `offline_bundle`); Pfad-Prefixe wechseln nur dann, wenn die Response-Form wechselt. Direkte `fetch("/api/...")`-Aufrufe in JS dürfen nur unter `/api/v1/` gehen — HTMX-Partials werden niemals als JSON konsumiert.
+
 ### Conventional Commits
 
 Commit-Messages folgen dem [Conventional Commits](https://www.conventionalcommits.org/)-Standard:
