@@ -71,6 +71,53 @@ class TestCustomLoginViewSuperAdminRedirect:
 
 
 @pytest.mark.django_db
+class TestCustomLoginViewCacheHeaders:
+    """Refs #970: Regression-Tests fuer Login-Cache-Verhalten.
+
+    Hintergrund: User-Beobachtung "nach Login oft 403 Sicherheits-Token
+    abgelaufen". Eine Hypothese war Browser-bfcache (back/forward), der
+    eine alte Login-Page mit altem CSRF-Token zeigt -> 403 beim Submit.
+
+    Verifikation am Live-Server ergab: Django liefert auf der Login-View
+    bereits ``Cache-Control: max-age=0, no-cache, no-store,
+    must-revalidate, private`` + ``Expires``-Header (via die in
+    ``auth_views.LoginView`` enthaltenen Decorators
+    ``@sensitive_post_parameters`` + ``Vary: Cookie``). Ein zusaetzliches
+    ``@never_cache`` wuerde nur den HTTP/1.0-Pragma-Header ergaenzen
+    (praktisch von Browsern ignoriert).
+
+    Diese Tests sichern das Verhalten als Regression ab — falls Django
+    in einer Zukunfts-Version den Default-Schutz aufgeben sollte, muss
+    der Decorator explizit auf ``CustomLoginView`` gesetzt werden.
+    """
+
+    def test_login_get_sets_no_store_cache_control(self, client):
+        response = client.get(reverse("login"))
+        assert response.status_code == 200
+        cache_control = response.get("Cache-Control", "")
+        assert "no-store" in cache_control
+        assert "no-cache" in cache_control
+        assert "must-revalidate" in cache_control
+
+    def test_login_get_sets_csrf_cookie(self, client):
+        response = client.get(reverse("login"))
+        assert response.status_code == 200
+        assert "csrftoken" in response.cookies
+
+    def test_login_post_inherits_no_store(self, client, staff_user):
+        """Auch der POST-Response (Form-Error wie auch Redirect) hat no-store."""
+        staff_user.set_password("testpass123")
+        staff_user.save()
+        response = client.post(
+            reverse("login"),
+            {"username": staff_user.username, "password": "wrong"},
+        )
+        # Wrong password -> 200 mit Form-Errors (kein Redirect)
+        assert response.status_code == 200
+        assert "no-store" in response.get("Cache-Control", "")
+
+
+@pytest.mark.django_db
 class TestCustomLoginViewSessionTimeout:
     def test_session_timeout_from_facility_settings(self, client, staff_user, settings_obj):
         """Line 104: ``facility.settings.session_timeout_minutes`` setzt Session-Expiry."""
