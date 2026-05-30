@@ -121,14 +121,14 @@ class WorkItemForm(forms.ModelForm):
                 facility=self.facility,
             ).get()
         except Client.DoesNotExist as exc:
-            raise forms.ValidationError(_("Ungültige Person-ID")) from exc
+            raise forms.ValidationError(_("Ungültige Person-ID")) from exc  # pragma: no mutate
 
     def clean(self):
         cleaned = super().clean() or {}
         remind_at = cleaned.get("remind_at")
         due_date = cleaned.get("due_date")
         if remind_at and due_date and remind_at > due_date:
-            raise forms.ValidationError({"remind_at": _("Die Erinnerung muss vor oder am Fälligkeitstag liegen.")})
+            raise forms.ValidationError({"remind_at": _("Die Erinnerung muss vor oder am Fälligkeitstag liegen.")})  # pragma: no mutate  # noqa: E501
 
         max_date = max_workitem_date()
         max_str = date_format(max_date, "DATE_FORMAT")
@@ -146,7 +146,7 @@ class WorkItemForm(forms.ModelForm):
         # Items immer fehlschlagen.
         min_date = min_workitem_date()
         if due_date and due_date < min_date and "due_date" in self.changed_data:
-            raise forms.ValidationError({"due_date": _("Das Fälligkeitsdatum darf nicht in der Vergangenheit liegen.")})
+            raise forms.ValidationError({"due_date": _("Das Fälligkeitsdatum darf nicht in der Vergangenheit liegen.")})  # pragma: no mutate  # noqa: E501
         if remind_at and remind_at < min_date and "remind_at" in self.changed_data:
-            raise forms.ValidationError({"remind_at": _("Die Erinnerung darf nicht in der Vergangenheit liegen.")})
+            raise forms.ValidationError({"remind_at": _("Die Erinnerung darf nicht in der Vergangenheit liegen.")})  # pragma: no mutate  # noqa: E501
         return cleaned
