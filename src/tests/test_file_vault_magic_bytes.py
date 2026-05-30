@@ -59,7 +59,7 @@ PE_EXECUTABLE_BYTES = b"MZ\x90\x00\x03\x00\x00\x00\x04\x00\x00\x00\xff\xff\x00\x
 
 # Minimaler ZIP-basierter OOXML-Container (.docx). libmagic liefert dafuer
 # je nach Version "application/zip" oder die offizielle OOXML-MIME zurueck —
-# beides ist legitim (#662 FND-04).
+# beides ist legitim (#662).
 VALID_DOCX_BYTES = (
     b"PK\x03\x04"  # ZIP local file header
     b"\x14\x00\x06\x00"  # version + flags
@@ -154,7 +154,7 @@ class TestMagicBytesValidation:
     ):
         """Ein gueltiges DOCX (ZIP-Container) muss akzeptiert werden — auch
         wenn libmagic ``application/zip`` statt der offiziellen OOXML-MIME
-        zurueckliefert (#662 FND-04). Whitelist muss `.docx` enthalten."""
+        zurueckliefert (#662). Whitelist muss `.docx` enthalten."""
         Settings.objects.update_or_create(
             facility=event.facility,
             defaults={"allowed_file_types": "pdf,docx", "max_file_size_mb": 10},
@@ -180,7 +180,7 @@ class TestMagicBytesValidation:
     ):
         """Ein PE-Executable mit ``.docx``-Extension und OOXML-MIME muss
         weiterhin abgelehnt werden — die Aequivalenzklasse hilft nur bei
-        echten Container-Files (#662 FND-04)."""
+        echten Container-Files (#662)."""
         Settings.objects.update_or_create(
             facility=event.facility,
             defaults={"allowed_file_types": "pdf,docx", "max_file_size_mb": 10},
@@ -253,7 +253,7 @@ class TestAllowedFileTypesWhitelist:
     def test_fake_pdf_header_with_exe_payload_rejected(
         self, facility_with_settings, staff_user, doc_type_with_file, event
     ):
-        """Refs Welle 4 (#927): EXE-Payload (MZ-Header) als ``.pdf`` deklariert →
+        """Refs #927: EXE-Payload (MZ-Header) als ``.pdf`` deklariert →
         Magic-Byte-Check schlägt fehl, weil libmagic ``application/x-dosexec``
         o.ä. erkennt, nicht ``application/pdf``.
 
@@ -279,7 +279,7 @@ class TestAllowedFileTypesWhitelist:
     def test_double_extension_attack_uses_last_extension(
         self, facility_with_settings, staff_user, doc_type_with_file, event
     ):
-        """Refs Welle 4 (#927): Filename ``report.exe.pdf`` mit echtem PDF-Header.
+        """Refs #927: Filename ``report.exe.pdf`` mit echtem PDF-Header.
 
         Aktuelles Verhalten: ``_enforce_allowed_file_types`` nimmt die *letzte*
         Extension (``.pdf``) und akzeptiert; der Magic-Byte-Check bestätigt

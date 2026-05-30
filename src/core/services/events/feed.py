@@ -144,7 +144,7 @@ def _format_preview_value(value, ft):
         # File-Marker (Stufe A: einzelnes Attachment, Stufe B: Liste mit Versionen)
         # treten in `data_json` fuer File-Felder auf (siehe services/event.py:250-267).
         # Sie wuerden sonst als rohes Dict-Repr im Preview landen — Privacy-Leak
-        # (UUIDs sichtbar) und UX-Bug (Refs #670 FND-12).
+        # (UUIDs sichtbar) und UX-Bug (Refs #670).
         if value.get("__file__"):
             return _("[Datei]")
         if value.get("__files__"):

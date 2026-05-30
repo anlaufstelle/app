@@ -1,6 +1,6 @@
 """Follow-Up-Tests für Mutation-Survivors in ``core.services.compliance``.
 
-Refs Welle 7 (#930). Ziel: Mutationen an den Branch-Grenzen von
+Refs #930. Ziel: Mutationen an den Branch-Grenzen von
 ``_audit_event_checks``, ``_mfa_checks``, ``_retention_checks`` killen.
 
 Die Funktionen branchen auf festen Schwellwerten (Count/Age-Days/Percent).
@@ -53,7 +53,7 @@ def _create_retention_audit(facility) -> AuditLog:
 
 @pytest.mark.django_db
 class TestRetentionChecks:
-    """Refs Welle 7 Cluster ``DSGVO/Security`` — `_retention_checks`."""
+    """Refs DSGVO/Security — `_retention_checks`."""
 
     def test_no_audit_yields_unknown(self):
         """Ohne RETENTION_RUN_COMPLETED-Eintrag → UNKNOWN."""
@@ -112,7 +112,7 @@ def _create_security_violation(facility) -> AuditLog:
 
 @pytest.mark.django_db
 class TestAuditEventChecks:
-    """Refs Welle 7 Cluster ``DSGVO/Security`` — `_audit_event_checks`."""
+    """Refs DSGVO/Security — `_audit_event_checks`."""
 
     def test_no_critical_events_is_ok(self):
         result = _audit_event_checks()
@@ -173,7 +173,7 @@ class TestAuditEventChecks:
 
 @pytest.mark.django_db
 class TestMfaChecks:
-    """Refs Welle 7 Cluster ``DSGVO/Security`` — `_mfa_checks`.
+    """Refs DSGVO/Security — `_mfa_checks`.
 
     Branch-Schwellen:
     - 0 privileged → "Keine privilegierten User" (UNKNOWN, kein Quote-Check)
@@ -266,7 +266,7 @@ class TestMfaChecks:
 
 
 # ============================================================================
-# Welle 9 (#942): Follow-Up-Tests für Compliance-Logic-Survivors
+# #942: Follow-Up-Tests für Compliance-Logic-Survivors
 #
 # Pragmas auf Display-Strings (label/category/message/action_hint) haben
 # ~260 UI-String-Mutations entfernt. Verbleibende Survivors sind echte
@@ -301,7 +301,7 @@ class _AdminRoleCheck:
 
 
 class TestDbRoleAdminCheck:
-    """Branch-Grenzen für `_db_role_admin_check` (Refs Welle 9 #942).
+    """Branch-Grenzen für `_db_role_admin_check` (Refs #942).
 
     Test_compliance_service.py:TestDbRoleChecks deckt den App-Pfad ab, aber
     nicht den Admin-Pfad in `_db_role_admin_check` direkt. Mutmut findet
@@ -342,7 +342,7 @@ class TestDbRoleAdminCheck:
 
 
 class TestClamavSignatureBoundary:
-    """Branch-Grenzen für `_clamav_checks` Signatur-Alter (Refs Welle 9 #942).
+    """Branch-Grenzen für `_clamav_checks` Signatur-Alter (Refs #942).
 
     Bestehende Tests in test_compliance_service.py decken `ping=True`+`age=3`
     (OK) und `age=30` (WARNING) ab, lassen aber die exakte Schwelle (`age=7`
@@ -405,7 +405,7 @@ class TestClamavSignatureBoundary:
 
 
 class TestBackupBoundary:
-    """Branch-Grenzen für `_backup_checks` Age-Hours (Refs Welle 9 #942).
+    """Branch-Grenzen für `_backup_checks` Age-Hours (Refs #942).
 
     Schwellen: ``<= 24`` OK, ``<= 72`` WARNING, ``> 72`` CRITICAL.
     """
@@ -448,7 +448,7 @@ class TestBackupBoundary:
 
 
 class TestRestoreBoundary:
-    """Branch-Grenzen für `_restore_checks` Age-Days (Refs Welle 9 #942).
+    """Branch-Grenzen für `_restore_checks` Age-Days (Refs #942).
 
     Schwellen: ``<= 90`` OK, ``<= 180`` WARNING, ``> 180`` CRITICAL.
     Da AuditLog-Timestamps via Migration-0024 immutable sind, patchen wir

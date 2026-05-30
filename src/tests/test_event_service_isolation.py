@@ -1,10 +1,10 @@
-"""RF-T04: Service-Isolation-Tests fuer Event-CRUD (Refs #776).
+"""Service-Isolation-Tests fuer Event-CRUD (Refs #776).
 
 Charakterisiert das Verhalten von ``create_event``, ``update_event``,
 ``request_deletion`` und ``approve_deletion`` direkt auf der Service-
 Schicht — ohne View-Layer, Forms oder HTTP-Roundtrip. Heutige Tests
 gehen meist via ``client.post(...)`` durch ``EventCreateView``; die
-Service-Funktionen muessen als isolierte Bausteine fuer Sprint 2-
+Service-Funktionen muessen als isolierte Bausteine fuer
 Refactorings prüfbar bleiben.
 """
 

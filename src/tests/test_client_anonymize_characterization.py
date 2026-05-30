@@ -1,6 +1,6 @@
-"""RF-T02: Charakterisierungstests fuer ``Client.anonymize`` (Refs #776).
+"""Charakterisierungstests fuer ``Client.anonymize`` (Refs #776).
 
-Sicherheitsnetz fuer Sprint 2-Refactorings: dokumentieren das aktuelle
+Sicherheitsnetz fuer Refactorings: dokumentieren das aktuelle
 Verhalten von :func:`core.services.client.main.anonymize_client`. Wenn ein
 Refactoring eines dieser Tests umstoesst, ist das ein Verhaltensbruch
 (nicht ein Refactoring im engeren Sinne).

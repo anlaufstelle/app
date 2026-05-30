@@ -1,4 +1,4 @@
-"""Architecture-Guards — Template-Guards (CSP, Alpine, SVG-A11y, i18n, Kommentare) (Refs Welle 6 #929)."""
+"""Architecture-Guards — Template-Guards (CSP, Alpine, SVG-A11y, i18n, Kommentare) (Refs #929)."""
 
 import re
 from pathlib import Path
@@ -45,7 +45,7 @@ class TestNoInlineScriptBlocksGuard:
         )
 
     # Inline-Event-Attribute (onchange, onclick, onsubmit, ...) werden von der
-    # CSP ohne 'unsafe-inline' stumm blockiert (siehe #662 FND-01). Daher
+    # CSP ohne 'unsafe-inline' stumm blockiert (siehe #662). Daher
     # alle ``\son[a-z]+=`` in Templates verbieten — Listener gehoeren in
     # eigene static/js/*.js-Dateien.
     _INLINE_EVENT = re.compile(r"\son[a-z]+\s*=", re.IGNORECASE)
@@ -63,7 +63,7 @@ class TestNoInlineScriptBlocksGuard:
             "Inline-Event-Attribute (z. B. onchange=, onclick=) werden von der CSP "
             "ohne 'unsafe-inline' stumm blockiert. Bitte JS-Listener in eigene "
             "static/js/*.js-Dateien auslegen und ueber data-Attribute anbinden "
-            "(Refs #662 FND-01).\n"
+            "(Refs #662).\n"
             f"Betroffen: {violations}"
         )
 
@@ -73,8 +73,7 @@ class TestAlpineCspCompatibilityGuard:
 
     Hintergrund: Standard-Alpine wertet ``x-data="{ ... }"``-Inline-Objekte
     per dynamischer Funktionsauswertung aus und benoetigt deshalb
-    ``script-src 'unsafe-eval'`` (Audit-Finding S-6 aus
-    internem Audit-Dokument 2026-04-21).
+    ``script-src 'unsafe-eval'``.
     Die offizielle CSP-Variante (``@alpinejs/csp``) verzichtet auf
     Eval, laesst dafuer nur registrierte Komponenten zu — also
     ``x-data="myComponent"`` mit ``Alpine.data('myComponent', () => ({ ... }))``
@@ -226,7 +225,7 @@ class TestAlpineCspCompatibilityGuard:
 
         Inline-Scripts werden durch ``TestNoInlineScriptBlocksGuard`` (Refs
         #618) und Inline-Event-Attribute durch ``test_no_inline_event_-
-        attributes_in_templates`` (Refs #662 FND-01) bereits verboten — daher
+        attributes_in_templates`` (Refs #662) bereits verboten — daher
         darf ``'unsafe-inline'`` nie noetig sein.
 
         ``'unsafe-eval'`` wurde mit dem Wechsel auf den ``@alpinejs/csp``-Build
@@ -241,13 +240,13 @@ class TestAlpineCspCompatibilityGuard:
         forbidden = ["'unsafe-inline'", "'unsafe-eval'"]
         violations = [t for t in forbidden if t in script_src]
         assert not violations, (
-            "CSP script-src enthaelt verbotene Lockerungen. Audit-Finding S-6 "
+            "CSP script-src enthaelt verbotene Lockerungen. "
             "ist mit dem Wechsel auf @alpinejs/csp adressiert; Inline-Scripts "
             "und -Event-Attribute werden durch Architektur-Tests "
             "ausgeschlossen.\n"
             f"Verbotene Tokens: {violations}\n"
             f"Aktueller script-src: {script_src}\n"
-            "Refs #672 (CSP-Migration), #669 (Phase 1A), #618, #662 FND-01."
+            "Refs #672 (CSP-Migration), #669 (Phase 1A), #618, #662."
         )
 
 
@@ -257,7 +256,7 @@ class TestSvgAccessibilityGuard:
     ``aria-label=\"...\"``, ``role=\"img\"`` mit ``<title>``-Child oder ein
     ``<title>``-Element direkt im SVG.
 
-    Hintergrund: Der Audit (Refs #670 FND-15) hat 23+ Templates mit
+    Hintergrund: Der Audit (Refs #670) hat 23+ Templates mit
     dekorativen SVGs ohne ``aria-hidden`` gefunden — Screen Reader lesen
     sonst die XML-Source-Tokens vor (z.B. \"image\", Path-Daten). Default
     in der App ist ``aria-hidden=\"true\"``; nur SVG-Icon-Buttons ohne
@@ -293,7 +292,7 @@ class TestSvgAccessibilityGuard:
             'role="img" mit <title>. WCAG 2.1 SC 1.1.1: dekorative SVGs '
             "muessen vom Screen Reader ignoriert werden, nicht-dekorative "
             "muessen einen Text-Alternative bieten. "
-            "Refs #669 (Phase G), #670 FND-15.\n"
+            "Refs #669 (Phase G), #670.\n"
             f"Betroffen: {violations}"
         )
 
@@ -305,7 +304,7 @@ class TestNoFStringInGettextCallsGuard:
     nicht den stabilen Quellstring mit Platzhaltern. Damit landen weder
     Variants in der ``.po``-Datei, noch koennen Uebersetzer eine sinnvolle
     Vorlage erkennen. Stattdessen ``_("…%(name)s…") % {"name": value}``
-    nutzen (Refs #662 FND-07).
+    nutzen (Refs #662).
     """
 
     _SRC_DIR = Path("src/core")
@@ -329,7 +328,7 @@ class TestNoFStringInGettextCallsGuard:
             "f-Strings in ``_(...)`` sind unbrauchbar fuer gettext: der Extraktor "
             "sieht nur den interpolierten Laufzeit-String. Bitte auf "
             '``_("...%(name)s...") % {"name": value}`` umstellen '
-            "(Refs #662 FND-07).\n"
+            "(Refs #662).\n"
             f"Betroffen: {violations}"
         )
 

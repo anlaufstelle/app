@@ -1,4 +1,4 @@
-"""Tests für Events — Sensitivity-/Stage-/Rollen-Gates an Event-Endpunkten (Refs Welle 6 #929)."""
+"""Tests für Events — Sensitivity-/Stage-/Rollen-Gates an Event-Endpunkten (Refs #929)."""
 
 import pytest
 from django.urls import reverse

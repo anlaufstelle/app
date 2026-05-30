@@ -1,4 +1,4 @@
-"""Dedizierte Unit-Tests fuer UserLanguageMiddleware (Refs #670 FND-13).
+"""Dedizierte Unit-Tests fuer UserLanguageMiddleware (Refs #670).
 
 Verifiziert das Verhalten der App-eigenen Locale-Bestimmung:
 - Authentifizierte User mit gesetztem ``preferred_language`` bekommen ihre
@@ -6,7 +6,7 @@ Verifiziert das Verhalten der App-eigenen Locale-Bestimmung:
 - Authentifizierte User ohne Praeferenz und anonyme User fallen auf den
   ``LANGUAGE_CODE`` der App zurueck — Accept-Language wird bewusst
   ignoriert, sodass die Login-/Password-Reset-Seiten in der Default-Sprache
-  der App rendern (FND-13: User sahen englische Labels USERNAME/PASSWORD,
+  der App rendern (Hinweis: User sahen englische Labels USERNAME/PASSWORD,
   weil Accept-Language: en die Django-LocaleMiddleware umstellte).
 """
 

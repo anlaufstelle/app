@@ -1,4 +1,4 @@
-"""Helper-Factories für ``test_mutation_followup_client_export_*`` (Refs Welle 7 / #930).
+"""Helper-Factories für ``test_mutation_followup_client_export_*`` (Refs #930).
 
 Wird von den Sub-Files ``test_mutation_followup_client_export_gathers.py``,
 ``test_mutation_followup_client_export_serializers.py`` und

@@ -1,6 +1,6 @@
 """Follow-Up-Tests für Mutation-Survivors in ``core.services.events.feed``.
 
-Refs Welle 7 (#930). Ziel: Mutationen an den Branch- und Boundary-Grenzen
+Refs #930. Ziel: Mutationen an den Branch- und Boundary-Grenzen
 in ``get_time_range``, ``build_feed_items``, ``_format_preview_value`` und
 ``enrich_events_with_preview`` killen (Top-Survivor ``build_feed_items``
 mit 57 überlebenden Mutationen).
@@ -62,7 +62,7 @@ from core.services.events import (
 
 @pytest.mark.django_db
 class TestGetTimeRange:
-    """Refs Welle 7 — ``get_time_range`` (Line 17)."""
+    """Refs ``get_time_range`` (Line 17)."""
 
     def test_no_time_filter_returns_full_day(self):
         """Ohne ``time_filter`` muss die Range den kompletten Tag abdecken:
@@ -457,7 +457,7 @@ class _FT:
 
 
 class TestFormatPreviewValue:
-    """Refs Welle 7 — ``_format_preview_value`` (Line 130)."""
+    """Refs ``_format_preview_value`` (Line 130)."""
 
     def test_boolean_true_yields_ja(self):
         assert _format_preview_value(True, _FT("boolean")) == "Ja"
@@ -520,7 +520,7 @@ class TestFormatPreviewValue:
 
 @pytest.mark.django_db
 class TestEnrichEventsPreviewLimit:
-    """Refs Welle 7 — ``enrich_events_with_preview`` (Line 158).
+    """Refs ``enrich_events_with_preview`` (Line 158).
 
     Branch ``len(preview_fields) < 3`` mit 4 nicht-textarea-Feldern:
     Preview bleibt bei 3 stehen, Expanded zeigt alle 4.

@@ -1,4 +1,4 @@
-"""RetentionProposal-Lifecycle (#744 Phase 2).
+"""RetentionProposal-Lifecycle (#744).
 
 Vorschlags-Verwaltung: Erzeugen (idempotent), Approve/Defer/Reject,
 Bulk-Operationen, Dashboard-Aufbereitung, Reactivate-nach-Defer,
@@ -21,7 +21,7 @@ from core.retention.strategies import iter_strategies
 from core.services.audit import audit_retention_decision
 
 # Category labels for the dashboard grouping. Lives next to the service
-# (not the view) because the context-builder needs them — Refs FND-A003.
+# (not the view) because the context-builder needs them.
 DASHBOARD_CATEGORY_LABELS = {
     "anonymous": _("Anonym"),
     "identified": _("Identifiziert"),
@@ -63,7 +63,7 @@ def build_retention_dashboard_context(facility, user=None):
     the date anchors the template needs. The view then layers HTMX-specific
     decisions (partial vs. full template) on top.
 
-    Extracted from the view (Refs FND-A003) so the ~90-LOC block of
+    Extracted from the view so the ~90-LOC block of
     grouping, hold-lookup and urgency-colouring can be unit-tested and
     reused without going through the HTTP layer. The ``user`` argument is
     accepted for future role-based filtering and kept in the signature so

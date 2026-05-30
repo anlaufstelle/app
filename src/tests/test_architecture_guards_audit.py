@@ -1,4 +1,4 @@
-"""Architecture-Guards — Audit-Completeness, Settings-Allowlist, E2E-Selektor-Stabilität (Refs Welle 6 #929)."""
+"""Architecture-Guards — Audit-Completeness, Settings-Allowlist, E2E-Selektor-Stabilität (Refs #929)."""
 
 import re
 from pathlib import Path
@@ -10,7 +10,7 @@ pytestmark = pytest.mark.architecture
 
 
 class TestSettingsAuditCompletenessGuard:
-    """Refs #900 (FND-001): jedes Feld auf ``Settings`` muss entweder
+    """Refs #900: jedes Feld auf ``Settings`` muss entweder
     auditiert (``_AUDIT_FIELDS``) oder explizit ausgenommen sein
     (``_AUDIT_EXEMPT``). Verhindert, dass ein neues verhaltensrelevantes
     Setting unauditiert gemerged wird.
@@ -81,12 +81,12 @@ class TestSettingsAuditCompletenessGuard:
             f"Bitte zu ``_AUDIT_FIELDS`` in src/core/services/settings.py "
             f"hinzufuegen (verhaltensrelevant — DSGVO/MFA/Retention/Suche/"
             f"Datei-Policy) oder zu ``_AUDIT_EXEMPT`` mit Kommentar "
-            f"(z.B. PrimaryKey, auto_now). Refs #893 / FND-001."
+            f"(z.B. PrimaryKey, auto_now). Refs #893."
         )
 
 
 class TestAuditLogCreationAllowlist:
-    """Refs #901 / FND-002: direkte ``AuditLog.objects.create(...)``-Aufrufe
+    """Refs #901: direkte ``AuditLog.objects.create(...)``-Aufrufe
     sind nur an dokumentierten Stellen erlaubt. Alles andere muss ueber die
     typed Helper aus ``core.services.audit`` laufen
     (``log_audit_event``, ``audit_event``, ``audit_client_event``,
@@ -159,7 +159,7 @@ class TestAuditLogCreationAllowlist:
             "audit_retention_decision, audit_security_violation, "
             "audit_system_view) oder die Stelle in "
             "_ALLOWED_DIRECT_CALLS mit Begruendung dokumentieren.\n"
-            "Refs #901 / FND-002.\n"
+            "Refs #901.\n"
             f"Verstoesse: {violations}"
         )
 
@@ -192,13 +192,13 @@ class TestAuditLogCreationAllowlist:
 class TestE2ESelectorStabilityGuard:
     """Blockt brüchige Playwright-Selektoren in src/tests/e2e/.
 
-    Refs #922 / #924 (Welle 1): ``page.locator(...).first.click()`` und
+    Refs #922 / #924: ``page.locator(...).first.click()`` und
     ``.nth(<int>).click()`` auf nicht-deterministischer Reihenfolge führen
     zu Flakes bei Seed-Drift und parallelisierten Runs. Stabile Alternativen
     sind ``data-testid``-basierte Selektoren plus die Helper in
     ``src/tests/e2e/_selectors.py``.
 
-    Bestehende Sünden, die in dieser Welle bewusst noch nicht migriert wurden,
+    Bestehende Sünden, die bewusst noch nicht migriert wurden,
     sind per File-zentrierter Whitelist mit max. erlaubten Vorkommen erfasst.
     Wenn ein File aufräumt, muss der Counter heruntergesetzt werden — das
     erzwingt Bewegung in die richtige Richtung. Wenn die Zahl überschritten
@@ -211,19 +211,19 @@ class TestE2ESelectorStabilityGuard:
     # File-Whitelist mit max. erlaubten Vorkommen. Beim Migrieren auf 0 setzen
     # und den Eintrag entfernen, sobald der Counter 0 ist.
     #
-    # Welle-5-Follow-Up: Die neuen E2E-Files aus Welle 5 (#928) haben einige
+    # Follow-Up: Die neuen E2E-Files aus #928 haben einige
     # ``.first.click()``-Selektoren mitgebracht; Werte hier dokumentieren den
-    # Ist-Stand, damit Welle 6 (#929) den reinen Refactor ohne behavioural
-    # change abschließen kann. Cleanup → eigenes Issue (Welle 1 Nachzügler).
+    # Ist-Stand, damit #929 den reinen Refactor ohne behavioural
+    # change abschließen kann. Cleanup → eigenes Issue.
     _WHITELIST_MAX: ClassVar[dict[str, int]] = {
         "test_button_permissions.py": 2,
         "test_cases.py": 3,
         "test_client_deletion_workflow.py": 6,
         "test_episodes.py": 1,
-        # Welle 5 / dbdaf3c: TestMultipleGoalsAndMilestones brachte 3 weitere
+        # dbdaf3c: TestMultipleGoalsAndMilestones brachte 3 weitere
         # ``.first.click()`` (Milestone-Toggle + Goal-Toggle + Submit innerhalb
         # einer Schleife). Counter zieht den Ist-Stand nach; Stabilisierung
-        # auf data-testid läuft separat (Welle-1-Nachzügler).
+        # auf data-testid läuft separat.
         "test_goals_htmx.py": 5,
         "test_handover.py": 3,
         "test_i18n_locale.py": 2,

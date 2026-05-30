@@ -1,6 +1,6 @@
 """E2E: Optimistic-Locking auf WorkItem via Two-Browser-Context.
 
-Refs Welle 4 (#927), Master #922.
+Refs #927, Master #922.
 
 Szenario:
 1. Admin-Session A öffnet WorkItem-Edit (``expected_updated_at`` = v1).

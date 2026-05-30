@@ -1,4 +1,4 @@
-"""Re-Export-Stub fuer Bestands-Aufrufer (#744 Phase 2).
+"""Re-Export-Stub fuer Bestands-Aufrufer (#744).
 
 Die Retention-Logik wurde in das Submodul :mod:`core.retention`
 verschoben:

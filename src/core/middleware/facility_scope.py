@@ -28,7 +28,7 @@ class FacilityScopeMiddleware:
     stets neu — auch fuer anonyme/non-super_admin User explizit auf ''
     geleert, damit Connection-Pooling keinen stehengebliebenen Wert aus
     einer frueheren authentifizierten Request leaken kann (Defense-in-
-    Depth, Audit-Massnahme #9, Refs #733).
+    Depth, Refs #733).
 
     Refs #867: ``app.is_super_admin`` wird zusaetzlich pro Request
     gesetzt — ``'true'`` bei super_admin, sonst ``''``. Die RLS-Policies
@@ -51,7 +51,7 @@ class FacilityScopeMiddleware:
         # anonyme/non-super_admin User explizit auf '' leeren, damit
         # Connection-Pooling keinen stehengebliebenen Wert aus einer
         # frueheren authentifizierten Request leaken kann (Defense-in-
-        # Depth, Audit-Massnahme #9, Refs #733, #867).
+        # Depth, Refs #733, #867).
         if connection.vendor == "postgresql":
             facility_id = str(request.current_facility.pk) if (is_authenticated and request.current_facility) else ""
             is_super_admin = "true" if (is_authenticated and getattr(request.user, "is_super_admin", False)) else ""

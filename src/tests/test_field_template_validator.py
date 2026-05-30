@@ -1,4 +1,4 @@
-"""Validator-Tests für FieldTemplate (Audit-Massnahme #10, Refs #733).
+"""Validator-Tests für FieldTemplate (Refs #733).
 
 Prueft, dass ``FieldTemplate.clean()`` HIGH-Sensitivity-Felder ohne
 ``is_encrypted`` blockiert, damit Art.-9-relevanter Klartext nicht

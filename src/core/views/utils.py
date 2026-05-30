@@ -3,7 +3,7 @@
 ``safe_page_param`` cappt ``?page=`` auf ``MAX_PAGE``, validiert den
 Wert als positive Ganzzahl und faengt fehlerhafte Eingaben (negativ,
 ``abc``) ab. Vermeidet OFFSET-Seq-Scans bei boesgemeinten oder
-fehlerhaften URLs (Audit-Massnahme #32, Refs #733).
+fehlerhaften URLs (Refs #733).
 
 ``safe_redirect_path`` engt ``?next=``-Eingaben auf same-origin Pfade ein.
 ``startswith("/")`` allein matcht ``//evil.example/login``, das der

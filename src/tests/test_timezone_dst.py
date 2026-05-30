@@ -1,6 +1,6 @@
 """DST-Übergänge Europe/Berlin 2026 + Aware/Naive-DateTime-Mix.
 
-Refs Welle 4 (#927), Master #922.
+Refs #927, Master #922.
 
 Dokumentiert das System-Verhalten an den DST-Grenzen:
 - Spring-Forward 2026-03-29 02:00 → 03:00 (nicht-existente Stunde).

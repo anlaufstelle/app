@@ -178,7 +178,7 @@ find "$MONTHLY_DIR" -name "*_media.tar.gz.enc" -mtime +90 -delete
 
 echo "Rotation abgeschlossen."
 
-# Off-Site-Sync (Refs #738, Audit-Massnahme #22; State-File + Sentry: Refs #797).
+# Off-Site-Sync (Refs #738; State-File + Sentry: Refs #797).
 # BACKUP_OFFSITE_TARGET: rclone-Remote ("rclone:remote:bucket"),
 # S3-URL ("s3://bucket/path") oder SCP-Target ("user@host:/path").
 #

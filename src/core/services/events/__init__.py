@@ -1,7 +1,7 @@
 """Event-Services-Paket — Re-Export-Hub (Refs #777, erweitert in #959).
 
 Frueher lebten alle Funktionen in einem 715-LOC-Modul ``services/event.py``
-mit fuenf Concerns. Phase 1 von #777 schnitt sie in vier fokussierte
+mit fuenf Concerns. #777 schnitt sie in vier fokussierte
 Submodule; Refs #959 hat zusaetzlich den Activity-Feed-Service aus dem
 flachen ``services/feed.py`` ins Paket gezogen und den Kompatibilitaets-
 Stub ``services/event.py`` entfernt.

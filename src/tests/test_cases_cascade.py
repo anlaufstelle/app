@@ -15,7 +15,7 @@ Diese Tests verifizieren den DB-Level-Cascade-Vertrag der Models
 unveraendert weiterlaufen — eine Aenderung der ``on_delete``-Constraints
 ist eine API-Aenderung und braucht einen separaten Plan.
 
-Refs #922 (Master), #926 (Welle 3).
+Refs #922 (Master), #926.
 """
 
 import pytest

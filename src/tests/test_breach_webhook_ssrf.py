@@ -1,4 +1,4 @@
-"""RF-T07: SSRF-Validator fuer Breach-Notification-Webhook (Refs #772).
+"""SSRF-Validator fuer Breach-Notification-Webhook (Refs #772).
 
 Die Webhook-URL kommt aus der operatorseitig gesetzten Env-Var
 ``BREACH_NOTIFICATION_WEBHOOK_URL``. Vor #772

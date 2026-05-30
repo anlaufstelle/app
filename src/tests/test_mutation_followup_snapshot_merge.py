@@ -1,6 +1,6 @@
 """Mutation-Followup-Tests für ``core.services.snapshot`` — Merge & Hybrid.
 
-Refs Welle 7 (#930). Sub-File aus ``test_mutation_followup_snapshot``;
+Refs #930. Sub-File aus ``test_mutation_followup_snapshot``;
 enthält ``TestMergeStatsPerField``, ``TestMergeJugendamtStatsPerField``
 und ``TestGetStatisticsHybridCutoff`` — also die Feld-für-Feld-Aggregation
 und die Cutoff-Logik ``snapshot vs. live`` im hybriden Statistik-Pfad.
@@ -33,7 +33,7 @@ from tests._mutation_followup_snapshot_helpers import _make_event
 
 
 class TestMergeStatsPerField:
-    """Refs Welle 7 — ``_merge_stats`` (Line 149).
+    """Refs ``_merge_stats`` (Line 149).
 
     Adressierte Mutationen:
     - ``+=`` → ``-=`` per Feld (total_contacts, unique_clients, stage-keys,
@@ -215,7 +215,7 @@ class TestMergeStatsPerField:
 
 
 class TestMergeJugendamtStatsPerField:
-    """Refs Welle 7 — ``_merge_jugendamt_stats`` (Line 208).
+    """Refs ``_merge_jugendamt_stats`` (Line 208).
 
     Adressierte Mutationen:
     - ``total += stats.get("total", 0)``  → ``-=``.
@@ -332,7 +332,7 @@ class TestMergeJugendamtStatsPerField:
 
 @pytest.mark.django_db
 class TestGetStatisticsHybridCutoff:
-    """Refs Welle 7 — ``get_statistics_hybrid`` (Line 248).
+    """Refs ``get_statistics_hybrid`` (Line 248).
 
     Adressierte Mutationen:
     - ``if use_snapshot: stats = get_snapshot(...)`` — Conditional kippt.

@@ -1,4 +1,4 @@
-"""Unit-Tests für seed-event Helpers (Refs #922 — Welle 10 Coverage-Lift).
+"""Unit-Tests für seed-event Helpers (Refs #922 — Coverage-Lift).
 
 Testet ``random_time_of_day``, ``weighted_days_ago``, ``random_data``,
 ``seed_events_small`` und ``seed_events_bulk`` aus ``core.seed.events``.

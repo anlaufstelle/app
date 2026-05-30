@@ -1,7 +1,7 @@
 """Admin fuer AuditLog, Settings, StatisticsSnapshot (Refs #785, #958).
 
 AuditLog und StatisticsSnapshot sind append-only/read-only; Settings hat ein
-spezielles save_model fuer SETTINGS_CHANGE-AuditLog (Refs #893 / FND-001).
+spezielles save_model fuer SETTINGS_CHANGE-AuditLog (Refs #893).
 """
 
 from django.contrib import admin

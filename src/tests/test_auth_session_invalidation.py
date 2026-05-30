@@ -1,6 +1,6 @@
 """Unit-Tests fuer Session-Invalidierung bei User-Deaktivierung.
 
-Refs Matrix AUD-SEC-AUTH-04 (Welle 3, Issue #926, Master #922).
+Refs Matrix AUD-SEC-AUTH-04 (Issue #926, Master #922).
 
 Verifiziert, dass das Setzen von ``user.is_active = False`` dazu fuehrt, dass
 folgende Requests des Users zur Login-Seite umgeleitet werden — Djangos

@@ -1,6 +1,6 @@
 """DocumentType.retention_days beeinflusst die Retention-Strategien.
 
-Refs Matrix DEV-RET-11 (Welle 3 / Master #922).
+Refs Matrix DEV-RET-11 (Master #922).
 
 Die DSGVO-Retention-Logik kennt vier Strategien (anonymous, identified,
 qualified, document_type). Die Plan-Hypothese „Event-Sensitivity

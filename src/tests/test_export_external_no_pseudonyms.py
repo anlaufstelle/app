@@ -1,6 +1,6 @@
 """Externe Berichte enthalten keine Pseudonyme (DSGVO-Datenminimierung).
 
-Refs Matrix AUD-SEC-EXPORT-02 (Welle 3 / Master #922).
+Refs Matrix AUD-SEC-EXPORT-02 (Master #922).
 
 Externe Berichte gehen an Traeger, Foerdergeber oder Jugendamt und
 duerfen keine Re-Identifizierungs-Hinweise enthalten. Konkret:

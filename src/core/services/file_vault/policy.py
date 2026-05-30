@@ -71,7 +71,7 @@ def enforce_allowed_file_types(facility, uploaded_file, event, user):
     )
 
 
-# MIME-Aequivalenzen pro Extension (#662 FND-04).
+# MIME-Aequivalenzen pro Extension (#662).
 #
 # Container-Formate wie OOXML (.docx/.xlsx/.pptx) sind ZIP-Archive; libmagic
 # liefert je nach Version und genauer Erkennung uneinheitliche MIME-Typen
@@ -107,7 +107,7 @@ _MIME_EQUIVALENCE = {
 
 def _mime_equivalent(extension: str, declared: str, detected: str) -> bool:
     """True wenn ``declared`` und ``detected`` in derselben Aequivalenzklasse
-    fuer die gegebene ``extension`` liegen (#662 FND-04)."""
+    fuer die gegebene ``extension`` liegen (#662)."""
     klass = _MIME_EQUIVALENCE.get(extension.lower().lstrip("."))
     if not klass:
         return False
@@ -123,7 +123,7 @@ def enforce_magic_bytes(facility, uploaded_file, event, user):
     ``application/pdf``). Every mismatch is logged as ``SECURITY_VIOLATION``
     (Refs #610). Container-Formate wie DOCX werden via
     :data:`_MIME_EQUIVALENCE` toleriert, wenn beide Seiten in derselben
-    Aequivalenzklasse liegen (#662 FND-04).
+    Aequivalenzklasse liegen (#662).
     """
     # Lazy-Import: ``python-magic`` braucht die System-Bibliothek ``libmagic1``.
     # Im Docker-Image (Prod) ist sie installiert; lokale Unit-Tests ohne

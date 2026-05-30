@@ -7,7 +7,7 @@ Deckt die Branches:
 * :class:`RateLimitedPasswordResetView.form_valid` — User-Lookup-Exception (Lines 146-148).
 * :func:`set_user_language` — gueltige + ungueltige Sprache, unauth (Lines 213-218).
 
-Refs Welle 10 / Bucket D — siehe #949.
+Refs #949.
 """
 
 from unittest.mock import patch

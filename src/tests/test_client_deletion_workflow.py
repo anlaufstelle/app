@@ -186,7 +186,7 @@ class TestRetentionTrashAnonymization:
 
 
 # ---------------------------------------------------------------------------
-# View-Layer Tests (Refs #922 — Welle 10 Coverage-Lift)
+# View-Layer Tests (Refs #922 — Coverage-Lift)
 # ---------------------------------------------------------------------------
 
 from django.urls import reverse  # noqa: E402

@@ -39,7 +39,7 @@ class TestAccountProfileView:
 
     @pytest.mark.django_db
     def test_profile_redirects_anonymous(self, client, profile_url):
-        # FacilityScopeMiddleware oeffnet seit #733 (Tier-2) auch fuer
+        # FacilityScopeMiddleware oeffnet seit #733 auch fuer
         # anonyme Requests einen Cursor zum Clearing — daher braucht
         # auch dieser Test den django_db-Marker.
         response = client.get(profile_url)

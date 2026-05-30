@@ -1,10 +1,10 @@
-"""RF-T01: Charakterisierungstests für ``safe_redirect_path`` (Refs #770).
+"""Charakterisierungstests für ``safe_redirect_path`` (Refs #770).
 
 Open-Redirect-Helper: nur same-origin Pfade akzeptieren. ``startswith("/")``
 allein ist unzureichend, weil der Browser ``//evil.example/`` als
 protokoll-relative URL interpretiert (Phishing-Vektor).
 
-Quelle: Sprint 1 — Sicherheits-Quick-Wins, Goldene Regel „Erst Tests, dann Fix".
+Quelle: Sicherheits-Quick-Wins, Goldene Regel „Erst Tests, dann Fix".
 """
 
 from __future__ import annotations

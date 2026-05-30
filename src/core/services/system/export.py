@@ -94,7 +94,7 @@ def _resolve_field_value(value, ft):
     return value
 
 
-# OWASP CSV-Injection-Pattern (Refs #719, Master-Audit Blocker 6):
+# OWASP CSV-Injection-Pattern (Refs #719):
 # Werte, die mit einem dieser Zeichen beginnen, werden in Excel/LibreOffice
 # als Formel ausgewertet (``=cmd|'/c calc'!A1``, ``@SUM(...)``, ``-1234``,
 # ``+1234`` oder als Zellseparator-Smuggling via Tab/CR/LF). Das ``'`` als

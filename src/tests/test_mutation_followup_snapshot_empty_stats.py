@@ -1,6 +1,6 @@
 """Mutation-Followup-Tests für ``core.services.snapshot`` — Empty-Defaults.
 
-Refs Welle 7 (#930). Sub-File aus ``test_mutation_followup_snapshot``;
+Refs #930. Sub-File aus ``test_mutation_followup_snapshot``;
 enthält ``TestEmptyStats`` und ``TestEmptyJugendamtStats`` — also die
 Felder-für-Felder-Sentinels für ``_empty_stats`` und
 ``_empty_jugendamt_stats``.
@@ -21,7 +21,7 @@ from core.services.dashboard import (
 
 
 class TestEmptyStats:
-    """Refs Welle 7 — ``_empty_stats`` (Line 138).
+    """Refs ``_empty_stats`` (Line 138).
 
     Adressierte Mutationen: jedes Feld einzeln (Mutmut mutiert single keys/
     initial-Werte). Wir prüfen ALLE Keys + Defaults explizit.
@@ -63,7 +63,7 @@ class TestEmptyStats:
 
 
 class TestEmptyJugendamtStats:
-    """Refs Welle 7 — ``_empty_jugendamt_stats`` (Line 198)."""
+    """Refs ``_empty_jugendamt_stats`` (Line 198)."""
 
     def test_total_zero(self):
         assert _empty_jugendamt_stats()["total"] == 0

@@ -1,6 +1,6 @@
 """Mutation-Followup-Tests für ``core.services.offline`` — ``_visible_data_fields``.
 
-Refs Welle 7 (#930). Sub-File aus ``test_mutation_followup_offline``;
+Refs #930. Sub-File aus ``test_mutation_followup_offline``;
 enthält die Test-Klasse ``TestVisibleDataFields`` — Marker-Branches
 (``__file__``, ``__files__``), ``__encrypted__``-Branch via ``safe_decrypt``
 und Sensitivity-Strip.

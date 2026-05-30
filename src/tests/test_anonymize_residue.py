@@ -4,7 +4,7 @@ Verifiziert: nach ``Client.anonymize()`` sind in **allen** abhaengigen
 Tabellen keine PII-Spuren des Klienten mehr — Pseudonym, Notes, Event-
 data_json-Werte, Anhang-Dateinamen, DeletionRequest-Begruendung.
 
-Der Test deckt die vom Master-Audit als „Restdaten == 0"-Matrix
+Der Test deckt die als „Restdaten == 0"-Matrix
 geforderten Tabellen ab:
 - core_client (Stamm)
 - core_case + core_episode + core_workitem (linked)

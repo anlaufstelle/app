@@ -102,7 +102,7 @@ def store_encrypted_file(
             supersedes.save(update_fields=["is_current", "superseded_by", "superseded_at"])
     except Exception:
         # Synchroner Fehler in DB-Operationen — geschriebene Datei sofort
-        # entfernen, damit der Disk nicht waechst (#662 FND-03).
+        # entfernen, damit der Disk nicht waechst (#662).
         output_path.unlink(missing_ok=True)
         raise
 

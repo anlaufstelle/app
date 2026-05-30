@@ -1,6 +1,6 @@
 """E2E-Tests: Hausverbot-Banner im Aktivitätslog.
 
-Refs #922 / #924 (Welle 1): zuvor hat der Test nur „Banner vorhanden falls
+Refs #922 / #924: zuvor hat der Test nur „Banner vorhanden falls
 Seed-Daten zufällig einen aktiven Ban enthalten" geprüft — bei deterministisch
 gesäten Daten ist das geraten, kein Test. Diese Variante:
 

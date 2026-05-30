@@ -1,6 +1,6 @@
 """Unit tests for the typed audit helpers in ``core.services.audit``.
 
-Refs #901 / FND-002: Diese Tests sichern die Signatur und das Default-
+Refs #901: Diese Tests sichern die Signatur und das Default-
 Verhalten der fünf typed Helper (audit_event, audit_client_event,
 audit_retention_decision, audit_security_violation, audit_system_view).
 Migrations-Tests pro Domäne (clients, retention, file_vault, system)

@@ -12,7 +12,7 @@ Every dispatch into one of these views writes a
 :func:`core.services.audit.audit_system_view`
 (DSGVO-Rechenschaftspflicht).
 
-Refs #904 / FND-003: dieser Modul war fruher eine 877-LOC-Datei
+Refs #904: dieser Modul war fruher eine 877-LOC-Datei
 ``views/system.py``. Aufgeteilt in thematische Submodule; das Package
 re-exportiert alle View-Klassen, damit ``core.urls`` und Tests den
 Import-Pfad nicht aendern muessen.

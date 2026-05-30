@@ -4,7 +4,7 @@ Refs #958 (M-3) — vorher war alles in einem 589-LoC-Modul ``services/complianc
 jetzt thematisch gesplittet (db_roles, backup, clamav, retention, mfa, system_info,
 audit_events), analog zum bereits erfolgten ``services/events/``-Subpackage.
 
-Aggregiert die elf Compliance-Checks aus dem Audit-2 §2.4 in eine
+Aggregiert die elf Compliance-Checks aus §2.4 in eine
 einheitliche ``ComplianceCheck``-Liste mit ``ok``/``warning``/
 ``critical``/``unknown``-Status, Nachricht, Detail und
 Action-Hint. Wird konsumiert von :class:`core.views.system.compliance.

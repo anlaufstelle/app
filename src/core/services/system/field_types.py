@@ -1,6 +1,6 @@
-"""Field-Type-Registry — zentrale Definition aller Feldtypen (Refs #907 / FND-006).
+"""Field-Type-Registry — zentrale Definition aller Feldtypen (Refs #907).
 
-Refs FND-006: Vorher war die Feldtyp-Logik dreifach verteilt — Validierung
+Refs #907: Vorher war die Feldtyp-Logik dreifach verteilt — Validierung
 und Default-Casting im ``FieldTemplate``-Model, Form-Field-/Widget-Mapping
 im ``DynamicEventDataForm``, plus Sonderpfade fuer SELECT/MULTI_SELECT
 und FILE. Jede neue Feldart musste an drei Stellen nachgezogen werden.

@@ -1,6 +1,6 @@
 """Mutation-Followup-Tests für ``core.services.client.export`` — Aggregate.
 
-Refs Welle 7 (#930). Sub-File aus ``test_mutation_followup_client_export``;
+Refs #930. Sub-File aus ``test_mutation_followup_client_export``;
 enthält die Top-Level-Komposition (``TestBuildExportMeta``,
 ``TestExportClientDataAggregate``) plus den Test-Datei-internen
 Sanity-Check (``TestImportSanity``).
@@ -39,7 +39,7 @@ from tests._mutation_followup_client_export_helpers import (
 
 @pytest.mark.django_db
 class TestBuildExportMeta:
-    """Refs Welle 7 — ``_build_export_meta`` (Line 132).
+    """Refs ``_build_export_meta`` (Line 132).
 
     Boundary-Chain:
     - Settings.facility_full_name nicht leer → vollständiger Name
@@ -96,7 +96,7 @@ class TestBuildExportMeta:
 
 @pytest.mark.django_db
 class TestExportClientDataAggregate:
-    """Refs Welle 7 — ``export_client_data`` (Line 141).
+    """Refs ``export_client_data`` (Line 141).
 
     Sicherstellen, dass das Top-Level-Dict alle sieben Aggregat-Keys
     enthält UND dass Visibility-Filter den ``_gather_events``-Pfad
@@ -170,7 +170,7 @@ class TestExportClientDataAggregate:
 
 @pytest.mark.django_db
 class TestImportSanity:
-    """Refs Welle 7 — Test-Datei-interner Sanity-Check.
+    """Refs Test-Datei-interner Sanity-Check.
 
     Stellt sicher, dass die Test-Imports (``FieldTemplate``, ``User``,
     ``timedelta``) tatsächlich verwendet werden — falls eine spätere

@@ -7,7 +7,7 @@ Deckt die Filter- und Export-Branches:
 * :func:`_filter_auditlog_queryset` — Spiegel-Filter im Export (Lines 144-169).
 * :class:`SystemAuditLogExportView`.get — ``?format=`` Default csv (Line 214).
 
-Refs Welle 10 / Bucket D — siehe #949.
+Refs #949.
 """
 
 import pytest

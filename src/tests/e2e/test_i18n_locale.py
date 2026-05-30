@@ -1,12 +1,12 @@
 """E2E: Locale-Wechsel via User-Setting (ENT-SYS-05).
 
-Refs Welle 5 (#928), Master #922, Matrix ENT-SYS-05.
+Refs #928, Master #922, Matrix ENT-SYS-05.
 
 **Hinweis zur Spec-Lücke:** Der ursprüngliche TC ENT-SYS-05 in der
 Manual-Test-Matrix beschreibt ein Verhalten mit ``?lang=de/en``-Query-
 Parameter und ``Accept-Language``-Auswertung. Das ist **nicht** das
 implementierte Verhalten: ``core.middleware.user_language`` ignoriert
-bewusst den Browser-Header (Refs #670 FND-13) und es gibt keinen
+bewusst den Browser-Header (Refs #670) und es gibt keinen
 Query-Param-Handler. Locale wird ausschließlich über:
 
 1. ``request.user.preferred_language`` (eingeloggter User mit Setting), oder
@@ -25,7 +25,7 @@ import pytest
 class TestAnonymousLocale:
     """Anonyme User sehen immer den App-Default (Deutsch).
 
-    Refs #670 FND-13: Accept-Language und URL-Param werden bewusst nicht
+    Refs #670: Accept-Language und URL-Param werden bewusst nicht
     ausgewertet, damit anonyme Seiten (Login, MFA, Password-Reset) in
     deterministischer Sprache rendern.
     """

@@ -1,6 +1,6 @@
 """Unit-Tests für ``CaseForm`` und ``EpisodeForm`` (Refs #922 / #925).
 
-Welle 2 schließt die Forms-Coverage-Lücke: bisher gab es nur einen
+#925 schließt die Forms-Coverage-Lücke: bisher gab es nur einen
 Template-Render-Test (``test_form_non_field_errors.py``). Diese Datei
 deckt die Validierungs- und Queryset-Filter-Logik der beiden Forms in
 ``core.forms.cases`` und ``core.forms.episodes`` ab.
@@ -178,7 +178,7 @@ class TestEpisodeForm:
     def test_ended_at_before_started_at_is_currently_valid(self):
         """Boundary: ``ended_at`` < ``started_at`` ist aktuell valide.
 
-        Refs Welle 4: aktuelle ModelForm trimmt nicht — ggf. Edge-Case dort
+        Hinweis: aktuelle ModelForm trimmt nicht — ggf. Edge-Case dort
         schließen. Dieser Test dokumentiert nur den IST-Zustand, damit ein
         späterer Fix bewusst gegen einen failing Test fährt.
         """

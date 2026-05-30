@@ -1,4 +1,4 @@
-"""E2E: Bulk-Operationen und Recurrence für WorkItems (Welle 5 #928).
+"""E2E: Bulk-Operationen und Recurrence für WorkItems (#928).
 
 Refs Master #922.
 

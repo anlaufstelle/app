@@ -1,6 +1,6 @@
 """Unit-Tests fuer den Account-Lockout-Service nach Fehlanmeldungen.
 
-Refs Matrix AUD-SEC-MFA-02 (Welle 3, Issue #926, Master #922).
+Refs Matrix AUD-SEC-MFA-02 (Issue #926, Master #922).
 
 Verifiziert den IST-Zustand des ``core.services.security.login_lockout``-Services:
 Nach N fehlgeschlagenen Logins (LOCKOUT_THRESHOLD, default 10) innerhalb des

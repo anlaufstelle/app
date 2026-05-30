@@ -1,6 +1,6 @@
 """Unit-Tests fuer das Scoping von MFA-Devices auf den User.
 
-Refs Matrix DEV-SEC-MFA-03 (Welle 3, Issue #926, Master #922).
+Refs Matrix DEV-SEC-MFA-03 (Issue #926, Master #922).
 
 Die Anwendung nutzt django-otps Standard-Modelle ``TOTPDevice`` (TOTP) und
 ``StaticDevice`` (Backup-Codes). Diese sind ueber die ``user``-FK an den

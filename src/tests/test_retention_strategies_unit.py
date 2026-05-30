@@ -1,9 +1,9 @@
-"""RF-T03: Charakterisierungstests fuer Retention-Strategien (Refs #776).
+"""Charakterisierungstests fuer Retention-Strategien (Refs #776).
 
 Vier Strategien × pos/neg/boundary plus eine Cross-Strategy-Intersection
 fuer das Cutoff-Verhalten in :mod:`core.retention.enforcement`.
 
-Sicherheitsnetz fuer Sprint 2-Refactorings: wenn das Submodul umgebaut
+Sicherheitsnetz fuer Refactorings: wenn das Submodul umgebaut
 wird, muessen die Cutoffs in Tagen weiterhin **strikt unter** dem
 ``occurred_at`` greifen — nicht ``<=``, sonst loeschen wir Events am
 Stichtag.

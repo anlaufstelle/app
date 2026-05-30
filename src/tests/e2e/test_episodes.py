@@ -1,4 +1,4 @@
-"""E2E: Episoden — Bearbeiten und parallele Phasen pro Fall (Welle 5 #928).
+"""E2E: Episoden — Bearbeiten und parallele Phasen pro Fall (#928).
 
 Refs Master #922.
 

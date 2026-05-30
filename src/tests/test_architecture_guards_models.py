@@ -1,4 +1,4 @@
-"""Architecture-Guards — Model-Guards (Facility-Scoping, Event-Access-Policy) (Refs Welle 6 #929)."""
+"""Architecture-Guards — Model-Guards (Facility-Scoping, Event-Access-Policy) (Refs #929)."""
 
 import re
 from pathlib import Path

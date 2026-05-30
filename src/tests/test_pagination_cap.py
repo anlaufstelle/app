@@ -1,4 +1,4 @@
-"""Tests für ``safe_page_param`` (Refs #733, Audit-Massnahme #32).
+"""Tests für ``safe_page_param`` (Refs #733).
 
 Schuetzt die List-Views (clients, cases, audit) gegen ?page=99999-
 Angriffe, die Postgres in einen Seq-Scan zwingen.

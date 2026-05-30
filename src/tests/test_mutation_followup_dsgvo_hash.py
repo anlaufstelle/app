@@ -1,6 +1,6 @@
 """Follow-Up-Tests für Mutation-Survivors in ``core.services.client.dsgvo_package``.
 
-Refs Welle 7 (#930). Ziel: Mutationen in ``_settings_hash`` killen — die
+Refs #930. Ziel: Mutationen in ``_settings_hash`` killen — die
 Funktion erzeugt einen 8-stelligen, deterministischen SHA-256-Hash über
 einen JSON-Snapshot retention-relevanter Settings-Felder.
 
@@ -63,7 +63,7 @@ def _make_stub(**overrides):
 
 @pytest.mark.django_db
 class TestSettingsHash:
-    """Refs Welle 7 — `_settings_hash`-Mutation-Killer."""
+    """Refs `_settings_hash`-Mutation-Killer."""
 
     # ------------------------------------------------------------------
     # Output-Format & Determinismus

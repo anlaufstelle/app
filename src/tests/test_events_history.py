@@ -1,4 +1,4 @@
-"""Tests für Events — Event-Erstellungs-Defaults + Felder-Partial (HTMX) (Refs Welle 6 #929)."""
+"""Tests für Events — Event-Erstellungs-Defaults + Felder-Partial (HTMX) (Refs #929)."""
 
 import pytest
 from django.urls import reverse

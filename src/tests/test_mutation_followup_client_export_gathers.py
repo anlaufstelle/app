@@ -1,6 +1,6 @@
 """Mutation-Followup-Tests für ``core.services.client.export`` — Gather-Helfer.
 
-Refs Welle 7 (#930). Sub-File aus ``test_mutation_followup_client_export``;
+Refs #930. Sub-File aus ``test_mutation_followup_client_export``;
 enthält die Test-Klassen für die privaten ``_gather_*``-Helfer
 (``_gather_client_fields``, ``_gather_events``, ``_gather_cases``,
 ``_gather_event_history``, ``_gather_deletion_requests``,
@@ -43,7 +43,7 @@ from tests._mutation_followup_client_export_helpers import (
 
 @pytest.mark.django_db
 class TestGatherClientFields:
-    """Refs Welle 7 — ``_gather_client_fields`` (Line 12).
+    """Refs ``_gather_client_fields`` (Line 12).
 
     Mutation jedes einzelnen ``key`` würde das Result-Dict beschneiden.
     DSGVO Art. 15 verlangt aber Vollständigkeit der Stammdaten — wir
@@ -144,7 +144,7 @@ class TestGatherClientFields:
 
 @pytest.mark.django_db
 class TestGatherEvents:
-    """Refs Welle 7 — ``_gather_events`` (Line 41).
+    """Refs ``_gather_events`` (Line 41).
 
     Schwerpunkte:
     - Tuple-Return ``(events_data, event_ids)``
@@ -269,7 +269,7 @@ class TestGatherEvents:
 
 @pytest.mark.django_db
 class TestGatherCases:
-    """Refs Welle 7 — ``_gather_cases`` (Line 64).
+    """Refs ``_gather_cases`` (Line 64).
 
     Mutationen im Dict-Literal entfernen einzelne Case-Felder. Wir
     pinnen jedes Feld einzeln + Sort + Filter-Boundary.
@@ -428,7 +428,7 @@ class TestGatherCases:
 
 @pytest.mark.django_db
 class TestGatherEventHistory:
-    """Refs Welle 7 — ``_gather_event_history`` (Line 81).
+    """Refs ``_gather_event_history`` (Line 81).
 
     Mutationen:
     - ``filter(event_id__in=event_ids)`` → ohne Filter → cross-Event-Leak
@@ -549,7 +549,7 @@ class TestGatherEventHistory:
 
 @pytest.mark.django_db
 class TestGatherDeletionRequests:
-    """Refs Welle 7 — ``_gather_deletion_requests`` (Line 96).
+    """Refs ``_gather_deletion_requests`` (Line 96).
 
     Mutationen:
     - ``target_id__in=event_ids`` → falsche Boundary leaked
@@ -759,7 +759,7 @@ class TestGatherDeletionRequests:
 
 @pytest.mark.django_db
 class TestGatherWorkItems:
-    """Refs Welle 7 — ``_gather_workitems`` (Line 116).
+    """Refs ``_gather_workitems`` (Line 116).
 
     Mutationen:
     - ``filter(client=client)`` → cross-Klient-Leak

@@ -144,7 +144,7 @@ def audit_client_event(client, user, action: str, **detail):
     fix ``"Client"``. ``user=None`` ist legitim für anonymisierungs- oder
     Cron-Pfade.
 
-    Refs #901 / FND-002.
+    Refs #901.
     """
     return audit_event(
         action,
@@ -176,7 +176,7 @@ def audit_retention_decision(
     ``legal_hold_created``, ``client_anonymized``). ``user=None`` und
     ``target_id=None`` sind legitim für Cron-/Bulk-Pfade.
 
-    Refs #901 / FND-002.
+    Refs #901.
     """
     payload = {"category": category}
     payload.update(detail)
@@ -207,7 +207,7 @@ def audit_security_violation(
     landet in ``detail['reason']``. ``user`` und ``target_id`` dürfen
     ``None`` sein, wenn z.B. eine Datei vor User-Zuordnung scheitert.
 
-    Refs #901 / FND-002.
+    Refs #901.
     """
     from core.models import AuditLog
 

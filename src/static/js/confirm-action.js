@@ -1,5 +1,5 @@
 /*
- * Generic confirmation handler (Refs #867 / #662 FND-01).
+ * Generic confirmation handler (Refs #867 / #662).
  *
  * Forms with ``data-confirm="..."`` show ``window.confirm`` before submit;
  * elements (e.g. buttons) with ``data-action="print"`` run ``window.print``.

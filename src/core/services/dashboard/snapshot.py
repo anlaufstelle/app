@@ -43,7 +43,7 @@ def create_or_update_snapshot(facility, year, month):
     stats.pop("top_clients", None)
 
     # Enrich by_document_type with system_type and document_type_id.
-    # Bulk-Lookup statt N+1-Loop (Refs #598 Finding T-3): eine einzige Query
+    # Bulk-Lookup statt N+1-Loop (Refs #598): eine einzige Query
     # holt alle relevanten DocumentTypes, das Dict-Composite-Key (name,
     # category) stellt sicher, dass nur exakte Treffer zugeordnet werden.
     entries = stats.get("by_document_type", [])

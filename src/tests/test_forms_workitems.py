@@ -1,6 +1,6 @@
 """Unit-Tests fuer ``core.forms.workitems.WorkItemForm`` (Refs #922 / #925).
 
-Welle 2 / Issue #925: Form-Tests fuer das WorkItemForm. Geprueft werden
+#925: Form-Tests fuer das WorkItemForm. Geprueft werden
 Happy-Path, das Facility-scoped Queryset-Filtering fuer ``assigned_to``
 (inkl. Ausschluss der ASSISTANT-Rolle, Refs #867), das Cross-Facility-
 Verbot via ``clean_client()``, sowie die Cross-Field- und Datum-Range-

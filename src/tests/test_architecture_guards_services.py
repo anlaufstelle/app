@@ -1,4 +1,4 @@
-"""Architecture-Guards — Service-Layer-Direction- und Encryption-Bypass-Guards (Refs Welle 6 #929)."""
+"""Architecture-Guards — Service-Layer-Direction- und Encryption-Bypass-Guards (Refs #929)."""
 
 import re
 from pathlib import Path
@@ -9,7 +9,7 @@ pytestmark = pytest.mark.architecture
 
 
 class TestEventEncryptionBypassGuard:
-    """Refs #736 / #713 (Audit-Massnahme #11): Verhindert, dass irgendein
+    """Refs #736 / #713: Verhindert, dass irgendein
     Code-Pfad die Encryption-Pipeline in ``Event.save()``/``encryption.py``
     umgeht.
 
@@ -80,7 +80,7 @@ class TestEventEncryptionBypassGuard:
             "lebt in services/encryption.py und wird per Event.save() angewendet — "
             "bulk_create / .update(data_json=...) / .update_or_create(data_json=...) "
             "schreiben Klartext direkt in JSONB.\n"
-            "Refs #736 / #713 (Audit-Massnahme #11).\n"
+            "Refs #736 / #713.\n"
             f"Verstoesse: {violations}"
         )
 
@@ -125,7 +125,7 @@ class TestServiceLayerDirectionGuard:
     ``Client.anonymize()`` (``src/core/models/client.py``)
     delegiert an ``services/clients.py:anonymize_client``.
 
-    Refs #743 (Audit-Befund: ``Client.anonymize`` durchbrach Aggregat-Grenzen).
+    Refs #743 (``Client.anonymize`` durchbrach Aggregat-Grenzen).
     """
 
     _MODELS_DIR = Path("src/core/models")

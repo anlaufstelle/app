@@ -122,7 +122,7 @@ class TestSettingsChangeAudit:
     @pytest.mark.parametrize(
         ("field", "new_value"),
         [
-            # Refs #893 / FND-001: verhaltensrelevante Felder, die vor der Audit-
+            # Refs #893: verhaltensrelevante Felder, die vor der Audit-
             # Erweiterung 2026-05-15 nicht im Diff erschienen sind.
             ("client_trash_days", 60),
             ("auditlog_retention_months", 36),

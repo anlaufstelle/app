@@ -1,4 +1,4 @@
-"""Helper-Factories für ``test_mutation_followup_offline_*`` (Refs Welle 7 / #930).
+"""Helper-Factories für ``test_mutation_followup_offline_*`` (Refs #930).
 
 Wird von den Sub-Files ``test_mutation_followup_offline_filters.py``,
 ``test_mutation_followup_offline_serializers.py`` und

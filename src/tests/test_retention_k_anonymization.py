@@ -1,4 +1,4 @@
-"""RF-T06 + Wire-Up: K-Anonymisierung im Retention-Pfad (Refs #776, #780).
+"""Wire-Up: K-Anonymisierung im Retention-Pfad (Refs #776, #780).
 
 Vier Cases:
 

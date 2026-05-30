@@ -1,6 +1,6 @@
 """Mutation-Followup-Tests für ``core.services.snapshot`` — Branches/Boundaries.
 
-Refs Welle 7 (#930). Sub-File aus ``test_mutation_followup_snapshot``;
+Refs #930. Sub-File aus ``test_mutation_followup_snapshot``;
 enthält die Test-Klassen für die ``is_multi_month_range``-/Boundary-/
 Datums-Helfer:
 ``TestIsMultiMonthRange``, ``TestCreateOrUpdateSnapshotBranches``,
@@ -39,7 +39,7 @@ from tests._mutation_followup_snapshot_helpers import _make_event
 
 
 class TestIsMultiMonthRange:
-    """Refs Welle 7 — ``is_multi_month_range`` (Line 18).
+    """Refs ``is_multi_month_range`` (Line 18).
 
     Boundary ``(date_to - date_from).days > 31``. Mutationen:
     - ``> 31`` → ``>= 31`` würde 31-Tage-Range falsch als multi-month melden.
@@ -104,7 +104,7 @@ class TestIsMultiMonthRange:
 
 @pytest.mark.django_db
 class TestCreateOrUpdateSnapshotBranches:
-    """Refs Welle 7 — ``create_or_update_snapshot`` (Line 33).
+    """Refs ``create_or_update_snapshot`` (Line 33).
 
     Adressierte Mutationen:
     - ``calendar.monthrange(year, month)`` → falsche Tageszahl im Boundary.
@@ -288,7 +288,7 @@ class TestCreateOrUpdateSnapshotBranches:
 
 @pytest.mark.django_db
 class TestEnsureSnapshotsForMonthsBranches:
-    """Refs Welle 7 — ``ensure_snapshots_for_months`` (Line 82).
+    """Refs ``ensure_snapshots_for_months`` (Line 82).
 
     Adressierte Mutationen:
     - ``(year, month) < current`` → ``<=`` würde current_month Snapshot
@@ -351,7 +351,7 @@ class TestEnsureSnapshotsForMonthsBranches:
 
 @pytest.mark.django_db
 class TestGetSnapshot:
-    """Refs Welle 7 — ``get_snapshot`` (Line 93).
+    """Refs ``get_snapshot`` (Line 93).
 
     Adressierte Mutationen:
     - ``snap.data if snap else None`` → ``snap.jugendamt_data`` Vertauschung.
@@ -394,7 +394,7 @@ class TestGetSnapshot:
 
 
 class TestSplitIntoSegmentsBoundaries:
-    """Refs Welle 7 — ``_split_into_segments`` (Line 104).
+    """Refs ``_split_into_segments`` (Line 104).
 
     Adressierte Mutationen:
     - ``cursor = date(year + 1, 1, 1) if month == 12 else

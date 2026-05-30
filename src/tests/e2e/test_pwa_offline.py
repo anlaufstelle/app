@@ -229,7 +229,7 @@ class TestOfflineEntrypointsMobile:
         # Navigation passiert ist. Polling ist hier nicht moeglich, da wir
         # gerade auf das *Ausbleiben* eines Events warten (kein UI-Signal,
         # auf das wir warten koennten). Dokumentierter Ausnahmefall —
-        # nicht von #662 FND-10 erfasst.
+        # nicht von #662 erfasst.
         page.wait_for_timeout(500)
         assert page.url == list_url, "Offline-Klick hat ungewollt navigiert"
 

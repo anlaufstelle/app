@@ -1,4 +1,4 @@
-"""Perf-Tests fuer den Zeitstrom-Feed (Refs #740, Refs #713 Audit-Massnahme #31).
+"""Perf-Tests fuer den Zeitstrom-Feed (Refs #740, Refs #713).
 
 Verifiziert, dass die Feed-Funktionen ``build_feed_items`` und
 ``enrich_events_with_preview`` eine **konstante** Anzahl von Queries

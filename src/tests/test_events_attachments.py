@@ -1,4 +1,4 @@
-"""Tests für Events — Event-Attachment-Atomicity + Versionshistorie (Refs Welle 6 #929)."""
+"""Tests für Events — Event-Attachment-Atomicity + Versionshistorie (Refs #929)."""
 
 from unittest.mock import patch
 

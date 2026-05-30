@@ -192,8 +192,7 @@ SESSION_COOKIE_AGE = 1800  # 30 Minuten
 # False reduziert DB-Write-Amplifikation bei HTMX-Microrequests
 # (Polling, Autocomplete) — Session wird nur bei tatsaechlichen
 # Aenderungen geschrieben. Inaktivitaets-Timeout bleibt erhalten:
-# der Cookie laeuft 30 Min nach der letzten Modifikation ab. Refs #733,
-# Audit-Massnahme #35.
+# der Cookie laeuft 30 Min nach der letzten Modifikation ab. Refs #733.
 SESSION_SAVE_EVERY_REQUEST = False
 
 # --- Trusted Proxy Hops (Client-IP-Ermittlung) ---

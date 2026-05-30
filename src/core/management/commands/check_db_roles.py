@@ -1,6 +1,6 @@
 """CLI-Tool: Prueft Postgres-Rollenattribute fuer App- und Admin-Rolle.
 
-Refs #902 / FND-005: Selbst-Hosting-Installationen koennen mit zu
+Refs #902: Selbst-Hosting-Installationen koennen mit zu
 privilegiertem App-DB-User laufen, wenn das offizielle ``postgres:16``-
 Image den per ``POSTGRES_USER`` angelegten Login automatisch als
 Superuser erstellt. RLS-Policies (Migration 0047) und BYPASSRLS-
@@ -111,7 +111,7 @@ def check_db_roles() -> tuple[list[RoleCheck], list[str]]:
     if not admin_role:
         config_errors.append(
             "POSTGRES_ADMIN_USER ist nicht gesetzt — Admin-/Maintenance-Rolle nicht pruefbar. "
-            "Refs #902 / FND-005: Drei-Rollen-Modell in docker-compose.prod.yml."
+            "Refs #902: Drei-Rollen-Modell in docker-compose.prod.yml."
         )
     else:
         actual_super, actual_bypass = _query_role(admin_role)
@@ -130,7 +130,7 @@ def check_db_roles() -> tuple[list[RoleCheck], list[str]]:
 
 
 class Command(BaseCommand):
-    help = "Prueft Postgres-Rollenattribute fuer App-/Admin-Rolle (Refs #902 / FND-005)."
+    help = "Prueft Postgres-Rollenattribute fuer App-/Admin-Rolle (Refs #902)."
 
     def handle(self, *args, **options):
         checks, config_errors = check_db_roles()

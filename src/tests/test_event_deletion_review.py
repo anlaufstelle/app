@@ -7,7 +7,7 @@ Deckt die Branches:
 * POST ``action=approve`` fuer Event-Target (Line 107).
 * POST ``action=reject`` fuer Event-Target (Line 113).
 
-Refs Welle 10 / Bucket D — siehe #949.
+Refs #949.
 """
 
 import uuid

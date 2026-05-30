@@ -1,4 +1,4 @@
-"""Architecture-Guards — View-Guards (Rate-Limit, Redirect-Hygiene, Routes, ProdSettings) (Refs Welle 6 #929)."""
+"""Architecture-Guards — View-Guards (Rate-Limit, Redirect-Hygiene, Routes, ProdSettings) (Refs #929)."""
 
 import re
 from pathlib import Path
@@ -13,7 +13,7 @@ class TestRateLimitOnAllMutations:
     einen ``@ratelimit``-Decorator (per ``method_decorator`` oder direkt) tragen.
 
     Hintergrund: Brute-Force-/Spray-Schutz auf Mutationen ist Pflicht. Der
-    Audit (Refs #670 FND-14) hat 19 ungeschuetzte Handler gezeigt — von
+    Audit (Refs #670) hat 19 ungeschuetzte Handler gezeigt — von
     ``MFADisableView`` ueber ``ClientCreateView`` bis ``RetentionApproveView``.
 
     Ausnahmen muessen in der Allowlist stehen und mit Begruendung dokumentiert
@@ -70,13 +70,13 @@ class TestRateLimitOnAllMutations:
             "RATELIMIT_BULK_ACTION (30/h) verwenden, sonst RATELIMIT_MUTATION "
             "(60/h). Echte Ausnahmen in TestRateLimitOnAllMutations._ALLOWLIST "
             "mit Begruendung eintragen.\n"
-            "Refs #669 (Phase F), #670 FND-14.\n"
+            "Refs #669 (Phase F), #670.\n"
             f"Betroffen: {violations}"
         )
 
 
 class TestRateLimitOnSensitiveGetEndpoints:
-    """Refs #737 / #713 (Audit-Massnahme #13): GET-Endpoints mit
+    """Refs #737 / #713: GET-Endpoints mit
     Pseudonym-/Schluessel-/Detection-Bezug muessen rate-limited sein.
 
     Anders als ``TestRateLimitOnAllMutations`` (das alle POST-Handler
@@ -181,7 +181,7 @@ class TestRateLimitOnSensitiveGetEndpoints:
         assert not violations, (
             "Sensible GET-Endpoints muessen @ratelimit(..., method='GET', block=True) "
             "tragen. Ohne block=True liefert django-ratelimit weiter 200 trotz Verstoss.\n"
-            "Refs #737 / #713 (Audit-Massnahme #13).\n"
+            "Refs #737 / #713.\n"
             f"Verstoesse: {violations}"
         )
 

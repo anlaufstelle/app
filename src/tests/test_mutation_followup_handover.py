@@ -1,6 +1,6 @@
 """Follow-Up-Tests für Mutation-Survivors in ``core.services.case.handover``.
 
-Refs Welle 7 (#930). Ziel: Mutationen in den Branch-Grenzen von
+Refs #930. Ziel: Mutationen in den Branch-Grenzen von
 ``_collect_highlights`` (33 Survivors) und ``_collect_open_tasks``
 (52 Survivors) gezielt killen.
 
@@ -96,7 +96,7 @@ def _wide_time_range():
 
 @pytest.mark.django_db
 class TestCollectHighlights:
-    """Refs Welle 7 — `_collect_highlights`.
+    """Refs `_collect_highlights`.
 
     Funktionsverhalten:
     - Sammelt bis zu 10 Crisis-Events, 10 Ban-Events, 10 Urgent/Important-
@@ -218,7 +218,7 @@ class TestCollectHighlights:
 
 @pytest.mark.django_db
 class TestCollectOpenTasks:
-    """Refs Welle 7 — `_collect_open_tasks`.
+    """Refs `_collect_open_tasks`.
 
     Funktionsverhalten:
     - Filter ``status__in=["open", "in_progress"]``.

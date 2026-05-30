@@ -125,7 +125,7 @@ class TestFilterPersistenceExcludesQ:
     dem Fix bleibt ``q`` aussen vor; kategoriale Filter (``stage``, ``age``)
     werden weiterhin persistiert.
 
-    Refs Welle 6 (#929): zuvor in ``test_filter_persistence_q.py`` (61 LOC),
+    Refs #929: zuvor in ``test_filter_persistence_q.py`` (61 LOC),
     hier eingegliedert, Original gelöscht.
     """
 

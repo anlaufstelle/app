@@ -1,6 +1,6 @@
 """Follow-Up-Tests fuer Mutation-Survivors in ``core.forms.events.DynamicEventDataForm``.
 
-Refs Welle 7 (#930). Ziel: die 32 Survivors an ``DynamicEventDataForm.clean``
+Refs #930. Ziel: die 32 Survivors an ``DynamicEventDataForm.clean``
 (src/core/forms/events.py:197) sowie an der Field-Generierung in
 ``__init__`` toeten.
 

@@ -1,6 +1,6 @@
 """Upload-Error-Cases: Oversize, Empty, Filename-Injection, Unicode-Filename.
 
-Refs Welle 4 (#927), Master #922.
+Refs #927, Master #922.
 
 Die Service-Schicht ``store_encrypted_file`` ist die letzte Security-Bastion;
 zusätzlich greift im UI-Pfad die Größen-Validierung der ``DynamicEventDataForm``.

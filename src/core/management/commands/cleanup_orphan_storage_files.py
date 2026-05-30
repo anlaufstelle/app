@@ -1,6 +1,6 @@
 """Management command: orphan ``.enc``-Dateien aus dem Media-Root entfernen.
 
-Hintergrund (#662 FND-03): :func:`store_encrypted_file` schreibt die
+Hintergrund (#662): :func:`store_encrypted_file` schreibt die
 verschluesselte Datei vor dem ``EventAttachment``-INSERT. Der Service
 selbst bereinigt synchrone Fehler. Wenn aber eine spaetere Operation in
 der umgebenden ``transaction.atomic``-Transaktion fehlschlaegt (z. B.

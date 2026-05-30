@@ -1,6 +1,6 @@
 """Unit-Tests fuer ``core.forms.clients.ClientForm`` (Refs #922 / #925).
 
-Welle 2 / Issue #925: Form-Tests fuer das ClientForm. Geprueft werden
+#925: Form-Tests fuer das ClientForm. Geprueft werden
 Happy-Path, das Facility-scoped Unique-Constraint auf ``pseudonym``,
 Boundary-Tests (Empty / Unicode / Max-Length) sowie Choice-Field-Coverage
 fuer ``contact_stage`` und ``age_cluster``.

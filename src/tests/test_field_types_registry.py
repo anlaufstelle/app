@@ -1,4 +1,4 @@
-"""Unit tests for the field-type registry (Refs #907 / FND-006)."""
+"""Unit tests for the field-type registry (Refs #907)."""
 
 from __future__ import annotations
 

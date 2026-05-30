@@ -1,4 +1,4 @@
-"""Helper-Factory für ``test_mutation_followup_snapshot_*`` (Refs Welle 7 / #930).
+"""Helper-Factory für ``test_mutation_followup_snapshot_*`` (Refs #930).
 
 Wird von den Sub-Files ``test_mutation_followup_snapshot_branches.py`` und
 ``test_mutation_followup_snapshot_merge.py`` geteilt. Kapselt das

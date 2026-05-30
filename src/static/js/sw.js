@@ -58,7 +58,7 @@ async function notifyClients(data) {
 }
 
 // ACK-Timeout: nach dieser Zeit gilt enqueueRequest als gescheitert
-// (#662 FND-02). 5s ist großzügig genug für IndexedDB + AES-GCM-Verschlüsselung
+// (#662). 5s ist großzügig genug für IndexedDB + AES-GCM-Verschlüsselung
 // und zugleich kurz genug, dass der User keine ewig drehende UI sieht.
 const QUEUE_ACK_TIMEOUT_MS = 5000;
 
@@ -149,7 +149,7 @@ self.addEventListener("fetch", (event) => {
                 if (!ack.ok) {
                     // Persistieren ist gescheitert (NoSessionKey, kein
                     // offlineQueue, IndexedDB-Fehler, Timeout). Roter Banner
-                    // statt stummem Datenverlust (#662 FND-02).
+                    // statt stummem Datenverlust (#662).
                     return new Response(
                         '<div id="flash-messages">' +
                             '<div class="rounded-md bg-red-50 p-4 mb-4">' +

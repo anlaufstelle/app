@@ -17,7 +17,7 @@ class UserLanguageMiddleware:
     Damit ignorieren wir bewusst den ``Accept-Language``-Header — anonyme
     Pages (Login, Password-Reset, MFA-Login) rendern in der App-Default-
     Sprache statt in einer Browser-Sprache, die der User nicht eingestellt
-    hat. Refs #670 FND-13.
+    hat. Refs #670.
     """
 
     def __init__(self, get_response):

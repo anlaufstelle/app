@@ -8,7 +8,7 @@ Deckt die Branches:
 * CONCURRENTLY-Exception -> Fallback zu non-concurrent + Logger-Warning.
 * Non-concurrent-Exception -> ``CommandError``.
 
-Refs #922 (Welle 10 / Bucket B).
+Refs #922 (Coverage-Lift).
 """
 
 from io import StringIO

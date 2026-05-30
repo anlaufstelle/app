@@ -1,6 +1,6 @@
 """RBAC-Filterung im Client-Export (DSGVO Art. 15/20).
 
-Refs Matrix AUD-SEC-EXPORT-01 (Welle 3 / Master #922).
+Refs Matrix AUD-SEC-EXPORT-01 (Master #922).
 
 Der Service :func:`core.services.client.export.export_client_data`
 sammelt alle personenbezogenen Daten zu einem Klienten und filtert

@@ -1,6 +1,6 @@
 """End-to-End-Regression fuer die Append-Only-Garantie auf core_auditlog.
 
-Refs Matrix DEV-AUDIT-04 (Welle 3 / Master #922).
+Refs Matrix DEV-AUDIT-04 (Master #922).
 
 Das bestehende :mod:`test_audit_trigger` deckt den DB-Trigger fuer
 DELETE-Pfade ab (raw UPDATE, raw DELETE, ORM QuerySet.delete()). Diese

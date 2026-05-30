@@ -10,7 +10,7 @@ Deckt die Branches:
 * POST ``disable`` entfernt die Flag-Datei.
 * POST mit unbekannter Action (Lines 93-94) -> Fehler-Message.
 
-Refs #922 (Welle 10 / Bucket B).
+Refs #922 (Coverage-Lift).
 """
 
 import pytest

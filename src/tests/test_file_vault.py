@@ -701,7 +701,7 @@ class TestEventAttachmentAtomicity:
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
 class TestStorageOrphanCleanup:
-    """Direct-Cleanup beim Service + periodisches Orphan-Cleanup (#662 FND-03)."""
+    """Direct-Cleanup beim Service + periodisches Orphan-Cleanup (#662)."""
 
     def test_db_save_failure_removes_just_written_file(self, facility, staff_user, doc_type_with_file):
         """Schlaegt EventAttachment.objects.create fehl, wird die ``.enc``-Datei

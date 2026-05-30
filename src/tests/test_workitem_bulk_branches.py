@@ -6,7 +6,7 @@ Deckt die Branches:
 * Bulk-Priority mit ungueltigem Wert (Line 107).
 * Bulk-Assign mit unbekannter User-PK (Lines 123-124).
 
-Refs Welle 10 / Bucket D — siehe #949.
+Refs #949.
 """
 
 import pytest

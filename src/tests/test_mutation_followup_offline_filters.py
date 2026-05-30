@@ -1,6 +1,6 @@
 """Mutation-Followup-Tests für ``core.services.offline`` — Filter und Aggregate.
 
-Refs Welle 7 (#930). Sub-File aus ``test_mutation_followup_offline``;
+Refs #930. Sub-File aus ``test_mutation_followup_offline``;
 enthält die Test-Klassen ``TestEventFilter``, ``TestDocumentTypesAggregate``,
 ``TestWorkitemFilter`` und ``TestCasesFilter`` — also alle Cutoff-/Slice-/
 Soft-Delete-/Visibility-Filter sowie die DocumentType-Dedup-Logik.
@@ -192,7 +192,7 @@ class TestEventFilter:
 
 @pytest.mark.django_db
 class TestDocumentTypesAggregate:
-    """Refs Welle 7 — ``doc_types`` dedup + Felder-Serialisierung."""
+    """Refs ``doc_types`` dedup + Felder-Serialisierung."""
 
     def test_document_types_deduped_across_events(self, facility, client_identified, doc_type_contact, staff_user):
         """Mutation des ``if ev.document_type_id not in doc_types:``-Branch

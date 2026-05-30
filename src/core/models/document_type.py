@@ -241,14 +241,14 @@ class FieldTemplate(models.Model):
         self._validate_high_sensitivity_requires_encryption()
 
     def _validate_high_sensitivity_requires_encryption(self):
-        # Audit-Massnahme #10 (Refs #733): HIGH-Sensitivity-Felder muessen
+        # Refs #733: HIGH-Sensitivity-Felder muessen
         # verschluesselt sein — sonst landet Art.-9-relevanter Inhalt im
         # Klartext-JSONB und entgegen der Sensitivity-Logik im Backup.
         if self.sensitivity == DocumentType.Sensitivity.HIGH and not self.is_encrypted:
             raise ValidationError({"is_encrypted": _("Felder mit Sensibilität=Hoch müssen verschlüsselt sein.")})
 
     def _validate_default_value(self):
-        """Refs #907 / FND-006: delegiert an die Field-Type-Registry.
+        """Refs #907: delegiert an die Field-Type-Registry.
 
         Pre-Check ``allows_default=False`` (Datei) raised einen klaren
         Fehler, bevor der typspezifische Validator drankommt.
@@ -308,7 +308,7 @@ class FieldTemplate(models.Model):
     def get_default_initial(self):
         """Cast ``default_value`` (String) in den passenden Python-Typ fürs Form-Initial.
 
-        Refs #907 / FND-006: delegiert an die Field-Type-Registry —
+        Refs #907: delegiert an die Field-Type-Registry —
         jeder ``parse_default``-Helper ist fail-safe (liefert ``None``
         bei nicht-parsbarem Input).
         """

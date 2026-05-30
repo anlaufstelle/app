@@ -1,4 +1,4 @@
-"""Regressionstests gegen CSV-Formula-Injection (Refs #719, Master-Audit Blocker 6).
+"""Regressionstests gegen CSV-Formula-Injection (Refs #719).
 
 Werte, die mit ``=``, ``+``, ``-``, ``@``, Tab oder CR/LF beginnen,
 werden in Excel/LibreOffice als Formel ausgewertet — `=cmd|'/c calc'!A1`

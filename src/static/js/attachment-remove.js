@@ -1,5 +1,5 @@
 /**
- * Attachment-Entfernen-Checkboxen im Event-Edit (CSP-konform; Refs #662 FND-01).
+ * Attachment-Entfernen-Checkboxen im Event-Edit (CSP-konform; Refs #662).
  *
  * Markup-Convention: jede Entfernen-Checkbox trägt
  *   - data-attachment-remove

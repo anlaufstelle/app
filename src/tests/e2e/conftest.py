@@ -324,7 +324,7 @@ def authenticated_page(base_url, browser, _login_storage_state):
 def mobile_authenticated_page(base_url, browser, _login_storage_state):
     """Playwright-Page mit iPhone-Viewport (375x667) und Touch-Emulation.
 
-    Refs Welle 5 (#928). Nutzbar für Mobile-Workflow-Tests, die das
+    Refs #928. Nutzbar für Mobile-Workflow-Tests, die das
     Card-Layout, Touch-Targets oder mobile Navigation prüfen.
 
     Verwendet ``_login_storage_state`` (Admin-User) wie ``authenticated_page``;

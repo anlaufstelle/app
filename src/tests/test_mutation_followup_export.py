@@ -1,6 +1,6 @@
 """Follow-Up-Tests für Mutation-Survivors in ``core.services.export``.
 
-Refs Welle 7 (#930). Ziel: Mutationen an den Branch-, Boundary- und
+Refs #930. Ziel: Mutationen an den Branch-, Boundary- und
 Sicht-Grenzen der drei Top-Survivor-Funktionen killen:
 
 - ``_resolve_field_value`` (29 Survivors): dict-/list-/str-Branches inkl.

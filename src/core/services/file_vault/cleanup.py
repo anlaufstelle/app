@@ -6,7 +6,7 @@
 - :func:`cleanup_orphan_storage_files` ist der periodische Cron-Helper,
   der ``.enc``-Dateien ohne DB-Referenz findet (Race-Conditions zwischen
   ``encrypt_file`` und ``EventAttachment.create`` koennen Orphans
-  hinterlassen — #662 FND-03).
+  hinterlassen — #662).
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ def cleanup_orphan_storage_files(min_age_seconds: int = 3600):
     ein Restrisiko: schlaegt eine spaetere Operation in der umgebenden
     ``transaction.atomic``-Transaktion fehl (z. B. ``EventHistory``-Save),
     rollt der DB-Record zurueck — die bereits geschriebene ``.enc``-Datei
-    bleibt jedoch ohne Referenz liegen (#662 FND-03).
+    bleibt jedoch ohne Referenz liegen (#662).
 
     Dieser Helper findet solche Orphans, indem er alle ``.enc``-Dateien
     im Media-Root mit den aktuell registrierten ``storage_filename``-

@@ -1,6 +1,6 @@
 """RBAC-Matrix-Tests, Audit-, Löschanträge-, Handover-, Zeitstrom- und sonstige Views.
 
-Refs Welle 6 (#929) — gesplittet aus test_rbac_matrix.py.
+Refs #929 — gesplittet aus test_rbac_matrix.py.
 Refs #867: SUPER_ADMIN ist installations-weite Top-Rolle (Persona Jonas);
 hat *keinen* Zugriff auf facility-scoped Views.
 """

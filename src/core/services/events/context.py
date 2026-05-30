@@ -79,7 +79,7 @@ def _build_prior_versions(attachment, predecessor_index):
 
     ``predecessor_index`` ist ``{successor_pk: predecessor}`` fuer alle
     Attachments des Events, vorab in einem einzigen Query erstellt
-    (#662 FND-05).
+    (#662).
     """
     prior_versions = []
     current_attachment = attachment
@@ -110,7 +110,7 @@ def build_attachment_context(event):
     Single-Entry-Listen aufgeloest werden. Geloeschte Anhaenge
     (``deleted_at``) werden gefiltert.
 
-    Refs #894 (FND-004): Anhaenge einmalig laden und per PK-Dict
+    Refs #894: Anhaenge einmalig laden und per PK-Dict
     aufloesen — bei N File-Markern entstand vorher pro Marker eine
     separate Query.
     """

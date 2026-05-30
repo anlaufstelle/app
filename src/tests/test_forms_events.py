@@ -1,12 +1,12 @@
 """Unit-Tests fuer ``core.forms.events.EventMetaForm`` und ``MultipleFileField`` (Refs #922 / #925).
 
-Welle 2 / Issue #925: Form-Tests fuer das Event-Recording-Meta-Formular.
+#925: Form-Tests fuer das Event-Recording-Meta-Formular.
 Geprueft werden Happy-Path, das Facility-Scoping der ``document_type``- und
 ``case``-Querysets, die Sensitivity-Filterung anhand der User-Rolle, der
 ``occurred_at``-Default und die ``MultipleFileField.clean()``-Semantik fuer
 N=0/1/N (Refs #622).
 
-``DynamicEventDataForm`` ist ausdruecklich *Out-of-Scope* fuer diese Welle —
+``DynamicEventDataForm`` ist ausdruecklich *Out-of-Scope* fuer diese Aufgabe —
 seine Field-Registry- und Settings-/Whitelist-Logik bekommt einen eigenen
 Test-File.
 """

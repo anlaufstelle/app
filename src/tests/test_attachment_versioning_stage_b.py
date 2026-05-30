@@ -319,7 +319,7 @@ class TestBackwardCompatibility:
 @pytest.mark.django_db
 class TestEventDetailContextQueryCount:
     """``build_event_detail_context`` darf bei mehr Attachments + Versions-
-    Ketten nicht linear mehr Queries machen (#662 FND-05)."""
+    Ketten nicht linear mehr Queries machen (#662)."""
 
     def _build_event_with_chain(self, facility, staff_user, dt, ft, *, entries: int, versions: int):
         """Lege ein Event mit ``entries`` File-Eintraegen, jeder mit
@@ -446,7 +446,7 @@ class TestApplyAttachmentChangesQueryCount:
 
 @pytest.mark.django_db
 class TestBuildAttachmentContextQueryCount:
-    """Refs #894 (FND-004): ``build_attachment_context`` lud pro File-Marker
+    """Refs #894: ``build_attachment_context`` lud pro File-Marker
     eine eigene ``event.attachments.filter(pk=...).first()``-Query — N+1.
     Nach dem Fix laeuft ein einziger Bulk-SELECT auf ``core_eventattachment``,
     egal wie viele Entries das Event hat.

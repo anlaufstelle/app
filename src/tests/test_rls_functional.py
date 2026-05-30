@@ -1,4 +1,4 @@
-"""Funktionaler RLS-Cross-Tenant-Test (Refs #718, Master-Audit Blocker 5).
+"""Funktionaler RLS-Cross-Tenant-Test (Refs #718).
 
 Bisher liefen alle RLS-Tests als Superuser-DB-User — der bypassed RLS
 per Postgres-Default und macht echte Policy-Verletzungen in Tests

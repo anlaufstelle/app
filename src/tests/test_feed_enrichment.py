@@ -229,7 +229,7 @@ class TestEnrichEventsWithPreview:
 
     def test_file_marker_stage_a_renders_label(self, facility, staff_user, client_identified):
         """Stufe-A-File-Marker (`{"__file__": True, ...}`) ist im Preview ein
-        sprechender Hinweis statt rohes Dict-Repr (Refs #670 FND-12).
+        sprechender Hinweis statt rohes Dict-Repr (Refs #670).
         """
         dt = DocumentType.objects.create(facility=facility, name="StageA", category="contact")
         ft = FieldTemplate.objects.create(facility=facility, name="Scan", field_type="file")

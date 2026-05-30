@@ -1,6 +1,6 @@
 """Mutation-Followup-Tests für ``core.services.client.export`` — Serializer.
 
-Refs Welle 7 (#930). Sub-File aus ``test_mutation_followup_client_export``;
+Refs #930. Sub-File aus ``test_mutation_followup_client_export``;
 enthält die Test-Klasse ``TestSerializeEvent`` (Event-pro-Eintrag-
 Serialisierung inkl. Decryption-Branches).
 """
@@ -30,7 +30,7 @@ from tests._mutation_followup_client_export_helpers import (
 
 @pytest.mark.django_db
 class TestSerializeEvent:
-    """Refs Welle 7 — ``_serialize_event`` (Line 24).
+    """Refs ``_serialize_event`` (Line 24).
 
     Branches:
     - ``if event.data_json:`` (truthy)

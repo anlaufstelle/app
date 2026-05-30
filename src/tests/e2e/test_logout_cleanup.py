@@ -13,7 +13,7 @@ Combines defence-in-depth checks:
   - server-side `Clear-Site-Data: "storage"` header on `/logout/`
   - JS-side `_wipeOfflineState()` hook in `sw-register.js` (Refs #573, #576)
 
-Part of FND-D001 (Refs #645).
+Refs #645.
 """
 
 import re

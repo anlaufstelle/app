@@ -1,4 +1,4 @@
-"""Tests für Events — Event-Service + CRUD-Views (Create/Detail/Update + Atomicity) (Refs Welle 6 #929)."""
+"""Tests für Events — Event-Service + CRUD-Views (Create/Detail/Update + Atomicity) (Refs #929)."""
 
 from unittest.mock import patch
 

@@ -7,7 +7,7 @@ Deckt die Branches:
 * Time-Filter-Lookup: ungueltige PK -> ``selected_filter = None`` (Lines 37-39).
 * Time-Filter-Lookup: gueltige PK -> Filter wird gesetzt.
 
-Refs #922 (Welle 10 / Bucket B).
+Refs #922 (Coverage-Lift).
 """
 
 from datetime import date

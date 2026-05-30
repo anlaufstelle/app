@@ -1,6 +1,6 @@
 """Mutation-Followup-Tests für ``core.services.offline`` — Bundle-Envelope.
 
-Refs Welle 7 (#930). Sub-File aus ``test_mutation_followup_offline``;
+Refs #930. Sub-File aus ``test_mutation_followup_offline``;
 enthält die Test-Klassen ``TestBundleEnvelope``, ``TestBundleClientFields``
 und ``TestNotesVisibilityGate`` — also Schema-Version/TTL, Client-Felder
 und das Notes-Visibility-Gate.

@@ -9,7 +9,7 @@ verloren, die ueber das ``Client``-Aggregat verschwinden wuerden.
 Diese Tests verifizieren den IST-Zustand: der PROTECT-Constraint greift,
 und nach Wegraeumen der Cases laesst sich der Client regulaer loeschen.
 
-Refs #922 (Master), #926 (Welle 3).
+Refs #922 (Master), #926.
 """
 
 import pytest

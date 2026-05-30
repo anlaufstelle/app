@@ -1,4 +1,4 @@
-"""E2E: Mobile-Workflows (Welle 5 #928).
+"""E2E: Mobile-Workflows (#928).
 
 Refs Master #922. Deckt die fünf Mobile-Test-Cases der Matrix ab:
 

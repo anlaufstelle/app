@@ -1,4 +1,4 @@
-"""Max-Length-Boundary-Tests, aus Model._meta abgeleitet. Refs Welle 4 (#927), Master #922."""
+"""Max-Length-Boundary-Tests, aus Model._meta abgeleitet. Refs #927, Master #922."""
 
 from __future__ import annotations
 

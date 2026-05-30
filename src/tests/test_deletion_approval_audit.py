@@ -1,6 +1,6 @@
 """AuditLog-Spur fuer den 4-Augen-Loeschungs-Workflow.
 
-Refs Matrix DEV-DEL-06 (Welle 3 / Master #922) + DSGVO-Lift #932 (Welle 2).
+Refs Matrix DEV-DEL-06 (Master #922) + DSGVO-Lift #932.
 
 Der DSGVO-Loeschungs-Workflow auf Events durchlaeuft drei Service-
 Funktionen aus :mod:`core.services.events.deletion`:

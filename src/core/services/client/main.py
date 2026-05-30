@@ -246,7 +246,7 @@ def get_client_or_none(facility, client_id):
     fehlendem/ungültigem Parameter eine 404 zu werfen — stattdessen wird das
     Formular unverändert angezeigt.
 
-    Refs #598 Finding R-5.
+    Refs #598.
     """
     if not client_id:
         return None

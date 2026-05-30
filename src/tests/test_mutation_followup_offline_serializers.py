@@ -1,6 +1,6 @@
 """Mutation-Followup-Tests für ``core.services.offline`` — Serializer-Helfer.
 
-Refs Welle 7 (#930). Sub-File aus ``test_mutation_followup_offline``;
+Refs #930. Sub-File aus ``test_mutation_followup_offline``;
 enthält die Test-Klassen für die einzelnen Serializer-Helfer
 (``_serialize_event``, ``_serialize_case``, ``_serialize_workitem``,
 ``_serialize_document_type``, ``_serialize_field_template``). Pro Feld

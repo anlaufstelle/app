@@ -1,4 +1,4 @@
-"""Tests for the ``check_db_roles`` management command (Refs #902 / FND-005).
+"""Tests for the ``check_db_roles`` management command (Refs #902).
 
 Wir testen vor allem die Logik in :func:`check_db_roles`, nicht den
 Postgres-Roundtrip — letzteres wuerde voraussetzen, dass der Test-Cluster

@@ -105,7 +105,7 @@ class TestFacilityScopeDbVariable:
 
 @pytest.mark.django_db
 class TestFacilityScopeCursorHygiene:
-    """Defense-in-Depth (Audit-Massnahme #9, Refs #733): Variable pro Request
+    """Defense-in-Depth (Refs #733): Variable pro Request
     stets neu setzen — auch fuer anonyme Requests, damit Connection-Pooling
     keinen stehengebliebenen Wert aus einer frueheren authentifizierten
     Request leaken kann.

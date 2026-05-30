@@ -6,7 +6,7 @@ Deckt die Branches:
 * ``describe_due_date`` closed mit ``delta_days < 0`` (Line 109+).
 * ``_same_iso_week`` / ``_next_iso_week`` inkl. Jahresgrenze (Lines 219-224).
 
-Refs #922 (Welle 10 / Bucket B).
+Refs #922 (Coverage-Lift).
 """
 
 from datetime import date

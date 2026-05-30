@@ -6,7 +6,7 @@ with deterministic ``data-testid``-based lookups.
 Each helper returns a Playwright ``Locator`` (not a click target) so that callers
 can chain ``.click()``, ``.is_visible()``, ``.wait_for()`` etc. as needed.
 
-Template hooks (added in the Welle-1-data-testid commit):
+Template hooks (added in the data-testid commit):
 
 - ``data-testid="client-row"`` with ``data-pseudonym`` on each client row
 - ``data-testid="client-detail-link"`` on the ``<a>`` inside the row

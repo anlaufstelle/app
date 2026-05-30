@@ -1,4 +1,4 @@
-"""E2E: HTMX-Workflows für Wirkungsziele und Meilensteine (Welle 5 #928).
+"""E2E: HTMX-Workflows für Wirkungsziele und Meilensteine (#928).
 
 Refs Master #922.
 

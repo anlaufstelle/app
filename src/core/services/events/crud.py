@@ -5,7 +5,7 @@ Attachment-Schreiber ``attach_files_to_new_event`` und
 ``apply_attachment_changes``. Alles, was ein Event oder seine Anhaenge
 mutiert, lebt hier.
 
-Aufgeteilt aus dem alten ``services/event.py`` (Phase 1 von #777).
+Aufgeteilt aus dem alten ``services/event.py`` (#777).
 """
 
 from __future__ import annotations

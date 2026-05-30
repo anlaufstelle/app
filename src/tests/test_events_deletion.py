@@ -1,4 +1,4 @@
-"""Tests für Events — Event-Lösch-Workflows (Delete-View + 4-Augen Review) (Refs Welle 6 #929)."""
+"""Tests für Events — Event-Lösch-Workflows (Delete-View + 4-Augen Review) (Refs #929)."""
 
 import pytest
 from django.urls import reverse

@@ -1,6 +1,6 @@
-"""Welle-9-Follow-Up-Tests für Mutation-Survivors in ``core.forms`` (Refs #943).
+"""Follow-Up-Tests für Mutation-Survivors in ``core.forms`` (Refs #943).
 
-Welle-9-Voll-Run zeigte Bucket-Killrate ``core.forms`` brutto 76.79 %,
+Voll-Run zeigte Bucket-Killrate ``core.forms`` brutto 76.79 %,
 adjustiert 80 %. Ziel ist ≥ 85 %.
 
 Survivor-Konzentration nach Funktion (Top-Cluster):

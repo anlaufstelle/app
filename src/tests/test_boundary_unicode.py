@@ -1,6 +1,6 @@
 """Boundary-Tests für Unicode/Emoji/RTL/Null-Byte/Whitespace in user-input.
 
-Refs Welle 4 (#927), Master #922.
+Refs #927, Master #922.
 
 Überprüft Verhalten an den Rändern der Eingabevalidierung für die
 zentralen CharField-Eingabefelder (Pseudonym, Titel-Felder) sowie das

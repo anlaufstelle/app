@@ -1,4 +1,4 @@
-"""Retention-Enforcement: Soft-Delete-Strategien fuer Events (#744 Phase 2).
+"""Retention-Enforcement: Soft-Delete-Strategien fuer Events (#744).
 
 Vier Strategien (anonymous, identified, qualified, document_type) +
 Activities-Hard-Delete + Pipeline-Orchestrierung.

@@ -14,7 +14,7 @@ DEFAULT_PAGE_SIZE = 25
 AUDIT_PAGE_SIZE = 50
 # Maximale Seitenzahl — verhindert Seq-Scans bei ?page=99999. Postgres-OFFSET
 # waechst linear, daher cappen wir den Page-Index in den Listenviews
-# (clients/cases/audit). Refs #733, Audit-Massnahme #32.
+# (clients/cases/audit). Refs #733.
 MAX_PAGE = 500
 
 # Refs #803 (C-36): Maximalanzahl Eintraege pro Feed-Typ in services/feed.py.

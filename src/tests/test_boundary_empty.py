@@ -1,6 +1,6 @@
 """Empty-Collection-Renders für Dashboard/Statistics/Audit/Search/Retention.
 
-Refs Welle 4 (#927), Master #922.
+Refs #927, Master #922.
 
 Stellt sicher, dass die zentralen Übersichts-Views auch ohne Daten
 (leere Facility, keine Events, keine Klientel, keine Audit-Treffer für

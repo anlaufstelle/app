@@ -76,7 +76,7 @@ def test_audit_detail_view_escapes_xss_in_detail(client, admin_user, facility):
 
 
 # ---------------------------------------------------------------------------
-# Coverage-Lift fuer die uebrigen Filter/Tags (Refs #922, Welle 10 / Bucket B)
+# Coverage-Lift fuer die uebrigen Filter/Tags (Refs #922)
 # ---------------------------------------------------------------------------
 
 from unittest.mock import MagicMock  # noqa: E402  — Section-Import nach Trenn-Kommentar

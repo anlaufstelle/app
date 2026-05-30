@@ -10,7 +10,7 @@ from core.services.security import check_version_conflict
 logger = logging.getLogger(__name__)
 
 
-# Felder, die im Settings-Diff auditiert werden (Refs #893 / FND-001).
+# Felder, die im Settings-Diff auditiert werden (Refs #893).
 #
 # Erweiterung 2026-05-15: zusaetzlich zu Stammdaten/Retention-Basisfristen/
 # Datei-Upload-Policy werden jetzt auch DSGVO-/MFA-/Anonymisierungs-/Such-

@@ -1,4 +1,4 @@
-"""RF-T05: Fail-closed-Tests fuer File-Vault Default-Whitelist (Refs #771).
+"""Fail-closed-Tests fuer File-Vault Default-Whitelist (Refs #771).
 
 Bevor #771 geschlossen
 wurde, lieferte ``_enforce_allowed_file_types`` ``return`` (also fail-open),
@@ -26,7 +26,7 @@ try:
     magic.from_buffer(b"%PDF-1.4\n", mime=True)
 except Exception as _libmagic_exc:  # noqa: BLE001
     pytest.skip(
-        f"libmagic nicht lauffaehig ({_libmagic_exc}) — RF-T05 erfordert libmagic1.",
+        f"libmagic nicht lauffaehig ({_libmagic_exc}) — libmagic erfordert libmagic1.",
         allow_module_level=True,
     )
 

@@ -171,7 +171,7 @@ class TestAutoSave:
         # Auto-Save: 5s-Intervall + AES-GCM + IndexedDB. Polling-Predikate
         # auf den verschluesselten Row sind hier unzuverlaessig: ``getDecrypted``
         # diskardet bei transient-decrypt-Fail, ``db.drafts.get`` ist nicht
-        # aussagekraeftig genug. Audit-Befund #662 FND-10 wurde geprueft —
+        # aussagekraeftig genug. #662 wurde geprueft —
         # eine fixe Pause bleibt der pragmatisch stabilste Pfad.
         page.wait_for_timeout(7000)
         stored = page.evaluate(self._JS_GET)
@@ -196,7 +196,7 @@ class TestAutoSave:
         page.select_option("select[name='document_type']", label="Kontakt")
         page.wait_for_load_state("domcontentloaded")
 
-        # Audit-Befund #662 FND-10 geprueft — Polling auf encrypted IndexedDB
+        # #662 geprueft — Polling auf encrypted IndexedDB
         # ist unzuverlaessig (siehe oben). Fixe Pause bleibt.
         page.wait_for_timeout(6000)
         stored = page.evaluate(self._JS_GET)
@@ -252,7 +252,7 @@ class TestAutoSave:
         page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
         page.fill("input[name='dauer']", "23")
 
-        # Audit-Befund #662 FND-10 geprueft — Polling auf encrypted IndexedDB
+        # #662 geprueft — Polling auf encrypted IndexedDB
         # ist unzuverlaessig (siehe Predikat-Diskussion oben). Fixe Pause.
         page.wait_for_timeout(7000)
         assert page.evaluate(self._JS_GET) is not None, "Draft sollte vor Navigation gespeichert sein"
@@ -330,7 +330,7 @@ class TestAutoSave:
         page.select_option("select[name='document_type']", label="Kontakt")
         page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
         page.fill("input[name='dauer']", "13")
-        # Audit-Befund #662 FND-10 geprueft — fixe Pause bleibt.
+        # #662 geprueft — fixe Pause bleibt.
         page.wait_for_timeout(7000)
         assert page.evaluate(self._JS_GET) is not None, "Draft sollte vor Template-Anwendung gespeichert sein"
 
@@ -398,7 +398,7 @@ class TestAutoSave:
         page.locator("input[name='dauer']").wait_for(state="attached", timeout=5000)
         page.fill("input[name='dauer']", "11")
 
-        # Audit-Befund #662 FND-10 geprueft — fixe Pause bleibt.
+        # #662 geprueft — fixe Pause bleibt.
         page.wait_for_timeout(7000)
         assert page.evaluate(self._JS_GET) is not None, "Draft sollte vor Template-Anwendung gespeichert sein"
 

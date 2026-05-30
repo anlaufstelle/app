@@ -1,6 +1,6 @@
 """Bestandsdaten-Heilung: FieldTemplate.is_encrypted=True für sensitivity=HIGH.
 
-Audit-Massnahme #10 (Refs #733): ab dieser Migration wird im Modell
+Refs #733: ab dieser Migration wird im Modell
 ein Validator erzwingen, dass HIGH-Felder verschluesselt sind. Damit
 Bestandsdaten nicht durch fortlaufende Updates blockiert werden,
 heilt diese Datenmigration alle vorhandenen ``FieldTemplate``-Zeilen

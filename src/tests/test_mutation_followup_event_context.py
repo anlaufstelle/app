@@ -1,6 +1,6 @@
 """Follow-Up-Tests für Mutation-Survivors in ``core.services.events.context``.
 
-Refs Welle 7 (#930). Ziel: Mutationen an den Branch-Grenzen von
+Refs #930. Ziel: Mutationen an den Branch-Grenzen von
 ``filtered_server_data_json``, ``_format_field_display_value`` und
 ``build_event_detail_context`` killen.
 
@@ -114,7 +114,7 @@ def _make_user(facility, *, role: str, suffix: str) -> User:
 
 @pytest.mark.django_db
 class TestFilteredServerDataJson:
-    """Refs Welle 7 — ``filtered_server_data_json``.
+    """Refs ``filtered_server_data_json``.
 
     Boundary-Matrix: ``ROLE_MAX_SENSITIVITY`` (ASSISTANT=0, STAFF=1, LEAD/ADMIN=2)
     gegen ``DocumentType.Sensitivity`` (NORMAL=0, ELEVATED=1, HIGH=2). Felder
@@ -308,7 +308,7 @@ def _bare_ft(field_type: str, *, options_json=None) -> SimpleNamespace:
 
 
 class TestFormatFieldDisplayValue:
-    """Refs Welle 7 — ``_format_field_display_value``.
+    """Refs ``_format_field_display_value``.
 
     Branches: ``ft is None`` Fallback; BOOLEAN True/False; SELECT mit/ohne
     options_json; MULTI_SELECT mit Liste + Slug-Lookup-Fallback.
@@ -459,7 +459,7 @@ class TestFormatFieldDisplayValue:
 
 @pytest.mark.django_db
 class TestBuildEventDetailContext:
-    """Refs Welle 7 — ``build_event_detail_context``.
+    """Refs ``build_event_detail_context``.
 
     Schwerpunkte:
     - Result-Dict-Keys ``event``/``fields_display``/``history`` immer gesetzt.
@@ -743,7 +743,7 @@ class TestBuildEventDetailContext:
 
 @pytest.mark.django_db
 class TestSensitivityBoundaryMatrix:
-    """Refs Welle 7 — Komplette Boundary-Matrix einmal explizit durchspielen.
+    """Refs Komplette Boundary-Matrix einmal explizit durchspielen.
 
     Dieser Block ist redundant zum Detail oben, aber zentral genug, dass eine
     Mutation in ``SENSITIVITY_RANK``/``ROLE_MAX_SENSITIVITY`` oder den Branches

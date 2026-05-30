@@ -9,7 +9,7 @@ schreibt einen dedizierten ``AuditLog``-Eintrag mit ``DELETION_*``-Action
 und ``target_type="DeletionRequest"``. Bei Approve kommt zusaetzlich der
 ``Action.DELETE``-Eintrag aus :func:`soft_delete_event` (target=Event).
 
-Aufgeteilt aus dem alten ``services/event.py`` (Phase 1 von #777).
+Aufgeteilt aus dem alten ``services/event.py`` (#777).
 """
 
 from __future__ import annotations

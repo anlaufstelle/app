@@ -235,7 +235,7 @@ class TestRLSFunctional:
         assert value == "", "Anonymous Request darf die facility-Variable nicht setzen."
 
     def test_anonymous_request_clears_stale_facility_id(self):
-        """Defense-in-Depth (Audit-Massnahme #9, Refs #733): Ein anonymer
+        """Defense-in-Depth (Refs #733): Ein anonymer
         Request muss eine aus einer fruehren authentifizierten Request
         stehengebliebene ``app.current_facility_id`` explizit auf '' leeren,
         damit Connection-Pooling den Wert nicht in eine RLS-Anfrage

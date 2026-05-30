@@ -1,4 +1,4 @@
-"""Helpers for RBAC-Matrix-Tests (Welle 6 #929)."""
+"""Helpers for RBAC-Matrix-Tests (#929)."""
 
 
 def login_user_fixture(client, user_fixture, request):

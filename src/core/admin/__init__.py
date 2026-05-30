@@ -3,7 +3,7 @@
 Refs #785 — Custom AdminSite mit Sudo + Rollen-Gate.
 Refs #958 — vorher 559 LoC in einer einzigen ``core/admin.py``; jetzt thematisch
 gesplittet (mixins, users, organization, clients, documents, events, workflow,
-system) analog zum bereits erfolgten ``views/system/``-Split aus FND-003.
+system) analog zum bereits erfolgten ``views/system/``-Split.
 
 Imports der ModelAdmin-Module triggern die ``@admin.register``-Decorator-
 Registrierungen an der Custom-AdminSite. Re-Exports erhalten den

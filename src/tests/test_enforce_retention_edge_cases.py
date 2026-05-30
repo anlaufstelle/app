@@ -1,7 +1,7 @@
 """Edge-Case-Tests für den enforce_retention-Command.
 
 Ergänzt test_retention.py und schließt Missing-Lines aus dem Coverage-
-Report (FND-D005, Refs #649):
+Report (Refs #649):
 
 - CLI-Argument-Validierung (--dry-run + --propose = Konflikt)
 - --facility mit unbekanntem Namen

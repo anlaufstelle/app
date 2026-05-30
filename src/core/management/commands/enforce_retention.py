@@ -2,7 +2,7 @@
 
 Thin wrapper around :mod:`core.services.retention` — all business logic lives in the
 service module; the command handles only argument parsing, iteration over facilities,
-and ``stdout``/``stderr`` formatting (FND-A005).
+and ``stdout``/``stderr`` formatting.
 """
 
 from django.core.management.base import BaseCommand

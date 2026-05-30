@@ -6,7 +6,7 @@ Mutation mit einem ``RAISE EXCEPTION`` blockt. Damit sind AuditLog-
 Eintraege nicht nur Python-seitig (siehe ``AuditLog.save``/``delete``-
 Override) sondern auch via Raw SQL und ORM-Bypasses unveraenderlich.
 
-Audit-Massnahme #14 + C.1.2 fordert verifizieren, dass der Trigger
+C.1.2 fordert zu verifizieren, dass der Trigger
 greift und nach Restore erhalten bleibt — diese Tests sind die
 schnelle Smoke-Regression dafuer.
 """

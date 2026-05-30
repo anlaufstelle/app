@@ -37,7 +37,7 @@
 
         navigator.serviceWorker.addEventListener("message", async function (event) {
             if (event.data.type === "QUEUE_REQUEST") {
-                // ACK/NACK an den Service Worker zurueckschicken (#662 FND-02).
+                // ACK/NACK an den Service Worker zurueckschicken (#662).
                 // Ohne ACK wartet der SW max. QUEUE_ACK_TIMEOUT_MS und liefert
                 // dann eine 503-Response, damit der User keinen falschen
                 // Erfolgs-Banner sieht.

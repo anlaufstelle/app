@@ -1,6 +1,6 @@
 """E2E-Test: Krisen-Eskalations-Workflow.
 
-Refs Matrix SMK-A-CRIS-01, Refs #922 / #926 (Welle 3 P0).
+Refs Matrix SMK-A-CRIS-01, Refs #922 / #926 .
 
 Eine Fachkraft erfasst ein Krisengespräch (DocumentType mit system_type="crisis",
 sensitivity ≥ ELEVATED) für eine bekannte Person in unter 30 Sekunden. Anschließend

@@ -29,7 +29,7 @@ def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
 
     ``settings_obj.auditlog_retention_months == 0`` -> No-op (deaktiviert).
 
-    Refs #129 Teil B, Refs #733 (Tier-2-Sprint, Audit-Massnahme #14),
+    Refs #129 Teil B, Refs #733 (#14),
     Refs #781 (C-13).
     """
     months = getattr(settings_obj, "auditlog_retention_months", 0) or 0
