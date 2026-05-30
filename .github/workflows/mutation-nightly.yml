@@ -1,12 +1,12 @@
 name: Mutation Testing (Nightly)
 
-# Refs #922 / #923 Welle 0:
+# Refs #922 / #923:
 #
 # Mutmut auf core/services + core/forms nightly, kein PR-Gate.
 # Laufzeit ist mit ~30-60 Minuten zu hoch fuer die PR-Pipeline; daher
 # Cron + workflow_dispatch.
 #
-# Survivors werden als Artefakt hochgeladen und in Welle 7 triagiert.
+# Survivors werden als Artefakt hochgeladen und triagiert.
 
 on:
   schedule:

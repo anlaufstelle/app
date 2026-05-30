@@ -6,7 +6,7 @@ services:
     # Convention). Der App-User (NOSUPERUSER, NOBYPASSRLS) und der
     # Admin-User (NOSUPERUSER, BYPASSRLS) werden im Init-Script
     # ``deploy/postgres-init/01-app-role.sh`` angelegt. Refs #902 /
-    # FND-005, ADR-005, ADR-017.
+    # ADR-005, ADR-017.
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${POSTGRES_BOOTSTRAP_PASSWORD}

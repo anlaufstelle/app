@@ -34,12 +34,12 @@ jobs:
           python-version: "3.13"
           cache: pip
       - run: pip install -r requirements-dev.txt
-      # Refs #922 / #923 Welle 0: Drift-Check vor den Tests. Faillt, wenn die
+      # Refs #922 / #923: Drift-Check vor den Tests. Faillt, wenn die
       # Manual-Test-Matrix Test-Files referenziert, die nicht existieren.
       - name: Verify manual-test-matrix drift
         run: python scripts/verify_test_matrix_drift.py
       # Refs #823 (C-56): --cov-fail-under erzwingt die Coverage-Schwelle.
-      # Stand 2026-05-20 (Welle 10, #945/#949): 96 % erreicht durch gezielte
+      # Stand 2026-05-20 (#945/#949): 96 % erreicht durch gezielte
       # Top-Lücken-Tests (Buckets A+B+C+D). Folge-PRs dürfen den Wert anheben,
       # aber nicht senken.
       - run: python -m pytest -m "not e2e" --ignore=src/tests/e2e -n auto --cov=core --cov-report=term-missing --cov-report=xml --cov-report=html --cov-fail-under=96

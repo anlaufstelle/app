@@ -267,7 +267,7 @@ def render_extras(tests: list[Test]) -> list[str]:
     lines.append("## Automatisierungskandidaten (Manuell-only)")
     lines.append("")
     lines.append(
-        "> Refs [#916](https://github.com/tobiasnix/anlaufstelle/issues/916): Cases ohne E2E-Spiegelung "
+        "> Refs #916: Cases ohne E2E-Spiegelung "
         "sind potenzielle Kandidaten zur Automatisierung. Sortiert nach Sektion + TC-ID."
     )
     lines.append("")
@@ -287,7 +287,7 @@ def render_extras(tests: list[Test]) -> list[str]:
     lines.append("## 🔧 LOKAL/SSH-Cases")
     lines.append("")
     lines.append(
-        "> Refs [#916](https://github.com/tobiasnix/anlaufstelle/issues/916): Cases, die direkten "
+        "> Refs #916: Cases, die direkten "
         "Server-Zugriff brauchen (`docker compose exec web python manage.py …`, `psql`, …)."
     )
     lines.append("")
@@ -310,7 +310,7 @@ def render_extras(tests: list[Test]) -> list[str]:
     lines.append("## Security/DSGVO-Cases ohne E2E-Coverage")
     lines.append("")
     lines.append(
-        "> Refs [#916](https://github.com/tobiasnix/anlaufstelle/issues/916): Sektion-C-Cases ohne "
+        "> Refs #916: Sektion-C-Cases ohne "
         "automatisierte Spiegelung — höchste Priorität für nachfolgende E2E-/Architekturtests."
     )
     lines.append("")
@@ -367,7 +367,7 @@ def render_anhang_c(tests: list[Test]) -> str:
     lines.append("")
     lines.append(
         "> Auto-generiert per `python scripts/build_test_matrix_index.py` "
-        "([#909](https://github.com/tobiasnix/anlaufstelle/issues/909))."
+        "(#909)."
     )
 
     return "\n".join(lines) + "\n"

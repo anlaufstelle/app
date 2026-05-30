@@ -70,7 +70,7 @@ markers = [
     "e2e: End-to-End-Tests mit Playwright (benötigen laufenden Server)",
     "smoke: Kritische User-Flows für schnelle lokale Validierung",
     "slow: Tests mit Laufzeit > 2s (typisch: Seed-Läufe mit größerem Datensatz). Per `-m 'not slow'` deselektierbar.",
-    "flaky_quarantine: Tests, die wegen Flakiness unter Beobachtung stehen (Refs #922 Welle 1).",
+    "flaky_quarantine: Tests, die wegen Flakiness unter Beobachtung stehen (Refs #922).",
     "architecture: Meta-Tests, die Source-Files scannen (z.B. ``AuditLog.objects.create()``-Vorkommen zählen). Werden in Mutmut-Runs (#930) deselektiert, weil mutmut die gezählten Patterns vervielfacht.",
 ]
 
@@ -95,12 +95,12 @@ omit = [
 # Runner schliesst e2e und slow aus, damit ein Mutation-Run nicht Stunden
 # laeuft. Das Ziel ist ein nightly-Job ueber Cron, kein PR-Gate.
 [tool.mutmut]
-# Refs Welle 7 (#930): ``paths_to_mutate`` muss in mutmut 3.x eine TOML-
+# Refs #930: ``paths_to_mutate`` muss in mutmut 3.x eine TOML-
 # Liste sein. Ein String wird zeichenweise iteriert (jeder ``/`` triggert
 # Filesystem-Root-Walk → Crash mit ``/etc/vconsole.conf``-FileNotFoundError).
-# Welle 0 (#923) hatte den String-Wert als regression eingeführt.
+# Refs #923 hatte den String-Wert als regression eingeführt.
 paths_to_mutate = ["src/core/services/", "src/core/forms/"]
-# Welle 7 (#930) — Files mit reiner Ops/IO-Logik: ``system_health.py`` ist
+# Refs #930 — Files mit reiner Ops/IO-Logik: ``system_health.py`` ist
 # ``shutil``-/``importlib``-Wrapper; ``invite.py`` ist ``send_mail``-Wrapper;
 # ``virus_scan.py`` ist ClamAV-``clamd``-Wrapper (Subprocess-IO).
 # Mutationen dort produzieren Survivors, die nur durch tiefes Mocking
@@ -113,7 +113,7 @@ do_not_mutate = [
     "src/core/services/system_health.py",
     "src/core/services/invite.py",
     "src/core/services/virus_scan.py",
-    # Welle 9 (#944) / Welle 11 (#910) — File-Vault-Policy (Extension-
+    # Refs #944 / #910 — File-Vault-Policy (Extension-
     # Whitelist, Magic-Bytes, ClamAV-Wrapper) lag urspruenglich in
     # ``file_vault.py``, wurde dann nach ``file_vault_validation.py``
     # ausgelagert und ist seit #910 als ``file_vault/policy.py`` im
@@ -166,7 +166,7 @@ also_copy = [
 [tool.coverage.report]
 show_missing = true
 skip_covered = true
-# Refs #945/#949 (Welle 10): Coverage-Floor symmetrisch zur CI (test.yml).
+# Refs #945/#949: Coverage-Floor symmetrisch zur CI (test.yml).
 # Lokales ``coverage report`` faillt unter 96 %, ebenso wie der CI-Run.
 fail_under = 96
 exclude_lines = [

@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: "3.13"
           cache: pip
-      # Refs #819 (R-001): Ruff-Version aus dem Lockfile ziehen, damit lokale
+      # Refs #819: Ruff-Version aus dem Lockfile ziehen, damit lokale
       # ``make lint`` und CI dieselbe Version nutzen.
       - run: pip install -r requirements-dev.txt
       - run: ruff check src/

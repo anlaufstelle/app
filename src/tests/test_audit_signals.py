@@ -20,7 +20,7 @@ def test_create_client_writes_audit_log(facility, staff_user):
         facility,
         staff_user,
         contact_stage=Client.ContactStage.IDENTIFIED,
-        pseudonym="Audit-01",
+        pseudonym="Testperson-01",
     )
     after = AuditLog.objects.filter(action=AuditLog.Action.CLIENT_CREATE).count()
     assert after == before + 1

@@ -129,7 +129,7 @@ ci-coverage:
 
 # Verifiziert, dass alle in docs/testing/manual-test-matrix.md
 # referenzierten Test-Files in src/tests/ oder src/tests/e2e/ existieren.
-# Refs #922 Welle 0.
+# Refs #922.
 verify-matrix-drift:
 	$(PYTHON) scripts/verify_test_matrix_drift.py
 
@@ -137,7 +137,7 @@ verify-matrix-drift:
 # Konfiguration in pyproject.toml [tool.mutmut].
 # Erwartete Laufzeit: 30-60 Minuten — daher nightly per Cron, nicht PR-Pflicht.
 # scripts/run_mutmut.py umgeht den ``set_start_method``-Konflikt aus
-# mutmut 3.5 (Refs Welle 7 #930).
+# mutmut 3.5 (Refs #930).
 mutation:
 	$(PYTHON) scripts/run_mutmut.py run
 
@@ -183,7 +183,7 @@ test-matrix-index:
 test-matrix-index-check:
 	$(PYTHON) scripts/build_test_matrix_index.py --check
 
-# Generated artefacts loswerden (Refs #896 / FND-012).
+# Generated artefacts loswerden (Refs #896).
 # Nicht angefasst: src/media/ (Datenverlustrisiko) und .venv/.
 clean:
 	@echo "Räume generierte Artefakte auf…"
