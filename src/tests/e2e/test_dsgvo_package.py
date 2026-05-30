@@ -3,6 +3,7 @@
 import pytest
 
 from ._helpers import enter_sudo_mode
+from ._selectors import find_first_dsgvo_download_link
 
 pytestmark = pytest.mark.e2e
 
@@ -39,7 +40,7 @@ class TestDSGVODocumentDownload:
         authenticated_page.goto(f"{base_url}/dsgvo/")
 
         with authenticated_page.expect_download() as download_info:
-            authenticated_page.locator("a:has-text('Herunterladen')").first.click()
+            find_first_dsgvo_download_link(authenticated_page).click()
         download = download_info.value
         assert download.suggested_filename.endswith(".md")
 
@@ -49,7 +50,7 @@ class TestDSGVODocumentDownload:
         authenticated_page.goto(f"{base_url}/dsgvo/")
 
         with authenticated_page.expect_download() as download_info:
-            authenticated_page.locator("a:has-text('Herunterladen')").first.click()
+            find_first_dsgvo_download_link(authenticated_page).click()
         download = download_info.value
         content = download.path().read_text(encoding="utf-8")
         # Placeholder should be replaced

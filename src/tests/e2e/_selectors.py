@@ -41,6 +41,15 @@ def find_client_link(page: Page, pseudonym: str) -> Locator:
     )
 
 
+def find_first_client_link(page: Page) -> Locator:
+    """First client detail link on the page.
+
+    Use when a test does not care which client is opened, only that *any*
+    client detail page renders (e.g. PWA-cache smoke).
+    """
+    return page.locator("[data-testid='client-detail-link']").first
+
+
 def find_first_audit_detail_link(page: Page) -> Locator:
     """Link to the audit-detail page for the **first** (most-recent) row.
 

@@ -4,6 +4,8 @@ import re
 
 import pytest
 
+from tests.e2e._selectors import find_first_client_link
+
 pytestmark = pytest.mark.e2e
 
 
@@ -237,8 +239,9 @@ class TestOfflineEntrypointsMobile:
         page.goto(f"{base_url}/clients/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Auf erste Karte zur Detailseite springen (#643 + #663: Single-Loop CSS-Grid statt sm:hidden)
-        page.locator(".client-list a[href^='/clients/']").first.click()
+        # Auf erste Karte zur Detailseite springen (#643 + #663: Single-Loop CSS-Grid statt sm:hidden).
+        # Stabil per data-testid="client-detail-link" — siehe _selectors.find_first_client_link.
+        find_first_client_link(page).click()
         page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
 
         # Overflow-Menü öffnen
