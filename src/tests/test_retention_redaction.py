@@ -12,7 +12,7 @@ import pytest
 from django.utils import timezone
 
 from core.models import DocumentType, Event, EventHistory
-from core.services.event import build_redacted_delete_history, soft_delete_event
+from core.services.events import build_redacted_delete_history, soft_delete_event
 from core.services.retention import _soft_delete_events
 
 

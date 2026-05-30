@@ -14,7 +14,7 @@ from django.utils import timezone
 
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate
 from core.models.attachment import EventAttachment
-from core.services.event import (
+from core.services.events import (
     is_multi_file_marker,
     is_singleton_file_marker,
     normalize_file_marker,
@@ -307,7 +307,7 @@ class TestBackwardCompatibility:
         event.data_json = {"anhang": {"__file__": True, "attachment_id": str(att.pk)}}
         event.save(update_fields=["data_json"])
 
-        from core.services.event import build_event_detail_context
+        from core.services.events import build_event_detail_context
 
         ctx = build_event_detail_context(event, staff_user)
         field = next(f for f in ctx["fields_display"] if f.get("is_file"))
@@ -343,7 +343,7 @@ class TestEventDetailContextQueryCount:
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
 
-        from core.services.event import build_event_detail_context
+        from core.services.events import build_event_detail_context
 
         with CaptureQueriesContext(connection) as ctx:
             build_event_detail_context(event, user)
@@ -409,7 +409,7 @@ class TestApplyAttachmentChangesQueryCount:
         from django.db import connection
         from django.test.utils import CaptureQueriesContext
 
-        from core.services.event import apply_attachment_changes
+        from core.services.events import apply_attachment_changes
 
         dt, ft = doc_type_with_file
         event = self._build_event_with_entries(facility, staff_user, dt, ft, entries=5)

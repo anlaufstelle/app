@@ -8,7 +8,7 @@ from django.utils import timezone
 from core.models import AuditLog, Client, User
 from core.services.cases import create_case
 from core.services.clients import create_client
-from core.services.event import create_event
+from core.services.events import create_event
 from core.services.workitems import create_workitem
 
 # --- CREATE actions via services -----------------------------------------

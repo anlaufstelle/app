@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog, DeletionRequest, Event, EventHistory
-from core.services.event import (
+from core.services.events import (
     approve_deletion,
     create_event,
     reject_deletion,

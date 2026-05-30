@@ -18,7 +18,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.models import Client, DeletionRequest, Event
 from core.services.clients import approve_client_deletion, reject_client_deletion
-from core.services.event import approve_deletion, reject_deletion
+from core.services.events import approve_deletion, reject_deletion
 from core.views.mixins import LeadOrAdminRequiredMixin
 
 logger = logging.getLogger(__name__)

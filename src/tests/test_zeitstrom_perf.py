@@ -15,7 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import DocumentType, Event, WorkItem
-from core.services.feed import build_feed_items
+from core.services.events import build_feed_items
 
 
 def _create_events(facility, doc_type, user, count, when):

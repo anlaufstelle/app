@@ -1,4 +1,4 @@
-"""Follow-Up-Tests für Mutation-Survivors in ``core.services.feed``.
+"""Follow-Up-Tests für Mutation-Survivors in ``core.services.events.feed``.
 
 Refs Welle 7 (#930). Ziel: Mutationen an den Branch- und Boundary-Grenzen
 in ``get_time_range``, ``build_feed_items``, ``_format_preview_value`` und
@@ -26,7 +26,7 @@ Adressiert speziell folgende Mutationsklassen:
 Hinweis: ``FEED_MAX_PER_TYPE`` (default ``200``) wird in den Cap-Tests
 über ``unittest.mock.patch`` auf einen kleinen Wert reduziert, weil
 ``feed.py`` die Konstante per ``from … import FEED_MAX_PER_TYPE`` einbindet
-und ein Patch im Source-Modul ``core.services.feed`` daher greift, ohne
+und ein Patch im Source-Modul ``core.services.events.feed`` daher greift, ohne
 dass wir hunderte Events anlegen müssen.
 """
 
@@ -48,7 +48,7 @@ from core.models import (
     WorkItem,
 )
 from core.services.activity import log_activity
-from core.services.feed import (
+from core.services.events import (
     _format_preview_value,
     build_feed_items,
     enrich_events_with_preview,
@@ -330,7 +330,7 @@ class TestBuildFeedItemsCap:
                 data_json={},
                 created_by=staff_user,
             )
-        with patch("core.services.feed.FEED_MAX_PER_TYPE", 2):
+        with patch("core.services.events.feed.FEED_MAX_PER_TYPE", 2):
             items = build_feed_items(facility, today, feed_type="events", user=staff_user)
         assert len([i for i in items if i["type"] == "event"]) == 2
 
@@ -348,7 +348,7 @@ class TestBuildFeedItemsCap:
                 data_json={},
                 created_by=staff_user,
             )
-        with patch("core.services.feed.FEED_MAX_PER_TYPE", 2):
+        with patch("core.services.events.feed.FEED_MAX_PER_TYPE", 2):
             items = build_feed_items(facility, today, feed_type="events", user=staff_user)
         event_items = [i for i in items if i["type"] == "event"]
         # ``occurred_at`` ist UTC-aware aus dem DB — fuer Hour-Assertion

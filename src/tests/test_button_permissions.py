@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import DocumentType, DocumentTypeField, Event, FieldTemplate, User, WorkItem
-from core.services.event import create_event
+from core.services.events import create_event
 
 # ---------------------------------------------------------------------------
 # Fixtures

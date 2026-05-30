@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Event, EventHistory
-from core.services.event import (
+from core.services.events import (
     soft_delete_event,
 )
 
@@ -65,7 +65,7 @@ class TestEventAttachmentAtomicity:
         )
         uploaded = SimpleUploadedFile("test.pdf", pdf_bytes, content_type="application/pdf")
 
-        # ``store_encrypted_file`` wird jetzt aus ``core.services.event.
+        # ``store_encrypted_file`` wird jetzt aus ``core.services.events.
         # attach_files_to_new_event`` heraus gerufen — den Lazy-Import-Alias
         # in dem Service-Modul patchen, damit der Mock greift.
         with (

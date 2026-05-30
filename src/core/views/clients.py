@@ -205,7 +205,7 @@ class ClientAutocompleteView(AssistantOrAboveRequiredMixin, View):
     # Ueberschreitung — der Limit waere effektiv unwirksam).
     @method_decorator(ratelimit(key="user", rate="30/m", method="GET", block=True))
     def get(self, request):
-        from core.services.event import CONTACT_STAGE_ORDER, stage_index
+        from core.services.events import CONTACT_STAGE_ORDER, stage_index
 
         q = request.GET.get("q", "").strip()
 

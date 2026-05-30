@@ -106,7 +106,7 @@ class TestClientAnonymizeCharacterization:
     def test_trigger_bypass_invoked_for_event_history_redaction(
         self, facility, staff_user, doc_type_contact, client_identified
     ):
-        from core.services.event import create_event
+        from core.services.events import create_event
 
         # ``create_event`` legt eine EventHistory-Zeile (CREATE) an, die der
         # append-only-Trigger spaeter beim UPDATE verteidigen wuerde —

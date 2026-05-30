@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from core.models import Activity, DocumentType, DocumentTypeField, Event, FieldTemplate
 from core.services.activity import log_activity
-from core.services.feed import build_feed_items, enrich_events_with_preview
+from core.services.events import build_feed_items, enrich_events_with_preview
 from core.templatetags.core_tags import activity_target_url, doctype_badge_classes, verb_badge_classes
 
 

@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Event, TimeFilter
-from core.services.feed import get_time_range
+from core.services.events import get_time_range
 
 
 @pytest.fixture

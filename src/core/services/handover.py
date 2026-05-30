@@ -4,7 +4,7 @@ from django.db.models import Case as DBCase
 from django.db.models import Count, IntegerField, Value, When
 
 from core.models import Activity, Client, Event, WorkItem
-from core.services.feed import enrich_events_with_preview, get_time_range
+from core.services.events import enrich_events_with_preview, get_time_range
 
 
 def _build_shift_metadata(time_filter, start_dt, end_dt):

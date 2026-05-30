@@ -12,7 +12,7 @@ from django.utils import timezone
 
 from core.models import Case, Client, DocumentType, Event
 from core.services.cases import assign_event_to_case
-from core.services.event import create_event
+from core.services.events import create_event
 
 
 @pytest.fixture

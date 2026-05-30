@@ -21,7 +21,7 @@ from core.services.compliance import (
     user_can_see_document_type,
 )
 from core.services.encryption import safe_decrypt
-from core.services.event import (
+from core.services.events import (
     apply_attachment_changes,
     attach_files_to_new_event,
     build_attachment_context,

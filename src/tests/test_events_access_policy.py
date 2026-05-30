@@ -5,7 +5,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Event
-from core.services.event import (
+from core.services.events import (
     create_event,
 )
 

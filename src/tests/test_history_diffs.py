@@ -4,7 +4,7 @@ import pytest
 from django.utils import timezone
 
 from core.models import EventHistory
-from core.services.event import create_event, soft_delete_event, update_event
+from core.services.events import create_event, soft_delete_event, update_event
 from core.templatetags.history_tags import ENCRYPTED_PLACEHOLDER, RESTRICTED_PLACEHOLDER, compute_diff
 
 

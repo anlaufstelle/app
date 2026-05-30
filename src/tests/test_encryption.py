@@ -273,7 +273,7 @@ def test_already_encrypted_not_double_encrypted(facility, client_identified, doc
 def test_event_history_contains_encrypted_data(facility, client_identified, doc_type_crisis, staff_user):
     """EventHistory.data_after contains encrypted values after create_event()."""
     from core.models import EventHistory
-    from core.services.event import create_event
+    from core.services.events import create_event
 
     key = generate_key()
     with override_settings(ENCRYPTION_KEY=key):
@@ -411,7 +411,7 @@ def test_reencrypt_command_rotates_event_history_and_attachments(
             created_by=staff_user,
         )
         # EventHistory mit verschluesseltem data_after
-        from core.services.event import _snapshot_field_metadata
+        from core.services.events import _snapshot_field_metadata
 
         EventHistory.objects.create(
             event=event,
