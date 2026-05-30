@@ -4,6 +4,8 @@ import re
 
 import pytest
 
+from tests.e2e._selectors import find_first_audit_detail_link
+
 pytestmark = pytest.mark.e2e
 
 
@@ -16,8 +18,8 @@ class TestAuditDetail:
         page.goto(f"{base_url}/audit/")
         page.wait_for_load_state("domcontentloaded")
 
-        # Ersten Zeitstempel-Link in der Tabelle anklicken
-        first_link = page.locator("#audit-table table tbody tr a").first
+        # Ersten Zeitstempel-Link in der Tabelle anklicken (stabil per data-testid).
+        first_link = find_first_audit_detail_link(page)
         assert first_link.is_visible(), "Audit-Tabelle sollte mindestens einen Eintrag haben"
         first_link.click()
 
@@ -30,7 +32,7 @@ class TestAuditDetail:
         page.goto(f"{base_url}/audit/")
         page.wait_for_load_state("domcontentloaded")
 
-        page.locator("#audit-table table tbody tr a").first.click()
+        find_first_audit_detail_link(page).click()
         page.wait_for_url(re.compile(r"/audit/[0-9a-f-]+/"))
 
         # Strukturierte Felder prüfen (Labels aus dem Template)
@@ -52,7 +54,7 @@ class TestAuditDetail:
         page.goto(f"{base_url}/audit/")
         page.wait_for_load_state("domcontentloaded")
 
-        page.locator("#audit-table table tbody tr a").first.click()
+        find_first_audit_detail_link(page).click()
         page.wait_for_url(re.compile(r"/audit/[0-9a-f-]+/"))
 
         # "Zurück zur Liste"-Link klicken
@@ -70,7 +72,7 @@ class TestAuditDetailPermissions:
         admin = authenticated_page
         admin.goto(f"{base_url}/audit/")
         admin.wait_for_load_state("domcontentloaded")
-        admin.locator("#audit-table table tbody tr a").first.click()
+        find_first_audit_detail_link(admin).click()
         admin.wait_for_url(re.compile(r"/audit/[0-9a-f-]+/"))
         audit_pk = re.search(r"/audit/([0-9a-f-]+)/", admin.url).group(1)
 
