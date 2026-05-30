@@ -63,6 +63,7 @@ markers = [
     "e2e: End-to-End-Tests mit Playwright (benötigen laufenden Server)",
     "smoke: Kritische User-Flows für schnelle lokale Validierung",
     "slow: Tests mit Laufzeit > 2s (typisch: Seed-Läufe mit größerem Datensatz). Per `-m 'not slow'` deselektierbar.",
+    "flaky_quarantine: Tests, die wegen Flakiness unter Beobachtung stehen (Refs #922 Welle 1).",
 ]
 
 [tool.coverage.run]
@@ -72,6 +73,24 @@ omit = [
     "*/migrations/*",
     "*/management/commands/seed*.py",
 ]
+
+# --- mutmut (Refs #922 / #923) ---
+# Mutation-Testing fuer den Service-Layer (Business-Logik) und Forms (Eingabe-
+# validierung). Beide Bereiche sind hoch-kritisch und sollten nicht nur per
+# Coverage-Prozent, sondern per Mutation-Score abgesichert sein.
+#
+# Ausgenommen sind absichtlich:
+# - core.views/*         → werden ueber E2E + view-Tests abgedeckt
+# - core.models/*        → primaer Django-ORM-Definitionen, wenig Logik
+# - core.middleware/*    → eigene Test-Suite, einfacher als Unit zu testen
+#
+# Runner schliesst e2e und slow aus, damit ein Mutation-Run nicht Stunden
+# laeuft. Das Ziel ist ein nightly-Job ueber Cron, kein PR-Gate.
+[tool.mutmut]
+paths_to_mutate = "src/core/services/,src/core/forms/"
+tests_dir = "src/tests/"
+runner = ".venv/bin/python -m pytest -x -m 'not e2e and not slow'"
+backup = false
 
 [tool.coverage.report]
 show_missing = true
