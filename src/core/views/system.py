@@ -37,6 +37,7 @@ from core.models import AuditLog, Facility, Organization
 from core.models.retention import LegalHold, RetentionProposal
 from core.models.user import User
 from core.services import login_lockout, system_health
+from core.services.audit import audit_system_view
 from core.services.vvt import get_processing_activities
 from core.signals.audit import _set_session_vars, get_client_ip
 from core.utils.formatting import parse_date
@@ -78,12 +79,10 @@ class SystemAuditMixin(SuperAdminRequiredMixin):
         # Connections), damit der INSERT garantiert durchgeht.
         _set_session_vars(None, is_super_admin=True)
         try:
-            AuditLog.objects.create(
-                facility=None,
-                user=request.user,
-                action=AuditLog.Action.SYSTEM_VIEW,
+            audit_system_view(
+                request,
+                AuditLog.Action.SYSTEM_VIEW,
                 target_type=self.__class__.__name__,
-                ip_address=get_client_ip(request),
             )
         except Exception:
             # Audit-Fehler darf den View-Flow nicht kippen — der Zugriff
@@ -527,17 +526,13 @@ class SystemAuditLogExportView(SystemAuditMixin, View):
         # AuditLog-Eintrag VOR dem Streaming. Damit ist der Export auch
         # dann auditiert, wenn der Stream mittendrin abbricht.
         _set_session_vars(None, is_super_admin=True)
-        AuditLog.objects.create(
-            facility=None,
-            user=request.user,
-            action=AuditLog.Action.AUDIT_EXPORT,
+        audit_system_view(
+            request,
+            AuditLog.Action.AUDIT_EXPORT,
             target_type="AuditLog",
-            ip_address=get_client_ip(request),
-            detail={
-                "format": export_format,
-                "filter_count": row_count,
-                "filters": applied_filters,
-            },
+            format=export_format,
+            filter_count=row_count,
+            filters=applied_filters,
         )
 
         # Filename mit Timestamp + Format.
@@ -639,13 +634,11 @@ class SystemMaintenanceView(SystemAuditMixin, View):
                 return redirect("core:system_maintenance")
 
             _set_session_vars(None, is_super_admin=True)
-            AuditLog.objects.create(
-                facility=None,
-                user=request.user,
-                action=AuditLog.Action.MAINTENANCE_ENABLED,
+            audit_system_view(
+                request,
+                AuditLog.Action.MAINTENANCE_ENABLED,
                 target_type="MaintenanceMode",
-                ip_address=get_client_ip(request),
-                detail={"note": note},
+                note=note,
             )
             messages.success(request, _("Wartungsmodus aktiviert."))
             return redirect("core:system_maintenance")
@@ -660,13 +653,10 @@ class SystemMaintenanceView(SystemAuditMixin, View):
                 return redirect("core:system_maintenance")
 
             _set_session_vars(None, is_super_admin=True)
-            AuditLog.objects.create(
-                facility=None,
-                user=request.user,
-                action=AuditLog.Action.MAINTENANCE_DISABLED,
+            audit_system_view(
+                request,
+                AuditLog.Action.MAINTENANCE_DISABLED,
                 target_type="MaintenanceMode",
-                ip_address=get_client_ip(request),
-                detail={},
             )
             messages.success(request, _("Wartungsmodus deaktiviert."))
             return redirect("core:system_maintenance")

@@ -1080,14 +1080,7 @@ class TestAuditLogCreationAllowlist:
             198: "post_save User — role change detection",
             212: "post_save User — deactivation detection",
         },
-        # --- Migrations-Etappen (#901): werden in S6-S8 entfernt. ---
-        # S6 System-View-Migration:
-        "core/views/system.py": {
-            81: "Migration zu audit_system_view geplant (#901 S6)",
-            530: "Migration zu audit_system_view geplant (#901 S6)",
-            642: "Migration zu audit_system_view geplant (#901 S6)",
-            663: "Migration zu audit_system_view geplant (#901 S6)",
-        },
+        # --- Migrations-Etappen (#901): werden in S7-S8 entfernt. ---
         # S7 Service-Layer-Rest (cases, workitems, events/crud, goals, login_lockout):
         "core/services/cases.py": {
             39: "Migration zu audit_event geplant (#901 S7)",
