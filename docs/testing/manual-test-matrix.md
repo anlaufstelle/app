@@ -496,7 +496,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Tagesablauf | fachkraft | C/F/S | ✓ ||
+| Tagesablauf | fachkraft | C/F/S | ✓ | `test_crisis_escalation.py` |
 
 **Voraussetzung:** SMK-A-VORM-01
 
@@ -2206,7 +2206,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / RLS | admin (F1) + admin_2 (F2) | C || — (manueller Cross-Facility-Test) |
+| Klient:innen / RLS | admin (F1) + admin_2 (F2) | C || `test_clients.py`, `test_rls.py` |
 
 **Voraussetzung:** `make seed FACILITIES=2` — zwei parallele Facilities mit getrennten Admins.
 
@@ -5766,9 +5766,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 ### TC-ID: ENT-OFFL-13 — Logout löscht lokale Offline-Daten
 
+<!-- E2E: test_logout_cleanup.py (test_logout_indexeddb_databases_contain_no_plaintext deckt IndexedDB-Wipe ab) -->
+
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Offline | fachkraft | C | ✓ ||
+| Offline | fachkraft | C | ✓ | `test_logout_cleanup.py` |
 
 **Voraussetzung:** ENT-OFFL-01 erfolgreich, IndexedDB mit Bundle gefüllt.
 
@@ -7028,7 +7030,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | fachkraft | C/F/S |||
+| Security | fachkraft | C/F/S || `test_mfa_lockout.py` |
 
 **Schritte:**
 1. Aktiviertes MFA, Login mit korrektem Pwd.
@@ -7178,7 +7180,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | facility_admin + zweiter User | C (2 Browser-Profile) |||
+| Security | facility_admin + zweiter User | C (2 Browser-Profile) || `test_auth_session_invalidation.py` |
 
 **Schritte:**
 1. User A: als Fachkraft im Profil 1 (z.B. Chrome) einloggen.
@@ -7202,7 +7204,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | assistenz vs. leitung | C |||
+| Security | assistenz vs. leitung | C || `test_client_export_rbac.py` |
 
 **Schritte:**
 1. Als `assistenz` einloggen, einen Klient/Case mit `HIGH`-Sensitivity-Events anlegen oder laden.
@@ -7225,7 +7227,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | leitung | C |||
+| Security | leitung | C || `test_export_external_no_pseudonyms.py` |
 
 **Forward-looking:** Feature kommt mit #921 (datenschutzfreundliche externe Berichte). Case-Skelett:
 
@@ -7310,7 +7312,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Klient:innen / Kaskade | admin ||||
+| Klient:innen / Kaskade | admin ||| `test_clients_protect.py` |
 
 **Voraussetzung:** Klient:in mit mindestens einem `Case` (Status egal — entscheidend ist die FK-Beziehung).
 
@@ -7342,7 +7344,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle / Kaskade | admin ||||
+| Fälle / Kaskade | admin ||| `test_cases_cascade.py` |
 
 **Voraussetzung:** Fall mit ≥ 3 `OutcomeGoal` und je Goal ≥ 2 `Milestone` (Seed oder manuell anlegen).
 
@@ -7375,7 +7377,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Fälle / Kaskade | admin ||||
+| Fälle / Kaskade | admin ||| `test_cases_cascade.py` |
 
 **Voraussetzung:** Fall mit ≥ 2 zugeordneten `Event`s (`event.case = <fall>`).
 
@@ -7406,7 +7408,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| DeletionRequests | leitung + fachkraft ||||
+| DeletionRequests | leitung + fachkraft ||| `test_deletion_approval_audit.py` |
 
 **Voraussetzung:** DEL-01 + DEL-03 + DEL-04 durchgeführt.
 
@@ -7688,7 +7690,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Aufbewahrung | admin | C |||
+| Aufbewahrung | admin | C || `test_retention_sensitivity.py` |
 
 **Voraussetzung:** Zwei Events am gleichen Klienten — eines mit `sensitivity=NORMAL`, eines mit `sensitivity=HIGH` (über DocumentType-Mindeststufe gesteuert).
 
@@ -7784,7 +7786,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Audit | admin (Shell) || ⚪ ||
+| Audit | admin (Shell) || ⚪ | `test_audit_append_only_e2e.py` |
 
 **Voraussetzung:** mindestens ein AuditLog-Eintrag in der DB.
 
@@ -8104,7 +8106,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | leitung (F1) + leitung_2 (F2) | C |||
+| Security | leitung (F1) + leitung_2 (F2) | C || `test_rls.py` |
 
 **Voraussetzung:** zwei Facilities mit jeweils mindestens einem offenen `DeletionRequest`.
 
@@ -8138,7 +8140,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | fachkraft + admin | C/F/S |||
+| Security | fachkraft + admin | C/F/S || `test_mfa_scoping.py` |
 
 **Schritte:**
 1. Fachkraft hat alle Backup-Codes verloren + TOTP-App weg.
@@ -8600,7 +8602,7 @@ Methodik:
 
 | Sektion | Bereich | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|---------|------:|--------:|-------------:|----------:|
-| A | Tagesablauf | 12 | 10 | 2 | 83 % |
+| A | Tagesablauf | 12 | 11 | 1 | 92 % |
 | B | Accessibility | 9 | 0 | 9 | 0 % |
 | B | Acct | 5 | 5 | 0 | 100 % |
 | B | Attachments | 9 | 6 | 3 | 67 % |
@@ -8620,7 +8622,7 @@ Methodik:
 | B | Klient:innen / RLS | 1 | 1 | 0 | 100 % |
 | B | MFA | 9 | 9 | 0 | 100 % |
 | B | Meilensteine | 3 | 2 | 1 | 67 % |
-| B | Offline | 18 | 12 | 6 | 67 % |
+| B | Offline | 18 | 13 | 5 | 72 % |
 | B | Pwa | 5 | 5 | 0 | 100 % |
 | B | Statistik | 8 | 8 | 0 | 100 % |
 | B | Suche | 6 | 6 | 0 | 100 % |
@@ -8632,26 +8634,26 @@ Methodik:
 | B | Zeitstrom | 5 | 5 | 0 | 100 % |
 | B | Übergabe | 5 | 5 | 0 | 100 % |
 | C | Compliance | 14 | 11 | 3 | 79 % |
-| C | Security | 17 | 13 | 4 | 76 % |
-| D | Audit | 2 | 1 | 1 | 50 % |
-| D | Aufbewahrung | 9 | 8 | 1 | 89 % |
+| C | Security | 17 | 17 | 0 | 100 % |
+| D | Audit | 2 | 2 | 0 | 100 % |
+| D | Aufbewahrung | 9 | 9 | 0 | 100 % |
 | D | Compliance | 7 | 7 | 0 | 100 % |
-| D | DeletionRequests | 1 | 0 | 1 | 0 % |
-| D | Fälle / Kaskade | 2 | 0 | 2 | 0 % |
-| D | Klient:innen / Kaskade | 1 | 0 | 1 | 0 % |
+| D | DeletionRequests | 1 | 1 | 0 | 100 % |
+| D | Fälle / Kaskade | 2 | 2 | 0 | 100 % |
+| D | Klient:innen / Kaskade | 1 | 1 | 0 | 100 % |
 | D | Ops | 8 | 3 | 5 | 38 % |
-| D | Security | 7 | 5 | 2 | 71 % |
+| D | Security | 7 | 7 | 0 | 100 % |
 | D | Statistik | 2 | 2 | 0 | 100 % |
 
 **Sektion-Totals:**
 
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
-| A | 12 | 10 | 2 | 83 % |
-| B | 181 | 140 | 41 | 77 % |
-| C | 31 | 24 | 7 | 77 % |
-| D | 39 | 26 | 13 | 67 % |
-| **Gesamt** | **263** | **200** | **63** | **76 %** |
+| A | 12 | 11 | 1 | 92 % |
+| B | 181 | 141 | 40 | 78 % |
+| C | 31 | 28 | 3 | 90 % |
+| D | 39 | 34 | 5 | 87 % |
+| **Gesamt** | **263** | **214** | **49** | **81 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->
