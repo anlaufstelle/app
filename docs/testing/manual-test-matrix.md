@@ -5762,6 +5762,155 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Status:** ☐ Offen
 
+---
+
+### TC-ID: ENT-OFFL-13 — Logout löscht lokale Offline-Daten
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Offline | fachkraft | C | ✓ ||
+
+**Voraussetzung:** ENT-OFFL-01 erfolgreich, IndexedDB mit Bundle gefüllt.
+
+**Vorbereitung:**
+- DevTools → Application → IndexedDB Snapshot vor Logout.
+
+**Schritte:**
+1. Logout-Button klicken.
+2. DevTools → IndexedDB nach Reload prüfen:
+ - `clients`-Store leer.
+ - `pending`-Store leer.
+ - `meta.lease` gelöscht.
+3. Cookies: Session-Cookie gelöscht (Clear-Site-Data-Header ENT-AUTH-06).
+4. Erneuter Login als anderer User → vorherige Klient-Daten nicht sichtbar.
+
+**Erwartetes Ergebnis:**
+- Lokale Daten beim Logout vollständig gelöscht.
+- Geräte-Wechsel zwischen User:innen leakt keine Daten.
+
+**DSGVO/Security-Note:** Art. 5 Abs. 1 lit. e (Speicherbegrenzung) + Art. 32 (TOM). Shared-Device-Szenario in Sozialarbeit-Teams.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-OFFL-14 — Rollen-/Sensitivity-Änderung invalidiert Offline-Bundle
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Offline | facility_admin + fachkraft | C (2 Profile) |||
+
+**Voraussetzung:** fachkraft A mit aktivem Offline-Bundle, `assistenz`-Rolle.
+
+**Schritte:**
+1. fachkraft A: einloggen, Offline-Bundle laden (`ENT-OFFL-01`).
+2. fachkraft A: DevTools → IndexedDB → ein Event mit `HIGH`-Sensitivity-Feld sichtbar.
+3. `facility_admin` B (anderer Browser): Rolle von A auf `assistenz` herabstufen.
+4. fachkraft A: Seite neu laden / Sync triggern.
+5. Erwartung: Bundle wird neu geladen mit den jetzt erlaubten Sensitivities, `HIGH`-Felder sind weg.
+
+**Erwartetes Ergebnis:**
+- Bundle respektiert die *aktuelle* Rolle, nicht die zur Bootstrap-Zeit.
+- Falls aktuell nicht durchgesetzt: Issue eröffnen — Rollen-Downgrade muss Re-Bootstrap erzwingen.
+
+**DSGVO/Security-Note:** Art. 25 (Privacy-by-Default). Rollenwechsel ist häufiger Auslöser für Datenschutz-Risiken bei Personalwechsel.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-OFFL-15 — Lease-Verlust durch Server-Reset
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Offline | fachkraft + admin | C | ✓ ||
+
+**Voraussetzung:** Lease aktiv, IndexedDB gefüllt.
+
+**Schritte:**
+1. fachkraft: Bundle laden, in IndexedDB sichtbar.
+2. admin (per `manage.py shell` / SSH): Server-seitig `OfflineLease`-Eintrag für diesen User löschen oder revoke flag setzen.
+3. fachkraft: Seite neu laden.
+4. Bundle-Status-Endpoint meldet „Lease invalidiert".
+5. UI zeigt deutlich, dass Offline-Bundle nicht mehr nutzbar ist.
+6. Lokale Daten bleiben verschlüsselt in IndexedDB — werden aber nicht angezeigt und nicht synct.
+
+**Erwartetes Ergebnis:**
+- Server kann eine Lease zentral revoken (für gestohlenes/verlorenes Gerät).
+- Daten bleiben verschlüsselt; ohne gültige Lease kein Decrypt.
+- Re-Bootstrap nur nach erneutem Login.
+
+**DSGVO/Security-Note:** Defense gegen Geräte-Verlust — kritischer Sozialarbeit-Use-Case.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-OFFL-16 — Offline-Sync-Konflikt mit gelöschtem Event
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Offline | fachkraft + leitung | C (2 Profile) |||
+
+**Schritte:**
+1. fachkraft A: offline gehen.
+2. A bearbeitet ein Event E1 lokal (pending-Write).
+3. leitung B (online): selbes Event E1 soft-deleten (z.B. via Retention-Approve).
+4. A: wieder online → Sync läuft.
+5. Sync erkennt: Server-Event ist `deleted=True`.
+
+**Erwartetes Ergebnis:**
+- Pending-Write wird nicht stillschweigend verworfen.
+- Konflikt landet in Sync-Konflikt-Liste (ENT-OFFL-07) mit klarem Hinweis: „Event wurde inzwischen gelöscht/retention-anonymisiert".
+- User kann entscheiden: lokale Notiz exportieren oder verwerfen.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-OFFL-17 — Offline-Sync-Konflikt mit retention-betroffenem Event
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Offline | fachkraft + admin | C |||
+
+**Schritte:**
+1. fachkraft A: offline mit Event E2 (älter, kurz vor Retention-Frist).
+2. Server-Cron: `enforce_retention` läuft, E2 wird anonymisiert (`data_json={}`).
+3. A: offline-Bearbeitung an E2 (Notiz hinzufügen).
+4. A: online → Sync.
+5. Sync vergleicht Pre-/Post-Snapshot: Server-Event ist `_redacted`.
+
+**Erwartetes Ergebnis:**
+- Sync verweigert Write auf anonymisiertes Event.
+- Konflikt-Liste zeigt: „Event wurde anonymisiert — Notiz nicht synct, lokal markieren oder verwerfen".
+
+**DSGVO/Security-Note:** Verhindert „Wiederbelebung" anonymisierter Daten durch Offline-Sync.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-OFFL-18 — Offline-Upload mit später serverseitig abgelehntem Dateityp
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Offline | fachkraft + facility_admin | C |||
+
+**Schritte:**
+1. fachkraft A: offline gehen, Event mit `.docx`-Anhang lokal vorbereiten (Client hat noch `docx` in `allowed_file_types`).
+2. facility_admin B (online): Settings → `allowed_file_types` ändern auf `pdf,jpg,png` (docx raus).
+3. A: online → Sync versucht Upload.
+4. Server-Service rejectet mit Validation-Error.
+
+**Erwartetes Ergebnis:**
+- Upload wird sauber abgelehnt, **kein** 500.
+- Pending-Eintrag bekommt klare Fehlermeldung in der Sync-Konflikt-Liste: „Dateityp nicht mehr erlaubt".
+- AuditLog `SECURITY_VIOLATION` mit `reason=extension_not_allowed` für den Pfad.
+- User kann lokal Datei behalten und Konflikt manuell auflösen (z.B. PDF konvertieren und neu hochladen).
+
+**Status:** ☐ Offen
+
 </details>
 
 <details open>
