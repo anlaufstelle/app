@@ -6148,14 +6148,111 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 ### COMP — Betriebs-/Compliance-Dashboard
 
-> **Forward-looking Bereich (Refs #908).** Feature wird in #919 implementiert. Baut auf #902 (`check_db_roles`-Kommando) auf. Cases werden mit dem Feature ergänzt. Vorgesehenes Schema:
->
-> - `ENT-COMP-01` — DB-Rollencheck zeigt sichere App-Rolle (`NOSUPERUSER`, kein `BYPASSRLS`)
-> - `ENT-COMP-02` — Backup veraltet erzeugt Warnung
-> - `ENT-COMP-03` — ClamAV down ist critical
-> - `ENT-COMP-04` — Retention-Job überfällig ist warning/critical
+> Feature umgesetzt in #919. Aggregiert 11 Checks (`/system/compliance/`) mit Status `ok`/`warning`/`critical`/`unknown`. Baut auf #902 (`check_db_roles`) auf. **Verwandtes LOKAL/SSH-Pendant:** Die `D.OPS`-Cases (#903) prüfen dieselben Zustände per `psql` / SSH; das Dashboard zeigt sie für Betreiber:innen ohne Server-Zugriff.
 
-> **Verwandtes LOKAL/SSH-Pendant:** Die `D.OPS`-Cases (#903) prüfen dieselben Zustände manuell per `psql` / SSH; das Dashboard zeigt sie für Betreiber:innen ohne Server-Zugriff.
+<details open>
+
+### TC-ID: ENT-COMP-01 — DB-Rollencheck zeigt sichere App-Rolle
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Compliance | super_admin | C || `src/tests/test_compliance_service.py::TestDbRoleChecks` |
+
+**Code-Referenz:** [`src/core/services/compliance.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/compliance.py) `_db_role_checks`, ruft `check_db_roles` aus #902.
+
+**Voraussetzung:** Drei-Rollen-Modell aus #902 aktiv (`POSTGRES_BOOTSTRAP_PASSWORD` + `POSTGRES_ADMIN_USER` + `POSTGRES_ADMIN_PASSWORD` gesetzt).
+
+**Schritte:**
+1. Als `super_admin` einloggen.
+2. `/system/compliance/` aufrufen.
+3. Kategorie „Datenbank" prüfen: drei Checks sichtbar.
+4. App-DB-Rolle NOSUPERUSER → Status `ok`, Detail `rolsuper=False`.
+5. App-DB-Rolle kein BYPASSRLS → Status `ok`, Detail `rolbypassrls=False`.
+6. Admin-DB-Rolle → Status `ok`, Detail `rolbypassrls=True`.
+
+**Negativtest:**
+1. Per `psql` als Bootstrap-Superuser: `ALTER ROLE anlaufstelle SUPERUSER;`
+2. Dashboard neu laden → App-NOSUPERUSER wird `critical` mit Action-Hint „manage.py check_db_roles".
+3. Zurück: `ALTER ROLE anlaufstelle NOSUPERUSER;`
+
+**DSGVO/Security-Note:** Art. 32 Abs. 1 lit. b (Schutz vor unbefugter Verarbeitung) — RLS bleibt nur wirksam, wenn die App-Rolle keine Superuser-Privilegien hat.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-COMP-02 — Backup veraltet erzeugt Warnung
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Compliance | super_admin | C || `src/tests/test_compliance_service.py::TestBackupChecks` |
+
+**Code-Referenz:** `_backup_checks` + `system_health.last_backup_info`.
+
+**Schritte:**
+1. Frisches Backup vorhanden → `/system/compliance/` Kategorie „Backup": Status `ok`, Detail enthält Pfad + Alter (z.B. „6h").
+2. Backup-Verzeichnis leeren (oder älter machen via `touch -t 202401010000 <file>`).
+3. Dashboard neu laden:
+ - 24-72h Alter → Status `warning`, Action-Hint „Backup-Cron pruefen".
+ - >72h → Status `critical`.
+ - Kein Backup → Status `unknown` mit Hinweis auf `settings.BACKUP_DIR`.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-COMP-03 — ClamAV down ist critical
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Compliance | super_admin | C || `src/tests/test_compliance_service.py::TestClamavChecks` |
+
+**Code-Referenz:** `_clamav_checks` ruft `virus_scan.ping` + `virus_scan.signature_info`.
+
+**Schritte:**
+1. ClamAV-Container läuft → Kategorie „Virus-Scan": Erreichbarkeit `ok`, Signatur `ok` oder `warning` (je nach Alter).
+2. Container stoppen: `docker compose stop clamav`.
+3. Dashboard neu laden → Erreichbarkeit `critical` mit Action-Hint „docker compose ps clamav".
+4. Container wieder starten: `docker compose start clamav`.
+5. Sofort nach Start: Signatur-Status kann kurzzeitig `unknown` sein (Signatur-Daten werden noch geladen).
+6. Nach ein paar Minuten: zurück auf `ok` / `warning`.
+
+**Negativtest Signatur:**
+- Wenn `freshclam` länger als 7 Tage nicht lief → Signatur-Check wird `warning`.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-COMP-04 — Retention-Job überfällig ist warning/critical
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Compliance | super_admin | C || `src/tests/test_compliance_service.py::TestRetentionChecks` |
+
+**Code-Referenz:** `_retention_checks` liest neuesten `RETENTION_RUN_COMPLETED`-AuditLog (Refs #919 C2).
+
+**Voraussetzung:** `enforce_retention`-Cron muss in den letzten 7 Tagen einmal erfolgreich gelaufen sein.
+
+**Schritte:**
+1. `docker compose exec web python manage.py enforce_retention` einmal ausführen.
+2. Dashboard neu laden → Kategorie „Retention": Status `ok`, Detail „Letzter Lauf vor 0 Tag(en)".
+3. **Warning-Pfad:** AuditLog-Eintrag älter als 7 Tage machen (LOKAL/SSH per `bypass_replication_triggers`):
+ ```python
+   from django.utils import timezone
+   from datetime import timedelta
+   from core.models import AuditLog
+   from core.services._db_admin import bypass_replication_triggers
+   entry = AuditLog.objects.filter(action='retention_run_completed').latest('timestamp')
+   with bypass_replication_triggers():
+       AuditLog.objects.filter(pk=entry.pk).update(timestamp=timezone.now() - timedelta(days=10))
+   ```
+4. Dashboard neu laden → Status `warning`.
+5. Auf 30 Tage älter machen → Status `critical`.
+
+**Status:** ☐ Offen
+
+</details>
 
 ---
 
@@ -8510,6 +8607,7 @@ Methodik:
 | B | Audit | 5 | 5 | 0 | 100 % |
 | B | Aufbewahrung | 2 | 2 | 0 | 100 % |
 | B | Auth | 10 | 10 | 0 | 100 % |
+| B | Compliance | 4 | 4 | 0 | 100 % |
 | B | DSGVO | 8 | 8 | 0 | 100 % |
 | B | DeletionRequests | 5 | 4 | 1 | 80 % |
 | B | Episoden | 4 | 2 | 2 | 50 % |
@@ -8550,10 +8648,10 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 10 | 2 | 83 % |
-| B | 177 | 136 | 41 | 77 % |
+| B | 181 | 140 | 41 | 77 % |
 | C | 31 | 24 | 7 | 77 % |
 | D | 39 | 26 | 13 | 67 % |
-| **Gesamt** | **259** | **196** | **63** | **76 %** |
+| **Gesamt** | **263** | **200** | **63** | **76 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->

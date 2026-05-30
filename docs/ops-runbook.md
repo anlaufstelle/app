@@ -585,6 +585,21 @@ Das Skript laeuft 7 Schritte gegen das neueste DB- und Medien-Backup in `backups
 
 Output: ein `OK` / `FAIL`-Eintrag pro Schritt. Exit-Code != 0 bei jedem `FAIL`. Bei `FAIL` sofort auf Backup-Integritaet pruefen — Trigger-Check fehlgeschlagen (Schritt 5) ist kritisch, weil die AuditLog-Immutability dann nach Restore nicht mehr greift.
 
+**Nach erfolgreichem Drill — Compliance-Marker setzen (Refs #919):**
+
+```bash
+docker compose exec web python manage.py mark_restore_verified \
+    --note "Quartals-Drill $(date +%Y-%m-%d), restore-drill.sh OK"
+```
+
+Schreibt einen `RESTORE_VERIFIED`-AuditLog-Eintrag, den das Compliance-Dashboard (`/system/compliance/`) als Alter-Indikator nutzt:
+
+- ≤ 90 Tage → `ok`
+- ≤ 180 Tage → `warning`
+- älter → `critical` (DSGVO Art. 32 Abs. 1 lit. c verletzt — Wiederherstellbarkeit nicht mehr nachgewiesen).
+
+Ohne den Marker bleibt das Dashboard auf `unknown`, weil es nicht erkennen kann, ob jemals ein Restore-Test stattfand.
+
 **Cron-Vorschlag:**
 
 ```cron

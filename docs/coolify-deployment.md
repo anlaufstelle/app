@@ -182,8 +182,11 @@ Im Default-Setup ist die Rate-Limit-Stanza im `Caddyfile` als Kommentar dokument
 - RLS aktiv prüfen: per `psql` in der App-DB
  `SELECT relrowsecurity FROM pg_class WHERE relname='core_client';` → `t`.
 - RLS-Wirksamkeit prüfen: `docker compose exec web python manage.py check_db_roles` (Refs #902) — verifiziert App-Rolle = `NOSUPERUSER NOBYPASSRLS` und Admin-Rolle = `NOSUPERUSER BYPASSRLS`. Exit-Code 0 = ok.
+- **Compliance-Dashboard** (Refs #919): als `super_admin` `/system/compliance/` aufrufen. Aggregiert 11 Checks (DB-Rollen, Backup-Alter, Restore-Test, ClamAV-Erreichbarkeit + Signatur, Retention-Cron, MFA-Quote, Migrationen, Versionen, kritische Audit-Events der letzten 24h) mit `ok`/`warning`/`critical`/`unknown`-Status, Detail und Handlungsempfehlung. Pflichtcheck nach dem ersten Restore-Test (siehe unten).
 - Sentry-Events in den ersten 24h prüfen
 - Backup-Job erstmalig manuell triggern und restore auf Staging testen
+- **Restore-Test dokumentieren** (Refs #919): nach jedem erfolgreichen Restore-Test
+ `docker compose exec web python manage.py mark_restore_verified --note "Restore aus YYYY-MM-DD-Backup gegen anlaufstelle_restore_test"` ausführen. Schreibt einen `RESTORE_VERIFIED`-AuditLog-Eintrag, den das Compliance-Dashboard als Alter-Indikator nutzt (ok ≤90 Tage, warning ≤180, critical älter).
 - Monitoring-Alerts (Uptime + Disk + RAM) einrichten
 
 ## Referenzen

@@ -527,11 +527,7 @@ def _migration_checks() -> list[ComplianceCheck]:
 def _version_checks() -> list[ComplianceCheck]:
     """App-Version / Django-Version / Python-Version als Info-Karte."""
     versions = system_health.app_versions()
-    message = (
-        f"App {versions['app_version']}, "
-        f"Django {versions['django_version']}, "
-        f"Python {versions['python_version']}"
-    )
+    message = f"App {versions['app_version']}, Django {versions['django_version']}, Python {versions['python_version']}"
     return [
         ComplianceCheck(
             key="versions",
