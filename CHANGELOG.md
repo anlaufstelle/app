@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.13.1] - 2026-05-31
+## [0.13.1] - 2026-06-01
 
 Patch-Release (Pre-Release) mit Schwerpunkt **Außenwirkung und Aufräumen**: neue, automatisiert erzeugte Screenshots in Deutsch und Englisch (Desktop + Mobil) samt vollständiger Galerie-Seiten, ein wiederverwendbares Screenshot-Tooling, präsentablere Seed-Daten und das Schließen einiger bei v0.13.0 offen gebliebener Enden. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
 
@@ -12,6 +12,10 @@ Patch-Release (Pre-Release) mit Schwerpunkt **Außenwirkung und Aufräumen**: ne
 
 - **Screenshot-Generator `manage.py screenshot`** (#1005) — Neuer Management-Command erzeugt Doku-Screenshots reproduzierbar per Playwright gegen eine laufende Instanz: Login als Seed-User, Sprachumschaltung (DE/EN) über `preferred_language`, deklarative Shot-Liste, Ausgabe als **WebP** (via Pillow) in Desktop (1280×800) und Mobil (375px). Neues Make-Target [`docs-screens`](https://github.com/anlaufstelle/app/blob/main/Makefile) fährt den kompletten Lauf (Seed → Server → Generieren → Stop). `/system/`-Screens (Sudo-Mode) sind vorerst ausgeklammert.
 - **QuickTemplate-Seeds** (#1004) — Das seit #494 existierende `QuickTemplate`-Modell (vorbefüllte Schnelleintrags-Vorlagen) wurde bisher nie geseedet. Neues Seed-Modul [`core/seed/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/seed/quick_templates.py) erzeugt pro Einrichtung realistische, facility-gescopte Vorlagen für alle Scales (idempotent); in den Seed-Lauf verdrahtet. Demo-/Screenshot-Daten zeigen den Schnelleintrags-Workflow jetzt mit.
+
+### Changed
+
+- **Dependency-Bumps (Dependabot)** — `ruff` 0.15.14→0.15.15, `sentry-sdk[django]` 2.60.0→2.61.0, `django-stubs` 6.0.4→6.0.5. Begleitend der `requirements.txt`-Header durch `pip-compile` normalisiert, damit `make deps-check` grün bleibt.
 
 ### Docs
 
