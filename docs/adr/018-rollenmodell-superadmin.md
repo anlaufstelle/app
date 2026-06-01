@@ -84,5 +84,5 @@ Die [`FacilityScopeMiddleware`](../../src/core/middleware/facility_scope.py) set
 - [ADR-013](013-dsgvo-art16-no-selfservice.md) — DSGVO Art. 16 ohne App-Self-Service (Berichtigungen über `facility_admin`)
 - [ADR-015](015-mfa-totp.md) — MFA-Pflicht-Pfad für `super_admin`
 - [docs/admin-guide.md § 2.1 Erstinstallation](../admin-guide.md) — Bootstrap-Anleitung
-- [docs/dev-deployment.md § Production-Bootstrap](../dev/dev-deployment.md) — Server-Setup mit `create_super_admin`
+- [docs/dev-deployment.md § Production-Bootstrap](../dev-deployment.md) — Server-Setup mit `create_super_admin`
 - [docs/faq.md § C.13](../faq.md) — User-facing Rollendokumentation

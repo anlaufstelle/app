@@ -13,17 +13,17 @@
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" data-testid="staff-dashboard-cards">
-    <a href="{% url 'core:zeitstrom' %}" class="card p-4 hover:border-accent transition-colors block">
+    <a href="{% url 'core:zeitstrom' %}" class="bg-surface border border-subtle rounded-[10px] p-4 hover:border-accent transition-colors block">
         <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Heutige Kontakte" %}</div>
         <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-today-events">{{ today_events_count }}</div>
         <div class="text-[12px] text-ink-soft mt-1">{% trans "Ereignisse heute" %}</div>
     </a>
-    <a href="{% url 'core:workitem_inbox' %}" class="card p-4 hover:border-accent transition-colors block">
+    <a href="{% url 'core:workitem_inbox' %}" class="bg-surface border border-subtle rounded-[10px] p-4 hover:border-accent transition-colors block">
         <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Meine Aufgaben" %}</div>
         <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-my-workitems">{{ my_open_workitems_count }}</div>
         <div class="text-[12px] text-ink-soft mt-1">{% trans "Offen / In Bearbeitung" %}</div>
     </a>
-    <a href="{% url 'core:client_list' %}" class="card p-4 hover:border-accent transition-colors block">
+    <a href="{% url 'core:client_list' %}" class="bg-surface border border-subtle rounded-[10px] p-4 hover:border-accent transition-colors block">
         <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Zuletzt bearbeitet" %}</div>
         <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-recent-clients">{{ recent_clients|length }}</div>
         <div class="text-[12px] text-ink-soft mt-1">{% trans "Personen kürzlich aktualisiert" %}</div>

@@ -191,7 +191,7 @@ Aufwand L, post-v1.0** ein:
 
 **Aktueller Schutz:**
 - Backup ist AES-256-CBC + PBKDF2-verschlüsselt mit `BACKUP_ENCRYPTION_KEY`
- ([`backup.sh`](../scripts/ops/backup.sh)) — Klartext-Pseudonyme nur bei
+ ([`backup.sh`](../scripts/backup.sh)) — Klartext-Pseudonyme nur bei
  Schlüssel-Kompromittierung exponiert
 - Off-Site-Hook (Refs #738)
  empfiehlt Object-Lock gegen Ransomware

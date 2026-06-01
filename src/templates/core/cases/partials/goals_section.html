@@ -6,7 +6,7 @@
     {% if goals %}
     <div class="space-y-3">
         {% for goal in goals %}
-        <div class="card p-4" x-data="goalsSection">
+        <div class="bg-surface border border-subtle rounded-[10px] p-4" x-data="goalsSection">
             <div class="flex items-start justify-between">
                 <div class="flex-1 min-w-0" x-show="isViewing">
                     <div class="flex items-center">
@@ -30,8 +30,7 @@
                           hx-swap="outerHTML"
                           class="space-y-2">
                         {% csrf_token %}
-                        {# required: Leereingabe-Validierung beim Inline-Edit (Refs #1016, C6). #}
-                        <input type="text" name="title" value="{{ goal.title }}" required
+                        <input type="text" name="title" value="{{ goal.title }}"
                                class="w-full text-sm font-medium border border-subtle rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-accent"
                                placeholder="{% trans 'Titel' %}">
                         <textarea name="description" rows="2"
@@ -111,12 +110,10 @@
                                 {% endif %}
                             </button>
                         </form>
-                        {# hx-confirm: Bestätigung vor dem Löschen (Refs #1016, C6). #}
                         <form method="post"
                               hx-post="{% url 'core:milestone_delete' case_pk=case.pk pk=milestone.pk %}"
                               hx-target="#goals-section"
                               hx-swap="outerHTML"
-                              hx-confirm="{% trans 'Meilenstein wirklich löschen?' %}"
                               class="opacity-0 group-hover:opacity-100 transition-opacity ml-2">
                             {% csrf_token %}
                             <button type="submit" class="text-xs text-red-400 hover:text-red-600" title="{% trans 'Meilenstein löschen' %}" aria-label="{% trans 'Meilenstein löschen' %}">

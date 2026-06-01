@@ -14,12 +14,12 @@ import signal
 import subprocess
 import sys
 import time
-from contextlib import suppress
 
 import pytest
 import requests
 from filelock import FileLock
 
+_TEST_ENV = {**os.environ, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.test"}
 # E2E-Server + Seed mit e2e-Settings (Dev/PBKDF2 + kein Rate-Limit).
 # NICHT test-Settings verwenden — Django rehashed Passwörter bei Login
 # automatisch auf den primären Hasher (MD5), was den Dev-Login zerstört.
@@ -90,8 +90,10 @@ def _kill_port(port):
         stale = None
     if stale and stale.stdout.strip():
         for pid in stale.stdout.split():
-            with suppress(ProcessLookupError, ValueError):
+            try:
                 os.kill(int(pid), signal.SIGTERM)
+            except (ProcessLookupError, ValueError):
+                pass
         time.sleep(1)
 
 
@@ -206,52 +208,6 @@ def e2e_env(base_url):
 def admin_url(base_url):
     """Admin-Base-URL — Single Source of Truth für den obfuskierten Admin-Pfad."""
     return f"{base_url}/admin-mgmt"
-
-
-@pytest.fixture(scope="session")
-def enforced_base_url(request, base_url):
-    """Zweiter E2E-Server mit aktivem Rollen-MFA-Enforcement (A3.1, Refs #1019).
-
-    Teilt DB + Seed mit ``base_url`` (dort bereits migriert/geseedet), startet
-    aber einen separaten gunicorn mit ``E2E_MFA_ENFORCE_ROLES=1`` auf eigenem
-    Port (``8944 + worker_num``). So bleibt der Default-Server (``base_url``)
-    bewusst MFA-frei und nur hier greift der Rollen-Redirect auf ``/mfa/setup/``.
-    """
-    worker_num, _ = _get_worker_info(request)
-    port = 8944 + worker_num
-    db_name = "anlaufstelle_e2e" if worker_num == 0 else f"anlaufstelle_e2e_{worker_num}"
-    python = ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
-    env = {**_E2E_ENV, "E2E_DATABASE_NAME": db_name, "E2E_MFA_ENFORCE_ROLES": "1"}
-
-    _kill_port(port)
-    proc = subprocess.Popen(
-        [
-            python,
-            "-m",
-            "gunicorn",
-            "anlaufstelle.wsgi:application",
-            "--bind",
-            f"127.0.0.1:{port}",
-            "--workers",
-            "2",
-            "--threads",
-            "2",
-            "--chdir",
-            "src",
-            "--timeout",
-            "120",
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        env=env,
-    )
-    url = f"http://127.0.0.1:{port}"
-    _wait_for_server(url)
-
-    yield url
-
-    proc.send_signal(signal.SIGTERM)
-    proc.wait(timeout=10)
 
 
 def _create_storage_state(browser, base_url, username, password="anlaufstelle2026"):

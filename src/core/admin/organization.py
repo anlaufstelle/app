@@ -3,15 +3,13 @@
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 
-from core.admin.mixins import RoleBasedPermissionMixin, SuperAdminOnlyAdminMixin
+from core.admin.mixins import RoleBasedPermissionMixin
 from core.admin_site import anlaufstelle_admin_site
 from core.models import Facility, Organization
 
 
 @admin.register(Organization, site=anlaufstelle_admin_site)
-class OrganizationAdmin(SuperAdminOnlyAdminMixin, ModelAdmin):
-    """Organization liegt ueber der Facility-Ebene -> nur super_admin (A2.3, Refs #1021)."""
-
+class OrganizationAdmin(RoleBasedPermissionMixin, ModelAdmin):
     list_display = ("name", "created_at")
     search_fields = ("name",)
 

@@ -7,7 +7,6 @@ which is the expected fail-closed behaviour when a required variable is
 missing.
 """
 
-import json
 import os
 import subprocess
 import sys
@@ -17,17 +16,13 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "src"
 
 
-def _run_prod_import(env_overrides, code="import anlaufstelle.settings.prod  # noqa"):
+def _run_prod_import(env_overrides, args=("check", "--deploy")):
     """Import prod settings in a subprocess with a clean environment.
 
     All sensitive vars are pre-initialised to an empty string so that the
     project's ``load_dotenv()`` call cannot smuggle values from the local
     ``.env`` file into the test (dotenv does not override vars that are
     already set, even if their value is the empty string).
-
-    ``code`` is the snippet executed in the subprocess; the default merely
-    imports the module (enough to trigger the fail-closed guards). Pass a
-    custom snippet to read back resolved setting values (see A5.5 guard).
     """
     env = {
         "PATH": os.environ.get("PATH", ""),
@@ -44,11 +39,11 @@ def _run_prod_import(env_overrides, code="import anlaufstelle.settings.prod  # n
         "ALLOWED_HOSTS": "",
         "ENCRYPTION_KEY": "",
         "ENCRYPTION_KEYS": "",
-        "DJANGO_AUDIT_HASH_KEY": "",
     }
     env.update(env_overrides)
+    # Just importing the settings module is enough to trigger the guards.
     result = subprocess.run(
-        [sys.executable, "-c", code],
+        [sys.executable, "-c", "import anlaufstelle.settings.prod  # noqa"],
         env=env,
         capture_output=True,
         text=True,
@@ -90,21 +85,6 @@ class TestProdFailClosed:
         assert result.returncode != 0
         assert "ENCRYPTION_KEY" in result.stderr
 
-    def test_missing_audit_hash_key_raises(self):
-        """A4.2 (Refs #1024 / #1016): ohne DJANGO_AUDIT_HASH_KEY darf Prod nicht
-        starten — sonst fällt ``services.audit.hash`` still auf
-        SHA256(SECRET_KEY) zurück und ein SECRET_KEY-Leak knackt rückwirkend
-        die Audit-Hashes."""
-        result = _run_prod_import(
-            {
-                "DJANGO_SECRET_KEY": "x" * 50,
-                "ALLOWED_HOSTS": "example.org",
-                "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
-            }
-        )
-        assert result.returncode != 0
-        assert "AUDIT_HASH_KEY" in result.stderr
-
     def test_encryption_keys_plural_accepted(self):
         """ENCRYPTION_KEYS alone (without singular ENCRYPTION_KEY) must load."""
         result = _run_prod_import(
@@ -112,98 +92,6 @@ class TestProdFailClosed:
                 "DJANGO_SECRET_KEY": "x" * 50,
                 "ALLOWED_HOSTS": "example.org",
                 "ENCRYPTION_KEYS": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
-                "DJANGO_AUDIT_HASH_KEY": "y" * 50,
             }
         )
         assert result.returncode == 0, f"Import failed unexpectedly: {result.stderr}"
-
-
-class TestProdSettingsSecurityDefaultsGuard:
-    """A5.5 (Refs #1024 / #1016): explizite Defense-in-Depth-Settings einfrieren.
-
-    ``SESSION_COOKIE_HTTPONLY`` und ``SECURE_CROSS_ORIGIN_OPENER_POLICY`` sind
-    unter Django 6 bereits sicher per Default — hier in ``prod.py`` explizit
-    gesetzt, damit ein Default-Wechsel oder versehentliches Entfernen auffällt
-    (Auditierbarkeit/Regressionsschutz, kein offenes Loch). Die Request-Body-
-    Limits werden ebenfalls explizit verankert. Dieser Test friert die Werte ein.
-    """
-
-    _VALID_ENV = {
-        "DJANGO_SECRET_KEY": "x" * 50,
-        "ALLOWED_HOSTS": "example.org",
-        "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
-        "DJANGO_AUDIT_HASH_KEY": "y" * 50,
-    }
-
-    def _resolved(self):
-        code = (
-            "import json, anlaufstelle.settings.prod as p; "
-            "print(json.dumps({"
-            "'httponly': p.SESSION_COOKIE_HTTPONLY, "
-            "'coop': p.SECURE_CROSS_ORIGIN_OPENER_POLICY, "
-            "'data_max': p.DATA_UPLOAD_MAX_MEMORY_SIZE, "
-            "'file_max': p.FILE_UPLOAD_MAX_MEMORY_SIZE}))"
-        )
-        result = _run_prod_import(self._VALID_ENV, code=code)
-        assert result.returncode == 0, f"prod import failed: {result.stderr}"
-        return json.loads(result.stdout.strip().splitlines()[-1])
-
-    def test_session_cookie_httponly_explicit(self):
-        assert self._resolved()["httponly"] is True
-
-    def test_cross_origin_opener_policy_explicit(self):
-        assert self._resolved()["coop"] == "same-origin"
-
-    def test_request_body_limits_explicit(self):
-        resolved = self._resolved()
-        assert resolved["data_max"] > 0
-        assert resolved["file_max"] > 0
-
-
-class TestBaseSettingsDotenvGuard:
-    """A7.3 (Refs #1024 / #1016): ``load_dotenv()`` darf in ``base.py`` nicht
-    bedingungslos laufen.
-
-    In Produktion wird die Konfiguration über die Orchestrierungs-Env
-    (Docker/systemd) gesetzt. Eine versehentlich ins Image/Volume geratene
-    ``.env`` soll diese nicht still ergänzen — der Aufruf muss per
-    ``DJANGO_LOAD_DOTENV`` abschaltbar und an die Datei-Existenz gebunden sein.
-    """
-
-    _BASE_SETTINGS = SRC_DIR / "anlaufstelle" / "settings" / "base.py"
-
-    def test_load_dotenv_is_opt_out_guarded(self):
-        source = self._BASE_SETTINGS.read_text()
-        assert "DJANGO_LOAD_DOTENV" in source, (
-            "base.py muss load_dotenv() per DJANGO_LOAD_DOTENV abschaltbar machen "
-            "— sonst ergänzt eine versehentlich gemountete .env in Prod still die "
-            "Orchestrierungs-Env. Refs #1024."
-        )
-
-
-class TestProdSharedCacheGuard:
-    """A5.1 (Refs #1024 / #1016): Prod nutzt einen prozessübergreifenden
-    DatabaseCache statt des per-Worker isolierten LocMemCache — sonst zählen
-    django-ratelimit und das Health-Caching pro Worker getrennt."""
-
-    _VALID_ENV = {
-        "DJANGO_SECRET_KEY": "x" * 50,
-        "ALLOWED_HOSTS": "example.org",
-        "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
-        "DJANGO_AUDIT_HASH_KEY": "y" * 50,
-    }
-
-    def test_uses_database_cache_with_ratelimit(self):
-        code = (
-            "import json, anlaufstelle.settings.prod as p; "
-            "print(json.dumps({"
-            "'backend': p.CACHES['default']['BACKEND'], "
-            "'location': p.CACHES['default']['LOCATION'], "
-            "'rl_cache': getattr(p, 'RATELIMIT_USE_CACHE', None)}))"
-        )
-        result = _run_prod_import(self._VALID_ENV, code=code)
-        assert result.returncode == 0, f"prod import failed: {result.stderr}"
-        data = json.loads(result.stdout.strip().splitlines()[-1])
-        assert data["backend"] == "django.core.cache.backends.db.DatabaseCache"
-        assert data["location"] == "anlaufstelle_cache"
-        assert data["rl_cache"] == "default"

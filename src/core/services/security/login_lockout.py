@@ -29,16 +29,6 @@ from core.services.audit import audit_event
 # lösen die Sperre aus; sie wirkt, bis das Fenster leer ist — also 15 Min
 # nach dem letzten Fehlversuch.  Einträge vor dem letzten LOGIN_UNLOCK zählen
 # nicht mit, damit Admin-Unlock wirkt.
-#
-# Lockout-Semantik (A3.3, Refs #1024 — bewusste Maintainer-Entscheidung):
-# Login-Versuche WÄHREND einer aktiven Sperre werden über ``views/auth.py``
-# weiterhin als ``LOGIN_FAILED`` protokolliert und zählen ins gleitende
-# 15-Minuten-Fenster. Wer also gegen die Sperre weiter anmeldet, hält sie
-# selbst aufrecht ("self-sustaining"). Das ist GEWOLLT (stärkerer Anti-
-# Bruteforce-Effekt für einen Pre-Release-Pilot mit MFA-Pflicht-Option) —
-# es wird bewusst KEINE separate, nicht-gezählte ``LOGIN_BLOCKED``-Action
-# eingeführt. Falls sich die Anforderung ändert (saubere Forensik-Trennung
-# „trug zur Sperre bei" vs. „kam gegen die Sperre"), wäre das der Ansatzpunkt.
 LOCKOUT_THRESHOLD = 10
 LOCKOUT_WINDOW = timedelta(minutes=15)
 

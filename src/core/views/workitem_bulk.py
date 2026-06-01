@@ -27,17 +27,6 @@ from core.views.mixins import AssistantOrAboveRequiredMixin
 from core.views.workitems import can_user_mutate_workitem
 
 
-class BulkValidationError(Exception):
-    """Signalisiert ungueltige Bulk-Eingabe.
-
-    Die user-sichtbare Meldung kommt aus ``invalid_input_message`` der
-    jeweiligen View (kontrollierte, uebersetzte Literale) — **nicht** aus der
-    Exception selbst. So fliesst kein Exception-/Trace-Inhalt in die HTTP-
-    Antwort (Refs #1011, CodeQL py/stack-trace-exposure). Unerwartete
-    Exceptions werden nicht gefangen und propagieren als 500.
-    """
-
-
 @method_decorator(
     ratelimit(key="user", rate=RATELIMIT_BULK_ACTION, method="POST", block=True),
     name="post",
@@ -50,10 +39,6 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
     takes care of scoping to ``request.current_facility`` and rendering the
     inbox-partial for HTMX responses.
     """
-
-    # Kontrollierte Fehlermeldung pro View — fliesst statt ``str(exc)`` in die
-    # 400-Antwort (Refs #1011). Subklassen ueberschreiben sie.
-    invalid_input_message = _("Ungültige Eingabe.")
 
     def _get_workitem_ids(self, request):
         ids = request.POST.getlist("workitem_ids") or request.POST.getlist("workitem_ids[]")
@@ -89,8 +74,8 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
 
         try:
             count = self.perform_action(request, workitems)
-        except BulkValidationError:
-            return HttpResponseBadRequest(self.invalid_input_message)
+        except ValueError as exc:
+            return HttpResponseBadRequest(str(exc))
 
         messages.success(request, _("%(count)d Aufgaben aktualisiert.") % {"count": count})
 
@@ -105,32 +90,26 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
 class WorkItemBulkStatusView(_BulkActionMixin, View):
     """Bulk-update status for selected WorkItems."""
 
-    invalid_input_message = _("Ungültiger Status")
-
     def perform_action(self, request, workitems):
         status = request.POST.get("status", "").strip()
         # Refs #819: Django bietet Status.values als Liste an.
         if status not in WorkItem.Status.values:
-            raise BulkValidationError
+            raise ValueError(_("Ungültiger Status"))
         return bulk_update_workitem_status(workitems, request.user, status)
 
 
 class WorkItemBulkPriorityView(_BulkActionMixin, View):
     """Bulk-update priority for selected WorkItems."""
 
-    invalid_input_message = _("Ungültige Priorität")
-
     def perform_action(self, request, workitems):
         priority = request.POST.get("priority", "").strip()
         if priority not in WorkItem.Priority.values:
-            raise BulkValidationError
+            raise ValueError(_("Ungültige Priorität"))
         return bulk_update_workitem_priority(workitems, request.user, priority)
 
 
 class WorkItemBulkAssignView(_BulkActionMixin, View):
     """Bulk-assign selected WorkItems (or clear the assignment)."""
-
-    invalid_input_message = _("Unbekannte Benutzerin/Benutzer")
 
     def perform_action(self, request, workitems):
         assignee_id = request.POST.get("assigned_to", "").strip()
@@ -142,5 +121,5 @@ class WorkItemBulkAssignView(_BulkActionMixin, View):
                     facility=request.current_facility,
                 )
             except (User.DoesNotExist, ValueError, TypeError) as exc:
-                raise BulkValidationError from exc
+                raise ValueError(_("Unbekannte Benutzerin/Benutzer")) from exc
         return bulk_assign_workitems(workitems, request.user, assignee)

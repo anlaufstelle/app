@@ -122,8 +122,7 @@
         </ul>
         <div class="actions">
             <a href="/" class="btn primary">Zur Startseite</a>
-            <!-- href="" lädt die aktuelle URL neu, CSP-konform ohne Inline-Script. Refs #1016, C1 -->
-            <a href="" class="btn">Erneut versuchen</a>
+            <a href="javascript:location.reload()" class="btn">Erneut versuchen</a>
         </div>
         <p class="hint">Sobald die Verbindung wieder steht, schließt der Service-Worker offene Aufgaben automatisch ab.</p>
     </main>

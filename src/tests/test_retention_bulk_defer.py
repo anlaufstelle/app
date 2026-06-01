@@ -74,27 +74,6 @@ class TestDeferFollowup:
         p.refresh_from_db()
         assert p.defer_count == 2
 
-    def test_defer_count_increment_survives_stale_instance(self, facility, lead_user):
-        """Refs #1022 (B2): defer_count muss DB-atomar erhoeht werden, nicht
-        aus einem veralteten In-Memory-Wert. Zwei zeitgleiche Defers — hier
-        ueber zwei separat geladene Instanzen derselben Zeile simuliert —
-        duerfen kein Increment verlieren (Lost-Update). Sonst greift die
-        ``defer_count >= max_defer_count``-Auto-Approval-Schwelle zu frueh
-        bzw. zu spaet."""
-        p = _make_proposal(facility)
-        # Zwei Instanzen derselben Zeile: beide lesen defer_count == 0.
-        p_a = RetentionProposal.objects.get(pk=p.pk)
-        p_b = RetentionProposal.objects.get(pk=p.pk)
-
-        defer_proposal(p_a, lead_user)  # DB: defer_count -> 1
-        # p_b ist jetzt stale (haelt noch 0 im Speicher). Ein In-Memory-
-        # Increment wuerde erneut 1 schreiben (verlorenes Increment); der
-        # F()-Ausdruck schreibt DB-Wert + 1 = 2.
-        defer_proposal(p_b, lead_user)
-
-        p.refresh_from_db()
-        assert p.defer_count == 2
-
     def test_reject_writes_audit_entry(self, facility, lead_user):
         p = _make_proposal(facility)
         reject_proposal(p, lead_user)

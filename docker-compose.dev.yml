@@ -56,8 +56,6 @@ services:
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.devlive
       POSTGRES_HOST: db
       CLAMAV_HOST: clamav
-      # Refs #1017: Stabiler App-Rollenname für check_db_roles (siehe prod-Compose).
-      POSTGRES_APP_USER: ${POSTGRES_USER}
     volumes:
       - media_dev:/data
       # Refs #871: BACKUP_DIR aus .env.dev (Default /var/backups/anl) muss

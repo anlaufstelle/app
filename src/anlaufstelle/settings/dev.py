@@ -15,13 +15,6 @@ DEBUG = True
 
 ALLOWED_HOSTS = ["*"]
 
-# DEV bewusst MFA-frei (Refs #1019): das Rollen-Default-Enforcement aus base.py
-# wird hier abgeschaltet, damit die Seed-Logins (admin/thomas/superadmin) ohne
-# TOTP arbeiten. Kaskadiert ueber Vererbung nach test.py UND e2e.py.
-# ``mfa_required`` (User) und ``mfa_enforced_facility_wide`` (Facility) bleiben
-# unberuehrt — MFA laesst sich in DEV also weiterhin gezielt testen.
-MFA_ENFORCE_PRIVILEGED_ROLES = False
-
 # WhiteNoise: Static Files ohne collectstatic bei jeder Aenderung
 WHITENOISE_AUTOREFRESH = True
 WHITENOISE_USE_FINDERS = True

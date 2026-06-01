@@ -1,6 +1,6 @@
 # Threat Model — Anlaufstelle (STRIDE-Lite)
 
-**Version:** v0.14.x · **Letzte Revision:** 2026-06-11 · **Quelle:** [Issue #691](https://github.com/anlaufstelle/app/issues/691)
+**Version:** v0.13.x · **Letzte Revision:** 2026-05-27 · **Quelle:** [Issue #691](https://github.com/anlaufstelle/app/issues/691)
 
 Dieses Dokument macht das Sicherheitsmodell explizit. Es ergänzt — nicht ersetzt — die zeilengenauen internen Code-Audits (dev-only) und die Design-Entscheidungen in [`docs/security-notes.md`](security-notes.md).
 
@@ -40,7 +40,7 @@ Dieses Dokument macht das Sicherheitsmodell explizit. Es ergänzt — nicht erse
 | **AuditLog** | I, A (Repudiation-Schutz gegen nachträgliche Änderung/Löschung) | Postgres `core_auditlog` (UPDATE/DELETE per DB-Trigger blockiert; INSERT erlaubt; Retention-Pruning deaktiviert Trigger transaktional — siehe TB2/TB3-Tabelle) | hoch — gerichtsfest |
 | **Encryption-Keys** | C | `ENCRYPTION_KEYS` env, App-Speicher zur Laufzeit | kritisch — kompromittiert ⇒ Klartext |
 | **File-Vault-Anhänge** | C, I | `MEDIA_ROOT=/data/media`, Fernet-verschlüsselt ([`src/core/services/file_vault/encryption.py`](../src/core/services/file_vault/encryption.py)) | Art.-9 DSGVO |
-| **Backups** | C, I | `backups/`, AES-256-CBC verschlüsselt ([`backup.sh`](../scripts/ops/backup.sh)) | kritisch — Offline-Kopie aller Klientendaten |
+| **Backups** | C, I | `backups/`, AES-256-CBC verschlüsselt ([`backup.sh`](../scripts/backup.sh)) | kritisch — Offline-Kopie aller Klientendaten |
 | **Sessions** | C, I | Postgres `django_session`, HTTPOnly+Secure+SameSite-Cookie | mittel — Session-Hijack ⇒ Account-Übernahme |
 | **MFA-Secrets / Backup-Codes** | C | Postgres `otp_*` (django-otp) | hoch — kompromittiert ⇒ MFA-Bypass |
 | **Login-Lockout-State** | I, A | nicht persistiert — zur Laufzeit aus AuditLog abgeleitet ([`src/core/services/security/login_lockout.py`](../src/core/services/security/login_lockout.py)) | mittel — Bypass-Vektoren: gefälschter `LOGIN_UNLOCK`-INSERT, Race-Window (Threshold+1), Retention-Prune |
@@ -124,8 +124,8 @@ Backups (`backup.sh`) verlassen das interne Netz nur **verschlüsselt** auf den 
 
 | Threat | Mitigation (Bestand) | Quelle | Offene Lücke |
 |---|---|---|---|
-| **C** Backup-Diebstahl | AES-256-CBC + PBKDF2 mit `BACKUP_ENCRYPTION_KEY`; DB + Medien gemeinsam ([ #720](https://github.com/anlaufstelle/app/issues/720)) | [`backup.sh`](../scripts/ops/backup.sh) | Off-Site-Hook (rclone/restic/S3) fehlt |
-| **I** Backup-Tampering | `--verify` restored DB in Temp-DB + prüft Tabellen; Medien-tar wird auf Listbarkeit geprüft | [`backup.sh`](../scripts/ops/backup.sh) | Restore-Drill nur quartalsweise dokumentiert (Runbook § 6.6) |
+| **C** Backup-Diebstahl | AES-256-CBC + PBKDF2 mit `BACKUP_ENCRYPTION_KEY`; DB + Medien gemeinsam ([ #720](https://github.com/anlaufstelle/app/issues/720)) | [`backup.sh`](../scripts/backup.sh) | Off-Site-Hook (rclone/restic/S3) fehlt |
+| **I** Backup-Tampering | `--verify` restored DB in Temp-DB + prüft Tabellen; Medien-tar wird auf Listbarkeit geprüft | [`backup.sh`](../scripts/backup.sh) | Restore-Drill nur quartalsweise dokumentiert (Runbook § 6.6) |
 | **A** Schlüsselverlust ⇒ Restore unmöglich | Key-Rollover-Runbook geplant || Runbook fehlt |
 
 ---

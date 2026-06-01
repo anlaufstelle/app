@@ -4,7 +4,6 @@ import json
 import logging
 
 import pytest
-from django.test import override_settings
 from django.urls import reverse
 
 
@@ -42,28 +41,6 @@ class TestCSPReportEndpoint:
         warnings = [r for r in caplog.records if r.message == "csp_violation"]
         assert len(warnings) == 1
         assert warnings[0].csp_violation["blocked-uri"] == "https://evil.example.com/payload.js"
-
-    @override_settings(TRUSTED_PROXY_HOPS=1)
-    def test_remote_addr_uses_canonical_proxy_aware_ip(self, client, csp_url, caplog):
-        """A5.4 (Refs #1024 / #1016): csp_report nutzt die kanonische
-        ``get_client_ip`` (TRUSTED_PROXY_HOPS-bewusst) statt der naiven
-        'erste X-Forwarded-For-IP'.
-
-        Bei ``X-Forwarded-For: client, proxy`` wird die proxy-gesetzte (rechte)
-        IP geloggt — die linke ist vom Client fälschbar und darf nicht als
-        Herkunft im Security-Log erscheinen.
-        """
-        with caplog.at_level(logging.WARNING, logger="security.csp"):
-            response = client.post(
-                csp_url,
-                data=json.dumps(self.SAMPLE_REPORT),
-                content_type="application/csp-report",
-                HTTP_X_FORWARDED_FOR="1.2.3.4, 5.6.7.8",
-            )
-        assert response.status_code == 204
-        warnings = [r for r in caplog.records if r.message == "csp_violation"]
-        assert len(warnings) == 1
-        assert warnings[0].remote_addr == "5.6.7.8"
 
     def test_csp_level_3_reporting_api_payload(self, client, csp_url, caplog):
         # CSP Level 3 / Reporting API: Liste mit {"type": "csp-violation", "body": {...}}.

@@ -13,22 +13,22 @@
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6" data-testid="lead-dashboard-cards">
-    <a href="{% url 'core:deletion_request_list' %}" class="card p-4 hover:border-accent transition-colors block">
+    <a href="{% url 'core:deletion_request_list' %}" class="bg-surface border border-subtle rounded-[10px] p-4 hover:border-accent transition-colors block">
         <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Löschanträge" %}</div>
         <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-deletion-requests">{{ pending_deletion_requests }}</div>
         <div class="text-[12px] text-ink-soft mt-1">{% trans "ausstehend" %}</div>
     </a>
-    <a href="{% url 'core:retention_dashboard' %}" class="card p-4 hover:border-accent transition-colors block">
+    <a href="{% url 'core:retention_dashboard' %}" class="bg-surface border border-subtle rounded-[10px] p-4 hover:border-accent transition-colors block">
         <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Löschvorschläge" %}</div>
         <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-retention-proposals">{{ pending_retention_proposals }}</div>
         <div class="text-[12px] text-ink-soft mt-1">{% trans "ausstehend" %}</div>
     </a>
-    <a href="{% url 'core:system_legal_hold_list' %}" class="card p-4 hover:border-accent transition-colors block">
+    <a href="{% url 'core:system_legal_hold_list' %}" class="bg-surface border border-subtle rounded-[10px] p-4 hover:border-accent transition-colors block">
         <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Legal Holds" %}</div>
         <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-legal-holds">{{ active_legal_holds }}</div>
         <div class="text-[12px] text-ink-soft mt-1">{% trans "aktiv" %}</div>
     </a>
-    <a href="{% url 'core:statistics' %}" class="card p-4 hover:border-accent transition-colors block">
+    <a href="{% url 'core:statistics' %}" class="bg-surface border border-subtle rounded-[10px] p-4 hover:border-accent transition-colors block">
         <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Statistik" %}</div>
         {% if last_snapshot %}
         <div class="text-[20px] font-bold text-ink mt-1" data-testid="card-last-snapshot">{{ last_snapshot.month }}/{{ last_snapshot.year }}</div>

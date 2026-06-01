@@ -58,7 +58,7 @@ class Shot:
 
 
 # Highlights (README) + full gallery (docs/screenshots.md). Only shipped
-# features — no unreleased-milestone screens.
+# features — no NLnet M0–M6 screens.
 SHOTS: list[Shot] = [
     # --- Highlights ---
     Shot("zeitstrom", "core:zeitstrom", mobile=True),

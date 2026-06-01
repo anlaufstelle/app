@@ -57,7 +57,7 @@
                     {% trans "Neue Aufgabe" %}
                 </a>
                 {% endif %}
-                <a href="{% url 'core:event_create' %}?client={{ client.pk }}" class="inline-flex items-center gap-1.5 btn-primary px-3.5 py-2">
+                <a href="{% url 'core:event_create' %}?client={{ client.pk }}" class="inline-flex items-center gap-1.5 bg-accent text-white text-[13px] font-semibold rounded-md px-3.5 py-2">
                     <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
                     {% trans "Neuer Kontakt" %}
                 </a>

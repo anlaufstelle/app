@@ -3,7 +3,6 @@
 import json
 
 from django import template
-from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.html import format_html
 
@@ -151,10 +150,14 @@ def status_badge(status, label):
 
     The ``status`` value is mapped through ``_STATUS_COLOR_MAP`` to one of the
     palette colors in ``_BADGE_COLOR_MAP``. Unknown statuses fall back to gray.
-    Gerendert über ``components/_badge.html`` (Single Source, Refs #1016 C5).
     """
     color = _STATUS_COLOR_MAP.get(str(status).lower(), "gray")
-    return render_to_string("components/_badge.html", {"text": label, "color": color})
+    classes = _BADGE_COLOR_MAP.get(color, _BADGE_COLOR_MAP["gray"])
+    return format_html(
+        '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium {}">{}</span>',
+        classes,
+        label,
+    )
 
 
 # --- Activity verb badge ---

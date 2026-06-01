@@ -48,22 +48,6 @@ class TestCreateSuperAdminCommand:
         # Passwort wurde gehasht abgelegt.
         assert user.check_password("StrongPass!2026")
 
-    def test_created_super_admin_requires_mfa(self):
-        """A3.1 (Refs #1019): Der Prod-Bootstrap-super_admin ist ab Werk
-        MFA-pflichtig (``mfa_required=True``) — unabhaengig vom Rollen-Setting
-        ``MFA_ENFORCE_PRIVILEGED_ROLES`` — damit der allererste Admin nie ohne
-        zweiten Faktor arbeitet.
-        """
-        with patch("getpass.getpass", side_effect=["StrongPass!2026", "StrongPass!2026"]):
-            call_command(
-                "create_super_admin",
-                "--username=jonas_mfa",
-                "--email=jonas_mfa@example.org",
-            )
-
-        user = User.objects.get(username="jonas_mfa")
-        assert user.mfa_required is True
-
     def test_force_overrides_existing_super_admin_check(self):
         """Wenn bereits ein super_admin existiert, blockt der Command —
         ``--force`` ueberschreibt diese Bestandspruefung und legt einen

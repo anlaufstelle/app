@@ -13,12 +13,12 @@
 </div>
 
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6" data-testid="facility-admin-dashboard-cards">
-    <div class="card p-4">
+    <div class="bg-surface border border-subtle rounded-[10px] p-4">
         <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Benutzer ohne MFA" %}</div>
         <div class="text-[28px] font-bold {% if users_without_mfa > 0 %}text-orange-600{% else %}text-ink{% endif %} mt-1" data-testid="card-users-without-mfa">{{ users_without_mfa }}</div>
         <div class="text-[12px] text-ink-soft mt-1">{% trans "von" %} {{ users_total }} {% trans "aktiven Benutzern" %}</div>
     </div>
-    <div class="card p-4">
+    <div class="bg-surface border border-subtle rounded-[10px] p-4">
         <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Konfigurations-Warnungen" %}</div>
         <div class="text-[28px] font-bold {% if settings_warnings %}text-orange-600{% else %}text-ink{% endif %} mt-1" data-testid="card-settings-warnings">{{ settings_warnings|length }}</div>
         <div class="text-[12px] text-ink-soft mt-1">{% trans "aktive Hinweise" %}</div>

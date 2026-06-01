@@ -87,12 +87,5 @@ if [ -n "$ADMIN_DB_USER" ] && [ -n "$ADMIN_DB_PASSWORD" ]; then
 		-- noetig fuer DROP POLICY / ALTER TABLE in Migrationen, weil
 		-- BYPASSRLS allein nicht fuer DDL ausreicht. Refs #863.
 		GRANT :"app_user" TO :"admin_user";
-		-- Refs #1016 A1.2: session_replication_role ist ein SUPERUSER-Parameter.
-		-- bypass_replication_triggers() (DSGVO-Art.-17-Anonymisierung + Audit-
-		-- Pruning) setzt ihn, um den Append-Only-Trigger transaktional zu
-		-- umgehen. Die NOSUPERUSER-Admin-Rolle darf das nur mit explizitem
-		-- GRANT SET ON PARAMETER (PostgreSQL 15+) — sonst 'permission denied to
-		-- set parameter session_replication_role' beim Wartungs-Cron.
-		GRANT SET ON PARAMETER session_replication_role TO :"admin_user";
 		SQL
 fi

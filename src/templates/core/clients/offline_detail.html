@@ -8,7 +8,7 @@
      data-testid="offline-client-view">
 
     <div class="mb-4 flex items-center space-x-2">
-        <span class="badge bg-yellow-100 text-yellow-800">
+        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
             {% trans "Offline-Ansicht" %}
         </span>
         <span x-show="lastSynced" x-cloak class="text-xs text-ink-muted" data-testid="offline-last-synced">
@@ -38,14 +38,14 @@
             <div class="mb-6">
                 <h1 class="text-[22px] font-bold text-ink" x-text="data.client.pseudonym" data-testid="offline-pseudonym"></h1>
                 <div class="mt-1 flex items-center space-x-3">
-                    <span class="badge bg-green-100 text-green-800"
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
                           x-text="data.client.contact_stage_display"></span>
                     <span class="text-sm text-ink-muted" x-text="data.client.age_cluster_display"></span>
                 </div>
             </div>
 
             <template x-if="data.client.notes">
-                <div class="card p-4 mb-5">
+                <div class="bg-surface border border-subtle rounded-[10px] p-4 mb-5">
                     <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Notizen" %}</h2>
                     <p class="text-sm text-ink-soft whitespace-pre-wrap" x-text="data.client.notes"></p>
                 </div>
@@ -61,11 +61,11 @@
                     </template>
                     <div class="space-y-2" x-show="hasEvents">
                         <template x-for="event in data.events" :key="event.pk">
-                            <div class="block card p-4" data-testid="offline-event">
+                            <div class="block bg-surface border border-subtle rounded-[10px] p-4" data-testid="offline-event">
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-center space-x-3">
                                         <span class="text-sm text-ink-muted font-mono" x-text="event.occurred_at_fmt"></span>
-                                        <span class="badge bg-accent-light text-accent"
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-accent-light text-accent"
                                               x-text="event.document_type_name"></span>
                                         <template x-if="event.is_unsynced">
                                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800" data-testid="event-unsynced-badge">

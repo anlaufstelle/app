@@ -36,54 +36,6 @@ def _make_events(facility, client, doc_type, user, count: int):
     ]
 
 
-class TestSecondarySuppression:
-    """A6.1 (Refs #1024 / #1016): komplementäre/Randsummen-Offenlegung.
-
-    Ist in einer Gruppe genau EINE Zelle k-anon-unterdrückt, lässt sie sich aus
-    der publizierten Randsumme (z.B. total_contacts) und den sichtbaren Zellen
-    zurückrechnen. Sekundäre Suppression unterdrückt dann zusätzlich die
-    nächstkleinere sichtbare Zelle, sodass mindestens zwei Unbekannte bleiben.
-    """
-
-    def test_list_single_suppression_triggers_secondary(self):
-        from core.services.dashboard.external_report import _suppress_small
-
-        rows = [{"name": "A", "count": 10}, {"name": "B", "count": 8}, {"name": "C", "count": 3}]
-        result = _suppress_small(rows, threshold=5)
-        by_name = {r["name"]: r for r in result}
-        assert by_name["C"]["suppressed"] is True  # primär (<5)
-        assert by_name["B"]["suppressed"] is True  # sekundär (nächstkleinere sichtbare)
-        assert by_name["B"]["count"] is None
-        assert by_name["A"]["suppressed"] is False  # größte bleibt sichtbar
-
-    def test_list_two_already_suppressed_no_secondary(self):
-        from core.services.dashboard.external_report import _suppress_small
-
-        rows = [{"name": "A", "count": 10}, {"name": "B", "count": 3}, {"name": "C", "count": 2}]
-        result = _suppress_small(rows, threshold=5)
-        by_name = {r["name"]: r for r in result}
-        # Zwei sind ohnehin unterdrückt -> keine zusätzliche, A bleibt sichtbar.
-        assert by_name["A"]["suppressed"] is False
-        assert by_name["B"]["suppressed"] is True
-        assert by_name["C"]["suppressed"] is True
-
-    def test_list_no_suppression_below_count_leaves_all_visible(self):
-        from core.services.dashboard.external_report import _suppress_small
-
-        rows = [{"name": "A", "count": 10}, {"name": "B", "count": 8}]
-        result = _suppress_small(rows, threshold=5)
-        assert all(r["suppressed"] is False for r in result)
-
-    def test_stage_dict_single_suppression_triggers_secondary(self):
-        from core.services.dashboard.external_report import _suppress_stage_dict
-
-        stages = {"anonym": 10, "identifiziert": 8, "qualifiziert": 3}
-        result = _suppress_stage_dict(stages, threshold=5)
-        assert result["qualifiziert"] is None  # primär
-        assert result["identifiziert"] is None  # sekundär (nächstkleinere sichtbare)
-        assert result["anonym"] == 10
-
-
 @pytest.mark.django_db
 class TestExternalReportContent:
     """Inhaltliche Tests: keine Pseudonyme, K-Anon-Schwelle wirkt."""

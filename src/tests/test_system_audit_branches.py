@@ -4,7 +4,7 @@ Deckt die Filter- und Export-Branches:
 
 * :class:`SystemAuditLogListView`.get — action/user/facility/date_from/date_to Filter (Lines 50-76).
 * :class:`SystemAuditLogDetailView`.get — Fallback ``get_object_or_404`` (Line 126).
-* :func:`_apply_auditlog_filters` — zentrale Filter-Logik (Liste + Export, Refs #1022 B3).
+* :func:`_filter_auditlog_queryset` — Spiegel-Filter im Export (Lines 144-169).
 * :class:`SystemAuditLogExportView`.get — ``?format=`` Default csv (Line 214).
 
 Refs #949.
@@ -75,67 +75,6 @@ class TestSystemAuditLogListViewFilters:
 
 
 @pytest.mark.django_db
-class TestApplyAuditlogFilters:
-    """Refs #1022 (B3): ``_apply_auditlog_filters`` ist die Single Source of
-    Truth fuer Liste (``SystemAuditLogListView``) und Export. Direkt-Unit-
-    Test des extrahierten Helpers (vorher dupliziert in get() + Export)."""
-
-    def test_filters_queryset_and_returns_raw_plus_applied(self, facility, staff_user):
-        from django.test import RequestFactory
-
-        from core.models import AuditLog
-        from core.views.system.audit import _apply_auditlog_filters
-
-        match = AuditLog.objects.create(action=AuditLog.Action.LOGIN, user=staff_user, facility=facility)
-        AuditLog.objects.create(action=AuditLog.Action.LOGIN_FAILED, facility=None)
-
-        request = RequestFactory().get(
-            "/",
-            {"action": AuditLog.Action.LOGIN, "user": str(staff_user.pk), "facility": str(facility.pk)},
-        )
-        queryset, raw, applied = _apply_auditlog_filters(request)
-
-        assert list(queryset) == [match]
-        # raw enthaelt ALLE Filter-Keys (auch leere) fuer Context/pagination_params.
-        assert raw["action"] == AuditLog.Action.LOGIN
-        assert raw["user"] == str(staff_user.pk)
-        assert raw["facility"] == str(facility.pk)
-        assert raw["date_from"] == "" and raw["date_to"] == ""
-        # applied enthaelt nur gesetzte Filter (Export-Audit-Eintrag).
-        assert applied == {
-            "action": AuditLog.Action.LOGIN,
-            "user": str(staff_user.pk),
-            "facility": str(facility.pk),
-        }
-
-    def test_facility_null_sentinel_filters_system_events(self, facility):
-        from django.test import RequestFactory
-
-        from core.models import AuditLog
-        from core.views.system.audit import SystemAuditLogListView, _apply_auditlog_filters
-
-        system_event = AuditLog.objects.create(action=AuditLog.Action.LOGIN, facility=None)
-        AuditLog.objects.create(action=AuditLog.Action.LOGIN, facility=facility)
-
-        request = RequestFactory().get("/", {"facility": SystemAuditLogListView.FACILITY_NULL_SENTINEL})
-        queryset, _raw, applied = _apply_auditlog_filters(request)
-
-        assert list(queryset) == [system_event]
-        assert applied == {"facility": SystemAuditLogListView.FACILITY_NULL_SENTINEL}
-
-    def test_date_filters_parsed_into_applied(self):
-        from django.test import RequestFactory
-
-        from core.views.system.audit import _apply_auditlog_filters
-
-        request = RequestFactory().get("/", {"date_from": "2020-01-01", "date_to": "2099-12-31"})
-        _queryset, raw, applied = _apply_auditlog_filters(request)
-
-        assert raw["date_from"] == "2020-01-01"
-        assert applied == {"date_from": "2020-01-01", "date_to": "2099-12-31"}
-
-
-@pytest.mark.django_db
 class TestSystemAuditLogDetailView:
     def test_detail_renders_entry(self, client, super_admin_user, facility):
         """Lines 122-127: Detail-View laedt + rendert AuditLog-Eintrag."""
@@ -200,7 +139,7 @@ class TestSystemAuditLogExportView:
         assert content.endswith("]")
 
     def test_export_csv_with_filters_applied(self, client, super_admin_user, facility, staff_user):
-        """Export wendet ``_apply_auditlog_filters`` mit allen Filtern an."""
+        """Lines 144-169: ``_filter_auditlog_queryset`` mit allen Filtern."""
         self._login(client, super_admin_user)
         from core.models import AuditLog
 

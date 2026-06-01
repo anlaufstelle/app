@@ -48,21 +48,6 @@ class TestProcessingActivitiesSchema:
             missing = REQUIRED_KEYS - set(entry.keys())
             assert missing == set(), f"Eintrag {entry.get('id', '?')} fehlen Felder: {missing}"
 
-    def test_toms_describe_append_only_not_hash_chain(self):
-        """A6.2 (Refs #1024 / #1016): keine TOM darf 'Hash-Chain'-Integrität
-        behaupten.
-
-        Der AuditLog ist Append-Only via DB-Trigger + RLS-Policies — es gibt
-        keine kryptographische Hash-Kette. Eine solche Behauptung im VVT wäre
-        eine unzutreffende DSGVO-Art.-30-Dokumentation.
-        """
-        for entry in PROCESSING_ACTIVITIES:
-            for tom in entry["toms"]:
-                assert "Hash-Chain" not in str(tom), (
-                    f"Aktivitaet {entry['id']}: TOM behauptet faelschlich eine "
-                    "Hash-Chain — tatsaechlich Append-Only via DB-Trigger + RLS."
-                )
-
     def test_id_is_unique(self):
         ids = [entry["id"] for entry in PROCESSING_ACTIVITIES]
         assert len(ids) == len(set(ids)), f"Doppelte IDs gefunden: {ids}"

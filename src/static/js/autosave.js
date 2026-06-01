@@ -246,10 +246,12 @@
                 window.location.href = target;
             };
             try {
-                // deleteRow ist async (offline-store.js) -> liefert immer ein
-                // Promise; .finally navigiert nach Abschluss/Fehler. Wirft der
-                // synchrone Zugriff (kein offlineStore), greift catch. Refs #1011.
-                window.offlineStore.deleteRow("drafts", storageKey).finally(done);
+                var promise = window.offlineStore.deleteRow("drafts", storageKey);
+                if (promise && typeof promise.finally === "function") {
+                    promise.finally(done);
+                } else {
+                    done();
+                }
             } catch (_e) {
                 done();
             }

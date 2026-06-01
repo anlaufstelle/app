@@ -37,10 +37,6 @@ services:
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
       POSTGRES_HOST: db
       CLAMAV_HOST: clamav
-      # Refs #1017: Stabiler App-Rollenname für check_db_roles — der Migrate-Job
-      # (docker-migrate.sh) überschreibt POSTGRES_USER auf die Admin-Rolle; ohne
-      # diese Variable prüfte das Rollen-Gate fälschlich die Admin- statt App-Rolle.
-      POSTGRES_APP_USER: ${POSTGRES_USER}
     volumes:
       # Persistenter Mount fuer MEDIA_ROOT (=/data/media) — verhindert
       # stillen Datenverlust bei docker compose pull && up -d.
@@ -65,17 +61,10 @@ services:
     image: clamav/clamav:stable
     volumes:
       - clamav-db:/var/lib/clamav
-    # Refs #1006: Scan-Pfad-Vertrag. Die App scannt über pyclamd
-    # ClamdNetworkSocket per TCP (CLAMAV_HOST:CLAMAV_PORT, Default
-    # clamav:3310, siehe core/services/file_vault/virus_scan.py). Das
-    # offizielle clamav/clamav:stable-Image aktiviert in seiner gebündelten
-    # clamd.conf "TCPSocket 3310" by Default — clamd lauscht also auf
-    # 0.0.0.0:3310. expose macht diesen internen Vertrag explizit/gepinnt.
-    expose:
-      - "3310"
-    # Refs #938: Healthcheck via clamdscan --version (Smoke-Test des Binary)
-    # statt clamdcheck.sh — robust gegen die lange Signatur-Lade-Phase
-    # (start_period), in der ein Socket-Probe sonst transient unhealthy meldet.
+    # Refs #938: Healthcheck via clamdscan --version (Smoke-Test des Binary).
+    # Der frühere clamdcheck.sh testet TCP 3310, aber clamd lauscht im
+    # Image-Default nicht auf TCP — führte zu permanent unhealthy-Status,
+    # obwohl clamd grundsätzlich funktioniert.
     healthcheck:
       test: ["CMD", "clamdscan", "--version"]
       interval: 60s

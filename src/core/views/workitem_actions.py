@@ -53,7 +53,7 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
 
             workitem = update_workitem_status(workitem, new_status, request.user)
 
-        if request.headers.get("HX-Request") == "true":
+        if request.htmx:
             if request.POST.get("hide"):
                 return HttpResponse("")
             return render(request, "core/workitems/partials/item_card.html", {"wi": workitem})

@@ -140,11 +140,7 @@ class Command(BaseCommand):
         user.facility = None
         user.is_active = True
         user.must_change_password = False
-        # A3.1 (Refs #1019): Bootstrap-super_admin ist ab Werk MFA-pflichtig —
-        # unabhaengig von MFA_ENFORCE_PRIVILEGED_ROLES soll der erste Admin nie
-        # ohne zweiten Faktor arbeiten.
-        user.mfa_required = True
-        user.save(update_fields=["facility", "is_active", "must_change_password", "mfa_required"])
+        user.save(update_fields=["facility", "is_active", "must_change_password"])
 
         self.stdout.write(
             self.style.SUCCESS(

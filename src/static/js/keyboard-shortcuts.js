@@ -10,10 +10,7 @@
             form.addEventListener('keydown', function (e) {
                 if (e.ctrlKey && e.key === 'Enter') {
                     e.preventDefault();
-                    // requestSubmit() statt submit(): löst HTML5-Validierung UND
-                    // das submit-Event aus (Pflichtfelder werden geprüft, der
-                    // Doppel-Submit-Schutz/confirm-action greifen). Refs #1016 (C7).
-                    form.requestSubmit();
+                    form.submit();
                 }
             });
         }

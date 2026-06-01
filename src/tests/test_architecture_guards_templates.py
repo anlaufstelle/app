@@ -68,50 +68,6 @@ class TestNoInlineScriptBlocksGuard:
         )
 
 
-class TestNoJavascriptUriGuard:
-    """Templates dürfen keine ``javascript:``-URIs in Attributwerten nutzen.
-
-    Die produktive CSP setzt ``script-src 'self'`` **ohne** ``'unsafe-inline'``
-    (``src/anlaufstelle/settings/base.py``). Eine Navigation zu einer
-    ``javascript:``-URI — etwa ``<a href="javascript:location.reload()">`` —
-    wird dadurch vom Browser stumm blockiert: Der Link/Button ist für den
-    Nutzer funktionslos und löst zusätzlich einen CSP-Report aus. Genau dieser
-    Bug betraf ``403_csrf.html``, ``offline.html`` und ``503.html`` (#1016, C1).
-
-    Reload/Retry gehört CSP-konform über ``href=""`` gelöst (Navigation zur
-    aktuellen URL = Neuladen, reines HTML). Für ``offline.html``/``503.html``
-    ist das die einzige Option, weil diese Templates ohne Static-Pipeline
-    ausgeliefert werden (kein externes ``<script src>`` möglich, kein Nonce).
-
-    Refs #1016 (C1), #618, #662 (CSP-Härtung ``script-src``).
-    """
-
-    _TEMPLATES_DIR = Path("src/templates")
-    # Matcht ``javascript:`` als Beginn eines Attributwerts:
-    # ``href="javascript:…"``, ``src='javascript:…'``, ``formaction=…`` usw.
-    # Reiner Prosa-Text (\"JavaScript: …\") wird nicht erfasst, weil das
-    # ``="`` / ``='`` davor verlangt wird.
-    _JS_URI = re.compile(r"""=\s*["']\s*javascript:""", re.IGNORECASE)
-
-    def test_no_javascript_uri_in_templates(self):
-        if not self._TEMPLATES_DIR.exists():
-            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
-        violations = []
-        for template_file in self._TEMPLATES_DIR.rglob("*.html"):
-            source = template_file.read_text(errors="ignore")
-            for match in self._JS_URI.finditer(source):
-                line = source[: match.start()].count("\n") + 1
-                violations.append(f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line}")
-        assert not violations, (
-            "``javascript:``-URIs werden von der CSP (``script-src 'self'`` ohne "
-            "``'unsafe-inline'``) stumm blockiert — der Link/Button ist tot und "
-            'erzeugt einen CSP-Report. Bitte Reload/Retry über ``href=""`` '
-            "(Navigation zur aktuellen URL) lösen.\n"
-            "Refs #1016 (C1), #618, #662.\n"
-            f"Betroffen: {violations}"
-        )
-
-
 class TestAlpineCspCompatibilityGuard:
     """Alpine-Komponenten muessen CSP-konform definiert werden.
 
@@ -408,41 +364,5 @@ class TestNoMultilineDjangoCommentsGuard:
             "Mehrzeilige ``{# ... #}``-Kommentare werden von Django als Text "
             "ausgegeben (Refs #618). Bitte ``{% comment %} ... {% endcomment %}`` "
             "nutzen oder den Kommentar weglassen.\n"
-            f"Betroffen: {violations}"
-        )
-
-
-class TestLogoutIsAlwaysPostGuard:
-    """Logout darf nie über einen GET-``<a href>`` ausgelöst werden.
-
-    ``CustomLogoutView`` erbt von Djangos ``auth_views.LogoutView``, das seit
-    Django 5 **POST-only** ist — ein GET auf ``/logout/`` liefert 405 (Refs
-    #1031). Genau das passierte auf der MFA-Login-/Setup-Seite, deren
-    „Abmelden"-Link ein ``<a href="{% url 'logout' %}">`` war. Logout muss
-    immer über ein ``<form method="post">`` (mit ``{% csrf_token %}``) laufen,
-    wie in ``partials/_navigation_desktop.html``.
-    """
-
-    _TEMPLATES_DIR = Path("src/templates")
-    # ``<a … href="{% url 'logout' %}" …>`` — Anchor (GET) auf die Logout-URL.
-    _GET_LOGOUT_ANCHOR = re.compile(
-        r"""<a\b[^>]*href=["']\{%\s*url\s+['"]logout['"]\s*%\}["']""",
-        re.IGNORECASE,
-    )
-
-    def test_no_get_anchor_triggers_logout(self):
-        if not self._TEMPLATES_DIR.exists():
-            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
-        violations = []
-        for template_file in self._TEMPLATES_DIR.rglob("*.html"):
-            source = template_file.read_text(errors="ignore")
-            for match in self._GET_LOGOUT_ANCHOR.finditer(source):
-                line = source[: match.start()].count("\n") + 1
-                violations.append(f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line}")
-        assert not violations, (
-            "Logout über GET-<a href> liefert 405 (POST-only LogoutView, Refs "
-            '#1031). Bitte ein <form method="post" action="{% url \'logout\' %}"> '
-            "mit {% csrf_token %} + Submit-Button nutzen (Muster: "
-            "partials/_navigation_desktop.html).\n"
             f"Betroffen: {violations}"
         )

@@ -49,14 +49,8 @@ document.addEventListener("alpine:init", () => {
         get selectionCount() {
             return this.selected.length;
         },
-        onToggleAll() {
-            // CSP-Build (@alpinejs/csp): Bare-Method-Handler bekommen das
-            // native Event NICHT zuverlaessig — daher den Master-Checkbox-
-            // State direkt aus dem DOM lesen statt aus event.target (Refs
-            // #1023). Vermeidet zugleich die im CSP-Build verbotene
-            // $event-Expression in der Bindung.
-            const master = document.getElementById("workitem-select-all");
-            this.toggleAll(!!master && master.checked);
+        onToggleAll(event) {
+            this.toggleAll(event.target.checked);
         },
     }));
 

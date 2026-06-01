@@ -31,15 +31,6 @@
             <input type="password" name="password" id="id_password" required autofocus
                 class="mt-1 block w-full rounded-md border border-subtle shadow-sm focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 bg-canvas">
         </div>
-        {% if needs_otp %}
-        <div>
-            <label for="id_otp_token" class="block text-sm font-medium text-ink-soft">{% trans "Bestätigungscode (2FA)" %}</label>
-            <input type="text" name="otp_token" id="id_otp_token" required inputmode="numeric" autocomplete="one-time-code"
-                placeholder="{% trans 'OTP oder Backup-Code' %}"
-                class="mt-1 block w-full rounded-md border border-subtle shadow-sm focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 bg-canvas">
-            <p class="mt-1 text-xs text-ink-muted">{% trans "Geben Sie den aktuellen 6-stelligen Code Ihrer Authenticator-App oder einen Backup-Code ein." %}</p>
-        </div>
-        {% endif %}
         <button type="submit"
             class="w-full inline-flex items-center justify-center gap-2 py-2 px-4 rounded-md text-sm font-medium text-white bg-accent hover:bg-accent">
             {% trans "Bestätigen und fortfahren" %}

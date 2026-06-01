@@ -9,6 +9,7 @@ import csv
 import json
 from urllib.parse import urlencode
 
+from django.http import StreamingHttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views import View
@@ -18,7 +19,6 @@ from core.models import AuditLog, Facility
 from core.models.user import User
 from core.services.audit import audit_system_view
 from core.signals.audit import _set_session_vars
-from core.utils.downloads import safe_download_response
 from core.utils.formatting import parse_date
 from core.views.mixins import HTMXPartialMixin, PaginatedListMixin
 from core.views.system.mixins import SystemAuditMixin
@@ -44,10 +44,36 @@ class SystemAuditLogListView(SystemAuditMixin, PaginatedListMixin, HTMXPartialMi
     FACILITY_NULL_SENTINEL = "__null__"
 
     def get(self, request):
-        # Refs #1022 (B3): Filter-Logik zentral in ``_apply_auditlog_filters``
-        # (Single Source of Truth mit dem Export). ``raw`` liefert die
-        # Roh-GET-Werte fuer Context + ``pagination_params``.
-        queryset, raw, _applied = _apply_auditlog_filters(request)
+        queryset = AuditLog.objects.all().select_related("user", "facility")
+
+        # Filter: action
+        action = request.GET.get("action", "")
+        if action:
+            queryset = queryset.filter(action=action)
+
+        # Filter: user
+        user_id = request.GET.get("user", "")
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+
+        # Filter: facility (mit NULL-Sentinel fuer System-Events)
+        facility_id = request.GET.get("facility", "")
+        if facility_id == self.FACILITY_NULL_SENTINEL:
+            queryset = queryset.filter(facility__isnull=True)
+        elif facility_id:
+            queryset = queryset.filter(facility_id=facility_id)
+
+        # Filter: date_from
+        date_from_str = request.GET.get("date_from", "")
+        date_from = parse_date(date_from_str)
+        if date_from:
+            queryset = queryset.filter(timestamp__date__gte=date_from)
+
+        # Filter: date_to
+        date_to_str = request.GET.get("date_to", "")
+        date_to = parse_date(date_to_str)
+        if date_to:
+            queryset = queryset.filter(timestamp__date__lte=date_to)
 
         page = self.paginate(queryset, request)
 
@@ -55,7 +81,19 @@ class SystemAuditLogListView(SystemAuditMixin, PaginatedListMixin, HTMXPartialMi
         all_users = User.objects.order_by("last_name", "first_name", "username")
         all_facilities = Facility.objects.order_by("name")
 
-        pagination_params = urlencode({k: v for k, v in raw.items() if v})
+        pagination_params = urlencode(
+            {
+                k: v
+                for k, v in [
+                    ("action", action),
+                    ("user", user_id),
+                    ("facility", facility_id),
+                    ("date_from", date_from_str),
+                    ("date_to", date_to_str),
+                ]
+                if v
+            }
+        )
 
         context = {
             "page_obj": page,
@@ -63,11 +101,11 @@ class SystemAuditLogListView(SystemAuditMixin, PaginatedListMixin, HTMXPartialMi
             "all_users": all_users,
             "all_facilities": all_facilities,
             "facility_null_sentinel": self.FACILITY_NULL_SENTINEL,
-            "filter_action": raw["action"],
-            "filter_user": raw["user"],
-            "filter_facility": raw["facility"],
-            "filter_date_from": raw["date_from"],
-            "filter_date_to": raw["date_to"],
+            "filter_action": action,
+            "filter_user": user_id,
+            "filter_facility": facility_id,
+            "filter_date_from": date_from_str,
+            "filter_date_to": date_to_str,
             "pagination_params": pagination_params,
         }
 
@@ -92,55 +130,45 @@ class SystemAuditLogDetailView(SystemAuditMixin, View):
 # --- Export (Refs #873) -----------------------------------------------------
 
 
-def _apply_auditlog_filters(request) -> tuple:
-    """Single Source of Truth fuer die AuditLog-Filter — genutzt von
-    ``SystemAuditLogListView`` (Liste) und ``SystemAuditLogExportView``
-    (Export). Refs #1022 (B3): vorher in beiden Consumern dupliziert.
+def _filter_auditlog_queryset(request) -> tuple:
+    """Apply die gleichen Filter wie ``SystemAuditLogListView``.
 
-    Returns ``(queryset, raw, applied)``:
-
-    * ``queryset`` — gefiltertes ``AuditLog``-Queryset (``select_related``).
-    * ``raw`` — dict **aller** Filter-Roh-GET-Werte (leere Strings inklusive)
-      fuer Template-Context + ``pagination_params`` der Liste.
-    * ``applied`` — dict nur der **tatsaechlich gesetzten** Filter (Werte
-      normalisiert) fuer den Export-Audit-Eintrag (``filter_count``).
+    Returns ``(queryset, filter_dict)`` — das ``filter_dict`` enthaelt
+    nur tatsaechlich gesetzte Filter und ist fuer den Audit-Eintrag
+    (``filter_count``) gedacht.
     """
     queryset = AuditLog.objects.all().select_related("user", "facility")
-    raw = {
-        "action": request.GET.get("action", ""),
-        "user": request.GET.get("user", ""),
-        "facility": request.GET.get("facility", ""),
-        "date_from": request.GET.get("date_from", ""),
-        "date_to": request.GET.get("date_to", ""),
-    }
-    applied = {}
+    filters = {}
 
-    if raw["action"]:
-        queryset = queryset.filter(action=raw["action"])
-        applied["action"] = raw["action"]
+    action = request.GET.get("action", "")
+    if action:
+        queryset = queryset.filter(action=action)
+        filters["action"] = action
 
-    if raw["user"]:
-        queryset = queryset.filter(user_id=raw["user"])
-        applied["user"] = raw["user"]
+    user_id = request.GET.get("user", "")
+    if user_id:
+        queryset = queryset.filter(user_id=user_id)
+        filters["user"] = user_id
 
-    if raw["facility"] == SystemAuditLogListView.FACILITY_NULL_SENTINEL:
+    facility_id = request.GET.get("facility", "")
+    if facility_id == SystemAuditLogListView.FACILITY_NULL_SENTINEL:
         queryset = queryset.filter(facility__isnull=True)
-        applied["facility"] = SystemAuditLogListView.FACILITY_NULL_SENTINEL
-    elif raw["facility"]:
-        queryset = queryset.filter(facility_id=raw["facility"])
-        applied["facility"] = raw["facility"]
+        filters["facility"] = "__null__"
+    elif facility_id:
+        queryset = queryset.filter(facility_id=facility_id)
+        filters["facility"] = facility_id
 
-    date_from = parse_date(raw["date_from"])
+    date_from = parse_date(request.GET.get("date_from", ""))
     if date_from:
         queryset = queryset.filter(timestamp__date__gte=date_from)
-        applied["date_from"] = str(date_from)
+        filters["date_from"] = str(date_from)
 
-    date_to = parse_date(raw["date_to"])
+    date_to = parse_date(request.GET.get("date_to", ""))
     if date_to:
         queryset = queryset.filter(timestamp__date__lte=date_to)
-        applied["date_to"] = str(date_to)
+        filters["date_to"] = str(date_to)
 
-    return queryset, raw, applied
+    return queryset, filters
 
 
 def _audit_export_row(entry: AuditLog) -> dict:
@@ -185,7 +213,7 @@ class SystemAuditLogExportView(SystemAuditMixin, View):
         if export_format not in ("csv", "json"):
             export_format = "csv"
 
-        queryset, _raw, applied_filters = _apply_auditlog_filters(request)
+        queryset, applied_filters = _filter_auditlog_queryset(request)
         # Stabile Reihenfolge fuer den Export — neueste zuerst, analog
         # zur Liste.
         queryset = queryset.order_by("-timestamp")
@@ -208,21 +236,15 @@ class SystemAuditLogExportView(SystemAuditMixin, View):
             filters=applied_filters,
         )
 
-        # Filename mit Timestamp + Format. Der zentrale Download-Builder setzt
-        # RFC-5987-Content-Disposition (attachment) + X-Content-Type-Options:
-        # nosniff — konsistent mit allen anderen Downloads (Refs #1011).
+        # Filename mit Timestamp + Format.
         ts = timezone.now().strftime("%Y%m%d-%H%M%S")
         if export_format == "json":
-            return safe_download_response(
-                f"auditlog-{ts}.json",
-                "application/json",
-                self._iter_json(queryset),
-            )
-        return safe_download_response(
-            f"auditlog-{ts}.csv",
-            "text/csv; charset=utf-8",
-            self._iter_csv(queryset),
-        )
+            response = StreamingHttpResponse(self._iter_json(queryset), content_type="application/json")
+            response["Content-Disposition"] = f'attachment; filename="auditlog-{ts}.json"'
+        else:
+            response = StreamingHttpResponse(self._iter_csv(queryset), content_type="text/csv; charset=utf-8")
+            response["Content-Disposition"] = f'attachment; filename="auditlog-{ts}.csv"'
+        return response
 
     def _iter_csv(self, queryset):
         """Generator yielding CSV bytes for ``StreamingHttpResponse``.

@@ -46,22 +46,3 @@ from core.views.utils import safe_redirect_path
 )
 def test_safe_redirect_path(raw, expected):
     assert safe_redirect_path(raw) == expected
-
-
-@pytest.mark.parametrize(
-    "raw",
-    [
-        "/\\evil.com",  # Browser lesen \ wie / → //evil.com (protokoll-relativ)
-        "/\\/evil.com",
-        "/\\\\evil.example",
-    ],
-)
-def test_safe_redirect_path_rejects_backslash_bypass(raw):
-    """Backslash-Tricks duerfen nicht als same-origin durchgehen (Refs #1011).
-
-    ``startswith('/')`` allein erlaubt ``/\\evil.com``; Chrome & Co. behandeln
-    ``\\`` wie ``/``, wodurch daraus eine protokoll-relative URL auf eine
-    fremde Origin wird. Django's ``url_has_allowed_host_and_scheme`` prueft
-    beide Varianten (roh + mit ersetzten Backslashes) und faengt das ab.
-    """
-    assert safe_redirect_path(raw) == "/"

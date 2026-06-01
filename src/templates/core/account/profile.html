@@ -8,7 +8,7 @@
     <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Mein Profil" %}</h1>
 
     {# Profilinfo-Card #}
-    <div class="card p-5 mb-5">
+    <div class="bg-surface border border-subtle rounded-[10px] p-5 mb-5">
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
                 <div class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Name" %}</div>
@@ -55,7 +55,7 @@
 
     {# Zuletzt besuchte Personen #}
     {% if recent_clients %}
-    <div class="card p-5 mb-5">
+    <div class="bg-surface border border-subtle rounded-[10px] p-5 mb-5">
         <div class="flex items-center justify-between mb-3">
             <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Zuletzt besuchte Personen" %}</h2>
             <a href="{% url 'core:client_list' %}" class="text-[12px] text-accent hover:underline font-semibold">{% trans "Alle anzeigen" %}</a>
@@ -65,7 +65,7 @@
     {% endif %}
 
     {# Letzte Events #}
-    <div class="card p-5 mb-5">
+    <div class="bg-surface border border-subtle rounded-[10px] p-5 mb-5">
         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Letzte Ereignisse" %}</h2>
         {% if recent_events %}
         <ul class="divide-y divide-subtle">
@@ -87,7 +87,7 @@
     </div>
 
     {# Offene Aufgaben #}
-    <div class="card p-5 mb-5">
+    <div class="bg-surface border border-subtle rounded-[10px] p-5 mb-5">
         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Offene Aufgaben" %}</h2>
         {% if open_workitems %}
         <ul class="divide-y divide-subtle">
@@ -108,7 +108,7 @@
     </div>
 
     {# Erledigte Aufgaben #}
-    <div class="card p-5">
+    <div class="bg-surface border border-subtle rounded-[10px] p-5">
         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Kürzlich erledigt" %}</h2>
         {% if done_workitems %}
         <ul class="divide-y divide-subtle">

@@ -62,8 +62,7 @@
             {% trans "Bitte in wenigen Minuten erneut versuchen. Eingegebene Daten werden vom Service-Worker zwischengespeichert und automatisch gesendet, sobald die App wieder online ist." %}
         </p>
         <div>
-            <!-- href="" lädt die aktuelle URL neu, CSP-konform ohne Inline-Script. Refs #1016, C1 -->
-            <a href="" class="reload">{% trans "Erneut versuchen" %}</a>
+            <a href="javascript:location.reload()" class="reload">{% trans "Erneut versuchen" %}</a>
         </div>
     </div>
 </body>

@@ -2,10 +2,9 @@
 
 ``RoleDashboardView`` dispatched anhand der Rolle des angemeldeten Users
 zu einem von vier Templates und liefert pro Rolle einen Daten-Context
-aus :mod:`core.services.dashboard`. Kein eigenes Rollen-Gate —
-``LoginRequiredMixin`` schliesst nur nicht angemeldete Zugriffe aus; jede
-authentifizierte Rolle erhaelt ihre Landingpage (``assistant`` faellt in
-den Staff-/else-Zweig).
+aus :mod:`core.services.dashboard`. Kein eigenes Rechte-Konzept — der
+``AssistantOrAboveRequiredMixin`` schliesst nicht angemeldete und
+``assistant``-Rollen-untaugliche Pfade aus.
 """
 
 from __future__ import annotations

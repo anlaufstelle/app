@@ -87,20 +87,6 @@ class TestRLSSetup:
         missing = set(EXPECTED_TABLES) - covered
         assert not missing, f"Policy 'facility_isolation' missing on: {missing}"
 
-    def test_super_admin_bypass_branch_on_all_policies(self):
-        """Refs #1016 A1.3: JEDE facility_isolation-Policy muss den
-        ``app.is_super_admin``-Bypass-Branch in USING enthalten — sonst ist die
-        Tabelle fuer den super_admin cross-facility unsichtbar (0085 + 0091)."""
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT tablename, qual FROM pg_policies "
-                "WHERE policyname = 'facility_isolation' AND tablename = ANY(%s)",
-                [EXPECTED_TABLES],
-            )
-            quals = {row[0]: row[1] or "" for row in cursor.fetchall()}
-        missing_bypass = sorted(t for t in EXPECTED_TABLES if "is_super_admin" not in quals.get(t, ""))
-        assert not missing_bypass, f"super_admin-Bypass fehlt in USING auf: {missing_bypass} (Refs #1016 A1.3)"
-
     def test_set_config_does_not_raise(self):
         """Smoke-Test for the set_config call used by FacilityScopeMiddleware."""
         import uuid
@@ -288,70 +274,6 @@ class TestRLSFunctional:
 # ---------------------------------------------------------------------------
 # Super-Admin RLS-Bypass (Refs #867)
 # ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db(transaction=True)
-class TestReplicationRoleGrant:
-    """Refs #1016 A1.2: ``session_replication_role`` ist ein SUPERUSER-Parameter.
-    ``bypass_replication_triggers()`` (DSGVO-Art.-17-Anonymisierung + Audit-Pruning,
-    laufen seit A1.1 als NOSUPERUSER-Admin-Rolle via run-as-admin.sh) setzt ihn —
-    das gelingt einer NOSUPERUSER-Rolle nur mit ``GRANT SET ON PARAMETER``
-    (PostgreSQL 15+). ``01-app-role.sh`` erteilt der Admin-Rolle genau diesen GRANT;
-    ohne ihn bricht der Wartungs-Cron mit ``permission denied to set parameter``.
-
-    ``transaction=True``: CREATE/DROP ROLE + SET ROLE brauchen echte Sessions.
-    """
-
-    def setup_method(self):
-        if connection.vendor != "postgresql":
-            pytest.skip("RLS/Rollen-Test benoetigt PostgreSQL")
-
-    def _drop_roles(self):
-        with connection.cursor() as cur:
-            cur.execute("RESET ROLE")
-            # REVOKE vor DROP: der Parameter-GRANT erzeugt sonst eine Abhaengigkeit
-            # ('role cannot be dropped because some objects depend on it').
-            cur.execute(
-                "DO $$ DECLARE r text; BEGIN "
-                "FOREACH r IN ARRAY ARRAY['a1_repl_nogrant', 'a1_repl_granted'] LOOP "
-                "IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN "
-                "EXECUTE format('REVOKE SET ON PARAMETER session_replication_role FROM %I', r); "
-                "EXECUTE format('DROP ROLE %I', r); "
-                "END IF; END LOOP; END $$;"
-            )
-
-    def test_nosuperuser_needs_grant_for_session_replication_role(self):
-        from django.db import Error as DjangoDBError
-        from django.db import transaction
-
-        self._drop_roles()
-        with connection.cursor() as cur:
-            cur.execute("CREATE ROLE a1_repl_nogrant NOSUPERUSER NOBYPASSRLS")
-            cur.execute("CREATE ROLE a1_repl_granted NOSUPERUSER NOBYPASSRLS")
-            cur.execute("GRANT SET ON PARAMETER session_replication_role TO a1_repl_granted")
-        try:
-            # Ohne GRANT → permission denied. atomic() kapselt den Transaktions-Abort,
-            # damit die Connection danach weiterverwendbar bleibt.
-            with pytest.raises(DjangoDBError) as exc, transaction.atomic():
-                with connection.cursor() as cur:
-                    cur.execute("SET ROLE a1_repl_nogrant")
-                    cur.execute("SET session_replication_role = replica")
-            assert "session_replication_role" in str(exc.value) or "permission denied" in str(exc.value).lower()
-            with connection.cursor() as cur:
-                cur.execute("RESET ROLE")
-
-            # Mit GRANT → erfolgreich (das ist der Fix in 01-app-role.sh).
-            with transaction.atomic():
-                with connection.cursor() as cur:
-                    cur.execute("SET ROLE a1_repl_granted")
-                    cur.execute("SET session_replication_role = replica")
-                    cur.execute("SHOW session_replication_role")
-                    assert cur.fetchone()[0] == "replica"
-                    cur.execute("SET session_replication_role = origin")
-            with connection.cursor() as cur:
-                cur.execute("RESET ROLE")
-        finally:
-            self._drop_roles()
 
 
 @pytest.mark.django_db(transaction=True)

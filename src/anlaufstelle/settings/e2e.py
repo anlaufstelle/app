@@ -20,8 +20,3 @@ RATELIMIT_ENABLE = False
 # Session nicht bei jedem Request speichern (reduziert DB-Writes und
 # verhindert Background-Netzwerkaktivität, die networkidle-Waits stört)
 SESSION_SAVE_EVERY_REQUEST = False
-
-# MFA-Rollen-Enforcement ist in E2E (wie dev) standardmäßig AUS, damit die
-# Default-Logins MFA-frei bleiben. Der dedizierte enforced-Server (Refs #1019)
-# setzt ``E2E_MFA_ENFORCE_ROLES=1`` und prüft damit den Rollen-Redirect.
-MFA_ENFORCE_PRIVILEGED_ROLES = os.environ.get("E2E_MFA_ENFORCE_ROLES", "0") == "1"

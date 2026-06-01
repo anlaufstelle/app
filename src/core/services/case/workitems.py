@@ -100,19 +100,6 @@ def _maybe_duplicate_recurring(workitem, user, new_status) -> None:
     duplicate_recurring_workitem(workitem, user)
 
 
-def _locked_workitems(workitems):
-    """Refs #1022 (B2): Items innerhalb der Transaktion per
-    ``select_for_update`` neu laden+locken — deterministisch nach ``pk``
-    geordnet zur Deadlock-Vermeidung —, damit die Bulk-Pfade auf frischem
-    DB-Stand operieren statt auf den (potenziell veralteten) aus der View
-    geladenen Instanzen. Spiegelt den Single-Pfad ``update_workitem_status``
-    (Refs #129/#733). Facility-/Tenant-Isolation greift ueber RLS (GUC im
-    Request-Kontext) und die View-Vorfilterung.
-    """
-    pks = [w.pk for w in workitems]
-    return WorkItem.objects.select_for_update().filter(pk__in=pks).order_by("pk")
-
-
 @transaction.atomic
 def create_workitem(facility, user, *, client=None, **data):
     """Create a work item with activity and audit logging."""
@@ -311,7 +298,7 @@ def bulk_update_workitem_status(workitems, user, status):
         raise ValueError(f"Invalid status: {status}")
 
     count = 0
-    for workitem in _locked_workitems(workitems):
+    for workitem in workitems:
         # Refs #906: gemeinsame Transition-Logik mit dem Single-Pfad. Bulk
         # uebernimmt kein Auto-Assign (Designentscheidung, Refs #593).
         if not _apply_status_transition(workitem, status, user, auto_assign=False):
@@ -337,7 +324,7 @@ def bulk_update_workitem_priority(workitems, user, priority):
         raise ValueError(f"Invalid priority: {priority}")
 
     count = 0
-    for workitem in _locked_workitems(workitems):
+    for workitem in workitems:
         if workitem.priority == priority:
             continue
         workitem.priority = priority
@@ -354,7 +341,7 @@ def bulk_assign_workitems(workitems, user, assignee_or_none):
     ``assignee_or_none=None`` removes the assignment. Returns the processed count.
     """
     count = 0
-    for workitem in _locked_workitems(workitems):
+    for workitem in workitems:
         if workitem.assigned_to_id == (assignee_or_none.pk if assignee_or_none else None):
             continue
         workitem.assigned_to = assignee_or_none

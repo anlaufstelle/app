@@ -2,7 +2,7 @@
 
 > ℹ️ **Alternative, kein primaerer Pfad.** Primaerer Deployment-Pfad ist
 > Plain Docker Compose ([ADR-017](adr/017-deployment-topology.md),
-> [docs/dev-deployment.md](dev/dev-deployment.md)) — verankert in
+> [docs/dev-deployment.md](dev-deployment.md)) — verankert in
 > Fachkonzept §1009 (`docker compose up` als harte Anforderung).
 > Diese Coolify-Anleitung bleibt erhalten als **unterstuetzte Alternative**
 > fuer Trager, die Coolify bereits einsetzen, oder fuer kuenftige

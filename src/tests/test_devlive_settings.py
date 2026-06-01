@@ -19,9 +19,6 @@ _VALID_ENV = {
     "DJANGO_SECRET_KEY": "x" * 50,
     "ALLOWED_HOSTS": "dev.anlaufstelle.app",
     "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
-    # Refs #1024 A4.2: devlive erbt von prod.py, das AUDIT_HASH_KEY fail-closed
-    # verlangt — daher hier als Pflicht-ENV für den Import nötig.
-    "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     "POSTGRES_DB": "x",
     "POSTGRES_USER": "u",
     "POSTGRES_PASSWORD": "p",

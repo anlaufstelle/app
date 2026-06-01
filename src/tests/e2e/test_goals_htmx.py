@@ -218,8 +218,6 @@ class TestMilestoneDeleteViaHTMX:
         ms_li = page.locator(f"#goals-section li:has(:text-is('{ms_title}'))").first
         ms_li.hover()
         delete_form = ms_li.locator("form[hx-post*='/delete/']")
-        # C6 (#1016): hx-confirm zeigt einen Bestätigungsdialog — akzeptieren, damit gelöscht wird.
-        page.once("dialog", lambda dialog: dialog.accept())
         delete_form.locator("button[type='submit']").click()
 
         # Nach HTMX-Swap muss der Meilenstein-Title komplett aus der Sektion verschwunden sein.
@@ -233,55 +231,3 @@ class TestMilestoneDeleteViaHTMX:
         # Persistenz: Reload zeigt Meilenstein nicht mehr.
         page.reload(wait_until="domcontentloaded")
         assert page.locator(f"#goals-section :text-is('{ms_title}')").count() == 0
-
-    def test_milestone_delete_cancel_keeps_entry(self, staff_page, base_url):
-        """C6 (#1016): hx-confirm abbrechen → Meilenstein bleibt erhalten."""
-        page = staff_page
-        _create_case(page, base_url)
-        _create_goal_in_case(page, f"E2E-Goal-MsC-{uuid.uuid4().hex[:6]}")
-
-        ms_title = f"E2E-MSC-{uuid.uuid4().hex[:6]}"
-        add_form = page.locator(
-            "form[hx-post*='/milestones/'][hx-post$='/']:has(input[placeholder='Neuer Meilenstein'])"
-        ).first
-        add_form.locator("input[placeholder='Neuer Meilenstein']").fill(ms_title)
-        add_form.locator("button[type='submit']").click()
-        page.locator(f"#goals-section :text-is('{ms_title}')").first.wait_for(state="visible", timeout=5000)
-
-        ms_li = page.locator(f"#goals-section li:has(:text-is('{ms_title}'))").first
-        ms_li.hover()
-        # Dialog ABWEISEN → kein Delete, Meilenstein bleibt.
-        page.once("dialog", lambda dialog: dialog.dismiss())
-        ms_li.locator("form[hx-post*='/delete/'] button[type='submit']").click()
-        page.wait_for_timeout(500)
-        assert page.locator(f"#goals-section :text-is('{ms_title}')").count() == 1
-
-
-class TestGoalInlineEditValidation:
-    """C6 (#1016): Leereingabe-Validierung im Goal-Inline-Edit."""
-
-    def test_goal_edit_empty_title_is_blocked(self, staff_page, base_url):
-        page = staff_page
-        _create_case(page, base_url)
-        title = f"E2E-GoalV-{uuid.uuid4().hex[:6]}"
-        _create_goal_in_case(page, title)
-
-        # Edit-Form aufklappen.
-        page.locator(f"#goals-section h3:has-text('{title}')").first.locator(
-            "xpath=following-sibling::button[1]"
-        ).click()
-        edit_form = page.locator("#goals-section form[hx-post*='/goals/'][hx-post$='/edit/']").first
-        edit_form.wait_for(state="visible", timeout=5000)
-
-        title_input = edit_form.locator("input[name='title']")
-        assert title_input.get_attribute("required") is not None
-        title_input.fill("")
-        edit_form.locator("button:has-text('Speichern')").click()
-
-        # required blockt den Submit client-seitig → Form bleibt invalid + offen (kein Swap).
-        page.wait_for_timeout(300)
-        assert edit_form.evaluate("f => !f.checkValidity()")
-        assert edit_form.is_visible()
-        # Nach Reload (View-Modus): leerer Titel wurde NICHT gespeichert, Original bleibt.
-        page.reload(wait_until="domcontentloaded")
-        assert page.locator(f"#goals-section h3:text-is('{title}')").first.is_visible()

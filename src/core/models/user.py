@@ -116,20 +116,8 @@ class User(AbstractUser):
 
     @property
     def is_mfa_enforced(self):
-        """True if the user, the user's role, or the user's facility requires 2FA.
-
-        Rollen-Default-Enforcement (A3.1, Refs #1019): super_admin und
-        facility_admin erzwingen MFA allein ueber ihre Rolle, sobald
-        ``MFA_ENFORCE_PRIVILEGED_ROLES`` aktiv ist (nur Produktion — dev/test/e2e
-        bleiben bewusst MFA-frei). ``mfa_required`` (User) und
-        ``mfa_enforced_facility_wide`` (Facility) wirken unabhaengig davon weiter.
-        """
+        """True if either the user or the user's facility requires 2FA."""
         if self.mfa_required:
-            return True
-        if settings.MFA_ENFORCE_PRIVILEGED_ROLES and self.role in (
-            self.Role.SUPER_ADMIN,
-            self.Role.FACILITY_ADMIN,
-        ):
             return True
         facility = self.facility
         if facility is None:

@@ -8459,7 +8459,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 |---------|-------|---------|--------|-----|
 | Ops | admin ||||
 
-**Code-Referenz:** [`deploy/backup.sh`](https://github.com/anlaufstelle/app/blob/main/dev-ops/deploy/backup.sh), [`docs/ops-runbook.md`](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md)
+**Code-Referenz:** [`deploy/backup.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/backup.sh), [`docs/ops-runbook.md`](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md)
 
 **Schritte:**
 1. SSH auf Host: `ssh anlaufstelle@dev.anlaufstelle.app`.
@@ -8539,7 +8539,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 |---------|-------|---------|--------|-----|
 | Ops | admin ||||
 
-**Code-Referenz:** [`deploy/deploy-dev.sh`](https://github.com/anlaufstelle/app/blob/main/dev-ops/deploy/deploy-dev.sh) oder Entrypoint im App-Container.
+**Code-Referenz:** [`deploy/deploy-dev.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/deploy-dev.sh) oder Entrypoint im App-Container.
 
 **Schritte:**
 1. Neues Image pullen: `docker compose pull web`.

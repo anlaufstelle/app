@@ -142,7 +142,7 @@ python src/manage.py seed --flush          # flush existing data first
 
 Seed credentials: password `anlaufstelle2026`, 5 logins (username → role): `superadmin` → `super_admin` (no facility assignment), `admin` → `facility_admin`, `thomas` → `lead`, `miriam` → `staff`, `lena` → `assistant`. All except `superadmin` belong to the default facility.
 
-> **Production:** In production there is **no** default password and no default `super_admin`. Initial setup runs via `manage.py create_super_admin` (interactive, no default). Details: [docs/dev-deployment.md § Production-Bootstrap](docs/dev/dev-deployment.md), [docs/admin-guide.md § 2.1 Erstinstallation](docs/admin-guide.md). Lockout recovery: `manage.py unlock <username>`.
+> **Production:** In production there is **no** default password and no default `super_admin`. Initial setup runs via `manage.py create_super_admin` (interactive, no default). Details: [docs/dev-deployment.md § Production-Bootstrap](docs/dev-deployment.md), [docs/admin-guide.md § 2.1 Erstinstallation](docs/admin-guide.md). Lockout recovery: `manage.py unlock <username>`.
 
 **7. Install Node dependencies** (for Tailwind CSS)
 
@@ -263,7 +263,7 @@ Every new facility-scoped model must be protected on **both** defense lines:
  - New migration following the pattern of [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): add the table to `DIRECT_TABLES` (or `JOIN_TABLES` if no direct `facility_id` column exists). The migration sets `ENABLE + FORCE ROW LEVEL SECURITY` plus a `facility_isolation` policy.
  - Add the table to `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) so the RLS setup test guarantees coverage.
 
-Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS only takes effect in production when the Django DB user is **not** a superuser (see [docs/dev-deployment.md](docs/dev/dev-deployment.md), primary path per [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) is an alternative platform guide).
+Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS only takes effect in production when the Django DB user is **not** a superuser (see [docs/dev-deployment.md](docs/dev-deployment.md), primary path per [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) is an alternative platform guide).
 
 ### Linting and Formatting
 
@@ -460,21 +460,21 @@ This pipeline must pass locally before every pull request.
 Mutation testing checks how many synthetic code mutations the test suite actually detects. Configuration in `pyproject.toml` (`[tool.mutmut]`). Expected runtime: 3–6 h on `core.services` + `core.forms`. Therefore not a PR requirement, but done selectively per wave issue.
 
 ```bash
-make mutation           # mutmut run via scripts/dev/run_mutmut.py
+make mutation           # mutmut run via scripts/run_mutmut.py
 make mutation-report    # survivors list, non-interactive
 ```
 
 `make mutation` is resumable (mutmut stores state in `mutants/**/*.py.meta` and automatically picks up where a previous run stopped on restart).
 
-For longer runs on a sandbox with an OOM-killer or idle-killer, [`scripts/run_mutmut_watchdog.sh`](scripts/dev/run_mutmut_watchdog.sh) is available:
+For longer runs on a sandbox with an OOM-killer or idle-killer, [`scripts/run_mutmut_watchdog.sh`](scripts/run_mutmut_watchdog.sh) is available:
 
 ```bash
 # Default: 3 additional restarts, stall threshold 5 min, 2 mutmut workers
-scripts/dev/run_mutmut_watchdog.sh
+scripts/run_mutmut_watchdog.sh
 
 # More aggressive profile
 MAX_RESTARTS=5 STALL_THRESHOLD=600 MUTMUT_MAX_CHILDREN=4 \
-    scripts/dev/run_mutmut_watchdog.sh
+    scripts/run_mutmut_watchdog.sh
 ```
 
 The watchdog detects stalled or dead master processes and restarts `make mutation` — the resume mechanism takes over. Exits 0 as soon as `mutants/mutmut-stats.json` has been written during the watchdog session. Background: Refs #937.

@@ -60,5 +60,5 @@ Gleichzeitig ist die Multi-Stage-Welt nicht hypothetisch, sondern in unmittelbar
 
 - Fachkonzept: [`docs/fachkonzept-anlaufstelle.md`](../fachkonzept-anlaufstelle.md) §163, §247, §844, §928, §1009
 - Issues: #320 (Recherche), #554 (Coolify-Pivot, geschlossen mit diesem ADR), #671 (Plain-Compose-Pivot), #862 (Plan-Issue dieses ADRs)
-- Begleitende Doku: [`docs/dev-deployment.md`](../dev/dev-deployment.md), [`docs/coolify-deployment.md`](../coolify-deployment.md) (alternativer Pfad), [`docs/ops-runbook.md`](../ops-runbook.md)
+- Begleitende Doku: [`docs/dev-deployment.md`](../dev-deployment.md), [`docs/coolify-deployment.md`](../coolify-deployment.md) (alternativer Pfad), [`docs/ops-runbook.md`](../ops-runbook.md)
 - Verwandte ADRs: [ADR-009](009-settings-inheritance.md) (Settings-Vererbung), [ADR-011](011-three-repo-release-pipeline.md) (3-Repo-Pipeline)

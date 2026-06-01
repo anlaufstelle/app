@@ -10,26 +10,19 @@ fehlerhaften URLs (Refs #733).
 Browser als protokoll-relativ interpretiert (Refs #770).
 """
 
-from django.utils.http import url_has_allowed_host_and_scheme
-
 from core.constants import MAX_PAGE
 
 
 def safe_redirect_path(raw: str | None) -> str:
     """Open-Redirect-Schutz: nur same-origin Pfade akzeptieren.
 
-    Liefert ``raw`` zurueck, wenn es mit genau einem ``/`` beginnt **und**
-    Django's ``url_has_allowed_host_and_scheme`` es als same-origin einstuft;
+    Liefert ``raw`` zurueck, wenn es mit genau einem ``/`` beginnt;
     sonst ``"/"``. Faengt damit ``//evil``, ``http://...``, ``javascript:``,
-    Backslash-Tricks wie ``/\\evil`` (Browser lesen ``\\`` wie ``/``),
     leere Strings und ``None`` ab. Vorbild war ``views/sudo_mode._safe_next``.
-
-    ``allowed_hosts=None`` laesst nur relative Pfade ohne Host zu — genau die
-    same-origin-Semantik, die wir wollen. Der explizite ``startswith('/')``
-    bleibt, damit blanke relative Eingaben (``"evil"``) weiter auf ``"/"``
-    normalisiert werden (Django allein wuerde sie als same-origin zulassen).
     """
-    if raw and raw.startswith("/") and url_has_allowed_host_and_scheme(raw, allowed_hosts=None):
+    if not raw:
+        return "/"
+    if raw.startswith("/") and not raw.startswith("//"):
         return raw
     return "/"
 

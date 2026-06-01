@@ -11,35 +11,26 @@ from django_ratelimit.decorators import ratelimit
 
 from core.models import AuditLog
 from core.services.audit import log_audit_event
-from core.services.security import enter_sudo, verify_totp_or_backup
+from core.services.security import enter_sudo
 from core.views.utils import safe_redirect_path
 
 
 @method_decorator(ratelimit(key="user", rate="5/m", method="POST", block=True), name="post")
 class SudoModeView(LoginRequiredMixin, View):
-    """GET zeigt Form, POST prueft Passwort (+ ggf. 2. Faktor) + setzt SudoMode.
+    """GET zeigt Form, POST prueft Passwort + setzt SudoMode-Flag.
 
     Rate-Limit 5/min/User: schuetzt gegen Brute-Force des aktuellen
     Passworts ueber eine gestohlene Session.
-
-    A3.2 (Refs #1024): Hat der User ein bestätigtes TOTP-Gerät, verlangt der
-    Sudo-Mode zusätzlich einen frischen 2. Faktor (OTP oder Backup-Code) — ein
-    über eine gestohlene Session erbeutetes Passwort allein schaltet sensible
-    Aktionen dann nicht frei.
     """
 
     template_name = "auth/sudo_mode.html"
 
-    def _render_form(self, request, next_url, status=200):
+    def get(self, request):
         return render(
             request,
             self.template_name,
-            {"next": next_url, "needs_otp": request.user.has_confirmed_totp_device},
-            status=status,
+            {"next": safe_redirect_path(request.GET.get("next"))},
         )
-
-    def get(self, request):
-        return self._render_form(request, safe_redirect_path(request.GET.get("next")))
 
     def post(self, request):
         next_url = safe_redirect_path(request.POST.get("next"))
@@ -47,14 +38,12 @@ class SudoModeView(LoginRequiredMixin, View):
         user = authenticate(request, username=request.user.username, password=password)
         if user is None or user.pk != request.user.pk:
             messages.error(request, _("Passwort ist nicht korrekt."))
-            return self._render_form(request, next_url, status=403)
-
-        # A3.2: bei aktivem TOTP zusätzlich einen frischen 2. Faktor verlangen.
-        if request.user.has_confirmed_totp_device and not verify_totp_or_backup(
-            request.user, request.POST.get("otp_token", "")
-        ):
-            messages.error(request, _("Der Bestätigungscode (2FA) ist nicht korrekt."))
-            return self._render_form(request, next_url, status=403)
+            return render(
+                request,
+                self.template_name,
+                {"next": next_url},
+                status=403,
+            )
 
         enter_sudo(request)
         log_audit_event(

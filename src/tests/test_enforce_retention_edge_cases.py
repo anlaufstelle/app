@@ -15,7 +15,6 @@ from io import StringIO
 
 import pytest
 from django.core.management import call_command
-from django.core.management.base import CommandError
 from django.utils import timezone
 
 from core.models import DocumentType, Event, EventHistory
@@ -146,28 +145,3 @@ class TestDocumentTypeRetention:
 
         event.refresh_from_db()
         assert event.is_deleted is False  # Legal Hold bewahrt
-
-
-@pytest.mark.django_db
-class TestRlsBypassContextGuard:
-    """Refs #1016 A1.1: Der Retention-Lauf MUSS RLS umgehen koennen (Admin-Rolle
-    mit BYPASSRLS / SUPERUSER oder gesetzte ``app.is_super_admin``-GUC). Laeuft er
-    als RLS-gefilterte App-Rolle (Cron via ``compose exec`` ohne Request-GUC), sieht
-    er 0 Zeilen — dann **fail-loud** (CommandError, Exit != 0, KEIN
-    RETENTION_RUN_COMPLETED), statt Erfolg vorzutaeuschen."""
-
-    def test_aborts_loud_without_bypass_context(self, monkeypatch, facility, settings_obj):
-        from core.management.commands import enforce_retention as cmd
-
-        monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: False)
-        with pytest.raises(CommandError, match="RLS"):
-            call_command("enforce_retention")
-        # Kein Erfolgs-Marker, wenn der Lauf strukturell wirkungslos war:
-        assert not AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).exists()
-
-    def test_runs_and_marks_with_bypass_context(self, monkeypatch, facility, settings_obj):
-        from core.management.commands import enforce_retention as cmd
-
-        monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: True)
-        call_command("enforce_retention")
-        assert AuditLog.objects.filter(action=AuditLog.Action.RETENTION_RUN_COMPLETED).exists()

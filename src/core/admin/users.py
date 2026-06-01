@@ -5,7 +5,6 @@ import string
 
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.core.exceptions import PermissionDenied
 from unfold.admin import ModelAdmin
 from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationForm
 
@@ -76,38 +75,6 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
         ),
     )
 
-    def formfield_for_choice_field(self, db_field, request, **kwargs):
-        """Rollen-Vergabe begrenzen (A2.1, Refs #1020).
-
-        facility_admin darf die installationsweite Rolle super_admin nicht
-        vergeben. Die eingeschraenkten Choices wirken als UI-Restriktion **und**
-        serverseitige Validierung — ein POST ``role=super_admin`` scheitert an
-        Djangos Choice-Validierung.
-        """
-        if db_field.name == "role":
-            kwargs["choices"] = self.admin_site.assignable_roles(request)
-        return super().formfield_for_choice_field(db_field, request, **kwargs)
-
-    # facility-FK-Scoping (A2.1) ist nach A2.2 zentral im FacilityScopedAdminMixin
-    # (formfield_for_foreignkey + save_model-Erzwingung) — Single Source of Truth.
-
-    @staticmethod
-    def _is_protected_super_admin(request, obj):
-        """super_admin-Konto, das ein Nicht-super_admin nicht verwalten darf (A2.1)."""
-        return obj is not None and obj.is_super_admin and not getattr(request.user, "is_super_admin", False)
-
-    def has_change_permission(self, request, obj=None):
-        """facility_admin darf super_admin-Konten nicht aendern (A2.1, Refs #1020)."""
-        if self._is_protected_super_admin(request, obj):
-            return False
-        return super().has_change_permission(request, obj)
-
-    def has_delete_permission(self, request, obj=None):
-        """facility_admin darf super_admin-Konten nicht loeschen (A2.1, Refs #1020)."""
-        if self._is_protected_super_admin(request, obj):
-            return False
-        return super().has_delete_permission(request, obj)
-
     def save_model(self, request, obj, form, change):
         """Token-basierter Invite-Flow beim User-Anlegen.
 
@@ -118,11 +85,6 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
         der Admin-Oberfläche anzeigen — mit Warnhinweis, dass dieser Weg
         unsicherer ist. Siehe Issue #528.
         """
-        # Defense-in-Depth gegen umgangene Form-Validierung (A2.1, Refs #1020):
-        # nur super_admin darf die installationsweite Rolle super_admin vergeben.
-        if obj.role == User.Role.SUPER_ADMIN and not getattr(request.user, "is_super_admin", False):
-            raise PermissionDenied("Nur super_admin darf die Rolle „Systemadministration“ vergeben.")
-
         if change:
             super().save_model(request, obj, form, change)
             return

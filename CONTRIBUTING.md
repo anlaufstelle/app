@@ -143,7 +143,7 @@ python src/manage.py seed --flush          # vorhandene Daten vorher löschen
 
 Seed-Zugangsdaten: Passwort `anlaufstelle2026`, 5 Logins (Username → Rolle): `superadmin` → `super_admin` (keine `facility`-Zuordnung), `admin` → `facility_admin`, `thomas` → `lead`, `miriam` → `staff`, `lena` → `assistant`. Alle außer `superadmin` hängen an der Default-Einrichtung.
 
-> **Production:** In Produktion gibt es **kein** Default-Passwort und keinen Default-`super_admin`. Die Erstinstallation läuft über `manage.py create_super_admin` (interaktiv, ohne Default). Details: [docs/dev-deployment.md § Production-Bootstrap](docs/dev/dev-deployment.md), [docs/admin-guide.md § 2.1 Erstinstallation](docs/admin-guide.md). Lockout-Recovery: `manage.py unlock <username>`.
+> **Production:** In Produktion gibt es **kein** Default-Passwort und keinen Default-`super_admin`. Die Erstinstallation läuft über `manage.py create_super_admin` (interaktiv, ohne Default). Details: [docs/dev-deployment.md § Production-Bootstrap](docs/dev-deployment.md), [docs/admin-guide.md § 2.1 Erstinstallation](docs/admin-guide.md). Lockout-Recovery: `manage.py unlock <username>`.
 
 **7. Node-Abhängigkeiten installieren** (für Tailwind CSS)
 
@@ -264,7 +264,7 @@ Jedes neue facility-gescopte Model muss auf **beiden** Verteidigungslinien abges
  - Neue Migration nach dem Muster von [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): Tabelle zu `DIRECT_TABLES` hinzufügen (oder `JOIN_TABLES`, falls kein direktes `facility_id`-Feld vorhanden ist). Die Migration setzt `ENABLE + FORCE ROW LEVEL SECURITY` plus eine `facility_isolation`-Policy.
  - Tabelle in `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) ergänzen, damit der RLS-Setup-Test die Abdeckung garantiert.
 
-Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS greift in Produktion nur, wenn der Django-DB-User **kein** Superuser ist (siehe [docs/dev-deployment.md](docs/dev/dev-deployment.md), primaerer Pfad nach [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) ist eine alternative Plattform-Anleitung).
+Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS greift in Produktion nur, wenn der Django-DB-User **kein** Superuser ist (siehe [docs/dev-deployment.md](docs/dev-deployment.md), primaerer Pfad nach [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) ist eine alternative Plattform-Anleitung).
 
 ### Linting und Formatierung
 
@@ -461,21 +461,21 @@ Diese Pipeline muss vor jedem Pull Request lokal grün sein.
 Mutation-Testing prüft, wie viele synthetische Code-Mutationen die Test-Suite tatsächlich erkennt. Konfiguration in `pyproject.toml` (`[tool.mutmut]`). Erwartete Laufzeit: 3–6 h auf `core.services` + `core.forms`. Daher nicht PR-Pflicht, sondern punktuell pro Wellen-Issue.
 
 ```bash
-make mutation           # mutmut run via scripts/dev/run_mutmut.py
+make mutation           # mutmut run via scripts/run_mutmut.py
 make mutation-report    # Survivors-Liste, nicht-interaktiv
 ```
 
 `make mutation` ist resume-fähig (mutmut speichert State in `mutants/**/*.py.meta` und springt bei Neustart automatisch dort weiter, wo der Vorlauf stehengeblieben ist).
 
-Für längere Runs auf einer Sandbox, die OOM-Killer / Idle-Killer mitbringt, gibt es [`scripts/run_mutmut_watchdog.sh`](scripts/dev/run_mutmut_watchdog.sh):
+Für längere Runs auf einer Sandbox, die OOM-Killer / Idle-Killer mitbringt, gibt es [`scripts/run_mutmut_watchdog.sh`](scripts/run_mutmut_watchdog.sh):
 
 ```bash
 # Default: 3 zusätzliche Restarts, Stall-Threshold 5 min, 2 mutmut-Worker
-scripts/dev/run_mutmut_watchdog.sh
+scripts/run_mutmut_watchdog.sh
 
 # Aggressiveres Profil
 MAX_RESTARTS=5 STALL_THRESHOLD=600 MUTMUT_MAX_CHILDREN=4 \
-    scripts/dev/run_mutmut_watchdog.sh
+    scripts/run_mutmut_watchdog.sh
 ```
 
 Der Watchdog erkennt stillstehende oder gestorbene Master-Prozesse und startet `make mutation` neu — der Resume-Mechanismus übernimmt. Exit 0, sobald `mutants/mutmut-stats.json` während der Watchdog-Session geschrieben wurde. Aufruf-Hintergrund: Refs #937.

@@ -5,88 +5,6 @@
  * keine Inline-Objekte). Refs #669, #911.
  */
 
-/*
- * Gemeinsame Basis der beiden Klientel-Autocompletes (Refs #1016, C5).
- * ``eventClientAutocomplete`` erweitert ``clientAutocomplete`` nur um Cases-/
- * Stage-Logik; die untenstehenden Methoden waren in beiden Komponenten Zeile
- * fuer Zeile identisch. Sie werden per ``Object.assign(literal, shared)`` in
- * beide Komponenten gemischt — NUR Methoden, keine Getter: ``Object.assign``
- * wuerde Getter beim Kopieren auswerten und als statischen Wert ablegen
- * (Reaktivitaet kaputt), daher bleiben Getter in den jeweiligen Literalen.
- * Pro-Instanz-State (query/results/…) lebt ebenfalls im jeweiligen Literal.
- */
-const _autocompleteShared = {
-    _initCommon() {
-        this.query = this.$el.dataset.initialPseudonym || "";
-        this.selectedId = this.$el.dataset.initialClientId || "";
-        this._autocompleteUrl = this.$el.dataset.autocompleteUrl || "";
-        // CSP-friendly: enriche Items mit isHighlighted statt
-        // ``highlightIndex === idx`` im Template (Refs #693).
-        this.$watch("highlightIndex", () => this._enrich());
-        this.$watch("results", () => this._enrich());
-    },
-    _enrich() {
-        const hi = this.highlightIndex;
-        this.enrichedResults = this.results.map((c, i) => {
-            const isHi = i === hi;
-            return Object.assign({}, c, {
-                isHighlighted: isHi,
-                highlightClass: isHi ? "bg-accent-light" : "",
-            });
-        });
-    },
-    setQuery(event) { this.query = event.target.value; },
-    setSelectedId(event) { this.selectedId = event.target.value; },
-    hideResults() {
-        this.show = false;
-    },
-    selectByEvent(event) {
-        const idx = parseInt(event.currentTarget.dataset.idx, 10);
-        if (Number.isFinite(idx) && this.results[idx]) {
-            this.selectItem(this.results[idx]);
-        }
-    },
-    highlightByEvent(event) {
-        const idx = parseInt(event.currentTarget.dataset.idx, 10);
-        if (Number.isFinite(idx)) {
-            this.highlightIndex = idx;
-        }
-    },
-    moveHighlightUp() {
-        this.moveHighlight(-1);
-    },
-    moveHighlightDown() {
-        this.moveHighlight(1);
-    },
-    moveHighlight(delta) {
-        if (!this.show || this.results.length === 0) return;
-        this.highlightIndex =
-            (this.highlightIndex + delta + this.results.length) %
-            this.results.length;
-    },
-    confirmHighlight() {
-        if (
-            this.highlightIndex >= 0 &&
-            this.highlightIndex < this.results.length
-        ) {
-            this.selectItem(this.results[this.highlightIndex]);
-        }
-    },
-    onInput() {
-        if (this._justSelected) {
-            this._justSelected = false;
-            return;
-        }
-        this.highlightIndex = -1;
-        this.fetchResults();
-    },
-    onFocus() {
-        if (!this.show && !this._justSelected) {
-            this.fetchResults();
-        }
-    },
-};
-
 document.addEventListener("alpine:init", () => {
     /**
      * Klientel-Autocomplete-Basis. Verwendet in cases/form.html und
@@ -97,49 +15,110 @@ document.addEventListener("alpine:init", () => {
      * auf das Input-Element, nicht auf den x-data-Container — daher
      * speichern wir die URL direkt im State.
      */
-    Alpine.data("clientAutocomplete", () =>
-        Object.assign(
-            {
-                query: "",
-                results: [],
-                enrichedResults: [],
-                selectedId: "",
-                show: false,
-                highlightIndex: -1,
-                _justSelected: false,
-                _fetchGen: 0,
-                _autocompleteUrl: "",
-                init() {
-                    this._initCommon();
-                },
-                get ariaExpanded() {
-                    return this.show ? "true" : "false";
-                },
-                fetchResults() {
-                    const gen = ++this._fetchGen;
-                    const url = `${this._autocompleteUrl}?q=${encodeURIComponent(this.query)}`;
-                    fetch(url)
-                        .then((r) => r.json())
-                        .then((data) => {
-                            if (gen === this._fetchGen) {
-                                this.results = data;
-                                this.show = data.length > 0;
-                            }
-                        });
-                },
-                selectItem(item) {
-                    this._justSelected = true;
-                    this._fetchGen++;
-                    this.selectedId = item.id;
-                    this.query = item.pseudonym;
-                    this.show = false;
-                    this.results = [];
-                    this.highlightIndex = -1;
-                },
-            },
-            _autocompleteShared,
-        ),
-    );
+    Alpine.data("clientAutocomplete", () => ({
+        query: "",
+        results: [],
+        enrichedResults: [],
+        selectedId: "",
+        show: false,
+        highlightIndex: -1,
+        _justSelected: false,
+        _fetchGen: 0,
+        _autocompleteUrl: "",
+        init() {
+            this.query = this.$el.dataset.initialPseudonym || "";
+            this.selectedId = this.$el.dataset.initialClientId || "";
+            this._autocompleteUrl = this.$el.dataset.autocompleteUrl || "";
+            // CSP-friendly: enriche Items mit isHighlighted statt
+            // ``highlightIndex === idx`` im Template (Refs #693).
+            this.$watch("highlightIndex", () => this._enrich());
+            this.$watch("results", () => this._enrich());
+        },
+        _enrich() {
+            const hi = this.highlightIndex;
+            this.enrichedResults = this.results.map((c, i) => {
+                const isHi = i === hi;
+                return Object.assign({}, c, {
+                    isHighlighted: isHi,
+                    highlightClass: isHi ? "bg-accent-light" : "",
+                });
+            });
+        },
+        setQuery(event) { this.query = event.target.value; },
+        setSelectedId(event) { this.selectedId = event.target.value; },
+        get ariaExpanded() {
+            return this.show ? "true" : "false";
+        },
+        hideResults() {
+            this.show = false;
+        },
+        selectByEvent(event) {
+            const idx = parseInt(event.currentTarget.dataset.idx, 10);
+            if (Number.isFinite(idx) && this.results[idx]) {
+                this.selectItem(this.results[idx]);
+            }
+        },
+        highlightByEvent(event) {
+            const idx = parseInt(event.currentTarget.dataset.idx, 10);
+            if (Number.isFinite(idx)) {
+                this.highlightIndex = idx;
+            }
+        },
+        moveHighlightUp() {
+            this.moveHighlight(-1);
+        },
+        moveHighlightDown() {
+            this.moveHighlight(1);
+        },
+        fetchResults() {
+            const gen = ++this._fetchGen;
+            const url = `${this._autocompleteUrl}?q=${encodeURIComponent(this.query)}`;
+            fetch(url)
+                .then((r) => r.json())
+                .then((data) => {
+                    if (gen === this._fetchGen) {
+                        this.results = data;
+                        this.show = data.length > 0;
+                    }
+                });
+        },
+        onInput() {
+            if (this._justSelected) {
+                this._justSelected = false;
+                return;
+            }
+            this.highlightIndex = -1;
+            this.fetchResults();
+        },
+        onFocus() {
+            if (!this.show && !this._justSelected) {
+                this.fetchResults();
+            }
+        },
+        selectItem(item) {
+            this._justSelected = true;
+            this._fetchGen++;
+            this.selectedId = item.id;
+            this.query = item.pseudonym;
+            this.show = false;
+            this.results = [];
+            this.highlightIndex = -1;
+        },
+        moveHighlight(delta) {
+            if (!this.show || this.results.length === 0) return;
+            this.highlightIndex =
+                (this.highlightIndex + delta + this.results.length) %
+                this.results.length;
+        },
+        confirmHighlight() {
+            if (
+                this.highlightIndex >= 0 &&
+                this.highlightIndex < this.results.length
+            ) {
+                this.selectItem(this.results[this.highlightIndex]);
+            }
+        },
+    }));
 
     /**
      * Klientel- + Fall-Autocomplete fuer NewContact (events/create.html).
@@ -148,111 +127,172 @@ document.addEventListener("alpine:init", () => {
      * und im State gespeichert (``$el`` ist im Event-Handler-Kontext
      * nicht mehr der x-data-Container).
      */
-    Alpine.data("eventClientAutocomplete", () =>
-        Object.assign(
-            {
-                query: "",
-                results: [],
-                enrichedResults: [],
-                selectedId: "",
-                show: false,
-                anonymousAllowed: true,
-                minStage: "",
-                highlightIndex: -1,
-                _justSelected: false,
-                _fetchGen: 0,
-                clientCases: [],
-                selectedCaseId: "",
-                _autocompleteUrl: "",
-                _casesForClientUrl: "",
-                init() {
-                    this._initCommon();
-                    this._casesForClientUrl = this.$el.dataset.casesForClientUrl || "";
-                    // Stage initial pruefen + ggf. Cases laden
-                    this.updateAnonymousAllowed(this.$refs.docTypeSelect);
-                    if (this.selectedId) {
-                        this.loadCasesForClient(this.selectedId);
+    Alpine.data("eventClientAutocomplete", () => ({
+        query: "",
+        results: [],
+        enrichedResults: [],
+        selectedId: "",
+        show: false,
+        anonymousAllowed: true,
+        minStage: "",
+        highlightIndex: -1,
+        _justSelected: false,
+        _fetchGen: 0,
+        clientCases: [],
+        selectedCaseId: "",
+        _autocompleteUrl: "",
+        _casesForClientUrl: "",
+        init() {
+            this.query = this.$el.dataset.initialPseudonym || "";
+            this.selectedId = this.$el.dataset.initialClientId || "";
+            this._autocompleteUrl = this.$el.dataset.autocompleteUrl || "";
+            this._casesForClientUrl = this.$el.dataset.casesForClientUrl || "";
+            // Stage initial pruefen + ggf. Cases laden
+            this.updateAnonymousAllowed(this.$refs.docTypeSelect);
+            if (this.selectedId) {
+                this.loadCasesForClient(this.selectedId);
+            }
+            // CSP-friendly: enriche Items mit isHighlighted statt
+            // ``highlightIndex === idx`` im Template (Refs #693).
+            this.$watch("highlightIndex", () => this._enrich());
+            this.$watch("results", () => this._enrich());
+        },
+        _enrich() {
+            const hi = this.highlightIndex;
+            this.enrichedResults = this.results.map((c, i) => {
+                const isHi = i === hi;
+                return Object.assign({}, c, {
+                    isHighlighted: isHi,
+                    highlightClass: isHi ? "bg-accent-light" : "",
+                });
+            });
+        },
+        buildAutocompleteUrl() {
+            const params = new URLSearchParams({ q: this.query });
+            if (this.minStage) params.set("min_stage", this.minStage);
+            return `${this._autocompleteUrl}?${params.toString()}`;
+        },
+        updateAnonymousAllowed(selectEl) {
+            if (!selectEl) return;
+            const opt = selectEl.options[selectEl.selectedIndex];
+            this.anonymousAllowed = !opt || !opt.dataset.minStage;
+            this.minStage = (opt && opt.dataset.minStage) || "";
+            if (this.minStage && this.selectedId) {
+                this._fetchGen++;
+                this.selectedId = "";
+                this.query = "";
+                this.results = [];
+                this.clientCases = [];
+                this.selectedCaseId = "";
+            }
+        },
+        fetchResults() {
+            const gen = ++this._fetchGen;
+            fetch(this.buildAutocompleteUrl())
+                .then((r) => r.json())
+                .then((data) => {
+                    if (gen === this._fetchGen) {
+                        this.results = data;
+                        this.show = data.length > 0;
                     }
-                },
-                get ariaExpanded() {
-                    return this.show ? "true" : "false";
-                },
-                get notAnonymousAllowed() {
-                    return !this.anonymousAllowed;
-                },
-                get showAnonymousHint() {
-                    return this.anonymousAllowed && !this.selectedId;
-                },
-                get showCaseDropdown() {
-                    return this.selectedId && this.clientCases.length > 0;
-                },
-                get showNoCasesHint() {
-                    return this.selectedId && this.clientCases.length === 0;
-                },
-                buildAutocompleteUrl() {
-                    const params = new URLSearchParams({ q: this.query });
-                    if (this.minStage) params.set("min_stage", this.minStage);
-                    return `${this._autocompleteUrl}?${params.toString()}`;
-                },
-                updateAnonymousAllowed(selectEl) {
-                    if (!selectEl) return;
-                    const opt = selectEl.options[selectEl.selectedIndex];
-                    this.anonymousAllowed = !opt || !opt.dataset.minStage;
-                    this.minStage = (opt && opt.dataset.minStage) || "";
-                    if (this.minStage && this.selectedId) {
-                        this._fetchGen++;
-                        this.selectedId = "";
-                        this.query = "";
-                        this.results = [];
-                        this.clientCases = [];
-                        this.selectedCaseId = "";
-                    }
-                },
-                fetchResults() {
-                    const gen = ++this._fetchGen;
-                    fetch(this.buildAutocompleteUrl())
-                        .then((r) => r.json())
-                        .then((data) => {
-                            if (gen === this._fetchGen) {
-                                this.results = data;
-                                this.show = data.length > 0;
-                            }
-                        });
-                },
-                selectItem(item) {
-                    this._justSelected = true;
-                    this._fetchGen++;
-                    this.selectedId = item.id;
-                    this.query = item.pseudonym;
-                    this.show = false;
-                    this.results = [];
-                    this.highlightIndex = -1;
-                    this.loadCasesForClient(item.id);
-                },
-                loadCasesForClient(clientId) {
-                    this.selectedCaseId = "";
-                    if (!clientId) {
-                        this.clientCases = [];
-                        return;
-                    }
-                    const url = `${this._casesForClientUrl}?client=${encodeURIComponent(clientId)}`;
-                    fetch(url, { credentials: "same-origin" })
-                        .then((r) => (r.ok ? r.json() : []))
-                        .then((data) => {
-                            this.clientCases = Array.isArray(data) ? data : [];
-                        })
-                        .catch(() => {
-                            this.clientCases = [];
-                        });
-                },
-                onDocTypeChange(event) {
-                    this.updateAnonymousAllowed(event.target);
-                },
-                setSelectedCaseId(event) { this.selectedCaseId = event.target.value; },
-            },
-            _autocompleteShared,
-        ),
-    );
+                });
+        },
+        onInput() {
+            if (this._justSelected) {
+                this._justSelected = false;
+                return;
+            }
+            this.highlightIndex = -1;
+            this.fetchResults();
+        },
+        onFocus() {
+            if (!this.show && !this._justSelected) {
+                this.fetchResults();
+            }
+        },
+        selectItem(item) {
+            this._justSelected = true;
+            this._fetchGen++;
+            this.selectedId = item.id;
+            this.query = item.pseudonym;
+            this.show = false;
+            this.results = [];
+            this.highlightIndex = -1;
+            this.loadCasesForClient(item.id);
+        },
+        loadCasesForClient(clientId) {
+            this.selectedCaseId = "";
+            if (!clientId) {
+                this.clientCases = [];
+                return;
+            }
+            const url = `${this._casesForClientUrl}?client=${encodeURIComponent(clientId)}`;
+            fetch(url, { credentials: "same-origin" })
+                .then((r) => (r.ok ? r.json() : []))
+                .then((data) => {
+                    this.clientCases = Array.isArray(data) ? data : [];
+                })
+                .catch(() => {
+                    this.clientCases = [];
+                });
+        },
+        onDocTypeChange(event) {
+            this.updateAnonymousAllowed(event.target);
+        },
+        setQuery(event) { this.query = event.target.value; },
+        setSelectedId(event) { this.selectedId = event.target.value; },
+        setSelectedCaseId(event) { this.selectedCaseId = event.target.value; },
+        get ariaExpanded() {
+            return this.show ? "true" : "false";
+        },
+        hideResults() {
+            this.show = false;
+        },
+        get notAnonymousAllowed() {
+            return !this.anonymousAllowed;
+        },
+        get showAnonymousHint() {
+            return this.anonymousAllowed && !this.selectedId;
+        },
+        get showCaseDropdown() {
+            return this.selectedId && this.clientCases.length > 0;
+        },
+        get showNoCasesHint() {
+            return this.selectedId && this.clientCases.length === 0;
+        },
+        moveHighlight(delta) {
+            if (!this.show || this.results.length === 0) return;
+            this.highlightIndex =
+                (this.highlightIndex + delta + this.results.length) %
+                this.results.length;
+        },
+        moveHighlightUp() {
+            this.moveHighlight(-1);
+        },
+        moveHighlightDown() {
+            this.moveHighlight(1);
+        },
+        confirmHighlight() {
+            if (
+                this.highlightIndex >= 0 &&
+                this.highlightIndex < this.results.length
+            ) {
+                this.selectItem(this.results[this.highlightIndex]);
+            }
+        },
+        selectByEvent(event) {
+            const idx = parseInt(event.currentTarget.dataset.idx, 10);
+            if (Number.isFinite(idx) && this.results[idx]) {
+                this.selectItem(this.results[idx]);
+            }
+        },
+        highlightByEvent(event) {
+            const idx = parseInt(event.currentTarget.dataset.idx, 10);
+            if (Number.isFinite(idx)) {
+                this.highlightIndex = idx;
+            }
+        },
+    }));
 
     /**
      * Quick-Date-Buttons (Heute / Morgen / Nächste Woche / In 2 Wochen).

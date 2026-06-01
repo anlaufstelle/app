@@ -11,16 +11,7 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-# A7.3 (Refs #1024 / #1016): .env nur laden, wenn explizit erlaubt UND
-# vorhanden. In Produktion wird die Konfiguration über die Orchestrierungs-Env
-# (Docker/systemd) gesetzt; eine versehentlich ins Image/Volume geratene .env
-# soll diese nicht still ergänzen. ``load_dotenv(override=False)`` füllt zwar nur
-# Lücken, aber wir machen die Absicht explizit und per ``DJANGO_LOAD_DOTENV``
-# abschaltbar (Default: laden, damit Dev/Test unverändert funktionieren; in
-# Prod ``DJANGO_LOAD_DOTENV=false`` setzen bzw. keine .env mounten).
-_DOTENV_PATH = BASE_DIR.parent / ".env"
-if os.environ.get("DJANGO_LOAD_DOTENV", "true").lower() in ("true", "1", "yes") and _DOTENV_PATH.exists():
-    load_dotenv(_DOTENV_PATH)
+load_dotenv(BASE_DIR.parent / ".env")
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 
@@ -31,13 +22,6 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 # SHA256(SECRET_KEY) — funktional, aber operatorseitig sollte
 # DJANGO_AUDIT_HASH_KEY explizit gesetzt sein.
 AUDIT_HASH_KEY = os.environ.get("DJANGO_AUDIT_HASH_KEY", "")
-
-# HEALTH_DETAIL_TOKEN (A7.1, Refs #1024) — optionaler Token, mit dem ein
-# interner Monitoring-Caller die Detailfelder von ``/health/`` (version, smtp,
-# Backup-Alter, Disk-frei) abrufen darf. Ohne Token bzw. ohne authentifizierten
-# Request liefert ``/health/`` nur einen schlanken Liveness-Payload — anonyme
-# Caller bekommen keine Recon-Details. Header: ``X-Health-Token``.
-HEALTH_DETAIL_TOKEN = os.environ.get("DJANGO_HEALTH_DETAIL_TOKEN", "")
 
 # AGPL §13 (Refs #835): Quellcode-Link im Footer. Forks/Self-Hoster MUESSEN
 # SOURCE_CODE_URL auf ihren eigenen Quellcode-Spiegel zeigen lassen, sonst
@@ -158,12 +142,6 @@ LOGOUT_REDIRECT_URL = "/login/"
 
 OTP_TOTP_ISSUER = "Anlaufstelle"
 
-# Rollen-Default-Enforcement (A3.1, Refs #1019): erzwingt MFA fuer super_admin
-# und facility_admin allein ueber die Rolle (s. ``User.is_mfa_enforced``).
-# In Produktion an (hier in base.py); dev/test/e2e schalten es bewusst aus
-# (dev.py -> kaskadiert nach test/e2e), damit Seed-Logins MFA-frei bleiben.
-MFA_ENFORCE_PRIVILEGED_ROLES = True
-
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {
@@ -264,7 +242,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 MEDIA_URL = "/media/"
 
 # --- Backup-Verzeichnis (Refs #796) ---
-# Pfad, in dem ``scripts/ops/backup.sh`` die Daily-Files (.sql.gz.enc) ablegt.
+# Pfad, in dem ``scripts/backup.sh`` die Daily-Files (.sql.gz.enc) ablegt.
 # Wird vom Health-Endpoint zur Berechnung von ``last_backup_age_hours``
 # gelesen. Default = ``<repo>/backups`` passend zur Default-Convention im
 # Backup-Script.

@@ -43,8 +43,8 @@ def _select_qualified_client(page, base_url, e2e_env):
             "--no-imports",
             "-c",
             "from core.models import Client; "
-            + "c = Client.objects.filter(contact_stage='qualified').first(); "
-            + "print(c.pk if c else '')",
+            "c = Client.objects.filter(contact_stage='qualified').first(); "
+            "print(c.pk if c else '')",
         ],
         capture_output=True,
         text=True,
@@ -157,8 +157,8 @@ class TestFileUploadAndDownload:
                 "--no-imports",
                 "-c",
                 "from core.models import AuditLog; "
-                + "log = AuditLog.objects.filter(action='download').order_by('-timestamp').first(); "
-                + "print(f'{log.action}|{log.target_type}' if log else 'NONE')",
+                "log = AuditLog.objects.filter(action='download').order_by('-timestamp').first(); "
+                "print(f'{log.action}|{log.target_type}' if log else 'NONE')",
             ],
             capture_output=True,
             text=True,

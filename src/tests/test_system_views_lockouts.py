@@ -187,8 +187,6 @@ class TestSystemAuditLogExport:
         assert response.status_code == 200
         assert response["Content-Type"].startswith("text/csv")
         assert "attachment" in response["Content-Disposition"]
-        # Refs #1011 (CodeQL #31): Export ueber safe_download_response -> nosniff.
-        assert response["X-Content-Type-Options"] == "nosniff"
 
         body = b"".join(response.streaming_content).decode("utf-8")
         # Header
@@ -210,8 +208,6 @@ class TestSystemAuditLogExport:
         response = client.get(reverse("core:system_audit_export") + "?format=json")
         assert response.status_code == 200
         assert response["Content-Type"].startswith("application/json")
-        # Refs #1011 (CodeQL #31): Export ueber safe_download_response -> nosniff.
-        assert response["X-Content-Type-Options"] == "nosniff"
 
         body = b"".join(response.streaming_content).decode("utf-8")
         data = json.loads(body)

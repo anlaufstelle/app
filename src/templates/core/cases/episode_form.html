@@ -14,7 +14,7 @@
     <form method="post" class="space-y-4">
         {% csrf_token %}
 
-        <div class="card p-5 space-y-4">
+        <div class="bg-surface border border-subtle rounded-[10px] p-5 space-y-4">
             {% for field in form %}
             <div>
                 <label for="{{ field.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
@@ -29,10 +29,10 @@
         </div>
 
         <div class="flex flex-col sm:flex-row gap-2.5 pt-2">
-            <button type="submit" class="w-full sm:w-auto px-4 py-2 btn-primary">
+            <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-accent text-white text-[13px] font-semibold rounded-md">
                 {% if is_edit %}{% trans "Speichern" %}{% else %}{% trans "Episode erstellen" %}{% endif %}
             </button>
-            <a href="{% url 'core:case_detail' case.pk %}" class="w-full sm:w-auto text-center px-4 py-2 btn-secondary">{% trans "Abbrechen" %}</a>
+            <a href="{% url 'core:case_detail' case.pk %}" class="w-full sm:w-auto text-center px-4 py-2 bg-surface border border-subtle text-[13px] text-ink-soft rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
         </div>
     </form>
 </div>

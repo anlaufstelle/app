@@ -85,12 +85,9 @@
         </div>
 
         <div class="text-center mt-4">
-            <form method="post" action="{% url 'logout' %}">
-                {% csrf_token %}
-                <button type="submit" class="text-sm text-ink-muted hover:text-ink-soft">
-                    {% trans "Abmelden" %}
-                </button>
-            </form>
+            <a href="{% url 'logout' %}" class="text-sm text-ink-muted hover:text-ink-soft">
+                {% trans "Abmelden" %}
+            </a>
         </div>
     </div>
 </body>

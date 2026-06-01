@@ -16,10 +16,6 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 COMPOSE_FILE="${PROJECT_DIR}/docker-compose.prod.yml"
 
-# A4.3: Encrypt-then-MAC-Helfer (backup_verify_hmac).
-# shellcheck source=scripts/ops/_backup_common.sh
-source "${SCRIPT_DIR}/_backup_common.sh"
-
 if [[ $# -lt 1 || $# -gt 2 ]]; then
     echo "Verwendung: $0 <db-backup.sql.gz.enc> [media-backup.tar.gz.enc]"
     exit 1
@@ -62,9 +58,7 @@ if [[ "$CONFIRM" != "ja" ]]; then
     exit 0
 fi
 
-# DB restore — A4.3: Integrität VOR dem Entschlüsseln prüfen.
-echo "Prüfe Integrität des DB-Backups (HMAC)..."
-backup_verify_hmac "$BACKUP_FILE"
+# DB restore
 echo "Stelle DB-Backup wieder her..."
 openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$BACKUP_FILE" \
     | gunzip \
@@ -82,8 +76,6 @@ if [[ -n "$MEDIA_FILE" ]]; then
     docker compose -f "$COMPOSE_FILE" exec -T web \
         sh -c "rm -rf '${MEDIA_ROOT_CONTAINER}'/* '${MEDIA_ROOT_CONTAINER}'/.[!.]* 2>/dev/null || true"
 
-    echo "Prüfe Integrität des Medien-Backups (HMAC)..."
-    backup_verify_hmac "$MEDIA_FILE"
     echo "Entpacke Medien-Backup ..."
     openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$MEDIA_FILE" \
         | gunzip \

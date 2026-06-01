@@ -1,9 +1,14 @@
 """Service layer for facility Settings with audit logging."""
 
+import logging
+
 from django.db import transaction
 
 from core.models import AuditLog, Settings
 from core.services.security import check_version_conflict
+
+logger = logging.getLogger(__name__)
+
 
 # Felder, die im Settings-Diff auditiert werden (Refs #893).
 #
