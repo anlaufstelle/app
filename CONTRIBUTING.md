@@ -133,6 +133,7 @@ python src/manage.py seed --flush          # vorhandene Daten vorher löschen
 | Wirkungsziele || 15 | 60 |
 | Meilensteine / Ziel || 3 | 4 |
 | WorkItems | 5 | 25 | 100 |
+| Quick-Vorlagen / Einrichtung | 6 | 6 | 6 |
 | DeletionRequests || 5 | 15 |
 | RetentionProposals | 4 | 6 | 12 |
 | Dateianhänge (ca.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) |

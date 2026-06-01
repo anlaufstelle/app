@@ -19,6 +19,7 @@ from core.seed.doc_types import seed_document_types
 from core.seed.events import seed_events_bulk, seed_events_small
 from core.seed.flush import flush_seed_data
 from core.seed.organization import seed_facility, seed_organization
+from core.seed.quick_templates import seed_quick_templates
 from core.seed.scale import FACILITY_NAMES, SCALE_CONFIG
 from core.seed.settings_seed import seed_settings, seed_time_filters
 from core.seed.users import seed_super_admin, seed_users
@@ -58,6 +59,7 @@ class Command(BaseCommand):
             facility_name = FACILITY_NAMES[idx]
             facility = seed_facility(org, facility_name)
             seed_document_types(facility)
+            seed_quick_templates(facility)
             seed_settings(facility)
             seed_time_filters(facility)
             users = seed_users(facility, idx)
