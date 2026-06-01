@@ -303,6 +303,31 @@ Auf dem aktuellen privaten GitHub-Free-Repo sind Rulesets **nicht verfügbar** �
 
 ---
 
+## K-Anonymität gegen Re-Identifikation in Aggregaten (Issue #999)
+
+**Status:** Design-Entscheidung, produktiv verdrahtet.
+
+### Beobachtung
+
+Aggregat-Auswertungen (Statistiken, externe Berichte) können trotz Pseudonymisierung
+einzelne Personen offenlegen, wenn eine Merkmalskombination (z.B. *Alterscluster* ×
+*Geschlecht*) nur bei einer einzigen Person vorkommt. Pseudonymisierung schützt den
+direkten Identifikator, **nicht** vor Re-Identifikation über Kombinationen indirekter
+Merkmale.
+
+### Maßnahme
+
+Anlaufstelle wendet **K-Anonymität** an: Merkmalskombinationen mit weniger als *k*
+Personen werden im Aggregat unterdrückt (`count=None`, `suppressed=True`). Schwelle
+pro Einrichtung über [`Settings.k_anonymity_threshold`](../src/core/models/settings.py)
+(Default **5**). Verdrahtet in den datenschutzfreundlichen externen Berichten
+([`external_report.py`](../src/core/services/external_report.py), Refs #921)
+und optional im Retention-Löschpfad (`retention_use_k_anonymization`, Refs #780).
+Konzeptionelle Definition mit Beispiel: [Glossar § K-Anonymität im Detail](glossar.md#k-anonymität-im-detail).
+Hintergrund/Trade-offs: [ADR-023](adr/023-k-anonymization-statistik.md).
+
+---
+
 ## Weitere Einstiegspunkte
 
 - [CONTRIBUTING.md § Facility-Scoping & Row Level Security](../CONTRIBUTING.md#facility-scoping--row-level-security)
