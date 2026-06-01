@@ -365,10 +365,7 @@ def render_anhang_c(tests: list[Test]) -> str:
     total_quote = f"{(total_e2e / total * 100):.0f} %" if total else "—"
     lines.append(f"| **Gesamt** | **{total}** | **{total_e2e}** | **{total_manuell}** | **{total_quote}** |")
     lines.append("")
-    lines.append(
-        "> Auto-generiert per `python scripts/build_test_matrix_index.py` "
-        "(#909)."
-    )
+    lines.append("> Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).")
 
     return "\n".join(lines) + "\n"
 
