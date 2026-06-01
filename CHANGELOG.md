@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.13.1] - 2026-05-31
+
+Patch-Release (Pre-Release) mit Schwerpunkt **Außenwirkung und Aufräumen**: neue, automatisiert erzeugte Screenshots in Deutsch und Englisch (Desktop + Mobil) samt vollständiger Galerie-Seiten, ein wiederverwendbares Screenshot-Tooling, präsentablere Seed-Daten und das Schließen einiger bei v0.13.0 offen gebliebener Enden. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
+
+### Added
+
+- **Screenshot-Generator `manage.py screenshot`** (#1005) — Neuer Management-Command erzeugt Doku-Screenshots reproduzierbar per Playwright gegen eine laufende Instanz: Login als Seed-User, Sprachumschaltung (DE/EN) über `preferred_language`, deklarative Shot-Liste, Ausgabe als **WebP** (via Pillow) in Desktop (1280×800) und Mobil (375px). Neues Make-Target [`docs-screens`](https://github.com/anlaufstelle/app/blob/main/Makefile) fährt den kompletten Lauf (Seed → Server → Generieren → Stop). `/system/`-Screens (Sudo-Mode) sind vorerst ausgeklammert.
+- **QuickTemplate-Seeds** (#1004) — Das seit #494 existierende `QuickTemplate`-Modell (vorbefüllte Schnelleintrags-Vorlagen) wurde bisher nie geseedet. Neues Seed-Modul [`core/seed/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/seed/quick_templates.py) erzeugt pro Einrichtung realistische, facility-gescopte Vorlagen für alle Scales (idempotent); in den Seed-Lauf verdrahtet. Demo-/Screenshot-Daten zeigen den Schnelleintrags-Workflow jetzt mit.
+
+### Docs
+
+- **Neue Screenshots + Galerie-Seiten** (#1005) — [`README.md`](https://github.com/anlaufstelle/app/blob/main/README.md) und [`README.en.md`](https://github.com/anlaufstelle/app/blob/main/README.en.md) zeigen aktuelle WebP-Highlights (inkl. Arbeitszentrale und Ereignis-Erfassung), neue Galerie-Seiten [`docs/screenshots.md`](https://github.com/anlaufstelle/app/blob/main/docs/screenshots.md) und [`docs/screenshots.en.md`](https://github.com/anlaufstelle/app/blob/main/docs/screenshots.en.md) bilden den vollen Funktionsumfang ab. Veraltete Hero-PNGs entfernt.
+- **K-Anonymität konzeptionell erklärt** (#999) — [`docs/glossar.md`](https://github.com/anlaufstelle/app/blob/main/docs/glossar.md) erhält eine ausformulierte Definition mit Alltagsbeispiel (k=5, Unterdrückung kleiner Merkmalsgruppen), Verweis auf das Setting `k_anonymity_threshold` (Default 5) und Abgrenzung zur Pseudonymisierung; der frühere „(siehe unten)"-Platzhalter zeigte ins Leere.
+- **Seed-Scale-Tabelle** (#1004) — [`CONTRIBUTING.md`](https://github.com/anlaufstelle/app/blob/main/CONTRIBUTING.md) um die Spalte „Quick-Vorlagen" ergänzt.
+
+### Fixed
+
+- **clamav-TCP-Scan-Pfad als Folge-Issue erfasst** (#1006) — Der bei #938 angekündigte, aber nie angelegte Follow-up zum TCP-3310-Scan-Vertrag von `virus_scan.py` ist jetzt als eigenes Issue dokumentiert (fail-closed, kein aktiver Defekt).
+
 ## [0.13.0] - 2026-05-30
 
 Minor-Release (Pre-Release) mit Schwerpunkt Sicherheits-Härtung, Datenschutz und neuen Betriebs-Werkzeugen — **noch nicht für den Produktiveinsatz freigegeben**. Security: rollen-gegatete Custom-AdminSite mit Sudo-Pflicht, gehärtete GitHub-Actions-Lieferkette (SHA-Pinning aller Refs + Minimal-`permissions:`) und ein 3-Rollen-Postgres-Modell in Produktion, das eine RLS-Lücke schließt (Breaking-Change für Self-Hoster). Datenschutz und Betrieb: K-Anonymität im Retention-Löschpfad, DSGVO-Audit für den Vier-Augen-Lösch-Workflow, datenschutzfreundliche externe Berichte, Compliance-Dashboard mit 14 Checks und Self-Service-Lockout-Recovery — dazu ein großer Foundation-/Vereinfachungs-Refactor (Service-Layer in Domänen-Subpackages, typisierte Audit-Helper, Architektur-Tests) und der vollständige englische Übersetzungskatalog.
