@@ -80,6 +80,9 @@ omit = [
     "*/tests/*",
     "*/migrations/*",
     "*/management/commands/seed*.py",
+    # Playwright-getriebenes Doku-Tooling: nur gegen einen laufenden E2E-Server
+    # sinnvoll abdeckbar (manuell/e2e), nicht per Unit-Test — analog seed*.py.
+    "*/management/commands/screenshot.py",
 ]
 
 # --- mutmut (Refs #922 / #923) ---
