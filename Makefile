@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status clean test-matrix-index test-matrix-index-check verify-matrix-drift mutation mutation-report ci-coverage
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status clean test-matrix-index test-matrix-index-check verify-matrix-drift mutation mutation-report ci-coverage docs-screens
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -73,6 +73,21 @@ ssl-cert:
 
 seed:
 	$(PYTHON) src/manage.py seed
+
+# Doku-Screenshots (DE+EN, Desktop+Mobile, WebP) gegen einen frischen E2E-Server.
+# Schreibt nach docs/screenshots/. Braucht die Docker-DB (ggf. `sudo docker compose up -d`).
+DSM_E2E := DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e
+docs-screens:
+	-pkill -f 'gunicorn.*8844' 2>/dev/null || true
+	$(DSM_E2E) $(PYTHON) src/manage.py migrate --run-syncdb
+	$(DSM_E2E) $(PYTHON) src/manage.py seed --flush --scale=medium
+	$(DSM_E2E) $(PYTHON) src/manage.py collectstatic --noinput
+	$(DSM_E2E) $(PYTHON) -m gunicorn anlaufstelle.wsgi:application \
+		--bind 127.0.0.1:8844 --workers 2 --threads 2 --chdir src --timeout 120 & echo $$! > /tmp/docs-screens.pid
+	@sleep 5
+	-$(DSM_E2E) $(PYTHON) src/manage.py screenshot --base-url http://127.0.0.1:8844
+	-kill $$(cat /tmp/docs-screens.pid) 2>/dev/null || true
+	@echo "✓ Screenshots in docs/screenshots/"
 
 # CI lokal
 # Refs #860: scripts/ mitgescannt — die check_*.py-Helfer landeten sonst nur
