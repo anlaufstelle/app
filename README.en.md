@@ -12,20 +12,26 @@
 
 | Timeline — your digital logbook | Client list |
 |:---:|:---:|
-| ![Timeline](docs/screenshots/zeitstrom-en.png) | ![Client list](docs/screenshots/personenliste-en.png) |
+| ![Timeline](docs/screenshots/zeitstrom-en.webp) | ![Client list](docs/screenshots/personenliste-en.webp) |
 
 | Statistics at the push of a button | Client history |
 |:---:|:---:|
-| ![Statistics](docs/screenshots/statistiken-en.png) | ![Client history](docs/screenshots/personendetail-en.png) |
+| ![Statistics](docs/screenshots/statistiken-en.webp) | ![Client history](docs/screenshots/personendetail-en.webp) |
+
+| Work hub — role-based landing | Log an event |
+|:---:|:---:|
+| ![Work hub](docs/screenshots/arbeitszentrale-en.webp) | ![Log an event](docs/screenshots/ereignis-anlegen-en.webp) |
 
 <details>
 <summary>Mobile view</summary>
 
-| Timeline (Mobile) |
-|:---:|
-| ![Timeline mobile](docs/screenshots/zeitstrom-mobil-en.png) |
+| Timeline (mobile) | Work hub (mobile) |
+|:---:|:---:|
+| ![Timeline mobile](docs/screenshots/zeitstrom-mobil-en.webp) | ![Work hub mobile](docs/screenshots/arbeitszentrale-mobil-en.webp) |
 
 </details>
+
+➡️ **[See all screenshots](docs/screenshots.en.md)** — from case management and shift handover to the GDPR data package.
 
 ---
 

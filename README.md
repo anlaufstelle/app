@@ -12,20 +12,26 @@
 
 | Zeitstrom — Ihr digitales Dienstbuch | Personenliste |
 |:---:|:---:|
-| ![Zeitstrom](docs/screenshots/zeitstrom.png) | ![Personenliste](docs/screenshots/personenliste.png) |
+| ![Zeitstrom](docs/screenshots/zeitstrom.webp) | ![Personenliste](docs/screenshots/personenliste.webp) |
 
 | Statistiken auf Knopfdruck | Personenverlauf |
 |:---:|:---:|
-| ![Statistiken](docs/screenshots/statistiken.png) | ![Personenverlauf](docs/screenshots/personendetail.png) |
+| ![Statistiken](docs/screenshots/statistiken.webp) | ![Personenverlauf](docs/screenshots/personendetail.webp) |
+
+| Arbeitszentrale — rollenbezogener Einstieg | Ereignis erfassen |
+|:---:|:---:|
+| ![Arbeitszentrale](docs/screenshots/arbeitszentrale.webp) | ![Ereignis erfassen](docs/screenshots/ereignis-anlegen.webp) |
 
 <details>
 <summary>Mobile Ansicht</summary>
 
-| Zeitstrom (Mobil) |
-|:---:|
-| ![Zeitstrom mobil](docs/screenshots/zeitstrom-mobil.png) |
+| Zeitstrom (Mobil) | Arbeitszentrale (Mobil) |
+|:---:|:---:|
+| ![Zeitstrom mobil](docs/screenshots/zeitstrom-mobil.webp) | ![Arbeitszentrale mobil](docs/screenshots/arbeitszentrale-mobil.webp) |
 
 </details>
+
+➡️ **[Alle Screenshots ansehen](docs/screenshots.md)** — vom Fallmanagement über die Übergabe bis zum DSGVO-Datenpaket.
 
 ---
 
