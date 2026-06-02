@@ -35,9 +35,10 @@ class TestEventCardPreview:
             for i in range(min(badge_count, 10)):
                 cls = badges.nth(i).get_attribute("class") or ""
                 classes_set.add(cls)
-            # If seed creates multiple doc types, classes should differ
-            # This is a soft check — at minimum verify badges render
-            assert badge_count > 0
+            # If seed creates multiple doc types, classes should differ.
+            # Soft check: the collected badge classes are present (badge_count > 1
+            # here already guarantees the badges rendered).
+            assert classes_set
 
 
 def _find_date_with_activities(page, base_url, verb=None):

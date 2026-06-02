@@ -14,12 +14,12 @@ import signal
 import subprocess
 import sys
 import time
+from contextlib import suppress
 
 import pytest
 import requests
 from filelock import FileLock
 
-_TEST_ENV = {**os.environ, "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.test"}
 # E2E-Server + Seed mit e2e-Settings (Dev/PBKDF2 + kein Rate-Limit).
 # NICHT test-Settings verwenden — Django rehashed Passwörter bei Login
 # automatisch auf den primären Hasher (MD5), was den Dev-Login zerstört.
@@ -90,10 +90,8 @@ def _kill_port(port):
         stale = None
     if stale and stale.stdout.strip():
         for pid in stale.stdout.split():
-            try:
+            with suppress(ProcessLookupError, ValueError):
                 os.kill(int(pid), signal.SIGTERM)
-            except (ProcessLookupError, ValueError):
-                pass
         time.sleep(1)
 
 
