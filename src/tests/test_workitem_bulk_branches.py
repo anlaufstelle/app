@@ -66,3 +66,30 @@ class TestWorkItemBulkAssignUnknownUser:
         )
         assert response.status_code == 400
         assert b"Unbekannte" in response.content
+
+
+@pytest.mark.django_db
+class TestWorkItemBulkNoExceptionLeak:
+    """Refs #1011 (CodeQL #4, py/stack-trace-exposure).
+
+    Eine *unerwartete* Service-Exception darf ihre Message nicht als 400 in
+    die Antwort gespiegelt werden — nur kontrollierte Validierungs-Fehler
+    werden gefangen, der Rest propagiert als 500 (geloggt, nicht exponiert).
+    """
+
+    def test_unexpected_service_error_is_not_reflected(self, client, staff_user, workitem, monkeypatch):
+        client.force_login(staff_user)
+        client.raise_request_exception = False
+
+        def _boom(*args, **kwargs):
+            raise ValueError("INTERNAL-LEAK-MARKER-xyz")
+
+        monkeypatch.setattr("core.views.workitem_bulk.bulk_update_workitem_status", _boom)
+
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(workitem.pk)], "status": "done"},
+        )
+
+        assert response.status_code == 500
+        assert b"INTERNAL-LEAK-MARKER" not in response.content
