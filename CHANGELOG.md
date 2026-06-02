@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.13.2] - 2026-06-02
+
+Patch-Release (Pre-Release): vollständige Triage und Behebung aller **29 offenen CodeQL-Code-Scanning-Alerts** auf dem öffentlichen Mirror (#1011). Schwerpunkt ist defensive Security-Härtung (Open-Redirect-Schutz, keine Exception-Details in Fehlerantworten, einheitliche Download-Header); keine der gemeldeten Stellen war real ausnutzbar. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
+
+### Security
+
+- **Open-Redirect-Schutz gehärtet** (#1011) — der zentrale `?next=`-Sanitizer `safe_redirect_path` (Sudo-Mode, WorkItem-Status-Redirects) nutzt jetzt Django's [`url_has_allowed_host_and_scheme`](https://github.com/anlaufstelle/app/blob/main/src/core/views/utils.py). Das fängt zusätzlich Backslash-Bypässe wie `/\evil.example` ab — Browser interpretieren `\` als `/`, wodurch der bisherige `startswith('/')`-Check eine protokoll-relative Weiterleitung auf eine fremde Origin durchließ. Same-origin-Pfade bleiben unverändert erlaubt.
+- **Keine Exception-Strings in Bulk-Fehlerantworten** (#1011) — die Bulk-WorkItem-Aktionen (Status/Priorität/Zuweisung) liefern Validierungsfehler über eine kontrollierte, übersetzte Meldung statt `str(exception)`. Unerwartete Exceptions werden nicht mehr abgefangen und in die 400-Antwort gespiegelt, sondern propagieren als 500 (serverseitig geloggt, nicht exponiert).
+- **Einheitliche Download-Header beim Audit-Export** (#1011) — der Cross-Facility-Audit-Export (CSV/JSON) läuft jetzt über den zentralen [`safe_download_response`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/downloads.py)-Builder, inklusive `Content-Disposition: attachment`, RF-Dateiname und `X-Content-Type-Options: nosniff` — konsistent mit allen anderen Downloads.
+
+### Fixed
+
+- **Autosave-Entwurf zuverlässig verwerfen** (#1011) — beim Klick auf einen „Entwurf verwerfen"-Link wird das (stets asynchrone) Löschen des Offline-Entwurfs direkt verkettet statt über einen toten Laufzeit-Guard; das Navigationsziel wird in jedem Fall nach Abschluss angesteuert.
+
+### Changed
+
+- **Code-Hygiene aus der CodeQL-Triage** (#1011) — leere `except`-Blöcke aufgelöst (`.filter.first` statt `try/except DoesNotExist`, `contextlib.suppress`, gezieltes Debug-Logging für defekte Daten), toter/ungenutzter Code entfernt und kleinere E2E-Test-Hygiene (explizite String-Konkatenation, nicht-redundante Assertions). Rein intern, ohne Verhaltensänderung.
+
 ## [0.13.1] - 2026-06-01
 
 Patch-Release (Pre-Release) mit Schwerpunkt **Außenwirkung und Aufräumen**: neue, automatisiert erzeugte Screenshots in Deutsch und Englisch (Desktop + Mobil) samt vollständiger Galerie-Seiten, ein wiederverwendbares Screenshot-Tooling, präsentablere Seed-Daten und das Schließen einiger bei v0.13.0 offen gebliebener Enden. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
