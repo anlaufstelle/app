@@ -19,8 +19,8 @@ Anlaufstelle braucht eine Datenverwaltungs-Oberflaeche fuer Anwendungsbetreuung 
 Anlaufstelle verwendet eine **Custom-AdminSite-Subklasse** [`AnlaufstelleAdminSite`](../../src/core/admin_site.py) als alleinige Datenverwaltungs-UI unter `/admin-mgmt/`. Die Default-`django.contrib.admin.site` wird aus dem URLconf entfernt — es gibt keinen zweiten Admin-Pfad.
 
 - **Rollen-Gate:** `has_permission(request)` laesst nur User mit `is_super_admin` oder `is_facility_admin` durch. `lead`/`staff`/`assistant` werden geblockt, auch bei `is_staff=True`. Die Pruefung lebt in der Site-Methode `_has_admin_role` als einzige Truth-Source — ModelAdmin-Mixins delegieren an `admin_site.has_role_permission(request)`.
-- **Sudo-Mode-Pflicht:** Wenn `SUDO_MODE_ENABLED=True` (Default), muss zusaetzlich `is_in_sudo(request)` true sein. Die Site-eigene `login`-View redirected einen autorisierten User ohne Sudo aktiv auf `/sudo/?next=…` statt ihn stillschweigend reinzulassen.
-- **Facility-Scoping ueber Site-Methode:** `scope_to_facility(queryset, request)` ist die einzige Stelle, an der die Regel „`super_admin` sieht alles, `facility_admin` sieht nur die eigene Facility" implementiert wird. ModelAdmin-`get_queryset` ruft diese Methode auf.
+- **Sudo-Mode-Pflicht:** Wenn `SUDO_MODE_ENABLED=True` (Default), muss zusaetzlich `is_in_sudo(request)` true sein. Die Site-eigene `login()`-View redirected einen autorisierten User ohne Sudo aktiv auf `/sudo/?next=…` statt ihn stillschweigend reinzulassen.
+- **Facility-Scoping ueber Site-Methode:** `scope_to_facility(queryset, request)` ist die einzige Stelle, an der die Regel „`super_admin` sieht alles, `facility_admin` sieht nur die eigene Facility" implementiert wird. ModelAdmin-`get_queryset()` ruft diese Methode auf.
 - **Unfold-Theme als Basis:** Die Site erbt von `UnfoldAdminSite` (gevendor'tes `django-unfold`), damit Theme, Search-Endpoint und `each_context`-Variablen ohne Brueche funktionieren. Namespace bleibt `"admin"`, damit `{% url 'admin:...' %}` in Unfold-Templates aufloest.
 
 ## Consequences
@@ -31,7 +31,7 @@ Anlaufstelle verwendet eine **Custom-AdminSite-Subklasse** [`AnlaufstelleAdminSi
 - **+** Die Custom-Site rendert das CSP-Trade-off ([`docs/security-notes.md` § /admin-mgmt/](../security-notes.md#csp-unsafe-eval-auf-admin-mgmt-issue-695)) ueberhaupt erst akzeptabel: `'unsafe-eval'` wird nur auf einem Pfad gelockert, der durch Rollen-Gate + Sudo geschuetzt ist.
 - **−** Wartungs-Tax bei Django-Upgrades — die Subklasse muss bei `AdminSite`-API-Aenderungen nachgezogen werden. In der Praxis ist das API stabil; Risiko gering.
 - **−** Wer Django-Admin gewohnt ist, stolpert ueber den Sudo-Redirect beim ersten Zugriff. Mitigation: Banner und Doku in [`docs/admin-guide.md`](../admin-guide.md).
-- **−** Die Sudo-Pflicht muss in E2E-Tests gegen `/admin-mgmt/` aktiv beruecksichtigt werden (`enter_sudo_mode` vor `goto`). Refs der internen Notiz `feedback_e2e-sudo-mode-pre-785`.
+- **−** Die Sudo-Pflicht muss in E2E-Tests gegen `/admin-mgmt/` aktiv beruecksichtigt werden (`enter_sudo_mode()` vor `goto()`). Refs der internen Notiz `feedback_e2e-sudo-mode-pre-785`.
 
 ## Alternatives considered
 

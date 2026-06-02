@@ -256,8 +256,8 @@ pkill -f gunicorn
 Every new facility-scoped model must be protected on **both** defense lines:
 
 1. **Django layer (first line):**
- - `facility = models.ForeignKey(Facility,...)` on the model
- - `objects = FacilityScopedManager` (from [`src/core/models/managers.py`](src/core/models/managers.py))
+ - `facility = models.ForeignKey(Facility, ...)` on the model
+ - `objects = FacilityScopedManager()` (from [`src/core/models/managers.py`](src/core/models/managers.py))
  - Views/services filter via `.for_facility(request.current_facility)`
 2. **PostgreSQL RLS (second line, defense in depth):**
  - New migration following the pattern of [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): add the table to `DIRECT_TABLES` (or `JOIN_TABLES` if no direct `facility_id` column exists). The migration sets `ENABLE + FORCE ROW LEVEL SECURITY` plus a `facility_isolation` policy.
@@ -300,7 +300,7 @@ To ensure HTMX success messages reach screen-reader users:
 Endpoints are separated by response type — templates reference both exclusively via `{% url 'name' %}`:
 
 - **HTML fragments (HTMX partials):** Path `/partials/<feature>/<action>/`. Examples: `partials/clients/autocomplete/`, `partials/retention/<uuid:pk>/approve/`. Response is always HTML, rendered with a `partials/` template.
-- **JSON APIs:** Path `/api/v1/<feature>/<action>/`. Example: `api/v1/offline/bundle/client/<uuid:pk>/`. Response is JSON, consumed by service workers or JS `fetch` calls.
+- **JSON APIs:** Path `/api/v1/<feature>/<action>/`. Example: `api/v1/offline/bundle/client/<uuid:pk>/`. Response is JSON, consumed by service workers or JS `fetch()` calls.
 
 New endpoints belong in one of these two path groups. URL names stay short and feature-specific (`client_autocomplete`, `offline_bundle`); path prefixes only change when the response form changes. Direct `fetch("/api/...")`-calls in JS may only target `/api/v1/` — HTMX partials are never consumed as JSON.
 
@@ -444,7 +444,7 @@ Never run the full suite during development — work in layers, always with fail
 
 **Fail-fast always:** run tests with `pytest -x`. On failure, fix it, check whether related tests share the same root cause, then re-run the full suite. Re-runs: `pytest --lf -x` (last failed only) or `pytest --ff -x` (failed first).
 
-**Wait strategy (E2E):** `domcontentloaded` or `wait_for_url` — **never** `networkidle`.
+**Wait strategy (E2E):** `domcontentloaded` or `wait_for_url()` — **never** `networkidle`.
 
 ### Full CI Pipeline Locally
 
@@ -500,7 +500,7 @@ The watchdog detects stalled or dead master processes and restarts `make mutatio
  Also manually verify in the browser that the change works as expected.
 
 4. **Open a pull request:**
- - Title in Conventional Commits style (`feat:...`, `fix:...`)
+ - Title in Conventional Commits style (`feat: ...`, `fix: ...`)
  - Description: What was changed and why? Which issues are being closed?
  - Screenshot or demo if UI changes are included
  - Link to the associated GitHub issue

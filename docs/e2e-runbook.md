@@ -13,9 +13,9 @@ Die `conftest.py` erledigt DB-Erstellung, Migration, Seed und `collectstatic` au
 | # | Schritt | Befehl | Prüfung |
 |---|---------|--------|---------|
 | 1 | PostgreSQL läuft | `sudo docker compose up -d` | `pg_isready -h localhost` → Exit 0 |
-| 2 | Port 8844 frei | `lsof -i:8844` | Keine Ausgabe |
-| 3 | Alte Prozesse beenden | `pkill -f 'gunicorn.*8844'` | `lsof -i:8844` danach leer |
-| 4 | Venv aktiv | `source.venv/bin/activate` | `which python` zeigt `.venv/` |
+| 2 | Port 8844 frei | `lsof -i :8844` | Keine Ausgabe |
+| 3 | Alte Prozesse beenden | `pkill -f 'gunicorn.*8844'` | `lsof -i :8844` danach leer |
+| 4 | Venv aktiv | `source .venv/bin/activate` | `which python` zeigt `.venv/` |
 | 5 | Playwright installiert | `python -m playwright install chromium` | Kein „browser not found" |
 | 6 | Tailwind gebaut | `make tailwind-build` | `src/static/css/styles.css` existiert |
 | 7 | Tests starten | `make test-e2e` | Grüne Ausgabe |
@@ -30,16 +30,16 @@ Die `conftest.py` erledigt DB-Erstellung, Migration, Seed und `collectstatic` au
 
 | Symptom | Ursache | Fix |
 |---------|---------|-----|
-| `RuntimeError: gunicorn-Server konnte nicht gestartet werden` | Port 8844 belegt | `lsof -i:8844` → `kill <PID>` oder `pkill -f 'gunicorn.*8844'` |
+| `RuntimeError: gunicorn-Server konnte nicht gestartet werden` | Port 8844 belegt | `lsof -i :8844` → `kill <PID>` oder `pkill -f 'gunicorn.*8844'` |
 | `RuntimeError: gunicorn...` + DB-Connection-Error | PostgreSQL nicht gestartet | `sudo docker compose up -d` → `pg_isready -h localhost` |
 | `psycopg.OperationalError: database "anlaufstelle_e2e" does not exist` | conftest-Erstellung fehlgeschlagen | `PGPASSWORD=anlaufstelle psql -h localhost -U anlaufstelle -c "CREATE DATABASE anlaufstelle_e2e;"` |
-| Login-Redirect zurück zu `/login/` | Passwörter durch MD5 korrumpiert | `DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e.venv/bin/python src/manage.py seed --flush` |
+| Login-Redirect zurück zu `/login/` | Passwörter durch MD5 korrumpiert | `DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e .venv/bin/python src/manage.py seed --flush` |
 | Login-Redirect + Rate-Limit-Meldung | Falsches Settings-Modul (Rate-Limit aktiv) | `DJANGO_SETTINGS_MODULE` muss `anlaufstelle.settings.e2e` sein |
-| `TimeoutError` bei `page.goto` | `networkidle` als Wait-Strategie | `grep -r "networkidle" src/tests/e2e/` → ersetzen durch `domcontentloaded` |
-| `TimeoutError` nach Form-Submit | Kein `wait_for_url` nach `.click` | `page.wait_for_url(re.compile(r"/expected/path/"))` ergänzen |
+| `TimeoutError` bei `page.goto()` | `networkidle` als Wait-Strategie | `grep -r "networkidle" src/tests/e2e/` → ersetzen durch `domcontentloaded` |
+| `TimeoutError` nach Form-Submit | Kein `wait_for_url()` nach `.click()` | `page.wait_for_url(re.compile(r"/expected/path/"))` ergänzen |
 | `strict mode violation` | Locator matcht mehrere Elemente | Container scopen (`#main-content`) oder `.first` nutzen |
-| 404 auf CSS/JS (Seite ohne Styling) | `collectstatic` nicht gelaufen | Manuell: `DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e.venv/bin/python src/manage.py collectstatic --noinput` |
-| Seed-Client nicht gefunden (Stern-42 etc.) | Alte Daten nicht geflusht, Pagination | conftest nutzt `--flush`. Manuell: `seed --flush`. In Tests: per Filter suchen statt `.is_visible` |
+| 404 auf CSS/JS (Seite ohne Styling) | `collectstatic` nicht gelaufen | Manuell: `DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e .venv/bin/python src/manage.py collectstatic --noinput` |
+| Seed-Client nicht gefunden (Stern-42 etc.) | Alte Daten nicht geflusht, Pagination | conftest nutzt `--flush`. Manuell: `seed --flush`. In Tests: per Filter suchen statt `.is_visible()` |
 | `button[type="submit"]` matcht mehrere | Selektor greift Navigation-Buttons mit | `#main-content button[type='submit']` verwenden |
 | HTMX-Swap nicht sichtbar nach Klick | Kein Wait nach Response | `page.wait_for_load_state("domcontentloaded")` oder `page.wait_for_timeout(500)` |
 
@@ -190,9 +190,9 @@ def _create_own_client(self, page, base_url):
 | `page.wait_for_load_state("networkidle")` | Gleicher Grund | `page.wait_for_load_state("domcontentloaded")` |
 | `button[type="submit"]` ohne Container | Matcht Logout-, Sprach-, Such-Buttons | `#main-content button[type='submit']` |
 | `DJANGO_SETTINGS_MODULE=...test` für E2E | MD5-Hasher korrumpiert Passwörter | `...settings.e2e` |
-| Seed-Daten direkt mutieren | Andere Tests erwarten den Originalzustand | Eigene Objekte erstellen mit `uuid.uuid4.hex[:6]` |
+| Seed-Daten direkt mutieren | Andere Tests erwarten den Originalzustand | Eigene Objekte erstellen mit `uuid.uuid4().hex[:6]` |
 | `locator("text=...")` ohne Scope | Kann Desktop + Mobile Navigation matchen | Scopen auf `#main-content` oder `nav[aria-label='...']` |
-| `time.sleep` | Nicht deterministisch | `page.wait_for_timeout`, `wait_for_url`, `expect.to_be_visible` |
+| `time.sleep()` | Nicht deterministisch | `page.wait_for_timeout()`, `wait_for_url()`, `expect().to_be_visible()` |
 | `runserver` statt gunicorn | Single-threaded, blockiert bei Last | conftest startet gunicorn automatisch |
 | `stdout=subprocess.PIPE` für gunicorn | Pipe-Buffer füllt sich nach ~25 Requests | `stdout=subprocess.DEVNULL` |
 
@@ -200,7 +200,7 @@ def _create_own_client(self, page, base_url):
 
 Diese Patterns sind im seriellen Lauf meist grün, fallen aber unter `make test-e2e-parallel` (4 Worker, gunicorn 2x2 Slots) reproduzierbar um. Vermeiden — alternative Patterns nutzen.
 
-**1. `inner_text / count / assert` direkt nach `expect_response(...)`**
+**1. `inner_text() / count() / assert` direkt nach `expect_response(...)`**
 
 `page.expect_response` wartet nur auf den Server-Response, **nicht** auf den anschließenden HTMX-DOM-Swap. Unter Last liest die Folge-Assertion den alten Wert.
 
@@ -230,7 +230,7 @@ locator.wait_for(state="visible", timeout=3000)
 locator.wait_for(state="visible", timeout=10000)
 ```
 
-**3. `.first.click` / `.nth(N).click` ohne deterministische Vorbedingung**
+**3. `.first.click()` / `.nth(N).click()` ohne deterministische Vorbedingung**
 
 Bei kleiner, zufälliger Seed-Menge ist Listen-Sortierung nicht garantiert.
 
@@ -246,7 +246,7 @@ page.locator(SUBMIT).click()
 page.locator(f"a:has-text('{unique_title}')").click()
 ```
 
-`.first.click` ist nur dann zulässig, wenn der Selektor bereits eindeutig (z.B. `a:has-text('Stern-42')` mit Unique-Pseudonym) ist oder die Test-Assertion für jedes Listenelement gilt (z.B. Berechtigungsprüfung über alle Rollen hinweg).
+`.first.click()` ist nur dann zulässig, wenn der Selektor bereits eindeutig (z.B. `a:has-text('Stern-42')` mit Unique-Pseudonym) ist oder die Test-Assertion für jedes Listenelement gilt (z.B. Berechtigungsprüfung über alle Rollen hinweg).
 
 ---
 
@@ -319,8 +319,8 @@ make test-e2e ARGS="-x src/tests/e2e/test_cases.py::TestCaseCRUD::test_create_ca
 
 ### Dreistufige Verifikation neuer Tests
 
-1. **Einzeln:** Jeden neuen Test einzeln ausführen bis grün (`pytest -x...::test_name`)
-2. **Gruppe:** Alle neuen Tests als Gruppe zusammen (`pytest -x.../test_file.py`)
+1. **Einzeln:** Jeden neuen Test einzeln ausführen bis grün (`pytest -x ...::test_name`)
+2. **Gruppe:** Alle neuen Tests als Gruppe zusammen (`pytest -x .../test_file.py`)
 3. **Gesamt:** Gesamtlauf über alle Tests (`make test-e2e`)
 
 Bei Fehlern: fixen, prüfen ob verwandte Tests denselben Root Cause teilen, dann Stufe erneut.
@@ -350,7 +350,7 @@ Situation?
     └── page.wait_for_timeout(300)
 ```
 
-**Niemals:** `networkidle`, `time.sleep`.
+**Niemals:** `networkidle`, `time.sleep()`.
 
 ---
 

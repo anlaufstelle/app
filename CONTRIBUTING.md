@@ -257,8 +257,8 @@ pkill -f gunicorn
 Jedes neue facility-gescopte Model muss auf **beiden** Verteidigungslinien abgesichert sein:
 
 1. **Django-Layer (erste Linie):**
- - `facility = models.ForeignKey(Facility,...)` am Model
- - `objects = FacilityScopedManager` (aus [`src/core/models/managers.py`](src/core/models/managers.py))
+ - `facility = models.ForeignKey(Facility, ...)` am Model
+ - `objects = FacilityScopedManager()` (aus [`src/core/models/managers.py`](src/core/models/managers.py))
  - Views/Services filtern via `.for_facility(request.current_facility)`
 2. **PostgreSQL-RLS (zweite Linie, Defense-in-Depth):**
  - Neue Migration nach dem Muster von [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): Tabelle zu `DIRECT_TABLES` hinzufügen (oder `JOIN_TABLES`, falls kein direktes `facility_id`-Feld vorhanden ist). Die Migration setzt `ENABLE + FORCE ROW LEVEL SECURITY` plus eine `facility_isolation`-Policy.
@@ -301,7 +301,7 @@ Damit HTMX-Erfolgsmeldungen Screen-Reader-Nutzer*innen erreichen, gilt:
 Endpunkte werden nach Response-Typ getrennt — Templates referenzieren beide ausschließlich über `{% url 'name' %}`:
 
 - **HTML-Fragmente (HTMX-Partials):** Pfad `/partials/<feature>/<action>/`. Beispiel: `partials/clients/autocomplete/`, `partials/retention/<uuid:pk>/approve/`. Antwort ist immer HTML, gerendert mit `partials/`-Template.
-- **JSON-APIs:** Pfad `/api/v1/<feature>/<action>/`. Beispiel: `api/v1/offline/bundle/client/<uuid:pk>/`. Antwort ist JSON, von Service-Workern oder JS-`fetch`-Calls konsumiert.
+- **JSON-APIs:** Pfad `/api/v1/<feature>/<action>/`. Beispiel: `api/v1/offline/bundle/client/<uuid:pk>/`. Antwort ist JSON, von Service-Workern oder JS-`fetch()`-Calls konsumiert.
 
 Neue Endpunkte gehören entsprechend in eine der beiden Pfad-Gruppen. URL-Namen bleiben kurz und feature-spezifisch (`client_autocomplete`, `offline_bundle`); Pfad-Prefixe wechseln nur dann, wenn die Response-Form wechselt. Direkte `fetch("/api/...")`-Aufrufe in JS dürfen nur unter `/api/v1/` gehen — HTMX-Partials werden niemals als JSON konsumiert.
 
@@ -445,7 +445,7 @@ Während der Entwicklung nie die volle Suite laufen lassen — in Schichten vorg
 
 **Fail-Fast immer:** Tests mit `pytest -x` ausführen. Bei Fehlern fixen, prüfen ob verwandte Tests denselben Root Cause teilen, erst dann wieder Gesamtlauf. Re-Runs: `pytest --lf -x` (nur zuletzt fehlgeschlagene) oder `pytest --ff -x` (fehlgeschlagene zuerst).
 
-**Wait-Strategie (E2E):** `domcontentloaded` oder `wait_for_url` — **niemals** `networkidle`.
+**Wait-Strategie (E2E):** `domcontentloaded` oder `wait_for_url()` — **niemals** `networkidle`.
 
 ### Vollständige CI-Pipeline lokal
 
@@ -501,7 +501,7 @@ Der Watchdog erkennt stillstehende oder gestorbene Master-Prozesse und startet `
  Außerdem manuell im Browser prüfen, dass die Änderung wie erwartet funktioniert.
 
 4. **Pull Request öffnen:**
- - Titel im Conventional-Commits-Stil (`feat:...`, `fix:...`)
+ - Titel im Conventional-Commits-Stil (`feat: ...`, `fix: ...`)
  - Beschreibung: Was wurde geändert und warum? Welche Issues werden geschlossen?
  - Screenshot oder Demo, wenn UI-Änderungen enthalten sind
  - Verlinkung des zugehörigen GitHub-Issues

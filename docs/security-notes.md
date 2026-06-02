@@ -23,7 +23,7 @@ Zwei Use-Cases sind auf Cross-Facility-Zugriff angewiesen:
 
 Auch ohne RLS-Isolation auf `core_user` gilt:
 
-- **Facility-Scoping im ORM-Layer:** Alle user-facing Views gehen über [`FacilityScopeMiddleware`](../src/core/middleware/facility_scope.py), die `request.current_facility` setzt. Queries, die User ausschließlich einer Facility liefern sollen, filtern explizit (z.B. in [`forms/workitems.py`](../src/core/forms/workitems.py): `User.objects.filter(facility=facility,...)`).
+- **Facility-Scoping im ORM-Layer:** Alle user-facing Views gehen über [`FacilityScopeMiddleware`](../src/core/middleware/facility_scope.py), die `request.current_facility` setzt. Queries, die User ausschließlich einer Facility liefern sollen, filtern explizit (z.B. in [`forms/workitems.py`](../src/core/forms/workitems.py): `User.objects.filter(facility=facility, ...)`).
 - **Rollen-Gates:** [`AdminRequiredMixin`](../src/core/views/mixins.py) hält Cross-Facility-User-Management Admin-only.
 - **AuditLog:** User-Role-Changes und Deaktivierungen werden via `post_save`-Signale geloggt (siehe [`signals/audit.py`](../src/core/signals/audit.py)).
 
@@ -57,13 +57,13 @@ Wenn wir den Token-Link-Flow (Invite, Passwort-Reset, 2FA-Backup-Download) jemal
 
 ### Beobachtung
 
-Die globale CSP setzt `script-src 'self'` (kein `'unsafe-eval'`, kein `'unsafe-inline'`) — alle App-Templates nutzen den `@alpinejs/csp`-Build mit registrierten `Alpine.data`-Komponenten. Eine Ausnahme bildet die Django-Admin-UI auf `/admin-mgmt/`: das gevendor'te [`django-unfold`-Theme](https://github.com/unfoldadmin/django-unfold) (Version 0.91.0) liefert >20 Templates mit Inline-Function-Calls (`x-data="searchCommand"`, `x-data="theme(...)"`, `x-data="searchDropdown"`, `x-data="searchForm"`) **und** Inline-Object-Expressions (`x-data="{rowOpen: false}"` u.ä.). Beide Patterns scheitern unter dem strikten `@alpinejs/csp`-Build, weil Alpine sie nur mit dynamischer Code-Auswertung parsen kann (klassischer Alpine-Build), die unter `script-src 'self'` ohne `'unsafe-eval'` blockiert ist.
+Die globale CSP setzt `script-src 'self'` (kein `'unsafe-eval'`, kein `'unsafe-inline'`) — alle App-Templates nutzen den `@alpinejs/csp`-Build mit registrierten `Alpine.data()`-Komponenten. Eine Ausnahme bildet die Django-Admin-UI auf `/admin-mgmt/`: das gevendor'te [`django-unfold`-Theme](https://github.com/unfoldadmin/django-unfold) (Version 0.91.0) liefert >20 Templates mit Inline-Function-Calls (`x-data="searchCommand()"`, `x-data="theme(...)"`, `x-data="searchDropdown()"`, `x-data="searchForm()"`) **und** Inline-Object-Expressions (`x-data="{rowOpen: false}"` u.ä.). Beide Patterns scheitern unter dem strikten `@alpinejs/csp`-Build, weil Alpine sie nur mit dynamischer Code-Auswertung parsen kann (klassischer Alpine-Build), die unter `script-src 'self'` ohne `'unsafe-eval'` blockiert ist.
 
 [`AdminCSPRelaxMiddleware`](../src/core/middleware/admin_csp_relax.py) hängt `'unsafe-eval'` per Response-Header-Rewrite **ausschließlich** für Pfade unter `/admin-mgmt/` an. Die globale CSP bleibt unverändert — Login, Klient-CRUD, Zeitstrom, Statistik und alle anderen Routen laufen weiter mit `script-src 'self'`.
 
 ### Trade-off
 
-Die saubere Alternative wäre Option 2 aus dem Issue: 20+ Unfold-Templates in [`src/templates/admin/`](../src/templates/) überschreiben + Shim-JS mit `Alpine.data('searchCommand',...)`-Re-Implementierungen. Initialaufwand 1–2 Tage, dazu laufender Wartungs-Tax bei jedem `django-unfold`-Update. Im Issue-Body selbst auf v0.11 verschoben.
+Die saubere Alternative wäre Option 2 aus dem Issue: 20+ Unfold-Templates in [`src/templates/admin/`](../src/templates/) überschreiben + Shim-JS mit `Alpine.data('searchCommand', ...)`-Re-Implementierungen. Initialaufwand 1–2 Tage, dazu laufender Wartungs-Tax bei jedem `django-unfold`-Update. Im Issue-Body selbst auf v0.11 verschoben.
 
 **Was wir aufgeben:**
 - `script-src` auf Admin-Routes ist nicht mehr „strict" — Audit-Reports werden `'unsafe-eval'` flaggen
@@ -71,7 +71,7 @@ Die saubere Alternative wäre Option 2 aus dem Issue: 20+ Unfold-Templates in [`
 
 **Was wir behalten:**
 - `script-src` bleibt `'self'` — kein Remote-Script-Loading
-- Architektur-Tests verbieten weiterhin `csrf_exempt`, `|safe`, `mark_safe`, Inline-`<script>`-Blöcke im gesamten Repo (siehe `src/tests/test_architecture_guards_*.py`)
+- Architektur-Tests verbieten weiterhin `csrf_exempt`, `|safe`, `mark_safe()`, Inline-`<script>`-Blöcke im gesamten Repo (siehe `src/tests/test_architecture_guards_*.py`)
 - `/admin-mgmt/` ist nur fuer Rollen `super_admin` und `facility_admin` erreichbar (Custom `AnlaufstelleAdminSite`, Refs #785). `lead`/`staff`/`assistant` werden geblockt — auch wenn `is_staff=True` gesetzt ist. Sudo-Mode-Pflicht: erster Zugriff redirected zu `/sudo/?next=/admin-mgmt/`. Facility-Scoping in ModelAdmin: `facility_admin` sieht nur Daten der eigenen Facility, `super_admin` sieht alle. Plus AuditLog auf alle Schreib-Aktionen, RLS gegen Cross-Facility-Leaks. MFA-Pflicht ist separates Issue #788.
 
 ### Threat-Model-Bewertung
@@ -121,7 +121,7 @@ Diese Freitext-Felder folgen **nicht** dem Sensitivity/Encryption/Retention-Mode
 ### Was bewusst nicht jetzt umgesetzt wird (Audit-Item 17)
 
 Feldweise Encryption (`Client.notes`, `Case.description` als verschlüsselte Felder) ist im als **§ B.5 Item 17, Aufwand M** klassifiziert. Voll-Implementation würde:
-- Schema-Migration (TextField → JSONField mit `{"__encrypted__": True, "value":...}`)
+- Schema-Migration (TextField → JSONField mit `{"__encrypted__": True, "value": ...}`)
 - Existing-Data-Migration (Bestand verschlüsseln)
 - Search/Sort/Export anpassen — `Client.notes` wird in Detail-Views, Exports und ggf. Volltext-Suche gerendert
 - Decrypt-Pfad in allen Views, die das Feld lesen
@@ -297,8 +297,8 @@ Auf dem aktuellen privaten GitHub-Free-Repo sind Rulesets **nicht verfügbar** �
 
 ### Verifikation
 
-- `grep -rE 'uses: [^@]+@v[0-9]+\s*$'.github/workflows/` muss leer sein → kein Tag-Pinning übrig.
-- `grep -L 'permissions:'.github/workflows/*.yml` muss leer sein → jeder Workflow hat irgendwo Permissions (Top-Level oder Job-Level).
+- `grep -rE 'uses: [^@]+@v[0-9]+\s*$' .github/workflows/` muss leer sein → kein Tag-Pinning übrig.
+- `grep -L 'permissions:' .github/workflows/*.yml` muss leer sein → jeder Workflow hat irgendwo Permissions (Top-Level oder Job-Level).
 - CHANGELOG-`[Unreleased]`-Eintrag dokumentiert beide Maßnahmen mit Issue-Referenz.
 
 ---

@@ -114,7 +114,7 @@ base.py → dev.py → e2e.py
 
 - **`authenticated_page`** — Admin-Context mit gecachter Session
 - **`lead_page`** / **`staff_page`** / **`assistant_page`** — analog
-- Jeder Test bekommt einen frischen `browser.new_context` mit Storage-State
+- Jeder Test bekommt einen frischen `browser.new_context()` mit Storage-State
 - Timeouts: 30s (Default), 30s (Navigation)
 
 ### Helfer
@@ -127,7 +127,7 @@ base.py → dev.py → e2e.py
 
 **Niemals `networkidle` verwenden.** Es wartet auf 500ms ohne Netzwerkaktivitaet — jeder Background-Request (Session-Save, HTMX) resettet den Timer und verursacht Timeouts.
 
-### Nach `page.goto` — `domcontentloaded`
+### Nach `page.goto()` — `domcontentloaded`
 
 ```python
 page.goto(f"{base_url}/clients/new/")
@@ -136,7 +136,7 @@ page.wait_for_load_state("domcontentloaded")
 
 DOM ist geparsed und interaktionsfaehig. Reicht fuer die meisten Seiten.
 
-### Nach Formular-Submit — `wait_for_url`
+### Nach Formular-Submit — `wait_for_url()`
 
 ```python
 page.locator(SUBMIT).click()
@@ -154,7 +154,7 @@ page.wait_for_load_state("domcontentloaded")
 expect(page.locator("button:has-text('Erledigt')")).to_be_visible()
 ```
 
-### Alpine.js Debounce — `wait_for_timeout`
+### Alpine.js Debounce — `wait_for_timeout()`
 
 ```python
 page.fill("input[name='q']", "Blitz")
@@ -169,7 +169,7 @@ Nur fuer clientseitige Debounce-Timer noetig, nicht fuer Server-Waits.
 
 1. **Serielle Ausfuehrung:** E2E-Tests laufen seriell (kein pytest-xdist). Playwright/Chromium braucht ~200-400 MB RAM pro Instanz. Auf CI-Runnern mit begrenztem RAM wuerde Parallelisierung zu OOM fuehren.
 
-2. **Shared Database:** Alle E2E-Tests teilen sich `anlaufstelle_e2e` mit Seed-Daten. Keine Test-Isolation untereinander — Tests koennen Daten sehen, die andere Tests erstellt haben. Eindeutige Bezeichner (`uuid.uuid4.hex[:8]`) verwenden. Dev-Daten (`anlaufstelle`) sind nicht betroffen.
+2. **Shared Database:** Alle E2E-Tests teilen sich `anlaufstelle_e2e` mit Seed-Daten. Keine Test-Isolation untereinander — Tests koennen Daten sehen, die andere Tests erstellt haben. Eindeutige Bezeichner (`uuid.uuid4().hex[:8]`) verwenden. Dev-Daten (`anlaufstelle`) sind nicht betroffen.
 
 3. **Rate-Limiting deaktiviert:** `RATELIMIT_ENABLE = False` in e2e.py. Ausnahme: `TestZZRateLimiting` in `test_auth_roles.py` testet explizit das Rate-Limiting (muss als letzter Test laufen, ZZ-Prefix).
 
@@ -187,7 +187,7 @@ Nur fuer clientseitige Debounce-Timer noetig, nicht fuer Server-Waits.
 ### Server startet nicht (RuntimeError)
 
 - **Ursache:** Port 8844 belegt oder gunicorn-Fehler
-- **Fix:** `lsof -i:8844` pruefen, ggf. alten Prozess beenden. gunicorn-Logs in `stderr` des Subprozesses pruefen.
+- **Fix:** `lsof -i :8844` pruefen, ggf. alten Prozess beenden. gunicorn-Logs in `stderr` des Subprozesses pruefen.
 
 ### Login schlaegt fehl nach test-Settings
 

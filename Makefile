@@ -239,17 +239,25 @@ dev-logs:
 dev-shell:
 	ssh -t $(DEV_HOST) 'cd /opt/anlaufstelle && docker compose -f docker-compose.dev.yml --env-file .env.dev exec web python manage.py shell'
 
-# Einmalig nach dem Initial-Deploy: Demo-Daten einspielen.
+# Demo-Daten einspielen (idempotent). Args via SEED_ARGS, z.B.
+#   make dev-seed SEED_ARGS="--flush --scale=medium"
 # Connection als POSTGRES_ADMIN_USER (BYPASSRLS), damit seed in
 # RLS-geschuetzte Tabellen schreiben kann ohne app.current_facility_id-
 # Bootstrap-Henne-Ei. Refs #863.
+#
+# --entrypoint python: docker-entrypoint.sh ist seit Refs #802 hartcodiert auf
+# `exec gunicorn` und ignoriert das uebergebene Kommando — ohne Override startet
+# `run web python manage.py seed` nur den Webserver und seedet nie. -T + </dev/null
+# entkoppeln den Job vom STDIN (Refs #976); kein `ssh -t`, sonst Haenger ohne TTY.
+SEED_ARGS ?=
 dev-seed:
-	ssh -t $(DEV_HOST) 'cd /opt/anlaufstelle && \
+	ssh $(DEV_HOST) 'cd /opt/anlaufstelle && \
 	  set -a && . ./.env.dev && set +a && \
-	  docker compose -f docker-compose.dev.yml --env-file .env.dev run --rm \
+	  docker compose -f docker-compose.dev.yml --env-file .env.dev run --rm -T \
+	    --entrypoint python \
 	    -e POSTGRES_USER="$$POSTGRES_ADMIN_USER" \
 	    -e POSTGRES_PASSWORD="$$POSTGRES_ADMIN_PASSWORD" \
-	    web python manage.py seed'
+	    web manage.py seed $(SEED_ARGS) </dev/null'
 
 # Manueller Backup-Snapshot (Cron macht das eigenstaendig).
 dev-backup:

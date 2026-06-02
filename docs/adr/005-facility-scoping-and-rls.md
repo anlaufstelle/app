@@ -8,7 +8,7 @@
 
 Anlaufstelle ist mandantenfähig: eine Installation hostet mehrere Einrichtungen (`Facility`). Daten einer Einrichtung dürfen unter keinen Umständen in einer anderen sichtbar werden — auch nicht bei Programmierfehlern (vergessenes `.filter(facility=…)`), bei manuell konstruierten Querysets im Admin oder bei künftigen Refactorings.
 
-Eine reine Anwendungsschicht-Lösung („alle Querysets gehen über `FacilityScopedManager`") ist korrekt, aber einzeln-fehleranfällig. Ein einziges `Model.objects.all` an der falschen Stelle bricht die Mandantengrenze.
+Eine reine Anwendungsschicht-Lösung („alle Querysets gehen über `FacilityScopedManager`") ist korrekt, aber einzeln-fehleranfällig. Ein einziges `Model.objects.all()` an der falschen Stelle bricht die Mandantengrenze.
 
 ## Decision
 
@@ -76,7 +76,7 @@ Mit Einführung des 5-Rollen-Modells ([ADR-018](018-rollenmodell-superadmin.md))
 
 | Schicht | Mechanismus | Wer steuert? |
 |---|---|---|
-| 1 (Anwendung) | `FacilityScopedManager.for_facility` + Mixin-Gating | Django-Code |
+| 1 (Anwendung) | `FacilityScopedManager.for_facility()` + Mixin-Gating | Django-Code |
 | 2 (DB-User) | Runtime-User `anlaufstelle` ist `NOSUPERUSER NOBYPASSRLS` | Init-Script |
 | 3 (Anwendungsrolle) | `app.is_super_admin`-Session-Var als OR-Branch in Policies | Middleware (per Request neu gesetzt) |
 

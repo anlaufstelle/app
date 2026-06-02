@@ -661,7 +661,7 @@ erDiagram
 
 Scope-Regeln bestimmen, welche Daten für wen sichtbar sind:
 
-**Einrichtungsebene (v1.0):** Mitarbeitende sehen nur die Daten der Einrichtung, der sie zugeordnet sind. Da es in v1.0 nur eine Einrichtung gibt, ist der Scope-Filter technisch vorhanden (`WHERE facility_id =:current`), aber für den Nutzer unsichtbar. Jede Datenbankabfrage filtert auf `facility_id` — das ist die Vorbereitung für eine spätere Mehrmandantenfähigkeit.
+**Einrichtungsebene (v1.0):** Mitarbeitende sehen nur die Daten der Einrichtung, der sie zugeordnet sind. Da es in v1.0 nur eine Einrichtung gibt, ist der Scope-Filter technisch vorhanden (`WHERE facility_id = :current`), aber für den Nutzer unsichtbar. Jede Datenbankabfrage filtert auf `facility_id` — das ist die Vorbereitung für eine spätere Mehrmandantenfähigkeit.
 
 **Organisationsebene (Branding-Hülse):** Die Organisation existiert als reine Verwaltungs-Hülse für Träger-Branding (Logo, Trägername in Berichten). Es gibt **keinen** Org-Admin und **keine** Cross-Facility-Sichtbarkeit über die Organisation — die einzige facility-übergreifende Rolle ist die Systemadministration (`super_admin`), und auch sie sieht nur den `/system/`-Bereich, nicht das normale Fach-UI mehrerer Einrichtungen gleichzeitig. Diese Architektur-Entscheidung ist bewusst gewählt (Variante b1: Org als Branding-Hülse) und in [ADR-018](adr/018-rollenmodell-superadmin.md) festgehalten.
 
@@ -699,7 +699,7 @@ Jede Architekturentscheidung wird als strukturierter Block dokumentiert. Offene 
 - Jede Entität (Client, Event, DocumentType, WorkItem) hat `facility_id` als Pflicht-FK.
 - Client hat zusätzlich `organization_id` als vorbereiteten FK (in v1.0 redundant, da es nur eine Organization gibt).
 - Beim Setup wird automatisch eine Organization + eine Facility angelegt. Die UI zeigt die Organisationsebene nicht.
-- Jede Datenbankabfrage filtert auf `facility_id =:current_facility`. Da es nur eine Facility gibt, ist das ein transparenter Filter.
+- Jede Datenbankabfrage filtert auf `facility_id = :current_facility`. Da es nur eine Facility gibt, ist das ein transparenter Filter.
 
 **Begründung:** Der Mehraufwand gegenüber einer Struktur ohne Fremdschlüssel ist gering (ca. 10–15%): ein FK pro Model, ein Scope-Filter als Middleware. Aber die Migrationsfähigkeit ist real: Wenn ein Träger als Nutzer dazukommt, werden eine zweite Facility, ein Facility-Switcher und Scope-Regeln ergänzt — ohne jede Tabelle umbauen zu müssen. Das ist dieselbe Logik wie Entscheidung 5 (Case-FK von Anfang an).
 
@@ -1322,7 +1322,7 @@ v1.0 setzt auf Django-eigene Authentifizierung (Benutzername + Passwort, bcrypt/
 
 ### Scope-Filter als Middleware
 
-Da das Datenmodell von Anfang an `facility_id` auf allen Entitäten hat (Entscheidung 2), wird der Scope-Filter als Django-Middleware implementiert: Jede Datenbankabfrage filtert automatisch auf `facility_id =:current_facility`. In v1.0 gibt es nur eine Facility, also ist der Filter transparent. Wenn ein Träger dazukommt, wird ein Facility-Switcher ergänzt — der Scope-Filter funktioniert bereits.
+Da das Datenmodell von Anfang an `facility_id` auf allen Entitäten hat (Entscheidung 2), wird der Scope-Filter als Django-Middleware implementiert: Jede Datenbankabfrage filtert automatisch auf `facility_id = :current_facility`. In v1.0 gibt es nur eine Facility, also ist der Filter transparent. Wenn ein Träger dazukommt, wird ein Facility-Switcher ergänzt — der Scope-Filter funktioniert bereits.
 
 ### Monitoring und Betrieb
 

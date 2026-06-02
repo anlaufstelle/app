@@ -23,7 +23,7 @@ PDF-Generierung bleibt **synchron**. Mitigationen statt Async-Queue:
 
 - **Rate-Limiting** auf den teuren Endpunkten (`@ratelimit(rate="10/h")` pro User).
 - **Hybrid-Statistiken** (vorberechnete Aggregate für Jugendamt-Bericht), wo möglich.
-- **Decryption-Caching** (`lru_cache` auf `get_fernet`, `iter_records` statt Volladung).
+- **Decryption-Caching** (`lru_cache` auf `get_fernet()`, `iter_records` statt Volladung).
 - **WSGI/Gunicorn**-Tuning: ausreichend Worker, Timeouts an den realistischen Worst-Case angepasst.
 
 Ein Wechsel auf Async-Queue ist eine spätere Option, falls Lastprofil oder Featureumfang es erzwingt. Diese ADR wird dann durch eine Folge-ADR superseded.

@@ -45,7 +45,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 
 **Relevante Dateien:**
 - [`src/core/models/settings.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/settings.py) — `default_document_type` ForeignKey
-- [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) — `EventCreateView.get` liest den Default
+- [`src/core/views/events.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/events.py) — `EventCreateView.get()` liest den Default
 
 ---
 
@@ -105,7 +105,7 @@ Nach **10 fehlgeschlagenen Anmeldungen** wird das Konto automatisch gesperrt (Sc
 **Hinweis für Admins:** Die `LOGIN_FAILED`-Einträge im AuditLog sind durch einen DB-Trigger (`auditlog_immutable`) unveränderbar — der Cleanup erfolgt deshalb über einen `LOGIN_UNLOCK`-Eintrag, nicht durch Löschen.
 
 **Relevante Dateien:**
-- [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py) — `is_locked`, `unlock`, Schwellenwert
+- [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py) — `is_locked()`, `unlock()`, Schwellenwert
 - [`src/core/views/account.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/account.py) — Lockout-Check beim Login
 
 ---
@@ -152,8 +152,8 @@ Filter-Änderungen (Schicht, Typ, Dokumentationstyp) lösen einen HTMX-Request a
 
 **Relevante Dateien:**
 - [`src/core/views/zeitstrom.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/zeitstrom.py) — `ZeitstromView`, `ZeitstromFeedPartialView`
-- [`src/core/services/feed.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/feed.py) — `build_feed_items`, `enrich_events_with_preview`
-- [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary`
+- [`src/core/services/feed.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/feed.py) — `build_feed_items()`, `enrich_events_with_preview()`
+- [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary()`
 
 ---
 
@@ -181,12 +181,12 @@ Die **Übergabe** ist ein Dashboard für den Schichtwechsel — ersetzt das anal
 **Automatisches Verhalten:**
 - Öffnet man die Übergabe **heute**, wird automatisch die **vorherige Schicht** vorausgewählt
 - Datums-Navigation (vor/zurück) + Tab-Wechsel zwischen Schichten und „Ganzer Tag"
-- Nachtschichten über Mitternacht werden korrekt via `covers_time`-Logik behandelt
+- Nachtschichten über Mitternacht werden korrekt via `covers_time()`-Logik behandelt
 - Kompakte Version erscheint auch im Zeitstrom, wenn ein Schichtfilter aktiv ist
 
 **Relevante Dateien:**
 - [`src/core/views/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/handover.py) — `HandoverView`
-- [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary`
+- [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary()`
 - [`src/core/models/time_filter.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/time_filter.py) — `TimeFilter` (Schichtdefinition)
 - [`src/templates/core/handover/index.html`](https://github.com/anlaufstelle/app/blob/main/src/templates/core/handover/index.html) — Haupttemplate
 
@@ -232,7 +232,7 @@ Die **Wiedervorlage** (Feld `remind_at`) ist ein **optionales Frühwarn-Datum**,
 
 **Relevante Dateien:**
 - [`src/core/models/workitem.py`](https://github.com/anlaufstelle/app/blob/main/src/core/models/workitem.py) — Feld `remind_at`
-- [`src/core/utils/dates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/dates.py) — `describe_remind_at` (Badge-Logik)
+- [`src/core/utils/dates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/dates.py) — `describe_remind_at()` (Badge-Logik)
 - [`src/core/forms/workitems.py`](https://github.com/anlaufstelle/app/blob/main/src/core/forms/workitems.py) — Validierung `remind_at ≤ due_date`
 - [`src/core/services/workitems.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/workitems.py) — Offset-Erhalt bei Wiederholung
 

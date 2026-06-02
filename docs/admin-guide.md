@@ -454,7 +454,7 @@ Im Feld **Default-Wert** einer Feldvorlage kann ein Vorgabewert hinterlegt werde
 | Mehrfachauswahl | Komma-getrennte Liste aktiver Options-Slugs | `beratung, essen` |
 | Datei | nicht unterstützt ||
 
-Vorrangregel beim Neu-Anlegen: **Quick-Template > Default-Wert > leer**. Ungültige Werte werden in `FieldTemplate.clean` beim Speichern im Admin abgelehnt.
+Vorrangregel beim Neu-Anlegen: **Quick-Template > Default-Wert > leer**. Ungültige Werte werden in `FieldTemplate.clean()` beim Speichern im Admin abgelehnt.
 
 **Schema einer Option:**
 
@@ -622,7 +622,7 @@ Schnell-Vorlagen werden pro User über [`user_can_see_document_type`](https://gi
 
 ### 2.9 Encrypted File Vault & Virus-Scanning
 
-Dateianhänge (Fotos, Scans, Dokumente) an Ereignissen werden in einem **verschlüsselten Vault** abgelegt: vor dem Schreiben in `MEDIA_ROOT` auf Viren geprüft und anschließend chunk-weise per **Fernet** (AES-128-CBC mit HMAC-SHA256, [`cryptography.fernet`](https://cryptography.io/en/latest/fernet/)) mit dem `ENCRYPTION_KEYS`-Schlüsselmaterial verschlüsselt. Implementierung: [`encrypt_file` in `src/core/services/encryption.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/encryption.py). Refs #524.
+Dateianhänge (Fotos, Scans, Dokumente) an Ereignissen werden in einem **verschlüsselten Vault** abgelegt: vor dem Schreiben in `MEDIA_ROOT` auf Viren geprüft und anschließend chunk-weise per **Fernet** (AES-128-CBC mit HMAC-SHA256, [`cryptography.fernet`](https://cryptography.io/en/latest/fernet/)) mit dem `ENCRYPTION_KEYS`-Schlüsselmaterial verschlüsselt. Implementierung: [`encrypt_file()` in `src/core/services/encryption.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/encryption.py). Refs #524.
 
 #### Upload-Flow
 
@@ -659,7 +659,7 @@ MultiFernet akzeptiert eine Liste von Schlüsseln. Um zu rotieren:
 
 #### Sichere Downloads (RFC 5987)
 
-Alle File-Downloads werden über den zentralen Helper [`safe_download_response`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/downloads.py) ausgeliefert. Der Helper setzt `Content-Disposition` mit RF-kodierten Dateinamen (Unicode-sicher, kein Reverse-Path-Traversal) und verhindert Browser-MIME-Sniffing.
+Alle File-Downloads werden über den zentralen Helper [`safe_download_response`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/downloads.py) ausgeliefert. Der Helper setzt `Content-Disposition` mit RFC-5987-kodierten Dateinamen (Unicode-sicher, kein Reverse-Path-Traversal) und verhindert Browser-MIME-Sniffing.
 
 ### 2.10 Offline-Modus & Streetwork (M6A)
 
@@ -891,9 +891,9 @@ Die Content-Security-Policy (CSP) wird **zentral in Django** über [`django-csp`
 
 **Inline-Skripte sind nicht erlaubt.** Alle JavaScript-Logik liegt in externen Dateien unter `src/static/js/`, eingebunden per `<script src=…>` oder über Nonce-Aware-Template-Tags.
 
-**`script-src` global ohne `'unsafe-eval'`.** Mit der Migration auf den `@alpinejs/csp`-Build (v0.10.2) ist `'unsafe-eval'` aus der globalen Policy entfernt. Alle Alpine-Komponenten sind als `Alpine.data`-Komponenten in [`src/static/js/alpine-components.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/alpine-components.js) registriert; Architektur-Tests verbieten Inline-`x-data="{...}"` und komplexe Expressions (Ternaries, `||`/`&&`, Method-Calls, Object-Literale) in Alpine-/HTMX-Direktiven.
+**`script-src` global ohne `'unsafe-eval'`.** Mit der Migration auf den `@alpinejs/csp`-Build (v0.10.2) ist `'unsafe-eval'` aus der globalen Policy entfernt. Alle Alpine-Komponenten sind als `Alpine.data()`-Komponenten in [`src/static/js/alpine-components.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/alpine-components.js) registriert; Architektur-Tests verbieten Inline-`x-data="{...}"` und komplexe Expressions (Ternaries, `||`/`&&`, Method-Calls, Object-Literale) in Alpine-/HTMX-Direktiven.
 
-**Ausnahme `/admin-mgmt/*` (Django-Admin):** django-unfold lädt einen eigenen Alpine-Build, der für die Cmd+K-Suche `new AsyncFunction`-basierte Auswertung nutzt und damit ohne `'unsafe-eval'` nicht initialisiert. Die [`AdminCSPRelaxMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/) ergänzt `'unsafe-eval'` deshalb **per Request nur für Admin-Routen** — diese sind durch MFA-Gate und Rolle `facility_admin` (bzw. `super_admin`) zusätzlich geschützt. Außerhalb des Admins bleibt die strenge globale Policy aktiv.
+**Ausnahme `/admin-mgmt/*` (Django-Admin):** django-unfold lädt einen eigenen Alpine-Build, der für die Cmd+K-Suche `new AsyncFunction()`-basierte Auswertung nutzt und damit ohne `'unsafe-eval'` nicht initialisiert. Die [`AdminCSPRelaxMiddleware`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/) ergänzt `'unsafe-eval'` deshalb **per Request nur für Admin-Routen** — diese sind durch MFA-Gate und Rolle `facility_admin` (bzw. `super_admin`) zusätzlich geschützt. Außerhalb des Admins bleibt die strenge globale Policy aktiv.
 
 **Typische Fehlerbilder im Browser-Console:**
 

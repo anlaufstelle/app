@@ -71,7 +71,7 @@ In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.en
 **Pflicht:**
 - `DJANGO_SECRET_KEY` — frisch generiert (`python -c "import secrets; print(secrets.token_urlsafe(50))"`)
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
-- `ENCRYPTION_KEY` oder `ENCRYPTION_KEYS` — Fernet-Key (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key.decode)"`)
+- `ENCRYPTION_KEY` oder `ENCRYPTION_KEYS` — Fernet-Key (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
 - `ALLOWED_HOSTS=anlaufstelle.app,www.anlaufstelle.app`
 - `DOMAIN=anlaufstelle.app`
 - `BACKUP_ENCRYPTION_KEY` — separater Fernet-Key für Backups
@@ -114,7 +114,7 @@ Der Admin erhält eine Einladungs-E-Mail mit Setup-Link (Token-Invite-Flow, #528
 > docker compose exec web python manage.py check_db_roles
 > ```
 >
-> Erwartetes Ergebnis: ``OK App-Rolle... rolsuper=False, rolbypassrls=False`` und ``OK Admin-Rolle... rolsuper=False, rolbypassrls=True``. Hintergrund: [docs/ops-runbook.md § 9](ops-runbook.md).
+> Erwartetes Ergebnis: ``OK App-Rolle ... rolsuper=False, rolbypassrls=False`` und ``OK Admin-Rolle ... rolsuper=False, rolbypassrls=True``. Hintergrund: [docs/ops-runbook.md § 9](ops-runbook.md).
 
 ### 7. 2FA aktivieren
 

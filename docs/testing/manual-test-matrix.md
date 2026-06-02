@@ -725,11 +725,11 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Zusätzlicher AuditLog-Eintrag `LOGIN_FAILED` mit `detail.reason="locked"` und `detail.message="Login blockiert durch Account-Lockout"`.
 - Kein `LOGIN`-Erfolgs-Eintrag, kein Session-Cookie.
 - `is_locked(miriam)` gibt `True` zurück (Schwelle erreicht innerhalb 15-Minuten-Fenster).
-- Admin kann via `unlock` / `LOGIN_UNLOCK`-Audit den Cutoff setzen, danach werden die alten FAILED-Einträge ignoriert.
+- Admin kann via `unlock()` / `LOGIN_UNLOCK`-Audit den Cutoff setzen, danach werden die alten FAILED-Einträge ignoriert.
 
 **DSGVO/Security-Note:**
 - Lockout-Konstanten: `LOCKOUT_THRESHOLD = 10`, `LOCKOUT_WINDOW = timedelta(minutes=15)` in `src/core/services/login_lockout.py`.
-- Concurrency-Schutz via `transaction.atomic` + `User.objects.select_for_update` (Refs #737).
+- Concurrency-Schutz via `transaction.atomic()` + `User.objects.select_for_update()` (Refs #737).
 
 **Status:** ☐ Offen
 
@@ -998,7 +998,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Vorbereitung:**
 - Login als `miriam`.
-- DB-Check: `TOTPDevice.objects.filter(user=miriam, confirmed=True).exists == False`.
+- DB-Check: `TOTPDevice.objects.filter(user=miriam, confirmed=True).exists() == False`.
 
 **Schritte:**
 1. `/mfa/settings/` aufrufen → Status „2FA nicht aktiv".
@@ -1045,7 +1045,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Schritt 3: HTTP 302 auf `LOGIN_REDIRECT_URL=/`. Session `mfa_verified=True`. Anwendung nutzbar.
 - Schritt 4: HTTP 200, Form mit Fehlermeldung `"Der Code ist ungültig. Bitte erneut versuchen."`. AuditLog `MFA_FAILED` mit `detail.event="mfa_token_invalid"`, `detail.mode="totp"`.
 - Rate-Limit `5/min/User` auf `MFAVerifyView.post`. Bei 6+ Versuchen → HTTP 429.
-- Eingegebene Token werden mit `.strip.replace(" ", "")` normalisiert (Toleranz für Leerzeichen).
+- Eingegebene Token werden mit `.strip().replace(" ", "")` normalisiert (Toleranz für Leerzeichen).
 
 **DSGVO/Security-Note:**
 - Refs #683: Session-Hijack-Schutz — auch mit gestohlenem Session-Cookie braucht Angreifer den TOTP-Code.
@@ -1065,7 +1065,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Vorbereitung:**
 - Login + MFA-Verify.
-- DB-Check: `StaticDevice` mit `name="backup"` für `miriam`, `StaticToken.objects.filter(device=...).count` notieren.
+- DB-Check: `StaticDevice` mit `name="backup"` für `miriam`, `StaticToken.objects.filter(device=...).count()` notieren.
 
 **Schritte:**
 1. Auf `/mfa/backup-codes/` (über Setup-Flow oder Regenerate-Action) — 10 Codes anzeigen lassen.
@@ -1075,8 +1075,8 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Erwartetes Ergebnis:**
 - UI zeigt **genau 10** Codes als Liste/Card, mit Druck-/Copy-Hint.
 - Code-Format: `^[A-Za-z0-9_-]{22}$`, jedes Codes 128 Bit Entropie (`secrets.token_urlsafe(16)`).
-- DB: Pro Code ein `StaticToken`-Eintrag; **`token`-Feld enthält nicht den Klartext**, sondern SHA-256-Hex-Digest, truncated auf 16 Hex-Zeichen (`hashlib.sha256(code).hexdigest[:16]`).
-- Bestehender `StaticDevice` für `miriam` wird wiederverwendet, alte Tokens werden gelöscht (`device.token_set.all.delete`).
+- DB: Pro Code ein `StaticToken`-Eintrag; **`token`-Feld enthält nicht den Klartext**, sondern SHA-256-Hex-Digest, truncated auf 16 Hex-Zeichen (`hashlib.sha256(code).hexdigest()[:16]`).
+- Bestehender `StaticDevice` für `miriam` wird wiederverwendet, alte Tokens werden gelöscht (`device.token_set.all().delete()`).
 - AuditLog: `BACKUP_CODES_GENERATED` (Setup) bzw. `BACKUP_CODES_REGENERATED` (Regenerate) mit `detail.count=10`.
 
 **DSGVO/Security-Note:**
@@ -1107,7 +1107,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Erwartetes Ergebnis:**
 - HTTP 302 auf `LOGIN_REDIRECT_URL=/`.
 - Session `mfa_verified=True`.
-- DB: `StaticToken` für genutzten Code wurde via `match.delete` entfernt → `remaining_backup_codes(miriam) == 9`.
+- DB: `StaticToken` für genutzten Code wurde via `match.delete()` entfernt → `remaining_backup_codes(miriam) == 9`.
 - AuditLog: `BACKUP_CODES_USED` mit `detail.remaining=9`.
 - `device.set_last_used_timestamp(commit=False)` setzt Timestamp; `throttle_reset` wird ausgeführt.
 
@@ -1140,8 +1140,8 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - HTTP 200, Form mit Fehler `"Der Code ist ungültig. Bitte erneut versuchen."`.
 - Session bleibt `mfa_verified=False`.
 - AuditLog: neuer `MFA_FAILED`-Eintrag mit `detail.event="mfa_token_invalid"`, `detail.mode="backup"`.
-- `device.throttle_increment` wurde aufgerufen — wiederholte Misses verzögern weitere Verifies (django-otp ThrottlingMixin).
-- `verify_backup_code` returnt `False`, da `device.token_set.filter(token__in=[hashed, token]).first` kein Match findet (Token wurde gelöscht).
+- `device.throttle_increment()` wurde aufgerufen — wiederholte Misses verzögern weitere Verifies (django-otp ThrottlingMixin).
+- `verify_backup_code` returnt `False`, da `device.token_set.filter(token__in=[hashed, token]).first()` kein Match findet (Token wurde gelöscht).
 
 **DSGVO/Security-Note:**
 - Single-use ist Pflicht: Refs #790 — Match in EINER Query gegen Hash UND Cleartext (Legacy), aber Treffer wird direkt deleted.
@@ -1206,7 +1206,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 7. Versuch B: User mit `is_mfa_enforced=True` versucht Disable.
 
 **Erwartetes Ergebnis:**
-- Schritt 6: `TOTPDevice.objects.filter(user=miriam).delete` löscht alle Devices, `request.session.pop("mfa_verified")`. Redirect `/mfa/settings/`. Status zeigt „2FA nicht aktiv". Success-Message: „Zwei-Faktor-Authentifizierung deaktiviert."
+- Schritt 6: `TOTPDevice.objects.filter(user=miriam).delete()` löscht alle Devices, `request.session.pop("mfa_verified")`. Redirect `/mfa/settings/`. Status zeigt „2FA nicht aktiv". Success-Message: „Zwei-Faktor-Authentifizierung deaktiviert."
 - AuditLog: `MFA_DISABLED` mit `detail.event="mfa_disabled"`.
 - Rate-Limit `RATELIMIT_MUTATION` (Default: z.B. 30/h) auf `MFADisableView.post`.
 - Versuch B: Error-Message „Zwei-Faktor-Authentifizierung ist für dein Konto verpflichtend.", Redirect auf `/mfa/settings/`, Devices unverändert. Kein AuditLog `MFA_DISABLED`.
@@ -1229,7 +1229,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Vorbereitung:**
 - Admin setzt `User.mfa_required=True` für `thomas`.
-- DB: `TOTPDevice.objects.filter(user=thomas, confirmed=True).exists == False`.
+- DB: `TOTPDevice.objects.filter(user=thomas, confirmed=True).exists() == False`.
 
 **Schritte:**
 1. `/login/` mit `thomas` + Pwd → Submit.
@@ -1257,7 +1257,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Voraussetzung:** Facility-Settings `mfa_enforced_facility_wide=True` (über Admin-UI oder Shell gesetzt). Keiner der drei Test-User hat ein Device.
 
 **Vorbereitung:**
-- `facility.settings.mfa_enforced_facility_wide = True; facility.settings.save`.
+- `facility.settings.mfa_enforced_facility_wide = True; facility.settings.save()`.
 - Alle User der Facility ohne TOTPDevice.
 
 **Schritte:**
@@ -1504,7 +1504,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 4. Session-State und Redirect prüfen.
 
 **Erwartetes Ergebnis:**
-- Schritt 3: `authenticate(request, username="miriam", password="anlaufstelle2026")` returnt User; `enter_sudo(request)` setzt `session["sudo_until"] = int(time.time) + 900`.
+- Schritt 3: `authenticate(request, username="miriam", password="anlaufstelle2026")` returnt User; `enter_sudo(request)` setzt `session["sudo_until"] = int(time.time()) + 900`.
 - AuditLog: `SUDO_MODE_ENTERED` mit `user=miriam`, `target_type="User"`, `target_id=miriam.pk`, `detail.next="/mfa/disable/"`.
 - HTTP 302 Redirect auf `safe_redirect_path("/mfa/disable/")`.
 - Folge-POST auf `/mfa/disable/` ist jetzt erlaubt (`is_in_sudo==True`).
@@ -1533,12 +1533,12 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Schritte:**
 1. Direkt nach Sudo-Entry erste sudo-pflichtige Aktion ausführen → erfolgreich.
-2. 16 Min warten (oder mit gemockter `time.time` / Setting).
+2. 16 Min warten (oder mit gemockter `time.time()` / Setting).
 3. Erneut sudo-pflichtige Aktion versuchen.
 
 **Erwartetes Ergebnis:**
 - Schritt 1: erfolgreich (Sudo-Window noch offen).
-- Schritt 3: `is_in_sudo(request)` returnt `False`, da `time.time >= session["sudo_until"]`.
+- Schritt 3: `is_in_sudo(request)` returnt `False`, da `time.time() >= session["sudo_until"]`.
 - 302 Redirect auf `/sudo/?next=<originalpfad>` — User muss erneut sein Pwd eingeben.
 - Nach erneuter Re-Auth: AuditLog hat einen ZWEITEN `SUDO_MODE_ENTERED`-Eintrag.
 - Setting `SUDO_MODE_TTL_SECONDS` aus `os.environ.get("SUDO_MODE_TTL_SECONDS", "900")`.
@@ -1702,7 +1702,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
  - `/static/icons/icon-192.svg`, `/static/icons/icon-512.svg`
  - `/offline/`
 - Schritt 5: zweiter Reload servert aus Cache (Cache-Hit), gleichzeitig Hintergrund-Fetch der neuen Version → Cache-Update (Refs #618).
-- Bei `caches.keys`-Wechsel werden alte CACHE_NAMEs (v8 etc.) im `activate`-Event gelöscht.
+- Bei `caches.keys()`-Wechsel werden alte CACHE_NAMEs (v8 etc.) im `activate`-Event gelöscht.
 
 **DSGVO/Security-Note:**
 - SW-Scope-Restriction (Service-Worker-Allowed) verhindert, dass aus `/static/`-Pfaden Root-Skripte registriert werden.
@@ -1794,13 +1794,13 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Schritte:**
 1. App neu laden (Hard-Reload sind nicht nötig; Browser prüft SW automatisch).
 2. DevTools → Application → Service Workers: „waiting to activate"-Status für die neue SW-Version sehen.
-3. „skipWaiting"-Verhalten: laut Code ruft `install`-Handler `self.skipWaiting` auf — alte SW wird sofort durch neue ersetzt.
-4. `activate`-Handler löscht alte Caches via `caches.keys … filter(k !== CACHE_NAME).delete`.
+3. „skipWaiting"-Verhalten: laut Code ruft `install`-Handler `self.skipWaiting()` auf — alte SW wird sofort durch neue ersetzt.
+4. `activate`-Handler löscht alte Caches via `caches.keys() … filter(k !== CACHE_NAME).delete()`.
 5. App reloaden — beobachte Cache-Liste in DevTools (nur `anlaufstelle-v10` übrig).
 6. Static-Assets werden bei Bedarf via stale-while-revalidate aus dem neuen Cache geliefert.
 
 **Erwartetes Ergebnis:**
-- Neue SW installiert + aktiviert sich automatisch (Refs `self.skipWaiting` + `self.clients.claim` im Code).
+- Neue SW installiert + aktiviert sich automatisch (Refs `self.skipWaiting()` + `self.clients.claim()` im Code).
 - Alte Cache-Stores (`anlaufstelle-v9`, ältere) sind entfernt.
 - Nutzer-sichtbar: keine UI-Banner-Implementierung im aktuellen Code (Update-Toast wäre Custom-JS) — Reload reicht.
 - Anmerkung: Aktuell **kein expliziter** „Update verfügbar"-Banner im Frontend — wenn die Aufgabe einen User-Hinweis fordert, ist das ein offener Punkt (manuell verifizierbar: kein Banner sichtbar, aber Update funktioniert silent).
@@ -1850,7 +1850,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **DSGVO/Security-Note:**
 - Liste enthält nur Pseudonyme (Art. 5 Datenminimierung).
-- Cross-Facility-Daten unsichtbar dank `Client.objects.for_facility` + RLS.
+- Cross-Facility-Daten unsichtbar dank `Client.objects.for_facility()` + RLS.
 
 **Status:** ☐ Offen
 
@@ -2461,7 +2461,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Status-Badge wechselt von „Offen" auf „Geschlossen".
 - „Wiedereröffnen"-Button erscheint.
 - `AuditLog` `CASE_CLOSE`.
-- `Case.closed_at` gesetzt auf `timezone.now`.
+- `Case.closed_at` gesetzt auf `timezone.now()`.
 
 **DSGVO/Security-Note:**
 - Fachkraft (`StaffRequiredMixin` reicht für CRUD, aber Close erfordert `LeadOrAdminRequiredMixin`) → Schließen-Button bei Fachkraft nicht sichtbar (Test in `test_staff_cannot_close_case`).
@@ -2582,7 +2582,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 - Rate-Limit 30/Min (Refs `RATELIMIT_FREQUENT`-Pendant; hier `30/m`).
 
 **DSGVO/Security-Note:**
-- Endpoint facility-gescoped (`Case.objects.filter(facility=request.current_facility,...)`).
+- Endpoint facility-gescoped (`Case.objects.filter(facility=request.current_facility, ...)`).
 
 **Status:** ☐ Offen
 
@@ -2691,7 +2691,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **DSGVO/Security-Note:**
 - `started_at` ist Pflichtfeld (DateField); bei leerem POST → Form-Error.
-- Default falls Service direkt aufgerufen: `timezone.now.date`.
+- Default falls Service direkt aufgerufen: `timezone.now().date()`.
 
 **Status:** ☐ Offen
 
@@ -2747,7 +2747,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Erwartetes Ergebnis:**
 - Toast „Episode wurde abgeschlossen.".
 - Episode-Status wechselt von „aktiv" auf „abgeschlossen".
-- `ended_at = timezone.now.date` (Default falls nicht übergeben).
+- `ended_at = timezone.now().date()` (Default falls nicht übergeben).
 - Idempotenz: erneuter Klick auf „Abschließen" hat keinen Effekt (`if episode.ended_at is not None: return`).
 
 **DSGVO/Security-Note:**
@@ -2905,7 +2905,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 3. Erneut klicken → zurück auf „offen".
 
 **Erwartetes Ergebnis:**
-- Erste Klick: `goal.is_achieved=True`, `goal.achieved_at=timezone.localdate`.
+- Erste Klick: `goal.is_achieved=True`, `goal.achieved_at=timezone.localdate()`.
 - Zweite Klick: `is_achieved=False`, `achieved_at=None` (`unachieve_goal`).
 - HTMX-Partial-Refresh ohne Reload.
 - Idempotenz: Wenn `is_achieved=True` und `achieve_goal` erneut aufgerufen → no-op (Service-Return).
@@ -2963,7 +2963,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 3. Erneut klicken — wieder rückgängig.
 
 **Erwartetes Ergebnis:**
-- Erste Klick: `is_completed=True`, `completed_at=timezone.localdate`, `<span class="line-through">`.
+- Erste Klick: `is_completed=True`, `completed_at=timezone.localdate()`, `<span class="line-through">`.
 - Zweite Klick: `is_completed=False`, `completed_at=None`.
 - HTMX rendert Partial mit korrektem CSS-State.
 
@@ -3097,7 +3097,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 2. Erstes DocumentType A im Dropdown wählen.
 3. HTMX-Request `GET /api/events/fields/?document_type=<A>` beobachten → Antwort 200, Partial `dynamic_fields.html` mit 3 Inputs.
 4. DocumentType-Dropdown auf B wechseln.
-5. Zweiter HTMX-Request `GET /api/events/fields/?document_type=<B>` → 200, 5 Inputs, Default-Wert sichtbar im entsprechenden Feld (`field.initial = ft.get_default_initial`).
+5. Zweiter HTMX-Request `GET /api/events/fields/?document_type=<B>` → 200, 5 Inputs, Default-Wert sichtbar im entsprechenden Feld (`field.initial = ft.get_default_initial()`).
 6. Felder umschalten und prüfen, dass das `#dynamic-fields-target` durch HTMX-Swap ersetzt wird (kein voller Reload).
 
 **Erwartetes Ergebnis:**
@@ -4086,7 +4086,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Services:** `src/core/services/retention.py` 
 **Management-Commands:** `enforce_retention`, `reencrypt_fields` 
 **E2E-Coverage:** `test_retention_dashboard.py` 
-**Spezial-Setup:** Backdate-Daten via SQL (`UPDATE core_event SET created_at = NOW - INTERVAL '400 days'`); `enforce_retention --simulate-date=` für Trockenlauf.
+**Spezial-Setup:** Backdate-Daten via SQL (`UPDATE core_event SET created_at = NOW() - INTERVAL '400 days'`); `enforce_retention --simulate-date=` für Trockenlauf.
 
 ---
 
@@ -5677,7 +5677,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 **Schritte:**
 1. Pwd-Wechsel via `/accounts/password_change/` durchführen.
-2. Im Backend wird neuer Salt generiert und gespeichert (`offline_keys.rotate_salt`).
+2. Im Backend wird neuer Salt generiert und gespeichert (`offline_keys.rotate_salt()`).
 3. Logout, dann erneuter Login mit neuem Pwd.
 4. Salt-Endpoint liefert neuen Salt → neuer abgeleiteter Key.
 5. IndexedDB-Decrypt-Versuch alter Eintrag mit neuem Key → Fehler (alte Daten nicht entschlüsselbar).
@@ -6047,7 +6047,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 **Voraussetzung:** CSP-Header in Responses gesetzt mit `report-uri /csp-report/`.
 
 **Vorbereitung:**
-- `curl` zur Hand, oder Playwright mit `request.fetch`.
+- `curl` zur Hand, oder Playwright mit `request.fetch()`.
 
 **Schritte:**
 1. POST `/csp-report/` mit `Content-Type: application/csp-report` und valider JSON-Payload (`{"csp-report": {"document-uri": "...", "violated-directive": "..."}}`) → Status 204.
@@ -6164,7 +6164,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 |---------|-------|---------|--------|-----|
 | Compliance | super_admin | C || `src/tests/test_compliance_service.py::TestDbRoleChecks` |
 
-**Code-Referenz:** [`src/core/services/compliance/db_roles.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/compliance/db_roles.py) `_db_role_checks`, ruft `check_db_roles` aus #902.
+**Code-Referenz:** [`src/core/services/compliance/db_roles.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/compliance/db_roles.py) `_db_role_checks`, ruft `check_db_roles()` aus #902.
 
 **Voraussetzung:** Drei-Rollen-Modell aus #902 aktiv (`POSTGRES_BOOTSTRAP_PASSWORD` + `POSTGRES_ADMIN_USER` + `POSTGRES_ADMIN_PASSWORD` gesetzt).
 
@@ -6193,7 +6193,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 |---------|-------|---------|--------|-----|
 | Compliance | super_admin | C || `src/tests/test_compliance_service.py::TestBackupChecks` |
 
-**Code-Referenz:** `_backup_checks` + `system_health.last_backup_info`.
+**Code-Referenz:** `_backup_checks` + `system_health.last_backup_info()`.
 
 **Schritte:**
 1. Frisches Backup vorhanden → `/system/compliance/` Kategorie „Backup": Status `ok`, Detail enthält Pfad + Alter (z.B. „6h").
@@ -6213,7 +6213,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 |---------|-------|---------|--------|-----|
 | Compliance | super_admin | C || `src/tests/test_compliance_service.py::TestClamavChecks` |
 
-**Code-Referenz:** `_clamav_checks` ruft `virus_scan.ping` + `virus_scan.signature_info`.
+**Code-Referenz:** `_clamav_checks` ruft `virus_scan.ping()` + `virus_scan.signature_info()`.
 
 **Schritte:**
 1. ClamAV-Container läuft → Kategorie „Virus-Scan": Erreichbarkeit `ok`, Signatur `ok` oder `warning` (je nach Alter).
@@ -6863,7 +6863,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 1. Heruntergeladenes JSON in einem JSON-Schema-Validator (z.B. `jq` oder Online-Tool) öffnen.
 2. Schema-Probe: Top-Level-Felder `client`, `events[]`, `cases[]`, `attachments[]`.
 3. Test-Skript: `jq '.events | length' export.json` → Anzahl entspricht Events der Klient:in.
-4. Test-Skript: `jq '.client.pseudonym,.client.stage' export.json` → Werte aus UI.
+4. Test-Skript: `jq '.client.pseudonym, .client.stage' export.json` → Werte aus UI.
 
 **Erwartetes Ergebnis:**
 - JSON ist syntaktisch korrekt und schema-konform.
@@ -7484,8 +7484,8 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 **Schritte:**
 1. `python manage.py shell`.
 2. `from django.db.models.deletion import ProtectedError`.
-3. `Client.objects.get(id=<uuid>).delete` direkt aufrufen.
-4. Den Fall zuerst löschen (`Case.objects.filter(client_id=<uuid>).delete`), dann erneut `Client.delete`.
+3. `Client.objects.get(id=<uuid>).delete()` direkt aufrufen.
+4. Den Fall zuerst löschen (`Case.objects.filter(client_id=<uuid>).delete()`), dann erneut `Client.delete()`.
 5. UI-Probe (optional): Versuch über Admin / DeletionRequest-Workflow — Fehlermeldung an User-Oberfläche prüfen.
 
 **Erwartetes Ergebnis:**
@@ -7516,9 +7516,9 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 **Schritte:**
 1. `python manage.py shell` öffnen.
-2. Case-UUID notieren, IDs der Goals/Milestones zählen (`Case.objects.get(...).goals.count`, `goal.milestones.count`).
-3. `Case.objects.get(id=<uuid>).delete` ausführen.
-4. Erneut `OutcomeGoal.objects.filter(case_id=<uuid>).count` und `Milestone.objects.filter(goal__case_id=<uuid>).count`.
+2. Case-UUID notieren, IDs der Goals/Milestones zählen (`Case.objects.get(...).goals.count()`, `goal.milestones.count()`).
+3. `Case.objects.get(id=<uuid>).delete()` ausführen.
+4. Erneut `OutcomeGoal.objects.filter(case_id=<uuid>).count()` und `Milestone.objects.filter(goal__case_id=<uuid>).count()`.
 5. AuditLog prüfen: erfasst Lösch-Kette oder mindestens den Case-Delete?
 
 **Erwartetes Ergebnis:**
@@ -7527,7 +7527,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 - AuditLog: mindestens ein Eintrag für den Case-Delete (Cascade-Nebenwirkungen ggf. nicht protokolliert — Lücke dokumentieren).
 
 **DSGVO/Security-Note:**
-- Direktes `Case.delete` umgeht den Vier-Augen-Workflow. In Produktion nur über `DeletionRequest`-Service erlaubt — dieser Test prüft das Schema, nicht den User-Pfad.
+- Direktes `Case.delete()` umgeht den Vier-Augen-Workflow. In Produktion nur über `DeletionRequest`-Service erlaubt — dieser Test prüft das Schema, nicht den User-Pfad.
 
 **Status:** ☐ Offen
 
@@ -7548,7 +7548,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 
 **Schritte:**
 1. Shell: Event-UUIDs notieren, `Event.objects.filter(case_id=<uuid>).values_list('id', 'case_id')` ausgeben.
-2. `Case.objects.get(id=<uuid>).delete`.
+2. `Case.objects.get(id=<uuid>).delete()`.
 3. Erneut `Event.objects.filter(id__in=[…]).values_list('id', 'case_id')`.
 4. UI-Gegenprobe: Klient-Detail öffnen → Timeline zeigt die Events weiterhin (ohne Fall-Verlinkung).
 
@@ -7731,7 +7731,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 **Voraussetzung:** Settings `retention_anonymous_days = 90`; Anonymous-Klient:in (kein Echtname, nur Pseudonym) seit 91 Tagen.
 
 **Vorbereitung:**
-- DB-Backdate: `UPDATE core_client SET created_at = NOW - INTERVAL '91 days' WHERE sensitivity = 'anonymous';`
+- DB-Backdate: `UPDATE core_client SET created_at = NOW() - INTERVAL '91 days' WHERE sensitivity = 'anonymous';`
 - `python manage.py enforce_retention --dry-run`.
 
 **Schritte:**
@@ -7958,9 +7958,9 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 **Schritte:**
 1. `python manage.py shell` ausführen.
 2. `from core.models.audit import AuditLog`
-3. `entry = AuditLog.objects.first`
-4. `entry.action = "TAMPERED"; entry.save` versuchen → erwartet `ValueError` oder `IntegrityError`.
-5. `entry.delete` versuchen → erwartet `ValueError` oder gleiche Exception.
+3. `entry = AuditLog.objects.first()`
+4. `entry.action = "TAMPERED"; entry.save()` versuchen → erwartet `ValueError` oder `IntegrityError`.
+5. `entry.delete()` versuchen → erwartet `ValueError` oder gleiche Exception.
 6. DB-Direktzugriff: `psql` → `UPDATE core_auditlog SET action='X' WHERE id=...;` → Trigger blockiert (PG-Exception).
 
 **Erwartetes Ergebnis:**
@@ -8030,7 +8030,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 **Voraussetzung:** Backdate-Daten (Klient:in mit `created_at` vor 400 Tagen).
 
 **Schritte:**
-1. SQL: `UPDATE core_client SET created_at = NOW - INTERVAL '400 days' WHERE id = '<uuid>'`.
+1. SQL: `UPDATE core_client SET created_at = NOW() - INTERVAL '400 days' WHERE id = '<uuid>'`.
 2. `python manage.py enforce_retention --dry-run` ausführen → zeigt geplante Anonymisierungen.
 3. `python manage.py enforce_retention` ausführen.
 4. Klient:in in DB prüfen: `pseudonym` ist auf k-anon-Cluster gesetzt, alle direkt identifizierenden Felder leer.
@@ -8325,14 +8325,14 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 |---------|-------|---------|--------|-----|
 | Security | admin ||| `src/tests/test_audit_signals.py`, `src/tests/test_audit_trigger.py` |
 
-**Code-Referenz:** `src/core/models/audit.py` (`AuditLog.save` raises on update, `delete` raises)
+**Code-Referenz:** `src/core/models/audit.py` (`AuditLog.save()` raises on update, `delete()` raises)
 
 **Schritte:**
 1. `python manage.py shell` öffnen.
 2. `from core.models import AuditLog`
-3. `log = AuditLog.objects.first`
-4. `log.action = 'TAMPERED'; log.save` → erwarte `ValueError` (Append-Only).
-5. `log.delete` → erwarte `ValueError`.
+3. `log = AuditLog.objects.first()`
+4. `log.action = 'TAMPERED'; log.save()` → erwarte `ValueError` (Append-Only).
+5. `log.delete()` → erwarte `ValueError`.
 6. Direkt-SQL: `UPDATE core_auditlog SET action='X' WHERE id='<uuid>'` — falls DB-Trigger vorhanden: blockiert. Falls nur App-Layer: SQL umgeht App-Schutz, dann RLS+DB-Trigger ergänzen.
 
 **Erwartetes Ergebnis:**
@@ -8356,9 +8356,9 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 **Schritte:**
 1. `python manage.py shell` öffnen.
 2. `from core.services.audit_hash import verify_chain`
-3. `verify_chain` → erwartet `True` (alle Einträge konsistent).
+3. `verify_chain()` → erwartet `True` (alle Einträge konsistent).
 4. Direkt-SQL: ein älteres `hash_self`-Feld manipulieren.
-5. `verify_chain` erneut → erwartet `False` mit Position des Bruchs.
+5. `verify_chain()` erneut → erwartet `False` mit Position des Bruchs.
 
 **Erwartetes Ergebnis:**
 - Hash-Kette erkennt nachträgliche Manipulationen.
@@ -8839,7 +8839,7 @@ Passwort für alle Seed-User: `anlaufstelle2026`
 | `assistenz` (Seed-Variante: `lena`) | ASSISTANT | 1 | Niedrigste Rolle, RBAC-Negativtests |
 | `admin_2`, `leitung_2`, `fachkraft_2`, `assistenz_2` | je 1 | 2 | Cross-Facility-/RLS-Tests (`make seed FACILITIES=2`) |
 
-> **Hinweis:** Die genauen Seed-Usernamen können je nach `seed.py`-Variante abweichen (`admin`/`thomas`/`miriam`/`lena` vs. `admin`/`leitung`/`fachkraft`/`assistenz`). Vor Test-Lauf kurz `python manage.py shell -c "from django.contrib.auth import get_user_model; print(list(get_user_model.objects.values_list('username', flat=True)))"` ausführen.
+> **Hinweis:** Die genauen Seed-Usernamen können je nach `seed.py`-Variante abweichen (`admin`/`thomas`/`miriam`/`lena` vs. `admin`/`leitung`/`fachkraft`/`assistenz`). Vor Test-Lauf kurz `python manage.py shell -c "from django.contrib.auth import get_user_model; print(list(get_user_model().objects.values_list('username', flat=True)))"` ausführen.
 
 ### D.2 — Seed-Skalierung
 
@@ -8849,7 +8849,7 @@ Passwort für alle Seed-User: `anlaufstelle2026`
 | Medium | ~50 | ~100 | ~20 | ~50 | `make seed SCALE=medium` |
 | Large (Last-Smoke) | ~1000 | ~5000 | ~200 | ~500 | `make seed SCALE=large` |
 
-Quelle: `src/core/management/commands/seed.py` und Helper-Funktionen `seed_clients_small/bulk`, `seed_events_small/bulk`, etc.
+Quelle: `src/core/management/commands/seed.py` und Helper-Funktionen `seed_clients_small/bulk()`, `seed_events_small/bulk()`, etc.
 
 ### D.3 — Stamm-Daten (Document-Types, Activities, FieldTemplates)
 

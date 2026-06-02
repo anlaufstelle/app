@@ -17,7 +17,7 @@ Das AuditLog ist die einzige nachhaltige Spur über sensitive Operationen (Daten
 - AuditLog wird ausschließlich aus dem Service-Layer geschrieben (`core/services/audit.py`). Inline-Schreibvorgänge in Views sind verboten und werden im Code-Review zurückgewiesen (Refactoring-Commit `ef4fddc`).
 - **Datenbank-Trigger** verhindert `UPDATE` und `DELETE` auf der `core_auditlog`-Tabelle ([`0024_auditlog_immutable_trigger.py`](../../src/core/migrations/0024_auditlog_immutable_trigger.py)). Versuche werfen einen Error, kein Stillschweigen.
 - **Ausnahme Retention:** Die Retention-Pruning-Logik (`enforce_retention`, Refs commit `444ed8f`) darf alte AuditLog-Einträge nach Ablauf der Aufbewahrungsfrist löschen — über einen explizit privilegierten Pfad mit eigenem Audit-Eintrag über die Löschung selbst.
-- `detail` ist `JSONField` — strukturierte Daten, keine `repr`-Strings ([`0022_audit_detail_jsonfield.py`](../../src/core/migrations/0022_audit_detail_jsonfield.py)).
+- `detail` ist `JSONField` — strukturierte Daten, keine `repr()`-Strings ([`0022_audit_detail_jsonfield.py`](../../src/core/migrations/0022_audit_detail_jsonfield.py)).
 
 ## Consequences
 

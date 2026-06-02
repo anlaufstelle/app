@@ -14,7 +14,7 @@ Django bietet zwei View-Stile (FBV/CBV) und keine vorgegebene Stelle für Busine
 
 - **Views ausschließlich als CBVs** in `src/core/views/`, organisiert nach Feature-Modulen.
 - **Business-Logik ausschließlich in `src/core/services/`** — eine Datei pro Feature (z.B. `clients.py`, `cases.py`, `audit.py`, `retention.py`).
-- Views orchestrieren: validieren, Service aufrufen, Response rendern. Sie enthalten **keine** ORM-Mutations­logik außer trivialem `Form.save`.
+- Views orchestrieren: validieren, Service aufrufen, Response rendern. Sie enthalten **keine** ORM-Mutations­logik außer trivialem `Form.save()`.
 - Rollen-Mixins liegen zentral in [`src/core/views/mixins.py`](../../src/core/views/mixins.py) (`AdminRequiredMixin`, `StaffRequiredMixin`, …) und werden überall statt Decorator-Stapeln verwendet.
 
 ## Consequences

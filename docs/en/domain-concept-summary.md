@@ -131,8 +131,8 @@ Release v0.10.0 (2026-04-19) extends the domain concept with several capabilitie
 
 ### v0.10.2 (2026-04-28)
 
-- **CSP migration to `@alpinejs/csp`.** The vendored Alpine build was replaced with the CSP variant; all inline `x-data="{...}"` objects became registered `Alpine.data` components. With this change, `script-src 'unsafe-eval'` is removed from the global Content Security Policy. An architectural test prevents future regressions (no inline `x-data`, no ternaries / `||` / `&&` / method calls / object literals inside Alpine and HTMX directives).
-- **AdminCSPRelaxMiddleware.** django-unfold ships its own Alpine build that uses `new AsyncFunction` for the Cmd+K command palette and therefore needs `'unsafe-eval'` to initialize. A dedicated middleware now adds `'unsafe-eval'` only on `/admin-mgmt/*` routes — the privileged Django admin area, which is additionally protected by the MFA gate and the `admin` role. The strict global policy stays in place everywhere else.
+- **CSP migration to `@alpinejs/csp`.** The vendored Alpine build was replaced with the CSP variant; all inline `x-data="{...}"` objects became registered `Alpine.data()` components. With this change, `script-src 'unsafe-eval'` is removed from the global Content Security Policy. An architectural test prevents future regressions (no inline `x-data`, no ternaries / `||` / `&&` / method calls / object literals inside Alpine and HTMX directives).
+- **AdminCSPRelaxMiddleware.** django-unfold ships its own Alpine build that uses `new AsyncFunction()` for the Cmd+K command palette and therefore needs `'unsafe-eval'` to initialize. A dedicated middleware now adds `'unsafe-eval'` only on `/admin-mgmt/*` routes — the privileged Django admin area, which is additionally protected by the MFA gate and the `admin` role. The strict global policy stays in place everywhere else.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.12.0 -->
