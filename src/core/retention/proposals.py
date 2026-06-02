@@ -299,8 +299,10 @@ def reactivate_deferred_proposals(facility):
         auto_approve = settings_obj.retention_auto_approve_after_defer
         max_defer_count = settings_obj.retention_max_defer_count
     except facility._meta.model.settings.RelatedObjectDoesNotExist:
+        # Ohne Settings wird nichts auto-approved; ``max_defer_count`` bleibt
+        # bewusst ungesetzt, weil ``auto_approve=False`` die einzige Lesestelle
+        # (``auto_approve and ... >= max_defer_count``) kurzschliesst (Refs #1011).
         auto_approve = False
-        max_defer_count = 2
 
     due_proposals = RetentionProposal.objects.filter(
         facility=facility,
