@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.13.3] - 2026-06-02
+
+Patch-Release (Pre-Release): härtet einen flaky E2E-Test, der beim v0.13.2-Release-CI an einer HTMX-Swap-Race scheiterte. Reine Test-Stabilität — **kein** App-Code, keine Verhaltens- oder API-Änderung. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
+
+### Fixed
+
+- **Flaky E2E-Test gehärtet** (#1013) — `test_event_save_and_appears_in_detail` füllte die per HTMX nachgeladenen FieldTemplate-Felder, bevor der DOM-Swap abgeschlossen war; unter CI-Last ersetzte der Swap das gerade befüllte Feld (`AssertionError: HTMX-Swap hat dauer ueberschrieben`). Jetzt wird auf den `event_fields_partial`-Response gewartet und mit Verify-Retry gefüllt (Muster aus [`test_statistics_dashboard.py`](https://github.com/anlaufstelle/app/blob/main/src/tests/e2e/test_statistics_dashboard.py)). Kein Produktivcode betroffen.
+
 ## [0.13.2] - 2026-06-02
 
 Patch-Release (Pre-Release): vollständige Triage und Behebung aller **29 offenen CodeQL-Code-Scanning-Alerts** auf dem öffentlichen Mirror (#1011). Schwerpunkt ist defensive Security-Härtung (Open-Redirect-Schutz, keine Exception-Details in Fehlerantworten, einheitliche Download-Header); keine der gemeldeten Stellen war real ausnutzbar. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
