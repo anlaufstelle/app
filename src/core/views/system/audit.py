@@ -9,7 +9,6 @@ import csv
 import json
 from urllib.parse import urlencode
 
-from django.http import StreamingHttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
 from django.views import View
@@ -19,6 +18,7 @@ from core.models import AuditLog, Facility
 from core.models.user import User
 from core.services.audit import audit_system_view
 from core.signals.audit import _set_session_vars
+from core.utils.downloads import safe_download_response
 from core.utils.formatting import parse_date
 from core.views.mixins import HTMXPartialMixin, PaginatedListMixin
 from core.views.system.mixins import SystemAuditMixin
@@ -236,15 +236,21 @@ class SystemAuditLogExportView(SystemAuditMixin, View):
             filters=applied_filters,
         )
 
-        # Filename mit Timestamp + Format.
+        # Filename mit Timestamp + Format. Der zentrale Download-Builder setzt
+        # RFC-5987-Content-Disposition (attachment) + X-Content-Type-Options:
+        # nosniff — konsistent mit allen anderen Downloads (Refs #1011).
         ts = timezone.now().strftime("%Y%m%d-%H%M%S")
         if export_format == "json":
-            response = StreamingHttpResponse(self._iter_json(queryset), content_type="application/json")
-            response["Content-Disposition"] = f'attachment; filename="auditlog-{ts}.json"'
-        else:
-            response = StreamingHttpResponse(self._iter_csv(queryset), content_type="text/csv; charset=utf-8")
-            response["Content-Disposition"] = f'attachment; filename="auditlog-{ts}.csv"'
-        return response
+            return safe_download_response(
+                f"auditlog-{ts}.json",
+                "application/json",
+                self._iter_json(queryset),
+            )
+        return safe_download_response(
+            f"auditlog-{ts}.csv",
+            "text/csv; charset=utf-8",
+            self._iter_csv(queryset),
+        )
 
     def _iter_csv(self, queryset):
         """Generator yielding CSV bytes for ``StreamingHttpResponse``.
