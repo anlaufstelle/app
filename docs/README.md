@@ -33,7 +33,7 @@ des Release-Snapshots.
 
 | Dokument | Beschreibung | Zielgruppe |
 |----------|-------------|------------|
-| [dev-deployment.md](dev-deployment.md) | Deployment der Dev-/Test-Umgebung | DevOps |
+| [dev-deployment.md](dev/dev-deployment.md) | Deployment der Dev-/Test-Umgebung | DevOps |
 | [coolify-deployment.md](coolify-deployment.md) | Coolify-Deployment (unterstützte Alternative; primär ist plain Docker Compose, siehe [ADR-017](adr/017-deployment-topology.md)) | DevOps |
 | [release-checklist.md](release-checklist.md) | Release-Prozess, Sanitize-Schritte, Hart-Ausschluss-Liste | Release-Manager |
 

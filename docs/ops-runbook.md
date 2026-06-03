@@ -28,7 +28,7 @@ Betriebshandbuch fuer Anlaufstelle. Ergaenzt das [Admin-Handbuch](admin-guide.md
 
 ```bash
 # Aktuelles Backup erstellen
-./scripts/backup.sh
+./scripts/ops/backup.sh
 
 # Backup-Datei verifizieren (nicht leer)
 ls -lh backups/daily/
@@ -133,7 +133,7 @@ Letzter Ausweg, wenn Migration-Rollback nicht moeglich:
 docker compose -f docker-compose.prod.yml down
 
 # 2. Backup wiederherstellen — DB plus optional Medien
-./scripts/restore.sh \
+./scripts/ops/restore.sh \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS.sql.gz.enc \
     backups/daily/anlaufstelle_YYYY-MM-DD_HHMMSS_media.tar.gz.enc
 
@@ -177,7 +177,7 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 # In /etc/crontab oder via `crontab -e` auf dem Host einrichten
 
 # Backup (taeglich 02:00, vor Retention)
-0 2 * * * cd /opt/anlaufstelle && ./scripts/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
+0 2 * * * cd /opt/anlaufstelle && ./scripts/ops/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
 
 # Retention-Durchsetzung (taeglich 03:00)
 0 3 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py enforce_retention >> /var/log/anlaufstelle-retention.log 2>&1
@@ -200,15 +200,15 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 ### 3.3 Dev (systemd-Timer)
 
 Auf `dev.anlaufstelle.app` laufen die Jobs **nicht** per Host-Crontab, sondern als
-systemd-Timer, die [`deploy/install-timers.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/install-timers.sh)
-installiert — aufgerufen bei **jedem** Deploy durch [`deploy/deploy-dev.sh`](https://github.com/anlaufstelle/app/blob/main/deploy/deploy-dev.sh)
+systemd-Timer, die [`deploy/install-timers.sh`](https://github.com/anlaufstelle/app/blob/main/dev-ops/deploy/install-timers.sh)
+installiert — aufgerufen bei **jedem** Deploy durch [`deploy/deploy-dev.sh`](https://github.com/anlaufstelle/app/blob/main/dev-ops/deploy/deploy-dev.sh)
 (idempotent). Bewusst kein Compose-Sidecar (geplantes One-Command-Startup, siehe #794).
 
 > **Hinweis (Refs #980):** Frueher installierte `bootstrap.sh` die Timer inline. Da `bootstrap.sh` nur beim Erst-Provisioning laeuft, kamen nachtraeglich ergaenzte Timer nie auf den laufenden Host (Backup-Cron blieb aus). Die Installation liegt jetzt in `install-timers.sh` und laeuft bei jedem `deploy-dev.sh`.
 
 | Timer | OnCalendar | Command |
 |-------|-----------|---------|
-| `anlaufstelle-backup.timer` | `*-*-* 02:00` | `deploy/backup.sh` |
+| `anlaufstelle-backup.timer` | `*-*-* 02:00` | `dev-ops/deploy/backup.sh` |
 | `anlaufstelle-retention.timer` | `*-*-* 03:00` | `… exec -T web python manage.py enforce_retention` |
 | `anlaufstelle-snapshots.timer` | `*-*-01 04:00` | `… exec -T web python manage.py create_statistics_snapshots` |
 | `anlaufstelle-breach.timer` | `*-*-* *:30` | `… exec -T web python manage.py detect_breaches` |
@@ -218,7 +218,7 @@ installiert — aufgerufen bei **jedem** Deploy durch [`deploy/deploy-dev.sh`](h
 installiert die Timer mit. Einmalig sofort nachziehen geht auch direkt:
 
 ```bash
-sudo bash /opt/anlaufstelle/deploy/install-timers.sh  # idempotent, als root
+sudo bash /opt/anlaufstelle/dev-ops/deploy/install-timers.sh  # idempotent, als root
 systemctl list-timers "anlaufstelle-*"                # 5 Timer mit NEXT-Zeit
 systemctl start anlaufstelle-mv-refresh.service        # einmal manuell anstossen
 journalctl -u anlaufstelle-mv-refresh.service -n 20
@@ -490,7 +490,7 @@ docker compose -f docker-compose.prod.yml exec -T db \
   > /tmp/notfall_$(date +%Y%m%d_%H%M%S).dump
 
 # Verschluesseltes Backup via Skript
-./scripts/backup.sh
+./scripts/ops/backup.sh
 ```
 
 ### 6.3 Datenbank-Notfall-Zugriff
@@ -597,12 +597,12 @@ BACKUP_OFFSITE_TARGET=backup-user@offsite.example.com:/backups/anlaufstelle
 
 Verifiziert, dass das aktuellste Backup vollstaendig wiederherstellbar ist und die Verteidigungslinien (RLS, AuditLog-Immutability-Trigger) erhalten bleiben. **Empfehlung: quartalsweise per Cron + Alert-Mail bei Fehlschlag.**
 
-Das Skript ist auf das **`deploy/backup.sh`**-Format ausgerichtet, das auf `dev.anlaufstelle.app` tatsaechlich laeuft (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, Quelle `$BACKUP_DIR/dump-*.pgc.enc` (Default `/var/backups/anl`), Stack `docker-compose.dev.yml`, Restore als Postgres-Superuser (`postgres`, via Local-Socket-Trust im db-Container — nötig für `CREATE DATABASE`, bypassed zugleich RLS). Das alte `scripts/backup.sh`/`scripts/restore.sh`-Schema (`backups/daily/*.sql.gz.enc`, plain SQL) ist davon unberuehrt.
+Das Skript ist auf das **`dev-ops/deploy/backup.sh`**-Format ausgerichtet, das auf `dev.anlaufstelle.app` tatsaechlich laeuft (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, Quelle `$BACKUP_DIR/dump-*.pgc.enc` (Default `/var/backups/anl`), Stack `docker-compose.dev.yml`, Restore als Postgres-Superuser (`postgres`, via Local-Socket-Trust im db-Container — nötig für `CREATE DATABASE`, bypassed zugleich RLS). Das alte `scripts/ops/backup.sh`/`scripts/ops/restore.sh`-Schema (`backups/daily/*.sql.gz.enc`, plain SQL) ist davon unberuehrt.
 
 Die Dump-Dateien sind `0600` und gehoeren root — daher **als root** ausfuehren:
 
 ```bash
-sudo bash /opt/anlaufstelle/scripts/restore-drill.sh
+sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh
 ```
 
 | Schritt | Pruefung |
@@ -637,7 +637,7 @@ docker compose -f docker-compose.dev.yml --env-file .env.dev exec web \
 
 ```cron
 # Quartalsweise (1. Monat im Quartal, 03:30 nach Backup um 02:00):
-30 3 1 1,4,7,10 * cd /opt/anlaufstelle && bash scripts/restore-drill.sh \
+30 3 1 1,4,7,10 * cd /opt/anlaufstelle && bash scripts/ops/restore-drill.sh \
     >> /var/log/anlaufstelle-restore-drill.log 2>&1 \
     || mail -s "Restore-Drill FAIL" ops@example.com < /var/log/anlaufstelle-restore-drill.log
 ```
@@ -1055,8 +1055,8 @@ Erklaerung in `.env.example`. Bei CDN+Caddy auf `2` setzen, sonst greift der IP-
 ## Kurzreferenz
 
 ```text
-Backup erstellen          ./scripts/backup.sh
-Backup wiederherstellen   ./scripts/restore.sh <datei.sql.gz.enc>
+Backup erstellen          ./scripts/ops/backup.sh
+Backup wiederherstellen   ./scripts/ops/restore.sh <datei.sql.gz.enc>
 Health-Check              curl -sf https://$DOMAIN/health/
 Container-Status          docker compose -f docker-compose.prod.yml ps
 Live-Logs                 docker compose -f docker-compose.prod.yml logs -f web

@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- **Release-Hygiene: Dev-Ops-/Tooling-Struktur am Quellbaum getrennt** (#998, schließt #984) — Interne Build-/Deploy-/Release-Werkzeuge und Dev-only-Skripte liegen jetzt unter klaren Prefixen: `dev-ops/` (Deploy-Skripte + Release-Tooling inkl. des nun versionierten `build-release.sh`), `scripts/dev/` (Mutation-/Perf-Tooling), `scripts/ops/` (Self-Hoster-Ops), `docs/dev/` (Dev-Doku). Der Public-Release-Snapshot schließt dadurch nur noch zwei Verzeichnis-Prefixe (`dev-ops/`, `scripts/dev/`) plus `docs/dev/` und wenige Einzeldateien aus, statt einer Ad-hoc-Liste im Build-Skript. **Keine Auswirkung auf Self-Hoster:** `docker-compose.prod.yml`, `deploy/postgres-init/` und alle CI-relevanten Skripte (`scripts/check_*`, `verify_test_matrix_drift.py`) bleiben unverändert am Platz. Rein interne Umstrukturierung ohne Verhaltens- oder API-Änderung.
+
 ## [0.13.3] - 2026-06-02
 
 Patch-Release (Pre-Release): härtet einen flaky E2E-Test, der beim v0.13.2-Release-CI an einer HTMX-Swap-Race scheiterte. Reine Test-Stabilität — **kein** App-Code, keine Verhaltens- oder API-Änderung. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.

@@ -51,7 +51,7 @@ Postgres macht den per `POSTGRES_USER` angelegten Login-User automatisch zum Boo
 - **App-User** `anlaufstelle` (`NOSUPERUSER NOBYPASSRLS`) — Django-Runtime; RLS-Policies greifen.
 - **Admin-User** `anlaufstelle_admin` (`NOSUPERUSER BYPASSRLS`) — Operator-Tasks (`seed`, `migrate`, `retention-pruning`). Wird vom postgres-Init-Script angelegt.
 
-Operator-Tasks laufen via `compose run` mit `POSTGRES_USER`/`POSTGRES_PASSWORD`-ENV-Override (siehe [`deploy/deploy-dev.sh`](../../deploy/deploy-dev.sh) und [`Makefile`](../../Makefile) `dev-seed`-Target). App-Code nutzt ausschließlich den Runtime-User; kein BYPASSRLS-Toggling am Runtime-User.
+Operator-Tasks laufen via `compose run` mit `POSTGRES_USER`/`POSTGRES_PASSWORD`-ENV-Override (siehe [`deploy/deploy-dev.sh`](../../dev-ops/deploy/deploy-dev.sh) und [`Makefile`](../../Makefile) `dev-seed`-Target). App-Code nutzt ausschließlich den Runtime-User; kein BYPASSRLS-Toggling am Runtime-User.
 
 ## Update 2026-05-10: Anwendungsrollen-Schicht für Superadmin (Refs #867)
 

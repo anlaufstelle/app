@@ -46,7 +46,7 @@ Templates included:
 | [security-notes.md](../security-notes.md) | Deliberate security design decisions (2FA, Fernet, RLS, audit, lockout) |
 | [threat-model.md](../threat-model.md) | Security model, attack surface, known open gaps |
 | [audit-inventar.md](../audit-inventar.md) | Index of audit classification codes (FND-\*, S-\*, phases) |
-| [dev-deployment.md](../dev-deployment.md) | Dev/test environment deployment |
+| [dev-deployment.md](../dev/dev-deployment.md) | Dev/test environment deployment |
 | [coolify-deployment.md](../coolify-deployment.md) | Coolify deployment (supported alternative; primary is Docker Compose, see [ADR-017](../adr/017-deployment-topology.md)) |
 | [release-checklist.md](../release-checklist.md) | Release process, sanitize steps, hard-exclusion list |
 | [performance-budgets.md](../performance-budgets.md) | Performance targets and budgets |
