@@ -13,6 +13,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 
 **B. Tägliche Arbeit**
 5. [Wie funktioniert der Zeitstrom?](#5-wie-funktioniert-der-zeitstrom)
+5a. [Was zeigt mir die Arbeitszentrale (Startseite `/start/`)?](#5a-was-zeigt-mir-die-arbeitszentrale-startseite-start)
 6. [Wie funktioniert die Übergabe (Schichtübergabe)?](#6-wie-funktioniert-die-übergabe-schichtübergabe)
 7. [Was ist der Unterschied zwischen „Hinweis" und „Aufgabe"?](#7-was-ist-der-unterschied-zwischen-hinweis-und-aufgabe)
 8. [Was bedeutet die „Wiedervorlage" bei einer Aufgabe?](#8-was-bedeutet-die-wiedervorlage-bei-einer-aufgabe)
@@ -154,6 +155,28 @@ Filter-Änderungen (Schicht, Typ, Dokumentationstyp) lösen einen HTMX-Request a
 - [`src/core/views/zeitstrom.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/zeitstrom.py) — `ZeitstromView`, `ZeitstromFeedPartialView`
 - [`src/core/services/feed.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/feed.py) — `build_feed_items()`, `enrich_events_with_preview()`
 - [`src/core/services/handover.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/handover.py) — `build_handover_summary()`
+
+---
+
+### 5a. Was zeigt mir die Arbeitszentrale (Startseite `/start/`)?
+
+Die **Arbeitszentrale** (`/start/`) ist die rollenbezogene Landingpage (Refs #920) — nicht zu verwechseln mit dem **Zeitstrom** (`/`, der chronologische Tages-Feed, siehe [Frage 5](#5-wie-funktioniert-der-zeitstrom)). Die Arbeitszentrale verdichtet stattdessen die für **deine Rolle** wichtigsten Kennzahlen zu Karten. Zugang ab Rolle `assistant` aufwärts; jede Person sieht **ausschließlich** die Karten ihrer eigenen Rolle. Alle Daten sind auf die aktuelle Einrichtung (`current_facility`) gescoped — Ausnahme: der Super-Admin sieht einrichtungsübergreifend.
+
+Welche Karten je Rolle erscheinen:
+
+| Rolle | Karten (Inhalt) |
+|-------|-----------------|
+| **Fachkraft / Assistent** (`staff`, `assistant`) | Heutige Kontakte (Anzahl Ereignisse von heute) · Meine offenen Aufgaben (eigene WorkItems OPEN/IN_PROGRESS, Top 5 nach Fälligkeit + Gesamtzahl) · Zuletzt bearbeitete Personen (5 zuletzt geänderte aktive Klienten) |
+| **Leitung** (`lead`) | Ausstehende Löschanträge (PENDING) · Offene Retention-Vorschläge (PENDING) · Aktive Legal Holds · Jüngster Statistik-Snapshot |
+| **Facility-Admin** (`facility_admin`) | User ohne MFA (Anzahl + Gesamtzahl aktiver User) · Settings-Warnungen (keine Settings konfiguriert / MFA nicht einrichtungsweit erzwungen / K-Anonymisierung deaktiviert) |
+| **Super-Admin** (`super_admin`) — cross-facility | Anzahl Einrichtungen · Aktive User gesamt · Audit-Ereignisse der letzten 24 h · Kritische Audit-Aktionen der letzten 24 h (LOGIN_FAILED, SECURITY_VIOLATION, DELETE, DELETION_APPROVED) |
+
+Die Template-Auswahl erfolgt strikt über `user.role`; es gibt kein eigenes Rechte-Konzept außer dem Login- bzw. Rollen-Gate.
+
+**Relevante Dateien:**
+- [`src/core/views/dashboard.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/dashboard.py) — `RoleDashboardView` (Template-Dispatch nach Rolle)
+- [`src/core/services/dashboard/main.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/dashboard/main.py) — `staff_/lead_/facility_admin_/super_admin_dashboard_context()`
+- [`src/templates/core/dashboard/`](https://github.com/anlaufstelle/app/tree/main/src/templates/core/dashboard) — vier rollenspezifische Templates
 
 ---
 
