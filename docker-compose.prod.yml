@@ -37,6 +37,10 @@ services:
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
       POSTGRES_HOST: db
       CLAMAV_HOST: clamav
+      # Refs #1017: Stabiler App-Rollenname für check_db_roles — der Migrate-Job
+      # (docker-migrate.sh) überschreibt POSTGRES_USER auf die Admin-Rolle; ohne
+      # diese Variable prüfte das Rollen-Gate fälschlich die Admin- statt App-Rolle.
+      POSTGRES_APP_USER: ${POSTGRES_USER}
     volumes:
       # Persistenter Mount fuer MEDIA_ROOT (=/data/media) — verhindert
       # stillen Datenverlust bei docker compose pull && up -d.

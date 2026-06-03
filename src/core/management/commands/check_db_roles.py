@@ -9,7 +9,7 @@ Annahmen werden dann unbemerkt unterlaufen.
 Dieses Kommando verifiziert die Rollen-Topologie aus
 ``deploy/postgres-init/01-app-role.sh`` zur Laufzeit:
 
-- App-Rolle (``settings.DATABASES['default']['USER']``):
+- App-Rolle (``POSTGRES_APP_USER`` env, Fallback ``settings.DATABASES['default']['USER']``):
   ``rolsuper=false``, ``rolbypassrls=false``.
 - Admin-Rolle (``POSTGRES_ADMIN_USER`` aus env, falls gesetzt):
   ``rolsuper=false``, ``rolbypassrls=true``.
@@ -91,9 +91,15 @@ def check_db_roles() -> tuple[list[RoleCheck], list[str]]:
     config_errors: list[str] = []
     checks: list[RoleCheck] = []
 
-    app_role = settings.DATABASES.get("default", {}).get("USER")
+    # Refs #1017: App-Rollenname aus POSTGRES_APP_USER (stabile Quelle), Fallback
+    # auf den Connection-User. Der Migrate-Job (docker-migrate.sh) connectet als
+    # Admin (POSTGRES_USER-Override, Refs #863); ohne die stabile Quelle pruefte
+    # das Gate faelschlich die Admin- statt der App-Rolle.
+    app_role = os.environ.get("POSTGRES_APP_USER") or settings.DATABASES.get("default", {}).get("USER")
     if not app_role:
-        config_errors.append("settings.DATABASES['default']['USER'] ist leer.")
+        config_errors.append(
+            "App-Rolle nicht bestimmbar (weder POSTGRES_APP_USER noch settings.DATABASES['default']['USER'] gesetzt)."
+        )
     else:
         actual_super, actual_bypass = _query_role(app_role)
         checks.append(

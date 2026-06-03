@@ -228,3 +228,72 @@ class TestCommandExitCodes:
         with pytest.raises(SystemExit) as exc:
             call_command("check_db_roles")
         assert exc.value.code == 2
+
+
+class TestAppRoleIdentification:
+    """Refs #1017: Der App-Rollenname muss aus ``POSTGRES_APP_USER`` kommen, damit
+    der Migrate-Job (Connection als Admin via ``POSTGRES_USER``-Override, Refs
+    #863) trotzdem die *echte* App-Rolle prueft statt der gerade verbundenen
+    Admin-Rolle. Fallback bleibt ``settings.DATABASES['default']['USER']``."""
+
+    def test_app_role_from_postgres_app_user_when_connection_is_admin(self, monkeypatch, settings):
+        # Migrate-Kontext: settings USER ist auf den Admin-User ueberschrieben,
+        # POSTGRES_APP_USER traegt die echte App-Rolle.
+        settings.DATABASES = {"default": {"USER": "anlaufstelle_admin"}}
+        monkeypatch.setenv("POSTGRES_APP_USER", "anlaufstelle_app")
+        monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
+        monkeypatch.setattr(
+            cmd,
+            "_query_role",
+            lambda role: {
+                "anlaufstelle_app": (False, False),
+                "anlaufstelle_admin": (False, True),
+            }[role],
+        )
+
+        checks, config_errors = cmd.check_db_roles()
+        assert config_errors == []
+        app_check = next(c for c in checks if c.label == "App")
+        # App-Check trifft die App-Rolle, NICHT den Admin-Connection-User:
+        assert app_check.role == "anlaufstelle_app"
+        assert app_check.ok
+        assert all(c.ok for c in checks)
+
+    def test_app_role_falls_back_to_settings_user_without_env(self, monkeypatch, settings):
+        settings.DATABASES = {"default": {"USER": "anlaufstelle_app"}}
+        monkeypatch.delenv("POSTGRES_APP_USER", raising=False)
+        monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
+        monkeypatch.setattr(
+            cmd,
+            "_query_role",
+            lambda role: {
+                "anlaufstelle_app": (False, False),
+                "anlaufstelle_admin": (False, True),
+            }[role],
+        )
+
+        checks, _ = cmd.check_db_roles()
+        app_check = next(c for c in checks if c.label == "App")
+        assert app_check.role == "anlaufstelle_app"
+        assert app_check.ok
+
+    def test_app_misconfig_still_caught_in_migrate_context(self, monkeypatch, settings):
+        # #902-Schutz bleibt: eine zu privilegierte App-Rolle wird auch im
+        # Migrate-Kontext (Connection=Admin) ueber POSTGRES_APP_USER erkannt.
+        settings.DATABASES = {"default": {"USER": "anlaufstelle_admin"}}
+        monkeypatch.setenv("POSTGRES_APP_USER", "anlaufstelle_app")
+        monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
+        monkeypatch.setattr(
+            cmd,
+            "_query_role",
+            lambda role: {
+                "anlaufstelle_app": (True, False),  # App faelschlich Superuser
+                "anlaufstelle_admin": (False, True),
+            }[role],
+        )
+
+        checks, _ = cmd.check_db_roles()
+        app_check = next(c for c in checks if c.label == "App")
+        assert app_check.role == "anlaufstelle_app"
+        assert not app_check.ok
+        assert any("rolsuper=True" in p for p in app_check.problems())
