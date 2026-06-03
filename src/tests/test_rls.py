@@ -87,6 +87,20 @@ class TestRLSSetup:
         missing = set(EXPECTED_TABLES) - covered
         assert not missing, f"Policy 'facility_isolation' missing on: {missing}"
 
+    def test_super_admin_bypass_branch_on_all_policies(self):
+        """Refs #1016 A1.3: JEDE facility_isolation-Policy muss den
+        ``app.is_super_admin``-Bypass-Branch in USING enthalten — sonst ist die
+        Tabelle fuer den super_admin cross-facility unsichtbar (0085 + 0091)."""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT tablename, qual FROM pg_policies "
+                "WHERE policyname = 'facility_isolation' AND tablename = ANY(%s)",
+                [EXPECTED_TABLES],
+            )
+            quals = {row[0]: row[1] or "" for row in cursor.fetchall()}
+        missing_bypass = sorted(t for t in EXPECTED_TABLES if "is_super_admin" not in quals.get(t, ""))
+        assert not missing_bypass, f"super_admin-Bypass fehlt in USING auf: {missing_bypass} (Refs #1016 A1.3)"
+
     def test_set_config_does_not_raise(self):
         """Smoke-Test for the set_config call used by FacilityScopeMiddleware."""
         import uuid
