@@ -61,10 +61,17 @@ services:
     image: clamav/clamav:stable
     volumes:
       - clamav-db:/var/lib/clamav
-    # Refs #938: Healthcheck via clamdscan --version (Smoke-Test des Binary).
-    # Der frühere clamdcheck.sh testet TCP 3310, aber clamd lauscht im
-    # Image-Default nicht auf TCP — führte zu permanent unhealthy-Status,
-    # obwohl clamd grundsätzlich funktioniert.
+    # Refs #1006: Scan-Pfad-Vertrag. Die App scannt über pyclamd
+    # ClamdNetworkSocket per TCP (CLAMAV_HOST:CLAMAV_PORT, Default
+    # clamav:3310, siehe core/services/file_vault/virus_scan.py). Das
+    # offizielle clamav/clamav:stable-Image aktiviert in seiner gebündelten
+    # clamd.conf "TCPSocket 3310" by Default — clamd lauscht also auf
+    # 0.0.0.0:3310. expose macht diesen internen Vertrag explizit/gepinnt.
+    expose:
+      - "3310"
+    # Refs #938: Healthcheck via clamdscan --version (Smoke-Test des Binary)
+    # statt clamdcheck.sh — robust gegen die lange Signatur-Lade-Phase
+    # (start_period), in der ein Socket-Probe sonst transient unhealthy meldet.
     healthcheck:
       test: ["CMD", "clamdscan", "--version"]
       interval: 60s
