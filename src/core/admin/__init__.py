@@ -19,7 +19,7 @@ from core.admin.documents import (
     TimeFilterAdmin,
 )
 from core.admin.events import EventAdmin, EventAttachmentAdmin, EventHistoryAdmin
-from core.admin.mixins import FacilityScopedAdminMixin, RoleBasedPermissionMixin
+from core.admin.mixins import FacilityScopedAdminMixin, RoleBasedPermissionMixin, SuperAdminOnlyAdminMixin
 from core.admin.organization import FacilityAdmin, OrganizationAdmin
 from core.admin.system import AuditLogAdmin, SettingsAdmin, StatisticsSnapshotAdmin
 from core.admin.users import UserAdmin, unlock_selected_users
@@ -43,6 +43,7 @@ __all__ = [
     "RoleBasedPermissionMixin",
     "SettingsAdmin",
     "StatisticsSnapshotAdmin",
+    "SuperAdminOnlyAdminMixin",
     "TimeFilterAdmin",
     "UserAdmin",
     "WorkItemAdmin",

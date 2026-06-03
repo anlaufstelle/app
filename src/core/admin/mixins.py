@@ -35,6 +35,28 @@ class RoleBasedPermissionMixin:
         return self.admin_site.has_role_permission(request)
 
 
+class SuperAdminOnlyAdminMixin:
+    """Permissions nur fuer super_admin (A2.3, Refs #1021).
+
+    Fuer installationsweite Modelle oberhalb der Facility-Ebene (z.B.
+    ``Organization``), die ein facility_admin nicht verwalten darf. Delegiert an
+    ``self.admin_site.has_super_admin_permission`` (Single Source of Truth) —
+    analog ``RoleBasedPermissionMixin``.
+    """
+
+    def has_view_permission(self, request, obj=None):
+        return self.admin_site.has_super_admin_permission(request)
+
+    def has_add_permission(self, request):
+        return self.admin_site.has_super_admin_permission(request)
+
+    def has_change_permission(self, request, obj=None):
+        return self.admin_site.has_super_admin_permission(request)
+
+    def has_delete_permission(self, request, obj=None):
+        return self.admin_site.has_super_admin_permission(request)
+
+
 class FacilityScopedAdminMixin(RoleBasedPermissionMixin):
     """Delegiert Facility-Scoping an ``self.admin_site.scope_to_facility``.
 

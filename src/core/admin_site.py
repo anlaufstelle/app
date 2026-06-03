@@ -52,6 +52,16 @@ class AnlaufstelleAdminSite(UnfoldAdminSite):
         """
         return self._has_admin_role(request.user)
 
+    def has_super_admin_permission(self, request) -> bool:
+        """Public API fuer ModelAdmin-Mixins: nur super_admin (A2.3, Refs #1021).
+
+        Fuer installationsweite Modelle oberhalb der Facility-Ebene (z.B.
+        ``Organization``), die ein facility_admin nicht verwalten darf. Single
+        Source of Truth analog ``has_role_permission``/``assignable_roles``.
+        """
+        user = request.user
+        return user.is_authenticated and user.is_super_admin
+
     def scope_to_facility(self, queryset, request):
         """Public API fuer ModelAdmin.get_queryset() bei facility-gescopten Models.
 
