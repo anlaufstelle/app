@@ -36,6 +36,28 @@ def _do_sudo(page: Page, password: str = "anlaufstelle2026") -> None:
     page.get_by_role("button", name="Bestätigen und fortfahren").click()
 
 
+def _login_and_sudo(page: Page, base_url: str, username: str) -> None:
+    """Login + Sudo-Re-Auth bis zum Admin-Index (Refs #785)."""
+    _login(page, base_url, username)
+    page.goto(f"{base_url}/admin-mgmt/")
+    page.wait_for_load_state("domcontentloaded")
+    page.locator("input[name='password']").wait_for(timeout=30_000)
+    _do_sudo(page)
+    page.wait_for_url(lambda url: url.rstrip("/").endswith("/admin-mgmt"), timeout=30_000)
+    page.wait_for_load_state("domcontentloaded")
+
+
+def _role_option_values(page: Page, base_url: str, username: str) -> list[str]:
+    """Change-Page eines Users via Changelist oeffnen und die role-Select-Optionen lesen."""
+    page.goto(f"{base_url}/admin-mgmt/core/user/")
+    page.wait_for_load_state("domcontentloaded")
+    page.get_by_role("link", name=username, exact=True).first.click()
+    page.wait_for_load_state("domcontentloaded")
+    role_select = page.locator("select[name='role']")
+    role_select.wait_for(state="attached", timeout=30_000)
+    return role_select.evaluate("el => Array.from(el.options).map(o => o.value)")
+
+
 def test_superadmin_accesses_admin_via_sudo(page: Page, base_url: str) -> None:
     """super_admin: /admin-mgmt/ -> Sudo-Form -> Re-Auth -> Admin-Index."""
     _login(page, base_url, "superadmin")
@@ -94,3 +116,24 @@ def test_assistant_blocked_from_admin(page: Page, base_url: str) -> None:
     page.wait_for_load_state("domcontentloaded")
     page.locator("input[name='username']").wait_for(timeout=30_000)
     assert "/admin-mgmt/login/" in page.url
+
+
+def test_facility_admin_cannot_assign_super_admin_role(page: Page, base_url: str) -> None:
+    """A2.1 (Refs #1020): facility_admin sieht super_admin NICHT als vergebbare Rolle.
+
+    Abgeleitet aus manueller Playwright-Verifikation 2026-06-03: in der User-
+    Change-Page bietet das role-Select fuer facility_admin nur facility_admin/
+    lead/staff/assistant an — keine Eskalation auf die installationsweite
+    super_admin-Rolle.
+    """
+    _login_and_sudo(page, base_url, "admin")
+    values = _role_option_values(page, base_url, "thomas")
+    assert "super_admin" not in values
+    assert "staff" in values
+
+
+def test_super_admin_can_assign_super_admin_role(page: Page, base_url: str) -> None:
+    """A2.1 (Refs #1020): super_admin behaelt die volle Rollen-Auswahl inkl. super_admin."""
+    _login_and_sudo(page, base_url, "superadmin")
+    values = _role_option_values(page, base_url, "thomas")
+    assert "super_admin" in values
