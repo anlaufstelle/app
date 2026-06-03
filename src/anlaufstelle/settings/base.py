@@ -242,7 +242,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 MEDIA_URL = "/media/"
 
 # --- Backup-Verzeichnis (Refs #796) ---
-# Pfad, in dem ``scripts/backup.sh`` die Daily-Files (.sql.gz.enc) ablegt.
+# Pfad, in dem ``scripts/ops/backup.sh`` die Daily-Files (.sql.gz.enc) ablegt.
 # Wird vom Health-Endpoint zur Berechnung von ``last_backup_age_hours``
 # gelesen. Default = ``<repo>/backups`` passend zur Default-Convention im
 # Backup-Script.

@@ -151,10 +151,10 @@ verify-matrix-drift:
 # Mutation-Testing für core/services + core/forms (Refs #922 / #923).
 # Konfiguration in pyproject.toml [tool.mutmut].
 # Erwartete Laufzeit: 30-60 Minuten — daher nightly per Cron, nicht PR-Pflicht.
-# scripts/run_mutmut.py umgeht den ``set_start_method``-Konflikt aus
+# scripts/dev/run_mutmut.py umgeht den ``set_start_method``-Konflikt aus
 # mutmut 3.5 (Refs #930).
 mutation:
-	$(PYTHON) scripts/run_mutmut.py run
+	$(PYTHON) scripts/dev/run_mutmut.py run
 
 # Ergebnisse des letzten Mutation-Runs anzeigen (textuell, nicht-interaktiv).
 mutation-report:
@@ -224,12 +224,12 @@ DEV_HOST ?= anlaufstelle@dev.anlaufstelle.app
 # Erstmaliges Server-Hardening (idempotent): laeuft als root und legt den
 # anlaufstelle-User an. Ab dem zweiten Aufruf laeuft es als anlaufstelle@.
 dev-bootstrap:
-	scp deploy/bootstrap.sh root@$(word 2,$(subst @, ,$(DEV_HOST))):/root/bootstrap.sh
+	scp dev-ops/deploy/bootstrap.sh root@$(word 2,$(subst @, ,$(DEV_HOST))):/root/bootstrap.sh
 	ssh root@$(word 2,$(subst @, ,$(DEV_HOST))) bash /root/bootstrap.sh
 
-# Hauptdeploy: sync compose+caddy+deploy/, dann pull/migrate/up.
+# Hauptdeploy: sync compose+caddy+deploy/+dev-ops/deploy/, dann pull/migrate/up.
 deploy-dev:
-	DEV_HOST=$(DEV_HOST) ./deploy/deploy-dev.sh
+	DEV_HOST=$(DEV_HOST) ./dev-ops/deploy/deploy-dev.sh
 
 # Live-Logs vom web- und caddy-Container.
 dev-logs:
@@ -261,7 +261,7 @@ dev-seed:
 
 # Manueller Backup-Snapshot (Cron macht das eigenstaendig).
 dev-backup:
-	ssh -t $(DEV_HOST) 'sudo /opt/anlaufstelle/deploy/backup.sh'
+	ssh -t $(DEV_HOST) 'sudo /opt/anlaufstelle/dev-ops/deploy/backup.sh'
 
 # Compose-Status + Healthcheck.
 dev-status:
