@@ -137,3 +137,74 @@ def test_super_admin_can_assign_super_admin_role(page: Page, base_url: str) -> N
     _login_and_sudo(page, base_url, "superadmin")
     values = _role_option_values(page, base_url, "thomas")
     assert "super_admin" in values
+
+
+# ---------------------------------------------------------------------------
+# A2.3 (Refs #1021): OrganizationAdmin nur fuer super_admin
+# Abgeleitet aus manueller Playwright-Verifikation 2026-06-03: facility_admin
+# sieht Organisationen weder im Admin-Index noch per Direktzugriff (403),
+# super_admin behaelt vollen Zugriff (200).
+# ---------------------------------------------------------------------------
+def test_facility_admin_cannot_access_organization_admin(page: Page, base_url: str) -> None:
+    """A2.3: facility_admin -> /admin-mgmt/core/organization/ -> 403."""
+    _login_and_sudo(page, base_url, "admin")
+    response = page.goto(f"{base_url}/admin-mgmt/core/organization/")
+    page.wait_for_load_state("domcontentloaded")
+    assert response is not None and response.status == 403
+
+
+def test_super_admin_can_access_organization_admin(page: Page, base_url: str) -> None:
+    """A2.3: super_admin behaelt Zugriff auf OrganizationAdmin (200)."""
+    _login_and_sudo(page, base_url, "superadmin")
+    response = page.goto(f"{base_url}/admin-mgmt/core/organization/")
+    page.wait_for_load_state("domcontentloaded")
+    assert response is not None and response.status == 200
+
+
+# ---------------------------------------------------------------------------
+# A2.2 (Refs #1021): facility-FK zentral gescopt (FacilityScopedAdminMixin)
+# ---------------------------------------------------------------------------
+def _facility_option_labels(page: Page, base_url: str) -> list[str]:
+    """Einrichtung-Select-Optionen der Client-Add-Page lesen (nicht-User-Admin)."""
+    page.goto(f"{base_url}/admin-mgmt/core/client/add/")
+    page.wait_for_load_state("domcontentloaded")
+    sel = page.locator("select[name='facility']")
+    sel.wait_for(state="attached", timeout=30_000)
+    return sel.evaluate("el => Array.from(el.options).map(o => o.text)")
+
+
+def _create_facility(page: Page, base_url: str, name: str) -> None:
+    """Zweite Facility als super_admin ueber die Admin-UI anlegen (committed)."""
+    page.goto(f"{base_url}/admin-mgmt/core/facility/add/")
+    page.wait_for_load_state("domcontentloaded")
+    page.locator("input[name='name']").wait_for(timeout=30_000)
+    page.locator("input[name='name']").fill(name)
+    page.locator("select[name='organization']").select_option(index=1)
+    page.get_by_role("button", name="Sichern", exact=True).click()
+    # Erfolg: Redirect auf die Facility-Changelist (URL-Anker, 30s gegen Worker-Last).
+    page.wait_for_url(lambda url: url.rstrip("/").endswith("/core/facility"), timeout=30_000)
+    page.wait_for_load_state("domcontentloaded")
+
+
+def test_facility_admin_facility_select_excludes_other_facility(page: Page, base_url: str) -> None:
+    """A2.2: facility_admin sieht im facility-FK NUR die eigene Facility.
+
+    Abgeleitet aus manueller Playwright-Verifikation 2026-06-03: super_admin legt
+    eine zweite Facility an und sieht beide im Einrichtung-Select der Client-Add-
+    Page; facility_admin sieht nach Session-Wechsel weiterhin nur die eigene
+    ('Hauptstelle'). Beweist das zentrale Scoping im FacilityScopedAdminMixin —
+    es greift fuer ClientAdmin (nicht nur den lokal in A2.1 abgesicherten User).
+    """
+    other = "Zweigstelle E2E"
+    _login_and_sudo(page, base_url, "superadmin")
+    _create_facility(page, base_url, other)
+    super_labels = _facility_option_labels(page, base_url)
+    assert any(other in label for label in super_labels), super_labels
+    assert any("Hauptstelle" in label for label in super_labels), super_labels
+
+    # Session droppen -> als facility_admin neu anmelden + Sudo.
+    page.context.clear_cookies()
+    _login_and_sudo(page, base_url, "admin")
+    admin_labels = _facility_option_labels(page, base_url)
+    assert any("Hauptstelle" in label for label in admin_labels), admin_labels
+    assert not any(other in label for label in admin_labels), admin_labels
