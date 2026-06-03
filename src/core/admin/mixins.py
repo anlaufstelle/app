@@ -11,6 +11,8 @@ gibt es genau **einen** Ort, an dem das passieren muss:
 ``core/admin_site.AnlaufstelleAdminSite``.
 """
 
+from core.models import Facility
+
 
 class RoleBasedPermissionMixin:
     """Delegiert ModelAdmin-Permissions an ``self.admin_site.has_role_permission``.
@@ -46,3 +48,30 @@ class FacilityScopedAdminMixin(RoleBasedPermissionMixin):
     def get_queryset(self, request):
         qs = super().get_queryset(request)
         return self.admin_site.scope_to_facility(qs, request)
+
+    def formfield_for_foreignkey(self, db_field, request, **kwargs):
+        """facility-FK zentral auf die eigene Facility begrenzen (A2.2, Refs #1021).
+
+        non-super_admin darf in JEDEM facility-gescopten Admin nur die eigene
+        Facility zuweisen; der ``ModelChoiceField``-Queryset validiert die
+        geposteten PK serverseitig. Single Source of Truth statt Duplikat pro
+        ModelAdmin (vgl. die lokale A2.1-Loesung im ``UserAdmin``).
+        """
+        if db_field.name == "facility" and not request.user.is_super_admin:
+            current = getattr(request, "current_facility", None)
+            kwargs["queryset"] = Facility.objects.filter(pk=current.pk) if current else Facility.objects.none()
+        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+    def save_model(self, request, obj, form, change):
+        """facility serverseitig erzwingen (A2.2, Refs #1021).
+
+        Defense-in-Depth gegen umgangene Form-Validierung: ein non-super_admin
+        kann ueber einen gefaelschten POST keine fremde Facility setzen — die
+        eigene Facility wird vor dem Speichern erzwungen. super_admin behaelt
+        die freie Wahl.
+        """
+        if not request.user.is_super_admin:
+            current = getattr(request, "current_facility", None)
+            if current is not None:
+                obj.facility = current
+        super().save_model(request, obj, form, change)

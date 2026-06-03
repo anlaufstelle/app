@@ -11,7 +11,7 @@ from unfold.forms import AdminPasswordChangeForm, UserChangeForm, UserCreationFo
 
 from core.admin.mixins import FacilityScopedAdminMixin
 from core.admin_site import anlaufstelle_admin_site
-from core.models import Facility, User
+from core.models import User
 from core.services.security import is_locked as user_is_locked
 from core.services.security import send_invite_email
 from core.services.security import unlock as unlock_user
@@ -88,17 +88,8 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
             kwargs["choices"] = self.admin_site.assignable_roles(request)
         return super().formfield_for_choice_field(db_field, request, **kwargs)
 
-    def formfield_for_foreignkey(self, db_field, request, **kwargs):
-        """Facility-Zuweisung begrenzen (A2.1, Refs #1020).
-
-        facility_admin darf User nur der eigenen Facility zuweisen; der
-        ``ModelChoiceField``-Queryset validiert die geposteten PK serverseitig.
-        super_admin behaelt freie Wahl ueber alle Facilities.
-        """
-        if db_field.name == "facility" and not request.user.is_super_admin:
-            current = getattr(request, "current_facility", None)
-            kwargs["queryset"] = Facility.objects.filter(pk=current.pk) if current else Facility.objects.none()
-        return super().formfield_for_foreignkey(db_field, request, **kwargs)
+    # facility-FK-Scoping (A2.1) ist nach A2.2 zentral im FacilityScopedAdminMixin
+    # (formfield_for_foreignkey + save_model-Erzwingung) — Single Source of Truth.
 
     @staticmethod
     def _is_protected_super_admin(request, obj):
