@@ -898,6 +898,49 @@ nachfolgende Queries dieser Session gueltig.
 Refs #542,
 #586.
 
+### 9.5 Wartungsrolle: `SET ON PARAMETER session_replication_role` (A1.2)
+
+Die DSGVO-Art.-17-Anonymisierung (`Client.anonymize`) und das Audit-Pruning
+umgehen den Append-Only-Trigger transaktional via `bypass_replication_triggers()`,
+das `session_replication_role = replica` setzt. Das ist ein **SUPERUSER-Parameter**;
+die Wartungsrolle (`anlaufstelle_admin`, `NOSUPERUSER BYPASSRLS`, unter der seit
+A1.1 der Retention-/Breach-Cron laeuft) darf ihn ab PostgreSQL 15 nur mit
+explizitem `GRANT SET ON PARAMETER` setzen. Ohne den Grant scheitert eine echte
+Anonymisierung in Prod mit `permission denied to set parameter
+session_replication_role` (Refs
+#1016 A1.2,
+#1021).
+
+**Fresh DBs:** [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh)
+setzt den Grant automatisch beim ersten DB-Provisioning.
+
+**Bestands-DBs (vor dem A1.2-Fix provisioniert):** Der Grant fehlt und muss
+**einmalig als Superuser** nachgezogen werden (idempotent):
+
+```sql
+-- als Superuser (postgres), in der Anwendungs-DB:
+GRANT SET ON PARAMETER session_replication_role TO anlaufstelle_admin;
+```
+
+**Verifikation** (Grant vorhanden + funktional):
+
+```sql
+-- 1. ACL-Eintrag pruefen -> erwartet u.a. 'anlaufstelle_admin=s/...'
+SELECT parname, array_to_string(paracl, ',') AS acl
+FROM pg_parameter_acl WHERE parname = 'session_replication_role';
+
+-- 2. funktional als Wartungsrolle (session-lokal, harmlos):
+SET ROLE anlaufstelle_admin;
+SET session_replication_role = replica;   -- muss 'SET' liefern, kein permission denied
+RESET session_replication_role;
+RESET ROLE;
+```
+
+**Status:** `dev.anlaufstelle.app` ist bereits versorgt (Grant vorhanden +
+funktional verifiziert 2026-06-03). **Prod muss den Grant einmalig nachziehen**,
+falls die DB vor dem A1.2-Fix angelegt wurde — am besten direkt nach dem
+naechsten Deploy als Teil der Post-Deploy-Verifizierung (§ 1.3).
+
 ---
 
 ## 10. Invite-Token-Hygiene
