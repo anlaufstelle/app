@@ -142,6 +142,12 @@ LOGOUT_REDIRECT_URL = "/login/"
 
 OTP_TOTP_ISSUER = "Anlaufstelle"
 
+# Rollen-Default-Enforcement (A3.1, Refs #1019): erzwingt MFA fuer super_admin
+# und facility_admin allein ueber die Rolle (s. ``User.is_mfa_enforced``).
+# In Produktion an (hier in base.py); dev/test/e2e schalten es bewusst aus
+# (dev.py -> kaskadiert nach test/e2e), damit Seed-Logins MFA-frei bleiben.
+MFA_ENFORCE_PRIVILEGED_ROLES = True
+
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {
