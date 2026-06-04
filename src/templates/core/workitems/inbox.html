@@ -151,7 +151,7 @@
     <div class="flex items-center gap-2 mb-3 text-[13px] text-ink-muted">
         <input type="checkbox" id="workitem-select-all"
             class="h-4 w-4 rounded border-subtle text-accent"
-            @change="toggleAll($event.target.checked)">
+            @change="onToggleAll">
         <label for="workitem-select-all">{% trans "Alle sichtbaren auswählen" %}</label>
     </div>
 
