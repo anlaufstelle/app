@@ -241,6 +241,42 @@ def test_event_save_encrypts_sensitive_fields(facility, client_identified, doc_t
 
 
 @pytest.mark.django_db
+def test_reencrypt_heals_plaintext_pii_fields(facility, client_identified, doc_type_crisis, staff_user):
+    """A4.4 (Refs #1024 / #1016): reencrypt_fields verschlüsselt nachträglich
+    Plaintext-PII im Bestand.
+
+    Felder mit ``is_encrypted=True``, die z.B. vor Einführung der
+    Verschlüsselung als Klartext gespeichert wurden, werden vom Heal-Lauf
+    nachverschlüsselt.
+    """
+    from django.core.management import call_command
+
+    from core.models import Event
+
+    key = generate_key()
+    with override_settings(ENCRYPTION_KEY=key):
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_crisis,
+            occurred_at=timezone.now(),
+            data_json={"notiz-krise": "egal"},
+            created_by=staff_user,
+        )
+        # Altbestand simulieren: Klartext direkt in die DB schreiben (umgeht die
+        # save()-Verschlüsselung).
+        Event.objects.filter(pk=event.pk).update(data_json={"notiz-krise": "klartext-pii"})
+
+        call_command("reencrypt_fields")
+
+    event.refresh_from_db()
+    stored = event.data_json["notiz-krise"]
+    assert is_encrypted_value(stored), "Plaintext-PII muss nach dem Heal-Lauf verschlüsselt sein"
+    with override_settings(ENCRYPTION_KEY=key):
+        assert decrypt_field(stored) == "klartext-pii"
+
+
+@pytest.mark.django_db
 def test_event_save_skips_unencrypted_fields(facility, client_identified, doc_type_contact, staff_user):
     """Non-encrypted fields remain as plain values after save."""
     from core.models import Event
