@@ -11,7 +11,16 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-load_dotenv(BASE_DIR.parent / ".env")
+# A7.3 (Refs #1024 / #1016): .env nur laden, wenn explizit erlaubt UND
+# vorhanden. In Produktion wird die Konfiguration über die Orchestrierungs-Env
+# (Docker/systemd) gesetzt; eine versehentlich ins Image/Volume geratene .env
+# soll diese nicht still ergänzen. ``load_dotenv(override=False)`` füllt zwar nur
+# Lücken, aber wir machen die Absicht explizit und per ``DJANGO_LOAD_DOTENV``
+# abschaltbar (Default: laden, damit Dev/Test unverändert funktionieren; in
+# Prod ``DJANGO_LOAD_DOTENV=false`` setzen bzw. keine .env mounten).
+_DOTENV_PATH = BASE_DIR.parent / ".env"
+if os.environ.get("DJANGO_LOAD_DOTENV", "true").lower() in ("true", "1", "yes") and _DOTENV_PATH.exists():
+    load_dotenv(_DOTENV_PATH)
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 
