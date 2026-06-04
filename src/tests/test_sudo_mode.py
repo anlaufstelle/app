@@ -5,9 +5,17 @@ import time
 import pytest
 from django.test import RequestFactory
 from django.urls import reverse
+from django_otp.oath import totp as oath_totp
+from django_otp.plugins.otp_totp.models import TOTPDevice
 
 from core.models import AuditLog
-from core.services.security import SUDO_SESSION_KEY, clear_sudo, enter_sudo, is_in_sudo
+from core.services.security import (
+    SUDO_SESSION_KEY,
+    clear_sudo,
+    enter_sudo,
+    generate_backup_codes,
+    is_in_sudo,
+)
 
 
 class TestSudoModeService:
@@ -98,6 +106,87 @@ class TestSudoModeViewPOST:
         )
         assert response.status_code == 302
         assert response.url == "/", "Externer Redirect muss auf '/' gefiltert werden."
+
+
+@pytest.mark.django_db
+class TestSudoModeTwoFactor:
+    """A3.2 (Refs #1024): bei aktivem TOTP verlangt der Sudo-Mode zusätzlich
+    einen frischen 2. Faktor (OTP oder Backup-Code).
+
+    Ein über eine gestohlene Session + Passwort eindringender Angreifer darf
+    sensible Aktionen (MFA-Disable, DSGVO-Export) nicht ohne zweiten Faktor
+    freischalten.
+    """
+
+    def _login_with_password(self, client, admin_user):
+        admin_user.set_password("test-pw-123")
+        admin_user.save()
+        client.force_login(admin_user)
+        # Login-MFA bereits absolviert — sonst fängt die MFAEnforcementMiddleware
+        # den Request ab, bevor der Sudo-View greift. A3.2 verlangt darüber hinaus
+        # einen FRISCHEN 2. Faktor für die sensible Aktion.
+        session = client.session
+        session["mfa_verified"] = True
+        session.save()
+
+    def test_totp_user_without_otp_is_rejected(self, client, admin_user):
+        self._login_with_password(client, admin_user)
+        TOTPDevice.objects.create(user=admin_user, name="default", confirmed=True)
+        response = client.post(reverse("sudo_mode"), {"password": "test-pw-123", "next": "/clients/"})
+        assert response.status_code == 403
+        assert SUDO_SESSION_KEY not in client.session
+
+    def test_totp_user_with_valid_otp_enters_sudo(self, client, admin_user):
+        self._login_with_password(client, admin_user)
+        device = TOTPDevice.objects.create(user=admin_user, name="default", confirmed=True)
+        token = str(oath_totp(device.bin_key, step=device.step, t0=device.t0, digits=device.digits)).zfill(
+            device.digits
+        )
+        response = client.post(
+            reverse("sudo_mode"),
+            {"password": "test-pw-123", "otp_token": token, "next": "/clients/"},
+        )
+        assert response.status_code == 302
+        assert SUDO_SESSION_KEY in client.session
+
+    def test_totp_user_with_wrong_otp_is_rejected(self, client, admin_user):
+        self._login_with_password(client, admin_user)
+        TOTPDevice.objects.create(user=admin_user, name="default", confirmed=True)
+        response = client.post(
+            reverse("sudo_mode"),
+            {"password": "test-pw-123", "otp_token": "000000", "next": "/clients/"},
+        )
+        assert response.status_code == 403
+        assert SUDO_SESSION_KEY not in client.session
+
+    def test_backup_code_enters_sudo(self, client, admin_user):
+        self._login_with_password(client, admin_user)
+        TOTPDevice.objects.create(user=admin_user, name="default", confirmed=True)
+        codes = generate_backup_codes(admin_user)
+        response = client.post(
+            reverse("sudo_mode"),
+            {"password": "test-pw-123", "otp_token": codes[0], "next": "/clients/"},
+        )
+        assert response.status_code == 302
+        assert SUDO_SESSION_KEY in client.session
+
+    def test_non_totp_user_needs_only_password(self, client, admin_user):
+        """Regression: User ohne TOTP-Gerät kommen weiterhin mit Passwort durch."""
+        self._login_with_password(client, admin_user)
+        response = client.post(reverse("sudo_mode"), {"password": "test-pw-123", "next": "/clients/"})
+        assert response.status_code == 302
+        assert SUDO_SESSION_KEY in client.session
+
+    def test_get_shows_otp_field_for_totp_user(self, client, admin_user):
+        TOTPDevice.objects.create(user=admin_user, name="default", confirmed=True)
+        self._login_with_password(client, admin_user)
+        body = client.get(reverse("sudo_mode")).content.decode()
+        assert 'name="otp_token"' in body
+
+    def test_get_hides_otp_field_for_non_totp_user(self, client, admin_user):
+        client.force_login(admin_user)
+        body = client.get(reverse("sudo_mode")).content.decode()
+        assert 'name="otp_token"' not in body
 
 
 @pytest.mark.django_db
