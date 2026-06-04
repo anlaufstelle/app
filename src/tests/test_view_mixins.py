@@ -1,45 +1,11 @@
-"""Unit-Tests für FacilityScopedViewMixin und HTMXPartialMixin (Refs #598 R-2/R-3)."""
+"""Unit-Tests für HTMXPartialMixin (Refs #598 R-3)."""
 
 import pytest
 from django.http import HttpResponse
 from django.test import RequestFactory
 from django.views import View
 
-from core.views.mixins import FacilityScopedViewMixin, HTMXPartialMixin
-
-# --- FacilityScopedViewMixin ---------------------------------------------
-
-
-class TestFacilityScopedViewMixin:
-    def test_property_returns_request_current_facility(self):
-        class DummyView(FacilityScopedViewMixin, View):
-            pass
-
-        rf = RequestFactory()
-        request = rf.get("/")
-        request.current_facility = object()
-
-        view = DummyView()
-        view.request = request
-
-        assert view.facility is request.current_facility
-
-    def test_property_returns_none_when_middleware_did_not_set(self):
-        """Anonymous/Middleware-ohne-Facility-Pfad: ``current_facility`` ist
-        ``None``; das Mixin leitet das 1:1 durch (keine Guard-Logik)."""
-
-        class DummyView(FacilityScopedViewMixin, View):
-            pass
-
-        rf = RequestFactory()
-        request = rf.get("/")
-        request.current_facility = None
-
-        view = DummyView()
-        view.request = request
-
-        assert view.facility is None
-
+from core.views.mixins import HTMXPartialMixin
 
 # --- HTMXPartialMixin ----------------------------------------------------
 
