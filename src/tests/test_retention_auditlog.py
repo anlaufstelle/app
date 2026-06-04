@@ -24,14 +24,14 @@ class TestPruneAuditlog:
         if connection.vendor != "postgresql":
             pytest.skip("AuditLog-Trigger und prune_auditlog erfordern PostgreSQL")
 
-    def _create_log_with_timestamp(self, facility, ts):
+    def _create_log_with_timestamp(self, facility, ts, action=AuditLog.Action.LOGIN):
         """Erstellt AuditLog und ueberschreibt timestamp via Raw SQL.
 
         ``timestamp = auto_now_add`` ist beim Insert nicht steuerbar — fuer
         Tests, die alte Eintraege simulieren, brauchen wir Raw SQL. Trigger
         kurz deaktivieren, da er auch UPDATE blockt.
         """
-        log = AuditLog.objects.create(facility=facility, action=AuditLog.Action.LOGIN)
+        log = AuditLog.objects.create(facility=facility, action=action)
         with transaction.atomic(), connection.cursor() as cur:
             cur.execute("ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable")
             try:
@@ -80,6 +80,31 @@ class TestPruneAuditlog:
             "Eintrag innerhalb der kalendergenauen 24-Monats-Frist wurde "
             "faelschlich geloescht — 30-Tage-Naeherung statt Kalendermonat?"
         )
+
+    def test_prune_exempts_security_violation_and_retention_marker(self, facility, settings_obj):
+        """A6.3 (Refs #1024 / #1016): SECURITY_VIOLATION (Breach-Forensik) und
+        RETENTION_RUN_COMPLETED (Compliance-Dashboard-Marker) werden NICHT
+        gepruned.
+
+        Sonst verschwinden Sicherheitsnachweise mit der Routine-Frist und das
+        Retention-Dashboard kippt mangels Marker auf 'UNKNOWN'. Beide Aktionen
+        tragen System-Metadaten, keine Klient-PII — die längere Aufbewahrung ist
+        gerechtfertigt.
+        """
+        settings_obj.auditlog_retention_months = 24
+        settings_obj.save()
+        now = timezone.now()
+        old_ts = now - timedelta(days=24 * 31)
+        generic = self._create_log_with_timestamp(facility, old_ts)
+        viol = self._create_log_with_timestamp(facility, old_ts, AuditLog.Action.SECURITY_VIOLATION)
+        marker = self._create_log_with_timestamp(facility, old_ts, AuditLog.Action.RETENTION_RUN_COMPLETED)
+
+        result = prune_auditlog(facility, settings_obj, now=now, dry_run=False)
+
+        assert result["count"] == 1, "Nur der generische LOGIN-Eintrag darf gepruned werden."
+        assert not AuditLog.objects.filter(pk=generic.pk).exists()
+        assert AuditLog.objects.filter(pk=viol.pk).exists(), "SECURITY_VIOLATION muss erhalten bleiben."
+        assert AuditLog.objects.filter(pk=marker.pk).exists(), "RETENTION_RUN_COMPLETED muss erhalten bleiben."
 
     def test_prune_dry_run_does_not_delete(self, facility, settings_obj):
         settings_obj.auditlog_retention_months = 24

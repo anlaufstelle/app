@@ -13,6 +13,16 @@ from django.utils import timezone
 from core.models import AuditLog
 from core.services.system import bypass_replication_triggers
 
+# A6.3 (Refs #1024 / #1016): Aktionen, die NICHT der Routine-Retention
+# unterliegen. SECURITY_VIOLATION sind Breach-Detection-Forensiknachweise;
+# RETENTION_RUN_COMPLETED ist der Marker, aus dem das Compliance-Dashboard den
+# letzten erfolgreichen Lauf liest (sonst „UNKNOWN"). Beide tragen
+# System-Metadaten, keine Klient-PII — die längere Aufbewahrung ist gerechtfertigt.
+PRUNE_EXEMPT_ACTIONS = (
+    AuditLog.Action.SECURITY_VIOLATION,
+    AuditLog.Action.RETENTION_RUN_COMPLETED,
+)
+
 
 def _months_before(moment: datetime, months: int) -> datetime:
     """Kalendergenaue Monats-Subtraktion (A6.4, Refs #1024 / #1016).
@@ -47,15 +57,18 @@ def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
 
     ``settings_obj.auditlog_retention_months == 0`` -> No-op (deaktiviert).
 
+    Ausgenommen (``PRUNE_EXEMPT_ACTIONS``, A6.3): SECURITY_VIOLATION und
+    RETENTION_RUN_COMPLETED bleiben unabhaengig vom Alter erhalten.
+
     Refs #129 Teil B, Refs #733 (#14),
-    Refs #781 (C-13).
+    Refs #781 (C-13), Refs #1024 (A6.3).
     """
     months = getattr(settings_obj, "auditlog_retention_months", 0) or 0
     if months <= 0:
         return {"count": 0}
     now = now or timezone.now()
     cutoff = _months_before(now, months)
-    qs = AuditLog.objects.filter(facility=facility, timestamp__lt=cutoff)
+    qs = AuditLog.objects.filter(facility=facility, timestamp__lt=cutoff).exclude(action__in=PRUNE_EXEMPT_ACTIONS)
     count = qs.count()
     if count == 0 or dry_run:
         return {"count": count}
