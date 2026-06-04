@@ -117,6 +117,22 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@anlaufstelle.
 
 CONN_MAX_AGE = 60
 
+# --- Shared Cache (A5.1, Refs #1024 / #1016) ---
+# Ohne expliziten Cache nutzt Django LocMemCache — pro Gunicorn-Worker isoliert.
+# django-ratelimit (Login/Sudo/Health) und das Health-Detail-Caching (A7.2)
+# zählen dann pro Worker getrennt, sodass Rate-Limits in Multi-Worker-Prod
+# faktisch ge-N-facht werden. DatabaseCache teilt den Zustand prozessübergreifend
+# ohne neue Dependency (Redis-Vollausbau bleibt #795). Tabelle wird per Migration
+# 0092 angelegt (createcachetable-äquivalent).
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "anlaufstelle_cache",
+    }
+}
+# django-ratelimit gegen den shared Cache laufen lassen (statt LocMem-Default).
+RATELIMIT_USE_CACHE = "default"
+
 # --- Encryption Key (mandatory in production) ---
 # Akzeptiert ENCRYPTION_KEYS (Plural, MultiFernet-Rotation) oder ENCRYPTION_KEY (Singular, Legacy).
 # Mindestens eins muss gesetzt sein.

@@ -179,3 +179,31 @@ class TestBaseSettingsDotenvGuard:
             "— sonst ergänzt eine versehentlich gemountete .env in Prod still die "
             "Orchestrierungs-Env. Refs #1024."
         )
+
+
+class TestProdSharedCacheGuard:
+    """A5.1 (Refs #1024 / #1016): Prod nutzt einen prozessübergreifenden
+    DatabaseCache statt des per-Worker isolierten LocMemCache — sonst zählen
+    django-ratelimit und das Health-Caching pro Worker getrennt."""
+
+    _VALID_ENV = {
+        "DJANGO_SECRET_KEY": "x" * 50,
+        "ALLOWED_HOSTS": "example.org",
+        "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "DJANGO_AUDIT_HASH_KEY": "y" * 50,
+    }
+
+    def test_uses_database_cache_with_ratelimit(self):
+        code = (
+            "import json, anlaufstelle.settings.prod as p; "
+            "print(json.dumps({"
+            "'backend': p.CACHES['default']['BACKEND'], "
+            "'location': p.CACHES['default']['LOCATION'], "
+            "'rl_cache': getattr(p, 'RATELIMIT_USE_CACHE', None)}))"
+        )
+        result = _run_prod_import(self._VALID_ENV, code=code)
+        assert result.returncode == 0, f"prod import failed: {result.stderr}"
+        data = json.loads(result.stdout.strip().splitlines()[-1])
+        assert data["backend"] == "django.core.cache.backends.db.DatabaseCache"
+        assert data["location"] == "anlaufstelle_cache"
+        assert data["rl_cache"] == "default"
