@@ -32,6 +32,13 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 # DJANGO_AUDIT_HASH_KEY explizit gesetzt sein.
 AUDIT_HASH_KEY = os.environ.get("DJANGO_AUDIT_HASH_KEY", "")
 
+# HEALTH_DETAIL_TOKEN (A7.1, Refs #1024) — optionaler Token, mit dem ein
+# interner Monitoring-Caller die Detailfelder von ``/health/`` (version, smtp,
+# Backup-Alter, Disk-frei) abrufen darf. Ohne Token bzw. ohne authentifizierten
+# Request liefert ``/health/`` nur einen schlanken Liveness-Payload — anonyme
+# Caller bekommen keine Recon-Details. Header: ``X-Health-Token``.
+HEALTH_DETAIL_TOKEN = os.environ.get("DJANGO_HEALTH_DETAIL_TOKEN", "")
+
 # AGPL §13 (Refs #835): Quellcode-Link im Footer. Forks/Self-Hoster MUESSEN
 # SOURCE_CODE_URL auf ihren eigenen Quellcode-Spiegel zeigen lassen, sonst
 # liefert der Footer eine technisch falsche § 13-Network-Use-Disclosure.
