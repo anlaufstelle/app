@@ -306,6 +306,57 @@ class TestBulkViews:
 
 
 @pytest.mark.django_db
+class TestBulkConcurrencyReload:
+    """Refs #1022 (B2): Die Bulk-Pfade laden+locken die Items innerhalb der
+    Transaktion per ``select_for_update`` neu (analog Single-Pfad in
+    ``update_workitem_status``), statt auf der aus der View geladenen —
+    potenziell veralteten — Instanz zu operieren. Hier ueber eine stale
+    Instanz + ein concurrent DB-Update simuliert: der frische DB-Stand
+    entspricht bereits dem Ziel, also muss der Bulk-Pfad das Item
+    ueberspringen (kein erneuter Write, kein doppelter Audit-Eintrag)."""
+
+    def _make(self, facility, staff_user, **kwargs):
+        return WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            title="WI",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+            **kwargs,
+        )
+
+    def test_bulk_status_reads_fresh_db_state(self, facility, staff_user):
+        wi = self._make(facility, staff_user)
+        stale = WorkItem.objects.get(pk=wi.pk)  # haelt OPEN im Speicher
+        WorkItem.objects.filter(pk=wi.pk).update(status=WorkItem.Status.DONE)
+
+        count = bulk_update_workitem_status([stale], staff_user, WorkItem.Status.DONE)
+
+        assert count == 0
+        assert not AuditLog.objects.filter(action=AuditLog.Action.WORKITEM_UPDATE).exists()
+
+    def test_bulk_priority_reads_fresh_db_state(self, facility, staff_user):
+        wi = self._make(facility, staff_user)
+        stale = WorkItem.objects.get(pk=wi.pk)  # haelt NORMAL im Speicher
+        WorkItem.objects.filter(pk=wi.pk).update(priority=WorkItem.Priority.URGENT)
+
+        count = bulk_update_workitem_priority([stale], staff_user, WorkItem.Priority.URGENT)
+
+        assert count == 0
+        assert not AuditLog.objects.filter(action=AuditLog.Action.WORKITEM_UPDATE).exists()
+
+    def test_bulk_assign_reads_fresh_db_state(self, facility, staff_user, lead_user):
+        wi = self._make(facility, staff_user)
+        stale = WorkItem.objects.get(pk=wi.pk)  # assigned_to None im Speicher
+        WorkItem.objects.filter(pk=wi.pk).update(assigned_to=lead_user)
+
+        count = bulk_assign_workitems([stale], staff_user, lead_user)
+
+        assert count == 0
+        assert not AuditLog.objects.filter(action=AuditLog.Action.WORKITEM_UPDATE).exists()
+
+
+@pytest.mark.django_db
 class TestBulkStatusRecurrence:
     """Integrationstest Bulk-Status DONE + Recurrence (Refs #593).
 
