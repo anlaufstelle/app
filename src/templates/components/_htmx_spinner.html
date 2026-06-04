@@ -1,0 +1,22 @@
+{% comment %}
+Wiederverwendbarer HTMX-Lade-Spinner (Refs #1016, Workstream C — C3).
+
+Wird per ``hx-indicator="#<spinner_id>"`` von den Live-Such-Eingaben referenziert.
+HTMX hängt während des Requests die Klasse ``htmx-request`` an dieses Element;
+die mitgelieferten htmx-Indicator-Styles (config.includeIndicatorStyles) blenden
+es dann via Opacity ein — kein eigenes CSS, kein Tailwind-Build-Eingriff nötig.
+
+Rein visuell: ``aria-hidden`` — die inhaltliche Änderung kündigt bereits die
+bestehende #flash-messages-Live-Region an (kein ARIA-Ausbau, A11y/M3-Embargo).
+SVG-Markup 1:1 aus statistics/partials/dashboard_content.html.
+
+Parameter:
+  spinner_id      Pflicht — DOM-id, auf die hx-indicator zeigt.
+  position_class  Optional — Positionierungs-Utilities (z.B. absolute-Layout).
+{% endcomment %}
+<span id="{{ spinner_id }}" class="htmx-indicator {{ position_class }}" aria-hidden="true">
+    <svg aria-hidden="true" class="animate-spin h-4 w-4 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+    </svg>
+</span>
