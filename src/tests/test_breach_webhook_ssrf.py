@@ -52,6 +52,20 @@ def test_invalid_webhook_url_rejected(url):
             _validate_webhook_url(url)
 
 
+def test_cgnat_target_rejected():
+    """A5.3 (Refs #1024 / #1016): CGNAT 100.64.0.0/10 (RFC 6598) ist nicht
+    oeffentlich-routbar und muss abgelehnt werden.
+
+    Die fruehere ``is_private/loopback/link_local/multicast/reserved``-Kette
+    liess CGNAT durch (alle Flags False); ``not ip.is_global`` schliesst die
+    Luecke — relevant in Cloud-Umgebungen, die CGNAT fuer internes Routing
+    nutzen.
+    """
+    with patch("socket.gethostbyname", return_value="100.64.0.1"):
+        with pytest.raises(ValueError):
+            _validate_webhook_url("https://cgnat.example/hook")
+
+
 def test_valid_https_public_url_accepted():
     """Sanity: ein https-URL gegen eine public IP geht durch."""
     with patch("socket.gethostbyname", return_value="93.184.216.34"):

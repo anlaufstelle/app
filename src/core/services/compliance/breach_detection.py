@@ -55,8 +55,9 @@ def _validate_webhook_url(url: str) -> None:
 
     - Schema nicht ``https`` ist (kein ``http``, ``file``, ``gopher``, ``ftp``);
     - der Hostname nicht aufloesbar ist;
-    - die aufgeloeste IP privat / loopback / link-local ist (Cloud-Metadata
-      ``169.254.169.254``, RFC1918, ``127.0.0.0/8``).
+    - die aufgeloeste IP nicht oeffentlich-routbar ist (``not is_global``):
+      Cloud-Metadata ``169.254.169.254``, RFC1918, ``127.0.0.0/8``, multicast,
+      reserved und CGNAT ``100.64.0.0/10`` (RFC 6598).
 
     Die DNS-Aufloesung kostet ~50 ms, schliesst aber genau die SSRF-Wege,
     die die operatorseitige URL-Konfiguration sonst offen liesse.
@@ -70,8 +71,12 @@ def _validate_webhook_url(url: str) -> None:
         ip = ipaddress.ip_address(socket.gethostbyname(parsed.hostname))
     except (socket.gaierror, ValueError) as exc:
         raise ValueError(f"Webhook host unresolvable: {parsed.hostname!r}") from exc
-    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_reserved:
-        raise ValueError(f"Webhook target {ip} is private/loopback/link-local — refused (SSRF).")
+    # A5.3 (Refs #1024 / #1016): nur oeffentlich-routbare Ziele zulassen.
+    # ``not is_global`` deckt RFC1918, loopback, link-local, multicast, reserved
+    # UND CGNAT (100.64.0.0/10, RFC 6598) ab — letzteres liess die fruehere
+    # Einzel-Flag-Kette durch.
+    if not ip.is_global:
+        raise ValueError(f"Webhook target {ip} is not globally routable — refused (SSRF).")
 
 
 def _get_threshold(name: str, default: int) -> int:
