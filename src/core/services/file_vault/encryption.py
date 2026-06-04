@@ -96,7 +96,11 @@ def decrypt_field(value):
         return f.decrypt(value["value"].encode("utf-8")).decode("utf-8")
     except EncryptionKeyMissing:
         raise
-    except (InvalidToken, Exception) as exc:
+    except InvalidToken as exc:
+        # A4.6 (Refs #1024 / #1016): nur InvalidToken (kaputtes/fremdes
+        # Ciphertext) als EncryptionError verpacken. EncryptionKeyMissing
+        # propagiert oben; alle anderen (unerwarteten) Fehler bewusst NICHT
+        # fangen, damit echte Bugs nicht im safe_decrypt-Fallback verschwinden.
         raise EncryptionError(f"Decryption failed: {exc}") from exc
 
 

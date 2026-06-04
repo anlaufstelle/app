@@ -144,6 +144,26 @@ def test_decrypt_invalid_token_raises():
             decrypt_field(bad_value)
 
 
+def test_decrypt_field_does_not_mask_unexpected_errors(monkeypatch):
+    """A4.6 (Refs #1024 / #1016): decrypt_field fängt nur ``InvalidToken`` und
+    verpackt es in ``EncryptionError``.
+
+    Unerwartete Fehler (Programmierfehler, kaputte Krypto-Lib) dürfen NICHT
+    vom früheren breiten ``except (InvalidToken, Exception)`` als generischer
+    EncryptionError maskiert werden — sonst verschwinden echte Bugs lautlos im
+    ``safe_decrypt``-Fallback.
+    """
+
+    class _BoomFernet:
+        def decrypt(self, *args, **kwargs):
+            raise RuntimeError("unexpected boom")
+
+    monkeypatch.setattr("core.services.file_vault.encryption.get_fernet", lambda: _BoomFernet())
+    enc = {"__encrypted__": True, "value": "irrelevant"}
+    with pytest.raises(RuntimeError):
+        decrypt_field(enc)
+
+
 def test_safe_decrypt_returns_fallback():
     """safe_decrypt returns the fallback string instead of raising on error."""
     key = generate_key()
