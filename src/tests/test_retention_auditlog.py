@@ -8,7 +8,7 @@ Verifiziert die AuditLog-Retention:
 - Trigger ``auditlog_immutable`` ist nach Pruning weiterhin aktiv
 """
 
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from django.db import DatabaseError, connection, transaction
@@ -47,7 +47,7 @@ class TestPruneAuditlog:
         settings_obj.auditlog_retention_months = 24
         settings_obj.save()
         now = timezone.now()
-        old = self._create_log_with_timestamp(facility, now - timedelta(days=24 * 30 + 1))
+        old = self._create_log_with_timestamp(facility, now - timedelta(days=24 * 31))
         young = self._create_log_with_timestamp(facility, now - timedelta(days=10))
 
         result = prune_auditlog(facility, settings_obj, now=now, dry_run=False)
@@ -56,11 +56,36 @@ class TestPruneAuditlog:
         assert not AuditLog.objects.filter(pk=old.pk).exists()
         assert AuditLog.objects.filter(pk=young.pk).exists()
 
+    def test_prune_uses_calendar_months_not_30day_approx(self, facility, settings_obj):
+        """A6.4 (Refs #1024 / #1016): Cutoff = N Kalendermonate, nicht N*30 Tage.
+
+        Bei 24 Monaten weicht die 30-Tage-Naeherung (720 Tage) um ~10 Tage von
+        der kalendergenauen Grenze (730 Tage, da 2024 Schaltjahr) ab. Ein
+        Eintrag in diesem Fenster ist juenger als die Frist und darf NICHT
+        geloescht werden — sonst wird zu frueh anonymisiert/geloescht (DSGVO
+        Art. 5: Speicherbegrenzung, aber kein vorzeitiges Loeschen von
+        Nachweisen).
+        """
+        settings_obj.auditlog_retention_months = 24
+        settings_obj.save()
+        now = datetime(2026, 6, 4, 12, 0, tzinfo=UTC)
+        # 725 Tage alt: jenseits der 30-Tage-Naeherung (720), aber innerhalb
+        # der kalendergenauen 24-Monats-Frist (now - 24M = 2024-06-04) -> bleibt.
+        borderline = self._create_log_with_timestamp(facility, now - timedelta(days=725))
+
+        result = prune_auditlog(facility, settings_obj, now=now, dry_run=False)
+
+        assert result["count"] == 0
+        assert AuditLog.objects.filter(pk=borderline.pk).exists(), (
+            "Eintrag innerhalb der kalendergenauen 24-Monats-Frist wurde "
+            "faelschlich geloescht — 30-Tage-Naeherung statt Kalendermonat?"
+        )
+
     def test_prune_dry_run_does_not_delete(self, facility, settings_obj):
         settings_obj.auditlog_retention_months = 24
         settings_obj.save()
         now = timezone.now()
-        old = self._create_log_with_timestamp(facility, now - timedelta(days=24 * 30 + 1))
+        old = self._create_log_with_timestamp(facility, now - timedelta(days=24 * 31))
 
         result = prune_auditlog(facility, settings_obj, now=now, dry_run=True)
 
@@ -85,7 +110,7 @@ class TestPruneAuditlog:
         settings_obj.auditlog_retention_months = 24
         settings_obj.save()
         now = timezone.now()
-        self._create_log_with_timestamp(facility, now - timedelta(days=24 * 30 + 1))
+        self._create_log_with_timestamp(facility, now - timedelta(days=24 * 31))
 
         prune_auditlog(facility, settings_obj, now=now, dry_run=False)
 
@@ -113,7 +138,7 @@ class TestPruneAuditlog:
         settings_obj.auditlog_retention_months = 24
         settings_obj.save()
         now = timezone.now()
-        self._create_log_with_timestamp(facility, now - timedelta(days=24 * 30 + 1))
+        self._create_log_with_timestamp(facility, now - timedelta(days=24 * 31))
 
         prune_auditlog(facility, settings_obj, now=now, dry_run=False)
 

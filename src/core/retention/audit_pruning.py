@@ -4,13 +4,31 @@ Aus ``services/retention.py`` ausgekoppelt — semantisch eigenes Thema
 (append-only-Trigger, separate Aufbewahrungsfrist).
 """
 
-from datetime import timedelta
+import calendar
+from datetime import datetime
 
 from django.db import connection, transaction
 from django.utils import timezone
 
 from core.models import AuditLog
 from core.services.system import bypass_replication_triggers
+
+
+def _months_before(moment: datetime, months: int) -> datetime:
+    """Kalendergenaue Monats-Subtraktion (A6.4, Refs #1024 / #1016).
+
+    Zieht ``months`` Kalendermonate von ``moment`` ab und erhaelt Uhrzeit +
+    tzinfo. Der Tag wird auf den letzten gueltigen Tag des Zielmonats geklemmt
+    (z.B. 31.03. - 1 Monat = 28./29.02.). Vermeidet die fruehere 30-Tage-
+    Naeherung (``months * 30``), die bei 24 Monaten ~10 Tage zu frueh schnitt.
+    Analog zu ``_add_months`` in ``services/case/workitems.py``, aber
+    datetime-/tz-erhaltend fuer den Retention-Cutoff.
+    """
+    month_index = moment.month - 1 - months
+    year = moment.year + month_index // 12
+    month = month_index % 12 + 1
+    day = min(moment.day, calendar.monthrange(year, month)[1])
+    return moment.replace(year=year, month=month, day=day)
 
 
 def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
@@ -36,7 +54,7 @@ def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
     if months <= 0:
         return {"count": 0}
     now = now or timezone.now()
-    cutoff = now - timedelta(days=months * 30)
+    cutoff = _months_before(now, months)
     qs = AuditLog.objects.filter(facility=facility, timestamp__lt=cutoff)
     count = qs.count()
     if count == 0 or dry_run:
