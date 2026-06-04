@@ -34,6 +34,26 @@ def _get_threshold(facility) -> int:
         return DEFAULT_K_THRESHOLD
 
 
+def _apply_secondary_suppression(rows: list[dict[str, Any]], count_key: str) -> None:
+    """A6.1 (Refs #1024 / #1016): komplementaere Offenlegung verhindern.
+
+    Ist nach der primaeren k-Anon-Unterdrueckung genau EINE Zelle unterdrueckt,
+    laesst sie sich aus der publizierten Randsumme (z.B. ``total_contacts``) und
+    den sichtbaren Zellen zurueckrechnen. Dann zusaetzlich die naechstkleinere
+    sichtbare Zelle unterdruecken, sodass mindestens zwei Unbekannte bleiben.
+    Mutiert ``rows`` in place.
+    """
+    suppressed = [r for r in rows if r.get("suppressed")]
+    if len(suppressed) != 1:
+        return
+    visible = [r for r in rows if not r.get("suppressed")]
+    if not visible:
+        return
+    smallest = min(visible, key=lambda r: r[count_key])
+    smallest[count_key] = None
+    smallest["suppressed"] = True
+
+
 def _suppress_small(rows: list[dict[str, Any]], threshold: int, count_key: str = "count") -> list[dict[str, Any]]:
     """Markiert Aggregate < threshold als unterdrueckt (count=None, suppressed=True)."""
     result = []
@@ -46,12 +66,19 @@ def _suppress_small(rows: list[dict[str, Any]], threshold: int, count_key: str =
         else:
             row_copy["suppressed"] = False
         result.append(row_copy)
+    _apply_secondary_suppression(result, count_key)
     return result
 
 
 def _suppress_stage_dict(stage_dict: dict[str, int], threshold: int) -> dict[str, Any]:
-    """Suppress-Variante fuer den by_contact_stage-Dict."""
-    return {key: (None if value < threshold else value) for key, value in stage_dict.items()}
+    """Suppress-Variante fuer den by_contact_stage-Dict (mit sekundaerer
+    Suppression analog ``_apply_secondary_suppression``, A6.1)."""
+    suppressed_keys = {key for key, value in stage_dict.items() if value < threshold}
+    if len(suppressed_keys) == 1:
+        visible = {key: value for key, value in stage_dict.items() if key not in suppressed_keys}
+        if visible:
+            suppressed_keys.add(min(visible, key=lambda k: visible[k]))
+    return {key: (None if key in suppressed_keys else value) for key, value in stage_dict.items()}
 
 
 def build_external_report(facility, date_from: date, date_to: date) -> dict[str, Any]:
