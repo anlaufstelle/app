@@ -28,6 +28,8 @@ from django.views import View
 from django.views.decorators.csrf import csrf_exempt
 from django_ratelimit.decorators import ratelimit
 
+from core.signals.audit import get_client_ip
+
 # Eigener Logger-Namespace ausserhalb von `core` — die Django-Log-Config in
 # settings/base.py setzt fuer `core` ``propagate=False``, was Tests via
 # pytest-caplog brechen wuerde. ``security.csp`` propagiert per Default an
@@ -78,18 +80,10 @@ class CSPReportView(View):
                 "csp_violation",
                 extra={
                     "csp_violation": violation,
-                    "remote_addr": _client_ip(request),
+                    "remote_addr": get_client_ip(request),
                     "user_agent": request.META.get("HTTP_USER_AGENT", ""),
                 },
             )
 
         # Browser ignorieren den Body; 204 reicht.
         return HttpResponse(status=204)
-
-
-def _client_ip(request) -> str:
-    """Erste IP aus X-Forwarded-For (vom Edge gesetzt) oder REMOTE_ADDR."""
-    forwarded = request.META.get("HTTP_X_FORWARDED_FOR", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.META.get("REMOTE_ADDR", "")
