@@ -136,10 +136,11 @@ class TestWebhook:
     def test_no_webhook_when_url_unset(self, facility, admin_user, monkeypatch, settings):
         called = []
 
-        def _fake_urlopen(*args, **kwargs):
+        def _fake_open(self, *args, **kwargs):
             called.append(args)
 
-        monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+        # A5.2: _post_webhook nutzt build_opener(...).open statt urlopen.
+        monkeypatch.setattr("urllib.request.OpenerDirector.open", _fake_open)
         settings.BREACH_NOTIFICATION_WEBHOOK_URL = None
         record_finding(
             facility,
@@ -156,11 +157,12 @@ class TestWebhook:
     def test_webhook_called_when_url_set(self, facility, admin_user, monkeypatch, settings):
         called = []
 
-        def _fake_urlopen(req, *args, **kwargs):
+        def _fake_open(self, req, *args, **kwargs):
             called.append(req.full_url)
             return None
 
-        monkeypatch.setattr("urllib.request.urlopen", _fake_urlopen)
+        # A5.2: _post_webhook nutzt build_opener(...).open statt urlopen.
+        monkeypatch.setattr("urllib.request.OpenerDirector.open", _fake_open)
         # Refs #772 — DNS-Lookup mocken, damit der Test offline laeuft.
         monkeypatch.setattr("socket.gethostbyname", lambda host: "93.184.216.34")
         settings.BREACH_NOTIFICATION_WEBHOOK_URL = "https://example.com/webhook"

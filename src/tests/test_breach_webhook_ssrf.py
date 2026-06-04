@@ -70,3 +70,20 @@ def test_valid_https_public_url_accepted():
     """Sanity: ein https-URL gegen eine public IP geht durch."""
     with patch("socket.gethostbyname", return_value="93.184.216.34"):
         _validate_webhook_url("https://valid.example/hook")
+
+
+def test_webhook_does_not_follow_redirects():
+    """A5.2 (Refs #1024 / #1016): Der Webhook-POST folgt keinen Redirects.
+
+    Sonst könnte ein (kompromittierter/bösartiger) Webhook-Host per 3xx auf
+    eine interne Adresse (Cloud-Metadata 169.254.169.254, loopback) umleiten,
+    die ``_validate_webhook_url`` nie geprüft hat. ``redirect_request`` gibt
+    ``None`` zurück → urllib folgt nicht, sondern liefert die 3xx-Response.
+    """
+    from core.services.compliance.breach_detection import _NoRedirectHandler
+
+    handler = _NoRedirectHandler()
+    result = handler.redirect_request(
+        req=None, fp=None, code=302, msg="Found", headers={}, newurl="http://169.254.169.254/"
+    )
+    assert result is None

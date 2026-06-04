@@ -184,13 +184,28 @@ def _already_reported(facility, finding: dict) -> bool:
     return any((entry.detail or {}).get("kind") == finding["kind"] for entry in qs.iterator())
 
 
+class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """A5.2 (Refs #1024 / #1016): Redirects beim Webhook-POST nicht folgen.
+
+    ``_validate_webhook_url`` prueft nur die initiale URL. Folgte urllib einem
+    3xx-Redirect, koennte ein (kompromittierter/boesartiger) Webhook-Host auf
+    eine interne Adresse (Cloud-Metadata, loopback) umleiten, die nie validiert
+    wurde. ``redirect_request`` -> ``None`` unterbindet das Folgen; die
+    3xx-Response wird stattdessen zurueckgegeben.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
 def _post_webhook(payload: dict) -> bool:
     """Optional: Webhook-Notification bei aktiver ``BREACH_NOTIFICATION_WEBHOOK_URL``.
 
     Refs #772 — vor jedem Aufruf wird die URL durch ``_validate_webhook_url``
     geprueft (https-only + public-IP). Verstoesse werden geloggt und
     fuehren zu ``return False`` statt einem stillen Aufruf gegen Cloud-
-    Metadata oder den loopback.
+    Metadata oder den loopback. Redirects werden via ``_NoRedirectHandler``
+    nicht gefolgt (A5.2).
     """
     url = getattr(settings, "BREACH_NOTIFICATION_WEBHOOK_URL", None)
     if not url:
@@ -207,7 +222,9 @@ def _post_webhook(payload: dict) -> bool:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        urllib.request.urlopen(req, timeout=5)  # noqa: S310 — durch _validate_webhook_url gegen SSRF gehaertet
+        # A5.2: opener ohne Redirect-Folgen (siehe _NoRedirectHandler).
+        opener = urllib.request.build_opener(_NoRedirectHandler)
+        opener.open(req, timeout=5)  # noqa: S310 — _validate_webhook_url + NoRedirect gegen SSRF
         return True
     except (urllib.error.URLError, OSError) as exc:
         logger.warning("breach_webhook_failed: %s", exc)
