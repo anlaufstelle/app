@@ -32,6 +32,39 @@ class TestPWASetup:
         assert "javascript" in response.headers.get("content-type", "")
 
 
+class TestOfflineRetryButton:
+    """/offline/-Retry-Button laedt CSP-konform neu — kein ``javascript:``-URI.
+
+    Frueher ``<a href="javascript:location.reload()">``: unter der prod-CSP
+    (``script-src 'self'`` ohne ``'unsafe-inline'``) stumm geblockt, Button
+    fuer den Nutzer tot. Jetzt ``href=""`` = Navigation zur aktuellen URL =
+    Neuladen, reines HTML. Refs #1016 (C1).
+    """
+
+    def test_retry_link_has_no_javascript_uri(self, authenticated_page, base_url):
+        page = authenticated_page
+        page.goto(f"{base_url}/offline/", wait_until="domcontentloaded")
+        # Kein Link darf eine ``javascript:``-URI nutzen — die CSP wuerde sie
+        # stumm blocken und einen CSP-Report ausloesen.
+        assert page.locator('a[href^="javascript:"]').count() == 0
+        retry = page.get_by_role("link", name="Erneut versuchen")
+        retry.wait_for(state="visible", timeout=5000)
+        assert retry.get_attribute("href") == ""
+
+    def test_retry_link_reloads_current_url(self, authenticated_page, base_url):
+        page = authenticated_page
+        page.goto(f"{base_url}/offline/", wait_until="domcontentloaded")
+        # Marker setzen; nach einem echten Reload (Navigation zur aktuellen
+        # URL) ist er weg. Bleibt er, war der Link tot (alter Bug).
+        page.evaluate("() => { window.__c1_reload_marker = true; }")
+        page.get_by_role("link", name="Erneut versuchen").click()
+        page.wait_for_load_state("domcontentloaded")
+        assert page.url.rstrip("/").endswith("/offline")
+        assert page.evaluate("() => window.__c1_reload_marker === undefined"), (
+            "Retry-Link hat die Seite nicht neu geladen"
+        )
+
+
 @pytest.mark.smoke
 def test_service_worker_registered(authenticated_page, base_url):
     """Service Worker ist registriert und aktiv."""
