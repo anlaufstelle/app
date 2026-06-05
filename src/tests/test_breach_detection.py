@@ -195,3 +195,60 @@ class TestBreachScanMarker:
         markers = AuditLog.objects.filter(action=AuditLog.Action.BREACH_SCAN_COMPLETED)
         assert markers.count() == 1
         assert markers.first().facility_id is None
+
+
+class TestWebhookIPPinning:
+    """A5.2 (Refs #1016): DNS-Rebinding-Schutz — die in der Validierung
+    aufgeloeste IP wird fuer den Verbindungsaufbau gepinnt (keine Re-Resolution
+    zwischen Pruefung und Connect)."""
+
+    def test_validate_returns_resolved_ip(self, monkeypatch):
+        from core.services.compliance.breach_detection import _validate_webhook_url
+
+        monkeypatch.setattr("socket.gethostbyname", lambda host: "93.184.216.34")
+        assert _validate_webhook_url("https://example.com/webhook") == "93.184.216.34"
+
+    def test_pinned_connection_uses_pinned_ip_and_tls_hostname(self, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from core.services.compliance.breach_detection import _PinnedHTTPSConnection
+
+        captured = {}
+
+        def fake_create_connection(addr, *args, **kwargs):
+            captured["addr"] = addr
+            return MagicMock(name="sock")
+
+        def fake_wrap(self, sock, server_hostname=None):
+            captured["server_hostname"] = server_hostname
+            return MagicMock(name="tls_sock")
+
+        monkeypatch.setattr("socket.create_connection", fake_create_connection)
+        monkeypatch.setattr("ssl.SSLContext.wrap_socket", fake_wrap)
+
+        conn = _PinnedHTTPSConnection("example.com", pinned_ip="93.184.216.34", timeout=5)
+        conn.connect()
+
+        # Socket verbindet zur gepinnten IP (nicht erneut aufloesen):
+        assert captured["addr"] == ("93.184.216.34", 443)
+        # TLS-Handshake aber gegen den Hostnamen (SNI + Zertifikatspruefung):
+        assert captured["server_hostname"] == "example.com"
+
+    def test_post_webhook_wires_pinned_opener(self, monkeypatch, settings):
+        """_post_webhook validiert die URL und baut den Opener mit gepinntem
+        HTTPS-Handler (+ NoRedirect) — kein Re-Resolve beim Connect."""
+        from core.services.compliance.breach_detection import _post_webhook
+
+        captured = {}
+
+        def _fake_open(self, req, *args, **kwargs):
+            captured["handlers"] = [type(h).__name__ for h in self.handlers]
+            return None
+
+        monkeypatch.setattr("urllib.request.OpenerDirector.open", _fake_open)
+        monkeypatch.setattr("socket.gethostbyname", lambda host: "93.184.216.34")
+        settings.BREACH_NOTIFICATION_WEBHOOK_URL = "https://example.com/webhook"
+
+        assert _post_webhook({"kind": "x"}) is True
+        assert "_PinnedHTTPSHandler" in captured["handlers"]
+        assert "_NoRedirectHandler" in captured["handlers"]

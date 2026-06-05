@@ -29,6 +29,7 @@ betroffener Subject + 24h-Fenster) bereits ein Eintrag existiert.
 
 from __future__ import annotations
 
+import http.client
 import ipaddress
 import json
 import logging
@@ -48,8 +49,12 @@ from core.services.audit import audit_security_violation
 logger = logging.getLogger(__name__)
 
 
-def _validate_webhook_url(url: str) -> None:
+def _validate_webhook_url(url: str) -> str:
     """Refs #772 — SSRF-Schutz fuer ``BREACH_NOTIFICATION_WEBHOOK_URL``.
+
+    Gibt bei Erfolg die aufgeloeste, oeffentlich-routbare IP als String zurueck
+    — diese wird in ``_post_webhook`` gepinnt, damit zwischen Pruefung und
+    Verbindungsaufbau kein DNS-Rebinding stattfinden kann (A5.2, Refs #1016).
 
     Wirft ``ValueError``, wenn:
 
@@ -77,6 +82,7 @@ def _validate_webhook_url(url: str) -> None:
     # Einzel-Flag-Kette durch.
     if not ip.is_global:
         raise ValueError(f"Webhook target {ip} is not globally routable — refused (SSRF).")
+    return str(ip)
 
 
 def _get_threshold(name: str, default: int) -> int:
@@ -198,6 +204,36 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
         return None
 
 
+class _PinnedHTTPSConnection(http.client.HTTPSConnection):
+    """A5.2 (Refs #1016): verbindet den Socket zur in der Validierung
+    aufgeloesten IP, fuehrt den TLS-Handshake aber gegen den Hostnamen (SNI +
+    Zertifikatspruefung). So kann zwischen ``_validate_webhook_url`` und dem
+    Connect kein DNS-Rebinding auf eine interne Adresse (Cloud-Metadata,
+    loopback) erfolgen. Nur direkter Aufbau (Webhooks laufen ohne Proxy)."""
+
+    def __init__(self, host, *, pinned_ip, **kwargs):
+        super().__init__(host, **kwargs)
+        self._pinned_ip = pinned_ip
+
+    def connect(self):
+        sock = socket.create_connection((self._pinned_ip, self.port), self.timeout)
+        self.sock = self._context.wrap_socket(sock, server_hostname=self.host)
+
+
+class _PinnedHTTPSHandler(urllib.request.HTTPSHandler):
+    """urllib-Handler, der jede HTTPS-Verbindung auf die validierte IP pinnt."""
+
+    def __init__(self, pinned_ip: str):
+        super().__init__()
+        self._pinned_ip = pinned_ip
+
+    def https_open(self, req):
+        return self.do_open(self._build_connection, req, context=self._context)
+
+    def _build_connection(self, host, **kwargs):
+        return _PinnedHTTPSConnection(host, pinned_ip=self._pinned_ip, **kwargs)
+
+
 def _post_webhook(payload: dict) -> bool:
     """Optional: Webhook-Notification bei aktiver ``BREACH_NOTIFICATION_WEBHOOK_URL``.
 
@@ -211,7 +247,7 @@ def _post_webhook(payload: dict) -> bool:
     if not url:
         return False
     try:
-        _validate_webhook_url(url)
+        pinned_ip = _validate_webhook_url(url)
     except ValueError as exc:
         logger.warning("breach_webhook_url_rejected: %s", exc)
         return False
@@ -222,9 +258,9 @@ def _post_webhook(payload: dict) -> bool:
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        # A5.2: opener ohne Redirect-Folgen (siehe _NoRedirectHandler).
-        opener = urllib.request.build_opener(_NoRedirectHandler)
-        opener.open(req, timeout=5)  # noqa: S310 — _validate_webhook_url + NoRedirect gegen SSRF
+        # A5.2: Opener mit gepinnter IP (kein DNS-Rebinding) + ohne Redirect-Folgen.
+        opener = urllib.request.build_opener(_NoRedirectHandler, _PinnedHTTPSHandler(pinned_ip))
+        opener.open(req, timeout=5)  # noqa: S310 — validate + IP-Pin + NoRedirect gegen SSRF
         return True
     except (urllib.error.URLError, OSError) as exc:
         logger.warning("breach_webhook_failed: %s", exc)
