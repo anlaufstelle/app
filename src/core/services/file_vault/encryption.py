@@ -5,7 +5,9 @@ Supports MultiFernet for key rotation: multiple keys can be configured
 all keys are tried for decryption.
 """
 
+import hashlib
 import logging
+import struct
 from functools import lru_cache
 
 from cryptography.fernet import Fernet, InvalidToken, MultiFernet
@@ -144,48 +146,77 @@ def generate_key():
 
 # --- Binary file encryption (chunk-based) ---
 
-FILE_FORMAT_VERSION = 1
+# v1: [1B ver=1][4B chunk_count][per chunk: 4B len + Fernet(data)] — keine
+#     Positions-/Datei-Bindung (Bestandsformat, weiter lesbar).
+# v2 (A4.5, Refs #1016): wie v1, aber jeder Chunk-Klartext ist mit einem
+#     24-Byte-Kontext praefixiert (16B Datei-Bindung + 4B index + 4B total),
+#     den Fernet mit-authentifiziert. Da Fernet kein AEAD-AAD bietet, ist das
+#     der Weg, Reorder/Truncation/Cross-File-Splicing durch einen Angreifer mit
+#     Disk-Schreibzugriff erkennbar zu machen. Aktiviert via ``file_id``.
+_FILE_FORMAT_V1 = 1
+_FILE_FORMAT_V2 = 2
+FILE_FORMAT_VERSION = _FILE_FORMAT_V1  # Default-Schreibversion ohne file_id (Legacy)
 CHUNK_SIZE = 64 * 1024  # 64 KB per chunk
+_CTX_LEN = 24  # 16B Datei-Bindung + 4B chunk_index + 4B total
 
 
-def encrypt_file(input_stream, output_path):
+def _file_binding(file_id: str) -> bytes:
+    """Stabile 16-Byte-Bindung aus der Storage-ID der Datei."""
+    return hashlib.sha256(file_id.encode("utf-8")).digest()[:16]
+
+
+def _chunk_context(fid16: bytes, index: int, total: int) -> bytes:
+    return fid16 + struct.pack(">II", index, total)
+
+
+def encrypt_file(input_stream, output_path, file_id=None):
     """Encrypt a file stream in chunks, writing to output_path.
 
-    Format: [1B version][4B chunk_count][per chunk: 4B token_len + token_bytes]
-    Each chunk is independently Fernet-encrypted for streaming decryption.
+    ``file_id is None`` → Legacy-v1 (keine Positions-/Datei-Bindung).
+    ``file_id`` gesetzt → v2: bindet jeden Chunk an ``file_id`` + Index + Anzahl
+    (A4.5). Produktion (``storage.py``) reicht die Storage-ID durch.
     """
-    import struct
     from pathlib import Path
 
     f = get_fernet()
-    chunks = []
+    raw_chunks = []
     while True:
         data = input_stream.read(CHUNK_SIZE)
         if not data:
             break
         if isinstance(data, str):
             data = data.encode("utf-8")
-        chunks.append(f.encrypt(data))
+        raw_chunks.append(data)
+
+    total = len(raw_chunks)
+    if file_id is None:
+        version = _FILE_FORMAT_V1
+        tokens = [f.encrypt(chunk) for chunk in raw_chunks]
+    else:
+        version = _FILE_FORMAT_V2
+        fid16 = _file_binding(file_id)
+        tokens = [f.encrypt(_chunk_context(fid16, i, total) + chunk) for i, chunk in enumerate(raw_chunks)]
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, "wb") as out:
-        out.write(struct.pack(">B", FILE_FORMAT_VERSION))
-        out.write(struct.pack(">I", len(chunks)))
-        for token in chunks:
+        out.write(struct.pack(">B", version))
+        out.write(struct.pack(">I", total))
+        for token in tokens:
             token_bytes = token if isinstance(token, bytes) else token.encode("utf-8")
             out.write(struct.pack(">I", len(token_bytes)))
             out.write(token_bytes)
 
 
-def decrypt_file_stream(input_path):
+def decrypt_file_stream(input_path, file_id=None):
     """Generator that yields decrypted chunks from an encrypted file.
 
-    Reads chunk-by-chunk to avoid loading the entire file into memory.
+    Reads chunk-by-chunk to avoid loading the entire file into memory. Bei
+    v2-Dateien (A4.5) ist ``file_id`` erforderlich; jeder Chunk wird gegen
+    seine erwartete Position + Datei-Bindung geprueft (Reorder/Truncation/
+    Splicing werfen ``EncryptionError``).
     """
-    import struct
-
     f = get_fernet()
 
     with open(input_path, "rb") as inp:
@@ -193,12 +224,18 @@ def decrypt_file_stream(input_path):
         if not version_bytes:
             raise EncryptionError("Empty encrypted file")
         (version,) = struct.unpack(">B", version_bytes)
-        if version != FILE_FORMAT_VERSION:
+        if version not in (_FILE_FORMAT_V1, _FILE_FORMAT_V2):
             raise EncryptionError(f"Unsupported file format version: {version}")
 
         (chunk_count,) = struct.unpack(">I", inp.read(4))
 
-        for _ in range(chunk_count):
+        fid16 = None
+        if version == _FILE_FORMAT_V2:
+            if file_id is None:
+                raise EncryptionError("file_id required to decrypt a v2 (bound) file")
+            fid16 = _file_binding(file_id)
+
+        for index in range(chunk_count):
             len_bytes = inp.read(4)
             if len(len_bytes) < 4:
                 raise EncryptionError("Truncated encrypted file")
@@ -207,6 +244,16 @@ def decrypt_file_stream(input_path):
             if len(token) < token_len:
                 raise EncryptionError("Truncated encrypted file")
             try:
-                yield f.decrypt(token)
+                plaintext = f.decrypt(token)
             except InvalidToken as exc:
                 raise EncryptionError(f"Chunk decryption failed: {exc}") from exc
+
+            if version == _FILE_FORMAT_V1:
+                yield plaintext
+                continue
+
+            # v2: der authentifizierte Kontext bindet den Chunk an (Datei, index, total).
+            ctx, chunk_data = plaintext[:_CTX_LEN], plaintext[_CTX_LEN:]
+            if ctx != _chunk_context(fid16, index, chunk_count):
+                raise EncryptionError("Chunk binding mismatch — possible reorder/truncation/splicing")
+            yield chunk_data

@@ -1,5 +1,6 @@
 """Tests for file vault service + views."""
 
+import struct
 from unittest.mock import patch
 
 import pytest
@@ -30,6 +31,7 @@ from core.services.file_vault import (  # noqa: E402  # noqa: E402
     delete_attachment_file,
     delete_event_attachments,
     get_attachment_path,
+    get_decrypted_file_stream,
     get_original_filename,
     store_encrypted_file,
 )
@@ -131,6 +133,27 @@ class TestFileVaultService:
 
         # Original filename is encrypted and decryptable
         assert get_original_filename(attachment) == "test.pdf"
+
+    def test_stored_file_is_v2_bound_and_roundtrips(self, facility, staff_user, doc_type_with_file):
+        """A4.5 (Refs #1016): produktiv gespeicherte Dateien sind v2 (an die
+        Storage-ID gebunden) und werden über genau diese Bindung wieder
+        entschlüsselt. Regression-Guard gegen ein stilles Zurückfallen auf das
+        ungebundene v1-Format."""
+        dt, _, ft_file = doc_type_with_file
+        event = Event.objects.create(
+            facility=facility,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        uploaded = SimpleUploadedFile("test.pdf", PDF_HEADER, content_type="application/pdf")
+        attachment = store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
+
+        with open(get_attachment_path(attachment), "rb") as f:
+            (version,) = struct.unpack(">B", f.read(1))
+        assert version == 2, "Produktiv gespeicherte Datei muss v2-gebunden sein."
+        assert b"".join(get_decrypted_file_stream(attachment)) == PDF_HEADER
 
     def test_uuid_filename_no_leakage(self, facility, staff_user, doc_type_with_file):
         dt, _, ft_file = doc_type_with_file
