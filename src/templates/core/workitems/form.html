@@ -14,7 +14,7 @@
         <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
         {% endif %}
 
-        <div class="bg-surface border border-subtle rounded-[10px] p-5 space-y-4">
+        <div class="card p-5 space-y-4">
             {# Typ #}
             {% include "components/_form_field.html" with field=form.item_type %}
 
@@ -101,10 +101,10 @@
         </div>
 
         <div class="flex flex-col sm:flex-row gap-2.5">
-            <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-accent text-white text-[13px] font-semibold rounded-md">
+            <button type="submit" class="w-full sm:w-auto px-4 py-2 btn-primary">
                 {% trans "Speichern" %}
             </button>
-            <a href="{% url 'core:workitem_inbox' %}" class="w-full sm:w-auto text-center px-4 py-2 bg-surface border border-subtle text-[13px] text-ink-soft rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
+            <a href="{% url 'core:workitem_inbox' %}" class="w-full sm:w-auto text-center px-4 py-2 btn-secondary">{% trans "Abbrechen" %}</a>
         </div>
     </form>
 </div>

@@ -45,7 +45,7 @@
             </div>
 
             <template x-if="data.client.notes">
-                <div class="bg-surface border border-subtle rounded-[10px] p-4 mb-5">
+                <div class="card p-4 mb-5">
                     <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Notizen" %}</h2>
                     <p class="text-sm text-ink-soft whitespace-pre-wrap" x-text="data.client.notes"></p>
                 </div>
@@ -61,7 +61,7 @@
                     </template>
                     <div class="space-y-2" x-show="hasEvents">
                         <template x-for="event in data.events" :key="event.pk">
-                            <div class="block bg-surface border border-subtle rounded-[10px] p-4" data-testid="offline-event">
+                            <div class="block card p-4" data-testid="offline-event">
                                 <div class="flex items-center justify-between">
                                     <div class="flex items-center space-x-3">
                                         <span class="text-sm text-ink-muted font-mono" x-text="event.occurred_at_fmt"></span>

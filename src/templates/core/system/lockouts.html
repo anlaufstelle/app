@@ -13,7 +13,7 @@
 {# Sub-Navigation innerhalb /system/ #}
 {% include "core/system/_subnav.html" %}
 
-<section class="mb-4 bg-surface border border-subtle rounded-[10px] p-4 text-[13px] text-ink-muted">
+<section class="mb-4 card p-4 text-[13px] text-ink-muted">
     {% blocktrans with threshold=lockout_threshold window=lockout_window_minutes %}
     Konten gelten als gesperrt, sobald in den letzten {{ window }} Minuten {{ threshold }} oder mehr Fehlanmeldungen seit der letzten Entsperrung registriert wurden. Die Entsperrung wird im Audit-Log protokolliert.
     {% endblocktrans %}

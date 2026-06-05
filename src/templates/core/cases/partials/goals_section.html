@@ -6,7 +6,7 @@
     {% if goals %}
     <div class="space-y-3">
         {% for goal in goals %}
-        <div class="bg-surface border border-subtle rounded-[10px] p-4" x-data="goalsSection">
+        <div class="card p-4" x-data="goalsSection">
             <div class="flex items-start justify-between">
                 <div class="flex-1 min-w-0" x-show="isViewing">
                     <div class="flex items-center">
