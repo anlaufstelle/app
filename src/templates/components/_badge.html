@@ -1,0 +1,14 @@
+{% load core_tags %}{% comment %}
+Wiederverwendbares Badge (Refs #1016, Workstream C — C5).
+
+Pille mit Farb-Variante aus der zentralen _BADGE_COLOR_MAP (Tailwind-Safelist
+in tailwind.config.js). Basis-Stil über die .badge-Komponentenklasse.
+
+Parameter:
+  text   Pflicht — angezeigter Text.
+  color  Farbname aus _BADGE_COLOR_MAP (indigo/amber/red/green/blue/purple/
+         teal/rose/gray); Unbekannt → Default (indigo).
+  title  Optional — title-Attribut (Tooltip).
+
+Backt auch das {% status_badge %}-Tag (core_tags.py).
+{% endcomment %}<span class="badge {{ color|doctype_badge_classes }}"{% if title %} title="{{ title }}"{% endif %}>{{ text }}</span>

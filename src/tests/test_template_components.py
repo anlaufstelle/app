@@ -39,3 +39,31 @@ class TestFormFieldComponent:
         content = resp.content.decode()
         assert 'id="id_title-error"' in content
         assert 'role="alert"' in content
+
+
+class TestBadgeComponent:
+    """C5: components/_badge.html (Basis .badge + Farb-Variante) + status_badge-Tag."""
+
+    def test_badge_component_renders_class_color_text(self):
+        from django.template.loader import render_to_string
+
+        html = render_to_string("components/_badge.html", {"text": "Dringend", "color": "red", "title": "Hinweis"})
+        assert 'class="badge bg-red-100 text-red-800"' in html
+        assert 'title="Hinweis"' in html
+        assert ">Dringend<" in html
+
+    def test_badge_component_omits_title_when_absent(self):
+        from django.template.loader import render_to_string
+
+        html = render_to_string("components/_badge.html", {"text": "X", "color": "green"})
+        assert "title=" not in html
+
+    def test_status_badge_uses_badge_component_unescaped(self):
+        """status_badge muss echtes HTML liefern (nicht escaped) — Single Source via _badge.html."""
+        from django.template import Context, Template
+
+        out = Template('{% load core_tags %}{% status_badge "open" "Offen" %}').render(Context({}))
+        assert '<span class="badge ' in out
+        assert "&lt;span" not in out
+        assert "bg-green-100" in out
+        assert ">Offen<" in out
