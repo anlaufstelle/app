@@ -26,6 +26,7 @@ except Exception as _libmagic_exc:  # noqa: BLE001 — libmagic-Shared-Library f
 from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate, Settings  # noqa: E402
 from core.models.attachment import EventAttachment  # noqa: E402
 from core.services.file_vault import (  # noqa: E402  # noqa: E402
+    EncryptionError,
     ScanResult,
     VirusScannerUnavailableError,
     delete_attachment_file,
@@ -154,6 +155,35 @@ class TestFileVaultService:
             (version,) = struct.unpack(">B", f.read(1))
         assert version == 2, "Produktiv gespeicherte Datei muss v2-gebunden sein."
         assert b"".join(get_decrypted_file_stream(attachment)) == PDF_HEADER
+
+    def test_stored_v2_file_resists_header_tampering(self, facility, staff_user, doc_type_with_file):
+        """A4.5/PR-Review bug_002: ein auf der Disk manipulierter v2-Header
+        (Downgrade auf v1 ODER count=0-Blanking) fuehrt auf dem Download-Pfad
+        (get_decrypted_file_stream) zu EncryptionError statt stiller Korruption
+        bzw. stillem Leeren der Datei."""
+        dt, _, ft_file = doc_type_with_file
+        event = Event.objects.create(
+            facility=facility,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        uploaded = SimpleUploadedFile("test.pdf", PDF_HEADER, content_type="application/pdf")
+        attachment = store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
+        path = get_attachment_path(attachment)
+        original = path.read_bytes()
+        assert original[0] == 2
+
+        # 1. Downgrade: Header-Byte 0x02 -> 0x01.
+        path.write_bytes(b"\x01" + original[1:])
+        with pytest.raises(EncryptionError, match="binding"):
+            list(get_decrypted_file_stream(attachment))
+
+        # 2. Blanking: [v2][count=0] (5-Byte-Overwrite).
+        path.write_bytes(struct.pack(">B", 2) + struct.pack(">I", 0))
+        with pytest.raises(EncryptionError, match="binding"):
+            list(get_decrypted_file_stream(attachment))
 
     def test_uuid_filename_no_leakage(self, facility, staff_user, doc_type_with_file):
         dt, _, ft_file = doc_type_with_file

@@ -189,13 +189,20 @@ def encrypt_file(input_stream, output_path, file_id=None):
         raw_chunks.append(data)
 
     total = len(raw_chunks)
+    # In-place: jeder Klartext-Slot wird sofort durch sein Token ersetzt und so
+    # zur GC freigegeben — kein gleichzeitiges Vorhalten von Klartext UND
+    # Ciphertext (Peak ~1x statt ~2x Dateigröße; die zurückgehaltenen Bytes
+    # waeren Klartext). PR-Review bug_001.
     if file_id is None:
         version = _FILE_FORMAT_V1
-        tokens = [f.encrypt(chunk) for chunk in raw_chunks]
+        for i in range(total):
+            raw_chunks[i] = f.encrypt(raw_chunks[i])
     else:
         version = _FILE_FORMAT_V2
         fid16 = _file_binding(file_id)
-        tokens = [f.encrypt(_chunk_context(fid16, i, total) + chunk) for i, chunk in enumerate(raw_chunks)]
+        for i in range(total):
+            raw_chunks[i] = f.encrypt(_chunk_context(fid16, i, total) + raw_chunks[i])
+    tokens = raw_chunks
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -229,11 +236,18 @@ def decrypt_file_stream(input_path, file_id=None):
 
         (chunk_count,) = struct.unpack(">I", inp.read(4))
 
-        fid16 = None
+        # ``file_id`` (sofern uebergeben) erlaubt die v2-Bindungspruefung UND die
+        # Erkennung eines auf v1 herabgestuften, eigentlich gebundenen Headers.
+        # Der 1B-Header (Version + Anzahl) liegt ausserhalb jedes Fernet-Tokens
+        # und ist daher selbst nicht authentifiziert — PR-Review bug_002.
+        fid16 = _file_binding(file_id) if file_id is not None else None
         if version == _FILE_FORMAT_V2:
             if file_id is None:
                 raise EncryptionError("file_id required to decrypt a v2 (bound) file")
-            fid16 = _file_binding(file_id)
+            if chunk_count == 0:
+                # Produktion schreibt nie ein leeres v2 (enforce_magic_bytes lehnt
+                # leere Uploads ab) → [v2][count=0] ist ein Blanking-/Truncation-Versuch.
+                raise EncryptionError("Chunk binding mismatch — empty v2 file (possible truncation/blanking)")
 
         for index in range(chunk_count):
             len_bytes = inp.read(4)
@@ -249,6 +263,12 @@ def decrypt_file_stream(input_path, file_id=None):
                 raise EncryptionError(f"Chunk decryption failed: {exc}") from exc
 
             if version == _FILE_FORMAT_V1:
+                # Downgrade-Erkennung: ein als v2 gebundener Chunk, dessen
+                # Header-Byte auf v1 gefaelscht wurde, beginnt mit genau seinem
+                # erwarteten Kontext. Echte v1-Daten treffen das nicht (und ein
+                # Angreifer kann es ohne Schluessel nicht erzeugen).
+                if fid16 is not None and plaintext[:_CTX_LEN] == _chunk_context(fid16, index, chunk_count):
+                    raise EncryptionError("Chunk binding mismatch — v1 header on bound chunk (possible downgrade)")
                 yield plaintext
                 continue
 
