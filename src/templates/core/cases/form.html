@@ -16,15 +16,7 @@
 
         <div class="bg-surface border border-subtle rounded-[10px] p-5 space-y-4">
             {# Titel #}
-            <div>
-                <label for="id_title" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.title.label }} *</label>
-                {% aria_field form.title %}
-                {% if form.title.errors %}
-                <ul id="id_title-error" class="mt-1 text-sm text-red-600" role="alert">
-                    {% for error in form.title.errors %}<li>{{ error }}</li>{% endfor %}
-                </ul>
-                {% endif %}
-            </div>
+            {% include "components/_form_field.html" with field=form.title %}
 
             {# Person-Autocomplete #}
             <div x-data="clientAutocomplete"
@@ -79,26 +71,10 @@
             </div>
 
             {# Beschreibung #}
-            <div>
-                <label for="id_description" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.description.label }}</label>
-                {% aria_field form.description %}
-                {% if form.description.errors %}
-                <ul id="id_description-error" class="mt-1 text-sm text-red-600" role="alert">
-                    {% for error in form.description.errors %}<li>{{ error }}</li>{% endfor %}
-                </ul>
-                {% endif %}
-            </div>
+            {% include "components/_form_field.html" with field=form.description %}
 
             {# Fallverantwortlich #}
-            <div>
-                <label for="id_lead_user" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.lead_user.label }}</label>
-                {% aria_field form.lead_user %}
-                {% if form.lead_user.errors %}
-                <ul id="id_lead_user-error" class="mt-1 text-sm text-red-600" role="alert">
-                    {% for error in form.lead_user.errors %}<li>{{ error }}</li>{% endfor %}
-                </ul>
-                {% endif %}
-            </div>
+            {% include "components/_form_field.html" with field=form.lead_user %}
         </div>
 
         <div class="flex flex-col sm:flex-row gap-2.5 pt-2">
