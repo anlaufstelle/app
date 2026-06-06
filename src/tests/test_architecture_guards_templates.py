@@ -410,3 +410,39 @@ class TestNoMultilineDjangoCommentsGuard:
             "nutzen oder den Kommentar weglassen.\n"
             f"Betroffen: {violations}"
         )
+
+
+class TestLogoutIsAlwaysPostGuard:
+    """Logout darf nie über einen GET-``<a href>`` ausgelöst werden.
+
+    ``CustomLogoutView`` erbt von Djangos ``auth_views.LogoutView``, das seit
+    Django 5 **POST-only** ist — ein GET auf ``/logout/`` liefert 405 (Refs
+    #1031). Genau das passierte auf der MFA-Login-/Setup-Seite, deren
+    „Abmelden"-Link ein ``<a href="{% url 'logout' %}">`` war. Logout muss
+    immer über ein ``<form method="post">`` (mit ``{% csrf_token %}``) laufen,
+    wie in ``partials/_navigation_desktop.html``.
+    """
+
+    _TEMPLATES_DIR = Path("src/templates")
+    # ``<a … href="{% url 'logout' %}" …>`` — Anchor (GET) auf die Logout-URL.
+    _GET_LOGOUT_ANCHOR = re.compile(
+        r"""<a\b[^>]*href=["']\{%\s*url\s+['"]logout['"]\s*%\}["']""",
+        re.IGNORECASE,
+    )
+
+    def test_no_get_anchor_triggers_logout(self):
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = []
+        for template_file in self._TEMPLATES_DIR.rglob("*.html"):
+            source = template_file.read_text(errors="ignore")
+            for match in self._GET_LOGOUT_ANCHOR.finditer(source):
+                line = source[: match.start()].count("\n") + 1
+                violations.append(f"{template_file.relative_to(self._TEMPLATES_DIR)}:{line}")
+        assert not violations, (
+            "Logout über GET-<a href> liefert 405 (POST-only LogoutView, Refs "
+            '#1031). Bitte ein <form method="post" action="{% url \'logout\' %}"> '
+            "mit {% csrf_token %} + Submit-Button nutzen (Muster: "
+            "partials/_navigation_desktop.html).\n"
+            f"Betroffen: {violations}"
+        )
