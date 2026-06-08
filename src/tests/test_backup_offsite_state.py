@@ -1,6 +1,6 @@
 """Tests fuer den Off-Site-Backup-State-File-Mechanismus (Refs #797).
 
-Das Backup-Skript ``scripts/backup.sh`` schreibt bei Off-Site-Fehlern einen
+Das Backup-Skript ``scripts/ops/backup.sh`` schreibt bei Off-Site-Fehlern einen
 Counter ins State-File ``$BACKUP_STATE_DIR/.offsite_state``. Erst beim
 zweiten aufeinanderfolgenden Fehler endet das Skript mit Exit ≠ 0 — sonst
 wuerde jeder transiente Netzwerk-Fehler den Cron-Lauf rot faerben.
@@ -17,7 +17,7 @@ from pathlib import Path
 
 
 def _run_offsite_logic(state_dir: Path, *, succeed: bool) -> tuple[int, Path]:
-    """Fuehre das State-File-Snippet aus scripts/backup.sh isoliert aus.
+    """Fuehre das State-File-Snippet aus scripts/ops/backup.sh isoliert aus.
 
     Returns (exit_code, state_file_path).
     """

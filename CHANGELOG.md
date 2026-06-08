@@ -4,7 +4,39 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.13.1] - 2026-05-31
+## [Unreleased]
+
+### Changed
+
+- **Release-Hygiene: Dev-Ops-/Tooling-Struktur am Quellbaum getrennt** (#998, schließt #984) — Interne Build-/Deploy-/Release-Werkzeuge und Dev-only-Skripte liegen jetzt unter klaren Prefixen: `dev-ops/` (Deploy-Skripte + Release-Tooling inkl. des nun versionierten `build-release.sh`), `scripts/dev/` (Mutation-/Perf-Tooling), `scripts/ops/` (Self-Hoster-Ops), `docs/dev/` (Dev-Doku). Der Public-Release-Snapshot schließt dadurch nur noch zwei Verzeichnis-Prefixe (`dev-ops/`, `scripts/dev/`) plus `docs/dev/` und wenige Einzeldateien aus, statt einer Ad-hoc-Liste im Build-Skript. **Keine Auswirkung auf Self-Hoster:** `docker-compose.prod.yml`, `deploy/postgres-init/` und alle CI-relevanten Skripte (`scripts/check_*`, `verify_test_matrix_drift.py`) bleiben unverändert am Platz. Rein interne Umstrukturierung ohne Verhaltens- oder API-Änderung.
+
+## [0.13.3] - 2026-06-02
+
+Patch-Release (Pre-Release): härtet einen flaky E2E-Test, der beim v0.13.2-Release-CI an einer HTMX-Swap-Race scheiterte. Reine Test-Stabilität — **kein** App-Code, keine Verhaltens- oder API-Änderung. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
+
+### Fixed
+
+- **Flaky E2E-Test gehärtet** (#1013) — `test_event_save_and_appears_in_detail` füllte die per HTMX nachgeladenen FieldTemplate-Felder, bevor der DOM-Swap abgeschlossen war; unter CI-Last ersetzte der Swap das gerade befüllte Feld (`AssertionError: HTMX-Swap hat dauer ueberschrieben`). Jetzt wird auf den `event_fields_partial`-Response gewartet und mit Verify-Retry gefüllt (Muster aus [`test_statistics_dashboard.py`](https://github.com/anlaufstelle/app/blob/main/src/tests/e2e/test_statistics_dashboard.py)). Kein Produktivcode betroffen.
+
+## [0.13.2] - 2026-06-02
+
+Patch-Release (Pre-Release): vollständige Triage und Behebung aller **29 offenen CodeQL-Code-Scanning-Alerts** auf dem öffentlichen Mirror (#1011). Schwerpunkt ist defensive Security-Härtung (Open-Redirect-Schutz, keine Exception-Details in Fehlerantworten, einheitliche Download-Header); keine der gemeldeten Stellen war real ausnutzbar. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
+
+### Security
+
+- **Open-Redirect-Schutz gehärtet** (#1011) — der zentrale `?next=`-Sanitizer `safe_redirect_path` (Sudo-Mode, WorkItem-Status-Redirects) nutzt jetzt Django's [`url_has_allowed_host_and_scheme`](https://github.com/anlaufstelle/app/blob/main/src/core/views/utils.py). Das fängt zusätzlich Backslash-Bypässe wie `/\evil.example` ab — Browser interpretieren `\` als `/`, wodurch der bisherige `startswith('/')`-Check eine protokoll-relative Weiterleitung auf eine fremde Origin durchließ. Same-origin-Pfade bleiben unverändert erlaubt.
+- **Keine Exception-Strings in Bulk-Fehlerantworten** (#1011) — die Bulk-WorkItem-Aktionen (Status/Priorität/Zuweisung) liefern Validierungsfehler über eine kontrollierte, übersetzte Meldung statt `str(exception)`. Unerwartete Exceptions werden nicht mehr abgefangen und in die 400-Antwort gespiegelt, sondern propagieren als 500 (serverseitig geloggt, nicht exponiert).
+- **Einheitliche Download-Header beim Audit-Export** (#1011) — der Cross-Facility-Audit-Export (CSV/JSON) läuft jetzt über den zentralen [`safe_download_response`](https://github.com/anlaufstelle/app/blob/main/src/core/utils/downloads.py)-Builder, inklusive `Content-Disposition: attachment`, RFC-5987-Dateiname und `X-Content-Type-Options: nosniff` — konsistent mit allen anderen Downloads.
+
+### Fixed
+
+- **Autosave-Entwurf zuverlässig verwerfen** (#1011) — beim Klick auf einen „Entwurf verwerfen"-Link wird das (stets asynchrone) Löschen des Offline-Entwurfs direkt verkettet statt über einen toten Laufzeit-Guard; das Navigationsziel wird in jedem Fall nach Abschluss angesteuert.
+
+### Changed
+
+- **Code-Hygiene aus der CodeQL-Triage** (#1011) — leere `except`-Blöcke aufgelöst (`.filter().first()` statt `try/except DoesNotExist`, `contextlib.suppress`, gezieltes Debug-Logging für defekte Daten), toter/ungenutzter Code entfernt und kleinere E2E-Test-Hygiene (explizite String-Konkatenation, nicht-redundante Assertions). Rein intern, ohne Verhaltensänderung.
+
+## [0.13.1] - 2026-06-01
 
 Patch-Release (Pre-Release) mit Schwerpunkt **Außenwirkung und Aufräumen**: neue, automatisiert erzeugte Screenshots in Deutsch und Englisch (Desktop + Mobil) samt vollständiger Galerie-Seiten, ein wiederverwendbares Screenshot-Tooling, präsentablere Seed-Daten und das Schließen einiger bei v0.13.0 offen gebliebener Enden. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
 
@@ -12,6 +44,10 @@ Patch-Release (Pre-Release) mit Schwerpunkt **Außenwirkung und Aufräumen**: ne
 
 - **Screenshot-Generator `manage.py screenshot`** (#1005) — Neuer Management-Command erzeugt Doku-Screenshots reproduzierbar per Playwright gegen eine laufende Instanz: Login als Seed-User, Sprachumschaltung (DE/EN) über `preferred_language`, deklarative Shot-Liste, Ausgabe als **WebP** (via Pillow) in Desktop (1280×800) und Mobil (375px). Neues Make-Target [`docs-screens`](https://github.com/anlaufstelle/app/blob/main/Makefile) fährt den kompletten Lauf (Seed → Server → Generieren → Stop). `/system/`-Screens (Sudo-Mode) sind vorerst ausgeklammert.
 - **QuickTemplate-Seeds** (#1004) — Das seit #494 existierende `QuickTemplate`-Modell (vorbefüllte Schnelleintrags-Vorlagen) wurde bisher nie geseedet. Neues Seed-Modul [`core/seed/quick_templates.py`](https://github.com/anlaufstelle/app/blob/main/src/core/seed/quick_templates.py) erzeugt pro Einrichtung realistische, facility-gescopte Vorlagen für alle Scales (idempotent); in den Seed-Lauf verdrahtet. Demo-/Screenshot-Daten zeigen den Schnelleintrags-Workflow jetzt mit.
+
+### Changed
+
+- **Dependency-Bumps (Dependabot)** — `ruff` 0.15.14→0.15.15, `sentry-sdk[django]` 2.60.0→2.61.0, `django-stubs` 6.0.4→6.0.5. Begleitend der `requirements.txt`-Header durch `pip-compile` normalisiert, damit `make deps-check` grün bleibt.
 
 ### Docs
 

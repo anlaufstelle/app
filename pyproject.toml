@@ -1,6 +1,6 @@
 [project]
 name = "anlaufstelle"
-version = "0.13.1"
+version = "0.13.3"
 description = "Open-Source-Fachsystem für niedrigschwellige soziale Einrichtungen"
 requires-python = ">=3.13"
 license = "AGPL-3.0-or-later"
@@ -43,8 +43,8 @@ select = ["E", "F", "I", "W", "B", "UP", "SIM", "N", "S"]
     "N817",  # Import-Alias als Akronym
     "N818",  # Exception-Naming
 ]
-# Refs #885: release/tests/* enthaelt Unit-Tests fuer das Release-Sanitize-Tool.
-"release/tests/*" = [
+# Refs #885: dev-ops/release/tests/* enthaelt Unit-Tests fuer das Release-Sanitize-Tool.
+"dev-ops/release/tests/*" = [
     "S101",  # assert in tests
 ]
 # Seeds nutzen random() bewusst zur Verteilung — kein crypto-Pfad.
@@ -53,7 +53,7 @@ select = ["E", "F", "I", "W", "B", "UP", "SIM", "N", "S"]
 
 # Dev-/CI-Skripte rufen System-Tools (msgfmt, pip-licenses) als Subprocess
 # auf — kein untrusted input. Refs #860.
-"scripts/*" = [
+"scripts/**" = [
     "S603",  # subprocess
     "S607",  # subprocess partial executable path
 ]
@@ -61,10 +61,10 @@ select = ["E", "F", "I", "W", "B", "UP", "SIM", "N", "S"]
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "anlaufstelle.settings.test"
 pythonpath = ["src"]
-# Refs #885: release/tests enthält Unit-Tests für das Release-Sanitize-Tool
-# (release/sanitize_release_tree.py). Beim Tree-Snapshot dev→stage→app wird
-# der release/-Ordner ausgeschlossen (Excludes in lokaler build-release.sh).
-testpaths = ["src/tests", "release/tests"]
+# Refs #885: dev-ops/release/tests enthält Unit-Tests für das Release-Sanitize-Tool
+# (dev-ops/release/sanitize_release_tree.py). Beim Tree-Snapshot dev→stage→app wird
+# der dev-ops/-Ordner ausgeschlossen (Excludes in dev-ops/release/build-release.sh).
+testpaths = ["src/tests", "dev-ops/release/tests"]
 addopts = "--reuse-db"
 markers = [
     "e2e: End-to-End-Tests mit Playwright (benötigen laufenden Server)",
@@ -80,6 +80,9 @@ omit = [
     "*/tests/*",
     "*/migrations/*",
     "*/management/commands/seed*.py",
+    # Playwright-getriebenes Doku-Tooling: nur gegen einen laufenden E2E-Server
+    # sinnvoll abdeckbar (manuell/e2e), nicht per Unit-Test — analog seed*.py.
+    "*/management/commands/screenshot.py",
 ]
 
 # --- mutmut (Refs #922 / #923) ---

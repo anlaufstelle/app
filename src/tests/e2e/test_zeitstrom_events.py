@@ -17,6 +17,28 @@ pytestmark = pytest.mark.e2e
 SUBMIT = "#main-content button[type='submit']"
 
 
+def _fill_after_htmx_swap(page, selector, value, *, attempts=8):
+    """Fuelle ein HTMX-nachgeladenes Feld robust gegen Swap-nach-fill (Refs #1013).
+
+    Der ``document_type``-Wechsel laedt die FieldTemplate-Felder per HTMX nach
+    (``hx-target=#dynamic-fields``). Unter CI-Last kann der DOM-Swap das gerade
+    befuellte Element ersetzen (Wert dann leer). Wir fuellen daher neu, bis der
+    Wert stabil haelt, statt einmalig (vgl. expect_response+Poll-Pattern in
+    ``test_statistics_dashboard.py``, Refs #761/#849).
+    """
+    field = page.locator(selector)
+    field.wait_for(state="visible", timeout=10_000)
+    for _ in range(attempts):
+        field.fill(value)
+        # einen noch ausstehenden Swap settlen lassen, dann frisch aufloesen
+        page.wait_for_timeout(250)
+        if page.locator(selector).input_value() == value:
+            return
+    # letzter Versuch + aussagekraeftige Assertion bei echtem Fehler
+    page.locator(selector).fill(value)
+    expect(page.locator(selector)).to_have_value(value, timeout=5_000)
+
+
 class TestAktivitaetslogStartseite:
     """Login → Aktivitätslog-Startseite mit TimeFilter-Tabs."""
 
@@ -184,22 +206,14 @@ class TestEventErstellung:
         page.goto(f"{base_url}/events/new/")
 
         # Formular ausfüllen
-        page.select_option("select[name='document_type']", label="Kontakt")
-        # HTMX kann mehrfach swappen (erst Default-Felder, dann FieldTemplate-
-        # spezifische). `attached` matcht den ersten Mount und ist deshalb
-        # race-anfaellig: fill schreibt in das alte Element, das direkt danach
-        # ausgetauscht wird (auf Stage-CI-Runner reproduzierbar, lokal grün).
-        # Anker: `visible` auf BEIDEN Feldern, plus Round-Trip-Verify durch
-        # input_value nach fill, damit ein verlorenes fill sofort auffällt.
-        notiz = page.locator("textarea[name='notiz']")
-        dauer = page.locator("input[name='dauer']")
-        notiz.wait_for(state="visible", timeout=10_000)
-        dauer.wait_for(state="visible", timeout=10_000)
-        dauer.fill("20")
-        notiz.fill("E2E-Test Kontakt")
-        # Verify: wenn HTMX nochmal swappt, ist input_value leer.
-        assert notiz.input_value() == "E2E-Test Kontakt", "HTMX-Swap hat textarea ueberschrieben"
-        assert dauer.input_value() == "20", "HTMX-Swap hat dauer ueberschrieben"
+        # document_type-Wechsel laedt die FieldTemplate-Felder per HTMX nach
+        # (hx-target=#dynamic-fields). Erst auf den Server-Response warten, dann
+        # robust fuellen — der DOM-Swap kann unter CI-Last das gerade befuellte
+        # Feld ersetzen (Refs #1013).
+        with page.expect_response(lambda r: "fields" in r.url and r.request.method == "GET"):
+            page.select_option("select[name='document_type']", label="Kontakt")
+        _fill_after_htmx_swap(page, "input[name='dauer']", "20")
+        _fill_after_htmx_swap(page, "textarea[name='notiz']", "E2E-Test Kontakt")
 
         # Kein Klientel ausgewählt → wird automatisch anonym
 

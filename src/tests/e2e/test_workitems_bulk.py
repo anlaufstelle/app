@@ -222,3 +222,35 @@ class TestRecurrence:
             f"Idempotenz verletzt: {len(ids)} distinkte WorkItems mit Title {title!r} "
             f"— erwartet ≤ 2 (Refs #596). IDs: {ids}"
         )
+
+
+class TestBulkSelectAllUI:
+    """Refs #1023: ``Alle sichtbaren auswählen`` im echten Inbox-UI.
+
+    Klickt die Select-All-Checkbox (Alpine ``workitemBulkSelect``,
+    ``@alpinejs/csp``-Build) statt — wie die übrigen Bulk-Tests — direkt zu
+    POSTen. Regression: die Bindung ``@change="toggleAll($event.target.checked)"``
+    warf im CSP-Build einen ``TypeError: …reading 'target'`` (kein ``$event``
+    im Ausdruck-Scope) → keine Item-Auswahl, keine Bulk-Toolbar. Fix: Bare-
+    Method ``@change="onToggleAll"``.
+    """
+
+    def test_select_all_marks_visible_items_and_shows_toolbar(self, staff_page, base_url):
+        page = staff_page
+        tag = uuid.uuid4().hex[:6]
+        _create_workitem(page, base_url, f"E2E-SelAll-{tag}-1")
+        _create_workitem(page, base_url, f"E2E-SelAll-{tag}-2")
+
+        page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+        boxes = page.locator("input[type=checkbox][name='workitem_ids']")
+        total = boxes.count()
+        assert total >= 2, f"Erwartet ≥2 sichtbare Auswahl-Checkboxen, gefunden {total}."
+
+        page.locator("#workitem-select-all").click()
+
+        # Fix: Select-All markiert ALLE sichtbaren Item-Checkboxen.
+        checked = sum(1 for i in range(total) if boxes.nth(i).is_checked())
+        assert checked == total, f"Select-All markierte nur {checked}/{total} Checkboxen (CSP-Bind-Bug #1023?)."
+
+        # …und die Bulk-Toolbar (x-show=hasSelection) erscheint.
+        page.locator("[x-show='hasSelection']").first.wait_for(state="visible", timeout=3000)

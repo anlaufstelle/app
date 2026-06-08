@@ -2,14 +2,14 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-26 10:50+0200\n"
+"POT-Creation-Date: 2026-06-05 14:50+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
 #: src/core/constants.py:8 src/core/models/client.py:18
-#: src/core/retention/proposals.py:27
+#: src/core/retention/proposals.py:28
 #: src/templates/core/export/report_pdf.html:49
 #: src/templates/core/retention/partials/dashboard_content.html:27
 #: src/templates/core/statistics/partials/dashboard_content.html:22
@@ -17,7 +17,7 @@ msgid "Identifiziert"
 msgstr "Identified"
 
 #: src/core/constants.py:9 src/core/models/client.py:19
-#: src/core/retention/proposals.py:28
+#: src/core/retention/proposals.py:29
 #: src/templates/core/export/report_pdf.html:53
 #: src/templates/core/retention/partials/dashboard_content.html:28
 #: src/templates/core/statistics/partials/dashboard_content.html:27
@@ -29,7 +29,7 @@ msgstr "Qualified"
 #: src/core/models/event.py:30 src/core/models/workitem.py:53
 #: src/core/models/workitem.py:160 src/core/services/system/export.py:73
 #: src/templates/core/attachments/partials/attachment_table.html:13
-#: src/templates/core/cases/form.html:34
+#: src/templates/core/cases/form.html:26
 #: src/templates/core/cases/partials/table.html:10
 #: src/templates/core/events/create.html:100
 #: src/templates/core/events/delete_confirm.html:32
@@ -37,7 +37,7 @@ msgstr "Qualified"
 #: src/templates/core/events/detail.html:58
 #: src/templates/core/events/edit.html:22
 #: src/templates/core/workitems/detail.html:116
-#: src/templates/core/workitems/form.html:117
+#: src/templates/core/workitems/form.html:74
 msgid "Person"
 msgstr "Person"
 
@@ -64,7 +64,7 @@ msgid "Ende"
 msgstr "End"
 
 #: src/core/forms/events.py:55 src/core/models/document_type.py:101
-#: src/core/models/document_type.py:334 src/core/models/event.py:36
+#: src/core/models/document_type.py:328 src/core/models/event.py:36
 #: src/core/models/quick_template.py:41 src/core/services/system/export.py:72
 #: src/templates/core/attachments/partials/attachment_table.html:12
 #: src/templates/core/events/delete_confirm.html:24
@@ -159,8 +159,8 @@ msgstr "Email address. Asked interactively if not provided."
 
 #: src/core/management/commands/create_super_admin.py:45
 msgid ""
-"Bestaetigung ueberspringen, wenn bereits ein Super-Admin existiert. Ohne "
-"--force bricht der Befehl ab."
+"Bestaetigung ueberspringen, wenn bereits ein Super-Admin existiert. Ohne --"
+"force bricht der Befehl ab."
 msgstr ""
 "Skip confirmation if a super admin already exists. Without --force the "
 "command aborts."
@@ -208,15 +208,15 @@ msgid ""
 "Es existiert bereits ein Super-Admin ('%s'). Mit --force kannst du trotzdem "
 "einen weiteren anlegen."
 msgstr ""
-"A super admin already exists ('%s'). With --force you can create another one"
-" anyway."
+"A super admin already exists ('%s'). With --force you can create another one "
+"anyway."
 
 #: src/core/management/commands/create_super_admin.py:121
 #, python-format
 msgid "Benutzer '%s' existiert bereits."
 msgstr "User '%s' already exists."
 
-#: src/core/management/commands/create_super_admin.py:147
+#: src/core/management/commands/create_super_admin.py:151
 #, python-format
 msgid "Super-Admin angelegt: %s — Login unter /login/, Bereich /system/."
 msgstr "Super admin created: %s — log in at /login/, area at /system/."
@@ -288,7 +288,7 @@ msgid "Entry-ID (Versionskette)"
 msgstr "Entry ID (version chain)"
 
 #: src/core/models/attachment.py:31 src/core/models/document_type.py:88
-#: src/core/models/document_type.py:342 src/core/models/quick_template.py:56
+#: src/core/models/document_type.py:336 src/core/models/quick_template.py:56
 #: src/core/models/time_filter.py:38
 msgid "Sortierung"
 msgstr "Sort order"
@@ -309,8 +309,8 @@ msgstr ""
 "Marks the entry as removed by the user. Physical deletion only on event "
 "delete/anonymize."
 
-#: src/core/models/attachment.py:44 src/core/models/document_type.py:210
-#: src/core/models/document_type.py:340
+#: src/core/models/attachment.py:44 src/core/models/document_type.py:207
+#: src/core/models/document_type.py:334
 msgid "Feldvorlage"
 msgstr "Field template"
 
@@ -362,8 +362,8 @@ msgstr "Created by"
 #: src/templates/core/export/client_data_pdf.html:44
 #: src/templates/core/export/client_data_pdf.html:130
 #: src/templates/core/export/client_data_pdf.html:160
-#: src/templates/core/system/dashboard.html:144
-#: src/templates/core/system/dashboard.html:203
+#: src/templates/core/system/dashboard.html:195
+#: src/templates/core/system/dashboard.html:254
 #: src/templates/core/system/legal_holds.html:69
 #: src/templates/core/system/organization.html:24
 #: src/templates/core/system/organization.html:39
@@ -432,8 +432,7 @@ msgid "Download"
 msgstr "Download"
 
 #: src/core/models/audit.py:26 src/core/models/retention.py:19
-#: src/core/models/retention.py:132
-#: src/templates/core/system/retention.html:36
+#: src/core/models/retention.py:132 src/templates/core/system/retention.html:36
 msgid "Legal Hold"
 msgstr "Legal hold"
 
@@ -554,7 +553,6 @@ msgid "Wartungsmodus deaktiviert"
 msgstr "Maintenance mode disabled"
 
 #: src/core/models/audit.py:64
-#| msgid "abgeschlossen"
 msgid "Retention-Lauf abgeschlossen"
 msgstr "Retention run completed"
 
@@ -563,22 +561,18 @@ msgid "Restore-Test verifiziert"
 msgstr "Restore test verified"
 
 #: src/core/models/audit.py:74
-#| msgid "Löschen beantragen"
 msgid "Löschung beantragt"
 msgstr "Deletion requested"
 
 #: src/core/models/audit.py:75
-#| msgid "Löschantrag wurde genehmigt."
 msgid "Löschung genehmigt"
 msgstr "Deletion approved"
 
 #: src/core/models/audit.py:76
-#| msgid "Löschantrag wurde abgelehnt."
 msgid "Löschung abgelehnt"
 msgstr "Deletion rejected"
 
 #: src/core/models/audit.py:80
-#| msgid "Statistik-Snapshots"
 msgid "Statistik-Snapshot-Lauf abgeschlossen"
 msgstr "Statistics snapshot run completed"
 
@@ -587,13 +581,12 @@ msgid "Breach-Detection-Scan abgeschlossen"
 msgstr "Breach detection scan completed"
 
 #: src/core/models/audit.py:82
-#| msgid "Episode wurde abgeschlossen."
 msgid "Statistik-View-Refresh abgeschlossen"
 msgstr "Statistics view refresh completed"
 
 #: src/core/models/audit.py:93 src/core/models/case.py:28
 #: src/core/models/client.py:34 src/core/models/document_type.py:50
-#: src/core/models/document_type.py:151 src/core/models/event.py:22
+#: src/core/models/document_type.py:148 src/core/models/event.py:22
 #: src/core/models/organization.py:41 src/core/models/quick_template.py:35
 #: src/core/models/retention.py:33 src/core/models/retention.py:93
 #: src/core/models/settings.py:20 src/core/models/time_filter.py:21
@@ -709,7 +702,7 @@ msgstr ""
 #: src/core/models/case.py:40 src/core/models/episode.py:23
 #: src/core/models/outcome.py:15 src/core/models/outcome.py:41
 #: src/core/models/workitem.py:90
-#: src/templates/core/cases/partials/goals_section.html:35
+#: src/templates/core/cases/partials/goals_section.html:36
 #: src/templates/core/cases/partials/table.html:9
 #: src/templates/core/export/client_data_pdf.html:42
 #: src/templates/core/export/client_data_pdf.html:156
@@ -808,6 +801,7 @@ msgstr "27+"
 #: src/templates/core/system/compliance.html:37
 #: src/templates/core/system/compliance.html:57
 #: src/templates/core/system/dashboard.html:88
+#: src/templates/core/system/dashboard.html:166
 #: src/templates/core/zeitstrom/index.html:36
 msgid "Unbekannt"
 msgstr "Unknown"
@@ -855,8 +849,8 @@ msgstr "Notes"
 #: src/core/models/client.py:59
 msgid ""
 "Interne Notizen, nur für Fachkräfte sichtbar. **Nicht feldverschlüsselt** — "
-"keine Klarnamen / Art-9-Daten (Gesundheit, Suchtdiagnosen, Klarname-Adresse)"
-" hier vermerken. Sensible Inhalte gehören in ein FieldTemplate mit "
+"keine Klarnamen / Art-9-Daten (Gesundheit, Suchtdiagnosen, Klarname-Adresse) "
+"hier vermerken. Sensible Inhalte gehören in ein FieldTemplate mit "
 "Sensitivity=HOCH."
 msgstr ""
 "Internal notes, visible to staff only. **Not field-encrypted** — do not "
@@ -865,11 +859,11 @@ msgstr ""
 "sensitivity=HIGH."
 
 #: src/core/models/client.py:65 src/core/models/document_type.py:87
-#: src/core/models/document_type.py:202 src/core/models/organization.py:37
+#: src/core/models/document_type.py:199 src/core/models/organization.py:37
 #: src/core/models/quick_template.py:60 src/core/models/time_filter.py:37
 #: src/templates/core/export/client_data_pdf.html:32
-#: src/templates/core/system/dashboard.html:202
-#: src/templates/core/system/dashboard.html:212
+#: src/templates/core/system/dashboard.html:253
+#: src/templates/core/system/dashboard.html:263
 #: src/templates/core/system/legal_holds.html:41
 #: src/templates/core/system/legal_holds.html:94
 #: src/templates/core/system/organization.html:38
@@ -963,11 +957,11 @@ msgstr "Counseling session"
 msgid "Vermittlung"
 msgstr "Referral"
 
-#: src/core/models/document_type.py:52 src/core/models/document_type.py:153
+#: src/core/models/document_type.py:52 src/core/models/document_type.py:150
 #: src/core/models/organization.py:13 src/core/models/organization.py:35
 #: src/templates/core/account/profile.html:14
-#: src/templates/core/system/dashboard.html:140
-#: src/templates/core/system/dashboard.html:201
+#: src/templates/core/system/dashboard.html:191
+#: src/templates/core/system/dashboard.html:252
 #: src/templates/core/system/organization.html:20
 #: src/templates/core/system/organization.html:36
 msgid "Name"
@@ -988,7 +982,7 @@ msgstr ""
 "UI grouping for statistics display and admin filters only. Does not affect "
 "export or ban/crisis logic — that is governed by the system type."
 
-#: src/core/models/document_type.py:68 src/core/models/document_type.py:172
+#: src/core/models/document_type.py:68 src/core/models/document_type.py:169
 msgid "Sensibilität"
 msgstr "Sensitivity"
 
@@ -1025,8 +1019,8 @@ msgid ""
 "Stabile Kennung für Bann-Logik, Krisen-Highlight und Jugendamt-Export. Nach "
 "Erstellung unveränderbar."
 msgstr ""
-"Stable identifier for ban logic, crisis highlight, and youth-welfare export."
-" Cannot be changed after creation.Stable identifier — used as key in "
+"Stable identifier for ban logic, crisis highlight, and youth-welfare export. "
+"Cannot be changed after creation.Stable identifier — used as key in "
 "data_json. Immutable after creation."
 
 #: src/core/models/document_type.py:102
@@ -1034,53 +1028,53 @@ msgstr ""
 msgid "Dokumentationstypen"
 msgstr "Document types"
 
-#: src/core/models/document_type.py:121
+#: src/core/models/document_type.py:120
 msgid "system_type kann nach Erstellung nicht geändert werden."
 msgstr "system_type cannot be changed after creation."
 
-#: src/core/models/document_type.py:134
+#: src/core/models/document_type.py:131
 msgid "Text"
 msgstr "Text"
 
-#: src/core/models/document_type.py:135
+#: src/core/models/document_type.py:132
 msgid "Textbereich"
 msgstr "Text area"
 
-#: src/core/models/document_type.py:136
+#: src/core/models/document_type.py:133
 msgid "Zahl"
 msgstr "Number"
 
-#: src/core/models/document_type.py:137 src/core/services/system/export.py:70
+#: src/core/models/document_type.py:134 src/core/services/system/export.py:70
 #: src/templates/core/attachments/partials/attachment_table.html:14
 msgid "Datum"
 msgstr "Date"
 
-#: src/core/models/document_type.py:138 src/core/services/system/export.py:71
+#: src/core/models/document_type.py:135 src/core/services/system/export.py:71
 msgid "Uhrzeit"
 msgstr "Time"
 
-#: src/core/models/document_type.py:139
+#: src/core/models/document_type.py:136
 msgid "Ja/Nein"
 msgstr "Yes/No"
 
-#: src/core/models/document_type.py:140
+#: src/core/models/document_type.py:137
 #: src/templates/core/events/conflict_review.html:54
 msgid "Auswahl"
 msgstr "Selection"
 
-#: src/core/models/document_type.py:141
+#: src/core/models/document_type.py:138
 msgid "Mehrfachauswahl"
 msgstr "Multi-select"
 
-#: src/core/models/document_type.py:142
+#: src/core/models/document_type.py:139
 msgid "Datei"
 msgstr "Data"
 
-#: src/core/models/document_type.py:156
+#: src/core/models/document_type.py:153
 msgid "Slug"
 msgstr "Slug"
 
-#: src/core/models/document_type.py:157
+#: src/core/models/document_type.py:154
 msgid ""
 "Stabiler Identifier — wird als Key in data_json verwendet. Nach Erstellung "
 "unveränderbar."
@@ -1089,49 +1083,48 @@ msgstr ""
 "creation.Stable identifier — used as key in data_json. Immutable after "
 "creation."
 
-#: src/core/models/document_type.py:163
+#: src/core/models/document_type.py:160
 msgid "Feldtyp"
 msgstr "Field type"
 
-#: src/core/models/document_type.py:165
+#: src/core/models/document_type.py:162
 msgid "Pflichtfeld"
 msgstr "Required field"
 
-#: src/core/models/document_type.py:166
+#: src/core/models/document_type.py:163
 msgid "Verschlüsselt"
 msgstr "Encrypted"
 
-#: src/core/models/document_type.py:173
+#: src/core/models/document_type.py:170
 msgid "Feld-Level Sichtbarkeit. Leer = erbt vom Dokumentationstyp."
 msgstr "Field-level visibility. Empty = inherits from document type."
 
-#: src/core/models/document_type.py:178
+#: src/core/models/document_type.py:175
 msgid "Optionen (JSON)"
 msgstr "Options (JSON)"
 
-#: src/core/models/document_type.py:183
+#: src/core/models/document_type.py:180
 msgid "Default-Wert"
 msgstr "Default value"
 
-#: src/core/models/document_type.py:185
+#: src/core/models/document_type.py:182
 msgid ""
 "Wird beim Neu-Anlegen eines Ereignisses vorgeblendet. Leer lassen = kein "
 "Default. Für SELECT/MULTI_SELECT: Option-Slug(s) (mehrere durch Komma "
 "trennen). Für FILE nicht unterstützt."
 msgstr ""
-"Pre-filled when creating a new event. Leave empty = no default. For "
-"SELECT/MULTI_SELECT: option slug(s), comma-separated. Not supported for "
-"FILE."
+"Pre-filled when creating a new event. Leave empty = no default. For SELECT/"
+"MULTI_SELECT: option slug(s), comma-separated. Not supported for FILE."
 
-#: src/core/models/document_type.py:193
+#: src/core/models/document_type.py:190
 msgid "Statistik-Kategorie"
 msgstr "Statistics category"
 
-#: src/core/models/document_type.py:198
+#: src/core/models/document_type.py:195
 msgid "Hilfetext"
 msgstr "Help text"
 
-#: src/core/models/document_type.py:204
+#: src/core/models/document_type.py:201
 msgid ""
 "Deaktivierte Feldvorlagen werden in Formularen nicht mehr angezeigt. "
 "Bestehende Werte in Events bleiben erhalten (Soft-Delete-Alternative zum "
@@ -1140,40 +1133,40 @@ msgstr ""
 "Disabled field templates are no longer shown in forms. Existing values in "
 "events are preserved (soft-delete alternative to hard delete)."
 
-#: src/core/models/document_type.py:211
+#: src/core/models/document_type.py:208
 msgid "Feldvorlagen"
 msgstr "Field templates"
 
-#: src/core/models/document_type.py:228
+#: src/core/models/document_type.py:225
 msgid "Name ergibt keinen gültigen Slug."
 msgstr "Name does not produce a valid slug."
 
-#: src/core/models/document_type.py:239
+#: src/core/models/document_type.py:236
 msgid "Nur a-z, 0-9 und Bindestriche erlaubt."
 msgstr "Only a-z, 0-9, and hyphens allowed."
 
-#: src/core/models/document_type.py:248
+#: src/core/models/document_type.py:245
 msgid "Felder mit Sensibilität=Hoch müssen verschlüsselt sein."
 msgstr "Fields with sensitivity=High must be encrypted."
 
-#: src/core/models/document_type.py:263
+#: src/core/models/document_type.py:260
 #: src/core/services/system/field_types.py:171
 msgid "Für Datei-Felder ist kein Default-Wert zulässig."
 msgstr "Default value is not allowed for file fields."
 
-#: src/core/models/document_type.py:278
+#: src/core/models/document_type.py:275
 msgid "Slug ist nicht gültig (nur a-z, 0-9, Bindestriche)."
 msgstr "Slug is not valid (only a-z, 0-9, hyphens)."
 
-#: src/core/models/document_type.py:296
+#: src/core/models/document_type.py:292
 msgid "Slug kann nach Erstellung nicht geändert werden."
 msgstr "Slug cannot be changed after creation."
 
-#: src/core/models/document_type.py:345
+#: src/core/models/document_type.py:339
 msgid "Dokumentationstyp-Feld"
 msgstr "Document type field"
 
-#: src/core/models/document_type.py:346
+#: src/core/models/document_type.py:340
 msgid "Dokumentationstyp-Felder"
 msgstr "Document type fields"
 
@@ -1202,7 +1195,7 @@ msgstr "Data (JSON)"
 msgid "Suchindex"
 msgstr "Search index"
 
-#: src/core/models/event.py:69 src/core/retention/proposals.py:26
+#: src/core/models/event.py:69 src/core/retention/proposals.py:27
 #: src/core/services/system/export.py:126
 #: src/templates/components/_ban_feed_card.html:12
 #: src/templates/components/_event_card.html:17
@@ -1274,7 +1267,7 @@ msgstr "Deleted by"
 
 #: src/core/models/organization.py:17 src/core/models/organization.py:33
 #: src/templates/core/system/_subnav.html:10
-#: src/templates/core/system/dashboard.html:136
+#: src/templates/core/system/dashboard.html:187
 #: src/templates/core/system/organization.html:10
 msgid "Organisation"
 msgstr "Organization"
@@ -1285,9 +1278,9 @@ msgstr "Organizations"
 
 #: src/core/models/organization.py:42
 #: src/templates/core/dashboard/role_super_admin.html:19
-#: src/templates/core/system/dashboard.html:148
-#: src/templates/core/system/dashboard.html:160
-#: src/templates/core/system/dashboard.html:196
+#: src/templates/core/system/dashboard.html:199
+#: src/templates/core/system/dashboard.html:211
+#: src/templates/core/system/dashboard.html:247
 #: src/templates/core/system/organization.html:31
 msgid "Einrichtungen"
 msgstr "Facilities"
@@ -1563,11 +1556,11 @@ msgstr "Maximum deferrals"
 
 #: src/core/models/settings.py:105
 msgid ""
-"Nach wie vielen Zurückstellungen eine endgültige Entscheidung erzwungen oder"
-" (bei Auto-Freigabe) automatisch freigegeben wird."
+"Nach wie vielen Zurückstellungen eine endgültige Entscheidung erzwungen oder "
+"(bei Auto-Freigabe) automatisch freigegeben wird."
 msgstr ""
-"After how many deferrals a final decision is enforced or (with auto-release)"
-" is automatically released."
+"After how many deferrals a final decision is enforced or (with auto-release) "
+"is automatically released."
 
 #: src/core/models/settings.py:111
 msgid "K-Anonymisierung statt Hard-Delete"
@@ -1600,8 +1593,8 @@ msgstr "Fuzzy search threshold"
 
 #: src/core/models/settings.py:132
 msgid ""
-"Mindest-Ähnlichkeit (0.0–1.0) für Fuzzy-Treffer im Pseudonym. Kleinere Werte"
-" liefern mehr, aber ungenauere Treffer; größere Werte sind strenger. "
+"Mindest-Ähnlichkeit (0.0–1.0) für Fuzzy-Treffer im Pseudonym. Kleinere Werte "
+"liefern mehr, aber ungenauere Treffer; größere Werte sind strenger. "
 "Standard: 0.3."
 msgstr ""
 "Minimum similarity (0.0–1.0) for fuzzy matches on pseudonyms. Lower = more "
@@ -1676,7 +1669,7 @@ msgid "Assistenz"
 msgstr "Assistant"
 
 #: src/core/models/user.py:28 src/templates/core/account/profile.html:22
-#: src/templates/core/system/dashboard.html:179
+#: src/templates/core/system/dashboard.html:230
 msgid "Rolle"
 msgstr "Role"
 
@@ -1695,11 +1688,11 @@ msgstr "2FA required"
 #: src/core/models/user.py:60
 msgid ""
 "Wenn aktiv, muss der Nutzer ein TOTP-Gerät einrichten, bevor er die "
-"Anwendung weiter nutzen kann. Wird automatisch gesetzt, wenn die Einrichtung"
-" 2FA für alle verlangt."
+"Anwendung weiter nutzen kann. Wird automatisch gesetzt, wenn die Einrichtung "
+"2FA für alle verlangt."
 msgstr ""
-"If active, the user must set up a TOTP device before they can continue using"
-" the application. Automatically set when the facility requires 2FA for all "
+"If active, the user must set up a TOTP device before they can continue using "
+"the application. Automatically set when the facility requires 2FA for all "
 "users."
 
 #: src/core/models/user.py:69
@@ -1803,8 +1796,7 @@ msgstr "Task = action required, Note = informational."
 
 #: src/core/models/workitem.py:81
 msgid ""
-"Offen = noch nicht begonnen, In Bearbeitung = aktiv, Erledigt = "
-"abgeschlossen"
+"Offen = noch nicht begonnen, In Bearbeitung = aktiv, Erledigt = abgeschlossen"
 msgstr "Open = not yet started, In progress = active, Completed = finished"
 
 #: src/core/models/workitem.py:87
@@ -1843,8 +1835,7 @@ msgstr "Recurrence"
 msgid ""
 "Bei Erledigung wird automatisch eine Folgeaufgabe mit neuer Frist erstellt."
 msgstr ""
-"On completion, a follow-up task with a new due date is automatically "
-"created."
+"On completion, a follow-up task with a new due date is automatically created."
 
 #: src/core/models/workitem.py:129
 msgid "Folgeaufgabe erstellt am"
@@ -1903,7 +1894,7 @@ msgstr "Deletion request"
 msgid "Löschanträge"
 msgstr "Deletion Requests"
 
-#: src/core/retention/proposals.py:29
+#: src/core/retention/proposals.py:30
 msgid "Dokumenttyp"
 msgstr "Document"
 
@@ -1957,8 +1948,8 @@ msgid ""
 "Lebenslagen). Sozialdatenschutz: SGB X §§67–85a."
 msgstr ""
 "GDPR Art. 6(1)(e) (performance of a task in the public interest) in "
-"conjunction with SGB VIII §13 (youth social work) and SGB XII (assistance in"
-" life situations). Social data protection: SGB X §§67–85a."
+"conjunction with SGB VIII §13 (youth social work) and SGB XII (assistance in "
+"life situations). Social data protection: SGB X §§67–85a."
 
 #: src/core/services/compliance/vvt.py:55
 msgid "Pseudonym (kein Klarname)"
@@ -1978,8 +1969,8 @@ msgstr "Assigned facility"
 
 #: src/core/services/compliance/vvt.py:61
 msgid ""
-"Intern: Mitarbeiter:innen der jeweiligen Einrichtung (facility-gescopt, kein"
-" Cross-Facility-Zugriff)"
+"Intern: Mitarbeiter:innen der jeweiligen Einrichtung (facility-gescopt, kein "
+"Cross-Facility-Zugriff)"
 msgstr ""
 "Internal: staff of the respective facility (facility-scoped, no cross-"
 "facility access)"
@@ -1991,13 +1982,12 @@ msgstr "Application support of the facility (audit, GDPR package)"
 #: src/core/services/compliance/vvt.py:65
 msgid ""
 "Konfigurierbar pro Kontaktstufe und Dokumentationstyp. Anonyme Kontakte: 12 "
-"Monate (danach Aggregation). Identifizierte Kontakte: 36 Monate nach letztem"
-" Kontakt. Qualifizierte Kontakte: 10 Jahre nach Falllauf-Ende (SGB VIII "
-"§97)."
+"Monate (danach Aggregation). Identifizierte Kontakte: 36 Monate nach letztem "
+"Kontakt. Qualifizierte Kontakte: 10 Jahre nach Falllauf-Ende (SGB VIII §97)."
 msgstr ""
 "Configurable per contact stage and documentation type. Anonymous contacts: "
-"12 months (aggregated thereafter). Identified contacts: 36 months after last"
-" contact. Qualified contacts: 10 years after case closure (SGB VIII §97)."
+"12 months (aggregated thereafter). Identified contacts: 36 months after last "
+"contact. Qualified contacts: 10 years after case closure (SGB VIII §97)."
 
 #: src/core/services/compliance/vvt.py:72
 msgid "Pseudonymisierung by Design"
@@ -2080,8 +2070,8 @@ msgid ""
 "Keine Weitergabe an Dritte — pseudonymisierte Statistik ggf. an "
 "Foerdermittelgeber (Jugendamt-Export)"
 msgstr ""
-"No disclosure to third parties — pseudonymized statistics may be shared with"
-" funders (youth welfare office export)"
+"No disclosure to third parties — pseudonymized statistics may be shared with "
+"funders (youth welfare office export)"
 
 #: src/core/services/compliance/vvt.py:108
 msgid ""
@@ -2165,8 +2155,8 @@ msgstr "Application support of the facility (facility audit log)"
 
 #: src/core/services/compliance/vvt.py:146
 msgid ""
-"Systemadministration (Cross-Facility-Audit ueber /system/audit/, mit eigenem"
-" SYSTEM_VIEW-Eintrag pro Aufruf)"
+"Systemadministration (Cross-Facility-Audit ueber /system/audit/, mit eigenem "
+"SYSTEM_VIEW-Eintrag pro Aufruf)"
 msgstr ""
 "System administration (cross-facility audit via /system/audit/, with a "
 "dedicated SYSTEM_VIEW entry per access)"
@@ -2187,8 +2177,8 @@ msgid "Append-Only durch DB-Konvention und RLS-Policies"
 msgstr "Append-only by DB convention and RLS policies"
 
 #: src/core/services/compliance/vvt.py:160
-msgid "Hash-Chain-Integritaet (manipulationssicher)"
-msgstr "Hash chain integrity (tamper-evident)"
+msgid "Unveraenderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE blockiert)"
+msgstr "Immutability enforced via DB trigger (UPDATE/DELETE blocked)"
 
 #: src/core/services/compliance/vvt.py:161
 msgid "Zugriff nur fuer Anwendungsbetreuung und Systemadministration"
@@ -2211,16 +2201,16 @@ msgid ""
 "Authentifizierung der Mitarbeiter:innen, Schutz gegen Brute-Force, "
 "Sitzungsverwaltung. Nachweis fuer Datenschutz-Vorfallpruefung."
 msgstr ""
-"Authentication of staff, protection against brute force, session management."
-" Evidence for data-protection incident review."
+"Authentication of staff, protection against brute force, session management. "
+"Evidence for data-protection incident review."
 
 #: src/core/services/compliance/vvt.py:175
 msgid ""
-"DSGVO Art. 6 Abs. 1 lit. b (Vertragserfuellung — Arbeitsvertrag) und Art. 32"
-" (Sicherheit der Verarbeitung)."
+"DSGVO Art. 6 Abs. 1 lit. b (Vertragserfuellung — Arbeitsvertrag) und Art. 32 "
+"(Sicherheit der Verarbeitung)."
 msgstr ""
-"GDPR Art. 6(1)(b) (performance of a contract — employment contract) and Art."
-" 32 (security of processing)."
+"GDPR Art. 6(1)(b) (performance of a contract — employment contract) and Art. "
+"32 (security of processing)."
 
 #: src/core/services/compliance/vvt.py:179
 msgid "Username, E-Mail-Adresse"
@@ -2308,8 +2298,8 @@ msgstr ""
 
 #: src/core/services/compliance/vvt.py:215
 msgid ""
-"DSGVO Art. 6 Abs. 1 lit. f (berechtigtes Interesse an Verfuegbarkeit) i.V.m."
-" Art. 32 (Sicherheit der Verarbeitung)."
+"DSGVO Art. 6 Abs. 1 lit. f (berechtigtes Interesse an Verfuegbarkeit) i.V.m. "
+"Art. 32 (Sicherheit der Verarbeitung)."
 msgstr ""
 "GDPR Art. 6(1)(f) (legitimate interest in availability) in conjunction with "
 "Art. 32 (security of processing)."
@@ -2410,8 +2400,7 @@ msgstr "Processing status and date"
 
 #: src/core/services/compliance/vvt.py:260
 msgid ""
-"Erzeugte Datenpakete (JSON, PDF) mit allen personenbezogenen Daten der "
-"Person"
+"Erzeugte Datenpakete (JSON, PDF) mit allen personenbezogenen Daten der Person"
 msgstr ""
 "Generated data packages (JSON, PDF) with all personal data of the person"
 
@@ -2434,22 +2423,20 @@ msgstr "Requester (delivery of the data package)"
 #: src/core/services/compliance/vvt.py:269
 msgid ""
 "Bearbeitungsvorgaenge: 3 Jahre nach Abschluss (Nachweis der Erfuellung). "
-"Erzeugte Datenpakete: nach Abholung loeschen. "
-"Berichtigungs-/Loeschungsvorgaenge: im AuditLog dauerhaft (siehe "
-"Verarbeitung 'AuditLog')."
+"Erzeugte Datenpakete: nach Abholung loeschen. Berichtigungs-/"
+"Loeschungsvorgaenge: im AuditLog dauerhaft (siehe Verarbeitung 'AuditLog')."
 msgstr ""
 "Processing operations: 3 years after completion (proof of fulfillment). "
 "Generated data packages: delete after retrieval. Rectification/erasure "
-"operations: permanently in the AuditLog (see 'AuditLog' processing "
-"activity)."
+"operations: permanently in the AuditLog (see 'AuditLog' processing activity)."
 
 #: src/core/services/compliance/vvt.py:275
 msgid ""
 "Berichtigung organisatorisch ueber Mitarbeiter:innen / Leitung — kein Self-"
 "Service durch Klient:in"
 msgstr ""
-"Rectification handled organizationally via staff / lead — no self-service by"
-" the person concerned"
+"Rectification handled organizationally via staff / lead — no self-service by "
+"the person concerned"
 
 #: src/core/services/compliance/vvt.py:276
 msgid "Vier-Augen-Prinzip fuer Loeschung qualifizierter Daten"
@@ -2539,8 +2526,8 @@ msgstr ""
 #: src/core/services/events/crud.py:172
 #, python-format
 msgid ""
-"Person muss mindestens die Kontaktstufe '%(required_stage)s' haben, aktuelle"
-" Stufe ist '%(actual_stage)s'."
+"Person muss mindestens die Kontaktstufe '%(required_stage)s' haben, aktuelle "
+"Stufe ist '%(actual_stage)s'."
 msgstr ""
 "Person must have at least contact stage '%(required_stage)s'; current stage "
 "is '%(actual_stage)s'."
@@ -2610,12 +2597,12 @@ msgstr "Default value '%(value)s' is not an active option slug."
 #: src/core/signals/field_template.py:47
 #, python-format
 msgid ""
-"Feldvorlage „%(name)s“ kann nicht gelöscht werden — es existieren Events mit"
-" Daten unter dem Slug „%(slug)s“. Alternativ: Feldvorlage deaktivieren "
+"Feldvorlage „%(name)s“ kann nicht gelöscht werden — es existieren Events mit "
+"Daten unter dem Slug „%(slug)s“. Alternativ: Feldvorlage deaktivieren "
 "(is_active=False)."
 msgstr ""
-"Field template \"%(name)s\" cannot be deleted — events exist with data under"
-" slug \"%(slug)s\". Alternative: deactivate the field template "
+"Field template \"%(name)s\" cannot be deleted — events exist with data under "
+"slug \"%(slug)s\". Alternative: deactivate the field template "
 "(is_active=False)."
 
 #: src/core/utils/dates.py:60 src/core/utils/dates.py:67
@@ -2640,13 +2627,13 @@ msgstr[1] "Overdue (for %(days)d days)"
 
 #: src/core/utils/dates.py:140 src/core/views/workitems.py:45
 #: src/templates/core/handover/index.html:20
-#: src/templates/core/workitems/form.html:67
+#: src/templates/core/workitems/form.html:35
 #: src/templates/core/zeitstrom/index.html:53
 msgid "Heute"
 msgstr "Today"
 
-#: src/core/utils/dates.py:148 src/templates/core/workitems/form.html:68
-#: src/templates/core/workitems/form.html:87
+#: src/core/utils/dates.py:148 src/templates/core/workitems/form.html:36
+#: src/templates/core/workitems/form.html:55
 msgid "Morgen"
 msgstr "Tomorrow"
 
@@ -2755,10 +2742,8 @@ msgid "Ereignis wurde aktualisiert."
 msgstr "Event has been updated."
 
 #: src/core/views/events.py:431
-msgid ""
-"Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."
-msgstr ""
-"Deletion request has been submitted and must be approved by a manager."
+msgid "Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."
+msgstr "Deletion request has been submitted and must be approved by a manager."
 
 #: src/core/views/events.py:434
 msgid "Ereignis wurde gelöscht."
@@ -2791,7 +2776,6 @@ msgid "Backup-Code"
 msgstr "Backup code"
 
 #: src/core/views/lockout_recovery.py:164
-#| msgid "Benutzer nicht gefunden."
 msgid "Code ungueltig oder Konto nicht gefunden."
 msgstr "Code invalid or account not found."
 
@@ -2844,9 +2828,14 @@ msgstr "No entries found."
 msgid "date_from und date_to erforderlich"
 msgstr "date_from and date_to required"
 
-#: src/core/views/sudo_mode.py:40
+#: src/core/views/sudo_mode.py:49
 msgid "Passwort ist nicht korrekt."
 msgstr "Password is incorrect."
+
+#: src/core/views/sudo_mode.py:56
+#| msgid "Passwort ist nicht korrekt."
+msgid "Der Bestätigungscode (2FA) ist nicht korrekt."
+msgstr "The confirmation code (2FA) is incorrect."
 
 #: src/core/views/system/lockouts.py:144
 msgid "Kein Benutzername uebergeben."
@@ -2866,8 +2855,8 @@ msgid ""
 "MAINTENANCE_FLAG_FILE ist nicht konfiguriert. Setze die Umgebungsvariable, "
 "um den Wartungsmodus zu nutzen."
 msgstr ""
-"MAINTENANCE_FLAG_FILE is not configured. Set the environment variable to use"
-" maintenance mode."
+"MAINTENANCE_FLAG_FILE is not configured. Set the environment variable to use "
+"maintenance mode."
 
 #: src/core/views/system/maintenance.py:62
 msgid "Wartungsmodus konnte nicht aktiviert werden (siehe Server-Log)."
@@ -2897,12 +2886,11 @@ msgstr ""
 "No organization has been created yet. Please set one up via the "
 "administration."
 
-#: src/core/views/workitem_actions.py:39 src/core/views/workitem_bulk.py:97
+#: src/core/views/workitem_actions.py:39 src/core/views/workitem_bulk.py:108
 msgid "Ungültiger Status"
 msgstr "Invalid status"
 
-#: src/core/views/workitem_actions.py:52
-#: src/core/views/workitem_actions.py:139
+#: src/core/views/workitem_actions.py:52 src/core/views/workitem_actions.py:139
 #: src/core/views/workitem_actions.py:156
 msgid "Keine Berechtigung für diese Aufgabe."
 msgstr "No permission for this task."
@@ -2919,28 +2907,33 @@ msgstr "Task has been created."
 msgid "Aufgabe wurde aktualisiert."
 msgstr "Task has been updated."
 
-#: src/core/views/workitem_bulk.py:61
+#: src/core/views/workitem_bulk.py:56
+#| msgid "Ungültiges Datum."
+msgid "Ungültige Eingabe."
+msgstr "Invalid input."
+
+#: src/core/views/workitem_bulk.py:76
 msgid "Keine Aufgaben ausgewählt."
 msgstr "No event selected."
 
-#: src/core/views/workitem_bulk.py:65
+#: src/core/views/workitem_bulk.py:80
 msgid "Keine gültigen Aufgaben gefunden."
 msgstr "No clients found"
 
-#: src/core/views/workitem_bulk.py:73
+#: src/core/views/workitem_bulk.py:88
 msgid "Keine Berechtigung für ausgewählte Aufgaben."
 msgstr "No permission for this task."
 
-#: src/core/views/workitem_bulk.py:80
+#: src/core/views/workitem_bulk.py:95
 #, python-format
 msgid "%(count)d Aufgaben aktualisiert."
 msgstr "%(count)d tasks updated."
 
-#: src/core/views/workitem_bulk.py:107
+#: src/core/views/workitem_bulk.py:121
 msgid "Ungültige Priorität"
 msgstr "Invalid status"
 
-#: src/core/views/workitem_bulk.py:124
+#: src/core/views/workitem_bulk.py:133
 msgid "Unbekannte Benutzerin/Benutzer"
 msgstr "Unknown user"
 
@@ -3009,8 +3002,8 @@ msgid ""
 "Ihre Sitzung ist abgelaufen oder das Sicherheitstoken ist ungültig. Bitte "
 "laden Sie die Seite neu und versuchen Sie es erneut."
 msgstr ""
-"Your session has expired or the security token is invalid. Please reload the"
-" page and try again."
+"Your session has expired or the security token is invalid. Please reload the "
+"page and try again."
 
 #: src/templates/403_csrf.html:15
 msgid ""
@@ -3020,11 +3013,11 @@ msgstr ""
 "Common cause: you were inactive for an extended period or logged out in "
 "another tab."
 
-#: src/templates/403_csrf.html:20
+#: src/templates/403_csrf.html:21
 msgid "Seite neu laden"
 msgstr "Reload page"
 
-#: src/templates/403_csrf.html:24 src/templates/auth/sudo_mode.html:41
+#: src/templates/403_csrf.html:25 src/templates/auth/sudo_mode.html:50
 msgid "Zur Startseite"
 msgstr "Go to home page"
 
@@ -3070,14 +3063,13 @@ msgstr ""
 "Please try again in a few minutes. Entered data is cached by the service "
 "worker and sent automatically as soon as the app is back online."
 
-#: src/templates/503.html:65
+#: src/templates/503.html:66
 msgid "Erneut versuchen"
 msgstr "Try again"
 
 #: src/templates/auth/lockout_recovery_backup_code.html:7
 #: src/templates/auth/lockout_recovery_backup_code.html:12
 #: src/templates/auth/login.html:81
-#| msgid "Backup-Code verwenden"
 msgid "Backup-Code einlösen"
 msgstr "Redeem backup code"
 
@@ -3086,13 +3078,12 @@ msgid ""
 "Wenn Sie 2FA aktiviert haben, können Sie Ihr Konto mit einem Ihrer Backup-"
 "Codes entsperren. Jeder Code ist nur einmal gültig."
 msgstr ""
-"If you have enabled 2FA, you can unlock your account with one of your backup"
-" codes. Each code is valid only once."
+"If you have enabled 2FA, you can unlock your account with one of your backup "
+"codes. Each code is valid only once."
 
 #: src/templates/auth/lockout_recovery_backup_code.html:40
 #: src/templates/auth/lockout_recovery_request.html:7
 #: src/templates/auth/lockout_recovery_request.html:12
-#| msgid "Entsperren"
 msgid "Konto entsperren"
 msgstr "Unlock account"
 
@@ -3123,19 +3114,13 @@ msgstr ""
 "Anlaufstelle account."
 
 #: src/templates/auth/lockout_recovery_email.txt:5
-#| msgid ""
-#| "Bitte setzen Sie über den folgenden Link Ihr Passwort, um Ihr Konto zu "
-#| "aktivieren:"
 msgid "Bitte klicken Sie den folgenden Link, um Ihr Konto zu entsperren:"
 msgstr "Please click the following link to unlock your account:"
 
 #: src/templates/auth/lockout_recovery_email.txt:9
-#| msgid ""
-#| "Falls Sie diese Anforderung nicht gestellt haben, können Sie diese E-Mail "
-#| "ignorieren."
 msgid ""
-"Der Link ist 30 Minuten gültig. Wenn Sie diese Anfrage nicht gestellt haben,"
-" können Sie diese E-Mail ignorieren."
+"Der Link ist 30 Minuten gültig. Wenn Sie diese Anfrage nicht gestellt haben, "
+"können Sie diese E-Mail ignorieren."
 msgstr ""
 "The link is valid for 30 minutes. If you did not make this request, you can "
 "ignore this email."
@@ -3150,8 +3135,8 @@ msgid ""
 "Der Entsperr-Link ist nicht mehr gültig oder bereits verbraucht. Sie können "
 "einen neuen Link anfordern."
 msgstr ""
-"The unlock link is no longer valid or has already been used. You can request"
-" a new link."
+"The unlock link is no longer valid or has already been used. You can request "
+"a new link."
 
 #: src/templates/auth/lockout_recovery_invalid.html:17
 #: src/templates/registration/password_reset_confirm.html:51
@@ -3159,9 +3144,6 @@ msgid "Neuen Link anfordern"
 msgstr "Request new link"
 
 #: src/templates/auth/lockout_recovery_request.html:14
-#| msgid ""
-#| "Geben Sie Ihre E-Mail-Adresse ein. Sie erhalten einen Link zum Zurücksetzen "
-#| "Ihres Passworts."
 msgid ""
 "Geben Sie Ihre E-Mail-Adresse ein. Wir senden Ihnen einen Link, mit dem Sie "
 "Ihr Konto entsperren können."
@@ -3174,20 +3156,15 @@ msgid "Link senden"
 msgstr "Send link"
 
 #: src/templates/auth/lockout_recovery_request.html:43
-#| msgid "Backup-Code verwenden"
 msgid "Stattdessen Backup-Code verwenden"
 msgstr "Use a backup code instead"
 
 #: src/templates/auth/lockout_recovery_sent.html:7
 #: src/templates/auth/lockout_recovery_sent.html:12
-#| msgid "Link senden"
 msgid "Link versendet"
 msgstr "Link sent"
 
 #: src/templates/auth/lockout_recovery_sent.html:14
-#| msgid ""
-#| "Falls ein Konto mit dieser E-Mail-Adresse existiert, wurde eine Nachricht "
-#| "mit einem Link zum Zurücksetzen des Passworts gesendet."
 msgid ""
 "Wenn ein Konto mit dieser E-Mail-Adresse existiert, erhalten Sie kurz einen "
 "Entsperr-Link."
@@ -3239,8 +3216,8 @@ msgstr "For faster access"
 
 #: src/templates/auth/login.html:103
 msgid ""
-"Teilen <span class=\"inline-block\">&#x2191;</span> → „Zum Home-Bildschirm\""
-" tippen"
+"Teilen <span class=\"inline-block\">&#x2191;</span> → „Zum Home-Bildschirm\" "
+"tippen"
 msgstr ""
 "Share <span class=\"inline-block\">&#x2191;</span> → tap \"Add to Home "
 "Screen\"Tap Share <span class=\"inline-block\">&#x2191;</span> → \"Add to "
@@ -3353,8 +3330,8 @@ msgstr ""
 
 #: src/templates/auth/mfa_settings.html:29
 msgid ""
-"Du kannst die 2FA jederzeit deaktivieren. Bei wichtigen Rollen empfehlen wir"
-" die Aktivierung."
+"Du kannst die 2FA jederzeit deaktivieren. Bei wichtigen Rollen empfehlen wir "
+"die Aktivierung."
 msgstr ""
 "You can disable 2FA at any time. We recommend keeping it active for "
 "privileged roles."
@@ -3375,16 +3352,17 @@ msgstr ""
 #, python-format
 msgid ""
 "\n"
-"                        Noch <strong>%(remaining)s</strong> von %(total)s Codes verfügbar.\n"
+"                        Noch <strong>%(remaining)s</strong> von %(total)s "
+"Codes verfügbar.\n"
 "                    "
 msgstr ""
 "\n"
-"                        <strong>%(remaining)s</strong> of %(total)s codes remaining.\n"
+"                        <strong>%(remaining)s</strong> of %(total)s codes "
+"remaining.\n"
 "                    "
 
 #: src/templates/auth/mfa_settings.html:56
-msgid ""
-"Wenige Backup-Codes übrig. Am besten jetzt einen neuen Satz generieren."
+msgid "Wenige Backup-Codes übrig. Am besten jetzt einen neuen Satz generieren."
 msgstr "Few backup codes left. Generate a fresh set now."
 
 #: src/templates/auth/mfa_settings.html:62
@@ -3487,10 +3465,26 @@ msgid "Die Bestätigung gilt fuer 15 Minuten innerhalb dieser Sitzung."
 msgstr "The confirmation is valid for 15 minutes within this session."
 
 #: src/templates/auth/sudo_mode.html:36
+msgid "Bestätigungscode (2FA)"
+msgstr "Confirmation code (2FA)"
+
+#: src/templates/auth/sudo_mode.html:38
+#| msgid "Backup-Code"
+msgid "OTP oder Backup-Code"
+msgstr "OTP or backup code"
+
+#: src/templates/auth/sudo_mode.html:40
+#| msgid "Gib den 6-stelligen Code aus deiner Authenticator-App ein."
+msgid ""
+"Geben Sie den aktuellen 6-stelligen Code Ihrer Authenticator-App oder einen "
+"Backup-Code ein."
+msgstr "Enter the current 6-digit code from your authenticator app or a backup code."
+
+#: src/templates/auth/sudo_mode.html:45
 msgid "Bestätigen und fortfahren"
 msgstr "Confirm and continue"
 
-#: src/templates/auth/sudo_mode.html:41
+#: src/templates/auth/sudo_mode.html:50
 msgid "Brechen Sie ab und kehren Sie zurück:"
 msgstr "Cancel and return:"
 
@@ -3802,11 +3796,11 @@ msgid "Neue Episode"
 msgstr "New Episode"
 
 #: src/templates/core/cases/episode_form.html:33
-#: src/templates/core/cases/form.html:106
-#: src/templates/core/cases/partials/goals_section.html:41
-#: src/templates/core/clients/form.html:40
+#: src/templates/core/cases/form.html:82
+#: src/templates/core/cases/partials/goals_section.html:42
+#: src/templates/core/clients/form.html:25
 #: src/templates/core/events/create.html:185
-#: src/templates/core/workitems/form.html:156
+#: src/templates/core/workitems/form.html:105
 msgid "Speichern"
 msgstr "Save"
 
@@ -3815,17 +3809,16 @@ msgid "Episode erstellen"
 msgstr "Create Episode"
 
 #: src/templates/core/cases/episode_form.html:35
-#: src/templates/core/cases/form.html:109
-#: src/templates/core/cases/form.html:111
-#: src/templates/core/cases/partials/goals_section.html:44
+#: src/templates/core/cases/form.html:85 src/templates/core/cases/form.html:87
+#: src/templates/core/cases/partials/goals_section.html:45
 #: src/templates/core/clients/delete_request_confirm.html:33
-#: src/templates/core/clients/form.html:43
-#: src/templates/core/clients/form.html:45
+#: src/templates/core/clients/form.html:28
+#: src/templates/core/clients/form.html:30
 #: src/templates/core/events/create.html:187
 #: src/templates/core/events/delete_confirm.html:62
 #: src/templates/core/events/edit.html:100
 #: src/templates/core/retention/partials/proposal_card.html:84
-#: src/templates/core/workitems/form.html:158
+#: src/templates/core/workitems/form.html:107
 msgid "Abbrechen"
 msgstr "Cancel"
 
@@ -3839,18 +3832,18 @@ msgstr "Edit Case"
 msgid "Neuer Fall"
 msgstr "New Case"
 
-#: src/templates/core/cases/form.html:45
+#: src/templates/core/cases/form.html:37
 #: src/templates/core/events/create.html:113
-#: src/templates/core/workitems/form.html:124
+#: src/templates/core/workitems/form.html:81
 msgid "Pseudonym eingeben..."
 msgstr "Enter pseudonym..."
 
-#: src/templates/core/cases/form.html:46
+#: src/templates/core/cases/form.html:38
 #: src/templates/core/events/create.html:114
 msgid "Person suchen"
 msgstr "Search person"
 
-#: src/templates/core/cases/form.html:106
+#: src/templates/core/cases/form.html:82
 msgid "Fall erstellen"
 msgstr "Create Case"
 
@@ -3858,11 +3851,11 @@ msgstr "Create Case"
 msgid "Titel suchen..."
 msgstr "Search title..."
 
-#: src/templates/core/cases/list.html:33
+#: src/templates/core/cases/list.html:35
 msgid "Status filtern"
 msgstr "Filter by status"
 
-#: src/templates/core/cases/list.html:38
+#: src/templates/core/cases/list.html:41
 msgid "Alle Status"
 msgstr "All statuses"
 
@@ -3896,47 +3889,52 @@ msgstr "No contacts assigned."
 msgid "Zuordnen"
 msgstr "Assign"
 
-#: src/templates/core/cases/partials/goals_section.html:38
+#: src/templates/core/cases/partials/goals_section.html:39
 msgid "Beschreibung (optional)"
 msgstr "Description (optional)"
 
-#: src/templates/core/cases/partials/goals_section.html:52
+#: src/templates/core/cases/partials/goals_section.html:53
 msgid "erreicht"
 msgstr "reached"
 
-#: src/templates/core/cases/partials/goals_section.html:56
+#: src/templates/core/cases/partials/goals_section.html:57
 msgid "offen"
 msgstr "open"
 
-#: src/templates/core/cases/partials/goals_section.html:71
+#: src/templates/core/cases/partials/goals_section.html:72
 msgid "Nicht erreicht"
 msgstr "Not achieved"
 
-#: src/templates/core/cases/partials/goals_section.html:81
+#: src/templates/core/cases/partials/goals_section.html:82
 msgid "Ziel erreicht"
 msgstr "Goal achieved"
 
-#: src/templates/core/cases/partials/goals_section.html:99
+#: src/templates/core/cases/partials/goals_section.html:100
 msgid "Meilenstein umschalten"
 msgstr "Delete Milestone"
 
 #: src/templates/core/cases/partials/goals_section.html:119
+#| msgid "Meilenstein löschen"
+msgid "Meilenstein wirklich löschen?"
+msgstr "Really delete this milestone?"
+
+#: src/templates/core/cases/partials/goals_section.html:122
 msgid "Meilenstein löschen"
 msgstr "Delete Milestone"
 
-#: src/templates/core/cases/partials/goals_section.html:137
+#: src/templates/core/cases/partials/goals_section.html:140
 msgid "Neuer Meilenstein"
 msgstr "New Milestone"
 
-#: src/templates/core/cases/partials/goals_section.html:146
+#: src/templates/core/cases/partials/goals_section.html:149
 msgid "Noch keine Wirkungsziele vorhanden."
 msgstr "No impact goals yet."
 
-#: src/templates/core/cases/partials/goals_section.html:157
+#: src/templates/core/cases/partials/goals_section.html:160
 msgid "Neues Wirkungsziel"
 msgstr "New Impact Goal"
 
-#: src/templates/core/cases/partials/goals_section.html:160
+#: src/templates/core/cases/partials/goals_section.html:163
 msgid "Hinzufügen"
 msgstr "Add"
 
@@ -3958,8 +3956,8 @@ msgstr "Request person deletion"
 #, python-format
 msgid ""
 "Vier-Augen-Prinzip — Ihr Antrag geht zur Genehmigung an die Leitung. Nach "
-"Genehmigung wird <strong>%(pseudonym)s</strong> in den Papierkorb verschoben"
-" und nach Ablauf der Aufbewahrungsfrist automatisch anonymisiert."
+"Genehmigung wird <strong>%(pseudonym)s</strong> in den Papierkorb verschoben "
+"und nach Ablauf der Aufbewahrungsfrist automatisch anonymisiert."
 msgstr ""
 "Four-eyes principle — your request goes to the lead for approval. After "
 "approval, <strong>%(pseudonym)s</strong> is moved to the trash and "
@@ -4105,7 +4103,7 @@ msgstr "Edit person"
 msgid "Neue Person"
 msgstr "New person"
 
-#: src/templates/core/clients/form.html:40
+#: src/templates/core/clients/form.html:25
 #: src/templates/partials/_navigation_desktop.html:54
 #: src/templates/partials/_navigation_mobile.html:27
 msgid "Person anlegen"
@@ -4115,19 +4113,19 @@ msgstr "Create person"
 msgid "Pseudonym suchen..."
 msgstr "Search pseudonym..."
 
-#: src/templates/core/clients/list.html:35
+#: src/templates/core/clients/list.html:37
 msgid "Kontaktstufe filtern"
 msgstr "Filter by contact stage"
 
-#: src/templates/core/clients/list.html:40
+#: src/templates/core/clients/list.html:43
 msgid "Alle Stufen"
 msgstr "All stages"
 
-#: src/templates/core/clients/list.html:45
+#: src/templates/core/clients/list.html:48
 msgid "Altersgruppe filtern"
 msgstr "Filter by age group"
 
-#: src/templates/core/clients/list.html:50
+#: src/templates/core/clients/list.html:54
 msgid "Alle Altersgruppen"
 msgstr "All age groups"
 
@@ -4146,8 +4144,8 @@ msgstr "Loading offline data…"
 
 #: src/templates/core/clients/offline_detail.html:28
 msgid ""
-"Diese Person wurde nicht für die Offline-Nutzung vorbereitet oder der lokale"
-" Cache ist leer."
+"Diese Person wurde nicht für die Offline-Nutzung vorbereitet oder der lokale "
+"Cache ist leer."
 msgstr ""
 "This person has not been prepared for offline use or the local cache is "
 "empty."
@@ -4206,8 +4204,8 @@ msgid ""
 "(Settings.client_trash_days) anonymisiert enforce_retention diese "
 "automatisch."
 msgstr ""
-"Soft-deleted people. After the retention period (Settings.client_trash_days)"
-" expires, enforce_retention anonymizes them automatically."
+"Soft-deleted people. After the retention period (Settings.client_trash_days) "
+"expires, enforce_retention anonymizes them automatically."
 
 #: src/templates/core/clients/trash.html:33
 msgid "Wiederherstellen"
@@ -4229,39 +4227,32 @@ msgstr "Users, security and configuration at a glance."
 #: src/templates/core/dashboard/role_facility_admin.html:12
 #: src/templates/core/dashboard/role_lead.html:12
 #: src/templates/core/dashboard/role_staff.html:12
-#| msgid "Zeitstrom"
 msgid "Zum Zeitstrom"
 msgstr "To the timeline"
 
 #: src/templates/core/dashboard/role_facility_admin.html:17
-#| msgid "Benutzername: "
 msgid "Benutzer ohne MFA"
 msgstr "Users without MFA"
 
 #: src/templates/core/dashboard/role_facility_admin.html:19
-#| msgid "Von"
 msgid "von"
 msgstr "of"
 
 #: src/templates/core/dashboard/role_facility_admin.html:19
-#| msgid "Alle Benutzer"
 msgid "aktiven Benutzern"
 msgstr "active users"
 
 #: src/templates/core/dashboard/role_facility_admin.html:22
 #: src/templates/core/dashboard/role_facility_admin.html:30
-#| msgid "Konfigurationsdaten der Installation"
 msgid "Konfigurations-Warnungen"
 msgstr "Configuration warnings"
 
 #: src/templates/core/dashboard/role_facility_admin.html:24
-#| msgid "Hinweis"
 msgid "aktive Hinweise"
 msgstr "active notices"
 
 #: src/templates/core/dashboard/role_lead.html:4
 #: src/templates/core/dashboard/role_lead.html:9
-#| msgid "Wartungsarbeiten"
 msgid "Leitungs-Arbeitszentrale"
 msgstr "Lead work center"
 
@@ -4271,7 +4262,6 @@ msgstr "GDPR workflows, retention and statistics at a glance."
 
 #: src/templates/core/dashboard/role_lead.html:19
 #: src/templates/core/dashboard/role_lead.html:24
-#| msgid "Ausstehend"
 msgid "ausstehend"
 msgstr "pending"
 
@@ -4284,19 +4274,16 @@ msgid "Statistik"
 msgstr "Statistics"
 
 #: src/templates/core/dashboard/role_lead.html:35
-#| msgid "Snapshot"
 msgid "letzter Snapshot"
 msgstr "last snapshot"
 
 #: src/templates/core/dashboard/role_lead.html:38
-#| msgid "Snapshot"
 msgid "noch kein Snapshot"
 msgstr "no snapshot yet"
 
 #: src/templates/core/dashboard/role_staff.html:4
 #: src/templates/core/dashboard/role_staff.html:9
 #: src/templates/partials/_navigation_desktop.html:72
-#| msgid "Arbeitsauftrag"
 msgid "Arbeitszentrale"
 msgstr "Work center"
 
@@ -4305,32 +4292,26 @@ msgid "Heutige Aufgaben und Kontakte auf einen Blick."
 msgstr "Today's tasks and contacts at a glance."
 
 #: src/templates/core/dashboard/role_staff.html:17
-#| msgid "Neuer Kontakt"
 msgid "Heutige Kontakte"
 msgstr "Today's contacts"
 
 #: src/templates/core/dashboard/role_staff.html:19
-#| msgid "Ereignisse"
 msgid "Ereignisse heute"
 msgstr "Events today"
 
 #: src/templates/core/dashboard/role_staff.html:24
-#| msgid "In Bearbeitung"
 msgid "Offen / In Bearbeitung"
 msgstr "Open / In progress"
 
 #: src/templates/core/dashboard/role_staff.html:27
-#| msgid "Fall bearbeiten"
 msgid "Zuletzt bearbeitet"
 msgstr "Recently edited"
 
 #: src/templates/core/dashboard/role_staff.html:29
-#| msgid "Person aktualisiert"
 msgid "Personen kürzlich aktualisiert"
 msgstr "People recently updated"
 
 #: src/templates/core/dashboard/role_staff.html:35
-#| msgid "Keine offenen Aufgaben"
 msgid "Meine offenen Aufgaben"
 msgstr "My open tasks"
 
@@ -4339,7 +4320,6 @@ msgid "ohne Termin"
 msgstr "no date"
 
 #: src/templates/core/dashboard/role_staff.html:51
-#| msgid "Zuletzt besuchte Personen"
 msgid "Zuletzt bearbeitete Personen"
 msgstr "Recently edited people"
 
@@ -4353,7 +4333,6 @@ msgid "Cross-Facility-Status und Audit-Aktivität."
 msgstr "Cross-facility status and audit activity."
 
 #: src/templates/core/dashboard/role_super_admin.html:12
-#| msgid "Systembereich"
 msgid "Detail: Systembereich"
 msgstr "Detail: system area"
 
@@ -4362,7 +4341,6 @@ msgid "Mandanten"
 msgstr "Tenants"
 
 #: src/templates/core/dashboard/role_super_admin.html:22
-#| msgid "Benutzer deaktiviert"
 msgid "Benutzer aktiv"
 msgstr "active users"
 
@@ -4380,7 +4358,6 @@ msgid "in den letzten 24 Stunden"
 msgstr "in the last 24 hours"
 
 #: src/templates/core/dashboard/role_super_admin.html:32
-#| msgid "Kritisch"
 msgid "Kritische Events"
 msgstr "Critical events"
 
@@ -4673,10 +4650,10 @@ msgid ""
 "Dieses Dokument enthält alle zu Ihrer Person gespeicherten Daten gemäß Art. "
 "15 DSGVO (Auskunftsrecht) und Art. 20 DSGVO (Datenübertragbarkeit)."
 msgstr ""
-"This document contains all personal data stored about you under Art. 15 GDPR"
-" (right of access) and Art. 20 GDPR (data portability).This document "
-"contains all data stored about you pursuant to Art. 15 GDPR (right of "
-"access) and Art. 20 GDPR (data portability)."
+"This document contains all personal data stored about you under Art. 15 GDPR "
+"(right of access) and Art. 20 GDPR (data portability).This document contains "
+"all data stored about you pursuant to Art. 15 GDPR (right of access) and "
+"Art. 20 GDPR (data portability)."
 
 #: src/templates/core/export/client_data_pdf.html:27
 msgid "1. Stammdaten"
@@ -4776,7 +4753,7 @@ msgstr "Services by Category"
 #: src/templates/core/statistics/external_report.html:98
 #: src/templates/core/statistics/partials/dashboard_content.html:138
 #: src/templates/core/statistics/partials/dashboard_content.html:179
-#: src/templates/core/system/dashboard.html:180
+#: src/templates/core/system/dashboard.html:231
 msgid "Anzahl"
 msgstr "Count"
 
@@ -5025,11 +5002,11 @@ msgstr "Will be deleted on next run"
 msgid "Suche"
 msgstr "Search"
 
-#: src/templates/core/search/index.html:13
+#: src/templates/core/search/index.html:14
 msgid "Pseudonym oder Suchbegriff eingeben..."
 msgstr "Enter pseudonym or search term..."
 
-#: src/templates/core/search/index.html:14
+#: src/templates/core/search/index.html:15
 msgid "Suchfeld"
 msgstr "Search field"
 
@@ -5064,7 +5041,6 @@ msgid "Suchbegriff eingeben, um Personen und Ereignisse zu finden."
 msgstr "Enter a search term to find people and events."
 
 #: src/templates/core/statistics/external_report.html:4
-#| msgid "Erreicht"
 msgid "Externer Bericht"
 msgstr "External report"
 
@@ -5087,12 +5063,10 @@ msgid "Zeitraum"
 msgstr "Period"
 
 #: src/templates/core/statistics/external_report.html:27
-#| msgid "K-Anonymitäts-Schwelle"
 msgid "K-Anonymität-Schwelle"
 msgstr "K-anonymity threshold"
 
 #: src/templates/core/statistics/external_report.html:31
-#| msgid "Ersetzt am"
 msgid "Erzeugt am"
 msgstr "Generated on"
 
@@ -5100,20 +5074,20 @@ msgstr "Generated on"
 #, python-format
 msgid ""
 "\n"
-"        Aggregate mit weniger als %(threshold)s Datensätzen werden zum Schutz der Anonymität unterdrückt (Anzeige als „unterdrückt\").\n"
+"        Aggregate mit weniger als %(threshold)s Datensätzen werden zum "
+"Schutz der Anonymität unterdrückt (Anzeige als „unterdrückt\").\n"
 "        "
 msgstr ""
 "\n"
-"        Aggregates with fewer than %(threshold)s records are suppressed to protect anonymity (shown as „suppressed“).\n"
+"        Aggregates with fewer than %(threshold)s records are suppressed to "
+"protect anonymity (shown as „suppressed“).\n"
 "        "
 
 #: src/templates/core/statistics/external_report.html:43
-#| msgid "Anzahl"
 msgid "Kennzahlen"
 msgstr "Key figures"
 
 #: src/templates/core/statistics/external_report.html:46
-#| msgid "Kontakte heute"
 msgid "Kontakte gesamt"
 msgstr "Total contacts"
 
@@ -5125,23 +5099,19 @@ msgstr "Distinct people"
 #: src/templates/core/statistics/external_report.html:53
 #: src/templates/core/statistics/external_report.html:77
 #: src/templates/core/statistics/external_report.html:107
-#| msgid "Zurück"
 msgid "unterdrückt"
 msgstr "suppressed"
 
 #: src/templates/core/statistics/external_report.html:63
-#| msgid "Dokumentationstyp"
 msgid "Nach Dokumentationstyp"
 msgstr "By documentation type"
 
 #: src/templates/core/statistics/external_report.html:85
 #: src/templates/core/statistics/external_report.html:115
-#| msgid "Keine Daten im gewählten Zeitraum."
 msgid "Keine Daten im Zeitraum."
 msgstr "No data in the period."
 
 #: src/templates/core/statistics/external_report.html:93
-#| msgid "Altersgruppe"
 msgid "Nach Altersgruppe"
 msgstr "By age group"
 
@@ -5171,8 +5141,8 @@ msgid ""
 "Monatssnapshots summiert. Personen, die in mehreren Monaten erscheinen, "
 "werden mehrfach gezählt."
 msgstr ""
-"Approximation: for ranges beyond one month, people are summed across monthly"
-" snapshots. People appearing in multiple months are counted multiple times."
+"Approximation: for ranges beyond one month, people are summed across monthly "
+"snapshots. People appearing in multiple months are counted multiple times."
 
 #: src/templates/core/statistics/partials/dashboard_content.html:44
 msgid "Personen mit mindestens einem Kontakt im Zeitraum"
@@ -5336,23 +5306,25 @@ msgstr "GDPR/security status of the installation. Aggregated from"
 #: src/templates/core/system/dashboard.html:60
 #: src/templates/core/system/dashboard.html:88
 #: src/templates/core/system/dashboard.html:114
+#: src/templates/core/system/dashboard.html:160
 msgid "OK"
 msgstr "OK"
 
 #: src/templates/core/system/compliance.html:29
-#| msgid "Warnung"
 msgid "Warnungen"
 msgstr "Warnings"
 
 #: src/templates/core/system/compliance.html:33
 #: src/templates/core/system/compliance.html:55
 #: src/templates/core/system/dashboard.html:88
+#: src/templates/core/system/dashboard.html:164
 msgid "Kritisch"
 msgstr "Critical"
 
 #: src/templates/core/system/compliance.html:53
 #: src/templates/core/system/dashboard.html:60
 #: src/templates/core/system/dashboard.html:88
+#: src/templates/core/system/dashboard.html:162
 msgid "Warnung"
 msgstr "Warning"
 
@@ -5458,28 +5430,55 @@ msgstr "App %(app)s · Python %(py)s · Django %(dj)s"
 msgid "Info"
 msgstr "Info"
 
-#: src/templates/core/system/dashboard.html:153
+#: src/templates/core/system/dashboard.html:137
+msgid "Hintergrundjobs"
+msgstr "Background jobs"
+
+#: src/templates/core/system/dashboard.html:142
+#, python-format
+msgid "%(ok)s/%(total)s laufen"
+msgstr "%(ok)s/%(total)s running"
+
+#: src/templates/core/system/dashboard.html:147
+#, python-format
+msgid "⚠ %(overdue)s überfällig"
+msgid_plural "⚠ %(overdue)s überfällig"
+msgstr[0] "⚠ %(overdue)s overdue"
+msgstr[1] "⚠ %(overdue)s overdue"
+
+#: src/templates/core/system/dashboard.html:152
+#, python-format
+msgid "%(unknown)s ohne Lauf-Marker"
+msgid_plural "%(unknown)s ohne Lauf-Marker"
+msgstr[0] "%(unknown)s without run marker"
+msgstr[1] "%(unknown)s without run markers"
+
+#: src/templates/core/system/dashboard.html:180
+msgid "Details im Compliance-Dashboard"
+msgstr "Details in the compliance dashboard"
+
+#: src/templates/core/system/dashboard.html:204
 msgid "Es ist noch keine Organisation angelegt."
 msgstr "No organisation has been set up yet."
 
-#: src/templates/core/system/dashboard.html:164
+#: src/templates/core/system/dashboard.html:215
 msgid "Benutzer (gesamt)"
 msgstr "Users (total)"
 
-#: src/templates/core/system/dashboard.html:168
+#: src/templates/core/system/dashboard.html:219
 msgid "Audit-Log-Einträge"
 msgstr "Audit log entries"
 
-#: src/templates/core/system/dashboard.html:175
+#: src/templates/core/system/dashboard.html:226
 msgid "Benutzer pro Rolle"
 msgstr "Users per role"
 
-#: src/templates/core/system/dashboard.html:214
+#: src/templates/core/system/dashboard.html:265
 #: src/templates/core/system/organization.html:51
 msgid "Inaktiv"
 msgstr "Inactive"
 
-#: src/templates/core/system/dashboard.html:223
+#: src/templates/core/system/dashboard.html:274
 #: src/templates/core/system/organization.html:60
 #: src/templates/core/system/retention.html:99
 msgid "Keine Einrichtungen vorhanden."
@@ -5496,12 +5495,14 @@ msgstr "Legal holds (all facilities)"
 #: src/templates/core/system/legal_holds.html:16
 msgid ""
 "\n"
-"    Cross-Facility-Übersicht aller Legal Holds. Read-Only — Anlegen und Aufheben von Legal\n"
+"    Cross-Facility-Übersicht aller Legal Holds. Read-Only — Anlegen und "
+"Aufheben von Legal\n"
 "    Holds erfolgt im Facility-Kontext der jeweiligen Einrichtung.\n"
 "    "
 msgstr ""
 "\n"
-"    Cross-facility overview of all legal holds. Read-only — creating and lifting legal\n"
+"    Cross-facility overview of all legal holds. Read-only — creating and "
+"lifting legal\n"
 "    holds happens in the facility context of the respective facility.\n"
 "    "
 
@@ -5530,11 +5531,15 @@ msgstr "Locked accounts (system)"
 #, python-format
 msgid ""
 "\n"
-"    Konten gelten als gesperrt, sobald in den letzten %(window)s Minuten %(threshold)s oder mehr Fehlanmeldungen seit der letzten Entsperrung registriert wurden. Die Entsperrung wird im Audit-Log protokolliert.\n"
+"    Konten gelten als gesperrt, sobald in den letzten %(window)s Minuten "
+"%(threshold)s oder mehr Fehlanmeldungen seit der letzten Entsperrung "
+"registriert wurden. Die Entsperrung wird im Audit-Log protokolliert.\n"
 "    "
 msgstr ""
 "\n"
-"    Accounts are considered locked once %(threshold)s or more failed logins have been registered in the last %(window)s minutes since the last unlock. Unlocking is logged in the audit log.\n"
+"    Accounts are considered locked once %(threshold)s or more failed logins "
+"have been registered in the last %(window)s minutes since the last unlock. "
+"Unlocking is logged in the audit log.\n"
 "    "
 
 #: src/templates/core/system/lockouts.html:29
@@ -5568,15 +5573,21 @@ msgstr "Maintenance mode (system)"
 #: src/templates/core/system/maintenance.html:17
 msgid ""
 "\n"
-"    Im Wartungsmodus antwortet die Anwendung mit HTTP 503 und einer Wartungsseite.\n"
-"    Whitelist-Pfade (Health-Endpoint, statische Dateien) und ggf. konfigurierte Ops-IPs\n"
-"    bleiben weiterhin erreichbar. Der Toggle wirkt sofort, sobald die Flag-Datei geschrieben wurde.\n"
+"    Im Wartungsmodus antwortet die Anwendung mit HTTP 503 und einer "
+"Wartungsseite.\n"
+"    Whitelist-Pfade (Health-Endpoint, statische Dateien) und ggf. "
+"konfigurierte Ops-IPs\n"
+"    bleiben weiterhin erreichbar. Der Toggle wirkt sofort, sobald die Flag-"
+"Datei geschrieben wurde.\n"
 "    "
 msgstr ""
 "\n"
-"    In maintenance mode the application responds with HTTP 503 and a maintenance page.\n"
-"    Whitelisted paths (health endpoint, static files) and any configured ops IPs\n"
-"    remain reachable. The toggle takes effect immediately once the flag file is written.\n"
+"    In maintenance mode the application responds with HTTP 503 and a "
+"maintenance page.\n"
+"    Whitelisted paths (health endpoint, static files) and any configured ops "
+"IPs\n"
+"    remain reachable. The toggle takes effect immediately once the flag file "
+"is written.\n"
 "    "
 
 #: src/templates/core/system/maintenance.html:26
@@ -5588,8 +5599,8 @@ msgid ""
 "Setze die Umgebungsvariable MAINTENANCE_FLAG_FILE auf einen schreibbaren "
 "Pfad, um den Wartungsmodus zu nutzen. Toggle ist aktuell nicht möglich."
 msgstr ""
-"Set the environment variable MAINTENANCE_FLAG_FILE to a writable path to use"
-" maintenance mode. Toggling is currently not possible."
+"Set the environment variable MAINTENANCE_FLAG_FILE to a writable path to use "
+"maintenance mode. Toggling is currently not possible."
 
 #: src/templates/core/system/maintenance.html:37
 msgid "Wartungsmodus ist aktiv"
@@ -5647,13 +5658,16 @@ msgstr "Retention (all facilities)"
 #: src/templates/core/system/retention.html:16
 msgid ""
 "\n"
-"    Cross-Facility-Aggregation der Löschvorschläge je Status. Read-Only — Aktionen\n"
-"    (Freigabe, Zurückstellen, Ablehnen) laufen weiterhin im Facility-Kontext der\n"
+"    Cross-Facility-Aggregation der Löschvorschläge je Status. Read-Only — "
+"Aktionen\n"
+"    (Freigabe, Zurückstellen, Ablehnen) laufen weiterhin im Facility-Kontext "
+"der\n"
 "    jeweiligen Einrichtung.\n"
 "    "
 msgstr ""
 "\n"
-"    Cross-facility aggregation of deletion proposals by status. Read-only — actions\n"
+"    Cross-facility aggregation of deletion proposals by status. Read-only — "
+"actions\n"
 "    (approve, defer, reject) still run in the facility context of the\n"
 "    respective facility.\n"
 "    "
@@ -5684,15 +5698,20 @@ msgstr "Register of processing activities"
 #: src/templates/core/system/vvt.html:42
 msgid ""
 "\n"
-"    Verzeichnis der Verarbeitungstätigkeiten gemäß DSGVO Art. 30 Abs. 1. Zweck, Rechtsgrundlage,\n"
-"    Datenkategorien, Empfänger, Speicherfristen sowie technisch-organisatorische Maßnahmen pro Tätigkeit.\n"
+"    Verzeichnis der Verarbeitungstätigkeiten gemäß DSGVO Art. 30 Abs. 1. "
+"Zweck, Rechtsgrundlage,\n"
+"    Datenkategorien, Empfänger, Speicherfristen sowie technisch-"
+"organisatorische Maßnahmen pro Tätigkeit.\n"
 "    Read-Only — der Inhalt wird im Quellcode der Installation gepflegt.\n"
 "    "
 msgstr ""
 "\n"
-"    Records of processing activities pursuant to GDPR Art. 30(1). Purpose, legal basis,\n"
-"    data categories, recipients, retention periods, and technical and organizational measures per activity.\n"
-"    Read-only — the content is maintained in the installation's source code.\n"
+"    Records of processing activities pursuant to GDPR Art. 30(1). Purpose, "
+"legal basis,\n"
+"    data categories, recipients, retention periods, and technical and "
+"organizational measures per activity.\n"
+"    Read-only — the content is maintained in the installation's source "
+"code.\n"
 "    "
 
 #: src/templates/core/system/vvt.html:61
@@ -5748,13 +5767,13 @@ msgstr "Back to inbox"
 msgid "Aufgabe bearbeiten"
 msgstr "Edit Task"
 
-#: src/templates/core/workitems/form.html:69
-#: src/templates/core/workitems/form.html:88
+#: src/templates/core/workitems/form.html:37
+#: src/templates/core/workitems/form.html:56
 msgid "Nächste Woche"
 msgstr "Next week"
 
-#: src/templates/core/workitems/form.html:70
-#: src/templates/core/workitems/form.html:89
+#: src/templates/core/workitems/form.html:38
+#: src/templates/core/workitems/form.html:57
 msgid "In 2 Wochen"
 msgstr "In 2 weeks"
 
@@ -5923,8 +5942,8 @@ msgstr "Username"
 
 #: src/templates/registration/invite_email.html:12
 msgid ""
-"Der Link ist aus Sicherheitsgründen zeitlich begrenzt gültig. Falls der Link"
-" abgelaufen ist, kann ein Administrator eine neue Einladung versenden."
+"Der Link ist aus Sicherheitsgründen zeitlich begrenzt gültig. Falls der Link "
+"abgelaufen ist, kann ein Administrator eine neue Einladung versenden."
 msgstr ""
 "For security reasons the link is valid only for a limited time. If the link "
 "has expired, an administrator can send a new invitation."
@@ -5962,8 +5981,8 @@ msgid ""
 "neuen Passwort anmelden."
 msgstr ""
 "Your password has been changed successfully. You can now sign in with your "
-"new password.Your password has been changed successfully. You can now log in"
-" with your new password."
+"new password.Your password has been changed successfully. You can now log in "
+"with your new password."
 
 #: src/templates/registration/password_reset_complete.html:21
 msgid "Zur Anmeldung"
@@ -5983,8 +6002,8 @@ msgid ""
 "Der Link zum Zurücksetzen des Passworts ist ungültig oder abgelaufen. Bitte "
 "fordern Sie einen neuen Link an."
 msgstr ""
-"The password reset link is invalid or expired. Please request a new link.The"
-" password reset link is invalid or has expired. Please request a new link."
+"The password reset link is invalid or expired. Please request a new link.The "
+"password reset link is invalid or has expired. Please request a new link."
 
 #: src/templates/registration/password_reset_done.html:7
 #: src/templates/registration/password_reset_done.html:12
@@ -6037,29 +6056,5 @@ msgstr ""
 "password.Enter your email address. You will receive a link to reset your "
 "password."
 
-#: src/templates/core/system/dashboard.html:137
-msgid "Hintergrundjobs"
-msgstr "Background jobs"
-
-#: src/templates/core/system/dashboard.html:142
-#, python-format
-msgid "%(ok)s/%(total)s laufen"
-msgstr "%(ok)s/%(total)s running"
-
-#: src/templates/core/system/dashboard.html:147
-#, python-format
-msgid "⚠ %(overdue)s überfällig"
-msgid_plural "⚠ %(overdue)s überfällig"
-msgstr[0] "⚠ %(overdue)s overdue"
-msgstr[1] "⚠ %(overdue)s overdue"
-
-#: src/templates/core/system/dashboard.html:152
-#, python-format
-msgid "%(unknown)s ohne Lauf-Marker"
-msgid_plural "%(unknown)s ohne Lauf-Marker"
-msgstr[0] "%(unknown)s without run marker"
-msgstr[1] "%(unknown)s without run markers"
-
-#: src/templates/core/system/dashboard.html:180
-msgid "Details im Compliance-Dashboard"
-msgstr "Details in the compliance dashboard"
+#~ msgid "Hash-Chain-Integritaet (manipulationssicher)"
+#~ msgstr "Hash chain integrity (tamper-evident)"

@@ -12,6 +12,7 @@ Deckt den Browser-Round-Trip ab, der in den reinen Unit-/Integration-Tests
 from __future__ import annotations
 
 import re
+from contextlib import suppress
 
 import pytest
 
@@ -108,14 +109,12 @@ class TestOfflineBundleRoundTrip:
             count = page.evaluate("() => window.offlineStore.countOfflineClients()")
             assert count == 1, f"Erwarte genau 1 Offline-Klient, gesehen: {count}"
         finally:
-            try:
+            with suppress(Exception):
                 page.evaluate(
                     """async () => {
                         if (window.offlineStore) await window.offlineStore.purgeAll();
                     }"""
                 )
-            except Exception:
-                pass
             context.close()
 
     def test_bundle_audit_log_written_on_fetch(self, browser, base_url):

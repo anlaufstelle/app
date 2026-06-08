@@ -123,8 +123,8 @@ class TestAuditLogCreationAllowlist:
             126: "audit_event-Body — generischer Service-/Cron-Helper",
         },
         "core/services/system/settings.py": {
-            85: "log_settings_change-Body — Settings-Diff-Helper",
-            105: "log_settings_change-Body — zweite create-Stelle",
+            80: "update_settings-Body — Settings-Diff-Helper",
+            100: "log_settings_change-Body — zweite create-Stelle",
         },
         # Signal-Handler: kein Request, RLS-Session-State explizit gesetzt.
         "core/signals/audit.py": {
@@ -216,6 +216,11 @@ class TestE2ESelectorStabilityGuard:
     # Ist-Stand, damit #929 den reinen Refactor ohne behavioural
     # change abschließen kann. Cleanup → eigenes Issue.
     _WHITELIST_MAX: ClassVar[dict[str, int]] = {
+        # e320590 (A2.1-E2E): _role_option_values klickt den User-Link in der
+        # Django/Unfold-Changelist, die kein data-testid rendert -> exact-name
+        # role-Locator + ``.first``. Counter zieht den Ist-Stand nach;
+        # Stabilisierung (Direkt-Navigation per pk) separat.
+        "test_admin_site.py": 1,
         "test_button_permissions.py": 2,
         "test_cases.py": 3,
         "test_client_deletion_workflow.py": 6,

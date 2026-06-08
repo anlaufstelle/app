@@ -52,31 +52,11 @@ class SuperAdminRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
         return self.request.user.is_super_admin
 
 
-# --- Facility/HTMX Helper-Mixins (Refs #598 R-2/R-3, #745) --------------
-#
-# ``FacilityScopedViewMixin`` ist als Convenience für neue Views gedacht,
-# eine systematische Migration der ~87 ``request.current_facility``-Sites
-# wäre kosmetisch.
+# --- HTMX Helper-Mixin (Refs #745) --------------------------------------
 #
 # ``HTMXPartialMixin`` ist seit #745 in allen Listen-Views mit echtem
 # Partial/Full-Branching umgesetzt; verbleibende ``HX-Request``-Checks im
 # Code sind bewusste Sonderfälle (s. Docstring von ``HTMXPartialMixin``).
-
-
-class FacilityScopedViewMixin:
-    """Stellt ``self.facility`` als Alias für ``request.current_facility``
-    bereit. Keine zusätzliche Guard-Logik — Anonymous-Schutz läuft über
-    ``LoginRequiredMixin`` bzw. die Role-Mixins oben, User-ohne-Facility-
-    Edge-Cases regelt die jeweilige View selbst.
-
-    Nutzen: Views, die die Facility in ``get``, ``post`` und
-    ``get_context_data`` brauchen, sparen sich die wiederholte
-    ``request.current_facility``-Lookup. Eine Zeile weniger pro Methode.
-    """
-
-    @property
-    def facility(self):
-        return self.request.current_facility
 
 
 class PaginatedListMixin:

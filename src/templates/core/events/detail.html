@@ -52,7 +52,7 @@
     </div>
 
     {# Meta-Daten #}
-    <div class="bg-surface border border-subtle rounded-[10px] p-4 mb-4">
+    <div class="card p-4 mb-4">
         <dl class="grid grid-cols-2 gap-4 text-sm">
             <div>
                 <dt class="text-ink-muted">{% trans "Person" %}</dt>
@@ -91,7 +91,7 @@
 
     {# Felder #}
     {% if fields_display %}
-    <div class="bg-surface border border-subtle rounded-[10px] p-4 mb-4">
+    <div class="card p-4 mb-4">
         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Erfasste Daten" %}</h2>
         <dl class="space-y-3">
             {% for field in fields_display %}
@@ -153,7 +153,7 @@
 
     {# History #}
     {% if history %}
-    <div class="bg-surface border border-subtle rounded-[10px] p-4">
+    <div class="card p-4">
         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Änderungshistorie" %}</h2>
         <div class="space-y-3">
             {% for entry in history %}

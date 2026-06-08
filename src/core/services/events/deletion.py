@@ -14,6 +14,7 @@ Aufgeteilt aus dem alten ``services/event.py`` (#777).
 
 from __future__ import annotations
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
@@ -65,7 +66,16 @@ def approve_deletion(deletion_request, reviewer):
     :func:`soft_delete_event`) einen DELETION_APPROVED-Eintrag mit Bezug
     zum DeletionRequest. So sind die drei Workflow-Schritte (Request,
     Approve, Reject) in der Auditspur klar unterscheidbar.
+
+    Vier-Augen-Prinzip (A3.4, Refs #1021 #1016): der Reviewer darf nicht der
+    Antragsteller sein. Der Guard sitzt hier im Service (Single Source of
+    Truth) — analog ``approve_client_deletion`` — und greift *vor* jedem
+    DB-Schreibzugriff, statt sich auf die DB-CHECK-Constraint (IntegrityError)
+    oder die View zu verlassen.
     """
+    if deletion_request.requested_by_id == reviewer.pk:
+        raise ValidationError("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip).")
+
     event = Event.objects.get(pk=deletion_request.target_id, facility=deletion_request.facility)
     soft_delete_event(event, reviewer)
     deletion_request.status = DeletionRequest.Status.APPROVED

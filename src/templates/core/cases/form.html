@@ -14,17 +14,9 @@
         <input type="hidden" name="expected_updated_at" value="{{ case.updated_at.isoformat }}">
         {% endif %}
 
-        <div class="bg-surface border border-subtle rounded-[10px] p-5 space-y-4">
+        <div class="card p-5 space-y-4">
             {# Titel #}
-            <div>
-                <label for="id_title" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.title.label }} *</label>
-                {% aria_field form.title %}
-                {% if form.title.errors %}
-                <ul id="id_title-error" class="mt-1 text-sm text-red-600" role="alert">
-                    {% for error in form.title.errors %}<li>{{ error }}</li>{% endfor %}
-                </ul>
-                {% endif %}
-            </div>
+            {% include "components/_form_field.html" with field=form.title %}
 
             {# Person-Autocomplete #}
             <div x-data="clientAutocomplete"
@@ -79,36 +71,20 @@
             </div>
 
             {# Beschreibung #}
-            <div>
-                <label for="id_description" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.description.label }}</label>
-                {% aria_field form.description %}
-                {% if form.description.errors %}
-                <ul id="id_description-error" class="mt-1 text-sm text-red-600" role="alert">
-                    {% for error in form.description.errors %}<li>{{ error }}</li>{% endfor %}
-                </ul>
-                {% endif %}
-            </div>
+            {% include "components/_form_field.html" with field=form.description %}
 
             {# Fallverantwortlich #}
-            <div>
-                <label for="id_lead_user" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{{ form.lead_user.label }}</label>
-                {% aria_field form.lead_user %}
-                {% if form.lead_user.errors %}
-                <ul id="id_lead_user-error" class="mt-1 text-sm text-red-600" role="alert">
-                    {% for error in form.lead_user.errors %}<li>{{ error }}</li>{% endfor %}
-                </ul>
-                {% endif %}
-            </div>
+            {% include "components/_form_field.html" with field=form.lead_user %}
         </div>
 
         <div class="flex flex-col sm:flex-row gap-2.5 pt-2">
-            <button type="submit" class="w-full sm:w-auto px-4 py-2 bg-accent text-white text-[13px] font-semibold rounded-md">
+            <button type="submit" class="w-full sm:w-auto px-4 py-2 btn-primary">
                 {% if is_edit %}{% trans "Speichern" %}{% else %}{% trans "Fall erstellen" %}{% endif %}
             </button>
             {% if is_edit %}
-            <a href="{% url 'core:case_detail' case.pk %}" class="w-full sm:w-auto text-center px-4 py-2 bg-surface border border-subtle text-[13px] text-ink-soft rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
+            <a href="{% url 'core:case_detail' case.pk %}" class="w-full sm:w-auto text-center px-4 py-2 btn-secondary">{% trans "Abbrechen" %}</a>
             {% else %}
-            <a href="{% url 'core:case_list' %}" class="w-full sm:w-auto text-center px-4 py-2 bg-surface border border-subtle text-[13px] text-ink-soft rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
+            <a href="{% url 'core:case_list' %}" class="w-full sm:w-auto text-center px-4 py-2 btn-secondary">{% trans "Abbrechen" %}</a>
             {% endif %}
         </div>
     </form>

@@ -151,10 +151,10 @@ verify-matrix-drift:
 # Mutation-Testing für core/services + core/forms (Refs #922 / #923).
 # Konfiguration in pyproject.toml [tool.mutmut].
 # Erwartete Laufzeit: 30-60 Minuten — daher nightly per Cron, nicht PR-Pflicht.
-# scripts/run_mutmut.py umgeht den ``set_start_method``-Konflikt aus
+# scripts/dev/run_mutmut.py umgeht den ``set_start_method``-Konflikt aus
 # mutmut 3.5 (Refs #930).
 mutation:
-	$(PYTHON) scripts/run_mutmut.py run
+	$(PYTHON) scripts/dev/run_mutmut.py run
 
 # Ergebnisse des letzten Mutation-Runs anzeigen (textuell, nicht-interaktiv).
 mutation-report:
@@ -224,12 +224,12 @@ DEV_HOST ?= anlaufstelle@dev.anlaufstelle.app
 # Erstmaliges Server-Hardening (idempotent): laeuft als root und legt den
 # anlaufstelle-User an. Ab dem zweiten Aufruf laeuft es als anlaufstelle@.
 dev-bootstrap:
-	scp deploy/bootstrap.sh root@$(word 2,$(subst @, ,$(DEV_HOST))):/root/bootstrap.sh
+	scp dev-ops/deploy/bootstrap.sh root@$(word 2,$(subst @, ,$(DEV_HOST))):/root/bootstrap.sh
 	ssh root@$(word 2,$(subst @, ,$(DEV_HOST))) bash /root/bootstrap.sh
 
-# Hauptdeploy: sync compose+caddy+deploy/, dann pull/migrate/up.
+# Hauptdeploy: sync compose+caddy+deploy/+dev-ops/deploy/, dann pull/migrate/up.
 deploy-dev:
-	DEV_HOST=$(DEV_HOST) ./deploy/deploy-dev.sh
+	DEV_HOST=$(DEV_HOST) ./dev-ops/deploy/deploy-dev.sh
 
 # Live-Logs vom web- und caddy-Container.
 dev-logs:
@@ -239,21 +239,29 @@ dev-logs:
 dev-shell:
 	ssh -t $(DEV_HOST) 'cd /opt/anlaufstelle && docker compose -f docker-compose.dev.yml --env-file .env.dev exec web python manage.py shell'
 
-# Einmalig nach dem Initial-Deploy: Demo-Daten einspielen.
+# Demo-Daten einspielen (idempotent). Args via SEED_ARGS, z.B.
+#   make dev-seed SEED_ARGS="--flush --scale=medium"
 # Connection als POSTGRES_ADMIN_USER (BYPASSRLS), damit seed in
 # RLS-geschuetzte Tabellen schreiben kann ohne app.current_facility_id-
 # Bootstrap-Henne-Ei. Refs #863.
+#
+# --entrypoint python: docker-entrypoint.sh ist seit Refs #802 hartcodiert auf
+# `exec gunicorn` und ignoriert das uebergebene Kommando — ohne Override startet
+# `run web python manage.py seed` nur den Webserver und seedet nie. -T + </dev/null
+# entkoppeln den Job vom STDIN (Refs #976); kein `ssh -t`, sonst Haenger ohne TTY.
+SEED_ARGS ?=
 dev-seed:
-	ssh -t $(DEV_HOST) 'cd /opt/anlaufstelle && \
+	ssh $(DEV_HOST) 'cd /opt/anlaufstelle && \
 	  set -a && . ./.env.dev && set +a && \
-	  docker compose -f docker-compose.dev.yml --env-file .env.dev run --rm \
+	  docker compose -f docker-compose.dev.yml --env-file .env.dev run --rm -T \
+	    --entrypoint python \
 	    -e POSTGRES_USER="$$POSTGRES_ADMIN_USER" \
 	    -e POSTGRES_PASSWORD="$$POSTGRES_ADMIN_PASSWORD" \
-	    web python manage.py seed'
+	    web manage.py seed $(SEED_ARGS) </dev/null'
 
 # Manueller Backup-Snapshot (Cron macht das eigenstaendig).
 dev-backup:
-	ssh -t $(DEV_HOST) 'sudo /opt/anlaufstelle/deploy/backup.sh'
+	ssh -t $(DEV_HOST) 'sudo /opt/anlaufstelle/dev-ops/deploy/backup.sh'
 
 # Compose-Status + Healthcheck.
 dev-status:

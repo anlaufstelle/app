@@ -157,7 +157,7 @@ PROCESSING_ACTIVITIES = [
         ),
         "toms": [
             _("Append-Only durch DB-Konvention und RLS-Policies"),
-            _("Hash-Chain-Integritaet (manipulationssicher)"),
+            _("Unveraenderbarkeit per DB-Trigger erzwungen (UPDATE/DELETE blockiert)"),
             _("Zugriff nur fuer Anwendungsbetreuung und Systemadministration"),
             _("Cross-Facility-Auswertung bedingt eigenen SYSTEM_VIEW-Audit"),
             _("Backup taeglich (siehe Verarbeitung 'Backup-Daten')"),

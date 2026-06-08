@@ -43,6 +43,7 @@ from core.services.security.mfa import (
     generate_backup_codes,
     remaining_backup_codes,
     verify_backup_code,
+    verify_totp_or_backup,
 )
 from core.services.security.sudo_mode import (
     SUDO_SESSION_KEY,
@@ -72,4 +73,5 @@ __all__ = [
     "unlock",
     "verify_backup_code",
     "verify_recovery_token",
+    "verify_totp_or_backup",
 ]

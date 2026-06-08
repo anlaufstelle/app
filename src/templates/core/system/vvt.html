@@ -38,7 +38,7 @@
     {% include "core/system/_subnav.html" %}
 </div>
 
-<section class="mb-6 bg-surface border border-subtle rounded-[10px] p-4 text-[13px] text-ink-muted">
+<section class="mb-6 card p-4 text-[13px] text-ink-muted">
     {% blocktrans %}
     Verzeichnis der Verarbeitungstätigkeiten gemäß DSGVO Art. 30 Abs. 1. Zweck, Rechtsgrundlage,
     Datenkategorien, Empfänger, Speicherfristen sowie technisch-organisatorische Maßnahmen pro Tätigkeit.
@@ -49,7 +49,7 @@
 <div class="space-y-4 print:space-y-2" data-testid="system-vvt-list">
     {% for activity in activities %}
     <article id="vvt-{{ activity.id }}"
-             class="bg-surface border border-subtle rounded-[10px] p-5 print:p-3 print:break-inside-avoid"
+             class="card p-5 print:p-3 print:break-inside-avoid"
              data-testid="system-vvt-card-{{ activity.id }}">
         <header class="mb-3 print:mb-2">
             <h2 class="text-[16px] font-semibold text-ink">{{ activity.title }}</h2>

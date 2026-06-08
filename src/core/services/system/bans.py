@@ -49,7 +49,9 @@ def _collect_active_bans(events, user, *, include_client_in_result):
                 if bis_date < today:
                     continue
             except (ValueError, TypeError):
-                pass
+                # Defekt gespeichertes Datum -> als "kein Ablauf" behandeln,
+                # aber fuer die Diagnose protokollieren (Refs #1011).
+                logger.debug("Ungueltiges Ban-'bis'-Datum ignoriert: %r", bis_raw)
 
         grund = ""
         if _user_may_see_grund(user, event):

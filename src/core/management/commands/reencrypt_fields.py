@@ -1,11 +1,16 @@
-"""Re-encrypt all encrypted Event/EventHistory/EventAttachment fields with the current primary key."""
+"""Re-encrypt all encrypted Event/EventHistory/EventAttachment fields with the current primary key.
+
+A4.4 (Refs #1024): Für ``Event.data_json`` werden zusätzlich Plaintext-PII-Felder
+(laut document_type ``is_encrypted=True``) nachverschlüsselt — Heal von Altbestand
+vor Einführung der Feldverschlüsselung.
+"""
 
 from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from core.models import Event, EventHistory
 from core.models.attachment import EventAttachment
-from core.services.file_vault import encrypt_field, is_encrypted_value, safe_decrypt
+from core.services.file_vault import encrypt_event_data, encrypt_field, is_encrypted_value, safe_decrypt
 from core.services.system import bypass_replication_triggers
 
 
@@ -32,7 +37,8 @@ class Command(BaseCommand):
     help = (
         "Re-encrypt all encrypted fields with the current primary encryption key — "
         "Event.data_json, EventHistory.data_before/data_after, "
-        "EventAttachment.original_filename_encrypted (Refs #783)."
+        "EventAttachment.original_filename_encrypted (Refs #783). Heilt zusätzlich "
+        "Plaintext-PII in Event.data_json (Refs #1024 A4.4)."
     )
 
     def add_arguments(self, parser):
@@ -56,10 +62,16 @@ class Command(BaseCommand):
         updated = 0
         for event in Event.objects.filter(is_deleted=False).iterator(chunk_size=500):
             new_data, changed = _reencrypt_data_json(event.data_json)
-            if changed:
+            # A4.4 (Refs #1024): zusätzlich Plaintext-PII-Felder (laut
+            # document_type ``is_encrypted=True``) nachverschlüsseln — heilt
+            # Altbestand, der vor Einführung der Feldverschlüsselung als Klartext
+            # gespeichert wurde. ``encrypt_event_data`` lässt bereits verschlüsselte
+            # Werte unangetastet.
+            healed = encrypt_event_data(event.document_type, new_data) if event.document_type_id else new_data
+            if changed or healed != event.data_json:
                 updated += 1
                 if not dry_run:
-                    event.data_json = new_data
+                    event.data_json = healed
                     event.save(update_fields=["data_json", "updated_at"])
         return updated
 

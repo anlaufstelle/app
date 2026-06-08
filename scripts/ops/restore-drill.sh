@@ -9,7 +9,7 @@ set -uo pipefail
 # der Lauf via ``manage.py mark_restore_verified`` im AuditLog
 # dokumentiert -> Compliance-Check „Restore-Test" springt auf gruen.
 #
-# WICHTIG (Refs #981): Dieses Skript ist auf das **deploy/backup.sh**-Format
+# WICHTIG (Refs #981): Dieses Skript ist auf das **dev-ops/deploy/backup.sh**-Format
 # ausgerichtet, das auf dev.anlaufstelle.app tatsaechlich laeuft:
 #   - Quelle:  $BACKUP_DIR/dump-*.pgc.enc  (Default /var/backups/anl)
 #   - Format:  pg_dump --format=custom -> braucht pg_restore (NICHT psql)
@@ -19,11 +19,11 @@ set -uo pipefail
 #              Trust im db-Container). Noetig fuer CREATE DATABASE; bypassed
 #              zugleich RLS/FORCE-RLS beim pg_restore. (``anlaufstelle_admin``
 #              ist BYPASSRLS, hat aber kein CREATEDB.)
-# Das alte scripts/backup.sh + scripts/restore.sh-Schema (backups/daily/
+# Das alte scripts/ops/backup.sh + scripts/ops/restore.sh-Schema (backups/daily/
 # *.sql.gz.enc, plain SQL) ist davon unberuehrt.
 #
 # Die Dump-Dateien sind 0600 und gehoeren root — daher als root ausfuehren:
-#   sudo bash /opt/anlaufstelle/scripts/restore-drill.sh
+#   sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh
 #
 # Empfohlen quartalsweise (per Timer/Cron) + Alert bei Exit-Code != 0.
 

@@ -52,6 +52,16 @@ class AnlaufstelleAdminSite(UnfoldAdminSite):
         """
         return self._has_admin_role(request.user)
 
+    def has_super_admin_permission(self, request) -> bool:
+        """Public API fuer ModelAdmin-Mixins: nur super_admin (A2.3, Refs #1021).
+
+        Fuer installationsweite Modelle oberhalb der Facility-Ebene (z.B.
+        ``Organization``), die ein facility_admin nicht verwalten darf. Single
+        Source of Truth analog ``has_role_permission``/``assignable_roles``.
+        """
+        user = request.user
+        return user.is_authenticated and user.is_super_admin
+
     def scope_to_facility(self, queryset, request):
         """Public API fuer ModelAdmin.get_queryset() bei facility-gescopten Models.
 
@@ -61,6 +71,21 @@ class AnlaufstelleAdminSite(UnfoldAdminSite):
         if request.user.is_super_admin:
             return queryset
         return queryset.filter(facility=request.current_facility)
+
+    def assignable_roles(self, request):
+        """Welche Rollen darf der eingeloggte Admin vergeben? (A2.1, Refs #1020).
+
+        super_admin vergibt alle Rollen; facility_admin alles **ausser**
+        super_admin — verhindert Privilege-Escalation auf die installationsweite
+        super_admin-Rolle. Single Source of Truth fuer die Rollen-Hierarchie
+        (analog ``scope_to_facility``); konsumiert von
+        ``UserAdmin.formfield_for_choice_field('role')``.
+        """
+        from core.models import User
+
+        if request.user.is_super_admin:
+            return list(User.Role.choices)
+        return [choice for choice in User.Role.choices if choice[0] != User.Role.SUPER_ADMIN]
 
     def has_permission(self, request):
         """Zugriff nur fuer super_admin/facility_admin mit aktivem Sudo-Mode."""

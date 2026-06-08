@@ -33,7 +33,7 @@
         <input type="hidden" name="expected_updated_at" value="{{ event.updated_at.isoformat }}">
 
         {% if data_form.fields %}
-        <div class="bg-surface border border-subtle rounded-[10px] p-4 space-y-4">
+        <div class="card p-4 space-y-4">
             <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Felder" %}</h2>
             {% for field in data_form %}
             <div>

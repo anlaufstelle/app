@@ -5,7 +5,8 @@ service module; the command handles only argument parsing, iteration over facili
 and ``stdout``/``stderr`` formatting.
 """
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
+from django.db import connection
 from django.utils import timezone
 
 from core.models import AuditLog, Facility, Settings
@@ -21,6 +22,25 @@ from core.services.retention import (
     prune_auditlog,
     reactivate_deferred_proposals,
 )
+
+
+def _has_rls_bypass_context() -> bool:
+    """Refs #1016 A1.1: Kann der aktuelle DB-Kontext RLS umgehen?
+
+    True, wenn die Verbindungsrolle SUPERUSER/BYPASSRLS ist ODER die Session-GUC
+    ``app.is_super_admin`` auf ``true`` steht. Andernfalls filtert RLS diesen
+    Wartungslauf auf 0 Zeilen (kein Request setzt ``app.current_facility_id``) —
+    er waere wirkungslos. No-op (``True``) auf Nicht-PostgreSQL (SQLite-Tests).
+    """
+    if connection.vendor != "postgresql":
+        return True
+    with connection.cursor() as cur:
+        cur.execute("SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user")
+        row = cur.fetchone()
+        if row and row[0]:
+            return True
+        cur.execute("SELECT current_setting('app.is_super_admin', true) = 'true'")
+        return bool(cur.fetchone()[0])
 
 
 class Command(BaseCommand):
@@ -45,6 +65,16 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        # Refs #1016 A1.1: Fail-loud, statt RLS-blind 0 Zeilen zu verarbeiten und
+        # faelschlich RETENTION_RUN_COMPLETED zu melden. Der Cron MUSS als Rolle mit
+        # BYPASSRLS (Admin) laufen — siehe dev-ops/deploy/install-timers.sh.
+        if not _has_rls_bypass_context():
+            raise CommandError(
+                "Retention-Lauf laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch "
+                "ohne Erfolgs-Marker — sonst wuerden 0 Zeilen verarbeitet und faelschlich "
+                "RETENTION_RUN_COMPLETED gemeldet (Refs #1016 A1.1)."
+            )
         dry_run = options["dry_run"]
         propose = options["propose"]
         facility_name = options["facility"]

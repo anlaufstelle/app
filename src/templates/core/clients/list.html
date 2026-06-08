@@ -8,7 +8,7 @@
 <div class="flex items-center justify-between mb-6">
     <h1 class="text-[22px] font-bold text-ink">{% trans "Personen" %}</h1>
     <div class="hidden md:block">
-        <a href="{% url 'core:client_create' %}" class="inline-flex items-center gap-1.5 bg-accent text-white text-[13px] font-semibold rounded-md px-3.5 py-2">
+        <a href="{% url 'core:client_create' %}" class="inline-flex items-center gap-1.5 btn-primary px-3.5 py-2">
             <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
             {% trans "Neue Person" %}
         </a>
@@ -30,13 +30,16 @@
                hx-trigger="keyup changed delay:300ms"
                hx-target="#client-table"
                hx-include="[name='stage'],[name='age']"
+               hx-indicator="#client-table-spinner"
         >
+        {% include "components/_htmx_spinner.html" with spinner_id="client-table-spinner" position_class="absolute right-2.5 top-1/2 -translate-y-1/2" %}
     </div>
     <select name="stage" aria-label="{% trans 'Kontaktstufe filtern' %}" class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
             hx-get="{% url 'core:client_list' %}"
             hx-trigger="change"
             hx-target="#client-table"
-            hx-include="[name='q'],[name='age']">
+            hx-include="[name='q'],[name='age']"
+            hx-indicator="#client-table-spinner">
         <option value="">{% trans "Alle Stufen" %}</option>
         {% for value, label in contact_stages %}
         <option value="{{ value }}" {% if value == selected_stage %}selected{% endif %}>{{ label }}</option>
@@ -46,7 +49,8 @@
             hx-get="{% url 'core:client_list' %}"
             hx-trigger="change"
             hx-target="#client-table"
-            hx-include="[name='q'],[name='stage']">
+            hx-include="[name='q'],[name='stage']"
+            hx-indicator="#client-table-spinner">
         <option value="">{% trans "Alle Altersgruppen" %}</option>
         {% for value, label in age_clusters %}
         <option value="{{ value }}" {% if value == selected_age %}selected{% endif %}>{{ label }}</option>

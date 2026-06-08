@@ -142,3 +142,115 @@ class TestFileEncryption:
         encrypt_file(io.BytesIO(b"nested"), output)
         assert output.exists()
         assert b"".join(decrypt_file_stream(output)) == b"nested"
+
+
+def _split_v2(path):
+    """Parse a v2 file into (version, chunk_count, [token_bytes])."""
+    out = []
+    with open(path, "rb") as f:
+        (version,) = struct.unpack(">B", f.read(1))
+        (count,) = struct.unpack(">I", f.read(4))
+        for _ in range(count):
+            (tlen,) = struct.unpack(">I", f.read(4))
+            out.append(f.read(tlen))
+    return version, count, out
+
+
+def _write_v2(path, version, count, tokens):
+    with open(path, "wb") as f:
+        f.write(struct.pack(">B", version))
+        f.write(struct.pack(">I", count))
+        for tok in tokens:
+            f.write(struct.pack(">I", len(tok)))
+            f.write(tok)
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_encryption_key")
+class TestFileEncryptionV2Binding:
+    """A4.5 (Refs #1016): Chunks an file_id + index + total binden.
+
+    Fernet kennt kein AEAD-AAD; der Kontext wird daher in den Klartext jedes
+    Chunks gepackt und beim Entschlüsseln gegen die erwartete Position +
+    Datei-ID geprüft. Schützt Bestandsdateien gegen Reorder, Truncation und
+    Cross-File-Splicing durch einen Angreifer mit Schreibzugriff auf die Disk.
+    """
+
+    def test_v2_roundtrip(self, tmp_path):
+        out = tmp_path / "v2.enc"
+        data = b"Y" * (CHUNK_SIZE * 2 + 7)
+        encrypt_file(io.BytesIO(data), out, file_id="file-A")
+        assert b"".join(decrypt_file_stream(out, file_id="file-A")) == data
+
+    def test_v2_uses_version_byte_2(self, tmp_path):
+        out = tmp_path / "v2ver.enc"
+        encrypt_file(io.BytesIO(b"x"), out, file_id="file-A")
+        version, _, _ = _split_v2(out)
+        assert version == 2
+
+    def test_v2_wrong_file_id_rejected(self, tmp_path):
+        out = tmp_path / "v2wrong.enc"
+        encrypt_file(io.BytesIO(b"secret"), out, file_id="file-A")
+        with pytest.raises(EncryptionError, match="binding"):
+            list(decrypt_file_stream(out, file_id="file-B"))
+
+    def test_v2_chunk_reorder_rejected(self, tmp_path):
+        out = tmp_path / "v2reorder.enc"
+        data = b"A" * CHUNK_SIZE + b"B" * CHUNK_SIZE + b"C" * 10
+        encrypt_file(io.BytesIO(data), out, file_id="file-A")
+        version, count, tokens = _split_v2(out)
+        tokens[0], tokens[1] = tokens[1], tokens[0]  # swap first two chunks
+        _write_v2(out, version, count, tokens)
+        with pytest.raises(EncryptionError, match="binding"):
+            list(decrypt_file_stream(out, file_id="file-A"))
+
+    def test_v2_truncation_rejected(self, tmp_path):
+        out = tmp_path / "v2trunc.enc"
+        data = b"A" * CHUNK_SIZE + b"B" * CHUNK_SIZE + b"C" * CHUNK_SIZE
+        encrypt_file(io.BytesIO(data), out, file_id="file-A")
+        version, count, tokens = _split_v2(out)
+        _write_v2(out, version, count - 1, tokens[:-1])  # drop last chunk + adjust count
+        with pytest.raises(EncryptionError, match="binding"):
+            list(decrypt_file_stream(out, file_id="file-A"))
+
+    def test_v2_requires_file_id_to_decrypt(self, tmp_path):
+        out = tmp_path / "v2noid.enc"
+        encrypt_file(io.BytesIO(b"x"), out, file_id="file-A")
+        with pytest.raises(EncryptionError, match="file_id"):
+            list(decrypt_file_stream(out))
+
+    def test_v1_still_roundtrips_without_file_id(self, tmp_path):
+        """Bestandsformat (kein file_id) bleibt les-/schreibbar (Abwärtskompat)."""
+        out = tmp_path / "v1.enc"
+        encrypt_file(io.BytesIO(b"legacy"), out)  # no file_id → v1
+        version, _, _ = _split_v2(out)
+        assert version == 1
+        assert b"".join(decrypt_file_stream(out)) == b"legacy"
+
+    def test_v2_zero_chunk_count_rejected(self, tmp_path):
+        """[v2][count=0]-Header (Blanking durch 5-Byte-Overwrite) wird abgewiesen
+        statt still einen leeren Stream zu liefern. PR-Review bug_002."""
+        out = tmp_path / "v2zero.enc"
+        encrypt_file(io.BytesIO(b"x"), out, file_id="file-A")
+        _write_v2(out, 2, 0, [])  # version 2, count 0, keine Chunks
+        with pytest.raises(EncryptionError, match="binding"):
+            list(decrypt_file_stream(out, file_id="file-A"))
+
+    def test_v2_header_downgraded_to_v1_rejected(self, tmp_path):
+        """v2-Datei mit auf v1 gefälschtem Header-Byte wird erkannt (kein stiller
+        Garbage-Stream mit 24-Byte-Kontext-Präfix). PR-Review bug_002."""
+        out = tmp_path / "v2down.enc"
+        encrypt_file(io.BytesIO(b"X" * 100), out, file_id="file-A")
+        version, count, tokens = _split_v2(out)
+        assert version == 2
+        _write_v2(out, 1, count, tokens)  # Header-Byte 0x02 → 0x01
+        with pytest.raises(EncryptionError, match="binding"):
+            list(decrypt_file_stream(out, file_id="file-A"))
+
+    def test_legit_v1_with_file_id_not_flagged(self, tmp_path):
+        """Echtes v1 (ungebunden) wird auch mit file_id NICHT fälschlich als
+        Downgrade markiert — kein False-Positive auf dem Storage-Lesepfad."""
+        content = b"echte v1-Nutzdaten, definitiv kein Bindungs-Kontext-Praefix" * 3
+        out = tmp_path / "v1fid.enc"
+        encrypt_file(io.BytesIO(content), out)  # v1
+        assert b"".join(decrypt_file_stream(out, file_id="file-A")) == content

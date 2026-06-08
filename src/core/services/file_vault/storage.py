@@ -70,7 +70,9 @@ def store_encrypted_file(
     storage_name = f"{uuid.uuid4()}.enc"
     output_path = _facility_dir(facility) / storage_name
 
-    encrypt_file(uploaded_file, output_path)
+    # A4.5 (Refs #1016): Chunks an die Storage-ID binden (v2-Format) — schützt
+    # Bestandsdateien gegen Reorder/Truncation/Cross-File-Splicing auf der Disk.
+    encrypt_file(uploaded_file, output_path, file_id=storage_name)
 
     try:
         if supersedes is not None:
@@ -147,7 +149,8 @@ def get_attachment_path(attachment):
 
 def get_decrypted_file_stream(attachment):
     """Return a generator of decrypted chunks for streaming download."""
-    return decrypt_file_stream(get_attachment_path(attachment))
+    # A4.5: v2-Bindung gegen die Storage-ID verifizieren (Legacy-v1 ignoriert sie).
+    return decrypt_file_stream(get_attachment_path(attachment), file_id=attachment.storage_filename)
 
 
 def get_original_filename(attachment):

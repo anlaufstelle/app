@@ -1,7 +1,7 @@
 {% load i18n %}
 
 {% if data_form and data_form.fields %}
-<div class="bg-surface border border-subtle rounded-[10px] p-5 space-y-4">
+<div class="card p-5 space-y-4">
     <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Felder" %}</h2>
     {% for field in data_form %}
     <div>

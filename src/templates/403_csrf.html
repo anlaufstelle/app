@@ -15,7 +15,8 @@
             {% trans "Häufiger Grund: Sie waren längere Zeit inaktiv oder haben sich in einem anderen Tab abgemeldet." %}
         </p>
         <div class="mt-6 flex gap-3 justify-center flex-wrap">
-            <a href="javascript:location.reload()"
+            {# href="" lädt die aktuelle URL neu (frisches CSRF-Token), CSP-konform ohne Inline-Script. Refs #1016, C1 #}
+            <a href=""
                class="inline-flex items-center px-4 py-2 bg-accent text-white rounded-md hover:bg-accent text-sm font-medium transition-colors">
                 {% trans "Seite neu laden" %}
             </a>

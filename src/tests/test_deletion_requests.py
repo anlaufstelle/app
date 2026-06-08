@@ -222,7 +222,7 @@ class TestRejectDeletion:
 
 @pytest.mark.django_db
 class TestFourEyesConstraint:
-    """The reviewer must differ from the requester (DB constraint)."""
+    """The reviewer must differ from the requester (DB constraint + service guard)."""
 
     def test_db_constraint_prevents_self_review(self, event_qualified, lead_user):
         """DB CHECK constraint prevents requester == reviewer."""
@@ -234,6 +234,22 @@ class TestFourEyesConstraint:
         dr.reviewed_at = timezone.now()
         with pytest.raises(IntegrityError):
             dr.save()
+
+    def test_service_guard_rejects_self_review(self, event_qualified, lead_user):
+        """approve_deletion erzwingt das Vier-Augen-Prinzip im Service (SSoT).
+
+        Spiegelt ``approve_client_deletion`` (A3.4, Refs #1021 #1016): der Guard
+        wirft sauber ``ValidationError`` *vor* jedem DB-Schreibzugriff — nicht
+        erst über die DB-Constraint (IntegrityError) oder die View. Das Event
+        darf dabei nicht soft-gelöscht werden.
+        """
+        from django.core.exceptions import ValidationError
+
+        dr = request_deletion(event_qualified, lead_user, "Selbst-Test")
+        with pytest.raises(ValidationError):
+            approve_deletion(dr, lead_user)
+        event_qualified.refresh_from_db()
+        assert event_qualified.is_deleted is False
 
 
 @pytest.mark.django_db

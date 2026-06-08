@@ -107,6 +107,27 @@
     }
 }
 
+/* ─── Komponenten-Klassen (Refs #1016, C5) ───
+   Bewusst IDENTITÄT-ONLY: nur die wiederkehrenden Farb-/Typo-/Radius-Utilities,
+   die app-weit dupliziert waren. Layout (display/Padding/Breite/gap) bleibt als
+   Utility am Element — so ist das gerenderte CSS deckungsgleich mit vorher
+   (kein Visual-Change), nur DRY. ``@layer components`` steht vor ``utilities``,
+   d.h. Utilities am Element überschreiben bei Bedarf (z.B. text-sm). */
+@layer components {
+    .btn-primary {
+        @apply bg-accent text-white text-[13px] font-semibold rounded-md;
+    }
+    .btn-secondary {
+        @apply bg-surface border border-subtle text-[13px] text-ink-soft rounded-md hover:bg-canvas;
+    }
+    .card {
+        @apply bg-surface border border-subtle rounded-[10px];
+    }
+    .badge {
+        @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    }
+}
+
 @media print {
     nav, .no-print, button, [role="navigation"] {
         display: none !important;

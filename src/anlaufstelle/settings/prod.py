@@ -80,6 +80,26 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 X_FRAME_OPTIONS = "DENY"
 
+# --- Defense-in-Depth-Settings explizit (A5.5, Refs #1024 / #1016) ---
+# Django-6-Defaults sind hier bereits sicher; wir setzen sie in prod.py
+# trotzdem explizit, damit ein Default-Wechsel im Framework oder ein
+# versehentliches Entfernen im Review auffällt (Auditierbarkeit /
+# Regressionsschutz, kein offenes Loch). Der Guard-Test
+# ``TestProdSettingsSecurityDefaultsGuard`` friert die Werte ein.
+SESSION_COOKIE_HTTPONLY = True
+# COOP "same-origin": isoliert den Browsing-Context von cross-origin-Fenstern
+# (Schutz vor XS-Leaks / window.opener-Zugriff).
+SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+# Request-Body-Limits explizit verankern (DoS-Schutz). Datei-Uploads laufen
+# über den File-Vault (Cap ``DEFAULT_MAX_FILE_SIZE_MB``, per Facility
+# überschreibbar) und sind von DATA_UPLOAD_MAX_MEMORY_SIZE ohnehin
+# ausgenommen — der Wert begrenzt also Nicht-Datei-Formdaten. Auf dem sicheren
+# Django-Default (2.5 MB) belassen; FILE_UPLOAD_MAX_MEMORY_SIZE als
+# RAM→Disk-Schwelle ebenfalls konservativ, damit große Vault-Uploads auf
+# Temp-Disk gestreamt statt im Speicher gehalten werden.
+DATA_UPLOAD_MAX_MEMORY_SIZE = 2_621_440  # 2.5 MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 2_621_440  # 2.5 MB
+
 # --- E-Mail (SMTP) ---
 # Für Passwort-zurücksetzen und andere E-Mail-Funktionen.
 # Konfiguration via Umgebungsvariablen:
@@ -97,6 +117,22 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@anlaufstelle.
 
 CONN_MAX_AGE = 60
 
+# --- Shared Cache (A5.1, Refs #1024 / #1016) ---
+# Ohne expliziten Cache nutzt Django LocMemCache — pro Gunicorn-Worker isoliert.
+# django-ratelimit (Login/Sudo/Health) und das Health-Detail-Caching (A7.2)
+# zählen dann pro Worker getrennt, sodass Rate-Limits in Multi-Worker-Prod
+# faktisch ge-N-facht werden. DatabaseCache teilt den Zustand prozessübergreifend
+# ohne neue Dependency (Redis-Vollausbau bleibt #795). Tabelle wird per Migration
+# 0092 angelegt (createcachetable-äquivalent).
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "anlaufstelle_cache",
+    }
+}
+# django-ratelimit gegen den shared Cache laufen lassen (statt LocMem-Default).
+RATELIMIT_USE_CACHE = "default"
+
 # --- Encryption Key (mandatory in production) ---
 # Akzeptiert ENCRYPTION_KEYS (Plural, MultiFernet-Rotation) oder ENCRYPTION_KEY (Singular, Legacy).
 # Mindestens eins muss gesetzt sein.
@@ -104,6 +140,19 @@ if "collectstatic" not in sys.argv and not (ENCRYPTION_KEY or ENCRYPTION_KEYS): 
     raise ImproperlyConfigured(
         "ENCRYPTION_KEY oder ENCRYPTION_KEYS muss in Produktion gesetzt sein. "
         'Generate one with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
+    )
+
+# --- Audit-Hash-Key (mandatory in production) (A4.2, Refs #1024 / #1016) ---
+# ``services.audit.hash`` fällt ohne AUDIT_HASH_KEY still auf SHA256(SECRET_KEY)
+# zurück (funktional für Dev/Test). In Produktion wäre das eine stille
+# Defense-Erosion: ein SECRET_KEY-Leak könnte rückwirkend die Audit-Hashes
+# (z.B. pseudonymisierte E-Mails in Passwort-Reset-Audits) knacken. Daher
+# fail-closed — lieber Server-Start-Fehler als unbemerkt schwächere Audit-PII.
+if "collectstatic" not in sys.argv and not AUDIT_HASH_KEY:  # noqa: F405
+    raise ImproperlyConfigured(
+        "DJANGO_AUDIT_HASH_KEY muss in Produktion gesetzt sein (separat von "
+        'DJANGO_SECRET_KEY). Generate one with: python -c "import secrets; '
+        'print(secrets.token_urlsafe(64))"'
     )
 
 # --- Virenscan (Default: aktiv in Produktion) ---

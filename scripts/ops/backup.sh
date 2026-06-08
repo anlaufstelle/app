@@ -20,6 +20,10 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BACKUP_DIR="${PROJECT_DIR}/backups"
 COMPOSE_FILE="${PROJECT_DIR}/docker-compose.prod.yml"
 
+# A4.3: Encrypt-then-MAC-Helfer (backup_write_hmac / backup_verify_hmac).
+# shellcheck source=scripts/ops/_backup_common.sh
+source "${SCRIPT_DIR}/_backup_common.sh"
+
 # .env laden falls vorhanden
 if [[ -f "${PROJECT_DIR}/.env" ]]; then
     set -a
@@ -64,6 +68,9 @@ if [[ "${1:-}" == "--verify" ]]; then
         psql -U "$POSTGRES_USER" -d postgres \
         -c "CREATE DATABASE \"${VERIFY_DB}\";"
 
+    # A4.3: Integrität VOR dem Entschlüsseln prüfen.
+    backup_verify_hmac "$LATEST_BACKUP"
+
     # Backup entschluesseln, entpacken und wiederherstellen
     echo "Stelle Backup in temporaere Datenbank wieder her..."
     openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY \
@@ -93,6 +100,7 @@ if [[ "${1:-}" == "--verify" ]]; then
         echo "WARNUNG: Kein Medien-Backup in ${DAILY_DIR} gefunden."
     else
         echo "Verifiziere Medien-Backup: ${LATEST_MEDIA}"
+        backup_verify_hmac "$LATEST_MEDIA"
         FILE_COUNT=$(openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY \
             -in "$LATEST_MEDIA" \
             | gunzip \
@@ -129,6 +137,9 @@ if [ ! -s "$BACKUP_FILE" ]; then
     exit 1
 fi
 
+# A4.3: detached HMAC für Integritätsschutz (Encrypt-then-MAC).
+backup_write_hmac "$BACKUP_FILE"
+
 echo "DB-Backup erstellt: $(du -h "$BACKUP_FILE" | cut -f1)"
 
 # Medien-Backup (Refs #720)
@@ -150,31 +161,34 @@ if [ ! -s "$MEDIA_FILE" ]; then
     exit 1
 fi
 
+# A4.3: detached HMAC für Integritätsschutz (Encrypt-then-MAC).
+backup_write_hmac "$MEDIA_FILE"
+
 echo "Medien-Backup erstellt: $(du -h "$MEDIA_FILE" | cut -f1)"
 
 # Rotation
 DOW=$(date +%u)  # 1=Montag, 7=Sonntag
 DOM=$(date +%d)  # Tag des Monats
 
-# Sonntags → Weekly kopieren (DB + Medien)
+# Sonntags → Weekly kopieren (DB + Medien + HMAC-Sidecars)
 if [[ "$DOW" -eq 7 ]]; then
-    cp "$BACKUP_FILE" "$MEDIA_FILE" "$WEEKLY_DIR/"
+    cp "$BACKUP_FILE" "$BACKUP_FILE.hmac" "$MEDIA_FILE" "$MEDIA_FILE.hmac" "$WEEKLY_DIR/"
     echo "Weekly-Backup kopiert."
 fi
 
-# Am 1. des Monats → Monthly kopieren (DB + Medien)
+# Am 1. des Monats → Monthly kopieren (DB + Medien + HMAC-Sidecars)
 if [[ "$DOM" -eq "01" ]]; then
-    cp "$BACKUP_FILE" "$MEDIA_FILE" "$MONTHLY_DIR/"
+    cp "$BACKUP_FILE" "$BACKUP_FILE.hmac" "$MEDIA_FILE" "$MEDIA_FILE.hmac" "$MONTHLY_DIR/"
     echo "Monthly-Backup kopiert."
 fi
 
-# Alte Backups löschen — DB + Medien parallel
-find "$DAILY_DIR" -name "*.sql.gz.enc" -mtime +7 -delete
-find "$DAILY_DIR" -name "*_media.tar.gz.enc" -mtime +7 -delete
-find "$WEEKLY_DIR" -name "*.sql.gz.enc" -mtime +28 -delete
-find "$WEEKLY_DIR" -name "*_media.tar.gz.enc" -mtime +28 -delete
-find "$MONTHLY_DIR" -name "*.sql.gz.enc" -mtime +90 -delete
-find "$MONTHLY_DIR" -name "*_media.tar.gz.enc" -mtime +90 -delete
+# Alte Backups löschen — DB + Medien + HMAC-Sidecars parallel (A4.3)
+find "$DAILY_DIR" \( -name "*.sql.gz.enc" -o -name "*.sql.gz.enc.hmac" \) -mtime +7 -delete
+find "$DAILY_DIR" \( -name "*_media.tar.gz.enc" -o -name "*_media.tar.gz.enc.hmac" \) -mtime +7 -delete
+find "$WEEKLY_DIR" \( -name "*.sql.gz.enc" -o -name "*.sql.gz.enc.hmac" \) -mtime +28 -delete
+find "$WEEKLY_DIR" \( -name "*_media.tar.gz.enc" -o -name "*_media.tar.gz.enc.hmac" \) -mtime +28 -delete
+find "$MONTHLY_DIR" \( -name "*.sql.gz.enc" -o -name "*.sql.gz.enc.hmac" \) -mtime +90 -delete
+find "$MONTHLY_DIR" \( -name "*_media.tar.gz.enc" -o -name "*_media.tar.gz.enc.hmac" \) -mtime +90 -delete
 
 echo "Rotation abgeschlossen."
 
@@ -195,7 +209,7 @@ if [[ -n "${BACKUP_OFFSITE_TARGET:-}" ]]; then
         rclone:*)
             REMOTE="${BACKUP_OFFSITE_TARGET#rclone:}"
             rclone copy "$DAILY_DIR" "$REMOTE/daily" \
-                --include "*.enc" --transfers 2 \
+                --include "*.enc" --include "*.hmac" --transfers 2 \
                 || { echo "ERROR: rclone copy fehlgeschlagen — Off-Site nicht aktualisiert."; OFFSITE_OK=false; }
             ;;
         s3://*)
@@ -203,13 +217,13 @@ if [[ -n "${BACKUP_OFFSITE_TARGET:-}" ]]; then
                 echo "ERROR: aws-CLI nicht installiert — Off-Site (S3) nicht moeglich."; OFFSITE_OK=false; }
             if [[ "$OFFSITE_OK" == true ]]; then
                 aws s3 sync "$DAILY_DIR" "${BACKUP_OFFSITE_TARGET}/daily" \
-                    --exclude "*" --include "*.enc" \
+                    --exclude "*" --include "*.enc" --include "*.hmac" \
                     || { echo "ERROR: aws s3 sync fehlgeschlagen — Off-Site nicht aktualisiert."; OFFSITE_OK=false; }
             fi
             ;;
         *@*:*)
             # SCP-Target — kompatibel mit OpenSSH ssh/scp inkl. Schluessel-Auth via SSH-Agent.
-            scp -q -B "$BACKUP_FILE" "$MEDIA_FILE" "${BACKUP_OFFSITE_TARGET%/}/" \
+            scp -q -B "$BACKUP_FILE" "$BACKUP_FILE.hmac" "$MEDIA_FILE" "$MEDIA_FILE.hmac" "${BACKUP_OFFSITE_TARGET%/}/" \
                 || { echo "ERROR: scp fehlgeschlagen — Off-Site nicht aktualisiert."; OFFSITE_OK=false; }
             ;;
         *)

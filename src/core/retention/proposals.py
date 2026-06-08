@@ -9,6 +9,7 @@ fuer den ``--propose``-Lauf des ``enforce_retention``-Commands.
 from datetime import date, timedelta
 
 from django.db import transaction
+from django.db.models import F
 from django.db.utils import IntegrityError
 from django.utils.translation import gettext_lazy as _
 
@@ -206,8 +207,14 @@ def defer_proposal(proposal, user, days=30):
     deferred_until = date.today() + timedelta(days=days)
     proposal.status = RetentionProposal.Status.DEFERRED
     proposal.deferred_until = deferred_until
-    proposal.defer_count = (proposal.defer_count or 0) + 1
+    # Refs #1022 (B2): DB-atomares Increment statt In-Memory-Read-Modify-
+    # Write — zwei zeitgleiche Defers duerfen kein Increment verlieren
+    # (Lost-Update). ``status``/``deferred_until`` bleiben Last-Write-Wins
+    # (fachlich unkritisch). ``refresh_from_db`` materialisiert den
+    # F()-Ausdruck fuer den Audit-Eintrag unten.
+    proposal.defer_count = F("defer_count") + 1
     proposal.save(update_fields=["status", "deferred_until", "defer_count"])
+    proposal.refresh_from_db(fields=["defer_count"])
     audit_retention_decision(
         proposal.facility,
         target_type=proposal.target_type,
@@ -299,8 +306,10 @@ def reactivate_deferred_proposals(facility):
         auto_approve = settings_obj.retention_auto_approve_after_defer
         max_defer_count = settings_obj.retention_max_defer_count
     except facility._meta.model.settings.RelatedObjectDoesNotExist:
+        # Ohne Settings wird nichts auto-approved; ``max_defer_count`` bleibt
+        # bewusst ungesetzt, weil ``auto_approve=False`` die einzige Lesestelle
+        # (``auto_approve and ... >= max_defer_count``) kurzschliesst (Refs #1011).
         auto_approve = False
-        max_defer_count = 2
 
     due_proposals = RetentionProposal.objects.filter(
         facility=facility,

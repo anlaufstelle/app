@@ -25,6 +25,7 @@ import secrets
 
 from django.db import transaction
 from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
+from django_otp.plugins.otp_totp.models import TOTPDevice
 
 BACKUP_CODES_COUNT = 10
 BACKUP_DEVICE_NAME = "backup"
@@ -120,3 +121,20 @@ def verify_backup_code(user, token: str) -> bool:
     device.set_last_used_timestamp(commit=False)
     device.save()
     return True
+
+
+def verify_totp_or_backup(user, token: str) -> bool:
+    """Verifiziert einen frischen TOTP-Token ODER Backup-Code (A3.2, Refs #1024).
+
+    Reihenfolge: erst das bestätigte ``TOTPDevice`` (``verify_token`` ist
+    single-use je Zeitfenster + gedrosselt), dann Backup-Code. Genutzt vom
+    Sudo-Mode-Re-Auth, wenn der User 2FA aktiv hat — ein über eine gestohlene
+    Session erbeutetes Passwort allein soll sensible Aktionen nicht freischalten.
+    """
+    token = (token or "").strip().replace(" ", "")
+    if not token:
+        return False
+    device = TOTPDevice.objects.filter(user=user, confirmed=True).first()
+    if device is not None and device.verify_token(token):
+        return True
+    return verify_backup_code(user, token)

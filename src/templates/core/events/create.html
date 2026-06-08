@@ -42,7 +42,7 @@
         {% endif %}
 
         {# Sektion 1: Meta — kompaktes Layout #}
-        <div class="bg-surface border border-subtle rounded-[10px] p-4 space-y-3">
+        <div class="card p-4 space-y-3">
             <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider">{% trans "Basis-Daten" %}</h2>
 
             {% if meta_form.non_field_errors %}
@@ -181,10 +181,10 @@
 
         <div class="flex flex-col sm:flex-row gap-2.5">
             <button type="submit" id="event-submit-btn"
-                    class="w-full sm:w-auto px-4 py-2 bg-accent text-white text-[13px] font-semibold rounded-md transition-colors">
+                    class="w-full sm:w-auto px-4 py-2 btn-primary transition-colors">
                 {% trans "Speichern" %}
             </button>
-            <a href="{% url 'core:zeitstrom' %}" class="w-full sm:w-auto text-center px-4 py-2 bg-surface border border-subtle text-[13px] text-ink-soft rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
+            <a href="{% url 'core:zeitstrom' %}" class="w-full sm:w-auto text-center px-4 py-2 btn-secondary">{% trans "Abbrechen" %}</a>
         </div>
     </form>
 </div>

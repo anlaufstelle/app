@@ -115,12 +115,9 @@ class DocumentType(models.Model):
 
     def save(self, *args, **kwargs):
         if not self._state.adding:
-            try:
-                orig = DocumentType.objects.get(pk=self.pk)
-                if orig.system_type and orig.system_type != self.system_type:
-                    raise ValidationError(_("system_type kann nach Erstellung nicht geändert werden."))
-            except DocumentType.DoesNotExist:
-                pass
+            orig = DocumentType.objects.filter(pk=self.pk).first()
+            if orig and orig.system_type and orig.system_type != self.system_type:
+                raise ValidationError(_("system_type kann nach Erstellung nicht geändert werden."))
         super().save(*args, **kwargs)
 
     def __str__(self):
@@ -290,12 +287,9 @@ class FieldTemplate(models.Model):
                 super().save(*args, **kwargs)
                 return
         else:
-            try:
-                orig = FieldTemplate.objects.get(pk=self.pk)
-                if orig.slug and orig.slug != self.slug:
-                    raise ValidationError(_("Slug kann nach Erstellung nicht geändert werden."))
-            except FieldTemplate.DoesNotExist:
-                pass
+            orig = FieldTemplate.objects.filter(pk=self.pk).first()
+            if orig and orig.slug and orig.slug != self.slug:
+                raise ValidationError(_("Slug kann nach Erstellung nicht geändert werden."))
             super().save(*args, **kwargs)
 
     @property

@@ -144,6 +144,26 @@ def test_decrypt_invalid_token_raises():
             decrypt_field(bad_value)
 
 
+def test_decrypt_field_does_not_mask_unexpected_errors(monkeypatch):
+    """A4.6 (Refs #1024 / #1016): decrypt_field fängt nur ``InvalidToken`` und
+    verpackt es in ``EncryptionError``.
+
+    Unerwartete Fehler (Programmierfehler, kaputte Krypto-Lib) dürfen NICHT
+    vom früheren breiten ``except (InvalidToken, Exception)`` als generischer
+    EncryptionError maskiert werden — sonst verschwinden echte Bugs lautlos im
+    ``safe_decrypt``-Fallback.
+    """
+
+    class _BoomFernet:
+        def decrypt(self, *args, **kwargs):
+            raise RuntimeError("unexpected boom")
+
+    monkeypatch.setattr("core.services.file_vault.encryption.get_fernet", lambda: _BoomFernet())
+    enc = {"__encrypted__": True, "value": "irrelevant"}
+    with pytest.raises(RuntimeError):
+        decrypt_field(enc)
+
+
 def test_safe_decrypt_returns_fallback():
     """safe_decrypt returns the fallback string instead of raising on error."""
     key = generate_key()
@@ -218,6 +238,42 @@ def test_event_save_encrypts_sensitive_fields(facility, client_identified, doc_t
     with override_settings(ENCRYPTION_KEY=key):
         plaintext = decrypt_field(stored_value)
     assert plaintext == "Sehr geheime Information"
+
+
+@pytest.mark.django_db
+def test_reencrypt_heals_plaintext_pii_fields(facility, client_identified, doc_type_crisis, staff_user):
+    """A4.4 (Refs #1024 / #1016): reencrypt_fields verschlüsselt nachträglich
+    Plaintext-PII im Bestand.
+
+    Felder mit ``is_encrypted=True``, die z.B. vor Einführung der
+    Verschlüsselung als Klartext gespeichert wurden, werden vom Heal-Lauf
+    nachverschlüsselt.
+    """
+    from django.core.management import call_command
+
+    from core.models import Event
+
+    key = generate_key()
+    with override_settings(ENCRYPTION_KEY=key):
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_crisis,
+            occurred_at=timezone.now(),
+            data_json={"notiz-krise": "egal"},
+            created_by=staff_user,
+        )
+        # Altbestand simulieren: Klartext direkt in die DB schreiben (umgeht die
+        # save()-Verschlüsselung).
+        Event.objects.filter(pk=event.pk).update(data_json={"notiz-krise": "klartext-pii"})
+
+        call_command("reencrypt_fields")
+
+    event.refresh_from_db()
+    stored = event.data_json["notiz-krise"]
+    assert is_encrypted_value(stored), "Plaintext-PII muss nach dem Heal-Lauf verschlüsselt sein"
+    with override_settings(ENCRYPTION_KEY=key):
+        assert decrypt_field(stored) == "klartext-pii"
 
 
 @pytest.mark.django_db

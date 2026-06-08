@@ -11,6 +11,11 @@ www.{$DOMAIN} {
         X-Content-Type-Options "nosniff"
         X-Frame-Options "DENY"
         Referrer-Policy "strict-origin-when-cross-origin"
+        # X-Robots-Tag (A7.4, Refs #1024): Anlaufstelle ist eine geschlossene
+        # Fachsoftware mit sensiblen Daten — keine Suchmaschinen-Indizierung
+        # erwünscht (gilt auch für Staging/Dev-Deployments). Default noindex/
+        # nofollow; per X_ROBOTS_TAG-Env überschreibbar, falls je gewünscht.
+        X-Robots-Tag "{$X_ROBOTS_TAG:noindex, nofollow}"
         # CSP wird ausschließlich über Django-CSP-Middleware gesteuert (settings/base.py)
     }
 
