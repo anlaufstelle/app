@@ -60,7 +60,7 @@ django-unfold==0.94.0
     # via -r requirements.in
 execnet==2.1.2
     # via pytest-xdist
-filelock==3.29.1
+filelock==3.29.0
     # via -r requirements-dev.in
 fonttools[woff]==4.62.1
     # via weasyprint
@@ -177,7 +177,7 @@ requests==2.33.1
     # via pytest-base-url
 rich==15.0.0
     # via textual
-ruff==0.15.15
+ruff==0.15.16
     # via -r requirements-dev.in
 sentry-sdk[django]==2.61.0
     # via -r requirements.in
