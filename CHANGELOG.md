@@ -6,9 +6,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-06-11
+
+Sicherheits- und Stabilisierungs-Release (Pre-Release): konsolidiert eine breite Hardening-Runde aus dem Post-v0.13.0-Plan (#1016) — Privilege-Escalation- und Admin-Scoping-Abdichtung, MFA-/Sudo-Verschärfung, authentifizierte Backups, Datei-Chunk-Binding v2, Webhook-SSRF-Härtung — plus UI/UX-Polish (#1024). Keine Datenmodell-Brüche; Vorwärts-Migration ohne Datenverlust. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
+
+### Security
+
+- **Privilege-Escalation & Admin-Facility-Scoping abgedichtet** (#1016) — `facility_admin` kann sich über das Rollen-Select nicht mehr zu `super_admin` hochstufen; der `facility`-FK wird zentral als Single Source of Truth gescopt und erzwungen; `OrganizationAdmin` ist auf `super_admin` beschränkt. E2E-Regressionstests sichern jede der drei Abdichtungen.
+- **Sudo-Mode verlangt frischen zweiten Faktor** (#1016) — bei aktivem TOTP erfordert die Sudo-Re-Authentifizierung neben dem Passwort einen frischen OTP-Code, nicht nur das Passwort.
+- **MFA-Default-Enforcement für privilegierte Rollen** (#1016) — `super_admin` und `facility_admin` werden hinter `MFA_ENFORCE_PRIVILEGED_ROLES` standardmäßig zur MFA-Einrichtung gezwungen.
+- **Vier-Augen-Prinzip bei Löschfreigabe serverseitig erzwungen** (#1016) — `approve_deletion` prüft die Trennung von Antragsteller und Genehmiger im Service-Layer als SSoT, nicht nur im UI.
+- **Row-Level-Security-Lücke geschlossen** (#1016) — der `super_admin`-Bypass wird auf vier zuvor fehlende facility-Policies nachgezogen.
+- **Authentifizierte Backups** (#1016) — Backup-Artefakte sind per Encrypt-then-MAC (HMAC-SHA256) gegen Manipulation geschützt.
+- **Datei-Chunk-Binding v2 + Header-Tamper-Schutz** (#1016) — verschlüsselte Datei-Chunks sind an Storage-ID und Position gebunden, mit Downgrade-Erkennung gegen das Vertauschen oder Wiedereinspielen alter Chunks; In-Place-Encrypt schließt eine Klartext-Zwischenstufe.
+- **Klartext-PII-Heilung** (#1016) — `reencrypt_fields` verschlüsselt nachträglich etwaige Klartext-PII in `Event.data_json`.
+- **Webhook-SSRF-Härtung** (#1016) — Breach-Webhooks folgen keinen Redirects mehr, sind per DNS-Pinning gegen Rebinding geschützt und der Guard prüft `not is_global` statt einer Negativliste.
+- **Geteilter DatabaseCache + Ratelimit-Backend** (#1016) — gemeinsamer DB-Cache, Ratelimits laufen über `RATELIMIT_USE_CACHE` statt prozesslokal.
+- **k-Anonymität: sekundäre Suppression** (#1016) — komplementäre Offenlegung über sich ergänzende Auswertungen wird durch zusätzliche Unterdrückung verhindert.
+- **Retention-/Audit-Pruning gehärtet** (#1016) — `SECURITY_VIOLATION`- und `RETENTION_RUN_COMPLETED`-Einträge sind vom Pruning ausgenommen; AuditLog-Pruning rechnet kalendergenau statt mit 30-Tage-Näherung.
+- **Härtung am Rand** (#1016) — `/health` mit reduzierter Detailtiefe plus Cache/Rate-Limit, `X-Robots-Tag: noindex` als Default, CSP-Report über den kanonischen `get_client_ip`, verengte Entschlüsselungs-Fehlerbehandlung (nur `InvalidToken`) und ein Settings-Guard-Cluster gegen Fehlkonfiguration in Produktion.
+- **Django 6.0.5 → 6.0.6** — Security-Patch-Release, schließt fünf von Django veröffentlichte Schwachstellen (PYSEC-2026-197 bis -201). Reiner Versions-Bump im `<6.1`-Rahmen, keine API-/Verhaltensänderung.
+
+### Added
+
+- **HTMX-Fehler-Toast, Lade-Spinner & Doppel-Submit-Schutz** (#1024) — fehlgeschlagene HTMX-Requests zeigen einen Toast statt stillem Scheitern; laufende Requests bekommen einen Spinner, und Doppel-Submits werden unterbunden.
+- **Inline-Edit für Ziele/Meilensteine** (#1024) — Ziele und Meilensteine sind direkt editierbar, mit Bestätigung und Leereingabe-Validierung.
+
 ### Changed
 
-- **Release-Hygiene: Dev-Ops-/Tooling-Struktur am Quellbaum getrennt** (#998, schließt #984) — Interne Build-/Deploy-/Release-Werkzeuge und Dev-only-Skripte liegen jetzt unter klaren Prefixen: `dev-ops/` (Deploy-Skripte + Release-Tooling inkl. des nun versionierten `build-release.sh`), `scripts/dev/` (Mutation-/Perf-Tooling), `scripts/ops/` (Self-Hoster-Ops), `docs/dev/` (Dev-Doku). Der Public-Release-Snapshot schließt dadurch nur noch zwei Verzeichnis-Prefixe (`dev-ops/`, `scripts/dev/`) plus `docs/dev/` und wenige Einzeldateien aus, statt einer Ad-hoc-Liste im Build-Skript. **Keine Auswirkung auf Self-Hoster:** `docker-compose.prod.yml`, `deploy/postgres-init/` und alle CI-relevanten Skripte (`scripts/check_*`, `verify_test_matrix_drift.py`) bleiben unverändert am Platz. Rein interne Umstrukturierung ohne Verhaltens- oder API-Änderung.
+- **Wiederverwendbare UI-Komponenten** (#1024) — gemeinsame `components/_badge.html` und `components/_form_field.html`, `@layer components`-Klassen für `.btn-primary`/`.btn-secondary`/`.card`/`.badge` sowie eine gemeinsame Alpine-Basis für Autocomplete-Felder (Dedup) vereinheitlichen das Markup.
+- **Interne Refactorings** (#1016) — System-AuditLog-Filter zentralisiert (DRY), totes `FacilityScopedViewMixin` entfernt, HTMX-Detection an das Projektmuster angeglichen. Kein Verhaltensunterschied.
+- **i18n EN-Katalog synchronisiert** (#1024) — englischer Übersetzungskatalog auf den aktuellen Stand gebracht, übersetzt und kompiliert.
+
+### Fixed
+
+- **Lost-Update-Schutz** (#1016) — `defer_count` wird atomar via `F()` hochgezählt und WorkItem-Bulk-Pfade nutzen `select_for_update`; gleichzeitige Bearbeitungen überschreiben sich nicht mehr.
+- **CSP-Konformität in der UI** (#1016, #1024) — Reload-Buttons ohne `javascript:`-URI, Inbox-Select-All ohne `$event` in der Alpine-Expression, `Ctrl+Enter` nutzt `requestSubmit()` statt `submit()`.
+- **MFA-Logout-Links als POST-Form** — die MFA-Logout-Aktion ist ein POST-Formular statt eines GET-Anchors (behebt einen 405).
+- **Cache-Tabelle dem DB-Owner zugewiesen** (#1030) — die Cache-Tabelle gehört der korrekten DB-Rolle, sodass die App-Rolle zugreifen kann (`permission denied` behoben).
+- **Deploy- & Ops-Härtung** — `check_db_roles` als Fail-Fast-Gate vor der Migration und Identifikation der App-Rolle über `POSTGRES_APP_USER`, Wartungs-Cron als BYPASSRLS-Admin-Rolle mit Fail-loud-Guard, expliziter ClamAV-TCP-3310-Scan-Pfad-Vertrag, `GRANT SET ON PARAMETER session_replication_role` für den Anonymisierungs-Pfad, lauffähiges `dev-seed` via `--entrypoint python`.
 
 ## [0.13.3] - 2026-06-02
 

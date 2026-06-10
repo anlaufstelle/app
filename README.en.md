@@ -4,7 +4,7 @@
 
 **Documentation, statistics, and team communication for drop-in centers, shelters, and street outreach — open source, GDPR-compliant, pseudonymized, free.**
 
-> ⚠️ **Pre-Release (v0.13.3)** — Anlaufstelle is functional but not yet cleared for production use. Quality assurance and stabilization are ongoing. We are looking for pilot facilities to test and co-develop the system — [get in touch](mailto:kontakt@anlaufstelle.app).
+> ⚠️ **Pre-Release (v0.14.0)** — Anlaufstelle is functional but not yet cleared for production use. Quality assurance and stabilization are ongoing. We are looking for pilot facilities to test and co-develop the system — [get in touch](mailto:kontakt@anlaufstelle.app).
 
 ---
 
