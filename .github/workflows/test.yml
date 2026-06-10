@@ -90,6 +90,7 @@ jobs:
           POSTGRES_HOST: localhost
           DJANGO_SECRET_KEY: ci-check-only-not-a-real-secret
           ENCRYPTION_KEY: P2N8yY4cVt1BmHZSvNrkSfkDYIJwEFcftRmO4bE-nZM=
+          DJANGO_AUDIT_HASH_KEY: ci-check-only-not-a-real-audit-hash-key
           ALLOWED_HOSTS: localhost
 
   audit:
