@@ -60,7 +60,7 @@ django-unfold==0.94.0
     # via -r requirements.in
 execnet==2.1.2
     # via pytest-xdist
-filelock==3.29.0
+filelock==3.29.1
     # via -r requirements-dev.in
 fonttools[woff]==4.62.1
     # via weasyprint
