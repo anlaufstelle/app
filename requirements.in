@@ -1,4 +1,4 @@
-Django>=6.0.5,<6.1
+Django>=6.0.6,<6.1
 psycopg[binary]>=3.3.4
 gunicorn>=26.0.0
 whitenoise>=6.5

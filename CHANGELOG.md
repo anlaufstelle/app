@@ -25,6 +25,7 @@ Sicherheits- und Stabilisierungs-Release (Pre-Release): konsolidiert eine breite
 - **k-Anonymität: sekundäre Suppression** (#1016) — komplementäre Offenlegung über sich ergänzende Auswertungen wird durch zusätzliche Unterdrückung verhindert.
 - **Retention-/Audit-Pruning gehärtet** (#1016) — `SECURITY_VIOLATION`- und `RETENTION_RUN_COMPLETED`-Einträge sind vom Pruning ausgenommen; AuditLog-Pruning rechnet kalendergenau statt mit 30-Tage-Näherung.
 - **Härtung am Rand** (#1016) — `/health` mit reduzierter Detailtiefe plus Cache/Rate-Limit, `X-Robots-Tag: noindex` als Default, CSP-Report über den kanonischen `get_client_ip`, verengte Entschlüsselungs-Fehlerbehandlung (nur `InvalidToken`) und ein Settings-Guard-Cluster gegen Fehlkonfiguration in Produktion.
+- **Django 6.0.5 → 6.0.6** — Security-Patch-Release, schließt fünf von Django veröffentlichte Schwachstellen (PYSEC-2026-197 bis -201). Reiner Versions-Bump im `<6.1`-Rahmen, keine API-/Verhaltensänderung.
 
 ### Added
 
