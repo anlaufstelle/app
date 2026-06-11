@@ -1126,7 +1126,11 @@ Unter **Core → Audit-Logs** (bzw. `/audit/`) können Logs nach Aktion, Einrich
 
 ### 7.5 Löschanträge (4-Augen-Prinzip)
 
-Löschanträge für Personendaten werden im Vier-Augen-Prinzip bearbeitet: Ein Antrag muss von Leitung oder Anwendungsbetreuung (`facility_admin`) genehmigt werden, bevor Daten endgültig gelöscht werden. Dies schützt vor versehentlicher oder unberechtigter Löschung.
+Löschanträge für Personendaten werden im Vier-Augen-Prinzip bearbeitet: Ein Antrag muss von einer **zweiten berechtigten Person** genehmigt werden, bevor Daten endgültig gelöscht werden. Dies schützt vor versehentlicher oder unberechtigter Löschung — auch durch privilegierte Rollen selbst.
+
+**Genehmiger-Pool über das Recht „Löschbestätigung"** (Refs #1053): Wer genehmigen darf, wird nicht aus der Rolle abgeleitet, sondern über das einzeln vergebbare Benutzer-Recht *Löschbestätigung* (`can_confirm_deletion`) kuratiert. Bei der Einführung erhalten bestehende Leitungen und Anwendungsbetreuungen das Recht automatisch; danach kann die Anwendungsbetreuung es in der Benutzerverwaltung (Administration → Benutzer) gezielt vergeben oder entziehen — z. B. an eine erfahrene Fachkraft, damit auch bei einer einzelnen Leitung immer eine zweite Person verfügbar ist. Eigene Anträge kann auch ein:e Rechteträger:in nie selbst genehmigen (View-, Service- und Datenbank-Ebene erzwingen Antragsteller ≠ Genehmiger).
+
+Jede Vergabe und jeder Entzug des Rechts sowie jede Genehmigung werden im unveränderlichen Audit-Log protokolliert. Existiert für einen offenen Antrag außer der antragstellenden Person keine aktive Person mit dem Recht, zeigt die Löschantragsliste eine deutliche Warnung („Kein möglicher Genehmiger") — vergeben Sie das Recht dann an eine weitere Person.
 
 ### 7.6 Betroffenenrechte (Art. 15–20 DSGVO)
 
