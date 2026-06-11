@@ -12,36 +12,9 @@ import uuid
 import pytest
 import requests
 
+from tests.e2e._authz_audit_helpers import login, session_cookie_header
+
 pytestmark = pytest.mark.e2e
-
-PASSWORD = "anlaufstelle2026"
-
-
-def _login(base_url, username):
-    """Per echtem HTTP einloggen; gibt (Session, Login-Response) zurück.
-
-    Aufrufer müssen die Session schließen (``with session:`` bzw.
-    ``session.close()``). Zusätzlich ``Connection: close``: Der
-    gunicorn-gthread-Worker blockiert nach einem POST über eine
-    Keep-Alive-Verbindung den graceful Shutdown um volle 30s
-    (graceful_timeout) — auch wenn der Client die Verbindung längst
-    geschlossen hat. Das ließ den Server-Teardown der base_url-Fixture
-    (proc.wait(timeout=10)) reproduzierbar in TimeoutExpired laufen.
-    """
-    session = requests.Session()
-    session.headers["Connection"] = "close"
-    login_page = session.get(f"{base_url}/login/", timeout=10)
-    assert login_page.status_code == 200
-    token = session.cookies.get("csrftoken")
-    response = session.post(
-        f"{base_url}/login/",
-        data={"username": username, "password": PASSWORD, "csrfmiddlewaretoken": token},
-        headers={"Referer": f"{base_url}/login/"},
-        timeout=10,
-        allow_redirects=False,
-    )
-    assert response.status_code == 302, f"Login {username} fehlgeschlagen: {response.status_code}"
-    return session, response
 
 
 class TestSessionCookieFlags:
@@ -49,14 +22,13 @@ class TestSessionCookieFlags:
 
     def test_session_cookie_is_httponly_and_samesite(self, base_url):
         """Session-Cookie trägt HttpOnly und SameSite=Lax (curl-verifiziert)."""
-        session, login_response = _login(base_url, "miriam")
+        session, login_response = login(base_url, "miriam")
         session.close()
-        # requests fasst mehrere Set-Cookie-Header (csrftoken + sessionid)
-        # kommasepariert zusammen — daher gezielt den sessionid-Teil prüfen,
-        # damit Attribute des csrftoken-Cookies kein False-Positive liefern.
-        set_cookie = login_response.headers.get("Set-Cookie", "")
-        assert "sessionid=" in set_cookie
-        session_part = set_cookie.split("sessionid=", 1)[1]
+        # Den rohen sessionid-Set-Cookie-Header gezielt prüfen (reihenfolge-
+        # unabhängig via raw.headers.getlist), damit Attribute des
+        # csrftoken-Cookies kein False-Positive liefern.
+        session_part = session_cookie_header(login_response)
+        assert session_part, "Kein sessionid-Set-Cookie-Header im Login-Response"
         assert "HttpOnly" in session_part
         assert "SameSite=Lax" in session_part
         # Secure-Flag ist prod-only (settings/prod.py SESSION_COOKIE_SECURE=True,
@@ -77,7 +49,7 @@ class TestSecurityHeaders:
 
     def test_headers_when_authenticated(self, base_url):
         """Auch eingeloggte Seiten (/start/) tragen die Security-Header."""
-        session, _ = _login(base_url, "miriam")
+        session, _ = login(base_url, "miriam")
         with session:
             response = session.get(f"{base_url}/start/", timeout=10)
         assert response.status_code == 200
@@ -89,7 +61,7 @@ class TestVerticalEscalationSample:
 
     def test_assistant_cannot_reach_system_area(self, base_url):
         """Assistant erhält auf /system/ kein 200 (beobachtet: 403)."""
-        session, _ = _login(base_url, "lena")
+        session, _ = login(base_url, "lena")
         with session:
             response = session.get(f"{base_url}/system/", timeout=10, allow_redirects=False)
         assert response.status_code in (403, 404), response.status_code
@@ -99,7 +71,7 @@ class TestVerticalEscalationSample:
 
         Beobachtet: 302 → /admin-mgmt/login/?next=/admin-mgmt/.
         """
-        session, _ = _login(base_url, "lena")
+        session, _ = login(base_url, "lena")
         with session:
             response = session.get(f"{base_url}/admin-mgmt/", timeout=10, allow_redirects=False)
         assert response.status_code in (302, 403, 404)
@@ -119,7 +91,7 @@ class TestObjectScopeSample:
     def test_unknown_client_uuid_is_404_not_500(self, base_url):
         """Stichprobe Objekt-Scope über echtes HTTP. Die echte
         Cross-Facility-Probe läuft im Audit (medium-Seed, 2 Facilities)."""
-        session, _ = _login(base_url, "miriam")
+        session, _ = login(base_url, "miriam")
         with session:
             response = session.get(f"{base_url}/clients/{uuid.uuid4()}/", timeout=10)
         assert response.status_code == 404
