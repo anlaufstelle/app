@@ -6067,3 +6067,7 @@ msgstr "Awaiting approval by a second authorized person (four-eyes principle)"
 #: src/templates/core/events/deletion_review.html:49
 msgid "Sie haben diesen Löschantrag selbst gestellt. Die Genehmigung muss durch eine zweite berechtigte Person erfolgen (Vier-Augen-Prinzip)."
 msgstr "You submitted this deletion request yourself. Approval must be given by a second authorized person (four-eyes principle)."
+
+#: src/templates/core/clients/list.html:13
+msgid "Papierkorb"
+msgstr "Trash"
