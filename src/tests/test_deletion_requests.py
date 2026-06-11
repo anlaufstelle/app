@@ -633,3 +633,61 @@ class TestDeletionEdgeCases:
         client.force_login(other_lead)
         response = client.get(reverse("core:deletion_review", kwargs={"pk": dr.pk}))
         assert response.status_code == 404
+
+
+@pytest.mark.django_db
+class TestOwnDeletionRequestUI:
+    """Refs #1052: Antragsteller:in sieht beim eigenen Löschantrag keinen
+    Button zur Genehmigung/finalen Löschung — stattdessen einen
+    Statushinweis. Die UI bildet damit ab, was die Backend-Guards
+    (View-POST, Service-SSoT, DB-Constraint) ohnehin erzwingen
+    (Vier-Augen-Prinzip).
+    """
+
+    @pytest.fixture
+    def own_request(self, event_qualified, lead_user):
+        """Pending Request, gestellt von lead_user (= eingeloggte Person)."""
+        return request_deletion(event_qualified, lead_user, "Eigener Antrag")
+
+    def test_list_hides_review_link_for_own_request(self, client, lead_user, own_request):
+        client.force_login(lead_user)
+        response = client.get(reverse("core:deletion_request_list"))
+        content = response.content.decode()
+        assert "deletion-review-link" not in content
+        assert "deletion-own-request-hint" in content
+        assert "zweite berechtigte Person" in content
+
+    def test_list_shows_review_link_for_foreign_request(self, client, lead_user, pending_request):
+        # pending_request stammt von staff_user — lead_user darf prüfen.
+        client.force_login(lead_user)
+        response = client.get(reverse("core:deletion_request_list"))
+        content = response.content.decode()
+        assert "deletion-review-link" in content
+        assert "deletion-own-request-hint" not in content
+
+    def test_event_review_hides_buttons_for_requester(self, client, lead_user, own_request):
+        client.force_login(lead_user)
+        response = client.get(reverse("core:deletion_review", kwargs={"pk": own_request.pk}))
+        content = response.content.decode()
+        assert 'value="approve"' not in content
+        assert 'value="reject"' not in content
+        assert "deletion-own-request-hint" in content
+
+    def test_event_review_shows_buttons_for_other_reviewer(self, client, lead_user, pending_request):
+        client.force_login(lead_user)
+        response = client.get(reverse("core:deletion_review", kwargs={"pk": pending_request.pk}))
+        content = response.content.decode()
+        assert 'value="approve"' in content
+        assert 'value="reject"' in content
+        assert "deletion-own-request-hint" not in content
+
+    def test_client_review_hides_buttons_for_requester(self, client, lead_user, client_qualified):
+        from core.services.client import request_client_deletion
+
+        dr = request_client_deletion(client_qualified, lead_user, "Eigener Personen-Antrag")
+        client.force_login(lead_user)
+        response = client.get(reverse("core:deletion_review", kwargs={"pk": dr.pk}))
+        content = response.content.decode()
+        assert 'value="approve"' not in content
+        assert 'value="reject"' not in content
+        assert "deletion-own-request-hint" in content
