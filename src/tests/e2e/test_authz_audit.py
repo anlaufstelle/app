@@ -119,7 +119,11 @@ def _judge(exp, actor, allowed, status, location):
     if actor in allowed:
         if exp.sudo and status == 302 and location.startswith("/sudo/"):
             return "allow", "OK"  # AuthZ hat durchgelassen — Sudo-Gate aktiv.
-        ok = (status not in (403, 404) or status in exp.extra_ok) and not login_redirect
+        # Nur ?next=-Redirects sind echte Auth-Bounces (redirect_to_login);
+        # ein nacktes /login/ ist der legitime Logout-Redirect
+        # (LOGOUT_REDIRECT_URL) — vgl. test_authz_matrix.py.
+        auth_bounce = status == 302 and location.startswith("/login/?next=")
+        ok = (status not in (403, 404) or status in exp.extra_ok) and not auth_bounce
         return "allow", "OK" if ok else "ABWEICHUNG"
     return "deny", "OK" if status in (403, 404) else "ABWEICHUNG"
 
