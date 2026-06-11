@@ -9,6 +9,7 @@ Deckt ab:
 """
 
 import pytest
+from playwright.sync_api import expect
 
 from tests.e2e._helpers import enter_sudo_mode
 from tests.e2e._selectors import find_client_link
@@ -188,6 +189,37 @@ def _clear_lockout_for(usernames, e2e_env):
         check=False,
         capture_output=True,
     )
+
+
+class TestPasswordToggle:
+    """Klarsicht-Toggle (Auge-Button) für Passwortfelder (Refs #1049).
+
+    Abgeleitet aus manueller Verifikation: Klick wechselt input-type
+    password↔text, aria-pressed und aria-label spiegeln den Zustand,
+    der eingegebene Wert bleibt erhalten. Alpine flusht reaktiv im
+    Microtask → expect() wartet auf den Attributwechsel.
+    """
+
+    def test_toggle_reveals_and_hides_password(self, base_url, browser):
+        context = browser.new_context()
+        page = context.new_page()
+        try:
+            page.goto(f"{base_url}/login/")
+            pw = page.locator('input[name="password"]')
+            toggle = page.locator('[data-testid="password-toggle"]')
+            pw.fill("geheim123")
+            # Default: verborgen (NIST SP 800-63B)
+            expect(pw).to_have_attribute("type", "password")
+            expect(toggle).to_have_attribute("aria-pressed", "false")
+            toggle.click()
+            expect(pw).to_have_attribute("type", "text")
+            expect(toggle).to_have_attribute("aria-pressed", "true")
+            assert pw.input_value() == "geheim123"
+            toggle.click()
+            expect(pw).to_have_attribute("type", "password")
+            expect(toggle).to_have_attribute("aria-pressed", "false")
+        finally:
+            context.close()
 
 
 class TestZZAccountLockout:
