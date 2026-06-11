@@ -11,17 +11,21 @@ except ImportError:
     collect_ignore_glob = ["e2e/*"]
 
 from core.models import (
+    AuditLog,
     Case,
     Client,
+    DeletionRequest,
     DocumentType,
     DocumentTypeField,
     Episode,
     Event,
     Facility,
     FieldTemplate,
+    LegalHold,
     Milestone,
     Organization,
     OutcomeGoal,
+    RetentionProposal,
     Settings,
     User,
     WorkItem,
@@ -285,4 +289,272 @@ def milestone(outcome_goal):
     return Milestone.objects.create(
         goal=outcome_goal,
         title="Erstgespräch geführt",
+    )
+
+
+# ---- AuthZ-Matrix-Fixtures (Refs #1055) ---------------------------------
+# Eigene Facility-1-Objekte für Matrix-Zellen + Spiegel-Objekte in
+# second_facility für IDOR-Probes (erwartet 404, kein Existenz-Leak).
+
+PDF_MINIMAL = (
+    b"%PDF-1.4\n"
+    b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\n"
+    b"xref\n0 3\n0000000000 65535 f\n"
+    b"trailer<</Size 3/Root 1 0 R>>\n"
+    b"startxref\n9\n%%EOF\n"
+)
+
+
+def _make_attachment(fac, event, user):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    from core.services.file_vault import store_encrypted_file
+
+    ft = FieldTemplate.objects.create(facility=fac, name="Anhang (AuthZ)", field_type="file")
+    upload = SimpleUploadedFile("authz.pdf", PDF_MINIMAL, content_type="application/pdf")
+    return store_encrypted_file(fac, upload, ft, event, user)
+
+
+@pytest.fixture
+def client_trashed(facility, staff_user):
+    return Client.objects.create(
+        facility=facility,
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        pseudonym="Trash-01",
+        created_by=staff_user,
+        is_deleted=True,
+        deleted_at=timezone.now(),
+    )
+
+
+@pytest.fixture
+def case_event(case_open, sample_event):
+    sample_event.case = case_open
+    sample_event.save(update_fields=["case"])
+    return sample_event
+
+
+@pytest.fixture
+def authz_attachment(facility, sample_event, staff_user):
+    return _make_attachment(facility, sample_event, staff_user)
+
+
+@pytest.fixture
+def audit_entry(facility, staff_user, client_identified):
+    return AuditLog.objects.create(
+        facility=facility,
+        user=staff_user,
+        action=AuditLog.Action.EXPORT,
+        target_type="Client",
+        target_id=str(client_identified.pk),
+        detail={},
+    )
+
+
+@pytest.fixture
+def retention_proposal(facility, sample_event):
+    return RetentionProposal.objects.create(
+        facility=facility,
+        target_type=RetentionProposal.TargetType.EVENT,
+        target_id=sample_event.pk,
+        deletion_due_at=timezone.localdate(),
+        retention_category="anonymous",
+    )
+
+
+@pytest.fixture
+def legal_hold(facility, sample_event, lead_user):
+    return LegalHold.objects.create(
+        facility=facility,
+        target_type="Event",
+        target_id=sample_event.pk,
+        reason="AuthZ-Matrix-Test",
+        created_by=lead_user,
+    )
+
+
+@pytest.fixture
+def deletion_request(facility, sample_event, staff_user):
+    return DeletionRequest.objects.create(
+        facility=facility,
+        target_type="Event",
+        target_id=sample_event.pk,
+        reason="AuthZ-Matrix-Test",
+        requested_by=staff_user,
+    )
+
+
+# ---- Fremde Facility (IDOR-Ziele) ----------------------------------------
+
+
+@pytest.fixture
+def foreign_staff(second_facility):
+    user = User.objects.create_user(
+        username="authz_foreign_staff",
+        role=User.Role.STAFF,
+        facility=second_facility,
+        is_staff=True,
+    )
+    user.set_password("testpass123")
+    user.save()
+    return user
+
+
+@pytest.fixture
+def foreign_client(second_facility, foreign_staff):
+    return Client.objects.create(
+        facility=second_facility,
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        pseudonym="Fremd-01",
+        created_by=foreign_staff,
+    )
+
+
+@pytest.fixture
+def foreign_client_trashed(second_facility, foreign_staff):
+    return Client.objects.create(
+        facility=second_facility,
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        pseudonym="Fremd-Trash-01",
+        created_by=foreign_staff,
+        is_deleted=True,
+        deleted_at=timezone.now(),
+    )
+
+
+@pytest.fixture
+def foreign_case(second_facility, foreign_client, foreign_staff):
+    return Case.objects.create(
+        facility=second_facility,
+        client=foreign_client,
+        title="Fremder Fall",
+        status=Case.Status.OPEN,
+        created_by=foreign_staff,
+    )
+
+
+@pytest.fixture
+def foreign_case_closed(second_facility, foreign_client, foreign_staff):
+    return Case.objects.create(
+        facility=second_facility,
+        client=foreign_client,
+        title="Fremder geschlossener Fall",
+        status=Case.Status.CLOSED,
+        closed_at=timezone.now(),
+        created_by=foreign_staff,
+    )
+
+
+@pytest.fixture
+def foreign_doc_type(second_facility):
+    return DocumentType.objects.create(
+        facility=second_facility,
+        category=DocumentType.Category.CONTACT,
+        name="Kontakt (fremd)",
+    )
+
+
+@pytest.fixture
+def foreign_event(second_facility, foreign_client, foreign_doc_type, foreign_staff):
+    return Event.objects.create(
+        facility=second_facility,
+        client=foreign_client,
+        document_type=foreign_doc_type,
+        occurred_at=timezone.now(),
+        data_json={},
+        created_by=foreign_staff,
+    )
+
+
+@pytest.fixture
+def foreign_case_event(foreign_case, foreign_event):
+    foreign_event.case = foreign_case
+    foreign_event.save(update_fields=["case"])
+    return foreign_event
+
+
+@pytest.fixture
+def foreign_episode(foreign_case, foreign_staff):
+    return Episode.objects.create(
+        case=foreign_case,
+        title="Fremde Episode",
+        started_at=timezone.now().date(),
+        created_by=foreign_staff,
+    )
+
+
+@pytest.fixture
+def foreign_goal(foreign_case, foreign_staff):
+    return OutcomeGoal.objects.create(
+        case=foreign_case,
+        title="Fremdes Ziel",
+        created_by=foreign_staff,
+    )
+
+
+@pytest.fixture
+def foreign_milestone(foreign_goal):
+    return Milestone.objects.create(goal=foreign_goal, title="Fremder Meilenstein")
+
+
+@pytest.fixture
+def foreign_workitem(second_facility, foreign_client, foreign_staff):
+    return WorkItem.objects.create(
+        facility=second_facility,
+        client=foreign_client,
+        created_by=foreign_staff,
+        item_type=WorkItem.ItemType.TASK,
+        status=WorkItem.Status.OPEN,
+        title="Fremde Aufgabe",
+    )
+
+
+@pytest.fixture
+def foreign_attachment(second_facility, foreign_event, foreign_staff):
+    return _make_attachment(second_facility, foreign_event, foreign_staff)
+
+
+@pytest.fixture
+def foreign_audit_entry(second_facility, foreign_staff, foreign_client):
+    return AuditLog.objects.create(
+        facility=second_facility,
+        user=foreign_staff,
+        action=AuditLog.Action.EXPORT,
+        target_type="Client",
+        target_id=str(foreign_client.pk),
+        detail={},
+    )
+
+
+@pytest.fixture
+def foreign_retention_proposal(second_facility, foreign_event):
+    return RetentionProposal.objects.create(
+        facility=second_facility,
+        target_type=RetentionProposal.TargetType.EVENT,
+        target_id=foreign_event.pk,
+        deletion_due_at=timezone.localdate(),
+        retention_category="anonymous",
+    )
+
+
+@pytest.fixture
+def foreign_legal_hold(second_facility, foreign_event, foreign_staff):
+    return LegalHold.objects.create(
+        facility=second_facility,
+        target_type="Event",
+        target_id=foreign_event.pk,
+        reason="AuthZ-IDOR-Test",
+        created_by=foreign_staff,
+    )
+
+
+@pytest.fixture
+def foreign_deletion_request(second_facility, foreign_event, foreign_staff):
+    return DeletionRequest.objects.create(
+        facility=second_facility,
+        target_type="Event",
+        target_id=foreign_event.pk,
+        reason="AuthZ-IDOR-Test",
+        requested_by=foreign_staff,
     )
