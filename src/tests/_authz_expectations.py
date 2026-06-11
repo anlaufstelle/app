@@ -95,7 +95,9 @@ EXPECTATIONS = (
     E("logout", "auth-flow", post=ALL_AUTH, anonymous_ok=True),
     E("password_change", "auth-flow", get=ALL_AUTH, post=ALL_AUTH),
     E("offline_key_salt", "auth-flow", post=ALL_AUTH),
-    E("sudo_mode", "auth-flow", get=ALL_AUTH, post=ALL_AUTH),
+    # POST ohne korrektes Passwort antwortet 403 (Re-Auth-Form, sudo_mode.py) —
+    # Authentifizierungs-, keine Autorisierungs-Semantik.
+    E("sudo_mode", "auth-flow", get=ALL_AUTH, post=ALL_AUTH, extra_ok=(403,)),
     E("mfa_setup", "auth-flow", get=ALL_AUTH, post=ALL_AUTH),
     E("mfa_verify", "auth-flow", get=ALL_AUTH, post=ALL_AUTH),
     E("mfa_settings", "auth-flow", get=ALL_AUTH),
@@ -275,28 +277,37 @@ EXPECTATIONS = (
         idor=(("case_pk", "foreign_case.pk"), ("pk", "foreign_milestone.pk")),
     ),
     E("core:event_create", "facility-write", get=ASSISTANT_PLUS, post=ASSISTANT_PLUS),
+    # Mixin: AssistantOrAbove, aber Owner-Regel (events.py: EventUpdateView.dispatch):
+    # Assistenz darf nur EIGENE Events bearbeiten — sample_event gehört staff_user,
+    # daher gilt für dieses Matrix-Objekt STAFF_PLUS.
     E(
         "core:event_update",
         "facility-write",
-        get=ASSISTANT_PLUS,
-        post=ASSISTANT_PLUS,
+        get=STAFF_PLUS,
+        post=STAFF_PLUS,
         url_kwargs=(("pk", "sample_event.pk"),),
         idor=(("pk", "foreign_event.pk"),),
     ),
+    # Mixin: StaffRequired, aber Owner-Regel (events.py: EventDeleteView.dispatch):
+    # Staff darf nur EIGENE Events löschen — sample_event gehört staff_user (nicht
+    # dem Matrix-Akteur), daher gilt für dieses Matrix-Objekt LEAD_PLUS.
     E(
         "core:event_delete",
         "facility-write",
-        get=STAFF_PLUS,
-        post=STAFF_PLUS,
+        get=LEAD_PLUS,
+        post=LEAD_PLUS,
         url_kwargs=(("pk", "sample_event.pk"),),
         idor=(("pk", "foreign_event.pk"),),
     ),
     E("core:workitem_create", "facility-write", get=STAFF_PLUS, post=STAFF_PLUS),
+    # Mixin: StaffRequired, aber Owner/Assignee-Policy (Refs #735,
+    # workitems.py: can_user_mutate_workitem): Staff nur Ersteller:in oder
+    # zugewiesen — sample_workitem gehört staff_user, daher LEAD_PLUS.
     E(
         "core:workitem_update",
         "facility-write",
-        get=STAFF_PLUS,
-        post=STAFF_PLUS,
+        get=LEAD_PLUS,
+        post=LEAD_PLUS,
         url_kwargs=(("pk", "sample_workitem.pk"),),
         idor=(("pk", "foreign_workitem.pk"),),
     ),

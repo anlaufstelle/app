@@ -6,10 +6,11 @@ Eintrag / Eintrag ohne Pattern), damit neue Endpoints eine bewusste
 AuthZ-Deklaration erzwingen.
 """
 
-from django.urls import get_resolver
+import pytest
+from django.urls import get_resolver, reverse
 from django.urls.resolvers import URLPattern, URLResolver
 
-from tests._authz_expectations import EXPECTATIONS
+from tests._authz_expectations import EXPECTATIONS, ROLES
 
 # Django-Admin-Site (obfuskierter Pfad, eigene Permission-Maschinerie,
 # abgedeckt durch test_admin_site_permissions.py) und Debug-Toolbar sind
@@ -83,3 +84,108 @@ class TestCompletenessGate:
         _, _, named_list = _collect_patterns()
         dupes = {n for n in named_list if named_list.count(n) > 1}
         assert not dupes, f"Doppelte URL-Namen im URLconf: {sorted(dupes)}"
+
+
+# ---- Vertikale Matrix: Endpoint × Methode × Akteur (Test-Client) ----------
+
+LOGIN_PATH = "/login/"
+ACTORS = (*ROLES, "anonymous")
+
+# Bekannte, als Issue dokumentierte Lücken: Zelle → Begründung mit Issue-Ref.
+# Format: ("core:foo", "POST", "assistant"): "200 statt 403 — Issue #XXXX"
+_EVENT_DISPATCH_GAP = (
+    "404 statt Login-Redirect für anonym — dispatch() lädt das Event VOR dem "
+    "LoginRequired-Check (super().dispatch()), src/core/views/events.py. "
+    "Issue folgt (#1055-Befund 1)"
+)
+KNOWN_GAPS: dict = {
+    ("core:event_update", "GET", "anonymous"): _EVENT_DISPATCH_GAP,
+    ("core:event_update", "POST", "anonymous"): _EVENT_DISPATCH_GAP,
+    ("core:event_delete", "GET", "anonymous"): _EVENT_DISPATCH_GAP,
+    ("core:event_delete", "POST", "anonymous"): _EVENT_DISPATCH_GAP,
+}
+
+
+def _cells():
+    """Generiert je Tabellen-Zeile × Methode × Akteur einen Test-Parameter."""
+    for exp in EXPECTATIONS:
+        for method, allowed in exp.methods:
+            for actor in ACTORS:
+                marks = []
+                if (exp.url_name, method, actor) in KNOWN_GAPS:
+                    marks.append(pytest.mark.xfail(reason=KNOWN_GAPS[(exp.url_name, method, actor)], strict=True))
+                yield pytest.param(
+                    exp,
+                    method,
+                    allowed,
+                    actor,
+                    id=f"{exp.url_name}-{method}-{actor}",
+                    marks=marks,
+                )
+
+
+@pytest.fixture
+def matrix_users(db, facility):
+    """Fünf Akteure analog Seed (Refs #867/#1053): confirm-Flag für admin+lead."""
+    from core.models import User
+
+    def make(username, role, fac, confirm=False):
+        user = User.objects.create_user(username=username, role=role, facility=fac, is_staff=True)
+        user.can_confirm_deletion = confirm
+        user.set_password("testpass123")
+        user.save()
+        return user
+
+    return {
+        "facility_admin": make("mx_admin", User.Role.FACILITY_ADMIN, facility, confirm=True),
+        "lead": make("mx_lead", User.Role.LEAD, facility, confirm=True),
+        "staff": make("mx_staff", User.Role.STAFF, facility),
+        "assistant": make("mx_assistant", User.Role.ASSISTANT, facility),
+        "super_admin": make("mx_super", User.Role.SUPER_ADMIN, None),
+    }
+
+
+def _resolve_kwargs(exp, request):
+    """Löst die url_kwargs der Tabelle auf (Punkt = Fixture-Attributpfad, sonst Literal)."""
+    kwargs = {}
+    for name, ref in exp.url_kwargs:
+        if "." in ref:
+            fixture_name, attr = ref.split(".", 1)
+            kwargs[name] = getattr(request.getfixturevalue(fixture_name), attr)
+        else:
+            kwargs[name] = ref
+    return kwargs
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("exp,method,allowed,actor", _cells())
+def test_authz_cell(client, exp, method, allowed, actor, matrix_users, request):
+    """Eine Matrix-Zelle: erlaubt = kein 403/404/Login-Redirect, verboten = 403/404."""
+    kwargs = _resolve_kwargs(exp, request)
+    url = reverse(exp.url_name, kwargs=kwargs or None)
+    if actor != "anonymous":
+        client.force_login(matrix_users[actor])
+
+    response = getattr(client, method.lower())(url)
+    status = response.status_code
+    location = getattr(response, "url", "")
+
+    if actor == "anonymous":
+        if exp.anonymous_ok:
+            assert status < 500, f"{url}: {status}"
+        else:
+            assert status == 302 and location.startswith(LOGIN_PATH), (
+                f"{url}: anonym erwartet Login-Redirect, bekam {status} {location}"
+            )
+        return
+
+    if actor in allowed:
+        allowed_here = (status not in (403, 404)) or (status in exp.extra_ok)
+        assert allowed_here, f"{url}: {actor} erwartet Zugriff, bekam {status}"
+        if status == 302:
+            # Ein echter Auth-Bounce (redirect_to_login) trägt immer ?next=…;
+            # ein nacktes /login/ ist z. B. der legitime Logout-Redirect
+            # (LOGOUT_REDIRECT_URL) und kein Berechtigungsproblem.
+            assert not location.startswith(f"{LOGIN_PATH}?next="), f"{url}: {actor} wurde zum Login umgeleitet"
+    else:
+        assert status in (403, 404), f"{url}: {actor} erwartet 403/404, bekam {status} {location}"
