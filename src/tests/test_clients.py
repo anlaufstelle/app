@@ -11,6 +11,18 @@ from core.services.client import get_client_or_none, update_client
 
 @pytest.mark.django_db
 class TestClientList:
+    def test_client_list_shows_trash_link_for_facility_admin(self, client, admin_user):
+        # Refs #1040 (D3): /clients/trash/ war funktional, aber nirgends verlinkt.
+        client.force_login(admin_user)
+        response = client.get(reverse("core:client_list"))
+        assert reverse("core:client_trash") in response.content.decode()
+
+    def test_client_list_hides_trash_link_for_staff(self, client, staff_user):
+        # Papierkorb ist FacilityAdmin-gescopt — kein toter Link für Staff.
+        client.force_login(staff_user)
+        response = client.get(reverse("core:client_list"))
+        assert reverse("core:client_trash") not in response.content.decode()
+
     def test_client_list_renders(self, client, staff_user):
         client.force_login(staff_user)
         response = client.get(reverse("core:client_list"))
