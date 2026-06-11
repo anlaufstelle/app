@@ -623,12 +623,15 @@ class TestDeletionEdgeCases:
             reason="Cross-facility test",
             requested_by=staff_user,
         )
-        # Create a lead in the second facility
+        # Create a lead in the second facility. Mit Genehmiger-Recht
+        # (Refs #1053), damit der Test das Facility-Scoping (404) prüft
+        # und nicht schon am Rechte-Gate (403) endet.
         other_lead = User.objects.create_user(
             username="otherlead",
             role=User.Role.LEAD,
             facility=second_facility,
             is_staff=True,
+            can_confirm_deletion=True,
         )
         client.force_login(other_lead)
         response = client.get(reverse("core:deletion_review", kwargs={"pk": dr.pk}))

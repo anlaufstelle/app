@@ -46,6 +46,9 @@ def admin_user(facility):
         facility=facility,
         is_superuser=True,
         is_staff=True,
+        # Refs #1053: spiegelt die Backfill-Migration — bestehende
+        # Admins/Leitungen tragen das Vier-Augen-Genehmiger-Recht.
+        can_confirm_deletion=True,
     )
     user.set_password("testpass123")
     user.save()
@@ -59,6 +62,7 @@ def lead_user(facility):
         role=User.Role.LEAD,
         facility=facility,
         is_staff=True,
+        can_confirm_deletion=True,
     )
     user.set_password("testpass123")
     user.save()
