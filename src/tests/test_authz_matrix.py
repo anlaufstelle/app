@@ -86,6 +86,11 @@ class TestCompletenessGate:
         dupes = {n for n in named_list if named_list.count(n) > 1}
         assert not dupes, f"Doppelte URL-Namen im URLconf: {sorted(dupes)}"
 
+    def test_every_pk_endpoint_has_idor_probe_or_exemption(self):
+        """Jeder Endpoint mit URL-Kwargs braucht eine IDOR-Probe oder begründete Ausnahme."""
+        missing = [e.url_name for e in EXPECTATIONS if e.url_kwargs and not e.idor and not e.idor_exempt]
+        assert not missing, f"pk-Endpoints ohne IDOR-Probe und ohne begründete Ausnahme: {sorted(missing)}"
+
 
 # ---- Vertikale Matrix: Endpoint × Methode × Akteur (Test-Client) ----------
 
