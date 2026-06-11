@@ -5777,3 +5777,12 @@ msgstr "Link senden"
 
 #~ msgid "PDF-Bericht"
 #~ msgstr "PDF-Bericht"
+
+#: src/templates/core/deletion_requests/list.html:23
+msgid "Wartet auf Genehmigung durch eine zweite berechtigte Person (Vier-Augen-Prinzip)"
+msgstr "Wartet auf Genehmigung durch eine zweite berechtigte Person (Vier-Augen-Prinzip)"
+
+#: src/templates/core/clients/deletion_review.html:52
+#: src/templates/core/events/deletion_review.html:49
+msgid "Sie haben diesen Löschantrag selbst gestellt. Die Genehmigung muss durch eine zweite berechtigte Person erfolgen (Vier-Augen-Prinzip)."
+msgstr "Sie haben diesen Löschantrag selbst gestellt. Die Genehmigung muss durch eine zweite berechtigte Person erfolgen (Vier-Augen-Prinzip)."
