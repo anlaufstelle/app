@@ -7,7 +7,13 @@
 {# PageHeader (Design: als-screens.jsx PageHeader) #}
 <div class="flex items-center justify-between mb-6">
     <h1 class="text-[22px] font-bold text-ink">{% trans "Personen" %}</h1>
-    <div class="hidden md:block">
+    <div class="hidden md:flex items-center gap-3">
+        {% if user.is_facility_admin %}
+        {# Refs #1040 (D3): Papierkorb war nur per URL erreichbar. #}
+        <a href="{% url 'core:client_trash' %}" class="text-[13px] text-ink-muted hover:text-ink hover:underline" data-testid="client-trash-link">
+            {% trans "Papierkorb" %}
+        </a>
+        {% endif %}
         <a href="{% url 'core:client_create' %}" class="inline-flex items-center gap-1.5 btn-primary px-3.5 py-2">
             <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
             {% trans "Neue Person" %}
