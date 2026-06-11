@@ -23,7 +23,9 @@ Semantik:
 - ``sudo``: View trägt RequireSudoModeMixin (in Unit-Tests deaktiviert;
   am Live-Server antwortet ein erlaubter Akteur mit 302 → /sudo/).
 - ``extra_ok``: zusätzliche Status, die für ERLAUBTE Akteure ok sind
-  (z. B. 404 bei synthetischen Token-Kwargs).
+  (z. B. 404 bei synthetischen Token-Kwargs). Gilt für ALLE deklarierten
+  Methoden des Eintrags — bewusst grob gehalten; bei Bedarf
+  methodenspezifisch verfeinern.
 """
 
 from dataclasses import dataclass

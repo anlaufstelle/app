@@ -7,6 +7,7 @@ AuthZ-Deklaration erzwingen.
 """
 
 import pytest
+from django.conf import settings
 from django.urls import get_resolver, reverse
 from django.urls.resolvers import URLPattern, URLResolver
 
@@ -88,7 +89,7 @@ class TestCompletenessGate:
 
 # ---- Vertikale Matrix: Endpoint × Methode × Akteur (Test-Client) ----------
 
-LOGIN_PATH = "/login/"
+LOGIN_PATH = settings.LOGIN_URL
 ACTORS = (*ROLES, "anonymous")
 
 # Bekannte, als Issue dokumentierte Lücken: Zelle → Begründung mit Issue-Ref.
@@ -98,12 +99,19 @@ _EVENT_DISPATCH_GAP = (
     "LoginRequired-Check (super().dispatch()), src/core/views/events.py. "
     "Issue folgt (#1055-Befund 1)"
 )
-KNOWN_GAPS: dict = {
+KNOWN_GAPS: dict[tuple[str, str, str], str] = {
     ("core:event_update", "GET", "anonymous"): _EVENT_DISPATCH_GAP,
     ("core:event_update", "POST", "anonymous"): _EVENT_DISPATCH_GAP,
     ("core:event_delete", "GET", "anonymous"): _EVENT_DISPATCH_GAP,
     ("core:event_delete", "POST", "anonymous"): _EVENT_DISPATCH_GAP,
 }
+
+
+def test_known_gaps_reference_existing_cells():
+    """Tippfehler in KNOWN_GAPS-Keys dürfen nicht lautlos ins Leere zeigen."""
+    valid = {(exp.url_name, method, actor) for exp in EXPECTATIONS for method, _ in exp.methods for actor in ACTORS}
+    stray = set(KNOWN_GAPS) - valid
+    assert not stray, f"KNOWN_GAPS-Einträge ohne Matrix-Zelle: {sorted(stray)}"
 
 
 def _cells():
@@ -130,11 +138,11 @@ def matrix_users(db, facility):
     from core.models import User
 
     def make(username, role, fac, confirm=False):
-        user = User.objects.create_user(username=username, role=role, facility=fac, is_staff=True)
-        user.can_confirm_deletion = confirm
-        user.set_password("testpass123")
-        user.save()
-        return user
+        # Kein Passwort nötig: force_login umgeht die Authentifizierung;
+        # create_user reicht can_confirm_deletion als Kwarg ans Model durch.
+        return User.objects.create_user(
+            username=username, role=role, facility=fac, is_staff=True, can_confirm_deletion=confirm
+        )
 
     return {
         "facility_admin": make("mx_admin", User.Role.FACILITY_ADMIN, facility, confirm=True),
@@ -159,12 +167,14 @@ def _resolve_kwargs(exp, request):
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("exp,method,allowed,actor", _cells())
-def test_authz_cell(client, exp, method, allowed, actor, matrix_users, request):
+def test_authz_cell(client, exp, method, allowed, actor, request):
     """Eine Matrix-Zelle: erlaubt = kein 403/404/Login-Redirect, verboten = 403/404."""
     kwargs = _resolve_kwargs(exp, request)
     url = reverse(exp.url_name, kwargs=kwargs or None)
     if actor != "anonymous":
-        client.force_login(matrix_users[actor])
+        # Lazy: anonyme Zellen brauchen keine fünf User-Objekte.
+        users = request.getfixturevalue("matrix_users")
+        client.force_login(users[actor])
 
     response = getattr(client, method.lower())(url)
     status = response.status_code
@@ -172,7 +182,7 @@ def test_authz_cell(client, exp, method, allowed, actor, matrix_users, request):
 
     if actor == "anonymous":
         if exp.anonymous_ok:
-            assert status < 500, f"{url}: {status}"
+            assert status < 500, f"{url}: anonym (anonymous_ok) erwartet <500, bekam {status}"
         else:
             assert status == 302 and location.startswith(LOGIN_PATH), (
                 f"{url}: anonym erwartet Login-Redirect, bekam {status} {location}"
@@ -182,6 +192,7 @@ def test_authz_cell(client, exp, method, allowed, actor, matrix_users, request):
     if actor in allowed:
         allowed_here = (status not in (403, 404)) or (status in exp.extra_ok)
         assert allowed_here, f"{url}: {actor} erwartet Zugriff, bekam {status}"
+        assert status < 500, f"{url}: {actor} erhielt Serverfehler {status}"
         if status == 302:
             # Ein echter Auth-Bounce (redirect_to_login) trägt immer ?next=…;
             # ein nacktes /login/ ist z. B. der legitime Logout-Redirect
