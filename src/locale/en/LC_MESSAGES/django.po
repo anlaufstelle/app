@@ -6071,3 +6071,11 @@ msgstr "You submitted this deletion request yourself. Approval must be given by 
 #: src/templates/core/clients/list.html:13
 msgid "Papierkorb"
 msgstr "Trash"
+
+#: src/templates/components/_password_input.html:9
+msgid "Passwort anzeigen"
+msgstr "Show password"
+
+#: src/templates/components/_password_input.html:10
+msgid "Passwort verbergen"
+msgstr "Hide password"

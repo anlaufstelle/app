@@ -5790,3 +5790,11 @@ msgstr "Sie haben diesen Löschantrag selbst gestellt. Die Genehmigung muss durc
 #: src/templates/core/clients/list.html:13
 msgid "Papierkorb"
 msgstr "Papierkorb"
+
+#: src/templates/components/_password_input.html:9
+msgid "Passwort anzeigen"
+msgstr "Passwort anzeigen"
+
+#: src/templates/components/_password_input.html:10
+msgid "Passwort verbergen"
+msgstr "Passwort verbergen"
