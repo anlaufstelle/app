@@ -96,10 +96,20 @@ def _kill_port(port):
 
 
 def _wait_for_server(url, retries=30, interval=0.5):
-    """Warten bis der Server auf /login/ antwortet."""
+    """Warten bis der Server auf /login/ antwortet.
+
+    ``Connection: close`` ist Pflicht (Refs #1055): Der erste Probe-Request
+    erreicht den Server oft noch während des App-Boots, läuft client-seitig
+    in den 1s-ReadTimeout und der Socket bleibt im pytest-Prozess offen
+    (requests/urllib3 räumt ihn nach ReadTimeout nicht zuverlässig ab).
+    Ohne ``Connection: close`` hält gunicorn diese Verbindung als
+    Keep-Alive aktiv und blockiert beim Teardown den graceful Shutdown
+    um volle 30s (graceful_timeout) — ``proc.wait(timeout=10)`` läuft
+    dann reproduzierbar in ``TimeoutExpired``.
+    """
     for _ in range(retries):
         try:
-            resp = requests.get(f"{url}/login/", timeout=1)
+            resp = requests.get(f"{url}/login/", timeout=1, headers={"Connection": "close"})
             if resp.status_code == 200:
                 return
         except (requests.ConnectionError, requests.ReadTimeout):
