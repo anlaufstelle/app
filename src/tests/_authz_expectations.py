@@ -14,6 +14,9 @@ Semantik:
 - ``anonymous_ok``: anonymer Zugriff ist KEIN Fehler (public/auth-flow);
   sonst wird für anonym ein Redirect auf /login/ erwartet.
 - ``url_kwargs``: ("kwarg", "fixture.attr")-Paare oder ("kwarg", "literal").
+  Disambiguierung: Enthält der Wert einen Punkt (``.``), wird er als
+  Fixture-Attributpfad aufgelöst (``"fixture_name.attr"``); sonst ist er
+  ein Literal und wird unverändert als URL-Kwarg eingesetzt.
 - ``idor``: wie url_kwargs, aber mit Objekten der ZWEITEN Facility —
   erwartet wird 404 (kein Existenz-Leak). ``idor_exempt`` begründet,
   warum ein pk-Endpoint keine IDOR-Probe braucht.
@@ -41,13 +44,13 @@ CONFIRMER = frozenset({"facility_admin", "lead"})
 class Expectation:
     url_name: str
     category: str
-    methods: tuple  # (("GET", frozenset), ("POST", frozenset), ...)
-    url_kwargs: tuple = ()
-    idor: tuple = ()
+    methods: tuple[tuple[str, frozenset[str]], ...]  # (("GET", frozenset), ...)
+    url_kwargs: tuple[tuple[str, str], ...] = ()
+    idor: tuple[tuple[str, str], ...] = ()
     idor_exempt: str = ""
     anonymous_ok: bool = False
     sudo: bool = False
-    extra_ok: tuple = ()
+    extra_ok: tuple[int, ...] = ()
 
 
 def E(url_name, category, *, get=None, post=None, **kw):
@@ -169,7 +172,6 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "client_trashed.pk"),),
         idor=(("pk", "foreign_client_trashed.pk"),),
     ),
-    E("core:client_trash", "facility-admin", get=ADMIN_ONLY),
     E("core:case_create", "facility-write", get=STAFF_PLUS, post=STAFF_PLUS),
     E(
         "core:case_update",
@@ -320,6 +322,7 @@ EXPECTATIONS = (
         idor=(("pk", "foreign_deletion_request.pk"),),
     ),
     # ---- facility-admin -----------------------------------------------------
+    E("core:client_trash", "facility-admin", get=ADMIN_ONLY),
     E("core:audit_log", "facility-admin", get=ADMIN_ONLY),
     E(
         "core:audit_detail",

@@ -23,15 +23,17 @@ UNNAMED_ALLOWLIST = {"aktivitaetslog/", "timeline/"}
 
 
 def _collect_patterns():
-    """Alle URL-Patterns: benannte (namespace-qualifiziert) + unbenannte Routen."""
-    named, unnamed = set(), set()
+    """Alle URL-Patterns: benannte (Set + Liste, namespace-qualifiziert) + unbenannte Routen."""
+    named, unnamed, named_list = set(), set(), []
 
     def walk(resolver, namespace, prefix):
         for p in resolver.url_patterns:
             route = prefix + str(p.pattern)
             if isinstance(p, URLPattern):
                 if p.name:
-                    named.add(f"{namespace}:{p.name}" if namespace else p.name)
+                    qualified = f"{namespace}:{p.name}" if namespace else p.name
+                    named.add(qualified)
+                    named_list.append(qualified)
                 else:
                     unnamed.add(route)
             elif isinstance(p, URLResolver):
@@ -44,24 +46,24 @@ def _collect_patterns():
                 walk(p, child_ns, route)
 
     walk(get_resolver(), None, "")
-    return named, unnamed
+    return named, unnamed, named_list
 
 
 class TestCompletenessGate:
     def test_every_named_pattern_is_declared(self):
-        named, _ = _collect_patterns()
+        named, _, _ = _collect_patterns()
         declared = {e.url_name for e in EXPECTATIONS}
         undeclared = named - declared
         assert not undeclared, f"URL-Patterns ohne AuthZ-Deklaration in _authz_expectations.py: {sorted(undeclared)}"
 
     def test_every_declaration_has_a_pattern(self):
-        named, _ = _collect_patterns()
+        named, _, _ = _collect_patterns()
         declared = {e.url_name for e in EXPECTATIONS}
         stale = declared - named
         assert not stale, f"Deklarationen ohne URL-Pattern (Drift): {sorted(stale)}"
 
     def test_unnamed_patterns_are_allowlisted(self):
-        _, unnamed = _collect_patterns()
+        _, unnamed, _ = _collect_patterns()
         unexpected = unnamed - UNNAMED_ALLOWLIST
         assert not unexpected, f"Unbenannte URL-Patterns außerhalb der Allowlist: {sorted(unexpected)}"
 
@@ -72,6 +74,12 @@ class TestCompletenessGate:
 
     def test_gate_detects_missing_declaration(self):
         """Selbsttest: Ein fehlender Eintrag MUSS auffallen (Schutz vor Gate-Bugs)."""
-        named, _ = _collect_patterns()
+        named, _, _ = _collect_patterns()
         declared = {e.url_name for e in EXPECTATIONS} - {"core:client_detail"}
-        assert named - declared, "Gate hat den künstlich entfernten Eintrag nicht bemerkt"
+        assert "core:client_detail" in named - declared, "Gate hat den künstlich entfernten Eintrag nicht bemerkt"
+
+    def test_no_duplicate_url_names_in_urlconf(self):
+        """Doppelte URL-Namen kollabieren im Set — reverse() träfe nur eines."""
+        _, _, named_list = _collect_patterns()
+        dupes = {n for n in named_list if named_list.count(n) > 1}
+        assert not dupes, f"Doppelte URL-Namen im URLconf: {sorted(dupes)}"
