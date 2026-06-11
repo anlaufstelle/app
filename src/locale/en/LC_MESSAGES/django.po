@@ -6079,3 +6079,19 @@ msgstr "Show password"
 #: src/templates/components/_password_input.html:10
 msgid "Passwort verbergen"
 msgstr "Hide password"
+
+#: src/core/models/user.py
+msgid "Löschbestätigung"
+msgstr "Deletion confirmation"
+
+#: src/core/models/user.py
+msgid "Darf Löschanträge als zweite Person genehmigen (Vier-Augen-Prinzip). Rollenunabhängig vergebbar, damit auch bei einer einzelnen Leitung ein Genehmiger verfügbar ist. Eigene Anträge bleiben ausgeschlossen."
+msgstr "May approve deletion requests as the second person (four-eyes principle). Can be granted independently of roles so an approver is available even with a single lead. Own requests remain excluded."
+
+#: src/core/models/audit.py
+msgid "Recht Löschbestätigung geändert"
+msgstr "Deletion-confirmation right changed"
+
+#: src/templates/core/deletion_requests/list.html:35
+msgid "Kein möglicher Genehmiger: Außer der antragstellenden Person trägt niemand das Recht 'Löschbestätigung'. Die Anwendungsbetreuung kann es in der Benutzerverwaltung vergeben."
+msgstr "No possible approver: apart from the requesting person, nobody holds the 'deletion confirmation' right. The facility administration can grant it in user management."

@@ -5798,3 +5798,19 @@ msgstr "Passwort anzeigen"
 #: src/templates/components/_password_input.html:10
 msgid "Passwort verbergen"
 msgstr "Passwort verbergen"
+
+#: src/core/models/user.py
+msgid "Löschbestätigung"
+msgstr "Löschbestätigung"
+
+#: src/core/models/user.py
+msgid "Darf Löschanträge als zweite Person genehmigen (Vier-Augen-Prinzip). Rollenunabhängig vergebbar, damit auch bei einer einzelnen Leitung ein Genehmiger verfügbar ist. Eigene Anträge bleiben ausgeschlossen."
+msgstr "Darf Löschanträge als zweite Person genehmigen (Vier-Augen-Prinzip). Rollenunabhängig vergebbar, damit auch bei einer einzelnen Leitung ein Genehmiger verfügbar ist. Eigene Anträge bleiben ausgeschlossen."
+
+#: src/core/models/audit.py
+msgid "Recht Löschbestätigung geändert"
+msgstr "Recht Löschbestätigung geändert"
+
+#: src/templates/core/deletion_requests/list.html:35
+msgid "Kein möglicher Genehmiger: Außer der antragstellenden Person trägt niemand das Recht 'Löschbestätigung'. Die Anwendungsbetreuung kann es in der Benutzerverwaltung vergeben."
+msgstr "Kein möglicher Genehmiger: Außer der antragstellenden Person trägt niemand das Recht 'Löschbestätigung'. Die Anwendungsbetreuung kann es in der Benutzerverwaltung vergeben."
