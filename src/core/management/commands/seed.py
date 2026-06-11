@@ -7,7 +7,8 @@ with explicit parameters so it can be reused in tests or ad-hoc scripts.
 
 import random
 
-from django.core.management.base import BaseCommand
+from django.conf import settings
+from django.core.management.base import BaseCommand, CommandError
 
 from core.models import Case, Client
 from core.seed.activities import seed_activities
@@ -44,6 +45,15 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        # Fail-closed: Demo-Logins/--flush sind nur in explizit
+        # freigeschalteten Umgebungen zulaessig. Refs #1040 (S1).
+        if not getattr(settings, "SEED_ALLOWED", False):
+            raise CommandError(
+                "'seed' ist in dieser Umgebung gesperrt (SEED_ALLOWED=False). "
+                "Demo-Logins und --flush sind auf Produktionssystemen nicht "
+                "erlaubt — Ersteinrichtung über 'manage.py create_super_admin'."
+            )
+
         scale = options["scale"]
         cfg = SCALE_CONFIG[scale]
         random.seed(42)

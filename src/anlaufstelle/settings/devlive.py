@@ -27,3 +27,7 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 # beim Healthcheck-Request keinen X-Forwarded-Proto → wuerde sonst
 # SSL_REDIRECT triggern und der Healthcheck-Client kann lokal kein TLS.
 SECURE_REDIRECT_EXEMPT = [r"^health/$"]
+
+# dev.anlaufstelle.app laeuft mit Demo-Daten ('make dev-seed') — Seed trotz
+# prod-Vererbung explizit freigeschaltet. Refs #1040 (S1).
+SEED_ALLOWED = True

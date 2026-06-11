@@ -390,3 +390,10 @@ UNFOLD = {
         },
     },
 }
+
+# 'manage.py seed' ist fail-closed gesperrt: Der Seed legt Demo-Logins mit
+# dokumentiertem Passwort an (auf Prod ein Backdoor) und loescht mit --flush
+# den kompletten Datenbestand. Nur dev/test/e2e/devlive schalten frei.
+# Produktions-Ersteinrichtung laeuft ueber 'manage.py create_super_admin'.
+# Refs #1040 (S1).
+SEED_ALLOWED = False

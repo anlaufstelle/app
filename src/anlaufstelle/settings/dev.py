@@ -31,3 +31,6 @@ if not ENCRYPTION_KEY:  # noqa: F405
     import logging
 
     logging.getLogger("core").warning("ENCRYPTION_KEY nicht gesetzt — Felder werden unverschlüsselt gespeichert.")
+
+# Demo-Seed in lokaler Entwicklung erlaubt (test.py/e2e.py erben). Refs #1040 (S1).
+SEED_ALLOWED = True
