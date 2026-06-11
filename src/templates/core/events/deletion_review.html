@@ -44,6 +44,11 @@
         </dl>
     </div>
 
+    {% if deletion_request.requested_by == request.user %}
+    <p class="text-sm text-ink-muted italic" data-testid="deletion-own-request-hint">
+        {% trans "Sie haben diesen Löschantrag selbst gestellt. Die Genehmigung muss durch eine zweite berechtigte Person erfolgen (Vier-Augen-Prinzip)." %}
+    </p>
+    {% else %}
     <form method="post" class="flex items-center space-x-3">
         {% csrf_token %}
         <button type="submit" name="action" value="approve" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700">
@@ -53,5 +58,6 @@
             {% trans "Ablehnen" %}
         </button>
     </form>
+    {% endif %}
 </div>
 {% endblock %}

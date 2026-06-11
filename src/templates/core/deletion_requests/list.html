@@ -18,10 +18,15 @@
                     <span class="text-sm font-medium">{{ dr.target_type }}</span>
                     <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 ml-2">{% trans "Ausstehend" %}</span>
                 </div>
+                {% if dr.requested_by == request.user %}
+                <span class="text-xs text-ink-muted italic"
+                      data-testid="deletion-own-request-hint">{% trans "Wartet auf Genehmigung durch eine zweite berechtigte Person (Vier-Augen-Prinzip)" %}</span>
+                {% else %}
                 <a href="{% url 'core:deletion_review' pk=dr.pk %}"
                    class="text-sm text-accent hover:underline font-medium"
                    data-testid="deletion-review-link"
                    data-dr-pk="{{ dr.pk }}">{% trans "Prüfen" %}</a>
+                {% endif %}
             </div>
             <p class="text-sm text-ink-muted mb-1">{{ dr.reason|truncatewords:30 }}</p>
             <div class="text-xs text-ink-muted">
