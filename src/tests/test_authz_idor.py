@@ -10,6 +10,7 @@ import pytest
 from django.urls import reverse
 
 from tests._authz_expectations import EXPECTATIONS
+from tests._rbac_helpers import resolve_fixture_kwargs
 
 # Bekannte, als Issue dokumentierte IDOR-Lücken: (url_name, method) → Begründung.
 KNOWN_IDOR_GAPS: dict[tuple[str, str], str] = {}
@@ -58,15 +59,6 @@ def _idor_cells():
             yield pytest.param(exp, method, actor, id=f"{exp.url_name}-{method}", marks=marks)
 
 
-def _resolve_foreign_kwargs(exp, request):
-    """Löst die idor-Kwargs der Tabelle auf (durchgängig Fixture-Attributpfade)."""
-    kwargs = {}
-    for name, ref in exp.idor:
-        fixture_name, attr = ref.split(".", 1)
-        kwargs[name] = getattr(request.getfixturevalue(fixture_name), attr)
-    return kwargs
-
-
 @pytest.fixture
 def idor_actor_users(db, facility):
     """Die zwei stärksten Facility-Rollen aus Facility 1 (analog matrix_users)."""
@@ -91,14 +83,45 @@ def idor_actor_users(db, facility):
 @pytest.mark.parametrize("exp,method,actor", _idor_cells())
 def test_idor_foreign_object_is_404(client, exp, method, actor, idor_actor_users, request):
     """Eine IDOR-Zelle: Zugriff auf das Objekt der zweiten Facility muss 404 liefern."""
-    kwargs = _resolve_foreign_kwargs(exp, request)
+    kwargs = resolve_fixture_kwargs(exp.idor, request)
     url = reverse(exp.url_name, kwargs=kwargs)
     client.force_login(idor_actor_users[actor])
 
     data = IDOR_POST_DATA.get((exp.url_name, method))
     response = getattr(client, method.lower())(url, data)
 
-    assert response.status_code == 404, (
-        f"{url}: fremdes Objekt antwortete {response.status_code} statt 404 "
-        f"({'Existenz-Leak' if response.status_code == 403 else 'MANDANTENTRENNUNG VERLETZT'})"
+    if response.status_code == 403:
+        verdict = "Existenz-Leak"
+    elif response.status_code < 400:
+        verdict = "MANDANTENTRENNUNG VERLETZT"
+    else:
+        verdict = "unerwartete Antwort"
+    assert response.status_code == 404, f"{url}: fremdes Objekt antwortete {response.status_code} statt 404 ({verdict})"
+
+
+def _not_probeable_cells():
+    """Generiert je NOT_PROBEABLE-Eintrag einen Test-Parameter für den Drift-Guard."""
+    by_name = {exp.url_name: exp for exp in EXPECTATIONS}
+    for url_name, method in sorted(NOT_PROBEABLE):
+        yield pytest.param(by_name[url_name], method, id=f"{url_name}-{method}")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("exp,method", _not_probeable_cells())
+def test_not_probeable_cell_still_answers_405(client, exp, method, idor_actor_users, request):
+    """Drift-Guard: NOT_PROBEABLE setzt voraus, dass die View die Methode pauschal mit 405 beantwortet.
+
+    Bekommt die View später einen echten Handler mit Objekt-Lookup (die
+    405-Prämisse kippt), failt dieser Test und erzwingt die Umwandlung
+    des Eintrags in eine echte IDOR-Probe.
+    """
+    kwargs = resolve_fixture_kwargs(exp.idor, request)
+    url = reverse(exp.url_name, kwargs=kwargs)
+    client.force_login(idor_actor_users["facility_admin"])
+
+    response = getattr(client, method.lower())(url)
+
+    assert response.status_code == 405, (
+        f"{url}: {method} antwortete {response.status_code} statt 405 — die NOT_PROBEABLE-Prämisse "
+        f"gilt nicht mehr, Eintrag in eine echte IDOR-Probe umwandeln"
     )

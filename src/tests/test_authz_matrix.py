@@ -12,6 +12,7 @@ from django.urls import get_resolver, reverse
 from django.urls.resolvers import URLPattern, URLResolver
 
 from tests._authz_expectations import EXPECTATIONS, ROLES
+from tests._rbac_helpers import resolve_fixture_kwargs
 
 # Django-Admin-Site (obfuskierter Pfad, eigene Permission-Maschinerie,
 # abgedeckt durch test_admin_site_permissions.py) und Debug-Toolbar sind
@@ -91,6 +92,13 @@ class TestCompletenessGate:
         missing = [e.url_name for e in EXPECTATIONS if e.url_kwargs and not e.idor and not e.idor_exempt]
         assert not missing, f"pk-Endpoints ohne IDOR-Probe und ohne begründete Ausnahme: {sorted(missing)}"
 
+    def test_idor_declarations_are_consistent(self):
+        """idor und idor_exempt schließen sich aus; idor setzt url_kwargs voraus."""
+        both = [e.url_name for e in EXPECTATIONS if e.idor and e.idor_exempt]
+        assert not both, f"Einträge mit idor UND idor_exempt (widersprüchlich): {sorted(both)}"
+        no_kwargs = [e.url_name for e in EXPECTATIONS if e.idor and not e.url_kwargs]
+        assert not no_kwargs, f"Einträge mit idor ohne url_kwargs: {sorted(no_kwargs)}"
+
 
 # ---- Vertikale Matrix: Endpoint × Methode × Akteur (Test-Client) ----------
 
@@ -158,23 +166,11 @@ def matrix_users(db, facility):
     }
 
 
-def _resolve_kwargs(exp, request):
-    """Löst die url_kwargs der Tabelle auf (Punkt = Fixture-Attributpfad, sonst Literal)."""
-    kwargs = {}
-    for name, ref in exp.url_kwargs:
-        if "." in ref:
-            fixture_name, attr = ref.split(".", 1)
-            kwargs[name] = getattr(request.getfixturevalue(fixture_name), attr)
-        else:
-            kwargs[name] = ref
-    return kwargs
-
-
 @pytest.mark.django_db
 @pytest.mark.parametrize("exp,method,allowed,actor", _cells())
 def test_authz_cell(client, exp, method, allowed, actor, request):
     """Eine Matrix-Zelle: erlaubt = kein 403/404/Login-Redirect, verboten = 403/404."""
-    kwargs = _resolve_kwargs(exp, request)
+    kwargs = resolve_fixture_kwargs(exp.url_kwargs, request)
     url = reverse(exp.url_name, kwargs=kwargs or None)
     if actor != "anonymous":
         # Lazy: anonyme Zellen brauchen keine fünf User-Objekte.
