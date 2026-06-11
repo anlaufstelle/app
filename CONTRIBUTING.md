@@ -119,6 +119,11 @@ python src/manage.py seed --scale large    # Lasttest-Volumen
 python src/manage.py seed --flush          # vorhandene Daten vorher löschen
 ```
 
+> **Umgebungs-Guard:** `seed` läuft nur, wenn die Settings `SEED_ALLOWED = True`
+> setzen (dev/test/e2e/devlive). Unter `prod`-Settings bricht das Command mit
+> `CommandError` ab — Demo-Logins und `--flush` sind dort tabu; die
+> Ersteinrichtung läuft über `manage.py create_super_admin` (Refs #1040).
+
 **Scale-Profile im Überblick:**
 
 | Daten | `small` (Default) | `medium` | `large` |
