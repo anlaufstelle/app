@@ -72,6 +72,7 @@ markers = [
     "slow: Tests mit Laufzeit > 2s (typisch: Seed-Läufe mit größerem Datensatz). Per `-m 'not slow'` deselektierbar.",
     "flaky_quarantine: Tests, die wegen Flakiness unter Beobachtung stehen (Refs #922).",
     "architecture: Meta-Tests, die Source-Files scannen (z.B. ``AuditLog.objects.create()``-Vorkommen zählen). Werden in Mutmut-Runs (#930) deselektiert, weil mutmut die gezählten Patterns vervielfacht.",
+    "authz_audit: Einmaliger/wiederholbarer Live-AuthZ-Audit am E2E-Server (Refs #1055). Läuft nur mit AUTHZ_AUDIT=1, schreibt den Matrix-Report nach docs/archive/audits/.",
 ]
 
 [tool.coverage.run]
