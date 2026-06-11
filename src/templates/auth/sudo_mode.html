@@ -28,8 +28,7 @@
         <input type="hidden" name="next" value="{{ next }}">
         <div>
             <label for="id_password" class="block text-sm font-medium text-ink-soft">{% trans "Passwort" %}</label>
-            <input type="password" name="password" id="id_password" required autofocus
-                class="mt-1 block w-full rounded-md border border-subtle shadow-sm focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 bg-canvas">
+            {% include "components/_password_input.html" with name="password" input_id="id_password" required=True autofocus=True autocomplete="current-password" input_class="mt-1 block w-full rounded-md border border-subtle shadow-sm focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 bg-canvas" %}
         </div>
         {% if needs_otp %}
         <div>

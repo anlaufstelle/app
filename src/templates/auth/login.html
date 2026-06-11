@@ -62,8 +62,7 @@
                 </div>
                 <div>
                     <label for="id_password" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">{% trans "Passwort" %}</label>
-                    <input type="password" name="password" id="id_password" required
-                        class="block w-full rounded-md border border-subtle bg-canvas text-[14px] text-ink px-3 py-2.5">
+                    {% include "components/_password_input.html" with name="password" input_id="id_password" required=True autocomplete="current-password" input_class="block w-full rounded-md border border-subtle bg-canvas text-[14px] text-ink px-3 py-2.5" %}
                 </div>
                 <button type="submit"
                     class="w-full flex justify-center py-2.5 px-4 rounded-md text-[14px] font-semibold text-white bg-accent min-h-[44px]">

@@ -77,4 +77,35 @@ document.addEventListener("alpine:init", () => {
             });
         },
     }));
+
+    /**
+     * Klarsicht-Toggle fuer Passwortfelder (Refs #1049).
+     * Default verborgen (NIST SP 800-63B); Reveal ist eine bewusste
+     * Nutzeraktion. Die i18n-Labels kommen aus data-Attributen des
+     * Komponenten-Elements (data-label-show / data-label-hide).
+     */
+    Alpine.data("passwordToggle", () => ({
+        show: false,
+        labelShow: "",
+        labelHide: "",
+        init() {
+            this.labelShow = this.$root.dataset.labelShow || "";
+            this.labelHide = this.$root.dataset.labelHide || "";
+        },
+        toggle() {
+            this.show = !this.show;
+        },
+        get hidden() {
+            return !this.show;
+        },
+        get inputType() {
+            return this.show ? "text" : "password";
+        },
+        get pressed() {
+            return this.show ? "true" : "false";
+        },
+        get toggleLabel() {
+            return this.show ? this.labelHide : this.labelShow;
+        },
+    }));
 });
