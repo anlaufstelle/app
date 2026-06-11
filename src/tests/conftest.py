@@ -311,7 +311,7 @@ def _make_attachment(fac, event, user):
 
     from core.services.file_vault import store_encrypted_file
 
-    ft = FieldTemplate.objects.create(facility=fac, name="Anhang (AuthZ)", field_type="file")
+    ft = FieldTemplate.objects.create(facility=fac, name="Anhang (AuthZ)", field_type=FieldTemplate.FieldType.FILE)
     upload = SimpleUploadedFile("authz.pdf", PDF_MINIMAL, content_type="application/pdf")
     return store_encrypted_file(fac, upload, ft, event, user)
 
@@ -330,6 +330,7 @@ def client_trashed(facility, staff_user):
 
 @pytest.fixture
 def case_event(case_open, sample_event):
+    """Hängt sample_event an case_open (mutiert sample_event in place)."""
     sample_event.case = case_open
     sample_event.save(update_fields=["case"])
     return sample_event
@@ -469,6 +470,7 @@ def foreign_event(second_facility, foreign_client, foreign_doc_type, foreign_sta
 
 @pytest.fixture
 def foreign_case_event(foreign_case, foreign_event):
+    """Hängt foreign_event an foreign_case (mutiert foreign_event in place)."""
     foreign_event.case = foreign_case
     foreign_event.save(update_fields=["case"])
     return foreign_event
