@@ -23,6 +23,9 @@ def seed_users(facility: Facility, facility_idx: int) -> list[User]:
                 "is_staff": True,
                 "is_superuser": is_superuser,
                 "display_name": f"{first} {last}",
+                # Refs #1053: Leitung + Anwendungsbetreuung starten als
+                # Genehmiger-Pool (analog Backfill-Migration).
+                "can_confirm_deletion": role in (User.Role.FACILITY_ADMIN, User.Role.LEAD),
             },
         )
         if created:

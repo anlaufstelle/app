@@ -327,6 +327,10 @@ def approve_client_deletion(deletion_request, reviewer):
     """
     if deletion_request.requested_by_id == reviewer.pk:
         raise ValidationError("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip).")
+    # Refs #1053: Genehmiger-Pool wird über das Recht kuratiert (SSoT hier,
+    # nicht nur in der View).
+    if not reviewer.can_confirm_deletion:
+        raise ValidationError("Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip).")
 
     client = Client.objects.get(pk=deletion_request.target_id, facility=deletion_request.facility)
     client.soft_delete(user=reviewer)

@@ -57,6 +57,9 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
                     "notes",
                     "must_change_password",
                     "preferred_language",
+                    # Refs #1053: Grant/Revoke-UI für das Vier-Augen-Recht;
+                    # jede Änderung wird via Signal audit-geloggt.
+                    "can_confirm_deletion",
                 ),
             },
         ),

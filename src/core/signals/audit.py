@@ -174,15 +174,18 @@ def _capture_old_user_state(sender, instance, **kwargs):
     if not instance.pk:
         instance._audit_old_role = None
         instance._audit_old_is_active = None
+        instance._audit_old_can_confirm_deletion = None
         return
     try:
-        old = User.objects.only("role", "is_active").get(pk=instance.pk)
+        old = User.objects.only("role", "is_active", "can_confirm_deletion").get(pk=instance.pk)
     except User.DoesNotExist:
         instance._audit_old_role = None
         instance._audit_old_is_active = None
+        instance._audit_old_can_confirm_deletion = None
         return
     instance._audit_old_role = old.role
     instance._audit_old_is_active = old.is_active
+    instance._audit_old_can_confirm_deletion = old.can_confirm_deletion
 
 
 @receiver(post_save, sender=User)
@@ -216,4 +219,21 @@ def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
             target_type="User",
             target_id=str(instance.pk),
             detail={"username": instance.username},
+        )
+
+    # Refs #1053: Vergabe/Entzug des Rechts „Löschbestätigung" ist
+    # forensisch relevant (kuratiert den Vier-Augen-Genehmiger-Pool).
+    old_confirmer = getattr(instance, "_audit_old_can_confirm_deletion", None)
+    if old_confirmer is not None and old_confirmer != instance.can_confirm_deletion:
+        AuditLog.objects.create(
+            facility=getattr(instance, "facility", None),
+            user=instance,
+            action=AuditLog.Action.DELETION_CONFIRMER_CHANGED,
+            target_type="User",
+            target_id=str(instance.pk),
+            detail={
+                "old_value": old_confirmer,
+                "new_value": instance.can_confirm_deletion,
+                "username": instance.username,
+            },
         )

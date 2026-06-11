@@ -68,6 +68,16 @@ class User(AbstractUser):
         default=settings.LANGUAGE_CODE,
         verbose_name=_("Bevorzugte Sprache"),
     )
+    can_confirm_deletion = models.BooleanField(
+        default=False,
+        verbose_name=_("Löschbestätigung"),
+        help_text=_(
+            "Darf Löschanträge als zweite Person genehmigen (Vier-Augen-"
+            "Prinzip). Rollenunabhängig vergebbar, damit auch bei einer "
+            "einzelnen Leitung ein Genehmiger verfügbar ist. Eigene "
+            "Anträge bleiben ausgeschlossen."
+        ),
+    )
     offline_key_salt = models.CharField(
         max_length=32,
         blank=True,

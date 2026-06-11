@@ -28,6 +28,27 @@ class LeadOrAdminRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
         return self.request.user.is_lead_or_admin
 
 
+class DeletionConfirmerRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
+    """Access for holders of the right „Löschbestätigung" (Refs #1053).
+
+    Der Vier-Augen-Genehmiger-Pool wird über ``can_confirm_deletion``
+    kuratiert statt aus der Rolle abgeleitet — löst den Deadlock bei
+    einer einzelnen Leitung ohne erreichbare Anwendungsbetreuung.
+    """
+
+    def test_func(self):
+        return self.request.user.can_confirm_deletion
+
+
+class DeletionRequestListAccessMixin(LoginRequiredMixin, UserPassesTestMixin):
+    """Liste der Löschanträge: Leitung/Admin (Transparenz über eigene
+    Anträge) sowie Träger des Rechts „Löschbestätigung" (Refs #1053)."""
+
+    def test_func(self):
+        user = self.request.user
+        return user.is_lead_or_admin or user.can_confirm_deletion
+
+
 class FacilityAdminRequiredMixin(LoginRequiredMixin, UserPassesTestMixin):
     """Access for Anwendungsbetreuung (facility_admin) only.
 

@@ -21,13 +21,20 @@
                 {% if dr.requested_by == request.user %}
                 <span class="text-xs text-ink-muted italic"
                       data-testid="deletion-own-request-hint">{% trans "Wartet auf Genehmigung durch eine zweite berechtigte Person (Vier-Augen-Prinzip)" %}</span>
-                {% else %}
+                {% elif user.can_confirm_deletion %}
                 <a href="{% url 'core:deletion_review' pk=dr.pk %}"
                    class="text-sm text-accent hover:underline font-medium"
                    data-testid="deletion-review-link"
                    data-dr-pk="{{ dr.pk }}">{% trans "Prüfen" %}</a>
                 {% endif %}
             </div>
+            {% if dr.no_eligible_reviewer %}
+            <p class="text-sm text-red-700 font-medium mb-1"
+               data-testid="deletion-no-reviewer-warning"
+               data-dr-pk="{{ dr.pk }}">
+                {% trans "Kein möglicher Genehmiger: Außer der antragstellenden Person trägt niemand das Recht 'Löschbestätigung'. Die Anwendungsbetreuung kann es in der Benutzerverwaltung vergeben." %}
+            </p>
+            {% endif %}
             <p class="text-sm text-ink-muted mb-1">{{ dr.reason|truncatewords:30 }}</p>
             <div class="text-xs text-ink-muted">
                 {% trans "Beantragt von:" %} {{ dr.requested_by.get_full_name|default:dr.requested_by.username }} – {{ dr.created_at|date:"DATETIME_FORMAT" }}

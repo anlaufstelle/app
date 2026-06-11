@@ -40,6 +40,7 @@ class AuditLog(models.Model):
         WORKITEM_UPDATE = "workitem_update", _("Aufgabe aktualisiert")
         USER_ROLE_CHANGED = "user_role_changed", _("Benutzerrolle geändert")
         USER_DEACTIVATED = "user_deactivated", _("Benutzer deaktiviert")
+        DELETION_CONFIRMER_CHANGED = "deletion_confirmer_changed", _("Recht Löschbestätigung geändert")
         PASSWORD_RESET_REQUESTED = "password_reset_requested", _("Passwort-Reset angefordert")
         SECURITY_VIOLATION = "security_violation", _("Sicherheitsverletzung")
         MFA_ENABLED = "mfa_enabled", _("2FA aktiviert")

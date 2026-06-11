@@ -16,15 +16,15 @@ from django.views import View
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
-from core.models import Client, DeletionRequest, Event
+from core.models import Client, DeletionRequest, Event, User
 from core.services.client import approve_client_deletion, reject_client_deletion
 from core.services.events import approve_deletion, reject_deletion
-from core.views.mixins import LeadOrAdminRequiredMixin
+from core.views.mixins import DeletionConfirmerRequiredMixin, DeletionRequestListAccessMixin
 
 logger = logging.getLogger(__name__)
 
 
-class DeletionRequestListView(LeadOrAdminRequiredMixin, View):
+class DeletionRequestListView(DeletionRequestListAccessMixin, View):
     """List of all deletion requests."""
 
     def get(self, request):
@@ -39,6 +39,17 @@ class DeletionRequestListView(LeadOrAdminRequiredMixin, View):
         approved = list(all_requests.filter(status=DeletionRequest.Status.APPROVED))
         rejected = list(all_requests.filter(status=DeletionRequest.Status.REJECTED))
 
+        # Setup-Guard (Refs #1053): ein Antrag ohne möglichen Genehmiger
+        # (kein aktiver Träger des Rechts „Löschbestätigung" außer der
+        # Antragsteller:in) darf nicht still blocken — Warnung rendern.
+        confirmer_ids = set(
+            User.objects.filter(facility=facility, is_active=True, can_confirm_deletion=True).values_list(
+                "pk", flat=True
+            )
+        )
+        for dr in pending:
+            dr.no_eligible_reviewer = not (confirmer_ids - {dr.requested_by_id})
+
         context = {
             "pending_requests": pending,
             "approved_requests": approved,
@@ -51,8 +62,13 @@ class DeletionRequestListView(LeadOrAdminRequiredMixin, View):
     ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
     name="post",
 )
-class DeletionRequestReviewView(LeadOrAdminRequiredMixin, View):
-    """Review a deletion request (four-eyes principle)."""
+class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
+    """Review a deletion request (four-eyes principle).
+
+    Refs #1053: Genehmiger-Pool = Träger des Rechts „Löschbestätigung"
+    (rollenunabhängig), Antragsteller bleibt per Service-Guard und
+    DB-Constraint ausgeschlossen.
+    """
 
     def get(self, request, pk):
         dr = get_object_or_404(
