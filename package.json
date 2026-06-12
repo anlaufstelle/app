@@ -2,7 +2,7 @@
   "name": "anlaufstelle-frontend",
   "private": true,
   "engines": {
-    "node": ">=20"
+    "node": ">=24"
   },
   "scripts": {
     "build": "tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --minify",

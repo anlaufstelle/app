@@ -5,7 +5,7 @@ COPY requirements.txt .
 RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
 
 # Stage 2: Compile Tailwind CSS
-FROM node:20-alpine AS node
+FROM node:24-alpine AS node
 WORKDIR /build
 COPY package.json package-lock.json tailwind.config.js ./
 COPY src/templates/ src/templates/
