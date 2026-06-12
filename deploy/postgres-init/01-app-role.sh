@@ -9,10 +9,13 @@
 # also POSTGRES_USER=postgres als Bootstrap und legen separat zwei
 # Application-Rollen an.
 #
-# Idempotenz: Beide Role-Anlagen via DO-Block mit pg_roles-Check —
+# Idempotenz: Beide Role-Anlagen via SELECT … WHERE NOT EXISTS + \gexec —
 # das Script ist beim manuellen Re-Run auf bestehender DB safe.
+# Kein DO-$$-Block: psql interpoliert :'var'-Variablen nicht innerhalb
+# von Dollar-Quotes; ein DO-Block saehe das Literal ":'app_user'" und
+# wuerde jeden frischen Init abbrechen (Refs #1039).
 #
-# Refs #671, #863, ADR-005, ADR-017.
+# Refs #671, #863, #1039, ADR-005, ADR-017.
 #
 # Variablen aus dem Container-Env:
 #   POSTGRES_USER       — Bootstrap (=postgres), Superuser
@@ -36,16 +39,12 @@ psql -v ON_ERROR_STOP=1 \
 	-v app_password="$APP_DB_PASSWORD" \
 	-v dbname="$POSTGRES_DB" <<-'SQL'
 	-- App-User: Django-Runtime, RLS-Policies greifen.
-	DO $$
-	BEGIN
-	    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_user') THEN
-	        EXECUTE format(
-	            'CREATE ROLE %I WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB PASSWORD %L',
-	            :'app_user', :'app_password'
-	        );
-	    END IF;
-	END
-	$$;
+	SELECT format(
+	    'CREATE ROLE %I WITH LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB PASSWORD %L',
+	    :'app_user', :'app_password'
+	)
+	WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_user')
+	\gexec
 	-- App-User wird DB-Owner; Schema-Aenderungen via Django-Migrations
 	-- laufen damit unter dieser Rolle.
 	ALTER DATABASE :"dbname" OWNER TO :"app_user";
@@ -63,16 +62,12 @@ if [ -n "$ADMIN_DB_USER" ] && [ -n "$ADMIN_DB_PASSWORD" ]; then
 		-v dbname="$POSTGRES_DB" <<-'SQL'
 		-- Admin-User: Operator-Tasks (seed, migrate, retention-pruning).
 		-- BYPASSRLS umgeht RLS-Policies, NOSUPERUSER verhindert Eskalation.
-		DO $$
-		BEGIN
-		    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'admin_user') THEN
-		        EXECUTE format(
-		            'CREATE ROLE %I WITH LOGIN NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB PASSWORD %L',
-		            :'admin_user', :'admin_password'
-		        );
-		    END IF;
-		END
-		$$;
+		SELECT format(
+		    'CREATE ROLE %I WITH LOGIN NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB PASSWORD %L',
+		    :'admin_user', :'admin_password'
+		)
+		WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'admin_user')
+		\gexec
 		GRANT ALL PRIVILEGES ON DATABASE :"dbname" TO :"admin_user";
 		GRANT ALL ON SCHEMA public TO :"admin_user";
 		GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO :"admin_user";
