@@ -17,6 +17,7 @@ from core.constants import AUDIT_PAGE_SIZE
 from core.models import AuditLog, Facility
 from core.models.user import User
 from core.services.audit import audit_system_view
+from core.services.system import _sanitize_csv_cell
 from core.signals.audit import _set_session_vars
 from core.utils.downloads import safe_download_response
 from core.utils.formatting import parse_date
@@ -230,6 +231,13 @@ class SystemAuditLogExportView(SystemAuditMixin, View):
         Wir wandeln das ``detail``-JSON-Feld via ``json.dumps`` zu einem
         String um — andernfalls schreibt der CSV-Writer ``{'k': 'v'}``,
         was bei Re-Import wieder geparst werden muss.
+
+        Refs #1064: alle dynamischen Zellen laufen durch
+        ``_sanitize_csv_cell`` (OWASP-Formel-Praefix-Neutralisierung),
+        analog zum Events-Export (#719). Realer Vektor ist ``facility``
+        (von facility_admin umbenennbar, die CSV oeffnet der
+        super_admin); ``timestamp`` bleibt roh (isoformat beginnt
+        strukturell mit Ziffer).
         """
         echo = _CsvEcho()
         writer = csv.writer(echo)
@@ -240,13 +248,13 @@ class SystemAuditLogExportView(SystemAuditMixin, View):
             yield writer.writerow(
                 [
                     row["timestamp"],
-                    row["user"],
-                    row["action"],
-                    row["target_type"],
-                    row["target_id"],
-                    row["facility"],
-                    row["ip_address"],
-                    json.dumps(row["detail"], ensure_ascii=False),
+                    _sanitize_csv_cell(row["user"]),
+                    _sanitize_csv_cell(row["action"]),
+                    _sanitize_csv_cell(row["target_type"]),
+                    _sanitize_csv_cell(row["target_id"]),
+                    _sanitize_csv_cell(row["facility"]),
+                    _sanitize_csv_cell(row["ip_address"]),
+                    _sanitize_csv_cell(json.dumps(row["detail"], ensure_ascii=False)),
                 ]
             )
 

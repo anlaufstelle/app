@@ -1,17 +1,21 @@
-"""Regressionstests gegen CSV-Formula-Injection (Refs #719).
+"""Regressionstests gegen CSV-Formula-Injection (Refs #719, #1064).
 
 Werte, die mit ``=``, ``+``, ``-``, ``@``, Tab oder CR/LF beginnen,
 werden in Excel/LibreOffice als Formel ausgewertet — `=cmd|'/c calc'!A1`
 in einem Klientel-Pseudonym fuehrt zu Code-Execution beim Oeffnen der CSV.
 ``_sanitize_csv_cell`` praefixt solche Werte mit ``'`` (OWASP-Pattern).
+
+Abgedeckt: Events-/Statistik-Export (#719) und der AuditLog-CSV-Export
+des super_admin (#1064).
 """
 
 from datetime import date, timedelta
 
 import pytest
+from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Client, DocumentType, Event, FieldTemplate
+from core.models import AuditLog, Client, DocumentType, Event, FieldTemplate, User
 from core.services.system import _sanitize_csv_cell, export_events_csv
 
 
@@ -155,3 +159,88 @@ class TestExportEventsCSVNeutralizesInjection:
         assert "'Maria-Mueller-1" not in full_csv
         assert "Hallo Welt" in full_csv
         assert "'Hallo Welt" not in full_csv
+
+
+@pytest.mark.django_db
+class TestAuditLogExportNeutralizesInjection:
+    """Integrations-Test AuditLog-CSV-Export (Refs #1064).
+
+    Der Events-/Statistik-Export sanitized seit #719 jede dynamische
+    Zelle — ``SystemAuditLogExportView._iter_csv`` wurde dabei uebersehen.
+    Angriffspfad: ein facility_admin benennt die eigene Facility in einen
+    Formel-Payload um, jede Audit-Zeile der Facility traegt den Namen in
+    der ``facility``-Spalte; ein super_admin exportiert das Audit-Log und
+    oeffnet die CSV in Excel/LibreOffice → Formel/DDE laeuft im Kontext
+    des hoechstprivilegierten Operators.
+    """
+
+    def _export_csv(self, client, super_admin_user):
+        client.force_login(super_admin_user)
+        response = client.get(reverse("core:system_audit_export"))
+        assert response.status_code == 200
+        return b"".join(response.streaming_content).decode("utf-8")
+
+    def test_facility_name_with_formula_prefix_is_neutralized(self, client, super_admin_user, facility):
+        facility.name = "=cmd|'/c calc'!A1"
+        facility.save()
+        AuditLog.objects.create(action=AuditLog.Action.LOGIN, facility=facility)
+
+        full_csv = self._export_csv(client, super_admin_user)
+
+        # Property: KEINE Zelle darf mit einem OWASP-Praefix-Zeichen
+        # beginnen — gleiche Garantie wie beim Events-Export (#719).
+        import csv
+        import io
+
+        reader = csv.reader(io.StringIO(full_csv))
+        for row in reader:
+            for cell in row:
+                if cell:
+                    assert cell[0] not in ("=", "+", "-", "@", "\t", "\r", "\n"), (
+                        f"Zelle beginnt mit Formula-Injection-Praefix: {cell!r} (Zeile: {row})"
+                    )
+
+        # Positiv-Check: der neutralisierte Facility-Name ist da.
+        assert "'=cmd|'/c calc'!A1" in full_csv, (
+            f"Erwartete neutralisierte Variante nicht im CSV gefunden.\nCSV-Auszug: {full_csv[:500]}"
+        )
+
+    def test_username_and_target_cells_neutralized(self, client, super_admin_user, facility):
+        """``UnicodeUsernameValidator`` erlaubt fuehrende ``@``/``+``/``-``
+        (``-2+3`` ist ein gueltiger Username und eine valide Excel-Formel);
+        ``target_type``/``target_id`` sind freie CharFields."""
+        attacker = User.objects.create_user(
+            username="-2+3",
+            role=User.Role.FACILITY_ADMIN,
+            facility=facility,
+            is_staff=True,
+        )
+        AuditLog.objects.create(
+            action=AuditLog.Action.LOGIN,
+            user=attacker,
+            facility=facility,
+            target_type="@SUM(A1:A10)",
+            target_id="+2+5",
+        )
+
+        full_csv = self._export_csv(client, super_admin_user)
+
+        assert "'-2+3" in full_csv
+        assert "'@SUM(A1:A10)" in full_csv
+        assert "'+2+5" in full_csv
+
+    def test_normal_values_not_modified(self, client, super_admin_user, facility):
+        """Negativtest: harmlose Werte bleiben unveraendert."""
+        AuditLog.objects.create(
+            action=AuditLog.Action.LOGIN,
+            facility=facility,
+            target_type="Client",
+            target_id="42",
+        )
+
+        full_csv = self._export_csv(client, super_admin_user)
+
+        assert "Teststelle" in full_csv
+        assert "'Teststelle" not in full_csv
+        assert "Client" in full_csv
+        assert "'Client" not in full_csv
