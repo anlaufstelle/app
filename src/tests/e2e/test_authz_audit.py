@@ -254,6 +254,13 @@ def test_full_live_matrix_and_report(base_url, audit_context):
                         DESTRUCTIVE_RESET[exp.url_name](conn, audit_context)
 
     # 2. IDOR: fremde Objekt-IDs (Facility 2), stärkste erlaubte Facility-Rolle.
+    # Sudo-Elevation NACH der vertikalen Matrix (deren 302→/sudo/-Beobachtungen
+    # bleiben echt): sudo-geschützte IDOR-Zellen (client_export_*) erreichen
+    # sonst nie den Objekt-Lookup — RequireSudoModeMixin redirected pk-unabhängig
+    # vor get_object_or_404 (services/security/sudo_mode.py). Im Unit-IDOR-Test
+    # entfällt das Gate (SUDO_MODE_ENABLED=False in settings/test.py).
+    for idor_actor in ("facility_admin", "lead"):
+        helpers.elevate_sudo(sessions[idor_actor], base_url)
     for exp in EXPECTATIONS:
         if not exp.idor:
             continue

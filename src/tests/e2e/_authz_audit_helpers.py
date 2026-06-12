@@ -98,6 +98,26 @@ def _request(session, base_url, method, path, data):
     )
 
 
+def elevate_sudo(session, base_url):
+    """Sudo-Fenster der Session öffnen (POST /sudo/ mit Seed-Passwort).
+
+    Nötig für IDOR-Probes auf sudo-geschützte Views: RequireSudoModeMixin
+    redirected sonst VOR jedem Objekt-Lookup nach /sudo/ (302, pk-unabhängig)
+    — die Probe erreicht den Scoping-Code nie. Im Unit-IDOR-Test stellt sich
+    die Frage nicht (SUDO_MODE_ENABLED=False in settings/test.py); der
+    E2E-Server läuft mit aktivem Sudo-Gate. TTL 900s > Audit-Laufzeit.
+    """
+    session.get(f"{base_url}/sudo/?next=/start/", timeout=10)  # csrftoken sicherstellen
+    response = session.post(
+        f"{base_url}/sudo/",
+        data={"password": PASSWORD, "next": "/start/"},
+        headers={"Referer": f"{base_url}/sudo/", "X-CSRFToken": session.cookies.get("csrftoken", "")},
+        timeout=10,
+        allow_redirects=False,
+    )
+    assert response.status_code == 302, f"Sudo-Elevation fehlgeschlagen: {response.status_code}"
+
+
 def db_connection():
     """Direkte psycopg-Verbindung zur E2E-Datenbank (autocommit)."""
     return psycopg.connect(
@@ -290,6 +310,24 @@ def prepare_audit_objects(conn, fac_id):
         """,  # noqa: S608
         params,
     )
+    # 6. Feld-Sensitivität des authz_attachment neutralisieren: der Seed kennt
+    #    nur HIGH-File-FieldTemplates (alle Attachments hängen an „high"-Feldern)
+    #    — user_can_see_field nimmt max(doc, feld), also 403 für staff/assistant
+    #    trotz NORMAL-Event (views/attachments.py). Der Unit-Fixture-Vertrag
+    #    nutzt ein frisches Template MIT leerer Sensitivität (= vom DocumentType
+    #    erben, conftest._make_attachment) — daher hier '' setzen, nur für
+    #    Templates der Attachments am konformen Event. Statuscode-neutral für
+    #    alle anderen Zellen (Sensitivität steuert nur Sichtbarkeit/Download).
+    cur.execute(
+        f"""
+        UPDATE core_fieldtemplate SET sensitivity = ''
+        WHERE id IN (
+            SELECT a.field_template_id FROM core_eventattachment a
+            WHERE a.is_current AND a.event_id = ({_CONFORMABLE_EVENT})
+        )
+        """,  # noqa: S608
+        params,
+    )
 
 
 # SQL pro Fixture-Name aus der Erwartungs-Tabelle. %(fac)s = Facility-ID.
@@ -310,10 +348,22 @@ HARVEST_SQL = {
     "client_trashed": (
         "SELECT id FROM core_client WHERE facility_id = %(fac)s AND is_deleted = true ORDER BY id LIMIT 1"
     ),
-    "case_open": (
-        "SELECT id FROM core_case WHERE facility_id = %(fac)s AND status = 'open' AND is_deleted = false "
-        "ORDER BY id LIMIT 1"
-    ),
+    # Episode/Goal/Milestone-URLs kombinieren case_open.pk mit den Kind-PKs —
+    # die Views lookup-en strikt get_object_or_404(..., case=case)
+    # (case_episodes.py, case_goals.py). Daher: offenen Fall bevorzugen, der
+    # Episode UND Milestone (impliziert Goal) hat; die Kind-Queries unten
+    # pinnen sich per %(case_open)s auf genau diesen Fall (harvest_ids).
+    "case_open": """
+        SELECT c.id FROM core_case c
+        WHERE c.facility_id = %(fac)s AND c.status = 'open' AND c.is_deleted = false
+        ORDER BY (
+            EXISTS (SELECT 1 FROM core_episode ep WHERE ep.case_id = c.id AND ep.is_deleted = false)
+            AND EXISTS (
+                SELECT 1 FROM core_milestone m JOIN core_outcomegoal g ON g.id = m.goal_id WHERE g.case_id = c.id
+            )
+        ) DESC, c.id
+        LIMIT 1
+    """,
     "case_closed": (
         "SELECT id FROM core_case WHERE facility_id = %(fac)s AND status = 'closed' AND is_deleted = false "
         "ORDER BY id LIMIT 1"
@@ -338,17 +388,16 @@ HARVEST_SQL = {
         ) DESC, e.id
         LIMIT 1
     """,  # noqa: S608
+    # %(case_open)s: an den geernteten case_open gepinnt (siehe oben) — die
+    # Erwartungs-Tabelle baut die URLs aus case_open.pk + Kind-PK zusammen.
     "episode": (
-        "SELECT ep.id FROM core_episode ep JOIN core_case c ON c.id = ep.case_id "
-        "WHERE c.facility_id = %(fac)s AND ep.is_deleted = false ORDER BY ep.id LIMIT 1"
+        "SELECT ep.id FROM core_episode ep "
+        "WHERE ep.case_id = %(case_open)s AND ep.is_deleted = false ORDER BY ep.id LIMIT 1"
     ),
-    "outcome_goal": (
-        "SELECT g.id FROM core_outcomegoal g JOIN core_case c ON c.id = g.case_id "
-        "WHERE c.facility_id = %(fac)s ORDER BY g.id LIMIT 1"
-    ),
+    "outcome_goal": ("SELECT g.id FROM core_outcomegoal g WHERE g.case_id = %(case_open)s ORDER BY g.id LIMIT 1"),
     "milestone": (
         "SELECT m.id FROM core_milestone m JOIN core_outcomegoal g ON g.id = m.goal_id "
-        "JOIN core_case c ON c.id = g.case_id WHERE c.facility_id = %(fac)s ORDER BY m.id LIMIT 1"
+        "WHERE g.case_id = %(case_open)s ORDER BY m.id LIMIT 1"
     ),
     "sample_workitem": (
         "SELECT w.id FROM core_workitem w "
@@ -386,6 +435,13 @@ HARVEST_SQL = {
     ),
 }
 
+# Drift-Guard für die Zweiphasen-Ernte: case_open muss vor den Queries
+# liegen, die %(case_open)s referenzieren (harvest_ids füllt es on-the-fly).
+_HARVEST_ORDER = list(HARVEST_SQL)
+assert all(
+    _HARVEST_ORDER.index("case_open") < _HARVEST_ORDER.index(name) for name in ("episode", "outcome_goal", "milestone")
+), "HARVEST_SQL: case_open muss vor episode/outcome_goal/milestone stehen"
+
 # Audit-Pendants der Unit-Fixture-Namen für IDOR (foreign_X in Facility 2 = X-SQL dort).
 FOREIGN_ALIASES = {
     "foreign_client": "client_identified",
@@ -407,13 +463,23 @@ FOREIGN_ALIASES = {
 
 
 def harvest_ids(conn, fac_id):
-    """``fixture_name → id`` (oder ``None`` = SETUP-ERROR-Zelle im Report)."""
+    """``fixture_name → id`` (oder ``None`` = SETUP-ERROR-Zelle im Report).
+
+    Zweiphasig: sobald ``case_open`` geerntet ist, steht seine ID den
+    nachfolgenden Queries als ``%(case_open)s`` zur Verfügung (Episode/Goal/
+    Milestone müssen im SELBEN Fall liegen — Views lookup-en case-gebunden).
+    Dict-Reihenfolge von HARVEST_SQL stellt sicher, dass case_open vor den
+    abhängigen Queries läuft; psycopg ignoriert überzählige Mapping-Keys.
+    """
     cur = _superuser_cursor(conn)
     out = {}
+    params = {"fac": fac_id, "case_open": None}
     for name, sql in HARVEST_SQL.items():
-        cur.execute(sql, {"fac": fac_id})
+        cur.execute(sql, params)
         row = cur.fetchone()
         out[name] = row[0] if row else None
+        if name == "case_open":
+            params["case_open"] = out[name]
     return out
 
 
@@ -508,6 +574,11 @@ def write_report(rows, header_findings, meta):
         " `core:retention_dismiss_hold` werden übersprungen: GET antwortet pauschal"
         " 405 vor jedem Objekt-Lookup (NOT_PROBEABLE inkl. Drift-Guard in"
         " `test_authz_idor.py`).",
+        "- IDOR-Probes laufen mit zuvor geöffnetem Sudo-Fenster (echter POST auf"
+        " `/sudo/`): sudo-geschützte Views (`core:client_export_*`) würden sonst"
+        " pk-unabhängig 302 → `/sudo/` antworten, bevor der Objekt-Lookup läuft —"
+        " die Probe erreicht so den Scoping-Code. Die vertikale Matrix lief davor,"
+        " ihre 302-→-`/sudo/`-Beobachtungen sind unbeeinflusst.",
         "- Mutationen durch erlaubte POSTs sind akzeptiert — die E2E-Datenbank ist"
         " wegwerfbar; Folgezellen können dadurch einzelne Statuswechsel sehen.",
         "",
