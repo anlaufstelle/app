@@ -27,7 +27,8 @@ src/static/css/output.css
 # AI Tools
 CLAUDE.md
 Gemini.md
-.claude/
+.claude/*
+!.claude/commands/
 .codex
 .codex/
 .gemini/
