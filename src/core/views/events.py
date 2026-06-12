@@ -284,6 +284,11 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
 
     def dispatch(self, request, *args, **kwargs):
         """Load event and check permissions (assistants may only edit their own events)."""
+        if not request.user.is_authenticated:
+            # Refs #1072: Kein ORM-Lookup für anonyme Requests — die Mixin-
+            # Kette (LoginRequiredMixin) liefert den Login-Redirect mit
+            # ``next``-Parameter wie alle anderen geschützten Endpoints.
+            return super().dispatch(request, *args, **kwargs)
         self.event = get_visible_event_or_404(
             request.user,
             request.current_facility,
@@ -407,6 +412,11 @@ class EventDeleteView(StaffRequiredMixin, View):
 
     def dispatch(self, request, *args, **kwargs):
         """Load event and check permissions (staff may only delete their own events)."""
+        if not request.user.is_authenticated:
+            # Refs #1072: Kein ORM-Lookup für anonyme Requests — die Mixin-
+            # Kette (LoginRequiredMixin) liefert den Login-Redirect mit
+            # ``next``-Parameter wie alle anderen geschützten Endpoints.
+            return super().dispatch(request, *args, **kwargs)
         self.event = get_visible_event_or_404(
             request.user,
             request.current_facility,

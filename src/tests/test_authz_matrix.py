@@ -107,17 +107,7 @@ ACTORS = (*ROLES, "anonymous")
 
 # Bekannte, als Issue dokumentierte Lücken: Zelle → Begründung mit Issue-Ref.
 # Format: ("core:foo", "POST", "assistant"): "200 statt 403 — Issue #XXXX"
-_EVENT_DISPATCH_GAP = (
-    "404 statt Login-Redirect für anonym — dispatch() lädt das Event VOR dem "
-    "LoginRequired-Check (super().dispatch()), src/core/views/events.py. "
-    "Issue #1072"
-)
-KNOWN_GAPS: dict[tuple[str, str, str], str] = {
-    ("core:event_update", "GET", "anonymous"): _EVENT_DISPATCH_GAP,
-    ("core:event_update", "POST", "anonymous"): _EVENT_DISPATCH_GAP,
-    ("core:event_delete", "GET", "anonymous"): _EVENT_DISPATCH_GAP,
-    ("core:event_delete", "POST", "anonymous"): _EVENT_DISPATCH_GAP,
-}
+KNOWN_GAPS: dict[tuple[str, str, str], str] = {}
 
 
 def test_known_gaps_reference_existing_cells():
