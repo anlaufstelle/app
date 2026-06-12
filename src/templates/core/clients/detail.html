@@ -168,12 +168,14 @@
 </div>
 {% endif %}
 
-{# Notizen #}
+{# Notizen — staff-stufig, analog notes_visible in services/system/offline.py (Refs #1068) #}
+{% if user.is_staff_or_above %}
 {% if client.notes %}
 <div class="bg-surface border border-subtle rounded-[10px] px-4 py-3.5 mb-5">
     <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2">{% trans "Notizen" %}</h2>
     <p class="text-[13px] text-ink-soft leading-relaxed whitespace-pre-wrap">{{ client.notes }}</p>
 </div>
+{% endif %}
 {% endif %}
 
 <div class="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-6 items-start">

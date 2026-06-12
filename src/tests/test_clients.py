@@ -97,6 +97,25 @@ class TestClientDetail:
             target_type="Client",
         ).exists()
 
+    def test_client_detail_hides_notes_for_assistant(self, client, assistant_user, client_identified):
+        # Refs #1068: notes sind staff-stufig (analog offline.py notes_visible)
+        # und dürfen für Assistants nicht im Web-Detail gerendert werden.
+        client_identified.notes = "Vertrauliche-Staff-Notiz-1068"
+        client_identified.save(update_fields=["notes"])
+        client.force_login(assistant_user)
+        response = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk}))
+        assert response.status_code == 200
+        assert "Vertrauliche-Staff-Notiz-1068" not in response.content.decode()
+
+    def test_client_detail_shows_notes_for_staff(self, client, staff_user, client_identified):
+        # Refs #1068: staff+ sieht die Notizen weiterhin.
+        client_identified.notes = "Vertrauliche-Staff-Notiz-1068"
+        client_identified.save(update_fields=["notes"])
+        client.force_login(staff_user)
+        response = client.get(reverse("core:client_detail", kwargs={"pk": client_identified.pk}))
+        assert response.status_code == 200
+        assert "Vertrauliche-Staff-Notiz-1068" in response.content.decode()
+
     def test_staff_cannot_see_client_from_other_facility(
         self, client, staff_user, second_facility, second_facility_user
     ):
