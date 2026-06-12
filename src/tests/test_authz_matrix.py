@@ -110,7 +110,7 @@ ACTORS = (*ROLES, "anonymous")
 _EVENT_DISPATCH_GAP = (
     "404 statt Login-Redirect für anonym — dispatch() lädt das Event VOR dem "
     "LoginRequired-Check (super().dispatch()), src/core/views/events.py. "
-    "Issue folgt (#1055-Befund 1)"
+    "Issue #1072"
 )
 KNOWN_GAPS: dict[tuple[str, str, str], str] = {
     ("core:event_update", "GET", "anonymous"): _EVENT_DISPATCH_GAP,
