@@ -351,3 +351,123 @@ class TestEventUpdateView:
             event=sample_event,
             action=EventHistory.Action.UPDATE,
         ).exists()
+
+
+@pytest.fixture
+def doc_type_with_date(facility):
+    """DocumentType mit DATE- und TIME-Feld — Repro fuer Refs #1073."""
+    from core.models import DocumentType, DocumentTypeField, FieldTemplate
+
+    doc_type = DocumentType.objects.create(
+        facility=facility,
+        category=DocumentType.Category.CONTACT,
+        name="Arztbesuch",
+    )
+    ft_datum = FieldTemplate.objects.create(
+        facility=facility,
+        name="Datum",
+        field_type=FieldTemplate.FieldType.DATE,
+    )
+    ft_uhrzeit = FieldTemplate.objects.create(
+        facility=facility,
+        name="Uhrzeit",
+        field_type=FieldTemplate.FieldType.TIME,
+    )
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_datum, sort_order=0)
+    DocumentTypeField.objects.create(document_type=doc_type, field_template=ft_uhrzeit, sort_order=1)
+    return doc_type
+
+
+@pytest.mark.django_db
+class TestEventDateFieldSerialization:
+    """Datumsfelder in dynamischen Formularen duerfen keinen 500 ausloesen (Refs #1073).
+
+    ``DynamicEventDataForm`` liefert fuer DATE/TIME-Felder ``datetime.date``/
+    ``datetime.time``-Objekte in ``cleaned_data``. ``Event.data_json`` ist ein
+    JSONField ohne Custom-Encoder — die Objekte muessen vor dem Save als
+    ISO-Strings normalisiert werden (Wire-Format, das auch ``bans.py`` und
+    der Seed verwenden).
+    """
+
+    def test_create_event_serializes_date_to_iso_string(self, facility, staff_user, doc_type_with_date):
+        from datetime import date, time
+
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_with_date,
+            occurred_at=timezone.now(),
+            data_json={"datum": date(2026, 7, 1), "uhrzeit": time(14, 30)},
+        )
+        event.refresh_from_db()
+        assert event.data_json["datum"] == "2026-07-01"
+        assert event.data_json["uhrzeit"] == "14:30:00"
+        history = EventHistory.objects.get(event=event, action=EventHistory.Action.CREATE)
+        assert history.data_after["datum"] == "2026-07-01"
+
+    def test_update_event_serializes_date_to_iso_string(self, facility, staff_user, doc_type_with_date):
+        from datetime import date
+
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_with_date,
+            occurred_at=timezone.now(),
+            data_json={},
+        )
+        update_event(event, staff_user, {"datum": date(2026, 8, 15)})
+        event.refresh_from_db()
+        assert event.data_json["datum"] == "2026-08-15"
+
+    def test_event_create_view_with_date_succeeds(self, client, staff_user, doc_type_with_date, client_identified):
+        """Akzeptanzkriterium #1073: Kontakt mit Datum speichern — kein 500."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_with_date.pk),
+                "client": str(client_identified.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "datum": "2026-07-01",
+                "uhrzeit": "14:30",
+            },
+        )
+        assert response.status_code == 302
+        event = Event.objects.get(document_type=doc_type_with_date)
+        assert event.data_json["datum"] == "2026-07-01"
+        assert event.data_json["uhrzeit"] == "14:30:00"
+
+    def test_event_create_view_invalid_date_shows_form_error(
+        self, client, staff_user, doc_type_with_date, client_identified
+    ):
+        """Akzeptanzkriterium #1073: ungueltiges Datum → Formularfehler, kein 500."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_with_date.pk),
+                "client": str(client_identified.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "datum": "kein-datum",
+            },
+        )
+        assert response.status_code == 200
+        assert not Event.objects.filter(document_type=doc_type_with_date).exists()
+
+    def test_event_update_view_with_date_succeeds(self, client, staff_user, facility, doc_type_with_date):
+        """Akzeptanzkriterium #1073: Bearbeiten mit Datum — kein 500."""
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_with_date,
+            occurred_at=timezone.now(),
+            data_json={"datum": "2026-07-01"},
+        )
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": event.pk}),
+            {"datum": "2026-09-30", "uhrzeit": "08:15"},
+        )
+        assert response.status_code == 302
+        event.refresh_from_db()
+        assert event.data_json["datum"] == "2026-09-30"

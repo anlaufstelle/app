@@ -10,6 +10,7 @@ Aufgeteilt aus dem alten ``services/event.py`` (#777).
 from __future__ import annotations
 
 import logging
+from datetime import date, time
 
 from django.core.files.uploadedfile import UploadedFile
 
@@ -146,13 +147,29 @@ def normalize_file_marker(value):
     return []
 
 
+def _serialize_json_value(value):
+    """Normalisiert Form-``cleaned_data``-Werte auf das JSON-Wire-Format.
+
+    Refs #1073: ``DynamicEventDataForm`` liefert fuer DATE/TIME-Felder
+    ``datetime.date``/``datetime.time``-Objekte — ``Event.data_json`` ist
+    aber ein JSONField ohne Custom-Encoder, der Save wirft sonst
+    ``TypeError`` (Fehler 500). ISO-Strings sind das etablierte Format:
+    der Seed schreibt sie, ``bans.py`` liest via ``date.fromisoformat``.
+    ``datetime`` ist eine ``date``-Subklasse und damit mit abgedeckt.
+    """
+    if isinstance(value, (date, time)):
+        return value.isoformat()
+    return value
+
+
 def _validate_data_json(document_type, data_json):
     """Only accept fields defined in the DocumentType's field templates.
 
     FILE-typed fields use marker dicts — entweder das Stufe-A-Singleton
     (``{"__file__": True, "attachment_id": "..."}``) oder das Stufe-B-List-
     Format (``{"__files__": True, "entries": [...]}``). Beide werden
-    unmodifiziert durchgereicht.
+    unmodifiziert durchgereicht. Datums-/Zeitwerte werden auf ISO-Strings
+    normalisiert (Refs #1073).
     """
     if not data_json:
         return {}
@@ -177,7 +194,7 @@ def _validate_data_json(document_type, data_json):
         elif k in file_slugs:
             continue
         else:
-            cleaned[k] = v
+            cleaned[k] = _serialize_json_value(v)
     return cleaned
 
 
