@@ -10,7 +10,7 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from core.models import AuditLog, Client
+from core.models import AuditLog, Client, DocumentType, Event, EventHistory, LegalHold
 from core.models.workitem import DeletionRequest
 from core.services.client import (
     anonymize_eligible_soft_deleted_clients,
@@ -183,6 +183,123 @@ class TestRetentionTrashAnonymization:
 
         assert count == 1
         assert not client.pseudonym.startswith("Gelöscht-")
+
+    # -- Legal-Hold-Ausschluss (Refs #1066) ---------------------------------
+
+    def _make_expired_trash_client(self, facility, staff_user, lead_user, pseudonym):
+        """Soft-deleter Klient mit abgelaufener Papierkorb-Frist."""
+        c = _make_client(facility, pseudonym=pseudonym)
+        dr = request_client_deletion(c, staff_user, "test")
+        approve_client_deletion(dr, lead_user)
+        Client.objects.filter(pk=c.pk).update(deleted_at=timezone.now() - timedelta(days=31))
+        return c
+
+    def _make_event_with_history(self, facility, client_obj, user):
+        """Event + Klartext-EventHistory für einen Klienten."""
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.CONTACT,
+            name=f"DT-{client_obj.pseudonym}",
+        )
+        event = Event.objects.create(
+            facility=facility,
+            client=client_obj,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={"notiz": "klartext"},
+            created_by=user,
+        )
+        history = EventHistory.objects.create(
+            event=event,
+            changed_by=user,
+            action=EventHistory.Action.CREATE,
+            data_after={"notiz": "klartext"},
+        )
+        return event, history
+
+    def test_client_with_held_event_survives_trash_expiry(self, facility, lead_user, staff_user):
+        """Refs #1066: Aktiver Legal Hold auf einem Event blockiert die
+        Trash-Anonymisierung des Eltern-Klienten (Spoliation-Schutz) —
+        ungehaltene Klienten derselben Facility werden weiter anonymisiert."""
+        settings_obj = self._make_settings(facility, trash_days=30)
+
+        held_client = self._make_expired_trash_client(facility, staff_user, lead_user, "P-Held")
+        event, history = self._make_event_with_history(facility, held_client, staff_user)
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=event.pk,
+            reason="Litigation",
+            created_by=lead_user,
+        )
+        plain_client = self._make_expired_trash_client(facility, staff_user, lead_user, "P-Plain")
+
+        count = anonymize_eligible_soft_deleted_clients(facility, settings_obj)
+
+        held_client.refresh_from_db()
+        plain_client.refresh_from_db()
+        history.refresh_from_db()
+
+        assert count == 1
+        assert held_client.pseudonym == "P-Held"
+        assert plain_client.pseudonym.startswith("Gelöscht-")
+        assert history.data_after == {"notiz": "klartext"}
+
+    def test_dry_run_count_excludes_clients_with_held_events(self, facility, lead_user, staff_user):
+        """Refs #1066: dry_run zählt gehaltene Klienten nicht mit."""
+        settings_obj = self._make_settings(facility, trash_days=30)
+        held_client = self._make_expired_trash_client(facility, staff_user, lead_user, "P-DryHeld")
+        event, _ = self._make_event_with_history(facility, held_client, staff_user)
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=event.pk,
+            reason="Litigation",
+            created_by=lead_user,
+        )
+
+        assert anonymize_eligible_soft_deleted_clients(facility, settings_obj, dry_run=True) == 0
+
+    def test_directly_held_client_is_excluded(self, facility, lead_user, staff_user):
+        """Refs #1066: Auch ein direkt gehaltener Klient (target_type="Client")
+        wird vom Trash-Ablauf ausgenommen."""
+        settings_obj = self._make_settings(facility, trash_days=30)
+        held_client = self._make_expired_trash_client(facility, staff_user, lead_user, "P-ClientHold")
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Client",
+            target_id=held_client.pk,
+            reason="Audit",
+            created_by=lead_user,
+        )
+
+        count = anonymize_eligible_soft_deleted_clients(facility, settings_obj)
+
+        held_client.refresh_from_db()
+        assert count == 0
+        assert held_client.pseudonym == "P-ClientHold"
+
+    def test_dismissed_hold_does_not_block_anonymization(self, facility, lead_user, staff_user):
+        """Refs #1066: Nur AKTIVE Holds schieben auf — nach Aufhebung muss
+        die DSGVO-Anonymisierung im nächsten Lauf nachgeholt werden."""
+        settings_obj = self._make_settings(facility, trash_days=30)
+        former_held = self._make_expired_trash_client(facility, staff_user, lead_user, "P-Dismissed")
+        event, _ = self._make_event_with_history(facility, former_held, staff_user)
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=event.pk,
+            reason="Litigation beendet",
+            created_by=lead_user,
+            dismissed_at=timezone.now(),
+            dismissed_by=lead_user,
+        )
+
+        count = anonymize_eligible_soft_deleted_clients(facility, settings_obj)
+
+        former_held.refresh_from_db()
+        assert count == 1
+        assert former_held.pseudonym.startswith("Gelöscht-")
 
 
 # ---------------------------------------------------------------------------

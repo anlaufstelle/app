@@ -10,6 +10,7 @@ from core.models import AuditLog, Client
 from core.models.activity import Activity
 from core.models.recent_client_visit import RecentClientVisit
 from core.models.workitem import DeletionRequest
+from core.retention.legal_holds import get_active_hold_target_ids
 from core.services.audit import audit_client_event, audit_event
 from core.services.dashboard import log_activity
 from core.services.security import check_version_conflict
@@ -390,15 +391,28 @@ def anonymize_eligible_soft_deleted_clients(facility, settings_obj, *, dry_run=F
     mit ``is_deleted=True`` und ``deleted_at`` älter als
     ``settings_obj.client_trash_days``, ruft :func:`anonymize_client` auf.
 
+    Refs #1066: Klienten mit aktivem Legal Hold — direkt (``target_type
+    "Client"``) oder auf einem ihrer Events — sind ausgeschlossen, analog
+    zur Event-Retention (:mod:`core.retention.enforcement`). Sonst würde
+    das Löschen des Eltern-Klienten einen Event-Hold aushebeln
+    (Spoliation): Anonymisierung wird aufgeschoben, bis der Hold
+    aufgehoben/abgelaufen ist; ein späterer Lauf holt sie nach.
+
     Returns: Anzahl anonymisierter Datensätze.
     """
     from datetime import timedelta
 
     cutoff = timezone.now() - timedelta(days=settings_obj.client_trash_days)
-    qs = Client.objects.filter(
-        facility=facility,
-        is_deleted=True,
-        deleted_at__lt=cutoff,
+    held_event_ids = get_active_hold_target_ids(facility, "Event")
+    held_client_ids = get_active_hold_target_ids(facility, "Client")
+    qs = (
+        Client.objects.filter(
+            facility=facility,
+            is_deleted=True,
+            deleted_at__lt=cutoff,
+        )
+        .exclude(pk__in=held_client_ids)
+        .exclude(events__pk__in=held_event_ids)
     )
     if dry_run:
         return qs.count()
