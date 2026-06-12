@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """CI check: every translated file must declare a translation-version
-header, and it must be no more than two minor versions behind the
-current project version (`pyproject.toml`). Refs #832.
+header that matches the current minor version of `pyproject.toml`
+(hard release gate since 2026-06-12, was: two minors tolerance).
+Refs #832, #1078.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-MAX_MINOR_BEHIND = 2
+MAX_MINOR_BEHIND = 0
 
 VERSION_RE = re.compile(r"<!--\s*translation-version:\s*v(\d+)\.(\d+)\.(\d+)\s*-->")
 SOURCE_RE = re.compile(r"<!--\s*translation-source:\s*[^\n]+?-->")

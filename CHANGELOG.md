@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **Englische Dokumentation vollständig auf v0.14.0 synchronisiert** (#1078, #1071) — README.en, CONTRIBUTING.en und docs/en/* decken jetzt u. a. Arbeitszentrale, Lockout-Selbsthilfe (E-Mail/Backup-Code), Drei-Rollen-Datenbankmodell, Compliance-Dashboard, Genehmiger-Pool und datenschutzfreundliche externe Berichte ab.
+- **Übersetzungs-Gate verschärft** (#1078) — `scripts/check_translation_versions.py` verlangt Übersetzungs-Sync mit jedem Minor-Release (`MAX_MINOR_BEHIND` 2 → 0); Teil der neuen EN-Sync-Policy „hartes Release-Gate".
 
 ## [0.14.0] - 2026-06-11
 
