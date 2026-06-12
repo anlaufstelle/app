@@ -1,7 +1,7 @@
 """CLI-Tool: Prueft Postgres-Rollenattribute fuer App- und Admin-Rolle.
 
 Refs #902: Selbst-Hosting-Installationen koennen mit zu
-privilegiertem App-DB-User laufen, wenn das offizielle ``postgres:16``-
+privilegiertem App-DB-User laufen, wenn das offizielle ``postgres:18``-
 Image den per ``POSTGRES_USER`` angelegten Login automatisch als
 Superuser erstellt. RLS-Policies (Migration 0047) und BYPASSRLS-
 Annahmen werden dann unbemerkt unterlaufen.

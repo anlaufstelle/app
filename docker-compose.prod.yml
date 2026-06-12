@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     # KEIN env_file: .env hier — der db-Container nutzt
     # POSTGRES_USER=postgres als Bootstrap-Superuser (Postgres-Image-
     # Convention). Der App-User (NOSUPERUSER, NOBYPASSRLS) und der
@@ -16,7 +16,12 @@ services:
       ADMIN_DB_USER: ${POSTGRES_ADMIN_USER}
       ADMIN_DB_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # PG18-Image: PGDATA=/var/lib/postgresql/18/docker, VOLUME-Deklaration
+      # /var/lib/postgresql — Mount aufs Elternverzeichnis, nicht .../data
+      # (PG16-Layout), sonst landen die Daten in einem anonymen Volume.
+      # Migrationspfad 16→18 (dump/restore + Rollback): docs/ops-runbook.md.
+      # Refs #1039.
+      - pgdata:/var/lib/postgresql
       - ./deploy/postgres-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]

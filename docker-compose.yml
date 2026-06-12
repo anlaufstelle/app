@@ -8,7 +8,7 @@
 # Fuer den produktiven Einsatz bitte ``docker-compose.prod.yml`` verwenden.
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_DB: anlaufstelle
       POSTGRES_USER: anlaufstelle
@@ -17,7 +17,11 @@ services:
       # Loopback-Binding — DB ist nur lokal erreichbar (Refs #799).
       - "127.0.0.1:5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # PG18-Image: PGDATA liegt unter /var/lib/postgresql/18/docker, das Image
+      # deklariert VOLUME /var/lib/postgresql. Mount aufs Elternverzeichnis —
+      # ein Mount auf .../data (PG16-Layout) liefe ins Leere und die Daten
+      # landeten in einem anonymen Volume. Refs #1039.
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U anlaufstelle"]
       interval: 5s

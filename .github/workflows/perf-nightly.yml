@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:18-alpine
         env:
           POSTGRES_DB: anlaufstelle
           POSTGRES_USER: anlaufstelle

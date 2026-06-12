@@ -8,10 +8,13 @@
 
 services:
   db:
-    image: postgres:16-alpine
+    image: postgres:18-alpine
     env_file: .env.staging
     volumes:
-      - pgdata_staging:/var/lib/postgresql/data
+      # PG18-Image: PGDATA=/var/lib/postgresql/18/docker, VOLUME-Deklaration
+      # /var/lib/postgresql — Mount aufs Elternverzeichnis, nicht .../data
+      # (PG16-Layout). Migrationspfad 16→18: docs/ops-runbook.md. Refs #1039.
+      - pgdata_staging:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
       interval: 10s
