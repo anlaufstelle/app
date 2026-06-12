@@ -8,7 +8,7 @@ import requests
 
 PASSWORD = "anlaufstelle2026"
 REPO_ROOT = Path(__file__).resolve().parents[3]
-REPORT_PATH = REPO_ROOT / "docs" / "archive" / "audits" / "2026-06-11-a1-laufzeit-authz-matrix.md"
+REPORT_PATH = REPO_ROOT / "docs" / "archive" / "audits" / "2026-06-12-a1-laufzeit-authz-matrix.md"
 
 # Seed-Logins (CLAUDE.md): Facility 1 ohne Suffix, Facility 2 mit _1.
 ACTOR_LOGINS = {
