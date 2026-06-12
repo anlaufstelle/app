@@ -2,6 +2,7 @@
 
 > This is a partial English translation of the Anlaufstelle documentation.
 > The [German documentation](../README.md) is the authoritative source.
+> Internal artifacts (`docs/archive/`, `docs/superpowers/`, `docs/ai/`) are dev-only and not part of the release snapshot.
 
 ---
 
@@ -9,7 +10,7 @@
 
 | Document | Description | Audience |
 |----------|-------------|----------|
-| [admin-guide.md](admin-guide.md) | Operations manual: installation, backup, monitoring, MFA, compliance dashboard, GDPR | IT Admins |
+| [admin-guide.md](admin-guide.md) | Operations manual: installation, backup/restore, monitoring, MFA, retention, GDPR | IT Admins |
 | [user-guide.md](user-guide.md) | User handbook: work center, timeline, persons, events, search, export, statistics, roles | End users |
 | [domain-concept-summary.md](domain-concept-summary.md) | Summary of the domain concept (not a 1:1 translation) | Stakeholders, Developers |
 | [glossary.md](glossary.md) | Bilingual glossary of domain terms (DE↔EN) | Everyone |
@@ -45,7 +46,7 @@ Templates included:
 | [faq.md](../faq.md) | Frequently asked questions — operations & troubleshooting |
 | [security-notes.md](../security-notes.md) | Deliberate security design decisions (2FA, Fernet, RLS, audit, lockout) |
 | [threat-model.md](../threat-model.md) | Security model, attack surface, known open gaps |
-| [audit-inventar.md](../audit-inventar.md) | Index of audit classification codes (FND-\*, S-\*, phases) |
+| [audit-inventar.md](../audit-inventar.md) | Index of audit classification codes (FND-\*, S-\*, phases, sprints) |
 | [dev-deployment.md](../dev/dev-deployment.md) | Dev/test environment deployment |
 | [coolify-deployment.md](../coolify-deployment.md) | Coolify deployment (supported alternative; primary is Docker Compose, see [ADR-017](../adr/017-deployment-topology.md)) |
 | [release-checklist.md](../release-checklist.md) | Release process, sanitize steps, hard-exclusion list |
@@ -58,6 +59,6 @@ Templates included:
 | [async-pdf-evaluation.md](../async-pdf-evaluation.md) | _Historical_ — async PDF queue evaluation, superseded by [ADR-010](../adr/010-sync-pdf-generation.md) |
 
 <!-- translation-source: docs/README.md -->
-<!-- translation-version: v0.12.0 -->
-<!-- translation-date: 2026-05-26 -->
-<!-- source-hash: 4fe0c79 -->
+<!-- translation-version: v0.14.0 -->
+<!-- translation-date: 2026-06-12 -->
+<!-- source-hash: da1fa91 -->

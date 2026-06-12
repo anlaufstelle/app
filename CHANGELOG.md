@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Englische Dokumentation vollständig auf v0.14.0 synchronisiert** (#1078, #1071) — README.en, CONTRIBUTING.en und docs/en/* decken jetzt u. a. Arbeitszentrale, Lockout-Selbsthilfe (E-Mail/Backup-Code), Drei-Rollen-Datenbankmodell, Compliance-Dashboard, Genehmiger-Pool und datenschutzfreundliche externe Berichte ab.
+
 ## [0.14.0] - 2026-06-11
 
 Sicherheits- und Stabilisierungs-Release (Pre-Release): konsolidiert eine breite Hardening-Runde aus dem Post-v0.13.0-Plan (#1016) — Privilege-Escalation- und Admin-Scoping-Abdichtung, MFA-/Sudo-Verschärfung, authentifizierte Backups, Datei-Chunk-Binding v2, Webhook-SSRF-Härtung — plus UI/UX-Polish (#1024). Keine Datenmodell-Brüche; Vorwärts-Migration ohne Datenverlust. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.

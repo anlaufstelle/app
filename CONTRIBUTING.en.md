@@ -119,6 +119,10 @@ python src/manage.py seed --scale large    # load-testing volume
 python src/manage.py seed --flush          # flush existing data first
 ```
 
+> **Environment guard:** `seed` only runs when the active settings module has `SEED_ALLOWED = True` (dev/test/e2e/devlive). Under `prod` settings the command aborts with a
+> `CommandError` — demo logins and `--flush` are forbidden there; initial setup
+> runs via `manage.py create_super_admin` (Refs #1040).
+
 **Scale profiles overview:**
 
 | Data | `small` (default) | `medium` | `large` |
@@ -133,6 +137,7 @@ python src/manage.py seed --flush          # flush existing data first
 | Impact goals || 15 | 60 |
 | Milestones / goal || 3 | 4 |
 | WorkItems | 5 | 25 | 100 |
+| Quick Templates / facility | 6 | 6 | 6 |
 | DeletionRequests || 5 | 15 |
 | RetentionProposals | 4 | 6 | 12 |
 | Attachments (approx.) | 1–2 (50 %) | ~15 (25 %) | ~80 (10 %) |
@@ -588,6 +593,6 @@ src/
 - **Service layer:** Views delegate logic to services — this makes testing easier and keeps views lean.
 
 <!-- translation-source: CONTRIBUTING.md -->
-<!-- translation-version: v0.12.0 -->
-<!-- translation-date: 2026-05-26 -->
-<!-- source-hash: 4fe0c79 -->
+<!-- translation-version: v0.14.0 -->
+<!-- translation-date: 2026-06-12 -->
+<!-- source-hash: da1fa91 -->

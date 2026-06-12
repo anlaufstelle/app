@@ -205,5 +205,5 @@ docker compose exec web python src/manage.py seed
 </details>
 
 <!-- translation-source: README.md -->
-<!-- translation-version: v0.13.3 -->
-<!-- translation-date: 2026-06-02 -->
+<!-- translation-version: v0.14.0 -->
+<!-- translation-date: 2026-06-12 -->

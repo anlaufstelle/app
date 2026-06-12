@@ -1125,7 +1125,11 @@ Under **Core > Audit logs** (or `/audit/`), logs can be filtered by action, faci
 
 ### 7.5 Deletion Requests (Four-Eyes Principle / Dual Approval)
 
-Deletion requests for personal data are processed using the four-eyes principle (dual approval): a request must be approved by a Lead or Application manager (`facility_admin`) before data is permanently deleted. This protects against accidental or unauthorized deletion.
+Deletion requests for personal data are processed using the four-eyes principle (dual approval): a request must be approved by a **second authorized person** before data is permanently deleted. This protects against accidental or unauthorized deletion — including by privileged roles themselves.
+
+**Approver pool — "deletion confirmation" permission** (Refs #1053): Who may approve is not derived from the user's role; instead, approvers are curated via the individually assignable user permission *deletion confirmation* (`can_confirm_deletion`). On first rollout, existing leads and facility admins receive the permission automatically. Afterwards, the facility admin can grant or revoke it in user management (Administration → Users) as needed — for example, granting it to an experienced staff member so that a second approver is always available even if there is only one lead. A permission holder can never approve their own requests; the view, service, and database layers all enforce **requester ≠ approver**.
+
+Every grant and revocation of the permission, as well as every approval, is recorded in the immutable audit log. If an open request has no active approver other than the requester, the deletion request list displays a prominent warning ("No possible approver") — grant the permission to an additional person to resolve this.
 
 ### 7.6 Data Subject Rights (Art. 15--20 GDPR)
 
@@ -1283,6 +1287,6 @@ python manage.py create_statistics_snapshots --year 2026 --month 2
 Snapshots are visible in the Django admin under **Statistics snapshots** (read-only). You can check which months have been captured and when the last update took place.
 
 <!-- translation-source: docs/admin-guide.md -->
-<!-- translation-version: v0.12.0 -->
-<!-- translation-date: 2026-05-26 -->
-<!-- source-hash: 4fe0c79 -->
+<!-- translation-version: v0.14.0 -->
+<!-- translation-date: 2026-06-12 -->
+<!-- source-hash: da1fa91 -->
