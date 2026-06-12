@@ -103,6 +103,38 @@ class TestClientAnonymizeCharacterization:
         # ... aber der freie Reason-Text ist redigiert.
         assert dr.reason == "[Anonymisiert]"
 
+    def test_activity_summaries_redacted_for_client_and_event_targets(self, facility, staff_user, doc_type_contact):
+        """Refs #1067: Zeitstrom darf das alte Pseudonym nicht überleben.
+
+        ``create_client`` („Person Stern-9 angelegt") und ``create_event``
+        („Kontakt für Stern-9") schreiben das Klartext-Pseudonym in
+        ``Activity.summary`` — beide Spuren müssen nach der Anonymisierung
+        redigiert sein.
+        """
+        from core.models.activity import Activity
+        from core.services.client import create_client
+        from core.services.events import create_event
+
+        client = create_client(
+            facility,
+            staff_user,
+            pseudonym="Stern-9",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+        )
+        create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 5, "notiz": "x"},
+            client=client,
+        )
+        assert Activity.objects.filter(facility=facility, summary__contains="Stern-9").count() == 2
+
+        anonymize_client(client, user=staff_user)
+
+        assert not Activity.objects.filter(facility=facility, summary__contains="Stern-9").exists()
+
     def test_trigger_bypass_invoked_for_event_history_redaction(
         self, facility, staff_user, doc_type_contact, client_identified
     ):
@@ -302,3 +334,26 @@ class TestAnonymizeClientHelpers:
 
         # Defensive: kein Crash, kein UPDATE, wenn keine Events vorhanden.
         _redact_deletion_requests([])  # darf nicht raisen
+
+    def test_redact_activities_only_touches_own_targets(self, facility, staff_user, doc_type_contact):
+        """Refs #1067: Redaktion trifft nur Client-/Event-Activities DIESES Klienten."""
+        from core.models.activity import Activity
+        from core.services.client import _redact_activities, create_client
+        from core.services.events import create_event
+
+        own = create_client(facility, staff_user, pseudonym="Eigen-1")
+        own_event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 5, "notiz": "x"},
+            client=own,
+        )
+        create_client(facility, staff_user, pseudonym="Fremd-1")
+
+        _redact_activities(own, [own_event.pk])
+
+        assert not Activity.objects.filter(facility=facility, summary__contains="Eigen-1").exists()
+        # Fremder Klient bleibt unangetastet.
+        assert Activity.objects.filter(facility=facility, summary__contains="Fremd-1").exists()

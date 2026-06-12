@@ -105,6 +105,32 @@ def _redact_deletion_requests(event_ids: list) -> None:
     ).update(reason="[Anonymisiert]")
 
 
+def _redact_activities(client, event_ids: list) -> None:
+    """Redigiere ``Activity.summary`` fuer Client- und Event-Targets (Refs #1067).
+
+    Mehrere Pfade schreiben das Klartext-Pseudonym in den Zeitstrom:
+    ``create_client``/``update_client``/``approve_client_deletion``
+    (Target = Client) sowie ``create_event`` („… für <pseudonym>",
+    Target = Event). Verb + Zeitpunkt bleiben fuer den Feed erhalten,
+    nur der Freitext wird ersetzt.
+    """
+    from django.contrib.contenttypes.models import ContentType
+    from django.db.models import Q
+
+    from core.models.event import Event
+
+    targets = Q(
+        target_type=ContentType.objects.get_for_model(Client),
+        target_id=client.pk,
+    )
+    if event_ids:
+        targets |= Q(
+            target_type=ContentType.objects.get_for_model(Event),
+            target_id__in=event_ids,
+        )
+    Activity.objects.filter(facility=client.facility).filter(targets).update(summary="[Anonymisiert]")
+
+
 @transaction.atomic
 def anonymize_client(client, user=None):
     """DSGVO-konforme Aggregat-Anonymisierung eines Klienten (Refs #715, #743).
@@ -126,8 +152,10 @@ def anonymize_client(client, user=None):
     - ``DeletionRequest.reason`` für Event-Targets dieses Klienten —
       Antrags-Meta (status/requested_by/...) bleibt für den 4-Augen-
       Audit-Trail erhalten.
+    - ``Activity.summary`` für Client- und Event-Targets — der Zeitstrom
+      trägt sonst das Klartext-Pseudonym weiter (Refs #1067).
 
-    Refs #905: Public API stabil; intern delegiert an sechs ``_redact_*``-
+    Refs #905: Public API stabil; intern delegiert an ``_redact_*``-
     Helper, die einzeln testbar sind.
     """
     _redact_client_identity(client)
@@ -136,6 +164,7 @@ def anonymize_client(client, user=None):
     event_ids = _delete_event_attachments_for_client(client)
     _redact_event_history(event_ids)
     _redact_deletion_requests(event_ids)
+    _redact_activities(client, event_ids)
 
     logger.info(
         "client_anonymized",
