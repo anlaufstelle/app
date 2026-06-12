@@ -241,13 +241,15 @@ def decrypt_file_stream(input_path, file_id=None):
         # Der 1B-Header (Version + Anzahl) liegt ausserhalb jedes Fernet-Tokens
         # und ist daher selbst nicht authentifiziert — PR-Review bug_002.
         fid16 = _file_binding(file_id) if file_id is not None else None
-        if version == _FILE_FORMAT_V2:
-            if file_id is None:
-                raise EncryptionError("file_id required to decrypt a v2 (bound) file")
-            if chunk_count == 0:
-                # Produktion schreibt nie ein leeres v2 (enforce_magic_bytes lehnt
-                # leere Uploads ab) → [v2][count=0] ist ein Blanking-/Truncation-Versuch.
-                raise EncryptionError("Chunk binding mismatch — empty v2 file (possible truncation/blanking)")
+        if version == _FILE_FORMAT_V2 and file_id is None:
+            raise EncryptionError("file_id required to decrypt a v2 (bound) file")
+        if file_id is not None and chunk_count == 0:
+            # Produktion schreibt nie ein leeres gebundenes File (enforce_magic_bytes
+            # lehnt leere Uploads ab) → [count=0] ist ein Blanking-/Truncation-Versuch.
+            # Versionsunabhaengig, weil der Header nicht authentifiziert ist: ein auf
+            # [v1][count=0] gefaelschter Header wuerde sonst die per-Chunk-Downgrade-
+            # Erkennung umgehen (Schleife laeuft 0x). Refs #1069.
+            raise EncryptionError("Chunk binding mismatch — empty bound file (possible truncation/blanking)")
 
         for index in range(chunk_count):
             len_bytes = inp.read(4)

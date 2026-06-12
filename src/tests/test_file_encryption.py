@@ -236,6 +236,17 @@ class TestFileEncryptionV2Binding:
         with pytest.raises(EncryptionError, match="binding"):
             list(decrypt_file_stream(out, file_id="file-A"))
 
+    def test_v1_zero_chunk_count_on_bound_file_rejected(self, tmp_path):
+        """[v1][count=0]-Header auf einer v2-gebundenen Datei wird als Blanking
+        abgewiesen statt still einen leeren Stream zu liefern — der gefälschte
+        v1-Header darf den v2-only count=0-Guard nicht umgehen (die per-Chunk-
+        Downgrade-Erkennung läuft bei 0 Chunks nie). Refs #1069."""
+        out = tmp_path / "v1zero.enc"
+        encrypt_file(io.BytesIO(b"x"), out, file_id="file-A")
+        _write_v2(out, 1, 0, [])  # Header auf [v1][count=0] gefälscht
+        with pytest.raises(EncryptionError, match="binding"):
+            list(decrypt_file_stream(out, file_id="file-A"))
+
     def test_v2_header_downgraded_to_v1_rejected(self, tmp_path):
         """v2-Datei mit auf v1 gefälschtem Header-Byte wird erkannt (kein stiller
         Garbage-Stream mit 24-Byte-Kontext-Präfix). PR-Review bug_002."""
