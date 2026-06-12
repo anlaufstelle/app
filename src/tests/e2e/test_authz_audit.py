@@ -18,6 +18,7 @@ import subprocess
 import sys
 
 import pytest
+import requests
 from django.urls import reverse
 
 from tests._authz_expectations import EXPECTATIONS, ROLES
@@ -28,6 +29,10 @@ from tests.e2e import _authz_audit_helpers as helpers
 # Audit übersprungen — der 405-Drift-Guard läuft in test_authz_idor.py.
 from tests.test_authz_idor import IDOR_POST_DATA, NOT_PROBEABLE
 
+# M6: bekannte, als Issue dokumentierte Lücken der Unit-Matrix — Abweichungen
+# dieser Zellen werden im Report als „Bekannt" annotiert (kein neuer Befund).
+from tests.test_authz_matrix import KNOWN_GAPS
+
 pytestmark = [
     pytest.mark.e2e,
     pytest.mark.authz_audit,
@@ -36,12 +41,16 @@ pytestmark = [
 
 
 @pytest.fixture(scope="module")
-def medium_seed(base_url):
+def medium_seed(request, base_url):
     """Reseed mit ``--scale medium``: der Audit braucht 2 Facilities (IDOR).
 
     ``base_url`` hat bereits small geseedet und den Server gestartet —
     hier wird die laufende E2E-DB unter dem Server neu befüllt.
     """
+    # I3: helpers.db_connection() trifft immer die Worker-0-Default-DB —
+    # unter xdist (workerinput gesetzt, vgl. _get_worker_info in conftest.py)
+    # würden Reseed/Harvesting fremde Worker-DBs/Server verfehlen.
+    assert getattr(request.config, "workerinput", None) is None, "Audit nur seriell ausführen (ohne pytest-xdist / -n)"
     python = str(helpers.REPO_ROOT / ".venv" / "bin" / "python")
     if not os.path.exists(python):
         python = sys.executable
@@ -80,11 +89,70 @@ def audit_context(base_url, medium_seed):
         helpers.prepare_audit_objects(conn, fac2)
         ids_fac1 = helpers.harvest_ids(conn, fac1)
         ids_fac2 = helpers.harvest_ids(conn, fac2)
+        milestone_snapshot = _snapshot_milestone(conn, ids_fac1["milestone"])
 
-    yield {"sessions": sessions, "ids_fac1": ids_fac1, "ids_fac2": ids_fac2}
+    yield {
+        "sessions": sessions,
+        "ids_fac1": ids_fac1,
+        "ids_fac2": ids_fac2,
+        "milestone_snapshot": milestone_snapshot,
+    }
 
     for session in sessions.values():
         session.close()
+
+
+# Spaltenliste am Model verifiziert (core/models/outcome.py: Milestone).
+_MILESTONE_COLUMNS = "id, goal_id, title, is_completed, completed_at, sort_order, created_at"
+
+
+def _snapshot_milestone(conn, milestone_id):
+    """Row-Snapshot des Matrix-Milestones für die Hard-Delete-Wiederherstellung."""
+    if milestone_id is None:
+        return None
+    cur = helpers._superuser_cursor(conn)
+    cur.execute(f"SELECT {_MILESTONE_COLUMNS} FROM core_milestone WHERE id = %s", (milestone_id,))  # noqa: S608
+    return cur.fetchone()
+
+
+def _reset_event(conn, ctx):
+    """Soft-Delete von sample_event rückgängig machen.
+
+    Event hat KEIN deleted_at/deleted_by (eigenes is_deleted-Feld statt
+    SoftDeletableModel, core/models/event.py) — is_deleted reicht, damit
+    get_visible_event_or_404 das Objekt wieder findet. data_json/Attachments
+    werden bewusst nicht restauriert (für die AuthZ-Probe irrelevant; die
+    Attachment-Zellen laufen in EXPECTATIONS-Reihenfolge VOR event_delete).
+    """
+    cur = helpers._superuser_cursor(conn)
+    cur.execute("UPDATE core_event SET is_deleted = false WHERE id = %s", (ctx["ids_fac1"]["sample_event"],))
+
+
+def _reset_milestone(conn, ctx):
+    """Hard-Delete von milestone rückgängig machen.
+
+    Gewählte Variante: Row-Snapshot aus audit_context per Re-INSERT mit
+    identischer ID — die in den URL-Pfaden eingebaute Milestone-ID bleibt
+    dadurch über alle Akteur-Zellen gültig. ON CONFLICT DO NOTHING macht den
+    Hook idempotent (abgelehnte Akteure haben nichts gelöscht).
+    """
+    if ctx["milestone_snapshot"] is None:
+        return
+    cur = helpers._superuser_cursor(conn)
+    cur.execute(
+        f"INSERT INTO core_milestone ({_MILESTONE_COLUMNS}) "  # noqa: S608
+        "VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (id) DO NOTHING",
+        ctx["milestone_snapshot"],
+    )
+
+
+# C2: Endpoints, deren erlaubter POST das Matrix-Objekt konsumiert — ohne
+# Wiederherstellung bekämen nachfolgende ERLAUBTE Akteure 404 (falsche
+# ABWEICHUNG). Hook läuft nach jeder POST-Zelle dieser Endpoints.
+DESTRUCTIVE_RESET = {
+    "core:event_delete": _reset_event,  # Soft-Delete (events/crud.py: soft_delete_event)
+    "core:milestone_delete": _reset_milestone,  # Hard-Delete
+}
 
 
 def _path_for(url_name, ids, kwarg_spec):
@@ -123,12 +191,15 @@ def _judge(exp, actor, allowed, status, location):
         # ein nacktes /login/ ist der legitime Logout-Redirect
         # (LOGOUT_REDIRECT_URL) — vgl. test_authz_matrix.py.
         auth_bounce = status == 302 and location.startswith("/login/?next=")
-        ok = (status not in (403, 404) or status in exp.extra_ok) and not auth_bounce
+        # I1: 5xx auf einer Allow-Zelle ist eine Abweichung, kein OK.
+        ok = status < 500 and (status not in (403, 404) or status in exp.extra_ok) and not auth_bounce
         return "allow", "OK" if ok else "ABWEICHUNG"
     return "deny", "OK" if status in (403, 404) else "ABWEICHUNG"
 
 
 def _row(exp, method, actor, expected, status, verdict):
+    # M6: bekannte Unit-Matrix-Gaps annotieren (Spalte „Bekannt" im Report).
+    gap = KNOWN_GAPS.get((exp.url_name, method, actor), "")
     return {
         "url_name": exp.url_name,
         "category": exp.category,
@@ -137,6 +208,7 @@ def _row(exp, method, actor, expected, status, verdict):
         "expected": expected,
         "status": status,
         "verdict": verdict,
+        "known": f"✔ {gap}" if gap else "",
     }
 
 
@@ -155,19 +227,31 @@ def test_full_live_matrix_and_report(base_url, audit_context):
                 rows.append(_row(exp, method, "alle", "-", "-", "SETUP-ERROR"))
                 continue
             for actor in (*ROLES, "anonymous"):
-                if exp.url_name == "logout" and method == "POST" and actor != "anonymous":
-                    # Logout zerstört die Session — Wegwerf-Login statt der
-                    # geteilten Matrix-Session, sonst kippen alle Folgezellen
-                    # dieses Akteurs in Login-Redirects.
-                    fresh_session, _ = helpers.login(base_url, helpers.ACTOR_LOGINS[actor])
-                    with fresh_session:
-                        response = helpers.request_cell(fresh_session, base_url, method, path)
+                # I2: Request-Fehler (Timeout, ConnectionError, …) brechen den
+                # Lauf nicht ab — die Zelle wird als ERROR-Zeile reportet.
+                try:
+                    if exp.url_name == "logout" and method == "POST" and actor != "anonymous":
+                        # Logout zerstört die Session — Wegwerf-Login statt der
+                        # geteilten Matrix-Session, sonst kippen alle Folgezellen
+                        # dieses Akteurs in Login-Redirects.
+                        fresh_session, _ = helpers.login(base_url, helpers.ACTOR_LOGINS[actor])
+                        with fresh_session:
+                            response = helpers.request_cell(fresh_session, base_url, method, path)
+                    else:
+                        response = helpers.request_cell(sessions.get(actor), base_url, method, path)
+                except requests.RequestException as exc:
+                    rows.append(_row(exp, method, actor, f"Request-Fehler: {type(exc).__name__}", "-", "ERROR"))
                 else:
-                    response = helpers.request_cell(sessions.get(actor), base_url, method, path)
-                expected, verdict = _judge(
-                    exp, actor, allowed, response.status_code, response.headers.get("Location", "")
-                )
-                rows.append(_row(exp, method, actor, expected, response.status_code, verdict))
+                    expected, verdict = _judge(
+                        exp, actor, allowed, response.status_code, response.headers.get("Location", "")
+                    )
+                    rows.append(_row(exp, method, actor, expected, response.status_code, verdict))
+                # C2: konsumiertes Objekt wiederherstellen, bevor der nächste
+                # Akteur dieselbe Zelle abfragt (auch nach Request-Fehler —
+                # serverseitig kann die Mutation trotzdem passiert sein).
+                if method == "POST" and exp.url_name in DESTRUCTIVE_RESET:
+                    with helpers.db_connection() as conn:
+                        DESTRUCTIVE_RESET[exp.url_name](conn, audit_context)
 
     # 2. IDOR: fremde Objekt-IDs (Facility 2), stärkste erlaubte Facility-Rolle.
     for exp in EXPECTATIONS:
@@ -182,7 +266,11 @@ def test_full_live_matrix_and_report(base_url, audit_context):
                 rows.append(_row(exp, f"{method} (IDOR)", actor, "404", "-", "SETUP-ERROR"))
                 continue
             data = IDOR_POST_DATA.get((exp.url_name, method))
-            response = helpers.request_cell(sessions[actor], base_url, method, path, data=data)
+            try:
+                response = helpers.request_cell(sessions[actor], base_url, method, path, data=data)
+            except requests.RequestException as exc:
+                rows.append(_row(exp, f"{method} (IDOR)", actor, f"Request-Fehler: {type(exc).__name__}", "-", "ERROR"))
+                continue
             verdict = "OK" if response.status_code == 404 else "ABWEICHUNG"
             rows.append(_row(exp, f"{method} (IDOR)", actor, "404", response.status_code, verdict))
 
@@ -216,10 +304,16 @@ def test_full_live_matrix_and_report(base_url, audit_context):
     ok_count = sum(1 for r in rows if r["verdict"] == "OK")
     deviation_count = sum(1 for r in rows if r["verdict"] == "ABWEICHUNG")
     setup_error_count = sum(1 for r in rows if r["verdict"] == "SETUP-ERROR")
+    request_error_count = sum(1 for r in rows if r["verdict"] == "ERROR")
     print(f"\nReport: {report_path}")
-    print(f"Zellen: {len(rows)} — OK {ok_count} · Abweichungen {deviation_count} · Setup-Fehler {setup_error_count}")
+    print(
+        f"Zellen: {len(rows)} — OK {ok_count} · Abweichungen {deviation_count} · "
+        f"Setup-Fehler {setup_error_count} · Request-Fehler {request_error_count}"
+    )
 
-    assert len(rows) > 500, f"Nur {len(rows)} Zellen — Matrix unvollständig ausgeführt"
-    assert setup_error_count < len(rows) * 0.1, (
-        f"{setup_error_count} Setup-Fehler bei {len(rows)} Zellen — Seed/Harvesting prüfen"
+    assert len(rows) > 850, f"Nur {len(rows)} Zellen — Matrix unvollständig ausgeführt"
+    # I2: ERROR-Zellen zählen in den strukturellen <10%-Assert mit.
+    assert setup_error_count + request_error_count < len(rows) * 0.1, (
+        f"{setup_error_count} Setup-Fehler + {request_error_count} Request-Fehler "
+        f"bei {len(rows)} Zellen — Seed/Harvesting/Server prüfen"
     )

@@ -121,92 +121,268 @@ def _superuser_cursor(conn):
 def facility_ids(conn):
     """``(facility_1_id, facility_2_id)`` über die Seed-Usernamen."""
     cur = _superuser_cursor(conn)
-    cur.execute("SELECT facility_id FROM core_user WHERE username = 'admin'")
-    fac1 = cur.fetchone()[0]
-    cur.execute("SELECT facility_id FROM core_user WHERE username = %s", (FOREIGN_ADMIN,))
-    fac2 = cur.fetchone()[0]
-    return fac1, fac2
+    ids = []
+    for username in ("admin", FOREIGN_ADMIN):
+        cur.execute("SELECT facility_id FROM core_user WHERE username = %s", (username,))
+        row = cur.fetchone()
+        if row is None:
+            raise RuntimeError(
+                f"Seed-User {username!r} fehlt — medium-Seed gelaufen? "
+                "(.venv/bin/python src/manage.py seed --flush --scale medium)"
+            )
+        ids.append(row[0])
+    return tuple(ids)
+
+
+# Subquery: erster lead-User der Facility (fac2-Leads heißen thomas_1 etc.,
+# daher facility-bewusst per role statt hartem Username).
+_LEAD_OF_FACILITY = (
+    "(SELECT u.id FROM core_user u WHERE u.role = 'lead' AND u.facility_id = %(fac)s ORDER BY u.id LIMIT 1)"
+)
+
+# Vertragsbedingungen für Matrix-Events (Unit-Fixture-Vertrag, Refs #1055):
+# NORMAL-Sensitivität (ROLE_MAX_SENSITIVITY blendet ELEVATED/HIGH für
+# assistant/staff per 404 aus — services/compliance/sensitivity.py) und kein
+# QUALIFIED-Client (EventDeleteView.post stellt für qualified statt zu löschen
+# einen Löschantrag — Vier-Augen-Prinzip, views/events.py).
+_EVENT_CONTRACT_WHERE = (
+    "e.is_deleted = false AND dt.sensitivity = 'normal' AND (e.client_id IS NULL OR cl.contact_stage != 'qualified')"
+)
+
+# Erstes vertragskonformes Event (außer Owner) — Events MIT aktuellem
+# Attachment bevorzugt, damit sample_event und authz_attachment auf dasselbe
+# Event zeigen (attachment_download nutzt beide Kwargs zusammen).
+_CONFORMABLE_EVENT = f"""
+    SELECT e.id FROM core_event e
+    JOIN core_documenttype dt ON dt.id = e.document_type_id
+    LEFT JOIN core_client cl ON cl.id = e.client_id
+    WHERE e.facility_id = %(fac)s AND {_EVENT_CONTRACT_WHERE}
+    ORDER BY EXISTS (
+        SELECT 1 FROM core_eventattachment a WHERE a.event_id = e.id AND a.is_current
+    ) DESC, e.id
+    LIMIT 1
+"""  # noqa: S608 — nur statische Fragmente, keine Userdaten.
 
 
 def prepare_audit_objects(conn, fac_id):
-    """Idempotente Seed-Nachbesserungen: 1 Trash-Client, 1 Case-Event."""
+    """Idempotente Seed-Nachbesserungen je Facility (Refs #1055):
+
+    1. 1 Trash-Client (client_trashed).
+    2. Vertragskonformes sample_event: Der Seed vergibt Owner und
+       DocumentType-Sensitivität zufällig; die Erwartungen für
+       core:event_update (STAFF_PLUS) / core:event_delete (LEAD_PLUS) gelten
+       aber nur, wenn der Matrix-Akteur NIE Owner ist und die Sensitivität
+       NORMAL ist (Unit-Fixture-Vertrag). Daher: Owner des ersten
+       NORMAL-Events (Attachment bevorzugt, kein QUALIFIED-Client) auf den
+       lead der Facility setzen. Unbedingt (ohne NOT-EXISTS-Guard), damit
+       garantiert das Attachment-präferierte Event konform ist —
+       deterministisches Ziel + fester Wert = idempotent.
+    3. Vertragskonformes authz_attachment: der Seed hängt Attachments NUR an
+       counseling-Events, und counseling ist ELEVATED (core/seed/attachments.py,
+       core/seed/doc_types.py) — ohne Nachbesserung gäbe es nie ein Attachment
+       auf einem NORMAL-Event. Daher: erstes aktuelles Attachment der Facility
+       auf das vertragskonforme Event aus Schritt 2 umhängen (rein relational;
+       Download entschlüsselt die Datei unabhängig vom Parent-Event).
+    4. Vertragskonformes case_event: falls kein NORMAL-Event an einem Fall
+       hängt, erst einem NORMAL-Event einen Fall zuweisen; dann Owner des
+       ersten NORMAL-Case-Events auf lead setzen.
+    5. Vertragskonformes sample_workitem (core:workitem_update LEAD_PLUS):
+       erstes WorkItem auf created_by = lead, assigned_to = NULL setzen —
+       weder created_by noch assigned_to dürfen staff/assistant sein.
+    """
     cur = _superuser_cursor(conn)
+    params = {"fac": fac_id}
+    # 1. Trash-Client.
     cur.execute(
         """
         UPDATE core_client SET is_deleted = true, deleted_at = now()
         WHERE id = (
             SELECT id FROM core_client
-            WHERE facility_id = %s AND is_deleted = false
+            WHERE facility_id = %(fac)s AND is_deleted = false
             ORDER BY id LIMIT 1
         )
         AND NOT EXISTS (
-            SELECT 1 FROM core_client WHERE facility_id = %s AND is_deleted = true
+            SELECT 1 FROM core_client WHERE facility_id = %(fac)s AND is_deleted = true
         )
         """,
-        (fac_id, fac_id),
+        params,
     )
+    # 2. sample_event: Owner → lead.
     cur.execute(
-        """
+        f"UPDATE core_event SET created_by_id = {_LEAD_OF_FACILITY} WHERE id = ({_CONFORMABLE_EVENT})",  # noqa: S608
+        params,
+    )
+    # 3. authz_attachment: erstes Attachment auf das konforme Event umhängen
+    #    (nur falls noch kein Attachment an einem konformen Event hängt —
+    #    der Guard prüft inkl. lead-Owner, der in Schritt 2 gesetzt wurde).
+    cur.execute(
+        f"""
+        UPDATE core_eventattachment SET event_id = ({_CONFORMABLE_EVENT})
+        WHERE id = (
+            SELECT a.id FROM core_eventattachment a
+            JOIN core_event ae ON ae.id = a.event_id
+            WHERE ae.facility_id = %(fac)s AND a.is_current
+            ORDER BY a.id LIMIT 1
+        )
+        AND NOT EXISTS (
+            SELECT 1 FROM core_eventattachment a2
+            JOIN core_event e ON e.id = a2.event_id
+            JOIN core_documenttype dt ON dt.id = e.document_type_id
+            LEFT JOIN core_client cl ON cl.id = e.client_id
+            WHERE a2.is_current AND e.facility_id = %(fac)s AND {_EVENT_CONTRACT_WHERE}
+              AND e.created_by_id IN (
+                  SELECT u.id FROM core_user u WHERE u.role = 'lead' AND u.facility_id = %(fac)s
+              )
+        )
+        """,  # noqa: S608
+        params,
+    )
+    # 4a. Falls kein NORMAL-Case-Event existiert: erstem fall-losen
+    #     NORMAL-Event den ersten Fall der Facility zuweisen.
+    cur.execute(
+        f"""
         UPDATE core_event SET case_id = (
             SELECT c.id FROM core_case c
-            WHERE c.facility_id = %s ORDER BY c.id LIMIT 1
+            WHERE c.facility_id = %(fac)s AND c.is_deleted = false
+            ORDER BY c.id LIMIT 1
         )
         WHERE id = (
             SELECT e.id FROM core_event e
-            WHERE e.facility_id = %s AND e.case_id IS NULL
+            JOIN core_documenttype dt ON dt.id = e.document_type_id
+            LEFT JOIN core_client cl ON cl.id = e.client_id
+            WHERE e.facility_id = %(fac)s AND e.case_id IS NULL AND {_EVENT_CONTRACT_WHERE}
             ORDER BY e.id LIMIT 1
         )
         AND NOT EXISTS (
-            SELECT 1 FROM core_event WHERE facility_id = %s AND case_id IS NOT NULL
+            SELECT 1 FROM core_event e
+            JOIN core_case c ON c.id = e.case_id
+            JOIN core_documenttype dt ON dt.id = e.document_type_id
+            LEFT JOIN core_client cl ON cl.id = e.client_id
+            WHERE c.facility_id = %(fac)s AND {_EVENT_CONTRACT_WHERE}
         )
-        """,
-        (fac_id, fac_id, fac_id),
+        """,  # noqa: S608
+        params,
+    )
+    # 4b. case_event: Owner → lead.
+    cur.execute(
+        f"""
+        UPDATE core_event SET created_by_id = {_LEAD_OF_FACILITY}
+        WHERE id = (
+            SELECT e.id FROM core_event e
+            JOIN core_case c ON c.id = e.case_id
+            JOIN core_documenttype dt ON dt.id = e.document_type_id
+            LEFT JOIN core_client cl ON cl.id = e.client_id
+            WHERE c.facility_id = %(fac)s AND {_EVENT_CONTRACT_WHERE}
+            ORDER BY e.id LIMIT 1
+        )
+        """,  # noqa: S608
+        params,
+    )
+    # 5. sample_workitem: created_by → lead, assigned_to → NULL.
+    cur.execute(
+        f"""
+        UPDATE core_workitem SET created_by_id = {_LEAD_OF_FACILITY}, assigned_to_id = NULL
+        WHERE id = (
+            SELECT id FROM core_workitem
+            WHERE facility_id = %(fac)s AND is_deleted = false
+            ORDER BY id LIMIT 1
+        )
+        """,  # noqa: S608
+        params,
     )
 
 
 # SQL pro Fixture-Name aus der Erwartungs-Tabelle. %(fac)s = Facility-ID.
 # Tabellennamen sind db_table-Defaults (core_<modelname klein>, keine Overrides
 # in src/core/models/); Status-Literale gegen die TextChoices verifiziert
-# (Case.Status, RetentionProposal.Status, DeletionRequest.Status).
+# (Case.Status, RetentionProposal.Status, DeletionRequest.Status,
+# DocumentType.Sensitivity, Client.ContactStage, User.Role).
 # Soft-deletable Models (Client, Case, Event, Episode, WorkItem) werden auf
 # is_deleted = false gefiltert, damit die Matrix keine Papierkorb-Objekte trifft.
+# Determinismus: alle Queries ORDER BY id vor LIMIT 1 (Refs #1055, C1).
+# Event-/WorkItem-Queries pinnen zusätzlich den Unit-Fixture-Vertrag
+# (Owner = lead, NORMAL-Sensitivität, kein QUALIFIED-Client) — siehe
+# prepare_audit_objects, das je ein solches Objekt garantiert.
 HARVEST_SQL = {
-    "client_identified": "SELECT id FROM core_client WHERE facility_id = %(fac)s AND is_deleted = false LIMIT 1",
-    "client_trashed": "SELECT id FROM core_client WHERE facility_id = %(fac)s AND is_deleted = true LIMIT 1",
+    "client_identified": (
+        "SELECT id FROM core_client WHERE facility_id = %(fac)s AND is_deleted = false ORDER BY id LIMIT 1"
+    ),
+    "client_trashed": (
+        "SELECT id FROM core_client WHERE facility_id = %(fac)s AND is_deleted = true ORDER BY id LIMIT 1"
+    ),
     "case_open": (
-        "SELECT id FROM core_case WHERE facility_id = %(fac)s AND status = 'open' AND is_deleted = false LIMIT 1"
+        "SELECT id FROM core_case WHERE facility_id = %(fac)s AND status = 'open' AND is_deleted = false "
+        "ORDER BY id LIMIT 1"
     ),
     "case_closed": (
-        "SELECT id FROM core_case WHERE facility_id = %(fac)s AND status = 'closed' AND is_deleted = false LIMIT 1"
+        "SELECT id FROM core_case WHERE facility_id = %(fac)s AND status = 'closed' AND is_deleted = false "
+        "ORDER BY id LIMIT 1"
     ),
-    "case_event": (
-        "SELECT e.id FROM core_event e JOIN core_case c ON c.id = e.case_id "
-        "WHERE c.facility_id = %(fac)s AND e.is_deleted = false LIMIT 1"
-    ),
-    "sample_event": "SELECT id FROM core_event WHERE facility_id = %(fac)s AND is_deleted = false LIMIT 1",
+    "case_event": f"""
+        SELECT e.id FROM core_event e
+        JOIN core_case c ON c.id = e.case_id
+        JOIN core_documenttype dt ON dt.id = e.document_type_id
+        LEFT JOIN core_client cl ON cl.id = e.client_id
+        WHERE c.facility_id = %(fac)s AND {_EVENT_CONTRACT_WHERE}
+          AND e.created_by_id IN (SELECT u.id FROM core_user u WHERE u.role = 'lead' AND u.facility_id = %(fac)s)
+        ORDER BY e.id LIMIT 1
+    """,  # noqa: S608
+    "sample_event": f"""
+        SELECT e.id FROM core_event e
+        JOIN core_documenttype dt ON dt.id = e.document_type_id
+        LEFT JOIN core_client cl ON cl.id = e.client_id
+        WHERE e.facility_id = %(fac)s AND {_EVENT_CONTRACT_WHERE}
+          AND e.created_by_id IN (SELECT u.id FROM core_user u WHERE u.role = 'lead' AND u.facility_id = %(fac)s)
+        ORDER BY EXISTS (
+            SELECT 1 FROM core_eventattachment a WHERE a.event_id = e.id AND a.is_current
+        ) DESC, e.id
+        LIMIT 1
+    """,  # noqa: S608
     "episode": (
         "SELECT ep.id FROM core_episode ep JOIN core_case c ON c.id = ep.case_id "
-        "WHERE c.facility_id = %(fac)s AND ep.is_deleted = false LIMIT 1"
+        "WHERE c.facility_id = %(fac)s AND ep.is_deleted = false ORDER BY ep.id LIMIT 1"
     ),
     "outcome_goal": (
-        "SELECT g.id FROM core_outcomegoal g JOIN core_case c ON c.id = g.case_id WHERE c.facility_id = %(fac)s LIMIT 1"
+        "SELECT g.id FROM core_outcomegoal g JOIN core_case c ON c.id = g.case_id "
+        "WHERE c.facility_id = %(fac)s ORDER BY g.id LIMIT 1"
     ),
     "milestone": (
         "SELECT m.id FROM core_milestone m JOIN core_outcomegoal g ON g.id = m.goal_id "
-        "JOIN core_case c ON c.id = g.case_id WHERE c.facility_id = %(fac)s LIMIT 1"
+        "JOIN core_case c ON c.id = g.case_id WHERE c.facility_id = %(fac)s ORDER BY m.id LIMIT 1"
     ),
-    "sample_workitem": "SELECT id FROM core_workitem WHERE facility_id = %(fac)s AND is_deleted = false LIMIT 1",
-    "authz_attachment": (
-        "SELECT a.id FROM core_eventattachment a JOIN core_event e ON e.id = a.event_id "
-        "WHERE e.facility_id = %(fac)s AND a.is_current LIMIT 1"
+    "sample_workitem": (
+        "SELECT w.id FROM core_workitem w "
+        "WHERE w.facility_id = %(fac)s AND w.is_deleted = false "
+        "AND w.created_by_id IN (SELECT u.id FROM core_user u WHERE u.role = 'lead' AND u.facility_id = %(fac)s) "
+        "AND (w.assigned_to_id IS NULL OR w.assigned_to_id = w.created_by_id) "
+        "ORDER BY w.id LIMIT 1"
     ),
-    "audit_entry": "SELECT id FROM core_auditlog WHERE facility_id = %(fac)s LIMIT 1",
+    # Attachment am selben Event, das die sample_event-Query liefert —
+    # attachment_download kombiniert sample_event.pk + authz_attachment.pk.
+    "authz_attachment": f"""
+        SELECT a.id FROM core_eventattachment a
+        WHERE a.is_current AND a.event_id = (
+            SELECT e.id FROM core_event e
+            JOIN core_documenttype dt ON dt.id = e.document_type_id
+            LEFT JOIN core_client cl ON cl.id = e.client_id
+            WHERE e.facility_id = %(fac)s AND {_EVENT_CONTRACT_WHERE}
+              AND e.created_by_id IN (SELECT u.id FROM core_user u WHERE u.role = 'lead' AND u.facility_id = %(fac)s)
+            ORDER BY EXISTS (
+                SELECT 1 FROM core_eventattachment a2 WHERE a2.event_id = e.id AND a2.is_current
+            ) DESC, e.id
+            LIMIT 1
+        )
+        ORDER BY a.id LIMIT 1
+    """,  # noqa: S608
+    "audit_entry": "SELECT id FROM core_auditlog WHERE facility_id = %(fac)s ORDER BY id LIMIT 1",
     "retention_proposal": (
-        "SELECT id FROM core_retentionproposal WHERE facility_id = %(fac)s AND status = 'pending' LIMIT 1"
+        "SELECT id FROM core_retentionproposal WHERE facility_id = %(fac)s AND status = 'pending' ORDER BY id LIMIT 1"
     ),
-    "legal_hold": "SELECT id FROM core_legalhold WHERE facility_id = %(fac)s AND dismissed_at IS NULL LIMIT 1",
+    "legal_hold": (
+        "SELECT id FROM core_legalhold WHERE facility_id = %(fac)s AND dismissed_at IS NULL ORDER BY id LIMIT 1"
+    ),
     "deletion_request": (
-        "SELECT id FROM core_deletionrequest WHERE facility_id = %(fac)s AND status = 'pending' LIMIT 1"
+        "SELECT id FROM core_deletionrequest WHERE facility_id = %(fac)s AND status = 'pending' ORDER BY id LIMIT 1"
     ),
 }
 
@@ -245,17 +421,19 @@ def write_report(rows, header_findings, meta):
     """Markdown-Report nach REPORT_PATH schreiben; gibt den Pfad zurück.
 
     ``rows``: Dicts mit url_name, category, method, actor, expected, status,
-    verdict ("OK"/"ABWEICHUNG"/"SETUP-ERROR"). ``header_findings``: fertige
+    verdict ("OK"/"ABWEICHUNG"/"SETUP-ERROR"/"ERROR") und optional ``known``
+    (M6: Annotation bekannter Unit-Matrix-Gaps). ``header_findings``: fertige
     Markdown-Bullet-Zeilen. ``meta``: Dict mit ``date`` und ``commit``.
     """
     ok_count = sum(1 for r in rows if r["verdict"] == "OK")
     deviations = [r for r in rows if r["verdict"] == "ABWEICHUNG"]
     setup_errors = [r for r in rows if r["verdict"] == "SETUP-ERROR"]
+    request_errors = [r for r in rows if r["verdict"] == "ERROR"]
 
     # Aggregation Kategorie × Akteur (Insertion-Order = EXPECTATIONS-Reihenfolge).
     agg = {}
     for r in rows:
-        bucket = agg.setdefault((r["category"], r["actor"]), {"OK": 0, "ABWEICHUNG": 0, "SETUP-ERROR": 0})
+        bucket = agg.setdefault((r["category"], r["actor"]), {"OK": 0, "ABWEICHUNG": 0, "SETUP-ERROR": 0, "ERROR": 0})
         bucket[r["verdict"]] += 1
 
     lines = [
@@ -277,32 +455,42 @@ def write_report(rows, header_findings, meta):
         "",
         "## Ergebnis",
         "",
-        f"**{ok_count} OK · {len(deviations)} Abweichungen · {len(setup_errors)} Setup-Fehler** "
-        f"({len(rows)} Zellen gesamt)",
+        f"**{ok_count} OK · {len(deviations)} Abweichungen · {len(setup_errors)} Setup-Fehler · "
+        f"{len(request_errors)} Request-Fehler** ({len(rows)} Zellen gesamt)",
         "",
         "## Aggregat: Kategorie × Akteur",
         "",
-        "| Kategorie | Akteur | OK | Abweichung | Setup-Error |",
-        "|---|---|---:|---:|---:|",
+        "| Kategorie | Akteur | OK | Abweichung | Setup-Error | Request-Error |",
+        "|---|---|---:|---:|---:|---:|",
     ]
     for (category, actor), bucket in agg.items():
-        lines.append(f"| {category} | {actor} | {bucket['OK']} | {bucket['ABWEICHUNG']} | {bucket['SETUP-ERROR']} |")
+        lines.append(
+            f"| {category} | {actor} | {bucket['OK']} | {bucket['ABWEICHUNG']} | "
+            f"{bucket['SETUP-ERROR']} | {bucket['ERROR']} |"
+        )
 
     lines += ["", "## Abweichungen", ""]
     if deviations:
         lines += [
-            "| Endpoint | Methode | Akteur | Erwartet | Ist |",
-            "|---|---|---|---|---|",
+            # „Bekannt": ✔ + Begründung, wenn die Zelle in KNOWN_GAPS der
+            # Unit-Matrix dokumentiert ist (test_authz_matrix.py, Refs #1055).
+            "| Endpoint | Methode | Akteur | Erwartet | Ist | Bekannt |",
+            "|---|---|---|---|---|---|",
         ]
         for r in deviations:
-            lines.append(f"| `{r['url_name']}` | {r['method']} | {r['actor']} | {r['expected']} | {r['status']} |")
+            lines.append(
+                f"| `{r['url_name']}` | {r['method']} | {r['actor']} | {r['expected']} | {r['status']} | "
+                f"{r.get('known', '')} |"
+            )
     else:
         lines.append("Keine. ✅")
 
-    lines += ["", "## Setup-Fehler", ""]
-    if setup_errors:
+    lines += ["", "## Setup- & Request-Fehler", ""]
+    if setup_errors or request_errors:
         for r in setup_errors:
             lines.append(f"- `{r['url_name']}` ({r['method']}, {r['actor']}): benötigte Objekt-ID nicht erntbar")
+        for r in request_errors:
+            lines.append(f"- `{r['url_name']}` ({r['method']}, {r['actor']}): {r['expected']}")
     else:
         lines.append("Keine. ✅")
 
