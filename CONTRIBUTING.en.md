@@ -39,7 +39,7 @@ Welcome! This guide explains how to set up the development environment, how the 
 
 - **Python 3.13** (recommended: via [pyenv](https://github.com/pyenv/pyenv))
 - **PostgreSQL 18** (or Docker, see below)
-- **Node.js 20+** (for Tailwind CSS)
+- **Node.js 24+** (for Tailwind CSS)
 - **Docker** (optional, for the database)
 
 ### Step by Step
