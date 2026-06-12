@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status clean test-matrix-index test-matrix-index-check verify-matrix-drift mutation mutation-report ci-coverage docs-screens
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status clean test-matrix-index test-matrix-index-check verify-matrix-drift mutation mutation-report ci-coverage docs-screens release-gates release-preflight release-verify-public
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -159,6 +159,20 @@ mutation:
 # Ergebnisse des letzten Mutation-Runs anzeigen (textuell, nicht-interaktiv).
 mutation-report:
 	$(PYTHON) -m mutmut results
+
+# ── Release-Helfer (dev-only, Refs #1078/#1051): Skripte liegen unter
+#    dev-ops/release/ und sind nicht im Public-Snapshot — analog `make mutation`.
+# Lokale Replikation der Stage/App-only-CI-Gates (W3/W4-Lehre)
+release-gates:
+	bash dev-ops/release/release-gates.sh
+
+# Read-only-Preflight vor Release-Beginn
+release-preflight:
+	bash dev-ops/release/release-preflight.sh
+
+# Public-Verifikation nach App-Push: make release-verify-public TAG=vX.Y.Z
+release-verify-public:
+	bash dev-ops/release/release-verify-public.sh "$(TAG)"
 
 # Dependencies: Lock-Files aus requirements*.in neu erzeugen (pip-tools).
 # Nach Änderungen an requirements.in oder requirements-dev.in ausführen.
