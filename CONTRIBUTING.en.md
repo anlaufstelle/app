@@ -9,7 +9,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
 [![Django 6.0](https://img.shields.io/badge/django-6.0-green.svg)](https://www.djangoproject.com/)
-[![PostgreSQL 16](https://img.shields.io/badge/postgresql-16-blue.svg)](https://www.postgresql.org/)
+[![PostgreSQL 18](https://img.shields.io/badge/postgresql-18-blue.svg)](https://www.postgresql.org/)
 [![HTMX](https://img.shields.io/badge/htmx-%E2%9C%93-blue.svg)](https://htmx.org/)
 [![Alpine.js](https://img.shields.io/badge/alpine.js-%E2%9C%93-blue.svg)](https://alpinejs.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/tailwindcss-%E2%9C%93-blue.svg)](https://tailwindcss.com/)
@@ -38,7 +38,7 @@ Welcome! This guide explains how to set up the development environment, how the 
 ### Prerequisites
 
 - **Python 3.13** (recommended: via [pyenv](https://github.com/pyenv/pyenv))
-- **PostgreSQL 16** (or Docker, see below)
+- **PostgreSQL 18** (or Docker, see below)
 - **Node.js 20+** (for Tailwind CSS)
 - **Docker** (optional, for the database)
 
@@ -76,7 +76,7 @@ With Docker (recommended):
 make db
 ```
 
-This starts a PostgreSQL 16 container with the following credentials:
+This starts a PostgreSQL 18 container with the following credentials:
 
 | Variable | Value |
 |-----------|---------------|
@@ -175,7 +175,7 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 
 | Target | Description |
 |------------------|-------------------------------------------------------------------|
-| `make db` | Start PostgreSQL 16 container |
+| `make db` | Start PostgreSQL 18 container |
 | `make db-stop` | Stop and remove PostgreSQL container |
 | `make migrate` | Run Django migrations |
 | `make run` | Start dev server (gunicorn + HTTPS on `0.0.0.0:8443`) |

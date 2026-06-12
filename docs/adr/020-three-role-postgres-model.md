@@ -11,7 +11,7 @@ Row Level Security ([ADR-005](005-facility-scoping-and-rls.md)) traegt nur, sola
 
 Drei realweltliche Stolperfallen bedrohen genau diese Voraussetzung:
 
-1. **Default-`postgres:16`-Image** legt den per `POSTGRES_USER` definierten Login automatisch als **Superuser** an. Wer das `.env`-Muster „App-User = POSTGRES_USER" naiv uebernimmt, faehrt RLS-frei in Produktion — ohne Warnung. dokumentiert das als realen Selbst-Hosting-Risiko.
+1. **Default-`postgres`-Image** (Verhalten in 16 wie 18 identisch, Refs #1039) legt den per `POSTGRES_USER` definierten Login automatisch als **Superuser** an. Wer das `.env`-Muster „App-User = POSTGRES_USER" naiv uebernimmt, faehrt RLS-frei in Produktion — ohne Warnung. dokumentiert das als realen Selbst-Hosting-Risiko.
 2. **Migrationen, Restore und einige Retention-Schritte** brauchen Rechte, die ein NOSUPERUSER/NOBYPASSRLS-User nicht hat (`CREATE EXTENSION`, `ALTER TABLE … ENABLE ROW LEVEL SECURITY`, facility-uebergreifendes Pruning). Wenn die App-Rolle dafuer aufgemacht wird, faellt RLS auch im Normalbetrieb.
 3. **Erstinstallation** muss die App-Rollen ueberhaupt erst anlegen koennen — irgendeine Bootstrap-Identitaet mit Superuser-Rechten ist unvermeidbar.
 
@@ -35,7 +35,7 @@ Konkrete Folge-Festlegungen:
 
 ## Consequences
 
-- **+** RLS ist auch unter dem default `postgres:16`-Image belastbar. Die App-Rolle hat per Konstruktion keine Bypass-Rechte, egal wie das Image den `POSTGRES_USER` initialisieren wuerde — das Init-Script entreisst dem Superuser-Default explizit die Attribute.
+- **+** RLS ist auch unter dem default `postgres`-Image belastbar. Die App-Rolle hat per Konstruktion keine Bypass-Rechte, egal wie das Image den `POSTGRES_USER` initialisieren wuerde — das Init-Script entreisst dem Superuser-Default explizit die Attribute. Auf `postgres:18-alpine` re-verifiziert: Init-Logik und Rollen-Attribute unveraendert, `check_db_roles` Exit 0 (Refs #1039).
 - **+** Klare Verantwortung pro Rolle erleichtert Rollen-Audit. `pg_roles`-Snapshot zeigt eindeutig, wer was darf.
 - **+** Migrationen und Retention koennen ihre Arbeit (facility-uebergreifende Updates, Trigger-Wartung) machen, ohne dass die Web-App dieselben Rechte erbt.
 - **+** Lockout-Recovery und Rollen-Rotation laufen ueber den Bootstrap-Superuser — die normale App-Verbindung kennt das Passwort nie.

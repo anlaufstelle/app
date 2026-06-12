@@ -2,7 +2,7 @@
 
 Betriebshandbuch fuer Anlaufstelle. Ergaenzt das [Admin-Handbuch](admin-guide.md) um operative Prozeduren fuer Deployment, Rollback, Cron-Jobs, Log-Analyse und Troubleshooting.
 
-**Stack:** Django 6.0 / Gunicorn / PostgreSQL 16 / Caddy 2 / Docker Compose
+**Stack:** Django 6.0 / Gunicorn / PostgreSQL 18 / Caddy 2 / Docker Compose
 
 ---
 
@@ -19,6 +19,8 @@ Betriebshandbuch fuer Anlaufstelle. Ergaenzt das [Admin-Handbuch](admin-guide.md
 9. [Row Level Security (RLS)](#9-row-level-security-rls)
 10. [Invite-Token-Hygiene](#10-invite-token-hygiene)
 11. [Statistics Materialized View](#11-statistics-materialized-view)
+12. [Trust-Boundary](#12-trust-boundary-refs-841)
+13. [PostgreSQL-Major-Upgrade (16 → 18)](#13-postgresql-major-upgrade-16--18)
 
 ---
 
@@ -1092,6 +1094,103 @@ TRUSTED_PROXY_HOPS=1
 ```
 
 Erklaerung in `.env.example`. Bei CDN+Caddy auf `2` setzen, sonst greift der IP-Spoof-Schutz aus [`signals.audit.get_client_ip`](https://github.com/anlaufstelle/app/blob/main/src/core/signals/audit.py) den falschen Eintrag.
+
+---
+
+## 13. PostgreSQL-Major-Upgrade (16 → 18)
+
+Refs #1039. PostgreSQL-Major-Versionen haben **inkompatible Datenverzeichnisse** — ein In-Place-Start des neuen Images auf dem alten Volume ist unmöglich. Gewählter und lokal durchgespielter Pfad: **dump → frisches PG18-Cluster → restore**. (`pg_upgrade` verworfen: das Alpine-Image enthält nur eine Binär-Major-Version, und PG18-`initdb` aktiviert Data-Checksums per Default — ein 16er-Cluster ohne Checksums wäre dafür erst zu konvertieren.)
+
+**Geändertes Image-Layout ab 18:** `PGDATA` liegt unter `/var/lib/postgresql/18/docker`, das Image deklariert `VOLUME /var/lib/postgresql`. Die Compose-Dateien mounten seit #1039 deshalb das Elternverzeichnis (`…:/var/lib/postgresql` statt `…/data`). Startet man den neuen Stand versehentlich gegen ein altes 16er-Volume, bricht der Entrypoint **kontrolliert ohne Datenverlust** ab („there appears to be PostgreSQL data in: /var/lib/postgresql" + Hinweistext).
+
+### 13.1 Prod/Staging — Daten erhalten (Wartungsfenster)
+
+Staging identisch mit `docker-compose.staging.yml`, `.env.staging` und Volume `*_pgdata_staging`. Reihenfolge ist sicherheitskritisch: **Rollen vor Daten** — das Init-Script legt App-/Admin-Rolle im frischen Cluster an, bevor der Restore Ownership/Grants wiederherstellt (ADR-020).
+
+```bash
+# 0. Maintenance-Mode aktivieren (§ 6) + Web stoppen — DB bleibt fuer den Dump erreichbar
+docker compose -f docker-compose.prod.yml stop web
+
+# 1. Finales verschluesseltes Backup (§ 1.1) + unverschluesselter Arbeits-Dump.
+#    Dump als Admin-Rolle (BYPASSRLS) ueber den Container-Socket — wie backup.sh.
+./scripts/ops/backup.sh
+docker compose -f docker-compose.prod.yml exec -T db \
+    sh -c 'pg_dump -U "$ADMIN_DB_USER" -Fc -Z 6 "$POSTGRES_DB"' > /tmp/upgrade-pg16.dump
+
+# 2. DB stoppen, Volume-Tarball als byte-genauen Rollback-Anker ziehen
+#    (Volume-Name pruefen: docker volume ls | grep pgdata)
+docker compose -f docker-compose.prod.yml stop db
+docker run --rm -v anlaufstelle_pgdata:/from -v "$PWD":/to alpine \
+    tar czf /to/pgdata-pg16.tar.gz -C /from .
+
+# 3. Alten DB-Container + Volume entfernen — erst NACH Schritt 1+2!
+docker compose -f docker-compose.prod.yml rm -f db
+docker volume rm anlaufstelle_pgdata
+
+# 4. Neuen Release-Stand einspielen (postgres:18-alpine + neuer Mount)
+git pull   # bzw. Release-Paket
+
+# 5. Nur DB hochfahren: frisches initdb (PG 18, Checksums on) + Init-Script
+#    legt App-/Admin-Rolle an. Log muss fehlerfrei sein.
+docker compose -f docker-compose.prod.yml up -d db
+docker compose -f docker-compose.prod.yml logs db | grep -icE 'error|fatal'   # 0
+
+# 6. Restore als Bootstrap-Superuser via Container-Socket (bypasst RLS/FORCE-RLS,
+#    wie scripts/ops/restore-drill.sh; --clean/--if-exists ist re-run-sicher)
+docker compose -f docker-compose.prod.yml exec -T db \
+    sh -c 'pg_restore -U postgres -d "$POSTGRES_DB" --clean --if-exists' < /tmp/upgrade-pg16.dump
+
+# 7. Verifizieren: Rollen-Gate, RLS aktiv, Stichproben
+docker compose -f docker-compose.prod.yml run --rm -T \
+    --entrypoint python web manage.py check_db_roles        # Exit 0
+docker compose -f docker-compose.prod.yml exec -T db sh -c \
+    'psql -U postgres -d "$POSTGRES_DB" -tAc "SELECT count(*) FROM pg_class WHERE relrowsecurity AND relforcerowsecurity"'   # > 0
+
+# 8. Migrationen als One-Shot (i. d. R. No-op) + Stack hoch + Health (§ 1.2/1.3)
+docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh web
+docker compose -f docker-compose.prod.yml up -d web caddy
+curl -sf https://$DOMAIN/health/ | python3 -m json.tool
+
+# 9. Maintenance-Mode aus. Arbeits-Dump enthaelt KLARTEXT-Daten — sofort loeschen;
+#    Tarball nach Bewaehrungsfrist (z. B. 1 Woche) entsorgen.
+rm /tmp/upgrade-pg16.dump
+```
+
+Meldet `pg_restore` eine Warnung bei `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, sind die Daten trotzdem vollständig — danach einmal den MV-Refresh ausführen (§ 11).
+
+### 13.2 Rollback
+
+Primär über den Volume-Tarball (exakter 16er-Byte-Stand), alternativ verschlüsseltes Backup (§ 6):
+
+```bash
+# 1. Compose-Stand zurueckdrehen: postgres:16-alpine + Mount …:/var/lib/postgresql/data
+git checkout <vorheriger-stand> -- docker-compose.prod.yml
+
+# 2. 18er-Volume entfernen, 16er-Bytes wiederherstellen
+docker compose -f docker-compose.prod.yml rm -f db
+docker volume rm anlaufstelle_pgdata && docker volume create anlaufstelle_pgdata
+docker run --rm -v anlaufstelle_pgdata:/to -v "$PWD":/from alpine \
+    tar xzf /from/pgdata-pg16.tar.gz -C /to
+
+# 3. Stack hochfahren + Health
+docker compose -f docker-compose.prod.yml up -d
+```
+
+### 13.3 dev.anlaufstelle.app — Daten wegwerfbar
+
+`pgdata_dev` enthält nur Demo-Seed (Refs #1039): kein Restore nötig.
+
+```bash
+cd /opt/anlaufstelle
+docker compose -f docker-compose.dev.yml --env-file .env.dev stop db web
+docker compose -f docker-compose.dev.yml --env-file .env.dev rm -f db
+docker volume rm anlaufstelle_pgdata_dev
+# Neuen Stand deployen (make deploy-dev vom Operator-Rechner): frisches
+# 18er-Cluster + Rollen via Init-Script, Migrate-Job, Stack-Start.
+# Danach Demo-Daten: make dev-seed SEED_ARGS="--flush --scale=medium"
+```
+
+Der komplette Pfad (Init-Rollen vor Daten, Superuser-Restore, `check_db_roles` Exit 0, FORCE-RLS aktiv, App-Rolle ohne Bypass, MV-Refresh, Rollback auf 16) wurde im Zuge von #1039 lokal in Docker durchgespielt.
 
 ---
 

@@ -35,7 +35,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-001](001-greenfield-rewrite.md) | Greenfield-Rewrite statt Prototyp-Weiterbau | Accepted |
 | [ADR-002](002-cbvs-and-service-layer.md) | Class-Based Views + Service-Layer | Accepted |
 | [ADR-003](003-htmx-alpine-tailwind.md) | HTMX + Alpine.js + Tailwind statt SPA | Accepted |
-| [ADR-004](004-postgresql-only.md) | PostgreSQL 16 als einzige Datenbank | Accepted |
+| [ADR-004](004-postgresql-only.md) | PostgreSQL als einzige Datenbank | Accepted |
 | [ADR-005](005-facility-scoping-and-rls.md) | Facility-Scoping via Middleware + Row Level Security | Accepted |
 | [ADR-006](006-fernet-field-encryption.md) | Fernet/MultiFernet für Feldverschlüsselung | Accepted |
 | [ADR-007](007-auditlog-append-only.md) | AuditLog als Append-Only mit DB-Trigger | Accepted |

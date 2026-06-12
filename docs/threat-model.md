@@ -13,7 +13,7 @@ Dieses Dokument macht das Sicherheitsmodell explizit. Es ergänzt — nicht erse
 **In Scope:**
 
 - Django-Applikation `core` (Models, Services, Views, Middleware, Templates)
-- Lauf-Stack laut [`docker-compose.prod.yml`](../docker-compose.prod.yml): Caddy 2 → Django/Gunicorn → PostgreSQL 16; ClamAV als Sidecar
+- Lauf-Stack laut [`docker-compose.prod.yml`](../docker-compose.prod.yml): Caddy 2 → Django/Gunicorn → PostgreSQL 18; ClamAV als Sidecar
 - Backup-/Restore-Pfade in [`scripts/`](../scripts/)
 
 **Out of Scope (vertrauen wir):**
@@ -76,7 +76,7 @@ TB1│        ↕ HTTPS, SameSite=Lax/Strict-Cookies            │
 TB2│        ↕ HTTP intern (frontend-Netz)                   │
    ├─ Django / Gunicorn (App-Logik, Middleware-Stack) ──────┤
 TB3│        ↕ Postgres-Protokoll (internal-Netz)            │
-   ├─ PostgreSQL 16 (RLS-FORCE, immutable AuditLog-Trigger) ┤
+   ├─ PostgreSQL 18 (RLS-FORCE, immutable AuditLog-Trigger) ┤
 TB4│        ↕ INSTREAM via TCP (internal-Netz)              │
    └─ ClamAV (Datei-Scan, fail-closed) ─────────────────────┘
 ```

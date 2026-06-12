@@ -195,7 +195,7 @@ docker compose exec web python src/manage.py seed
 |---|---|
 | Backend | Django 6.0+, Python 3.13 |
 | Frontend | HTMX + Alpine.js + Tailwind CSS |
-| Datenbank | PostgreSQL 16 |
+| Datenbank | PostgreSQL 18 |
 | Verschlüsselung | AES-128 (Fernet/MultiFernet, Detail in ADR-006/014) |
 | Deployment | Docker Compose |
 | Tests | pytest + Playwright (E2E) |

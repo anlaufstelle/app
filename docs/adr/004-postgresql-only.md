@@ -1,8 +1,10 @@
-# ADR-004: PostgreSQL 16 als einzige Datenbank
+# ADR-004: PostgreSQL als einzige Datenbank
 
 - **Status:** Accepted
 - **Date:** 2026-03-19
 - **Deciders:** Tobias Nix
+- **Updated:** 2026-06-12 — Major-Version 16 → 18 (Refs #1039); die
+ Entscheidung „nur PostgreSQL" ist versionsunabhängig und bleibt unverändert.
 
 ## Context
 
@@ -18,7 +20,7 @@ Eine portable Lösung müsste den kleinsten gemeinsamen Nenner verwenden und all
 
 ## Decision
 
-PostgreSQL 16 ist die einzige unterstützte Datenbank — in Entwicklung, Test, E2E und Produktion. Migrations dürfen PostgreSQL-spezifische Features verwenden (`JSONB`, `GIN`, RLS-Policies, Trigger, `TSVECTOR`).
+PostgreSQL (aktuell Major-Version 18, `postgres:18-alpine`) ist die einzige unterstützte Datenbank — in Entwicklung, Test, E2E und Produktion. Migrations dürfen PostgreSQL-spezifische Features verwenden (`JSONB`, `GIN`, RLS-Policies, Trigger, `TSVECTOR`). Major-Upgrades laufen über den dump/restore-Pfad in [`docs/ops-runbook.md`](../ops-runbook.md) (Refs #1039).
 
 ## Consequences
 
