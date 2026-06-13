@@ -36,6 +36,12 @@ class AdminCSPRelaxMiddleware:
         if not request.path.startswith(ADMIN_PREFIX):
             return response
 
+        # S4 (Refs #1084): Relax nur fuer HTML-Dokumente — JSON-/CSV-Responses
+        # unter /admin-mgmt/ (Autocomplete, Exporte) fuehren kein Script aus
+        # und behalten die strikte globale CSP.
+        if not response.headers.get("Content-Type", "").lower().startswith("text/html"):
+            return response
+
         for header in ("Content-Security-Policy", "Content-Security-Policy-Report-Only"):
             csp = response.headers.get(header)
             if not csp or "'unsafe-eval'" in csp:
