@@ -444,3 +444,189 @@ def test_no_residue_after_trash_expiry(maximal_pii_graph, table):
     assert count >= 1, "Trash-Expiry hat den Client nicht erfasst"
     hits = [h for h in undeclared_hits(g.facility.id) if h.table == table]
     assert not hits, f"PII-Residue nach Trash-Expiry in {table}:\n{_fmt(hits)}"
+
+
+# --------------------------------------------------------------------------
+# Pfad-Sweep: enforce_retention Voll-Pipeline (Refs #1083)
+# --------------------------------------------------------------------------
+# Der Command orchestriert in dieser Reihenfolge:
+#   1. process_facility_retention -> Event-Soft-Delete (vier Strategien)
+#   2. enforce_activities         -> Activity-Hard-Delete
+#   3. anonymize_clients          -> Client-Anonymisierung (alle Events deleted)
+#   4. anonymize_eligible_soft_deleted_clients -> Trash-Expiry-Anonymisierung
+#   5. prune_auditlog             -> AuditLog-Pruning
+#
+# Die Test-Config stellt ALLE Fristen scharf (0 Tage), damit jeder Schritt
+# real agiert. Der Event wird ueber die document_type-Strategie soft-deletet
+# (``doc_type.retention_days = 0`` + ``occurred_at`` in der Vergangenheit) —
+# unabhaengig von der Kontaktstufe und ohne Case-Verknuepfung, die der Fixture-
+# Event nicht hat. So laeuft Schritt 1 VOR der Anonymisierung (Schritt 3/4).
+#
+# EMPIRISCHES RESIDUE-PROFIL (am echten DB-Lauf beobachtet, nicht aus
+# ANONYMIZE_TABLES kopiert — bewusst abweichend):
+#
+#   core_event  -> RESIDUE (H5, NEU). Der Event WIRD soft-deletet
+#       (``data_json`` -> ``{}``), ABER ``search_text`` behaelt den Klartext-
+#       Needle. Ursache: ``_soft_delete_events`` (retention/enforcement.py)
+#       speichert mit ``update_fields=["is_deleted", "data_json", "updated_at"]``
+#       — ``search_text`` fehlt in der Liste. Das ``pre_save``-Signal
+#       ``_refresh_event_search_text`` berechnet zwar den leeren Wert auf der
+#       Instanz, Django persistiert ihn aber NICHT (update_fields uebergeht ihn).
+#       KONTRAST zum User-Pfad ``soft_delete_event`` (events/crud.py), der mit
+#       ``event.save()`` OHNE update_fields speichert — dort schlaegt das Signal
+#       durch und ``search_text`` faellt auf "" (siehe
+#       test_event_content_gone_after_soft_delete, H4 widerlegt). Der
+#       Retention-Soft-Delete leakt also, der manuelle nicht.
+#       -> Anders als die anonymize-H2 (dort bleibt die LIVE-data_json stehen,
+#          weil kein Soft-Delete laeuft): hier ist data_json sauber, nur
+#          search_text leakt. Eigener Befund, eigenes Folge-Issue.
+#
+#   core_deletionrequest -> RESIDUE (H3-2, wie im anonymize-Pfad). Der
+#       Vier-Augen-Antrag, der die Client-Loeschung ausloeste, hat
+#       ``target_type="Client"``; ``_redact_deletion_requests`` redigiert nur
+#       ``target_type="Event"`` -> sein ``reason`` bleibt stehen.
+#
+#   core_activity -> SAUBER (H3-1 reproduziert hier NICHT). ``enforce_activities``
+#       mit ``retention_activities_days=0`` hard-deletet ALLE Activities (auch
+#       die WorkItem-Target-Activity, die im reinen anonymize-Pfad als H3-1
+#       stehenbliebe). Daher KEIN xfail fuer core_activity — sonst XPASS-strict.
+#
+# Eigene xfail-Liste (NICHT ANONYMIZE_TABLES): nur die empirisch roten Tabellen.
+RETENTION_XFAIL = {
+    "core_event": "H5: enforce_retention-Soft-Delete laesst search_text stehen "
+    "(update_fields ohne search_text), Fix folgt",
+    "core_deletionrequest": "H3-2: Client-Target-DeletionRequest.reason unredigiert, Fix folgt",
+}
+RETENTION_TABLES = [
+    pytest.param(t, marks=pytest.mark.xfail(strict=True, reason=RETENTION_XFAIL[t])) if t in RETENTION_XFAIL else t
+    for t in SCOPED_TABLES
+]
+
+
+def _sharpen_retention(facility):
+    """Stellt alle Retention-Fristen der Facility auf 0/1, damit die Pipeline
+    die Akte maximal abraeumt. Gibt das Settings-Objekt zurueck."""
+    from core.models import Settings
+
+    settings_obj, _ = Settings.objects.get_or_create(facility=facility)
+    settings_obj.retention_anonymous_days = 0
+    settings_obj.retention_identified_days = 0
+    settings_obj.retention_qualified_days = 0
+    settings_obj.retention_activities_days = 0
+    settings_obj.client_trash_days = 0
+    # 1 Monat statt 0 = Pruning aktiv; die frischen Fixture-AuditLogs (now)
+    # liegen aber innerhalb der Frist und bleiben erhalten (core_auditlog.detail
+    # ist ohnehin known_residue -> aus undeclared_hits gefiltert).
+    settings_obj.auditlog_retention_months = 1
+    settings_obj.save()
+    return settings_obj
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("table", RETENTION_TABLES)
+def test_no_residue_after_enforce_retention(maximal_pii_graph, table):
+    from datetime import timedelta
+
+    from django.core.management import call_command
+
+    from core.models import Event
+
+    g = maximal_pii_graph
+    _sharpen_retention(g.facility)
+
+    # Event ueber die document_type-Strategie loeschbar machen: Custom-Retention
+    # 0 Tage + occurred_at in der Vergangenheit. So feuert Schritt 1 (Soft-Delete)
+    # VOR der Anonymisierung — unabhaengig von Kontaktstufe/Case-Verknuepfung.
+    g.doc_type.retention_days = 0
+    g.doc_type.save(update_fields=["retention_days"])
+    Event.objects.filter(pk=g.event.pk).update(occurred_at=timezone.now() - timedelta(days=10))
+    # Papierkorb-Frist sicher ueberschritten (Trash-Expiry-Schritt).
+    g.client.deleted_at = timezone.now() - timedelta(days=10)
+    g.client.save(update_fields=["deleted_at"])
+
+    call_command("enforce_retention", "--facility", g.facility.name)
+
+    hits = [h for h in undeclared_hits(g.facility.id) if h.table == table]
+    assert not hits, f"PII-Residue nach enforce_retention in {table}:\n{_fmt(hits)}"
+
+
+@pytest.mark.django_db
+def test_enforce_retention_acts_on_the_graph(maximal_pii_graph):
+    """Positiv-Kontrolle: die Pipeline agiert real (Event soft-deletet, Client
+    anonymisiert, Activities hart geloescht) — sonst waeren die Residue-Tests
+    wertlos (gruen, weil nichts passiert)."""
+    from datetime import timedelta
+
+    from django.core.management import call_command
+
+    from core.models import Activity, Event
+
+    g = maximal_pii_graph
+    _sharpen_retention(g.facility)
+    g.doc_type.retention_days = 0
+    g.doc_type.save(update_fields=["retention_days"])
+    Event.objects.filter(pk=g.event.pk).update(occurred_at=timezone.now() - timedelta(days=10))
+    g.client.deleted_at = timezone.now() - timedelta(days=10)
+    g.client.save(update_fields=["deleted_at"])
+
+    assert Activity.objects.filter(facility=g.facility).exists()  # vor dem Lauf
+
+    call_command("enforce_retention", "--facility", g.facility.name)
+
+    g.client.refresh_from_db()
+    ev = Event.objects.get(pk=g.event.pk)
+    # Event soft-deletet (data_json geleert) ...
+    assert ev.is_deleted is True
+    assert ev.data_json == {}
+    # ... Client anonymisiert (Pseudonym-Marker) ...
+    assert g.client.pseudonym.startswith("Gelöscht-")
+    assert g.client.notes == ""
+    # ... Activities komplett hart geloescht.
+    assert not Activity.objects.filter(facility=g.facility).exists()
+
+
+# --------------------------------------------------------------------------
+# Pfad-Sweep: k_anonymize_client (Refs #1083)
+# --------------------------------------------------------------------------
+# ``k_anonymize_client`` ist BEWUSST client-only (Docstring
+# k_anonymization.py:45 — „Linked cases/episodes/workitems are *not*
+# modified"). Ein 22-Tabellen-Sweep waere der falsche Vertrag; geprueft wird
+# gezielt die Client-Zeile selbst + die dokumentierte Nicht-Kaskade.
+
+
+@pytest.mark.django_db
+def test_client_record_clean_after_k_anonymization(maximal_pii_graph):
+    """Die Client-Zeile selbst ist nach k-Anonymisierung needle-frei
+    (pseudonym -> Hash-Bucket, notes -> "")."""
+    from core.services.compliance.k_anonymization import k_anonymize_client
+
+    g = maximal_pii_graph
+    k_anonymize_client(g.client)
+    hits = [h for h in undeclared_hits(g.facility.id) if h.table == "core_client"]
+    assert not hits, f"PII-Residue in core_client nach k-Anonymisierung:\n{_fmt(hits)}"
+
+
+@pytest.mark.django_db
+def test_k_anonymization_does_not_cascade_to_cases(maximal_pii_graph):
+    """k_anonymize_client kaskadiert NICHT (dokumentierte Grenze, k_anonymization.py:45).
+
+    Festschreibung des AKTUELLEN Verhaltens: nach ``k_anonymize_client`` ALLEIN
+    tragen ``core_case``/``core_episode``/``core_workitem`` weiterhin Needles —
+    k-Anon redigiert nur die Client-Zeile (pseudonym/notes).
+
+    Relevanz: wird k-Anon als Erfuellungs-Modus der Retention statt
+    Hard-Anonymisierung genutzt (``Settings.retention_use_k_anonymization``),
+    bleibt Fall-/Episoden-/Aufgaben-Freitext stehen — potenzielle DSGVO-Luecke
+    (Befund "H6 — k-Anon kaskadiert nicht"). Klassifikation/Fix entscheidet der
+    Maintainer (Folge-Issue), nicht dieser Test.
+    """
+    from core.services.compliance.k_anonymization import k_anonymize_client
+
+    g = maximal_pii_graph
+    k_anonymize_client(g.client)
+    residual = {h.table for h in undeclared_hits(g.facility.id)}
+    # Bewusste Festschreibung der fehlenden Kaskade — alle drei verknuepften
+    # Aggregate behalten ihren Klartext-Freitext:
+    assert "core_case" in residual
+    assert "core_episode" in residual
+    assert "core_workitem" in residual
