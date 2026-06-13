@@ -364,6 +364,19 @@ class TestAuditEventChecks:
         checks = compliance._audit_event_checks()
         assert checks[0].status == compliance.ComplianceStatus.WARNING
 
+    def test_sudo_mode_failed_counts_as_critical_event(self, facility, staff_user):
+        """SUDO_MODE_FAILED zaehlt fuer Check #11 — analog MFA_FAILED (Refs #1084)."""
+        AuditLog.objects.filter(action__in=compliance._CRITICAL_AUDIT_ACTIONS).delete()
+        AuditLog.objects.create(
+            facility=facility,
+            user=staff_user,
+            action=AuditLog.Action.SUDO_MODE_FAILED,
+            target_type="User",
+            target_id=str(staff_user.pk),
+        )
+        checks = compliance._audit_event_checks()
+        assert checks[0].status == compliance.ComplianceStatus.WARNING
+
     def test_critical_when_over_5_events(self, facility, staff_user):
         AuditLog.objects.filter(action__in=compliance._CRITICAL_AUDIT_ACTIONS).delete()
         for _ in range(7):

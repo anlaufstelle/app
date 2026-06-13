@@ -49,10 +49,13 @@ class ComplianceCheck:
 # seit 24h). LOGIN_FAILED ist bewusst NICHT enthalten — der ist Teil
 # der normalen Tippfehler-Rate und wuerde das Dashboard zu rot machen.
 # Brute-Force-Erkennung passiert oberhalb in breach_detection.py und
-# erzeugt dann SECURITY_VIOLATION.
+# erzeugt dann SECURITY_VIOLATION. SUDO_MODE_FAILED dagegen ist wie
+# MFA_FAILED ein seltener Re-Auth-Fehlversuch einer bereits
+# authentifizierten Session (Refs #1084).
 _CRITICAL_AUDIT_ACTIONS = (
     AuditLog.Action.SECURITY_VIOLATION,
     AuditLog.Action.MFA_FAILED,
+    AuditLog.Action.SUDO_MODE_FAILED,
     AuditLog.Action.USER_DEACTIVATED,
 )
 

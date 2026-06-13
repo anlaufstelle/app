@@ -46,6 +46,15 @@ class SudoModeView(LoginRequiredMixin, View):
         password = request.POST.get("password", "")
         user = authenticate(request, username=request.user.username, password=password)
         if user is None or user.pk != request.user.pk:
+            # S2 (Refs #1084): Fehlversuche auditieren — symmetrisch zu
+            # LOGIN_FAILED/MFA_FAILED, sonst bleibt Brute-Force ueber eine
+            # gestohlene Session im Audit-Trail unsichtbar.
+            log_audit_event(
+                request,
+                AuditLog.Action.SUDO_MODE_FAILED,
+                target_obj=request.user,
+                detail={"factor": "password"},
+            )
             messages.error(request, _("Passwort ist nicht korrekt."))
             return self._render_form(request, next_url, status=403)
 
@@ -53,6 +62,12 @@ class SudoModeView(LoginRequiredMixin, View):
         if request.user.has_confirmed_totp_device and not verify_totp_or_backup(
             request.user, request.POST.get("otp_token", "")
         ):
+            log_audit_event(
+                request,
+                AuditLog.Action.SUDO_MODE_FAILED,
+                target_obj=request.user,
+                detail={"factor": "otp"},
+            )
             messages.error(request, _("Der Bestätigungscode (2FA) ist nicht korrekt."))
             return self._render_form(request, next_url, status=403)
 

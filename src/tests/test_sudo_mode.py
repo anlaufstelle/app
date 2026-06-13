@@ -96,6 +96,29 @@ class TestSudoModeViewPOST:
         assert response.status_code == 403
         assert SUDO_SESSION_KEY not in client.session
 
+    def test_wrong_password_writes_sudo_mode_failed_audit(self, client, admin_user):
+        """S2 (Refs #1084): fehlgeschlagene Re-Auth muss im Audit-Trail
+        sichtbar sein — asymmetrisch zu LOGIN_FAILED/MFA_FAILED wurde bisher
+        nur der Erfolg (SUDO_MODE_ENTERED) geloggt."""
+        admin_user.set_password("test-pw-123")
+        admin_user.save()
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("sudo_mode"),
+            {"password": "WRONG", "next": "/clients/"},
+        )
+        assert response.status_code == 403
+        log = AuditLog.objects.filter(
+            user=admin_user,
+            action=AuditLog.Action.SUDO_MODE_FAILED,
+        ).latest("timestamp")
+        assert log.detail == {"factor": "password"}
+        # Fehlversuch darf keinen Erfolgs-Eintrag erzeugen.
+        assert not AuditLog.objects.filter(
+            user=admin_user,
+            action=AuditLog.Action.SUDO_MODE_ENTERED,
+        ).exists()
+
     def test_open_redirect_protection(self, client, admin_user):
         admin_user.set_password("test-pw-123")
         admin_user.save()
@@ -158,6 +181,26 @@ class TestSudoModeTwoFactor:
         )
         assert response.status_code == 403
         assert SUDO_SESSION_KEY not in client.session
+
+    def test_wrong_otp_writes_sudo_mode_failed_audit(self, client, admin_user):
+        """S2 (Refs #1084): auch der OTP-Pfad der Re-Auth muss Fehlversuche
+        auditieren (detail.factor unterscheidet Passwort- vs. OTP-Faktor)."""
+        self._login_with_password(client, admin_user)
+        TOTPDevice.objects.create(user=admin_user, name="default", confirmed=True)
+        response = client.post(
+            reverse("sudo_mode"),
+            {"password": "test-pw-123", "otp_token": "000000", "next": "/clients/"},
+        )
+        assert response.status_code == 403
+        log = AuditLog.objects.filter(
+            user=admin_user,
+            action=AuditLog.Action.SUDO_MODE_FAILED,
+        ).latest("timestamp")
+        assert log.detail == {"factor": "otp"}
+        assert not AuditLog.objects.filter(
+            user=admin_user,
+            action=AuditLog.Action.SUDO_MODE_ENTERED,
+        ).exists()
 
     def test_backup_code_enters_sudo(self, client, admin_user):
         self._login_with_password(client, admin_user)

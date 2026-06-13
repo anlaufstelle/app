@@ -50,6 +50,10 @@ class AuditLog(models.Model):
         BACKUP_CODES_USED = "backup_codes_used", _("2FA Backup-Code verwendet")
         BACKUP_CODES_REGENERATED = "backup_codes_regenerated", _("2FA Backup-Codes neu generiert")
         SUDO_MODE_ENTERED = "sudo_mode_entered", _("Sudo-Mode aktiviert (Re-Auth)")
+        # Refs #1084 (S2): fehlgeschlagene Sudo-Re-Auth auditieren —
+        # asymmetrisch zu LOGIN_FAILED/MFA_FAILED blieben Brute-Force-
+        # Versuche ueber eine gestohlene Session bisher unsichtbar.
+        SUDO_MODE_FAILED = "sudo_mode_failed", _("Sudo-Mode Re-Auth fehlgeschlagen")
         # Refs #867: protokolliert facility-uebergreifende Lese-Zugriffe
         # durch super_admin im /system/-Bereich (DSGVO-Rechenschaftspflicht).
         SYSTEM_VIEW = "system_view", _("Systembereich aufgerufen")
