@@ -33,7 +33,8 @@
     <script src="{% static 'js/alpine-csp.min.js' %}" defer></script>
     {% block extra_head %}{% endblock %}
 </head>
-<body class="h-full overflow-x-hidden" data-user-id="{{ request.user.pk|default:'' }}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+{# Refs #1065: data-session-age (Sekunden) koppelt den Offline-Krypto-Schlüssel in crypto.js an die Session-Lebenszeit (inkl. Facility-Override via set_expiry). #}
+<body class="h-full overflow-x-hidden" data-user-id="{{ request.user.pk|default:'' }}" data-session-age="{{ request.session.get_expiry_age }}" hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
 
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-accent focus:text-white focus:px-4 focus:py-2 focus:rounded-md">
         {% trans "Zum Inhalt springen" %}

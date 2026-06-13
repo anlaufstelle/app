@@ -122,7 +122,9 @@ class CustomLogoutView(auth_views.LogoutView):
 
     def dispatch(self, request, *args, **kwargs):
         response = super().dispatch(request, *args, **kwargs)
-        response["Clear-Site-Data"] = '"storage"'
+        # Refs #573 + #1065: "storage" räumt IndexedDB/localStorage ab,
+        # "cache" zusätzlich den HTTP-Cache (gecachte Art.-9-Responses).
+        response["Clear-Site-Data"] = '"storage", "cache"'
         return response
 
 

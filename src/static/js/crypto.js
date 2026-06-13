@@ -12,10 +12,17 @@
  *   - encryptPayload / decryptPayload lazy-load the CryptoKey from IndexedDB
  *     and cache it for the rest of the page's lifetime.
  *   - clearSessionKey() (called on logout / password change) deletes the row.
- *   - The browser's Clear-Site-Data: "storage" header on logout drops the
- *     entire IndexedDB as defence in depth.
+ *   - The browser's Clear-Site-Data: "storage", "cache" header on logout
+ *     drops the entire IndexedDB as defence in depth.
+ *   - Idle wipe (Refs #1065): the key lifetime is coupled to the server
+ *     session. A throttled lastActivity stamp lives next to the key; once
+ *     it is older than the session age (data-session-age on <body>,
+ *     fallback 1800 s = SESSION_COOKIE_AGE), key AND offline store are
+ *     wiped — on boot/rehydration, on a 60 s interval and on tab return.
+ *     No wipe on pagehide/close: re-opening offline within the idle window
+ *     must keep working (Streetwork use case).
  *
- * Refs #573, #576.
+ * Refs #573, #576, #1065.
  */
 (function () {
     "use strict";
@@ -29,9 +36,15 @@
     const DB_NAME = "anlaufstelle-crypto";
     const META_TABLE = "meta";
     const KEY_NAME = "sessionKey";
+    // Idle wipe (Refs #1065): lastActivity stamp in the same meta store.
+    const ACTIVITY_KEY = "lastActivity";
+    const ACTIVITY_THROTTLE_MS = 30 * 1000;
+    const IDLE_CHECK_INTERVAL_MS = 60 * 1000;
+    const DEFAULT_SESSION_AGE_S = 1800; // fallback = SESSION_COOKIE_AGE
 
     let cachedKey = null;
     let initialLoad = null; // Promise<void> that resolves once cachedKey reflects IndexedDB
+    let lastActivityWrite = 0; // in-memory throttle marker for _touchActivity
 
     function isSupported() {
         return (
@@ -147,8 +160,84 @@
         });
     }
 
+    /*
+     * ─── Idle wipe (Refs #1065) ─────────────────────────────────────────
+     * Couples the key lifetime to the server session: the key must not be
+     * usable (and the encrypted Art.-9 bundles must not stay around) once
+     * the device has been idle longer than the session age. Re-opening the
+     * app offline WITHIN the window keeps working — that is the Streetwork
+     * use case the offline mode exists for.
+     */
+
+    function _sessionAgeMs() {
+        // base.html exposes request.session.get_expiry_age via
+        // data-session-age on <body>; login.html / password_change.html
+        // load crypto.js without it (and before <body> exists) → fallback.
+        const body = document.body;
+        const raw = body && body.dataset ? body.dataset.sessionAge : null;
+        const parsed = parseInt(raw || "", 10);
+        const seconds = Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_SESSION_AGE_S;
+        return seconds * 1000;
+    }
+
+    function _touchActivity(force) {
+        const now = Date.now();
+        if (!force && now - lastActivityWrite < ACTIVITY_THROTTLE_MS) {
+            return Promise.resolve();
+        }
+        lastActivityWrite = now;
+        return _idbPut({ key: ACTIVITY_KEY, ts: now }).catch(function () {
+            // ignore — the next trigger stamps again
+        });
+    }
+
+    async function wipeOfflineState() {
+        // Shared wipe path for logout (sw-register.js) and idle timeout:
+        // drop the CryptoKey AND purge the encrypted Dexie store together.
+        await clearSessionKey();
+        try {
+            if (window.offlineStore) {
+                await window.offlineStore.purgeAll();
+            } else if (document.readyState === "loading") {
+                // Boot path: crypto.js executes before offline-store.js —
+                // catch up once all synchronous scripts have run.
+                document.addEventListener("DOMContentLoaded", function () {
+                    if (window.offlineStore) {
+                        window.offlineStore.purgeAll().catch(function () {});
+                    }
+                });
+            }
+        } catch (_e) {
+            // ignore — leftover ciphertext is useless without the key and
+            // decryptPayload failures auto-discard rows anyway (#576).
+        }
+    }
+
+    async function _enforceIdleWipe() {
+        const row = await _idbGet(ACTIVITY_KEY);
+        if (!row || typeof row.ts !== "number") {
+            // No stamp yet (pre-#1065 install or first run): start the idle
+            // window now instead of wiping a possibly active session.
+            _touchActivity(true);
+            return false;
+        }
+        if (Date.now() - row.ts <= _sessionAgeMs()) {
+            return false;
+        }
+        await wipeOfflineState();
+        return true;
+    }
+
     async function _loadKey() {
         if (cachedKey) return cachedKey;
+        // Idle gate (Refs #1065): before rehydrating from IndexedDB, check
+        // whether the session age has passed since the last activity — then
+        // wipe instead of making the key usable again without re-auth.
+        try {
+            if (await _enforceIdleWipe()) return null;
+        } catch (_e) {
+            // ignore — a stamp read error must not break online operation
+        }
         const row = await _idbGet(KEY_NAME);
         if (row && row.cryptoKey) {
             cachedKey = row.cryptoKey;
@@ -157,11 +246,43 @@
     }
 
     // Eager hydration so synchronous hasSessionKey() reflects IndexedDB
-    // contents once the page has finished its first tick.
+    // contents once the page has finished its first tick. _loadKey() also
+    // runs the idle gate, so an expired install is wiped on boot (#1065).
     if (typeof window !== "undefined" && "indexedDB" in window) {
         initialLoad = _loadKey().catch(function () {
             // Ignore — caller will retry via encrypt/decrypt
         });
+
+        // Activity stamping (throttled) + periodic idle checks (#1065).
+        document.addEventListener(
+            "pointerdown",
+            function () {
+                _touchActivity(false);
+            },
+            { passive: true }
+        );
+        document.addEventListener(
+            "keydown",
+            function () {
+                _touchActivity(false);
+            },
+            { passive: true }
+        );
+        document.addEventListener("visibilitychange", function () {
+            if (document.visibilityState === "hidden") {
+                // Final stamp when the tab goes away — the idle window for
+                // a later (possibly offline) re-open starts here.
+                _touchActivity(true);
+            } else if (document.visibilityState === "visible") {
+                _enforceIdleWipe().catch(function () {});
+            }
+        });
+        window.addEventListener("pagehide", function () {
+            _touchActivity(true);
+        });
+        window.setInterval(function () {
+            _enforceIdleWipe().catch(function () {});
+        }, IDLE_CHECK_INTERVAL_MS);
     }
 
     function ready() {
@@ -192,6 +313,9 @@
             false, // non-extractable
             ["encrypt", "decrypt"]
         );
+        // Stamp BEFORE storing the key so a stale pre-login stamp can never
+        // race the new key into an immediate idle wipe (#1065).
+        await _touchActivity(true);
         cachedKey = key;
         await _idbPut({ key: KEY_NAME, cryptoKey: key });
     }
@@ -232,6 +356,9 @@
         cachedKey = null;
         try {
             await _idbDelete(KEY_NAME);
+            // Drop the activity stamp with the key: the next idle check
+            // starts a fresh window instead of re-wiping forever (#1065).
+            await _idbDelete(ACTIVITY_KEY);
         } catch (_e) {
             // ignore — Clear-Site-Data on logout will get rid of it anyway
         }
@@ -249,6 +376,7 @@
         encryptPayload: encryptPayload,
         decryptPayload: decryptPayload,
         clearSessionKey: clearSessionKey,
+        wipeOfflineState: wipeOfflineState,
         hasSessionKey: hasSessionKey,
         ready: ready,
     };

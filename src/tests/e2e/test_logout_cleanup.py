@@ -235,3 +235,81 @@ def test_logout_indexeddb_databases_contain_no_plaintext(browser, base_url):
         # else: the DB was dropped entirely — cleanup complete.
     finally:
         context.close()
+
+
+def _backdate_last_activity(page, minutes):
+    """Set the `lastActivity` stamp in `anlaufstelle-crypto` N minutes back."""
+    page.evaluate(
+        f"""async () => {{
+            await new Promise((resolve, reject) => {{
+                const req = indexedDB.open('anlaufstelle-crypto', 1);
+                req.onsuccess = () => {{
+                    const db = req.result;
+                    const tx = db.transaction('meta', 'readwrite');
+                    tx.objectStore('meta').put({{
+                        key: 'lastActivity',
+                        ts: Date.now() - {minutes} * 60 * 1000,
+                    }});
+                    tx.oncomplete = () => {{ db.close(); resolve(); }};
+                    tx.onerror = () => {{ db.close(); reject(tx.error); }};
+                }};
+                req.onerror = () => reject(req.error);
+            }});
+        }}"""
+    )
+
+
+def test_idle_timeout_wipes_crypto_session_key(browser, base_url):
+    """Idle > SESSION_COOKIE_AGE wipes the key on next boot (Refs #1065).
+
+    Mirrors the manual verification: backdate `lastActivity` 31 minutes
+    (session age is 1800 s), reload, and expect the key to be gone — both
+    the in-memory cache and the IndexedDB row.
+    """
+    context = browser.new_context()
+    page = context.new_page()
+    try:
+        _login_via_form(page, base_url)
+        assert page.evaluate("window.crypto_session.hasSessionKey()") is True
+        assert page.evaluate("document.body.dataset.sessionAge") == "1800"
+
+        _backdate_last_activity(page, 31)
+        page.reload()
+        page.wait_for_function("window.crypto_session && window.offlineStore")
+
+        has_key = page.evaluate(
+            """async () => {
+                await window.crypto_session.ready();
+                return window.crypto_session.hasSessionKey();
+            }"""
+        )
+        assert has_key is False
+    finally:
+        context.close()
+
+
+def test_idle_within_window_keeps_crypto_session_key(browser, base_url):
+    """Idle below the session age must NOT wipe the key (Refs #1065).
+
+    Counter-probe for the offline field-work window: 10 minutes idle,
+    reload — the key has to survive so cached bundles stay readable.
+    """
+    context = browser.new_context()
+    page = context.new_page()
+    try:
+        _login_via_form(page, base_url)
+        assert page.evaluate("window.crypto_session.hasSessionKey()") is True
+
+        _backdate_last_activity(page, 10)
+        page.reload()
+        page.wait_for_function("window.crypto_session && window.offlineStore")
+
+        has_key = page.evaluate(
+            """async () => {
+                await window.crypto_session.ready();
+                return window.crypto_session.hasSessionKey();
+            }"""
+        )
+        assert has_key is True
+    finally:
+        context.close()

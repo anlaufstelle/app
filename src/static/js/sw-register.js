@@ -117,9 +117,15 @@
     }
 
     function _wipeOfflineState() {
+        // Refs #1065: gemeinsamer Wipe-Pfad lebt in crypto.js — Logout
+        // (hier) und Idle-Timeout (crypto.js) räumen identisch ab:
+        // CryptoKey + Aktivitäts-Stempel + alle Dexie-Tabellen.
         try {
-            if (window.crypto_session) window.crypto_session.clearSessionKey();
-            if (window.offlineStore) window.offlineStore.purgeAll();
+            if (window.crypto_session) {
+                window.crypto_session.wipeOfflineState();
+            } else if (window.offlineStore) {
+                window.offlineStore.purgeAll();
+            }
         } catch (_e) {
             // ignore
         }

@@ -188,6 +188,14 @@ class TestLoginLogout:
         assert response.status_code == 302
         assert "/login/" in response.url
 
+    def test_logout_clear_site_data_includes_storage_and_cache(self, client, staff_user):
+        """Refs #1065: Logout muss neben "storage" (IndexedDB/localStorage)
+        auch "cache" senden — sonst überleben gecachte Art.-9-Responses
+        (Offline-Bundles, Detailseiten) den Logout im HTTP-Cache."""
+        client.login(username="teststaff", password="testpass123")
+        response = client.post("/logout/")
+        assert response["Clear-Site-Data"] == '"storage", "cache"'
+
     def test_password_change_page_loads(self, client, staff_user):
         client.login(username="teststaff", password="testpass123")
         response = client.get("/password-change/")
