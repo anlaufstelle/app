@@ -65,6 +65,8 @@ docker compose -f docker-compose.prod.yml up -d web caddy
 
 **Erwartete Downtime:** ~3-5 Sekunden (nur Gunicorn-Restart). Migrationen laufen vorab im One-Shot-Job — der Web-Container faehrt erst hoch, wenn das Schema bereit ist. Bei mehreren Web-Replicas wartet keine mehr auf den Migrate-Lock.
 
+> **Ownership-Normalisierung (Refs #1085):** Der One-Shot-Job fuehrt nach `migrate` zusaetzlich `normalize_db_ownership` aus. Da Migrationen als Admin-Rolle laufen (BYPASSRLS, Refs #863), entstehen frisch erstellte Tabellen admin-owned — `REASSIGN OWNED` uebertraegt sie auf den DB-Owner (App-Rolle), sonst bekaeme die App-Runtime auf einem frischen Cluster `permission denied`. Idempotent; auf Bestands-/Dev-Clustern (migrate laeuft als Owner) ein No-op. Ein Fehler bricht den Deploy fail-fast ab, bevor neue Web-Replicas live gehen.
+
 ### 1.3 Post-Deploy-Verifizierung
 
 ```bash

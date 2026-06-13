@@ -32,6 +32,7 @@ Konkrete Folge-Festlegungen:
 - **`.env` ist verbindlich:** `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD` und `POSTGRES_BOOTSTRAP_PASSWORD` sind Pflichtvariablen in Produktion (siehe [`docs/admin-guide.md` § Datenbank](../admin-guide.md)). Default-Werte gibt es bewusst nicht — kein stiller Fallback auf die App-Rolle.
 - **Runtime-Verifikation:** Das Management-Command [`manage.py check_db_roles`](../../src/core/management/commands/check_db_roles.py) prueft beim Start (und im Compliance-Dashboard, Refs #919) per `pg_roles`, dass die App-Rolle `rolsuper=false`/`rolbypassrls=false` und die Admin-Rolle `rolsuper=false`/`rolbypassrls=true` hat. Exit-Codes: `0` ok, `1` falsches Attributprofil, `2` Konfiguration unvollstaendig.
 - **Migrationen laufen unter der Admin-Rolle**, nicht unter der App-Rolle. Damit braucht die App-Rolle keine DDL-Rechte und das RLS-Gate bleibt zur Laufzeit eng.
+- **Ownership-Normalisierung nach dem Migrate:** Weil der Migrate-Job als Admin connectet, entstehen frisch migrierte Tabellen *admin-owned* — auf einem frischen Cluster bekaeme die App-Rolle sonst `permission denied` (Refs #1085). Der Migrate-One-Shot ruft daher nach `migrate` [`manage.py normalize_db_ownership`](../../src/core/management/commands/normalize_db_ownership.py) auf: `REASSIGN OWNED BY <admin> TO <db_owner>` uebertraegt alle Objekte (Tabellen, Sequenzen, Matviews) env-agnostisch und idempotent auf den Datenbank-Owner (App-Rolle, gesetzt per `ALTER DATABASE OWNER`). Generalisiert das per-Tabelle-Muster aus [`0093_cache_table_owner.py`](../../src/core/migrations/0093_cache_table_owner.py) (Refs #1030) — neue admin-erstellte Tabellen brauchen keine einzelnen Owner-Fix-Migrationen mehr.
 
 ## Consequences
 
@@ -48,6 +49,7 @@ Konkrete Folge-Festlegungen:
 - **Single-Role mit `BYPASSRLS` fuer die App.** Verworfen: hebt das gesamte RLS-Gate auf. Das war der Ist-Zustand des Default-Images und exakt das Risiko, das sichtbar gemacht hat.
 - **Single-Role ohne Bypass + Migrationen ueber App-Rolle.** Verworfen: braucht entweder DDL-Rechte auf der App-Rolle (= effektiv Superuser-naehe) oder eine Sondermechanik, die RLS pro Migration temporaer abschaltet. Beide Varianten sind fragiler als zwei getrennte Rollen.
 - **Dynamischer Rollenwechsel per `SET ROLE` pro Request.** Verworfen: braucht eine Connection-Pool-Schicht ueber Django hinaus, plus zusaetzliche Audit-Komplexitaet. Liefert keinen Vorteil gegenueber „App-Rolle ohne Bypass" als Default — und ADR-018 nutzt fuer `super_admin` ohnehin Session-Variablen + OR-Branch statt Rollenwechsel.
+- **`SET ROLE app_user` im Migrate-Job** (statt der Ownership-Normalisierung oben), damit Objekte direkt app-owned entstehen. Verworfen (Refs #1085): BYPASSRLS haengt an `current_user` — nach `SET ROLE` auf die NOBYPASSRLS-App-Rolle greifen die RLS-Policies wieder, sodass RunPython-Datenmigrationen auf facility-gescopte Tabellen (ohne gesetztes `app.current_facility_id`) still **null Zeilen** treffen. Empirisch auf `postgres:18` bestaetigt. Stattdessen bleibt der Migrate-Job auf der BYPASSRLS-Admin-Rolle und normalisiert die Ownership *nach* dem Migrate.
 - **Vier Rollen (zusaetzlich Read-Only-Reporting).** Vertagt: konkreter Bedarf erst sichtbar, wenn externe Reporting-Tools angedockt werden. Additiv jederzeit nachruestbar, ohne dieses Modell zu brechen.
 
 ## References
@@ -59,3 +61,4 @@ Konkrete Folge-Festlegungen:
 - [ADR-005](005-facility-scoping-and-rls.md) — Facility-Scoping + RLS (Voraussetzung)
 - [ADR-018](018-rollenmodell-superadmin.md) — App-Ebene Super-Admin (nicht DB-Ebene)
 - Issue #902 — Drei-Rollen-Modell
+- Issue #1085 — Fresh-Install-Ownership: Normalisierung nach Migrate-als-Admin
