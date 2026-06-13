@@ -375,3 +375,72 @@ def test_attachments_deleted_after_anonymize(maximal_pii_graph):
     assert EventAttachment.objects.filter(event=g.event).exists()  # Positiv-Kontrolle
     g.client.anonymize()
     assert EventAttachment.objects.filter(event=g.event).count() == 0
+
+
+# --------------------------------------------------------------------------
+# Pfad-Sweep: Event-Soft-Delete via Vier-Augen-Loeschung (Refs #1083)
+# --------------------------------------------------------------------------
+# Fokussierter Test (NICHT 22-fach): der Event-Soft-Delete redigiert nur den
+# Event-Inhalt (``data_json`` -> ``{}``, Anhaenge geloescht). Client/Case/
+# Episode/WorkItem/Activity/EventHistory bleiben absichtlich stehen (der
+# Klient wird nicht geloescht) — daher wird nur auf ``core_event``-Senken
+# geprueft, nicht ueber alle Scoped-Tabellen.
+#
+# Empirie zu search_text: ``soft_delete_event`` setzt zwar nur
+# ``data_json = {}`` und berechnet ``search_text`` nicht explizit neu — das
+# ``pre_save``-Signal ``_refresh_event_search_text`` (signals/event_search.py)
+# leitet ``search_text`` aber bei JEDEM Event-Save aus ``data_json`` ab. Mit
+# leerem ``data_json`` faellt ``search_text`` daher auf "" zurueck. Beide
+# core_event-Senken (data_json + search_text) sind nach Soft-Delete sauber —
+# KEIN search_text-Residue (H4 widerlegt).
+
+
+@pytest.mark.django_db
+def test_event_content_gone_after_soft_delete(maximal_pii_graph, admin_user, lead_user):
+    from core.models import EventAttachment
+    from core.services.events import approve_deletion, request_deletion
+
+    g = maximal_pii_graph
+    # Vier-Augen-Loeschung des Events (Soft-Delete leert data_json). Reviewer
+    # (lead_user) != Antragsteller (admin_user); lead_user.can_confirm_deletion.
+    dr = request_deletion(g.event, admin_user, reason="RESIDUEPROBE-EvDel")
+    approve_deletion(dr, lead_user)
+
+    # Der soft-deletete Event darf keinen Klartext-Needle mehr in seiner eigenen
+    # Zeile tragen — data_json ist {} und search_text wird per Signal mit auf ""
+    # zurueckgesetzt.
+    event_hits = [h for h in undeclared_hits(g.facility.id) if h.table == "core_event"]
+    assert not event_hits, f"Event-Inhalt nach Soft-Delete nicht entfernt:\n{_fmt(event_hits)}"
+
+    # Anhaenge des Events geloescht.
+    assert EventAttachment.objects.filter(event=g.event).count() == 0
+
+
+# --------------------------------------------------------------------------
+# Pfad-Sweep: Trash-Expiry via anonymize_eligible_soft_deleted_clients (Refs #1083)
+# --------------------------------------------------------------------------
+# Die Papierkorb-Frist-Anonymisierung ruft ``anonymize_client`` auf die ganze
+# Klientenakte — gleiches Residue-Profil wie der direkte anonymize-Pfad
+# (dieselben Lecks H2/H3-1/H3-2 ueber ``ANONYMIZE_TABLES``).
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("table", ANONYMIZE_TABLES)
+def test_no_residue_after_trash_expiry(maximal_pii_graph, table):
+    from datetime import timedelta
+
+    from core.models import Settings
+    from core.services.client import anonymize_eligible_soft_deleted_clients
+
+    g = maximal_pii_graph
+    # Frist kuenstlich ueberschreiten, dann der reale Retention-Einstieg.
+    g.client.deleted_at = timezone.now() - timedelta(days=9999)
+    g.client.save(update_fields=["deleted_at"])
+    settings_obj, _ = Settings.objects.get_or_create(facility=g.facility)
+    settings_obj.client_trash_days = 30
+    settings_obj.save()
+
+    count = anonymize_eligible_soft_deleted_clients(g.facility, settings_obj)
+    assert count >= 1, "Trash-Expiry hat den Client nicht erfasst"
+    hits = [h for h in undeclared_hits(g.facility.id) if h.table == table]
+    assert not hits, f"PII-Residue nach Trash-Expiry in {table}:\n{_fmt(hits)}"
