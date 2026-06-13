@@ -1,6 +1,7 @@
 """Tests for DSGVO documentation package."""
 
 import pytest
+from django.core.cache import cache
 from django.test import Client as DjangoClient
 
 from core.models import AuditLog, Facility, Organization, Settings, User
@@ -159,6 +160,39 @@ class TestDSGVODocumentDownload:
         client.force_login(lead_user)
         response = client.get("/dsgvo/toms/")
         assert response.status_code == 403
+
+
+@pytest.mark.django_db
+class TestDSGVORateLimit:
+    """S3 (Refs #1084): RATELIMIT_BULK_ACTION (30/h/User) auf Package-Ansicht
+    und Dokument-Download — Dokument-Rendering ist teuer, die Views waren die
+    letzte Luecke im sonst dichten Drossel-Netz.
+
+    Tests laufen mit ``RATELIMIT_ENABLE = False``; hier wird das Limit explizit
+    aktiviert (Muster: ``test_offline_bundle_api.test_rate_limited_after_30_requests``).
+    django-ratelimit mit ``block=True`` antwortet mit 403.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _enable_ratelimit(self, settings):
+        settings.RATELIMIT_ENABLE = True
+        cache.clear()
+        yield
+        cache.clear()
+
+    def test_package_view_blocked_after_30_requests(self, admin_user):
+        client = DjangoClient()
+        client.force_login(admin_user)
+        for _ in range(30):
+            assert client.get("/dsgvo/").status_code == 200
+        assert client.get("/dsgvo/").status_code == 403
+
+    def test_document_download_blocked_after_30_requests(self, admin_user):
+        client = DjangoClient()
+        client.force_login(admin_user)
+        for _ in range(30):
+            assert client.get("/dsgvo/toms/").status_code == 200
+        assert client.get("/dsgvo/toms/").status_code == 403
 
 
 # Refs #840 (C-73): Versionsstempel-Footer in jedem gerenderten Dokument.

@@ -5,8 +5,11 @@ import logging
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.http import Http404
+from django.utils.decorators import method_decorator
 from django.views import View
+from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_FREQUENT
 from core.models import AuditLog, DocumentType
 from core.models.attachment import EventAttachment
 from core.services.audit import log_audit_event
@@ -121,8 +124,12 @@ class AttachmentDownloadView(AssistantOrAboveRequiredMixin, View):
     By default, displays the file inline if its MIME type is on the safe
     whitelist (images, PDF, plain text). Other types and requests with
     ``?download=1`` are served with ``Content-Disposition: attachment``.
+
+    S3 (Refs #1084): Rate-limited (120/h/User) — die Datei wird pro Request
+    serverseitig entschluesselt, Massen-Downloads muessen gedrosselt sein.
     """
 
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="GET", block=True))
     def get(self, request, pk, attachment_pk):
         event, attachment = get_visible_attachment_or_404(request.user, request.current_facility, pk, attachment_pk)
 

@@ -100,7 +100,14 @@ class TestRateLimitOnSensitiveGetEndpoints:
 
     _VIEWS_DIR = Path("src/core/views")
     # Liste sensibler GET-Endpoints. Format: (datei, klasse).
-    _SENSITIVE_GET_VIEWS = (("clients.py", "ClientAutocompleteView"),)
+    _SENSITIVE_GET_VIEWS = (
+        ("clients.py", "ClientAutocompleteView"),
+        # Refs #1084 (S3): teure/sensible GET-Endpoints — DSGVO-Dokument-
+        # Rendering und Attachment-Entschluesselung laufen pro Request.
+        ("attachments.py", "AttachmentDownloadView"),
+        ("dsgvo.py", "DSGVOPackageView"),
+        ("dsgvo.py", "DSGVODocumentDownloadView"),
+    )
 
     def _collect_decorators_above(self, lines: list[str], def_idx: int) -> str:
         """Sammelt zusammenhaengende ``@...``-Zeilen oberhalb ``def_idx``.
