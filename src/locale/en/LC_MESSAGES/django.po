@@ -536,6 +536,10 @@ msgstr "2FA backup codes regenerated"
 msgid "Sudo-Mode aktiviert (Re-Auth)"
 msgstr "Sudo mode enabled (re-auth)"
 
+#: src/core/models/audit.py:56
+msgid "Sudo-Mode Re-Auth fehlgeschlagen"
+msgstr "Sudo mode re-auth failed"
+
 #: src/core/models/audit.py:54
 msgid "Systembereich aufgerufen"
 msgstr "System area accessed"

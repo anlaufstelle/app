@@ -584,6 +584,10 @@ msgstr ""
 msgid "Sudo-Mode aktiviert (Re-Auth)"
 msgstr ""
 
+#: src/core/models/audit.py:56
+msgid "Sudo-Mode Re-Auth fehlgeschlagen"
+msgstr ""
+
 #: src/core/models/audit.py:54
 msgid "Systembereich aufgerufen"
 msgstr ""
