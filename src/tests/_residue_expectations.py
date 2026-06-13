@@ -86,7 +86,7 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     non_pii("core_fieldtemplate", "statistics_category", reason="Statistik-Zuordnungs-Label (Konfiguration)."),
     non_pii("core_fieldtemplate", "help_text", reason="Admin-Hilfetext fuers Formular (Konfig-Label)."),
     # ---- core_auditlog (append-only, DSGVO-Rechenschaft) -----------------
-    known_residue("core_auditlog", "detail", reason="forensic: Audit-Rechenschaft Art. 5(2)"),
+    known_residue("core_auditlog", "detail", reason="forensic: Audit-Rechenschaft Art. 5(2)", issue="#1093"),
     non_pii("core_auditlog", "action", reason="Enum (login/export/client_create/...)."),
     non_pii("core_auditlog", "target_type", reason="Modell-Typ-Marker (z.B. 'Client'), kein Freitext."),
     non_pii("core_auditlog", "target_id", reason="UUID/PK-String des Ziels, kein Freitext."),

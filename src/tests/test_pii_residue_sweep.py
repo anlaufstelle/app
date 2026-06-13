@@ -348,9 +348,9 @@ def _fmt(hits: list[Hit]) -> str:
 #       Klienten-Loeschung ausloest (``request_client_deletion``), hat aber
 #       target_type="Client" — sein Freitext-``reason`` bleibt stehen.
 ANONYMIZE_XFAIL = {
-    "core_event": "H2: Event.data_json/search_text-Residue, Fix folgt",
-    "core_activity": "H3-1: WorkItem-Target-Activity-Summary unredigiert, Fix folgt",
-    "core_deletionrequest": "H3-2: Client-Target-DeletionRequest.reason unredigiert, Fix folgt",
+    "core_event": "H2: Event.data_json/search_text-Residue (Fix #1089)",
+    "core_activity": "H3-1: WorkItem-Target-Activity-Summary unredigiert (Fix #1090)",
+    "core_deletionrequest": "H3-2: Client-Target-DeletionRequest.reason unredigiert (Fix #1091)",
 }
 ANONYMIZE_TABLES = [
     pytest.param(t, marks=pytest.mark.xfail(strict=True, reason=ANONYMIZE_XFAIL[t])) if t in ANONYMIZE_XFAIL else t
@@ -494,8 +494,8 @@ def test_no_residue_after_trash_expiry(maximal_pii_graph, table):
 # Eigene xfail-Liste (NICHT ANONYMIZE_TABLES): nur die empirisch roten Tabellen.
 RETENTION_XFAIL = {
     "core_event": "H5: enforce_retention-Soft-Delete laesst search_text stehen "
-    "(update_fields ohne search_text), Fix folgt",
-    "core_deletionrequest": "H3-2: Client-Target-DeletionRequest.reason unredigiert, Fix folgt",
+    "(update_fields ohne search_text) (Fix #1092)",
+    "core_deletionrequest": "H3-2: Client-Target-DeletionRequest.reason unredigiert (Fix #1091)",
 }
 RETENTION_TABLES = [
     pytest.param(t, marks=pytest.mark.xfail(strict=True, reason=RETENTION_XFAIL[t])) if t in RETENTION_XFAIL else t
@@ -617,8 +617,8 @@ def test_k_anonymization_does_not_cascade_to_cases(maximal_pii_graph):
     Relevanz: wird k-Anon als Erfuellungs-Modus der Retention statt
     Hard-Anonymisierung genutzt (``Settings.retention_use_k_anonymization``),
     bleibt Fall-/Episoden-/Aufgaben-Freitext stehen — potenzielle DSGVO-Luecke
-    (Befund "H6 — k-Anon kaskadiert nicht"). Klassifikation/Fix entscheidet der
-    Maintainer (Folge-Issue), nicht dieser Test.
+    (Befund "H6 — k-Anon kaskadiert nicht", #1094). Klassifikation/Fix entscheidet
+    der Maintainer (Folge-Issue), nicht dieser Test.
     """
     from core.services.compliance.k_anonymization import k_anonymize_client
 
