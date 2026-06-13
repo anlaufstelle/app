@@ -51,6 +51,17 @@ with connection.cursor() as cursor:
     cursor.execute("SELECT pg_advisory_lock(1)")
     try:
         result = subprocess.run([sys.executable, "manage.py", "migrate", "--noinput"])
+        # Refs #1085: Nach erfolgreichem Migrate die Tabellen-Ownership auf den
+        # DB-Owner (App-Rolle) normalisieren. Der Migrate-Job connectet als
+        # BYPASSRLS-Admin (POSTGRES_USER-Override, Refs #863) — frisch migrierte
+        # Tabellen sind dadurch admin-owned, und die NOSUPERUSER-App-Runtime-Rolle
+        # bekäme 'permission denied'. REASSIGN OWNED überträgt sie env-agnostisch
+        # und idempotent auf den DB-Owner; ein Fehler bricht den Deploy fail-fast
+        # ab, bevor neue Web-Replicas live gehen.
+        if result.returncode == 0:
+            normalize = subprocess.run([sys.executable, "manage.py", "normalize_db_ownership"])
+            if normalize.returncode != 0:
+                result = normalize
     finally:
         cursor.execute("SELECT pg_advisory_unlock(1)")
 sys.exit(result.returncode)
