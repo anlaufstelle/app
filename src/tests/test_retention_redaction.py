@@ -108,6 +108,26 @@ class TestRetentionSoftDeleteRedacts:
         assert "Cafe X" not in repr_str
         assert "Krisengespraech" not in repr_str
 
+    def test_retention_soft_delete_clears_search_text(self, event_with_pii, facility):
+        # Refs #1092: ``_soft_delete_events`` muss ``search_text`` in
+        # ``update_fields`` aufnehmen, sonst persistiert Django den vom
+        # ``pre_save``-Signal geleerten Wert nicht und der Klartext-PII bleibt
+        # in der search_text-Spalte stehen (DSGVO-Residue).
+        #
+        # search_text deterministisch befuellen, ohne Slug-Mechanik: ``.update()``
+        # umgeht das pre_save-Signal und schreibt echten Klartext in die Spalte —
+        # genau die Residue, die der Soft-Delete tilgen muss (Stil analog
+        # test_client_anonymize_characterization.py).
+        Event.objects.filter(pk=event_with_pii.pk).update(search_text="Klartext-Krise")
+
+        qs = Event.objects.filter(pk=event_with_pii.pk)
+        _soft_delete_events(qs, facility, category="anonymous", retention_days=90)
+
+        event_with_pii.refresh_from_db()
+        assert event_with_pii.is_deleted is True
+        assert event_with_pii.data_json == {}
+        assert event_with_pii.search_text == ""
+
     def test_retention_soft_delete_includes_field_metadata(self, event_with_pii, facility):
         # Refs #714: bisheriger Retention-Pfad schrieb kein field_metadata,
         # was die Audit-Spur beim Restore unvollstaendig machte. Jetzt

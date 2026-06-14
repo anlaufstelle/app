@@ -469,22 +469,6 @@ def test_no_residue_after_trash_expiry(maximal_pii_graph, table):
 # EMPIRISCHES RESIDUE-PROFIL (am echten DB-Lauf beobachtet, nicht aus
 # ANONYMIZE_TABLES kopiert — bewusst abweichend):
 #
-#   core_event  -> RESIDUE (H5, NEU). Der Event WIRD soft-deletet
-#       (``data_json`` -> ``{}``), ABER ``search_text`` behaelt den Klartext-
-#       Needle. Ursache: ``_soft_delete_events`` (retention/enforcement.py)
-#       speichert mit ``update_fields=["is_deleted", "data_json", "updated_at"]``
-#       — ``search_text`` fehlt in der Liste. Das ``pre_save``-Signal
-#       ``_refresh_event_search_text`` berechnet zwar den leeren Wert auf der
-#       Instanz, Django persistiert ihn aber NICHT (update_fields uebergeht ihn).
-#       KONTRAST zum User-Pfad ``soft_delete_event`` (events/crud.py), der mit
-#       ``event.save()`` OHNE update_fields speichert — dort schlaegt das Signal
-#       durch und ``search_text`` faellt auf "" (siehe
-#       test_event_content_gone_after_soft_delete, H4 widerlegt). Der
-#       Retention-Soft-Delete leakt also, der manuelle nicht.
-#       -> Anders als die anonymize-H2 (dort bleibt die LIVE-data_json stehen,
-#          weil kein Soft-Delete laeuft): hier ist data_json sauber, nur
-#          search_text leakt. Eigener Befund, eigenes Folge-Issue.
-#
 #   core_deletionrequest -> RESIDUE (H3-2, wie im anonymize-Pfad). Der
 #       Vier-Augen-Antrag, der die Client-Loeschung ausloeste, hat
 #       ``target_type="Client"``; ``_redact_deletion_requests`` redigiert nur
@@ -497,8 +481,6 @@ def test_no_residue_after_trash_expiry(maximal_pii_graph, table):
 #
 # Eigene xfail-Liste (NICHT ANONYMIZE_TABLES): nur die empirisch roten Tabellen.
 RETENTION_XFAIL = {
-    "core_event": "H5: enforce_retention-Soft-Delete laesst search_text stehen "
-    "(update_fields ohne search_text) (Fix #1092)",
     "core_deletionrequest": "H3-2: Client-Target-DeletionRequest.reason unredigiert (Fix #1091)",
 }
 RETENTION_TABLES = [

@@ -56,7 +56,11 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
         event.is_deleted = True
         event.data_json = {}
         delete_event_attachments(event)
-        event.save(update_fields=["is_deleted", "data_json", "updated_at"])
+        # Refs #1092: ``search_text`` MUSS in ``update_fields`` stehen, sonst
+        # persistiert Django den vom ``pre_save``-Signal
+        # (``_refresh_event_search_text``) berechneten Leerwert nicht und der
+        # Klartext-PII leakt in der search_text-Spalte (DSGVO-Residue).
+        event.save(update_fields=["is_deleted", "data_json", "search_text", "updated_at"])
         history_entries.append(
             EventHistory(
                 event=event,
