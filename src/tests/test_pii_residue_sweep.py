@@ -576,26 +576,68 @@ def test_client_record_clean_after_k_anonymization(maximal_pii_graph):
 
 
 @pytest.mark.django_db
-def test_k_anonymization_does_not_cascade_to_cases(maximal_pii_graph):
-    """k_anonymize_client kaskadiert NICHT (dokumentierte Grenze, k_anonymization.py:45).
+def test_bare_k_anonymize_client_stays_client_only(maximal_pii_graph):
+    """Vertrag der Primitive: ``k_anonymize_client`` ALLEIN kaskadiert NICHT.
 
-    Festschreibung des AKTUELLEN Verhaltens: nach ``k_anonymize_client`` ALLEIN
-    tragen ``core_case``/``core_episode``/``core_workitem`` weiterhin Needles —
-    k-Anon redigiert nur die Client-Zeile (pseudonym/notes).
-
-    Relevanz: wird k-Anon als Erfuellungs-Modus der Retention statt
-    Hard-Anonymisierung genutzt (``Settings.retention_use_k_anonymization``),
-    bleibt Fall-/Episoden-/Aufgaben-Freitext stehen — potenzielle DSGVO-Luecke
-    (Befund "H6 — k-Anon kaskadiert nicht", #1094). Klassifikation/Fix entscheidet
-    der Maintainer (Folge-Issue), nicht dieser Test.
+    Festschreibung des dokumentierten client-only-Vertrags (k_anonymization.py:45,
+    „Linked cases/episodes/workitems are *not* modified"): nach dem nackten
+    ``k_anonymize_client`` tragen ``core_case``/``core_episode``/``core_workitem``
+    weiterhin ihre Needles. Die Kaskade ist Sache des Retention-Bridge-Layers
+    (siehe ``test_retention_k_anonymization_cascades_to_cases``), NICHT dieser
+    Primitive — beide Vertraege sind so getrennt gegen Regression geschuetzt
+    (Refs #1094).
     """
     from core.services.compliance.k_anonymization import k_anonymize_client
 
     g = maximal_pii_graph
     k_anonymize_client(g.client)
     residual = {h.table for h in undeclared_hits(g.facility.id)}
-    # Bewusste Festschreibung der fehlenden Kaskade — alle drei verknuepften
-    # Aggregate behalten ihren Klartext-Freitext:
+    # Die Primitive ist bewusst client-only — alle drei verknuepften Aggregate
+    # behalten ihren Klartext-Freitext:
     assert "core_case" in residual
     assert "core_episode" in residual
     assert "core_workitem" in residual
+
+
+@pytest.mark.django_db
+def test_retention_k_anonymization_cascades_to_cases(maximal_pii_graph):
+    """Der Retention-K-Anon-Pfad MUSS Fall-/Episoden-/Aufgaben-Freitext tilgen (Refs #1094).
+
+    Wird k-Anon als Erfuellungs-Modus der Retention statt Hard-Anonymisierung
+    genutzt (``Settings.retention_use_k_anonymization=True``), speist
+    ``anonymize_clients`` dieselben Loesch-Kandidaten in ``k_anonymize_client``.
+    Die nackte Primitive ist client-only — der Bridge-Layer muss daher zusaetzlich
+    die Kaskade fahren, sonst bleibt Klienten-PII im Freitext von ``core_case`` /
+    ``core_episode`` / ``core_workitem`` stehen (Befund "H6 — k-Anon kaskadiert
+    nicht").
+
+    Kandidaten-Bedingung von ``anonymize_clients``: ``total_events > 0`` und
+    ``active_events == 0`` (alle Events soft-deletet). Der Fixture-Event ist live,
+    daher wird er hier soft-deletet, damit der Klient zum Kandidaten wird.
+    """
+    from core.models import Event, Settings
+    from core.retention.anonymization import anonymize_clients
+
+    g = maximal_pii_graph
+    Settings.objects.update_or_create(
+        facility=g.facility,
+        defaults={"retention_use_k_anonymization": True, "k_anonymity_threshold": 5},
+    )
+    # Event soft-deletet -> Klient erfuellt die Kandidaten-Bedingung
+    # (total_events>0, active_events=0).
+    Event.objects.filter(pk=g.event.pk).update(is_deleted=True)
+
+    anonymize_clients(g.facility, dry_run=False)
+
+    # K-Anon-Pfad muss tatsaechlich gegriffen haben (Positiv-Kontrolle).
+    g.client.refresh_from_db()
+    assert g.client.k_anonymized is True, "K-Anon-Pfad muss gegriffen haben"
+
+    # Kern-Assertion: Freitext-Kaskade ist getilgt, keine Needles mehr in den
+    # drei verknuepften Aggregat-Tabellen.
+    residual = {h.table for h in undeclared_hits(g.facility.id)}
+    for table in ("core_case", "core_episode", "core_workitem"):
+        assert table not in residual, (
+            f"PII-Residue in {table} nach Retention-K-Anonymisierung:\n"
+            f"{_fmt([h for h in undeclared_hits(g.facility.id) if h.table == table])}"
+        )
