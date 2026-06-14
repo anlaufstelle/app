@@ -55,6 +55,8 @@ Wenn wir den Token-Link-Flow (Invite, Passwort-Reset, 2FA-Backup-Download) jemal
 
 **Status:** Design-Entscheidung, Workaround akzeptiert. Trigger-Liste für Re-Evaluation am Ende.
 
+> **Als ADR dokumentiert:** Die Architektur-Entscheidung ist als [ADR-025](adr/025-csp-unsafe-eval-admin.md) festgehalten (inkl. der `text/html`-Verschärfung aus #1084). Dieser Abschnitt bleibt als ausführliche Trade-off- und Threat-Model-Notiz.
+
 ### Beobachtung
 
 Die globale CSP setzt `script-src 'self'` (kein `'unsafe-eval'`, kein `'unsafe-inline'`) — alle App-Templates nutzen den `@alpinejs/csp`-Build mit registrierten `Alpine.data()`-Komponenten. Eine Ausnahme bildet die Django-Admin-UI auf `/admin-mgmt/`: das gevendor'te [`django-unfold`-Theme](https://github.com/unfoldadmin/django-unfold) (Version 0.91.0) liefert >20 Templates mit Inline-Function-Calls (`x-data="searchCommand()"`, `x-data="theme(...)"`, `x-data="searchDropdown()"`, `x-data="searchForm()"`) **und** Inline-Object-Expressions (`x-data="{rowOpen: false}"` u.ä.). Beide Patterns scheitern unter dem strikten `@alpinejs/csp`-Build, weil Alpine sie nur mit dynamischer Code-Auswertung parsen kann (klassischer Alpine-Build), die unter `script-src 'self'` ohne `'unsafe-eval'` blockiert ist.
