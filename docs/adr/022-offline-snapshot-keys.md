@@ -3,9 +3,11 @@
 - **Status:** Proposed
 - **Date:** 2026-05-28
 - **Deciders:** Tobias Nix
-- **Refs:** #572, #574, #786
+- **Refs:** #572, #574, #786, #1100, #1109, #1110, #1111
 
 > **Hinweis Status:** Das Feature ist als Code-Entwurf vorhanden, aber **nicht in Pilotbetrieb**. Vor einer breiten Freigabe sind eine Security-Review und ein Pen-Test gegen das Tablet-Diebstahl-Szenario erforderlich; die Annahmen zu Bedrohungs-Modell, Schluessel-Lebenszyklus und Sync-Semantik sind dann zu finalisieren. Diese ADR dokumentiert den aktuellen Stand und ist **vor einem breiten Production-Rollout zu re-evaluieren**.
+>
+> **Remediation-Stand 2026-06-14 (#1100):** Die Security-Review ([Befund-Doc](../archive/audits/2026-06-14-offline-snapshot-security-review.md)) ist erfolgt; die drei als `Accepted`-Blocker eingestuften Befunde sind behoben und unit- + E2E-verifiziert: Sync-Konflikt-Token (F-07, #1109), Client-TTL-Durchsetzung + Server-Revalidierung (F-04/F-10, #1110) und Offline-Cache-Entzug bei Rechteentzug/Deaktivierung (F-03, #1110); zusaetzlich Idempotenz-Schutz beim Queue-Replay (F-09). Offen vor einem `Accepted`: Verdrahtung + E2E-Erprobung des Offline-Edit-Pfads (F-08, #1111) sowie die explizite Dokumentation der akzeptierten Restrisiken (Passwortstaerke als Single-Point F-02, kein Offline-spezifisches Auto-Lock F-01, Schema-Version-Purge F-05). Die Statusentscheidung (`Accepted`) trifft der Maintainer.
 
 ## Context
 
