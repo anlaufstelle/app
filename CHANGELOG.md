@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Übersetzungs-Gate verschärft** (#1078) — `scripts/check_translation_versions.py` verlangt Übersetzungs-Sync mit jedem Minor-Release (`MAX_MINOR_BEHIND` 2 → 0); Teil der neuen EN-Sync-Policy „hartes Release-Gate".
 - **Compose-Image-Pins vereinheitlicht** (#1082) — `docker-compose.staging.yml` und `docker-compose.prod.yml` ziehen den App-Image-Tag konsistent über `${APP_VERSION:-v0.14.0}` (vorher war staging hart auf das vier Minors alte `v0.10.2` gepinnt und der prod-Fallback ebenfalls veraltet). Der Release-Doc-Sync hält den Fallback künftig aktuell.
 - **Release-Testprofile auf automatisiert-first umgestellt** (#1081) — `docs/testing/release-test-profiles.md` definiert nun ein verbindliches automatisiertes Gate (`make ci` + volle E2E + AuthZ-Matrix #1055 + `make release-gates`) als primären Release-Nachweis; die manuellen Profile (RC-Smoke/Security-RC) sind auf den nicht-automatisierten Rest (visueller Augenschein, Pen-/Spot-Checks, KEEP-MANUAL) reduziert und in der Release-Checkliste operativ verdrahtet. Schließt die seit v0.13.x offene Lücke „Profile laut Policy fällig, aber nicht gelaufen".
+- **Threat-Model auf HMAC-SHA256-Backup-Integrität nachgezogen** (#1099) — `docs/threat-model.md` beschrieb Backups noch als nur „AES-256-CBC verschlüsselt"; Asset-Tabelle und Trust-Boundary TB5 spiegeln jetzt den real ausgelieferten Encrypt-then-MAC-Schutz (detached HMAC-SHA256-Sidecar, der vor der Entschlüsselung geprüft wird).
 
 ## [0.14.0] - 2026-06-11
 
