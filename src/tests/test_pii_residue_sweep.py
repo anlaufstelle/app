@@ -339,9 +339,11 @@ def _fmt(hits: list[Hit]) -> str:
 # sodass ein spaeterer Fix den Test als XPASS reisst (Erinnerung, das xfail
 # zu entfernen). Pro Eintrag ein eigenes Folge-Issue:
 #
-#   H2 (core_event): anonymize_client() leert die Live-Event-data_json/
-#       search_text NICHT (nur der Soft-Delete-Pfad tut das). Die Live-Zeile
-#       bleibt mit Klartext-Needle stehen.
+#   H2 (core_event): GEFIXT (#1089). ``anonymize_client`` redigiert jetzt auch
+#       die Live-``Event``-Zeilen (data_json -> {} + search_text neu berechnet),
+#       nicht nur EventHistory. Bereits soft-deletete Events werden NICHT
+#       angefasst — deren search_text-Leck im Retention-Pfad ist ein eigener
+#       Befund (H5, #1092, siehe RETENTION_XFAIL).
 #   H3-1 (core_activity): _redact_activities() redigiert nur Activities mit
 #       Target Client/Event. ``create_workitem`` schreibt aber eine Activity
 #       mit Target=WorkItem ("Aufgabe: <titel>"), deren Titel Klienten-PII
@@ -351,7 +353,6 @@ def _fmt(hits: list[Hit]) -> str:
 #       Klienten-Loeschung ausloest (``request_client_deletion``), hat aber
 #       target_type="Client" — sein Freitext-``reason`` bleibt stehen.
 ANONYMIZE_XFAIL = {
-    "core_event": "H2: Event.data_json/search_text-Residue (Fix #1089)",
     "core_activity": "H3-1: WorkItem-Target-Activity-Summary unredigiert (Fix #1090)",
     "core_deletionrequest": "H3-2: Client-Target-DeletionRequest.reason unredigiert (Fix #1091)",
 }

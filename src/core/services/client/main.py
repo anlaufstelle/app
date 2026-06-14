@@ -69,6 +69,32 @@ def _delete_event_attachments_for_client(client) -> list:
     return event_ids
 
 
+def _redact_live_events(client) -> None:
+    """Leere ``data_json`` + ``search_text`` der noch nicht soft-deleteten Events.
+
+    Refs #1089: ``anonymize_client`` redigierte bisher nur ``EventHistory``, ließ
+    aber die Live-``Event``-Zeilen mit Klartext stehen. Beim Trash-Expiry-Pfad
+    (``anonymize_eligible_soft_deleted_clients``) sind die Events evtl. noch nicht
+    soft-deletet — ohne diese Redaktion bleibt Klartext-Residue stehen. Die Events
+    bleiben als Statistik-Aggregat erhalten (``client_id``/``occurred_at``/
+    ``document_type``), nur der Freitext-Inhalt geht raus.
+
+    Nur Live-Events (``is_deleted=False``): bereits soft-deletete Events haben ihr
+    ``data_json`` schon im Soft-Delete-Pfad geleert; deren ``search_text``-Leck im
+    Retention-Soft-Delete ist ein eigener Befund (#1092) und wird hier bewusst
+    nicht angefasst.
+
+    ``search_text`` MUSS in ``update_fields`` stehen — sonst persistiert Django den
+    vom ``pre_save``-Signal (``_refresh_event_search_text``) berechneten Leerwert
+    nicht (genau die Falle, die #1092 im Retention-Pfad auslöst).
+    """
+    from core.models.event import Event
+
+    for event in Event.objects.filter(client=client, is_deleted=False).iterator():
+        event.data_json = {}
+        event.save(update_fields=["data_json", "search_text", "updated_at"])
+
+
 def _redact_event_history(event_ids: list) -> None:
     """Anonymisiere EventHistory-Eintraege per Trigger-Bypass.
 
@@ -144,6 +170,9 @@ def anonymize_client(client, user=None):
     - ``Case.title`` / ``Case.description`` aller verknüpften Fälle
     - ``Episode.title`` / ``Episode.description`` aller Episoden dieser Fälle
     - alle Workitems (auch DONE/DISMISSED): title, description
+    - ``Event.data_json``/``search_text`` aller noch nicht soft-deleteten
+      Events des Klienten (Refs #1089) — die Live-Zeile bliebe sonst mit
+      Klartext stehen, etwa im Trash-Expiry-Pfad vor dem Soft-Delete.
     - ``EventHistory.data_before``/``data_after`` für alle Events des
       Klienten — append-only-Trigger (Migration 0012) wird transaktional
       umgangen, sonst blockt das ``UPDATE``.
@@ -162,6 +191,7 @@ def anonymize_client(client, user=None):
     _redact_cases_and_episodes(client)
     _redact_workitems(client)
     event_ids = _delete_event_attachments_for_client(client)
+    _redact_live_events(client)
     _redact_event_history(event_ids)
     _redact_deletion_requests(event_ids)
     _redact_activities(client, event_ids)

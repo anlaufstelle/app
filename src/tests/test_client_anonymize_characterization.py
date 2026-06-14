@@ -177,7 +177,7 @@ class TestClientAnonymizeCharacterization:
 class TestAnonymizeClientHelpers:
     """Refs #905: isolierte Tests für die internen ``_redact_*``-Helper.
 
-    Die Public API ``anonymize_client`` ruft die sechs Helper sequentiell;
+    Die Public API ``anonymize_client`` ruft die sieben Helper sequentiell;
     diese Tests prüfen jeden Schritt einzeln gegen seine Verantwortung,
     damit zukünftige Aenderungen einen klaren Bruchpunkt haben.
     """
@@ -328,6 +328,57 @@ class TestAnonymizeClientHelpers:
         # Metadaten bleiben unangetastet — Vier-Augen-Audit-Trail.
         assert dr.requested_by_id == staff_user.pk
         assert dr.status == DeletionRequest.Status.PENDING
+
+    def test_redact_live_events_clears_data_json_and_search_text(
+        self, facility, staff_user, doc_type_contact, client_identified
+    ):
+        """Refs #1089: Live-Events des Klienten werden PII-frei, bleiben aber
+        als Statistik-Aggregat erhalten (data_json -> {}, search_text -> "")."""
+        from core.services.client import _redact_live_events
+
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"notiz": "Klartext-Krise"},
+            created_by=staff_user,
+        )
+        # search_text deterministisch befuellen, ohne Slug-Mechanik: ``.update()``
+        # umgeht das pre_save-Signal, der Klartext steht roh in der Spalte.
+        Event.objects.filter(pk=event.pk).update(search_text="Klartext-Krise")
+
+        _redact_live_events(client_identified)
+
+        event.refresh_from_db()
+        assert event.data_json == {}
+        assert event.search_text == ""
+        # Event bleibt als Aggregat erhalten — nur die PII ist raus.
+        assert event.is_deleted is False
+
+    def test_redact_live_events_skips_soft_deleted(self, facility, staff_user, doc_type_contact, client_identified):
+        """Bereits soft-deletete Events bleiben unangetastet (Refs #1089).
+
+        Ihr ``search_text``-Leck im Retention-Soft-Delete ist ein eigener
+        Befund (H5, #1092) — der Live-Event-Fix darf ihn nicht maskieren.
+        """
+        from core.services.client import _redact_live_events
+
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={},
+            is_deleted=True,
+            created_by=staff_user,
+        )
+        Event.objects.filter(pk=event.pk).update(search_text="Restspur-Klartext")
+
+        _redact_live_events(client_identified)
+
+        event.refresh_from_db()
+        assert event.search_text == "Restspur-Klartext"
 
     def test_redact_deletion_requests_is_no_op_without_event_ids(self):
         from core.services.client import _redact_deletion_requests
