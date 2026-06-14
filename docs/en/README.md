@@ -14,6 +14,7 @@
 | [user-guide.md](user-guide.md) | User handbook: work center, timeline, persons, events, search, export, statistics, roles | End users |
 | [domain-concept-summary.md](domain-concept-summary.md) | Summary of the domain concept (not a 1:1 translation) | Stakeholders, Developers |
 | [glossary.md](glossary.md) | Bilingual glossary of domain terms (DE↔EN) | Everyone |
+| [data-protection.md](data-protection.md) | GDPR guide: article/right → ADR/template/code/FAQ (companion to German [datenschutz.md](../datenschutz.md)) | Everyone (Auditor/Dev/Operator) |
 | [../../README.en.md](../../README.en.md) | Project README | Everyone |
 | [../../CONTRIBUTING.en.md](../../CONTRIBUTING.en.md) | Contributing guidelines | Developers |
 
@@ -60,5 +61,5 @@ Templates included:
 
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.14.0 -->
-<!-- translation-date: 2026-06-12 -->
-<!-- source-hash: da1fa91 -->
+<!-- translation-date: 2026-06-14 -->
+<!-- source-hash: 02a2028 -->

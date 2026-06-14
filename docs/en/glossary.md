@@ -42,7 +42,8 @@
 | Inbox | Inbox | Personal overview of all open notes and due tasks for the logged-in staff member. Part of the operations layer. |
 | IndexedDB | IndexedDB | Browser-native database used by the offline store. Holds AES-GCM-encrypted events, drafts, and cached clients. |
 | JSONB | JSONB | PostgreSQL data type for binary JSON. Used in Anlaufstelle to store event field values together with the event record. Indexable (GIN index), queryable, performant. |
-| K-Anonymisierung | K-anonymization | Retention strategy that aggregates/pseudonymizes records instead of hard-deleting them, so statistical reports remain possible after the retention window expires. |
+| K-Anonymisierung | K-anonymization | Used two ways: (a) bucket suppression of small aggregates in the external report; (b) the retention path (`retention_use_k_anonymization`) that generalizes the client record instead of hard-deleting it, so statistics stay possible after the retention window. See [ADR-023](../adr/023-k-anonymization-statistik.md). |
+| k-Anon-Retention | k-anon retention | The retention deletion path that k-anonymizes the client record instead of hard-deleting it. Since #1094 the retention bridge also redacts case/episode/work-item free text in this path (same helpers as the hard path); the `k_anonymize_client` primitive itself stays client-only. |
 | Kontaktstufe | Contact level | Three-tier model describing a person's identification status in the system: anonymous (count only), identified (pseudonym), qualified (counseling process). Determines access rights, permitted document types, and retention periods. |
 | Legal Hold | Legal hold | Flag on individual records that excludes them from automated retention deletion. |
 | Materialized View | Materialized view | Pre-aggregated PostgreSQL view (`core_statistics_event_flat`) that backs the statistics dashboard so reports do not re-scan the entire event table on every request (since v0.10.0, #544). Refreshed periodically via management command, ideally `CONCURRENTLY` (requires the unique index that the migration provides). |
@@ -52,8 +53,11 @@
 | Organisation | Organization | The carrier or parent entity — the top level of the hierarchy. In v1.0 exactly one organization exists, created automatically and hidden in the UI. Serves as a prepared scope for future multi-carrier support. |
 | Outcome | Outcome | The result of working with a person. Not the activity ("347 contacts") but the change ("stable housing situation achieved"). |
 | OutcomeGoal | Outcome goal | What should be achieved through the work with a person. Assigned to a case. |
+| Personenbezogene Daten | Personal data (PII) | Information that identifies a natural person directly (name, address, client ID) or indirectly via *quasi-identifiers* (age, region, subject in combination) — Art. 4(1) GDPR. Health/social data are *special categories* (Art. 9). Highest leak risk: free text. |
 | Pseudonym | Pseudonym | A name assigned by the team to identify a person in the system. Primary identifier in Anlaufstelle. The mapping to the real name exists only in staff knowledge, not in the system. |
+| Pseudonymisierung | Pseudonymization | Replaces direct identifiers with a pseudonym; the individual record persists and stays re-identifiable with additional knowledge. Weaker than anonymization (see K-anonymization). |
 | PWA | Progressive Web App | Installable web app for smartphones and desktops. Provides home-screen install, an app-like shell, and offline behavior coordinated by the Service Worker. Used in Anlaufstelle for the streetwork quick-capture flow. |
+| Quasi-Identifikator | Quasi-identifier | An attribute that does not identify on its own but does in combination with others. The k-anonymization equivalence class is `(facility, age_cluster, contact_stage)` ([ADR-023](../adr/023-k-anonymization-statistik.md)). |
 | Quick Template | Quick template | Pre-filled event template maintained by admins. Applied by clicking a button on "New Contact"; fills empty fields only; self-heals against deactivated select options. |
 | Retention Proposal | Retention proposal | Individual deletion/anonymization suggestion surfaced on the retention dashboard. Can be approved, deferred, or rejected in bulk. |
 | Role | Role | Determines which actions a user may perform. Five roles (Refs #867, [ADR-018](../adr/018-rollenmodell-superadmin.md)): Super-Admin (installation-wide system control, no facility), Application manager (`facility_admin`, full access within one facility), Lead (professional leadership), Staff (case worker), Assistant (support). |
@@ -61,6 +65,8 @@
 | Scope | Scope | Visibility boundary. Determines which data is accessible to a user — based on facility, role, and contact level. |
 | Sensitivität | Sensitivity | Classification of a document type or field regarding its protection level. Controls which roles may access field values. Configurable per document type and per field (`FieldTemplate.sensitivity`). Independent of field encryption (`is_encrypted`). |
 | Service Worker | Service worker | Browser script coordinating offline caching, queue replay, and PWA behavior. See `src/static/js/sw.js`. |
+| Soft-Delete-Strategie | Soft-delete strategy | One of the four retention strategies used instead of hard delete: `anonymous`, `identified`, `qualified`, `document_type` ([ADR-021](../adr/021-retention-modell.md)). |
+| Speicherbegrenzung | Storage limitation | GDPR Art. 5(1)(e) principle: do not keep personal data longer than necessary for the purpose. Implemented via the retention model ([ADR-021](../adr/021-retention-modell.md)). |
 | TimeFilter | Time filter | Technical term for a named time filter. Belongs to a facility and defines a time window (start time, end time) with a label. |
 | Token-Einladung | Token invite | Token-based invitation flow that replaces the former plaintext initial password. Admin creates a user, the user receives an email with a one-time link (valid 7 days) and sets their own password. |
 | TOTP / 2FA | TOTP / 2FA | Time-based one-time passwords via `django-otp`. Enforceable per user (`User.mfa_required`) or facility-wide (`Settings.mfa_enforced_facility_wide`). Codes valid for 30 s. |
@@ -70,5 +76,5 @@
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md (chapter 14) -->
 <!-- translation-version: v0.14.0 -->
-<!-- translation-date: 2026-06-12 -->
+<!-- translation-date: 2026-06-14 -->
 <!-- source-hash: da1fa91 -->
