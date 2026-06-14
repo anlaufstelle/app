@@ -29,6 +29,8 @@ Das Rollenmodell wird auf **5 Rollen** erweitert. Eine Rolle (`super_admin`) wir
 
 UI-Label: `facility_admin` heißt im UI „Anwendungsbetreuung", `super_admin` heißt „Systemadministration". Der DB-Wert `admin` wird per Migration nach `facility_admin` umbenannt.
 
+> **Abgrenzung App-Rollen ↔ DB-Rollen:** Diese fünf Rollen sind **Anwendungsrollen** (wer im UI was darf) und liegen auf einer anderen Ebene als die drei **Postgres-DB-Rollen** (Bootstrap / App / Admin) aus [ADR-020](020-three-role-postgres-model.md), die die Datenbank-Verbindung absichern. Auch eine `super_admin`-Sitzung verbindet über die `NOSUPERUSER NOBYPASSRLS`-App-DB-Rolle — die facility-übergreifende Sicht entsteht **nicht** durch ein DB-Rollen-Privileg, sondern durch die Session-Variable `app.is_super_admin` (Punkt 2 unten).
+
 ### Architektur-Entscheidungen
 
 **1. Organization als Branding-Hülse (Variante b1).** Die `Organization` bleibt als Modell bestehen, dient aber **nur** dem Träger-Branding (Logo, Trägername in Berichten). Es gibt **keinen** Org-Admin und **keinen** Cross-Facility-Effekt durch sie. Die einzige facility-übergreifende Rolle ist `super_admin`. Damit bleibt die Mandanten-Trennung scharf, ohne ein zusätzliches Hierarchiekonzept aufzubauen.
@@ -80,6 +82,7 @@ Die [`FacilityScopeMiddleware`](../../src/core/middleware/facility_scope.py) set
 - Issue #867 — Plan-Issue: 5-Rollen-Modell + super_admin
 - Issue #866 — NULL-Facility-AuditLogs im UI sichtbar machen
 - [ADR-005](005-facility-scoping-and-rls.md) — Facility-Scoping + RLS, mit Update 2026-05-10 zur OR-Branch-Schicht
+- [ADR-020](020-three-role-postgres-model.md) — Postgres-DB-Rollen (Bootstrap/App/Admin); die DB-Ebene zu den hier definierten App-Rollen
 - [ADR-007](007-auditlog-append-only.md) — AuditLog Append-Only, mit Update 2026-05-10 zu `SYSTEM_VIEW`
 - [ADR-013](013-dsgvo-art16-no-selfservice.md) — DSGVO Art. 16 ohne App-Self-Service (Berichtigungen über `facility_admin`)
 - [ADR-015](015-mfa-totp.md) — MFA-Pflicht-Pfad für `super_admin`
