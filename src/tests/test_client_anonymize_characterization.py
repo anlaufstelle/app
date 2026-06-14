@@ -329,6 +329,31 @@ class TestAnonymizeClientHelpers:
         assert dr.requested_by_id == staff_user.pk
         assert dr.status == DeletionRequest.Status.PENDING
 
+    def test_redact_client_deletion_request_redacts_client_target_reason(self, facility, staff_user, client_identified):
+        """Refs #1091: Der Client-Target-Loeschantrag wird redigiert.
+
+        Der Vier-Augen-Antrag aus ``request_client_deletion`` hat
+        ``target_type="Client"`` und wird vom Event-only-Helper
+        ``_redact_deletion_requests`` nicht erfasst — sein Freitext
+        ``reason`` bliebe sonst als PII-Residue stehen.
+        """
+        from core.services.client import _redact_client_deletion_request
+
+        dr = DeletionRequest.objects.create(
+            facility=facility,
+            target_type=DeletionRequest.TargetType.CLIENT,
+            target_id=client_identified.pk,
+            reason="Klartext-Begruendung mit Klarnamen",
+            requested_by=staff_user,
+        )
+
+        _redact_client_deletion_request(client_identified)
+        dr.refresh_from_db()
+        assert dr.reason == "[Anonymisiert]"
+        # Antrags-Meta bleibt fuer den Vier-Augen-Audit-Trail erhalten.
+        assert dr.requested_by_id == staff_user.pk
+        assert dr.status == DeletionRequest.Status.PENDING
+
     def test_redact_live_events_clears_data_json_and_search_text(
         self, facility, staff_user, doc_type_contact, client_identified
     ):

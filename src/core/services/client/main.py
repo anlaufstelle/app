@@ -131,6 +131,21 @@ def _redact_deletion_requests(event_ids: list) -> None:
     ).update(reason="[Anonymisiert]")
 
 
+def _redact_client_deletion_request(client) -> None:
+    """Redigiere reason des Client-Target-Loeschantrags dieses Klienten (Refs #1091).
+
+    Der Vier-Augen-Antrag aus ``request_client_deletion`` hat
+    ``target_type="Client"`` und wird vom Event-only-Helper
+    ``_redact_deletion_requests`` nicht erfasst. Antrags-Meta
+    (status/requested_by/reviewed_by/timestamps) bleibt fuer den
+    Audit-Trail erhalten — nur der Freitext ``reason`` wird redigiert.
+    """
+    DeletionRequest.objects.filter(
+        target_type=DeletionRequest.TargetType.CLIENT,
+        target_id=client.pk,
+    ).update(reason="[Anonymisiert]")
+
+
 def _redact_activities(client, event_ids: list) -> None:
     """Redigiere ``Activity.summary`` fuer Client-, Event- und WorkItem-Targets.
 
@@ -191,9 +206,9 @@ def anonymize_client(client, user=None):
       umgangen, sonst blockt das ``UPDATE``.
     - ``EventAttachment``: Disk-Files + DB-Zeilen via
       :func:`core.services.file_vault.delete_event_attachments`.
-    - ``DeletionRequest.reason`` für Event-Targets dieses Klienten —
-      Antrags-Meta (status/requested_by/...) bleibt für den 4-Augen-
-      Audit-Trail erhalten.
+    - ``DeletionRequest.reason`` für Event-Targets sowie für den
+      Client-Target-Löschantrag dieses Klienten (Refs #1091) — Antrags-Meta
+      (status/requested_by/...) bleibt für den 4-Augen-Audit-Trail erhalten.
     - ``Activity.summary`` für Client-, Event- und WorkItem-Targets — der
       Zeitstrom trägt sonst das Klartext-Pseudonym weiter (Refs #1067), die
       WorkItem-Target-Activity zudem den Aufgaben-Titel (Refs #1090).
@@ -208,6 +223,7 @@ def anonymize_client(client, user=None):
     _redact_live_events(client)
     _redact_event_history(event_ids)
     _redact_deletion_requests(event_ids)
+    _redact_client_deletion_request(client)
     _redact_activities(client, event_ids)
 
     logger.info(

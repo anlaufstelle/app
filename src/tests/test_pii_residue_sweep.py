@@ -344,13 +344,7 @@ def _fmt(hits: list[Hit]) -> str:
 #       nicht nur EventHistory. Bereits soft-deletete Events werden NICHT
 #       angefasst — deren search_text-Leck im Retention-Pfad ist ein eigener
 #       Befund (H5, #1092, siehe RETENTION_XFAIL).
-#   H3-2 (core_deletionrequest): _redact_deletion_requests() redigiert nur
-#       Antraege mit target_type="Event". Der Vier-Augen-Antrag, der die
-#       Klienten-Loeschung ausloest (``request_client_deletion``), hat aber
-#       target_type="Client" — sein Freitext-``reason`` bleibt stehen.
-ANONYMIZE_XFAIL = {
-    "core_deletionrequest": "H3-2: Client-Target-DeletionRequest.reason unredigiert (Fix #1091)",
-}
+ANONYMIZE_XFAIL = {}
 ANONYMIZE_TABLES = [
     pytest.param(t, marks=pytest.mark.xfail(strict=True, reason=ANONYMIZE_XFAIL[t])) if t in ANONYMIZE_XFAIL else t
     for t in SCOPED_TABLES
@@ -464,20 +458,13 @@ def test_no_residue_after_trash_expiry(maximal_pii_graph, table):
 # EMPIRISCHES RESIDUE-PROFIL (am echten DB-Lauf beobachtet, nicht aus
 # ANONYMIZE_TABLES kopiert — bewusst abweichend):
 #
-#   core_deletionrequest -> RESIDUE (H3-2, wie im anonymize-Pfad). Der
-#       Vier-Augen-Antrag, der die Client-Loeschung ausloeste, hat
-#       ``target_type="Client"``; ``_redact_deletion_requests`` redigiert nur
-#       ``target_type="Event"`` -> sein ``reason`` bleibt stehen.
-#
 #   core_activity -> SAUBER (H3-1 reproduziert hier NICHT). ``enforce_activities``
 #       mit ``retention_activities_days=0`` hard-deletet ALLE Activities (auch
 #       die WorkItem-Target-Activity, die im reinen anonymize-Pfad als H3-1
 #       stehenbliebe). Daher KEIN xfail fuer core_activity — sonst XPASS-strict.
 #
 # Eigene xfail-Liste (NICHT ANONYMIZE_TABLES): nur die empirisch roten Tabellen.
-RETENTION_XFAIL = {
-    "core_deletionrequest": "H3-2: Client-Target-DeletionRequest.reason unredigiert (Fix #1091)",
-}
+RETENTION_XFAIL = {}
 RETENTION_TABLES = [
     pytest.param(t, marks=pytest.mark.xfail(strict=True, reason=RETENTION_XFAIL[t])) if t in RETENTION_XFAIL else t
     for t in SCOPED_TABLES
