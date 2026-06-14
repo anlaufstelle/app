@@ -197,6 +197,56 @@ class TestEventUpdateConflict:
         # No conflict → regular success redirect to event_detail
         assert response.status_code == 302
 
+    def test_offline_bundle_token_triggers_conflict_on_stale_replay(self, client, staff_user, sample_event):
+        """F-07 (Refs #1109): End-to-End — der ``updated_at``-Token, den das
+        Offline-Bundle pro Event serialisiert, stellt beim Replay den
+        serverseitigen Konflikt-Check scharf.
+
+        Ablauf: Bundle wird gebaut (trägt den frischen Token) → der Server-
+        Datensatz wird zwischenzeitlich verändert (Token veraltet) → der
+        Offline-Replay schickt den *alten* Bundle-Token als
+        ``expected_updated_at`` → Server muss 409 statt 302 liefern. Genau
+        dieser Pfad war tot, solange das Bundle keinen Token mitführte.
+        """
+        from core.services.system import build_client_offline_bundle
+
+        # 1) Token wie der Offline-Client ihn aus dem Bundle bekäme.
+        bundle = build_client_offline_bundle(staff_user, sample_event.facility, sample_event.client)
+        token = next(e for e in bundle["events"] if e["pk"] == str(sample_event.pk))["updated_at"]
+        assert token, "Bundle muss einen Optimistic-Lock-Token liefern (F-07)"
+
+        # 2) Server-seitige Konkurrenz-Änderung → Token veraltet.
+        sample_event.data_json = {"dauer": 7, "notiz": "server-seitig geaendert"}
+        sample_event.save()
+
+        # 3) Offline-Replay mit dem (jetzt veralteten) Bundle-Token.
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}),
+            {"dauer": "99", "notiz": "offline-edit", "expected_updated_at": token},
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 409, "Offline-Replay mit Bundle-Token muss Konflikt erkennen"
+        assert response.json()["error"] == "conflict"
+
+    def test_offline_bundle_token_allows_clean_replay(self, client, staff_user, sample_event):
+        """Gegenprobe zu F-07: Ist der Bundle-Token noch aktuell (keine
+        Server-Änderung zwischendurch), geht der Replay normal durch (302).
+        Der Token darf den legitimen Sync nicht fälschlich blockieren.
+        """
+        from core.services.system import build_client_offline_bundle
+
+        bundle = build_client_offline_bundle(staff_user, sample_event.facility, sample_event.client)
+        token = next(e for e in bundle["events"] if e["pk"] == str(sample_event.pk))["updated_at"]
+
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}),
+            {"dauer": "99", "notiz": "offline-edit", "expected_updated_at": token},
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 302
+
 
 @pytest.mark.django_db
 class TestOfflineConflictShellViews:

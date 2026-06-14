@@ -182,6 +182,31 @@ class TestBuildClientOfflineBundleService:
         dt_pks = {dt["pk"] for dt in bundle["document_types"]}
         assert str(doc_type_contact.pk) in dt_pks
 
+    def test_bundle_event_carries_updated_at_token(self, facility, client_identified, doc_type_contact, staff_user):
+        """F-07 (Refs #1109): Jedes serialisierte Event muss seinen
+        ``updated_at``-Optimistic-Lock-Token mitführen.
+
+        Ohne diesen Token kann der Offline-Replay keinen ``expected_updated_at``
+        an den Server schicken — der serverseitige Konflikt-Check (der bei
+        leerem Token aussteigt) feuert dann nie und ein offline entstandener
+        Edit überschreibt Server-Daten still (silent Last-Write-Wins).
+        """
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 5, "notiz": "ok"},
+            created_by=staff_user,
+        )
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        serialized = next(e for e in bundle["events"] if e["pk"] == str(event.pk))
+        assert "updated_at" in serialized
+        # Muss exakt der ISO-Form von ``event.updated_at`` entsprechen, damit
+        # der Server-Vergleich (``datetime.fromisoformat``) ohne Offset-Drift
+        # greift.
+        assert serialized["updated_at"] == event.updated_at.isoformat()
+
     def test_bundle_normalizes_stage_b_files_marker(self, facility, client_identified, doc_type_contact, staff_user):
         """Refs #786 (C-18): Stage-B-Multifile (`__files__`) muss zu einem
         sicheren Marker minimiert werden — keine internen Attachment-IDs,

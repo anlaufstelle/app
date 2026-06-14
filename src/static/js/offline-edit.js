@@ -79,6 +79,28 @@
     }
 
     /*
+     * Read the optimistic-lock token (`updated_at`) of the cached event.
+     *
+     * Refs #1109 (F-07): Das Offline-Bundle serialisiert pro Event jetzt
+     * ein `updated_at` (`offline.py:_serialize_event`). Liegt im IndexedDB
+     * noch der CLEAN-Record aus dem Bundle, trägt dessen Envelope dieses
+     * `updated_at`. Wir lesen es hier, bevor `markEventModified` den Record
+     * mit dem Edit-Envelope überschreibt — sonst ginge der Token verloren und
+     * der Replay würde mit leerem `expected_updated_at` rausgehen (silent LWW).
+     */
+    async function _cachedUpdatedAt(eventPk) {
+        try {
+            const cached = await _store().getOfflineEvent(String(eventPk));
+            if (!cached) return "";
+            // CLEAN-Bundle-Records tragen `updated_at` direkt im Envelope;
+            // bereits modifizierte Records tragen `expectedUpdatedAt`.
+            return cached.updated_at || cached.expectedUpdatedAt || "";
+        } catch (_e) {
+            return "";
+        }
+    }
+
+    /*
      * Persist a modified event in IndexedDB.
      *
      * `formData` is the flat object of slug → value that the edit form
@@ -89,6 +111,13 @@
      */
     async function markEventModified(eventPk, formData, options) {
         const opts = options || {};
+        // Refs #1109 (F-07): Fehlt der Token explizit, aus dem gecachten
+        // Bundle-Event nachziehen, damit der Replay den Server-Konflikt-Check
+        // scharf stellt statt bedingungslos zu überschreiben.
+        let token = opts.expectedUpdatedAt || "";
+        if (!token) {
+            token = await _cachedUpdatedAt(eventPk);
+        }
         const record = {
             pk: String(eventPk),
             clientPk: opts.clientPk || "",
@@ -96,7 +125,7 @@
             localStatus: opts.localStatus || "modified",
             data: {
                 formData: formData,
-                expectedUpdatedAt: opts.expectedUpdatedAt || "",
+                expectedUpdatedAt: token,
                 // Snapshot a few metadata fields so the list/review UI can
                 // label the edit without cross-referencing the cache.
                 documentTypeName: opts.documentTypeName || "",
@@ -126,8 +155,15 @@
             if (value === null || value === undefined) continue;
             form.append(key, String(value));
         }
-        if (record.data && record.data.expectedUpdatedAt) {
-            form.set("expected_updated_at", record.data.expectedUpdatedAt);
+        // Refs #1109 (F-07): Token mitschicken, damit der Server-Konflikt-Check
+        // greift. Fehlt er am Record (z.B. ein vor diesem Fix angelegter Edit),
+        // einmalig aus dem gecachten Bundle-Event nachladen.
+        let token = (record.data && record.data.expectedUpdatedAt) || "";
+        if (!token) {
+            token = await _cachedUpdatedAt(record.pk);
+        }
+        if (token) {
+            form.set("expected_updated_at", token);
         }
 
         const headers = {

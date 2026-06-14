@@ -107,6 +107,12 @@ def _serialize_event(user, event) -> dict[str, Any]:
     return {
         "pk": str(event.pk),
         "occurred_at": event.occurred_at.isoformat(),
+        # Optimistic-Lock-Token (Refs #1109, F-07): Der Offline-Replay schickt
+        # diesen Wert als ``expected_updated_at`` zurück, damit der
+        # serverseitige Konflikt-Check (``check_version_conflict``) auch für
+        # offline entstandene Edits greift. Ohne ihn bliebe der Token leer und
+        # der Check würde übersprungen → stilles Last-Write-Wins.
+        "updated_at": event.updated_at.isoformat() if event.updated_at else None,
         "document_type_pk": str(event.document_type_id),
         "document_type_name": event.document_type.name,
         "created_by_display": (
