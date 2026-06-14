@@ -8,6 +8,10 @@ zwischen Event-Retention und der eigentlichen Anonymisierungs-Logik in
 Welcher Pfad gewaehlt wird, haengt am Facility-Setting
 ``retention_use_k_anonymization`` (Refs #780): Default ``False`` = Hard,
 ``True`` = K-Anon mit Schwelle aus ``k_anonymity_threshold``.
+
+Beide Pfade tilgen die Freitext-Kaskade auf Faelle/Episoden/Aufgaben: der
+Hard-Pfad inline in ``anonymize_client``, der K-Anon-Pfad hier im Bridge-Layer
+(Refs #1094) — die ``k_anonymize_client``-Primitive selbst bleibt client-only.
 """
 
 from django.db.models import Count, Q
@@ -15,6 +19,7 @@ from django.db.models import Count, Q
 # Refs #818 — Inline-Imports an Modulkopf gehoben.
 from core.models import AuditLog, Client, Settings
 from core.services.audit import audit_retention_decision
+from core.services.client import _redact_cases_and_episodes, _redact_workitems
 from core.services.compliance import k_anonymize_client
 
 
@@ -54,7 +59,15 @@ def anonymize_clients(facility, dry_run):
         category = "client_k_anonymized" if use_k_anon else "client_anonymized"
         for client in candidates.iterator():
             if use_k_anon:
+                # ``k_anonymize_client`` ist bewusst client-only (Vertrag der
+                # Primitive). Der Retention-Bridge-Layer ergaenzt die Freitext-
+                # Kaskade auf Faelle/Episoden/Aufgaben, damit der K-Anon-Modus
+                # dieselbe PII-Tilgung leistet wie der Hard-Pfad — sonst bliebe
+                # Klienten-PII in core_case/core_episode/core_workitem stehen
+                # (Refs #1094). Die Primitive bleibt unangetastet.
                 k_anonymize_client(client, k=k)
+                _redact_cases_and_episodes(client)
+                _redact_workitems(client)
             else:
                 client.anonymize()
         audit_retention_decision(
