@@ -102,11 +102,58 @@
     }
 
     async function purgeExpired(now) {
-        const cutoff = (now || Date.now()) - TTL_MS;
+        const ts = now || Date.now();
+        const cutoff = ts - TTL_MS;
         // Queue records with createdAt < cutoff
         await db.queue.where("createdAt").below(cutoff).delete();
         // Drafts with updatedAt < cutoff
         await db.drafts.where("updatedAt").below(cutoff).delete();
+        // F-04 (#1110): Klientel-/Case-/Event-Bundles tragen `expiresAt` im
+        // verschluesselten Envelope des `clients`-Records (kein Index). Jeden
+        // abgelaufenen Bundle samt seiner cases/events verwerfen — sonst
+        // ueberlebt veraltetes PII die 48h-TTL, solange der Key lebt.
+        await purgeExpiredBundles(ts);
+    }
+
+    /*
+     * F-04 (#1110): Entferne jeden Klientel-Bundle, dessen `expiresAt` in der
+     * Vergangenheit liegt. `expiresAt` steckt im verschluesselten
+     * clients-Envelope, daher muss jeder client-Record entschluesselt werden.
+     * Ein Decrypt-Fehler (Key rotiert/Salt gewechselt) ist selbst ein
+     * Invalidierungsgrund -> Auto-Discard. Bundles ohne `expiresAt`
+     * (Altdaten vor diesem Feld) bleiben unangetastet.
+     */
+    async function purgeExpiredBundles(now) {
+        const crypto = _crypto();
+        const ts = now || Date.now();
+        const rows = await db.clients.toArray();
+        for (const row of rows) {
+            let envelope;
+            try {
+                envelope = await crypto.decryptPayload(row.data);
+            } catch (_e) {
+                // Unentschlüsselbar -> der Schlüssel passt nicht mehr; samt
+                // cases/events verwerfen.
+                await removeOfflineClient(row.pk);
+                continue;
+            }
+            if (_isExpired(envelope.expiresAt, ts)) {
+                await removeOfflineClient(row.pk);
+            }
+        }
+    }
+
+    /*
+     * True, wenn `expiresAt` (ISO-8601-String vom Server) echt vor `now`
+     * (ms-Epoch) liegt. Fehlt/ungueltig der Wert, gilt der Bundle NICHT als
+     * abgelaufen (fail-open gegen versehentliches Loeschen frischer Daten;
+     * der Server-Re-Fetch und der TTL-Index der Queue fangen das ab).
+     */
+    function _isExpired(expiresAt, now) {
+        if (!expiresAt) return false;
+        const exp = Date.parse(expiresAt);
+        if (Number.isNaN(exp)) return false;
+        return exp < (now || Date.now());
     }
 
     async function count(table) {
@@ -177,6 +224,14 @@
             return null;
         }
 
+        // F-04/F-10 (#1110): Ein abgelaufener Bundle darf NICHT mehr gerendert
+        // werden (veraltetes/anonymisiertes PII). Beim Lesen hart verwerfen —
+        // samt cases/events — und so tun, als sei nichts gecacht.
+        if (_isExpired(envelope.expiresAt)) {
+            await removeOfflineClient(pk);
+            return null;
+        }
+
         const cases = await listDecrypted("cases", (r) => r.clientPk === pk);
         const events = await listDecrypted("events", (r) => r.clientPk === pk);
 
@@ -222,6 +277,87 @@
 
     async function countOfflineClients() {
         return db.clients.count();
+    }
+
+    /*
+     * F-10 (#1110): Beim naechsten Online-Kontakt jeden gecachten Klientel
+     * gegen den Server re-validieren. Der Bundle-Endpoint wendet alle
+     * Sichtbarkeits-Gates serverseitig an und liefert 404, sobald der Klient
+     * geloescht ist oder nicht mehr im Facility-Scope/der Rolle des Users
+     * liegt (`get_object_or_404(... facility=...)` in views/offline.py).
+     *
+     * Invalidierungs-Statuscodes (401/403/404/410) -> lokalen Eintrag samt
+     * cases/events purgen: der Klient darf offline nicht im Klartext
+     * fortbestehen. 200 -> frisches (ggf. anonymisiertes/leeres) Bundle
+     * zurueckschreiben, damit eine serverseitige Anonymisierung den lokalen
+     * Klartext ueberschreibt. Netz-/Serverfehler (offline, 5xx, sonstige)
+     * lassen den Cache UNANGETASTET — fail-open, sonst wuerde ein flapatender
+     * Server den Aussendienst-Cache leeren.
+     *
+     * Idempotent und ohne Seiteneffekt auf laufende Edits: ein Klient mit
+     * lokal modifizierten/konfligierenden Events wird NICHT re-fetcht
+     * (sonst wuerde der Re-Fetch unsynced Klartext ueberschreiben). Diese
+     * werden ueber den Queue-/Edit-Replay separat behandelt.
+     */
+    const INVALIDATION_STATUSES = [401, 403, 404, 410];
+
+    function _bundleUrl(clientPk) {
+        return "/api/v1/offline/bundle/client/" + encodeURIComponent(clientPk) + "/";
+    }
+
+    async function _hasUnsyncedEvents(pk) {
+        return (
+            (await db.events
+                .where("clientPk")
+                .equals(pk)
+                .filter((e) => e.localStatus && e.localStatus !== "clean")
+                .count()) > 0
+        );
+    }
+
+    async function revalidateCachedClient(pk) {
+        // Unsynced lokale Aenderungen nicht ueberschreiben/loeschen.
+        if (await _hasUnsyncedEvents(pk)) return "skipped";
+
+        let response;
+        try {
+            response = await fetch(_bundleUrl(pk), {
+                method: "GET",
+                credentials: "same-origin",
+                headers: { Accept: "application/json" },
+            });
+        } catch (_e) {
+            // Offline / Netzfehler -> Cache bewusst behalten.
+            return "error";
+        }
+
+        if (INVALIDATION_STATUSES.includes(response.status)) {
+            await removeOfflineClient(pk);
+            return "purged";
+        }
+        if (response.ok) {
+            try {
+                const bundle = await response.json();
+                await saveClientBundle(bundle);
+                return "refreshed";
+            } catch (_e) {
+                return "error";
+            }
+        }
+        // 5xx oder unerwartet -> nichts tun.
+        return "error";
+    }
+
+    async function revalidateCachedClients() {
+        const rows = await db.clients.toArray();
+        let purged = 0;
+        let refreshed = 0;
+        for (const row of rows) {
+            const result = await revalidateCachedClient(row.pk);
+            if (result === "purged") purged += 1;
+            else if (result === "refreshed") refreshed += 1;
+        }
+        return { purged: purged, refreshed: refreshed, total: rows.length };
     }
 
     /* ─── Stage 3 (#575) — Local-Status-Tracking on events ───────────────── */
@@ -323,6 +459,7 @@
         deleteRow: deleteRow,
         purgeAll: purgeAll,
         purgeExpired: purgeExpired,
+        purgeExpiredBundles: purgeExpiredBundles,
         count: count,
         saveClientBundle: saveClientBundle,
         getOfflineClient: getOfflineClient,
@@ -330,6 +467,9 @@
         removeOfflineClient: removeOfflineClient,
         isClientOffline: isClientOffline,
         countOfflineClients: countOfflineClients,
+        // F-10 (#1110) — Re-Validierung gegen den Server beim Online-Kontakt
+        revalidateCachedClient: revalidateCachedClient,
+        revalidateCachedClients: revalidateCachedClients,
         // Stage 3 (#575) — offline edit + conflict tracking
         saveOfflineEdit: saveOfflineEdit,
         getOfflineEvent: getOfflineEvent,
@@ -343,4 +483,32 @@
         TTL_MS: TTL_MS,
         MAX_OFFLINE_CLIENTS: MAX_OFFLINE_CLIENTS,
     };
+
+    /*
+     * F-04 + F-10 (#1110): Sobald die Verbindung zurueckkehrt, zuerst die
+     * abgelaufenen Bundles per TTL verwerfen (rein lokal, ohne Schluessel-
+     * Risiko) und anschliessend die verbliebenen gegen den Server
+     * re-validieren. Eigener Listener in dieser Datei — koexistiert mit den
+     * `online`-Listenern der Queue/Edit-Module. Fehler werden geschluckt,
+     * damit ein Re-Validierungs-Problem den uebrigen Online-Sync nicht stoert.
+     */
+    if (typeof window !== "undefined" && window.addEventListener) {
+        window.addEventListener("online", async () => {
+            try {
+                await purgeExpired(Date.now());
+                // Re-Validierung braucht den Session-Key (Refresh ruft
+                // saveClientBundle -> encrypt). Ohne Key ist die Session
+                // ohnehin idle-gewiped; dann uebernimmt der naechste Login
+                // (Clear-Site-Data / Auto-Discard) die Bereinigung.
+                const cs = window.crypto_session;
+                const hasKey = cs && cs.hasSessionKey ? cs.hasSessionKey() : false;
+                if (hasKey) {
+                    await revalidateCachedClients();
+                }
+            } catch (_e) {
+                // eslint-disable-next-line no-console
+                console.debug("[offline-store] online-revalidation skipped");
+            }
+        });
+    }
 })();

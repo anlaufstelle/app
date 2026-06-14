@@ -152,3 +152,51 @@ class TestSubmitWithStaleLease:
         # 302 = regulärer Erfolg (Redirect auf Detail). Der Lease-Ablauf
         # wird vom Server nicht als Ablehnungsgrund genutzt.
         assert response.status_code == 302
+
+
+@pytest.mark.django_db
+class TestBundleRefetchInvalidation:
+    """Server-Garantie für die client-seitige Re-Fetch-Validierung (F-10, Refs #1110).
+
+    Der Offline-Cache überdauert eine server-seitige Löschung/Anonymisierung
+    eines Klienten. Der client-seitige Re-Validierungspfad
+    (``offline-client.js:revalidateCachedClients``) re-fetcht beim nächsten
+    Online-Kontakt jeden gecachten Klienten und purged ihn lokal, wenn der
+    Server ihn mit 403/404/410 ablehnt. Diese Tests fixieren die
+    server-seitige Voraussetzung dafür: ein nicht mehr lieferbarer Klient
+    ergibt einen 4xx-Bundle-Response statt eines stillen 200 mit Altdaten.
+    """
+
+    def _url(self, client_pk):
+        return reverse("core:offline_bundle", kwargs={"pk": client_pk})
+
+    def test_deleted_client_bundle_returns_404(self, client, client_identified, staff_user):
+        """Ein gelöschter Klient liefert 404 — der Re-Fetch erkennt das als
+        Invalidierungssignal und verwirft den lokalen Cache-Eintrag."""
+        client.force_login(staff_user)
+        # Vorher liefert der Endpoint ein gültiges Bundle.
+        assert client.get(self._url(client_identified.pk)).status_code == 200
+
+        pk = client_identified.pk
+        client_identified.delete()
+
+        response = client.get(self._url(pk))
+        assert response.status_code == 404
+
+    def test_cross_facility_client_bundle_returns_404(self, client, client_identified, organization):
+        """Ein Klient außerhalb der Facility des (herabgestuften/verschobenen)
+        Users ist über ``get_object_or_404(... facility=...)`` nicht mehr
+        erreichbar → 404. Damit greift der Re-Fetch auch bei Scope-Verlust."""
+        from core.models import Facility, User
+
+        other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
+        outsider = User.objects.create_user(
+            username="outsider",
+            role=User.Role.STAFF,
+            facility=other_facility,
+            is_staff=True,
+        )
+        client.force_login(outsider)
+
+        response = client.get(self._url(client_identified.pk))
+        assert response.status_code == 404

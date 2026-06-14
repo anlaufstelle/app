@@ -57,6 +57,16 @@
                         this.available = false;
                         return;
                     }
+                    // F-04/F-10 (#1110): Defense-in-Depth — niemals ein
+                    // abgelaufenes Bundle rendern (veraltetes/anonymisiertes
+                    // PII). Der Store verwirft abgelaufene Bundles bereits beim
+                    // Lesen; diese zweite Pruefung greift, falls ueber einen
+                    // anderen Pfad doch ein Bundle mit `expiresAt` in der
+                    // Vergangenheit zurueckkommt.
+                    if (this.isExpired(cached.expiresAt)) {
+                        this.available = false;
+                        return;
+                    }
                     // Vorab-Formatierung fuer CSP-konforme Templates (Refs #693).
                     if (cached.events) {
                         cached.events = cached.events.map((ev) => {
@@ -91,6 +101,14 @@
                 if (!iso) return "";
                 const d = new Date(iso);
                 return d.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
+            },
+            isExpired(expiresAt) {
+                // True, wenn der vom Server gesetzte ISO-Zeitstempel echt in
+                // der Vergangenheit liegt. Fehlt/ungueltig -> nicht abgelaufen.
+                if (!expiresAt) return false;
+                const exp = Date.parse(expiresAt);
+                if (Number.isNaN(exp)) return false;
+                return exp < Date.now();
             },
             formatFieldValue(v) {
                 if (v == null) return "";
