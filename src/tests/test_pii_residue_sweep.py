@@ -344,16 +344,11 @@ def _fmt(hits: list[Hit]) -> str:
 #       nicht nur EventHistory. Bereits soft-deletete Events werden NICHT
 #       angefasst — deren search_text-Leck im Retention-Pfad ist ein eigener
 #       Befund (H5, #1092, siehe RETENTION_XFAIL).
-#   H3-1 (core_activity): _redact_activities() redigiert nur Activities mit
-#       Target Client/Event. ``create_workitem`` schreibt aber eine Activity
-#       mit Target=WorkItem ("Aufgabe: <titel>"), deren Titel Klienten-PII
-#       tragen kann (z.B. Pseudonym) — diese bleibt unredigiert stehen.
 #   H3-2 (core_deletionrequest): _redact_deletion_requests() redigiert nur
 #       Antraege mit target_type="Event". Der Vier-Augen-Antrag, der die
 #       Klienten-Loeschung ausloest (``request_client_deletion``), hat aber
 #       target_type="Client" — sein Freitext-``reason`` bleibt stehen.
 ANONYMIZE_XFAIL = {
-    "core_activity": "H3-1: WorkItem-Target-Activity-Summary unredigiert (Fix #1090)",
     "core_deletionrequest": "H3-2: Client-Target-DeletionRequest.reason unredigiert (Fix #1091)",
 }
 ANONYMIZE_TABLES = [

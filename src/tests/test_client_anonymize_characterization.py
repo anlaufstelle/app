@@ -408,3 +408,30 @@ class TestAnonymizeClientHelpers:
         assert not Activity.objects.filter(facility=facility, summary__contains="Eigen-1").exists()
         # Fremder Klient bleibt unangetastet.
         assert Activity.objects.filter(facility=facility, summary__contains="Fremd-1").exists()
+
+    def test_redact_activities_clears_workitem_target_summary(self, facility, staff_user):
+        """Refs #1090: WorkItem-Target-Activity mit PII-Titel wird redigiert.
+
+        ``create_workitem`` schreibt eine Activity „Aufgabe: <titel>" mit
+        Target = WorkItem; der Titel kann das Klienten-Pseudonym tragen.
+        ``_redact_activities`` muss sie auch ohne Event-IDs erfassen.
+        """
+        from core.models.activity import Activity
+        from core.services.case import create_workitem
+        from core.services.client import _redact_activities, create_client
+
+        client = create_client(facility, staff_user, pseudonym="Aufgaben-PII-1")
+        create_workitem(facility, staff_user, client=client, title="Aufgaben-PII-1")
+
+        # Positiv-Kontrolle: Activity traegt den PII-Titel.
+        assert Activity.objects.filter(facility=facility, summary__contains="Aufgaben-PII-1").exists()
+
+        _redact_activities(client, [])
+
+        assert not Activity.objects.filter(facility=facility, summary__contains="Aufgaben-PII-1").exists()
+        # WorkItem-Target-Activity ist auf den Anonym-Marker gesetzt.
+        assert Activity.objects.filter(
+            facility=facility,
+            verb=Activity.Verb.CREATED,
+            summary="[Anonymisiert]",
+        ).exists()

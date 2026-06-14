@@ -132,18 +132,25 @@ def _redact_deletion_requests(event_ids: list) -> None:
 
 
 def _redact_activities(client, event_ids: list) -> None:
-    """Redigiere ``Activity.summary`` fuer Client- und Event-Targets (Refs #1067).
+    """Redigiere ``Activity.summary`` fuer Client-, Event- und WorkItem-Targets.
 
     Mehrere Pfade schreiben das Klartext-Pseudonym in den Zeitstrom:
     ``create_client``/``update_client``/``approve_client_deletion``
     (Target = Client) sowie ``create_event`` („… für <pseudonym>",
-    Target = Event). Verb + Zeitpunkt bleiben fuer den Feed erhalten,
-    nur der Freitext wird ersetzt.
+    Target = Event). ``create_workitem``/``update_workitem``/
+    ``update_workitem_status`` schreiben zudem Activities mit Target =
+    WorkItem und der Titel im ``summary`` („Aufgabe: <titel>"), der
+    Klienten-PII (z.B. Pseudonym) tragen kann (Refs #1090). Verb +
+    Zeitpunkt bleiben fuer den Feed erhalten, nur der Freitext wird
+    ersetzt.
+
+    Refs #1067.
     """
     from django.contrib.contenttypes.models import ContentType
     from django.db.models import Q
 
     from core.models.event import Event
+    from core.models.workitem import WorkItem
 
     targets = Q(
         target_type=ContentType.objects.get_for_model(Client),
@@ -153,6 +160,12 @@ def _redact_activities(client, event_ids: list) -> None:
         targets |= Q(
             target_type=ContentType.objects.get_for_model(Event),
             target_id__in=event_ids,
+        )
+    workitem_ids = list(client.work_items.values_list("pk", flat=True))
+    if workitem_ids:
+        targets |= Q(
+            target_type=ContentType.objects.get_for_model(WorkItem),
+            target_id__in=workitem_ids,
         )
     Activity.objects.filter(facility=client.facility).filter(targets).update(summary="[Anonymisiert]")
 
@@ -181,8 +194,9 @@ def anonymize_client(client, user=None):
     - ``DeletionRequest.reason`` für Event-Targets dieses Klienten —
       Antrags-Meta (status/requested_by/...) bleibt für den 4-Augen-
       Audit-Trail erhalten.
-    - ``Activity.summary`` für Client- und Event-Targets — der Zeitstrom
-      trägt sonst das Klartext-Pseudonym weiter (Refs #1067).
+    - ``Activity.summary`` für Client-, Event- und WorkItem-Targets — der
+      Zeitstrom trägt sonst das Klartext-Pseudonym weiter (Refs #1067), die
+      WorkItem-Target-Activity zudem den Aufgaben-Titel (Refs #1090).
 
     Refs #905: Public API stabil; intern delegiert an ``_redact_*``-
     Helper, die einzeln testbar sind.
