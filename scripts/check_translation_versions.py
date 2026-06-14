@@ -26,6 +26,7 @@ TRANSLATED_FILES = [
     "docs/en/user-guide.md",
     "docs/en/domain-concept-summary.md",
     "docs/en/glossary.md",
+    "docs/en/data-protection.md",
 ]
 
 
