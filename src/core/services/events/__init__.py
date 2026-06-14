@@ -59,6 +59,10 @@ from core.services.events.fields import (
     split_file_and_text_data,
     stage_index,
 )
+from core.services.events.idempotency import (
+    get_idempotent_result,
+    remember_idempotent_result,
+)
 
 __all__ = [
     "CONTACT_STAGE_ORDER",
@@ -79,11 +83,13 @@ __all__ = [
     "create_event",
     "enrich_events_with_preview",
     "filtered_server_data_json",
+    "get_idempotent_result",
     "get_time_range",
     "is_multi_file_marker",
     "is_singleton_file_marker",
     "normalize_file_marker",
     "reject_deletion",
+    "remember_idempotent_result",
     "remove_restricted_fields",
     "request_deletion",
     "resolve_default_document_type",

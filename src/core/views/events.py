@@ -34,6 +34,8 @@ from core.services.events import (
     build_field_template_lookup,
     create_event,
     filtered_server_data_json,
+    get_idempotent_result,
+    remember_idempotent_result,
     remove_restricted_fields,
     request_deletion,
     resolve_default_document_type,
@@ -152,6 +154,18 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request):
         facility = request.current_facility
+
+        # Idempotenz-Guard (F-09, Refs #1109): Bricht beim Offline-Replay die
+        # Verbindung nach erfolgreichem Server-Write, aber vor Empfang der
+        # Response ab, spielt der Client dieselbe Queue-Zeile erneut. Trägt sie
+        # den ``X-Idempotency-Key`` eines bereits angelegten Events, leiten wir
+        # auf dieses Event um, statt einen Duplikat-Datensatz zu erzeugen.
+        idem_key = request.headers.get("X-Idempotency-Key")
+        if idem_key:
+            existing_pk = get_idempotent_result("event_create", request.user.pk, idem_key)
+            if existing_pk:
+                return redirect("core:event_detail", pk=existing_pk)
+
         meta_form = EventMetaForm(request.POST, facility=facility, user=request.user)
 
         if not meta_form.is_valid():
@@ -235,6 +249,11 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                 "core/events/create.html",
                 {"meta_form": meta_form, "data_form": data_form},
             )
+
+        # Erfolgreich angelegt → Ergebnis unter dem Idempotenz-Schlüssel merken,
+        # damit ein späterer Replay (F-09) hier oben kurzschließt statt ein
+        # zweites Event zu erzeugen. No-op ohne Schlüssel.
+        remember_idempotent_result("event_create", request.user.pk, idem_key, event.pk)
 
         messages.success(request, _("Kontakt wurde dokumentiert."))
         return redirect("core:event_detail", pk=event.pk)

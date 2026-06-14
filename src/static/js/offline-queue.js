@@ -38,6 +38,18 @@
         return meta ? meta.getAttribute("content") || null : null;
     }
 
+    function _newIdempotencyKey() {
+        // Refs #1109 (F-09): Stabiler Schlüssel pro Queue-Eintrag. Bricht beim
+        // Replay die Verbindung nach erfolgreichem Server-Write ab, wird die
+        // Zeile erneut gespielt — derselbe Schlüssel lässt den Server den
+        // Doppel-Submit erkennen (Header ``X-Idempotency-Key``).
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+            return window.crypto.randomUUID();
+        }
+        // Fallback für ältere Engines ohne randomUUID: zeit- + zufallsbasiert.
+        return "idem-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12);
+    }
+
     async function _refreshCsrf() {
         try {
             // Fetch rendert beim Zurückkommen aus Offline den Login-Flow neu,
@@ -86,6 +98,9 @@
             attempts: 0,
             retryAfter: 0,
             lastError: "",
+            // Refs #1109 (F-09): Idempotenz-Schlüssel einmalig beim Enqueue
+            // festlegen, damit er über alle Replay-Versuche stabil bleibt.
+            idempotencyKey: _newIdempotencyKey(),
             data: { method: method, body: body, headers: headers || {} },
         });
         await _updateQueueCount();
@@ -124,6 +139,10 @@
             if (!(await _isReady(record))) continue;
             const headers = Object.assign({}, record.data.headers);
             if (csrf) headers["X-CSRFToken"] = csrf;
+            // Refs #1109 (F-09): Idempotenz-Schlüssel bei jedem Replay-Versuch
+            // mitschicken, damit der Server einen Wiederholungs-POST nach
+            // Verbindungsabbruch als solchen erkennt.
+            if (record.idempotencyKey) headers["X-Idempotency-Key"] = record.idempotencyKey;
             try {
                 const response = await fetch(record.url, {
                     method: record.data.method,
