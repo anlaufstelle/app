@@ -43,6 +43,7 @@ des Release-Snapshots.
 
 | Dokument | Beschreibung | Zielgruppe |
 |----------|-------------|------------|
+| [datenschutz.md](datenschutz.md) | DSGVO-Wegweiser: Artikel/Recht → ADR/Vorlage/Code/FAQ | alle (Auditor/Dev/Träger) |
 | [security-notes.md](security-notes.md) | Bewusste Security-Design-Entscheidungen (2FA, Fernet, RLS, Audit, Lockout) | Security-Officer, Entwickler |
 | [threat-model.md](threat-model.md) | Sicherheitsmodell, Angriffsfläche, bekannte offene Lücken | Security-Officer, Auditoren |
 | [audit-inventar.md](audit-inventar.md) | Index aller Audit-Klassifizierungs-Codes (FND-\*, S-\*, Phasen, Sprints); die zugrunde liegenden Multi-AI-Audits liegen archiviert unter `docs/archive/` (dev-only) | Entwickler, Auditoren |
