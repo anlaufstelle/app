@@ -53,7 +53,9 @@ def request_deletion(event, user, reason):
         facility=event.facility,
         target_type="DeletionRequest",
         target_id=str(dr.pk),
-        detail={"reason": reason, "target_event": str(event.pk)},
+        # Refs #1093: reason nicht ins detail duplizieren — er lebt in
+        # DeletionRequest.reason (via target_id=dr.pk erreichbar).
+        detail={"target_event": str(event.pk)},
     )
     return dr
 

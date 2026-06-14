@@ -128,6 +128,9 @@ def test_fixture_seeds_needles_everywhere(maximal_pii_graph):
     """Positiv-Kontrolle: vor Redaktion sind Sentinels breit gestreut."""
     hits = scan_facility_for_needles(maximal_pii_graph.facility.id)
     tables_hit = {h.table for h in hits}
+    # core_auditlog bewusst NICHT erwartet: seit #1093 schreibt der Klienten-
+    # Pfad keine Klienten-PII mehr ins AuditLog.detail (write-time minimiert),
+    # die Fixture streut dort also keinen Sentinel.
     for expected in {
         "core_client",
         "core_event",
@@ -136,7 +139,6 @@ def test_fixture_seeds_needles_everywhere(maximal_pii_graph):
         "core_workitem",
         "core_activity",
         "core_eventhistory",
-        "core_auditlog",
         "core_deletionrequest",
     }:
         assert expected in tables_hit, f"Fixture befuellt {expected} nicht: {tables_hit}"
@@ -159,7 +161,8 @@ def test_fixture_seeds_needles_everywhere(maximal_pii_graph):
 #   - store_encrypted_file-> core_eventattachment (Name Fernet-verschluesselt:
 #                          strukturell geprueft, NICHT per Needle-Scan)
 #   - request_deletion   -> core_deletionrequest.reason
-#   - approve_deletion   -> core_auditlog.detail (pseudonym + reason)
+#   - approve_deletion   -> seit #1093 KEINE Klienten-PII mehr in
+#                          core_auditlog.detail (nur die DeletionRequest-PK)
 # Alle Klartext-PII-Werte tragen den ``RESIDUEPROBE-``-Praefix.
 
 # Minimal-PDF (gueltige Magic-Bytes) fuer ``store_encrypted_file`` —
@@ -515,8 +518,9 @@ def _sharpen_retention(facility):
     settings_obj.retention_activities_days = 0
     settings_obj.client_trash_days = 0
     # 1 Monat statt 0 = Pruning aktiv; die frischen Fixture-AuditLogs (now)
-    # liegen aber innerhalb der Frist und bleiben erhalten (core_auditlog.detail
-    # ist ohnehin known_residue -> aus undeclared_hits gefiltert).
+    # liegen aber innerhalb der Frist und bleiben erhalten — seit #1093 traegt
+    # core_auditlog.detail jedoch keine Klienten-PII mehr (nur die
+    # DeletionRequest-PK), daher kein Sentinel-Residue.
     settings_obj.auditlog_retention_months = 1
     settings_obj.save()
     return settings_obj

@@ -70,8 +70,9 @@ class TestDeletionApprovalAudit:
         )
         assert audit.user == staff_user
         assert audit.facility == event_qualified.facility
-        assert audit.detail["reason"] == "DSGVO-Anfrage"
-        assert audit.detail["target_event"] == str(event_qualified.pk)
+        # Refs #1093: reason wird nicht mehr ins detail dupliziert — er lebt in
+        # DeletionRequest.reason und ist via target_id=dr.pk erreichbar.
+        assert audit.detail == {"target_event": str(event_qualified.pk)}
 
     def test_request_deletion_is_idempotent_no_duplicate_audit(self, event_qualified, staff_user):
         """Zweiter request_deletion-Aufruf fuer dasselbe Event darf KEIN
@@ -191,8 +192,8 @@ class TestClientDeletionAudit:
         )
         assert audit.user == staff_user
         assert audit.facility == client_qualified.facility
-        assert audit.detail["reason"] == "DSGVO-Antrag Klient"
-        assert audit.detail["target_client"] == str(client_qualified.pk)
+        # Refs #1093: reason nicht mehr im detail (lebt in DeletionRequest.reason).
+        assert audit.detail == {"target_client": str(client_qualified.pk)}
 
     def test_request_client_deletion_is_idempotent(self, client_qualified, staff_user):
         """Zweiter request_client_deletion-Aufruf erzeugt kein zweites Audit-Event."""

@@ -85,8 +85,15 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     non_pii("core_fieldtemplate", "options_json", reason="Select/Multi-Select-Optionsdefinitionen (Schema-Konfig)."),
     non_pii("core_fieldtemplate", "statistics_category", reason="Statistik-Zuordnungs-Label (Konfiguration)."),
     non_pii("core_fieldtemplate", "help_text", reason="Admin-Hilfetext fuers Formular (Konfig-Label)."),
-    # ---- core_auditlog (append-only, DSGVO-Rechenschaft) -----------------
-    known_residue("core_auditlog", "detail", reason="forensic: Audit-Rechenschaft Art. 5(2)", issue="#1093"),
+    # ---- core_auditlog ---------------------------------------------------
+    # Refs #1093: Klienten-PII (Pseudonym/reason) wird write-time minimiert —
+    # gar nicht erst ins detail geschrieben, statt im append-only-Log
+    # nachtraeglich redigiert (was den Immutable-Trigger braeche). detail ist
+    # daher 'pii' (scharfer Regressionswaechter), nicht mehr 'known_residue'.
+    # LOGIN_FAILED.username bleibt bewusst als Sicherheits-Forensik (Art. 5(2)
+    # + berechtigtes Interesse), traegt aber keinen Klienten-Sentinel und
+    # faellt im Klienten-Sweep daher nicht an.
+    pii("core_auditlog", "detail"),
     non_pii("core_auditlog", "action", reason="Enum (login/export/client_create/...)."),
     non_pii("core_auditlog", "target_type", reason="Modell-Typ-Marker (z.B. 'Client'), kein Freitext."),
     non_pii("core_auditlog", "target_id", reason="UUID/PK-String des Ziels, kein Freitext."),

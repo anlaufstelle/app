@@ -65,7 +65,10 @@ class TestApproveClientDeletion:
             target_id=str(client.pk),
         ).first()
         assert audit is not None
-        assert audit.detail["requested_by"] == staff_user.username
+        # Refs #1093: detail traegt nur noch die DeletionRequest-PK — kein
+        # Klienten-Pseudonym/reason, kein Antragsteller-Username (Forensik via
+        # DR-Join: requested_by/reason leben in der DeletionRequest-Zeile).
+        assert audit.detail == {"deletion_request": str(dr.pk)}
 
     def test_self_review_blocked(self, facility, staff_user):
         client = _make_client(facility)

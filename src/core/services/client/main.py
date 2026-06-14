@@ -192,13 +192,13 @@ def update_client_stage(client, old_stage, new_stage, facility, user):
     """Log a stage change if the contact stage has changed."""
     if old_stage == new_stage:
         return
+    # Refs #1093: kein client_pseudonym ins detail (= target_id-Dublette).
     audit_client_event(
         client,
         user,
         AuditLog.Action.STAGE_CHANGE,
         old_stage=old_stage,
         new_stage=new_stage,
-        client_pseudonym=client.pseudonym,
     )
 
 
@@ -341,7 +341,9 @@ def request_client_deletion(client, user, reason):
         facility=client.facility,
         target_type="DeletionRequest",
         target_id=str(dr.pk),
-        detail={"reason": reason, "target_client": str(client.pk)},
+        # Refs #1093: reason nicht ins detail duplizieren — er lebt in
+        # DeletionRequest.reason (via target_id=dr.pk erreichbar).
+        detail={"target_client": str(client.pk)},
     )
     return dr
 
@@ -370,13 +372,15 @@ def approve_client_deletion(deletion_request, reviewer):
     deletion_request.reviewed_at = timezone.now()
     deletion_request.save()
 
+    # Refs #1093: detail traegt nur die DeletionRequest-PK. Pseudonym
+    # (= target_id), Antragsteller und reason leben strukturiert in der
+    # DeletionRequest-Zeile — keine Klienten-PII-Dublette im append-only-
+    # AuditLog (loest die Spannung Art. 17 vs. Art. 5(2) write-time auf).
     audit_client_event(
         client,
         reviewer,
         AuditLog.Action.CLIENT_SOFT_DELETED,
-        pseudonym=client.pseudonym,
-        requested_by=deletion_request.requested_by.username,
-        reason=deletion_request.reason,
+        deletion_request=str(deletion_request.pk),
     )
     log_activity(
         facility=client.facility,
@@ -405,11 +409,11 @@ def restore_client(client, user):
     if not client.is_deleted:
         raise ValidationError("Person ist nicht im Papierkorb.")
     client.restore()
+    # Refs #1093: kein Pseudonym ins detail (= target_id-Dublette).
     audit_client_event(
         client,
         user,
         AuditLog.Action.CLIENT_RESTORED,
-        pseudonym=client.pseudonym,
     )
 
 
