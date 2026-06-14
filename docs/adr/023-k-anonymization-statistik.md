@@ -31,7 +31,7 @@ Anlaufstelle implementiert **k-Anonymisierung mit Default-Schwelle `k=5`** in [`
  - `is_active` → `False`, `k_anonymized` → `True` (Flag fuer Wiedererkennung in spaeteren Laeufen)
 - **Bericht-Aggregate (Statistik-Seite):** Buckets mit `count < k` werden als **„unterdrueckt"** ausgewiesen, **nicht** mit der echten Zahl. Das betrifft die Kennzahlen „Unterschiedliche Personen", „Nach Dokumentationstyp" und „Nach Altersgruppe" in `/statistics/external/` (siehe [`docs/user-guide.md` § Externe Berichte](../user-guide.md)).
 - **Datenschutzprofil-Kopf** im Bericht zeigt Einrichtung, Profil (`external`), Zeitraum, `k`-Schwelle und Erzeugungs-Zeitpunkt — damit der Empfaenger nachvollziehen kann, unter welcher Aggregations-Politik die Zahlen entstanden sind.
-- **Trennung von `Client.anonymize`:** `k_anonymize_client` ist *additiv* — sie aendert nur das Client-Record. Kaskadierende Loeschungen in Cases/Episodes/WorkItems bleiben Sache von `Client.anonymize` (Retention-Pipeline, [ADR-021](021-retention-modell.md)).
+- **Trennung von `Client.anonymize`:** `k_anonymize_client` ist *additiv* — sie aendert nur das Client-Record. Kaskadierende Loeschungen in Cases/Episodes/WorkItems bleiben Sache von `Client.anonymize` (Retention-Pipeline, [ADR-021](021-retention-modell.md)). *(Update 2026-06-14: Der Retention-Bridge-Layer ruft die Freitext-Kaskade seit #1094 auch im K-Anon-Pfad auf — siehe Abschnitt „Update" unten. Die Primitive selbst bleibt client-only.)*
 
 ## Consequences
 
@@ -51,6 +51,12 @@ Anlaufstelle implementiert **k-Anonymisierung mit Default-Schwelle `k=5`** in [`
 - **Reine Pseudonym-Loeschung ohne Bucket-Suppression** — adressiert nur den direkten Klar-Identifier, nicht die Inferenz ueber Bucket-Groesse. Verworfen, weil das genau das Problem ist, das die externe Statistik aufwirft.
 - **Differential Privacy mit Rauschen.** Vertagt: brauchen Library (z.B. `python-dp` / Google DP), neue Hyperparameter (Epsilon-Budget) und ein Bedrohungs-Modell-Update. Fuer die Zielgruppe (kleine Traeger, externer Bericht 1–4× pro Jahr) ist der Aufwand aktuell nicht im Verhaeltnis zum Schutzgewinn.
 - **K-Anonymisierung erst beim Bericht-Rendering, nicht im Datensatz.** Wird parallel genutzt — die Berichts-Suppression rendert nur die Aggregate. Die `k_anonymize_client`-Funktion ist zusaetzlich ein Werkzeug fuer die Retention-Pipeline ([ADR-021](021-retention-modell.md)), wenn ein Klient aus der laufenden Statistik entfernt, aber im Aggregat erhalten bleiben soll.
+
+## Update 2026-06-14: Retention-Kaskade auch im K-Anon-Pfad (Refs #1094)
+
+Die oben beschriebene Trennung galt fuer den urspruenglichen Stand: Die Freitext-Kaskade auf Faelle/Episoden/Aufgaben (`core_case`/`core_episode`/`core_workitem`) war allein `Client.anonymize` (Hard-Pfad) vorbehalten, waehrend der K-Anon-Retention-Pfad nur die client-only-Primitive `k_anonymize_client` aufrief — Klienten-PII in jenen Freitexten blieb stehen.
+
+Mit #1094 ergaenzt der Retention-Bridge-Layer ([`src/core/retention/anonymization.py`](../../src/core/retention/anonymization.py)) im `use_k_anon`-Zweig zusaetzlich `_redact_cases_and_episodes` + `_redact_workitems` (dieselben Helfer wie der Hard-Pfad). **Beide Retention-Pfade tilgen damit jetzt denselben Fall-/Episoden-/Aufgaben-Freitext.** Die Primitive `k_anonymize_client` bleibt bewusst client-only — die Kaskade liegt im Bridge-Layer, nicht in der Primitive. Die Berichts-Suppression (Aggregat-Buckets `< k`) ist davon unberuehrt.
 
 ## References
 
