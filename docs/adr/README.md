@@ -55,6 +55,8 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-021](021-retention-modell.md) | Retention-Modell (Fristen, Legal-Hold, AuditLog-Pruning) | Accepted |
 | [ADR-022](022-offline-snapshot-keys.md) | Offline-Snapshot und Offline-Keys | Accepted |
 | [ADR-023](023-k-anonymization-statistik.md) | K-Anonymisierung für externe Statistik | Accepted |
+| [ADR-024](024-slug-based-identifiers.md) | Slug-basierte stabile Identifikatoren | Accepted |
+| [ADR-025](025-csp-unsafe-eval-admin.md) | CSP-`unsafe-eval` nur auf `/admin-mgmt/` | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
@@ -62,6 +64,10 @@ Entscheidungen, die im Code bereits sichtbar sind, deren Begründung aber noch n
 
 | Kandidat | Worum es geht | Warum noch keine ADR |
 |----------|---------------|----------------------|
-| _(aktuell keine offenen Kandidaten)_ | Retention, Offline-Snapshot und K-Anonymisierung sind nach [ADR-021](021-retention-modell.md), [ADR-022](022-offline-snapshot-keys.md) und [ADR-023](023-k-anonymization-statistik.md) verschriftlicht. ||
+| Rate-Limiting-Strategie | Schwellen `RATELIMIT_BULK_ACTION=30/h`, `RATELIMIT_MUTATION=60/h`, `RATELIMIT_FREQUENT=120/h` (`src/core/constants.py`) + GET-vs-POST-Politik | niedrig — Werte stabil, Rationale noch nicht verschriftlicht (#1071 §E) |
+| i18n-Strategie | DE-Quelltext, EN-Sync-Disziplin (`translation-version`-Gate), `USE_I18N` | niedrig — Prozess existiert, als Entscheidung noch nicht festgehalten (#1071 §E) |
+| ADR-022 → Accepted | Offline-Snapshot/Keys: Status-Wechsel `Proposed` → `Accepted` | offen — erst nach Security-Review + Pen-Test (Tablet-Diebstahl), siehe [ADR-022](022-offline-snapshot-keys.md) Update 2026-06-14 |
 
 **Vorgehen:** Wenn eines der Themen sich stabilisiert oder eine echte Entwicklungs­alternative ansteht, wird die nächste freie ADR-Nummer vergeben. Bei Verwerfen einer ADR-Idee bleibt der Eintrag hier kurz mit „verworfen, weil …" stehen, damit die Diskussion nicht verloren geht.
+
+**Sicherheits-Härtung (v0.14.0, #1016):** Webhook-IP-Pinning, authentifizierte Backups (HMAC-SHA256), Shared-`DatabaseCache` und das Datei-Chunk-Format v2 sind bewusst **keine** eigenen ADRs — sie gehören als Mitigations in [`threat-model.md`](../threat-model.md) / [`security-notes.md`](../security-notes.md). Offen: `threat-model.md` beschreibt Backups noch als „AES-256-CBC + `--verify`" und ist auf die HMAC-SHA256-Integrität (Refs #1024) nachzuziehen.
