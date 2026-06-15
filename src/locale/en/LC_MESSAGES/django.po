@@ -6099,3 +6099,19 @@ msgstr "Deletion-confirmation right changed"
 #: src/templates/core/deletion_requests/list.html:35
 msgid "Kein möglicher Genehmiger: Außer der antragstellenden Person trägt niemand das Recht 'Löschbestätigung'. Die Anwendungsbetreuung kann es in der Benutzerverwaltung vergeben."
 msgstr "No possible approver: apart from the requesting person, nobody holds the 'deletion confirmation' right. The facility administration can grant it in user management."
+
+#: src/core/views/mfa.py:112
+msgid "Fast geschafft: Sichere die Backup-Codes und bestätige unten, um die Einrichtung abzuschließen."
+msgstr "Almost there: save your backup codes and confirm below to finish setup."
+
+#: src/core/views/mfa.py:264
+msgid "Backup-Codes gespeichert."
+msgstr "Backup codes saved."
+
+#: src/templates/auth/mfa_backup_codes.html:51
+msgid "Bitte bestätige zuerst, dass du die Backup-Codes gesichert hast."
+msgstr "Please confirm first that you have saved your backup codes."
+
+#: src/templates/auth/mfa_backup_codes.html:63
+msgid "Einrichtung abschließen"
+msgstr "Finish setup"

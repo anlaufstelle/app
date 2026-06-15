@@ -5818,3 +5818,19 @@ msgstr "Recht Löschbestätigung geändert"
 #: src/templates/core/deletion_requests/list.html:35
 msgid "Kein möglicher Genehmiger: Außer der antragstellenden Person trägt niemand das Recht 'Löschbestätigung'. Die Anwendungsbetreuung kann es in der Benutzerverwaltung vergeben."
 msgstr "Kein möglicher Genehmiger: Außer der antragstellenden Person trägt niemand das Recht 'Löschbestätigung'. Die Anwendungsbetreuung kann es in der Benutzerverwaltung vergeben."
+
+#: src/core/views/mfa.py:112
+msgid "Fast geschafft: Sichere die Backup-Codes und bestätige unten, um die Einrichtung abzuschließen."
+msgstr ""
+
+#: src/core/views/mfa.py:264
+msgid "Backup-Codes gespeichert."
+msgstr ""
+
+#: src/templates/auth/mfa_backup_codes.html:51
+msgid "Bitte bestätige zuerst, dass du die Backup-Codes gesichert hast."
+msgstr ""
+
+#: src/templates/auth/mfa_backup_codes.html:63
+msgid "Einrichtung abschließen"
+msgstr ""
