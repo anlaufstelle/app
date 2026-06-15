@@ -53,7 +53,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-019](019-custom-admin-site-sudo.md) | Custom AdminSite mit Rollen-Gate und Sudo-Mode | Accepted |
 | [ADR-020](020-three-role-postgres-model.md) | Drei-Rollen-Postgres-Modell (Bootstrap / App / Admin) | Accepted |
 | [ADR-021](021-retention-modell.md) | Retention-Modell (Fristen, Legal-Hold, AuditLog-Pruning) | Accepted |
-| [ADR-022](022-offline-snapshot-keys.md) | Offline-Snapshot und Offline-Keys | Proposed |
+| [ADR-022](022-offline-snapshot-keys.md) | Offline-Snapshot und Offline-Keys | Accepted |
 | [ADR-023](023-k-anonymization-statistik.md) | K-Anonymisierung für externe Statistik | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
