@@ -28,7 +28,10 @@ class TestMFASetupFlow:
         # Ein unbestätigtes TOTPDevice wurde beim Rendern angelegt.
         assert TOTPDevice.objects.filter(user=staff_user, confirmed=False).count() == 1
 
-    def test_setup_post_confirms_device_with_valid_token(self, client, staff_user):
+    def test_setup_post_with_valid_token_defers_activation_to_backup_ack(self, client, staff_user):
+        """Refs #1118: Korrekter TOTP-Code führt zur Backup-Code-Seite, aktiviert
+        2FA aber noch NICHT. Das Device bleibt unbestätigt, bis die Sicherung der
+        Backup-Codes quittiert wurde — sonst ist der Schutz nur optisch."""
         client.login(username="teststaff", password="testpass123")
         # Zuerst GET, damit das Device erzeugt wird.
         client.get("/mfa/setup/")
@@ -37,13 +40,18 @@ class TestMFASetupFlow:
         token = oath_totp(device.bin_key, step=device.step, t0=device.t0, digits=device.digits)
         response = client.post("/mfa/setup/", {"token": f"{token:0{device.digits}d}"})
         assert response.status_code == 302
-        # Nach Setup werden frische Backup-Codes einmalig angezeigt (Refs #588).
+        # Nach Setup werden frische Backup-Codes angezeigt (Refs #588).
         assert response.url == "/mfa/backup-codes/"
         device.refresh_from_db()
-        assert device.confirmed is True
-        # AuditLog wurde geschrieben — sowohl MFA_ENABLED als auch BACKUP_CODES_GENERATED.
-        assert AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.MFA_ENABLED).exists()
+        # 2FA noch NICHT aktiv — die Aktivierung hängt an der Backup-Quittung.
+        assert device.confirmed is False
+        # Session signalisiert den offenen Abschluss und hält die Codes zur Anzeige.
+        assert client.session.get("mfa_setup_pending") is True
+        assert client.session.get("mfa_backup_codes")
+        assert client.session.get("mfa_verified") is not True
+        # Codes-Generierung wird auditiert; die 2FA-Aktivierung aber noch nicht.
         assert AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.BACKUP_CODES_GENERATED).exists()
+        assert not AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.MFA_ENABLED).exists()
 
     def test_setup_post_rejects_invalid_token(self, client, staff_user):
         client.login(username="teststaff", password="testpass123")

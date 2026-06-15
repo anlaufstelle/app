@@ -132,8 +132,16 @@ class TestZZMFASetupFlow:
                 codes = codes_list.locator("li")
                 assert codes.count() == 10, f"Erwarte 10 Backup-Codes, gesehen: {codes.count()}"
 
-                # MFA-Settings zeigt aktives Device + vollen Counter (10/10).
-                page.goto(f"{base_url}/mfa/settings/", wait_until="domcontentloaded")
+                # Refs #1118: 2FA ist hier noch NICHT aktiv — erst die Quittung
+                # der Backup-Codes schließt das Setup ab. Der Abschluss-Button
+                # bleibt deaktiviert, solange die Bestätigung fehlt.
+                continue_btn = page.locator("[data-testid='backup-codes-continue']")
+                assert continue_btn.is_disabled(), "Abschluss-Button muss ohne Bestätigung deaktiviert sein"
+                page.locator("[data-testid='backup-codes-confirm']").check()
+                continue_btn.click()
+
+                # Erst die Quittung führt in die Settings — jetzt mit aktivem Device.
+                page.wait_for_url(re.compile(r"/mfa/settings/"), timeout=10000)
                 status = page.locator("[data-testid='mfa-status']")
                 status.wait_for(state="visible", timeout=5000)
                 assert "Aktiv" in status.inner_text()
@@ -175,6 +183,44 @@ class TestZZMFASetupFlow:
 
                 # QR-Code wird weiterhin angezeigt (User kann erneut versuchen).
                 page.locator("[data-testid='mfa-qrcode']").wait_for(state="visible", timeout=5000)
+            finally:
+                context.close()
+        finally:
+            _cleanup_totp("admin", e2e_env)
+
+    def test_setup_incomplete_without_backup_ack_keeps_2fa_inactive(self, base_url, browser, e2e_env):
+        """Refs #1118: Wird die Backup-Code-Seite ohne Bestätigung verlassen,
+        bleibt 2FA inaktiv — das Setup ist eindeutig unvollständig. Genau die
+        vom Tester gemeldete Lücke: die Checkbox darf nicht überspringbar sein."""
+        _ensure_no_totp("admin", e2e_env)
+        try:
+            context = browser.new_context(locale="de-DE")
+            page = context.new_page()
+            page.set_default_timeout(30000)
+            try:
+                page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
+                page.fill("#id_username", "admin")
+                page.fill("#id_password", "anlaufstelle2026")
+                page.click("button[type=submit]")
+                page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
+
+                page.goto(f"{base_url}/mfa/setup/", wait_until="domcontentloaded")
+                page.locator("[data-testid='mfa-qrcode']").wait_for(state="visible", timeout=5000)
+                secret = (page.locator("[data-testid='mfa-secret']").text_content() or "").strip()
+                token = _generate_totp_code(secret)
+                page.locator("[data-testid='mfa-token-input']").fill(token)
+                page.locator("[data-testid='mfa-confirm-button']").click()
+                page.wait_for_url(re.compile(r"/mfa/backup-codes/"), timeout=10000)
+
+                # Backup-Code-Seite ohne Bestätigung verlassen.
+                page.goto(f"{base_url}/mfa/settings/", wait_until="domcontentloaded")
+
+                # 2FA darf NICHT aktiv sein — Settings zeigt den Einrichten-Button
+                # statt des Aktiv-Status.
+                assert page.locator("[data-testid='mfa-setup-button']").is_visible(), (
+                    "Ohne Backup-Quittung darf 2FA nicht als aktiv gelten (Refs #1118)"
+                )
+                assert "Aktiv" not in page.locator("[data-testid='mfa-status']").inner_text()
             finally:
                 context.close()
         finally:

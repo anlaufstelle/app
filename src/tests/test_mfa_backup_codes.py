@@ -181,7 +181,10 @@ class TestMFAVerifyWithBackupCode:
 
 @pytest.mark.django_db
 class TestMFABackupCodesView:
-    def test_view_shows_codes_once(self, client, staff_user):
+    def test_codes_remain_visible_until_acknowledged(self, client, staff_user):
+        """Refs #1118: Die Codes bleiben über Reloads hinweg sichtbar, bis der
+        Nutzer ihre Sicherung bestätigt. Ein versehentlicher Reload soll die
+        einmal generierten Codes nicht verschlucken."""
         client.login(username="teststaff", password="testpass123")
         session = client.session
         session["mfa_backup_codes"] = ["aaaa-bbbb", "cccc-dddd"]
@@ -191,14 +194,63 @@ class TestMFABackupCodesView:
         assert first.status_code == 200
         assert b"aaaa-bbbb" in first.content
 
-        # Zweiter GET zeigt nichts mehr — Codes sind aus der Session entfernt.
+        # Reload zeigt die Codes weiterhin (peek statt pop) — erst die Quittung räumt auf.
         second = client.get("/mfa/backup-codes/")
-        assert second.status_code == 302
-        assert second.url == "/mfa/settings/"
+        assert second.status_code == 200
+        assert b"aaaa-bbbb" in second.content
 
     def test_view_redirects_when_no_codes_in_session(self, client, staff_user):
         client.login(username="teststaff", password="testpass123")
         response = client.get("/mfa/backup-codes/")
+        assert response.status_code == 302
+        assert response.url == "/mfa/settings/"
+
+    def test_ack_without_confirmation_does_not_activate_2fa(self, client, staff_user):
+        """Refs #1118: POST ohne gesetzte Bestätigungs-Checkbox schließt das
+        Setup NICHT ab — das Device bleibt unbestätigt, kein MFA_ENABLED."""
+        device = TOTPDevice.objects.create(user=staff_user, name="default", confirmed=False)
+        client.login(username="teststaff", password="testpass123")
+        session = client.session
+        session["mfa_backup_codes"] = ["aaaa-bbbb", "cccc-dddd"]
+        session["mfa_setup_pending"] = True
+        session.save()
+
+        # Kein 'confirm_saved' im POST — serverseitig muss das abgewiesen werden.
+        response = client.post("/mfa/backup-codes/")
+        assert response.status_code == 200  # Re-Render mit Validierungshinweis
+        device.refresh_from_db()
+        assert device.confirmed is False
+        assert not AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.MFA_ENABLED).exists()
+        # Setup bleibt eindeutig unvollständig.
+        assert client.session.get("mfa_setup_pending") is True
+        assert staff_user.has_confirmed_totp_device is False
+
+    def test_ack_with_confirmation_completes_setup(self, client, staff_user):
+        """Refs #1118: POST mit gesetzter Checkbox aktiviert 2FA — Device wird
+        bestätigt, Session verifiziert, MFA_ENABLED auditiert, Codes geräumt."""
+        device = TOTPDevice.objects.create(user=staff_user, name="default", confirmed=False)
+        client.login(username="teststaff", password="testpass123")
+        session = client.session
+        session["mfa_backup_codes"] = ["aaaa-bbbb", "cccc-dddd"]
+        session["mfa_setup_pending"] = True
+        session.save()
+
+        response = client.post("/mfa/backup-codes/", {"confirm_saved": "on"})
+        assert response.status_code == 302
+        assert response.url == "/mfa/settings/"
+        device.refresh_from_db()
+        assert device.confirmed is True
+        assert client.session.get("mfa_verified") is True
+        assert client.session.get("mfa_setup_pending") is None
+        # Codes nach Abschluss aus der Session entfernt (keine Wiederanzeige).
+        assert client.session.get("mfa_backup_codes") is None
+        assert AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.MFA_ENABLED).exists()
+
+    def test_ack_without_codes_in_session_redirects(self, client, staff_user):
+        """Ein POST ohne Codes in der Session (z. B. nach Abschluss/Reload) führt
+        ohne Seiteneffekt zurück in die Einstellungen."""
+        client.login(username="teststaff", password="testpass123")
+        response = client.post("/mfa/backup-codes/", {"confirm_saved": "on"})
         assert response.status_code == 302
         assert response.url == "/mfa/settings/"
 
