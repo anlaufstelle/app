@@ -65,9 +65,11 @@ class TestFourEyesPrincipleReview:
         lead_page.wait_for_url(re.compile(r"/deletion-requests/[0-9a-f-]+/review/$"))
 
         find_deletion_approve_button(lead_page).click()
-        lead_page.wait_for_load_state("domcontentloaded")
 
-        assert lead_page.locator("text=genehmigt").count() > 0 or lead_page.url == f"{base_url}/"
+        # Refs #1119: Event-Genehmigung führt konsistent zurück in die
+        # Löschantragsliste (vorher überraschend in den Zeitstrom).
+        lead_page.wait_for_url(re.compile(r"/deletion-requests/$"), timeout=10000)
+        assert lead_page.locator("text=Genehmigt").count() > 0
 
     def test_lead_can_reject_deletion_request(self, authenticated_page, lead_page, base_url):
         """Lead (thomas) lehnt von admin gestellten Löschantrag ab.

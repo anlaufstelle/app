@@ -422,6 +422,65 @@ class TestDeletionRequestReviewView:
         pending_request.refresh_from_db()
         assert pending_request.status == DeletionRequest.Status.APPROVED
 
+    # -- Redirect-Ziel nach Review (Refs #1119) -----------------------------
+    # Bisher landete die Genehmigung eines Event-Löschantrags im Zeitstrom
+    # ("/"), obwohl der Workflow fachlich in der Löschantragsliste verortet
+    # ist. Erwartet wird ein konsistenter, kontextsensitiver Redirect.
+
+    def test_approve_event_redirects_to_deletion_list(self, client, lead_user, pending_request):
+        """Genehmigung eines Event-Antrags führt zur Löschantragsliste, nicht zum Zeitstrom."""
+        client.force_login(lead_user)
+        response = client.post(
+            reverse("core:deletion_review", kwargs={"pk": pending_request.pk}),
+            {"action": "approve"},
+        )
+        assert response.status_code == 302
+        assert response.url == reverse("core:deletion_request_list")
+
+    def test_reject_event_redirects_to_deletion_list(self, client, lead_user, pending_request):
+        """Ablehnung eines Event-Antrags führt ebenfalls zur Löschantragsliste."""
+        client.force_login(lead_user)
+        response = client.post(
+            reverse("core:deletion_review", kwargs={"pk": pending_request.pk}),
+            {"action": "reject"},
+        )
+        assert response.status_code == 302
+        assert response.url == reverse("core:deletion_request_list")
+
+    def test_approve_with_safe_next_redirects_there(self, client, lead_user, pending_request):
+        """Ein sicherer same-origin ?next= führt nach Review dorthin zurück (z. B. Arbeitszentrale)."""
+        client.force_login(lead_user)
+        target = reverse("core:workitem_inbox")
+        response = client.post(
+            reverse("core:deletion_review", kwargs={"pk": pending_request.pk}),
+            {"action": "approve", "next": target},
+        )
+        assert response.status_code == 302
+        assert response.url == target
+
+    def test_approve_with_unsafe_next_falls_back_to_list(self, client, lead_user, pending_request):
+        """Ein offener Redirect (fremde Host) wird verworfen — Fallback ist die Löschantragsliste."""
+        client.force_login(lead_user)
+        response = client.post(
+            reverse("core:deletion_review", kwargs={"pk": pending_request.pk}),
+            {"action": "approve", "next": "//evil.example/phish"},
+        )
+        assert response.status_code == 302
+        assert response.url == reverse("core:deletion_request_list")
+
+    def test_client_approve_redirects_to_deletion_list(self, client, lead_user, staff_user, client_qualified):
+        """Regression: Client-Anträge führen weiterhin zur Löschantragsliste (Konsistenz Event/Client)."""
+        from core.services.client import request_client_deletion
+
+        dr = request_client_deletion(client_qualified, staff_user, "Widerruf")
+        client.force_login(lead_user)
+        response = client.post(
+            reverse("core:deletion_review", kwargs={"pk": dr.pk}),
+            {"action": "approve"},
+        )
+        assert response.status_code == 302
+        assert response.url == reverse("core:deletion_request_list")
+
 
 @pytest.mark.django_db
 class TestEventDeleteViewRouting:
