@@ -91,20 +91,15 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
         token = (request.POST.get("token") or "").strip().replace(" ", "")
         device = _get_unconfirmed_device(request.user)
         if token and device.verify_token(token):
-            device.confirmed = True
-            device.save(update_fields=["confirmed"])
-            request.session["mfa_verified"] = True
-            # Backup-Codes bei Erstaktivierung automatisch ausstellen; sie
-            # werden gleich auf der nächsten Seite einmalig angezeigt.
+            # 2FA wird hier bewusst NOCH NICHT scharf geschaltet (Refs #1118):
+            # Das ``TOTPDevice`` bleibt unbestätigt, bis der Nutzer auf der
+            # Backup-Code-Seite die Sicherung der Codes quittiert. Verlässt er
+            # den Flow vorher, bleibt der Setup-Status eindeutig unvollständig —
+            # ``has_confirmed_totp_device`` ist dann weiterhin False und die
+            # Middleware führt beim nächsten Aufruf zurück ins Setup.
             codes = generate_backup_codes(request.user)
             request.session["mfa_backup_codes"] = codes
-            log_audit_event(
-                request,
-                AuditLog.Action.MFA_ENABLED,
-                target_obj=request.user,
-                detail={"event": "mfa_setup_confirmed"},
-                facility=getattr(request.user, "facility", None),
-            )
+            request.session["mfa_setup_pending"] = True
             log_audit_event(
                 request,
                 AuditLog.Action.BACKUP_CODES_GENERATED,
@@ -112,7 +107,10 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
                 detail={"count": len(codes)},
                 facility=getattr(request.user, "facility", None),
             )
-            messages.success(request, _("Zwei-Faktor-Authentifizierung aktiviert."))
+            messages.info(
+                request,
+                _("Fast geschafft: Sichere die Backup-Codes und bestätige unten, um die Einrichtung abzuschließen."),
+            )
             return redirect("mfa_backup_codes")
         messages.error(request, _("Der Code ist ungültig. Bitte erneut versuchen."))
         return self.render_to_response(self.get_context_data(token_error=True))
@@ -193,26 +191,80 @@ class MFASettingsView(LoginRequiredMixin, TemplateView):
 
 
 class MFABackupCodesView(LoginRequiredMixin, TemplateView):
-    """Einmalige Anzeige frisch generierter Backup-Codes (Refs #588).
+    """Anzeige + verbindliche Quittung frisch generierter Backup-Codes (Refs #588, #1118).
 
-    Die Codes landen nach der Generierung in ``request.session["mfa_backup_codes"]``
-    und werden beim ersten GET direkt wieder aus der Session entfernt. Ein
-    Reload oder zweiter GET zeigt deshalb nichts mehr — bewusste Einmal-
-    Ausgabe, die Codes sind an dieser Stelle Passwort-äquivalent.
+    Die Codes liegen in ``request.session["mfa_backup_codes"]`` und bleiben
+    über Reloads sichtbar, bis der Nutzer ihre Sicherung per POST bestätigt
+    (Checkbox ``confirm_saved``). Diese Quittung wird **serverseitig** geprüft —
+    eine im Frontend umgangene Checkbox schließt das Setup nicht ab. Erst die
+    Bestätigung
+
+    * schaltet im Setup-Flow das ``TOTPDevice`` scharf (``confirmed=True``) und
+    * räumt die Codes aus der Session (danach keine Wiederanzeige mehr).
+
+    Solange nicht quittiert wurde, bleibt der Setup-Status unvollständig: das
+    Device ist unbestätigt, 2FA gilt nicht als eingerichtet (Refs #1118).
     """
 
     template_name = "auth/mfa_backup_codes.html"
 
     def get(self, request, *args, **kwargs):
-        codes = request.session.pop("mfa_backup_codes", None)
+        codes = request.session.get("mfa_backup_codes")
         if not codes:
             messages.info(
                 request,
                 _("Die Codes werden nur einmal angezeigt. Neue Codes lassen sich in den 2FA-Einstellungen generieren."),
             )
             return redirect("mfa_settings")
-        context = self.get_context_data(codes=codes, **kwargs)
+        context = self.get_context_data(
+            codes=codes,
+            setup_pending=bool(request.session.get("mfa_setup_pending")),
+            **kwargs,
+        )
         return self.render_to_response(context)
+
+    @method_decorator(ratelimit(key="user", rate="10/m", method="POST", block=True))
+    def post(self, request, *args, **kwargs):
+        codes = request.session.get("mfa_backup_codes")
+        if not codes:
+            # Nichts zu quittieren (z. B. Reload nach Abschluss) — still zurück.
+            return redirect("mfa_settings")
+
+        if not request.POST.get("confirm_saved"):
+            # Serverseitiges Gate: ohne Bestätigung kein Abschluss (Refs #1118).
+            # Der Hinweis wird inline am Formular gerendert (``confirm_error``).
+            context = self.get_context_data(
+                codes=codes,
+                setup_pending=bool(request.session.get("mfa_setup_pending")),
+                confirm_error=True,
+                **kwargs,
+            )
+            return self.render_to_response(context)
+
+        # Quittung erteilt. Im Setup-Flow jetzt — und erst jetzt — 2FA aktivieren.
+        if request.session.pop("mfa_setup_pending", False):
+            device = TOTPDevice.objects.filter(user=request.user, confirmed=False).first()
+            if device is None:
+                # Defensive: Pending-Marker ohne unbestätigtes Device → neu aufsetzen.
+                request.session.pop("mfa_backup_codes", None)
+                return redirect("mfa_setup")
+            device.confirmed = True
+            device.save(update_fields=["confirmed"])
+            request.session["mfa_verified"] = True
+            log_audit_event(
+                request,
+                AuditLog.Action.MFA_ENABLED,
+                target_obj=request.user,
+                detail={"event": "mfa_setup_confirmed"},
+                facility=getattr(request.user, "facility", None),
+            )
+            messages.success(request, _("Zwei-Faktor-Authentifizierung aktiviert."))
+        else:
+            # Regenerate-Flow: Device ist längst bestätigt, nur Codes quittieren.
+            messages.success(request, _("Backup-Codes gespeichert."))
+
+        request.session.pop("mfa_backup_codes", None)
+        return redirect("mfa_settings")
 
 
 class MFARegenerateBackupCodesView(LoginRequiredMixin, View):

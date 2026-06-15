@@ -34,27 +34,33 @@
         </button>
         <button type="button"
                 data-testid="backup-codes-download"
-                @click="const blob = new Blob([Array.from(document.querySelectorAll('#backup-codes-list li')).map(li => li.textContent.trim()).join('\n') + '\n'], {type:'text/plain'}); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'anlaufstelle-backup-codes.txt'; a.click(); URL.revokeObjectURL(url);"
+                @click="downloadCodes"
                 class="inline-flex items-center px-3 py-2 border border-subtle text-sm rounded-md hover:bg-canvas">
             {% trans "Als Datei herunterladen" %}
         </button>
-        <button type="button" @click="window.print()"
+        <button type="button" @click="printCodes"
                 class="inline-flex items-center px-3 py-2 border border-subtle text-sm rounded-md hover:bg-canvas">
             {% trans "Drucken" %}
         </button>
     </div>
 
-    <form method="get" action="{% url 'mfa_settings' %}" class="print:hidden">
+    <form method="post" class="print:hidden">
+        {% csrf_token %}
+        {% if confirm_error %}
+        <p class="text-sm text-red-700 mb-2" role="alert" data-testid="backup-codes-confirm-error">
+            {% trans "Bitte bestätige zuerst, dass du die Backup-Codes gesichert hast." %}
+        </p>
+        {% endif %}
         <label class="inline-flex items-start gap-2 mb-3 text-sm text-ink-soft">
-            <input type="checkbox" x-model="confirmed" data-testid="backup-codes-confirm"
+            <input type="checkbox" name="confirm_saved" @change="syncConfirmed" data-testid="backup-codes-confirm"
                    class="mt-0.5 rounded border-subtle text-accent focus:ring-accent">
             <span>{% trans "Ich habe die Codes sicher gespeichert." %}</span>
         </label>
         <div>
-            <button type="submit" :disabled="!confirmed"
+            <button type="submit" :disabled="notConfirmed"
                     data-testid="backup-codes-continue"
                     class="inline-flex items-center px-4 py-2 bg-accent text-white text-sm font-medium rounded-md hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed">
-                {% trans "Zu den 2FA-Einstellungen" %}
+                {% if setup_pending %}{% trans "Einrichtung abschließen" %}{% else %}{% trans "Zu den 2FA-Einstellungen" %}{% endif %}
             </button>
         </div>
     </form>

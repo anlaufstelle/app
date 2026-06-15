@@ -38,16 +38,50 @@ document.addEventListener("alpine:init", () => {
         },
     }));
 
-    /** Backup-Codes-Confirmation-Toggle (auth/mfa_backup_codes.html). */
+    /**
+     * Backup-Codes-Confirmation + Aktionen (auth/mfa_backup_codes.html).
+     *
+     * Refs #1118: Der CSP-Build (alpine-csp.min.js) kann keine Inline-
+     * Ausdrücke auswerten — weder `!confirmed` noch die früheren Inline-
+     * `@click`-Handler für Download/Drucken. Solche geworfenen Ausdrucks-
+     * Fehler legten die ganze Komponente lahm, sodass `x-model="confirmed"`
+     * nicht mehr synchronisierte und der Bestätigungs-Button nie korrekt
+     * (de)aktiviert wurde. Daher: alles als registrierte Methoden/Getter.
+     */
     Alpine.data("backupCodesAcknowledge", () => ({
         confirmed: false,
-        copyCodes() {
-            const codes = Array.from(
+        get notConfirmed() {
+            return !this.confirmed;
+        },
+        // `x-model` funktioniert im CSP-Build nicht (erzeugt eine nicht
+        // auswertbare Zuweisung `confirmed = …`). Daher den Checkbox-Zustand
+        // per @change-Handler aus dem Element selbst übernehmen (Refs #1118).
+        syncConfirmed() {
+            this.confirmed = this.$el.checked;
+        },
+        _collectCodes() {
+            return Array.from(
                 document.querySelectorAll("#backup-codes-list li")
             )
                 .map((li) => li.textContent.trim())
                 .join("\n");
-            navigator.clipboard.writeText(codes);
+        },
+        copyCodes() {
+            navigator.clipboard.writeText(this._collectCodes());
+        },
+        downloadCodes() {
+            const blob = new Blob([this._collectCodes() + "\n"], {
+                type: "text/plain",
+            });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "anlaufstelle-backup-codes.txt";
+            a.click();
+            URL.revokeObjectURL(url);
+        },
+        printCodes() {
+            window.print();
         },
     }));
 
