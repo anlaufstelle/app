@@ -3,7 +3,7 @@
 from django.db.models import Case as DBCase
 from django.db.models import Count, IntegerField, Value, When
 
-from core.models import Activity, Client, Event, WorkItem
+from core.models import Client, Event, WorkItem
 from core.services.events import enrich_events_with_preview, get_time_range
 
 
@@ -28,11 +28,6 @@ def _collect_stats(facility, visible_events, time_range):
         .order_by("-count")
     )
 
-    activities_total = Activity.objects.filter(
-        facility=facility,
-        occurred_at__range=time_range,
-    ).count()
-
     workitems_new = WorkItem.objects.filter(
         facility=facility,
         created_at__range=time_range,
@@ -54,7 +49,6 @@ def _collect_stats(facility, visible_events, time_range):
     return {
         "events_total": events_total,
         "events_by_type": events_by_type,
-        "activities_total": activities_total,
         "workitems_new": workitems_new,
         "workitems_completed": workitems_completed,
         "bans_new": bans_new,

@@ -3,10 +3,9 @@
 from datetime import datetime, time, timedelta
 
 import pytest
-from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 
-from core.models import Activity, DocumentType, Event, TimeFilter, WorkItem
+from core.models import DocumentType, Event, TimeFilter, WorkItem
 from core.services.case import build_handover_summary
 
 
@@ -34,29 +33,13 @@ def doc_type_ban(facility):
     )
 
 
-def _make_activity(facility, user, target_obj, **kwargs):
-    """Helper to create an Activity with required GenericForeignKey fields."""
-    ct = ContentType.objects.get_for_model(target_obj)
-    defaults = {
-        "facility": facility,
-        "actor": user,
-        "verb": "created",
-        "summary": "Test activity",
-        "occurred_at": timezone.now(),
-        "target_type": ct,
-        "target_id": target_obj.pk,
-    }
-    defaults.update(kwargs)
-    return Activity.objects.create(**defaults)
-
-
 @pytest.mark.django_db
 class TestBuildHandoverSummary:
     def test_stats_aggregation(self, facility, staff_user, client_identified, doc_type_contact, time_filter_frueh):
-        """Events, activities, workitems in range are counted."""
+        """Events and workitems in range are counted."""
         today = timezone.localdate()
         now = timezone.make_aware(datetime.combine(today, time(12, 0)))
-        ev1 = Event.objects.create(
+        Event.objects.create(
             facility=facility,
             client=client_identified,
             document_type=doc_type_contact,
@@ -72,11 +55,9 @@ class TestBuildHandoverSummary:
             data_json={},
             created_by=staff_user,
         )
-        _make_activity(facility, staff_user, ev1, occurred_at=now)
 
         result = build_handover_summary(facility, today, time_filter_frueh, staff_user)
         assert result["stats"]["events_total"] == 2
-        assert result["stats"]["activities_total"] == 1
         assert result["shift_label"] == "Fruhdienst"
 
     def test_events_by_type_breakdown(
@@ -194,7 +175,6 @@ class TestBuildHandoverSummary:
         today = timezone.localdate()
         result = build_handover_summary(facility, today, time_filter_frueh, staff_user)
         assert result["stats"]["events_total"] == 0
-        assert result["stats"]["activities_total"] == 0
         assert result["highlights"] == []
 
     def test_full_day_without_filter(self, facility, staff_user, client_identified, doc_type_contact):

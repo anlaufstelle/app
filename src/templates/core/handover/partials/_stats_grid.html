@@ -1,14 +1,10 @@
 {% load i18n %}
 
 {# KPI-Karten (Design: HandoverScreen - 4 Mono-Number Cards) #}
-<div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+<div class="grid grid-cols-2 sm:grid-cols-3 gap-3">
     <div class="bg-surface border border-subtle rounded-[10px] px-5 py-4 text-center">
         <div class="text-[28px] font-bold text-ink font-mono leading-none">{{ summary.stats.events_total }}</div>
         <div class="text-[12px] text-ink-muted mt-1">{% trans "Kontakte" %}</div>
-    </div>
-    <div class="bg-surface border border-subtle rounded-[10px] px-5 py-4 text-center">
-        <div class="text-[28px] font-bold text-ink font-mono leading-none">{{ summary.stats.activities_total }}</div>
-        <div class="text-[12px] text-ink-muted mt-1">{% trans "Aktivitäten" %}</div>
     </div>
     <div class="bg-surface border border-subtle rounded-[10px] px-5 py-4 text-center">
         <div class="text-[28px] font-bold text-ink font-mono leading-none">{{ summary.stats.workitems_new }}</div>
