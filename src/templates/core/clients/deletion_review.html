@@ -54,6 +54,7 @@
     {% else %}
     <form method="post" class="flex items-center space-x-3">
         {% csrf_token %}
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
         <button type="submit" name="action" value="approve" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700">
             {% trans "Genehmigen" %}
         </button>

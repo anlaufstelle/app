@@ -10,6 +10,7 @@ import logging
 from django.contrib import messages
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -20,6 +21,7 @@ from core.models import Client, DeletionRequest, Event, User
 from core.services.client import approve_client_deletion, reject_client_deletion
 from core.services.events import approve_deletion, reject_deletion
 from core.views.mixins import DeletionConfirmerRequiredMixin, DeletionRequestListAccessMixin
+from core.views.utils import safe_redirect_path
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +80,12 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
             status=DeletionRequest.Status.PENDING,
         )
 
+        # Einstiegskontext für den Rücksprung nach Review (Refs #1119).
+        # Nur als same-origin Pfad ins Template durchreichen; der eigentliche
+        # Open-Redirect-Schutz greift erneut beim POST.
+        next_url = safe_redirect_path(request.GET.get("next"))
+        next_url = next_url if next_url != "/" else ""
+
         if dr.target_type == DeletionRequest.TargetType.CLIENT:
             try:
                 client = Client.objects.get(pk=dr.target_id, facility=request.current_facility)
@@ -86,7 +94,7 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
             return render(
                 request,
                 "core/clients/deletion_review.html",
-                {"deletion_request": dr, "client": client},
+                {"deletion_request": dr, "client": client, "next_url": next_url},
             )
 
         try:
@@ -99,7 +107,7 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
         return render(
             request,
             "core/events/deletion_review.html",
-            {"deletion_request": dr, "event": event},
+            {"deletion_request": dr, "event": event, "next_url": next_url},
         )
 
     def post(self, request, pk):
@@ -131,4 +139,22 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
                 reject_deletion(dr, request.user)
             messages.info(request, _("Löschantrag wurde abgelehnt."))
 
-        return redirect("core:deletion_request_list" if is_client else "core:zeitstrom")
+        return redirect(self._post_review_redirect(request))
+
+    @staticmethod
+    def _post_review_redirect(request) -> str:
+        """Kontextsensitiver Redirect nach Review (Refs #1119).
+
+        Fachlicher Default ist die Löschantragsliste — für Event **und**
+        Client gleichermaßen, weil dort der Lösch-Workflow verortet ist
+        (vorher führten Event-Anträge überraschend in den Zeitstrom). Ein
+        sicherer same-origin ``?next=`` (z. B. Einstieg aus der
+        Arbeitszentrale) hat Vorrang; offene Redirects werden via
+        ``safe_redirect_path`` verworfen und fallen auf die Liste zurück.
+        """
+        list_url = reverse("core:deletion_request_list")
+        raw_next = request.POST.get("next")
+        if not raw_next:
+            return list_url
+        safe = safe_redirect_path(raw_next)
+        return safe if safe != "/" else list_url
