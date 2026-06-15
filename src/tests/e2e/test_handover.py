@@ -12,9 +12,53 @@ Prüft:
 Refs #661 — Plan Top 3.
 """
 
+import subprocess
+import sys
+
 import pytest
 
 pytestmark = pytest.mark.e2e
+
+
+def _create_overdue_task(username: str, e2e_env) -> None:
+    """Lege eine offene, überfällige Aufgabe für den User an (Refs #1120)."""
+    subprocess.run(
+        [
+            sys.executable,
+            "src/manage.py",
+            "shell",
+            "--no-imports",
+            "-c",
+            (
+                "from datetime import timedelta; from django.utils import timezone; "
+                "from core.models import User, WorkItem; "
+                f"u = User.objects.get(username='{username}'); "
+                "WorkItem.objects.create(facility=u.facility, created_by=u, "
+                "title='E2E ueberfaellig', priority='normal', status='open', "
+                "due_date=timezone.localdate() - timedelta(days=2))"
+            ),
+        ],
+        env=e2e_env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+
+def _cleanup_overdue_task(e2e_env) -> None:
+    subprocess.run(
+        [
+            sys.executable,
+            "src/manage.py",
+            "shell",
+            "--no-imports",
+            "-c",
+            ("from core.models import WorkItem; WorkItem.objects.filter(title='E2E ueberfaellig').delete()"),
+        ],
+        env=e2e_env,
+        capture_output=True,
+        text=True,
+    )
 
 
 class TestHandoverPage:
@@ -48,16 +92,39 @@ class TestHandoverPage:
         assert page.locator("h2:has-text('Frühdienst')").count() >= 1
 
     def test_statistics_section_visible(self, authenticated_page, base_url):
-        """Statistiken-Sektion (Kontakte/Aktivitäten/Aufgaben/Klientel) ist sichtbar."""
+        """Statistiken-Sektion (Kontakte/Aufgaben/Personen) ist sichtbar."""
         page = authenticated_page
         page.goto(f"{base_url}/uebergabe/", wait_until="domcontentloaded")
         assert page.locator("h2:has-text('Statistiken')").is_visible()
 
-    def test_highlights_section_visible(self, authenticated_page, base_url):
-        """'Wichtige Ereignisse'-Sektion wird gerendert."""
+    def test_activities_kpi_removed(self, authenticated_page, base_url):
+        """Refs #1122: Die KPI-Kachel 'Aktivitäten' ist aus der Übergabe entfernt."""
+        page = authenticated_page
+        page.goto(f"{base_url}/uebergabe/?date=2026-04-15", wait_until="domcontentloaded")
+        # Nur innerhalb der Statistik-KPI-Kacheln prüfen.
+        stats = page.locator("h2:has-text('Statistiken')").locator("xpath=following-sibling::*[1]")
+        assert stats.get_by_text("Aktivitäten", exact=True).count() == 0
+        assert stats.get_by_text("Kontakte", exact=True).count() >= 1
+
+    def test_highlights_section_relabeled(self, authenticated_page, base_url):
+        """Refs #1121: Sektion heißt 'Übergabe-relevante Hinweise' mit erklärendem Untertitel."""
         page = authenticated_page
         page.goto(f"{base_url}/uebergabe/", wait_until="domcontentloaded")
-        assert page.locator("h2:has-text('Wichtige Ereignisse')").is_visible()
+        assert page.locator("h2:has-text('Übergabe-relevante Hinweise')").is_visible()
+        assert page.get_by_text("Krisen, Hausverbote und dringende Aufgaben").is_visible()
+        assert page.locator("h2:has-text('Wichtige Ereignisse')").count() == 0
+
+    def test_overdue_open_task_badge_visible(self, authenticated_page, base_url, e2e_env):
+        """Refs #1120: Eine offene überfällige Aufgabe trägt ein 'Überfällig'-Badge."""
+        _create_overdue_task("admin", e2e_env)
+        try:
+            page = authenticated_page
+            page.goto(f"{base_url}/uebergabe/", wait_until="domcontentloaded")
+            badge = page.locator("[data-testid='handover-task-overdue']").first
+            badge.wait_for(state="visible", timeout=10000)
+            assert "Überfällig" in badge.inner_text()
+        finally:
+            _cleanup_overdue_task(e2e_env)
 
     def test_open_tasks_section_visible(self, authenticated_page, base_url):
         """'Offene Aufgaben'-Sektion wird gerendert."""
