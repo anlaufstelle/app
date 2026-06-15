@@ -6115,3 +6115,11 @@ msgstr "Please confirm first that you have saved your backup codes."
 #: src/templates/auth/mfa_backup_codes.html:63
 msgid "Einrichtung abschließen"
 msgstr "Finish setup"
+
+#: src/templates/core/handover/index.html:62
+msgid "Übergabe-relevante Hinweise"
+msgstr "Handover-relevant notes"
+
+#: src/templates/core/handover/index.html:63
+msgid "Krisen, Hausverbote und dringende Aufgaben"
+msgstr "Crises, bans and urgent tasks"

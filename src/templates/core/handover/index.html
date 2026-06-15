@@ -57,9 +57,10 @@
     {% include "core/handover/partials/_stats_grid.html" %}
 </div>
 
-{# Highlights #}
+{# Highlights — automatisch aus Krisen/Hausverboten/dringenden Aufgaben (Refs #1121) #}
 <div class="mb-6">
-    <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Wichtige Ereignisse" %}</h2>
+    <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-0.5">{% trans "Übergabe-relevante Hinweise" %}</h2>
+    <p class="text-[12px] text-ink-muted mb-2.5">{% trans "Krisen, Hausverbote und dringende Aufgaben" %}</p>
     {% include "core/handover/partials/_highlights.html" %}
 </div>
 

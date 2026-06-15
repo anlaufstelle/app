@@ -5834,3 +5834,11 @@ msgstr ""
 #: src/templates/auth/mfa_backup_codes.html:63
 msgid "Einrichtung abschließen"
 msgstr ""
+
+#: src/templates/core/handover/index.html:62
+msgid "Übergabe-relevante Hinweise"
+msgstr ""
+
+#: src/templates/core/handover/index.html:63
+msgid "Krisen, Hausverbote und dringende Aufgaben"
+msgstr ""
