@@ -4327,6 +4327,10 @@ msgstr "no date"
 msgid "Zuletzt bearbeitete Personen"
 msgstr "Recently edited people"
 
+#: src/templates/core/dashboard/role_staff.html:29
+msgid "Aufgaben mit überschrittenem Termin"
+msgstr "Tasks past their due date"
+
 #: src/templates/core/dashboard/role_super_admin.html:4
 #: src/templates/core/dashboard/role_super_admin.html:9
 msgid "System-Arbeitszentrale"

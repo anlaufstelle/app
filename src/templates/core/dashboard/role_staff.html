@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n date_tags %}
 
 {% block title %}{% trans "Arbeitszentrale" %} – Anlaufstelle{% endblock %}
 
@@ -23,10 +23,10 @@
         <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-my-workitems">{{ my_open_workitems_count }}</div>
         <div class="text-[12px] text-ink-soft mt-1">{% trans "Offen / In Bearbeitung" %}</div>
     </a>
-    <a href="{% url 'core:client_list' %}" class="card p-4 hover:border-accent transition-colors block">
-        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Zuletzt bearbeitet" %}</div>
-        <div class="text-[28px] font-bold text-ink mt-1" data-testid="card-recent-clients">{{ recent_clients|length }}</div>
-        <div class="text-[12px] text-ink-soft mt-1">{% trans "Personen kürzlich aktualisiert" %}</div>
+    <a href="{% url 'core:workitem_inbox' %}" class="card p-4 hover:border-accent transition-colors block">
+        <div class="text-[12px] text-ink-muted uppercase tracking-wide">{% trans "Überfällig" %}</div>
+        <div class="text-[28px] font-bold {% if my_overdue_count %}text-red-600{% else %}text-ink{% endif %} mt-1" data-testid="card-overdue">{{ my_overdue_count }}</div>
+        <div class="text-[12px] text-ink-soft mt-1">{% trans "Aufgaben mit überschrittenem Termin" %}</div>
     </a>
 </div>
 
@@ -39,20 +39,16 @@
             <a href="{% url 'core:workitem_detail' wi.pk %}" class="text-[13px] text-ink hover:text-accent">
                 {{ wi.title }}
             </a>
-            <span class="text-[12px] text-ink-muted">{% if wi.due_date %}{{ wi.due_date|date:"d.m.Y" }}{% else %}{% trans "ohne Termin" %}{% endif %}</span>
-        </li>
-        {% endfor %}
-    </ul>
-</section>
-{% endif %}
-
-{% if recent_clients %}
-<section class="bg-surface border border-subtle rounded-[10px] overflow-hidden">
-    <h2 class="text-[15px] font-semibold text-ink px-4 py-3 border-b border-subtle">{% trans "Zuletzt bearbeitete Personen" %}</h2>
-    <ul class="divide-y divide-subtle">
-        {% for c in recent_clients %}
-        <li class="px-4 py-3">
-            <a href="{% url 'core:client_detail' c.pk %}" class="text-[13px] text-ink hover:text-accent">{{ c.pseudonym }}</a>
+            {% if wi.due_date %}
+                {% due_date_info wi as ddi %}
+                {% if ddi.is_overdue %}
+                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[12px] font-semibold bg-red-100 text-red-700" data-testid="staff-task-overdue">{% trans "Überfällig" %}</span>
+                {% else %}
+                <span class="text-[12px] {{ ddi.css_class }}">{{ ddi.text }}</span>
+                {% endif %}
+            {% else %}
+                <span class="text-[12px] text-ink-muted">{% trans "ohne Termin" %}</span>
+            {% endif %}
         </li>
         {% endfor %}
     </ul>

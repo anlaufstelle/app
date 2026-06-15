@@ -5842,3 +5842,7 @@ msgstr ""
 #: src/templates/core/handover/index.html:63
 msgid "Krisen, Hausverbote und dringende Aufgaben"
 msgstr ""
+
+#: src/templates/core/dashboard/role_staff.html:29
+msgid "Aufgaben mit überschrittenem Termin"
+msgstr "Aufgaben mit überschrittenem Termin"

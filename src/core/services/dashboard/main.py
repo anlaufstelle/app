@@ -11,12 +11,12 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 
+from django.db.models import F
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
 from core.models import (
     AuditLog,
-    Client,
     DeletionRequest,
     Event,
     Facility,
@@ -32,8 +32,9 @@ from core.models import (
 def staff_dashboard_context(user, facility) -> dict:
     """Daten fuer die Fachkraft-/Assistent-Arbeitszentrale.
 
-    Karten: heutige Kontakte, eigene offene Aufgaben, zuletzt
-    bearbeitete Personen.
+    Nur Handlungsbedarf: heutige Kontakte, eigene offene Aufgaben mit
+    Faelligkeit zuerst (ueberfaellige oben), Ueberfaellig-Zaehler.
+    Persoenlich-historische Listen leben im Profil (Refs #1124).
     """
     today = timezone.localdate()
     today_start = timezone.make_aware(datetime.combine(today, time.min))
@@ -46,23 +47,19 @@ def staff_dashboard_context(user, facility) -> dict:
         is_deleted=False,
     ).count()
 
-    my_open_workitems = (
-        WorkItem.objects.filter(
-            facility=facility,
-            assigned_to=user,
-            status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS],
-        )
-        .select_related("client")
-        .order_by("due_date", "-created_at")[:5]
-    )
+    open_qs = WorkItem.objects.filter(
+        facility=facility,
+        assigned_to=user,
+        status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS],
+    ).select_related("client")
 
-    recent_clients = list(Client.objects.filter(facility=facility, is_active=True).order_by("-updated_at")[:5])
+    my_open_workitems = open_qs.order_by(F("due_date").asc(nulls_last=True), "-created_at")[:5]
 
     return {
         "today_events_count": today_events_count,
         "my_open_workitems": list(my_open_workitems),
-        "my_open_workitems_count": my_open_workitems.count(),
-        "recent_clients": recent_clients,
+        "my_open_workitems_count": open_qs.count(),
+        "my_overdue_count": open_qs.filter(due_date__lt=today).count(),
     }
 
 
