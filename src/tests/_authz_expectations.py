@@ -110,7 +110,11 @@ EXPECTATIONS = (
     E("core:account_profile", "auth-flow", get=ALL_AUTH),
     # ---- facility-read (Assistenz aufwärts; super_admin AUSGESCHLOSSEN) -
     E("core:zeitstrom", "facility-read", get=ASSISTANT_PLUS),
-    E("core:handover", "facility-read", get=ASSISTANT_PLUS),
+    # Refs #1124: /uebergabe/ ist ein permanenter Redirect auf
+    # /?view=uebergabe (RedirectView, keine eigene AuthZ). 301 für alle
+    # Akteure inkl. anonym — der Übergabe-Inhalt selbst ist über
+    # ZeitstromView (ASSISTANT_PLUS) gegated.
+    E("core:handover", "public", get=ALL_AUTH, anonymous_ok=True),
     E("core:client_list", "facility-read", get=ASSISTANT_PLUS),
     E(
         "core:client_detail",

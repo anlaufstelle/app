@@ -54,7 +54,6 @@ from core.views.events import (
     EventFieldsPartialView,
     EventUpdateView,
 )
-from core.views.handover import HandoverView
 from core.views.lockout_recovery import (
     LockoutRecoveryBackupCodeView,
     LockoutRecoveryConfirmView,
@@ -122,8 +121,8 @@ urlpatterns = [
     path("", ZeitstromView.as_view(), name="zeitstrom"),
     # Rollenbezogene Arbeitszentrale (Refs #920)
     path("start/", RoleDashboardView.as_view(), name="dashboard"),
-    # Übergabe
-    path("uebergabe/", HandoverView.as_view(), name="handover"),
+    # Übergabe → in den Zeitstrom gefaltet (?view=uebergabe). Refs #1124.
+    path("uebergabe/", RedirectView.as_view(url="/?view=uebergabe", permanent=True), name="handover"),
     # Redirects (alte URLs)
     path("aktivitaetslog/", RedirectView.as_view(pattern_name="core:zeitstrom", permanent=True)),
     path("timeline/", RedirectView.as_view(pattern_name="core:zeitstrom", permanent=True)),

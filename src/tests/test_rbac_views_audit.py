@@ -112,23 +112,22 @@ class TestAuditLogDetailViewRBAC:
 
 
 @pytest.mark.django_db
-class TestHandoverViewRBAC:
-    """HandoverView — GET, AssistantOrAboveRequiredMixin."""
+class TestHandoverRedirect:
+    """/uebergabe/ ist in den Zeitstrom gefaltet (?view=uebergabe). Refs #1124.
+
+    Der permanente Redirect trägt selbst keine AuthZ-Logik; die Rollen-Gates
+    für den Übergabe-Inhalt deckt ``TestZeitstromViewRBAC`` (AssistantOrAbove)
+    ab, da die Übergabe nur ein Modus der ZeitstromView ist."""
 
     @pytest.mark.parametrize(
-        "user_fixture,expected_status",
-        [
-            ("admin_user", 200),
-            ("lead_user", 200),
-            ("staff_user", 200),
-            ("assistant_user", 200),
-            ("super_admin_user", 403),
-        ],
+        "user_fixture",
+        ["admin_user", "lead_user", "staff_user", "assistant_user", "super_admin_user"],
     )
-    def test_handover(self, client, user_fixture, expected_status, request):
+    def test_handover_redirects(self, client, user_fixture, request):
         _login(client, user_fixture, request)
         response = client.get(reverse("core:handover"))
-        assert response.status_code == expected_status
+        assert response.status_code == 301
+        assert response.url == "/?view=uebergabe"
 
 
 @pytest.mark.django_db
@@ -205,7 +204,6 @@ class TestUnauthenticatedRedirectsMatrix:
     @pytest.mark.parametrize(
         "url_name,kwargs",
         [
-            ("core:handover", None),
             ("core:case_list", None),
             ("core:case_create", None),
             ("core:workitem_inbox", None),

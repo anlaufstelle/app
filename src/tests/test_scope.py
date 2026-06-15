@@ -359,10 +359,10 @@ class TestHandoverScope:
         )
 
         client.force_login(staff_user)
-        response = client.get(reverse("core:handover"))
+        response = client.get(reverse("core:zeitstrom"), {"view": "uebergabe"})
 
         assert response.status_code == 200
-        summary = response.context["summary"]
+        summary = response.context["uebergabe_summary"]
         assert summary["stats"]["events_total"] == 0
 
     def test_handover_other_facility_workitems_not_shown(self, client, staff_user, facility, organization):
@@ -379,10 +379,10 @@ class TestHandoverScope:
         )
 
         client.force_login(staff_user)
-        response = client.get(reverse("core:handover"))
+        response = client.get(reverse("core:zeitstrom"), {"view": "uebergabe"})
 
         assert response.status_code == 200
-        open_tasks = response.context["summary"]["open_tasks"]
+        open_tasks = response.context["uebergabe_summary"]["open_tasks"]
         task_titles = [t.title for t in open_tasks]
         assert "Fremde Handover-Aufgabe" not in task_titles
 

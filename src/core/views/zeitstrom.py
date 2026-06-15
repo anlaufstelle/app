@@ -139,6 +139,17 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                 "active_bans": active_bans,
             }
         )
+
+        # Übergabe-Modus: Schicht-Zusammenfassung als Primärinhalt (Refs #1124).
+        if self.request.GET.get("view") == "uebergabe":
+            uebergabe_filter = self._select_handover_shift(time_filters, target_date)
+            context["uebergabe_mode"] = True
+            context["uebergabe_summary"] = build_handover_summary(
+                facility, target_date, uebergabe_filter, self.request.user
+            )
+            context["selected_filter"] = uebergabe_filter
+            context["selected_filter_id"] = str(uebergabe_filter.pk) if uebergabe_filter else "all"
+
         return context
 
     def _get_target_date(self):
@@ -149,6 +160,21 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
             except ValueError:
                 pass
         return timezone.localdate()
+
+    def _select_handover_shift(self, time_filters, target_date):
+        """Vorschicht-Auto-Wahl fuer den Uebergabe-Modus (Port aus HandoverView)."""
+        time_filter_id = self.request.GET.get("time_filter")
+        if time_filter_id and time_filter_id != "all":
+            return time_filters.filter(pk=time_filter_id).first()
+        if target_date == timezone.localdate():
+            now = timezone.localtime()
+            prev_filter = None
+            for tf in time_filters:
+                if tf.covers_time(now):
+                    break
+                prev_filter = tf
+            return prev_filter
+        return None
 
 
 class ZeitstromFeedPartialView(AssistantOrAboveRequiredMixin, TemplateView):

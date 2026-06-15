@@ -3392,9 +3392,12 @@ msgstr ""
 msgid "Zeitstrom"
 msgstr "Zeitstrom"
 
+#: src/templates/core/zeitstrom/index.html:28
+msgid "Feed"
+msgstr "Feed"
+
 #: src/templates/base.html:142 src/templates/base.html:326
-#: src/templates/core/handover/index.html:4
-#: src/templates/core/handover/index.html:9
+#: src/templates/core/zeitstrom/index.html:29
 msgid "Übergabe"
 msgstr "Übergabe"
 

@@ -70,7 +70,7 @@ SHOTS: list[Shot] = [
     Shot("login", "/login/", role=None, langs=("de",)),
     Shot("ereignis-anlegen", "core:event_create"),
     Shot("fallakte", "core:case_detail", pk_kind="case", full_page=True),
-    Shot("uebergabe", "core:handover"),
+    Shot("uebergabe", "/?view=uebergabe"),
     Shot("statistik-extern", "core:statistics_external_report"),
     Shot("dsgvo-paket", "core:dsgvo_package"),
     # NOTE: /system/-Screens (compliance, systembereich) brauchen Sudo-Mode und

@@ -286,33 +286,60 @@ class TestZeitstromPreviewEnrichment:
 
 
 @pytest.mark.django_db
-class TestHandoverView:
-    """Tests for the /uebergabe/ page."""
+class TestZeitstromUebergabeMode:
+    """Übergabe als ?view=uebergabe-Modus im Zeitstrom (Refs #1124)."""
 
-    def test_handover_page_renders(self, client, staff_user, facility):
+    def test_uebergabe_mode_has_summary(self, client, staff_user, facility):
         client.force_login(staff_user)
-        response = client.get(reverse("core:handover"))
+        response = client.get(reverse("core:zeitstrom"), {"view": "uebergabe"})
         assert response.status_code == 200
-        assert "Übergabe" in response.content.decode()
+        assert response.context["uebergabe_mode"] is True
+        assert response.context["uebergabe_summary"] is not None
 
-    def test_handover_requires_auth(self, client):
-        response = client.get(reverse("core:handover"))
-        assert response.status_code == 302
-
-    def test_handover_context_has_summary(self, client, staff_user, facility):
-        client.force_login(staff_user)
-        response = client.get(reverse("core:handover"))
-        assert "summary" in response.context
-
-    def test_handover_with_time_filter(self, client, staff_user, time_filter_frueh):
+    def test_uebergabe_mode_explicit_shift(self, client, staff_user, time_filter_frueh):
         client.force_login(staff_user)
         response = client.get(
-            reverse("core:handover"),
-            {"time_filter": str(time_filter_frueh.pk)},
+            reverse("core:zeitstrom"),
+            {"view": "uebergabe", "time_filter": str(time_filter_frueh.pk)},
+        )
+        assert response.context["uebergabe_summary"]["shift_label"] == "Frühdienst"
+
+    def test_uebergabe_mode_auto_selects_previous_shift(
+        self, client, staff_user, facility, time_filter_frueh, time_filter_spaet
+    ):
+        today = date(2025, 6, 15)
+        mock_now = timezone.make_aware(datetime.combine(today, time(18, 0)))
+        with (
+            patch("core.views.zeitstrom.timezone.localdate", return_value=today),
+            patch("core.views.zeitstrom.timezone.localtime", return_value=mock_now),
+        ):
+            client.force_login(staff_user)
+            response = client.get(reverse("core:zeitstrom"), {"view": "uebergabe"})
+        assert response.context["selected_filter"] == time_filter_frueh
+
+    def test_uebergabe_mode_invalid_date_falls_back_to_today(self, client, staff_user):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom"), {"view": "uebergabe", "date": "not-a-date"})
+        assert response.status_code == 200
+        assert response.context["target_date"] == timezone.localdate()
+
+    def test_uebergabe_mode_invalid_time_filter_ignored(self, client, staff_user, facility):
+        client.force_login(staff_user)
+        response = client.get(
+            reverse("core:zeitstrom"),
+            {"view": "uebergabe", "time_filter": "00000000-0000-0000-0000-000000000000"},
         )
         assert response.status_code == 200
-        summary = response.context["summary"]
-        assert summary["shift_label"] == "Frühdienst"
+        assert response.context["selected_filter"] is None
+
+
+@pytest.mark.django_db
+class TestUebergabeRedirect:
+    def test_uebergabe_url_redirects(self, client, staff_user):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:handover"))
+        assert response.status_code == 301
+        assert response.url == "/?view=uebergabe"
 
 
 @pytest.mark.django_db

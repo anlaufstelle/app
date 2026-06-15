@@ -54,7 +54,7 @@
         {% endif %}
         {# Slot 5: Mehr (inkl. Suche, Übergabe und sonstiger Items) #}
         <div class="relative" x-data="mobileMore">
-            <button @click="toggleMore" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'handover,case_list,case_detail,case_create,case_update,attachment_list,search,statistics,deletion_request_list,deletion_review,retention_dashboard,audit_log,dsgvo_package,dsgvo_document,account_profile' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-more">
+            <button @click="toggleMore" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'case_list,case_detail,case_create,case_update,attachment_list,search,statistics,deletion_request_list,deletion_review,retention_dashboard,audit_log,dsgvo_package,dsgvo_document,account_profile' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-more">
                 <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
                 <span class="text-[12px] font-medium">{% trans "Mehr" %}</span>
             </button>
@@ -67,7 +67,6 @@
                     {% trans "Suche" %}
                 </button>
                 <div class="border-t border-subtle my-1"></div>
-                <a href="{% url 'core:handover' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "Übergabe" %}</a>
                 {% if user.is_staff_or_above %}
                 <a href="{% url 'core:case_list' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "Fälle" %}</a>
                 {% endif %}

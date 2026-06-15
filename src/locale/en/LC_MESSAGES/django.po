@@ -4816,10 +4816,11 @@ msgstr "Contacts by Age Group"
 msgid "Top 5 Personen"
 msgstr "Top 5 people"
 
-#: src/templates/core/handover/index.html:4
-#: src/templates/core/handover/index.html:9
-#: src/templates/partials/_navigation_desktop.html:81
-#: src/templates/partials/_navigation_mobile.html:70
+#: src/templates/core/zeitstrom/index.html:28
+msgid "Feed"
+msgstr "Feed"
+
+#: src/templates/core/zeitstrom/index.html:29
 msgid "Übergabe"
 msgstr "Handover"
 
