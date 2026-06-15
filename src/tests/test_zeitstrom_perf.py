@@ -124,3 +124,34 @@ class TestZeitstromViewQueryCount:
             f"Differenz {large_queries - small_queries} > 3 deutet auf N+1 hin "
             f"(Sidebar muss select_related('client', 'assigned_to') haben)."
         )
+
+    def test_staff_cockpit_query_count_constant(self, client, facility, normal_doc_type, staff_user, client_identified):
+        from django.db import connection
+
+        client.force_login(staff_user)
+        WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            client=client_identified,
+            title="A1",
+            status=WorkItem.Status.OPEN,
+            assigned_to=staff_user,
+        )
+        with CaptureQueriesContext(connection) as ctx_small:
+            assert client.get(reverse("core:zeitstrom")).status_code == 200
+        small = len(ctx_small.captured_queries)
+
+        for i in range(8):
+            WorkItem.objects.create(
+                facility=facility,
+                created_by=staff_user,
+                client=client_identified,
+                title=f"A{i + 2}",
+                status=WorkItem.Status.OPEN,
+                assigned_to=staff_user,
+            )
+        with CaptureQueriesContext(connection) as ctx_large:
+            assert client.get(reverse("core:zeitstrom")).status_code == 200
+        large = len(ctx_large.captured_queries)
+
+        assert large <= small + 3, f"staff-Cockpit skaliert nicht-konstant: {small} -> {large} Queries."

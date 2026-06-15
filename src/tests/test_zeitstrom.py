@@ -152,6 +152,23 @@ class TestZeitstromView:
         response = client.get(reverse("core:zeitstrom"))
         assert "document_types" in response.context
 
+    def test_staff_sees_cockpit_header(self, client, staff_user, facility):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom"))
+        assert response.context["show_cockpit"] is True
+        assert b"zeitstrom-cockpit" in response.content
+
+    def test_assistant_sees_cockpit_header(self, client, assistant_user, facility):
+        client.force_login(assistant_user)
+        response = client.get(reverse("core:zeitstrom"))
+        assert response.context["show_cockpit"] is True
+        assert b"zeitstrom-cockpit" in response.content
+
+    def test_lead_no_cockpit_header(self, client, lead_user, facility):
+        client.force_login(lead_user)
+        response = client.get(reverse("core:zeitstrom"))
+        assert "show_cockpit" not in response.context
+
     def test_facility_scoping(self, client, staff_user, facility, other_facility, doc_type_contact):
         """Events from other facilities are not shown."""
         other_doc = doc_type_contact.__class__.objects.create(

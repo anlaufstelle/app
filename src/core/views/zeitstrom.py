@@ -10,6 +10,7 @@ from django.views.generic import TemplateView
 
 from core.models import DocumentType, TimeFilter, WorkItem
 from core.services.case import build_handover_summary
+from core.services.dashboard import staff_dashboard_context
 from core.services.events import build_feed_items, enrich_events_with_preview
 from core.services.system import get_active_bans
 from core.views.mixins import AssistantOrAboveRequiredMixin
@@ -139,6 +140,12 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                 "active_bans": active_bans,
             }
         )
+
+        # Rollen-Cockpit als Kopf der Start-Seite — nur Fachkraft/Assistenz
+        # (Leitung/Admin behalten /start/). Refs #1124.
+        if not self.request.user.is_lead_or_admin and not self.request.user.is_super_admin:
+            context["show_cockpit"] = True
+            context["cockpit"] = staff_dashboard_context(self.request.user, facility)
 
         # Übergabe-Modus: Schicht-Zusammenfassung als Primärinhalt (Refs #1124).
         if self.request.GET.get("view") == "uebergabe":

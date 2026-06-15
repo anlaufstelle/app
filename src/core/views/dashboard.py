@@ -11,6 +11,7 @@ den Staff-/else-Zweig).
 from __future__ import annotations
 
 from django.contrib.auth.mixins import LoginRequiredMixin
+from django.shortcuts import redirect
 from django.views.generic import TemplateView
 
 from core.services.dashboard import (
@@ -27,6 +28,12 @@ class RoleDashboardView(LoginRequiredMixin, TemplateView):
     Wahl des Templates anhand ``user.role``; Daten-Aggregation in
     :mod:`core.services.dashboard`.
     """
+
+    def get(self, request, *args, **kwargs):
+        # Fachkraft/Assistenz: Cockpit lebt auf der Start-Seite (Refs #1124).
+        if not request.user.is_super_admin and not request.user.is_lead_or_admin:
+            return redirect("core:zeitstrom")
+        return super().get(request, *args, **kwargs)
 
     def get_template_names(self) -> list[str]:
         user = self.request.user
