@@ -2877,6 +2877,19 @@ msgstr "Keine Berechtigung für diese Aufgabe."
 msgid "%(count)d Aufgaben aktualisiert."
 msgstr "Aufgabe wurde aktualisiert."
 
+#: src/core/views/workitem_bulk.py:134
+#, python-format
+msgid ""
+"%(forbidden)d der %(total)d ausgewählten Aufgaben ist einer anderen Person "
+"zugewiesen und kann nicht per Sammelaktion geändert werden. Bitte diese "
+"Aufgabe abwählen."
+msgid_plural ""
+"%(forbidden)d der %(total)d ausgewählten Aufgaben sind anderen Personen "
+"zugewiesen und können nicht per Sammelaktion geändert werden. Bitte diese "
+"Aufgaben abwählen."
+msgstr[0] ""
+msgstr[1] ""
+
 #: src/core/views/workitem_bulk.py:107
 #, fuzzy
 #| msgid "Ungültiger Status"

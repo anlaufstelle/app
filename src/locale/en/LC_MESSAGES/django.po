@@ -2933,6 +2933,23 @@ msgstr "No permission for this task."
 msgid "%(count)d Aufgaben aktualisiert."
 msgstr "%(count)d tasks updated."
 
+#: src/core/views/workitem_bulk.py:134
+#, python-format
+msgid ""
+"%(forbidden)d der %(total)d ausgewählten Aufgaben ist einer anderen Person "
+"zugewiesen und kann nicht per Sammelaktion geändert werden. Bitte diese "
+"Aufgabe abwählen."
+msgid_plural ""
+"%(forbidden)d der %(total)d ausgewählten Aufgaben sind anderen Personen "
+"zugewiesen und können nicht per Sammelaktion geändert werden. Bitte diese "
+"Aufgaben abwählen."
+msgstr[0] ""
+"%(forbidden)d of the %(total)d selected tasks is assigned to another person "
+"and cannot be changed via bulk action. Please deselect that task."
+msgstr[1] ""
+"%(forbidden)d of the %(total)d selected tasks are assigned to other people "
+"and cannot be changed via bulk action. Please deselect those tasks."
+
 #: src/core/views/workitem_bulk.py:121
 msgid "Ungültige Priorität"
 msgstr "Invalid status"
