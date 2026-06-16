@@ -6,13 +6,63 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+Sicherheits- und Stabilisierungs-Release (Pre-Release) auf dem Weg zur Demo-Version: vertieft die Härtungsagenda nach v0.14.0 — eine Laufzeit-Autorisierungs-Matrix als dauerhafter Nachweis, ein datenbankweiter PII-Residue-Sweep nach Löschung und Retention, die Entkopplung der Vier-Augen-Löschfreigabe in einen rollenunabhängigen Genehmiger-Pool und die abschließende Härtung des Offline-Caches (ADR-022). Dazu der Datenbank-Major-Sprung auf PostgreSQL 18, Node 24 LTS in der Build-Toolchain sowie UI-Polish rund um die neue Arbeitszentrale und die Schichtübergabe. Keine Datenmodell-Brüche; Vorwärts-Migration ohne Datenverlust. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
+
+### Security
+
+- **Datenbankweiter PII-Residue-Sweep nach Löschung & Retention** (#1083) — ein zeilenweiser Bedarfs-Scan über die facility-gescopten Tabellen deckte stille Klartext-Reste nach Anonymisierung/Retention auf. Behoben: `Event.data_json`/`search_text` werden bei `anonymize_client` redigiert (#1089), ebenso die WorkItem-bezogene `Activity` (#1090) und der Client-Target-Löschantrag (#1091); der Retention-Soft-Delete tilgt jetzt auch den `search_text` der Event-Zeile (#1092); Klienten-PII wird beim Schreiben aus `AuditLog.detail` minimiert (#1093); und der K-Anonymitäts-Retention-Pfad kaskadiert die Tilgung auf Fall-/Episoden-/Aufgaben-Freitext (ADR-023, #1094).
+- **Klartext-Pseudonym bei Anonymisierung redigiert** (#1067) — das Klartext-Pseudonym wird bei der Klienten-Anonymisierung auch aus `Activity.summary` entfernt.
+- **Offline-Cache abschließend gehärtet (ADR-022)** (#1100) — der verschlüsselte Offline-Snapshot setzt jetzt seine TTL durch und revalidiert serverseitig (#1110); der Cache-Zugriff wird bei Rollenwechsel und Deaktivierung entzogen (#1110); ein Idempotenzschlüssel verhindert Doppel-Submits beim Queue-Replay und `updated_at` wandert ins Event-Bundle für die Konflikterkennung (#1109); der Krypto-Schlüssel ist an die Session-Lebenszeit gekoppelt (#1065).
+- **MFA-Backup-Code-Bestätigung serverseitig erzwungen** (#1118) — die Quittierung der Backup-Codes ist ein verbindliches Setup-Gate und wird serverseitig durchgesetzt, nicht nur im UI.
+- **File-Vault-Downgrade abgewehrt** (#1069) — ein `[v1][count=0]`-Header gegen einen v2-Chunk-Block wird als Blanking-/Downgrade-Versuch abgelehnt statt als leerer Inhalt akzeptiert.
+- **Objektzugriff erst nach Auth bei Event-Update/-Delete** (#1072) — die Event-Bearbeitungs-/Lösch-Views greifen erst nach dem Login-/Berechtigungs-Check auf das Objekt zu.
+- **`client.notes` hinter staff+-Gate** (#1068) — das Freitext-Notizfeld wird im Web-Detail nur ab Rolle `staff` aufwärts gerendert.
+- **CSV-Formel-Injection im Audit-Export neutralisiert** (#1064) — der AuditLog-Export entschärft führende Formelzeichen, analog zum bestehenden Schutz im Events-/Statistik-Export.
+- **Legal-Hold-Bypass im Papierkorb geschlossen** (#1066) — der Client-Papierkorb-Pfad respektiert einen aktiven Legal Hold und lässt sich nicht mehr umgehen.
+- **Ratelimit für DSGVO-Export und Attachment-Download** (#1084) — beide Download-Pfade sind gegen Massenabruf rate-limitiert.
+- **Fehlgeschlagene Sudo-Re-Authentifizierung auditiert** (#1084) — eine misslungene Sudo-Re-Auth schreibt einen `SUDO_MODE_FAILED`-AuditLog-Eintrag und zählt zu den kritischen Aktionen des Compliance-Checks.
+- **Admin-CSP-Relax nur für `text/html`** (#1084) — die gelockerte CSP des Admin-Bereichs greift nur noch für HTML-Antworten, nicht für andere Content-Types.
+- **Laufzeit-Autorisierungs-Matrix als dauerhafter Nachweis** (#1055) — eine parametrisierte Live-Test-Suite prüft am laufenden System alle Rollen über die URL-Patterns inklusive IDOR-Proben über Facility-Grenzen, Session-Cookie-Flags und Security-Header; Befunde sind als `KNOWN_GAPS` mit Folge-Issue dokumentiert.
+- **Threat-Model auf HMAC-SHA256-Backup-Integrität nachgezogen** (#1099) — `docs/threat-model.md` beschrieb Backups noch als nur „AES-256-CBC verschlüsselt"; Asset-Tabelle und Trust-Boundary TB5 spiegeln jetzt den real ausgelieferten Encrypt-then-MAC-Schutz (detached HMAC-SHA256-Sidecar, der vor der Entschlüsselung geprüft wird).
+
+### Added
+
+- **Arbeitszentrale als Cockpit-Kopf der Start-Seite** (#1124) — eine schlanke Arbeitszentrale bündelt den Handlungsbedarf der Schicht an der Spitze der Start-Seite.
+- **Recht „Löschbestätigung" — Genehmiger-Pool entkoppelt von der Rolle** (#1053) — die zweite Person der Vier-Augen-Löschfreigabe ist jetzt über ein eigenes Recht (`can_confirm_deletion`) kuratierbar statt fest an die Leitungsrolle gebunden; das entdeadlockt den Workflow bei nur einer Leitung.
+- **Deployte Version im Footer** (#1050) — das eingeloggte Layout zeigt die laufende Version im Footer (Login-Seite bleibt versionslos); im Demo-/Pilotbetrieb erleichtert das die Zuordnung.
+- **Klarsicht-Toggle für Passwortfelder** (#1049) — ein Auge-Button blendet Passwörter ein/aus (`aria-pressed`), als wiederverwendbares Formularfeld-Pattern.
+
 ### Changed
 
-- **Englische Dokumentation vollständig auf v0.14.0 synchronisiert** (#1078, #1071) — README.en, CONTRIBUTING.en und docs/en/* decken jetzt u. a. Arbeitszentrale, Lockout-Selbsthilfe (E-Mail/Backup-Code), Drei-Rollen-Datenbankmodell, Compliance-Dashboard, Genehmiger-Pool und datenschutzfreundliche externe Berichte ab.
+- **PostgreSQL 16 → 18** (#1039) — Datenbank-Major-Upgrade: Image-Pins und PG18-Volume-Layout in allen Compose-Dateien, Drei-Rollen-/RLS-Verifikation und Major-Upgrade-Runbook (§ 13) nachgezogen.
+- **Node 20 → 24 LTS** (#1075) — Build-Toolchain und CI laufen auf Node 24 LTS (Node 20 EOL 2026-04-30); CONTRIBUTING auf Node 24+ angehoben.
+- **Schichtübergabe als Ansicht im Zeitstrom** (#1124) — die Übergabe ist in den Zeitstrom als Schicht-Ansicht gefaltet und die staff-Arbeitszentrale auf den reinen Handlungsbedarf verschlankt.
+- **Englische Dokumentation vollständig synchronisiert** (#1078, #1071) — README.en, CONTRIBUTING.en und docs/en/* decken jetzt u. a. Arbeitszentrale, Lockout-Selbsthilfe (E-Mail/Backup-Code), Drei-Rollen-Datenbankmodell, Compliance-Dashboard, Genehmiger-Pool und datenschutzfreundliche externe Berichte ab.
 - **Übersetzungs-Gate verschärft** (#1078) — `scripts/check_translation_versions.py` verlangt Übersetzungs-Sync mit jedem Minor-Release (`MAX_MINOR_BEHIND` 2 → 0); Teil der neuen EN-Sync-Policy „hartes Release-Gate".
-- **Compose-Image-Pins vereinheitlicht** (#1082) — `docker-compose.staging.yml` und `docker-compose.prod.yml` ziehen den App-Image-Tag konsistent über `${APP_VERSION:-v0.14.0}` (vorher war staging hart auf das vier Minors alte `v0.10.2` gepinnt und der prod-Fallback ebenfalls veraltet). Der Release-Doc-Sync hält den Fallback künftig aktuell.
-- **Release-Testprofile auf automatisiert-first umgestellt** (#1081) — `docs/testing/release-test-profiles.md` definiert nun ein verbindliches automatisiertes Gate (`make ci` + volle E2E + AuthZ-Matrix #1055 + `make release-gates`) als primären Release-Nachweis; die manuellen Profile (RC-Smoke/Security-RC) sind auf den nicht-automatisierten Rest (visueller Augenschein, Pen-/Spot-Checks, KEEP-MANUAL) reduziert und in der Release-Checkliste operativ verdrahtet. Schließt die seit v0.13.x offene Lücke „Profile laut Policy fällig, aber nicht gelaufen".
-- **Threat-Model auf HMAC-SHA256-Backup-Integrität nachgezogen** (#1099) — `docs/threat-model.md` beschrieb Backups noch als nur „AES-256-CBC verschlüsselt"; Asset-Tabelle und Trust-Boundary TB5 spiegeln jetzt den real ausgelieferten Encrypt-then-MAC-Schutz (detached HMAC-SHA256-Sidecar, der vor der Entschlüsselung geprüft wird).
+- **Compose-Image-Pins vereinheitlicht** (#1082) — `docker-compose.staging.yml` und `docker-compose.prod.yml` ziehen den App-Image-Tag konsistent über `${APP_VERSION}` (vorher war staging hart auf das vier Minors alte `v0.10.2` gepinnt und der prod-Fallback ebenfalls veraltet). Der Release-Doc-Sync hält den Fallback künftig aktuell.
+- **Release-Testprofile auf automatisiert-first umgestellt** (#1081) — `docs/testing/release-test-profiles.md` definiert nun ein verbindliches automatisiertes Gate (`make ci` + volle E2E + Autorisierungs-Matrix + `make release-gates`) als primären Release-Nachweis; die manuellen Profile sind auf den nicht-automatisierten Rest (visueller Augenschein, Pen-/Spot-Checks) reduziert und in der Release-Checkliste operativ verdrahtet.
+
+### Fixed
+
+- **Nicht zugewiesene Aufgaben als mutierbare Teamaufgaben** (#1125) — Aufgaben ohne Zuweisung werden wieder als Teamaufgaben behandelt und sind bearbeitbar.
+- **Schichtübergabe präzisiert** (#1120, #1121, #1122) — überfällige offene Aufgaben werden in der Übergabe markiert, die Überschrift konkreter benannt und die redundante Aktivitäten-Kachel entfernt.
+- **Redirect nach Löschantrag-Review kontextsensitiv** (#1119) — die Weiterleitung nach der Review führt kontextgerecht zurück, abgesichert über den zentralen Open-Redirect-Schutz.
+- **Eigener Löschantrag ohne Genehmigen-Button** (#1052) — der eigene Antrag zeigt einen Statushinweis „wartet auf zweite Person" statt einer toten Genehmigen-Aktion (Vier-Augen-Konsistenz).
+- **Super-Admin-Dashboard verlinkt `/system/audit/`** (#1048) — die Audit-Karten der System-Arbeitszentrale zeigen für `super_admin` auf den korrekten Systembereich statt in einen 403.
+- **Papierkorb-Link für `facility_admin`** (#1040) — der Papierkorb-Link erscheint in der Klientenliste für `facility_admin`, nicht für Staff.
+- **Datums-/Zeitwerte in `data_json` als ISO-Strings normalisiert** (#1073) — Datums- und Zeitwerte werden konsistent als ISO-Strings abgelegt.
+- **Seed-Umgebungs-Guard + atomarer Flush** (#1040) — das `seed`-Command verlangt ein explizites `SEED_ALLOWED` (Schutz gegen versehentliches `--flush` auf Prod) und führt den Flush atomar aus.
+- **Wartungsjobs mit `--pull never`** (#1047) — `run-as-admin.sh` setzt `--pull never`, damit Retention/Breach/MV-Refresh nicht still gegen ein neu gezogenes Image brechen (per Architektur-Guard abgesichert).
+- **Tabellen-Ownership nach Migrate-als-Admin normalisiert** (#1085) — der Migrate-Job normalisiert die Ownership frisch erstellter Tabellen auf den DB-Owner, sodass die App-Rolle zugreifen kann (kein `permission denied` mehr); generalisiert das frühere per-Tabelle-Muster.
+- **`postgres-init`-Rollenanlage auf `\gexec`** (#1039) — die Anlage der DB-Rollen im Init-Skript läuft robust über `\gexec`.
+
+### Docs
+
+- **DSGVO-Wegweiser** (#1104, #1105) — ein nach Zielgruppe getaggter Wegweiser (Artikel → Quelle) als Einstiegspunkt, mit DSGVO-Begriffen im Glossar und vollständigem EN-Mirror des Datenschutz-Hubs.
+- **ADR-022 auf „Accepted"** (#1100) — die Offline-Snapshot-Entscheidung ist nach Security-Review und Pen-Test auf den eingegrenzten Scope „Accepted" gesetzt.
+- **ADR-023 aktualisiert** (#1106) — dokumentiert, dass die K-Anonymitäts-Retention die Freitext-Tilgung kaskadiert.
+- **PostgreSQL-18-Runbook (§ 13)** (#1039) — Major-Upgrade-Pfad und PG18-Referenzen im Ops-Runbook ergänzt.
+- **Repository-Ausblick archiviert** (#1074) — der Langfrist-Ausblick 2026–2031 ist ins Archiv überführt.
 
 ## [0.14.0] - 2026-06-11
 
