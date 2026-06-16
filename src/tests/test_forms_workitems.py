@@ -284,3 +284,89 @@ class TestWorkItemForm:
         del data["recurrence"]
         form = WorkItemForm(data=data, facility=facility)
         assert_form_valid(form)
+
+    # ---------------------------------------------------------------
+    # 8. Browser-``min``-Attribut konsistent zur Server-Validierung
+    #    (Refs #1131): Beim Edit eines bereits ueberfaelligen Items darf
+    #    das HTML5-``min`` den unveraenderten Vergangenheitswert nicht
+    #    blockieren — sonst laesst sich das Item im Browser nicht speichern.
+    # ---------------------------------------------------------------
+
+    def test_due_date_min_attr_is_today_on_new(self, facility):
+        """Neues Item: ``min`` bleibt heute — Vergangenheit weiterhin blockiert."""
+        form = WorkItemForm(facility=facility)
+        assert form.fields["due_date"].widget.attrs["min"] == min_workitem_date().isoformat()
+        assert form.fields["remind_at"].widget.attrs["min"] == min_workitem_date().isoformat()
+
+    def test_due_date_min_attr_lowered_to_overdue_value_on_edit(
+        self,
+        facility,
+        client_identified,
+        staff_user,
+    ):
+        """Edit eines ueberfaelligen Items: ``min`` faellt auf das Bestandsdatum.
+
+        So akzeptiert die Browser-Native-Validation den unveraenderten
+        Vergangenheitswert (Wert == ``min``), blockiert aber weiterhin ein
+        *noch frueheres* Datum. Das aktive Verschieben auf ein anderes
+        Vergangenheits-Datum faengt serverseitig ``clean()`` ab.
+        """
+        item = WorkItem.objects.create(
+            facility=facility,
+            client=client_identified,
+            created_by=staff_user,
+            item_type=WorkItem.ItemType.TASK,
+            status=WorkItem.Status.OPEN,
+            title="Bereits ueberfaellig",
+            due_date=PAST,
+            remind_at=PAST,
+        )
+        form = WorkItemForm(instance=item, facility=facility)
+        assert form.fields["due_date"].widget.attrs["min"] == PAST.isoformat()
+        assert form.fields["remind_at"].widget.attrs["min"] == PAST.isoformat()
+
+    def test_due_date_min_attr_stays_today_on_edit_when_not_overdue(
+        self,
+        facility,
+        client_identified,
+        staff_user,
+    ):
+        """Edit eines nicht-ueberfaelligen Items: ``min`` bleibt heute."""
+        item = WorkItem.objects.create(
+            facility=facility,
+            client=client_identified,
+            created_by=staff_user,
+            item_type=WorkItem.ItemType.TASK,
+            status=WorkItem.Status.OPEN,
+            title="Zukuenftig faellig",
+            due_date=FUTURE,
+            remind_at=FUTURE,
+        )
+        form = WorkItemForm(instance=item, facility=facility)
+        assert form.fields["due_date"].widget.attrs["min"] == min_workitem_date().isoformat()
+        assert form.fields["remind_at"].widget.attrs["min"] == min_workitem_date().isoformat()
+
+    def test_min_attr_independent_per_field_on_edit(
+        self,
+        facility,
+        client_identified,
+        staff_user,
+    ):
+        """Nur das tatsaechlich ueberfaellige Feld senkt sein ``min``.
+
+        ``due_date`` in der Vergangenheit, ``remind_at`` leer -> nur
+        ``due_date`` faellt auf das Bestandsdatum, ``remind_at`` bleibt heute.
+        """
+        item = WorkItem.objects.create(
+            facility=facility,
+            client=client_identified,
+            created_by=staff_user,
+            item_type=WorkItem.ItemType.TASK,
+            status=WorkItem.Status.OPEN,
+            title="Nur due_date ueberfaellig",
+            due_date=PAST,
+            remind_at=None,
+        )
+        form = WorkItemForm(instance=item, facility=facility)
+        assert form.fields["due_date"].widget.attrs["min"] == PAST.isoformat()
+        assert form.fields["remind_at"].widget.attrs["min"] == min_workitem_date().isoformat()

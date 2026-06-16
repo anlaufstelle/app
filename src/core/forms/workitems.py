@@ -110,6 +110,21 @@ class WorkItemForm(forms.ModelForm):
         # Recurrence has a DB default (NONE) — allow omitting it in POST.
         self.fields["recurrence"].required = False
 
+        # Refs #1131: Beim Edit eines bereits überfälligen Items das HTML5-
+        # ``min`` auf den Bestandswert absenken. ``clean()`` erlaubt den
+        # unveränderten Vergangenheitswert (``changed_data``-Check), aber das
+        # statische ``min=heute`` der Widget-Definition würde die Browser-
+        # Native-Validation den Prefill verwerfen lassen — das Item ließe sich
+        # in der Oberfläche nicht speichern. Mit ``min == Bestandsdatum`` nimmt
+        # der Browser den unveränderten Wert an und blockiert weiterhin ein
+        # *noch früheres* Datum; das aktive Verschieben auf ein anderes
+        # Vergangenheits-Datum fängt serverseitig ``clean()`` ab.
+        min_date = min_workitem_date()
+        for field_name in ("due_date", "remind_at"):
+            existing = getattr(self.instance, field_name, None)
+            if existing and existing < min_date:
+                self.fields[field_name].widget.attrs["min"] = existing.isoformat()
+
         # Refs #710: Browser-native HTML5-Validation-Tooltips folgen der
         # Browser-Sprache. Wir reichen lokalisierte Custom-Messages als
         # data-Attribute durch, ein DOMContentLoaded-Listener in
