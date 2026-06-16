@@ -7,9 +7,12 @@ und bleibt hier zentral — ein Bulk-Endpoint darf nicht feiner erlauben
 als die Single-Route.
 """
 
+from urllib.parse import urlencode
+
 from django.contrib import messages
 from django.http import HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import redirect
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -55,9 +58,41 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
     # 400-Antwort (Refs #1011). Subklassen ueberschreiben sie.
     invalid_input_message = _("Ungültige Eingabe.")
 
+    # Filter-Parameter, die nach dem Bulk-Submit in das Redirect-Ziel
+    # uebernommen werden, damit die Inbox in derselben gefilterten Sicht
+    # zurueckkommt (Refs #1132). Schluessel sind die ``filter_<name>``-Felder
+    # aus dem Bulk-Form; Werte die zugehoerigen Inbox-GET-Parameter. Bewusst
+    # eine Allowlist: beliebige POST-Keys koennten sonst als Query in den
+    # Redirect-Location wandern.
+    FILTER_PARAM_MAP = {
+        "filter_item_type": "item_type",
+        "filter_priority": "priority",
+        "filter_assigned_to": "assigned_to",
+        "filter_due": "due",
+    }
+
     def _get_workitem_ids(self, request):
         ids = request.POST.getlist("workitem_ids") or request.POST.getlist("workitem_ids[]")
         return [i for i in ids if i]
+
+    def _inbox_redirect_target(self, request):
+        """Inbox-URL inkl. erhaltener Filter-Query (Refs #1132).
+
+        Liest ausschliesslich die in ``FILTER_PARAM_MAP`` definierten
+        ``filter_<name>``-Felder aus dem POST und haengt nicht-leere Werte als
+        Query-String an die Inbox-URL. Unbekannte POST-Keys werden ignoriert,
+        sodass kein fremder Parameter (z.B. ``next``) ins Redirect-Ziel
+        gelangt.
+        """
+        params = {}
+        for post_key, get_key in self.FILTER_PARAM_MAP.items():
+            value = request.POST.get(post_key, "").strip()
+            if value:
+                params[get_key] = value
+        url = reverse("core:workitem_inbox")
+        if params:
+            url = f"{url}?{urlencode(params)}"
+        return url
 
     def _load_workitems(self, request, ids):
         return list(
@@ -94,12 +129,17 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
 
         messages.success(request, _("%(count)d Aufgaben aktualisiert.") % {"count": count})
 
+        # Filter-State erhalten: zurueck in dieselbe gefilterte Inbox-Sicht
+        # (Refs #1132), statt auf den nackten ``/workitems/``-Pfad, der die
+        # Liste ungefiltert neu lud.
+        target = self._inbox_redirect_target(request)
+
         if request.headers.get("HX-Request"):
-            response = redirect("core:workitem_inbox")
+            response = redirect(target)
             response["HX-Redirect"] = response["Location"]
             return response
 
-        return redirect("core:workitem_inbox")
+        return redirect(target)
 
 
 class WorkItemBulkStatusView(_BulkActionMixin, View):

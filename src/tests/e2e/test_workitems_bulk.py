@@ -256,6 +256,127 @@ class TestBulkSelectAllUI:
         page.locator("[x-show='hasSelection']").first.wait_for(state="visible", timeout=3000)
 
 
+class TestBulkManualSelectionUI:
+    """Refs #1132: manuelle Einzel-/Mehrfachauswahl im echten Inbox-UI.
+
+    Regression: die Item-Checkbox-Bindung ``@change="toggle('<pk>')"`` war im
+    ``@alpinejs/csp``-Build wirkungslos — der CSP-Evaluator interpretiert nur
+    Property-Pfade, keine Methodenaufrufe mit Literal-Argumenten. Folge: ein
+    Einzelklick aenderte die Auswahl NICHT, die Toolbar oeffnete nur ueber
+    „Alle sichtbaren auswählen", und nach „Alle + Abwaehlen" blieb der Zaehler
+    stehen und die Bulk-Aktion traf alle zuvor sichtbaren Items. Fix: Bare-
+    Method ``@change="onToggleItem"`` + Auswahl frisch aus dem DOM ableiten.
+    """
+
+    def test_single_manual_checkbox_opens_toolbar_with_count_one(self, staff_page, base_url):
+        page = staff_page
+        tag = uuid.uuid4().hex[:6]
+        _create_workitem(page, base_url, f"E2E-Manual-{tag}-1")
+        _create_workitem(page, base_url, f"E2E-Manual-{tag}-2")
+
+        page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+        toolbar = page.locator("[x-show='hasSelection']").first
+        # Vor jeder Auswahl ist die Toolbar verborgen.
+        assert not toolbar.is_visible(), "Toolbar darf ohne Auswahl nicht sichtbar sein."
+
+        boxes = page.locator("input[type=checkbox][name='workitem_ids']")
+        assert boxes.count() >= 1
+        boxes.first.check()
+
+        # Einzelner manueller Klick: Toolbar erscheint, Zaehler steht auf 1.
+        toolbar.wait_for(state="visible", timeout=3000)
+        count = page.locator("[x-text='selectionCount']").first
+        assert count.inner_text().strip() == "1", "Manuelle Einzelauswahl muss Zaehler 1 zeigen (Refs #1132)."
+
+    def test_deselect_after_select_all_reduces_count_and_submission(self, staff_page, base_url):
+        page = staff_page
+        tag = uuid.uuid4().hex[:6]
+        for i in range(3):
+            _create_workitem(page, base_url, f"E2E-Desel-{tag}-{i}")
+
+        page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+        boxes = page.locator("input[type=checkbox][name='workitem_ids']")
+        total = boxes.count()
+        assert total >= 3, f"Erwartet ≥3 Checkboxen, gefunden {total}."
+
+        page.locator("#workitem-select-all").check()
+        count = page.locator("[x-text='selectionCount']").first
+        expect = page.locator("[x-show='hasSelection']").first
+        expect.wait_for(state="visible", timeout=3000)
+        assert count.inner_text().strip() == str(total)
+
+        # Eine Checkbox manuell wieder abwaehlen → Zaehler sinkt um genau 1.
+        boxes.first.uncheck()
+        assert count.inner_text().strip() == str(total - 1), (
+            "Nach manuellem Abwaehlen muss der Zaehler um 1 sinken (Refs #1132)."
+        )
+        # Master-Checkbox darf nicht mehr „alle" anzeigen.
+        assert not page.locator("#workitem-select-all").is_checked()
+
+        # Die Bulk-Status-Form sendet GENAU die noch ausgewaehlten IDs — nicht
+        # die abgewaehlte. Die versteckten ``workitem_ids`` der Form spiegeln
+        # die aktuelle Auswahl.
+        deselected_value = boxes.first.get_attribute("value")
+        submitted = page.locator("form[action*='bulk-status'] input[type=hidden][name='workitem_ids']")
+        submitted_values = submitted.evaluate_all("els => els.map(e => e.value)")
+        assert deselected_value not in submitted_values, (
+            "Abgewaehltes Item darf NICHT mehr im Bulk-Submit stehen (Refs #1132)."
+        )
+        assert len(submitted_values) == total - 1
+
+    def test_clear_selection_hides_toolbar(self, staff_page, base_url):
+        page = staff_page
+        tag = uuid.uuid4().hex[:6]
+        _create_workitem(page, base_url, f"E2E-Clear-{tag}-1")
+
+        page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+        page.locator("input[type=checkbox][name='workitem_ids']").first.check()
+        toolbar = page.locator("[x-show='hasSelection']").first
+        toolbar.wait_for(state="visible", timeout=3000)
+
+        page.get_by_role("button", name="Auswahl löschen").click()
+        toolbar.wait_for(state="hidden", timeout=3000)
+        assert not page.locator("input[type=checkbox][name='workitem_ids']").first.is_checked()
+
+
+class TestBulkPreservesFilterUI:
+    """Refs #1132: nach dem Anwenden bleibt der aktive Filter erhalten.
+
+    Vorher leitete der Bulk-Endpoint auf den nackten ``/workitems/``-Pfad um
+    — die Tabelle kam ungefiltert zurueck, das Filter-Feld zeigte (client-
+    seitig restauriert) aber weiter z.B. ``Lena Weber``. Fix: die aktiven
+    Filterwerte werden per ``syncFilters`` in versteckte ``filter_*``-Felder
+    geschrieben und vom Endpoint in die Redirect-Query uebernommen.
+    """
+
+    def test_filter_preserved_in_url_after_bulk_apply(self, staff_page, base_url):
+        page = staff_page
+        tag = uuid.uuid4().hex[:6]
+        _create_workitem(page, base_url, f"E2E-FilterKeep-{tag}", priority="normal")
+
+        # Typ-Filter „Aufgabe" aktivieren — die frisch erstellten Items sind
+        # vom Typ ``task`` und damit unter diesem Filter sichtbar (anders als
+        # ein Personenfilter, der unassigned Items ausblenden wuerde).
+        page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+        page.select_option("#filter-item-type", value="task")
+        page.wait_for_load_state("domcontentloaded")
+
+        boxes = page.locator("input[type=checkbox][name='workitem_ids']")
+        assert boxes.count() >= 1, "Mind. eine Aufgabe muss unter dem Typ-Filter sichtbar sein."
+        boxes.first.check()
+        page.locator("[x-show='hasSelection']").first.wait_for(state="visible", timeout=3000)
+
+        page.select_option("#bulk-priority", value="urgent")
+        with page.expect_navigation(timeout=10000):
+            page.locator("form[action*='bulk-priority'] button[type=submit]").click()
+
+        # Der aktive Typ-Filter bleibt in der Redirect-URL erhalten (Refs #1132)
+        # — vorher landete man auf dem ungefilterten ``/workitems/``.
+        assert "item_type=task" in page.url, f"Typ-Filter ging nach Bulk-Apply verloren: {page.url}"
+        # Und der Filter-Select zeigt nach dem Reload weiterhin „Aufgabe".
+        assert page.locator("#filter-item-type").input_value() == "task"
+
+
 def _create_workitem_assigned(page, base_url, title: str, assignee_label: str | None) -> str:
     """Wie ``_create_workitem``, aber setzt optional eine Zuweisung.
 

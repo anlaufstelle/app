@@ -1,0 +1,18 @@
+{% comment %}
+Versteckte Filter-Felder fuer die Bulk-Forms (Refs #1132).
+
+Tragen den aktiven Inbox-Filter in den POST, damit der Bulk-Endpoint nach
+dem Anwenden in dieselbe gefilterte Sicht zurueckleitet (statt auf die
+ungefilterte ``/workitems/``-Liste). Die Werte aus dem Server-Kontext sind
+der initiale Stand bzw. der No-JS-Fallback; bei aktiviertem JS schreibt
+``syncFilters`` (workitemBulkSelect) vor dem Submit die *aktuellen* Werte
+der Filter-Selects hier hinein — so wirkt auch ein nach dem Laden per
+Dropdown geaenderter Filter.
+
+``data-bulk-filter`` markiert die Felder fuer ``syncFilters``; das
+``data-filter-source``-Attribut nennt das zugehoerige Filter-Select.
+{% endcomment %}
+<input type="hidden" name="filter_item_type" value="{{ selected_item_type }}" data-bulk-filter data-filter-source="filter-item-type">
+<input type="hidden" name="filter_priority" value="{{ selected_priority }}" data-bulk-filter data-filter-source="filter-priority">
+<input type="hidden" name="filter_assigned_to" value="{{ selected_assigned_to }}" data-bulk-filter data-filter-source="filter-assigned-to">
+<input type="hidden" name="filter_due" value="{{ selected_due }}" data-bulk-filter data-filter-source="filter-due">

@@ -315,6 +315,103 @@ class TestBulkViews:
 
 
 @pytest.mark.django_db
+class TestBulkPreservesFilterState:
+    """Refs #1132: Nach einer Bulk-Aktion muss der aktive Filter erhalten
+    bleiben.
+
+    Vorher leitete der Bulk-Endpoint stur auf ``/workitems/`` ohne
+    Query-String um — die Tabelle kam ungefiltert zurück, während das
+    Filter-Feld (clientseitig restauriert) weiterhin z.B. ``Lena Weber``
+    zeigte. Der Fix reicht die Filter-Parameter aus dem POST in das
+    Redirect-Ziel durch, sodass dieselbe gefilterte Liste serverseitig
+    erneut gerendert wird.
+    """
+
+    def _filter_fields(self, assignee_id):
+        return {
+            "filter_item_type": "task",
+            "filter_priority": "urgent",
+            "filter_assigned_to": str(assignee_id),
+            "filter_due": "today",
+        }
+
+    def test_bulk_status_redirect_preserves_filters(self, client, staff_user, lead_user, workitems_open):
+        client.force_login(staff_user)
+        ids = [str(wi.pk) for wi in workitems_open]
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": ids, "status": "done", **self._filter_fields(lead_user.pk)},
+        )
+        assert response.status_code == 302
+        location = response.url
+        assert "item_type=task" in location
+        assert "priority=urgent" in location
+        assert f"assigned_to={lead_user.pk}" in location
+        assert "due=today" in location
+
+    def test_bulk_priority_redirect_preserves_filters(self, client, staff_user, lead_user, workitems_open):
+        client.force_login(staff_user)
+        ids = [str(wi.pk) for wi in workitems_open]
+        response = client.post(
+            reverse("core:workitem_bulk_priority"),
+            {"workitem_ids": ids, "priority": "urgent", **self._filter_fields(lead_user.pk)},
+        )
+        assert response.status_code == 302
+        assert f"assigned_to={lead_user.pk}" in response.url
+
+    def test_bulk_assign_redirect_preserves_filters(self, client, staff_user, lead_user, workitems_open):
+        client.force_login(staff_user)
+        ids = [str(wi.pk) for wi in workitems_open]
+        response = client.post(
+            reverse("core:workitem_bulk_assign"),
+            {"workitem_ids": ids, "assigned_to": str(lead_user.pk), **self._filter_fields(lead_user.pk)},
+        )
+        assert response.status_code == 302
+        assert f"assigned_to={lead_user.pk}" in response.url
+
+    def test_bulk_without_filters_redirects_to_plain_inbox(self, client, staff_user, workitems_open):
+        """Ohne Filter-Felder bleibt das Ziel der nackte Inbox-Pfad."""
+        client.force_login(staff_user)
+        ids = [str(wi.pk) for wi in workitems_open]
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": ids, "status": "done"},
+        )
+        assert response.status_code == 302
+        assert response.url == reverse("core:workitem_inbox")
+
+    def test_bulk_ignores_unknown_filter_keys(self, client, staff_user, workitems_open):
+        """Nur bekannte Filter-Parameter werden durchgereicht (kein Open-Redirect
+        via beliebiger Query-Parameter)."""
+        client.force_login(staff_user)
+        ids = [str(wi.pk) for wi in workitems_open]
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {
+                "workitem_ids": ids,
+                "status": "done",
+                "filter_evil": "http://example.com",
+                "next": "http://example.com",
+            },
+        )
+        assert response.status_code == 302
+        assert response.url == reverse("core:workitem_inbox")
+        assert "example.com" not in response.url
+
+    def test_bulk_htmx_redirect_preserves_filters(self, client, staff_user, lead_user, workitems_open):
+        """HX-Request-Pfad setzt HX-Redirect inkl. Filter-Query."""
+        client.force_login(staff_user)
+        ids = [str(wi.pk) for wi in workitems_open]
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": ids, "status": "done", **self._filter_fields(lead_user.pk)},
+            headers={"HX-Request": "true"},
+        )
+        assert response.status_code == 302
+        assert f"assigned_to={lead_user.pk}" in response["HX-Redirect"]
+
+
+@pytest.mark.django_db
 class TestBulkConcurrencyReload:
     """Refs #1022 (B2): Die Bulk-Pfade laden+locken die Items innerhalb der
     Transaktion per ``select_for_update`` neu (analog Single-Pfad in

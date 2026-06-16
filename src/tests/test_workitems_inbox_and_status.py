@@ -111,6 +111,38 @@ class TestWorkItemInbox:
         response = client.get(reverse("core:workitem_inbox"))
         assert response.status_code == 200
 
+    def test_inbox_bulk_forms_use_csp_safe_handlers(self, client, staff_user):
+        """Refs #1132: Item-Checkboxen rufen ``onToggleItem`` (bare Method),
+        nicht das im CSP-Build nicht interpretierbare ``toggle('<pk>')``.
+
+        Die Bulk-Forms reichen zudem den aktiven Filter per ``@submit`` und
+        versteckten ``filter_*``-Feldern durch.
+        """
+        WorkItem.objects.create(
+            facility=staff_user.facility,
+            created_by=staff_user,
+            title="Auswählbar",
+            status=WorkItem.Status.OPEN,
+        )
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert '@change="onToggleItem"' in html
+        assert "toggle(" not in html
+        assert '@submit="syncFilters"' in html
+        assert 'name="filter_assigned_to"' in html
+        assert 'name="filter_due"' in html
+
+    def test_inbox_bulk_filter_fields_carry_active_filter(self, client, staff_user, lead_user):
+        """Refs #1132: Der aktive Filter landet als Wert in den versteckten
+        Bulk-Filter-Feldern (No-JS-Fallback / Initialstand)."""
+        client.force_login(staff_user)
+        html = client.get(
+            reverse("core:workitem_inbox"),
+            {"assigned_to": str(lead_user.pk), "due": "today"},
+        ).content.decode()
+        assert f'name="filter_assigned_to" value="{lead_user.pk}"' in html
+        assert 'name="filter_due" value="today"' in html
+
 
 @pytest.mark.django_db
 class TestWorkItemStatusUpdate:

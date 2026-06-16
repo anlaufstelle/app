@@ -97,11 +97,12 @@
         </span>
 
         {# Status #}
-        <form method="post" action="{% url 'core:workitem_bulk_status' %}" class="flex items-center gap-2">
+        <form method="post" action="{% url 'core:workitem_bulk_status' %}" class="flex items-center gap-2" @submit="syncFilters">
             {% csrf_token %}
             <template x-for="id in selected" :key="id">
                 <input type="hidden" name="workitem_ids" :value="id">
             </template>
+            {% include "core/workitems/partials/_bulk_filter_fields.html" %}
             <label class="sr-only" for="bulk-status">{% trans "Status" %}</label>
             <select id="bulk-status" name="status" class="text-[13px] bg-surface border border-subtle rounded-[10px] px-2 py-1">
                 <option value="">{% trans "Status ändern..." %}</option>
@@ -113,11 +114,12 @@
         </form>
 
         {# Priorität #}
-        <form method="post" action="{% url 'core:workitem_bulk_priority' %}" class="flex items-center gap-2">
+        <form method="post" action="{% url 'core:workitem_bulk_priority' %}" class="flex items-center gap-2" @submit="syncFilters">
             {% csrf_token %}
             <template x-for="id in selected" :key="id">
                 <input type="hidden" name="workitem_ids" :value="id">
             </template>
+            {% include "core/workitems/partials/_bulk_filter_fields.html" %}
             <label class="sr-only" for="bulk-priority">{% trans "Priorität" %}</label>
             <select id="bulk-priority" name="priority" class="text-[13px] bg-surface border border-subtle rounded-[10px] px-2 py-1">
                 <option value="">{% trans "Priorität ändern..." %}</option>
@@ -129,11 +131,12 @@
         </form>
 
         {# Zuweisen #}
-        <form method="post" action="{% url 'core:workitem_bulk_assign' %}" class="flex items-center gap-2">
+        <form method="post" action="{% url 'core:workitem_bulk_assign' %}" class="flex items-center gap-2" @submit="syncFilters">
             {% csrf_token %}
             <template x-for="id in selected" :key="id">
                 <input type="hidden" name="workitem_ids" :value="id">
             </template>
+            {% include "core/workitems/partials/_bulk_filter_fields.html" %}
             <label class="sr-only" for="bulk-assign">{% trans "Zuweisen" %}</label>
             <select id="bulk-assign" name="assigned_to" class="text-[13px] bg-surface border border-subtle rounded-[10px] px-2 py-1">
                 <option value="">{% trans "Zuweisung entfernen" %}</option>

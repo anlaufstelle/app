@@ -14,40 +14,59 @@ document.addEventListener("alpine:init", () => {
      */
     Alpine.data("workitemBulkSelect", () => ({
         selected: [],
-        isSelected(id) {
-            return this.selected.includes(id);
+        itemBoxes() {
+            // Nur die sichtbaren Item-Checkboxen — NICHT die versteckten
+            // ``workitem_ids``-Inputs, die die Bulk-Forms per ``x-for`` aus
+            // ``selected`` rendern. Sonst zaehlte ``syncFromDom`` die eigenen
+            // Form-Inputs mit und der Zaehler liefe hoch (Refs #1132).
+            return document.querySelectorAll(
+                "input[type=checkbox][name=workitem_ids]"
+            );
         },
-        toggle(id) {
-            const i = this.selected.indexOf(id);
-            if (i === -1) {
-                this.selected.push(id);
-            } else {
-                this.selected.splice(i, 1);
+        // Auswahl IMMER aus dem DOM ableiten — die Item-Checkboxen sind die
+        // einzige Wahrheitsquelle. So bleiben Zaehler/Toolbar/Hidden-Inputs
+        // konsistent, egal ob per Einzelklick, "Alle auswaehlen" oder
+        // Wieder-Abwaehlen geaendert wird (Refs #1132).
+        syncFromDom() {
+            const boxes = this.itemBoxes();
+            const next = [];
+            boxes.forEach((b) => {
+                if (b.checked) next.push(b.value);
+            });
+            this.selected = next;
+            const master = document.getElementById("workitem-select-all");
+            if (master) {
+                master.checked = boxes.length > 0 && next.length === boxes.length;
             }
         },
         toggleAll(checked) {
-            const boxes = document.querySelectorAll(
-                "input[name=workitem_ids]"
-            );
-            this.selected = [];
-            boxes.forEach((b) => {
+            this.itemBoxes().forEach((b) => {
                 b.checked = checked;
-                if (checked) this.selected.push(b.value);
             });
+            this.syncFromDom();
         },
         clear() {
-            this.selected = [];
-            document
-                .querySelectorAll("input[name=workitem_ids]")
-                .forEach((b) => (b.checked = false));
+            this.itemBoxes().forEach((b) => (b.checked = false));
             const master = document.getElementById("workitem-select-all");
             if (master) master.checked = false;
+            this.selected = [];
         },
         get hasSelection() {
             return this.selected.length > 0;
         },
         get selectionCount() {
             return this.selected.length;
+        },
+        onToggleItem() {
+            // CSP-Build (@alpinejs/csp): Bare-Method-Handler ohne Argument.
+            // Das frueher genutzte ``toggle('<pk>')`` konnte der CSP-
+            // Evaluator NICHT interpretieren (nur Property-Pfade, keine
+            // Methodenaufrufe mit Literal-Argumenten) — der Einzelklick
+            // blieb wirkungslos, die Toolbar oeffnete nie und der Zaehler
+            // stimmte nach "Alle auswaehlen" + Abwaehlen nicht (Refs #1132).
+            // Loesung: Auswahl nach jedem Checkbox-Change frisch aus dem DOM
+            // lesen.
+            this.syncFromDom();
         },
         onToggleAll() {
             // CSP-Build (@alpinejs/csp): Bare-Method-Handler bekommen das
@@ -57,6 +76,21 @@ document.addEventListener("alpine:init", () => {
             // $event-Expression in der Bindung.
             const master = document.getElementById("workitem-select-all");
             this.toggleAll(!!master && master.checked);
+        },
+        syncFilters(event) {
+            // Vor dem Bulk-Submit die *aktuellen* Werte der Inbox-Filter-
+            // Selects in die versteckten ``filter_*``-Felder des
+            // abgeschickten Forms schreiben (Refs #1132). Greift den live
+            // gewaehlten Filter ab — auch wenn er nach dem Laden per Dropdown
+            // geaendert wurde — damit der Server in dieselbe gefilterte Sicht
+            // zurueckleitet.
+            const form = event && event.target;
+            if (!form || typeof form.querySelectorAll !== "function") return;
+            form.querySelectorAll("[data-bulk-filter]").forEach((hidden) => {
+                const sourceId = hidden.getAttribute("data-filter-source");
+                const source = sourceId && document.getElementById(sourceId);
+                if (source) hidden.value = source.value;
+            });
         },
     }));
 
