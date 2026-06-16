@@ -135,6 +135,6 @@ Release v0.10.0 (2026-04-19) extends the domain concept with several capabilitie
 - **AdminCSPRelaxMiddleware.** django-unfold ships its own Alpine build that uses `new AsyncFunction()` for the Cmd+K command palette and therefore needs `'unsafe-eval'` to initialize. A dedicated middleware now adds `'unsafe-eval'` only on `/admin-mgmt/*` routes — the privileged Django admin area, which is additionally protected by the MFA gate and the `admin` role. The strict global policy stays in place everywhere else.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.14.0 -->
+<!-- translation-version: v0.15.0 -->
 <!-- translation-date: 2026-06-12 -->
 <!-- source-hash: da1fa91 -->

@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.15.0] - 2026-06-16
 
 Sicherheits- und Stabilisierungs-Release (Pre-Release) auf dem Weg zur Demo-Version: vertieft die Härtungsagenda nach v0.14.0 — eine Laufzeit-Autorisierungs-Matrix als dauerhafter Nachweis, ein datenbankweiter PII-Residue-Sweep nach Löschung und Retention, die Entkopplung der Vier-Augen-Löschfreigabe in einen rollenunabhängigen Genehmiger-Pool und die abschließende Härtung des Offline-Caches (ADR-022). Dazu der Datenbank-Major-Sprung auf PostgreSQL 18, Node 24 LTS in der Build-Toolchain sowie UI-Polish rund um die neue Arbeitszentrale und die Schichtübergabe. Keine Datenmodell-Brüche; Vorwärts-Migration ohne Datenverlust. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
 

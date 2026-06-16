@@ -27,7 +27,7 @@ services:
   web:
     # Image-Tag via APP_VERSION parametrisieren (analog prod, Refs #800/#1082);
     # Fallback = zuletzt gepinnter Release-Tag, beim Release-Doc-Sync mitpflegen.
-    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.14.0}
+    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.15.0}
     env_file: .env.staging
     environment:
       DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
