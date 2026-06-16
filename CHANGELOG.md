@@ -62,7 +62,6 @@ Sicherheits- und Stabilisierungs-Release (Pre-Release) auf dem Weg zur Demo-Vers
 - **ADR-022 auf „Accepted"** (#1100) — die Offline-Snapshot-Entscheidung ist nach Security-Review und Pen-Test auf den eingegrenzten Scope „Accepted" gesetzt.
 - **ADR-023 aktualisiert** (#1106) — dokumentiert, dass die K-Anonymitäts-Retention die Freitext-Tilgung kaskadiert.
 - **PostgreSQL-18-Runbook (§ 13)** (#1039) — Major-Upgrade-Pfad und PG18-Referenzen im Ops-Runbook ergänzt.
-- **Repository-Ausblick archiviert** (#1074) — der Langfrist-Ausblick 2026–2031 ist ins Archiv überführt.
 
 ## [0.14.0] - 2026-06-11
 
