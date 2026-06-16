@@ -157,18 +157,39 @@
         </div>
     </div>
 
-    {# Right-Sidebar: Offene Aufgaben (Design: rechte 220px-Spalte) #}
-    <aside class="hidden lg:block">
-        <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Offene Aufgaben" %}</h2>
-        {% if workitems %}
-        <div class="space-y-1.5">
-            {% for wi in workitems %}
-            {% include "components/_workitem_row.html" with compact=True %}
+    {# Right-Sidebar: Team-Fokusbox für Handlungsbedarf (Refs #1128) #}
+    <aside class="hidden lg:block" data-testid="zeitstrom-focus-box">
+        <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Team-Aufgaben mit Handlungsbedarf" %}</h2>
+        {% if focus_box.groups %}
+        <div class="space-y-3">
+            {% for group in focus_box.groups %}
+            <div data-focus-group="{{ group.key }}">
+                <div class="text-[12px] font-semibold text-ink-soft mb-1.5">{{ group.label }}</div>
+                <div class="space-y-1.5">
+                    {% for wi in group.items %}
+                    {% include "components/_workitem_row.html" with compact=True %}
+                    {% endfor %}
+                </div>
+            </div>
             {% endfor %}
         </div>
-        {% else %}
-        <p class="text-[12px] text-ink-muted">{% trans "Keine offenen Aufgaben" %}</p>
+        {% if focus_box.has_more %}
+        <p class="text-[12px] text-ink-muted mt-3" data-testid="focus-box-more">
+            {% blocktrans with shown=focus_box.shown_count total=focus_box.total_open_count %}{{ shown }} von {{ total }} offenen Aufgaben angezeigt{% endblocktrans %}
+        </p>
         {% endif %}
+        {% else %}
+        <p class="text-[12px] text-ink-muted">{% trans "Keine Team-Aufgaben mit Handlungsbedarf" %}</p>
+        {% if focus_box.has_more %}
+        <p class="text-[12px] text-ink-muted mt-1.5" data-testid="focus-box-more">
+            {% blocktrans count total=focus_box.total_open_count %}{{ total }} offene Aufgabe ohne akuten Handlungsbedarf{% plural %}{{ total }} offene Aufgaben ohne akuten Handlungsbedarf{% endblocktrans %}
+        </p>
+        {% endif %}
+        {% endif %}
+        <a href="{% url 'core:workitem_inbox' %}" class="inline-flex items-center gap-1 text-[12px] font-semibold text-accent hover:underline mt-3" data-testid="focus-box-overview-link">
+            {% trans "Zur Aufgabenübersicht" %}
+            <svg aria-hidden="true" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        </a>
     </aside>
 </div>
 {% endif %}

@@ -3,14 +3,12 @@
 import logging
 from datetime import date, timedelta
 
-from django.db.models import Case as DBCase
-from django.db.models import IntegerField, Value, When
 from django.utils import timezone
 from django.views.generic import TemplateView
 
-from core.models import DocumentType, TimeFilter, WorkItem
+from core.models import DocumentType, TimeFilter
 from core.services.case import build_handover_summary
-from core.services.dashboard import staff_dashboard_context
+from core.services.dashboard import build_focus_box, staff_dashboard_context
 from core.services.events import build_feed_items, enrich_events_with_preview
 from core.services.system import get_active_bans
 from core.views.mixins import AssistantOrAboveRequiredMixin
@@ -80,26 +78,12 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
             .order_by("name")
         )
 
-        # Sidebar: open workitems (from Aktivitätslog)
-        # Refs #740: select_related fuer client + assigned_to — Template
-        # iteriert wi.client.pseudonym in _workitem_row.html → ohne
-        # Prefetch ein Query pro Sidebar-WorkItem.
-        workitems = (
-            WorkItem.objects.filter(
-                facility=facility,
-                status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS],
-            )
-            .select_related("client", "assigned_to")
-            .annotate(
-                priority_order=DBCase(
-                    When(priority=WorkItem.Priority.URGENT, then=Value(0)),
-                    When(priority=WorkItem.Priority.IMPORTANT, then=Value(1)),
-                    When(priority=WorkItem.Priority.NORMAL, then=Value(2)),
-                    output_field=IntegerField(),
-                )
-            )
-            .order_by("priority_order", "due_date", "-created_at")[:5]
-        )
+        # Sidebar: Team-Fokusbox für Handlungsbedarf (Refs #1128).
+        # Gruppiert offene/laufende Aufgaben der Einrichtung nach Druckstufe
+        # (überfällig, heute, dringend/wichtig, in Bearbeitung) statt einer
+        # flachen Top-5-Liste; select_related deckt client/assigned_to für die
+        # Zeilen-Partials ab.
+        focus_box = build_focus_box(facility)
 
         # Handover summary (when a shift filter is active)
         handover_summary = None
@@ -136,7 +120,7 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                 "document_types": document_types,
                 "selected_doc_type": doc_type_id or "",
                 "events_partial_url": "core:zeitstrom_feed_partial",
-                "workitems": workitems,
+                "focus_box": focus_box,
                 "active_bans": active_bans,
             }
         )

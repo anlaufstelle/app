@@ -16,6 +16,7 @@ Module:
 
 from core.services.dashboard.activity import log_activity
 from core.services.dashboard.external_report import build_external_report
+from core.services.dashboard.focus_box import build_focus_box
 from core.services.dashboard.main import (
     facility_admin_dashboard_context,
     lead_dashboard_context,
@@ -69,6 +70,7 @@ __all__ = [
     "_split_into_segments",
     "apply_template",
     "build_external_report",
+    "build_focus_box",
     "create_or_update_snapshot",
     "ensure_snapshots_for_months",
     "facility_admin_dashboard_context",
