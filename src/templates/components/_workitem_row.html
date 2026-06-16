@@ -42,7 +42,8 @@
         <div class="flex items-center gap-2">
             {% due_date_info wi as ddi %}
             {% if ddi %}
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold {{ ddi.css_class }}">{{ ddi.text }}</span>
+            {# Refs #1133: Frist eindeutig benennen — sichtbares Präfix + Tooltip, damit die Liste das Fälligkeitsdatum (nicht das Erstellungsdatum) zeigt. #}
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold {{ ddi.css_class }}" title="{% trans 'Zu erledigen bis' %}"><span class="text-ink-muted font-normal mr-1">{% trans "Fällig:" %}</span>{{ ddi.text }}</span>
             {% endif %}
             {% remind_at_info wi as rai %}
             {% if rai %}
@@ -60,6 +61,8 @@
         </div>
     </div>
 
+    {# Refs #1133: Erstellungsdatum aus der Übersicht entfernt (missverständlich); es bleibt in der Einzelansicht erhalten. Meta-Zeile nur, wenn es noch etwas zu zeigen gibt. #}
+    {% if wi.client or wi.assigned_to %}
     <div class="flex items-center text-[12px] text-ink-muted gap-3 mb-3">
         {% if wi.client %}
         <a href="{% url 'core:client_detail' pk=wi.client.pk %}" class="text-accent hover:underline font-semibold">{{ wi.client.pseudonym }}</a>
@@ -67,8 +70,8 @@
         {% if wi.assigned_to %}
         <span>{% trans "Zugewiesen:" %} {{ wi.assigned_to.get_full_name|default:wi.assigned_to.username }}</span>
         {% endif %}
-        <span class="font-mono">{{ wi.created_at|date:"DATETIME_FORMAT" }}</span>
     </div>
+    {% endif %}
 
     {% if wi.description %}
     <p class="text-[13px] text-ink-soft mb-3">{{ wi.description|truncatewords:20 }}</p>
