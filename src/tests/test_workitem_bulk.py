@@ -694,3 +694,92 @@ class TestCanUserMutateWorkitem:
 
         wi = self._make(facility, staff_user, lead_user)
         assert can_user_mutate_workitem(assistant_user, wi) is False
+
+
+@pytest.mark.django_db
+class TestBulkForbiddenMessageIsConcrete:
+    """Refs #1136: Die 403-Antwort bei fremd-zugewiesenen Items darf nicht
+    pauschal "Keine Berechtigung für ausgewählte Aufgaben." lauten.
+
+    Hintergrund: Seit #1125 zeigt die Inbox bei explizitem Filter (z.B. "Alle"
+    oder ein Personenfilter) auch fremd-zugewiesene Aufgaben an und macht sie
+    per "Alle sichtbaren auswählen" auswählbar. Eine Fachkraft (Miriam) wählt
+    sie damit unbeabsichtigt mit aus; der Bulk-Submit scheitert dann mit einer
+    pauschalen Rechtemeldung, ohne zu erklären, *welche* Einschränkung greift.
+
+    Die Antwort soll stattdessen konkret nennen, wie viele der ausgewählten
+    Aufgaben anderen Personen zugewiesen sind und deshalb die Sammelaktion
+    blockieren — damit die Nutzerin gezielt abwählen kann. Die
+    Alles-oder-nichts-Semantik (kein stiller Teil-Erfolg, Refs #583) bleibt
+    bewusst erhalten: Es darf nichts verändert werden.
+    """
+
+    def _foreign(self, facility, creator, assignee):
+        return WorkItem.objects.create(
+            facility=facility,
+            created_by=creator,
+            assigned_to=assignee,
+            title="Fremd zugewiesen",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+
+    def test_message_names_count_of_foreign_items(self, client, facility, staff_user, lead_user, assistant_user):
+        """Bei 1 fremd-zugewiesenen von 2 ausgewählten Aufgaben nennt die
+        Meldung die Anzahl der blockierenden Items und ist nicht die pauschale
+        Alt-Meldung."""
+        own = WorkItem.objects.create(
+            facility=facility,
+            created_by=assistant_user,
+            title="Eigene",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+        foreign = self._foreign(facility, staff_user, lead_user)
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(own.pk), str(foreign.pk)], "status": "done"},
+        )
+        assert response.status_code == 403
+        body = response.content.decode()
+        # Pauschale Alt-Meldung darf nicht mehr erscheinen.
+        assert "Keine Berechtigung für ausgewählte Aufgaben." not in body
+        # Konkret: nennt die Anzahl der blockierenden (fremd-zugewiesenen) Items.
+        assert "1" in body
+        # Erklärt die Einschränkung (Zuweisung an andere Personen).
+        assert "zugewiesen" in body
+        # Keine Mutation.
+        own.refresh_from_db()
+        foreign.refresh_from_db()
+        assert own.status == WorkItem.Status.OPEN
+        assert foreign.status == WorkItem.Status.OPEN
+
+    def test_message_plural_for_multiple_foreign_items(self, client, facility, staff_user, lead_user, assistant_user):
+        """Mehrere fremd-zugewiesene Items → die Meldung nennt die korrekte
+        (Mehrzahl-)Anzahl."""
+        foreign_a = self._foreign(facility, staff_user, lead_user)
+        foreign_b = self._foreign(facility, staff_user, lead_user)
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_priority"),
+            {"workitem_ids": [str(foreign_a.pk), str(foreign_b.pk)], "priority": "urgent"},
+        )
+        assert response.status_code == 403
+        body = response.content.decode()
+        assert "2" in body
+        assert "Keine Berechtigung für ausgewählte Aufgaben." not in body
+
+    def test_message_applies_to_assign_endpoint(self, client, facility, staff_user, lead_user, assistant_user):
+        """Refs #1136: Auch der Zuweisungs-Endpoint liefert die konkrete
+        Meldung (alle Bulk-Felder betroffen, nicht nur Status/Priorität)."""
+        foreign = self._foreign(facility, staff_user, lead_user)
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_assign"),
+            {"workitem_ids": [str(foreign.pk)], "assigned_to": str(assistant_user.pk)},
+        )
+        assert response.status_code == 403
+        body = response.content.decode()
+        assert "zugewiesen" in body
+        assert "Keine Berechtigung für ausgewählte Aufgaben." not in body

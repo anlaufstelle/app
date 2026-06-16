@@ -15,6 +15,7 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
+from django.utils.translation import ngettext
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
@@ -120,7 +121,26 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         # "5 aktualisiert"-Erfolgsmeldung zu erzeugen.
         forbidden = [wi for wi in workitems if not can_user_mutate_workitem(request.user, wi)]
         if forbidden:
-            return HttpResponseForbidden(_("Keine Berechtigung für ausgewählte Aufgaben."))
+            # Refs #1136: Konkrete statt pauschaler Meldung. Seit #1125 zeigt die
+            # Inbox bei explizitem Filter ("Alle"/Person) auch fremd-zugewiesene
+            # Aufgaben an und macht sie per "Alle sichtbaren auswählen"
+            # auswählbar. Eine Fachkraft wählt sie dadurch unbeabsichtigt mit
+            # aus; die alte Pauschalmeldung "Keine Berechtigung für ausgewählte
+            # Aufgaben." erklärte nicht, *welche* Einschränkung greift. Wir
+            # nennen die Anzahl der blockierenden (fremd-zugewiesenen) Items von
+            # der Gesamtauswahl, damit gezielt abgewählt werden kann. Die
+            # Alles-oder-nichts-Semantik bleibt: es wird nichts verändert.
+            n = len(forbidden)
+            message = ngettext(
+                "%(forbidden)d der %(total)d ausgewählten Aufgaben ist einer "
+                "anderen Person zugewiesen und kann nicht per Sammelaktion "
+                "geändert werden. Bitte diese Aufgabe abwählen.",
+                "%(forbidden)d der %(total)d ausgewählten Aufgaben sind anderen "
+                "Personen zugewiesen und können nicht per Sammelaktion geändert "
+                "werden. Bitte diese Aufgaben abwählen.",
+                n,
+            ) % {"forbidden": n, "total": len(workitems)}
+            return HttpResponseForbidden(message)
 
         try:
             count = self.perform_action(request, workitems)
