@@ -156,6 +156,69 @@ class TestWorkItemInboxFilters:
         assert len(open_items) == 2
         assert response.context["selected_assigned_to"] == ""
 
+    def test_explicit_all_filter_shows_foreign_assigned(self, client, staff_user, lead_user, facility):
+        """Explizit ``assigned_to=`` (Alle) zeigt auch fremd-zugewiesene Aufgaben.
+
+        Refs #1125: Solange es keine privaten Aufgaben (#607) gibt, muss eine
+        normale Aufgabe innerhalb der Facility über den Alle-Filter auffindbar
+        sein — auch wenn sie einer anderen Person zugewiesen ist.
+        """
+        client.force_login(staff_user)
+        wi_foreign = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=lead_user,
+            title="Für Lead, von Staff angelegt",
+        )
+
+        response = client.get(reverse("core:workitem_inbox"), {"assigned_to": ""})
+        assert response.status_code == 200
+        open_items = list(response.context["open_items"])
+        # Erstellerin (Staff) findet die fremd-zugewiesene Aufgabe über "Alle".
+        assert wi_foreign in open_items
+
+    def test_person_filter_shows_other_persons_items(self, client, staff_user, lead_user, facility):
+        """Personenfilter auf eine *andere* Person zeigt deren Aufgaben.
+
+        Refs #1125: Vorher schnitt die Inbox jede Liste hart mit
+        ``Q(assigned_to=user) | isnull`` — ein Personenfilter auf jemand
+        anderen lieferte damit eine leere Liste.
+        """
+        client.force_login(staff_user)
+        wi_lead = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=lead_user,
+            title="Lead-Aufgabe",
+        )
+
+        response = client.get(reverse("core:workitem_inbox"), {"assigned_to": str(lead_user.pk)})
+        assert response.status_code == 200
+        open_items = list(response.context["open_items"])
+        assert wi_lead in open_items
+        assert all(wi.assigned_to_id == lead_user.id for wi in open_items)
+
+    def test_creator_finds_own_task_assigned_to_other_via_all(self, client, staff_user, lead_user, facility):
+        """Selbst erstellte, an andere Person zugewiesene Aufgabe bleibt auffindbar.
+
+        Refs #1125 (Kern des wiedereröffneten Tickets): Miriam (Staff) legt eine
+        Aufgabe an und weist sie Thomas (Lead) zu. Über den Alle-Filter muss sie
+        die Aufgabe wiederfinden — sie darf nicht "verschwinden".
+        """
+        client.force_login(staff_user)
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=lead_user,
+            title="Von Miriam für Thomas",
+        )
+        # Default (Mir zugewiesen) blendet sie aus …
+        default_resp = client.get(reverse("core:workitem_inbox"))
+        assert wi not in list(default_resp.context["open_items"])
+        # … aber über "Alle" ist sie auffindbar.
+        all_resp = client.get(reverse("core:workitem_inbox"), {"assigned_to": ""})
+        assert wi in list(all_resp.context["open_items"])
+
     def test_no_filter_returns_all(self, client, staff_user, facility):
         """Ohne Filter werden alle eigenen WorkItems angezeigt."""
         client.force_login(staff_user)

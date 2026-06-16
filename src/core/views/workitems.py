@@ -140,17 +140,31 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
         # Refs #639 #640, #803.
         cap = WORKITEM_INBOX_CAP
 
-        open_qs = base_qs.filter(
-            status=WorkItem.Status.OPEN,
-        ).filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
+        # Default-Sicht (kein expliziter ``assigned_to``-Parameter) =
+        # "Mir zugewiesen + nicht zugewiesene Teamaufgaben". Sobald die Nutzer:in
+        # aber explizit "Alle" (``assigned_to=``) oder eine Person wählt, greift
+        # nur noch der Filter aus ``_apply_filters`` — normale Aufgaben sollen
+        # innerhalb der Facility auffindbar sein, auch wenn sie einer anderen
+        # Person zugewiesen sind (private Aufgaben aus #607 existieren noch
+        # nicht). Vorher schnitt die Inbox jede Liste hart mit
+        # ``Q(assigned_to=user) | isnull`` — dadurch lieferte "Alle" weiterhin
+        # nur eigene+unassigned, und ein Personenfilter auf jemand anderen eine
+        # leere Liste. Eine selbst erstellte, fremd-zugewiesene Aufgabe
+        # "verschwand" so aus der Sicht der Erstellerin (Refs #1125).
+        default_scope = "assigned_to" not in request.GET
+
+        def _scope_open_inprogress(qs):
+            if default_scope:
+                return qs.filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
+            return qs
+
+        open_qs = _scope_open_inprogress(base_qs.filter(status=WorkItem.Status.OPEN))
         open_items = list(open_qs[: cap + 1])
         open_has_more = len(open_items) > cap
         if open_has_more:
             open_items = open_items[:cap]
 
-        in_progress_qs = base_qs.filter(
-            status=WorkItem.Status.IN_PROGRESS,
-        ).filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
+        in_progress_qs = _scope_open_inprogress(base_qs.filter(status=WorkItem.Status.IN_PROGRESS))
         in_progress_items = list(in_progress_qs[: cap + 1])
         in_progress_has_more = len(in_progress_items) > cap
         if in_progress_has_more:
