@@ -330,6 +330,113 @@ class TestZeitstromPreviewEnrichment:
 
 
 @pytest.mark.django_db
+class TestZeitstromCurrentShift:
+    """Dienst-Übersicht bezieht sich immer auf den aktuell laufenden Dienst (Refs #1138).
+
+    Der Bereich darf NICHT der Datums-/Schicht-Auswahl im Zeitstrom folgen,
+    sondern zeigt dauerhaft die Kennzahlen der gerade laufenden Schicht.
+    """
+
+    def test_current_shift_summary_in_context(self, client, staff_user, facility, time_filter_frueh):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom"))
+        assert "current_shift_summary" in response.context
+
+    def test_current_shift_summary_uses_running_shift_not_selected(
+        self, client, staff_user, facility, time_filter_frueh, time_filter_spaet
+    ):
+        """Auch wenn ein anderer Filter gewählt ist, zeigt die Box die laufende Schicht."""
+        today = date(2025, 6, 15)
+        # 18:00 → Spätdienst läuft gerade
+        mock_now = timezone.make_aware(datetime.combine(today, time(18, 0)))
+        with (
+            patch("core.views.zeitstrom.timezone.localdate", return_value=today),
+            patch("core.views.zeitstrom.timezone.localtime", return_value=mock_now),
+        ):
+            client.force_login(staff_user)
+            # User wählt explizit den Frühdienst-Filter
+            response = client.get(
+                reverse("core:zeitstrom"),
+                {"time_filter": str(time_filter_frueh.pk)},
+            )
+        # Feed/Filter folgt der Auswahl …
+        assert response.context["selected_filter"] == time_filter_frueh
+        # … die Dienst-Übersicht bleibt aber beim laufenden Spätdienst.
+        assert response.context["current_shift_summary"] is not None
+        assert response.context["current_shift_summary"]["shift_label"] == "Spätdienst"
+
+    def test_current_shift_summary_independent_of_date_navigation(
+        self, client, staff_user, facility, time_filter_frueh, time_filter_spaet
+    ):
+        """Beim Durchklicken anderer Tage wechselt die laufende-Schicht-Box nicht mit."""
+        today = date(2025, 6, 15)
+        yesterday = today - timedelta(days=1)
+        mock_now = timezone.make_aware(datetime.combine(today, time(18, 0)))
+        with (
+            patch("core.views.zeitstrom.timezone.localdate", return_value=today),
+            patch("core.views.zeitstrom.timezone.localtime", return_value=mock_now),
+        ):
+            client.force_login(staff_user)
+            response = client.get(reverse("core:zeitstrom"), {"date": yesterday.isoformat()})
+        assert response.context["target_date"] == yesterday
+        # Box zeigt weiterhin den heute laufenden Spätdienst.
+        assert response.context["current_shift_summary"]["shift_label"] == "Spätdienst"
+        assert response.context["current_shift_summary"]["date"] == today
+
+    def test_current_shift_summary_counts_events_of_running_shift(
+        self, client, staff_user, facility, doc_type_contact, time_filter_spaet
+    ):
+        today = date(2025, 6, 15)
+        mock_now = timezone.make_aware(datetime.combine(today, time(18, 0)))
+        Event.objects.create(
+            facility=facility,
+            document_type=doc_type_contact,
+            occurred_at=timezone.make_aware(datetime.combine(today, time(17, 30))),
+            data_json={},
+            created_by=staff_user,
+        )
+        with (
+            patch("core.views.zeitstrom.timezone.localdate", return_value=today),
+            patch("core.views.zeitstrom.timezone.localtime", return_value=mock_now),
+        ):
+            client.force_login(staff_user)
+            response = client.get(reverse("core:zeitstrom"))
+        assert response.context["current_shift_summary"]["stats"]["events_total"] == 1
+
+    def test_current_shift_card_always_visible_not_details(self, client, staff_user, facility, time_filter_spaet):
+        """Die Box ist dauerhaft sichtbar und kein aufklappbares <details> mehr."""
+        today = date(2025, 6, 15)
+        mock_now = timezone.make_aware(datetime.combine(today, time(18, 0)))
+        with (
+            patch("core.views.zeitstrom.timezone.localdate", return_value=today),
+            patch("core.views.zeitstrom.timezone.localtime", return_value=mock_now),
+        ):
+            client.force_login(staff_user)
+            response = client.get(reverse("core:zeitstrom"))
+        content = response.content.decode()
+        assert 'data-testid="current-shift"' in content
+        # Beschriftung grenzt die laufende Schicht von der Zeitstrom-Filterung ab.
+        assert "Aktueller Dienst" in content
+        # Kein aufklappbarer Bereich mehr für die Dienst-Übersicht.
+        assert 'data-testid="handover-summary"' not in content
+        assert "<details" not in content
+
+    def test_current_shift_summary_none_when_no_shift_running(self, client, staff_user, facility, time_filter_frueh):
+        """Läuft gerade keine Schicht, bleibt die Box leer (kein Crash)."""
+        today = date(2025, 6, 15)
+        # 23:00 liegt außerhalb des Frühdienstes (08–16) → keine laufende Schicht
+        mock_now = timezone.make_aware(datetime.combine(today, time(23, 0)))
+        with (
+            patch("core.views.zeitstrom.timezone.localdate", return_value=today),
+            patch("core.views.zeitstrom.timezone.localtime", return_value=mock_now),
+        ):
+            client.force_login(staff_user)
+            response = client.get(reverse("core:zeitstrom"))
+        assert response.status_code == 200
+        assert response.context["current_shift_summary"] is None
+
+
+@pytest.mark.django_db
 class TestZeitstromUebergabeMode:
     """Übergabe als ?view=uebergabe-Modus im Zeitstrom (Refs #1124)."""
 

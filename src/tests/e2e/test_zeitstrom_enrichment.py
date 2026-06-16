@@ -161,22 +161,52 @@ class TestHandoverPage:
         assert page.locator("text=Kontakte").count() > 0
 
 
-class TestHandoverInZeitstrom:
-    """Übergabe-Zusammenfassung im Zeitstrom bei aktiver Schicht."""
+class TestCurrentShiftInZeitstrom:
+    """Dienst-Übersicht des aktuell laufenden Dienstes im Zeitstrom (Refs #1138)."""
 
-    def test_handover_summary_with_time_filter(self, authenticated_page, base_url):
-        """When a time filter is selected, a handover summary should appear."""
+    def test_current_shift_card_visible_on_load(self, authenticated_page, base_url):
+        """Die Dienst-Übersicht ist dauerhaft sichtbar und beschriftet — kein Aufklappen."""
         page = authenticated_page
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
 
-        # Click the first time filter tab (not "Alle")
-        filter_tabs = page.locator("[data-testid='time-filter-tab']")
-        if filter_tabs.count() > 1:
-            # Click second tab (first non-"Alle" filter)
-            filter_tabs.nth(1).click()
-            page.wait_for_load_state("domcontentloaded")
+        card = page.locator("[data-testid='current-shift']")
+        card.wait_for(state="visible", timeout=10000)
+        # Überschrift wird per CSS in Versalien dargestellt → case-insensitiv prüfen.
+        assert "aktueller dienst" in card.inner_text().lower()
+        # Kein aufklappbares <details> mehr für die Dienst-Übersicht.
+        assert page.locator("[data-testid='handover-summary']").count() == 0
 
-            # The handover summary details element should be present
-            summary = page.locator("[data-testid='handover-summary']")
-            if summary.count() > 0:
-                assert summary.is_visible()
+    def test_current_shift_card_independent_of_date_and_filter(self, authenticated_page, base_url):
+        """Die Dienst-Übersicht bleibt beim laufenden Dienst, auch bei anderer Datums-/Schicht-Auswahl."""
+        from datetime import date, timedelta
+
+        page = authenticated_page
+        page.goto(f"{base_url}/", wait_until="domcontentloaded")
+
+        card = page.locator("[data-testid='current-shift']")
+        card.wait_for(state="visible", timeout=10000)
+        running_shift_label = card.locator("[data-testid='current-shift-label']").inner_text()
+
+        # Beliebigen Schicht-Filter ermitteln, der NICHT der laufende Dienst ist,
+        # und per Voll-Navigation (anderer Tag) ansteuern.
+        tabs = page.locator(".time-filter-tab")
+        other_label = None
+        for i in range(tabs.count()):
+            label = tabs.nth(i).inner_text().strip()
+            if label.startswith("Alle"):
+                continue
+            # running_shift_label = "Spätdienst · 16:00 – 22:00"; Tab = "Spätdienst 16:00–22:00"
+            if label.split()[0] not in running_shift_label:
+                other_label = label
+                break
+
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        if other_label:
+            page.locator(".time-filter-tab", has_text=other_label.split()[0]).first.click()
+        # Voll-Navigation auf einen anderen Tag (Datums-Pfeile beziehen den Filter mit ein).
+        page.goto(f"{base_url}/?date={yesterday}", wait_until="domcontentloaded")
+
+        card = page.locator("[data-testid='current-shift']")
+        card.wait_for(state="visible", timeout=10000)
+        # Beschriftung der Box folgt weder Datum noch Schicht-Auswahl.
+        assert card.locator("[data-testid='current-shift-label']").inner_text() == running_shift_label
