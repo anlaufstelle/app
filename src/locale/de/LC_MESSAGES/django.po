@@ -5849,3 +5849,31 @@ msgstr "Krisen, Hausverbote und dringende Aufgaben"
 #: src/templates/core/dashboard/role_staff.html:29
 msgid "Aufgaben mit überschrittenem Termin"
 msgstr "Aufgaben mit überschrittenem Termin"
+
+#: src/templates/core/zeitstrom/index.html:162
+msgid "Team-Aufgaben mit Handlungsbedarf"
+msgstr "Team-Aufgaben mit Handlungsbedarf"
+
+#: src/core/services/dashboard/focus_box.py:44
+msgid "Dringend · Wichtig"
+msgstr "Dringend · Wichtig"
+
+#: src/templates/core/zeitstrom/index.html:178
+#, python-format
+msgid "%(shown)s von %(total)s offenen Aufgaben angezeigt"
+msgstr "%(shown)s von %(total)s offenen Aufgaben angezeigt"
+
+#: src/templates/core/zeitstrom/index.html:182
+msgid "Keine Team-Aufgaben mit Handlungsbedarf"
+msgstr "Keine Team-Aufgaben mit Handlungsbedarf"
+
+#: src/templates/core/zeitstrom/index.html:185
+#, python-format
+msgid "%(total)s offene Aufgabe ohne akuten Handlungsbedarf"
+msgid_plural "%(total)s offene Aufgaben ohne akuten Handlungsbedarf"
+msgstr[0] "%(total)s offene Aufgabe ohne akuten Handlungsbedarf"
+msgstr[1] "%(total)s offene Aufgaben ohne akuten Handlungsbedarf"
+
+#: src/templates/core/zeitstrom/index.html:190
+msgid "Zur Aufgabenübersicht"
+msgstr "Zur Aufgabenübersicht"

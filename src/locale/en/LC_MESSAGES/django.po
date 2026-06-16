@@ -6128,3 +6128,31 @@ msgstr "Handover-relevant notes"
 #: src/templates/core/handover/index.html:63
 msgid "Krisen, Hausverbote und dringende Aufgaben"
 msgstr "Crises, bans and urgent tasks"
+
+#: src/templates/core/zeitstrom/index.html:162
+msgid "Team-Aufgaben mit Handlungsbedarf"
+msgstr "Team tasks needing attention"
+
+#: src/core/services/dashboard/focus_box.py:44
+msgid "Dringend · Wichtig"
+msgstr "Urgent · Important"
+
+#: src/templates/core/zeitstrom/index.html:178
+#, python-format
+msgid "%(shown)s von %(total)s offenen Aufgaben angezeigt"
+msgstr "Showing %(shown)s of %(total)s open tasks"
+
+#: src/templates/core/zeitstrom/index.html:182
+msgid "Keine Team-Aufgaben mit Handlungsbedarf"
+msgstr "No team tasks need attention"
+
+#: src/templates/core/zeitstrom/index.html:185
+#, python-format
+msgid "%(total)s offene Aufgabe ohne akuten Handlungsbedarf"
+msgid_plural "%(total)s offene Aufgaben ohne akuten Handlungsbedarf"
+msgstr[0] "%(total)s open task without urgent action needed"
+msgstr[1] "%(total)s open tasks without urgent action needed"
+
+#: src/templates/core/zeitstrom/index.html:190
+msgid "Zur Aufgabenübersicht"
+msgstr "To task overview"
