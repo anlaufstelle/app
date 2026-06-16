@@ -449,6 +449,75 @@ class TestUnassignedTeamTaskBulk:
         )
 
 
+def _post_form_with_body(page, base_url, path: str, data: dict) -> dict:
+    """Wie ``_post_form``, liefert zusätzlich den Antwort-Body als Text.
+
+    Für die #1136-Verifikation brauchen wir nicht nur den Status, sondern den
+    konkreten Meldungstext der 403-Antwort.
+    """
+    page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+    token = _csrf_token(page)
+    pairs = []
+    for key, value in data.items():
+        if isinstance(value, (list, tuple)):
+            pairs.extend((key, str(v)) for v in value)
+        else:
+            pairs.append((key, str(value)))
+    response = page.request.post(
+        f"{base_url}{path}",
+        data=urlencode(pairs),
+        headers={
+            "X-CSRFToken": token,
+            "Referer": f"{base_url}/workitems/",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+    )
+    return {"status": response.status, "body": response.text()}
+
+
+class TestBulkForbiddenMessageConcrete:
+    """Refs #1136: konkrete statt pauschaler 403-Meldung im echten Flow.
+
+    Manuell auf E2E-Port 8844 (Fachkraft Miriam) beobachtet: nach „Alle
+    sichtbaren auswählen" über den ``Alle``-Filter sind auch fremd-zugewiesene
+    Aufgaben mit ausgewählt; der Bulk-Submit scheiterte mit der pauschalen
+    Meldung „Keine Berechtigung für ausgewählte Aufgaben." — sie erklärte
+    nicht, *welche* Einschränkung greift. Die Antwort nennt jetzt die Anzahl
+    der blockierenden (fremd-zugewiesenen) Items von der Gesamtauswahl.
+    """
+
+    def test_mixed_selection_returns_concrete_count_message(self, lead_page, staff_page, base_url):
+        # Eine fremd-zugewiesene Aufgabe (Thomas) + eine Miriam selbst
+        # zugewiesene Aufgabe → gemischte Auswahl.
+        foreign_title = f"E2E-1136-Foreign-{uuid.uuid4().hex[:6]}"
+        foreign_id = _create_workitem_assigned(lead_page, base_url, foreign_title, assignee_label="Thomas Müller")
+        own_title = f"E2E-1136-Own-{uuid.uuid4().hex[:6]}"
+        own_id = _create_workitem_assigned(staff_page, base_url, own_title, assignee_label="Miriam Schmidt")
+
+        result = _post_form_with_body(
+            staff_page,
+            base_url,
+            "/workitems/bulk-priority/",
+            {"workitem_ids": [own_id, foreign_id], "priority": "urgent"},
+        )
+        assert result["status"] == 403, f"Gemischte Auswahl muss 403 liefern, ist {result['status']}."
+        body = result["body"]
+        # Pauschale Alt-Meldung darf NICHT mehr erscheinen.
+        assert "Keine Berechtigung für ausgewählte Aufgaben." not in body, (
+            "Die pauschale 403-Meldung wurde durch eine konkrete ersetzt (Refs #1136)."
+        )
+        # Konkret: 1 von 2 ist fremd-zugewiesen, mit Begründung „zugewiesen".
+        assert "1" in body and "2" in body, f"Meldung muss die Anzahl (1 von 2) nennen: {body!r}"
+        assert "zugewiesen" in body, f"Meldung muss die Einschränkung erklären: {body!r}"
+
+        # Keine Mutation: das eigene Item bleibt unverändert (nicht 'urgent').
+        staff_page.goto(f"{base_url}/workitems/{own_id}/", wait_until="domcontentloaded")
+        own_content = staff_page.content().lower()
+        assert "dringend" not in own_content and "urgent" not in own_content, (
+            "Bei abgelehntem Bulk darf KEIN Item verändert worden sein (Alles-oder-nichts)."
+        )
+
+
 def _create_workitem_assigned_no_default_wait(page, base_url, title: str, assignee_label: str) -> None:
     """Legt eine zugewiesene Aufgabe an, OHNE auf die Default-Inbox zu warten.
 
