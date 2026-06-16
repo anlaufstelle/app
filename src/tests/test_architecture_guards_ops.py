@@ -22,6 +22,11 @@ class TestRunAsAdminPullPolicy:
     _SCRIPT = Path("dev-ops/deploy/run-as-admin.sh")
 
     def test_compose_run_uses_pull_never(self) -> None:
+        # ``dev-ops/`` ist im Public-/Stage-Snapshot ausgeschlossen
+        # (build-release.sh), der Test selbst (``src/tests/``) wird aber
+        # mitgeliefert. Dort ist der Guard moot — überspringen statt failen.
+        if not self._SCRIPT.exists():
+            pytest.skip("dev-ops/ nicht im Public-Snapshot — Guard nur im Dev-Repo relevant (Refs #1047)")
         # Kommentarzeilen ausfiltern (der Skript-Header erwähnt ``docker
         # compose run`` in Prosa) und Zeilenfortsetzungen auflösen, damit
         # der mehrzeilige Aufruf als ein Statement matchbar ist.
