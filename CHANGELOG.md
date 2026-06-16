@@ -28,6 +28,7 @@ Sicherheits- und Stabilisierungs-Release (Pre-Release) auf dem Weg zur Demo-Vers
 ### Added
 
 - **Arbeitszentrale als Cockpit-Kopf der Start-Seite** (#1124) — eine schlanke Arbeitszentrale bündelt den Handlungsbedarf der Schicht an der Spitze der Start-Seite.
+- **Team-Fokusbox in der Zeitstrom-Sidebar** (#1128) — eine Sidebar-Fokusbox bündelt den offenen Handlungsbedarf des Teams (eigenes Dashboard-Service-Modul).
 - **Recht „Löschbestätigung" — Genehmiger-Pool entkoppelt von der Rolle** (#1053) — die zweite Person der Vier-Augen-Löschfreigabe ist jetzt über ein eigenes Recht (`can_confirm_deletion`) kuratierbar statt fest an die Leitungsrolle gebunden; das entdeadlockt den Workflow bei nur einer Leitung.
 - **Deployte Version im Footer** (#1050) — das eingeloggte Layout zeigt die laufende Version im Footer (Login-Seite bleibt versionslos); im Demo-/Pilotbetrieb erleichtert das die Zuordnung.
 - **Klarsicht-Toggle für Passwortfelder** (#1049) — ein Auge-Button blendet Passwörter ein/aus (`aria-pressed`), als wiederverwendbares Formularfeld-Pattern.
@@ -37,6 +38,7 @@ Sicherheits- und Stabilisierungs-Release (Pre-Release) auf dem Weg zur Demo-Vers
 - **PostgreSQL 16 → 18** (#1039) — Datenbank-Major-Upgrade: Image-Pins und PG18-Volume-Layout in allen Compose-Dateien, Drei-Rollen-/RLS-Verifikation und Major-Upgrade-Runbook (§ 13) nachgezogen.
 - **Node 20 → 24 LTS** (#1075) — Build-Toolchain und CI laufen auf Node 24 LTS (Node 20 EOL 2026-04-30); CONTRIBUTING auf Node 24+ angehoben.
 - **Schichtübergabe als Ansicht im Zeitstrom** (#1124) — die Übergabe ist in den Zeitstrom als Schicht-Ansicht gefaltet und die staff-Arbeitszentrale auf den reinen Handlungsbedarf verschlankt.
+- **Aufgaben in der Hauptnavigation unter Zeitstrom** (#1126) — die operative Hauptnavigation ist neu geordnet, Aufgaben sitzen direkt unter dem Zeitstrom.
 - **Englische Dokumentation vollständig synchronisiert** (#1078, #1071) — README.en, CONTRIBUTING.en und docs/en/* decken jetzt u. a. Arbeitszentrale, Lockout-Selbsthilfe (E-Mail/Backup-Code), Drei-Rollen-Datenbankmodell, Compliance-Dashboard, Genehmiger-Pool und datenschutzfreundliche externe Berichte ab.
 - **Übersetzungs-Gate verschärft** (#1078) — `scripts/check_translation_versions.py` verlangt Übersetzungs-Sync mit jedem Minor-Release (`MAX_MINOR_BEHIND` 2 → 0); Teil der neuen EN-Sync-Policy „hartes Release-Gate".
 - **Compose-Image-Pins vereinheitlicht** (#1082) — `docker-compose.staging.yml` und `docker-compose.prod.yml` ziehen den App-Image-Tag konsistent über `${APP_VERSION}` (vorher war staging hart auf das vier Minors alte `v0.10.2` gepinnt und der prod-Fallback ebenfalls veraltet). Der Release-Doc-Sync hält den Fallback künftig aktuell.
@@ -44,7 +46,7 @@ Sicherheits- und Stabilisierungs-Release (Pre-Release) auf dem Weg zur Demo-Vers
 
 ### Fixed
 
-- **Nicht zugewiesene Aufgaben als mutierbare Teamaufgaben** (#1125) — Aufgaben ohne Zuweisung werden wieder als Teamaufgaben behandelt und sind bearbeitbar.
+- **Aufgaben-Zuweisung & -Sichtbarkeit korrigiert** (#1125) — nicht zugewiesene Aufgaben werden wieder als mutierbare Teamaufgaben behandelt, die Assistenz ist als Aufgaben-Empfängerin zuweisbar, und explizite Filter zeigen alle Aufgaben der Einrichtung.
 - **Schichtübergabe präzisiert** (#1120, #1121, #1122) — überfällige offene Aufgaben werden in der Übergabe markiert, die Überschrift konkreter benannt und die redundante Aktivitäten-Kachel entfernt.
 - **Redirect nach Löschantrag-Review kontextsensitiv** (#1119) — die Weiterleitung nach der Review führt kontextgerecht zurück, abgesichert über den zentralen Open-Redirect-Schutz.
 - **Eigener Löschantrag ohne Genehmigen-Button** (#1052) — der eigene Antrag zeigt einen Statushinweis „wartet auf zweite Person" statt einer toten Genehmigen-Aktion (Vier-Augen-Konsistenz).
