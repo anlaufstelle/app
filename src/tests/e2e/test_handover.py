@@ -1,4 +1,4 @@
-"""E2E-Tests für die Übergabe-Seite (/uebergabe/).
+"""E2E-Tests für die Übergabe (?view=uebergabe-Modus im Zeitstrom, Refs #1124).
 
 Prüft:
 - Übergabe-Seite ist über Hauptnavigation erreichbar.
@@ -62,13 +62,13 @@ def _cleanup_overdue_task(e2e_env) -> None:
 
 
 class TestHandoverPage:
-    def test_link_in_navigation(self, authenticated_page, base_url):
-        """Klick auf 'Übergabe' in der Hauptnavigation führt zur Übergabe-Seite."""
+    def test_uebergabe_tab_opens_mode(self, authenticated_page, base_url):
+        """Klick auf den 'Übergabe'-Tab im Zeitstrom öffnet den ?view=uebergabe-Modus (Refs #1124)."""
         page = authenticated_page
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
-        page.locator("nav[aria-label='Hauptnavigation']").locator("a:has-text('Übergabe')").first.click()
-        page.wait_for_url(lambda url: "/uebergabe/" in url, timeout=10000)
-        assert page.locator("h1").inner_text() == "Übergabe"
+        page.locator("[data-testid='zeitstrom-tab-uebergabe']").click()
+        page.wait_for_url(lambda url: "view=uebergabe" in url, timeout=10000)
+        assert page.locator("h2:has-text('Statistiken')").is_visible()
 
     def test_default_view_shows_full_day(self, authenticated_page, base_url):
         """Ohne time_filter steht 'Ganzer Tag' als Schicht-Label.
@@ -77,7 +77,7 @@ class TestHandoverPage:
         View automatisch die zuletzt aktive Schicht wählt (handover.py).
         """
         page = authenticated_page
-        page.goto(f"{base_url}/uebergabe/?date=2026-04-15", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/?view=uebergabe&date=2026-04-15", wait_until="domcontentloaded")
         # Es gibt zwei "Ganzer Tag"-Elemente: Filter-Link und Schicht-Heading.
         # Wir prüfen das Heading-Element (h2 mit Schicht-Range).
         heading = page.locator("h2:has-text('Ganzer Tag')")
@@ -86,7 +86,7 @@ class TestHandoverPage:
     def test_shift_filter_switches_label(self, authenticated_page, base_url):
         """Klick auf 'Frühdienst' setzt time_filter im URL und wechselt Schicht-Heading."""
         page = authenticated_page
-        page.goto(f"{base_url}/uebergabe/", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")
         page.locator("a:has-text('Frühdienst')").first.click()
         page.wait_for_url(lambda url: "time_filter=" in url, timeout=10000)
         assert page.locator("h2:has-text('Frühdienst')").count() >= 1
@@ -94,13 +94,13 @@ class TestHandoverPage:
     def test_statistics_section_visible(self, authenticated_page, base_url):
         """Statistiken-Sektion (Kontakte/Aufgaben/Personen) ist sichtbar."""
         page = authenticated_page
-        page.goto(f"{base_url}/uebergabe/", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")
         assert page.locator("h2:has-text('Statistiken')").is_visible()
 
     def test_activities_kpi_removed(self, authenticated_page, base_url):
         """Refs #1122: Die KPI-Kachel 'Aktivitäten' ist aus der Übergabe entfernt."""
         page = authenticated_page
-        page.goto(f"{base_url}/uebergabe/?date=2026-04-15", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/?view=uebergabe&date=2026-04-15", wait_until="domcontentloaded")
         # Nur innerhalb der Statistik-KPI-Kacheln prüfen.
         stats = page.locator("h2:has-text('Statistiken')").locator("xpath=following-sibling::*[1]")
         assert stats.get_by_text("Aktivitäten", exact=True).count() == 0
@@ -109,7 +109,7 @@ class TestHandoverPage:
     def test_highlights_section_relabeled(self, authenticated_page, base_url):
         """Refs #1121: Sektion heißt 'Übergabe-relevante Hinweise' mit erklärendem Untertitel."""
         page = authenticated_page
-        page.goto(f"{base_url}/uebergabe/", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")
         assert page.locator("h2:has-text('Übergabe-relevante Hinweise')").is_visible()
         assert page.get_by_text("Krisen, Hausverbote und dringende Aufgaben").is_visible()
         assert page.locator("h2:has-text('Wichtige Ereignisse')").count() == 0
@@ -119,7 +119,7 @@ class TestHandoverPage:
         _create_overdue_task("admin", e2e_env)
         try:
             page = authenticated_page
-            page.goto(f"{base_url}/uebergabe/", wait_until="domcontentloaded")
+            page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")
             badge = page.locator("[data-testid='handover-task-overdue']").first
             badge.wait_for(state="visible", timeout=10000)
             assert "Überfällig" in badge.inner_text()
@@ -129,13 +129,13 @@ class TestHandoverPage:
     def test_open_tasks_section_visible(self, authenticated_page, base_url):
         """'Offene Aufgaben'-Sektion wird gerendert."""
         page = authenticated_page
-        page.goto(f"{base_url}/uebergabe/", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")
         assert page.locator("h2:has-text('Offene Aufgaben')").is_visible()
 
     def test_date_back_navigation_changes_url(self, authenticated_page, base_url):
         """Klick auf 'Tag zurück' setzt ?date=...-1 im URL."""
         page = authenticated_page
-        page.goto(f"{base_url}/uebergabe/?date=2026-04-25", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/?view=uebergabe&date=2026-04-25", wait_until="domcontentloaded")
         # Zurück-Pfeil ist der erste <a> mit href="?date=2026-04-24..."
         page.locator("a[href*='date=2026-04-24']").first.click()
         page.wait_for_url(lambda url: "date=2026-04-24" in url, timeout=10000)

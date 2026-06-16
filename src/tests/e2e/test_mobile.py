@@ -170,15 +170,15 @@ class TestMobileNavigation:
         assert page.locator("h1").inner_text() == "Zeitstrom"
 
     def test_mobile_nav_more_opens_menu(self, mobile_page, base_url):
-        # Klientel/Aufgaben sind jetzt eigene Bottom-Nav-Slots — Mehr enthält Uebergabe/Dateien/Suche etc.
+        # Klientel/Aufgaben sind eigene Bottom-Nav-Slots — Mehr enthält Dateien/Suche/Profil etc.
         page = mobile_page
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
         page.locator("[data-testid='mobile-nav-more']").click()
-        uebergabe_link = page.locator("nav[aria-label='Mobile Navigation'] a[href='/uebergabe/']")
-        uebergabe_link.wait_for(state="visible", timeout=10000)
-        assert uebergabe_link.is_visible(), "Uebergabe-Link im Mehr-Menue nicht sichtbar"
+        profil_link = page.locator("nav[aria-label='Mobile Navigation'] a[href='/account/']")
+        profil_link.wait_for(state="visible", timeout=10000)
+        assert profil_link.is_visible(), "Profil-Link im Mehr-Menue nicht sichtbar"
 
     def test_mobile_nav_clients_navigates(self, mobile_page, base_url):
         page = mobile_page
@@ -471,7 +471,7 @@ class TestMobileNoHorizontalScroll:
             ("/clients/", "Personen"),
             ("/workitems/", "Aufgaben"),
             ("/events/new/", "Neuer Kontakt"),
-            ("/uebergabe/", "Übergabe"),
+            ("/?view=uebergabe", "Zeitstrom"),
         ],
     )
     def test_mobile_no_horizontal_scroll(self, mobile_page, base_url, path, title):

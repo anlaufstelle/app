@@ -12,24 +12,20 @@ class TestRoleDashboardLanding:
     """Smoke pro Rolle: /start/ rendert das rollenspezifische Template."""
 
     @pytest.mark.smoke
-    def test_staff_dashboard_renders(self, staff_page, base_url):
+    def test_staff_start_redirects_to_cockpit(self, staff_page, base_url):
+        """Fachkraft: /start/ leitet auf / um — das Cockpit liegt dort (Refs #1124)."""
         page = staff_page
         page.goto(f"{base_url}/start/")
-        page.wait_for_load_state("domcontentloaded")
-
-        expect(page.locator("h1")).to_contain_text("Arbeitszentrale")
-        expect(page.locator("[data-testid='staff-dashboard-cards']")).to_be_visible()
-        expect(page.locator("[data-testid='card-today-events']")).to_be_visible()
-        expect(page.locator("[data-testid='card-my-workitems']")).to_be_visible()
-        expect(page.locator("[data-testid='card-recent-clients']")).to_be_visible()
+        page.wait_for_url(f"{base_url}/")
+        expect(page.locator("[data-testid='zeitstrom-cockpit']")).to_be_visible()
 
     @pytest.mark.smoke
-    def test_assistant_dashboard_renders(self, assistant_page, base_url):
+    def test_assistant_start_redirects_to_cockpit(self, assistant_page, base_url):
+        """Assistenz: /start/ leitet auf / um (Refs #1124)."""
         page = assistant_page
         page.goto(f"{base_url}/start/")
-        page.wait_for_load_state("domcontentloaded")
-
-        expect(page.locator("[data-testid='staff-dashboard-cards']")).to_be_visible()
+        page.wait_for_url(f"{base_url}/")
+        expect(page.locator("[data-testid='zeitstrom-cockpit']")).to_be_visible()
 
     @pytest.mark.smoke
     def test_lead_dashboard_renders(self, lead_page, base_url):
@@ -70,11 +66,11 @@ class TestRoleDashboardLanding:
 
 
 class TestNavLinkDashboard:
-    """Der neue Nav-Link "Arbeitszentrale" fuehrt zu /start/."""
+    """Nav-Link "Arbeitszentrale" nur fuer Leitung/Admin; Fachkraft sieht stattdessen das Cockpit (Refs #1124)."""
 
     @pytest.mark.smoke
-    def test_nav_link_visible_and_navigates(self, staff_page, base_url):
-        page = staff_page
+    def test_nav_link_visible_for_lead_and_navigates(self, lead_page, base_url):
+        page = lead_page
         page.goto(f"{base_url}/")
         page.wait_for_load_state("domcontentloaded")
 
@@ -82,4 +78,16 @@ class TestNavLinkDashboard:
         expect(nav_link).to_be_visible()
         nav_link.click()
         page.wait_for_url(f"{base_url}/start/")
-        expect(page.locator("[data-testid='staff-dashboard-cards']")).to_be_visible()
+        expect(page.locator("[data-testid='lead-dashboard-cards']")).to_be_visible()
+
+    @pytest.mark.smoke
+    def test_staff_has_no_arbeitszentrale_or_uebergabe_nav(self, staff_page, base_url):
+        """Fachkraft: kein Arbeitszentrale- und kein Uebergabe-Eintrag in der Hauptnav (Refs #1124)."""
+        page = staff_page
+        page.goto(f"{base_url}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        nav = page.locator("nav[aria-label='Hauptnavigation']")
+        expect(nav.locator("[data-testid='nav-dashboard']")).to_have_count(0)
+        expect(nav.locator("[data-testid='nav-handover']")).to_have_count(0)
+        expect(page.locator("[data-testid='zeitstrom-cockpit']")).to_be_visible()

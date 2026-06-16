@@ -137,26 +137,26 @@ class TestActivityCards:
 
 
 class TestHandoverPage:
-    """Übergabe-Seite erreichbar und zeigt Inhalt."""
+    """Übergabe als ?view=uebergabe-Modus im Zeitstrom erreichbar und zeigt Inhalt (Refs #1124)."""
 
-    def test_handover_page_accessible(self, authenticated_page, base_url):
-        """The /uebergabe/ page loads successfully."""
+    def test_handover_mode_accessible(self, authenticated_page, base_url):
+        """Der ?view=uebergabe-Modus lädt und zeigt die Statistiken-Sektion."""
         page = authenticated_page
-        page.goto(f"{base_url}/uebergabe/", wait_until="domcontentloaded")
-        assert page.locator("h1").inner_text() == "Übergabe"
+        page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")
+        assert page.locator("h2:has-text('Statistiken')").is_visible()
 
-    def test_handover_nav_link_visible(self, authenticated_page, base_url):
-        """The Übergabe link is visible in the desktop sidebar."""
+    def test_uebergabe_tab_visible(self, authenticated_page, base_url):
+        """Der 'Übergabe'-Tab ist im Zeitstrom sichtbar."""
         page = authenticated_page
         page.goto(f"{base_url}/", wait_until="domcontentloaded")
-        nav_link = page.locator("[data-testid='nav-handover']")
-        assert nav_link.is_visible()
-        assert "Übergabe" in nav_link.inner_text()
+        tab = page.locator("[data-testid='zeitstrom-tab-uebergabe']")
+        assert tab.is_visible()
+        assert "Übergabe" in tab.inner_text()
 
     def test_handover_shows_stats(self, authenticated_page, base_url):
-        """The handover page shows statistics section."""
+        """Der Übergabe-Modus zeigt die Statistiken-Sektion mit 'Kontakte'."""
         page = authenticated_page
-        page.goto(f"{base_url}/uebergabe/", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")
         # Stats section should show "Kontakte" label
         assert page.locator("text=Kontakte").count() > 0
 
