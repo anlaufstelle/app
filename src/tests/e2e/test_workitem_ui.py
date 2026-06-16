@@ -189,6 +189,76 @@ class TestWorkItemClickableClientDetail:
         assert authenticated_page.locator("h1:has-text('Klientel-Klicktest')").is_visible()
 
 
+class TestWorkItemListDateLabeling:
+    """Refs #1133: In der Aufgabenliste ist das Datum eindeutig die Frist
+    ('Fällig:' + Tooltip 'Zu erledigen bis'); das Erstellungsdatum erscheint
+    nicht mehr in der Übersicht, bleibt aber in der Einzelansicht erhalten.
+
+    Abgeleitet aus der manuellen Playwright-Verifikation gegen den E2E-Server.
+    """
+
+    _TITLE = "Frist-Label-Test #1133"
+    # Eindeutiges, klar abgegrenztes Erstelldatum (lokalisiert: '14. März 2021').
+    _BACKDATED = "14. März 2021"
+
+    def _create_and_backdate(self, page, base_url, e2e_env):
+        """Offene Aufgabe mit ferner Frist anlegen und created_at zurückdatieren."""
+        page.goto(f"{base_url}/workitems/new/")
+        page.wait_for_load_state("domcontentloaded")
+        page.select_option("select[name='item_type']", value="task")
+        page.fill("input[name='title']", self._TITLE)
+        page.select_option("select[name='priority']", value="normal")
+        # Frist 30 Tage in der Zukunft → relative Anzeige ohne Schlüsselwort.
+        future = page.evaluate(
+            "() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); }"
+        )
+        page.fill("input[name='due_date']", future)
+        page.click("button:has-text('Speichern')")
+        page.wait_for_url(re.compile(r"/workitems/$"))
+
+        code = (
+            "from core.models import WorkItem; "
+            "from datetime import datetime, timezone; "
+            f"wi = WorkItem.objects.filter(title='{self._TITLE}').first(); "
+            "wi and WorkItem.objects.filter(pk=wi.pk).update("
+            "  created_at=datetime(2021, 3, 14, 9, 5, tzinfo=timezone.utc)); "
+            "print(wi.pk if wi else 'MISSING')"
+        )
+        wi_pk = _run_shell(code, e2e_env).strip().splitlines()[-1]
+        assert wi_pk and wi_pk != "MISSING", "WorkItem nicht angelegt/auffindbar"
+        return wi_pk
+
+    @pytest.mark.smoke
+    def test_list_labels_due_date_and_hides_creation_date(self, authenticated_page, base_url, e2e_env):
+        page = authenticated_page
+        self._create_and_backdate(page, base_url, e2e_env)
+
+        page.goto(f"{base_url}/workitems/")
+        page.wait_for_load_state("domcontentloaded")
+
+        row = page.locator("[id^='workitem-']", has_text=self._TITLE).first
+        row.wait_for(state="visible", timeout=10000)
+
+        # Frist eindeutig benannt: sichtbares Präfix + Tooltip an der Zeile.
+        assert "Fällig:" in row.inner_text()
+        assert row.locator("[title='Zu erledigen bis']").count() > 0
+
+        # Erstellungsdatum erscheint in der Übersicht NICHT mehr.
+        assert self._BACKDATED not in row.inner_text()
+
+    def test_detail_still_shows_creation_date(self, authenticated_page, base_url, e2e_env):
+        page = authenticated_page
+        wi_pk = self._create_and_backdate(page, base_url, e2e_env)
+
+        page.goto(f"{base_url}/workitems/{wi_pk}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        body = page.locator("main").inner_text()
+        # Label wird per CSS in Großbuchstaben dargestellt → case-insensitiv prüfen.
+        assert "erstellt am" in body.lower()
+        assert self._BACKDATED in body
+
+
 class TestWorkItemCompletedAt:
     """Erledigungsdatum wird nach Abschluss einer Aufgabe angezeigt."""
 

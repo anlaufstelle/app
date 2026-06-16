@@ -145,6 +145,76 @@ class TestWorkItemInbox:
 
 
 @pytest.mark.django_db
+class TestWorkItemInboxDateLabeling:
+    """Refs #1133: In der Aufgabenliste ist das angezeigte Datum eindeutig das
+    Fälligkeitsdatum; das Erstellungsdatum erscheint nicht mehr (missverständlich)
+    in der Übersicht. Es bleibt nur in der Einzelansicht erhalten.
+    """
+
+    def test_inbox_due_date_is_clearly_labelled(self, client, staff_user, facility):
+        """Das Fälligkeitsdatum in der Liste trägt eine eindeutige Bezeichnung
+        ('Fällig:' sichtbar + Tooltip 'Zu erledigen bis'), damit es nicht mit dem
+        Erstellungsdatum verwechselt wird.
+
+        Die Frist liegt 30 Tage in der Zukunft, sodass die relative Anzeige ein
+        absolutes Datum ohne Schlüsselwort liefert — die Bezeichnung muss daher
+        aus dem Markup der Zeile stammen, nicht aus dem Filter ('Fälligkeit')."""
+        WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            title="Aufgabe mit Frist",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+            due_date=datetime.date.today() + datetime.timedelta(days=30),
+        )
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        # Tooltip am Fälligkeits-Badge der Zeile (nur dort, nicht im Filter).
+        assert 'title="Zu erledigen bis"' in html
+        # Sichtbares Präfix vor der relativen Frist-Anzeige.
+        assert "Fällig:" in html
+
+    def test_inbox_does_not_show_creation_date(self, client, staff_user, facility):
+        """Das Erstellungsdatum wird in der Listenübersicht nicht mehr angezeigt.
+
+        ``created_at`` wird zurückdatiert auf ein eindeutiges Datum (März 2021),
+        dessen lokalisierte Darstellung im gerenderten HTML nicht auftauchen darf.
+        """
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            title="Aufgabe ohne sichtbares Erstelldatum",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+            due_date=datetime.date.today() + datetime.timedelta(days=30),
+        )
+        # created_at ist auto_now_add → nachträglich auf ein klar abgegrenztes
+        # Datum setzen, damit die Abwesenheit eindeutig prüfbar ist.
+        backdated = datetime.datetime(2021, 3, 14, 9, 5, tzinfo=datetime.UTC)
+        WorkItem.objects.filter(pk=wi.pk).update(created_at=backdated)
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert "14. März 2021" not in html
+        assert "2021" not in html
+
+    def test_inbox_creation_date_still_in_detail(self, client, staff_user, facility):
+        """Gegenprobe: Das Erstellungsdatum bleibt in der Einzelansicht sichtbar."""
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            title="Detail-Aufgabe",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+        backdated = datetime.datetime(2021, 3, 14, 9, 5, tzinfo=datetime.UTC)
+        WorkItem.objects.filter(pk=wi.pk).update(created_at=backdated)
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_detail", kwargs={"pk": wi.pk})).content.decode()
+        assert "Erstellt am" in html
+        assert "14. März 2021" in html
+
+
+@pytest.mark.django_db
 class TestWorkItemStatusUpdate:
     def test_status_update(self, client, staff_user, workitem_open):
         client.force_login(staff_user)
