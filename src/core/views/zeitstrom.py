@@ -90,6 +90,12 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
         if selected_filter:
             handover_summary = build_handover_summary(facility, target_date, selected_filter, self.request.user)
 
+        # Dienst-Übersicht der aktuell *laufenden* Schicht (Refs #1138).
+        # Bewusst unabhängig von der Datums-/Schicht-Auswahl im Zeitstrom:
+        # Die Box bezieht sich immer auf den gerade laufenden Dienst, damit sie
+        # beim Durchklicken anderer Tage/Schichten nicht mitwechselt.
+        current_shift_summary = self._build_current_shift_summary(facility, time_filters)
+
         # Active bans (from Dashboard)
         active_bans = get_active_bans(facility, user=self.request.user)
 
@@ -108,6 +114,7 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
             {
                 "feed_items": feed_items,
                 "handover_summary": handover_summary,
+                "current_shift_summary": current_shift_summary,
                 "time_filters": time_filters,
                 "selected_filter": selected_filter,
                 "selected_filter_id": selected_filter_id,
@@ -151,6 +158,25 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
             except ValueError:
                 pass
         return timezone.localdate()
+
+    def _build_current_shift_summary(self, facility, time_filters):
+        """Handover-Summary der gerade laufenden Schicht (Refs #1138).
+
+        Unabhängig von der Datums-/Schicht-Auswahl im Request: ermittelt die
+        Schicht, die den *aktuellen* Zeitpunkt abdeckt, und baut dafür die
+        Dienst-Übersicht. Mitternachts-Überlappung wird berücksichtigt — in den
+        frühen Morgenstunden gehört der Zeitpunkt zum Nachtdienst des Vortags.
+        Läuft gerade keine Schicht, wird ``None`` zurückgegeben.
+        """
+        now = timezone.localtime()
+        for tf in time_filters:
+            if not tf.covers_time(now):
+                continue
+            shift_date = timezone.localdate()
+            if tf.start_time > tf.end_time and now.time() <= tf.end_time:
+                shift_date = shift_date - timedelta(days=1)
+            return build_handover_summary(facility, shift_date, tf, self.request.user)
+        return None
 
     def _select_handover_shift(self, time_filters, target_date):
         """Vorschicht-Auto-Wahl fuer den Uebergabe-Modus (Port aus HandoverView)."""

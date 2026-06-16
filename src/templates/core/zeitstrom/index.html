@@ -109,20 +109,20 @@
 {# TimeFilter-Tabs (Schicht-Auswahl) #}
 {% include "components/_time_filter_dropdown.html" with feed_target_id="feed-list" events_partial_url="core:zeitstrom_feed_partial" %}
 
-{# Schicht-Summary-Card (Design: Shift-Banner mit Inline-Stats; bleibt expandable als <details>) #}
-{% if handover_summary %}
-<details class="mb-5 bg-surface border border-subtle rounded-[10px] overflow-hidden" data-testid="handover-summary">
-    <summary class="px-4 py-3 cursor-pointer hover:bg-canvas flex items-center gap-3 flex-wrap">
-        <svg aria-hidden="true" class="w-4 h-4 text-ink-muted flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0-4-4m4 4-4 4m0 6H4m0 0 4 4m-4-4 4-4"/></svg>
-        <span class="text-[13px] font-semibold text-ink-soft">{{ handover_summary.shift_label }} · {{ handover_summary.shift_range }}</span>
-        <div class="ml-auto flex items-center gap-3 text-[12px] text-ink-muted">
-            <span><b class="text-ink font-mono">{{ handover_summary.stats.events_total }}</b> {% trans "Kontakte" %}</span>
+{# Aktueller Dienst (Refs #1138): dauerhaft sichtbare Dienst-Übersicht der laufenden Schicht — nicht aufklappbar, nicht an die Zeitstrom-Auswahl gekoppelt. #}
+{% if current_shift_summary %}
+<section class="mb-5 bg-surface border border-subtle rounded-[10px] overflow-hidden" data-testid="current-shift" aria-labelledby="current-shift-heading">
+    <div class="px-4 py-3 flex items-center gap-3 flex-wrap border-b border-subtle">
+        <svg aria-hidden="true" class="w-4 h-4 text-ink-muted flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+        <div>
+            <h2 id="current-shift-heading" class="text-[11px] font-bold text-ink-muted uppercase tracking-wider leading-none">{% trans "Aktueller Dienst" %}</h2>
+            <span class="text-[13px] font-semibold text-ink-soft" data-testid="current-shift-label">{{ current_shift_summary.shift_label }} · {{ current_shift_summary.shift_range }}</span>
         </div>
-    </summary>
-    <div class="px-4 pb-4 border-t border-subtle">
-        {% include "core/handover/partials/_summary_compact.html" %}
     </div>
-</details>
+    <div class="px-4 pb-4 pt-3">
+        {% include "core/handover/partials/_summary_compact.html" with handover_summary=current_shift_summary %}
+    </div>
+</section>
 {% endif %}
 
 {# Filter + Feed-Layout: 1fr/220px Grid (Design) #}
