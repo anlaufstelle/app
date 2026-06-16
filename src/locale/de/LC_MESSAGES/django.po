@@ -5883,6 +5883,10 @@ msgstr "Krisen, Hausverbote und dringende Aufgaben"
 msgid "Aufgaben mit überschrittenem Termin"
 msgstr "Aufgaben mit überschrittenem Termin"
 
+#: src/templates/core/zeitstrom/index.html:118
+msgid "Aktueller Dienst"
+msgstr "Aktueller Dienst"
+
 #: src/templates/core/zeitstrom/index.html:162
 msgid "Team-Aufgaben mit Handlungsbedarf"
 msgstr "Team-Aufgaben mit Handlungsbedarf"

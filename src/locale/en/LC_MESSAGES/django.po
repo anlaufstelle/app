@@ -6165,6 +6165,10 @@ msgstr "Handover-relevant notes"
 msgid "Krisen, Hausverbote und dringende Aufgaben"
 msgstr "Crises, bans and urgent tasks"
 
+#: src/templates/core/zeitstrom/index.html:118
+msgid "Aktueller Dienst"
+msgstr "Current shift"
+
 #: src/templates/core/zeitstrom/index.html:162
 msgid "Team-Aufgaben mit Handlungsbedarf"
 msgstr "Team tasks needing attention"
