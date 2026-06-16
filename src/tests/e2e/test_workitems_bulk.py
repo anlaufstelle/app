@@ -326,3 +326,104 @@ class TestUnassignedTeamTaskBulk:
             "Fremd-zugewiesene Aufgabe muss für die Fachkraft geschützt bleiben "
             f"(Refs #1125), bekam {result['status']}."
         )
+
+
+def _create_workitem_assigned_no_default_wait(page, base_url, title: str, assignee_label: str) -> None:
+    """Legt eine zugewiesene Aufgabe an, OHNE auf die Default-Inbox zu warten.
+
+    Anders als ``_create_workitem_assigned`` setzt diese Variante NICHT voraus,
+    dass die erstellende Person die Aufgabe in ihrer Default-Sicht („Mir
+    zugewiesen") sieht. Genau das ist hier der Punkt: Miriam weist Thomas zu,
+    die Aufgabe ist im Default ausgeblendet — die UUID/Sichtbarkeit prüfen die
+    Tests anschließend gezielt über die passenden Filter (Refs #1125).
+    """
+    page.goto(f"{base_url}/workitems/new/", wait_until="domcontentloaded")
+    page.select_option("select[name='item_type']", value="task")
+    page.fill("input[name='title']", title)
+    page.select_option("select[name='assigned_to']", label=assignee_label)
+    page.click("button:has-text('Speichern')")
+    page.wait_for_url(re.compile(r"/workitems/$"), timeout=10000)
+
+
+def _filter_option_value(page, base_url, label: str) -> str | None:
+    """Liest den Option-Wert einer Person aus dem Inbox-Personenfilter."""
+    page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+    option = page.locator(f"#filter-assigned-to option:has-text('{label}')").first
+    if option.count() == 0:
+        return None
+    return option.get_attribute("value")
+
+
+class TestCreatorFindsForeignAssignedTask:
+    """Refs #1125: selbst erstellte, fremd-zugewiesene Aufgabe bleibt auffindbar.
+
+    Kern des wiedereröffneten Tickets: Miriam (Fachkraft) legt eine Aufgabe an
+    und weist sie Thomas (Leitung) zu. Im Default-Filter „Mir zugewiesen" ist
+    sie ausgeblendet — über „Alle" muss die Erstellerin sie wiederfinden, sonst
+    wirkt die Aufgabe verschwunden. Solange es keine privaten Aufgaben (#607)
+    gibt, sind normale Aufgaben innerhalb der Facility sichtbar.
+    """
+
+    def test_default_filter_hides_but_all_filter_shows_foreign_assigned(self, staff_page, base_url):
+        page = staff_page
+        title = f"E2E-Visible-{uuid.uuid4().hex[:6]}"
+        # Miriam legt die Aufgabe an und weist sie Thomas zu (im Default versteckt).
+        _create_workitem_assigned_no_default_wait(page, base_url, title, assignee_label="Thomas Müller")
+
+        # Default-Sicht („Mir zugewiesen") blendet die Aufgabe aus.
+        page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+        page.wait_for_selector("#inbox-content", timeout=5000)
+        default_hits = page.locator(f"#inbox-content a[href*='/workitems/']:has-text('{title}')").count()
+        assert default_hits == 0, "Fremd-zugewiesene Aufgabe darf im Default-Filter 'Mir zugewiesen' nicht erscheinen."
+
+        # „Alle" (assigned_to leer) macht sie wieder auffindbar.
+        page.goto(f"{base_url}/workitems/?assigned_to=", wait_until="domcontentloaded")
+        page.wait_for_selector("#inbox-content", timeout=5000)
+        all_hits = page.locator(f"#inbox-content a[href*='/workitems/']:has-text('{title}')").count()
+        assert all_hits > 0, "Erstellerin muss die fremd-zugewiesene Aufgabe über 'Alle' wiederfinden (Refs #1125)."
+
+    def test_person_filter_shows_other_persons_task(self, staff_page, base_url):
+        """Personenfilter auf Thomas zeigt seine Aufgabe (vorher: leere Liste)."""
+        page = staff_page
+        title = f"E2E-Person-{uuid.uuid4().hex[:6]}"
+        _create_workitem_assigned_no_default_wait(page, base_url, title, assignee_label="Thomas Müller")
+
+        thomas_id = _filter_option_value(page, base_url, "Thomas Müller")
+        if not thomas_id:
+            pytest.skip("Thomas-User im Personenfilter nicht gefunden — Seed-Variation.")
+
+        page.goto(f"{base_url}/workitems/?assigned_to={thomas_id}", wait_until="domcontentloaded")
+        page.wait_for_selector("#inbox-content", timeout=5000)
+        hits = page.locator(f"#inbox-content a[href*='/workitems/']:has-text('{title}')").count()
+        assert hits > 0, "Personenfilter auf Thomas muss dessen Aufgabe zeigen (Refs #1125)."
+
+
+class TestAssignTaskToAssistant:
+    """Refs #1125: Fachkraft kann einer Assistenz eine Aufgabe zuweisen.
+
+    Korrigiert die frühere #867-Annahme. Assistenzkräfte können offene
+    Teamaufgaben ohnehin per „Annehmen" auf sich ziehen — eine normale,
+    nicht-private Aufgabe muss einer aktiven Assistenz derselben Facility auch
+    direkt zuweisbar sein.
+    """
+
+    def test_assistant_is_selectable_and_assignment_persists(self, staff_page, base_url):
+        page = staff_page
+        title = f"E2E-Assist-{uuid.uuid4().hex[:6]}"
+
+        # Assistenz „Lena Weber" steht im Zuweisungs-Select des Erstell-Formulars.
+        page.goto(f"{base_url}/workitems/new/", wait_until="domcontentloaded")
+        lena_option = page.locator("select[name='assigned_to'] option:has-text('Lena Weber')").first
+        assert lena_option.count() > 0, "Assistenz 'Lena Weber' muss im Zuweisungs-Select auswählbar sein (Refs #1125)."
+
+        # Aufgabe anlegen und der Assistenz zuweisen.
+        _create_workitem_assigned_no_default_wait(page, base_url, title, assignee_label="Lena Weber")
+
+        # Zuweisung ist persistiert: Personenfilter auf Lena listet die Aufgabe.
+        lena_id = _filter_option_value(page, base_url, "Lena Weber")
+        assert lena_id, "Lena muss im Personenfilter erscheinen."
+
+        page.goto(f"{base_url}/workitems/?assigned_to={lena_id}", wait_until="domcontentloaded")
+        page.wait_for_selector("#inbox-content", timeout=5000)
+        hits = page.locator(f"#inbox-content a[href*='/workitems/']:has-text('{title}')").count()
+        assert hits > 0, "Der Assistenz zugewiesene Aufgabe muss unter ihrem Personenfilter auftauchen."
