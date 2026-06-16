@@ -2,9 +2,9 @@
 
 #925: Form-Tests fuer das WorkItemForm. Geprueft werden
 Happy-Path, das Facility-scoped Queryset-Filtering fuer ``assigned_to``
-(inkl. Ausschluss der ASSISTANT-Rolle, Refs #867), das Cross-Facility-
-Verbot via ``clean_client()``, sowie die Cross-Field- und Datum-Range-
-Validierung in ``clean()`` (Refs #708 / #711).
+(inkl. aktiver ASSISTANT-Rolle, Refs #1125 — korrigiert die fruehere
+#867-Annahme), das Cross-Facility-Verbot via ``clean_client()``, sowie die
+Cross-Field- und Datum-Range-Validierung in ``clean()`` (Refs #708 / #711).
 """
 
 from __future__ import annotations
@@ -84,8 +84,24 @@ class TestWorkItemForm:
         assert lead_user.pk in pks
         assert staff_user.pk in pks
 
-    def test_assigned_to_queryset_excludes_assistant(self, facility, assistant_user):
-        """ASSISTANT darf nicht in der Auswahl auftauchen (Refs #867)."""
+    def test_assigned_to_queryset_includes_assistant(self, facility, assistant_user):
+        """ASSISTANT ist zuweisbar (Refs #1125).
+
+        Korrigiert die frühere #867-Annahme: Assistenzkräfte können offene
+        Teamaufgaben ohnehin per "Annehmen" auf sich ziehen (Auto-Assign auf
+        IN_PROGRESS) und sind damit faktisch ``assigned_to``. Eine normale,
+        nicht-private Aufgabe (private Aufgaben aus #607 existieren noch nicht)
+        darf einer aktiven Assistenz derselben Facility direkt zugewiesen
+        werden — sonst läuft die Sichtbarkeits-/Bearbeitungslogik auseinander.
+        """
+        form = WorkItemForm(facility=facility)
+        pks = queryset_pks(form, "assigned_to")
+        assert assistant_user.pk in pks
+
+    def test_assigned_to_queryset_excludes_inactive_assistant(self, facility, assistant_user):
+        """Deaktivierte Assistenz bleibt aus der Auswahl (Refs #1125)."""
+        assistant_user.is_active = False
+        assistant_user.save(update_fields=["is_active"])
         form = WorkItemForm(facility=facility)
         pks = queryset_pks(form, "assigned_to")
         assert assistant_user.pk not in pks

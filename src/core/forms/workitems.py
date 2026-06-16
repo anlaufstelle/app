@@ -89,10 +89,21 @@ class WorkItemForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.facility = facility
         if facility:
+            # Refs #1125: ASSISTANT ist zuweisbar. Assistenzkräfte ziehen offene
+            # Teamaufgaben ohnehin per "Annehmen" auf sich (Auto-Assign auf
+            # IN_PROGRESS) und sind damit faktisch ``assigned_to``; eine normale,
+            # nicht-private Aufgabe (private Aufgaben aus #607 existieren noch
+            # nicht) muss einer aktiven Assistenz derselben Facility direkt
+            # zuweisbar sein. Korrigiert die frühere #867-Annahme.
             self.fields["assigned_to"].queryset = User.objects.filter(  # type: ignore[attr-defined]
                 facility=facility,
                 is_active=True,
-                role__in=[User.Role.FACILITY_ADMIN, User.Role.LEAD, User.Role.STAFF],
+                role__in=[
+                    User.Role.FACILITY_ADMIN,
+                    User.Role.LEAD,
+                    User.Role.STAFF,
+                    User.Role.ASSISTANT,
+                ],
             ).order_by("username")
         self.fields["assigned_to"].required = False
         self.fields["description"].required = False

@@ -79,14 +79,25 @@ class TestWorkItemFormAssignedQueryset:
     das Queryset das erwartete Set liefert.
     """
 
-    def test_queryset_includes_facility_admin_lead_staff(self, facility, admin_user, lead_user, staff_user):
+    def test_queryset_includes_all_active_facility_roles(
+        self, facility, admin_user, lead_user, staff_user, assistant_user
+    ):
         form = WorkItemForm(facility=facility)
         qs = form.fields["assigned_to"].queryset
         assert admin_user in qs
         assert lead_user in qs
         assert staff_user in qs
+        # Refs #1125: ASSISTANT ist jetzt zuweisbar (korrigiert #867-Annahme).
+        assert assistant_user in qs
 
-    def test_queryset_excludes_assistant(self, facility, assistant_user):
+    def test_queryset_excludes_inactive_assistant(self, facility, assistant_user):
+        """Refs #1125: Eine *deaktivierte* Assistenz bleibt aus dem Queryset.
+
+        Hält den ``is_active=True``-Branch unter Mutationsdruck, jetzt da die
+        ASSISTANT-Rolle selbst nicht mehr ausschließt.
+        """
+        assistant_user.is_active = False
+        assistant_user.save(update_fields=["is_active"])
         form = WorkItemForm(facility=facility)
         qs = form.fields["assigned_to"].queryset
         assert assistant_user not in qs
