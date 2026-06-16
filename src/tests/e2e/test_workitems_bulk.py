@@ -254,3 +254,75 @@ class TestBulkSelectAllUI:
 
         # …und die Bulk-Toolbar (x-show=hasSelection) erscheint.
         page.locator("[x-show='hasSelection']").first.wait_for(state="visible", timeout=3000)
+
+
+def _create_workitem_assigned(page, base_url, title: str, assignee_label: str | None) -> str:
+    """Wie ``_create_workitem``, aber setzt optional eine Zuweisung.
+
+    ``assignee_label=None`` lässt die Aufgabe unassigned (Teamaufgabe).
+    ``assignee_label`` wählt im ``assigned_to``-Select die passende Option.
+    """
+    page.goto(f"{base_url}/workitems/new/", wait_until="domcontentloaded")
+    page.select_option("select[name='item_type']", value="task")
+    page.fill("input[name='title']", title)
+    if assignee_label is not None:
+        page.select_option("select[name='assigned_to']", label=assignee_label)
+    page.click("button:has-text('Speichern')")
+    page.wait_for_url(re.compile(r"/workitems/$"), timeout=10000)
+    link = page.locator(f"a[href*='/workitems/']:has-text('{title}')").first
+    link.wait_for(state="visible", timeout=5000)
+    href = link.get_attribute("href")
+    match = re.search(r"/workitems/([0-9a-f-]{36})/", href or "")
+    assert match, f"Konnte UUID nicht aus Link extrahieren: {href!r}"
+    return match.group(1)
+
+
+class TestUnassignedTeamTaskBulk:
+    """Refs #1125: Teamaufgaben-Konsistenz zwischen Sichtbarkeit und Bulk.
+
+    Eine nicht zugewiesene Aufgabe ist eine Teamaufgabe: Sie erscheint in der
+    Inbox jeder Fachkraft mit Auswahl-Checkbox und Status-Buttons. Genau diese
+    Items lehnte die Bulk-Route bisher mit 403 ``Keine Berechtigung für
+    ausgewählte Aufgaben.`` ab, obwohl sie sichtbar und auswählbar sind. Der
+    Fix erlaubt Fachkräften das Mutieren nicht zugewiesener Items; einer
+    *anderen* Person zugewiesene Items bleiben geschützt.
+    """
+
+    def test_staff_may_bulk_mutate_unassigned_team_task_of_other_creator(self, lead_page, staff_page, base_url):
+        # Thomas (Lead) legt eine NICHT zugewiesene Aufgabe an → Teamaufgabe.
+        title = f"E2E-Team-{uuid.uuid4().hex[:6]}"
+        wi_id = _create_workitem_assigned(lead_page, base_url, title, assignee_label=None)
+
+        # Miriam (Fachkraft) ist weder Ersteller noch Assignee, mutiert per Bulk.
+        result = _post_form(
+            staff_page,
+            base_url,
+            "/workitems/bulk-status/",
+            {"workitem_ids": [wi_id], "status": "in_progress"},
+        )
+        assert result["status"] == 200, (
+            "Fachkraft muss eine nicht zugewiesene Teamaufgabe bulk-mutieren dürfen "
+            f"(Refs #1125), bekam {result['status']}."
+        )
+
+        # Verifikation: Status ist jetzt „In Bearbeitung".
+        staff_page.goto(f"{base_url}/workitems/{wi_id}/", wait_until="domcontentloaded")
+        content = staff_page.content().lower()
+        assert "in bearbeitung" in content, "Teamaufgabe sollte nach Bulk-Update 'In Bearbeitung' sein."
+
+    def test_staff_may_not_bulk_mutate_task_assigned_to_other_user(self, lead_page, staff_page, base_url):
+        # Thomas (Lead) legt eine Aufgabe an und weist sie SICH SELBST zu.
+        title = f"E2E-Foreign-{uuid.uuid4().hex[:6]}"
+        wi_id = _create_workitem_assigned(lead_page, base_url, title, assignee_label="Thomas Müller")
+
+        # Miriam (Fachkraft) darf eine fremd-zugewiesene Aufgabe NICHT bulk-mutieren.
+        result = _post_form(
+            staff_page,
+            base_url,
+            "/workitems/bulk-status/",
+            {"workitem_ids": [wi_id], "status": "done"},
+        )
+        assert result["status"] == 403, (
+            "Fremd-zugewiesene Aufgabe muss für die Fachkraft geschützt bleiben "
+            f"(Refs #1125), bekam {result['status']}."
+        )

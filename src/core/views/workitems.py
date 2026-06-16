@@ -27,11 +27,27 @@ logger = logging.getLogger(__name__)
 def can_user_mutate_workitem(user, workitem):
     """True if ``user`` darf ``workitem`` mutieren (Status/Priorität/Assignee).
 
-    Identisch zur Einzel-Update-Regel: Leads/Admins, Ersteller:innen und
-    Zugewiesene. Zentrale Hilfsfunktion, damit Single- und Bulk-Routen
+    Mutierbar sind: Leads/Admins (innerhalb ihrer Facility), Ersteller:innen,
+    Zugewiesene — sowie **nicht zugewiesene Teamaufgaben** (Refs #1125).
+
+    Zur Begründung der Teamaufgaben-Regel: Die Inbox blendet jeder Fachkraft/
+    Assistenz offene + nicht zugewiesene Items mit "Annehmen"-Buttons und
+    Bulk-Auswahl ein, und der Zeitstrom zeigt sie ebenfalls. Eine nicht
+    zugewiesene Aufgabe ist damit fachlich eine vom Team aufzunehmende
+    Aufgabe. Ohne diese Regel sähe eine Fachkraft die Aufgabe samt Buttons,
+    erhielte beim Anwenden aber 403 "Keine Berechtigung für ausgewählte
+    Aufgaben." — die Sichtbarkeit (Inbox/Zeitstrom/Übergabe) und die
+    Mutierbarkeit liefen auseinander. Items, die einer *anderen* Person
+    zugewiesen sind, bleiben geschützt (und sind für Fachkräfte auch in der
+    Inbox ausgeblendet). Zentrale Hilfsfunktion, damit Single- und Bulk-Routen
     dieselbe Policy anwenden (Refs #583).
     """
-    return user.is_lead_or_admin or workitem.created_by == user or workitem.assigned_to == user
+    return (
+        user.is_lead_or_admin
+        or workitem.created_by == user
+        or workitem.assigned_to == user
+        or workitem.assigned_to_id is None
+    )
 
 
 class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):

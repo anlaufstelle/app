@@ -222,14 +222,19 @@ class TestBulkViews:
         foreign_wi.refresh_from_db()
         assert foreign_wi.status == WorkItem.Status.OPEN
 
-    def test_bulk_rejects_items_without_ownership(self, client, facility, staff_user, assistant_user):
+    def test_bulk_rejects_items_without_ownership(self, client, facility, staff_user, lead_user, assistant_user):
         """Assistenz darf Bulk-Mutation auf nicht eigene/zugewiesene Items nicht
         ausführen — Bulk-Route muss dieselbe Ownership-Policy wie die
-        Single-Route durchsetzen (Refs #583)."""
-        # Aufgabe gehört staff_user, assistant ist nicht Ersteller/Assignee
+        Single-Route durchsetzen (Refs #583).
+
+        Refs #1125: Die fremde Aufgabe muss einer *dritten* Person zugewiesen
+        sein. Nicht zugewiesene Aufgaben sind Teamaufgaben und damit bewusst
+        mutierbar (siehe ``TestBulkUnassignedTeamTasks``)."""
+        # Aufgabe ist lead_user zugewiesen, assistant ist nicht Ersteller/Assignee
         foreign = WorkItem.objects.create(
             facility=facility,
             created_by=staff_user,
+            assigned_to=lead_user,
             title="Fremde Aufgabe",
             status=WorkItem.Status.OPEN,
             priority=WorkItem.Priority.NORMAL,
@@ -262,9 +267,12 @@ class TestBulkViews:
         mine.refresh_from_db()
         assert mine.status == WorkItem.Status.DONE
 
-    def test_bulk_mixed_ownership_rejects_whole_batch(self, client, facility, staff_user, assistant_user):
+    def test_bulk_mixed_ownership_rejects_whole_batch(self, client, facility, staff_user, lead_user, assistant_user):
         """Bei gemischtem Batch (eigene + fremde) wird der ganze Request
-        abgelehnt — kein Partial-Success, damit der Erfolgstext nicht lügt."""
+        abgelehnt — kein Partial-Success, damit der Erfolgstext nicht lügt.
+
+        Refs #1125: Die fremde Aufgabe ist einer dritten Person zugewiesen
+        (echte Ownership-Grenze), nicht bloß unassigned."""
         own = WorkItem.objects.create(
             facility=facility,
             created_by=assistant_user,
@@ -275,6 +283,7 @@ class TestBulkViews:
         foreign = WorkItem.objects.create(
             facility=facility,
             created_by=staff_user,
+            assigned_to=lead_user,
             title="Fremde",
             status=WorkItem.Status.OPEN,
             priority=WorkItem.Priority.NORMAL,
@@ -408,3 +417,166 @@ class TestBulkStatusRecurrence:
             "Pro recurring DONE-Item muss eine Folgeaufgabe mit "
             "due_date = ursprüngliches due_date + 1 Monat existieren."
         )
+
+
+@pytest.mark.django_db
+class TestBulkUnassignedTeamTasks:
+    """Unassigned WorkItems sind Teamaufgaben (Refs #1125).
+
+    Die Inbox zeigt jeder Fachkraft/Assistenz offene + nicht zugewiesene
+    Items mit Status-Buttons ("Annehmen") und Bulk-Auswahl an. Genau diese
+    nicht zugewiesenen Team-Items musste die Mutations-Policy bislang ab —
+    daraus entstand die irritierende 403-Meldung "Keine Berechtigung für
+    ausgewählte Aufgaben." obwohl die Items sichtbar und mit Buttons versehen
+    sind. Sichtbarkeit (Inbox/Zeitstrom) und Mutierbarkeit müssen für
+    Teamaufgaben konsistent sein.
+    """
+
+    def test_bulk_allows_unassigned_item_for_other_creator(self, client, facility, staff_user, assistant_user):
+        """Eine nicht zugewiesene Aufgabe, die jemand anderes erstellt hat,
+        ist eine Teamaufgabe und darf von der Assistenz bulk-mutiert werden."""
+        team_task = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=None,
+            title="Teamaufgabe",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(team_task.pk)], "status": "in_progress"},
+        )
+        assert response.status_code == 302
+        team_task.refresh_from_db()
+        assert team_task.status == WorkItem.Status.IN_PROGRESS
+
+    def test_bulk_still_rejects_item_assigned_to_other_user(
+        self, client, facility, staff_user, lead_user, assistant_user
+    ):
+        """Eine Aufgabe, die einer dritten Person zugewiesen ist, bleibt
+        geschützt — die Assistenz darf sie nicht bulk-mutieren."""
+        foreign = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=lead_user,
+            title="Fremd zugewiesen",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(foreign.pk)], "status": "done"},
+        )
+        assert response.status_code == 403
+        foreign.refresh_from_db()
+        assert foreign.status == WorkItem.Status.OPEN
+
+    def test_bulk_mixed_unassigned_and_own_succeeds(self, client, facility, staff_user, assistant_user):
+        """Gemischter Batch aus eigener + nicht zugewiesener Teamaufgabe wird
+        komplett verarbeitet (kein 403)."""
+        own = WorkItem.objects.create(
+            facility=facility,
+            created_by=assistant_user,
+            title="Eigene",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+        team_task = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=None,
+            title="Teamaufgabe",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(own.pk), str(team_task.pk)], "status": "in_progress"},
+        )
+        assert response.status_code == 302
+        own.refresh_from_db()
+        team_task.refresh_from_db()
+        assert own.status == WorkItem.Status.IN_PROGRESS
+        assert team_task.status == WorkItem.Status.IN_PROGRESS
+
+    def test_single_status_update_allows_unassigned_team_task(self, client, facility, staff_user):
+        """Single-Status-Pfad (z.B. 'Annehmen'-Button) erlaubt das Annehmen
+        einer nicht zugewiesenen Teamaufgabe durch eine andere Fachkraft."""
+        other_staff = staff_user
+        team_task = WorkItem.objects.create(
+            facility=facility,
+            created_by=other_staff,
+            assigned_to=None,
+            title="Offene Teamaufgabe",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+        # Eine zweite Fachkraft, die weder Ersteller noch Assignee ist.
+        from core.models.user import User
+
+        picker = User.objects.create_user(
+            username="picker",
+            password="x",
+            facility=facility,
+            role=User.Role.STAFF,
+        )
+        client.force_login(picker)
+        response = client.post(
+            reverse("core:workitem_status_update", args=[team_task.pk]),
+            {"status": "in_progress"},
+        )
+        assert response.status_code in (200, 302)
+        team_task.refresh_from_db()
+        assert team_task.status == WorkItem.Status.IN_PROGRESS
+
+
+@pytest.mark.django_db
+class TestCanUserMutateWorkitem:
+    """Direkte Unit-Tests der Policy-Hilfsfunktion (Refs #1125)."""
+
+    def _make(self, facility, creator, assignee):
+        return WorkItem.objects.create(
+            facility=facility,
+            created_by=creator,
+            assigned_to=assignee,
+            title="WI",
+            status=WorkItem.Status.OPEN,
+        )
+
+    def test_creator_may_mutate(self, facility, staff_user):
+        from core.views.workitems import can_user_mutate_workitem
+
+        wi = self._make(facility, staff_user, None)
+        assert can_user_mutate_workitem(staff_user, wi) is True
+
+    def test_assignee_may_mutate(self, facility, staff_user, assistant_user):
+        from core.views.workitems import can_user_mutate_workitem
+
+        wi = self._make(facility, staff_user, assistant_user)
+        assert can_user_mutate_workitem(assistant_user, wi) is True
+
+    def test_lead_may_mutate_foreign_assigned(self, facility, staff_user, lead_user, assistant_user):
+        from core.views.workitems import can_user_mutate_workitem
+
+        wi = self._make(facility, staff_user, assistant_user)
+        assert can_user_mutate_workitem(lead_user, wi) is True
+
+    def test_unassigned_team_task_is_mutable_by_anyone(self, facility, staff_user, assistant_user):
+        """Nicht zugewiesen = Teamaufgabe → für jede sichtberechtigte Rolle
+        mutierbar (Refs #1125)."""
+        from core.views.workitems import can_user_mutate_workitem
+
+        wi = self._make(facility, staff_user, None)
+        assert can_user_mutate_workitem(assistant_user, wi) is True
+
+    def test_foreign_assigned_task_not_mutable_by_unrelated_user(self, facility, staff_user, lead_user, assistant_user):
+        """Einer dritten Person zugewiesen → für Unbeteiligte nicht
+        mutierbar (Ownership-Grenze bleibt erhalten)."""
+        from core.views.workitems import can_user_mutate_workitem
+
+        wi = self._make(facility, staff_user, lead_user)
+        assert can_user_mutate_workitem(assistant_user, wi) is False

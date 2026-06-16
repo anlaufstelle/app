@@ -306,14 +306,15 @@ EXPECTATIONS = (
         idor=(("pk", "foreign_event.pk"),),
     ),
     E("core:workitem_create", "facility-write", get=STAFF_PLUS, post=STAFF_PLUS),
-    # Mixin: StaffRequired, aber Owner/Assignee-Policy (Refs #735,
-    # workitems.py: can_user_mutate_workitem): Staff nur Ersteller:in oder
-    # zugewiesen — sample_workitem gehört staff_user, daher LEAD_PLUS.
+    # Mixin: StaffRequired, plus Owner/Assignee/Teamaufgaben-Policy (Refs #735,
+    # #1125, workitems.py: can_user_mutate_workitem): Staff dürfen eigene,
+    # zugewiesene und nicht zugewiesene (Team-)Aufgaben mutieren.
+    # sample_workitem ist nicht zugewiesen → Teamaufgabe → STAFF_PLUS.
     E(
         "core:workitem_update",
         "facility-write",
-        get=LEAD_PLUS,
-        post=LEAD_PLUS,
+        get=STAFF_PLUS,
+        post=STAFF_PLUS,
         url_kwargs=(("pk", "sample_workitem.pk"),),
         idor=(("pk", "foreign_workitem.pk"),),
     ),

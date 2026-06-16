@@ -70,10 +70,15 @@ class TestWorkItemStatusUpdateOwnership:
         assert wi.status == WorkItem.Status.IN_PROGRESS
 
     def test_assistant_cannot_update_others_workitem(self, client, assistant_user, staff_user, facility):
-        """Assistant who neither created nor is assigned gets 403."""
+        """Assistant who neither created nor is assigned gets 403.
+
+        Refs #1125: Das Item muss einer *anderen* Person zugewiesen sein —
+        nicht zugewiesene Items sind Teamaufgaben und damit bewusst mutierbar.
+        """
         wi = WorkItem.objects.create(
             facility=facility,
             created_by=staff_user,
+            assigned_to=staff_user,
             title="Fremde Aufgabe",
             status=WorkItem.Status.OPEN,
         )
@@ -139,9 +144,12 @@ class TestWorkItemUpdateOwnership:
             facility=facility,
             role=User.Role.STAFF,
         )
+        # Refs #1125: einem Dritten zugewiesen → echte Ownership-Grenze
+        # (unassigned waere eine mutierbare Teamaufgabe).
         wi = WorkItem.objects.create(
             facility=facility,
             created_by=other_staff,
+            assigned_to=other_staff,
             title="Fremde Edit-Aufgabe",
             status=WorkItem.Status.OPEN,
         )
@@ -158,9 +166,11 @@ class TestWorkItemUpdateOwnership:
             facility=facility,
             role=User.Role.STAFF,
         )
+        # Refs #1125: einem Dritten zugewiesen → echte Ownership-Grenze.
         wi = WorkItem.objects.create(
             facility=facility,
             created_by=other_staff,
+            assigned_to=other_staff,
             title="Fremde Edit-Aufgabe POST",
             status=WorkItem.Status.OPEN,
         )
