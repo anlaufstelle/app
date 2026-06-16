@@ -135,12 +135,39 @@ class TestZeitstromView:
         response = client.get(reverse("core:zeitstrom"), {"date": "2025-06-15"})
         assert response.context["target_date"] == date(2025, 6, 15)
 
-    def test_workitems_sidebar(self, client, staff_user, sample_workitem):
+    def test_focus_box_in_context(self, client, staff_user, facility):
         client.force_login(staff_user)
         response = client.get(reverse("core:zeitstrom"))
-        assert "workitems" in response.context
-        workitems = list(response.context["workitems"])
-        assert len(workitems) >= 1
+        assert "focus_box" in response.context
+        box = response.context["focus_box"]
+        assert set(box) == {"groups", "shown_count", "total_open_count", "has_more"}
+
+    def test_focus_box_groups_overdue_task(self, client, staff_user, facility):
+        from datetime import timedelta
+
+        from core.models import WorkItem
+
+        today = timezone.localdate()
+        WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            title="Überfälliges Team-Item",
+            due_date=today - timedelta(days=2),
+        )
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom"))
+        keys = [g["key"] for g in response.context["focus_box"]["groups"]]
+        assert "overdue" in keys
+        content = response.content.decode()
+        assert "Team-Aufgaben mit Handlungsbedarf" in content
+        assert "Überfälliges Team-Item" in content
+
+    def test_focus_box_renders_overview_link(self, client, staff_user, facility):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom"))
+        content = response.content.decode()
+        assert "Zur Aufgabenübersicht" in content
+        assert reverse("core:workitem_inbox") in content
 
     def test_ban_banner_context(self, client, staff_user, facility):
         client.force_login(staff_user)

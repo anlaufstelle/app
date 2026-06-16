@@ -1,12 +1,31 @@
 """E2E-Tests: WorkItem-UI — Navigation, Inbox, Status, Badge, Klickbarkeit, Erledigungsdatum."""
 
+import os
 import re
+import subprocess
+import sys
 
 import pytest
 
 from tests.e2e._selectors import find_client_link
 
 pytestmark = pytest.mark.e2e
+
+
+def _python():
+    return ".venv/bin/python" if os.path.exists(".venv/bin/python") else sys.executable
+
+
+def _run_shell(code, e2e_env):
+    """``manage.py shell --no-imports -c`` ausführen und stdout zurückgeben."""
+    result = subprocess.run(
+        [_python(), "src/manage.py", "shell", "--no-imports", "-c", code],
+        capture_output=True,
+        text=True,
+        env=e2e_env,
+    )
+    assert result.returncode == 0, f"shell failed: {result.stderr}\n{result.stdout}"
+    return result.stdout
 
 
 class TestWorkItemNavigation:
@@ -210,3 +229,110 @@ class TestWorkItemCompletedAt:
 
         # Erledigungsdatum sollte sichtbar sein
         page.locator("text=Abgeschlossen am:").wait_for(state="visible", timeout=10000)
+
+
+# Eindeutiger Titel-Präfix, damit die Fokusbox-Items von Seed-/Fremdtest-Daten
+# isoliert bleiben und gezielt wieder gelöscht werden können.
+_ZFB = "ZFB-Fokus"
+
+
+def _seed_focus_box_items(e2e_env):
+    """Legt deterministische Aufgaben für jede Druckstufe an (Refs #1128).
+
+    Eine überfällige, eine heute fällige und eine in Bearbeitung befindliche
+    Aufgabe (drei sichtbare Gruppen) plus mehrere offene Normal-Aufgaben ohne
+    Frist, die keinen Handlungsdruck erzeugen und nur den Transparenz-Zähler
+    erhöhen. ``due_date`` in der Vergangenheit ist über die Shell möglich, über
+    das UI-Formular dagegen bewusst gesperrt.
+    """
+    code = (
+        "from core.models import WorkItem, Facility, User; "
+        "from datetime import timedelta; "
+        "from django.utils import timezone; "
+        "f = Facility.objects.first(); "
+        "u = User.objects.get(username='admin'); "
+        "today = timezone.localdate(); "
+        f"WorkItem.objects.filter(facility=f, title__startswith='{_ZFB}').delete(); "
+        "WorkItem.objects.create(facility=f, created_by=u, "
+        f"  title='{_ZFB} überfällig', status='open', priority='normal', "
+        "  due_date=today - timedelta(days=2)); "
+        "WorkItem.objects.create(facility=f, created_by=u, "
+        f"  title='{_ZFB} heute', status='open', priority='normal', due_date=today); "
+        "WorkItem.objects.create(facility=f, created_by=u, "
+        f"  title='{_ZFB} laeuft', status='in_progress', priority='normal', "
+        "  due_date=today + timedelta(days=30)); "
+        "[WorkItem.objects.create(facility=f, created_by=u, "
+        f"  title='{_ZFB} ohne Druck %d' % i, status='open', priority='normal') "
+        "  for i in range(6)]; "
+        f"print('OPEN', WorkItem.objects.filter(facility=f, title__startswith='{_ZFB}').count())"
+    )
+    out = _run_shell(code, e2e_env)
+    assert "OPEN" in out, out
+
+
+def _cleanup_focus_box_items(e2e_env):
+    code = (
+        "from core.models import WorkItem, Facility; "
+        "f = Facility.objects.first(); "
+        f"WorkItem.objects.filter(facility=f, title__startswith='{_ZFB}').delete(); "
+        "print('CLEAN')"
+    )
+    _run_shell(code, e2e_env)
+
+
+class TestZeitstromFocusBox:
+    """Zeitstrom-Sidebar als Team-Fokusbox für Handlungsbedarf (Refs #1128)."""
+
+    @pytest.mark.smoke
+    def test_focus_box_groups_and_transparency(self, authenticated_page, base_url, e2e_env):
+        """Gruppierte Anzeige (überfällig/heute/in Bearbeitung), Zähler und Übersichtslink."""
+        _seed_focus_box_items(e2e_env)
+        try:
+            page = authenticated_page
+            page.set_viewport_size({"width": 1400, "height": 1000})
+            page.goto(f"{base_url}/")
+            page.wait_for_load_state("domcontentloaded")
+
+            box = page.locator("[data-testid='zeitstrom-focus-box']")
+            box.wait_for(state="visible", timeout=10000)
+
+            # Benennung macht den Zweck klar (h2 ist per CSS uppercase).
+            assert "team-aufgaben mit handlungsbedarf" in box.inner_text().lower()
+
+            # Gruppen mit Inhalt erscheinen, nach Handlungsdruck benannt.
+            assert box.locator("[data-focus-group='overdue']").is_visible()
+            assert box.locator("[data-focus-group='today']").is_visible()
+            assert box.locator("[data-focus-group='in_progress']").is_visible()
+
+            # Aufgaben landen in der erwarteten Gruppe.
+            overdue = box.locator("[data-focus-group='overdue']")
+            assert overdue.locator(f"text={_ZFB} überfällig").is_visible()
+            today_group = box.locator("[data-focus-group='today']")
+            assert today_group.locator(f"text={_ZFB} heute").is_visible()
+            in_progress = box.locator("[data-focus-group='in_progress']")
+            assert in_progress.locator(f"text={_ZFB} laeuft").is_visible()
+
+            # Begrenzung ist transparent: Zähler weist auf weitere Aufgaben hin.
+            more = box.locator("[data-testid='focus-box-more']")
+            assert more.is_visible()
+            assert re.search(r"\d+ von \d+ offenen Aufgaben angezeigt", more.inner_text())
+
+            # Offene Normal-Aufgaben ohne Frist erzeugen keinen Druck → nicht in der Box.
+            assert box.locator(f"text={_ZFB} ohne Druck 0").count() == 0
+        finally:
+            _cleanup_focus_box_items(e2e_env)
+
+    @pytest.mark.smoke
+    def test_focus_box_overview_link_navigates(self, authenticated_page, base_url):
+        """Link „Zur Aufgabenübersicht" führt in die vollständige Aufgabenliste."""
+        page = authenticated_page
+        page.set_viewport_size({"width": 1400, "height": 1000})
+        page.goto(f"{base_url}/")
+        page.wait_for_load_state("domcontentloaded")
+
+        link = page.locator("[data-testid='focus-box-overview-link']")
+        link.wait_for(state="visible", timeout=10000)
+        assert "Zur Aufgabenübersicht" in link.inner_text()
+        link.click()
+        page.wait_for_url(re.compile(r"/workitems/$"))
+        assert page.locator("h1").inner_text() == "Aufgaben"
