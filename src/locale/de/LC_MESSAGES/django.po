@@ -586,7 +586,7 @@ msgstr ""
 
 #: src/core/models/audit.py:56
 msgid "Sudo-Mode Re-Auth fehlgeschlagen"
-msgstr ""
+msgstr "Sudo-Mode Re-Auth fehlgeschlagen"
 
 #: src/core/models/audit.py:54
 msgid "Systembereich aufgerufen"
@@ -5824,27 +5824,27 @@ msgstr "Kein möglicher Genehmiger: Außer der antragstellenden Person trägt ni
 
 #: src/core/views/mfa.py:112
 msgid "Fast geschafft: Sichere die Backup-Codes und bestätige unten, um die Einrichtung abzuschließen."
-msgstr ""
+msgstr "Fast geschafft: Sichere die Backup-Codes und bestätige unten, um die Einrichtung abzuschließen."
 
 #: src/core/views/mfa.py:264
 msgid "Backup-Codes gespeichert."
-msgstr ""
+msgstr "Backup-Codes gespeichert."
 
 #: src/templates/auth/mfa_backup_codes.html:51
 msgid "Bitte bestätige zuerst, dass du die Backup-Codes gesichert hast."
-msgstr ""
+msgstr "Bitte bestätige zuerst, dass du die Backup-Codes gesichert hast."
 
 #: src/templates/auth/mfa_backup_codes.html:63
 msgid "Einrichtung abschließen"
-msgstr ""
+msgstr "Einrichtung abschließen"
 
 #: src/templates/core/handover/index.html:62
 msgid "Übergabe-relevante Hinweise"
-msgstr ""
+msgstr "Übergabe-relevante Hinweise"
 
 #: src/templates/core/handover/index.html:63
 msgid "Krisen, Hausverbote und dringende Aufgaben"
-msgstr ""
+msgstr "Krisen, Hausverbote und dringende Aufgaben"
 
 #: src/templates/core/dashboard/role_staff.html:29
 msgid "Aufgaben mit überschrittenem Termin"
