@@ -3586,14 +3586,33 @@ msgid "Zugewiesen:"
 msgstr "Assigned:"
 
 #: src/templates/components/_workitem_row.html:85
-#: src/templates/core/workitems/detail.html:37
 msgid "Annehmen"
 msgstr "Accept"
 
 #: src/templates/components/_workitem_row.html:92
-#: src/templates/core/workitems/detail.html:45
 msgid "Verwerfen"
 msgstr "Discard"
+
+#: src/templates/core/workitems/detail.html:38
+msgid "Aufgabe übernehmen"
+msgstr "Take over task"
+
+#: src/templates/core/workitems/detail.html:46
+msgid "Als erledigt markieren"
+msgstr "Mark as done"
+
+#: src/templates/core/workitems/detail.html:56
+msgid "Als nicht relevant schließen"
+msgstr "Close as not relevant"
+
+#: src/templates/core/workitems/detail.html:51
+msgid ""
+"Aufgabe als nicht relevant schließen? Sie wird als verworfen markiert und "
+"erscheint nicht mehr bei den offenen Aufgaben. Sie wird nicht gelöscht und "
+"bleibt weiterhin nachvollziehbar."
+msgstr ""
+"Close this task as not relevant? It will be marked as discarded and will no "
+"longer appear under open tasks. It will not be deleted and remains traceable."
 
 #: src/templates/components/_workitem_row.html:107
 #: src/templates/core/audit/list.html:62
