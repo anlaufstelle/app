@@ -58,7 +58,7 @@ django-stubs[compatible-mypy]==6.0.5
     # via -r requirements-dev.in
 django-stubs-ext==6.0.3
     # via django-stubs
-django-unfold==0.97.0
+django-unfold==0.97.1
     # via -r requirements.in
 execnet==2.1.2
     # via pytest-xdist
