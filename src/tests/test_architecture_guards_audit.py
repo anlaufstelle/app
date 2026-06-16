@@ -231,7 +231,7 @@ class TestE2ESelectorStabilityGuard:
         # einer Schleife). Counter zieht den Ist-Stand nach; Stabilisierung
         # auf data-testid läuft separat.
         "test_goals_htmx.py": 5,
-        "test_handover.py": 3,
+        "test_handover.py": 2,
         "test_i18n_locale.py": 2,
         "test_retention_dashboard.py": 5,
         "test_workflow_complete.py": 1,
