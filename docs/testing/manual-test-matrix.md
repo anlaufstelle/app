@@ -123,7 +123,7 @@ Tester:innen arbeiten gegen **[https://dev.anlaufstelle.app](https://dev.anlaufs
 Die Cases in **Sektion D** (LOKAL/SSH) benötigen **direkten Server-Zugriff** (z.B. `manage.py shell`, `psql`, Backdate-SQL, `enforce_retention`-Cron). Die jeweils aktuelle Zahl steht im generierten Index ([`test-matrix-index.md`](test-matrix-index.md)). Cases sind im Header mit `🔧 LOKAL/SSH` markiert und werden:
 
 - **lokal** auf Tobias' Maschine durchgeführt (Setup unten), oder
-- per **SSH auf dev-Server** (`ssh anlaufstelle@dev.anlaufstelle.app`, dann `docker compose exec web python manage.py …`)
+- per **SSH auf dev-Server** (`ssh <ssh-user>@dev.anlaufstelle.app`, dann `docker compose exec web python manage.py …`)
 
 Lokales Setup nur falls 🔧 LOKAL/SSH-Cases anstehen:
 
@@ -6143,7 +6143,7 @@ Jeder Case in der Tabellen-Kopfzeile hat zwei Spalten zum Browser-/Mobile-Scope:
 
 ### SETUP — Einrichtungs-/Konfigurationsassistent
 
-> **Forward-looking Bereich (Refs #908).** Feature wird in #917 implementiert und ist aktuell **roadmap-blocked** (geplante Custom-Admin-UI + Config-Loader). Cases werden mit dem Feature ergänzt. Vorgesehenes Schema gemäß Codex-Audit §4.5:
+> **Forward-looking Bereich (Refs #908).** Feature wird in #917 implementiert und ist aktuell **roadmap-blocked** (geplante Custom-Admin-UI + Config-Loader). Cases werden mit dem Feature ergänzt. Vorgesehenes Schema gemäß Audit §4.5:
 >
 > - `ENT-SETUP-01` — Neue Facility per Assistent vollständig anlegen (End-to-End ohne Shell)
 > - `ENT-SETUP-02` — Dokumentationsbibliothek auswählen (Template-Übernahme und Anpassung)
@@ -8462,7 +8462,7 @@ Stammdaten, Session/MFA, Retention-Basis, Retention-Workflow, K-Anonymisierung, 
 **Code-Referenz:** [`deploy/backup.sh`](https://github.com/anlaufstelle/app/blob/main/dev-ops/deploy/backup.sh), [`docs/ops-runbook.md`](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md)
 
 **Schritte:**
-1. SSH auf Host: `ssh anlaufstelle@dev.anlaufstelle.app`.
+1. SSH auf Host: `ssh <ssh-user>@dev.anlaufstelle.app`.
 2. Backup-Verzeichnis prüfen (per Runbook): `ls -lh /var/backups/anlaufstelle/ | head`.
 3. Neuestes Backup: `find /var/backups/anlaufstelle/ -mtime -1 -type f`.
 4. Optional: Backup-Cron-Log einsehen (z.B. `journalctl -u anlaufstelle-backup` oder `/var/log/syslog`).

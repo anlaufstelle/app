@@ -29,20 +29,31 @@
                 {% if user.is_lead_or_admin or workitem.created_by == user or workitem.assigned_to == user %}
                 <div class="flex items-center space-x-2 mt-2">
                     {% if workitem.status == "open" %}
+                    {# Refs #1130: zwei getrennte positive Aktionen — übernehmen (in_progress) und direkt erledigen (done ohne Zwischenstatus). #}
                     <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}">
                         {% csrf_token %}
                         <input type="hidden" name="status" value="in_progress">
                         <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
                         <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100">
-                            {% trans "Annehmen" %}
+                            {% trans "Aufgabe übernehmen" %}
                         </button>
                     </form>
                     <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}">
                         {% csrf_token %}
+                        <input type="hidden" name="status" value="done">
+                        <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
+                        <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100">
+                            {% trans "Als erledigt markieren" %}
+                        </button>
+                    </form>
+                    {# Refs #1130: data-confirm erklärt, dass nicht gelöscht und nur aus den offenen Aufgaben entfernt wird (confirm-action.js, CSP-konform). #}
+                    <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}"
+                          data-confirm="{% trans 'Aufgabe als nicht relevant schließen? Sie wird als verworfen markiert und erscheint nicht mehr bei den offenen Aufgaben. Sie wird nicht gelöscht und bleibt weiterhin nachvollziehbar.' %}">
+                        {% csrf_token %}
                         <input type="hidden" name="status" value="dismissed">
                         <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
                         <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-canvas text-ink-muted hover:bg-canvas">
-                            {% trans "Verwerfen" %}
+                            {% trans "Als nicht relevant schließen" %}
                         </button>
                     </form>
                     {% elif workitem.status == "in_progress" %}

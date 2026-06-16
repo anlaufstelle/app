@@ -109,6 +109,61 @@ class TestWorkItemCRUD:
 
 
 @pytest.mark.django_db
+class TestWorkItemDetailActions:
+    """Detailansicht-Aktionen für offene Aufgaben (Refs #1130).
+
+    Verständlichere Benennung und ein direkter Erledigen-Pfad ohne den
+    Zwischenstatus *In Bearbeitung*. Die Status-Transition-Logik selbst
+    bleibt unverändert; getestet wird die in der Detailansicht angebotene
+    Auswahl an Aktionen.
+    """
+
+    def test_open_task_offers_take_over_label(self, client, staff_user, workitem_open):
+        """`Annehmen` wird in der Detailansicht zu `Aufgabe übernehmen`."""
+        client.force_login(staff_user)
+        response = client.get(reverse("core:workitem_detail", kwargs={"pk": workitem_open.pk}))
+        body = response.content.decode()
+        assert "Aufgabe übernehmen" in body
+
+    def test_open_task_offers_direct_done_action(self, client, staff_user, workitem_open):
+        """Offene Aufgaben bieten `Als erledigt markieren` ohne Umweg über
+        `In Bearbeitung` an (eigenes Form mit status=done)."""
+        client.force_login(staff_user)
+        response = client.get(reverse("core:workitem_detail", kwargs={"pk": workitem_open.pk}))
+        body = response.content.decode()
+        assert "Als erledigt markieren" in body
+        # Es existiert genau ein Form, das den Status direkt auf done setzt.
+        assert body.count('value="done"') == 1
+
+    def test_open_task_dismiss_relabelled_with_confirmation(self, client, staff_user, workitem_open):
+        """`Verwerfen` wird zu `Als nicht relevant schließen` und erhält eine
+        Bestätigung, die erklärt, dass nicht gelöscht und aus den offenen
+        Aufgaben entfernt wird."""
+        client.force_login(staff_user)
+        response = client.get(reverse("core:workitem_detail", kwargs={"pk": workitem_open.pk}))
+        body = response.content.decode()
+        assert "Als nicht relevant schließen" in body
+        assert "Verwerfen" not in body
+        assert "data-confirm" in body
+        # Die Bestätigung erklärt die fachlichen Garantien.
+        assert "nicht gelöscht" in body
+        assert "offenen Aufgaben" in body
+
+    def test_direct_done_from_open_sets_completed(self, client, staff_user, workitem_open):
+        """Der direkte Erledigen-Pfad (open → done) setzt Status und
+        Abschlusszeitpunkt, ohne vorher in_progress zu durchlaufen."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_status_update", kwargs={"pk": workitem_open.pk}),
+            {"status": "done"},
+        )
+        assert response.status_code == 302
+        workitem_open.refresh_from_db()
+        assert workitem_open.status == WorkItem.Status.DONE
+        assert workitem_open.completed_at is not None
+
+
+@pytest.mark.django_db
 class TestDeletionRequestList:
     def test_lead_can_access(self, client, lead_user):
         client.force_login(lead_user)

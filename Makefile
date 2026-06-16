@@ -233,7 +233,7 @@ dev: db migrate run
 # DEV_HOST darf in .env.deploy (gitignored) gesetzt werden, damit
 # nicht jedes Make-Aufruf das Argument mitschleppt.
 -include .env.deploy
-DEV_HOST ?= anlaufstelle@dev.anlaufstelle.app
+DEV_HOST ?= <ssh-user>@dev.anlaufstelle.app
 
 # Erstmaliges Server-Hardening (idempotent): laeuft als root und legt den
 # anlaufstelle-User an. Ab dem zweiten Aufruf laeuft es als anlaufstelle@.

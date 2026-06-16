@@ -94,13 +94,17 @@ class TestWorkItemDetailBearbeitenButton:
 class TestWorkItemDetailStatusButtons:
     """Status buttons should only appear for creator, assigned, or Lead+."""
 
-    def test_creator_sees_annehmen_verwerfen(self, client, assistant_user, assistant_workitem):
-        """Creator (assistant) sees 'Annehmen' and 'Verwerfen' on own open workitem."""
+    def test_creator_sees_status_buttons(self, client, assistant_user, assistant_workitem):
+        """Creator (assistant) sees the open-task actions on own workitem.
+
+        Refs #1130: Detailansicht-Labels sind `Aufgabe übernehmen` /
+        `Als nicht relevant schließen` (vormals `Annehmen` / `Verwerfen`).
+        """
         client.force_login(assistant_user)
         response = client.get(reverse("core:workitem_detail", kwargs={"pk": assistant_workitem.pk}))
         content = response.content.decode()
-        assert "Annehmen" in content
-        assert "Verwerfen" in content
+        assert "Aufgabe übernehmen" in content
+        assert "Als nicht relevant schließen" in content
 
     def test_unrelated_assistant_cannot_see_status_buttons(self, client, facility, staff_user, sample_workitem):
         """Unrelated assistant (not creator, not assigned) must NOT see status buttons."""
@@ -114,16 +118,16 @@ class TestWorkItemDetailStatusButtons:
         client.force_login(other_assistant)
         response = client.get(reverse("core:workitem_detail", kwargs={"pk": sample_workitem.pk}))
         content = response.content.decode()
-        assert "Annehmen" not in content
-        assert "Verwerfen" not in content
+        assert "Aufgabe übernehmen" not in content
+        assert "Als nicht relevant schließen" not in content
 
     def test_lead_sees_status_buttons_on_any_open_workitem(self, client, lead_user, sample_workitem):
         """Lead sees status buttons on any open workitem, regardless of ownership."""
         client.force_login(lead_user)
         response = client.get(reverse("core:workitem_detail", kwargs={"pk": sample_workitem.pk}))
         content = response.content.decode()
-        assert "Annehmen" in content
-        assert "Verwerfen" in content
+        assert "Aufgabe übernehmen" in content
+        assert "Als nicht relevant schließen" in content
 
     def test_status_update_with_next_redirects_to_detail(self, client, staff_user, sample_workitem):
         """POST with 'next' parameter redirects back to detail URL."""
