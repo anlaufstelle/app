@@ -468,3 +468,100 @@ class TestZeitstromFocusBox:
         link.click()
         page.wait_for_url(re.compile(r"/workitems/$"))
         assert page.locator("h1").inner_text() == "Aufgaben"
+
+
+# Eindeutiger Titel-Präfix für die Bulk-Status-Konsistenz-Aufgaben.
+_BULK = "BULK-Status #1134"
+
+
+def _seed_done_items_for_admin(e2e_env, count=2):
+    """Legt erledigte, der eingeloggten ``admin`` zugewiesene Aufgaben an.
+
+    Zuweisung an ``admin`` (statt unassigned) ist wichtig: nur so sind die
+    Items in der Default-Sicht *und* nach dem Wechsel auf In Bearbeitung in der
+    (scoped) In-Bearbeitung-Liste sichtbar — sonst würde der Konsistenz-Check
+    durch das Scoping verfälscht.
+    """
+    code = (
+        "from core.models import WorkItem, Facility, User; "
+        "from django.utils import timezone; "
+        "u = User.objects.get(username='admin'); "
+        "f = u.facility; "
+        f"WorkItem.objects.filter(facility=f, title__startswith='{_BULK}').delete(); "
+        "[WorkItem.objects.create(facility=f, created_by=u, assigned_to=u, "
+        f"  title='{_BULK} %d' % i, item_type='task', priority='normal', "
+        "  status='done', completed_at=timezone.now()) "
+        f"  for i in range({count})]; "
+        f"print('SEEDED', WorkItem.objects.filter(facility=f, title__startswith='{_BULK}').count())"
+    )
+    out = _run_shell(code, e2e_env)
+    assert "SEEDED" in out, out
+
+
+def _cleanup_bulk_items(e2e_env):
+    code = (
+        "from core.models import WorkItem, Facility; "
+        "f = Facility.objects.first(); "
+        f"WorkItem.objects.filter(facility=f, title__startswith='{_BULK}').delete(); "
+        "print('CLEAN')"
+    )
+    _run_shell(code, e2e_env)
+
+
+class TestWorkItemBulkStatusConsistency:
+    """Refs #1134: Bulk-Statuswechsel Erledigt → In Bearbeitung entfernt die
+    Erledigt-Markierung konsistent in Liste und Detailansicht.
+
+    Abgeleitet aus der manuellen Playwright-Verifikation gegen den E2E-Server.
+    """
+
+    @pytest.mark.smoke
+    def test_bulk_done_to_in_progress_removes_done_marking(self, authenticated_page, base_url, e2e_env):
+        _seed_done_items_for_admin(e2e_env, count=2)
+        try:
+            page = authenticated_page
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+
+            # Die erledigten Aufgaben erscheinen in der Default-Sicht unter
+            # "Kürzlich erledigt" und sind auswählbar.
+            done_section = page.locator("section", has=page.locator("h2", has_text="Kürzlich erledigt"))
+            row0 = done_section.locator("[id^='workitem-']", has_text=f"{_BULK} 0").first
+            row1 = done_section.locator("[id^='workitem-']", has_text=f"{_BULK} 1").first
+            row0.wait_for(state="visible", timeout=10000)
+            row1.wait_for(state="visible", timeout=10000)
+            row0.get_by_role("checkbox", name="Auswählen").check()
+            row1.get_by_role("checkbox", name="Auswählen").check()
+
+            # Bulk: Status → In Bearbeitung anwenden.
+            page.select_option("#bulk-status", value="in_progress")
+            page.locator("#bulk-status ~ button[type='submit']").click()
+
+            page.wait_for_url(re.compile(r"/workitems/"))
+            page.wait_for_load_state("domcontentloaded")
+            assert page.locator("[role='alert']:has-text('Aufgaben aktualisiert')").first.is_visible()
+
+            # Beide Aufgaben stehen jetzt in "In Bearbeitung" — nicht mehr unter
+            # "Kürzlich erledigt".
+            in_progress = page.locator("section", has=page.locator("h2", has_text="In Bearbeitung"))
+            moved0 = in_progress.locator("[id^='workitem-']", has_text=f"{_BULK} 0").first
+            moved0.wait_for(state="visible", timeout=10000)
+            assert in_progress.locator("[id^='workitem-']", has_text=f"{_BULK} 1").first.is_visible()
+
+            done_after = page.locator("section", has=page.locator("h2", has_text="Kürzlich erledigt"))
+            assert done_after.locator("[id^='workitem-']", has_text=f"{_BULK} 0").count() == 0
+            assert done_after.locator("[id^='workitem-']", has_text=f"{_BULK} 1").count() == 0
+
+            # In der In-Bearbeitung-Zeile gibt es keinen "Erledigt"-Status-Badge
+            # mehr, sondern die Aktions-Buttons (Erledigt-Button + Zurücksetzen).
+            assert moved0.get_by_role("button", name="Zurücksetzen").is_visible()
+
+            # Detailansicht zeigt denselben Status und kein Abschlussdatum mehr.
+            moved0.get_by_role("link", name=f"{_BULK} 0").click()
+            page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/$"))
+            page.wait_for_load_state("domcontentloaded")
+            detail = page.locator("main").inner_text()
+            assert "In Bearbeitung" in detail
+            assert "Abgeschlossen am" not in detail
+        finally:
+            _cleanup_bulk_items(e2e_env)
