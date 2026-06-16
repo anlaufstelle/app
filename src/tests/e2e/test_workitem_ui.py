@@ -231,6 +231,68 @@ class TestWorkItemCompletedAt:
         page.locator("text=Abgeschlossen am:").wait_for(state="visible", timeout=10000)
 
 
+def _open_workitem_detail(page, base_url, title):
+    """Aufgabe per UI anlegen und ihre Detail-Seite öffnen.
+
+    Der Titel ist pro Test eindeutig, deshalb genügt ein exakter
+    Text-Locator ohne ``.first`` (stabil gegen Seed-Drift, Refs #922).
+    """
+    _create_open_workitem(page, base_url, title)
+    page.get_by_role("link", name=title, exact=True).click()
+    page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/$"))
+    page.wait_for_load_state("domcontentloaded")
+
+
+class TestWorkItemDetailActions:
+    """Detailansicht-Aktionen für offene Aufgaben (Refs #1130).
+
+    Verständlichere Benennung (`Aufgabe übernehmen`), direkter Erledigen-Pfad
+    (`Als erledigt markieren`) und abgesichertes Verwerfen mit Bestätigung
+    (`Als nicht relevant schließen`). Abgeleitet aus der manuellen
+    Playwright-Verifikation.
+    """
+
+    def test_open_detail_offers_three_named_actions(self, authenticated_page, base_url):
+        page = authenticated_page
+        _open_workitem_detail(page, base_url, "Detail-Aktionen-Test")
+        assert page.locator("button:has-text('Aufgabe übernehmen')").is_visible()
+        assert page.locator("button:has-text('Als erledigt markieren')").is_visible()
+        assert page.locator("button:has-text('Als nicht relevant schließen')").is_visible()
+
+    def test_mark_as_done_directly_from_open(self, authenticated_page, base_url):
+        """`Als erledigt markieren` setzt offene Aufgabe direkt auf Erledigt
+        (ohne Zwischenstatus) und zeigt das Abschlussdatum."""
+        page = authenticated_page
+        _open_workitem_detail(page, base_url, "Direkt-Erledigt-Test")
+        page.click("button:has-text('Als erledigt markieren')")
+        page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/$"))
+        page.wait_for_load_state("domcontentloaded")
+        assert page.locator("text=Erledigt").first.is_visible()
+        page.locator("text=Abgeschlossen am:").wait_for(state="visible", timeout=10000)
+
+    def test_dismiss_requires_confirmation_and_can_be_cancelled(self, authenticated_page, base_url):
+        """Abbruch des Bestätigungsdialogs lässt den Status auf Offen."""
+        page = authenticated_page
+        _open_workitem_detail(page, base_url, "Verwerfen-Abbruch-Test")
+        page.once("dialog", lambda dialog: dialog.dismiss())
+        page.click("button:has-text('Als nicht relevant schließen')")
+        # Kein Statuswechsel — die offenen Aktionen bleiben sichtbar.
+        page.wait_for_timeout(500)
+        assert page.locator("button:has-text('Als nicht relevant schließen')").is_visible()
+
+    def test_dismiss_confirmed_sets_status_to_verworfen(self, authenticated_page, base_url):
+        """Bestätigtes Verwerfen setzt den Status auf Verworfen und entfernt
+        die offenen Aktionen."""
+        page = authenticated_page
+        _open_workitem_detail(page, base_url, "Verwerfen-Bestaetigt-Test")
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.click("button:has-text('Als nicht relevant schließen')")
+        page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/$"))
+        page.wait_for_load_state("domcontentloaded")
+        assert page.locator("text=Verworfen").first.is_visible()
+        assert page.locator("button:has-text('Als nicht relevant schließen')").count() == 0
+
+
 # Eindeutiger Titel-Präfix, damit die Fokusbox-Items von Seed-/Fremdtest-Daten
 # isoliert bleiben und gezielt wieder gelöscht werden können.
 _ZFB = "ZFB-Fokus"

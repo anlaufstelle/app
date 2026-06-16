@@ -120,9 +120,10 @@ class TestWorkItemDetailPermissions:
         page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/"))
         page.wait_for_load_state("domcontentloaded")
 
-        # Status action buttons should be visible (open workitem has "Annehmen" + "Verwerfen")
-        expect(page.locator("button:has-text('Annehmen')")).to_be_visible()
-        expect(page.locator("button:has-text('Verwerfen')")).to_be_visible()
+        # Status action buttons should be visible (Refs #1130: Detailansicht
+        # bietet "Aufgabe übernehmen" + "Als nicht relevant schließen").
+        expect(page.locator("button:has-text('Aufgabe übernehmen')")).to_be_visible()
+        expect(page.locator("button:has-text('Als nicht relevant schließen')")).to_be_visible()
 
 
 # ---------------------------------------------------------------------------
