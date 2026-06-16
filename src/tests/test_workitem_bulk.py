@@ -52,6 +52,23 @@ class TestBulkStatusService:
         count = bulk_update_workitem_status(workitems_open, staff_user, WorkItem.Status.DONE)
         assert count == 2
 
+    def test_bulk_update_status_done_to_in_progress_clears_completed_at(self, facility, staff_user, workitems_open):
+        """Refs #1134: Erledigt → In Bearbeitung per Bulk hebt die Erledigt-
+        Markierung konsistent auf — Status wechselt und ``completed_at`` wird
+        zurückgesetzt, sodass kein widersprüchlicher Zustand zurückbleibt."""
+        bulk_update_workitem_status(workitems_open, staff_user, WorkItem.Status.DONE)
+        for wi in workitems_open:
+            wi.refresh_from_db()
+            assert wi.status == WorkItem.Status.DONE
+            assert wi.completed_at is not None
+
+        count = bulk_update_workitem_status(workitems_open, staff_user, WorkItem.Status.IN_PROGRESS)
+        assert count == 3
+        for wi in workitems_open:
+            wi.refresh_from_db()
+            assert wi.status == WorkItem.Status.IN_PROGRESS
+            assert wi.completed_at is None
+
     def test_bulk_update_status_rejects_invalid(self, staff_user, workitems_open):
         with pytest.raises(ValueError):
             bulk_update_workitem_status(workitems_open, staff_user, "bogus")

@@ -177,6 +177,68 @@ class TestWorkItemInboxFilters:
         # Erstellerin (Staff) findet die fremd-zugewiesene Aufgabe über "Alle".
         assert wi_foreign in open_items
 
+    def test_default_done_list_scoped_like_open_inprogress(self, client, staff_user, lead_user, facility):
+        """Refs #1134: Die "Kürzlich erledigt"-Liste folgt im Default derselben
+        Mir-zugewiesen-+-Teamaufgaben-Eingrenzung wie Offen/In-Bearbeitung.
+
+        Vorher war die Done-Liste die *einzige* unscoped Liste: in der Default-
+        Sicht (kein ``assigned_to``-Parameter) zeigte sie auch fremd-zugewiesene
+        erledigte Aufgaben an und machte sie per Bulk auswählbar. Eine Bulk-
+        Statusänderung (z.B. Erledigt → In Bearbeitung) verschob das Item dann in
+        die *scoped* In-Bearbeitung-Liste, wo es für die handelnde Person nicht
+        mehr auftauchte — Liste und tatsächlicher Status liefen auseinander.
+        """
+        client.force_login(staff_user)
+        done_self = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=staff_user,
+            title="Erledigt – mir",
+            status=WorkItem.Status.DONE,
+        )
+        done_unassigned = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=None,
+            title="Erledigt – Team",
+            status=WorkItem.Status.DONE,
+        )
+        done_foreign = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=lead_user,
+            title="Erledigt – fremd",
+            status=WorkItem.Status.DONE,
+        )
+
+        response = client.get(reverse("core:workitem_inbox"))
+        assert response.status_code == 200
+        done_items = list(response.context["done_items"])
+        assert done_self in done_items
+        assert done_unassigned in done_items
+        # Konsistent mit Offen/In-Bearbeitung: fremd-zugewiesene erledigte
+        # Aufgaben tauchen im Default nicht auf (und sind damit nicht per Bulk
+        # auswählbar).
+        assert done_foreign not in done_items
+
+    def test_explicit_all_filter_shows_foreign_done(self, client, staff_user, lead_user, facility):
+        """Refs #1134: Über den expliziten "Alle"-Filter bleibt eine fremd-
+        zugewiesene erledigte Aufgabe weiterhin sichtbar — analog zu
+        ``test_explicit_all_filter_shows_foreign_assigned`` für Offen."""
+        client.force_login(staff_user)
+        done_foreign = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=lead_user,
+            title="Erledigt – fremd, über Alle auffindbar",
+            status=WorkItem.Status.DONE,
+        )
+
+        response = client.get(reverse("core:workitem_inbox"), {"assigned_to": ""})
+        assert response.status_code == 200
+        done_items = list(response.context["done_items"])
+        assert done_foreign in done_items
+
     def test_person_filter_shows_other_persons_items(self, client, staff_user, lead_user, facility):
         """Personenfilter auf eine *andere* Person zeigt deren Aufgaben.
 

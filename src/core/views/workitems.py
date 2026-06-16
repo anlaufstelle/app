@@ -151,29 +151,38 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
         # nur eigene+unassigned, und ein Personenfilter auf jemand anderen eine
         # leere Liste. Eine selbst erstellte, fremd-zugewiesene Aufgabe
         # "verschwand" so aus der Sicht der Erstellerin (Refs #1125).
+        #
+        # Refs #1134: Die Eingrenzung gilt im Default für *alle drei* Listen —
+        # auch "Kürzlich erledigt". War diese als einzige unscoped, zeigte die
+        # Default-Sicht fremd-zugewiesene erledigte Aufgaben an und machte sie
+        # per Bulk auswählbar; eine Statusänderung (z.B. Erledigt → In
+        # Bearbeitung) verschob das Item dann in eine scoped Liste, wo es nicht
+        # mehr auftauchte — Liste und tatsächlicher Status liefen auseinander.
         default_scope = "assigned_to" not in request.GET
 
-        def _scope_open_inprogress(qs):
+        def _apply_default_scope(qs):
             if default_scope:
                 return qs.filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
             return qs
 
-        open_qs = _scope_open_inprogress(base_qs.filter(status=WorkItem.Status.OPEN))
+        open_qs = _apply_default_scope(base_qs.filter(status=WorkItem.Status.OPEN))
         open_items = list(open_qs[: cap + 1])
         open_has_more = len(open_items) > cap
         if open_has_more:
             open_items = open_items[:cap]
 
-        in_progress_qs = _scope_open_inprogress(base_qs.filter(status=WorkItem.Status.IN_PROGRESS))
+        in_progress_qs = _apply_default_scope(base_qs.filter(status=WorkItem.Status.IN_PROGRESS))
         in_progress_items = list(in_progress_qs[: cap + 1])
         in_progress_has_more = len(in_progress_items) > cap
         if in_progress_has_more:
             in_progress_items = in_progress_items[:cap]
 
         seven_days_ago = timezone.now() - timedelta(days=7)
-        done_qs = base_qs.filter(
-            status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED],
-            updated_at__gte=seven_days_ago,
+        done_qs = _apply_default_scope(
+            base_qs.filter(
+                status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED],
+                updated_at__gte=seven_days_ago,
+            )
         )
         done_items = list(done_qs[: cap + 1])
         done_has_more = len(done_items) > cap
