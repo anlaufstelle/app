@@ -45,6 +45,14 @@ def get_document_type_definitions() -> list[dict]:
                 },
                 {"name": "Notiz", "slug": "notiz", "type": "textarea"},
                 {"name": "Straßenkontakt", "slug": "strassenkontakt", "type": "boolean"},
+                # Refs #1142: Erreichbarer Datei-Upload im Default-Flow. Ohne
+                # "encrypted": True im field_def bleibt die Seed-Default-Sensibilität
+                # "" (NORMAL) — damit ist das Feld für Fachkraft/Assistenz sichtbar
+                # (remove_restricted_fields). encrypted=True würde sensitivity="high"
+                # setzen und das Feld wieder ausblenden. At-rest verschlüsselt wird
+                # die Datei trotzdem: FieldTemplate.save() erzwingt is_encrypted=True
+                # für FILE, store_encrypted_file verschlüsselt zusätzlich den Blob.
+                {"name": "Anhang", "slug": "anhang", "type": FieldTemplate.FieldType.FILE, "required": False},
             ],
         },
         {
