@@ -34,12 +34,9 @@ def test_staff_can_request_client_deletion(staff_page, base_url):
     page.locator("textarea[name='reason']").fill("E2E: Fachkraft beantragt Löschung")
     page.locator("#main-content button[type='submit']").click()
 
-    # Redirect auf Detail mit Erfolgsmeldung
+    # Redirect auf Detail mit Erfolgsmeldung (Refs #1144: korrekter Umlaut)
     page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
-    assert (
-        page.locator("text=Loeschantrag gestellt").first.is_visible()
-        or page.locator("text=Löschantrag").first.is_visible()
-    )
+    assert page.locator("text=Löschantrag gestellt").first.is_visible()
 
 
 def test_assistant_does_not_see_delete_request_button(assistant_page, base_url):
