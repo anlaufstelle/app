@@ -6,59 +6,15 @@ Prüft:
 - Schicht-Filter (Frühdienst/Spätdienst/Nachtdienst) wechseln den
   ``time_filter``-Querystring und ändern die Schicht-Überschrift.
 - Datums-Navigation (Vor/Zurück) ändert den ``date``-Querystring.
-- Statistiken-Sektion und Aufgaben-Sektion sind sichtbar; Aufgaben mit
-  Priorität tragen ein Priority-Badge.
+- Statistiken-Sektion ist sichtbar; eine allgemeine Aufgabenliste gibt es
+  bewusst nicht mehr (Refs #1139).
 
 Refs #661 — Plan Top 3.
 """
 
-import subprocess
-import sys
-
 import pytest
 
 pytestmark = pytest.mark.e2e
-
-
-def _create_overdue_task(username: str, e2e_env) -> None:
-    """Lege eine offene, überfällige Aufgabe für den User an (Refs #1120)."""
-    subprocess.run(
-        [
-            sys.executable,
-            "src/manage.py",
-            "shell",
-            "--no-imports",
-            "-c",
-            (
-                "from datetime import timedelta; from django.utils import timezone; "
-                "from core.models import User, WorkItem; "
-                f"u = User.objects.get(username='{username}'); "
-                "WorkItem.objects.create(facility=u.facility, created_by=u, "
-                "title='E2E ueberfaellig', priority='normal', status='open', "
-                "due_date=timezone.localdate() - timedelta(days=2))"
-            ),
-        ],
-        env=e2e_env,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-
-
-def _cleanup_overdue_task(e2e_env) -> None:
-    subprocess.run(
-        [
-            sys.executable,
-            "src/manage.py",
-            "shell",
-            "--no-imports",
-            "-c",
-            ("from core.models import WorkItem; WorkItem.objects.filter(title='E2E ueberfaellig').delete()"),
-        ],
-        env=e2e_env,
-        capture_output=True,
-        text=True,
-    )
 
 
 class TestHandoverPage:
@@ -114,23 +70,19 @@ class TestHandoverPage:
         assert page.get_by_text("Krisen, Hausverbote und dringende Aufgaben").is_visible()
         assert page.locator("h2:has-text('Wichtige Ereignisse')").count() == 0
 
-    def test_overdue_open_task_badge_visible(self, authenticated_page, base_url, e2e_env):
-        """Refs #1120: Eine offene überfällige Aufgabe trägt ein 'Überfällig'-Badge."""
-        _create_overdue_task("admin", e2e_env)
-        try:
-            page = authenticated_page
-            page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")
-            badge = page.locator("[data-testid='handover-task-overdue']").first
-            badge.wait_for(state="visible", timeout=10000)
-            assert "Überfällig" in badge.inner_text()
-        finally:
-            _cleanup_overdue_task(e2e_env)
+    def test_open_tasks_section_removed(self, authenticated_page, base_url):
+        """Refs #1139: Die allgemeine 'Offene Aufgaben'-Sektion ist entfernt.
 
-    def test_open_tasks_section_visible(self, authenticated_page, base_url):
-        """'Offene Aufgaben'-Sektion wird gerendert."""
+        Offene Aufgaben mit Handlungsbedarf gehören in die Aufgaben-Fokusbox
+        bzw. die Aufgabenübersicht; die Übergabe zeigt nur noch
+        schichtbezogene 'Übergabe-relevante Hinweise'.
+        """
         page = authenticated_page
         page.goto(f"{base_url}/?view=uebergabe", wait_until="domcontentloaded")
-        assert page.locator("h2:has-text('Offene Aufgaben')").is_visible()
+        # Anker: Statistiken-Heading existiert in der Übergabe immer.
+        page.locator("h2:has-text('Statistiken')").wait_for(state="visible", timeout=30000)
+        assert page.locator("h2:has-text('Offene Aufgaben')").count() == 0
+        assert page.locator("h2:has-text('Übergabe-relevante Hinweise')").count() == 1
 
     def test_date_back_navigation_changes_url(self, authenticated_page, base_url):
         """Klick auf 'Tag zurück' setzt ?date=...-1 im URL."""

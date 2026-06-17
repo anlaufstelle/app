@@ -177,6 +177,25 @@ class TestBuildHandoverSummary:
         assert result["stats"]["events_total"] == 0
         assert result["highlights"] == []
 
+    def test_no_general_open_tasks_list(self, facility, staff_user, client_identified, time_filter_frueh):
+        """Refs #1139: Die Übergabe liefert keine allgemeine Aufgabenliste mehr.
+
+        Offene Aufgaben gehören in die Aufgaben-Fokusbox (#1128) bzw. die
+        Aufgabenübersicht. Übergaberelevante Aufgaben tauchen ausschließlich
+        schichtbezogen in ``highlights`` auf.
+        """
+        WorkItem.objects.create(
+            facility=facility,
+            client=client_identified,
+            created_by=staff_user,
+            item_type="task",
+            status="open",
+            priority="normal",
+            title="Allgemeine offene Aufgabe",
+        )
+        result = build_handover_summary(facility, timezone.localdate(), time_filter_frueh, staff_user)
+        assert "open_tasks" not in result
+
     def test_full_day_without_filter(self, facility, staff_user, client_identified, doc_type_contact):
         """Without time_filter, summarizes the full day."""
         today = timezone.localdate()

@@ -1,10 +1,9 @@
 """Follow-Up-Tests für Mutation-Survivors in ``core.services.case.handover``.
 
 Refs #930. Ziel: Mutationen in den Branch-Grenzen von
-``_collect_highlights`` (33 Survivors) und ``_collect_open_tasks``
-(52 Survivors) gezielt killen.
+``_collect_highlights`` (33 Survivors) gezielt killen.
 
-Beide Funktionen kombinieren ORM-Filter (priority/status/system_type),
+Die Funktion kombiniert ORM-Filter (priority/status/system_type),
 explizite Slice-Limits (``[:10]``) und Sortierreihenfolgen — also genau
 die Stellen, an denen Mutmut gerne ``<=`` ↔ ``<``, ``in`` ↔ ``not in``,
 ``-foo`` ↔ ``foo`` und Konstanten-Off-by-One mutiert.
@@ -18,7 +17,7 @@ import pytest
 from django.utils import timezone
 
 from core.models import DocumentType, Event, WorkItem
-from core.services.case import _collect_highlights, _collect_open_tasks
+from core.services.case import _collect_highlights
 
 # ---------------------------------------------------------------------------
 # Helper-Factories — bewusst klein, damit Tests nicht von komplexen
@@ -209,115 +208,3 @@ class TestCollectHighlights:
         result = _collect_highlights(facility, visible_events, _wide_time_range(), staff_user)
         times = [h["time"] for h in result]
         assert times == [e_new.occurred_at, e_mid.occurred_at, e_old.occurred_at]
-
-
-# ---------------------------------------------------------------------------
-# _collect_open_tasks
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.django_db
-class TestCollectOpenTasks:
-    """Refs `_collect_open_tasks`.
-
-    Funktionsverhalten:
-    - Filter ``status__in=["open", "in_progress"]``.
-    - LEAD/FACILITY_ADMIN sehen alle Tasks der Facility,
-      STAFF/ASSISTANT nur eigene/zugewiesene (analog Mutate-Permission).
-    - Priorität-Sortierung: urgent(0), important(1), normal(2).
-    - Final sort: ``priority_rank, due_date, -created_at``, slice ``[:10]``.
-    """
-
-    def test_includes_open_status(self, facility, lead_user):
-        wi = _make_workitem(facility, lead_user, status=WorkItem.Status.OPEN)
-        result = list(_collect_open_tasks(facility, lead_user))
-        assert wi in result
-
-    def test_includes_in_progress_status(self, facility, lead_user):
-        wi = _make_workitem(facility, lead_user, status=WorkItem.Status.IN_PROGRESS)
-        result = list(_collect_open_tasks(facility, lead_user))
-        assert wi in result
-
-    def test_excludes_done_status(self, facility, lead_user):
-        """Boundary: ``status__in=["open", "in_progress"]`` schliesst ``done`` aus."""
-        _make_workitem(facility, lead_user, status=WorkItem.Status.DONE)
-        result = list(_collect_open_tasks(facility, lead_user))
-        assert result == []
-
-    def test_excludes_dismissed_status(self, facility, lead_user):
-        _make_workitem(facility, lead_user, status=WorkItem.Status.DISMISSED)
-        result = list(_collect_open_tasks(facility, lead_user))
-        assert result == []
-
-    def test_lead_sees_others_tasks(self, facility, lead_user, staff_user):
-        """LEAD darf alle Facility-Tasks sehen."""
-        wi = _make_workitem(facility, staff_user, title="staff-created")
-        result = list(_collect_open_tasks(facility, lead_user))
-        assert wi in result
-
-    def test_facility_admin_sees_others_tasks(self, facility, admin_user, staff_user):
-        wi = _make_workitem(facility, staff_user, title="staff-created")
-        result = list(_collect_open_tasks(facility, admin_user))
-        assert wi in result
-
-    def test_staff_sees_only_own_or_assigned(self, facility, staff_user, lead_user):
-        """STAFF darf nur eigene oder zugewiesene Tasks sehen.
-
-        Boundary: ``Q(created_by=user) | Q(assigned_to=user)`` — wenn
-        Mutmut ``|`` ↔ ``&`` flippt, würde nur Tasks zaehlen, wo BEIDES
-        zutrifft. Wir prüfen, dass beide Disjunkte einzeln greifen.
-        """
-        own = _make_workitem(facility, staff_user, title="own")
-        assigned = _make_workitem(facility, lead_user, title="assigned", assigned_to=staff_user)
-        # Task von anderem User, NICHT staff_user assigned → darf nicht sichtbar sein.
-        other = _make_workitem(facility, lead_user, title="other")
-        result = list(_collect_open_tasks(facility, staff_user))
-        assert own in result
-        assert assigned in result
-        assert other not in result
-
-    def test_assistant_sees_only_own_or_assigned(self, facility, assistant_user, lead_user):
-        own = _make_workitem(facility, assistant_user, title="own")
-        other = _make_workitem(facility, lead_user, title="other")
-        result = list(_collect_open_tasks(facility, assistant_user))
-        assert own in result
-        assert other not in result
-
-    def test_priority_order_urgent_first(self, facility, lead_user):
-        """Boundary: priority_rank ``urgent=0 < important=1 < normal=2``.
-
-        Tests in umgekehrter Erstellungsreihenfolge, damit ``-created_at``
-        die Reihenfolge nicht zufaellig richtig stellt.
-        """
-        normal = _make_workitem(facility, lead_user, title="n", priority=WorkItem.Priority.NORMAL)
-        important = _make_workitem(facility, lead_user, title="i", priority=WorkItem.Priority.IMPORTANT)
-        urgent = _make_workitem(facility, lead_user, title="u", priority=WorkItem.Priority.URGENT)
-        result = list(_collect_open_tasks(facility, lead_user))
-        assert result == [urgent, important, normal]
-
-    def test_due_date_tiebreak_within_same_priority(self, facility, lead_user):
-        """Boundary: zweite Sort-Spalte ``due_date`` (ASC) bricht Priority-Gleichstand."""
-        today = timezone.now().date()
-        later = _make_workitem(
-            facility, lead_user, title="later", priority=WorkItem.Priority.NORMAL, due_date=today + timedelta(days=10)
-        )
-        sooner = _make_workitem(
-            facility, lead_user, title="sooner", priority=WorkItem.Priority.NORMAL, due_date=today + timedelta(days=1)
-        )
-        result = list(_collect_open_tasks(facility, lead_user))
-        assert result.index(sooner) < result.index(later)
-
-    def test_cap_at_10(self, facility, lead_user):
-        """Boundary: ``[:10]``-Slice."""
-        for i in range(12):
-            _make_workitem(facility, lead_user, title=f"t{i}", priority=WorkItem.Priority.URGENT)
-        result = list(_collect_open_tasks(facility, lead_user))
-        assert len(result) == 10
-
-    def test_none_user_skips_visibility_filter(self, facility, staff_user):
-        """``user is None``-Branch: kein Filter, alle Tasks sichtbar (z.B. fuer
-        System-Aggregatoren). Boundary: ``if user is not None`` vs ``is None``.
-        """
-        wi = _make_workitem(facility, staff_user)
-        result = list(_collect_open_tasks(facility, None))
-        assert wi in result

@@ -366,7 +366,13 @@ class TestHandoverScope:
         assert summary["stats"]["events_total"] == 0
 
     def test_handover_other_facility_workitems_not_shown(self, client, staff_user, facility, organization):
-        """Handover open tasks do not include work items from other facilities."""
+        """Handover highlights do not include work items from other facilities.
+
+        Refs #1139: Die Übergabe zeigt keine allgemeine Aufgabenliste mehr;
+        übergaberelevante Aufgaben erscheinen nur schichtbezogen in
+        ``highlights``. Eine dringende Aufgabe einer fremden Einrichtung darf
+        dort trotz Übergaberelevanz nicht auftauchen.
+        """
         other_facility = Facility.objects.create(organization=organization, name="Andere Stelle")
         other_client = Client.objects.create(facility=other_facility, pseudonym="Fremd-HO-02", created_by=staff_user)
         WorkItem.objects.create(
@@ -375,6 +381,7 @@ class TestHandoverScope:
             created_by=staff_user,
             item_type=WorkItem.ItemType.TASK,
             status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.URGENT,
             title="Fremde Handover-Aufgabe",
         )
 
@@ -382,8 +389,9 @@ class TestHandoverScope:
         response = client.get(reverse("core:zeitstrom"), {"view": "uebergabe"})
 
         assert response.status_code == 200
-        open_tasks = response.context["uebergabe_summary"]["open_tasks"]
-        task_titles = [t.title for t in open_tasks]
+        summary = response.context["uebergabe_summary"]
+        assert "open_tasks" not in summary
+        task_titles = [h["object"].title for h in summary["highlights"] if h["type"] == "task"]
         assert "Fremde Handover-Aufgabe" not in task_titles
 
 

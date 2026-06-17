@@ -1,4 +1,4 @@
-{% load i18n core_tags date_tags %}
+{% load i18n %}
 {% if summary %}
 {# Schicht-Header (Card mit accent-light bg, Design-Pattern) #}
 <div class="bg-accent-light border border-accent-light rounded-[10px] px-5 py-4 mb-5">
@@ -15,52 +15,12 @@
     {% include "core/handover/partials/_stats_grid.html" %}
 </div>
 
-{# Highlights — automatisch aus Krisen/Hausverboten/dringenden Aufgaben (Refs #1121) #}
+{# Übergabe-relevante Hinweise: schichtbezogene Highlights, keine allgemeine Aufgabenliste mehr (Refs #1121, #1128, #1139). #}
 <div class="mb-6">
     <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-0.5">{% trans "Übergabe-relevante Hinweise" %}</h2>
     <p class="text-[12px] text-ink-muted mb-2.5">{% trans "Krisen, Hausverbote und dringende Aufgaben" %}</p>
     {% include "core/handover/partials/_highlights.html" %}
 </div>
-
-{# Offene Aufgaben #}
-{% if summary.open_tasks %}
-<div class="mb-6">
-    <h2 class="text-[12px] font-bold text-ink-muted uppercase tracking-wider mb-2.5">{% trans "Offene Aufgaben" %}</h2>
-    <div class="space-y-2">
-        {% for wi in summary.open_tasks %}
-        <a href="{% url 'core:workitem_detail' wi.pk %}" class="block bg-surface border border-subtle rounded-[10px] px-3.5 py-2.5 hover:shadow-sm transition">
-            <div class="flex items-center gap-2.5 flex-wrap">
-                <div class="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0"></div>
-                {% if wi.priority == "urgent" %}
-                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[12px] font-semibold bg-red-100 text-red-700">{% trans "Dringend" %}</span>
-                {% elif wi.priority == "important" %}
-                <span class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[12px] font-semibold bg-yellow-100 text-yellow-700">{% trans "Wichtig" %}</span>
-                {% endif %}
-                <span class="text-[13px] font-medium text-ink truncate">{{ wi.title|truncatewords:10 }}</span>
-                <div class="ml-auto flex items-center gap-2.5 text-[12px] text-ink-muted">
-                    {% if wi.assigned_to %}
-                    <span>{{ wi.assigned_to.display_name|default:wi.assigned_to.username }}</span>
-                    {% endif %}
-                    {% if wi.due_date %}
-                    {% due_date_info wi as ddi %}
-                    {% if ddi.is_overdue %}
-                    {# Refs #1120: überfällige offene Aufgaben sofort sichtbar — Farbe + Text + Icon #}
-                    <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[12px] font-semibold bg-red-100 text-red-700"
-                          data-testid="handover-task-overdue">
-                        <svg aria-hidden="true" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01M5 19h14a2 2 0 001.84-2.75L13.74 4a2 2 0 00-3.48 0L3.18 16.25A2 2 0 005 19z"/></svg>
-                        {% trans "Überfällig" %}
-                    </span>
-                    {% else %}
-                    <span class="font-mono">{% trans "Fällig:" %} {{ wi.due_date|date:"d.m." }}</span>
-                    {% endif %}
-                    {% endif %}
-                </div>
-            </div>
-        </a>
-        {% endfor %}
-    </div>
-</div>
-{% endif %}
 
 {% else %}
 {% include "components/_empty_state.html" with icon="clock" message=_("Keine Daten für diesen Zeitraum") %}

@@ -32,7 +32,6 @@ from core.services.case.goals import (
 )
 from core.services.case.handover import (
     _collect_highlights,
-    _collect_open_tasks,
     _collect_stats,
     build_handover_summary,
 )
@@ -55,7 +54,6 @@ __all__ = [
     "_add_months",
     "_apply_status_transition",
     "_collect_highlights",
-    "_collect_open_tasks",
     "_collect_stats",
     "_log_workitem_update",
     "_maybe_duplicate_recurring",
