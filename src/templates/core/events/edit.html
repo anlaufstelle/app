@@ -42,7 +42,8 @@
                 </label>
 
                 {# Stufe B (#622): FILE-Felder bekommen pro Entry Ersetzen- und Soft-Delete-Steuerung + Multi-Upload unten. #}
-                {% if field.field.widget.allow_multiple_selected %}
+                {# Refs #1143: gezielt auf den Datei-Widget-Typ prüfen — allow_multiple_selected ist auch bei CheckboxSelectMultiple True. #}
+                {% if field.field.widget.input_type == "file" %}
                 {% with entries=existing_attachments|get_item:field.name %}
                 {% if entries %}
                 <ul class="mb-2 space-y-2" data-testid="attachment-entries-{{ field.name }}">
