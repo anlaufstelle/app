@@ -2674,7 +2674,7 @@ msgid "Bitte eine Begruendung angeben."
 msgstr ""
 
 #: src/core/views/client_deletion.py:54
-msgid "Loeschantrag gestellt — Leitung wird benachrichtigt."
+msgid "Löschantrag gestellt — Leitung wird benachrichtigt."
 msgstr ""
 
 #: src/core/views/client_deletion.py:70

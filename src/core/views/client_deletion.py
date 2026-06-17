@@ -51,7 +51,7 @@ class ClientDeleteRequestView(StaffRequiredMixin, View):
         request_client_deletion(client, request.user, reason)
         messages.success(
             request,
-            _("Loeschantrag gestellt — Leitung wird benachrichtigt."),
+            _("Löschantrag gestellt — Leitung wird benachrichtigt."),
         )
         return redirect("core:client_detail", pk=pk)
 

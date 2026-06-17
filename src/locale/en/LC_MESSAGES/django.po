@@ -2710,7 +2710,7 @@ msgid "Bitte eine Begruendung angeben."
 msgstr "Please provide a reason."
 
 #: src/core/views/client_deletion.py:54
-msgid "Loeschantrag gestellt — Leitung wird benachrichtigt."
+msgid "Löschantrag gestellt — Leitung wird benachrichtigt."
 msgstr "Deletion request submitted — the lead will be notified."
 
 #: src/core/views/client_deletion.py:70
@@ -3713,7 +3713,7 @@ msgstr "No recently completed tasks."
 #: src/templates/partials/_navigation_desktop.html:103
 #: src/templates/partials/_navigation_mobile.html:74
 msgid "Dateien"
-msgstr "Data"
+msgstr "Files"
 
 #: src/templates/core/attachments/list.html:14
 msgid "Dokumentationstyp filtern"
@@ -4910,7 +4910,7 @@ msgstr "The activity log view will be implemented in Stream C."
 #: src/templates/partials/_navigation_desktop.html:117
 #: src/templates/partials/_navigation_mobile.html:79
 msgid "Löschfristen"
-msgstr "Delete"
+msgstr "Deletion deadlines"
 
 #: src/templates/core/retention/partials/dashboard_content.html:12
 #: src/templates/core/retention/partials/proposal_card.html:21
