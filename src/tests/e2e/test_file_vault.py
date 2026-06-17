@@ -381,3 +381,42 @@ class TestFileSensitivity:
         page.wait_for_selector("text=Scan/Bescheid", timeout=10000)
 
         assert page.locator("text=Scan/Bescheid").count() >= 1
+
+
+class TestStaffAttachmentReachable:
+    """Refs #1142: Verschlüsselte Anhänge müssen im Default-Flow für Fachkraft
+    erreichbar sein — der Kontakt-Typ (NORMAL) trägt dafür das ``anhang``-Feld.
+    """
+
+    @pytest.mark.smoke
+    def test_staff_uploads_file_via_kontakt_anhang(self, staff_page, base_url, _test_pdf):
+        """Fachkraft lädt am Kontakt eine Datei hoch und kann sie wieder
+        herunterladen (Encrypt-Roundtrip) — vor #1142 gab es kein erreichbares
+        Datei-Feld für Fachkraft/Assistenz."""
+        page = staff_page
+
+        page.goto(f"{base_url}/events/new/")
+        page.wait_for_load_state("domcontentloaded")
+
+        # Kontakt ist NORMAL → für Fachkraft erstellbar; das anhang-Feld ist
+        # NORMAL-sichtbar (anders als Scan/Bescheid mit sensitivity='high').
+        page.select_option('select[name="document_type"]', label="Kontakt")
+        page.wait_for_selector('input[name="anhang"]', timeout=10000)
+
+        # Datei über den echten File-Chooser setzen (wie ein realer Nutzer).
+        # ``set_input_files`` direkt auf das frisch via HTMX eingeswappte Feld ist
+        # zeitkritisch und verwirft die Auswahl gelegentlich; der Chooser-Weg ist
+        # deterministisch. Kontakt erlaubt anonyme Erfassung — keine Person nötig.
+        with page.expect_file_chooser() as fc_info:
+            page.click('input[name="anhang"]')
+        fc_info.value.set_files(_test_pdf)
+        page.click('button:has-text("Speichern")')
+        page.wait_for_url(lambda url: "/events/" in url and "/new/" not in url, timeout=10000)
+
+        # Datei erscheint auf der Detailseite und ist byte-genau herunterladbar.
+        assert page.locator("text=e2e-test.pdf").count() >= 1
+        with page.expect_download() as download_info:
+            page.locator("a:has-text('e2e-test.pdf')").click()
+        download = download_info.value
+        with open(download.path(), "rb") as f:
+            assert f.read() == _VALID_PDF_BYTES
