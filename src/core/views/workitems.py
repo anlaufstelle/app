@@ -56,6 +56,19 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
     template_name = "core/workitems/inbox.html"
     partial_template_name = "core/workitems/partials/inbox_content.html"
 
+    # Refs #1145: Sentinel-Wert für den ``assigned_to``-Filter, der die
+    # Default-Sicht ("Mir zugewiesen + nicht zugewiesene Teamaufgaben")
+    # *explizit* benennt. Nötig, weil diese Default-Sicht eine eigene, von
+    # "Mir zugewiesen" (strikt ``me``) und "Alle" (alle Personen) verschiedene
+    # Liste liefert. Ohne eigenen Wert zeigte das Dropdown beim parameterlosen
+    # Aufruf mangels gesetztem ``selected`` die erste Option ("Mir zugewiesen")
+    # an, während die Query die breitere Default-Liste lieferte — Anzeige und
+    # Filterwirkung liefen auseinander. Der Sentinel sorgt dafür, dass die
+    # sichtbare Auswahl der Query entspricht und über Filter-Persistenz
+    # (filter-persistence.js) sowie Bulk-Redirect (Refs #1132) korrekt
+    # round-trippt.
+    DEFAULT_ASSIGNED_SCOPE = "mine_team"
+
     DUE_FILTER_CHOICES = [
         ("overdue", _("Überfällig")),
         ("today", _("Heute")),
@@ -74,6 +87,13 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
             qs = qs.filter(priority=priority)
 
         assigned_to = request.GET.get("assigned_to")
+        # Refs #1145: Der Default-Sentinel ist kein Personen-/me-Filter, sondern
+        # benennt nur die breitere Default-Sicht — die eigentliche Eingrenzung
+        # passiert in ``_apply_default_scope`` (get). Hier wie "kein Filter"
+        # behandeln, damit ``mine_team`` nicht als (ungültiger) Personen-Wert in
+        # die Query gerät.
+        if assigned_to == self.DEFAULT_ASSIGNED_SCOPE:
+            assigned_to = None
         if assigned_to == "me":
             assigned_to = str(request.user.id)
         if assigned_to:
@@ -140,13 +160,14 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
         # Refs #639 #640, #803.
         cap = WORKITEM_INBOX_CAP
 
-        # Default-Sicht (kein expliziter ``assigned_to``-Parameter) =
-        # "Mir zugewiesen + nicht zugewiesene Teamaufgaben". Sobald die Nutzer:in
-        # aber explizit "Alle" (``assigned_to=``) oder eine Person wählt, greift
-        # nur noch der Filter aus ``_apply_filters`` — normale Aufgaben sollen
-        # innerhalb der Facility auffindbar sein, auch wenn sie einer anderen
-        # Person zugewiesen sind (private Aufgaben aus #607 existieren noch
-        # nicht). Vorher schnitt die Inbox jede Liste hart mit
+        # Default-Sicht = "Mir zugewiesen + nicht zugewiesene Teamaufgaben".
+        # Sie greift, wenn kein ``assigned_to``-Parameter gesetzt ist *oder* der
+        # Default-Sentinel ``mine_team`` explizit gewählt wurde (Refs #1145).
+        # Sobald die Nutzer:in dagegen "Alle" (``assigned_to=``) oder eine Person
+        # wählt, greift nur noch der Filter aus ``_apply_filters`` — normale
+        # Aufgaben sollen innerhalb der Facility auffindbar sein, auch wenn sie
+        # einer anderen Person zugewiesen sind (private Aufgaben aus #607
+        # existieren noch nicht). Vorher schnitt die Inbox jede Liste hart mit
         # ``Q(assigned_to=user) | isnull`` — dadurch lieferte "Alle" weiterhin
         # nur eigene+unassigned, und ein Personenfilter auf jemand anderen eine
         # leere Liste. Eine selbst erstellte, fremd-zugewiesene Aufgabe
@@ -158,7 +179,15 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
         # per Bulk auswählbar; eine Statusänderung (z.B. Erledigt → In
         # Bearbeitung) verschob das Item dann in eine scoped Liste, wo es nicht
         # mehr auftauchte — Liste und tatsächlicher Status liefen auseinander.
-        default_scope = "assigned_to" not in request.GET
+        #
+        # Refs #1145: ``selected_assigned_to`` für die Anzeige unterscheidet
+        # "Parameter fehlt" (Default → Sentinel anzeigen) von "Parameter
+        # vorhanden, aber leer" (explizit "Alle"). ``request.GET.get(..., "")``
+        # allein kann das nicht, weil beide Fälle ``""`` liefern.
+        raw_assigned_to = request.GET.get("assigned_to")
+        param_absent = raw_assigned_to is None
+        default_scope = param_absent or raw_assigned_to == self.DEFAULT_ASSIGNED_SCOPE
+        selected_assigned_to = self.DEFAULT_ASSIGNED_SCOPE if param_absent else raw_assigned_to
 
         def _apply_default_scope(qs):
             if default_scope:
@@ -206,7 +235,8 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
             "facility_users": facility_users,
             "selected_item_type": request.GET.get("item_type", ""),
             "selected_priority": request.GET.get("priority", ""),
-            "selected_assigned_to": request.GET.get("assigned_to", ""),
+            "selected_assigned_to": selected_assigned_to,
+            "default_assigned_scope": self.DEFAULT_ASSIGNED_SCOPE,
             "selected_due": request.GET.get("due", ""),
         }
 
