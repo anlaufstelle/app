@@ -109,9 +109,9 @@ class TestMobileWorkItemInbox:
     def test_workitem_status_toggle_via_tap(self, mobile_authenticated_page, base_url):
         """HTMX-Status-Toggle funktioniert per Tap, kein Full-Reload.
 
-        Verifiziert über die URL: nach dem Tap auf „Annehmen" bleibt
-        ``/workitems/`` aktiv (keine Vollnavigation), und der Erledigt-Button
-        wird sichtbar (HTMX-Swap).
+        Verifiziert über die URL: nach dem Tap auf „Übernehmen" (Refs #1146)
+        bleibt ``/workitems/`` aktiv (keine Vollnavigation), und der
+        Erledigt-Button wird sichtbar (HTMX-Swap).
         """
         page = mobile_authenticated_page
         # Aufgabe erzeugen, damit garantiert eine offene Karte da ist.
@@ -123,7 +123,7 @@ class TestMobileWorkItemInbox:
         page.wait_for_url(re.compile(r"/workitems/$"), timeout=10000)
 
         url_before = page.url
-        accept_btn = page.locator("button:has-text('Annehmen')").first
+        accept_btn = page.locator("button:has-text('Übernehmen')").first
         accept_btn.wait_for(state="visible", timeout=5000)
         accept_btn.click()
         # HTMX-Swap: kein Full-Reload, URL bleibt gleich.

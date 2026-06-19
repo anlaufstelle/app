@@ -239,13 +239,17 @@ class TestWorkItemDoneConfirmation:
         assert "als erledigt gespeichert" in confirm_text
         assert "offenen Aufgaben" in confirm_text
 
-    def test_inbox_open_actions_have_no_done_confirmation(self, client, staff_user, workitem_open):
-        """Gegenprobe: Eine *offene* Aufgabe bietet in der Übersicht keinen
-        direkten Erledigen-Pfad (nur Annehmen/Verwerfen) und löst daher auch
-        keine Erledigt-Bestätigung aus."""
+    def test_inbox_open_done_button_has_confirmation(self, client, staff_user, workitem_open):
+        """Refs #1146: Eine *offene* Aufgabe bietet in der Übersicht jetzt den
+        direkten Erledigen-Pfad an (wie in der Detailansicht). Auch dieser ist
+        durch dieselbe ``hx-confirm``-Bestätigung abgesichert."""
         client.force_login(staff_user)
         html = client.get(reverse("core:workitem_inbox")).content.decode()
-        assert 'hx-confirm="Aufgabe als erledigt markieren?' not in html
+        marker = 'hx-confirm="Aufgabe als erledigt markieren?'
+        assert marker in html
+        confirm_text = html.split(marker, 1)[1].split('"', 1)[0]
+        assert "als erledigt gespeichert" in confirm_text
+        assert "offenen Aufgaben" in confirm_text
 
     def test_bulk_status_form_uses_done_confirmation_handler(self, client, staff_user, workitem_open):
         """Die Bulk-Statusänderung wird vor dem Submit über
@@ -255,6 +259,63 @@ class TestWorkItemDoneConfirmation:
         html = client.get(reverse("core:workitem_inbox")).content.decode()
         # Das Status-Bulk-Form nutzt den dedizierten Handler (statt nur syncFilters).
         assert '@submit="confirmBulkStatus"' in html
+
+
+@pytest.mark.django_db
+class TestWorkItemInboxRowActions:
+    """Refs #1146: Die Übersicht (Tabellenzeilen) verwendet dieselben
+    Aktionsbegriffe wie die Einzelansicht und sichert abschließende Aktionen ab.
+
+    Vorher zeigte die offene Zeile ``Annehmen`` / ``Verwerfen`` (alte Begriffe,
+    Verwerfen ohne Bestätigung). Nach #1130/#1147 heißen die Aktionen in der
+    Detailansicht ``Aufgabe übernehmen`` / ``Als erledigt markieren`` / ``Als
+    nicht relevant schließen``; die Übersicht zieht nach.
+    """
+
+    def test_open_row_uses_take_over_label(self, client, staff_user, workitem_open):
+        """``Annehmen`` ist in der Übersicht durch ``Übernehmen`` ersetzt."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert "Übernehmen" in html
+        assert "Annehmen" not in html
+
+    def test_open_row_offers_direct_done_action(self, client, staff_user, workitem_open):
+        """Offene Aufgaben bieten in der Übersicht ``Als erledigt markieren`` als
+        direkte Tabellenaktion an (status=done)."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert "Als erledigt markieren" in html
+        # Der Button setzt den Status direkt auf done.
+        assert '"status": "done"' in html
+
+    def test_open_row_dismiss_relabelled_with_confirmation(self, client, staff_user, workitem_open):
+        """``Verwerfen`` ist durch ``Als nicht relevant schließen`` ersetzt und
+        die kritische Aktion ist mit einer Bestätigung abgesichert, die erklärt,
+        dass nicht gelöscht und aus den offenen Aufgaben entfernt wird."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert "Als nicht relevant schließen" in html
+        assert "Verwerfen" not in html
+        marker = 'hx-confirm="Aufgabe als nicht relevant schließen?'
+        assert marker in html
+        confirm_text = html.split(marker, 1)[1].split('"', 1)[0]
+        assert "nicht gelöscht" in confirm_text
+        assert "offenen Aufgaben" in confirm_text
+
+    def test_dismissed_status_label_unchanged(self, client, staff_user, facility, client_identified):
+        """Gegenprobe: Die Statusanzeige ``Verworfen`` (bereits verworfene
+        Aufgabe) bleibt als Begriff bestehen — nur die *Aktion* wurde umbenannt,
+        nicht der Status (Abgrenzung zu #1130)."""
+        WorkItem.objects.create(
+            facility=facility,
+            client=client_identified,
+            created_by=staff_user,
+            title="Bereits verworfen",
+            status=WorkItem.Status.DISMISSED,
+        )
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert "Verworfen" in html
 
 
 @pytest.mark.django_db

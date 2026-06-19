@@ -90,8 +90,8 @@ class TestWorkItemStatusHTMX:
         page = authenticated_page
         self._create_task(page, base_url)
 
-        # "Annehmen" klickt → Status wechselt zu In Bearbeitung
-        accept_btn = page.locator("button:has-text('Annehmen')").first
+        # "Übernehmen" klickt → Status wechselt zu In Bearbeitung (Refs #1146)
+        accept_btn = page.locator("button:has-text('Übernehmen')").first
         accept_btn.click()
 
         # Nach HTMX swap sollte "Erledigt"-Button sichtbar sein
@@ -751,5 +751,86 @@ class TestWorkItemDoneConfirmation:
             page.wait_for_url(re.compile(r"/workitems/"))
             page.wait_for_load_state("domcontentloaded")
             assert _status_of_done_confirm_item(e2e_env, 0) == "in_progress"
+        finally:
+            _cleanup_done_confirm_items(e2e_env)
+
+
+class TestWorkItemInboxRowActions:
+    """Refs #1146: Die Tabellenaktionen einer offenen Aufgabe in der Übersicht
+    sind mit der Einzelansicht (#1130/#1147) vereinheitlicht — „Übernehmen",
+    „Als erledigt markieren" (direkt, mit Bestätigung) und „Als nicht relevant
+    schließen" (abgesichert) statt der alten „Annehmen"/„Verwerfen".
+
+    Abgeleitet aus der manuellen Playwright-Verifikation gegen den E2E-Server
+    (Buttonbeschriftung, Accept beim Erledigen, Cancel/Accept beim Schließen).
+    """
+
+    def test_open_row_offers_renamed_actions(self, authenticated_page, base_url, e2e_env):
+        """Die offene Zeile zeigt die drei vereinheitlichten Buttons; die alten
+        Begriffe „Annehmen"/„Verwerfen" tauchen nicht mehr auf."""
+        _seed_items_for_done_confirm(e2e_env, status="open", count=1)
+        try:
+            page = authenticated_page
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+            row = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
+            row.wait_for(state="visible", timeout=10000)
+            assert row.get_by_role("button", name="Übernehmen").is_visible()
+            assert row.get_by_role("button", name="Als erledigt markieren").is_visible()
+            assert row.get_by_role("button", name="Als nicht relevant schließen").is_visible()
+            assert row.get_by_role("button", name="Annehmen").count() == 0
+            assert row.get_by_role("button", name="Verwerfen").count() == 0
+        finally:
+            _cleanup_done_confirm_items(e2e_env)
+
+    def test_open_row_mark_done_confirmation_accept_sets_done(self, authenticated_page, base_url, e2e_env):
+        """Übersicht: „Als erledigt markieren" einer offenen Aufgabe fragt nach
+        (hx-confirm); bestätigt wird der Status direkt auf erledigt gesetzt —
+        ohne Zwischenschritt über In Bearbeitung."""
+        _seed_items_for_done_confirm(e2e_env, status="open", count=1)
+        try:
+            page = authenticated_page
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+            row = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
+            row.wait_for(state="visible", timeout=10000)
+            page.once("dialog", lambda dialog: dialog.accept())
+            row.get_by_role("button", name="Als erledigt markieren").click()
+            page.wait_for_timeout(800)
+            assert _status_of_done_confirm_item(e2e_env, 0) == "done"
+        finally:
+            _cleanup_done_confirm_items(e2e_env)
+
+    def test_open_row_dismiss_confirmation_cancel_keeps_open(self, authenticated_page, base_url, e2e_env):
+        """Übersicht: Abbruch des „Als nicht relevant schließen"-Dialogs lässt
+        die Aufgabe unverändert offen."""
+        _seed_items_for_done_confirm(e2e_env, status="open", count=1)
+        try:
+            page = authenticated_page
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+            row = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
+            row.wait_for(state="visible", timeout=10000)
+            page.once("dialog", lambda dialog: dialog.dismiss())
+            row.get_by_role("button", name="Als nicht relevant schließen").click()
+            page.wait_for_timeout(500)
+            assert _status_of_done_confirm_item(e2e_env, 0) == "open"
+        finally:
+            _cleanup_done_confirm_items(e2e_env)
+
+    def test_open_row_dismiss_confirmation_accept_sets_dismissed(self, authenticated_page, base_url, e2e_env):
+        """Übersicht: bestätigtes „Als nicht relevant schließen" setzt den Status
+        auf verworfen."""
+        _seed_items_for_done_confirm(e2e_env, status="open", count=1)
+        try:
+            page = authenticated_page
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+            row = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
+            row.wait_for(state="visible", timeout=10000)
+            page.once("dialog", lambda dialog: dialog.accept())
+            row.get_by_role("button", name="Als nicht relevant schließen").click()
+            page.wait_for_timeout(800)
+            assert _status_of_done_confirm_item(e2e_env, 0) == "dismissed"
         finally:
             _cleanup_done_confirm_items(e2e_env)
