@@ -31,7 +31,7 @@ def can_user_mutate_workitem(user, workitem):
     Zugewiesene — sowie **nicht zugewiesene Teamaufgaben** (Refs #1125).
 
     Zur Begründung der Teamaufgaben-Regel: Die Inbox blendet jeder Fachkraft/
-    Assistenz offene + nicht zugewiesene Items mit "Annehmen"-Buttons und
+    Assistenz offene + nicht zugewiesene Items mit "Übernehmen"-Buttons und
     Bulk-Auswahl ein, und der Zeitstrom zeigt sie ebenfalls. Eine nicht
     zugewiesene Aufgabe ist damit fachlich eine vom Team aufzunehmende
     Aufgabe. Ohne diese Regel sähe eine Fachkraft die Aufgabe samt Buttons,

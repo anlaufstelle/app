@@ -80,19 +80,29 @@
     {# Status-Buttons #}
     <div class="flex items-center gap-2">
         {% if wi.status == "open" %}
+        {# Refs #1146: Tabellenaktionen mit der Einzelansicht (#1130/#1147) vereinheitlicht — „Übernehmen" (in_progress), direkter „Als erledigt markieren"-Pfad und „Als nicht relevant schließen" statt „Verwerfen". Die abschließenden Aktionen (erledigt/verworfen) fragen vor dem Statuswechsel per hx-confirm nach (HTMX-Buttons, wie bei Goals/Retention). #}
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
                 hx-vals='{"status": "in_progress"}'
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
                 class="px-3 py-1 text-[12px] font-semibold rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100">
-            {% trans "Annehmen" %}
+            {% trans "Übernehmen" %}
+        </button>
+        <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
+                hx-vals='{"status": "done"{% if hide_on_complete %}, "hide": "1"{% endif %}}'
+                hx-confirm="{% trans 'Aufgabe als erledigt markieren? Die Aufgabe wird als erledigt gespeichert und erscheint nicht mehr bei offenen Aufgaben.' %}"
+                hx-target="#workitem-{{ wi.pk }}"
+                hx-swap="outerHTML"
+                class="px-3 py-1 text-[12px] font-semibold rounded-md bg-green-50 text-green-700 hover:bg-green-100">
+            {% trans "Als erledigt markieren" %}
         </button>
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
                 hx-vals='{"status": "dismissed"{% if hide_on_complete %}, "hide": "1"{% endif %}}'
+                hx-confirm="{% trans 'Aufgabe als nicht relevant schließen? Sie wird als verworfen markiert und erscheint nicht mehr bei den offenen Aufgaben. Sie wird nicht gelöscht und bleibt weiterhin nachvollziehbar.' %}"
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
                 class="px-3 py-1 text-[12px] font-semibold rounded-md bg-canvas text-ink-muted hover:bg-canvas">
-            {% trans "Verwerfen" %}
+            {% trans "Als nicht relevant schließen" %}
         </button>
         {% elif wi.status == "in_progress" %}
         {# Refs #1147: Bestätigung vor dem Statuswechsel auf erledigt — abschließende Wirkung. HTMX-Button, daher hx-confirm (wie Goals/Retention) statt data-confirm. #}

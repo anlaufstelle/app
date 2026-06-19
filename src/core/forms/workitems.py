@@ -90,7 +90,7 @@ class WorkItemForm(forms.ModelForm):
         self.facility = facility
         if facility:
             # Refs #1125: ASSISTANT ist zuweisbar. Assistenzkräfte ziehen offene
-            # Teamaufgaben ohnehin per "Annehmen" auf sich (Auto-Assign auf
+            # Teamaufgaben ohnehin per "Übernehmen" auf sich (Auto-Assign auf
             # IN_PROGRESS) und sind damit faktisch ``assigned_to``; eine normale,
             # nicht-private Aufgabe (private Aufgaben aus #607 existieren noch
             # nicht) muss einer aktiven Assistenz derselben Facility direkt
