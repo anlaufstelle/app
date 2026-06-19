@@ -52,9 +52,14 @@ class TestWorkItemInbox:
     def test_inbox_shows_sections(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/workitems/")
+        # Refs #1149: Offen + In Bearbeitung sind eigene Spalten-Sektionen, der
+        # erledigt-Rückblick liegt als aufklappbarer <details> darunter und führt
+        # den Zeitraum (letzte 7 Tage) klar in der Beschriftung.
         assert page.locator("section h2", has_text="Offen").first.is_visible()
         assert page.locator("section h2", has_text="In Bearbeitung").first.is_visible()
-        assert page.locator("section h2", has_text="Kürzlich erledigt").first.is_visible()
+        assert page.locator(
+            "details[data-testid='recent-done'] summary", has_text="Erledigt in den letzten 7 Tagen"
+        ).first.is_visible()
 
     @pytest.mark.smoke
     def test_create_workitem_and_appears_in_inbox(self, authenticated_page, base_url):
@@ -486,13 +491,19 @@ def _seed_done_items_for_admin(e2e_env, count=2):
     Items in der Default-Sicht *und* nach dem Wechsel auf In Bearbeitung in der
     (scoped) In-Bearbeitung-Liste sichtbar — sonst würde der Konsistenz-Check
     durch das Scoping verfälscht.
+
+    Refs #1149: Vorab werden *alle* erledigten/verworfenen Aufgaben der Facility
+    entfernt. „Kürzlich erledigt" zeigt jetzt nur die letzten fünf direkt an
+    (Rest hinter einem zweiten Aufklapp-Bereich); ohne das Leeren könnten von
+    früheren Tests übrig gebliebene erledigte Aufgaben die frisch angelegten aus
+    der sichtbaren Vorschau verdrängen.
     """
     code = (
         "from core.models import WorkItem, Facility, User; "
         "from django.utils import timezone; "
         "u = User.objects.get(username='admin'); "
         "f = u.facility; "
-        f"WorkItem.objects.filter(facility=f, title__startswith='{_BULK}').delete(); "
+        "WorkItem.objects.filter(facility=f, status__in=['done', 'dismissed']).delete(); "
         "[WorkItem.objects.create(facility=f, created_by=u, assigned_to=u, "
         f"  title='{_BULK} %d' % i, item_type='task', priority='normal', "
         "  status='done', completed_at=timezone.now()) "
@@ -528,9 +539,11 @@ class TestWorkItemBulkStatusConsistency:
             page.goto(f"{base_url}/workitems/")
             page.wait_for_load_state("domcontentloaded")
 
-            # Die erledigten Aufgaben erscheinen in der Default-Sicht unter
-            # "Kürzlich erledigt" und sind auswählbar.
-            done_section = page.locator("section", has=page.locator("h2", has_text="Kürzlich erledigt"))
+            # Refs #1149: Die erledigten Aufgaben liegen im aufklappbaren Bereich
+            # "Erledigt in den letzten 7 Tagen", der standardmäßig eingeklappt
+            # ist — zum Auswählen erst aufklappen.
+            done_section = page.locator("details[data-testid='recent-done']")
+            _open_recent_done(page)
             row0 = done_section.locator("[id^='workitem-']", has_text=f"{_BULK} 0").first
             row1 = done_section.locator("[id^='workitem-']", has_text=f"{_BULK} 1").first
             row0.wait_for(state="visible", timeout=10000)
@@ -553,7 +566,7 @@ class TestWorkItemBulkStatusConsistency:
             moved0.wait_for(state="visible", timeout=10000)
             assert in_progress.locator("[id^='workitem-']", has_text=f"{_BULK} 1").first.is_visible()
 
-            done_after = page.locator("section", has=page.locator("h2", has_text="Kürzlich erledigt"))
+            done_after = page.locator("details[data-testid='recent-done']")
             assert done_after.locator("[id^='workitem-']", has_text=f"{_BULK} 0").count() == 0
             assert done_after.locator("[id^='workitem-']", has_text=f"{_BULK} 1").count() == 0
 
@@ -593,7 +606,10 @@ def _seed_done_item_assigned_to_other(e2e_env):
         "admin = User.objects.get(username='admin'); "
         "other = User.objects.exclude(pk=admin.pk).filter(facility=admin.facility, is_active=True).first(); "
         "f = admin.facility; "
-        f"WorkItem.objects.filter(facility=f, title__startswith='{_BULK_FOREIGN}').delete(); "
+        # Refs #1149: erledigte Aufgaben leeren, damit das eine fremd-zugewiesene
+        # Item in der „Alle"-Sicht in der Fünfer-Vorschau auftaucht (nicht im
+        # zweiten Aufklapp-Bereich verschwindet).
+        "WorkItem.objects.filter(facility=f, status__in=['done', 'dismissed']).delete(); "
         "WorkItem.objects.create(facility=f, created_by=admin, assigned_to=other, "
         f"  title='{_BULK_FOREIGN} 0', item_type='task', priority='normal', "
         "  status='done', completed_at=timezone.now()); "
@@ -634,7 +650,9 @@ class TestWorkItemBulkStatusConsistencyAllView:
             page.goto(f"{base_url}/workitems/?assigned_to=")
             page.wait_for_load_state("domcontentloaded")
 
-            done_section = page.locator("section", has=page.locator("h2", has_text="Kürzlich erledigt"))
+            # Refs #1149: erledigt-Bereich erst aufklappen, dann auswählen.
+            done_section = page.locator("details[data-testid='recent-done']")
+            _open_recent_done(page)
             row = done_section.locator("[id^='workitem-']", has_text=f"{_BULK_FOREIGN} 0").first
             row.wait_for(state="visible", timeout=10000)
             row.get_by_role("checkbox", name="Auswählen").check()
@@ -655,7 +673,7 @@ class TestWorkItemBulkStatusConsistencyAllView:
             moved = in_progress.locator("[id^='workitem-']", has_text=f"{_BULK_FOREIGN} 0").first
             moved.wait_for(state="visible", timeout=10000)
 
-            done_after = page.locator("section", has=page.locator("h2", has_text="Kürzlich erledigt"))
+            done_after = page.locator("details[data-testid='recent-done']")
             assert done_after.locator("[id^='workitem-']", has_text=f"{_BULK_FOREIGN} 0").count() == 0
         finally:
             _cleanup_foreign_bulk_items(e2e_env)
@@ -923,3 +941,236 @@ class TestWorkItemInboxRowActions:
             assert _status_of_done_confirm_item(e2e_env, 0) == "dismissed"
         finally:
             _cleanup_done_confirm_items(e2e_env)
+
+
+# Refs #1149: Zwei-Spalten-Layout + aufklappbarer „Kürzlich erledigt"-Bereich.
+_LAYOUT = "LAYOUT #1149"
+
+_RECENT_DONE = "details[data-testid='recent-done']"
+
+
+def _open_recent_done(page):
+    """Klappt den „Kürzlich erledigt"-Bereich auf und stellt sicher, dass er
+    offen *bleibt*.
+
+    Auf ressourcenknappen CI-Containern kann ein einzelner Summary-Klick unter
+    Last gelegentlich „durchrutschen" oder doppelt auslösen (toggle auf-zu). Statt
+    blind einmal zu klicken, wird hier bis zu dreimal geklickt, bis das
+    ``open``-Attribut gesetzt ist — ein echter Nutzer-Klick, nur idempotent
+    abgesichert.
+    """
+    summary = page.locator(f"{_RECENT_DONE} > summary")
+    details = page.locator(_RECENT_DONE)
+    for _ in range(3):
+        if details.get_attribute("open") is not None:
+            return
+        summary.click()
+        page.wait_for_timeout(150)
+    assert details.get_attribute("open") is not None, "Kürzlich-erledigt-Bereich ließ sich nicht aufklappen"
+
+
+def _close_recent_done(page):
+    """Gegenstück zu :func:`_open_recent_done` — klappt den Bereich sicher zu."""
+    summary = page.locator(f"{_RECENT_DONE} > summary")
+    details = page.locator(_RECENT_DONE)
+    for _ in range(3):
+        if details.get_attribute("open") is None:
+            return
+        summary.click()
+        page.wait_for_timeout(150)
+    assert details.get_attribute("open") is None, "Kürzlich-erledigt-Bereich ließ sich nicht einklappen"
+
+
+def _seed_done_unassigned_for_admin(e2e_env, count):
+    """Legt ``count`` erledigte, *nicht zugewiesene* Aufgaben in der Facility der
+    eingeloggten ``admin`` an — so sind sie in der Default-Sicht sichtbar, ohne
+    die Zahl der aktiven (offen/in Bearbeitung) Aufgaben zu verändern.
+
+    Refs #1149: Vorab werden *alle* erledigten/verworfenen Aufgaben der Facility
+    gelöscht, damit die Vorschau-/Aufklapp-Aufteilung deterministisch ist und
+    ausschließlich die hier angelegten Aufgaben enthält (frühere Tests in
+    derselben Session hinterlassen sonst erledigte Aufgaben in der Sitzungs-DB).
+    """
+    code = (
+        "from core.models import WorkItem, User; "
+        "from django.utils import timezone; "
+        "u = User.objects.get(username='admin'); "
+        "f = u.facility; "
+        "WorkItem.objects.filter(facility=f, status__in=['done', 'dismissed']).delete(); "
+        "[WorkItem.objects.create(facility=f, created_by=u, "
+        f"  title='{_LAYOUT} %d' % i, item_type='task', priority='normal', "
+        "  status='done', completed_at=timezone.now()) "
+        f"  for i in range({count})]; "
+        f"print('SEEDED', WorkItem.objects.filter(facility=f, title__startswith='{_LAYOUT}').count())"
+    )
+    out = _run_shell(code, e2e_env)
+    assert "SEEDED" in out, out
+
+
+def _cleanup_layout_items(e2e_env):
+    code = (
+        "from core.models import WorkItem, Facility; "
+        "f = Facility.objects.first(); "
+        f"WorkItem.objects.filter(facility=f, title__startswith='{_LAYOUT}').delete(); "
+        "print('CLEAN')"
+    )
+    _run_shell(code, e2e_env)
+
+
+class TestWorkItemTwoColumnLayout:
+    """Refs #1149: Aufgabenübersicht als zweispaltige Arbeitsansicht (Offen +
+    In Bearbeitung) mit aufklappbarem, eindeutig auf die letzten 7 Tage
+    beschriftetem „Kürzlich erledigt"-Bereich.
+
+    Abgeleitet aus der manuellen Playwright-Verifikation gegen den E2E-Server.
+    """
+
+    def test_open_and_in_progress_side_by_side_on_desktop(self, authenticated_page, base_url):
+        """Auf breitem Viewport stehen die beiden Hauptspalten nebeneinander:
+        die x-Position von „In Bearbeitung" liegt rechts von „Offen", nicht
+        darunter."""
+        page = authenticated_page
+        page.set_viewport_size({"width": 1280, "height": 900})
+        page.goto(f"{base_url}/workitems/")
+        page.wait_for_load_state("domcontentloaded")
+
+        open_h = page.locator("section h2", has_text="Offen").first
+        prog_h = page.locator("section h2", has_text="In Bearbeitung").first
+        open_box = open_h.bounding_box()
+        prog_box = prog_h.bounding_box()
+        assert open_box and prog_box
+        # Zweispaltig: gleiche Höhe (nebeneinander), unterschiedliche x-Position.
+        assert prog_box["x"] > open_box["x"] + 50
+        assert abs(prog_box["y"] - open_box["y"]) < 30
+
+    def test_recent_done_collapsed_by_default_with_seven_day_label(self, authenticated_page, base_url, e2e_env):
+        """„Kürzlich erledigt" ist standardmäßig eingeklappt; die Überschrift
+        benennt den Zeitraum (letzte 7 Tage); ein Klick klappt die Liste auf."""
+        _seed_done_unassigned_for_admin(e2e_env, count=2)
+        try:
+            page = authenticated_page
+            page.set_viewport_size({"width": 1280, "height": 900})
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+
+            section = page.locator("details[data-testid='recent-done']")
+            summary = section.locator("summary", has_text="Erledigt in den letzten 7 Tagen")
+            assert summary.is_visible()
+            # Eingeklappt: das <details> trägt kein open-Attribut, die Items sind
+            # nicht sichtbar.
+            assert section.get_attribute("open") is None
+            item = section.locator("[id^='workitem-']", has_text=f"{_LAYOUT} 0").first
+            assert not item.is_visible()
+
+            # Aufklappen → Items werden sichtbar.
+            _open_recent_done(page)
+            item.wait_for(state="visible", timeout=5000)
+            assert item.is_visible()
+        finally:
+            _cleanup_layout_items(e2e_env)
+
+    def test_recent_done_preview_caps_at_five_with_seven_day_expander(self, authenticated_page, base_url, e2e_env):
+        """Bei mehr als fünf erledigten Aufgaben zeigt der aufgeklappte Bereich
+        zunächst fünf; ein eindeutig auf „letzte 7 Tage" beschrifteter
+        Aufklapp-Button blendet den Rest ein.
+
+        Die Vorschau-Grenze (fünf) ist global; die genaue Rest-Anzahl hängt von
+        ggf. vorhandenen Seed-Aufgaben ab. Geprüft wird daher: genau fünf
+        Vorschau-Karten, Extra-Bereich anfangs zu, und nach dem Aufklappen sind
+        *alle acht* eigens angelegten Aufgaben im Bereich auffindbar (keine geht
+        verloren).
+        """
+        _seed_done_unassigned_for_admin(e2e_env, count=8)
+        try:
+            page = authenticated_page
+            page.set_viewport_size({"width": 1280, "height": 900})
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+
+            section = page.locator("details[data-testid='recent-done']")
+            _open_recent_done(page)
+
+            # Vorschau: genau fünf Karten sichtbar (Cap), der Rest steckt im noch
+            # geschlossenen Extra-<details>.
+            preview_cards = page.locator("details[data-testid='recent-done'] > div > .space-y-3 > [id^='workitem-']")
+            preview_cards.first.wait_for(state="visible", timeout=5000)
+            assert preview_cards.count() == 5
+
+            extra = section.locator("details[data-testid='recent-done-extra']")
+            expander = page.locator("details[data-testid='recent-done-extra'] > summary")
+            # Beschriftung benennt den 7-Tage-Zeitraum (kein nacktes „Alle anzeigen").
+            assert "der letzten 7 Tage anzeigen" in expander.inner_text()
+            assert extra.get_attribute("open") is None
+
+            # Aufklappen → die restlichen Aufgaben werden sichtbar; insgesamt sind
+            # alle acht eigens angelegten Aufgaben im Bereich vorhanden.
+            expander.click()
+            extra.locator("[id^='workitem-']").first.wait_for(state="visible", timeout=5000)
+            mine = section.locator("[id^='workitem-']", has_text=_LAYOUT)
+            assert mine.count() == 8
+            # Im Extra-Bereich liegen die über die fünf Vorschau-Karten
+            # hinausgehenden eigenen Aufgaben (mindestens drei).
+            assert extra.locator("[id^='workitem-']", has_text=_LAYOUT).count() >= 3
+        finally:
+            _cleanup_layout_items(e2e_env)
+
+    def test_select_all_visible_skips_collapsed_done_items(self, authenticated_page, base_url, e2e_env):
+        """Refs #1149: „Alle sichtbaren auswählen" erfasst die erledigten
+        Aufgaben im *eingeklappten* Bereich nicht — die Auswahl bleibt
+        nachvollziehbar (nur wirklich sichtbare Karten).
+
+        Reihenfolge bewusst: Gegenprobe (aufgeklappt) zuerst, solange noch nichts
+        ausgewählt ist und die sticky Bulk-Leiste das Layout nicht verschoben hat.
+        Danach erst der eigentliche Skip-Test im eingeklappten Zustand.
+        """
+        _seed_done_unassigned_for_admin(e2e_env, count=6)
+        try:
+            page = authenticated_page
+            page.set_viewport_size({"width": 1280, "height": 900})
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+
+            section = page.locator("details[data-testid='recent-done']")
+
+            # Gegenprobe: Im *aufgeklappten* Zustand erfasst „Alle sichtbaren
+            # auswählen" die erledigten Vorschau-Karten. (Welche der sechs in der
+            # Fünfer-Vorschau landen, hängt von der Sortierung ab — daher auf die
+            # erste Vorschau-Karte warten, nicht auf einen festen Titel.)
+            _open_recent_done(page)
+            page.locator("details[data-testid='recent-done'] > div > .space-y-3 > [id^='workitem-']").first.wait_for(
+                state="visible", timeout=5000
+            )
+            page.locator("#workitem-select-all").check()
+            page.wait_for_timeout(200)
+            assert section.locator("input[type=checkbox][name=workitem_ids]:checked").count() >= 1
+
+            # Auswahl löschen und Bereich wieder einklappen.
+            page.locator("#workitem-select-all").uncheck()
+            page.wait_for_timeout(150)
+            _close_recent_done(page)
+
+            # Eigentlicher Test: eingeklappt darf keine erledigte Aufgabe in die
+            # Auswahl geraten.
+            page.locator("#workitem-select-all").check()
+            page.wait_for_timeout(200)
+            assert section.locator("input[type=checkbox][name=workitem_ids]:checked").count() == 0
+        finally:
+            _cleanup_layout_items(e2e_env)
+
+    def test_mobile_single_column(self, mobile_authenticated_page, base_url):
+        """Auf schmalem (mobilem) Viewport stehen Offen und In Bearbeitung
+        untereinander (einspaltig): „In Bearbeitung" liegt unterhalb von
+        „Offen", nicht rechts daneben."""
+        page = mobile_authenticated_page
+        page.goto(f"{base_url}/workitems/")
+        page.wait_for_load_state("domcontentloaded")
+
+        open_box = page.locator("section h2", has_text="Offen").first.bounding_box()
+        prog_box = page.locator("section h2", has_text="In Bearbeitung").first.bounding_box()
+        assert open_box and prog_box
+        # Einspaltig: untereinander (y deutlich größer), nicht nebeneinander.
+        assert prog_box["y"] > open_box["y"] + 30
+        # „Kürzlich erledigt" bleibt auch mobil als aufklappbarer Bereich da.
+        assert page.locator(
+            "details[data-testid='recent-done'] summary", has_text="Erledigt in den letzten 7 Tagen"
+        ).first.is_visible()

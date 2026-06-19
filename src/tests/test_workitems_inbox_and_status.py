@@ -668,3 +668,81 @@ class TestWorkItemRemindAt:
         wi.refresh_from_db()
         assert wi.title == "Bereits überfällig — Beschreibung ergänzt"
         assert wi.due_date == past
+
+
+@pytest.mark.django_db
+class TestWorkItemInboxRecentDonePreview:
+    """Refs #1149: ``Kürzlich erledigt`` wird als aufklappbarer Bereich unter den
+    beiden Hauptspalten dargestellt — mit klarem Zeitraum (letzte 7 Tage) in der
+    Beschriftung. Standardmäßig sind höchstens die letzten 5 erledigten Aufgaben
+    sichtbar; gibt es mehr, lässt sich der Rest über eine eindeutig beschriftete
+    Aktion aufklappen, die unmissverständlich nur die letzten 7 Tage meint
+    (kein vollständiges Archiv).
+    """
+
+    def _make_done(self, facility, user, n):
+        items = []
+        for i in range(n):
+            items.append(
+                WorkItem.objects.create(
+                    facility=facility,
+                    created_by=user,
+                    title=f"Erledigt {i}",
+                    status=WorkItem.Status.DONE,
+                )
+            )
+        return items
+
+    def test_done_preview_capped_at_five(self, client, staff_user, facility):
+        """Bei mehr als fünf erledigten Aufgaben enthält die Vorschau nur fünf,
+        der Rest landet in ``done_items_extra``."""
+        self._make_done(facility, staff_user, 7)
+        client.force_login(staff_user)
+        ctx = client.get(reverse("core:workitem_inbox")).context
+        assert len(ctx["done_items_preview"]) == 5
+        assert len(ctx["done_items_extra"]) == 2
+        # Vorschau + Rest decken zusammen die volle (gedeckelte) Liste ab.
+        assert list(ctx["done_items_preview"]) + list(ctx["done_items_extra"]) == list(ctx["done_items"])
+
+    def test_done_preview_no_extra_when_five_or_fewer(self, client, staff_user, facility):
+        """Höchstens fünf erledigte Aufgaben → keine Aufklapp-Gruppe."""
+        self._make_done(facility, staff_user, 3)
+        client.force_login(staff_user)
+        ctx = client.get(reverse("core:workitem_inbox")).context
+        assert len(ctx["done_items_preview"]) == 3
+        assert list(ctx["done_items_extra"]) == []
+
+    def test_recent_done_preview_count_in_context(self, client, staff_user):
+        """Die Vorschau-Grenze steht als Zahl im Kontext (für UI-Beschriftung)."""
+        client.force_login(staff_user)
+        ctx = client.get(reverse("core:workitem_inbox")).context
+        assert ctx["recent_done_preview"] == 5
+
+    def test_two_column_grid_for_open_and_in_progress(self, client, staff_user):
+        """Offen und In Bearbeitung stehen auf breiten Bildschirmen nebeneinander
+        (responsive Grid: einspaltig mobil, zweispaltig ab lg)."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert "grid-cols-1" in html
+        assert "lg:grid-cols-2" in html
+
+    def test_recent_done_is_collapsible_with_timeframe_heading(self, client, staff_user):
+        """``Kürzlich erledigt`` ist ein aufklappbarer Bereich (<details>/<summary>),
+        dessen Beschriftung den Zeitraum (letzte 7 Tage) klar benennt."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert "<details" in html
+        assert "<summary" in html
+        # Zeitraum eindeutig in der Überschrift.
+        assert "letzten 7 Tagen" in html
+
+    def test_expand_action_names_seven_day_scope(self, client, staff_user, facility):
+        """Die Aufklapp-Aktion für die restlichen erledigten Aufgaben benennt den
+        7-Tage-Zeitraum eindeutig — keine missverständliche Kurzform wie nur
+        ``Alle anzeigen`` (sonst Eindruck eines vollständigen Archivs)."""
+        self._make_done(facility, staff_user, 7)
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert "der letzten 7 Tage anzeigen" in html
+        # Reine Kurzform darf es als alleinige Beschriftung nicht geben.
+        assert ">Alle anzeigen<" not in html

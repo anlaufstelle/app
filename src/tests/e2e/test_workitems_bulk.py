@@ -242,7 +242,11 @@ class TestBulkSelectAllUI:
         _create_workitem(page, base_url, f"E2E-SelAll-{tag}-2")
 
         page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
-        boxes = page.locator("input[type=checkbox][name='workitem_ids']")
+        # Refs #1149: „Alle sichtbaren auswählen" erfasst nur tatsächlich sichtbare
+        # Checkboxen — erledigte Aufgaben im standardmäßig eingeklappten Bereich
+        # „Kürzlich erledigt" zählen bewusst NICHT mit. Daher nur sichtbare
+        # Checkboxen als Soll-Menge heranziehen (``:visible``).
+        boxes = page.locator("input[type=checkbox][name='workitem_ids']:visible")
         total = boxes.count()
         assert total >= 2, f"Erwartet ≥2 sichtbare Auswahl-Checkboxen, gefunden {total}."
 
@@ -295,9 +299,12 @@ class TestBulkManualSelectionUI:
             _create_workitem(page, base_url, f"E2E-Desel-{tag}-{i}")
 
         page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
-        boxes = page.locator("input[type=checkbox][name='workitem_ids']")
+        # Refs #1149: nur sichtbare Checkboxen sind die Soll-Menge für „Alle
+        # sichtbaren auswählen" — erledigte Aufgaben im eingeklappten Bereich
+        # „Kürzlich erledigt" zählen nicht mit.
+        boxes = page.locator("input[type=checkbox][name='workitem_ids']:visible")
         total = boxes.count()
-        assert total >= 3, f"Erwartet ≥3 Checkboxen, gefunden {total}."
+        assert total >= 3, f"Erwartet ≥3 sichtbare Checkboxen, gefunden {total}."
 
         page.locator("#workitem-select-all").check()
         count = page.locator("[x-text='selectionCount']").first
