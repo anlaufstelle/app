@@ -19,9 +19,20 @@ document.addEventListener("alpine:init", () => {
             // ``workitem_ids``-Inputs, die die Bulk-Forms per ``x-for`` aus
             // ``selected`` rendern. Sonst zaehlte ``syncFromDom`` die eigenen
             // Form-Inputs mit und der Zaehler liefe hoch (Refs #1132).
-            return document.querySelectorAll(
+            //
+            // Refs #1149: "Kuerzlich erledigt" liegt jetzt in einem
+            // einklappbaren <details>. Checkboxen in einem *geschlossenen*
+            // <details> sind im DOM, aber nicht sichtbar — "Alle sichtbaren
+            // auswaehlen" darf sie daher nicht erfassen, sonst waeren Aufgaben
+            // ausgewaehlt, die niemand sieht (nicht nachvollziehbar). Wir
+            // filtern Checkboxen heraus, deren Vorfahr-<details> zugeklappt ist.
+            const all = document.querySelectorAll(
                 "input[type=checkbox][name=workitem_ids]"
             );
+            return Array.from(all).filter((box) => {
+                const details = box.closest("details");
+                return !details || details.open;
+            });
         },
         // Auswahl IMMER aus dem DOM ableiten — die Item-Checkboxen sind die
         // einzige Wahrheitsquelle. So bleiben Zaehler/Toolbar/Hidden-Inputs

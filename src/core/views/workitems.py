@@ -16,7 +16,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 
-from core.constants import WORKITEM_INBOX_CAP
+from core.constants import WORKITEM_INBOX_CAP, WORKITEM_RECENT_DONE_PREVIEW
 from core.models import WorkItem
 from core.models.user import User
 from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin
@@ -218,6 +218,15 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
         if done_has_more:
             done_items = done_items[:cap]
 
+        # Refs #1149: "Kürzlich erledigt" ist Rückblick, kein Arbeitsbereich.
+        # Standardmäßig nur die letzten N (innerhalb der 7 Tage) zeigen; der
+        # Rest wird im Template über eine eigene, eindeutig auf "letzte 7 Tage"
+        # beschriftete Aufklapp-Aktion eingeblendet. Die Aufteilung passiert
+        # hier (statt per Template-|slice), damit sie testbar bleibt und das
+        # Template dumm bleibt.
+        done_items_preview = done_items[:WORKITEM_RECENT_DONE_PREVIEW]
+        done_items_extra = done_items[WORKITEM_RECENT_DONE_PREVIEW:]
+
         facility_users = User.objects.filter(facility=facility).order_by("last_name", "first_name", "username")
 
         context = {
@@ -227,6 +236,9 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
             "in_progress_has_more": in_progress_has_more,
             "done_items": done_items,
             "done_has_more": done_has_more,
+            "done_items_preview": done_items_preview,
+            "done_items_extra": done_items_extra,
+            "recent_done_preview": WORKITEM_RECENT_DONE_PREVIEW,
             "inbox_list_limit": cap,
             "item_type_choices": WorkItem.ItemType.choices,
             "priority_choices": WorkItem.Priority.choices,

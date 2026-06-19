@@ -28,6 +28,12 @@ FEED_MAX_PER_TYPE = 200
 # "weitere ueber Filter/Detailsuche"-Hinweis.
 WORKITEM_INBOX_CAP = 50
 
+# Refs #1149: Im aufklappbaren Bereich "Kürzlich erledigt" (letzte 7 Tage)
+# zeigt die Inbox standardmaessig nur die letzten N Eintraege; der Rest wird
+# erst auf Wunsch eingeblendet. Haelt den Rueckblick visuell schlank, ohne den
+# 7-Tage-Zeitraum zu beschneiden.
+WORKITEM_RECENT_DONE_PREVIEW = 5
+
 # Rate-Limits (django-ratelimit) — pro User, sliding window
 RATELIMIT_BULK_ACTION = "30/h"
 RATELIMIT_MUTATION = "60/h"

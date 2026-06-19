@@ -1,52 +1,93 @@
 {% load i18n %}
 
-{# Offen #}
-<section class="mb-8">
-    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Offen" %} ({{ open_items|length }}{% if open_has_more %}+{% endif %})</h2>
-    {% if open_items %}
-    <div class="space-y-3">
-        {% for wi in open_items %}
-        {% include "core/workitems/partials/item_card.html" %}
-        {% endfor %}
-    </div>
-    {% if open_has_more %}
-    <p class="text-xs text-ink-muted mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
-    {% endif %}
-    {% else %}
-    <p class="text-sm text-ink-muted">{% trans "Keine offenen Aufgaben" %}</p>
-    {% endif %}
-</section>
+{% comment %}
+Refs #1149: Offen + In Bearbeitung als zweispaltige Arbeitsansicht auf breiten
+Bildschirmen (lg), mobil einspaltig untereinander. Offene und laufende Aufgaben
+sind die wichtigsten Zustände und sollen parallel sichtbar sein.
+{% endcomment %}
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 mb-8">
+    {# Offen #}
+    <section>
+        <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Offen" %} ({{ open_items|length }}{% if open_has_more %}+{% endif %})</h2>
+        {% if open_items %}
+        <div class="space-y-3">
+            {% for wi in open_items %}
+            {% include "core/workitems/partials/item_card.html" %}
+            {% endfor %}
+        </div>
+        {% if open_has_more %}
+        <p class="text-xs text-ink-muted mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
+        {% endif %}
+        {% else %}
+        <p class="text-sm text-ink-muted">{% trans "Keine offenen Aufgaben" %}</p>
+        {% endif %}
+    </section>
 
-{# In Bearbeitung #}
-<section class="mb-8">
-    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "In Bearbeitung" %} ({{ in_progress_items|length }}{% if in_progress_has_more %}+{% endif %})</h2>
-    {% if in_progress_items %}
-    <div class="space-y-3">
-        {% for wi in in_progress_items %}
-        {% include "core/workitems/partials/item_card.html" %}
-        {% endfor %}
-    </div>
-    {% if in_progress_has_more %}
-    <p class="text-xs text-ink-muted mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
-    {% endif %}
-    {% else %}
-    <p class="text-sm text-ink-muted">{% trans "Keine Aufgaben in Bearbeitung" %}</p>
-    {% endif %}
-</section>
+    {# In Bearbeitung #}
+    <section>
+        <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "In Bearbeitung" %} ({{ in_progress_items|length }}{% if in_progress_has_more %}+{% endif %})</h2>
+        {% if in_progress_items %}
+        <div class="space-y-3">
+            {% for wi in in_progress_items %}
+            {% include "core/workitems/partials/item_card.html" %}
+            {% endfor %}
+        </div>
+        {% if in_progress_has_more %}
+        <p class="text-xs text-ink-muted mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
+        {% endif %}
+        {% else %}
+        <p class="text-sm text-ink-muted">{% trans "Keine Aufgaben in Bearbeitung" %}</p>
+        {% endif %}
+    </section>
+</div>
 
-{# Kürzlich Erledigt #}
-<section>
-    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Kürzlich erledigt" %} ({{ done_items|length }}{% if done_has_more %}+{% endif %})</h2>
-    {% if done_items %}
-    <div class="space-y-3">
-        {% for wi in done_items %}
-        {% include "core/workitems/partials/item_card.html" %}
-        {% endfor %}
+{% comment %}
+Kürzlich erledigt — Refs #1149: Rückblick/Kontrolle, daher unterhalb der beiden
+Hauptspalten und visuell zurückgenommen. Native <details>/<summary> (CSP-sicher,
+ohne JS, mobil bedienbar) als aufklappbarer Bereich mit Chevron-Indikator.
+Standardmäßig eingeklappt. Die Überschrift benennt den Zeitraum eindeutig
+(letzte 7 Tage), damit "kürzlich" verständlich ist.
+{% endcomment %}
+<details class="group border-t border-subtle pt-4" data-testid="recent-done">
+    <summary class="flex items-center gap-2 cursor-pointer list-none select-none text-[12px] font-bold uppercase tracking-wider text-ink-muted hover:text-ink-soft">
+        {# Chevron dreht beim Aufklappen (group-open) — klarer Aufklapp-Indikator. #}
+        <svg aria-hidden="true" class="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        <span>{% trans "Erledigt in den letzten 7 Tagen" %} ({{ done_items|length }}{% if done_has_more %}+{% endif %})</span>
+    </summary>
+
+    <div class="mt-4">
+        {% if done_items_preview %}
+        <div class="space-y-3">
+            {% for wi in done_items_preview %}
+            {% include "core/workitems/partials/item_card.html" %}
+            {% endfor %}
+        </div>
+
+        {% comment %}
+        Rest der erledigten Aufgaben (über die ersten recent_done_preview hinaus)
+        — eigener Aufklapp-Bereich, dessen Beschriftung den 7-Tage-Zeitraum
+        eindeutig benennt. Kein vollständiges Archiv.
+        {% endcomment %}
+        {% if done_items_extra %}
+        <details class="group/extra mt-3" data-testid="recent-done-extra">
+            <summary class="inline-flex items-center gap-1.5 cursor-pointer list-none select-none text-[13px] font-semibold text-accent hover:underline">
+                <svg aria-hidden="true" class="w-3 h-3 transition-transform group-open/extra:rotate-90" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                <span class="group-open/extra:hidden">{% blocktrans count count=done_items_extra|length %}Alle {{ count }} der letzten 7 Tage anzeigen{% plural %}Alle {{ count }} der letzten 7 Tage anzeigen{% endblocktrans %}</span>
+                <span class="hidden group-open/extra:inline">{% trans "Weitere der letzten 7 Tage ausblenden" %}</span>
+            </summary>
+            <div class="space-y-3 mt-3">
+                {% for wi in done_items_extra %}
+                {% include "core/workitems/partials/item_card.html" %}
+                {% endfor %}
+            </div>
+        </details>
+        {% endif %}
+
+        {% if done_has_more %}
+        <p class="text-xs text-ink-muted mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
+        {% endif %}
+        {% else %}
+        <p class="text-sm text-ink-muted">{% trans "Keine kürzlich erledigten Aufgaben" %}</p>
+        {% endif %}
     </div>
-    {% if done_has_more %}
-    <p class="text-xs text-ink-muted mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
-    {% endif %}
-    {% else %}
-    <p class="text-sm text-ink-muted">{% trans "Keine kürzlich erledigten Aufgaben" %}</p>
-    {% endif %}
-</section>
+</details>
