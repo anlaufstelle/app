@@ -10,7 +10,7 @@ als die Single-Route.
 from urllib.parse import urlencode
 
 from django.contrib import messages
-from django.http import HttpResponseBadRequest, HttpResponseForbidden
+from django.http import HttpResponseBadRequest
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils.decorators import method_decorator
@@ -140,7 +140,16 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
                 "werden. Bitte diese Aufgaben abwählen.",
                 n,
             ) % {"forbidden": n, "total": len(workitems)}
-            return HttpResponseForbidden(message)
+            # Refs #1148: Diese fachliche Meldung NICHT mehr als nackte
+            # ``HttpResponseForbidden``-Textseite ausliefern — das erschien als
+            # leere weiße Seite mit Text in der Ecke und wirkte wie ein
+            # technischer Abbruch. Stattdessen — wie der Erfolgsfall — als
+            # Flash-Hinweis in die (gefilterte) Inbox zurückleiten, damit der
+            # Hinweis als Alert oberhalb der Aufgabenliste erscheint und die
+            # Nutzerin im Arbeitskontext bleibt. ``warning`` statt ``success``,
+            # weil nichts geändert wurde (Alles-oder-nichts, Refs #583).
+            messages.warning(request, message)
+            return self._inbox_redirect(request)
 
         try:
             count = self.perform_action(request, workitems)
@@ -149,17 +158,23 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
 
         messages.success(request, _("%(count)d Aufgaben aktualisiert.") % {"count": count})
 
-        # Filter-State erhalten: zurueck in dieselbe gefilterte Inbox-Sicht
-        # (Refs #1132), statt auf den nackten ``/workitems/``-Pfad, der die
-        # Liste ungefiltert neu lud.
+        return self._inbox_redirect(request)
+
+    def _inbox_redirect(self, request):
+        """Redirect in die gefilterte Inbox-Sicht — HTMX-bewusst.
+
+        Filter-State erhalten: zurueck in dieselbe gefilterte Inbox-Sicht
+        (Refs #1132), statt auf den nackten ``/workitems/``-Pfad, der die Liste
+        ungefiltert neu lud. Bei HX-Request zusaetzlich ``HX-Redirect``, damit
+        HTMX einen echten Seitenwechsel ausloest und der hinterlegte Flash
+        oberhalb der Liste gerendert wird, statt ein Fragment in den DOM zu
+        swappen (Refs #1148).
+        """
         target = self._inbox_redirect_target(request)
-
+        response = redirect(target)
         if request.headers.get("HX-Request"):
-            response = redirect(target)
             response["HX-Redirect"] = response["Location"]
-            return response
-
-        return redirect(target)
+        return response
 
 
 class WorkItemBulkStatusView(_BulkActionMixin, View):
