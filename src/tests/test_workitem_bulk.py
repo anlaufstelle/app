@@ -402,6 +402,54 @@ class TestBulkPreservesFilterState:
         assert response.status_code == 302
         assert response.url == reverse("core:workitem_inbox")
 
+    def test_bulk_status_redirect_preserves_explicit_all_assignee_filter(self, client, staff_user, workitems_open):
+        """Refs #1134: Die "Alle"-Sicht (``assigned_to`` leer, aber gesetzt) muss
+        nach dem Bulk-Submit erhalten bleiben.
+
+        Das Bulk-Form sendet das versteckte ``filter_assigned_to`` immer mit; in
+        der "Alle"-Sicht ist sein Wert der Leerstring. Wurde dieser als "kein
+        Filter" verworfen, landete die Nutzerin nach einem Statuswechsel auf der
+        Default-Sicht ("Mir & unzugewiesene"). Eine fremd-zugewiesene, gerade von
+        Erledigt → In Bearbeitung gesetzte Aufgabe verschwand dort aus der Liste,
+        obwohl ihr Status korrekt geändert wurde — Liste und Status liefen
+        auseinander. Der explizite Leerstring muss als ``assigned_to=`` (= "Alle")
+        zurückgereicht werden.
+        """
+        client.force_login(staff_user)
+        ids = [str(wi.pk) for wi in workitems_open]
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {
+                "workitem_ids": ids,
+                "status": "in_progress",
+                "filter_item_type": "",
+                "filter_priority": "",
+                "filter_assigned_to": "",
+                "filter_due": "",
+            },
+        )
+        assert response.status_code == 302
+        # Die "Alle"-Sicht round-trippt als expliziter (leerer) assigned_to-Param,
+        # NICHT als nackter Inbox-Pfad (der die Default-Eingrenzung aktivierte).
+        assert response.url != reverse("core:workitem_inbox")
+        assert "assigned_to=" in response.url
+
+    def test_bulk_status_htmx_redirect_preserves_explicit_all_assignee_filter(self, client, staff_user, workitems_open):
+        """Refs #1134: Auch der HX-Redirect erhält die explizite "Alle"-Sicht."""
+        client.force_login(staff_user)
+        ids = [str(wi.pk) for wi in workitems_open]
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {
+                "workitem_ids": ids,
+                "status": "in_progress",
+                "filter_assigned_to": "",
+            },
+            headers={"HX-Request": "true"},
+        )
+        assert response.status_code == 302
+        assert "assigned_to=" in response["HX-Redirect"]
+
     def test_bulk_ignores_unknown_filter_keys(self, client, staff_user, workitems_open):
         """Nur bekannte Filter-Parameter werden durchgereicht (kein Open-Redirect
         via beliebiger Query-Parameter)."""

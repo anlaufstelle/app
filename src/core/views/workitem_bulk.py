@@ -72,23 +72,47 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         "filter_due": "due",
     }
 
+    # Refs #1134: Filter-Felder, deren *leerer* Wert eine eigene Bedeutung hat
+    # und daher (wenn explizit gesendet) erhalten bleiben muss. Beim
+    # ``assigned_to``-Filter ist der Leerstring die "Alle"-Sicht — eine andere
+    # Liste als die parameterlose Default-Sicht ("Mir & unzugewiesene",
+    # Refs #1145). Das Bulk-Form sendet ``filter_assigned_to`` immer mit (auch
+    # leer); ohne diese Ausnahme verwarf der Redirect den Leerstring wie "kein
+    # Filter" und warf die Nutzerin aus der "Alle"-Sicht zurueck in die
+    # Default-Eingrenzung. Eine fremd-zugewiesene, gerade Erledigt → In
+    # Bearbeitung gesetzte Aufgabe verschwand dort, obwohl ihr Status korrekt
+    # geaendert wurde — Liste und Status liefen auseinander. Die uebrigen Filter
+    # (Typ/Prioritaet/Faelligkeit) haben keinen bedeutungstragenden Leerwert
+    # (leer == "Alle" == Default), daher bleiben sie aus dem Redirect-Ziel
+    # heraus, solange sie leer sind.
+    FILTER_KEYS_KEEP_EMPTY = frozenset({"filter_assigned_to"})
+
     def _get_workitem_ids(self, request):
         ids = request.POST.getlist("workitem_ids") or request.POST.getlist("workitem_ids[]")
         return [i for i in ids if i]
 
     def _inbox_redirect_target(self, request):
-        """Inbox-URL inkl. erhaltener Filter-Query (Refs #1132).
+        """Inbox-URL inkl. erhaltener Filter-Query (Refs #1132, #1134).
 
         Liest ausschliesslich die in ``FILTER_PARAM_MAP`` definierten
         ``filter_<name>``-Felder aus dem POST und haengt nicht-leere Werte als
         Query-String an die Inbox-URL. Unbekannte POST-Keys werden ignoriert,
         sodass kein fremder Parameter (z.B. ``next``) ins Redirect-Ziel
         gelangt.
+
+        Refs #1134: Felder aus ``FILTER_KEYS_KEEP_EMPTY`` (z.B.
+        ``filter_assigned_to`` = "Alle") werden auch mit leerem Wert erhalten,
+        sofern der Schluessel im POST *vorhanden* ist — sonst wuerde die
+        "Alle"-Sicht beim Redirect auf die parameterlose Default-Eingrenzung
+        zurueckfallen. Fehlt der Schluessel ganz (No-JS-/filterloser POST),
+        bleibt das Ziel der nackte Inbox-Pfad.
         """
         params = {}
         for post_key, get_key in self.FILTER_PARAM_MAP.items():
+            if post_key not in request.POST:
+                continue
             value = request.POST.get(post_key, "").strip()
-            if value:
+            if value or post_key in self.FILTER_KEYS_KEEP_EMPTY:
                 params[get_key] = value
         url = reverse("core:workitem_inbox")
         if params:
