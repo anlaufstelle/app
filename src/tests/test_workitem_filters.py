@@ -126,7 +126,7 @@ class TestWorkItemInboxFilters:
         assert len(open_items) == 0
 
     def test_inbox_default_remains_all(self, client, staff_user, lead_user, facility):
-        """Default-Verhalten ohne Filter bleibt 'Alle' (eigene + unassigned in Open/In-Progress)."""
+        """Default-Verhalten ohne Filter: eigene + unassigned in Open/In-Progress."""
         client.force_login(staff_user)
         wi_self = WorkItem.objects.create(
             facility=facility,
@@ -154,7 +154,85 @@ class TestWorkItemInboxFilters:
         assert wi_self in open_items
         assert wi_unassigned in open_items
         assert len(open_items) == 2
-        assert response.context["selected_assigned_to"] == ""
+        # Refs #1145: Die Default-Sicht (kein Parameter) ist nicht der strikte
+        # "me"-Filter. Der sichtbare Filter trägt den eigenen Sentinel
+        # ``mine_team`` ("Mir & unzugewiesene"), damit Anzeige und Query-Logik
+        # übereinstimmen — vorher meldete der Default ``""`` und das Template
+        # zeigte mangels gesetztem ``selected`` fälschlich die erste Option
+        # ("Mir zugewiesen") an.
+        assert response.context["selected_assigned_to"] == "mine_team"
+
+    def test_default_filter_not_marked_as_me(self, client, staff_user, facility):
+        """Refs #1145: Im Default ist nicht der strikte "me"-Filter aktiv.
+
+        Beim Aufruf aus einem anderen Menüpunkt (kein ``assigned_to``-Parameter)
+        zeigte die Inbox den Filter sichtbar als "Mir zugewiesen" an — die erste
+        ``<option>`` ohne gesetztes ``selected`` wird vom Browser angezeigt —,
+        lieferte aber die breitere Default-Liste (eigene + unzugewiesene). Die
+        sichtbare Auswahl muss zur Query passen: der Default-Sentinel
+        ``mine_team`` ist gewählt, nicht ``me``.
+        """
+        client.force_login(staff_user)
+        response = client.get(reverse("core:workitem_inbox"))
+        assert response.status_code == 200
+        assert response.context["selected_assigned_to"] == "mine_team"
+        html = response.content.decode()
+        # Die Default-Option ist als selected markiert, die strikte
+        # "Mir zugewiesen"-Option (value="me") nicht.
+        assert '<option value="mine_team" selected' in html
+        assert '<option value="me" selected' not in html
+
+    def test_me_filter_marked_selected_in_rendered_html(self, client, staff_user, facility):
+        """Refs #1145: Mit ``assigned_to=me`` ist die strikte Option selected.
+
+        Gegenstück zu ``test_default_filter_not_marked_as_me`` — nur wenn die
+        Nutzer:in bewusst "Mir zugewiesen" wählt, trägt diese Option das
+        ``selected``-Attribut, und der Default-Sentinel nicht.
+        """
+        client.force_login(staff_user)
+        response = client.get(reverse("core:workitem_inbox"), {"assigned_to": "me"})
+        assert response.status_code == 200
+        assert response.context["selected_assigned_to"] == "me"
+        html = response.content.decode()
+        assert '<option value="me" selected' in html
+        assert '<option value="mine_team" selected' not in html
+
+    def test_default_sentinel_round_trips_to_default_scope(self, client, staff_user, lead_user, facility):
+        """Refs #1145: ``assigned_to=mine_team`` reproduziert die Default-Sicht.
+
+        Der Bulk-Redirect (Refs #1132) und die Filter-Persistenz schreiben den
+        aktiven Filterwert zurück in die URL bzw. den Storage. Damit Anzeige und
+        Query nach so einem Round-Trip übereinstimmen, muss der Sentinel ``mine_team``
+        dieselbe Liste liefern wie der parameterlose Default: eigene +
+        unzugewiesene, aber keine fremd-zugewiesenen.
+        """
+        client.force_login(staff_user)
+        wi_self = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=staff_user,
+            title="Mir",
+        )
+        wi_unassigned = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=None,
+            title="Unassigned",
+        )
+        wi_foreign = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=lead_user,
+            title="Für Lead",
+        )
+
+        response = client.get(reverse("core:workitem_inbox"), {"assigned_to": "mine_team"})
+        assert response.status_code == 200
+        open_items = list(response.context["open_items"])
+        assert wi_self in open_items
+        assert wi_unassigned in open_items
+        assert wi_foreign not in open_items
+        assert response.context["selected_assigned_to"] == "mine_team"
 
     def test_explicit_all_filter_shows_foreign_assigned(self, client, staff_user, lead_user, facility):
         """Explizit ``assigned_to=`` (Alle) zeigt auch fremd-zugewiesene Aufgaben.
