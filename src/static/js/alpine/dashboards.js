@@ -92,6 +92,28 @@ document.addEventListener("alpine:init", () => {
                 if (source) hidden.value = source.value;
             });
         },
+        confirmBulkStatus(event) {
+            // Status-Bulk-Submit (Refs #1147): erst die Filter wie gehabt
+            // synchronisieren (Refs #1132), dann — und nur dann — eine
+            // Bestaetigung verlangen, wenn der gewaehlte Zielstatus
+            // *erledigt* ist. Der Effekt entspricht dem Einzel-Erledigen,
+            // betrifft hier aber potentiell mehrere Aufgaben gleichzeitig;
+            // der allgemeine "Anwenden"-Button erklaert die Folge nicht.
+            // Andere Zielstatus (offen/in Bearbeitung/verworfen) bleiben ohne
+            // Rueckfrage, damit nur die abschliessende Aktion abgesichert ist.
+            this.syncFilters(event);
+            const form = event && event.target;
+            if (!form || typeof form.querySelector !== "function") return;
+            const select = form.querySelector("select[name=status]");
+            if (!select || select.value !== "done") return;
+            // Bestaetigungstext kommt uebersetzbar aus dem Template
+            // (data-confirm-done) — JS bleibt sprachneutral. Fehlt das
+            // Attribut, lieber abschicken als blockieren.
+            const msg = form.getAttribute("data-confirm-done");
+            if (msg && !window.confirm(msg)) {
+                event.preventDefault();
+            }
+        },
     }));
 
     /**

@@ -38,7 +38,9 @@
                             {% trans "Aufgabe übernehmen" %}
                         </button>
                     </form>
-                    <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}">
+                    {# Refs #1147: Bestätigung vor dem Statuswechsel auf erledigt — abschließende Wirkung, daher kein versehentlicher Klick (data-confirm, confirm-action.js, CSP-konform). #}
+                    <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}"
+                          data-confirm="{% trans 'Aufgabe als erledigt markieren? Die Aufgabe wird als erledigt gespeichert und erscheint nicht mehr bei offenen Aufgaben.' %}">
                         {% csrf_token %}
                         <input type="hidden" name="status" value="done">
                         <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
@@ -57,7 +59,9 @@
                         </button>
                     </form>
                     {% elif workitem.status == "in_progress" %}
-                    <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}">
+                    {# Refs #1147: Auch aus In Bearbeitung heraus vor dem Statuswechsel auf erledigt bestätigen — konsistent mit dem direkten Pfad aus Offen. #}
+                    <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}"
+                          data-confirm="{% trans 'Aufgabe als erledigt markieren? Die Aufgabe wird als erledigt gespeichert und erscheint nicht mehr bei offenen Aufgaben.' %}">
                         {% csrf_token %}
                         <input type="hidden" name="status" value="done">
                         <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">

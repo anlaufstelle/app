@@ -97,7 +97,10 @@
         </span>
 
         {# Status #}
-        <form method="post" action="{% url 'core:workitem_bulk_status' %}" class="flex items-center gap-2" @submit="syncFilters">
+        {# Refs #1147: Beim Bulk-Zielstatus „erledigt" vor dem Speichern bestätigen (mehrere Aufgaben möglich) — confirmBulkStatus synchronisiert weiterhin die Filter und fragt nur bei done nach. Der Bestätigungstext kommt übersetzbar aus dem Template (data-confirm-done), JS bleibt generisch. #}
+        <form method="post" action="{% url 'core:workitem_bulk_status' %}" class="flex items-center gap-2"
+              @submit="confirmBulkStatus"
+              data-confirm-done="{% trans 'Ausgewählte Aufgaben als erledigt markieren? Die ausgewählten Aufgaben werden als erledigt gespeichert und erscheinen danach nicht mehr bei offenen Aufgaben.' %}">
             {% csrf_token %}
             <template x-for="id in selected" :key="id">
                 <input type="hidden" name="workitem_ids" :value="id">

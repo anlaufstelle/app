@@ -95,8 +95,10 @@
             {% trans "Verwerfen" %}
         </button>
         {% elif wi.status == "in_progress" %}
+        {# Refs #1147: Bestätigung vor dem Statuswechsel auf erledigt — abschließende Wirkung. HTMX-Button, daher hx-confirm (wie Goals/Retention) statt data-confirm. #}
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
                 hx-vals='{"status": "done"{% if hide_on_complete %}, "hide": "1"{% endif %}}'
+                hx-confirm="{% trans 'Aufgabe als erledigt markieren? Die Aufgabe wird als erledigt gespeichert und erscheint nicht mehr bei offenen Aufgaben.' %}"
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
                 class="px-3 py-1 text-[12px] font-semibold rounded-md bg-green-50 text-green-700 hover:bg-green-100">
