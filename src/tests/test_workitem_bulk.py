@@ -3,6 +3,7 @@
 from datetime import date
 
 import pytest
+from django.contrib.messages import get_messages
 from django.urls import reverse
 
 from core.models import AuditLog, WorkItem
@@ -261,7 +262,9 @@ class TestBulkViews:
             reverse("core:workitem_bulk_status"),
             {"workitem_ids": [str(foreign.pk)], "status": "done"},
         )
-        assert response.status_code == 403
+        # Refs #1148: Ablehnung erfolgt als Flash-Redirect in die Inbox (kein
+        # rohes 403), die Ownership-Policy bleibt aber strikt: keine Mutation.
+        assert response.status_code == 302
         foreign.refresh_from_db()
         assert foreign.status == WorkItem.Status.OPEN
 
@@ -310,7 +313,9 @@ class TestBulkViews:
             reverse("core:workitem_bulk_status"),
             {"workitem_ids": [str(own.pk), str(foreign.pk)], "status": "done"},
         )
-        assert response.status_code == 403
+        # Refs #1148: Ablehnung als Flash-Redirect in die Inbox (kein rohes
+        # 403). Alles-oder-nichts bleibt: kein Item wird verändert.
+        assert response.status_code == 302
         own.refresh_from_db()
         foreign.refresh_from_db()
         # Kein Item darf verändert worden sein.
@@ -584,7 +589,9 @@ class TestBulkUnassignedTeamTasks:
             reverse("core:workitem_bulk_status"),
             {"workitem_ids": [str(foreign.pk)], "status": "done"},
         )
-        assert response.status_code == 403
+        # Refs #1148: Ablehnung als Flash-Redirect in die Inbox (kein rohes
+        # 403); der Schutz fremd-zugewiesener Items bleibt: keine Mutation.
+        assert response.status_code == 302
         foreign.refresh_from_db()
         assert foreign.status == WorkItem.Status.OPEN
 
@@ -698,21 +705,30 @@ class TestCanUserMutateWorkitem:
 
 @pytest.mark.django_db
 class TestBulkForbiddenMessageIsConcrete:
-    """Refs #1136: Die 403-Antwort bei fremd-zugewiesenen Items darf nicht
-    pauschal "Keine Berechtigung für ausgewählte Aufgaben." lauten.
+    """Refs #1136 + #1148: Bei fremd-zugewiesenen Items bleibt die Nutzerin in
+    der Aufgabenliste und sieht die konkrete Berechtigungsmeldung als Flash-
+    Alert — keine pauschale Meldung, keine rohe 403-Seite.
 
     Hintergrund: Seit #1125 zeigt die Inbox bei explizitem Filter (z.B. "Alle"
     oder ein Personenfilter) auch fremd-zugewiesene Aufgaben an und macht sie
     per "Alle sichtbaren auswählen" auswählbar. Eine Fachkraft (Miriam) wählt
-    sie damit unbeabsichtigt mit aus; der Bulk-Submit scheitert dann mit einer
-    pauschalen Rechtemeldung, ohne zu erklären, *welche* Einschränkung greift.
+    sie damit unbeabsichtigt mit aus.
 
-    Die Antwort soll stattdessen konkret nennen, wie viele der ausgewählten
-    Aufgaben anderen Personen zugewiesen sind und deshalb die Sammelaktion
-    blockieren — damit die Nutzerin gezielt abwählen kann. Die
-    Alles-oder-nichts-Semantik (kein stiller Teil-Erfolg, Refs #583) bleibt
+    #1136 hat die Meldung inhaltlich konkretisiert (nennt die Anzahl der
+    blockierenden Items), sie aber weiterhin als nackte
+    ``HttpResponseForbidden``-Textseite ausgeliefert — eine leere weiße Seite
+    mit Text in der Ecke, die wie ein technischer Abbruch wirkte (#1148).
+    Stattdessen leitet die Aktion jetzt — wie der Erfolgsfall — in die
+    (gefilterte) Inbox zurück und hinterlegt die konkrete Meldung als
+    ``messages.warning``-Flash, sodass sie als Alert oberhalb der Liste
+    erscheint und die Nutzerin direkt weiterarbeiten kann.
+
+    Die Alles-oder-nichts-Semantik (kein stiller Teil-Erfolg, Refs #583) bleibt
     bewusst erhalten: Es darf nichts verändert werden.
     """
+
+    def _messages_for(self, response):
+        return [m.message for m in get_messages(response.wsgi_request)]
 
     def _foreign(self, facility, creator, assignee):
         return WorkItem.objects.create(
@@ -724,10 +740,22 @@ class TestBulkForbiddenMessageIsConcrete:
             priority=WorkItem.Priority.NORMAL,
         )
 
+    def test_no_raw_forbidden_page_redirects_to_inbox(self, client, facility, staff_user, lead_user, assistant_user):
+        """#1148: Statt einer rohen 403-Seite leitet die Aktion in die Inbox
+        zurück (Nutzerin bleibt im Aufgaben-Kontext)."""
+        foreign = self._foreign(facility, staff_user, lead_user)
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(foreign.pk)], "status": "done"},
+        )
+        assert response.status_code == 302
+        assert response.url == reverse("core:workitem_inbox")
+
     def test_message_names_count_of_foreign_items(self, client, facility, staff_user, lead_user, assistant_user):
-        """Bei 1 fremd-zugewiesenen von 2 ausgewählten Aufgaben nennt die
-        Meldung die Anzahl der blockierenden Items und ist nicht die pauschale
-        Alt-Meldung."""
+        """Bei 1 fremd-zugewiesenen von 2 ausgewählten Aufgaben nennt der
+        Flash-Hinweis die Anzahl der blockierenden Items und ist nicht die
+        pauschale Alt-Meldung."""
         own = WorkItem.objects.create(
             facility=facility,
             created_by=assistant_user,
@@ -741,22 +769,71 @@ class TestBulkForbiddenMessageIsConcrete:
             reverse("core:workitem_bulk_status"),
             {"workitem_ids": [str(own.pk), str(foreign.pk)], "status": "done"},
         )
-        assert response.status_code == 403
-        body = response.content.decode()
+        assert response.status_code == 302
+        messages = self._messages_for(response)
+        assert len(messages) == 1
+        text = str(messages[0])
         # Pauschale Alt-Meldung darf nicht mehr erscheinen.
-        assert "Keine Berechtigung für ausgewählte Aufgaben." not in body
+        assert "Keine Berechtigung für ausgewählte Aufgaben." not in text
         # Konkret: nennt die Anzahl der blockierenden (fremd-zugewiesenen) Items.
-        assert "1" in body
+        assert "1" in text
         # Erklärt die Einschränkung (Zuweisung an andere Personen).
-        assert "zugewiesen" in body
+        assert "zugewiesen" in text
         # Keine Mutation.
         own.refresh_from_db()
         foreign.refresh_from_db()
         assert own.status == WorkItem.Status.OPEN
         assert foreign.status == WorkItem.Status.OPEN
 
+    def test_forbidden_flash_uses_warning_level(self, client, facility, staff_user, lead_user, assistant_user):
+        """#1148: Der Hinweis ist ein Warning-Level-Flash (Alert-Box, kein
+        Erfolg) — nicht ``success``."""
+        from django.contrib.messages import constants as message_constants
+
+        foreign = self._foreign(facility, staff_user, lead_user)
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(foreign.pk)], "status": "done"},
+        )
+        stored = list(get_messages(response.wsgi_request))
+        assert len(stored) == 1
+        assert stored[0].level == message_constants.WARNING
+
+    def test_forbidden_redirect_preserves_filters(self, client, facility, staff_user, lead_user, assistant_user):
+        """#1148/#1132: Die abgelehnte Aktion behält die gefilterte Sicht bei,
+        damit die markierten Aufgaben nach dem Zurückleiten sichtbar bleiben."""
+        foreign = self._foreign(facility, staff_user, lead_user)
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {
+                "workitem_ids": [str(foreign.pk)],
+                "status": "done",
+                "filter_assigned_to": str(lead_user.pk),
+                "filter_priority": "urgent",
+            },
+        )
+        assert response.status_code == 302
+        assert f"assigned_to={lead_user.pk}" in response.url
+        assert "priority=urgent" in response.url
+
+    def test_forbidden_htmx_uses_hx_redirect(self, client, facility, staff_user, lead_user, assistant_user):
+        """#1148: Bei HX-Request setzt die abgelehnte Aktion ``HX-Redirect`` auf
+        die Inbox, damit HTMX einen echten Seitenwechsel auslöst statt das rohe
+        403-Fragment in den DOM zu swappen."""
+        foreign = self._foreign(facility, staff_user, lead_user)
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(foreign.pk)], "status": "done"},
+            headers={"HX-Request": "true"},
+        )
+        assert "HX-Redirect" in response
+        assert response["HX-Redirect"].endswith(reverse("core:workitem_inbox"))
+
     def test_message_plural_for_multiple_foreign_items(self, client, facility, staff_user, lead_user, assistant_user):
-        """Mehrere fremd-zugewiesene Items → die Meldung nennt die korrekte
+        """Mehrere fremd-zugewiesene Items → der Hinweis nennt die korrekte
         (Mehrzahl-)Anzahl."""
         foreign_a = self._foreign(facility, staff_user, lead_user)
         foreign_b = self._foreign(facility, staff_user, lead_user)
@@ -765,10 +842,10 @@ class TestBulkForbiddenMessageIsConcrete:
             reverse("core:workitem_bulk_priority"),
             {"workitem_ids": [str(foreign_a.pk), str(foreign_b.pk)], "priority": "urgent"},
         )
-        assert response.status_code == 403
-        body = response.content.decode()
-        assert "2" in body
-        assert "Keine Berechtigung für ausgewählte Aufgaben." not in body
+        assert response.status_code == 302
+        text = str(self._messages_for(response)[0])
+        assert "2" in text
+        assert "Keine Berechtigung für ausgewählte Aufgaben." not in text
 
     def test_message_applies_to_assign_endpoint(self, client, facility, staff_user, lead_user, assistant_user):
         """Refs #1136: Auch der Zuweisungs-Endpoint liefert die konkrete
@@ -779,7 +856,7 @@ class TestBulkForbiddenMessageIsConcrete:
             reverse("core:workitem_bulk_assign"),
             {"workitem_ids": [str(foreign.pk)], "assigned_to": str(assistant_user.pk)},
         )
-        assert response.status_code == 403
-        body = response.content.decode()
-        assert "zugewiesen" in body
-        assert "Keine Berechtigung für ausgewählte Aufgaben." not in body
+        assert response.status_code == 302
+        text = str(self._messages_for(response)[0])
+        assert "zugewiesen" in text
+        assert "Keine Berechtigung für ausgewählte Aufgaben." not in text

@@ -437,16 +437,24 @@ class TestUnassignedTeamTaskBulk:
         wi_id = _create_workitem_assigned(lead_page, base_url, title, assignee_label="Thomas Müller")
 
         # Miriam (Fachkraft) darf eine fremd-zugewiesene Aufgabe NICHT bulk-mutieren.
+        # Refs #1148: Die Ablehnung leitet (statt einer rohen 403-Seite) in die
+        # Inbox zurück; ``page.request.post`` folgt dem Redirect → 200.
         result = _post_form(
             staff_page,
             base_url,
             "/workitems/bulk-status/",
             {"workitem_ids": [wi_id], "status": "done"},
         )
-        assert result["status"] == 403, (
-            "Fremd-zugewiesene Aufgabe muss für die Fachkraft geschützt bleiben "
-            f"(Refs #1125), bekam {result['status']}."
+        assert result["status"] == 200, (
+            f"Abgelehnter Bulk leitet in die Inbox zurück (Refs #1148), bekam {result['status']}."
         )
+        assert "/workitems/" in result["url"], f"Ziel der Ablehnung muss die Inbox sein, ist {result['url']!r}."
+
+        # Schutz bleibt strikt: der Status der fremd-zugewiesenen Aufgabe ist
+        # unverändert (kein 'Erledigt').
+        staff_page.goto(f"{base_url}/workitems/{wi_id}/", wait_until="domcontentloaded")
+        content = staff_page.content().lower()
+        assert "erledigt am" not in content, "Fremd-zugewiesene Aufgabe darf nicht erledigt worden sein (Refs #1125)."
 
 
 def _post_form_with_body(page, base_url, path: str, data: dict) -> dict:
@@ -476,45 +484,95 @@ def _post_form_with_body(page, base_url, path: str, data: dict) -> dict:
 
 
 class TestBulkForbiddenMessageConcrete:
-    """Refs #1136: konkrete statt pauschaler 403-Meldung im echten Flow.
+    """Refs #1136 + #1148: konkrete Meldung als Inline-Alert in der Aufgabenliste.
 
     Manuell auf E2E-Port 8844 (Fachkraft Miriam) beobachtet: nach „Alle
     sichtbaren auswählen" über den ``Alle``-Filter sind auch fremd-zugewiesene
     Aufgaben mit ausgewählt; der Bulk-Submit scheiterte mit der pauschalen
-    Meldung „Keine Berechtigung für ausgewählte Aufgaben." — sie erklärte
-    nicht, *welche* Einschränkung greift. Die Antwort nennt jetzt die Anzahl
-    der blockierenden (fremd-zugewiesenen) Items von der Gesamtauswahl.
+    Meldung „Keine Berechtigung für ausgewählte Aufgaben." (#1125). #1136 hat
+    die Meldung konkretisiert (nennt die Anzahl), sie aber als rohe
+    403-Textseite ausgeliefert — eine leere weiße Seite, die wie ein
+    technischer Abbruch wirkte (#1148).
+
+    Erwartet jetzt: Die abgelehnte Aktion leitet in die (gefilterte) Inbox
+    zurück und zeigt die konkrete Meldung als Flash-Alert oberhalb der
+    Aufgabenliste — die Nutzerin bleibt im Arbeitskontext.
     """
 
-    def test_mixed_selection_returns_concrete_count_message(self, lead_page, staff_page, base_url):
+    def test_mixed_selection_shows_concrete_count_alert_in_inbox(self, lead_page, staff_page, base_url):
         # Eine fremd-zugewiesene Aufgabe (Thomas) + eine Miriam selbst
         # zugewiesene Aufgabe → gemischte Auswahl.
-        foreign_title = f"E2E-1136-Foreign-{uuid.uuid4().hex[:6]}"
+        foreign_title = f"E2E-1148-Foreign-{uuid.uuid4().hex[:6]}"
         foreign_id = _create_workitem_assigned(lead_page, base_url, foreign_title, assignee_label="Thomas Müller")
-        own_title = f"E2E-1136-Own-{uuid.uuid4().hex[:6]}"
+        own_title = f"E2E-1148-Own-{uuid.uuid4().hex[:6]}"
         own_id = _create_workitem_assigned(staff_page, base_url, own_title, assignee_label="Miriam Schmidt")
 
+        # ``page.request.post`` folgt dem 302-Redirect → 200 (Inbox-HTML inkl.
+        # gerendertem Flash-Alert). Refs #1148: keine rohe 403-Seite mehr.
         result = _post_form_with_body(
             staff_page,
             base_url,
             "/workitems/bulk-priority/",
             {"workitem_ids": [own_id, foreign_id], "priority": "urgent"},
         )
-        assert result["status"] == 403, f"Gemischte Auswahl muss 403 liefern, ist {result['status']}."
+        assert result["status"] == 200, (
+            f"Abgelehnter Bulk leitet in die Inbox zurück (Refs #1148), ist {result['status']}."
+        )
         body = result["body"]
         # Pauschale Alt-Meldung darf NICHT mehr erscheinen.
         assert "Keine Berechtigung für ausgewählte Aufgaben." not in body, (
-            "Die pauschale 403-Meldung wurde durch eine konkrete ersetzt (Refs #1136)."
+            "Die pauschale Meldung wurde durch eine konkrete ersetzt (Refs #1136)."
         )
         # Konkret: 1 von 2 ist fremd-zugewiesen, mit Begründung „zugewiesen".
         assert "1" in body and "2" in body, f"Meldung muss die Anzahl (1 von 2) nennen: {body!r}"
         assert "zugewiesen" in body, f"Meldung muss die Einschränkung erklären: {body!r}"
+        # Die Meldung steht als Alert in der Inbox (role=alert) — nicht als
+        # nackte Fehlerseite. Die Aufgabenliste ist weiterhin sichtbar.
+        assert 'role="alert"' in body, "Konkrete Meldung muss als Alert gerendert sein (Refs #1148)."
+        assert "Aufgaben" in body, "Die Aufgabenliste muss sichtbar bleiben (Refs #1148)."
 
         # Keine Mutation: das eigene Item bleibt unverändert (nicht 'urgent').
         staff_page.goto(f"{base_url}/workitems/{own_id}/", wait_until="domcontentloaded")
         own_content = staff_page.content().lower()
         assert "dringend" not in own_content and "urgent" not in own_content, (
             "Bei abgelehntem Bulk darf KEIN Item verändert worden sein (Alles-oder-nichts)."
+        )
+
+    def test_forbidden_bulk_via_ui_stays_in_list_with_alert(self, lead_page, staff_page, base_url):
+        """UI-Flow (Refs #1148): Miriam wählt über den ``Alle``-Filter eine
+        fremd-zugewiesene Aufgabe aus und löst per Bulk-Bar eine Änderung aus.
+        Statt einer weißen 403-Seite bleibt sie in der Aufgabenliste und sieht
+        oberhalb der Liste einen Warn-Alert mit der konkreten Begründung.
+
+        Spiegelt die manuelle Beobachtung auf Port 8844 wider.
+        """
+        # Thomas (Lead) legt eine sich selbst zugewiesene Aufgabe an.
+        foreign_title = f"E2E-1148-UI-{uuid.uuid4().hex[:6]}"
+        _create_workitem_assigned(lead_page, base_url, foreign_title, assignee_label="Thomas Müller")
+
+        page = staff_page
+        # „Alle"-Filter, damit die fremd-zugewiesene Aufgabe sichtbar wird.
+        page.goto(f"{base_url}/workitems/?assigned_to=", wait_until="domcontentloaded")
+        # Genau die fremd-zugewiesene Karte auswählen (deterministisch über den
+        # Card-Titel → zugehörige Checkbox).
+        card = page.locator("div").filter(has_text=foreign_title).last
+        checkbox = card.locator("input[type=checkbox][name=workitem_ids]").first
+        checkbox.check()
+        # Bulk-Bar erscheint; Priorität auf „Dringend" und anwenden.
+        page.select_option("#bulk-priority", value="urgent")
+        priority_form = page.locator("form").filter(has=page.locator("#bulk-priority"))
+        priority_form.get_by_role("button", name="Anwenden").click()
+
+        # Kein Seitenwechsel zu einer rohen Seite: wir sind weiterhin in der Inbox.
+        page.wait_for_url(re.compile(r"/workitems/"), timeout=10000)
+        alert = page.get_by_role("alert")
+        alert.wait_for(state="visible", timeout=5000)
+        alert_text = alert.inner_text()
+        assert "zugewiesen" in alert_text, f"Alert muss die Einschränkung erklären: {alert_text!r}"
+        assert "Sammelaktion" in alert_text, f"Alert muss die Bulk-Aktion benennen: {alert_text!r}"
+        # Die Aufgabenliste bleibt sichtbar.
+        assert page.get_by_role("heading", name="Aufgaben").is_visible(), (
+            "Die Aufgabenliste muss sichtbar bleiben (Refs #1148)."
         )
 
 
