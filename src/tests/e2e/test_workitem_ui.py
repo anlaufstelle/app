@@ -572,6 +572,95 @@ class TestWorkItemBulkStatusConsistency:
             _cleanup_bulk_items(e2e_env)
 
 
+# Eindeutiger Titel-Präfix für die "Alle"-Sicht-Regression (Refs #1134 Nachtest).
+_BULK_FOREIGN = "BULK-Fremd #1134"
+
+
+def _seed_done_item_assigned_to_other(e2e_env):
+    """Legt eine erledigte Aufgabe an, die *einer anderen* Person zugewiesen ist.
+
+    Refs #1134 (Nachtest): Solche fremd-zugewiesenen erledigten Aufgaben sind nur
+    in der expliziten "Alle"-Sicht sichtbar/auswählbar — in der Default-Sicht
+    ("Mir & unzugewiesene") blendet das Scoping sie aus. Genau hier brach der
+    Bulk-Statuswechsel: Der Redirect verwarf die "Alle"-Sicht (leerer
+    ``assigned_to``-Filter) und warf die Nutzerin in die Default-Eingrenzung
+    zurück — die gerade auf In Bearbeitung gesetzte Aufgabe verschwand dort, statt
+    sichtbar umzuziehen.
+    """
+    code = (
+        "from core.models import WorkItem, User; "
+        "from django.utils import timezone; "
+        "admin = User.objects.get(username='admin'); "
+        "other = User.objects.exclude(pk=admin.pk).filter(facility=admin.facility, is_active=True).first(); "
+        "f = admin.facility; "
+        f"WorkItem.objects.filter(facility=f, title__startswith='{_BULK_FOREIGN}').delete(); "
+        "WorkItem.objects.create(facility=f, created_by=admin, assigned_to=other, "
+        f"  title='{_BULK_FOREIGN} 0', item_type='task', priority='normal', "
+        "  status='done', completed_at=timezone.now()); "
+        f"print('SEEDED', WorkItem.objects.filter(facility=f, title__startswith='{_BULK_FOREIGN}').count())"
+    )
+    out = _run_shell(code, e2e_env)
+    assert "SEEDED 1" in out, out
+
+
+def _cleanup_foreign_bulk_items(e2e_env):
+    code = (
+        "from core.models import WorkItem, Facility; "
+        "f = Facility.objects.first(); "
+        f"WorkItem.objects.filter(facility=f, title__startswith='{_BULK_FOREIGN}').delete(); "
+        "print('CLEAN')"
+    )
+    _run_shell(code, e2e_env)
+
+
+class TestWorkItemBulkStatusConsistencyAllView:
+    """Refs #1134 (Nachtest): Bulk-Statuswechsel in der expliziten "Alle"-Sicht
+    erhält die Sicht und zeigt die Aufgabe konsistent mit ihrem neuen Status.
+
+    Der erste Fix (a64f669) scopte nur die Default-Sicht. In der "Alle"-Sicht
+    (fremd-zugewiesene erledigte Aufgaben sichtbar) verwarf der Redirect aber den
+    leeren ``assigned_to``-Filter und fiel auf die Default-Eingrenzung zurück —
+    die umgezogene Aufgabe verschwand, Liste und Status liefen weiter auseinander.
+    Abgeleitet aus der manuellen Playwright-Verifikation gegen den E2E-Server.
+    """
+
+    @pytest.mark.smoke
+    def test_bulk_done_to_in_progress_in_all_view_keeps_item_visible(self, authenticated_page, base_url, e2e_env):
+        _seed_done_item_assigned_to_other(e2e_env)
+        try:
+            page = authenticated_page
+            # Explizite "Alle"-Sicht: nur hier ist die fremd-zugewiesene
+            # erledigte Aufgabe sichtbar und auswählbar.
+            page.goto(f"{base_url}/workitems/?assigned_to=")
+            page.wait_for_load_state("domcontentloaded")
+
+            done_section = page.locator("section", has=page.locator("h2", has_text="Kürzlich erledigt"))
+            row = done_section.locator("[id^='workitem-']", has_text=f"{_BULK_FOREIGN} 0").first
+            row.wait_for(state="visible", timeout=10000)
+            row.get_by_role("checkbox", name="Auswählen").check()
+
+            # Bulk: Status → In Bearbeitung anwenden.
+            page.select_option("#bulk-status", value="in_progress")
+            page.locator("#bulk-status ~ button[type='submit']").click()
+
+            # Der Redirect erhält die "Alle"-Sicht (assigned_to-Param explizit
+            # vorhanden) — nicht der nackte Inbox-Pfad mit Default-Eingrenzung.
+            page.wait_for_url(re.compile(r"/workitems/\?.*assigned_to="))
+            page.wait_for_load_state("domcontentloaded")
+            assert page.locator("[role='alert']:has-text('Aufgaben aktualisiert')").first.is_visible()
+
+            # Die Aufgabe steht jetzt sichtbar in "In Bearbeitung" — nicht mehr
+            # unter "Kürzlich erledigt" und nicht verschwunden.
+            in_progress = page.locator("section", has=page.locator("h2", has_text="In Bearbeitung"))
+            moved = in_progress.locator("[id^='workitem-']", has_text=f"{_BULK_FOREIGN} 0").first
+            moved.wait_for(state="visible", timeout=10000)
+
+            done_after = page.locator("section", has=page.locator("h2", has_text="Kürzlich erledigt"))
+            assert done_after.locator("[id^='workitem-']", has_text=f"{_BULK_FOREIGN} 0").count() == 0
+        finally:
+            _cleanup_foreign_bulk_items(e2e_env)
+
+
 # Eindeutiger Titel-Präfix für die Erledigt-Bestätigungs-Aufgaben (Refs #1147).
 _DONE_CONFIRM = "DoneConfirm #1147"
 
