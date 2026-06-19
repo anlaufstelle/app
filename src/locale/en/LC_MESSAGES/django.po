@@ -5821,8 +5821,12 @@ msgid "In 2 Wochen"
 msgstr "In 2 weeks"
 
 #: src/templates/core/workitems/inbox.html:59
+msgid "Mir & unzugewiesene"
+msgstr "Mine & unassigned"
+
+#: src/templates/core/workitems/inbox.html:60
 msgid "Mir zugewiesen"
-msgstr "Assigned:"
+msgstr "Assigned to me"
 
 #: src/templates/core/workitems/inbox.html:67
 msgid "Fälligkeit"
