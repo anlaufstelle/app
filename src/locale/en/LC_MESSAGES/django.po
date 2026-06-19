@@ -3602,22 +3602,20 @@ msgstr "Selection"
 msgid "Zugewiesen:"
 msgstr "Assigned:"
 
-#: src/templates/components/_workitem_row.html:85
-msgid "Annehmen"
-msgstr "Accept"
-
-#: src/templates/components/_workitem_row.html:92
-msgid "Verwerfen"
-msgstr "Discard"
+#: src/templates/components/_workitem_row.html:89
+msgid "Übernehmen"
+msgstr "Take over"
 
 #: src/templates/core/workitems/detail.html:38
 msgid "Aufgabe übernehmen"
 msgstr "Take over task"
 
+#: src/templates/components/_workitem_row.html:97
 #: src/templates/core/workitems/detail.html:46
 msgid "Als erledigt markieren"
 msgstr "Mark as done"
 
+#: src/templates/components/_workitem_row.html:105
 #: src/templates/core/workitems/detail.html:56
 msgid "Als nicht relevant schließen"
 msgstr "Close as not relevant"

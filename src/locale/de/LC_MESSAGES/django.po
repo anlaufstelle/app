@@ -3573,22 +3573,20 @@ msgstr "Auswahl"
 msgid "Zugewiesen:"
 msgstr "Zugewiesen:"
 
-#: src/templates/components/_workitem_row.html:85
-msgid "Annehmen"
-msgstr "Annehmen"
-
-#: src/templates/components/_workitem_row.html:92
-msgid "Verwerfen"
-msgstr "Verwerfen"
+#: src/templates/components/_workitem_row.html:89
+msgid "Übernehmen"
+msgstr "Übernehmen"
 
 #: src/templates/core/workitems/detail.html:38
 msgid "Aufgabe übernehmen"
 msgstr "Aufgabe übernehmen"
 
+#: src/templates/components/_workitem_row.html:97
 #: src/templates/core/workitems/detail.html:46
 msgid "Als erledigt markieren"
 msgstr "Als erledigt markieren"
 
+#: src/templates/components/_workitem_row.html:105
 #: src/templates/core/workitems/detail.html:56
 msgid "Als nicht relevant schließen"
 msgstr "Als nicht relevant schließen"
