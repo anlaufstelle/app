@@ -331,9 +331,14 @@ class TestWorkItemDetailActions:
 
     def test_mark_as_done_directly_from_open(self, authenticated_page, base_url):
         """`Als erledigt markieren` setzt offene Aufgabe direkt auf Erledigt
-        (ohne Zwischenstatus) und zeigt das Abschlussdatum."""
+        (ohne Zwischenstatus) und zeigt das Abschlussdatum.
+
+        Refs #1147: Vor dem Statuswechsel auf erledigt erscheint eine
+        Bestätigung — der bestätigte Pfad muss weiterhin auf Erledigt führen.
+        """
         page = authenticated_page
         _open_workitem_detail(page, base_url, "Direkt-Erledigt-Test")
+        page.once("dialog", lambda dialog: dialog.accept())
         page.click("button:has-text('Als erledigt markieren')")
         page.wait_for_url(re.compile(r"/workitems/[0-9a-f-]+/$"))
         page.wait_for_load_state("domcontentloaded")
@@ -565,3 +570,186 @@ class TestWorkItemBulkStatusConsistency:
             assert "Abgeschlossen am" not in detail
         finally:
             _cleanup_bulk_items(e2e_env)
+
+
+# Eindeutiger Titel-Präfix für die Erledigt-Bestätigungs-Aufgaben (Refs #1147).
+_DONE_CONFIRM = "DoneConfirm #1147"
+
+
+def _seed_items_for_done_confirm(e2e_env, status, count=1):
+    """Legt der eingeloggten ``admin`` zugewiesene Aufgaben mit ``status`` an.
+
+    Zuweisung an ``admin`` hält die Items in der Default-Sicht („Mir
+    zugewiesen") sichtbar und auswählbar. Liefert nichts zurück — die Tests
+    greifen die Items über den eindeutigen Titel-Präfix ab.
+    """
+    code = (
+        "from core.models import WorkItem, User; "
+        "u = User.objects.get(username='admin'); "
+        "f = u.facility; "
+        f"WorkItem.objects.filter(facility=f, title__startswith='{_DONE_CONFIRM}').delete(); "
+        "[WorkItem.objects.create(facility=f, created_by=u, assigned_to=u, "
+        f"  title='{_DONE_CONFIRM} %d' % i, item_type='task', priority='normal', "
+        f"  status='{status}') for i in range({count})]; "
+        f"print('SEEDED', WorkItem.objects.filter(facility=f, title__startswith='{_DONE_CONFIRM}').count())"
+    )
+    out = _run_shell(code, e2e_env)
+    assert "SEEDED" in out, out
+
+
+def _cleanup_done_confirm_items(e2e_env):
+    code = (
+        "from core.models import WorkItem, Facility; "
+        "f = Facility.objects.first(); "
+        f"WorkItem.objects.filter(facility=f, title__startswith='{_DONE_CONFIRM}').delete(); "
+        "print('CLEAN')"
+    )
+    _run_shell(code, e2e_env)
+
+
+def _status_of_done_confirm_item(e2e_env, index=0):
+    """Liest den aktuellen Status eines Erledigt-Bestätigungs-Items aus der DB."""
+    code = (
+        "from core.models import WorkItem, Facility; "
+        "f = Facility.objects.first(); "
+        f"wi = WorkItem.objects.get(facility=f, title='{_DONE_CONFIRM} {index}'); "
+        "print('STATUS', wi.status)"
+    )
+    out = _run_shell(code, e2e_env)
+    line = next((line_ for line_ in out.splitlines() if line_.startswith("STATUS")), "")
+    return line.replace("STATUS", "").strip()
+
+
+class TestWorkItemDoneConfirmation:
+    """Refs #1147: Bestätigung vor „Als erledigt markieren" — konsistent in
+    Übersicht (Tabelle), Bulk-Aktion und Detailansicht.
+
+    Abgeleitet aus der manuellen Playwright-Verifikation gegen den E2E-Server
+    (Cancel/Accept je Kontext, Gegenprobe für Nicht-Erledigt-Bulk).
+    """
+
+    def test_detail_done_confirmation_can_be_cancelled(self, authenticated_page, base_url):
+        """Detailansicht: Abbruch des Erledigt-Dialogs lässt den Status auf
+        Offen — die offenen Aktionen bleiben sichtbar."""
+        page = authenticated_page
+        _open_workitem_detail(page, base_url, "Detail-Erledigt-Abbruch")
+        page.once("dialog", lambda dialog: dialog.dismiss())
+        page.click("button:has-text('Als erledigt markieren')")
+        page.wait_for_timeout(500)
+        # Kein Statuswechsel: der Erledigen-Button ist weiter da.
+        assert page.locator("button:has-text('Als erledigt markieren')").is_visible()
+
+    def test_overview_done_confirmation_cancel_keeps_in_progress(self, authenticated_page, base_url, e2e_env):
+        """Übersicht/Tabelle: der Erledigt-Button einer In-Bearbeitung-Aufgabe
+        fragt nach (hx-confirm); Abbruch lässt den Status auf In Bearbeitung."""
+        _seed_items_for_done_confirm(e2e_env, status="in_progress", count=1)
+        try:
+            page = authenticated_page
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+            row = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
+            row.wait_for(state="visible", timeout=10000)
+            page.once("dialog", lambda dialog: dialog.dismiss())
+            row.get_by_role("button", name="Erledigt").click()
+            page.wait_for_timeout(500)
+            assert _status_of_done_confirm_item(e2e_env, 0) == "in_progress"
+        finally:
+            _cleanup_done_confirm_items(e2e_env)
+
+    def test_overview_done_confirmation_accept_sets_done(self, authenticated_page, base_url, e2e_env):
+        """Übersicht/Tabelle: bestätigter Erledigt-Dialog setzt den Status auf
+        erledigt."""
+        _seed_items_for_done_confirm(e2e_env, status="in_progress", count=1)
+        try:
+            page = authenticated_page
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+            row = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
+            row.wait_for(state="visible", timeout=10000)
+            page.once("dialog", lambda dialog: dialog.accept())
+            row.get_by_role("button", name="Erledigt").click()
+            # Auf den HTMX-Swap zur Erledigt-Markierung warten, dann DB prüfen.
+            page.wait_for_timeout(800)
+            assert _status_of_done_confirm_item(e2e_env, 0) == "done"
+        finally:
+            _cleanup_done_confirm_items(e2e_env)
+
+    def test_bulk_done_confirmation_accept_sets_done(self, authenticated_page, base_url, e2e_env):
+        """Bulk: Zielstatus erledigt fragt vor dem Speichern nach (Dialog mit
+        Mehrzahl-Wortlaut); bestätigt werden alle ausgewählten Aufgaben auf
+        erledigt gesetzt."""
+        _seed_items_for_done_confirm(e2e_env, status="open", count=2)
+        try:
+            page = authenticated_page
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+            row0 = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
+            row1 = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 1").first
+            row0.wait_for(state="visible", timeout=10000)
+            row1.wait_for(state="visible", timeout=10000)
+            row0.get_by_role("checkbox", name="Auswählen").check()
+            row1.get_by_role("checkbox", name="Auswählen").check()
+
+            page.select_option("#bulk-status", value="done")
+            page.once("dialog", lambda dialog: dialog.accept())
+            page.locator("#bulk-status ~ button[type='submit']").click()
+
+            page.wait_for_url(re.compile(r"/workitems/"))
+            page.wait_for_load_state("domcontentloaded")
+            assert page.locator("[role='alert']:has-text('Aufgaben aktualisiert')").first.is_visible()
+            assert _status_of_done_confirm_item(e2e_env, 0) == "done"
+            assert _status_of_done_confirm_item(e2e_env, 1) == "done"
+        finally:
+            _cleanup_done_confirm_items(e2e_env)
+
+    def test_bulk_done_confirmation_cancel_keeps_status(self, authenticated_page, base_url, e2e_env):
+        """Bulk: Abbruch des Erledigt-Dialogs speichert nichts — die Auswahl
+        bleibt unverändert (Status weiter offen)."""
+        _seed_items_for_done_confirm(e2e_env, status="open", count=2)
+        try:
+            page = authenticated_page
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+            row0 = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
+            row1 = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 1").first
+            row0.wait_for(state="visible", timeout=10000)
+            row1.wait_for(state="visible", timeout=10000)
+            row0.get_by_role("checkbox", name="Auswählen").check()
+            row1.get_by_role("checkbox", name="Auswählen").check()
+
+            page.select_option("#bulk-status", value="done")
+            page.once("dialog", lambda dialog: dialog.dismiss())
+            page.locator("#bulk-status ~ button[type='submit']").click()
+            page.wait_for_timeout(500)
+            assert _status_of_done_confirm_item(e2e_env, 0) == "open"
+            assert _status_of_done_confirm_item(e2e_env, 1) == "open"
+        finally:
+            _cleanup_done_confirm_items(e2e_env)
+
+    def test_bulk_non_done_status_has_no_confirmation(self, authenticated_page, base_url, e2e_env):
+        """Gegenprobe: ein anderer Bulk-Zielstatus (In Bearbeitung) löst KEINE
+        Bestätigung aus und wird direkt angewendet.
+
+        Wird wider Erwarten ein Dialog gezeigt, schlägt der Test fehl: ein
+        akzeptierender Handler würde ihn maskieren, daher dismiss — bei
+        unerwartetem Dialog bliebe der Statuswechsel dann aus."""
+        _seed_items_for_done_confirm(e2e_env, status="open", count=1)
+        try:
+            page = authenticated_page
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+            row0 = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
+            row0.wait_for(state="visible", timeout=10000)
+            row0.get_by_role("checkbox", name="Auswählen").check()
+
+            page.select_option("#bulk-status", value="in_progress")
+            # Kein Dialog erwartet: ein dismiss-Handler würde einen (fälschlich
+            # gezeigten) Dialog abbrechen und den Statuswechsel verhindern.
+            page.once("dialog", lambda dialog: dialog.dismiss())
+            page.locator("#bulk-status ~ button[type='submit']").click()
+
+            page.wait_for_url(re.compile(r"/workitems/"))
+            page.wait_for_load_state("domcontentloaded")
+            assert _status_of_done_confirm_item(e2e_env, 0) == "in_progress"
+        finally:
+            _cleanup_done_confirm_items(e2e_env)

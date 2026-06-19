@@ -215,6 +215,49 @@ class TestWorkItemInboxDateLabeling:
 
 
 @pytest.mark.django_db
+class TestWorkItemDoneConfirmation:
+    """Refs #1147: Vor dem Statuswechsel auf *erledigt* erscheint eine
+    Bestätigung — konsistent in der Übersicht (Tabelle), in der Bulk-Aktion und
+    in der Detailansicht (Detail siehe ``TestWorkItemDetailActions``).
+
+    Die Übersichts-Buttons sind HTMX-Aktionen, daher läuft die Bestätigung dort
+    über ``hx-confirm`` (wie bei Goals/Retention). Die Bulk-Statusänderung ist
+    bewusst nur dann zu bestätigen, wenn der Zielstatus *erledigt* gewählt wird;
+    das übernimmt ein dedizierter ``@submit``-Handler.
+    """
+
+    def test_inbox_done_button_has_confirmation(self, client, staff_user, workitem_in_progress):
+        """Der Erledigt-Button einer *In Bearbeitung*-Aufgabe in der Übersicht
+        fragt vor dem Statuswechsel nach (hx-confirm)."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        # hx-confirm muss am Erledigt-Button hängen und die Folge erklären.
+        assert "hx-confirm=" in html
+        marker = 'hx-confirm="Aufgabe als erledigt markieren?'
+        assert marker in html
+        confirm_text = html.split(marker, 1)[1].split('"', 1)[0]
+        assert "als erledigt gespeichert" in confirm_text
+        assert "offenen Aufgaben" in confirm_text
+
+    def test_inbox_open_actions_have_no_done_confirmation(self, client, staff_user, workitem_open):
+        """Gegenprobe: Eine *offene* Aufgabe bietet in der Übersicht keinen
+        direkten Erledigen-Pfad (nur Annehmen/Verwerfen) und löst daher auch
+        keine Erledigt-Bestätigung aus."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert 'hx-confirm="Aufgabe als erledigt markieren?' not in html
+
+    def test_bulk_status_form_uses_done_confirmation_handler(self, client, staff_user, workitem_open):
+        """Die Bulk-Statusänderung wird vor dem Submit über
+        ``confirmBulkStatus`` geleitet, der nur beim Zielstatus *erledigt*
+        bestätigt (und weiterhin die Filter synchronisiert)."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        # Das Status-Bulk-Form nutzt den dedizierten Handler (statt nur syncFilters).
+        assert '@submit="confirmBulkStatus"' in html
+
+
+@pytest.mark.django_db
 class TestWorkItemStatusUpdate:
     def test_status_update(self, client, staff_user, workitem_open):
         client.force_login(staff_user)

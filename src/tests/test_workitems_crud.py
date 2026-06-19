@@ -27,6 +27,18 @@ def workitem_open(facility, client_identified, staff_user):
     )
 
 
+@pytest.fixture
+def workitem_in_progress(facility, staff_user):
+    return WorkItem.objects.create(
+        facility=facility,
+        created_by=staff_user,
+        assigned_to=staff_user,
+        title="In Bearbeitung",
+        status=WorkItem.Status.IN_PROGRESS,
+        priority=WorkItem.Priority.NORMAL,
+    )
+
+
 @pytest.mark.django_db
 class TestWorkItemCRUD:
     def test_create_get(self, client, staff_user):
@@ -161,6 +173,35 @@ class TestWorkItemDetailActions:
         workitem_open.refresh_from_db()
         assert workitem_open.status == WorkItem.Status.DONE
         assert workitem_open.completed_at is not None
+
+    def test_open_task_done_action_has_confirmation(self, client, staff_user, workitem_open):
+        """Refs #1147: Der direkte Erledigen-Pfad (open → done) erhält in der
+        Detailansicht eine Bestätigung, die erklärt, dass die Aufgabe als
+        erledigt gespeichert wird und danach nicht mehr bei offenen Aufgaben
+        erscheint. Wie bei #1130 läuft die Bestätigung CSP-konform über
+        ``data-confirm`` am abschickenden Form (confirm-action.js)."""
+        client.force_login(staff_user)
+        response = client.get(reverse("core:workitem_detail", kwargs={"pk": workitem_open.pk}))
+        body = response.content.decode()
+        # Das Form, das den Status direkt auf done setzt, trägt eine Bestätigung.
+        marker = 'data-confirm="Aufgabe als erledigt markieren?'
+        assert marker in body
+        confirm_text = body.split(marker, 1)[1].split('"', 1)[0]
+        assert "als erledigt gespeichert" in confirm_text
+        assert "offenen Aufgaben" in confirm_text
+
+    def test_in_progress_task_done_action_has_confirmation(self, client, staff_user, workitem_in_progress):
+        """Refs #1147: Auch der Erledigen-Pfad aus *In Bearbeitung* (in_progress
+        → done) ist in der Detailansicht durch dieselbe Bestätigung abgesichert
+        — konsistent mit dem direkten Pfad aus *Offen*."""
+        client.force_login(staff_user)
+        response = client.get(reverse("core:workitem_detail", kwargs={"pk": workitem_in_progress.pk}))
+        body = response.content.decode()
+        marker = 'data-confirm="Aufgabe als erledigt markieren?'
+        assert marker in body
+        confirm_text = body.split(marker, 1)[1].split('"', 1)[0]
+        assert "als erledigt gespeichert" in confirm_text
+        assert "offenen Aufgaben" in confirm_text
 
 
 @pytest.mark.django_db
