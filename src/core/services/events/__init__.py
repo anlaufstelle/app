@@ -61,6 +61,11 @@ from core.services.events.fields import (
     split_file_and_text_data,
     stage_index,
 )
+from core.services.events.history_diff import (
+    ENCRYPTED_PLACEHOLDER,
+    RESTRICTED_PLACEHOLDER,
+    compute_event_diff,
+)
 from core.services.events.idempotency import (
     get_idempotent_result,
     remember_idempotent_result,
@@ -68,6 +73,8 @@ from core.services.events.idempotency import (
 
 __all__ = [
     "CONTACT_STAGE_ORDER",
+    "ENCRYPTED_PLACEHOLDER",
+    "RESTRICTED_PLACEHOLDER",
     "_build_prior_versions",
     "_format_field_display_value",
     "_format_preview_value",
@@ -82,6 +89,7 @@ __all__ = [
     "build_feed_items",
     "build_field_template_lookup",
     "build_redacted_delete_history",
+    "compute_event_diff",
     "create_event",
     "decrypt_event_text_data",
     "enrich_events_with_preview",
