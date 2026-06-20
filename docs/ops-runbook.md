@@ -872,6 +872,58 @@ Tenant-Test in CI **nicht** fehl (er nutzt die explizite Test-Rolle),
 aber die Smoke-Query aus § 9.2 unten muss in Prod liefern: ``rolsuper =
 false`` fuer den Django-DB-User.
 
+### DB-Rollenmodell (Goldstandard)
+
+**Dies ist die kanonische Beschreibung des PostgreSQL-Rollenmodells** — andere
+Deployment-Dokumente verweisen hierher, statt sie zu wiederholen. Quelle der
+Wahrheit ist das Init-Script
+[`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh)
+(Refs #863,
+#902,
+[ADR-005](adr/005-facility-scoping-and-rls.md), [ADR-017](adr/017-deployment-topology.md)).
+
+Das offizielle `postgres:18`-Image macht den per `POSTGRES_USER` des Containers
+angelegten Bootstrap-Login automatisch zum Superuser. Dieser kann sich selbst
+nicht entrechten — deshalb laeuft der Container mit `POSTGRES_USER=postgres` als
+Bootstrap, und das Init-Script legt **zwei** entrechtete Application-Rollen an:
+
+| Rolle (`.env`-Variable) | Beispiel-Name | Attribute | Wofuer |
+|---|---|---|---|
+| `postgres` (Bootstrap, `POSTGRES_BOOTSTRAP_PASSWORD`) | `postgres` | SUPERUSER | Nur DB-Init + Notfall-Wartung. **Nicht** fuer Runtime/Operator-Tasks. |
+| `POSTGRES_USER` (App) | `anlaufstelle` | `NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB`, ist DB-Owner | Django-Runtime. RLS-Policies greifen scharf (`FORCE ROW LEVEL SECURITY`). |
+| `POSTGRES_ADMIN_USER` (Admin/Wartung) | `anlaufstelle_admin` | `NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB`, Mitglied der App-Rolle | `migrate`, `seed`, Retention-/Anonymisierungs-Cron. |
+
+Eigenschaften, die das Init-Script code-treu garantiert:
+
+- Beide Rollen sind **NOSUPERUSER** — kein Pfad zur Rechte-Eskalation.
+- Die App-Rolle ist **NOBYPASSRLS** und DB-Owner; durch `FORCE ROW LEVEL
+ SECURITY` greifen die Policies auch fuer den Owner (Fail-closed, § 9 oben).
+- Die Admin-Rolle ist **BYPASSRLS** (fuer Migrationen/Wartung) und wird per
+ `GRANT <app> TO <admin>` Mitglied der App-Rolle — noetig fuer `DROP POLICY`
+ / `ALTER TABLE` in Migrationen, weil `BYPASSRLS` allein nicht fuer DDL reicht.
+- Die Admin-Rolle erhaelt `GRANT SET ON PARAMETER session_replication_role`
+ (PostgreSQL 15+) — sonst scheitert die DSGVO-Art.-17-Anonymisierung in Prod
+ (Details § 9.5).
+
+Operator-/Wartungs-Tasks connecten als Admin-Rolle ueber einen ENV-Override
+(`POSTGRES_USER`/`POSTGRES_PASSWORD` auf die Admin-Werte); der Migrate-Job
+[`docker-migrate.sh`](../docker-migrate.sh) macht das automatisch. Das
+Rollen-Gate `check_db_roles` prueft die stabile App-Rolle ueber
+`POSTGRES_APP_USER` (Refs #1017), damit der ENV-Override es nicht verwirrt.
+
+**Pflicht-`.env`-Variablen** (Vorlage [`.env.example`](../.env.example)):
+`POSTGRES_BOOTSTRAP_PASSWORD`, `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`
+(zusaetzlich zu den App-Variablen). Der Pre-Deploy-Check in § 1.1 verifiziert,
+dass sie gesetzt und nicht mehr auf `change-me-*` stehen.
+
+**Verifikation** nach dem ersten Hochfahren — das Gate prueft beide Rollen:
+
+```bash
+docker compose -f docker-compose.prod.yml exec web python manage.py check_db_roles
+# erwartet: App-Rolle  rolsuper=False, rolbypassrls=False
+#           Admin-Rolle rolsuper=False, rolbypassrls=True   (Exit-Code 0)
+```
+
 ### 9.1 Symptome eines RLS-Problems
 
 - UI zeigt leere Listen, obwohl in der DB Zeilen vorhanden sind.
@@ -1216,6 +1268,18 @@ docker volume rm anlaufstelle_pgdata_dev
 ```
 
 Der komplette Pfad (Init-Rollen vor Daten, Superuser-Restore, `check_db_roles` Exit 0, FORCE-RLS aktiv, App-Rolle ohne Bypass, MV-Refresh, Rollback auf 16) wurde im Zuge von #1039 lokal in Docker durchgespielt.
+
+### 13.4 Künftige Major-Upgrades (18 → 19 und später) — Vorausverweis
+
+> **Platzhalter (Refs #1039).** Der oben beschriebene **dump → frisches Cluster → restore**-Pfad ist das **generische Muster für jeden** PostgreSQL-Major-Sprung, nicht nur 16→18. Künftige Upgrades (18→19 usw.) folgen denselben Schritten aus §13.1/§13.2; anzupassen sind im Wesentlichen nur die Versionsnummern, das `postgres:<N>-alpine`-Image und ggf. der `PGDATA`-Mountpfad, falls ein neues Image-Layout das Verzeichnis erneut verschiebt (wie der Wechsel auf `/var/lib/postgresql/18/docker` bei 18).
+
+Vor dem nächsten Major-Sprung prüfen:
+
+- **Release-Notes der Ziel-Major** auf inkompatible Änderungen (Datenformat, entfernte Funktionen, geänderte Defaults — bei 18 z. B. Data-Checksums per Default).
+- **Image-Layout/`VOLUME`-Pfad** des neuen `postgres:<N>-alpine` — bei Änderung die Mounts in allen Compose-Dateien (`prod`/`staging`/`dev`) nachziehen, analog #1039.
+- **Verfügbarkeit von `pg_dump`/`pg_restore` der Ziel-Major** im Image (Cross-Version-Dump-Kompatibilität).
+
+Diese Notiz ist bewusst knapp gehalten; der ausführliche, lokal durchgespielte Ablauf bleibt in §13.1–§13.3 und wird beim tatsächlichen nächsten Upgrade unter einem neuen Issue konkretisiert.
 
 ---
 
