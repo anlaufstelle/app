@@ -102,6 +102,78 @@ class PaginatedListMixin:
         return Paginator(queryset, size).get_page(safe_page_param(request))
 
 
+class FilteredPaginatedListMixin(PaginatedListMixin):
+    """Refs #1164 (R5): Buendelt die q-Suche-, Equality-Filter- und
+    ``pagination_params``-Boilerplate der Listen-Views (clients, cases).
+
+    Drei kleine, opt-in Helfer — bewusst *kein* generisches Filter-
+    Framework (YAGNI). Die View baut weiterhin ihr Basis-Queryset,
+    ``annotate``/``select_related``/``order_by`` und den Context selbst;
+    der Mixin uebernimmt nur das wiederholte Muster:
+
+    * ``search_fields`` — Liste von Modellfeld-Lookups (z. B.
+      ``["pseudonym"]``). ``apply_search`` filtert per ``__icontains``-
+      OR ueber alle Felder, wenn ``?q=`` (getrimmt) nicht leer ist.
+    * ``filter_fields`` — Mapping ``GET-Param -> Modellfeld`` (z. B.
+      ``{"stage": "contact_stage"}``). ``apply_filters`` haengt fuer
+      jeden gesetzten Param ein ``.filter(feld=wert)`` an.
+    * ``pagination_params`` — baut den Querystring fuer Paginierungs-
+      Links aus genau den Roh-GET-Werten neu, die auch gefiltert
+      wurden (leere weggelassen). ``extra_params`` erlaubt View-eigene
+      Zusatzparameter (z. B. Audit-Datumsfelder), ohne den Mixin zu
+      generalisieren.
+
+    Felder mit Sonderlogik (Datums-Parsing, Sentinels, ``__in``-Listen)
+    bleiben in der View — dafuer ``extra_params`` bzw. eigener Code.
+    """
+
+    search_fields: list[str] = []
+    filter_fields: dict[str, str] = {}
+
+    def get_search_term(self, request) -> str:
+        """Den getrimmten ``?q=``-Wert (oder ``""``)."""
+        return request.GET.get("q", "").strip()
+
+    def apply_search(self, queryset, request):
+        """``__icontains``-OR ueber ``search_fields``, falls ``?q=`` gesetzt."""
+        q = self.get_search_term(request)
+        if q and self.search_fields:
+            from django.db.models import Q
+
+            condition = Q()
+            for field in self.search_fields:
+                condition |= Q(**{f"{field}__icontains": q})
+            queryset = queryset.filter(condition)
+        return queryset
+
+    def apply_filters(self, queryset, request):
+        """Equality-Filter aus ``filter_fields`` fuer jeden gesetzten Param."""
+        for param, field in self.filter_fields.items():
+            value = request.GET.get(param)
+            if value:
+                queryset = queryset.filter(**{field: value})
+        return queryset
+
+    def pagination_params(self, request, extra_params=None) -> str:
+        """Querystring fuer Paginierungs-Links aus den aktiven Filtern.
+
+        ``q`` (falls ``search_fields`` gesetzt), die ``filter_fields``-
+        Params und optionale ``extra_params`` (Mapping) — leere Werte
+        werden weggelassen. Reihenfolge: ``q``, dann ``filter_fields``,
+        dann ``extra_params`` (wie in der Original-View aufgebaut).
+        """
+        from urllib.parse import urlencode
+
+        params: dict[str, str] = {}
+        if self.search_fields:
+            params["q"] = self.get_search_term(request)
+        for param in self.filter_fields:
+            params[param] = request.GET.get(param, "")
+        if extra_params:
+            params.update(extra_params)
+        return urlencode({k: v for k, v in params.items() if v})
+
+
 class HTMXPartialMixin:
     """Rendert je nach ``HX-Request``-Header ein Partial- oder Full-Page-
     Template. Erwartet ``partial_template_name`` und ``template_name`` als

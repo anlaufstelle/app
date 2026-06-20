@@ -5,7 +5,6 @@ Meilensteine in :file:`views/case_goals.py` (Refs #605).
 """
 
 import logging
-from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
@@ -30,9 +29,9 @@ from core.services.case import (
 from core.services.client import get_client_or_none
 from core.services.compliance import get_visible_event_or_404
 from core.views.mixins import (
+    FilteredPaginatedListMixin,
     HTMXPartialMixin,
     LeadOrAdminRequiredMixin,
-    PaginatedListMixin,
     StaffRequiredMixin,
 )
 
@@ -68,36 +67,31 @@ def _get_case_event_context(case, facility, user):
     return {"events": events, "unassigned_events": unassigned_events}
 
 
-class CaseListView(StaffRequiredMixin, PaginatedListMixin, HTMXPartialMixin, View):
+class CaseListView(StaffRequiredMixin, FilteredPaginatedListMixin, HTMXPartialMixin, View):
     """Case list with search, filter by status and pagination."""
 
     template_name = "core/cases/list.html"
     partial_template_name = "core/cases/partials/table.html"
+    search_fields = ["title"]
+    filter_fields = {"status": "status"}
 
     def get(self, request):
         facility = request.current_facility
         qs = Case.objects.for_facility(facility)
 
-        q = request.GET.get("q", "").strip()
-        if q:
-            qs = qs.filter(title__icontains=q)
-
-        status = request.GET.get("status")
-        if status:
-            qs = qs.filter(status=status)
+        qs = self.apply_search(qs, request)
+        qs = self.apply_filters(qs, request)
 
         qs = qs.select_related("client", "lead_user").order_by("-created_at")
 
         cases = self.paginate(qs, request)
 
-        pagination_params = urlencode({k: v for k, v in [("q", q), ("status", status)] if v})
-
         context = {
             "cases": cases,
-            "q": q,
-            "selected_status": status,
+            "q": self.get_search_term(request),
+            "selected_status": request.GET.get("status"),
             "status_choices": Case.Status.choices,
-            "pagination_params": pagination_params,
+            "pagination_params": self.pagination_params(request),
         }
 
         return self.render_htmx_or_full(context)
