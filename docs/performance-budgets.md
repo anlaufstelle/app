@@ -15,6 +15,8 @@ Schwellen für die nächtliche Last-Tests-Schicht ([Locust](https://locust.io/) 
 
 ## Workflow
 
+> **Status (Stand 2026-06): Der `perf-nightly`-Workflow ist derzeit deaktiviert** (`disabled_manually` — wie alle CI-Workflows in diesem Repo; Gates laufen lokal via `make`). Der `schedule`-Trigger steht zwar weiter im YAML (`cron: "30 2 * * *"`), feuert aber nicht — der echte Status ist nur über `gh workflow list` sichtbar, nicht aus der Datei. Es gibt **kein** lokales `make`-Target für die Last-Tests (Locust läuft ausschließlich über diesen Workflow); die Budgets unten bleiben als Zielwerte gültig. Vor einer Reaktivierung: `gh workflow enable perf-nightly.yml`.
+
 Der Nightly-Workflow (`.github/workflows/perf-nightly.yml`) startet einen seedgefüllten Container, fährt Locust headless gegen `localhost:8000` mit `--users 5 --spawn-rate 1 --run-time 2m --csv perf` und parst danach `perf_stats.csv`. Verletzte Budgets blocken den Job mit Exit-Code ≠ 0.
 
 Bei Verletzung erzeugt das Workflow-Step `Open issue on regression` (über [peter-evans/create-issue-from-file](https://github.com/peter-evans/create-issue-from-file)) ein neues Issue mit dem Diff zum letzten erfolgreichen Lauf. Slack-Alerts sind aktuell **nicht** verdrahtet — die Issue-Öffnung deckt den Inbound-Pfad.
