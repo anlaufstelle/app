@@ -56,24 +56,14 @@ def annotate_urgency(proposal, *, today=None):
     return proposal
 
 
-def build_retention_dashboard_context(facility, user=None):
-    """Build the template context dict for :class:`RetentionDashboardView`.
+def _attach_holds_and_urgency(facility, proposals_by_category, today):
+    """Annotate each proposal in-place with its active hold and urgency colour.
 
-    Returns the complete dashboard context — proposals grouped by category,
-    active-hold annotations, per-category counts, retention settings, and
-    the date anchors the template needs. The view then layers HTMX-specific
-    decisions (partial vs. full template) on top.
-
-    Extracted from the view so the ~90-LOC block of
-    grouping, hold-lookup and urgency-colouring can be unit-tested and
-    reused without going through the HTTP layer. The ``user`` argument is
-    accepted for future role-based filtering and kept in the signature so
-    callers don't have to change when it becomes relevant.
+    Looks up the active :class:`LegalHold` for every HELD proposal in a single
+    query and sets ``p.active_hold`` (``None`` when no active hold exists) plus
+    ``p.urgency`` via :func:`annotate_urgency`. Mutates the proposals in the
+    grouping; returns nothing.
     """
-    del user  # currently unused; see docstring
-    proposals_by_category = get_dashboard_proposals(facility)
-
-    # Collect active holds for held proposals and attach them to the cards.
     held_target_ids = set()
     for proposals in proposals_by_category.values():
         for p in proposals:
@@ -90,39 +80,58 @@ def build_retention_dashboard_context(facility, user=None):
         for hold in active_holds:
             holds_by_target[hold.target_id] = hold
 
-    today = date.today()
     for proposals in proposals_by_category.values():
         for p in proposals:
             p.active_hold = holds_by_target.get(p.target_id)
             annotate_urgency(p, today=today)
 
-    # Counts — flatten once, reuse the list for all status tallies.
+
+def _status_counts(proposals_by_category):
+    """Tally proposals per status across all categories.
+
+    Flattens the grouping once and returns a dict keyed by the lowercase status
+    name (``pending``, ``held``, ``approved``, ``deferred``, ``rejected``).
+    """
     all_proposals = []
     for proposals in proposals_by_category.values():
         all_proposals.extend(proposals)
 
-    pending_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.PENDING)
-    held_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.HELD)
-    approved_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.APPROVED)
-    deferred_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.DEFERRED)
-    rejected_count = sum(1 for p in all_proposals if p.status == RetentionProposal.Status.REJECTED)
+    return {
+        "pending": sum(1 for p in all_proposals if p.status == RetentionProposal.Status.PENDING),
+        "held": sum(1 for p in all_proposals if p.status == RetentionProposal.Status.HELD),
+        "approved": sum(1 for p in all_proposals if p.status == RetentionProposal.Status.APPROVED),
+        "deferred": sum(1 for p in all_proposals if p.status == RetentionProposal.Status.DEFERRED),
+        "rejected": sum(1 for p in all_proposals if p.status == RetentionProposal.Status.REJECTED),
+    }
 
-    # Facility settings — mirror the defaults from the enforce_retention
-    # command when no Settings row exists yet.
+
+def _retention_settings_for(facility):
+    """Return the retention-days mapping for the dashboard.
+
+    Mirrors the defaults from the ``enforce_retention`` command (90/365/3650)
+    when no ``Settings`` row exists yet for the facility.
+    """
     try:
         settings_obj = facility.settings
-        retention_settings = {
+        return {
             "anonymous": settings_obj.retention_anonymous_days,
             "identified": settings_obj.retention_identified_days,
             "qualified": settings_obj.retention_qualified_days,
         }
     except facility._meta.model.settings.RelatedObjectDoesNotExist:
-        retention_settings = {
+        return {
             "anonymous": 90,
             "identified": 365,
             "qualified": 3650,
         }
 
+
+def _category_cards(proposals_by_category):
+    """Build the per-category card dicts the template iterates over.
+
+    Each card carries the category key, its translated label, the proposal list
+    and the count. Preserves the iteration order of ``proposals_by_category``.
+    """
     categories = []
     for cat_key, proposals in proposals_by_category.items():
         categories.append(
@@ -133,15 +142,38 @@ def build_retention_dashboard_context(facility, user=None):
                 "count": len(proposals),
             }
         )
+    return categories
+
+
+def build_retention_dashboard_context(facility, user=None):
+    """Build the template context dict for :class:`RetentionDashboardView`.
+
+    Returns the complete dashboard context — proposals grouped by category,
+    active-hold annotations, per-category counts, retention settings, and
+    the date anchors the template needs. The view then layers HTMX-specific
+    decisions (partial vs. full template) on top.
+
+    Extracted from the view so the ~90-LOC block of
+    grouping, hold-lookup and urgency-colouring can be unit-tested and
+    reused without going through the HTTP layer. The ``user`` argument is
+    accepted for future role-based filtering and kept in the signature so
+    callers don't have to change when it becomes relevant.
+    """
+    del user  # currently unused; see docstring
+    proposals_by_category = get_dashboard_proposals(facility)
+    today = date.today()
+
+    _attach_holds_and_urgency(facility, proposals_by_category, today)
+    counts = _status_counts(proposals_by_category)
 
     return {
-        "categories": categories,
-        "pending_count": pending_count,
-        "held_count": held_count,
-        "approved_count": approved_count,
-        "deferred_count": deferred_count,
-        "rejected_count": rejected_count,
-        "retention_settings": retention_settings,
+        "categories": _category_cards(proposals_by_category),
+        "pending_count": counts["pending"],
+        "held_count": counts["held"],
+        "approved_count": counts["approved"],
+        "deferred_count": counts["deferred"],
+        "rejected_count": counts["rejected"],
+        "retention_settings": _retention_settings_for(facility),
         "today": today,
         "soon_threshold": today + timedelta(days=7),
     }

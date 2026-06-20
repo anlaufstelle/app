@@ -5,6 +5,8 @@ service module; the command handles only argument parsing, iteration over facili
 and ``stdout``/``stderr`` formatting.
 """
 
+from dataclasses import dataclass
+
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 from django.utils import timezone
@@ -41,6 +43,22 @@ def _has_rls_bypass_context() -> bool:
             return True
         cur.execute("SELECT current_setting('app.is_super_admin', true) = 'true'")
         return bool(cur.fetchone()[0])
+
+
+@dataclass
+class _RetentionTotals:
+    """Aggregates the per-facility deletion/anonymization counts across the run.
+
+    Mirrors the five running totals the command reports in its summary. Held in
+    one object so :meth:`Command._process_single_facility` can accumulate into it
+    without threading five integers through the call.
+    """
+
+    deleted: int = 0
+    anonymized: int = 0
+    trash_anonymized: int = 0
+    activities: int = 0
+    auditlog_pruned: int = 0
 
 
 class Command(BaseCommand):
@@ -95,90 +113,104 @@ class Command(BaseCommand):
             self._handle_propose(facilities, now)
             return
 
-        total_deleted = 0
-        total_anonymized = 0
-        total_trash_anonymized = 0
-        total_activities = 0
-        total_auditlog_pruned = 0
-
+        totals = _RetentionTotals()
         for facility in facilities:
-            try:
-                settings_obj = facility.settings
-            except Settings.DoesNotExist:
-                self.stdout.write(self.style.WARNING(f"No settings for facility '{facility.name}', skipping."))
-                continue
+            self._process_single_facility(facility, now, dry_run, totals)
 
-            # Reactivate deferred proposals whose wait has expired (Issue #515)
-            if not dry_run:
-                reactivated, auto_approved = reactivate_deferred_proposals(facility)
-                if reactivated or auto_approved:
-                    self.stdout.write(
-                        f"Facility '{facility.name}': {reactivated} proposal(s) reactivated, "
-                        f"{auto_approved} auto-approved after defer."
-                    )
+        self._report_enforce_summary(totals, facilities, dry_run)
 
-            # Snapshots vor Löschung sichern
-            if not dry_run:
-                doomed_qs = collect_doomed_events(facility, settings_obj, now)
-                if doomed_qs.exists():
-                    ensure_snapshots_for_months(facility, doomed_qs)
+    def _process_single_facility(self, facility, now, dry_run, totals):
+        """Run the full retention pipeline for one facility, accumulating into ``totals``.
 
-            total_deleted += process_facility_retention(facility, settings_obj, now, dry_run)["count"]
-            total_activities += enforce_activities(facility, settings_obj, now, dry_run)["count"]
-            total_anonymized += anonymize_clients(facility, dry_run)["count"]
-            # Refs #626: Soft-deletete Personen aus dem Papierkorb anonymisieren,
-            # sobald die client_trash_days-Frist abgelaufen ist.
-            from core.services.client import anonymize_eligible_soft_deleted_clients
+        Facilities without a ``Settings`` row are skipped with a warning (the
+        loop's previous ``continue``). On a real (non-dry-run) pass this also
+        reactivates due deferred proposals, snapshots doomed events before
+        deletion, and cleans up stale proposals afterwards — each guarded the
+        same way as before, so the dry-run path stays read-only.
+        """
+        try:
+            settings_obj = facility.settings
+        except Settings.DoesNotExist:
+            self.stdout.write(self.style.WARNING(f"No settings for facility '{facility.name}', skipping."))
+            return
 
-            total_trash_anonymized += anonymize_eligible_soft_deleted_clients(facility, settings_obj, dry_run=dry_run)
-            total_auditlog_pruned += prune_auditlog(facility, settings_obj, now, dry_run)["count"]
+        # Reactivate deferred proposals whose wait has expired (Issue #515)
+        if not dry_run:
+            reactivated, auto_approved = reactivate_deferred_proposals(facility)
+            if reactivated or auto_approved:
+                self.stdout.write(
+                    f"Facility '{facility.name}': {reactivated} proposal(s) reactivated, "
+                    f"{auto_approved} auto-approved after defer."
+                )
 
-            # Cleanup stale proposals after actual deletion
-            if not dry_run:
-                stale_count = cleanup_stale_proposals(facility)
-                if stale_count:
-                    self.stdout.write(f"Cleaned up {stale_count} stale proposal(s) for '{facility.name}'.")
+        # Snapshots vor Löschung sichern
+        if not dry_run:
+            doomed_qs = collect_doomed_events(facility, settings_obj, now)
+            if doomed_qs.exists():
+                ensure_snapshots_for_months(facility, doomed_qs)
 
+        totals.deleted += process_facility_retention(facility, settings_obj, now, dry_run)["count"]
+        totals.activities += enforce_activities(facility, settings_obj, now, dry_run)["count"]
+        totals.anonymized += anonymize_clients(facility, dry_run)["count"]
+        # Refs #626: Soft-deletete Personen aus dem Papierkorb anonymisieren,
+        # sobald die client_trash_days-Frist abgelaufen ist.
+        from core.services.client import anonymize_eligible_soft_deleted_clients
+
+        totals.trash_anonymized += anonymize_eligible_soft_deleted_clients(facility, settings_obj, dry_run=dry_run)
+        totals.auditlog_pruned += prune_auditlog(facility, settings_obj, now, dry_run)["count"]
+
+        # Cleanup stale proposals after actual deletion
+        if not dry_run:
+            stale_count = cleanup_stale_proposals(facility)
+            if stale_count:
+                self.stdout.write(f"Cleaned up {stale_count} stale proposal(s) for '{facility.name}'.")
+
+    def _report_enforce_summary(self, totals, facilities, dry_run):
+        """Emit the run summary and (on a real pass) the RETENTION_RUN_COMPLETED marker.
+
+        Same stdout lines and ordering as before: dry-run prints the ``[dry-run]
+        Would …`` block and writes no audit marker; a real pass prints the
+        ``Soft-deleted …`` block and records the installation-wide LastRun event.
+        """
         if dry_run:
-            self.stdout.write(self.style.WARNING(f"[dry-run] Would soft-delete {total_deleted} event(s) in total."))
+            self.stdout.write(self.style.WARNING(f"[dry-run] Would soft-delete {totals.deleted} event(s) in total."))
             self.stdout.write(
-                self.style.WARNING(f"[dry-run] Would hard-delete {total_activities} activity/activities in total.")
+                self.style.WARNING(f"[dry-run] Would hard-delete {totals.activities} activity/activities in total.")
             )
-            self.stdout.write(self.style.WARNING(f"[dry-run] Would anonymize {total_anonymized} client(s) in total."))
+            self.stdout.write(self.style.WARNING(f"[dry-run] Would anonymize {totals.anonymized} client(s) in total."))
             self.stdout.write(
                 self.style.WARNING(
-                    f"[dry-run] Would anonymize {total_trash_anonymized} trash-expired client(s) in total."
+                    f"[dry-run] Would anonymize {totals.trash_anonymized} trash-expired client(s) in total."
                 )
             )
             self.stdout.write(
-                self.style.WARNING(f"[dry-run] Would prune {total_auditlog_pruned} audit-log entry/entries in total.")
+                self.style.WARNING(f"[dry-run] Would prune {totals.auditlog_pruned} audit-log entry/entries in total.")
             )
-        else:
-            self.stdout.write(self.style.SUCCESS(f"Soft-deleted {total_deleted} event(s) in total."))
-            self.stdout.write(self.style.SUCCESS(f"Hard-deleted {total_activities} activity/activities in total."))
-            self.stdout.write(self.style.SUCCESS(f"Anonymized {total_anonymized} client(s) in total."))
-            self.stdout.write(
-                self.style.SUCCESS(f"Anonymized {total_trash_anonymized} trash-expired client(s) in total.")
-            )
-            self.stdout.write(self.style.SUCCESS(f"Pruned {total_auditlog_pruned} audit-log entry/entries in total."))
+            return
 
-            # Refs #919: persistenter LastRun-Marker fuer das Compliance-Dashboard.
-            # Geschrieben nur nach erfolgreichem (non-dry-run) Lauf. ``facility=None``
-            # — der Cron laeuft installationsweit, nicht pro Facility.
-            audit_event(
-                AuditLog.Action.RETENTION_RUN_COMPLETED,
-                user=None,
-                facility=None,
-                target_type="RetentionRun",
-                detail={
-                    "facilities": facilities.count(),
-                    "soft_deleted_events": total_deleted,
-                    "hard_deleted_activities": total_activities,
-                    "anonymized_clients": total_anonymized,
-                    "anonymized_trash_clients": total_trash_anonymized,
-                    "pruned_auditlog": total_auditlog_pruned,
-                },
-            )
+        self.stdout.write(self.style.SUCCESS(f"Soft-deleted {totals.deleted} event(s) in total."))
+        self.stdout.write(self.style.SUCCESS(f"Hard-deleted {totals.activities} activity/activities in total."))
+        self.stdout.write(self.style.SUCCESS(f"Anonymized {totals.anonymized} client(s) in total."))
+        self.stdout.write(self.style.SUCCESS(f"Anonymized {totals.trash_anonymized} trash-expired client(s) in total."))
+        self.stdout.write(self.style.SUCCESS(f"Pruned {totals.auditlog_pruned} audit-log entry/entries in total."))
+
+        # Refs #919: persistenter LastRun-Marker fuer das Compliance-Dashboard.
+        # Geschrieben nur nach erfolgreichem (non-dry-run) Lauf. ``facility=None``
+        # — der Cron laeuft installationsweit, nicht pro Facility.
+        audit_event(
+            AuditLog.Action.RETENTION_RUN_COMPLETED,
+            user=None,
+            facility=None,
+            target_type="RetentionRun",
+            detail={
+                "facilities": facilities.count(),
+                "soft_deleted_events": totals.deleted,
+                "hard_deleted_activities": totals.activities,
+                "anonymized_clients": totals.anonymized,
+                "anonymized_trash_clients": totals.trash_anonymized,
+                "pruned_auditlog": totals.auditlog_pruned,
+            },
+        )
 
     def _handle_propose(self, facilities, now):
         """Create RetentionProposal entries for events that would be deleted."""

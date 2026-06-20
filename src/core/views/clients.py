@@ -2,6 +2,7 @@
 
 import json
 import logging
+from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
@@ -30,42 +31,51 @@ from core.services.system import get_active_bans_for_client
 from core.utils.downloads import safe_download_response
 from core.views.mixins import (
     AssistantOrAboveRequiredMixin,
-    FilteredPaginatedListMixin,
     HTMXPartialMixin,
     LeadOrAdminRequiredMixin,
+    PaginatedListMixin,
     StaffRequiredMixin,
 )
 
 logger = logging.getLogger(__name__)
 
 
-class ClientListView(AssistantOrAboveRequiredMixin, FilteredPaginatedListMixin, HTMXPartialMixin, View):
+class ClientListView(AssistantOrAboveRequiredMixin, PaginatedListMixin, HTMXPartialMixin, View):
     """Client list with search, filtering and pagination."""
 
     template_name = "core/clients/list.html"
     partial_template_name = "core/clients/partials/table.html"
-    search_fields = ["pseudonym"]
-    filter_fields = {"stage": "contact_stage", "age": "age_cluster"}
 
     def get(self, request):
         facility = request.current_facility
         qs = Client.objects.for_facility(facility).filter(is_active=True, is_deleted=False)
 
-        qs = self.apply_search(qs, request)
-        qs = self.apply_filters(qs, request)
+        q = request.GET.get("q", "").strip()
+        if q:
+            qs = qs.filter(pseudonym__icontains=q)
+
+        stage = request.GET.get("stage")
+        if stage:
+            qs = qs.filter(contact_stage=stage)
+
+        age = request.GET.get("age")
+        if age:
+            qs = qs.filter(age_cluster=age)
 
         qs = qs.annotate(last_contact=Max("events__occurred_at")).order_by("pseudonym")
 
         clients = self.paginate(qs, request)
 
+        pagination_params = urlencode({k: v for k, v in [("q", q), ("stage", stage), ("age", age)] if v})
+
         context = {
             "clients": clients,
-            "q": self.get_search_term(request),
-            "selected_stage": request.GET.get("stage"),
-            "selected_age": request.GET.get("age"),
+            "q": q,
+            "selected_stage": stage,
+            "selected_age": age,
             "contact_stages": Client.ContactStage.choices,
             "age_clusters": Client.AgeCluster.choices,
-            "pagination_params": self.pagination_params(request),
+            "pagination_params": pagination_params,
         }
 
         return self.render_htmx_or_full(context)
