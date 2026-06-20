@@ -293,6 +293,29 @@ Die Ruff-Konfiguration befindet sich in `pyproject.toml`.
 - Tailwind CSS für Styling — keine eigenen CSS-Klassen anlegen, soweit möglich.
 - Barrierefreiheit (WCAG 2.1 AA) beachten.
 
+#### Vendored JS-Libraries aktualisieren (Refs #1076)
+
+Es gibt **keinen Frontend-Bundler** — vier Libraries werden als vorgebaute `*.min.js` unter [`src/static/js/`](src/static/js/) eingecheckt (vendored) und per `{% static %}` geladen. Damit sie trotzdem im Dependabot-/CVE-Radar liegen, sind sie als **exakt gepinnte** `devDependencies` in [`package.json`](package.json) geführt:
+
+| Library | npm-Paket | vendored Datei | dist-Quelle in `node_modules/` |
+|---|---|---|---|
+| htmx | `htmx.org` | `htmx.min.js` | `dist/htmx.min.js` |
+| Alpine.js (CSP-Build) | `@alpinejs/csp` | `alpine-csp.min.js` | `dist/cdn.min.js` |
+| Dexie | `dexie` | `dexie.min.js` | `dist/dexie.min.js` |
+| Chart.js | `chart.js` | `chart.min.js` | `dist/chart.umd.js` *(bereits minifiziert)* |
+
+> Achtung: Das CSP-Build von Alpine ist das **eigene** Paket `@alpinejs/csp`, nicht `alpinejs`. Chart.js liefert im npm-`dist` keine eigene `*.min.js`; der UMD-Build `chart.umd.js` ist bereits minifiziert.
+
+**Update-Ablauf** (z. B. nach einem Dependabot-Bump, der nur `package.json`/`package-lock.json` ändert):
+
+```bash
+npm ci                                # node_modules/ auf package-lock-Stand bringen
+make sync-vendor-js                   # dist-Builds nach src/static/js/ kopieren
+git add package.json package-lock.json src/static/js
+```
+
+**Verifikation:** `make ci` führt den Drift-Guard `make verify-vendor-js-sync` aus ([`scripts/verify_vendor_js_sync.py`](scripts/verify_vendor_js_sync.py)). Er vergleicht die in `package.json` gepinnte Version mit dem Versions-String im eingecheckten `*.min.js` und failt bei Drift — so kann das Re-Vendoring nicht vergessen werden. Der Guard ist reiner String-Vergleich (kein node/npm nötig). Zusätzlich E2E-Smoke (`make test-e2e-smoke`), da die Offline-Flows an Dexie hängen.
+
 #### HTMX & Live-Regions (Refs #811)
 
 Damit HTMX-Erfolgsmeldungen Screen-Reader-Nutzer*innen erreichen, gilt:
