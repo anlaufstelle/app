@@ -323,6 +323,8 @@ Zugriffsberechtigungen werden über drei Ebenen gesteuert: **Rolle**, **Einricht
 
 #### Die fünf Rollen
 
+> **Zielgruppe dieses Abschnitts:** die **technische** Sicht — DB-Werte, `User`-Properties und das RLS-/Facility-Scoping hinter dem Rollenmodell. Die fachliche Begründung steht im [Fachkonzept (Role — Die Rolle)](fachkonzept-anlaufstelle.md#role--die-rolle), die praxisnahe „Was darf wer?"-Sicht im [User-Guide § 9](user-guide.md#9-rollen-und-berechtigungen), das Anlegen/Verwalten im [Admin-Guide § 2.4](admin-guide.md#rollenbeschreibung).
+
 Jeder User hat genau eine Rolle. Vier Rollen sind strikt facility-gebunden und bilden eine aufsteigende Hierarchie — höhere Rollen umfassen alle Rechte der niedrigeren. Die fünfte Rolle (`super_admin`) wirkt facility-übergreifend und ist außerhalb der Hierarchie:
 
 | Rolle | DB-Wert | Anzeigename | Beschreibung |

@@ -339,6 +339,8 @@ Neue Konten werden **ohne** Klartext-Passwort angelegt. Stattdessen versendet di
 
 #### Rollenbeschreibung
 
+> **Zielgruppe dieses Abschnitts:** die **Bootstrap-/Verwaltungssicht** — welche Rolle Sie beim Anlegen von Benutzern vergeben und welche Bootstrap-Rechte daran hängen. Die fachliche Begründung steht im [Fachkonzept (Role — Die Rolle)](fachkonzept-anlaufstelle.md#role--die-rolle), die praktische „Was darf wer?"-Sicht im [User-Guide § 9](user-guide.md#9-rollen-und-berechtigungen), die technischen Details (DB-Werte, RLS-Scoping) in der [FAQ § C](faq.md#die-fünf-rollen).
+
 Anlaufstelle kennt fünf Rollen — vier facility-gebunden, eine facility-übergreifend:
 
 | Rolle | Bezeichnung | Scope | Berechtigungen |

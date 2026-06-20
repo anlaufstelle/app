@@ -622,6 +622,8 @@ Wurde ein Ereignis gleichzeitig online (durch jemand anderen) und offline (durch
 
 Anlaufstelle unterscheidet fünf Rollen. Ihre Rolle wird von der Anwendungsbetreuung Ihrer Einrichtung festgelegt.
 
+> **Zielgruppe dieses Abschnitts:** die **praktische** Sicht — was Sie im Arbeitsalltag mit Ihrer Rolle tun dürfen. Die fachliche Begründung des Modells steht im [Fachkonzept (Role — Die Rolle)](fachkonzept-anlaufstelle.md#role--die-rolle), die technischen Details (DB-Werte, RLS-Scoping) in der [FAQ § C](faq.md#die-fünf-rollen), das Anlegen und Verwalten von Rollen im [Admin-Guide § 2.4](admin-guide.md#rollenbeschreibung).
+
 ### Rollenübersicht
 
 | Rolle | Anzeigename | Kurzbeschreibung |
