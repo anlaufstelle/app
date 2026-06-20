@@ -43,6 +43,20 @@ curl -sf https://$DOMAIN/health/ | python3 -m json.tool
 
 # Aktuelles Image-Tag notieren (fuer Rollback)
 docker compose -f docker-compose.prod.yml images web
+
+# Pflicht-Env-Vars des 3-Rollen-PostgreSQL-Modells pruefen (Refs #902, ADR-005/017):
+# Der Bootstrap-Superuser ``postgres`` legt damit die App-Rolle (NOSUPERUSER,
+# NOBYPASSRLS) und die Admin-Rolle (NOSUPERUSER, BYPASSRLS) an
+# (deploy/postgres-init/01-app-role.sh). Fehlen sie oder stehen noch auf
+# change-me-*, schlagen DB-Init bzw. der Migrate-Job fehl.
+# Quelle: .env.example, docs/coolify-deployment.md.
+for var in POSTGRES_BOOTSTRAP_PASSWORD POSTGRES_ADMIN_USER POSTGRES_ADMIN_PASSWORD; do
+    val=$(grep -E "^${var}=" .env | cut -d= -f2-)
+    case "$val" in
+        ""|change-me*) echo "✗ $var fehlt oder steht noch auf Default"; ;;
+        *)             echo "✓ $var gesetzt"; ;;
+    esac
+done
 ```
 
 ### 1.2 Deploy-Schritte
@@ -603,6 +617,15 @@ Verifiziert, dass das aktuellste Backup vollstaendig wiederherstellbar ist und d
 
 Das Skript ist auf das **`dev-ops/deploy/backup.sh`**-Format ausgerichtet, das auf `dev.anlaufstelle.app` tatsaechlich laeuft (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, Quelle `$BACKUP_DIR/dump-*.pgc.enc` (Default `/var/backups/anl`), Stack `docker-compose.dev.yml`, Restore als Postgres-Superuser (`postgres`, via Local-Socket-Trust im db-Container — nötig für `CREATE DATABASE`, bypassed zugleich RLS). Das alte `scripts/ops/backup.sh`/`scripts/ops/restore.sh`-Schema (`backups/daily/*.sql.gz.enc`, plain SQL) ist davon unberuehrt.
 
+**Kompatibilitaet Backup-Format × Restore-Pfad** — die beiden Backup-Welten sind *nicht* austauschbar; ein Drill gegen das jeweils fremde Format schlaegt fehl:
+
+| Backup-Quelle | Dump-Format | Verschluesselung | Datei(en) | Restore-Tool | Restore-Drill |
+|---|---|---|---|---|---|
+| `dev-ops/deploy/backup.sh` (laeuft auf `dev.anlaufstelle.app`) | `pg_dump -Fc` (custom) | AES-256-CBC (kein HMAC) | `dump-*.pgc.enc` | `pg_restore` | ✓ `restore-drill.sh` ist genau hierauf ausgelegt (Glob `dump-*.pgc.enc`) |
+| `scripts/ops/backup.sh` (Prod-Schema) | plain SQL + gzip | AES-256-CBC **+ HMAC-SHA256**-Sidecar (Refs #1024) | `*.sql.gz.enc` + `.hmac` | `psql` (`scripts/ops/restore.sh`) | ✗ nicht vom Drill abgedeckt — eigener Verify-Pfad (HMAC-Check vor Decrypt) |
+
+Warum kein Cross-Restore: Der Drill sucht per Glob `dump-*.pgc.enc` und pipet in `pg_restore` — ein plain-SQL-Backup (`*.sql.gz.enc`) wird so gar nicht gefunden und ist auch kein gueltiges `pg_restore`-Archiv. Umgekehrt scheitert `scripts/ops/restore.sh` an einem `dump-*.pgc.enc` am fehlenden `.hmac`-Sidecar (`backup_verify_hmac`) und am Binaerformat. Wer den Prod-Pfad drillen will, nutzt `scripts/ops/backup.sh --verify` (HMAC + Probe-Decrypt), nicht `restore-drill.sh`.
+
 Die Dump-Dateien sind `0600` und gehoeren root — daher **als root** ausfuehren:
 
 ```bash
@@ -615,7 +638,7 @@ sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh
 | 1 | Frische Wegwerf-DB (`anlaufstelle_drill_<pid>`) anlegen |
 | 2 | Backup decrypten + `pg_restore` (custom format) in die Wegwerf-DB |
 | 3 | Stichproben pro Tabelle (`core_facility`, `core_client`, `core_event`, `core_auditlog`, `core_workitem`) — Counts pruefen |
-| 4 | RLS-Policy-Check — `SELECT COUNT FROM pg_class WHERE relrowsecurity = true` muss `>= 22` ergeben |
+| 4 | RLS-Policy-Check — `SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'core_%' AND relrowsecurity = true` muss `>= 18` ergeben (konservativer Mindestwert im Skript; tatsaechliche Anzahl liegt hoeher, siehe Abschnitt 9) |
 | 5 | `auditlog_immutable`-Trigger existiert UND blockt Raw UPDATE |
 | 6 | Cleanup: Wegwerf-DB drop (via trap) |
 | 7 | **Bei vollem Erfolg:** `mark_restore_verified` im web-Container → Compliance-Marker |
