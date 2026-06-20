@@ -1217,18 +1217,6 @@ docker volume rm anlaufstelle_pgdata_dev
 
 Der komplette Pfad (Init-Rollen vor Daten, Superuser-Restore, `check_db_roles` Exit 0, FORCE-RLS aktiv, App-Rolle ohne Bypass, MV-Refresh, Rollback auf 16) wurde im Zuge von #1039 lokal in Docker durchgespielt.
 
-### 13.4 Künftige Major-Upgrades (18 → 19 und später) — Vorausverweis
-
-> **Platzhalter (Refs #1039).** Der oben beschriebene **dump → frisches Cluster → restore**-Pfad ist das **generische Muster für jeden** PostgreSQL-Major-Sprung, nicht nur 16→18. Künftige Upgrades (18→19 usw.) folgen denselben Schritten aus §13.1/§13.2; anzupassen sind im Wesentlichen nur die Versionsnummern, das `postgres:<N>-alpine`-Image und ggf. der `PGDATA`-Mountpfad, falls ein neues Image-Layout das Verzeichnis erneut verschiebt (wie der Wechsel auf `/var/lib/postgresql/18/docker` bei 18).
-
-Vor dem nächsten Major-Sprung prüfen:
-
-- **Release-Notes der Ziel-Major** auf inkompatible Änderungen (Datenformat, entfernte Funktionen, geänderte Defaults — bei 18 z. B. Data-Checksums per Default).
-- **Image-Layout/`VOLUME`-Pfad** des neuen `postgres:<N>-alpine` — bei Änderung die Mounts in allen Compose-Dateien (`prod`/`staging`/`dev`) nachziehen, analog #1039.
-- **Verfügbarkeit von `pg_dump`/`pg_restore` der Ziel-Major** im Image (Cross-Version-Dump-Kompatibilität).
-
-Diese Notiz ist bewusst knapp gehalten; der ausführliche, lokal durchgespielte Ablauf bleibt in §13.1–§13.3 und wird beim tatsächlichen nächsten Upgrade unter einem neuen Issue konkretisiert.
-
 ---
 
 ## Kurzreferenz
