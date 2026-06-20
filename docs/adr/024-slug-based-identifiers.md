@@ -12,13 +12,13 @@
 
 ## Decision
 
-Stabile, **unveränderliche Slugs** als interne Identifikatoren auf drei Ebenen:
+Stabile, **unveränderliche** interne Identifikatoren auf drei Ebenen — ein immutabler Enum-Wert für Dokumenttypen, generierte Slugs für Feldtemplates und Optionen:
 
-1. `DocumentType.slug` — Identifier für Business-Logik (`slug="hausverbot"` statt `name="Hausverbot"`).
+1. `DocumentType.system_type` — immutabler `SystemType`-Enum als Identifier für Business-Logik (`system_type="ban"` statt Lookup über `name="Hausverbot"`; `bans.py` selektiert darüber).
 2. `FieldTemplate.slug` — Schlüssel in `Event.data_json` (`{"aktiv": true, "bis": "2026-06-01"}`).
 3. Options als `{"slug": …, "label": …}` in `options_json`; `data_json` speichert den Options-Slug.
 
-Slugs werden bei Erstellung aus dem Namen generiert (`slugify` + Umlaut-Map, Kollisions-Suffix `-2`, `-3`, …) und sind danach **immutable** — `save()` wirft `ValidationError` bei Änderungsversuch; ein leerer Slug ist ein Fehler, kein stiller Fallback. Die Anzeige nach außen (UI-Labels, Export-Header) bleibt der frei änderbare `name`/`label`. System-Typen erhalten feste, im Seed vordefinierte Slugs. `UniqueConstraint(facility, slug)` sichert Eindeutigkeit pro Einrichtung.
+Slugs werden bei Erstellung aus dem Namen generiert (`slugify` + Umlaut-Map, Kollisions-Suffix `-2`, `-3`, …) und sind danach **immutable** — `save()` wirft `ValidationError` bei Änderungsversuch; ein leerer Slug ist ein Fehler, kein stiller Fallback. Die Anzeige nach außen (UI-Labels, Export-Header) bleibt der frei änderbare `name`/`label`. Der `system_type` der Dokumenttypen ist dagegen ein fester `TextChoices`-Wert (im Seed vergeben, nach Erstellung via `clean()`/`save()` gesperrt) — kein generierter Slug. `UniqueConstraint(facility, slug)` sichert Eindeutigkeit der Feldtemplate-Slugs pro Einrichtung.
 
 ## Consequences
 
@@ -38,6 +38,6 @@ Slugs werden bei Erstellung aus dem Namen generiert (`slugify` + Umlaut-Map, Kol
 
 ## References
 
-- [`src/core/models/document_type.py`](../../src/core/models/document_type.py) — `DocumentType.slug`, `FieldTemplate.slug`, `_generate_unique_slug`, `save()`-Immutabilität, `choices`-Property (`{slug, label}`)
-- [`src/core/services/system/bans.py`](../../src/core/services/system/bans.py), [`src/core/services/system/export.py`](../../src/core/services/system/export.py), [`src/core/forms/events.py`](../../src/core/forms/events.py) — Slug-basierte Lookups und `data_json`-Keys (Options-Slug→Label-Auflösung in `system/export.py`)
+- [`src/core/models/document_type.py`](../../src/core/models/document_type.py) — `DocumentType.system_type` (immutabler Enum), `FieldTemplate.slug`, `_generate_unique_slug`, `save()`-Immutabilität, `choices`-Property (`{slug, label}`)
+- [`src/core/services/system/bans.py`](../../src/core/services/system/bans.py), [`src/core/services/system/export.py`](../../src/core/services/system/export.py), [`src/core/forms/events.py`](../../src/core/forms/events.py) — `system_type`-/Slug-basierte Lookups und `data_json`-Keys (`system_type`-Selektion in `bans.py`, Options-Slug→Label-Auflösung in `system/export.py`)
 - Issues #210, #175, #212; Migration im Rahmen von #1071

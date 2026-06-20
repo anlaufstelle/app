@@ -14,7 +14,7 @@ Anlaufstelle ist deutsch-first (Zielgruppe: deutsche Träger und Beratungsstelle
 
 **DE ist die kanonische Quellsprache.** Alle Quell-Strings, Templates und Primär-Doku werden auf Deutsch verfasst (`LANGUAGE_CODE="de"`). EN ist die **eine** gepflegte Übersetzung (`LANGUAGES = de, en`) — kein „best effort".
 
-**UI-Strings** laufen über Django-gettext (`locale/`). Qualität gegated durch [`scripts/check_translations.py`](../../scripts/check_translations.py) (Refs #813/#814): liest `msgfmt --statistics` pro `django.po` und fällt, wenn fuzzy/untranslated über einer **gepinnten Baseline** liegen. Die Baseline darf nur **gesenkt**, nie erhöht werden — unübersetzte UI kann so nicht still wachsen.
+**UI-Strings** laufen über Django-gettext (`locale/`). Qualität gegated durch [`scripts/check_translations.py`](../../scripts/check_translations.py) (Refs #813/#814): liest `msgfmt --statistics` pro `django.po` und fällt, wenn fuzzy/untranslated über einer **gepinnten Baseline** liegen. Das Skript erzwingt die Obergrenze; die Baseline wird per Konvention nur **gesenkt**, nie erhöht (Review-Disziplin) — so kann unübersetzte UI nicht still wachsen.
 
 **Langform-Doku** (die 8 Dateien in `TRANSLATED_FILES`: `README.en.md`, `CONTRIBUTING.en.md`, `docs/en/*`) trägt zwei HTML-Kommentar-Header: `<!-- translation-source: … -->` und `<!-- translation-version: vX.Y.Z -->`. [`scripts/check_translation_versions.py`](../../scripts/check_translation_versions.py) prüft den Versions-Marker gegen `pyproject.toml`. **Hartes Release-Gate seit 2026-06-12 (#1078): `MAX_MINOR_BEHIND = 0`** — jede EN-Doku muss dem aktuellen *Minor* entsprechen (Patch toleriert); EN darf DE nie um einen Minor-Release hinterherhängen. „Ahead-of-source" und Major-Mismatch fallen ebenfalls.
 

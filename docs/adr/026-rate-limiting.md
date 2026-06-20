@@ -16,13 +16,13 @@ Rate-Limiting liegt in der **Anwendung**, nicht am Edge, und folgt zwei Achsen �
 
 **1. Schlüssel.** Authentifizierte fachliche Endpunkte zählen pro `user` (`key="user"`) — eine einzelne Person/ein Account kann andere nicht aushungern, und hinter geteiltem Büro-NAT wird nicht das ganze Team bestraft. Vor-/peri-authentifizierte und unauthentifizierte Endpunkte zählen pro `ip`: Login `5/m`/IP **plus** `10/h` pro Benutzername ([`auth.py`](../../src/core/views/auth.py)), CSP-Report `10/m`/IP ([`csp_report.py`](../../src/core/views/csp_report.py)), Health `120/m`/IP ([`health.py`](../../src/core/views/health.py)).
 
-**2. Methode.** Limits zählen nur die teure/zustandsändernde Methode: Mutationen/Bulk auf `method="POST"`, Lesen/Download/Suche auf `method="GET"`. Normale Seitennavigation (GET) verbraucht damit kein Mutations-Budget.
+**2. Methode.** Limits zählen nur die teure Methode: Mutationen auf `method="POST"`, Lesen/Suche auf `method="GET"`. Normale Seitennavigation (GET) verbraucht kein Limit-Budget. Der Bulk-Tarif deckt beides ab — POST-Massenaktionen **und** wenige schwere GET-Exporte (DSGVO-Auskunft, Offline-Snapshot-Download).
 
 **Drei benannte Pro-User-Stundentarife** (Sliding Window, [`constants.py`](../../src/core/constants.py)):
 
 | Konstante | Rate | Klasse | Beispiel-Endpunkte |
 |-----------|------|--------|--------------------|
-| `RATELIMIT_BULK_ACTION` | `30/h` | Bulk-Aktionen (ein Call fächert über viele Zeilen) | [`workitem_bulk.py`](../../src/core/views/workitem_bulk.py), Retention-Bulk ([`retention.py`](../../src/core/views/retention.py)) |
+| `RATELIMIT_BULK_ACTION` | `30/h` | Bulk-/teure Aktionen (fächert über viele Zeilen oder erzeugt einen großen Export) | POST: [`workitem_bulk.py`](../../src/core/views/workitem_bulk.py), Retention-Bulk ([`retention.py`](../../src/core/views/retention.py)); GET: DSGVO-Auskunft ([`dsgvo.py`](../../src/core/views/dsgvo.py)), Offline-Snapshot ([`offline.py`](../../src/core/views/offline.py)) |
 | `RATELIMIT_MUTATION` | `60/h` | Einzelobjekt-Schreibzugriffe | [`cases.py`](../../src/core/views/cases.py), [`case_episodes.py`](../../src/core/views/case_episodes.py), [`event_deletion.py`](../../src/core/views/event_deletion.py) |
 | `RATELIMIT_FREQUENT` | `120/h` | hochfrequente legitime Aktionen | [`workitem_actions.py`](../../src/core/views/workitem_actions.py), [`case_goals.py`](../../src/core/views/case_goals.py), Anhang-Download ([`attachments.py`](../../src/core/views/attachments.py)) |
 
@@ -50,7 +50,7 @@ Bulk ist am niedrigsten, weil ein Aufruf am meisten Arbeit auslöst; „frequent
 ## References
 
 - [`src/core/constants.py`](../../src/core/constants.py) — die drei Tarife (`RATELIMIT_BULK_ACTION`/`_MUTATION`/`_FREQUENT`)
-- Decorators: [`workitem_bulk.py`](../../src/core/views/workitem_bulk.py), [`retention.py`](../../src/core/views/retention.py) (Bulk); [`cases.py`](../../src/core/views/cases.py), [`case_episodes.py`](../../src/core/views/case_episodes.py), [`event_deletion.py`](../../src/core/views/event_deletion.py) (Mutation); [`workitem_actions.py`](../../src/core/views/workitem_actions.py), [`case_goals.py`](../../src/core/views/case_goals.py), [`attachments.py`](../../src/core/views/attachments.py) (Frequent); [`auth.py`](../../src/core/views/auth.py), [`search.py`](../../src/core/views/search.py), [`health.py`](../../src/core/views/health.py), [`csp_report.py`](../../src/core/views/csp_report.py) (endpunktspezifisch)
+- Decorators: [`workitem_bulk.py`](../../src/core/views/workitem_bulk.py), [`retention.py`](../../src/core/views/retention.py), [`dsgvo.py`](../../src/core/views/dsgvo.py), [`offline.py`](../../src/core/views/offline.py) (Bulk-Tarif); [`cases.py`](../../src/core/views/cases.py), [`case_episodes.py`](../../src/core/views/case_episodes.py), [`event_deletion.py`](../../src/core/views/event_deletion.py) (Mutation); [`workitem_actions.py`](../../src/core/views/workitem_actions.py), [`case_goals.py`](../../src/core/views/case_goals.py), [`attachments.py`](../../src/core/views/attachments.py) (Frequent); [`auth.py`](../../src/core/views/auth.py), [`search.py`](../../src/core/views/search.py), [`health.py`](../../src/core/views/health.py), [`csp_report.py`](../../src/core/views/csp_report.py) (endpunktspezifisch)
 - [`src/anlaufstelle/settings/prod.py`](../../src/anlaufstelle/settings/prod.py) — `CACHES` (`DatabaseCache`) + `RATELIMIT_USE_CACHE`
 - [`Caddyfile`](../../Caddyfile) — optionales `caddy-ratelimit`-Modul (auskommentiert)
 - [ADR-008](008-lockout-scope.md) — Login-Lockout (Username + IP), komplementär zum Login-Rate-Limit
