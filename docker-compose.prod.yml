@@ -33,6 +33,10 @@ services:
       - internal
 
   web:
+    # Migrationen laufen NICHT im Entrypoint, sondern als separater One-Shot-Job
+    # vor dem Rolling-Restart (``docker-migrate.sh``; Refs #802/C-34). Der
+    # Entrypoint macht nur ``collectstatic`` + ``gunicorn``. Ablauf + Aufruf:
+    # docs/ops-runbook.md §1.2.
     # Image-Tag via APP_VERSION parametrisieren (Refs #800), Fallback auf
     # den zuletzt gepinnten Release-Tag — Operator-Setups ohne explizite
     # .env bleiben reproduzierbar.
