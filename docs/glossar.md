@@ -1,4 +1,8 @@
 
+# Datenschutz-Glossar — Anlaufstelle
+
+> **Vertiefung zum Domänen-Glossar.** Diese Datei erklärt die **datenschutz- und compliance-spezifischen** Begriffe von Anlaufstelle in der nötigen Tiefe (K-Anonymität, Retention, Pseudonymisierung, Legal Hold, Offline-Snapshot-Keys …). Das **allgemeine Domänen-Glossar** (Fall, Ereignis, Kontaktstufe, Rolle …) steht im [Fachkonzept §14](fachkonzept-anlaufstelle.md#14-glossar), die **bilinguale (DE↔EN)** Gesamtliste in [`en/glossary.md`](en/glossary.md). Zugehöriger DSGVO-Wegweiser: [datenschutz.md](datenschutz.md).
+
 ## K-Anonymität im Detail
 
 **K-Anonymität** ist ein etabliertes Datenschutzprinzip gegen Re-Identifikation in
@@ -67,3 +71,12 @@ von der **Bucket-Suppression** im externen Bericht. Details: [ADR-021](adr/021-r
 **Quasi-Identifikator / Äquivalenzklasse** — Merkmale, die einzeln nicht, in
 Kombination aber identifizieren. Die Äquivalenzklasse der K-Anonymisierung ist
 `(facility, age_cluster, contact_stage)` ([ADR-023](adr/023-k-anonymization-statistik.md)).
+
+**Offline-Snapshot-Keys** — die client-seitige Verschlüsselung des Offline-Lesecaches
+(Streetwork-Modus, § 16 Fachkonzept). Pro Gerät wird beim Login aus dem Nutzerpasswort via
+PBKDF2 (600 000 Iterationen, SHA-256) ein **non-extractable** AES-GCM-256-`CryptoKey`
+abgeleitet und in einer eigenen IndexedDB (`anlaufstelle-crypto`) gehalten; die rohen
+Schlüssel-Bytes sind nicht exportierbar, ein **Idle-Key-Wipe** verwirft ihn bei
+Session-Ablauf. Ein gestohlenes Gerät ohne aktive Session liefert nur Chiffretext.
+Server-Bundles sind gedeckelt (50 Ereignisse, 90 Tage, TTL 48 h) und wenden Sichtbarkeit
+vor der Serialisierung an. Details: [ADR-022](adr/022-offline-snapshot-keys.md).
