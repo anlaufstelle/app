@@ -2,7 +2,7 @@
 
 # Anlaufstelle
 
-**Dokumentation, Statistik und Teamkommunikation für Kontaktläden, Notschlafstellen und Streetwork — Open Source, DSGVO-konform, pseudonymisiert, kostenlos.**
+**Dokumentation, Statistik und Teamkommunikation für die niedrigschwellige Soziale Arbeit — überall, wo Menschen ohne Termin und ohne Klarnamen kommen. Open Source, DSGVO-konform, pseudonymisiert, kostenlos.**
 
 > ⚠️ **Pre-Release (v0.15.0)** — Anlaufstelle ist funktionsfähig, aber noch nicht für den Produktiveinsatz freigegeben. Qualitätssicherung und Stabilisierung laufen. Wir suchen Piloteinrichtungen, die das System gemeinsam mit uns testen und weiterentwickeln möchten — [Kontakt aufnehmen](mailto:kontakt@anlaufstelle.app).
 
@@ -39,11 +39,12 @@
 
 Anlaufstelle richtet sich an Einrichtungen, in denen die Mehrzahl der Kontakte anonym oder pseudonym ist:
 
+- **Offene Sprechstunden & Sozialberatung** — niedrigschwellige Beratungsstellen
+- **Psychosoziale Beratung, Jugend- & Frauenberatung** — anonym möglich
 - **Kontaktläden und Kontaktcafés** — niedrigschwellige Suchthilfe
-- **Notschlafstellen** — Wohnungslosenhilfe
-- **Streetwork-Teams** — mobile soziale Arbeit
-- **Tagesaufenthalte und Tagesstätten**
-- **Konsumräume und niedrigschwellige Beratungsstellen**
+- **Aufsuchende Arbeit / Streetwork** — mobile soziale Arbeit
+- **Tagestreffs, Wärmestuben und Notschlafstellen** — Wohnungslosenhilfe
+- **Konsumräume und weitere niedrigschwellige Angebote**
 
 Typische Teamgröße: 5–20 Mitarbeitende. Typische Situation: Dokumentation mit Kladden, Zählblättern und Excel — weil passende Software entweder zu teuer, zu komplex oder nicht auf anonyme Kontakte ausgelegt ist.
 

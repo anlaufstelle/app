@@ -2,7 +2,7 @@
 
 # Anlaufstelle
 
-**Documentation, statistics, and team communication for drop-in centers, shelters, and street outreach — open source, GDPR-compliant, pseudonymized, free.**
+**Documentation, statistics, and team communication for low-threshold social work — wherever people come without an appointment and without giving their real name. Open source, GDPR-compliant, pseudonymized, free.**
 
 > ⚠️ **Pre-Release (v0.15.0)** — Anlaufstelle is functional but not yet cleared for production use. Quality assurance and stabilization are ongoing. We are looking for pilot facilities to test and co-develop the system — [get in touch](mailto:kontakt@anlaufstelle.app).
 
@@ -39,11 +39,12 @@
 
 Anlaufstelle is built for facilities where most contacts are anonymous or pseudonymous:
 
+- **Open consultation hours & social counseling** — low-threshold advice centers
+- **Psychosocial counseling, youth & women's services** — anonymous where needed
 - **Drop-in centers** — low-threshold addiction services
-- **Emergency shelters** — homelessness support
-- **Street outreach teams** — mobile social work
-- **Day centers and day shelters**
-- **Supervised consumption rooms and low-threshold counseling**
+- **Street outreach / mobile work**
+- **Day shelters, warming centers and emergency shelters** — homelessness support
+- **Supervised consumption rooms and other low-threshold services**
 
 Typical team size: 5–20 staff. Typical situation: documentation with logbooks, tally sheets, and spreadsheets — because suitable software is either too expensive, too complex, or not designed for anonymous contacts.
 

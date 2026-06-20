@@ -9,9 +9,9 @@ bestehende Daten verdichtet aggregiert.
 
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import datetime, time, timedelta
 
-from django.db.models import F, Q
+from django.db.models import F
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -79,13 +79,8 @@ def lead_dashboard_context(user, facility) -> dict:
         status=RetentionProposal.Status.PENDING,
     ).count()
 
-    # Spiegelt LegalHold.is_active 1:1 in SQL: nicht aufgehoben UND
-    # (kein Ablaufdatum ODER Ablaufdatum >= heute). is_active nutzt
-    # date.today() mit striktem "<", daher hier date.today()/__gte (Refs #1166).
-    active_legal_holds = (
-        LegalHold.objects.filter(facility=facility, dismissed_at__isnull=True)
-        .filter(Q(expires_at__isnull=True) | Q(expires_at__gte=date.today()))
-        .count()
+    active_legal_holds = sum(
+        1 for h in LegalHold.objects.filter(facility=facility, dismissed_at__isnull=True) if h.is_active
     )
 
     last_snapshot = StatisticsSnapshot.objects.filter(facility=facility).order_by("-year", "-month").first()
