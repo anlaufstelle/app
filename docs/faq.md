@@ -52,9 +52,9 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 
 ### 2. Wie richte ich 2FA ein?
 
-Kurz: **Benutzermenü → Zwei-Faktor-Authentifizierung** (`/mfa/settings/`) → **2FA einrichten**, QR-Code mit einer Authenticator-App scannen, 6-stelligen Code bestätigen.
+**Benutzermenü → Zwei-Faktor-Authentifizierung** (URL: `/mfa/settings/`) → **2FA einrichten**. Einen QR-Code mit einer Authenticator-App scannen (Google Authenticator, Microsoft Authenticator, Authy, FreeOTP+, 1Password, Bitwarden, Proton Pass) und den angezeigten 6-stelligen Code zur Bestätigung eintippen.
 
-Die **vollständige Schritt-für-Schritt-Anleitung** (getestete Apps, manuelle Secret-Eingabe, Login-Ablauf, Backup-Codes, Deaktivieren) steht kanonisch im **[User-Guide § 1 — Zwei-Faktor-Authentifizierung](user-guide.md#zwei-faktor-authentifizierung-2fa)**. Admin-seitige Erzwingung: [Admin-Guide § 2.7](admin-guide.md#27-zwei-faktor-authentifizierung-2fa). Diese FAQ deckt darüber hinaus nur die typischen Fehlerfälle ab (siehe nächste Fragen).
+Ausführliche Anleitung inkl. manuelle Eingabe: [User-Guide § 1 — Zwei-Faktor-Authentifizierung](user-guide.md#zwei-faktor-authentifizierung-2fa). Admin-seitige Erzwingung: [Admin-Guide § 2.7](admin-guide.md#27-zwei-faktor-authentifizierung-2fa).
 
 **Relevante Dateien:**
 - [`src/core/views/mfa.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mfa.py) — `MFASetupView`, `MFAVerifyView`, `MFASettingsView`
@@ -322,8 +322,6 @@ Schnell-Vorlagen beschleunigen das Erfassen wiederkehrender Dokumentationen. Akt
 Zugriffsberechtigungen werden über drei Ebenen gesteuert: **Rolle**, **Einrichtung** und **Sensitivitätsstufe**. Zusammen bestimmen sie, welcher User welche Daten sehen und welche Aktionen ausführen darf.
 
 #### Die fünf Rollen
-
-> **Zielgruppe dieses Abschnitts:** die **technische** Sicht — DB-Werte, `User`-Properties und das RLS-/Facility-Scoping hinter dem Rollenmodell. Die fachliche Begründung steht im [Fachkonzept (Role — Die Rolle)](fachkonzept-anlaufstelle.md#role--die-rolle), die praxisnahe „Was darf wer?"-Sicht im [User-Guide § 9](user-guide.md#9-rollen-und-berechtigungen), das Anlegen/Verwalten im [Admin-Guide § 2.4](admin-guide.md#rollenbeschreibung).
 
 Jeder User hat genau eine Rolle. Vier Rollen sind strikt facility-gebunden und bilden eine aufsteigende Hierarchie — höhere Rollen umfassen alle Rechte der niedrigeren. Die fünfte Rolle (`super_admin`) wirkt facility-übergreifend und ist außerhalb der Hierarchie:
 

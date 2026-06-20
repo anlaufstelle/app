@@ -48,13 +48,10 @@ Initial-Admin anlegen über `http://<server-ip>:8000`.
 - **Domain:** `anlaufstelle.app` (Coolify kümmert sich um TLS via Traefik)
 
 > **ClamAV-Service:** `docker-compose.prod.yml` definiert einen Service `clamav`
-> (Image `clamav/clamav:stable`, Volume `clamav-db`, Healthcheck via
-> `clamdscan --version`; Refs #938).
+> (Image `clamav/clamav:stable`, Volume `clamav-db`, Healthcheck via `clamdcheck.sh`).
 > Coolify startet ihn beim Compose-Deploy automatisch mit — der `web`-Service
 > verbindet via `CLAMAV_HOST=clamav` und wartet per `depends_on: service_healthy`
-> auf die Signaturdatenbank. Konfiguration und Betrieb (Fail-closed, Signatur-
-> Updates, EICAR-Test) sind kanonisch in [docs/ops-runbook.md § 7](ops-runbook.md)
-> beschrieben. Refs #524.
+> auf die Signaturdatenbank. Refs #524.
 >
 > - **Separater ClamAV-Host:** `CLAMAV_HOST`/`CLAMAV_PORT` in den ENVs auf den
 > externen Host setzen, `CLAMAV_ENABLED=true` belassen.
@@ -109,15 +106,15 @@ Der Admin erhält eine Einladungs-E-Mail mit Setup-Link (Token-Invite-Flow, #528
 
 > **⚠️ PostgreSQL-Rolle: NOSUPERUSER ist Pflicht.** Der in `POSTGRES_USER` konfigurierte DB-User darf **kein** PostgreSQL-Superuser sein — sonst wird Row Level Security (Migration [`0047_postgres_rls_setup.py`](../src/core/migrations/0047_postgres_rls_setup.py)) per Postgres-Default **bypasst** und das Facility-Isolations-Safety-Net ist wirkungslos.
 >
-> Das Init-Script [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) legt die Rollen automatisch korrekt an (Refs #902). **Das vollstaendige, code-treue Rollenmodell** (Bootstrap-/App-/Admin-Rolle, Attribute, Membership, `session_replication_role`-Grant) ist kanonisch in **[docs/ops-runbook.md § 9 „DB-Rollenmodell"](ops-runbook.md)** beschrieben — hier nur das Coolify-Wesentliche.
+> Seit #902 übernimmt das Init-Script [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) die korrekte Rollenanlage automatisch: Bootstrap-Superuser (`postgres`), App-Rolle (`NOSUPERUSER NOBYPASSRLS`) und Admin-Rolle (`NOSUPERUSER BYPASSRLS`). Voraussetzung: `POSTGRES_BOOTSTRAP_PASSWORD`, `POSTGRES_ADMIN_USER` und `POSTGRES_ADMIN_PASSWORD` in `.env` setzen (siehe `.env.example`).
 >
-> Voraussetzung: `POSTGRES_BOOTSTRAP_PASSWORD`, `POSTGRES_ADMIN_USER` und `POSTGRES_ADMIN_PASSWORD` zusaetzlich zu den App-Variablen in den Coolify-ENVs setzen (Muster: [`.env.example`](../.env.example)). Prüfen nach dem ersten Hochfahren:
+> Prüfen nach dem ersten Hochfahren:
 >
 > ```bash
 > docker compose exec web python manage.py check_db_roles
 > ```
 >
-> Erwartet: App-Rolle `rolsuper=False, rolbypassrls=False` und Admin-Rolle `rolsuper=False, rolbypassrls=True` (Exit-Code 0).
+> Erwartetes Ergebnis: ``OK App-Rolle ... rolsuper=False, rolbypassrls=False`` und ``OK Admin-Rolle ... rolsuper=False, rolbypassrls=True``. Hintergrund: [docs/ops-runbook.md § 9](ops-runbook.md).
 
 ### 7. 2FA aktivieren
 

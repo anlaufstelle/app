@@ -872,58 +872,6 @@ Tenant-Test in CI **nicht** fehl (er nutzt die explizite Test-Rolle),
 aber die Smoke-Query aus § 9.2 unten muss in Prod liefern: ``rolsuper =
 false`` fuer den Django-DB-User.
 
-### DB-Rollenmodell (Goldstandard)
-
-**Dies ist die kanonische Beschreibung des PostgreSQL-Rollenmodells** — andere
-Deployment-Dokumente verweisen hierher, statt sie zu wiederholen. Quelle der
-Wahrheit ist das Init-Script
-[`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh)
-(Refs #863,
-#902,
-[ADR-005](adr/005-facility-scoping-and-rls.md), [ADR-017](adr/017-deployment-topology.md)).
-
-Das offizielle `postgres:18`-Image macht den per `POSTGRES_USER` des Containers
-angelegten Bootstrap-Login automatisch zum Superuser. Dieser kann sich selbst
-nicht entrechten — deshalb laeuft der Container mit `POSTGRES_USER=postgres` als
-Bootstrap, und das Init-Script legt **zwei** entrechtete Application-Rollen an:
-
-| Rolle (`.env`-Variable) | Beispiel-Name | Attribute | Wofuer |
-|---|---|---|---|
-| `postgres` (Bootstrap, `POSTGRES_BOOTSTRAP_PASSWORD`) | `postgres` | SUPERUSER | Nur DB-Init + Notfall-Wartung. **Nicht** fuer Runtime/Operator-Tasks. |
-| `POSTGRES_USER` (App) | `anlaufstelle` | `NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB`, ist DB-Owner | Django-Runtime. RLS-Policies greifen scharf (`FORCE ROW LEVEL SECURITY`). |
-| `POSTGRES_ADMIN_USER` (Admin/Wartung) | `anlaufstelle_admin` | `NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB`, Mitglied der App-Rolle | `migrate`, `seed`, Retention-/Anonymisierungs-Cron. |
-
-Eigenschaften, die das Init-Script code-treu garantiert:
-
-- Beide Rollen sind **NOSUPERUSER** — kein Pfad zur Rechte-Eskalation.
-- Die App-Rolle ist **NOBYPASSRLS** und DB-Owner; durch `FORCE ROW LEVEL
- SECURITY` greifen die Policies auch fuer den Owner (Fail-closed, § 9 oben).
-- Die Admin-Rolle ist **BYPASSRLS** (fuer Migrationen/Wartung) und wird per
- `GRANT <app> TO <admin>` Mitglied der App-Rolle — noetig fuer `DROP POLICY`
- / `ALTER TABLE` in Migrationen, weil `BYPASSRLS` allein nicht fuer DDL reicht.
-- Die Admin-Rolle erhaelt `GRANT SET ON PARAMETER session_replication_role`
- (PostgreSQL 15+) — sonst scheitert die DSGVO-Art.-17-Anonymisierung in Prod
- (Details § 9.5).
-
-Operator-/Wartungs-Tasks connecten als Admin-Rolle ueber einen ENV-Override
-(`POSTGRES_USER`/`POSTGRES_PASSWORD` auf die Admin-Werte); der Migrate-Job
-[`docker-migrate.sh`](../docker-migrate.sh) macht das automatisch. Das
-Rollen-Gate `check_db_roles` prueft die stabile App-Rolle ueber
-`POSTGRES_APP_USER` (Refs #1017), damit der ENV-Override es nicht verwirrt.
-
-**Pflicht-`.env`-Variablen** (Vorlage [`.env.example`](../.env.example)):
-`POSTGRES_BOOTSTRAP_PASSWORD`, `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`
-(zusaetzlich zu den App-Variablen). Der Pre-Deploy-Check in § 1.1 verifiziert,
-dass sie gesetzt und nicht mehr auf `change-me-*` stehen.
-
-**Verifikation** nach dem ersten Hochfahren — das Gate prueft beide Rollen:
-
-```bash
-docker compose -f docker-compose.prod.yml exec web python manage.py check_db_roles
-# erwartet: App-Rolle  rolsuper=False, rolbypassrls=False
-#           Admin-Rolle rolsuper=False, rolbypassrls=True   (Exit-Code 0)
-```
-
 ### 9.1 Symptome eines RLS-Problems
 
 - UI zeigt leere Listen, obwohl in der DB Zeilen vorhanden sind.

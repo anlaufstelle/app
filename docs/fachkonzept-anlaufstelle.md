@@ -552,8 +552,6 @@ Ein User ist eine Person, die mit dem System arbeitet. User haben eine Identitä
 
 #### Role — Die Rolle
 
-> **Zielgruppe dieses Abschnitts:** das **fachlich-konzeptionelle** Warum des Rollenmodells (Zweckbindung, Trennung System/Anwendung). Praxisnahe „Was darf wer?"-Tabellen stehen im [User-Guide § 9](user-guide.md#9-rollen-und-berechtigungen), die technische Umsetzung (DB-Werte, Properties, RLS-Scoping) in der [FAQ § C](faq.md#die-fünf-rollen), die Bootstrap-/Verwaltungssicht im [Admin-Guide § 2.4](admin-guide.md#rollenbeschreibung).
-
 Rollen definieren, welche Aktionen ein User ausführen darf. Anlaufstelle kennt fünf Rollen — vier davon sind strikt facility-gebunden, die fünfte (Systemadministration) wirkt facility-übergreifend:
 
 - **Super-Admin (`super_admin`, „Systemadministration"):** Facility-übergreifend. Hostet und betreibt die Installation. Sieht den `/system/`-Bereich (alle Einrichtungen, Bootstrap-Tools, Pre-Auth-AuditLogs ohne Facility-Bezug). Wird nicht über Seed-Daten oder das Admin-UI angelegt, sondern über den Bootstrap-Befehl `manage.py create_super_admin`. Jeder Aufruf einer `/system/`-View wird im Audit-Log mit der Action `SYSTEM_VIEW` protokolliert; das System-UI zeigt einen permanenten Banner über die facility-übergreifende Sicht.
