@@ -27,6 +27,8 @@ des Release-Snapshots.
 | [screenshots.md](screenshots.md) | Bebilderter Rundgang durch die Oberfläche (Demo-Daten, pseudonymisiert); EN: [screenshots.en.md](screenshots.en.md) | Stakeholder, Endanwender |
 | [faq.md](faq.md) | Häufige Fragen — Betrieb, Troubleshooting, organisatorische Abläufe (synchron mit #474) | Admins, Endanwender |
 | [ops-runbook.md](ops-runbook.md) | Betriebs-Runbook: Monitoring, Alerts, Cron-Jobs, RLS, Backup/Restore, Restore-Drill | IT-Admins, DevOps |
+| [monitoring-guide.md](monitoring-guide.md) | `/health/`-Endpoint: Felder, HTTP-Status-Codes, Liveness vs. Detail, Anbindung an Uptime-/Monitoring-Tools (Refs #1071) | IT-Admins, DevOps |
+| [disaster-recovery.md](disaster-recovery.md) | Totalverlust-Wiederherstellung: Off-Site-Backup beschaffen, Schlüssel-Eskrow, Restore auf frischem Host, RTO/RPO (Refs #1071) | IT-Admins, DevOps |
 
 ---
 
