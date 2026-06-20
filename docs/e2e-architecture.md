@@ -177,6 +177,29 @@ Nur fuer clientseitige Debounce-Timer noetig, nicht fuer Server-Waits.
 
 ---
 
+## AuthZ-Live-Audit-Runner
+
+Zusätzlich zur regulären E2E-Suite gibt es einen **opt-in Live-Audit der Autorisierungs-Matrix** gegen den laufenden gunicorn-Server: `src/tests/e2e/test_authz_audit.py` (Helfer: `_authz_audit_helpers.py`; Refs #1055, #1042/A1). Er prüft pro Route aus `EXPECTATIONS` × HTTP-Methode × jede Rolle (`ROLES` + `anonymous`) drei Dimensionen ab:
+
+1. **Vertikale Allow/Deny-Matrix** — darf Rolle X Route Y? (`_judge`)
+2. **IDOR / Cross-Facility** — Zugriff auf Objekt-IDs aus Facility 2 (Fixture `medium_seed`, `--scale medium`, zwei Facilities; `facility_admin`/`lead` werden für den Objekt-Lookup per Sudo elevatet, sonst greift `RequireSudoModeMixin` schon davor)
+3. **Cookie-Flags + Security-Header** — HttpOnly, SameSite, X-Content-Type-Options, Referrer-Policy, CSP
+
+**Ausführung (manuell, nicht Teil von `make test-e2e`):**
+
+```bash
+AUTHZ_AUDIT=1 .venv/bin/python -m pytest \
+    src/tests/e2e/test_authz_audit.py -m authz_audit -v
+```
+
+Gated über die Env-Var `AUTHZ_AUDIT=1` (`skipif`) + Marker `authz_audit`. Seriell laufen lassen (Assert gegen `pytest-xdist`); ein eigenes `make`-Target gibt es bewusst nicht.
+
+**Fail-open mit Report:** Der Lauf **failt nicht** bei AuthZ-Abweichungen — diese landen als „ABWEICHUNG" im generierten Markdown-Report (`docs/archive/audits/2026-06-12-a1-laufzeit-authz-matrix.md`). Der eigentliche Regressionsschutz ist die schnelle Unit-Matrix (`test_authz_matrix.py`); der Live-Audit ist das periodische Vollbild. Er failt nur bei **strukturellem** Versagen (Schwellen: > 850 geprüfte Zeilen, < 10 % Setup-/Request-Fehler). Destruktive POSTs werden über `DESTRUCTIVE_RESET`-Hooks zurückgesetzt.
+
+Schritt-für-Schritt-Bedienung + Debugging: siehe [e2e-runbook.md](e2e-runbook.md).
+
+---
+
 ## Troubleshooting
 
 ### Timeout bei einzelnen Tests
