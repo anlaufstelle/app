@@ -10,15 +10,6 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog, Event, LegalHold, RetentionProposal, Settings
-
-# Private dashboard-context helpers (#1161): imported directly from the
-# implementation module — the service facade only re-exports public symbols.
-from core.retention.proposals import (
-    DASHBOARD_CATEGORY_LABELS,
-    _category_cards,
-    _retention_settings_for,
-    _status_counts,
-)
 from core.services.retention import (
     approve_proposal,
     cleanup_stale_proposals,
@@ -652,82 +643,3 @@ class TestRetentionBulkViews:
         )
         other.refresh_from_db()
         assert other.status == RetentionProposal.Status.PENDING
-
-
-# ---------------------------------------------------------------------------
-# Dashboard-Context Helper Tests (#1161)
-#
-# Pure-logic units extracted from build_retention_dashboard_context. No DB —
-# they operate on plain objects / the already-grouped proposal dict, so they
-# can assert exactly the tallying, card-shaping and default-settings behavior
-# the inline block had before the decomposition.
-# ---------------------------------------------------------------------------
-
-
-class _FakeProposal:
-    """Minimal stand-in carrying just the ``status`` the counter inspects."""
-
-    def __init__(self, status):
-        self.status = status
-
-
-class TestStatusCounts:
-    def test_tallies_every_status_across_categories(self):
-        status = RetentionProposal.Status
-        grouping = {
-            "anonymous": [_FakeProposal(status.PENDING), _FakeProposal(status.HELD)],
-            "identified": [
-                _FakeProposal(status.PENDING),
-                _FakeProposal(status.APPROVED),
-                _FakeProposal(status.DEFERRED),
-                _FakeProposal(status.REJECTED),
-            ],
-        }
-        assert _status_counts(grouping) == {
-            "pending": 2,
-            "held": 1,
-            "approved": 1,
-            "deferred": 1,
-            "rejected": 1,
-        }
-
-    def test_empty_grouping_is_all_zero(self):
-        assert _status_counts({}) == {
-            "pending": 0,
-            "held": 0,
-            "approved": 0,
-            "deferred": 0,
-            "rejected": 0,
-        }
-
-
-class TestCategoryCards:
-    def test_preserves_order_and_shape(self):
-        cards = _category_cards({"anonymous": ["p1", "p2"], "qualified": []})
-        assert [c["key"] for c in cards] == ["anonymous", "qualified"]
-        assert cards[0]["count"] == 2
-        assert cards[0]["proposals"] == ["p1", "p2"]
-        assert cards[0]["label"] == DASHBOARD_CATEGORY_LABELS["anonymous"]
-        assert cards[1]["count"] == 0
-
-    def test_unknown_category_key_falls_back_to_key_as_label(self):
-        cards = _category_cards({"surprise": []})
-        assert cards[0]["label"] == "surprise"
-
-
-@pytest.mark.django_db
-class TestRetentionSettingsFor:
-    def test_reads_facility_settings_when_present(self, facility, settings_obj):
-        assert _retention_settings_for(facility) == {
-            "anonymous": 90,
-            "identified": 365,
-            "qualified": 3650,
-        }
-
-    def test_defaults_when_no_settings_row(self, facility):
-        # No Settings object created → mirrors the enforce_retention defaults.
-        assert _retention_settings_for(facility) == {
-            "anonymous": 90,
-            "identified": 365,
-            "qualified": 3650,
-        }

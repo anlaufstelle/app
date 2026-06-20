@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status clean test-matrix-index test-matrix-index-check verify-matrix-drift mutation mutation-report ci-coverage docs-screens release-gates release-preflight release-verify-public
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report ci-coverage docs-screens release-gates release-preflight release-verify-public
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -134,7 +134,7 @@ check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
-ci: lint check deps-check verify-matrix-drift typecheck test-parallel
+ci: lint check deps-check verify-matrix-drift verify-release-test-guard typecheck test-parallel
 
 # Lokale Coverage-HTML: praktisch zum gezielten Lücken-Suchen.
 # CI nutzt --cov-fail-under in test.yml; dieses Target rendert
@@ -147,6 +147,14 @@ ci-coverage:
 # Refs #922.
 verify-matrix-drift:
 	$(PYTHON) scripts/verify_test_matrix_drift.py
+
+# Guard (Refs #1137): kein ausgelieferter Test (src/tests/) darf hart auf
+# Pfade verweisen, die der Public-/Stage-Release-Snapshot strippt
+# (dev-ops/, scripts/dev/, docs/ai/, CLAUDE.md, …) — sonst fällt der Test erst
+# auf der public Stage-CI mit FileNotFoundError um. Exclude-Liste als Single
+# Source aus dev-ops/release/verify-leak.sh. Frühes Dev-Gate vor pytest.
+verify-release-test-guard:
+	$(PYTHON) scripts/verify_release_test_guard.py
 
 # Mutation-Testing für core/services + core/forms (Refs #922 / #923).
 # Konfiguration in pyproject.toml [tool.mutmut].
