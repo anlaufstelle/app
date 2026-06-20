@@ -24,6 +24,7 @@ des Release-Snapshots.
 |----------|-------------|------------|
 | [admin-guide.md](admin-guide.md) | Betriebshandbuch: Installation, Backup/Restore, Monitoring, MFA, Retention, DSGVO | IT-Admins |
 | [user-guide.md](user-guide.md) | Benutzerhandbuch: Arbeitszentrale, Zeitstrom, Personen, Events, Suche, Export, Statistik, Rollen | Endanwender |
+| [screenshots.md](screenshots.md) | Bebilderter Rundgang durch die Oberfläche (Demo-Daten, pseudonymisiert); EN: [screenshots.en.md](screenshots.en.md) | Stakeholder, Endanwender |
 | [faq.md](faq.md) | Häufige Fragen — Betrieb, Troubleshooting, organisatorische Abläufe (synchron mit #474) | Admins, Endanwender |
 | [ops-runbook.md](ops-runbook.md) | Betriebs-Runbook: Monitoring, Alerts, Cron-Jobs, RLS, Backup/Restore, Restore-Drill | IT-Admins, DevOps |
 
@@ -44,6 +45,7 @@ des Release-Snapshots.
 | Dokument | Beschreibung | Zielgruppe |
 |----------|-------------|------------|
 | [datenschutz.md](datenschutz.md) | DSGVO-Wegweiser: Artikel/Recht → ADR/Vorlage/Code/FAQ | alle (Auditor/Dev/Träger) |
+| [glossar.md](glossar.md) | Datenschutz-/Compliance-Glossar — Vertiefung der Datenschutz-Begriffe (K-Anonymität, Retention, Pseudonymisierung …); allgemeines Domänen-Glossar in [Fachkonzept §14](fachkonzept-anlaufstelle.md#14-glossar), bilingual [en/glossary.md](en/glossary.md) | alle (Auditor/Dev/Träger) |
 | [security-notes.md](security-notes.md) | Bewusste Security-Design-Entscheidungen (2FA, Fernet, RLS, Audit, Lockout) | Security-Officer, Entwickler |
 | [threat-model.md](threat-model.md) | Sicherheitsmodell, Angriffsfläche, bekannte offene Lücken | Security-Officer, Auditoren |
 | [audit-inventar.md](audit-inventar.md) | Index aller Audit-Klassifizierungs-Codes (FND-\*, S-\*, Phasen, Sprints); die zugrunde liegenden Multi-AI-Audits liegen archiviert unter `docs/archive/` (dev-only) | Entwickler, Auditoren |
@@ -58,6 +60,8 @@ des Release-Snapshots.
 | [e2e-architecture.md](e2e-architecture.md) | E2E-Test-Infrastruktur: gunicorn, Playwright, Wait-Strategien, Fixtures | Entwickler, QA |
 | [e2e-runbook.md](e2e-runbook.md) | E2E-Test-Ausführung: Server starten, Tests laufen lassen, Debugging | Entwickler, QA |
 | testing/test-matrix-index.md | Test-Matrix-Übersicht (manuelle Testfälle + E2E-Mapping); Detail in [testing/manual-test-matrix.md](testing/manual-test-matrix.md), Mutation-Testing in testing/mutation-testing.md | QA, Entwickler |
+| testing/release-test-profiles.md | Release-Testprofile — manueller Rest neben dem automatisierten Gate (Refs #1081); Vorlage run-template.md → testing/runs/ | QA, Release-Manager |
+| testing/mutation-survivors-baseline.md | Baseline überlebender Mutanten (Mutation-Testing,) | QA, Entwickler |
 | [performance-budgets.md](performance-budgets.md) | Performance-Ziele und Budget-Grenzen (perf-nightly) | Entwickler, QA |
 | [async-pdf-evaluation.md](async-pdf-evaluation.md) | _Historisch_ — Evaluierung asynchroner PDF-Generierung, abgelöst durch [ADR-010](adr/010-sync-pdf-generation.md) | Entwickler, Architekten |
 
