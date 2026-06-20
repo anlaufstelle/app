@@ -52,9 +52,9 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 
 ### 2. Wie richte ich 2FA ein?
 
-**Benutzermenü → Zwei-Faktor-Authentifizierung** (URL: `/mfa/settings/`) → **2FA einrichten**. Einen QR-Code mit einer Authenticator-App scannen (Google Authenticator, Microsoft Authenticator, Authy, FreeOTP+, 1Password, Bitwarden, Proton Pass) und den angezeigten 6-stelligen Code zur Bestätigung eintippen.
+Kurz: **Benutzermenü → Zwei-Faktor-Authentifizierung** (`/mfa/settings/`) → **2FA einrichten**, QR-Code mit einer Authenticator-App scannen, 6-stelligen Code bestätigen.
 
-Ausführliche Anleitung inkl. manuelle Eingabe: [User-Guide § 1 — Zwei-Faktor-Authentifizierung](user-guide.md#zwei-faktor-authentifizierung-2fa). Admin-seitige Erzwingung: [Admin-Guide § 2.7](admin-guide.md#27-zwei-faktor-authentifizierung-2fa).
+Die **vollständige Schritt-für-Schritt-Anleitung** (getestete Apps, manuelle Secret-Eingabe, Login-Ablauf, Backup-Codes, Deaktivieren) steht kanonisch im **[User-Guide § 1 — Zwei-Faktor-Authentifizierung](user-guide.md#zwei-faktor-authentifizierung-2fa)**. Admin-seitige Erzwingung: [Admin-Guide § 2.7](admin-guide.md#27-zwei-faktor-authentifizierung-2fa). Diese FAQ deckt darüber hinaus nur die typischen Fehlerfälle ab (siehe nächste Fragen).
 
 **Relevante Dateien:**
 - [`src/core/views/mfa.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/mfa.py) — `MFASetupView`, `MFAVerifyView`, `MFASettingsView`
