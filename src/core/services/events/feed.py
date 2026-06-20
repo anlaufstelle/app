@@ -155,6 +155,43 @@ def _format_preview_value(value, ft):
     return str(value)
 
 
+def _build_event_preview_fields(event, field_templates, user):
+    """Refs #1160: ``(preview_fields, expanded_fields)`` fuer ein Event bauen.
+
+    Aus :func:`enrich_events_with_preview` herausgezogen. Wirkungs-identisch:
+
+    - Felder, die der User nicht sehen darf, sowie leere/None/leere-Liste- und
+      falsy-BOOLEAN-Werte werden uebersprungen.
+    - ``expanded_fields`` enthaelt alle uebrigen Felder (inkl. textarea),
+      ``preview_fields`` bleibt kompakt (max. 3, keine textarea) — Refs #707.
+    """
+    doc_sensitivity = event.document_type.sensitivity
+    data = event.data_json or {}
+    preview_fields = []
+    expanded_fields = []
+
+    for ft in field_templates:
+        if not user_can_see_field(user, doc_sensitivity, ft.sensitivity):
+            continue
+        value = data.get(ft.slug)
+        if value is None or value == "":
+            continue
+        if isinstance(value, list) and len(value) == 0:
+            continue
+        if ft.field_type == "boolean" and not value:
+            continue
+        formatted = _format_preview_value(value, ft)
+        entry = {"label": ft.name, "value": formatted, "is_textarea": ft.field_type == "textarea"}
+        expanded_fields.append(entry)
+        # Preview bleibt kompakt (max 3 Felder, keine textareas);
+        # Expanded zeigt alles inkl. textarea, damit Notizen ohne
+        # Detail-Klick lesbar sind (Refs #707).
+        if ft.field_type != "textarea" and len(preview_fields) < 3:
+            preview_fields.append(entry)
+
+    return preview_fields, expanded_fields
+
+
 def enrich_events_with_preview(feed_items, user):
     """Attach preview_fields to each event/ban in feed_items."""
     dt_ids = {item["object"].document_type_id for item in feed_items if item["type"] in ("event", "ban")}
@@ -175,29 +212,8 @@ def enrich_events_with_preview(feed_items, user):
             continue
 
         event = item["object"]
-        doc_sensitivity = event.document_type.sensitivity
-        data = event.data_json or {}
-        preview_fields = []
-        expanded_fields = []
-
-        for ft in dt_fields.get(event.document_type_id, []):
-            if not user_can_see_field(user, doc_sensitivity, ft.sensitivity):
-                continue
-            value = data.get(ft.slug)
-            if value is None or value == "":
-                continue
-            if isinstance(value, list) and len(value) == 0:
-                continue
-            if ft.field_type == "boolean" and not value:
-                continue
-            formatted = _format_preview_value(value, ft)
-            entry = {"label": ft.name, "value": formatted, "is_textarea": ft.field_type == "textarea"}
-            expanded_fields.append(entry)
-            # Preview bleibt kompakt (max 3 Felder, keine textareas);
-            # Expanded zeigt alles inkl. textarea, damit Notizen ohne
-            # Detail-Klick lesbar sind (Refs #707).
-            if ft.field_type != "textarea" and len(preview_fields) < 3:
-                preview_fields.append(entry)
-
+        preview_fields, expanded_fields = _build_event_preview_fields(
+            event, dt_fields.get(event.document_type_id, []), user
+        )
         event.preview_fields = preview_fields
         event.expanded_fields = expanded_fields

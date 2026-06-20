@@ -589,3 +589,205 @@ class TestDynamicEventDataFormClean:
         form = DynamicEventDataForm(document_type=dt, facility=facility, data={ft.slug: "hi"})
         assert form.is_valid(), form.errors
         assert form.cleaned_data.get(ft.slug) == "hi"
+
+
+# ===========================================================================
+# Refs #1160 R1a: direkte Tests der extrahierten Form-Helfer
+# ===========================================================================
+
+
+@pytest.mark.django_db
+class TestSelectChoicesHelper:
+    """``_select_choices`` — Leer-Option-Prefix + Reaktivierung inaktiver Werte."""
+
+    def _ft(self, facility, *, field_type, options_json):
+        return FieldTemplate.objects.create(
+            facility=facility, name="Cat", field_type=field_type, options_json=options_json
+        )
+
+    def test_select_prepends_empty_choice(self, facility):
+        from core.forms.events import _select_choices
+        from core.services.system import SELECT
+
+        ft = self._ft(
+            facility,
+            field_type=FieldTemplate.FieldType.SELECT,
+            options_json=[{"slug": "a", "label": "Alpha", "is_active": True}],
+        )
+        choices = _select_choices(ft, None, SELECT)
+        assert choices[0] == ("", "---------")
+        assert ("a", "Alpha") in choices
+
+    def test_multi_select_no_empty_choice(self, facility):
+        from core.forms.events import _select_choices
+        from core.services.system import SELECT
+
+        ft = self._ft(
+            facility,
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
+            options_json=[{"slug": "x", "label": "X", "is_active": True}],
+        )
+        choices = _select_choices(ft, None, SELECT)
+        assert ("", "---------") not in choices
+        assert ("x", "X") in choices
+
+    def test_inactive_option_readded_when_in_initial(self, facility):
+        from core.forms.events import _select_choices
+        from core.services.system import SELECT
+
+        ft = self._ft(
+            facility,
+            field_type=FieldTemplate.FieldType.SELECT,
+            options_json=[
+                {"slug": "a", "label": "Alpha", "is_active": True},
+                {"slug": "b", "label": "Beta", "is_active": False},
+            ],
+        )
+        choices = _select_choices(ft, {ft.slug: "b"}, SELECT)
+        labels = dict(choices)
+        assert "b" in labels
+        assert "deaktiviert" in labels["b"]
+
+    def test_inactive_option_omitted_without_initial(self, facility):
+        from core.forms.events import _select_choices
+        from core.services.system import SELECT
+
+        ft = self._ft(
+            facility,
+            field_type=FieldTemplate.FieldType.SELECT,
+            options_json=[
+                {"slug": "a", "label": "Alpha", "is_active": True},
+                {"slug": "b", "label": "Beta", "is_active": False},
+            ],
+        )
+        slugs = [s for s, _ in _select_choices(ft, None, SELECT)]
+        assert "b" not in slugs
+
+    def test_non_list_initial_value_normalized(self, facility):
+        """``initial_data[slug]`` als Skalar (nicht-Liste) wird auf eine Liste
+        normalisiert, bevor der ``in current_values``-Check laeuft."""
+        from core.forms.events import _select_choices
+        from core.services.system import SELECT
+
+        ft = self._ft(
+            facility,
+            field_type=FieldTemplate.FieldType.MULTI_SELECT,
+            options_json=[{"slug": "b", "label": "Beta", "is_active": False}],
+        )
+        choices = dict(_select_choices(ft, {ft.slug: "b"}, SELECT))
+        assert "deaktiviert" in choices["b"]
+
+
+@pytest.mark.django_db
+class TestBuildDynamicFieldHelper:
+    """``_build_dynamic_field`` — Field-Klasse/Widget/Initial pro Feldtyp."""
+
+    def _ft(self, facility, **kwargs):
+        kwargs.setdefault("name", "F")
+        return FieldTemplate.objects.create(facility=facility, **kwargs)
+
+    def test_file_field_is_multiple_file_field(self, facility):
+        from core.forms.events import _build_dynamic_field
+
+        ft = self._ft(facility, field_type=FieldTemplate.FieldType.FILE)
+        field = _build_dynamic_field(ft, None)
+        assert isinstance(field, MultipleFileField)
+
+    def test_required_flag_propagated(self, facility):
+        from core.forms.events import _build_dynamic_field
+
+        ft = self._ft(facility, field_type=FieldTemplate.FieldType.TEXT, is_required=True)
+        assert _build_dynamic_field(ft, None).required is True
+
+    def test_label_and_help_text(self, facility):
+        from core.forms.events import _build_dynamic_field
+
+        ft = self._ft(facility, name="Anliegen", field_type=FieldTemplate.FieldType.TEXT, help_text="Hinweis")
+        field = _build_dynamic_field(ft, None)
+        assert field.label == "Anliegen"
+        assert field.help_text == "Hinweis"
+
+    def test_initial_data_wins_over_default(self, facility):
+        from core.forms.events import _build_dynamic_field
+
+        ft = self._ft(facility, field_type=FieldTemplate.FieldType.TEXT, default_value="DEFAULT")
+        field = _build_dynamic_field(ft, {ft.slug: "INITIAL"})
+        assert field.initial == "INITIAL"
+
+    def test_default_used_when_no_initial(self, facility):
+        from core.forms.events import _build_dynamic_field
+
+        ft = self._ft(facility, field_type=FieldTemplate.FieldType.TEXT, default_value="DEFAULT")
+        field = _build_dynamic_field(ft, None)
+        assert field.initial == "DEFAULT"
+
+
+@pytest.mark.django_db
+class TestResolveUploadConstraintsHelper:
+    """``_resolve_upload_constraints`` — fail-closed Fallback auf Defaults."""
+
+    def test_missing_settings_uses_defaults(self, facility):
+        from core.forms.events import _resolve_upload_constraints
+
+        allowed, max_mb, max_bytes = _resolve_upload_constraints(facility)
+        assert allowed == set(DEFAULT_ALLOWED_FILE_TYPES)
+        assert max_mb == DEFAULT_MAX_FILE_SIZE_MB
+        assert max_bytes == max_mb * 1024 * 1024
+
+    def test_empty_whitelist_falls_back_to_defaults(self, facility):
+        from core.forms.events import _resolve_upload_constraints
+
+        _set_file_settings(facility, allowed="", max_mb=7)
+        allowed, max_mb, _ = _resolve_upload_constraints(facility)
+        assert allowed == set(DEFAULT_ALLOWED_FILE_TYPES)
+        assert max_mb == 7
+
+    def test_explicit_whitelist_normalized(self, facility):
+        from core.forms.events import _resolve_upload_constraints
+
+        _set_file_settings(facility, allowed=".PDF, .Jpg ", max_mb=3)
+        allowed, max_mb, max_bytes = _resolve_upload_constraints(facility)
+        assert allowed == {"pdf", "jpg"}
+        assert max_mb == 3
+        assert max_bytes == 3 * 1024 * 1024
+
+
+class TestFileUploadErrorsHelper:
+    """``_file_upload_errors`` — reine Funktion ohne DB."""
+
+    def test_allowed_within_size_no_errors(self):
+        from core.forms.events import _file_upload_errors
+
+        up = _upload("a.pdf", size_bytes=10)
+        assert _file_upload_errors(up, {"pdf"}, 1, 1024 * 1024) == []
+
+    def test_disallowed_extension_error(self):
+        from core.forms.events import _file_upload_errors
+
+        up = _upload("a.exe", size_bytes=10)
+        errors = _file_upload_errors(up, {"pdf"}, 1, 1024 * 1024)
+        assert len(errors) == 1
+        assert "exe" in " ".join(str(e) for e in errors).lower()
+
+    def test_size_at_limit_ok_one_over_errors(self):
+        from core.forms.events import _file_upload_errors
+
+        limit = 1024 * 1024
+        assert _file_upload_errors(_upload("a.pdf", size_bytes=limit), {"pdf"}, 1, limit) == []
+        over = _file_upload_errors(_upload("a.pdf", size_bytes=limit + 1), {"pdf"}, 1, limit)
+        assert len(over) == 1
+
+    def test_no_dot_yields_empty_extension_error(self):
+        from core.forms.events import _file_upload_errors
+
+        up = _upload("noext", size_bytes=10)
+        errors = _file_upload_errors(up, {"pdf"}, 1, 1024 * 1024)
+        assert len(errors) == 1
+
+    def test_both_errors_when_disallowed_and_too_big(self):
+        from core.forms.events import _file_upload_errors
+
+        limit = 1024
+        up = _upload("a.exe", size_bytes=limit + 1)
+        errors = _file_upload_errors(up, {"pdf"}, 1, limit)
+        assert len(errors) == 2

@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-vendor-js-sync sync-vendor-js mutation mutation-report ci-coverage docs-screens release-gates release-preflight release-verify-public
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status clean test-matrix-index test-matrix-index-check verify-matrix-drift mutation mutation-report ci-coverage docs-screens release-gates release-preflight release-verify-public
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -134,7 +134,7 @@ check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
-ci: lint check deps-check verify-matrix-drift verify-vendor-js-sync typecheck test-parallel
+ci: lint check deps-check verify-matrix-drift typecheck test-parallel
 
 # Lokale Coverage-HTML: praktisch zum gezielten Lücken-Suchen.
 # CI nutzt --cov-fail-under in test.yml; dieses Target rendert
@@ -147,18 +147,6 @@ ci-coverage:
 # Refs #922.
 verify-matrix-drift:
 	$(PYTHON) scripts/verify_test_matrix_drift.py
-
-# Drift-Guard fuer vendored JS-Libs (Refs #1076): vergleicht die in
-# package.json gepinnte Version mit dem Versions-String im eingecheckten
-# src/static/js/*.min.js. Reiner String-Vergleich — kein node/npm noetig.
-verify-vendor-js-sync:
-	$(PYTHON) scripts/verify_vendor_js_sync.py
-
-# Vendored JS-Libs aus node_modules/ neu kopieren (Refs #1076). Nach einem
-# Dependabot-Bump: erst 'npm ci', dann dieses Target, dann src/static/js/
-# committen. node_modules/ ist gitignored.
-sync-vendor-js:
-	$(PYTHON) scripts/sync_vendor_js.py
 
 # Mutation-Testing für core/services + core/forms (Refs #922 / #923).
 # Konfiguration in pyproject.toml [tool.mutmut].

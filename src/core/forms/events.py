@@ -109,6 +109,129 @@ class EventMetaForm(forms.Form):
         return cleaned
 
 
+def _select_choices(ft, initial_data, select_type):
+    """Refs #1160: Choices fuer SELECT/MULTI_SELECT inkl. Beibehaltung
+    inaktiver Werte des bearbeiteten Events.
+
+    ``select_type`` ist die ``SELECT``-Konstante aus ``core.services.system`` —
+    bei SELECT wird die Leer-Option vorangestellt. Wirkungs-identisch zum
+    frueheren Inline-Block in :meth:`DynamicEventDataForm.__init__`.
+    """
+    choices = [("", "---------")] + list(ft.choices) if ft.field_type == select_type else list(ft.choices)
+
+    # Bei Bearbeitung: inaktive Werte des Events beibehalten
+    if initial_data and ft.slug in initial_data:
+        current_values = initial_data[ft.slug]
+        if not isinstance(current_values, list):
+            current_values = [current_values] if current_values else []
+        for o in ft.options_json or []:
+            if not o.get("is_active", True) and o["slug"] in current_values:
+                choices.append((o["slug"], f"{o['label']} (deaktiviert)"))
+
+    return choices
+
+
+def _build_dynamic_field(ft, initial_data):
+    """Refs #1160: Ein einzelnes Formularfeld aus einem ``FieldTemplate`` bauen.
+
+    Aus :meth:`DynamicEventDataForm.__init__` herausgezogen — kapselt die
+    Field-Klassen-/Widget-/CSS-/Choices-/Initial-Auswahl pro Feldtyp.
+    Wirkungs-identisch; FILE -> ``MultipleFileField`` (Refs #622), die
+    SELECT/MULTI_SELECT-Choices stammen aus :func:`_select_choices`.
+    """
+    from core.services.system import (
+        FILE,
+        MULTI_SELECT,
+        SELECT,
+        get_form_field_cls_for_file,
+        get_spec,
+    )
+
+    spec = get_spec(ft.field_type)
+
+    # FILE bekommt den MultipleFileField — der unterstuetzt
+    # Multi-Upload (Refs #622). Der Registry-Eintrag fuer FILE
+    # nennt nur ``forms.FileField`` als generischen Marker.
+    if ft.field_type == FILE:
+        field_cls: type[forms.Field] = get_form_field_cls_for_file()
+    else:
+        field_cls = spec.form_field_cls
+
+    widget = spec.widget_factory()
+
+    css = INPUT_CSS
+    if not isinstance(widget, (forms.CheckboxInput, forms.CheckboxSelectMultiple)):
+        widget.attrs.setdefault("class", css)
+    else:
+        widget.attrs.setdefault("class", "rounded border-subtle text-accent")
+
+    kwargs_copy: dict[str, Any] = {
+        "widget": widget,
+        "required": ft.is_required,
+        "label": ft.name,
+    }
+    if ft.help_text:
+        kwargs_copy["help_text"] = ft.help_text
+
+    if ft.field_type in (SELECT, MULTI_SELECT):
+        kwargs_copy["choices"] = _select_choices(ft, initial_data, SELECT)
+
+    field = field_cls(**kwargs_copy)
+
+    if initial_data and ft.slug in initial_data:
+        field.initial = initial_data[ft.slug]
+    elif spec.allows_default:
+        default_initial = ft.get_default_initial()
+        if default_initial is not None:
+            field.initial = default_initial
+
+    return field
+
+
+def _resolve_upload_constraints(facility):
+    """Refs #1160/#771: ``(allowed, max_mb, max_bytes)`` fuer Upload-Validierung.
+
+    Fail-closed: fehlende Settings oder leere Whitelist greifen auf
+    ``DEFAULT_ALLOWED_FILE_TYPES`` / ``DEFAULT_MAX_FILE_SIZE_MB`` zurueck,
+    statt jeden Upload stillschweigend durchzulassen.
+    """
+    try:
+        facility_settings = Settings.objects.get(facility=facility)
+    except Settings.DoesNotExist:
+        facility_settings = None
+    raw = (facility_settings.allowed_file_types or "") if facility_settings else ""
+    allowed = {ext.strip().lower().lstrip(".") for ext in raw.split(",") if ext.strip()}
+    if not allowed:
+        allowed = set(DEFAULT_ALLOWED_FILE_TYPES)
+    max_mb = facility_settings.max_file_size_mb if facility_settings else DEFAULT_MAX_FILE_SIZE_MB
+    max_bytes = max_mb * 1024 * 1024
+    return allowed, max_mb, max_bytes
+
+
+def _file_upload_errors(uploaded, allowed, max_mb, max_bytes):
+    """Refs #1160: Validierungsfehler fuer eine einzelne hochgeladene Datei.
+
+    Liefert eine Liste lazy-uebersetzter Fehlermeldungen (Dateityp nicht
+    erlaubt / Datei zu gross). Wirkungs-identisch zum frueheren Inline-Block.
+    """
+    errors = []
+    ext = uploaded.name.rsplit(".", 1)[-1].lower() if "." in uploaded.name else ""
+    if allowed and ext not in allowed:
+        errors.append(
+            _("Dateityp .%(ext)s nicht erlaubt. Erlaubt: %(allowed)s")  # pragma: no mutate
+            % {"ext": ext, "allowed": ", ".join(sorted(allowed))}
+        )
+    if uploaded.size > max_bytes:
+        errors.append(
+            _("Datei zu groß (%(size)d MB). Maximum: %(max)d MB")  # pragma: no mutate
+            % {
+                "size": uploaded.size // (1024 * 1024),
+                "max": max_mb,
+            }
+        )
+    return errors
+
+
 class DynamicEventDataForm(forms.Form):
     """Dynamic form based on DocumentType fields.
 
@@ -125,14 +248,6 @@ class DynamicEventDataForm(forms.Form):
         if not document_type:
             return
 
-        from core.services.system import (
-            FILE,
-            MULTI_SELECT,
-            SELECT,
-            get_form_field_cls_for_file,
-            get_spec,
-        )
-
         dtf_qs = (
             DocumentTypeField.objects.filter(
                 document_type=document_type,
@@ -143,74 +258,13 @@ class DynamicEventDataForm(forms.Form):
 
         for dtf in dtf_qs:
             ft = dtf.field_template
-            spec = get_spec(ft.field_type)
-
-            # FILE bekommt den MultipleFileField — der unterstuetzt
-            # Multi-Upload (Refs #622). Der Registry-Eintrag fuer FILE
-            # nennt nur ``forms.FileField`` als generischen Marker.
-            if ft.field_type == FILE:
-                field_cls: type[forms.Field] = get_form_field_cls_for_file()
-            else:
-                field_cls = spec.form_field_cls
-
-            widget = spec.widget_factory()
-
-            css = INPUT_CSS
-            if not isinstance(widget, (forms.CheckboxInput, forms.CheckboxSelectMultiple)):
-                widget.attrs.setdefault("class", css)
-            else:
-                widget.attrs.setdefault("class", "rounded border-subtle text-accent")
-
-            kwargs_copy: dict[str, Any] = {
-                "widget": widget,
-                "required": ft.is_required,
-                "label": ft.name,
-            }
-            if ft.help_text:
-                kwargs_copy["help_text"] = ft.help_text
-
-            if ft.field_type in (SELECT, MULTI_SELECT):
-                choices = [("", "---------")] + list(ft.choices) if ft.field_type == SELECT else list(ft.choices)
-
-                # Bei Bearbeitung: inaktive Werte des Events beibehalten
-                if initial_data and ft.slug in initial_data:
-                    current_values = initial_data[ft.slug]
-                    if not isinstance(current_values, list):
-                        current_values = [current_values] if current_values else []
-                    for o in ft.options_json or []:
-                        if not o.get("is_active", True) and o["slug"] in current_values:
-                            choices.append((o["slug"], f"{o['label']} (deaktiviert)"))
-
-                kwargs_copy["choices"] = choices
-
-            field = field_cls(**kwargs_copy)
-
-            if initial_data and ft.slug in initial_data:
-                field.initial = initial_data[ft.slug]
-            elif spec.allows_default:
-                default_initial = ft.get_default_initial()
-                if default_initial is not None:
-                    field.initial = default_initial
-
-            self.fields[ft.slug] = field
+            self.fields[ft.slug] = _build_dynamic_field(ft, initial_data)
 
     def clean(self):
         cleaned = super().clean() or {}
         if not self.facility:
             return cleaned
-        # Refs #771 — fail-closed: fehlende Settings oder leere Whitelist greifen
-        # auf DEFAULT_ALLOWED_FILE_TYPES / DEFAULT_MAX_FILE_SIZE_MB zurueck,
-        # statt jeden Upload stillschweigend durchzulassen.
-        try:
-            facility_settings = Settings.objects.get(facility=self.facility)
-        except Settings.DoesNotExist:
-            facility_settings = None
-        raw = (facility_settings.allowed_file_types or "") if facility_settings else ""
-        allowed = {ext.strip().lower().lstrip(".") for ext in raw.split(",") if ext.strip()}
-        if not allowed:
-            allowed = set(DEFAULT_ALLOWED_FILE_TYPES)
-        max_mb = facility_settings.max_file_size_mb if facility_settings else DEFAULT_MAX_FILE_SIZE_MB
-        max_bytes = max_mb * 1024 * 1024
+        allowed, max_mb, max_bytes = _resolve_upload_constraints(self.facility)
         for field_name, field_obj in self.fields.items():
             if not isinstance(field_obj, forms.FileField):
                 continue
@@ -222,20 +276,6 @@ class DynamicEventDataForm(forms.Form):
             for uploaded in uploads:
                 if not uploaded:
                     continue
-                ext = uploaded.name.rsplit(".", 1)[-1].lower() if "." in uploaded.name else ""
-                if allowed and ext not in allowed:
-                    self.add_error(
-                        field_name,
-                        _("Dateityp .%(ext)s nicht erlaubt. Erlaubt: %(allowed)s")  # pragma: no mutate
-                        % {"ext": ext, "allowed": ", ".join(sorted(allowed))},
-                    )
-                if uploaded.size > max_bytes:
-                    self.add_error(
-                        field_name,
-                        _("Datei zu gro\u00df (%(size)d MB). Maximum: %(max)d MB")  # pragma: no mutate
-                        % {
-                            "size": uploaded.size // (1024 * 1024),
-                            "max": max_mb,
-                        },
-                    )
+                for error in _file_upload_errors(uploaded, allowed, max_mb, max_bytes):
+                    self.add_error(field_name, error)
         return cleaned

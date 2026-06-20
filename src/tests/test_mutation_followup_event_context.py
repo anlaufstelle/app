@@ -35,6 +35,8 @@ from core.models import (
     User,
 )
 from core.services.events.context import (
+    _build_field_display_entry,
+    _build_history_with_slug_info,
     _format_field_display_value,
     build_event_detail_context,
     filtered_server_data_json,
@@ -801,6 +803,87 @@ class TestSensitivityBoundaryMatrix:
         event, ft_normal, ft_elevated, ft_high = matrix_event
         result = filtered_server_data_json(admin_user, event)
         assert set(result.keys()) == {ft_normal.slug, ft_elevated.slug, ft_high.slug}
+
+
+# ---------------------------------------------------------------------------
+# Refs #1160 R1a: extrahierte Helfer aus build_event_detail_context
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestBuildFieldDisplayEntryHelper:
+    """``_build_field_display_entry`` — die drei Faelle einzeln.
+
+    Restricted-Maskierung, FILE-Marker-Fallthrough bei leeren file_entries und
+    der entschluesselte Default-Pfad muessen wirkungs-identisch bleiben.
+    """
+
+    def test_restricted_returns_masked_entry(self, facility, client_identified, assistant_user, staff_user):
+        doc_type = _make_doc_type(facility, sensitivity=DocumentType.Sensitivity.ELEVATED)
+        ft = _make_field_template(facility, name="Diagnose")
+        _attach(doc_type, ft)
+        # ASSISTANT (rank 0) darf ELEVATED nicht sehen.
+        entry = _build_field_display_entry(ft.slug, "geheim", ft, assistant_user, doc_type.sensitivity, {}, {})
+        assert entry["restricted"] is True
+        assert "geheim" not in str(entry["value"])
+        assert "Eingeschränkt" in str(entry["value"])
+
+    def test_plain_value_decrypted_default_branch(self, facility, staff_user):
+        doc_type = _make_doc_type(facility)
+        ft = _make_field_template(facility, name="Notiz")
+        entry = _build_field_display_entry("notiz", "Hallo", ft, staff_user, doc_type.sensitivity, {}, {})
+        assert entry["value"] == "Hallo"
+        assert entry.get("restricted") is not True
+        assert entry["is_encrypted"] is False
+
+    def test_files_marker_without_resolvable_attachment_falls_through(self, facility, staff_user):
+        """Stufe-B ``__files__``-Marker, dessen Attachments fehlen → leere
+        file_entries → Fall-through auf safe_decrypt statt Crash.
+
+        Das ``if file_entries:`` (ohne else) muss erhalten bleiben — sonst
+        wuerde ein verwaister Marker einen leeren is_file-Eintrag erzeugen.
+        """
+        doc_type = _make_doc_type(facility)
+        ft = _make_field_template(facility, name="Anhang", field_type=FieldTemplate.FieldType.FILE)
+        marker = {"__files__": True, "entries": [{"id": "00000000-0000-0000-0000-000000000000", "sort": 0}]}
+        # attachments_by_pk leer → kein Attachment aufloesbar.
+        entry = _build_field_display_entry("anhang", marker, ft, staff_user, doc_type.sensitivity, {}, {})
+        # Kein is_file-Eintrag; statt dessen der safe_decrypt-Default-Pfad.
+        assert entry.get("is_file") is not True
+        assert "value" in entry
+
+    def test_unknown_ft_uses_titleized_label(self, facility, staff_user):
+        doc_type = _make_doc_type(facility)
+        entry = _build_field_display_entry("foo-bar", "baz", None, staff_user, doc_type.sensitivity, {}, {})
+        assert entry["label"] == "Foo Bar"
+        assert entry["value"] == "baz"
+
+
+@pytest.mark.django_db
+class TestBuildHistoryWithSlugInfoHelper:
+    """``_build_history_with_slug_info`` — DESC-Sortierung + Slug-Info-Injektion."""
+
+    def test_empty_history(self, facility, client_identified, staff_user):
+        doc_type = _make_doc_type(facility)
+        ft = _make_field_template(facility, name="Feld")
+        _attach(doc_type, ft)
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"})
+        assert _build_history_with_slug_info(event) == []
+
+    def test_history_desc_and_slug_info_attached(self, facility, client_identified, staff_user):
+        doc_type = _make_doc_type(facility)
+        ft = _make_field_template(facility, name="Notiz")
+        _attach(doc_type, ft)
+        event = _make_event(facility, client_identified, doc_type, staff_user, data_json={ft.slug: "v"})
+        h1 = EventHistory.objects.create(event=event, action=EventHistory.Action.CREATE, changed_by=staff_user)
+        h2 = EventHistory.objects.create(event=event, action=EventHistory.Action.UPDATE, changed_by=staff_user)
+        history = _build_history_with_slug_info(event)
+        assert {h.pk for h in history} == {h1.pk, h2.pk}
+        assert history[0].pk == h2.pk  # neueste zuerst
+        for entry in history:
+            assert entry.event is event
+            assert ft.slug in entry._slug_info
+            assert entry._slug_info[ft.slug]["name"] == "Notiz"
 
 
 # Marker-Importe gegen Pyflakes (timedelta/timezone werden für Future-Use

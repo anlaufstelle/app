@@ -3,6 +3,7 @@
 from unittest.mock import patch
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.urls import reverse
 from django.utils import timezone
 
@@ -10,6 +11,8 @@ from core.models import AuditLog, DeletionRequest, Event, EventHistory
 from core.services.events import (
     approve_deletion,
     create_event,
+    decrypt_event_text_data,
+    merge_update_payload,
     reject_deletion,
     request_deletion,
     soft_delete_event,
@@ -471,3 +474,306 @@ class TestEventDateFieldSerialization:
         assert response.status_code == 302
         event.refresh_from_db()
         assert event.data_json["datum"] == "2026-09-30"
+
+
+# ===================================================================
+# Refs #1160 R1b: decrypt_event_text_data + merge_update_payload
+# ===================================================================
+
+
+@pytest.mark.django_db
+class TestDecryptEventTextData:
+    """``decrypt_event_text_data`` — gemeinsamer Helfer fuer EventUpdateView.get/post.
+
+    Grenzfaelle: leeres/None-data_json, File-Marker (legacy ``__file__`` +
+    Stufe-B ``__files__``) werden uebersprungen, uebrige Werte entschluesselt.
+    """
+
+    def _event(self, facility, staff_user, doc_type_contact, data_json):
+        return Event.objects.create(
+            facility=facility,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json=data_json,
+            created_by=staff_user,
+        )
+
+    def test_empty_data_json_returns_empty_dict(self, facility, staff_user, doc_type_contact):
+        event = self._event(facility, staff_user, doc_type_contact, {})
+        assert decrypt_event_text_data(event) == {}
+
+    def test_none_data_json_returns_empty_dict(self, facility, staff_user, doc_type_contact):
+        event = self._event(facility, staff_user, doc_type_contact, {})
+        event.data_json = None
+        assert decrypt_event_text_data(event) == {}
+
+    def test_plain_values_passed_through(self, facility, staff_user, doc_type_contact):
+        event = self._event(facility, staff_user, doc_type_contact, {"dauer": 15, "notiz": "Hallo"})
+        assert decrypt_event_text_data(event) == {"dauer": 15, "notiz": "Hallo"}
+
+    def test_legacy_file_marker_skipped(self, facility, staff_user, doc_type_contact):
+        """Legacy ``__file__``-Marker darf NICHT als Form-Initial auftauchen."""
+        event = self._event(
+            facility,
+            staff_user,
+            doc_type_contact,
+            {"notiz": "x", "anhang": {"__file__": True, "attachment_id": "abc", "name": "a.pdf"}},
+        )
+        result = decrypt_event_text_data(event)
+        assert "anhang" not in result
+        assert result == {"notiz": "x"}
+
+    def test_stage_b_files_marker_skipped(self, facility, staff_user, doc_type_contact):
+        """Stufe-B ``__files__``-Marker wird ebenfalls uebersprungen."""
+        event = self._event(
+            facility,
+            staff_user,
+            doc_type_contact,
+            {"notiz": "x", "anhang": {"__files__": True, "entries": [{"id": "abc", "sort": 0}]}},
+        )
+        result = decrypt_event_text_data(event)
+        assert "anhang" not in result
+        assert result == {"notiz": "x"}
+
+    def test_non_marker_dict_is_decrypted_not_skipped(self, facility, staff_user, doc_type_contact):
+        """Ein Dict ohne ``__file__``/``__files__`` ist KEIN File-Marker und
+        geht durch ``safe_decrypt`` — ohne Encryption-Marker bleibt es gleich."""
+        payload = {"some": "dict"}
+        event = self._event(facility, staff_user, doc_type_contact, {"notiz": payload})
+        assert decrypt_event_text_data(event) == {"notiz": payload}
+
+
+@pytest.mark.django_db
+class TestMergeUpdatePayload:
+    """``merge_update_payload`` — Restricted-Felder + FILE-Marker re-injizieren.
+
+    Grenzfaelle: Restricted-Key mit/ohne Original-Wert, FILE-Marker beider
+    Formate bleibt erhalten, Nicht-FILE-Felder werden nicht angefasst.
+    """
+
+    @pytest.fixture
+    def doc_type_with_file(self, facility):
+        from core.models import DocumentType, DocumentTypeField, FieldTemplate
+
+        dt = DocumentType.objects.create(facility=facility, name="Mit Datei", category=DocumentType.Category.NOTE)
+        ft_file = FieldTemplate.objects.create(
+            facility=facility, name="Anhang", field_type=FieldTemplate.FieldType.FILE
+        )
+        ft_text = FieldTemplate.objects.create(
+            facility=facility, name="Notiz", field_type=FieldTemplate.FieldType.TEXTAREA
+        )
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft_file, sort_order=0)
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft_text, sort_order=1)
+        return dt, ft_file, ft_text
+
+    def _event(self, facility, staff_user, doc_type, data_json):
+        return Event.objects.create(
+            facility=facility,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json=data_json,
+            created_by=staff_user,
+        )
+
+    def test_restricted_key_reinjected_with_original_value(self, facility, staff_user, doc_type_with_file):
+        dt, ft_file, ft_text = doc_type_with_file
+        event = self._event(facility, staff_user, dt, {ft_text.slug: "ORIGINAL"})
+        merged = {}
+        result = merge_update_payload(event, merged, [ft_text.slug], dt)
+        assert result is merged  # in-place
+        assert merged[ft_text.slug] == "ORIGINAL"
+
+    def test_restricted_key_absent_in_event_is_not_added(self, facility, staff_user, doc_type_with_file):
+        """Restricted-Key, der gar nicht in ``event.data_json`` steht, wird
+        nicht erfunden (Mutation am ``if key in event_data``)."""
+        dt, ft_file, ft_text = doc_type_with_file
+        event = self._event(facility, staff_user, dt, {})
+        merged = {}
+        merge_update_payload(event, merged, [ft_text.slug], dt)
+        assert ft_text.slug not in merged
+
+    def test_legacy_file_marker_preserved(self, facility, staff_user, doc_type_with_file):
+        dt, ft_file, ft_text = doc_type_with_file
+        marker = {"__file__": True, "attachment_id": "abc", "name": "a.pdf"}
+        event = self._event(facility, staff_user, dt, {ft_file.slug: marker})
+        merged = {}
+        merge_update_payload(event, merged, [], dt)
+        assert merged[ft_file.slug] == marker
+
+    def test_stage_b_files_marker_preserved(self, facility, staff_user, doc_type_with_file):
+        dt, ft_file, ft_text = doc_type_with_file
+        marker = {"__files__": True, "entries": [{"id": "abc", "sort": 0}]}
+        event = self._event(facility, staff_user, dt, {ft_file.slug: marker})
+        merged = {}
+        merge_update_payload(event, merged, [], dt)
+        assert merged[ft_file.slug] == marker
+
+    def test_file_field_without_marker_not_injected(self, facility, staff_user, doc_type_with_file):
+        """FILE-Feld ohne bestehenden Marker bleibt unangetastet im merged."""
+        dt, ft_file, ft_text = doc_type_with_file
+        event = self._event(facility, staff_user, dt, {})
+        merged = {"some_other": "value"}
+        merge_update_payload(event, merged, [], dt)
+        assert ft_file.slug not in merged
+        assert merged == {"some_other": "value"}
+
+    def test_existing_merged_form_value_not_overwritten_for_text(self, facility, staff_user, doc_type_with_file):
+        """Nicht-restricted, Nicht-FILE-Felder im merged bleiben unveraendert —
+        merge fasst nur restricted + FILE an."""
+        dt, ft_file, ft_text = doc_type_with_file
+        event = self._event(facility, staff_user, dt, {ft_text.slug: "DB-WERT"})
+        merged = {ft_text.slug: "FORM-WERT"}
+        merge_update_payload(event, merged, [], dt)
+        # ft_text ist nicht restricted und kein FILE-Feld → Form-Wert gewinnt.
+        assert merged[ft_text.slug] == "FORM-WERT"
+
+
+# ===================================================================
+# Refs #1160 R1a: create_event-Validierungs-Helfer (Verhalten via public API)
+# ===================================================================
+
+
+@pytest.mark.django_db
+class TestCreateEventValidationHelpers:
+    """Die aus ``create_event`` extrahierten Validierungs-Helfer
+    (``_validate_case_assignment``, ``_validate_contact_stage``) muessen
+    wirkungs-identisch bleiben — geprueft ueber die public ``create_event``-API.
+    """
+
+    @pytest.fixture
+    def doc_type_min_stage(self, facility):
+        from core.models import Client, DocumentType
+
+        return DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.SERVICE,
+            name="Mindeststufe",
+            min_contact_stage=Client.ContactStage.QUALIFIED,
+        )
+
+    def test_case_from_other_facility_rejected(self, facility, second_facility, staff_user, doc_type_contact):
+        from core.models import Case, Client
+
+        other_client = Client.objects.create(
+            facility=second_facility,
+            pseudonym="Fremd-01",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            created_by=staff_user,
+        )
+        other_case = Case.objects.create(
+            facility=second_facility,
+            client=other_client,
+            title="Fremd",
+            status=Case.Status.OPEN,
+            created_by=staff_user,
+        )
+        with pytest.raises(ValidationError, match="selben Einrichtung"):
+            create_event(
+                facility=facility,
+                user=staff_user,
+                document_type=doc_type_contact,
+                occurred_at=timezone.now(),
+                data_json={"dauer": 5},
+                case=other_case,
+            )
+
+    def test_case_person_mismatch_rejected(self, facility, staff_user, doc_type_contact, case_open):
+        from core.models import Client
+
+        other = Client.objects.create(
+            facility=facility,
+            pseudonym="Andere-01",
+            contact_stage=Client.ContactStage.IDENTIFIED,
+            created_by=staff_user,
+        )
+        with pytest.raises(ValidationError, match="passt nicht zur Person"):
+            create_event(
+                facility=facility,
+                user=staff_user,
+                document_type=doc_type_contact,
+                occurred_at=timezone.now(),
+                data_json={"dauer": 5},
+                client=other,
+                case=case_open,
+            )
+
+    def test_anonymous_event_rejected_for_client_case(self, facility, staff_user, doc_type_contact, case_open):
+        with pytest.raises(ValidationError, match="Anonyme Ereignisse"):
+            create_event(
+                facility=facility,
+                user=staff_user,
+                document_type=doc_type_contact,
+                occurred_at=timezone.now(),
+                data_json={"dauer": 5},
+                client=None,
+                is_anonymous=True,
+                case=case_open,
+            )
+
+    def test_min_stage_anonymous_rejected(self, facility, staff_user, doc_type_min_stage):
+        with pytest.raises(ValidationError, match="Anonyme Kontakte"):
+            create_event(
+                facility=facility,
+                user=staff_user,
+                document_type=doc_type_min_stage,
+                occurred_at=timezone.now(),
+                data_json={},
+                is_anonymous=True,
+            )
+
+    def test_min_stage_requires_client(self, facility, staff_user, doc_type_min_stage):
+        with pytest.raises(ValidationError, match="muss eine Person"):
+            create_event(
+                facility=facility,
+                user=staff_user,
+                document_type=doc_type_min_stage,
+                occurred_at=timezone.now(),
+                data_json={},
+                client=None,
+                is_anonymous=False,
+            )
+
+    def test_min_stage_client_too_low_rejected(self, facility, staff_user, doc_type_min_stage, client_identified):
+        # client_identified ist IDENTIFIED, doc verlangt QUALIFIED → zu niedrig.
+        with pytest.raises(ValidationError, match="mindestens die Kontaktstufe"):
+            create_event(
+                facility=facility,
+                user=staff_user,
+                document_type=doc_type_min_stage,
+                occurred_at=timezone.now(),
+                data_json={},
+                client=client_identified,
+            )
+
+    def test_min_stage_client_high_enough_succeeds(self, facility, staff_user, doc_type_min_stage):
+        from core.models import Client
+
+        qualified = Client.objects.create(
+            facility=facility,
+            pseudonym="Quali-01",
+            contact_stage=Client.ContactStage.QUALIFIED,
+            created_by=staff_user,
+        )
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_min_stage,
+            occurred_at=timezone.now(),
+            data_json={},
+            client=qualified,
+        )
+        assert event.pk is not None
+
+    def test_auto_anonymous_when_no_client_and_no_min_stage(self, facility, staff_user, doc_type_contact):
+        """Ohne Client + ohne min_contact_stage wird is_anonymous=True gesetzt —
+        und der Contact-Stage-Check ueberspringt (kein min_contact_stage)."""
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 1},
+            client=None,
+            is_anonymous=False,
+        )
+        assert event.is_anonymous is True

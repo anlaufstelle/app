@@ -14,7 +14,7 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
-from core.models import Client, DocumentType, FieldTemplate
+from core.models import Client, DocumentType
 from core.services.client import get_client_or_none
 from core.services.compliance import (
     get_visible_event_or_404,
@@ -31,10 +31,11 @@ from core.services.events import (
     attach_files_to_new_event,
     build_attachment_context,
     build_event_detail_context,
-    build_field_template_lookup,
     create_event,
+    decrypt_event_text_data,
     filtered_server_data_json,
     get_idempotent_result,
+    merge_update_payload,
     remember_idempotent_result,
     remove_restricted_fields,
     request_deletion,
@@ -43,7 +44,6 @@ from core.services.events import (
     split_file_and_text_data,
     update_event,
 )
-from core.services.file_vault import safe_decrypt
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -322,12 +322,8 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         event = self.event
 
         # Decrypted data as initial_data (skip file markers, both legacy __file__
-        # and new __files__ format).
-        initial_data = {}
-        for key, value in (event.data_json or {}).items():
-            if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
-                continue
-            initial_data[key] = safe_decrypt(value, default="")
+        # and new __files__ format). Refs #1160: gemeinsame Service-Helfer.
+        initial_data = decrypt_event_text_data(event)
 
         data_form = DynamicEventDataForm(
             document_type=event.document_type,
@@ -349,12 +345,9 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         event = self.event
         facility = request.current_facility
 
-        # Pass existing data so inactive options stay in choices for validation
-        existing_data = {}
-        for key, value in (event.data_json or {}).items():
-            if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
-                continue  # File fields don't use initial_data
-            existing_data[key] = safe_decrypt(value, default="")
+        # Pass existing data so inactive options stay in choices for validation.
+        # Refs #1160: gemeinsame Service-Helfer (vorher dupliziert mit get()).
+        existing_data = decrypt_event_text_data(event)
 
         data_form = DynamicEventDataForm(
             request.POST,
@@ -370,21 +363,8 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         if data_form.is_valid():
             file_fields, merged = split_file_and_text_data(data_form.cleaned_data)
 
-            # Re-insert restricted fields with original values
-            for key in restricted_keys:
-                if key in (event.data_json or {}):
-                    merged[key] = event.data_json[key]
-
-            # Für FILE-Felder: bestehenden Marker (beide Formate) erstmal
-            # beibehalten — apply_attachment_changes passt ihn anschliessend an.
-            field_templates = build_field_template_lookup(event.document_type)
-            for slug, ft in field_templates.items():
-                if ft.field_type == FieldTemplate.FieldType.FILE:
-                    existing_marker = (event.data_json or {}).get(slug)
-                    if isinstance(existing_marker, dict) and (
-                        existing_marker.get("__file__") or existing_marker.get("__files__")
-                    ):
-                        merged[slug] = existing_marker
+            # Refs #1160: Restricted-Felder + bestehende FILE-Marker re-injizieren.
+            merged = merge_update_payload(event, merged, restricted_keys, event.document_type)
 
             expected_updated_at = request.POST.get("expected_updated_at")
             # Event-Update + Attachment-Versionierung atomar (Refs #584/#587/#622).

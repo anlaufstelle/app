@@ -169,6 +169,105 @@ def resolve_default_document_type(facility):
     return default_doc_type, initial
 
 
+def _resolve_file_entries(value, attachments_by_pk, predecessor_index):
+    """Refs #1160: Marker-Entries eines FILE-Felds zu Display-Dicts aufloesen.
+
+    Akzeptiert beide Marker-Formate (via :func:`normalize_file_marker`),
+    ueberspringt nicht aufloesbare/geloeschte (``deleted_at``) Anhaenge und
+    haengt pro aktivem Anhang die ``prior_versions``-Kette an. Wirkungs-
+    identisch zum frueheren Inline-Loop.
+    """
+    entries_meta = normalize_file_marker(value)
+    file_entries = []
+    for entry in entries_meta:
+        try:
+            entry_pk = uuid.UUID(entry["id"]) if not isinstance(entry["id"], uuid.UUID) else entry["id"]
+        except (ValueError, TypeError):
+            continue
+        att = attachments_by_pk.get(entry_pk)
+        if not att:
+            continue
+        if att.deleted_at is not None:
+            continue
+        prior = _build_prior_versions(att, predecessor_index)
+        file_entries.append(
+            {
+                "attachment_id": str(att.pk),
+                "original_filename": get_original_filename(att),
+                "file_size_display": format_file_size(att.file_size),
+                "prior_versions": prior,
+            }
+        )
+    return file_entries
+
+
+def _build_field_display_entry(key, value, ft, user, doc_sensitivity, attachments_by_pk, predecessor_index):
+    """Refs #1160: Ein einzelnes ``fields_display``-Dict bauen.
+
+    Kapselt die drei Faelle aus :func:`build_event_detail_context`:
+    restringiert (``[Eingeschränkt]``), FILE-Marker mit aktiven Anhaengen,
+    und der entschluesselte Default. Wirkungs-identisch — gibt genau das
+    Dict zurueck, das vorher inline an ``fields_display`` angehaengt wurde.
+    """
+    field_sensitivity = ft.sensitivity if ft else ""
+    is_encrypted = ft.is_encrypted if ft else False
+
+    if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
+        return {
+            "label": ft.name if ft else key.replace("-", " ").title(),
+            "value": _("[Eingeschränkt]"),
+            "is_sensitive": bool(field_sensitivity),
+            "restricted": True,
+        }
+
+    if _is_file_marker(value):
+        file_entries = _resolve_file_entries(value, attachments_by_pk, predecessor_index)
+        if file_entries:
+            first = file_entries[0]
+            return {
+                "label": ft.name if ft else key,
+                "is_file": True,
+                "attachment_id": first["attachment_id"],
+                "original_filename": first["original_filename"],
+                "file_size_display": first["file_size_display"],
+                "prior_versions": first["prior_versions"],
+                "entries": file_entries,
+                "is_sensitive": bool(field_sensitivity),
+            }
+
+    decrypted = safe_decrypt(value, default=_("[verschlüsselt]"))
+    return {
+        "label": ft.name if ft else key.replace("-", " ").title(),
+        "value": _format_field_display_value(decrypted, ft),
+        "is_encrypted": is_encrypted,
+        "is_sensitive": bool(field_sensitivity),
+    }
+
+
+def _build_history_with_slug_info(event):
+    """Refs #1160/#824 (C-57): History DESC laden + geteilten Slug-Info-Lookup anhaengen.
+
+    Alle History-Entries gehoeren zum selben Event und damit zum selben
+    DocumentType. Wir bauen den Slug-Info-Lookup einmal vor und haengen ihn an
+    jeden Entry — das Template-Tag ``compute_diff`` nutzt ``entry._slug_info``
+    per Vorrang vor seinem eigenen ``_build_slug_info``-Fallback und spart pro
+    Entry einen Field-Query.
+    """
+    shared_slug_info = {}
+    for dtf in event.document_type.fields.select_related("field_template"):
+        ft = dtf.field_template
+        shared_slug_info[ft.slug] = {
+            "name": ft.name,
+            "is_encrypted": ft.is_encrypted,
+            "sensitivity": ft.sensitivity,
+        }
+    history = list(event.history.select_related("changed_by").order_by("-changed_at"))
+    for entry in history:
+        entry.event = event
+        entry._slug_info = shared_slug_info
+    return history
+
+
 def build_event_detail_context(event, user):
     """Build the template context dict for :class:`EventDetailView`.
 
@@ -183,91 +282,21 @@ def build_event_detail_context(event, user):
     attachments_by_pk = {att.pk: att for att in all_attachments}
     predecessor_index = {att.superseded_by_id: att for att in all_attachments if att.superseded_by_id is not None}
 
-    fields_display = []
-    for key, value in (event.data_json or {}).items():
-        ft = field_templates.get(key)
-        field_sensitivity = ft.sensitivity if ft else ""
-        is_encrypted = ft.is_encrypted if ft else False
-
-        if not user_can_see_field(user, doc_sensitivity, field_sensitivity):
-            fields_display.append(
-                {
-                    "label": ft.name if ft else key.replace("-", " ").title(),
-                    "value": _("[Eingeschränkt]"),
-                    "is_sensitive": bool(field_sensitivity),
-                    "restricted": True,
-                }
-            )
-            continue
-
-        if _is_file_marker(value):
-            entries_meta = normalize_file_marker(value)
-            file_entries = []
-            for entry in entries_meta:
-                try:
-                    entry_pk = uuid.UUID(entry["id"]) if not isinstance(entry["id"], uuid.UUID) else entry["id"]
-                except (ValueError, TypeError):
-                    continue
-                att = attachments_by_pk.get(entry_pk)
-                if not att:
-                    continue
-                if att.deleted_at is not None:
-                    continue
-                prior = _build_prior_versions(att, predecessor_index)
-                file_entries.append(
-                    {
-                        "attachment_id": str(att.pk),
-                        "original_filename": get_original_filename(att),
-                        "file_size_display": format_file_size(att.file_size),
-                        "prior_versions": prior,
-                    }
-                )
-            if file_entries:
-                first = file_entries[0]
-                fields_display.append(
-                    {
-                        "label": ft.name if ft else key,
-                        "is_file": True,
-                        "attachment_id": first["attachment_id"],
-                        "original_filename": first["original_filename"],
-                        "file_size_display": first["file_size_display"],
-                        "prior_versions": first["prior_versions"],
-                        "entries": file_entries,
-                        "is_sensitive": bool(field_sensitivity),
-                    }
-                )
-                continue
-
-        decrypted = safe_decrypt(value, default=_("[verschlüsselt]"))
-        fields_display.append(
-            {
-                "label": ft.name if ft else key.replace("-", " ").title(),
-                "value": _format_field_display_value(decrypted, ft),
-                "is_encrypted": is_encrypted,
-                "is_sensitive": bool(field_sensitivity),
-            }
+    fields_display = [
+        _build_field_display_entry(
+            key,
+            value,
+            field_templates.get(key),
+            user,
+            doc_sensitivity,
+            attachments_by_pk,
+            predecessor_index,
         )
-
-    # Refs #824 (C-57): Alle History-Entries gehoeren zum selben Event und
-    # damit zum selben DocumentType. Wir bauen den Slug-Info-Lookup einmal
-    # vor und haengen ihn an jeden Entry — das Template-Tag ``compute_diff``
-    # nutzt ``entry._slug_info`` per Vorrang vor seinem eigenen
-    # ``_build_slug_info``-Fallback und spart pro Entry einen Field-Query.
-    shared_slug_info = {}
-    for dtf in event.document_type.fields.select_related("field_template"):
-        ft = dtf.field_template
-        shared_slug_info[ft.slug] = {
-            "name": ft.name,
-            "is_encrypted": ft.is_encrypted,
-            "sensitivity": ft.sensitivity,
-        }
-    history = list(event.history.select_related("changed_by").order_by("-changed_at"))
-    for entry in history:
-        entry.event = event
-        entry._slug_info = shared_slug_info
+        for key, value in (event.data_json or {}).items()
+    ]
 
     return {
         "event": event,
         "fields_display": fields_display,
-        "history": history,
+        "history": _build_history_with_slug_info(event),
     }

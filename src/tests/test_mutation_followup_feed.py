@@ -621,3 +621,96 @@ class TestBuildFeedItemsWorkItemBoundary:
         items = build_feed_items(facility, today, feed_type="workitems", user=staff_user)
         wi_items = [i for i in items if i["type"] == "workitem"]
         assert len(wi_items) == 1
+
+
+# ---------------------------------------------------------------------------
+# Refs #1160 R1a: _build_event_preview_fields (aus enrich_events_with_preview)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestBuildEventPreviewFieldsHelper:
+    """``_build_event_preview_fields`` — Skip-Bedingungen + Preview/Expanded-Split.
+
+    Direkt-Tests fuer den aus ``enrich_events_with_preview`` extrahierten Helfer.
+    """
+
+    def _dt_with_fields(self, facility, specs):
+        dt = DocumentType.objects.create(facility=facility, name="PreviewDT", category="contact")
+        fts = []
+        for i, spec in enumerate(specs):
+            ft = FieldTemplate.objects.create(facility=facility, **spec)
+            DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=i)
+            fts.append(ft)
+        return dt, fts
+
+    def test_preview_capped_at_three_expanded_unbounded(self, facility, staff_user, client_identified):
+        from core.services.events.feed import _build_event_preview_fields
+
+        dt, fts = self._dt_with_fields(facility, [{"name": f"Feld{i}", "field_type": "text"} for i in range(5)])
+        data = {ft.slug: f"val{i}" for i, ft in enumerate(fts)}
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json=data,
+            created_by=staff_user,
+        )
+        preview, expanded = _build_event_preview_fields(event, fts, staff_user)
+        assert len(preview) == 3
+        assert len(expanded) == 5
+
+    def test_textarea_excluded_from_preview_included_in_expanded(self, facility, staff_user, client_identified):
+        from core.services.events.feed import _build_event_preview_fields
+
+        dt, fts = self._dt_with_fields(
+            facility,
+            [
+                {"name": "Zahl", "field_type": "number"},
+                {"name": "Notiz", "field_type": "textarea"},
+            ],
+        )
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={fts[0].slug: 5, fts[1].slug: "lang"},
+            created_by=staff_user,
+        )
+        preview, expanded = _build_event_preview_fields(event, fts, staff_user)
+        assert [p["label"] for p in preview] == ["Zahl"]
+        assert {e["label"] for e in expanded} == {"Zahl", "Notiz"}
+
+    def test_empty_none_and_falsy_boolean_skipped(self, facility, staff_user, client_identified):
+        from core.services.events.feed import _build_event_preview_fields
+
+        dt, fts = self._dt_with_fields(
+            facility,
+            [
+                {"name": "Leer", "field_type": "text"},
+                {"name": "Fehlt", "field_type": "text"},
+                {"name": "Flag", "field_type": "boolean"},
+                {"name": "Liste", "field_type": "multi_select"},
+                {"name": "Gut", "field_type": "text"},
+            ],
+        )
+        ft_empty, ft_missing, ft_bool, ft_list, ft_good = fts
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={
+                ft_empty.slug: "",  # leerer String → skip
+                ft_bool.slug: False,  # falsy boolean → skip
+                ft_list.slug: [],  # leere Liste → skip
+                ft_good.slug: "ok",
+                # ft_missing.slug fehlt komplett → None → skip
+            },
+            created_by=staff_user,
+        )
+        preview, expanded = _build_event_preview_fields(event, fts, staff_user)
+        labels = {e["label"] for e in expanded}
+        assert labels == {"Gut"}

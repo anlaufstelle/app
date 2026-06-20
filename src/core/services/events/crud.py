@@ -54,6 +54,67 @@ def attach_files_to_new_event(event, user, file_fields, document_type):
     event.save(update_fields=["data_json"])
 
 
+def _apply_remove(slug, current_entries, attachments_by_pk, request_post, event, user):
+    """REMOVE-Schritt: hidden CSV ``<slug>__remove`` listet zu loeschende
+    ``entry_id``-Werte -> ``soft_delete_attachment_chain``. Liefert die um die
+    geloeschten Entries bereinigte Entry-Liste."""
+    from core.services.file_vault import soft_delete_attachment_chain
+
+    remove_raw = request_post.get(f"{slug}__remove", "")
+    remove_ids = {x.strip() for x in remove_raw.split(",") if x.strip()}
+    if not remove_ids:
+        return current_entries
+    filtered = []
+    for entry in current_entries:
+        att = attachments_by_pk.get(str(entry["id"]))
+        if att and str(att.entry_id) in remove_ids:
+            soft_delete_attachment_chain(event, att.entry_id, user)
+            continue
+        filtered.append(entry)
+    return filtered
+
+
+def _apply_replace(slug, current_entries, attachments_by_pk, request_files, facility, ft, event, user):
+    """REPLACE-Schritt: pro bestehendem Entry ein File-Input
+    ``<slug>__replace__<entry_id>`` -> ``store_encrypted_file(supersedes=...)``.
+    Liefert die (ggf. ersetzte) Entry-Liste."""
+    from core.services.file_vault import store_encrypted_file
+
+    updated_entries = []
+    for entry in current_entries:
+        att = attachments_by_pk.get(str(entry["id"]))
+        if not att:
+            continue
+        replace_file = request_files.get(f"{slug}__replace__{att.entry_id}")
+        if replace_file is not None:
+            new_att = store_encrypted_file(facility, replace_file, ft, event, user, supersedes=att)
+            updated_entries.append({"id": str(new_att.pk), "sort": att.sort_order})
+        else:
+            updated_entries.append(entry)
+    return updated_entries
+
+
+def _apply_add(slug, updated_entries, file_fields, facility, ft, event, user):
+    """ADD-Schritt: alle Files aus dem Multi-Upload-Feld werden mit frischen
+    ``entry_id`` angehaengt. Liefert die um die neuen Entries erweiterte Liste."""
+    from core.services.file_vault import store_encrypted_file
+
+    add_files = file_fields.get(slug) or []
+    base_sort = (max((e.get("sort", 0) for e in updated_entries), default=-1)) + 1
+    for idx, uploaded_file in enumerate(add_files):
+        new_att = store_encrypted_file(facility, uploaded_file, ft, event, user, sort_order=base_sort + idx)
+        updated_entries.append({"id": str(new_att.pk), "sort": base_sort + idx})
+    return updated_entries
+
+
+def _write_file_marker(event, slug, updated_entries):
+    """Schreibt bzw. entfernt den Stufe-B-Marker im ``event.data_json``."""
+    if updated_entries:
+        event.data_json[slug] = {"__files__": True, "entries": updated_entries}
+    elif slug in event.data_json:
+        del event.data_json[slug]
+
+
 def apply_attachment_changes(event, user, request_post, request_files, file_fields, document_type):
     """Applizieren von REMOVE/REPLACE/ADD auf die FILE-Felder eines Events.
 
@@ -66,8 +127,6 @@ def apply_attachment_changes(event, user, request_post, request_files, file_fiel
 
     Aktualisiert anschliessend den Marker im ``event.data_json``.
     """
-    from core.services.file_vault import soft_delete_attachment_chain, store_encrypted_file
-
     field_templates = build_field_template_lookup(document_type)
     facility = event.facility
     for slug, ft in field_templates.items():
@@ -85,45 +144,67 @@ def apply_attachment_changes(event, user, request_post, request_files, file_fiel
             {str(att.pk): att for att in event.attachments.filter(pk__in=entry_ids)} if entry_ids else {}
         )
 
-        # 1) REMOVE
-        remove_raw = request_post.get(f"{slug}__remove", "")
-        remove_ids = {x.strip() for x in remove_raw.split(",") if x.strip()}
-        if remove_ids:
-            filtered = []
-            for entry in current_entries:
-                att = attachments_by_pk.get(str(entry["id"]))
-                if att and str(att.entry_id) in remove_ids:
-                    soft_delete_attachment_chain(event, att.entry_id, user)
-                    continue
-                filtered.append(entry)
-            current_entries = filtered
+        current_entries = _apply_remove(slug, current_entries, attachments_by_pk, request_post, event, user)
+        updated_entries = _apply_replace(
+            slug, current_entries, attachments_by_pk, request_files, facility, ft, event, user
+        )
+        updated_entries = _apply_add(slug, updated_entries, file_fields, facility, ft, event, user)
 
-        # 2) REPLACE
-        updated_entries = []
-        for entry in current_entries:
-            att = attachments_by_pk.get(str(entry["id"]))
-            if not att:
-                continue
-            replace_file = request_files.get(f"{slug}__replace__{att.entry_id}")
-            if replace_file is not None:
-                new_att = store_encrypted_file(facility, replace_file, ft, event, user, supersedes=att)
-                updated_entries.append({"id": str(new_att.pk), "sort": att.sort_order})
-            else:
-                updated_entries.append(entry)
-
-        # 3) ADD
-        add_files = file_fields.get(slug) or []
-        base_sort = (max((e.get("sort", 0) for e in updated_entries), default=-1)) + 1
-        for idx, uploaded_file in enumerate(add_files):
-            new_att = store_encrypted_file(facility, uploaded_file, ft, event, user, sort_order=base_sort + idx)
-            updated_entries.append({"id": str(new_att.pk), "sort": base_sort + idx})
-
-        if updated_entries:
-            event.data_json[slug] = {"__files__": True, "entries": updated_entries}
-        elif slug in event.data_json:
-            del event.data_json[slug]
+        _write_file_marker(event, slug, updated_entries)
 
     event.save(update_fields=["data_json"])
+
+
+def _validate_case_assignment(facility, case, client, is_anonymous):
+    """Refs #1160: Fall-Zuordnung pruefen (Facility-Scope, Person-Match,
+    Anonymitaets-Ausschluss). Wirkungs-identisch zum frueheren Inline-Block."""
+    if case is None:
+        return
+    if case.facility_id != facility.pk:
+        raise ValidationError(_("Fall gehört nicht zur selben Einrichtung wie das Ereignis."))
+    if case.client_id is not None and client is not None and case.client_id != client.pk:
+        raise ValidationError(_("Person des Ereignisses passt nicht zur Person des Falls."))
+    if case.client_id is not None and (client is None or is_anonymous):
+        raise ValidationError(_("Anonyme Ereignisse dürfen nicht an klientelbezogene Fälle gehängt werden."))
+
+
+def _validate_contact_stage(document_type, client, is_anonymous):
+    """Refs #1160: Mindest-Kontaktstufen-Regeln des DocumentType pruefen.
+
+    Wirkungs-identisch zum frueheren Inline-Block — die Reihenfolge der
+    Checks (anonym -> fehlende Person -> Stufe zu niedrig) bleibt erhalten.
+    """
+    if not document_type.min_contact_stage:
+        return
+    if is_anonymous:
+        raise ValidationError(
+            _(
+                "Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, "
+                "da eine Mindest-Kontaktstufe vorausgesetzt wird."
+            )
+        )
+    if client is None:
+        raise ValidationError(
+            _(
+                "Für diesen Dokumentationstyp muss eine Person ausgewählt werden, "
+                "da eine Mindest-Kontaktstufe vorausgesetzt wird."
+            )
+        )
+    required = stage_index(document_type.min_contact_stage)
+    actual = stage_index(client.contact_stage)
+    if actual < required:
+        raise ValidationError(
+            _(
+                "Person muss mindestens die Kontaktstufe "
+                "'%(required_stage)s' "
+                "haben, aktuelle Stufe ist "
+                "'%(actual_stage)s'."
+            )
+            % {
+                "required_stage": document_type.min_contact_stage,
+                "actual_stage": client.get_contact_stage_display(),
+            }
+        )
 
 
 @transaction.atomic
@@ -133,13 +214,7 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
         raise ValueError("DocumentType gehört nicht zur Facility")
     if client and client.facility_id != facility.pk:
         raise ValueError("Client gehört nicht zur Facility")
-    if case is not None:
-        if case.facility_id != facility.pk:
-            raise ValidationError(_("Fall gehört nicht zur selben Einrichtung wie das Ereignis."))
-        if case.client_id is not None and client is not None and case.client_id != client.pk:
-            raise ValidationError(_("Person des Ereignisses passt nicht zur Person des Falls."))
-        if case.client_id is not None and (client is None or is_anonymous):
-            raise ValidationError(_("Anonyme Ereignisse dürfen nicht an klientelbezogene Fälle gehängt werden."))
+    _validate_case_assignment(facility, case, client, is_anonymous)
 
     if user is not None and not user_can_see_document_type(user, document_type):
         raise PermissionDenied(_("Diese Dokumentation darf von Ihrer Rolle nicht erstellt werden."))
@@ -147,38 +222,7 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
     if client is None and not is_anonymous and not document_type.min_contact_stage:
         is_anonymous = True
 
-    if document_type.min_contact_stage and is_anonymous:
-        raise ValidationError(
-            _(
-                "Anonyme Kontakte sind bei diesem Dokumentationstyp nicht erlaubt, "
-                "da eine Mindest-Kontaktstufe vorausgesetzt wird."
-            )
-        )
-
-    if document_type.min_contact_stage and client is None and not is_anonymous:
-        raise ValidationError(
-            _(
-                "Für diesen Dokumentationstyp muss eine Person ausgewählt werden, "
-                "da eine Mindest-Kontaktstufe vorausgesetzt wird."
-            )
-        )
-
-    if document_type.min_contact_stage and client is not None and not is_anonymous:
-        required = stage_index(document_type.min_contact_stage)
-        actual = stage_index(client.contact_stage)
-        if actual < required:
-            raise ValidationError(
-                _(
-                    "Person muss mindestens die Kontaktstufe "
-                    "'%(required_stage)s' "
-                    "haben, aktuelle Stufe ist "
-                    "'%(actual_stage)s'."
-                )
-                % {
-                    "required_stage": document_type.min_contact_stage,
-                    "actual_stage": client.get_contact_stage_display(),
-                }
-            )
+    _validate_contact_stage(document_type, client, is_anonymous)
 
     data_json = _validate_data_json(document_type, data_json)
 
@@ -247,6 +291,58 @@ def update_event(event, user, data_json, expected_updated_at=None, **kwargs):
         field_metadata=_snapshot_field_metadata(event.document_type),
     )
     return event
+
+
+def decrypt_event_text_data(event):
+    """Refs #1160: Klartext-``data_json`` eines Events fuer Form-Vorbelegung.
+
+    Liefert ein ``{slug: wert}``-Dict, in dem File-Marker (legacy ``__file__``
+    und Stufe-B ``__files__``) uebersprungen und alle uebrigen Werte via
+    :func:`safe_decrypt` (Default ``""``) entschluesselt sind. Aus
+    ``EventUpdateView.get``/``post`` herausgezogen — beide Stellen bauten
+    bisher dieselbe Schleife (Duplikat, Refs #1160 R1b).
+    """
+    from core.services.file_vault import safe_decrypt
+
+    result = {}
+    for key, value in (event.data_json or {}).items():
+        if isinstance(value, dict) and (value.get("__file__") or value.get("__files__")):
+            continue
+        result[key] = safe_decrypt(value, default="")
+    return result
+
+
+def merge_update_payload(event, merged, restricted_keys, document_type):
+    """Refs #1160: Update-Payload um Felder ergaenzen, die das Formular nicht traegt.
+
+    Aus ``EventUpdateView.post`` herausgezogen (R1b). Mutiert ``merged`` in-place
+    und liefert es zurueck:
+
+    - **Restricted-Felder** (vom User nicht sichtbar, vorher per
+      ``remove_restricted_fields`` aus dem Form entfernt) werden mit ihrem
+      Original-Wert aus ``event.data_json`` wieder eingesetzt — sonst wuerde der
+      Update sie loeschen.
+    - **FILE-Felder** behalten ihren bestehenden Marker (beide Formate), damit
+      ``apply_attachment_changes`` ihn anschliessend anpassen kann.
+    """
+    event_data = event.data_json or {}
+
+    # Re-insert restricted fields with original values
+    for key in restricted_keys:
+        if key in event_data:
+            merged[key] = event_data[key]
+
+    # Für FILE-Felder: bestehenden Marker (beide Formate) erstmal beibehalten —
+    # apply_attachment_changes passt ihn anschliessend an.
+    field_templates = build_field_template_lookup(document_type)
+    for slug, ft in field_templates.items():
+        if ft.field_type == FieldTemplate.FieldType.FILE:
+            existing_marker = event_data.get(slug)
+            if isinstance(existing_marker, dict) and (
+                existing_marker.get("__file__") or existing_marker.get("__files__")
+            ):
+                merged[slug] = existing_marker
+    return merged
 
 
 @transaction.atomic
