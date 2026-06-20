@@ -82,7 +82,7 @@ Anlaufstelle processes social data of highly vulnerable people. Privacy is not a
 - **Audit log.** An append-only, immutable log records all security-relevant actions: data access, modifications, deletions, login attempts, and exports.
 - **Facility scoping.** Every query filters on `facility_id`, enforced by middleware. Since v0.10, PostgreSQL Row Level Security provides defense-in-depth on all facility-scoped tables, with session-variable-driven policies that enforce the tenant boundary at the database layer itself.
 - **Two-factor authentication.** Since v0.10, TOTP-based 2FA is available and can be enforced per user or facility-wide.
-- **GDPR compliance.** Data subject rights (access, rectification, deletion, portability) are implemented as system functions. GDPR documentation templates (processing register, DPIA, DPA) are on the roadmap.
+- **GDPR compliance.** Data subject rights (access, rectification, deletion, portability) are implemented as system functions. GDPR documentation templates (processing register, DPIA, DPA, TOMs) ship with the app ([`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/), since #784).
 
 ## Role Model
 
@@ -112,7 +112,7 @@ Access is not purely role-based but context-dependent: what a user can see also 
 
 Release v0.10.0 (2026-04-19) extends the domain concept with several capabilities that sharpen the low-threshold fit and strengthen the privacy architecture. Configuration details live in the [admin guide](../admin-guide.md); this section summarizes the conceptual intent.
 
-- **Offline mode (M6A).** Street work teams frequently operate without connectivity. An optional offline mode provides a client-side capture and read cache encrypted with AES-GCM-256. The encryption key is derived from the user password via PBKDF2, lives only in browser memory, and is destroyed on logout -- no plaintext cache ever touches disk.
+- **Offline mode (M6A).** Street work teams frequently operate without connectivity. An optional offline mode provides a client-side capture and read cache encrypted with AES-GCM-256. The key is a non-extractable `CryptoKey` derived from the user password via PBKDF2; it is wiped on logout and on session-idle, so a stolen device without an active session yields only ciphertext. Read and write-queue are the accepted scope; the in-app offline-**edit** entry is deferred (#1111).
 - **File vault.** Attachments on events are no longer stored in the clear. They are scanned by ClamAV before acceptance and encrypted at rest, extending field-level encryption to binary material.
 - **Two-factor authentication.** TOTP-based second factor, configurable per user or enforced facility-wide, hardens login for facilities handling qualified data.
 - **Fuzzy search.** Pseudonyms are often misremembered or misspelled. A typo-tolerant search based on PostgreSQL `pg_trgm` trigrams, with a per-facility similarity threshold, helps staff find known persons without resorting to broader disclosures.
