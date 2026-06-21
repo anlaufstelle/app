@@ -345,6 +345,107 @@ class TestBulkManualSelectionUI:
         toolbar.wait_for(state="hidden", timeout=3000)
         assert not page.locator("input[type=checkbox][name='workitem_ids']").first.is_checked()
 
+    def test_manual_checkbox_works_after_person_filter_swap(self, staff_page, base_url):
+        """Refs #1132 (Kern-Regression): manueller Einzelklick funktioniert auch
+        auf einer Checkbox, die erst durch einen HTMX-Filter-Swap in die Liste
+        kam.
+
+        Das gemeldete Szenario: Leitung filtert nach einer Person → die Liste
+        ``#inbox-content`` wird per ``hx-get`` ausgetauscht → erst danach klickt
+        man eine Checkbox. Die übrigen Tests selektieren VOR jedem Swap und
+        verfehlen daher genau diese Regression: ein eingeswapptes Item-Feld muss
+        von Alpines MutationObserver neu an ``onToggleItem`` gebunden werden,
+        sonst bleibt der Einzelklick wirkungslos und die Toolbar öffnet nicht.
+
+        Ein künftiges Zurückfallen auf eine CSP-inkompatible Bindung (z.B.
+        ``toggle('<pk>')`` oder ``$event``) bräche genau diesen Pfad, während die
+        nicht-swappenden Tests grün blieben.
+        """
+        page = staff_page
+        tag = uuid.uuid4().hex[:6]
+        # Mind. zwei Aufgaben „Lena Weber" zuweisen, damit der Personenfilter
+        # eine nicht-leere, eingeswappte Liste liefert.
+        _create_workitem_assigned_no_default_wait(page, base_url, f"E2E-Swap-{tag}-1", assignee_label="Lena Weber")
+        _create_workitem_assigned_no_default_wait(page, base_url, f"E2E-Swap-{tag}-2", assignee_label="Lena Weber")
+
+        lena_id = _filter_option_value(page, base_url, "Lena Weber")
+        if not lena_id:
+            pytest.skip("Lena Weber im Personenfilter nicht gefunden — Seed-Variation.")
+
+        page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+        # Personenfilter setzen → löst den ``hx-get``-Swap von #inbox-content aus.
+        # Auf die ausgetauschte Liste über die erwartete Checkbox-Anzahl warten
+        # (NICHT networkidle) — die Boxen entstehen erst nach dem Swap.
+        page.select_option("#filter-assigned-to", value=lena_id)
+        boxes = page.locator("#inbox-content input[type=checkbox][name='workitem_ids']")
+        page.wait_for_function(
+            "([sel, n]) => document.querySelectorAll(sel).length >= n",
+            arg=["#inbox-content input[type=checkbox][name='workitem_ids']", 2],
+            timeout=10000,
+        )
+
+        toolbar = page.locator("[x-show='hasSelection']").first
+        assert not toolbar.is_visible(), "Toolbar darf vor der Auswahl nicht sichtbar sein."
+
+        # Eine erst durch den Swap entstandene Checkbox manuell anklicken.
+        boxes.first.check()
+
+        # Regression-Kern: Toolbar erscheint und Zähler steht auf 1 — der
+        # eingeswappte Checkbox-Handler ist neu gebunden.
+        toolbar.wait_for(state="visible", timeout=3000)
+        count = page.locator("[x-text='selectionCount']").first
+        assert count.inner_text().strip() == "1", (
+            "Manueller Klick auf eine eingeswappte Checkbox muss den Zähler auf 1 setzen (Refs #1132)."
+        )
+
+    def test_select_all_then_deselect_after_person_filter(self, staff_page, base_url):
+        """Refs #1132: Auswahl-/Anwendungsmenge folgt den echten Checkboxen, auch
+        nachdem die Liste über einen Personenfilter geladen wurde.
+
+        Geladen über ``?assigned_to=<pk>``, damit alle Boxen schon beim Init
+        existieren: „Alle sichtbaren auswählen" → N, eine manuell abwählen → N-1,
+        Master nicht mehr „alle", und die versteckten ``workitem_ids`` der Bulk-
+        Form enthalten genau N-1 Werte ohne den abgewählten.
+        """
+        page = staff_page
+        tag = uuid.uuid4().hex[:6]
+        _create_workitem_assigned_no_default_wait(page, base_url, f"E2E-PFDesel-{tag}-1", assignee_label="Lena Weber")
+        _create_workitem_assigned_no_default_wait(page, base_url, f"E2E-PFDesel-{tag}-2", assignee_label="Lena Weber")
+        _create_workitem_assigned_no_default_wait(page, base_url, f"E2E-PFDesel-{tag}-3", assignee_label="Lena Weber")
+
+        lena_id = _filter_option_value(page, base_url, "Lena Weber")
+        if not lena_id:
+            pytest.skip("Lena Weber im Personenfilter nicht gefunden — Seed-Variation.")
+
+        # Direkt mit gesetztem Personenfilter laden — alle Boxen existieren beim Init.
+        page.goto(f"{base_url}/workitems/?assigned_to={lena_id}", wait_until="domcontentloaded")
+        page.wait_for_selector("#inbox-content", timeout=5000)
+        boxes = page.locator("#inbox-content input[type=checkbox][name='workitem_ids']:visible")
+        total = boxes.count()
+        assert total >= 3, f"Erwartet ≥3 sichtbare Checkboxen unter dem Personenfilter, gefunden {total}."
+
+        page.locator("#workitem-select-all").check()
+        count = page.locator("[x-text='selectionCount']").first
+        toolbar = page.locator("[x-show='hasSelection']").first
+        toolbar.wait_for(state="visible", timeout=3000)
+        assert count.inner_text().strip() == str(total)
+
+        deselected_value = boxes.first.get_attribute("value")
+        boxes.first.uncheck()
+        assert count.inner_text().strip() == str(total - 1), (
+            "Nach manuellem Abwählen muss der Zähler um 1 sinken (Refs #1132)."
+        )
+        assert not page.locator("#workitem-select-all").is_checked()
+
+        # Die Bulk-Status-Form trägt genau die noch ausgewählten IDs — ohne die
+        # abgewählte. Die angewandte Menge folgt damit der echten Auswahl.
+        submitted = page.locator("form[action*='bulk-status'] input[type=hidden][name='workitem_ids']")
+        submitted_values = submitted.evaluate_all("els => els.map(e => e.value)")
+        assert deselected_value not in submitted_values, (
+            "Abgewähltes Item darf NICHT mehr im Bulk-Submit stehen (Refs #1132)."
+        )
+        assert len(submitted_values) == total - 1
+
 
 class TestBulkPreservesFilterUI:
     """Refs #1132: nach dem Anwenden bleibt der aktive Filter erhalten.
@@ -383,12 +484,54 @@ class TestBulkPreservesFilterUI:
         # Und der Filter-Select zeigt nach dem Reload weiterhin „Aufgabe".
         assert page.locator("#filter-item-type").input_value() == "task"
 
+    def test_person_filter_preserved_in_url_after_bulk_apply(self, staff_page, base_url):
+        """Refs #1132 (gemeldeter Fall): nach einer Sammelaktion bleibt der
+        aktive *Personen*-Filter erhalten.
+
+        Genau das Fehlerbild aus dem Ticket: Leitung filtert nach „Lena Weber",
+        wendet eine Bulk-Priorität an — und landet scheinbar wieder in der
+        ungefilterten Liste, obwohl der Filter noch gesetzt schien. Anders als
+        ``test_filter_preserved_in_url_after_bulk_apply`` (Typ-Filter) prüft
+        dieser Test den Personenfilter (``assigned_to=<pk>``), dessen Erhalt der
+        Server über ``syncFilters`` → ``FILTER_PARAM_MAP`` herstellt.
+        """
+        page = staff_page
+        tag = uuid.uuid4().hex[:6]
+        _create_workitem_assigned_no_default_wait(page, base_url, f"E2E-PFKeep-{tag}", assignee_label="Lena Weber")
+
+        lena_id = _filter_option_value(page, base_url, "Lena Weber")
+        if not lena_id:
+            pytest.skip("Lena Weber im Personenfilter nicht gefunden — Seed-Variation.")
+
+        # Mit gesetztem Personenfilter laden, damit das fremd-zugewiesene Item
+        # sichtbar/auswählbar ist.
+        page.goto(f"{base_url}/workitems/?assigned_to={lena_id}", wait_until="domcontentloaded")
+        page.wait_for_selector("#inbox-content", timeout=5000)
+        boxes = page.locator("#inbox-content input[type=checkbox][name='workitem_ids']")
+        assert boxes.count() >= 1, "Mind. eine Aufgabe muss unter dem Personenfilter sichtbar sein."
+        boxes.first.check()
+        page.locator("[x-show='hasSelection']").first.wait_for(state="visible", timeout=3000)
+
+        page.select_option("#bulk-priority", value="urgent")
+        with page.expect_navigation(timeout=10000):
+            page.locator("form[action*='bulk-priority'] button[type=submit]").click()
+
+        # Der Personenfilter bleibt in der Redirect-URL erhalten (Refs #1132).
+        assert f"assigned_to={lena_id}" in page.url, f"Personenfilter ging nach Bulk-Apply verloren: {page.url}"
+        # Und der Filter-Select zeigt nach dem Reload weiterhin Lena Webers PK.
+        assert page.locator("#filter-assigned-to").input_value() == str(lena_id)
+
 
 def _create_workitem_assigned(page, base_url, title: str, assignee_label: str | None) -> str:
     """Wie ``_create_workitem``, aber setzt optional eine Zuweisung.
 
     ``assignee_label=None`` lässt die Aufgabe unassigned (Teamaufgabe).
     ``assignee_label`` wählt im ``assigned_to``-Select die passende Option.
+
+    Setzt voraus, dass die erstellende Person das Item in ihrer Default-Liste
+    sieht (selbst- oder unzugewiesen) — von dort wird die UUID gelesen und
+    zurückgegeben. Für fremd-zugewiesene Items, die im Default ausgeblendet
+    sind, stattdessen ``_create_workitem_assigned_no_default_wait`` verwenden.
     """
     page.goto(f"{base_url}/workitems/new/", wait_until="domcontentloaded")
     page.select_option("select[name='item_type']", value="task")

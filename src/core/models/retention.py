@@ -1,10 +1,10 @@
 """Retention proposals and legal holds for GDPR retention management."""
 
 import uuid
+from datetime import date
 
 from django.conf import settings
 from django.db import models
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models.managers import FacilityScopedManager
@@ -123,16 +123,10 @@ class LegalHold(models.Model):
 
     @property
     def is_active(self):
-        """A hold is active if not dismissed and not expired.
-
-        Uses ``timezone.localdate()`` (Europe/Berlin) rather than the naive,
-        server-local ``date.today()`` so the active/expired boundary does not
-        shift by a day near midnight (UTC vs. Berlin). Stays in lockstep with
-        the dashboard SQL filter in ``core.services.dashboard.main`` (#1191).
-        """
+        """A hold is active if not dismissed and not expired."""
         if self.dismissed_at:
             return False
-        return not (self.expires_at and self.expires_at < timezone.localdate())
+        return not (self.expires_at and self.expires_at < date.today())
 
     class Meta:
         verbose_name = _("Legal Hold")
