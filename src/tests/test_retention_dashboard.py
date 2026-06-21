@@ -1,7 +1,8 @@
 """Tests for retention proposals, legal holds, dashboard views, and enforce_retention --propose."""
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from io import StringIO
+from unittest import mock
 
 import pytest
 from django.core.management import call_command
@@ -353,6 +354,109 @@ class TestGetActiveHoldTargetIds:
         )
         ids = get_active_hold_target_ids(facility, "Event")
         assert old_anonymous_event.pk not in ids
+
+
+# ---------------------------------------------------------------------------
+# Near-midnight TZ boundary for the *enforcement* path (#1192)
+#
+# #1191 moved LegalHold.is_active + the dashboard-SQL filter from naive
+# date.today() to timezone.localdate() (Europe/Berlin), but the enforcement
+# helpers in core.retention.legal_holds (has_active_hold /
+# get_active_hold_target_ids, used by enforce_retention) still compared against
+# date.today(). Near midnight the UTC date and the Berlin local date diverge, so
+# the two sides could classify the active/expired boundary one day apart. These
+# tests pin an instant where UTC date != Berlin date and assert the Berlin local
+# date (timezone.localdate()) now decides — i.e. that date.today() is no longer
+# authoritative. freezegun is not in this venv, so the boundary is built by
+# patching timezone.now (which localdate() derives from). The genuine, non-
+# tautological TZ boundary is that naive date.today() returns the UTC date here
+# (the container runs in UTC) and would keep the boundary hold ACTIVE, whereas
+# the Berlin local date classifies it EXPIRED. Mirrors TestGetActiveHoldTargetIds
+# and TestEnforceRetentionLegalHoldFilter. Refs #1191.
+# ---------------------------------------------------------------------------
+
+# 2026-06-21 22:30 UTC == 2026-06-22 00:30 Europe/Berlin (CEST, +02:00):
+#   UTC date    = 2026-06-21  (the naive date.today() value the bug used)
+#   Berlin date = 2026-06-22  (what timezone.localdate() must return)
+_BOUNDARY_INSTANT = datetime(2026, 6, 21, 22, 30, tzinfo=UTC)
+_UTC_DATE = date(2026, 6, 21)
+_BERLIN_DATE = date(2026, 6, 22)
+# A hold expiring on the UTC date sits exactly between the two candidate "today"
+# values, so the verdict flips with the chosen date:
+#   naive/UTC today=2026-06-21 -> expires_at < today is False -> ACTIVE  (bug)
+#   Berlin    today=2026-06-22 -> expires_at < today is True  -> EXPIRED (fix)
+_EXPIRES_ON_UTC_DATE = _UTC_DATE
+
+
+def _assert_boundary_really_diverges():
+    """Pin the chosen instant: UTC date and Berlin local date truly differ."""
+    assert _BOUNDARY_INSTANT.date() == _UTC_DATE
+    assert timezone.localtime(_BOUNDARY_INSTANT).date() == _BERLIN_DATE
+    assert _UTC_DATE != _BERLIN_DATE
+
+
+@pytest.mark.django_db
+class TestEnforcementLocaldateBoundary:
+    def test_get_active_hold_target_ids_uses_berlin_local_date(self, facility, lead_user, old_anonymous_event):
+        """A hold expiring on the UTC date is EXPIRED by the Berlin date, so it
+        must not appear in the active-target set — only true if the helper uses
+        timezone.localdate() rather than naive date.today()."""
+        _assert_boundary_really_diverges()
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=old_anonymous_event.pk,
+            reason="Boundary hold",
+            expires_at=_EXPIRES_ON_UTC_DATE,
+            created_by=lead_user,
+        )
+
+        with mock.patch("django.utils.timezone.now", return_value=_BOUNDARY_INSTANT):
+            assert timezone.localdate() == _BERLIN_DATE  # guard: lever is wired
+            # date.today() (container UTC) would still say active and include it.
+            assert date.today() == _UTC_DATE
+            ids = get_active_hold_target_ids(facility, "Event")
+
+        assert old_anonymous_event.pk not in ids
+
+    def test_has_active_hold_uses_berlin_local_date(self, facility, lead_user, old_anonymous_event):
+        """has_active_hold must agree: the boundary hold is expired by the
+        Berlin date, so the target has no active hold."""
+        _assert_boundary_really_diverges()
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=old_anonymous_event.pk,
+            reason="Boundary hold",
+            expires_at=_EXPIRES_ON_UTC_DATE,
+            created_by=lead_user,
+        )
+
+        with mock.patch("django.utils.timezone.now", return_value=_BOUNDARY_INSTANT):
+            assert timezone.localdate() == _BERLIN_DATE  # guard: lever is wired
+            assert has_active_hold(facility, "Event", old_anonymous_event.pk) is False
+
+    def test_enforce_retention_deletes_when_hold_expired_by_berlin_date(
+        self, facility, settings_obj, old_anonymous_event, lead_user
+    ):
+        """End-to-end: enforce_retention deletes the due event because its hold
+        is expired by the Berlin local date. With the old naive date.today()
+        (UTC) the hold would still count as active and block deletion."""
+        _assert_boundary_really_diverges()
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=old_anonymous_event.pk,
+            reason="Boundary hold",
+            expires_at=_EXPIRES_ON_UTC_DATE,
+            created_by=lead_user,
+        )
+
+        with mock.patch("django.utils.timezone.now", return_value=_BOUNDARY_INSTANT):
+            call_command("enforce_retention", stdout=StringIO())
+
+        old_anonymous_event.refresh_from_db()
+        assert old_anonymous_event.is_deleted is True
 
 
 @pytest.mark.django_db
@@ -717,11 +821,20 @@ class TestCategoryCards:
 
 @pytest.mark.django_db
 class TestRetentionSettingsFor:
-    def test_reads_facility_settings_when_present(self, facility, settings_obj):
+    def test_reads_facility_settings_when_present(self, facility):
+        # Non-default values (the defaults are 90/365/3650) so a regression
+        # that ignores the Settings row and always returns the defaults makes
+        # this test fail instead of staying green (#1188).
+        Settings.objects.create(
+            facility=facility,
+            retention_anonymous_days=30,
+            retention_identified_days=180,
+            retention_qualified_days=1000,
+        )
         assert _retention_settings_for(facility) == {
-            "anonymous": 90,
-            "identified": 365,
-            "qualified": 3650,
+            "anonymous": 30,
+            "identified": 180,
+            "qualified": 1000,
         }
 
     def test_defaults_when_no_settings_row(self, facility):

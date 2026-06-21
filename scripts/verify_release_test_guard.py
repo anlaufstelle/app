@@ -27,6 +27,18 @@ Release-Exclude-Liste, driftet dieser Guard automatisch mit. Fehlt die Datei
 weg ist), endet der Guard mit Exit 0 + Hinweis — dort ist er per Definition
 moot, und er soll Stage-CI nicht selbst rot machen.
 
+Anti-Drift-Sync gegen die Strip-Autorität (Refs #1189)
+======================================================
+Die FORBIDDEN-Regex ist allerdings nur das *Spiegelbild* der eigentlichen
+Strip-Autorität: dem ``rm -rf``/``rm -f``-Block in
+``dev-ops/release/build-release.sh``, der die dev-only Pfade physisch aus dem
+Public-Snapshot entfernt. Beide Listen wurden bisher von Hand synchron gehalten
+und konnten still driften (Pfad in build-release.sh ergänzt, FORBIDDEN-Regex
+vergessen ⇒ Guard läuft stale). Vor dem eigentlichen Scan gleicht ``main`` die
+beiden Quellen daher über ``assert_strip_lists_in_sync`` ab (notations-
+unabhängig via ``canonical_strip_key``). Drift ⇒ Exit 2. Fehlt build-release.sh
+(gestrippter Public-Tree), ist der Sync-Check moot und wird übersprungen.
+
 Was zählt als „verbotene Referenz"
 ==================================
 Gescannt wird ``src/tests/**/*.py``. Für jede Datei werden über das ``ast``-
@@ -77,9 +89,13 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_TESTS_DIR = ROOT / "src" / "tests"
 DEFAULT_LEAK_SCRIPT = ROOT / "dev-ops" / "release" / "verify-leak.sh"
+DEFAULT_BUILD_SCRIPT = ROOT / "dev-ops" / "release" / "build-release.sh"
 
 # Zeile der Form  FORBIDDEN='^( … )'  in verify-leak.sh.
 _FORBIDDEN_LINE = re.compile(r"""^\s*FORBIDDEN=(['"])(?P<re>.*)\1\s*$""")
+
+# Strip-Zeile in build-release.sh:  rm -rf "$RELEASE_DIR/<pfad>"  bzw.  rm -f …
+_RM_STRIP_LINE = re.compile(r"""^\s*rm\s+-[rf]+\s+(['"])\$RELEASE_DIR/(?P<path>[^'"]+)\1\s*$""")
 
 # Skip-Gate-Marker, deren Begründungstext einen Prefix nennen kann.
 _SKIP_CALL = re.compile(r"pytest\.(?:skip|importorskip)\b")
@@ -198,6 +214,90 @@ def _literalize(fragment: str) -> str:
     return fragment.replace("\\", "").rstrip("$").strip()
 
 
+# ── Anti-Drift-Sync: Strip-Autorität (build-release.sh) ↔ FORBIDDEN ─────────
+def parse_stripped_paths_from_build_release(build_script: Path) -> list[str]:
+    """Die im ``rm -rf``/``rm -f``-Block gestrippten Pfade aus build-release.sh.
+
+    Die *eigentliche* Strip-Autorität des Public-Snapshots ist nicht die
+    FORBIDDEN-Regex in verify-leak.sh, sondern dieser Block — er entfernt die
+    dev-only Pfade physisch aus dem Release-Tree (Refs #1189). Geparst werden
+    Zeilen der Form::
+
+        rm -rf "$RELEASE_DIR/dev-ops"
+        rm -f  "$RELEASE_DIR/scripts/run_mutmut.py"
+
+    Rückgabe: die Pfade *relativ zum Release-Root* (ohne ``$RELEASE_DIR/``),
+    in Skript-Reihenfolge, dedupliziert. Beispiele: ``dev-ops``,
+    ``docs/testing/runs``, ``CLAUDE.md``, ``scripts/run_mutmut.py``.
+    """
+    paths: list[str] = []
+    for line in build_script.read_text(encoding="utf-8").splitlines():
+        match = _RM_STRIP_LINE.match(line)
+        if match:
+            path = match.group("path")
+            if path and path not in paths:
+                paths.append(path)
+    if not paths:
+        raise ValueError(f'Kein rm -rf/-f "$RELEASE_DIR/…"-Block in {build_script} gefunden — Format geändert?')
+    return paths
+
+
+def canonical_strip_key(path: str) -> str:
+    """Notations-unabhängiger Vergleichsschlüssel für einen Strip-/Exclude-Pfad.
+
+    build-release.sh (rm-Block) und die FORBIDDEN-Regex notieren denselben Pfad
+    unterschiedlich. Diese Funktion bildet beide auf eine gemeinsame Kanonform
+    ab, damit der Sync-Check (Refs #1189) sie 1:1 vergleichen kann:
+
+      * Verzeichnis-Marker ``/`` am Ende entfernen
+        (FORBIDDEN: ``dev-ops/`` — build: ``dev-ops``).
+      * Regex-Boundary ``.`` am Ende entfernen
+        (FORBIDDEN: ``scripts/run_mutmut.`` aus ``…(run_mutmut|…)\\.``).
+      * Ausführbare Endung ``.py``/``.sh`` entfernen, die nur build-seitig am
+        vollen Dateinamen steht (``scripts/run_mutmut.py``). ``.md``-Dateien
+        tragen ihren vollen Namen auf BEIDEN Seiten — sie werden bewusst NICHT
+        gestutzt, damit kein Verzeichnis mit einer gleichnamigen ``.md`` kollidiert.
+
+    Bewusst eng gehalten: nur die real auftretenden Notations-Differenzen werden
+    geglättet; jede echte Pfad-Abweichung bleibt sichtbar (Drift-Erkennung).
+    """
+    key = path.rstrip("/")
+    if key.endswith("."):
+        key = key[:-1]
+    elif key.endswith(".py") or key.endswith(".sh"):
+        key = key.rsplit(".", 1)[0]
+    return key
+
+
+def assert_strip_lists_in_sync(build_script: Path, leak_script: Path) -> tuple[int, int]:
+    """Strip-Liste (build-release.sh) ↔ FORBIDDEN (verify-leak.sh) abgleichen.
+
+    Verifiziert, dass beide Quellen — über ``canonical_strip_key`` normalisiert —
+    exakt dieselben Pfade beschreiben. Rückgabe ``(n_strip, n_forbidden)``: die
+    Pfad-Anzahl je Quelle (zum Loggen). Wirft ``ValueError`` bei Drift oder wenn
+    die Kanonisierung zwei Pfade derselben Quelle kollidieren lässt.
+    """
+    strip_paths = parse_stripped_paths_from_build_release(build_script)
+    forbidden = parse_excluded_prefixes(leak_script)
+
+    strip_keys = {canonical_strip_key(p) for p in strip_paths}
+    forbidden_keys = {canonical_strip_key(p) for p in forbidden}
+    if len(strip_keys) != len(strip_paths):
+        raise ValueError(f"Kanon-Kollision in der Strip-Liste von {build_script.name}")
+    if len(forbidden_keys) != len(forbidden):
+        raise ValueError(f"Kanon-Kollision in der FORBIDDEN-Liste von {leak_script.name}")
+
+    only_build = strip_keys - forbidden_keys
+    only_forbidden = forbidden_keys - strip_keys
+    if only_build or only_forbidden:
+        raise ValueError(
+            "Strip-Liste (build-release.sh) und FORBIDDEN (verify-leak.sh) sind gedriftet — "
+            f"nur in build-release.sh: {sorted(only_build)}; "
+            f"nur in verify-leak.sh: {sorted(only_forbidden)} (Refs #1189)."
+        )
+    return len(strip_paths), len(forbidden)
+
+
 # ── AST-/Token-Analyse einer Test-Datei ────────────────────────────────────
 def _docstring_node_ids(tree: ast.AST) -> set[int]:
     """``id()`` aller String-Konstanten, die Docstrings sind (Modul/Klasse/Func).
@@ -290,6 +390,12 @@ def main(argv: list[str] | None = None) -> int:
         default=DEFAULT_LEAK_SCRIPT,
         help="Quelle der Exclude-Liste (default: dev-ops/release/verify-leak.sh)",
     )
+    parser.add_argument(
+        "--build-script",
+        type=Path,
+        default=DEFAULT_BUILD_SCRIPT,
+        help="Strip-Autorität für den Sync-Check (default: dev-ops/release/build-release.sh)",
+    )
     args = parser.parse_args(argv)
 
     leak_script: Path = args.leak_script
@@ -307,6 +413,29 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         print(f"FEHLER: {exc}", file=sys.stderr)
         return 2
+
+    # Anti-Drift-Sync (Refs #1189): die FORBIDDEN-Liste oben ist nur das *Spiegel-
+    # bild* der eigentlichen Strip-Autorität (rm-Block in build-release.sh). Beide
+    # wurden bisher von Hand synchron gehalten und konnten still driften. Hier
+    # gegeneinander verifizieren, bevor wir gegen die FORBIDDEN-Liste scannen —
+    # sonst liefe der Guard auf einer stale Liste. build-release.sh fehlt im
+    # gestrippten Public-Tree → dort moot, nicht failen.
+    build_script: Path = args.build_script
+    if build_script.is_file():
+        try:
+            n_strip, n_forbidden = assert_strip_lists_in_sync(build_script, leak_script)
+        except ValueError as exc:
+            print(f"FEHLER: {exc}", file=sys.stderr)
+            return 2
+        print(
+            f"OK: Strip-Liste ({build_script.name}, {n_strip} Pfade) und FORBIDDEN "
+            f"({leak_script.name}, {n_forbidden} Prefixe) sind synchron."
+        )
+    else:
+        print(
+            f"HINWEIS: Strip-Autorität {build_script.name} nicht vorhanden — "
+            "Sync-Check übersprungen (im Public-Snapshot per Definition moot).",
+        )
 
     tests_dir: Path = args.tests_dir
     if not tests_dir.is_dir():

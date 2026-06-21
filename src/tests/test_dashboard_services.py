@@ -6,7 +6,7 @@ Counts, die im rollenspezifischen Dashboard-Template gerendert werden.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import timedelta
 
 import pytest
 from django.utils import timezone
@@ -179,7 +179,7 @@ class TestLeadDashboardContext:
             target_id=client_identified.pk,
             reason="Läuft heute ab",
             created_by=lead_user,
-            expires_at=date.today(),
+            expires_at=timezone.localdate(),
         )
 
         ctx = lead_dashboard_context(lead_user, facility)
@@ -194,7 +194,7 @@ class TestLeadDashboardContext:
             target_id=client_identified.pk,
             reason="Gestern abgelaufen",
             created_by=lead_user,
-            expires_at=date.today() - timedelta(days=1),
+            expires_at=timezone.localdate() - timedelta(days=1),
         )
 
         ctx = lead_dashboard_context(lead_user, facility)
@@ -209,7 +209,7 @@ class TestLeadDashboardContext:
             target_id=client_identified.pk,
             reason="Aufgehoben trotz Zukunfts-Ablauf",
             created_by=lead_user,
-            expires_at=date.today() + timedelta(days=30),
+            expires_at=timezone.localdate() + timedelta(days=30),
             dismissed_at=timezone.now(),
         )
 

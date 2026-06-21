@@ -4,8 +4,6 @@ Aus ``services/retention.py`` ausgekoppelt — eigenes Thema (Sperre
 gegen Loeschung; orthogonal zu Vorschlaegen und Enforcement).
 """
 
-from datetime import date
-
 from django.db import transaction
 from django.utils import timezone
 
@@ -67,7 +65,13 @@ def dismiss_legal_hold(hold, user):
 
 
 def has_active_hold(facility, target_type, target_id):
-    """Check if a target has an active (not dismissed, not expired) legal hold."""
+    """Check if a target has an active (not dismissed, not expired) legal hold.
+
+    Uses ``timezone.localdate()`` (Europe/Berlin) rather than the naive,
+    server-local ``date.today()`` so the active/expired boundary stays in
+    lockstep with ``LegalHold.is_active`` and the dashboard SQL filter near
+    midnight (UTC vs. Berlin); see #1191 (Refs #1192).
+    """
     return (
         LegalHold.objects.filter(
             facility=facility,
@@ -76,19 +80,24 @@ def has_active_hold(facility, target_type, target_id):
             dismissed_at__isnull=True,
         )
         .exclude(
-            expires_at__lt=date.today(),
+            expires_at__lt=timezone.localdate(),
         )
         .exists()
     )
 
 
 def get_active_hold_target_ids(facility, target_type="Event"):
-    """Return set of target_ids with active legal holds for a facility."""
+    """Return set of target_ids with active legal holds for a facility.
+
+    Uses ``timezone.localdate()`` (Europe/Berlin) for the active/expired
+    boundary, in lockstep with ``has_active_hold`` and the dashboard filter;
+    see #1191 (Refs #1192).
+    """
     qs = LegalHold.objects.filter(
         facility=facility,
         target_type=target_type,
         dismissed_at__isnull=True,
     ).exclude(
-        expires_at__lt=date.today(),
+        expires_at__lt=timezone.localdate(),
     )
     return set(qs.values_list("target_id", flat=True))
