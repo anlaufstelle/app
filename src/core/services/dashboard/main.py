@@ -9,7 +9,7 @@ bestehende Daten verdichtet aggregiert.
 
 from __future__ import annotations
 
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 from django.db.models import F, Q
 from django.utils import timezone
@@ -81,13 +81,10 @@ def lead_dashboard_context(user, facility) -> dict:
 
     # Spiegelt LegalHold.is_active 1:1 in SQL: nicht aufgehoben UND
     # (kein Ablaufdatum ODER Ablaufdatum >= heute). is_active nutzt
-    # timezone.localdate() (Europe/Berlin) mit striktem "<", daher hier
-    # timezone.localdate()/__gte. Beide Stellen müssen dasselbe
-    # (lokale) Grenzdatum verwenden, sonst driften sie nahe Mitternacht
-    # (UTC vs. Berlin) auseinander (Refs #1166, #1191).
+    # date.today() mit striktem "<", daher hier date.today()/__gte (Refs #1166).
     active_legal_holds = (
         LegalHold.objects.filter(facility=facility, dismissed_at__isnull=True)
-        .filter(Q(expires_at__isnull=True) | Q(expires_at__gte=timezone.localdate()))
+        .filter(Q(expires_at__isnull=True) | Q(expires_at__gte=date.today()))
         .count()
     )
 

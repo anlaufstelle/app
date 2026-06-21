@@ -717,11 +717,20 @@ class TestCategoryCards:
 
 @pytest.mark.django_db
 class TestRetentionSettingsFor:
-    def test_reads_facility_settings_when_present(self, facility, settings_obj):
+    def test_reads_facility_settings_when_present(self, facility):
+        # Non-default values (the defaults are 90/365/3650) so a regression
+        # that ignores the Settings row and always returns the defaults makes
+        # this test fail instead of staying green (#1188).
+        Settings.objects.create(
+            facility=facility,
+            retention_anonymous_days=30,
+            retention_identified_days=180,
+            retention_qualified_days=1000,
+        )
         assert _retention_settings_for(facility) == {
-            "anonymous": 90,
-            "identified": 365,
-            "qualified": 3650,
+            "anonymous": 30,
+            "identified": 180,
+            "qualified": 1000,
         }
 
     def test_defaults_when_no_settings_row(self, facility):
