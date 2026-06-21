@@ -158,6 +158,15 @@ class TestSudoModeTwoFactor:
         response = client.post(reverse("sudo_mode"), {"password": "test-pw-123", "next": "/clients/"})
         assert response.status_code == 403
         assert SUDO_SESSION_KEY not in client.session
+        log = AuditLog.objects.filter(
+            user=admin_user,
+            action=AuditLog.Action.SUDO_MODE_FAILED,
+        ).latest("timestamp")
+        assert log.detail == {"factor": "otp"}
+        assert not AuditLog.objects.filter(
+            user=admin_user,
+            action=AuditLog.Action.SUDO_MODE_ENTERED,
+        ).exists()
 
     def test_totp_user_with_valid_otp_enters_sudo(self, client, admin_user):
         self._login_with_password(client, admin_user)
