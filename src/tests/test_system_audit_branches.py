@@ -231,3 +231,32 @@ class TestSystemAuditLogExportView:
         AuditLog.objects.create(action=AuditLog.Action.LOGIN, facility=None)
         response = client.get(reverse("core:system_audit_export") + "?facility=__null__")
         assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestSystemAuditExportRateLimit:
+    """Refs #1193 (Refs #1158, #1084): RATELIMIT_BULK_ACTION (30/h/User) auf den
+    Cross-Facility-Audit-Export — letzte Luecke im sonst dichten Drossel-Netz.
+
+    Tests laufen mit ``RATELIMIT_ENABLE = False``; hier wird das Limit explizit
+    aktiviert (Muster: ``test_dsgvo_package.TestDSGVORateLimit``). django-ratelimit
+    mit ``block=True`` antwortet mit 403.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _enable_ratelimit(self, settings):
+        from django.core.cache import cache
+
+        settings.RATELIMIT_ENABLE = True
+        cache.clear()
+        yield
+        cache.clear()
+
+    def test_export_blocked_after_30_requests(self, client, super_admin_user):
+        super_admin_user.set_password("testpass123")
+        super_admin_user.save()
+        client.force_login(super_admin_user)
+        url = reverse("core:system_audit_export")
+        for _ in range(30):
+            assert client.get(url).status_code == 200
+        assert client.get(url).status_code == 403

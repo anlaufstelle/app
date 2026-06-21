@@ -11,9 +11,11 @@ from urllib.parse import urlencode
 
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
+from django.utils.decorators import method_decorator
 from django.views import View
+from django_ratelimit.decorators import ratelimit
 
-from core.constants import AUDIT_PAGE_SIZE
+from core.constants import AUDIT_PAGE_SIZE, RATELIMIT_BULK_ACTION
 from core.models import AuditLog, Facility
 from core.models.user import User
 from core.services.audit import audit_system_view
@@ -181,6 +183,11 @@ class SystemAuditLogExportView(SystemAuditMixin, View):
 
     FIELDS = ["timestamp", "user", "action", "target_type", "target_id", "facility", "ip_address", "detail"]
 
+    # Refs #1158, #1084: konservatives Ratelimit (30/h/User) auf den
+    # Cross-Facility-Audit-Export — letzte Luecke im sonst dichten
+    # Drossel-Netz. super_admin-only ⇒ geringe Angriffsflaeche, daher
+    # konsistent mit den uebrigen Bulk-Exporten (analog DSGVO-Views).
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_BULK_ACTION, method="GET", block=True))
     def get(self, request):
         export_format = request.GET.get("format", "csv").lower()
         if export_format not in ("csv", "json"):
