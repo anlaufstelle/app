@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> The German version is the authoritative source. Last synced: 2026-05-26 (v0.12.0).
+> The German version is the authoritative source. Last synced: 2026-06-21 (v0.15.0).
 
 # Anlaufstelle -- Admin Guide
 

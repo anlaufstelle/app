@@ -22,7 +22,7 @@
 
 ## German-only Documentation
 
-The following documents are available only in German. They are either deeply rooted in German legal/regulatory frameworks or primarily relevant for internal development.
+The documents listed below are **intentionally German-only** — they are not awaiting translation. Each is either deeply rooted in German legal/regulatory frameworks (DSGVO, BDSG, SGB X) or primarily relevant for internal development and operations, so an English version would add little value. Where the underlying concepts matter to an English-speaking audience, a companion document already exists — for example the [domain concept summary](domain-concept-summary.md) and the bilingual [glossary](glossary.md).
 
 ### Domain Concept (Fachkonzept)
 
