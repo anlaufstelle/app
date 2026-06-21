@@ -126,6 +126,30 @@ def test_ambiguous_double_version_literal_is_flagged(tmp_path: Path) -> None:
     assert "mehrdeutig" in combined.lower()
 
 
+def test_missing_version_string_is_reported(tmp_path: Path) -> None:
+    """Kein ``version:"x.y.z"``-Literal im Min-File -> kein Treffer -> Exit != 0.
+
+    Zerstoert den einzigen Versions-String im vendored htmx-File, sodass KEIN
+    Pattern mehr greift (``extract_vendored_version`` liefert ``None``). Der Guard
+    darf das nicht als „OK" durchwinken, sondern muss laut failen und Lib + Datei
+    in der Meldung nennen — sonst wuerde ein Build mit unerwartetem Versions-Format
+    still als synchron gelten.
+    """
+    pinned = json.loads((REPO_ROOT / "package.json").read_text())["devDependencies"]["htmx.org"]
+    # Das Versions-Literal so verbiegen, dass weder der htmx-Pattern noch ein
+    # anderer generischer Pattern es noch matcht (Pin in package.json bleibt gueltig).
+    mirror = _mirror_repo(
+        tmp_path / "repo",
+        mutate={str(VENDOR_REL / "htmx.min.js"): f'version:"{pinned}"\x00version:"NICHT_GEFUNDEN"'},
+    )
+    result = _run(mirror)
+    combined = result.stdout + result.stderr
+    assert result.returncode == 1, f"Guard sollte ohne Versions-Treffer failen:\n{combined}"
+    assert "htmx.org" in combined
+    assert "htmx.min.js" in combined
+    assert "kein Versions-String" in combined
+
+
 def test_manipulated_package_version_is_detected(tmp_path: Path) -> None:
     """Verbiegt die gepinnte dexie-Version in package.json -> Drift -> Exit != 0."""
     mirror = _mirror_repo(

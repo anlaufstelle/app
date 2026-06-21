@@ -101,9 +101,10 @@ class AmbiguousVersionError(Exception):
 
     Die generischen ``version:"x.y.z"``-Patterns (htmx/alpine/dexie) verlassen
     sich darauf, dass GENAU EIN solches Literal pro Min-File existiert. Bettet ein
-    kuenftiger Build ein zweites ein, waere ``re.search`` (erster Treffer) ein
-    stiller Fehler — moeglicherweise die FALSCHE Version. Statt zu raten, brechen
-    wir hier laut ab; der Aufrufer reichert die Meldung um Lib/Datei an.
+    kuenftiger Build ein zweites ein, lieferte ``re.findall`` mehrere Treffer; den
+    ersten blind zu nehmen waere ein stiller Fehler — moeglicherweise die FALSCHE
+    Version. Statt zu raten, brechen wir hier laut ab; der Aufrufer reichert die
+    Meldung um Lib/Datei an.
     """
 
 
@@ -112,9 +113,9 @@ def extract_vendored_version(text: str, patterns: tuple[str, ...]) -> str | None
 
     Die ``patterns`` werden der Reihe nach probiert (Builds variieren leicht). Das
     ERSTE Pattern, das ueberhaupt greift, entscheidet — muss dann aber GENAU EINEN
-    Treffer liefern. Mehrere Treffer desselben Patterns sind mehrdeutig und loesen
-    ``AmbiguousVersionError`` aus (statt still ``re.search``s ersten Treffer zu
-    nehmen). Kein Pattern greift -> ``None``.
+    Treffer liefern. Geprueft wird per ``re.findall``: mehrere Treffer desselben
+    Patterns sind mehrdeutig und loesen ``AmbiguousVersionError`` aus (statt still
+    den ersten Treffer zu nehmen). Kein Pattern greift -> ``None``.
     """
     for pattern in patterns:
         matches = re.findall(pattern, text)
