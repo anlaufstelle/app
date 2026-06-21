@@ -11,6 +11,11 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import AuditLog, Event, LegalHold, RetentionProposal, Settings
+from core.models.settings import (
+    DEFAULT_RETENTION_ANONYMOUS_DAYS,
+    DEFAULT_RETENTION_IDENTIFIED_DAYS,
+    DEFAULT_RETENTION_QUALIFIED_DAYS,
+)
 
 # Private dashboard-context helpers (#1161): imported directly from the
 # implementation module — the service facade only re-exports public symbols.
@@ -39,9 +44,9 @@ from core.services.retention import (
 def settings_obj(facility):
     return Settings.objects.create(
         facility=facility,
-        retention_anonymous_days=90,
-        retention_identified_days=365,
-        retention_qualified_days=3650,
+        retention_anonymous_days=DEFAULT_RETENTION_ANONYMOUS_DAYS,
+        retention_identified_days=DEFAULT_RETENTION_IDENTIFIED_DAYS,
+        retention_qualified_days=DEFAULT_RETENTION_QUALIFIED_DAYS,
     )
 
 
@@ -840,7 +845,7 @@ class TestRetentionSettingsFor:
     def test_defaults_when_no_settings_row(self, facility):
         # No Settings object created → mirrors the enforce_retention defaults.
         assert _retention_settings_for(facility) == {
-            "anonymous": 90,
-            "identified": 365,
-            "qualified": 3650,
+            "anonymous": DEFAULT_RETENTION_ANONYMOUS_DAYS,
+            "identified": DEFAULT_RETENTION_IDENTIFIED_DAYS,
+            "qualified": DEFAULT_RETENTION_QUALIFIED_DAYS,
         }

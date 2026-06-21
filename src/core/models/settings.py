@@ -6,6 +6,12 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models.managers import FacilityScopedManager
 
+# Default retention periods (days). Shared so tests can assert the same values
+# the model fields default to, instead of re-hardcoding the literals (#1205).
+DEFAULT_RETENTION_ANONYMOUS_DAYS = 90
+DEFAULT_RETENTION_IDENTIFIED_DAYS = 365
+DEFAULT_RETENTION_QUALIFIED_DAYS = 3650
+
 
 class Settings(models.Model):
     """Configuration for a facility (1:1 with Facility)."""
@@ -37,15 +43,15 @@ class Settings(models.Model):
         verbose_name=_("Session-Timeout (Minuten)"),
     )
     retention_anonymous_days = models.IntegerField(
-        default=90,
+        default=DEFAULT_RETENTION_ANONYMOUS_DAYS,
         verbose_name=_("Aufbewahrung anonym (Tage)"),
     )
     retention_identified_days = models.IntegerField(
-        default=365,
+        default=DEFAULT_RETENTION_IDENTIFIED_DAYS,
         verbose_name=_("Aufbewahrung identifiziert (Tage)"),
     )
     retention_qualified_days = models.IntegerField(
-        default=3650,
+        default=DEFAULT_RETENTION_QUALIFIED_DAYS,
         verbose_name=_("Aufbewahrung qualifiziert (Tage)"),
     )
     retention_activities_days = models.IntegerField(
