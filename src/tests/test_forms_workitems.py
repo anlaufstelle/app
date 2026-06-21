@@ -443,7 +443,7 @@ class TestWorkItemDueDateNativeInput:
         validiert) fuer die freie Eingabe ab.
         """
         form = WorkItemForm(data=_base_data(due_date="kein-datum"), facility=facility)
-        assert_field_error(form, "due_date", "")
+        assert_field_error(form, "due_date", "gültiges Datum")
 
     # --- Akzeptanzkriterium #4: neue Aufgabe nicht in der Vergangenheit ---
 
