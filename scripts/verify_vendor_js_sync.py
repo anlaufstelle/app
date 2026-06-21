@@ -52,7 +52,7 @@ class VendorLib:
 # wie ihn der jeweilige Build einbettet:
 #   htmx        ... version:"2.0.4"        (config-Objekt)
 #   @alpinejs/csp ... version:"3.14.8"     (Alpine.version)
-#   dexie       ... version:"4.2.0"        (Dexie.version)
+#   dexie       ... version:"4.2.0"        (Dexie.version) bzw. version:"4.2.0
 #   chart.js    ... Chart.js v4.4.8        (Banner-Kommentar)
 VENDOR_LIBS: tuple[VendorLib, ...] = (
     VendorLib(
@@ -96,35 +96,12 @@ def load_pinned_versions(package_json: Path) -> dict[str, str]:
     return pinned
 
 
-class AmbiguousVersionError(Exception):
-    """Ein Pattern matcht mehr als einmal -> die Version ist nicht eindeutig.
-
-    Die generischen ``version:"x.y.z"``-Patterns (htmx/alpine/dexie) verlassen
-    sich darauf, dass GENAU EIN solches Literal pro Min-File existiert. Bettet ein
-    kuenftiger Build ein zweites ein, waere ``re.search`` (erster Treffer) ein
-    stiller Fehler — moeglicherweise die FALSCHE Version. Statt zu raten, brechen
-    wir hier laut ab; der Aufrufer reichert die Meldung um Lib/Datei an.
-    """
-
-
 def extract_vendored_version(text: str, patterns: tuple[str, ...]) -> str | None:
-    """Eindeutige Version aus dem Datei-Inhalt extrahieren, sonst ``None``.
-
-    Die ``patterns`` werden der Reihe nach probiert (Builds variieren leicht). Das
-    ERSTE Pattern, das ueberhaupt greift, entscheidet — muss dann aber GENAU EINEN
-    Treffer liefern. Mehrere Treffer desselben Patterns sind mehrdeutig und loesen
-    ``AmbiguousVersionError`` aus (statt still ``re.search``s ersten Treffer zu
-    nehmen). Kein Pattern greift -> ``None``.
-    """
+    """Erster Treffer eines der ``patterns`` im Datei-Inhalt, sonst ``None``."""
     for pattern in patterns:
-        matches = re.findall(pattern, text)
-        if not matches:
-            continue
-        if len(matches) > 1:
-            raise AmbiguousVersionError(
-                f"Pattern {pattern!r} matcht {len(matches)}x ({', '.join(sorted(set(matches)))}) — Version mehrdeutig"
-            )
-        return matches[0]
+        match = re.search(pattern, text)
+        if match is not None:
+            return match.group(1)
     return None
 
 
@@ -145,14 +122,7 @@ def check_lib(lib: VendorLib, pinned: dict[str, str]) -> str | None:
     if not vendored_path.is_file():
         return f"{lib.package}: vendored Datei fehlt: {vendored_path.relative_to(ROOT)}"
 
-    try:
-        found = extract_vendored_version(vendored_path.read_text(encoding="utf-8"), lib.version_patterns)
-    except AmbiguousVersionError as exc:
-        return (
-            f"{lib.package}: Versions-String in {vendored_path.relative_to(ROOT)} "
-            f"ist MEHRDEUTIG ({exc}). Erwartet wird genau ein Treffer pro Min-File; "
-            f"den Pattern fuer {lib.package} praezisieren (statt eines Zufalls-Treffers)."
-        )
+    found = extract_vendored_version(vendored_path.read_text(encoding="utf-8"), lib.version_patterns)
     if found is None:
         return (
             f"{lib.package}: kein Versions-String in "

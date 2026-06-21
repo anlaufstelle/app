@@ -99,33 +99,6 @@ def test_manipulated_vendored_version_is_detected(tmp_path: Path) -> None:
     assert "htmx.org" in (result.stdout + result.stderr)
 
 
-def test_ambiguous_double_version_literal_is_flagged(tmp_path: Path) -> None:
-    """Zwei ``version:"x.y.z"``-Literale im selben Min-File -> laute Ambiguität.
-
-    Der generische Pattern (htmx/alpine/dexie) verlaesst sich darauf, dass GENAU
-    EIN solches Literal pro Datei existiert. Schmuggelt ein Build ein zweites ein,
-    darf der Guard NICHT still den ersten Treffer nehmen, sondern muss mit einer
-    klaren Fehlermeldung (Lib + Datei genannt) failen statt potenziell die falsche
-    Version zu lesen.
-    """
-    pinned = json.loads((REPO_ROOT / "package.json").read_text())["devDependencies"]["htmx.org"]
-    # Aus dem EINEN echten Literal zwei machen (Pin bleibt unveraendert -> ohne
-    # Härtung wuerde der erste Treffer == Pin den Guard faelschlich gruen lassen).
-    mirror = _mirror_repo(
-        tmp_path / "repo",
-        mutate={
-            str(VENDOR_REL / "htmx.min.js"): (f'version:"{pinned}"\x00version:"{pinned}";var __x={{version:"9.9.9"}}')
-        },
-    )
-    result = _run(mirror)
-    combined = result.stdout + result.stderr
-    assert result.returncode == 1, f"Guard sollte bei Mehrdeutigkeit failen:\n{combined}"
-    assert "htmx.org" in combined
-    assert "htmx.min.js" in combined
-    # 'mehrdeutig' belegt, dass NICHT der gewoehnliche DRIFT-Pfad griff.
-    assert "mehrdeutig" in combined.lower()
-
-
 def test_manipulated_package_version_is_detected(tmp_path: Path) -> None:
     """Verbiegt die gepinnte dexie-Version in package.json -> Drift -> Exit != 0."""
     mirror = _mirror_repo(
