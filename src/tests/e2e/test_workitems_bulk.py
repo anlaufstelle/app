@@ -372,23 +372,34 @@ class TestBulkManualSelectionUI:
         if not lena_id:
             pytest.skip("Lena Weber im Personenfilter nicht gefunden — Seed-Variation.")
 
+        # UUID eines frisch erzeugten Items über den Personenfilter abgreifen —
+        # dient unten als swap-spezifischer Marker (Refs #1201): Miriams Default-
+        # Sicht enthält dieses Lena-zugewiesene Item nie, eine Checkbox mit genau
+        # diesem ``value`` beweist also den eingeswappten DOM (nicht den Vor-Swap).
+        page.goto(f"{base_url}/workitems/?assigned_to={lena_id}", wait_until="domcontentloaded")
+        swapped_link = page.locator(f"#inbox-content a[href*='/workitems/']:has-text('E2E-Swap-{tag}-1')").first
+        swapped_link.wait_for(state="visible", timeout=5000)
+        swapped_match = re.search(r"/workitems/([0-9a-f-]{36})/", swapped_link.get_attribute("href") or "")
+        assert swapped_match, "Konnte UUID des frisch erzeugten Items nicht ermitteln."
+        swapped_id = swapped_match.group(1)
+
         page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
         # Personenfilter setzen → löst den ``hx-get``-Swap von #inbox-content aus.
-        # Auf die ausgetauschte Liste über die erwartete Checkbox-Anzahl warten
-        # (NICHT networkidle) — die Boxen entstehen erst nach dem Swap.
+        # Auf die ausgetauschte Liste warten (NICHT networkidle), und zwar an einen
+        # swap-spezifischen Marker gekoppelt: die Checkbox des frisch erzeugten
+        # Items. So kann die Bedingung nicht gegen den Vor-Swap-DOM zurückfallen
+        # (Refs #1201) — diese Box existiert nur in der eingeswappten Lena-Liste.
         page.select_option("#filter-assigned-to", value=lena_id)
-        boxes = page.locator("#inbox-content input[type=checkbox][name='workitem_ids']")
-        page.wait_for_function(
-            "([sel, n]) => document.querySelectorAll(sel).length >= n",
-            arg=["#inbox-content input[type=checkbox][name='workitem_ids']", 2],
-            timeout=10000,
-        )
+        swapped_box = page.locator(f"#inbox-content input[type=checkbox][name='workitem_ids'][value='{swapped_id}']")
+        swapped_box.wait_for(state="visible", timeout=10000)
 
         toolbar = page.locator("[x-show='hasSelection']").first
         assert not toolbar.is_visible(), "Toolbar darf vor der Auswahl nicht sichtbar sein."
 
-        # Eine erst durch den Swap entstandene Checkbox manuell anklicken.
-        boxes.first.check()
+        # Genau die erst durch den Swap entstandene Checkbox manuell anklicken
+        # (Refs #1201): nicht irgendeine „erste" Box, sondern die nachweislich
+        # eingeswappte des frisch erzeugten Items.
+        swapped_box.check()
 
         # Regression-Kern: Toolbar erscheint und Zähler steht auf 1 — der
         # eingeswappte Checkbox-Handler ist neu gebunden.
