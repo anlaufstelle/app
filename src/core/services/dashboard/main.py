@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, time, timedelta
 
-from django.db.models import F
+from django.db.models import F, Q
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
@@ -79,8 +79,16 @@ def lead_dashboard_context(user, facility) -> dict:
         status=RetentionProposal.Status.PENDING,
     ).count()
 
-    active_legal_holds = sum(
-        1 for h in LegalHold.objects.filter(facility=facility, dismissed_at__isnull=True) if h.is_active
+    # Spiegelt LegalHold.is_active 1:1 in SQL: nicht aufgehoben UND
+    # (kein Ablaufdatum ODER Ablaufdatum >= heute). is_active nutzt
+    # timezone.localdate() (Europe/Berlin) mit striktem "<", daher hier
+    # timezone.localdate()/__gte. Beide Stellen müssen dasselbe
+    # (lokale) Grenzdatum verwenden, sonst driften sie nahe Mitternacht
+    # (UTC vs. Berlin) auseinander (Refs #1166, #1191).
+    active_legal_holds = (
+        LegalHold.objects.filter(facility=facility, dismissed_at__isnull=True)
+        .filter(Q(expires_at__isnull=True) | Q(expires_at__gte=timezone.localdate()))
+        .count()
     )
 
     last_snapshot = StatisticsSnapshot.objects.filter(facility=facility).order_by("-year", "-month").first()

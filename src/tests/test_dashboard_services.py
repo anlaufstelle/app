@@ -6,7 +6,7 @@ Counts, die im rollenspezifischen Dashboard-Template gerendert werden.
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 import pytest
 from django.utils import timezone
@@ -170,6 +170,52 @@ class TestLeadDashboardContext:
         ctx = lead_dashboard_context(lead_user, facility)
 
         assert ctx["active_legal_holds"] == 1
+
+    def test_legal_hold_expiring_today_counts_as_active(self, facility, lead_user, client_identified):
+        """Grenzfall: Ablaufdatum == heute zählt noch als aktiv (is_active nutzt striktes <)."""
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=client_identified.pk,
+            reason="Läuft heute ab",
+            created_by=lead_user,
+            expires_at=date.today(),
+        )
+
+        ctx = lead_dashboard_context(lead_user, facility)
+
+        assert ctx["active_legal_holds"] == 1
+
+    def test_legal_hold_expired_yesterday_does_not_count(self, facility, lead_user, client_identified):
+        """Grenzfall: gestern abgelaufener Hold zählt nicht mehr als aktiv."""
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=client_identified.pk,
+            reason="Gestern abgelaufen",
+            created_by=lead_user,
+            expires_at=date.today() - timedelta(days=1),
+        )
+
+        ctx = lead_dashboard_context(lead_user, facility)
+
+        assert ctx["active_legal_holds"] == 0
+
+    def test_legal_hold_dismissed_does_not_count(self, facility, lead_user, client_identified):
+        """Aufgehobener Hold zählt nicht, auch wenn das Ablaufdatum in der Zukunft liegt."""
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Event",
+            target_id=client_identified.pk,
+            reason="Aufgehoben trotz Zukunfts-Ablauf",
+            created_by=lead_user,
+            expires_at=date.today() + timedelta(days=30),
+            dismissed_at=timezone.now(),
+        )
+
+        ctx = lead_dashboard_context(lead_user, facility)
+
+        assert ctx["active_legal_holds"] == 0
 
 
 @pytest.mark.django_db
