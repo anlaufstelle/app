@@ -1,10 +1,11 @@
 """Tests fuer ``scripts/verify_test_matrix_drift.py`` (Refs #922 / #923).
 
-Das Script verifiziert, dass alle in
-``docs/testing/manual-test-matrix.md`` referenzierten Test-Files
-tatsaechlich in ``src/tests/`` oder ``src/tests/e2e/`` existieren.
-Wenn die Matrix ein File behauptet, das nicht existiert, soll der
-Drift-Check den CI-Build mit Exit-Code != 0 stoppen.
+Das Script verifiziert, dass alle in der Manual-Test-Matrix referenzierten
+Test-Files tatsaechlich in ``src/tests/`` oder ``src/tests/e2e/``
+existieren. Refs #1071 Block B: die Matrix ist in Hub + Sektions-Dateien
+(``manual-test-matrix-a.md`` … ``-d.md``) gesplittet; das Script scannt
+per Default alle. Wenn die Matrix ein File behauptet, das nicht
+existiert, soll der Drift-Check den CI-Build mit Exit-Code != 0 stoppen.
 
 Die Tests rufen das Script per ``subprocess.run`` auf, damit das
 End-to-End-Verhalten (Argumente, Stderr, Exit-Code) abgedeckt ist.
@@ -38,9 +39,18 @@ def _run(matrix_path: Path) -> subprocess.CompletedProcess[str]:
 
 
 def test_real_matrix_has_no_drift() -> None:
-    """Smoke gegen die echte Matrix — heute MUSS sie konsistent sein."""
-    real_matrix = REPO_ROOT / "docs" / "testing" / "manual-test-matrix.md"
-    result = _run(real_matrix)
+    """Smoke gegen die echte Matrix — heute MUSS sie konsistent sein.
+
+    Refs #1071 Block B: ohne ``--matrix`` scannt das Script per Default Hub +
+    alle Sektions-Dateien; die TC→Test-Referenzen leben in den Sektionen.
+    """
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT)],
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        check=False,
+    )
     assert result.returncode == 0, (
         f"Drift-Check schlug auf der echten Matrix fehl:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )

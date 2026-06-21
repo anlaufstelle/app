@@ -61,7 +61,7 @@ des Release-Snapshots.
 | [../CONTRIBUTING.md](../CONTRIBUTING.md) | Dev-Setup, Make-Targets, Coding Conventions, Architektur, PR-Prozess | Entwickler |
 | [e2e-architecture.md](e2e-architecture.md) | E2E-Test-Infrastruktur: gunicorn, Playwright, Wait-Strategien, Fixtures | Entwickler, QA |
 | [e2e-runbook.md](e2e-runbook.md) | E2E-Test-Ausführung: Server starten, Tests laufen lassen, Debugging | Entwickler, QA |
-| testing/test-matrix-index.md | Test-Matrix-Übersicht (manuelle Testfälle + E2E-Mapping); Detail in [testing/manual-test-matrix.md](testing/manual-test-matrix.md), Mutation-Testing in testing/mutation-testing.md | QA, Entwickler |
+| testing/test-matrix-index.md | Test-Matrix-Übersicht (manuelle Testfälle + E2E-Mapping); Detail im Hub [testing/manual-test-matrix.md](testing/manual-test-matrix.md) (Front-matter + Anhänge) mit Sektions-Dateien `manual-test-matrix-a.md`…`-d.md`, Mutation-Testing in testing/mutation-testing.md | QA, Entwickler |
 | testing/release-test-profiles.md | Release-Testprofile — manueller Rest neben dem automatisierten Gate (Refs #1081); Vorlage run-template.md → testing/runs/ | QA, Release-Manager |
 | testing/mutation-survivors-baseline.md | Baseline überlebender Mutanten (Mutation-Testing,) | QA, Entwickler |
 | [performance-budgets.md](performance-budgets.md) | Performance-Ziele und Budget-Grenzen (perf-nightly) | Entwickler, QA |
