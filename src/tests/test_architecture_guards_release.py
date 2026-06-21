@@ -22,6 +22,7 @@ dieser zählen nicht).
 
 from __future__ import annotations
 
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
@@ -35,6 +36,31 @@ pytestmark = pytest.mark.architecture
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "verify_release_test_guard.py"
 LEAK_SCRIPT = REPO_ROOT / "dev-ops" / "release" / "verify-leak.sh"
+
+
+def _load_guard_module():
+    """Den Guard als Modul laden, um seine Parser-Helfer direkt zu pinnen.
+
+    Liegt unter ``scripts/`` (kein Package); per ``importlib`` aus dem Pfad
+    geladen statt importiert."""
+    spec = importlib.util.spec_from_file_location("verify_release_test_guard", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _strip_line(path: str, flag: str = "-rf") -> str:
+    """Eine kanonische Strip-Zeile ``  rm <flag> "$RELEASE_DIR/<path>"`` bauen.
+
+    Bewusst zur Laufzeit zusammengesetzt mit NEUTRALEN Platzhalter-Pfaden (z.B.
+    ``some/strip-target``), nie mit einem real gestrippten Pfad — sonst stünde ein
+    Public-ausgeschlossener Prefix (``CLAUDE.md``, ``dev-ops/`` …) als Literal in
+    dieser ausgelieferten Test-Datei und der echte Guard-Lauf würde GENAU diese
+    Datei melden (Selbst-Trigger, siehe Modul-Docstring). ``$RELEASE_DIR`` wird aus
+    Teilstücken gefügt, damit auch das Quoting-/Klammer-Pinning unten ohne reale
+    Prefixe auskommt."""
+    var = "$" + "RELEASE_DIR"
+    return f'  rm {flag}  "{var}/{path}"'
 
 
 def _excluded_example_path() -> str:
@@ -166,3 +192,65 @@ def test_excludes_are_single_sourced_from_verify_leak(tmp_path: Path) -> None:
     assert result.returncode == 0, (
         f"Ohne Exclude-Quelle muss der Guard grün/moot sein:\nSTDOUT:\n{result.stdout}\nSTDERR:\n{result.stderr}"
     )
+
+
+# ── Strip-Listen-Parser-Kontrakt (Refs #1189, #1203) ───────────────────────
+class TestStripLineParserContract:
+    """Pinnt den Kontrakt, den der ``rm``-Block in build-release.sh und der
+    Sync-Guard-Parser (``_RM_STRIP_LINE`` / ``parse_stripped_paths_from_build_release``)
+    teilen: genau EIN gequoteter Pfad pro Zeile, Form ``rm -rf "$RELEASE_DIR/…"``
+    bzw. ``rm -f "$RELEASE_DIR/…"``.
+
+    Der Parser ist bewusst eng (Refs #1189): eine künftige Strip-Zeile, die
+    unquoted ist, ``${RELEASE_DIR}``-Klammern nutzt oder zwei Pfade in EINER Zeile
+    listet, wäre für den Sync-Check unsichtbar (begrenzter False-Negative). Diese
+    Tests dokumentieren genau diese Grenze, damit ein versehentlicher Reformat des
+    rm-Blocks NICHT still am Sync-Guard vorbeiläuft — der Kontrakt-Kommentar in
+    build-release.sh verweist hierauf."""
+
+    def test_documented_format_is_parsed(self) -> None:
+        """Die kanonische Form (``-rf`` und ``-f``) wird als Strip-Pfad geparst."""
+        guard = _load_guard_module()
+        assert guard._RM_STRIP_LINE.match(_strip_line("some/strip-target", "-rf"))
+        assert guard._RM_STRIP_LINE.match(_strip_line("placeholder.md", "-f"))
+        match = guard._RM_STRIP_LINE.match(_strip_line("some/nested/target", "-rf"))
+        assert match is not None and match.group("path") == "some/nested/target"
+
+    def test_contract_breaking_strip_line_is_not_recognised(self) -> None:
+        """Kontraktbruch-Formen matchen NICHT — sie wären für den Sync-Guard
+        unsichtbar. Schlägt dieser Test fehl, wurde der Parser erweitert: dann den
+        Kontrakt-Kommentar in build-release.sh anpassen (Refs #1189, #1203).
+
+        Pfade sind neutrale Platzhalter (siehe ``_strip_line``); ``$RELEASE_DIR``
+        wird gefügt, damit kein Public-Prefix als Literal in dieser Datei steht."""
+        guard = _load_guard_module()
+        var = "$" + "RELEASE_DIR"
+        breakers = {
+            "unquoted": f"  rm -rf {var}/some/strip-target",
+            "geklammertes ${RELEASE_DIR}": f'  rm -rf "${{{"RELEASE_DIR"}}}/some/strip-target"',
+            "zwei Pfade in einer Zeile": f'  rm -rf "{var}/a" "{var}/b"',
+        }
+        for why, line in breakers.items():
+            assert guard._RM_STRIP_LINE.match(line) is None, (
+                f"Strip-Zeile mit {why} wird unerwartet geparst — Parser/Kontrakt driften "
+                "(siehe Kontrakt-Kommentar am rm-Block in build-release.sh, Refs #1203)."
+            )
+
+    def test_parser_picks_up_strip_paths_in_skript_order(self, tmp_path: Path) -> None:
+        """``parse_stripped_paths_from_build_release`` liest aus einem Mini-Skript
+        genau die gequoteten Pfade in Reihenfolge — und ignoriert die kontrakt-
+        brechende (unquoted) Zeile (sie bleibt unsichtbar)."""
+        guard = _load_guard_module()
+        var = "$" + "RELEASE_DIR"
+        fake_build = tmp_path / "build-release.sh"
+        fake_build.write_text(
+            "#!/usr/bin/env bash\n"
+            + _strip_line("some/strip-target", "-rf")
+            + "\n"
+            + _strip_line("placeholder.md", "-f")
+            + "\n"
+            + f"  rm -rf {var}/some/unquoted-invisible\n",  # unquoted ⇒ vom Parser ignoriert
+            encoding="utf-8",
+        )
+        paths = guard.parse_stripped_paths_from_build_release(fake_build)
+        assert paths == ["some/strip-target", "placeholder.md"]
