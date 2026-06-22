@@ -117,6 +117,59 @@ class TestWorkItemInboxFilters:
         expect(page.locator(f"#inbox-content a:has-text('{team}')")).to_have_count(0)
         assert page.locator(f"#inbox-content a:has-text('{mine}')").count() > 0
 
+    def test_changing_type_filter_keeps_assigned_scope(self, staff_page, base_url):
+        """Refs #1145 (Reopen): Ein anderer Filter darf die Zuweisungs-Sicht nicht
+        heimlich auf "Alle" aufweiten.
+
+        Wurzel des wiedereröffneten Tickets: Die Bulk-Aktions-Forms tragen eigene
+        Selects ``name="assigned_to"`` / ``name="priority"``. Solange die
+        Filter-Selects ihre Geschwister per ``hx-include="[name='…']"`` einbanden,
+        matchten diese Selektoren **auch** die (leeren) Bulk-Selects: HTMX hängte
+        beim Typ-/Prioritäts-Filter einen zweiten leeren ``assigned_to=`` an die
+        Query, und ``request.GET.get`` nahm den letzten (leeren = "Alle") Wert. Der
+        sichtbare Filter blieb auf "Mir & unzugewiesene", die Liste zeigte aber
+        plötzlich fremd-zugewiesene Aufgaben.
+
+        Erwartet jetzt: Nach dem Umschalten des Typ-Filters bleibt die
+        Default-Sicht erhalten — die fremd-zugewiesene Aufgabe taucht nicht auf,
+        und das Zuweisungs-Select steht weiter auf ``mine_team``.
+        """
+        page = staff_page
+        mine = "E2E-Scope-Mir"
+        anchor = "E2E-Scope-Hinweis"
+        foreign = "E2E-Scope-Fremd"
+        # Miriam (staff) ist eingeloggt; die Fremd-Aufgabe wird Thomas zugewiesen.
+        self._create_workitem(page, base_url, mine, item_type="Aufgabe", assignee_label="Miriam Schmidt")
+        # Eigener Hinweis als Swap-Anker: er ist im Default sichtbar und
+        # *verschwindet* beim Wechsel auf den Typ-Filter "Aufgabe". Erst sein
+        # Verschwinden belegt zuverlässig, dass der HTMX-Swap abgeschlossen ist —
+        # ohne diesen Anker prüft ``to_have_count(0)`` für die Fremd-Aufgabe ggf.
+        # noch den (foreign-freien) Pre-Swap-DOM und wäre falsch-grün.
+        self._create_workitem(page, base_url, anchor, item_type="Hinweis", assignee_label="Miriam Schmidt")
+        self._create_workitem(page, base_url, foreign, item_type="Aufgabe", assignee_label="Thomas Müller")
+
+        # Frischer Default-Aufruf: Fremd-Aufgabe ist nicht sichtbar, eigene da.
+        page.goto(f"{base_url}/workitems/")
+        page.wait_for_load_state("domcontentloaded")
+        page.wait_for_selector("#inbox-content")
+        select = page.locator("#filter-assigned-to")
+        assert select.input_value() == "mine_team"
+        expect(page.locator(f"#inbox-content a:has-text('{anchor}')")).to_have_count(1)
+        expect(page.locator(f"#inbox-content a:has-text('{foreign}')")).to_have_count(0)
+        assert page.locator(f"#inbox-content a:has-text('{mine}')").count() > 0
+
+        # Typ-Filter auf "Aufgabe" umschalten (nicht der Zuweisungs-Filter).
+        page.select_option("#filter-item-type", value="task")
+        page.wait_for_load_state("domcontentloaded")
+        # Swap-Abschluss-Anker: der eigene Hinweis ist nach dem Typ-Filter weg.
+        expect(page.locator(f"#inbox-content a:has-text('{anchor}')")).to_have_count(0)
+        # Jetzt gegen den vollständig getauschten DOM prüfen: die fremd-
+        # zugewiesene Aufgabe darf nicht hereinrutschen, die eigene bleibt.
+        expect(page.locator(f"#inbox-content a:has-text('{foreign}')")).to_have_count(0)
+        assert page.locator(f"#inbox-content a:has-text('{mine}')").count() > 0
+        # Die sichtbare Zuweisungs-Auswahl ist unverändert die Default-Sicht.
+        assert select.input_value() == "mine_team"
+
 
 class TestTimelineDocTypeFilter:
     """Timeline-Dokumentationstyp-Filter filtert Events."""

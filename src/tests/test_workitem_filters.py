@@ -1,5 +1,7 @@
 """Tests für WorkItem-Inbox-Filter."""
 
+import re
+
 import pytest
 from django.urls import reverse
 
@@ -468,3 +470,42 @@ class TestWorkItemInboxFilters:
         )
         assert response.status_code == 200
         assert "core/workitems/partials/inbox_content.html" in [t.name for t in response.templates]
+
+
+@pytest.mark.django_db
+class TestWorkItemInboxFilterHxIncludeScope:
+    """Refs #1145 (Reopen): Die Filter-Selects dürfen beim HTMX-Reload nicht
+    die gleichnamigen Bulk-Aktions-Selects mit einsammeln.
+
+    Wurzel des wiedereröffneten Tickets: Die Bulk-Forms enthalten eigene
+    ``<select name="assigned_to">`` und ``<select name="priority">``. Die
+    Filter-Selects bündelten ihre Geschwister früher per ``hx-include`` über
+    ``[name='assigned_to']`` / ``[name='priority']`` — diese Selektoren matchen
+    aber **auch** die (leeren) Bulk-Selects. HTMX hängte deren leeren Wert als
+    zweiten ``assigned_to=``/``priority=`` an die Query; ``request.GET.get`` nimmt
+    den *letzten* Wert (leer = "Alle"). Ergebnis: Der sichtbare Filter zeigte
+    weiter "Mir & unzugewiesene"/"Mir zugewiesen", die Liste war aber "Alle" und
+    zeigte fremd-zugewiesene Aufgaben — exakt das Reopen-Symptom.
+    """
+
+    def test_filter_hx_include_does_not_match_bulk_selects(self, client, staff_user, facility):
+        """``hx-include`` der Filter-Selects zielt auf die Filter-IDs, nicht auf
+        die kollidierenden ``[name='assigned_to']``/``[name='priority']``.
+
+        Die Bulk-Forms tragen eigene Selects ``name="assigned_to"`` und
+        ``name="priority"``. Solange die Filter-Selects ihre Geschwister über
+        ``[name='…']`` einbinden, hängt HTMX beim Filter-Reload zusätzlich den
+        leeren Bulk-Wert an die Query — der überschreibt (als letzter Wert) den
+        echten Filter. Das Einbinden über die stabilen Filter-IDs schließt die
+        Bulk-Selects sauber aus.
+        """
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+
+        includes = re.findall(r'hx-include="([^"]*)"', html)
+        assert includes, "Filter-Selects ohne hx-include — Test-Annahme stimmt nicht mehr"
+        for include in includes:
+            assert "[name='assigned_to']" not in include, (
+                "hx-include sammelt das Bulk-Assign-Select mit ein: " + include
+            )
+            assert "[name='priority']" not in include, "hx-include sammelt das Bulk-Priority-Select mit ein: " + include
