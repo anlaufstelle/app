@@ -1,5 +1,6 @@
 """Tests for retention proposals, legal holds, dashboard views, and enforce_retention --propose."""
 
+from contextlib import contextmanager
 from datetime import UTC, date, datetime, timedelta
 from io import StringIO
 from unittest import mock
@@ -372,12 +373,16 @@ class TestGetActiveHoldTargetIds:
 # the two sides could classify the active/expired boundary one day apart. These
 # tests pin an instant where UTC date != Berlin date and assert the Berlin local
 # date (timezone.localdate()) now decides — i.e. that date.today() is no longer
-# authoritative. freezegun is not in this venv, so the boundary is built by
-# patching timezone.now (which localdate() derives from). The genuine, non-
-# tautological TZ boundary is that naive date.today() returns the UTC date here
-# (the container runs in UTC) and would keep the boundary hold ACTIVE, whereas
-# the Berlin local date classifies it EXPIRED. Mirrors TestGetActiveHoldTargetIds
-# and TestEnforceRetentionLegalHoldFilter. Refs #1191.
+# authoritative. freezegun is not in this venv, so _frozen_boundary_clocks()
+# freezes BOTH clocks: timezone.now() (which localdate() derives from) AND the
+# module-level ``date`` in core.retention.legal_holds, pinned so a regressed
+# naive date.today() returns _UTC_DATE deterministically. Pinning the naive
+# clock too is what makes the regression caught on every calendar day — not only
+# when the real wall-clock happens to sit on _UTC_DATE (the date-dependent gap
+# fixed in #1225). With the buggy UTC date the boundary hold stays ACTIVE,
+# whereas the Berlin local date classifies it EXPIRED. Mirrors
+# TestGetActiveHoldTargetIds and TestEnforceRetentionLegalHoldFilter.
+# Refs #1191, #1223, #1225.
 # ---------------------------------------------------------------------------
 
 # 2026-06-21 22:30 UTC == 2026-06-22 00:30 Europe/Berlin (CEST, +02:00):
@@ -400,6 +405,27 @@ def _assert_boundary_really_diverges():
     assert _UTC_DATE != _BERLIN_DATE
 
 
+@contextmanager
+def _frozen_boundary_clocks():
+    """Freeze BOTH the aware and the naive clock at the UTC↔Berlin boundary.
+
+    ``timezone.now()`` → ``_BOUNDARY_INSTANT`` drives ``timezone.localdate()`` ==
+    ``_BERLIN_DATE`` (the fixed verdict the assertions expect). Additionally pin
+    ``core.retention.legal_holds.date`` (``create=True`` — the fixed code imports
+    no ``date``) so that *if* the helpers regress to the pre-#1192 naive
+    ``date.today()`` it returns ``_UTC_DATE`` → the buggy UTC verdict that flips
+    every assertion. Without this second lever ``date.today()`` would read the
+    real wall-clock and the regression would pass undetected on any day after
+    ``_UTC_DATE`` — the date-dependent detection gap from #1225 (Refs #1223, #1191).
+    """
+    with (
+        mock.patch("django.utils.timezone.now", return_value=_BOUNDARY_INSTANT),
+        mock.patch("core.retention.legal_holds.date", create=True) as mock_date,
+    ):
+        mock_date.today.return_value = _UTC_DATE
+        yield
+
+
 @pytest.mark.django_db
 class TestEnforcementLocaldateBoundary:
     def test_get_active_hold_target_ids_uses_berlin_local_date(self, facility, lead_user, old_anonymous_event):
@@ -416,12 +442,11 @@ class TestEnforcementLocaldateBoundary:
             created_by=lead_user,
         )
 
-        with mock.patch("django.utils.timezone.now", return_value=_BOUNDARY_INSTANT):
+        with _frozen_boundary_clocks():
             assert timezone.localdate() == _BERLIN_DATE  # guard: lever is wired
-            # Kein date.today()-Vergleich: das läse die echte Wall-Clock (nicht
-            # den gemockten _BOUNDARY_INSTANT) und machte den Test datumsabhängig
-            # (#1223). Die UTC-↔-Berlin-Divergenz ist bereits deterministisch über
-            # _assert_boundary_really_diverges() gepinnt.
+            # No date.today() in the assertions: _frozen_boundary_clocks() pins
+            # both clocks deterministically (#1225), so the Berlin↔UTC verdict no
+            # longer depends on the real wall-clock (#1223).
             ids = get_active_hold_target_ids(facility, "Event")
 
         assert old_anonymous_event.pk not in ids
@@ -439,7 +464,7 @@ class TestEnforcementLocaldateBoundary:
             created_by=lead_user,
         )
 
-        with mock.patch("django.utils.timezone.now", return_value=_BOUNDARY_INSTANT):
+        with _frozen_boundary_clocks():
             assert timezone.localdate() == _BERLIN_DATE  # guard: lever is wired
             assert has_active_hold(facility, "Event", old_anonymous_event.pk) is False
 
@@ -459,7 +484,7 @@ class TestEnforcementLocaldateBoundary:
             created_by=lead_user,
         )
 
-        with mock.patch("django.utils.timezone.now", return_value=_BOUNDARY_INSTANT):
+        with _frozen_boundary_clocks():
             call_command("enforce_retention", stdout=StringIO())
 
         old_anonymous_event.refresh_from_db()
