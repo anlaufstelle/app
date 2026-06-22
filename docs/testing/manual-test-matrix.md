@@ -38,40 +38,10 @@
 
 > **Einmalig pro Test-Tag, nicht pro Case.** Sobald du eingeloggt bist und deinen Browser/Mobile bereit hast, gehst du Cases einfach durch — ohne den Setup zu wiederholen. Cases verweisen in „Voraussetzung" nur noch auf **Daten-** oder **Workflow-Voraussetzungen** (z.B. „Klient:in mit Pseudonym X existiert"), nicht auf den Infra-Setup.
 
-### Test-Umgebung: dev.anlaufstelle.app (Standard)
+### Test-Umgebung (Standard)
 
-Tester:innen arbeiten gegen **[https://dev.anlaufstelle.app](https://dev.anlaufstelle.app)** — die öffentliche Demo-Instanz. Sie ist prod-ähnlich konfiguriert (Settings-Modul `devlive` erbt `prod`, nur Email-Backend auf Console), läuft auf Hetzner mit Caddy + Let's Encrypt + ClamAV.
+Tests laufen gegen eine erreichbare Test-/Demo-Instanz mit HTTPS, ClamAV, persistenter DB und den Standard-Seed-Logins. Die Seed-Logins und das Seed-Passwort sind öffentliche Demo-Defaults — siehe [`CONTRIBUTING.md`](../../CONTRIBUTING.md) (`make seed`).
 
-**Was du auf dev hast:**
-
-| Was | Verfügbar? |
-|-----|------------|
-| HTTPS + gültiges Zertifikat | ✓ |
-| ClamAV (Virus-Scan funktioniert mit EICAR) | ✓ |
-| Persistente DB (Daten überleben Test-Pausen) | ✓ |
-| Standard-Seed-Logins (s.u.) | ✓ |
-| MFA, Audit-Log, DSGVO-Paket | ✓ |
-| Email-Versand (Pwd-Reset, Notifications) | ✗ Console-Only — Tobias liest die Logs |
-| 2 Facilities für RLS-Tests | abhängig von dev-Stand — bei Bedarf Tobias fragen |
-
-### Standard-Logins (Pwd `anlaufstelle2026` für alle)
-
-| Username | Rolle | Facility | Typische Verwendung |
-|----------|-------|----------|----------------------|
-| `admin` | facility_admin | 1 (Hauptstelle) | Admin-Workflows, Audit-Log, DSGVO-Paket |
-| `thomas` | lead | 1 (Hauptstelle) | Cases schließen, Retention, Statistik |
-| `miriam` | staff | 1 (Hauptstelle) | Standard-Sozialarbeit (CRUD, Events, Dokumentation) |
-| `lena` | assistant | 1 (Hauptstelle) | Niedrigste Rolle, RBAC-Negativtests |
-| `superadmin` | super_admin | — (keine) | Systembereich `/system/`, facility-übergreifend |
-| `admin_1`, `thomas_1`, `miriam_1`, `lena_1` | je wie oben | 2 (Zweigstelle Nord) | Cross-Facility-/RLS-Tests (nur bei `--scale medium`+) |
-
-> **Hinweis (Refs #973):** Die Seed-Usernamen sind `admin`/`thomas`/`miriam`/`lena` (nicht `leitung`/`fachkraft`/`assistenz`) und der Suffix der 2.-Facility-User ist **`_1`** (0-indexierter `facility_idx`), nicht `_2`. Quelle: [`src/core/seed/constants.py`](https://github.com/anlaufstelle/app/blob/main/src/core/seed/constants.py) (`USER_TEMPLATES`) + [`src/core/seed/users.py`](https://github.com/anlaufstelle/app/blob/main/src/core/seed/users.py).
-
-> ⚠️ **Geteilte Accounts — Konflikt-Hinweise**
-> - Logins werden geteilt: parallele Tester:innen sollen sich abstimmen, wer wann mit welchem Account testet.
-> - **MFA:** Wenn Tester:in A MFA auf einem Account aktiviert, sind alle anderen ohne TOTP-App ausgeschlossen. Konvention: **MFA auf dev nur durch Tobias setzen lassen** (oder gemeinsamer Backup-Codes-Speicher per 1Password/Bitwarden).
-> - **Datenstand:** Tester:innen sehen die Daten der vorherigen Sessions. Vor einem strukturierten Test-Lauf Tobias um `make seed`-Reset bitten.
-> - **Löschungen:** Soft-Delete-Anträge sind reversibel (Trash-Frist 30 Tage), aber andere Tester:innen sehen die gelöschten Datensätze nicht mehr.
 
 ### Test-Umgebung: lokal (nur für 🔧 LOKAL/SSH-Cases)
 
