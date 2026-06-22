@@ -229,6 +229,17 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
 
         facility_users = User.objects.filter(facility=facility).order_by("last_name", "first_name", "username")
 
+        # Refs #1148 (Folge-Feedback): Nach einer wegen fehlender Berechtigung
+        # abgelehnten Bulk-Aktion reicht der Bulk-Endpoint die PKs der
+        # blockierenden Items als wiederholten ``forbidden``-Parameter zurueck.
+        # Diese Items markiert/hebt das Template wieder hervor, damit die zuvor
+        # getroffene Auswahl nicht verloren geht und die Warnmeldung mit der
+        # konkreten Aufgabe verbunden bleibt. Strikt auf die *tatsaechlich
+        # gerenderten* PKs beschraenken: so wird nichts Unsichtbares vorab
+        # ausgewaehlt und kein beliebiger fremder Wert in den DOM gespiegelt.
+        visible_pks = {str(wi.pk) for wi in (*open_items, *in_progress_items, *done_items)}
+        forbidden_ids = {pk for pk in request.GET.getlist("forbidden") if pk in visible_pks}
+
         context = {
             "open_items": open_items,
             "open_has_more": open_has_more,
@@ -250,6 +261,7 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
             "selected_assigned_to": selected_assigned_to,
             "default_assigned_scope": self.DEFAULT_ASSIGNED_SCOPE,
             "selected_due": request.GET.get("due", ""),
+            "forbidden_ids": forbidden_ids,
         }
 
         return self.render_htmx_or_full(context)

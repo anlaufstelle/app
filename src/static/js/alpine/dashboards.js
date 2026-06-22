@@ -14,6 +14,16 @@ document.addEventListener("alpine:init", () => {
      */
     Alpine.data("workitemBulkSelect", () => ({
         selected: [],
+        init() {
+            // Refs #1148 (Folge-Feedback): Nach einer wegen fehlender
+            // Berechtigung abgelehnten Bulk-Aktion rendert der Server die
+            // betroffenen (blockierenden) Checkboxen bereits ``checked`` und
+            // hebt die Karten hervor. Die Auswahl beim Laden einmal aus dem DOM
+            // ableiten, damit die Bulk-Toolbar wieder aufgeht und der Zaehler
+            // stimmt — sonst ginge die zuvor getroffene Auswahl verloren und die
+            // Warnmeldung verloere den Bezug zur konkreten Aufgabe.
+            this.syncFromDom();
+        },
         itemBoxes() {
             // Nur die sichtbaren Item-Checkboxen — NICHT die versteckten
             // ``workitem_ids``-Inputs, die die Bulk-Forms per ``x-for`` aus

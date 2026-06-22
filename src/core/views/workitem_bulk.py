@@ -91,7 +91,7 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         ids = request.POST.getlist("workitem_ids") or request.POST.getlist("workitem_ids[]")
         return [i for i in ids if i]
 
-    def _inbox_redirect_target(self, request):
+    def _inbox_redirect_target(self, request, forbidden_ids=None):
         """Inbox-URL inkl. erhaltener Filter-Query (Refs #1132, #1134).
 
         Liest ausschliesslich die in ``FILTER_PARAM_MAP`` definierten
@@ -106,6 +106,12 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         "Alle"-Sicht beim Redirect auf die parameterlose Default-Eingrenzung
         zurueckfallen. Fehlt der Schluessel ganz (No-JS-/filterloser POST),
         bleibt das Ziel der nackte Inbox-Pfad.
+
+        Refs #1148 (Folge-Feedback): ``forbidden_ids`` (PKs der blockierenden,
+        fremd-zugewiesenen Items) werden als wiederholter ``forbidden``-Parameter
+        angehaengt, damit die Inbox genau diese Auswahl wieder markiert und
+        hervorhebt — sonst ginge die zuvor getroffene Auswahl beim Redirect
+        verloren und die Meldung verloere den Bezug zur konkreten Aufgabe.
         """
         params = {}
         for post_key, get_key in self.FILTER_PARAM_MAP.items():
@@ -115,8 +121,15 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
             if value or post_key in self.FILTER_KEYS_KEEP_EMPTY:
                 params[get_key] = value
         url = reverse("core:workitem_inbox")
-        if params:
-            url = f"{url}?{urlencode(params)}"
+        # Je blockierende PK ein eigenes ``forbidden=<pk>``-Paar (Liste von
+        # Tupeln statt dict, damit der Schluessel mehrfach vorkommen darf); die
+        # Inbox liest sie per ``request.GET.getlist("forbidden")``.
+        query = urlencode(params)
+        if forbidden_ids:
+            forbidden_query = urlencode([("forbidden", str(pk)) for pk in forbidden_ids])
+            query = f"{query}&{forbidden_query}" if query else forbidden_query
+        if query:
+            url = f"{url}?{query}"
         return url
 
     def _load_workitems(self, request, ids):
@@ -173,7 +186,11 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
             # Nutzerin im Arbeitskontext bleibt. ``warning`` statt ``success``,
             # weil nichts geändert wurde (Alles-oder-nichts, Refs #583).
             messages.warning(request, message)
-            return self._inbox_redirect(request)
+            # Refs #1148 (Folge-Feedback): Die zuvor getroffene Auswahl der
+            # blockierenden Items in das Redirect-Ziel durchreichen, damit die
+            # Inbox sie wieder markiert/hervorhebt und die Nutzerin sie direkt
+            # abwaehlen kann — statt die Auswahl kommentarlos zu verlieren.
+            return self._inbox_redirect(request, forbidden_ids=[wi.pk for wi in forbidden])
 
         try:
             count = self.perform_action(request, workitems)
@@ -184,7 +201,7 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
 
         return self._inbox_redirect(request)
 
-    def _inbox_redirect(self, request):
+    def _inbox_redirect(self, request, forbidden_ids=None):
         """Redirect in die gefilterte Inbox-Sicht — HTMX-bewusst.
 
         Filter-State erhalten: zurueck in dieselbe gefilterte Inbox-Sicht
@@ -193,8 +210,12 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         HTMX einen echten Seitenwechsel ausloest und der hinterlegte Flash
         oberhalb der Liste gerendert wird, statt ein Fragment in den DOM zu
         swappen (Refs #1148).
+
+        ``forbidden_ids`` (optional) reicht die PKs der blockierenden Items als
+        ``forbidden``-Query mit, damit die Inbox die abgelehnte Auswahl wieder
+        markiert/hervorhebt (Refs #1148 Folge-Feedback).
         """
-        target = self._inbox_redirect_target(request)
+        target = self._inbox_redirect_target(request, forbidden_ids=forbidden_ids)
         response = redirect(target)
         if request.headers.get("HX-Request"):
             response["HX-Redirect"] = response["Location"]

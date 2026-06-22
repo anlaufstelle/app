@@ -26,7 +26,19 @@
     </div>
 </a>
 {% else %}
-<div class="card p-4" id="workitem-{{ wi.pk }}" aria-live="polite">
+{% comment %}
+Refs #1148 (Folge-Feedback): Nach einer abgelehnten Bulk-Aktion reicht der
+Endpoint die PKs der blockierenden (fremd-zugewiesenen) Items als
+``forbidden``-Query zurück. ``forbidden_ids`` (Set von String-PKs) markiert
+genau diese Zeilen: die Checkbox wird vorab angewählt (Auswahl bleibt erhalten)
+und die Karte amber umrandet (optische Hervorhebung), damit die Warnmeldung
+fachlich mit der konkreten Aufgabe verbunden bleibt und direkt abgewählt werden
+kann.
+{% endcomment %}
+<div class="card p-4{% if forbidden_ids and wi.pk|stringformat:'s' in forbidden_ids %} ring-2 ring-amber-400 ring-offset-1{% endif %}"
+     id="workitem-{{ wi.pk }}"
+     aria-live="polite"
+     {% if forbidden_ids and wi.pk|stringformat:'s' in forbidden_ids %}data-forbidden-id="{{ wi.pk }}"{% endif %}>
     <div class="flex items-center justify-between mb-2">
         <div class="flex items-center gap-2 min-w-0">
             {% if selectable %}
@@ -35,6 +47,7 @@
                 value="{{ wi.pk }}"
                 aria-label="{% trans 'Auswählen' %}"
                 class="h-4 w-4 rounded border-subtle text-accent"
+                {% if forbidden_ids and wi.pk|stringformat:'s' in forbidden_ids %}checked{% endif %}
                 @change="onToggleItem">
             {% endif %}
             <a href="{% url 'core:workitem_detail' pk=wi.pk %}" class="text-[14px] font-semibold text-ink hover:text-accent truncate">{{ wi.title }}</a>
