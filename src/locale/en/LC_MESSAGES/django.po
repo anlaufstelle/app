@@ -3518,20 +3518,32 @@ msgid "Offline — Daten werden bei Verbindung gespeichert"
 msgstr "Offline — Data will be saved when connected"
 
 #: src/templates/base.html:57
+msgid "Person lokal verfügbar"
+msgstr "person available locally"
+
+#: src/templates/base.html:57
 msgid "Personen lokal verfügbar"
-msgstr "People available locally"
+msgstr "people available locally"
 
 #: src/templates/base.html:60
 msgid "nicht synchronisiert"
 msgstr "not synced"
 
 #: src/templates/base.html:66
-msgid "Aenderung(en) werden synchronisiert..."
-msgstr "Change(s) are being synced..."
+msgid "Änderung wird synchronisiert..."
+msgstr "change is being synced..."
+
+#: src/templates/base.html:66
+msgid "Änderungen werden synchronisiert..."
+msgstr "changes are being synced..."
 
 #: src/templates/base.html:72
-msgid "Konflikt(e) — bitte auflösen"
-msgstr "Conflict(s) — please resolve"
+msgid "Konflikt — bitte auflösen"
+msgstr "conflict — please resolve"
+
+#: src/templates/base.html:72
+msgid "Konflikte — bitte auflösen"
+msgstr "conflicts — please resolve"
 
 #: src/templates/components/_activity_card.html:22
 #: src/templates/components/_event_card.html:31

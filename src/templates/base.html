@@ -54,7 +54,7 @@
              data-testid="offline-banner">
             {% trans "Offline — Daten werden bei Verbindung gespeichert" %}
             <span x-show="hasCachedClients" x-cloak class="ml-2 text-xs" data-testid="offline-cached-count">
-                (<span x-text="cachedClients"></span> {% trans "Personen lokal verfügbar" %})
+                (<span x-text="cachedClients"></span><span x-show="isSingleCachedClient" x-cloak> {% trans "Person lokal verfügbar" %}</span><span x-show="hasMultipleCachedClients" x-cloak> {% trans "Personen lokal verfügbar" %}</span>)
             </span>
             <span x-show="hasUnsynced" x-cloak class="ml-2 text-xs" data-testid="offline-unsynced-count">
                 · <span x-text="unsyncedCount"></span> {% trans "nicht synchronisiert" %}
@@ -63,13 +63,13 @@
         <div x-show="showSyncBanner" x-cloak
              class="fixed top-0 inset-x-0 z-50 bg-blue-500 text-white text-center text-sm py-2"
              data-testid="sync-banner">
-            <span x-text="queueCount"></span> {% trans "Aenderung(en) werden synchronisiert..." %}
+            <span x-text="queueCount"></span><span x-show="isSingleQueued" x-cloak> {% trans "Änderung wird synchronisiert..." %}</span><span x-show="hasMultipleQueued" x-cloak> {% trans "Änderungen werden synchronisiert..." %}</span>
         </div>
         <div x-show="showConflictBanner" x-cloak
              class="fixed top-0 inset-x-0 z-50 bg-red-500 text-white text-center text-sm py-2"
              data-testid="conflict-banner">
             <a href="{% url 'core:offline_conflict_list' %}" class="underline">
-                <span x-text="conflictCount"></span> {% trans "Konflikt(e) — bitte auflösen" %}
+                <span x-text="conflictCount"></span><span x-show="isSingleConflict" x-cloak> {% trans "Konflikt — bitte auflösen" %}</span><span x-show="hasMultipleConflict" x-cloak> {% trans "Konflikte — bitte auflösen" %}</span>
             </a>
         </div>
     </div>

@@ -3321,7 +3321,11 @@ msgstr "Zum Inhalt springen"
 msgid "Offline — Daten werden bei Verbindung gespeichert"
 msgstr "Offline — Daten werden bei Verbindung gespeichert"
 
-#: src/templates/base.html:47
+#: src/templates/base.html:57
+msgid "Person lokal verfügbar"
+msgstr "Person lokal verfügbar"
+
+#: src/templates/base.html:57
 msgid "Personen lokal verfügbar"
 msgstr "Personen lokal verfügbar"
 
@@ -3329,13 +3333,21 @@ msgstr "Personen lokal verfügbar"
 msgid "nicht synchronisiert"
 msgstr ""
 
-#: src/templates/base.html:56
-msgid "Aenderung(en) werden synchronisiert..."
-msgstr "Aenderung(en) werden synchronisiert..."
+#: src/templates/base.html:66
+msgid "Änderung wird synchronisiert..."
+msgstr "Änderung wird synchronisiert..."
 
-#: src/templates/base.html:62
-msgid "Konflikt(e) — bitte auflösen"
-msgstr ""
+#: src/templates/base.html:66
+msgid "Änderungen werden synchronisiert..."
+msgstr "Änderungen werden synchronisiert..."
+
+#: src/templates/base.html:72
+msgid "Konflikt — bitte auflösen"
+msgstr "Konflikt — bitte auflösen"
+
+#: src/templates/base.html:72
+msgid "Konflikte — bitte auflösen"
+msgstr "Konflikte — bitte auflösen"
 
 #: src/templates/base.html:68
 msgid "Hauptnavigation"

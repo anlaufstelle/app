@@ -41,14 +41,32 @@ document.addEventListener("alpine:init", () => {
         get hasCachedClients() {
             return this.cachedClients > 0;
         },
+        get isSingleCachedClient() {
+            return this.cachedClients === 1;
+        },
+        get hasMultipleCachedClients() {
+            return this.cachedClients > 1;
+        },
         get hasUnsynced() {
             return this.unsyncedCount > 0;
         },
         get showSyncBanner() {
             return !this.offline && this.queueCount > 0;
         },
+        get isSingleQueued() {
+            return this.queueCount === 1;
+        },
+        get hasMultipleQueued() {
+            return this.queueCount > 1;
+        },
         get showConflictBanner() {
             return !this.offline && this.conflictCount > 0;
+        },
+        get isSingleConflict() {
+            return this.conflictCount === 1;
+        },
+        get hasMultipleConflict() {
+            return this.conflictCount > 1;
         },
     }));
 
