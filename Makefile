@@ -249,13 +249,14 @@ clean:
 dev: db migrate run
 
 # === dev.anlaufstelle.app deploy-Targets (Refs #671) ===
-# DEV_HOST darf in .env.deploy (gitignored) gesetzt werden, damit
-# nicht jedes Make-Aufruf das Argument mitschleppt.
+# DEV_HOST (user@host des Deploy-Ziels) MUSS in .env.deploy (gitignored) oder als
+# Env-Var gesetzt werden; der Default ist nur ein Platzhalter — der konkrete
+# Deploy-User/-Host gehoert nicht in den oeffentlichen Snapshot. Refs #1226.
 -include .env.deploy
-DEV_HOST ?= <ssh-user>@dev.anlaufstelle.app
+DEV_HOST ?= deploy@your-server.example
 
 # Erstmaliges Server-Hardening (idempotent): laeuft als root und legt den
-# anlaufstelle-User an. Ab dem zweiten Aufruf laeuft es als anlaufstelle@.
+# Deploy-User an. Ab dem zweiten Aufruf laeuft es als der konfigurierte Deploy-User.
 dev-bootstrap:
 	scp dev-ops/deploy/bootstrap.sh root@$(word 2,$(subst @, ,$(DEV_HOST))):/root/bootstrap.sh
 	ssh root@$(word 2,$(subst @, ,$(DEV_HOST))) bash /root/bootstrap.sh
