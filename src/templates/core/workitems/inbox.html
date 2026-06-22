@@ -24,7 +24,8 @@
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
-            hx-include="[name='priority'],[name='assigned_to'],[name='due']"
+            {% comment %}Refs #1145 (Reopen): Geschwister-Filter über ihre IDs einbinden, nicht über [name='…']. Die Bulk-Forms tragen eigene Selects name="assigned_to"/name="priority"; ein [name='…']-Include zog deren leeren Wert als zweiten Query-Parameter mit, der den echten Filter überschrieb (Anzeige „Mir & unzugewiesene" / „Mir zugewiesen", Liste aber „Alle").{% endcomment %}
+            hx-include="#filter-priority,#filter-assigned-to,#filter-due"
         >
             <option value="">{% trans "Alle" %}</option>
             {% for value, label in item_type_choices %}
@@ -39,7 +40,7 @@
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
-            hx-include="[name='item_type'],[name='assigned_to'],[name='due']"
+            hx-include="#filter-item-type,#filter-assigned-to,#filter-due"
         >
             <option value="">{% trans "Alle" %}</option>
             {% for value, label in priority_choices %}
@@ -54,7 +55,7 @@
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
-            hx-include="[name='item_type'],[name='priority'],[name='due']"
+            hx-include="#filter-item-type,#filter-priority,#filter-due"
         >
             {% comment %}Refs #1145: Eigene Default-Option, deren sichtbare Auswahl zur Default-Query (eigene + nicht zugewiesene Teamaufgaben) passt. „Mir zugewiesen" (value="me") bleibt der strikte Filter, der ausschließlich eigene Aufgaben zeigt.{% endcomment %}
             <option value="{{ default_assigned_scope }}" {% if selected_assigned_to == default_assigned_scope %}selected{% endif %}>{% trans "Mir & unzugewiesene" %}</option>
@@ -72,7 +73,7 @@
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
-            hx-include="[name='item_type'],[name='priority'],[name='assigned_to']"
+            hx-include="#filter-item-type,#filter-priority,#filter-assigned-to"
         >
             <option value="">{% trans "Alle" %}</option>
             {% for value, label in due_filter_choices %}
