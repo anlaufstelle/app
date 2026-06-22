@@ -736,6 +736,58 @@ class TestBulkForbiddenMessageConcrete:
             "Die Aufgabenliste muss sichtbar bleiben (Refs #1148)."
         )
 
+    def test_forbidden_bulk_via_ui_keeps_selection_and_highlights(self, lead_page, staff_page, base_url):
+        """UI-Flow (Refs #1148 Folge-Feedback): Nach der abgelehnten Bulk-Aktion
+        bleibt die zuvor ausgewählte (blockierende) Aufgabe weiterhin angewählt
+        und wird optisch hervorgehoben; die Bulk-Bar bleibt offen, sodass Miriam
+        die Auswahl direkt korrigieren kann.
+
+        Hintergrund: Die vorherige Lösung zeigte zwar den Alert, verwarf aber die
+        Auswahl — die betroffene Aufgabe war nicht mehr erkennbar .
+        Spiegelt die manuelle Beobachtung auf Port 8844 wider.
+        """
+        # Thomas (Lead) legt eine sich selbst zugewiesene Aufgabe an.
+        foreign_title = f"E2E-1148-KEEP-{uuid.uuid4().hex[:6]}"
+        foreign_id = _create_workitem_assigned(lead_page, base_url, foreign_title, assignee_label="Thomas Müller")
+
+        page = staff_page
+        # „Alle"-Filter, damit die fremd-zugewiesene Aufgabe sichtbar wird.
+        page.goto(f"{base_url}/workitems/?assigned_to=", wait_until="domcontentloaded")
+        card = page.locator("div").filter(has_text=foreign_title).last
+        checkbox = card.locator("input[type=checkbox][name=workitem_ids]").first
+        checkbox.check()
+        page.select_option("#bulk-priority", value="urgent")
+        priority_form = page.locator("form").filter(has=page.locator("#bulk-priority"))
+        priority_form.get_by_role("button", name="Anwenden").click()
+
+        # Redirect-Ziel trägt die blockierende PK als ``forbidden``-Query.
+        page.wait_for_url(re.compile(rf"forbidden={foreign_id}"), timeout=10000)
+
+        # Die blockierende Aufgabe ist nach dem Zurückleiten weiterhin angewählt
+        # (Auswahl geht nicht verloren) …
+        rechecked = page.locator(f"input[type=checkbox][name=workitem_ids][value='{foreign_id}']")
+        rechecked.wait_for(state="visible", timeout=5000)
+        assert rechecked.is_checked(), (
+            "Die zuvor ausgewählte blockierende Aufgabe muss nach der abgelehnten "
+            "Bulk-Aktion weiterhin angewählt sein (Refs #1148 Folge-Feedback)."
+        )
+
+        # … und optisch als blockierend hervorgehoben (data-Hook + amber Ring).
+        highlighted = page.locator(f"[data-forbidden-id='{foreign_id}']")
+        assert highlighted.count() == 1, (
+            "Die blockierende Aufgabe muss optisch hervorgehoben sein (data-forbidden-id), Refs #1148 Folge-Feedback."
+        )
+        klass = highlighted.first.get_attribute("class") or ""
+        assert "ring-amber-400" in klass, f"Karte muss amber hervorgehoben sein: {klass!r}"
+
+        # Die Bulk-Bar bleibt offen, damit die Auswahl direkt korrigierbar ist.
+        # ``exact=True``: sonst kollidiert die Suche mit dem Alert-Text
+        # ("1 der 1 ausgewählten Aufgaben …").
+        assert page.get_by_text("1 ausgewählt", exact=True).is_visible(), (
+            "Die Bulk-Auswahlleiste muss nach dem Zurückleiten offen bleiben, damit "
+            "die Auswahl direkt korrigiert werden kann (Refs #1148 Folge-Feedback)."
+        )
+
 
 def _create_workitem_assigned_no_default_wait(page, base_url, title: str, assignee_label: str) -> None:
     """Legt eine zugewiesene Aufgabe an, OHNE auf die Default-Inbox zu warten.

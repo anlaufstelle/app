@@ -790,7 +790,11 @@ class TestBulkForbiddenMessageIsConcrete:
 
     def test_no_raw_forbidden_page_redirects_to_inbox(self, client, facility, staff_user, lead_user, assistant_user):
         """#1148: Statt einer rohen 403-Seite leitet die Aktion in die Inbox
-        zurück (Nutzerin bleibt im Aufgaben-Kontext)."""
+        zurück (Nutzerin bleibt im Aufgaben-Kontext).
+
+        Refs #1148 (Folge-Feedback): Das Ziel ist der Inbox-Pfad, ergänzt um die
+        ``forbidden``-Query, die die abgelehnte Auswahl wieder markiert.
+        """
         foreign = self._foreign(facility, staff_user, lead_user)
         client.force_login(assistant_user)
         response = client.post(
@@ -798,7 +802,7 @@ class TestBulkForbiddenMessageIsConcrete:
             {"workitem_ids": [str(foreign.pk)], "status": "done"},
         )
         assert response.status_code == 302
-        assert response.url == reverse("core:workitem_inbox")
+        assert response.url.split("?")[0] == reverse("core:workitem_inbox")
 
     def test_message_names_count_of_foreign_items(self, client, facility, staff_user, lead_user, assistant_user):
         """Bei 1 fremd-zugewiesenen von 2 ausgewählten Aufgaben nennt der
@@ -878,7 +882,9 @@ class TestBulkForbiddenMessageIsConcrete:
             headers={"HX-Request": "true"},
         )
         assert "HX-Redirect" in response
-        assert response["HX-Redirect"].endswith(reverse("core:workitem_inbox"))
+        # Refs #1148 (Folge-Feedback): Der HX-Redirect zielt auf den Inbox-Pfad,
+        # ergänzt um die ``forbidden``-Query (abgelehnte Auswahl bleibt markiert).
+        assert response["HX-Redirect"].split("?")[0].endswith(reverse("core:workitem_inbox"))
 
     def test_message_plural_for_multiple_foreign_items(self, client, facility, staff_user, lead_user, assistant_user):
         """Mehrere fremd-zugewiesene Items → der Hinweis nennt die korrekte
@@ -908,3 +914,148 @@ class TestBulkForbiddenMessageIsConcrete:
         text = str(self._messages_for(response)[0])
         assert "zugewiesen" in text
         assert "Keine Berechtigung für ausgewählte Aufgaben." not in text
+
+
+@pytest.mark.django_db
+class TestBulkForbiddenPreservesSelection:
+    """Refs #1148 (Folge-Feedback): Nach einer wegen fehlender Berechtigung
+    abgelehnten Bulk-Aktion darf die vorherige Auswahl nicht kommentarlos
+    verloren gehen.
+
+    Beobachtung: Die konkrete Meldung erscheint zwar als Inline-Alert,
+    aber die zuvor ausgewählte (blockierende) Aufgabe ist danach abgewählt — die
+    Nutzerin sieht nicht mehr, welche Aufgabe gemeint ist, und kann die Auswahl
+    nicht direkt korrigieren. Die abgelehnte Aktion reicht daher die PKs der
+    blockierenden (fremd-zugewiesenen) Items als ``forbidden``-Query in das
+    Redirect-Ziel durch; die Inbox markiert genau diese wieder als ausgewählt
+    und hebt sie optisch hervor, sodass die Meldung fachlich mit der konkreten
+    Auswahl verbunden bleibt.
+    """
+
+    def _foreign(self, facility, creator, assignee):
+        return WorkItem.objects.create(
+            facility=facility,
+            created_by=creator,
+            assigned_to=assignee,
+            title="Fremd zugewiesen",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+
+    def test_forbidden_redirect_carries_blocking_ids(self, client, facility, staff_user, lead_user, assistant_user):
+        """Die abgelehnte Aktion hängt die PKs der blockierenden Items als
+        ``forbidden``-Parameter an das Inbox-Redirect-Ziel."""
+        foreign = self._foreign(facility, staff_user, lead_user)
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(foreign.pk)], "status": "done"},
+        )
+        assert response.status_code == 302
+        assert f"forbidden={foreign.pk}" in response.url
+
+    def test_forbidden_redirect_carries_only_blocking_ids_not_whole_selection(
+        self, client, facility, staff_user, lead_user, assistant_user
+    ):
+        """Bei gemischter Auswahl wird NUR die blockierende (fremd-zugewiesene)
+        Aufgabe als ``forbidden`` zurückgereicht — sie ist die, die abgewählt
+        werden muss; die eigene bleibt außen vor."""
+        own = WorkItem.objects.create(
+            facility=facility,
+            created_by=assistant_user,
+            title="Eigene",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+        foreign = self._foreign(facility, staff_user, lead_user)
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_priority"),
+            {"workitem_ids": [str(own.pk), str(foreign.pk)], "priority": "urgent"},
+        )
+        assert response.status_code == 302
+        assert f"forbidden={foreign.pk}" in response.url
+        assert f"forbidden={own.pk}" not in response.url
+
+    def test_forbidden_htmx_redirect_carries_blocking_ids(
+        self, client, facility, staff_user, lead_user, assistant_user
+    ):
+        """Auch der HX-Redirect transportiert die ``forbidden``-PKs."""
+        foreign = self._foreign(facility, staff_user, lead_user)
+        client.force_login(assistant_user)
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {"workitem_ids": [str(foreign.pk)], "status": "done"},
+            headers={"HX-Request": "true"},
+        )
+        assert f"forbidden={foreign.pk}" in response["HX-Redirect"]
+
+    def test_inbox_prechecks_and_highlights_forbidden_item(
+        self, client, facility, staff_user, lead_user, assistant_user
+    ):
+        """Die Inbox liest die ``forbidden``-PKs und rendert die zugehörige
+        Checkbox als angewählt und die Karte optisch hervorgehoben."""
+        foreign = self._foreign(facility, staff_user, lead_user)
+        client.force_login(assistant_user)
+        # "Alle"-Sicht, damit die fremd-zugewiesene Aufgabe sichtbar ist.
+        response = client.get(
+            reverse("core:workitem_inbox"),
+            {"assigned_to": "", "forbidden": str(foreign.pk)},
+        )
+        assert response.status_code == 200
+        html = response.content.decode()
+        # Die Checkbox des blockierenden Items wird vorab angewählt.
+        assert f'value="{foreign.pk}"' in html
+        # Genau diese Zeile ist als blockierend markiert (Hervorhebung + Hook).
+        assert f'data-forbidden-id="{foreign.pk}"' in html
+
+    def test_inbox_ignores_forbidden_ids_not_in_visible_list(
+        self, client, facility, staff_user, lead_user, assistant_user
+    ):
+        """Nur tatsächlich gerenderte Items werden vorab markiert — eine
+        ``forbidden``-PK, die in der aktuellen (gefilterten) Sicht nicht
+        vorkommt, wird ignoriert (kein Pre-Check für unsichtbare Items)."""
+        # Fremd-zugewiesen → in der Default-Sicht NICHT sichtbar.
+        foreign = self._foreign(facility, staff_user, lead_user)
+        client.force_login(assistant_user)
+        response = client.get(
+            reverse("core:workitem_inbox"),
+            {"forbidden": str(foreign.pk)},  # Default-Sicht (kein assigned_to)
+        )
+        assert response.status_code == 200
+        html = response.content.decode()
+        assert f'data-forbidden-id="{foreign.pk}"' not in html
+
+    def test_inbox_forbidden_ids_in_context_are_visible_only(
+        self, client, facility, staff_user, lead_user, assistant_user
+    ):
+        """Der View exponiert ``forbidden_ids`` im Kontext, beschränkt auf die
+        in der aktuellen Sicht tatsächlich gerenderten PKs."""
+        foreign = self._foreign(facility, staff_user, lead_user)
+        client.force_login(assistant_user)
+        response = client.get(
+            reverse("core:workitem_inbox"),
+            {"assigned_to": "", "forbidden": [str(foreign.pk), "999999"]},
+        )
+        assert response.status_code == 200
+        forbidden_ids = response.context["forbidden_ids"]
+        assert str(foreign.pk) in forbidden_ids
+        # Nicht existierende / unsichtbare PK ist nicht enthalten.
+        assert "999999" not in forbidden_ids
+
+    def test_inbox_without_forbidden_param_marks_nothing(self, client, facility, staff_user, assistant_user):
+        """Ohne ``forbidden``-Parameter wird nichts vorab markiert (Normalfall)."""
+        own = WorkItem.objects.create(
+            facility=facility,
+            created_by=assistant_user,
+            title="Eigene",
+            status=WorkItem.Status.OPEN,
+            priority=WorkItem.Priority.NORMAL,
+        )
+        client.force_login(assistant_user)
+        response = client.get(reverse("core:workitem_inbox"))
+        assert response.status_code == 200
+        html = response.content.decode()
+        assert "data-forbidden-id=" not in html
+        assert response.context["forbidden_ids"] == set()
+        assert str(own.pk) in html  # Liste rendert normal
