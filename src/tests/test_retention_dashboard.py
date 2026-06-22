@@ -418,8 +418,10 @@ class TestEnforcementLocaldateBoundary:
 
         with mock.patch("django.utils.timezone.now", return_value=_BOUNDARY_INSTANT):
             assert timezone.localdate() == _BERLIN_DATE  # guard: lever is wired
-            # date.today() (container UTC) would still say active and include it.
-            assert date.today() == _UTC_DATE
+            # Kein date.today()-Vergleich: das läse die echte Wall-Clock (nicht
+            # den gemockten _BOUNDARY_INSTANT) und machte den Test datumsabhängig
+            # (#1223). Die UTC-↔-Berlin-Divergenz ist bereits deterministisch über
+            # _assert_boundary_really_diverges() gepinnt.
             ids = get_active_hold_target_ids(facility, "Event")
 
         assert old_anonymous_event.pk not in ids
