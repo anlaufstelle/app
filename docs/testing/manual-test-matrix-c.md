@@ -545,14 +545,14 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Security | thomas + thomas_1 | C || `src/tests/test_rls.py` |
+| Security | emma + emma_1 | C || `src/tests/test_rls.py` |
 
 **Schritte:**
-1. Als `thomas` (lead, Hauptstelle) Lösch-Antrag-/Retention-Detail-UUID merken.
-2. Als `thomas_1` (lead, Zweigstelle Nord) dieselbe `/deletion-requests/<uuid>/review/` aufrufen.
+1. Als `emma` (lead, Hauptstelle) Lösch-Antrag-/Retention-Detail-UUID merken.
+2. Als `emma_1` (lead, Zweigstelle Nord) dieselbe `/deletion-requests/<uuid>/review/` aufrufen.
 
 **Erwartetes Ergebnis:**
-- Fremde Facility → **404** (Live verifiziert: `thomas_1` → 404 auf `deletion_review` der Hauptstelle). Retention-Dashboard zeigt nur eigene-Facility-Proposals.
+- Fremde Facility → **404** (Live verifiziert: `emma_1` → 404 auf `deletion_review` der Hauptstelle). Retention-Dashboard zeigt nur eigene-Facility-Proposals.
 
 **Status:** ☐ Offen
 
@@ -569,7 +569,7 @@
 2. Als `miriam_1` (Zweigstelle Nord) Attachment-URL aufrufen und nach dem Fremd-Pseudonym suchen.
 
 **Erwartetes Ergebnis:**
-- Attachment fremder Facility → 404; `/search/` liefert keine Fremd-Facility-Treffer; Statistik aggregiert nur eigene Facility (`thomas`/`admin` 200, scope-gebunden).
+- Attachment fremder Facility → 404; `/search/` liefert keine Fremd-Facility-Treffer; Statistik aggregiert nur eigene Facility (`emma`/`admin` 200, scope-gebunden).
 
 **Status:** ☐ Offen
 

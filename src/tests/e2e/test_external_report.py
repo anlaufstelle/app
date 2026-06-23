@@ -5,7 +5,7 @@ Port 8844. Wait-Strategie: domcontentloaded + Anchor-First (locator.wait_for),
 nie networkidle, nie wait_for_url mit kurzem Timeout.
 
 Beobachtetes Verhalten:
-- lead (thomas) -> HTML-Bericht 200 mit Datenschutzprofil-Block, K-Anon=5,
+- lead (emma) -> HTML-Bericht 200 mit Datenschutzprofil-Block, K-Anon=5,
   Aggregate < 5 als "unterdrueckt" angezeigt
 - ?format=json liefert JSON ohne "top_clients", mit "metadata"-Block
 - staff (miriam) -> 403 Zugriff verweigert
@@ -32,7 +32,7 @@ def _login(page: Page, base_url: str, username: str, password: str = "anlaufstel
 
 def test_lead_can_view_external_report_html(page: Page, base_url: str) -> None:
     """lead: /statistics/external/ -> 200 HTML mit Datenschutzprofil."""
-    _login(page, base_url, "thomas")
+    _login(page, base_url, "emma")
 
     page.goto(f"{base_url}/statistics/external/")
     page.wait_for_load_state("domcontentloaded")
@@ -46,7 +46,7 @@ def test_lead_can_view_external_report_html(page: Page, base_url: str) -> None:
 
 def test_external_report_json_endpoint(page: Page, base_url: str) -> None:
     """?format=json liefert JSON ohne Pseudonym-Ranking, mit metadata-Block."""
-    _login(page, base_url, "thomas")
+    _login(page, base_url, "emma")
 
     page.goto(f"{base_url}/statistics/external/?format=json")
     page.wait_for_load_state("domcontentloaded")

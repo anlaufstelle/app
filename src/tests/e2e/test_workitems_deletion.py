@@ -51,7 +51,7 @@ class TestFourEyesPrincipleReview:
 
     @pytest.mark.smoke
     def test_lead_can_approve_deletion_request(self, authenticated_page, lead_page, base_url):
-        """Lead (thomas) genehmigt von admin gestellten Löschantrag."""
+        """Lead (emma) genehmigt von admin gestellten Löschantrag."""
         _create_qualified_event_and_request_deletion(authenticated_page, base_url)
 
         lead_page.goto(f"{base_url}/deletion-requests/")
@@ -72,7 +72,7 @@ class TestFourEyesPrincipleReview:
         assert lead_page.locator("text=Genehmigt").count() > 0
 
     def test_lead_can_reject_deletion_request(self, authenticated_page, lead_page, base_url):
-        """Lead (thomas) lehnt von admin gestellten Löschantrag ab.
+        """Lead (emma) lehnt von admin gestellten Löschantrag ab.
 
         Refs Matrix ENT-DEL-04 (Sektion E — Endanwender DSGVO).
 

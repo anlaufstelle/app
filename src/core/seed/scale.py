@@ -3,7 +3,7 @@
 SCALE_CONFIG = {
     "small": {
         "facilities": 1,
-        "users_per_facility": 4,
+        "users_per_facility": 6,
         "clients_per_facility": 7,
         "events_per_facility": 25,
         "cases": 3,
@@ -16,7 +16,7 @@ SCALE_CONFIG = {
     },
     "medium": {
         "facilities": 2,
-        "users_per_facility": 4,
+        "users_per_facility": 6,
         "clients_per_facility": 40,
         "events_per_facility": 750,
         "cases": 12,
@@ -31,7 +31,7 @@ SCALE_CONFIG = {
     },
     "large": {
         "facilities": 5,
-        "users_per_facility": 4,
+        "users_per_facility": 6,
         "clients_per_facility": 500,
         "events_per_facility": 10000,
         "cases": 50,
@@ -46,7 +46,7 @@ SCALE_CONFIG = {
     },
     "solo": {
         "facilities": 1,
-        "users_per_facility": 4,
+        "users_per_facility": 6,
         "clients_per_facility": 30,
         "events_per_facility": 500,
         "cases": 10,

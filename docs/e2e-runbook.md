@@ -255,7 +255,7 @@ page.locator(f"a:has-text('{unique_title}')").click()
 | Fixture | Scope | Rolle | User | Typischer Einsatz |
 |---------|-------|-------|------|-------------------|
 | `authenticated_page` | function | Admin | admin | Standard für die meisten Tests |
-| `lead_page` | function | Leitung | thomas | Statistik, Löschanträge genehmigen |
+| `lead_page` | function | Leitung | emma | Statistik, Löschanträge genehmigen |
 | `staff_page` | function | Fachkraft | miriam | CRUD, Facharbeit |
 | `assistant_page` | function | Assistenz | lena | Eingeschränkte Rechte testen |
 | `base_url` | session ||| `http://127.0.0.1:8844` |
@@ -361,7 +361,7 @@ E2E-Tests nutzen standardmäßig `--scale=small` (via conftest.py):
 | Daten | Anzahl | Details |
 |-------|--------|---------|
 | Einrichtungen | 1 | „Anlaufstelle Altstadt" |
-| Users | 4 | admin, thomas (Leitung), miriam (Fachkraft), lena (Assistenz) |
+| Users | 6 | admin, emma (Leitung), miriam + markus (Fachkraft), lena + felix (Assistenz) |
 | Clients | 7 | Stern-42, Wolke-17, Blitz-08, Regen-55, Wind-33, Nebel-71, Sonne-99 |
 | Events | 25 | Verteilt über 80 Tage |
 | Cases | 3 | |

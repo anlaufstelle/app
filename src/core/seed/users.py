@@ -5,7 +5,7 @@ from core.seed.constants import USER_TEMPLATES
 
 
 def seed_users(facility: Facility, facility_idx: int) -> list[User]:
-    """Create the four standard users for a facility.
+    """Create the six standard users for a facility.
 
     For ``facility_idx > 0`` usernames get a ``_{idx}`` suffix to avoid
     collisions across facilities.

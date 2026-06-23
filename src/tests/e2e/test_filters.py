@@ -138,7 +138,7 @@ class TestWorkItemInboxFilters:
         mine = "E2E-Scope-Mir"
         anchor = "E2E-Scope-Hinweis"
         foreign = "E2E-Scope-Fremd"
-        # Miriam (staff) ist eingeloggt; die Fremd-Aufgabe wird Thomas zugewiesen.
+        # Miriam (staff) ist eingeloggt; die Fremd-Aufgabe wird Emma zugewiesen.
         self._create_workitem(page, base_url, mine, item_type="Aufgabe", assignee_label="Miriam Schmidt")
         # Eigener Hinweis als Swap-Anker: er ist im Default sichtbar und
         # *verschwindet* beim Wechsel auf den Typ-Filter "Aufgabe". Erst sein
@@ -146,7 +146,7 @@ class TestWorkItemInboxFilters:
         # ohne diesen Anker prüft ``to_have_count(0)`` für die Fremd-Aufgabe ggf.
         # noch den (foreign-freien) Pre-Swap-DOM und wäre falsch-grün.
         self._create_workitem(page, base_url, anchor, item_type="Hinweis", assignee_label="Miriam Schmidt")
-        self._create_workitem(page, base_url, foreign, item_type="Aufgabe", assignee_label="Thomas Müller")
+        self._create_workitem(page, base_url, foreign, item_type="Aufgabe", assignee_label="Emma Müller")
 
         # Frischer Default-Aufruf: Fremd-Aufgabe ist nicht sichtbar, eigene da.
         page.goto(f"{base_url}/workitems/")

@@ -129,7 +129,7 @@ class TestBulkAssign:
         # eine separate DB-Anbindung.
         page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
         lead_option = page.locator(
-            "#bulk-assign option:has-text('Leitung'), #bulk-assign option:has-text('thomas')"
+            "#bulk-assign option:has-text('Leitung'), #bulk-assign option:has-text('emma')"
         ).first
         if lead_option.count() == 0:
             pytest.skip("Lead-User im Bulk-Assign-Select nicht gefunden — Seed-Variation.")
@@ -571,7 +571,7 @@ class TestUnassignedTeamTaskBulk:
     """
 
     def test_staff_may_bulk_mutate_unassigned_team_task_of_other_creator(self, lead_page, staff_page, base_url):
-        # Thomas (Lead) legt eine NICHT zugewiesene Aufgabe an → Teamaufgabe.
+        # Emma (Lead) legt eine NICHT zugewiesene Aufgabe an → Teamaufgabe.
         title = f"E2E-Team-{uuid.uuid4().hex[:6]}"
         wi_id = _create_workitem_assigned(lead_page, base_url, title, assignee_label=None)
 
@@ -593,9 +593,9 @@ class TestUnassignedTeamTaskBulk:
         assert "in bearbeitung" in content, "Teamaufgabe sollte nach Bulk-Update 'In Bearbeitung' sein."
 
     def test_staff_may_not_bulk_mutate_task_assigned_to_other_user(self, lead_page, staff_page, base_url):
-        # Thomas (Lead) legt eine Aufgabe an und weist sie SICH SELBST zu.
+        # Emma (Lead) legt eine Aufgabe an und weist sie SICH SELBST zu.
         title = f"E2E-Foreign-{uuid.uuid4().hex[:6]}"
-        wi_id = _create_workitem_assigned(lead_page, base_url, title, assignee_label="Thomas Müller")
+        wi_id = _create_workitem_assigned(lead_page, base_url, title, assignee_label="Emma Müller")
 
         # Miriam (Fachkraft) darf eine fremd-zugewiesene Aufgabe NICHT bulk-mutieren.
         # Refs #1148: Die Ablehnung leitet (statt einer rohen 403-Seite) in die
@@ -661,10 +661,10 @@ class TestBulkForbiddenMessageConcrete:
     """
 
     def test_mixed_selection_shows_concrete_count_alert_in_inbox(self, lead_page, staff_page, base_url):
-        # Eine fremd-zugewiesene Aufgabe (Thomas) + eine Miriam selbst
+        # Eine fremd-zugewiesene Aufgabe (Emma) + eine Miriam selbst
         # zugewiesene Aufgabe → gemischte Auswahl.
         foreign_title = f"E2E-1148-Foreign-{uuid.uuid4().hex[:6]}"
-        foreign_id = _create_workitem_assigned(lead_page, base_url, foreign_title, assignee_label="Thomas Müller")
+        foreign_id = _create_workitem_assigned(lead_page, base_url, foreign_title, assignee_label="Emma Müller")
         own_title = f"E2E-1148-Own-{uuid.uuid4().hex[:6]}"
         own_id = _create_workitem_assigned(staff_page, base_url, own_title, assignee_label="Miriam Schmidt")
 
@@ -707,9 +707,9 @@ class TestBulkForbiddenMessageConcrete:
 
         Spiegelt die manuelle Beobachtung auf Port 8844 wider.
         """
-        # Thomas (Lead) legt eine sich selbst zugewiesene Aufgabe an.
+        # Emma (Lead) legt eine sich selbst zugewiesene Aufgabe an.
         foreign_title = f"E2E-1148-UI-{uuid.uuid4().hex[:6]}"
-        _create_workitem_assigned(lead_page, base_url, foreign_title, assignee_label="Thomas Müller")
+        _create_workitem_assigned(lead_page, base_url, foreign_title, assignee_label="Emma Müller")
 
         page = staff_page
         # „Alle"-Filter, damit die fremd-zugewiesene Aufgabe sichtbar wird.
@@ -746,9 +746,9 @@ class TestBulkForbiddenMessageConcrete:
         Auswahl — die betroffene Aufgabe war nicht mehr erkennbar .
         Spiegelt die manuelle Beobachtung auf Port 8844 wider.
         """
-        # Thomas (Lead) legt eine sich selbst zugewiesene Aufgabe an.
+        # Emma (Lead) legt eine sich selbst zugewiesene Aufgabe an.
         foreign_title = f"E2E-1148-KEEP-{uuid.uuid4().hex[:6]}"
-        foreign_id = _create_workitem_assigned(lead_page, base_url, foreign_title, assignee_label="Thomas Müller")
+        foreign_id = _create_workitem_assigned(lead_page, base_url, foreign_title, assignee_label="Emma Müller")
 
         page = staff_page
         # „Alle"-Filter, damit die fremd-zugewiesene Aufgabe sichtbar wird.
@@ -794,7 +794,7 @@ def _create_workitem_assigned_no_default_wait(page, base_url, title: str, assign
 
     Anders als ``_create_workitem_assigned`` setzt diese Variante NICHT voraus,
     dass die erstellende Person die Aufgabe in ihrer Default-Sicht („Mir
-    zugewiesen") sieht. Genau das ist hier der Punkt: Miriam weist Thomas zu,
+    zugewiesen") sieht. Genau das ist hier der Punkt: Miriam weist Emma zu,
     die Aufgabe ist im Default ausgeblendet — die UUID/Sichtbarkeit prüfen die
     Tests anschließend gezielt über die passenden Filter (Refs #1125).
     """
@@ -819,7 +819,7 @@ class TestCreatorFindsForeignAssignedTask:
     """Refs #1125: selbst erstellte, fremd-zugewiesene Aufgabe bleibt auffindbar.
 
     Kern des wiedereröffneten Tickets: Miriam (Fachkraft) legt eine Aufgabe an
-    und weist sie Thomas (Leitung) zu. Im Default-Filter „Mir zugewiesen" ist
+    und weist sie Emma (Leitung) zu. Im Default-Filter „Mir zugewiesen" ist
     sie ausgeblendet — über „Alle" muss die Erstellerin sie wiederfinden, sonst
     wirkt die Aufgabe verschwunden. Solange es keine privaten Aufgaben (#607)
     gibt, sind normale Aufgaben innerhalb der Facility sichtbar.
@@ -828,8 +828,8 @@ class TestCreatorFindsForeignAssignedTask:
     def test_default_filter_hides_but_all_filter_shows_foreign_assigned(self, staff_page, base_url):
         page = staff_page
         title = f"E2E-Visible-{uuid.uuid4().hex[:6]}"
-        # Miriam legt die Aufgabe an und weist sie Thomas zu (im Default versteckt).
-        _create_workitem_assigned_no_default_wait(page, base_url, title, assignee_label="Thomas Müller")
+        # Miriam legt die Aufgabe an und weist sie Emma zu (im Default versteckt).
+        _create_workitem_assigned_no_default_wait(page, base_url, title, assignee_label="Emma Müller")
 
         # Default-Sicht („Mir zugewiesen") blendet die Aufgabe aus.
         page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
@@ -844,19 +844,19 @@ class TestCreatorFindsForeignAssignedTask:
         assert all_hits > 0, "Erstellerin muss die fremd-zugewiesene Aufgabe über 'Alle' wiederfinden (Refs #1125)."
 
     def test_person_filter_shows_other_persons_task(self, staff_page, base_url):
-        """Personenfilter auf Thomas zeigt seine Aufgabe (vorher: leere Liste)."""
+        """Personenfilter auf Emma zeigt ihre Aufgabe (vorher: leere Liste)."""
         page = staff_page
         title = f"E2E-Person-{uuid.uuid4().hex[:6]}"
-        _create_workitem_assigned_no_default_wait(page, base_url, title, assignee_label="Thomas Müller")
+        _create_workitem_assigned_no_default_wait(page, base_url, title, assignee_label="Emma Müller")
 
-        thomas_id = _filter_option_value(page, base_url, "Thomas Müller")
-        if not thomas_id:
-            pytest.skip("Thomas-User im Personenfilter nicht gefunden — Seed-Variation.")
+        emma_id = _filter_option_value(page, base_url, "Emma Müller")
+        if not emma_id:
+            pytest.skip("Emma-User im Personenfilter nicht gefunden — Seed-Variation.")
 
-        page.goto(f"{base_url}/workitems/?assigned_to={thomas_id}", wait_until="domcontentloaded")
+        page.goto(f"{base_url}/workitems/?assigned_to={emma_id}", wait_until="domcontentloaded")
         page.wait_for_selector("#inbox-content", timeout=5000)
         hits = page.locator(f"#inbox-content a[href*='/workitems/']:has-text('{title}')").count()
-        assert hits > 0, "Personenfilter auf Thomas muss dessen Aufgabe zeigen (Refs #1125)."
+        assert hits > 0, "Personenfilter auf Emma muss ihre Aufgabe zeigen (Refs #1125)."
 
 
 class TestAssignTaskToAssistant:

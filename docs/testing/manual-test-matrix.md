@@ -331,12 +331,12 @@ Passwort für alle Seed-User: `anlaufstelle2026`
 | Username | Rolle | Facility | Verwendung |
 |----------|-------|----------|------------|
 | `admin` | ADMIN | 1 | Volle Rechte, Audit, DSGVO-Paket |
-| `leitung` (Seed-Variante: `thomas`) | LEAD | 1 | Cases schließen, Retention, Statistik |
+| `leitung` (Seed-Variante: `emma`) | LEAD | 1 | Cases schließen, Retention, Statistik |
 | `fachkraft` (Seed-Variante: `miriam`) | STAFF | 1 | Standard-Beratung, Klient/Event-CRUD |
 | `assistenz` (Seed-Variante: `lena`) | ASSISTANT | 1 | Niedrigste Rolle, RBAC-Negativtests |
 | `admin_2`, `leitung_2`, `fachkraft_2`, `assistenz_2` | je 1 | 2 | Cross-Facility-/RLS-Tests (`make seed FACILITIES=2`) |
 
-> **Hinweis:** Die genauen Seed-Usernamen können je nach `seed.py`-Variante abweichen (`admin`/`thomas`/`miriam`/`lena` vs. `admin`/`leitung`/`fachkraft`/`assistenz`). Vor Test-Lauf kurz `python manage.py shell -c "from django.contrib.auth import get_user_model; print(list(get_user_model().objects.values_list('username', flat=True)))"` ausführen.
+> **Hinweis:** Die genauen Seed-Usernamen können je nach `seed.py`-Variante abweichen (`admin`/`emma`/`miriam`/`lena` vs. `admin`/`leitung`/`fachkraft`/`assistenz`). Vor Test-Lauf kurz `python manage.py shell -c "from django.contrib.auth import get_user_model; print(list(get_user_model().objects.values_list('username', flat=True)))"` ausführen.
 
 ### D.2 — Seed-Skalierung
 

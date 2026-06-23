@@ -13,7 +13,7 @@ REPORT_PATH = REPO_ROOT / "docs" / "archive" / "audits" / "2026-06-12-a1-laufzei
 # Seed-Logins (CLAUDE.md): Facility 1 ohne Suffix, Facility 2 mit _1.
 ACTOR_LOGINS = {
     "facility_admin": "admin",
-    "lead": "thomas",
+    "lead": "emma",
     "staff": "miriam",
     "assistant": "lena",
     "super_admin": "superadmin",
@@ -154,7 +154,7 @@ def facility_ids(conn):
     return tuple(ids)
 
 
-# Subquery: erster lead-User der Facility (fac2-Leads heißen thomas_1 etc.,
+# Subquery: erster lead-User der Facility (fac2-Leads heißen emma_1 etc.,
 # daher facility-bewusst per role statt hartem Username).
 _LEAD_OF_FACILITY = (
     "(SELECT u.id FROM core_user u WHERE u.role = 'lead' AND u.facility_id = %(fac)s ORDER BY u.id LIMIT 1)"

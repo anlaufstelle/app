@@ -129,8 +129,8 @@ python src/manage.py seed --flush          # vorhandene Daten vorher löschen
 | Daten | `small` (Default) | `medium` | `large` |
 |---|---|---|---|
 | Einrichtungen | 1 | 2 | 5 |
-| Users (gesamt) | 5 (1 super_admin + 4 facility-User) | 9 (1 super_admin + 2×4) | 21 (1 super_admin + 5×4) |
-| Users / Einrichtung | 4 (`admin`/`thomas`/`miriam`/`lena`) | 4 | 4 |
+| Users (gesamt) | 7 (1 super_admin + 6 facility-User) | 13 (1 super_admin + 2×6) | 31 (1 super_admin + 5×6) |
+| Users / Einrichtung | 6 (`admin`/`emma`/`miriam`/`markus`/`lena`/`felix`) | 6 | 6 |
 | Clients / Einrichtung | 7 | 40 | 500 |
 | Events / Einrichtung | 25 | 750 | 10.000 |
 | Cases | 3 | 12 | 50 |
@@ -146,7 +146,7 @@ python src/manage.py seed --flush          # vorhandene Daten vorher löschen
 
 > **Hinweis:** `small` enthält kein Fallmanagement (keine Episoden, Ziele). Für die Entwicklung am Fallmanagement `medium` verwenden.
 
-Seed-Zugangsdaten: Passwort `anlaufstelle2026`, 5 Logins (Username → Rolle): `superadmin` → `super_admin` (keine `facility`-Zuordnung), `admin` → `facility_admin`, `thomas` → `lead`, `miriam` → `staff`, `lena` → `assistant`. Alle außer `superadmin` hängen an der Default-Einrichtung.
+Seed-Zugangsdaten: Passwort `anlaufstelle2026`, 7 Logins (Username → Rolle): `superadmin` → `super_admin` (keine `facility`-Zuordnung), `admin` → `facility_admin`, `emma` → `lead`, `miriam` → `staff`, `markus` → `staff`, `lena` → `assistant`, `felix` → `assistant`. Alle außer `superadmin` hängen an der Default-Einrichtung.
 
 > **Production:** In Produktion gibt es **kein** Default-Passwort und keinen Default-`super_admin`. Die Erstinstallation läuft über `manage.py create_super_admin` (interaktiv, ohne Default). Details: [docs/dev-deployment.md § Production-Bootstrap](docs/dev/dev-deployment.md), [docs/admin-guide.md § 2.1 Erstinstallation](docs/admin-guide.md). Lockout-Recovery: `manage.py unlock <username>`.
 

@@ -99,13 +99,13 @@ def test_seed_small_creates_expected_clients():
 
 
 @pytest.mark.django_db
-def test_seed_small_creates_four_users():
-    """Small scale creates 4 users (admin, lead, staff, assistant)."""
+def test_seed_small_creates_six_users():
+    """Small scale creates 6 users (admin, lead, 2 staff, 2 assistant)."""
     call_command("seed")
 
     facility = Facility.objects.get(name="Hauptstelle")
     users = User.objects.filter(facility=facility)
-    assert users.count() == 4
+    assert users.count() == 6
 
     roles = set(users.values_list("role", flat=True))
     assert roles == {User.Role.FACILITY_ADMIN, User.Role.LEAD, User.Role.STAFF, User.Role.ASSISTANT}
@@ -181,15 +181,15 @@ def test_seed_medium_creates_two_facilities():
 @pytest.mark.slow
 @pytest.mark.django_db
 def test_seed_medium_creates_users_per_facility():
-    """Medium scale creates 4 users per facility + 1 installation-wide super-admin.
+    """Medium scale creates 6 users per facility + 1 installation-wide super-admin.
 
     Refs #867: ``seed_super_admin()`` legt zusaetzlich zur Per-Facility-User-
     Liste einen installation-weiten ``superadmin`` an (Persona Jonas).
-    Daher 4 (Hauptstelle) + 4 (Zweigstelle Nord) + 1 (super-admin) = 9.
+    Daher 6 (Hauptstelle) + 6 (Zweigstelle Nord) + 1 (super-admin) = 13.
     """
     call_command("seed", scale="medium")
 
-    assert User.objects.count() == 9
+    assert User.objects.count() == 13
     # Sicherheitsprobe: genau ein super_admin, der Rest sind facility-User.
     assert User.objects.filter(role=User.Role.SUPER_ADMIN).count() == 1
 
@@ -278,8 +278,8 @@ def test_seed_idempotent_facility_count():
 def test_seed_flush_recreates_data():
     """--flush deletes existing data and recreates from scratch.
 
-    Refs #867: small seed legt 4 Facility-User + 1 installation-weiten
-    super_admin an = 5.
+    Refs #867: small seed legt 6 Facility-User + 1 installation-weiten
+    super_admin an = 7.
     """
     call_command("seed")
     first_user_ids = set(User.objects.values_list("id", flat=True))
@@ -289,8 +289,8 @@ def test_seed_flush_recreates_data():
 
     # After flush+recreate, IDs differ (new objects)
     assert first_user_ids != second_user_ids
-    # But counts are the same — 4 Facility-User + 1 super_admin.
-    assert User.objects.count() == 5
+    # But counts are the same — 6 Facility-User + 1 super_admin.
+    assert User.objects.count() == 7
 
 
 # ---------------------------------------------------------------------------

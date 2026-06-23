@@ -344,7 +344,7 @@ class TestWorkItemInboxFilters:
         """Selbst erstellte, an andere Person zugewiesene Aufgabe bleibt auffindbar.
 
         Refs #1125 (Kern des wiedereröffneten Tickets): Miriam (Staff) legt eine
-        Aufgabe an und weist sie Thomas (Lead) zu. Über den Alle-Filter muss sie
+        Aufgabe an und weist sie Emma (Lead) zu. Über den Alle-Filter muss sie
         die Aufgabe wiederfinden — sie darf nicht "verschwinden".
         """
         client.force_login(staff_user)
@@ -352,7 +352,7 @@ class TestWorkItemInboxFilters:
             facility=facility,
             created_by=staff_user,
             assigned_to=lead_user,
-            title="Von Miriam für Thomas",
+            title="Von Miriam für Emma",
         )
         # Default (Mir zugewiesen) blendet sie aus …
         default_resp = client.get(reverse("core:workitem_inbox"))

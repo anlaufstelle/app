@@ -106,13 +106,13 @@ class TestZZMFABackupCodeLogin:
             _cleanup_totp("lena", e2e_env)
 
     def test_backup_codes_settings_page_shows_counter_after_login(self, base_url, browser, e2e_env):
-        codes = _enable_totp_and_generate_codes("thomas", e2e_env)
+        codes = _enable_totp_and_generate_codes("emma", e2e_env)
         try:
             context = browser.new_context(locale="de-DE")
             page = context.new_page()
             try:
                 page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
-                page.fill("#id_username", "thomas")
+                page.fill("#id_username", "emma")
                 page.fill("#id_password", "anlaufstelle2026")
                 page.click("button[type=submit]")
                 page.wait_for_url(re.compile(r"/mfa/verify/"))
@@ -130,7 +130,7 @@ class TestZZMFABackupCodeLogin:
             finally:
                 context.close()
         finally:
-            _cleanup_totp("thomas", e2e_env)
+            _cleanup_totp("emma", e2e_env)
 
 
 @pytest.mark.smoke

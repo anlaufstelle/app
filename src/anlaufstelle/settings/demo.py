@@ -27,14 +27,16 @@ MFA_ENFORCE_PRIVILEGED_ROLES = False
 
 # Oeffentlich kommunizierte Seed-Logins fuer das Login-Zugangsdaten-Panel
 # (Refs #1062). Passwort fuer alle Konten gleich. scale=medium legt eine 2.
-# Einrichtung mit Suffix _1 an (admin_1, thomas_1, ...).
+# Einrichtung mit Suffix _1 an (admin_1, emma_1, ...).
 DEMO_PASSWORD = "anlaufstelle2026"  # noqa: S105 — oeffentliches Demo-Passwort, bewusst
 DEMO_LOGINS = [
     {"username": "superadmin", "role": "Super-Admin (systemweit)"},
     {"username": "admin", "role": "Einrichtungs-Admin"},
-    {"username": "thomas", "role": "Leitung"},
+    {"username": "emma", "role": "Leitung"},
     {"username": "miriam", "role": "Fachkraft"},
+    {"username": "markus", "role": "Fachkraft"},
     {"username": "lena", "role": "Assistenz"},
+    {"username": "felix", "role": "Assistenz"},
 ]
 
 # Demo-Guard: POST auf diese Pfade wird bei DEMO_MODE gesperrt (Refs #1062).

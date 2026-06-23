@@ -24,7 +24,7 @@
 **Spezial-Setup:**
 - Login-Lockout-Test braucht 10 sequenzielle Fehlversuche innerhalb von 15 Min — IP-Rate-Limit (5/m) muss vorher umgangen werden (z.B. Cookie-Reset zwischen Bursts oder Limit per Settings hochsetzen).
 - Pwd-Reset-Test braucht `EMAIL_BACKEND=django.core.mail.backends.console.EmailBackend` (dev/e2e-Default) oder MailHog für Token-Capture.
-- Seed-User: `admin`, `thomas` (Leitung), `miriam` (Fachkraft), `lena` (Assistenz) — Passwort `anlaufstelle2026`. Quelle: `src/core/seed/constants.py`.
+- Seed-User: `admin`, `emma` (Leitung), `miriam` (Fachkraft), `lena` (Assistenz) — Passwort `anlaufstelle2026`. Quelle: `src/core/seed/constants.py`.
 
 ---
 
@@ -610,22 +610,22 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| MFA | leitung (`thomas`) | C || `test_mfa_setup_flow.py` |
+| MFA | leitung (`emma`) | C || `test_mfa_setup_flow.py` |
 
-**Voraussetzung:** `thomas` (LEAD), `mfa_required=True` per Admin-UI gesetzt; bisher kein TOTPDevice.
+**Voraussetzung:** `emma` (LEAD), `mfa_required=True` per Admin-UI gesetzt; bisher kein TOTPDevice.
 
 **Vorbereitung:**
-- Admin setzt `User.mfa_required=True` für `thomas`.
-- DB: `TOTPDevice.objects.filter(user=thomas, confirmed=True).exists() == False`.
+- Admin setzt `User.mfa_required=True` für `emma`.
+- DB: `TOTPDevice.objects.filter(user=emma, confirmed=True).exists() == False`.
 
 **Schritte:**
-1. `/login/` mit `thomas` + Pwd → Submit.
+1. `/login/` mit `emma` + Pwd → Submit.
 2. `/clients/` direkt aufrufen.
 
 **Erwartetes Ergebnis:**
 - Schritt 1: Login OK (HTTP 302).
 - Schritt 2: `MFAEnforcementMiddleware` greift (`is_mfa_enforced=True`, kein Device) → 302 Redirect auf `/mfa/setup/`.
-- Solange `thomas` kein bestätigtes Device hat, sind alle Routes außer EXEMPT_URLS (`/login/`, `/logout/`, `/mfa/`, `/static/`, `/i18n/`, `/health/`, `/sw.js`, `/manifest.json`, `/auth/offline-key-salt/`, `/password-change/`, `/password-reset/`) gesperrt.
+- Solange `emma` kein bestätigtes Device hat, sind alle Routes außer EXEMPT_URLS (`/login/`, `/logout/`, `/mfa/`, `/static/`, `/i18n/`, `/health/`, `/sw.js`, `/manifest.json`, `/auth/offline-key-salt/`, `/password-change/`, `/password-reset/`) gesperrt.
 - Nach erfolgreichem Setup (analog ENT-MFA-01) wird der reguläre Flow fortgesetzt.
 
 **DSGVO/Security-Note:**
@@ -639,7 +639,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| MFA | fachkraft (`miriam`), assistenz (`lena`), leitung (`thomas`) | C || `test_mfa_setup_flow.py` |
+| MFA | fachkraft (`miriam`), assistenz (`lena`), leitung (`emma`) | C || `test_mfa_setup_flow.py` |
 
 **Voraussetzung:** Facility-Settings `mfa_enforced_facility_wide=True` (über Admin-UI oder Shell gesetzt). Keiner der drei Test-User hat ein Device.
 
@@ -650,7 +650,7 @@
 **Schritte:**
 1. Login als `miriam` → Pwd → versucht `/clients/`.
 2. Login als `lena` → Pwd → versucht `/`.
-3. Login als `thomas` → Pwd → versucht `/cases/`.
+3. Login als `emma` → Pwd → versucht `/cases/`.
 
 **Erwartetes Ergebnis:**
 - Bei allen drei: `MFAEnforcementMiddleware` redirected auf `/mfa/setup/` (Case 1 in `_required_redirect`).

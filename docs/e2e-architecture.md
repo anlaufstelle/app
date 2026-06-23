@@ -105,7 +105,7 @@ base.py → dev.py → e2e.py
 
 2. **Storage-States** — Login einmal pro Rolle, Session-Cookies cachen:
  - `_login_storage_state` → Admin (admin)
- - `_lead_storage_state` → Lead (thomas)
+ - `_lead_storage_state` → Lead (emma)
  - `_staff_storage_state` → Staff (miriam)
  - `_assistant_storage_state` → Assistant (lena)
  - Passwort: `anlaufstelle2026` (Seed-Default)

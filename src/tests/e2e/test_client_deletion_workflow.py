@@ -50,7 +50,7 @@ def test_full_four_eyes_workflow(staff_page, lead_page, authenticated_page, base
     """End-to-End: Antrag → Genehmigung → Soft-Delete sichtbar → Restore.
 
     Drei Rollen-Pages werden parallel verwendet — entspricht dem manuellen
-    Klickpfad: miriam beantragt, thomas genehmigt, admin restored.
+    Klickpfad: miriam beantragt, emma genehmigt, admin restored.
     """
     # 1. Fachkraft beantragt Löschung
     page = staff_page

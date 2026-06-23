@@ -89,7 +89,7 @@ def test_facility_admin_accesses_admin_via_sudo(page: Page, base_url: str) -> No
 
 def test_lead_blocked_from_admin(page: Page, base_url: str) -> None:
     """lead: /admin-mgmt/ -> /admin-mgmt/login/ (Rollen-Block)."""
-    _login(page, base_url, "thomas")
+    _login(page, base_url, "emma")
 
     page.goto(f"{base_url}/admin-mgmt/")
     page.wait_for_load_state("domcontentloaded")
@@ -127,7 +127,7 @@ def test_facility_admin_cannot_assign_super_admin_role(page: Page, base_url: str
     super_admin-Rolle.
     """
     _login_and_sudo(page, base_url, "admin")
-    values = _role_option_values(page, base_url, "thomas")
+    values = _role_option_values(page, base_url, "emma")
     assert "super_admin" not in values
     assert "staff" in values
 
@@ -135,7 +135,7 @@ def test_facility_admin_cannot_assign_super_admin_role(page: Page, base_url: str
 def test_super_admin_can_assign_super_admin_role(page: Page, base_url: str) -> None:
     """A2.1 (Refs #1020): super_admin behaelt die volle Rollen-Auswahl inkl. super_admin."""
     _login_and_sudo(page, base_url, "superadmin")
-    values = _role_option_values(page, base_url, "thomas")
+    values = _role_option_values(page, base_url, "emma")
     assert "super_admin" in values
 
 

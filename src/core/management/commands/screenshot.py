@@ -49,7 +49,7 @@ class Shot:
 
     name: str  # base filename (DE), e.g. "zeitstrom"
     route: str  # reverse() name or literal path starting with "/"
-    role: str | None = "thomas"  # seed username to log in as; None = anonymous
+    role: str | None = "emma"  # seed username to log in as; None = anonymous
     langs: tuple[str, ...] = ("de", "en")
     mobile: bool = False  # also render a 375px mobile variant
     full_page: bool = False
@@ -111,7 +111,7 @@ class Command(BaseCommand):
             browser = pw.chromium.launch()
             for lang in ("de", "en"):
                 # Drive the UI language through the seeded users' preference.
-                User.objects.filter(username__in=["thomas", "superadmin"]).update(preferred_language=lang)
+                User.objects.filter(username__in=["emma", "superadmin"]).update(preferred_language=lang)
                 for viewport, is_mobile in ((DESKTOP, False), (MOBILE, True)):
                     locale = "de-DE" if lang == "de" else "en-US"
                     context = browser.new_context(viewport=viewport, locale=locale, ignore_https_errors=True)
@@ -125,8 +125,8 @@ class Command(BaseCommand):
 
     def _resolve_pks(self) -> dict:
         """Pick representative objects from the (e2e) DB for detail routes."""
-        thomas = User.objects.filter(username="thomas").first()
-        facility = getattr(thomas, "facility", None)
+        emma = User.objects.filter(username="emma").first()
+        facility = getattr(emma, "facility", None)
         client = Client.objects.filter(facility=facility).order_by("pk").first() if facility else None
         case = Case.objects.filter(facility=facility).order_by("pk").first() if facility else None
         return {"client": client, "case": case}

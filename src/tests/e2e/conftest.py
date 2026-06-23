@@ -286,8 +286,8 @@ def _login_storage_state(base_url, browser):
 
 @pytest.fixture(scope="session")
 def _lead_storage_state(base_url, browser):
-    """Storage-State für Lead-User (thomas)."""
-    return _create_storage_state(browser, base_url, "thomas")
+    """Storage-State für Lead-User (emma)."""
+    return _create_storage_state(browser, base_url, "emma")
 
 
 @pytest.fixture(scope="session")
@@ -406,7 +406,7 @@ def mobile_authenticated_page(base_url, browser, _login_storage_state):
 
 @pytest.fixture
 def lead_page(base_url, browser, _lead_storage_state):
-    """Playwright-Page mit eingeloggtem Lead-User (thomas)."""
+    """Playwright-Page mit eingeloggtem Lead-User (emma)."""
     context = browser.new_context(storage_state=_lead_storage_state, locale="de-DE")
     page = _setup_page(context)
     page.goto(f"{base_url}/")
