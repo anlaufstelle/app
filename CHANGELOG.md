@@ -4,9 +4,9 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.15.0] - 2026-06-16
+## [0.15.0] - 2026-06-23
 
-Sicherheits- und Stabilisierungs-Release (Pre-Release) auf dem Weg zur Demo-Version: vertieft die Härtungsagenda nach v0.14.0 — eine Laufzeit-Autorisierungs-Matrix als dauerhafter Nachweis, ein datenbankweiter PII-Residue-Sweep nach Löschung und Retention, die Entkopplung der Vier-Augen-Löschfreigabe in einen rollenunabhängigen Genehmiger-Pool und die abschließende Härtung des Offline-Caches (ADR-022). Dazu der Datenbank-Major-Sprung auf PostgreSQL 18, Node 24 LTS in der Build-Toolchain sowie UI-Polish rund um die neue Arbeitszentrale und die Schichtübergabe. Keine Datenmodell-Brüche; Vorwärts-Migration ohne Datenverlust. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
+Sicherheits- und Stabilisierungs-Release (Pre-Release) auf dem Weg zur Demo-Version: vertieft die Härtungsagenda nach v0.14.0 — eine Laufzeit-Autorisierungs-Matrix als dauerhafter Nachweis, ein datenbankweiter PII-Residue-Sweep nach Löschung und Retention, die Entkopplung der Vier-Augen-Löschfreigabe in einen rollenunabhängigen Genehmiger-Pool und die abschließende Härtung des Offline-Caches (ADR-022). Erstmals dabei: eine öffentliche Demo-Instanz (`demo.anlaufstelle.app`) mit eigener Demo-Schutzschicht. Dazu der Datenbank-Major-Sprung auf PostgreSQL 18, Node 24 LTS in der Build-Toolchain, eine umfassend überarbeitete Aufgabenübersicht sowie UI-Polish rund um die neue Arbeitszentrale und die Schichtübergabe. Keine Datenmodell-Brüche; Vorwärts-Migration ohne Datenverlust. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
 
 ### Security
 
@@ -24,9 +24,13 @@ Sicherheits- und Stabilisierungs-Release (Pre-Release) auf dem Weg zur Demo-Vers
 - **Admin-CSP-Relax nur für `text/html`** (#1084) — die gelockerte CSP des Admin-Bereichs greift nur noch für HTML-Antworten, nicht für andere Content-Types.
 - **Laufzeit-Autorisierungs-Matrix als dauerhafter Nachweis** (#1055) — eine parametrisierte Live-Test-Suite prüft am laufenden System alle Rollen über die URL-Patterns inklusive IDOR-Proben über Facility-Grenzen, Session-Cookie-Flags und Security-Header; Befunde sind als `KNOWN_GAPS` mit Folge-Issue dokumentiert.
 - **Threat-Model auf HMAC-SHA256-Backup-Integrität nachgezogen** (#1099) — `docs/threat-model.md` beschrieb Backups noch als nur „AES-256-CBC verschlüsselt"; Asset-Tabelle und Trust-Boundary TB5 spiegeln jetzt den real ausgelieferten Encrypt-then-MAC-Schutz (detached HMAC-SHA256-Sidecar, der vor der Entschlüsselung geprüft wird).
+- **Ratelimit für den System-Audit-Log-Export** (#1193) — `SystemAuditLogExportView` ist gegen Massenabruf gedrosselt, analog zu den übrigen Export-/Download-Pfaden.
+- **`cryptography` auf 48.0.1** ([GHSA-537c-gmf6-5ccf](https://github.com/advisories/GHSA-537c-gmf6-5ccf)) — Security-Patch innerhalb des `<49`-Rahmens, schließt eine von `pip-audit` gemeldete Schwachstelle in 48.0.0; reiner Cap-Bump (`>=48.0.1,<49`), keine API-/Verhaltensänderung. Der Major-Bump auf 49.0.0 wird separat verifiziert (#1129).
 
 ### Added
 
+- **Öffentliche Demo-Instanz `demo.anlaufstelle.app`** (#1062, #971) — eigener Deployment-Stack auf separater VPS (Image-Build auf dem Server, stündlicher Reset), ein `DEMO_MODE`-Banner und ein Login-Panel mit den Demo-Zugangsdaten und dem nächsten Reset-Zeitpunkt. Eine `DemoGuardMiddleware` sperrt schadensträchtige Aktionen (Wartungsmodus-Toggle, 2FA-Setup, Passwortänderung, Benutzerverwaltung); Banner und Panel weisen zudem auf deaktivierte Funktionen hin (E-Mails gehen nur in die Konsole).
+- **Aufgabenübersicht als zweispaltige Arbeitsansicht** (#1149) — „Offen" und „In Bearbeitung" stehen auf breiten Bildschirmen nebeneinander (mobil weiter untereinander); „Kürzlich erledigt" rückt als standardmäßig eingeklappter Rückblick („letzte 7 Tage") darunter.
 - **Arbeitszentrale als Cockpit-Kopf der Start-Seite** (#1124) — eine schlanke Arbeitszentrale bündelt den Handlungsbedarf der Schicht an der Spitze der Start-Seite.
 - **Team-Fokusbox in der Zeitstrom-Sidebar** (#1128) — eine Sidebar-Fokusbox bündelt den offenen Handlungsbedarf des Teams (eigenes Dashboard-Service-Modul).
 - **Recht „Löschbestätigung" — Genehmiger-Pool entkoppelt von der Rolle** (#1053) — die zweite Person der Vier-Augen-Löschfreigabe ist jetzt über ein eigenes Recht (`can_confirm_deletion`) kuratierbar statt fest an die Leitungsrolle gebunden; das entdeadlockt den Workflow bei nur einer Leitung.
@@ -43,6 +47,10 @@ Sicherheits- und Stabilisierungs-Release (Pre-Release) auf dem Weg zur Demo-Vers
 - **Übersetzungs-Gate verschärft** (#1078) — `scripts/check_translation_versions.py` verlangt Übersetzungs-Sync mit jedem Minor-Release (`MAX_MINOR_BEHIND` 2 → 0); Teil der neuen EN-Sync-Policy „hartes Release-Gate".
 - **Compose-Image-Pins vereinheitlicht** (#1082) — `docker-compose.staging.yml` und `docker-compose.prod.yml` ziehen den App-Image-Tag konsistent über `${APP_VERSION}` (vorher war staging hart auf das vier Minors alte `v0.10.2` gepinnt und der prod-Fallback ebenfalls veraltet). Der Release-Doc-Sync hält den Fallback künftig aktuell.
 - **Release-Testprofile auf automatisiert-first umgestellt** (#1081) — `docs/testing/release-test-profiles.md` definiert nun ein verbindliches automatisiertes Gate (`make ci` + volle E2E + Autorisierungs-Matrix + `make release-gates`) als primären Release-Nachweis; die manuellen Profile sind auf den nicht-automatisierten Rest (visueller Augenschein, Pen-/Spot-Checks) reduziert und in der Release-Checkliste operativ verdrahtet.
+- **Aufgaben-Aktionen vereinheitlicht und abgesichert** (#1130, #1146) — Tabellen- und Detailansicht nutzen dieselben Begriffe („Aufgabe übernehmen", „Als nicht relevant schließen"), bieten „Als erledigt markieren" als direkte Aktion und sichern abschließende Statuswechsel mit einer erklärenden Bestätigung ab. Die Status-Transition-Logik bleibt unverändert.
+- **Aufgabenliste: Frist eindeutig benannt** (#1133) — das Fristen-Badge trägt das sichtbare Präfix „Fällig:"; das missverständliche, unbeschriftete Erstellungsdatum entfällt in der Übersicht (bleibt in der Einzelansicht).
+- **Zeitstrom-Übergabe auf Schichtrelevantes fokussiert** (#1139) — die zur Aufgaben-Fokusbox redundante allgemeine „Offene Aufgaben"-Liste entfällt; übergaberelevante Aufgaben erscheinen weiterhin schichtbezogen in den Hinweisen.
+- **Zeitstrom: dauerhafte Sektion „Aktueller Dienst"** (#1138) — die Dienst-Kennzahlen beziehen sich jetzt immer auf die laufende Schicht (Mitternachts-Überlappung berücksichtigt) statt auf die Datums-/Schichtauswahl im Zeitstrom.
 
 ### Fixed
 
@@ -57,6 +65,17 @@ Sicherheits- und Stabilisierungs-Release (Pre-Release) auf dem Weg zur Demo-Vers
 - **Wartungsjobs mit `--pull never`** (#1047) — `run-as-admin.sh` setzt `--pull never`, damit Retention/Breach/MV-Refresh nicht still gegen ein neu gezogenes Image brechen (per Architektur-Guard abgesichert).
 - **Tabellen-Ownership nach Migrate-als-Admin normalisiert** (#1085) — der Migrate-Job normalisiert die Ownership frisch erstellter Tabellen auf den DB-Owner, sodass die App-Rolle zugreifen kann (kein `permission denied` mehr); generalisiert das frühere per-Tabelle-Muster.
 - **`postgres-init`-Rollenanlage auf `\gexec`** (#1039) — die Anlage der DB-Rollen im Init-Skript läuft robust über `\gexec`.
+- **Verschlüsselte Anhänge im Dokumentations-Flow erreichbar** (#1142) — der Kontakt-Dokumentationstyp bietet wieder ein nutzbares (weiterhin at-rest verschlüsseltes) Datei-Upload-Feld. Zuvor blendete die Sensitivitäts-Regel das einzige Datei-Feld des Seeds für Fachkraft und Assistenz aus, sodass das beworbene Feature „Verschlüsselte Anhänge" im Default-Flow nicht nutzbar war.
+- **Aufgaben-Default-Filter zeigt die passende Liste** (#1145) — Anzeige und Filterwirkung des Zuweisungs-Filters stimmen wieder überein (eigener Sentinel „Mir & unzugewiesene"); ein HTMX-Filter-Reload sammelt die gleichnamigen Bulk-Selects nicht mehr als leere Doppel-Parameter ein, die fremd-zugewiesene Aufgaben einblendeten.
+- **Aufgaben-Sicht beim Bulk-Statuswechsel stabil** (#1134) — die „Kürzlich erledigt"-Liste ist an dieselbe Default-Eingrenzung gebunden wie die übrigen Listen, und eine explizite „Alle"-Sicht bleibt nach dem Statuswechsel erhalten; Listenanzeige und tatsächlicher Status laufen nicht mehr auseinander.
+- **Aufgaben-Bulk-Auswahl & -Aktionsleiste** (#1132) — die Einzelauswahl per Checkbox wirkt im CSP-Alpine-Build wieder (Auswahl wird nach jedem Change frisch aus dem DOM abgeleitet), der Auswahlzähler bleibt konsistent und die Aktionsleiste erscheint auch bei rein manueller Auswahl.
+- **Verständlicher Bulk-Berechtigungshinweis** (#1136, #1148) — eine Sammelaktion mit fremd-zugewiesenen Aufgaben nennt jetzt konkret, wie viele Aufgaben blockieren, zeigt das als Inline-Warnung über der Liste statt als nackte Forbidden-Seite und hält die blockierende Auswahl markiert. Die Alles-oder-nichts-Semantik bleibt erhalten (#583).
+- **Bestätigung vor „Als erledigt markieren"** (#1147) — der abschließende Statuswechsel fragt in Detail-, Tabellen- und Bulk-Kontext konsistent nach, damit ein schneller Klick ihn nicht versehentlich auslöst.
+- **Überfällige Aufgabe mit unverändertem Datum speicherbar** (#1131) — das statische HTML5-`min`=heute blockierte das Speichern eines bereits überfälligen Items nicht mehr; ein aktives Verschieben auf ein anderes Vergangenheits-Datum fängt weiterhin die Server-Validierung ab.
+- **Verwaister Datei-Hilfetext entfernt** (#1143) — der Datei-Upload-Hinweis erschien fälschlich am Mehrfach-Auswahl-Feld „Leistungen" im Kontakt-Formular (Bedingung auf den echten Datei-Widget-Typ umgestellt).
+- **Navigation: Systembereich nicht mehr fälschlich aktiv** — der Aktivzustand testete per Substring (`dashboard` ⊂ `system_dashboard`); ein neuer `split`-Template-Filter macht daraus einen exakten Element-Test über die gesamte Desktop- und Mobil-Navigation.
+- **Standalone-Auth-Seiten scrollen bei hohem Inhalt** (#1062) — Login, MFA-Login/-Setup, Passwort-Reset und Lockout-Recovery schneiden Inhalt oberhalb des Viewports nicht mehr ab (`min-h-screen` statt `h-full`).
+- **Legal-Hold-Zeitzonenkonsistenz** (#1191, #1192) — `is_active`, der Dashboard-SQL-Filter und der Enforcement-Pfad nutzen `timezone.localdate()` statt des naiven `date.today()`, sodass die Aktiv-/Abgelaufen-Grenze nahe Mitternacht nicht um einen Tag springt.
 
 ### Docs
 
