@@ -1,11 +1,11 @@
-{% load i18n %}
+{% load i18n core_tags %}
 {# Mobile Bottom-Nav (visible nur unter md). Refs #867, #911. #}
 {# super_admin sieht nur System-Slots (kein Facility-Kontext). #}
 <nav class="fixed bottom-0 inset-x-0 md:hidden bg-surface border-t border-subtle z-40" aria-label="{% trans 'Mobile Navigation' %}">
     <div class="flex justify-around py-1 pb-2">
         {% if user.is_super_admin %}
         {# Super-Admin-Layout: Systembereich + Mehr. #}
-        <a href="{% url 'core:system_dashboard' %}" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'system_dashboard,system_organization,system_audit_list,system_audit_detail,system_lockout_list,system_unlock,system_maintenance' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-system">
+        <a href="{% url 'core:system_dashboard' %}" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'system_dashboard,system_organization,system_audit_list,system_audit_detail,system_lockout_list,system_unlock,system_maintenance'|split:',' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-system">
             <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12V7a2 2 0 012-2h10a2 2 0 012 2v5M5 12h14M5 12v5a2 2 0 002 2h10a2 2 0 002-2v-5M9 8.5h.01M9 15.5h.01"/></svg>
             <span class="text-[12px] font-medium">{% trans "Systembereich" %}</span>
         </a>
@@ -41,20 +41,20 @@
             <span class="text-[12px] font-medium">{% trans "Zeitstrom" %}</span>
         </a>
         {# Slot 3: Aufgaben — operativer Alltagsbereich vor Stammdaten. Refs #1126. #}
-        <a href="{% url 'core:workitem_inbox' %}" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center relative {% if request.resolver_match.url_name in 'workitem_inbox,workitem_detail,workitem_create,workitem_update' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-workitems">
+        <a href="{% url 'core:workitem_inbox' %}" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center relative {% if request.resolver_match.url_name in 'workitem_inbox,workitem_detail,workitem_create,workitem_update'|split:',' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-workitems">
             <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
             <span class="text-[12px] font-medium">{% trans "Aufgaben" %}</span>
             {% if overdue_workitems_count %}<span class="absolute top-1 right-1.5 inline-flex items-center justify-center px-1 py-px rounded-full text-[12px] font-bold bg-red-500 text-white">{{ overdue_workitems_count }}!</span>{% endif %}
         </a>
         {# Slot 4: Personen #}
-        <a href="{% url 'core:client_list' %}" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'client_list,client_detail,client_create,client_update' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-clients">
+        <a href="{% url 'core:client_list' %}" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'client_list,client_detail,client_create,client_update'|split:',' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-clients">
             <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 0 0 2.625.372 9.337 9.337 0 0 0 4.121-.952 4.125 4.125 0 0 0-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 0 1 8.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0 1 11.964-3.07M12 6.375a3.375 3.375 0 1 1-6.75 0 3.375 3.375 0 0 1 6.75 0Zm8.25 2.25a2.625 2.625 0 1 1-5.25 0 2.625 2.625 0 0 1 5.25 0Z"/></svg>
             <span class="text-[12px] font-medium">{% trans "Personen" %}</span>
         </a>
         {% endif %}
         {# Slot 5: Mehr (inkl. Suche, Übergabe und sonstiger Items) #}
         <div class="relative" x-data="mobileMore">
-            <button @click="toggleMore" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'case_list,case_detail,case_create,case_update,attachment_list,search,statistics,deletion_request_list,deletion_review,retention_dashboard,audit_log,dsgvo_package,dsgvo_document,account_profile' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-more">
+            <button @click="toggleMore" class="flex flex-col items-center gap-0.5 px-3 py-1.5 min-w-[48px] min-h-[44px] justify-center {% if request.resolver_match.url_name in 'case_list,case_detail,case_create,case_update,attachment_list,search,statistics,deletion_request_list,deletion_review,retention_dashboard,audit_log,dsgvo_package,dsgvo_document,account_profile'|split:',' %}text-accent{% else %}text-ink-muted hover:text-accent{% endif %}" data-testid="mobile-nav-more">
                 <svg class="w-[22px] h-[22px]" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
                 <span class="text-[12px] font-medium">{% trans "Mehr" %}</span>
             </button>

@@ -50,6 +50,20 @@ def get_item(container, key):
 
 
 @register.filter
+def split(value, sep=","):
+    """Split a string into a list for true membership tests in templates.
+
+    Django's ``{% if x in 'a,b,c' %}`` tests substring containment on a string,
+    not list membership — so ``'dashboard'`` matches ``'system_dashboard'``.
+    Piping through ``|split:','`` yields a real list, making ``in`` an exact-
+    element check (Nav-Aktivmarkierung, vermeidet Substring-Kollisionen).
+    """
+    if value is None:
+        return []
+    return str(value).split(sep)
+
+
+@register.filter
 def decrypt(value):
     """Decrypt a field value, or return [encrypted] as fallback."""
     from core.services.file_vault import is_encrypted_value, safe_decrypt
