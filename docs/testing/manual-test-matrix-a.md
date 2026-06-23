@@ -317,7 +317,7 @@
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
-| Tagesablauf | fachkraft | C/S | ✓ | `test_offline_apis.py`, `test_offline_login_bootstrap.py` |
+| Tagesablauf | fachkraft | C/S | ✓ | `test_offline_apis.py`, `test_offline_login_bootstrap.py`, `test_offline_store.py`, `test_pwa_offline.py` |
 
 
 **Vorbereitung:**
@@ -336,10 +336,13 @@
 
 **Sicherheitsregeln im Hintergrund:**
 - Offline-Daten sind im lokalen Speicher verschlüsselt (mit dem Passwort der Anmeldung).
+- IndexedDB-Stores (`anlaufstelle-offline`) halten Klienten/Events als `{iv,ct}` (AES-GCM); der Schlüssel liegt non-extractable in `anlaufstelle-crypto` — kein Klartext.
 - Beim nächsten Passwort-Wechsel verfallen die offline-Daten automatisch.
 
 **Erwartung:**
 - Du hast offline gearbeitet, beim Wieder-Online sind die Daten synchron.
+
+> 🤖 **Automatisiert abgedeckt** (Playwright, echtes `context.set_offline`): `test_pwa_offline.py` (Offline-Banner sichtbar bei Netz-Aus, Service-Worker-`/offline/`-Fallback, Offline-`POST` → SW-Queue + Feedback) und `test_offline_store.py` (verschlüsselter IndexedDB-Store, Sync-Konflikt-Review). Vollständige Offline-/PWA-Fälle: ENT-OFFL-01…12 / ENT-PWA-01…05 in [Matrix B](manual-test-matrix-b.md).
 
 **Status:** ☐ Offen
 
