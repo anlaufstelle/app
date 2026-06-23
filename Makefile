@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report ci-coverage docs-screens release-gates release-preflight release-verify-public verify-vendor-js-sync sync-vendor-js
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report ci-coverage docs-screens release-gates release-preflight release-verify-public verify-vendor-js-sync sync-vendor-js
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -300,3 +300,30 @@ dev-backup:
 dev-status:
 	ssh $(DEV_HOST) 'cd /opt/anlaufstelle && docker compose -f docker-compose.dev.yml --env-file .env.dev ps'
 	curl -sS -I https://dev.anlaufstelle.app/health/ | head -5
+
+# === demo.anlaufstelle.app deploy-Targets (Refs #1062) ===
+# Eigene VPS, entkoppelt von dev (#971). Image wird AUF DEM SERVER gebaut.
+DEMO_HOST ?= <ssh-user>@demo.anlaufstelle.app
+
+# Hauptdeploy: build context syncen, Image bauen, migrate, up, Reset-Timer.
+deploy-demo:
+	DEMO_HOST=$(DEMO_HOST) ./dev-ops/deploy/deploy-demo.sh
+
+# Demo-Daten (idempotent). SEED_ARGS, z.B. SEED_ARGS="--flush --scale=medium".
+demo-seed:
+	ssh $(DEMO_HOST) 'cd /opt/anlaufstelle && \
+	  set -a && . ./.env.demo && set +a && \
+	  docker compose -f docker-compose.demo.yml --env-file .env.demo run --rm -T \
+	    --entrypoint python \
+	    -e POSTGRES_USER="$$POSTGRES_ADMIN_USER" \
+	    -e POSTGRES_PASSWORD="$$POSTGRES_ADMIN_PASSWORD" \
+	    web manage.py seed $(SEED_ARGS) </dev/null'
+
+# Compose-Status + Healthcheck.
+demo-status:
+	ssh $(DEMO_HOST) 'cd /opt/anlaufstelle && docker compose -f docker-compose.demo.yml --env-file .env.demo ps'
+	curl -sS -I https://demo.anlaufstelle.app/health/ | head -5
+
+# Live-Logs.
+demo-logs:
+	ssh $(DEMO_HOST) 'cd /opt/anlaufstelle && docker compose -f docker-compose.demo.yml --env-file .env.demo logs -f --tail=200 web caddy'

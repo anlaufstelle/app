@@ -1,0 +1,113 @@
+# demo.anlaufstelle.app — oeffentliche Demo-Instanz (Refs #1062).
+#
+# Eigene VPS, entkoppelt von dev (Beschluss #971). Struktur 1:1 wie
+# docker-compose.dev.yml; Unterschiede:
+#   - Settings-Modul anlaufstelle.settings.demo (DEMO_MODE, MFA-Enforce aus)
+#   - web-Image wird AUF DEM SERVER gebaut (CI-Image-Builds aus) und lokal als
+#     ``anlaufstelle:demo`` getaggt -> pull_policy: never (kein ghcr-Pull).
+#   - eigene Volumes (_demo), eigene .env.demo.
+#
+# Verwendung am Server (/opt/anlaufstelle), via dev-ops/deploy/deploy-demo.sh:
+#   docker compose -f docker-compose.demo.yml --env-file .env.demo up -d
+#
+# .env.demo wird NICHT committed; Vorlage: .env.demo.example.
+
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_BOOTSTRAP_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      APP_DB_USER: ${POSTGRES_USER}
+      APP_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      ADMIN_DB_USER: ${POSTGRES_ADMIN_USER}
+      ADMIN_DB_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+    volumes:
+      - pgdata_demo:/var/lib/postgresql
+      - ./deploy/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - internal
+
+  clamav:
+    image: clamav/clamav:stable
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/clamdcheck.sh"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 5m
+    networks:
+      - internal
+
+  web:
+    # Lokal auf dem Server gebaut (deploy-demo.sh), NICHT von ghcr gezogen.
+    image: anlaufstelle:demo
+    pull_policy: never
+    env_file: .env.demo
+    environment:
+      DJANGO_SETTINGS_MODULE: anlaufstelle.settings.demo
+      POSTGRES_HOST: db
+      CLAMAV_HOST: clamav
+      POSTGRES_APP_USER: ${POSTGRES_USER}
+    volumes:
+      - media_demo:/data
+      - ${BACKUP_DIR:-/var/backups/anl}:${BACKUP_DIR:-/var/backups/anl}:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - |
+          import urllib.request, json, sys;
+          body = urllib.request.urlopen('http://localhost:8000/health/', timeout=5).read();
+          sys.exit(0 if json.loads(body).get('status') == 'ok' else 1)
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      # 6 min Grace: /health/ ist erst "ok", wenn die ClamAV-DB synchronisiert
+      # ist (Initial-Download 3-5 min) — sonst haengt caddy's depends_on.
+      start_period: 6m
+    restart: unless-stopped
+    networks:
+      - internal
+      - frontend
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile.demo:/etc/caddy/Caddyfile:ro
+      - caddy_data_demo:/data
+      - caddy_config_demo:/config
+    env_file: .env.demo
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - frontend
+
+volumes:
+  pgdata_demo:
+  caddy_data_demo:
+  caddy_config_demo:
+  media_demo:
+
+networks:
+  internal:
+    internal: true
+  frontend:
