@@ -9,7 +9,7 @@
     "watch": "tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --watch"
   },
   "devDependencies": {
-    "@alpinejs/csp": "3.14.8",
+    "@alpinejs/csp": "3.15.12",
     "chart.js": "4.5.1",
     "dexie": "4.4.4",
     "htmx.org": "2.0.10",
