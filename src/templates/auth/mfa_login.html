@@ -17,7 +17,7 @@
     <script defer src="{% static 'js/date-input-i18n.js' %}"></script>
     <script defer src="{% static 'js/alpine-csp.min.js' %}"></script>
 </head>
-<body class="h-full bg-canvas flex items-center justify-center">
+<body class="min-h-screen bg-canvas flex items-center justify-center">
     <div class="w-full max-w-sm p-6 bg-surface rounded-lg shadow-md"
          x-data="mfaModeSwitch"
          data-initial-mode="{{ last_mode|default:'totp' }}">
