@@ -100,6 +100,9 @@ MIDDLEWARE = [
     "core.middleware.password_change.ForcePasswordChangeMiddleware",
     "core.middleware.mfa.MFAEnforcementMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    # Refs #1062: Demo-Guard nach MessageMiddleware (nutzt Flash-Messages),
+    # No-Op ausserhalb DEMO_MODE.
+    "core.middleware.demo_guard.DemoGuardMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django_htmx.middleware.HtmxMiddleware",
 ]
@@ -124,6 +127,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "core.context_processors.workitem_counts",
                 "core.context_processors.source_code",
+                "core.context_processors.demo",
             ],
         },
     },

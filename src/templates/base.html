@@ -79,6 +79,12 @@
 
     {# --- Main Content: always visible, offset on desktop --- #}
     <main id="main-content" class="md:ml-60 min-h-screen pb-20 md:pb-0 overflow-x-hidden">
+        {# Demo-Banner — kennzeichnet synthetische Daten + naechsten Reset (Refs #1062). #}
+        {% if demo_mode %}
+        <div class="bg-amber-100 border-b border-amber-300 text-amber-900 text-center text-[13px] py-1.5 px-4" data-testid="demo-banner">
+            {% blocktrans with reset=demo_next_reset|time:"H:i" %}Demo — synthetische Daten, Reset jede volle Stunde (nächster: {{ reset }} Uhr).{% endblocktrans %}
+        </div>
+        {% endif %}
         <div class="max-w-[1140px] mx-auto px-4 py-5 md:px-8 md:py-7">
             {# Refs #811 (C-44): stabile Live-Region — siehe CONTRIBUTING.md "Templates und Frontend". #}
             <div id="flash-messages" role="status" aria-live="polite" aria-atomic="true">

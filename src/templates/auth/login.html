@@ -53,6 +53,8 @@
             </div>
             {% endif %}
 
+            {% if demo_mode %}{% include "auth/_demo_credentials.html" %}{% endif %}
+
             <form method="post" class="space-y-4" id="login-form">
                 {% csrf_token %}
                 <div>

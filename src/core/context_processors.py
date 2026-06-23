@@ -6,6 +6,7 @@ from functools import lru_cache
 
 from django.conf import settings
 from django.db.models import Q
+from django.utils import timezone
 
 from core.models import WorkItem
 
@@ -70,4 +71,24 @@ def workitem_counts(request):
         "open_workitems_count": count,
         "overdue_workitems_count": overdue_count,
         "current_facility": facility,
+    }
+
+
+def demo(request):
+    """Refs #1062: Demo-Banner + Login-Zugangsdaten-Panel (nur bei DEMO_MODE).
+
+    Exponiert die oeffentlich kommunizierten Seed-Logins und den naechsten
+    Reset-Zeitpunkt fuer die oeffentliche Demo-Instanz. Der stuendliche
+    Reset-Timer laeuft ``OnCalendar=hourly`` -> naechster Reset ist die
+    kommende volle Stunde. Ausserhalb der Demo (Default) ein No-Op.
+    """
+    if not getattr(settings, "DEMO_MODE", False):
+        return {"demo_mode": False}
+    now = timezone.localtime()
+    next_reset = now.replace(minute=0, second=0, microsecond=0) + datetime.timedelta(hours=1)
+    return {
+        "demo_mode": True,
+        "demo_logins": getattr(settings, "DEMO_LOGINS", []),
+        "demo_password": getattr(settings, "DEMO_PASSWORD", ""),
+        "demo_next_reset": next_reset,
     }
