@@ -152,9 +152,10 @@ def test_missing_version_string_is_reported(tmp_path: Path) -> None:
 
 def test_manipulated_package_version_is_detected(tmp_path: Path) -> None:
     """Verbiegt die gepinnte dexie-Version in package.json -> Drift -> Exit != 0."""
+    pinned = json.loads((REPO_ROOT / "package.json").read_text())["devDependencies"]["dexie"]
     mirror = _mirror_repo(
         tmp_path / "repo",
-        mutate={"package.json": '"dexie": "4.2.0"\x00"dexie": "9.9.9"'},
+        mutate={"package.json": f'"dexie": "{pinned}"\x00"dexie": "9.9.9"'},
     )
     result = _run(mirror)
     assert result.returncode == 1
@@ -163,9 +164,10 @@ def test_manipulated_package_version_is_detected(tmp_path: Path) -> None:
 
 def test_non_exact_pin_is_rejected(tmp_path: Path) -> None:
     """Ein Range-Pin (``^``) auf einer vendored Lib wird als Fehler gemeldet."""
+    pinned = json.loads((REPO_ROOT / "package.json").read_text())["devDependencies"]["chart.js"]
     mirror = _mirror_repo(
         tmp_path / "repo",
-        mutate={"package.json": '"chart.js": "4.4.8"\x00"chart.js": "^4.4.8"'},
+        mutate={"package.json": f'"chart.js": "{pinned}"\x00"chart.js": "^{pinned}"'},
     )
     result = _run(mirror)
     assert result.returncode == 1
@@ -204,16 +206,21 @@ if __name__ == "__main__":
     _check("Meldung '4 vendored JS-Libs'", "4 vendored JS-Libs" in real.stdout)
 
     with tempfile.TemporaryDirectory() as td:
+        htmx_pin = json.loads((REPO_ROOT / "package.json").read_text())["devDependencies"]["htmx.org"]
         m = _mirror_repo(
             Path(td) / "drift",
-            mutate={str(VENDOR_REL / "htmx.min.js"): 'version:"2.0.4"\x00version:"0.0.0"'},
+            mutate={str(VENDOR_REL / "htmx.min.js"): f'version:"{htmx_pin}"\x00version:"0.0.0"'},
         )
         r = _run(m)
         _check("manipulierte htmx-Version -> Exit 1", r.returncode == 1)
         _check("Meldung enthaelt 'DRIFT'", "DRIFT" in (r.stdout + r.stderr))
 
     with tempfile.TemporaryDirectory() as td:
-        m = _mirror_repo(Path(td) / "range", mutate={"package.json": '"chart.js": "4.4.8"\x00"chart.js": "^4.4.8"'})
+        chart_pin = json.loads((REPO_ROOT / "package.json").read_text())["devDependencies"]["chart.js"]
+        m = _mirror_repo(
+            Path(td) / "range",
+            mutate={"package.json": f'"chart.js": "{chart_pin}"\x00"chart.js": "^{chart_pin}"'},
+        )
         r = _run(m)
         _check("Range-Pin '^' -> Exit 1", r.returncode == 1)
 
