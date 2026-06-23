@@ -304,7 +304,9 @@ dev-status:
 
 # === demo.anlaufstelle.app deploy-Targets (Refs #1062) ===
 # Eigene VPS, entkoppelt von dev (#971). Image wird AUF DEM SERVER gebaut.
-DEMO_HOST ?= <ssh-user>@demo.anlaufstelle.app
+# DEMO_HOST (user@host) via .env.deploy (gitignored, s.o.) oder Env setzen; der
+# Default ist nur ein Platzhalter — konkreter Deploy-User/-Host nicht public. Refs #1232.
+DEMO_HOST ?= deploy@your-server.example
 
 # Hauptdeploy: build context syncen, Image bauen, migrate, up, Reset-Timer.
 deploy-demo:
