@@ -4,8 +4,8 @@ gunicorn>=26.0.0
 whitenoise>=6.5
 django-htmx>=1.17
 django-ratelimit>=4.1
-# Cap auf <49: CVE GHSA-537c-gmf6-5ccf-Fix (48.0.1) jetzt; Major-Bump 49.0.0 separat verifizieren (#1129).
-cryptography>=48.0.1,<49
+# Major-Bump auf 49.0.0 verifiziert (#1129); der GHSA-537c-gmf6-5ccf-Fix kam mit 48.0.1.
+cryptography>=49.0.0,<50
 python-dotenv>=1.0
 weasyprint>=69.0
 django-unfold>=0.97.0

@@ -11,7 +11,7 @@ _Noch nicht veröffentlicht._ Sammelt die seit v0.15.0 hinzugekommenen Änderung
 ### Security
 
 - **Ratelimit für den System-Audit-Log-Export** (#1193) — `SystemAuditLogExportView` ist gegen Massenabruf gedrosselt, analog zu den übrigen Export-/Download-Pfaden.
-- **`cryptography` auf 48.0.1** ([GHSA-537c-gmf6-5ccf](https://github.com/advisories/GHSA-537c-gmf6-5ccf)) — Security-Patch innerhalb des `<49`-Rahmens, schließt eine von `pip-audit` gemeldete Schwachstelle in 48.0.0; reiner Cap-Bump (`>=48.0.1,<49`), keine API-/Verhaltensänderung. Der Major-Bump auf 49.0.0 wird separat verifiziert (#1129).
+- **`cryptography` auf 49.0.0** (#1129) — Major-Bump verifiziert (volle Krypto-Suite grün: Feldverschlüsselung, File-Vault, Backup-HMAC, Offline-Cache, MFA-Backup-Codes), keine API-/Verhaltensänderung. Löst den bisherigen `<49`-Cap ab, mit dem zuvor die in 48.0.0 von `pip-audit` gemeldete Schwachstelle ([GHSA-537c-gmf6-5ccf](https://github.com/advisories/GHSA-537c-gmf6-5ccf)) via 48.0.1 geschlossen wurde.
 
 ### Added
 
