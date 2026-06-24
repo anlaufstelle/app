@@ -333,6 +333,11 @@ Endpunkte werden nach Response-Typ getrennt — Templates referenzieren beide au
 
 Neue Endpunkte gehören entsprechend in eine der beiden Pfad-Gruppen. URL-Namen bleiben kurz und feature-spezifisch (`client_autocomplete`, `offline_bundle`); Pfad-Prefixe wechseln nur dann, wenn die Response-Form wechselt. Direkte `fetch("/api/...")`-Aufrufe in JS dürfen nur unter `/api/v1/` gehen — HTMX-Partials werden niemals als JSON konsumiert.
 
+### Übersetzungen (i18n)
+
+- **EN im selben Commit nachziehen (verbindlich, Refs #1215).** Wer übersetzbare Strings ändert — Django-`{% trans %}`/`.po` unter [`src/locale/`](src/locale/) oder die gespiegelten EN-Dokumente (`*.en.md`, [`docs/en/`](docs/en/)) — zieht die englische Entsprechung im **selben Commit** nach, nicht in einem nachgelagerten Sync-Commit. Konsistent mit der i18n-als-eigener-Commit-Regel in [`CLAUDE.md`](CLAUDE.md): DE und EN gehören in *einen* `chore(i18n):`-Commit, getrennt vom Feature.
+- **Stempel als Backstop:** [`scripts/check_translation_versions.py`](scripts/check_translation_versions.py) erzwingt für die EN-Dokumente einen `translation-version`-Header == aktuelle Minor-Version (Pre-Commit-Hook + `make release-gates`, hartes Gate seit #1078). Der Stempel fängt Drift zum Release ab; die „im selben Commit"-Regel verhindert, dass Drift überhaupt entsteht.
+
 ### Conventional Commits
 
 Commit-Messages folgen dem [Conventional Commits](https://www.conventionalcommits.org/)-Standard:

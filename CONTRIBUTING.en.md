@@ -309,6 +309,11 @@ Endpoints are separated by response type — templates reference both exclusivel
 
 New endpoints belong in one of these two path groups. URL names stay short and feature-specific (`client_autocomplete`, `offline_bundle`); path prefixes only change when the response form changes. Direct `fetch("/api/...")`-calls in JS may only target `/api/v1/` — HTMX partials are never consumed as JSON.
 
+### Translations (i18n)
+
+- **Update EN in the same commit (binding, Refs #1215).** Whoever changes translatable strings — Django `{% trans %}`/`.po` under [`src/locale/`](src/locale/) or the mirrored EN docs (`*.en.md`, [`docs/en/`](docs/en/)) — updates the English counterpart in the **same commit**, not in a deferred sync commit. Consistent with the "i18n is its own commit" rule in [`CLAUDE.md`](CLAUDE.md): DE and EN belong in *one* `chore(i18n):` commit, separate from the feature.
+- **Stamp as backstop:** [`scripts/check_translation_versions.py`](scripts/check_translation_versions.py) requires a `translation-version` header == current minor for the EN docs (pre-commit hook + `make release-gates`, hard gate since #1078). The stamp catches drift at release; the "same commit" rule prevents drift from arising.
+
 ### Conventional Commits
 
 Commit messages follow the [Conventional Commits](https://www.conventionalcommits.org/) standard:
