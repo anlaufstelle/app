@@ -188,11 +188,11 @@ class TestKAnonymizedClientSkip:
     nicht erneut anonymisiert werden (kein „Gelöscht-<prefix>"-Overwrite, keine
     doppelte Verarbeitung).
 
-    Beobachtung am Code (``enforce_retention._anonymize_clients``):
-    Der Skip-Filter basiert aktuell ausschließlich auf
-    ``pseudonym__startswith='Gelöscht-'`` — ein k-anonymisiertes
-    Pseudonym hat aber das Präfix ``anon-…``. Der Test flaggt dies als
-    xfail, damit der Bug sichtbar bleibt, ohne Produktivcode anzufassen.
+    Abgesichert am Code (``core/retention/anonymization.py:anonymize_clients``):
+    Der Kandidaten-Filter schließt k-anonymisierte Clients explizit aus
+    (``.exclude(Q(pseudonym__startswith="Gelöscht-") | Q(k_anonymized=True))``),
+    obwohl ihr Pseudonym das Präfix ``anon-…`` trägt. Dieser Test ist daher ein
+    **grüner** Regressions-Guard für genau diesen Skip — kein xfail.
     """
 
     def test_k_anonymized_client_not_touched_by_enforce_retention(
