@@ -36,6 +36,7 @@ Stdlib-only (ausser dem zuvor noetigen ``npm ci``). Refs #1076.
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -63,6 +64,19 @@ SYNC_MAP: tuple[VendorSync, ...] = (
 )
 
 
+# Abschliessender ``//# sourceMappingURL=...``-Kommentar minifizierter Builds.
+# chart.js 4.5.1 / dexie 4.4.4 haengen ihn an, ohne die ``.map`` mitzuliefern —
+# unter CompressedManifestStaticFilesStorage (prod) bricht ``collectstatic`` sonst
+# mit MissingFileError ab. Rein devtools-relevant; wir vendoren ohne ihn (analog
+# htmx/alpine, deren Builds keine Map-Referenz tragen).
+_SOURCE_MAP_COMMENT_RE = re.compile(rb"\n//# sourceMappingURL=[^\n]*\n?$")
+
+
+def _strip_source_map_comment(data: bytes) -> bytes:
+    """Entfernt eine abschliessende ``//# sourceMappingURL=...``-Referenz."""
+    return _SOURCE_MAP_COMMENT_RE.sub(b"\n", data)
+
+
 def sync_one(entry: VendorSync, *, check_only: bool) -> tuple[bool, str]:
     """Kopiert (oder prueft) eine Lib. Rueckgabe ``(ok, meldung)``."""
     source = NODE_MODULES / entry.package / entry.dist_relpath
@@ -74,7 +88,7 @@ def sync_one(entry: VendorSync, *, check_only: bool) -> tuple[bool, str]:
             f"{entry.package}: dist-Build fehlt: {source.relative_to(ROOT)} (zuerst 'npm ci' ausfuehren)",
         )
 
-    src_bytes = source.read_bytes()
+    src_bytes = _strip_source_map_comment(source.read_bytes())
     if check_only:
         if not target.is_file():
             return (False, f"{entry.package}: vendored Datei fehlt: {target.relative_to(ROOT)}")
