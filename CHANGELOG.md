@@ -22,6 +22,7 @@ _Noch nicht veröffentlicht._ Sammelt die seit v0.15.0 hinzugekommenen Änderung
 
 - **Aufgaben-Aktionen vereinheitlicht und abgesichert** (#1130, #1146) — Tabellen- und Detailansicht nutzen dieselben Begriffe („Aufgabe übernehmen", „Als nicht relevant schließen"), bieten „Als erledigt markieren" als direkte Aktion und sichern abschließende Statuswechsel mit einer erklärenden Bestätigung ab. Die Status-Transition-Logik bleibt unverändert.
 - **Aufgabenliste: Frist eindeutig benannt** (#1133) — das Fristen-Badge trägt das sichtbare Präfix „Fällig:"; das missverständliche, unbeschriftete Erstellungsdatum entfällt in der Übersicht (bleibt in der Einzelansicht).
+- **Aufgaben-Frist über natives Datumsfeld wählbar** (#1135) — das Fälligkeitsdatum (und die Erinnerung) nutzen ein natives `<input type="date">`-Auswahlfeld mit Heute-/Folgejahres-Grenzen und sind damit direkt manuell wählbar.
 - **Zeitstrom-Übergabe auf Schichtrelevantes fokussiert** (#1139) — die zur Aufgaben-Fokusbox redundante allgemeine „Offene Aufgaben"-Liste entfällt; übergaberelevante Aufgaben erscheinen weiterhin schichtbezogen in den Hinweisen.
 - **Zeitstrom: dauerhafte Sektion „Aktueller Dienst"** (#1138) — die Dienst-Kennzahlen beziehen sich jetzt immer auf die laufende Schicht (Mitternachts-Überlappung berücksichtigt) statt auf die Datums-/Schichtauswahl im Zeitstrom.
 
