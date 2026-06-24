@@ -59,6 +59,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-025](025-csp-unsafe-eval-admin.md) | CSP-`unsafe-eval` nur auf `/admin-mgmt/` | Accepted |
 | [ADR-026](026-rate-limiting.md) | Rate-Limiting-Strategie (Tarife, Pro-User-Keying, Shared-Cache) | Accepted |
 | [ADR-027](027-i18n-strategy.md) | i18n-/Übersetzungs-Strategie (DE-Quelle, EN-Sync-Gate) | Accepted |
+| [ADR-028](028-demo-release-versioning.md) | Demo-Instanz läuft nur auf getaggtem Release | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
