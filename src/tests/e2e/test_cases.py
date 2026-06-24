@@ -107,8 +107,9 @@ class TestCaseCRUD:
         # Titel vorhanden
         assert page.locator("h1").inner_text().strip() != ""
 
-        # Status-Badge sichtbar (Offen oder Geschlossen)
-        status_badge = page.locator("span.rounded-full")
+        # Status-Badge sichtbar (Offen oder Geschlossen) — .badge-Komponentenklasse
+        # seit dem C5-CSS-Refactor (_badge.html), nicht mehr inline `rounded-full`.
+        status_badge = page.locator("span.badge")
         assert status_badge.first.is_visible()
 
         # Meta-Info: Fallverantwortlich
