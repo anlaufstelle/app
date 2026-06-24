@@ -4,9 +4,9 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.16.0] - 2026-06-25
 
-_Noch nicht veröffentlicht._ Sammelt die seit v0.15.0 hinzugekommenen Änderungen — Schwerpunkte: die erste öffentliche Demo-Instanz (`demo.anlaufstelle.app`) mit eigener Demo-Schutzschicht und eine umfassend überarbeitete Aufgabenübersicht, dazu Security-Härtung und Zeitzonen-Korrekturen.
+Stabilisierungs-Release (Pre-Release): die erste öffentliche Demo-Instanz (`demo.anlaufstelle.app`) mit eigener Demo-Schutzschicht und eine umfassend überarbeitete Aufgabenübersicht, dazu Security-Härtung (u. a. `cryptography` 49.0.0, Ratelimit für den Audit-Log-Export) und Zeitzonen-Korrekturen. Keine Datenmodell-Brüche; Vorwärts-Migration ohne Datenverlust. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
 
 ### Security
 
