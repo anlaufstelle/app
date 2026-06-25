@@ -2905,7 +2905,7 @@
 
 ---
 
-### TC-ID: ENT-ATT-06 — MIME-Whitelist:.exe → Ablehnung + AuditLog
+### TC-ID: ENT-ATT-06 — MIME-Whitelist: .exe → Ablehnung + AuditLog
 
 | Bereich | Rolle | Browser | Mobile | E2E |
 |---------|-------|---------|--------|-----|
@@ -2922,7 +2922,7 @@
 3. Submit.
 
 **Erwartetes Ergebnis:**
-- Form-Validation (`DynamicEventDataForm.clean`) lehnt ab: „Dateityp.exe nicht erlaubt. Erlaubt: pdf, jpg, png, docx".
+- Form-Validation (`DynamicEventDataForm.clean`) lehnt ab: „Dateityp .exe nicht erlaubt. Erlaubt: pdf, jpg, png, docx".
 - Falls über Form vorbei direkt der Service aufgerufen wird (programmatisch): `_enforce_allowed_file_types` wirft `ValidationError` und schreibt AuditLog `security_violation` mit `reason="extension_not_allowed"`, `detail={extension: "exe", allowed: [...]}`.
 - HTTP-Status: bleibt auf der Form (200 mit Fehler), nicht 415 — das Test-Schema beschreibt 415 für direkten Service-Bypass.
 - Fail-closed: Bei leerer/fehlender Settings-Row → Default-Whitelist `DEFAULT_ALLOWED_FILE_TYPES` aus `core.constants` (Refs #771).

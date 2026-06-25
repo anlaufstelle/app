@@ -64,7 +64,7 @@ pythonpath = ["src"]
 # Refs #885: dev-ops/release/tests enthält Unit-Tests für das Release-Sanitize-Tool
 # (dev-ops/release/sanitize_release_tree.py). Beim Tree-Snapshot dev→stage→app wird
 # der dev-ops/-Ordner ausgeschlossen (Excludes in dev-ops/release/build-release.sh).
-testpaths = ["src/tests", "dev-ops/release/tests"]
+testpaths = ["src/tests"]
 addopts = "--reuse-db"
 markers = [
     "e2e: End-to-End-Tests mit Playwright (benötigen laufenden Server)",
