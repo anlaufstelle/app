@@ -143,7 +143,7 @@ Seit v0.12 trennt Anlaufstelle drei DB-Rollen: einen hartkodierten `postgres`-Bo
 | `CLAMAV_ENABLED` | `true` | Aktiviert den Virenscan vor Upload-Verschlüsselung. Fail-closed: Ist der Daemon nicht erreichbar, wird der Upload abgewiesen. |
 | `CLAMAV_HOST` | `clamav` | Hostname des ClamAV-Daemons (Service-Name im Compose-Netzwerk). |
 | `CLAMAV_PORT` | `3310` | TCP-Port des clamd-Sockets. |
-| `CLAMAV_TIMEOUT` | `30` | Timeout in Sekunden pro Scan-Aufruf. |
+| `CLAMAV_TIMEOUT` | `15` | Wall-Clock-Timeout in Sekunden pro Scan-Aufruf; MUSS unter `GUNICORN_TIMEOUT` liegen, sonst killt der Worker-Timeout den Request statt fail-closed abzuweisen. |
 
 **Logging**
 

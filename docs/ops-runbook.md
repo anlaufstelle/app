@@ -714,7 +714,7 @@ Env-Vars (Defaults siehe [`src/anlaufstelle/settings/base.py`](../src/anlaufstel
 CLAMAV_ENABLED=true        # Default in prod.py
 CLAMAV_HOST=clamav         # Service-Name im Compose-Netzwerk
 CLAMAV_PORT=3310
-CLAMAV_TIMEOUT=30          # Sekunden
+CLAMAV_TIMEOUT=15          # Sekunden; MUSS < GUNICORN_TIMEOUT (Refs #1283)
 ```
 
 In Entwicklung/Test ist der Scan deaktiviert (`CLAMAV_ENABLED=false`), damit

@@ -146,7 +146,7 @@ Since v0.12, Anlaufstelle separates three DB roles: a hardcoded `postgres` boots
 | `CLAMAV_ENABLED` | `true` | Enables virus scanning before upload encryption. Fail-closed: if the daemon is unreachable, the upload is rejected. |
 | `CLAMAV_HOST` | `clamav` | Hostname of the ClamAV daemon (service name in the Compose network). |
 | `CLAMAV_PORT` | `3310` | TCP port of the clamd socket. |
-| `CLAMAV_TIMEOUT` | `30` | Timeout in seconds per scan invocation. |
+| `CLAMAV_TIMEOUT` | `15` | Wall-clock timeout in seconds per scan invocation; MUST be below `GUNICORN_TIMEOUT`, otherwise the worker timeout kills the request instead of failing closed. |
 
 **Logging**
 
