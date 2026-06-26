@@ -8,6 +8,7 @@ import sys
 import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
 
+from ._sentry import before_send as _sentry_before_send
 from .base import *  # noqa: F401, F403
 from .base import LOGGING  # noqa: F401
 
@@ -26,6 +27,14 @@ if _sentry_dsn:
         dsn=_sentry_dsn,
         traces_sample_rate=float(os.environ.get("SENTRY_TRACES_SAMPLE_RATE", "0.1")),
         send_default_pii=False,
+        # Refs #1275: send_default_pii=False unterdrückt NICHT die
+        # Exception-Local-Variablen (z. B. entschlüsselte Notizen in einem
+        # Stack-Frame) oder Request-Bodies. include_local_variables=False
+        # verhindert das Erfassen der Frame-Locals direkt im SDK, before_send
+        # scrubt zusätzlich Request-Body/Cookies und sensible Felder, bevor ein
+        # Event übertragen wird (Defense-in-Depth).
+        include_local_variables=False,
+        before_send=_sentry_before_send,
     )
 
 # --- Media (encrypted attachments) ---
@@ -155,10 +164,18 @@ if "collectstatic" not in sys.argv and not AUDIT_HASH_KEY:  # noqa: F405
         'print(secrets.token_urlsafe(64))"'
     )
 
-# --- Virenscan (Default: aktiv in Produktion) ---
-# In Produktion ist der Virenscan standardmäßig aktiv und kann nur durch explizite
-# Setzung von CLAMAV_ENABLED=false deaktiviert werden.
+# --- Virenscan (ClamAV ist in Produktion Pflicht, Refs #1267) ---
+# base.py defaultet CLAMAV_ENABLED=false (Dev/Test-Bypass: ``virus_scan.scan_file``
+# liefert dann ohne ClamAV-Kontakt „clean"). In Produktion ist der Scanner Pflicht
+# und der Default daher „true". Ein explizites CLAMAV_ENABLED=false würde Uploads
+# ungescannt durchwinken — daher fail-closed: lieber Server-Start-Fehler als
+# stiller Scanner-Bypass (analog zu SUDO_MODE_ENABLED / AUDIT_HASH_KEY).
 CLAMAV_ENABLED = os.environ.get("CLAMAV_ENABLED", "true").lower() in ("true", "1", "yes")
+if not CLAMAV_ENABLED:
+    raise ImproperlyConfigured(
+        "CLAMAV_ENABLED muss in Produktion True sein. Der Virenscan darf nicht "
+        "deaktiviert werden — sonst akzeptiert die Anwendung ungescannte Uploads."
+    )
 
 # --- Sudo-Mode (Refs #775) ---
 # settings/test.py setzt SUDO_MODE_ENABLED=False, damit Tests nicht jedes

@@ -117,6 +117,39 @@ class TestProdFailClosed:
         )
         assert result.returncode == 0, f"Import failed unexpectedly: {result.stderr}"
 
+    def test_clamav_disabled_raises(self):
+        """#1267 (T2): In Produktion MUSS der Virenscan aktiv sein.
+
+        ``base.py`` defaultet ``CLAMAV_ENABLED=false`` (Dev/Test-Bypass:
+        ``virus_scan.scan_file`` liefert dann ohne ClamAV-Kontakt „clean"). Wird
+        der Scanner in Prod explizit abgeschaltet, würden Uploads ungescannt
+        akzeptiert — daher fail-closed: lieber Server-Start-Fehler als stiller
+        Scanner-Bypass."""
+        result = _run_prod_import(
+            {
+                "DJANGO_SECRET_KEY": "x" * 50,
+                "ALLOWED_HOSTS": "example.org",
+                "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+                "DJANGO_AUDIT_HASH_KEY": "y" * 50,
+                "CLAMAV_ENABLED": "false",
+            }
+        )
+        assert result.returncode != 0
+        assert "CLAMAV_ENABLED" in result.stderr
+
+    def test_clamav_enabled_by_default(self):
+        """Ohne explizites ``CLAMAV_ENABLED`` ist der Scanner in Prod an (Default
+        ``true``) und der Guard lässt den Import passieren (#1267)."""
+        result = _run_prod_import(
+            {
+                "DJANGO_SECRET_KEY": "x" * 50,
+                "ALLOWED_HOSTS": "example.org",
+                "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+                "DJANGO_AUDIT_HASH_KEY": "y" * 50,
+            }
+        )
+        assert result.returncode == 0, f"Import failed unexpectedly: {result.stderr}"
+
 
 class TestProdSettingsSecurityDefaultsGuard:
     """A5.5 (Refs #1024 / #1016): explizite Defense-in-Depth-Settings einfrieren.

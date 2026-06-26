@@ -14,6 +14,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Datei-Upload bei langsamem Virenscanner liefert keinen 500 mehr** (#1283) — der ClamAV-Scan läuft jetzt unter einer harten Wall-Clock-Deadline und das Scan-Timeout (`CLAMAV_TIMEOUT`) liegt unter dem Gunicorn-Worker-Timeout, sodass ein nicht (rechtzeitig) antwortender Daemon den Upload fail-closed mit klarer Meldung abweist, statt den Worker ins Timeout laufen zu lassen.
 
+### Security
+
+- **ClamAV in Produktion hart erzwungen** (#1267) — `prod.py` verweigert den Start (fail-closed `ImproperlyConfigured`), wenn `CLAMAV_ENABLED` nicht aktiv ist, sodass keine produktive Umgebung Datei-Uploads ungescannt durchwinkt.
+- **Sentry-`before_send`-Scrubber** (#1275) — Request-Bodies/Cookies und Exception-Frame-Locals (z. B. entschlüsselte Notizen) werden entfernt, sensible Felder/Texte maskiert und `include_local_variables=False` gesetzt, bevor ein Event übertragen wird; Sentry bleibt weiterhin standardmäßig aus.
+- **Lautere Klartext-Warnung in den dev-Settings** (#1276) — fehlt der `ENCRYPTION_KEY`, warnt `dev.py` jetzt unübersehbar (stderr-Banner) und verweigert mit gesetztem `REQUIRE_ENCRYPTION` den Start, damit eine versehentlich auf dev-Settings laufende Staging-Box keine Art-9-Daten still im Klartext ablegt.
+
 ## [0.16.0] - 2026-06-25
 
 Stabilisierungs-Release (Pre-Release): die erste öffentliche Demo-Instanz (`demo.anlaufstelle.app`) mit eigener Demo-Schutzschicht und eine umfassend überarbeitete Aufgabenübersicht, dazu Security-Härtung (u. a. `cryptography` 49.0.0, Ratelimit für den Audit-Log-Export) und Zeitzonen-Korrekturen. Keine Datenmodell-Brüche; Vorwärts-Migration ohne Datenverlust. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.

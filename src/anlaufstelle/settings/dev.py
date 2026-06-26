@@ -2,6 +2,9 @@
 Development settings for Anlaufstelle.
 """
 
+import os
+import sys
+
 from .base import *  # noqa: F401, F403
 
 # Dev-Default für SECRET_KEY — NUR in dev/test. prod.py erzwingt DJANGO_SECRET_KEY.
@@ -26,11 +29,43 @@ MFA_ENFORCE_PRIVILEGED_ROLES = False
 WHITENOISE_AUTOREFRESH = True
 WHITENOISE_USE_FINDERS = True
 
-# Encryption ist optional in Dev
+# --- Feldverschlüsselung in Dev (Refs #1276) ---
+# Encryption ist in Dev optional, damit lokal ohne Key-Setup gearbeitet werden
+# kann. ABER: ohne ENCRYPTION_KEY werden sensible Felder (inkl. besonderer
+# Kategorien nach Art. 9 DSGVO) im KLARTEXT persistiert. Eine Staging-Box, die
+# versehentlich auf dev-Settings läuft, täte das bisher still (nur eine
+# einzeilige Log-Warnung). Daher:
+#   1) eine unübersehbar laute Warnung (Banner auf stderr, nicht nur Log), und
+#   2) ein opt-in-Guard REQUIRE_ENCRYPTION: ist er gesetzt (z. B. auf einer
+#      Staging-/Nicht-lokal-Box), verweigert dev.py den Start ohne Key —
+#      analog zum prod-Fail-Closed.
+# Lokal (Default, Flag ungesetzt) bleibt der Start ohne Key bewusst möglich.
+REQUIRE_ENCRYPTION = os.environ.get("REQUIRE_ENCRYPTION", "").lower() in ("true", "1", "yes")
+
 if not ENCRYPTION_KEY:  # noqa: F405
+    if REQUIRE_ENCRYPTION:
+        from django.core.exceptions import ImproperlyConfigured
+
+        raise ImproperlyConfigured(
+            "REQUIRE_ENCRYPTION ist gesetzt, aber ENCRYPTION_KEY fehlt — dev-Settings "
+            "verweigern den Start, statt Felder im Klartext zu speichern. Setze einen "
+            "ENCRYPTION_KEY (Fernet-Key) oder entferne REQUIRE_ENCRYPTION für rein "
+            "lokale Entwicklung mit Wegwerf-Daten."
+        )
+
     import logging
 
-    logging.getLogger("core").warning("ENCRYPTION_KEY nicht gesetzt — Felder werden unverschlüsselt gespeichert.")
+    _plaintext_msg = (
+        "KLARTEXT-MODUS: ENCRYPTION_KEY ist NICHT gesetzt — sensible Felder (inkl. "
+        "besonderer Kategorien nach Art. 9 DSGVO) werden UNVERSCHLÜSSELT gespeichert. "
+        "Nur für lokale Entwicklung mit Wegwerf-Daten zulässig. Für jede nicht-lokale "
+        "Umgebung ENCRYPTION_KEY setzen oder mit REQUIRE_ENCRYPTION=1 hart absichern."
+    )
+    _border = "!" * 80
+    logging.getLogger("core").warning("\n%s\n  %s\n%s", _border, _plaintext_msg, _border)
+    # Zusätzlich direkt auf stderr: eine einzelne Log-Zeile ginge im Server-/
+    # systemd-Output sonst leicht unter — das Risiko muss unübersehbar sein.
+    print(f"\n{_border}\n  {_plaintext_msg}\n{_border}\n", file=sys.stderr)
 
 # Demo-Seed in lokaler Entwicklung erlaubt (test.py/e2e.py erben). Refs #1040 (S1).
 SEED_ALLOWED = True
