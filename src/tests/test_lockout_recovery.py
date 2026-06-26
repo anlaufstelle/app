@@ -192,6 +192,23 @@ class TestRecoveryTokenFlow:
         response = client.post(reverse("core:lockout_recovery_confirm", kwargs={"token": token}))
         assert response.status_code == 400
 
+    def test_token_binds_to_latest_failed_login_uuid_anchor(self, staff_user):
+        """Refs #1294: Anker ist die UUID des juengsten LOGIN_FAILED (kein int-Roundtrip).
+
+        ``AuditLog.id`` ist eine UUID; der Token muss direkt (Service-Ebene) an
+        den juengsten Fehlversuch binden und nach einer spaeteren Entsperrung
+        verfallen — ohne von der frueheren ``int(uuid)``-Kodierung abzuhaengen.
+        """
+        from core.services.security import build_recovery_token
+        from core.services.security import unlock as unlock_user
+        from core.services.security.lockout_recovery import verify_recovery_token
+
+        _lock_account(staff_user)  # echte LOGIN_FAILED-Eintraege mit UUID-PKs
+        token = build_recovery_token(staff_user)
+        assert verify_recovery_token(token) == staff_user
+        unlock_user(staff_user, unlocked_by=None, trigger="admin")
+        assert verify_recovery_token(token) is None
+
     def test_recovery_confirm_with_invalid_token_404s(self, client, staff_user):
         response = client.get(
             reverse(

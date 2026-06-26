@@ -17,6 +17,8 @@ Sperre ab dem Klick-Zeitpunkt wieder normal.
 
 from __future__ import annotations
 
+import uuid
+
 from django.core.signing import BadSignature, SignatureExpired, TimestampSigner
 
 from core.models import AuditLog, User
@@ -25,27 +27,32 @@ _SALT = "lockout-recovery.v1"
 _MAX_AGE_SECONDS = 30 * 60  # 30 Minuten
 
 
-def _latest_failed_id(user) -> int:
-    """PK des juengsten LOGIN_FAILED-Eintrags des Users (Anker), oder 0."""
-    pk = (
+def _latest_failed_anchor(user) -> str:
+    """ID (als UUID-String) des juengsten LOGIN_FAILED-Eintrags, oder "".
+
+    ``AuditLog.id`` ist eine UUID — der Anker wird als kanonischer UUID-String
+    transportiert. (Frueher als ``int(uuid)`` round-getrippt: lief dank Djangos
+    ``UUIDField``-Int-Coercion, brach aber den Typecheck und war verschleiert.)
+    """
+    anchor = (
         AuditLog.objects.filter(user=user, action=AuditLog.Action.LOGIN_FAILED)
         .order_by("-timestamp", "-id")
         .values_list("id", flat=True)
         .first()
     )
-    return int(pk) if pk is not None else 0
+    return str(anchor) if anchor is not None else ""
 
 
 def build_recovery_token(user) -> str:
     """Erzeugt einen signierten, einmalig nutzbaren Token.
 
-    Payload ``<user.pk>:<anchor>``, wobei ``anchor`` den juengsten
-    LOGIN_FAILED-Eintrag zum Erstellungszeitpunkt referenziert (0, wenn
+    Payload ``<user.pk>:<anchor>``, wobei ``anchor`` die UUID des juengsten
+    LOGIN_FAILED-Eintrags zum Erstellungszeitpunkt referenziert (leer, wenn
     keiner existiert). Siehe :func:`verify_recovery_token` fuer die
     Einmal-Nutzungs-Pruefung.
     """
     signer = TimestampSigner(salt=_SALT)
-    return signer.sign(f"{user.pk}:{_latest_failed_id(user)}")
+    return signer.sign(f"{user.pk}:{_latest_failed_anchor(user)}")
 
 
 def verify_recovery_token(token: str) -> User | None:
@@ -73,16 +80,20 @@ def verify_recovery_token(token: str) -> User | None:
         return None  # Alt-Token ohne Anker -> nicht (mehr) vertrauenswuerdig.
     try:
         user = User.objects.get(pk=int(pk_str), is_active=True)
-        anchor_id = int(anchor_str)
     except (User.DoesNotExist, ValueError):
         return None
 
     anchor_ts = None
-    if anchor_id > 0:
+    # Leer = kein Anker; "0" = Legacy-Token (alte int-Kodierung) -> als kein
+    # vertrauenswuerdiger Anker behandeln und ueber den LOGIN_UNLOCK-Check
+    # absichern.
+    if anchor_str and anchor_str != "0":
+        try:
+            anchor_pk = uuid.UUID(anchor_str)
+        except ValueError:
+            return None  # Malformer Anker -> Token nicht vertrauenswuerdig.
         anchor_ts = (
-            AuditLog.objects.filter(
-                pk=anchor_id, user=user, action=AuditLog.Action.LOGIN_FAILED
-            )
+            AuditLog.objects.filter(pk=anchor_pk, user=user, action=AuditLog.Action.LOGIN_FAILED)
             .values_list("timestamp", flat=True)
             .first()
         )
