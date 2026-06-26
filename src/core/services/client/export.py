@@ -7,6 +7,7 @@ from django.utils import timezone
 from core.models import Case as CaseModel
 from core.models import DeletionRequest, Event, EventHistory, WorkItem
 from core.services.file_vault import safe_decrypt
+from core.services.system.export import restricted_url_fetcher
 
 
 def _gather_client_fields(client):
@@ -174,4 +175,4 @@ def export_client_data_pdf(client, facility, user):
             "generated_at": timezone.now(),
         },
     )
-    return weasyprint.HTML(string=html).write_pdf()
+    return weasyprint.HTML(string=html, url_fetcher=restricted_url_fetcher).write_pdf()

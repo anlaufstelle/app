@@ -15,7 +15,7 @@ Module:
 """
 
 from core.services.dashboard.activity import log_activity
-from core.services.dashboard.external_report import build_external_report
+from core.services.dashboard.external_report import build_external_report, suppress_jugendamt_stats
 from core.services.dashboard.focus_box import build_focus_box
 from core.services.dashboard.main import (
     facility_admin_dashboard_context,
@@ -92,4 +92,5 @@ __all__ = [
     "search_similar_clients",
     "staff_dashboard_context",
     "super_admin_dashboard_context",
+    "suppress_jugendamt_stats",
 ]

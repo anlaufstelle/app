@@ -412,3 +412,103 @@ class TestJugendamtExport:
             action=AuditLog.Action.EXPORT,
             target_type="Jugendamt-PDF",
         ).exists()
+
+
+class _CaptureHTML:
+    """Faengt ``weasyprint.HTML(...)``-kwargs ab und liefert Fake-PDF-Bytes."""
+
+    last_kwargs: dict = {}
+
+    def __init__(self, **kwargs):
+        type(self).last_kwargs = kwargs
+
+    def write_pdf(self, *args, **kwargs):
+        return b"%PDF-1.7 fake"
+
+
+@pytest.mark.django_db
+class TestJugendamtPdfKAnonSuppression:
+    """Refs #1278 (T1): Kleinstfallzahlen (< k) muessen im Jugendamt-PDF
+    unterdrueckt werden — bisher gab das am ehesten externe Artefakt
+    Roh-Fallzahlen aus, waehrend die Suppression nur im On-Screen-Bericht lief.
+    """
+
+    def _mk_events(self, facility, user, system_type, n):
+        from core.models import DocumentType
+
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name=f"DT-{system_type}",
+            category=DocumentType.Category.CONTACT,
+            system_type=system_type,
+        )
+        for _ in range(n):
+            Event.objects.create(
+                facility=facility,
+                document_type=dt,
+                occurred_at=timezone.now(),
+                data_json={},
+                is_anonymous=True,
+                created_by=user,
+            )
+
+    def test_generate_jugendamt_pdf_routes_figures_through_suppression(self, facility, admin_user, monkeypatch):
+        from core.models import DocumentType
+        from core.services.system import export as sys_export
+
+        self._mk_events(facility, admin_user, DocumentType.SystemType.CONTACT, 10)  # Kontakte = 10 (sichtbar)
+        self._mk_events(facility, admin_user, DocumentType.SystemType.CRISIS, 3)  # Beratung = 3 (< 5)
+        self._mk_events(facility, admin_user, DocumentType.SystemType.MEDICAL, 2)  # Versorgung = 2 (< 5)
+
+        captured = {}
+
+        def fake_render(template_name, context):
+            captured["stats"] = context["stats"]
+            return "<html></html>"
+
+        monkeypatch.setattr(sys_export, "render_to_string", fake_render)
+        monkeypatch.setattr(sys_export.weasyprint, "HTML", _CaptureHTML)
+
+        today = date.today()
+        out = sys_export.generate_jugendamt_pdf(facility, today - timedelta(days=2), today)
+        assert out == b"%PDF-1.7 fake"
+
+        cats = {r["name"]: r for r in captured["stats"]["by_category"]}
+        assert cats["Beratung"]["suppressed"] is True and cats["Beratung"]["count"] is None
+        assert cats["Versorgung"]["suppressed"] is True and cats["Versorgung"]["count"] is None
+        assert cats["Kontakte"]["suppressed"] is False and cats["Kontakte"]["count"] == 10
+
+    def test_jugendamt_template_renders_marker_not_raw_count(self):
+        from datetime import datetime
+
+        from django.template.loader import render_to_string
+
+        stats = {
+            "total": 17,
+            "unique_clients": None,
+            "by_category": [
+                {"name": "Kontakte", "count": 12, "suppressed": False},
+                {"name": "Beratung", "count": None, "suppressed": True},
+            ],
+            "by_age_cluster": [
+                {"cluster": "u18", "label": "Unter 18", "count": None, "suppressed": True},
+                {"cluster": "27_plus", "label": "27+", "count": 15, "suppressed": False},
+            ],
+        }
+        html = render_to_string(
+            "core/export/jugendamt_pdf.html",
+            {
+                "facility_name": "Teststelle",
+                "date_from": date(2025, 8, 1),
+                "date_to": date(2025, 8, 31),
+                "stats": stats,
+                "generated_at": timezone.make_aware(datetime(2025, 9, 1, 9, 0)),
+            },
+        )
+        # Unterdrueckungs-Marker erscheint (Beratung, u18, unique_clients).
+        assert "unterdrückt" in html
+        # Sichtbare Zellen zeigen ihre Zahl ...
+        assert "12" in html  # Kontakte
+        assert "15" in html  # 27+
+        # ... aber keine rohe ``None``-Ausgabe fuer unterdrueckte Zellen.
+        assert "None" not in html

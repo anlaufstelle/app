@@ -41,7 +41,7 @@
     <div class="summary">
         <h2>{% trans "Zusammenfassung" %}</h2>
         <p><strong>{% trans "Gesamtkontakte (ohne Notizen/Hausverbote):" %}</strong> {{ stats.total }}</p>
-        <p><strong>{% trans "Einzigartige Personen:" %}</strong> {{ stats.unique_clients }}</p>
+        <p><strong>{% trans "Einzigartige Personen:" %}</strong> {% if stats.unique_clients is None %}{% trans "unterdrückt" %}{% else %}{{ stats.unique_clients }}{% endif %}</p>
     </div>
 
     <h2>{% trans "Leistungen nach Kategorie" %}</h2>
@@ -54,10 +54,10 @@
             </tr>
         </thead>
         <tbody>
-            {% for name, count in stats.by_category %}
+            {% for row in stats.by_category %}
             <tr>
-                <td>{{ name }}</td>
-                <td class="num">{{ count }}</td>
+                <td>{{ row.name }}</td>
+                <td class="num">{% if row.suppressed %}{% trans "unterdrückt" %}{% else %}{{ row.count }}{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -79,7 +79,7 @@
             {% for row in stats.by_age_cluster %}
             <tr>
                 <td>{{ row.label }}</td>
-                <td class="num">{{ row.count }}</td>
+                <td class="num">{% if row.suppressed %}{% trans "unterdrückt" %}{% else %}{{ row.count }}{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>

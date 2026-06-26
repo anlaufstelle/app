@@ -111,3 +111,38 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
             "privacy_profile": "external",
         },
     }
+
+
+def suppress_jugendamt_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
+    """K-Anon-Kleinstfallzahl-Suppression fuer das Jugendamt-PDF (Refs #1278, T1).
+
+    Das Jugendamt-PDF ist das am ehesten extern zirkulierende Artefakt und muss
+    derselben Small-Cell-Suppression unterliegen wie :func:`build_external_report`
+    — bisher lief die Suppression nur im On-Screen-Bericht, das PDF gab Roh-
+    Kleinstfallzahlen aus.
+
+    - ``by_category`` (Leistungskategorien) und ``by_age_cluster`` (Altersgruppen):
+      Zellen < Schwelle werden via :func:`_suppress_small` auf ``count=None`` /
+      ``suppressed=True`` gesetzt — inkl. sekundaerer Suppression gegen
+      Randsummen-Rueckrechnung.
+    - ``unique_clients`` < Schwelle -> ``None`` (wie in ``build_external_report``).
+    - ``total`` bleibt als publizierte Randsumme erhalten (analog ``total_contacts``).
+
+    ``by_category`` kommt als ``(name, count)``-Tupel-Liste (aus
+    ``get_jugendamt_statistics``) und wird auf Dicts mit ``name``/``count``/
+    ``suppressed`` normalisiert, damit das Template den Unterdrueckungs-Marker
+    rendern kann. Gibt ein neues Dict zurueck; die Eingabe wird nicht mutiert.
+    """
+    threshold = _get_threshold(facility)
+
+    category_rows = [{"name": name, "count": count} for name, count in stats.get("by_category", [])]
+    by_category = _suppress_small(category_rows, threshold, count_key="count")
+    by_age_cluster = _suppress_small(list(stats.get("by_age_cluster", [])), threshold, count_key="count")
+
+    unique = stats.get("unique_clients", 0)
+    return {
+        **stats,
+        "by_category": by_category,
+        "by_age_cluster": by_age_cluster,
+        "unique_clients": unique if unique >= threshold else None,
+    }

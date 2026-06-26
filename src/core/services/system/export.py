@@ -18,6 +18,26 @@ from core.services.file_vault import safe_decrypt
 logger = logging.getLogger(__name__)
 
 
+def restricted_url_fetcher(url, *args, **kwargs):
+    """Restriktiver WeasyPrint-``url_fetcher`` (Refs #1272, T8).
+
+    Defense-in-Depth gegen ``file://``-SSRF / Local-File-Read: Die PDF-Templates
+    referenzieren ausschliesslich Inline-Styles und keine externen Ressourcen.
+    WeasyPrints Default-Fetcher liest ``file://``-URLs jedoch vom lokalen
+    Dateisystem und ruft externe ``http(s)://``-Ressourcen ab. Dieser Fetcher
+    lehnt daher jeden ``file://``- oder Netzwerk-Fetch hart ab und reicht nur
+    inline ``data:``-URIs an den Default-Fetcher durch.
+
+    Bisher griff der Schutz nur, weil die Templates kein ``|safe`` enthalten
+    (injizierte Tags rendern inert) — fragil. Da die legitimen Templates keine
+    externen Ressourcen referenzieren, wird der Fetcher fuer regulaere Eingaben
+    nie aufgerufen → byte-gleiche PDF-Ausgabe.
+    """
+    if url.startswith("data:"):
+        return weasyprint.default_url_fetcher(url, *args, **kwargs)
+    raise ValueError(f"Externe Ressourcen sind in PDF-Exporten nicht erlaubt: {url!r}")
+
+
 def _get_events_queryset(facility, date_from, date_to, user=None):
     """Events in the given period, ordered descending by occurrence.
 
@@ -209,7 +229,7 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
             "generated_at": timezone.now(),
         },
     )
-    return weasyprint.HTML(string=html).write_pdf()
+    return weasyprint.HTML(string=html, url_fetcher=restricted_url_fetcher).write_pdf()
 
 
 # Mapping: DocumentType.system_type -> Jugendamt category (missing = excluded)
@@ -284,10 +304,16 @@ def get_jugendamt_statistics(facility, date_from, date_to):
 
 
 def generate_jugendamt_pdf(facility, date_from, date_to):
-    """Generate the youth welfare office report as PDF."""
-    from core.services.dashboard import get_jugendamt_statistics_hybrid
+    """Generate the youth welfare office report as PDF.
+
+    Refs #1278 (T1): Das Jugendamt-PDF ist das am ehesten externe Artefakt und
+    wird daher durch dieselbe k-Anon-Kleinstfallzahl-Suppression geleitet wie
+    der externe On-Screen-Bericht — Zellen < Schwelle werden unterdrueckt.
+    """
+    from core.services.dashboard import get_jugendamt_statistics_hybrid, suppress_jugendamt_stats
 
     stats = get_jugendamt_statistics_hybrid(facility, date_from, date_to)
+    stats = suppress_jugendamt_stats(facility, stats)
     html = render_to_string(
         "core/export/jugendamt_pdf.html",
         {
@@ -298,4 +324,4 @@ def generate_jugendamt_pdf(facility, date_from, date_to):
             "generated_at": timezone.now(),
         },
     )
-    return weasyprint.HTML(string=html).write_pdf()
+    return weasyprint.HTML(string=html, url_fetcher=restricted_url_fetcher).write_pdf()

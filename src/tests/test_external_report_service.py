@@ -212,3 +212,93 @@ class TestExternalReportEdgeCases:
         by_dt = report["by_document_type"]
         assert by_dt[0]["count"] == 1
         assert by_dt[0].get("suppressed", False) is False
+
+
+@pytest.mark.django_db
+class TestJugendamtStatsSuppression:
+    """Refs #1278 (T1): Das Jugendamt-PDF — das am ehesten externe Artefakt —
+    muss derselben k-Anon-Kleinstfallzahl-Suppression unterliegen wie der
+    externe On-Screen-Bericht. ``suppress_jugendamt_stats`` leitet die
+    Jugendamt-Aggregate durch dieselbe ``_suppress_small``-Logik (inkl.
+    sekundaerer Suppression) und Nones ``unique_clients`` < k — die publizierte
+    Randsumme ``total`` bleibt roh (analog ``total_contacts``).
+    """
+
+    def test_by_category_cells_below_threshold_suppressed(self, facility):
+        from core.services.dashboard import suppress_jugendamt_stats
+
+        stats = {
+            "total": 18,
+            "by_category": [("Kontakte", 12), ("Beratung", 4), ("Versorgung", 2)],
+            "by_age_cluster": [],
+            "unique_clients": 11,
+        }
+        result = suppress_jugendamt_stats(facility, stats)
+        cats = {r["name"]: r for r in result["by_category"]}
+        # Zwei Zellen < 5 -> beide primaer unterdrueckt, keine Sekundaer-Suppression.
+        assert cats["Beratung"]["count"] is None and cats["Beratung"]["suppressed"] is True
+        assert cats["Versorgung"]["count"] is None and cats["Versorgung"]["suppressed"] is True
+        # Zelle >= 5 bleibt sichtbar.
+        assert cats["Kontakte"]["count"] == 12 and cats["Kontakte"]["suppressed"] is False
+
+    def test_by_age_cluster_cells_below_threshold_suppressed(self, facility):
+        from core.services.dashboard import suppress_jugendamt_stats
+
+        stats = {
+            "total": 20,
+            "by_category": [],
+            "by_age_cluster": [
+                {"cluster": "u18", "label": "Unter 18", "count": 3},
+                {"cluster": "18_26", "label": "18–26", "count": 2},
+                {"cluster": "27_plus", "label": "27+", "count": 15},
+            ],
+            "unique_clients": 11,
+        }
+        result = suppress_jugendamt_stats(facility, stats)
+        ages = {r["cluster"]: r for r in result["by_age_cluster"]}
+        assert ages["u18"]["count"] is None and ages["u18"]["suppressed"] is True
+        assert ages["18_26"]["count"] is None and ages["18_26"]["suppressed"] is True
+        assert ages["27_plus"]["count"] == 15 and ages["27_plus"]["suppressed"] is False
+        # Labels bleiben fuer die Template-Darstellung erhalten.
+        assert ages["u18"]["label"] == "Unter 18"
+
+    def test_unique_clients_below_threshold_suppressed_total_stays_raw(self, facility):
+        from core.services.dashboard import suppress_jugendamt_stats
+
+        stats = {"total": 3, "by_category": [], "by_age_cluster": [], "unique_clients": 2}
+        result = suppress_jugendamt_stats(facility, stats)
+        assert result["unique_clients"] is None  # 2 < 5
+        # ``total`` ist die publizierte Randsumme und bleibt roh.
+        assert result["total"] == 3
+
+    def test_unique_clients_above_threshold_kept(self, facility):
+        from core.services.dashboard import suppress_jugendamt_stats
+
+        stats = {"total": 30, "by_category": [], "by_age_cluster": [], "unique_clients": 9}
+        assert suppress_jugendamt_stats(facility, stats)["unique_clients"] == 9
+
+    def test_does_not_mutate_input(self, facility):
+        import copy
+
+        from core.services.dashboard import suppress_jugendamt_stats
+
+        stats = {
+            "total": 18,
+            "by_category": [("Kontakte", 12), ("Beratung", 4), ("Versorgung", 2)],
+            "by_age_cluster": [{"cluster": "u18", "label": "Unter 18", "count": 3}],
+            "unique_clients": 11,
+        }
+        snapshot = copy.deepcopy(stats)
+        suppress_jugendamt_stats(facility, stats)
+        assert stats == snapshot
+
+    def test_custom_threshold_from_settings_disables_suppression(self, facility):
+        from core.models import Settings
+        from core.services.dashboard import suppress_jugendamt_stats
+
+        Settings.objects.update_or_create(facility=facility, defaults={"k_anonymity_threshold": 1})
+        stats = {"total": 1, "by_category": [("Kontakte", 1)], "by_age_cluster": [], "unique_clients": 1}
+        result = suppress_jugendamt_stats(facility, stats)
+        assert result["by_category"][0]["count"] == 1
+        assert result["by_category"][0]["suppressed"] is False
+        assert result["unique_clients"] == 1
