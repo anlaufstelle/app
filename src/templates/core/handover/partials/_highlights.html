@@ -3,9 +3,14 @@
 {% if summary.highlights %}
 <div class="space-y-2">
     {% for h in summary.highlights %}
-    {# Refs #747: Crisis/Ban-Highlights aufklappbar wie _event_card (Tasks statisch). #}
-    <div class="flex items-start gap-3 px-3 py-2.5 rounded-[10px] {% if h.type == 'crisis' %}bg-yellow-50{% elif h.type == 'ban' %}bg-ban-soft{% else %}bg-event-soft{% endif %}"
-         {% if h.type != 'task' %}x-data="expandableCard"{% endif %}>
+    {# Refs #747: Crisis/Ban-Highlights aufklappbar wie _event_card; Aufgaben verlinken zur Detailseite. #}
+    {% if h.type == 'task' %}
+    <a href="{% url 'core:workitem_detail' pk=h.object.pk %}"
+       class="flex items-start gap-3 px-3 py-2.5 rounded-[10px] bg-event-soft hover:shadow-sm transition">
+    {% else %}
+    <div class="flex items-start gap-3 px-3 py-2.5 rounded-[10px] {% if h.type == 'crisis' %}bg-yellow-50{% else %}bg-ban-soft{% endif %}"
+         x-data="expandableCard">
+    {% endif %}
         {% if h.type == "crisis" %}
         <svg aria-hidden="true" class="w-4 h-4 mt-0.5 flex-shrink-0 text-yellow-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
         {% elif h.type == "ban" %}
@@ -14,7 +19,16 @@
         <svg aria-hidden="true" class="w-4 h-4 mt-0.5 flex-shrink-0 text-event-deep" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         {% endif %}
         <div class="flex-1 min-w-0">
+            {% if h.type != "task" and h.object.expanded_fields %}
+            {# Ganze Kopfzeile togglet (nicht nur der Chevron); Button nur mit Phrasing-Content. #}
+            <button type="button"
+                    @click="toggle"
+                    :aria-expanded="expanded"
+                    aria-controls="highlight-detail-{{ h.object.pk }}"
+                    class="flex items-center gap-2 text-[13px] w-full text-left cursor-pointer">
+            {% else %}
             <div class="flex items-center gap-2 text-[13px]">
+            {% endif %}
                 <span class="font-mono text-ink-muted">{{ h.time|time:"H:i" }}</span>
                 {% if h.type == "crisis" %}
                 <span class="font-semibold text-yellow-800">{% trans "Krisengespräch" %}</span>
@@ -27,18 +41,17 @@
                 <span class="text-ink-soft">{{ h.object.client.pseudonym }}</span>
                 {% endif %}
                 {% if h.type != "task" and h.object.expanded_fields %}
-                <button type="button"
-                        @click="toggle"
-                        class="ml-auto text-ink-muted hover:text-ink transition-transform duration-200 p-0.5"
-                        :class="rotateClass"
-                        :aria-expanded="expanded"
-                        aria-label="{% trans 'Details anzeigen' %}">
+                <span class="ml-auto inline-flex text-ink-muted transition-transform duration-200 p-0.5" :class="rotateClass" aria-hidden="true">
                     <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
                     </svg>
-                </button>
+                </span>
                 {% endif %}
+            {% if h.type != "task" and h.object.expanded_fields %}
+            </button>
+            {% else %}
             </div>
+            {% endif %}
             {% if h.type != "task" and h.object.preview_fields %}
             <div class="mt-0.5 text-[12px] text-ink-muted">
                 {% for pf in h.object.preview_fields %}
@@ -47,7 +60,8 @@
             </div>
             {% endif %}
             {% if h.type != "task" and h.object.expanded_fields %}
-            <div x-show="expanded"
+            <div id="highlight-detail-{{ h.object.pk }}"
+                 x-show="expanded"
                  x-transition:enter="transition ease-out duration-150"
                  x-transition:enter-start="opacity-0 -translate-y-1"
                  x-transition:enter-end="opacity-100 translate-y-0"
@@ -80,7 +94,7 @@
             <div class="mt-0.5 text-[12px] text-ink-muted">→ {{ h.object.assigned_to.display_name|default:h.object.assigned_to.username }}</div>
             {% endif %}
         </div>
-    </div>
+    {% if h.type == 'task' %}</a>{% else %}</div>{% endif %}
     {% endfor %}
 </div>
 {% else %}

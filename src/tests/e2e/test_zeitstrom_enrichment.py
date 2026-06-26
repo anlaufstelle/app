@@ -4,6 +4,7 @@ Refs #411 — Zeitstrom aufwerten.
 """
 
 import pytest
+from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -210,3 +211,39 @@ class TestCurrentShiftInZeitstrom:
         card.wait_for(state="visible", timeout=10000)
         # Beschriftung der Box folgt weder Datum noch Schicht-Auswahl.
         assert card.locator("[data-testid='current-shift-label']").inner_text() == running_shift_label
+
+
+class TestFeedCardHeaderToggle:
+    """Refs #1286: Die ganze Kopfzeile (nicht nur der Chevron) klappt Feed-Karten auf."""
+
+    _SEL = "#feed-list button[aria-controls^='event-detail-'], #feed-list button[aria-controls^='activity-detail-']"
+
+    def test_clicking_header_text_toggles_details(self, authenticated_page, base_url):
+        """Klick auf den Zeit-Text der Kopfzeile (nicht den Chevron) klappt auf und wieder zu."""
+        import re
+
+        page = authenticated_page
+        page.goto(f"{base_url}/", wait_until="domcontentloaded")
+        if page.locator(self._SEL).count() == 0:
+            # Fallback: ein Datum mit Aktivitäten suchen, dann gemischter Feed.
+            if not _find_date_with_activities(page, base_url):
+                pytest.skip("Kein Seed-Datum mit aufklappbaren Feed-Karten gefunden")
+            date_str = re.search(r"date=(\d{4}-\d{2}-\d{2})", page.url).group(1)
+            page.goto(f"{base_url}/?date={date_str}", wait_until="domcontentloaded")
+            if page.locator(self._SEL).count() == 0:
+                pytest.skip("Kein aufklappbarer Feed-Eintrag im gemischten Feed")
+
+        header = page.locator(self._SEL).first
+        header.wait_for(state="visible", timeout=10000)
+        expect(header).to_have_attribute("aria-expanded", "false")
+        panel = page.locator(f"#{header.get_attribute('aria-controls')}")
+
+        # Klick auf den Zeit-Text in der Kopfzeile (NICHT den Chevron rechts).
+        time_text = header.get_by_text(re.compile(r"^\d{1,2}:\d{2}$")).first
+        time_text.click()
+        expect(header).to_have_attribute("aria-expanded", "true", timeout=5000)
+        expect(panel).to_be_visible()
+
+        # Erneuter Klick auf die Kopfzeile klappt wieder zu.
+        time_text.click()
+        expect(header).to_have_attribute("aria-expanded", "false", timeout=5000)

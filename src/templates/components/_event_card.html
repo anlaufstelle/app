@@ -4,7 +4,12 @@
     {# Linke Kante in Kontakt-Farbe #}
     <div class="w-[3px] bg-event flex-shrink-0"></div>
     <div class="flex-1 px-3.5 py-3 min-w-0">
-        <div class="flex flex-wrap items-center gap-2">
+        {# Ganze Kopfzeile togglet (nicht nur der Chevron); Button enthält nur Phrasing-Content (spans statt divs). #}
+        <button type="button"
+                @click="toggle"
+                :aria-expanded="expanded"
+                aria-controls="event-detail-{{ event.pk }}"
+                class="flex flex-wrap items-center gap-2 w-full text-left cursor-pointer">
             {% if show_date %}
             <span class="font-mono text-[13px] font-medium text-ink-muted flex-shrink-0">{{ event.occurred_at|date:"DATETIME_FORMAT" }}</span>
             {% else %}
@@ -19,22 +24,17 @@
                 <span class="text-[12px] font-semibold text-accent truncate">{{ event.client.pseudonym }}</span>
                 {% endif %}
             {% endif %}
-            <div class="flex items-center gap-2 ml-auto shrink-0">
+            <span class="flex items-center gap-2 ml-auto shrink-0">
                 {% if event.created_by %}
                 <span class="text-[12px] text-ink-muted whitespace-nowrap">{{ event.created_by.display_name|default:event.created_by.username }}</span>
                 {% endif %}
-                <button type="button"
-                        @click="toggle"
-                        class="text-ink-muted hover:text-ink transition-transform duration-200 p-0.5"
-                        :class="rotateClass"
-                        :aria-expanded="expanded"
-                        aria-label="{% trans 'Details anzeigen' %}">
+                <span class="inline-flex text-ink-muted transition-transform duration-200 p-0.5" :class="rotateClass" aria-hidden="true">
                     <svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                         <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
                     </svg>
-                </button>
-            </div>
-        </div>
+                </span>
+            </span>
+        </button>
         {% if event.preview_fields %}
         <div class="mt-2 flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-ink-muted">
             {% for pf in event.preview_fields %}
@@ -42,7 +42,7 @@
             {% endfor %}
         </div>
         {% endif %}
-        <div x-show="expanded" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" x-cloak>
+        <div id="event-detail-{{ event.pk }}" x-show="expanded" x-transition:enter="transition ease-out duration-150" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" x-transition:leave="transition ease-in duration-100" x-transition:leave-start="opacity-100 translate-y-0" x-transition:leave-end="opacity-0 -translate-y-1" x-cloak>
             <div class="mt-2 bg-canvas rounded-md px-3 py-2 text-[13px] text-ink-soft space-y-1">
                 {% if event.expanded_fields %}
                     {% for f in event.expanded_fields %}

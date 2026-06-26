@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+
+- **Zeitstrom: ganze Kopfzeile klappt Einträge auf** (#1286) — im Feed und in der Übergabe öffnet ein Klick (oder Enter/Leertaste) auf die gesamte Kopfzeile die Detailansicht, nicht mehr nur der kleine Chevron-Pfeil; Übergabe-Aufgaben verlinken zudem direkt auf ihre Detailseite.
+
 ## [0.16.0] - 2026-06-25
 
 Stabilisierungs-Release (Pre-Release): die erste öffentliche Demo-Instanz (`demo.anlaufstelle.app`) mit eigener Demo-Schutzschicht und eine umfassend überarbeitete Aufgabenübersicht, dazu Security-Härtung (u. a. `cryptography` 49.0.0, Ratelimit für den Audit-Log-Export) und Zeitzonen-Korrekturen. Keine Datenmodell-Brüche; Vorwärts-Migration ohne Datenverlust. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.

@@ -67,3 +67,70 @@ class TestBadgeComponent:
         assert "&lt;span" not in out
         assert "bg-green-100" in out
         assert ">Offen<" in out
+
+
+class TestHighlightsToggleComponent:
+    """Refs #1286: Übergabe-Highlights — ganze Kopfzeile togglet (Button), Aufgaben verlinken.
+
+    Render-Ebene (kein DB nötig): prüft die beiden konditionalen Zweige von
+    ``core/handover/partials/_highlights.html`` deterministisch — den Krisen/Hausverbot-
+    Button-Zweig und den Aufgaben-Link-Zweig. Live-Toggle-Verhalten deckt der E2E-Test
+    ``TestFeedCardHeaderToggle`` ab (gleiche ``expandableCard``-Mechanik).
+    """
+
+    @staticmethod
+    def _render(highlight):
+        from types import SimpleNamespace
+
+        from django.template.loader import render_to_string
+
+        return render_to_string(
+            "core/handover/partials/_highlights.html",
+            {"summary": SimpleNamespace(highlights=[highlight])},
+        )
+
+    def test_crisis_header_is_button_toggle(self):
+        from datetime import time
+        from types import SimpleNamespace
+
+        pk = "929c8152-d514-4979-bb01-c5bc9e56dbc4"
+        crisis = SimpleNamespace(
+            type="crisis",
+            time=time(8, 0),
+            object=SimpleNamespace(
+                pk=pk,
+                client=SimpleNamespace(pseudonym="Klient"),
+                preview_fields=[{"label": "Dauer", "value": "30 min", "is_textarea": False}],
+                expanded_fields=[{"label": "Verlauf", "value": "…", "is_textarea": True}],
+            ),
+        )
+        html = self._render(crisis)
+        # Ganze Kopfzeile = <button>, das auf das Detail-Panel verweist.
+        assert f'aria-controls="highlight-detail-{pk}"' in html
+        assert f'id="highlight-detail-{pk}"' in html
+        assert ':aria-expanded="expanded"' in html
+        # Button enthält keinen verschachtelten <div> (gültiges HTML, button = Phrasing-Content).
+        header = html.split("<button", 1)[1].split("</button>", 1)[0]
+        assert "<div" not in header
+        # "Zum Eintrag"-Link bleibt erhalten (außerhalb des Buttons).
+        assert f"/events/{pk}/" in html
+
+    def test_task_is_link_not_toggle(self):
+        from datetime import time
+        from types import SimpleNamespace
+
+        pk = "01367217-3d2c-4c56-bd9d-5bcd5d1c70e9"
+        task = SimpleNamespace(
+            type="task",
+            time=time(9, 0),
+            object=SimpleNamespace(
+                pk=pk,
+                title="Streetwork-Bericht",
+                assigned_to=SimpleNamespace(display_name="Max Muster", username="max"),
+            ),
+        )
+        html = self._render(task)
+        # Aufgabe verlinkt zur WorkItem-Detailseite (vorher gar nicht klickbar).
+        assert f'href="/workitems/{pk}/"' in html
+        # Aufgaben sind nicht aufklappbar -> kein Toggle-Button.
+        assert "<button" not in html
