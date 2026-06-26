@@ -337,3 +337,87 @@ class TestEventAttachmentVersioning:
 
         soft_delete_event(event, staff_user)
         assert EventAttachment.objects.filter(event=event).count() == 0
+
+
+@pytest.mark.django_db
+class TestEventEditScannerUnavailable:
+    """Refs #1283: Datei-Replace beim Event-Edit mit unerreichbarem Virenscanner.
+
+    Der Scan-Pfad ist fail-closed: ein nicht erreichbarer Scanner muss als
+    freundliche Flash-Meldung + Redirect enden, NIE als 500. Dieser Test sichert
+    den End-to-End-Contract ab, in den die Wall-Clock-Deadline aus #1283
+    einspeist (ein hängender clamd wird zu ``VirusScannerUnavailableError``).
+    """
+
+    @pytest.fixture
+    def doc_type_with_file(self, facility):
+        from core.models import DocumentType, DocumentTypeField, FieldTemplate
+
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name="Doc mit Anhang",
+            category=DocumentType.Category.NOTE,
+        )
+        ft_file = FieldTemplate.objects.create(
+            facility=facility,
+            name="Anhang",
+            field_type=FieldTemplate.FieldType.FILE,
+        )
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft_file, sort_order=0)
+        return dt
+
+    @staticmethod
+    def _pdf(marker):
+        return (
+            b"%PDF-1.4\n"
+            b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+            b"2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\n"
+            b"xref\n0 3\n0000000000 65535 f\n"
+            b"trailer<</Size 3/Root 1 0 R>>\n"
+            b"startxref\n9\n%%EOF\n" + marker
+        )
+
+    def test_replace_with_unreachable_scanner_redirects_not_500(self, client, staff_user, facility, doc_type_with_file):
+        from django.contrib.messages import get_messages
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        from core.models.attachment import EventAttachment
+        from core.services.file_vault import VirusScannerUnavailableError
+
+        client.force_login(staff_user)
+
+        # Event mit Anhang anlegen (Scanner in Tests per Default aus → clean).
+        first = SimpleUploadedFile("a.pdf", self._pdf(b"v1"), content_type="application/pdf")
+        resp = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_with_file.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "anhang": first,
+            },
+        )
+        assert resp.status_code == 302
+        event = Event.objects.get(document_type=doc_type_with_file)
+        entry_id = event.attachments.get().entry_id
+        count_before = EventAttachment.objects.filter(event=event).count()
+
+        # Replace, während der Scanner unerreichbar ist → fail-closed, kein 500.
+        replacement = SimpleUploadedFile("b.pdf", self._pdf(b"v2"), content_type="application/pdf")
+        with patch(
+            "core.services.file_vault.policy.scan_file",
+            side_effect=VirusScannerUnavailableError("clamd hängt"),
+        ):
+            resp = client.post(
+                reverse("core:event_update", kwargs={"pk": event.pk}),
+                {
+                    "document_type": str(doc_type_with_file.pk),
+                    "occurred_at": event.occurred_at.strftime("%Y-%m-%dT%H:%M"),
+                    f"anhang__replace__{entry_id}": replacement,
+                },
+            )
+
+        assert resp.status_code == 302  # graceful redirect, NICHT 500
+        msgs = [str(m) for m in get_messages(resp.wsgi_request)]
+        assert any("Virenscanner" in m for m in msgs), msgs
+        # fail-closed: keine neue Attachment-Version gespeichert.
+        assert EventAttachment.objects.filter(event=event).count() == count_before

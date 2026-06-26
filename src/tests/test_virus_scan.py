@@ -365,3 +365,40 @@ class TestSignatureInfo:
         client.stats.return_value = ""
         with patch("core.services.file_vault.virus_scan._build_client", return_value=client):
             assert signature_info() is None
+
+
+class TestScanDeadline:
+    """Refs #1283: harte Wall-Clock-Deadline um den ClamAV-Scan.
+
+    pyclamds Per-Socket-Timeout ist ein Per-``recv``-Inaktivitäts-Timer. Ein
+    clamd, der die Verbindung annimmt und den INSTREAM-Datenstrom schluckt, aber
+    den Verdict nicht (rechtzeitig) zurückliefert, kann ``scan_stream`` über das
+    Gunicorn-Worker-Timeout hinaus blocken — der Worker wird gekillt → 500 statt
+    der fail-closed ``VirusScannerUnavailableError``. ``scan_file`` MUSS daher
+    spätestens nach ~``CLAMAV_TIMEOUT`` Sekunden abbrechen.
+    """
+
+    def test_hanging_scan_stream_aborts_within_deadline(self, settings):
+        """Hängender ``scan_stream`` → Abbruch mit ``VirusScannerUnavailableError``
+        innerhalb der Deadline, statt unbegrenzt zu blocken."""
+        import time
+
+        settings.CLAMAV_ENABLED = True
+        settings.CLAMAV_TIMEOUT = 1
+        uploaded = SimpleUploadedFile("x.pdf", b"payload", content_type="application/pdf")
+
+        client = MagicMock()
+        client.ping.return_value = True
+
+        def _hang(_data):
+            time.sleep(5)  # simuliert einen clamd, der den Verdict nicht zurückgibt
+            return None
+
+        client.scan_stream.side_effect = _hang
+
+        start = time.monotonic()
+        with patch("core.services.file_vault.virus_scan._build_client", return_value=client):
+            with pytest.raises(VirusScannerUnavailableError):
+                scan_file(uploaded)
+        elapsed = time.monotonic() - start
+        assert elapsed < 3, f"scan_file blockierte {elapsed:.1f}s — Deadline nicht erzwungen"
