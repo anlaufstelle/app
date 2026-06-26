@@ -149,6 +149,11 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
         "core_eventattachment", "storage_filename", reason="UUID-basierter Disk-Dateiname (abc.enc), kein Klartext."
     ),
     non_pii("core_eventattachment", "mime_type", reason="MIME-Typ (z.B. application/pdf), kein Freitext."),
+    non_pii(
+        "core_eventattachment",
+        "detected_mime",
+        reason="Verifizierter MIME-Typ (libmagic, z.B. application/pdf), kein Freitext (Refs #1274).",
+    ),
     # ---- core_episode ----------------------------------------------------
     pii("core_episode", "title"),
     pii("core_episode", "description"),

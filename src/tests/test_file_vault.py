@@ -135,6 +135,23 @@ class TestFileVaultService:
         # Original filename is encrypted and decryptable
         assert get_original_filename(attachment) == "test.pdf"
 
+    def test_store_persists_verified_detected_mime(self, facility, staff_user, doc_type_with_file):
+        """Refs #1274 (T10): der per libmagic verifizierte MIME wird beim Upload
+        persistiert (nicht nur für den Gleichheits-Check berechnet und verworfen)."""
+        dt, _, ft_file = doc_type_with_file
+        event = Event.objects.create(
+            facility=facility,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        uploaded = SimpleUploadedFile("verify.pdf", PDF_HEADER, content_type="application/pdf")
+
+        attachment = store_encrypted_file(facility, uploaded, ft_file, event, staff_user)
+
+        assert attachment.detected_mime == "application/pdf"
+
     def test_stored_file_is_v2_bound_and_roundtrips(self, facility, staff_user, doc_type_with_file):
         """A4.5 (Refs #1016): produktiv gespeicherte Dateien sind v2 (an die
         Storage-ID gebunden) und werden über genau diese Bindung wieder
@@ -300,6 +317,30 @@ class TestFileUploadView:
         # Verify content is decrypted correctly
         content = b"".join(response.streaming_content)
         assert content == PDF_HEADER
+
+    def test_download_serves_verified_mime_not_browser_mime(self, client, staff_user, event_with_file):
+        """Refs #1274 (T10): Der Download liefert den verifizierten (libmagic)
+        MIME aus, nicht den vom Browser gemeldeten ``content_type``.
+
+        Wir verbiegen den browser-gemeldeten ``mime_type`` auf einen gefährlichen
+        Wert (``text/html`` — würde sonst aktiv gerendert), während der beim
+        Upload verifizierte ``detected_mime`` weiterhin ``application/pdf`` ist.
+        Der Download muss den verifizierten Typ verwenden → sicheres Inline-PDF.
+        """
+        event, attachment = event_with_file
+        # Beim Upload als application/pdf verifiziert (Refs #1274).
+        assert attachment.detected_mime == "application/pdf"
+        # Browser-gemeldeten Typ auf einen aktiv-renderbaren Wert verbiegen
+        # (lügender Client / Bestandsdaten) — der Download darf ihn ignorieren.
+        EventAttachment.objects.filter(pk=attachment.pk).update(mime_type="text/html")
+
+        client.force_login(staff_user)
+        url = reverse("core:attachment_download", kwargs={"pk": event.pk, "attachment_pk": attachment.pk})
+        response = client.get(url)
+        assert response.status_code == 200
+        # Verifizierter Typ ist maßgeblich: Content-Type + Inline-Disposition.
+        assert response["Content-Type"] == "application/pdf"
+        assert response["Content-Disposition"] == 'inline; filename="testfile.pdf"'
 
     def test_download_force_attachment_with_query_param(self, client, staff_user, event_with_file):
         """?download=1 forces Content-Disposition: attachment even for whitelisted MIME types."""

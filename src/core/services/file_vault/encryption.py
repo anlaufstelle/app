@@ -112,13 +112,30 @@ def is_encrypted_value(value):
 
 
 def safe_decrypt(value, default="[verschlüsselt]"):
-    """Decrypt with fallback on error."""
+    """Decrypt with fallback on error.
+
+    Refs #1269 (T4): ein fehlender/fehlkonfigurierter Schlüssel
+    (``EncryptionKeyMissing``) wird NICHT als ``default``-Platzhalter maskiert,
+    sondern laut gemeldet (Error-Log) und durchgereicht — sonst bleibt eine
+    Key-Fehlkonfiguration auf Lesepfaden unsichtbar (der Boot-Time-Hard-Fail
+    greift nur bei komplett fehlendem Key, nicht z.B. bei einem aus der Rotation
+    gefallenen Key). Nur echte Token-Korruption (``InvalidToken`` → generischer
+    ``EncryptionError``) fällt weiterhin graceful auf den Platzhalter zurück.
+    Da ``EncryptionKeyMissing`` von ``EncryptionError`` erbt, muss es ZUERST
+    gefangen werden.
+    """
     if not is_encrypted_value(value):
         return value
     try:
         return decrypt_field(value)
+    except EncryptionKeyMissing:
+        logger.error(
+            "safe_decrypt: Entschlüsselung unmöglich — ENCRYPTION_KEY/ENCRYPTION_KEYS "
+            "fehlt oder ist fehlkonfiguriert. Fehler wird durchgereicht statt maskiert."
+        )
+        raise
     except EncryptionError:
-        logger.warning("Decryption failed — using fallback.")
+        logger.warning("Decryption failed (corrupt token) — using fallback placeholder.")
         return default
 
 
@@ -175,10 +192,60 @@ def encrypt_file(input_stream, output_path, file_id=None):
     ``file_id is None`` → Legacy-v1 (keine Positions-/Datei-Bindung).
     ``file_id`` gesetzt → v2: bindet jeden Chunk an ``file_id`` + Index + Anzahl
     (A4.5). Produktion (``storage.py``) reicht die Storage-ID durch.
+
+    Refs #1268: Seekbare Streams (Uploads, ``BytesIO``) werden in ZWEI Pässen
+    verarbeitet — Pass 1 zählt nur die Chunks (hält keinen Klartext), Pass 2
+    verschlüsselt + schreibt chunkweise auf die Disk. Peak-RAM ist damit
+    O(CHUNK) statt O(Dateigröße). ``total`` muss vor den Chunks in den Header
+    (und in den v2-Kontext), daher der Zähl-Pass. Nicht-seekbare Streams fallen
+    auf die bisherige Voll-Pufferung zurück (Peak ~1x, in-place).
     """
     from pathlib import Path
 
     f = get_fernet()
+    version = _FILE_FORMAT_V1 if file_id is None else _FILE_FORMAT_V2
+    fid16 = _file_binding(file_id) if file_id is not None else None
+
+    output_path = Path(output_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _encrypt_chunk(index, total, data):
+        if isinstance(data, str):
+            data = data.encode("utf-8")
+        if file_id is None:
+            return f.encrypt(data)
+        return f.encrypt(_chunk_context(fid16, index, total) + data)
+
+    def _write_token(out, token):
+        token_bytes = token if isinstance(token, bytes) else token.encode("utf-8")
+        out.write(struct.pack(">I", len(token_bytes)))
+        out.write(token_bytes)
+
+    seekable = hasattr(input_stream, "seek") and (not hasattr(input_stream, "seekable") or input_stream.seekable())
+
+    if seekable:
+        try:
+            start = input_stream.tell()
+        except (OSError, ValueError):
+            start = 0
+        # Pass 1: Chunks zaehlen, ohne Klartext zu halten (Reads deterministisch
+        # auf seekbaren File-/BytesIO-Streams → identische Chunk-Grenzen in Pass 2).
+        total = 0
+        while input_stream.read(CHUNK_SIZE):
+            total += 1
+        input_stream.seek(start)
+        # Pass 2: chunkweise verschluesseln + schreiben (Peak-RAM O(CHUNK)).
+        with open(output_path, "wb") as out:
+            out.write(struct.pack(">B", version))
+            out.write(struct.pack(">I", total))
+            for index in range(total):
+                data = input_stream.read(CHUNK_SIZE)
+                _write_token(out, _encrypt_chunk(index, total, data))
+        return
+
+    # Fallback (nicht-seekbarer Stream): puffern wie bisher. In-place ersetzt
+    # jeden Klartext-Slot sofort durch sein Token (Peak ~1x statt ~2x; PR-Review
+    # bug_001).
     raw_chunks = []
     while True:
         data = input_stream.read(CHUNK_SIZE)
@@ -187,33 +254,14 @@ def encrypt_file(input_stream, output_path, file_id=None):
         if isinstance(data, str):
             data = data.encode("utf-8")
         raw_chunks.append(data)
-
     total = len(raw_chunks)
-    # In-place: jeder Klartext-Slot wird sofort durch sein Token ersetzt und so
-    # zur GC freigegeben — kein gleichzeitiges Vorhalten von Klartext UND
-    # Ciphertext (Peak ~1x statt ~2x Dateigröße; die zurückgehaltenen Bytes
-    # waeren Klartext). PR-Review bug_001.
-    if file_id is None:
-        version = _FILE_FORMAT_V1
-        for i in range(total):
-            raw_chunks[i] = f.encrypt(raw_chunks[i])
-    else:
-        version = _FILE_FORMAT_V2
-        fid16 = _file_binding(file_id)
-        for i in range(total):
-            raw_chunks[i] = f.encrypt(_chunk_context(fid16, i, total) + raw_chunks[i])
-    tokens = raw_chunks
-
-    output_path = Path(output_path)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
+    for i in range(total):
+        raw_chunks[i] = _encrypt_chunk(i, total, raw_chunks[i])
     with open(output_path, "wb") as out:
         out.write(struct.pack(">B", version))
         out.write(struct.pack(">I", total))
-        for token in tokens:
-            token_bytes = token if isinstance(token, bytes) else token.encode("utf-8")
-            out.write(struct.pack(">I", len(token_bytes)))
-            out.write(token_bytes)
+        for token in raw_chunks:
+            _write_token(out, token)
 
 
 def decrypt_file_stream(input_path, file_id=None):

@@ -267,6 +267,16 @@ class FieldTemplate(models.Model):
         if self.field_type == self.FieldType.FILE:
             self.is_encrypted = True
 
+        # Refs #1270 (T5): HIGH⇒verschlüsselt-Invariante auf save()-Ebene
+        # erzwingen. clean()/full_clean() (ModelForm) blockiert HIGH ohne
+        # Verschlüsselung bereits mit einer ValidationError (UX-Feedback); ein
+        # direktes .save() (Seed/Bulk/Migration) umgeht das aber. Wie beim
+        # FILE-Zwang oben setzen wir is_encrypted hier als sichere Backstop-
+        # Maßnahme, damit Art.-9-relevanter Klartext nicht über einen
+        # Nicht-Form-Pfad ins JSONB/Backup gerät.
+        if self.sensitivity == DocumentType.Sensitivity.HIGH:
+            self.is_encrypted = True
+
         if self._state.adding:
             auto_slug = not self.slug
             if auto_slug:

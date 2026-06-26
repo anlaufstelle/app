@@ -143,6 +143,25 @@ class TestFileEncryption:
         assert output.exists()
         assert b"".join(decrypt_file_stream(output)) == b"nested"
 
+    def test_encrypt_non_seekable_stream_falls_back_and_roundtrips(self, tmp_path):
+        """Refs #1268: encrypt_file streamt seekbare Uploads (Peak-RAM O(CHUNK));
+        ein nicht-seekbarer Stream fällt auf Voll-Pufferung zurück und erzeugt
+        trotzdem ein gültiges, entschlüsselbares File über mehrere Chunks."""
+
+        class _NonSeekable:
+            def __init__(self, data):
+                self._b = io.BytesIO(data)
+
+            def read(self, n=-1):
+                return self._b.read(n)
+
+            # absichtlich KEIN seek/seekable → Fallback-Pfad
+
+        data = b"Z" * (CHUNK_SIZE * 2 + 123)
+        out = tmp_path / "nonseek.enc"
+        encrypt_file(_NonSeekable(data), out)
+        assert b"".join(decrypt_file_stream(out)) == data
+
 
 def _split_v2(path):
     """Parse a v2 file into (version, chunk_count, [token_bytes])."""

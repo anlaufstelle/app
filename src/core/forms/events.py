@@ -3,6 +3,7 @@
 from typing import Any
 
 from django import forms
+from django.conf import settings as django_settings
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
@@ -35,10 +36,19 @@ class MultipleFileField(forms.FileField):
     def clean(self, data, initial=None):
         single_clean = super().clean
         if isinstance(data, (list, tuple)):
-            return [single_clean(d, initial) for d in data if d]
-        if data:
-            return [single_clean(data, initial)]
-        return []
+            files = [single_clean(d, initial) for d in data if d]
+        elif data:
+            files = [single_clean(data, initial)]
+        else:
+            files = []
+        # Refs #1268 (T3): Datei-Anzahl pro Feld/POST cappen — sonst kann ein
+        # einzelner Request beliebig viele Dateien einschleusen (Memory-DoS).
+        max_files = getattr(django_settings, "FILE_VAULT_MAX_UPLOAD_FILES", 20)
+        if len(files) > max_files:
+            raise forms.ValidationError(
+                _("Zu viele Dateien (%(n)d). Maximal %(max)d pro Feld.") % {"n": len(files), "max": max_files}
+            )
+        return files
 
 
 def _case_label(case: Case) -> str:

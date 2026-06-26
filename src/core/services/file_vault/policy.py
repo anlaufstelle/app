@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 
+from django.conf import settings as django_settings
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
@@ -26,6 +27,97 @@ from core.services.file_vault.audit import log_attachment_violation
 from core.services.file_vault.virus_scan import VirusScannerUnavailableError, scan_file
 
 logger = logging.getLogger(__name__)
+
+# Bild-Extensions, fuer die der Decompression-Bomb-Pixelcheck greift (#1268).
+_IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "gif", "webp", "bmp", "tif", "tiff"})
+
+
+def enforce_upload_size(facility, uploaded_file, event, user):
+    """Reject uploads exceeding the hard service-layer size ceiling.
+
+    Refs #1268 (T3): Die Form-Schicht prueft die per-Facility-Groesse; der
+    Service ist die letzte Bastion fuer programmatische Aufrufer.
+    ``FILE_VAULT_MAX_UPLOAD_BYTES`` ist eine absolute Obergrenze, die VOR jeder
+    Voll-Pufferung (Virenscan/Encrypt) greift — so wird eine Riesendatei nicht
+    erst in den RAM gelesen (authentifizierter Memory-Exhaustion-DoS). Jeder
+    Verstoss wird als ``SECURITY_VIOLATION`` protokolliert (Form-Bypass ist
+    verdaechtig).
+    """
+    max_bytes = getattr(django_settings, "FILE_VAULT_MAX_UPLOAD_BYTES", 50 * 1024 * 1024)
+    size = getattr(uploaded_file, "size", None)
+    if size is None or size <= max_bytes:
+        return
+
+    log_attachment_violation(
+        facility,
+        user,
+        event,
+        reason="file_too_large",
+        filename=uploaded_file.name,
+        size=size,
+        max_bytes=max_bytes,
+    )
+    raise ValidationError(
+        _("Datei zu groß (%(mb)d MB). Maximum: %(max)d MB.")
+        % {"mb": size // (1024 * 1024), "max": max_bytes // (1024 * 1024)}
+    )
+
+
+def enforce_image_limits(facility, uploaded_file, event, user):
+    """Reject decompression-bomb images (Refs #1268 (T3)).
+
+    Setzt ``PIL.Image.MAX_IMAGE_PIXELS`` und lehnt Bilder ab, deren (aus dem
+    Header gelesene, NICHT dekodierte) Pixelzahl ``FILE_VAULT_MAX_IMAGE_PIXELS``
+    uebersteigt — so kann eine klein komprimierte Datei nicht in eine RAM-Bombe
+    dekodieren. Nicht-Bild-Uploads (per Extension) werden uebersprungen; fuer sie
+    bleiben Extension-/Magic-/Virus-Checks zustaendig.
+    """
+    name = uploaded_file.name or ""
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if ext not in _IMAGE_EXTENSIONS:
+        return
+
+    import warnings  # noqa: PLC0415
+
+    from PIL import Image, UnidentifiedImageError  # noqa: PLC0415 — lazy, wie magic in enforce_magic_bytes
+
+    max_pixels = getattr(django_settings, "FILE_VAULT_MAX_IMAGE_PIXELS", 40_000_000)
+    # Globaler Pillow-Guard (schuetzt auch spaetere Dekodier-Pfade), zusaetzlich
+    # zur expliziten, versionsunabhaengigen Header-Pruefung unten.
+    Image.MAX_IMAGE_PIXELS = max_pixels
+
+    uploaded_file.seek(0)
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", Image.DecompressionBombWarning)
+            # Image.open liest nur den Header (lazy, keine Pixel-Dekodierung) →
+            # .size ist guenstig und auch fuer eine "Bombe" gefahrlos lesbar.
+            with Image.open(uploaded_file) as img:
+                pixels = img.size[0] * img.size[1]
+    except Image.DecompressionBombError:
+        pixels = max_pixels + 1  # harte Pillow-Grenze (>2x MAX) → ablehnen
+    except (UnidentifiedImageError, OSError, ValueError):
+        # Keine dekodierbare Bilddatei trotz Bild-Extension — hier nicht
+        # zusaetzlich abweisen; Magic-Bytes/Extension entscheiden.
+        uploaded_file.seek(0)
+        return
+    finally:
+        uploaded_file.seek(0)
+
+    if pixels > max_pixels:
+        log_attachment_violation(
+            facility,
+            user,
+            event,
+            reason="image_too_large",
+            filename=name,
+            pixels=pixels,
+            max_pixels=max_pixels,
+        )
+        raise ValidationError(
+            _("Bild hat zu viele Pixel (%(px)d). Maximum: %(max)d — möglicher Decompression-Bomb-Upload.")
+            % {"px": pixels, "max": max_pixels}
+        )
 
 
 def enforce_allowed_file_types(facility, uploaded_file, event, user):
@@ -124,6 +216,12 @@ def enforce_magic_bytes(facility, uploaded_file, event, user):
     (Refs #610). Container-Formate wie DOCX werden via
     :data:`_MIME_EQUIVALENCE` toleriert, wenn beide Seiten in derselben
     Aequivalenzklasse liegen (#662).
+
+    Returns the libmagic-detected MIME type (the *verified* type) on success, so
+    the caller can persist it and serve it on download instead of the
+    browser-reported ``content_type`` (Refs #1274). Falls libmagic den Inhalt
+    nicht eindeutig erkennt, ist das ``application/octet-stream`` (generisch,
+    erzwingt beim Download den Attachment-Pfad).
     """
     # Lazy-Import: ``python-magic`` braucht die System-Bibliothek ``libmagic1``.
     # Im Docker-Image (Prod) ist sie installiert; lokale Unit-Tests ohne
@@ -144,13 +242,13 @@ def enforce_magic_bytes(facility, uploaded_file, event, user):
     # Only reject when libmagic POSITIVELY identifies a type that contradicts
     # the declared one (e.g. PE executable declared as PDF).
     if detected_mime in (declared_mime, "application/octet-stream"):
-        return
+        return detected_mime
 
     # Extension-basierte Aequivalenz (DOCX/OOXML, JPEG-Synonyme).
     name = uploaded_file.name or ""
     extension = name.rsplit(".", 1)[-1] if "." in name else ""
     if _mime_equivalent(extension, declared_mime, detected_mime):
-        return
+        return detected_mime
 
     log_attachment_violation(
         facility,

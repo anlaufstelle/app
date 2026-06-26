@@ -188,6 +188,32 @@ def test_safe_decrypt_passes_through_plain_value():
     assert safe_decrypt(42) == 42
 
 
+def test_safe_decrypt_surfaces_missing_key_instead_of_masking(caplog):
+    """Refs #1269 (T4): ein fehlender/fehlkonfigurierter Schlüssel darf auf
+    Lesepfaden NICHT als '[verschlüsselt]'-Platzhalter maskiert werden.
+
+    ``EncryptionKeyMissing`` (ENCRYPTION_KEY/ENCRYPTION_KEYS gar nicht gesetzt)
+    muss laut gemeldet werden (Error-Log) und durchschlagen, damit eine
+    Key-Fehlkonfiguration sichtbar wird — im Gegensatz zu echter Token-Korruption
+    (``InvalidToken``), die weiter graceful auf den Platzhalter zurückfällt
+    (siehe ``test_safe_decrypt_returns_fallback``).
+    """
+    import logging
+
+    key = generate_key()
+    with override_settings(ENCRYPTION_KEY=key):
+        encrypted = encrypt_field("Art-9-Notiz")
+
+    with override_settings(ENCRYPTION_KEY="", ENCRYPTION_KEYS=""):
+        with caplog.at_level(logging.ERROR, logger="core.services.file_vault.encryption"):
+            with pytest.raises(EncryptionKeyMissing):
+                safe_decrypt(encrypted)
+
+    assert any(rec.levelno >= logging.ERROR for rec in caplog.records), (
+        "Fehlender Key muss auf ERROR-Ebene geloggt werden, nicht still maskiert"
+    )
+
+
 def test_missing_key_raises():
     """Empty ENCRYPTION_KEY raises EncryptionKeyMissing."""
     with override_settings(ENCRYPTION_KEY=""), pytest.raises(EncryptionKeyMissing):

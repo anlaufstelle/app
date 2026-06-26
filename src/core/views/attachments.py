@@ -163,14 +163,19 @@ class AttachmentDownloadView(AssistantOrAboveRequiredMixin, View):
             detail={"event_id": str(event.pk), "field": ft.slug},
         )
 
+        # #1274 (T10): den beim Upload verifizierten (libmagic) MIME ausliefern,
+        # nicht den browser-gemeldeten ``mime_type``. Bestandsanhänge ohne
+        # erkannten Typ fallen auf ``mime_type`` zurück (rückwärtskompatibel).
+        served_mime = attachment.detected_mime or attachment.mime_type
+
         force_download = request.GET.get("download") in ("1", "true")
-        disposition = _attachment_disposition(attachment.mime_type, force_download)
+        disposition = _attachment_disposition(served_mime, force_download)
 
         original_filename = get_original_filename(attachment)
         as_attachment = disposition == "attachment"
         response = safe_download_response(
             original_filename,
-            attachment.mime_type,
+            served_mime,
             get_decrypted_file_stream(attachment),
             as_attachment=as_attachment,
         )

@@ -433,13 +433,24 @@ def doc_type_masking_matrix(facility):
         ("Plain Open", False, ""),
     ]
     for sort_order, (name, is_encrypted, sensitivity) in enumerate(specs):
+        # Refs #1270 (T5): seit dem save()-Backstop erzwingt FieldTemplate.save()
+        # die HIGH⇒verschlüsselt-Invariante. Die Kombination "unverschlüsselt +
+        # HIGH" (``plain-restr``) ist daher nur noch als *Bestandsdatensatz*
+        # möglich (vor der Invariante angelegt). Um den Render-Zweig "restricted,
+        # aber nicht encrypted" weiter abzudecken, legen wir das Feld an und
+        # setzen die HIGH-Sensitivity per ``QuerySet.update()`` nachträglich —
+        # das umgeht ``save()`` wie eine Legacy-/Bulk-Schreiboperation.
+        needs_legacy_high = sensitivity == "high" and not is_encrypted
         ft = FieldTemplate.objects.create(
             facility=facility,
             name=name,
             field_type=FieldTemplate.FieldType.TEXT,
             is_encrypted=is_encrypted,
-            sensitivity=sensitivity,
+            sensitivity="" if needs_legacy_high else sensitivity,
         )
+        if needs_legacy_high:
+            FieldTemplate.objects.filter(pk=ft.pk).update(sensitivity="high")
+            ft.refresh_from_db()
         DocumentTypeField.objects.create(document_type=doc_type, field_template=ft, sort_order=sort_order)
 
     return doc_type

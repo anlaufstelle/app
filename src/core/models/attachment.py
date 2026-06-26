@@ -59,6 +59,17 @@ class EventAttachment(models.Model):
         max_length=100,
         verbose_name=_("MIME-Typ"),
     )
+    detected_mime = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name=_("Verifizierter MIME-Typ"),
+        help_text=_(
+            "Beim Upload per libmagic erkannter (verifizierter) Typ. Maßgeblich "
+            "beim Download; der browser-gemeldete mime_type dient nur als Fallback "
+            "für Bestandsanhänge ohne erkannten Typ (Refs #1274)."
+        ),
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

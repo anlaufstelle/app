@@ -201,13 +201,109 @@ class TestEmptyFile:
 
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
-class TestOversizeViaForm:
-    """Größenlimit ist im Form-Layer verdrahtet, nicht im Service.
+class TestServiceSizeCap:
+    """Refs #1268 (T3): harte Service-Layer-Größenobergrenze.
 
-    Der UI-Pfad nutzt ``DynamicEventDataForm`` mit
-    ``Settings.max_file_size_mb``. Programmatische Caller, die direkt den
-    Service rufen, umgehen diese Prüfung — das ist dokumentiert und in
-    ``store_encrypted_file`` bewusst nicht dupliziert (Refs #771).
+    Der Service-Layer ist die letzte Bastion; ``FILE_VAULT_MAX_UPLOAD_BYTES``
+    ist eine absolute Obergrenze, die VOR der Voll-Pufferung (Virenscan/Encrypt)
+    greift — auch für programmatische Caller, die das Formular umgehen.
+    """
+
+    def test_service_rejects_file_over_hard_cap(
+        self, facility_with_settings, staff_user, doc_type_with_file, event, settings
+    ):
+        settings.FILE_VAULT_MAX_UPLOAD_BYTES = 1024  # 1 KiB
+        _, ft_file = doc_type_with_file
+        oversize = SimpleUploadedFile("big.pdf", VALID_PDF_BYTES + b"a" * 2048, content_type="application/pdf")
+        with pytest.raises(ValidationError):
+            store_encrypted_file(facility_with_settings, oversize, ft_file, event, staff_user)
+        assert EventAttachment.objects.filter(event=event).count() == 0
+
+    def test_service_accepts_file_within_cap(
+        self, facility_with_settings, staff_user, doc_type_with_file, event, settings
+    ):
+        settings.FILE_VAULT_MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+        _, ft_file = doc_type_with_file
+        uploaded = SimpleUploadedFile("ok.pdf", VALID_PDF_BYTES, content_type="application/pdf")
+        attachment = store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
+        assert attachment.pk is not None
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_encryption_key")
+class TestImageDecompressionBomb:
+    """Refs #1268 (T3): Pixel-Obergrenze gegen Bild-Decompression-Bomben.
+
+    Eine klein komprimierte Datei, die zu Milliarden Pixeln dekodiert, würde
+    den RAM erschöpfen; der Header-Pixel-Check lehnt sie ab, bevor dekodiert
+    wird.
+    """
+
+    def test_oversized_pixel_image_rejected(
+        self, facility_with_settings, staff_user, doc_type_with_file, event, settings
+    ):
+        import io
+
+        from PIL import Image
+
+        settings.FILE_VAULT_MAX_IMAGE_PIXELS = 50  # winziges Limit
+        _, ft_file = doc_type_with_file
+        buf = io.BytesIO()
+        Image.new("RGB", (10, 10)).save(buf, format="PNG")  # 100 Pixel > 50
+        uploaded = SimpleUploadedFile("bomb.png", buf.getvalue(), content_type="image/png")
+        with pytest.raises(ValidationError):
+            store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
+        assert EventAttachment.objects.filter(event=event).count() == 0
+
+    def test_small_image_within_cap_accepted(
+        self, facility_with_settings, staff_user, doc_type_with_file, event, settings
+    ):
+        import io
+
+        from PIL import Image
+
+        settings.FILE_VAULT_MAX_IMAGE_PIXELS = 1000
+        _, ft_file = doc_type_with_file
+        buf = io.BytesIO()
+        Image.new("RGB", (10, 10)).save(buf, format="PNG")  # 100 Pixel < 1000
+        uploaded = SimpleUploadedFile("ok.png", buf.getvalue(), content_type="image/png")
+        attachment = store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
+        assert attachment.pk is not None
+
+
+class TestMultipleFileCountCap:
+    """Refs #1268 (T3): ``MultipleFileField`` cappt die Datei-Anzahl pro Feld/POST."""
+
+    def test_too_many_files_rejected(self, settings):
+        from django import forms
+
+        from core.forms.events import MultipleFileField
+
+        settings.FILE_VAULT_MAX_UPLOAD_FILES = 2
+        field = MultipleFileField(required=False)
+        files = [SimpleUploadedFile(f"f{i}.pdf", VALID_PDF_BYTES, content_type="application/pdf") for i in range(3)]
+        with pytest.raises(forms.ValidationError):
+            field.clean(files)
+
+    def test_within_cap_accepted(self, settings):
+        from core.forms.events import MultipleFileField
+
+        settings.FILE_VAULT_MAX_UPLOAD_FILES = 2
+        field = MultipleFileField(required=False)
+        files = [SimpleUploadedFile(f"f{i}.pdf", VALID_PDF_BYTES, content_type="application/pdf") for i in range(2)]
+        cleaned = field.clean(files)
+        assert len(cleaned) == 2
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("_encryption_key")
+class TestOversizeViaForm:
+    """Größenlimit greift im Form-Layer (per-Facility ``max_file_size_mb``) UND
+    seit Refs #1268 zusätzlich als harte Service-Obergrenze
+    (``FILE_VAULT_MAX_UPLOAD_BYTES``, siehe :class:`TestServiceSizeCap`).
+
+    Dieser Test deckt weiterhin den UI-Pfad ab: ``DynamicEventDataForm`` lehnt
+    eine Datei über der per-Facility-Größe ab.
     """
 
     def test_oversize_via_form_rejected(self, facility_with_settings, staff_user, doc_type_with_file):

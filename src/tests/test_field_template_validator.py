@@ -74,3 +74,35 @@ class TestSensitivityHighRequiresEncryption:
             is_encrypted=False,
         )
         ft.full_clean()
+
+    def test_save_high_sensitivity_forces_encryption_bypassing_clean(self, facility):
+        """Refs #1270 (T5): die HIGH⇒verschlüsselt-Invariante muss auch auf
+        ``save()``-Ebene greifen — ``.create()``/Seed/Bulk umgehen
+        ``clean()``/``full_clean()``, es gibt keinen DB-CHECK.
+
+        Backstop analog zum bestehenden FILE-Feld-Zwang (``FieldTemplate.save()``
+        setzt dort bereits ``is_encrypted=True``): ein HIGH-Feld kann danach
+        nicht mehr mit ``is_encrypted=False`` persistiert werden — egal über
+        welchen Code-Pfad —, damit kein Art.-9-Klartext ins JSONB/Backup gerät.
+        """
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name="Diagnose (direkt gespeichert)",
+            field_type=FieldTemplate.FieldType.TEXT,
+            sensitivity=DocumentType.Sensitivity.HIGH,
+            is_encrypted=False,
+        )
+        ft.refresh_from_db()
+        assert ft.is_encrypted is True
+
+    def test_save_high_sensitivity_already_encrypted_unchanged(self, facility):
+        """HIGH + bereits verschlüsselt bleibt unverändert speicherbar."""
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name="Diagnose verschlüsselt",
+            field_type=FieldTemplate.FieldType.TEXT,
+            sensitivity=DocumentType.Sensitivity.HIGH,
+            is_encrypted=True,
+        )
+        ft.refresh_from_db()
+        assert ft.is_encrypted is True

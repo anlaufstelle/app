@@ -296,6 +296,27 @@ CLAMAV_PORT = int(os.environ.get("CLAMAV_PORT", "3310"))
 # zuerst → 500 statt fail-closed "Scanner nicht erreichbar".
 CLAMAV_TIMEOUT = int(os.environ.get("CLAMAV_TIMEOUT", "15"))
 
+# --- File-Vault Upload-Limits (Refs #1268) ---
+# Service-Layer-Obergrenzen als Defense-in-Depth gegen authentifizierten
+# Memory-Exhaustion-DoS. Sie greifen UNABHÄNGIG von der per-Facility
+# konfigurierbaren Form-Größe (``Settings.max_file_size_mb``) auch für
+# programmatische Aufrufer, die das Formular umgehen — der Service-Layer ist die
+# letzte Bastion (Extension/Magic/Virus + jetzt Größe/Pixel/Anzahl). Bewusst in
+# base.py (nicht prod.py), um Kollisionen mit laufenden prod.py-Änderungen zu
+# vermeiden; per Env-Var überschreibbar.
+#
+# * FILE_VAULT_MAX_UPLOAD_BYTES — harte Obergrenze pro Datei; greift VOR jeder
+#   Voll-Pufferung (Virenscan/Encrypt), damit eine Riesendatei nicht erst in den
+#   RAM gelesen wird.
+# * FILE_VAULT_MAX_UPLOAD_FILES — Obergrenze für die Datei-Anzahl pro File-Feld
+#   (MultipleFileField) → bremst Masse-Uploads pro Request.
+# * FILE_VAULT_MAX_IMAGE_PIXELS — Decompression-Bomb-Schutz: maximale (aus dem
+#   Header gelesene, nicht dekodierte) Pixelzahl eines Bild-Uploads; setzt
+#   zugleich ``PIL.Image.MAX_IMAGE_PIXELS``.
+FILE_VAULT_MAX_UPLOAD_BYTES = int(os.environ.get("FILE_VAULT_MAX_UPLOAD_BYTES", str(50 * 1024 * 1024)))
+FILE_VAULT_MAX_UPLOAD_FILES = int(os.environ.get("FILE_VAULT_MAX_UPLOAD_FILES", "20"))
+FILE_VAULT_MAX_IMAGE_PIXELS = int(os.environ.get("FILE_VAULT_MAX_IMAGE_PIXELS", str(40_000_000)))
+
 # --- Default PK ---
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

@@ -19,7 +19,9 @@ from core.models.attachment import EventAttachment
 from core.services.file_vault.encryption import decrypt_file_stream, encrypt_field, encrypt_file, safe_decrypt
 from core.services.file_vault.policy import (
     enforce_allowed_file_types,
+    enforce_image_limits,
     enforce_magic_bytes,
+    enforce_upload_size,
     run_virus_scan,
 )
 
@@ -64,8 +66,15 @@ def store_encrypted_file(
     (Refs #587/622 — Versionshistorie + Stufe-B Multi-Entry).
     """
     enforce_allowed_file_types(facility, uploaded_file, event, user)
+    # #1268: harte Service-Groessenobergrenze VOR der Voll-Pufferung im Virenscan
+    # (Memory-DoS-Schutz), unabhaengig von der per-Facility-Form-Groesse.
+    enforce_upload_size(facility, uploaded_file, event, user)
     run_virus_scan(facility, uploaded_file, event, user)
-    enforce_magic_bytes(facility, uploaded_file, event, user)
+    # #1274: den verifizierten (libmagic) MIME festhalten, damit er beim Download
+    # massgeblich ist statt des browser-gemeldeten content_type.
+    detected_mime = enforce_magic_bytes(facility, uploaded_file, event, user)
+    # #1268: Decompression-Bomb-Schutz fuer Bild-Uploads (Pixel-Obergrenze).
+    enforce_image_limits(facility, uploaded_file, event, user)
 
     storage_name = f"{uuid.uuid4()}.enc"
     output_path = _facility_dir(facility) / storage_name
@@ -91,6 +100,7 @@ def store_encrypted_file(
             original_filename_encrypted=encrypt_field(uploaded_file.name),
             file_size=uploaded_file.size,
             mime_type=uploaded_file.content_type or "application/octet-stream",
+            detected_mime=detected_mime or "",
             created_by=user,
             is_current=True,
             entry_id=entry_id,
