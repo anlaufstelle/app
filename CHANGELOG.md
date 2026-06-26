@@ -27,6 +27,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **WeasyPrint-PDF-Exporte mit restriktivem `url_fetcher`** (#1272) — alle drei PDF-Export-Pfade (Halbjahresbericht, Jugendamt-Sachbericht, DSGVO-Auskunft) lehnen `file://`- und externe Netzwerk-Fetches jetzt explizit ab (Defense-in-Depth gegen SSRF/Local-File-Read), statt sich allein auf das fehlende `|safe` in den PDF-Templates zu verlassen.
 - **K-Anon-Suppression im Jugendamt-PDF** (#1278) — der Jugendamt-Sachbericht (das am ehesten externe Artefakt) leitet seine Kategorie-, Altersgruppen- und Personen-Zahlen jetzt durch dieselbe Kleinstfallzahl-Unterdrückung (k-Anonymität) wie der On-Screen-Bericht; Zellen unterhalb der Schwelle werden als „unterdrückt" ausgewiesen statt als Roh-Fallzahl.
 
+### Docs
+
+- **README-Rollenmodell an die 5-Rollen-Implementierung angeglichen** (#1277) — die englische README bewarb noch ein „4-Stufen-Rollenmodell"; sie listet jetzt wie die deutsche Fassung alle fünf Rollen (`super_admin` über `facility_admin`, `lead`, `staff`, `assistant`) gemäß [ADR-018](docs/adr/018-rollenmodell-superadmin.md).
+
 ## [0.16.0] - 2026-06-25
 
 Stabilisierungs-Release (Pre-Release): die erste öffentliche Demo-Instanz (`demo.anlaufstelle.app`) mit eigener Demo-Schutzschicht und eine umfassend überarbeitete Aufgabenübersicht, dazu Security-Härtung (u. a. `cryptography` 49.0.0, Ratelimit für den Audit-Log-Export) und Zeitzonen-Korrekturen. Keine Datenmodell-Brüche; Vorwärts-Migration ohne Datenverlust. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.

@@ -104,7 +104,7 @@ The configuration also governs data protection:
 
 - **Statistics and reports** — analysis at the push of a button, export as CSV and PDF
 - **Youth welfare report** — pre-formatted and ready to submit
-- **4-tier role model** — Admin, Lead, Staff, Assistant
+- **5-tier role model** — System administration (`super_admin`), Application support (`facility_admin`), Lead, Staff, Assistant
 - **Facility isolation** — data is fully separated, no mixing between locations
 
 ### Data protection and GDPR
