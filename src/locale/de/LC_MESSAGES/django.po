@@ -3137,7 +3137,7 @@ msgid "Gib den 6-stelligen Code aus deiner Authenticator-App ein."
 msgstr ""
 
 #: src/templates/auth/mfa_login.html:35
-msgid "Gib einen deiner einmaligen Backup-Codes ein (Format xxxx-xxxx)."
+msgid "Gib einen deiner einmaligen Backup-Codes genau wie angezeigt ein (Groß-/Kleinschreibung beachten)."
 msgstr ""
 
 #: src/templates/auth/mfa_login.html:44

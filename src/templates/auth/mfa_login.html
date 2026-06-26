@@ -37,7 +37,7 @@
             {% trans "Gib den 6-stelligen Code aus deiner Authenticator-App ein." %}
         </p>
         <p class="text-sm text-ink-muted mb-4 text-center" x-show="isBackup" x-cloak>
-            {% trans "Gib einen deiner einmaligen Backup-Codes ein (Format xxxx-xxxx)." %}
+            {% trans "Gib einen deiner einmaligen Backup-Codes genau wie angezeigt ein (Groß-/Kleinschreibung beachten)." %}
         </p>
 
         <form method="post" class="space-y-4">
@@ -63,9 +63,9 @@
                 <input type="text" name="token" id="id_token_backup"
                        x-bind:required="isBackup"
                        inputmode="text" autocomplete="off" autocapitalize="none" spellcheck="false"
-                       placeholder="xxxx-xxxx"
+                       placeholder="z. B. Ab12Cd34Ef56Gh78Ij90Kl"
                        data-testid="mfa-backup-input"
-                       class="mt-1 block w-full rounded-md border-subtle shadow-sm focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 border text-center text-lg tracking-widest">
+                       class="mt-1 block w-full rounded-md border-subtle shadow-sm focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 border font-mono">
             </div>
 
             <button type="submit"

@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **MFA-Login zeigt korrektes Backup-Code-Format** (#1291) — die Backup-Code-Eingabe unter `/mfa/verify/` bewarb fälschlich das veraltete „xxxx-xxxx"-Format (Hinweis + Platzhalter); sie spiegelt jetzt die seit #790 genutzten 22-stelligen, case-sensitiven Codes wider (serverseitig waren diese Codes bereits gültig).
 - **Datei-Upload bei langsamem Virenscanner liefert keinen 500 mehr** (#1283) — der ClamAV-Scan läuft jetzt unter einer harten Wall-Clock-Deadline und das Scan-Timeout (`CLAMAV_TIMEOUT`) liegt unter dem Gunicorn-Worker-Timeout, sodass ein nicht (rechtzeitig) antwortender Daemon den Upload fail-closed mit klarer Meldung abweist, statt den Worker ins Timeout laufen zu lassen.
 
 ### Security

@@ -61,6 +61,27 @@ class TestMFAVerifyFlow:
         assert response.status_code == 302
         assert response.url == "/"
 
+    def test_verify_backup_mode_accepts_new_22char_code(self, client, staff_user):
+        """Refs #1291: Neue 22-Zeichen-Backup-Codes (Refs #790) werden vom Verify-View akzeptiert."""
+        from core.services.security import generate_backup_codes
+
+        self._make_confirmed_device(staff_user)
+        codes = generate_backup_codes(staff_user)
+        assert len(codes[0]) == 22  # token_urlsafe(16) — Format-Sanity, kein xxxx-xxxx
+        client.login(username="teststaff", password="testpass123")
+        response = client.post("/mfa/verify/", {"token": codes[0], "mode": "backup"})
+        assert response.status_code == 302
+        assert response.url == "/"
+        assert client.session.get("mfa_verified") is True
+
+    def test_verify_page_does_not_advertise_legacy_format(self, client, staff_user):
+        """Refs #1291: Die Backup-Eingabe darf das obsolete xxxx-xxxx-Format nicht mehr bewerben."""
+        self._make_confirmed_device(staff_user)
+        client.login(username="teststaff", password="testpass123")
+        html = client.get("/mfa/verify/").content.decode("utf-8")
+        assert "mfa-backup-input" in html
+        assert "xxxx-xxxx" not in html
+
 
 @pytest.mark.django_db
 class TestMFAEnforcementMiddleware:
