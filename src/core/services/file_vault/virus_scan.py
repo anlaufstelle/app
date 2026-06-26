@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import threading
 from dataclasses import dataclass
 from datetime import UTC
 from typing import Any
@@ -88,6 +89,37 @@ def _read_all_bytes(file_obj: Any) -> bytes:
     return data
 
 
+def _run_with_deadline(func: Any, timeout: float) -> Any:
+    """Führt ``func()`` in einem Daemon-Thread aus und bricht nach ``timeout``
+    Sekunden mit ``TimeoutError`` ab (Refs #1283).
+
+    Hintergrund: Der ClamAV-Scan läuft synchron im Request-Worker. pyclamds
+    Socket-Timeout greift nur *pro* ``recv`` (Inaktivitäts-Timer) — ein clamd,
+    der die Verbindung annimmt und den INSTREAM-Datenstrom schluckt, den Verdict
+    aber nicht (rechtzeitig) zurückgibt, blockt sonst bis zum Gunicorn-Worker-
+    Kill (→ 500 statt fail-closed). Diese Deadline ist ein harter Wall-Clock-
+    Backstop. Der abgehängte Daemon-Thread ist harmlos: er wird vom Per-Socket-
+    Timeout begrenzt, blockiert den Interpreter-Exit nicht und stirbt mit dem
+    Prozess.
+    """
+    box: dict[str, Any] = {}
+
+    def _target() -> None:
+        try:
+            box["result"] = func()
+        except BaseException as exc:  # noqa: BLE001 — an den Aufrufer-Thread weiterreichen
+            box["error"] = exc
+
+    worker = threading.Thread(target=_target, name="clamav-scan", daemon=True)
+    worker.start()
+    worker.join(timeout)
+    if worker.is_alive():
+        raise TimeoutError(f"Vorgang überschritt {timeout}s-Deadline")
+    if "error" in box:
+        raise box["error"]
+    return box.get("result")
+
+
 def scan_file(file_obj: Any) -> ScanResult:
     """Scannt eine hochgeladene Datei auf Viren.
 
@@ -124,8 +156,18 @@ def scan_file(file_obj: Any) -> ScanResult:
         logger.error("Upload konnte für Virenscan nicht gelesen werden: %s", exc)
         raise VirusScannerUnavailableError(f"Datei konnte für Virenscan nicht gelesen werden: {exc}") from exc
 
+    # Refs #1283: harte Wall-Clock-Deadline um den Scan. pyclamds Per-Socket-
+    # Timeout ist nur ein Per-``recv``-Inaktivitäts-Timer — ein clamd, der den
+    # INSTREAM-Verdict nicht zurückgibt, würde ``scan_stream`` sonst über das
+    # Gunicorn-Worker-Timeout hinaus blocken (→ Worker-Kill → 500). Die Deadline
+    # erzwingt, dass stattdessen der fail-closed Pfad greift.
     try:
-        result = client.scan_stream(data)
+        result = _run_with_deadline(lambda: client.scan_stream(data), settings.CLAMAV_TIMEOUT)
+    except TimeoutError as exc:
+        logger.error("ClamAV-Scan-Zeitlimit (%ss) überschritten: %s", settings.CLAMAV_TIMEOUT, exc)
+        raise VirusScannerUnavailableError(
+            f"Virenscan-Zeitlimit überschritten ({settings.CLAMAV_TIMEOUT}s) — Daemon antwortet nicht."
+        ) from exc
     except Exception as exc:  # noqa: BLE001 — BufferTooLong / ConnectionError / etc.
         logger.error("ClamAV-Scan fehlgeschlagen: %s", exc)
         raise VirusScannerUnavailableError(f"Virenscan fehlgeschlagen: {exc}") from exc

@@ -8,6 +8,10 @@ set -e
 
 python manage.py collectstatic --noinput
 
+# Refs #1283: GUNICORN_TIMEOUT MUSS größer als CLAMAV_TIMEOUT (settings/base.py)
+# sein. Der ClamAV-Upload-Scan läuft synchron im Worker; ist das Worker-Timeout
+# <= dem Scan-Timeout, killt Gunicorn den Worker bei langsamem clamd zuerst
+# (→ 500) statt den fail-closed "Scanner nicht erreichbar"-Pfad greifen zu lassen.
 exec gunicorn anlaufstelle.wsgi:application \
     --bind 0.0.0.0:8000 \
     --workers "${GUNICORN_WORKERS:-3}" \

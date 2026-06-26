@@ -289,7 +289,12 @@ ENCRYPTION_KEY = os.environ.get("ENCRYPTION_KEY", "")
 CLAMAV_ENABLED = os.environ.get("CLAMAV_ENABLED", "false").lower() in ("true", "1", "yes")
 CLAMAV_HOST = os.environ.get("CLAMAV_HOST", "clamav")
 CLAMAV_PORT = int(os.environ.get("CLAMAV_PORT", "3310"))
-CLAMAV_TIMEOUT = int(os.environ.get("CLAMAV_TIMEOUT", "30"))
+# Refs #1283: MUSS unter dem Gunicorn-Worker-Timeout (GUNICORN_TIMEOUT, Default
+# 30s — siehe docker-entrypoint.sh) bleiben, inkl. Marge für die
+# Fehlerbehandlung. scan_file erzwingt diesen Wert als harte Wall-Clock-Deadline;
+# liegt er >= dem Worker-Timeout, killt Gunicorn den Worker bei langsamem clamd
+# zuerst → 500 statt fail-closed "Scanner nicht erreichbar".
+CLAMAV_TIMEOUT = int(os.environ.get("CLAMAV_TIMEOUT", "15"))
 
 # --- Default PK ---
 

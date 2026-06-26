@@ -10,6 +10,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Zeitstrom: ganze Kopfzeile klappt Einträge auf** (#1286) — im Feed und in der Übergabe öffnet ein Klick (oder Enter/Leertaste) auf die gesamte Kopfzeile die Detailansicht, nicht mehr nur der kleine Chevron-Pfeil; Übergabe-Aufgaben verlinken zudem direkt auf ihre Detailseite.
 
+### Fixed
+
+- **Datei-Upload bei langsamem Virenscanner liefert keinen 500 mehr** (#1283) — der ClamAV-Scan läuft jetzt unter einer harten Wall-Clock-Deadline und das Scan-Timeout (`CLAMAV_TIMEOUT`) liegt unter dem Gunicorn-Worker-Timeout, sodass ein nicht (rechtzeitig) antwortender Daemon den Upload fail-closed mit klarer Meldung abweist, statt den Worker ins Timeout laufen zu lassen.
+
 ## [0.16.0] - 2026-06-25
 
 Stabilisierungs-Release (Pre-Release): die erste öffentliche Demo-Instanz (`demo.anlaufstelle.app`) mit eigener Demo-Schutzschicht und eine umfassend überarbeitete Aufgabenübersicht, dazu Security-Härtung (u. a. `cryptography` 49.0.0, Ratelimit für den Audit-Log-Export) und Zeitzonen-Korrekturen. Keine Datenmodell-Brüche; Vorwärts-Migration ohne Datenverlust. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
