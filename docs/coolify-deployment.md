@@ -174,7 +174,7 @@ Im Default-Setup ist die Rate-Limit-Stanza im `Caddyfile` als Kommentar dokument
 
 ### Staging
 
-[`Caddyfile.staging`](../Caddyfile.staging) ist strukturgleich, hat aber zusätzlich einen Hinweis auf `tls internal` — falls die Stage-Domain nicht öffentlich auflösbar ist (interner Reverse-Proxy oder CDN davor), kann Caddy auf seine eigene CA wechseln statt LE.
+`Caddyfile.staging` ist strukturgleich, hat aber zusätzlich einen Hinweis auf `tls internal` — falls die Stage-Domain nicht öffentlich auflösbar ist (interner Reverse-Proxy oder CDN davor), kann Caddy auf seine eigene CA wechseln statt LE.
 
 ## Nach Go-Live
 

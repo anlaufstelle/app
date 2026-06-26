@@ -52,7 +52,7 @@ Gleichzeitig ist die Multi-Stage-Welt nicht hypothetisch, sondern in unmittelbar
 
 - **Coolify Cloud (Empfehlung aus #320):** Verworfen — `docker compose up`-Versprechen aus §1009 wuerde nicht mehr im internen Live-Setup gelebt; Cloud-Lock-in entgegen §928.
 - **Coolify Self-Hosted (Plan in #554):** Selbe Beisser zu §1009 + §163 (Persona-Lernkurve), zusaetzlich Coolify-RAM-Footprint und eigene Update/Patch-Verantwortung fuer den Coolify-Layer.
-- **Plain Compose + Traefik** (Reverse-Proxy mit Auto-Discovery via Container-Labels): Caddy-Replacement waere ein paralleler Konzept-Wechsel ohne Mehrwert gegenueber Caddy-mit-`import sites.d/*.caddy`; nicht im Stack-Vokabular der bestehenden Doku ([`Caddyfile`](../../Caddyfile), [`Caddyfile.staging`](../../Caddyfile.staging), [`docs/ops-runbook.md`](../ops-runbook.md)).
+- **Plain Compose + Traefik** (Reverse-Proxy mit Auto-Discovery via Container-Labels): Caddy-Replacement waere ein paralleler Konzept-Wechsel ohne Mehrwert gegenueber Caddy-mit-`import sites.d/*.caddy`; nicht im Stack-Vokabular der bestehenden Doku ([`Caddyfile`](../../Caddyfile), `Caddyfile.staging`, [`docs/ops-runbook.md`](../ops-runbook.md)).
 - **Dokploy:** Junges Projekt (2023+), kleine Community, Compose-first — aber gleiche prinzipielle Beisser wie Coolify gegenueber dem Selbsthosting-Versprechen.
 - **Dokku:** Single-Container-orientiert; Anlaufstelle ist Multi-Service (web + db + clamav + caddy) — schlechter Fit.
 

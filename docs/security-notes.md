@@ -263,7 +263,7 @@ Alle 7 Workflows haben jetzt einen expliziten `permissions:`-Block. Statt des De
 | [`dev-image.yml`](../.github/workflows/dev-image.yml) | Job | `contents: read`, `packages: write` (GHCR-Push) |
 | [`e2e.yml`](../.github/workflows/e2e.yml) | Top-Level | `contents: read` |
 | [`lint.yml`](../.github/workflows/lint.yml) | Top-Level | `contents: read` |
-| [`perf-nightly.yml`](../.github/workflows/perf-nightly.yml) | Top-Level | `contents: read`, `issues: write` |
+| `perf-nightly.yml` | Top-Level | `contents: read`, `issues: write` |
 | [`release.yml`](../.github/workflows/release.yml) | Job | `contents: read`, `packages: write` (GHCR-Push) |
 | [`test.yml`](../.github/workflows/test.yml) | Top-Level | `contents: read` |
 
