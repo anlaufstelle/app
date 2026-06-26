@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Fehlender Verschlüsselungs-Key wird laut gemeldet** (#1269) — `safe_decrypt` maskiert einen fehlenden/fehlkonfigurierten `ENCRYPTION_KEY` nicht mehr als „[verschlüsselt]"-Platzhalter, sondern loggt auf Error-Ebene und reicht den Fehler durch; echte Token-Korruption fällt weiterhin graceful auf den Platzhalter zurück.
 - **Download liefert den verifizierten MIME-Typ** (#1274) — der beim Upload per libmagic erkannte Typ wird am Anhang persistiert (`detected_mime`) und beim Download ausgeliefert, statt dem vom Browser gemeldeten `content_type` zu vertrauen (Bestandsanhänge fallen rückwärtskompatibel auf den alten Wert zurück).
 - **Service-Layer-Upload-Limits gegen Memory-DoS** (#1268) — der File-Vault erzwingt eine harte Größenobergrenze, eine Datei-Anzahl-Obergrenze pro Feld und einen Decompression-Bomb-Pixelcheck jetzt auch im Service-Layer (nicht nur im Formular) und verschlüsselt seekbare Uploads streamend statt die ganze Datei in den RAM zu puffern.
+- **Lockout-Recovery-Link einmalig nutzbar und POST-basiert** (#1273) — der per E-Mail versendete Entsperr-Link ist an den letzten Fehlversuch gebunden und damit einmalig gültig (ein Replay im 30-Minuten-Fenster wird abgewiesen); die eigentliche Entsperrung erfolgt nur noch per CSRF-geschütztem POST über eine kleine Bestätigungsseite statt per zustandsänderndem GET.
 
 ## [0.16.0] - 2026-06-25
 

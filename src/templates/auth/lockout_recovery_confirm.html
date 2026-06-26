@@ -1,0 +1,30 @@
+{% load i18n static %}
+<!DOCTYPE html>
+<html lang="de" class="h-full">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% trans "Konto entsperren" %} — Anlaufstelle</title>
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+</head>
+<body class="min-h-screen bg-canvas flex items-center justify-center p-6">
+    <div class="w-full max-w-[380px] bg-surface border border-subtle rounded-[10px] p-7" data-testid="recovery-confirm">
+        <h1 class="text-2xl font-bold text-ink mb-2">{% trans "Konto entsperren" %}</h1>
+        <p class="text-sm text-ink-muted mb-6">
+            {% blocktrans %}Klicken Sie auf „Konto entsperren", um Ihr Anlaufstelle-Konto wieder freizugeben. Dieser Link ist nur einmal gültig.{% endblocktrans %}
+        </p>
+
+        <form method="post" action="{% url 'core:lockout_recovery_confirm' token=token %}" data-testid="recovery-confirm-form">
+            {% csrf_token %}
+            <button type="submit"
+                    class="w-full flex justify-center py-2.5 px-4 rounded-md text-[14px] font-semibold text-white bg-accent min-h-[44px]">
+                {% trans "Konto entsperren" %}
+            </button>
+        </form>
+
+        <a href="{% url 'login' %}" class="text-[13px] text-ink-muted hover:underline block mt-4">
+            {% trans "Zurück zur Anmeldung" %}
+        </a>
+    </div>
+</body>
+</html>

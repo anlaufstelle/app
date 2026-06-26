@@ -122,7 +122,8 @@ class TestRecoveryTokenFlow:
         # Kein Mail-Versand fuer unbekannte Adresse — Anti-Enumeration.
         assert len(mail.outbox) == 0
 
-    def test_recovery_confirm_unlocks_account(self, client, staff_user):
+    def test_recovery_confirm_get_shows_form_without_unlocking(self, client, staff_user):
+        """GET ist zustandsneutral: zeigt nur die Bestaetigungsseite, entsperrt nicht (Refs #1273)."""
         from core.services.security import build_recovery_token
 
         staff_user.email = "locked@example.org"
@@ -130,15 +131,66 @@ class TestRecoveryTokenFlow:
         _lock_account(staff_user)
         token = build_recovery_token(staff_user)
 
-        response = client.get(
-            reverse("core:lockout_recovery_confirm", kwargs={"token": token}),
-            follow=True,
-        )
+        response = client.get(reverse("core:lockout_recovery_confirm", kwargs={"token": token}))
         assert response.status_code == 200
+        # Bestaetigungsseite mit POST-Formular — der GET aendert keinen Zustand.
+        assert b"recovery-confirm-form" in response.content
+        assert is_locked(staff_user) is True
+        assert not AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.LOGIN_UNLOCK).exists()
+
+    def test_recovery_confirm_post_unlocks_account(self, client, staff_user):
+        from core.services.security import build_recovery_token
+
+        staff_user.email = "locked@example.org"
+        staff_user.save(update_fields=["email"])
+        _lock_account(staff_user)
+        token = build_recovery_token(staff_user)
+
+        response = client.post(reverse("core:lockout_recovery_confirm", kwargs={"token": token}))
+        assert response.status_code == 302
+        assert response.url.endswith("/login/?recovered=1")
         assert is_locked(staff_user) is False
         unlock_entry = AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.LOGIN_UNLOCK).first()
         assert unlock_entry is not None
         assert unlock_entry.detail.get("trigger") == "recovery_token"
+
+    def test_recovery_token_is_single_use(self, client, staff_user):
+        """Replay desselben Tokens im 30-Min-Fenster wird abgewiesen (Refs #1273)."""
+        from core.services.security import build_recovery_token
+
+        staff_user.email = "locked@example.org"
+        staff_user.save(update_fields=["email"])
+        _lock_account(staff_user)
+        token = build_recovery_token(staff_user)
+        confirm_url = reverse("core:lockout_recovery_confirm", kwargs={"token": token})
+
+        first = client.post(confirm_url)
+        assert first.status_code == 302
+
+        # Zweiter POST mit demselben Token: abgewiesen, kein zweiter LOGIN_UNLOCK.
+        second = client.post(confirm_url)
+        assert second.status_code == 400
+        assert AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.LOGIN_UNLOCK).count() == 1
+
+        # Auch ein GET-Replay zeigt die Invalid-Seite statt der Bestaetigung.
+        third = client.get(confirm_url)
+        assert third.status_code == 400
+
+    def test_recovery_token_rejected_after_other_unlock(self, client, staff_user):
+        """An den letzten Fehlversuch gebunden: eine andere Entsperrung verbraucht den Link (Refs #1273)."""
+        from core.services.security import build_recovery_token
+        from core.services.security import unlock as unlock_user
+
+        staff_user.email = "locked@example.org"
+        staff_user.save(update_fields=["email"])
+        _lock_account(staff_user)
+        token = build_recovery_token(staff_user)
+
+        # Zwischenzeitliche Admin-/CLI-Entsperrung.
+        unlock_user(staff_user, unlocked_by=None, trigger="admin")
+
+        response = client.post(reverse("core:lockout_recovery_confirm", kwargs={"token": token}))
+        assert response.status_code == 400
 
     def test_recovery_confirm_with_invalid_token_404s(self, client, staff_user):
         response = client.get(

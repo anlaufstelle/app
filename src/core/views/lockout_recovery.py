@@ -95,19 +95,40 @@ class LockoutRecoverySentView(TemplateView):
 
 
 class LockoutRecoveryConfirmView(View):
-    """Token-Klick: validiert + schreibt LOGIN_UNLOCK."""
+    """Token-Klick: GET zeigt eine Bestaetigungsseite, POST entsperrt (Refs #1273).
+
+    Die Entsperrung ist zustandsaendernd und erfolgt ausschliesslich per
+    **POST** (CSRF-geschuetzt). Der per E-Mail versendete GET-Link landet auf
+    einer kleinen Bestaetigungsseite, deren Button den POST ausloest — so kann
+    weder ein Mail-Prefetch noch ein Crawler die Entsperrung ungewollt
+    triggern. Der Token ist zudem einmalig nutzbar (siehe
+    :func:`verify_recovery_token`): ein Replay im 30-Min-Fenster wird
+    abgewiesen.
+    """
 
     @method_decorator(ratelimit(key="ip", rate="10/m", method="GET", block=True))
     def get(self, request: HttpRequest, token: str, *args, **kwargs) -> HttpResponse:
+        if verify_recovery_token(token) is None:
+            return self._invalid(request)
+        return HttpResponse(
+            render_to_string("auth/lockout_recovery_confirm.html", {"token": token}, request=request),
+        )
+
+    @method_decorator(ratelimit(key="ip", rate="10/m", method="POST", block=True))
+    def post(self, request: HttpRequest, token: str, *args, **kwargs) -> HttpResponse:
         user = verify_recovery_token(token)
         if user is None:
-            return HttpResponse(
-                render_to_string("auth/lockout_recovery_invalid.html", {}, request=request),
-                status=400,
-            )
+            return self._invalid(request)
         unlock_user(user, unlocked_by=None, ip_address=None, trigger="recovery_token")
         messages.success(request, _("Konto entsperrt. Sie koennen sich jetzt anmelden."))
         return HttpResponseRedirect("/login/?recovered=1")
+
+    @staticmethod
+    def _invalid(request: HttpRequest) -> HttpResponse:
+        return HttpResponse(
+            render_to_string("auth/lockout_recovery_invalid.html", {}, request=request),
+            status=400,
+        )
 
 
 class _BackupCodeForm(forms.Form):
