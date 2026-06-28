@@ -311,7 +311,7 @@ Heike öffnet den Statistikbereich und wählt den Zeitraum „Januar–Juni 2026
 - Nach Leistungsart: Aufenthalt (2.341), Verpflegung (1.998), Spritzentausch (876), Krisengespräch (134), Begleitung (67), Vermittlung (43)
 - Nach Alterscluster: U18 (28), 18–26 (412), 27+ (2.175), unbekannt (232)
 
-Ein Klick auf „PDF-Export" erzeugt einen druckfertigen Bericht — anonymisiert, aggregiert, formatiert für die Weitergabe ans Jugendamt.
+Ein Klick auf „PDF-Export" erzeugt einen anonymisierten, aggregierten Bericht — als anpassbare Vorlage (Beispiel-Sachbericht) für die Weitergabe an externe Stellen wie das Jugendamt. Die Vorlage ist ein anpassbares Beispiel, kein verbindlicher oder aktueller Behördennachweis.
 
 ### Einstiegshürde: Erlernbar in 2–3 Stunden
 

@@ -372,7 +372,7 @@ Die Kategorie gruppiert Dokumentationstypen für Filter und die **Statistik-Seit
 | **Verwaltung** | Administrative Vorgänge | Hausverbot, Vermittlung |
 | **Notiz** | Freie Notizen | Beobachtungen, Vermerke |
 
-> **Hinweis:** Die Kategorie ist eine **reine UI-Gruppierung** für Statistik-Anzeige und Admin-Filter. Sie beeinflusst weder den Jugendamt-Export noch die Bann-/Krisen-Logik — dafür ist der **Systemtyp** maßgeblich (siehe unten).
+> **Hinweis:** Die Kategorie ist eine **reine UI-Gruppierung** für Statistik-Anzeige und Admin-Filter. Sie beeinflusst weder den Beispiel-Sachbericht-Export noch die Bann-/Krisen-Logik — dafür ist der **Systemtyp** maßgeblich (siehe unten).
 >
 > Der Tripel `(Einrichtung, Name, Kategorie)` ist eindeutig: Pro Einrichtung kann derselbe Dokumentationstyp-Name nur einmal pro Kategorie existieren. Gleiche Namen unter unterschiedlichen Kategorien (z.B. „Notiz" als Verwaltung *und* als Notiz) sind erlaubt.
 
@@ -399,7 +399,9 @@ Aktuell hat der Systemtyp zwei Funktionen:
 | **Hausverbot** | Aktiviert Hausverbot-Banner auf der Personenseite, eigener Filter im Zeitstrom, Zählung und Highlight in der Übergabe |
 | **Krisengespräch** | Wird als Highlight in der Übergabe angezeigt (letzte Krisen-Events) |
 
-**2. Jugendamt-Export** (Zuordnung zu Berichtskategorien):
+**2. Beispiel-Sachbericht-Export** (Zuordnung zu Berichtskategorien):
+
+Der Beispiel-Sachbericht ist ein anpassbares Beispiel bzw. eine Vorlage — kein verbindlicher oder aktueller Behördennachweis.
 
 | Systemtyp | Export-Kategorie |
 |-----------|-----------------|
@@ -412,9 +414,9 @@ Aktuell hat der Systemtyp zwei Funktionen:
 | **Vermittlung** | Vermittlung |
 | **Notiz** | *(wird ausgeschlossen)* |
 
-> **Hinweis:** Nicht jeder Dokumentationstyp benötigt einen Systemtyp. Typen ohne Systemtyp haben keine spezielle interne Logik und werden vom Jugendamt-Export ausgeschlossen, funktionieren aber ganz normal für die Dokumentation.
+> **Hinweis:** Nicht jeder Dokumentationstyp benötigt einen Systemtyp. Typen ohne Systemtyp haben keine spezielle interne Logik und werden vom Beispiel-Sachbericht-Export ausgeschlossen, funktionieren aber ganz normal für die Dokumentation.
 >
-> Systemtypen wie `note`, `contact`, `counseling` oder `medical` haben **keine sichtbare UI-Logik** (anders als `ban` und `crisis`). Sie dienen ausschließlich als Whitelist für den Jugendamt-Export — die Kategorie alleine entscheidet nicht, ob ein Eintrag exportiert wird.
+> Systemtypen wie `note`, `contact`, `counseling` oder `medical` haben **keine sichtbare UI-Logik** (anders als `ban` und `crisis`). Sie dienen ausschließlich als Whitelist für den Beispiel-Sachbericht-Export — die Kategorie alleine entscheidet nicht, ob ein Eintrag exportiert wird.
 
 #### Mindest-Kontaktstufe
 
@@ -1239,7 +1241,7 @@ Implementierung: [`src/core/management/commands/refresh_statistics_view.py`](htt
 
 ### Was sind Statistik-Snapshots?
 
-Anlaufstelle berechnet Statistiken (Dashboard, Halbjahresberichte, Jugendamt-PDFs) standardmäßig aus der Event-Tabelle (über die Materialized View aggregiert). Wenn die automatische Datenlöschung (`enforce_retention`) alte Events entfernt, würden diese aus den Statistiken verschwinden.
+Anlaufstelle berechnet Statistiken (Dashboard, Halbjahresberichte, Beispiel-Sachbericht-PDFs) standardmäßig aus der Event-Tabelle (über die Materialized View aggregiert). Wenn die automatische Datenlöschung (`enforce_retention`) alte Events entfernt, würden diese aus den Statistiken verschwinden.
 
 **Statistik-Snapshots** sichern monatliche Aggregate, bevor Events gelöscht werden. Die Auswertungen nutzen eine Hybrid-Logik: gespeicherte Snapshots für vergangene Monate, Live-Daten (aus der Materialized View) für den aktuellen Monat.
 

@@ -8,7 +8,7 @@
 
 ## Context
 
-`DocumentType`, `FieldTemplate` und Select-Optionen wurden an vielen Stellen über ihren **Anzeigenamen** identifiziert — als Lookup-Key in der Business-Logik, als Schlüssel in `Event.data_json` und als gespeicherter Wert von Select-/MultiSelect-Feldern. Ändert ein Admin einen Namen, brechen Bans, Export und Statistik **still** (keine Exception): `data_json`-Einträge werden unsichtbar, Jugendamt-Kategorien liefern 0, Statistik-Buckets splitten sich. Betroffen waren vier Kategorien fragiler String-Referenzen (DocumentType-Lookup, `data_json`-Keys, Options-Klartext, hartcodierte Feldnamen in `bans.py`). Das System war in der Entwicklungsphase ohne Produktionsdaten — der Umbau war damit migrationsfrei möglich.
+`DocumentType`, `FieldTemplate` und Select-Optionen wurden an vielen Stellen über ihren **Anzeigenamen** identifiziert — als Lookup-Key in der Business-Logik, als Schlüssel in `Event.data_json` und als gespeicherter Wert von Select-/MultiSelect-Feldern. Ändert ein Admin einen Namen, brechen Bans, Export und Statistik **still** (keine Exception): `data_json`-Einträge werden unsichtbar, Beispiel-Sachbericht-Kategorien liefern 0, Statistik-Buckets splitten sich. Betroffen waren vier Kategorien fragiler String-Referenzen (DocumentType-Lookup, `data_json`-Keys, Options-Klartext, hartcodierte Feldnamen in `bans.py`). Das System war in der Entwicklungsphase ohne Produktionsdaten — der Umbau war damit migrationsfrei möglich.
 
 ## Decision
 

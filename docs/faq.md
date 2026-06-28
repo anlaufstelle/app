@@ -371,7 +371,7 @@ Jeder User mit Rolle `assistant` / `staff` / `lead` / `facility_admin` gehört z
 | Arbeitsaufträge | Anzeigen | Assistenz |
 | Arbeitsaufträge | Anlegen, Bearbeiten | Fachkraft |
 | Arbeitsaufträge | Status ändern | Ersteller, Zugewiesener oder Leitung |
-| Statistiken & Exports | Anzeigen, CSV/PDF/Jugendamt-Export | Leitung |
+| Statistiken & Exports | Anzeigen, CSV/PDF/Beispiel-Sachbericht-Export | Leitung |
 | Audit-Log (eigene Einrichtung, `/audit/`) | Anzeigen | Anwendungsbetreuung (`facility_admin`) |
 | DSGVO-Paket | Generieren, Herunterladen | Anwendungsbetreuung (`facility_admin`) |
 | Administration (`/admin-mgmt/`) | Zugang | Anwendungsbetreuung (`facility_admin`) |

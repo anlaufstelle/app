@@ -6,7 +6,7 @@
 
 ## Context
 
-Drei Endpunkte erzeugen PDFs serverseitig mit WeasyPrint (DSGVO-Datenauskunft, Halbjahresbericht, Jugendamt-Bericht). Aktuell laufen sie **synchron im Request-Thread** und blockieren den HTTP-Worker für Sekunden bis (im Extremfall) zweistellige Sekunden.
+Drei Endpunkte erzeugen PDFs serverseitig mit WeasyPrint (DSGVO-Datenauskunft, Halbjahresbericht, Beispiel-Sachbericht). Aktuell laufen sie **synchron im Request-Thread** und blockieren den HTTP-Worker für Sekunden bis (im Extremfall) zweistellige Sekunden.
 
 Naheliegende Lösung: Task-Queue (Celery/RQ/Dramatiq) mit Worker-Prozessen, asynchroner Statusseite und Download-Token. Damit kämen aber:
 
@@ -22,7 +22,7 @@ Detaillierte Aufwands- und Nutzen-Analyse in `docs/async-pdf-evaluation.md` (dev
 PDF-Generierung bleibt **synchron**. Mitigationen statt Async-Queue:
 
 - **Rate-Limiting** auf den teuren Endpunkten (`@ratelimit(rate="10/h")` pro User).
-- **Hybrid-Statistiken** (vorberechnete Aggregate für Jugendamt-Bericht), wo möglich.
+- **Hybrid-Statistiken** (vorberechnete Aggregate für Beispiel-Sachbericht), wo möglich.
 - **Decryption-Caching** (`lru_cache` auf `get_fernet()`, `iter_records` statt Volladung).
 - **WSGI/Gunicorn**-Tuning: ausreichend Worker, Timeouts an den realistischen Worst-Case angepasst.
 

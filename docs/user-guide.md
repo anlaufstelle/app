@@ -522,12 +522,12 @@ Der PDF-Bericht erstellt einen strukturierten Halbjahresbericht für die interne
 2. Klicken Sie auf **PDF-Bericht**.
 3. Die PDF-Datei wird heruntergeladen (Dateiname: `bericht_YYYY-MM-DD_YYYY-MM-DD.pdf`).
 
-### Jugendamt-Sachbericht
+### Beispiel-Sachbericht
 
-Der Jugendamt-Export erstellt einen standardisierten Sachbericht im Jugendamt-Format.
+Der Beispiel-Sachbericht erstellt einen strukturierten Sachbericht nach einem festen Beispiel-Layout. Er ist ein anpassbares Beispiel bzw. eine Vorlage — kein verbindlicher oder aktueller Behördennachweis und keine Garantie für landesspezifische Anforderungen.
 
 1. Wählen Sie im Statistik-Dashboard den Zeitraum.
-2. Klicken Sie auf **Jugendamt-Bericht**.
+2. Klicken Sie auf **Beispiel-Sachbericht**.
 3. Die PDF-Datei wird heruntergeladen (Dateiname: `jugendamt_YYYY-MM-DD_YYYY-MM-DD.pdf`).
 
 > **Tipp:** Für Halbjahresberichte wählen Sie den Zeitraum „Letztes Halbjahr" und passen Sie Start- und Enddatum bei Bedarf manuell auf den 01.01. bzw. 30.06. (oder 01.07. – 31.12.) an.

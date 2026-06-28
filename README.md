@@ -103,7 +103,7 @@ Die Konfiguration bestimmt auch den Datenschutz:
 ### Für Leitung und Träger
 
 - **Statistiken und Berichte** — Auswertungen auf Knopfdruck, Export als CSV und PDF
-- **Jugendamtsbericht** — fertig formatiert
+- **Beispiel-Sachbericht** — strukturierte, anpassbare Vorlage (kein verbindlicher Behördennachweis)
 - **5-Stufen-Rollenmodell** — Systemadministration (`super_admin`), Anwendungsbetreuung (`facility_admin`), Leitung, Fachkraft, Assistenz
 - **Einrichtungstrennung** — Daten sind vollständig getrennt, kein Datenmix zwischen Standorten
 
