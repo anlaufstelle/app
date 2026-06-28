@@ -50,6 +50,7 @@ Dieses Verzeichnis enthält die gesamte Projektdokumentation. Interne Artefakte
 | [security-notes.md](security-notes.md) | Bewusste Security-Design-Entscheidungen (2FA, Fernet, RLS, Audit, Lockout) | Security-Officer, Entwickler |
 | [threat-model.md](threat-model.md) | Sicherheitsmodell, Angriffsfläche, bekannte offene Lücken | Security-Officer, Auditoren |
 | `audit-inventar.md` (dev-only) | Index aller Audit-Klassifizierungs-Codes (FND-\*, S-\*, Phasen, Sprints); die zugrunde liegenden Multi-AI-Audits liegen archiviert unter `docs/archive/` (dev-only) | Entwickler, Auditoren |
+| [compliance/cra-einordnung.md](compliance/cra-einordnung.md) | CRA-Einordnung (EU 2024/2847) — FOSS-Scope, Gap-Check gegen Anhang I, Meldeprozess-Skizze, Wiedervorlage-Trigger (Refs #1077) | Maintainer, Auditoren, Träger |
 
 ---
 
