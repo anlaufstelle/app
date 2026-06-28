@@ -10,7 +10,9 @@ explizit kein Superuser sein darf (siehe docs/coolify-deployment.md).
 """
 
 import pytest
+from django.apps import apps
 from django.db import connection
+from django.db.models import ForeignKey, OneToOneField
 
 # Importiere Fixtures aus test_rls_functional.py, sodass
 # ``TestSuperAdminRLSBypass`` unten die Fixtures wiederverwenden kann.
@@ -24,31 +26,52 @@ from tests.test_rls_functional import (  # noqa: F401
     rls_test_role,
 )
 
-EXPECTED_TABLES = [
-    "core_client",
-    "core_event",
-    "core_case",
-    "core_workitem",
-    "core_documenttype",
-    "core_fieldtemplate",
-    "core_auditlog",
-    "core_activity",
-    "core_deletionrequest",
-    "core_retentionproposal",
-    "core_settings",
-    "core_timefilter",
-    "core_legalhold",
-    "core_statisticssnapshot",
-    "core_recentclientvisit",
-    "core_quicktemplate",
-    "core_eventhistory",
-    "core_eventattachment",
-    "core_episode",
-    # Retro-Audit #600: transitiv facility-gescopte Tabellen (Migration 0063).
-    "core_outcomegoal",
-    "core_milestone",
-    "core_documenttypefield",
-]
+# Refs #1096: ``EXPECTED_TABLES`` wird ableitungsbasiert statt hartkodiert —
+# damit verschwindet die historische Drift-Quelle (0063/0091 waren beide
+# nachtraegliche Korrekturen fuer von frueheren Migrationen uebersehene
+# Tabellen). DIRECT-Tabellen leiten sich by-construction aus der Model-Registry
+# ab; nur die transitiv (JOIN) gescopten Tabellen bleiben von Hand kuriert.
+
+# Transitiv facility-gescopt (KEIN direkter facility-FK), RLS via JOIN-Policy in
+# Migration 0047/0063 — aus Model-Metadaten nicht ableitbar, daher kuriert. Dies
+# ist der einzige von Hand zu pflegende Eintrag bei einer neuen JOIN-Tabelle.
+JOIN_SCOPED_TABLES = frozenset(
+    {
+        "core_eventhistory",
+        "core_eventattachment",
+        "core_episode",
+        "core_outcomegoal",
+        "core_milestone",
+        "core_documenttypefield",
+    }
+)
+# facility-FK, aber bewusst AUSSERHALB von RLS (Auth-Grenze: super_admin hat
+# keine Facility, Auth geht dem Facility-Scoping voraus). Allowlist-Muster wie
+# ``_OBJECTS_ALL_WHITELIST_PREFIXES`` in test_architecture_guards_models.py.
+NOT_RLS_SCOPED = frozenset({"core_user"})
+
+
+def _has_direct_facility_fk(model) -> bool:
+    """True, wenn ``model`` eine direkte FK/O2O auf ``core_facility`` traegt."""
+    try:
+        field = model._meta.get_field("facility")
+    except Exception:  # FieldDoesNotExist
+        return False
+    return isinstance(field, (ForeignKey, OneToOneField)) and field.related_model._meta.db_table == "core_facility"
+
+
+def _direct_scoped_tables() -> set[str]:
+    """Alle Tabellen mit direktem facility-FK, ohne die Auth-Grenzen-Allowlist."""
+    return {
+        m._meta.db_table for m in apps.get_models() if not m._meta.proxy and _has_direct_facility_fk(m)
+    } - NOT_RLS_SCOPED
+
+
+# Reine Registry-Introspektion (kein DB-Zugriff) — importierbar ohne Postgres;
+# ``_residue_expectations.py`` importiert ``EXPECTED_TABLES`` als SSOT. Gewollte
+# Nebenwirkung: ein neues DIRECT-Model landet hier automatisch und triggert
+# damit auch das Completeness-Gate des PII-Residue-Sweeps.
+EXPECTED_TABLES = sorted(_direct_scoped_tables() | JOIN_SCOPED_TABLES)
 
 
 @pytest.mark.django_db
@@ -204,6 +227,38 @@ class TestRLSSetup:
         assert with_check is not None, "WITH CHECK fehlt — Migration 0083 nicht angewendet?"
         assert "is null" in with_check.lower(), f"WITH CHECK erlaubt NULL nicht: {with_check}"
         assert "current_setting" in with_check.lower(), f"WITH CHECK fehlt scope-match: {with_check}"
+
+
+@pytest.mark.django_db
+class TestRLSCoverageGuard:
+    """Refs #1096: Reverse-Guard zur ableitungsbasierten ``EXPECTED_TABLES``.
+
+    Die vier ``TestRLSSetup``-Tests decken die Richtung ``EXPECTED ⊆ DB`` ab
+    (jede erwartete Tabelle hat RLS/Policy/Bypass). Dieser Test schliesst die
+    Gegenrichtung ``DB ⊆ EXPECTED``: Traegt die DB RLS auf einer
+    ``core_``-Tabelle, die nicht (mehr) in ``EXPECTED_TABLES`` steht — etwa ein
+    neues facility-Model, dessen JOIN-Tabelle in ``JOIN_SCOPED_TABLES`` fehlt,
+    oder eine verwaiste RLS-Migration — wird der Test rot. Zusammen erzwingen
+    beide Richtungen Gleichheit, sodass die Abdeckung vollstaendig-by-
+    construction bleibt.
+    """
+
+    def setup_method(self):
+        if connection.vendor != "postgresql":
+            pytest.skip("RLS requires PostgreSQL")
+
+    def test_expected_tables_equals_live_db_rls_set(self):
+        with connection.cursor() as cur:
+            cur.execute(
+                "SELECT relname FROM pg_class WHERE relrowsecurity AND relname LIKE %s",
+                ["core_%"],
+            )
+            db_rls = {row[0] for row in cur.fetchall()}
+        assert db_rls == set(EXPECTED_TABLES), (
+            f"RLS-Drift — nur in DB: {db_rls - set(EXPECTED_TABLES)}; "
+            f"nur in EXPECTED_TABLES: {set(EXPECTED_TABLES) - db_rls}. "
+            "Neues facility-Model ohne RLS-Migration? Oder JOIN_SCOPED_TABLES veraltet?"
+        )
 
 
 @pytest.mark.django_db
