@@ -125,6 +125,36 @@ class TestDbRoleChecks:
 
 
 @pytest.mark.django_db
+class TestAppSuperuserChecks:
+    """Refs #1297: Django-Ebenen-Guard — kein App-``User`` hat is_superuser=True.
+
+    Bewusst abgegrenzt von :class:`TestDbRoleChecks` (prueft die
+    PostgreSQL-Rollen-Attribute ueber den ``check_db_roles``-Command) und von
+    #793 (Health-Endpoint NOSUPERUSER auf der Postgres-Rolle): dieser Check
+    betrachtet ausschliesslich das Django-``User.is_superuser``-Feld.
+    """
+
+    def test_ok_when_no_app_user_is_superuser(self):
+        User.objects.create_user(username="emma", password="x", role=User.Role.LEAD)
+        checks = compliance._app_superuser_checks()
+        assert len(checks) == 1
+        assert checks[0].key == "app_user_no_django_superuser"
+        assert checks[0].status == compliance.ComplianceStatus.OK
+
+    def test_critical_when_an_app_user_is_superuser(self):
+        rogue = User.objects.create_user(username="rogue", password="x", role=User.Role.STAFF)
+        rogue.is_superuser = True
+        rogue.save(update_fields=["is_superuser"])
+        checks = compliance._app_superuser_checks()
+        assert checks[0].status == compliance.ComplianceStatus.CRITICAL
+        assert "rogue" in (checks[0].detail or "")
+
+    def test_aggregate_includes_app_superuser_check(self):
+        keys = {c.key for c in compliance.aggregate_checks()}
+        assert "app_user_no_django_superuser" in keys
+
+
+@pytest.mark.django_db
 class TestBackupChecks:
     def test_unknown_when_no_backup_info(self):
         with patch("core.services.system.health.last_backup_info", return_value=None):

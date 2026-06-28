@@ -32,6 +32,7 @@ from core.services.compliance._types import (
     ComplianceCheck,
     ComplianceStatus,
 )
+from core.services.compliance.app_superuser import _app_superuser_checks
 from core.services.compliance.audit_events import _audit_event_checks
 from core.services.compliance.backup import _backup_checks, _restore_checks
 from core.services.compliance.breach_detection import (
@@ -130,6 +131,7 @@ def aggregate_checks() -> list[ComplianceCheck]:
     return _run_helpers(
         (
             _db_role_checks,
+            _app_superuser_checks,
             _backup_checks,
             _clamav_checks,
             _retention_checks,
@@ -177,6 +179,7 @@ __all__ = [
     "SENSITIVITY_RANK",
     "_CRITICAL_AUDIT_ACTIONS",
     "_PRIVILEGED_ROLES",
+    "_app_superuser_checks",
     "_audit_event_checks",
     "_backup_checks",
     "_breach_scan_checks",
