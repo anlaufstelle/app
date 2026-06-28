@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **Zeitstrom: ganze Kopfzeile klappt Einträge auf** (#1286) — im Feed und in der Übergabe öffnet ein Klick (oder Enter/Leertaste) auf die gesamte Kopfzeile die Detailansicht, nicht mehr nur der kleine Chevron-Pfeil; Übergabe-Aufgaben verlinken zudem direkt auf ihre Detailseite.
+- **Release-Exclude-Liste auf reine Verzeichnisse vereinfacht** (#1045) — interne, ohnehin dev-only Entwickler-Dokumentation wurde unter `docs/dev/` gebündelt, sodass der Public-Release-Ausschluss dev-only Inhalte ohne fragile Einzeldatei-Enumeration greift.
 
 ### Fixed
 
