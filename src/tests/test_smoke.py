@@ -12,7 +12,7 @@ def test_fixture_chain(facility, admin_user, doc_type_contact, sample_event):
     # Refs #867: ``admin_user`` ist seit dem 5-Rollen-Refactor ein
     # FACILITY_ADMIN ("facility_admin"), nicht mehr "admin".
     assert admin_user.role == User.Role.FACILITY_ADMIN
-    assert admin_user.is_superuser is True
+    assert admin_user.is_superuser is False
     assert doc_type_contact.category == "contact"
     assert sample_event.data_json["dauer"] == 15
 

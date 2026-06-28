@@ -48,7 +48,8 @@ def admin_user(facility):
         username="testadmin",
         role=User.Role.FACILITY_ADMIN,
         facility=facility,
-        is_superuser=True,
+        # Refs #1271: facility_admin ist kein Django-superuser (Least-Privilege);
+        # spiegelt Seed/Prod. ``is_staff`` bleibt fuer den Admin-Site-Login.
         is_staff=True,
         # Refs #1053: spiegelt die Backfill-Migration — bestehende
         # Admins/Leitungen tragen das Vier-Augen-Genehmiger-Recht.

@@ -53,7 +53,8 @@ class Command(BaseCommand):
                 "role": User.Role.FACILITY_ADMIN,
                 "facility": facility,
                 "is_staff": True,
-                "is_superuser": True,
+                # Refs #1271: kein ``is_superuser`` — facility_admin ist auf eine
+                # Einrichtung beschraenkt; Autorisierung laeuft ueber die Rolle.
                 "display_name": admin_username.title(),
             },
         )

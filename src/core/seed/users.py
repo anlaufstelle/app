@@ -11,7 +11,7 @@ def seed_users(facility: Facility, facility_idx: int) -> list[User]:
     collisions across facilities.
     """
     created_users: list[User] = []
-    for username_base, first, last, role, is_superuser in USER_TEMPLATES:
+    for username_base, first, last, role in USER_TEMPLATES:
         username = username_base if facility_idx == 0 else f"{username_base}_{facility_idx}"
         user, created = User.objects.get_or_create(
             username=username,
@@ -21,7 +21,6 @@ def seed_users(facility: Facility, facility_idx: int) -> list[User]:
                 "role": role,
                 "facility": facility,
                 "is_staff": True,
-                "is_superuser": is_superuser,
                 "display_name": f"{first} {last}",
                 # Refs #1053: Leitung + Anwendungsbetreuung starten als
                 # Genehmiger-Pool (analog Backfill-Migration).
@@ -51,7 +50,8 @@ def seed_super_admin() -> User:
             "role": User.Role.SUPER_ADMIN,
             "facility": None,
             "is_staff": True,
-            "is_superuser": True,
+            # Refs #1271: kein ``is_superuser`` — konsistent mit create_super_admin
+            # (Prod) und der super_admin_user-Fixture; Autorisierung ueber die Rolle.
             "display_name": "Super Admin",
         },
     )

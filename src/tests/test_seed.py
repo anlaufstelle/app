@@ -311,12 +311,18 @@ def test_seed_invalid_scale_raises():
 
 
 @pytest.mark.django_db
-def test_seed_admin_has_superuser_flag():
-    """The seeded admin user has is_superuser=True."""
+def test_seed_admin_is_not_superuser():
+    """Refs #1271: der geseedete facility_admin ist KEIN Django-superuser.
+
+    Least-Privilege: die Rolle ``facility_admin`` darf nicht mit Djangos
+    ``is_superuser`` gleichgesetzt werden (Autorisierung laeuft ueber die
+    Rolle, nicht ueber das Django-Flag). ``is_staff`` bleibt fuer den
+    Admin-Site-Login erhalten.
+    """
     call_command("seed")
 
     admin = User.objects.get(username="admin")
-    assert admin.is_superuser is True
+    assert admin.is_superuser is False
     assert admin.is_staff is True
     assert admin.role == User.Role.FACILITY_ADMIN
 
@@ -343,7 +349,10 @@ def test_seed_creates_super_admin():
     super_admin = User.objects.get(username="superadmin")
     assert super_admin.role == User.Role.SUPER_ADMIN
     assert super_admin.facility is None
-    assert super_admin.is_superuser is True
+    # Refs #1271: auch der geseedete super_admin ist KEIN Django-superuser —
+    # konsistent mit der Produktion (create_super_admin) und der
+    # super_admin_user-Fixture (Autorisierung laeuft ueber die Rolle).
+    assert super_admin.is_superuser is False
 
 
 @pytest.mark.django_db

@@ -35,8 +35,8 @@ class TestSystemDashboardAccess:
         """Refs #867: facility_admin ist NICHT super_admin -> 403.
 
         Zentrales Trenn-Kriterium: nur ``role=SUPER_ADMIN`` darf in
-        ``/system/``. Selbst ``facility_admin`` (mit ``is_superuser=True``
-        im Test-Fixture) wird abgewiesen.
+        ``/system/``. ``facility_admin`` wird allein anhand der Rolle
+        abgewiesen (Refs #1271: kein ``is_superuser`` im Spiel).
         """
         client.force_login(admin_user)
         response = client.get(reverse("core:system_dashboard"))

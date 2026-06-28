@@ -39,7 +39,8 @@ class TestSetupFacilitySuccess:
 
         user = User.objects.get(username="myadmin")
         assert user.role == User.Role.FACILITY_ADMIN
-        assert user.is_superuser is True
+        # Refs #1271: facility_admin ist kein Django-superuser (Least-Privilege).
+        assert user.is_superuser is False
         assert user.is_staff is True
         assert user.facility == facility
         assert user.check_password("secret123")

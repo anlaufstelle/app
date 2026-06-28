@@ -3,13 +3,15 @@
 from core.models import Client, User
 
 # User templates (reused per facility).
+# Refs #1271: kein ``is_superuser``-Feld mehr — Autorisierung laeuft ueber die
+# Rolle, nicht ueber Djangos Auth-Superuser-Flag (Least-Privilege).
 USER_TEMPLATES = [
-    ("admin", "Admin", "User", User.Role.FACILITY_ADMIN, True),
-    ("emma", "Emma", "Müller", User.Role.LEAD, False),
-    ("miriam", "Miriam", "Schmidt", User.Role.STAFF, False),
-    ("markus", "Markus", "Wolf", User.Role.STAFF, False),
-    ("lena", "Lena", "Weber", User.Role.ASSISTANT, False),
-    ("felix", "Felix", "Berger", User.Role.ASSISTANT, False),
+    ("admin", "Admin", "User", User.Role.FACILITY_ADMIN),
+    ("emma", "Emma", "Müller", User.Role.LEAD),
+    ("miriam", "Miriam", "Schmidt", User.Role.STAFF),
+    ("markus", "Markus", "Wolf", User.Role.STAFF),
+    ("lena", "Lena", "Weber", User.Role.ASSISTANT),
+    ("felix", "Felix", "Berger", User.Role.ASSISTANT),
 ]
 
 # Client definitions for small scale (backward-compatible).
