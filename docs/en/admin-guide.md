@@ -373,7 +373,7 @@ The category groups documentation types for filtering and the **statistics page*
 | **Admin** | Administrative processes | Ban, referral |
 | **Note** | Free-form notes | Observations, memos |
 
-> **Note:** The category is used on the statistics page for grouping by documentation type. For the youth welfare office export, the **system type** is used instead (see below).
+> **Note:** The category is used on the statistics page for grouping by documentation type. For the example activity report export, the **system type** is used instead (see below).
 
 #### Sensitivity Level
 
@@ -398,7 +398,9 @@ Currently, the system type serves two purposes:
 | **Ban** | Activates a ban banner on the person page, dedicated filter in the timeline, count and highlight in the handover |
 | **Crisis** | Displayed as a highlight in the handover (recent crisis events) |
 
-**2. Youth welfare office export** (mapping to report categories):
+**2. Example activity report export** (mapping to report categories):
+
+The example activity report is a customizable example or template -- not a binding or current official proof.
 
 | System Type | Export Category |
 |-------------|---------------|
@@ -411,7 +413,7 @@ Currently, the system type serves two purposes:
 | **Referral** | Referral |
 | **Note** | *(excluded)* |
 
-> **Note:** Not every documentation type needs a system type. Types without a system type have no special internal logic and are excluded from the youth welfare office export, but work normally for documentation.
+> **Note:** Not every documentation type needs a system type. Types without a system type have no special internal logic and are excluded from the example activity report export, but work normally for documentation.
 
 #### Minimum Contact Stage
 
@@ -1236,7 +1238,7 @@ Implementation: [`src/core/management/commands/refresh_statistics_view.py`](http
 
 ### What Are Statistics Snapshots?
 
-Anlaufstelle computes statistics (dashboard, half-year reports, youth welfare office PDFs) from the event table by default (aggregated via the materialized view). When automatic data deletion (`enforce_retention`) removes old events, those events would disappear from the statistics.
+Anlaufstelle computes statistics (dashboard, half-year reports, example activity report PDFs) from the event table by default (aggregated via the materialized view). When automatic data deletion (`enforce_retention`) removes old events, those events would disappear from the statistics.
 
 **Statistics snapshots** persist monthly aggregates before events are deleted. Reports use hybrid logic: stored snapshots for past months, live data (from the materialized view) for the current month.
 

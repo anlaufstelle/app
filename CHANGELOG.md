@@ -42,6 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Docs
 
 - **Anti-Abschwächungs-Regel für Tests verankert** (#1150) — `CLAUDE.md` und `CONTRIBUTING.md` halten jetzt fest, dass ein roter Test im Default den Code (nicht die Assertion) fixt und das Abschwächen einer bestehenden Assertion ein harter Review-Stopp ist (nur bei geänderter Anforderung, mit Begründung im Commit-Body).
+- **Doku zum Statistik-Export auf „Beispiel-Sachbericht" umgestellt** (#1279) — README, Nutzer-/Admin-Handbuch (DE und EN), Fachkonzept, FAQ und ADR-010/-024 beschreiben den Export jetzt als anpassbares Beispiel bzw. Vorlage statt als verbindlichen oder aktuellen Jugendamt-Nachweis.
 - **README-Rollenmodell an die 5-Rollen-Implementierung angeglichen** (#1277) — die englische README bewarb noch ein „4-Stufen-Rollenmodell"; sie listet jetzt wie die deutsche Fassung alle fünf Rollen (`super_admin` über `facility_admin`, `lead`, `staff`, `assistant`) gemäß [ADR-018](docs/adr/018-rollenmodell-superadmin.md).
 
 ## [0.16.0] - 2026-06-25

@@ -525,12 +525,12 @@ The PDF report generates a structured semi-annual report for internal documentat
 2. Click **PDF Report**.
 3. The PDF file is downloaded (filename: `bericht_YYYY-MM-DD_YYYY-MM-DD.pdf`).
 
-### Youth Welfare Office Report
+### Example Activity Report
 
-The youth welfare office export generates a standardized report in the official youth welfare office format.
+The example activity report generates a structured report based on a fixed example layout. It is a customizable example or template -- not a binding or current official proof, and no guarantee for state-specific requirements.
 
 1. Select the time period in the statistics dashboard.
-2. Click **Youth Welfare Report**.
+2. Click **Example Activity Report**.
 3. The PDF file is downloaded (filename: `jugendamt_YYYY-MM-DD_YYYY-MM-DD.pdf`).
 
 > **Tip:** For semi-annual reports, select the "Last half-year" time period and manually adjust the start and end dates to 01/01 and 06/30 (or 07/01 -- 12/31) as needed.
