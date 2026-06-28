@@ -37,6 +37,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Docs
 
+- **Anti-Abschwächungs-Regel für Tests verankert** (#1150) — `CLAUDE.md` und `CONTRIBUTING.md` halten jetzt fest, dass ein roter Test im Default den Code (nicht die Assertion) fixt und das Abschwächen einer bestehenden Assertion ein harter Review-Stopp ist (nur bei geänderter Anforderung, mit Begründung im Commit-Body).
 - **README-Rollenmodell an die 5-Rollen-Implementierung angeglichen** (#1277) — die englische README bewarb noch ein „4-Stufen-Rollenmodell"; sie listet jetzt wie die deutsche Fassung alle fünf Rollen (`super_admin` über `facility_admin`, `lead`, `staff`, `assistant`) gemäß [ADR-018](docs/adr/018-rollenmodell-superadmin.md).
 
 ## [0.16.0] - 2026-06-25

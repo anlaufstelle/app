@@ -388,6 +388,8 @@ Seit 2026-05-20 ist Test-Driven Development für die Unit-/Service-Schicht verpf
 2. **Green** — minimale Implementation in `src/core/...`, bis genau dieser Test grün wird. Keine zusätzlichen Features, keine vorgezogene Verallgemeinerung.
 3. **Refactor** — Code (und ggf. Test) aufräumen, während die Suite grün bleibt. `pytest -x` nach jedem Cleanup-Schritt.
 
+**Kein „falsch grün" — Assertion-Stärke schützen** (Refs #1150): Ein roter Test bedeutet im Default, dass die **Root Cause im Code** zu fixen ist — nicht der Test. Eine **bestehende Assertion abzuschwächen** (lockern, entfernen, ans tatsächliche kaputte Verhalten nachziehen) ist ein **harter Review-Stopp**: zulässig nur, wenn sich die *Anforderung* geändert hat (nicht der Code), und dann mit expliziter Begründung im Commit-Body. Bei **Bugfixes** zuerst einen **failing-test-first** schreiben, der den Bug reproduziert, *bevor* der Code angefasst wird (Skill `superpowers:systematic-debugging`). Hintergrund: 96 % Coverage misst *ausgeführte*, nicht *geprüfte* Zeilen — eine abgeschwächte Assertion bleibt grün und fällt erst im Mutation-Run auf.
+
 Beispiel (Service-Schicht, Pseudonym-Hashing aus [Issue #844](https://github.com/anlaufstelle/app/issues/844)):
 
 ```python
