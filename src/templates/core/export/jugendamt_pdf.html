@@ -3,12 +3,13 @@
 <html lang="de">
 <head>
     <meta charset="utf-8">
-    <title>{% trans "Sachbericht an das Jugendamt" %}</title>
+    <title>{% trans "Beispiel-Sachbericht" %}</title>
     <style>
         body { font-family: sans-serif; font-size: 12px; color: #1a1a1a; margin: 40px; }
         h1 { font-size: 18px; text-align: center; margin-bottom: 4px; }
         h2 { font-size: 14px; margin-top: 24px; margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
-        .subtitle { text-align: center; font-size: 13px; color: #333; margin-bottom: 20px; }
+        .subtitle { text-align: center; font-size: 13px; color: #333; margin-bottom: 4px; }
+        .subtitle-note { text-align: center; font-size: 11px; color: #777; margin-bottom: 20px; }
         .meta { margin-bottom: 20px; }
         .meta-row { display: flex; margin-bottom: 4px; }
         .meta-label { font-weight: 600; width: 160px; }
@@ -24,8 +25,9 @@
     </style>
 </head>
 <body>
-    <h1>{% trans "Sachbericht an das Jugendamt" %}</h1>
+    <h1>{% trans "Beispiel-Sachbericht" %}</h1>
     <p class="subtitle">{{ facility_name }}</p>
+    <p class="subtitle-note">{% trans "Vorlage – frei anpassbar" %}</p>
 
     <div class="meta">
         <div class="meta-row">

@@ -4770,8 +4770,13 @@ msgstr "Generated on %(date)s · Anlaufstelle"
 
 #: src/templates/core/export/jugendamt_pdf.html:6
 #: src/templates/core/export/jugendamt_pdf.html:27
-msgid "Sachbericht an das Jugendamt"
-msgstr "Report to the Youth Welfare Office"
+#: src/templates/core/statistics/partials/dashboard_content.html:223
+msgid "Beispiel-Sachbericht"
+msgstr "Example Activity Report"
+
+#: src/templates/core/export/jugendamt_pdf.html:29
+msgid "Vorlage – frei anpassbar"
+msgstr "Template – freely customizable"
 
 #: src/templates/core/export/jugendamt_pdf.html:32
 msgid "Einrichtung:"
@@ -5242,10 +5247,6 @@ msgstr "Uses the period selected above as the reporting period."
 #: src/templates/core/statistics/partials/dashboard_content.html:218
 msgid "Halbjahresbericht (PDF)"
 msgstr "Semi-annual report (PDF)"
-
-#: src/templates/core/statistics/partials/dashboard_content.html:223
-msgid "Jugendamt-Bericht"
-msgstr "Youth Welfare Office Report"
 
 #: src/templates/core/statistics/partials/full_content.html:10
 msgid "Monat"

@@ -49,14 +49,14 @@ class TestJugendamtExportE2E:
     def test_jugendamt_export_button_visible(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
-        assert page.locator("a:has-text('Jugendamt-Bericht')").is_visible()
+        assert page.locator("a:has-text('Beispiel-Sachbericht')").is_visible()
 
     def test_jugendamt_download(self, authenticated_page, base_url):
         page = authenticated_page
         page.goto(f"{base_url}/statistics/")
 
         with page.expect_download() as download_info:
-            page.locator("a:has-text('Jugendamt-Bericht')").click()
+            page.locator("a:has-text('Beispiel-Sachbericht')").click()
         download = download_info.value
         assert download.suggested_filename.startswith("jugendamt_")
 

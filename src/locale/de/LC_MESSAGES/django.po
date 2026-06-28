@@ -4596,8 +4596,13 @@ msgstr "Erstellt am %(date)s · Anlaufstelle"
 
 #: src/templates/core/export/jugendamt_pdf.html:6
 #: src/templates/core/export/jugendamt_pdf.html:27
-msgid "Sachbericht an das Jugendamt"
-msgstr "Sachbericht an das Jugendamt"
+#: src/templates/core/statistics/partials/dashboard_content.html:223
+msgid "Beispiel-Sachbericht"
+msgstr "Beispiel-Sachbericht"
+
+#: src/templates/core/export/jugendamt_pdf.html:29
+msgid "Vorlage – frei anpassbar"
+msgstr "Vorlage – frei anpassbar"
 
 #: src/templates/core/export/jugendamt_pdf.html:32
 msgid "Einrichtung:"
@@ -5028,10 +5033,6 @@ msgstr "Keine relevanten Kontakte im Berichtszeitraum."
 #| msgid "Halbjahresbericht"
 msgid "Halbjahresbericht (PDF)"
 msgstr "Halbjahresbericht"
-
-#: src/templates/core/statistics/partials/dashboard_content.html:223
-msgid "Jugendamt-Bericht"
-msgstr "Jugendamt-Bericht"
 
 #: src/templates/core/statistics/partials/full_content.html:10
 msgid "Monat"
