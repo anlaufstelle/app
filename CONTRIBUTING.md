@@ -267,7 +267,7 @@ Jedes neue facility-gescopte Model muss auf **beiden** Verteidigungslinien abges
  - Views/Services filtern via `.for_facility(request.current_facility)`
 2. **PostgreSQL-RLS (zweite Linie, Defense-in-Depth):**
  - Neue Migration nach dem Muster von [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): Tabelle zu `DIRECT_TABLES` hinzufügen (oder `JOIN_TABLES`, falls kein direktes `facility_id`-Feld vorhanden ist). Die Migration setzt `ENABLE + FORCE ROW LEVEL SECURITY` plus eine `facility_isolation`-Policy.
- - Tabelle in `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) ergänzen, damit der RLS-Setup-Test die Abdeckung garantiert.
+ - `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) ist seit #1096 **ableitungsbasiert**: Tabellen mit direktem `facility`-FK (DIRECT) leitet die Test-Suite automatisch aus der Model-Registry ab — ein neues solches Model erscheint ohne Handgriff in `EXPECTED_TABLES`, und der RLS-Coverage-Guard (`TestRLSCoverageGuard`) failt, bis die RLS-Migration **und** die PII-Klassifikation existieren. Nur **JOIN-gescopte** Tabellen ohne direkten FK brauchen einen Hand-Eintrag in der `JOIN_SCOPED_TABLES`-Konstante; die Auth-Grenzen-Ausnahme (`core_user`) steht in `NOT_RLS_SCOPED`.
 
 Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS greift in Produktion nur, wenn der Django-DB-User **kein** Superuser ist (siehe `docs/dev/dev-deployment.md` (dev-only), primaerer Pfad nach [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) ist eine alternative Plattform-Anleitung).
 

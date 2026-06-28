@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Drift-Guards für RLS-Abdeckung und Seed-Dokumentation** (#1096) — neue Architektur-Tests leiten die RLS-`EXPECTED_TABLES` aus der Model-Registry ab und prüfen die CONTRIBUTING-Seed-Tabelle gegen `SCALE_CONFIG`/`USER_TEMPLATES`, sodass ein neues facility-Model oder Seed-Feld ohne mitgepflegte Migration bzw. Dokumentation den Testlauf rot färbt.
+
 ### Changed
 
 - **Zeitstrom: ganze Kopfzeile klappt Einträge auf** (#1286) — im Feed und in der Übergabe öffnet ein Klick (oder Enter/Leertaste) auf die gesamte Kopfzeile die Detailansicht, nicht mehr nur der kleine Chevron-Pfeil; Übergabe-Aufgaben verlinken zudem direkt auf ihre Detailseite.
