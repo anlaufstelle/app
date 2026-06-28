@@ -19,6 +19,7 @@ from core.constants import AUDIT_PAGE_SIZE, RATELIMIT_BULK_ACTION
 from core.models import AuditLog, Facility
 from core.models.user import User
 from core.services.audit import audit_system_view
+from core.services.security import RequireSudoModeMixin
 from core.services.system import _sanitize_csv_cell
 from core.signals.audit import _set_session_vars
 from core.utils.downloads import safe_download_response
@@ -173,12 +174,17 @@ class _CsvEcho:
         return value
 
 
-class SystemAuditLogExportView(SystemAuditMixin, View):
+class SystemAuditLogExportView(SystemAuditMixin, RequireSudoModeMixin, View):
     """Streaming CSV/JSON Export des Cross-Facility-AuditLogs.
 
     Vor dem Streaming wird ein ``AUDIT_EXPORT``-AuditLog-Eintrag
     geschrieben (DSGVO-Spur, da der Export potentiell qualifizierte
     Daten enthaelt). Format wird per ``?format=csv|json`` ausgewaehlt.
+
+    Refs #1253: ``RequireSudoModeMixin`` (nach dem Rollen-Gate) — der
+    Cross-Facility-Audit-Export inkl. IP-Adressen ist Bulk-Rohdaten und
+    damit das direkte Analogon zum sudo-gegateten Klienten-Export; eine
+    gestohlene super_admin-Session allein reicht nicht.
     """
 
     FIELDS = ["timestamp", "user", "action", "target_type", "target_id", "facility", "ip_address", "detail"]

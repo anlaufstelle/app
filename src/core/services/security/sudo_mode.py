@@ -52,6 +52,22 @@ def clear_sudo(request) -> None:
     request.session.pop(SUDO_SESSION_KEY, None)
 
 
+# --- SudoMode-Policy (Refs #683, #1252, #1253) ------------------------------
+# Damit neue sensible Endpoints die Entscheidung nicht wieder vergessen,
+# gilt: ``RequireSudoModeMixin`` (per-View, nach dem Login-/Rollen-Gate)
+# GEHOERT AUF
+#   * Auth-Schwaechung (MFA-Disable),
+#   * Bulk-/Rohdaten-Exporte (Klienten-PII Art. 15/20, Cross-Facility-
+#     Audit-Export inkl. IP-Adressen),
+#   * destruktive installationsweite Toggles (Wartungsmodus, Konto-Unlock).
+# NICHT AUF
+#   * routinemaessige Fallarbeit,
+#   * aggregierte/k-anon Daten (ADR-023, Statistik-/Jugendamt-Exporte),
+#   * oeffentliche Vorlagen (DSGVO-Doku-Paket, #1252),
+#   * Aktionen mit eigenem Step-up (altes Passwort, frischer OTP,
+#     Vier-Augen-Loeschung #1053, sudo-gegatete Admin-Site).
+# Jede ``sudo=True/False``-Zeile in ``src/tests/_authz_expectations.py`` ist
+# die test-erzwungene Verankerung dieser Policy.
 class RequireSudoModeMixin:
     """View-Mixin: redirected zu ``/sudo/`` wenn nicht im SudoMode.
 

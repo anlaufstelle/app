@@ -391,11 +391,15 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "audit_entry.pk"),),
         idor_exempt="super_admin ist installationsweit — Mandantentrennung greift hier bewusst nicht",
     ),
-    E("core:system_audit_export", "system", get=SUPER_ONLY),
+    # Refs #1253: Cross-Facility-Audit-Export inkl. IP-Adressen — Bulk-Rohdaten,
+    # Analogon zum sudo-gegateten Klienten-Export.
+    E("core:system_audit_export", "system", get=SUPER_ONLY, sudo=True),
     E("core:system_organization", "system", get=SUPER_ONLY),
     E("core:system_lockout_list", "system", get=SUPER_ONLY),
-    E("core:system_unlock", "system", post=SUPER_ONLY),
-    E("core:system_maintenance", "system", get=SUPER_ONLY, post=SUPER_ONLY),
+    # Refs #1253: Konto-Entsperrung hebt einen Schutz-Lockout auf (destruktiv).
+    E("core:system_unlock", "system", post=SUPER_ONLY, sudo=True),
+    # Refs #1253: Wartungsmodus = installationsweites 503 (destruktiver Toggle).
+    E("core:system_maintenance", "system", get=SUPER_ONLY, post=SUPER_ONLY, sudo=True),
     E("core:system_retention", "system", get=SUPER_ONLY),
     E("core:system_vvt", "system", get=SUPER_ONLY),
     E("core:system_legal_hold_list", "system", get=SUPER_ONLY),

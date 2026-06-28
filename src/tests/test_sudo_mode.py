@@ -263,3 +263,56 @@ class TestDSGVODocsNotSudoGated:
         client.force_login(admin_user)
         response = client.get(reverse("core:dsgvo_document", kwargs={"document": "verarbeitungsverzeichnis"}))
         assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestSystemViewsRequireSudo:
+    """Refs #1253: gezielte SudoMode-Pflicht auf den maechtigsten /system/-Aktionen.
+
+    SUDO_MODE_ENABLED ist in test.py auf False — diese Tests aktivieren es
+    explizit. Der Cross-Facility-Audit-Export (inkl. IP-Adressen), der
+    Wartungsmodus-Toggle (installationsweites 503) und das Entsperren eines
+    Kontos verlangen jetzt eine frische Re-Auth — auch aus einer bestehenden
+    super_admin-Session heraus. Das Rollen-Gate greift weiterhin zuerst.
+    """
+
+    @staticmethod
+    def _enter_sudo(client):
+        session = client.session
+        session[SUDO_SESSION_KEY] = int(time.time()) + 900
+        session.save()
+
+    def test_audit_export_redirects_without_sudo(self, client, super_admin_user, settings):
+        settings.SUDO_MODE_ENABLED = True
+        client.force_login(super_admin_user)
+        response = client.get(reverse("core:system_audit_export"))
+        assert response.status_code == 302
+        assert "/sudo/" in response.url
+
+    def test_audit_export_passes_with_sudo(self, client, super_admin_user, settings):
+        settings.SUDO_MODE_ENABLED = True
+        client.force_login(super_admin_user)
+        self._enter_sudo(client)
+        response = client.get(reverse("core:system_audit_export"))
+        assert response.status_code == 200
+
+    def test_maintenance_redirects_without_sudo(self, client, super_admin_user, settings):
+        settings.SUDO_MODE_ENABLED = True
+        client.force_login(super_admin_user)
+        response = client.get(reverse("core:system_maintenance"))
+        assert response.status_code == 302
+        assert "/sudo/" in response.url
+
+    def test_unlock_redirects_without_sudo(self, client, super_admin_user, settings):
+        settings.SUDO_MODE_ENABLED = True
+        client.force_login(super_admin_user)
+        response = client.post(reverse("core:system_unlock"), {"username": "irgendwer"})
+        assert response.status_code == 302
+        assert "/sudo/" in response.url
+
+    def test_role_gate_runs_before_sudo(self, client, admin_user, settings):
+        """facility_admin -> 403 (Rollen-Gate vor SudoMode), kein /sudo/-Redirect."""
+        settings.SUDO_MODE_ENABLED = True
+        client.force_login(admin_user)
+        response = client.get(reverse("core:system_audit_export"))
+        assert response.status_code == 403

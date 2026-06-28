@@ -16,19 +16,25 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.models import AuditLog
 from core.services.audit import audit_system_view
+from core.services.security import RequireSudoModeMixin
 from core.signals.audit import _set_session_vars
 from core.views.system.mixins import SystemAuditMixin
 
 logger = logging.getLogger(__name__)
 
 
-class SystemMaintenanceView(SystemAuditMixin, View):
+class SystemMaintenanceView(SystemAuditMixin, RequireSudoModeMixin, View):
     """Wartungsmodus aktivieren/deaktivieren ueber den Systembereich.
 
     GET zeigt den aktuellen Status (``flag_path`` existiert?). POST mit
     ``action=enable|disable`` mutiert die Flag-Datei. Wenn
     ``MAINTENANCE_FLAG_FILE`` nicht konfiguriert ist, wird ein Hinweis
     angezeigt — Toggle ist dann nicht moeglich.
+
+    Refs #1253: ``RequireSudoModeMixin`` (nach dem Rollen-Gate) — der
+    Wartungsmodus ist ein installationsweites 503 und damit ein
+    destruktiver Toggle, der aus einer gestohlenen super_admin-Session
+    nicht ohne frische Re-Auth umlegbar sein darf.
     """
 
     template_name = "core/system/maintenance.html"

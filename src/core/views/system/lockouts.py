@@ -13,7 +13,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.models import AuditLog
 from core.models.user import User
-from core.services.security import login_lockout
+from core.services.security import RequireSudoModeMixin, login_lockout
 from core.signals.audit import _set_session_vars, get_client_ip
 from core.views.system.mixins import SystemAuditMixin
 
@@ -128,11 +128,16 @@ class SystemLockoutListView(SystemAuditMixin, TemplateView):
         return context
 
 
-class SystemUnlockView(SystemAuditMixin, View):
+class SystemUnlockView(SystemAuditMixin, RequireSudoModeMixin, View):
     """POST-Handler: hebt die Sperre eines Users auf (Refs #872).
 
     Schreibt einen ``LOGIN_UNLOCK``-AuditLog-Eintrag mit dem aktuellen
     super_admin als ``unlocked_by``. Anschliessend Redirect zur Liste.
+
+    Refs #1253: ``RequireSudoModeMixin`` (nach dem Rollen-Gate) — das
+    Aushebeln eines Schutz-Lockouts ist destruktiv und verlangt eine
+    frische Re-Auth. Die reine Lockout-Liste (``SystemLockoutListView``,
+    read-only) bleibt bewusst sudo-frei.
     """
 
     http_method_names = ["post"]
