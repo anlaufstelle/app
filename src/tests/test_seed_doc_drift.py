@@ -2,7 +2,7 @@
 
 Die Seed-Konfiguration (``SCALE_CONFIG``/``USER_TEMPLATES`` + das Seed-Passwort)
 und die Tabelle „Seed-Daten laden" in ``CONTRIBUTING.md`` werden heute von Hand
-synchron gehalten — die Regel steht in ``CLAUDE.md``, aber nichts erzwingt sie.
+synchron gehalten — die Regel steht in den Coding-Regeln, aber nichts erzwingt sie.
 Dieser Guard erzwingt die **Vollstaendigkeit** (Profile, Metrik-Felder,
 Credentials), bewusst NICHT die Zahlenwerte (die Doku zeigt menschenfreundliche
 Werte wie „3 Jahre"/„50 %").
@@ -37,7 +37,7 @@ UNDOCUMENTED_PROFILES = frozenset({"solo"})
 
 # Jeder Metrik-Key aus ``SCALE_CONFIG`` wird einer Zeilenbeschriftung der
 # CONTRIBUTING-Tabelle zugeordnet. Fehlt ein Mapping fuer einen neuen Key, failt
-# ``test_every_scale_key_is_documented`` laut — genau die ``CLAUDE.md``-Regel
+# ``test_every_scale_key_is_documented`` laut — genau die dokumentierte Coding-Regel
 # „neue Seed-Felder mitdokumentieren". Die Map ist der eine Pflegepunkt, aber
 # guarded.
 KEY_TO_DOC_LABEL = {
@@ -146,7 +146,7 @@ def test_every_scale_key_is_documented() -> None:
     all_keys = {key for cfg in SCALE_CONFIG.values() for key in cfg}
     for key in sorted(all_keys):
         assert key in KEY_TO_DOC_LABEL, (
-            f"Neues Seed-Feld '{key}': CONTRIBUTING-Tabelle + KEY_TO_DOC_LABEL ergaenzen (CLAUDE.md-Regel)."
+            f"Neues Seed-Feld '{key}': CONTRIBUTING-Tabelle + KEY_TO_DOC_LABEL ergaenzen (Coding-Regel)."
         )
         assert KEY_TO_DOC_LABEL[key] in labels, (
             f"Seed-Feld '{key}' erwartet die Tabellenzeile '{KEY_TO_DOC_LABEL[key]}' in CONTRIBUTING — fehlt."
