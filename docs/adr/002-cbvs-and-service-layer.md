@@ -34,4 +34,4 @@ Django bietet zwei View-Stile (FBV/CBV) und keine vorgegebene Stelle für Busine
 ## References
 
 - [`src/core/views/`](../../src/core/views), [`src/core/services/`](../../src/core/services)
-- [CLAUDE.md § Projekt & Architektur](../../CLAUDE.md)
+- `CLAUDE.md § Projekt & Architektur` (dev-only)

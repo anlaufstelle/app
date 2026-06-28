@@ -170,8 +170,9 @@ sync-vendor-js:
 # Mutation-Testing für core/services + core/forms (Refs #922 / #923).
 # Konfiguration in pyproject.toml [tool.mutmut].
 # Erwartete Laufzeit: 30-60 Minuten — daher nightly per Cron, nicht PR-Pflicht.
-# scripts/dev/run_mutmut.py umgeht den ``set_start_method``-Konflikt aus
-# mutmut 3.5 (Refs #930).
+# Maintainer-/dev-only: scripts/dev/run_mutmut.py wird aus dem Public-Snapshot
+# gestrippt (analog die Release-Helfer unten), dieses Target läuft nur im Dev-Repo.
+# Der Wrapper umgeht den ``set_start_method``-Konflikt aus mutmut 3.5 (Refs #930).
 mutation:
 	$(PYTHON) scripts/dev/run_mutmut.py run
 
@@ -261,7 +262,9 @@ dev-bootstrap:
 	scp dev-ops/deploy/bootstrap.sh root@$(word 2,$(subst @, ,$(DEV_HOST))):/root/bootstrap.sh
 	ssh root@$(word 2,$(subst @, ,$(DEV_HOST))) bash /root/bootstrap.sh
 
-# Hauptdeploy: sync compose+caddy+deploy/+dev-ops/deploy/, dann pull/migrate/up.
+# Hauptdeploy (maintainer-/dev-only): sync compose+caddy+deploy/+dev-ops/deploy/,
+# dann pull/migrate/up. Die dev-ops/deploy/-Skripte sind aus dem Public-Snapshot
+# gestrippt — diese Deploy-Targets laufen nur im Dev-Repo gegen eigene Hosts.
 deploy-dev:
 	DEV_HOST=$(DEV_HOST) ./dev-ops/deploy/deploy-dev.sh
 

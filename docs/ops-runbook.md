@@ -218,8 +218,8 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 ### 3.3 Dev (systemd-Timer)
 
 Auf `dev.anlaufstelle.app` laufen die Jobs **nicht** per Host-Crontab, sondern als
-systemd-Timer, die [`deploy/install-timers.sh`](https://github.com/anlaufstelle/app/blob/main/dev-ops/deploy/install-timers.sh)
-installiert — aufgerufen bei **jedem** Deploy durch [`deploy/deploy-dev.sh`](https://github.com/anlaufstelle/app/blob/main/dev-ops/deploy/deploy-dev.sh)
+systemd-Timer, die `dev-ops/deploy/install-timers.sh` (dev-only)
+installiert — aufgerufen bei **jedem** Deploy durch `dev-ops/deploy/deploy-dev.sh` (dev-only)
 (idempotent). Bewusst kein Compose-Sidecar (geplantes One-Command-Startup, siehe #794).
 
 > **Hinweis (Refs #980):** Frueher installierte `bootstrap.sh` die Timer inline. Da `bootstrap.sh` nur beim Erst-Provisioning laeuft, kamen nachtraeglich ergaenzte Timer nie auf den laufenden Host (Backup-Cron blieb aus). Die Installation liegt jetzt in `install-timers.sh` und laeuft bei jedem `deploy-dev.sh`.

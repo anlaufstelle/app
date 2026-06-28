@@ -2,7 +2,7 @@
 
 > This is a partial English translation of the Anlaufstelle documentation.
 > The [German documentation](../README.md) is the authoritative source.
-> Internal artifacts (`docs/archive/`, `docs/superpowers/`, `docs/ai/`) are dev-only and not part of the release snapshot.
+> Internal artifacts (`docs/archive/`, `docs/superpowers/`, `docs/ai/`) are dev-only.
 
 ---
 

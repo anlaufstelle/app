@@ -148,7 +148,7 @@ python src/manage.py seed --flush          # vorhandene Daten vorher löschen
 
 Seed-Zugangsdaten: Passwort `anlaufstelle2026`, 7 Logins (Username → Rolle): `superadmin` → `super_admin` (keine `facility`-Zuordnung), `admin` → `facility_admin`, `emma` → `lead`, `miriam` → `staff`, `markus` → `staff`, `lena` → `assistant`, `felix` → `assistant`. Alle außer `superadmin` hängen an der Default-Einrichtung.
 
-> **Production:** In Produktion gibt es **kein** Default-Passwort und keinen Default-`super_admin`. Die Erstinstallation läuft über `manage.py create_super_admin` (interaktiv, ohne Default). Details: [docs/dev-deployment.md § Production-Bootstrap](docs/dev/dev-deployment.md), [docs/admin-guide.md § 2.1 Erstinstallation](docs/admin-guide.md). Lockout-Recovery: `manage.py unlock <username>`.
+> **Production:** In Produktion gibt es **kein** Default-Passwort und keinen Default-`super_admin`. Die Erstinstallation läuft über `manage.py create_super_admin` (interaktiv, ohne Default). Details: `docs/dev/dev-deployment.md` § Production-Bootstrap (dev-only) und [docs/admin-guide.md § 2.1 Erstinstallation](docs/admin-guide.md). Lockout-Recovery: `manage.py unlock <username>`.
 
 **7. Node-Abhängigkeiten installieren** (für Tailwind CSS)
 
@@ -269,7 +269,7 @@ Jedes neue facility-gescopte Model muss auf **beiden** Verteidigungslinien abges
  - Neue Migration nach dem Muster von [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): Tabelle zu `DIRECT_TABLES` hinzufügen (oder `JOIN_TABLES`, falls kein direktes `facility_id`-Feld vorhanden ist). Die Migration setzt `ENABLE + FORCE ROW LEVEL SECURITY` plus eine `facility_isolation`-Policy.
  - Tabelle in `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) ergänzen, damit der RLS-Setup-Test die Abdeckung garantiert.
 
-Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS greift in Produktion nur, wenn der Django-DB-User **kein** Superuser ist (siehe [docs/dev-deployment.md](docs/dev/dev-deployment.md), primaerer Pfad nach [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) ist eine alternative Plattform-Anleitung).
+Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS greift in Produktion nur, wenn der Django-DB-User **kein** Superuser ist (siehe `docs/dev/dev-deployment.md` (dev-only), primaerer Pfad nach [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) ist eine alternative Plattform-Anleitung).
 
 ### Linting und Formatierung
 
@@ -335,7 +335,7 @@ Neue Endpunkte gehören entsprechend in eine der beiden Pfad-Gruppen. URL-Namen 
 
 ### Übersetzungen (i18n)
 
-- **EN im selben Commit nachziehen (verbindlich, Refs #1215).** Wer übersetzbare Strings ändert — Django-`{% trans %}`/`.po` unter [`src/locale/`](src/locale/) oder die gespiegelten EN-Dokumente (`*.en.md`, [`docs/en/`](docs/en/)) — zieht die englische Entsprechung im **selben Commit** nach, nicht in einem nachgelagerten Sync-Commit. Konsistent mit der i18n-als-eigener-Commit-Regel in [`CLAUDE.md`](CLAUDE.md): DE und EN gehören in *einen* `chore(i18n):`-Commit, getrennt vom Feature.
+- **EN im selben Commit nachziehen (verbindlich, Refs #1215).** Wer übersetzbare Strings ändert — Django-`{% trans %}`/`.po` unter [`src/locale/`](src/locale/) oder die gespiegelten EN-Dokumente (`*.en.md`, [`docs/en/`](docs/en/)) — zieht die englische Entsprechung im **selben Commit** nach, nicht in einem nachgelagerten Sync-Commit. Konsistent mit der i18n-als-eigener-Commit-Regel in `CLAUDE.md` (dev-only): DE und EN gehören in *einen* `chore(i18n):`-Commit, getrennt vom Feature.
 - **Stempel als Backstop:** [`scripts/check_translation_versions.py`](scripts/check_translation_versions.py) erzwingt für die EN-Dokumente einen `translation-version`-Header == aktuelle Minor-Version (Pre-Commit-Hook + `make release-gates`, hartes Gate seit #1078). Der Stempel fängt Drift zum Release ab; die „im selben Commit"-Regel verhindert, dass Drift überhaupt entsteht.
 
 ### Conventional Commits
@@ -434,7 +434,7 @@ pytest src/tests/test_pseudonym_hashing.py -x
 - Reine Markdown-/Doku-Änderungen.
 - One-Shot-Hygiene-Skripte ohne Wiederverwendung.
 
-Querverweise: [`CLAUDE.md § Tests & Verifikation`](CLAUDE.md#tests--verifikation) und Skill `superpowers:test-driven-development`.
+Querverweise: `CLAUDE.md § Tests & Verifikation` (dev-only) und Skill `superpowers:test-driven-development`.
 
 ### Unit- und Integrationstests
 
@@ -500,7 +500,7 @@ make mutation-report    # Survivors-Liste, nicht-interaktiv
 
 `make mutation` ist resume-fähig (mutmut speichert State in `mutants/**/*.py.meta` und springt bei Neustart automatisch dort weiter, wo der Vorlauf stehengeblieben ist).
 
-Für längere Runs auf einer Sandbox, die OOM-Killer / Idle-Killer mitbringt, gibt es [`scripts/run_mutmut_watchdog.sh`](scripts/dev/run_mutmut_watchdog.sh):
+Für längere Runs auf einer Sandbox, die OOM-Killer / Idle-Killer mitbringt, gibt es `scripts/dev/run_mutmut_watchdog.sh` (dev-only):
 
 ```bash
 # Default: 3 zusätzliche Restarts, Stall-Threshold 5 min, 2 mutmut-Worker

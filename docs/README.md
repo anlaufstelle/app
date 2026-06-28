@@ -3,8 +3,7 @@
 > **[English Documentation](en/README.md)**
 
 Dieses Verzeichnis enthält die gesamte Projektdokumentation. Interne Artefakte
-(`docs/archive/`, `docs/superpowers/`, `docs/ai/`) sind dev-only und nicht Teil
-des Release-Snapshots.
+(`docs/archive/`, `docs/superpowers/`, `docs/ai/`) sind dev-only.
 
 ---
 

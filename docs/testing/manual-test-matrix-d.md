@@ -1001,7 +1001,7 @@
 |---------|-------|---------|--------|-----|
 | Ops | admin ||||
 
-**Code-Referenz:** [`deploy/backup.sh`](https://github.com/anlaufstelle/app/blob/main/dev-ops/deploy/backup.sh), [`docs/ops-runbook.md`](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md)
+**Code-Referenz:** `dev-ops/deploy/backup.sh` (dev-only), [`docs/ops-runbook.md`](https://github.com/anlaufstelle/app/blob/main/docs/ops-runbook.md)
 
 **Schritte:**
 1. SSH auf Host: `ssh <ssh-user>@dev.anlaufstelle.app`.
@@ -1081,7 +1081,7 @@
 |---------|-------|---------|--------|-----|
 | Ops | admin ||||
 
-**Code-Referenz:** [`deploy/deploy-dev.sh`](https://github.com/anlaufstelle/app/blob/main/dev-ops/deploy/deploy-dev.sh) oder Entrypoint im App-Container.
+**Code-Referenz:** `dev-ops/deploy/deploy-dev.sh` (dev-only) oder Entrypoint im App-Container.
 
 **Schritte:**
 1. Neues Image pullen: `docker compose pull web`.

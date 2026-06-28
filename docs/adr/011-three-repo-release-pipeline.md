@@ -29,7 +29,7 @@ Pipeline (vereinfacht):
 2. Release-Kandidat wird auf **stage** gepusht (vom User; das automatisierte Setup hat keinen Push-Zugriff auf stage/app).
 3. Nach Stage-Verifikation manuelle Freigabe nach **app**.
 
-> **Release-Tag auf allen drei Repos:** Der signierte Tag `vX.Y.Z` wird vom Release-Build ([`dev-ops/release/build-release.sh`](../../dev-ops/release/build-release.sh)) auf **allen drei** Repos gesetzt — im **dev**-Repo auf dem Quell-Commit, in **stage**/**app** auf dem daraus gebauten, sanitierten Snapshot (andere SHA, dasselbe Release). So bleibt der Release-Stand auch aus dem dev-Repo allein eindeutig ablesbar; [`verify-leak.sh`](../../dev-ops/release/verify-leak.sh) erzwingt den dev-Tag als Teil des Release-Gates (Refs #1237).
+> **Release-Tag auf allen drei Repos:** Der signierte Tag `vX.Y.Z` wird vom Release-Build (`dev-ops/release/build-release.sh`, dev-only) auf **allen drei** Repos gesetzt — im **dev**-Repo auf dem Quell-Commit, in **stage**/**app** auf dem daraus gebauten, sanitierten Snapshot (andere SHA, dasselbe Release). So bleibt der Release-Stand auch aus dem dev-Repo allein eindeutig ablesbar; `dev-ops/release/verify-leak.sh` (dev-only) erzwingt den dev-Tag als Teil des Release-Gates (Refs #1237).
 
 ## Consequences
 

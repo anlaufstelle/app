@@ -260,7 +260,7 @@ Alle 7 Workflows haben jetzt einen expliziten `permissions:`-Block. Statt des De
 | Workflow | Top-Level / Job | Permissions |
 |---|---|---|
 | [`codeql.yml`](../.github/workflows/codeql.yml) | Job | `actions: read`, `contents: read`, `security-events: write` |
-| [`dev-image.yml`](../.github/workflows/dev-image.yml) | Job | `contents: read`, `packages: write` (GHCR-Push) |
+| `dev-image.yml` (dev-only) | Job | `contents: read`, `packages: write` (GHCR-Push) |
 | [`e2e.yml`](../.github/workflows/e2e.yml) | Top-Level | `contents: read` |
 | [`lint.yml`](../.github/workflows/lint.yml) | Top-Level | `contents: read` |
 | `perf-nightly.yml` | Top-Level | `contents: read`, `issues: write` |
@@ -271,7 +271,7 @@ Alle 7 Workflows haben jetzt einen expliziten `permissions:`-Block. Statt des De
 
 ### Umgesetzt: SHA-Pinning aller Actions
 
-Alle 42 `uses:`-Referenzen über die 7 Workflows zeigen jetzt auf **40-stellige Commit-SHAs** statt auf Major-Tags. Format: `uses: <owner>/<action>@<sha> # vX.Y.Z`. Dependabot ist über das `github-actions`-Ökosystem in [`.github/dependabot.yml`](../.github/dependabot.yml) bereits konfiguriert (wöchentlich, Mo 06:00 Europe/Berlin) und aktualisiert SHA + Tag-Kommentar bei neuen Versionen automatisch.
+Alle 42 `uses:`-Referenzen über die 7 Workflows zeigen jetzt auf **40-stellige Commit-SHAs** statt auf Major-Tags. Format: `uses: <owner>/<action>@<sha> # vX.Y.Z`. Dependabot ist über das `github-actions`-Ökosystem in `.github/dependabot.yml` (dev-only) bereits konfiguriert (wöchentlich, Mo 06:00 Europe/Berlin) und aktualisiert SHA + Tag-Kommentar bei neuen Versionen automatisch.
 
 **Warum:** Tags sind mutierbar. Bei einer hypothetischen Action-Repo-Übernahme könnte ein Angreifer einen Tag auf einen bösartigen Commit verschieben — bei Anlaufstelle würde die nächste CI-Run dann den bösartigen Code ausführen. SHA-Pinning blockt diesen Vektor; Dependabot übernimmt das laufende Update.
 

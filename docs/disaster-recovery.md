@@ -2,7 +2,7 @@
 
 > **Abgrenzung zum Restore-Drill:** Der quartalsweise [Restore-Drill](ops-runbook.md#66-backup-restore-drill-refs-720-739) beweist den *Happy Path* — „lässt sich das neueste Backup in eine Wegwerf-DB **auf demselben, laufenden Host** zurückspielen?". Dieses Dokument deckt den **Totalverlust** ab: Der Prod-Host ist weg (Hardware-Defekt, Ransomware, Provider-Ausfall, versehentliches `docker volume rm` ohne Tarball). Es beschreibt das Beschaffen eines Off-Site-Backups, die Wiederbeschaffung der Schlüssel, den Aufbau auf einem **fabrikfrischen Server** und konkrete RTO/RPO-Ziele.
 >
-> **Code ist die Wahrheitsquelle.** Jede Operation hier ist gegen die realen Skripte verifiziert: [`scripts/ops/backup.sh`](../scripts/ops/backup.sh), [`scripts/ops/restore.sh`](../scripts/ops/restore.sh), [`scripts/ops/restore-drill.sh`](../scripts/ops/restore-drill.sh), [`dev-ops/deploy/backup.sh`](../dev-ops/deploy/backup.sh), [`dev-ops/deploy/bootstrap.sh`](../dev-ops/deploy/bootstrap.sh), [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) und [`docker-compose.prod.yml`](../docker-compose.prod.yml). Stand: v0.14.0-Roadmap (Refs #1071 Block D).
+> **Code ist die Wahrheitsquelle.** Jede Operation hier ist gegen die realen Skripte verifiziert: [`scripts/ops/backup.sh`](../scripts/ops/backup.sh), [`scripts/ops/restore.sh`](../scripts/ops/restore.sh), [`scripts/ops/restore-drill.sh`](../scripts/ops/restore-drill.sh), `dev-ops/deploy/backup.sh` (dev-only), `dev-ops/deploy/bootstrap.sh` (dev-only), [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) und [`docker-compose.prod.yml`](../docker-compose.prod.yml). Stand: v0.14.0-Roadmap (Refs #1071 Block D).
 
 ---
 
@@ -23,7 +23,7 @@
 
 | Kennzahl | Zielwert | Begründung / Verankerung im Code |
 |---|---|---|
-| **RPO** (max. tolerierter Datenverlust) | **≤ 24 h** | Der Backup-Timer läuft täglich um **02:00** ([`install-timers.sh`](../dev-ops/deploy/install-timers.sh): `OnCalendar="*-*-* 02:00:00"`). Zwischen zwei Läufen entstandene Daten sind bei Totalverlust verloren. Wer engere Ziele braucht, erhöht die Backup-Frequenz **und** die Off-Site-Sync-Frequenz. |
+| **RPO** (max. tolerierter Datenverlust) | **≤ 24 h** | Der Backup-Timer läuft täglich um **02:00** (`dev-ops/deploy/install-timers.sh`, dev-only: `OnCalendar="*-*-* 02:00:00"`). Zwischen zwei Läufen entstandene Daten sind bei Totalverlust verloren. Wer engere Ziele braucht, erhöht die Backup-Frequenz **und** die Off-Site-Sync-Frequenz. |
 | **RPO Off-Site** (Datenverlust bei Host-Totalverlust) | **≤ 24 h**, sofern Off-Site-Sync aktiv | `scripts/ops/backup.sh` synct **nach jeder Rotation** in `BACKUP_OFFSITE_TARGET`. Ohne konfiguriertes Off-Site-Ziel ist der RPO bei Host-Totalverlust **unendlich** (lokale Backups gehen mit dem Host verloren) — siehe [§8](#8-offene-punkte-noch-nicht-verdrahtet). |
 | **RTO** (Zeit bis Service wieder online auf frischem Host) | **Richtwert 2–4 h** | Setzt sich zusammen aus: Server provisionieren + `bootstrap.sh` (~20–30 min) · Off-Site-Backup herunterladen (datenmengenabhängig) · DB- + Medien-Restore (~10–30 min bei mittlerer Datenmenge) · Smoke-Verifikation (~15 min). **Kein vertraglich zugesichertes SLA** — Richtwert für einen geübten Operator mit verfügbaren Schlüsseln. |
 | **RTO ohne Schlüssel** | **∞ (nicht wiederherstellbar)** | Ohne `ENCRYPTION_KEY`/`ENCRYPTION_KEYS` sind die verschlüsselten Feld-/Datei-Inhalte **dauerhaft unlesbar**; ohne `BACKUP_ENCRYPTION_KEY` ist das Backup selbst nicht entschlüsselbar. Die Schlüssel-Eskrow-Strategie ([§4](#4-schlüssel--und-secret-wiederbeschaffung)) ist damit der kritischste RTO-Faktor. |
@@ -124,7 +124,7 @@ scp "user@host:/path/*.enc" "user@host:/path/*.hmac" ./restore-src/
 
 Szenario: leerer Server (Hetzner CX22 o. vergleichbar, Debian 13), nichts vom alten Host außer den beschafften Backup-Artefakten ([§5](#5-off-site-backup-beschaffen)) und den Secrets ([§4](#4-schlüssel--und-secret-wiederbeschaffung)).
 
-Dieser Ablauf entspricht dem regulären Provisioning ([`bootstrap.sh`](../dev-ops/deploy/bootstrap.sh)) plus Restore. Er beschreibt das **Welt-B/Prod**-Schema (`docker-compose.prod.yml` + `scripts/ops/restore.sh`); für das `dev.anlaufstelle.app`-Schema (Welt A, `pg_restore`) gilt der Restore-Befehl aus dem Skript-Header von [`dev-ops/deploy/backup.sh`](../dev-ops/deploy/backup.sh) bzw. [ops-runbook §2.3](ops-runbook.md#23-vollstaendiger-rollback-db-restore).
+Dieser Ablauf entspricht dem regulären Provisioning (`dev-ops/deploy/bootstrap.sh`, dev-only) plus Restore. Er beschreibt das **Welt-B/Prod**-Schema (`docker-compose.prod.yml` + `scripts/ops/restore.sh`); für das `dev.anlaufstelle.app`-Schema (Welt A, `pg_restore`) gilt der Restore-Befehl aus dem Skript-Header von `dev-ops/deploy/backup.sh` (dev-only) bzw. [ops-runbook §2.3](ops-runbook.md#23-vollstaendiger-rollback-db-restore).
 
 ### Schritt 1 — Host härten + Docker installieren
 
@@ -249,7 +249,7 @@ Ehrliche Bestandsaufnahme — diese Teile sind **organisatorisch**, nicht im Cod
 
 - **`offen` — Off-Site nur für Welt B, und nur wenn konfiguriert.** `dev-ops/deploy/backup.sh` (Welt A, das auf `dev.anlaufstelle.app` läuft) hat **keinen** Off-Site-Sync. `scripts/ops/backup.sh` (Welt B) hat einen, aber nur aktiv bei gesetztem `BACKUP_OFFSITE_TARGET`. Ist keines konfiguriert, überlebt **kein** Backup den Host-Totalverlust. → Vor Produktivbetrieb `BACKUP_OFFSITE_TARGET` setzen **und** das erste Off-Site-Retrieval einmal proben.
 
-- **`offen` — `restic` ist installiert, aber ungenutzt.** [`bootstrap.sh`](../dev-ops/deploy/bootstrap.sh) L30 installiert `restic`, doch **kein** Skript verwendet es. Off-Site läuft (in Welt B) über rclone/aws/scp, nicht über restic. Die restic-Installation ist derzeit toter Ballast bzw. Vorbereitung für ein noch nicht gebautes restic-basiertes Off-Site/Eskrow. → Entweder einen restic-Pfad bauen oder die Installation aus dem Bootstrap entfernen.
+- **`offen` — `restic` ist installiert, aber ungenutzt.** `dev-ops/deploy/bootstrap.sh` (dev-only) L30 installiert `restic`, doch **kein** Skript verwendet es. Off-Site läuft (in Welt B) über rclone/aws/scp, nicht über restic. Die restic-Installation ist derzeit toter Ballast bzw. Vorbereitung für ein noch nicht gebautes restic-basiertes Off-Site/Eskrow. → Entweder einen restic-Pfad bauen oder die Installation aus dem Bootstrap entfernen.
 
 - **`offen` — Recovery auf fabrikfrischem Host ist nicht end-to-end geprobt.** Der [Restore-Drill](ops-runbook.md#66-backup-restore-drill-refs-720-739) testet Restore **auf dem laufenden Host** in eine Wegwerf-DB; das PG-16→18-Upgrade ([ops-runbook §13](ops-runbook.md#13-postgresql-major-upgrade-16--18)) testet dump→frisches-Cluster→restore lokal. Der **vollständige** DR-Pfad aus [§6](#6-wiederherstellung-auf-einem-fabrikfrischen-host) (frischer Server + Off-Site-Download + Schlüssel-aus-Eskrow + Restore) ist in dieser Form **noch nicht als Drill durchgespielt**. → Einmal jährlich als „echten" DR-Drill auf einem Wegwerf-Server üben und das Ergebnis hier/in einem Issue festhalten.
 

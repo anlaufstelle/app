@@ -147,7 +147,7 @@ python src/manage.py seed --flush          # flush existing data first
 
 Seed credentials: password `anlaufstelle2026`, 7 logins (username → role): `superadmin` → `super_admin` (no facility assignment), `admin` → `facility_admin`, `emma` → `lead`, `miriam` → `staff`, `markus` → `staff`, `lena` → `assistant`, `felix` → `assistant`. All except `superadmin` belong to the default facility.
 
-> **Production:** In production there is **no** default password and no default `super_admin`. Initial setup runs via `manage.py create_super_admin` (interactive, no default). Details: [docs/dev-deployment.md § Production-Bootstrap](docs/dev/dev-deployment.md), [docs/admin-guide.md § 2.1 Erstinstallation](docs/admin-guide.md). Lockout recovery: `manage.py unlock <username>`.
+> **Production:** In production there is **no** default password and no default `super_admin`. Initial setup runs via `manage.py create_super_admin` (interactive, no default). Details: `docs/dev/dev-deployment.md` § Production-Bootstrap (dev-only) and [docs/admin-guide.md § 2.1 Erstinstallation](docs/admin-guide.md). Lockout recovery: `manage.py unlock <username>`.
 
 **7. Install Node dependencies** (for Tailwind CSS)
 
@@ -268,7 +268,7 @@ Every new facility-scoped model must be protected on **both** defense lines:
  - New migration following the pattern of [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): add the table to `DIRECT_TABLES` (or `JOIN_TABLES` if no direct `facility_id` column exists). The migration sets `ENABLE + FORCE ROW LEVEL SECURITY` plus a `facility_isolation` policy.
  - Add the table to `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) so the RLS setup test guarantees coverage.
 
-Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS only takes effect in production when the Django DB user is **not** a superuser (see [docs/dev-deployment.md](docs/dev/dev-deployment.md), primary path per [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) is an alternative platform guide).
+Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS only takes effect in production when the Django DB user is **not** a superuser (see `docs/dev/dev-deployment.md` (dev-only), primary path per [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) is an alternative platform guide).
 
 ### Linting and Formatting
 
@@ -311,7 +311,7 @@ New endpoints belong in one of these two path groups. URL names stay short and f
 
 ### Translations (i18n)
 
-- **Update EN in the same commit (binding, Refs #1215).** Whoever changes translatable strings — Django `{% trans %}`/`.po` under [`src/locale/`](src/locale/) or the mirrored EN docs (`*.en.md`, [`docs/en/`](docs/en/)) — updates the English counterpart in the **same commit**, not in a deferred sync commit. Consistent with the "i18n is its own commit" rule in [`CLAUDE.md`](CLAUDE.md): DE and EN belong in *one* `chore(i18n):` commit, separate from the feature.
+- **Update EN in the same commit (binding, Refs #1215).** Whoever changes translatable strings — Django `{% trans %}`/`.po` under [`src/locale/`](src/locale/) or the mirrored EN docs (`*.en.md`, [`docs/en/`](docs/en/)) — updates the English counterpart in the **same commit**, not in a deferred sync commit. Consistent with the "i18n is its own commit" rule in `CLAUDE.md` (dev-only): DE and EN belong in *one* `chore(i18n):` commit, separate from the feature.
 - **Stamp as backstop:** [`scripts/check_translation_versions.py`](scripts/check_translation_versions.py) requires a `translation-version` header == current minor for the EN docs (pre-commit hook + `make release-gates`, hard gate since #1078). The stamp catches drift at release; the "same commit" rule prevents drift from arising.
 
 ### Conventional Commits
@@ -410,7 +410,7 @@ pytest src/tests/test_pseudonym_hashing.py -x
 - Pure Markdown/documentation changes.
 - One-shot hygiene scripts without reuse.
 
-Cross-references: [`CLAUDE.md § Tests & Verifikation`](CLAUDE.md#tests--verifikation) and skill `superpowers:test-driven-development`.
+Cross-references: `CLAUDE.md § Tests & Verifikation` (dev-only) and skill `superpowers:test-driven-development`.
 
 ### Unit and Integration Tests
 
@@ -476,7 +476,7 @@ make mutation-report    # survivors list, non-interactive
 
 `make mutation` is resumable (mutmut stores state in `mutants/**/*.py.meta` and automatically picks up where a previous run stopped on restart).
 
-For longer runs on a sandbox with an OOM-killer or idle-killer, [`scripts/run_mutmut_watchdog.sh`](scripts/dev/run_mutmut_watchdog.sh) is available:
+For longer runs on a sandbox with an OOM-killer or idle-killer, `scripts/dev/run_mutmut_watchdog.sh` (dev-only) is available:
 
 ```bash
 # Default: 3 additional restarts, stall threshold 5 min, 2 mutmut workers
