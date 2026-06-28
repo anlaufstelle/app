@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 
 - **Mutation + Coverage als verbindliches Release-Gate** (#1150) — die Release-Checkliste und `dev-ops/release/release-gates.sh` führen Mutation-Testing (Score-Ziele `core.forms` ≥ 85 %, `core.services` ≥ 75 % nach Triage) samt Coverage-Untergrenze jetzt als Pflichtschritt vor jedem Release-Tag; die bewusst lokal-only durchgesetzte CI ist als [ADR-029](docs/adr/029-local-only-ci.md) festgehalten.
+- **DSGVO-Doku-Paket ohne Sudo-Mode-Pflicht** (#1252) — die Übersicht und der Download der DSGVO-Vorlagen-Dokumente (öffentliche Templates, gefüllt mit Einrichtungsname und Aufbewahrungsfristen) verlangen keine erneute Passwort-Eingabe mehr; Einrichtungs-Admin-Rolle, Rate-Limit und Audit-Protokollierung bleiben, der personenbezogene Rohdaten-Export (Art. 15/20) bleibt unverändert sudo-pflichtig.
 - **Zeitstrom: ganze Kopfzeile klappt Einträge auf** (#1286) — im Feed und in der Übergabe öffnet ein Klick (oder Enter/Leertaste) auf die gesamte Kopfzeile die Detailansicht, nicht mehr nur der kleine Chevron-Pfeil; Übergabe-Aufgaben verlinken zudem direkt auf ihre Detailseite.
 - **Release-Exclude-Liste auf reine Verzeichnisse vereinfacht** (#1045) — interne, ohnehin dev-only Entwickler-Dokumentation wurde unter `docs/dev/` gebündelt, sodass der Public-Release-Ausschluss dev-only Inhalte ohne fragile Einzeldatei-Enumeration greift.
 

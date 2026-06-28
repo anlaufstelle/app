@@ -349,12 +349,15 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "audit_entry.pk"),),
         idor=(("pk", "foreign_audit_entry.pk"),),
     ),
-    E("core:dsgvo_package", "facility-admin", get=ADMIN_ONLY, sudo=True),
+    # Refs #1252: Das Vorlagen-Bündel (öffentliche Templates + Einrichtungsname
+    # + Aufbewahrungsfristen) ist bewusst NICHT sudo-pflichtig — #683 zielte auf
+    # den Rohdaten-Export (Art. 15/20), nicht das Doku-Paket. Niedrige Sensibilität.
+    E("core:dsgvo_package", "facility-admin", get=ADMIN_ONLY, sudo=False),
     E(
         "core:dsgvo_document",
         "facility-admin",
         get=ADMIN_ONLY,
-        sudo=True,
+        sudo=False,
         url_kwargs=(("document", "verarbeitungsverzeichnis"),),
         idor_exempt="Statisches Template, facility-Daten nur der eigenen Einrichtung",
     ),

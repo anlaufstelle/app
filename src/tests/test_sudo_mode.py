@@ -242,26 +242,24 @@ class TestSudoModeTwoFactor:
 
 
 @pytest.mark.django_db
-class TestRequireSudoModeMixin:
-    """Mixin redirected zu /sudo/?next= wenn nicht im SudoMode.
+class TestDSGVODocsNotSudoGated:
+    """Refs #1252: Das DSGVO-Doku-Paket ist bewusst NICHT sudo-pflichtig.
 
-    SUDO_MODE_ENABLED ist in test.py auf False — diese Tests aktivieren
-    es explizit per pytest-django ``settings``-Fixture.
+    SUDO_MODE_ENABLED ist in test.py auf False — diese Tests aktivieren es
+    explizit per ``settings``-Fixture und belegen, dass die Vorlagen-Views
+    auch bei aktivem SudoMode OHNE Re-Auth erreichbar sind (öffentliche
+    Templates + Einrichtungsname, niedrige Sensibilität). #683 zielte auf
+    den Rohdaten-Export — der bleibt sudo-pflichtig (``ClientDataExport*``).
     """
 
-    def test_dsgvo_package_redirects_without_sudo(self, client, admin_user, settings):
+    def test_dsgvo_package_reachable_without_sudo(self, client, admin_user, settings):
         settings.SUDO_MODE_ENABLED = True
         client.force_login(admin_user)
         response = client.get(reverse("core:dsgvo_package"))
-        assert response.status_code == 302
-        assert "/sudo/" in response.url
-        assert "next=" in response.url
+        assert response.status_code == 200
 
-    def test_dsgvo_package_passes_with_sudo(self, client, admin_user, settings):
+    def test_dsgvo_document_reachable_without_sudo(self, client, admin_user, settings):
         settings.SUDO_MODE_ENABLED = True
         client.force_login(admin_user)
-        session = client.session
-        session[SUDO_SESSION_KEY] = int(time.time()) + 900
-        session.save()
-        response = client.get(reverse("core:dsgvo_package"))
+        response = client.get(reverse("core:dsgvo_document", kwargs={"document": "verarbeitungsverzeichnis"}))
         assert response.status_code == 200

@@ -12,18 +12,24 @@ from core.constants import RATELIMIT_BULK_ACTION
 from core.models import AuditLog
 from core.services.audit import log_audit_event
 from core.services.client import DOCUMENTS, get_document_list, render_document
-from core.services.security import RequireSudoModeMixin
 from core.utils.downloads import safe_download_response
 from core.views.mixins import FacilityAdminRequiredMixin
 
 logger = logging.getLogger(__name__)
 
 
-class DSGVOPackageView(FacilityAdminRequiredMixin, RequireSudoModeMixin, View):
+# Refs #1252: Bewusste Teil-Abweichung von #683. Die beiden Doku-Paket-Views
+# tragen KEIN ``RequireSudoModeMixin`` — sie rendern öffentliche Vorlagen
+# (``src/core/dsgvo_templates/*.md``) gefüllt mit Einrichtungsname und
+# Aufbewahrungsfristen, also keine Personendaten (Sensibilität niedrig).
+# SudoMode bleibt bewusst auf dem Rohdaten-/Personen-Export (Art. 15/20,
+# ``ClientDataExport{JSON,PDF}View`` in ``views/clients.py``). FacilityAdmin +
+# Rate-Limit (30/h) + EXPORT-Audit bleiben als Schutz erhalten.
+class DSGVOPackageView(FacilityAdminRequiredMixin, View):
     """Overview page listing all DSGVO document templates.
 
     S3 (Refs #1084): Rate-limited (30/h/User) — Dokument-Rendering ist teuer;
-    AuthZ-Gates (FacilityAdmin + Sudo) ersetzen keine Drosselung.
+    das AuthZ-Gate (FacilityAdmin) ersetzt keine Drosselung.
     """
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_BULK_ACTION, method="GET", block=True))
@@ -32,10 +38,11 @@ class DSGVOPackageView(FacilityAdminRequiredMixin, RequireSudoModeMixin, View):
         return render(request, "core/dsgvo/package.html", {"documents": documents})
 
 
-class DSGVODocumentDownloadView(FacilityAdminRequiredMixin, RequireSudoModeMixin, View):
+class DSGVODocumentDownloadView(FacilityAdminRequiredMixin, View):
     """Download a single DSGVO document template, filled with facility data.
 
     S3 (Refs #1084): Rate-limited (30/h/User), siehe ``DSGVOPackageView``.
+    Kein SudoMode — siehe Begründung über ``DSGVOPackageView`` (Refs #1252).
     """
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_BULK_ACTION, method="GET", block=True))
