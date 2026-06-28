@@ -60,6 +60,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-026](026-rate-limiting.md) | Rate-Limiting-Strategie (Tarife, Pro-User-Keying, Shared-Cache) | Accepted |
 | [ADR-027](027-i18n-strategy.md) | i18n-/Übersetzungs-Strategie (DE-Quelle, EN-Sync-Gate) | Accepted |
 | [ADR-028](028-demo-release-versioning.md) | Demo-Instanz läuft nur auf getaggtem Release | Accepted |
+| [ADR-029](029-local-only-ci.md) | Quality-Gates lokal-only durchgesetzt (Dev-CI bewusst deaktiviert) | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
