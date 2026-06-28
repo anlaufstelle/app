@@ -28,7 +28,7 @@ Dieses Dokument macht das Sicherheitsmodell explizit. Es ergänzt — nicht erse
 - Postgres-DB-User ist **kein** Superuser ([`docs/ops-runbook.md` § 9](ops-runbook.md))
 - `ENCRYPTION_KEYS` und `BACKUP_ENCRYPTION_KEY` werden über die Plattform-Geheimnisverwaltung bereitgestellt, nicht im Image
 - Caddy terminiert TLS und setzt `X-Forwarded-Proto`; Django vertraut diesem Header (`SECURE_PROXY_SSL_HEADER` in [`prod.py`](../src/anlaufstelle/settings/prod.py))
-- Admins befolgen das [Release-Runbook](https://github.com/anlaufstelle/app/issues/502) und die [Release-Checkliste](release-checklist.md)
+- Admins befolgen das [Release-Runbook](https://github.com/anlaufstelle/app/issues/502) und die Release-Checkliste
 
 ---
 

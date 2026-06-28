@@ -15,7 +15,7 @@ Naheliegende Lösung: Task-Queue (Celery/RQ/Dramatiq) mit Worker-Prozessen, asyn
 - Async-Statusseite, Polling, Token-Lifecycle, eventueller Re-Auth bei langem Job.
 - Operativer Aufwand für jede Zielinstallation (oft kleine Träger ohne Ops-Team).
 
-Detaillierte Aufwands- und Nutzen-Analyse in [`docs/async-pdf-evaluation.md`](../async-pdf-evaluation.md).
+Detaillierte Aufwands- und Nutzen-Analyse in `docs/async-pdf-evaluation.md` (dev-intern).
 
 ## Decision
 
@@ -44,5 +44,5 @@ Ein Wechsel auf Async-Queue ist eine spätere Option, falls Lastprofil oder Feat
 
 ## References
 
-- [`docs/async-pdf-evaluation.md`](../async-pdf-evaluation.md)
+- `docs/async-pdf-evaluation.md` (dev-intern)
 - [`src/core/services/client/export.py`](../../src/core/services/client/export.py), [`src/core/services/system/export.py`](../../src/core/services/system/export.py)

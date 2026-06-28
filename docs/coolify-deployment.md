@@ -195,5 +195,5 @@ Im Default-Setup ist die Rate-Limit-Stanza im `Caddyfile` als Kommentar dokument
 ## Referenzen
 
 - Ops-Runbook: [`docs/ops-runbook.md`](ops-runbook.md)
-- Release-Checkliste: [`docs/release-checklist.md`](release-checklist.md)
+- Release-Checkliste: `docs/release-checklist.md` (dev-only)
 - Security-Review: [`SECURITY.md`](../SECURITY.md)

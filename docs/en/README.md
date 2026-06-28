@@ -47,17 +47,17 @@ Templates included:
 | [faq.md](../faq.md) | Frequently asked questions — operations & troubleshooting |
 | [security-notes.md](../security-notes.md) | Deliberate security design decisions (2FA, Fernet, RLS, audit, lockout) |
 | [threat-model.md](../threat-model.md) | Security model, attack surface, known open gaps |
-| [audit-inventar.md](../audit-inventar.md) | Index of audit classification codes (FND-\*, S-\*, phases, sprints) |
+| `audit-inventar.md` (dev-only) | Index of audit classification codes (FND-\*, S-\*, phases, sprints) |
 | [dev-deployment.md](../dev/dev-deployment.md) | Dev/test environment deployment |
 | [coolify-deployment.md](../coolify-deployment.md) | Coolify deployment (supported alternative; primary is Docker Compose, see [ADR-017](../adr/017-deployment-topology.md)) |
-| [release-checklist.md](../release-checklist.md) | Release process, sanitize steps, hard-exclusion list |
+| `release-checklist.md` (dev-only) | Release process, sanitize steps, hard-exclusion list |
 | [performance-budgets.md](../performance-budgets.md) | Performance targets and budgets |
 | [sprachleitlinie.md](../sprachleitlinie.md) | Language guideline for UI and handbook — _Klientel → Person_, terminology matrix, refactor priorities (Refs #604) |
 | [adr/](../adr/) | Architecture Decision Records — why the architecture looks the way it does |
 | [testing/](../testing/) | Test matrix, mutation testing, release test profiles |
 | [e2e-architecture.md](../e2e-architecture.md) | E2E testing infrastructure (developer-facing) |
 | [e2e-runbook.md](../e2e-runbook.md) | E2E test execution, debugging, checklists |
-| [async-pdf-evaluation.md](../async-pdf-evaluation.md) | _Historical_ — async PDF queue evaluation, superseded by [ADR-010](../adr/010-sync-pdf-generation.md) |
+| `async-pdf-evaluation.md` (dev-only) | _Historical_ — async PDF queue evaluation, superseded by [ADR-010](../adr/010-sync-pdf-generation.md) |
 
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.16.0 -->
