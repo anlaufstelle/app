@@ -102,9 +102,7 @@
                                     </div>
                                     <div class="flex items-center space-x-3">
                                         <span class="text-xs text-ink-muted" x-text="event.created_by_display"></span>
-                                        {# Offline-Edit-Einstieg (Refs #1111): nur wo der Replay durchginge.
-                                           can_edit_ui ist pro Event in load() vorberechnet — der
-                                           @alpinejs/csp-Guard verbietet Method-Calls mit Argumenten in x-if. #}
+                                        {# Offline-Edit-Einstieg (Refs #1111): nur wo der Replay durchginge; event.can_edit_ui in load() vorberechnet (CSP-Guard verbietet Method-Calls in x-if). #}
                                         <template x-if="event.can_edit_ui">
                                             <button type="button" @click="startEdit(event)"
                                                     class="text-xs text-accent hover:underline"
@@ -125,10 +123,7 @@
                                     </dl>
                                 </template>
 
-                                {# Inline-Edit-Formular (Refs #1111). Felder + Werte stammen aus dem
-                                   Offline-Bundle; beim Absenden geht der Edit über markEventModified
-                                   in die Offline-Queue und wird beim Reconnect repliziert.
-                                   event.editing wird per _setEditing() gesetzt (CSP: kein isEditing(event)). #}
+                                {# Inline-Edit-Formular (Refs #1111): Felder/Werte aus dem Offline-Bundle; Absenden → markEventModified → Offline-Queue → Replay bei Reconnect; event.editing via _setEditing(). #}
                                 <template x-if="event.editing">
                                     <form class="mt-3 border-t border-subtle pt-3 space-y-3"
                                           @submit.prevent="saveEdit(event)" data-testid="offline-edit-form">
