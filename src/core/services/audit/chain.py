@@ -24,11 +24,29 @@ import hmac
 import json
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import UTC, timedelta
 
 from django.db import connection
 
 from core.services.audit.hash import _get_audit_hash_key
+
+
+def _canonical_timestamp(ts) -> str:
+    """UTC-normalisierter ISO-8601-Zeitstempel fuer den Kettenhash.
+
+    Migration 0097 stellte ``timestamp`` von ``auto_now_add`` auf
+    ``default=timezone.now`` um — ein Aufrufer kann also einen naiven oder
+    nicht-UTC-aware Wert uebergeben. Beim Schreiben lebt dieser In-Memory-Wert in
+    seiner Original-Zone, beim Verify liefert Postgres ihn UTC-aware zurueck.
+    Ohne Vereinheitlichung haetten beide unterschiedliche ``isoformat()``-Strings
+    und damit verschiedene Hashes — ein falscher „Tamper". Wir normalisieren
+    daher konsistent auf UTC (naiv → als UTC interpretiert). Refs #1070.
+    """
+    if not ts:
+        return ""
+    if ts.utcoffset() is None:  # naiv → als UTC interpretieren
+        ts = ts.replace(tzinfo=UTC)
+    return ts.astimezone(UTC).isoformat()
 
 
 def _canonical_payload(row) -> str:
@@ -41,7 +59,7 @@ def _canonical_payload(row) -> str:
     """
     return json.dumps(
         {
-            "timestamp": row.timestamp.isoformat() if row.timestamp else "",
+            "timestamp": _canonical_timestamp(row.timestamp),
             "action": str(row.action),
             "user_id": row.user_id,
             "facility_id": row.facility_id,

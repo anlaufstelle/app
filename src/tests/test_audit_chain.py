@@ -15,6 +15,7 @@ Deckt ab:
 from __future__ import annotations
 
 from datetime import timedelta
+from datetime import timezone as dt_timezone
 
 import pytest
 from django.core.management import call_command
@@ -345,6 +346,36 @@ class TestPruneCheckpoint:
         from core.retention.audit_pruning import PRUNE_EXEMPT_ACTIONS
 
         assert AuditLog.Action.AUDIT_PRUNE_CHECKPOINT in PRUNE_EXEMPT_ACTIONS
+
+
+# ---------------------------------------------------------------------------
+# Zeitstempel-Normalisierung (UTC)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestTimestampNormalization:
+    """Refs #1070: Seit Migration 0097 (``default=timezone.now`` statt
+    ``auto_now_add``) kann ein Aufrufer einen nicht-UTC-aware Zeitstempel liefern.
+    Der Schreib-Hash sieht ihn dann in seiner Original-Zone, Postgres liefert ihn
+    beim Verify UTC-aware zurueck — ohne UTC-Normalisierung im Canonical haetten
+    beide unterschiedliche Hashes (falscher „Tamper")."""
+
+    def test_non_utc_aware_timestamp_verifies_clean(self, facility, staff_user):
+        # Aware, NICHT-UTC (+05:00) und in der Zukunft, damit der Monotonie-Bump
+        # in ``assign_chain_fields`` nicht zuschlaegt und der Original-Offset
+        # tatsaechlich in den Schreib-Hash eingeht.
+        ts = (timezone.now() + timedelta(hours=1)).astimezone(dt_timezone(timedelta(hours=5)))
+        assert ts.utcoffset() == timedelta(hours=5)  # wirklich non-UTC
+        AuditLog.objects.create(
+            facility=facility,
+            user=staff_user,
+            action=AuditLog.Action.LOGIN,
+            detail={},
+            timestamp=ts,
+        )
+        result = verify_chain(facility)
+        assert result.ok, result.reason
 
 
 @pytest.fixture
