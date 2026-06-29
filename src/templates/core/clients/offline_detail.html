@@ -54,6 +54,18 @@
                     </p>
                 </div>
             </template>
+            {# Refs #1111: Server-Validierung fehlgeschlagen — Edit blieb erhalten, nicht still verworfen. #}
+            <template x-if="showInvalid">
+                <div class="mb-4 bg-red-50 border border-red-200 rounded-[10px] p-3" data-testid="offline-edit-invalid">
+                    <p class="text-sm text-red-900">{% trans "Änderung nicht gespeichert – Eingabe ungültig:" %} <span x-text="editError"></span></p>
+                </div>
+            </template>
+            {# Refs #1111: transienter Sync-Fehler — Änderung lokal behalten, später erneut versucht. #}
+            <template x-if="showError">
+                <div class="mb-4 bg-red-50 border border-red-200 rounded-[10px] p-3" data-testid="offline-edit-error">
+                    <p class="text-sm text-red-900">{% trans "Synchronisierung fehlgeschlagen – Änderung wurde lokal behalten und wird später erneut versucht." %}</p>
+                </div>
+            </template>
 
             <div class="mb-6">
                 <h1 class="text-[22px] font-bold text-ink" x-text="data.client.pseudonym" data-testid="offline-pseudonym"></h1>

@@ -134,6 +134,11 @@
                 documentTypeName: opts.documentTypeName || "",
                 documentTypePk: opts.documentTypePk || "",
                 occurredAt: opts.occurredAt || "",
+                // Refs #1111: bestehende Datei-Anhang-Marker (nicht editierbar)
+                // fuer die Offline-Anzeige bewahren — werden in
+                // normalizeOfflineEventRecord wieder in data_fields gemerged,
+                // gehen NICHT in formData/Replay ein.
+                fileMarkers: opts.fileMarkers || {},
                 lastEditedAt: Date.now(),
             },
         };
@@ -200,11 +205,19 @@
             return { status: "network-error" };
         }
 
-        if (response.ok || response.status === 302) {
-            // Server accepted the edit. Drop the local record so future
-            // replays don't re-submit and force a re-sync next time the
-            // client opens the event.
-            await _store().clearOfflineEdit(record.pk);
+        // Erfolg ist NUR ein echtes Speichern: der Server bestaetigt mit einem
+        // Redirect (302), dem fetch folgt -> response.redirected. Ein blankes 200
+        // ist KEIN Erfolg — Refs #1111: ein ungueltiges Formular kam frueher als
+        // 200 (re-rendertes Formular) zurueck und wurde faelschlich als "synced"
+        // verworfen (stiller Datenverlust). Der Server liefert dafuer jetzt 422.
+        if (response.redirected || response.status === 302) {
+            // F-08 (#1111): synchronisiertes Event SICHTBAR lassen statt loeschen —
+            // sonst verschwindet es aus der Offline-Ansicht, wenn ein
+            // Geschwister-Edit desselben Klienten noch offen ist (revalidate
+            // ueberspringt dann). Auf "clean" markieren: raus aus dem Unsynced-Set,
+            // kein Re-Replay, weiter gerendert. Der naechste volle Re-Sync ersetzt
+            // es durch das kanonische Server-Event.
+            await _store().updateEventLocalStatus(record.pk, "clean");
             _fireCountEvent();
             return { status: "synced" };
         }
@@ -218,9 +231,28 @@
             await enqueueConflictForReview(record, body.server_state || {});
             return { status: "conflict", serverState: body.server_state };
         }
-        // Any other 4xx/5xx — keep the record untouched so the user can
-        // inspect in the modified-list; mark attempts so the UI can show
-        // a retry hint.
+        if (response.status === 422) {
+            // Server-seitige Formularvalidierung fehlgeschlagen (#1111): Edit NICHT
+            // verwerfen, als "modified" behalten und dem Nutzer zur Korrektur
+            // melden — sonst ginge die dokumentierte Aenderung still verloren.
+            let body = null;
+            try {
+                body = await response.json();
+            } catch (_e) {
+                body = {};
+            }
+            await _store().updateEventLocalStatus(record.pk, "modified");
+            _fireCountEvent();
+            return { status: "invalid", errors: (body && body.errors) || {} };
+        }
+        if (response.status === 403 || response.status === 404) {
+            // Permanenter Fehler = Zugriff entzogen oder Event geloescht. Den Replay
+            // hier NICHT als behebbar behandeln; der nachgelagerte
+            // revalidateCachedClient purged den Client (F-10/#1110) — der
+            // Sicherheits-Purge darf nicht an einem haengenden Edit scheitern.
+            return { status: "revoked", statusCode: response.status };
+        }
+        // Transiente Fehler (5xx/429): Record behalten, spaeter erneut versuchen.
         return { status: "error", statusCode: response.status };
     }
 

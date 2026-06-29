@@ -179,6 +179,16 @@
             get showConflictNotice() {
                 return this.lastSyncResult === "conflict";
             },
+            // Refs #1111: Server-Validierung schlug fehl — der Edit blieb offen
+            // (nicht still verworfen). editError traegt die Feldfehler.
+            get showInvalid() {
+                return this.lastSyncResult === "invalid";
+            },
+            // Refs #1111: transienter Replay-Fehler (5xx/429/Zugriffsentzug) —
+            // der Edit ist NICHT synchronisiert und wurde behalten.
+            get showError() {
+                return this.lastSyncResult === "error";
+            },
             get conflictHref() {
                 return "/offline/conflicts/" + this.lastSyncPk + "/";
             },
@@ -262,10 +272,18 @@
                         return;
                     }
                     const formData = {};
+                    const fileMarkers = {};
                     for (const f of this.editFields) {
-                        // FILE-Felder offline nicht editierbar — der Server hält
-                        // bestehende Anhänge über merge_update_payload.
-                        if (f.isFile) continue;
+                        if (f.isFile) {
+                            // FILE-Felder sind offline nicht editierbar (der Server
+                            // haelt bestehende Anhaenge ueber merge_update_payload).
+                            // Den vorhandenen Anhang-Marker NUR fuer die Anzeige
+                            // bewahren (Refs #1111) — NICHT in formData, damit der
+                            // Replay ihn nicht als Formularwert mitschickt.
+                            const cur = ev.data_fields ? ev.data_fields[f.slug] : null;
+                            if (cur) fileMarkers[f.slug] = cur;
+                            continue;
+                        }
                         formData[f.slug] = this.editValues[f.slug];
                     }
                     const dt = this._findDocType(ev.document_type_pk);
@@ -275,6 +293,7 @@
                         documentTypeName: ev.document_type_name || (dt && dt.name) || "",
                         documentTypePk: ev.document_type_pk || "",
                         expectedUpdatedAt: ev.updated_at || "",
+                        fileMarkers: fileMarkers,
                     });
                     this.lastSyncPk = ev.pk;
                     this._setEditing(null);
@@ -285,7 +304,7 @@
                         // das Resultat spiegeln. Offline bleibt es „pending" und
                         // der Reconnect-Listener von offline-edit.js übernimmt.
                         const result = await window.offlineEdit.replayModifiedEvent(record);
-                        this._reflectReplay(result && result.status);
+                        this._reflectReplay(result);
                         await this._reconcile();
                     } else {
                         this.lastSyncResult = "pending";
@@ -298,12 +317,35 @@
                     this.saving = false;
                 }
             },
-            _reflectReplay(status) {
+            _reflectReplay(result) {
+                const status = result && result.status;
                 if (status === "synced") this.lastSyncResult = "synced";
                 else if (status === "conflict") this.lastSyncResult = "conflict";
-                else if (status === "offline" || status === "network-error") this.lastSyncResult = "pending";
-                else if (status === "no-key") this.lastSyncResult = "pending";
-                else this.lastSyncResult = "error";
+                else if (status === "invalid") {
+                    // Refs #1111: Server-Validierung fehlgeschlagen — Edit bleibt
+                    // offen, Feldfehler anzeigen statt still als "synced" zu werten.
+                    this.editError = this._formatReplayErrors(result && result.errors);
+                    this.lastSyncResult = "invalid";
+                } else if (status === "offline" || status === "network-error" || status === "no-key") {
+                    this.lastSyncResult = "pending";
+                } else {
+                    // error / revoked: nicht synchronisiert. Bei "revoked" raeumt der
+                    // nachgelagerte revalidateCachedClient den Klienten weg (F-10).
+                    this.lastSyncResult = "error";
+                }
+            },
+            _formatReplayErrors(errors) {
+                if (!errors || typeof errors !== "object") return "Eingabe ungültig.";
+                const parts = [];
+                for (const key of Object.keys(errors)) {
+                    const list = errors[key];
+                    if (Array.isArray(list)) {
+                        parts.push(list.map((e) => (e && e.message) || String(e)).join(" "));
+                    } else if (list) {
+                        parts.push(String(list));
+                    }
+                }
+                return parts.join(" ") || "Eingabe ungültig.";
             },
             // Nach einer Replay-Runde den lokalen Cache mit dem Server abgleichen
             // (refetcht NUR, wenn keine unsynced/conflict-Events mehr offen sind —

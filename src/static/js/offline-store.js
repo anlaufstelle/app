@@ -239,7 +239,10 @@
             occurred_at: data.occurredAt || r.occurredAt || "",
             document_type_name: data.documentTypeName || "",
             document_type_pk: data.documentTypePk || "",
-            data_fields: data.formData || {},
+            // Refs #1111: Datei-Marker (display-only) wieder einmischen, damit der
+            // "Datei vorhanden"-Hinweis nicht verschwindet, solange der Edit pending
+            // ist. formData enthaelt keine FILE-Felder (nicht offline-editierbar).
+            data_fields: Object.assign({}, data.formData || {}, data.fileMarkers || {}),
             updated_at: data.expectedUpdatedAt || "",
             localStatus: localStatus,
         };
@@ -346,9 +349,6 @@
     }
 
     async function revalidateCachedClient(pk) {
-        // Unsynced lokale Aenderungen nicht ueberschreiben/loeschen.
-        if (await _hasUnsyncedEvents(pk)) return "skipped";
-
         let response;
         try {
             response = await fetch(_bundleUrl(pk), {
@@ -361,10 +361,20 @@
             return "error";
         }
 
+        // F-10 (#1110/#1111): Zugriff entzogen oder Client weg -> IMMER purgen,
+        // AUCH bei offenen unsynced Edits. Entschluesselte PII darf nach
+        // Rechteentzug nicht offline ueberleben; ein haengender Edit darf den
+        // Sicherheits-Purge nicht blockieren. (Vorher stand der unsynced-Check
+        // davor und uebersprang den Purge -> Befund #1111.)
         if (INVALIDATION_STATUSES.includes(response.status)) {
             await removeOfflineClient(pk);
             return "purged";
         }
+
+        // Zugriff weiterhin gueltig: lokale unsynced Aenderungen NICHT mit
+        // Server-Daten ueberschreiben -> Refresh ueberspringen.
+        if (await _hasUnsyncedEvents(pk)) return "skipped";
+
         if (response.ok) {
             try {
                 const bundle = await response.json();
