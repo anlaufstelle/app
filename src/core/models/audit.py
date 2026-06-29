@@ -3,7 +3,8 @@
 import uuid
 
 from django.conf import settings
-from django.db import models
+from django.db import models, transaction
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.models.managers import FacilityScopedManager
@@ -85,6 +86,11 @@ class AuditLog(models.Model):
         SNAPSHOT_RUN_COMPLETED = "snapshot_run_completed", _("Statistik-Snapshot-Lauf abgeschlossen")
         BREACH_SCAN_COMPLETED = "breach_scan_completed", _("Breach-Detection-Scan abgeschlossen")
         MV_REFRESH_COMPLETED = "mv_refresh_completed", _("Statistik-View-Refresh abgeschlossen")
+        # Refs #1070: Tombstone-Marker, der beim Pruning den entry_hash der
+        # juengsten geloeschten Zeile (``boundary_hash``) festhaelt. Die
+        # HMAC-Kette wird nie umgeschrieben — der Checkpoint legitimiert die
+        # Diskontinuitaet, die das Loeschen alter Zeilen hinterlaesst.
+        AUDIT_PRUNE_CHECKPOINT = "audit_prune_checkpoint", _("Audit-Pruning-Checkpoint")
 
     objects = FacilityScopedManager()
 
@@ -126,7 +132,22 @@ class AuditLog(models.Model):
         blank=True,
         verbose_name=_("IP-Adresse"),
     )
-    timestamp = models.DateTimeField(auto_now_add=True, verbose_name=_("Zeitstempel"))
+    # Refs #1070: ``default=timezone.now`` statt ``auto_now_add`` — der
+    # Zeitstempel muss VOR dem INSERT feststehen, damit er in den HMAC-
+    # Kettenhash eingeht und beim Verify exakt reproduzierbar bleibt
+    # (``auto_now_add`` ueberschreibt den Wert erst im INSERT). Append-only
+    # bleibt durch ``save()``/``delete()`` + den DB-Trigger geschuetzt.
+    timestamp = models.DateTimeField(default=timezone.now, verbose_name=_("Zeitstempel"))
+
+    # Refs #1070: per-Zeile HMAC-Kette (Tamper-Evidenz). ``prev_hash`` ist der
+    # entry_hash der vorherigen Zeile derselben Facility-Kette (""=Kettenstart);
+    # ``entry_hash = HMAC(key, prev_hash || canonical(row))``. Beide nullable,
+    # damit Bestandszeilen per ``backfill_audit_chain`` nachgezogen werden
+    # koennen (NULL = noch nicht verkettet) und Raw-Inserts gueltig bleiben.
+    prev_hash = models.CharField(max_length=64, null=True, blank=True, verbose_name=_("Vorheriger Hash"))
+    entry_hash = models.CharField(
+        max_length=64, null=True, blank=True, db_index=True, verbose_name=_("Eintrags-Hash")
+    )
 
     class Meta:
         verbose_name = _("Audit-Log")
@@ -142,10 +163,24 @@ class AuditLog(models.Model):
         ]
 
     def save(self, *args, **kwargs):
-        """Prevent updates — only inserts are allowed."""
+        """Prevent updates — only inserts are allowed — and seal the row into
+        the per-facility HMAC hash chain on insert (Refs #1070).
+
+        The chain assignment (advisory lock + read of the predecessor hash +
+        compute) and the INSERT run inside one ``transaction.atomic()`` so the
+        per-facility advisory lock is held across read-and-write and writers to
+        the same chain serialize. The logic itself lives in
+        ``core.services.audit.chain`` (services-for-logic convention).
+        """
         if self.pk and type(self).objects.filter(pk=self.pk).exists():
             raise ValueError("AuditLog entries are append-only and cannot be updated.")
-        super().save(*args, **kwargs)
+
+        # Lazy import to avoid a models<->services import cycle.
+        from core.services.audit.chain import assign_chain_fields
+
+        with transaction.atomic():
+            assign_chain_fields(self)
+            super().save(*args, **kwargs)
 
     def delete(self, *args, **kwargs):
         """Prevent deletion of audit log entries."""

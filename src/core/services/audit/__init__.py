@@ -27,6 +27,7 @@ Subpackages, ``services/settings.py`` und ``signals/audit.py`` werden
 vom Architekturtest (``TestAuditLogCreationAllowlist``) blockiert.
 """
 
+from core.services.audit.chain import compute_entry_hash, verify_chain
 from core.services.audit.hash import hmac_hash_email
 from core.services.audit.helpers import (
     audit_client_event,
@@ -43,6 +44,8 @@ __all__ = [
     "audit_retention_decision",
     "audit_security_violation",
     "audit_system_view",
+    "compute_entry_hash",
     "hmac_hash_email",
     "log_audit_event",
+    "verify_chain",
 ]
