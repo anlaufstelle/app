@@ -31,6 +31,10 @@ logger = logging.getLogger(__name__)
 # Bild-Extensions, fuer die der Decompression-Bomb-Pixelcheck greift (#1268).
 _IMAGE_EXTENSIONS = frozenset({"jpg", "jpeg", "png", "gif", "webp", "bmp", "tif", "tiff"})
 
+# ZIP-Family-Extensions, fuer die der Archiv-Expansions-Guard greift (#1310, S4).
+# OOXML (docx/xlsx/pptx) sind ZIP-Container — derselbe Decompression-Bomb-Vektor.
+_ARCHIVE_EXTENSIONS = frozenset({"zip", "docx", "xlsx", "pptx"})
+
 
 def enforce_upload_size(facility, uploaded_file, event, user):
     """Reject uploads exceeding the hard service-layer size ceiling.
@@ -120,6 +124,67 @@ def enforce_image_limits(facility, uploaded_file, event, user):
         )
 
 
+def enforce_archive_limits(facility, uploaded_file, event, user):
+    """Reject zip-bomb archives (Refs #1310 (S4)).
+
+    Fuer ZIP-Container (zip + OOXML docx/xlsx/pptx) wird aus dem Zip-Directory
+    die Summe der UNkomprimierten Eintrags-Groessen sowie das Expansions-
+    Verhaeltnis (unkomprimiert/komprimiert) gelesen — OHNE die Eintraege zu
+    entpacken. Eine klein gepackte Datei, die zu hunderten MB expandiert
+    (Decompression-Bomb), wird abgelehnt, bevor ein nachgelagerter Konsument sie
+    auspackt. Nicht-Archiv-Uploads (per Extension) und kaputte ZIPs werden
+    uebersprungen; fuer sie bleiben Extension-/Magic-/Virus-Checks zustaendig.
+    Der Stream wird NICHT konsumiert (``seek(0)`` am Ende), damit die nach-
+    gelagerte Verschluesselung die Datei noch lesen kann.
+    """
+    name = uploaded_file.name or ""
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if ext not in _ARCHIVE_EXTENSIONS:
+        return
+
+    import zipfile  # noqa: PLC0415 — lazy, wie magic/PIL in den anderen Checks
+
+    max_bytes = getattr(django_settings, "FILE_VAULT_MAX_ARCHIVE_BYTES", 200 * 1024 * 1024)
+    max_ratio = getattr(django_settings, "FILE_VAULT_MAX_ARCHIVE_RATIO", 100)
+
+    uploaded_file.seek(0)
+    try:
+        with zipfile.ZipFile(uploaded_file) as zf:
+            total_uncompressed = 0
+            total_compressed = 0
+            for info in zf.infolist():
+                total_uncompressed += info.file_size
+                total_compressed += info.compress_size
+    except zipfile.BadZipFile:
+        # Kein lesbares ZIP trotz Archiv-Extension — hier nicht abweisen;
+        # Magic-Bytes/Extension/Virus entscheiden.
+        uploaded_file.seek(0)
+        return
+    finally:
+        uploaded_file.seek(0)
+
+    # Expansions-Verhaeltnis nur bei vorhandener komprimierter Groesse (div0-Guard).
+    ratio = (total_uncompressed / total_compressed) if total_compressed else 0
+
+    if total_uncompressed > max_bytes or ratio > max_ratio:
+        log_attachment_violation(
+            facility,
+            user,
+            event,
+            reason="archive_bomb",
+            filename=name,
+            uncompressed=total_uncompressed,
+            compressed=total_compressed,
+            ratio=round(ratio, 2),
+            max_bytes=max_bytes,
+            max_ratio=max_ratio,
+        )
+        raise ValidationError(
+            _("Archiv expandiert zu stark (%(unc)d Bytes, Faktor %(ratio).0f) — möglicher Zip-Bomb-Upload.")
+            % {"unc": total_uncompressed, "ratio": ratio}
+        )
+
+
 def enforce_allowed_file_types(facility, uploaded_file, event, user):
     """Reject uploads whose extension is not in ``Settings.allowed_file_types``.
 
@@ -206,6 +271,28 @@ def _mime_equivalent(extension: str, declared: str, detected: str) -> bool:
     return declared in klass and detected in klass
 
 
+# Positive Magic-Byte-Allowlist (#1310, S3).
+#
+# Anders als Container-Formate (OOXML/ZIP, siehe _MIME_EQUIVALENCE) haben diese
+# Endungen eine UNVERWECHSELBARE Magic-Signatur. Fuer sie genuegt es nicht, dass
+# libmagic den Inhalt nicht widerlegt — libmagic MUSS den passenden MIME-Typ
+# positiv bestaetigen. Ein generisches "application/octet-stream" ODER ein
+# fremder Positiv-Typ zaehlt hier NICHT als Pass (schliesst das frueher
+# tolerierte octet-stream-Loch fuer diese Endungen, #1254 §4.2 / S3).
+#
+# Bewusst konservativ: nur Formate mit zuverlaessig erkannter Signatur. Endungen
+# OHNE Eintrag (docx/xlsx/pptx/zip/odt …) behalten das tolerante Verhalten
+# (Extension-Whitelist + ClamAV + Archiv-Guard decken sie ab).
+_STRONG_MAGIC = {
+    "pdf": {"application/pdf"},
+    "png": {"image/png"},
+    # JPEG: libmagic liefert "image/jpeg"; "image/jpg" ist das Browser-Synonym (#662).
+    "jpg": {"image/jpeg", "image/jpg"},
+    "jpeg": {"image/jpeg", "image/jpg"},
+    "gif": {"image/gif"},
+}
+
+
 def enforce_magic_bytes(facility, uploaded_file, event, user):
     """Verify the file's true MIME type (sniffed via libmagic) matches the
     browser-declared ``content_type``.
@@ -235,6 +322,31 @@ def enforce_magic_bytes(facility, uploaded_file, event, user):
     detected_mime = magic.from_buffer(buffer, mime=True) or "application/octet-stream"
     declared_mime = uploaded_file.content_type or "application/octet-stream"
 
+    name = uploaded_file.name or ""
+    extension = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+
+    # S3 (#1310): Positive Magic-Byte-Allowlist fuer Endungen mit eindeutiger
+    # Signatur. Fuer diese MUSS libmagic einen erlaubten MIME bestaetigen — ein
+    # generisches "application/octet-stream" ODER ein fremder Positiv-Typ wird
+    # abgelehnt. Laeuft VOR der tolerant-octet-stream-Rueckgabe unten, die damit
+    # nur noch fuer mehrdeutige Container-Formate (OOXML/ZIP) gilt.
+    allowed_strong = _STRONG_MAGIC.get(extension)
+    if allowed_strong is not None and detected_mime not in allowed_strong:
+        log_attachment_violation(
+            facility,
+            user,
+            event,
+            reason="magic_not_allowlisted",
+            filename=uploaded_file.name,
+            declared=declared_mime,
+            detected=detected_mime,
+            allowed=sorted(allowed_strong),
+        )
+        raise ValidationError(
+            _("Datei-Inhalt passt nicht zur Endung .%(ext)s (erkannt: %(detected)s).")
+            % {"ext": extension, "detected": detected_mime}
+        )
+
     # libmagic returns "application/octet-stream" when it cannot confidently
     # identify the content (common for small archives, ZIP-like containers, and
     # formats whose magic.mgc definitions are terse). Treat it as "unknown",
@@ -245,8 +357,6 @@ def enforce_magic_bytes(facility, uploaded_file, event, user):
         return detected_mime
 
     # Extension-basierte Aequivalenz (DOCX/OOXML, JPEG-Synonyme).
-    name = uploaded_file.name or ""
-    extension = name.rsplit(".", 1)[-1] if "." in name else ""
     if _mime_equivalent(extension, declared_mime, detected_mime):
         return detected_mime
 

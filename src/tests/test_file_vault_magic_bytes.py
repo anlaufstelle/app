@@ -134,7 +134,13 @@ class TestMagicBytesValidation:
         assert AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).count() == 0
 
     def test_png_masquerading_as_pdf_rejected(self, facility_with_settings, staff_user, doc_type_with_file, event):
-        """PNG-Bytes mit PDF-Content-Type → ValidationError + SECURITY_VIOLATION."""
+        """PNG-Bytes mit PDF-Content-Type → ValidationError + SECURITY_VIOLATION.
+
+        Refs #1310 (S3): ``.pdf`` ist eine Strong-Magic-Endung — libmagic erkennt
+        hier ``image/png``, also NICHT den geforderten ``application/pdf``. Der
+        Reject läuft jetzt über die positive Allowlist (``magic_not_allowlisted``)
+        statt über den declared-vs-detected-Vergleich (``mime_mismatch``).
+        """
         _, ft_file = doc_type_with_file
         # Erweiterung .pdf, damit wir die Whitelist passieren und wirklich den Magic-Byte-Check treffen.
         uploaded = SimpleUploadedFile("tricky.pdf", VALID_PNG_BYTES, content_type="application/pdf")
@@ -144,7 +150,7 @@ class TestMagicBytesValidation:
 
         assert EventAttachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
-        assert log.detail["reason"] == "mime_mismatch"
+        assert log.detail["reason"] == "magic_not_allowlisted"
         assert log.detail["declared"] == "application/pdf"
         assert log.detail["detected"].startswith("image/png")
         assert log.detail["filename"] == "tricky.pdf"
@@ -200,7 +206,12 @@ class TestMagicBytesValidation:
         assert log.detail["reason"] == "mime_mismatch"
 
     def test_pe_executable_rejected(self, facility_with_settings, staff_user, doc_type_with_file, event):
-        """PE-Executable (MZ-Header) mit PDF-Content-Type → ValidationError + SECURITY_VIOLATION."""
+        """PE-Executable (MZ-Header) mit PDF-Content-Type → ValidationError + SECURITY_VIOLATION.
+
+        Refs #1310 (S3): ``.pdf`` (Strong-Magic) verlangt positiv
+        ``application/pdf``; libmagic erkennt hier ``application/x-dosexec`` →
+        Reject via Allowlist (``magic_not_allowlisted``).
+        """
         _, ft_file = doc_type_with_file
         uploaded = SimpleUploadedFile("virus.pdf", PE_EXECUTABLE_BYTES, content_type="application/pdf")
 
@@ -209,10 +220,53 @@ class TestMagicBytesValidation:
 
         assert EventAttachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
-        assert log.detail["reason"] == "mime_mismatch"
+        assert log.detail["reason"] == "magic_not_allowlisted"
         assert log.detail["declared"] == "application/pdf"
         # libmagic erkennt PE-Binaries als "application/x-dosexec" oder Varianten.
         assert "dos" in log.detail["detected"].lower() or "exec" in log.detail["detected"].lower()
+
+    def test_pdf_sniffing_as_octet_stream_rejected(
+        self, facility_with_settings, staff_user, doc_type_with_file, event
+    ):
+        """Refs #1310 (S3): Eine ``.pdf``, deren Inhalt von libmagic NICHT positiv
+        als ``application/pdf`` erkannt wird (generisches
+        ``application/octet-stream``), wird abgelehnt.
+
+        Das frühere octet-stream-Toleranzloch (octet-stream galt als Pass) greift
+        für Strong-Magic-Endungen nicht mehr — die positive Allowlist verlangt
+        einen bestätigten ``application/pdf``.
+        """
+        _, ft_file = doc_type_with_file
+        # 512 Null-Bytes → libmagic erkennt keinen Typ → application/octet-stream.
+        uploaded = SimpleUploadedFile("leer.pdf", b"\x00" * 512, content_type="application/pdf")
+
+        with pytest.raises(ValidationError):
+            store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
+
+        assert EventAttachment.objects.filter(event=event).count() == 0
+        log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
+        assert log.detail["reason"] == "magic_not_allowlisted"
+        assert log.detail["detected"] == "application/octet-stream"
+        assert log.detail["filename"] == "leer.pdf"
+
+    def test_pdf_content_under_png_extension_rejected(
+        self, facility_with_settings, staff_user, doc_type_with_file, event
+    ):
+        """Refs #1310 (S3): Die Allowlist ist pro Endung — ein echtes PDF unter
+        ``.png`` (libmagic erkennt ``application/pdf``) erfüllt die PNG-Allowlist
+        ``{image/png}`` nicht und wird abgelehnt, unabhängig vom deklarierten
+        Content-Type."""
+        _, ft_file = doc_type_with_file
+        uploaded = SimpleUploadedFile("fake.png", VALID_PDF_BYTES, content_type="image/png")
+
+        with pytest.raises(ValidationError):
+            store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
+
+        assert EventAttachment.objects.filter(event=event).count() == 0
+        log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
+        assert log.detail["reason"] == "magic_not_allowlisted"
+        assert log.detail["detected"] == "application/pdf"
+        assert log.detail["filename"] == "fake.png"
 
 
 @pytest.mark.django_db
@@ -272,7 +326,8 @@ class TestAllowedFileTypesWhitelist:
 
         assert EventAttachment.objects.filter(event=event).count() == 0
         log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
-        assert log.detail["reason"] == "mime_mismatch"
+        # Refs #1310 (S3): ``.pdf`` ist Strong-Magic → Reject via positive Allowlist.
+        assert log.detail["reason"] == "magic_not_allowlisted"
         assert log.detail["declared"] == "application/pdf"
         assert log.detail["filename"] == "payload.pdf"
 

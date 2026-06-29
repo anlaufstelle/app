@@ -19,6 +19,7 @@ from core.models.attachment import EventAttachment
 from core.services.file_vault.encryption import decrypt_file_stream, encrypt_field, encrypt_file, safe_decrypt
 from core.services.file_vault.policy import (
     enforce_allowed_file_types,
+    enforce_archive_limits,
     enforce_image_limits,
     enforce_magic_bytes,
     enforce_upload_size,
@@ -75,6 +76,8 @@ def store_encrypted_file(
     detected_mime = enforce_magic_bytes(facility, uploaded_file, event, user)
     # #1268: Decompression-Bomb-Schutz fuer Bild-Uploads (Pixel-Obergrenze).
     enforce_image_limits(facility, uploaded_file, event, user)
+    # #1310 (S4): Archiv-Expansions-Guard (Zip-Bomb) fuer ZIP/OOXML-Container.
+    enforce_archive_limits(facility, uploaded_file, event, user)
 
     storage_name = f"{uuid.uuid4()}.enc"
     output_path = _facility_dir(facility) / storage_name
