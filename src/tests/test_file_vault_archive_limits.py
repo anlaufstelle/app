@@ -12,6 +12,7 @@ Der direkte Guard-Test braucht kein libmagic. Der End-to-End-Test durch
 from __future__ import annotations
 
 import io
+import struct
 import zipfile
 
 import pytest
@@ -211,6 +212,26 @@ class TestArchiveExpansionGuard:
         laufen weiter durch den Größen-/Ratio-Pfad (kein False Positive)."""
         settings.FILE_VAULT_MAX_ARCHIVE_ENTRIES = 5
         upload = _zip_with_entries("few.zip", 2)
+
+        enforce_archive_limits(facility_with_settings, upload, event, staff_user)
+
+        assert upload.tell() == 0
+        assert AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).count() == 0
+
+    @pytest.mark.parametrize(
+        "exc",
+        [OSError("disk weg"), EOFError(), ValueError("kaputt"), struct.error("unpack")],
+    )
+    def test_malformed_zip_non_badzipfile_skipped(self, facility_with_settings, staff_user, event, monkeypatch, exc):
+        """Nicht nur ``BadZipFile``: auch andere Parser-Fehler (OSError/EOFError/
+        ValueError/struct.error) auf pathologischen ZIPs werden graceful
+        übersprungen statt als unbehandelter 500 durchzuschlagen. Refs #1310 (S4)."""
+        upload = _zip_upload("weird.zip", b"egal")  # gültiges EOCD, 1 Eintrag → Vorabcheck passt
+
+        def _raise(*args, **kwargs):
+            raise exc
+
+        monkeypatch.setattr(zipfile, "ZipFile", _raise)
 
         enforce_archive_limits(facility_with_settings, upload, event, staff_user)
 

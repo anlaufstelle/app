@@ -214,9 +214,10 @@ def enforce_archive_limits(facility, uploaded_file, event, user):
             for info in zf.infolist():
                 total_uncompressed += info.file_size
                 total_compressed += info.compress_size
-    except zipfile.BadZipFile:
-        # Kein lesbares ZIP trotz Archiv-Extension — hier nicht abweisen;
-        # Magic-Bytes/Extension/Virus entscheiden.
+    except (zipfile.BadZipFile, OSError, EOFError, ValueError, struct.error):
+        # Kein lesbares ZIP trotz Archiv-Extension — BadZipFile ODER andere
+        # Parser-Fehler auf pathologischem Input (graceful skip statt 500); hier
+        # nicht abweisen, Magic-Bytes/Extension/Virus entscheiden.
         uploaded_file.seek(0)
         return
     finally:
