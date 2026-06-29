@@ -14,8 +14,8 @@
             lastSynced: null,
             lastSyncedRel: "",
             _pk: "",
-            // Offline-Edit-Zustand (Refs #1111).
-            editingPk: null,
+            // Offline-Edit-Zustand (Refs #1111). Welches Event editiert wird,
+            // steht als per-Event ``editing``-Flag in ``data.events`` (CSP-konform).
             editFields: [],
             editValues: {},
             editError: "",
@@ -93,6 +93,8 @@
                     if (cached.events) {
                         cached.events = cached.events.map((ev) => {
                             const fields = ev.data_fields || {};
+                            const isUnsynced = ev.localStatus === "modified" || ev.localStatus === "new";
+                            const isConflict = ev.localStatus === "conflict";
                             return Object.assign({}, ev, {
                                 occurred_at_fmt: this.formatTs(ev.occurred_at),
                                 data_fields_pairs: Object.keys(fields).map((slug) => ({
@@ -100,10 +102,16 @@
                                     value_fmt: this.formatFieldValue(fields[slug]),
                                 })),
                                 has_data_fields: Object.keys(fields).length > 0,
-                                is_unsynced:
-                                    ev.localStatus === "modified" ||
-                                    ev.localStatus === "new",
-                                is_conflict: ev.localStatus === "conflict",
+                                is_unsynced: isUnsynced,
+                                is_conflict: isConflict,
+                                // Refs #1111: Edit-Affordanz + Edit-Form-Sichtbarkeit als
+                                // per-Event-Booleans vorberechnen. Der @alpinejs/csp-Build
+                                // (Architektur-Guard) verbietet Method-Calls mit Argumenten
+                                // in x-if/x-show — daher Flags statt canEditEvent(event)/
+                                // isEditing(event). Edit nur wo der Replay durchginge
+                                // (can_edit bzw. bereits unsynced), nie bei Konflikt.
+                                can_edit_ui: Boolean((ev.can_edit || isUnsynced) && !isConflict),
+                                editing: false,
                             });
                         });
                     }
@@ -153,14 +161,14 @@
 
             /* ── Offline-Edit (Refs #1111) ─────────────────────────────── */
 
-            // Edit-Affordanz nur, wo der Replay auch durchginge (can_edit aus
-            // dem Bundle) bzw. für bereits lokal geänderte Events (Re-Edit).
-            // Konflikte werden über den Resolver gelöst, nicht hier.
-            canEditEvent(ev) {
-                return Boolean((ev.can_edit || ev.is_unsynced) && !ev.is_conflict);
-            },
-            isEditing(ev) {
-                return this.editingPk === ev.pk;
+            // Genau ein Event als „in Bearbeitung" markieren (oder keins bei
+            // ``pk === null``). Die per-Event ``editing``-Flags steuern die
+            // Edit-Form-Sichtbarkeit (CSP: keine Method-Calls in x-if) und
+            // bleiben über den reaktiven ``data.events``-Proxy live.
+            _setEditing(pk) {
+                for (const e of (this.data && this.data.events) || []) {
+                    e.editing = e.pk === pk;
+                }
             },
             get showSynced() {
                 return this.lastSyncResult === "synced";
@@ -236,10 +244,10 @@
                 }
                 this.editFields = descriptors;
                 this.editValues = values;
-                this.editingPk = ev.pk;
+                this._setEditing(ev.pk);
             },
             cancelEdit() {
-                this.editingPk = null;
+                this._setEditing(null);
                 this.editFields = [];
                 this.editValues = {};
                 this.editError = "";
@@ -269,7 +277,7 @@
                         expectedUpdatedAt: ev.updated_at || "",
                     });
                     this.lastSyncPk = ev.pk;
-                    this.editingPk = null;
+                    this._setEditing(null);
                     // Sofort den „Nicht synchronisiert"-Status zeigen.
                     await this.load();
                     if (navigator.onLine && window.offlineEdit.replayModifiedEvent) {
