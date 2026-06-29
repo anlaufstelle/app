@@ -97,6 +97,8 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     non_pii("core_auditlog", "action", reason="Enum (login/export/client_create/...)."),
     non_pii("core_auditlog", "target_type", reason="Modell-Typ-Marker (z.B. 'Client'), kein Freitext."),
     non_pii("core_auditlog", "target_id", reason="UUID/PK-String des Ziels, kein Freitext."),
+    non_pii("core_auditlog", "prev_hash", reason="HMAC-Hash der Vorgaengerzeile (Kette #1070), kein Freitext."),
+    non_pii("core_auditlog", "entry_hash", reason="HMAC-Hash der Zeile (Kette #1070), kein Freitext."),
     # ---- core_activity ---------------------------------------------------
     pii("core_activity", "summary"),
     non_pii("core_activity", "verb", reason="Enum (created/updated/deleted/...)."),

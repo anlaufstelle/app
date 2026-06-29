@@ -145,9 +145,7 @@ class AuditLog(models.Model):
     # damit Bestandszeilen per ``backfill_audit_chain`` nachgezogen werden
     # koennen (NULL = noch nicht verkettet) und Raw-Inserts gueltig bleiben.
     prev_hash = models.CharField(max_length=64, null=True, blank=True, verbose_name=_("Vorheriger Hash"))
-    entry_hash = models.CharField(
-        max_length=64, null=True, blank=True, db_index=True, verbose_name=_("Eintrags-Hash")
-    )
+    entry_hash = models.CharField(max_length=64, null=True, blank=True, db_index=True, verbose_name=_("Eintrags-Hash"))
 
     class Meta:
         verbose_name = _("Audit-Log")
