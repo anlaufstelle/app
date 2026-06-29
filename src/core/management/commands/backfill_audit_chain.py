@@ -23,12 +23,16 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db import connection, transaction
 
 from core.models import AuditLog
 from core.services.audit.chain import compute_entry_hash
+
+# Refs #1070: ``has_rls_bypass_context`` unter Modul-Name re-exportiert, damit Tests
+# die Fail-Loud-Pruefung auf Command-Ebene patchen koennen (siehe verify_audit_chain).
 from core.services.system import bypass_replication_triggers
+from core.services.system import has_rls_bypass_context as _has_rls_bypass_context
 
 
 class Command(BaseCommand):
@@ -42,6 +46,15 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        # Refs #1070: Wie enforce_retention (Refs #1016 A1.1) fail-loud — unter der
+        # RLS-gefilterten App-Rolle saehe der Backfill 0 Zeilen und verkettete
+        # nichts. Das Kommando MUSS als Admin-Rolle mit BYPASSRLS laufen.
+        if not _has_rls_bypass_context():
+            raise CommandError(
+                "backfill_audit_chain laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — sonst "
+                "wuerden 0 Zeilen gesehen und nichts verkettet (Refs #1070)."
+            )
         dry_run = options["dry_run"]
         facility_ids = list(AuditLog.objects.values_list("facility_id", flat=True).distinct())
 

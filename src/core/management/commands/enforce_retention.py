@@ -8,7 +8,6 @@ and ``stdout``/``stderr`` formatting.
 from dataclasses import dataclass
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db import connection
 from django.utils import timezone
 
 from core.models import AuditLog, Facility, Settings
@@ -25,24 +24,9 @@ from core.services.retention import (
     reactivate_deferred_proposals,
 )
 
-
-def _has_rls_bypass_context() -> bool:
-    """Refs #1016 A1.1: Kann der aktuelle DB-Kontext RLS umgehen?
-
-    True, wenn die Verbindungsrolle SUPERUSER/BYPASSRLS ist ODER die Session-GUC
-    ``app.is_super_admin`` auf ``true`` steht. Andernfalls filtert RLS diesen
-    Wartungslauf auf 0 Zeilen (kein Request setzt ``app.current_facility_id``) —
-    er waere wirkungslos. No-op (``True``) auf Nicht-PostgreSQL (SQLite-Tests).
-    """
-    if connection.vendor != "postgresql":
-        return True
-    with connection.cursor() as cur:
-        cur.execute("SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user")
-        row = cur.fetchone()
-        if row and row[0]:
-            return True
-        cur.execute("SELECT current_setting('app.is_super_admin', true) = 'true'")
-        return bool(cur.fetchone()[0])
+# Refs #1016/#1070: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
+# als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
+from core.services.system import has_rls_bypass_context as _has_rls_bypass_context
 
 
 @dataclass

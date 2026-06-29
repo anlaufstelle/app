@@ -10,6 +10,30 @@ from contextlib import contextmanager
 from django.db import connection
 
 
+def has_rls_bypass_context() -> bool:
+    """Refs #1016 A1.1: Kann der aktuelle DB-Kontext RLS umgehen?
+
+    True, wenn die Verbindungsrolle SUPERUSER/BYPASSRLS ist ODER die Session-GUC
+    ``app.is_super_admin`` auf ``true`` steht. Andernfalls filtert RLS einen
+    Wartungs-/Cron-Lauf auf 0 Zeilen (kein Request setzt ``app.current_facility_id``)
+    — er waere wirkungslos und wuerde faelschlich Erfolg melden. No-op (``True``)
+    auf Nicht-PostgreSQL (SQLite-Tests).
+
+    Gemeinsame Quelle fuer ``enforce_retention`` (Refs #1016) sowie
+    ``verify_audit_chain`` / ``backfill_audit_chain`` (Refs #1070), damit die
+    Fail-Loud-Pruefung nicht dreifach driftet.
+    """
+    if connection.vendor != "postgresql":
+        return True
+    with connection.cursor() as cur:
+        cur.execute("SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user")
+        row = cur.fetchone()
+        if row and row[0]:
+            return True
+        cur.execute("SELECT current_setting('app.is_super_admin', true) = 'true'")
+        return bool(cur.fetchone()[0])
+
+
 @contextmanager
 def bypass_replication_triggers():
     """Disable session-local trigger firing for the wrapped block.

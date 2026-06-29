@@ -19,6 +19,7 @@ from datetime import timezone as dt_timezone
 
 import pytest
 from django.core.management import call_command
+from django.core.management.base import CommandError
 from django.db import connection, transaction
 from django.utils import timezone
 
@@ -376,6 +377,36 @@ class TestTimestampNormalization:
         )
         result = verify_chain(facility)
         assert result.ok, result.reason
+
+
+# ---------------------------------------------------------------------------
+# RLS-Bypass-Guard der Ketten-Kommandos
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestChainCommandRlsBypassGuard:
+    """Refs #1070: ``verify_audit_chain`` / ``backfill_audit_chain`` MUESSEN RLS
+    umgehen koennen — sonst liefern die Queries unter der NOBYPASSRLS-App-Rolle
+    0 Zeilen, ``verify`` meldet faelschlich „Alle Audit-Ketten intakt" und
+    ``backfill`` verkettet nichts. Ohne Bypass-Kontext: fail-loud (CommandError),
+    analog zu ``enforce_retention`` (Refs #1016 A1.1)."""
+
+    def test_verify_aborts_loud_without_bypass_context(self, monkeypatch, facility, staff_user):
+        from core.management.commands import verify_audit_chain as cmd
+
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: False)
+        with pytest.raises(CommandError, match="RLS"):
+            call_command("verify_audit_chain")
+
+    def test_backfill_aborts_loud_without_bypass_context(self, monkeypatch, facility, staff_user):
+        from core.management.commands import backfill_audit_chain as cmd
+
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: False)
+        with pytest.raises(CommandError, match="RLS"):
+            call_command("backfill_audit_chain")
 
 
 @pytest.fixture

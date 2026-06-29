@@ -20,16 +20,29 @@ from __future__ import annotations
 
 import sys
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from core.models import Facility
 from core.services.audit.chain import verify_chain
+
+# Refs #1070: zentrale Fail-Loud-Pruefung in services/system/_db_admin — als
+# Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
+from core.services.system import has_rls_bypass_context as _has_rls_bypass_context
 
 
 class Command(BaseCommand):
     help = "Verifiziert die HMAC-Integritaetskette des AuditLog (Refs #1070)."
 
     def handle(self, *args, **options):
+        # Refs #1070: Wie enforce_retention (Refs #1016 A1.1) fail-loud, statt
+        # RLS-blind 0 Zeilen zu pruefen und faelschlich „Alle Audit-Ketten intakt"
+        # zu melden. Der Compliance-Cron MUSS als Rolle mit BYPASSRLS (Admin) laufen.
+        if not _has_rls_bypass_context():
+            raise CommandError(
+                "verify_audit_chain laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — sonst "
+                "saehe der Lauf 0 Zeilen und meldete faelschlich intakte Ketten (Refs #1070)."
+            )
         # System-Kette (facility=NULL) zuerst, dann jede Facility.
         targets: list = [None, *Facility.objects.all().order_by("name")]
 
