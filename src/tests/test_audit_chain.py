@@ -184,6 +184,47 @@ class TestTamperDetection:
         assert not result.ok
         assert "linkage" in result.reason.lower() or "deleted" in result.reason.lower()
 
+    def test_forged_checkpoint_does_not_mask_deletion(self, facility, staff_user):
+        """Refs #1070 (CRITICAL): Ein GEFAELSCHTER Checkpoint darf eine Loeschung
+        nicht legitimieren.
+
+        Der Immutability-Trigger (Migration 0024) schuetzt nur UPDATE/DELETE —
+        ein DB-Angreifer ohne ``AUDIT_HASH_KEY`` kann eine mittlere Zeile loeschen
+        und einen Checkpoint EINFUEGEN, der den dann danglenden ``prev_hash`` des
+        Nachfolgers als Prune-Grenze tarnt. Weil er den Schluessel nicht kennt,
+        kann er fuer den Checkpoint keinen gueltigen ``entry_hash`` berechnen —
+        ``verify_chain`` darf dessen Grenzen daher nicht vertrauen.
+        """
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        r2 = audit_event(AuditLog.Action.VIEW_QUALIFIED, user=staff_user, facility=facility)
+        r3 = audit_event(AuditLog.Action.LOGOUT, user=staff_user, facility=facility)
+        r2.refresh_from_db()
+        r3.refresh_from_db()
+        assert verify_chain(facility).ok
+        r2_hash = r2.entry_hash
+
+        # r2 loeschen (Trigger umgangen) -> r3.prev_hash zeigt ins Leere.
+        with transaction.atomic(), bypass_replication_triggers():
+            AuditLog.objects.filter(pk=r2.pk).delete()
+        # Gefaelschten Checkpoint einschieben: behauptet r2_hash als Prune-Grenze,
+        # hat aber KEINEN gueltigen entry_hash (kein Key). ``bulk_create`` umgeht
+        # ``save()`` und damit das Ketten-Sealing — modelliert den Raw-INSERT.
+        forged = AuditLog(
+            facility=facility,
+            action=AuditLog.Action.AUDIT_PRUNE_CHECKPOINT,
+            target_type="AuditLog",
+            detail={"pruned_count": 1, "boundary_hashes": [r2_hash]},
+            timestamp=r3.timestamp + timedelta(seconds=1),
+            prev_hash="deadbeef",
+            entry_hash=None,
+        )
+        AuditLog.objects.bulk_create([forged])
+
+        result = verify_chain(facility)
+        assert not result.ok
+        assert result.first_break_id == str(r3.pk)
+        assert "linkage" in result.reason.lower() or "deleted" in result.reason.lower()
+
     def test_verify_command_exit_code_nonzero_on_tamper(self, facility, staff_user):
         audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
         victim = audit_event(AuditLog.Action.CLIENT_UPDATE, user=staff_user, facility=facility, detail={"k": "v"})

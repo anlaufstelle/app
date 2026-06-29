@@ -148,13 +148,34 @@ class ChainResult:
 
 
 def _checkpoint_boundaries(rows) -> set[str]:
-    """Sammelt alle legitimen Prune-Grenzen (``boundary_hash`` +
-    ``boundary_hashes``) aus den Checkpoint-Zeilen der Kette."""
+    """Sammelt die legitimen Prune-Grenzen (``boundary_hash`` +
+    ``boundary_hashes``) — aber NUR aus Checkpoint-Zeilen, die selbst
+    AUTHENTIFIZIERT sind.
+
+    Der Immutability-Trigger (Migration 0024) schuetzt nur UPDATE/DELETE. Ein
+    DB-Angreifer ohne ``AUDIT_HASH_KEY`` koennte sonst eine mittlere Zeile
+    loeschen und einen GEFAELSCHTEN Checkpoint einschieben (``entry_hash`` NULL
+    oder Schrott, ``detail.boundary_hashes=[<hash der geloeschten Zeile>]``), der
+    den dann danglenden ``prev_hash`` des Nachfolgers als legitime Prune-Grenze
+    tarnt — und damit die Tamper-Evidenz aushebelt. Da er den Schluessel nicht
+    kennt, kann er fuer den Checkpoint keinen gueltigen ``entry_hash`` berechnen.
+    Wir vertrauen den Grenzen einer Checkpoint-Zeile daher nur, wenn ihr
+    ``entry_hash`` vorhanden ist UND ``compute_entry_hash(cp, cp.prev_hash)`` via
+    :func:`hmac.compare_digest` exakt reproduziert. Refs #1070.
+    """
     from core.models import AuditLog
 
     boundaries: set[str] = set()
     for row in rows:
         if row.action != AuditLog.Action.AUDIT_PRUNE_CHECKPOINT:
+            continue
+        # Nur authentifizierte Checkpoints legitimieren Luecken — ein gefaelschter
+        # (NULL/falscher entry_hash) wird ignoriert, die maskierte Loeschung faellt
+        # dann beim Verkettungs-Check auf.
+        if not row.entry_hash:
+            continue
+        expected = compute_entry_hash(row, row.prev_hash or "")
+        if not hmac.compare_digest(expected, row.entry_hash):
             continue
         detail = row.detail or {}
         single = detail.get("boundary_hash")
