@@ -4,12 +4,21 @@ Fuer den Compliance-Cron: geht jede Facility-Kette (inkl. der System-Kette mit
 ``facility=NULL``) in ``(timestamp, id)``-Reihenfolge durch und prueft pro
 Zeile (a) ``entry_hash`` == ``HMAC(key, prev_hash || canonical(row))`` —
 erkennt In-Place-Manipulation — und (b) die ``prev_hash``-Verkettung auf die
-vorherige ueberlebende Zeile (Loeschung/Einschub), wobei von
-``AUDIT_PRUNE_CHECKPOINT`` protokollierte Prune-Grenzen toleriert werden.
+vorherige ueberlebende Zeile (MITTIGE Loeschung/Einschub), wobei nur von einem
+*authentifizierten* ``AUDIT_PRUNE_CHECKPOINT`` protokollierte Prune-Grenzen
+toleriert werden (ein gefaelschter Checkpoint ohne gueltigen ``entry_hash``
+legitimiert keine Luecke).
 
 Gibt den ersten Bruch mit Zeilen-ID aus und beendet sich mit Exit-Code != 0,
 sobald irgendeine Kette gebrochen ist — damit ein Cron-Job das Finding
 eskalieren kann.
+
+**Bekannte Grenze (Tail-Truncation):** Erkannt werden In-Place-Manipulation und
+MITTIGE Loeschung/Einschuebe. Das Abschneiden der *juengsten* Zeile(n) am
+Ketten-Ende ist NICHT erkennbar — die Restkette bleibt in sich konsistent und es
+fehlt der danglende Nachfolger. Dafuer braeuchte es einen extern verankerten
+High-Water-Mark (juengster ``entry_hash`` + Count ausserhalb der DB); ein bewusst
+offener Folge-Schritt.
 
 Beispiel::
 

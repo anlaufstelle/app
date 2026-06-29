@@ -216,11 +216,21 @@ def verify_chain(facility) -> ChainResult:
     2. **Verkettung** — ``prev_hash`` muss auf den ``entry_hash`` der
        vorherigen ueberlebenden Zeile zeigen (Kettenstart: ``""``). Eine
        Diskontinuitaet ist nur legitim, wenn ``prev_hash`` eine von einem
-       Checkpoint protokollierte Prune-Grenze ist — sonst wurde eine Zeile
+       *authentifizierten* Checkpoint protokollierte Prune-Grenze ist (siehe
+       :func:`_checkpoint_boundaries`) — sonst wurde eine Zeile
        geloescht/eingeschoben.
 
     ``facility`` darf eine ``Facility``-Instanz, ein PK oder ``None`` (System-
     Kette) sein. Vergleich via :func:`hmac.compare_digest`.
+
+    **Bekannte Grenze (Tail-Truncation):** Erkannt werden In-Place-Manipulation
+    und MITTIGE Loeschung/Einschuebe (der Nachfolger traegt dann einen
+    danglenden ``prev_hash``). NICHT erkennbar ist das Abschneiden der
+    *juengsten* Zeile(n) am Ketten-Ende: loescht ein Angreifer den Tail, bleibt
+    die verbleibende Kette in sich konsistent und es gibt keinen Nachfolger mit
+    danglendem ``prev_hash``. Dafuer braeuchte es einen extern verankerten
+    High-Water-Mark (juengster ``entry_hash`` + Count, ausserhalb der DB
+    gespeichert) — ein bewusst offener Folge-Schritt, kein Teil dieser Pruefung.
     """
     from core.models import AuditLog, Facility
 
