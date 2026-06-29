@@ -8,9 +8,11 @@ import calendar
 from datetime import datetime
 
 from django.db import connection, transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from core.models import AuditLog
+from core.services.audit import audit_event
 from core.services.system import bypass_replication_triggers
 
 # A6.3 (Refs #1024 / #1016): Aktionen, die NICHT der Routine-Retention
@@ -18,9 +20,14 @@ from core.services.system import bypass_replication_triggers
 # RETENTION_RUN_COMPLETED ist der Marker, aus dem das Compliance-Dashboard den
 # letzten erfolgreichen Lauf liest (sonst „UNKNOWN"). Beide tragen
 # System-Metadaten, keine Klient-PII — die längere Aufbewahrung ist gerechtfertigt.
+# Refs #1070: AUDIT_PRUNE_CHECKPOINT ist der HMAC-Ketten-Tombstone selbst — er
+# protokolliert die ``boundary_hash``-Grenzen geloeschter Zeilen und darf nie
+# gepruned werden, sonst verloere ``verify_chain`` die Legitimation der
+# Diskontinuitaet.
 PRUNE_EXEMPT_ACTIONS = (
     AuditLog.Action.SECURITY_VIOLATION,
     AuditLog.Action.RETENTION_RUN_COMPLETED,
+    AuditLog.Action.AUDIT_PRUNE_CHECKPOINT,
 )
 
 
@@ -72,10 +79,42 @@ def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
     count = qs.count()
     if count == 0 or dry_run:
         return {"count": count}
+
+    # Refs #1070: HMAC-Kettengrenzen VOR dem Loeschen festhalten — die Kette
+    # wird nie umgeschrieben, der Checkpoint legitimiert nur die Luecke.
+    # ``boundary_hash`` = entry_hash der juengsten geloeschten Zeile.
+    # ``boundary_hashes`` = alle Schnittpunkte (entry_hash einer geloeschten
+    # Zeile, auf die eine ueberlebende Zeile via ``prev_hash`` zeigt) — deckt
+    # auch prune-exempte Ueberlebende MITTEN im geloeschten Bereich ab, sodass
+    # ``verify_chain`` keine falschen Brueche meldet.
+    deleted_hashes = {h for h in qs.values_list("entry_hash", flat=True) if h}
+    newest_boundary = qs.order_by("-timestamp", "-id").values_list("entry_hash", flat=True).first() or ""
+    survivor_prevs = set(
+        AuditLog.objects.filter(facility=facility)
+        .filter(Q(timestamp__gte=cutoff) | Q(action__in=PRUNE_EXEMPT_ACTIONS))
+        .values_list("prev_hash", flat=True)
+    )
+    boundary_hashes = sorted(survivor_prevs & deleted_hashes)
+
     if connection.vendor == "postgresql":
         with transaction.atomic(), bypass_replication_triggers():
             qs.delete()
     else:
         # SQLite/Tests ohne Trigger — direkt loeschen.
         qs.delete()
+
+    # Refs #1070: Checkpoint NACH dem Loeschen ueber den normalen (verketteten)
+    # ``audit_event``-Pfad anlegen — er verlinkt auf den neuen Ketten-Tail und
+    # haelt die Loeschgrenzen als Tombstone fest (selbst prune-exempt).
+    audit_event(
+        AuditLog.Action.AUDIT_PRUNE_CHECKPOINT,
+        user=None,
+        facility=facility,
+        target_type="AuditLog",
+        detail={
+            "pruned_count": count,
+            "boundary_hash": newest_boundary,
+            "boundary_hashes": boundary_hashes,
+        },
+    )
     return {"count": count}
