@@ -395,6 +395,19 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             messages.success(request, _("Ereignis wurde aktualisiert."))
             return redirect("core:event_detail", pk=event.pk)
 
+        # Formular ungueltig. Refs #1111: der Offline-Replay (Accept: application/json)
+        # darf ein ungueltiges Formular NICHT als Erfolg (HTTP 200) deuten — sonst
+        # verwirft er den Edit still als "synchronisiert" (Datenverlust von Art.9-/
+        # §203-Dokumentation). Daher 422 mit Feldfehlern. Bewusst NUR an Accept:
+        # application/json gebunden (nicht _wants_json_response, das auch HX-Request
+        # erfasst): ein normaler HTML-/HTMX-Submit behaelt das 200-Re-Render mit
+        # inline-Formularfehlern.
+        accept = (request.headers.get("Accept") or "").lower()
+        if "application/json" in accept:
+            return JsonResponse(
+                {"error": "invalid", "errors": data_form.errors.get_json_data()},
+                status=422,
+            )
         context = {
             "event": event,
             "data_form": data_form,

@@ -247,6 +247,36 @@ class TestEventUpdateConflict:
         )
         assert response.status_code == 302
 
+    def test_event_update_returns_422_json_on_invalid_form(self, client, staff_user, sample_event):
+        """Refs #1111: ein Offline-Replay (Accept: application/json) mit einem
+        UNGUELTIGEN Formular muss 422 + Feldfehler bekommen — nicht ein 200-
+        Re-Render, das der Replay faelschlich als ``synced`` werten und damit den
+        Edit still verwerfen wuerde (Datenverlust).
+        """
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}),
+            {"dauer": "nicht-numerisch"},  # Number-Feld -> Validierung schlaegt fehl
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 422
+        payload = response.json()
+        assert payload["error"] == "invalid"
+        assert payload["errors"], "422-Antwort muss die Feldfehler tragen"
+
+    def test_event_update_html_invalid_form_still_rerenders_200(self, client, staff_user, sample_event):
+        """Gegenprobe: ein normaler Browser-POST (kein Accept: application/json)
+        mit ungueltigem Formular behaelt das 200-Re-Render mit inline-Fehlern —
+        die 422-Sonderbehandlung gilt NUR fuer den JSON/Offline-Replay-Pfad.
+        """
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}),
+            {"dauer": "nicht-numerisch"},
+        )
+        assert response.status_code == 200
+        assert response["Content-Type"].startswith("text/html")
+
 
 @pytest.mark.django_db
 class TestOfflineConflictShellViews:
