@@ -272,9 +272,7 @@ class TestBuildClientOfflineBundleService:
         field_sens = {f["slug"]: f["sensitivity"] for f in dts[0]["fields"]}
         assert field_sens["risiko"] == "high"
 
-    def test_bundle_field_template_includes_render_metadata(
-        self, facility, client_identified, staff_user
-    ):
+    def test_bundle_field_template_includes_render_metadata(self, facility, client_identified, staff_user):
         """Refs #1111: Damit der Offline-Viewer ein Edit-Formular OHNE Server
         rendern kann, muss jede Feldvorlage ihre Render-Metadaten mitführen:
         Auswahl-Optionen (SELECT/MULTI_SELECT), Pflichtfeld-Flag, Hilfetext.
@@ -343,12 +341,8 @@ class TestBuildClientOfflineBundleService:
         )
         staff_bundle = build_client_offline_bundle(staff_user, facility, client_identified)
         lead_bundle = build_client_offline_bundle(lead_user, facility, client_identified)
-        staff_dt = next(
-            d for d in staff_bundle["document_types"] if d["pk"] == str(doc_type_normal_with_high_field.pk)
-        )
-        lead_dt = next(
-            d for d in lead_bundle["document_types"] if d["pk"] == str(doc_type_normal_with_high_field.pk)
-        )
+        staff_dt = next(d for d in staff_bundle["document_types"] if d["pk"] == str(doc_type_normal_with_high_field.pk))
+        lead_dt = next(d for d in lead_bundle["document_types"] if d["pk"] == str(doc_type_normal_with_high_field.pk))
         staff_slugs = {f["slug"] for f in staff_dt["fields"]}
         lead_slugs = {f["slug"] for f in lead_dt["fields"]}
         assert "bemerkung" in staff_slugs

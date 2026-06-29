@@ -641,9 +641,7 @@ class TestSerializeFieldTemplate:
     def test_options_mapped_to_value_label_dicts(self):
         """Die Optionen werden als ``{"value", "label"}`` serialisiert, damit
         der Offline-Viewer SELECT/MULTI_SELECT rendern kann."""
-        out = _serialize_field_template(
-            self._make_ft_stub(choices=[("gut", "Gut"), ("schlecht", "Schlecht")])
-        )
+        out = _serialize_field_template(self._make_ft_stub(choices=[("gut", "Gut"), ("schlecht", "Schlecht")]))
         assert out["options"] == [
             {"value": "gut", "label": "Gut"},
             {"value": "schlecht", "label": "Schlecht"},

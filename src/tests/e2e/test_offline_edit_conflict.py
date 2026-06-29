@@ -79,7 +79,7 @@ def _seed_client_with_event(e2e_env, notiz="Originalwert"):
 def _server_notiz(e2e_env, event_pk):
     return _shell(
         e2e_env,
-        "from core.models import Event;" f" print(Event.objects.get(pk='{event_pk}').data_json.get('notiz'))",
+        f"from core.models import Event; print(Event.objects.get(pk='{event_pk}').data_json.get('notiz'))",
     )[-1]
 
 

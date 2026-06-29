@@ -225,9 +225,7 @@ class TestMagicBytesValidation:
         # libmagic erkennt PE-Binaries als "application/x-dosexec" oder Varianten.
         assert "dos" in log.detail["detected"].lower() or "exec" in log.detail["detected"].lower()
 
-    def test_pdf_sniffing_as_octet_stream_rejected(
-        self, facility_with_settings, staff_user, doc_type_with_file, event
-    ):
+    def test_pdf_sniffing_as_octet_stream_rejected(self, facility_with_settings, staff_user, doc_type_with_file, event):
         """Refs #1310 (S3): Eine ``.pdf``, deren Inhalt von libmagic NICHT positiv
         als ``application/pdf`` erkannt wird (generisches
         ``application/octet-stream``), wird abgelehnt.
