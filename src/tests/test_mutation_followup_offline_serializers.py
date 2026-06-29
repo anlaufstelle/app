@@ -196,7 +196,34 @@ class TestSerializeEvent:
             "episode_pk",
             "is_anonymous",
             "data_fields",
+            # Refs #1111: steuert die Edit-Affordanz im Offline-Viewer.
+            "can_edit",
         }
+
+    def test_can_edit_true_for_staff_on_foreign_event(
+        self, facility, client_identified, doc_type_contact, staff_user, assistant_user
+    ):
+        """Refs #1111: Staff+ darf jedes sichtbare Event bearbeiten — auch
+        ein von einem anderen Nutzer angelegtes."""
+        event = _make_event(facility, client_identified, doc_type_contact, staff_user, created_by=assistant_user)
+        out = _serialize_event(staff_user, event)
+        assert out["can_edit"] is True
+
+    def test_can_edit_true_for_assistant_on_own_event(
+        self, facility, client_identified, doc_type_contact, assistant_user
+    ):
+        event = _make_event(facility, client_identified, doc_type_contact, assistant_user, created_by=assistant_user)
+        out = _serialize_event(assistant_user, event)
+        assert out["can_edit"] is True
+
+    def test_can_edit_false_for_assistant_on_foreign_event(
+        self, facility, client_identified, doc_type_contact, assistant_user, staff_user
+    ):
+        """Mutation des ``and``/``or`` im can_edit-Ausdruck: ein Assistant darf
+        fremde Events NICHT bearbeiten (spiegelt ``EventUpdateView.dispatch``)."""
+        event = _make_event(facility, client_identified, doc_type_contact, staff_user, created_by=staff_user)
+        out = _serialize_event(assistant_user, event)
+        assert out["can_edit"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -457,9 +484,13 @@ class TestSerializeWorkitem:
 
 @pytest.mark.django_db
 class TestSerializeDocumentType:
-    def test_dt_keys_complete(self, facility):
+    # Refs #1111: ``_serialize_document_type`` filtert seine Felder jetzt nach
+    # Feld-Sensitivity für den Bundle-Nutzer (wie ``_serialize_event``). Diese
+    # Shape-Tests nutzen ``lead_user`` (sieht alle Sensitivities) damit nie ein
+    # Feld weggefiltert wird und die reine Serialisierungs-Form geprüft bleibt.
+    def test_dt_keys_complete(self, facility, lead_user):
         dt = _make_doc_type(facility, name="DT", icon="ico", color="red")
-        out = _serialize_document_type(dt)
+        out = _serialize_document_type(lead_user, dt)
         assert set(out.keys()) == {
             "pk",
             "name",
@@ -470,42 +501,42 @@ class TestSerializeDocumentType:
             "fields",
         }
 
-    def test_dt_pk_stringified(self, facility):
+    def test_dt_pk_stringified(self, facility, lead_user):
         dt = _make_doc_type(facility, name="X")
-        assert _serialize_document_type(dt)["pk"] == str(dt.pk)
+        assert _serialize_document_type(lead_user, dt)["pk"] == str(dt.pk)
 
-    def test_dt_name_and_category(self, facility):
+    def test_dt_name_and_category(self, facility, lead_user):
         dt = _make_doc_type(facility, name="N")
-        out = _serialize_document_type(dt)
+        out = _serialize_document_type(lead_user, dt)
         assert out["name"] == "N"
         assert out["category"] == "contact"
 
-    def test_dt_sensitivity_passes_through_value_not_display(self, facility):
+    def test_dt_sensitivity_passes_through_value_not_display(self, facility, lead_user):
         """Mutation ``doc_type.sensitivity`` → ``.get_sensitivity_display()``
         wuerde "Hoch" statt "high" liefern."""
         dt = _make_doc_type(facility, name="HD", sensitivity=DocumentType.Sensitivity.HIGH)
-        out = _serialize_document_type(dt)
+        out = _serialize_document_type(lead_user, dt)
         assert out["sensitivity"] == "high"
 
-    def test_dt_icon_empty_default(self, facility):
+    def test_dt_icon_empty_default(self, facility, lead_user):
         """Mutation ``dt.icon or ""`` → ``dt.icon`` wuerde None oder ""
         durchreichen — wir prueffen explizit "" bei leerem icon."""
         dt = _make_doc_type(facility, name="NoIcon", icon="")
-        assert _serialize_document_type(dt)["icon"] == ""
+        assert _serialize_document_type(lead_user, dt)["icon"] == ""
 
-    def test_dt_color_empty_default(self, facility):
+    def test_dt_color_empty_default(self, facility, lead_user):
         dt = _make_doc_type(facility, name="NoColor", color="")
-        assert _serialize_document_type(dt)["color"] == ""
+        assert _serialize_document_type(lead_user, dt)["color"] == ""
 
-    def test_dt_icon_passthrough(self, facility):
+    def test_dt_icon_passthrough(self, facility, lead_user):
         dt = _make_doc_type(facility, name="Ico", icon="bi-bell")
-        assert _serialize_document_type(dt)["icon"] == "bi-bell"
+        assert _serialize_document_type(lead_user, dt)["icon"] == "bi-bell"
 
-    def test_dt_color_passthrough(self, facility):
+    def test_dt_color_passthrough(self, facility, lead_user):
         dt = _make_doc_type(facility, name="Col", color="#abc")
-        assert _serialize_document_type(dt)["color"] == "#abc"
+        assert _serialize_document_type(lead_user, dt)["color"] == "#abc"
 
-    def test_dt_fields_sorted_by_sort_order(self, facility):
+    def test_dt_fields_sorted_by_sort_order(self, facility, lead_user):
         """Mutation ``order_by("sort_order")`` → unsortiert wuerde Reihenfolge
         kippen, wenn man die Eintraege in umgekehrter Order erstellt."""
         dt = _make_doc_type(facility, name="Ord")
@@ -515,13 +546,30 @@ class TestSerializeDocumentType:
         # Reihenfolge im Output ist [B, A].
         _attach(dt, ft_b, sort_order=0)
         _attach(dt, ft_a, sort_order=1)
-        out = _serialize_document_type(dt)
+        out = _serialize_document_type(lead_user, dt)
         slugs = [f["slug"] for f in out["fields"]]
         assert slugs == [ft_b.slug, ft_a.slug]
 
-    def test_dt_fields_empty_list_when_no_fields(self, facility):
+    def test_dt_fields_empty_list_when_no_fields(self, facility, lead_user):
         dt = _make_doc_type(facility, name="Empty")
-        assert _serialize_document_type(dt)["fields"] == []
+        assert _serialize_document_type(lead_user, dt)["fields"] == []
+
+    def test_dt_fields_filtered_by_user_sensitivity(self, facility, staff_user, lead_user):
+        """Refs #1111: Ein HIGH-Feld in einem NORMAL-Typ darf nur in der
+        Feld-Liste auftauchen, wenn der Nutzer es sehen darf. Staff (max
+        ELEVATED) bekommt es NICHT, Lead schon — gleiche Grenze wie die
+        Wert-Filterung in ``_visible_data_fields``."""
+        dt = _make_doc_type(facility, name="Gemischt", sensitivity=DocumentType.Sensitivity.NORMAL)
+        ft_normal = _make_field_template(facility, name="Offen")
+        ft_high = _make_field_template(facility, name="Vertraulich", sensitivity="high")
+        _attach(dt, ft_normal, sort_order=0)
+        _attach(dt, ft_high, sort_order=1)
+
+        staff_slugs = {f["slug"] for f in _serialize_document_type(staff_user, dt)["fields"]}
+        lead_slugs = {f["slug"] for f in _serialize_document_type(lead_user, dt)["fields"]}
+        assert ft_normal.slug in staff_slugs
+        assert ft_high.slug not in staff_slugs
+        assert {ft_normal.slug, ft_high.slug} <= lead_slugs
 
 
 class TestSerializeFieldTemplate:
@@ -535,6 +583,9 @@ class TestSerializeFieldTemplate:
         field_type: str = "text",
         sensitivity: str = "",
         is_encrypted: bool = False,
+        is_required: bool = False,
+        help_text: str = "",
+        choices=None,
     ):
         from types import SimpleNamespace
 
@@ -544,6 +595,11 @@ class TestSerializeFieldTemplate:
             field_type=field_type,
             sensitivity=sensitivity,
             is_encrypted=is_encrypted,
+            is_required=is_required,
+            help_text=help_text,
+            # ``FieldTemplate.choices`` ist eine Property, die (value, label)-
+            # Tupel der aktiven Optionen liefert — hier als Attribut gestubbt.
+            choices=choices or [],
         )
 
     def test_keys_complete(self):
@@ -554,7 +610,44 @@ class TestSerializeFieldTemplate:
             "field_type",
             "sensitivity",
             "is_encrypted",
+            # Refs #1111: Render-Metadaten fürs Offline-Edit-Formular.
+            "is_required",
+            "help_text",
+            "options",
         }
+
+    def test_is_required_passthrough_true(self):
+        out = _serialize_field_template(self._make_ft_stub(is_required=True))
+        assert out["is_required"] is True
+
+    def test_is_required_passthrough_false(self):
+        out = _serialize_field_template(self._make_ft_stub(is_required=False))
+        assert out["is_required"] is False
+
+    def test_help_text_passthrough(self):
+        out = _serialize_field_template(self._make_ft_stub(help_text="Hilfe"))
+        assert out["help_text"] == "Hilfe"
+
+    def test_help_text_none_becomes_empty_string(self):
+        """Mutation ``field_template.help_text or ""`` → ``.help_text`` wuerde
+        None durchreichen und im JSON ``null`` erzeugen."""
+        out = _serialize_field_template(self._make_ft_stub(help_text=None))
+        assert out["help_text"] == ""
+
+    def test_options_empty_when_no_choices(self):
+        out = _serialize_field_template(self._make_ft_stub(choices=[]))
+        assert out["options"] == []
+
+    def test_options_mapped_to_value_label_dicts(self):
+        """Die Optionen werden als ``{"value", "label"}`` serialisiert, damit
+        der Offline-Viewer SELECT/MULTI_SELECT rendern kann."""
+        out = _serialize_field_template(
+            self._make_ft_stub(choices=[("gut", "Gut"), ("schlecht", "Schlecht")])
+        )
+        assert out["options"] == [
+            {"value": "gut", "label": "Gut"},
+            {"value": "schlecht", "label": "Schlecht"},
+        ]
 
     def test_sensitivity_none_becomes_empty_string(self):
         """Mutation ``field_template.sensitivity or ""`` → ``.sensitivity``

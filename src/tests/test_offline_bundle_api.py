@@ -272,6 +272,125 @@ class TestBuildClientOfflineBundleService:
         field_sens = {f["slug"]: f["sensitivity"] for f in dts[0]["fields"]}
         assert field_sens["risiko"] == "high"
 
+    def test_bundle_field_template_includes_render_metadata(
+        self, facility, client_identified, staff_user
+    ):
+        """Refs #1111: Damit der Offline-Viewer ein Edit-Formular OHNE Server
+        rendern kann, muss jede Feldvorlage ihre Render-Metadaten mitführen:
+        Auswahl-Optionen (SELECT/MULTI_SELECT), Pflichtfeld-Flag, Hilfetext.
+        Der aktuelle Wert fürs Vorbelegen liegt im Event (``data_fields``).
+        """
+        dt = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.CONTACT,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+            name="MitAuswahl",
+        )
+        ft = FieldTemplate.objects.create(
+            facility=facility,
+            name="Stimmung",
+            field_type=FieldTemplate.FieldType.SELECT,
+            is_required=True,
+            help_text="Bitte auswählen",
+            options_json=[
+                {"slug": "gut", "label": "Gut", "is_active": True},
+                {"slug": "schlecht", "label": "Schlecht", "is_active": True},
+                {"slug": "veraltet", "label": "Veraltet", "is_active": False},
+            ],
+        )
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={"stimmung": "gut"},
+            created_by=staff_user,
+        )
+
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        sdt = next(d for d in bundle["document_types"] if d["pk"] == str(dt.pk))
+        field = next(f for f in sdt["fields"] if f["slug"] == "stimmung")
+        assert field["is_required"] is True
+        assert field["help_text"] == "Bitte auswählen"
+        # Nur aktive Optionen, als value/label-Paare fürs Offline-Rendering.
+        assert field["options"] == [
+            {"value": "gut", "label": "Gut"},
+            {"value": "schlecht", "label": "Schlecht"},
+        ]
+        # Aktueller Wert zum Vorbelegen kommt aus dem Event-Snapshot.
+        ev = next(e for e in bundle["events"] if e["document_type_pk"] == str(dt.pk))
+        assert ev["data_fields"]["stimmung"] == "gut"
+
+    def test_bundle_omits_restricted_field_definitions_for_staff(
+        self, facility, client_identified, doc_type_normal_with_high_field, staff_user, lead_user
+    ):
+        """Refs #1111: Das Offline-Edit-Formular rendert aus den Feld-Defs des
+        Bundles. Felder, deren Wert der Nutzer per Sensitivity NICHT sehen darf,
+        dürfen daher auch nicht als Definition (inkl. der neuen Optionen/Hilfe-
+        texte) das Bundle erreichen — gleiche Servergrenze wie die Wert-Filterung
+        in ``_visible_data_fields``. Sonst zeigte der Viewer ein Eingabefeld,
+        dessen Eingabe der Server beim Replay still verwirft, und es verließe
+        mehr Schema die Servergrenze als die Read-Snapshot-Filterung erlaubt.
+        """
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_normal_with_high_field,
+            occurred_at=timezone.now(),
+            data_json={"bemerkung": "x", "risiko": "y"},
+            created_by=staff_user,
+        )
+        staff_bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        lead_bundle = build_client_offline_bundle(lead_user, facility, client_identified)
+        staff_dt = next(
+            d for d in staff_bundle["document_types"] if d["pk"] == str(doc_type_normal_with_high_field.pk)
+        )
+        lead_dt = next(
+            d for d in lead_bundle["document_types"] if d["pk"] == str(doc_type_normal_with_high_field.pk)
+        )
+        staff_slugs = {f["slug"] for f in staff_dt["fields"]}
+        lead_slugs = {f["slug"] for f in lead_dt["fields"]}
+        assert "bemerkung" in staff_slugs
+        assert "risiko" not in staff_slugs, "HIGH-Feld-Definition darf nicht zu Staff gelangen"
+        assert {"bemerkung", "risiko"} <= lead_slugs
+
+    def test_bundle_event_reports_can_edit_flag(
+        self, facility, client_identified, doc_type_contact, staff_user, assistant_user
+    ):
+        """Refs #1111: Der Viewer blendet die Edit-Affordanz nur ein, wenn der
+        Nutzer das Event auch online bearbeiten dürfte (``EventUpdateView``:
+        Staff+ darf alles, Assistant nur eigene Events). Ohne dieses Flag liefe
+        ein Assistant in einen 403-Replay und der Edit bliebe ewig „unsynced".
+        """
+        own_event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 1},
+            created_by=assistant_user,
+        )
+        foreign_event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 2},
+            created_by=staff_user,
+        )
+
+        staff_bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        staff_flags = {e["pk"]: e["can_edit"] for e in staff_bundle["events"]}
+        # Staff+ darf jedes sichtbare Event bearbeiten.
+        assert staff_flags[str(own_event.pk)] is True
+        assert staff_flags[str(foreign_event.pk)] is True
+
+        assistant_bundle = build_client_offline_bundle(assistant_user, facility, client_identified)
+        assistant_flags = {e["pk"]: e["can_edit"] for e in assistant_bundle["events"]}
+        assert assistant_flags[str(own_event.pk)] is True
+        assert assistant_flags[str(foreign_event.pk)] is False
+
 
 @pytest.mark.django_db
 class TestOfflineClientBundleView:

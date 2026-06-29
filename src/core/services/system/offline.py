@@ -44,10 +44,18 @@ def _serialize_field_template(field_template) -> dict[str, Any]:
         "field_type": field_template.field_type,
         "sensitivity": field_template.sensitivity or "",
         "is_encrypted": field_template.is_encrypted,
+        # Refs #1111: Render-Metadaten, damit der Offline-Viewer ein
+        # Edit-Formular OHNE Serverkontakt aufbauen kann — Pflichtfeld-Marker,
+        # Hilfetext und (für SELECT/MULTI_SELECT) die auswählbaren Optionen als
+        # ``value``/``label``-Paare. Es verlässt nur Schema (keine PII): die
+        # Werte selbst bleiben in ``_visible_data_fields`` sensitivity-gefiltert.
+        "is_required": field_template.is_required,
+        "help_text": field_template.help_text or "",
+        "options": [{"value": value, "label": label} for value, label in field_template.choices],
     }
 
 
-def _serialize_document_type(doc_type) -> dict[str, Any]:
+def _serialize_document_type(user, doc_type) -> dict[str, Any]:
     return {
         "pk": str(doc_type.pk),
         "name": doc_type.name,
@@ -55,9 +63,15 @@ def _serialize_document_type(doc_type) -> dict[str, Any]:
         "sensitivity": doc_type.sensitivity,
         "icon": doc_type.icon or "",
         "color": doc_type.color or "",
+        # Refs #1111: Nur Felder serialisieren, deren Wert der Nutzer per
+        # Sensitivity sehen/bearbeiten darf — dieselbe Grenze wie die
+        # Wert-Filterung in ``_visible_data_fields``. So verlässt kein
+        # zusätzliches Schema (Optionen/Hilfetext) für gesperrte Felder den
+        # Server und der Offline-Editor rendert nur editierbare Felder.
         "fields": [
             _serialize_field_template(dtf.field_template)
             for dtf in doc_type.fields.select_related("field_template").order_by("sort_order")
+            if user_can_see_field(user, doc_type.sensitivity, dtf.field_template.sensitivity or "")
         ],
     }
 
@@ -122,6 +136,14 @@ def _serialize_event(user, event) -> dict[str, Any]:
         "episode_pk": str(event.episode_id) if event.episode_id else None,
         "is_anonymous": event.is_anonymous,
         "data_fields": _visible_data_fields(user, event),
+        # Refs #1111: Spiegelt die Edit-Berechtigung aus ``EventUpdateView``
+        # (Staff+ darf alles, Assistant nur eigene Events) in den Snapshot, damit
+        # der Offline-Viewer die Edit-Affordanz nur dort zeigt, wo der Replay
+        # auch durchginge — sonst stranden Assistant-Edits in einem 403.
+        "can_edit": bool(
+            getattr(user, "is_staff_or_above", False)
+            or (event.created_by_id is not None and event.created_by_id == getattr(user, "pk", None))
+        ),
     }
 
 
@@ -212,5 +234,5 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
         "cases": [_serialize_case(c) for c in cases],
         "workitems": [_serialize_workitem(w) for w in workitems],
         "events": [_serialize_event(user, ev) for ev in events],
-        "document_types": [_serialize_document_type(dt) for dt in doc_types.values()],
+        "document_types": [_serialize_document_type(user, dt) for dt in doc_types.values()],
     }
