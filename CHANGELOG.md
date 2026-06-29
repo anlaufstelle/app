@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Offline-Editieren von Ereignissen** (#1111) — im Offline-Viewer lassen sich Ereignisse jetzt bearbeiten; die Änderungen wandern in die Offline-Queue und werden beim Reconnect serverseitig repliziert, bei divergenter Serverversion mit Konflikt-Markierung statt stillem Überschreiben.
 - **Drift-Guards für RLS-Abdeckung und Seed-Dokumentation** (#1096) — neue Architektur-Tests leiten die RLS-`EXPECTED_TABLES` aus der Model-Registry ab und prüfen die CONTRIBUTING-Seed-Tabelle gegen `SCALE_CONFIG`/`USER_TEMPLATES`, sodass ein neues facility-Model oder Seed-Feld ohne mitgepflegte Migration bzw. Dokumentation den Testlauf rot färbt.
 
 ### Changed
@@ -25,6 +26,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **Audit-Trail mit verketteter HMAC-Integrität (Tamper-Evidenz)** (#1070) — jede `AuditLog`-Zeile trägt einen pro Einrichtung verketteten HMAC-Hash; das neue `verify_audit_chain`-Kommando erkennt nachträgliche Manipulation oder Löschung einzelner Einträge (etwa direkt in der DB unter Umgehung des Append-Only-Triggers), `backfill_audit_chain` versieht Bestandszeilen, Retention-Pruning schreibt einen verketteten Checkpoint.
+- **File-Upload-Härtung: Magic-Byte-Allowlist und Zip-Bomb-Schutz** (#1310) — Uploads mit eindeutiger Endung (pdf/png/jpg/gif) müssen den passenden, per libmagic bestätigten Inhaltstyp tragen (kein generisches `application/octet-stream` mehr), und ZIP/OOXML-Archive mit übermäßiger Expansion (Größe bzw. Pack-Verhältnis) werden vor der Verschlüsselung fail-closed abgewiesen.
 - **Kein Markdown-Verweis mehr auf release-ausgeschlossene Pfade** (#1281) — ausgelieferte `.md`-Dateien (inkl. `CHANGELOG`) verlinken keine aus dem Public-Snapshot gestrippten Artefakte mehr (vermeidet tote Links und das Leaken interner Struktur); `verify-leak.sh` erzwingt das per `.md`-Link-/Phrasen-Guard auf dem sanitisierten Tree, und der Release-Build reduziert `pyproject.toml`-`testpaths` in der Public-Kopie auf `src/tests`.
 - **SudoMode auf den mächtigsten `/system/`-Aktionen** (#1253) — der Cross-Facility-Audit-Log-Export (inklusive IP-Adressen), der installationsweite Wartungsmodus-Toggle und das Entsperren gesperrter Konten verlangen jetzt eine frische Re-Authentifizierung, sodass eine gestohlene `super_admin`-Session allein nicht mehr für diese Aktionen genügt (das Rollen-Gate greift weiterhin zuerst).
 - **Compliance-Wächter „kein App-User ist Django-Superuser"** (#1297) — ein neuer Compliance-Check weist auf dem `/system/`-Dashboard jeden Anwendungs-`User` mit `is_superuser=True` als `CRITICAL` aus und ein Regressions-Test friert die mit #1271 etablierte Invariante über alle Bootstrap-Pfade (`seed`/`create_super_admin`/`setup_facility`) ein; bewusst abgegrenzt von der PostgreSQL-Rollen-Prüfung (`check_db_roles`).
