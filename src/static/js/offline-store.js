@@ -212,6 +212,39 @@
         }
     }
 
+    /*
+     * Refs #1111: Bring a decrypted `events`-row into one canonical shape the
+     * offline viewer can render, regardless of whether it is a CLEAN bundle
+     * event or an offline EDIT envelope written by `offline-edit.js`.
+     *
+     * A clean record's `data` is the full serialized event (carries its own
+     * `pk`/`occurred_at`/`document_type_name`/`data_fields`). A modified or
+     * conflict record's `data` is the edit envelope (`formData`,
+     * `expectedUpdatedAt`, `documentTypeName`, `documentTypePk`, `occurredAt`)
+     * — markEventModified overwrites the clean record, so we reconstruct the
+     * display/edit fields from the envelope here instead of leaving the row
+     * with undefined date/type/values.
+     */
+    function normalizeOfflineEventRecord(r) {
+        const data = r.data || {};
+        const localStatus = r.localStatus || "clean";
+        if (data.pk) {
+            // Clean serialized event — pass through, only attach status.
+            return { ...data, localStatus: localStatus };
+        }
+        // Edit envelope (modified/conflict) — map back to the canonical event
+        // keys the read template + edit form expect.
+        return {
+            pk: r.pk,
+            occurred_at: data.occurredAt || r.occurredAt || "",
+            document_type_name: data.documentTypeName || "",
+            document_type_pk: data.documentTypePk || "",
+            data_fields: data.formData || {},
+            updated_at: data.expectedUpdatedAt || "",
+            localStatus: localStatus,
+        };
+    }
+
     async function getOfflineClient(pk) {
         const crypto = _crypto();
         const row = await db.clients.get(pk);
@@ -250,10 +283,7 @@
             // payload so the offline-detail template can badge unsynced
             // or conflicting edits without another IndexedDB round-trip.
             events: events
-                .map((r) => {
-                    const payload = r.data && r.data.pk ? r.data : { ...(r.data || {}), pk: r.pk };
-                    return { ...payload, localStatus: r.localStatus || "clean" };
-                })
+                .map((r) => normalizeOfflineEventRecord(r))
                 .sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)),
         };
     }

@@ -127,8 +127,13 @@
                 formData: formData,
                 expectedUpdatedAt: token,
                 // Snapshot a few metadata fields so the list/review UI can
-                // label the edit without cross-referencing the cache.
+                // label the edit without cross-referencing the cache. Refs
+                // #1111: ``documentTypePk`` + ``occurredAt`` let the offline
+                // viewer re-render and re-edit a still-unsynced event (the
+                // clean bundle record is overwritten by this edit envelope).
                 documentTypeName: opts.documentTypeName || "",
+                documentTypePk: opts.documentTypePk || "",
+                occurredAt: opts.occurredAt || "",
                 lastEditedAt: Date.now(),
             },
         };
@@ -153,7 +158,18 @@
         const fd = (record.data && record.data.formData) || {};
         for (const [key, value] of Object.entries(fd)) {
             if (value === null || value === undefined) continue;
-            form.append(key, String(value));
+            // Refs #1111: MULTI_SELECT-Felder tragen ein Array — jeden Wert als
+            // eigenen Key anhängen, damit Djangos MultipleChoiceField
+            // (``value_from_datadict`` → ``getlist``) sie als Liste sieht statt
+            // als einen kommaverbundenen String (= „ungültige Auswahl").
+            if (Array.isArray(value)) {
+                for (const item of value) {
+                    if (item === null || item === undefined) continue;
+                    form.append(key, String(item));
+                }
+            } else {
+                form.append(key, String(value));
+            }
         }
         // Refs #1109 (F-07): Token mitschicken, damit der Server-Konflikt-Check
         // greift. Fehlt er am Record (z.B. ein vor diesem Fix angelegter Edit),
