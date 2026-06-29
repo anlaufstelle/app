@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report ci-coverage docs-screens release-gates release-preflight release-verify-public verify-vendor-js-sync sync-vendor-js
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public verify-vendor-js-sync sync-vendor-js
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -179,6 +179,19 @@ mutation:
 # Ergebnisse des letzten Mutation-Runs anzeigen (textuell, nicht-interaktiv).
 mutation-report:
 	$(PYTHON) -m mutmut results
+
+# Worktree-Workflow (dev-only, Refs #1240): ein Worktree pro Feature als
+# Geschwister-Ordner ../anlaufstelle-<NAME>. scripts/dev/worktree.sh wird —
+# wie run_mutmut.py — aus dem Public-Snapshot gestrippt. Doku:
+# docs/ai/agent-workflow.md § "Worktrees für parallele Agents".
+#   make worktree NAME=<slug> [BRANCH=<branch>] [WT_FLAGS=--own-deps]
+worktree:
+	bash scripts/dev/worktree.sh new "$(NAME)" $(BRANCH) $(WT_FLAGS)
+
+# Worktree wieder entfernen (git worktree remove + prune).
+#   make worktree-rm NAME=<slug>
+worktree-rm:
+	bash scripts/dev/worktree.sh rm "$(NAME)"
 
 # ── Release-Helfer (dev-only, Refs #1078/#1051): Skripte liegen unter
 #    dev-ops/release/ und sind nicht im Public-Snapshot — analog `make mutation`.
