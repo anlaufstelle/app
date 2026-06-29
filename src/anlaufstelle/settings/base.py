@@ -317,11 +317,16 @@ CLAMAV_TIMEOUT = int(os.environ.get("CLAMAV_TIMEOUT", "15"))
 #   ZIP/OOXML-Container: maximale Summe der UNkomprimierten Eintraege bzw.
 #   maximales Expansions-Verhaeltnis (unkomprimiert/komprimiert), aus dem
 #   Zip-Directory gelesen — OHNE Entpacken.
+# * FILE_VAULT_MAX_ARCHIVE_ENTRIES — Zip-Bomb-Schutz (#1310, S4): maximale Anzahl
+#   Eintraege, billig aus dem EOCD-Record gelesen, BEVOR zipfile.ZipFile() pro
+#   Eintrag ein ZipInfo materialisiert — sonst waere der Archiv-Guard selbst ein
+#   Memory-DoS (~1 Mio Mini-Eintraege => hunderte MB transient) auf RAM-limitierten Hosts.
 FILE_VAULT_MAX_UPLOAD_BYTES = int(os.environ.get("FILE_VAULT_MAX_UPLOAD_BYTES", str(50 * 1024 * 1024)))
 FILE_VAULT_MAX_UPLOAD_FILES = int(os.environ.get("FILE_VAULT_MAX_UPLOAD_FILES", "20"))
 FILE_VAULT_MAX_IMAGE_PIXELS = int(os.environ.get("FILE_VAULT_MAX_IMAGE_PIXELS", str(40_000_000)))
 FILE_VAULT_MAX_ARCHIVE_BYTES = int(os.environ.get("FILE_VAULT_MAX_ARCHIVE_BYTES", str(200 * 1024 * 1024)))
 FILE_VAULT_MAX_ARCHIVE_RATIO = int(os.environ.get("FILE_VAULT_MAX_ARCHIVE_RATIO", "100"))
+FILE_VAULT_MAX_ARCHIVE_ENTRIES = int(os.environ.get("FILE_VAULT_MAX_ARCHIVE_ENTRIES", "10000"))
 
 # --- Default PK ---
 

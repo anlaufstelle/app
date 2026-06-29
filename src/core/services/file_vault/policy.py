@@ -16,6 +16,8 @@ produzieren 15-30 s Mutmut-Timeouts pro Mutation.
 from __future__ import annotations
 
 import logging
+import os
+import struct
 
 from django.conf import settings as django_settings
 from django.core.exceptions import ValidationError
@@ -124,6 +126,39 @@ def enforce_image_limits(facility, uploaded_file, event, user):
         )
 
 
+def _zip_entry_count(uploaded_file) -> int | None:
+    """Cheap EOCD-only read of a ZIP's "total entries" count (#1310, S4).
+
+    Liest NUR den End-Of-Central-Directory-Record (EOCD) am Datei-Ende — OHNE das
+    Central Directory zu parsen — damit ein Archiv mit absurd vielen Eintraegen
+    abgelehnt werden kann, BEVOR ``zipfile.ZipFile()``/``infolist()`` pro Eintrag
+    ein ``ZipInfo`` materialisiert (~1 Mio Mini-Eintraege => hunderte MB transient
+    => OOM auf RAM-limitierten Containern).
+
+    Lokalisiert die EOCD-Signatur ``PK\\x05\\x06`` per ``rfind`` im Tail —
+    dieselbe Suche, mit der die stdlib den operativen EOCD findet; die Zaehlung
+    ist damit spoof-resistent. Gibt die EOCD-"total entries" zurueck oder
+    ``None``, wenn kein EOCD gefunden / die Datei zu kurz ist. ZIP64 setzt dieses
+    2-Byte-Feld auf 0xFFFF (65535), was jeden vernuenftigen Cap uebersteigt und
+    die Mega-Eintrags-Bombe ebenfalls fasst. Spult den Stream am Ende auf 0.
+    """
+    try:
+        uploaded_file.seek(0, os.SEEK_END)
+        filesize = uploaded_file.tell()
+        read_len = min(filesize, 22 + 0xFFFF)  # EOCD: 22 Byte Fixteil + bis 64 KB Kommentar
+        uploaded_file.seek(filesize - read_len)
+        tail = uploaded_file.read(read_len)
+    finally:
+        uploaded_file.seek(0)
+
+    idx = tail.rfind(b"PK\x05\x06")
+    if idx < 0 or len(tail) < idx + 12:
+        return None
+    # EOCD-Layout: Sig(4) DiskNo(2) CDDisk(2) EntriesHere(2) EntriesTotal(2)@+10 …
+    (entries,) = struct.unpack_from("<H", tail, idx + 10)
+    return entries
+
+
 def enforce_archive_limits(facility, uploaded_file, event, user):
     """Reject zip-bomb archives (Refs #1310 (S4)).
 
@@ -132,8 +167,12 @@ def enforce_archive_limits(facility, uploaded_file, event, user):
     Verhaeltnis (unkomprimiert/komprimiert) gelesen — OHNE die Eintraege zu
     entpacken. Eine klein gepackte Datei, die zu hunderten MB expandiert
     (Decompression-Bomb), wird abgelehnt, bevor ein nachgelagerter Konsument sie
-    auspackt. Nicht-Archiv-Uploads (per Extension) und kaputte ZIPs werden
-    uebersprungen; fuer sie bleiben Extension-/Magic-/Virus-Checks zustaendig.
+    auspackt. Davor lehnt ein billiger EOCD-Vorabcheck Archive mit zu vielen
+    Eintraegen ab (``FILE_VAULT_MAX_ARCHIVE_ENTRIES``), damit nicht schon
+    ``ZipFile()``/``infolist()`` pro Eintrag ein ``ZipInfo`` allokiert (sonst
+    waere dieser Guard selbst ein Memory-DoS). Nicht-Archiv-Uploads (per
+    Extension) und kaputte ZIPs werden uebersprungen; fuer sie bleiben
+    Extension-/Magic-/Virus-Checks zustaendig.
     Der Stream wird NICHT konsumiert (``seek(0)`` am Ende), damit die nach-
     gelagerte Verschluesselung die Datei noch lesen kann.
     """
@@ -146,6 +185,26 @@ def enforce_archive_limits(facility, uploaded_file, event, user):
 
     max_bytes = getattr(django_settings, "FILE_VAULT_MAX_ARCHIVE_BYTES", 200 * 1024 * 1024)
     max_ratio = getattr(django_settings, "FILE_VAULT_MAX_ARCHIVE_RATIO", 100)
+    max_entries = getattr(django_settings, "FILE_VAULT_MAX_ARCHIVE_ENTRIES", 10000)
+
+    # Billiger EOCD-Vorabcheck VOR ZipFile(): lehnt eine Mega-Eintrags-Bombe ab,
+    # bevor infolist() pro Eintrag ein ZipInfo materialisiert — sonst waere dieser
+    # Guard selbst ein Memory-DoS auf RAM-limitierten Hosts. Refs #1310 (S4).
+    entries = _zip_entry_count(uploaded_file)
+    if entries is not None and entries > max_entries:
+        log_attachment_violation(
+            facility,
+            user,
+            event,
+            reason="archive_too_many_entries",
+            filename=name,
+            entries=entries,
+            max_entries=max_entries,
+        )
+        raise ValidationError(
+            _("Archiv enthält zu viele Einträge (%(entries)d). Maximum: %(max)d — möglicher Zip-Bomb-Upload.")
+            % {"entries": entries, "max": max_entries}
+        )
 
     uploaded_file.seek(0)
     try:

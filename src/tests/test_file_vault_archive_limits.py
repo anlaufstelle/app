@@ -46,6 +46,15 @@ def _zip_upload(name, payload, *, content_type="application/zip", compression=zi
     return SimpleUploadedFile(name, buf.getvalue(), content_type=content_type)
 
 
+def _zip_with_entries(name, count, *, content_type="application/zip"):
+    """Baue ein gueltiges In-Memory-ZIP mit ``count`` trivialen Eintraegen."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for i in range(count):
+            zf.writestr(f"e{i}.txt", b"x")
+    return SimpleUploadedFile(name, buf.getvalue(), content_type=content_type)
+
+
 @pytest.fixture
 def _encryption_key(settings):
     settings.ENCRYPTION_KEY = Fernet.generate_key().decode("utf-8")
@@ -153,6 +162,59 @@ class TestArchiveExpansionGuard:
 
         enforce_archive_limits(facility_with_settings, upload, event, staff_user)
 
+        assert AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).count() == 0
+
+    def test_too_many_entries_rejected(self, facility_with_settings, staff_user, event, settings):
+        """Eine ZIP mit absurd vielen Einträgen → archive_too_many_entries.
+
+        Das ist der eigentliche S4-DoS-Vektor: ein strukturell gültiges ≤50-MB-
+        ZIP64 mit ~1 Mio Mini-Einträgen ließe ``ZipFile()``/``infolist()`` pro
+        Eintrag ein ``ZipInfo`` allokieren (hunderte MB transient → OOM auf RAM-
+        limitierten Containern). Der billige EOCD-Vorabcheck lehnt das ab.
+        Refs #1310 (S4).
+        """
+        settings.FILE_VAULT_MAX_ARCHIVE_ENTRIES = 5
+        upload = _zip_with_entries("many.zip", 6)
+
+        with pytest.raises(ValidationError):
+            enforce_archive_limits(facility_with_settings, upload, event, staff_user)
+
+        # Stream zurückgespult — die nachgelagerte Verschlüsselung kann noch lesen.
+        assert upload.tell() == 0
+        log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
+        assert log.detail["reason"] == "archive_too_many_entries"
+        assert log.detail["entries"] == 6
+        assert log.detail["max_entries"] == 5
+
+    def test_entry_count_precheck_runs_before_zipfile(
+        self, facility_with_settings, staff_user, event, settings, monkeypatch
+    ):
+        """Der Eintrags-Check lehnt ab, OHNE ``zipfile.ZipFile()`` aufzurufen —
+        sonst würde ``infolist()`` pro Eintrag ein ``ZipInfo`` materialisieren
+        (genau der Memory-DoS, den der Check verhindert). Refs #1310 (S4)."""
+        settings.FILE_VAULT_MAX_ARCHIVE_ENTRIES = 5
+        upload = _zip_with_entries("many.zip", 6)
+
+        def _must_not_open(*args, **kwargs):  # pragma: no cover - darf nie aufgerufen werden
+            raise AssertionError("zipfile.ZipFile vor dem EOCD-Vorabcheck aufgerufen")
+
+        monkeypatch.setattr(zipfile, "ZipFile", _must_not_open)
+
+        with pytest.raises(ValidationError):
+            enforce_archive_limits(facility_with_settings, upload, event, staff_user)
+
+        log = AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).latest("timestamp")
+        assert log.detail["reason"] == "archive_too_many_entries"
+
+    def test_few_entries_under_cap_accepted(self, facility_with_settings, staff_user, event, settings):
+        """Unter dem Eintrags-Cap greift der Vorabcheck nicht — normale Archive
+        laufen weiter durch den Größen-/Ratio-Pfad (kein False Positive)."""
+        settings.FILE_VAULT_MAX_ARCHIVE_ENTRIES = 5
+        upload = _zip_with_entries("few.zip", 2)
+
+        enforce_archive_limits(facility_with_settings, upload, event, staff_user)
+
+        assert upload.tell() == 0
         assert AuditLog.objects.filter(action=AuditLog.Action.SECURITY_VIOLATION).count() == 0
 
 
