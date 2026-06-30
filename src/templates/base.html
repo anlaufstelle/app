@@ -53,9 +53,10 @@
              class="fixed top-0 inset-x-0 z-50 bg-yellow-500 text-white text-center text-sm py-2"
              data-testid="offline-banner">
             {% trans "Offline — Daten werden bei Verbindung gespeichert" %}
-            <span x-show="hasCachedClients" x-cloak class="ml-2 text-xs" data-testid="offline-cached-count">
+            {# Refs #1321: verlinkt den Offline-Arbeitsplatz (/offline/) — lokal verfuegbare Personen offline erreichbar. #}
+            <a href="{% url 'offline_fallback' %}" x-show="hasCachedClients" x-cloak class="ml-2 text-xs underline" data-testid="offline-cached-count">
                 (<span x-text="cachedClients"></span><span x-show="isSingleCachedClient" x-cloak> {% trans "Person lokal verfügbar" %}</span><span x-show="hasMultipleCachedClients" x-cloak> {% trans "Personen lokal verfügbar" %}</span>)
-            </span>
+            </a>
             <span x-show="hasUnsynced" x-cloak class="ml-2 text-xs" data-testid="offline-unsynced-count">
                 · <span x-text="unsyncedCount"></span> {% trans "nicht synchronisiert" %}
             </span>

@@ -298,6 +298,40 @@
         return rows.map((r) => ({ pk: r.pk, lastSynced: r.lastSynced }));
     }
 
+    /*
+     * Refs #1321: Anzeige-Liste fuer den Offline-Arbeitsplatz. Pseudonym und
+     * `expiresAt` stecken im verschluesselten clients-Envelope, daher wird
+     * dieser pro Zeile EINMAL entschluesselt (die schwereren cases/events
+     * bleiben ungelesen). Abgelaufene Bundles (TTL) werden uebersprungen; ein
+     * Decrypt-Fehler (kein/falscher Schluessel nach Idle-Wipe/Re-Login) laesst
+     * die Zeile still aus — die Home zeigt dann ihren "bitte neu anmelden"-
+     * Zustand. Bewusst read-only: kein Purge als Render-Seiteneffekt (das
+     * uebernehmen getOfflineClient beim Lesen und der online-Re-Validate).
+     */
+    async function listOfflineClientsDetailed() {
+        const crypto = _crypto();
+        const rows = await db.clients.toArray();
+        const out = [];
+        for (const row of rows) {
+            let envelope;
+            try {
+                envelope = await crypto.decryptPayload(row.data);
+            } catch (_e) {
+                continue;
+            }
+            if (_isExpired(envelope.expiresAt)) continue;
+            const client = envelope.client || {};
+            out.push({
+                pk: row.pk,
+                pseudonym: client.pseudonym || "",
+                lastSynced: row.lastSynced,
+                expiresAt: envelope.expiresAt || "",
+            });
+        }
+        out.sort((a, b) => (a.pseudonym || "").localeCompare(b.pseudonym || "", "de"));
+        return out;
+    }
+
     async function removeOfflineClient(pk) {
         await db.clients.delete(pk);
         await db.cases.where("clientPk").equals(pk).delete();
@@ -504,6 +538,7 @@
         saveClientBundle: saveClientBundle,
         getOfflineClient: getOfflineClient,
         listOfflineClients: listOfflineClients,
+        listOfflineClientsDetailed: listOfflineClientsDetailed,
         removeOfflineClient: removeOfflineClient,
         isClientOffline: isClientOffline,
         countOfflineClients: countOfflineClients,

@@ -66,6 +66,20 @@ class TestOfflineFallbackView:
         response = client.get(reverse("offline_fallback"))
         assert response.status_code == 200
 
+    def test_renders_offline_workspace_scaffold(self, client):
+        """Refs #1321: /offline/ ist nicht mehr Sackgasse, sondern Offline-
+        Arbeitsplatz — PII-freies Scaffold + Renderer-Script, das die lokal
+        verfuegbaren Personen aus der verschluesselten IndexedDB fuellt.
+        """
+        response = client.get(reverse("offline_fallback"))
+        body = response.content.decode()
+        assert 'data-testid="offline-home"' in body
+        # Container, den offline-home.js mit der Personenliste fuellt.
+        assert 'data-testid="offline-home-list"' in body
+        # Renderer + Datenschicht muessen geladen werden (CSP: externe Scripts).
+        assert "offline-home.js" in body
+        assert "offline-store.js" in body
+
 
 @pytest.mark.django_db
 class TestServiceWorkerCachesOfflineFallback:
@@ -76,7 +90,22 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v9"' in body, "CACHE_NAME muss bei APP_SHELL-Aenderung gebumpt sein."
+        assert 'CACHE_NAME = "anlaufstelle-v10"' in body, "CACHE_NAME muss bei APP_SHELL-Aenderung gebumpt sein."
+
+    def test_sw_caches_offline_home_assets(self, client):
+        """Refs #1321: Die Offline-Home rendert client-seitig aus IndexedDB —
+        ihre JS-Deps muessen im APP_SHELL pre-cached sein, sonst ist die Home
+        beim ersten Offline-Aufruf (PWA-Kaltstart) nicht ladbar.
+        """
+        response = client.get(reverse("service_worker"))
+        body = response.content.decode()
+        for asset in (
+            "/static/js/dexie.min.js",
+            "/static/js/crypto.js",
+            "/static/js/offline-store.js",
+            "/static/js/offline-home.js",
+        ):
+            assert asset in body, f"{asset} fehlt im APP_SHELL — Offline-Home offline nicht ladbar."
 
 
 @pytest.mark.django_db

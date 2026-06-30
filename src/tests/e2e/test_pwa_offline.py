@@ -215,6 +215,46 @@ def test_offline_url_encoded_post_returns_offline_feedback(browser, base_url):
         context.close()
 
 
+def test_offline_home_lists_cached_clients(browser, base_url):
+    """Refs #1321: /offline/ ist der Offline-Arbeitsplatz und listet die lokal
+    mitgenommenen Personen aus der verschluesselten IndexedDB — mit Link in den
+    Offline-Viewer. Aktives Login (statt storage_state-Restore), damit
+    ``crypto_session`` den Schluessel ableitet und ``takeClientOffline`` das
+    Bundle verschluesseln kann. Refs #573/#574/#576.
+    """
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        page.goto(f"{base_url}/login/")
+        page.fill('input[name="username"]', "miriam")
+        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.click('button[type="submit"]')
+        page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
+
+        # Eine Person oeffnen und offline mitnehmen.
+        page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
+        find_first_client_link(page).click()
+        page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
+        match = re.search(r"/clients/([0-9a-f-]+)/", page.url)
+        assert match, f"keine Client-UUID in {page.url}"
+        client_pk = match.group(1)
+
+        take = page.locator('[data-testid="take-offline-btn"]').first
+        take.wait_for(state="visible", timeout=10000)
+        take.click()
+        # Badge "Lokal verfügbar" bestaetigt das verschluesselte Bundle in IndexedDB.
+        page.locator('[data-testid="offline-available-badge"]').wait_for(state="visible", timeout=10000)
+
+        # Offline-Arbeitsplatz zeigt die mitgenommene Person mit Viewer-Link.
+        page.goto(f"{base_url}/offline/", wait_until="domcontentloaded")
+        link = page.locator(f'[data-testid="offline-home-item"] a[href="/offline/clients/{client_pk}/"]')
+        link.wait_for(state="visible", timeout=10000)
+        assert link.count() >= 1, "Offline-Home listet die mitgenommene Person nicht"
+    finally:
+        context.close()
+
+
 # Hinweis: Multipart-Form-POSTs (z.B. Event-Anlage mit Datei-Anhang) werden
 # vom SW per Design NICHT in der verschluesselten Offline-Queue persistiert
 # — Binaerdaten brauchen eine eigene Pipeline (Issue #574). Der SW liefert

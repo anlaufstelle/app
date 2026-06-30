@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Offline-Arbeitsplatz statt Sackgasse** (#1321) — die `/offline/`-Seite listet jetzt client-seitig die lokal mitgenommenen Personen aus der verschlüsselten IndexedDB (mit „zuletzt synchronisiert"/„läuft ab" und Pending-/Konflikt-Zähler) und verlinkt in den Offline-Viewer; der Service Worker hält die nötigen Skripte im App-Shell vor (Offline-Kaltstart), und das Offline-Banner verlinkt den Arbeitsplatz.
 - **Offline-Editieren von Ereignissen** (#1111) — im Offline-Viewer lassen sich Ereignisse jetzt bearbeiten; die Änderungen wandern in die Offline-Queue und werden beim Reconnect serverseitig repliziert, bei divergenter Serverversion mit Konflikt-Markierung statt stillem Überschreiben.
 - **Drift-Guards für RLS-Abdeckung und Seed-Dokumentation** (#1096) — neue Architektur-Tests leiten die RLS-`EXPECTED_TABLES` aus der Model-Registry ab und prüfen die CONTRIBUTING-Seed-Tabelle gegen `SCALE_CONFIG`/`USER_TEMPLATES`, sodass ein neues facility-Model oder Seed-Feld ohne mitgepflegte Migration bzw. Dokumentation den Testlauf rot färbt.
 

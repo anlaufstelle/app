@@ -15,7 +15,7 @@
 
 importScripts("/static/js/url-patterns.js");
 
-const CACHE_NAME = "anlaufstelle-v9";
+const CACHE_NAME = "anlaufstelle-v10";
 // Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
 // ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
 // auch beim ersten Offline-Aufruf garantiert verfuegbar ist.
@@ -26,6 +26,14 @@ const APP_SHELL = [
     "/static/icons/icon-512.png",
     "/static/icons/icon-192.svg",
     "/static/icons/icon-512.svg",
+    // Refs #1321: Der Offline-Arbeitsplatz (/offline/) rendert seine
+    // Personenliste client-seitig aus der verschluesselten IndexedDB. Seine
+    // JS-Deps muessen pre-cached sein, sonst ist die Home beim ersten
+    // Offline-Aufruf (PWA-Kaltstart) leer/unladbar.
+    "/static/js/dexie.min.js",
+    "/static/js/crypto.js",
+    "/static/js/offline-store.js",
+    "/static/js/offline-home.js",
     OFFLINE_FALLBACK_URL,
 ];
 
