@@ -593,11 +593,13 @@ Für Einsätze ohne verlässliche Internetverbindung — etwa bei aufsuchender A
 **Vor dem Einsatz (online):**
 
 1. Öffnen Sie die Personenliste.
-2. Klicken Sie auf **„Personen für Offline laden"**, um die relevanten Personenprofile in den Offline-Cache Ihres Geräts zu laden. So sind die Pseudonyme und Stammdaten auch ohne Netz verfügbar.
+2. Tippen Sie bei jeder gewünschten Person in der Spalte **„Offline"** auf **„Mitnehmen"** — oder auf der Detailseite der Person auf **„Offline mitnehmen"**. Pseudonym, Stammdaten und die letzten Ereignisse werden dann verschlüsselt für die Offline-Nutzung auf Ihr Gerät geladen; ein Badge **„Lokal verfügbar"** bestätigt es. Maximal 20 Personen gleichzeitig.
+3. Der **Offline-Arbeitsplatz** unter **`/offline/`** listet jederzeit Ihre mitgenommenen Personen und dient auch als Einstieg, wenn Sie die App ohne Netz (bzw. als installierte App) öffnen.
 
 **Während des Einsatzes (offline):**
 
-- Sie können Ereignisse wie gewohnt erfassen. Die Einträge werden verschlüsselt lokal im Browser gespeichert (AES-GCM-256; der Schlüssel wird aus Ihrem Passwort abgeleitet).
+- Öffnen Sie eine mitgenommene Person wie gewohnt über ihre Detailseite — die Ansicht bleibt an der **normalen Adresse** und wird aus dem verschlüsselten Offline-Speicher aufgebaut (kein separater „Offline"-Link mehr).
+- Sie können **bestehende Ereignisse bearbeiten**; die Änderungen werden verschlüsselt lokal gespeichert (AES-GCM-256; der Schlüssel wird aus Ihrem Passwort abgeleitet) und bei Verbindung automatisch gesendet.
 - In der Oberfläche sehen Sie einen Hinweis, dass Sie offline arbeiten und wie viele Einträge noch auf die Synchronisation warten.
 
 **Zurück im Netz:**
@@ -612,7 +614,7 @@ Wurde ein Ereignis gleichzeitig online (durch jemand anderen) und offline (durch
 - **Server-Version übernehmen** — die Online-Änderung gewinnt, Ihre offline-Version wird verworfen.
 - **Manuell zusammenführen** — Sie entscheiden Feld für Feld, welche Inhalte übernommen werden.
 
-> **Wichtig — Datenverlust vermeiden:** Bei **Logout, Passwort-Änderung oder dem Schließen des Tabs** werden alle noch offline gespeicherten Daten **unlesbar**. Synchronisieren Sie daher **immer zuerst**, bevor Sie sich abmelden, Ihr Passwort ändern oder den Browser schließen.
+> **Wichtig — Datenverlust vermeiden:** **Logout** und **Passwort-Änderung** löschen die lokal gespeicherten Offline-Daten — synchronisieren Sie daher **immer zuerst**, bevor Sie sich abmelden oder Ihr Passwort ändern. Bei längerer Inaktivität wird der Offline-Zugriff aus Sicherheitsgründen **gesperrt**; nach erneuter Anmeldung sind noch nicht synchronisierte Einträge wieder verfügbar. Das bloße **Schließen des Tabs** löscht dagegen nichts.
 
 > **Keine Datei-Anhänge offline:** Ereignisse mit Datei-Anhängen können offline **nicht** gespeichert werden. Aus Sicherheitsgründen werden keine unverschlüsselten Datei-Blobs im Browser abgelegt. Erfassen Sie in diesem Fall zuerst das Ereignis ohne Datei und hängen Sie die Datei nach, sobald Sie wieder online sind.
 
