@@ -456,6 +456,9 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "client_identified.pk"),),
         idor_exempt="Reines Scaffold ohne DB-Lookup/PII (Docstring der View)",
     ),
+    # Refs #1322: pk-loser Shell fuer In-Place-Offline-Rendern. Public wie
+    # offline_fallback — PII-frei, muss via SW cache.addAll cachebar sein.
+    E("core:offline_client_shell", "public", get=ALL_AUTH, anonymous_ok=True),
     E("core:offline_conflict_list", "offline-api", get=ASSISTANT_PLUS),
     E(
         "core:offline_conflict_review",

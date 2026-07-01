@@ -15,11 +15,14 @@
 
 importScripts("/static/js/url-patterns.js");
 
-const CACHE_NAME = "anlaufstelle-v10";
+const CACHE_NAME = "anlaufstelle-v11";
 // Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
 // ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
 // auch beim ersten Offline-Aufruf garantiert verfuegbar ist.
 const OFFLINE_FALLBACK_URL = "/offline/";
+// Refs #1322: generischer, pk-loser Shell fuer In-Place-Rendern an der
+// kanonischen URL /clients/<pk>/ (offline) — statt Redirect auf /offline/...
+const OFFLINE_CLIENT_SHELL_URL = "/offline/client-shell/";
 const APP_SHELL = [
     "/static/css/styles.css",
     "/static/icons/icon-192.png",
@@ -34,7 +37,13 @@ const APP_SHELL = [
     "/static/js/crypto.js",
     "/static/js/offline-store.js",
     "/static/js/offline-home.js",
+    // Refs #1322: Der In-Place-Client-Shell rendert ueber offline-client-view.js,
+    // das NUR vom Offline-Detail-Template geladen wird (sonst nirgends -> nicht
+    // per stale-while-revalidate gecacht). Ohne Pre-Cache bliebe der Shell
+    // offline ohne Renderer.
+    "/static/js/offline-client-view.js",
     OFFLINE_FALLBACK_URL,
+    OFFLINE_CLIENT_SHELL_URL,
 ];
 
 self.addEventListener("install", (event) => {
@@ -237,21 +246,24 @@ self.addEventListener("fetch", (event) => {
     }
 
     if (request.headers.get("Accept")?.includes("text/html") || request.headers.get("HX-Request")) {
-        // Offline-Fallback-Kette (Refs #701):
+        // Offline-Fallback-Kette (Refs #701/#1322):
         // 1. Versuch: Netz
-        // 2. Klientel-Detail-Sonderfall: auf /offline/clients/<pk>/ umleiten
-        //    (der Viewer rendert aus IndexedDB)
+        // 2. Klientel-Detail-Sonderfall: den gecachten, pk-losen Client-Shell
+        //    IN-PLACE servieren (200, KEIN Redirect) — die URL bleibt
+        //    kanonisch (/clients/<pk>/), offline-client-view.js liest die pk
+        //    aus location.pathname und rendert aus IndexedDB.
         // 3. Sonst: gecachte Version dieser URL
-        // 4. Sonst: dediziertes /offline/-Fallback-Template (statt
-        //    Browser-Default „Sie sind offline / Chrome-Dino")
+        // 4. Sonst: dedizierte /offline/-Home (Offline-Arbeitsplatz) statt
+        //    Browser-Default „Sie sind offline / Chrome-Dino"
         event.respondWith(
             fetch(request).catch(() => {
                 const clientPk =
                     self.URL_PATTERNS.extractClientPk &&
                     self.URL_PATTERNS.extractClientPk(request.url);
                 if (clientPk) {
-                    const offlineUrl = "/offline/clients/" + clientPk + "/";
-                    return Response.redirect(offlineUrl, 302);
+                    return caches
+                        .match(OFFLINE_CLIENT_SHELL_URL)
+                        .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
                 }
                 return caches.match(request).then((cached) => cached || caches.match(OFFLINE_FALLBACK_URL));
             })

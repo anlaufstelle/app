@@ -255,6 +255,55 @@ def test_offline_home_lists_cached_clients(browser, base_url):
         context.close()
 
 
+def test_offline_client_detail_renders_in_place(browser, base_url):
+    """Refs #1322: Offline rendert ``/clients/<pk>/`` den Viewer IN-PLACE an der
+    kanonischen URL (kein ``/offline/...``-Redirect). Der Service Worker
+    serviert den gecachten, pk-losen Shell; ``offline-client-view.js`` liest die
+    pk aus ``location.pathname`` und rendert die mitgenommene Person aus der
+    verschluesselten IndexedDB.
+    """
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        page.goto(f"{base_url}/login/")
+        page.fill('input[name="username"]', "miriam")
+        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.click('button[type="submit"]')
+        page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
+
+        page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
+        find_first_client_link(page).click()
+        page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
+        detail_url = page.url
+        client_pk = re.search(r"/clients/([0-9a-f-]+)/", detail_url).group(1)
+
+        # Offline mitnehmen + Badge abwarten (Bundle in IndexedDB).
+        take = page.locator('[data-testid="take-offline-btn"]').first
+        take.wait_for(state="visible", timeout=10000)
+        take.click()
+        page.locator('[data-testid="offline-available-badge"]').wait_for(state="visible", timeout=10000)
+
+        # SW muss die Seite kontrollieren, bevor wir offline gehen.
+        _wait_for_active_service_worker(page, base_url)
+
+        page.context.set_offline(True)
+        # Kanonische Detail-URL erneut ansteuern — der SW serviert den Shell
+        # IN-PLACE (kein Redirect auf /offline/...).
+        page.goto(detail_url, wait_until="domcontentloaded")
+
+        # URL bleibt kanonisch — KEIN /offline/...-Split.
+        assert page.url.rstrip("/").endswith(f"/clients/{client_pk}"), f"URL nicht kanonisch: {page.url}"
+        assert "/offline/clients/" not in page.url
+
+        # Viewer rendert aus IndexedDB (Pseudonym sichtbar).
+        page.locator('[data-testid="offline-client-view"]').wait_for(state="visible", timeout=10000)
+        page.locator('[data-testid="offline-pseudonym"]').wait_for(state="visible", timeout=10000)
+    finally:
+        page.context.set_offline(False)
+        context.close()
+
+
 # Hinweis: Multipart-Form-POSTs (z.B. Event-Anlage mit Datei-Anhang) werden
 # vom SW per Design NICHT in der verschluesselten Offline-Queue persistiert
 # — Binaerdaten brauchen eine eigene Pipeline (Issue #574). Der SW liefert

@@ -63,6 +63,7 @@ from core.views.lockout_recovery import (
 from core.views.offline import (
     OfflineClientBundleView,
     OfflineClientDetailView,
+    OfflineClientShellView,
     OfflineConflictListView,
     OfflineConflictReviewView,
 )
@@ -271,6 +272,13 @@ urlpatterns = [
         "offline/clients/<uuid:pk>/",
         OfflineClientDetailView.as_view(),
         name="offline_client_detail",
+    ),
+    # Refs #1322: generischer, pk-loser Shell fuer In-Place-Rendern an der
+    # kanonischen URL /clients/<pk>/ (Service Worker serviert ihn offline).
+    path(
+        "offline/client-shell/",
+        OfflineClientShellView.as_view(),
+        name="offline_client_shell",
     ),
     # Offline (Streetwork Stage 3) — conflict review UI
     path(

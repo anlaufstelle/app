@@ -6,6 +6,16 @@
 (function () {
     "use strict";
 
+    // Refs #1322: In-Place-Rendern an /clients/<pk>/ (oder /offline/clients/<pk>/)
+    // ohne Django-Kontext — die Klientel-pk aus dem Pfad ziehen.
+    function _pkFromPath() {
+        var path = (window.location && window.location.pathname) || "";
+        var m = path.match(
+            /\/clients\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i
+        );
+        return m ? m[1] : "";
+    }
+
     document.addEventListener("alpine:init", () => {
         Alpine.data("offlineClientView", () => ({
             loading: true,
@@ -25,7 +35,7 @@
             lastSyncResult: "",
             lastSyncPk: "",
             init() {
-                this._pk = this.$el.dataset.pk || "";
+                this._pk = this.$el.dataset.pk || _pkFromPath();
                 // Refs #1111: Auf die Sync-Zähler von offline-edit.js hören.
                 // Spielt der Reconnect-Listener (offline-edit.js) eine offline
                 // angelegte Änderung ein, ändert sich der Unsynced-/Konflikt-

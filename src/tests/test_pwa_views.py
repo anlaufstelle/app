@@ -90,7 +90,19 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v10"' in body, "CACHE_NAME muss bei APP_SHELL-Aenderung gebumpt sein."
+        assert 'CACHE_NAME = "anlaufstelle-v11"' in body, "CACHE_NAME muss bei APP_SHELL-Aenderung gebumpt sein."
+
+    def test_sw_caches_offline_client_shell(self, client):
+        """Refs #1322: Der generische Offline-Client-Shell wird offline an der
+        kanonischen URL /clients/<pk>/ in-place serviert — muss daher im
+        APP_SHELL pre-cached sein (sonst beim ersten Offline-Aufruf nicht da).
+        """
+        response = client.get(reverse("service_worker"))
+        body = response.content.decode()
+        assert "/offline/client-shell/" in body, "Offline-Client-Shell fehlt im APP_SHELL."
+        # Der Viewer-Renderer wird nur vom Offline-Detail-Template geladen →
+        # ohne Pre-Cache offline kein Renderer fuer den In-Place-Shell.
+        assert "/static/js/offline-client-view.js" in body, "offline-client-view.js fehlt im APP_SHELL."
 
     def test_sw_caches_offline_home_assets(self, client):
         """Refs #1321: Die Offline-Home rendert client-seitig aus IndexedDB —
@@ -106,6 +118,30 @@ class TestServiceWorkerCachesOfflineFallback:
             "/static/js/offline-home.js",
         ):
             assert asset in body, f"{asset} fehlt im APP_SHELL — Offline-Home offline nicht ladbar."
+
+
+@pytest.mark.django_db
+class TestOfflineClientShellView:
+    """Refs #1322: generischer, pk-loser Offline-Client-Shell. Der Service
+    Worker serviert ihn offline IN-PLACE an der kanonischen URL /clients/<pk>/
+    (kein /offline/...-Redirect mehr); der Viewer liest die pk aus
+    location.pathname. Der Shell selbst traegt kein PII.
+    """
+
+    def test_renders_pkless_offline_client_scaffold(self, client):
+        response = client.get(reverse("core:offline_client_shell"))
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert 'data-testid="offline-client-view"' in body
+        # Keine pk im Scaffold — der Viewer leitet sie aus der URL ab.
+        assert 'data-pk=""' in body
+        assert "offline-client-view.js" in body
+
+    def test_public_access(self, client):
+        """Shell ist PII-frei und muss offline aus dem Cache servierbar sein —
+        kein Server-Auth-Gate (die Daten schuetzt der IndexedDB-Schluessel)."""
+        response = client.get(reverse("core:offline_client_shell"))
+        assert response.status_code == 200
 
 
 @pytest.mark.django_db

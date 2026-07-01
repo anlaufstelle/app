@@ -79,6 +79,28 @@ class OfflineClientDetailView(AssistantOrAboveRequiredMixin, View):
         )
 
 
+class OfflineClientShellView(View):
+    """Generic, pk-less scaffold for IN-PLACE offline rendering at the canonical
+    ``/clients/<uuid>/`` URL (Refs #1322).
+
+    The Service Worker pre-caches this shell and serves it for offline
+    navigations to a client detail page **without** redirecting to
+    ``/offline/clients/<pk>/`` — so the URL stays canonical and the offline/
+    online split disappears. ``offline-client-view.js`` then derives the client
+    pk from ``location.pathname`` (its ``data-pk`` is empty here).
+
+    Public on purpose, exactly like :class:`~core.views.pwa.OfflineFallbackView`:
+    the shell carries no PII (data is decrypted client-side from IndexedDB) and
+    must be pre-cacheable via the SW ``cache.addAll`` — an auth gate would make
+    the install-time fetch redirect to ``/login/`` and fail ``addAll``.
+    """
+
+    http_method_names = ["get"]
+
+    def get(self, request):
+        return render(request, "core/clients/offline_detail.html", {"client_pk": ""})
+
+
 class OfflineConflictReviewView(AssistantOrAboveRequiredMixin, View):
     """Shell page for the merge-UI at ``/offline/conflicts/<uuid>/``.
 
