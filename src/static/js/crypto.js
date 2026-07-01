@@ -213,7 +213,7 @@
         }
     }
 
-    async function _enforceIdleWipe() {
+    async function enforceIdleWipe() {
         const row = await _idbGet(ACTIVITY_KEY);
         if (!row || typeof row.ts !== "number") {
             // No stamp yet (pre-#1065 install or first run): start the idle
@@ -224,7 +224,26 @@
         if (Date.now() - row.ts <= _sessionAgeMs()) {
             return false;
         }
-        await wipeOfflineState();
+        // Idle-Grenze ueberschritten (Refs #1324): Liegt offline noch
+        // ungesyncte Arbeit vor, NUR den Schluessel verwerfen (Lock) statt zu
+        // purgen — der verschluesselte Bestand ueberlebt, Re-Login leitet
+        // denselben PBKDF2-Schluessel ab und macht ihn wieder lesbar/abspielbar.
+        // clearSessionKey allein erfuellt F-01 bereits (Daten ohne Key
+        // unlesbar); der Purge ist nur zusaetzliche Defense-in-Depth fuer den
+        // sauberen Cache. Im Fehlerfall daher lieber locken als Daten verlieren.
+        let unsynced = false;
+        try {
+            if (window.offlineStore && window.offlineStore.hasUnsyncedData) {
+                unsynced = await window.offlineStore.hasUnsyncedData();
+            }
+        } catch (_e) {
+            unsynced = true;
+        }
+        if (unsynced) {
+            await clearSessionKey();
+        } else {
+            await wipeOfflineState();
+        }
         return true;
     }
 
@@ -234,7 +253,7 @@
         // whether the session age has passed since the last activity — then
         // wipe instead of making the key usable again without re-auth.
         try {
-            if (await _enforceIdleWipe()) return null;
+            if (await enforceIdleWipe()) return null;
         } catch (_e) {
             // ignore — a stamp read error must not break online operation
         }
@@ -274,14 +293,14 @@
                 // a later (possibly offline) re-open starts here.
                 _touchActivity(true);
             } else if (document.visibilityState === "visible") {
-                _enforceIdleWipe().catch(function () {});
+                enforceIdleWipe().catch(function () {});
             }
         });
         window.addEventListener("pagehide", function () {
             _touchActivity(true);
         });
         window.setInterval(function () {
-            _enforceIdleWipe().catch(function () {});
+            enforceIdleWipe().catch(function () {});
         }, IDLE_CHECK_INTERVAL_MS);
     }
 
@@ -377,6 +396,9 @@
         decryptPayload: decryptPayload,
         clearSessionKey: clearSessionKey,
         wipeOfflineState: wipeOfflineState,
+        // Refs #1324: exponiert fuer den deterministischen Idle-Wipe-Trigger
+        // (Interval/visibilitychange rufen es intern; Tests treiben es gezielt).
+        enforceIdleWipe: enforceIdleWipe,
         hasSessionKey: hasSessionKey,
         ready: ready,
     };

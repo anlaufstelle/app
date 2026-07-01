@@ -23,6 +23,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Idle-Wipe verwirft keine ungesyncten Offline-Einträge mehr** (#1324) — läuft die Inaktivitätsgrenze ab, während noch offline erfasste, nicht synchronisierte Einträge (Queue/Konflikte) vorliegen, wird nur der Sitzungsschlüssel verworfen (Sperre) statt der verschlüsselte Bestand gelöscht; nach erneutem Login wird derselbe Schlüssel abgeleitet, die Einträge sind wieder lesbar und werden synchronisiert — bei sauberem Cache bleibt der vollständige Wipe (F-01) erhalten.
 - **MFA-Login zeigt korrektes Backup-Code-Format** (#1291) — die Backup-Code-Eingabe unter `/mfa/verify/` bewarb fälschlich das veraltete „xxxx-xxxx"-Format (Hinweis + Platzhalter); sie spiegelt jetzt die seit #790 genutzten 22-stelligen, case-sensitiven Codes wider (serverseitig waren diese Codes bereits gültig).
 - **Datei-Upload bei langsamem Virenscanner liefert keinen 500 mehr** (#1283) — der ClamAV-Scan läuft jetzt unter einer harten Wall-Clock-Deadline und das Scan-Timeout (`CLAMAV_TIMEOUT`) liegt unter dem Gunicorn-Worker-Timeout, sodass ein nicht (rechtzeitig) antwortender Daemon den Upload fail-closed mit klarer Meldung abweist, statt den Worker ins Timeout laufen zu lassen.
 

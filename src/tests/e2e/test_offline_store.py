@@ -73,6 +73,102 @@ def test_indexeddb_record_is_ciphertext_at_rest(authenticated_page, base_url):
     assert "ct" in raw["data"]
 
 
+# ── Idle-Wipe-Datenverlust-Schutz (Refs #1324) ──────────────────────────────
+
+_NEW_EVENT_PK = "11111111-1111-1111-1111-111111111111"
+
+
+def _seed_unsynced_new_event(page):
+    """Ein offline neu angelegtes ('new') Event in die Queue schreiben."""
+    return page.evaluate(
+        """async () => {
+            await window.offlineStore.saveOfflineEdit({
+                pk: '11111111-1111-1111-1111-111111111111',
+                clientPk: 'c1',
+                occurredAt: '2026-01-01T00:00:00Z',
+                localStatus: 'new',
+                data: { formData: { note: 'offline erfasst' }, documentTypePk: 'dt1' },
+            });
+            return await window.offlineStore.countUnsyncedEvents();
+        }"""
+    )
+
+
+def _expire_activity_and_enforce_idle(page):
+    """Activity-Stempel kuenstlich veralten und den Idle-Wipe ausloesen."""
+    return page.evaluate(
+        """async () => {
+            await new Promise((resolve, reject) => {
+                const req = indexedDB.open('anlaufstelle-crypto', 1);
+                req.onsuccess = () => {
+                    const tx = req.result.transaction('meta', 'readwrite');
+                    tx.objectStore('meta').put({ key: 'lastActivity', ts: 1 });
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                };
+                req.onerror = () => reject(req.error);
+            });
+            await window.crypto_session.enforceIdleWipe();
+            return !window.crypto_session.hasSessionKey();
+        }"""
+    )
+
+
+def test_has_unsynced_data_reflects_pending_edits(authenticated_page, base_url):
+    page = authenticated_page
+    _bootstrap(page, base_url)
+    before = page.evaluate("() => window.offlineStore.hasUnsyncedData()")
+    assert _seed_unsynced_new_event(page) == 1
+    after = page.evaluate("() => window.offlineStore.hasUnsyncedData()")
+    assert before is False
+    assert after is True
+
+
+def test_idle_wipe_preserves_unsynced_data_for_relogin(authenticated_page, base_url):
+    """Refs #1324: Idle-Wipe darf offline erfasste, noch ungesyncte Eintraege
+    NICHT verwerfen — nur den Schluessel loeschen (Lock). Re-Login leitet
+    denselben PBKDF2-Schluessel wieder ab und macht Daten + Queue lesbar.
+    """
+    page = authenticated_page
+    _bootstrap(page, base_url)
+    _seed_unsynced_new_event(page)
+
+    locked_out = _expire_activity_and_enforce_idle(page)
+    recovered = page.evaluate(
+        """async () => {
+            await window.crypto_session.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+            const ev = await window.offlineStore.getOfflineEvent('11111111-1111-1111-1111-111111111111');
+            return { recovered: !!ev, still: await window.offlineStore.countUnsyncedEvents() };
+        }"""
+    )
+    assert locked_out is True, "Idle-Wipe muss den Schluessel loeschen (Lock)"
+    assert recovered["recovered"] is True, "Ungesyncte Daten duerfen nach Idle-Wipe NICHT verloren sein"
+    assert recovered["still"] == 1
+
+
+def test_idle_wipe_purges_when_all_synced(authenticated_page, base_url):
+    """Refs #1324: Ohne ungesyncte Arbeit bleibt der volle Idle-Wipe (Key +
+    Daten) — verschluesselte Bundles ueberleben die Idle-Grenze nicht.
+    """
+    page = authenticated_page
+    _bootstrap(page, base_url)
+    page.evaluate(
+        """async () => {
+            await window.offlineStore.putEncrypted('drafts', {
+                formKey: 'clean', updatedAt: 1700000000000, data: { x: 1 },
+            });
+        }"""
+    )
+    _expire_activity_and_enforce_idle(page)
+    drafts = page.evaluate(
+        """async () => {
+            await window.crypto_session.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+            return await window.offlineStore.count('drafts');
+        }"""
+    )
+    assert drafts == 0, "Ohne ungesyncte Arbeit muss der Idle-Wipe die Daten purgen"
+
+
 def test_get_after_clear_session_key_returns_null_and_discards(authenticated_page, base_url):
     page = authenticated_page
     _bootstrap(page, base_url)

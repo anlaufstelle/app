@@ -483,6 +483,20 @@
         return db.events.where("localStatus").equals("conflict").count();
     }
 
+    /*
+     * Refs #1324: True, wenn offline noch NICHT synchronisierte Arbeit vorliegt
+     * — die generische Write-Queue ODER modifizierte/neue/konfligierende Events.
+     * Der Idle-Wipe fragt das ab, um bei ungesyncter Arbeit nur zu LOCKEN
+     * (Schluessel verwerfen) statt zu purgen: der verschluesselte Bestand
+     * ueberlebt, Re-Login leitet denselben PBKDF2-Schluessel ab und macht ihn
+     * wieder lesbar/abspielbar — sonst gingen offline erfasste Eintraege beim
+     * 30-Min-Idle still verloren.
+     */
+    async function hasUnsyncedData() {
+        if ((await db.queue.count()) > 0) return true;
+        return (await countUnsyncedEvents()) > 0;
+    }
+
     async function updateEventLocalStatus(pk, status) {
         // Dexie's `update()` only touches the indexed fields; safe because
         // `localStatus` is an index and not inside the encrypted envelope.
@@ -552,6 +566,7 @@
         listConflicts: listConflicts,
         countUnsyncedEvents: countUnsyncedEvents,
         countConflictEvents: countConflictEvents,
+        hasUnsyncedData: hasUnsyncedData,
         updateEventLocalStatus: updateEventLocalStatus,
         saveConflictState: saveConflictState,
         clearOfflineEdit: clearOfflineEdit,
