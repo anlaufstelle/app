@@ -222,3 +222,42 @@ class TestOfflineEditReplay:
             with suppress(Exception):
                 page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
             context.close()
+
+    def test_conflict_resolver_keep_server_resolves(self, browser, base_url, e2e_env):
+        """Refs #1327: Der Konflikt-Resolver (/offline/conflicts/<pk>/) ist
+        end-to-end verdrahtet — der 409-Konflikt liefert eine feldweise
+        Gegenueberstellung mit keepLocal/keepServer/keepMerged; „Server-Version
+        uebernehmen" loest den Konflikt auf und verwirft den lokalen Edit.
+        """
+        client_pk, event_pk = _seed_client_with_event(e2e_env, notiz="Originalwert")
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            assert _cache_bundle(page, client_pk)["ok"]
+            _open_offline_detail(page, base_url, client_pk)
+            _go_offline(page)
+            _edit_notiz_offline(page, event_pk, "Mein lokaler Wert")
+            _bump_server_event(e2e_env, event_pk, "Server hat zuerst geaendert")
+            _go_online(page)
+            page.locator("[data-testid='event-conflict-badge']").first.wait_for(state="visible", timeout=20000)
+
+            # Resolver oeffnen — feldweiser Diff + alle drei Auswahl-Aktionen da.
+            page.goto(f"{base_url}/offline/conflicts/{event_pk}/", wait_until="domcontentloaded")
+            page.locator("[data-testid='conflict-resolver-view']").wait_for(state="visible", timeout=10000)
+            page.locator("[data-testid='conflict-diff-table']").wait_for(state="visible", timeout=10000)
+            assert page.locator("[data-testid='conflict-keep-local']").count() == 1
+            assert page.locator("[data-testid='conflict-keep-server']").count() == 1
+            assert page.locator("[data-testid='conflict-merge']").count() == 1
+
+            # „Server-Version uebernehmen" → aufgeloest, lokaler Edit verworfen.
+            page.locator("[data-testid='conflict-keep-server']").click()
+            page.locator("[data-testid='conflict-resolved']").wait_for(state="visible", timeout=15000)
+
+            page.wait_for_timeout(500)
+            assert _server_notiz(e2e_env, event_pk) == "Server hat zuerst geaendert"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
