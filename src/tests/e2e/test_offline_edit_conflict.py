@@ -139,6 +139,38 @@ def _open_offline_detail(page, base_url, client_pk):
     page.locator("[data-testid='offline-event']").first.wait_for(state="visible", timeout=15000)
 
 
+def _open_inplace_shell(page, base_url, client_pk):
+    """Die kanonische URL ``/clients/<pk>/`` OFFLINE oeffnen — der Service Worker
+    liefert die In-Place-Shell (Refs #1322), NICHT ``/offline/clients/<pk>/``.
+    Voraussetzung: SW aktiv/kontrollierend + Bundle gecacht + offline.
+    """
+    page.goto(f"{base_url}/clients/{client_pk}/", wait_until="domcontentloaded")
+    page.locator("[data-testid='offline-event']").first.wait_for(state="visible", timeout=15000)
+
+
+def _wait_for_active_service_worker(page, base_url):
+    """SW registriert + aktiviert + kontrolliert die Page (sonst kann er
+    ``/clients/<pk>/`` offline nicht in-place ausliefern). Analog
+    ``test_pwa_offline._wait_for_active_service_worker``."""
+    page.evaluate(
+        """async () => {
+            const reg = await navigator.serviceWorker.getRegistration('/');
+            if (!reg) return;
+            const sw = reg.active || reg.installing || reg.waiting;
+            if (!sw || sw.state === 'activated') return;
+            return new Promise((resolve) => {
+                sw.addEventListener('statechange', () => {
+                    if (sw.state === 'activated') resolve();
+                });
+                setTimeout(resolve, 5000);
+            });
+        }"""
+    )
+    if not page.evaluate("() => !!navigator.serviceWorker.controller"):
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=5000)
+
+
 def _go_offline(page):
     page.context.set_offline(True)
     page.evaluate("window.dispatchEvent(new Event('offline'))")
@@ -272,6 +304,52 @@ class TestOfflineEditReplay:
             # Server hat den offline gesetzten Wert übernommen.
             page.wait_for_timeout(500)  # kleine Marge für die DB-Sicht des Subprozesses
             assert _server_notiz(e2e_env, event_pk) == "Geaenderter Wert offline"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_inplace_shell_offline_edit_syncs_despite_stale_csrf(self, browser, base_url, e2e_env):
+        """Refs #1330: Offline-Edit auf der SW-servierten In-Place-Shell unter der
+        kanonischen URL ``/clients/<pk>/`` (Refs #1322) muss beim Reconnect
+        synchronisieren — auch wenn die aus dem Cache gelieferte Shell ein zur
+        Precache-Zeit eingefrorenes, veraltetes ``<meta name="csrf-token">``
+        traegt. Der Replay darf am 403 nicht als „revoked" scheitern, sondern
+        muss den Token auffrischen und erneut senden.
+        """
+        client_pk, event_pk = _seed_client_with_event(e2e_env, notiz="Originalwert")
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            assert _cache_bundle(page, client_pk)["ok"]
+            _wait_for_active_service_worker(page, base_url)
+
+            # Offline → kanonische URL: der SW liefert die In-Place-Shell.
+            _go_offline(page)
+            _open_inplace_shell(page, base_url, client_pk)
+            assert page.url.rstrip("/").endswith(f"/clients/{client_pk}"), f"kein In-Place-Render, URL={page.url}"
+
+            _edit_notiz_offline(page, event_pk, "Shell-Edit offline")
+
+            # Die gecachte Shell traegt ein veraltetes CSRF-Meta — deterministisch
+            # reproduzieren (in Produktion: Snapshot der Precache-Zeit vor der
+            # Login-Token-Rotation), damit der Replay-POST erst einen 403 kassiert.
+            page.evaluate(
+                "() => document.querySelector('meta[name=\"csrf-token\"]')"
+                ".setAttribute('content', 'stale-precached-token-DEADBEEF')"
+            )
+
+            # Reconnect (auf der Shell-Seite bleibend) → Auto-Replay.
+            _go_online(page)
+
+            # Erfolg: Unsynced-Badge verschwindet (synced), kein Konflikt,
+            # Server traegt den offline gesetzten Wert.
+            page.locator("[data-testid='event-unsynced-badge']").first.wait_for(state="hidden", timeout=20000)
+            assert page.locator("[data-testid='event-conflict-badge']").count() == 0
+            page.wait_for_timeout(500)
+            assert _server_notiz(e2e_env, event_pk) == "Shell-Edit offline"
         finally:
             with suppress(Exception):
                 page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")

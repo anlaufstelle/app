@@ -52,6 +52,55 @@
         return _csrfFromMeta();
     }
 
+    function _postForm(url, body, csrf, extraHeaders) {
+        const headers = Object.assign(
+            {
+                "Content-Type": "application/x-www-form-urlencoded",
+                Accept: "application/json",
+            },
+            extraHeaders || {}
+        );
+        if (csrf) headers["X-CSRFToken"] = csrf;
+        return fetch(url, {
+            method: "POST",
+            body: body,
+            headers: headers,
+            credentials: "same-origin",
+        });
+    }
+
+    // Refs #1330: Die aus dem SW-Cache servierte In-Place-Shell (/clients/<pk>/,
+    // Refs #1322) kann ein zur Precache-Zeit eingefrorenes, veraltetes
+    // <meta name="csrf-token"> tragen (der Login rotiert den Token danach). Ein
+    // 403 ist dann KEIN Rechteentzug, sondern ein reines Token-Problem — einmal
+    // mit frisch von /login/ geholtem Token nachfassen, bevor der Replay als
+    // "revoked" gilt. Gibt null zurück, wenn das Netz wegbricht.
+    async function _postFormWithCsrfRetry(url, body, csrf, extraHeaders) {
+        let response;
+        try {
+            response = await _postForm(url, body, csrf, extraHeaders);
+        } catch (_e) {
+            return null;
+        }
+        if (response.status === 403) {
+            const fresh = await _refreshCsrf();
+            // `fresh !== csrf` filtert KEINE echten Rechteentzug-403 heraus:
+            // Django re-maskt den Token bei jedem Render, `fresh` unterscheidet
+            // sich also praktisch immer vom Ausgangs-`csrf`. Der Guard unterdrückt
+            // den Retry nur, wenn `_refreshCsrf` mangels Netz auf dasselbe (stale)
+            // Meta zurückfiel — ein echter 403 wird nach einem verworfenen Retry
+            // korrekt zu "revoked".
+            if (fresh && fresh !== csrf) {
+                try {
+                    response = await _postForm(url, body, fresh, extraHeaders);
+                } catch (_e) {
+                    return null;
+                }
+            }
+        }
+        return response;
+    }
+
     function _eventEditUrl(eventPk) {
         return "/events/" + encodeURIComponent(eventPk) + "/edit/";
     }
@@ -209,22 +258,10 @@
                 form.append(key, String(value));
             }
         }
-        const headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            Accept: "application/json",
+        const response = await _postFormWithCsrfRetry("/events/new/", form.toString(), csrf, {
             "X-Idempotency-Key": data.idempotencyKey || record.pk,
-        };
-        if (csrf) headers["X-CSRFToken"] = csrf;
-
-        let response;
-        try {
-            response = await fetch("/events/new/", {
-                method: "POST",
-                body: form.toString(),
-                headers: headers,
-                credentials: "same-origin",
-            });
-        } catch (_e) {
+        });
+        if (!response) {
             return { status: "network-error" };
         }
         if (response.redirected || response.status === 302) {
@@ -289,21 +326,8 @@
             form.set("expected_updated_at", token);
         }
 
-        const headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            Accept: "application/json",
-        };
-        if (csrf) headers["X-CSRFToken"] = csrf;
-
-        let response;
-        try {
-            response = await fetch(_eventEditUrl(record.pk), {
-                method: "POST",
-                body: form.toString(),
-                headers: headers,
-                credentials: "same-origin",
-            });
-        } catch (_e) {
+        const response = await _postFormWithCsrfRetry(_eventEditUrl(record.pk), form.toString(), csrf);
+        if (!response) {
             return { status: "network-error" };
         }
 
