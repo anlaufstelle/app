@@ -111,5 +111,67 @@
                 }
             },
         }));
+
+        // Refs #1326: Sammel-Mitnahme — alle aktuell gelisteten Personen offline
+        // laden (bis zum MAX_OFFLINE_CLIENTS-Limit). Liest die pks aus den
+        // gerenderten Zeilen; bereits offline verfuegbare werden uebersprungen.
+        Alpine.data("bulkOfflineTake", () => ({
+            busy: false,
+            async takeAll() {
+                if (this.busy) return;
+                if (window.crypto_session && !window.crypto_session.isSupported()) {
+                    notify(
+                        "Offline hier nicht verfügbar — keine sichere Verbindung. Offline-Daten benötigen HTTPS (oder localhost).",
+                        "error"
+                    );
+                    return;
+                }
+                if (!window.offlineClient) {
+                    notify("Offline-Funktion nicht aktiv — bitte neu anmelden.", "error");
+                    return;
+                }
+                this.busy = true;
+                try {
+                    const pks = [];
+                    document.querySelectorAll('[data-testid="client-row"]').forEach((r) => {
+                        if (r.dataset && r.dataset.pk) pks.push(r.dataset.pk);
+                    });
+                    let taken = 0;
+                    let skipped = 0;
+                    let limited = false;
+                    for (const pk of pks) {
+                        try {
+                            if (await window.offlineClient.isClientOffline(pk)) {
+                                skipped += 1;
+                                continue;
+                            }
+                            await window.offlineClient.takeClientOffline(pk);
+                            taken += 1;
+                        } catch (e) {
+                            if (e && e.name === "OfflineLimitError") {
+                                limited = true;
+                                break;
+                            }
+                            if (e && e.name === "NoSessionKeyError") {
+                                notify("Offline-Schlüssel nicht aktiv — bitte neu anmelden.", "error");
+                                return;
+                            }
+                            // Sonstige Fehler: diese Person ueberspringen, weiter.
+                        }
+                    }
+                    if (window.offlineClient.refreshCountBadge) {
+                        await window.offlineClient.refreshCountBadge();
+                    }
+                    let msg = taken + (taken === 1 ? " Person mitgenommen" : " Personen mitgenommen");
+                    if (skipped) msg += ", " + skipped + " bereits offline";
+                    if (limited) {
+                        msg += " (Limit " + (window.offlineClient.MAX_OFFLINE_CLIENTS || 20) + " erreicht)";
+                    }
+                    notify(msg + ".", limited ? "error" : "info");
+                } finally {
+                    this.busy = false;
+                }
+            },
+        }));
     });
 })();

@@ -326,6 +326,66 @@ def test_take_offline_shows_secure_context_hint_when_unsupported(staff_page, bas
     assert "keine sichere Verbindung" in (toast.text_content() or "")
 
 
+def test_bulk_take_offline_caches_multiple_clients(browser, base_url):
+    """Refs #1326: „Alle offline mitnehmen" laedt die gelisteten Personen (bis
+    zum Limit) verschluesselt in den Offline-Cache. Aktives Login fuer den
+    crypto_session-Schluessel.
+    """
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        page.goto(f"{base_url}/login/")
+        page.fill('input[name="username"]', "miriam")
+        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.click('button[type="submit"]')
+        page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
+        page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
+
+        page.locator('[data-testid="bulk-take-offline-btn"]').click()
+        # Toast bestaetigt die Sammel-Mitnahme.
+        page.locator('[data-testid="client-offline-toast"]').wait_for(state="visible", timeout=10000)
+
+        count = page.evaluate("() => window.offlineStore.countOfflineClients()")
+        assert count >= 2, f"Sammel-Mitnahme cachte zu wenige Personen: {count}"
+    finally:
+        context.close()
+
+
+def test_offline_expiry_warning_near_ttl(browser, base_url):
+    """Refs #1326: Naht das 48h-TTL-Ende (< 6 h), warnt das „Lokal verfügbar"-
+    Badge mit „läuft bald ab"."""
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        page.goto(f"{base_url}/login/")
+        page.fill('input[name="username"]', "miriam")
+        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.click('button[type="submit"]')
+        page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
+        page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
+        find_first_client_link(page).click()
+        page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
+        client_pk = re.search(r"/clients/([0-9a-f-]+)/", page.url).group(1)
+
+        # Bundle mit baldigem Ablauf (in 1 h) in die IndexedDB legen.
+        page.evaluate(
+            """async (pk) => {
+                const url = `/api/v1/offline/bundle/client/${pk}/`;
+                const resp = await fetch(url, { headers: { Accept: 'application/json' } });
+                const bundle = await resp.json();
+                bundle.expires_at = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+                await window.offlineStore.saveClientBundle(bundle);
+            }""",
+            client_pk,
+        )
+        page.reload(wait_until="domcontentloaded")
+        page.locator('[data-testid="offline-expiry-warning"]').wait_for(state="visible", timeout=10000)
+    finally:
+        context.close()
+
+
 # Hinweis: Multipart-Form-POSTs (z.B. Event-Anlage mit Datei-Anhang) werden
 # vom SW per Design NICHT in der verschluesselten Offline-Queue persistiert
 # — Binaerdaten brauchen eine eigene Pipeline (Issue #574). Der SW liefert

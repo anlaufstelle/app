@@ -36,6 +36,8 @@
                     <svg aria-hidden="true" class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     <span>{% trans "Lokal verfügbar" %}</span>
                     <span x-show="expiresAtDisplay" class="ml-1 text-[12px]">(<span x-text="expiresAtDisplay"></span>)</span>
+                    {# Refs #1326: Warnung, wenn das 48h-TTL bald abläuft. #}
+                    <span x-show="expiryWarning" x-cloak class="ml-1 text-[12px] font-bold text-red-700" data-testid="offline-expiry-warning">{% trans "läuft bald ab" %}</span>
                 </span>
             </div>
         </div>

@@ -17,6 +17,9 @@
             message: "",
             messageType: "info",
             expiresAtDisplay: "",
+            // Refs #1326: naht das 48h-TTL-Ende (< 6h), wird der Nutzer gewarnt,
+            // die Person vor dem Einsatz erneut mitzunehmen.
+            expiryWarning: false,
             _pk: "",
             init() {
                 this._pk = this.$el.dataset.pk || "";
@@ -46,17 +49,23 @@
                 if (!window.offlineClient) return;
                 try {
                     this.isOffline = await window.offlineClient.isClientOffline(this._pk);
+                    this.expiresAtDisplay = "";
+                    this.expiryWarning = false;
                     if (this.isOffline) {
                         const cached = await window.offlineClient.getOfflineClient(this._pk);
-                        if (cached && cached.expiresAt) {
+                        if (!cached) {
+                            // Bundle abgelaufen und beim Lesen verworfen (TTL) →
+                            // nicht mehr offline verfuegbar.
+                            this.isOffline = false;
+                        } else if (cached.expiresAt) {
                             const exp = new Date(cached.expiresAt);
                             this.expiresAtDisplay = exp.toLocaleString("de-DE", {
                                 dateStyle: "short",
                                 timeStyle: "short",
                             });
+                            const msLeft = exp.getTime() - Date.now();
+                            this.expiryWarning = msLeft > 0 && msLeft <= 6 * 3600 * 1000;
                         }
-                    } else {
-                        this.expiresAtDisplay = "";
                     }
                 } catch (_e) {
                     this.isOffline = false;
