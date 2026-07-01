@@ -122,6 +122,22 @@
         return Math.min(BASE_BACKOFF_MS * Math.pow(2, attempts), MAX_BACKOFF_MS);
     }
 
+    // Baut einen Replay-Request aus einem Queue-Record. Refs #1109 (F-09):
+    // Idempotenz-Schlüssel bei jedem Replay-Versuch mitschicken, damit der
+    // Server einen Wiederholungs-POST nach Verbindungsabbruch als solchen
+    // erkennt.
+    function _send(record, csrf) {
+        const headers = Object.assign({}, record.data.headers);
+        if (csrf) headers["X-CSRFToken"] = csrf;
+        if (record.idempotencyKey) headers["X-Idempotency-Key"] = record.idempotencyKey;
+        return fetch(record.url, {
+            method: record.data.method,
+            body: record.data.body,
+            headers: headers,
+            credentials: "same-origin",
+        });
+    }
+
     async function replayQueue() {
         if (!navigator.onLine) return;
         if (window.crypto_session && window.crypto_session.ready) {
@@ -137,19 +153,21 @@
 
         for (const record of records) {
             if (!(await _isReady(record))) continue;
-            const headers = Object.assign({}, record.data.headers);
-            if (csrf) headers["X-CSRFToken"] = csrf;
-            // Refs #1109 (F-09): Idempotenz-Schlüssel bei jedem Replay-Versuch
-            // mitschicken, damit der Server einen Wiederholungs-POST nach
-            // Verbindungsabbruch als solchen erkennt.
-            if (record.idempotencyKey) headers["X-Idempotency-Key"] = record.idempotencyKey;
             try {
-                const response = await fetch(record.url, {
-                    method: record.data.method,
-                    body: record.data.body,
-                    headers: headers,
-                    credentials: "same-origin",
-                });
+                let response = await _send(record, csrf);
+                // Refs #1332: analog #1330 — ein 403 kann an einem zur
+                // Precache-Zeit eingefrorenen, veralteten CSRF-Meta (aus einer
+                // SW-gecachten Shell) liegen, nicht an fehlendem Recht. Einmal
+                // mit frisch von /login/ geholtem Token nachfassen, bevor der
+                // Record als 4xx liegen bleibt und die Queue anhaelt. Der
+                // frische Token gilt auch fuer die restlichen Records.
+                if (response.status === 403) {
+                    const fresh = await _refreshCsrf();
+                    if (fresh && fresh !== csrf) {
+                        csrf = fresh;
+                        response = await _send(record, csrf);
+                    }
+                }
                 if (response.ok) {
                     await _store().deleteRow("queue", record.id);
                 } else if (response.status === 409) {

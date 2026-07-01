@@ -1,6 +1,7 @@
 """E2E-Tests: PWA — Setup, Manifest, Service Worker, Offline-Modus."""
 
 import re
+import uuid
 
 import pytest
 
@@ -212,6 +213,67 @@ def test_offline_url_encoded_post_returns_offline_feedback(browser, base_url):
         page.context.set_offline(False)
         page.evaluate("window.dispatchEvent(new Event('online'))")
     finally:
+        context.close()
+
+
+def test_offline_queue_replay_syncs_despite_stale_csrf(browser, base_url):
+    """Refs #1332: Der generische Offline-Queue-Replay muss bei einem 403 durch
+    ein veraltetes CSRF-Meta (z. B. aus einer SW-gecachten Shell) den Token
+    auffrischen und erneut senden, statt die Queue mit ``lastError`` zu
+    blockieren — analog zum Offline-Edit-Replay (#1330).
+
+    Reproduziert den HTMX-Pfad: CSRF nur im Header (kein Body-
+    ``csrfmiddlewaretoken``), den der Replay aus dem — hier deterministisch
+    veralteten — ``<meta name="csrf-token">`` setzt.
+    """
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    page.goto(f"{base_url}/login/")
+    page.fill('input[name="username"]', "admin")
+    page.fill('input[name="password"]', "anlaufstelle2026")
+    page.click('button[type="submit"]')
+    page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
+    title = f"E2E-Queue-CSRF-{uuid.uuid4().hex[:8]}"
+    try:
+        page.goto(f"{base_url}/workitems/new/", wait_until="domcontentloaded")
+
+        # Generischen POST in die Queue legen — Header-Token-Stil, KEIN
+        # csrfmiddlewaretoken im Body, damit Django den (vom Replay gesetzten)
+        # X-CSRFToken-Header prueft.
+        page.evaluate(
+            """async (title) => {
+                await window.crypto_session.ready();
+                const body = new URLSearchParams({
+                    item_type: 'task', title: title, description: '',
+                    priority: 'normal', recurrence: '',
+                }).toString();
+                await window.offlineQueue.enqueueRequest(
+                    '/workitems/new/', 'POST', body,
+                    { 'Content-Type': 'application/x-www-form-urlencoded' }
+                );
+            }""",
+            title,
+        )
+        assert page.evaluate("() => window.offlineStore.count('queue')") == 1
+
+        # CSRF-Meta deterministisch veralten (wie die aus dem Cache gelieferte Shell).
+        page.evaluate(
+            "() => document.querySelector('meta[name=\"csrf-token\"]')"
+            ".setAttribute('content', 'stale-precached-token-DEADBEEF')"
+        )
+
+        # Replay vollständig abwarten (page.evaluate awaited das Promise).
+        page.evaluate("() => window.offlineQueue.replayQueue()")
+
+        # Erfolg: der Record wurde serverseitig akzeptiert (2xx) und aus der
+        # Queue geloescht → count 0. Bei stale Token ohne Fix bleibt er nach
+        # dem 403 im 4xx-Zweig liegen und die Queue haelt an (count bleibt 1).
+        assert page.evaluate("() => window.offlineStore.count('queue')") == 0, (
+            "Queue-Replay hat nicht synchronisiert — Record blieb nach 403 liegen"
+        )
+    finally:
+        page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
         context.close()
 
 
