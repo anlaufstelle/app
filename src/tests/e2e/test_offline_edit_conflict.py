@@ -95,6 +95,15 @@ def _bump_server_event(e2e_env, event_pk, notiz="Server-Aenderung"):
     )
 
 
+def _server_client_event_notes(e2e_env, client_pk):
+    """Liste der ``notiz``-Werte aller (nicht geloeschten) Events eines Klienten."""
+    return _shell(
+        e2e_env,
+        "from core.models import Event;"
+        f" [print(e.data_json.get('notiz')) for e in Event.objects.filter(client_id='{client_pk}', is_deleted=False)]",
+    )
+
+
 # ---------------------------------------------------------------------------
 # Browser-Helfer
 
@@ -151,6 +160,86 @@ def _edit_notiz_offline(page, event_pk, value):
 
 
 # ---------------------------------------------------------------------------
+
+
+class TestOfflineCreate:
+    """Refs #1323: offline NEU angelegte Ereignisse → Replay gegen /events/new/."""
+
+    def test_offline_created_event_replays_to_server(self, browser, base_url, e2e_env):
+        client_pk, _ = _seed_client_with_event(e2e_env, notiz="Bestandsereignis")
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            assert _cache_bundle(page, client_pk)["ok"]
+
+            doc_type_pk = page.evaluate(
+                """async (pk) => {
+                    const c = await window.offlineStore.getOfflineClient(pk);
+                    return c.documentTypes[0].pk;
+                }""",
+                client_pk,
+            )
+
+            # Offline neu erfassen + (online) direkt replizieren.
+            result = page.evaluate(
+                """async (args) => {
+                    const rec = await window.offlineEdit.markEventNew(
+                        args.clientPk, args.docTypePk,
+                        { notiz: 'Offline neu erfasst', dauer: '5' },
+                        { occurredAt: '2026-01-02T09:30', documentTypeName: 'Kontakt' }
+                    );
+                    return await window.offlineEdit.replayModifiedEvent(rec);
+                }""",
+                {"clientPk": client_pk, "docTypePk": doc_type_pk},
+            )
+            assert result["status"] == "synced", f"Replay nicht synced: {result!r}"
+
+            page.wait_for_timeout(500)
+            notes = _server_client_event_notes(e2e_env, client_pk)
+            assert "Offline neu erfasst" in notes, f"neues Event fehlt serverseitig: {notes!r}"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_offline_create_via_viewer_ui_syncs_to_server(self, browser, base_url, e2e_env):
+        """Refs #1323: „Neuer Kontakt" im Offline-Viewer — Dokumentationstyp
+        waehlen, Felder aus dem Bundle ausfuellen, OFFLINE speichern → beim
+        Reconnect gegen /events/new/ angelegt.
+        """
+        client_pk, _ = _seed_client_with_event(e2e_env, notiz="Bestand")
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            assert _cache_bundle(page, client_pk)["ok"]
+            _open_offline_detail(page, base_url, client_pk)
+
+            _go_offline(page)
+            page.locator("[data-testid='offline-new-event-btn']").click()
+            page.locator("[data-testid='offline-create-form']").wait_for(state="visible", timeout=10000)
+            page.locator("[data-testid='offline-create-doctype']").select_option(label="Kontakt")
+            notiz = page.locator("[data-testid='offline-create-input-notiz']")
+            notiz.wait_for(state="visible", timeout=10000)
+            notiz.fill("Offline neu (UI)")
+            page.locator("[data-testid='offline-create-save']").click()
+
+            # Neues Event erscheint als „nicht synchronisiert".
+            page.locator("[data-testid='event-unsynced-badge']").first.wait_for(state="visible", timeout=10000)
+
+            # Reconnect → Auto-Replay → serverseitig angelegt, Unsynced verschwindet.
+            _go_online(page)
+            page.locator("[data-testid='event-unsynced-badge']").first.wait_for(state="hidden", timeout=20000)
+
+            page.wait_for_timeout(500)
+            assert "Offline neu (UI)" in _server_client_event_notes(e2e_env, client_pk)
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
 
 
 class TestOfflineEditReplay:

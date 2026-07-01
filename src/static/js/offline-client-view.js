@@ -16,6 +16,23 @@
         return m ? m[1] : "";
     }
 
+    // Refs #1323: aktueller Zeitpunkt als datetime-local-Wert (YYYY-MM-DDTHH:MM).
+    function _nowLocalInput() {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return (
+            d.getFullYear() +
+            "-" +
+            pad(d.getMonth() + 1) +
+            "-" +
+            pad(d.getDate()) +
+            "T" +
+            pad(d.getHours()) +
+            ":" +
+            pad(d.getMinutes())
+        );
+    }
+
     document.addEventListener("alpine:init", () => {
         Alpine.data("offlineClientView", () => ({
             loading: true,
@@ -34,6 +51,11 @@
             // "synced" | "conflict" | "error".
             lastSyncResult: "",
             lastSyncPk: "",
+            // Refs #1323: Offline-Erfassung eines neuen Ereignisses.
+            creating: false,
+            createDocTypePk: "",
+            createDocTypeName: "",
+            createOccurredAt: "",
             init() {
                 this._pk = this.$el.dataset.pk || _pkFromPath();
                 // Refs #1111: Auf die Sync-Zähler von offline-edit.js hören.
@@ -271,6 +293,98 @@
                 this.editFields = [];
                 this.editValues = {};
                 this.editError = "";
+            },
+            // ── Offline-Erfassung neuer Ereignisse (Refs #1323) ──────────────
+            get documentTypeOptions() {
+                const dts = (this.data && this.data.documentTypes) || [];
+                return dts.map((d) => ({ value: d.pk, label: d.name }));
+            },
+            get hasDocumentTypes() {
+                return this.documentTypeOptions.length > 0;
+            },
+            startCreate() {
+                this.editError = "";
+                this.lastSyncResult = "";
+                this._setEditing(null);
+                this.editFields = [];
+                this.editValues = {};
+                this.createDocTypePk = "";
+                this.createDocTypeName = "";
+                this.createOccurredAt = _nowLocalInput();
+                this.creating = true;
+            },
+            onCreateDocTypeChange() {
+                this.editError = "";
+                const dt = this._findDocType(this.createDocTypePk);
+                const fields = (dt && dt.fields) || [];
+                const emptyEv = { data_fields: {} };
+                const descriptors = [];
+                const values = {};
+                for (const f of fields) {
+                    const desc = this._fieldDescriptor(f, emptyEv);
+                    descriptors.push(desc);
+                    if (!desc.isFile) values[f.slug] = this._initialValue(f.field_type, undefined);
+                }
+                this.editFields = descriptors;
+                this.editValues = values;
+                this.createDocTypeName = dt ? dt.name : "";
+            },
+            cancelCreate() {
+                this.creating = false;
+                this.editFields = [];
+                this.editValues = {};
+                this.createDocTypePk = "";
+                this.createDocTypeName = "";
+                this.editError = "";
+            },
+            async saveCreate() {
+                if (this.saving) return;
+                this.saving = true;
+                this.editError = "";
+                try {
+                    if (!window.offlineEdit || !window.offlineEdit.markEventNew) {
+                        this.editError = "Offline-Erfassung nicht verfügbar.";
+                        return;
+                    }
+                    if (!this.createDocTypePk) {
+                        this.editError = "Bitte einen Dokumentationstyp wählen.";
+                        return;
+                    }
+                    const formData = {};
+                    for (const f of this.editFields) {
+                        // FILE-Felder sind offline nicht erfassbar (kein Blob im Cache).
+                        if (f.isFile) continue;
+                        formData[f.slug] = this.editValues[f.slug];
+                    }
+                    const record = await window.offlineEdit.markEventNew(
+                        this._pk,
+                        this.createDocTypePk,
+                        formData,
+                        {
+                            occurredAt: this.createOccurredAt || "",
+                            documentTypeName: this.createDocTypeName || "",
+                        }
+                    );
+                    this.lastSyncPk = record.pk;
+                    this.creating = false;
+                    this.editFields = [];
+                    this.editValues = {};
+                    // Sofort den „Nicht synchronisiert"-Status zeigen.
+                    await this.load();
+                    if (navigator.onLine && window.offlineEdit.replayModifiedEvent) {
+                        const result = await window.offlineEdit.replayModifiedEvent(record);
+                        this._reflectReplay(result);
+                        await this._reconcile();
+                    } else {
+                        this.lastSyncResult = "pending";
+                    }
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.error("[offline-viewer] saveCreate", e);
+                    this.editError = "Erfassen fehlgeschlagen: " + (e.message || e);
+                } finally {
+                    this.saving = false;
+                }
             },
             async saveEdit(ev) {
                 if (this.saving) return;

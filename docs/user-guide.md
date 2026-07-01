@@ -599,7 +599,7 @@ Für Einsätze ohne verlässliche Internetverbindung — etwa bei aufsuchender A
 **Während des Einsatzes (offline):**
 
 - Öffnen Sie eine mitgenommene Person wie gewohnt über ihre Detailseite — die Ansicht bleibt an der **normalen Adresse** und wird aus dem verschlüsselten Offline-Speicher aufgebaut (kein separater „Offline"-Link mehr).
-- Sie können **bestehende Ereignisse bearbeiten**; die Änderungen werden verschlüsselt lokal gespeichert (AES-GCM-256; der Schlüssel wird aus Ihrem Passwort abgeleitet) und bei Verbindung automatisch gesendet.
+- Sie können **neue Ereignisse erfassen** (über **„Neuer Kontakt"**) und **bestehende bearbeiten**; die Einträge werden verschlüsselt lokal gespeichert (AES-GCM-256; der Schlüssel wird aus Ihrem Passwort abgeleitet) und bei Verbindung automatisch gesendet. **Datei-Anhänge** können offline nicht erfasst werden — reichen Sie sie nach, sobald Sie online sind.
 - In der Oberfläche sehen Sie einen Hinweis, dass Sie offline arbeiten und wie viele Einträge noch auf die Synchronisation warten.
 
 **Zurück im Netz:**

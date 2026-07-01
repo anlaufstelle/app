@@ -147,6 +147,102 @@
         return record;
     }
 
+    function _uuid() {
+        if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+        // Fallback (im Secure Context — Voraussetzung fuer Offline — nie noetig).
+        return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, function (c) {
+            const r = (Math.random() * 16) | 0;
+            return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+        });
+    }
+
+    /*
+     * Refs #1323: Ein offline NEU angelegtes Ereignis in IndexedDB ablegen.
+     * localStatus "new" mit client-generierter pk; beim Reconnect spielt
+     * replayModifiedEvent es gegen ``/events/new/`` (statt ``/edit/``). Der
+     * Idempotenz-Key schuetzt gegen Doppel-Anlage, wenn die Verbindung nach
+     * dem Server-Write, aber vor der Response abbricht (F-09, #1109).
+     */
+    async function markEventNew(clientPk, documentTypePk, formData, options) {
+        const opts = options || {};
+        const record = {
+            pk: opts.pk || _uuid(),
+            clientPk: clientPk || "",
+            occurredAt: opts.occurredAt || "",
+            localStatus: "new",
+            data: {
+                formData: formData,
+                documentTypePk: documentTypePk || "",
+                documentTypeName: opts.documentTypeName || "",
+                occurredAt: opts.occurredAt || "",
+                idempotencyKey: opts.idempotencyKey || _uuid(),
+                lastEditedAt: Date.now(),
+            },
+        };
+        await _store().saveOfflineEdit(record);
+        _fireCountEvent();
+        return record;
+    }
+
+    /*
+     * Replay eines offline neu angelegten Events gegen ``/events/new/``.
+     * Erfolg = Redirect auf die Event-Detailseite (der Create-View re-rendert
+     * bei invaliden Formularen mit 200, KEIN 422 wie der Edit-View). Bei Erfolg
+     * den lokalen "new"-Record entfernen — die naechste Re-Validierung holt das
+     * kanonische Server-Event mit seiner echten pk ins Bundle.
+     */
+    async function replayNewEvent(record, csrf) {
+        const data = record.data || {};
+        const fd = data.formData || {};
+        const form = new URLSearchParams();
+        if (record.clientPk) form.set("client", record.clientPk);
+        if (data.documentTypePk) form.set("document_type", data.documentTypePk);
+        if (data.occurredAt) form.set("occurred_at", data.occurredAt);
+        for (const [key, value] of Object.entries(fd)) {
+            if (value === null || value === undefined) continue;
+            if (Array.isArray(value)) {
+                for (const item of value) {
+                    if (item === null || item === undefined) continue;
+                    form.append(key, String(item));
+                }
+            } else {
+                form.append(key, String(value));
+            }
+        }
+        const headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Accept: "application/json",
+            "X-Idempotency-Key": data.idempotencyKey || record.pk,
+        };
+        if (csrf) headers["X-CSRFToken"] = csrf;
+
+        let response;
+        try {
+            response = await fetch("/events/new/", {
+                method: "POST",
+                body: form.toString(),
+                headers: headers,
+                credentials: "same-origin",
+            });
+        } catch (_e) {
+            return { status: "network-error" };
+        }
+        if (response.redirected || response.status === 302) {
+            await _store().clearOfflineEdit(record.pk);
+            _fireCountEvent();
+            return { status: "synced" };
+        }
+        if (response.status === 403 || response.status === 404) {
+            return { status: "revoked", statusCode: response.status };
+        }
+        if (response.status === 200) {
+            // Serverseitige Formularvalidierung fehlgeschlagen (Re-Render).
+            // Record NICHT verwerfen — als "new" behalten, dem Nutzer melden.
+            return { status: "invalid", errors: {} };
+        }
+        return { status: "error", statusCode: response.status };
+    }
+
     async function replayModifiedEvent(record) {
         if (!navigator.onLine) return { status: "offline" };
         if (window.crypto_session && window.crypto_session.ready) {
@@ -158,6 +254,12 @@
 
         let csrf = _csrfFromMeta();
         if (!csrf) csrf = await _refreshCsrf();
+
+        // Refs #1323: offline NEU angelegte Events gehen an /events/new/ statt
+        // an den /edit/-Pfad (dessen pk serverseitig gar nicht existiert).
+        if (record.localStatus === "new") {
+            return await replayNewEvent(record, csrf);
+        }
 
         const form = new URLSearchParams();
         const fd = (record.data && record.data.formData) || {};
@@ -291,6 +393,7 @@
 
     window.offlineEdit = {
         markEventModified: markEventModified,
+        markEventNew: markEventNew,
         replayModifiedEvent: replayModifiedEvent,
         replayAllModifiedEvents: replayAllModifiedEvents,
         enqueueConflictForReview: enqueueConflictForReview,
