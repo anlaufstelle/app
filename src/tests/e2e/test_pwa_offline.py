@@ -304,6 +304,28 @@ def test_offline_client_detail_renders_in_place(browser, base_url):
         context.close()
 
 
+def test_take_offline_shows_secure_context_hint_when_unsupported(staff_page, base_url):
+    """Refs #1325: Fehlt der sichere Kontext (WebCrypto nicht verfuegbar, z.B.
+    http-LAN), zeigt „Offline mitnehmen" einen klaren Hinweis statt stillem
+    No-op. Hier per Stub von ``crypto_session.isSupported`` simuliert (127.0.0.1
+    ist selbst ein Secure Context).
+    """
+    page = staff_page
+    page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
+    find_first_client_link(page).click()
+    page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
+
+    page.evaluate("() => { window.crypto_session.isSupported = () => false; }")
+
+    take = page.locator('[data-testid="take-offline-btn"]').first
+    take.wait_for(state="visible", timeout=10000)
+    take.click()
+
+    toast = page.locator('[data-testid="offline-toast"]')
+    toast.wait_for(state="visible", timeout=5000)
+    assert "keine sichere Verbindung" in (toast.text_content() or "")
+
+
 # Hinweis: Multipart-Form-POSTs (z.B. Event-Anlage mit Datei-Anhang) werden
 # vom SW per Design NICHT in der verschluesselten Offline-Queue persistiert
 # — Binaerdaten brauchen eine eigene Pipeline (Issue #574). Der SW liefert

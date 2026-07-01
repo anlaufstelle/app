@@ -69,6 +69,16 @@
             },
             async toggleOffline() {
                 if (this.busy) return;
+                // Refs #1325: Ohne sicheren Kontext (HTTPS/localhost) fehlt
+                // WebCrypto → kein Offline-Schluessel. Klaren Hinweis zeigen
+                // statt still nichts zu tun.
+                if (window.crypto_session && !window.crypto_session.isSupported()) {
+                    notify(
+                        "Offline hier nicht verfügbar — keine sichere Verbindung. Offline-Daten benötigen HTTPS (oder localhost).",
+                        "error"
+                    );
+                    return;
+                }
                 if (!window.offlineClient) {
                     notify(
                         "Offline-Funktion nicht aktiv — bitte neu anmelden, damit der Sitzungsschluessel erzeugt wird.",
