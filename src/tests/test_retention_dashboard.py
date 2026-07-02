@@ -475,6 +475,12 @@ class TestEnforcementLocaldateBoundary:
         is expired by the Berlin local date. With the old naive date.today()
         (UTC) the hold would still count as active and block deletion."""
         _assert_boundary_really_diverges()
+        # occurred_at an die frozen Clock pinnen: die Fixture rechnet mit der
+        # echten Uhr, die Fälligkeit unten mit _BOUNDARY_INSTANT — ab
+        # real_now-100d > _BOUNDARY_INSTANT-90d wäre das Event sonst nicht mehr
+        # fällig und der Test kippt kalenderabhängig (Refs #1379).
+        old_anonymous_event.occurred_at = _BOUNDARY_INSTANT - timedelta(days=100)
+        old_anonymous_event.save(update_fields=["occurred_at"])
         LegalHold.objects.create(
             facility=facility,
             target_type="Event",
