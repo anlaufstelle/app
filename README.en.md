@@ -2,7 +2,7 @@
 
 # Anlaufstelle
 
-**Documentation, statistics, and team communication for low-threshold social work — wherever people come without an appointment and without giving their real name. Open source, GDPR-compliant, pseudonymized, free.**
+**Documentation, statistics, and team communication for low-threshold social work — wherever people come without an appointment and without giving their real name. Open source, pseudonymized, free — designed for privacy-compliant operation.**
 
 > ⚠️ **Pre-Release (v0.16.0)** — Anlaufstelle is functional but not yet cleared for production use. Quality assurance and stabilization are ongoing. We are looking for pilot facilities to test and co-develop the system — [get in touch](mailto:kontakt@anlaufstelle.app).
 
