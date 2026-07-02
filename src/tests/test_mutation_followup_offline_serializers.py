@@ -233,6 +233,11 @@ class TestSerializeEvent:
 
 @pytest.mark.django_db
 class TestSerializeCase:
+    # Refs #1355: ``_serialize_case`` filtert ``description`` jetzt nach der
+    # Rolle des Bundle-Nutzers (wie ``_serialize_event``s can_edit). Diese
+    # Shape-Tests nutzen durchgehend ``staff_user`` (is_staff_or_above=True),
+    # damit description nie weggefiltert wird und die reine Serialisierungs-
+    # Form geprüft bleibt; das Gate selbst hat eigene Tests weiter unten.
     def test_pk_stringified(self, facility, client_identified, staff_user):
         c = Case.objects.create(
             facility=facility,
@@ -240,7 +245,7 @@ class TestSerializeCase:
             title="t",
             created_by=staff_user,
         )
-        out = _serialize_case(c)
+        out = _serialize_case(staff_user, c)
         assert out["pk"] == str(c.pk)
 
     def test_title_and_description_passthrough(self, facility, client_identified, staff_user):
@@ -251,9 +256,24 @@ class TestSerializeCase:
             description="Beschreibung X",
             created_by=staff_user,
         )
-        out = _serialize_case(c)
+        out = _serialize_case(staff_user, c)
         assert out["title"] == "Mein Fall"
         assert out["description"] == "Beschreibung X"
+
+    def test_description_blanked_for_non_staff(self, facility, client_identified, assistant_user, staff_user):
+        """Refs #1355: description ist STAFF_PLUS-only online (CaseDetailView,
+        cases.py:70) — fuer Nicht-Staff liefert die Serialisierung einen
+        leeren String, NICHT Key-Omission (Schema-Stabilitaet)."""
+        c = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="t",
+            description="Sollte nicht offline zu Assistenz gelangen",
+            created_by=staff_user,
+        )
+        out = _serialize_case(assistant_user, c)
+        assert out["description"] == ""
+        assert "description" in out
 
     def test_status_and_display_both_set(self, facility, client_identified, staff_user):
         c = Case.objects.create(
@@ -264,7 +284,7 @@ class TestSerializeCase:
             closed_at=timezone.now(),
             created_by=staff_user,
         )
-        out = _serialize_case(c)
+        out = _serialize_case(staff_user, c)
         assert out["status"] == "closed"
         assert out["status_display"] == "Geschlossen"
 
@@ -275,7 +295,7 @@ class TestSerializeCase:
             title="t",
             created_by=staff_user,
         )
-        out = _serialize_case(c)
+        out = _serialize_case(staff_user, c)
         assert out["created_at"] == c.created_at.isoformat()
 
     def test_closed_at_none_for_open_case(self, facility, client_identified, staff_user):
@@ -288,7 +308,7 @@ class TestSerializeCase:
             status=Case.Status.OPEN,
             created_by=staff_user,
         )
-        out = _serialize_case(c)
+        out = _serialize_case(staff_user, c)
         assert out["closed_at"] is None
 
     def test_closed_at_isoformat_when_set(self, facility, client_identified, staff_user):
@@ -301,7 +321,7 @@ class TestSerializeCase:
             closed_at=when,
             created_by=staff_user,
         )
-        out = _serialize_case(c)
+        out = _serialize_case(staff_user, c)
         # closed_at wird in DB ggf. mit µs-Aufloesung gespeichert → über das
         # Modell lesen statt direkt ``when.isoformat()`` vergleichen.
         c.refresh_from_db()
@@ -315,7 +335,7 @@ class TestSerializeCase:
             created_by=staff_user,
             lead_user=None,
         )
-        out = _serialize_case(c)
+        out = _serialize_case(staff_user, c)
         assert out["lead_user_display"] == ""
 
     def test_lead_user_display_falls_back_to_username(self, facility, client_identified, staff_user, lead_user):
@@ -329,7 +349,7 @@ class TestSerializeCase:
             created_by=staff_user,
             lead_user=lead_user,
         )
-        out = _serialize_case(c)
+        out = _serialize_case(staff_user, c)
         assert out["lead_user_display"] == lead_user.username
 
     def test_lead_user_display_uses_full_name(self, facility, client_identified, staff_user, lead_user):
@@ -343,7 +363,7 @@ class TestSerializeCase:
             created_by=staff_user,
             lead_user=lead_user,
         )
-        out = _serialize_case(c)
+        out = _serialize_case(staff_user, c)
         assert out["lead_user_display"] == "Lea Direktorin"
 
     def test_case_serialized_keys_complete(self, facility, client_identified, staff_user):
@@ -353,7 +373,7 @@ class TestSerializeCase:
             title="t",
             created_by=staff_user,
         )
-        out = _serialize_case(c)
+        out = _serialize_case(staff_user, c)
         assert set(out.keys()) == {
             "pk",
             "title",

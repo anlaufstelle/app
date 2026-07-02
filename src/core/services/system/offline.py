@@ -4,7 +4,10 @@ The bundle is a *derivative* of the server-side state: it is built by running
 the same ``visible_to(user)`` and ``user_can_see_field`` gates that the online
 views apply, so an offline cache can never leak data the user would not see
 online. Field-level sensitivity is respected by dropping restricted keys from
-the ``data_fields`` dict before the payload leaves the server.
+the ``data_fields`` dict before the payload leaves the server. Cases are
+gated the same way (Refs #1355): non-staff only receive ``status=OPEN``
+cases with ``description`` blanked, mirroring what ``CaseListView``/
+``CaseDetailView`` and the client-detail case list already restrict online.
 
 The bundle is intentionally small — metadata + visible field values — so that
 the Dexie-encrypted payload in the browser stays below a few hundred kB per
@@ -147,11 +150,15 @@ def _serialize_event(user, event) -> dict[str, Any]:
     }
 
 
-def _serialize_case(case) -> dict[str, Any]:
+def _serialize_case(user, case) -> dict[str, Any]:
+    # Refs #1355: description is STAFF_PLUS-only online (CaseDetailView,
+    # cases.py:70) — non-staff still get the key (schema-stable) but blanked,
+    # same idiom as _serialize_event's can_edit.
+    is_staff_or_above = getattr(user, "is_staff_or_above", False)
     return {
         "pk": str(case.pk),
         "title": case.title,
-        "description": case.description,
+        "description": case.description if is_staff_or_above else "",
         "status": case.status,
         "status_display": case.get_status_display(),
         "created_at": case.created_at.isoformat(),
@@ -198,21 +205,26 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
         if ev.document_type_id not in doc_types:
             doc_types[ev.document_type_id] = ev.document_type
 
+    # Notes are a HIGH-sensitivity free-text field, and full case detail
+    # (any status, description) is STAFF_PLUS-only online too
+    # (CaseListView/CaseDetailView, cases.py:70) — one flag gates both so the
+    # offline bundle can never show more than the user would see online
+    # (ADR-022, Refs #1355).
+    is_staff_or_above = user.is_staff_or_above if hasattr(user, "is_staff_or_above") else False
+
     cases = (
         CaseModel.objects.for_facility(facility)
         .filter(client=client)
         .select_related("lead_user")
         .order_by("-created_at")
     )
+    if not is_staff_or_above:
+        cases = cases.filter(status=CaseModel.Status.OPEN)
     workitems = (
         WorkItem.objects.filter(client=client, facility=facility)
         .filter(status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS])
         .order_by("-created_at")
     )
-
-    # Notes are a HIGH-sensitivity free-text field; staff can see them but
-    # assistants should not.
-    notes_visible = user.is_staff_or_above if hasattr(user, "is_staff_or_above") else False
 
     generated_at = timezone.now()
 
@@ -228,10 +240,10 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
             "contact_stage_display": client.get_contact_stage_display(),
             "age_cluster": client.age_cluster,
             "age_cluster_display": client.get_age_cluster_display(),
-            "notes": client.notes if notes_visible else "",
+            "notes": client.notes if is_staff_or_above else "",
             "is_active": client.is_active,
         },
-        "cases": [_serialize_case(c) for c in cases],
+        "cases": [_serialize_case(user, c) for c in cases],
         "workitems": [_serialize_workitem(w) for w in workitems],
         "events": [_serialize_event(user, ev) for ev in events],
         "document_types": [_serialize_document_type(user, dt) for dt in doc_types.values()],

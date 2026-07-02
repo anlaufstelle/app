@@ -17,7 +17,7 @@ from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import AuditLog, DocumentType, DocumentTypeField, Event, FieldTemplate
+from core.models import AuditLog, Case, DocumentType, DocumentTypeField, Event, FieldTemplate
 from core.services.system import BUNDLE_SCHEMA_VERSION, build_client_offline_bundle
 
 
@@ -151,6 +151,71 @@ class TestBuildClientOfflineBundleService:
 
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
         assert bundle["client"]["notes"] == "interne notiz"
+
+    def test_assistant_case_bundle_excludes_closed_and_blanks_open_description(
+        self, facility, client_identified, assistant_user, staff_user
+    ):
+        """Refs #1355: Online sieht eine Assistenz Cases nur ueber den
+        Client-Detail (nur ``status=OPEN``, nie ``description`` —
+        ``clients.py``/``detail.html``); ``CaseListView``/``CaseDetailView``
+        (mit description) sind STAFF_PLUS (``cases.py:70``). Das Offline-
+        Bundle darf laut ADR-022 nie mehr zeigen als online: der CLOSED-Case
+        muss fehlen, der OPEN-Case darf keine description tragen (leerer
+        String, nicht fehlender Key — Schema-Stabilitaet)."""
+        open_case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Offener Fall",
+            description="Sensible Fallbeschreibung",
+            status=Case.Status.OPEN,
+            created_by=staff_user,
+        )
+        closed_case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Geschlossener Fall",
+            description="Sollte offline nicht landen",
+            status=Case.Status.CLOSED,
+            closed_at=timezone.now(),
+            created_by=staff_user,
+        )
+
+        bundle = build_client_offline_bundle(assistant_user, facility, client_identified)
+        pks = {c["pk"] for c in bundle["cases"]}
+        assert str(open_case.pk) in pks
+        assert str(closed_case.pk) not in pks
+        serialized_open = next(c for c in bundle["cases"] if c["pk"] == str(open_case.pk))
+        assert serialized_open["description"] == ""
+        assert "description" in serialized_open
+
+    def test_staff_case_bundle_includes_closed_with_description(self, facility, client_identified, staff_user):
+        """Gegenprobe: Staff+ sieht online via CaseListView/CaseDetailView
+        alle Cases inkl. description — das Bundle bleibt fuer diese Rolle
+        unveraendert vollstaendig."""
+        open_case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Offener Fall",
+            description="Offene Beschreibung",
+            status=Case.Status.OPEN,
+            created_by=staff_user,
+        )
+        closed_case = Case.objects.create(
+            facility=facility,
+            client=client_identified,
+            title="Geschlossener Fall",
+            description="Geschlossene Beschreibung",
+            status=Case.Status.CLOSED,
+            closed_at=timezone.now(),
+            created_by=staff_user,
+        )
+
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        pks = {c["pk"] for c in bundle["cases"]}
+        assert pks == {str(open_case.pk), str(closed_case.pk)}
+        descriptions = {c["pk"]: c["description"] for c in bundle["cases"]}
+        assert descriptions[str(open_case.pk)] == "Offene Beschreibung"
+        assert descriptions[str(closed_case.pk)] == "Geschlossene Beschreibung"
 
     def test_bundle_event_limit_respected(self, facility, client_identified, doc_type_contact, staff_user):
         from core.services.system import MAX_EVENTS_PER_BUNDLE

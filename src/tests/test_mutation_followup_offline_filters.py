@@ -352,7 +352,10 @@ class TestWorkitemFilter:
 
 @pytest.mark.django_db
 class TestCasesFilter:
-    """Cases werden NICHT nach Status gefiltert — closed UND open beide drin."""
+    """Fuer Staff+ werden Cases NICHT nach Status gefiltert — closed UND open
+    beide drin (alle Tests hier nutzen ``staff_user``). Das Non-Staff-Gate
+    (nur OPEN, description geleert, Refs #1355) hat eigene Tests in
+    ``TestBuildClientOfflineBundleService`` (``test_offline_bundle_api.py``)."""
 
     def test_open_case_included(self, facility, client_identified, staff_user):
         c = Case.objects.create(

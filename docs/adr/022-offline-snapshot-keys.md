@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-05-28
 - **Deciders:** Tobias Nix
-- **Refs:** #572, #574, #786, #1100, #1109, #1110, #1111
+- **Refs:** #572, #574, #786, #1100, #1109, #1110, #1111, #1355
 
 > **Accepted (2026-06-15, #1100) — mit eingegrenztem Scope.** Die in dieser ADR geforderte Security-Review + konzeptioneller Pen-Test gegen das Tablet-Diebstahl-Szenario ist erfolgt ([Befund-Doc](../archive/audits/2026-06-14-offline-snapshot-security-review.md)); die drei als Blocker eingestuften Befunde sind behoben und unit- + E2E-verifiziert: Sync-Konflikt-Token (F-07, #1109), Client-TTL-Durchsetzung + Server-Revalidierung (F-04/F-10, #1110) und Offline-Cache-Entzug bei Rechteentzug/Deaktivierung (F-03, #1110); dazu Idempotenz-Schutz beim Queue-Replay (F-09).
 >
@@ -45,6 +45,7 @@ Anlaufstelle baut **server-seitig vorgefilterte Snapshot-Bundles**, die client-s
 - **−** Wartungs-Tax: jede Aenderung an `visible_to` / `user_can_see_field` muss am Snapshot-Builder mitgezogen werden, sonst entsteht Online/Offline-Drift.
 - **+** **Offline-Editieren (Stage A) ist seit #1111 verdrahtet und erprobt:** das Bundle traegt die editierbaren Feld-Definitionen (sensitivity-gefiltert) + ein `can_edit`-Flag, der Viewer-Edit-Einstieg ruft `markEventModified` → Replay; unit- + E2E-getestet (Reconnect→`synced`, Server-Konkurrenz→Konflikt). Die fachlichen LWW-Grenzen bleiben bestehen (s. o. + Restrisiken).
 - **−** Last-Write-Wins bleibt auch nach der Verdrahtung die Konflikt-Strategie: ein offline entstandener Edit kann beim Replay einen fachlich besseren neueren Server-Stand nur per Konflikt-Markierung (nicht automatisch) zur Pruefung stellen. Die akzeptierten Restrisiken (F-01/F-02/F-05, Cold-Boot/RAM) sind unten gesondert dokumentiert.
+- **+** **Cases sind rollen-/status-gegated wie online (Refs #1355):** Non-Staff sehen im Bundle nur `status=OPEN`-Faelle ohne `description` (leerer String statt Key-Omission, schema-stabil); Staff+ sieht wie online via CaseListView/CaseDetailView alle Faelle inkl. description. Vorher verliess ungefiltert jeder Fall inkl. description den Server — ein Bruch der Kernzusage oben, der mit diesem Fix behoben ist.
 
 ## Alternatives considered
 
