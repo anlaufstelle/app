@@ -7,29 +7,56 @@
  *   2. Purge all encrypted IndexedDB stores
  * The server still sends Clear-Site-Data: "storage" as defence in depth.
  *
- * Refs #573, #576.
+ * Refs #573, #576, #1351, #1386.
  */
 (function () {
     "use strict";
 
     if ("serviceWorker" in navigator) {
+        // Refs #1386: Update-Gate. Der neue SW uebernimmt erst, wenn die
+        // Seite explizit SKIP_WAITING schickt (Klick auf "Neu laden" im
+        // Update-Toast, siehe _showUpdatePrompt). ``controllerchange``
+        // feuert danach — der ``reloaded``-Guard verhindert eine
+        // Reload-Schleife, falls der Browser das Event mehrfach ausloest.
+        //
+        // WICHTIG (``wasControlled``-Guard): Auch der ALLERERSTE SW-Install
+        // feuert controllerchange — ``clients.claim()`` im activate-Handler
+        // macht die bislang unkontrollierte Seite kontrolliert. Das ist KEIN
+        // Update und darf nicht neu laden: Ein Reload in diesem Moment
+        // bricht laufende Arbeit ab, konkret den fetch()-basierten
+        // Login-POST von auth-bootstrap.js (net::ERR_ABORTED, Login
+        // scheitert). Nur eine Seite, die schon vorher einen Controller
+        // hatte, erlebt einen echten SW-Wechsel.
+        var reloaded = false;
+        var wasControlled = !!navigator.serviceWorker.controller;
+        navigator.serviceWorker.addEventListener("controllerchange", function () {
+            if (!wasControlled) {
+                wasControlled = true;
+                return;
+            }
+            if (reloaded) return;
+            reloaded = true;
+            window.location.reload();
+        });
+
         navigator.serviceWorker.register("/sw.js", { scope: "/" }).then(function (registration) {
             // Update-Prompt: Wenn ein neuer SW installiert wird, wird
             // `updatefound` ausgelöst. Der neue SW durchläuft States
-            // installing → installed (→ activating → activated). Wenn
-            // bereits ein aktiver SW existiert und der neue den State
-            // `installed` erreicht, ist ein Update pending.
+            // installing → installed (→ wartet in `registration.waiting`,
+            // bis die Seite SKIP_WAITING schickt). Wenn bereits ein aktiver
+            // SW existiert und der neue den State `installed` erreicht, ist
+            // ein Update pending.
             //
             // Wir zeigen dem Nutzer einen diskreten Hinweis statt stumm
-            // zu aktualisieren (Refs #659). Der User klickt manuell auf
-            // "Neu laden" — sonst geht evtl. nicht-gespeicherter State
-            // verloren.
+            // zu aktualisieren (Refs #659). Erst ein Klick auf "Neu laden"
+            // loest SKIP_WAITING aus — sonst geht evtl. nicht-gespeicherter
+            // State verloren.
             registration.addEventListener("updatefound", function () {
                 var newWorker = registration.installing;
                 if (!newWorker) return;
                 newWorker.addEventListener("statechange", function () {
                     if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
-                        _showUpdatePrompt();
+                        _showUpdatePrompt(registration);
                     }
                 });
             });
@@ -59,22 +86,27 @@
                     console.warn("[offline-queue]", e.message);
                     if (port) port.postMessage({ type: "QUEUE_NACK", reason: e.name || "EnqueueFailed" });
                 }
-            } else if (event.data.type === "REPLAY_QUEUE") {
-                if (window.offlineQueue) await window.offlineQueue.replayQueue();
             }
+            // Refs #1351 (M6): REPLAY_QUEUE-Empfang entfernt. Replay-
+            // Koordination bei Reconnect laeuft seit M6 ueber
+            // sync-orchestrator.js (exklusiver Web Lock
+            // "anlaufstelle-offline-mutex" + BroadcastChannel
+            // "anlaufstelle-offline"), nicht mehr ueber den Service Worker.
         });
     }
 
     /**
      * Zeigt einen diskreten Hinweis-Toast "Neue Version verfügbar" unten
-     * rechts im Viewport. Ein Klick auf "Neu laden" reloaded die Seite —
-     * der bereits installierte neue SW übernimmt dann.
+     * rechts im Viewport. Ein Klick auf "Neu laden" schickt SKIP_WAITING an
+     * den wartenden SW (Refs #1386); der eigentliche Reload passiert erst
+     * im `controllerchange`-Handler oben, sobald der neue SW die Seite
+     * tatsächlich übernommen hat.
      *
      * Kein Alert(), keine Modal-Overlay-Library — nur DOM-Manipulation,
      * kompatibel mit unserer CSP (kein Inline-Script, keine unsafe-*
      * Directives außer den bestehenden für Alpine).
      */
-    function _showUpdatePrompt() {
+    function _showUpdatePrompt(registration) {
         // Doppel-Trigger verhindern (updatefound kann bei manchen Browsern
         // mehrfach feuern)
         if (document.getElementById("sw-update-toast")) return;
@@ -86,6 +118,20 @@
         toast.className =
             "fixed bottom-4 right-4 z-50 max-w-sm bg-indigo-600 text-white " +
             "rounded-lg shadow-lg p-4 flex items-center gap-3";
+        // Refs #1386: Tailwinds Content-Scan umfasst src/static/js/ nicht
+        // (tailwind.config.js: nur templates/**.html + core/**.py) — Klassen,
+        // die NUR hier im JS vorkommen (bottom-4, bg-indigo-600), fehlen im
+        // kompilierten styles.css. Ohne Fallback rendert der Toast unterhalb
+        // des Viewports (fixed ohne bottom = statische Position am
+        // Dokumentende) und ohne Hintergrund. Die positions-/
+        // sichtbarkeitskritischen Properties daher zusaetzlich inline
+        // (CSSOM-Manipulation, von der CSP nicht betroffen); die Klassen
+        // bleiben fuehrend, falls der Scan spaeter JS einschliesst.
+        toast.style.position = "fixed";
+        toast.style.bottom = "1rem";
+        toast.style.right = "1rem";
+        toast.style.zIndex = "50";
+        toast.style.backgroundColor = "#4f46e5"; // indigo-600
 
         var text = document.createElement("span");
         text.className = "text-sm flex-grow";
@@ -99,7 +145,13 @@
             "rounded hover:bg-indigo-50";
         reloadBtn.textContent = "Neu laden";
         reloadBtn.addEventListener("click", function () {
-            window.location.reload();
+            // Refs #1386: Erst hier — auf explizite Bestätigung — wird der
+            // wartende SW aufgefordert zu übernehmen. skipWaiting() selbst
+            // lebt im SW-Message-Handler, nicht mehr ungegated im
+            // install-Handler.
+            if (registration.waiting) {
+                registration.waiting.postMessage({ type: "SKIP_WAITING" });
+            }
         });
         toast.appendChild(reloadBtn);
 
