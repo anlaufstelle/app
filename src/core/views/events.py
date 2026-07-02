@@ -5,7 +5,6 @@ import logging
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -44,7 +43,12 @@ from core.services.events import (
     split_file_and_text_data,
     update_event,
 )
-from core.views._json_contracts import _conflict_response, _wants_json_response
+from core.views._json_contracts import (
+    _conflict_response,
+    _invalid_form_response,
+    _wants_json_response,
+    _wants_raw_json_response,
+)
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -163,6 +167,19 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
         meta_form = EventMetaForm(request.POST, facility=facility, user=request.user)
 
         if not meta_form.is_valid():
+            # Refs #1351 Task 8, #1387: der Offline-Replay (roher Accept:
+            # application/json) darf ein ungueltiges Formular NICHT als
+            # Erfolg (200) deuten — sonst verwirft die generische Queue die
+            # Anlage still als "synchronisiert", obwohl nie ein Event
+            # entstand (Datenverlust). Bewusst NUR an
+            # _wants_raw_json_response gebunden (nicht HX-Request) — Muster
+            # wie im Update-Pfad (siehe EventUpdateView.post). Frühzeitiger
+            # Return spart hier zusätzlich die weiter unten folgende
+            # Rekonstruktion von data_form/client_pseudonym, die nur fürs
+            # HTML-Re-Render gebraucht wird.
+            if _wants_raw_json_response(request):
+                return _invalid_form_response(meta_form)
+
             # Preserve client selection on validation error
             client_id = request.POST.get("client", "")
             client_obj = get_client_or_none(facility, client_id)
@@ -205,6 +222,9 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
         remove_restricted_fields(request.user, doc_type, data_form)
 
         if not data_form.is_valid():
+            # Refs #1351 Task 8, #1387: analog zum meta_form-Zweig oben.
+            if _wants_raw_json_response(request):
+                return _invalid_form_response(data_form)
             return render(
                 request,
                 "core/events/create.html",
@@ -238,6 +258,13 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                 attach_files_to_new_event(event, request.user, file_fields, doc_type)
         except ValidationError as e:
             meta_form.add_error(None, e.message)
+            # Refs #1351 Task 8, #1387: analog zu den beiden Formular-Zweigen
+            # oben. ``add_error(None, …)`` legt die Meldung unter Djangos
+            # NON_FIELD_ERRORS ab, die get_json_data() als "__all__"-Key
+            # ausgibt — der Offline-Replay-Client bekommt so einen erkennbaren
+            # (wenn auch feldlosen) Fehler statt eines stillen 200-Erfolgs.
+            if _wants_raw_json_response(request):
+                return _invalid_form_response(meta_form)
             return render(
                 request,
                 "core/events/create.html",
@@ -411,16 +438,14 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
         # Formular ungueltig. Refs #1111: der Offline-Replay (Accept: application/json)
         # darf ein ungueltiges Formular NICHT als Erfolg (HTTP 200) deuten — sonst
         # verwirft er den Edit still als "synchronisiert" (Datenverlust von Art.9-/
-        # §203-Dokumentation). Daher 422 mit Feldfehlern. Bewusst NUR an Accept:
-        # application/json gebunden (nicht _wants_json_response, das auch HX-Request
-        # erfasst): ein normaler HTML-/HTMX-Submit behaelt das 200-Re-Render mit
-        # inline-Formularfehlern.
-        accept = (request.headers.get("Accept") or "").lower()
-        if "application/json" in accept:
-            return JsonResponse(
-                {"error": "invalid", "errors": data_form.errors.get_json_data()},
-                status=422,
-            )
+        # §203-Dokumentation). Daher 422 mit Feldfehlern. Bewusst NUR an
+        # _wants_raw_json_response gebunden (nicht _wants_json_response, das auch
+        # HX-Request erfasst): ein normaler HTML-/HTMX-Submit behaelt das
+        # 200-Re-Render mit inline-Formularfehlern. (Refs #1351 Task 8: Helper
+        # nach _json_contracts.py gezogen, sobald die Create-Views denselben
+        # Zweig brauchten — verhaltensneutral.)
+        if _wants_raw_json_response(request):
+            return _invalid_form_response(data_form)
         context = {
             "event": event,
             "data_form": data_form,

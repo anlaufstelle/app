@@ -7,7 +7,7 @@ bleiben dort, weil sie reine Read-Pfade sind.
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
+from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -24,7 +24,12 @@ from core.services.case import (
 )
 from core.services.client import get_client_or_none
 from core.services.events import get_idempotent_result, remember_idempotent_result
-from core.views._json_contracts import _conflict_response, _wants_json_response
+from core.views._json_contracts import (
+    _conflict_response,
+    _invalid_form_response,
+    _wants_json_response,
+    _wants_raw_json_response,
+)
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 from core.views.utils import safe_redirect_path
 from core.views.workitems import can_user_mutate_workitem
@@ -161,6 +166,16 @@ class WorkItemCreateView(StaffRequiredMixin, View):
             messages.success(request, _("Aufgabe wurde erstellt."))
             return redirect("core:workitem_inbox")
 
+        # Formular ungueltig. Refs #1351 Task 8, #1387 (analog #1111/EventCreateView):
+        # der Offline-Replay (roher Accept: application/json) darf ein
+        # ungueltiges Formular NICHT als Erfolg (200) deuten — sonst verwirft
+        # die generische Queue die Anlage still als "synchronisiert", obwohl
+        # nie ein WorkItem entstand (Datenverlust). Bewusst NUR an
+        # _wants_raw_json_response gebunden (nicht HX-Request): ein normaler
+        # HTML-/HTMX-Submit behaelt das 200-Re-Render mit inline-Fehlern.
+        if _wants_raw_json_response(request):
+            return _invalid_form_response(form)
+
         context = {
             "form": form,
             "client_id": request.POST.get("client", ""),
@@ -262,16 +277,14 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
         # der Offline-Replay (Accept: application/json) darf ein ungueltiges
         # Formular NICHT als Erfolg (HTTP 200) deuten — sonst verwirft er den
         # Edit still als "synchronisiert" (Datenverlust). Daher 422 mit
-        # Feldfehlern. Bewusst NUR an Accept: application/json gebunden
-        # (nicht _wants_json_response, das auch HX-Request erfasst): ein
-        # normaler HTML-/HTMX-Submit behaelt das 200-Re-Render mit
-        # inline-Formularfehlern.
-        accept = (request.headers.get("Accept") or "").lower()
-        if "application/json" in accept:
-            return JsonResponse(
-                {"error": "invalid", "errors": form.errors.get_json_data()},
-                status=422,
-            )
+        # Feldfehlern. Bewusst NUR an _wants_raw_json_response gebunden (nicht
+        # _wants_json_response, das auch HX-Request erfasst): ein normaler
+        # HTML-/HTMX-Submit behaelt das 200-Re-Render mit
+        # inline-Formularfehlern. (Refs #1351 Task 8: Helper nach
+        # _json_contracts.py gezogen, sobald die Create-Views denselben Zweig
+        # brauchten — verhaltensneutral.)
+        if _wants_raw_json_response(request):
+            return _invalid_form_response(form)
         context = {
             "form": form,
             "workitem": workitem,

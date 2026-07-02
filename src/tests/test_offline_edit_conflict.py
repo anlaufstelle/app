@@ -30,6 +30,21 @@ mit einem Unterschied: ``server_state`` trägt statt ``data_json``/
 ``status``/``updated_at`` direkt (WorkItems haben keine dynamischen,
 sensitivitätsklassifizierten Felder wie Events, daher entfällt der
 Filter-Test).
+
+Erweiterung (Refs #1351 Task 8, #1387): die beiden Create-Views
+(``EventCreateView``, ``WorkItemCreateView``) rendern bei ungueltigem
+Formular bislang IMMER 200-HTML — unabhaengig vom Accept-Header. Fuer den
+Offline-Replay bedeutet das denselben Datenverlust wie beim ungefixten
+Update-Pfad: ein 200-Re-Render wird von der generischen Queue als Erfolg
+gewertet und die lokale Aenderung geloescht, obwohl sie nie in der DB
+gelandet ist. ``TestEventCreateInvalid422``/``TestWorkItemCreateInvalid422``
+uebertragen den 422-Vertrag von ``TestEventUpdateConflict``/
+``TestWorkItemUpdateConflict`` auf die Create-Pfade. Bei Events gibt es DREI
+statt einem Invalid-Pfad (``meta_form``, ``data_form``, ``ValidationError``
+aus ``create_event``); der Formular-Check bleibt bewusst an den ROHEN
+``Accept: application/json``-Header gebunden (nicht ``HX-Request`` wie bei
+409-Konflikten) — ein normaler HTMX-Submit behaelt sein 200-Re-Render mit
+inline-Fehlern.
 """
 
 from __future__ import annotations
@@ -43,6 +58,7 @@ from core.models import (
     DocumentTypeField,
     Event,
     FieldTemplate,
+    WorkItem,
 )
 
 
@@ -585,6 +601,236 @@ class TestWorkItemUpdateConflict:
         response = client.post(
             reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk}),
             {"item_type": "task", "priority": "normal"},
+        )
+        assert response.status_code == 200
+        assert response["Content-Type"].startswith("text/html")
+
+
+@pytest.mark.django_db
+class TestEventCreateInvalid422:
+    """Create-422-Contract für :class:`EventCreateView.post` (Refs #1351 Task 8, #1387).
+
+    Analog zum Update-Pfad (:class:`TestEventUpdateConflict`), aber mit DREI
+    statt einem Invalid-Pfad — ``EventCreateView.post`` prüft das Formular in
+    drei Stufen, bevor das Event angelegt wird: ``meta_form``
+    (Dokumentationstyp/Zeitpunkt), ``data_form`` (dynamische Felder je
+    DocumentType) und eine ``ValidationError`` aus ``create_event``
+    (Geschäftsregeln wie Fall/Person-Konsistenz, erst NACH beiden
+    Formular-Checks geprüft, innerhalb der ``transaction.atomic()``). Alle
+    drei rendern heute bei JEDEM Client dieselbe 200-HTML-Antwort — ein
+    Offline-Replay mit rohem ``Accept: application/json`` deutet ein 200
+    fälschlich als "synchronisiert" und verwirft den lokalen Edit
+    (Datenverlust). Muster: der bestehende 422-Zweig in
+    ``EventUpdateView.post``.
+
+    Dieser Test ist gegen den heutigen Code ROT: alle drei Pfade liefern
+    aktuell 200-HTML statt 422-JSON. Refs #1351, #1387.
+    """
+
+    def test_event_create_meta_form_invalid_returns_422_json(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        """Pfad 1: ``meta_form`` ungültig (``occurred_at`` fehlt)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_contact.pk),
+                "client": str(client_identified.pk),
+                # occurred_at fehlt -> meta_form ungueltig
+                "dauer": "15",
+                "notiz": "offline-create",
+            },
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 422
+        payload = response.json()
+        assert payload["error"] == "invalid"
+        assert "occurred_at" in payload["errors"]
+        assert not Event.objects.filter(created_by=staff_user).exists()
+
+    def test_event_create_data_form_invalid_returns_422_json(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        """Pfad 2: ``data_form`` ungültig (``dauer`` ist ein NUMBER-Feld,
+        siehe ``doc_type_contact``-Fixture)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_contact.pk),
+                "client": str(client_identified.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "dauer": "nicht-numerisch",
+                "notiz": "offline-create",
+            },
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 422
+        payload = response.json()
+        assert payload["error"] == "invalid"
+        assert "dauer" in payload["errors"]
+        assert not Event.objects.filter(created_by=staff_user).exists()
+
+    def test_event_create_validation_error_returns_422_with_all_key(
+        self, client, staff_user, facility, doc_type_contact, case_open
+    ):
+        """Pfad 3: beide Formulare valide, aber ``create_event`` wirft eine
+        ``ValidationError`` (der POST-``client`` passt nicht zur Person des
+        gewählten ``case`` — dieselbe Konstellation wie
+        ``test_event_create_rejects_case_of_other_client`` in
+        ``test_events_crud.py``). Die View fängt das über
+        ``meta_form.add_error(None, e.message)`` auf, wodurch die Meldung
+        unter dem ``__all__``-Key (Django NON_FIELD_ERRORS) landet."""
+        from core.models import Client as ClientModel
+
+        other = ClientModel.objects.create(
+            facility=facility,
+            pseudonym="Orca",
+            contact_stage=ClientModel.ContactStage.IDENTIFIED,
+        )
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_contact.pk),
+                "client": str(other.pk),
+                "case": str(case_open.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "dauer": "15",
+                "notiz": "Mismatch",
+            },
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 422
+        payload = response.json()
+        assert payload["error"] == "invalid"
+        assert "__all__" in payload["errors"]
+        assert not Event.objects.filter(created_by=staff_user).exists()
+
+    def test_event_create_valid_accept_json_still_redirects(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        """Wächter (c): ein valider POST mit ``Accept: application/json``
+        bleibt beim normalen 302-Redirect — der 422-Zweig gilt nur für
+        ungültige Formulare. Bereits heute grün, darf durch Task 8 nicht
+        brechen (Regressionsschutz #1387)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_contact.pk),
+                "client": str(client_identified.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "dauer": "15",
+                "notiz": "Testnotiz",
+            },
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 302
+        assert Event.objects.filter(created_by=staff_user).exists()
+
+    def test_event_create_html_invalid_still_renders_200(self, client, staff_user, doc_type_contact, client_identified):
+        """Wächter (d)/Regressionsschutz #1387: ohne ``Accept:
+        application/json`` bleibt das bestehende 200-Re-Render mit
+        inline-Fehlern unverändert."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_contact.pk),
+                "client": str(client_identified.pk),
+                # occurred_at fehlt -> meta_form ungueltig
+                "dauer": "15",
+                "notiz": "offline-create",
+            },
+        )
+        assert response.status_code == 200
+        assert response["Content-Type"].startswith("text/html")
+
+    def test_event_create_hx_request_without_accept_returns_200(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        """Wächter (e)/Regressionsschutz #1387: ``HX-Request: true`` OHNE
+        ``Accept: application/json`` löst NICHT den 422-Zweig aus — ein
+        normaler HTMX-Submit behält sein 200-HTML-Re-Render (Muster-
+        Konsistenz mit dem Update-Pfad, der ebenfalls NUR auf den rohen
+        Accept-Header prüft, nicht auf HX-Request)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_contact.pk),
+                "client": str(client_identified.pk),
+                # occurred_at fehlt -> meta_form ungueltig
+                "dauer": "15",
+                "notiz": "offline-create",
+            },
+            HTTP_HX_REQUEST="true",
+        )
+        assert response.status_code == 200
+        assert response["Content-Type"].startswith("text/html")
+
+
+@pytest.mark.django_db
+class TestWorkItemCreateInvalid422:
+    """Create-422-Contract für :class:`WorkItemCreateView.post` (Refs #1351 Task 8, #1387).
+
+    Analog zu :class:`TestEventCreateInvalid422`, aber nur EIN Invalid-Pfad —
+    ``WorkItemCreateView.post`` prüft (anders als Events) kein zweites
+    Formular und fängt auch keine ``ValidationError`` aus dem Service ab.
+
+    Dieser Test ist gegen den heutigen Code ROT: der einzige Invalid-Pfad
+    liefert aktuell 200-HTML statt 422-JSON. Refs #1351, #1387.
+    """
+
+    def test_workitem_create_invalid_returns_422_json(self, client, staff_user):
+        """``title`` fehlt -> Form ungültig -> 422 statt 200."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_create"),
+            {"item_type": "task", "priority": "normal"},
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 422
+        payload = response.json()
+        assert payload["error"] == "invalid"
+        assert "title" in payload["errors"]
+        assert not WorkItem.objects.filter(created_by=staff_user).exists()
+
+    def test_workitem_create_valid_accept_json_still_redirects(self, client, staff_user):
+        """Wächter (c): valider POST + ``Accept: application/json`` bleibt
+        beim 302-Redirect. Bereits heute grün, darf durch Task 8 nicht
+        brechen (Regressionsschutz #1387)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_create"),
+            {"item_type": "task", "title": "Aufgabe-422-Guard", "priority": "normal"},
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 302
+        assert WorkItem.objects.filter(title="Aufgabe-422-Guard").exists()
+
+    def test_workitem_create_html_invalid_still_renders_200(self, client, staff_user):
+        """Wächter (d)/Regressionsschutz #1387: ohne ``Accept:
+        application/json`` bleibt das bestehende 200-Re-Render mit
+        inline-Fehlern unverändert."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_create"),
+            {"item_type": "task", "priority": "normal"},
+        )
+        assert response.status_code == 200
+        assert response["Content-Type"].startswith("text/html")
+
+    def test_workitem_create_hx_request_without_accept_returns_200(self, client, staff_user):
+        """Wächter (e)/Regressionsschutz #1387: ``HX-Request: true`` OHNE
+        ``Accept: application/json`` löst NICHT den 422-Zweig aus."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_create"),
+            {"item_type": "task", "priority": "normal"},
+            HTTP_HX_REQUEST="true",
         )
         assert response.status_code == 200
         assert response["Content-Type"].startswith("text/html")
