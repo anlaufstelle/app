@@ -92,8 +92,16 @@
                         await window.offlineClient.removeClientFromOffline(this._pk);
                         notify("Aus Offline-Cache entfernt.", "info");
                     } else {
-                        await window.offlineClient.takeClientOffline(this._pk);
-                        notify("Klientel ist jetzt offline verfuegbar.", "info");
+                        const bundle = await window.offlineClient.takeClientOffline(this._pk);
+                        let msg = "Klientel ist jetzt offline verfuegbar.";
+                        if (bundle && bundle.persistDenied) {
+                            // Refs #1356: dezenter Hinweis, wenn der Browser
+                            // keinen dauerhaften Speicher gewaehrt hat (kein
+                            // Blocker fuer die Mitnahme selbst).
+                            msg +=
+                                " – Hinweis: Der Browser gewährt keinen dauerhaften Speicher; bei Speicherdruck können Offline-Daten verloren gehen.";
+                        }
+                        notify(msg, "info");
                     }
                     await this.refresh();
                 } catch (e) {
@@ -139,13 +147,18 @@
                     let taken = 0;
                     let skipped = 0;
                     let limited = false;
+                    // Refs #1356: ueber alle mitgenommenen Personen gesammelt —
+                    // der Hinweis erscheint hoechstens einmal in der Summary,
+                    // nicht pro Person.
+                    let persistDenied = false;
                     for (const pk of pks) {
                         try {
                             if (await window.offlineClient.isClientOffline(pk)) {
                                 skipped += 1;
                                 continue;
                             }
-                            await window.offlineClient.takeClientOffline(pk);
+                            const bundle = await window.offlineClient.takeClientOffline(pk);
+                            if (bundle && bundle.persistDenied) persistDenied = true;
                             taken += 1;
                         } catch (e) {
                             if (e && e.name === "OfflineLimitError") {
@@ -167,7 +180,12 @@
                     if (limited) {
                         msg += " (Limit " + (window.offlineClient.MAX_OFFLINE_CLIENTS || 20) + " erreicht)";
                     }
-                    notify(msg + ".", limited ? "error" : "info");
+                    msg += ".";
+                    if (persistDenied) {
+                        msg +=
+                            " – Hinweis: Der Browser gewährt keinen dauerhaften Speicher; bei Speicherdruck können Offline-Daten verloren gehen.";
+                    }
+                    notify(msg, limited ? "error" : "info");
                 } finally {
                     this.busy = false;
                 }

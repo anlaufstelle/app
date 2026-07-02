@@ -62,6 +62,16 @@
             throw err;
         }
 
+        // Refs #1356: Einmalige Anfrage um dauerhaften Speicher (Eviction-
+        // Schutz). Ergebnis wird von offlineStore selbst gecacht; eine
+        // Verweigerung oder ein Fehler hier darf die Mitnahme NIE blockieren.
+        let persisted = null;
+        try {
+            persisted = await window.offlineStore.ensurePersistentStorage();
+        } catch (_e) {
+            // Geschluckt — siehe Kommentar oben.
+        }
+
         const store = _store();
         const currentCount = await store.countOfflineClients();
         const already = await store.isClientOffline(clientPk);
@@ -91,6 +101,10 @@
         const bundle = await response.json();
         await store.saveClientBundle(bundle);
         await _emitCountEvent();
+        // Refs #1356: Aufrufer (Badge/Listen-Toggle) haengen bei Verweigerung
+        // einen dezenten Hinweis an ihre Erfolgsmeldung. `null` (API fehlt/
+        // Fehler) zaehlt NICHT als Verweigerung.
+        bundle.persistDenied = persisted === false;
         return bundle;
     }
 

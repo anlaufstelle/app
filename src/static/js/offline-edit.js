@@ -228,6 +228,12 @@
                 lastEditedAt: Date.now(),
             },
         };
+        // Refs #1356: Offline neu angelegte Eintraege existieren serverseitig
+        // noch gar nicht — das schuetzenswerteste Gut. Fire-and-forget um
+        // dauerhaften Speicher bitten (Eviction-Schutz), OHNE das Anlegen
+        // durch eine Verweigerung/einen Fehler zu blockieren; kein
+        // UI-Feedback an dieser Stelle.
+        window.offlineStore.ensurePersistentStorage().catch(function () {});
         await _store().saveOfflineEdit(record);
         _fireCountEvent();
         return record;

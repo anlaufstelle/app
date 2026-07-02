@@ -685,6 +685,44 @@
         return db.events.delete(pk);
     }
 
+    /*
+     * Refs #1356: Frage den Browser EINMALIG um dauerhaften Speicher
+     * (navigator.storage.persist()). Ohne diesen Grant darf der Browser die
+     * Origin-IndexedDB unter Speicherdruck evicten (Safari-ITP zusaetzlich
+     * zeitbasiert bei nicht installierter PWA) — inklusive verschluesselter
+     * Bundles UND ungesyncter Edits/Queue-Rows. Das Ergebnis wird in
+     * `meta` gecacht, damit der Browser-Prompt nicht bei jedem weiteren
+     * Take/Edit erneut auftaucht.
+     *
+     * Rueckgabe:
+     *   true/false — Browser-Antwort (aus dem Cache oder frisch erfragt).
+     *   null       — kein `navigator.storage.persist` (Feature-Detection)
+     *                ODER der Call ist fehlgeschlagen. Bewusst NICHT
+     *                gecacht: ein spaeterer Aufruf (z.B. nach einem
+     *                Browser-Update) soll erneut fragen duerfen statt an
+     *                einem verworfenen `null` haengen zu bleiben.
+     */
+    async function ensurePersistentStorage() {
+        const cached = await db.meta.get("storagePersist");
+        if (cached) return cached.granted;
+
+        if (!navigator.storage || !navigator.storage.persist) {
+            return null;
+        }
+
+        let granted;
+        try {
+            granted = await navigator.storage.persist();
+        } catch (_e) {
+            return null;
+        }
+
+        // Bewusst UNverschluesselt: kein PII, nur ein Boolean-Flag zum
+        // Re-Prompt-Schutz — dafuer lohnt sich kein Crypto-Overhead.
+        await db.meta.put({ key: "storagePersist", granted: granted, ts: Date.now() });
+        return granted;
+    }
+
     window.offlineStore = {
         db: db,
         putEncrypted: putEncrypted,
@@ -716,6 +754,8 @@
         updateEventLocalStatus: updateEventLocalStatus,
         saveConflictState: saveConflictState,
         clearOfflineEdit: clearOfflineEdit,
+        // Refs #1356 — persistenter Speicher (Eviction-Schutz)
+        ensurePersistentStorage: ensurePersistentStorage,
         TTL_MS: TTL_MS,
         MAX_OFFLINE_CLIENTS: MAX_OFFLINE_CLIENTS,
     };

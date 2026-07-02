@@ -844,3 +844,70 @@ class TestUnsyncedNeverDiesSilently:
         assert result["outcome"]["purged"] == 0
         assert result["after"] == 2, "Beide Bundles muessen nach dem 429-Abbruch unversehrt bleiben"
         assert request_count["n"] == 1, "Nach dem ersten 429 darf kein weiterer Bundle-GET rausgehen (break)"
+
+
+# ── Persistenter Speicher (Refs #1356) ───────────────────────────────────────
+
+
+class TestPersistentStorageRequest:
+    """navigator.storage.persist()-Anfrage beim ersten Offline-Take (Refs #1356).
+
+    Playwright grantet Persistent-Storage standardmäßig automatisch — das
+    würde den Call/Cache-Vertrag nicht prüfbar machen. Ein Init-Script ersetzt
+    ``navigator.storage.persist`` daher VOR jeder Navigation durch einen Spy
+    (``page.add_init_script`` läuft vor jedem Seiten-Skript, auch bei
+    Reloads). Geprüft wird die Store-Ebene (``ensurePersistentStorage``)
+    direkt — passend zur Test-Granularität dieser Datei, ohne einen
+    Server-Bundle-Seed für den vollen ``takeClientOffline``-Pfad zu brauchen.
+    """
+
+    @staticmethod
+    def _install_persist_spy(page, resolves_to):
+        """navigator.storage.persist durch einen Spy ersetzen: zählt Aufrufe
+        in window.__persistCalls und löst mit ``resolves_to`` auf."""
+        resolved = "true" if resolves_to else "false"
+        page.add_init_script(
+            "window.__persistCalls = 0;"
+            "navigator.storage.persist = () => {"
+            "    window.__persistCalls += 1;"
+            f"    return Promise.resolve({resolved});"
+            "};"
+        )
+
+    def test_first_call_requests_and_caches_grant(self, browser, base_url, _login_storage_state):
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page = context.new_page()
+        self._install_persist_spy(page, True)
+        _bootstrap(page, base_url)
+
+        result = page.evaluate(
+            """async () => {
+                const first = await window.offlineStore.ensurePersistentStorage();
+                const second = await window.offlineStore.ensurePersistentStorage();
+                const row = await window.offlineStore.db.meta.get('storagePersist');
+                return { first, second, calls: window.__persistCalls, row };
+            }"""
+        )
+        assert result["first"] is True
+        assert result["second"] is True
+        assert result["calls"] == 1, "Zweiter Call muss aus dem meta-Cache kommen (kein Re-Prompt)"
+        assert result["row"]["granted"] is True
+        context.close()
+
+    def test_denied_grant_is_returned_and_cached_as_false(self, browser, base_url, _login_storage_state):
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page = context.new_page()
+        self._install_persist_spy(page, False)
+        _bootstrap(page, base_url)
+
+        result = page.evaluate(
+            """async () => {
+                const granted = await window.offlineStore.ensurePersistentStorage();
+                const row = await window.offlineStore.db.meta.get('storagePersist');
+                return { granted, calls: window.__persistCalls, row };
+            }"""
+        )
+        assert result["granted"] is False
+        assert result["calls"] == 1
+        assert result["row"]["granted"] is False
+        context.close()

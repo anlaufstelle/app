@@ -97,8 +97,16 @@
                         await window.offlineClient.removeClientFromOffline(this._pk);
                         this.showMessage("Aus Offline-Cache entfernt.", "info");
                     } else {
-                        await window.offlineClient.takeClientOffline(this._pk);
-                        this.showMessage("Klientel ist jetzt offline verfuegbar.", "info");
+                        const bundle = await window.offlineClient.takeClientOffline(this._pk);
+                        let msg = "Klientel ist jetzt offline verfuegbar.";
+                        if (bundle && bundle.persistDenied) {
+                            // Refs #1356: dezenter Hinweis, wenn der Browser
+                            // keinen dauerhaften Speicher gewaehrt hat (kein
+                            // Blocker fuer die Mitnahme selbst).
+                            msg +=
+                                " – Hinweis: Der Browser gewährt keinen dauerhaften Speicher; bei Speicherdruck können Offline-Daten verloren gehen.";
+                        }
+                        this.showMessage(msg, "info");
                     }
                     await this.refresh();
                 } catch (e) {
