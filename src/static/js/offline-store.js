@@ -462,20 +462,31 @@
      * geloescht ist oder nicht mehr im Facility-Scope/der Rolle des Users
      * liegt (`get_object_or_404(... facility=...)` in views/offline.py).
      *
-     * Invalidierungs-Statuscodes (401/403/404/410) -> lokalen Eintrag samt
-     * cases/events purgen: der Klient darf offline nicht im Klartext
-     * fortbestehen. 200 -> frisches (ggf. anonymisiertes/leeres) Bundle
-     * zurueckschreiben, damit eine serverseitige Anonymisierung den lokalen
-     * Klartext ueberschreibt. Netz-/Serverfehler (offline, 5xx, sonstige)
-     * lassen den Cache UNANGETASTET — fail-open, sonst wuerde ein flapatender
-     * Server den Aussendienst-Cache leeren.
+     * Invalidierungs-Statuscodes (401/404/410) -> lokalen Eintrag samt
+     * cases/events purgen (Loeschung/Anonymisierung, F-10/#1110 — der
+     * force-Purge aus M2/#1353 bleibt unveraendert): der Klient darf offline
+     * nicht im Klartext fortbestehen. 200 -> frisches (ggf. anonymisiertes/
+     * leeres) Bundle zurueckschreiben, damit eine serverseitige
+     * Anonymisierung den lokalen Klartext ueberschreibt. Netz-/Serverfehler
+     * (offline, 5xx, sonstige) lassen den Cache UNANGETASTET — fail-open,
+     * sonst wuerde ein flapatender Server den Aussendienst-Cache leeren.
+     *
+     * Refs #1354: 403 ist bewusst KEIN Invalidierungs-Status mehr. Echter
+     * Rechteentzug erreicht den Client nie als 403 — `signals/
+     * offline_invalidation.py` rotiert bei Entzug den Salt UND flusht die
+     * Sessions serverseitig, der naechste Bundle-Fetch landet also auf dem
+     * Login-Redirect (dem `fetch` folgt) -> eine 200-Loginseite, deren
+     * `response.json()` wirft -> "error", Cache bleibt. Die eigentliche
+     * Datenvernichtung nach Entzug leistet ohnehin die Salt-Rotation ueber
+     * den permanenten Decrypt-Fehler (M1/#1352). Ein tatsaechliches 403 ist
+     * damit CSRF-/Rate-Limit-/Proxy-Rauschen -> Cache behalten statt purgen.
      *
      * Idempotent und ohne Seiteneffekt auf laufende Edits: ein Klient mit
      * lokal modifizierten/konfligierenden Events wird NICHT re-fetcht
      * (sonst wuerde der Re-Fetch unsynced Klartext ueberschreiben). Diese
      * werden ueber den Queue-/Edit-Replay separat behandelt.
      */
-    const INVALIDATION_STATUSES = [401, 403, 404, 410];
+    const INVALIDATION_STATUSES = [401, 404, 410];
 
     function _bundleUrl(clientPk) {
         return "/api/v1/offline/bundle/client/" + encodeURIComponent(clientPk) + "/";
@@ -502,6 +513,14 @@
         } catch (_e) {
             // Offline / Netzfehler -> Cache bewusst behalten.
             return "error";
+        }
+
+        // Refs #1354: 429 (Rate-Limit) ist weder Rechteentzug noch eine
+        // Aussage ueber den Klienten selbst -> eigenes Ergebnis, Cache
+        // unangetastet. `revalidateCachedClients` bricht die Batch-Schleife
+        // darauf ab, statt das Request-Budget weiter zu verbrennen.
+        if (response.status === 429) {
+            return "ratelimited";
         }
 
         // F-10 (#1110/#1111): Zugriff entzogen oder Client weg -> IMMER purgen,
@@ -537,12 +556,20 @@
         const rows = await db.clients.toArray();
         let purged = 0;
         let refreshed = 0;
+        let ratelimited = false;
         for (const row of rows) {
             const result = await revalidateCachedClient(row.pk);
             if (result === "purged") purged += 1;
             else if (result === "refreshed") refreshed += 1;
+            else if (result === "ratelimited") {
+                // Refs #1354: Budget nicht weiter verbrennen -> Schleife
+                // abbrechen; das naechste online-Event/Boot revalidiert die
+                // restlichen Klienten erneut.
+                ratelimited = true;
+                break;
+            }
         }
-        return { purged: purged, refreshed: refreshed, total: rows.length };
+        return { purged: purged, refreshed: refreshed, total: rows.length, ratelimited: ratelimited };
     }
 
     /* ─── Stage 3 (#575) — Local-Status-Tracking on events ───────────────── */

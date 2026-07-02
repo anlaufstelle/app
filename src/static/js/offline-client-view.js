@@ -453,8 +453,11 @@
                 } else if (status === "offline" || status === "network-error" || status === "no-key") {
                     this.lastSyncResult = "pending";
                 } else {
-                    // error / revoked: nicht synchronisiert. Bei "revoked" raeumt der
-                    // nachgelagerte revalidateCachedClient den Klienten weg (F-10).
+                    // error / revoked: nicht synchronisiert. Bei "revoked" durch
+                    // 404 raeumt der nachgelagerte revalidateCachedClient den
+                    // Klienten weg (F-10); ein 403-"revoked" purgt seit #1354
+                    // nicht mehr (moegliches Rate-Limit-/Proxy-Rauschen) — der
+                    // Edit bleibt erhalten.
                     this.lastSyncResult = "error";
                 }
             },

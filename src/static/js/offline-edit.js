@@ -372,10 +372,12 @@
             return { status: "invalid", errors: (body && body.errors) || {} };
         }
         if (response.status === 403 || response.status === 404) {
-            // Permanenter Fehler = Zugriff entzogen oder Event geloescht. Den Replay
-            // hier NICHT als behebbar behandeln; der nachgelagerte
-            // revalidateCachedClient purged den Client (F-10/#1110) — der
-            // Sicherheits-Purge darf nicht an einem haengenden Edit scheitern.
+            // 404 = Event geloescht/entzogen; der nachgelagerte
+            // revalidateCachedClient purged den Klienten (F-10/#1110). Ein 403
+            // ist seit #1354 KEIN Purge-Trigger mehr — er kann Rate-Limit-/
+            // CSRF-/Proxy-Rauschen sein; bei echtem Rechteentzug vernichtet
+            // die Salt-Rotation den Bestand (permanenter Decrypt-Fehler,
+            // #1352). Der Edit bleibt in beiden Faellen lokal erhalten.
             return { status: "revoked", statusCode: response.status };
         }
         // Transiente Fehler (5xx/429): Record behalten, spaeter erneut versuchen.

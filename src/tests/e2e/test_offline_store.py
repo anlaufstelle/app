@@ -758,3 +758,89 @@ class TestUnsyncedNeverDiesSilently:
         assert result["outcome"] == "purged"
         assert result["clientGone"] is True
         assert result["events"] == 0, "Security-Purge (F-10) muss auch das unsynced Event mitnehmen"
+
+    def test_revalidate_403_keeps_cache(self, authenticated_page, base_url):
+        """Refs #1354 (K1c): 403 ist CSRF-/Rate-Limit-/Proxy-Rauschen, KEIN
+        Rechteentzug — ein echter Rechteentzug erreicht den Client wegen des
+        Session-Flushs in ``signals/offline_invalidation.py`` nie als 403
+        (Folgerequest = Login-Redirect). Anders als 404/410 darf
+        ``revalidateCachedClient`` bei 403 daher weder den Klienten noch das
+        unsynced Event purgen. ``page.route`` mockt die 403-Antwort (Muster:
+        ``test_revalidate_404_force_purges_everything``). Dieser Test ist
+        gegen den heutigen Code ROT: heute steht 403 noch in
+        ``INVALIDATION_STATUSES`` und der Zweig force-purgt genau wie 404/410."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        page.route(
+            re.compile(r"/api/v1/offline/bundle/client/"),
+            lambda route: route.fulfill(status=403, content_type="application/json", body="{}"),
+        )
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                const PK = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+                await s.saveClientBundle({
+                    client: {pk: PK, pseudonym: 'RL-403'}, expires_at: future, ttl: 3600,
+                    events: [{pk: 'clean-ev-403', occurred_at: future}],
+                });
+                await s.saveOfflineEdit({
+                    pk: 'modified-ev-403',
+                    clientPk: PK,
+                    occurredAt: future,
+                    localStatus: 'modified',
+                    data: {formData: {note: 'pending, 403 darf das nicht purgen'}, expectedUpdatedAt: ''},
+                });
+                const before = {clients: await s.count('clients'), events: await s.count('events')};
+                const outcome = await s.revalidateCachedClient(PK);
+                const after = {clients: await s.count('clients'), events: await s.count('events')};
+                return {outcome, before, after};
+            }"""
+        )
+        # Konkreter Rueckgabewert nach dem Fix ist "skipped" (der
+        # unsynced-Guard aus M2/#1353 greift, sobald der 403-Purge-Zweig
+        # nicht mehr zieht) — die harte Invariante ist "nicht purged".
+        assert result["outcome"] != "purged", "403 ist kein Rechteentzug und darf nicht mehr force-purgen"
+        assert result["before"] == {"clients": 1, "events": 2}
+        assert result["after"] == result["before"], "Cache (inkl. unsynced Event) muss nach 403 unangetastet bleiben"
+
+    def test_revalidate_429_aborts_batch(self, authenticated_page, base_url):
+        """Refs #1354: Der Bundle-Endpoint limitiert (``RATELIMIT_OFFLINE_BUNDLE``,
+        Server-Teil in #1354); ein 429 mitten in der Batch-Re-Validierung
+        darf das restliche Budget nicht weiter verbrennen.
+        ``revalidateCachedClients`` muss nach dem ERSTEN 429 abbrechen
+        (``break``) statt jeden gecachten Klienten einzeln anzufragen — der
+        Request-Zaehler im Mock belegt, dass trotz zwei gecachten Bundles nur
+        EIN Bundle-GET rausging."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        request_count = {"n": 0}
+
+        def _count_and_429(route):
+            request_count["n"] += 1
+            route.fulfill(status=429, content_type="application/json", body="{}")
+
+        page.route(re.compile(r"/api/v1/offline/bundle/client/"), _count_and_429)
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                await s.saveClientBundle({
+                    client: {pk: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', pseudonym: 'RL-A'},
+                    expires_at: future, ttl: 3600,
+                });
+                await s.saveClientBundle({
+                    client: {pk: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', pseudonym: 'RL-B'},
+                    expires_at: future, ttl: 3600,
+                });
+                const before = await s.count('clients');
+                const outcome = await s.revalidateCachedClients();
+                const after = await s.count('clients');
+                return {before, after, outcome};
+            }"""
+        )
+        assert result["before"] == 2
+        assert result["outcome"]["ratelimited"] is True
+        assert result["outcome"]["purged"] == 0
+        assert result["after"] == 2, "Beide Bundles muessen nach dem 429-Abbruch unversehrt bleiben"
+        assert request_count["n"] == 1, "Nach dem ersten 429 darf kein weiterer Bundle-GET rausgehen (break)"
