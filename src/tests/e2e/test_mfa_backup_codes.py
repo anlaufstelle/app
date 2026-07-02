@@ -50,6 +50,39 @@ def _enable_totp_and_generate_codes(username: str, e2e_env) -> list[str]:
     return lines[-1].split("|")
 
 
+def _enable_totp_and_current_code(username: str, e2e_env) -> str:
+    """Wie ``_enable_totp_and_generate_codes``, gibt aber einen aktuell
+    gültigen TOTP-Code des frischen Devices zurück (Refs #1378: der
+    TOTP-Modus von ``/mfa/verify/`` braucht echte Browser-Abdeckung —
+    vor dem Fix gingen BEIDE ``token``-Inputs in den POST und
+    ``QueryDict.get("token")`` las das leere Backup-Feld)."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "src/manage.py",
+            "shell",
+            "--no-imports",
+            "-c",
+            (
+                "from core.models import User; "
+                "from django_otp.plugins.otp_totp.models import TOTPDevice; "
+                "from django_otp.oath import totp; "
+                f"u = User.objects.get(username='{username}'); "
+                "TOTPDevice.objects.filter(user=u).delete(); "
+                "d = TOTPDevice.objects.create(user=u, name='default', confirmed=True); "
+                "print('CODE:' + str(totp(d.bin_key, step=d.step, t0=d.t0, digits=d.digits)).zfill(d.digits))"
+            ),
+        ],
+        env=e2e_env,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, f"Shell-Setup fehlgeschlagen: {result.stderr}"
+    lines = [line for line in result.stdout.splitlines() if line.startswith("CODE:")]
+    assert lines, f"Kein Code ausgegeben: {result.stdout}"
+    return lines[-1].removeprefix("CODE:")
+
+
 def _cleanup_totp(username: str, e2e_env) -> None:
     subprocess.run(
         [
@@ -163,6 +196,38 @@ class TestZZMFABackupCodeLogin:
                 context.close()
         finally:
             _cleanup_totp("emma", e2e_env)
+
+
+class TestZZMFATotpLogin:
+    """TOTP-Modus von /mfa/verify/ im echten Browser (Refs #1378).
+
+    Beide Eingabefelder heißen ``token``; ohne das disabled-Gating des
+    inaktiven Feldes serialisiert der Browser beide und der Server liest
+    per ``QueryDict.get`` das LEERE Backup-Feld — der Authenticator-Code
+    wäre serverseitig immer „ungültig", was kein Unit-Test (Client-POST
+    mit nur einem Wert) je sehen kann."""
+
+    def test_user_can_login_with_totp_code(self, base_url, browser, e2e_env):
+        code = _enable_totp_and_current_code("miriam", e2e_env)
+        try:
+            context = browser.new_context(locale="de-DE")
+            page = context.new_page()
+            try:
+                page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
+                page.fill("#id_username", "miriam")
+                page.fill("#id_password", "anlaufstelle2026")
+                page.click("button[type=submit]")
+                page.wait_for_url(re.compile(r"/mfa/verify/"), timeout=8000)
+
+                page.locator("[data-testid='mfa-token-input']").fill(code)
+                page.locator("[data-testid='mfa-verify-button']").click()
+
+                page.wait_for_url(f"{base_url}/", timeout=5000)
+                assert page.url == f"{base_url}/"
+            finally:
+                context.close()
+        finally:
+            _cleanup_totp("miriam", e2e_env)
 
 
 @pytest.mark.smoke
