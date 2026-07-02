@@ -147,8 +147,24 @@
     // password_change.html — those templates trigger crypto_session.deriveSessionKey
     // before redirecting away from the login page.
     if (window.offlineStore && document.body.dataset.userId) {
-        window.offlineStore.purgeExpired().catch(function () {
-            // ignore — better to leave stale records than crash
-        });
+        (async function () {
+            try {
+                var cs = window.crypto_session;
+                if (cs && cs.ready) {
+                    await cs.ready();
+                }
+                // Refs #1352: ohne Schluessel keine Loeschentscheidung — nach
+                // Idle-Lock (#1324) oder vor dem ersten Re-Login waere jeder
+                // Decrypt-Fehler nur transient (NoSessionKeyError); der
+                // Boot-Purge wuerde also nichts sinnvoll aufraeumen. Skip
+                // statt Purge ohne Key.
+                var hasKey = cs && cs.hasSessionKey ? cs.hasSessionKey() : false;
+                if (hasKey) {
+                    await window.offlineStore.purgeExpired();
+                }
+            } catch (_e) {
+                // ignore — better to leave stale records than crash
+            }
+        })();
     }
 })();

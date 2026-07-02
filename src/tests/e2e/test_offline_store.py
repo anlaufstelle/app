@@ -355,3 +355,214 @@ def test_revalidate_overwrites_stale_bundle_with_server_data(authenticated_page,
     assert result["before"] == "STALE-LOCAL"
     assert result["outcome"] == "refreshed"
     assert result["after"] != "STALE-LOCAL"
+
+
+# ── Transienter Schluessel-Verlust (Idle-Lock) vs. permanenter Mismatch ──────
+# Refs #1352 (K1a): NoSessionKey ist TRANSIENT (Idle-Lock #1324, frischer Boot
+# vor Re-Login) — ohne Schluessel keine Loeschentscheidung. Nur ein PERMANENTER
+# Decrypt-Fehler (Salt rotiert/Passwort gewechselt) discardet weiter (#576/F-03).
+
+_LOCK_EDIT_PK = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+
+
+def _seed_bundle_and_modified_edit(page):
+    """Bundle (Klient + clean Event) plus einen modifizierten Offline-Edit seeden."""
+    return page.evaluate(
+        """async () => {
+            const s = window.offlineStore;
+            const future = new Date(Date.now() + 3600e3).toISOString();
+            await s.saveClientBundle({
+                client: {pk: '55555555-5555-4555-8555-555555555555', pseudonym: 'PS-LOCK-001'},
+                expires_at: future, ttl: 3600,
+                events: [{pk: 'ev-clean-1352', occurred_at: future}],
+            });
+            await s.saveOfflineEdit({
+                pk: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+                clientPk: '55555555-5555-4555-8555-555555555555',
+                occurredAt: '2026-01-01T00:00:00Z',
+                localStatus: 'modified',
+                data: { formData: { notiz: 'offline geaendert' }, expectedUpdatedAt: '' },
+            });
+            return {
+                clients: await s.count('clients'),
+                events: await s.count('events'),
+                modified: (await s.listModifiedEvents()).length,
+            };
+        }"""
+    )
+
+
+class TestTransientKeyLossPreservesRows:
+    """Refs #1352 (K1a): Der Idle-Lock (#1324) verwirft NUR den Schluessel und
+    behaelt die verschluesselten Rows. Die Store-Schicht darf den dann
+    transienten ``NoSessionKey``-Fehler nicht wie einen permanenten
+    Schluessel-Mismatch behandeln und Rows loeschen — sonst vernichtet das
+    blosse Oeffnen der App bzw. das erste ``online``-Event nach dem Lock die
+    aufbewahrten ungesyncten Edits (stiller Offline-Datenverlust)."""
+
+    def test_locked_state_does_not_discard_rows(self, authenticated_page, base_url):
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        seeded = _seed_bundle_and_modified_edit(page)
+        assert seeded == {"clients": 1, "events": 2, "modified": 1}
+
+        # Idle-Lock-Zustand (#1324): nur der Schluessel ist weg, Rows bleiben.
+        # Listing liefert leer (nichts entschluesselbar), Purge laeuft
+        # fehlerfrei — und KEINES von beidem darf Rows verwerfen.
+        locked = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                await window.crypto_session.clearSessionKey();
+                const listed = await s.listModifiedEvents();
+                await s.purgeExpired();
+                return {
+                    listed: listed.length,
+                    clients: await s.count('clients'),
+                    events: await s.count('events'),
+                };
+            }"""
+        )
+        assert locked["listed"] == 0, "Ohne Schluessel darf kein Edit gelistet werden"
+        assert locked["clients"] == 1, "Lock darf den Bundle nicht discarden"
+        assert locked["events"] == 2, "Lock darf Events (clean + modified) nicht discarden"
+
+        # Re-Login: derselbe PBKDF2-Schluessel (Passwort + Salt wie beim
+        # Seeding) macht den aufbewahrten Edit wieder les- und abspielbar.
+        recovered = page.evaluate(
+            """async () => {
+                await window.crypto_session.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+                const listed = await window.offlineStore.listModifiedEvents();
+                return listed.map((r) => r.pk);
+            }"""
+        )
+        assert recovered == [_LOCK_EDIT_PK], "Edit muss nach Re-Login wieder auftauchen"
+
+    def test_online_event_in_locked_state_keeps_rows(self, authenticated_page, base_url):
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        seeded = _seed_bundle_and_modified_edit(page)
+        assert seeded == {"clients": 1, "events": 2, "modified": 1}
+
+        # Lock, dann das erste ``online``-Event — es triggert die
+        # fire-and-forget-Listener (Store-Purge/Re-Validate, Edit-Replay).
+        page.evaluate(
+            """async () => {
+                await window.crypto_session.clearSessionKey();
+                window.dispatchEvent(new Event('online'));
+            }"""
+        )
+        # Dokumentierte Ausnahme zur „kein wait_for_timeout"-Regel (wie
+        # test_offline_edit_conflict.py nach _go_online): die online-Listener
+        # laufen fire-and-forget ohne DOM-Signal. Ein sofortiges Polling auf
+        # „Counts unveraendert" waere schon true, BEVOR ein (fehlerhaft)
+        # loeschender Handler ueberhaupt gelaufen ist — erst die
+        # Stabilisierungs-Pause macht die Assertion beweiskraeftig.
+        page.wait_for_timeout(500)
+        page.wait_for_function(
+            """async () => {
+                const s = window.offlineStore;
+                const [clients, events] = await Promise.all([
+                    s.count('clients'),
+                    s.count('events'),
+                ]);
+                return clients === 1 && events === 2;
+            }""",
+            timeout=5000,
+        )
+
+        recovered = page.evaluate(
+            """async () => {
+                await window.crypto_session.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+                const listed = await window.offlineStore.listModifiedEvents();
+                return listed.map((r) => r.pk);
+            }"""
+        )
+        assert recovered == [_LOCK_EDIT_PK], "Edit muss das online-Event im Lock ueberleben"
+
+    def test_permanent_key_mismatch_still_discards(self, authenticated_page, base_url):
+        """Regressionsschutz #576/F-03: Ein falscher Schluessel (Salt-Rotation
+        nach Rechteentzug/Passwortwechsel -> GCM ``OperationError``) bleibt ein
+        PERMANENTER Fehler und discardet die Row weiterhin — die Transient-
+        Schonung (#1352) darf den gewollten Auto-Discard nicht aufweichen."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                const PK = '66666666-6666-4666-8666-666666666666';
+                await s.saveClientBundle({
+                    client: {pk: PK, pseudonym: 'PS-ROTATED-001'},
+                    expires_at: future, ttl: 3600,
+                });
+                await window.crypto_session.clearSessionKey();
+                await window.crypto_session.deriveSessionKey('different-pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+                const row = await s.getOfflineClient(PK);
+                return { rowIsNull: row === null, clients: await s.count('clients') };
+            }"""
+        )
+        assert result["rowIsNull"] is True
+        assert result["clients"] == 0, "Permanenter Key-Mismatch muss weiter auto-discarden"
+
+    def test_boot_purge_in_locked_state_keeps_rows(self, authenticated_page, base_url):
+        """Refs #1352: Der Boot-Purge (sw-register.js:149-169) laeuft auf JEDEM
+        authentifizierten Seitenload — anders als die beiden Tests oben, die
+        Store-Funktionen direkt aufrufen bzw. nur das ``online``-Event
+        dispatchen, ohne die Seite tatsaechlich neu zu laden. Ein Reload im
+        Lock-Zustand (#1324) ist der Pfad, den ein Nutzer nach einem
+        Idle-Timeout in echt durchlaeuft: ohne das Key-Gate wuerde
+        purgeExpired() beim Boot jede Zeile ohne Schluessel als PERMANENT
+        unentschluesselbar behandeln und den aufbewahrten Bundle samt Edit
+        vernichten (stiller Offline-Datenverlust)."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        seeded = _seed_bundle_and_modified_edit(page)
+        assert seeded == {"clients": 1, "events": 2, "modified": 1}
+
+        # Lock-Zustand (#1324): nur der Schluessel wird geloescht. Die
+        # Django-Session (Cookie aus der authenticated_page-Fixture) bleibt
+        # gueltig — ein Reload haelt den User eingeloggt, aber crypto.js
+        # findet nach dem Neuladen keine sessionKey-Row mehr in IndexedDB
+        # (clearSessionKey loescht sie persistent, nicht nur den RAM-Cache).
+        page.evaluate(
+            """async () => {
+                await window.crypto_session.clearSessionKey();
+            }"""
+        )
+
+        # Reload statt direktem Store-Aufruf/online-Dispatch (siehe Tests
+        # oben) — nur so laeuft tatsaechlich der Boot-Purge-Zweig in
+        # sw-register.js. Warten wie ueberall in dieser Datei auf
+        # App-Bereitschaft (kein networkidle).
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_function("window.crypto_session && window.offlineStore")
+
+        # Dokumentierte Ausnahme zur „kein wait_for_timeout"-Regel (wie
+        # test_online_event_in_locked_state_keeps_rows oben): der Boot-Purge
+        # laeuft fire-and-forget ohne DOM-Signal. Ein sofortiges Polling auf
+        # „Counts unveraendert" waere schon true, BEVOR ein (fehlerhaft)
+        # loeschender Handler ueberhaupt gelaufen ist — erst die
+        # Stabilisierungs-Pause macht die Assertion beweiskraeftig.
+        page.wait_for_timeout(500)
+        page.wait_for_function(
+            """async () => {
+                const s = window.offlineStore;
+                const [clients, events] = await Promise.all([
+                    s.count('clients'),
+                    s.count('events'),
+                ]);
+                return clients === 1 && events === 2;
+            }""",
+            timeout=5000,
+        )
+
+        # Re-Login: derselbe PBKDF2-Schluessel (Passwort + Salt wie beim
+        # Seeding) macht den aufbewahrten Edit wieder les- und abspielbar.
+        recovered = page.evaluate(
+            """async () => {
+                await window.crypto_session.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+                const listed = await window.offlineStore.listModifiedEvents();
+                return listed.map((r) => r.pk);
+            }"""
+        )
+        assert recovered == [_LOCK_EDIT_PK], "Edit muss den Boot-Purge im Lock ueberleben"

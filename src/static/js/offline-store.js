@@ -3,9 +3,11 @@
  *
  * Wraps Dexie.js with a thin envelope that runs every payload through
  * window.crypto_session.encryptPayload before write and decryptPayload after
- * read. If decryption fails (key was wiped, salt rotated, password changed),
- * the offending row is silently dropped — that is the auto-discard behaviour
- * specified for #573 / #576.
+ * read. A PERMANENT decrypt failure (salt rotated, password changed) drops
+ * the offending row silently — the auto-discard behaviour specified for
+ * #573 / #576. A TRANSIENT failure (no key loaded — Idle-Lock #1324, or a
+ * fresh boot before re-login) leaves the row untouched instead (Refs #1352,
+ * see `_isTransientDecryptError`).
  *
  * Schema v1 (Stage 1, #576):
  *   queue:  ++id, url, createdAt, lastError, retryAfter, attempts
@@ -54,6 +56,19 @@
         return window.crypto_session;
     }
 
+    /*
+     * Refs #1352: Unterscheidet einen TRANSIENTEN Decrypt-Fehler (kein
+     * Schluessel geladen — Idle-Lock #1324 oder frischer Boot vor Re-Login)
+     * von einem PERMANENTEN (Salt rotiert/Passwort gewechselt, kaputter
+     * Datensatz). Nur bei PERMANENT bleibt der Auto-Discard-Mechanismus
+     * (#576/F-03) aktiv; bei TRANSIENT darf keine der Discard-Stellen unten
+     * die Row anfassen — sie ist mit dem naechsten gueltigen Schluessel
+     * wieder lesbar.
+     */
+    function _isTransientDecryptError(e) {
+        return e && (e.name === "NoSessionKeyError" || e.message === "NoSessionKey");
+    }
+
     async function putEncrypted(table, record) {
         const crypto = _crypto();
         const { data, ...rest } = record;
@@ -68,8 +83,13 @@
         try {
             row.data = await crypto.decryptPayload(row.data);
             return row;
-        } catch (_e) {
-            // Auto-discard on decrypt failure (salt/password rotated)
+        } catch (e) {
+            if (_isTransientDecryptError(e)) {
+                // Refs #1352: kein Schluessel geladen — TRANSIENT, Row
+                // behalten und nur null liefern.
+                return null;
+            }
+            // Auto-discard on PERMANENT decrypt failure (salt/password rotated)
             await db[table].delete(primaryKey);
             return null;
         }
@@ -85,8 +105,13 @@
                 if (!filterFn || filterFn(decrypted)) {
                     out.push(decrypted);
                 }
-            } catch (_e) {
-                // Auto-discard
+            } catch (e) {
+                if (_isTransientDecryptError(e)) {
+                    // Refs #1352: kein Schluessel — Row NICHT loeschen, nur
+                    // in dieser Liste ueberspringen.
+                    continue;
+                }
+                // Auto-discard on PERMANENT decrypt failure
                 await db[table].delete(row[db[table].schema.primKey.name]);
             }
         }
@@ -131,9 +156,15 @@
             let envelope;
             try {
                 envelope = await crypto.decryptPayload(row.data);
-            } catch (_e) {
-                // Unentschlüsselbar -> der Schlüssel passt nicht mehr; samt
-                // cases/events verwerfen.
+            } catch (e) {
+                if (_isTransientDecryptError(e)) {
+                    // Refs #1352: kein Schluessel geladen — ob der Bundle
+                    // abgelaufen ist, laesst sich gerade nicht entscheiden;
+                    // Row unangetastet lassen statt zu verwerfen.
+                    continue;
+                }
+                // Permanent unentschlüsselbar -> der Schlüssel passt nicht
+                // mehr (Salt/Passwort gewechselt); samt cases/events verwerfen.
                 await removeOfflineClient(row.pk);
                 continue;
             }
@@ -255,7 +286,12 @@
         let envelope;
         try {
             envelope = await crypto.decryptPayload(row.data);
-        } catch (_e) {
+        } catch (e) {
+            if (_isTransientDecryptError(e)) {
+                // Refs #1352: kein Schluessel geladen — Row behalten, nur
+                // null liefern (Idle-Lock #1324 statt Loeschentscheidung).
+                return null;
+            }
             await db.clients.delete(pk);
             return null;
         }
@@ -518,7 +554,15 @@
         let envelope;
         try {
             envelope = await crypto.decryptPayload(existing.data);
-        } catch (_e) {
+        } catch (e) {
+            if (_isTransientDecryptError(e)) {
+                // Refs #1352: kein Schluessel geladen — Row unangetastet
+                // lassen und den Fehler weiterreichen. Der Replay-Aufrufer
+                // (nach Idle-Lock ohne Re-Login) sieht den 409 nach dem
+                // naechsten Versuch mit gueltigem Schluessel erneut und legt
+                // den Konflikt dann an.
+                throw e;
+            }
             // Key rotated / tampered row — drop it instead of persisting
             // an undecryptable conflict record. Matches the auto-discard
             // contract from #576.
@@ -585,14 +629,22 @@
     if (typeof window !== "undefined" && window.addEventListener) {
         window.addEventListener("online", async () => {
             try {
-                await purgeExpired(Date.now());
-                // Re-Validierung braucht den Session-Key (Refresh ruft
-                // saveClientBundle -> encrypt). Ohne Key ist die Session
-                // ohnehin idle-gewiped; dann uebernimmt der naechste Login
-                // (Clear-Site-Data / Auto-Discard) die Bereinigung.
+                // Refs #1352: ready() VOR hasSessionKey() abwarten — sonst
+                // liefert die synchrone Cache-Pruefung direkt nach einem
+                // frischen Seiten-Load ein falsches Negativ (initialLoad ist
+                // noch nicht durchgelaufen) und das Key-Gate greift faelschlich.
                 const cs = window.crypto_session;
+                if (cs && cs.ready) {
+                    await cs.ready();
+                }
                 const hasKey = cs && cs.hasSessionKey ? cs.hasSessionKey() : false;
+                // Refs #1352: ohne Schluessel keine Loeschentscheidung — das
+                // Gate umschliesst jetzt auch purgeExpired(), nicht nur die
+                // Re-Validierung. Ohne Key ist die Session ohnehin idle-
+                // gelockt (#1324); der naechste Online-Kontakt mit
+                // gueltigem Schluessel holt beides nach.
                 if (hasKey) {
+                    await purgeExpired(Date.now());
                     await revalidateCachedClients();
                 }
             } catch (_e) {

@@ -22,7 +22,22 @@
  *     No wipe on pagehide/close: re-opening offline within the idle window
  *     must keep working (Streetwork use case).
  *
- * Refs #573, #576, #1065.
+ * Error taxonomy (Refs #1352): encryptPayload/decryptPayload throw typed
+ * errors (`err.name`) so offline-store.js can tell a TRANSIENT absence of
+ * the key apart from a PERMANENT decrypt failure:
+ *   - TRANSIENT — `NoSessionKeyError` (message "NoSessionKey"): no key is
+ *     loaded right now (Idle-Lock #1324, or a fresh boot before re-login).
+ *     The ciphertext is still valid and becomes readable again once the
+ *     same password re-derives the same key — callers MUST NOT discard the
+ *     row for this error.
+ *   - PERMANENT — `InvalidEnvelopeError` (message "InvalidEnvelope") for a
+ *     malformed record, and the native WebCrypto `DOMException` with
+ *     `name === "OperationError"` that `subtle.decrypt` throws un-wrapped
+ *     on a GCM auth-tag mismatch (salt rotated / password changed): the
+ *     ciphertext can never be decrypted with the current key — callers
+ *     auto-discard the row (#576/F-03).
+ *
+ * Refs #573, #576, #1065, #1352.
  */
 (function () {
     "use strict";
@@ -208,8 +223,13 @@
                 });
             }
         } catch (_e) {
-            // ignore — leftover ciphertext is useless without the key and
-            // decryptPayload failures auto-discard rows anyway (#576).
+            // ignore — falls purgeAll() hier scheitert, bleibt das Chiffrat
+            // liegen; ohne Schluessel ist es ohnehin unlesbar (F-01). Anders
+            // als vor #1352 loest das fehlende purgeAll() ALLEIN keinen
+            // Auto-Discard mehr aus (NoSessionKeyError ist TRANSIENT) — der
+            // naechste PERMANENTE Decrypt-Fehler (Salt-Rotation/Passwort-
+            // wechsel, #576/F-03) oder ein spaeterer purgeExpired()-Lauf mit
+            // gueltigem Schluessel raeumt die Reste auf.
         }
     }
 
@@ -341,7 +361,13 @@
 
     async function encryptPayload(plain) {
         const key = await _loadKey();
-        if (!key) throw new Error("NoSessionKey");
+        if (!key) {
+            // Refs #1352: typisiert (Praezedenz offline-queue.js) — TRANSIENT,
+            // siehe Fehler-Taxonomie im Kopfkommentar.
+            const err = new Error("NoSessionKey");
+            err.name = "NoSessionKeyError";
+            throw err;
+        }
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
         const data = new TextEncoder().encode(JSON.stringify(plain));
         const ctBuffer = await window.crypto.subtle.encrypt(
@@ -357,12 +383,27 @@
 
     async function decryptPayload(envelope) {
         const key = await _loadKey();
-        if (!key) throw new Error("NoSessionKey");
+        if (!key) {
+            // Refs #1352: typisiert (Praezedenz offline-queue.js) — TRANSIENT,
+            // siehe Fehler-Taxonomie im Kopfkommentar.
+            const err = new Error("NoSessionKey");
+            err.name = "NoSessionKeyError";
+            throw err;
+        }
         if (!envelope || !envelope.iv || !envelope.ct) {
-            throw new Error("InvalidEnvelope");
+            // Refs #1352: typisiert — PERMANENT (kaputter/fremder Datensatz),
+            // siehe Fehler-Taxonomie im Kopfkommentar.
+            const err = new Error("InvalidEnvelope");
+            err.name = "InvalidEnvelopeError";
+            throw err;
         }
         const iv = b64ToBytes(envelope.iv);
         const ct = b64ToBytes(envelope.ct);
+        // Refs #1352: bewusst UNGEWRAPPT — ein GCM-Auth-Tag-Mismatch wirft
+        // nativ eine DOMException mit name === "OperationError" (PERMANENT,
+        // Salt/Passwort gewechselt). Ein try/catch hier wuerde sie in eine
+        // generische Error-Instanz verwandeln und die Namens-basierte
+        // Transient/Permanent-Unterscheidung in offline-store.js zerstoeren.
         const plainBuffer = await window.crypto.subtle.decrypt(
             { name: "AES-GCM", iv: iv },
             key,

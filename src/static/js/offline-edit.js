@@ -388,6 +388,18 @@
     }
 
     async function replayAllModifiedEvents() {
+        // Refs #1352: Key-Gate VOR dem Listing — ohne Schluessel liest
+        // listModifiedEvents() jede modifizierte Row als transienten
+        // NoSessionKeyError und liefert (korrekt) eine leere Liste; das
+        // wuerde diesen Lauf aber wie "nichts zu synchronisieren" aussehen
+        // lassen, obwohl in Wahrheit nur der Schluessel fehlt (Idle-Lock
+        // #1324). Sofort return statt eines fuer den Nutzer unsichtbaren No-Ops.
+        if (window.crypto_session && window.crypto_session.ready) {
+            await window.crypto_session.ready();
+        }
+        if (!window.crypto_session || !window.crypto_session.hasSessionKey()) {
+            return;
+        }
         // Best-effort loop: stop on the first network error so we don't
         // spam the server with failing requests, but carry on past a
         // conflict — conflicts are a per-record state, not a session-wide
