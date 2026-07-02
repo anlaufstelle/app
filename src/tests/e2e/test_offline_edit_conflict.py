@@ -430,29 +430,29 @@ class TestOfflineReeditOfNewEvent:
                 f"erwartet: {original_idempotency_key!r}."
             )
 
-            # Kern-Invariante: das Event wurde serverseitig angelegt (mit dem
-            # finalen, re-editierten Wert) — nicht still verworfen.
+            # Kern-Invariante: das Event wurde serverseitig GENAU EINMAL angelegt
+            # (mit dem finalen, re-editierten Wert) — nicht still verworfen und
+            # nicht dupliziert.
             #
-            # BEWUSST ">= 1" statt "== 1" (Refs Review Task 1, #1351): unter
-            # Doppel-Fire gehen zwei PARALLELE POSTs mit demselben Key raus,
-            # und die heutige Server-Idempotenz (F-09/#1109) ist Cache-basiertes
-            # check-then-act — in dev/e2e dazu LocMem PRO gunicorn-Worker,
-            # dedupliziert also nur SERIELLE Replays (dokumentierte Grenze in
-            # services/events/idempotency.py). Empirisch entstehen hier unter
-            # Doppel-Fire real 2 Events mit identischem Key (4/6 Laeufen) —
-            # ein VORBESTEHENDER, von diesem Client-Fix unabhaengiger Befund.
-            # Auf "== 1" schaerfen, sobald konkurrierende Sync-Laeufe
-            # strukturell ausgeschlossen sind (M6-Sync-Orchestrierung:
-            # exklusiver Web Lock um jede Sync-Sequenz) oder die
-            # Server-Idempotenz atomar/prozessuebergreifend dedupliziert.
-            # Der Task-1-Kernbeweis steht unabhaengig davon oben: Create-Route
-            # statt Edit-Route, Original-Key, Row aufgeloest.
+            # "== 1" (Refs #1351/#1383, M6-Sync-Orchestrierung): der frueher
+            # dokumentierte Doppel-Fire-Trigger fuer ">= 1" ist mit dem
+            # Sync-Orchestrator strukturell ausgeschlossen. Feuert der Reconnect
+            # zweimal "online" (Chromium 148.x: natives Event aus set_offline(False)
+            # + der manuelle dispatch), koalesziert requestSync PRO TAB (ein Lauf
+            # + rerun-Flag) UND der origin-weite exklusive Web Lock serialisiert
+            # jede Sync-Sequenz — der zweite Lauf findet die "new"-Row bereits
+            # aufgeloest und schickt keinen zweiten POST. Genau EIN /events/new/-
+            # POST ⇒ genau EIN Server-Event; die Cache-basierte Server-Idempotenz
+            # (F-09/#1109, LocMem pro gunicorn-Worker) muss den Doppel-Submit gar
+            # nicht mehr abfangen. Flaked dieser Test wieder auf 2, ist das ein
+            # ECHTES Signal ueber den Orchestrator (Lock/Koaleszenz greift nicht)
+            # — dann debuggen, nicht wieder lockern.
             page.wait_for_timeout(500)
             notes = _server_client_event_notes(e2e_env, client_pk)
             created = notes.count("Geaendert vor Sync (Re-Edit)")
-            assert created >= 1, (
-                f"Server hat das re-editierte Event nie angelegt (alle notiz-Werte: {notes!r}; "
-                f"gesendete Idempotency-Keys: {sent_keys!r})."
+            assert created == 1, (
+                f"Server muss das re-editierte Event GENAU EINMAL angelegt haben "
+                f"(alle notiz-Werte: {notes!r}; gesendete Idempotency-Keys: {sent_keys!r})."
             )
         finally:
             with suppress(Exception):

@@ -315,6 +315,12 @@
     }
 
     window.addEventListener("online", () => {
+        // M6 (Refs #1351/#1383): Der Sync-Orchestrator haelt den EINZIGEN
+        // koordinierten online-Trigger (origin-weiter Web Lock, Multi-Tab). Ist
+        // er geladen (base.html), uebernimmt seine requestSync-Sequenz diesen
+        // Replay — hier nichts tun (sonst liefe der Replay doppelt/unkoordiniert).
+        // Nur als Fallback auf Seiten OHNE Orchestrator direkt replayen wie bisher.
+        if (window.syncOrchestrator && window.syncOrchestrator.requestSync) return;
         replayQueue();
     });
 

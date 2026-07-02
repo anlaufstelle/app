@@ -233,7 +233,65 @@
         }
     }
 
+    /*
+     * Refs #1351/#1383 (M6): Der Idle-Wipe-ENTSCHEID (lastActivity-Read →
+     * hasUnsyncedData → clearSessionKey/wipeOfflineState) muss gegen jede
+     * laufende Sync-Sequenz serialisiert sein — sonst raeumt der Wipe unter dem
+     * einen Tab weg, was ein anderer Tab gerade replayt (TOCTOU #1324 ueber
+     * Tabs). Daher unter den origin-weiten Web Lock des Sync-Orchestrators. Ist
+     * der Orchestrator nicht geladen (Login-/Shell-Seiten, alte Engine ohne
+     * navigator.locks), laeuft die Kette direkt — heutiges Verhalten.
+     *
+     * Kein Import-Zyklus: Zugriff nur via ``window.syncOrchestrator?.…``.
+     */
+    function _runExclusive(fn) {
+        if (window.syncOrchestrator && window.syncOrchestrator.runExclusive) {
+            return window.syncOrchestrator.runExclusive(fn);
+        }
+        return (async function () {
+            return fn();
+        })();
+    }
+
+    // Refs #1351/#1383: Nach einem Wipe/Lock den anderen Tabs signalisieren,
+    // dass ihr Memory-``cachedKey`` jetzt ohne IndexedDB-Grundlage dasteht —
+    // sonst behielten sie ihn bis zu 60s (bis ihr eigener Idle-Interval feuert).
+    // Best-effort; BroadcastChannel liefert bewusst nicht an den Absender selbst
+    // (kein Echo-Loop).
+    function _broadcastKeyCleared() {
+        try {
+            if (window.syncOrchestrator && window.syncOrchestrator.broadcast) {
+                window.syncOrchestrator.broadcast({ type: "key-cleared" });
+            }
+        } catch (_e) {
+            // ignore
+        }
+    }
+
+    // Refs #1351/#1383: Empfaenger fuer den key-cleared-Broadcast eines ANDEREN
+    // Tabs. NUR den Memory-Key verwerfen — die IndexedDB-Loeschung hat der
+    // wipende Tab bereits erledigt (KEIN erneuter Wipe), und BroadcastChannel
+    // liefert nicht an den Absender zurueck (KEIN Re-Broadcast noetig, kein
+    // Echo-Loop). Danach das bestehende UI-Refresh-Signal feuern, damit
+    // Banner/Offline-Ansicht den gesperrten Zustand widerspiegeln (der
+    // Offline-Viewer rendert dann seinen "bitte neu anmelden"-Zustand).
+    function _onOrchestratorMessage(msg) {
+        if (!msg || msg.type !== "key-cleared") return;
+        cachedKey = null;
+        try {
+            if (window.offlineEdit && window.offlineEdit.refreshCounts) {
+                window.offlineEdit.refreshCounts();
+            }
+        } catch (_e) {
+            // ignore — UI-Refresh ist best-effort
+        }
+    }
+
     async function enforceIdleWipe() {
+        return _runExclusive(_enforceIdleWipeLocked);
+    }
+
+    async function _enforceIdleWipeLocked() {
         const row = await _idbGet(ACTIVITY_KEY);
         if (!row || typeof row.ts !== "number") {
             // No stamp yet (pre-#1065 install or first run): start the idle
@@ -264,6 +322,9 @@
         } else {
             await wipeOfflineState();
         }
+        // Refs #1351/#1383: erst NACH dem lokalen Wipe/Lock broadcasten (die
+        // Empfaenger verwerfen nur ihren Memory-Key, kein erneuter Wipe/Broadcast).
+        _broadcastKeyCleared();
         return true;
     }
 
@@ -272,8 +333,17 @@
         // Idle gate (Refs #1065): before rehydrating from IndexedDB, check
         // whether the session age has passed since the last activity — then
         // wipe instead of making the key usable again without re-auth.
+        //
+        // Refs #1351/#1383: bewusst der UNGESPERRTE Idle-Gate
+        // (``_enforceIdleWipeLocked`` OHNE ``_runExclusive``). ``_loadKey`` ist
+        // aus einer bereits gesperrten Sync-Sequenz heraus erreichbar
+        // (replayQueue/replayModifiedEvent → encrypt/decrypt) — ein erneutes
+        // Anfordern desselben, NICHT reentranten Web Locks wuerde sich selbst
+        // deadlocken. Beim Boot (Haupt-Use dieses Gates) gibt es keinen
+        // Konkurrenten; die GESPERRTE Variante nutzen die Top-Level-Trigger
+        // (Interval/visibilitychange/direkter ``enforceIdleWipe``-Aufruf).
         try {
-            if (await enforceIdleWipe()) return null;
+            if (await _enforceIdleWipeLocked()) return null;
         } catch (_e) {
             // ignore — a stamp read error must not break online operation
         }
@@ -322,6 +392,30 @@
         window.setInterval(function () {
             enforceIdleWipe().catch(function () {});
         }, IDLE_CHECK_INTERVAL_MS);
+
+        // Refs #1351/#1383: Cross-Tab-Empfaenger fuer key-cleared beim
+        // Sync-Orchestrator registrieren. Der laedt in base.html NACH crypto.js
+        // (window-Globals existieren erst spaeter) — daher lade-reihenfolge-
+        // tolerant: jetzt versuchen, sonst auf DOMContentLoaded/naechsten Tick.
+        // Auf Seiten ohne Orchestrator (Login/Shell) registriert sich nie einer;
+        // das ist der dokumentierte "kein BroadcastChannel → skip"-Fallback.
+        var _receiverRegistered = false;
+        function _registerOrchestratorReceiver() {
+            if (_receiverRegistered) return true;
+            if (window.syncOrchestrator && window.syncOrchestrator.onMessage) {
+                window.syncOrchestrator.onMessage(_onOrchestratorMessage);
+                _receiverRegistered = true;
+                return true;
+            }
+            return false;
+        }
+        if (!_registerOrchestratorReceiver()) {
+            if (document.readyState === "loading") {
+                document.addEventListener("DOMContentLoaded", _registerOrchestratorReceiver);
+            } else {
+                window.setTimeout(_registerOrchestratorReceiver, 0);
+            }
+        }
     }
 
     function ready() {

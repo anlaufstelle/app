@@ -947,6 +947,12 @@
      */
     if (typeof window !== "undefined" && window.addEventListener) {
         window.addEventListener("online", async () => {
+            // M6 (Refs #1351/#1383): Ist der Sync-Orchestrator geladen (base.html),
+            // koordiniert dessen requestSync-Sequenz purgeExpired+revalidate hinter
+            // dem origin-weiten Web Lock — hier nichts tun (sonst liefe die
+            // Re-Validierung doppelt/unkoordiniert). Nur als Fallback auf Seiten
+            // OHNE Orchestrator (offline-Shell/Login) direkt re-validieren wie bisher.
+            if (window.syncOrchestrator && window.syncOrchestrator.requestSync) return;
             try {
                 // Refs #1352: ready() VOR hasSessionKey() abwarten — sonst
                 // liefert die synchrone Cache-Pruefung direkt nach einem

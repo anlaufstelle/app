@@ -372,7 +372,7 @@
                     // Sofort den „Nicht synchronisiert"-Status zeigen.
                     await this.load();
                     if (navigator.onLine && window.offlineEdit.replayModifiedEvent) {
-                        const result = await window.offlineEdit.replayModifiedEvent(record);
+                        const result = await this._replayExclusive(record);
                         this._reflectReplay(result);
                         await this._reconcile();
                     } else {
@@ -427,7 +427,8 @@
                         // Schon online (Offline-Vorschau): direkt replizieren und
                         // das Resultat spiegeln. Offline bleibt es „pending" und
                         // der Reconnect-Listener von offline-edit.js übernimmt.
-                        const result = await window.offlineEdit.replayModifiedEvent(record);
+                        // M6: unter den origin-weiten Lock (siehe _replayExclusive).
+                        const result = await this._replayExclusive(record);
                         this._reflectReplay(result);
                         await this._reconcile();
                     } else {
@@ -473,6 +474,20 @@
                     }
                 }
                 return parts.join(" ") || "Eingabe ungültig.";
+            },
+            // M6 (Refs #1351/#1383): Einzel-Replay aus saveEdit/saveCreate unter
+            // denselben origin-weiten Web Lock wie der online-getriebene Sync legen
+            // — verhindert, dass dieser Direkt-Replay mit einem parallelen
+            // requestSync-Lauf (anderer Tab / online-Event) kollidiert und ein
+            // Record doppelt gespielt wird. runExclusive reicht den Rueckgabewert
+            // durch, sodass das lastSyncResult-Feedback (_reflectReplay) erhalten
+            // bleibt. Fallback ohne Orchestrator: direkter Aufruf wie bisher.
+            async _replayExclusive(record) {
+                const replay = () => window.offlineEdit.replayModifiedEvent(record);
+                if (window.syncOrchestrator && window.syncOrchestrator.runExclusive) {
+                    return window.syncOrchestrator.runExclusive(replay);
+                }
+                return replay();
             },
             // Nach einer Replay-Runde den lokalen Cache mit dem Server abgleichen
             // (refetcht NUR, wenn keine unsynced/conflict-Events mehr offen sind —

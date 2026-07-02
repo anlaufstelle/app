@@ -128,6 +128,8 @@
     <script src="{% static 'js/offline-queue.js' %}"></script>
     <script src="{% static 'js/offline-client.js' %}"></script>
     <script src="{% static 'js/offline-edit.js' %}"></script>
+    {# M6 (Refs #1351, Refs #1383): Sync-Orchestrator — koordiniert alle Replay-Trigger hinter einem origin-weiten Web Lock (Multi-Tab) + Key-Wipe-Broadcast. NACH offline-store/queue/edit, damit die window-Globals existieren; greift selbst nur via window.* zu (lade-reihenfolge-tolerant). #}
+    <script src="{% static 'js/sync-orchestrator.js' %}"></script>
     <script src="{% static 'js/attachment-remove.js' %}" defer></script>
     <script src="{% static 'js/confirm-action.js' %}" defer></script>
     {# C3 (#1016): Doppel-Submit-Schutz — nach confirm-action.js (Capture-Reihenfolge). #}
