@@ -3204,8 +3204,8 @@ msgid "Anmelden"
 msgstr "Log in"
 
 #: src/templates/auth/login.html:38
-msgid "Open Source · DSGVO-konform · Selbst gehostet"
-msgstr "Open source · GDPR-compliant · Self-hosted"
+msgid "Open Source · datenschutzkonform konzipiert · Selbst gehostet"
+msgstr "Open source · designed for privacy compliance · Self-hosted"
 
 #: src/templates/auth/login.html:51
 msgid "Benutzername oder Passwort falsch."

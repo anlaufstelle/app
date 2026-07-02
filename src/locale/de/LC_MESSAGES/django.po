@@ -3033,7 +3033,7 @@ msgid "Anmelden"
 msgstr "Anmelden"
 
 #: src/templates/auth/login.html:30
-msgid "Open Source · DSGVO-konform · Selbst gehostet"
+msgid "Open Source · datenschutzkonform konzipiert · Selbst gehostet"
 msgstr ""
 
 #: src/templates/auth/login.html:43
