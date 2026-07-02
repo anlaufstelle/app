@@ -105,6 +105,38 @@ class TestZZMFABackupCodeLogin:
         finally:
             _cleanup_totp("lena", e2e_env)
 
+    def test_backup_login_succeeds_after_code_typed_into_totp_field(self, base_url, browser, e2e_env):
+        """Refs #1378: Backup-Code zuerst ins sichtbare TOTP-Feld getippt, dann
+        umgeschaltet — das versteckte TOTP-Feld (``pattern="[0-9 ]*"``) darf den
+        Submit nicht per Constraint-Validierung blockieren ("invalid form
+        control with name='token' is not focusable")."""
+        codes = _enable_totp_and_generate_codes("felix", e2e_env)
+        try:
+            context = browser.new_context(locale="de-DE")
+            page = context.new_page()
+            try:
+                page.goto(f"{base_url}/login/", wait_until="domcontentloaded")
+                page.fill("#id_username", "felix")
+                page.fill("#id_password", "anlaufstelle2026")
+                page.click("button[type=submit]")
+                page.wait_for_url(re.compile(r"/mfa/verify/"), timeout=8000)
+
+                # Realer Fehlbedienungs-Flow: Backup-Code (mit Buchstaben)
+                # landet erst im TOTP-Feld, dann fällt der Irrtum auf.
+                page.locator("[data-testid='mfa-token-input']").fill(codes[0])
+                page.locator("[data-testid='mfa-toggle-mode']").click()
+                backup_input = page.locator("[data-testid='mfa-backup-input']")
+                backup_input.wait_for(state="visible", timeout=10000)
+                backup_input.fill(codes[0])
+                page.locator("[data-testid='mfa-verify-button']").click()
+
+                page.wait_for_url(f"{base_url}/", timeout=5000)
+                assert page.url == f"{base_url}/"
+            finally:
+                context.close()
+        finally:
+            _cleanup_totp("felix", e2e_env)
+
     def test_backup_codes_settings_page_shows_counter_after_login(self, base_url, browser, e2e_env):
         codes = _enable_totp_and_generate_codes("emma", e2e_env)
         try:

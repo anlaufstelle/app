@@ -48,8 +48,12 @@
                 <label for="id_token_totp" class="block text-sm font-medium text-ink-soft">
                     {% trans "Code" %}
                 </label>
+                {# x-bind:disabled: das inaktive Feld hängt sonst mit Restwert #}
+                {# pattern-invalid+unfokussierbar im DOM und blockiert den Submit; #}
+                {# disabled nimmt es aus Constraint-Validierung UND POST (Refs #1378). #}
                 <input type="text" name="token" id="id_token_totp"
                        x-bind:required="isTotp"
+                       x-bind:disabled="isBackup"
                        x-bind:autofocus="isTotp"
                        inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code"
                        data-testid="mfa-token-input"
@@ -62,6 +66,7 @@
                 </label>
                 <input type="text" name="token" id="id_token_backup"
                        x-bind:required="isBackup"
+                       x-bind:disabled="isTotp"
                        inputmode="text" autocomplete="off" autocapitalize="none" spellcheck="false"
                        placeholder="z. B. Ab12Cd34Ef56Gh78Ij90Kl"
                        data-testid="mfa-backup-input"
