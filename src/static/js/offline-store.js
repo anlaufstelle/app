@@ -27,6 +27,14 @@
  *   cases:   pk, clientPk, lastSynced
  *   events:  pk, clientPk, occurredAt, localStatus
  * Every record's `data` field is { iv, ct } (never plaintext).
+ *
+ * Schema v3 (Refs #1351/#1384): `queue` gains an indexed `localStatus`
+ * (`null | "conflict" | "dead"`) so the generic replay queue can exclude
+ * conflicting/dead-lettered rows from auto-replay the same way `events`
+ * already does. `lastError`/`attempts` stay plain (unindexed) row fields —
+ * Dexie stores them regardless of whether they're listed in the index
+ * string, only `.where()` queries need the index.
+ *   queue: ++id, url, createdAt, retryAfter, localStatus
  */
 (function () {
     "use strict";
@@ -50,6 +58,17 @@
     });
     db.version(2).stores({
         queue: "++id, url, createdAt, lastError, retryAfter, attempts",
+        drafts: "formKey, updatedAt",
+        meta: "key",
+        clients: "pk, lastSynced",
+        cases: "pk, clientPk, lastSynced",
+        events: "pk, clientPk, occurredAt, localStatus",
+    });
+    // Refs #1351/#1384: additiver Upgrade — bestehende Rows behalten
+    // `localStatus` undefined (= aktiv/pending), niemand wird beim Upgrade
+    // umgeschrieben oder verworfen.
+    db.version(3).stores({
+        queue: "++id, url, createdAt, retryAfter, localStatus",
         drafts: "formKey, updatedAt",
         meta: "key",
         clients: "pk, lastSynced",
@@ -614,10 +633,13 @@
     }
 
     async function countUnsyncedEvents() {
+        // DEFENSE (#1329/#1324): Diese Liste MUSS mit der Status-Invariante
+        // im Header synchron bleiben — fehlt hier ein unsynced-Status, purgt
+        // der Idle-Wipe echte Arbeit.
         // Dexie where() on indexed field `localStatus`:
         return db.events
             .where("localStatus")
-            .anyOf(["modified", "new", "conflict"])
+            .anyOf(["modified", "new", "conflict", "dead"])
             .count();
     }
 
@@ -689,6 +711,147 @@
         return db.events.delete(pk);
     }
 
+    /* ─── dead-Letter fuer Event-Replays (Refs #1351/#1384) ──────────────── */
+
+    /*
+     * Ein Event nach einem PERMANENTEN Replay-Fehler (404/410 Edit-Ziel weg,
+     * dauerhaft ungueltige Formulardaten, o.ae.) auf `localStatus: "dead"`
+     * setzen statt es endlos erneut zu versuchen. `dead` ist laut
+     * Kern-Invariante (S1) KEIN Loeschen — die Row bleibt bis zu einer
+     * expliziten Nutzeraktion (`retryDeadEvent`/`discardDeadEvent`, M8)
+     * erhalten. `deadReason`/`lastError`/`lastAttemptAt` landen im
+     * verschluesselten Envelope (nicht indiziert, keine Suche noetig);
+     * `wasNew` merkt sich, ob das Event serverseitig NIE existierte (fuer
+     * `retryDeadEvent`: Retry ueber /events/new/ statt /edit/).
+     */
+    async function markEventDead(pk, reason, lastError) {
+        const crypto = _crypto();
+        const existing = await db.events.get(pk);
+        if (!existing) return; // Race mit einer anderen Aktion — nichts zu markieren.
+        let envelope;
+        try {
+            envelope = await crypto.decryptPayload(existing.data);
+        } catch (e) {
+            if (_isTransientDecryptError(e)) {
+                // Refs #1352: kein Schluessel geladen — Row unangetastet
+                // lassen, der naechste Versuch mit gueltigem Schluessel
+                // klassifiziert erneut statt jetzt blind "dead" ohne
+                // lesbaren Envelope zu schreiben.
+                return;
+            }
+            // Permanent unentschluesselbar -> Auto-Discard-Konvention (#576/F-03).
+            await db.events.delete(pk);
+            return;
+        }
+        envelope.deadReason = reason;
+        envelope.lastError = lastError || "";
+        envelope.lastAttemptAt = Date.now();
+        if (existing.localStatus === "new") {
+            envelope.wasNew = true;
+        }
+        await db.events.put({
+            ...existing,
+            localStatus: "dead",
+            data: await crypto.encryptPayload(envelope),
+        });
+    }
+
+    async function listDeadEvents() {
+        return listDecrypted("events", (r) => r.localStatus === "dead");
+    }
+
+    /*
+     * Refs #1351/#1384 (M8/Task 4): Nutzeraktion "Erneut versuchen" fuer ein
+     * dead Event. Ging das Event serverseitig NIE existieren (Envelope-Flag
+     * `wasNew`) und starb es aus einem Grund, der auf eine reparable
+     * Eingabe hindeutet (`invalid`/`unexpected-response`), geht es zurueck
+     * auf "new" — der naechste Replay laeuft ueber /events/new/. Alle
+     * anderen Faelle (insbesondere `not-found`/`forbidden`, oder ein Event,
+     * das serverseitig bereits existierte) gehen auf "modified" zurueck
+     * (naechster Replay ueber /events/<pk>/edit/).
+     */
+    async function retryDeadEvent(pk) {
+        const crypto = _crypto();
+        const existing = await db.events.get(pk);
+        if (!existing) throw new Error("NoEventToRetry:" + pk);
+        let envelope;
+        try {
+            envelope = await crypto.decryptPayload(existing.data);
+        } catch (e) {
+            if (_isTransientDecryptError(e)) throw e;
+            await db.events.delete(pk);
+            return null;
+        }
+        const backToNew =
+            envelope.wasNew === true &&
+            (envelope.deadReason === "invalid" || envelope.deadReason === "unexpected-response");
+        const nextStatus = backToNew ? "new" : "modified";
+        delete envelope.deadReason;
+        await db.events.put({
+            ...existing,
+            localStatus: nextStatus,
+            data: await crypto.encryptPayload(envelope),
+        });
+        return nextStatus;
+    }
+
+    async function discardDeadEvent(pk) {
+        // Nutzeraktion (S1-Ausnahme 1) — Pendant zu clearOfflineEdit fuer
+        // den dead-Letter-Pfad.
+        return clearOfflineEdit(pk);
+    }
+
+    /* ─── generische Queue: Listing + Nutzeraktionen (Refs #1351/#1384) ──── */
+
+    /*
+     * Duenne, UI-taugliche Sicht auf die Queue fuer die M8-Dead-Letter-UI
+     * (Task 4). `method` kommt aus dem verschluesselten `data`-Feld (muss
+     * daher entschluesselt werden) — Body-Inhalte werden bewusst NICHT
+     * zurueckgegeben (koennten PII tragen).
+     */
+    async function listQueueEntries() {
+        const rows = await listDecrypted("queue");
+        return rows.map((r) => ({
+            id: r.id,
+            url: r.url,
+            createdAt: r.createdAt,
+            attempts: r.attempts || 0,
+            lastError: r.lastError || "",
+            localStatus: r.localStatus || null,
+            method: (r.data && r.data.method) || "",
+        }));
+    }
+
+    /*
+     * Nutzeraktion "Erneut versuchen" fuer eine conflict/dead Queue-Row:
+     * wieder fuer den naechsten Auto-Replay freigeben. `url`/`retryAfter`/
+     * `attempts`/`localStatus` sind unverschluesselte Row-Felder — kein
+     * Decrypt/Re-Encrypt noetig.
+     */
+    async function retryQueueEntry(id) {
+        return db.queue.update(id, { localStatus: null, retryAfter: 0, attempts: 0 });
+    }
+
+    async function discardQueueEntry(id) {
+        // Nutzeraktion (S1-Ausnahme 1) → delete erlaubt.
+        return db.queue.delete(id);
+    }
+
+    /*
+     * `pending`/`blocked`-Aufteilung fuers Queue-Badge OHNE Decrypt:
+     * `localStatus`/`retryAfter` sind unverschluesselte Row-Felder (siehe
+     * `putEncrypted`), die Aufteilung funktioniert daher auch ohne
+     * Session-Key (z.B. vor dem ersten Login-Handshake nach einem Boot).
+     */
+    async function countQueueByStatus() {
+        const rows = await db.queue.toArray();
+        let blocked = 0;
+        for (const row of rows) {
+            if (row.localStatus === "conflict" || row.localStatus === "dead") blocked += 1;
+        }
+        return { total: rows.length, pending: rows.length - blocked, blocked: blocked };
+    }
+
     /*
      * Refs #1356: Frage den Browser EINMALIG um dauerhaften Speicher
      * (navigator.storage.persist()). Ohne diesen Grant darf der Browser die
@@ -758,6 +921,16 @@
         updateEventLocalStatus: updateEventLocalStatus,
         saveConflictState: saveConflictState,
         clearOfflineEdit: clearOfflineEdit,
+        // Refs #1351/#1384 — dead-Letter fuer Event-Replays (M8/Task 4)
+        markEventDead: markEventDead,
+        listDeadEvents: listDeadEvents,
+        retryDeadEvent: retryDeadEvent,
+        discardDeadEvent: discardDeadEvent,
+        // Refs #1351/#1384 — generische Queue: Listing + Nutzeraktionen (M8/Task 4)
+        listQueueEntries: listQueueEntries,
+        retryQueueEntry: retryQueueEntry,
+        discardQueueEntry: discardQueueEntry,
+        countQueueByStatus: countQueueByStatus,
         // Refs #1356 — persistenter Speicher (Eviction-Schutz)
         ensurePersistentStorage: ensurePersistentStorage,
         TTL_MS: TTL_MS,
