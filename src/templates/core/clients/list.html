@@ -17,7 +17,8 @@
         {# Refs #1326: Sammel-Mitnahme aller gelisteten Personen für den Offline-Einsatz. #}
         <button type="button" x-data="bulkOfflineTake" @click="takeAll" :disabled="busy"
                 class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas disabled:opacity-50"
-                data-testid="bulk-take-offline-btn">
+                data-testid="bulk-take-offline-btn"
+                data-label-ratelimited="{% trans 'Rate-Limit erreicht — bitte später erneut versuchen.' %}">
             <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
             {% trans "Alle offline mitnehmen" %}
         </button>

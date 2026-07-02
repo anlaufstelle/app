@@ -1,6 +1,7 @@
 """E2E tests for the encrypted IndexedDB offline-store (Refs #573, #576)."""
 
 import re
+from contextlib import suppress
 
 import pytest
 
@@ -945,3 +946,251 @@ class TestPersistentStorageRequest:
         assert result["calls"] == 1
         assert result["row"]["granted"] is False
         context.close()
+
+
+# ── Queue-Replay-Klassifikation nach HTTP-Replay-Contract (Refs #1351/#1384) ─
+# Kein Head-of-Line-Blocking mehr (ein 422/400/404/410/403 markiert nur den
+# einzelnen Record als "dead" statt die gesamte Schleife abzubrechen), 409
+# wird zu einem echten `localStatus`-Feld und vom Auto-Replay ausgeschlossen,
+# 429 bekommt Backoff + Batch-Abbruch, ein Login-Redirect waehrend des
+# Batches gilt als "auth-pending" statt Erfolg.
+
+
+class TestQueueReplayClassification:
+    """Refs #1351/#1384: `replayQueue` (offline-queue.js) klassifiziert jede
+    Replay-Response nach der HTTP-Replay-Contract-Tabelle, statt bei JEDEM
+    4xx die gesamte Schleife abzubrechen (Head-of-Line-Blocking, bisher
+    offline-queue.js:198-206) oder jeden Redirect (auch einen Login-Redirect)
+    als Erfolg zu werten. `service_workers="block"`: die Mock-URLs treffen
+    QUEUE_PATTERNS — ohne das Flag verdeckt der Service Worker die Routes
+    (Refs Task 1, #1351)."""
+
+    def test_422_dead_does_not_block_next_record(self, browser, base_url, _login_storage_state):
+        """Dieser Test ist gegen den heutigen Code ROT: `replayQueue` bricht
+        heute bei JEDEM 4xx (inkl. 422) die GESAMTE Schleife ab
+        (offline-queue.js:198-206, `break` im else-Zweig) — der zweite,
+        eigentlich erfolgreiche Record wird dadurch NIE gesendet. Refs #1384.
+        """
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            dead_url = "/events/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/edit/"
+            ok_url = "/workitems/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/edit/"
+            hits = []
+            accepts = []
+
+            def _handler(route):
+                hits.append(route.request.url)
+                accepts.append(route.request.headers.get("accept", ""))
+                if dead_url in route.request.url:
+                    route.fulfill(status=422, content_type="application/json", body='{"error":"invalid","errors":{}}')
+                else:
+                    # Erfolg per HTMX-Partial-Kontrakt (200, kein Redirect,
+                    # Record traegt hx-request) — vermeidet die Komplexitaet,
+                    # einen echten Redirect-Follow-Chain mocken zu muessen.
+                    route.fulfill(status=200, content_type="text/html", body="<div>ok</div>")
+
+            page.route(re.compile(r"/events/aaaaaaaa|/workitems/bbbbbbbb"), _handler)
+
+            result = page.evaluate(
+                """async (args) => {
+                    const s = window.offlineStore;
+                    await s.putEncrypted('queue', {
+                        url: args.deadUrl, createdAt: Date.now(), attempts: 0, retryAfter: 0,
+                        lastError: '', idempotencyKey: 'idem-a1',
+                        data: {method: 'POST', body: 'notiz=x', headers: {}},
+                    });
+                    await s.putEncrypted('queue', {
+                        url: args.okUrl, createdAt: Date.now() + 1, attempts: 0, retryAfter: 0,
+                        lastError: '', idempotencyKey: 'idem-a2',
+                        data: {method: 'POST', body: 'notiz=y', headers: {'hx-request': 'true'}},
+                    });
+                    await window.offlineQueue.replayQueue();
+                    const rows = await s.listDecrypted('queue');
+                    return rows.map((r) => ({url: r.url, localStatus: r.localStatus, deadReason: r.deadReason}));
+                }""",
+                {"deadUrl": dead_url, "okUrl": ok_url},
+            )
+
+            assert len(hits) == 2, f"Beide Records haetten gesendet werden muessen (kein HoL): {hits!r}"
+            assert all("application/json" in a for a in accepts), (
+                f"_send muss Accept: application/json setzen: {accepts!r}"
+            )
+            assert len(result) == 1, f"Der erfolgreiche Record haette geloescht werden muessen: {result!r}"
+            assert result[0]["localStatus"] == "dead"
+            assert dead_url in result[0]["url"]
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_409_conflict_excluded_from_next_replay(self, browser, base_url, _login_storage_state):
+        """Dieser Test ist gegen den heutigen Code ROT (Teil 2): `_isReady`
+        prueft heute nur `retryAfter` (offline-queue.js:117-119), nicht
+        `localStatus` — eine bereits als `conflict` markierte Row wird beim
+        naechsten `replayQueue()`-Lauf ERNEUT gesendet. Refs #1384."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            url = "/events/cccccccc-cccc-4ccc-8ccc-cccccccccccc/edit/"
+            hits = {"n": 0}
+
+            def _handler(route):
+                hits["n"] += 1
+                route.fulfill(
+                    status=409, content_type="application/json", body='{"error":"conflict","server_state":{}}'
+                )
+
+            page.route(re.compile(r"/events/cccccccc"), _handler)
+
+            result = page.evaluate(
+                """async (url) => {
+                    const s = window.offlineStore;
+                    await s.putEncrypted('queue', {
+                        url, createdAt: Date.now(), attempts: 0, retryAfter: 0, lastError: '',
+                        idempotencyKey: 'idem-b1', data: {method: 'POST', body: 'x=1', headers: {}},
+                    });
+                    await window.offlineQueue.replayQueue();
+                    const afterFirst = await s.listDecrypted('queue');
+                    await window.offlineQueue.replayQueue();
+                    const afterSecondCount = await s.count('queue');
+                    return {
+                        afterFirstStatus: afterFirst[0] && afterFirst[0].localStatus,
+                        afterSecondCount,
+                    };
+                }""",
+                url,
+            )
+            assert result["afterFirstStatus"] == "conflict"
+            assert result["afterSecondCount"] == 1, "Row darf beim zweiten Replay-Lauf nicht verschwinden"
+            assert hits["n"] == 1, "Der zweite replayQueue()-Lauf darf die conflict-Row NICHT erneut senden"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_429_sets_backoff_and_aborts_batch(self, browser, base_url, _login_storage_state):
+        """Dieser Test ist gegen den heutigen Code ROT: 429 faellt heute in
+        den generischen `else`-Zweig (offline-queue.js:198-206) — Backoff
+        wird NIE gesetzt (nur `>=500` bekommt `retryAfter`), die Row wuerde
+        beim naechsten `online`-Event sofort erneut (ohne Wartezeit) gesendet.
+        Refs #1384."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            url1 = "/events/dddddddd-dddd-4ddd-8ddd-dddddddddddd/edit/"
+            url2 = "/events/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/edit/"
+            hits = {"n": 0}
+
+            def _handler(route):
+                hits["n"] += 1
+                route.fulfill(status=429, content_type="application/json", body="{}")
+
+            page.route(re.compile(r"/events/dddddddd|/events/eeeeeeee"), _handler)
+
+            result = page.evaluate(
+                """async (args) => {
+                    const s = window.offlineStore;
+                    await s.putEncrypted('queue', {
+                        url: args.url1, createdAt: Date.now(), attempts: 0, retryAfter: 0,
+                        lastError: '', idempotencyKey: 'idem-c1', data: {method: 'POST', body: 'a', headers: {}},
+                    });
+                    await s.putEncrypted('queue', {
+                        url: args.url2, createdAt: Date.now() + 1, attempts: 0, retryAfter: 0,
+                        lastError: '', idempotencyKey: 'idem-c2', data: {method: 'POST', body: 'b', headers: {}},
+                    });
+                    const before = Date.now();
+                    await window.offlineQueue.replayQueue();
+                    const rows = await s.listDecrypted('queue');
+                    return {
+                        before,
+                        rows: rows.map((r) => ({
+                            url: r.url, retryAfter: r.retryAfter, attempts: r.attempts, localStatus: r.localStatus,
+                        })),
+                    };
+                }""",
+                {"url1": url1, "url2": url2},
+            )
+            assert hits["n"] == 1, (
+                "429 muss die Batch-Schleife abbrechen — der zweite Record darf nicht gesendet werden"
+            )
+            assert len(result["rows"]) == 2, "Beide Rows bleiben erhalten (kein Loeschen bei 429)"
+            row1 = next(r for r in result["rows"] if r["url"] == url1)
+            assert row1["retryAfter"] > result["before"], "retryAfter muss in der Zukunft liegen (Backoff gesetzt)"
+            assert row1["attempts"] == 1
+            assert row1["localStatus"] is None
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_login_redirect_is_auth_pending_and_keeps_row(self, browser, base_url, _login_storage_state):
+        """Dieser Test ist gegen den heutigen Code ROT: `replayQueue` wertet
+        JEDES `response.ok` (offline-queue.js:171-172) als Erfolg und loescht
+        die Row — auch einen Login-Redirect, dem `fetch` transparent folgt
+        (abgelaufene Session waehrend des Offline-Betriebs). Die Eingabe
+        wuerde dadurch STILL verworfen. Refs #1384."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            url = "/events/ffffffff-ffff-4fff-8fff-ffffffffffff/edit/"
+
+            def _handler(route):
+                route.fulfill(status=302, headers={"Location": "/login/"})
+
+            page.route(re.compile(r"/events/ffffffff"), _handler)
+
+            result = page.evaluate(
+                """async (url) => {
+                    const s = window.offlineStore;
+                    await s.putEncrypted('queue', {
+                        url, createdAt: Date.now(), attempts: 0, retryAfter: 0, lastError: '',
+                        idempotencyKey: 'idem-d1', data: {method: 'POST', body: 'x=1', headers: {}},
+                    });
+                    const before = await s.count('queue');
+                    await window.offlineQueue.replayQueue();
+                    const after = await s.count('queue');
+                    const rows = await s.listDecrypted('queue');
+                    return {
+                        before, after,
+                        attempts: rows[0] && rows[0].attempts,
+                        localStatus: rows[0] && rows[0].localStatus,
+                    };
+                }""",
+                url,
+            )
+            assert result["before"] == 1
+            assert result["after"] == 1, "Login-Redirect darf die Row NICHT loeschen (kein stiller Datenverlust)"
+            assert result["attempts"] == 0, "auth-pending darf attempts NICHT erhoehen"
+            assert result["localStatus"] is None, "auth-pending darf localStatus NICHT aendern"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+
+def test_count_unsynced_events_includes_dead_status(authenticated_page, base_url):
+    """Dieser Test ist gegen den heutigen Code ROT: `countUnsyncedEvents`
+    (offline-store.js:616-622) filtert nur modified/new/conflict — ein
+    manuell auf `dead` gesetztes Event zaehlt NICHT mit. Der Idle-Wipe
+    (#1324) wuerde einen dead-only-Bestand daher faelschlich als "alles
+    synced" ansehen und PURGEN statt nur zu LOCKEN (Final-Review-Handoff S1,
+    #1329). Refs #1384."""
+    page = authenticated_page
+    _bootstrap(page, base_url)
+    result = page.evaluate(
+        """async () => {
+            const s = window.offlineStore;
+            await s.saveOfflineEdit({
+                pk: 'dead-ev-1384', clientPk: 'c1', occurredAt: '2026-01-01T00:00:00Z',
+                localStatus: 'dead',
+                data: {formData: {note: 'tot'}, deadReason: 'not-found'},
+            });
+            return await s.countUnsyncedEvents();
+        }"""
+    )
+    assert result == 1

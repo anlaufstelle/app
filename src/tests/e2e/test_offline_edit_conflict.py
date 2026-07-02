@@ -614,3 +614,220 @@ class TestOfflineEditReplay:
             with suppress(Exception):
                 page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
             context.close()
+
+
+# ── Edit-Replay-Robustheit: 429-Batch-Abbruch, dead-Letter, Token-Fallback ──
+# Refs #1351/#1384. Diese Tests treiben offline-edit.js ausschliesslich gegen
+# Playwright-Route-Mocks (nie gegen den echten Server-Contract, der teils
+# noch anders antwortet — die Server-Seite entsteht parallel in Strang B).
+
+
+def _bootstrap_store(page, base_url):
+    """Crypto-Session direkt ableiten (kein Passwort-Formular) — analog
+    ``test_offline_store.py::_bootstrap``, fuer Tests, die nur die
+    offline-store/offline-edit-Schicht isoliert (mit Route-Mocks statt
+    echtem Server-Contract) treiben und daher ohne den ``manage.py
+    shell``-Seed/echten Login auskommen."""
+    page.goto(base_url, wait_until="domcontentloaded")
+    page.wait_for_function("window.crypto_session && window.offlineStore && window.offlineEdit")
+    page.evaluate(
+        """async () => {
+            await window.crypto_session.clearSessionKey();
+            await window.offlineStore.purgeAll();
+            await window.crypto_session.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+        }"""
+    )
+
+
+def test_cached_updated_at_fallback_reads_real_token_from_clean_event(authenticated_page, base_url):
+    """Dieser Test ist gegen den heutigen Code ROT: ``_cachedUpdatedAt``
+    (offline-edit.js:140-150) liest ``cached.updated_at`` /
+    ``cached.expectedUpdatedAt`` — ``cached`` ist aber die Store-ROW
+    (``{pk, clientPk, ..., data}``), das Envelope mit dem echten Token liegt
+    in ``cached.data``. Der Fallback liefert daher IMMER ``""`` statt des
+    echten Server-``updated_at`` (F-07/#1109 war dadurch nie funktionsfaehig),
+    sobald ``markEventModified`` ohne explizites ``opts.expectedUpdatedAt``
+    aufgerufen wird — ein leerer Token loest serverseitig den
+    ``missing-token``-409-Fall aus und taeuscht einen Konflikt vor, wo keiner
+    existiert. Refs #1384."""
+    page = authenticated_page
+    _bootstrap_store(page, base_url)
+    result = page.evaluate(
+        """async () => {
+            const s = window.offlineStore;
+            const future = new Date(Date.now() + 3600e3).toISOString();
+            const PK = 'ffffffff-0000-4000-8000-000000000001';
+            await s.saveClientBundle({
+                client: {pk: 'client-1384-fallback', pseudonym: 'FALLBACK'},
+                expires_at: future, ttl: 3600,
+                events: [{
+                    pk: PK, occurred_at: future, updated_at: '2026-05-01T12:00:00Z',
+                    data_fields: {notiz: 'a'},
+                }],
+            });
+            const record = await window.offlineEdit.markEventModified(
+                PK, {notiz: 'b'}, {clientPk: 'client-1384-fallback'}
+            );
+            return record.data.expectedUpdatedAt;
+        }"""
+    )
+    assert result == "2026-05-01T12:00:00Z", (
+        f"Token-Fallback muss den echten updated_at aus dem gecachten Event liefern, war {result!r}"
+    )
+
+
+def test_transient_key_loss_during_replay_skips_without_tokenless_post(authenticated_page, base_url):
+    """Dieser Test ist gegen den heutigen Code ROT: ``_cachedUpdatedAt``
+    faengt JEDEN Fehler (inkl. ``NoSessionKeyError``) ab und degradiert zu
+    ``""`` — ein tokenloser POST wuerde serverseitig als ``missing-token``
+    (409) einen Konflikt vortaeuschen, wo in Wahrheit nur der Schluessel
+    gerade (Idle-Lock #1324) transient gesperrt ist. Simuliert die enge Race
+    zwischen dem ``hasSessionKey()``-Gate am Anfang von
+    ``replayModifiedEvent`` (muss ``true`` liefern) und dem spaeteren
+    ``_cachedUpdatedAt()``-Aufruf (muss in dieser Race ``false`` sehen), indem
+    ``hasSessionKey()`` beim ZWEITEN Aufruf ``false`` liefert. Refs #1384."""
+    page = authenticated_page
+    _bootstrap_store(page, base_url)
+    result = page.evaluate(
+        """async () => {
+            const s = window.offlineStore;
+            const future = new Date(Date.now() + 3600e3).toISOString();
+            const PK = 'ffffffff-0000-4000-8000-000000000002';
+            await s.saveClientBundle({
+                client: {pk: 'client-1384-locked', pseudonym: 'LOCKED'},
+                expires_at: future, ttl: 3600,
+                events: [{pk: PK, occurred_at: future, updated_at: '2026-05-01T12:00:00Z'}],
+            });
+            await s.saveOfflineEdit({
+                pk: PK, clientPk: 'client-1384-locked', occurredAt: future,
+                localStatus: 'modified',
+                data: {formData: {notiz: 'ohne expliziten Token'}, expectedUpdatedAt: ''},
+            });
+
+            let postWentOut = false;
+            const origFetch = window.fetch;
+            window.fetch = (url, opts) => {
+                if (String(url || '').includes('/edit/')) {
+                    postWentOut = true;
+                    return Promise.resolve(new Response('{}', {status: 200}));
+                }
+                return origFetch(url, opts);
+            };
+            let calls = 0;
+            const origHasKey = window.crypto_session.hasSessionKey;
+            window.crypto_session.hasSessionKey = () => {
+                calls += 1;
+                return calls === 1;
+            };
+            let replayResult;
+            try {
+                const record = await s.getOfflineEvent(PK);
+                replayResult = await window.offlineEdit.replayModifiedEvent(record);
+            } finally {
+                window.crypto_session.hasSessionKey = origHasKey;
+                window.fetch = origFetch;
+            }
+            return { replayResult, postWentOut, calls };
+        }"""
+    )
+    assert result["calls"] == 2, f"Erwartete Gate-Aufrufe (top-level + _cachedUpdatedAt): {result!r}"
+    assert result["replayResult"]["status"] == "locked", f"Erwarteter Status 'locked': {result!r}"
+    assert result["postWentOut"] is False, "Kein tokenloser POST — das Event darf gar nicht erst gesendet werden"
+
+
+class TestOfflineEditReplayRobustness:
+    """Refs #1351/#1384: 429-Batch-Abbruch und dead-Letter fuer den
+    dedizierten Edit-Replay (offline-edit.js) — Pendant zur generischen
+    Queue-Klassifikation (offline-queue.js, siehe
+    ``test_offline_store.py::TestQueueReplayClassification``), hier aber
+    ueber ``replayModifiedEvent``/``replayAllModifiedEvents``.
+    ``service_workers="block"``: die Mock-URLs treffen QUEUE_PATTERNS (Refs
+    Task 1, #1351)."""
+
+    def test_429_aborts_batch_after_first_event(self, browser, base_url, _login_storage_state):
+        """Dieser Test ist gegen den heutigen Code ROT:
+        ``replayAllModifiedEvents`` bricht die Schleife heute NUR bei
+        network-error/offline ab (offline-edit.js:436-441) — ein 429 auf dem
+        ersten Event laesst die Schleife ungebremst zum zweiten Event
+        weiterlaufen und verbrennt das Ratelimit-Budget des Nutzers weiter.
+        Refs #1384."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap_store(page, base_url)
+            hits = {"n": 0}
+
+            def _handler(route):
+                hits["n"] += 1
+                route.fulfill(status=429, content_type="application/json", body="{}")
+
+            page.route(re.compile(r"/events/(11111111|22222222)"), _handler)
+
+            result = page.evaluate(
+                """async () => {
+                    const s = window.offlineStore;
+                    await s.saveOfflineEdit({
+                        pk: '11111111-1111-4111-8111-111111111111', clientPk: 'c1',
+                        occurredAt: '2026-01-01T00:00:00Z', localStatus: 'modified',
+                        data: {formData: {notiz: 'a'}, expectedUpdatedAt: 'etag-1'},
+                    });
+                    await s.saveOfflineEdit({
+                        pk: '22222222-2222-4222-8222-222222222222', clientPk: 'c1',
+                        occurredAt: '2026-01-01T00:00:00Z', localStatus: 'modified',
+                        data: {formData: {notiz: 'b'}, expectedUpdatedAt: 'etag-2'},
+                    });
+                    await window.offlineEdit.replayAllModifiedEvents();
+                    return {
+                        first: await s.getOfflineEvent('11111111-1111-4111-8111-111111111111'),
+                        second: await s.getOfflineEvent('22222222-2222-4222-8222-222222222222'),
+                    };
+                }"""
+            )
+            assert hits["n"] == 1, "429 muss den Batch NACH dem ersten Event abbrechen"
+            assert result["first"]["localStatus"] == "modified", "Record bleibt unveraendert (kein Datenverlust)"
+            assert result["second"]["localStatus"] == "modified", "Zweites Event darf gar nicht erst versucht werden"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_404_marks_event_dead_and_stops_auto_retry(self, browser, base_url, _login_storage_state):
+        """Dieser Test ist gegen den heutigen Code ROT: ein 404 beim
+        Edit-Replay liefert heute ``{status: "revoked"}``, der Record bleibt
+        aber ``localStatus: "modified"`` (offline-edit.js:400-407) — jeder
+        weitere Reconnect versucht denselben, serverseitig geloeschten Edit
+        ENDLOS erneut zu POSTen. Refs #1384."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap_store(page, base_url)
+            hits = {"n": 0}
+
+            def _handler(route):
+                hits["n"] += 1
+                route.fulfill(status=404, content_type="text/html", body="Not Found")
+
+            page.route(re.compile(r"/events/33333333"), _handler)
+
+            result = page.evaluate(
+                """async () => {
+                    const s = window.offlineStore;
+                    await s.saveOfflineEdit({
+                        pk: '33333333-3333-4333-8333-333333333333', clientPk: 'c1',
+                        occurredAt: '2026-01-01T00:00:00Z', localStatus: 'modified',
+                        data: {formData: {notiz: 'weg'}, expectedUpdatedAt: 'etag-3'},
+                    });
+                    await window.offlineEdit.replayAllModifiedEvents();
+                    const afterFirst = await s.getOfflineEvent('33333333-3333-4333-8333-333333333333');
+                    // Zweiter Lauf: darf NICHT erneut senden (kein Auto-Retry fuer dead).
+                    await window.offlineEdit.replayAllModifiedEvents();
+                    return { afterFirst };
+                }"""
+            )
+            assert result["afterFirst"]["localStatus"] == "dead"
+            assert result["afterFirst"]["data"]["deadReason"] == "not-found"
+            assert hits["n"] == 1, "Ein dead Event darf im naechsten Replay-Lauf NICHT erneut gesendet werden"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()

@@ -125,6 +125,13 @@
         // gerenderten Zeilen; bereits offline verfuegbare werden uebersprungen.
         Alpine.data("bulkOfflineTake", () => ({
             busy: false,
+            _labelRatelimited: "",
+            init() {
+                // Refs #1351/#1384: i18n-Text fuers 429-Feedback kommt aus
+                // dem Template (data-*-Attribut), kein hartcodiertes
+                // deutsches JS-Literal fuer eine neue Meldung.
+                this._labelRatelimited = this.$el.dataset.labelRatelimited || "";
+            },
             async takeAll() {
                 if (this.busy) return;
                 if (window.crypto_session && !window.crypto_session.isSupported()) {
@@ -147,6 +154,11 @@
                     let taken = 0;
                     let skipped = 0;
                     let limited = false;
+                    // Refs #1351/#1384: bulkOfflineTake bricht bei 429
+                    // (Bundle-Rate-Limit, M3-Handoff) ab, statt die restliche
+                    // Liste stumm einzeln durchzuprobieren und das
+                    // Ratelimit-Budget weiter zu verbrennen.
+                    let ratelimited = false;
                     // Refs #1356: ueber alle mitgenommenen Personen gesammelt —
                     // der Hinweis erscheint hoechstens einmal in der Summary,
                     // nicht pro Person.
@@ -169,6 +181,10 @@
                                 notify("Offline-Schlüssel nicht aktiv — bitte neu anmelden.", "error");
                                 return;
                             }
+                            if (e && e.name === "BundleFetchError" && e.status === 429) {
+                                ratelimited = true;
+                                break;
+                            }
                             // Sonstige Fehler: diese Person ueberspringen, weiter.
                         }
                     }
@@ -181,11 +197,14 @@
                         msg += " (Limit " + (window.offlineClient.MAX_OFFLINE_CLIENTS || 20) + " erreicht)";
                     }
                     msg += ".";
+                    if (ratelimited && this._labelRatelimited) {
+                        msg += " " + this._labelRatelimited;
+                    }
                     if (persistDenied) {
                         msg +=
                             " – Hinweis: Der Browser gewährt keinen dauerhaften Speicher; bei Speicherdruck können Offline-Daten verloren gehen.";
                     }
-                    notify(msg, limited ? "error" : "info");
+                    notify(msg, limited || ratelimited ? "error" : "info");
                 } finally {
                     this.busy = false;
                 }

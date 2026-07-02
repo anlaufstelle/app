@@ -2,6 +2,7 @@
 
 import re
 import uuid
+from contextlib import suppress
 
 import pytest
 
@@ -411,6 +412,56 @@ def test_bulk_take_offline_caches_multiple_clients(browser, base_url):
         count = page.evaluate("() => window.offlineStore.countOfflineClients()")
         assert count >= 2, f"Sammel-Mitnahme cachte zu wenige Personen: {count}"
     finally:
+        context.close()
+
+
+def test_bulk_take_offline_aborts_on_ratelimited_bundle_fetch(browser, base_url):
+    """Refs #1351/#1384 (M3-Handoff): `bulkOfflineTake` (client-row-offline.js)
+    brach bislang bei einem 429 auf den Bundle-Fetch NICHT ab — die Schleife
+    probierte die restliche Personenliste stumm weiter durch und verbrannte
+    das Rate-Limit-Budget zusaetzlich. Ein 429 ab dem zweiten Bundle-Request
+    muss die Schleife abbrechen (keine weitere Person wird genommen) und
+    einen Rate-Limit-Hinweis im Toast zeigen. Dieser Test ist gegen den
+    heutigen Code ROT: ``bulkOfflineTake``s catch-Block kennt
+    ``BundleFetchError``/429 nicht — der Request-Zaehler bliebe unbegrenzt
+    weiterlaufen und die zweite Person wuerde trotzdem nicht abgebrochen
+    protokolliert."""
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        page.goto(f"{base_url}/login/")
+        page.fill('input[name="username"]', "miriam")
+        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.click('button[type="submit"]')
+        page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
+        page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
+
+        # Erster Bundle-GET geht echt durch (belegt Fortschritt VOR dem
+        # Abbruch), ab dem zweiten antwortet die Route mit 429.
+        request_count = {"n": 0}
+
+        def _handler(route):
+            request_count["n"] += 1
+            if request_count["n"] >= 2:
+                route.fulfill(status=429, content_type="application/json", body="{}")
+            else:
+                route.continue_()
+
+        page.route(re.compile(r"/api/v1/offline/bundle/client/"), _handler)
+
+        page.locator('[data-testid="bulk-take-offline-btn"]').click()
+        toast = page.locator('[data-testid="client-offline-toast"]')
+        toast.wait_for(state="visible", timeout=10000)
+
+        assert "später erneut versuchen" in (toast.text_content() or ""), (
+            f"Toast muss den Rate-Limit-Hinweis zeigen: {toast.text_content()!r}"
+        )
+        count = page.evaluate("() => window.offlineStore.countOfflineClients()")
+        assert count == 1, f"Nach dem 429 duerfen keine weiteren Personen genommen worden sein: {count}"
+    finally:
+        with suppress(Exception):
+            page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
         context.close()
 
 

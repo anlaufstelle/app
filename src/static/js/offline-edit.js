@@ -138,15 +138,34 @@
      * der Replay würde mit leerem `expected_updated_at` rausgehen (silent LWW).
      */
     async function _cachedUpdatedAt(eventPk) {
-        try {
-            const cached = await _store().getOfflineEvent(String(eventPk));
-            if (!cached) return "";
-            // CLEAN-Bundle-Records tragen `updated_at` direkt im Envelope;
-            // bereits modifizierte Records tragen `expectedUpdatedAt`.
-            return cached.updated_at || cached.expectedUpdatedAt || "";
-        } catch (_e) {
-            return "";
+        if (window.crypto_session && window.crypto_session.ready) {
+            await window.crypto_session.ready();
         }
+        if (!window.crypto_session || !window.crypto_session.hasSessionKey()) {
+            // Refs #1351/#1384: ein transienter Key-Fehler (Idle-Lock #1324)
+            // darf NICHT zu "" degradieren — ein leerer Token wuerde den
+            // Server-Konflikt-Check umgehen (fehlender Token ist im
+            // HTTP-Replay-Contract ein eigener 409-"missing-token"-Fall) und
+            // einen KONFLIKT vortaeuschen, wo in Wahrheit nur der Schluessel
+            // gerade gesperrt ist. Aufrufer muessen diesen Fehler abfangen
+            // und den Replay dieses Events ueberspringen (kein tokenloser
+            // POST) statt mit leerem Token weiterzumachen.
+            const err = new Error("NoSessionKey");
+            err.name = "NoSessionKeyError";
+            throw err;
+        }
+        const cached = await _store().getOfflineEvent(String(eventPk));
+        if (!cached) return "";
+        // Refs #1351/#1384: `cached` ist die Store-ROW ({pk, clientPk, ...,
+        // data}) — das Envelope mit `updated_at`/`expectedUpdatedAt` liegt in
+        // `cached.data`, NICHT auf `cached` selbst. Der vorherige Code las
+        // `cached.updated_at`/`cached.expectedUpdatedAt` (stets `undefined`)
+        // und lieferte dadurch IMMER "" — der Fallback war seit F-07/#1109
+        // faktisch nie funktionsfaehig.
+        const envelope = cached.data || {};
+        // CLEAN-Bundle-Records tragen `updated_at` direkt im Envelope;
+        // bereits modifizierte Records tragen `expectedUpdatedAt`.
+        return envelope.updated_at || envelope.expectedUpdatedAt || "";
     }
 
     /*
@@ -261,10 +280,13 @@
 
     /*
      * Replay eines offline neu angelegten Events gegen ``/events/new/``.
-     * Erfolg = Redirect auf die Event-Detailseite (der Create-View re-rendert
-     * bei invaliden Formularen mit 200, KEIN 422 wie der Edit-View). Bei Erfolg
-     * den lokalen "new"-Record entfernen — die naechste Re-Validierung holt das
-     * kanonische Server-Event mit seiner echten pk ins Bundle.
+     * Erfolg = Redirect auf die Event-Detailseite. Refs #1351/#1384: nach M11
+     * antwortet die Create-View auf ein ungueltiges Formular (roher
+     * ``Accept: application/json``) mit 422+errors — der bestehende
+     * 200-Re-Render-Fallback (aeltere/HX-Faelle) bleibt zusaetzlich erhalten.
+     * Bei Erfolg den lokalen "new"-Record entfernen — die naechste
+     * Re-Validierung holt das kanonische Server-Event mit seiner echten pk
+     * ins Bundle.
      */
     async function replayNewEvent(record, csrf) {
         const data = record.data || {};
@@ -298,9 +320,31 @@
         if (response.status === 403 || response.status === 404) {
             return { status: "revoked", statusCode: response.status };
         }
+        if (response.status === 429) {
+            // Refs #1351/#1384: Ratelimit ist user-global (analog
+            // offline-queue.js) — Record unangetastet lassen (bleibt "new"),
+            // der Aufrufer (replayAllModifiedEvents) bricht den Rest des
+            // Batches ab statt das Ratelimit-Budget weiter zu verbrennen.
+            return { status: "ratelimited", statusCode: response.status };
+        }
+        if (response.status === 422) {
+            // Refs #1351/#1384 (M11): serverseitige Formularvalidierung
+            // fehlgeschlagen, jetzt mit Feldfehlern statt eines blossen
+            // Re-Renders. Record NICHT verwerfen — als "new" behalten, dem
+            // Nutzer die Feldfehler melden (analog replayModifiedEvent/422).
+            let body = null;
+            try {
+                body = await response.json();
+            } catch (_e) {
+                body = {};
+            }
+            return { status: "invalid", errors: (body && body.errors) || {} };
+        }
         if (response.status === 200) {
             // Serverseitige Formularvalidierung fehlgeschlagen (Re-Render).
             // Record NICHT verwerfen — als "new" behalten, dem Nutzer melden.
+            // Bestehender Fallback fuer den Fall, dass (noch) kein 422
+            // geliefert wird (aeltere Server-Version / HX-Submit-Pfad).
             return { status: "invalid", errors: {} };
         }
         return { status: "error", statusCode: response.status };
@@ -346,7 +390,18 @@
         // einmalig aus dem gecachten Bundle-Event nachladen.
         let token = (record.data && record.data.expectedUpdatedAt) || "";
         if (!token) {
-            token = await _cachedUpdatedAt(record.pk);
+            try {
+                token = await _cachedUpdatedAt(record.pk);
+            } catch (e) {
+                if (e && e.name === "NoSessionKeyError") {
+                    // Refs #1351/#1384: transienter Key-Fehler (Idle-Lock) —
+                    // dieses Event ueberspringen statt tokenlos zu POSTen
+                    // (wuerde serverseitig "missing-token" ausloesen und
+                    // einen Konflikt vortaeuschen, wo keiner existiert).
+                    return { status: "locked" };
+                }
+                throw e;
+            }
         }
         if (token) {
             form.set("expected_updated_at", token);
@@ -397,16 +452,37 @@
             _fireCountEvent();
             return { status: "invalid", errors: (body && body.errors) || {} };
         }
-        if (response.status === 403 || response.status === 404) {
-            // 404 = Event geloescht/entzogen; der nachgelagerte
-            // revalidateCachedClient purged den Klienten (F-10/#1110). Ein 403
-            // ist seit #1354 KEIN Purge-Trigger mehr — er kann Rate-Limit-/
-            // CSRF-/Proxy-Rauschen sein; bei echtem Rechteentzug vernichtet
-            // die Salt-Rotation den Bestand (permanenter Decrypt-Fehler,
-            // #1352). Der Edit bleibt in beiden Faellen lokal erhalten.
+        if (response.status === 404 || response.status === 410) {
+            // Refs #1351/#1384: das Edit-Ziel existiert serverseitig
+            // dauerhaft nicht mehr (geloescht/nie existent) — anders als 403
+            // (kann Rate-Limit-/Proxy-Rauschen sein) ist das PERMANENT.
+            // "dead" statt endlosem "revoked"-Retry bei jedem weiteren
+            // Reconnect; der nachgelagerte revalidateCachedClient purged den
+            // Klienten weiterhin separat, falls der Zugriff selbst entzogen
+            // wurde (F-10/#1110).
+            await _store().markEventDead(record.pk, "not-found", "" + response.status);
+            _fireCountEvent();
+            return { status: "dead", deadReason: "not-found", statusCode: response.status };
+        }
+        if (response.status === 403) {
+            // Der CSRF-Refresh-Retry ist in _postFormWithCsrfRetry bereits
+            // gelaufen. Ein 403 ist seit #1354 KEIN Purge-Trigger mehr — er
+            // kann Rate-Limit-/CSRF-/Proxy-Rauschen sein; bei echtem
+            // Rechteentzug vernichtet die Salt-Rotation den Bestand
+            // (permanenter Decrypt-Fehler, #1352). Der Edit bleibt lokal
+            // erhalten (unveraendert ggue. dem bisherigen Verhalten).
             return { status: "revoked", statusCode: response.status };
         }
-        // Transiente Fehler (5xx/429): Record behalten, spaeter erneut versuchen.
+        if (response.status === 429) {
+            // Refs #1351/#1384: Ratelimit ist user-global (analog
+            // offline-queue.js) — Record unangetastet lassen (kein eigenes
+            // Backoff-Feld im events-Schema noetig, der naechste
+            // online-Kontakt versucht erneut), aber den Aufrufer
+            // (replayAllModifiedEvents) den Rest des Batches abbrechen
+            // lassen statt das Ratelimit-Budget weiter zu verbrennen.
+            return { status: "ratelimited", statusCode: response.status };
+        }
+        // Transiente Fehler (5xx): Record behalten, spaeter erneut versuchen.
         return { status: "error", statusCode: response.status };
     }
 
@@ -431,11 +507,14 @@
         // Best-effort loop: stop on the first network error so we don't
         // spam the server with failing requests, but carry on past a
         // conflict — conflicts are a per-record state, not a session-wide
-        // halt.
+        // halt. Refs #1351/#1384: "ratelimited" bricht den Batch ebenfalls ab
+        // (Ratelimit ist user-global, nicht per-Record) — "locked" (transient
+        // fehlender Schluessel bei EINEM Event) dagegen NICHT: die Schleife
+        // laeuft mit den restlichen Events weiter.
         const records = await _store().listModifiedEvents();
         for (const record of records) {
             const result = await replayModifiedEvent(record);
-            if (result.status === "network-error" || result.status === "offline") {
+            if (result.status === "network-error" || result.status === "offline" || result.status === "ratelimited") {
                 break;
             }
         }
