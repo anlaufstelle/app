@@ -18,20 +18,28 @@ zweites Objekt zu erzeugen.
   also über Prozesse hinweg konsistent. Im LocMem-Default (dev/test) gilt sie
   pro Prozess — für den dokumentierten Replay-Fall (serielles Re-Drainen
   derselben Queue durch denselben Client) ausreichend.
-* Das Zeitfenster ist die TTL (Default 24 h, deckt den Offline-Bundle-Lease von
-  48 h nicht voll ab, aber jeden realistischen Replay-Zyklus nach
-  Verbindungsabbruch). Ein Replay nach Ablauf der TTL würde wieder ein neues
-  Objekt erzeugen — akzeptiert, weil ein so später Replay nach Lease-Ablauf
-  ohnehin verworfen werden sollte.
+* Das Zeitfenster ist die TTL (72 h, Refs #1329). Sie ist bewusst **länger**
+  als die Offline-Bundle-Lease (``BUNDLE_TTL_SECONDS = 48 h`` in
+  :mod:`core.services.system.offline`) plus ein Retry-Fenster für einen
+  Reconnect kurz vor Lease-Ablauf — Invariante ``TTL ≥ Bundle-Lease``. Der
+  ursprüngliche Default (24 h) verletzte diese Invariante: ein Replay kurz
+  vor Lease-Ablauf, aber nach TTL-Ablauf des Dedup-Keys, hätte wieder ein
+  Duplikat erzeugt. Ein Replay nach Ablauf der (jetzt 72 h langen) TTL würde
+  weiterhin ein neues Objekt erzeugen — akzeptiert, weil ein so später
+  Replay ohnehin verworfen werden sollte.
 """
 
 from __future__ import annotations
 
 from django.core.cache import cache
 
-# Wie lange ein Idempotenz-Schlüssel als „erledigt" gilt. Großzügig genug für
-# jeden Reconnect-/Replay-Zyklus, aber begrenzt, damit der Cache nicht wächst.
-IDEMPOTENCY_TTL_SECONDS = 24 * 3600
+# Wie lange ein Idempotenz-Schlüssel als „erledigt" gilt. Muss >= der
+# Offline-Bundle-Lease sein (``BUNDLE_TTL_SECONDS`` in
+# ``core.services.system.offline``, aktuell 48 h) plus ein Retry-Fenster für
+# Reconnects kurz vor Lease-Ablauf (Refs #1329) — sonst dedupliziert ein
+# später Replay nicht mehr zuverlässig. Modul bleibt generisch: gilt für
+# jeden Scope (``event_create``, ``workitem_create``, …), nicht nur Events.
+IDEMPOTENCY_TTL_SECONDS = 72 * 3600
 
 # Marker für „in Bearbeitung / fehlgeschlagen, aber noch kein Ergebnis" — wird
 # bewusst NICHT genutzt: ein fehlgeschlagener Versuch darf den Key nicht

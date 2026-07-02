@@ -23,6 +23,7 @@ from core.services.case import (
     update_workitem_status,
 )
 from core.services.client import get_client_or_none
+from core.services.events import get_idempotent_result, remember_idempotent_result
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 from core.views.utils import safe_redirect_path
 from core.views.workitems import can_user_mutate_workitem
@@ -91,10 +92,24 @@ class WorkItemCreateView(StaffRequiredMixin, View):
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request):
         facility = request.current_facility
+
+        # Idempotenz-Guard (Refs #1329): analog zu EventCreateView.post —
+        # bricht der Offline-Client die Verbindung nach erfolgreichem
+        # Server-Write, aber vor Empfang der Response ab, spielt er dieselbe
+        # Queue-Zeile beim nächsten ``online``-Event erneut. Trägt sie den
+        # ``X-Idempotency-Key`` eines bereits angelegten WorkItems, leiten
+        # wir auf dasselbe Ziel um wie beim Original-Erfolg, statt ein
+        # Duplikat zu erzeugen.
+        idem_key = request.headers.get("X-Idempotency-Key")
+        if idem_key:
+            existing_pk = get_idempotent_result("workitem_create", request.user.pk, idem_key)
+            if existing_pk:
+                return redirect("core:workitem_inbox")
+
         form = WorkItemForm(request.POST, facility=facility)
 
         if form.is_valid():
-            create_workitem(
+            workitem = create_workitem(
                 facility=facility,
                 user=request.user,
                 client=form.cleaned_data.get("client"),
@@ -107,6 +122,10 @@ class WorkItemCreateView(StaffRequiredMixin, View):
                 recurrence=form.cleaned_data.get("recurrence") or WorkItem.Recurrence.NONE,
                 assigned_to=form.cleaned_data.get("assigned_to"),
             )
+            # Erfolgreich angelegt → Ergebnis unter dem Idempotenz-Schlüssel
+            # merken, damit ein späterer Replay (#1329) hier oben kurzschließt
+            # statt ein zweites WorkItem zu erzeugen. No-op ohne Schlüssel.
+            remember_idempotent_result("workitem_create", request.user.pk, idem_key, workitem.pk)
             messages.success(request, _("Aufgabe wurde erstellt."))
             return redirect("core:workitem_inbox")
 
