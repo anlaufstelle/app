@@ -274,6 +274,150 @@ class TestOfflineCreate:
             context.close()
 
 
+class TestOfflineReeditOfNewEvent:
+    """Refs #1351: Re-Edit eines offline neu angelegten (``localStatus="new"``)
+    Events, BEVOR es je synchronisiert wurde.
+
+    Der Offline-Viewer erlaubt das erneute Bearbeiten eines ``new``-Events (die
+    Edit-Affordanz ``can_edit_ui`` behandelt ``new`` wie ``modified`` — beide
+    sind ``is_unsynced``). ``markEventModified`` (aufgerufen von ``saveEdit``
+    OHNE ``localStatus``-Option) darf dabei weder den ``new``-Status noch den
+    zugehörigen ``idempotencyKey`` verlieren — sonst zielt jeder weitere
+    Replay-Versuch dauerhaft auf ``/events/<lokale-uuid>/edit/`` (existiert
+    serverseitig nie) statt auf ``/events/new/``: das Event wird nie angelegt
+    (verletzt die S1-Kern-Invariante „unsynced stirbt nie still" — hier stirbt
+    es funktional).
+    """
+
+    def test_reedit_of_unsynced_new_event_keeps_new_status_and_replays_via_create(self, browser, base_url, e2e_env):
+        """Dieser Test ist gegen den heutigen Code ROT: ``markEventModified``
+        (``offline-edit.js:174``) überschreibt ``localStatus`` immer mit dem
+        Default ``"modified"``, sobald kein ``opts.localStatus`` übergeben
+        wird — und genau das tut ``saveEdit`` (``offline-client-view.js``) bei
+        jedem Re-Edit über den Offline-Viewer. Die erste Assertion unten
+        (``localStatus == "new"`` direkt nach dem Re-Edit, VOR dem Replay)
+        schlägt daher heute fehl. Refs #1351.
+        """
+        client_pk, _ = _seed_client_with_event(e2e_env, notiz="Bestandsereignis")
+        # service_workers="block": /events/new/ und /events/<uuid>/edit/ stehen
+        # in url-patterns.js QUEUE_PATTERNS — mit aktivem SW liefe der Replay-
+        # POST durch dessen eigenen fetch()-Aufruf im SW-Kontext (transparenter
+        # Online-Passthrough), den Playwright ueber page.route() NICHT sieht.
+        # Der SW-Queue-Pfad ist ein eigenstaendiger, hier nicht relevanter
+        # Mechanismus (Strang C) — dieser Test prueft ausschliesslich die
+        # offline-edit.js-Replay-Logik, daher SW fuer verlaessliche
+        # Request-Zaehlung deaktiviert.
+        context = browser.new_context(locale="de-DE", service_workers="block")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            assert _cache_bundle(page, client_pk)["ok"]
+            _open_offline_detail(page, base_url, client_pk)
+
+            _go_offline(page)
+
+            # 1) Offline ein NEUES Event anlegen (localStatus "new").
+            page.locator("[data-testid='offline-new-event-btn']").click()
+            page.locator("[data-testid='offline-create-form']").wait_for(state="visible", timeout=10000)
+            page.locator("[data-testid='offline-create-doctype']").select_option(label="Kontakt")
+            notiz = page.locator("[data-testid='offline-create-input-notiz']")
+            notiz.wait_for(state="visible", timeout=10000)
+            notiz.fill("Neu offline vor Re-Edit")
+            page.locator("[data-testid='offline-create-save']").click()
+            page.locator("[data-testid='event-unsynced-badge']").first.wait_for(state="visible", timeout=10000)
+
+            new_event = page.evaluate(
+                """async () => {
+                    const rows = await window.offlineStore.listModifiedEvents();
+                    const row = rows.find((r) => r.localStatus === 'new');
+                    return row ? {pk: row.pk, idempotencyKey: row.data.idempotencyKey} : null;
+                }"""
+            )
+            assert new_event, "Neu angelegtes Offline-Event nicht in listModifiedEvents() gefunden"
+            new_pk = new_event["pk"]
+            original_idempotency_key = new_event["idempotencyKey"]
+            assert original_idempotency_key, "markEventNew muss einen idempotencyKey vergeben"
+
+            # 2) Dasselbe, noch ungesyncte Event erneut editieren — der Offline-
+            #    Viewer zeigt die Edit-Affordanz auch fuer "new"-Events (can_edit_ui
+            #    erlaubt jedes unsynced Event).
+            _edit_notiz_offline(page, new_pk, "Geaendert vor Sync (Re-Edit)")
+
+            # Assertion VOR dem Replay: der Re-Edit darf den "new"-Status und den
+            # urspruenglichen idempotencyKey nicht verlieren.
+            after_reedit = page.evaluate("async (pk) => window.offlineStore.getOfflineEvent(pk)", new_pk)
+            assert after_reedit is not None
+            assert after_reedit["localStatus"] == "new", (
+                "Re-Edit eines offline neu angelegten Events degradiert den Status zu "
+                f"{after_reedit['localStatus']!r} statt 'new' zu bleiben (markEventModified "
+                "defaultet ohne opts.localStatus auf 'modified'). Refs #1351."
+            )
+            assert after_reedit["data"]["idempotencyKey"] == original_idempotency_key, (
+                "Re-Edit darf den urspruenglichen idempotencyKey nicht durch einen neuen "
+                "ersetzen/verlieren (Doppel-Anlage-Schutz, Refs #1109/#1351)."
+            )
+
+            # 3) Reconnect: Playwright-Route-Zaehler belegen, dass GENAU EIN POST auf
+            #    /events/new/ geht (mit dem URSPRUENGLICHEN Idempotency-Key) und KEIN
+            #    Request auf /events/<uuid>/edit/ (die serverseitig nie existierende
+            #    Edit-URL fuer eine rein lokale pk).
+            #
+            #    Bewusst NUR page.context.set_offline(False) OHNE zusaetzliches
+            #    manuelles dispatchEvent("online") (das der sonst uebliche
+            #    _go_online-Helfer ausloest): in dieser Chromium-Version (148.x)
+            #    feuert set_offline(False) selbst bereits genau EIN natives
+            #    "online"-Event (per Diagnose verifiziert) — ein zusaetzlicher
+            #    manueller dispatchEvent-Aufruf wuerde replayAllModifiedEvents()
+            #    (kein eigener Reentrancy-Guard) ein zweites Mal anstossen und die
+            #    "genau EIN POST"-Zaehlung verfaelschen (2 statt 1 Request).
+            new_counter = {"n": 0}
+            edit_counter = {"n": 0}
+            sent_headers = {}
+
+            def _count_new(route):
+                new_counter["n"] += 1
+                sent_headers["x-idempotency-key"] = route.request.headers.get("x-idempotency-key")
+                route.continue_()
+
+            def _count_edit(route):
+                edit_counter["n"] += 1
+                route.continue_()
+
+            page.route(re.compile(r"/events/new/"), _count_new)
+            page.route(
+                re.compile(r"/events/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/edit/"),
+                _count_edit,
+            )
+
+            page.context.set_offline(False)
+            page.locator("[data-testid='event-unsynced-badge']").first.wait_for(state="hidden", timeout=20000)
+
+            assert edit_counter["n"] == 0, (
+                "Der Replay eines re-editierten new-Events darf NIE auf /events/<uuid>/edit/ "
+                f"POSTen (war {edit_counter['n']}x) — diese URL existiert serverseitig nie, das "
+                "Event wuerde nie angelegt."
+            )
+            assert new_counter["n"] == 1, f"Erwartet genau 1 POST auf /events/new/, war {new_counter['n']}"
+            assert sent_headers.get("x-idempotency-key") == original_idempotency_key, (
+                "Der Replay muss den URSPRUENGLICHEN Idempotency-Key der Neuanlage senden "
+                f"(war {sent_headers.get('x-idempotency-key')!r})."
+            )
+
+            final_row = page.evaluate("async (pk) => window.offlineStore.getOfflineEvent(pk)", new_pk)
+            assert final_row is None, "Nach erfolgreichem Create-Replay muss die lokale new-Row entfernt sein"
+
+            # Kern-Invariante: das Event wurde tatsaechlich serverseitig angelegt (mit dem
+            # finalen, re-editierten Wert) — nicht still verworfen.
+            page.wait_for_timeout(500)
+            notes = _server_client_event_notes(e2e_env, client_pk)
+            assert "Geaendert vor Sync (Re-Edit)" in notes, f"Server hat das re-editierte Event nie angelegt: {notes!r}"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+
 class TestOfflineEditReplay:
     """Der bisher tote Pfad markEventModified → Replay, end-to-end im Browser."""
 

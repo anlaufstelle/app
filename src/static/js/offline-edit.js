@@ -160,6 +160,7 @@
      */
     async function markEventModified(eventPk, formData, options) {
         const opts = options || {};
+        const pk = String(eventPk);
         // Refs #1109 (F-07): Fehlt der Token explizit, aus dem gecachten
         // Bundle-Event nachziehen, damit der Replay den Server-Konflikt-Check
         // scharf stellt statt bedingungslos zu überschreiben.
@@ -167,29 +168,48 @@
         if (!token) {
             token = await _cachedUpdatedAt(eventPk);
         }
+        // Refs #1351: bestehende Row lesen — ein offline NEU angelegtes, noch
+        // nie synchronisiertes Event (localStatus "new") darf durch einen
+        // Re-Edit NICHT zu "modified" degradieren. saveOfflineEdit ersetzt die
+        // Row vollstaendig (kein Merge); ohne diesen Erhalt wuerde jeder
+        // weitere Replay-Versuch dauerhaft auf die serverseitig nie
+        // existierende /events/<pk>/edit/-URL zielen statt auf /events/new/ —
+        // das Event wuerde nie angelegt (verletzt die S1-Invariante „unsynced
+        // stirbt nie still").
+        const existing = await _store().getOfflineEvent(pk);
+        const wasNew = Boolean(existing && existing.localStatus === "new");
+        const data = {
+            formData: formData,
+            expectedUpdatedAt: token,
+            // Snapshot a few metadata fields so the list/review UI can
+            // label the edit without cross-referencing the cache. Refs
+            // #1111: ``documentTypePk`` + ``occurredAt`` let the offline
+            // viewer re-render and re-edit a still-unsynced event (the
+            // clean bundle record is overwritten by this edit envelope).
+            documentTypeName: opts.documentTypeName || "",
+            documentTypePk: opts.documentTypePk || "",
+            occurredAt: opts.occurredAt || "",
+            // Refs #1111: bestehende Datei-Anhang-Marker (nicht editierbar)
+            // fuer die Offline-Anzeige bewahren — werden in
+            // normalizeOfflineEventRecord wieder in data_fields gemerged,
+            // gehen NICHT in formData/Replay ein.
+            fileMarkers: opts.fileMarkers || {},
+            lastEditedAt: Date.now(),
+        };
+        if (wasNew) {
+            // Refs #1351: der Idempotenzschutz der urspruenglichen Neuanlage
+            // (F-09, #1109) muss ueber den Re-Edit hinweg erhalten bleiben —
+            // sonst schickt der naechste Replay ein ANDERES Idempotency-Key
+            // mit und der Doppel-Anlage-Schutz fuer den ORIGINAL-Request
+            // greift nicht mehr.
+            data.idempotencyKey = (existing.data && existing.data.idempotencyKey) || _uuid();
+        }
         const record = {
-            pk: String(eventPk),
+            pk: pk,
             clientPk: opts.clientPk || "",
             occurredAt: opts.occurredAt || "",
-            localStatus: opts.localStatus || "modified",
-            data: {
-                formData: formData,
-                expectedUpdatedAt: token,
-                // Snapshot a few metadata fields so the list/review UI can
-                // label the edit without cross-referencing the cache. Refs
-                // #1111: ``documentTypePk`` + ``occurredAt`` let the offline
-                // viewer re-render and re-edit a still-unsynced event (the
-                // clean bundle record is overwritten by this edit envelope).
-                documentTypeName: opts.documentTypeName || "",
-                documentTypePk: opts.documentTypePk || "",
-                occurredAt: opts.occurredAt || "",
-                // Refs #1111: bestehende Datei-Anhang-Marker (nicht editierbar)
-                // fuer die Offline-Anzeige bewahren — werden in
-                // normalizeOfflineEventRecord wieder in data_fields gemerged,
-                // gehen NICHT in formData/Replay ein.
-                fileMarkers: opts.fileMarkers || {},
-                lastEditedAt: Date.now(),
-            },
+            localStatus: wasNew ? "new" : opts.localStatus || "modified",
+            data: data,
         };
         await _store().saveOfflineEdit(record);
         _fireCountEvent();
