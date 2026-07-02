@@ -15,7 +15,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
-from core.constants import RATELIMIT_BULK_ACTION
+from core.constants import RATELIMIT_OFFLINE_BUNDLE
 from core.models import AuditLog, Client
 from core.services.audit import log_audit_event
 from core.services.system import build_client_offline_bundle
@@ -32,7 +32,7 @@ class OfflineClientBundleView(AssistantOrAboveRequiredMixin, View):
 
     http_method_names = ["get"]
 
-    @method_decorator(ratelimit(key="user", rate=RATELIMIT_BULK_ACTION, method="GET", block=True))
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_OFFLINE_BUNDLE, method="GET", block=True))
     def get(self, request, pk):
         facility = request.current_facility
         client = get_object_or_404(Client, pk=pk, facility=facility)

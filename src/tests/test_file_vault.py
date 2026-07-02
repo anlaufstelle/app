@@ -452,7 +452,8 @@ class TestFileUploadView:
         RATELIMIT_FREQUENT (120/h/User) drosselt Massen-Downloads.
 
         Tests laufen mit ``RATELIMIT_ENABLE = False``; hier explizit aktiviert.
-        django-ratelimit mit ``block=True`` antwortet mit 403.
+        django-ratelimit mit ``block=True`` antwortet via ``handler403`` mit 429
+        (Refs #1354).
         """
         from django.core.cache import cache
 
@@ -464,7 +465,7 @@ class TestFileUploadView:
             url = reverse("core:attachment_download", kwargs={"pk": event.pk, "attachment_pk": attachment.pk})
             for _ in range(120):
                 assert client.get(url).status_code == 200
-            assert client.get(url).status_code == 403
+            assert client.get(url).status_code == 429
         finally:
             cache.clear()
 

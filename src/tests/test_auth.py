@@ -296,29 +296,32 @@ class TestRateLimiting:
         cache.clear()
 
     def test_rate_limit_blocks_after_threshold(self, client, staff_user):
-        """Nach 5 fehlerhaften POST-Requests von derselben IP → 403."""
+        """Nach 5 fehlerhaften POST-Requests von derselben IP → 429 (Ratelimited
+        via handler403, Refs #1354)."""
         for i in range(6):
             response = client.post(
                 "/login/",
                 {"username": "teststaff", "password": "wrong"},
                 REMOTE_ADDR="10.99.99.99",
             )
-        assert response.status_code == 403
+        assert response.status_code == 429
 
     def test_password_reset_post_rate_limited(self, client):
-        """Nach 5 POST-Requests auf password-reset von derselben IP → 403."""
+        """Nach 5 POST-Requests auf password-reset von derselben IP → 429
+        (Ratelimited via handler403, Refs #1354)."""
         for i in range(6):
             response = client.post(
                 "/password-reset/",
                 {"email": "test@example.com"},
                 REMOTE_ADDR="10.88.88.88",
             )
-        assert response.status_code == 403
+        assert response.status_code == 429
 
     def test_rate_limit_per_username_blocks_distributed_brute_force(self, client, staff_user):
         """Refs #598: Nach 10 fehlgeschlagenen Login-Versuchen auf den
         gleichen Usernamen — auch von unterschiedlichen IPs — greift der
-        User-basierte Ratelimit (10/h) und Versuch 11 liefert 403.
+        User-basierte Ratelimit (10/h) und Versuch 11 liefert 429
+        (Ratelimited via handler403, Refs #1354).
 
         IP-Rate-Limit wird durch rotierende REMOTE_ADDR umgangen (simuliert
         Botnet). User-Rate-Limit muss trotzdem greifen.
@@ -340,7 +343,7 @@ class TestRateLimiting:
             {"username": "teststaff", "password": "wrong"},
             REMOTE_ADDR="10.77.77.250",
         )
-        assert response.status_code == 403
+        assert response.status_code == 429
 
     def test_rate_limit_per_username_is_case_insensitive(self, client, staff_user):
         """Die Lambda normalisiert Username (lowercase + strip) — sonst wäre
@@ -358,7 +361,7 @@ class TestRateLimiting:
             {"username": " teststaff ", "password": "wrong"},
             REMOTE_ADDR="10.66.66.250",
         )
-        assert response.status_code == 403
+        assert response.status_code == 429
 
 
 # --- B.8: Account-Lockout (Refs #612) ---

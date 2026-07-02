@@ -38,6 +38,11 @@ WORKITEM_RECENT_DONE_PREVIEW = 5
 RATELIMIT_BULK_ACTION = "30/h"
 RATELIMIT_MUTATION = "60/h"
 RATELIMIT_FREQUENT = "120/h"
+# Refs #1354 (Befund K1c): dediziertes Limit fuer den Offline-Bundle-GET.
+# Sammel-Mitnahme von 20 Klienten (#1326) + Revalidierung aller 20 beim
+# naechsten Online-Event = 40 GETs/h bestimmungsgemaesser Gebrauch — das
+# vorher geteilte RATELIMIT_BULK_ACTION (30/h) war zu knapp.
+RATELIMIT_OFFLINE_BUNDLE = "120/h"
 
 # Retention — Schwellen (in Tagen) für Urgency-Markierung
 # `red`: Löschung in <= RETENTION_URGENCY_RED_DAYS Tagen fällig

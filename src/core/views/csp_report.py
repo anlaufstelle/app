@@ -14,7 +14,8 @@ Trade-offs:
   veraendert.
 - Rate-Limit ``10/m`` pro IP: Verhindert Log-Flooding durch boesgemeinte
   Reports. Bei realer Violation ist 10/min ausreichend; mehr deutet auf
-  Spam hin und wird verworfen (HTTP 429).
+  Spam hin und wird verworfen (HTTP 429 via ``handler403``,
+  ``core/views/errors.py``, Refs #1354).
 - Body-Limit: 32 KiB harter Cap, damit ein Angreifer nicht beliebig
   grosse Payloads dem Logging-Pipeline zu fressen gibt.
 """

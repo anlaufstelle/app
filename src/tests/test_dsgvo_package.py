@@ -169,8 +169,9 @@ class TestDSGVORateLimit:
     letzte Luecke im sonst dichten Drossel-Netz.
 
     Tests laufen mit ``RATELIMIT_ENABLE = False``; hier wird das Limit explizit
-    aktiviert (Muster: ``test_offline_bundle_api.test_rate_limited_after_30_requests``).
-    django-ratelimit mit ``block=True`` antwortet mit 403.
+    aktiviert (Muster: ``test_offline_bundle_api.test_rate_limited_after_120_requests``).
+    django-ratelimit mit ``block=True`` antwortet via ``handler403`` mit 429
+    (Refs #1354).
     """
 
     @pytest.fixture(autouse=True)
@@ -185,14 +186,14 @@ class TestDSGVORateLimit:
         client.force_login(admin_user)
         for _ in range(30):
             assert client.get("/dsgvo/").status_code == 200
-        assert client.get("/dsgvo/").status_code == 403
+        assert client.get("/dsgvo/").status_code == 429
 
     def test_document_download_blocked_after_30_requests(self, admin_user):
         client = DjangoClient()
         client.force_login(admin_user)
         for _ in range(30):
             assert client.get("/dsgvo/toms/").status_code == 200
-        assert client.get("/dsgvo/toms/").status_code == 403
+        assert client.get("/dsgvo/toms/").status_code == 429
 
 
 # Refs #840 (C-73): Versionsstempel-Footer in jedem gerenderten Dokument.

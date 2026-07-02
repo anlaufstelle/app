@@ -240,7 +240,7 @@ class TestSystemAuditExportRateLimit:
 
     Tests laufen mit ``RATELIMIT_ENABLE = False``; hier wird das Limit explizit
     aktiviert (Muster: ``test_dsgvo_package.TestDSGVORateLimit``). django-ratelimit
-    mit ``block=True`` antwortet mit 403.
+    mit ``block=True`` antwortet via ``handler403`` mit 429 (Refs #1354).
     """
 
     @pytest.fixture(autouse=True)
@@ -259,4 +259,4 @@ class TestSystemAuditExportRateLimit:
         url = reverse("core:system_audit_export")
         for _ in range(30):
             assert client.get(url).status_code == 200
-        assert client.get(url).status_code == 403
+        assert client.get(url).status_code == 429

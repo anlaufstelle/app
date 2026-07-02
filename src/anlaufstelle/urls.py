@@ -86,3 +86,8 @@ urlpatterns = [
     path("sudo/", SudoModeView.as_view(), name="sudo_mode"),
     path("", include("core.urls")),
 ]
+
+# Refs #1354: django_ratelimits ``Ratelimited`` (PermissionDenied-Subklasse)
+# wird auf 429 gemappt statt als 403 ausgeliefert — der Offline-Client deutet
+# 403 als Rechteentzug und purgt lokale Bundles. Echte 403 bleiben unveraendert.
+handler403 = "core.views.errors.permission_denied"

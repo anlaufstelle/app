@@ -196,8 +196,9 @@ class ClientUpdateView(StaffRequiredMixin, View):
 class ClientAutocompleteView(AssistantOrAboveRequiredMixin, View):
     """JSON endpoint for client autocomplete."""
 
-    # Refs #737: block=True liefert 429 bei Limit-Verstoss (sonst 200 trotz
-    # Ueberschreitung — der Limit waere effektiv unwirksam).
+    # Refs #737: block=True wirft Ratelimited bei Limit-Verstoss (sonst 200
+    # trotz Ueberschreitung — der Limit waere effektiv unwirksam); der
+    # handler403 (core/views/errors.py) liefert dafuer 429 (Refs #1354).
     @method_decorator(ratelimit(key="user", rate="30/m", method="GET", block=True))
     def get(self, request):
         from core.services.events import CONTACT_STAGE_ORDER, stage_index

@@ -425,33 +425,62 @@ class TestOfflineClientBundleView:
         assert after == before + 1
 
     def test_rate_limit_decorator_configured(self):
-        """The view must be decorated with ``ratelimit`` (30/h/user) so that
-        the production settings (``RATELIMIT_ENABLE = True``) apply the cap.
+        """The view must be decorated with ``ratelimit`` (``RATELIMIT_OFFLINE_BUNDLE``,
+        120/h/user — Refs #1354) so that the production settings
+        (``RATELIMIT_ENABLE = True``) apply the cap.
 
         Tests run with ``RATELIMIT_ENABLE = False`` so we cannot assert a 429
         at runtime; we assert the decorator is present instead.
         """
+        from core.constants import RATELIMIT_OFFLINE_BUNDLE
+        from core.views import offline as offline_module
         from core.views.offline import OfflineClientBundleView
 
         get = OfflineClientBundleView.get
         # method_decorator copies attributes onto the wrapper — the presence
         # of a ``__wrapped__`` chain signals decoration happened.
         assert hasattr(get, "__wrapped__"), "get() should be wrapped by ratelimit"
+        # Refs #1354: dediziertes Bundle-Limit statt geteiltem 30/h-Bulk-Limit.
+        # Der Modul-Namespace-Check stellt sicher, dass die View die Konstante
+        # importiert (und nicht ein hartcodiertes Rate traegt).
+        assert RATELIMIT_OFFLINE_BUNDLE == "120/h"
+        assert offline_module.RATELIMIT_OFFLINE_BUNDLE == "120/h"
 
-    def test_rate_limited_after_30_requests(self, client, client_identified, staff_user):
-        """With rate-limiting forcibly enabled, the 31st request per hour is blocked
-        (django-ratelimit's default ``block=True`` responds with 403).
+    def test_rate_limited_after_120_requests(self, client, client_identified, staff_user):
+        """With rate-limiting forcibly enabled, the 121st request per hour is
+        blocked (Refs #1354: dediziertes ``RATELIMIT_OFFLINE_BUNDLE`` = 120/h,
+        statt dem geteilten 30/h-``RATELIMIT_BULK_ACTION``).
+
+        django-ratelimit's ``Ratelimited`` (a ``PermissionDenied`` subclass) is
+        mapped to HTTP 429 by the custom ``handler403`` — not Django's default
+        403 — weil der Offline-Client 403 als Rechteentzug deutet und lokale
+        verschlüsselte Bundles purgt (siehe ``offline-store.js``
+        ``INVALIDATION_STATUSES``). Ein Rate-Limit-Treffer ist kein
+        Rechteentzug.
         """
         cache.clear()
         client.force_login(staff_user)
         url = self._url(client_identified.pk)
         with override_settings(RATELIMIT_ENABLE=True):
-            for _ in range(30):
+            for _ in range(120):
                 response = client.get(url)
                 assert response.status_code == 200
             response = client.get(url)
-            assert response.status_code == 403
+            assert response.status_code == 429
         cache.clear()
+
+    def test_real_permission_denied_still_403(self, client, client_identified, super_admin_user):
+        """Kontrolltest (Refs #1354): Ein echter Berechtigungs-403 bleibt 403 —
+        der ``handler403`` mappt ausschliesslich ``Ratelimited`` auf 429.
+
+        super_admin ist per ``is_assistant_or_above`` vom Bundle-Endpoint
+        ausgeschlossen (kein Facility-Bezug); der authentifizierte Zugriff
+        wirft ``PermissionDenied`` und muss durch den Custom-Handler
+        unveraendert als 403 herauskommen.
+        """
+        client.force_login(super_admin_user)
+        response = client.get(self._url(client_identified.pk))
+        assert response.status_code == 403
 
     def test_only_get_allowed(self, client, client_identified, staff_user):
         client.force_login(staff_user)
