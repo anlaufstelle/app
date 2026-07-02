@@ -266,15 +266,21 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
 
 
 @transaction.atomic
-def update_event(event, user, data_json, expected_updated_at=None, **kwargs):
+def update_event(event, user, data_json, expected_updated_at=None, require_version_token=False, **kwargs):
     """Update an event + EventHistory(UPDATE).
 
     Refs #734: nutzt zentrale ``check_version_conflict`` statt eigenem
     ``str(updated_at)``-Vergleich.
+
+    ``require_version_token`` (Refs #1338): wird 1:1 an
+    ``check_version_conflict`` durchgereicht. ``EventUpdateView`` setzt es
+    auf das Ergebnis von ``_wants_json_response`` — JSON-/Offline-Replay-
+    Clients müssen dadurch einen Token mitschicken, während der klassische
+    HTML-Formular-Pfad beim Default ``False`` bleibt (kein Verhaltensbruch).
     """
     from core.services.security import check_version_conflict
 
-    check_version_conflict(event, expected_updated_at)
+    check_version_conflict(event, expected_updated_at, require_token=require_version_token)
     data_json = _validate_data_json(event.document_type, data_json)
     data_before = event.data_json.copy() if event.data_json else {}
     event.data_json = data_json

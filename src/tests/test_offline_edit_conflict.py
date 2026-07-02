@@ -185,16 +185,106 @@ class TestEventUpdateConflict:
         assert "risiko" not in data_json, "HIGH field must not leak via conflict response"
 
     def test_no_conflict_json_still_redirects(self, client, staff_user, sample_event):
-        """A successful JSON edit (no stale expected_updated_at) keeps the
-        normal 302 redirect. The 409 branch is only for the conflict case.
+        """A successful JSON edit with a fresh (non-stale) expected_updated_at
+        keeps the normal 302 redirect. The 409 branch is only for the
+        conflict case.
+
+        Refs #1338: seit der Token-Pflicht im JSON-Pfad muss ein gueltiger
+        Token mitgeschickt werden -- vorher testete dieser Fall den JSON-Pfad
+        ganz ohne ``expected_updated_at``, was jetzt (korrekterweise) den
+        neuen 409-``missing-token``-Zweig treffen wuerde statt den hier
+        geprueften Erfolgsfall.
+        """
+        client.force_login(staff_user)
+        sample_event.refresh_from_db()
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}),
+            {
+                "dauer": "30",
+                "notiz": "update",
+                "expected_updated_at": sample_event.updated_at.isoformat(),
+            },
+            HTTP_ACCEPT="application/json",
+        )
+        # No conflict → regular success redirect to event_detail
+        assert response.status_code == 302
+
+    def test_event_update_returns_409_missing_token_without_expected_updated_at(self, client, staff_user, sample_event):
+        """Refs #1338: JSON-/Offline-Replay-Clients MUESSEN ``expected_updated_at``
+        mitschicken. Ein fehlender/leerer Token ist seit #1338 kein stilles
+        No-Op mehr (silent Last-Write-Wins, K3), sondern ein expliziter 409
+        mit eigener Fehlerkennung -- das Event bleibt dabei unveraendert.
+        """
+        client.force_login(staff_user)
+        original_notiz = sample_event.data_json["notiz"]
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}),
+            {"dauer": "99", "notiz": "offline-edit-ohne-token"},
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 409
+        payload = response.json()
+        assert payload["error"] == "missing-token"
+        assert payload["client_expected"] is None
+        assert "server_state" in payload
+        assert payload["server_state"]["updated_at"] is not None
+        sample_event.refresh_from_db()
+        assert sample_event.data_json["notiz"] == original_notiz, (
+            "Event darf bei fehlendem Token nicht veraendert werden"
+        )
+
+    def test_event_update_htmx_without_token_also_returns_missing_token(self, client, staff_user, sample_event):
+        """Der ``missing-token``-Zweig gilt fuer JEDEN JSON-wollenden Request
+        (Accept: application/json ODER HX-Request), nicht nur fuer Accept-Header
+        -- konsistent mit dem bestehenden Konflikt-Zweig (Refs #1338, #575).
         """
         client.force_login(staff_user)
         response = client.post(
             reverse("core:event_update", kwargs={"pk": sample_event.pk}),
-            {"dauer": "30", "notiz": "update"},
+            {"dauer": "99", "notiz": "offline-edit-ohne-token"},
+            HTTP_HX_REQUEST="true",
+        )
+        assert response.status_code == 409
+        assert response.json()["error"] == "missing-token"
+
+    def test_event_update_html_post_without_token_still_succeeds(self, client, staff_user, sample_event):
+        """Regressionsschutz #1338: der HTML-Formular-Pfad (kein Accept:
+        application/json, kein HX-Request) erzwingt den Versions-Token
+        NICHT -- ``require_version_token`` gilt nur fuer
+        ``_wants_json_response``. Ein normaler Browser-Submit ohne
+        ``expected_updated_at`` bleibt unveraendert ein No-Op-Check.
+        """
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}),
+            {"dauer": "50", "notiz": "html-ohne-token"},
+        )
+        assert response.status_code == 302
+
+    def test_event_update_corrupt_token_returns_409_not_500(self, client, staff_user, sample_event):
+        """Refs #1338: ein nicht-ISO-parsebarer Token darf im JSON-Pfad
+        keinen ungefangenen ``ValueError`` (-> 500) mehr ausloesen. Defensiv
+        wird das wie ein echter Konflikt behandelt (Server-Stand zur Review).
+        """
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}),
+            {"dauer": "99", "notiz": "offline-edit", "expected_updated_at": "nicht-iso"},
             HTTP_ACCEPT="application/json",
         )
-        # No conflict → regular success redirect to event_detail
+        assert response.status_code == 409
+        payload = response.json()
+        assert payload["error"] == "conflict"
+        assert payload["client_expected"] == "nicht-iso"
+
+    def test_event_update_corrupt_token_html_path_redirects_not_500(self, client, staff_user, sample_event):
+        """Gegenprobe: derselbe korrupte Token im klassischen HTML-Pfad
+        bleibt beim bisherigen messages+redirect-Verhalten (kein 500)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_update", kwargs={"pk": sample_event.pk}),
+            {"dauer": "99", "notiz": "offline-edit", "expected_updated_at": "nicht-iso"},
+        )
         assert response.status_code == 302
 
     def test_offline_bundle_token_triggers_conflict_on_stale_replay(self, client, staff_user, sample_event):

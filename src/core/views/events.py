@@ -63,7 +63,7 @@ def _wants_json_response(request) -> bool:
     return bool(request.headers.get("HX-Request"))
 
 
-def _conflict_response(user, event, client_expected):
+def _conflict_response(user, event, client_expected, *, error="conflict"):
     """Build the 409-Conflict JSON payload for a stale optimistic-concurrency edit.
 
     The payload carries enough context for :file:`conflict-resolver.js` to show
@@ -73,10 +73,18 @@ def _conflict_response(user, event, client_expected):
     ``expected_updated_at`` after the user resolves the conflict), the
     document-type display name, and the value the client sent — so the UI can
     label the two sides unambiguously.
+
+    ``error`` (Refs #1338) distinguishes the two JSON failure shapes the
+    offline-sync contract defines: the default ``"conflict"`` for a genuine
+    version mismatch (also used defensively for a corrupt/unparseable token —
+    the server state is shown for review instead of raising a 500) and
+    ``"missing-token"`` when the caller omitted ``expected_updated_at``
+    entirely on a JSON/HTMX edit. Both share the same body shape, so
+    :file:`conflict-resolver.js` needs only one parser.
     """
     return JsonResponse(
         {
-            "error": "conflict",
+            "error": error,
             "server_state": {
                 "data_json": filtered_server_data_json(user, event),
                 "updated_at": event.updated_at.isoformat() if event.updated_at else None,
@@ -367,10 +375,21 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             merged = merge_update_payload(event, merged, restricted_keys, event.document_type)
 
             expected_updated_at = request.POST.get("expected_updated_at")
+            wants_json = _wants_json_response(request)
             # Event-Update + Attachment-Versionierung atomar (Refs #584/#587/#622).
             try:
                 with transaction.atomic():
-                    update_event(event, request.user, merged, expected_updated_at=expected_updated_at)
+                    update_event(
+                        event,
+                        request.user,
+                        merged,
+                        expected_updated_at=expected_updated_at,
+                        # Refs #1338: JSON-/Offline-Replay-Clients müssen den
+                        # Versions-Token mitschicken (kein stilles Last-Write-
+                        # Wins mehr). Der klassische HTML-Formular-Pfad bleibt
+                        # unverändert (kein require).
+                        require_version_token=wants_json,
+                    )
                     apply_attachment_changes(
                         event,
                         request.user,
@@ -384,10 +403,18 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                 # current server state so the client-side conflict resolver
                 # can show a diff. Normal browser requests fall back to the
                 # previous redirect + flash message behaviour.
-                if _wants_json_response(request):
+                if wants_json:
                     # Refresh the event so we emit the committed server state,
                     # not the in-memory copy this view started from.
                     event.refresh_from_db()
+                    if getattr(e, "code", None) == "missing_token":
+                        # Refs #1338: fehlender Token ist kein Merge-Konflikt
+                        # im eigentlichen Sinn (es wurde nichts verglichen) —
+                        # eigene Fehlerkennung, damit der Client zwischen
+                        # "bitte Token nachreichen" und "echter Konflikt"
+                        # unterscheiden kann. client_expected ist null, weil
+                        # kein sinnvoller roher Client-Wert vorliegt.
+                        return _conflict_response(request.user, event, None, error="missing-token")
                     return _conflict_response(request.user, event, expected_updated_at)
                 messages.error(request, str(e.message))
                 return redirect("core:event_update", pk=event.pk)

@@ -138,15 +138,28 @@ class TestSubmitWithStaleLease:
     """
 
     def test_event_submit_ignores_bundle_expires_at(self, client, staff_user, sample_event):
-        """Ein regulärer Event-Update POST (ohne ``expected_updated_at``) wird
-        normal verarbeitet — selbst wenn der Client aus einem „abgelaufenen"
-        Offline-Bundle gepostet hätte. Der Server kennt das Bundle-Lease
-        an dieser Stelle nicht.
+        """Ein regulärer Event-Update POST mit einem gültigen (nicht
+        abgelaufenen) ``expected_updated_at`` wird normal verarbeitet —
+        selbst wenn der Client aus einem „abgelaufenen" Offline-Bundle
+        gepostet hätte. Der Server kennt das Bundle-Lease an dieser Stelle
+        nicht; Kollisionsbehandlung läuft ausschließlich über den
+        Versions-Token, nicht über die Bundle-``expires_at``.
+
+        Refs #1338: seit der Token-Pflicht im JSON-Pfad muss ein gültiger
+        Token mitgeschickt werden — vorher testete dieser Fall den JSON-Pfad
+        ganz ohne ``expected_updated_at``, was jetzt (korrekterweise) den
+        neuen 409-``missing-token``-Zweig treffen würde statt den hier
+        geprüften Lease-Ablauf-hat-keine-Wirkung-Fall.
         """
         client.force_login(staff_user)
+        sample_event.refresh_from_db()
         response = client.post(
             reverse("core:event_update", kwargs={"pk": sample_event.pk}),
-            {"dauer": "42", "notiz": "from-offline-cache"},
+            {
+                "dauer": "42",
+                "notiz": "from-offline-cache",
+                "expected_updated_at": sample_event.updated_at.isoformat(),
+            },
             HTTP_ACCEPT="application/json",
         )
         # 302 = regulärer Erfolg (Redirect auf Detail). Der Lease-Ablauf
