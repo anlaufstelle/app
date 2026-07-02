@@ -221,6 +221,12 @@ def test_purge_all_empties_all_stores(authenticated_page, base_url):
 
 
 def test_purge_expired_removes_old_records(authenticated_page, base_url):
+    """Anforderungsänderung Refs #1353 (M2, K1b/K1d): ``queue``-Rows sind per
+    Definition ungesyncte Arbeit und überleben die 48h-TTL jetzt IMMER —
+    vorher wurden sie wie ``drafts`` still gelöscht, was einen >48h-Einsatz
+    beim nächsten Online-Kontakt Schreibvorgänge kosten konnte. Nur
+    ``drafts`` (reine Autosave-Komfortkopien, kein Primärbestand) verfallen
+    weiterhin nach ``updatedAt``."""
     page = authenticated_page
     _bootstrap(page, base_url)
     counts = page.evaluate(
@@ -241,7 +247,8 @@ def test_purge_expired_removes_old_records(authenticated_page, base_url):
             };
         }"""
     )
-    assert counts == {"queue": 1, "drafts": 1}
+    # Refs #1353: beide queue-Rows überleben (vorher: {"queue": 1, "drafts": 1}).
+    assert counts == {"queue": 2, "drafts": 1}
 
 
 def test_get_offline_client_rejects_expired_bundle(authenticated_page, base_url):
@@ -566,3 +573,188 @@ class TestTransientKeyLossPreservesRows:
             }"""
         )
         assert recovered == [_LOCK_EDIT_PK], "Edit muss den Boot-Purge im Lock ueberleben"
+
+
+# ── TTL-Ablauf & Re-Take duerfen ungesyncte Arbeit nicht loeschen ───────────
+# Refs #1353 (M2, K1b/K1d): Rows mit localStatus in {modified,new,conflict,
+# dead} und queue-Rows loescht NUR eine explizite Nutzeraktion (P1/M8), der
+# Security-Purge bei Rechteentzug (revalidateCachedClient 404/410,
+# F-10/#1110 — bewusst UNVERAENDERT), purgeAll (Logout) oder der permanente
+# Decrypt-Fehler-Discard aus M1 (#1352). TTL-Ablauf und Re-Take gehoeren
+# NICHT dazu.
+
+
+class TestUnsyncedNeverDiesSilently:
+    """Refs #1353: TTL-Ablauf (``purgeExpired``/``purgeExpiredBundles``) und
+    Re-Take (``saveClientBundle`` ueber einem bereits offline gecachten
+    Klienten) duerfen unsynced Events (modified/new/conflict) und
+    Queue-Rows nicht mehr vernichten — nur der Server-Spiegel
+    (clients/cases/clean-events) verfaellt. Der Security-Purge bei
+    Rechteentzug (F-10/#1110) bleibt davon bewusst unberuehrt und purgt
+    weiterhin restlos."""
+
+    def test_ttl_purge_preserves_unsynced(self, authenticated_page, base_url):
+        """Ein abgelaufenes Bundle mit einem clean- und einem modified-Event:
+        ``purgeExpired()`` verwirft die Klienten-Row und das clean Event, das
+        modified Event ueberlebt — ``hasUnsyncedData()`` bleibt true."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const past = new Date(Date.now() - 3600e3).toISOString();
+                const PK = '77777777-7777-4777-8777-777777777777';
+                await s.saveClientBundle({
+                    client: {pk: PK, pseudonym: 'TTL-EXPIRED'},
+                    expires_at: past, ttl: 3600,
+                    events: [{pk: 'clean-ev-ttl', occurred_at: past}],
+                });
+                await s.saveOfflineEdit({
+                    pk: 'modified-ev-ttl',
+                    clientPk: PK,
+                    occurredAt: past,
+                    localStatus: 'modified',
+                    data: {formData: {note: 'pending edit'}, expectedUpdatedAt: ''},
+                });
+                const before = {
+                    clients: await s.count('clients'),
+                    events: await s.count('events'),
+                };
+                await s.purgeExpired(Date.now());
+                const after = {
+                    clients: await s.count('clients'),
+                    events: await s.count('events'),
+                };
+                const survivor = await s.getOfflineEvent('modified-ev-ttl');
+                return {
+                    before,
+                    after,
+                    survivorStatus: survivor && survivor.localStatus,
+                    hasUnsynced: await s.hasUnsyncedData(),
+                };
+            }"""
+        )
+        assert result["before"] == {"clients": 1, "events": 2}
+        assert result["after"] == {"clients": 0, "events": 1}, "Nur das clean Event darf der TTL zum Opfer fallen"
+        assert result["survivorStatus"] == "modified"
+        assert result["hasUnsynced"] is True
+
+    def test_queue_rows_survive_ttl(self, authenticated_page, base_url):
+        """Eine Queue-Row aelter als die 48h-TTL (``createdAt`` in der
+        Vergangenheit) uebersteht ``purgeExpired()`` — Queue-Rows sind
+        ungesyncte Arbeit und verfallen nicht mehr per TTL (vorher: stiller
+        Verlust wartender Requests eines >48h-Einsatzes)."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const old = Date.now() - 49 * 60 * 60 * 1000;
+                await s.putEncrypted('queue', {
+                    url: '/old-unsynced', createdAt: old, attempts: 0,
+                    retryAfter: 0, lastError: '', data: {a: 1},
+                });
+                const before = await s.count('queue');
+                await s.purgeExpired(Date.now());
+                const after = await s.count('queue');
+                return {before, after};
+            }"""
+        )
+        assert result["before"] == 1
+        assert result["after"] == 1
+
+    def test_retake_preserves_modified_envelope(self, authenticated_page, base_url):
+        """Re-Take (erneutes ``saveClientBundle`` desselben Klienten) darf ein
+        bereits modifiziertes Event nicht mit der frischen Server-„clean"-
+        Version ueberschreiben (Ueberschreib-Falle) — Status und
+        Edit-Envelope (formData) bleiben erhalten. Das clean-Geschwister-
+        Event wird dagegen normal durch die neue Server-Version ersetzt."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                const PK = '88888888-8888-4888-8888-888888888888';
+                await s.saveClientBundle({
+                    client: {pk: PK, pseudonym: 'RETAKE'},
+                    expires_at: future, ttl: 3600,
+                    events: [
+                        {pk: 'ev-edited', occurred_at: future, data_fields: {note: 'server-v1'}},
+                        {pk: 'ev-clean', occurred_at: future, data_fields: {note: 'server-v1'}},
+                    ],
+                });
+                await s.saveOfflineEdit({
+                    pk: 'ev-edited',
+                    clientPk: PK,
+                    occurredAt: future,
+                    localStatus: 'modified',
+                    data: {formData: {note: 'offline-geaendert'}, expectedUpdatedAt: 'etag-1'},
+                });
+
+                // Re-Take: frisches Bundle desselben Klienten. Enthaelt
+                // ev-edited erneut als clean (Server kennt den lokalen Edit
+                // nicht) und eine geaenderte ev-clean.
+                await s.saveClientBundle({
+                    client: {pk: PK, pseudonym: 'RETAKE'},
+                    expires_at: future, ttl: 3600,
+                    events: [
+                        {pk: 'ev-edited', occurred_at: future, data_fields: {note: 'server-v2-nach-retake'}},
+                        {pk: 'ev-clean', occurred_at: future, data_fields: {note: 'server-v2-nach-retake'}},
+                    ],
+                });
+
+                const edited = await s.getOfflineEvent('ev-edited');
+                const clean = await s.getOfflineEvent('ev-clean');
+                return {
+                    editedStatus: edited && edited.localStatus,
+                    editedFormData: edited && edited.data && edited.data.formData,
+                    cleanNote: clean && clean.data && clean.data.data_fields && clean.data.data_fields.note,
+                };
+            }"""
+        )
+        assert result["editedStatus"] == "modified", "Re-Take darf den Edit-Status nicht zuruecksetzen"
+        assert result["editedFormData"] == {"note": "offline-geaendert"}, (
+            "Re-Take darf den Edit-Envelope nicht mit der Server-Version ueberschreiben"
+        )
+        assert result["cleanNote"] == "server-v2-nach-retake", "Clean-Geschwister muss normal aktualisiert werden"
+
+    def test_revalidate_404_force_purges_everything(self, authenticated_page, base_url):
+        """Regressionsschutz F-10 (#1110): Ein Zugriffsentzug (404/410 beim
+        Re-Validieren) bleibt der EINE TTL-/Re-Take-fremde Pfad, der auch
+        unsynced Events purgt — bewusst auch schon vor M2 gruen, da
+        ``revalidateCachedClient`` hier ``{force: true}`` setzt. ``page.route``
+        mockt die 404-Antwort, damit der Test unabhaengig vom realen
+        Klient-Bestand des Servers bleibt."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        page.route(
+            re.compile(r"/api/v1/offline/bundle/client/"),
+            lambda route: route.fulfill(status=404, content_type="application/json", body="{}"),
+        )
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                const PK = '99999999-9999-4999-8999-999999999999';
+                await s.saveClientBundle({
+                    client: {pk: PK, pseudonym: 'REVOKED'}, expires_at: future, ttl: 3600,
+                });
+                await s.saveOfflineEdit({
+                    pk: 'modified-ev-revoked',
+                    clientPk: PK,
+                    occurredAt: future,
+                    localStatus: 'modified',
+                    data: {formData: {note: 'pending, aber Zugriff entzogen'}, expectedUpdatedAt: ''},
+                });
+                const outcome = await s.revalidateCachedClient(PK);
+                return {
+                    outcome,
+                    clientGone: (await s.getOfflineClient(PK)) === null,
+                    events: await s.count('events'),
+                };
+            }"""
+        )
+        assert result["outcome"] == "purged"
+        assert result["clientGone"] is True
+        assert result["events"] == 0, "Security-Purge (F-10) muss auch das unsynced Event mitnehmen"

@@ -9,6 +9,14 @@
  * fresh boot before re-login) leaves the row untouched instead (Refs #1352,
  * see `_isTransientDecryptError`).
  *
+ * Unsynced work — `events` rows with `localStatus` in
+ * {modified, new, conflict, dead} and every `queue` row — is never dropped
+ * silently by TTL expiry or a client re-take. Only an explicit user action
+ * (P1/M8), the security purge on access revocation
+ * (`revalidateCachedClient` at 404/410, F-10/#1110), `purgeAll` (logout) or
+ * the permanent-decrypt-discard above may remove it. See
+ * `removeOfflineClient`'s `force` parameter (Refs #1353).
+ *
  * Schema v1 (Stage 1, #576):
  *   queue:  ++id, url, createdAt, lastError, retryAfter, attempts
  *   drafts: formKey, updatedAt
@@ -129,14 +137,20 @@
     async function purgeExpired(now) {
         const ts = now || Date.now();
         const cutoff = ts - TTL_MS;
-        // Queue records with createdAt < cutoff
-        await db.queue.where("createdAt").below(cutoff).delete();
+        // Refs #1353: KEIN TTL-Delete mehr fuer `queue` — Queue-Rows sind per
+        // Definition ungesyncte Arbeit (wartende Requests) und verfallen
+        // nicht stumm, nur weil sie >48h alt sind (vorher ging ein laenger
+        // offline arbeitender Einsatz beim naechsten Online-Kontakt verloren).
+        // Sichtbarkeit/expliziter Verwurf kommt mit der Sync-Status-UI
+        // (#1351-M8).
         // Drafts with updatedAt < cutoff
         await db.drafts.where("updatedAt").below(cutoff).delete();
         // F-04 (#1110): Klientel-/Case-/Event-Bundles tragen `expiresAt` im
         // verschluesselten Envelope des `clients`-Records (kein Index). Jeden
-        // abgelaufenen Bundle samt seiner cases/events verwerfen — sonst
-        // ueberlebt veraltetes PII die 48h-TTL, solange der Key lebt.
+        // abgelaufenen Bundle-Spiegel (clients/cases/clean-events) verwerfen —
+        // sonst ueberlebt veraltetes PII die 48h-TTL, solange der Key lebt.
+        // Unsynced Events dieses Klienten ueberleben (Refs #1353, siehe
+        // removeOfflineClient).
         await purgeExpiredBundles(ts);
     }
 
@@ -164,11 +178,18 @@
                     continue;
                 }
                 // Permanent unentschlüsselbar -> der Schlüssel passt nicht
-                // mehr (Salt/Passwort gewechselt); samt cases/events verwerfen.
-                await removeOfflineClient(row.pk);
+                // mehr (Salt/Passwort gewechselt) -> Security-Klasse wie der
+                // Rechteentzug-Purge (F-10): der Bestand ist ohnehin
+                // unlesbar und soll vollstaendig weg, auch unsynced Events
+                // (#576/F-03, Refs #1353).
+                await removeOfflineClient(row.pk, { force: true });
                 continue;
             }
             if (_isExpired(envelope.expiresAt, ts)) {
+                // Refs #1353: TTL-Ablauf ist KEIN Loeschgrund fuer unsynced
+                // Arbeit — ohne force bleiben modified/new/conflict/dead
+                // Events erhalten, nur der Server-Spiegel (clients/cases/
+                // clean-events) faellt weg.
                 await removeOfflineClient(row.pk);
             }
         }
@@ -206,8 +227,29 @@
         if (!pk) throw new Error("MalformedBundle");
         const now = Date.now();
 
-        // Remove stale per-client state in case of a re-sync.
+        // Remove stale per-client state in case of a re-sync (Refs #1353:
+        // Re-Take ist KEIN Sicherheits-Purge — ohne force ueberleben
+        // unsynced Events dieses Klienten, siehe removeOfflineClient().
         await removeOfflineClient(pk);
+
+        // Refs #1353 (Ueberschreib-Falle): Nach dem non-force-Remove oben
+        // koennen noch unsynced events-Rows dieses Klienten existieren. Die
+        // Bundle-Schleife unten schreibt jedes Event mit localStatus:"clean"
+        // — traefe sie eine ueberlebende unsynced Row mit derselben pk,
+        // wuerde der lokale Edit durch die Server-Version ueberschrieben und
+        // waere verloren. Deshalb zuerst die pks der Ueberlebenden sammeln;
+        // die Bundle-Schleife ueberspringt sie unten. Der Edit-Envelope
+        // traegt via `expectedUpdatedAt` den Konflikt-Token — Replay/409
+        // klaert die Divergenz, nicht der Re-Take.
+        const survivingUnsyncedPks = new Set(
+            (
+                await db.events
+                    .where("clientPk")
+                    .equals(pk)
+                    .filter((e) => e.localStatus && e.localStatus !== "clean")
+                    .toArray()
+            ).map((e) => e.pk)
+        );
 
         await db.clients.put({
             pk: pk,
@@ -233,6 +275,10 @@
         }
 
         for (const event of bundle.events || []) {
+            // Refs #1353 (Ueberschreib-Falle): nicht die Server-"clean"-
+            // Version einer noch unsynced Row derselben pk schreiben — siehe
+            // Kommentar bei survivingUnsyncedPks oben.
+            if (survivingUnsyncedPks.has(event.pk)) continue;
             await db.events.put({
                 pk: event.pk,
                 clientPk: pk,
@@ -297,8 +343,10 @@
         }
 
         // F-04/F-10 (#1110): Ein abgelaufener Bundle darf NICHT mehr gerendert
-        // werden (veraltetes/anonymisiertes PII). Beim Lesen hart verwerfen —
-        // samt cases/events — und so tun, als sei nichts gecacht.
+        // werden (veraltetes/anonymisiertes PII). Beim Lesen verwerfen — OHNE
+        // force (Refs #1353): der Server-Spiegel (clients/cases/clean-events)
+        // faellt weg, unsynced Events dieses Klienten bleiben erhalten und
+        // sind hier bewusst NICHT Teil von "so tun, als sei nichts gecacht".
         if (_isExpired(envelope.expiresAt)) {
             await removeOfflineClient(pk);
             return null;
@@ -368,10 +416,35 @@
         return out;
     }
 
-    async function removeOfflineClient(pk) {
+    /*
+     * Refs #1353: Invariante — Rows mit `localStatus` in
+     * {modified, new, conflict, dead} ("unsynced") loescht NUR: (1) eine
+     * explizite Nutzeraktion (P1/M8), (2) der Security-Purge bei
+     * Rechteentzug/Loeschung (`revalidateCachedClient` bei 404/410,
+     * F-10/#1110), (3) `purgeAll` (Logout), (4) der permanente
+     * Decrypt-Fehler-Discard aus M1 (#1352). TTL-Ablauf und Re-Take gehoeren
+     * NICHT dazu.
+     *
+     * Ohne `{force: true}` (Default) loescht diese Funktion daher nur die
+     * `clients`-Row, alle `cases` des Klienten und NUR jene `events` mit
+     * `localStatus === "clean"` (bzw. fehlendem `localStatus` bei
+     * Altdaten) — unsynced Events bleiben erhalten. Mit `{force: true}`
+     * gilt weiterhin das alte Verhalten: restlos alles weg, fuer die vier
+     * oben genannten erlaubten Loeschgruende.
+     */
+    async function removeOfflineClient(pk, opts) {
+        const force = !!(opts && opts.force);
         await db.clients.delete(pk);
         await db.cases.where("clientPk").equals(pk).delete();
-        await db.events.where("clientPk").equals(pk).delete();
+        if (force) {
+            await db.events.where("clientPk").equals(pk).delete();
+        } else {
+            await db.events
+                .where("clientPk")
+                .equals(pk)
+                .filter((e) => !e.localStatus || e.localStatus === "clean")
+                .delete();
+        }
     }
 
     async function isClientOffline(pk) {
@@ -435,9 +508,11 @@
         // AUCH bei offenen unsynced Edits. Entschluesselte PII darf nach
         // Rechteentzug nicht offline ueberleben; ein haengender Edit darf den
         // Sicherheits-Purge nicht blockieren. (Vorher stand der unsynced-Check
-        // davor und uebersprang den Purge -> Befund #1111.)
+        // davor und uebersprang den Purge -> Befund #1111.) Refs #1353: dies
+        // ist einer der wenigen erlaubten Loeschgruende fuer unsynced Arbeit
+        // -> bewusst mit {force: true}, unveraendert gegenueber F-10.
         if (INVALIDATION_STATUSES.includes(response.status)) {
-            await removeOfflineClient(pk);
+            await removeOfflineClient(pk, { force: true });
             return "purged";
         }
 
