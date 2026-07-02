@@ -338,7 +338,11 @@
                 // null liefern (Idle-Lock #1324 statt Loeschentscheidung).
                 return null;
             }
-            await db.clients.delete(pk);
+            // Permanent unentschluesselbar -> restloser F-03-Purge wie in
+            // purgeExpiredBundles, sonst blieben cases dieses Klienten als
+            // verwaiste Chiffrate liegen (die pk wird ohne clients-Row nie
+            // wieder besucht) (#576/F-03, Refs #1352).
+            await removeOfflineClient(pk, { force: true });
             return null;
         }
 

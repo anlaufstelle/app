@@ -511,6 +511,40 @@ class TestTransientKeyLossPreservesRows:
         assert result["rowIsNull"] is True
         assert result["clients"] == 0, "Permanenter Key-Mismatch muss weiter auto-discarden"
 
+    def test_permanent_key_mismatch_purges_orphaned_cases(self, authenticated_page, base_url):
+        """Refs #1352: Der permanente Decrypt-Fehler-Zweig in ``getOfflineClient``
+        loeschte bislang nur die ``clients``-Row (nacktes ``db.clients.delete``)
+        — die ``cases``-Rows desselben Klienten blieben als verwaiste Chiffrate
+        liegen, weil ohne Klienten-Row auch ``purgeExpiredBundles`` die pk nie
+        wieder besucht. Der Schwester-Pfad in ``purgeExpiredBundles`` purgt
+        bereits korrekt ueber ``removeOfflineClient(pk, {force: true})`` — dieser
+        Test spiegelt ``test_permanent_key_mismatch_still_discards`` oben,
+        seedet aber zusaetzlich einen Case, um die verwaisten Zeilen sichtbar zu
+        machen."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                const PK = '77777777-7777-4777-8777-777777777777';
+                await s.saveClientBundle({
+                    client: {pk: PK, pseudonym: 'PS-ROTATED-002'},
+                    expires_at: future, ttl: 3600,
+                    cases: [{pk: 'case-orphan-1352'}],
+                });
+                await window.crypto_session.clearSessionKey();
+                await window.crypto_session.deriveSessionKey('different-pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+                const row = await s.getOfflineClient(PK);
+                return {
+                    rowIsNull: row === null,
+                    orphanedCases: await s.db.cases.where('clientPk').equals(PK).count(),
+                };
+            }"""
+        )
+        assert result["rowIsNull"] is True
+        assert result["orphanedCases"] == 0, "Verwaiste cases-Chiffrate duerfen den F-03-Purge nicht ueberleben"
+
     def test_boot_purge_in_locked_state_keeps_rows(self, authenticated_page, base_url):
         """Refs #1352: Der Boot-Purge (sw-register.js:149-169) laeuft auf JEDEM
         authentifizierten Seitenload — anders als die beiden Tests oben, die
