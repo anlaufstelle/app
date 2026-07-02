@@ -135,7 +135,7 @@ def create_workitem(facility, user, *, client=None, **data):
 
 
 @transaction.atomic
-def update_workitem(workitem, user, *, expected_updated_at=None, **fields):
+def update_workitem(workitem, user, *, expected_updated_at=None, require_version_token=False, **fields):
     """Update a work item with activity logging and audit logging.
 
     Accepts allowed fields (item_type, title, description, priority, due_date,
@@ -144,10 +144,16 @@ def update_workitem(workitem, user, *, expected_updated_at=None, **fields):
 
     ``expected_updated_at`` enables optimistic locking (Refs #531) — when the
     DB-side ``updated_at`` differs, a ``ValidationError`` is raised.
+
+    ``require_version_token`` (Refs #1338, #1351): wird 1:1 an
+    ``check_version_conflict`` durchgereicht. ``WorkItemUpdateView`` setzt es
+    auf das Ergebnis von ``_wants_json_response`` — JSON-/Offline-Replay-
+    Clients müssen dadurch einen Token mitschicken, während der klassische
+    HTML-Formular-Pfad beim Default ``False`` bleibt (kein Verhaltensbruch).
     """
     from core.services.security import check_version_conflict
 
-    check_version_conflict(workitem, expected_updated_at)
+    check_version_conflict(workitem, expected_updated_at, require_token=require_version_token)
     changed_fields = []
     for key, value in fields.items():
         if getattr(workitem, key) != value:

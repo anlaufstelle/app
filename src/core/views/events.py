@@ -44,27 +44,19 @@ from core.services.events import (
     split_file_and_text_data,
     update_event,
 )
+from core.views._json_contracts import _conflict_response, _wants_json_response
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
 
 
-def _wants_json_response(request) -> bool:
-    """Return True if the caller prefers a JSON response (HTMX/fetch).
+def _event_conflict_response(user, event, client_expected, *, error="conflict"):
+    """Build the 409-Conflict JSON payload for a stale optimistic-concurrency Event edit.
 
-    Used by :class:`EventUpdateView` to decide whether an optimistic-concurrency
-    conflict should emit a 409 JSON body (Stage 3, Refs #575) or the classic
-    HTML redirect+flash fallback for normal form submissions.
-    """
-    accept = (request.headers.get("Accept") or "").lower()
-    if "application/json" in accept:
-        return True
-    # HTMX requests implicitly want a partial/data response, not a full redirect.
-    return bool(request.headers.get("HX-Request"))
-
-
-def _conflict_response(user, event, client_expected, *, error="conflict"):
-    """Build the 409-Conflict JSON payload for a stale optimistic-concurrency edit.
+    Assembles the Event-specific ``server_state`` (Refs #1351 Task 7: dieser
+    Teil ist NICHT nach ``_json_contracts.py`` mitgezogen, weil er
+    Event-spezifisch ist) and delegates the shared envelope shape to
+    :func:`core.views._json_contracts._conflict_response`.
 
     The payload carries enough context for :file:`conflict-resolver.js` to show
     a side-by-side diff: the current server ``data_json`` (sensitivity-filtered,
@@ -82,18 +74,12 @@ def _conflict_response(user, event, client_expected, *, error="conflict"):
     entirely on a JSON/HTMX edit. Both share the same body shape, so
     :file:`conflict-resolver.js` needs only one parser.
     """
-    return JsonResponse(
-        {
-            "error": error,
-            "server_state": {
-                "data_json": filtered_server_data_json(user, event),
-                "updated_at": event.updated_at.isoformat() if event.updated_at else None,
-                "document_type_name": event.document_type.name,
-            },
-            "client_expected": client_expected,
-        },
-        status=409,
-    )
+    server_state = {
+        "data_json": filtered_server_data_json(user, event),
+        "updated_at": event.updated_at.isoformat() if event.updated_at else None,
+        "document_type_name": event.document_type.name,
+    }
+    return _conflict_response(server_state, client_expected, error=error)
 
 
 class EventCreateView(AssistantOrAboveRequiredMixin, View):
@@ -414,8 +400,8 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
                         # "bitte Token nachreichen" und "echter Konflikt"
                         # unterscheiden kann. client_expected ist null, weil
                         # kein sinnvoller roher Client-Wert vorliegt.
-                        return _conflict_response(request.user, event, None, error="missing-token")
-                    return _conflict_response(request.user, event, expected_updated_at)
+                        return _event_conflict_response(request.user, event, None, error="missing-token")
+                    return _event_conflict_response(request.user, event, expected_updated_at)
                 messages.error(request, str(e.message))
                 return redirect("core:event_update", pk=event.pk)
 

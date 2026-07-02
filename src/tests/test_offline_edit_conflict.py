@@ -16,6 +16,20 @@ The server-side contract under test is narrow but load-bearing:
 * The filtered ``data_json`` in the response must respect field-level
   sensitivity — a downgraded user must not learn restricted values by
   triggering a conflict on purpose.
+
+Erweiterung (Refs #1351 Task 7): ``WorkItemUpdateView.post`` hatte bislang
+GAR KEINEN JSON-Zweig — ein Versionskonflikt landete unabhängig vom
+Accept-/HX-Request-Header immer im klassischen messages+redirect(302)-Pfad.
+Für die generische Offline-Queue (die jedem 200/redirect als Erfolg folgt
+und die Zeile dann löscht) bedeutete das: der Konflikt verschwand
+ersatzlos — schlimmer als der ungefixte Event-Fall, weil hier sogar ein
+gültiges Replay ohne Token still durchging. ``TestWorkItemUpdateConflict``
+überträgt den Vertrag von ``TestEventUpdateConflict`` 1:1 auf WorkItems,
+mit einem Unterschied: ``server_state`` trägt statt ``data_json``/
+``document_type_name`` die WorkItem-Felder ``title``/``description``/
+``status``/``updated_at`` direkt (WorkItems haben keine dynamischen,
+sensitivitätsklassifizierten Felder wie Events, daher entfällt der
+Filter-Test).
 """
 
 from __future__ import annotations
@@ -363,6 +377,214 @@ class TestEventUpdateConflict:
         response = client.post(
             reverse("core:event_update", kwargs={"pk": sample_event.pk}),
             {"dauer": "nicht-numerisch"},
+        )
+        assert response.status_code == 200
+        assert response["Content-Type"].startswith("text/html")
+
+
+@pytest.mark.django_db
+class TestWorkItemUpdateConflict:
+    """Optimistic-concurrency contract of :class:`WorkItemUpdateView.post`.
+
+    1:1 aus :class:`TestEventUpdateConflict` übertragen (Refs #1351 Task 7):
+    ``WorkItemUpdateView.post`` fing Versionskonflikte bislang NUR klassisch
+    (messages+redirect 302) ab — unabhängig vom Accept-/HX-Request-Header.
+    Für die generische Offline-Queue (folgt jedem 200/redirect als Erfolg)
+    bedeutete das: der Konflikt verschwindet ersatzlos, die Queue-Zeile wird
+    als "synchronisiert" gelöscht. Reihenfolge und Assertions spiegeln die
+    Event-Tests oben; ``server_state`` trägt WorkItem-Felder
+    (``title``/``description``/``status``/``updated_at``) statt
+    ``data_json``/``document_type_name`` — WorkItems haben keine
+    dynamischen, sensitivitätsklassifizierten Felder, daher entfällt der
+    Event-Filter-Test.
+
+    Dieser Test ist gegen den heutigen Code (vor Task 7) ROT, sofern nicht
+    anders vermerkt — siehe Docstrings der einzelnen Tests. Refs #1351.
+    """
+
+    def _payload(self, **overrides):
+        payload = {"item_type": "task", "title": "Lokale Änderung", "priority": "normal"}
+        payload.update(overrides)
+        return payload
+
+    def test_workitem_update_returns_409_json_on_conflict(self, client, staff_user, sample_workitem):
+        """Ein JSON/HTMX-Client mit veraltetem ``expected_updated_at`` muss
+        409 mit maschinenlesbarem Server-Stand bekommen — heute (vor Task 7)
+        liefert dieser POST unveraendert 302 (ROT)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk}),
+            self._payload(expected_updated_at=_stale_timestamp()),
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 409
+        payload = response.json()
+        assert payload["error"] == "conflict"
+        assert "server_state" in payload
+        assert payload["client_expected"] == _stale_timestamp()
+
+    def test_workitem_update_409_triggered_by_htmx_header(self, client, staff_user, sample_workitem):
+        """HTMX setzt kein Accept: application/json, aber ``HX-Request: true``
+        muss ebenfalls den JSON-Konflikt-Zweig ausloesen (ROT vor Task 7)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk}),
+            self._payload(expected_updated_at=_stale_timestamp()),
+            HTTP_HX_REQUEST="true",
+        )
+        assert response.status_code == 409
+        assert response.json()["error"] == "conflict"
+
+    def test_workitem_update_html_fallback_remains_rerender(self, client, staff_user, sample_workitem):
+        """Wächter (bereits heute grün): ein normaler Browser-POST (kein
+        Accept-Header, kein HX-Request) behält den bestehenden
+        redirect-mit-Flash-Fallback — *kein* 409-JSON. Task 7 darf den
+        HTML-Pfad nicht veraendern."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk}),
+            self._payload(expected_updated_at=_stale_timestamp()),
+        )
+        assert response.status_code == 302
+
+    def test_conflict_response_includes_server_state(self, client, staff_user, sample_workitem):
+        """Body trägt die WorkItem-Felder, die der Konflikt-Resolver braucht:
+        ``title``, ``description``, ``status``, ``updated_at`` — statt
+        ``data_json``/``document_type_name`` wie beim Event-Pendant, weil
+        WorkItems ihre Felder direkt als Spalten halten (ROT vor Task 7)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk}),
+            self._payload(expected_updated_at=_stale_timestamp()),
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 409
+        server_state = response.json()["server_state"]
+        # sample_workitem: title="Test-Aufgabe", status=OPEN, description="".
+        assert server_state["title"] == "Test-Aufgabe"
+        assert server_state["description"] == ""
+        assert server_state["status"] == "open"
+        assert server_state["updated_at"] is not None
+
+    def test_no_conflict_json_still_redirects(self, client, staff_user, sample_workitem):
+        """Ein erfolgreicher JSON-Edit mit frischem (nicht veraltetem) Token
+        behält den normalen 302-Redirect — der 409-Zweig gilt nur für den
+        Konfliktfall. Bereits heute grün (kein neuer Zweig betroffen)."""
+        client.force_login(staff_user)
+        sample_workitem.refresh_from_db()
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk}),
+            self._payload(expected_updated_at=sample_workitem.updated_at.isoformat()),
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 302
+
+    def test_workitem_update_returns_409_missing_token_without_expected_updated_at(
+        self, client, staff_user, sample_workitem
+    ):
+        """JSON-/Offline-Replay-Clients MUESSEN ``expected_updated_at``
+        mitschicken. Ein fehlender/leerer Token ist kein stilles No-Op
+        (silent Last-Write-Wins), sondern ein expliziter 409 mit eigener
+        Fehlerkennung — das WorkItem bleibt dabei unveraendert (ROT vor
+        Task 7: heute wuerde der Edit klaglos durchgehen)."""
+        client.force_login(staff_user)
+        original_title = sample_workitem.title
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk}),
+            self._payload(),
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 409
+        payload = response.json()
+        assert payload["error"] == "missing-token"
+        assert payload["client_expected"] is None
+        assert "server_state" in payload
+        assert payload["server_state"]["updated_at"] is not None
+        sample_workitem.refresh_from_db()
+        assert sample_workitem.title == original_title, "WorkItem darf bei fehlendem Token nicht veraendert werden"
+
+    def test_workitem_update_htmx_without_token_also_returns_missing_token(self, client, staff_user, sample_workitem):
+        """Der ``missing-token``-Zweig gilt für JEDEN JSON-wollenden Request
+        (Accept: application/json ODER HX-Request), nicht nur für den
+        Accept-Header (ROT vor Task 7)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk}),
+            self._payload(),
+            HTTP_HX_REQUEST="true",
+        )
+        assert response.status_code == 409
+        assert response.json()["error"] == "missing-token"
+
+    def test_workitem_update_html_post_without_token_still_succeeds(self, client, staff_user, sample_workitem):
+        """Regressionsschutz: der HTML-Formular-Pfad (kein Accept:
+        application/json, kein HX-Request) erzwingt den Versions-Token
+        NICHT — ``require_version_token`` gilt nur für
+        ``_wants_json_response``. Ein normaler Browser-Submit ohne
+        ``expected_updated_at`` bleibt ein No-Op-Check und die Aenderung
+        geht durch. Bereits heute gruen."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk}),
+            self._payload(title="HTML ohne Token"),
+        )
+        assert response.status_code == 302
+        sample_workitem.refresh_from_db()
+        assert sample_workitem.title == "HTML ohne Token"
+
+    def test_workitem_update_corrupt_token_returns_409_not_500(self, client, staff_user, sample_workitem):
+        """Ein nicht-ISO-parsebarer Token darf im JSON-Pfad keinen
+        ungefangenen ``ValueError`` (-> 500) ausloesen. Defensiv wird das wie
+        ein echter Konflikt behandelt (Server-Stand zur Review). ROT vor
+        Task 7 (heute: 302, kein 409)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk}),
+            self._payload(expected_updated_at="nicht-iso"),
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 409
+        payload = response.json()
+        assert payload["error"] == "conflict"
+        assert payload["client_expected"] == "nicht-iso"
+
+    def test_workitem_update_corrupt_token_html_path_redirects_not_500(self, client, staff_user, sample_workitem):
+        """Gegenprobe: derselbe korrupte Token im klassischen HTML-Pfad
+        bleibt beim bisherigen messages+redirect-Verhalten (kein 500).
+        Bereits heute gruen."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk}),
+            self._payload(expected_updated_at="nicht-iso"),
+        )
+        assert response.status_code == 302
+
+    def test_workitem_update_returns_422_json_on_invalid_form(self, client, staff_user, sample_workitem):
+        """Ein Offline-Replay (Accept: application/json) mit einem
+        UNGUELTIGEN Formular muss 422 + Feldfehler bekommen — nicht ein
+        200-Re-Render, das der Replay faelschlich als "synced" werten und
+        damit den Edit still verwerfen wuerde (Datenverlust). ROT vor Task 7
+        (heute: 200)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk}),
+            {"item_type": "task", "priority": "normal"},  # title fehlt -> Form ungueltig
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 422
+        payload = response.json()
+        assert payload["error"] == "invalid"
+        assert payload["errors"], "422-Antwort muss die Feldfehler tragen"
+
+    def test_workitem_update_html_invalid_form_still_rerenders_200(self, client, staff_user, sample_workitem):
+        """Gegenprobe: ein normaler Browser-POST (kein Accept:
+        application/json) mit ungueltigem Formular behaelt das
+        200-Re-Render mit inline-Fehlern — die 422-Sonderbehandlung gilt
+        NUR für den JSON/Offline-Replay-Pfad. Bereits heute gruen."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_update", kwargs={"pk": sample_workitem.pk}),
+            {"item_type": "task", "priority": "normal"},
         )
         assert response.status_code == 200
         assert response["Content-Type"].startswith("text/html")

@@ -187,7 +187,8 @@ class HTMXPartialMixin:
       ``RetentionBulkApproveView``, ``WorkItemBulkStatusView``): der HTMX-
       Pfad antwortet mit ``HX-Redirect``-Header statt einem Partial.
     * **API-Format-Negotiation** zwischen JSON und HTML (z. B.
-      ``_wants_json_response`` in :file:`views/events.py`): hier ist die
+      ``_wants_json_response`` in :file:`views/_json_contracts.py`, genutzt
+      von ``EventUpdateView`` und ``WorkItemUpdateView``): hier ist die
       Abzweigung kein Render-Branch, sondern ein Format-Branch.
     * **Mehrere Partials pro View** oder bedingtes Rendern abhängig vom
       Request-Pfad: bleibt explizit, weil der Mixin nur ein einziges

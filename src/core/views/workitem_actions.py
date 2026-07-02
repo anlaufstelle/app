@@ -7,7 +7,7 @@ bleiben dort, weil sie reine Read-Pfade sind.
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import transaction
-from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -24,9 +24,41 @@ from core.services.case import (
 )
 from core.services.client import get_client_or_none
 from core.services.events import get_idempotent_result, remember_idempotent_result
+from core.views._json_contracts import _conflict_response, _wants_json_response
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 from core.views.utils import safe_redirect_path
 from core.views.workitems import can_user_mutate_workitem
+
+
+def _workitem_conflict_response(workitem, client_expected, *, error="conflict"):
+    """Build the 409-Conflict JSON payload for a stale optimistic-concurrency WorkItem edit.
+
+    Refs #1351 Task 7: Analog zu ``core.views.events._event_conflict_response``,
+    aber mit einer anderen ``server_state``-Form — WorkItems halten ihre
+    Felder direkt als Modell-Spalten (kein dynamisches ``data_json`` wie bei
+    Events), daher trägt der Payload die vier Felder, die
+    :file:`conflict-resolver.js` für ein WorkItem zum Diff-Rendern braucht:
+
+    - ``title`` — aktueller Titel
+    - ``description`` — aktuelle Freitext-Beschreibung
+    - ``status`` — aktueller Workflow-Status (``open``/``in_progress``/…)
+    - ``updated_at`` — ISO-Timestamp, wird nach Konfliktauflösung zum neuen
+      ``expected_updated_at``
+
+    Keine Sensitivitäts-Filterung nötig (anders als bei Events): WorkItems
+    haben keine dynamischen, pro-DocumentType klassifizierten Felder.
+
+    ``error`` unterscheidet wie beim Event-Pendant ``"conflict"`` (echter
+    Versions-Mismatch, auch defensiv für einen korrupten Token) von
+    ``"missing-token"`` (JSON-/HTMX-Edit ohne ``expected_updated_at``).
+    """
+    server_state = {
+        "title": workitem.title,
+        "description": workitem.description,
+        "status": workitem.status,
+        "updated_at": workitem.updated_at.isoformat() if workitem.updated_at else None,
+    }
+    return _conflict_response(server_state, client_expected, error=error)
 
 
 class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
@@ -177,11 +209,18 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
 
         if form.is_valid():
             expected_updated_at = request.POST.get("expected_updated_at") or None
+            wants_json = _wants_json_response(request)
             try:
                 update_workitem(
                     workitem,
                     request.user,
                     expected_updated_at=expected_updated_at,
+                    # Refs #1351 Task 7 (analog #1338 bei Events): JSON-/
+                    # Offline-Replay-Clients müssen den Versions-Token
+                    # mitschicken (kein stilles Last-Write-Wins mehr). Der
+                    # klassische HTML-Formular-Pfad bleibt unverändert
+                    # (kein require).
+                    require_version_token=wants_json,
                     client=form.cleaned_data.get("client"),
                     item_type=form.cleaned_data["item_type"],
                     title=form.cleaned_data["title"],
@@ -193,11 +232,46 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
                     assigned_to=form.cleaned_data.get("assigned_to"),
                 )
             except ValidationError as e:
+                # Refs #1351 Task 7: JSON/HTMX-Clients erhalten einen 409 mit
+                # dem aktuellen Server-Stand, damit der Offline-Konflikt
+                # sichtbar bleibt statt von der generischen Queue (die jedem
+                # 200/redirect als Erfolg folgt) stillschweigend als
+                # "synchronisiert" verworfen zu werden. Normale
+                # Browser-Requests behalten das bisherige
+                # redirect+Flash-Verhalten.
+                if wants_json:
+                    # Aktuellen Server-Stand nachladen, nicht die
+                    # In-Memory-Kopie, mit der diese View gestartet ist.
+                    workitem.refresh_from_db()
+                    if getattr(e, "code", None) == "missing_token":
+                        # Refs #1338/#1351: fehlender Token ist kein
+                        # Merge-Konflikt im eigentlichen Sinn (es wurde
+                        # nichts verglichen) — eigene Fehlerkennung, damit
+                        # der Client zwischen "bitte Token nachreichen" und
+                        # "echter Konflikt" unterscheiden kann.
+                        # client_expected ist null, weil kein sinnvoller
+                        # roher Client-Wert vorliegt.
+                        return _workitem_conflict_response(workitem, None, error="missing-token")
+                    return _workitem_conflict_response(workitem, expected_updated_at)
                 messages.error(request, e.message if hasattr(e, "message") else str(e))
                 return redirect("core:workitem_update", pk=workitem.pk)
             messages.success(request, _("Aufgabe wurde aktualisiert."))
             return redirect("core:workitem_inbox")
 
+        # Formular ungueltig. Refs #1351 Task 7 (analog #1111 bei Events):
+        # der Offline-Replay (Accept: application/json) darf ein ungueltiges
+        # Formular NICHT als Erfolg (HTTP 200) deuten — sonst verwirft er den
+        # Edit still als "synchronisiert" (Datenverlust). Daher 422 mit
+        # Feldfehlern. Bewusst NUR an Accept: application/json gebunden
+        # (nicht _wants_json_response, das auch HX-Request erfasst): ein
+        # normaler HTML-/HTMX-Submit behaelt das 200-Re-Render mit
+        # inline-Formularfehlern.
+        accept = (request.headers.get("Accept") or "").lower()
+        if "application/json" in accept:
+            return JsonResponse(
+                {"error": "invalid", "errors": form.errors.get_json_data()},
+                status=422,
+            )
         context = {
             "form": form,
             "workitem": workitem,
