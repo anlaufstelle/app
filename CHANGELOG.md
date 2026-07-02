@@ -17,6 +17,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 
+- **Login-Untertitel ohne Pauschal-Claim „DSGVO-konform"** (#1381) — der Untertitel der Anmeldeseite lautet jetzt „Open Source · datenschutzkonform konzipiert · Selbst gehostet" (EN: „designed for privacy compliance") statt „DSGVO-konform"/„GDPR-compliant", analog zur README-Tagline.
 - **Offline-Detailansicht bleibt an der normalen Adresse** (#1322) — offline öffnet sich eine mitgenommene Person jetzt in-place unter der kanonischen URL `/clients/<pk>/` (der Service Worker liefert einen gecachten, PII-freien Shell, der Viewer liest die pk aus der URL), statt sichtbar auf `/offline/clients/<pk>/` umzuleiten; der verwirrende Offline/Online-URL-Wechsel entfällt.
 - **Klarer Hinweis, wenn Offline mangels sicherer Verbindung nicht geht** (#1325) — „Offline mitnehmen" meldet jetzt „keine sichere Verbindung (HTTPS erforderlich)", wenn WebCrypto nicht verfügbar ist (z. B. Zugriff über eine unverschlüsselte LAN-Adresse), statt wirkungslos zu bleiben.
 - **Mutation + Coverage als verbindliches Release-Gate** (#1150) — die Release-Checkliste und `dev-ops/release/release-gates.sh` führen Mutation-Testing (Score-Ziele `core.forms` ≥ 85 %, `core.services` ≥ 75 % nach Triage) samt Coverage-Untergrenze jetzt als Pflichtschritt vor jedem Release-Tag; die bewusst lokal-only durchgesetzte CI ist als [ADR-029](docs/adr/029-local-only-ci.md) festgehalten.
