@@ -105,9 +105,7 @@ class TestSyncOrchestrator:
         serialisiert die Laeufe: der zweite Tab findet nach dem Lock nichts mehr
         → GENAU 1 POST. Refs #1383.
         """
-        context = browser.new_context(
-            storage_state=_login_storage_state, locale="de-DE", service_workers="block"
-        )
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
         # Replay-Ziel in QUEUE_PATTERNS (deshalb service_workers="block", sonst
         # verdeckt der SW die Route). context.route zaehlt ueber BEIDE Pages.
         url = "/workitems/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/edit/"
@@ -135,17 +133,13 @@ class TestSyncOrchestrator:
             page2.evaluate("() => window.dispatchEvent(new Event('online'))")
 
             # Ein Replay MUSS gelaufen sein (Record geloescht) — RED wie GREEN.
-            page1.wait_for_function(
-                "async () => (await window.offlineStore.count('queue')) === 0", timeout=15000
-            )
+            page1.wait_for_function("async () => (await window.offlineStore.count('queue')) === 0", timeout=15000)
             # GREEN: beide Tabs vollstaendig zur Ruhe kommen lassen. requestSync
             # koalesziert in den ggf. noch laufenden Lauf und resolved erst nach
             # dessen Abschluss (leere Queue → kein weiterer POST). RED (kein
             # Orchestrator) uebersprungen — dort haben die beiden konkurrierenden
             # Replays bereits gepostet, die Queue-Leere oben genuegt als Barriere.
-            has_orch = page1.evaluate(
-                "() => !!(window.syncOrchestrator && window.syncOrchestrator.requestSync)"
-            )
+            has_orch = page1.evaluate("() => !!(window.syncOrchestrator && window.syncOrchestrator.requestSync)")
             if has_orch:
                 page1.evaluate("async () => { await window.syncOrchestrator.requestSync('settle'); }")
                 page2.evaluate("async () => { await window.syncOrchestrator.requestSync('settle'); }")
@@ -163,9 +157,7 @@ class TestSyncOrchestrator:
         """Refs #1383: 5× ``requestSync`` synchron auf EINEM Tab — der laufende
         Request koalesziert (ein wartender Request + rerun-Flag), statt fuenf
         Laeufe anzustossen. Der eine Queue-Record wird nur EINMAL gespielt."""
-        context = browser.new_context(
-            storage_state=_login_storage_state, locale="de-DE", service_workers="block"
-        )
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
         page = context.new_page()
         page.set_default_timeout(30000)
         url = "/workitems/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb/edit/"
@@ -230,9 +222,7 @@ class TestSyncOrchestrator:
             # Tab B: cachedKey wird OHNE eigenen Timer/Reload false — nur per
             # Broadcast. In RED laeuft dieser Wait in den Timeout (Tab B behaelt
             # seinen Key).
-            page_b.wait_for_function(
-                "() => window.crypto_session.hasSessionKey() === false", timeout=10000
-            )
+            page_b.wait_for_function("() => window.crypto_session.hasSessionKey() === false", timeout=10000)
         finally:
             with suppress(Exception):
                 page_a.evaluate(
@@ -254,9 +244,7 @@ class TestSyncOrchestrator:
             # Als Arrow (Boolean-Rueckgabe) — eine nackte Expression, die zur
             # runExclusive-Funktion evaluiert, wuerde Playwright als Predicate
             # AUFRUFEN (LockManager-TypeError statt Warten).
-            page.wait_for_function(
-                "() => !!(window.syncOrchestrator && window.syncOrchestrator.runExclusive)"
-            )
+            page.wait_for_function("() => !!(window.syncOrchestrator && window.syncOrchestrator.runExclusive)")
             result = page.evaluate(
                 """async () => {
                     return await window.syncOrchestrator.runExclusive(
