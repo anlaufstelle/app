@@ -247,6 +247,13 @@
             get showRevoked() {
                 return this.lastSyncResult === "revoked";
             },
+            // Refs #1351 (M1): Der Server hat das Ziel dauerhaft nicht gefunden
+            // (404/410) — kein transienter Fehler (showError) und kein
+            // auto-retry. Der Eintrag bleibt erhalten und wartet auf eine
+            // manuelle Entscheidung in der Konflikt-/Dead-Letter-Liste.
+            get showDead() {
+                return this.lastSyncResult === "dead";
+            },
             get conflictHref() {
                 return "/offline/conflicts/" + this.lastSyncPk + "/";
             },
@@ -488,6 +495,14 @@
                     // Proxy-Rauschen sein) — der Edit bleibt lokal erhalten,
                     // eigener erklärender Text statt des generischen showError.
                     this.lastSyncResult = "revoked";
+                } else if (status === "dead") {
+                    // Refs #1351 (M1): 404/410-Replay — das Edit-/Create-Ziel
+                    // existiert serverseitig dauerhaft nicht mehr. Anders als
+                    // "error" wird ein dead-Result NICHT automatisch erneut
+                    // versucht (nur manuell ueber die Konflikt-/Dead-Letter-
+                    // Liste). Eigener Zweig statt des irrefuehrenden generischen
+                    // "wird spaeter erneut versucht"-Textes.
+                    this.lastSyncResult = "dead";
                 } else {
                     // error: transienter Replay-Fehler (5xx/429) — nicht
                     // synchronisiert, Edit bleibt erhalten.

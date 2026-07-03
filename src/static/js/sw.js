@@ -96,6 +96,16 @@ function isMultipart(request) {
     return ct.toLowerCase().startsWith("multipart/form-data");
 }
 
+// Refs #1351 (Bug #1): Request-Header sind immutabel — einen neuen Request aus
+// dem Clone mit ergaenztem Header bauen (Body/Method/Credentials bleiben aus
+// dem Input erhalten). Genutzt, um den SW-generierten Idempotency-Key an den
+// Erstversuch-fetch zu haengen.
+function _withHeader(request, name, value) {
+    const headers = new Headers(request.headers);
+    headers.set(name, value);
+    return new Request(request.clone(), { headers: headers });
+}
+
 // ACK-Timeout: nach dieser Zeit gilt enqueueRequest als gescheitert
 // (#662). 5s ist großzügig genug für IndexedDB + AES-GCM-Verschlüsselung
 // und zugleich kurz genug, dass der User keine ewig drehende UI sieht.
@@ -142,6 +152,17 @@ self.addEventListener("fetch", (event) => {
 
     // POST/PUT bei Netzausfall queuen (nur fuer relevante URLs)
     if ((request.method === "POST" || request.method === "PUT") && shouldQueueRequest(request.url)) {
+        // Refs #1351 (Bug #5): A's EIGENE Replays (offline-queue._send /
+        // offline-edit._postForm) tragen den Marker X-Offline-Replay. Solche
+        // Requests NIE erneut abfangen/queuen — network-only durchreichen und
+        // dem echten Netz/Fehler ueberlassen (der Replayer klassifiziert die
+        // Antwort selbst). Ohne diesen frühen Ausstieg faenge der SW den Replay
+        // bei >6s erneut ab → Doppelkanal + spurious dead-letter. Kein
+        // respondWith → der Browser fuehrt den Default-Netzwerk-Fetch aus.
+        if (request.headers.get("X-Offline-Replay")) {
+            return;
+        }
+
         // Multipart-Uploads NICHT queuen — die binären Daten würden im IndexedDB
         // landen und beim Replay falsch interpretiert werden.
         if (isMultipart(request)) {
@@ -170,19 +191,43 @@ self.addEventListener("fetch", (event) => {
             return;
         }
 
+        // Refs #1351 (Bug #1): EINEN Idempotency-Key fuer BEIDE Kanaele minten,
+        // BEVOR der Erstversuch rausgeht. Denselben Key traegt (a) der
+        // Erstversuch-fetch (X-Idempotency-Key-Header) und (b) — falls der
+        // Erstversuch nach >6s abbricht, gunicorn aber weiter committet — der
+        // in die Queue persistierte Replay. So dedupliziert der Server den
+        // Slow-Commit gegen den Replay statt zwei Objekte anzulegen. Einen vom
+        // Client bereits gesetzten Key NICHT ueberschreiben (offline-edit-/
+        // Queue-Replays bringen ihren eigenen mit).
+        const clientIdemKey = request.headers.get("X-Idempotency-Key");
+        const idempotencyKey = clientIdemKey || crypto.randomUUID();
+        const firstAttempt = clientIdemKey
+            ? request.clone()
+            : _withHeader(request, "X-Idempotency-Key", idempotencyKey);
+
         event.respondWith(
-            fetch(request.clone(), { signal: AbortSignal.timeout(WRITE_FETCH_TIMEOUT_MS) }).catch(async () => {
+            fetch(firstAttempt, { signal: AbortSignal.timeout(WRITE_FETCH_TIMEOUT_MS) }).catch(async () => {
                 const body = await request.clone().text();
                 const headers = {};
                 request.headers.forEach((value, key) => {
                     if (
-                        ["content-type", "x-csrftoken", "hx-request", "hx-target", "hx-current-url"].includes(
-                            key.toLowerCase()
-                        )
+                        [
+                            "content-type",
+                            "x-csrftoken",
+                            "hx-request",
+                            "hx-target",
+                            "hx-current-url",
+                            "x-idempotency-key",
+                        ].includes(key.toLowerCase())
                     ) {
                         headers[key] = value;
                     }
                 });
+                // Refs #1351 (Bug #1): denselben Key wie der Erstversuch in die
+                // Queue-Payload — hat der Client keinen gesetzt, steht der
+                // SW-generierte Key NICHT in request.headers und fehlte sonst.
+                // enqueueRequest bevorzugt diesen eingehenden Key.
+                headers["x-idempotency-key"] = idempotencyKey;
 
                 const ack = await requestQueueAck(
                     {

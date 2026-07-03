@@ -57,6 +57,12 @@
             {
                 "Content-Type": "application/x-www-form-urlencoded",
                 Accept: "application/json",
+                // Refs #1351 (Bug #5): Alle Offline-Edit-Replays (Create UND
+                // Edit gehen ueber _postForm) tragen den Marker X-Offline-Replay.
+                // Der Service Worker reicht markierte Requests network-only durch
+                // (kein Re-Intercept/Re-Queue) — sonst faenge er A's eigenen
+                // Replay bei >6s erneut ab (Doppelkanal + spurious dead-letter).
+                "X-Offline-Replay": "1",
             },
             extraHeaders || {}
         );
@@ -314,6 +320,16 @@
         if (!response) {
             return { status: "network-error" };
         }
+        // Refs #1351 (Bug #2): Ein Redirect auf /login/ ist KEIN Erfolg —
+        // die Session ist waehrend des Offline-Fensters abgelaufen und fetch
+        // folgt dem 302 transparent bis zur Login-Seite. Ohne diesen Guard
+        // wuerde der nie serverseitig angelegte Record hier als "synced"
+        // geloescht (stiller Datenverlust). Record UNVERAENDERT lassen, kein
+        // clearOfflineEdit; der Aufrufer (replayAllModifiedEvents) bricht den
+        // Batch ab (symmetrisch zur generischen Queue, HTTP-Replay-Contract).
+        if (response.redirected && response.url.includes("/login/")) {
+            return { status: "auth-pending" };
+        }
         if (response.redirected || response.status === 302) {
             await _store().clearOfflineEdit(record.pk);
             _fireCountEvent();
@@ -412,6 +428,18 @@
         const response = await _postFormWithCsrfRetry(_eventEditUrl(record.pk), form.toString(), csrf);
         if (!response) {
             return { status: "network-error" };
+        }
+
+        // Refs #1351 (Bug #2): symmetrisch zu replayNewEvent — ein Redirect auf
+        // /login/ ist KEIN Erfolg, sondern eine waehrend des Offline-Fensters
+        // abgelaufene Session (fetch folgt dem 302 transparent bis zur
+        // Login-Seite). Ohne diesen Guard wuerde der Erfolgszweig unten den
+        // nie serverseitig gespeicherten Edit auf "clean" setzen (raus aus dem
+        // Unsynced-Set = stiller Datenverlust bei blossem Session-Ablauf).
+        // Record UNVERAENDERT lassen; der Aufrufer (replayAllModifiedEvents)
+        // bricht den Batch ab (HTTP-Replay-Contract, constraints.md Z.29).
+        if (response.redirected && response.url.includes("/login/")) {
+            return { status: "auth-pending" };
         }
 
         // Erfolg ist NUR ein echtes Speichern: der Server bestaetigt mit einem
@@ -520,11 +548,20 @@
         // halt. Refs #1351/#1384: "ratelimited" bricht den Batch ebenfalls ab
         // (Ratelimit ist user-global, nicht per-Record) — "locked" (transient
         // fehlender Schluessel bei EINEM Event) dagegen NICHT: die Schleife
-        // laeuft mit den restlichen Events weiter.
+        // laeuft mit den restlichen Events weiter. Refs #1351 (Bug #2):
+        // "auth-pending" (Session abgelaufen, 302→/login/) bricht ebenfalls ab
+        // — jeder weitere Record kassierte denselben Login-Redirect; die Rows
+        // bleiben unveraendert liegen (kein still verworfener Edit), exakt wie
+        // beim Netzfehler (symmetrisch zur generischen Queue).
         const records = await _store().listModifiedEvents();
         for (const record of records) {
             const result = await replayModifiedEvent(record);
-            if (result.status === "network-error" || result.status === "offline" || result.status === "ratelimited") {
+            if (
+                result.status === "network-error" ||
+                result.status === "offline" ||
+                result.status === "ratelimited" ||
+                result.status === "auth-pending"
+            ) {
                 break;
             }
         }

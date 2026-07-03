@@ -76,6 +76,15 @@
                     <p class="text-sm text-red-900">{% trans "Server hat die Änderung abgelehnt (keine Berechtigung oder abgelaufene Sitzung). Änderung wurde lokal behalten – bitte Berechtigung prüfen und erneut versuchen." %}</p>
                 </div>
             </template>
+            {# Refs #1351 (M1): dead (404/410) — Ziel serverseitig dauerhaft nicht gefunden, KEIN auto-retry (anders als showError). Eintrag bleibt erhalten, wird in der Konflikt-Liste manuell entschieden. #}
+            <template x-if="showDead">
+                <div class="mb-4 bg-red-50 border border-red-200 rounded-[10px] p-3" data-testid="offline-edit-dead" role="status" aria-live="polite">
+                    <p class="text-sm text-red-900">
+                        {% trans "Der Server hat den zugehörigen Eintrag nicht gefunden (gelöscht oder Zugriff entzogen). Die Änderung wurde lokal behalten und wird NICHT automatisch erneut versucht." %}
+                        <a href="{% url 'core:offline_conflict_list' %}" class="font-medium text-accent hover:underline" data-testid="offline-edit-dead-link">{% trans "In der Konflikt-Liste ansehen" %}</a>
+                    </p>
+                </div>
+            </template>
 
             <div class="mb-6">
                 <h1 class="text-[22px] font-bold text-ink" x-text="data.client.pseudonym" data-testid="offline-pseudonym"></h1>

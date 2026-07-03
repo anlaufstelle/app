@@ -59,6 +59,21 @@
         return "idem-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 12);
     }
 
+    function _incomingIdempotencyKey(headers) {
+        // Refs #1351 (Bug #1): Der Service Worker mintet den Idempotency-Key
+        // bereits fuer den ERSTVERSUCH-fetch (sw.js) und reicht ihn in den
+        // QUEUE_REQUEST-Headern durch. Diesen bevorzugen (case-insensitiv —
+        // die Fetch-Headers-API normalisiert Keys auf lowercase), damit
+        // Erstversuch UND Replay DENSELBEN Key tragen und der Server einen
+        // Slow-Commit gegen den Replay deduplizieren kann. Nur wenn keiner
+        // uebergeben wurde, hier neu minten.
+        if (!headers) return null;
+        for (const k of Object.keys(headers)) {
+            if (k.toLowerCase() === "x-idempotency-key" && headers[k]) return headers[k];
+        }
+        return null;
+    }
+
     async function _refreshCsrf() {
         try {
             // Fetch rendert beim Zurückkommen aus Offline den Login-Flow neu,
@@ -116,7 +131,9 @@
             lastError: "",
             // Refs #1109 (F-09): Idempotenz-Schlüssel einmalig beim Enqueue
             // festlegen, damit er über alle Replay-Versuche stabil bleibt.
-            idempotencyKey: _newIdempotencyKey(),
+            // Refs #1351 (Bug #1): einen vom SW-Erstversuch durchgereichten
+            // Key bevorzugen (geteilte Idempotenz ueber die SW→Queue-Grenze).
+            idempotencyKey: _incomingIdempotencyKey(headers) || _newIdempotencyKey(),
             data: { method: method, body: body, headers: headers || {} },
         });
         await _updateQueueCount();
@@ -166,6 +183,11 @@
         // (evtl. aus einem normalen Formular-Submit stammende) Request beim
         // Enqueue trug. Alle anderen Record-Header-Werte bleiben unangetastet.
         headers["Accept"] = "application/json";
+        // Refs #1351 (Bug #5): Jeder Replay traegt den Marker X-Offline-Replay,
+        // damit der Service Worker A's EIGENEN Replay network-only durchreicht
+        // (kein Re-Intercept/Re-Queue) — sonst faenge er ihn bei >6s erneut ab
+        // (Doppelkanal + spurious dead-letter).
+        headers["X-Offline-Replay"] = "1";
         if (csrf) headers["X-CSRFToken"] = csrf;
         if (record.idempotencyKey) headers["X-Idempotency-Key"] = record.idempotencyKey;
         return fetch(record.url, {
