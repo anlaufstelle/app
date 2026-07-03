@@ -55,7 +55,7 @@
         container.appendChild(list);
     }
 
-    function renderStatus(unsynced, conflicts) {
+    function renderStatus(unsynced, conflicts, dead) {
         const statusEl = document.querySelector('[data-testid="offline-home-status"]');
         if (!statusEl) return;
         statusEl.replaceChildren();
@@ -67,6 +67,20 @@
             });
             a.textContent =
                 conflicts + (conflicts === 1 ? " Konflikt — bitte auflösen" : " Konflikte — bitte auflösen");
+            statusEl.appendChild(a);
+        }
+        // Refs #1351/#1385 (M8/Task 4): dead-Zaehler + Link zur Konflikt-Liste
+        // (die die dead-Sektion "Nicht übertragbar" seit Task 4 mit anzeigt).
+        // Eigenes Badge statt in `conflicts` einzurechnen: die Home-Liste
+        // trennt bewusst zwischen "wartet auf Entscheidung" (Konflikt) und
+        // "nicht übertragbar" (dead) — konsistent mit conflict_list.html.
+        if (dead > 0) {
+            const a = el("a", {
+                class: "oh-badge oh-badge-conflict",
+                href: "/offline/conflicts/",
+                testid: "offline-home-dead",
+            });
+            a.textContent = dead + (dead === 1 ? " nicht übertragbare Änderung" : " nicht übertragbare Änderungen");
             statusEl.appendChild(a);
         }
         if (unsynced > 0) {
@@ -108,7 +122,8 @@
             }
             const unsynced = await window.offlineStore.countUnsyncedEvents();
             const conflicts = await window.offlineStore.countConflictEvents();
-            renderStatus(unsynced, conflicts);
+            const dead = await window.offlineStore.countDeadEvents();
+            renderStatus(unsynced, conflicts, dead);
         } catch (_e) {
             renderEmpty(container, "Offline-Daten konnten nicht geladen werden.");
         }

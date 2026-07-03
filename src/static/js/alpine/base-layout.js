@@ -15,6 +15,10 @@ document.addEventListener("alpine:init", () => {
     Alpine.data("offlineStatus", () => ({
         offline: !navigator.onLine,
         queueCount: 0,
+        // Refs #1351/#1385 (M8/Task 4): blockierte Queue-Rows (conflict/dead)
+        // getrennt von "pending" — der blaue Sync-Banner darf nicht mehr fuer
+        // Records zaehlen, die der Auto-Replay ohnehin ausschliesst.
+        queueBlocked: 0,
         cachedClients: 0,
         unsyncedCount: 0,
         conflictCount: 0,
@@ -25,7 +29,11 @@ document.addEventListener("alpine:init", () => {
             this.offline = true;
         },
         onQueueEvent(event) {
-            this.queueCount = event.detail.count;
+            // Refs #1351/#1385: `pending` statt der Gesamtzahl `count` — sonst
+            // zeigt der blaue "wird synchronisiert"-Banner auch Records, die
+            // laengst als conflict/dead vom Auto-Replay ausgeschlossen sind.
+            this.queueCount = event.detail.pending;
+            this.queueBlocked = event.detail.blocked;
         },
         onClientsEvent(event) {
             this.cachedClients = event.detail.count;
@@ -34,6 +42,9 @@ document.addEventListener("alpine:init", () => {
             this.unsyncedCount = event.detail.count;
         },
         onConflictEvent(event) {
+            // Refs #1351/#1385: `count` ist bereits conflict+dead (Events) —
+            // siehe offline-edit.js::_fireCountEvent. Kombiniert mit
+            // queueBlocked in `combinedConflictCount` unten.
             this.conflictCount = event.detail.count;
         },
         // CSP-Build erlaubt keine Function-Calls in x-show/x-bind — nur
@@ -59,14 +70,20 @@ document.addEventListener("alpine:init", () => {
         get hasMultipleQueued() {
             return this.queueCount > 1;
         },
+        // Refs #1351/#1385 (M8/Task 4): Konflikt-Banner-Zaehler = conflict+dead
+        // (Events, bereits in conflictCount kombiniert) + blockierte
+        // Queue-Rows (Task 2) — alles, was eine Nutzerentscheidung wartet.
+        get combinedConflictCount() {
+            return this.conflictCount + this.queueBlocked;
+        },
         get showConflictBanner() {
-            return !this.offline && this.conflictCount > 0;
+            return !this.offline && this.combinedConflictCount > 0;
         },
         get isSingleConflict() {
-            return this.conflictCount === 1;
+            return this.combinedConflictCount === 1;
         },
         get hasMultipleConflict() {
-            return this.conflictCount > 1;
+            return this.combinedConflictCount > 1;
         },
     }));
 

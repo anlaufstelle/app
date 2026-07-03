@@ -99,12 +99,16 @@
             throw err;
         }
         const bundle = await response.json();
-        await store.saveClientBundle(bundle);
+        const saveResult = await store.saveClientBundle(bundle);
         await _emitCountEvent();
         // Refs #1356: Aufrufer (Badge/Listen-Toggle) haengen bei Verweigerung
         // einen dezenten Hinweis an ihre Erfolgsmeldung. `null` (API fehlt/
         // Fehler) zaehlt NICHT als Verweigerung.
         bundle.persistDenied = persisted === false;
+        // Refs #1351/#1385 (M8/Task 4): Re-Take-Rueckmeldung — wie viele
+        // ungesyncte Aenderungen dieses (Re-)Takes ueberlebt haben (Aufrufer
+        // zeigt ggf. "<N> lokale Aenderungen beibehalten").
+        bundle.survivingEdits = (saveResult && saveResult.survivingEdits) || 0;
         return bundle;
     }
 

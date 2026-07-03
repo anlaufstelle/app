@@ -17,6 +17,8 @@
 {# Profil-Header #}
 <div class="mb-5"
      x-data="offlineClientBadge" data-pk="{{ client.pk }}"
+     data-confirm-remove-text="{% trans '{count} nicht übertragene Änderungen bleiben lokal erhalten, wenn Sie diese Person jetzt aus dem Offline-Cache entfernen. Trotzdem fortfahren?' %}"
+     data-label-kept-edits="{% trans '{count} lokale Änderungen beibehalten.' %}"
      x-init="refresh"
      @offline-clients-count.window="refresh">
     <div class="flex items-start justify-between gap-3 flex-wrap">

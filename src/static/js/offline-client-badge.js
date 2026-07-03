@@ -21,8 +21,15 @@
             // die Person vor dem Einsatz erneut mitzunehmen.
             expiryWarning: false,
             _pk: "",
+            _confirmRemoveText: "",
+            _labelKeptEdits: "",
             init() {
                 this._pk = this.$el.dataset.pk || "";
+                // Refs #1351/#1385 (M8/Task 4): i18n-Text kommt aus dem Template
+                // (data-*-Attribut), kein hartkodiertes deutsches JS-Literal
+                // fuer eine neue Meldung.
+                this._confirmRemoveText = this.$el.dataset.confirmRemoveText || "";
+                this._labelKeptEdits = this.$el.dataset.labelKeptEdits || "";
             },
             // CSP-konforme Wrapper-Methoden fuer Template-Expressions
             get isMessageNotError() {
@@ -94,11 +101,28 @@
                         return;
                     }
                     if (this.isOffline) {
+                        // Refs #1351/#1385 (M8/Task 4): S1-Invariante — das
+                        // Entfernen loescht ungesyncte Events NICHT (nur den
+                        // Server-Spiegel), aber der Nutzer soll das VORHER
+                        // wissen statt es stillschweigend anzunehmen.
+                        if (window.offlineStore && window.offlineStore.countUnsyncedEventsFor) {
+                            const n = await window.offlineStore.countUnsyncedEventsFor(this._pk);
+                            if (n > 0 && this._confirmRemoveText) {
+                                const confirmMsg = this._confirmRemoveText.replace("{count}", String(n));
+                                if (!window.confirm(confirmMsg)) return;
+                            }
+                        }
                         await window.offlineClient.removeClientFromOffline(this._pk);
                         this.showMessage("Aus Offline-Cache entfernt.", "info");
                     } else {
                         const bundle = await window.offlineClient.takeClientOffline(this._pk);
                         let msg = "Klientel ist jetzt offline verfuegbar.";
+                        if (bundle && bundle.survivingEdits > 0 && this._labelKeptEdits) {
+                            // Refs #1351/#1385: Re-Take-Rueckmeldung — ueberlebende
+                            // ungesyncte Aenderungen wurden NICHT durch den
+                            // frischen Bundle-Spiegel ueberschrieben.
+                            msg += " " + this._labelKeptEdits.replace("{count}", String(bundle.survivingEdits));
+                        }
                         if (bundle && bundle.persistDenied) {
                             // Refs #1356: dezenter Hinweis, wenn der Browser
                             // keinen dauerhaften Speicher gewaehrt hat (kein

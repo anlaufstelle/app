@@ -330,6 +330,16 @@
         _updateQueueCount();
     }
 
+    // Refs #1351/#1385 (M8/Task 4): Cross-Tab-Refresh — ein Sync in Tab A
+    // (BroadcastChannel liefert dessen eigenen Lauf nicht an sich selbst
+    // zurueck) aktualisiert Tab B's Queue-Zaehler (Banner: pending/blocked)
+    // ohne Polling.
+    if (window.syncOrchestrator && window.syncOrchestrator.onMessage) {
+        window.syncOrchestrator.onMessage((msg) => {
+            if (msg && msg.type === "sync-finished") _updateQueueCount();
+        });
+    }
+
     window.offlineQueue = {
         enqueueRequest: enqueueRequest,
         replayQueue: replayQueue,

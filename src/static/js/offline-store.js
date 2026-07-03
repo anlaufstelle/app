@@ -306,6 +306,11 @@
                 data: await crypto.encryptPayload(event),
             });
         }
+
+        // Refs #1351/#1385 (M8/Task 4): Re-Take-Rueckmeldung — wie viele
+        // ungesyncte Aenderungen dieses Klienten den (Re-)Sync ueberlebt
+        // haben (Anzeige "<N> lokale Aenderungen beibehalten" im Aufrufer).
+        return { survivingEdits: survivingUnsyncedPks.size };
     }
 
     /*
@@ -341,6 +346,11 @@
             data_fields: Object.assign({}, data.formData || {}, data.fileMarkers || {}),
             updated_at: data.expectedUpdatedAt || "",
             localStatus: localStatus,
+            // Refs #1351/#1385 (M8/Task 4): deadReason aus dem Envelope
+            // durchreichen — der Offline-Viewer braucht ihn fuers dead-Badge
+            // (deadReason-Mapping ueber data-*-Texte, siehe
+            // offline-client-view.js).
+            deadReason: data.deadReason || "",
         };
     }
 
@@ -515,14 +525,41 @@
         return "/api/v1/offline/bundle/client/" + encodeURIComponent(clientPk) + "/";
     }
 
+    /*
+     * Liefert die ANZAHL ungesyncter Events (modified/new/conflict/dead)
+     * dieses Klienten — nicht nur bool. `revalidateCachedClient` unten
+     * braucht nur Truthy/Falsy (eine Number > 0 ist truthy, unveraendertes
+     * Verhalten); Refs #1351/#1385 (M8/Task 4) braucht den echten Zaehlwert
+     * fuer die Toggle-Warnung (`countUnsyncedEventsFor`) und den
+     * bool-Wrapper (`hasUnsyncedEventsFor`).
+     */
     async function _hasUnsyncedEvents(pk) {
-        return (
-            (await db.events
-                .where("clientPk")
-                .equals(pk)
-                .filter((e) => e.localStatus && e.localStatus !== "clean")
-                .count()) > 0
-        );
+        return db.events
+            .where("clientPk")
+            .equals(pk)
+            .filter((e) => e.localStatus && e.localStatus !== "clean")
+            .count();
+    }
+
+    /*
+     * Refs #1351/#1385 (M8/Task 4): oeffentlicher, benannter Wrapper um das
+     * bisher rein interne `_hasUnsyncedEvents`-Praedikat (nur von
+     * `revalidateCachedClient` genutzt) — fuer die Toggle-Warnung vor
+     * `removeClientFromOffline` exportiert, damit Konsumenten nicht auf eine
+     * `_`-praefigierte Funktion zugreifen muessen.
+     */
+    async function hasUnsyncedEventsFor(pk) {
+        return (await _hasUnsyncedEvents(pk)) > 0;
+    }
+
+    /*
+     * Refs #1351/#1385: echter Zaehlwert (statt nur bool) fuer die
+     * Toggle-Warnung — der Confirm-Text nennt die Anzahl ungesyncter
+     * Aenderungen, die beim Entfernen aus dem Offline-Cache lokal erhalten
+     * bleiben (S1: kein Datenverlust, nur ein Hinweis).
+     */
+    async function countUnsyncedEventsFor(pk) {
+        return _hasUnsyncedEvents(pk);
     }
 
     async function revalidateCachedClient(pk) {
@@ -645,6 +682,16 @@
 
     async function countConflictEvents() {
         return db.events.where("localStatus").equals("conflict").count();
+    }
+
+    /*
+     * Refs #1351/#1385 (M8/Task 4): Analog `countConflictEvents` fuer
+     * `localStatus:"dead"` — indizierte Zaehlung ohne Decrypt, damit Banner/
+     * Offline-Home dead-Events mitzaehlen koennen (Konflikt-Banner-Zaehler
+     * = conflict+dead), ohne jede Row zu entschluesseln.
+     */
+    async function countDeadEvents() {
+        return db.events.where("localStatus").equals("dead").count();
     }
 
     /*
@@ -917,6 +964,10 @@
         listConflicts: listConflicts,
         countUnsyncedEvents: countUnsyncedEvents,
         countConflictEvents: countConflictEvents,
+        // Refs #1351/#1385 — M8/Task 4: dead-Zaehler + Toggle-Warnung
+        countDeadEvents: countDeadEvents,
+        hasUnsyncedEventsFor: hasUnsyncedEventsFor,
+        countUnsyncedEventsFor: countUnsyncedEventsFor,
         hasUnsyncedData: hasUnsyncedData,
         updateEventLocalStatus: updateEventLocalStatus,
         saveConflictState: saveConflictState,

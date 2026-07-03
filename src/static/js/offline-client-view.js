@@ -56,8 +56,19 @@
             createDocTypePk: "",
             createDocTypeName: "",
             createOccurredAt: "",
+            // Refs #1351/#1385 (M8/Task 4): deadReason -> lesbarer Text, aus
+            // data-*-Attributen gelesen (i18n via {% trans %}, kein
+            // hartkodiertes deutsches JS-Literal).
+            _deadReasonText: {},
             init() {
                 this._pk = this.$el.dataset.pk || _pkFromPath();
+                const ds = this.$el.dataset;
+                this._deadReasonText = {
+                    "not-found": ds.deadReasonNotFound || "",
+                    invalid: ds.deadReasonInvalid || "",
+                    forbidden: ds.deadReasonForbidden || "",
+                    "unexpected-response": ds.deadReasonUnexpectedResponse || "",
+                };
                 // Refs #1111: Auf die Sync-Zähler von offline-edit.js hören.
                 // Spielt der Reconnect-Listener (offline-edit.js) eine offline
                 // angelegte Änderung ein, ändert sich der Unsynced-/Konflikt-
@@ -127,6 +138,11 @@
                             const fields = ev.data_fields || {};
                             const isUnsynced = ev.localStatus === "modified" || ev.localStatus === "new";
                             const isConflict = ev.localStatus === "conflict";
+                            // Refs #1351/#1385 (M8/Task 4): dead-Badge analog
+                            // is_conflict — permanent fehlgeschlagener Replay
+                            // (Task 2/#1384), noch nicht per Retry/Verwerfen
+                            // aufgelöst (Konflikt-Liste).
+                            const isDead = ev.localStatus === "dead";
                             return Object.assign({}, ev, {
                                 occurred_at_fmt: this.formatTs(ev.occurred_at),
                                 data_fields_pairs: Object.keys(fields).map((slug) => ({
@@ -136,6 +152,8 @@
                                 has_data_fields: Object.keys(fields).length > 0,
                                 is_unsynced: isUnsynced,
                                 is_conflict: isConflict,
+                                is_dead: isDead,
+                                dead_reason_text: isDead ? this._deadReasonText[ev.deadReason] || "" : "",
                                 // Refs #1111: Edit-Affordanz + Edit-Form-Sichtbarkeit als
                                 // per-Event-Booleans vorberechnen. Der @alpinejs/csp-Build
                                 // (Architektur-Guard) verbietet Method-Calls mit Argumenten
@@ -220,6 +238,14 @@
             // der Edit ist NICHT synchronisiert und wurde behalten.
             get showError() {
                 return this.lastSyncResult === "error";
+            },
+            // Refs #1351/#1385 (M8/Task 4): Server hat die Änderung ABGELEHNT
+            // (403 — kein transienter Fehler wie showError, sondern eine
+            // Rechte-/Sitzungsfrage). Der Edit bleibt lokal erhalten (kein
+            // Datenverlust), aber der Nutzer bekommt eine spezifische
+            // Erklärung statt des generischen "wird später erneut versucht".
+            get showRevoked() {
+                return this.lastSyncResult === "revoked";
             },
             get conflictHref() {
                 return "/offline/conflicts/" + this.lastSyncPk + "/";
@@ -453,12 +479,18 @@
                     this.lastSyncResult = "invalid";
                 } else if (status === "offline" || status === "network-error" || status === "no-key") {
                     this.lastSyncResult = "pending";
+                } else if (status === "revoked") {
+                    // Refs #1351/#1385 (M8/Task 4): 403 beim Edit-Replay — kein
+                    // transienter Fehler, sondern eine Ablehnung (Rechte/Sitzung).
+                    // Ein 404/410-"revoked" gibt es seit #1384 nicht mehr (das
+                    // Edit wird stattdessen "dead" mit deadReason "not-found");
+                    // ein 403 purgt seit #1354 nicht mehr (kann Rate-Limit-/
+                    // Proxy-Rauschen sein) — der Edit bleibt lokal erhalten,
+                    // eigener erklärender Text statt des generischen showError.
+                    this.lastSyncResult = "revoked";
                 } else {
-                    // error / revoked: nicht synchronisiert. Bei "revoked" durch
-                    // 404 raeumt der nachgelagerte revalidateCachedClient den
-                    // Klienten weg (F-10); ein 403-"revoked" purgt seit #1354
-                    // nicht mehr (moegliches Rate-Limit-/Proxy-Rauschen) — der
-                    // Edit bleibt erhalten.
+                    // error: transienter Replay-Fehler (5xx/429) — nicht
+                    // synchronisiert, Edit bleibt erhalten.
                     this.lastSyncResult = "error";
                 }
             },

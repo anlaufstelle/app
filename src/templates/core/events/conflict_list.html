@@ -4,16 +4,28 @@
 {% block title %}{% trans "Konflikte" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-<div x-data="conflictList" x-init="load" data-testid="conflict-list-view" class="space-y-6">
+<div x-data="conflictList" x-init="load" data-testid="conflict-list-view" class="space-y-6"
+     data-reason-not-found="{% trans 'Wurde auf dem Server gelöscht oder der Zugriff wurde entzogen' %}"
+     data-reason-invalid="{% trans 'Vom Server als ungültig abgelehnt' %}"
+     data-reason-forbidden="{% trans 'Keine Berechtigung' %}"
+     data-reason-unexpected-response="{% trans 'Unerwartete Server-Antwort' %}"
+     data-confirm-discard="{% trans 'Wirklich verwerfen? Diese Aktion kann nicht rückgängig gemacht werden.' %}"
+     data-label-retried="{% trans 'Erneut aktiviert — wird beim nächsten Online-Kontakt gesendet.' %}"
+     data-label-discarded="{% trans 'Verworfen.' %}"
+     data-label-action-failed="{% trans 'Aktion fehlgeschlagen. Bitte erneut versuchen.' %}">
 
     <div class="flex items-center justify-between">
         <div>
             <h1 class="text-xl font-bold text-ink">{% trans "Offline-Konflikte" %}</h1>
             <p class="mt-1 text-sm text-ink-muted">
-                {% trans "Ereignisse, bei denen lokale Änderungen mit dem Server abgeglichen werden müssen." %}
+                {% trans "Ereignisse und Änderungen, bei denen eine Entscheidung nötig ist." %}
             </p>
         </div>
     </div>
+
+    <p x-show="hasFeedback" x-cloak role="status" aria-live="polite"
+       class="text-sm rounded-md px-3 py-2" :class="feedbackClass"
+       data-testid="conflict-action-feedback" x-text="feedback"></p>
 
     <template x-if="loading">
         <div class="py-8 text-center text-ink-muted">{% trans "Lade Konflikte..." %}</div>
@@ -25,21 +37,99 @@
         </div>
     </template>
 
-    <template x-if="showList">
-        <div class="bg-surface border border-subtle rounded-[10px] overflow-hidden divide-y divide-subtle">
-            <template x-for="item in items" :key="item.pk">
-                <a :href="'/offline/conflicts/' + item.pk + '/'" class="flex items-center justify-between px-4 py-3 hover:bg-canvas" data-testid="conflict-list-item">
-                    <div>
-                        <span class="text-sm font-medium text-ink" x-text="item.documentTypeName"></span>
-                        <span class="ml-2 text-xs text-ink-muted" x-text="item.lastEditedAtFmt"></span>
+    <div x-show="showList" x-cloak class="space-y-6">
+
+        {# ── "Wartet auf Entscheidung" (localStatus "conflict"): Event-Konflikte (verlinken zum Diff-Resolver) + generische Queue-Konflikte (kein Diff, nur Retry/Verwerfen). #}
+        <div x-show="hasPending" x-cloak data-testid="conflict-pending-section">
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Wartet auf Entscheidung" %}</h2>
+            <div class="bg-surface border border-subtle rounded-[10px] overflow-hidden divide-y divide-subtle">
+                <template x-for="item in conflictEvents" :key="item.pk">
+                    <a :href="'/offline/conflicts/' + item.pk + '/'" class="flex items-center justify-between px-4 py-3 hover:bg-canvas" data-testid="conflict-list-item">
+                        <div>
+                            <span class="text-sm font-medium text-ink" x-text="item.documentTypeName"></span>
+                            <span class="ml-2 text-xs text-ink-muted" x-text="item.lastEditedAtFmt"></span>
+                        </div>
+                        <span class="badge bg-red-100 text-red-800">{% trans "Konflikt" %}</span>
+                    </a>
+                </template>
+                <template x-for="item in queueConflict" :key="item.id">
+                    <div class="flex items-center justify-between px-4 py-3" data-testid="queue-conflict-item">
+                        <div class="min-w-0">
+                            <span class="text-sm font-medium text-ink truncate" x-text="item.label"></span>
+                            <span class="badge bg-red-100 text-red-800 ml-2">{% trans "Konflikt" %}</span>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <button type="button" @click="retryQueueEntry(item.id)"
+                                    class="text-xs text-accent hover:underline"
+                                    :data-testid="'queue-conflict-retry-' + item.id">
+                                {% trans "Erneut versuchen" %}
+                            </button>
+                            <button type="button" @click="discardQueueEntry(item.id)"
+                                    class="text-xs text-red-700 hover:underline"
+                                    :data-testid="'queue-conflict-discard-' + item.id">
+                                {% trans "Verwerfen" %}
+                            </button>
+                        </div>
                     </div>
-                    <span class="badge bg-red-100 text-red-800">
-                        {% trans "Konflikt" %}
-                    </span>
-                </a>
-            </template>
+                </template>
+            </div>
         </div>
-    </template>
+
+        {# ── "Nicht übertragbar" (localStatus "dead"): permanent fehlgeschlagene Event-Replays (Grund, Retry/Verwerfen/Export) + Queue-Rows (Grund, Retry/Verwerfen). #}
+        <div x-show="hasDead" x-cloak data-testid="conflict-dead-section">
+            <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-2">{% trans "Nicht übertragbar" %}</h2>
+            <div class="bg-surface border border-subtle rounded-[10px] overflow-hidden divide-y divide-subtle">
+                <template x-for="item in deadEvents" :key="item.pk">
+                    <div class="flex items-center justify-between px-4 py-3 gap-3" data-testid="dead-event-item">
+                        <div class="min-w-0">
+                            <div>
+                                <span class="text-sm font-medium text-ink" x-text="item.documentTypeName"></span>
+                                <span class="ml-2 text-xs text-ink-muted" x-text="item.lastEditedAtFmt"></span>
+                            </div>
+                            <p class="mt-0.5 text-xs text-ink-muted" data-testid="dead-event-reason" x-text="item.reasonText"></p>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <button type="button" @click="exportNote(item)"
+                                    class="text-xs text-accent hover:underline"
+                                    :data-testid="'dead-event-export-' + item.pk">
+                                {% trans "Exportieren" %}
+                            </button>
+                            <button type="button" @click="retryDeadEvent(item.pk)"
+                                    class="text-xs text-accent hover:underline"
+                                    :data-testid="'dead-event-retry-' + item.pk">
+                                {% trans "Erneut versuchen" %}
+                            </button>
+                            <button type="button" @click="discardDeadEvent(item.pk)"
+                                    class="text-xs text-red-700 hover:underline"
+                                    :data-testid="'dead-event-discard-' + item.pk">
+                                {% trans "Verwerfen" %}
+                            </button>
+                        </div>
+                    </div>
+                </template>
+                <template x-for="item in queueDead" :key="item.id">
+                    <div class="flex items-center justify-between px-4 py-3 gap-3" data-testid="queue-dead-item">
+                        <div class="min-w-0">
+                            <span class="text-sm font-medium text-ink truncate" x-text="item.label"></span>
+                            <p class="mt-0.5 text-xs text-ink-muted" data-testid="queue-dead-reason" x-text="item.reasonText"></p>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            <button type="button" @click="retryQueueEntry(item.id)"
+                                    class="text-xs text-accent hover:underline"
+                                    :data-testid="'queue-dead-retry-' + item.id">
+                                {% trans "Erneut versuchen" %}
+                            </button>
+                            <button type="button" @click="discardQueueEntry(item.id)"
+                                    class="text-xs text-red-700 hover:underline"
+                                    :data-testid="'queue-dead-discard-' + item.id">
+                                {% trans "Verwerfen" %}
+                            </button>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </div>
 </div>
 
 {% endblock %}

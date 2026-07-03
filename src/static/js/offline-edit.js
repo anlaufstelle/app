@@ -117,11 +117,13 @@
             .catch(() => {
                 /* ignore — banner just stays at its last known count */
             });
-        _store()
-            .countConflictEvents()
-            .then((count) => {
+        // Refs #1351/#1385 (M8/Task 4): Konflikt-Banner-Zaehler = conflict+dead
+        // (beide sind "wartet auf eine Nutzerentscheidung" — nur der
+        // Aufloesungsweg unterscheidet sich: Resolver vs. Retry/Verwerfen).
+        Promise.all([_store().countConflictEvents(), _store().countDeadEvents()])
+            .then(([conflictCount, deadCount]) => {
                 window.dispatchEvent(
-                    new CustomEvent("offline-conflict-count", { detail: { count: count } })
+                    new CustomEvent("offline-conflict-count", { detail: { count: conflictCount + deadCount } })
                 );
             })
             .catch(() => {});
@@ -429,6 +431,14 @@
             return { status: "synced" };
         }
         if (response.status === 409) {
+            // Refs #1351/#1385 (M8/Task 4): der Server liefert 409 in ZWEI
+            // Varianten — `error:"conflict"` (Versionskonflikt) UND
+            // `error:"missing-token"` (JSON-Edit ohne `expected_updated_at`,
+            // Strang B). Beide tragen ein voll befuelltes `server_state`; wir
+            // behandeln sie hier bewusst GLEICH (missing-token -> conflict-Flow):
+            // die Verzweigung haengt nur am Status 409, nicht an `body.error`,
+            // sodass der Konflikt-Resolver in beiden Faellen den Server-Stand
+            // feldweise gegenueberstellt statt den Edit still zu verwerfen.
             let body = null;
             try {
                 body = await response.json();
@@ -536,6 +546,17 @@
         document.addEventListener("DOMContentLoaded", _fireCountEvent);
     } else {
         _fireCountEvent();
+    }
+
+    // Refs #1351/#1385 (M8/Task 4): Cross-Tab-Refresh — synct Tab A in Tab B
+    // (BroadcastChannel liefert den eigenen Sync-Lauf nicht an den Sender
+    // selbst zurueck; die window-CustomEvents oben feuern nur lokal pro Tab),
+    // aktualisiert Tab B's unsynced-/conflict-Zaehler (Banner, Detail-View)
+    // ohne Polling.
+    if (window.syncOrchestrator && window.syncOrchestrator.onMessage) {
+        window.syncOrchestrator.onMessage((msg) => {
+            if (msg && msg.type === "sync-finished") _fireCountEvent();
+        });
     }
 
     window.offlineEdit = {

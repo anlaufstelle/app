@@ -29,6 +29,8 @@
              data-pseudonym="{{ client.pseudonym }}"
              data-label-take="{% trans 'Offline mitnehmen' %}"
              data-label-remove="{% trans 'Aus Offline-Cache entfernen' %}"
+             data-confirm-remove-text="{% trans '{count} nicht übertragene Änderungen bleiben lokal erhalten, wenn Sie diese Person jetzt aus dem Offline-Cache entfernen. Trotzdem fortfahren?' %}"
+             data-label-kept-edits="{% trans '{count} lokale Änderungen beibehalten.' %}"
              x-init="refresh"
              @offline-clients-count.window="refresh">
             <div class="flex items-start justify-between gap-2 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto] sm:gap-4 sm:items-center sm:px-4 sm:py-3">

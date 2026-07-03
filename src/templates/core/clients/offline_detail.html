@@ -5,7 +5,11 @@
 
 {% block content %}
 <div x-data="offlineClientView" data-pk="{{ client_pk }}" x-init="load"
-     data-testid="offline-client-view">
+     data-testid="offline-client-view"
+     data-dead-reason-not-found="{% trans 'Wurde auf dem Server gelöscht oder der Zugriff wurde entzogen' %}"
+     data-dead-reason-invalid="{% trans 'Vom Server als ungültig abgelehnt' %}"
+     data-dead-reason-forbidden="{% trans 'Keine Berechtigung' %}"
+     data-dead-reason-unexpected-response="{% trans 'Unerwartete Server-Antwort' %}">
 
     <div class="mb-4 flex items-center space-x-2">
         <span class="badge bg-yellow-100 text-yellow-800">
@@ -64,6 +68,12 @@
             <template x-if="showError">
                 <div class="mb-4 bg-red-50 border border-red-200 rounded-[10px] p-3" data-testid="offline-edit-error">
                     <p class="text-sm text-red-900">{% trans "Synchronisierung fehlgeschlagen – Änderung wurde lokal behalten und wird später erneut versucht." %}</p>
+                </div>
+            </template>
+            {# Refs #1351/#1385 (M8/Task 4): Server hat die Änderung abgelehnt (403) — kein transienter Fehler wie showError, eigener erklärender Text. Änderung bleibt lokal erhalten. #}
+            <template x-if="showRevoked">
+                <div class="mb-4 bg-red-50 border border-red-200 rounded-[10px] p-3" data-testid="offline-edit-revoked" role="status" aria-live="polite">
+                    <p class="text-sm text-red-900">{% trans "Server hat die Änderung abgelehnt (keine Berechtigung oder abgelaufene Sitzung). Änderung wurde lokal behalten – bitte Berechtigung prüfen und erneut versuchen." %}</p>
                 </div>
             </template>
 
@@ -201,6 +211,15 @@
                                                class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 hover:bg-red-200"
                                                data-testid="event-conflict-badge">
                                                 {% trans "Konflikt" %}
+                                            </a>
+                                        </template>
+                                        {# Refs #1351/#1385 (M8/Task 4): permanent fehlgeschlagener Replay (Task 2/#1384) — Aktionen (Retry/Verwerfen/Export) leben in der Konflikt-Übersicht, hier nur ein informativer Badge mit Link dorthin. #}
+                                        <template x-if="event.is_dead">
+                                            <a href="{% url 'core:offline_conflict_list' %}"
+                                               class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200"
+                                               :title="event.dead_reason_text"
+                                               data-testid="event-dead-badge">
+                                                {% trans "Nicht übertragbar" %}
                                             </a>
                                         </template>
                                     </div>

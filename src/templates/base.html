@@ -70,7 +70,7 @@
              class="fixed top-0 inset-x-0 z-50 bg-red-500 text-white text-center text-sm py-2"
              data-testid="conflict-banner">
             <a href="{% url 'core:offline_conflict_list' %}" class="underline">
-                <span x-text="conflictCount"></span><span x-show="isSingleConflict" x-cloak> {% trans "Konflikt — bitte auflösen" %}</span><span x-show="hasMultipleConflict" x-cloak> {% trans "Konflikte — bitte auflösen" %}</span>
+                <span x-text="combinedConflictCount"></span><span x-show="isSingleConflict" x-cloak> {% trans "Konflikt — bitte auflösen" %}</span><span x-show="hasMultipleConflict" x-cloak> {% trans "Konflikte — bitte auflösen" %}</span>
             </a>
         </div>
     </div>
