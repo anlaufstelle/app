@@ -61,6 +61,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-027](027-i18n-strategy.md) | i18n-/Übersetzungs-Strategie (DE-Quelle, EN-Sync-Gate) | Accepted |
 | [ADR-028](028-demo-release-versioning.md) | Demo-Instanz läuft nur auf getaggtem Release | Accepted |
 | [ADR-029](029-local-only-ci.md) | Quality-Gates lokal-only durchgesetzt (Dev-CI bewusst deaktiviert) | Accepted |
+| [ADR-030](030-offline-sync-orchestration-replay-contract.md) | Offline-Sync-Orchestrierung, Replay-Contract & Dead-Letter-Semantik | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
