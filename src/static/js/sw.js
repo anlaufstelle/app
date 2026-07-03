@@ -165,9 +165,17 @@ self.addEventListener("fetch", (event) => {
 
         // Multipart-Uploads NICHT queuen — die binären Daten würden im IndexedDB
         // landen und beim Replay falsch interpretiert werden.
+        // Refs #1351: KEIN WRITE_FETCH_TIMEOUT_MS auf diesem Zweig — ein
+        // grosser/langsamer Upload (z.B. Foto über Mobilfunk) braucht legitim
+        // >6s. AbortSignal.timeout ist ein absoluter Timer ab Erstellung und
+        // wuerde den Upload mitten im Stream abbrechen und faelschlich
+        // "Internetverbindung erforderlich" melden — ohne Retry-/Queue-Netz
+        // (Multipart wird nie gequeued). Der Lie-Fi-Timeout bleibt dem
+        // queue-baren Nicht-Multipart-Schreibpfad vorbehalten (der davon
+        // profitiert, weil er bei Lie-Fi schnell in die Queue faellt).
         if (isMultipart(request)) {
             event.respondWith(
-                fetch(request.clone(), { signal: AbortSignal.timeout(WRITE_FETCH_TIMEOUT_MS) }).catch(
+                fetch(request.clone()).catch(
                     () =>
                         new Response(
                             '<div id="flash-messages">' +

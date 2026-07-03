@@ -159,15 +159,22 @@ class TestServiceWorkerRobustness:
         return response.content.decode()
 
     def test_write_path_fetches_have_lie_fi_timeout(self, client):
-        """Dieser Test ist gegen den heutigen Code ROT: die beiden
-        Schreibpfad-fetch()-Aufrufe (Multipart- und Standard-Queue-Zweig)
-        haben keinen Timeout — bei Lie-Fi haengt respondWith() endlos statt
-        in die Queue-/Fallback-Kette zu laufen. Refs #1351, Refs #1386."""
+        """Der queue-bare Schreibpfad (Standard-Zweig) traegt den
+        Lie-Fi-Timeout, damit respondWith() bei Lie-Fi nicht endlos haengt,
+        sondern in die Queue-/Fallback-Kette faellt.
+
+        Der Multipart-Zweig traegt bewusst KEINEN Timeout (Refs #1351): ein
+        grosser/langsamer Upload braucht legitim >6s, und da Multipart nie
+        gequeued wird (kein Retry-Netz), wuerde ein absoluter 6s-Timer den
+        Upload mitten im Stream abbrechen und faelschlich
+        "Internetverbindung erforderlich" melden. Darum genau EIN
+        WRITE_FETCH_TIMEOUT_MS-fetch (der queue-bare Pfad). Refs #1386."""
         body = self._sw_body(client)
         assert "const WRITE_FETCH_TIMEOUT_MS = 6000;" in body
-        assert body.count("AbortSignal.timeout(WRITE_FETCH_TIMEOUT_MS)") == 2, (
-            "Beide Schreibpfad-fetch()-Aufrufe (Multipart- und Standard-Zweig) "
-            "muessen AbortSignal.timeout(WRITE_FETCH_TIMEOUT_MS) nutzen."
+        assert body.count("AbortSignal.timeout(WRITE_FETCH_TIMEOUT_MS)") == 1, (
+            "Nur der queue-bare Standard-Schreibpfad nutzt "
+            "AbortSignal.timeout(WRITE_FETCH_TIMEOUT_MS); der Multipart-Upload-Zweig "
+            "traegt bewusst keinen (bricht sonst legitime grosse Uploads ab, Refs #1351)."
         )
 
     def test_read_path_fetches_have_lie_fi_timeout(self, client):

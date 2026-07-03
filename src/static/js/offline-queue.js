@@ -177,6 +177,16 @@
     // erkennt.
     function _send(record, csrf) {
         const headers = Object.assign({}, record.data.headers);
+        // Refs #1351: Der Service Worker reicht den Idempotency-Key
+        // KLEINGESCHRIEBEN (``x-idempotency-key``) in die Record-Header durch
+        // (sw.js-Allowlist). Wir setzen unten den kanonischen, grossgeschriebenen
+        // ``X-Idempotency-Key``. Ohne dieses Entfernen traegt das an ``fetch``
+        // uebergebene Objekt BEIDE Case-Varianten desselben Header-Namens, die
+        // die Headers-API zu ``"KEY, KEY"`` zusammenfasst → der Server-Cache-Key
+        // matcht den Erstversuch nicht mehr → Doppel-Anlage. Genau EINEN Key senden.
+        for (const k of Object.keys(headers)) {
+            if (k.toLowerCase() === "x-idempotency-key") delete headers[k];
+        }
         // Refs #1351/#1384 (HTTP-Replay-Contract): der Replay ist immer ein
         // JSON-Client — ueberschreibt gezielt NUR diesen einen Header,
         // unabhaengig davon, welchen Accept-Header der urspruengliche

@@ -146,6 +146,60 @@ class TestIdempotencyKeyBridge:
             _purge(page)
             context.close()
 
+    def test_replay_emits_single_idempotency_header_from_lowercase_record(
+        self, browser, base_url, _login_storage_state
+    ):
+        """RED gegen den heutigen Code: der Service Worker schreibt den
+        Idempotency-Key kleingeschrieben (``x-idempotency-key``) in die
+        QUEUE_REQUEST-Payload (sw.js-Allowlist). ``_send`` uebernimmt ihn per
+        ``Object.assign`` UND setzt zusaetzlich den grossgeschriebenen
+        ``X-Idempotency-Key`` — das an ``fetch`` uebergebene Objekt traegt
+        beide Case-Varianten, die die Headers-API zu ``"KEY, KEY"``
+        zusammenfasst. Der Server liest den Header roh als Cache-Key →
+        ``"KEY, KEY"`` matcht den Erstversuch-Key ``"KEY"`` NICHT → Dedup
+        greift nie → Doppel-Anlage (genau der Bug, den der Integrations-Fix
+        schliessen sollte). Der Replay MUSS GENAU EINEN sauberen Key senden.
+        Refs #1351.
+        """
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            shared_key = "shared-" + uuid.uuid4().hex
+            wi_url = f"/workitems/{uuid.uuid4()}/edit/"
+            seen_keys = []
+
+            def _handler(route):
+                seen_keys.append(route.request.headers.get("x-idempotency-key"))
+                route.fulfill(status=200, content_type="text/html", body="<div>ok</div>")
+
+            page.route(re.compile(r"/workitems/"), _handler)
+
+            # Die SW→Queue-Grenze persistiert den Key KLEINGESCHRIEBEN in die
+            # Record-Header (sw.js:230). Genau diesen Fall nachstellen —
+            # nicht die Grossschreibung, die ``_send`` ohnehin ueberschreibt.
+            page.evaluate(
+                """async (args) => {
+                    await window.offlineQueue.enqueueRequest(
+                        args.url, 'POST', 'title=x',
+                        {
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'x-idempotency-key': args.key,
+                            'hx-request': 'true',
+                        }
+                    );
+                }""",
+                {"url": wi_url, "key": shared_key},
+            )
+            page.evaluate("async () => { await window.offlineQueue.replayQueue(); }")
+            assert seen_keys == [shared_key], (
+                f"Der Replay muss GENAU EINEN sauberen X-Idempotency-Key senden "
+                f"(kein 'KEY, KEY' aus doppelten Case-Varianten): {seen_keys!r}"
+            )
+        finally:
+            _purge(page)
+            context.close()
+
     def test_service_worker_preserves_client_key_into_queue(self, browser, base_url):
         """RED gegen den heutigen Code: die SW-Header-Allowlist (``sw.js``)
         strippt ``x-idempotency-key`` beim Persistieren in die Queue — ein vom
