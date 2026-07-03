@@ -55,14 +55,19 @@ class OfflineClientBundleView(AssistantOrAboveRequiredMixin, View):
 
 
 class OfflineClientDetailView(AssistantOrAboveRequiredMixin, View):
-    """Offline-fallback shell for ``/offline/clients/<uuid>/``.
+    """Offline-detail scaffold for ``/offline/clients/<uuid>/``.
 
-    This view always returns the same scaffold; it is the page the Service
-    Worker redirects to when the network is unavailable. The scaffold loads
-    the bundle from IndexedDB via ``offline-viewer.js``. When the user is
-    online, navigation to this URL still works and shows the most recently
-    cached copy (useful for debugging and for "offline preview" before
-    going out in the field).
+    This is the link target of the offline workspace (``/offline/``, #1321):
+    it renders the ``offline_detail.html`` scaffold with the pk baked into
+    ``data-pk``, and ``offline-client-view.js`` decrypts the matching bundle
+    from IndexedDB and renders it client-side.
+
+    Since #1322 the Service Worker no longer *redirects* offline navigations
+    here. For the canonical ``/clients/<pk>/`` URL it serves the pk-less
+    :class:`OfflineClientShellView` in place (see ``sw.js``), so the URL stays
+    canonical and the online/offline split disappears. This view survives as
+    the explicit workspace entry point and as an online "offline preview"
+    (navigating here while online still shows the most recently cached bundle).
 
     The view does not require the client to exist in the DB — a user might
     open the page while offline and the record may still be fetchable from
