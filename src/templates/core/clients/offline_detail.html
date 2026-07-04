@@ -130,6 +130,18 @@
                             <input type="datetime-local" x-model="createOccurredAt"
                                    class="w-full rounded-md border-subtle text-sm" data-testid="offline-create-occurred-at">
                         </div>
+                        <template x-if="hasCaseOptions">
+                            <div>
+                                <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Fall (optional)" %}</label>
+                                <select x-model="createCasePk"
+                                        class="w-full rounded-md border-subtle text-sm" data-testid="offline-create-case">
+                                    <option value="">{% trans "– kein Fall –" %}</option>
+                                    <template x-for="opt in caseOptions" :key="opt.value">
+                                        <option :value="opt.value" x-text="opt.label"></option>
+                                    </template>
+                                </select>
+                            </div>
+                        </template>
 
                         <template x-for="field in editFields" :key="field.slug">
                             <div>

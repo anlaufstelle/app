@@ -56,6 +56,8 @@
             createDocTypePk: "",
             createDocTypeName: "",
             createOccurredAt: "",
+            // Refs #1397: optionale Fall-Zuordnung bei der Offline-Erfassung.
+            createCasePk: "",
             // Refs #1351/#1385 (M8/Task 4): deadReason -> lesbarer Text, aus
             // data-*-Attributen gelesen (i18n via {% trans %}, kein
             // hartkodiertes deutsches JS-Literal).
@@ -330,10 +332,30 @@
             // ── Offline-Erfassung neuer Ereignisse (Refs #1323) ──────────────
             get documentTypeOptions() {
                 const dts = (this.data && this.data.documentTypes) || [];
-                return dts.map((d) => ({ value: d.pk, label: d.name }));
+                // Refs #1397: nur AKTIVE Typen zur Erfassung anbieten (wie
+                // EventMetaForm). Inaktiv-referenzierte Typen liegen nur zum
+                // Rendern bestehender Events im Bundle. ``!== false`` bleibt
+                // tolerant gegen ältere Bundles ohne ``is_active``.
+                return dts
+                    .filter((d) => d.is_active !== false)
+                    .map((d) => ({ value: d.pk, label: d.name }));
             },
             get hasDocumentTypes() {
                 return this.documentTypeOptions.length > 0;
+            },
+            // Refs #1397: Fall-Selektor bei der Offline-Erfassung — nur die
+            // OFFENEN Fälle dieser Person aus dem Bundle (data.cases sind bereits
+            // #1355-sichtbarkeitsgefiltert; online bietet EventMetaForm ebenfalls
+            // nur status=OPEN). Der Titel genügt als Label, weil alle Fälle zu
+            // genau dieser angezeigten Person gehören.
+            get caseOptions() {
+                const cases = (this.data && this.data.cases) || [];
+                return cases
+                    .filter((c) => c.status === "open")
+                    .map((c) => ({ value: c.pk, label: c.title }));
+            },
+            get hasCaseOptions() {
+                return this.caseOptions.length > 0;
             },
             startCreate() {
                 this.editError = "";
@@ -343,6 +365,7 @@
                 this.editValues = {};
                 this.createDocTypePk = "";
                 this.createDocTypeName = "";
+                this.createCasePk = "";
                 this.createOccurredAt = _nowLocalInput();
                 this.creating = true;
             },
@@ -368,6 +391,7 @@
                 this.editValues = {};
                 this.createDocTypePk = "";
                 this.createDocTypeName = "";
+                this.createCasePk = "";
                 this.editError = "";
             },
             async saveCreate() {
@@ -396,6 +420,7 @@
                         {
                             occurredAt: this.createOccurredAt || "",
                             documentTypeName: this.createDocTypeName || "",
+                            casePk: this.createCasePk || "",
                         }
                     );
                     this.lastSyncPk = record.pk;

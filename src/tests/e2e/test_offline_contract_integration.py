@@ -560,3 +560,70 @@ class TestReplayContractRegression:
         finally:
             _purge(page)
             context.close()
+
+
+class TestOfflineCreateCaseAssignment:
+    """Refs #1397: Offline-Erfassung mit optionaler Fall-Zuordnung. Die offline
+    gewählte ``casePk`` muss der Replay als ``case`` an /events/new/ senden
+    (Feldname wie ``EventMetaForm``); ohne Auswahl darf kein ``case`` mitgehen."""
+
+    def test_offline_new_event_replay_sends_selected_case(self, browser, base_url, _login_storage_state):
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            case_pk = str(uuid.uuid4())
+            seen_bodies = []
+
+            def _handler(route):
+                seen_bodies.append(route.request.post_data or "")
+                route.fulfill(status=200, content_type="text/html", body="<div>ok</div>")
+
+            page.route(re.compile(r"/events/new/"), _handler)
+            page.evaluate(
+                """async (args) => {
+                    const rec = await window.offlineEdit.markEventNew(
+                        args.client, args.dt, { notiz: 'x' },
+                        { occurredAt: '2026-07-04T10:00', casePk: args.casePk }
+                    );
+                    await window.offlineEdit.replayModifiedEvent(rec);
+                }""",
+                {"client": str(uuid.uuid4()), "dt": str(uuid.uuid4()), "casePk": case_pk},
+            )
+            assert len(seen_bodies) == 1, f"Replay soll genau einmal an /events/new/ senden: {seen_bodies!r}"
+            assert f"case={case_pk}" in seen_bodies[0], (
+                f"Replay muss die offline gewählte Fall-Zuordnung als ``case`` senden: {seen_bodies[0]!r}"
+            )
+        finally:
+            _purge(page)
+            context.close()
+
+    def test_offline_new_event_without_case_omits_case_field(self, browser, base_url, _login_storage_state):
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            seen_bodies = []
+
+            def _handler(route):
+                seen_bodies.append(route.request.post_data or "")
+                route.fulfill(status=200, content_type="text/html", body="<div>ok</div>")
+
+            page.route(re.compile(r"/events/new/"), _handler)
+            page.evaluate(
+                """async (args) => {
+                    const rec = await window.offlineEdit.markEventNew(
+                        args.client, args.dt, { notiz: 'x' },
+                        { occurredAt: '2026-07-04T10:00' }
+                    );
+                    await window.offlineEdit.replayModifiedEvent(rec);
+                }""",
+                {"client": str(uuid.uuid4()), "dt": str(uuid.uuid4())},
+            )
+            assert len(seen_bodies) == 1, f"Replay soll genau einmal senden: {seen_bodies!r}"
+            assert "case=" not in seen_bodies[0], (
+                f"Ohne Fall-Auswahl darf kein leeres ``case`` mitgesendet werden: {seen_bodies[0]!r}"
+            )
+        finally:
+            _purge(page)
+            context.close()

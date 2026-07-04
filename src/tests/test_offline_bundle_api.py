@@ -247,6 +247,62 @@ class TestBuildClientOfflineBundleService:
         dt_pks = {dt["pk"] for dt in bundle["document_types"]}
         assert str(doc_type_contact.pk) in dt_pks
 
+    def test_bundle_includes_all_active_document_types_even_if_unused(self, facility, client_identified, staff_user):
+        """Refs #1397: Offline-Create muss denselben Katalog wie online anbieten
+        (EventMetaForm: alle aktiven Facility-Doctypes), nicht nur die von den
+        Events der Person bereits genutzten — sonst ist ein nie genutzter Typ
+        offline nicht anlegbar. Die Person hat hier gar keine Events."""
+        unused = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.SERVICE,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+            name="NieGenutzt",
+        )
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        entry = next((dt for dt in bundle["document_types"] if dt["pk"] == str(unused.pk)), None)
+        assert entry is not None, "Aktiver Doctype muss im Bundle stehen (Offline-Create-Katalog)."
+        assert entry["is_active"] is True
+
+    def test_bundle_excludes_inactive_unreferenced_document_type(self, facility, client_identified, staff_user):
+        """Refs #1397: spiegelt online ``is_active=True`` — ein stillgelegter Typ,
+        den kein Event nutzt, wird nicht zur Offline-Erfassung angeboten."""
+        inactive = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.SERVICE,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+            name="Stillgelegt",
+            is_active=False,
+        )
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        dt_pks = {dt["pk"] for dt in bundle["document_types"]}
+        assert str(inactive.pk) not in dt_pks
+
+    def test_bundle_keeps_referenced_but_inactive_document_type(self, facility, client_identified, staff_user):
+        """Refs #1397: ein Event auf einem seither stillgelegten Typ muss dessen
+        Schema weiter mitschicken, damit der vorhandene Wert offline rendert
+        (Vereinigung: aktiver Katalog ∪ referenzierte Typen)."""
+        dt = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.CONTACT,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+            name="AlterTyp",
+            is_active=False,
+        )
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        entry = next((d for d in bundle["document_types"] if d["pk"] == str(dt.pk)), None)
+        assert entry is not None, "Referenzierter (auch inaktiver) Typ muss zum Rendern im Bundle bleiben."
+        # Refs #1397: Das is_active-Flag trägt den Render-only-Zustand, damit der
+        # Offline-Create-Dropdown (documentTypeOptions) inaktive Typen ausschließt.
+        assert entry["is_active"] is False
+
     def test_bundle_event_carries_updated_at_token(self, facility, client_identified, doc_type_contact, staff_user):
         """F-07 (Refs #1109): Jedes serialisierte Event muss seinen
         ``updated_at``-Optimistic-Lock-Token mitführen.

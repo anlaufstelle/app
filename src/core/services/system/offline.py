@@ -22,7 +22,7 @@ from typing import Any
 from django.utils import timezone
 
 from core.models import Case as CaseModel
-from core.models import Event, WorkItem
+from core.models import DocumentType, Event, WorkItem
 from core.services.compliance import user_can_see_field
 from core.services.file_vault import safe_decrypt
 
@@ -62,6 +62,10 @@ def _serialize_document_type(user, doc_type) -> dict[str, Any]:
     return {
         "pk": str(doc_type.pk),
         "name": doc_type.name,
+        # Refs #1397: Der Offline-Create-Dropdown bietet nur AKTIVE Typen an
+        # (wie EventMetaForm); inaktiv-referenzierte Typen bleiben im Bundle
+        # nur zum Rendern bestehender Events.
+        "is_active": doc_type.is_active,
         "category": doc_type.category,
         "sensitivity": doc_type.sensitivity,
         "icon": doc_type.icon or "",
@@ -198,9 +202,11 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
     )
     events = list(events_qs)
 
-    # Collect every DocumentType referenced by the events so the offline
-    # viewer can resolve slugs/labels without another round-trip.
-    doc_types = {}
+    # Ship the full ACTIVE document-type catalogue so offline-create offers the
+    # same choices as online (EventMetaForm: ``for_facility`` + ``is_active``),
+    # PLUS any type referenced by the cached events even if since deactivated —
+    # so existing event values still render offline (union). Refs #1397.
+    doc_types = {dt.pk: dt for dt in DocumentType.objects.for_facility(facility).filter(is_active=True)}
     for ev in events:
         if ev.document_type_id not in doc_types:
             doc_types[ev.document_type_id] = ev.document_type

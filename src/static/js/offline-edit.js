@@ -270,6 +270,9 @@
                 formData: formData,
                 documentTypePk: documentTypePk || "",
                 documentTypeName: opts.documentTypeName || "",
+                // Refs #1397: optionale Fall-Zuordnung offline erfassen; der
+                // Replay sendet sie als ``case`` an /events/new/ (wie online).
+                casePk: opts.casePk || "",
                 occurredAt: opts.occurredAt || "",
                 idempotencyKey: opts.idempotencyKey || _uuid(),
                 lastEditedAt: Date.now(),
@@ -302,6 +305,8 @@
         const form = new URLSearchParams();
         if (record.clientPk) form.set("client", record.clientPk);
         if (data.documentTypePk) form.set("document_type", data.documentTypePk);
+        // Refs #1397: Fall-Zuordnung mitschicken (Feldname wie EventMetaForm).
+        if (data.casePk) form.set("case", data.casePk);
         if (data.occurredAt) form.set("occurred_at", data.occurredAt);
         for (const [key, value] of Object.entries(fd)) {
             if (value === null || value === undefined) continue;
