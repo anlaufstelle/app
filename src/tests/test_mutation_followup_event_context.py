@@ -290,6 +290,38 @@ class TestFilteredServerDataJson:
         result = filtered_server_data_json(staff_user, event)
         assert result[ft.slug] == payload
 
+    def test_invisible_field_before_visible_field_keeps_the_visible_one(
+        self, facility, client_identified, staff_user, assistant_user
+    ):
+        """Mutation ``continue`` → ``break`` (Zeile 40): ein unsichtbares Feld
+        VOR einem sichtbaren darf das sichtbare nicht verschlucken.
+
+        NORMAL-doc, HIGH-Feld zuerst (für ASSISTANT unsichtbar), danach ein
+        NORMAL-Feld. ``continue`` überspringt nur das HIGH-Feld; ``break`` würde
+        das nachfolgende sichtbare Feld fälschlich mit abbrechen.
+        """
+        doc_type = _make_doc_type(facility, sensitivity=DocumentType.Sensitivity.NORMAL)
+        ft_high = _make_field_template(
+            facility,
+            name="Geheim",
+            sensitivity=DocumentType.Sensitivity.HIGH,
+            is_encrypted=True,
+        )
+        ft_normal = _make_field_template(facility, name="Offen")
+        _attach(doc_type, ft_high, sort_order=0)
+        _attach(doc_type, ft_normal, sort_order=1)
+        # data_json-Reihenfolge (insertion-order): unsichtbar zuerst, dann sichtbar.
+        event = _make_event(
+            facility,
+            client_identified,
+            doc_type,
+            staff_user,
+            data_json={ft_high.slug: "secret", ft_normal.slug: "ok"},
+        )
+        result = filtered_server_data_json(assistant_user, event)
+        assert ft_high.slug not in result, "HIGH-Feld muss gestrippt sein"
+        assert result.get(ft_normal.slug) == "ok", "sichtbares Folgefeld darf nicht durch break wegfallen"
+
 
 # ---------------------------------------------------------------------------
 # _format_field_display_value — pro-Feldtyp-Branches
@@ -857,6 +889,32 @@ class TestBuildFieldDisplayEntryHelper:
         entry = _build_field_display_entry("foo-bar", "baz", None, staff_user, doc_type.sensitivity, {}, {})
         assert entry["label"] == "Foo Bar"
         assert entry["value"] == "baz"
+
+    def test_unknown_ft_defaults_encryption_and_sensitivity_false(self, facility, staff_user):
+        """``ft is None``-Defaults im entschlüsselten Zweig fixieren:
+
+        - ``is_encrypted = ft.is_encrypted if ft else False`` (Mutation ``else True``)
+        - ``field_sensitivity = ft.sensitivity if ft else ""`` → ``is_sensitive``
+          (Mutation ``else "XXXX"`` würde ``bool(...)`` auf True kippen).
+        """
+        doc_type = _make_doc_type(facility)
+        entry = _build_field_display_entry("foo-bar", "baz", None, staff_user, doc_type.sensitivity, {}, {})
+        assert entry["is_encrypted"] is False
+        assert entry["is_sensitive"] is False
+
+    def test_unknown_ft_restricted_label_titleized(self, facility, assistant_user):
+        """``ft is None`` UND restricted-Zweig (Zeile 217): das Label kommt aus
+        ``key.replace("-", " ").title()``.
+
+        Mutation ``key.replace("-", None)`` würde ``TypeError`` werfen. Der
+        bestehende ``test_unknown_ft_uses_titleized_label`` deckt nur den
+        entschlüsselten Zweig (Zeile 240) ab — hier zwingen wir den restricted-
+        Zweig über ASSISTANT (rank 0) auf einem HIGH-Doc.
+        """
+        doc_type = _make_doc_type(facility, sensitivity=DocumentType.Sensitivity.HIGH)
+        entry = _build_field_display_entry("foo-bar", "geheim", None, assistant_user, doc_type.sensitivity, {}, {})
+        assert entry["restricted"] is True
+        assert entry["label"] == "Foo Bar"
 
 
 @pytest.mark.django_db
