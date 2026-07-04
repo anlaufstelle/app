@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public verify-vendor-js-sync sync-vendor-js
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci verify-fast build lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public verify-vendor-js-sync sync-vendor-js
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -135,6 +135,18 @@ check:
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
 ci: lint check deps-check verify-matrix-drift verify-release-test-guard verify-vendor-js-sync typecheck test-parallel
+
+# Schneller Gate: statische Prüfung + Unit-Ebene, ohne E2E/Browser.
+# Enge Feedback-Schleife + Pre-Commit. Beziehung: ci ⊇ verify-fast
+# (ci ergänzt deps-check + die drei Drift-Guards). Refs #1401.
+verify-fast: lint check typecheck test-parallel
+
+# Deploybare Artefakte deterministisch erzeugen: minifiziertes CSS + statische
+# Dateien. Settings überschreibbar (BUILD_SETTINGS=…), Default = prod wie im
+# Release-Pfad. Refs #1401.
+BUILD_SETTINGS ?= anlaufstelle.settings.prod
+build: tailwind-build
+	DJANGO_SETTINGS_MODULE=$(BUILD_SETTINGS) $(PYTHON) src/manage.py collectstatic --noinput
 
 # Lokale Coverage-HTML: praktisch zum gezielten Lücken-Suchen.
 # CI nutzt --cov-fail-under in test.yml; dieses Target rendert
