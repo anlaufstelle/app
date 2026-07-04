@@ -1,7 +1,7 @@
 PYTHON ?= .venv/bin/python
 E2E_WORKERS ?= 2
 
-.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci verify-fast build lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public verify-vendor-js-sync sync-vendor-js
+.PHONY: dev setup db tailwind migrate run run-http ssl-cert seed ci verify-fast build lint typecheck test test-e2e test-focus test-parallel test-e2e-parallel test-e2e-smoke check deps-lock deps-check maintenance-on maintenance-off deploy-dev dev-bootstrap dev-logs dev-shell dev-seed dev-backup dev-status deploy-demo demo-seed demo-status demo-logs clean test-matrix-index test-matrix-index-check verify-matrix-drift verify-release-test-guard mutation mutation-report worktree worktree-rm ci-coverage docs-screens release-gates release-preflight release-verify-public verify-vendor-js-sync verify-agent-docs-sync sync-vendor-js
 
 # Erstmalige Einrichtung: .env aus .env.example erzeugen und Keys generieren
 setup:
@@ -134,7 +134,7 @@ check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run
 
-ci: lint check deps-check verify-matrix-drift verify-release-test-guard verify-vendor-js-sync typecheck test-parallel
+ci: lint check deps-check verify-matrix-drift verify-release-test-guard verify-vendor-js-sync verify-agent-docs-sync typecheck test-parallel
 
 # Schneller Gate: statische Prüfung + Unit-Ebene, ohne E2E/Browser.
 # Enge Feedback-Schleife + Pre-Commit. Beziehung: ci ⊇ verify-fast
@@ -172,6 +172,11 @@ verify-release-test-guard:
 # src/static/js/*.min.js. Reiner String-Vergleich — kein node/npm noetig.
 verify-vendor-js-sync:
 	$(PYTHON) scripts/verify_vendor_js_sync.py
+
+# Drift-Guard (Refs #1403): AGENTS.md ist die tool-neutrale SSOT der Agent-
+# Konventionen; CLAUDE.md verweist darauf und dupliziert sie nicht (12.11).
+verify-agent-docs-sync:
+	$(PYTHON) scripts/verify_agent_docs_sync.py
 
 # Vendored JS-Libs aus node_modules/ neu kopieren (Refs #1076). Nach einem
 # Dependabot-Bump: erst 'npm ci', dann dieses Target, dann src/static/js/
