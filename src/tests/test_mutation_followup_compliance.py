@@ -95,6 +95,35 @@ class TestRetentionChecks:
             result = _retention_checks()
         assert result[0].status == ComplianceStatus.CRITICAL
 
+    def test_check_key_is_stable_machine_readable(self, facility):
+        """Der ``key`` des Retention-Checks bleibt exakt ``retention_last_run``.
+
+        Killt die Survivors am ``key`` des OK/WARNING/CRITICAL-``ComplianceCheck``:
+        ``key=None`` (mutmut_51), ``key="XXretention_last_runXX"`` (mutmut_65) und
+        ``key="RETENTION_LAST_RUN"`` (mutmut_66). Laut ``ComplianceCheck``-Docstring
+        ist ``key`` stabil + maschinen-lesbar — Templates und Tests verlassen sich
+        darauf, deshalb ist eine falsche/leere Key-ID ein echter Verhaltensbruch.
+        """
+        entry = _create_retention_audit(facility)
+        with _patch_compliance_now(entry.timestamp):
+            result = _retention_checks()
+        assert result[0].status == ComplianceStatus.OK
+        assert result[0].key == "retention_last_run"
+
+    def test_check_category_groups_under_retention(self, facility):
+        """Die ``category`` des Retention-Checks bleibt exakt ``Retention``.
+
+        Killt Survivor ``category=None`` (mutmut_53) am OK/WARNING/CRITICAL-Check.
+        ``category`` ist kein reiner Display-String: ``views/system/compliance.py``
+        gruppiert per ``grouped[check.category]`` — ``None`` würde den Retention-Check
+        aus seiner Dashboard-Sektion in einen ``None``-Bucket verschieben.
+        """
+        entry = _create_retention_audit(facility)
+        with _patch_compliance_now(entry.timestamp):
+            result = _retention_checks()
+        assert result[0].status == ComplianceStatus.OK
+        assert result[0].category == "Retention"
+
 
 # ---------------------------------------------------------------------------
 # _audit_event_checks — Boundary 0 / 5 Events in 24h
