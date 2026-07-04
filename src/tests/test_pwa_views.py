@@ -90,7 +90,22 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v12"' in body, "CACHE_NAME muss bei APP_SHELL-Aenderung gebumpt sein."
+        assert 'CACHE_NAME = "anlaufstelle-v13"' in body, "CACHE_NAME muss bei APP_SHELL-Aenderung gebumpt sein."
+
+    def test_sw_caches_manifest_and_favicon(self, client):
+        """Refs #1334: PWA-Manifest (/manifest.json — aus Scope-Gruenden nicht
+        unter /static/) und das deklarierte Site-Icon (favicon.svg) muessen im
+        APP_SHELL pre-cached sein, sonst scheitern sie offline
+        (net::ERR_INTERNET_DISCONNECTED). Das Manifest braucht zusaetzlich einen
+        eigenen Fetch-Zweig, da es nicht in den /static/-SWR-Zweig faellt.
+        """
+        response = client.get(reverse("service_worker"))
+        body = response.content.decode()
+        assert '"/manifest.json"' in body, "/manifest.json fehlt im APP_SHELL."
+        assert "/static/icons/favicon.svg" in body, "favicon.svg fehlt im APP_SHELL."
+        assert 'pathname === "/manifest.json"' in body, (
+            "Manifest-Fetch-Zweig fehlt — /manifest.json wuerde offline nicht aus dem Cache serviert."
+        )
 
     def test_sw_caches_offline_client_shell(self, client):
         """Refs #1322: Der generische Offline-Client-Shell wird offline an der

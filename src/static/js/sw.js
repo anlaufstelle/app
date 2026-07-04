@@ -15,7 +15,7 @@
 
 importScripts("/static/js/url-patterns.js");
 
-const CACHE_NAME = "anlaufstelle-v12";
+const CACHE_NAME = "anlaufstelle-v13";
 // Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
 // ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
 // auch beim ersten Offline-Aufruf garantiert verfuegbar ist.
@@ -58,6 +58,13 @@ const APP_SHELL = [
     "/static/js/offline-queue.js",
     "/static/js/offline-client.js",
     "/static/js/offline-edit.js",
+    // Refs #1334: Das PWA-Manifest (aus Scope-Gruenden unter /manifest.json,
+    // nicht /static/) und das deklarierte Site-Icon (favicon.svg) offline
+    // verfuegbar machen — sonst net::ERR_INTERNET_DISCONNECTED beim Offline-
+    // Laden. Das Manifest faellt nicht in den /static/-SWR-Zweig und bekommt
+    // deshalb unten (fetch-Handler) einen eigenen Zweig.
+    "/manifest.json",
+    "/static/icons/favicon.svg",
     OFFLINE_FALLBACK_URL,
     OFFLINE_CLIENT_SHELL_URL,
 ];
@@ -306,7 +313,10 @@ self.addEventListener("fetch", (event) => {
         return;
     }
 
-    if (request.url.includes("/static/")) {
+    // Refs #1334: /manifest.json liegt aus PWA-Scope-Gruenden nicht unter
+    // /static/, soll aber wie ein statisches Asset offline aus dem Cache
+    // kommen (gleiche stale-while-revalidate-Behandlung).
+    if (request.url.includes("/static/") || new URL(request.url).pathname === "/manifest.json") {
         // Stale-while-revalidate: sofort aus dem Cache servieren, im
         // Hintergrund die neue Version holen und den Cache aktualisieren.
         // Offline-Fähigkeit bleibt erhalten (Cache-Fallback), aber der
