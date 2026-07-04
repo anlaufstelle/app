@@ -15,7 +15,7 @@
 
 importScripts("/static/js/url-patterns.js");
 
-const CACHE_NAME = "anlaufstelle-v13";
+const CACHE_NAME = "anlaufstelle-v14";
 // Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
 // ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
 // auch beim ersten Offline-Aufruf garantiert verfuegbar ist.
@@ -28,6 +28,13 @@ const OFFLINE_CLIENT_SHELL_URL = "/offline/client-shell/";
 // endlos, statt in die vorhandenen Queue-/Offline-Fallback-Ketten zu laufen.
 const WRITE_FETCH_TIMEOUT_MS = 6000;
 const READ_FETCH_TIMEOUT_MS = 8000;
+// Refs #V5: Die /static/-Eintraege dieses APP_SHELL werden beim Ausliefern von
+// GET /sw.js serverseitig durch staticfiles_storage.url() aufgeloest
+// (ServiceWorkerView._resolve_app_shell). In Produktion (Manifest-Storage)
+// werden daraus die GEHASHTEN URLs — exakt die, die {% static %} in den
+// Templates referenziert. Nur so trifft caches.match() die pre-cachten Assets.
+// Die Quelldatei bleibt bewusst dev-lesbar mit ungehashten Pfaden; in Dev/Test
+// (kein Manifest / DEBUG) liefert die Aufloesung dieselben Pfade zurueck.
 const APP_SHELL = [
     "/static/css/styles.css",
     "/static/icons/icon-192.png",

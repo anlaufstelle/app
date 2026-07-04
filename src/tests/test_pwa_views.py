@@ -4,9 +4,13 @@ Covers: Happy-Path (200 + korrekter Content-Type + Scope-Header),
 FileNotFoundError-Pfad (404), und die @lru_cache-Idempotenz.
 """
 
+import re
 from unittest.mock import patch
 
 import pytest
+from django.contrib.staticfiles import finders
+from django.core.management import call_command
+from django.test import override_settings
 from django.urls import reverse
 
 
@@ -90,7 +94,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v13"' in body, "CACHE_NAME muss bei APP_SHELL-Aenderung gebumpt sein."
+        assert 'CACHE_NAME = "anlaufstelle-v14"' in body, "CACHE_NAME muss bei APP_SHELL-Aenderung gebumpt sein."
 
     def test_sw_caches_manifest_and_favicon(self, client):
         """Refs #1334: PWA-Manifest (/manifest.json — aus Scope-Gruenden nicht
@@ -152,6 +156,105 @@ class TestServiceWorkerCachesOfflineFallback:
             "/static/js/offline-edit.js",
         ):
             assert asset in body, f"{asset} fehlt im APP_SHELL — Offline-Sync-Kern offline nicht ladbar."
+
+
+def _app_shell_block(body: str) -> str:
+    """Schneidet den APP_SHELL-Array-Block aus dem SW-Body heraus.
+
+    Nur dieser Block wird serverseitig aufgeloest; /static/-Vorkommen
+    ausserhalb (importScripts, fetch-Handler-String) bleiben unberuehrt.
+    """
+    start = body.index("const APP_SHELL = [")
+    end = body.index("];", start)
+    return body[start:end]
+
+
+@pytest.mark.django_db
+class TestAppShellFindersGuard:
+    """Refs #V5: Jeder /static/-Eintrag im APP_SHELL muss als Quelldatei via
+    ``finders.find`` aufloesbar sein. Ein Tippfehler/Umzug wuerde sonst den
+    atomaren ``cache.addAll`` killen (und damit die GESAMTE Precache) — und die
+    neue serverseitige Aufloesung faende keinen Manifest-Eintrag. Dieser Guard
+    verhindert Drift genau an der Quelle.
+    """
+
+    def test_every_app_shell_static_entry_has_source_file(self):
+        from core.views.pwa import _read_service_worker
+
+        _read_service_worker.cache_clear()
+        block = _app_shell_block(_read_service_worker())
+        static_paths = re.findall(r'"/static/([^"]+)"', block)
+        assert static_paths, "Kein /static/-Eintrag im APP_SHELL gefunden — Regex-/Block-Drift?"
+        missing = [p for p in static_paths if finders.find(p) is None]
+        assert not missing, f"APP_SHELL-Eintraege ohne Quelldatei (via finders.find): {missing}"
+
+
+@pytest.mark.django_db
+class TestServiceWorkerPrecacheHashedAssets:
+    """Refs #V5: Der SW-Precache (APP_SHELL) muss die vom Staticfiles-Storage
+    aufgeloesten URLs pre-cachen. In Produktion (Manifest-Storage, DEBUG=False)
+    sind das GEHASHTE URLs — sonst verfehlt ``caches.match`` (URL-exakt) die von
+    ``{% static %}`` in den Templates referenzierten Assets, und die
+    Offline-In-Place-Client-Shell (/clients/<pk>/) bricht offline in Prod.
+    """
+
+    def test_dev_storage_keeps_unhashed_paths(self, client):
+        """Default-/Dev-Storage (kein Manifest, DEBUG=True) ⇒ Ausgabe
+        byte-gleich zu heute: der APP_SHELL enthaelt die ungehashten
+        Original-Pfade (Dev-Lesbarkeit + E2E-Kompatibilitaet)."""
+        body = client.get(reverse("service_worker")).content.decode()
+        block = _app_shell_block(body)
+        assert '"/static/js/offline-client-view.js"' in block
+        assert '"/static/css/styles.css"' in block
+
+    def test_html_routes_stay_untouched(self, client):
+        """HTML-Routen-Eintraege des APP_SHELL bleiben unangetastet — nur
+        /static/-Literale werden aufgeloest."""
+        block = _app_shell_block(client.get(reverse("service_worker")).content.decode())
+        assert '"/manifest.json"' in block
+        assert "OFFLINE_FALLBACK_URL" in block
+        assert "OFFLINE_CLIENT_SHELL_URL" in block
+
+    def test_manifest_storage_resolves_to_hashed_urls(self, client, tmp_path):
+        # Ungehashte Original-Literale aus dem Dev-Block als Referenz ziehen.
+        dev_block = _app_shell_block(client.get(reverse("service_worker")).content.decode())
+        dev_static_literals = set(re.findall(r'"/static/[^"]+"', dev_block))
+        assert dev_static_literals, "Sanity: Dev-APP_SHELL hat /static/-Literale."
+
+        manifest_storage = {"staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"}}
+        # DEBUG=False ist zwingend: Djangos HashedFilesMixin._url gibt sonst
+        # (im DEBUG-Zweig) den ungehashten Namen zurueck — Prod laeuft DEBUG=False.
+        with override_settings(DEBUG=False, STATIC_ROOT=str(tmp_path), STORAGES=manifest_storage):
+            call_command("collectstatic", "--noinput", verbosity=0)
+            prod_body = client.get(reverse("service_worker")).content.decode()
+
+        prod_block = _app_shell_block(prod_body)
+        # 1) Erkennbar gehashte URLs fuer die kritischen Assets vorhanden.
+        assert re.search(r'"/static/js/offline-client-view\.[0-9a-f]{8,}\.js"', prod_block), (
+            "offline-client-view.js wurde nicht auf eine gehashte URL aufgeloest."
+        )
+        assert re.search(r'"/static/css/styles\.[0-9a-f]{8,}\.css"', prod_block), (
+            "styles.css wurde nicht auf eine gehashte URL aufgeloest."
+        )
+        # 2) Kein ungehashtes /static/-Original-Literal mehr im APP_SHELL-Block.
+        for literal in dev_static_literals:
+            assert literal not in prod_block, (
+                f"{literal} wurde nicht durch eine gehashte URL ersetzt — caches.match "
+                "verfehlt sonst das von {% static %} referenzierte Asset."
+            )
+
+    def test_missing_manifest_entry_falls_back_and_never_500s(self, client, tmp_path):
+        """/sw.js darf niemals 500en: fehlt ein Eintrag im Manifest (ValueError),
+        faellt die Aufloesung auf den ungehashten Pfad zurueck. Simuliert durch
+        Manifest-Storage MIT leerem Manifest (kein collectstatic → jeder
+        stored_name-Lookup wirft ValueError)."""
+        manifest_storage = {"staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"}}
+        with override_settings(DEBUG=False, STATIC_ROOT=str(tmp_path), STORAGES=manifest_storage):
+            response = client.get(reverse("service_worker"))
+        assert response.status_code == 200
+        block = _app_shell_block(response.content.decode())
+        # Fallback = ungehashter Original-Pfad (Guard-Test sichert die Existenz).
+        assert '"/static/js/offline-client-view.js"' in block
 
 
 @pytest.mark.django_db
