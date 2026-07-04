@@ -104,9 +104,11 @@ omit = [
 # Filesystem-Root-Walk → Crash mit ``/etc/vconsole.conf``-FileNotFoundError).
 # Refs #923 hatte den String-Wert als regression eingeführt.
 paths_to_mutate = ["src/core/services/", "src/core/forms/"]
-# Refs #930 — Files mit reiner Ops/IO-Logik: ``system_health.py`` ist
-# ``shutil``-/``importlib``-Wrapper; ``invite.py`` ist ``send_mail``-Wrapper;
-# ``virus_scan.py`` ist ClamAV-``clamd``-Wrapper (Subprocess-IO).
+# Refs #930 / #1388 — Files mit reiner Ops/IO-Logik. Die Pfade folgen dem
+# Subpackage-Umzug (Refs #910), sonst mutiert mutmut die Wrapper wieder mit:
+# ``system/health.py`` ist ``shutil``-/``importlib``-Wrapper;
+# ``security/invite.py`` ist ``send_mail``-Wrapper; ``file_vault/virus_scan.py``
+# ist ClamAV-``clamd``-Wrapper (Subprocess-IO).
 # Mutationen dort produzieren Survivors, die nur durch tiefes Mocking
 # erschlagbar wären — Mehrwert minimal gegenüber Ops-Monitoring (Sentry,
 # Healthcheck-Endpoint, real-world Ops-RC-Tests). ``virus_scan.py``
@@ -114,9 +116,9 @@ paths_to_mutate = ["src/core/services/", "src/core/forms/"]
 # 240s-Timeouts pro Mutation produzieren — Crash-Risiko bei
 # Container-Verlust (siehe 2026-05-18-Run-Abbruch in Baseline-Doc).
 do_not_mutate = [
-    "src/core/services/system_health.py",
-    "src/core/services/invite.py",
-    "src/core/services/virus_scan.py",
+    "src/core/services/system/health.py",
+    "src/core/services/security/invite.py",
+    "src/core/services/file_vault/virus_scan.py",
     # Refs #944 / #910 — File-Vault-Policy (Extension-
     # Whitelist, Magic-Bytes, ClamAV-Wrapper) lag urspruenglich in
     # ``file_vault.py``, wurde dann nach ``file_vault_validation.py``
