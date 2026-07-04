@@ -82,6 +82,17 @@
     /* Status-Badges (Pending / Konflikt). */
     .oh-status { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
     .oh-status:empty { display: none; }
+    /* Refs #1399: Client-seitiges Filterfeld ueber die mitgenommenen Personen. */
+    .oh-filter {
+        width: 100%;
+        padding: .6rem .9rem;
+        margin: 0 0 .9rem;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--surface);
+        color: var(--ink);
+        font-size: .95rem;
+    }
     .oh-badge {
         display: inline-block;
         font-size: .8rem;
@@ -150,6 +161,10 @@
            bearbeitbar. Änderungen werden bei Verbindung automatisch gesendet.</p>
 
         <div class="oh-status" data-testid="offline-home-status"></div>
+
+        <input type="search" data-testid="offline-home-filter" class="oh-filter"
+               placeholder="Person filtern…" aria-label="Personen filtern" style="display:none"
+               autocomplete="off" />
 
         <div data-testid="offline-home-list">
             <p class="oh-empty" data-testid="offline-home-loading">Lade Offline-Daten…</p>

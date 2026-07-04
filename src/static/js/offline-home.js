@@ -39,6 +39,8 @@
         const list = el("ul", { class: "oh-list" });
         for (const c of clients) {
             const li = el("li", { class: "oh-item", testid: "offline-home-item" });
+            // Refs #1399: Pseudonym fuer das clientseitige Filtern am <li> ablegen.
+            li.setAttribute("data-pseudonym", c.pseudonym || "");
             const link = el("a", { class: "oh-link", href: "/offline/clients/" + c.pk + "/" });
             link.appendChild(
                 el("span", { class: "oh-name", text: c.pseudonym || "(ohne Pseudonym)" })
@@ -53,6 +55,56 @@
             list.appendChild(li);
         }
         container.appendChild(list);
+    }
+
+    // Refs #1399: Client-seitiges Filtern der (bis zu 20) mitgenommenen Personen
+    // — rein im Renderer, kein Server-/Krypto-Zugriff, CSP-konform
+    // (addEventListener statt Inline-Handler). Blendet <li>s per Pseudonym-
+    // Teilstring ein/aus; bei 0 Treffern ein Hinweis.
+    function applyFilter(query) {
+        const container = document.querySelector('[data-testid="offline-home-list"]');
+        if (!container) return;
+        const q = (query || "").trim().toLowerCase();
+        const items = container.querySelectorAll('[data-testid="offline-home-item"]');
+        let visible = 0;
+        for (const li of items) {
+            const name = (li.getAttribute("data-pseudonym") || "").toLowerCase();
+            const match = !q || name.indexOf(q) !== -1;
+            li.style.display = match ? "" : "none";
+            if (match) visible++;
+        }
+        let noMatch = container.querySelector('[data-testid="offline-home-no-match"]');
+        if (q && visible === 0) {
+            if (!noMatch) {
+                noMatch = el("p", {
+                    class: "oh-empty",
+                    text: "Keine Person passt zum Suchbegriff.",
+                    testid: "offline-home-no-match",
+                });
+                container.appendChild(noMatch);
+            }
+            noMatch.style.display = "";
+        } else if (noMatch) {
+            noMatch.style.display = "none";
+        }
+    }
+
+    function setupFilter(clientCount) {
+        const input = document.querySelector('[data-testid="offline-home-filter"]');
+        if (!input) return;
+        // Filter erst ab 2 Personen anbieten (bei einer ist er sinnlos).
+        if (clientCount > 1) {
+            input.style.display = "";
+            if (!input.dataset.wired) {
+                input.addEventListener("input", function () {
+                    applyFilter(input.value);
+                });
+                input.dataset.wired = "1";
+            }
+            if (input.value) applyFilter(input.value);
+        } else {
+            input.style.display = "none";
+        }
     }
 
     function renderStatus(unsynced, conflicts, dead) {
@@ -117,8 +169,10 @@
             const clients = await window.offlineStore.listOfflineClientsDetailed();
             if (!clients.length) {
                 renderEmpty(container, "Keine Person für die Offline-Nutzung mitgenommen.");
+                setupFilter(0);
             } else {
                 renderClients(container, clients);
+                setupFilter(clients.length);
             }
             const unsynced = await window.offlineStore.countUnsyncedEvents();
             const conflicts = await window.offlineStore.countConflictEvents();

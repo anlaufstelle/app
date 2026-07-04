@@ -318,6 +318,64 @@ def test_offline_home_lists_cached_clients(browser, base_url):
         context.close()
 
 
+def test_offline_home_filters_taken_clients_by_pseudonym(browser, base_url):
+    """Refs #1399: Ab zwei mitgenommenen Personen bietet der Offline-Arbeitsplatz
+    ein Filterfeld; die Eingabe blendet nicht passende Personen rein clientseitig
+    aus (kein Server-/Krypto-Zugriff), ohne Treffer erscheint ein Hinweis.
+    """
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        page.goto(f"{base_url}/login/")
+        page.fill('input[name="username"]', "miriam")
+        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.click('button[type="submit"]')
+        page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
+        page.wait_for_function("window.crypto_session && window.offlineStore")
+        # Zwei Personen mit bekannten Pseudonymen verschluesselt ablegen (der
+        # Schluessel stammt aus dem echten Login).
+        page.evaluate(
+            """async () => {
+                if (window.crypto_session.ready) await window.crypto_session.ready();
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                const mk = (pk, pseudonym) =>
+                    s.saveClientBundle({client: {pk, pseudonym}, expires_at: future, ttl: 3600});
+                await mk('11111111-1111-4111-8111-111111111111', 'Anton-01');
+                await mk('22222222-2222-4222-8222-222222222222', 'Berta-02');
+            }"""
+        )
+        page.goto(f"{base_url}/offline/", wait_until="domcontentloaded")
+        page.wait_for_selector('[data-testid="offline-home-item"]')
+        assert page.locator('[data-testid="offline-home-item"]').count() == 2
+
+        filter_input = page.locator('[data-testid="offline-home-filter"]')
+        assert filter_input.is_visible(), "Filterfeld muss ab 2 Personen sichtbar sein."
+
+        # Filtern auf "anton" -> nur Anton bleibt sichtbar.
+        filter_input.fill("anton")
+        page.wait_for_function(
+            """() => {
+                const vis = [...document.querySelectorAll('[data-testid=offline-home-item]')]
+                    .filter(li => li.offsetParent !== null);
+                return vis.length === 1 &&
+                    (vis[0].getAttribute('data-pseudonym') || '').toLowerCase().includes('anton');
+            }"""
+        )
+        # Leeren -> wieder beide sichtbar.
+        filter_input.fill("")
+        page.wait_for_function(
+            "() => [...document.querySelectorAll('[data-testid=offline-home-item]')]"
+            ".filter(li => li.offsetParent !== null).length === 2"
+        )
+        # Kein Treffer -> Hinweis.
+        filter_input.fill("zzz-kein-treffer")
+        page.locator('[data-testid="offline-home-no-match"]').wait_for(state="visible", timeout=5000)
+    finally:
+        context.close()
+
+
 def test_offline_client_detail_renders_in_place(browser, base_url):
     """Refs #1322: Offline rendert ``/clients/<pk>/`` den Viewer IN-PLACE an der
     kanonischen URL (kein ``/offline/...``-Redirect). Der Service Worker
