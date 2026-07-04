@@ -17,7 +17,7 @@ from django.test import override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import AuditLog, Case, DocumentType, DocumentTypeField, Event, FieldTemplate
+from core.models import AuditLog, Case, DocumentType, DocumentTypeField, Event, FieldTemplate, User, WorkItem
 from core.services.system import BUNDLE_SCHEMA_VERSION, build_client_offline_bundle
 
 
@@ -687,3 +687,78 @@ class TestClientPkRenderedAsBareUuid:
         assert response.status_code == 200
         assert f'data-event-pk="{pk}"'.encode() in response.content
         assert b"\\u002D" not in response.content
+
+
+@pytest.mark.django_db
+class TestBundleWorkItemAuthoring:
+    """Refs #1398: WorkItems offline erfassen/bearbeiten — das Bundle muss die
+    editierbaren Felder + Konflikt-Token (updated_at) + ``can_edit`` tragen und
+    (nur fuer Staff+) die zuweisbaren Nutzer:innen liefern."""
+
+    def _mk_workitem(self, facility, client, creator, **kw):
+        kw.setdefault("title", "Aufgabe")
+        return WorkItem.objects.create(facility=facility, client=client, created_by=creator, **kw)
+
+    def test_workitem_carries_edit_fields(self, facility, client_identified, staff_user):
+        from datetime import date
+
+        wi = self._mk_workitem(
+            facility,
+            client_identified,
+            staff_user,
+            description="desc",
+            priority=WorkItem.Priority.URGENT,
+            item_type=WorkItem.ItemType.HINT,
+            recurrence=WorkItem.Recurrence.WEEKLY,
+            due_date=date(2099, 1, 1),
+            remind_at=date(2098, 12, 1),
+            assigned_to=staff_user,
+        )
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        entry = next(w for w in bundle["workitems"] if w["pk"] == str(wi.pk))
+        assert entry["updated_at"] is not None
+        assert entry["remind_at"] == "2098-12-01"
+        assert entry["recurrence"] == WorkItem.Recurrence.WEEKLY
+        assert entry["assigned_to_pk"] == str(staff_user.pk)
+        assert entry["can_edit"] is True  # Ersteller
+
+    def test_workitem_can_edit_unassigned_team_task(self, facility, client_identified, staff_user, lead_user):
+        wi = self._mk_workitem(facility, client_identified, lead_user, assigned_to=None)
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        entry = next(w for w in bundle["workitems"] if w["pk"] == str(wi.pk))
+        assert entry["can_edit"] is True  # unzugewiesene Teamaufgabe (#1125)
+
+    def test_workitem_not_editable_when_assigned_to_other(self, facility, client_identified, staff_user, lead_user):
+        wi = self._mk_workitem(facility, client_identified, lead_user, assigned_to=lead_user)
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        entry = next(w for w in bundle["workitems"] if w["pk"] == str(wi.pk))
+        assert entry["can_edit"] is False  # weder Ersteller/Zugewiesener/Lead
+
+    def test_assistant_cannot_edit_workitem(self, facility, client_identified, assistant_user, staff_user):
+        wi = self._mk_workitem(facility, client_identified, staff_user, assigned_to=None)
+        bundle = build_client_offline_bundle(assistant_user, facility, client_identified)
+        entry = next(w for w in bundle["workitems"] if w["pk"] == str(wi.pk))
+        assert entry["can_edit"] is False  # StaffRequired schliesst Assistenz aus
+
+    def test_bundle_ships_assignable_users_for_staff(
+        self, facility, client_identified, staff_user, lead_user, assistant_user
+    ):
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        pks = {u["pk"] for u in bundle["assignable_users"]}
+        assert str(staff_user.pk) in pks
+        assert str(lead_user.pk) in pks
+        assert str(assistant_user.pk) in pks  # Assistenz ist zuweisbar (#1125)
+
+    def test_assignable_users_excludes_inactive_and_super_admin(self, facility, client_identified, staff_user):
+        inactive = User.objects.create_user(
+            username="inaktiv", role=User.Role.STAFF, facility=facility, is_active=False
+        )
+        superad = User.objects.create_user(username="super", role=User.Role.SUPER_ADMIN, facility=facility)
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        pks = {u["pk"] for u in bundle["assignable_users"]}
+        assert str(inactive.pk) not in pks
+        assert str(superad.pk) not in pks
+
+    def test_assistant_bundle_omits_assignable_users(self, facility, client_identified, assistant_user):
+        bundle = build_client_offline_bundle(assistant_user, facility, client_identified)
+        assert bundle["assignable_users"] == []

@@ -22,7 +22,7 @@ from typing import Any
 from django.utils import timezone
 
 from core.models import Case as CaseModel
-from core.models import DocumentType, Event, WorkItem
+from core.models import DocumentType, Event, User, WorkItem
 from core.services.compliance import user_can_see_field
 from core.services.file_vault import safe_decrypt
 
@@ -171,7 +171,15 @@ def _serialize_case(user, case) -> dict[str, Any]:
     }
 
 
-def _serialize_workitem(workitem) -> dict[str, Any]:
+def _serialize_workitem(user, workitem) -> dict[str, Any]:
+    # Refs #1398: ``can_edit`` spiegelt die Online-Mutations-Policy — der
+    # Edit-View ist ``StaffRequired`` UND ``can_user_mutate_workitem``
+    # (Lead/Admin, Ersteller:in, Zugewiesene:r oder unzugewiesene Teamaufgabe).
+    # Assistenz kann WorkItems nicht mutieren. Funktions-lokaler Import
+    # vermeidet einen Service→View-Import-Zirkel.
+    from core.views.workitems import can_user_mutate_workitem
+
+    can_edit = bool(getattr(user, "is_staff_or_above", False) and can_user_mutate_workitem(user, workitem))
     return {
         "pk": str(workitem.pk),
         "title": workitem.title,
@@ -180,7 +188,27 @@ def _serialize_workitem(workitem) -> dict[str, Any]:
         "priority": workitem.priority,
         "item_type": workitem.item_type,
         "due_date": workitem.due_date.isoformat() if workitem.due_date else None,
+        # Refs #1398: Offline-Edit-Metadaten — Konflikt-Token (updated_at, wie
+        # Events F-07) + die restlichen editierbaren WorkItemForm-Felder.
+        "updated_at": workitem.updated_at.isoformat() if workitem.updated_at else None,
+        "remind_at": workitem.remind_at.isoformat() if workitem.remind_at else None,
+        "recurrence": workitem.recurrence,
+        "assigned_to_pk": str(workitem.assigned_to_id) if workitem.assigned_to_id else None,
+        "can_edit": can_edit,
     }
+
+
+def _serialize_assignable_users(facility) -> list[dict[str, Any]]:
+    # Refs #1398: dieselbe Menge wie das ``WorkItemForm.assigned_to``-Queryset —
+    # aktive Facility-Nutzer:innen der zuweisbaren Rollen. Nur pk + Anzeigename
+    # (Staff-Roster, KEINE Klientel-PII; ADR-022-Notiz). Wird nur fuer Staff+ ins
+    # Bundle gelegt (nur sie koennen WorkItems anlegen/zuweisen).
+    users = User.objects.filter(
+        facility=facility,
+        is_active=True,
+        role__in=[User.Role.FACILITY_ADMIN, User.Role.LEAD, User.Role.STAFF, User.Role.ASSISTANT],
+    ).order_by("username")
+    return [{"pk": str(u.pk), "name": u.get_full_name() or u.username} for u in users]
 
 
 def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
@@ -229,6 +257,7 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
     workitems = (
         WorkItem.objects.filter(client=client, facility=facility)
         .filter(status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS])
+        .select_related("assigned_to", "created_by")
         .order_by("-created_at")
     )
 
@@ -250,7 +279,10 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
             "is_active": client.is_active,
         },
         "cases": [_serialize_case(user, c) for c in cases],
-        "workitems": [_serialize_workitem(w) for w in workitems],
+        "workitems": [_serialize_workitem(user, w) for w in workitems],
+        # Refs #1398: zuweisbare Nutzer:innen nur fuer Staff+ (nur sie legen
+        # WorkItems an/weisen zu) — begrenzt die Roster-Exposition im Offline-Cache.
+        "assignable_users": _serialize_assignable_users(facility) if is_staff_or_above else [],
         "events": [_serialize_event(user, ev) for ev in events],
         "document_types": [_serialize_document_type(user, dt) for dt in doc_types.values()],
     }
