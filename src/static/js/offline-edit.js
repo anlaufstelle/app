@@ -14,6 +14,17 @@
  * must round-trip through a dedicated replay because they need to read the
  * 409 response body and carry per-event status information, both of which
  * the queue's fire-and-forget model does not provide.
+ *
+ * Refs #1398 (P2): WorkItem-Records fahren als paralleler Track durch
+ * dieselbe Maschinerie — Diskriminator `kind: "workitem"` liegt IM
+ * verschluesselten `data`-Envelope (nie top-level: saveOfflineEdit
+ * persistiert nur {pk, clientPk, occurredAt, localStatus, data}, ein
+ * Top-Level-Feld wuerde gedroppt). Die Records teilen sich die
+ * `events`-Tabelle, damit die #1389-gehaerteten Status-Ops
+ * (updateEventLocalStatus/markEventDead/saveConflictState/clearOfflineEdit/
+ * countUnsyncedEvents) per pk unveraendert greifen. Replay geht gegen
+ * /workitems/new/ bzw. /workitems/<pk>/edit/; Klassifikation und
+ * Store-Side-Effects sind identisch zum Event-Pfad (ADR-030).
  */
 (function () {
     "use strict";
@@ -109,6 +120,19 @@
 
     function _eventEditUrl(eventPk) {
         return "/events/" + encodeURIComponent(eventPk) + "/edit/";
+    }
+
+    function _workItemEditUrl(workItemPk) {
+        return "/workitems/" + encodeURIComponent(workItemPk) + "/edit/";
+    }
+
+    /*
+     * Refs #1398 (P2): Record-Diskriminator fuer den WorkItem-Track. Event-
+     * Records tragen nie `kind: "workitem"` — jede Verzweigung auf dieses
+     * Praedikat laesst den Event-Pfad verhaltensgleich.
+     */
+    function _isWorkItemRecord(record) {
+        return Boolean(record && record.data && record.data.kind === "workitem");
     }
 
     function _fireCountEvent() {
@@ -290,25 +314,16 @@
     }
 
     /*
-     * Replay eines offline neu angelegten Events gegen ``/events/new/``.
-     * Erfolg = Redirect auf die Event-Detailseite. Refs #1351/#1384: nach M11
-     * antwortet die Create-View auf ein ungueltiges Formular (roher
-     * ``Accept: application/json``) mit 422+errors — der bestehende
-     * 200-Re-Render-Fallback (aeltere/HX-Faelle) bleibt zusaetzlich erhalten.
-     * Bei Erfolg den lokalen "new"-Record entfernen — die naechste
-     * Re-Validierung holt das kanonische Server-Event mit seiner echten pk
-     * ins Bundle.
+     * Flache formData (slug → value) in URLSearchParams uebertragen. Refs
+     * #1111: MULTI_SELECT-Felder tragen ein Array — jeden Wert als eigenen
+     * Key anhaengen, damit Djangos MultipleChoiceField
+     * (``value_from_datadict`` → ``getlist``) sie als Liste sieht statt als
+     * einen kommaverbundenen String (= „ungültige Auswahl"). Refs #1398:
+     * aus replayNewEvent/replayModifiedEvent extrahiert (dort identische
+     * Schleifen), damit der WorkItem-Track sie mitnutzt — verhaltensneutral.
      */
-    async function replayNewEvent(record, csrf) {
-        const data = record.data || {};
-        const fd = data.formData || {};
-        const form = new URLSearchParams();
-        if (record.clientPk) form.set("client", record.clientPk);
-        if (data.documentTypePk) form.set("document_type", data.documentTypePk);
-        // Refs #1397: Fall-Zuordnung mitschicken (Feldname wie EventMetaForm).
-        if (data.casePk) form.set("case", data.casePk);
-        if (data.occurredAt) form.set("occurred_at", data.occurredAt);
-        for (const [key, value] of Object.entries(fd)) {
+    function _appendFormFields(form, fd) {
+        for (const [key, value] of Object.entries(fd || {})) {
             if (value === null || value === undefined) continue;
             if (Array.isArray(value)) {
                 for (const item of value) {
@@ -319,12 +334,15 @@
                 form.append(key, String(value));
             }
         }
-        const response = await _postFormWithCsrfRetry("/events/new/", form.toString(), csrf, {
-            "X-Idempotency-Key": data.idempotencyKey || record.pk,
-        });
-        if (!response) {
-            return { status: "network-error" };
-        }
+    }
+
+    /*
+     * Gemeinsame Antwort-Klassifikation fuer Create-Replays — genutzt von
+     * replayNewEvent UND replayNewWorkItem (Refs #1398), nach dem
+     * HTTP-Replay-Contract (ADR-030). Store-Side-Effects laufen zentral hier:
+     * Erfolg raeumt den Record ab, 404/410 dead-lettert ihn.
+     */
+    async function _classifyCreateResponse(record, response) {
         // Refs #1351 (Bug #2): Ein Redirect auf /login/ ist KEIN Erfolg —
         // die Session ist waehrend des Offline-Fensters abgelaufen und fetch
         // folgt dem 302 transparent bis zur Login-Seite. Ohne diesen Guard
@@ -340,8 +358,24 @@
             _fireCountEvent();
             return { status: "synced" };
         }
-        if (response.status === 403 || response.status === 404) {
+        if (response.status === 403) {
+            // Refs #1394: 403 bleibt "revoked" (kann CSRF-/Rate-Limit-/
+            // Proxy-Rauschen sein; seit #1354 KEIN Purge-Trigger, bei echtem
+            // Rechteentzug vernichtet die Salt-Rotation den Bestand) —
+            // Record bleibt "new", der naechste Reconnect versucht erneut.
             return { status: "revoked", statusCode: response.status };
+        }
+        if (response.status === 404 || response.status === 410) {
+            // Refs #1394 (ADR-030): das Create-Ziel existiert serverseitig
+            // dauerhaft nicht (Klient geloescht/Route weg) — PERMANENT, wie
+            // im Edit-Pfad (replayModifiedEvent). Vorher kollabierte 404 in
+            // ein endloses "revoked"-Retry und 410 in den transienten
+            // error-Bucket. markEventDead merkt sich `wasNew`, damit ein
+            // Nutzer-Retry aus der Dead-Letter-UI (retryDeadEvent) den
+            // Create-Pfad wiederfindet.
+            await _store().markEventDead(record.pk, "not-found", "" + response.status);
+            _fireCountEvent();
+            return { status: "dead", deadReason: "not-found", statusCode: response.status };
         }
         if (response.status === 429) {
             // Refs #1351/#1384: Ratelimit ist user-global (analog
@@ -373,6 +407,143 @@
         return { status: "error", statusCode: response.status };
     }
 
+    /*
+     * Replay eines offline neu angelegten Events gegen ``/events/new/``.
+     * Erfolg = Redirect auf die Event-Detailseite. Refs #1351/#1384: nach M11
+     * antwortet die Create-View auf ein ungueltiges Formular (roher
+     * ``Accept: application/json``) mit 422+errors — der bestehende
+     * 200-Re-Render-Fallback (aeltere/HX-Faelle) bleibt zusaetzlich erhalten.
+     * Bei Erfolg den lokalen "new"-Record entfernen — die naechste
+     * Re-Validierung holt das kanonische Server-Event mit seiner echten pk
+     * ins Bundle. Antwort-Klassifikation: _classifyCreateResponse (geteilt
+     * mit dem WorkItem-Track, Refs #1398).
+     */
+    async function replayNewEvent(record, csrf) {
+        const data = record.data || {};
+        const form = new URLSearchParams();
+        if (record.clientPk) form.set("client", record.clientPk);
+        if (data.documentTypePk) form.set("document_type", data.documentTypePk);
+        // Refs #1397: Fall-Zuordnung mitschicken (Feldname wie EventMetaForm).
+        if (data.casePk) form.set("case", data.casePk);
+        if (data.occurredAt) form.set("occurred_at", data.occurredAt);
+        _appendFormFields(form, data.formData);
+        const response = await _postFormWithCsrfRetry("/events/new/", form.toString(), csrf, {
+            "X-Idempotency-Key": data.idempotencyKey || record.pk,
+        });
+        if (!response) {
+            return { status: "network-error" };
+        }
+        return await _classifyCreateResponse(record, response);
+    }
+
+    /*
+     * Refs #1398 (P2): Ein offline NEU angelegtes WorkItem in IndexedDB
+     * ablegen — Spiegel von markEventNew: localStatus "new" mit
+     * client-generierter pk, Idempotenz-Key gegen Doppel-Anlage bei
+     * Verbindungsabbruch nach dem Server-Write (F-09/#1109, #1329).
+     * `formData` traegt die WorkItemForm-Felder flach (item_type, title,
+     * description, priority, due_date, remind_at, recurrence, assigned_to);
+     * `kind: "workitem"` in `data` waehlt beim Replay den
+     * /workitems/new/-Track.
+     */
+    async function markWorkItemNew(clientPk, formData, options) {
+        const opts = options || {};
+        const record = {
+            pk: opts.pk || _uuid(),
+            clientPk: clientPk || "",
+            occurredAt: "",
+            localStatus: "new",
+            data: {
+                kind: "workitem",
+                formData: formData,
+                idempotencyKey: opts.idempotencyKey || _uuid(),
+                lastEditedAt: Date.now(),
+            },
+        };
+        // Refs #1356: offline neu angelegte Eintraege existieren serverseitig
+        // noch gar nicht — das schuetzenswerteste Gut. Fire-and-forget um
+        // dauerhaften Speicher bitten (Eviction-Schutz), OHNE das Anlegen zu
+        // blockieren (analog markEventNew).
+        window.offlineStore.ensurePersistentStorage().catch(function () {});
+        await _store().saveOfflineEdit(record);
+        _fireCountEvent();
+        return record;
+    }
+
+    /*
+     * Refs #1398 (P2): Ein offline bearbeitetes WorkItem in IndexedDB
+     * ablegen — Spiegel von markEventModified fuer den WorkItem-Track.
+     *
+     * `expectedUpdatedAt` (Optimistic-Lock-Token) ist das
+     * WorkItem-`updated_at` aus dem Bundle (Refs #1398 P1) und kommt vom
+     * Aufrufer. Anders als bei Events gibt es KEINEN CLEAN-Row-Fallback in
+     * der events-Tabelle (WorkItems liegen im clients-Envelope) — bei einem
+     * Re-Edit bleibt der Token des vorherigen Edit-Envelopes erhalten;
+     * fehlt er ganz, antwortet der Server mit 409 "missing-token"
+     * (Konflikt-Flow, #1338/#1351) statt still Last-Write-Wins.
+     */
+    async function markWorkItemModified(workItemPk, formData, options) {
+        const opts = options || {};
+        const pk = String(workItemPk);
+        // Refs #1351 (analog markEventModified): ein offline NEU angelegtes,
+        // noch nie synchronisiertes WorkItem (localStatus "new") darf durch
+        // einen Re-Edit NICHT zu "modified" degradieren — sonst zielte jeder
+        // weitere Replay dauerhaft auf die serverseitig nie existierende
+        // /workitems/<pk>/edit/-URL statt auf /workitems/new/ (S1-Invariante
+        // „unsynced stirbt nie still").
+        const existing = await _store().getOfflineEvent(pk);
+        const wasNew = Boolean(existing && existing.localStatus === "new");
+        let token = opts.expectedUpdatedAt || "";
+        if (!token && existing && existing.data) {
+            token = existing.data.expectedUpdatedAt || "";
+        }
+        const data = {
+            kind: "workitem",
+            formData: formData,
+            expectedUpdatedAt: token,
+            lastEditedAt: Date.now(),
+        };
+        if (wasNew) {
+            // Refs #1351 (analog markEventModified): der Idempotenzschutz der
+            // urspruenglichen Neuanlage muss den Re-Edit ueberleben — sonst
+            // schickt der naechste Replay ein ANDERES Idempotency-Key mit und
+            // der Doppel-Anlage-Schutz greift nicht mehr.
+            data.idempotencyKey = (existing.data && existing.data.idempotencyKey) || _uuid();
+        }
+        const record = {
+            pk: pk,
+            clientPk: opts.clientPk || "",
+            occurredAt: "",
+            localStatus: wasNew ? "new" : "modified",
+            data: data,
+        };
+        await _store().saveOfflineEdit(record);
+        _fireCountEvent();
+        return record;
+    }
+
+    /*
+     * Refs #1398 (P2): Replay eines offline neu angelegten WorkItems gegen
+     * ``/workitems/new/`` — Spiegel von replayNewEvent. `client` geht als
+     * hidden-pk-Feld mit (WorkItemForm), alle uebrigen Formfelder liegen
+     * flach in `formData`. Idempotenz-Key-Konvention identisch zum
+     * Event-Pendant (#1329): der beim Anlegen geminte Key bleibt ueber
+     * Re-Edits/Retries stabil.
+     */
+    async function replayNewWorkItem(record, csrf) {
+        const data = record.data || {};
+        const form = new URLSearchParams();
+        if (record.clientPk) form.set("client", record.clientPk);
+        _appendFormFields(form, data.formData);
+        const response = await _postFormWithCsrfRetry("/workitems/new/", form.toString(), csrf, {
+            "X-Idempotency-Key": data.idempotencyKey || record.pk,
+        });
+        if (!response) {
+            return { status: "network-error" };
+        }
+        return await _classifyCreateResponse(record, response);
+    }
+
     async function replayModifiedEvent(record) {
         if (!navigator.onLine) return { status: "offline" };
         if (window.crypto_session && window.crypto_session.ready) {
@@ -385,29 +556,19 @@
         let csrf = _csrfFromMeta();
         if (!csrf) csrf = await _refreshCsrf();
 
-        // Refs #1323: offline NEU angelegte Events gehen an /events/new/ statt
-        // an den /edit/-Pfad (dessen pk serverseitig gar nicht existiert).
+        // Refs #1323: offline NEU angelegte Eintraege gehen an den Create-
+        // statt den /edit/-Pfad (dessen pk serverseitig gar nicht existiert).
+        // Refs #1398 (P2): der `kind`-Diskriminator in `data` waehlt den
+        // WorkItem-Track; Events tragen nie `kind: "workitem"`.
         if (record.localStatus === "new") {
+            if (_isWorkItemRecord(record)) {
+                return await replayNewWorkItem(record, csrf);
+            }
             return await replayNewEvent(record, csrf);
         }
 
         const form = new URLSearchParams();
-        const fd = (record.data && record.data.formData) || {};
-        for (const [key, value] of Object.entries(fd)) {
-            if (value === null || value === undefined) continue;
-            // Refs #1111: MULTI_SELECT-Felder tragen ein Array — jeden Wert als
-            // eigenen Key anhängen, damit Djangos MultipleChoiceField
-            // (``value_from_datadict`` → ``getlist``) sie als Liste sieht statt
-            // als einen kommaverbundenen String (= „ungültige Auswahl").
-            if (Array.isArray(value)) {
-                for (const item of value) {
-                    if (item === null || item === undefined) continue;
-                    form.append(key, String(item));
-                }
-            } else {
-                form.append(key, String(value));
-            }
-        }
+        _appendFormFields(form, record.data && record.data.formData);
         // Refs #1109 (F-07): Token mitschicken, damit der Server-Konflikt-Check
         // greift. Fehlt er am Record (z.B. ein vor diesem Fix angelegter Edit),
         // einmalig aus dem gecachten Bundle-Event nachladen.
@@ -430,7 +591,12 @@
             form.set("expected_updated_at", token);
         }
 
-        const response = await _postFormWithCsrfRetry(_eventEditUrl(record.pk), form.toString(), csrf);
+        // Refs #1398 (P2): der Edit-Pfad ist generisch — nur die Ziel-URL
+        // haengt am `kind` (WorkItem: /workitems/<pk>/edit/, Event:
+        // /events/<pk>/edit/); Klassifikation + Store-Side-Effects darunter
+        // sind fuer beide identisch (HTTP-Replay-Contract, ADR-030).
+        const editUrl = _isWorkItemRecord(record) ? _workItemEditUrl(record.pk) : _eventEditUrl(record.pk);
+        const response = await _postFormWithCsrfRetry(editUrl, form.toString(), csrf);
         if (!response) {
             return { status: "network-error" };
         }
@@ -604,6 +770,10 @@
     window.offlineEdit = {
         markEventModified: markEventModified,
         markEventNew: markEventNew,
+        // Refs #1398 (P2): WorkItem-Track — gleiche Tabelle/Status-Ops wie
+        // Events, eigene Replay-Endpunkte via `kind`-Diskriminator in `data`.
+        markWorkItemModified: markWorkItemModified,
+        markWorkItemNew: markWorkItemNew,
         replayModifiedEvent: replayModifiedEvent,
         replayAllModifiedEvents: replayAllModifiedEvents,
         enqueueConflictForReview: enqueueConflictForReview,

@@ -150,6 +150,73 @@ def test_dead_event_shows_not_found_reason_and_discard_removes_it(browser, base_
 
 
 # ---------------------------------------------------------------------------
+# (a2) Refs #1394: 404/410 auf den CREATE-Replay (Event UND WorkItem) landet
+# als dead-Letter in der Liste — vorher deckte nur der Edit-Pfad (a) das ab;
+# der Create-Pfad klassifizierte 404 als endloses "revoked" und 410 als
+# transienten error (Auto-Retry bei jedem Reconnect statt Nutzerentscheidung).
+
+
+@pytest.mark.parametrize("track", ["event", "workitem"])
+def test_dead_create_shows_in_deadletter_list_and_discard_removes_it(browser, base_url, _login_storage_state, track):
+    """RED gegen den heutigen Code (Event-Teil) bzw. gegen den noch fehlenden
+    WorkItem-Track (#1398 P2): ein 404 auf den Create-Replay muss den
+    ``new``-Record dead-lettern; er erscheint in der Konflikt-Liste mit
+    not-found-Text, wird NICHT automatisch erneut versucht, und Verwerfen
+    entfernt ihn endgueltig. Refs #1394, #1398."""
+    context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        _bootstrap_store(page, base_url)
+        hits = {"n": 0}
+
+        def _handler(route):
+            hits["n"] += 1
+            route.fulfill(status=404, content_type="text/html", body="Not Found")
+
+        page.route(re.compile(r"/events/new/|/workitems/new/"), _handler)
+
+        event_pk = page.evaluate(
+            """async (track) => {
+                const rec = track === 'event'
+                    ? await window.offlineEdit.markEventNew('c1', 'dt1', { notiz: 'Neu-offline-404' },
+                        { occurredAt: '2026-01-01T09:00', documentTypeName: 'Kontakt' })
+                    : await window.offlineEdit.markWorkItemNew('c1', {
+                        item_type: 'task', title: 'Aufgabe-offline-404', priority: 'normal' });
+                await window.offlineEdit.replayAllModifiedEvents();
+                return rec.pk;
+            }""",
+            track,
+        )
+        after = page.evaluate("(pk) => window.offlineStore.getOfflineEvent(pk)", event_pk)
+        assert after is not None
+        assert after["localStatus"] == "dead", f"Erwartete dead nach Create-404, war {after['localStatus']!r}"
+        assert after["data"]["deadReason"] == "not-found"
+
+        # Kein Auto-Retry: der naechste Batch-Lauf ueberspringt den dead-Record.
+        page.evaluate("async () => { await window.offlineEdit.replayAllModifiedEvents(); }")
+        assert hits["n"] == 1, f"dead-Record darf nicht erneut gesendet werden: {hits['n']}"
+
+        page.goto(f"{base_url}/offline/conflicts/", wait_until="domcontentloaded")
+        item = page.locator("[data-testid='dead-event-item']").first
+        item.wait_for(state="visible", timeout=10000)
+        assert "Wurde auf dem Server gelöscht oder der Zugriff wurde entzogen" in item.inner_text(), (
+            f"deadReason-Text fehlt/falsch: {item.inner_text()!r}"
+        )
+
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.locator(f"[data-testid='dead-event-discard-{event_pk}']").click()
+        page.locator("[data-testid='dead-event-item']").wait_for(state="hidden", timeout=10000)
+
+        remaining = page.evaluate("(pk) => window.offlineStore.getOfflineEvent(pk)", event_pk)
+        assert remaining is None, "Verwerfen muss die dead-Row endgueltig loeschen"
+    finally:
+        with suppress(Exception):
+            page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+        context.close()
+
+
+# ---------------------------------------------------------------------------
 # (b) Queue-409-Row erscheint unter "Wartet auf Entscheidung", Discard entfernt sie.
 
 

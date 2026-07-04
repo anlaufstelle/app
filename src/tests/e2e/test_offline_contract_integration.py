@@ -627,3 +627,317 @@ class TestOfflineCreateCaseAssignment:
         finally:
             _purge(page)
             context.close()
+
+
+# ---------------------------------------------------------------------------
+# Refs #1398 (P2) — WorkItem-Replay-Track: Records mit ``kind: "workitem"``
+# IN ``data`` teilen sich die ``events``-Tabelle + Status-Ops mit den Events,
+# replayen aber gegen die WorkItem-Endpunkte (/workitems/new/ bzw.
+# /workitems/<pk>/edit/). Klassifikation + Store-Side-Effects identisch zum
+# Event-Pfad (HTTP-Replay-Contract, ADR-030).
+
+
+class TestWorkItemReplayContract:
+    def test_new_workitem_replay_posts_all_fields_with_idempotency_key(self, browser, base_url, _login_storage_state):
+        """RED gegen den heutigen Code: ``offlineEdit.markWorkItemNew`` existiert
+        nicht — der WorkItem-Track (#1398 P2) fehlt. Erwartung: der Replay
+        eines offline neu angelegten WorkItems POSTet an ``/workitems/new/``
+        mit allen ``WorkItemForm``-Feldern inkl. ``client`` (hidden pk) und
+        traegt den persistierten ``X-Idempotency-Key``; ein Redirect-Erfolg
+        raeumt den ``new``-Record ab (synced)."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            client_pk = str(uuid.uuid4())
+            user_pk = str(uuid.uuid4())
+            captured = []
+
+            def _handler(route):
+                captured.append(
+                    {
+                        "url": route.request.url,
+                        "body": route.request.post_data or "",
+                        "idem": route.request.headers.get("x-idempotency-key"),
+                    }
+                )
+                route.fulfill(status=302, headers={"Location": "/workitems/"})
+
+            page.route(re.compile(r"/workitems/new/"), _handler)
+            result = page.evaluate(
+                """async (args) => {
+                    const rec = await window.offlineEdit.markWorkItemNew(args.clientPk, {
+                        item_type: 'task', title: 'Offline-Aufgabe', description: 'Notiz',
+                        priority: 'important', due_date: '2026-08-01', remind_at: '2026-07-20',
+                        recurrence: 'weekly', assigned_to: args.userPk,
+                    });
+                    const r = await window.offlineEdit.replayModifiedEvent(rec);
+                    const row = await window.offlineStore.getOfflineEvent(rec.pk);
+                    return { status: r.status, rowPresent: !!row, idemKey: rec.data.idempotencyKey };
+                }""",
+                {"clientPk": client_pk, "userPk": user_pk},
+            )
+            assert len(captured) == 1, f"Genau ein POST an /workitems/new/ erwartet: {captured!r}"
+            body = captured[0]["body"]
+            for fragment in (
+                f"client={client_pk}",
+                "item_type=task",
+                "title=Offline-Aufgabe",
+                "description=Notiz",
+                "priority=important",
+                "due_date=2026-08-01",
+                "remind_at=2026-07-20",
+                "recurrence=weekly",
+                f"assigned_to={user_pk}",
+            ):
+                assert fragment in body, f"Feld fehlt im Create-Replay-Body: {fragment!r} not in {body!r}"
+            assert captured[0]["idem"] == result["idemKey"], (
+                f"Der Replay muss den persistierten Idempotenz-Key senden: "
+                f"{captured[0]['idem']!r} != {result['idemKey']!r}"
+            )
+            assert result["status"] == "synced", f"Redirect-Erfolg muss synced liefern: {result!r}"
+            assert result["rowPresent"] is False, "Erfolg muss den new-Record abraeumen (clearOfflineEdit)"
+        finally:
+            _purge(page)
+            context.close()
+
+    def test_modified_workitem_replay_posts_token_to_workitem_edit_url(self, browser, base_url, _login_storage_state):
+        """RED gegen den heutigen Code: ``markWorkItemModified`` existiert nicht
+        und der Edit-Replay kennt nur die Event-URL. Erwartung: der Replay
+        eines modifizierten WorkItems POSTet an ``/workitems/<pk>/edit/`` mit
+        ``expected_updated_at`` (Token = WorkItem-``updated_at`` aus dem
+        Bundle); Erfolg markiert den Record ``clean`` (wie beim Event-Edit)."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            wi_pk = str(uuid.uuid4())
+            captured = []
+
+            def _handler(route):
+                captured.append({"url": route.request.url, "body": route.request.post_data or ""})
+                route.fulfill(status=302, headers={"Location": "/workitems/"})
+
+            page.route(re.compile(r"/workitems/.*/edit/"), _handler)
+            result = page.evaluate(
+                """async (pk) => {
+                    const rec = await window.offlineEdit.markWorkItemModified(
+                        pk,
+                        { item_type: 'task', title: 'Neuer-Titel', priority: 'normal', recurrence: 'none' },
+                        { clientPk: 'c1', expectedUpdatedAt: '2026-01-01T00:00:00Z' }
+                    );
+                    const r = await window.offlineEdit.replayModifiedEvent(rec);
+                    const row = await window.offlineStore.getOfflineEvent(pk);
+                    return { status: r.status, localStatus: row && row.localStatus };
+                }""",
+                wi_pk,
+            )
+            assert len(captured) == 1, f"Genau ein POST erwartet: {captured!r}"
+            assert captured[0]["url"].endswith(f"/workitems/{wi_pk}/edit/"), (
+                f"WorkItem-Edit muss an /workitems/<pk>/edit/ gehen (nicht an die Event-URL): {captured[0]['url']!r}"
+            )
+            assert "expected_updated_at=2026-01-01T00%3A00%3A00Z" in captured[0]["body"], (
+                f"Der Edit-Replay muss den Optimistic-Lock-Token senden: {captured[0]['body']!r}"
+            )
+            assert "title=Neuer-Titel" in captured[0]["body"]
+            assert result["status"] == "synced", f"Redirect-Erfolg muss synced liefern: {result!r}"
+            assert result["localStatus"] == "clean", (
+                f"Erfolg muss den Record auf clean setzen (sichtbar lassen, F-08): {result!r}"
+            )
+        finally:
+            _purge(page)
+            context.close()
+
+    def test_workitem_edit_stale_token_409_marks_conflict(self, browser, base_url, _login_storage_state):
+        """409 (stale ``expected_updated_at``) beim WorkItem-Edit-Replay:
+        Klassifikation identisch zum Event-Pfad — Record wird ``conflict``,
+        der Server-Stand landet im Envelope (kein stiller Last-Write-Wins)."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+
+            def _handler(route):
+                route.fulfill(
+                    status=409,
+                    content_type="application/json",
+                    body='{"error":"conflict","server_state":{"title":"Server-Titel","description":"",'
+                    '"status":"open","updated_at":"2026-02-02T00:00:00Z"}}',
+                )
+
+            page.route(re.compile(r"/workitems/.*/edit/"), _handler)
+            wi_pk = str(uuid.uuid4())
+            result = page.evaluate(
+                """async (pk) => {
+                    const rec = await window.offlineEdit.markWorkItemModified(
+                        pk,
+                        { item_type: 'task', title: 'Lokal-Titel', priority: 'normal', recurrence: 'none' },
+                        { clientPk: 'c1', expectedUpdatedAt: '2026-01-01T00:00:00Z' }
+                    );
+                    const r = await window.offlineEdit.replayModifiedEvent(rec);
+                    const row = await window.offlineStore.getOfflineEvent(pk);
+                    return {
+                        status: r.status,
+                        serverTitle: r.serverState && r.serverState.title,
+                        localStatus: row && row.localStatus,
+                    };
+                }""",
+                wi_pk,
+            )
+            assert result["status"] == "conflict", f"409 muss conflict liefern: {result!r}"
+            assert result["serverTitle"] == "Server-Titel", f"server_state muss durchgereicht werden: {result!r}"
+            assert result["localStatus"] == "conflict", f"Record muss conflict-markiert erhalten bleiben: {result!r}"
+        finally:
+            _purge(page)
+            context.close()
+
+    def test_workitem_edit_422_keeps_record_as_invalid(self, browser, base_url, _login_storage_state):
+        """422 (serverseitige Formularvalidierung) beim WorkItem-Edit-Replay:
+        Record bleibt als ``modified`` erhalten, Feldfehler gehen an den
+        Aufrufer (kein stiller Verwurf der dokumentierten Aenderung)."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+
+            def _handler(route):
+                route.fulfill(
+                    status=422,
+                    content_type="application/json",
+                    body='{"error":"invalid","errors":{"title":[{"message":"Pflichtfeld"}]}}',
+                )
+
+            page.route(re.compile(r"/workitems/.*/edit/"), _handler)
+            wi_pk = str(uuid.uuid4())
+            result = page.evaluate(
+                """async (pk) => {
+                    const rec = await window.offlineEdit.markWorkItemModified(
+                        pk,
+                        { item_type: 'task', title: '', priority: 'normal', recurrence: 'none' },
+                        { clientPk: 'c1', expectedUpdatedAt: '2026-01-01T00:00:00Z' }
+                    );
+                    const r = await window.offlineEdit.replayModifiedEvent(rec);
+                    const row = await window.offlineStore.getOfflineEvent(pk);
+                    return { status: r.status, errors: r.errors, localStatus: row && row.localStatus };
+                }""",
+                wi_pk,
+            )
+            assert result["status"] == "invalid", f"422 muss invalid liefern: {result!r}"
+            assert "title" in (result["errors"] or {}), f"Feldfehler muessen durchgereicht werden: {result!r}"
+            assert result["localStatus"] == "modified", f"Der Record muss erhalten bleiben: {result!r}"
+        finally:
+            _purge(page)
+            context.close()
+
+    def test_workitem_replays_login_redirect_keep_rows(self, browser, base_url, _login_storage_state):
+        """302→/login/ (Session waehrend des Offline-Fensters abgelaufen) ist
+        auch im WorkItem-Track KEIN Erfolg: beide Records (new + modified)
+        bleiben unveraendert liegen, der Batch bricht ab (auth-pending) —
+        symmetrisch zu Bug #2 im Event-Pfad. Refs #1351, #1398."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+
+            def _handler(route):
+                url = route.request.url
+                if "/workitems/" in url:
+                    route.fulfill(status=302, headers={"Location": "/login/?next=/"})
+                else:
+                    route.fulfill(
+                        status=200,
+                        content_type="text/html",
+                        body="<html><head><meta name='csrf-token' content='x'></head><body>login</body></html>",
+                    )
+
+            page.route(re.compile(r"/workitems/|/login/"), _handler)
+            wi_pk = str(uuid.uuid4())
+            statuses = page.evaluate(
+                """async (pk) => {
+                    const recNew = await window.offlineEdit.markWorkItemNew('c1', {
+                        item_type: 'task', title: 'Neu-offline', priority: 'normal',
+                    });
+                    await window.offlineEdit.markWorkItemModified(
+                        pk,
+                        { item_type: 'task', title: 'Editiert-offline', priority: 'normal' },
+                        { clientPk: 'c1', expectedUpdatedAt: '2026-01-01T00:00:00Z' }
+                    );
+                    await window.offlineEdit.replayAllModifiedEvents();
+                    const rowNew = await window.offlineStore.getOfflineEvent(recNew.pk);
+                    const rowMod = await window.offlineStore.getOfflineEvent(pk);
+                    return [rowNew && rowNew.localStatus, rowMod && rowMod.localStatus];
+                }""",
+                wi_pk,
+            )
+            assert sorted(statuses) == ["modified", "new"], (
+                f"Beide WorkItem-Records muessen den Login-Redirect unveraendert "
+                f"ueberleben (kein stiller Datenverlust): {statuses!r}"
+            )
+        finally:
+            _purge(page)
+            context.close()
+
+
+# ---------------------------------------------------------------------------
+# Refs #1394 — 404/410 auf den CREATE-Replay (Event UND WorkItem) ist
+# PERMANENT: dead-Letter statt endlosem "revoked"-Retry bei jedem Reconnect
+# (ADR-030; 403 bleibt "revoked", kein Purge-Trigger seit #1354).
+
+
+class TestCreateDeadLetterContract:
+    @pytest.mark.parametrize(
+        ("track", "status_code"),
+        [("event", 404), ("event", 410), ("workitem", 404), ("workitem", 410)],
+    )
+    def test_create_not_found_marks_record_dead_without_auto_retry(
+        self, browser, base_url, _login_storage_state, track, status_code
+    ):
+        """RED gegen den heutigen Code: ``replayNewEvent`` klassifiziert
+        ``403 || 404`` als ``revoked`` und laesst 410 in den transienten
+        error-Bucket fallen — der nie anlegbare Record wuerde bei jedem
+        Reconnect erneut versucht. Erwartung (#1394/ADR-030): 404/410 →
+        ``markEventDead(pk, "not-found", status)``, kein Auto-Retry im
+        naechsten Batch-Lauf."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            hits = {"n": 0}
+
+            def _handler(route):
+                hits["n"] += 1
+                route.fulfill(status=status_code, content_type="text/html", body="weg")
+
+            page.route(re.compile(r"/events/new/|/workitems/new/"), _handler)
+            result = page.evaluate(
+                """async (track) => {
+                    const rec = track === 'event'
+                        ? await window.offlineEdit.markEventNew('c1', 'dt1', { notiz: 'x' },
+                            { occurredAt: '2026-01-01T09:00', documentTypeName: 'Kontakt' })
+                        : await window.offlineEdit.markWorkItemNew('c1', {
+                            item_type: 'task', title: 'x', priority: 'normal' });
+                    await window.offlineEdit.replayAllModifiedEvents();
+                    const row = await window.offlineStore.getOfflineEvent(rec.pk);
+                    await window.offlineEdit.replayAllModifiedEvents();
+                    const rowAfter = await window.offlineStore.getOfflineEvent(rec.pk);
+                    return {
+                        localStatus: row && row.localStatus,
+                        deadReason: row && row.data && row.data.deadReason,
+                        lastError: row && row.data && row.data.lastError,
+                        wasNew: row && row.data && row.data.wasNew,
+                        stillDead: rowAfter && rowAfter.localStatus,
+                    };
+                }""",
+                track,
+            )
+            assert result["localStatus"] == "dead", f"{status_code} auf Create muss dead-lettern: {result!r}"
+            assert result["deadReason"] == "not-found", f"deadReason muss not-found sein: {result!r}"
+            assert result["lastError"] == str(status_code), f"lastError muss den Statuscode tragen: {result!r}"
+            assert result["wasNew"] is True, f"wasNew-Flag muss fuer den Retry-Pfad erhalten bleiben: {result!r}"
+            assert result["stillDead"] == "dead", f"dead ist KEIN Loeschen — Record bleibt erhalten: {result!r}"
+            assert hits["n"] == 1, (
+                f"Der dead-Record darf im naechsten Replay-Lauf NICHT erneut gesendet werden: {hits['n']}"
+            )
+        finally:
+            _purge(page)
+            context.close()
