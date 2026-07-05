@@ -28,7 +28,7 @@ const OFFLINE_CLIENT_SHELL_URL = "/offline/client-shell/";
 // endlos, statt in die vorhandenen Queue-/Offline-Fallback-Ketten zu laufen.
 const WRITE_FETCH_TIMEOUT_MS = 6000;
 const READ_FETCH_TIMEOUT_MS = 8000;
-// Refs #V5: Die /static/-Eintraege dieses APP_SHELL werden beim Ausliefern von
+// Refs #1413: Die /static/-Eintraege dieses APP_SHELL werden beim Ausliefern von
 // GET /sw.js serverseitig durch staticfiles_storage.url() aufgeloest
 // (ServiceWorkerView._resolve_app_shell). In Produktion (Manifest-Storage)
 // werden daraus die GEHASHTEN URLs — exakt die, die {% static %} in den

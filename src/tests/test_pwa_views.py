@@ -171,7 +171,7 @@ def _app_shell_block(body: str) -> str:
 
 @pytest.mark.django_db
 class TestAppShellFindersGuard:
-    """Refs #V5: Jeder /static/-Eintrag im APP_SHELL muss als Quelldatei via
+    """Refs #1413: Jeder /static/-Eintrag im APP_SHELL muss als Quelldatei via
     ``finders.find`` aufloesbar sein. Ein Tippfehler/Umzug wuerde sonst den
     atomaren ``cache.addAll`` killen (und damit die GESAMTE Precache) — und die
     neue serverseitige Aufloesung faende keinen Manifest-Eintrag. Dieser Guard
@@ -191,7 +191,7 @@ class TestAppShellFindersGuard:
 
 @pytest.mark.django_db
 class TestServiceWorkerPrecacheHashedAssets:
-    """Refs #V5: Der SW-Precache (APP_SHELL) muss die vom Staticfiles-Storage
+    """Refs #1413: Der SW-Precache (APP_SHELL) muss die vom Staticfiles-Storage
     aufgeloesten URLs pre-cachen. In Produktion (Manifest-Storage, DEBUG=False)
     sind das GEHASHTE URLs — sonst verfehlt ``caches.match`` (URL-exakt) die von
     ``{% static %}`` in den Templates referenzierten Assets, und die

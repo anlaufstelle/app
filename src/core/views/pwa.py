@@ -13,7 +13,7 @@ from django.views import View
 
 logger = logging.getLogger(__name__)
 
-# Refs #V5: /static/-String-Literale (in doppelten Anführungszeichen) innerhalb
+# Refs #1413: /static/-String-Literale (in doppelten Anführungszeichen) innerhalb
 # des APP_SHELL-Arrays. Bewusst eng gefasst, damit nur Precache-Eintraege
 # ersetzt werden — HTML-Routen (/, /clients/, /manifest.json), bare Bezeichner
 # (OFFLINE_FALLBACK_URL) und /static/-Vorkommen ausserhalb des Arrays
@@ -30,7 +30,7 @@ def _read_service_worker():
 
 def _resolve_app_shell(content: str) -> str:
     """Loest die /static/-Literale im APP_SHELL-Block auf die vom
-    Staticfiles-Storage gelieferten URLs auf (Refs #V5).
+    Staticfiles-Storage gelieferten URLs auf (Refs #1413).
 
     In Produktion (Manifest-Storage, DEBUG=False) werden daraus die GEHASHTEN
     URLs — exakt die, die ``{% static %}`` in den Templates erzeugt. Da
@@ -58,7 +58,7 @@ def _resolve_app_shell(content: str) -> str:
             return f'"{staticfiles_storage.url(path)}"'
         except ValueError:
             # Kein Manifest-Eintrag (z.B. Asset nicht collected) → ungehashter
-            # Original-Pfad statt 500. Refs #V5.
+            # Original-Pfad statt 500. Refs #1413.
             logger.warning("APP_SHELL: kein Manifest-Eintrag fuer '%s' — Fallback auf ungehashten Pfad.", path)
             return match.group(0)
 
@@ -81,7 +81,7 @@ class ServiceWorkerView(View):
             content = _read_service_worker()
         except FileNotFoundError:
             return HttpResponseNotFound("Service worker not found.")
-        # Refs #V5: APP_SHELL-/static/-Eintraege pro Request auf die (in Prod
+        # Refs #1413: APP_SHELL-/static/-Eintraege pro Request auf die (in Prod
         # gehashten) Staticfiles-URLs aufloesen, damit der Precache exakt die
         # von {% static %} referenzierten Assets trifft.
         content = _resolve_app_shell(content)
