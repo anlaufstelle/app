@@ -33,6 +33,9 @@
             _labelRetried: "",
             _labelDiscarded: "",
             _labelActionFailed: "",
+            // Refs #1398 (P3): Fallback-Label fuer WorkItem-Records (der
+            // Diskriminator ``kind:"workitem"`` liegt im ``data``-Envelope).
+            _labelWorkItem: "",
 
             init() {
                 const ds = this.$el.dataset;
@@ -42,6 +45,7 @@
                     forbidden: ds.reasonForbidden || "",
                     "unexpected-response": ds.reasonUnexpectedResponse || "",
                 };
+                this._labelWorkItem = ds.labelWorkitem || "";
                 this._confirmDiscardText = ds.confirmDiscard || "";
                 this._labelRetried = ds.labelRetried || "";
                 this._labelDiscarded = ds.labelDiscarded || "";
@@ -133,9 +137,17 @@
                         /* noop */
                     }
                 }
+                // Refs #1398 (P3): WorkItem-Records tragen keinen
+                // ``documentTypeName`` (kein DocumentType) — sonst faelschlich als
+                // „Ereignis" gelabelt. Der WorkItem-Titel aus dem Envelope ist die
+                // aussagekraeftigste Bezeichnung, mit „Aufgabe" als Fallback.
+                const isWorkItem = data.kind === "workitem";
+                const label = isWorkItem
+                    ? (data.formData && data.formData.title) || this._labelWorkItem
+                    : data.documentTypeName || "Ereignis";
                 const item = {
                     pk: r.pk,
-                    documentTypeName: data.documentTypeName || "Ereignis",
+                    documentTypeName: label,
                     lastEditedAtFmt: lastEditedAtFmt,
                     reasonText: "",
                     noteText: "",

@@ -203,6 +203,16 @@ def test_dead_create_shows_in_deadletter_list_and_discard_removes_it(browser, ba
         assert "Wurde auf dem Server gelöscht oder der Zugriff wurde entzogen" in item.inner_text(), (
             f"deadReason-Text fehlt/falsch: {item.inner_text()!r}"
         )
+        # Refs #1398 (P3): WorkItem-Records werden mit ihrem Titel gelabelt,
+        # NICHT faelschlich als „Ereignis" (der frueher fehlende kind-Zweig in
+        # conflict-list.js:_eventItem).
+        if track == "workitem":
+            assert "Aufgabe-offline-404" in item.inner_text(), (
+                f"WorkItem-Dead-Record muss mit dem Aufgaben-Titel gelabelt sein: {item.inner_text()!r}"
+            )
+            assert "Ereignis" not in item.inner_text(), (
+                f"WorkItem-Dead-Record darf nicht als Ereignis gelabelt sein: {item.inner_text()!r}"
+            )
 
         page.once("dialog", lambda dialog: dialog.accept())
         page.locator(f"[data-testid='dead-event-discard-{event_pk}']").click()

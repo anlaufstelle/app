@@ -1,0 +1,58 @@
+{% load i18n %}
+{# Refs #1398 (P3): Geteilte WorkItemForm-Felder fuer Offline-Create UND -Edit. #}
+{# Bindet an wiValues.* (offline-client-view.js). Enum-Werte statisch — gegen die #}
+{# WorkItem-Model-Choices verifiziert; assigned_to dynamisch aus assignableUsers. #}
+<div>
+    <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Titel" %} *</label>
+    <input type="text" x-model="wiValues.title" required
+           class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-title">
+</div>
+<div>
+    <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Typ" %}</label>
+    <select x-model="wiValues.item_type" class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-item_type">
+        <option value="task">{% trans "Aufgabe" %}</option>
+        <option value="hint">{% trans "Hinweis" %}</option>
+    </select>
+</div>
+<div>
+    <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Priorität" %}</label>
+    <select x-model="wiValues.priority" class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-priority">
+        <option value="normal">{% trans "Normal" %}</option>
+        <option value="important">{% trans "Wichtig" %}</option>
+        <option value="urgent">{% trans "Dringend" %}</option>
+    </select>
+</div>
+<div>
+    <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Beschreibung" %}</label>
+    <textarea x-model="wiValues.description" rows="3"
+              class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-description"></textarea>
+</div>
+<div>
+    <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Zu erledigen bis" %}</label>
+    <input type="date" x-model="wiValues.due_date" :min="wiDueMin" :max="wiDateMax"
+           class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-due_date">
+</div>
+<div>
+    <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Wiedervorlage am" %}</label>
+    <input type="date" x-model="wiValues.remind_at" :min="wiRemindMin" :max="wiDateMax"
+           class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-remind_at">
+</div>
+<div>
+    <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Wiederholung" %}</label>
+    <select x-model="wiValues.recurrence" class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-recurrence">
+        <option value="none">{% trans "Keine" %}</option>
+        <option value="weekly">{% trans "Wöchentlich" %}</option>
+        <option value="monthly">{% trans "Monatlich" %}</option>
+        <option value="quarterly">{% trans "Vierteljährlich" %}</option>
+        <option value="yearly">{% trans "Jährlich" %}</option>
+    </select>
+</div>
+<div>
+    <label class="block text-xs font-medium text-ink-soft mb-1">{% trans "Zugewiesen an" %}</label>
+    <select x-model="wiValues.assigned_to" class="w-full rounded-md border-subtle text-sm" data-testid="offline-wi-input-assigned_to">
+        <option value="">{% trans "– niemand –" %}</option>
+        <template x-for="u in assignableUsers" :key="u.pk">
+            <option :value="u.pk" x-text="u.name"></option>
+        </template>
+    </select>
+</div>

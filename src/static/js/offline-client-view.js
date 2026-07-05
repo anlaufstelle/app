@@ -33,6 +33,20 @@
         );
     }
 
+    // Refs #1398: heutiges Datum als date-Input-Wert (YYYY-MM-DD) — untere
+    // Datumsschranke fuer WorkItem due_date/remind_at (min_workitem_date).
+    function _todayInput() {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+    }
+
+    // Refs #1398/#708: obere Datumsschranke — 31.12. des Folgejahrs
+    // (max_workitem_date). Werte-Spiegel der WorkItemForm.
+    function _maxWorkItemDateInput() {
+        return new Date().getFullYear() + 1 + "-12-31";
+    }
+
     document.addEventListener("alpine:init", () => {
         Alpine.data("offlineClientView", () => ({
             loading: true,
@@ -62,6 +76,21 @@
             // data-*-Attributen gelesen (i18n via {% trans %}, kein
             // hartkodiertes deutsches JS-Literal).
             _deadReasonText: {},
+            // Refs #1398 (P3): Offline-WorkItem-Erfassung/-Bearbeitung. `wiValues`
+            // traegt die WorkItemForm-Felder flach (Feldnamen wie im Server-Form).
+            creatingWorkItem: false,
+            wiValues: {},
+            wiError: "",
+            // HTML5-Datumsgrenzen (heute / 31.12. Folgejahr), spiegeln
+            // WorkItemForm.min_workitem_date/max_workitem_date. Server-clean()
+            // bleibt Autoritaet; ein 422 wird vom P2-Track graceful behandelt.
+            wiDateMin: "",
+            wiDateMax: "",
+            wiDueMin: "",
+            wiRemindMin: "",
+            // Enum-Labels (item_type/priority) fuer die Anzeige — aus data-*
+            // (i18n via {% trans %}), Werte gegen die Model-Choices verifiziert.
+            _workItemLabels: { itemType: {}, priority: {} },
             init() {
                 this._pk = this.$el.dataset.pk || _pkFromPath();
                 const ds = this.$el.dataset;
@@ -71,6 +100,16 @@
                     forbidden: ds.deadReasonForbidden || "",
                     "unexpected-response": ds.deadReasonUnexpectedResponse || "",
                 };
+                this._workItemLabels = {
+                    itemType: { task: ds.wiTypeTask || "", hint: ds.wiTypeHint || "" },
+                    priority: {
+                        normal: ds.wiPrioNormal || "",
+                        important: ds.wiPrioImportant || "",
+                        urgent: ds.wiPrioUrgent || "",
+                    },
+                };
+                this.wiDateMin = _todayInput();
+                this.wiDateMax = _maxWorkItemDateInput();
                 // Refs #1111: Auf die Sync-Zähler von offline-edit.js hören.
                 // Spielt der Reconnect-Listener (offline-edit.js) eine offline
                 // angelegte Änderung ein, ändert sich der Unsynced-/Konflikt-
@@ -102,6 +141,18 @@
             },
             get noWorkitems() {
                 return !this.hasWorkitems;
+            },
+            // Refs #1398 (P3): zuweisbare Nutzer:innen fuers assigned_to-Dropdown.
+            // Nur fuer Staff+ befuellt (Server-Bundle) — leer bei Assistenz.
+            get assignableUsers() {
+                return (this.data && this.data.assignableUsers) || [];
+            },
+            // Create-Affordanz nur fuer Staff+: das Bundle liefert
+            // ``assignable_users`` ausschliesslich fuer Staff+ (Assistenz bekommt
+            // eine leere Liste), es ist damit der Bundle-Level-Staff+-Marker.
+            // Assistenz sieht so weder Button noch (via can_edit) Edit.
+            get canCreateWorkItem() {
+                return this.assignableUsers.length > 0;
             },
             get showUnavailable() {
                 return !this.loading && !this.available;
@@ -167,6 +218,30 @@
                             });
                         });
                     }
+                    // Refs #1398 (P3): WorkItem-Anzeigefelder vorberechnen
+                    // (CSP-Guard verbietet Method-Calls in x-if/x-show — daher
+                    // Flags/Labels statt Inline-Ausdruecke, analog Events).
+                    if (cached.workitems) {
+                        cached.workitems = cached.workitems.map((wi) => {
+                            const isUnsynced = wi.localStatus === "modified" || wi.localStatus === "new";
+                            const isConflict = wi.localStatus === "conflict";
+                            const isDead = wi.localStatus === "dead";
+                            return Object.assign({}, wi, {
+                                is_unsynced: isUnsynced,
+                                is_conflict: isConflict,
+                                is_dead: isDead,
+                                dead_reason_text: isDead ? this._deadReasonText[wi.deadReason] || "" : "",
+                                // Edit-Affordanz nur wo der Replay durchginge (can_edit
+                                // aus dem Bundle bzw. bereits unsynced), nie bei Konflikt.
+                                can_edit_ui: Boolean((wi.can_edit || isUnsynced) && !isConflict),
+                                editing: false,
+                                item_type_label: this._workItemLabels.itemType[wi.item_type] || "",
+                                priority_label: this._workItemLabels.priority[wi.priority] || "",
+                                assigned_to_name: this._assignedName(wi.assigned_to_pk, cached.assignableUsers || []),
+                                due_date_fmt: this.formatDate(wi.due_date),
+                            });
+                        });
+                    }
                     this.data = cached;
                     this.lastSynced = cached.lastSynced;
                     this.lastSyncedRel = this.relativeTime(cached.lastSynced);
@@ -209,6 +284,26 @@
                 if (diffH < 24) return "vor " + diffH + " Std";
                 const diffD = Math.floor(diffH / 24);
                 return "vor " + diffD + " Tg";
+            },
+            // Refs #1398: reines Datum (YYYY-MM-DD) lokalisiert formatieren.
+            // Leerer/ungueltiger Wert -> leerer String (kein "Invalid Date").
+            formatDate(v) {
+                if (!v) return "";
+                const d = new Date(this._dateOnly(v));
+                if (Number.isNaN(d.getTime())) return "";
+                return d.toLocaleDateString("de-DE", { dateStyle: "short" });
+            },
+            _dateOnly(v) {
+                return v ? String(v).slice(0, 10) : "";
+            },
+            _assignedName(pk, users) {
+                if (!pk) return "";
+                // ``users`` explizit uebergeben, weil load() die Namen VOR
+                // ``this.data = cached`` vorberechnet (this.assignableUsers laese
+                // sonst den alten/leeren Stand).
+                const list = users || this.assignableUsers;
+                const u = list.find((x) => x.pk === pk);
+                return u ? u.name : "";
             },
 
             /* ── Offline-Edit (Refs #1111) ─────────────────────────────── */
@@ -496,6 +591,165 @@
                     // eslint-disable-next-line no-console
                     console.error("[offline-viewer] saveEdit", e);
                     this.editError = "Speichern fehlgeschlagen: " + (e.message || e);
+                } finally {
+                    this.saving = false;
+                }
+            },
+            /* ── Offline-WorkItem-Erfassung/-Bearbeitung (Refs #1398 P3) ──── */
+
+            _emptyWorkItemValues() {
+                return {
+                    item_type: "task",
+                    title: "",
+                    description: "",
+                    priority: "normal",
+                    due_date: "",
+                    remind_at: "",
+                    recurrence: "none",
+                    assigned_to: "",
+                };
+            },
+            _workItemFormData() {
+                // WorkItemForm-Feldnamen 1:1 (der Replay POSTet sie flach an
+                // /workitems/new/ bzw. /workitems/<pk>/edit/).
+                return {
+                    item_type: this.wiValues.item_type,
+                    title: this.wiValues.title,
+                    description: this.wiValues.description,
+                    priority: this.wiValues.priority,
+                    due_date: this.wiValues.due_date,
+                    remind_at: this.wiValues.remind_at,
+                    recurrence: this.wiValues.recurrence,
+                    assigned_to: this.wiValues.assigned_to,
+                };
+            },
+            // Genau ein WorkItem als „in Bearbeitung" markieren (analog _setEditing
+            // fuer Events; CSP: keine Method-Calls in x-if, daher per-Item-Flag).
+            _setEditingWorkItem(pk) {
+                for (const w of (this.data && this.data.workitems) || []) {
+                    w.editing = w.pk === pk;
+                }
+            },
+            // Refs #1131-Spiegel: Beim Edit eines bereits ueberfaelligen Items die
+            // HTML5-min auf den Bestandswert absenken, sonst verwuerfe die
+            // Browser-Native-Validation den unveraenderten Prefill.
+            _dateMinFor(existing) {
+                const today = this.wiDateMin;
+                const d = this._dateOnly(existing);
+                if (d && d < today) return d;
+                return today;
+            },
+            startCreateWorkItem() {
+                this.wiError = "";
+                this.lastSyncResult = "";
+                this._setEditing(null);
+                this._setEditingWorkItem(null);
+                this.creating = false;
+                this.wiValues = this._emptyWorkItemValues();
+                this.wiDueMin = this.wiDateMin;
+                this.wiRemindMin = this.wiDateMin;
+                this.creatingWorkItem = true;
+            },
+            cancelCreateWorkItem() {
+                this.creatingWorkItem = false;
+                this.wiValues = {};
+                this.wiError = "";
+            },
+            startEditWorkItem(wi) {
+                this.wiError = "";
+                this.lastSyncResult = "";
+                this._setEditing(null);
+                this.creating = false;
+                this.creatingWorkItem = false;
+                this.wiValues = {
+                    item_type: wi.item_type || "task",
+                    title: wi.title || "",
+                    description: wi.description || "",
+                    priority: wi.priority || "normal",
+                    due_date: this._dateOnly(wi.due_date),
+                    remind_at: this._dateOnly(wi.remind_at),
+                    recurrence: wi.recurrence || "none",
+                    assigned_to: wi.assigned_to_pk || "",
+                };
+                this.wiDueMin = this._dateMinFor(wi.due_date);
+                this.wiRemindMin = this._dateMinFor(wi.remind_at);
+                this._setEditingWorkItem(wi.pk);
+            },
+            cancelEditWorkItem() {
+                this._setEditingWorkItem(null);
+                this.wiValues = {};
+                this.wiError = "";
+            },
+            async saveCreateWorkItem() {
+                if (this.saving) return;
+                this.saving = true;
+                this.wiError = "";
+                try {
+                    if (!window.offlineEdit || !window.offlineEdit.markWorkItemNew) {
+                        this.wiError = "Offline-Erfassung nicht verfügbar.";
+                        return;
+                    }
+                    if (!this.wiValues.title) {
+                        this.wiError = "Bitte einen Titel angeben.";
+                        return;
+                    }
+                    const record = await window.offlineEdit.markWorkItemNew(this._pk, this._workItemFormData());
+                    this.lastSyncPk = record.pk;
+                    this.creatingWorkItem = false;
+                    this.wiValues = {};
+                    await this.load();
+                    if (navigator.onLine && window.offlineEdit.replayModifiedEvent) {
+                        const result = await this._replayExclusive(record);
+                        this._reflectReplay(result);
+                        await this._reconcile();
+                    } else {
+                        this.lastSyncResult = "pending";
+                    }
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.error("[offline-viewer] saveCreateWorkItem", e);
+                    this.wiError = "Erfassen fehlgeschlagen: " + (e.message || e);
+                } finally {
+                    this.saving = false;
+                }
+            },
+            async saveEditWorkItem(wi) {
+                if (this.saving) return;
+                this.saving = true;
+                this.wiError = "";
+                try {
+                    if (!window.offlineEdit || !window.offlineEdit.markWorkItemModified) {
+                        this.wiError = "Offline-Editor nicht verfügbar.";
+                        return;
+                    }
+                    if (!this.wiValues.title) {
+                        this.wiError = "Bitte einen Titel angeben.";
+                        return;
+                    }
+                    // Refs #1398 (P3-Review-Handoff #1): clientPk MUSS mit — ein
+                    // offline NEU angelegtes (``new``) WorkItem bleibt beim Re-Edit
+                    // ``new`` und replayt via /workitems/new/, das ``client`` als
+                    // Pflichtfeld braucht (sonst 422-Schleife). Zusaetzlich haengt
+                    // das Overlay (r.clientPk === pk) an diesem Feld.
+                    const record = await window.offlineEdit.markWorkItemModified(wi.pk, this._workItemFormData(), {
+                        clientPk: this._pk,
+                        expectedUpdatedAt: wi.updated_at || "",
+                    });
+                    this.lastSyncPk = wi.pk;
+                    this._setEditingWorkItem(null);
+                    this.wiValues = {};
+                    await this.load();
+                    if (navigator.onLine && window.offlineEdit.replayModifiedEvent) {
+                        const result = await this._replayExclusive(record);
+                        this._reflectReplay(result);
+                        await this._reconcile();
+                    } else {
+                        this.lastSyncResult = "pending";
+                    }
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.error("[offline-viewer] saveEditWorkItem", e);
+                    this.wiError = "Speichern fehlgeschlagen: " + (e.message || e);
                 } finally {
                     this.saving = false;
                 }

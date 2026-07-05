@@ -9,7 +9,12 @@
      data-dead-reason-not-found="{% trans 'Wurde auf dem Server gelöscht oder der Zugriff wurde entzogen' %}"
      data-dead-reason-invalid="{% trans 'Vom Server als ungültig abgelehnt' %}"
      data-dead-reason-forbidden="{% trans 'Keine Berechtigung' %}"
-     data-dead-reason-unexpected-response="{% trans 'Unerwartete Server-Antwort' %}">
+     data-dead-reason-unexpected-response="{% trans 'Unerwartete Server-Antwort' %}"
+     data-wi-type-task="{% trans 'Aufgabe' %}"
+     data-wi-type-hint="{% trans 'Hinweis' %}"
+     data-wi-prio-normal="{% trans 'Normal' %}"
+     data-wi-prio-important="{% trans 'Wichtig' %}"
+     data-wi-prio-urgent="{% trans 'Dringend' %}">
 
     <div class="mb-4 flex items-center space-x-2">
         <span class="badge bg-yellow-100 text-yellow-800">
@@ -362,13 +367,109 @@
                     </div>
 
                     <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3 mt-6">{% trans "Aufgaben" %}</h2>
+
+                    {# Refs #1398 (P3): Offline eine neue Aufgabe erfassen — nur Staff+ (canCreateWorkItem). #}
+                    <div class="mb-3" data-testid="offline-wi-create">
+                        <template x-if="!creatingWorkItem">
+                            <button type="button" @click="startCreateWorkItem" x-show="canCreateWorkItem"
+                                    class="inline-flex items-center gap-1.5 text-sm text-accent hover:underline"
+                                    data-testid="offline-new-workitem-btn">
+                                <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                                {% trans "Neue Aufgabe" %}
+                            </button>
+                        </template>
+                        <template x-if="creatingWorkItem">
+                            <form class="card p-4 space-y-3" @submit.prevent="saveCreateWorkItem" data-testid="offline-wi-create-form">
+                                <h3 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Neue Aufgabe (offline)" %}</h3>
+                                {% include "core/clients/_offline_workitem_fields.html" %}
+                                <template x-if="wiError">
+                                    <p class="text-sm text-red-600" x-text="wiError" data-testid="offline-wi-create-error"></p>
+                                </template>
+                                <div class="flex gap-2">
+                                    <button type="submit" :disabled="saving"
+                                            class="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-md hover:bg-accent disabled:opacity-60"
+                                            data-testid="offline-wi-create-save">
+                                        {% trans "Speichern" %}
+                                    </button>
+                                    <button type="button" @click="cancelCreateWorkItem"
+                                            class="px-3 py-1.5 border border-subtle text-sm rounded-md hover:bg-canvas"
+                                            data-testid="offline-wi-create-cancel">
+                                        {% trans "Abbrechen" %}
+                                    </button>
+                                </div>
+                            </form>
+                        </template>
+                    </div>
+
                     <template x-if="noWorkitems">
                         <p class="text-sm text-ink-muted">{% trans "Keine offenen Aufgaben" %}</p>
                     </template>
                     <div class="space-y-2" x-show="hasWorkitems">
                         <template x-for="wi in data.workitems" :key="wi.pk">
-                            <div class="block bg-surface border border-subtle rounded-[10px] p-3">
-                                <span class="text-sm font-medium" x-text="wi.title"></span>
+                            <div class="block bg-surface border border-subtle rounded-[10px] p-3" data-testid="offline-workitem">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <span class="text-sm font-medium" x-text="wi.title"></span>
+                                        <div class="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-ink-muted">
+                                            <span x-text="wi.item_type_label"></span>
+                                            <span x-text="wi.priority_label"></span>
+                                            <span x-show="wi.due_date_fmt" x-text="wi.due_date_fmt"></span>
+                                            <span x-show="wi.assigned_to_name" x-text="wi.assigned_to_name"></span>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2 flex-shrink-0">
+                                        <template x-if="wi.is_unsynced">
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800" data-testid="workitem-unsynced-badge">
+                                                {% trans "Nicht synchronisiert" %}
+                                            </span>
+                                        </template>
+                                        <template x-if="wi.is_conflict">
+                                            <a :href="'/offline/conflicts/' + wi.pk + '/'"
+                                               class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 hover:bg-red-200"
+                                               data-testid="workitem-conflict-badge">
+                                                {% trans "Konflikt" %}
+                                            </a>
+                                        </template>
+                                        <template x-if="wi.is_dead">
+                                            <a href="{% url 'core:offline_conflict_list' %}"
+                                               class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 hover:bg-gray-200"
+                                               :title="wi.dead_reason_text"
+                                               data-testid="workitem-dead-badge">
+                                                {% trans "Nicht übertragbar" %}
+                                            </a>
+                                        </template>
+                                        <template x-if="wi.can_edit_ui">
+                                            <button type="button" @click="startEditWorkItem(wi)"
+                                                    class="text-xs text-accent hover:underline"
+                                                    :data-testid="'offline-wi-edit-btn-' + wi.pk">
+                                                {% trans "Bearbeiten" %}
+                                            </button>
+                                        </template>
+                                    </div>
+                                </div>
+
+                                {# Inline-Edit-Formular (Refs #1398 P3): Prefill aus dem Overlay-WorkItem; Absenden → markWorkItemModified → Replay bei Reconnect. #}
+                                <template x-if="wi.editing">
+                                    <form class="mt-3 border-t border-subtle pt-3 space-y-3"
+                                          @submit.prevent="saveEditWorkItem(wi)" data-testid="offline-wi-edit-form">
+                                        {% include "core/clients/_offline_workitem_fields.html" %}
+                                        <template x-if="wiError">
+                                            <p class="text-sm text-red-600" x-text="wiError" data-testid="offline-wi-edit-error"></p>
+                                        </template>
+                                        <div class="flex gap-2">
+                                            <button type="submit" :disabled="saving"
+                                                    class="px-3 py-1.5 bg-accent text-white text-sm font-medium rounded-md hover:bg-accent disabled:opacity-60"
+                                                    data-testid="offline-wi-edit-save">
+                                                {% trans "Speichern" %}
+                                            </button>
+                                            <button type="button" @click="cancelEditWorkItem"
+                                                    class="px-3 py-1.5 border border-subtle text-sm rounded-md hover:bg-canvas"
+                                                    data-testid="offline-wi-edit-cancel">
+                                                {% trans "Abbrechen" %}
+                                            </button>
+                                        </div>
+                                    </form>
+                                </template>
                             </div>
                         </template>
                     </div>

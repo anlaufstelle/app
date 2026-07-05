@@ -370,9 +370,12 @@
             // dauerhaft nicht (Klient geloescht/Route weg) — PERMANENT, wie
             // im Edit-Pfad (replayModifiedEvent). Vorher kollabierte 404 in
             // ein endloses "revoked"-Retry und 410 in den transienten
-            // error-Bucket. markEventDead merkt sich `wasNew`, damit ein
-            // Nutzer-Retry aus der Dead-Letter-UI (retryDeadEvent) den
-            // Create-Pfad wiederfindet.
+            // error-Bucket. markEventDead merkt sich `wasNew`; ein Nutzer-Retry
+            // aus der Dead-Letter-UI reaktiviert einen not-found-Record aber
+            // bewusst als "modified" (Edit-Pfad), NICHT als "new": ist das Ziel
+            // dauerhaft weg, wuerde ein erneuter Create-POST genauso 404en. Nur
+            // fuer reparable Gruende (invalid/unexpected-response) schickt
+            // retryDeadEvent einen wasNew-Record zurueck auf den Create-Pfad.
             await _store().markEventDead(record.pk, "not-found", "" + response.status);
             _fireCountEvent();
             return { status: "dead", deadReason: "not-found", statusCode: response.status };
