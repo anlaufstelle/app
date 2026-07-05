@@ -277,6 +277,12 @@
                 client: bundle.client,
                 document_types: bundle.document_types || [],
                 workitems: bundle.workitems || [],
+                // Refs #1398 (P3): zuweisbare Nutzer:innen (Staff-Roster, nur
+                // fuer Staff+ befuellt) fuers Offline-Create-Dropdown
+                // ``assigned_to`` mitspeichern — sonst fehlt der Overlay-
+                // Render-Pfad die Anzeigenamen und der Create-Replay koennte
+                // niemanden zuweisen.
+                assignable_users: bundle.assignable_users || [],
                 generatedAt: bundle.generated_at,
                 expiresAt: bundle.expires_at,
                 ttl: bundle.ttl,
@@ -354,6 +360,93 @@
         };
     }
 
+    /*
+     * Refs #1398 (P3): Record-Diskriminator fuer den WorkItem-Track (Spiegel
+     * von ``_isWorkItemRecord`` in offline-edit.js — der `kind`-Marker liegt IM
+     * verschluesselten ``data``, nie top-level). WorkItem-Records teilen sich
+     * die ``events``-Tabelle mit Events; ``getOfflineClient`` muss sie darum
+     * beim Rendern trennen: nur echte Events gehen durch
+     * ``normalizeOfflineEventRecord``, WorkItems bilden ein eigenes Overlay
+     * ueber die Bundle-``workitems``.
+     */
+    function _isWorkItemRow(r) {
+        return Boolean(r && r.data && r.data.kind === "workitem");
+    }
+
+    /*
+     * Refs #1398 (P3): Einen dekryptierten WorkItem-``events``-Record in die
+     * kanonische WorkItem-Anzeige-Form bringen (Spiegel von
+     * ``normalizeOfflineEventRecord`` fuer den WorkItem-Track).
+     *
+     * Der Record traegt IMMER ein Edit-Envelope (``data.formData`` mit den
+     * WorkItemForm-Feldnamen + ``expectedUpdatedAt``) — anders als Events gibt
+     * es keinen CLEAN-Bundle-Record in dieser Tabelle (WorkItems liegen im
+     * clients-Envelope). Wir mappen die Formularfelder zurueck auf die
+     * Bundle-Feldnamen (``assigned_to`` → ``assigned_to_pk``), damit
+     * Overlay-Merge und Edit-Prefill dieselbe Form sehen wie ein Bundle-WorkItem.
+     */
+    function normalizeOfflineWorkItemRecord(r) {
+        const data = r.data || {};
+        const fd = data.formData || {};
+        return {
+            pk: r.pk,
+            title: fd.title || "",
+            description: fd.description || "",
+            priority: fd.priority || "normal",
+            item_type: fd.item_type || "task",
+            due_date: fd.due_date || "",
+            remind_at: fd.remind_at || "",
+            recurrence: fd.recurrence || "none",
+            assigned_to_pk: fd.assigned_to || "",
+            updated_at: data.expectedUpdatedAt || "",
+            localStatus: r.localStatus || "clean",
+            deadReason: data.deadReason || "",
+        };
+    }
+
+    /*
+     * Refs #1398 (P3): Die Bundle-``workitems`` mit den offline erfassten
+     * WorkItem-Records ueberlagern — analog zum Event-Overlay:
+     *   - modified/conflict/dead ueber einen bestehenden Bundle-WorkItem:
+     *     editierbare Felder aus dem Envelope ziehen, nicht editierbare
+     *     Bundle-Felder (``status``/``can_edit``) bewahren, ``localStatus`` setzen;
+     *   - offline NEU angelegte WorkItems (kein Bundle-Pendant): als neue Zeile
+     *     mit ``localStatus:"new"`` VORNE einreihen (erscheinen sofort).
+     */
+    function _mergeWorkItemOverlay(bundleWorkitems, workitemRows) {
+        const overlay = new Map();
+        for (const row of workitemRows) {
+            overlay.set(row.pk, normalizeOfflineWorkItemRecord(row));
+        }
+        const merged = (bundleWorkitems || []).map((wi) => {
+            const ov = overlay.get(wi.pk);
+            if (!ov) {
+                return Object.assign({}, wi, { localStatus: "clean" });
+            }
+            overlay.delete(wi.pk);
+            return Object.assign({}, wi, {
+                title: ov.title,
+                description: ov.description,
+                priority: ov.priority,
+                item_type: ov.item_type,
+                due_date: ov.due_date,
+                remind_at: ov.remind_at,
+                recurrence: ov.recurrence,
+                assigned_to_pk: ov.assigned_to_pk,
+                updated_at: ov.updated_at || wi.updated_at,
+                localStatus: ov.localStatus,
+                deadReason: ov.deadReason,
+            });
+        });
+        // Uebrig gebliebene Overlays = offline neu angelegte WorkItems ohne
+        // Bundle-Pendant. Ersteller:in darf sie editieren (``can_edit:true``),
+        // Status defaultet auf "open".
+        const created = Array.from(overlay.values()).map((ov) =>
+            Object.assign({}, ov, { status: ov.status || "open", can_edit: true })
+        );
+        return created.concat(merged);
+    }
+
     async function getOfflineClient(pk) {
         const crypto = _crypto();
         const row = await db.clients.get(pk);
@@ -386,14 +479,23 @@
         }
 
         const cases = await listDecrypted("cases", (r) => r.clientPk === pk);
-        const events = await listDecrypted("events", (r) => r.clientPk === pk);
+        const allRows = await listDecrypted("events", (r) => r.clientPk === pk);
+        // Refs #1398 (P3): WorkItem-Records aus der Event-Liste heraustrennen —
+        // sonst rendert normalizeOfflineEventRecord sie als (kaputte) Events.
+        const eventRows = allRows.filter((r) => !_isWorkItemRow(r));
+        const workitemRows = allRows.filter((r) => _isWorkItemRow(r));
 
         return {
             pk: pk,
             lastSynced: row.lastSynced,
             client: envelope.client,
             documentTypes: envelope.document_types,
-            workitems: envelope.workitems,
+            // Refs #1398 (P3): Bundle-WorkItems mit dem Offline-Overlay (neu +
+            // modifiziert/conflict/dead) zusammenfuehren, inkl. localStatus fuer
+            // die Status-Badges.
+            workitems: _mergeWorkItemOverlay(envelope.workitems, workitemRows),
+            // Refs #1398 (P3): zuweisbare Nutzer:innen fuers Create-Dropdown.
+            assignableUsers: envelope.assignable_users || [],
             generatedAt: envelope.generatedAt,
             expiresAt: envelope.expiresAt,
             ttl: envelope.ttl,
@@ -402,7 +504,7 @@
             // Surface the indexed `localStatus` alongside the decrypted
             // payload so the offline-detail template can badge unsynced
             // or conflicting edits without another IndexedDB round-trip.
-            events: events
+            events: eventRows
                 .map((r) => normalizeOfflineEventRecord(r))
                 .sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1)),
         };

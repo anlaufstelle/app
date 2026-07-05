@@ -1173,6 +1173,126 @@ class TestQueueReplayClassification:
             context.close()
 
 
+class TestWorkItemStoreMerge:
+    """Refs #1398 (P3): WorkItem-Records liegen (Entscheid P2) in der
+    ``events``-Tabelle mit ``kind:"workitem"`` im verschluesselten ``data``.
+    ``getOfflineClient`` muss sie deshalb (a) aus der Event-Liste
+    HERAUSFILTERN (sonst rendert ``normalizeOfflineEventRecord`` sie faelschlich
+    als Events) und (b) als Overlay ueber die Bundle-``workitems`` durchreichen
+    (neu → erscheint sofort; modified → ueberlagert den Bundle-Stand). Zusaetzlich
+    reicht der Store die Bundle-``assignable_users`` durch (Create-Dropdown).
+    """
+
+    _PK = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+    _W1 = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    _U1 = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+
+    def _seed_bundle(self, page):
+        return page.evaluate(
+            """async (args) => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                await s.saveClientBundle({
+                    client: {pk: args.pk, pseudonym: 'WI-Merge'},
+                    expires_at: future, ttl: 3600,
+                    workitems: [{
+                        pk: args.w1, title: 'Bundle-Aufgabe', description: 'Basis',
+                        status: 'open', priority: 'normal', item_type: 'task',
+                        due_date: null, updated_at: '2026-01-01T00:00:00Z',
+                        remind_at: null, recurrence: 'none', assigned_to_pk: null,
+                        can_edit: true,
+                    }],
+                    assignable_users: [{pk: args.u1, name: 'Miriam'}],
+                });
+            }""",
+            {"pk": self._PK, "w1": self._W1, "u1": self._U1},
+        )
+
+    def test_assignable_users_surfaced_from_bundle(self, authenticated_page, base_url):
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        self._seed_bundle(page)
+        result = page.evaluate(
+            """async (pk) => {
+                const c = await window.offlineStore.getOfflineClient(pk);
+                return c.assignableUsers;
+            }""",
+            self._PK,
+        )
+        assert result == [{"pk": self._U1, "name": "Miriam"}]
+
+    def test_offline_new_workitem_appears_as_overlay_and_not_in_events(self, authenticated_page, base_url):
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        self._seed_bundle(page)
+        result = page.evaluate(
+            """async (args) => {
+                const s = window.offlineStore;
+                await s.saveOfflineEdit({
+                    pk: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+                    clientPk: args.pk, occurredAt: '',
+                    localStatus: 'new',
+                    data: {kind: 'workitem', formData: {
+                        item_type: 'task', title: 'Offline neu (Store)', description: '',
+                        priority: 'urgent', due_date: '2026-08-01', remind_at: '',
+                        recurrence: 'none', assigned_to: args.u1,
+                    }, idempotencyKey: 'idem-1'},
+                });
+                const c = await s.getOfflineClient(args.pk);
+                return {
+                    events: (c.events || []).map((e) => e.pk),
+                    workitems: (c.workitems || []).map((w) => ({
+                        pk: w.pk, title: w.title, localStatus: w.localStatus,
+                        assigned: w.assigned_to_pk, priority: w.priority,
+                    })),
+                };
+            }""",
+            {"pk": self._PK, "u1": self._U1},
+        )
+        # WorkItem-Record darf NICHT als Event auftauchen.
+        assert "dddddddd-dddd-4ddd-8ddd-dddddddddddd" not in result["events"]
+        # Neu angelegtes WorkItem erscheint als Overlay mit localStatus "new".
+        new_items = [w for w in result["workitems"] if w["title"] == "Offline neu (Store)"]
+        assert len(new_items) == 1, f"neues WorkItem fehlt im Overlay: {result['workitems']!r}"
+        assert new_items[0]["localStatus"] == "new"
+        assert new_items[0]["assigned"] == self._U1
+        assert new_items[0]["priority"] == "urgent"
+        # Bundle-Aufgabe bleibt sichtbar (clean).
+        base_items = [w for w in result["workitems"] if w["pk"] == self._W1]
+        assert len(base_items) == 1
+        assert base_items[0]["localStatus"] == "clean"
+
+    def test_offline_modified_workitem_overlays_bundle_state(self, authenticated_page, base_url):
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        self._seed_bundle(page)
+        result = page.evaluate(
+            """async (args) => {
+                const s = window.offlineStore;
+                await s.saveOfflineEdit({
+                    pk: args.w1, clientPk: args.pk, occurredAt: '',
+                    localStatus: 'modified',
+                    data: {kind: 'workitem', formData: {
+                        item_type: 'task', title: 'Geaendert offline', description: 'Basis',
+                        priority: 'important', due_date: '', remind_at: '',
+                        recurrence: 'none', assigned_to: '',
+                    }, expectedUpdatedAt: '2026-01-01T00:00:00Z'},
+                });
+                const c = await s.getOfflineClient(args.pk);
+                const w = (c.workitems || []).find((x) => x.pk === args.w1);
+                return {title: w.title, localStatus: w.localStatus, status: w.status,
+                        priority: w.priority, updated: w.updated_at};
+            }""",
+            {"pk": self._PK, "w1": self._W1},
+        )
+        assert result["title"] == "Geaendert offline"
+        assert result["localStatus"] == "modified"
+        # Nicht editierbare Bundle-Felder (status) bleiben erhalten.
+        assert result["status"] == "open"
+        assert result["priority"] == "important"
+        assert result["updated"] == "2026-01-01T00:00:00Z"
+
+
 def test_count_unsynced_events_includes_dead_status(authenticated_page, base_url):
     """Dieser Test ist gegen den heutigen Code ROT: `countUnsyncedEvents`
     (offline-store.js:616-622) filtert nur modified/new/conflict — ein
