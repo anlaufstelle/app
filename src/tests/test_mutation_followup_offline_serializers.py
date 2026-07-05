@@ -514,12 +514,20 @@ class TestSerializeDocumentType:
         assert set(out.keys()) == {
             "pk",
             "name",
+            "is_active",
             "category",
             "sensitivity",
             "icon",
             "color",
             "fields",
         }
+
+    def test_dt_is_active_true_for_active_doctype(self, facility, lead_user):
+        """Refs #1397: Der Offline-Create-Dropdown filtert per ``is_active``
+        auf aktive Typen — ``_make_doc_type`` legt per Modell-Default (Refs
+        ``DocumentType.is_active``) einen aktiven Typ an."""
+        dt = _make_doc_type(facility, name="Active")
+        assert _serialize_document_type(lead_user, dt)["is_active"] is True
 
     def test_dt_pk_stringified(self, facility, lead_user):
         dt = _make_doc_type(facility, name="X")
