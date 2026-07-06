@@ -630,3 +630,57 @@ class TestOfflineEntrypointsMobile:
         # aktuellen Sichtbarkeit abhängig.
         label = offline_btn.text_content() or ""
         assert "Offline mitnehmen" in label or "Aus Offline-Cache entfernen" in label
+
+
+def test_take_offline_shows_quota_full_message(browser, base_url):
+    """Refs #1414 (V2): Ein QuotaExceededError beim Schreiben des Bundles wird
+    sichtbar als „Speicher voll" gemeldet (nicht still verschluckt) und
+    hinterlaesst kein Partial-Bundle. Aktives Login fuer den
+    crypto_session-Schluessel; der Fehler wird ueber einen Stub von
+    ``db.clients.put`` injiziert (Chromium wirft QuotaExceededError als
+    DOMException). Gegen den heutigen Code ROT: ohne Quota-Zweig faellt die
+    Meldung auf den generischen „Offline-Mitnahme fehlgeschlagen"-Text.
+    """
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        page.goto(f"{base_url}/login/")
+        page.fill('input[name="username"]', "miriam")
+        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.click('button[type="submit"]')
+        page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
+
+        page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
+        find_first_client_link(page).click()
+        page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
+        client_pk = re.search(r"/clients/([0-9a-f-]+)/", page.url).group(1)
+
+        page.wait_for_function("window.crypto_session && window.offlineStore")
+        page.evaluate(
+            """async () => {
+                if (window.crypto_session.ready) await window.crypto_session.ready();
+                // Speicher-voll-Fehler beim ersten Bundle-Write erzwingen.
+                window.offlineStore.db.clients.put = () => {
+                    throw new DOMException('quota', 'QuotaExceededError');
+                };
+            }"""
+        )
+
+        take = page.locator('[data-testid="take-offline-btn"]').first
+        take.wait_for(state="visible", timeout=10000)
+        take.click()
+
+        toast = page.locator('[data-testid="offline-toast"]')
+        toast.wait_for(state="visible", timeout=8000)
+        assert "Speicher voll" in (toast.text_content() or ""), (
+            f"Quota-Meldung fehlt im Toast: {toast.text_content()!r}"
+        )
+
+        # Kein Partial: der Klient ist nicht als offline verfuegbar gecacht.
+        cached = page.evaluate("async (pk) => window.offlineStore.isClientOffline(pk)", client_pk)
+        assert cached is False, "Nach einem Quota-Abbruch darf kein Partial-Bundle zurueckbleiben"
+    finally:
+        with suppress(Exception):
+            page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+        context.close()

@@ -138,6 +138,14 @@
                         this.showMessage(e.message, "error");
                     } else if (e && e.name === "NoSessionKeyError") {
                         this.showMessage("Offline-Schluessel nicht aktiv — bitte neu anmelden.", "error");
+                    } else if (e && e.name === "QuotaExceededError") {
+                        // Refs #1414: Speicher voll — sichtbar melden statt
+                        // still verschlucken. Der alte Bundle-Stand bleibt
+                        // dank atomarem saveClientBundle-Write erhalten.
+                        this.showMessage(
+                            "Speicher voll — Offline-Mitnahme nicht möglich. Bitte lokalen Speicher freigeben und erneut versuchen.",
+                            "error"
+                        );
                     } else {
                         this.showMessage("Offline-Mitnahme fehlgeschlagen. Bitte erneut versuchen.", "error");
                     }

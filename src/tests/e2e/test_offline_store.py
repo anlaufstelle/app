@@ -1351,3 +1351,105 @@ def test_count_unsynced_events_includes_dead_status(authenticated_page, base_url
         }"""
     )
     assert result == 1
+
+
+class TestSaveClientBundleAtomic:
+    """Refs #1414 (V2): ``saveClientBundle`` schreibt ein Bundle atomar —
+    Remove-Altbestand + Survivor-Scan + alle Puts liegen in EINER
+    ``rw``-Transaktion. Bricht ein Write mitten im Bundle ab (Quota,
+    Tab-Kill), rollt Dexie die gesamte Transaktion zurueck: der ALTE
+    Bundle-Stand bleibt vollstaendig erhalten und ueber ``getOfflineClient``
+    lesbar (kein Partial-Bundle, das faelschlich als „vollstaendig" rendert).
+    Ein ``QuotaExceededError`` wird als solcher gemeldet statt still
+    verschluckt.
+    """
+
+    def test_fault_mid_write_leaves_old_bundle_intact(self, authenticated_page, base_url):
+        """Wirft ein spaeterer ``events.put`` mitten im Re-Take, muss der
+        vorherige (alte) Bundle-Stand vollstaendig zurueckkehren: derselbe
+        Client-Envelope (Pseudonym ``OLD``) UND das alte clean-Event —
+        das neue Bundle darf NICHT teilweise committen. Gegen den heutigen
+        (transaktionslosen) Code ist der Test ROT: der ``clients.put`` des
+        frischen Bundles committet vor dem geworfenen ``events.put``, der
+        Alt-Stand ist dann bereits zerstoert (Partial ``NEW`` ohne Events)."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                const PK = 'a1a1a1a1-a1a1-4a1a-8a1a-a1a1a1a1a1a1';
+                // Alt-Stand: Client 'OLD' mit einem clean-Event.
+                await s.saveClientBundle({
+                    client: {pk: PK, pseudonym: 'OLD'},
+                    expires_at: future, ttl: 3600,
+                    events: [{pk: 'ev-old', occurred_at: future, data_fields: {note: 'alt'}}],
+                });
+                // Fault injizieren: der naechste events.put wirft mitten im Re-Take.
+                const origPut = s.db.events.put.bind(s.db.events);
+                s.db.events.put = () => { throw new Error('InjectedWriteFailure'); };
+                let threw = false;
+                try {
+                    await s.saveClientBundle({
+                        client: {pk: PK, pseudonym: 'NEW'},
+                        expires_at: future, ttl: 3600,
+                        events: [{pk: 'ev-new', occurred_at: future, data_fields: {note: 'neu'}}],
+                    });
+                } catch (_e) {
+                    threw = true;
+                }
+                s.db.events.put = origPut;  // wiederherstellen
+                const cached = await s.getOfflineClient(PK);
+                return {
+                    threw,
+                    pseudonym: cached && cached.client && cached.client.pseudonym,
+                    eventPks: cached ? cached.events.map((e) => e.pk) : [],
+                    clients: await s.count('clients'),
+                    events: await s.count('events'),
+                };
+            }"""
+        )
+        assert result["threw"] is True, "Ein Write-Fehler muss propagiert werden (nicht still verschluckt)"
+        assert result["pseudonym"] == "OLD", "Der alte Bundle-Stand muss erhalten bleiben (kein Partial mit NEW)"
+        assert result["eventPks"] == ["ev-old"], (
+            "Das alte clean-Event muss nach dem Rollback wieder da sein, das neue fehlen"
+        )
+        assert result["clients"] == 1
+        assert result["events"] == 1
+
+    def test_quota_exceeded_is_surfaced_and_old_bundle_intact(self, authenticated_page, base_url):
+        """Ein ``QuotaExceededError`` (Chromium: ``DOMException`` mit
+        ``name === 'QuotaExceededError'``) beim ersten Bundle-Write wird als
+        ``QuotaExceededError`` weitergereicht (nicht still verschluckt), und
+        der alte Bundle-Stand bleibt dank Rollback intakt. Gegen den heutigen
+        Code ROT: ohne Transaktion loescht der Re-Take den Alt-Client, bevor
+        der geworfene ``clients.put`` ihn ersetzen kann -> Alt-Stand weg."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                const PK = 'b2b2b2b2-b2b2-4b2b-8b2b-b2b2b2b2b2b2';
+                await s.saveClientBundle({
+                    client: {pk: PK, pseudonym: 'OLD-QUOTA'},
+                    expires_at: future, ttl: 3600,
+                });
+                const origPut = s.db.clients.put.bind(s.db.clients);
+                s.db.clients.put = () => { throw new DOMException('quota', 'QuotaExceededError'); };
+                let errName = null;
+                try {
+                    await s.saveClientBundle({
+                        client: {pk: PK, pseudonym: 'NEW-QUOTA'},
+                        expires_at: future, ttl: 3600,
+                    });
+                } catch (e) {
+                    errName = e && e.name;
+                }
+                s.db.clients.put = origPut;  // wiederherstellen
+                const cached = await s.getOfflineClient(PK);
+                return {errName, pseudonym: cached && cached.client && cached.client.pseudonym};
+            }"""
+        )
+        assert result["errName"] == "QuotaExceededError", "QuotaExceededError muss als solcher gemeldet werden"
+        assert result["pseudonym"] == "OLD-QUOTA", "Der alte Bundle-Stand muss nach einem Quota-Abbruch intakt bleiben"

@@ -265,6 +265,18 @@
     }
 
     /*
+     * Refs #1414: True, wenn `e` ein QuotaExceededError ist (Chromium:
+     * `DOMException` mit `name === 'QuotaExceededError'`). Dexie reicht den
+     * Fehler beim Transaktions-Abbruch weiter; je nach Pfad steht der Name
+     * direkt auf `e` oder im gekapselten `e.inner`.
+     */
+    function _isQuotaError(e) {
+        if (!e) return false;
+        if (e.name === "QuotaExceededError") return true;
+        return Boolean(e.inner && e.inner.name === "QuotaExceededError");
+    }
+
+    /*
      * Save a full offline client bundle produced by the server:
      *   {client, cases, workitems, events, document_types, generated_at, ttl}
      *
@@ -279,52 +291,30 @@
         if (!pk) throw new Error("MalformedBundle");
         const now = Date.now();
 
-        // Remove stale per-client state in case of a re-sync (Refs #1353:
-        // Re-Take ist KEIN Sicherheits-Purge — ohne force ueberleben
-        // unsynced Events dieses Klienten, siehe removeOfflineClient().
-        await removeOfflineClient(pk);
-
-        // Refs #1353 (Ueberschreib-Falle): Nach dem non-force-Remove oben
-        // koennen noch unsynced events-Rows dieses Klienten existieren. Die
-        // Bundle-Schleife unten schreibt jedes Event mit localStatus:"clean"
-        // — traefe sie eine ueberlebende unsynced Row mit derselben pk,
-        // wuerde der lokale Edit durch die Server-Version ueberschrieben und
-        // waere verloren. Deshalb zuerst die pks der Ueberlebenden sammeln;
-        // die Bundle-Schleife ueberspringt sie unten. Der Edit-Envelope
-        // traegt via `expectedUpdatedAt` den Konflikt-Token — Replay/409
-        // klaert die Divergenz, nicht der Re-Take.
-        const survivingUnsyncedPks = new Set(
-            (
-                await db.events
-                    .where("clientPk")
-                    .equals(pk)
-                    .filter((e) => e.localStatus && e.localStatus !== "clean")
-                    .toArray()
-            ).map((e) => e.pk)
-        );
-
-        await db.clients.put({
-            pk: pk,
-            lastSynced: now,
-            data: await crypto.encryptPayload({
-                client: bundle.client,
-                document_types: bundle.document_types || [],
-                workitems: bundle.workitems || [],
-                // Refs #1398 (P3): zuweisbare Nutzer:innen (Staff-Roster, nur
-                // fuer Staff+ befuellt) fuers Offline-Create-Dropdown
-                // ``assigned_to`` mitspeichern — sonst fehlt der Overlay-
-                // Render-Pfad die Anzeigenamen und der Create-Replay koennte
-                // niemanden zuweisen.
-                assignable_users: bundle.assignable_users || [],
-                generatedAt: bundle.generated_at,
-                expiresAt: bundle.expires_at,
-                ttl: bundle.ttl,
-                schemaVersion: bundle.schema_version,
-            }),
+        // Refs #1414: ALLE WebCrypto-`encrypt()`-Aufrufe VOR `db.transaction`.
+        // Ein `await` auf ein Nicht-IDB-Promise (WebCrypto) innerhalb einer
+        // Dexie-`rw`-Transaktion schliesst diese vorzeitig (stiller
+        // Teil-Commit). Darum hier vorab ALLE Envelopes verschluesseln; die
+        // Transaktion unten fuehrt ausschliesslich IDB-Operationen aus.
+        const clientEnvelope = await crypto.encryptPayload({
+            client: bundle.client,
+            document_types: bundle.document_types || [],
+            workitems: bundle.workitems || [],
+            // Refs #1398 (P3): zuweisbare Nutzer:innen (Staff-Roster, nur
+            // fuer Staff+ befuellt) fuers Offline-Create-Dropdown
+            // ``assigned_to`` mitspeichern — sonst fehlt der Overlay-
+            // Render-Pfad die Anzeigenamen und der Create-Replay koennte
+            // niemanden zuweisen.
+            assignable_users: bundle.assignable_users || [],
+            generatedAt: bundle.generated_at,
+            expiresAt: bundle.expires_at,
+            ttl: bundle.ttl,
+            schemaVersion: bundle.schema_version,
         });
 
+        const caseRows = [];
         for (const caseRec of bundle.cases || []) {
-            await db.cases.put({
+            caseRows.push({
                 pk: caseRec.pk,
                 clientPk: pk,
                 lastSynced: now,
@@ -332,12 +322,9 @@
             });
         }
 
+        const eventRows = [];
         for (const event of bundle.events || []) {
-            // Refs #1353 (Ueberschreib-Falle): nicht die Server-"clean"-
-            // Version einer noch unsynced Row derselben pk schreiben — siehe
-            // Kommentar bei survivingUnsyncedPks oben.
-            if (survivingUnsyncedPks.has(event.pk)) continue;
-            await db.events.put({
+            eventRows.push({
                 pk: event.pk,
                 clientPk: pk,
                 occurredAt: event.occurred_at,
@@ -346,10 +333,70 @@
             });
         }
 
+        // Refs #1414: Remove-Altbestand + Survivor-Scan + alle Puts ATOMAR in
+        // EINER `rw`-Transaktion. Bricht ein Write ab (Quota, Tab-Kill), rollt
+        // Dexie die gesamte Transaktion zurueck — der alte Bundle-Stand bleibt
+        // vollstaendig erhalten (kein Partial-Bundle, das `getOfflineClient`
+        // faelschlich als „vollstaendig" rendert). Innerhalb der Transaktion
+        // ausschliesslich IDB-Operationen (kein WebCrypto-`await`, s.o.).
+        let survivingEdits = 0;
+        try {
+            await db.transaction("rw", db.clients, db.cases, db.events, async () => {
+                // Remove stale per-client state in case of a re-sync (Refs
+                // #1353: Re-Take ist KEIN Sicherheits-Purge — ohne force
+                // ueberleben unsynced Events dieses Klienten). Joint via
+                // Dexie-Zone dieselbe Transaktion (nur IDB-Operationen).
+                await removeOfflineClient(pk);
+
+                // Refs #1353 (Ueberschreib-Falle): Nach dem non-force-Remove
+                // koennen noch unsynced events-Rows dieses Klienten
+                // existieren. Die Bundle-Schleife unten schreibt jedes Event
+                // mit localStatus:"clean" — traefe sie eine ueberlebende
+                // unsynced Row derselben pk, wuerde der lokale Edit durch die
+                // Server-Version ueberschrieben und waere verloren. Deshalb
+                // zuerst die pks der Ueberlebenden sammeln; die Bundle-Schleife
+                // ueberspringt sie. Der Edit-Envelope traegt via
+                // `expectedUpdatedAt` den Konflikt-Token — Replay/409 klaert
+                // die Divergenz, nicht der Re-Take.
+                const survivingUnsyncedPks = new Set(
+                    (
+                        await db.events
+                            .where("clientPk")
+                            .equals(pk)
+                            .filter((e) => e.localStatus && e.localStatus !== "clean")
+                            .toArray()
+                    ).map((e) => e.pk)
+                );
+                survivingEdits = survivingUnsyncedPks.size;
+
+                await db.clients.put({ pk: pk, lastSynced: now, data: clientEnvelope });
+                for (const row of caseRows) {
+                    await db.cases.put(row);
+                }
+                for (const row of eventRows) {
+                    if (survivingUnsyncedPks.has(row.pk)) continue;
+                    await db.events.put(row);
+                }
+            });
+        } catch (e) {
+            // Refs #1414: QuotaExceededError gesondert und SICHTBAR melden
+            // (kein stilles Ueberspringen). Die Transaktion ist bereits
+            // zurueckgerollt — der alte Bundle-Stand bleibt intakt. Als
+            // stabilen Vertrag fuer die aufrufende Fehler-UI (M17-anschluss-
+            // faehig) auf einen Error mit `name === "QuotaExceededError"`
+            // normalisieren.
+            if (_isQuotaError(e)) {
+                const quotaErr = new Error("OfflineQuotaExceeded");
+                quotaErr.name = "QuotaExceededError";
+                throw quotaErr;
+            }
+            throw e;
+        }
+
         // Refs #1351/#1385 (M8/Task 4): Re-Take-Rueckmeldung — wie viele
         // ungesyncte Aenderungen dieses Klienten den (Re-)Sync ueberlebt
         // haben (Anzeige "<N> lokale Aenderungen beibehalten" im Aufrufer).
-        return { survivingEdits: survivingUnsyncedPks.size };
+        return { survivingEdits: survivingEdits };
     }
 
     /*

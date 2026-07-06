@@ -133,6 +133,14 @@
                         notify("Offline-Schluessel nicht aktiv — bitte neu anmelden.", "error");
                     } else if (e && e.name === "OfflineLimitError") {
                         notify(e.message || "Offline-Limit erreicht.", "error");
+                    } else if (e && e.name === "QuotaExceededError") {
+                        // Refs #1414: Speicher voll — sichtbar melden statt
+                        // still verschlucken. Der alte Bundle-Stand bleibt
+                        // dank atomarem saveClientBundle-Write erhalten.
+                        notify(
+                            "Speicher voll — Offline-Mitnahme nicht möglich. Bitte lokalen Speicher freigeben und erneut versuchen.",
+                            "error"
+                        );
                     } else {
                         notify("Offline-Mitnahme fehlgeschlagen. Bitte erneut versuchen.", "error");
                     }
@@ -203,6 +211,16 @@
                             }
                             if (e && e.name === "NoSessionKeyError") {
                                 notify("Offline-Schlüssel nicht aktiv — bitte neu anmelden.", "error");
+                                return;
+                            }
+                            if (e && e.name === "QuotaExceededError") {
+                                // Refs #1414: Speicher voll — die Sammel-
+                                // Mitnahme abbrechen und sichtbar melden;
+                                // weitere Takes wuerden ebenfalls scheitern.
+                                notify(
+                                    "Speicher voll — Offline-Mitnahme nicht möglich. Bitte lokalen Speicher freigeben und erneut versuchen.",
+                                    "error"
+                                );
                                 return;
                             }
                             if (e && e.name === "BundleFetchError" && e.status === 429) {
