@@ -41,3 +41,46 @@ class TestRunAsAdminPullPolicy:
             "setzen — sonst erzwingt 'pull_policy: always' einen GHCR-Pull "
             "als root -> unauthorized, Wartungsjobs failen (Refs #1047)"
         )
+
+
+class TestBackgroundJobTimers:
+    """Security N3: Die HMAC-Audit-Integritätskette (``services/audit/chain.py``)
+    ist nur wirksam, wenn sie regelmäßig verifiziert wird. ``verify_audit_chain``
+    muss daher als eigener systemd-Timer geplant sein — und zwar über die
+    BYPASSRLS-Admin-Rolle (``$ADMIN_RUN``/``run-as-admin.sh``), weil das Kommando
+    ohne Bypass-Kontext fail-loud abbricht (0 sichtbare Zeilen). Ohne diesen
+    Timer bliebe Tamper an der Audit-Tabelle unentdeckt.
+    """
+
+    _SCRIPT = Path("dev-ops/deploy/install-timers.sh")
+
+    def _code(self) -> str:
+        if not self._SCRIPT.exists():
+            pytest.skip("dev-ops/ nicht im Public-Snapshot — Guard nur im Dev-Repo relevant (Refs #1047)")
+        lines = [
+            line for line in self._SCRIPT.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")
+        ]
+        # Zeilenfortsetzungen auflösen, damit der mehrzeilige install_timer-Aufruf
+        # (name/schedule/desc \ cmd) als ein Statement matchbar ist.
+        return "\n".join(lines).replace("\\\n", " ")
+
+    def test_verify_audit_chain_timer_runs_as_admin_role(self) -> None:
+        code = self._code()
+        call = re.search(r"install_timer\s+\S+[^\n]*verify_audit_chain[^\n]*", code)
+        assert call is not None, (
+            "install-timers.sh muss einen Timer planen, der 'verify_audit_chain' "
+            "ausführt (N3: sonst wird die Audit-HMAC-Kette nie verifiziert)."
+        )
+        assert "$ADMIN_RUN" in call.group(0), (
+            "Der verify_audit_chain-Timer muss über $ADMIN_RUN (BYPASSRLS-Admin-"
+            "Rolle) laufen — sonst bricht das Kommando fail-loud ab (Refs #1070)."
+        )
+
+    def test_verify_audit_chain_timer_is_enabled_on_restart(self) -> None:
+        code = self._code()
+        loop = re.search(r"for\s+t\s+in\s+([^\n;]+);\s*do", code)
+        assert loop is not None, "kein Timer-Restart-Loop in install-timers.sh gefunden"
+        assert "audit-verify" in loop.group(1), (
+            "Der 'audit-verify'-Timer muss im Restart-/Enable-Loop stehen — sonst "
+            "wird die Unit angelegt, aber nie gestartet."
+        )

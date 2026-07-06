@@ -79,6 +79,27 @@ def get_client_ip(request):
     return parts[-trusted_hops]
 
 
+def client_ip_for_ratelimit(request):
+    """Resolver für ``settings.RATELIMIT_IP_META_KEY`` (Security N1).
+
+    ``django-ratelimit`` ``key="ip"`` liest ohne diesen Resolver ``REMOTE_ADDR``
+    — hinter dem Caddy-Reverse-Proxy immer Caddys Container-IP, also EIN
+    gemeinsamer Ratelimit-Eimer fürs ganze Internet (globaler Login-/Reset-DoS,
+    zugleich keine echte Brute-Force-Isolierung pro IP). Wir leiten stattdessen
+    die echte Client-IP über :func:`get_client_ip` ab (respektiert
+    ``TRUSTED_PROXY_HOPS``, nutzt also NICHT den client-spoofbaren rohen
+    ``X-Forwarded-For``). Rückgabe ist ein reiner IP-String; django-ratelimit
+    maskiert ihn anschließend selbst auf ein ip_network.
+    """
+    ip = get_client_ip(request)
+    if not ip:
+        # Defensiv: django-ratelimit maskiert das Ergebnis in ein ip_network und
+        # würde bei leerem Wert eine Exception werfen. REMOTE_ADDR ist hinter dem
+        # Proxy stets gesetzt.
+        ip = request.META.get("REMOTE_ADDR", "")
+    return ip
+
+
 @receiver(user_logged_in)
 def on_user_logged_in(sender, request, user, **kwargs):
     """Create an audit entry on successful login.

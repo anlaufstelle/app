@@ -235,6 +235,15 @@ SESSION_SAVE_EVERY_REQUEST = False
 # der N-te Eintrag von rechts die echte Client-IP.
 TRUSTED_PROXY_HOPS = int(os.environ.get("TRUSTED_PROXY_HOPS", "1"))
 
+# django-ratelimit: die per-IP-Eimer (key="ip") sollen auf der ECHTEN Client-IP
+# schlüsseln, nicht auf REMOTE_ADDR. Hinter dem Caddy-Reverse-Proxy ist
+# REMOTE_ADDR immer Caddys Container-IP — ohne diesen Resolver kollabierten alle
+# Login-/Reset-/Recovery-Limits auf einen einzigen Eimer fürs ganze Internet
+# (globaler DoS, keine echte Brute-Force-Isolierung). Der Resolver leitet die
+# Client-IP über get_client_ip (TRUSTED_PROXY_HOPS-bewusst) ab. Security N1.
+# In test/e2e ist RATELIMIT_ENABLE=False, der Wert ist dort inert.
+RATELIMIT_IP_META_KEY = "core.signals.audit.client_ip_for_ratelimit"
+
 # --- i18n ---
 
 LANGUAGE_CODE = "de"
