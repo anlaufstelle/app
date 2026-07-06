@@ -5,6 +5,7 @@ import logging
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
+from django.utils.translation import gettext_lazy as _
 
 from core.models import AuditLog, Client
 from core.models.activity import Activity
@@ -281,6 +282,21 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
     check_version_conflict(client, expected_updated_at)
     if old_stage is None:
         old_stage = client.contact_stage
+
+    # Security N2: Die Vier-Augen-Löschung qualifizierter (Art.-9-naher)
+    # Dokumentation (``EventDeleteView`` → ``request_deletion``) greift nur,
+    # solange der Klient ``QUALIFIED`` ist. Ein Herabstufen QUALIFIED→IDENTIFIED
+    # würde diese Eintrittsbedingung aushebeln — danach löschte eine einzelne
+    # Kraft das Event allein. Nur Leitung/Admin darf daher herabstufen; der
+    # Guard sitzt im Service-Layer (SSOT) und deckt so auch Nicht-Formular-
+    # Aufrufer (z.B. Offline-Replay) ab, nicht nur ``ClientUpdateView``.
+    new_contact_stage = fields.get("contact_stage", old_stage)
+    if (
+        old_stage == Client.ContactStage.QUALIFIED
+        and new_contact_stage != Client.ContactStage.QUALIFIED
+        and not user.is_lead_or_admin
+    ):
+        raise ValidationError(_("Nur die Leitung darf eine qualifizierte Person herabstufen."))
 
     # Allowlist (Refs #734): Verhindert Mass-Assignment durch versehentlich
     # durchgereichte Felder (z.B. ``facility``, ``id``, ``created_at``). Liste
