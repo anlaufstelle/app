@@ -404,7 +404,7 @@ class TestSerializeWorkitem:
             title="T",
             description="D",
         )
-        out = _serialize_workitem(wi)
+        out = _serialize_workitem(staff_user, wi)
         assert set(out.keys()) == {
             "pk",
             "title",
@@ -413,6 +413,13 @@ class TestSerializeWorkitem:
             "priority",
             "item_type",
             "due_date",
+            # Refs #1398: Offline-Edit-Metadaten — Konflikt-Token +
+            # editierbare WorkItemForm-Felder + Edit-Berechtigung.
+            "updated_at",
+            "remind_at",
+            "recurrence",
+            "assigned_to_pk",
+            "can_edit",
         }
 
     def test_workitem_pk_stringified(self, facility, client_identified, staff_user):
@@ -422,7 +429,7 @@ class TestSerializeWorkitem:
             created_by=staff_user,
             title="x",
         )
-        assert _serialize_workitem(wi)["pk"] == str(wi.pk)
+        assert _serialize_workitem(staff_user, wi)["pk"] == str(wi.pk)
 
     def test_workitem_title_and_description(self, facility, client_identified, staff_user):
         wi = WorkItem.objects.create(
@@ -432,7 +439,7 @@ class TestSerializeWorkitem:
             title="MyTitle",
             description="MyDesc",
         )
-        out = _serialize_workitem(wi)
+        out = _serialize_workitem(staff_user, wi)
         assert out["title"] == "MyTitle"
         assert out["description"] == "MyDesc"
 
@@ -444,7 +451,7 @@ class TestSerializeWorkitem:
             title="x",
             status=WorkItem.Status.IN_PROGRESS,
         )
-        out = _serialize_workitem(wi)
+        out = _serialize_workitem(staff_user, wi)
         # Mutation ``workitem.status`` → ``workitem.get_status_display()``
         # würde "In Bearbeitung" liefern.
         assert out["status"] == "in_progress"
@@ -457,7 +464,7 @@ class TestSerializeWorkitem:
             title="x",
             priority=WorkItem.Priority.URGENT,
         )
-        out = _serialize_workitem(wi)
+        out = _serialize_workitem(staff_user, wi)
         assert out["priority"] == "urgent"
 
     def test_workitem_item_type_passthrough(self, facility, client_identified, staff_user):
@@ -468,7 +475,7 @@ class TestSerializeWorkitem:
             title="x",
             item_type=WorkItem.ItemType.HINT,
         )
-        out = _serialize_workitem(wi)
+        out = _serialize_workitem(staff_user, wi)
         assert out["item_type"] == "hint"
 
     def test_workitem_due_date_none(self, facility, client_identified, staff_user):
@@ -481,7 +488,7 @@ class TestSerializeWorkitem:
             title="x",
             due_date=None,
         )
-        out = _serialize_workitem(wi)
+        out = _serialize_workitem(staff_user, wi)
         assert out["due_date"] is None
 
     def test_workitem_due_date_isoformat_when_set(self, facility, client_identified, staff_user):
@@ -493,7 +500,7 @@ class TestSerializeWorkitem:
             title="x",
             due_date=when,
         )
-        out = _serialize_workitem(wi)
+        out = _serialize_workitem(staff_user, wi)
         assert out["due_date"] == when.isoformat()
 
 
@@ -514,6 +521,7 @@ class TestSerializeDocumentType:
         assert set(out.keys()) == {
             "pk",
             "name",
+            # Refs #1397: Aktiv-Flag fuer den Offline-Create-Dropdown-Filter.
             "is_active",
             "category",
             "sensitivity",

@@ -62,6 +62,8 @@ class TestBundleEnvelope:
             "client",
             "cases",
             "workitems",
+            # Refs #1398: zuweisbare Nutzer:innen fuer den Offline-Assign-Picker.
+            "assignable_users",
             "events",
             "document_types",
         }
