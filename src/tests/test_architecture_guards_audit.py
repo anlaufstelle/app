@@ -119,8 +119,8 @@ class TestAuditLogCreationAllowlist:
         },
         "core/services/audit/helpers.py": {
             4: "Docstring-Beispiel — kein echter Call",
-            85: "log_audit_event-Body — zentraler View-Helper",
-            126: "audit_event-Body — generischer Service-/Cron-Helper",
+            100: "log_audit_event-Body — zentraler View-Helper",
+            141: "audit_event-Body — generischer Service-/Cron-Helper",
         },
         "core/services/system/settings.py": {
             80: "update_settings-Body — Settings-Diff-Helper",
@@ -128,13 +128,13 @@ class TestAuditLogCreationAllowlist:
         },
         # Signal-Handler: kein Request, RLS-Session-State explizit gesetzt.
         "core/signals/audit.py": {
-            93: "on_user_logged_in — auth signal, kein Request",
-            112: "on_user_logged_out — auth signal",
-            145: "on_user_login_failed — no-facility branch",
-            153: "on_user_login_failed — with-facility branch",
-            201: "post_save User — role change detection",
-            215: "post_save User — deactivation detection",
-            228: "post_save User — Löschbestätigungs-Recht geändert (Refs #1053)",
+            114: "on_user_logged_in — auth signal, kein Request",
+            133: "on_user_logged_out — auth signal",
+            166: "on_user_login_failed — no-facility branch",
+            174: "on_user_login_failed — with-facility branch",
+            222: "post_save User — role change detection",
+            236: "post_save User — deactivation detection",
+            249: "post_save User — Löschbestätigungs-Recht geändert (Refs #1053)",
         },
     }
 

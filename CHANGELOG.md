@@ -53,6 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **Login-Lockout-/Passwort-Reset-Audits überstehen RLS** — log_audit_event synct die Postgres-Session-GUCs auf den übergebenen Pre-Auth-Kontext, sodass der AuditLog-INSERT unter der NOBYPASSRLS-App-Rolle nicht mehr an der WITH-CHECK-Policy scheitert.
 - **Optimistic-Lock-Token-Pflicht im Offline-Replay verhindert Lost-Update** (#1338) — der JSON-/Replay-Pfad der Ereignis- und Fallaufgaben-Updates verlangt jetzt einen Optimistic-Lock-Token (`expected_updated_at`), der unter `select_for_update` in derselben Transaktion geprüft wird; ein fehlender Token ist kein stilles Last-Write-Wins mehr, sondern ein 409-Konflikt mit vollem Server-Stand — konkurrierende Offline-Änderungen überschreiben sich nicht mehr gegenseitig.
 - **Offline-Bundle gated Cases nach Rolle und Status** (#1355) — das Offline-Bundle serialisierte bislang alle Fälle eines Klienten ungefiltert inklusive `description`; Assistenz sieht jetzt wie online nur `status=OPEN`-Fälle ohne Beschreibung, Staff+ weiterhin alle Fälle vollständig (ADR-022).
 - **Audit-Trail mit verketteter HMAC-Integrität (Tamper-Evidenz)** (#1070) — jede `AuditLog`-Zeile trägt einen pro Einrichtung verketteten HMAC-Hash; das neue `verify_audit_chain`-Kommando erkennt nachträgliche Manipulation oder Löschung einzelner Einträge (etwa direkt in der DB unter Umgehung des Append-Only-Triggers), `backfill_audit_chain` versieht Bestandszeilen, Retention-Pruning schreibt einen verketteten Checkpoint.

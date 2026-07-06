@@ -65,7 +65,8 @@ def log_audit_event(
     und ``facility`` explizit übergeben — z.B. um den **gefundenen** User
     statt ``request.user`` (anonym) zu loggen. ``None`` ist ein gültiger
     Override-Wert; nur wenn das Argument weggelassen wird, fällt der
-    Helper auf den Request zurück.
+    Helper auf den Request zurück. Der Helper synct dabei die
+    RLS-Session-GUCs auf den übergebenen Kontext (Review R3).
     """
     # Lazy-Imports, um Zirkularitäten mit ``core.models`` zu vermeiden.
     from core.models import AuditLog
@@ -77,10 +78,24 @@ def log_audit_event(
         if target_id is None:
             target_id = str(target_obj.pk)
 
+    has_override = user is not _UNSET or facility is not _UNSET
+
     if user is _UNSET:
         user = request.user if getattr(request.user, "is_authenticated", False) else None
     if facility is _UNSET:
         facility = getattr(request, "current_facility", None)
+
+    # Security R3: Pre-Auth-Flows (Login-Lockout, Password-Reset) uebergeben
+    # ``facility``/``user`` explizit, waehrend FacilityScopeMiddleware die
+    # Session-GUCs fuer den anonymen Request auf '' gesetzt hat. Unter der
+    # NOBYPASSRLS-App-Rolle wuerde der INSERT sonst die WITH-CHECK-Policy
+    # (Migration 0085) verletzen und der Ketten-Vorgaenger-Read (chain.py)
+    # saehe null Zeilen. GUCs daher vor dem Write auf den Ziel-Kontext
+    # syncen — exakt wie signals.audit.on_user_login_failed.
+    if has_override and not getattr(request.user, "is_authenticated", False):
+        from core.signals.audit import _set_session_vars
+
+        _set_session_vars(facility, is_super_admin=bool(getattr(user, "is_super_admin", False)))
 
     return AuditLog.objects.create(
         facility=facility,
