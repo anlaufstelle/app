@@ -84,3 +84,57 @@ class TestBackgroundJobTimers:
             "Der 'audit-verify'-Timer muss im Restart-/Enable-Loop stehen — sonst "
             "wird die Unit angelegt, aber nie gestartet."
         )
+
+
+class TestPublicBackupScriptsRlsRoles:
+    """Security N4 (H3-Residuum): ``scripts/ops/backup.sh`` — der Public-/
+    Self-Hoster-Pfad — dumpte als App-Rolle (NOBYPASSRLS). Alle Facility-
+    Tabellen stehen unter ``FORCE ROW LEVEL SECURITY``: ohne BYPASSRLS matcht
+    die Policy null Zeilen, ``pg_dump`` bricht ab und unter ``set -euo
+    pipefail`` entsteht KEIN Backup (DSGVO-Backup-Luecke fuer Self-Hoster).
+    Der Dump muss wie ``dev-ops/deploy/backup.sh`` ueber
+    ``POSTGRES_ADMIN_USER`` laufen; der ``--verify``-Zweig braucht den
+    Bootstrap-Superuser (beide App-Rollen sind NOCREATEDB) und muss eine
+    RLS-Tabelle zaehlen — ``core_facility`` (ohne RLS) erkennt einen
+    RLS-leeren Dump nicht. Kein pytest.skip: ``scripts/ops/`` ist im
+    Public-Snapshot enthalten.
+    """
+
+    _BACKUP = Path("scripts/ops/backup.sh")
+    _RESTORE = Path("scripts/ops/restore.sh")
+
+    @staticmethod
+    def _flat(path: Path) -> str:
+        lines = [
+            line for line in path.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")
+        ]
+        return "\n".join(lines).replace("\\\n", " ")
+
+    def test_backup_dump_runs_as_admin_role(self) -> None:
+        flat = self._flat(self._BACKUP)
+        assert 'DUMP_USER="${POSTGRES_ADMIN_USER:-$POSTGRES_USER}"' in flat, (
+            "backup.sh muss den Dump-User per POSTGRES_ADMIN_USER-Fallback "
+            "aufloesen (Review N4) — App-Rolle scheitert an FORCE RLS."
+        )
+        call = re.search(r"pg_dump\s+-U\s+\"\$DUMP_USER\"[^\n]*", flat)
+        assert call is not None, "pg_dump in backup.sh muss als $DUMP_USER (BYPASSRLS) laufen (Review N4)."
+
+    def test_backup_verify_probes_rls_table_as_superuser(self) -> None:
+        flat = self._flat(self._BACKUP)
+        assert 'SU_USER="${POSTGRES_SUPERUSER:-postgres}"' in flat, (
+            "--verify braucht den Bootstrap-Superuser: beide App-Rollen sind "
+            "NOCREATEDB (01-app-role.sh), CREATE DATABASE schlaegt sonst fehl."
+        )
+        assert "core_client" in flat, (
+            "--verify muss eine RLS-Tabelle (core_client) zaehlen — "
+            "core_facility (ohne RLS) erkennt einen RLS-leeren Dump nicht (Review N4)."
+        )
+
+    def test_restore_runs_as_superuser(self) -> None:
+        flat = self._flat(self._RESTORE)
+        assert 'SU_USER="${POSTGRES_SUPERUSER:-postgres}"' in flat, (
+            "restore.sh muss den Plain-SQL-Dump als Superuser einspielen: "
+            "OWNER-TO-/FORCE-RLS-Statements scheitern unter der App-Rolle (Review N4)."
+        )
+        call = re.search(r"psql\s+-U\s+\"\$SU_USER\"[^\n]*", flat)
+        assert call is not None, "Restore-Pipe in restore.sh muss psql -U \"$SU_USER\" nutzen (Review N4)."

@@ -49,6 +49,12 @@ fi
 : "${POSTGRES_DB:?POSTGRES_DB nicht gesetzt}"
 : "${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY nicht gesetzt}"
 
+# Der Plain-SQL-Dump enthaelt OWNER-TO-/FORCE-RLS-Statements und COPY in
+# FORCE-RLS-Tabellen — das scheitert unter der App-Rolle (NOBYPASSRLS, kein
+# DDL-Owner-Recht). Bootstrap-Superuser via Local-Socket-Trust im
+# db-Container — wie scripts/ops/restore-drill.sh (Review N4).
+SU_USER="${POSTGRES_SUPERUSER:-postgres}"
+
 echo "WARNUNG: Die Datenbank '${POSTGRES_DB}' wird überschrieben!"
 echo "DB-Backup:    ${BACKUP_FILE}"
 if [[ -n "$MEDIA_FILE" ]]; then
@@ -69,7 +75,7 @@ echo "Stelle DB-Backup wieder her..."
 openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$BACKUP_FILE" \
     | gunzip \
     | docker compose -f "$COMPOSE_FILE" exec -T db \
-        psql -U "$POSTGRES_USER" "$POSTGRES_DB"
+        psql -U "$SU_USER" "$POSTGRES_DB"
 echo "DB-Wiederherstellung abgeschlossen."
 
 # Medien-Restore (Refs #720)

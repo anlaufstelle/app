@@ -1192,7 +1192,7 @@ docker compose -f docker-compose.prod.yml stop web
 #    Dump als Admin-Rolle (BYPASSRLS) ueber den Container-Socket — wie backup.sh.
 ./scripts/ops/backup.sh
 docker compose -f docker-compose.prod.yml exec -T db \
-    sh -c 'pg_dump -U "$ADMIN_DB_USER" -Fc -Z 6 "$POSTGRES_DB"' > /tmp/upgrade-pg16.dump
+    sh -c 'pg_dump -U "$POSTGRES_ADMIN_USER" -Fc -Z 6 "$POSTGRES_DB"' > /tmp/upgrade-pg16.dump
 
 # 2. DB stoppen, Volume-Tarball als byte-genauen Rollback-Anker ziehen
 #    (Volume-Name pruefen: docker volume ls | grep pgdata)

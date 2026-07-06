@@ -36,6 +36,19 @@ fi
 : "${POSTGRES_DB:?POSTGRES_DB nicht gesetzt}"
 : "${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY nicht gesetzt}"
 
+# pg_dump muss als POSTGRES_ADMIN_USER (BYPASSRLS) laufen — sonst scheitert
+# der Dump an FORCE ROW LEVEL SECURITY auf den Facility-Tabellen (Migrationen
+# 0084/0085): die App-Rolle (NOBYPASSRLS) matcht ohne Session-GUC null Zeilen,
+# pg_dump bricht ab und unter `set -euo pipefail` entsteht KEIN Backup.
+# Fallback auf POSTGRES_USER fuer Alt-Setups ohne 2-Rollen-Modell (Review N4).
+DUMP_USER="${POSTGRES_ADMIN_USER:-$POSTGRES_USER}"
+export PGPASSWORD="${POSTGRES_ADMIN_PASSWORD:-${POSTGRES_PASSWORD:-}}"
+
+# Der --verify-Zweig braucht CREATE/DROP DATABASE: beide App-Rollen sind
+# NOCREATEDB (deploy/postgres-init/01-app-role.sh). Bootstrap-Superuser via
+# Local-Socket-Trust im db-Container — wie scripts/ops/restore-drill.sh.
+SU_USER="${POSTGRES_SUPERUSER:-postgres}"
+
 # --verify: Letztes Backup in temporaere Datenbank wiederherstellen und pruefen
 if [[ "${1:-}" == "--verify" ]]; then
     DAILY_DIR="${BACKUP_DIR}/daily"
@@ -57,7 +70,7 @@ if [[ "${1:-}" == "--verify" ]]; then
     cleanup() {
         echo "Raeume temporaere Datenbank '${VERIFY_DB}' auf..."
         docker compose -f "$COMPOSE_FILE" exec -T db \
-            psql -U "$POSTGRES_USER" -d postgres \
+            psql -U "$SU_USER" -d postgres \
             -c "DROP DATABASE IF EXISTS \"${VERIFY_DB}\";" 2>/dev/null || true
     }
     trap cleanup EXIT
@@ -65,7 +78,7 @@ if [[ "${1:-}" == "--verify" ]]; then
     # Temporaere Datenbank erstellen
     echo "Erstelle temporaere Datenbank: ${VERIFY_DB}"
     docker compose -f "$COMPOSE_FILE" exec -T db \
-        psql -U "$POSTGRES_USER" -d postgres \
+        psql -U "$SU_USER" -d postgres \
         -c "CREATE DATABASE \"${VERIFY_DB}\";"
 
     # A4.3: Integrität VOR dem Entschlüsseln prüfen.
@@ -77,20 +90,29 @@ if [[ "${1:-}" == "--verify" ]]; then
         -in "$LATEST_BACKUP" \
         | gunzip \
         | docker compose -f "$COMPOSE_FILE" exec -T db \
-            psql -U "$POSTGRES_USER" "$VERIFY_DB" > /dev/null
+            psql -U "$SU_USER" "$VERIFY_DB" > /dev/null
 
-    # Einfache Pruefabfrage ausfuehren
-    echo "Pruefe wiederhergestellte Daten..."
-    FACILITY_COUNT=$(docker compose -f "$COMPOSE_FILE" exec -T db \
-        psql -U "$POSTGRES_USER" -d "$VERIFY_DB" -t -A \
-        -c "SELECT COUNT(*) FROM core_facility;")
+    # Einfache Pruefabfrage: eine RLS-Tabelle zaehlen. core_facility (ohne
+    # RLS) wuerde einen RLS-leeren Dump nicht erkennen (Review N4). Live-
+    # Vergleich nur als Plausibilitaet: Live>0 aber Restore=0 heisst, der
+    # Dump war RLS-leer.
+    echo "Pruefe wiederhergestellte Daten (RLS-Tabelle core_client)..."
+    RESTORED_CLIENT_COUNT=$(docker compose -f "$COMPOSE_FILE" exec -T db \
+        psql -U "$SU_USER" -d "$VERIFY_DB" -t -A \
+        -c "SELECT COUNT(*) FROM core_client;")
+    LIVE_CLIENT_COUNT=$(docker compose -f "$COMPOSE_FILE" exec -T db \
+        psql -U "$SU_USER" -d "$POSTGRES_DB" -t -A \
+        -c "SELECT COUNT(*) FROM core_client;")
 
-    if [[ -z "$FACILITY_COUNT" || "$FACILITY_COUNT" -lt 0 ]] 2>/dev/null; then
+    if [[ -z "$RESTORED_CLIENT_COUNT" ]]; then
         echo "FEHLER: Pruefabfrage fehlgeschlagen."
         exit 1
     fi
-
-    echo "Verifikation erfolgreich: ${FACILITY_COUNT} Einrichtung(en) in core_facility."
+    if [[ "$LIVE_CLIENT_COUNT" -gt 0 && "$RESTORED_CLIENT_COUNT" -eq 0 ]]; then
+        echo "FEHLER: Backup enthaelt 0 core_client-Zeilen, Live-DB hat ${LIVE_CLIENT_COUNT} — Dump war RLS-leer (falsche Rolle?)."
+        exit 1
+    fi
+    echo "Verifikation erfolgreich: ${RESTORED_CLIENT_COUNT} Klient(en) in core_client (Live: ${LIVE_CLIENT_COUNT})."
     echo "DB-Backup ist gueltig: ${LATEST_BACKUP}"
 
     # Medien-Backup integritaetspruefen — kein Restore noetig, nur tar-listen.
@@ -126,8 +148,8 @@ MEDIA_FILE="${DAILY_DIR}/anlaufstelle_${TIMESTAMP}_media.tar.gz.enc"
 
 # DB-Backup
 echo "Erstelle DB-Backup: ${BACKUP_FILE}"
-docker compose -f "$COMPOSE_FILE" exec -T db \
-    pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB" \
+docker compose -f "$COMPOSE_FILE" exec -T -e PGPASSWORD db \
+    pg_dump -U "$DUMP_USER" "$POSTGRES_DB" \
     | gzip \
     | openssl enc -aes-256-cbc -salt -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY \
     > "$BACKUP_FILE"
