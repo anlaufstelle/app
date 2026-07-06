@@ -195,8 +195,8 @@ class HTMXPartialMixin:
       Partial-Template kennt.
     """
 
-    template_name = None
-    partial_template_name = None
+    template_name: str | None = None
+    partial_template_name: str | None = None
 
     def is_htmx(self):
         return self.request.headers.get("HX-Request") == "true"
