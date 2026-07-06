@@ -877,6 +877,83 @@ class TestWorkItemReplayContract:
             _purge(page)
             context.close()
 
+    def test_reedit_of_unsynced_new_workitem_keeps_new_status_and_idempotency_key(
+        self, browser, base_url, _login_storage_state
+    ):
+        """WorkItem-Pendant zu ``TestOfflineReeditOfNewEvent``
+        (``test_offline_edit_conflict.py:279-358``, insb. 335-358): ein
+        offline neu angelegtes, noch nie synchronisiertes WorkItem
+        (``localStatus="new"``) darf durch einen Re-Edit ueber
+        ``markWorkItemModified`` weder seinen ``new``-Status noch seinen
+        urspruenglichen ``idempotencyKey`` verlieren — sonst zielt der
+        naechste Replay-Versuch auf ``/workitems/<pk>/edit/`` (existiert
+        serverseitig nie, das WorkItem wurde ja nie angelegt) statt auf
+        ``/workitems/new/``, UND der Doppel-Anlage-Schutz waere durch einen
+        neu geminteten Key ersetzt. Pinnt den ``wasNew``-Zweig in
+        ``markWorkItemModified`` (``offline-edit.js`` ~508-515:
+        ``data.idempotencyKey = (existing.data && existing.data.idempotencyKey)
+        || _uuid()`` + ``localStatus: wasNew ? "new" : "modified"``)."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            client_pk = str(uuid.uuid4())
+            captured = []
+
+            def _handler(route):
+                captured.append({"url": route.request.url, "idem": route.request.headers.get("x-idempotency-key")})
+                route.fulfill(status=302, headers={"Location": "/workitems/"})
+
+            # Nur /workitems/new/ gemockt: schlaegt der wasNew-Zweig fehl und
+            # der Replay zielt (fehlerhaft) auf /workitems/<pk>/edit/, faengt
+            # dieser Handler NICHTS ab — das macht die Assertion unten
+            # (``len(captured) == 1``) diskriminierend statt nur die Header
+            # zu pruefen.
+            page.route(re.compile(r"/workitems/new/"), _handler)
+            result = page.evaluate(
+                """async (clientPk) => {
+                    const created = await window.offlineEdit.markWorkItemNew(clientPk, {
+                        item_type: 'task', title: 'Vor Re-Edit', priority: 'normal',
+                    });
+                    const beforeReedit = await window.offlineStore.getOfflineEvent(created.pk);
+                    const reedited = await window.offlineEdit.markWorkItemModified(
+                        created.pk,
+                        { item_type: 'task', title: 'Nach Re-Edit', priority: 'important' },
+                        { clientPk: clientPk }
+                    );
+                    const afterReedit = await window.offlineStore.getOfflineEvent(created.pk);
+                    const r = await window.offlineEdit.replayModifiedEvent(reedited);
+                    return {
+                        originalIdemKey: beforeReedit.data.idempotencyKey,
+                        afterLocalStatus: afterReedit.localStatus,
+                        afterIdemKey: afterReedit.data.idempotencyKey,
+                        replayStatus: r.status,
+                    };
+                }""",
+                client_pk,
+            )
+            assert result["originalIdemKey"], "markWorkItemNew muss einen idempotencyKey vergeben"
+            assert result["afterLocalStatus"] == "new", (
+                "Re-Edit eines offline neu angelegten WorkItems darf localStatus nicht auf "
+                f"'modified' degradieren (wasNew-Zweig von markWorkItemModified): {result!r}"
+            )
+            assert result["afterIdemKey"] == result["originalIdemKey"], (
+                "Re-Edit darf den urspruenglichen idempotencyKey nicht durch einen neuen "
+                f"ersetzen/verlieren (Doppel-Anlage-Schutz, Refs #1109/#1351): {result!r}"
+            )
+            assert len(captured) == 1, (
+                f"Replay nach Re-Edit muss weiterhin an /workitems/new/ gehen (localStatus "
+                f"'new' bleibt erhalten), nicht an /workitems/<pk>/edit/: {captured!r}"
+            )
+            assert captured[0]["idem"] == result["originalIdemKey"], (
+                "Der Replay nach Re-Edit muss denselben X-Idempotency-Key senden wie die "
+                f"urspruengliche Neuanlage: {captured[0]!r} vs {result!r}"
+            )
+            assert result["replayStatus"] == "synced", f"Redirect-Erfolg muss synced liefern: {result!r}"
+        finally:
+            _purge(page)
+            context.close()
+
 
 # ---------------------------------------------------------------------------
 # Refs #1394 — 404/410 auf den CREATE-Replay (Event UND WorkItem) ist
