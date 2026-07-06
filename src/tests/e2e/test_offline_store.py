@@ -23,6 +23,43 @@ def _bootstrap(page, base_url):
     )
 
 
+def test_permanent_decrypt_failure_surfaces_unsynced_event_as_deadletter(authenticated_page, base_url):
+    """R1 (Sicherheitsreview 2026-07-05): Eine Salt-Rotation (Rollenwechsel/
+    Deaktivierung) bzw. ein Passwortwechsel macht ungesyncte Offline-Doku
+    unentschlüsselbar. Der Inhalt ist dann unwiederbringlich — aber die Zeile
+    darf NICHT mehr STILL gelöscht werden (bisheriges #576-Auto-Discard),
+    sondern wird als dead-Letter (``localStatus='dead'``, gezählt) sichtbar
+    gemacht, damit die Sync-/Konfliktliste (#1385) den Verlust ausweist.
+    """
+    page = authenticated_page
+    _bootstrap(page, base_url)
+    result = page.evaluate(
+        """async () => {
+            // Ungesyncte, offline neu erfasste Doku (localStatus 'new').
+            await window.offlineStore.saveOfflineEdit({
+                pk: '22222222-2222-2222-2222-222222222222',
+                clientPk: '33333333-3333-3333-3333-333333333333',
+                occurredAt: '2026-01-01T00:00:00Z',
+                localStatus: 'new',
+                data: { note: 'ungesyncte Doku' },
+            });
+            // Salt-Rotation simulieren: ein anderer Schlüssel kann die Zeile
+            // nie mehr entschlüsseln (PERMANENTER Decrypt-Fehler).
+            await window.crypto_session.clearSessionKey();
+            await window.crypto_session.deriveSessionKey('rotated-pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+            const ev = await window.offlineStore.getOfflineEvent('22222222-2222-2222-2222-222222222222');
+            return {
+                readable: !!ev,
+                rows: await window.offlineStore.count('events'),
+                dead: await window.offlineStore.countDeadEvents(),
+            };
+        }"""
+    )
+    assert result["readable"] is False  # Inhalt unwiederbringlich (Schlüssel weg)
+    assert result["rows"] == 1  # Zeile wird NICHT still gelöscht …
+    assert result["dead"] == 1  # … sondern als dead-Letter sichtbar gemacht
+
+
 def _first_client_pk(page, base_url):
     """Erste echte Klient-UUID von ``/clients/`` (für den Re-Validierungs-Pfad)."""
     page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")

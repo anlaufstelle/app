@@ -96,6 +96,36 @@
         return e && (e.name === "NoSessionKeyError" || e.message === "NoSessionKey");
     }
 
+    // Refs R1 (Sicherheitsreview 2026-07-05): Ungesyncte Arbeit — jede
+    // `queue`-Row und `events` mit `localStatus` in {new, modified, conflict,
+    // dead}. Nur diese darf bei einem PERMANENTEN Decrypt-Fehler nicht STILL
+    // verschwinden; rein gecachte, serverseitig erneut abrufbare Read-Kopien
+    // (clients/cases/drafts/synced events) bleiben beim #576-Auto-Discard.
+    const _UNSYNCED_EVENT_STATUS = ["new", "modified", "conflict", "dead"];
+
+    function _isUnsyncedWorkRow(table, row) {
+        if (table === "queue") return true;
+        if (table === "events") return _UNSYNCED_EVENT_STATUS.includes(row && row.localStatus);
+        return false;
+    }
+
+    async function _discardOrTombstone(table, primaryKey, row) {
+        // R1: Salt-Rotation (Rollenwechsel/Deaktivierung) bzw. Passwortwechsel
+        // macht die Zeile unentschluesselbar — der Klartext ist ohne den alten
+        // Schluessel unwiederbringlich. Ungesyncte Arbeit wird deshalb NICHT
+        // mehr still geloescht, sondern als sichtbarer dead-Tombstone markiert
+        // (planes Index-Update, kein Decrypt/Re-Encrypt noetig), damit die
+        // vorhandene Sync-/Konflikt-/Dead-Letter-Anzeige (#1385) den Verlust
+        // ausweist statt ihn zu verschlucken. Idempotent: eine bereits
+        // getombstonete Zeile wird nicht erneut geschrieben.
+        if (_isUnsyncedWorkRow(table, row)) {
+            if (row && row.localStatus === "dead" && row.keyRotated) return;
+            await db[table].update(primaryKey, { localStatus: "dead", keyRotated: true });
+            return;
+        }
+        await db[table].delete(primaryKey);
+    }
+
     async function putEncrypted(table, record) {
         const crypto = _crypto();
         const { data, ...rest } = record;
@@ -116,8 +146,10 @@
                 // behalten und nur null liefern.
                 return null;
             }
-            // Auto-discard on PERMANENT decrypt failure (salt/password rotated)
-            await db[table].delete(primaryKey);
+            // PERMANENT decrypt failure (salt/password rotated): discard a
+            // re-fetchable cache row, but tombstone unsynced work so it is
+            // surfaced, not silently lost (Refs R1).
+            await _discardOrTombstone(table, primaryKey, row);
             return null;
         }
     }
@@ -138,8 +170,9 @@
                     // in dieser Liste ueberspringen.
                     continue;
                 }
-                // Auto-discard on PERMANENT decrypt failure
-                await db[table].delete(row[db[table].schema.primKey.name]);
+                // PERMANENT decrypt failure: discard cache, tombstone unsynced
+                // work so it is surfaced rather than silently lost (Refs R1).
+                await _discardOrTombstone(table, row[db[table].schema.primKey.name], row);
             }
         }
         return out;
