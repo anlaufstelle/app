@@ -1,6 +1,6 @@
 # Threat Model — Anlaufstelle (STRIDE-Lite)
 
-**Version:** v0.16.x · **Letzte Revision:** 2026-06-25 · **Quelle:** [Issue #691](https://github.com/anlaufstelle/app/issues/691)
+**Version:** v0.16.x · **Letzte Revision:** 2026-07-07 · **Quelle:** [Issue #691](https://github.com/anlaufstelle/app/issues/691), Offline-Grenze aus [ADR-022](adr/022-offline-snapshot-keys.md) (#1411)
 
 Dieses Dokument macht das Sicherheitsmodell explizit. Es ergänzt — nicht ersetzt — die zeilengenauen internen Code-Audits (dev-only) und die Design-Entscheidungen in [`docs/security-notes.md`](security-notes.md).
 
@@ -44,6 +44,7 @@ Dieses Dokument macht das Sicherheitsmodell explizit. Es ergänzt — nicht erse
 | **Sessions** | C, I | Postgres `django_session`, HTTPOnly+Secure+SameSite-Cookie | mittel — Session-Hijack ⇒ Account-Übernahme |
 | **MFA-Secrets / Backup-Codes** | C | Postgres `otp_*` (django-otp) | hoch — kompromittiert ⇒ MFA-Bypass |
 | **Login-Lockout-State** | I, A | nicht persistiert — zur Laufzeit aus AuditLog abgeleitet ([`src/core/services/security/login_lockout.py`](../src/core/services/security/login_lockout.py)) | mittel — Integrität AuditLog-abhängig (TB2/TB3); Restrisiken intern getrackt |
+| **IndexedDB (Offline-Bundle)** — server-vorgefilterte Klient:innen-Spiegel (AES-GCM-256-verschlüsselte Bundles **plus Klartext-Index-Metadaten**) | C, I | Browser-IndexedDB des Client-Geräts: verschlüsselte Envelopes in `anlaufstelle-offline` ([`offline-store.js`](../src/static/js/offline-store.js)), non-extractable Session-Key in `anlaufstelle-crypto` ([`crypto.js`](../src/static/js/crypto.js)); Datei-Inhalte nie im Bundle | Art.-9-DSGVO-Spiegel (verschlüsselt); Index-Metadaten (pk, `lastSynced`, `occurredAt`, `etag`, `expiresAt`) im **Klartext** — bewusstes Restrisiko (TB6), [ADR-022](adr/022-offline-snapshot-keys.md) |
 
 C = Confidentiality, I = Integrity, A = Availability
 
@@ -82,6 +83,15 @@ TB4│        ↕ INSTREAM via TCP (internal-Netz)              │
 ```
 
 Backups (`backup.sh`) verlassen das interne Netz nur **verschlüsselt** auf den Backup-Host (TB5: Off-Site).
+
+**TB6 — Offline: Client-Gerät als Datenhalter** (orthogonal zur Server-Kette oben). Im Offline-Modus ([ADR-022](adr/022-offline-snapshot-keys.md)) landen server-vorgefilterte Snapshot-Bundles in der Browser-IndexedDB des Mitarbeiter:innen-Geräts. Das **Client-Gerät** wird damit zu einer eigenen Vertrauensgrenze — verschlüsselter Datenbestand *at rest* plus Klartext-Index-Metadaten, außerhalb der Reichweite aller Server-Mitigations (TB1–TB5). Bewusst **als TB6 angehängt** (nicht als „TB0" vor TB1), damit die Bestandsnummern TB1–TB5 und ihre Querverweise stabil bleiben; wie TB5 (Off-Site-Backups) ist auch TB6 keine Inline-Station der Request-Kette, sondern eine terminale Daten-*at-rest*-Grenze.
+
+```
+   ┌─ Client-Gerät (Browser-Storage: IndexedDB, Cache) ─────┐
+TB6│   Snapshot-Bundle AES-GCM-256 (non-extractable Key)    │
+   │   + Klartext-Index-Metadaten · Idle-Wipe an Session    │
+   └─ ↕ derselbe Browser wie TB1 (Session-gebundener Key) ──┘
+```
 
 ---
 
@@ -128,6 +138,21 @@ Backups (`backup.sh`) verlassen das interne Netz nur **verschlüsselt** auf den 
 | **I** Backup-Tampering | Encrypt-then-MAC: detached HMAC-SHA256-Sidecar (`.hmac`, Key domain-separiert aus `BACKUP_ENCRYPTION_KEY` abgeleitet); `restore.sh` und `--verify` prüfen den HMAC **vor** der Entschlüsselung — fehlende Sidecar oder Mismatch bricht ab. Zusätzlich restored `--verify` die DB in eine Temp-DB + prüft Tabellen; Medien-tar wird auf Listbarkeit geprüft | [`_backup_common.sh`](../scripts/ops/_backup_common.sh), [`restore.sh`](../scripts/ops/restore.sh), [`backup.sh`](../scripts/ops/backup.sh) | Restore-Drill nur quartalsweise dokumentiert (Runbook § 6.6) |
 | **A** Schlüsselverlust ⇒ Restore unmöglich | Key-Rollover-Runbook geplant || Runbook fehlt |
 
+### TB6 — Offline: Client-Gerät als Datenhalter
+
+Grundlage: [ADR-022](adr/022-offline-snapshot-keys.md) (Krypto-/TTL-/Wipe-Kern), Snapshot-Build [`offline.py`](../src/core/services/system/offline.py), Client-Layer [`offline-store.js`](../src/static/js/offline-store.js) / [`crypto.js`](../src/static/js/crypto.js). Grundprinzip: **Server-seitige Sichtbarkeits- und Rechte-Entscheidungen (TB1–TB3) bleiben autoritativ** — die Browser-Crypto schützt gegen Gerätediebstahl, nicht gegen Rollen-Eskalation.
+
+| Threat | Mitigation (Bestand) | Quelle | Offene Lücke / Restrisiko |
+|---|---|---|---|
+| **S** Gerätediebstahl → Offline-Zugriff auf den Bundle-Bestand | Login-abgeleiteter AES-GCM-256-Key (PBKDF2 600 k / SHA-256), **non-extractable** in separater IndexedDB — ohne aktive Session liefert das Gerät nur Chiffretext; Idle-Wipe von Key **und** Store, sobald länger als die Session-Dauer (Default 30 Min) untätig — geprüft bei Boot, im 60-s-Intervall und bei Tab-Rückkehr | [`crypto.js`](../src/static/js/crypto.js), [ADR-022](adr/022-offline-snapshot-keys.md) | **F-02** — Salt + Chiffretext liegen bei Diebstahl beide lokal → Offline-Brute-Force gegen PBKDF2 bei schwachem Passwort möglich; **F-01** — kein kürzeres Offline-Lock und **kein** `pagehide`-Wipe (bewusst, Streetwork; #1065/#1324) |
+| **T** Manipulation lokaler IDB-Daten (Chiffretext / Index) | Server-Filter (`visible_to`/`user_can_see_field`) laufen **vor** der Serialisierung und sind autoritativ; Schreibzugriffe werden Server-gegen-Server neu gespielt; GCM-Auth-Tag erkennt jede Chiffretext-Manipulation → Auto-Discard | [`offline.py`](../src/core/services/system/offline.py), [`offline-store.js`](../src/static/js/offline-store.js) | Lokale Index-Metadaten sind schreibbar, aber nicht autoritativ — sie steuern nur die Client-Sicht; die maßgebliche Rechte-/Sichtbarkeits-Entscheidung fällt serverseitig |
+| **I** Klartext-Index-Metadaten bei Gerätezugriff lesbar | Nur Metadaten unverschlüsselt (pk, `lastSynced`, `occurredAt`, `etag`, `expiresAt`); alle Werte-/Freitext-Inhalte AES-GCM-verschlüsselt; Datei-Inhalte gehen nie ins Bundle (nur „vorhanden"-Marker) | [`offline-store.js`](../src/static/js/offline-store.js), [ADR-022](adr/022-offline-snapshot-keys.md) | **Bewusster YAGNI-Verzicht:** Index-Metadaten (u. a. Kontaktzeitpunkte, UUIDs) unverschlüsselt — als Restrisiko akzeptiert; Eviction-Aspekt siehe **D** |
+| **R** Abstreitbarkeit offline erzeugter Änderungen | Offline-Writes tragen Konflikt-Token + Idempotenz-Key und werden beim Reconnect gegen den Server gespielt — die **autoritative** AuditLog-Spur entsteht serverseitig beim Replay (TB2/TB3) | [`offline-queue.js`](../src/static/js/offline-queue.js), [ADR-022](adr/022-offline-snapshot-keys.md) | Kein clientseitiges Audit vor dem Replay (n. a. — die Aktion ist bis zum Sync nur lokal); permanente Decrypt-Fehler ungesyncter Zeilen werden als sichtbarer Dead-Letter markiert statt still verworfen (#1385) |
+| **D** Browser-Eviction / QuotaExceeded → Datenverlust | `navigator.storage.persist()` einmalig angefragt (#1356); Quota-/Persist-Status live angezeigt (#1412); `QuotaExceededError` wird **sichtbar** gemeldet statt still zu scheitern (#1414); 48-h-TTL deckelt den Bestand (Data-Minimization) | [`offline-store.js`](../src/static/js/offline-store.js) | Ohne `persist()`-Grant darf der Browser die IndexedDB unter Speicherdruck evicten (Safari-ITP zusätzlich zeitbasiert) — ungesyncte Arbeit gilt als Datenverlustrisiko, daher die Sichtbarmachung |
+| **E** Rechte-Eskalation über das Offline-Bundle | **Keine** — das Bundle kann nicht mehr enthalten, als der/die Nutzer:in online sähe; Sichtbarkeit wird serverseitig **vor** Bundle-Erzeugung entschieden; Non-Staff erhält keinen Zuweisungs-Roster und kann offline nicht mutieren | [`offline.py`](../src/core/services/system/offline.py), [ADR-022](adr/022-offline-snapshot-keys.md) | — (Server-Grenzen TB1–TB3 bleiben autoritativ) |
+
+**Restrisiken (Offline), konsolidiert:** Die Klartext-Index-Metadaten sind ein bewusster **YAGNI-Verzicht** (Index-Verschlüsselung vertagt). **F-01** (kein `pagehide`-/Kurz-Lock) und **F-02** (Passwortstärke als Single-Point beim Offline-Brute-Force) sind in [ADR-022 § Akzeptierte Restrisiken](adr/022-offline-snapshot-keys.md#akzeptierte-restrisiken) angenommen. Ein **Passwortwechsel rotiert den abgeleiteten Schlüssel** (Salt-Rotation): alte Bundles werden per GCM-Auth-Tag-Mismatch permanent unlesbar und verworfen — eine **Pre-Submit-Warnung** weist vor dem Wechsel auf noch nicht synchronisierte Offline-Einträge hin (#1415). Out-of-App-Grenzen (Cold-Boot-/RAM-Imaging, fehlende OS-Festplattenverschlüsselung, MDM, kompromittiertes Gerät) sind in ADR-022 über die Native-App-Alternative eingeordnet. DSFA-/TOM-Abdeckung des Offline-Pfads: offen (#1343); Design-Trade-offs der Krypto-Schicht: [`security-notes.md`](security-notes.md).
+
 ---
 
 ## 6. Bekannte offene Lücken (Verweis auf Audit-Reports)
@@ -150,3 +175,5 @@ Diese Threat-Model-Tabelle nennt Lücken nur als Stichwort. Vollständige Befund
 - **Pflegeverantwortung:** Solo-Maintainer ([SECURITY.md](../SECURITY.md))
 
 Letzte Revision: **2026-04-29** (initiale Fassung im Rahmen, Refs #691, #733).
+
+Ergänzung **2026-07-07**: Offline-Vertrauensgrenze **TB6** (Client-Gerät als Datenhalter) + Asset **IndexedDB (Offline-Bundle)**, destilliert aus [ADR-022](adr/022-offline-snapshot-keys.md) (#1411).
