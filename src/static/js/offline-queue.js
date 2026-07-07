@@ -180,7 +180,20 @@
         // (kein Re-Intercept/Re-Queue) — sonst faenge er ihn bei >6s erneut ab
         // (Doppelkanal + spurious dead-letter).
         headers["X-Offline-Replay"] = "1";
-        if (csrf) headers["X-CSRFToken"] = csrf;
+        // Refs #1419 (Bugfix, analog zum Idempotency-Key oben): die
+        // SW-Allowlist friert den x-csrftoken des Erstversuchs
+        // KLEINGESCHRIEBEN im Record ein. Zusammen mit dem frischen
+        // kanonischen X-CSRFToken ergaebe das ZWEI Case-Varianten desselben
+        // Headers, die die Headers-API zu "stale, fresh" zusammenfasst →
+        // Djangos CSRF-Check lehnt ab → JEDER Replay eines HTMX-/fetch-POSTs
+        // landete als 403-dead. Die Record-Variante nur entfernen, wenn ein
+        // frischer Token vorliegt — sonst bleibt sie der letzte Fallback.
+        if (csrf) {
+            for (const k of Object.keys(headers)) {
+                if (k.toLowerCase() === "x-csrftoken") delete headers[k];
+            }
+            headers["X-CSRFToken"] = csrf;
+        }
         if (record.idempotencyKey) headers["X-Idempotency-Key"] = record.idempotencyKey;
         return fetch(record.url, {
             method: record.data.method,

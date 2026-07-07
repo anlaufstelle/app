@@ -1468,6 +1468,57 @@ class TestQueueReplayClassification:
                 page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
             context.close()
 
+    def test_replay_sends_single_fresh_csrf_header(self, browser, base_url, _login_storage_state):
+        """Refs #1419 (Bugfix, gefunden bei der manuellen Verifikation): die
+        SW-Allowlist friert den ``x-csrftoken`` des Erstversuchs
+        KLEINGESCHRIEBEN im Queue-Record ein; ``_send`` setzte bisher
+        zusaetzlich den frischen kanonischen ``X-CSRFToken`` — die
+        Headers-API fasst beide Case-Varianten zu ``"stale, fresh"``
+        zusammen, Djangos CSRF-Check lehnt ab und JEDER Replay eines
+        HTMX-/fetch-POSTs landete als 403-dead (exakt der Doppel-Header-Bug,
+        der fuer ``x-idempotency-key`` schon in #1351 gefixt wurde). Dieser
+        Test ist gegen den heutigen Code ROT: der ankommende CSRF-Header
+        muss GENAU der frische Meta-Token sein."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            url = "/partials/workitems/ffffffff-ffff-4fff-8fff-ffffffffffff/status/"
+            seen = []
+
+            def _handler(route):
+                seen.append(route.request.headers.get("x-csrftoken", ""))
+                route.fulfill(status=200, content_type="text/html", body="<div>ok</div>")
+
+            page.route(re.compile(r"/partials/workitems/ffffffff"), _handler)
+
+            fresh = page.evaluate(
+                """async (url) => {
+                    const s = window.offlineStore;
+                    await s.putEncrypted('queue', {
+                        url, createdAt: Date.now(), attempts: 0, retryAfter: 0, lastError: '',
+                        idempotencyKey: 'idem-csrf1',
+                        data: {method: 'POST', body: 'status=done&expected_updated_at=x', headers: {
+                            'content-type': 'application/x-www-form-urlencoded;charset=UTF-8',
+                            'x-csrftoken': 'stale-token-vom-queueing',
+                            'hx-request': 'true',
+                        }},
+                    });
+                    await window.offlineQueue.replayQueue();
+                    const meta = document.querySelector('meta[name="csrf-token"]');
+                    return meta ? meta.content : '';
+                }""",
+                url,
+            )
+            assert len(seen) == 1, f"Genau ein Replay erwartet: {seen!r}"
+            assert "stale-token-vom-queueing" not in seen[0], f"Stale Record-Token darf nicht mitgesendet werden: {seen[0]!r}"
+            assert "," not in seen[0], f"Nur EIN CSRF-Header-Wert erlaubt: {seen[0]!r}"
+            assert fresh and seen[0] == fresh, f"Es muss der frische Meta-Token ankommen: {seen[0]!r} != {fresh!r}"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
     def test_429_sets_backoff_and_aborts_batch(self, browser, base_url, _login_storage_state):
         """Dieser Test ist gegen den heutigen Code ROT: 429 faellt heute in
         den generischen `else`-Zweig (offline-queue.js:198-206) — Backoff
