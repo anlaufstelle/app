@@ -16,6 +16,11 @@ coverage.json
 src/staticfiles/
 src/static/css/styles.css
 src/static/css/output.css
+# Kompilierte Uebersetzungen: die getrackten src/locale/**/*.mo sind bewusst
+# im Repo (Prod-i18n — der Docker-Build fuehrt KEIN compilemessages aus, die
+# .mo werden per `COPY src/` ausgeliefert). Nur versehentliche Root-Streuner
+# (z.B. ./messages.mo aus einem falsch aufgerufenen compilemessages) ignorieren.
+/*.mo
 
 # IDE
 .vscode/
