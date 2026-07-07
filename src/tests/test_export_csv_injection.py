@@ -244,3 +244,34 @@ class TestAuditLogExportNeutralizesInjection:
         assert "'Teststelle" not in full_csv
         assert "Client" in full_csv
         assert "'Client" not in full_csv
+
+
+@pytest.mark.django_db
+class TestCsvHeaderNeutralizesInjection:
+    """Security R13: FieldTemplate.name (freies CharField, durch
+    facility_admin setzbar) landet als CSV-Header-Zelle — muss wie
+    Werte-Zellen durch _sanitize_csv_cell laufen."""
+
+    def test_formula_field_name_in_header_is_neutralized(self, facility, admin_user, normal_doc_type):
+        import csv
+        import io
+
+        FieldTemplate.objects.create(
+            facility=facility,
+            name="=SUM(A1:A10)",
+            field_type=FieldTemplate.FieldType.TEXT,
+        )
+        chunks = list(
+            export_events_csv(
+                facility, date.today() - timedelta(days=1), date.today() + timedelta(days=1), user=admin_user
+            )
+        )
+        full_csv = "".join(chunks)
+        reader = csv.reader(io.StringIO(full_csv))
+        for row in reader:
+            for cell in row:
+                if cell:
+                    assert cell[0] not in ("=", "+", "-", "@", "\t", "\r", "\n"), (
+                        f"Header-/Zellen-Injection: {cell!r} (Zeile: {row})"
+                    )
+        assert "'=SUM(A1:A10)" in full_csv

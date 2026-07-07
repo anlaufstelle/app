@@ -93,7 +93,13 @@ def _build_header(all_field_templates, field_slugs):
         _("Person"),
         _("Kontaktstufe"),
         _("Altersgruppe"),
-    ] + [all_field_templates[s].name for s in field_slugs]
+    ] + [
+        # Security R13: FieldTemplate.name ist admin-kontrollierter Freitext —
+        # Header-Zellen genauso gegen Formel-Injection neutralisieren wie
+        # Werte-Zellen (Refs #719).
+        _sanitize_csv_cell(all_field_templates[s].name)
+        for s in field_slugs
+    ]
 
 
 def _resolve_field_value(value, ft):
