@@ -56,7 +56,9 @@ class TestBackgroundJobTimers:
 
     def _code(self) -> str:
         if not self._SCRIPT.exists():
-            pytest.skip("dev-ops/ nicht im Public-Snapshot — Guard nur im Dev-Repo relevant (Refs #1047)")
+            # Voller Pfad in der Skip-Zeile: verify_release_test_guard verlangt den
+            # ausgeschlossenen Prefix (deploy/install-timers.sh) auf der Gate-Zeile (Refs #1137).
+            pytest.skip("dev-ops/deploy/install-timers.sh nicht im Public-Snapshot (Refs #1047)")
         lines = [
             line for line in self._SCRIPT.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")
         ]
