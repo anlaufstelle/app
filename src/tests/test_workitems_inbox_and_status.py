@@ -15,9 +15,11 @@ pytest File-spezifische Fixtures nicht ueber Imports entdeckt.
 import datetime
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.urls import reverse
 
 from core.models import WorkItem
+from core.services.case import update_workitem_status
 
 
 @pytest.fixture
@@ -746,3 +748,42 @@ class TestWorkItemInboxRecentDonePreview:
         assert "der letzten 7 Tage anzeigen" in html
         # Reine Kurzform darf es als alleinige Beschriftung nicht geben.
         assert ">Alle anzeigen<" not in html
+
+
+@pytest.mark.django_db
+class TestUpdateWorkItemStatusVersionCheck:
+    """Service-Contract: ``update_workitem_status`` mit Optimistic-Lock-Token (Refs #1419).
+
+    Der Versions-Check läuft via ``check_version_conflict`` auf der bereits
+    gelockten Instanz innerhalb derselben Transaktion (ADR-030-Invariante) —
+    analog ``update_workitem``. Ohne Token und ohne Pflicht bleibt das
+    bisherige Verhalten (LWW) unangetastet.
+    """
+
+    def test_stale_token_raises_validation_error(self, staff_user, workitem_open):
+        with pytest.raises(ValidationError):
+            update_workitem_status(
+                workitem_open, "done", staff_user, expected_updated_at="2000-01-01T00:00:00+00:00"
+            )
+        workitem_open.refresh_from_db()
+        assert workitem_open.status == WorkItem.Status.OPEN
+
+    def test_missing_token_with_requirement_raises_missing_token(self, staff_user, workitem_open):
+        with pytest.raises(ValidationError) as excinfo:
+            update_workitem_status(workitem_open, "done", staff_user, require_version_token=True)
+        assert excinfo.value.code == "missing_token"
+
+    def test_fresh_token_applies_transition(self, staff_user, workitem_open):
+        workitem_open.refresh_from_db()
+        result = update_workitem_status(
+            workitem_open,
+            "done",
+            staff_user,
+            expected_updated_at=workitem_open.updated_at.isoformat(),
+            require_version_token=True,
+        )
+        assert result.status == WorkItem.Status.DONE
+
+    def test_no_token_without_requirement_keeps_lww(self, staff_user, workitem_open):
+        result = update_workitem_status(workitem_open, "done", staff_user)
+        assert result.status == WorkItem.Status.DONE

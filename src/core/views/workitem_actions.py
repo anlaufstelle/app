@@ -73,7 +73,19 @@ def _workitem_conflict_response(workitem, client_expected, *, error="conflict"):
 
 
 class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
-    """HTMX: update WorkItem status."""
+    """HTMX: update WorkItem status.
+
+    Refs #1419: Teil des HTTP-Replay-Contracts (ADR-030), damit
+    Status-Übergänge offline queue- und nachspielbar sind. Anders als der
+    Edit-Pfad (Token-Pflicht via ``_wants_json_response`` inkl. HTMX) gilt
+    die Token-Pflicht hier NUR für Raw-JSON-Clients
+    (``_wants_raw_json_response``): HTMX ist beim Status-Toggle der normale
+    ONLINE-Pfad (Inbox-Buttons), dessen bewusst akzeptiertes
+    Status-gegen-Status-LWW unverändert bleibt. Die Templates senden das
+    Token trotzdem immer mit — es gehört in den Offline-Payload, den der
+    Service Worker beim Queueing einfriert; ausgewertet wird es erst vom
+    Replay (der ``Accept: application/json`` setzt, offline-queue.js).
+    """
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="POST", block=True))
     def post(self, request, pk):
@@ -82,21 +94,79 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
         if new_status not in WorkItem.Status.values:
             return HttpResponseBadRequest(_("Ungültiger Status"))
 
+        wants_raw_json = _wants_raw_json_response(request)
+        expected_updated_at = (request.POST.get("expected_updated_at") or None) if wants_raw_json else None
+
+        # Idempotenz-Guard (Refs #1419, analog WorkItemCreateView/#1329):
+        # bricht der Offline-Client die Verbindung nach erfolgreichem
+        # Server-Write, aber vor Empfang der Response ab, spielt er dieselbe
+        # Queue-Zeile erneut. Ohne Dedup würde der Zweit-Replay einen
+        # ZWISCHENZEITLICHEN Statuswechsel (z.B. Reopen durch Kollegin) als
+        # 409-Konflikt melden, obwohl die Aktion längst angewendet ist — der
+        # Cache-Hit liefert stattdessen die Erfolgsform des Originals.
+        # Kein DB-Backstop wie bei Create (R5): Transitionen haben keine
+        # ``idempotency_key``-Spalte; nach Cache-Verlust fängt der
+        # Versions-Token den Doppel-Replay als sichtbaren 409 ab (kein
+        # stilles Überschreiben).
+        idem_key = normalize_idempotency_key(request.headers.get("X-Idempotency-Key"))
+        idem_payload_hash = payload_fingerprint(request) if idem_key else None
+        if idem_key:
+            hit = get_idempotent_result("workitem_status", request.user.pk, idem_key)
+            if hit is not None:
+                # N14 (#1424): derselbe Key mit ABWEICHENDEM Body ist eine
+                # Key-Kollision — kein gecachter Erfolg, sondern 422.
+                if hit.payload_hash is not None and hit.payload_hash != idem_payload_hash:
+                    return _idempotency_mismatch_response()
+                workitem = get_object_or_404(WorkItem, pk=pk, facility=request.current_facility)
+                return self._success_response(request, workitem)
+
         # Permission-Check + Service-Call innerhalb derselben Transaktion,
         # damit das gelockte Objekt aus dem Service-Layer zurueckgegeben
         # wird und kein parallel laufender Request den Stand zwischen
         # Check und Update veraendern kann (Refs #129 Teil A, Refs #733).
-        with transaction.atomic():
-            workitem = get_object_or_404(
-                WorkItem.objects.select_for_update(),
-                pk=pk,
-                facility=request.current_facility,
-            )
-            if not can_user_mutate_workitem(request.user, workitem):
-                return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
+        try:
+            with transaction.atomic():
+                workitem = get_object_or_404(
+                    WorkItem.objects.select_for_update(),
+                    pk=pk,
+                    facility=request.current_facility,
+                )
+                if not can_user_mutate_workitem(request.user, workitem):
+                    return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
 
-            workitem = update_workitem_status(workitem, new_status, request.user)
+                workitem = update_workitem_status(
+                    workitem,
+                    new_status,
+                    request.user,
+                    expected_updated_at=expected_updated_at,
+                    require_version_token=wants_raw_json,
+                )
+        except ValidationError as e:
+            # Refs #1419 (analog WorkItemUpdateView/#1338): der Offline-Replay
+            # braucht den 409 mit Server-Stand, damit der Konflikt in der
+            # M8-Liste sichtbar und auflösbar bleibt, statt von der
+            # generischen Queue still als Erfolg oder Dead-Letter
+            # klassifiziert zu werden.
+            workitem.refresh_from_db()
+            if _wants_json_response(request):
+                if getattr(e, "code", None) == "missing_token":
+                    return _workitem_conflict_response(workitem, None, error="missing-token")
+                return _workitem_conflict_response(workitem, expected_updated_at)
+            # Defensiver HTML-Fallback (praktisch unerreichbar, weil Token/
+            # Pflicht nur für Raw-JSON-Clients gesetzt werden).
+            messages.error(request, e.message if hasattr(e, "message") else str(e))
+            return redirect("core:workitem_inbox")
 
+        remember_idempotent_result(
+            "workitem_status", request.user.pk, idem_key, workitem.pk, payload_hash=idem_payload_hash
+        )
+        return self._success_response(request, workitem)
+
+    def _success_response(self, request, workitem):
+        """Erfolgsform des Status-POSTs — geteilt zwischen Erst-Request und
+        Idempotenz-Cache-Hit, damit der Replay exakt die Antwort bekommt, der
+        die generische Queue als Erfolg folgt (HX: 200-Partial bzw. leere
+        Antwort bei ``hide``; sonst Redirect)."""
         if request.headers.get("HX-Request") == "true":
             if request.POST.get("hide"):
                 return HttpResponse("")

@@ -182,7 +182,7 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
 
 
 @transaction.atomic
-def update_workitem_status(workitem, new_status, user):
+def update_workitem_status(workitem, new_status, user, *, expected_updated_at=None, require_version_token=False):
     """Perform a status transition including auto-assign and completed_at management.
 
     - On IN_PROGRESS: auto-assign to the user if not yet assigned.
@@ -198,13 +198,24 @@ def update_workitem_status(workitem, new_status, user):
     Status`` ist (Idempotenz-Guard), kehrt die Funktion sofort ohne
     ``save()`` und ohne Activity-Log zurueck.
 
+    ``expected_updated_at``/``require_version_token`` (Refs #1419, analog
+    ``update_workitem``): Optimistic-Lock-Token fuer Offline-Replay-Clients.
+    Der Check laeuft auf der frisch GELOCKTEN Instanz innerhalb derselben
+    Transaktion (ADR-030-Invariante) — die View setzt die Pflicht nur fuer
+    Raw-JSON-Clients (``_wants_raw_json_response``), der normale HTMX-/
+    HTML-Pfad bleibt beim bisherigen Status-gegen-Status-LWW (Default
+    ``None``/``False``, kein Verhaltensbruch).
+
     Refs #906: Status-/completed_at-/auto-assign-/Recurrence-Logik teilt
     sich mit dem Bulk-Pfad ueber ``_apply_status_transition`` und
     ``_maybe_duplicate_recurring``.
     """
+    from core.services.security import check_version_conflict
+
     # Innerhalb der Transaktion neu laden + locken — Facility-Filter
     # explizit, damit RLS- und Tenant-Isolation greifen.
     locked = WorkItem.objects.select_for_update().get(pk=workitem.pk, facility_id=workitem.facility_id)
+    check_version_conflict(locked, expected_updated_at, require_token=require_version_token)
     old_status = locked.status
 
     if not _apply_status_transition(locked, new_status, user, auto_assign=True):

@@ -673,3 +673,128 @@ class TestIntegrityErrorScopedToConstraint:
         assert r.status_code == 302
         assert r["Location"] == reverse("core:workitem_inbox")
         assert WorkItem.objects.count() == 1
+
+
+@pytest.mark.django_db
+class TestWorkItemStatusIdempotency:
+    """Server-Dedup-Contract von :class:`WorkItemStatusUpdateView.post` (Refs #1419).
+
+    Der Status-Replay der generischen Offline-Queue braucht denselben
+    ``X-Idempotency-Key``-Schutz wie Create (Scope ``workitem_status``):
+    Bricht die Verbindung nach erfolgreichem Server-Write, aber vor Empfang
+    der Response ab, spielt der Client dieselbe Queue-Zeile erneut. Ohne
+    Dedup würde der zweite Replay einen ZWISCHENZEITLICHEN Statuswechsel
+    (z.B. Kollegin hat wiedereröffnet) still überschreiben — der
+    Versions-Token hilft dann nicht, weil der Erst-Replay selbst das
+    ``updated_at`` fortgeschrieben hat, das der Zweit-Replay als 409 sähe;
+    schlimmer noch: OHNE Cache-Hit landet der Zweit-Replay als
+    Konflikt in der M8-Liste, obwohl die Aktion längst angewendet ist.
+    Der Cache-Hit liefert stattdessen die Erfolgsform des Originals.
+    """
+
+    def _url(self, workitem):
+        return reverse("core:workitem_status_update", kwargs={"pk": workitem.pk})
+
+    def _fresh_token(self, workitem):
+        workitem.refresh_from_db()
+        return workitem.updated_at.isoformat()
+
+    def test_replay_with_same_key_applies_transition_only_once(self, client, staff_user, sample_workitem):
+        """Der Zweit-Replay mit demselben Key wendet die Transition NICHT
+        erneut an: ein zwischenzeitlicher Statuswechsel (Reopen durch
+        Kollegin) bleibt erhalten (ROT vor #1419)."""
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        payload = {"status": "done", "expected_updated_at": self._fresh_token(sample_workitem)}
+
+        r1 = client.post(self._url(sample_workitem), payload, HTTP_X_IDEMPOTENCY_KEY=key)
+        assert r1.status_code == 302
+        sample_workitem.refresh_from_db()
+        assert sample_workitem.status == "done"
+
+        # Kollegin eröffnet die Aufgabe wieder (anderer Kontext, kein Key).
+        sample_workitem.status = "open"
+        sample_workitem.completed_at = None
+        sample_workitem.save()
+
+        # Replay derselben Queue-Zeile (gleicher Key, gleicher Body).
+        r2 = client.post(self._url(sample_workitem), payload, HTTP_X_IDEMPOTENCY_KEY=key)
+        assert r2.status_code == 302
+        sample_workitem.refresh_from_db()
+        assert sample_workitem.status == "open", (
+            "Replay mit gleichem Idempotenz-Schlüssel darf den zwischenzeitlichen Reopen nicht überschreiben"
+        )
+
+    def test_replay_hit_returns_htmx_success_shape(self, client, staff_user, sample_workitem):
+        """Für einen HX-Record liefert der Cache-Hit dieselbe Erfolgsform wie
+        das Original (200-Partial) — die generische Queue löscht die Zeile
+        dann als synchronisiert (ROT vor #1419)."""
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        payload = {"status": "in_progress", "expected_updated_at": self._fresh_token(sample_workitem)}
+
+        r1 = client.post(
+            self._url(sample_workitem), payload, HTTP_X_IDEMPOTENCY_KEY=key, HTTP_HX_REQUEST="true"
+        )
+        assert r1.status_code == 200
+        r2 = client.post(
+            self._url(sample_workitem), payload, HTTP_X_IDEMPOTENCY_KEY=key, HTTP_HX_REQUEST="true"
+        )
+        assert r2.status_code == 200
+        assert r2["Content-Type"].startswith("text/html")
+
+    def test_replay_hit_with_hide_returns_empty_response(self, client, staff_user, sample_workitem):
+        """``hide``-Records (Inbox-Karte ausblenden) bekommen auch beim
+        Cache-Hit die leere 200-Antwort des Originals."""
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        payload = {
+            "status": "done",
+            "hide": "1",
+            "expected_updated_at": self._fresh_token(sample_workitem),
+        }
+        r1 = client.post(
+            self._url(sample_workitem), payload, HTTP_X_IDEMPOTENCY_KEY=key, HTTP_HX_REQUEST="true"
+        )
+        assert r1.status_code == 200
+        assert r1.content == b""
+        r2 = client.post(
+            self._url(sample_workitem), payload, HTTP_X_IDEMPOTENCY_KEY=key, HTTP_HX_REQUEST="true"
+        )
+        assert r2.status_code == 200
+        assert r2.content == b""
+
+    def test_same_key_with_different_payload_returns_422(self, client, staff_user, sample_workitem):
+        """N14-Grenze (analog Create): derselbe Key mit ABWEICHENDEM Body ist
+        eine Key-Kollision → 422 (Dead-Letter), kein gecachter Erfolg und
+        keine zweite Transition."""
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        token = self._fresh_token(sample_workitem)
+
+        r1 = client.post(
+            self._url(sample_workitem),
+            {"status": "done", "expected_updated_at": token},
+            HTTP_X_IDEMPOTENCY_KEY=key,
+        )
+        assert r1.status_code == 302
+        r2 = client.post(
+            self._url(sample_workitem),
+            {"status": "dismissed", "expected_updated_at": token},
+            HTTP_X_IDEMPOTENCY_KEY=key,
+        )
+        assert r2.status_code == 422
+        assert r2.json()["error"] == "invalid"
+        sample_workitem.refresh_from_db()
+        assert sample_workitem.status == "done"
+
+    def test_without_key_each_post_applies(self, client, staff_user, sample_workitem):
+        """Ohne Key bleibt das bisherige Verhalten: jeder POST ist eine
+        eigenständige Aktion (Online-Pfad, kein Replay)."""
+        client.force_login(staff_user)
+        r1 = client.post(self._url(sample_workitem), {"status": "done"})
+        assert r1.status_code == 302
+        r2 = client.post(self._url(sample_workitem), {"status": "open"})
+        assert r2.status_code == 302
+        sample_workitem.refresh_from_db()
+        assert sample_workitem.status == "open"

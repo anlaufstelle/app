@@ -16,8 +16,9 @@ Timezone-Offset gilt als Konflikt). Daher werden beide Seiten zu
 behandelt Microsekunden-Präzision automatisch korrekt.
 
 Race-Fix (Refs #1338): Der Read erfolgt unter ``select_for_update()``. Alle
-fünf Aufrufer (``update_case``, ``update_settings``, ``update_event``,
-``update_client``, ``update_workitem``) sind bereits ``@transaction.atomic``
+sechs Aufrufer (``update_case``, ``update_settings``, ``update_event``,
+``update_client``, ``update_workitem``, ``update_workitem_status`` —
+letzterer seit Refs #1419) sind bereits ``@transaction.atomic``
 — die Zeile bleibt deshalb bis zum Commit des Callers gesperrt. Ein
 zeitgleicher zweiter Aufruf für dieselbe PK wartet dadurch, bis der erste
 committet hat, und sieht danach den fortgeschrittenen Wert, statt denselben

@@ -978,3 +978,158 @@ class TestOfflineConflictShellViews:
         )
         assert response.status_code == 200
         assert b"conflict-resolver-view" in response.content
+
+
+@pytest.mark.django_db
+class TestWorkItemStatusUpdateConflict:
+    """Optimistic-concurrency contract of :class:`WorkItemStatusUpdateView.post` (Refs #1419).
+
+    Der Status-Pfad tritt dem HTTP-Replay-Contract (ADR-030) bei, damit
+    Status-Übergänge offline queue- und nachspielbar werden. Anders als beim
+    Edit-Pfad (:class:`TestWorkItemUpdateConflict`, Token-Pflicht via
+    ``_wants_json_response`` inkl. HTMX) gilt die Token-Pflicht hier NUR für
+    Raw-JSON-Clients (``_wants_raw_json_response``): HTMX ist beim
+    Status-Toggle der normale ONLINE-Pfad (Inbox-Buttons), dessen bewusst
+    akzeptiertes Status-gegen-Status-LWW unverändert bleibt (Issue #1419:
+    „Online beschränkt sich das LWW auf Status-gegen-Status"). Der Replay der
+    generischen Offline-Queue setzt immer ``Accept: application/json``
+    (offline-queue.js ``_send``) und fällt damit unter die Pflicht.
+    """
+
+    def _url(self, workitem):
+        return reverse("core:workitem_status_update", kwargs={"pk": workitem.pk})
+
+    def test_status_replay_returns_409_json_on_stale_token(self, client, staff_user, sample_workitem):
+        """Ein Replay (Accept: application/json) mit veraltetem
+        ``expected_updated_at`` bekommt 409 mit Server-Stand — und der
+        Status-Übergang wird NICHT angewendet (ROT vor #1419: heute LWW)."""
+        client.force_login(staff_user)
+        response = client.post(
+            self._url(sample_workitem),
+            {"status": "done", "expected_updated_at": _stale_timestamp()},
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 409
+        payload = response.json()
+        assert payload["error"] == "conflict"
+        assert payload["client_expected"] == _stale_timestamp()
+        sample_workitem.refresh_from_db()
+        assert sample_workitem.status == "open", "Status darf bei veraltetem Token nicht wechseln"
+
+    def test_status_replay_conflict_body_includes_server_state(self, client, staff_user, sample_workitem):
+        """Der 409-Body trägt die Felder, die die M8-Konflikt-UI zum Rendern
+        des Status-Konflikts braucht (title/description/status/updated_at) —
+        dieselbe Form wie beim Edit-Pfad (``_workitem_conflict_response``)."""
+        client.force_login(staff_user)
+        response = client.post(
+            self._url(sample_workitem),
+            {"status": "done", "expected_updated_at": _stale_timestamp()},
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 409
+        server_state = response.json()["server_state"]
+        assert server_state["title"] == "Test-Aufgabe"
+        assert server_state["status"] == "open"
+        assert server_state["updated_at"] is not None
+
+    def test_status_replay_without_token_returns_409_missing_token(self, client, staff_user, sample_workitem):
+        """Replay-Clients MÜSSEN das Token mitschicken — fehlt es, ist das
+        kein stilles LWW, sondern ein expliziter 409 ``missing-token`` und
+        das WorkItem bleibt unverändert (ROT vor #1419)."""
+        client.force_login(staff_user)
+        response = client.post(
+            self._url(sample_workitem),
+            {"status": "done"},
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 409
+        payload = response.json()
+        assert payload["error"] == "missing-token"
+        assert payload["client_expected"] is None
+        assert payload["server_state"]["updated_at"] is not None
+        sample_workitem.refresh_from_db()
+        assert sample_workitem.status == "open"
+
+    def test_status_replay_with_fresh_token_succeeds_via_redirect(self, client, staff_user, sample_workitem):
+        """Erfolgsfall des Replays eines klassischen Formular-POSTs (kein
+        HX-Request-Header am Queue-Record): frisches Token → Redirect wie
+        beim Original — genau die Erfolgsform, der die generische Queue folgt
+        (``response.redirected``)."""
+        client.force_login(staff_user)
+        sample_workitem.refresh_from_db()
+        response = client.post(
+            self._url(sample_workitem),
+            {"status": "done", "expected_updated_at": sample_workitem.updated_at.isoformat()},
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 302
+        sample_workitem.refresh_from_db()
+        assert sample_workitem.status == "done"
+
+    def test_status_replay_with_fresh_token_htmx_returns_partial(self, client, staff_user, sample_workitem):
+        """Erfolgsfall des Replays eines HTMX-Button-Klicks: der Queue-Record
+        trägt ``HX-Request`` UND der Replay ``Accept: application/json`` →
+        200-Partial (Queue-Erfolgskontrakt für HX-Records)."""
+        client.force_login(staff_user)
+        sample_workitem.refresh_from_db()
+        response = client.post(
+            self._url(sample_workitem),
+            {"status": "in_progress", "expected_updated_at": sample_workitem.updated_at.isoformat()},
+            HTTP_ACCEPT="application/json",
+            HTTP_HX_REQUEST="true",
+        )
+        assert response.status_code == 200
+        sample_workitem.refresh_from_db()
+        assert sample_workitem.status == "in_progress"
+
+    def test_status_replay_corrupt_token_returns_409_not_500(self, client, staff_user, sample_workitem):
+        """Ein nicht-ISO-parsebarer Token im Replay-Pfad wird defensiv als
+        Konflikt behandelt (Server-Stand zur Review) statt als 500."""
+        client.force_login(staff_user)
+        response = client.post(
+            self._url(sample_workitem),
+            {"status": "done", "expected_updated_at": "nicht-iso"},
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 409
+        assert response.json()["error"] == "conflict"
+
+    def test_status_htmx_online_path_keeps_lww_with_stale_token(self, client, staff_user, sample_workitem):
+        """Wächter der Scope-Grenze: der normale ONLINE-HTMX-Klick (kein
+        Accept: application/json) bleibt beim bisherigen
+        Status-gegen-Status-LWW — auch wenn die Buttons künftig ein (ggf.
+        veraltetes) Token mitsenden. Die Templates senden das Token nur für
+        den Offline-Payload mit; ausgewertet wird es erst im Replay-Pfad."""
+        client.force_login(staff_user)
+        response = client.post(
+            self._url(sample_workitem),
+            {"status": "done", "expected_updated_at": _stale_timestamp()},
+            HTTP_HX_REQUEST="true",
+        )
+        assert response.status_code == 200
+        sample_workitem.refresh_from_db()
+        assert sample_workitem.status == "done"
+
+    def test_status_html_form_path_unchanged_with_stale_token(self, client, staff_user, sample_workitem):
+        """Wächter: auch der klassische Formular-POST (Detail-Seite) bleibt
+        beim LWW-Redirect — kein 409 im HTML-Pfad."""
+        client.force_login(staff_user)
+        response = client.post(
+            self._url(sample_workitem),
+            {"status": "done", "expected_updated_at": _stale_timestamp()},
+        )
+        assert response.status_code == 302
+        sample_workitem.refresh_from_db()
+        assert sample_workitem.status == "done"
+
+    def test_status_replay_invalid_status_stays_400(self, client, staff_user, sample_workitem):
+        """Ein ungültiger Statuswert bleibt 400 — die Replay-Klassifikation
+        (offline-queue.js) behandelt 400 wie 422 als dauerhaften
+        Dead-Letter, korrekt für einen nie gültig werdenden Wert."""
+        client.force_login(staff_user)
+        response = client.post(
+            self._url(sample_workitem),
+            {"status": "quatsch", "expected_updated_at": _stale_timestamp()},
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 400
