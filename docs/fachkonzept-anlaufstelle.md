@@ -3,8 +3,8 @@
 **Open-Source-Fachsystem für niedrigschwellige soziale Arbeit**
 
 Autor: Barbara Nix, Tobias Nix
-Stand: Juni 2026
-Version: 1.6
+Stand: Juli 2026
+Version: 1.7
 
 ---
 
@@ -19,6 +19,7 @@ Version: 1.6
 | 1.4 | April 2026 (2026-04-19) | Mobile-/Offline-Strategie (§ 16) auf Ist-Stand v0.10 aktualisiert; Sicherheitskonzept um 2FA, File Vault, RLS erweitert. |
 | 1.5 | Mai 2026 (2026-05-10) | 5-Rollen-Modell mit `super_admin` als oberster, facility-übergreifender Rolle (Persona Jonas). Bisherige `admin`-Rolle in `facility_admin` umbenannt (UI-Label „Anwendungsbetreuung"). § 5 (Persona Jonas), § 6 (Berechtigungsmodell), § 9 (Role + Organization), § 14 (Glossar), § 18 (DSGVO-Tabelle), § 25 (Monitoring/Backup) entsprechend aktualisiert. Organisation explizit als reine Branding-Hülse formuliert (Variante b1, [ADR-018](adr/018-rollenmodell-superadmin.md)). DSGVO-Rechenschaftspflicht: jeder Cross-Facility-Lese-Zugriff erzeugt `SYSTEM_VIEW`-AuditLog. Refs #867, löst #866. |
 | 1.6 | Juni 2026 (2026-06-20) | Doku-Audit-Nachzug (#1071 Block A): § 16 Offline-Krypto code-treu (non-extractable `CryptoKey` in IndexedDB statt „nur in-memory"; Offline-Edit-Einstieg als deferred #1111 statt „implementiert"; Idle-Key-Wipe + Bundle-Caps, [ADR-022](adr/022-offline-snapshot-keys.md)). § 19 Datenschutz-Reife auf Stand v0.15 (Retention-Automatisierung [ADR-021](adr/021-retention-modell.md), K-Anonymisierung [ADR-023](adr/023-k-anonymization-statistik.md), 4-Augen-Löschung, DSGVO-Vorlagen als umgesetzt; Portabilität/Berichtigung weiter offen). § 14 Querverweis auf das Datenschutz-Glossar (`docs/glossar.md`). |
+| 1.7 | Juli 2026 (2026-07-07) | Doku-Drift-Korrektur (#1417): § 16 Stufe 3 auf ADR-022-Re-Evaluationsstand (2026-06-29) gehoben — Offline-Edit-Einstieg ist seit #1111 verdrahtet und produktiv (nicht mehr deferred), inkl. Dead-Letter-Ansicht (`/offline/conflicts/`, seit #1396 auch offline erreichbar) und Fallaufgaben-Editieren (#1398). |
 
 ---
 
@@ -1084,14 +1085,14 @@ Volle Offline-Synchronisation (wie bei CouchDB-basierten Systemen) ist mit Djang
 - Die PWA hält den Read-Cache verschlüsselt in IndexedDB vor. Deniz kann unterwegs nachschlagen, ob jemand ein aktives Hausverbot hat oder welche Vermittlung zuletzt lief — auch ohne Netz.
 - Schreibzugriff auf gecachte Datensätze ist in dieser Stufe nicht möglich; er ist Stufe 3 vorbehalten.
 
-**Stufe 3 — Offline-Edit mit Side-by-Side-Konfliktauflösung (Maschinerie vorhanden, Edit-Einstieg deferred).**
+**Stufe 3 — Offline-Edit mit Side-by-Side-Konfliktauflösung (verdrahtet und produktiv).**
 - Für die in Stufe 2 gecachten Datensätze ist die Konfliktauflösungs-Maschinerie serverseitig vorhanden und gehärtet: Konflikt-Token, Replay- und Resolver-Schicht. Beim Wiederverbinden vergleicht das System den serverseitigen Stand mit der lokalen Änderung; im Konfliktfall entscheidet die Fachkraft feldweise (Last-Write-Wins mit Konflikt-Markierung). Optimistic Locking (§ Sicherheit) schützt vor stillem Überschreiben.
-- **Stand ([ADR-022](adr/022-offline-snapshot-keys.md), 2026-06-15):** Der Bearbeiten-**Einstieg** im Offline-Viewer ist bewusst noch **nicht verdrahtet** (#1111, deferred); offline entstandene Edits sind daher derzeit **kein zugesicherter Funktionsumfang**. Der akzeptierte, produktive Stand ist Lesen + Write-Queue (Stufe 1–2).
+- **Stand ([ADR-022](adr/022-offline-snapshot-keys.md)-Re-Evaluation, 2026-06-29, #1111):** Der Bearbeiten-**Einstieg** im Offline-Viewer ist **verdrahtet und erprobt** (nicht mehr deferred). Das Bundle trägt pro Ereignis die editierbaren Feld-Definitionen (sensitivity-gefiltert wie die Werte) plus ein `can_edit`-Flag; offline entstandene Edits sind damit produktiver Funktionsumfang, ebenso Fallaufgaben (WorkItems, #1398). Dauerhaft nicht übertragbare Einträge landen — statt endlos zu retryen — in einer Dead-Letter-Ansicht (`/offline/conflicts/`, mit Grund, Retry/Verwerfen/Export), seit #1396 auch offline erreichbar.
 - Datei-Anhänge sind offline nicht möglich und bleiben an eine bestehende Netzverbindung gebunden.
 
 ### Kryptografie des lokalen Speichers
 
-Alle offline gehaltenen Nutzdaten — Write-Queue, Read-Cache und (sobald verdrahtet) Offline-Edits — werden im Browser mit **AES-GCM-256** verschlüsselt abgelegt (`offline-store.js`). Der Schlüssel wird beim Login aus dem Nutzerpasswort via **PBKDF2 mit 600 000 Iterationen (SHA-256)** zu einem AES-GCM-256-Key abgeleitet (`crypto.js`). Dieser Key ist als WebCrypto-`CryptoKey` **non-extractable** markiert (`extractable=false`) und liegt in einer **eigenen, vom Daten-Store getrennten IndexedDB** (`anlaufstelle-crypto`, Tabelle `meta`). „Non-extractable" heißt: die App kann mit dem Key ver- und entschlüsseln, aber die rohen Schlüssel-Bytes nicht auslesen oder exportieren — ein gestohlenes Tablet ohne aktive Session liefert nur Chiffretext, selbst mit DevTool-Zugriff auf die IndexedDB. Die Persistenz (statt reiner In-Memory-Haltung) ist nötig, damit ein Reload die Offline-Daten nicht sofort unbrauchbar macht; den Schutz übernimmt stattdessen ein **Idle-Key-Wipe**.
+Alle offline gehaltenen Nutzdaten — Write-Queue, Read-Cache und Offline-Edits — werden im Browser mit **AES-GCM-256** verschlüsselt abgelegt (`offline-store.js`). Der Schlüssel wird beim Login aus dem Nutzerpasswort via **PBKDF2 mit 600 000 Iterationen (SHA-256)** zu einem AES-GCM-256-Key abgeleitet (`crypto.js`). Dieser Key ist als WebCrypto-`CryptoKey` **non-extractable** markiert (`extractable=false`) und liegt in einer **eigenen, vom Daten-Store getrennten IndexedDB** (`anlaufstelle-crypto`, Tabelle `meta`). „Non-extractable" heißt: die App kann mit dem Key ver- und entschlüsseln, aber die rohen Schlüssel-Bytes nicht auslesen oder exportieren — ein gestohlenes Tablet ohne aktive Session liefert nur Chiffretext, selbst mit DevTool-Zugriff auf die IndexedDB. Die Persistenz (statt reiner In-Memory-Haltung) ist nötig, damit ein Reload die Offline-Daten nicht sofort unbrauchbar macht; den Schutz übernimmt stattdessen ein **Idle-Key-Wipe**.
 
 **Idle-Key-Wipe und Bundle-Grenzen** ([ADR-022](adr/022-offline-snapshot-keys.md), Refs #1065/#1100):
 - Die Schlüssel-Lebensdauer ist an das Server-Session-Alter gekoppelt (Default 30 Min, facility-konfigurierbar). Ein Idle-Check (alle 60 s, beim Tab-Wechsel und beim Boot) verwirft den Key und löscht den Offline-Store, sobald die Session abgelaufen ist — bewusst **kein** Wipe bei `pagehide`/Tab-Schließen (Streetwork-Realität).

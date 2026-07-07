@@ -677,15 +677,15 @@ Für Außeneinsätze (z. B. Streetwork) bietet die Anlaufstelle einen **sicheren
 | Storage | **IndexedDB** (nur AES-Chiffretext, **niemals** Klartext) |
 | Key-Ableitung | **PBKDF2** — 600 000 Iterationen, SHA-256 |
 | KDF-Input | Benutzer-Passwort + `User.offline_key_salt` (16 Byte, pro User, serverseitig gespeichert) |
-| Key-Lebenszeit | Nur im Memory (`CryptoKey` mit `extractable: false`) |
+| Key-Lebenszeit | **Persistiert** als non-extractable `CryptoKey` (`extractable: false`) in einer eigenen IndexedDB (`anlaufstelle-crypto`) — überlebt Tab-Schließen und Reload; gekoppelt an das Server-Session-Alter (Idle-Key-Wipe), siehe „Konsequenzen für Admins" |
 
-Quelle: [`src/static/js/crypto.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/crypto.js), [`src/core/services/offline_keys.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/offline_keys.py).
+Quelle: [`src/static/js/crypto.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/crypto.js) (client-seitige Ableitung/Speicherung/Idle-Wipe), [`src/core/signals/offline_invalidation.py`](https://github.com/anlaufstelle/app/blob/main/src/core/signals/offline_invalidation.py) (server-seitige Salt-Rotation bei Rollenwechsel/Deaktivierung).
 
 #### Konsequenzen für Admins
 
 - **Key-Verlust ist nicht reparierbar:** Vergisst ein Nutzer sein Passwort, sind alle auf seinem Gerät lokal gespeicherten Offline-Daten **dauerhaft unlesbar**. Ein Admin-Reset der Offline-Daten ist technisch **nicht möglich** — der Schlüssel existiert nur im Browser des Nutzers.
-- **Vor Passwort-Änderung synchronisieren:** Nutzer müssen Offline-Daten mit dem Server synchronisieren, **bevor** sie das Passwort ändern oder sich ausloggen. Bei Passwortwechsel wird das Salt rotiert (neuer Schlüssel).
-- **Tab-Close, Logout, Passwort-Wechsel** → In-Memory-Key wird verworfen → gespeicherte Chiffretexte sind ohne erneute Anmeldung nicht mehr zu entschlüsseln.
+- **Vor Passwort-Änderung synchronisieren:** Nutzer müssen Offline-Daten mit dem Server synchronisieren, **bevor** sie das Passwort ändern oder sich ausloggen. Bei Passwortwechsel wird das Salt rotiert (neuer Schlüssel); derselbe Mechanismus rotiert den Salt automatisch bei Rollenwechsel oder Deaktivierung des Users (`offline_invalidation.py`), damit ein entzogenes Recht nicht offline fortbesteht.
+- **Schlüssel wird verworfen bei:** Logout, Passwort-Änderung (Salt-Rotation), Rollenentzug/Deaktivierung (server-seitige Salt-Rotation) und Sitzungs-Ablauf (Idle-Key-Wipe, Default 30 Min) → gespeicherte Chiffretexte sind ohne erneute Anmeldung nicht mehr zu entschlüsseln. **Das bloße Schließen des Tabs verwirft den Schlüssel NICHT** — er wird beim Wiederöffnen innerhalb der Session-Lebenszeit aus der IndexedDB rekonstruiert (bewusstes Streetwork-Design, #1065/#1324).
 
 #### Browser-Voraussetzungen
 

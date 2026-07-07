@@ -289,7 +289,7 @@ Ja — seit v0.10 gibt es einen sicheren **Offline-Modus** für Streetwork und m
 
 **Sicherheit:** Alle Offline-Daten liegen **verschlüsselt im Browser** (IndexedDB). Der Schlüssel wird aus Ihrem Passwort abgeleitet — der Browser allein kann die Daten nicht entschlüsseln.
 
-**Wichtig — Daten können verloren gehen:** Bei **Logout, Passwort-Änderung oder Schließen des Tabs** werden alle Offline-Daten unlesbar. Daher gilt: **Erst synchronisieren, dann ausloggen!**
+**Wichtig — Daten können verloren gehen:** Bei **Logout, Passwort-Änderung oder längerer Inaktivität (Session-Ablauf)** werden die lokal gespeicherten Offline-Daten unlesbar. Das bloße **Schließen des Tabs** löscht dagegen nichts — der Schlüssel wird beim erneuten Öffnen innerhalb der Session-Lebenszeit wiederhergestellt (Streetwork-Design, #1065/#1324). Daher gilt: **Erst synchronisieren, dann ausloggen!**
 
 **Einschränkung:** Datei-Anhänge (siehe FAQ #9) sind offline nicht möglich — das ist eine bewusste Sicherheitsentscheidung.
 

@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-05-26 (v0.12.0).
+> The German version is the authoritative source. Last synced: 2026-07-07 (v0.16.0), § 8 offline section only (#1417).
 
 # Anlaufstelle -- User Guide
 
@@ -596,11 +596,13 @@ For assignments without a reliable internet connection -- for example, outreach 
 **Before the assignment (online):**
 
 1. Open the client list.
-2. Click **"Load clients for offline"** to load the relevant client profiles into the offline cache of your device. That way, pseudonyms and master data are available even without a network.
+2. For each client you want to take along, tap the offline-toggle button in the **Offline** column of the client list -- or, on the client's detail page, tap **Take offline**. Pseudonym, master data, and the most recent events are then encrypted and loaded onto your device for offline use; an **Available locally** badge confirms it. Up to 20 clients at a time.
+3. The **offline workspace** at **`/offline/`** lists your taken-along clients at any time and also serves as the entry point when you open the app without a network (or as the installed app).
 
 **During the assignment (offline):**
 
-- You can record events as usual. Entries are stored encrypted locally in the browser (AES-GCM-256; the key is derived from your password).
+- Open a taken-along client as usual via their detail page -- the view stays at the **normal address** and is built from the encrypted offline store (no separate "offline" link anymore).
+- You can **record new events** (via **"New Contact"**) and **edit existing ones**; entries are stored encrypted locally (AES-GCM-256; the key is derived from your password) and sent automatically once you are back online. **File attachments** cannot be captured offline -- add them once you are back online.
 - The interface shows a hint that you are working offline and how many entries are still waiting to be synced.
 
 **Back online:**
@@ -615,7 +617,14 @@ If an event was edited online (by someone else) and offline (by you) at the same
 - **Keep server** -- the online edit wins, your offline version is discarded.
 - **Merge manually** -- you decide field by field which content is kept.
 
-> **Important -- avoid data loss:** On **logout, password change, or closing the tab**, any data still stored offline becomes **unreadable**. Therefore, **always sync first** before signing out, changing your password, or closing the browser.
+**Managing conflicts and undeliverable entries:**
+
+**`/offline/conflicts/`** shows every entry that needs a decision -- the page opens even without a network connection, since #1396. Two sections:
+
+- **"Awaiting decision"** -- open conflicts; click through to the side-by-side diff above.
+- **"Undeliverable"** -- entries that could not be sent permanently, each with a reason (e.g. deleted on the server, access revoked, rejected by the server as invalid, no permission). You can **retry** or **discard** these entries -- for undeliverable events you can also **export** the content first, so nothing is lost.
+
+> **Important -- avoid data loss:** **Logout** and **password change** delete the locally stored offline data -- always **sync first** before signing out or changing your password. After a period of inactivity, offline access is **locked** for security reasons; after signing in again, any not-yet-synced entries become available again. Simply **closing the tab**, however, deletes nothing. If you have not-yet-synced entries when changing your password, Anlaufstelle warns you before you submit, showing the number of affected entries.
 
 > **No file attachments offline:** Events with file attachments **cannot** be saved offline. For security reasons, no unencrypted file blobs are stored in the browser. In that case, record the event without the file first and attach the file once you are back online.
 

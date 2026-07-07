@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> The German version is the authoritative source. Last synced: 2026-06-25 (v0.16.0).
+> The German version is the authoritative source. Last synced: 2026-07-07 (v0.16.0), § 2.10 offline key-lifecycle only (#1417).
 
 # Anlaufstelle -- Admin Guide
 
@@ -674,15 +674,15 @@ For field work (e.g. streetwork), Anlaufstelle offers a **secure offline mode** 
 | Storage | **IndexedDB** (AES ciphertext only, **never** plaintext) |
 | Key derivation | **PBKDF2** -- 600,000 iterations, SHA-256 |
 | KDF input | User password + `User.offline_key_salt` (16 bytes, per-user, stored server-side) |
-| Key lifetime | In-memory only (`CryptoKey` with `extractable: false`) |
+| Key lifetime | **Persisted** as a non-extractable `CryptoKey` (`extractable: false`) in its own IndexedDB (`anlaufstelle-crypto`) -- survives tab close and reload; coupled to the server session age (idle key wipe), see "Consequences for Admins" |
 
-Source: [`src/static/js/crypto.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/crypto.js), [`src/core/services/offline_keys.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/offline_keys.py).
+Source: [`src/static/js/crypto.js`](https://github.com/anlaufstelle/app/blob/main/src/static/js/crypto.js) (client-side derivation/storage/idle wipe), [`src/core/signals/offline_invalidation.py`](https://github.com/anlaufstelle/app/blob/main/src/core/signals/offline_invalidation.py) (server-side salt rotation on role change/deactivation).
 
 #### Consequences for Admins
 
 - **Key loss is unrecoverable:** If a user forgets their password, all offline data stored locally on their device becomes **permanently unreadable**. An admin-side reset of offline data is technically **impossible** -- the key only exists in the user's browser.
-- **Sync before password change:** Users must synchronize offline data with the server **before** changing the password or logging out. Changing the password rotates the salt (new key).
-- **Tab close, logout, password change** → the in-memory key is discarded → stored ciphertexts are unreadable until the user authenticates again.
+- **Sync before password change:** Users must synchronize offline data with the server **before** changing the password or logging out. Changing the password rotates the salt (new key); the same mechanism auto-rotates the salt on a role change or user deactivation (`offline_invalidation.py`), so a revoked privilege cannot persist offline.
+- **The key is discarded on:** logout, password change (salt rotation), role revocation/deactivation (server-side salt rotation), and session expiry (idle key wipe, default 30 min) → stored ciphertexts are unreadable until the user authenticates again. **Simply closing the tab does NOT discard the key** -- it is reconstructed from IndexedDB on reopening, within the session lifetime (deliberate streetwork design, #1065/#1324).
 
 #### Browser Requirements
 

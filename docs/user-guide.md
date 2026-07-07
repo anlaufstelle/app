@@ -614,6 +614,13 @@ Wurde ein Ereignis gleichzeitig online (durch jemand anderen) und offline (durch
 - **Server-Version übernehmen** — die Online-Änderung gewinnt, Ihre offline-Version wird verworfen.
 - **Manuell zusammenführen** — Sie entscheiden Feld für Feld, welche Inhalte übernommen werden.
 
+**Konflikte und nicht übertragbare Einträge verwalten:**
+
+Unter **`/offline/conflicts/`** sehen Sie alle Einträge, die eine Entscheidung erfordern — die Seite öffnet sich seit #1396 auch ohne Netzverbindung. Zwei Bereiche:
+
+- **„Wartet auf Entscheidung"** — offene Konflikte; ein Klick führt zum Side-by-Side-Diff oben.
+- **„Nicht übertragbar"** — Einträge, die dauerhaft nicht gesendet werden konnten, jeweils mit Grund (z. B. auf dem Server gelöscht, Zugriff entzogen, vom Server als ungültig abgelehnt, keine Berechtigung). Sie können diese Einträge **erneut versuchen** oder **verwerfen** — bei nicht übertragbaren Ereignissen zusätzlich vorher **exportieren**, um den Inhalt nicht zu verlieren.
+
 > **Wichtig — Datenverlust vermeiden:** **Logout** und **Passwort-Änderung** löschen die lokal gespeicherten Offline-Daten — synchronisieren Sie daher **immer zuerst**, bevor Sie sich abmelden oder Ihr Passwort ändern. Bei längerer Inaktivität wird der Offline-Zugriff aus Sicherheitsgründen **gesperrt**; nach erneuter Anmeldung sind noch nicht synchronisierte Einträge wieder verfügbar. Das bloße **Schließen des Tabs** löscht dagegen nichts. Haben Sie beim Passwort-Ändern noch nicht synchronisierte Einträge, warnt Anlaufstelle Sie vor dem Absenden mit der Anzahl der betroffenen Einträge.
 
 > **Keine Datei-Anhänge offline:** Ereignisse mit Datei-Anhängen können offline **nicht** gespeichert werden. Aus Sicherheitsgründen werden keine unverschlüsselten Datei-Blobs im Browser abgelegt. Erfassen Sie in diesem Fall zuerst das Ereignis ohne Datei und hängen Sie die Datei nach, sobald Sie wieder online sind.
