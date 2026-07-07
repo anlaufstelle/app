@@ -376,6 +376,15 @@ self.addEventListener("fetch", (event) => {
 
     if (request.headers.get("Accept")?.includes("text/html") || request.headers.get("HX-Request")) {
         // Offline-Fallback-Kette (Refs #701/#1322):
+        // 0. HTMX-Partial-GET-Sonderfall (Refs #1416): ein Request mit
+        //    HX-Request: true ist NIE eine Navigation — htmx swappt die
+        //    Antwort in ein bestehendes DOM-Ziel (z.B. #client-table), statt
+        //    die Seite zu ersetzen. Die Stufen darunter sind fuer Navigationen
+        //    gebaut (Shells/OFFLINE_FALLBACK_URL liefern ein komplettes
+        //    offline.html-Dokument); im Swap-Target eines Partials wuerde das
+        //    ungestylt landen, Scripts erneut ausfuehren und per htmx'
+        //    eingebauter <title>-Uebernahme (htmx.config.ignoreTitle: false)
+        //    den Dokumenttitel kapern. Deshalb VOR den Shell-Stufen abzweigen.
         // 1. Versuch: Netz
         // 2. Klientel-Detail-Sonderfall: den gecachten, pk-losen Client-Shell
         //    IN-PLACE servieren (200, KEIN Redirect) — die URL bleibt
@@ -386,6 +395,27 @@ self.addEventListener("fetch", (event) => {
         //    Browser-Default „Sie sind offline / Chrome-Dino"
         event.respondWith(
             fetch(request, { signal: AbortSignal.timeout(READ_FETCH_TIMEOUT_MS) }).catch(() => {
+                if (request.headers.get("HX-Request") === "true") {
+                    // Kompaktes, gestyltes Banner statt der Voll-Shell — Text
+                    // hartkodiert Deutsch (Praezedenz: offline.html ist ebenso
+                    // hartkodiert DE; SW-i18n kommt mit #1412/M17). Bewusst
+                    // OHNE HX-Retarget/HX-Reswap: anders als im Write-Pfad
+                    // (events.py-Konflikt-Handling, htmx_session.py) droht
+                    // hier kein Datenverlust durch das Ersetzen des Targets
+                    // (Such-/Filterfelder liegen ausserhalb des Swap-Ziels) —
+                    // das Banner direkt an der Stelle zu zeigen, an der die
+                    // aktualisierten Daten erschienen waeren, ist die
+                    // naheliegendste, layoutneutrale Antwort.
+                    return new Response(
+                        '<div class="rounded-md bg-yellow-50 p-4" role="status" data-testid="offline-partial-banner">' +
+                            '<p class="text-sm text-yellow-800">Offline — dieser Inhalt kann gerade nicht aktualisiert werden.</p>' +
+                            "</div>",
+                        {
+                            status: 200,
+                            headers: { "Content-Type": "text/html" },
+                        }
+                    );
+                }
                 const clientPk =
                     self.URL_PATTERNS.extractClientPk &&
                     self.URL_PATTERNS.extractClientPk(request.url);

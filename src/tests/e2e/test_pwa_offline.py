@@ -217,6 +217,72 @@ def test_offline_url_encoded_post_returns_offline_feedback(browser, base_url):
         context.close()
 
 
+def test_offline_htmx_partial_get_shows_compact_banner(browser, base_url):
+    """Refs #1416: Ein offline ausgeloester HTMX-Partial-GET darf NICHT den
+    kompletten ``offline.html``-Block ins Swap-Target schwappen.
+
+    Testobjekt: die Pseudonym-Suche auf ``/clients/`` (``core/clients/list.html``),
+    ein reales ``hx-get`` auf ``core:client_list`` mit
+    ``hx-trigger="keyup changed delay:300ms"`` und ``hx-target="#client-table"``.
+    Vor dem Fix landete hier via ``caches.match(OFFLINE_FALLBACK_URL)`` der
+    volle ``offline.html``-Body im Zieldiv: ungestylt, mit Script-Tags UND
+    Titel-Hijack (htmx uebernimmt automatisch ein ``<title>`` aus der Response,
+    ``htmx.config.ignoreTitle`` ist ``false``) — ``offline.html`` setzt
+    ``<title>Offline-Arbeitsplatz — Anlaufstelle</title>``.
+    """
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        page.goto(f"{base_url}/login/")
+        page.fill('input[name="username"]', "admin")
+        page.fill('input[name="password"]', "anlaufstelle2026")
+        page.click('button[type="submit"]')
+        page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
+
+        page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
+        _wait_for_active_service_worker(page, base_url)
+        original_title = page.title()
+
+        page.context.set_offline(True)
+        page.evaluate("window.dispatchEvent(new Event('offline'))")
+
+        # Praezise auf das Ziel-Element pinnen (die Seite hat noch zwei
+        # weitere ``input[name="q"]`` — die globale Desktop- und die
+        # Mobile-Suche im Nav-Header).
+        search = page.locator('input[name="q"][hx-target="#client-table"]')
+        search.click()
+        search.press_sequentially("zzz-offline-such-probe", delay=20)
+
+        # Das HTMX-Partial-GET (Ziel #client-table) scheitert offline -> Fallback
+        # (entweder das neue Banner oder — pre-fix — der volle offline-home-Block).
+        page.wait_for_function(
+            "() => !!document.querySelector("
+            '\'#client-table [data-testid="offline-partial-banner"], '
+            '#client-table [data-testid="offline-home"]\')',
+            timeout=10000,
+        )
+
+        client_table_html = page.locator("#client-table").inner_html()
+        # KEIN Voll-Block der Offline-Shell im Swap-Target.
+        assert "offline-home" not in client_table_html, (
+            f"Voller offline.html-Block im HTMX-Swap-Target: {client_table_html[:300]}"
+        )
+        assert "Offline-Arbeitsplatz" not in client_table_html, (
+            f"offline.html-Ueberschrift im Swap-Target statt kompaktem Banner: {client_table_html[:300]}"
+        )
+        assert "<script" not in client_table_html.lower(), "offline.html-Scripts wurden ins Swap-Target geswapped"
+
+        # Kein Titel-Hijack.
+        assert page.title() == original_title, (
+            f"document.title veraendert ({page.title()!r} statt {original_title!r}) — "
+            "offline.html <title> wurde von htmx uebernommen"
+        )
+    finally:
+        page.context.set_offline(False)
+        context.close()
+
+
 def test_offline_queue_replay_syncs_despite_stale_csrf(browser, base_url):
     """Refs #1332: Der generische Offline-Queue-Replay muss bei einem 403 durch
     ein veraltetes CSRF-Meta (z. B. aus einer SW-gecachten Shell) den Token
