@@ -78,8 +78,9 @@
     // Refs #1322) kann ein zur Precache-Zeit eingefrorenes, veraltetes
     // <meta name="csrf-token"> tragen (der Login rotiert den Token danach). Ein
     // 403 ist dann KEIN Rechteentzug, sondern ein reines Token-Problem — einmal
-    // mit frisch von /login/ geholtem Token nachfassen, bevor der Replay als
-    // "revoked" gilt. Gibt null zurück, wenn das Netz wegbricht.
+    // mit dem frisch vom dedizierten CSRF-Endpoint geholten Token (Refs #1408,
+    // _refreshCsrf oben) nachfassen, bevor der Replay als "revoked" gilt. Gibt
+    // null zurück, wenn das Netz wegbricht.
     async function _postFormWithCsrfRetry(url, body, csrf, extraHeaders) {
         let response;
         try {
@@ -752,10 +753,31 @@
     // selbst zurueck; die window-CustomEvents oben feuern nur lokal pro Tab),
     // aktualisiert Tab B's unsynced-/conflict-Zaehler (Banner, Detail-View)
     // ohne Polling.
-    if (window.syncOrchestrator && window.syncOrchestrator.onMessage) {
-        window.syncOrchestrator.onMessage((msg) => {
-            if (msg && msg.type === "sync-finished") _fireCountEvent();
-        });
+    //
+    // Refs #1409: base.html laedt sync-orchestrator.js NACH offline-edit.js
+    // (Z. 132 vor Z. 134) — ein einmaliges Parse-Zeit-Gate wie zuvor hier ist
+    // IMMER false (window.syncOrchestrator existiert noch nicht) und der
+    // Handler wird nie registriert (toter Code). Lade-reihenfolge-tolerant
+    // wie crypto.js:402-418: jetzt versuchen, sonst auf
+    // DOMContentLoaded/naechsten Tick nachholen.
+    var _orchestratorReceiverRegistered = false;
+    function _registerOrchestratorReceiver() {
+        if (_orchestratorReceiverRegistered) return true;
+        if (window.syncOrchestrator && window.syncOrchestrator.onMessage) {
+            window.syncOrchestrator.onMessage((msg) => {
+                if (msg && msg.type === "sync-finished") _fireCountEvent();
+            });
+            _orchestratorReceiverRegistered = true;
+            return true;
+        }
+        return false;
+    }
+    if (!_registerOrchestratorReceiver()) {
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", _registerOrchestratorReceiver);
+        } else {
+            window.setTimeout(_registerOrchestratorReceiver, 0);
+        }
     }
 
     window.offlineEdit = {

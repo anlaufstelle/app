@@ -228,9 +228,10 @@
                 // Refs #1332: analog #1330 — ein 403 kann an einem zur
                 // Precache-Zeit eingefrorenen, veralteten CSRF-Meta (aus einer
                 // SW-gecachten Shell) liegen, nicht an fehlendem Recht. Einmal
-                // mit frisch von /login/ geholtem Token nachfassen, bevor der
-                // Record als 4xx liegen bleibt und die Queue anhaelt. Der
-                // frische Token gilt auch fuer die restlichen Records.
+                // mit dem frisch vom dedizierten CSRF-Endpoint geholten Token
+                // (Refs #1408, _refreshCsrf oben) nachfassen, bevor der Record
+                // als 4xx liegen bleibt und die Queue anhaelt. Der frische
+                // Token gilt auch fuer die restlichen Records.
                 if (response.status === 403) {
                     const fresh = await _refreshCsrf();
                     if (fresh && fresh !== csrf) {
@@ -348,10 +349,31 @@
     // (BroadcastChannel liefert dessen eigenen Lauf nicht an sich selbst
     // zurueck) aktualisiert Tab B's Queue-Zaehler (Banner: pending/blocked)
     // ohne Polling.
-    if (window.syncOrchestrator && window.syncOrchestrator.onMessage) {
-        window.syncOrchestrator.onMessage((msg) => {
-            if (msg && msg.type === "sync-finished") _updateQueueCount();
-        });
+    //
+    // Refs #1409: base.html laedt sync-orchestrator.js NACH offline-queue.js
+    // (Z. 130 vor Z. 134) — ein einmaliges Parse-Zeit-Gate wie zuvor hier ist
+    // IMMER false (window.syncOrchestrator existiert noch nicht) und der
+    // Handler wird nie registriert (toter Code). Lade-reihenfolge-tolerant
+    // wie crypto.js:402-418: jetzt versuchen, sonst auf
+    // DOMContentLoaded/naechsten Tick nachholen.
+    var _orchestratorReceiverRegistered = false;
+    function _registerOrchestratorReceiver() {
+        if (_orchestratorReceiverRegistered) return true;
+        if (window.syncOrchestrator && window.syncOrchestrator.onMessage) {
+            window.syncOrchestrator.onMessage((msg) => {
+                if (msg && msg.type === "sync-finished") _updateQueueCount();
+            });
+            _orchestratorReceiverRegistered = true;
+            return true;
+        }
+        return false;
+    }
+    if (!_registerOrchestratorReceiver()) {
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", _registerOrchestratorReceiver);
+        } else {
+            window.setTimeout(_registerOrchestratorReceiver, 0);
+        }
     }
 
     window.offlineQueue = {

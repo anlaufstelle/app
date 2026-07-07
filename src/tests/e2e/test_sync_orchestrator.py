@@ -153,6 +153,100 @@ class TestSyncOrchestrator:
                 page1.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
             context.close()
 
+    def test_cross_tab_sync_updates_queue_badge_without_reload(self, browser, base_url, _login_storage_state):
+        """Kern-Regression #1409: Sync in Tab A aktualisiert den Queue-Badge
+        (``sync-banner``) in Tab B OHNE Reload. Gegen den heutigen Code ROT:
+        der ``onMessage``-Handler in ``offline-queue.js`` wird nie registriert
+        (Parse-Zeit-Gate — ``sync-orchestrator.js`` laedt in base.html NACH
+        ``offline-queue.js``, ``window.syncOrchestrator`` existiert zu dem
+        Zeitpunkt noch nicht) → Tab B haengt bei ``queueCount=1`` fest, bis
+        dort zufaellig selbst ein ``online``-Event feuert. Refs #1409.
+        """
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        url = "/workitems/cccccccc-cccc-4ccc-8ccc-cccccccccccc/edit/"
+        posts = {"n": 0}
+
+        def _handler(route):
+            posts["n"] += 1
+            route.fulfill(status=200, content_type="text/html", body="<div>ok</div>")
+
+        context.route(re.compile(r"/workitems/cccccccc"), _handler)
+        page_a = context.new_page()
+        page_b = context.new_page()
+        page_a.set_default_timeout(30000)
+        page_b.set_default_timeout(30000)
+        try:
+            _boot_with_key(page_a, base_url)
+            _seed_queue_record(page_a, url, "idem-badge-crosstab")
+            # Tab B laedt ERST NACH dem Seed -> der Initial-Update
+            # (_updateQueueCount beim Laden) zeigt den Sync-Banner sofort mit
+            # 1 ausstehendem Eintrag.
+            _attach_to_shared_store(page_b, base_url)
+            page_b.locator('[data-testid="sync-banner"]').wait_for(state="visible", timeout=10000)
+            assert "1" in page_b.locator('[data-testid="sync-banner"]').inner_text()
+
+            # NUR Tab A synchronisiert — Tab B bekommt bewusst NIE ein eigenes
+            # 'online'-Event, sonst wuerde dessen EIGENER Replay-Lauf (nicht
+            # der Cross-Tab-Listener) den Badge aktualisieren und den Test
+            # gegen den eigentlichen Bug blind machen.
+            page_a.evaluate("() => window.dispatchEvent(new Event('online'))")
+            page_a.wait_for_function("async () => (await window.offlineStore.count('queue')) === 0", timeout=15000)
+            assert posts["n"] == 1
+
+            # GREEN: Tab B's Badge verschwindet OHNE eigenes Online-Event und
+            # OHNE Reload — ausschliesslich ueber den sync-finished-Broadcast
+            # von Tab A.
+            page_b.locator('[data-testid="sync-banner"]').wait_for(state="hidden", timeout=10000)
+        finally:
+            with suppress(Exception):
+                page_a.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_cross_tab_sync_finished_broadcast_reaches_both_badge_listeners(
+        self, browser, base_url, _login_storage_state
+    ):
+        """Beide in #1409 gemeldeten toten Listener in EINEM Test: sowohl
+        ``offline-queue.js`` (Queue-Badge, ``offline-queue-count``) als auch
+        ``offline-edit.js`` (Unsynced-Badge, ``offline-unsynced-count``)
+        registrieren ihren ``onMessage``-Handler nur bei einem zur Parse-Zeit
+        bereits existierenden ``window.syncOrchestrator`` — das Gate ist immer
+        false. Ein echter (leerer) Sync-Lauf via ``requestSync`` broadcastet am
+        Ende trotzdem ``{type: "sync-finished"}`` (sync-orchestrator.js
+        ``_drive``); Tab B muss BEIDE Events dadurch mindestens einmal sehen.
+        Refs #1409.
+        """
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page_a = context.new_page()
+        page_b = context.new_page()
+        page_a.set_default_timeout(30000)
+        page_b.set_default_timeout(30000)
+        try:
+            _boot_with_key(page_a, base_url)
+            _attach_to_shared_store(page_b, base_url)
+
+            # Tab B: auf die beiden window-CustomEvents lauschen, die die toten
+            # onMessage-Handler (bei erfolgreicher Registrierung) ausloesen.
+            page_b.evaluate(
+                """() => {
+                    window.__queueEvents = 0;
+                    window.__unsyncedEvents = 0;
+                    window.addEventListener('offline-queue-count', () => { window.__queueEvents += 1; });
+                    window.addEventListener('offline-unsynced-count', () => { window.__unsyncedEvents += 1; });
+                }"""
+            )
+
+            # Tab A: ein echter (leerer) Sync-Lauf ueber den Orchestrator —
+            # broadcastet am Ende IMMER sync-finished, unabhaengig davon, ob
+            # ueberhaupt etwas zu replayen war.
+            page_a.evaluate("async () => { await window.syncOrchestrator.requestSync('test'); }")
+
+            page_b.wait_for_function("() => window.__queueEvents > 0", timeout=10000)
+            page_b.wait_for_function("() => window.__unsyncedEvents > 0", timeout=10000)
+        finally:
+            with suppress(Exception):
+                page_a.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
     def test_requestsync_coalesces_five_synchronous_calls(self, browser, base_url, _login_storage_state):
         """Refs #1383: 5× ``requestSync`` synchron auf EINEM Tab — der laufende
         Request koalesziert (ein wartender Request + rerun-Flag), statt fuenf
