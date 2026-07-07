@@ -27,6 +27,14 @@ set -uo pipefail
 #
 # Empfohlen quartalsweise (per Timer/Cron) + Alert bei Exit-Code != 0.
 
+# Verzeichnis dieses Skripts VOR dem cd bestimmen, damit das gemeinsame
+# Krypto-/Guard-Modul relativ zum Skript gefunden wird (Refs #1441).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# N6-Guard (Refs #1441): backup_require_real_key weist einen change-me*-
+# BACKUP_ENCRYPTION_KEY fail-closed ab — geteilt mit backup.sh / restore.sh.
+# shellcheck source=scripts/ops/_backup_common.sh
+source "${SCRIPT_DIR}/_backup_common.sh"
+
 COMPOSE_DIR="${COMPOSE_DIR:-/opt/anlaufstelle}"
 ENV_FILE="${ENV_FILE:-$COMPOSE_DIR/.env.dev}"
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/anl}"
@@ -46,6 +54,10 @@ if [[ -r "$ENV_FILE" ]]; then
 fi
 
 : "${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY nicht gesetzt (aus $ENV_FILE)}"
+# Ein mit dem oeffentlich bekannten Platzhalter "verschluesseltes" Backup ist
+# faktisch unverschluesselt — der Drill wuerde es sonst als restore-faehig
+# durchwinken. Fail-closed (Refs #1441).
+backup_require_real_key
 
 # Der Drill braucht CREATE DATABASE — das kann auf dem 3-Rollen-Modell nur der
 # Postgres-Superuser (``anlaufstelle_admin`` ist BYPASSRLS, aber NICHT CREATEDB;

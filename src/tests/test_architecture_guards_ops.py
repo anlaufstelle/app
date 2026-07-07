@@ -157,6 +157,32 @@ class TestDeployChecksWiredIntoStartup:
             "_backup_common.sh muss backup_require_real_key definieren — ein "
             "change-me-BACKUP_ENCRYPTION_KEY verschluesselt faktisch nicht (Review N6)."
         )
-        for script in ("scripts/ops/backup.sh", "scripts/ops/restore.sh"):
+        # scripts/ops/ liegt vollstaendig im Public-Snapshot — kein Skip noetig.
+        # restore-drill.sh liest denselben Schluessel und muss den Guard ebenso
+        # aufrufen (Refs #1441), sonst ist ein "change-me"-Backup faktisch
+        # unverschluesselt und wird trotzdem als restore-faehig gedrillt.
+        for script in ("scripts/ops/backup.sh", "scripts/ops/restore.sh", "scripts/ops/restore-drill.sh"):
             body = Path(script).read_text(encoding="utf-8")
-            assert "backup_require_real_key" in body, f"{script} muss backup_require_real_key aufrufen (Review N6)."
+            assert "backup_require_real_key" in body, (
+                f"{script} muss backup_require_real_key aufrufen (Review N6, Refs #1441)."
+            )
+
+    def test_dev_ops_backup_rejects_placeholder_key(self) -> None:
+        """Security (Refs #1441): das dev-only ``dev-ops/deploy/backup.sh`` liest
+        denselben ``BACKUP_ENCRYPTION_KEY`` und muss den Platzhalter ebenfalls
+        fail-closed abweisen. Es sourcet ``scripts/ops/`` bewusst NICHT (eigener
+        Stack) — daher ein Inline-Case-Guard statt ``backup_require_real_key``.
+        """
+        # dev-ops/ ist im Public-Snapshot ausgeschlossen (build-release.sh) — der
+        # Guard ist dort moot, also skippen statt failen. Voller Pfad in der
+        # Skip-Zeile: verify_release_test_guard verlangt den ausgeschlossenen
+        # Prefix (dev-ops/deploy/backup.sh) auf der Gate-Zeile (Refs #1137, #1441).
+        script = Path("dev-ops/deploy/backup.sh")
+        if not script.exists():
+            pytest.skip("dev-ops/deploy/backup.sh nicht im Public-Snapshot (Refs #1441)")
+        body = script.read_text(encoding="utf-8")
+        assert "change-me*" in body, (
+            "dev-ops/deploy/backup.sh muss den Platzhalter-Schluessel (change-me*) "
+            "per Case-Guard fail-closed abweisen — ein oeffentlich bekannter Key "
+            "verschluesselt faktisch nicht (Refs #1441)."
+        )
