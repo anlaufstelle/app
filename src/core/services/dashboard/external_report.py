@@ -97,7 +97,8 @@ def build_external_report(facility, date_from: date, date_to: date) -> dict[str,
     by_contact_stage = _suppress_stage_dict(raw["by_contact_stage"], threshold)
 
     return {
-        "total_contacts": raw["total_contacts"],
+        # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
+        "total_contacts": raw["total_contacts"] if raw["total_contacts"] >= threshold else None,
         "unique_clients": raw["unique_clients"] if raw["unique_clients"] >= threshold else None,
         "by_contact_stage": by_contact_stage,
         "by_document_type": by_document_type,
@@ -126,7 +127,9 @@ def suppress_jugendamt_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
       ``suppressed=True`` gesetzt — inkl. sekundaerer Suppression gegen
       Randsummen-Rueckrechnung.
     - ``unique_clients`` < Schwelle -> ``None`` (wie in ``build_external_report``).
-    - ``total`` bleibt als publizierte Randsumme erhalten (analog ``total_contacts``).
+    - ``total`` bleibt als publizierte Randsumme erhalten (analog ``total_contacts``)
+      — ausser sie liegt selbst unter der Schwelle (R14), dann ist die Randsumme
+      selbst eine Kleinstfallzahl und wird ``None``.
 
     ``by_category`` kommt als ``(name, count)``-Tupel-Liste (aus
     ``get_jugendamt_statistics``) und wird auf Dicts mit ``name``/``count``/
@@ -140,11 +143,14 @@ def suppress_jugendamt_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
     by_age_cluster = _suppress_small(list(stats.get("by_age_cluster", [])), threshold, count_key="count")
 
     unique = stats.get("unique_clients", 0)
+    total = stats.get("total", 0)
     return {
         **stats,
         "by_category": by_category,
         "by_age_cluster": by_age_cluster,
         "unique_clients": unique if unique >= threshold else None,
+        # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
+        "total": total if total is not None and total >= threshold else None,
     }
 
 
@@ -166,4 +172,7 @@ def suppress_report_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
     out["by_contact_stage"] = _suppress_stage_dict(dict(stats.get("by_contact_stage", {})), threshold)
     unique = stats.get("unique_clients", 0)
     out["unique_clients"] = unique if unique is not None and unique >= threshold else None
+    # Security R14: Randsumme < k ist selbst eine Kleinstfallzahl.
+    total = stats.get("total_contacts", 0)
+    out["total_contacts"] = total if total is not None and total >= threshold else None
     return out

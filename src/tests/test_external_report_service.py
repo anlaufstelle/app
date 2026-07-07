@@ -186,12 +186,16 @@ class TestExternalReportMetadata:
 class TestExternalReportEdgeCases:
     """Edge-Cases: leere Periode, threshold=1."""
 
-    def test_empty_period_returns_zero_totals(self, facility, report_period):
+    def test_empty_period_suppresses_total_and_returns_empty_lists(self, facility, report_period):
+        # Security R14: die Randsumme ``total_contacts`` unterliegt jetzt selbst
+        # der k-Schwelle. Eine leere Periode liefert total_contacts=0 < 5 und
+        # wird daher wie jede andere Kleinstfallzahl auf ``None`` unterdrueckt
+        # (konsistent mit ``unique_clients``, das schon immer 0 -> None abbildet).
         from core.services.dashboard import build_external_report
 
         report = build_external_report(facility, *report_period)
 
-        assert report["total_contacts"] == 0
+        assert report["total_contacts"] is None
         assert report["by_document_type"] == []
 
     def test_threshold_1_disables_suppression(
@@ -262,14 +266,16 @@ class TestJugendamtStatsSuppression:
         # Labels bleiben fuer die Template-Darstellung erhalten.
         assert ages["u18"]["label"] == "Unter 18"
 
-    def test_unique_clients_below_threshold_suppressed_total_stays_raw(self, facility):
+    def test_unique_clients_and_total_below_threshold_both_suppressed(self, facility):
+        # Security R14: Ist die publizierte Randsumme ``total`` selbst < k, ist
+        # sie eine Kleinstfallzahl und wird ebenfalls unterdrueckt (frueher blieb
+        # sie hier roh — genau der von R14 adressierte Leak).
         from core.services.dashboard import suppress_jugendamt_stats
 
         stats = {"total": 3, "by_category": [], "by_age_cluster": [], "unique_clients": 2}
         result = suppress_jugendamt_stats(facility, stats)
         assert result["unique_clients"] is None  # 2 < 5
-        # ``total`` ist die publizierte Randsumme und bleibt roh.
-        assert result["total"] == 3
+        assert result["total"] is None  # 3 < 5 -> Randsumme selbst unterdrueckt
 
     def test_unique_clients_above_threshold_kept(self, facility):
         from core.services.dashboard import suppress_jugendamt_stats
@@ -302,3 +308,60 @@ class TestJugendamtStatsSuppression:
         assert result["by_category"][0]["count"] == 1
         assert result["by_category"][0]["suppressed"] is False
         assert result["unique_clients"] == 1
+        # Bei k=1 ist auch die Randsumme (1 >= 1) nicht unterdrueckt.
+        assert result["total"] == 1
+
+
+@pytest.mark.django_db
+class TestMarginTotalSuppression:
+    """Security R14: die Randsumme selbst ist eine Kleinstfallzahl, wenn sie
+    unter der Schwelle liegt — dann None statt roher Wert.
+
+    ``build_external_report`` (``total_contacts``), ``suppress_jugendamt_stats``
+    (``total``) und ``suppress_report_stats`` (``total_contacts``) publizierten die
+    Gesamtsumme bislang roh. Liegt sie selbst < k, ist sie eine Kleinstfallzahl —
+    dann ``None`` + Template-Marker. Randsummen >= Schwelle bleiben roh (die
+    sekundaere Suppression schuetzt bereits die Rueckrechnung einzelner Zellen).
+    """
+
+    def test_external_report_total_below_threshold_suppressed(
+        self, facility, client_qualified, doc_type_contact, staff_user, report_period
+    ):
+        from core.services.dashboard import build_external_report
+
+        # 2 Events gesamt -> Randsumme 2 < Default-Schwelle 5.
+        _make_events(facility, client_qualified, doc_type_contact, staff_user, 2)
+
+        report = build_external_report(facility, *report_period)
+        assert report["total_contacts"] is None
+
+    def test_external_report_total_at_or_above_threshold_stays_raw(
+        self, facility, client_qualified, doc_type_contact, staff_user, report_period
+    ):
+        from core.services.dashboard import build_external_report
+
+        # 7 Events gesamt -> Randsumme 7 >= Schwelle 5 bleibt roh.
+        _make_events(facility, client_qualified, doc_type_contact, staff_user, 7)
+
+        report = build_external_report(facility, *report_period)
+        assert report["total_contacts"] == 7
+
+    def test_jugendamt_total_below_threshold_suppressed(self, facility):
+        from core.services.dashboard import suppress_jugendamt_stats
+
+        stats = {"total": 3, "unique_clients": 0, "by_category": [], "by_age_cluster": []}
+        out = suppress_jugendamt_stats(facility, stats)
+        assert out["total"] is None
+
+    def test_report_stats_total_below_threshold_suppressed(self, facility):
+        from core.services.dashboard import suppress_report_stats
+
+        stats = {
+            "total_contacts": 3,
+            "unique_clients": 0,
+            "by_contact_stage": {},
+            "by_document_type": [],
+            "by_age_cluster": [],
+        }
+        out = suppress_report_stats(facility, stats)
+        assert out["total_contacts"] is None

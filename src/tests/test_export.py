@@ -599,7 +599,9 @@ class TestReportPdfKAnonSuppression:
                 "generated_at": tz.now(),
                 "internal_mode": False,
                 "stats": {
-                    "total_contacts": 12,
+                    # Security R14: Randsumme selbst < k -> None; das Template muss
+                    # auch hier den Marker rendern statt rohes "None" auszugeben.
+                    "total_contacts": None,
                     "unique_clients": None,
                     "by_contact_stage": {"anonym": 10, "identifiziert": None, "qualifiziert": None},
                     "by_document_type": [

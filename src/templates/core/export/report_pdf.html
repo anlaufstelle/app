@@ -37,7 +37,7 @@
     <h2>{% trans "Zusammenfassung" %}</h2>
     <div class="kpi-grid">
         <div class="kpi-card">
-            <div class="kpi-value">{{ stats.total_contacts }}</div>
+            <div class="kpi-value">{% if stats.total_contacts is None %}{% trans "unterdrückt" %}{% else %}{{ stats.total_contacts }}{% endif %}</div>
             <div class="kpi-label">{% trans "Gesamtkontakte" %}</div>
         </div>
         <div class="kpi-card">

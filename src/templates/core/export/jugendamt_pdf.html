@@ -42,7 +42,7 @@
 
     <div class="summary">
         <h2>{% trans "Zusammenfassung" %}</h2>
-        <p><strong>{% trans "Gesamtkontakte (ohne Notizen/Hausverbote):" %}</strong> {{ stats.total }}</p>
+        <p><strong>{% trans "Gesamtkontakte (ohne Notizen/Hausverbote):" %}</strong> {% if stats.total is None %}{% trans "unterdrückt" %}{% else %}{{ stats.total }}{% endif %}</p>
         <p><strong>{% trans "Einzigartige Personen:" %}</strong> {% if stats.unique_clients is None %}{% trans "unterdrückt" %}{% else %}{{ stats.unique_clients }}{% endif %}</p>
     </div>
 

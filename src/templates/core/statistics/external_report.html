@@ -44,7 +44,13 @@
     <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div class="bg-white border border-line rounded-lg p-4">
             <dt class="text-sm text-muted">{% trans "Kontakte gesamt" %}</dt>
-            <dd class="text-2xl font-bold text-ink">{{ report.total_contacts }}</dd>
+            <dd class="text-2xl font-bold text-ink">
+                {% if report.total_contacts is None %}
+                    <span class="text-muted italic">{% trans "unterdrückt" %}</span>
+                {% else %}
+                    {{ report.total_contacts }}
+                {% endif %}
+            </dd>
         </div>
         <div class="bg-white border border-line rounded-lg p-4">
             <dt class="text-sm text-muted">{% trans "Unterschiedliche Personen" %}</dt>

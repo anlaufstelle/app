@@ -82,6 +82,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Offline-Replay-Dedup übersteht Cache-Verlust und Parallel-Replays** (Sicherheitsreview 2026-07-05, R5/R6) — Event/WorkItem tragen den X-Idempotency-Key jetzt als Spalte mit partiellem Unique-Constraint; parallele Replays und Replays nach Cache-Eviction leiten auf den Originaldatensatz um statt Duplikate anzulegen; ungültige Keys (≠ ^[A-Za-z0-9_-]{1,64}$) werden verworfen.
 - **CSV-Header-Zellen werden gegen Formel-Injection neutralisiert** — Feldnamen (FieldTemplate.name) laufen im Events-Export jetzt wie alle Werte-Zellen durch die OWASP-Präfix-Sanitisierung.
 - **Halbjahres-Sachbericht unterdrückt Kleinstfallzahlen** (Sicherheitsreview 2026-07-05, R4) — das Standard-PDF (externes Artefakt) läuft jetzt durch dieselbe k-Anon-Suppression wie Jugendamt-PDF und On-Screen-Bericht; der interne Modus (INTERN-Banner) bleibt vollständig.
+- **Gesamtsummen externer Berichte unterliegen der k-Schwelle** (Sicherheitsreview 2026-07-05, R14) — total_contacts/total werden in externem Bericht, Jugendamt-PDF und Sachbericht unterdrückt, wenn die Randsumme selbst unter der Kleinstfallzahl-Schwelle liegt.
 
 ### Docs
 
