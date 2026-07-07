@@ -224,6 +224,65 @@ class TestEnforceDocumentTypeRetention:
 
 
 @pytest.mark.django_db
+class TestNonPositiveDaysSkipped:
+    """Security N8 (Refs #1445): 0/negative Fristen erzeugen einen Cutoff
+    ``>= jetzt`` (``now - timedelta(days=-5) == now + 5d``) und wuerden den
+    Gesamtbestand zum Loeschen vorschlagen. Validator + DB-Constraint
+    verhindern das beim Speichern; ``iter_strategies`` ueberspringt solche
+    Kategorien zusaetzlich defensiv (Alt-Daten / Direkt-Writes).
+
+    Die Settings-Faelle klemmen das Attribut nur IM SPEICHER (kein ``save``) —
+    der DB-Constraint wuerde eine negative Frist gar nicht erst persistieren.
+    """
+
+    def test_negative_anonymous_days_yields_no_anonymous_strategy(self, facility, settings_obj):
+        from core.retention.strategies import iter_strategies
+
+        settings_obj.retention_anonymous_days = -5
+        categories = [s.category for s in iter_strategies(facility, settings_obj, timezone.now())]
+        assert "anonymous" not in categories
+        # Die uebrigen (gueltigen) Kategorien bleiben erhalten.
+        assert "identified" in categories
+        assert "qualified" in categories
+
+    def test_zero_identified_days_yields_no_identified_strategy(self, facility, settings_obj):
+        from core.retention.strategies import iter_strategies
+
+        settings_obj.retention_identified_days = 0
+        categories = [s.category for s in iter_strategies(facility, settings_obj, timezone.now())]
+        assert "identified" not in categories
+        assert "anonymous" in categories
+
+    def test_negative_qualified_days_yields_no_qualified_strategy(self, facility, settings_obj):
+        from core.retention.strategies import iter_strategies
+
+        settings_obj.retention_qualified_days = -1
+        categories = [s.category for s in iter_strategies(facility, settings_obj, timezone.now())]
+        assert "qualified" not in categories
+
+    def test_negative_anonymous_days_collects_no_doomed_event(
+        self, facility, staff_user, doc_type_contact, settings_obj
+    ):
+        """End-to-end ueber ``collect_doomed_events`` (Proposal-Pfad): ein altes
+        anonymes Event ist bei gueltiger Frist doomed, bei negativer Frist nicht."""
+        from core.retention.enforcement import collect_doomed_events
+
+        Event.objects.create(
+            facility=facility,
+            document_type=doc_type_contact,
+            occurred_at=_at(100),
+            data_json={},
+            is_anonymous=True,
+            created_by=staff_user,
+        )
+        # Positivkontrolle: gueltige Frist -> Event ist doomed.
+        assert collect_doomed_events(facility, settings_obj, timezone.now()).count() == 1
+        # Negative Frist -> Strategie uebersprungen -> nichts doomed.
+        settings_obj.retention_anonymous_days = -5
+        assert collect_doomed_events(facility, settings_obj, timezone.now()).count() == 0
+
+
+@pytest.mark.django_db
 class TestStrategyIntersection:
     """Cross-Strategy: ein Event darf nicht von zwei Strategien doppelt
     gezaehlt werden — die Strategien sind disjunkt nach ``is_anonymous`` und

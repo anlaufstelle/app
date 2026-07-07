@@ -51,59 +51,72 @@ def iter_strategies(facility, settings_obj, now: datetime) -> Iterator[Retention
     (anonymous schlaegt identified usw.) — wichtig fuer die deterministische
     Categorisierung im Audit-Log.
     """
-    cutoff_anon = now - timedelta(days=settings_obj.retention_anonymous_days)
-    yield RetentionStrategy(
-        category="anonymous",
-        cutoff=cutoff_anon,
-        queryset=Event.objects.filter(
-            facility=facility,
-            is_anonymous=True,
-            is_deleted=False,
-            occurred_at__lt=cutoff_anon,
-        ),
-    )
+    # Security N8 (Refs #1445): 0/negative Fristen erzeugen einen Cutoff
+    # >= jetzt (``now - timedelta(days=-5) == now + 5d``) und wuerden den
+    # Gesamtbestand zum Loeschen vorschlagen. Validator + DB-Constraint
+    # verhindern das ab jetzt beim Speichern; defensiv (Alt-Daten,
+    # Direkt-Writes ueber .update()/raw SQL) ueberspringen wir solche
+    # Strategien hier zusaetzlich.
+    if settings_obj.retention_anonymous_days >= 1:
+        cutoff_anon = now - timedelta(days=settings_obj.retention_anonymous_days)
+        yield RetentionStrategy(
+            category="anonymous",
+            cutoff=cutoff_anon,
+            queryset=Event.objects.filter(
+                facility=facility,
+                is_anonymous=True,
+                is_deleted=False,
+                occurred_at__lt=cutoff_anon,
+            ),
+        )
 
-    cutoff_ident = now - timedelta(days=settings_obj.retention_identified_days)
-    identified_clients = Client.objects.filter(
-        facility=facility,
-        contact_stage=Client.ContactStage.IDENTIFIED,
-    )
-    yield RetentionStrategy(
-        category="identified",
-        cutoff=cutoff_ident,
-        queryset=Event.objects.filter(
+    if settings_obj.retention_identified_days >= 1:
+        cutoff_ident = now - timedelta(days=settings_obj.retention_identified_days)
+        identified_clients = Client.objects.filter(
             facility=facility,
-            client__in=identified_clients,
-            is_deleted=False,
-            occurred_at__lt=cutoff_ident,
-        ),
-    )
+            contact_stage=Client.ContactStage.IDENTIFIED,
+        )
+        yield RetentionStrategy(
+            category="identified",
+            cutoff=cutoff_ident,
+            queryset=Event.objects.filter(
+                facility=facility,
+                client__in=identified_clients,
+                is_deleted=False,
+                occurred_at__lt=cutoff_ident,
+            ),
+        )
 
-    case_cutoff = now - timedelta(days=settings_obj.retention_qualified_days)
-    qualified_clients = Client.objects.filter(
-        facility=facility,
-        contact_stage=Client.ContactStage.QUALIFIED,
-    )
-    expired_cases = Case.objects.filter(
-        facility=facility,
-        client__in=qualified_clients,
-        status=Case.Status.CLOSED,
-        closed_at__lt=case_cutoff,
-    )
-    yield RetentionStrategy(
-        category="qualified",
-        cutoff=case_cutoff,
-        queryset=Event.objects.filter(
+    if settings_obj.retention_qualified_days >= 1:
+        case_cutoff = now - timedelta(days=settings_obj.retention_qualified_days)
+        qualified_clients = Client.objects.filter(
+            facility=facility,
+            contact_stage=Client.ContactStage.QUALIFIED,
+        )
+        expired_cases = Case.objects.filter(
             facility=facility,
             client__in=qualified_clients,
-            case__in=expired_cases,
-            is_deleted=False,
-        ),
-    )
+            status=Case.Status.CLOSED,
+            closed_at__lt=case_cutoff,
+        )
+        yield RetentionStrategy(
+            category="qualified",
+            cutoff=case_cutoff,
+            queryset=Event.objects.filter(
+                facility=facility,
+                client__in=qualified_clients,
+                case__in=expired_cases,
+                is_deleted=False,
+            ),
+        )
 
+    # Security N8 (Refs #1445): retention_days >= 1 defensiv erzwingen (der
+    # Filter greift beim DB-Lesen — In-Memory nicht testbar; die eigentliche
+    # Absicherung ist der DB-CheckConstraint documenttype_retention_days_min_1).
     doc_types_with_retention = DocumentType.objects.filter(
         facility=facility,
         retention_days__isnull=False,
+        retention_days__gte=1,
     )
     for dt in doc_types_with_retention:
         # retention_days__isnull=False im Filter — None ist hier ausgeschlossen.

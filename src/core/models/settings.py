@@ -38,24 +38,33 @@ class Settings(models.Model):
         related_name="+",
         verbose_name=_("Standard-Dokumentationstyp"),
     )
+    # Security N8 (Refs #1445): Untergrenze 1 Tag. 0/negativ erzeugt in
+    # core.retention.strategies einen Cutoff >= jetzt und wuerde den
+    # Gesamtbestand zum Loeschen vorschlagen. Validator (Form/full_clean) +
+    # CheckConstraint (DB, siehe Meta) erzwingen die Untergrenze doppelt.
     session_timeout_minutes = models.IntegerField(
         default=30,
+        validators=[MinValueValidator(1)],
         verbose_name=_("Session-Timeout (Minuten)"),
     )
     retention_anonymous_days = models.IntegerField(
         default=DEFAULT_RETENTION_ANONYMOUS_DAYS,
+        validators=[MinValueValidator(1)],
         verbose_name=_("Aufbewahrung anonym (Tage)"),
     )
     retention_identified_days = models.IntegerField(
         default=DEFAULT_RETENTION_IDENTIFIED_DAYS,
+        validators=[MinValueValidator(1)],
         verbose_name=_("Aufbewahrung identifiziert (Tage)"),
     )
     retention_qualified_days = models.IntegerField(
         default=DEFAULT_RETENTION_QUALIFIED_DAYS,
+        validators=[MinValueValidator(1)],
         verbose_name=_("Aufbewahrung qualifiziert (Tage)"),
     )
     retention_activities_days = models.IntegerField(
         default=365,
+        validators=[MinValueValidator(1)],
         verbose_name=_("Aufbewahrung Aktivitäten (Tage)"),
     )
     client_trash_days = models.PositiveIntegerField(
@@ -152,6 +161,19 @@ class Settings(models.Model):
             models.CheckConstraint(
                 condition=models.Q(search_trigram_threshold__gte=0.0) & models.Q(search_trigram_threshold__lte=1.0),
                 name="settings_trigram_threshold_range",
+            ),
+            # Security N8 (Refs #1445): retention_*_days + session_timeout_minutes
+            # muessen >= 1 sein — schuetzt gegen 0/negative Fristen, die einen
+            # Massen-Loeschvorschlag ausloesen (siehe Validatoren oben).
+            models.CheckConstraint(
+                condition=(
+                    models.Q(session_timeout_minutes__gte=1)
+                    & models.Q(retention_anonymous_days__gte=1)
+                    & models.Q(retention_identified_days__gte=1)
+                    & models.Q(retention_qualified_days__gte=1)
+                    & models.Q(retention_activities_days__gte=1)
+                ),
+                name="settings_retention_days_min_1",
             ),
         ]
 

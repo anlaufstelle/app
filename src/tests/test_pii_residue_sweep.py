@@ -449,9 +449,10 @@ def test_no_residue_after_trash_expiry(maximal_pii_graph, table):
 #   4. anonymize_eligible_soft_deleted_clients -> Trash-Expiry-Anonymisierung
 #   5. prune_auditlog             -> AuditLog-Pruning
 #
-# Die Test-Config stellt ALLE Fristen scharf (0 Tage), damit jeder Schritt
+# Die Test-Config stellt ALLE Fristen auf das Minimum (1 Tag, Security N8) und
+# altert die Daten Jahre zurueck (``_sharpen_retention``), damit jeder Schritt
 # real agiert. Der Event wird ueber die document_type-Strategie soft-deletet
-# (``doc_type.retention_days = 0`` + ``occurred_at`` in der Vergangenheit) —
+# (``doc_type.retention_days = 1`` + ``occurred_at`` in der Vergangenheit) —
 # unabhaengig von der Kontaktstufe und ohne Case-Verknuepfung, die der Fixture-
 # Event nicht hat. So laeuft Schritt 1 VOR der Anonymisierung (Schritt 3/4).
 #
@@ -459,9 +460,10 @@ def test_no_residue_after_trash_expiry(maximal_pii_graph, table):
 # ANONYMIZE_TABLES kopiert — bewusst abweichend):
 #
 #   core_activity -> SAUBER (H3-1 reproduziert hier NICHT). ``enforce_activities``
-#       mit ``retention_activities_days=0`` hard-deletet ALLE Activities (auch
-#       die WorkItem-Target-Activity, die im reinen anonymize-Pfad als H3-1
-#       stehenbliebe). Daher KEIN xfail fuer core_activity — sonst XPASS-strict.
+#       mit ``retention_activities_days=1`` (+ Alterung) hard-deletet ALLE
+#       Activities (auch die WorkItem-Target-Activity, die im reinen anonymize-
+#       Pfad als H3-1 stehenbliebe). Daher KEIN xfail fuer core_activity — sonst
+#       XPASS-strict.
 #
 # Eigene xfail-Liste (NICHT ANONYMIZE_TABLES): nur die empirisch roten Tabellen.
 RETENTION_XFAIL = {}
@@ -472,15 +474,25 @@ RETENTION_TABLES = [
 
 
 def _sharpen_retention(facility):
-    """Stellt alle Retention-Fristen der Facility auf 0/1, damit die Pipeline
-    die Akte maximal abraeumt. Gibt das Settings-Objekt zurueck."""
-    from core.models import Settings
+    """Stellt alle Retention-Fristen der Facility auf das Minimum (1 Tag) und
+    altert alle zeitgebundenen Daten der Facility tief in die Vergangenheit,
+    damit die Pipeline die Akte maximal abraeumt. Gibt das Settings-Objekt zurueck.
+
+    Security N8 (Refs #1445): retention_*_days duerfen nicht mehr 0 sein
+    (CheckConstraint ``settings_retention_days_min_1``). Frueher erzwang die
+    0-Tages-Frist einen Cutoff = jetzt und fing damit ALLE (frischen) Fixture-
+    Daten. Jetzt setzen wir die Fristen auf 1 und schieben ``occurred_at`` von
+    Events und Activities um Jahre zurueck — der 1-Tages-Cutoff faengt damit
+    weiterhin den Gesamtbestand."""
+    from datetime import timedelta
+
+    from core.models import Activity, Event, Settings
 
     settings_obj, _ = Settings.objects.get_or_create(facility=facility)
-    settings_obj.retention_anonymous_days = 0
-    settings_obj.retention_identified_days = 0
-    settings_obj.retention_qualified_days = 0
-    settings_obj.retention_activities_days = 0
+    settings_obj.retention_anonymous_days = 1
+    settings_obj.retention_identified_days = 1
+    settings_obj.retention_qualified_days = 1
+    settings_obj.retention_activities_days = 1
     settings_obj.client_trash_days = 0
     # 1 Monat statt 0 = Pruning aktiv; die frischen Fixture-AuditLogs (now)
     # liegen aber innerhalb der Frist und bleiben erhalten — seit #1093 traegt
@@ -488,6 +500,12 @@ def _sharpen_retention(facility):
     # DeletionRequest-PK), daher kein Sentinel-Residue.
     settings_obj.auditlog_retention_months = 1
     settings_obj.save()
+
+    # Alle zeitgebundenen Daten weit vor den 1-Tages-Cutoff schieben, damit jede
+    # Strategie feuert (frueher via 0-Tages-Frist ohne Alterung erzwungen).
+    long_ago = timezone.now() - timedelta(days=3650)
+    Activity.objects.filter(facility=facility).update(occurred_at=long_ago)
+    Event.objects.filter(facility=facility).update(occurred_at=long_ago)
     return settings_obj
 
 
@@ -504,9 +522,10 @@ def test_no_residue_after_enforce_retention(maximal_pii_graph, table):
     _sharpen_retention(g.facility)
 
     # Event ueber die document_type-Strategie loeschbar machen: Custom-Retention
-    # 0 Tage + occurred_at in der Vergangenheit. So feuert Schritt 1 (Soft-Delete)
-    # VOR der Anonymisierung — unabhaengig von Kontaktstufe/Case-Verknuepfung.
-    g.doc_type.retention_days = 0
+    # 1 Tag (Minimum, Security N8) + occurred_at deutlich in der Vergangenheit.
+    # So feuert Schritt 1 (Soft-Delete) VOR der Anonymisierung — unabhaengig von
+    # Kontaktstufe/Case-Verknuepfung.
+    g.doc_type.retention_days = 1
     g.doc_type.save(update_fields=["retention_days"])
     Event.objects.filter(pk=g.event.pk).update(occurred_at=timezone.now() - timedelta(days=10))
     # Papierkorb-Frist sicher ueberschritten (Trash-Expiry-Schritt).
@@ -532,7 +551,7 @@ def test_enforce_retention_acts_on_the_graph(maximal_pii_graph):
 
     g = maximal_pii_graph
     _sharpen_retention(g.facility)
-    g.doc_type.retention_days = 0
+    g.doc_type.retention_days = 1
     g.doc_type.save(update_fields=["retention_days"])
     Event.objects.filter(pk=g.event.pk).update(occurred_at=timezone.now() - timedelta(days=10))
     g.client.deleted_at = timezone.now() - timedelta(days=10)

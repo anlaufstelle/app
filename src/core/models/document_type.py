@@ -4,6 +4,7 @@ import re
 import uuid
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import IntegrityError, models, transaction
 from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
@@ -79,6 +80,10 @@ class DocumentType(models.Model):
     retention_days = models.IntegerField(
         blank=True,
         null=True,
+        # Security N8 (Refs #1445): wie bei Settings.retention_*_days — 0/negativ
+        # erzeugt in core.retention.strategies einen Cutoff >= jetzt. None (keine
+        # Frist) bleibt zulaessig; gesetzte Werte muessen >= 1 sein.
+        validators=[MinValueValidator(1)],
         verbose_name=_("Aufbewahrungsfrist (Tage)"),
     )
     icon = models.CharField(max_length=50, blank=True, verbose_name=_("Icon"))
@@ -110,6 +115,12 @@ class DocumentType(models.Model):
             models.UniqueConstraint(
                 fields=["facility", "name", "category"],
                 name="unique_facility_documenttype_name_category",
+            ),
+            # Security N8 (Refs #1445): gesetzte retention_days muessen >= 1 sein
+            # (None = keine Frist bleibt erlaubt).
+            models.CheckConstraint(
+                condition=models.Q(retention_days__isnull=True) | models.Q(retention_days__gte=1),
+                name="documenttype_retention_days_min_1",
             ),
         ]
 

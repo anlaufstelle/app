@@ -87,6 +87,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Halbjahres-Sachbericht unterdrückt Kleinstfallzahlen** (Sicherheitsreview 2026-07-05, R4) — das Standard-PDF (externes Artefakt) läuft jetzt durch dieselbe k-Anon-Suppression wie Jugendamt-PDF und On-Screen-Bericht; der interne Modus (INTERN-Banner) bleibt vollständig.
 - **Gesamtsummen externer Berichte unterliegen der k-Schwelle** (Sicherheitsreview 2026-07-05, R14) — total_contacts/total werden in externem Bericht, Jugendamt-PDF und Sachbericht unterdrückt, wenn die Randsumme selbst unter der Kleinstfallzahl-Schwelle liegt.
 - **Sudo-Fehlversuche sperren den Login nicht mehr** (#1444) — die Sudo-Re-Auth prüft das Passwort direkt statt über authenticate, sodass Fehlversuche keine LOGIN_FAILED-Einträge mehr erzeugen und nicht in den Account-Lockout zählen; SUDO_MODE_FAILED bleibt als eigenes Audit-Signal erhalten.
+- **Aufbewahrungsfristen akzeptieren keine 0/negativen Werte mehr** (#1445) — Validator + DB-Constraint erzwingen mindestens 1 Tag (inkl. Dokumenttyp-Fristen und Session-Timeout), der Retention-Lauf überspringt ungültige Fristen defensiv, und SETTINGS_CHANGE-Audits protokollieren jetzt Alt-/Neu-Werte.
 
 ### Docs
 

@@ -237,6 +237,54 @@ def test_settings_trigram_threshold_db_constraint(facility):
 
 
 @pytest.mark.django_db
+def test_settings_retention_days_validator_rejects_below_1(facility):
+    """Security N8 (Refs #1445): retention_*_days + session_timeout_minutes
+    duerfen nicht < 1 sein — 0/negativ erzeugt einen Cutoff >= jetzt und wuerde
+    den Gesamtbestand zum Loeschen vorschlagen. MinValueValidator(1) blockt das."""
+    from django.core.exceptions import ValidationError
+
+    for field, bad in (
+        ("retention_identified_days", 0),
+        ("retention_identified_days", -1),
+        ("retention_anonymous_days", 0),
+        ("retention_qualified_days", -5),
+        ("retention_activities_days", 0),
+        ("session_timeout_minutes", 0),
+    ):
+        s = Settings(facility=facility, **{field: bad})
+        with pytest.raises(ValidationError):
+            s.full_clean()
+
+    # Gueltige Werte (Defaults) laufen durch.
+    Settings(facility=facility).full_clean()
+
+
+@pytest.mark.django_db
+def test_settings_retention_days_db_constraint(facility):
+    """Security N8 (Refs #1445): DB-CheckConstraint faengt Direct-Insert < 1."""
+    with pytest.raises(IntegrityError):
+        Settings.objects.create(facility=facility, retention_anonymous_days=-5)
+
+
+@pytest.mark.django_db
+def test_documenttype_retention_days_db_constraint(facility):
+    """Security N8 (Refs #1445): DocumentType.retention_days < 1 wird per
+    DB-Constraint abgelehnt; None (keine Frist) bleibt erlaubt."""
+    from django.db import transaction
+
+    from core.models import DocumentType
+
+    # None bleibt zulaessig (Feld ist nullable, keine facility-Frist gesetzt).
+    dt = DocumentType.objects.create(facility=facility, name="Ohne-Frist", retention_days=None)
+    assert dt.retention_days is None
+
+    # 0 verletzt den CheckConstraint. atomic() kapselt den Rollback, damit die
+    # gebrochene Transaktion die folgenden Queries nicht vergiftet.
+    with pytest.raises(IntegrityError), transaction.atomic():
+        DocumentType.objects.create(facility=facility, name="Mit-0-Frist", retention_days=0)
+
+
+@pytest.mark.django_db
 def test_audit_log_ordering(facility, admin_user):
     """AuditLog entries are ordered by -timestamp (most recent first)."""
     log1 = AuditLog.objects.create(

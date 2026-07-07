@@ -44,6 +44,33 @@ _AUDIT_FIELDS = (
 # - "updated_at": auto_now-Zeitstempel, technisch.
 _AUDIT_EXEMPT = ("facility", "updated_at")
 
+# Felder, deren Alt-/Neu-Werte forensisch ins SETTINGS_CHANGE-Detail geschrieben
+# werden duerfen (Security N8, Refs #1445). Bewusst NUR numerische/boolesche
+# Konfigurationswerte ohne PII- oder Geschaeftsgeheimnis-Charakter: ein
+# destruktiver Fristen-Aenderungsversuch (retention_*/session_timeout) muss
+# rekonstruierbar sein. Free-Text- und FK-Felder (facility_full_name,
+# default_document_type, allowed_file_types) bleiben bewusst nur namentlich im
+# Diff — sonst leaken PII/Secrets ins AuditLog (siehe die urspruengliche
+# No-Values-Policy und test_settings_audit_does_not_leak_values).
+_AUDIT_VALUE_FIELDS = frozenset(
+    {
+        "session_timeout_minutes",
+        "mfa_enforced_facility_wide",
+        "retention_anonymous_days",
+        "retention_identified_days",
+        "retention_qualified_days",
+        "retention_activities_days",
+        "client_trash_days",
+        "auditlog_retention_months",
+        "retention_auto_approve_after_defer",
+        "retention_max_defer_count",
+        "retention_use_k_anonymization",
+        "k_anonymity_threshold",
+        "search_trigram_threshold",
+        "max_file_size_mb",
+    }
+)
+
 
 def _snapshot(settings_obj):
     """Return a dict of audited field values for a Settings instance."""
@@ -53,6 +80,30 @@ def _snapshot(settings_obj):
 def _diff_fields(before, after):
     """Return a sorted list of field names that changed between before/after."""
     return sorted(field for field in _AUDIT_FIELDS if before.get(field) != after.get(field))
+
+
+def _jsonable(value):
+    """Coerce a value into something JSON-serialisable for the audit detail.
+
+    Die value-safe Allowlist enthaelt nur Primitive; der ``str()``-Fallback ist
+    eine defensive Absicherung fuer den Fall, dass die Allowlist spaeter waechst.
+    """
+    if value is None or isinstance(value, (bool, int, float, str)):
+        return value
+    return str(value)
+
+
+def _changed_values(before, after, changed):
+    """Build the ``changes`` sub-payload (old/new) for value-safe fields only.
+
+    Security N8 (Refs #1445): nur Felder aus :data:`_AUDIT_VALUE_FIELDS` — kein
+    PII/Secret-Leak ueber free-text/FK-Felder.
+    """
+    return {
+        field: {"old": _jsonable(before.get(field)), "new": _jsonable(after.get(field))}
+        for field in changed
+        if field in _AUDIT_VALUE_FIELDS
+    }
 
 
 @transaction.atomic
@@ -83,7 +134,13 @@ def update_settings(settings_obj, user, *, expected_updated_at=None, **fields):
             action=AuditLog.Action.SETTINGS_CHANGE,
             target_type="Settings",
             target_id=str(settings_obj.pk),
-            detail={"changed_fields": changed},
+            detail={
+                "changed_fields": changed,
+                # Security N8 (Refs #1445): Alt-/Neu-Werte value-sicherer Felder
+                # mitschreiben — ein destruktiver Fristen-Aenderungsversuch ist
+                # sonst forensisch nicht rekonstruierbar.
+                "changes": _changed_values(before, after, changed),
+            },
         )
     return settings_obj
 
@@ -103,7 +160,12 @@ def log_settings_change(settings_obj, user, before_snapshot):
             action=AuditLog.Action.SETTINGS_CHANGE,
             target_type="Settings",
             target_id=str(settings_obj.pk),
-            detail={"changed_fields": changed},
+            detail={
+                "changed_fields": changed,
+                # Security N8 (Refs #1445): identisches Detail-Schema wie
+                # update_settings (Admin-Pfad) — value-sichere Alt-/Neu-Werte.
+                "changes": _changed_values(before_snapshot, after, changed),
+            },
         )
     return changed
 

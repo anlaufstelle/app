@@ -118,6 +118,20 @@ class TestSettingsChangeAudit:
         ).latest("timestamp")
         assert "Geheime Einrichtung XYZ" not in str(entry.detail)
         assert "facility_full_name" in entry.detail.get("changed_fields", [])
+        # Security N8 (Refs #1445): free-text/PII-Feld darf auch nicht ueber die
+        # neue changes-Map leaken — facility_full_name steht nicht auf der
+        # value-safe Allowlist, also kein Wert im detail.
+        assert "facility_full_name" not in entry.detail.get("changes", {})
+
+    def test_settings_change_audit_contains_old_and_new_values(self, settings_obj, staff_user):
+        """Security N8 (Refs #1445): destruktive Fristen-Aenderungen muessen
+        forensisch mit Alt-/Neu-Wert rekonstruierbar sein."""
+        update_settings(settings_obj, staff_user, retention_identified_days=400)
+        entry = AuditLog.objects.filter(
+            action=AuditLog.Action.SETTINGS_CHANGE,
+            target_id=str(settings_obj.pk),
+        ).latest("timestamp")
+        assert entry.detail["changes"]["retention_identified_days"] == {"old": 365, "new": 400}
 
     @pytest.mark.parametrize(
         ("field", "new_value"),
