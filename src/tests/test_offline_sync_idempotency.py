@@ -733,13 +733,9 @@ class TestWorkItemStatusIdempotency:
         key = str(uuid.uuid4())
         payload = {"status": "in_progress", "expected_updated_at": self._fresh_token(sample_workitem)}
 
-        r1 = client.post(
-            self._url(sample_workitem), payload, HTTP_X_IDEMPOTENCY_KEY=key, HTTP_HX_REQUEST="true"
-        )
+        r1 = client.post(self._url(sample_workitem), payload, HTTP_X_IDEMPOTENCY_KEY=key, HTTP_HX_REQUEST="true")
         assert r1.status_code == 200
-        r2 = client.post(
-            self._url(sample_workitem), payload, HTTP_X_IDEMPOTENCY_KEY=key, HTTP_HX_REQUEST="true"
-        )
+        r2 = client.post(self._url(sample_workitem), payload, HTTP_X_IDEMPOTENCY_KEY=key, HTTP_HX_REQUEST="true")
         assert r2.status_code == 200
         assert r2["Content-Type"].startswith("text/html")
 
@@ -753,14 +749,10 @@ class TestWorkItemStatusIdempotency:
             "hide": "1",
             "expected_updated_at": self._fresh_token(sample_workitem),
         }
-        r1 = client.post(
-            self._url(sample_workitem), payload, HTTP_X_IDEMPOTENCY_KEY=key, HTTP_HX_REQUEST="true"
-        )
+        r1 = client.post(self._url(sample_workitem), payload, HTTP_X_IDEMPOTENCY_KEY=key, HTTP_HX_REQUEST="true")
         assert r1.status_code == 200
         assert r1.content == b""
-        r2 = client.post(
-            self._url(sample_workitem), payload, HTTP_X_IDEMPOTENCY_KEY=key, HTTP_HX_REQUEST="true"
-        )
+        r2 = client.post(self._url(sample_workitem), payload, HTTP_X_IDEMPOTENCY_KEY=key, HTTP_HX_REQUEST="true")
         assert r2.status_code == 200
         assert r2.content == b""
 

@@ -15,10 +15,11 @@
 
 importScripts("/static/js/url-patterns.js");
 
-// Refs #1412 (M17b): v16 -> v17 -- offline-store.js/offline-home.js/offline.html
-// (alle drei im APP_SHELL precached) tragen neue Quota-/Persist-Status-Logik;
-// der Bump erzwingt bei Bestandsnutzern Re-Install + Re-Precache.
-const CACHE_NAME = "anlaufstelle-v17";
+// Refs #1419: v17 -> v18 -- url-patterns.js (precached + importScripts)
+// nimmt WORKITEM_STATUS in QUEUE_PATTERNS auf; der Bump erzwingt bei
+// Bestandsnutzern Re-Install + Re-Precache, damit auch der laufende SW die
+// neuen Queue-Regeln laedt.
+const CACHE_NAME = "anlaufstelle-v18";
 // Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
 // ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
 // auch beim ersten Offline-Aufruf garantiert verfuegbar ist.

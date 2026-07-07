@@ -32,6 +32,7 @@
                     {# Refs #1130: zwei getrennte positive Aktionen — übernehmen (in_progress) und direkt erledigen (done ohne Zwischenstatus). #}
                     <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}">
                         {% csrf_token %}
+                        <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
                         <input type="hidden" name="status" value="in_progress">
                         <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
                         <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100">
@@ -42,6 +43,7 @@
                     <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}"
                           data-confirm="{% trans 'Aufgabe als erledigt markieren? Die Aufgabe wird als erledigt gespeichert und erscheint nicht mehr bei offenen Aufgaben.' %}">
                         {% csrf_token %}
+                        <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
                         <input type="hidden" name="status" value="done">
                         <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
                         <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100">
@@ -52,6 +54,7 @@
                     <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}"
                           data-confirm="{% trans 'Aufgabe als nicht relevant schließen? Sie wird als verworfen markiert und erscheint nicht mehr bei den offenen Aufgaben. Sie wird nicht gelöscht und bleibt weiterhin nachvollziehbar.' %}">
                         {% csrf_token %}
+                        <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
                         <input type="hidden" name="status" value="dismissed">
                         <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
                         <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-canvas text-ink-muted hover:bg-canvas">
@@ -63,6 +66,7 @@
                     <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}"
                           data-confirm="{% trans 'Aufgabe als erledigt markieren? Die Aufgabe wird als erledigt gespeichert und erscheint nicht mehr bei offenen Aufgaben.' %}">
                         {% csrf_token %}
+                        <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
                         <input type="hidden" name="status" value="done">
                         <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
                         <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-green-50 text-green-700 hover:bg-green-100">
@@ -71,6 +75,7 @@
                     </form>
                     <form method="post" action="{% url 'core:workitem_status_update' pk=workitem.pk %}">
                         {% csrf_token %}
+                        <input type="hidden" name="expected_updated_at" value="{{ workitem.updated_at.isoformat }}">
                         <input type="hidden" name="status" value="open">
                         <input type="hidden" name="next" value="{% url 'core:workitem_detail' pk=workitem.pk %}">
                         <button type="submit" class="px-3 py-1 text-xs font-medium rounded-md bg-canvas text-ink-muted hover:bg-canvas">

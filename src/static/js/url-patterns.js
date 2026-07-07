@@ -20,6 +20,10 @@
         EVENT_EDIT: new RegExp("/events/" + UUID + "/edit/", "i"),
         WORKITEM_NEW: /\/workitems\/new\//,
         WORKITEM_EDIT: new RegExp("/workitems/" + UUID + "/edit/", "i"),
+        // Refs #1419: Status-Uebergaenge (Uebernehmen/Erledigt/Verwerfen/
+        // Zuruecksetzen) — HTMX-POSTs der Inbox-Karten bzw. Formular-POSTs
+        // der Detailseite, unter dem /partials/-Praefix (urls.py).
+        WORKITEM_STATUS: new RegExp("/partials/workitems/" + UUID + "/status/", "i"),
         CLIENT_DETAIL: CLIENT_DETAIL_RE,
         CONFLICT_REVIEW: CONFLICT_REVIEW_RE,
         // Refs #751: Attachment-Downloads liefern Binärdaten, dürfen nicht
@@ -40,6 +44,7 @@
         self.URL_PATTERNS.EVENT_EDIT,
         self.URL_PATTERNS.WORKITEM_NEW,
         self.URL_PATTERNS.WORKITEM_EDIT,
+        self.URL_PATTERNS.WORKITEM_STATUS,
     ];
     self.URL_PATTERNS.extractClientPk = function (url) {
         var m = CLIENT_DETAIL_RE.exec(url);

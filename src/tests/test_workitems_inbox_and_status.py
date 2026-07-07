@@ -762,9 +762,7 @@ class TestUpdateWorkItemStatusVersionCheck:
 
     def test_stale_token_raises_validation_error(self, staff_user, workitem_open):
         with pytest.raises(ValidationError):
-            update_workitem_status(
-                workitem_open, "done", staff_user, expected_updated_at="2000-01-01T00:00:00+00:00"
-            )
+            update_workitem_status(workitem_open, "done", staff_user, expected_updated_at="2000-01-01T00:00:00+00:00")
         workitem_open.refresh_from_db()
         assert workitem_open.status == WorkItem.Status.OPEN
 

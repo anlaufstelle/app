@@ -273,11 +273,28 @@
                     // through offline-edit.js, but generic queue entries
                     // (e.g. from an offline CREATE-then-EDIT roll-up) may
                     // still hit this branch.
+                    //
+                    // Refs #1419 (zugleich Baustein (a) von #1390): den
+                    // maschinenlesbaren Server-Stand aus dem 409-Body am
+                    // Record persistieren — im verschluesselten data-Envelope,
+                    // weil server_state Titel/Beschreibung traegt. Damit kann
+                    // die M8-Liste den Konflikt fachlich rendern (Dein Status
+                    // vs. Server-Stand) und per "Erneut anwenden" mit frischem
+                    // Token aufloesen. Kein JSON-Body (aeltere Server,
+                    // Proxy-Fehlerseite): Konflikt bleibt generisch renderbar.
+                    let conflict = null;
+                    try {
+                        const body = await response.json();
+                        conflict = { error: body.error || "conflict", serverState: body.server_state || null };
+                    } catch (_jsonErr) {
+                        /* kein/kaputter JSON-Body — generischer Konflikt */
+                    }
                     await _store().putEncrypted("queue", {
                         ...record,
                         attempts: (record.attempts || 0) + 1,
                         lastError: "409",
                         localStatus: "conflict",
+                        data: conflict ? { ...record.data, conflict: conflict } : record.data,
                     });
                     continue; // try the next queued record, don't halt
                 } else if (response.status === 422 || response.status === 400) {

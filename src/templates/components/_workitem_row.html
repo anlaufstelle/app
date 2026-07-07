@@ -90,19 +90,19 @@ kann.
     <p class="text-[13px] text-ink-soft mb-3">{{ wi.description|truncatewords:20 }}</p>
     {% endif %}
 
-    {# Status-Buttons #}
+    {# Status-Buttons. Refs #1419: expected_updated_at gehoert in jeden Status-POST — es ist das Optimistic-Lock-Token des Offline-Payloads (der SW friert den Button-Body beim Queueing ein); online wertet der Server es bewusst nicht aus (Status-LWW bleibt). #}
     <div class="flex items-center gap-2">
         {% if wi.status == "open" %}
         {# Refs #1146: Tabellenaktionen mit der Einzelansicht (#1130/#1147) vereinheitlicht — „Übernehmen" (in_progress), direkter „Als erledigt markieren"-Pfad und „Als nicht relevant schließen" statt „Verwerfen". Die abschließenden Aktionen (erledigt/verworfen) fragen vor dem Statuswechsel per hx-confirm nach (HTMX-Buttons, wie bei Goals/Retention). #}
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
-                hx-vals='{"status": "in_progress"}'
+                hx-vals='{"status": "in_progress", "expected_updated_at": "{{ wi.updated_at.isoformat }}"}'
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
                 class="px-3 py-1 text-[12px] font-semibold rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100">
             {% trans "Übernehmen" %}
         </button>
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
-                hx-vals='{"status": "done"{% if hide_on_complete %}, "hide": "1"{% endif %}}'
+                hx-vals='{"status": "done", "expected_updated_at": "{{ wi.updated_at.isoformat }}"{% if hide_on_complete %}, "hide": "1"{% endif %}}'
                 hx-confirm="{% trans 'Aufgabe als erledigt markieren? Die Aufgabe wird als erledigt gespeichert und erscheint nicht mehr bei offenen Aufgaben.' %}"
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
@@ -110,7 +110,7 @@ kann.
             {% trans "Als erledigt markieren" %}
         </button>
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
-                hx-vals='{"status": "dismissed"{% if hide_on_complete %}, "hide": "1"{% endif %}}'
+                hx-vals='{"status": "dismissed", "expected_updated_at": "{{ wi.updated_at.isoformat }}"{% if hide_on_complete %}, "hide": "1"{% endif %}}'
                 hx-confirm="{% trans 'Aufgabe als nicht relevant schließen? Sie wird als verworfen markiert und erscheint nicht mehr bei den offenen Aufgaben. Sie wird nicht gelöscht und bleibt weiterhin nachvollziehbar.' %}"
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
@@ -120,7 +120,7 @@ kann.
         {% elif wi.status == "in_progress" %}
         {# Refs #1147: Bestätigung vor dem Statuswechsel auf erledigt — abschließende Wirkung. HTMX-Button, daher hx-confirm (wie Goals/Retention) statt data-confirm. #}
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
-                hx-vals='{"status": "done"{% if hide_on_complete %}, "hide": "1"{% endif %}}'
+                hx-vals='{"status": "done", "expected_updated_at": "{{ wi.updated_at.isoformat }}"{% if hide_on_complete %}, "hide": "1"{% endif %}}'
                 hx-confirm="{% trans 'Aufgabe als erledigt markieren? Die Aufgabe wird als erledigt gespeichert und erscheint nicht mehr bei offenen Aufgaben.' %}"
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
@@ -128,7 +128,7 @@ kann.
             {% trans "Erledigt" %}
         </button>
         <button hx-post="{% url 'core:workitem_status_update' pk=wi.pk %}"
-                hx-vals='{"status": "open"}'
+                hx-vals='{"status": "open", "expected_updated_at": "{{ wi.updated_at.isoformat }}"}'
                 hx-target="#workitem-{{ wi.pk }}"
                 hx-swap="outerHTML"
                 class="px-3 py-1 text-[12px] font-semibold rounded-md bg-canvas text-ink-muted hover:bg-canvas">

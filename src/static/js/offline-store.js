@@ -1107,15 +1107,38 @@
      */
     async function listQueueEntries() {
         const rows = await listDecrypted("queue");
-        return rows.map((r) => ({
-            id: r.id,
-            url: r.url,
-            createdAt: r.createdAt,
-            attempts: r.attempts || 0,
-            lastError: r.lastError || "",
-            localStatus: r.localStatus || null,
-            method: (r.data && r.data.method) || "",
-        }));
+        return rows.map((r) => {
+            const entry = {
+                id: r.id,
+                url: r.url,
+                createdAt: r.createdAt,
+                attempts: r.attempts || 0,
+                lastError: r.lastError || "",
+                localStatus: r.localStatus || null,
+                method: (r.data && r.data.method) || "",
+            };
+            // Refs #1419: fuer WorkItem-Status-Rows eine fachliche
+            // Konflikt-Sicht ableiten, damit die M8-Liste "Dein Status vs.
+            // Server-Stand" rendern kann — weiterhin KEIN Roh-Body an die
+            // UI, nur der Ziel-Status aus dem gequeuten Body plus der beim
+            // 409 persistierte server_state (offline-queue.js).
+            const patterns = (typeof self !== "undefined" && self.URL_PATTERNS) || null;
+            if (patterns && patterns.WORKITEM_STATUS && patterns.WORKITEM_STATUS.test(r.url || "")) {
+                let intended = null;
+                try {
+                    intended = new URLSearchParams((r.data && r.data.body) || "").get("status");
+                } catch (_e) {
+                    /* Body nicht parsebar — generische Darstellung */
+                }
+                const conflict = (r.data && r.data.conflict) || null;
+                entry.statusConflict = {
+                    intendedStatus: intended,
+                    serverState: (conflict && conflict.serverState) || null,
+                    conflictError: (conflict && conflict.error) || null,
+                };
+            }
+            return entry;
+        });
     }
 
     /*
@@ -1131,6 +1154,40 @@
     async function discardQueueEntry(id) {
         // Nutzeraktion (S1-Ausnahme 1) → delete erlaubt.
         return db.queue.delete(id);
+    }
+
+    /*
+     * Nutzeraktion "Erneut anwenden" fuer einen Status-Konflikt (Refs #1419):
+     * uebernimmt das updated_at des beim 409 persistierten Server-Stands als
+     * frisches expected_updated_at in den gequeuten Body und gibt die Row
+     * wieder fuer den Auto-Replay frei. Der naechste Replay wendet die Aktion
+     * damit gegen exakt den Stand an, den die Nutzer:in im Konflikt-Dialog
+     * GESEHEN hat — aendert sich der Server zwischenzeitlich erneut, kommt
+     * wieder ein 409 (kein blindes LWW). Body-Rewrite erfordert Decrypt +
+     * Re-Encrypt (anders als retryQueueEntry, das nur Row-Metadaten anfasst).
+     */
+    async function reapplyQueueEntryWithServerVersion(id) {
+        const row = await getDecrypted("queue", id);
+        if (!row) {
+            throw new Error("QueueRowNotFound");
+        }
+        const conflict = (row.data && row.data.conflict) || null;
+        const serverState = (conflict && conflict.serverState) || null;
+        if (!serverState || !serverState.updated_at) {
+            throw new Error("NoServerState");
+        }
+        const params = new URLSearchParams((row.data && row.data.body) || "");
+        params.set("expected_updated_at", serverState.updated_at);
+        const data = { ...row.data, body: params.toString() };
+        delete data.conflict;
+        return putEncrypted("queue", {
+            ...row,
+            data: data,
+            localStatus: null,
+            retryAfter: 0,
+            attempts: 0,
+            lastError: "",
+        });
     }
 
     /*
@@ -1282,6 +1339,7 @@
         // Refs #1351/#1384 — generische Queue: Listing + Nutzeraktionen (M8/Task 4)
         listQueueEntries: listQueueEntries,
         retryQueueEntry: retryQueueEntry,
+        reapplyQueueEntryWithServerVersion: reapplyQueueEntryWithServerVersion,
         discardQueueEntry: discardQueueEntry,
         countQueueByStatus: countQueueByStatus,
         // Refs #1356 — persistenter Speicher (Eviction-Schutz)

@@ -13,7 +13,14 @@
      data-label-retried="{% trans 'Erneut aktiviert — wird beim nächsten Online-Kontakt gesendet.' %}"
      data-label-discarded="{% trans 'Verworfen.' %}"
      data-label-action-failed="{% trans 'Aktion fehlgeschlagen. Bitte erneut versuchen.' %}"
-     data-label-workitem="{% trans 'Aufgabe' %}">
+     data-label-workitem="{% trans 'Aufgabe' %}"
+     {# Refs #1419: Status-Anzeigenamen + Labels fuer die Status-Konflikt-Darstellung. #}
+     data-status-open="{% trans 'Offen' %}"
+     data-status-in-progress="{% trans 'In Bearbeitung' %}"
+     data-status-done="{% trans 'Erledigt' %}"
+     data-status-dismissed="{% trans 'Verworfen' %}"
+     data-label-your-status="{% trans 'Deine Änderung:' %}"
+     data-label-server-status="{% trans 'Inzwischen auf dem Server:' %}">
 
     <div class="flex items-center justify-between">
         <div>
@@ -58,13 +65,32 @@
                         <div class="min-w-0">
                             <span class="text-sm font-medium text-ink truncate" x-text="item.label"></span>
                             <span class="badge bg-red-100 text-red-800 ml-2">{% trans "Konflikt" %}</span>
+                            {# Refs #1419: Status-Konflikt fachlich rendern — Ziel-Status der Nutzer:in vs. zwischenzeitlicher Server-Stand (aus dem beim 409 persistierten server_state). #}
+                            <template x-if="item.isStatusConflict">
+                                <div class="mt-0.5 text-xs text-ink-muted" data-testid="queue-conflict-status-detail">
+                                    <span x-text="item.yourStatusText"></span>
+                                    <span class="mx-1">&middot;</span>
+                                    <span x-text="item.serverStatusText"></span>
+                                    <span class="ml-1" x-text="item.serverUpdatedAtFmt"></span>
+                                </div>
+                            </template>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                            <button type="button" @click="retryQueueEntry(item.id)"
-                                    class="text-xs text-accent hover:underline"
-                                    :data-testid="'queue-conflict-retry-' + item.id">
-                                {% trans "Erneut versuchen" %}
-                            </button>
+                            {# Refs #1419: "Erneut anwenden" setzt das Versions-Token auf den gezeigten Server-Stand und spielt die Aktion sofort nach — nur moeglich, wenn ein server_state persistiert wurde. #}
+                            <template x-if="item.isStatusConflict">
+                                <button type="button" @click="reapplyQueueEntry(item.id)"
+                                        class="text-xs text-accent hover:underline"
+                                        :data-testid="'queue-conflict-reapply-' + item.id">
+                                    {% trans "Erneut anwenden" %}
+                                </button>
+                            </template>
+                            <template x-if="!item.isStatusConflict">
+                                <button type="button" @click="retryQueueEntry(item.id)"
+                                        class="text-xs text-accent hover:underline"
+                                        :data-testid="'queue-conflict-retry-' + item.id">
+                                    {% trans "Erneut versuchen" %}
+                                </button>
+                            </template>
                             <button type="button" @click="discardQueueEntry(item.id)"
                                     class="text-xs text-red-700 hover:underline"
                                     :data-testid="'queue-conflict-discard-' + item.id">
