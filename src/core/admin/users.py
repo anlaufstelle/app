@@ -28,6 +28,11 @@ def unlock_selected_users(modeladmin, request, queryset):
 
     unlocked = 0
     for user in queryset:
+        # N9 (Refs #1446): BEWUSST ohne ip_address — die Admin-Aktion fragt
+        # „ist dieser Account überhaupt (von irgendeiner IP) gesperrt?" und soll
+        # ihn dann ganz freigeben. Die IP-scoped-Prüfung (nur die aktuelle
+        # Admin-IP) wäre hier falsch — sie würde reale Sperren von fremden IPs
+        # übersehen. Legacy-Verhalten (alle Fehlversuche zählen) ist korrekt.
         if user_is_locked(user):
             unlock_user(user, unlocked_by=request.user, ip_address=get_client_ip(request))
             unlocked += 1

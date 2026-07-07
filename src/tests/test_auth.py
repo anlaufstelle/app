@@ -369,34 +369,41 @@ class TestRateLimiting:
 
 @pytest.mark.django_db
 class TestLoginLockoutService:
-    def _failed(self, user):
+    # Refs #1446: Default-Quell-IP der Same-IP-Alt-Tests — die Fehlversuche
+    # tragen jetzt eine IP und der Lockout zählt je (User, IP). Same-IP-
+    # Aggregation bleibt unverändert; Angreifer-/Opfer-Szenarien geben die IP
+    # explizit an.
+    _IP = "203.0.113.77"
+
+    def _failed(self, user, ip_address=None):
         return AuditLog.objects.create(
             facility=user.facility,
             user=user,
             action=AuditLog.Action.LOGIN_FAILED,
+            ip_address=ip_address or self._IP,
             detail={"username": user.username},
         )
 
     def test_not_locked_without_failed_attempts(self, staff_user):
         from core.services.security import is_locked
 
-        assert is_locked(staff_user) is False
+        assert is_locked(staff_user, ip_address=self._IP) is False
 
     def test_locked_after_threshold(self, staff_user):
         from core.services.security import LOCKOUT_THRESHOLD, is_locked
 
         for _ in range(LOCKOUT_THRESHOLD):
             self._failed(staff_user)
-        assert is_locked(staff_user) is True
+        assert is_locked(staff_user, ip_address=self._IP) is True
 
     def test_not_locked_after_unlock(self, staff_user, admin_user):
         from core.services.security import LOCKOUT_THRESHOLD, is_locked, unlock
 
         for _ in range(LOCKOUT_THRESHOLD):
             self._failed(staff_user)
-        assert is_locked(staff_user) is True
+        assert is_locked(staff_user, ip_address=self._IP) is True
         unlock(staff_user, unlocked_by=admin_user)
-        assert is_locked(staff_user) is False
+        assert is_locked(staff_user, ip_address=self._IP) is False
 
     def test_unlock_only_affects_prior_failures(self, staff_user, admin_user):
         from core.services.security import LOCKOUT_THRESHOLD, is_locked, unlock
@@ -407,9 +414,9 @@ class TestLoginLockoutService:
         # Neue Fehlversuche nach Unlock zählen wieder bis zum Threshold.
         for _ in range(LOCKOUT_THRESHOLD - 1):
             self._failed(staff_user)
-        assert is_locked(staff_user) is False
+        assert is_locked(staff_user, ip_address=self._IP) is False
         self._failed(staff_user)
-        assert is_locked(staff_user) is True
+        assert is_locked(staff_user, ip_address=self._IP) is True
 
     def test_old_failures_outside_window_ignored(self, staff_user):
         from datetime import timedelta
@@ -427,7 +434,7 @@ class TestLoginLockoutService:
         future = timezone.now() + LOCKOUT_WINDOW + timedelta(minutes=5)
         with patch.object(login_lockout, "timezone") as mock_tz:
             mock_tz.now.return_value = future
-            assert is_locked(staff_user) is False
+            assert is_locked(staff_user, ip_address=self._IP) is False
 
     def test_none_user_is_not_locked(self, db):
         from core.services.security import is_locked
@@ -439,8 +446,43 @@ class TestLoginLockoutService:
 
         for _ in range(LOCKOUT_THRESHOLD):
             self._failed(staff_user)
-        assert is_locked(staff_user) is True
-        assert is_locked(lead_user) is False
+        assert is_locked(staff_user, ip_address=self._IP) is True
+        assert is_locked(lead_user, ip_address=self._IP) is False
+
+    # --- N9 (Refs #1446): Lockout je Quell-IP statt global je Username ---
+
+    def test_failures_from_other_ip_do_not_lock_victims_login(self, staff_user):
+        """Refs #1446: Falschpasswörter von einer Angreifer-IP dürfen den Login
+        des Opfers von dessen EIGENER IP nicht sperren — der Lockout zählt je
+        Quell-IP, nicht global je Username (sonst gezielter Verfügbarkeits-DoS
+        gegen bekannte Usernamen)."""
+        from core.services.security import LOCKOUT_THRESHOLD, is_locked
+
+        for _ in range(LOCKOUT_THRESHOLD):
+            self._failed(staff_user, ip_address="198.51.100.9")  # Angreifer-IP
+        # Prüfung aus Sicht des Opfer-Logins (eigene IP): NICHT gesperrt.
+        assert is_locked(staff_user, ip_address="203.0.113.5") is False
+
+    def test_failures_from_same_ip_still_lock(self, staff_user):
+        """Refs #1446: Klassischer Single-Source-Bruteforce (10× von derselben
+        IP) sperrt dieses (User, IP)-Paar weiterhin — Kern-Schutz bleibt."""
+        from core.services.security import LOCKOUT_THRESHOLD, is_locked
+
+        for _ in range(LOCKOUT_THRESHOLD):
+            self._failed(staff_user, ip_address="198.51.100.9")
+        assert is_locked(staff_user, ip_address="198.51.100.9") is True
+
+    def test_lockout_without_ip_context_counts_all(self, staff_user):
+        """Refs #1446: Ohne IP-Kontext (Alt-Aufrufer / Admin-Anzeige) zählt der
+        Lockout konservativ ALLE Fehlversuche quer über alle Quell-IPs — das
+        Legacy-Verhalten bleibt erhalten. Pro Einzel-IP liegt die Zahl unter
+        dem Threshold, sodass die IP-scoped-Prüfung nicht greift."""
+        from core.services.security import LOCKOUT_THRESHOLD, is_locked
+
+        for i in range(LOCKOUT_THRESHOLD):
+            self._failed(staff_user, ip_address=f"198.51.100.{i % 2}")
+        assert is_locked(staff_user) is True  # ohne IP → alle zählen
+        assert is_locked(staff_user, ip_address="198.51.100.0") is False  # nur 5 < Threshold
 
 
 @pytest.mark.django_db
@@ -455,6 +497,10 @@ class TestLoginLockoutIntegration:
                 facility=staff_user.facility,
                 user=staff_user,
                 action=AuditLog.Action.LOGIN_FAILED,
+                # Refs #1446: Same-IP-Sperre — 127.0.0.1 ist die Client-IP des
+                # Test-Clients (REMOTE_ADDR ohne XFF-Header), sodass der jetzt
+                # IP-scoped Lockout auch den Test-Login-POST greift.
+                ip_address="127.0.0.1",
                 detail={"username": staff_user.username},
             )
         response = client.post(
@@ -480,6 +526,7 @@ class TestLoginLockoutIntegration:
                 facility=staff_user.facility,
                 user=staff_user,
                 action=AuditLog.Action.LOGIN_FAILED,
+                ip_address="127.0.0.1",  # Refs #1446: Client-IP des Test-Clients
                 detail={"username": staff_user.username},
             )
         unlock(staff_user, unlocked_by=admin_user)
@@ -489,6 +536,38 @@ class TestLoginLockoutIntegration:
         )
         assert response.status_code == 302
         assert response.url == "/"
+
+    def test_attacker_ip_failures_do_not_block_victim_own_ip_login(self, client, staff_user):
+        """Refs #1446 (End-to-End): Ein Angreifer feuert von SEINER IP
+        LOCKOUT_THRESHOLD Fehlversuche gegen einen bekannten Usernamen ab; das
+        Opfer muss sich anschließend von der EIGENEN IP mit korrektem Passwort
+        weiterhin einloggen können.
+
+        Aufbau der Angreifer-Fehlversuche via ORM (Angreifer-IP), nur der
+        entscheidende Opfer-Login wird real gepostet. Der Django-Test-Client
+        setzt ohne ``X-Forwarded-For`` die Client-IP aus ``REMOTE_ADDR``
+        (get_client_ip fällt bei TRUSTED_PROXY_HOPS≥1 ohne XFF darauf zurück).
+        Ratelimit ist in Test-Settings aus → ein einzelner POST trifft das
+        10/h-Username-Limit nicht.
+        """
+        from core.services.security import LOCKOUT_THRESHOLD
+
+        for _ in range(LOCKOUT_THRESHOLD):
+            AuditLog.objects.create(
+                facility=staff_user.facility,
+                user=staff_user,
+                action=AuditLog.Action.LOGIN_FAILED,
+                ip_address="198.51.100.9",  # Angreifer-IP
+                detail={"username": staff_user.username},
+            )
+        response = client.post(
+            "/login/",
+            {"username": "teststaff", "password": "testpass123"},
+            REMOTE_ADDR="203.0.113.5",  # Opfer-IP (≠ Angreifer)
+        )
+        assert response.status_code == 302, "Opfer muss sich von eigener IP einloggen können"
+        assert response.url == "/"
+        assert not response.wsgi_request.user.is_anonymous
 
 
 @pytest.mark.django_db

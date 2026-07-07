@@ -17,6 +17,7 @@ from core.models import AuditLog, User
 from core.services.audit import hmac_hash_email, log_audit_event
 from core.services.security import is_locked
 from core.services.security import unlock as unlock_user
+from core.signals.audit import get_client_ip
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +79,11 @@ class CustomLoginView(auth_views.LoginView):
         # den User zwar geprüft, aber auth_login() noch nicht ausgeführt; es
         # existiert also noch keine gebundene Session, die wir revoken müssten.
         user = form.get_user()
-        if is_locked(user):
+        # N9 (Refs #1446): Lockout je Quell-IP prüfen — fremde Falschpasswörter
+        # sperren nicht den Login des Opfers von dessen eigener IP. Der folgende
+        # "reason=locked"-Audit-Write trägt (über log_audit_event) die Request-IP
+        # mit, sodass der Block je Quell-IP self-sustaining bleibt (gewollt).
+        if is_locked(user, ip_address=get_client_ip(self.request)):
             log_audit_event(
                 self.request,
                 AuditLog.Action.LOGIN_FAILED,

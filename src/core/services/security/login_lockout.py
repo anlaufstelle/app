@@ -39,12 +39,33 @@ from core.services.audit import audit_event
 # es wird bewusst KEINE separate, nicht-gezählte ``LOGIN_BLOCKED``-Action
 # eingeführt. Falls sich die Anforderung ändert (saubere Forensik-Trennung
 # „trug zur Sperre bei" vs. „kam gegen die Sperre"), wäre das der Ansatzpunkt.
+#
+# Lockout-Achse je Quell-IP (N9, Refs #1446): Der Lockout zählt Fehlversuche
+# je (User, Quell-IP) statt global je Username. Ein Unauthentifizierter, der
+# einen (semi-öffentlichen) Usernamen kennt, sperrte sonst mit 10 Falsch-
+# passwörtern gezielt den Login des Opfers — auch von dessen eigener IP —
+# und hielt die Sperre durch Weiteranfeuern self-sustaining. Mit IP-Bindung
+# sperrt der Angreifer nur das Paar (Opfer-Username, Angreifer-IP); das Opfer
+# loggt sich von der eigenen IP normal ein. Das Self-Sustaining bleibt je IP
+# erhalten (der Block-Audit trägt die Angreifer-IP mit). Verteiltes Cross-IP-
+# Raten bleibt durch den Username-Ratelimit in ``views/auth.py`` (10/h GESAMT,
+# Refs #598) gedeckelt — dieser bleibt bewusst rein username-basiert, damit
+# rotierende IPs ihn nicht umgehen. Alt-Aufrufer ohne Request-Kontext (CLI /
+# Admin-Anzeige) rufen ``is_locked(user)`` ohne IP → konservativ zählen dann
+# weiterhin ALLE Fehlversuche (Frage „ist der Account überhaupt gesperrt?").
 LOCKOUT_THRESHOLD = 10
 LOCKOUT_WINDOW = timedelta(minutes=15)
 
 
-def is_locked(user) -> bool:
+def is_locked(user, ip_address=None) -> bool:
     """Return True when the user has reached the lockout threshold.
+
+    ``ip_address`` (N9, Refs #1446): echte Client-IP des AKTUELLEN Versuchs
+    (N1-Resolver ``get_client_ip``). Ist sie gesetzt, zählt nur die Sperre
+    dieser Quell-IP — fremde Falschpasswörter sperren den Login des Opfers von
+    dessen eigener IP nicht mehr. Ist sie ``None`` (Alt-Aufrufer ohne Request:
+    CLI / Admin-Anzeige), bleibt das konservative Legacy-Verhalten (alle
+    Fehlversuche des Users zählen, quer über alle IPs).
 
     Refs #737: ``transaction.atomic`` + ``select_for_update`` auf der
     User-Zeile serialisieren parallele ``is_locked``-Aufrufe fuer
@@ -69,6 +90,9 @@ def is_locked(user) -> bool:
             action=AuditLog.Action.LOGIN_FAILED,
             timestamp__gte=cutoff,
         )
+        if ip_address is not None:
+            # N9 (Refs #1446): Sperre nur je (User, Quell-IP).
+            qs = qs.filter(ip_address=ip_address)
         if last_unlock is not None:
             qs = qs.filter(timestamp__gt=last_unlock.timestamp)
         return qs.count() >= LOCKOUT_THRESHOLD
