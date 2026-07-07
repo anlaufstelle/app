@@ -332,3 +332,191 @@ class TestOfflineWorkItemEventRegression:
             with suppress(Exception):
                 page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
             context.close()
+
+
+# ---------------------------------------------------------------------------
+# Refs #1419: Status-Uebergaenge offline (generische SW-Queue statt des
+# dedizierten kind:"workitem"-Tracks oben). Aus der manuellen Verifikation
+# abgeleitet (AGENTS.md: manuell-first).
+
+
+def _seed_facility_workitem(e2e_env, title):
+    """OPEN WorkItem ohne Klienten (Inbox-Karte mit Status-Buttons)."""
+    script = (
+        "from core.models import WorkItem, Facility;"
+        " from core.models.user import User;"
+        " f = Facility.objects.get(name='Hauptstelle');"
+        " u = User.objects.get(username='miriam');"
+        f" w = WorkItem.objects.create(facility=f, created_by=u, title='{title}',"
+        "  item_type='task', priority='normal', status='open');"
+        " print(w.pk)"
+    )
+    return _shell(e2e_env, script)[-1]
+
+
+def _server_dismiss_workitem(e2e_env, wi_pk):
+    """Paralleler Statuswechsel einer Kollegin — schreibt updated_at fort."""
+    return _shell(
+        e2e_env,
+        "from core.models import WorkItem;"
+        f" w = WorkItem.objects.get(pk='{wi_pk}'); w.status='dismissed'; w.save();"
+        " print(w.updated_at.isoformat())",
+    )[-1]
+
+
+def _wait_for_active_service_worker(page):
+    """SW registriert + aktiviert + kontrolliert die Seite (Kopie aus
+    test_pwa_offline.py — Fixtures/Helfer werden per Konvention dieses
+    Verzeichnisses dateilokal kopiert)."""
+    page.evaluate(
+        """
+        async () => {
+            const reg = await navigator.serviceWorker.getRegistration('/');
+            if (!reg) return;
+            const sw = reg.active || reg.installing || reg.waiting;
+            if (!sw || sw.state === 'activated') return;
+            return new Promise((resolve) => {
+                sw.addEventListener('statechange', () => {
+                    if (sw.state === 'activated') resolve();
+                });
+                setTimeout(resolve, 5000);
+            });
+        }
+        """
+    )
+    if not page.evaluate("() => !!navigator.serviceWorker.controller"):
+        page.reload(wait_until="domcontentloaded")
+        page.wait_for_function("() => !!navigator.serviceWorker.controller", timeout=8000)
+
+
+def _poll_server_field(e2e_env, wi_pk, field, expected, timeout_s=20):
+    """Server-Stand pollen, bis der Replay angewendet hat (oder Timeout)."""
+    import time as _time
+
+    deadline = _time.time() + timeout_s
+    value = None
+    while _time.time() < deadline:
+        value = _server_workitem_field(e2e_env, wi_pk, field)
+        if value == expected:
+            return value
+        _time.sleep(1)
+    return value
+
+
+class TestOfflineWorkItemStatus:
+    """Refs #1419: Status-Uebergaenge laufen offline ueber die generische
+    SW-Queue (WORKITEM_STATUS in QUEUE_PATTERNS) und werden beim Reconnect
+    idempotent + versions-geprueft nachgespielt."""
+
+    def test_offline_status_click_queues_and_replays_on_reconnect(self, browser, base_url, e2e_env):
+        """Szenario A der manuellen Verifikation: Inbox offen, Verbindung
+        weg, Klick auf „Uebernehmen" → SW queued (Flash-Banner) → Reconnect
+        → Replay wendet an (in_progress + Auto-Assign auf miriam)."""
+        wi_pk = _seed_facility_workitem(e2e_env, f"E2E-Status-Toggle-{uuid.uuid4().hex[:6]}")
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        page.on("dialog", lambda d: d.accept())
+        try:
+            _do_real_login(page, base_url)
+            page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+            _wait_for_active_service_worker(page)
+
+            _go_offline(page)
+            card = page.locator(f"#workitem-{wi_pk}")
+            card.scroll_into_view_if_needed()
+            card.get_by_role("button", name="Übernehmen").click()
+            # SW-Queued-Antwort landet als Flash-Banner (HX-Retarget).
+            page.wait_for_selector("#flash-messages div", timeout=15000)
+            assert _server_workitem_field(e2e_env, wi_pk, "status") == "open", (
+                "Server darf offline noch keinen Statuswechsel sehen"
+            )
+
+            _go_online(page)
+            status = _poll_server_field(e2e_env, wi_pk, "status", "in_progress")
+            assert status == "in_progress", f"Replay hat den Status nicht angewendet: {status}"
+            assignee = _server_workitem_assignee_by_pk(e2e_env, wi_pk)
+            assert assignee == "miriam", f"Auto-Assign beim Replay fehlt: {assignee}"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_offline_status_conflict_resolvable_in_conflict_list(self, browser, base_url, e2e_env):
+        """Szenario B: waehrend der Offline-Klick („Erledigt") in der Queue
+        liegt, stellt eine Kollegin das Item auf „Verworfen" (updated_at
+        schreitet fort) → Replay kassiert 409 → M8-Liste zeigt den
+        Status-Konflikt fachlich (Titel, Deine Aenderung vs. Server-Stand)
+        → „Erneut anwenden" setzt das Token auf den gezeigten Server-Stand
+        und wendet an; die Row verschwindet nach dem Erfolg."""
+        title = f"E2E-Status-Konflikt-{uuid.uuid4().hex[:6]}"
+        wi_pk = _seed_facility_workitem(e2e_env, title)
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        page.on("dialog", lambda d: d.accept())
+        try:
+            _do_real_login(page, base_url)
+            page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+            _wait_for_active_service_worker(page)
+
+            _go_offline(page)
+            card = page.locator(f"#workitem-{wi_pk}")
+            card.scroll_into_view_if_needed()
+            card.get_by_role("button", name="Als erledigt markieren").click()
+            page.wait_for_selector("#flash-messages div", timeout=15000)
+
+            _server_dismiss_workitem(e2e_env, wi_pk)
+
+            _go_online(page)
+            # Erst auf DIESER Seite warten, bis der Replay die Row als 409
+            # klassifiziert hat — eine sofortige Navigation wuerde den
+            # laufenden Replay-Fetch abbrechen (Row bliebe pending, die
+            # Konflikt-Liste unten liefe in den Timeout). Python-seitiges
+            # Polling statt wait_for_function: dessen Poll wertet ein
+            # async-Praedikat als (immer truthy) Promise, nicht als Ergebnis.
+            import time as _time
+
+            deadline = _time.time() + 20
+            rows = []
+            while _time.time() < deadline:
+                rows = page.evaluate("async () => await window.offlineStore.listQueueEntries()")
+                if len(rows) == 1 and rows[0]["localStatus"] == "conflict":
+                    break
+                _time.sleep(0.5)
+            assert rows and rows[0]["localStatus"] == "conflict", f"Row nicht als Konflikt klassifiziert: {rows!r}"
+            page.goto(f"{base_url}/offline/conflicts/", wait_until="domcontentloaded")
+            page.wait_for_selector("[data-testid='conflict-list-view']", timeout=15000)
+            page.wait_for_selector("[data-testid='queue-conflict-item']", timeout=15000)
+            # 409 darf nichts angewendet haben — der parallele Stand gewinnt.
+            assert _server_workitem_field(e2e_env, wi_pk, "status") == "dismissed"
+
+            row = page.locator("[data-testid='queue-conflict-item']")
+            assert title in row.inner_text(), "Konflikt-Row muss den Aufgaben-Titel tragen"
+            detail = page.locator("[data-testid='queue-conflict-status-detail']")
+            detail.wait_for(state="visible", timeout=10000)
+            detail_text = detail.inner_text()
+            assert "Erledigt" in detail_text and "Verworfen" in detail_text, (
+                f"Status-Konflikt muss beide Staende zeigen: {detail_text!r}"
+            )
+
+            page.locator("[data-testid^='queue-conflict-reapply-']").click()
+            status = _poll_server_field(e2e_env, wi_pk, "status", "done")
+            assert status == "done", f"Erneut-anwenden hat nicht angewendet: {status}"
+            page.wait_for_function(
+                "() => document.querySelectorAll(\"[data-testid='queue-conflict-item']\").length === 0",
+                timeout=15000,
+            )
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+
+def _server_workitem_assignee_by_pk(e2e_env, wi_pk):
+    return _shell(
+        e2e_env,
+        "from core.models import WorkItem;"
+        f" w = WorkItem.objects.get(pk='{wi_pk}');"
+        " print(w.assigned_to.username if w.assigned_to else 'NONE')",
+    )[-1]
