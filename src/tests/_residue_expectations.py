@@ -52,6 +52,11 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     # ---- core_event ------------------------------------------------------
     pii("core_event", "data_json"),
     pii("core_event", "search_text"),
+    non_pii(
+        "core_event",
+        "idempotency_key",
+        reason="Client-generierter Zufalls-Dedup-Key (Replay, Review R5/R6), Format-Whitelist, kein Freitext.",
+    ),
     # ---- core_case -------------------------------------------------------
     pii("core_case", "title"),
     pii("core_case", "description"),
@@ -63,6 +68,11 @@ COLUMN_CLASSIFICATION: tuple[ColRule, ...] = (
     non_pii("core_workitem", "status", reason="Enum (open/in_progress/done/dismissed), kein Freitext."),
     non_pii("core_workitem", "priority", reason="Enum (normal/important/urgent), kein Freitext."),
     non_pii("core_workitem", "recurrence", reason="Enum (none/weekly/.../yearly), kein Freitext."),
+    non_pii(
+        "core_workitem",
+        "idempotency_key",
+        reason="Client-generierter Zufalls-Dedup-Key (Replay, Review R5/R6), Format-Whitelist, kein Freitext.",
+    ),
     # ---- core_documenttype (Konfiguration: Dokumentationstyp-Schema) -----
     non_pii("core_documenttype", "name", reason="Admin-konfigurierter Typ-Name (Label), keine Klientendaten."),
     non_pii("core_documenttype", "category", reason="Enum (contact/service/admin/note)."),
