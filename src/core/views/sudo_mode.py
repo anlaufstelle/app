@@ -1,7 +1,6 @@
 """SudoMode-View — Re-Auth-Form fuer sensible Aktionen (Refs #683)."""
 
 from django.contrib import messages
-from django.contrib.auth import authenticate
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
@@ -26,6 +25,10 @@ class SudoModeView(LoginRequiredMixin, View):
     Sudo-Mode zusätzlich einen frischen 2. Faktor (OTP oder Backup-Code) — ein
     über eine gestohlene Session erbeutetes Passwort allein schaltet sensible
     Aktionen dann nicht frei.
+
+    N7 (Refs #1444): Die Passwortpruefung ist bewusst vom Login-Lockout
+    entkoppelt — Sudo ist eine Re-Auth der bereits angemeldeten Session,
+    kein Login, und Fehlversuche duerfen nicht in den Account-Lockout zaehlen.
     """
 
     template_name = "auth/sudo_mode.html"
@@ -44,8 +47,14 @@ class SudoModeView(LoginRequiredMixin, View):
     def post(self, request):
         next_url = safe_redirect_path(request.POST.get("next"))
         password = request.POST.get("password", "")
-        user = authenticate(request, username=request.user.username, password=password)
-        if user is None or user.pk != request.user.pk:
+        # Security N7 (Refs #1444): KEIN authenticate() — das feuert bei
+        # Fehlversuch user_login_failed, der Receiver schreibt LOGIN_FAILED
+        # und is_locked() zaehlt das in den LOGIN-Lockout (10/15min). Sudo
+        # ist eine Re-Auth der bereits angemeldeten Session, kein Login:
+        # Passwort direkt gegen request.user pruefen. is_active-Check
+        # erhaelt die authenticate()-Semantik (ModelBackend lehnt inaktive
+        # User ab) fuer mid-session deaktivierte Konten.
+        if not request.user.is_active or not request.user.check_password(password):
             # S2 (Refs #1084): Fehlversuche auditieren — symmetrisch zu
             # LOGIN_FAILED/MFA_FAILED, sonst bleibt Brute-Force ueber eine
             # gestohlene Session im Audit-Trail unsichtbar.

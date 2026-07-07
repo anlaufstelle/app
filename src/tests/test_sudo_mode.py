@@ -119,6 +119,63 @@ class TestSudoModeViewPOST:
             action=AuditLog.Action.SUDO_MODE_ENTERED,
         ).exists()
 
+    def test_wrong_password_does_not_write_login_failed(self, client, admin_user):
+        """N7 (Refs #1444): Sudo-Re-Auth darf keinen LOGIN_FAILED-Eintrag
+        erzeugen — sonst speisen Sudo-Fehlversuche den Login-Lockout
+        (is_locked() in login_lockout.py zaehlt genau diese Action)."""
+        admin_user.set_password("test-pw-123")
+        admin_user.save()
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("sudo_mode"),
+            {"password": "WRONG", "next": "/clients/"},
+        )
+        assert response.status_code == 403
+        assert not AuditLog.objects.filter(
+            user=admin_user,
+            action=AuditLog.Action.LOGIN_FAILED,
+        ).exists()
+        # SUDO_MODE_FAILED bleibt das eigene Audit-Signal fuer den Fehlversuch.
+        assert AuditLog.objects.filter(
+            user=admin_user,
+            action=AuditLog.Action.SUDO_MODE_FAILED,
+        ).exists()
+
+    def test_sudo_failures_do_not_feed_login_lockout(self, client, admin_user):
+        """N7 (Refs #1444): Sudo-Fehlversuche duerfen den Login-Lockout weder
+        ausloesen noch daran mitzaehlen — der regulaere Login desselben Users
+        muss trotz kurz vor der Schwelle stehender LOGIN_FAILED-Historie
+        weiter funktionieren."""
+        from core.services.security import LOCKOUT_THRESHOLD, is_locked
+
+        admin_user.set_password("test-pw-123")
+        admin_user.save()
+        for _ in range(LOCKOUT_THRESHOLD - 1):
+            AuditLog.objects.create(
+                facility=admin_user.facility,
+                user=admin_user,
+                action=AuditLog.Action.LOGIN_FAILED,
+                detail={"username": admin_user.username},
+            )
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("sudo_mode"),
+            {"password": "WRONG", "next": "/clients/"},
+        )
+        assert response.status_code == 403
+        assert is_locked(admin_user) is False
+
+        # Regulaerer Login mit korrektem Passwort ist weiterhin moeglich —
+        # frischer Client, da der obige bereits eingeloggt ist.
+        from django.test import Client
+
+        fresh_client = Client()
+        login_response = fresh_client.post(
+            reverse("login"),
+            {"username": admin_user.username, "password": "test-pw-123"},
+        )
+        assert login_response.status_code == 302
+
     def test_open_redirect_protection(self, client, admin_user):
         admin_user.set_password("test-pw-123")
         admin_user.save()
