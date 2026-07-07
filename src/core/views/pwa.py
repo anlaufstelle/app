@@ -1,5 +1,6 @@
 """PWA service worker, manifest and offline-fallback views."""
 
+import json
 import logging
 import re
 from functools import lru_cache
@@ -9,6 +10,7 @@ from django.conf import settings
 from django.contrib.staticfiles.storage import staticfiles_storage
 from django.http import HttpResponse, HttpResponseNotFound
 from django.template.loader import render_to_string
+from django.utils.translation import gettext
 from django.views import View
 
 logger = logging.getLogger(__name__)
@@ -66,6 +68,58 @@ def _resolve_app_shell(content: str) -> str:
     return content[:start] + resolved_block + content[end:]
 
 
+# Refs #1412 (M17): SW-i18n. sw.js hat keinen Django-Template-Kontext; die
+# user-sichtbaren Strings werden pro Request in einen markierten Block injiziert
+# (analog _resolve_app_shell). Die DE-Quellstrings sind zugleich die
+# gettext-msgids — makemessages nimmt sie aus DIESEM Code auf, nicht aus sw.js.
+# Reihenfolge/Schluessel muessen zum SW_I18N-Default in sw.js passen.
+_SW_I18N_START = "// __SW_I18N_START__"
+_SW_I18N_END = "// __SW_I18N_END__"
+
+
+def _sw_i18n_strings() -> dict[str, str]:
+    """Die uebersetzten SW-Strings der aktiven Request-Sprache.
+
+    ``{reason}`` bleibt als Platzhalter im String — der fetch-Handler in sw.js
+    ersetzt ihn client-seitig (der konkrete Fehlergrund existiert nur im SW).
+    """
+    return {
+        "uploadOffline": gettext(
+            "Offline — Datei-Uploads erfordern eine Internetverbindung. Bitte erneut versuchen, sobald Sie online sind."
+        ),
+        "queuePersistFailed": gettext(
+            "Offline — Ihre Eingaben konnten nicht lokal gespeichert werden ({reason}). "
+            "Bitte erneut versuchen, sobald Sie online sind."
+        ),
+        "queuedOk": gettext(
+            "Offline — Ihre Eingaben wurden lokal verschlüsselt und werden bei Verbindung automatisch gesendet."
+        ),
+        "partialBanner": gettext("Offline — dieser Inhalt kann gerade nicht aktualisiert werden."),
+    }
+
+
+def _inject_sw_i18n(content: str) -> str:
+    """Ersetzt den markierten ``SW_I18N``-Default-Block durch die uebersetzten
+    Strings der aktiven Sprache (Refs #1412).
+
+    Nur der Bereich ZWISCHEN den Markern wird ersetzt; die Marker selbst bleiben
+    stehen. Fehlt ein Marker (Quelldrift), bleibt der Inhalt unangetastet — GET
+    /sw.js darf nie 500en (der DE-Default in sw.js greift dann weiter). Der
+    ``json.dumps``-Output ist ein gueltiges JS-Objektliteral (JSON ⊂ JS);
+    ``ensure_ascii=False`` haelt Umlaute/Gedankenstriche lesbar (sw.js wird als
+    UTF-8 ausgeliefert und geparst).
+    """
+    start = content.find(_SW_I18N_START)
+    end = content.find(_SW_I18N_END)
+    if start == -1 or end == -1 or end < start:
+        logger.warning("SW_I18N-Marker nicht gefunden — DE-Default in sw.js bleibt aktiv.")
+        return content
+    marker_end = start + len(_SW_I18N_START)
+    literal = json.dumps(_sw_i18n_strings(), ensure_ascii=False)
+    injected = f"\nconst SW_I18N = {literal};\n"
+    return content[:marker_end] + injected + content[end:]
+
+
 @lru_cache(maxsize=1)
 def _read_manifest():
     """Read and cache the manifest file content."""
@@ -85,6 +139,8 @@ class ServiceWorkerView(View):
         # gehashten) Staticfiles-URLs aufloesen, damit der Precache exakt die
         # von {% static %} referenzierten Assets trifft.
         content = _resolve_app_shell(content)
+        # Refs #1412: user-sichtbare SW-Strings in der Request-Sprache injizieren.
+        content = _inject_sw_i18n(content)
         return HttpResponse(
             content,
             content_type="application/javascript",

@@ -106,6 +106,14 @@
      * kompatibel mit unserer CSP (kein Inline-Script, keine unsafe-*
      * Directives außer den bestehenden für Alpine).
      */
+    // Refs #1412 (M17): Toast-Strings kommen als data-i18n-*-Attribute vom
+    // <body> (base.html, {% trans %}) — kein hartkodiertes deutsches JS-Literal
+    // mehr. Leerer Fallback (etabliertes Muster, vgl. client-row-offline.js),
+    // falls das Attribut mal fehlt.
+    function _i18n(key) {
+        return (document.body && document.body.dataset[key]) || "";
+    }
+
     function _showUpdatePrompt(registration) {
         // Doppel-Trigger verhindern (updatefound kann bei manchen Browsern
         // mehrfach feuern)
@@ -135,7 +143,7 @@
 
         var text = document.createElement("span");
         text.className = "text-sm flex-grow";
-        text.textContent = "Neue Version verfügbar.";
+        text.textContent = _i18n("i18nSwUpdate");
         toast.appendChild(text);
 
         var reloadBtn = document.createElement("button");
@@ -143,7 +151,7 @@
         reloadBtn.className =
             "text-sm font-semibold bg-white text-indigo-700 px-3 py-1 " +
             "rounded hover:bg-indigo-50";
-        reloadBtn.textContent = "Neu laden";
+        reloadBtn.textContent = _i18n("i18nSwReload");
         reloadBtn.addEventListener("click", function () {
             // Refs #1386: Erst hier — auf explizite Bestätigung — wird der
             // wartende SW aufgefordert zu übernehmen. skipWaiting() selbst
@@ -157,7 +165,7 @@
 
         var dismissBtn = document.createElement("button");
         dismissBtn.type = "button";
-        dismissBtn.setAttribute("aria-label", "Schließen");
+        dismissBtn.setAttribute("aria-label", _i18n("i18nSwDismiss"));
         dismissBtn.className = "text-white/70 hover:text-white text-lg leading-none";
         dismissBtn.textContent = "×";
         dismissBtn.addEventListener("click", function () {

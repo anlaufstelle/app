@@ -94,7 +94,9 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v15"' in body, "CACHE_NAME muss bei APP_SHELL-Aenderung gebumpt sein."
+        assert 'CACHE_NAME = "anlaufstelle-v16"' in body, (
+            "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein (#1412)."
+        )
 
     def test_sw_caches_manifest_and_favicon(self, client):
         """Refs #1334: PWA-Manifest (/manifest.json — aus Scope-Gruenden nicht
@@ -519,3 +521,164 @@ class TestHeadMetadata:
         assert 'name="mobile-web-app-capable"' in body, (
             "Modernes mobile-web-app-capable-Meta fehlt (apple-* ist deprecated)"
         )
+
+
+# --- Refs #1412 (M17, Teil a): i18n fuer Service-Worker + offline.html ---------
+
+
+def _login_with_language(client, user, lang):
+    """Setzt ``preferred_language`` und loggt den User ein.
+
+    Die ``UserLanguageMiddleware`` (Refs #670) aktiviert diese Praeferenz pro
+    Request; sowohl ``/offline/`` (render_to_string) als auch ``/sw.js``
+    (Server-Injektion) rendern damit in der Sprache des Users.
+    """
+    user.preferred_language = lang
+    user.save(update_fields=["preferred_language"])
+    client.force_login(user)
+
+
+@pytest.mark.django_db
+class TestOfflineFallbackI18n:
+    """Refs #1412: offline.html traegt keine hartkodierten DE-Strings mehr,
+    sondern ``{% trans %}``/``{% blocktrans %}`` — der Live-Call laeuft durch
+    die Middleware, ``{% trans %}`` nutzt die aktive Sprache des Users.
+    """
+
+    def test_renders_english_for_en_user(self, client, staff_user):
+        _login_with_language(client, staff_user, "en")
+        body = client.get(reverse("offline_fallback")).content.decode()
+        assert '<html lang="en">' in body
+        assert "Offline workspace" in body  # h1 + <title>
+        assert "Go to home page" in body  # Button (reuse bestehender msgid)
+        assert "Try again" in body  # Button (reuse bestehender msgid)
+        assert "Loading offline data" in body  # Lade-Text
+        # Kein DE-Leak der uebersetzten Strings.
+        assert "Offline-Arbeitsplatz" not in body
+        assert "Zur Startseite" not in body
+        assert "Erneut versuchen" not in body
+
+    def test_renders_german_for_de_user(self, client, staff_user):
+        _login_with_language(client, staff_user, "de")
+        body = client.get(reverse("offline_fallback")).content.decode()
+        assert '<html lang="de">' in body
+        assert "Offline-Arbeitsplatz" in body
+        assert "Zur Startseite" in body
+        assert "Erneut versuchen" in body
+        # Kein EN-Leak.
+        assert "Offline workspace" not in body
+
+    def test_anonymous_renders_german_default(self, client):
+        """Anonyme Requests → App-Default (DE), Accept-Language ignoriert."""
+        body = client.get(reverse("offline_fallback")).content.decode()
+        assert '<html lang="de">' in body
+        assert "Offline-Arbeitsplatz" in body
+
+    def test_offline_home_i18n_data_attributes_localized(self, client, staff_user):
+        """Die offline-home.js-Strings kommen als ``data-i18n-*``-Attribute aus
+        dem Template (etabliertes Muster) — offline-home.js liest ``dataset``,
+        kein hartkodiertes JS-Literal mehr."""
+        _login_with_language(client, staff_user, "en")
+        body = client.get(reverse("offline_fallback")).content.decode()
+        assert "data-i18n-conflict-one=" in body
+        assert "conflict — please resolve" in body  # reuse bestehender msgid
+        assert "No person taken offline." in body  # neu uebersetzt
+
+
+@pytest.mark.django_db
+class TestServiceWorkerI18n:
+    """Refs #1412: sw.js hat keinen Django-Template-Kontext — die
+    user-sichtbaren Strings werden pro Request in einen markierten Block
+    (``SW_I18N``) injiziert (analog ``_resolve_app_shell``). DE-Quellstrings
+    sind die gettext-msgids.
+    """
+
+    def _body(self, client):
+        response = client.get(reverse("service_worker"))
+        assert response.status_code == 200
+        return response.content.decode()
+
+    def test_i18n_block_markers_replaced(self, client):
+        body = self._body(client)
+        # Der markierte Block wird serverseitig zu genau einer const-Zeile.
+        assert "const SW_I18N = " in body
+        # Die Marker selbst bleiben stehen (Injektion ersetzt nur dazwischen).
+        assert "__SW_I18N_START__" in body
+        assert "__SW_I18N_END__" in body
+        # Die Banner referenzieren SW_I18N statt Literale.
+        assert "SW_I18N.uploadOffline" in body
+        assert "SW_I18N.queuedOk" in body
+        assert "SW_I18N.partialBanner" in body
+
+    def test_injects_english_for_en_user(self, client, staff_user):
+        _login_with_language(client, staff_user, "en")
+        body = self._body(client)
+        assert "file uploads require an internet connection" in body
+        assert "your entries were encrypted locally" in body
+        assert "this content cannot be updated right now" in body
+        # DE-Quellstrings duerfen fuer EN nicht mehr im Body stehen.
+        assert "Datei-Uploads erfordern eine Internetverbindung" not in body
+        assert "dieser Inhalt kann gerade nicht aktualisiert werden" not in body
+
+    def test_injects_german_for_de_user(self, client, staff_user):
+        _login_with_language(client, staff_user, "de")
+        body = self._body(client)
+        assert "Datei-Uploads erfordern eine Internetverbindung" in body
+        assert "dieser Inhalt kann gerade nicht aktualisiert werden" in body
+        assert "file uploads require an internet connection" not in body
+
+    def test_anonymous_injects_german_default(self, client):
+        body = self._body(client)
+        assert "Datei-Uploads erfordern eine Internetverbindung" in body
+
+
+class TestOfflineI18nTranslationLocks:
+    """Refs #1412 (Muster wie ``test_i18n_offline_banner``): Regression-Lock
+    fuer die EN-Terminologie der neuen SW-/offline.html-Strings. Ohne DB —
+    reine gettext-Assertions unter aktiver EN-Locale.
+    """
+
+    def test_sw_upload_offline_en(self):
+        from django.utils.translation import gettext, override
+
+        with override("en"):
+            assert gettext(
+                "Offline — Datei-Uploads erfordern eine Internetverbindung. "
+                "Bitte erneut versuchen, sobald Sie online sind."
+            ) == ("Offline — file uploads require an internet connection. Please try again once you are online.")
+
+    def test_sw_queued_ok_en(self):
+        from django.utils.translation import gettext, override
+
+        with override("en"):
+            assert gettext(
+                "Offline — Ihre Eingaben wurden lokal verschlüsselt und werden bei Verbindung automatisch gesendet."
+            ) == ("Offline — your entries were encrypted locally and will be sent automatically once connected.")
+
+    def test_sw_partial_banner_en(self):
+        from django.utils.translation import gettext, override
+
+        with override("en"):
+            assert (
+                gettext("Offline — dieser Inhalt kann gerade nicht aktualisiert werden.")
+                == "Offline — this content cannot be updated right now."
+            )
+
+    def test_offline_workspace_heading_en(self):
+        from django.utils.translation import gettext, override
+
+        with override("en"):
+            assert gettext("Offline-Arbeitsplatz") == "Offline workspace"
+
+    def test_offline_home_none_taken_en(self):
+        from django.utils.translation import gettext, override
+
+        with override("en"):
+            assert gettext("Keine Person für die Offline-Nutzung mitgenommen.") == "No person taken offline."
+
+    def test_sw_update_toast_en(self):
+        from django.utils.translation import gettext, override
+
+        with override("en"):
+            assert gettext("Neue Version verfügbar.") == "New version available."
+            assert gettext("Neu laden") == "Reload"

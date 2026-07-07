@@ -15,7 +15,7 @@
 
 importScripts("/static/js/url-patterns.js");
 
-const CACHE_NAME = "anlaufstelle-v15";
+const CACHE_NAME = "anlaufstelle-v16";
 // Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
 // ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
 // auch beim ersten Offline-Aufruf garantiert verfuegbar ist.
@@ -32,6 +32,26 @@ const OFFLINE_CONFLICT_SHELL_URL = "/offline/conflict-shell/";
 // endlos, statt in die vorhandenen Queue-/Offline-Fallback-Ketten zu laufen.
 const WRITE_FETCH_TIMEOUT_MS = 6000;
 const READ_FETCH_TIMEOUT_MS = 8000;
+// Refs #1412 (M17): user-sichtbare SW-Strings. Der SW hat keinen Django-
+// Template-Kontext; GET /sw.js ersetzt den markierten Block unten pro Request
+// durch die gettext-uebersetzten Strings der Request-Sprache
+// (ServiceWorkerView._inject_sw_i18n). Der Default hier ist Deutsch (Praezedenz
+// + Dev-Lesbarkeit). {reason} ist ein Platzhalter, den der fetch-Handler
+// client-seitig via .replace() ersetzt. Die DE-Quellstrings sind zugleich die
+// gettext-msgids (aus core/views/pwa.py extrahiert).
+// __SW_I18N_START__
+const SW_I18N = {
+    uploadOffline:
+        "Offline — Datei-Uploads erfordern eine Internetverbindung. " +
+        "Bitte erneut versuchen, sobald Sie online sind.",
+    queuePersistFailed:
+        "Offline — Ihre Eingaben konnten nicht lokal gespeichert werden ({reason}). " +
+        "Bitte erneut versuchen, sobald Sie online sind.",
+    queuedOk:
+        "Offline — Ihre Eingaben wurden lokal verschlüsselt und werden bei Verbindung automatisch gesendet.",
+    partialBanner: "Offline — dieser Inhalt kann gerade nicht aktualisiert werden.",
+};
+// __SW_I18N_END__
 // Refs #1413: Die /static/-Eintraege dieses APP_SHELL werden beim Ausliefern von
 // GET /sw.js serverseitig durch staticfiles_storage.url() aufgeloest
 // (ServiceWorkerView._resolve_app_shell). In Produktion (Manifest-Storage)
@@ -218,8 +238,7 @@ self.addEventListener("fetch", (event) => {
                             '<div id="flash-messages">' +
                                 '<div class="rounded-md bg-red-50 p-4 mb-4">' +
                                 '<p class="text-sm text-red-800">' +
-                                "Offline — Datei-Uploads erfordern eine Internetverbindung. " +
-                                "Bitte erneut versuchen, sobald Sie online sind." +
+                                SW_I18N.uploadOffline +
                                 "</p></div></div>",
                             {
                                 status: 503,
@@ -293,9 +312,7 @@ self.addEventListener("fetch", (event) => {
                         '<div id="flash-messages">' +
                             '<div class="rounded-md bg-red-50 p-4 mb-4">' +
                             '<p class="text-sm text-red-800">' +
-                            "Offline — Ihre Eingaben konnten nicht lokal gespeichert werden (" +
-                            ack.reason +
-                            "). Bitte erneut versuchen, sobald Sie online sind." +
+                            SW_I18N.queuePersistFailed.replace("{reason}", ack.reason) +
                             "</p></div></div>",
                         {
                             status: 503,
@@ -313,7 +330,7 @@ self.addEventListener("fetch", (event) => {
                     '<div id="flash-messages">' +
                         '<div class="rounded-md bg-yellow-50 p-4 mb-4">' +
                         '<p class="text-sm text-yellow-800">' +
-                        "Offline — Ihre Eingaben wurden lokal verschlüsselt und werden bei Verbindung automatisch gesendet." +
+                        SW_I18N.queuedOk +
                         "</p></div></div>",
                     {
                         status: 200,
@@ -396,9 +413,9 @@ self.addEventListener("fetch", (event) => {
         event.respondWith(
             fetch(request, { signal: AbortSignal.timeout(READ_FETCH_TIMEOUT_MS) }).catch(() => {
                 if (request.headers.get("HX-Request") === "true") {
-                    // Kompaktes, gestyltes Banner statt der Voll-Shell — Text
-                    // hartkodiert Deutsch (Praezedenz: offline.html ist ebenso
-                    // hartkodiert DE; SW-i18n kommt mit #1412/M17). Bewusst
+                    // Kompaktes, gestyltes Banner statt der Voll-Shell — der
+                    // Text kommt aus dem pro Request server-injizierten SW_I18N
+                    // (Refs #1412/M17). Bewusst
                     // OHNE HX-Retarget/HX-Reswap: anders als im Write-Pfad
                     // (events.py-Konflikt-Handling, htmx_session.py) droht
                     // hier kein Datenverlust durch das Ersetzen des Targets
@@ -408,7 +425,9 @@ self.addEventListener("fetch", (event) => {
                     // naheliegendste, layoutneutrale Antwort.
                     return new Response(
                         '<div class="rounded-md bg-yellow-50 p-4" role="status" data-testid="offline-partial-banner">' +
-                            '<p class="text-sm text-yellow-800">Offline — dieser Inhalt kann gerade nicht aktualisiert werden.</p>' +
+                            '<p class="text-sm text-yellow-800">' +
+                            SW_I18N.partialBanner +
+                            "</p>" +
                             "</div>",
                         {
                             status: 200,

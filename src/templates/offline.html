@@ -1,9 +1,9 @@
-<!doctype html>
-<html lang="de">
+{% load i18n %}{% get_current_language as LANG %}<!doctype html>
+<html lang="{{ LANG }}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Offline-Arbeitsplatz — Anlaufstelle</title>
+<title>{% trans "Offline-Arbeitsplatz" %} — Anlaufstelle</title>
 <style>
     /* Inline-CSS, weil der Service-Worker dieses Template direkt
        ausliefert (kein Django-Rendering, kein /static/css/-Lookup
@@ -153,30 +153,44 @@
 </style>
 </head>
 <body>
-    <main data-testid="offline-home">
-        <span class="badge">Offline</span>
-        <h1>Offline-Arbeitsplatz</h1>
-        <p>Sie sind aktuell offline. Hier sind die Personen, die Sie für die
-           Offline-Nutzung mitgenommen haben — auch ohne Netz lesbar und
-           bearbeitbar. Änderungen werden bei Verbindung automatisch gesendet.</p>
+    <!-- Refs #1412 (M17): Die von offline-home.js gerenderten Strings kommen als
+         uebersetzte data-i18n-*-Attribute aus dem Template — offline-home.js
+         liest dataset, kein hartkodiertes deutsches JS-Literal mehr. {date}
+         ist ein Platzhalter, den der Renderer client-seitig ersetzt. -->
+    <main data-testid="offline-home"
+          data-i18n-conflict-one="{% trans 'Konflikt — bitte auflösen' %}"
+          data-i18n-conflict-other="{% trans 'Konflikte — bitte auflösen' %}"
+          data-i18n-dead-one="{% trans 'nicht übertragbare Änderung' %}"
+          data-i18n-dead-other="{% trans 'nicht übertragbare Änderungen' %}"
+          data-i18n-unsynced="{% trans 'nicht synchronisiert' %}"
+          data-i18n-no-match="{% trans 'Keine Person passt zum Suchbegriff.' %}"
+          data-i18n-inactive="{% trans 'Offline-Funktion nicht aktiv.' %}"
+          data-i18n-relogin="{% trans 'Bitte neu anmelden, damit die offline gespeicherten Personen entschlüsselt werden können.' %}"
+          data-i18n-none-taken="{% trans 'Keine Person für die Offline-Nutzung mitgenommen.' %}"
+          data-i18n-load-error="{% trans 'Offline-Daten konnten nicht geladen werden.' %}"
+          data-i18n-no-pseudonym="{% trans '(ohne Pseudonym)' %}"
+          data-i18n-synced-at="{% trans 'synchronisiert: {date}' %}"
+          data-i18n-expires-at="{% trans 'läuft ab: {date}' %}">
+        <span class="badge">{% trans "Offline" %}</span>
+        <h1>{% trans "Offline-Arbeitsplatz" %}</h1>
+        <p>{% trans "Sie sind aktuell offline. Hier sind die Personen, die Sie für die Offline-Nutzung mitgenommen haben — auch ohne Netz lesbar und bearbeitbar. Änderungen werden bei Verbindung automatisch gesendet." %}</p>
 
         <div class="oh-status" data-testid="offline-home-status"></div>
 
         <input type="search" data-testid="offline-home-filter" class="oh-filter"
-               placeholder="Person filtern…" aria-label="Personen filtern" style="display:none"
+               placeholder="{% trans 'Person filtern…' %}" aria-label="{% trans 'Personen filtern' %}" style="display:none"
                autocomplete="off" />
 
         <div data-testid="offline-home-list">
-            <p class="oh-empty" data-testid="offline-home-loading">Lade Offline-Daten…</p>
+            <p class="oh-empty" data-testid="offline-home-loading">{% trans "Lade Offline-Daten…" %}</p>
         </div>
 
         <div class="actions">
-            <a href="/" class="btn primary">Zur Startseite</a>
+            <a href="/" class="btn primary">{% trans "Zur Startseite" %}</a>
             <!-- href="" lädt die aktuelle URL neu, CSP-konform ohne Inline-Script. Refs #1016, C1 -->
-            <a href="" class="btn">Erneut versuchen</a>
+            <a href="" class="btn">{% trans "Erneut versuchen" %}</a>
         </div>
-        <p class="hint">Datei-Uploads benötigen eine Verbindung. Sobald Sie
-           wieder online sind, schließt die App offene Aufgaben automatisch ab.</p>
+        <p class="hint">{% trans "Datei-Uploads benötigen eine Verbindung. Sobald Sie wieder online sind, schließt die App offene Aufgaben automatisch ab." %}</p>
     </main>
 
     <!-- Offline-Home-Stack: Reihenfolge dexie → crypto → offline-store → offline-home.

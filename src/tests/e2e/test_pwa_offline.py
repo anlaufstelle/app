@@ -264,11 +264,20 @@ def test_offline_htmx_partial_get_shows_compact_banner(browser, base_url):
         )
 
         client_table_html = page.locator("#client-table").inner_html()
-        # KEIN Voll-Block der Offline-Shell im Swap-Target.
+        # KEIN Voll-Block der Offline-Shell im Swap-Target. Der ``offline-home``-
+        # Testid-Marker ist der sprach-UNABHAENGIGE Kern-Guard (offline.html ist
+        # seit #1412 lokalisiert — die sichtbaren Strings variieren pro Sprache,
+        # die data-testid-Marker nicht).
         assert "offline-home" not in client_table_html, (
             f"Voller offline.html-Block im HTMX-Swap-Target: {client_table_html[:300]}"
         )
-        assert "Offline-Arbeitsplatz" not in client_table_html, (
+        # Zusaetzlich die sichtbare Ueberschrift der AKTIVEN Sprache pruefen.
+        # Diese Session laeuft in der App-Default-Locale (DE, seed-User ``admin``
+        # ohne ``preferred_language``); nach #1412 ist "Offline-Arbeitsplatz" die
+        # DE-lokalisierte h1 (msgid == Quellstring). Bewusst an die Session-
+        # Sprache gebunden statt als sprach-agnostisches Literal.
+        offline_heading_for_locale = "Offline-Arbeitsplatz"  # de-DE-Session
+        assert offline_heading_for_locale not in client_table_html, (
             f"offline.html-Ueberschrift im Swap-Target statt kompaktem Banner: {client_table_html[:300]}"
         )
         assert "<script" not in client_table_html.lower(), "offline.html-Scripts wurden ins Swap-Target geswapped"

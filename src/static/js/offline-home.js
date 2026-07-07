@@ -10,6 +10,16 @@
 (function () {
     "use strict";
 
+    // Refs #1412 (M17): Alle user-sichtbaren Strings kommen als data-i18n-*-
+    // Attribute vom offline-home-Root im Template (offline.html, {% trans %}) —
+    // kein hartkodiertes deutsches JS-Literal mehr. ``{date}`` ist ein
+    // Platzhalter, den der Renderer ersetzt. Leerer Fallback (etabliertes
+    // Muster), falls ein Attribut fehlt.
+    function t(key) {
+        const root = document.querySelector('[data-testid="offline-home"]');
+        return (root && root.dataset && root.dataset[key]) || "";
+    }
+
     function fmtDateTime(value) {
         if (!value) return "";
         const d = new Date(value);
@@ -43,11 +53,11 @@
             li.setAttribute("data-pseudonym", c.pseudonym || "");
             const link = el("a", { class: "oh-link", href: "/offline/clients/" + c.pk + "/" });
             link.appendChild(
-                el("span", { class: "oh-name", text: c.pseudonym || "(ohne Pseudonym)" })
+                el("span", { class: "oh-name", text: c.pseudonym || t("i18nNoPseudonym") })
             );
             const parts = [];
-            if (c.lastSynced) parts.push("synchronisiert: " + fmtDateTime(c.lastSynced));
-            if (c.expiresAt) parts.push("läuft ab: " + fmtDateTime(c.expiresAt));
+            if (c.lastSynced) parts.push(t("i18nSyncedAt").replace("{date}", fmtDateTime(c.lastSynced)));
+            if (c.expiresAt) parts.push(t("i18nExpiresAt").replace("{date}", fmtDateTime(c.expiresAt)));
             if (parts.length) {
                 link.appendChild(el("span", { class: "oh-meta", text: parts.join(" · ") }));
             }
@@ -78,7 +88,7 @@
             if (!noMatch) {
                 noMatch = el("p", {
                     class: "oh-empty",
-                    text: "Keine Person passt zum Suchbegriff.",
+                    text: t("i18nNoMatch"),
                     testid: "offline-home-no-match",
                 });
                 container.appendChild(noMatch);
@@ -117,8 +127,7 @@
                 href: "/offline/conflicts/",
                 testid: "offline-home-conflicts",
             });
-            a.textContent =
-                conflicts + (conflicts === 1 ? " Konflikt — bitte auflösen" : " Konflikte — bitte auflösen");
+            a.textContent = conflicts + " " + (conflicts === 1 ? t("i18nConflictOne") : t("i18nConflictOther"));
             statusEl.appendChild(a);
         }
         // Refs #1351/#1385 (M8/Task 4): dead-Zaehler + Link zur Konflikt-Liste
@@ -132,7 +141,7 @@
                 href: "/offline/conflicts/",
                 testid: "offline-home-dead",
             });
-            a.textContent = dead + (dead === 1 ? " nicht übertragbare Änderung" : " nicht übertragbare Änderungen");
+            a.textContent = dead + " " + (dead === 1 ? t("i18nDeadOne") : t("i18nDeadOther"));
             statusEl.appendChild(a);
         }
         if (unsynced > 0) {
@@ -140,7 +149,7 @@
                 el("span", {
                     class: "oh-badge oh-badge-pending",
                     testid: "offline-home-unsynced",
-                    text: unsynced + " nicht synchronisiert",
+                    text: unsynced + " " + t("i18nUnsynced"),
                 })
             );
         }
@@ -150,7 +159,7 @@
         const container = document.querySelector('[data-testid="offline-home-list"]');
         if (!container) return;
         if (!window.offlineStore || !window.crypto_session) {
-            renderEmpty(container, "Offline-Funktion nicht aktiv.");
+            renderEmpty(container, t("i18nInactive"));
             return;
         }
         try {
@@ -159,16 +168,13 @@
             // weiter — hasSessionKey faengt den fehlenden Schluessel ab
         }
         if (window.crypto_session.hasSessionKey && !window.crypto_session.hasSessionKey()) {
-            renderEmpty(
-                container,
-                "Bitte neu anmelden, damit die offline gespeicherten Personen entschlüsselt werden können."
-            );
+            renderEmpty(container, t("i18nRelogin"));
             return;
         }
         try {
             const clients = await window.offlineStore.listOfflineClientsDetailed();
             if (!clients.length) {
-                renderEmpty(container, "Keine Person für die Offline-Nutzung mitgenommen.");
+                renderEmpty(container, t("i18nNoneTaken"));
                 setupFilter(0);
             } else {
                 renderClients(container, clients);
@@ -179,7 +185,7 @@
             const dead = await window.offlineStore.countDeadEvents();
             renderStatus(unsynced, conflicts, dead);
         } catch (_e) {
-            renderEmpty(container, "Offline-Daten konnten nicht geladen werden.");
+            renderEmpty(container, t("i18nLoadError"));
         }
     }
 
