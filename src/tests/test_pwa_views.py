@@ -94,8 +94,8 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v17"' in body, (
-            "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein (#1412)."
+        assert 'CACHE_NAME = "anlaufstelle-v18"' in body, (
+            "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein (#1419: url-patterns.js/QUEUE_PATTERNS)."
         )
 
     def test_sw_caches_manifest_and_favicon(self, client):
