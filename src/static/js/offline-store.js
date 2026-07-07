@@ -1186,6 +1186,59 @@
         return granted;
     }
 
+    /*
+     * Refs #1412 (M17b): reiner Live-Wrapper um navigator.storage.estimate()
+     * fuer die Quota-/Belegungsanzeige im Offline-Arbeitsplatz. KEIN Caching
+     * (im Gegensatz zu ensurePersistentStorage) — die Belegung aendert sich
+     * laufend, ein gecachter Wert waere sofort veraltet. Fail-soft wie der
+     * Persist-Pfad: Feature fehlt oder der Call wirft => null, blockiert
+     * nichts (der Aufrufer zeigt dann einfach kein Quota-Badge).
+     */
+    async function getStorageEstimate() {
+        if (!navigator.storage || !navigator.storage.estimate) {
+            return null;
+        }
+        try {
+            const estimate = await navigator.storage.estimate();
+            const usage = estimate && estimate.usage;
+            const quota = estimate && estimate.quota;
+            if (typeof usage !== "number" || typeof quota !== "number" || quota <= 0) {
+                return null;
+            }
+            return { usage: usage, quota: quota, percent: Math.round((usage / quota) * 100) };
+        } catch (_e) {
+            return null;
+        }
+    }
+
+    /*
+     * Refs #1412 (M17b): liefert den Persist-Grant-Status fuer die Anzeige im
+     * Offline-Arbeitsplatz. Reiner Cache-Read aus `db.meta` ("storagePersist",
+     * derselbe Key wie ensurePersistentStorage) — fragt NIE selbst
+     * navigator.storage.persist(), das bleibt takeClientOffline vorbehalten
+     * (kein ungewollter Browser-Prompt nur weil der Nutzer die Anzeige
+     * ansieht).
+     *
+     * Rueckgabe:
+     *   "granted"/"denied" — aus dem Cache (Feld `granted`).
+     *   "unsupported"      — navigator.storage.persist fehlt in diesem Browser.
+     *   null                — Feature vorhanden, aber noch nie gefragt (kein
+     *                         Take/Edit bisher lief). Bewusst KEIN drittes
+     *                         Wort dafuer: der Aufrufer zeigt dann kein Badge,
+     *                         statt faelschlich "nicht unterstuetzt" zu
+     *                         behaupten.
+     */
+    async function getPersistStatus() {
+        if (!navigator.storage || !navigator.storage.persist) {
+            return "unsupported";
+        }
+        const cached = await db.meta.get("storagePersist");
+        if (!cached) {
+            return null;
+        }
+        return cached.granted ? "granted" : "denied";
+    }
+
     window.offlineStore = {
         db: db,
         putEncrypted: putEncrypted,
@@ -1233,6 +1286,9 @@
         countQueueByStatus: countQueueByStatus,
         // Refs #1356 — persistenter Speicher (Eviction-Schutz)
         ensurePersistentStorage: ensurePersistentStorage,
+        // Refs #1412 (M17b) — Quota-/Persist-Status-Anzeige
+        getStorageEstimate: getStorageEstimate,
+        getPersistStatus: getPersistStatus,
         TTL_MS: TTL_MS,
         MAX_OFFLINE_CLIENTS: MAX_OFFLINE_CLIENTS,
         // F-05 (#1425) — Lesepfad-Gate vergleicht dagegen, siehe _isSchemaMismatch
@@ -1278,6 +1334,27 @@
                 // eslint-disable-next-line no-console
                 console.debug("[offline-store] online-revalidation skipped");
             }
+        });
+    }
+
+    /*
+     * Refs #1412 (M17b, Design-Entscheidung 4): minimaler, gebundener
+     * Re-Prompt nach PWA-Installation. Installierte PWAs bekommen von den
+     * meisten Browsern grosszuegiger persistenten Speicher gewaehrt als
+     * Tab-Kontexte — ein Grant, der VOR der Installation verweigert wurde,
+     * lohnt daher einen erneuten Versuch. Kein sofortiger Prompt hier (kein
+     * Browser-Dialog ausserhalb des etablierten Take-Flows): nur die
+     * Cache-Invalidierung, der naechste ensurePersistentStorage()-Aufruf
+     * (naechste Mitnahme/Edit) darf danach erneut fragen. offline-store.js
+     * ist auf jeder Seite geladen, die einen Install-Prompt zeigen kann
+     * (Login UND base.html) — der passende, bereits geladene Ort dafuer.
+     */
+    if (typeof window !== "undefined" && window.addEventListener) {
+        window.addEventListener("appinstalled", () => {
+            db.meta.delete("storagePersist").catch(function () {
+                // Nicht fatal — der naechste Take fragt im Zweifel einfach
+                // aus dem (dann noch bestehenden) Cache erneut nicht.
+            });
         });
     }
 })();

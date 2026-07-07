@@ -155,6 +155,50 @@
         }
     }
 
+    // Refs #1412 (M17b): Belegung in MB, gerundet — bewusst nur EINE Einheit
+    // (YAGNI, kein GB-Umschalten fuer grosse Quotas, siehe Task-Brief
+    // Design-Entscheidung 3 "12 MB von 500 MB").
+    function formatMB(bytes) {
+        return Math.round(bytes / (1024 * 1024)) + " MB";
+    }
+
+    // Refs #1412 (M17b): Storage-Quota-/Belegungsanzeige + Persist-Status —
+    // eigene, dezente Badge-Zeile, GETRENNT von renderStatus (Konflikt/dead/
+    // unsynced) und vom 20-Personen-Limit (MAX_OFFLINE_CLIENTS): beides sind
+    // unabhaengige Kappungen, die nicht vermischt werden duerfen.
+    function renderStorage(estimate, persistStatus) {
+        const storageEl = document.querySelector('[data-testid="offline-home-storage"]');
+        if (!storageEl) return;
+        storageEl.replaceChildren();
+        if (estimate) {
+            storageEl.appendChild(
+                el("span", {
+                    class: "oh-badge oh-badge-info",
+                    testid: "offline-home-quota",
+                    text: t("i18nStorageUsage")
+                        .replace("{used}", formatMB(estimate.usage))
+                        .replace("{quota}", formatMB(estimate.quota))
+                        .replace("{percent}", String(estimate.percent)),
+                })
+            );
+        }
+        const persistKeys = {
+            granted: "i18nPersistGranted",
+            denied: "i18nPersistDenied",
+            unsupported: "i18nPersistUnsupported",
+        };
+        const persistKey = persistKeys[persistStatus];
+        if (persistKey) {
+            storageEl.appendChild(
+                el("span", {
+                    class: "oh-badge oh-badge-info",
+                    testid: "offline-home-persist",
+                    text: t(persistKey),
+                })
+            );
+        }
+    }
+
     async function render() {
         const container = document.querySelector('[data-testid="offline-home-list"]');
         if (!container) return;
@@ -184,6 +228,13 @@
             const conflicts = await window.offlineStore.countConflictEvents();
             const dead = await window.offlineStore.countDeadEvents();
             renderStatus(unsynced, conflicts, dead);
+            // Refs #1412 (M17b): Live-Belegung + gecachter Persist-Status —
+            // beide fail-soft (liefern null bei fehlender API/Fehler bzw.
+            // noch nie gefragt), renderStorage blendet dann das jeweilige
+            // Badge einfach aus statt einen falschen Wert zu zeigen.
+            const estimate = await window.offlineStore.getStorageEstimate();
+            const persistStatus = await window.offlineStore.getPersistStatus();
+            renderStorage(estimate, persistStatus);
         } catch (_e) {
             renderEmpty(container, t("i18nLoadError"));
         }

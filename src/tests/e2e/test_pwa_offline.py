@@ -454,6 +454,80 @@ def test_offline_home_filters_taken_clients_by_pseudonym(browser, base_url):
         context.close()
 
 
+def test_offline_home_shows_storage_estimate(browser, base_url):
+    """Refs #1412 (M17b): navigator.storage.estimate() wird gestubbt; der
+    Offline-Arbeitsplatz zeigt die Belegung, die den gestubbten Werten
+    entspricht (Akzeptanzkriterium: Quota-Anzeige spiegelt estimate()).
+    Init-Script VOR der ersten Navigation gesetzt (Login-Seite laedt
+    offline-store.js bereits, siehe base.html/login.html).
+    """
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    page.add_init_script(
+        "navigator.storage.estimate = () => Promise.resolve({"
+        "usage: 52428800, quota: 524288000"
+        "});"  # 50 MB / 500 MB -> 10%
+    )
+    try:
+        _login_miriam(page, base_url)
+
+        page.goto(f"{base_url}/offline/", wait_until="domcontentloaded")
+        quota = page.locator('[data-testid="offline-home-quota"]')
+        quota.wait_for(state="visible", timeout=10000)
+        text = quota.text_content() or ""
+        assert "50 MB" in text, f"gestubbte Belegung fehlt in der Anzeige: {text!r}"
+        assert "500 MB" in text, f"gestubbte Quota fehlt in der Anzeige: {text!r}"
+        assert "10" in text, f"gestubbter Prozentwert fehlt in der Anzeige: {text!r}"
+    finally:
+        context.close()
+
+
+class TestOfflineHomePersistBadge:
+    """Refs #1412 (M17b): der Persist-Status-Badge im Offline-Arbeitsplatz
+    spiegelt den gecachten Grant (granted vs. denied) -- reiner Cache-Read,
+    kein Re-Prompt aus der Anzeige heraus (Design-Entscheidung 2/3).
+    """
+
+    def test_shows_granted(self, browser, base_url):
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _login_miriam(page, base_url)
+            page.wait_for_function("window.crypto_session && window.offlineStore")
+            page.evaluate(
+                "async () => { await window.offlineStore.db.meta.put("
+                "{key: 'storagePersist', granted: true, ts: Date.now()}); }"
+            )
+            page.goto(f"{base_url}/offline/", wait_until="domcontentloaded")
+            badge = page.locator('[data-testid="offline-home-persist"]')
+            badge.wait_for(state="visible", timeout=10000)
+            text = (badge.text_content() or "").strip()
+            assert text == "dauerhafter Speicher: gewährt", text
+        finally:
+            context.close()
+
+    def test_shows_denied(self, browser, base_url):
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _login_miriam(page, base_url)
+            page.wait_for_function("window.crypto_session && window.offlineStore")
+            page.evaluate(
+                "async () => { await window.offlineStore.db.meta.put("
+                "{key: 'storagePersist', granted: false, ts: Date.now()}); }"
+            )
+            page.goto(f"{base_url}/offline/", wait_until="domcontentloaded")
+            badge = page.locator('[data-testid="offline-home-persist"]')
+            badge.wait_for(state="visible", timeout=10000)
+            text = (badge.text_content() or "").strip()
+            assert text == "dauerhafter Speicher: nicht gewährt", text
+        finally:
+            context.close()
+
+
 def test_offline_client_detail_renders_in_place(browser, base_url):
     """Refs #1322: Offline rendert ``/clients/<pk>/`` den Viewer IN-PLACE an der
     kanonischen URL (kein ``/offline/...``-Redirect). Der Service Worker

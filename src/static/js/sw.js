@@ -15,7 +15,10 @@
 
 importScripts("/static/js/url-patterns.js");
 
-const CACHE_NAME = "anlaufstelle-v16";
+// Refs #1412 (M17b): v16 -> v17 -- offline-store.js/offline-home.js/offline.html
+// (alle drei im APP_SHELL precached) tragen neue Quota-/Persist-Status-Logik;
+// der Bump erzwingt bei Bestandsnutzern Re-Install + Re-Precache.
+const CACHE_NAME = "anlaufstelle-v17";
 // Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
 // ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
 // auch beim ersten Offline-Aufruf garantiert verfuegbar ist.

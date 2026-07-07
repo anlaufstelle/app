@@ -1216,6 +1216,135 @@ class TestPersistentStorageRequest:
         context.close()
 
 
+# ── Storage-Quota-/Persist-Status-Anzeige (Refs #1412, M17b) ────────────────
+
+
+class TestStorageEstimate:
+    """``getStorageEstimate()`` (Refs #1412 M17b): reiner Live-Wrapper um
+    navigator.storage.estimate() -- KEIN Caching (Belegung aendert sich
+    laufend), fail-soft bei fehlender API/Fehler (blockiert nichts, gleiche
+    Praezedenz wie ``ensurePersistentStorage``). Playwright grantet echte
+    Quota-Werte, die vom Test-Runner abhaengen -- ein Init-Script-Stub macht
+    den Wert deterministisch pruefbar (gleiches Muster wie
+    ``_install_persist_spy`` oben).
+    """
+
+    @staticmethod
+    def _install_estimate_stub(page, usage, quota):
+        page.add_init_script(f"navigator.storage.estimate = () => Promise.resolve({{usage: {usage}, quota: {quota}}});")
+
+    def test_reflects_stubbed_usage_and_quota(self, browser, base_url, _login_storage_state):
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page = context.new_page()
+        self._install_estimate_stub(page, 52428800, 524288000)  # 50 MB / 500 MB -> 10%
+        _bootstrap(page, base_url)
+
+        result = page.evaluate("() => window.offlineStore.getStorageEstimate()")
+        assert result == {"usage": 52428800, "quota": 524288000, "percent": 10}
+        context.close()
+
+    def test_missing_api_returns_null(self, browser, base_url, _login_storage_state):
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page = context.new_page()
+        # navigator.storage.estimate ist eine geerbte Prototyp-Property --
+        # `delete` auf der Instanz waere ein No-Op. Ueberschreiben mit
+        # `undefined` simuliert die Feature-Detection zuverlaessig.
+        page.add_init_script("navigator.storage.estimate = undefined;")
+        _bootstrap(page, base_url)
+
+        result = page.evaluate("() => window.offlineStore.getStorageEstimate()")
+        assert result is None
+        context.close()
+
+
+class TestPersistStatus:
+    """``getPersistStatus()`` (Refs #1412 M17b): reiner Cache-Read des
+    ``ensurePersistentStorage``-Grants aus ``db.meta`` -- fragt NIE selbst
+    navigator.storage.persist() (kein Re-Prompt aus der Anzeige heraus, siehe
+    Design-Entscheidung 2 im Task-Brief).
+    """
+
+    def test_cached_grant_true_is_granted(self, browser, base_url, _login_storage_state):
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page = context.new_page()
+        _bootstrap(page, base_url)
+        page.evaluate(
+            "async () => { await window.offlineStore.db.meta.put("
+            "{key: 'storagePersist', granted: true, ts: Date.now()}); }"
+        )
+
+        status = page.evaluate("() => window.offlineStore.getPersistStatus()")
+        assert status == "granted"
+        context.close()
+
+    def test_cached_grant_false_is_denied(self, browser, base_url, _login_storage_state):
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page = context.new_page()
+        _bootstrap(page, base_url)
+        page.evaluate(
+            "async () => { await window.offlineStore.db.meta.put("
+            "{key: 'storagePersist', granted: false, ts: Date.now()}); }"
+        )
+
+        status = page.evaluate("() => window.offlineStore.getPersistStatus()")
+        assert status == "denied"
+        context.close()
+
+    def test_missing_api_is_unsupported(self, browser, base_url, _login_storage_state):
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page = context.new_page()
+        # Siehe Kommentar oben (test_missing_api_returns_null): `delete` auf
+        # einer geerbten Prototyp-Property ist ein No-Op.
+        page.add_init_script("navigator.storage.persist = undefined;")
+        _bootstrap(page, base_url)
+
+        status = page.evaluate("() => window.offlineStore.getPersistStatus()")
+        assert status == "unsupported"
+        context.close()
+
+    def test_no_cache_yet_returns_null(self, browser, base_url, _login_storage_state):
+        """Feature vorhanden, aber noch nie gefragt (kein Take/Edit bisher) --
+        kein falscher 'nicht unterstuetzt'-Claim; der Aufrufer zeigt dann
+        bewusst kein Badge (siehe offline-home.js renderStorage)."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page = context.new_page()
+        _bootstrap(page, base_url)
+
+        status = page.evaluate("() => window.offlineStore.getPersistStatus()")
+        assert status is None
+        context.close()
+
+
+class TestAppInstalledInvalidatesPersistCache:
+    """Re-Prompt nach PWA-Install (Refs #1412 M17b, bindende Design-
+    Entscheidung 4): ein globaler ``appinstalled``-Listener loescht den
+    ``storagePersist``-Cache, damit der naechste ``ensurePersistentStorage()``-
+    Aufruf (naechste Mitnahme/Edit) erneut persist() versuchen darf --
+    installierte PWAs granten oft grosszuegiger. Playwright kann eine echte
+    PWA-Installation nicht ausloesen (kein System-Installer im Test-Runner);
+    das Event wird daher synthetisch dispatcht -- dokumentierte Testgrenze,
+    siehe Report.
+    """
+
+    def test_appinstalled_clears_cached_persist_grant(self, browser, base_url, _login_storage_state):
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page = context.new_page()
+        _bootstrap(page, base_url)
+        page.evaluate(
+            "async () => { await window.offlineStore.db.meta.put("
+            "{key: 'storagePersist', granted: false, ts: Date.now()}); }"
+        )
+        before = page.evaluate("() => window.offlineStore.db.meta.get('storagePersist')")
+        assert before is not None, "Vorbedingung: Cache-Row muss vor dem Event existieren"
+
+        page.evaluate("() => window.dispatchEvent(new Event('appinstalled'))")
+        page.wait_for_function("async () => (await window.offlineStore.db.meta.get('storagePersist')) === undefined")
+
+        after = page.evaluate("() => window.offlineStore.db.meta.get('storagePersist')")
+        assert after is None
+        context.close()
+
+
 # ── Queue-Replay-Klassifikation nach HTTP-Replay-Contract (Refs #1351/#1384) ─
 # Kein Head-of-Line-Blocking mehr (ein 422/400/404/410/403 markiert nur den
 # einzelnen Record als "dead" statt die gesamte Schleife abzubrechen), 409

@@ -94,7 +94,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v16"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v17"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein (#1412)."
         )
 
@@ -682,3 +682,28 @@ class TestOfflineI18nTranslationLocks:
         with override("en"):
             assert gettext("Neue Version verfügbar.") == "New version available."
             assert gettext("Neu laden") == "Reload"
+
+    # Refs #1412 (M17b): Quota-/Persist-Status-Anzeige im Offline-Arbeitsplatz.
+    def test_storage_usage_en(self):
+        from django.utils.translation import gettext, override
+
+        with override("en"):
+            assert gettext("{used} / {quota} ({percent}% belegt)") == "{used} / {quota} ({percent}% used)"
+
+    def test_persist_granted_en(self):
+        from django.utils.translation import gettext, override
+
+        with override("en"):
+            assert gettext("dauerhafter Speicher: gewährt") == "persistent storage: granted"
+
+    def test_persist_denied_en(self):
+        from django.utils.translation import gettext, override
+
+        with override("en"):
+            assert gettext("dauerhafter Speicher: nicht gewährt") == "persistent storage: not granted"
+
+    def test_persist_unsupported_en(self):
+        from django.utils.translation import gettext, override
+
+        with override("en"):
+            assert gettext("dauerhafter Speicher: nicht unterstützt") == "persistent storage: not supported"

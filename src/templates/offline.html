@@ -103,6 +103,14 @@
     }
     .oh-badge-pending { background: var(--warn-bg); color: var(--warn-ink); border: 1px solid var(--warn-border); }
     .oh-badge-conflict { background: var(--danger-bg); color: var(--danger-ink); border: 1px solid var(--danger-border); }
+    /* Refs #1412 (M17b): Quota-/Persist-Status — dezent-neutral, kein Warn-/
+       Gefahren-Ton (reine Information, keine Handlungsaufforderung). */
+    .oh-badge-info { background: var(--canvas); color: var(--ink-soft); border: 1px solid var(--border); }
+    /* Refs #1412 (M17b): eigene Zeile, getrennt von .oh-status (Konflikt/
+       dead/unsynced) — Storage-Quota und das 20-Personen-Limit sind
+       unabhaengige Kappungen und bleiben optisch getrennt. */
+    .oh-storage { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
+    .oh-storage:empty { display: none; }
     /* Personenliste. */
     .oh-list { list-style: none; margin: 0 0 1.5rem; padding: 0; }
     .oh-item { margin: 0 0 .5rem; }
@@ -170,12 +178,19 @@
           data-i18n-load-error="{% trans 'Offline-Daten konnten nicht geladen werden.' %}"
           data-i18n-no-pseudonym="{% trans '(ohne Pseudonym)' %}"
           data-i18n-synced-at="{% trans 'synchronisiert: {date}' %}"
-          data-i18n-expires-at="{% trans 'läuft ab: {date}' %}">
+          data-i18n-expires-at="{% trans 'läuft ab: {date}' %}"
+          data-i18n-storage-usage="{% trans '{used} / {quota} ({percent}% belegt)' %}"
+          data-i18n-persist-granted="{% trans 'dauerhafter Speicher: gewährt' %}"
+          data-i18n-persist-denied="{% trans 'dauerhafter Speicher: nicht gewährt' %}"
+          data-i18n-persist-unsupported="{% trans 'dauerhafter Speicher: nicht unterstützt' %}">
         <span class="badge">{% trans "Offline" %}</span>
         <h1>{% trans "Offline-Arbeitsplatz" %}</h1>
         <p>{% trans "Sie sind aktuell offline. Hier sind die Personen, die Sie für die Offline-Nutzung mitgenommen haben — auch ohne Netz lesbar und bearbeitbar. Änderungen werden bei Verbindung automatisch gesendet." %}</p>
 
         <div class="oh-status" data-testid="offline-home-status"></div>
+        <!-- Refs #1412 (M17b): Storage-Quota-/Persist-Status — bewusst eigene
+             Zeile, getrennt vom 20-Personen-Limit oben (oh-status). -->
+        <div class="oh-storage" data-testid="offline-home-storage"></div>
 
         <input type="search" data-testid="offline-home-filter" class="oh-filter"
                placeholder="{% trans 'Person filtern…' %}" aria-label="{% trans 'Personen filtern' %}" style="display:none"
