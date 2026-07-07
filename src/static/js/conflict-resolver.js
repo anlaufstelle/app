@@ -20,6 +20,18 @@
 (function () {
     "use strict";
 
+    // Refs #1396: In-Place-Rendern an /offline/conflicts/<pk>/ ohne
+    // Django-Kontext — die event-pk aus dem Pfad ziehen (der SW serviert dort
+    // offline den pk-losen conflict-shell, dessen data-event-pk leer ist).
+    // Muster analog offline-client-view.js::_pkFromPath.
+    function _pkFromPath() {
+        var path = (window.location && window.location.pathname) || "";
+        var m = path.match(
+            /\/offline\/conflicts\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i
+        );
+        return m ? m[1] : "";
+    }
+
     function _asList(dataJson) {
         // Turn a flat slug→value dict into an ordered list we can render.
         // Sort for deterministic output across browsers.
@@ -67,7 +79,7 @@
             diffRows: [],
 
             init() {
-                this.eventPk = this.$el.dataset.eventPk || "";
+                this.eventPk = this.$el.dataset.eventPk || _pkFromPath();
             },
 
             // CSP-konforme Wrapper-Methoden

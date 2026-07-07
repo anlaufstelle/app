@@ -425,6 +425,163 @@ def test_offline_client_detail_renders_in_place(browser, base_url):
         context.close()
 
 
+def test_url_patterns_conflict_and_client_extractors_do_not_cross_match(authenticated_page, base_url):
+    """Refs #1396: ``extractConflictPk`` und ``extractClientPk`` duerfen sich
+    NICHT ueberlappen — sonst servierte der SW den falschen In-Place-Shell.
+    Zusaetzlich: die pk-lose Liste (/offline/conflicts/) matcht keinen der
+    beiden (sie wird ueber die generische Cache-Stufe serviert)."""
+    page = authenticated_page
+    page.goto(f"{base_url}/", wait_until="domcontentloaded")
+    page.wait_for_function(
+        "() => !!(window.URL_PATTERNS && typeof window.URL_PATTERNS.extractConflictPk === 'function')"
+    )
+    uuid_a = "11111111-1111-4111-8111-111111111111"
+    result = page.evaluate(
+        """(u) => {
+            const P = window.URL_PATTERNS;
+            return {
+                clientOnClient: P.extractClientPk('/clients/' + u + '/'),
+                clientOnConflict: P.extractClientPk('/offline/conflicts/' + u + '/'),
+                conflictOnConflict: P.extractConflictPk('/offline/conflicts/' + u + '/'),
+                conflictOnClient: P.extractConflictPk('/clients/' + u + '/'),
+                conflictOnList: P.extractConflictPk('/offline/conflicts/'),
+                clientOnList: P.extractClientPk('/offline/conflicts/'),
+            };
+        }""",
+        uuid_a,
+    )
+    assert result["clientOnClient"] == uuid_a
+    assert result["conflictOnConflict"] == uuid_a
+    # Keine Kreuz-Treffer.
+    assert result["clientOnConflict"] is None
+    assert result["conflictOnClient"] is None
+    # Die pk-lose Liste matcht keinen pk-Extraktor.
+    assert result["conflictOnList"] is None
+    assert result["clientOnList"] is None
+
+
+def _seed_dead_event(page, base_url, event_pk):
+    """Crypto-Session ableiten + einen dead-Letter-Datensatz in IDB seeden
+    (echter SW, kein ``service_workers="block"``). Muster analog
+    ``test_offline_deadletter_ui.py::_bootstrap_store``."""
+    page.goto(f"{base_url}/offline/conflicts/", wait_until="domcontentloaded")
+    page.wait_for_function("window.crypto_session && window.offlineStore")
+    page.evaluate(
+        """async (eventPk) => {
+            await window.crypto_session.clearSessionKey();
+            await window.offlineStore.purgeAll();
+            await window.crypto_session.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+            await window.offlineStore.saveOfflineEdit({
+                pk: eventPk, clientPk: 'c-1396', occurredAt: '2026-01-01T00:00:00Z',
+                localStatus: 'dead',
+                data: {
+                    formData: {notiz: 'Offline-Konflikt-1396'}, documentTypeName: 'Kontakt',
+                    deadReason: 'not-found', lastError: '404',
+                },
+            });
+        }""",
+        event_pk,
+    )
+
+
+def _login_miriam(page, base_url):
+    page.goto(f"{base_url}/login/")
+    page.fill('input[name="username"]', "miriam")
+    page.fill('input[name="password"]', "anlaufstelle2026")
+    page.click('button[type="submit"]')
+    page.wait_for_url(lambda url: "/login/" not in url, timeout=10000)
+
+
+def test_offline_conflict_list_renders_in_place(browser, base_url):
+    """Refs #1396: Offline rendert ``/offline/conflicts/`` die Konflikt-/Dead-
+    Verwaltung IN-PLACE aus der verschluesselten IndexedDB (KEIN Bounce auf
+    ``/offline/``). Der Service Worker serviert die pre-cachte, public Liste;
+    ``conflict-list.js`` fuellt sie aus IDB. Heute bouncte der Badge-Klick
+    offline stumm zurueck auf ``/offline/``.
+    """
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        _login_miriam(page, base_url)
+        event_pk = str(uuid.uuid4())
+        _seed_dead_event(page, base_url, event_pk)
+
+        _wait_for_active_service_worker(page, base_url)
+        page.context.set_offline(True)
+        page.goto(f"{base_url}/offline/conflicts/", wait_until="domcontentloaded")
+
+        # KEIN Bounce — die URL bleibt kanonisch (/offline/conflicts/).
+        assert page.url.rstrip("/").endswith("/offline/conflicts"), f"Offline-Bounce statt In-Place: {page.url}"
+        # Liste + Dead-Sektion rendern aus IDB.
+        page.locator('[data-testid="conflict-list-view"]').wait_for(state="visible", timeout=10000)
+        page.locator('[data-testid="conflict-dead-section"]').wait_for(state="visible", timeout=10000)
+        item = page.locator('[data-testid="dead-event-item"]').first
+        item.wait_for(state="visible", timeout=10000)
+        assert "Offline-Konflikt-1396" in item.inner_text() or "Wurde auf dem Server" in item.inner_text(), (
+            f"Dead-Letter-Eintrag nicht aus IDB gerendert: {item.inner_text()!r}"
+        )
+    finally:
+        page.context.set_offline(False)
+        context.close()
+
+
+def test_offline_conflict_review_renders_in_place(browser, base_url):
+    """Refs #1396: Offline rendert ``/offline/conflicts/<pk>/`` den Resolver-
+    Shell IN-PLACE an der kanonischen URL. Der Service Worker serviert den
+    pre-cachten, pk-losen Shell (/offline/conflict-shell/); ``conflict-
+    resolver.js`` liest die event-pk aus ``location.pathname``. Heute bouncte
+    die URL offline auf ``/offline/``.
+    """
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        _login_miriam(page, base_url)
+        page.goto(f"{base_url}/offline/", wait_until="domcontentloaded")
+        _wait_for_active_service_worker(page, base_url)
+
+        event_pk = str(uuid.uuid4())
+        page.context.set_offline(True)
+        page.goto(f"{base_url}/offline/conflicts/{event_pk}/", wait_until="domcontentloaded")
+
+        # URL bleibt kanonisch — KEIN Bounce, kein sichtbarer Shell-Redirect.
+        assert page.url.rstrip("/").endswith(f"/offline/conflicts/{event_pk}"), f"URL nicht kanonisch: {page.url}"
+        assert "/offline/conflict-shell/" not in page.url
+        # Der Resolver-Shell rendert (die x-data-Wurzel steht immer im DOM).
+        page.locator('[data-testid="conflict-resolver-view"]').wait_for(state="visible", timeout=10000)
+    finally:
+        page.context.set_offline(False)
+        context.close()
+
+
+def test_offline_discard_dead_event_updates_list(browser, base_url):
+    """Refs #1396: Ein dead-Letter offline verwerfen (rein lokaler IDB-Write)
+    aktualisiert die Liste ohne Netz."""
+    context = browser.new_context(locale="de-DE")
+    page = context.new_page()
+    page.set_default_timeout(30000)
+    try:
+        _login_miriam(page, base_url)
+        event_pk = str(uuid.uuid4())
+        _seed_dead_event(page, base_url, event_pk)
+
+        _wait_for_active_service_worker(page, base_url)
+        page.context.set_offline(True)
+        page.goto(f"{base_url}/offline/conflicts/", wait_until="domcontentloaded")
+
+        page.locator('[data-testid="dead-event-item"]').first.wait_for(state="visible", timeout=10000)
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.locator(f'[data-testid="dead-event-discard-{event_pk}"]').click()
+        page.locator('[data-testid="dead-event-item"]').wait_for(state="hidden", timeout=10000)
+
+        remaining = page.evaluate("(pk) => window.offlineStore.getOfflineEvent(pk)", event_pk)
+        assert remaining is None, "Verwerfen muss die dead-Row auch offline endgueltig loeschen"
+    finally:
+        page.context.set_offline(False)
+        context.close()
+
+
 def test_take_offline_shows_secure_context_hint_when_unsupported(staff_page, base_url):
     """Refs #1325: Fehlt der sichere Kontext (WebCrypto nicht verfuegbar, z.B.
     http-LAN), zeigt „Offline mitnehmen" einen klaren Hinweis statt stillem

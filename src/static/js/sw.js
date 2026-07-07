@@ -15,7 +15,7 @@
 
 importScripts("/static/js/url-patterns.js");
 
-const CACHE_NAME = "anlaufstelle-v14";
+const CACHE_NAME = "anlaufstelle-v15";
 // Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
 // ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
 // auch beim ersten Offline-Aufruf garantiert verfuegbar ist.
@@ -23,6 +23,10 @@ const OFFLINE_FALLBACK_URL = "/offline/";
 // Refs #1322: generischer, pk-loser Shell fuer In-Place-Rendern an der
 // kanonischen URL /clients/<pk>/ (offline) — statt Redirect auf /offline/...
 const OFFLINE_CLIENT_SHELL_URL = "/offline/client-shell/";
+// Refs #1396: generischer, pk-loser Shell fuer In-Place-Rendern an der
+// kanonischen URL /offline/conflicts/<pk>/ (offline) — statt Bounce auf
+// /offline/. Muster wie OFFLINE_CLIENT_SHELL_URL.
+const OFFLINE_CONFLICT_SHELL_URL = "/offline/conflict-shell/";
 // Refs #1386: Timeouts gegen Lie-Fi (Verbindung meldet sich als "online",
 // haengt aber ohne Antwort/Fehler). Ohne Timeout haengt respondWith()
 // endlos, statt in die vorhandenen Queue-/Offline-Fallback-Ketten zu laufen.
@@ -54,6 +58,17 @@ const APP_SHELL = [
     // per stale-while-revalidate gecacht). Ohne Pre-Cache bliebe der Shell
     // offline ohne Renderer.
     "/static/js/offline-client-view.js",
+    // Refs #1396: Die Konflikt-/Dead-Letter-Verwaltung (/offline/conflicts/)
+    // und der pk-lose Review-Shell rendern client-seitig aus der
+    // verschluesselten IndexedDB. Ihre Renderer werden NUR von den
+    // Konflikt-Templates geladen (sonst nirgends -> nicht per
+    // stale-while-revalidate gecacht) — ohne Pre-Cache blieben Liste/Shell
+    // offline ohne Renderer. Die Liste selbst wird pre-cached, damit ein
+    // Badge-Klick offline die generische caches.match(request)-Fallback-Stufe
+    // trifft (kein eigener sw.js-Zweig noetig); der pk-behaftete Review greift
+    // ueber extractConflictPk den Shell IN-PLACE.
+    "/static/js/conflict-list.js",
+    "/static/js/conflict-resolver.js",
     // Refs #1386: Diese Module treiben den Offline-Sync-Kern (CSRF-Refresh,
     // URL-Whitelist, Queue, "Offline mitnehmen"-Client-Cache, Event-Edit-
     // Replay) und werden auch von Seiten geladen, die selbst NICHT im
@@ -74,6 +89,10 @@ const APP_SHELL = [
     "/static/icons/favicon.svg",
     OFFLINE_FALLBACK_URL,
     OFFLINE_CLIENT_SHELL_URL,
+    OFFLINE_CONFLICT_SHELL_URL,
+    // Refs #1396: pk-lose Konflikt-Liste — public + datenlos, wird offline
+    // ueber die generische caches.match(request)-Fallback-Stufe serviert.
+    "/offline/conflicts/",
 ];
 
 self.addEventListener("install", (event) => {
@@ -371,7 +390,32 @@ self.addEventListener("fetch", (event) => {
                         .match(OFFLINE_CLIENT_SHELL_URL)
                         .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
                 }
-                return caches.match(request).then((cached) => cached || caches.match(OFFLINE_FALLBACK_URL));
+                // Refs #1396: Konflikt-Review-Sonderfall — den gecachten,
+                // pk-losen Konflikt-Shell IN-PLACE servieren (200, KEIN
+                // Redirect); conflict-resolver.js liest die event-pk aus
+                // location.pathname. Die pk-lose Liste (/offline/conflicts/)
+                // matcht hier bewusst NICHT und faellt in die generische
+                // caches.match(request)-Stufe (sie ist selbst pre-cached).
+                const conflictPk =
+                    self.URL_PATTERNS.extractConflictPk &&
+                    self.URL_PATTERNS.extractConflictPk(request.url);
+                if (conflictPk) {
+                    return caches
+                        .match(OFFLINE_CONFLICT_SHELL_URL)
+                        .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
+                }
+                // Refs #1396: nach der URL (nicht dem Live-Request) matchen. Die
+                // pre-cachten HTML-Shells (z.B. /offline/conflicts/) tragen ein
+                // Django-``Vary: Cookie, Accept-Language``; der Install-Fetch
+                // (cache.addAll) speichert sie mit LEEREN Vary-Headern, waehrend
+                // die Offline-Navigation Accept-Language/Cookie mitschickt —
+                // caches.match(request) verfehlt sie dadurch (Vary-Mismatch) und
+                // fiele faelschlich auf /offline/ zurueck. Der URL-String-Match
+                // ignoriert die Live-Header und trifft den Precache zuverlaessig
+                // (Muster wie die OFFLINE_*_SHELL_URL-Zweige darueber).
+                return caches
+                    .match(request.url)
+                    .then((cached) => cached || caches.match(OFFLINE_FALLBACK_URL));
             })
         );
     }

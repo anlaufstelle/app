@@ -66,6 +66,7 @@ from core.views.offline import (
     OfflineClientShellView,
     OfflineConflictListView,
     OfflineConflictReviewView,
+    OfflineConflictShellView,
 )
 from core.views.retention import (
     RetentionApproveView,
@@ -290,5 +291,13 @@ urlpatterns = [
         "offline/conflicts/<uuid:pk>/",
         OfflineConflictReviewView.as_view(),
         name="offline_conflict_review",
+    ),
+    # Refs #1396: generischer, pk-loser Shell fuer In-Place-Rendern an der
+    # kanonischen URL /offline/conflicts/<pk>/ (Service Worker serviert ihn
+    # offline) — Muster #1322 (OfflineClientShellView).
+    path(
+        "offline/conflict-shell/",
+        OfflineConflictShellView.as_view(),
+        name="offline_conflict_shell",
     ),
 ]

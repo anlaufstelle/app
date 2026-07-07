@@ -94,7 +94,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v14"' in body, "CACHE_NAME muss bei APP_SHELL-Aenderung gebumpt sein."
+        assert 'CACHE_NAME = "anlaufstelle-v15"' in body, "CACHE_NAME muss bei APP_SHELL-Aenderung gebumpt sein."
 
     def test_sw_caches_manifest_and_favicon(self, client):
         """Refs #1334: PWA-Manifest (/manifest.json — aus Scope-Gruenden nicht
@@ -122,6 +122,22 @@ class TestServiceWorkerCachesOfflineFallback:
         # Der Viewer-Renderer wird nur vom Offline-Detail-Template geladen →
         # ohne Pre-Cache offline kein Renderer fuer den In-Place-Shell.
         assert "/static/js/offline-client-view.js" in body, "offline-client-view.js fehlt im APP_SHELL."
+
+    def test_sw_caches_offline_conflict_shell(self, client):
+        """Refs #1396: Die Konflikt-Verwaltung (/offline/conflicts/) und der
+        generische, pk-lose Konflikt-Review-Shell werden offline aus dem Cache
+        serviert — beide muessen daher im APP_SHELL pre-cached sein. Die Liste
+        greift die generische ``caches.match(request)``-Fallback-Stufe; der
+        Review-Shell wird IN-PLACE an /offline/conflicts/<pk>/ serviert.
+        """
+        response = client.get(reverse("service_worker"))
+        body = response.content.decode()
+        assert '"/offline/conflicts/"' in body, "Konflikt-Liste fehlt im APP_SHELL."
+        assert "/offline/conflict-shell/" in body, "Offline-Konflikt-Shell fehlt im APP_SHELL."
+        # Die Renderer werden nur von den Konflikt-Templates geladen → ohne
+        # Pre-Cache offline kein Renderer fuer Liste/Review-Shell.
+        assert "/static/js/conflict-list.js" in body, "conflict-list.js fehlt im APP_SHELL."
+        assert "/static/js/conflict-resolver.js" in body, "conflict-resolver.js fehlt im APP_SHELL."
 
     def test_sw_caches_offline_home_assets(self, client):
         """Refs #1321: Die Offline-Home rendert client-seitig aus IndexedDB —
@@ -416,6 +432,45 @@ class TestOfflineClientShellView:
         kein Server-Auth-Gate (die Daten schuetzt der IndexedDB-Schluessel)."""
         response = client.get(reverse("core:offline_client_shell"))
         assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestOfflineConflictShellView:
+    """Refs #1396: generischer, pk-loser Offline-Konflikt-Review-Shell. Der
+    Service Worker serviert ihn offline IN-PLACE an der kanonischen URL
+    /offline/conflicts/<pk>/ (kein Redirect auf /offline/); der Resolver liest
+    die event-pk aus location.pathname. Der Shell selbst traegt kein PII.
+    """
+
+    def test_renders_pkless_conflict_scaffold(self, client):
+        response = client.get(reverse("core:offline_conflict_shell"))
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert 'data-testid="conflict-resolver-view"' in body
+        # Keine pk im Scaffold — der Resolver leitet sie aus der URL ab.
+        assert 'data-event-pk=""' in body
+        assert "conflict-resolver.js" in body
+
+    def test_public_access(self, client):
+        """Shell ist PII-frei und muss offline aus dem Cache servierbar sein —
+        kein Server-Auth-Gate (die Konfliktdaten liegen verschluesselt in IDB)."""
+        response = client.get(reverse("core:offline_conflict_shell"))
+        assert response.status_code == 200
+
+
+@pytest.mark.django_db
+class TestOfflineConflictListView:
+    """Refs #1396: Die Konflikt-Liste ist pk-los + datenlos (rendert
+    ausschliesslich aus IndexedDB) und muss offline via SW ``cache.addAll``
+    pre-cachebar sein — daher public wie der Client-Shell. Ein Auth-Gate wuerde
+    den Install-Fetch auf /login/ redirecten und ``addAll`` scheitern lassen.
+    """
+
+    def test_public_access(self, client):
+        response = client.get(reverse("core:offline_conflict_list"))
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert 'data-testid="conflict-list-view"' in body
 
 
 @pytest.mark.django_db

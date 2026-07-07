@@ -459,7 +459,12 @@ EXPECTATIONS = (
     # Refs #1322: pk-loser Shell fuer In-Place-Offline-Rendern. Public wie
     # offline_fallback — PII-frei, muss via SW cache.addAll cachebar sein.
     E("core:offline_client_shell", "public", get=ALL_AUTH, anonymous_ok=True),
-    E("core:offline_conflict_list", "offline-api", get=ASSISTANT_PLUS),
+    # Refs #1396: Konflikt-Liste + pk-loser Review-Shell sind pk-los, datenlos
+    # (rendern rein aus IndexedDB) und muessen via SW cache.addAll pre-cachebar
+    # sein — public wie offline_client_shell. Der auth-gated Review-pk-Endpoint
+    # (offline_conflict_review) bleibt bewusst ASSISTANT_PLUS.
+    E("core:offline_conflict_list", "public", get=ALL_AUTH, anonymous_ok=True),
+    E("core:offline_conflict_shell", "public", get=ALL_AUTH, anonymous_ok=True),
     E(
         "core:offline_conflict_review",
         "offline-api",

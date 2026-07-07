@@ -179,12 +179,29 @@ class TestOfflineApiAuthGates:
         finally:
             context.close()
 
-    def test_offline_conflict_list_requires_login(self, browser, base_url):
+    def test_offline_conflict_list_is_public(self, browser, base_url):
+        """Refs #1396 (Vertragsaenderung): Die Konflikt-Liste ist seit Option 1
+        PUBLIC — pk-los, datenlos, muss via SW cache.addAll pre-cachebar sein
+        (ein Auth-Gate wuerde den Install-Fetch auf /login/ redirecten). KEIN
+        Login-Redirect mehr; die Seite rendert das leere IDB-Skelett."""
         context = browser.new_context()
         page = context.new_page()
         try:
             page.goto(f"{base_url}/offline/conflicts/", wait_until="domcontentloaded")
-            assert "/login/" in page.url
+            assert "/login/" not in page.url
+            assert page.locator('[data-testid="conflict-list-view"]').count() == 1
+        finally:
+            context.close()
+
+    def test_offline_conflict_shell_is_public(self, browser, base_url):
+        """Refs #1396: Der pk-lose Konflikt-Review-Shell (Muster #1322) ist
+        public — PII-frei, precache-pflichtig."""
+        context = browser.new_context()
+        page = context.new_page()
+        try:
+            page.goto(f"{base_url}/offline/conflict-shell/", wait_until="domcontentloaded")
+            assert "/login/" not in page.url
+            assert page.locator('[data-testid="conflict-resolver-view"]').count() == 1
         finally:
             context.close()
 

@@ -10,12 +10,18 @@
     "use strict";
     var UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
     var CLIENT_DETAIL_RE = new RegExp("/clients/(" + UUID + ")/(?:$|\\?)", "i");
+    // Refs #1396: pk-behaftete Konflikt-Review-URL (/offline/conflicts/<uuid>/).
+    // Bewusst mit dem /offline/conflicts/-Praefix, damit die pk-lose Liste
+    // (/offline/conflicts/) NICHT matcht und extractClientPk Konflikt-URLs
+    // ebenso wenig faengt (kein /clients/-Segment).
+    var CONFLICT_REVIEW_RE = new RegExp("/offline/conflicts/(" + UUID + ")/(?:$|\\?)", "i");
     self.URL_PATTERNS = {
         EVENT_NEW: /\/events\/new\//,
         EVENT_EDIT: new RegExp("/events/" + UUID + "/edit/", "i"),
         WORKITEM_NEW: /\/workitems\/new\//,
         WORKITEM_EDIT: new RegExp("/workitems/" + UUID + "/edit/", "i"),
         CLIENT_DETAIL: CLIENT_DETAIL_RE,
+        CONFLICT_REVIEW: CONFLICT_REVIEW_RE,
         // Refs #751: Attachment-Downloads liefern Binärdaten, dürfen nicht
         // durch die HTML-Offline-Fallback-Kette ersetzt werden (sonst sieht
         // der User die /offline/-Seite statt einer Datei oder eines
@@ -37,6 +43,13 @@
     ];
     self.URL_PATTERNS.extractClientPk = function (url) {
         var m = CLIENT_DETAIL_RE.exec(url);
+        return m ? m[1] : null;
+    };
+    // Refs #1396: analog extractClientPk — die event-pk aus einer
+    // Konflikt-Review-URL ziehen (der SW serviert dafuer offline den pk-losen
+    // conflict-shell IN-PLACE).
+    self.URL_PATTERNS.extractConflictPk = function (url) {
+        var m = CONFLICT_REVIEW_RE.exec(url);
         return m ? m[1] : null;
     };
 })();

@@ -130,12 +130,42 @@ class OfflineConflictReviewView(AssistantOrAboveRequiredMixin, View):
         )
 
 
-class OfflineConflictListView(AssistantOrAboveRequiredMixin, View):
+class OfflineConflictShellView(View):
+    """Generic, pk-less scaffold for IN-PLACE offline rendering at the canonical
+    ``/offline/conflicts/<uuid>/`` URL (Refs #1396, Muster #1322).
+
+    The Service Worker pre-caches this shell and serves it for offline
+    navigations to a conflict-review page **without** redirecting to
+    ``/offline/`` — so the URL stays canonical and the offline/online split
+    disappears. ``conflict-resolver.js`` then derives the event pk from
+    ``location.pathname`` (its ``data-event-pk`` is empty here).
+
+    Public on purpose, exactly like :class:`OfflineClientShellView`: the shell
+    carries no PII (the conflict envelope is decrypted client-side from
+    IndexedDB) and must be pre-cacheable via the SW ``cache.addAll`` — an auth
+    gate would make the install-time fetch redirect to ``/login/`` and fail
+    ``addAll``. The auth-gated pk route :class:`OfflineConflictReviewView`
+    survives unchanged as the explicit workspace entry point.
+    """
+
+    http_method_names = ["get"]
+
+    def get(self, request):
+        return render(request, "core/events/conflict_review.html", {"event_pk": ""})
+
+
+class OfflineConflictListView(View):
     """Shell page for the conflict overview at ``/offline/conflicts/``.
 
-    Lists all events currently sitting in ``localStatus: "conflict"``. The
-    list itself is rendered from IndexedDB in JavaScript; the view only
-    supplies the skeleton and authentication gate.
+    Lists all events currently sitting in ``localStatus: "conflict"`` (plus the
+    dead-letter and blocked-queue sections since #1385). The list is rendered
+    entirely from IndexedDB in JavaScript; the view supplies only the skeleton.
+
+    Public on purpose, exactly like :class:`OfflineClientShellView` (Refs
+    #1396): the page is pk-less and carries no PII (data is decrypted
+    client-side from IndexedDB) and must be pre-cacheable via the SW
+    ``cache.addAll`` so a badge click reaches it offline — an auth gate would
+    make the install-time fetch redirect to ``/login/`` and fail ``addAll``.
     """
 
     http_method_names = ["get"]
