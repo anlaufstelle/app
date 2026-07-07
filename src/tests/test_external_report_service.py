@@ -365,3 +365,21 @@ class TestMarginTotalSuppression:
         }
         out = suppress_report_stats(facility, stats)
         assert out["total_contacts"] is None
+
+    @pytest.mark.parametrize("total_contacts", [5, 12])
+    def test_report_stats_total_at_or_above_threshold_stays_raw(self, facility, total_contacts):
+        """Final-Review Befund 4: die ``>=``-Vergleichsgrenze selbst (Randsumme
+        exakt gleich der Default-Schwelle 5) und ein Wert deutlich darueber (12)
+        bleiben beide roh — nur ``< k`` ist eine Kleinstfallzahl, ``>= k`` nicht,
+        auch nicht direkt an der Grenze."""
+        from core.services.dashboard import suppress_report_stats
+
+        stats = {
+            "total_contacts": total_contacts,
+            "unique_clients": 0,
+            "by_contact_stage": {},
+            "by_document_type": [],
+            "by_age_cluster": [],
+        }
+        out = suppress_report_stats(facility, stats)
+        assert out["total_contacts"] == total_contacts

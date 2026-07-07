@@ -343,3 +343,39 @@ class TestIdempotencyDbBackstop:
         r2 = client.post(reverse("core:event_create"), payload, HTTP_X_IDEMPOTENCY_KEY=bad_key)
         assert r1.status_code == 302 and r2.status_code == 302
         assert Event.objects.count() == 2
+
+    def test_same_key_different_users_both_succeed(self, staff_user, lead_user, doc_type_contact, facility):
+        """T1: Der Unique-Constraint ist bewusst auf (created_by, idempotency_key)
+        skopiert, nicht auf idempotency_key allein. Verwenden zwei VERSCHIEDENE
+        Nutzer zufaellig denselben X-Idempotency-Key (z.B. Client-seitige UUID-
+        Kollision oder zwei unabhaengige Offline-Queues), darf der Key des einen
+        Nutzers den Request des anderen weder blockieren (IntegrityError) noch
+        dessen Ergebnis leaken (Redirect/Event des fremden Nutzers zurueckgeben).
+        Direkt auf ORM-Ebene geprueft: beide Zeilen muessen mit demselben Key,
+        aber unterschiedlichem created_by, unabhaengig voneinander existieren.
+        """
+        shared_key = str(uuid.uuid4())
+
+        event_staff = Event.objects.create(
+            facility=facility,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={},
+            is_anonymous=True,
+            created_by=staff_user,
+            idempotency_key=shared_key,
+        )
+        event_lead = Event.objects.create(
+            facility=facility,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={},
+            is_anonymous=True,
+            created_by=lead_user,
+            idempotency_key=shared_key,
+        )
+
+        assert Event.objects.count() == 2
+        assert event_staff.pk != event_lead.pk
+        assert Event.objects.filter(created_by=staff_user, idempotency_key=shared_key).count() == 1
+        assert Event.objects.filter(created_by=lead_user, idempotency_key=shared_key).count() == 1
