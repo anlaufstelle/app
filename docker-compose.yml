@@ -8,7 +8,7 @@
 # Fuer den produktiven Einsatz bitte ``docker-compose.prod.yml`` verwenden.
 services:
   db:
-    image: postgres:18-alpine
+    image: postgres:18-alpine@sha256:1b1689b20d16a014a3d195653381cf2caa75a41a92d93b255a9d6ea29fd353aa
     environment:
       POSTGRES_DB: anlaufstelle
       POSTGRES_USER: anlaufstelle
@@ -46,7 +46,7 @@ services:
         condition: service_healthy
 
   tailwind:
-    image: node:24-alpine
+    image: node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd
     working_dir: /app
     volumes:
       - .:/app
@@ -55,7 +55,7 @@ services:
       - tailwind
 
   clamav:
-    image: clamav/clamav:stable
+    image: clamav/clamav:stable@sha256:6f4a9e7d616ffc8d1070200fe35ac860735fdd522161a1043f94856e6ee13c28
     volumes:
       - clamav-db:/var/lib/clamav
     # Port 3310 ist nur innerhalb des Compose-Netzwerks sichtbar — kein Host-Binding.

@@ -227,9 +227,9 @@ release-verify-public:
 # Dependencies: Lock-Files aus requirements*.in neu erzeugen (pip-tools).
 # Nach Änderungen an requirements.in oder requirements-dev.in ausführen.
 deps-lock:
-	$(PYTHON) -m piptools compile --no-strip-extras --resolver=backtracking \
+	$(PYTHON) -m piptools compile --generate-hashes --no-strip-extras --resolver=backtracking \
 		--output-file=requirements.txt requirements.in
-	$(PYTHON) -m piptools compile --no-strip-extras --resolver=backtracking \
+	$(PYTHON) -m piptools compile --generate-hashes --allow-unsafe --no-strip-extras --resolver=backtracking \
 		--output-file=requirements-dev.txt requirements-dev.in
 
 # Verifiziert, dass requirements*.txt aktuell zu requirements*.in ist.
@@ -238,9 +238,9 @@ deps-lock:
 deps-check:
 	@cp requirements.txt requirements.txt.bak && \
 		cp requirements-dev.txt requirements-dev.txt.bak && \
-		$(PYTHON) -m piptools compile --quiet --no-strip-extras --resolver=backtracking \
+		$(PYTHON) -m piptools compile --generate-hashes --quiet --no-strip-extras --resolver=backtracking \
 			--output-file=requirements.txt requirements.in >/dev/null && \
-		$(PYTHON) -m piptools compile --quiet --no-strip-extras --resolver=backtracking \
+		$(PYTHON) -m piptools compile --generate-hashes --allow-unsafe --quiet --no-strip-extras --resolver=backtracking \
 			--output-file=requirements-dev.txt requirements-dev.in >/dev/null && \
 		drift=0; \
 		diff -u requirements.txt.bak requirements.txt || drift=1; \

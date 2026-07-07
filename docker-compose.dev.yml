@@ -11,7 +11,7 @@
 
 services:
   db:
-    image: postgres:18-alpine
+    image: postgres:18-alpine@sha256:1b1689b20d16a014a3d195653381cf2caa75a41a92d93b255a9d6ea29fd353aa
     # Container-Runtime-Hardening (Refs #1374): kein Privilege-Escalation,
     # cap_drop ALL. Postgres startet als root (chmod/chown Datadir + Socket,
     # dann Drop auf postgres), daher CHOWN/FOWNER/SETUID/SETGID zurueck
@@ -57,7 +57,7 @@ services:
       - internal
 
   clamav:
-    image: clamav/clamav:stable
+    image: clamav/clamav:stable@sha256:6f4a9e7d616ffc8d1070200fe35ac860735fdd522161a1043f94856e6ee13c28
     # Container-Runtime-Hardening (Refs #1374): kein Privilege-Escalation,
     # cap_drop ALL. clamav startet als root und dropt auf den clamav-User;
     # CHOWN/FOWNER/SETUID/SETGID + DAC_OVERRIDE zurueck (ohne DAC_OVERRIDE
@@ -159,7 +159,7 @@ services:
       - frontend
 
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
     # Container-Runtime-Hardening (Refs #1374): kein Privilege-Escalation,
     # cap_drop ALL bis auf NET_BIND_SERVICE (Bind auf 80/443; das Caddy-Binary
     # traegt cap_net_bind_service als File-Cap, die no-new-privileges sonst

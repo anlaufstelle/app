@@ -1,11 +1,18 @@
 # Stage 1: Build Python wheels
-FROM python:3.13-slim AS builder
+# Base-Images per Digest gepinnt (Refs #1373): der Tag bleibt lesbar, der
+# @sha256 friert die Manifest-Liste (multi-arch) ein — ein umgehaengtes Tag
+# (Index-/Registry-MITM) kann so keinen anderen Inhalt unterschieben.
+# Bump: `docker buildx imagetools inspect <image>` -> .Manifest.Digest.
+FROM python:3.13-slim@sha256:eb43ff125d8d58d7449dcba7d336c23bcac412f526d861db493b9994d8010280 AS builder
 WORKDIR /build
 COPY requirements.txt .
-RUN pip wheel --no-cache-dir --wheel-dir /build/wheels -r requirements.txt
+# --require-hashes verifiziert JEDES von PyPI geladene Artefakt gegen die
+# in requirements.txt (pip-compile --generate-hashes) gepinnten sha256-Hashes.
+# Hier — am Download/Wheel-Bau — sitzt die Integritaetsgarantie der App-Deps.
+RUN pip wheel --no-cache-dir --require-hashes --wheel-dir /build/wheels -r requirements.txt
 
 # Stage 2: Compile Tailwind CSS
-FROM node:24-alpine AS node
+FROM node:24-alpine@sha256:a0b9bf06e4e6193cf7a0f58816cc935ff8c2a908f81e6f1a95432d679c54fbfd AS node
 WORKDIR /build
 COPY package.json package-lock.json tailwind.config.js ./
 COPY src/templates/ src/templates/
@@ -14,7 +21,7 @@ COPY src/static/css/input.css src/static/css/input.css
 RUN npm ci && npx tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --minify
 
 # Stage 3: Runtime
-FROM python:3.13-slim AS final
+FROM python:3.13-slim@sha256:eb43ff125d8d58d7449dcba7d336c23bcac412f526d861db493b9994d8010280 AS final
 
 # WeasyPrint + libmagic (file-upload magic-bytes validation, Refs #610) system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -28,8 +35,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install Python packages from wheels
+# --no-index + --no-deps: es wird AUSSCHLIESSLICH aus dem lokalen Wheel-Ordner
+# installiert (kein PyPI-Zugriff mehr). Kein erneutes --require-hashes hier, weil
+# lokal aus sdists gebaute Wheels andere sha256-Hashes haben als die PyPI-Artefakte;
+# die Hash-Pruefung ist bereits im Builder (pip wheel --require-hashes) erfolgt.
+# Der Wheel-Ordner enthaelt die vollstaendige transitive Huelle, daher ist
+# --no-deps korrekt und schliesst jeden Netzwerk-Fallback aus. Refs #1373.
 COPY --from=builder /build/wheels /tmp/wheels
-RUN pip install --no-cache-dir /tmp/wheels/* && rm -rf /tmp/wheels
+RUN pip install --no-cache-dir --no-index --no-deps /tmp/wheels/* && rm -rf /tmp/wheels
 
 # Copy application code
 COPY src/ ./
