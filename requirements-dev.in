@@ -12,4 +12,4 @@ filelock>=3.29.1
 mypy>=2.1.0
 django-stubs[compatible-mypy]>=6.0.5
 # Mutation-Testing fuer core/services + core/forms (nightly, Refs #922/#923).
-mutmut>=3.0,<4.0
+mutmut>=3.6.0,<4.0
