@@ -39,12 +39,14 @@ import uuid
 
 import pytest
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, close_old_connections, connection
+from django.test import RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Event, WorkItem
-from core.services.events.idempotency import IDEMPOTENCY_TTL_SECONDS
+from core.services.events.idempotency import IDEMPOTENCY_TTL_SECONDS, _cache_key
 from core.services.system.offline import BUNDLE_TTL_SECONDS
 
 
@@ -148,6 +150,66 @@ class TestEventCreateIdempotency:
         assert r.status_code == 302
         assert Event.objects.filter(document_type=doc_type_contact).count() == 1
 
+    def test_same_key_different_body_returns_422_and_no_second_event(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        """N14 (#1424): derselbe Key mit ABWEICHENDEM Body ist ein
+        Key-Kollisions-Kurzschluss — statt den gecachten Erfolg (Redirect
+        aufs Original) zurueckzugeben, MUSS der Server 422 liefern (sichtbares
+        Dead-Letter), und es darf KEIN zweites Event entstehen."""
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        payload = _create_payload(doc_type_contact, client_identified)
+
+        r1 = client.post(self._url(), payload, HTTP_X_IDEMPOTENCY_KEY=key)
+        assert r1.status_code == 302
+        assert Event.objects.filter(document_type=doc_type_contact).count() == 1
+
+        divergent = {**payload, "notiz": "GEAENDERTER-INHALT"}
+        r2 = client.post(self._url(), divergent, HTTP_X_IDEMPOTENCY_KEY=key)
+        assert r2.status_code == 422, "Key-Treffer mit abweichendem Body muss 422 sein, kein gecachter Erfolg"
+        assert "__all__" in r2.json()["errors"]
+        assert Event.objects.filter(document_type=doc_type_contact).count() == 1
+
+    def test_same_key_same_body_different_csrf_stays_idempotent(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        """Stale-CSRF-Retry (#1331/#1333): der CSRF-Token wird beim legitimen
+        403-Retry erneuert und darf den Fingerprint NICHT beeinflussen — sonst
+        braeche der konforme Replay als False-Positive-422."""
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        payload = _create_payload(doc_type_contact, client_identified)
+
+        r1 = client.post(self._url(), {**payload, "csrfmiddlewaretoken": "tok-A"}, HTTP_X_IDEMPOTENCY_KEY=key)
+        assert r1.status_code == 302
+        r2 = client.post(self._url(), {**payload, "csrfmiddlewaretoken": "tok-B"}, HTTP_X_IDEMPOTENCY_KEY=key)
+        assert r2.status_code == 302
+        assert r1["Location"] == r2["Location"]
+        assert Event.objects.filter(document_type=doc_type_contact).count() == 1
+
+    def test_legacy_cache_value_hits_without_payload_check(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        """Abwaertskompatibilitaet (N14): ein alter Cache-Eintrag (nackter
+        PK-String vor dem Payload-Hash, TTL bis 72 h nach Deploy) muss als
+        Treffer OHNE Hash-Pruefung durchgehen — kein 500, kein False-Positive-
+        422, auch bei abweichendem Body."""
+        client.force_login(staff_user)
+        payload = _create_payload(doc_type_contact, client_identified)
+        r0 = client.post(self._url(), payload)  # ohne Key -> reales Ziel-Event
+        assert r0.status_code == 302
+        event = Event.objects.get()
+
+        legacy_key = str(uuid.uuid4())
+        cache.set(_cache_key("event_create", staff_user.pk, legacy_key), str(event.pk), IDEMPOTENCY_TTL_SECONDS)
+
+        divergent = {**payload, "notiz": "voellig-anders"}
+        r = client.post(self._url(), divergent, HTTP_X_IDEMPOTENCY_KEY=legacy_key)
+        assert r.status_code == 302
+        assert r["Location"] == reverse("core:event_detail", kwargs={"pk": event.pk})
+        assert Event.objects.filter(document_type=doc_type_contact).count() == 1
+
 
 @pytest.mark.django_db
 class TestWorkItemCreateIdempotency:
@@ -240,6 +302,86 @@ class TestWorkItemCreateIdempotency:
         r = client.post(self._url(), good, HTTP_X_IDEMPOTENCY_KEY=key)
         assert r.status_code == 302
         assert WorkItem.objects.filter(title="kaputt").count() == 1
+
+    def test_same_key_different_body_returns_422_and_no_second_workitem(self, client, staff_user):
+        """N14 (#1424): analog zum Event-Pfad — Key-Treffer mit abweichendem
+        Body -> 422 (Dead-Letter), KEIN zweites WorkItem."""
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        r1 = client.post(self._url(), self._payload(title="Original"), HTTP_X_IDEMPOTENCY_KEY=key)
+        assert r1.status_code == 302
+        assert WorkItem.objects.count() == 1
+
+        r2 = client.post(self._url(), self._payload(title="Abweichend"), HTTP_X_IDEMPOTENCY_KEY=key)
+        assert r2.status_code == 422, "Key-Treffer mit abweichendem Body muss 422 sein, kein gecachter Erfolg"
+        assert "__all__" in r2.json()["errors"]
+        assert WorkItem.objects.count() == 1
+
+    def test_same_key_same_body_different_csrf_stays_idempotent(self, client, staff_user):
+        """Stale-CSRF-Retry (#1331/#1333): CSRF-Token darf den Fingerprint nicht
+        beeinflussen — konformer Replay bleibt idempotent (Redirect)."""
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        payload = self._payload()
+        r1 = client.post(self._url(), {**payload, "csrfmiddlewaretoken": "tok-A"}, HTTP_X_IDEMPOTENCY_KEY=key)
+        assert r1.status_code == 302
+        r2 = client.post(self._url(), {**payload, "csrfmiddlewaretoken": "tok-B"}, HTTP_X_IDEMPOTENCY_KEY=key)
+        assert r2.status_code == 302
+        assert r1["Location"] == r2["Location"]
+        assert WorkItem.objects.count() == 1
+
+    def test_legacy_cache_value_hits_without_payload_check(self, client, staff_user):
+        """Abwaertskompatibilitaet (N14): alter nackter PK-String im Cache ->
+        Treffer ohne Hash-Pruefung (kein 500, kein False-Positive-422)."""
+        client.force_login(staff_user)
+        r0 = client.post(self._url(), self._payload(title="Legacy-Basis"))
+        assert r0.status_code == 302
+        workitem = WorkItem.objects.get()
+
+        legacy_key = str(uuid.uuid4())
+        cache.set(_cache_key("workitem_create", staff_user.pk, legacy_key), str(workitem.pk), IDEMPOTENCY_TTL_SECONDS)
+
+        r = client.post(self._url(), self._payload(title="voellig-anders"), HTTP_X_IDEMPOTENCY_KEY=legacy_key)
+        assert r.status_code == 302
+        assert r["Location"] == reverse("core:workitem_inbox")
+        assert WorkItem.objects.count() == 1
+
+
+class TestPayloadFingerprint:
+    """Unit-Contract von :func:`payload_fingerprint` (N14, Refs #1424):
+    reihenfolge-unabhaengig, CSRF-agnostisch, datei-sensitiv."""
+
+    def _req(self, data, files=None):
+        return RequestFactory().post("/x", {**data, **(files or {})})
+
+    def test_order_independent(self):
+        from core.services.events.idempotency import payload_fingerprint
+
+        a = payload_fingerprint(self._req({"a": "1", "b": "2"}))
+        b = payload_fingerprint(self._req({"b": "2", "a": "1"}))
+        assert a == b
+
+    def test_csrf_token_excluded(self):
+        from core.services.events.idempotency import payload_fingerprint
+
+        a = payload_fingerprint(self._req({"a": "1", "csrfmiddlewaretoken": "AAA"}))
+        b = payload_fingerprint(self._req({"a": "1", "csrfmiddlewaretoken": "BBB"}))
+        c = payload_fingerprint(self._req({"a": "1"}))
+        assert a == b == c
+
+    def test_body_change_changes_hash(self):
+        from core.services.events.idempotency import payload_fingerprint
+
+        assert payload_fingerprint(self._req({"a": "1"})) != payload_fingerprint(self._req({"a": "2"}))
+
+    def test_file_sensitive(self):
+        from core.services.events.idempotency import payload_fingerprint
+
+        no_file = payload_fingerprint(self._req({"a": "1"}))
+        with_file = payload_fingerprint(self._req({"a": "1"}, {"anhang": SimpleUploadedFile("f.txt", b"data")}))
+        other_name = payload_fingerprint(self._req({"a": "1"}, {"anhang": SimpleUploadedFile("g.txt", b"data")}))
+        assert no_file != with_file
+        assert with_file != other_name
 
 
 class TestIdempotencyTtlCoupling:

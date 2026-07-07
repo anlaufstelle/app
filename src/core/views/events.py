@@ -36,6 +36,7 @@ from core.services.events import (
     get_idempotent_result,
     merge_update_payload,
     normalize_idempotency_key,
+    payload_fingerprint,
     remember_idempotent_result,
     remove_restricted_fields,
     request_deletion,
@@ -46,6 +47,7 @@ from core.services.events import (
 )
 from core.views._json_contracts import (
     _conflict_response,
+    _idempotency_mismatch_response,
     _invalid_form_response,
     _wants_json_response,
     _wants_raw_json_response,
@@ -160,17 +162,28 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
         # den ``X-Idempotency-Key`` eines bereits angelegten Events, leiten wir
         # auf dieses Event um, statt einen Duplikat-Datensatz zu erzeugen.
         idem_key = normalize_idempotency_key(request.headers.get("X-Idempotency-Key"))
+        idem_payload_hash = payload_fingerprint(request) if idem_key else None
         if idem_key:
-            existing_pk = get_idempotent_result("event_create", request.user.pk, idem_key)
-            if existing_pk is None:
-                # R5: Cache-Eviction/Neustart ueberlebt nur der DB-Backstop —
-                # sonst legt der Replay nach Cache-Verlust ein Duplikat an.
-                existing_pk = (
-                    Event.objects.for_facility(facility)
-                    .filter(created_by=request.user, idempotency_key=idem_key)
-                    .values_list("pk", flat=True)
-                    .first()
-                )
+            hit = get_idempotent_result("event_create", request.user.pk, idem_key)
+            if hit is not None:
+                # N14 (#1424): derselbe Key mit ABWEICHENDEM Body ist eine
+                # Key-Kollision — kein gecachter Erfolg, sondern 422 (Dead-
+                # Letter-UI; Rationale 422 vs. 409 im Helper-Docstring).
+                # Legacy-Eintraege (payload_hash is None, Cache-Wert aus der
+                # Zeit vor N14) passieren ohne Hash-Pruefung.
+                if hit.payload_hash is not None and hit.payload_hash != idem_payload_hash:
+                    return _idempotency_mismatch_response()
+                return redirect("core:event_detail", pk=hit.pk)
+            # R5: Cache-Eviction/Neustart ueberlebt nur der DB-Backstop —
+            # sonst legt der Replay nach Cache-Verlust ein Duplikat an. Die
+            # DB-Spalte traegt bewusst KEINEN Payload-Hash (N14-Grenze, siehe
+            # Modul-Docstring idempotency.py): Treffer ohne Payload-Pruefung.
+            existing_pk = (
+                Event.objects.for_facility(facility)
+                .filter(created_by=request.user, idempotency_key=idem_key)
+                .values_list("pk", flat=True)
+                .first()
+            )
             if existing_pk:
                 return redirect("core:event_detail", pk=existing_pk)
 
@@ -302,8 +315,9 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
 
         # Erfolgreich angelegt → Ergebnis unter dem Idempotenz-Schlüssel merken,
         # damit ein späterer Replay (F-09) hier oben kurzschließt statt ein
-        # zweites Event zu erzeugen. No-op ohne Schlüssel.
-        remember_idempotent_result("event_create", request.user.pk, idem_key, event.pk)
+        # zweites Event zu erzeugen. Der Payload-Hash (N14) macht dabei eine
+        # Key-Kollision mit anderem Body erkennbar. No-op ohne Schlüssel.
+        remember_idempotent_result("event_create", request.user.pk, idem_key, event.pk, payload_hash=idem_payload_hash)
 
         messages.success(request, _("Kontakt wurde dokumentiert."))
         return redirect("core:event_detail", pk=event.pk)

@@ -22,7 +22,9 @@ Inline-``accept = (...).lower(); if "application/json" in accept: …`` wird
 in diesem Task neu.
 """
 
+from django.core.exceptions import NON_FIELD_ERRORS
 from django.http import JsonResponse
+from django.utils.translation import gettext_lazy as _
 
 
 def _wants_json_response(request) -> bool:
@@ -70,6 +72,32 @@ def _invalid_form_response(form):
     """
     return JsonResponse(
         {"error": "invalid", "errors": form.errors.get_json_data()},
+        status=422,
+    )
+
+
+def _idempotency_mismatch_response():
+    """Build the 422 JSON envelope for an idempotency-key payload mismatch (N14, Refs #1424).
+
+    Ein Cache-Treffer des ``X-Idempotency-Key``, dessen gespeicherter
+    Payload-Hash NICHT zum aktuellen Request-Fingerprint passt, ist eine
+    Key-Kollision — der Request darf weder den gecachten Erfolg (Redirect aufs
+    Original) noch ein zweites Objekt liefern.
+
+    Bewusst **422, nicht 409**: :file:`offline-queue.js` mappt 409 auf
+    ``localStatus: "conflict"`` (User-Retry-Semantik des Optimistic-Locking-
+    Konflikts) — ein Payload-Mismatch kann aber nie durch einen Retry
+    erfolgreich werden, derselbe Key bleibt verbrannt. 422 landet dort als
+    ``dead``/``invalid`` in der sichtbaren Dead-Letter-UI, wo der Fall hingehört.
+
+    Dieselbe Body-Shape wie :func:`_invalid_form_response` (Fehler unter
+    Djangos ``NON_FIELD_ERRORS``-Key ``"__all__"``), damit der Replay-Client
+    sie wie jeden Invalid-Fall rendert — nur ohne ein Form zu faken.
+    """
+    message = _("Idempotenz-Schlüssel wurde bereits mit anderem Inhalt verwendet.")  # pragma: no mutate
+    code = "idempotency_payload_mismatch"  # pragma: no mutate
+    return JsonResponse(
+        {"error": "invalid", "errors": {NON_FIELD_ERRORS: [{"message": message, "code": code}]}},
         status=422,
     )
 

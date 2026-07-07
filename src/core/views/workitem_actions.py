@@ -26,10 +26,12 @@ from core.services.client import get_client_or_none
 from core.services.events import (
     get_idempotent_result,
     normalize_idempotency_key,
+    payload_fingerprint,
     remember_idempotent_result,
 )
 from core.views._json_contracts import (
     _conflict_response,
+    _idempotency_mismatch_response,
     _invalid_form_response,
     _wants_json_response,
     _wants_raw_json_response,
@@ -142,17 +144,28 @@ class WorkItemCreateView(StaffRequiredMixin, View):
         # wir auf dasselbe Ziel um wie beim Original-Erfolg, statt ein
         # Duplikat zu erzeugen.
         idem_key = normalize_idempotency_key(request.headers.get("X-Idempotency-Key"))
+        idem_payload_hash = payload_fingerprint(request) if idem_key else None
         if idem_key:
-            existing_pk = get_idempotent_result("workitem_create", request.user.pk, idem_key)
-            if existing_pk is None:
-                # R5: Cache-Eviction/Neustart ueberlebt nur der DB-Backstop —
-                # sonst legt der Replay nach Cache-Verlust ein Duplikat an.
-                existing_pk = (
-                    WorkItem.objects.for_facility(facility)
-                    .filter(created_by=request.user, idempotency_key=idem_key)
-                    .values_list("pk", flat=True)
-                    .first()
-                )
+            hit = get_idempotent_result("workitem_create", request.user.pk, idem_key)
+            if hit is not None:
+                # N14 (#1424): derselbe Key mit ABWEICHENDEM Body ist eine
+                # Key-Kollision — kein gecachter Erfolg, sondern 422 (Dead-
+                # Letter-UI; Rationale 422 vs. 409 im Helper-Docstring).
+                # Legacy-Eintraege (payload_hash is None, Cache-Wert aus der
+                # Zeit vor N14) passieren ohne Hash-Pruefung.
+                if hit.payload_hash is not None and hit.payload_hash != idem_payload_hash:
+                    return _idempotency_mismatch_response()
+                return redirect("core:workitem_inbox")
+            # R5: Cache-Eviction/Neustart ueberlebt nur der DB-Backstop —
+            # sonst legt der Replay nach Cache-Verlust ein Duplikat an. Die
+            # DB-Spalte traegt bewusst KEINEN Payload-Hash (N14-Grenze, siehe
+            # Modul-Docstring idempotency.py): Treffer ohne Payload-Pruefung.
+            existing_pk = (
+                WorkItem.objects.for_facility(facility)
+                .filter(created_by=request.user, idempotency_key=idem_key)
+                .values_list("pk", flat=True)
+                .first()
+            )
             if existing_pk:
                 return redirect("core:workitem_inbox")
 
@@ -198,8 +211,12 @@ class WorkItemCreateView(StaffRequiredMixin, View):
                 raise
             # Erfolgreich angelegt → Ergebnis unter dem Idempotenz-Schlüssel
             # merken, damit ein späterer Replay (#1329) hier oben kurzschließt
-            # statt ein zweites WorkItem zu erzeugen. No-op ohne Schlüssel.
-            remember_idempotent_result("workitem_create", request.user.pk, idem_key, workitem.pk)
+            # statt ein zweites WorkItem zu erzeugen. Der Payload-Hash (N14)
+            # macht eine Key-Kollision mit anderem Body erkennbar. No-op ohne
+            # Schlüssel.
+            remember_idempotent_result(
+                "workitem_create", request.user.pk, idem_key, workitem.pk, payload_hash=idem_payload_hash
+            )
             messages.success(request, _("Aufgabe wurde erstellt."))
             return redirect("core:workitem_inbox")
 
