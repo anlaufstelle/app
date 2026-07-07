@@ -27,7 +27,7 @@ Alle Replay-/Revalidierungs-Trigger (die früher drei unkoordinierten `online`-L
 
 ### 2. HTTP-Replay-Contract (SSOT für Client, Server, Service Worker)
 
-Die vier Mutations-Views antworten Replay-/JSON-Clients einheitlich:
+Die fünf Mutations-Views (Event-/WorkItem-Create und -Update; seit #1419 auch WorkItem-Status) antworten Replay-/JSON-Clients einheitlich:
 
 | Fall | Status | Body | Bedingung |
 |---|---|---|---|
@@ -38,6 +38,8 @@ Die vier Mutations-Views antworten Replay-/JSON-Clients einheitlich:
 | Erfolg | 302→200 | HTML | unverändert |
 
 `server_state` trägt die ressourcentypischen Felder (Event: `data_json`/`updated_at`/`document_type_name`; WorkItem: `title`/`description`/`status`/`updated_at`). Der Optimistic-Lock-Token (`expected_updated_at`) ist im JSON-Pfad **Pflicht** und wird unter `select_for_update` in derselben Transaktion geprüft (#1338) — ein fehlender Token ist kein stiller Last-Write-Wins mehr, sondern ein 409. Idempotenz für Offline-Create (Event **und** WorkItem) über `X-Idempotency-Key` mit serverseitiger Dedup-TTL **72 h ≥ Bundle-Lease 48 h** (#1329).
+
+**Abweichung des Status-Pfads (#1419):** Beim WorkItem-Status-Toggle ist HTMX der normale *Online*-Pfad (Inbox-Buttons). Token-Pflicht und Token-Auswertung gelten dort deshalb nur für **rohe** JSON-Clients (`_wants_raw_json_response` — der Queue-Replay setzt immer `Accept: application/json`); der Online-HTMX-/HTML-Pfad behält das bewusst akzeptierte Status-gegen-Status-LWW. Die Buttons senden das Token trotzdem immer mit, weil es in den vom SW eingefrorenen Offline-Payload gehört. Zusätzlich dedupliziert `X-Idempotency-Key` (Scope `workitem_status`, gleiche 72-h-TTL) Doppel-Replays nach Ack-Verlust — der Cache-Hit liefert die Erfolgsform des Originals, damit ein zwischenzeitlicher Statuswechsel weder überschrieben noch als Phantom-Konflikt gemeldet wird; einen DB-Backstop wie beim Create gibt es für Transitionen nicht (nach Cache-Verlust fängt der Versions-Token den Doppel-Replay als sichtbaren 409 ab). Bei 409 persistiert die generische Queue den `server_state` aus dem Response-Body am Queue-Record (verschlüsseltes Envelope); die Konflikt-Liste rendert den Status-Konflikt fachlich und bietet „Erneut anwenden" (Token:= gezeigter Server-Stand, Re-Replay) an.
 
 Der Client klassifiziert die Antwort deterministisch: Erfolg nur bei Redirect (≠ `/login/`) bzw. HTMX-Partial; 409 → sichtbarer Konflikt (aus dem Auto-Replay genommen); 422/400/404/410 → Dead-Letter; 403 → ein CSRF-Retry, dann Dead-Letter; 429/5xx/Netzfehler → Backoff bzw. Batch-Abbruch. **Kein Head-of-Line-Blocking** (ein toter Record blockiert die übrigen nicht).
 
