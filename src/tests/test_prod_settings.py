@@ -286,3 +286,33 @@ class TestProdPlaceholderSecretsGuard:
                 f"{var} muss in .env.example LEER sein — nicht-leere Platzhalter "
                 "ueberleben den Nur-leer-Guard (Review N6)."
             )
+
+
+class TestProdAllowedHostsWildcardGuard:
+    """C4 (Refs #1376 I4): Prod darf nicht mit einem Wildcard-Eintrag `*` in
+    ALLOWED_HOSTS starten. `*` ist in Django Match-all — es hebelt die
+    einzige Huerde gegen Host-Header-Poisoning (z. B. gefaelschte
+    Passwort-Reset-Links) aus. Subdomain-Patterns wie `.example.com` sind
+    KEIN Match-all und bleiben erlaubt."""
+
+    _VALID_ENV = {
+        "DJANGO_SECRET_KEY": "x" * 50,
+        "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "DJANGO_AUDIT_HASH_KEY": "y" * 50,
+    }
+
+    def test_wildcard_only_rejected(self):
+        result = _run_prod_import({**self._VALID_ENV, "ALLOWED_HOSTS": "*"})
+        assert result.returncode != 0
+        assert "ALLOWED_HOSTS" in result.stderr
+
+    def test_wildcard_as_list_element_rejected(self):
+        result = _run_prod_import({**self._VALID_ENV, "ALLOWED_HOSTS": "example.org,*"})
+        assert result.returncode != 0
+        assert "ALLOWED_HOSTS" in result.stderr
+
+    def test_subdomain_pattern_still_allowed(self):
+        """Regression: `.example.com`-Subdomain-Patterns sind kein Match-all
+        und duerfen den Guard nicht ausloesen."""
+        result = _run_prod_import({**self._VALID_ENV, "ALLOWED_HOSTS": "example.org,.example.org"})
+        assert result.returncode == 0, f"prod import failed: {result.stderr}"

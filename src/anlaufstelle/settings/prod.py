@@ -50,6 +50,16 @@ if "collectstatic" not in sys.argv and not SECRET_KEY:  # noqa: F405
 ALLOWED_HOSTS = [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
 if "collectstatic" not in sys.argv and not ALLOWED_HOSTS:
     raise ImproperlyConfigured("ALLOWED_HOSTS muss in Produktion gesetzt sein (Kommaseparierte Liste).")
+# Fail-closed (Refs #1376 C4/I4): "*" ist in Django ein Match-all-Eintrag und
+# hebelt die einzige Huerde gegen Host-Header-Poisoning aus (z. B. gefaelschte
+# Passwort-Reset-Links). Subdomain-Patterns wie ".example.com" sind KEIN
+# Match-all und bleiben erlaubt.
+if "collectstatic" not in sys.argv and "*" in ALLOWED_HOSTS:
+    raise ImproperlyConfigured(
+        "ALLOWED_HOSTS darf in Produktion kein Wildcard '*' enthalten (Match-all, "
+        "hebelt die Host-Header-Validierung aus). Subdomain-Patterns wie '.example.com' "
+        "bleiben erlaubt."
+    )
 
 # --- Security ---
 
