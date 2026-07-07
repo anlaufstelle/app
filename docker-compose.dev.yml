@@ -15,7 +15,10 @@ services:
     # Container-Runtime-Hardening (Refs #1374): kein Privilege-Escalation,
     # cap_drop ALL. Postgres startet als root (chmod/chown Datadir + Socket,
     # dann Drop auf postgres), daher CHOWN/FOWNER/SETUID/SETGID zurueck
-    # (empirisch minimal; DAC_OVERRIDE nicht noetig). Kein read_only: Datadir
+    # DAC_OVERRIDE ist noetig, damit root das BESTEHENDE PGDATA (mode 0700,
+    # postgres-uid) beim Entrypoint-``find`` traversieren kann — ohne bricht
+    # ein Redeploy auf vorhandenem Datadir mit "Permission denied" (ein
+    # Fresh-Init-Volume verdeckt das). Kein read_only: Datadir
     # + Unix-Socket sind Schreibpfade.
     security_opt:
       - "no-new-privileges:true"
@@ -26,6 +29,7 @@ services:
       - FOWNER
       - SETUID
       - SETGID
+      - DAC_OVERRIDE
     pids_limit: 512
     mem_limit: 2g
     # KEIN env_file: .env.dev hier — der db-Container nutzt
