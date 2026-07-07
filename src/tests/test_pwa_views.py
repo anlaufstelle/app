@@ -166,6 +166,10 @@ class TestServiceWorkerCachesOfflineFallback:
         body = response.content.decode()
         for asset in (
             "/static/js/csrf.js",
+            # Refs #1408: gemeinsames CSRF-Util (fromMeta/refresh) fuer die
+            # Replay-Konsumenten — muss offline verfuegbar sein, sonst bricht
+            # der Offline-Replay-Refresh-Pfad (Konsumenten laufen leer).
+            "/static/js/csrf-utils.js",
             "/static/js/url-patterns.js",
             "/static/js/offline-queue.js",
             "/static/js/offline-client.js",

@@ -449,6 +449,11 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "client_identified.pk"),),
         idor=(("pk", "foreign_client.pk"),),
     ),
+    # Refs #1408: dedizierter CSRF-Token-Endpoint fuer den Offline-Replay-
+    # Refresh-Pfad. Public wie offline_client_shell — der Token ist kein
+    # Geheimnis (Django rendert ihn in jedes Formular), PII-frei; bisherige
+    # Refresh-Quelle /login/ war ebenfalls public.
+    E("core:offline_csrf", "public", get=ALL_AUTH, anonymous_ok=True),
     E(
         "core:offline_client_detail",
         "offline-api",

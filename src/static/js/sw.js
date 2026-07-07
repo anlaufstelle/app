@@ -76,6 +76,10 @@ const APP_SHELL = [
     // sie beim ersten Offline-Aufruf einer noch nicht besuchten Seite nicht
     // ladbar.
     "/static/js/csrf.js",
+    // Refs #1408: gemeinsames CSRF-Util (fromMeta/refresh) der Replay-
+    // Konsumenten — muss wie sie pre-cached sein, sonst laeuft der Offline-
+    // Replay-Refresh-Pfad ins Leere (window.csrfUtils fehlt).
+    "/static/js/csrf-utils.js",
     "/static/js/url-patterns.js",
     "/static/js/offline-queue.js",
     "/static/js/offline-client.js",

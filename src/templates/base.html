@@ -118,8 +118,10 @@
 
     {% block extra_js %}{% endblock %}
 
-    {# Offline-Modul-Reihenfolge: csrf → dexie → url-patterns → crypto → offline-store → offline-queue → offline-client → offline-edit → autosave → sw-register #}
+    {# Offline-Modul-Reihenfolge: csrf → csrf-utils → dexie → url-patterns → crypto → offline-store → offline-queue → offline-client → offline-edit → autosave → sw-register #}
     <script src="{% static 'js/csrf.js' %}"></script>
+    {# Refs #1408: gemeinsames CSRF-Util (fromMeta/refresh) — VOR den Replay-Konsumenten (offline-queue/client/edit), damit window.csrfUtils bei deren Aufrufen existiert. #}
+    <script src="{% static 'js/csrf-utils.js' %}"></script>
     <script src="{% static 'js/dexie.min.js' %}"></script>
     <script src="{% static 'js/url-patterns.js' %}"></script>
     <script src="{% static 'js/crypto.js' %}"></script>

@@ -10,9 +10,11 @@ cannot see more offline than it would online.
 from __future__ import annotations
 
 from django.http import JsonResponse
+from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404, render
 from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_OFFLINE_BUNDLE
@@ -52,6 +54,37 @@ class OfflineClientBundleView(AssistantOrAboveRequiredMixin, View):
         )
 
         return JsonResponse(bundle)
+
+
+class OfflineCsrfTokenView(View):
+    """``GET /api/v1/offline/csrf/`` — dedizierter, günstiger CSRF-Token-Endpoint
+    für den Offline-/Replay-Refresh-Pfad (Refs #1408).
+
+    Der Offline-Replay (offline-edit.js/offline-queue.js) holt hier den frischen
+    Token, statt ihn client-seitig per Regex aus gescraptem ``/login/``-HTML zu
+    parsen — genau die fragile Konstruktion, die in #1330/#1332 (stale-CSRF-403
+    beim Retry) Bugquelle war. ``get_token`` liefert den maskierten Token und
+    stellt sicher, dass das CSRF-Cookie gesetzt wird; ``@ensure_csrf_cookie``
+    erzwingt das Cookie auch dann, wenn der Response-Pfad ``get_token`` nicht
+    ohnehin aufriefe.
+
+    Public on purpose, exactly like :class:`OfflineClientShellView`: der Token
+    ist kein Geheimnis (Django rendert ihn in jedes Formular), trägt keinerlei
+    PII, und die bisherige Refresh-Quelle ``/login/`` war ebenfalls public und
+    lieferte immer einen frischen Token — ein 403 NACH frischem Token bleibt so
+    sauber als echter Rechteentzug ("revoked") klassifizierbar. ``no-store``
+    verbietet jede Zwischenspeicherung: ein aus dem HTTP-Cache gelieferter,
+    veralteter Token würde exakt die 403-Kaskade reproduzieren, die der Endpoint
+    beheben soll.
+    """
+
+    http_method_names = ["get"]
+
+    @method_decorator(ensure_csrf_cookie)
+    def get(self, request):
+        response = JsonResponse({"csrftoken": get_token(request)})
+        response["Cache-Control"] = "no-store"
+        return response
 
 
 class OfflineClientDetailView(AssistantOrAboveRequiredMixin, View):

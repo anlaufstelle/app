@@ -67,6 +67,7 @@ from core.views.offline import (
     OfflineConflictListView,
     OfflineConflictReviewView,
     OfflineConflictShellView,
+    OfflineCsrfTokenView,
 )
 from core.views.retention import (
     RetentionApproveView,
@@ -268,6 +269,13 @@ urlpatterns = [
         "api/v1/offline/bundle/client/<uuid:pk>/",
         OfflineClientBundleView.as_view(),
         name="offline_bundle",
+    ),
+    # Refs #1408: dedizierter CSRF-Token-Endpoint fuer den Offline-Replay-
+    # Refresh-Pfad (loest das fragile /login/-HTML-Scraping ab).
+    path(
+        "api/v1/offline/csrf/",
+        OfflineCsrfTokenView.as_view(),
+        name="offline_csrf",
     ),
     path(
         "offline/clients/<uuid:pk>/",

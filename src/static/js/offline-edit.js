@@ -36,31 +36,19 @@
         return window.offlineStore;
     }
 
+    // Refs #1408: die gemeinsame CSRF-Logik (fromMeta/refresh) lebt in
+    // csrf-utils.js (window.csrfUtils). Zur CALL-Zeit aufloesen und tolerant
+    // bleiben, falls das Util wider Erwarten fehlt (kein Crash). refresh()
+    // holt den frischen Token vom dedizierten Endpoint statt per Regex aus
+    // /login/-HTML (das fragile Muster aus #1330/#1332) — bei !ok/Netzfehler
+    // null, sodass der 403-Retry unten sauber unterbleibt statt mit einem
+    // stale Token weiterzumachen.
     function _csrfFromMeta() {
-        // Refs #602: CSRF_COOKIE_HTTPONLY verbietet JS-Zugriff aufs Cookie,
-        // Token kommt aus dem <meta name="csrf-token">-Tag im Basistemplate.
-        if (typeof window.getCsrfToken === "function") {
-            return window.getCsrfToken() || null;
-        }
-        const meta = document.querySelector('meta[name="csrf-token"]');
-        return meta ? meta.getAttribute("content") || null : null;
+        return window.csrfUtils ? window.csrfUtils.fromMeta() : null;
     }
 
     async function _refreshCsrf() {
-        try {
-            const resp = await fetch("/login/", {
-                method: "GET",
-                credentials: "same-origin",
-            });
-            if (resp.ok) {
-                const html = await resp.text();
-                const m = html.match(/name=["']csrf-token["']\s+content=["']([^"']+)["']/i);
-                if (m) return m[1];
-            }
-        } catch (_e) {
-            // Still offline, ignore.
-        }
-        return _csrfFromMeta();
+        return window.csrfUtils ? window.csrfUtils.refresh() : null;
     }
 
     function _postForm(url, body, csrf, extraHeaders) {

@@ -541,6 +541,56 @@ class TestOfflineEditReplay:
                 page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
             context.close()
 
+    def test_csrf_403_refresh_uses_endpoint_not_login_scrape(self, browser, base_url, e2e_env):
+        """Refs #1408: Der 403-Refresh-Pfad des Replays holt den frischen
+        CSRF-Token vom dedizierten Endpoint ``/api/v1/offline/csrf/`` — es
+        findet KEIN ``/login/``-HTML-Scrape mehr statt (das fragile Muster aus
+        #1330/#1332). Gleiche Mechanik wie der Stale-CSRF-Regressionstest, hier
+        aber mit Netz-Beobachtung ueber die Replay-Phase.
+        """
+        client_pk, event_pk = _seed_client_with_event(e2e_env, notiz="Originalwert")
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            assert _cache_bundle(page, client_pk)["ok"]
+            _wait_for_active_service_worker(page, base_url)
+
+            _go_offline(page)
+            _open_inplace_shell(page, base_url, client_pk)
+            _edit_notiz_offline(page, event_pk, "Endpoint-Refresh offline")
+
+            # Stale-CSRF deterministisch reproduzieren → der Replay-POST kassiert
+            # erst einen 403 und muss den Token auffrischen.
+            page.evaluate(
+                "() => document.querySelector('meta[name=\"csrf-token\"]')"
+                ".setAttribute('content', 'stale-precached-token-DEADBEEF')"
+            )
+
+            # Ab hier die Requests mitschneiden — NACH dem Login, damit dessen
+            # eigene /login/-Navigation nicht mitzaehlt.
+            seen: list[str] = []
+            page.on("request", lambda req: seen.append(req.url))
+
+            _go_online(page)
+            page.locator("[data-testid='event-unsynced-badge']").first.wait_for(state="hidden", timeout=20000)
+            page.wait_for_timeout(500)
+            assert _server_notiz(e2e_env, event_pk) == "Endpoint-Refresh offline"
+
+            # Der Refresh lief ueber den Endpoint …
+            assert any("/api/v1/offline/csrf/" in u for u in seen), (
+                f"CSRF-Endpoint wurde im 403-Refresh-Pfad nicht aufgerufen: {seen}"
+            )
+            # … und NICHT ueber einen /login/-HTML-Fetch (Scrape).
+            assert not any(re.search(r"/login/(\?|$)", u) for u in seen), (
+                f"Unerwarteter /login/-Fetch im Replay (HTML-Scrape statt Endpoint): {seen}"
+            )
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
     def test_offline_edit_conflict_when_server_changed(self, browser, base_url, e2e_env):
         client_pk, event_pk = _seed_client_with_event(e2e_env, notiz="Originalwert")
         context = browser.new_context(locale="de-DE")

@@ -24,14 +24,11 @@
         return window.offlineStore;
     }
 
+    // Refs #1408: die gemeinsame CSRF-Logik lebt in csrf-utils.js
+    // (window.csrfUtils). Zur CALL-Zeit aufloesen und tolerant bleiben, falls
+    // das Util wider Erwarten fehlt (kein Crash) — dann null wie beim leeren Meta.
     function _csrfFromMeta() {
-        // Refs #602: CSRF_COOKIE_HTTPONLY verbietet JS-Zugriff aufs Cookie,
-        // Token kommt aus dem <meta name="csrf-token">-Tag im Basistemplate.
-        if (typeof window.getCsrfToken === "function") {
-            return window.getCsrfToken() || null;
-        }
-        const meta = document.querySelector('meta[name="csrf-token"]');
-        return meta ? meta.getAttribute("content") || null : null;
+        return window.csrfUtils ? window.csrfUtils.fromMeta() : null;
     }
 
     function _bundleUrl(clientPk) {

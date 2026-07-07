@@ -36,15 +36,11 @@
         return window.offlineStore;
     }
 
+    // Refs #1408: die gemeinsame CSRF-Logik (fromMeta/refresh) lebt in
+    // csrf-utils.js (window.csrfUtils). Zur CALL-Zeit aufloesen und tolerant
+    // bleiben, falls das Util wider Erwarten fehlt (kein Crash).
     function _csrfFromMeta() {
-        // Liest den CSRF-Token aus dem <meta name="csrf-token">-Tag, den das
-        // Basistemplate rendert. Refs #602: CSRF_COOKIE_HTTPONLY=True verbietet
-        // JS-Zugriff auf das Cookie, der Token muss also aus dem DOM kommen.
-        if (typeof window.getCsrfToken === "function") {
-            return window.getCsrfToken() || null;
-        }
-        var meta = document.querySelector('meta[name="csrf-token"]');
-        return meta ? meta.getAttribute("content") || null : null;
+        return window.csrfUtils ? window.csrfUtils.fromMeta() : null;
     }
 
     function _newIdempotencyKey() {
@@ -75,25 +71,11 @@
     }
 
     async function _refreshCsrf() {
-        try {
-            // Fetch rendert beim Zurückkommen aus Offline den Login-Flow neu,
-            // inkl. aktualisiertem csrf_token im Meta-Tag (falls die Seite
-            // neu geladen wurde) oder zumindest einem frischen Cookie-Paar.
-            const resp = await fetch("/login/", {
-                method: "GET",
-                credentials: "same-origin",
-            });
-            // Wenn die Login-Seite Text zurückliefert, können wir den Token
-            // aus dem HTML parsen (Cookie ist mit HTTPOnly unerreichbar).
-            if (resp.ok) {
-                const html = await resp.text();
-                const m = html.match(/name=["']csrf-token["']\s+content=["']([^"']+)["']/i);
-                if (m) return m[1];
-            }
-        } catch (_e) {
-            // network still down
-        }
-        return _csrfFromMeta();
+        // Refs #1408: holt den frischen Token vom dedizierten Endpoint
+        // (window.csrfUtils.refresh) statt per Regex aus gescraptem
+        // /login/-HTML (#1330/#1332). Bei !ok/Netzfehler null — der 403-Retry
+        // in replayQueue unterbleibt dann sauber (kein stale-Token-Retry).
+        return window.csrfUtils ? window.csrfUtils.refresh() : null;
     }
 
     async function _updateQueueCount() {
