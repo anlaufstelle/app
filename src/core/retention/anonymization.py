@@ -9,6 +9,12 @@ Welcher Pfad gewaehlt wird, haengt am Facility-Setting
 ``retention_use_k_anonymization`` (Refs #780): Default ``False`` = Hard,
 ``True`` = K-Anon mit Schwelle aus ``k_anonymity_threshold``.
 
+Security-Review N5: Die Schwelle ``k`` wird jetzt erzwungen — pro Klient
+prueft ``is_k_anonymous`` die Aequivalenzklasse ``(age_cluster,
+contact_stage)``; unterbesetzte Buckets (< k) fallen fail-safe auf den
+Hard-Pfad zurueck, statt faelschlich als ``k_anonymized=True`` markiert zu
+werden.
+
 Beide Pfade tilgen die Freitext-Kaskade auf Faelle/Episoden/Aufgaben: der
 Hard-Pfad inline in ``anonymize_client``, der K-Anon-Pfad hier im Bridge-Layer
 (Refs #1094) — die ``k_anonymize_client``-Primitive selbst bleibt client-only.
@@ -20,7 +26,7 @@ from django.db.models import Count, Q
 from core.models import AuditLog, Client, Settings
 from core.services.audit import audit_retention_decision
 from core.services.client import _redact_cases_and_episodes, _redact_workitems
-from core.services.compliance import k_anonymize_client
+from core.services.compliance import is_k_anonymous, k_anonymize_client
 
 
 def anonymize_clients(facility, dry_run):
@@ -31,11 +37,14 @@ def anonymize_clients(facility, dry_run):
     ``Gelöscht-`` or ``k_anonymized=True``) are skipped.
 
     Honors ``Settings.retention_use_k_anonymization`` (Refs #780): when active
-    on the facility, falls back to :func:`k_anonymize_client` with
-    ``k=settings.k_anonymity_threshold``; otherwise the classical
-    ``Client.anonymize()`` path.
+    on the facility, a client is k-anonymized via :func:`k_anonymize_client`
+    with ``k=settings.k_anonymity_threshold`` **only if** its equivalence class
+    is already ``is_k_anonymous`` (bucket >= k). Under-populated buckets — and
+    the default (setting off) — take the classical ``Client.anonymize()`` hard
+    path (Security-Review N5). Mixed runs audit both categories separately
+    (``client_k_anonymized`` / ``client_anonymized``).
 
-    Returns ``{"count": N}``.
+    Returns ``{"count": N}`` (total, both paths combined).
     """
     candidates = (
         Client.objects.filter(facility=facility)
@@ -56,9 +65,15 @@ def anonymize_clients(facility, dry_run):
         use_k_anon = bool(settings_obj and settings_obj.retention_use_k_anonymization)
         k = (settings_obj.k_anonymity_threshold if settings_obj else 5) or 5
 
-        category = "client_k_anonymized" if use_k_anon else "client_anonymized"
+        k_count = 0
+        hard_count = 0
         for client in candidates.iterator():
-            if use_k_anon:
+            # Security N5: k wird erzwungen. Nur wenn die Aequivalenzklasse
+            # (age_cluster, contact_stage) mindestens k Mitglieder hat, ist
+            # "k-anonymisiert" eine ehrliche Zusicherung. Unterbesetzte
+            # Buckets fallen fail-safe auf Hard-Anonymize zurueck — die
+            # Retention-Zusage (PII weg) gilt in beiden Faellen.
+            if use_k_anon and is_k_anonymous(client, k=k):
                 # ``k_anonymize_client`` ist bewusst client-only (Vertrag der
                 # Primitive). Der Retention-Bridge-Layer ergaenzt die Freitext-
                 # Kaskade auf Faelle/Episoden/Aufgaben, damit der K-Anon-Modus
@@ -68,14 +83,27 @@ def anonymize_clients(facility, dry_run):
                 k_anonymize_client(client, k=k)
                 _redact_cases_and_episodes(client)
                 _redact_workitems(client)
+                k_count += 1
             else:
                 client.anonymize()
-        audit_retention_decision(
-            facility,
-            target_type="Client",
-            action=AuditLog.Action.DELETE,
-            category=category,
-            command="enforce_retention",
-            count=count,
-        )
+                hard_count += 1
+
+        if k_count:
+            audit_retention_decision(
+                facility,
+                target_type="Client",
+                action=AuditLog.Action.DELETE,
+                category="client_k_anonymized",
+                command="enforce_retention",
+                count=k_count,
+            )
+        if hard_count:
+            audit_retention_decision(
+                facility,
+                target_type="Client",
+                action=AuditLog.Action.DELETE,
+                category="client_anonymized",
+                command="enforce_retention",
+                count=hard_count,
+            )
     return {"count": count}

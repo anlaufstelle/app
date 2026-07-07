@@ -18,7 +18,7 @@ import pytest
 from django.core.management import call_command
 from django.utils import timezone
 
-from core.models import Client, Event, Settings
+from core.models import AuditLog, Client, Event, Settings
 from core.retention.anonymization import anonymize_clients
 from core.services.compliance import is_k_anonymous
 
@@ -82,6 +82,17 @@ class TestKAnonymity:
             retention_use_k_anonymization=True,
             k_anonymity_threshold=5,
         )
+        # Security N5: k wird jetzt erzwungen — der Ziel-Client braucht eine
+        # ehrlich besetzte Aequivalenzklasse (>= k). ``client_identified`` hat
+        # age_cluster=UNKNOWN + contact_stage=IDENTIFIED; die 4 Genossen matchen
+        # diesen Bucket (ohne geloeschte Events, daher keine Kandidaten).
+        for i in range(4):
+            _make_client(
+                facility,
+                pseudonym=f"Peer-{i}",
+                age_cluster=Client.AgeCluster.UNKNOWN,
+                stage=Client.ContactStage.IDENTIFIED,
+            )
         Event.objects.create(
             facility=facility,
             client=client_identified,
@@ -111,6 +122,16 @@ class TestKAnonymity:
             retention_use_k_anonymization=True,
             k_anonymity_threshold=5,
         )
+        # Security N5: siehe test_setting_enabled_uses_k_anonymize — die
+        # Aequivalenzklasse muss ehrlich >= k besetzt sein, damit der K-Anon-
+        # Pfad greift. 4 Genossen im Bucket (UNKNOWN, IDENTIFIED).
+        for i in range(4):
+            _make_client(
+                facility,
+                pseudonym=f"Peer-{i}",
+                age_cluster=Client.AgeCluster.UNKNOWN,
+                stage=Client.ContactStage.IDENTIFIED,
+            )
         Event.objects.create(
             facility=facility,
             client=client_identified,
@@ -126,3 +147,91 @@ class TestKAnonymity:
         client_identified.refresh_from_db()
         assert client_identified.pseudonym.startswith("anon-")
         assert client_identified.k_anonymized is True
+
+
+@pytest.mark.django_db
+class TestKAnonEnforcement:
+    """Security N5: k wird jetzt erzwungen — unterbesetzte Buckets (< k)
+    fallen fail-safe auf Hard-Anonymize zurueck statt faelschlich als
+    k-anonymisiert markiert zu werden."""
+
+    def _settings(self, facility, k=5):
+        return Settings.objects.create(facility=facility, retention_use_k_anonymization=True, k_anonymity_threshold=k)
+
+    def _make_candidate(self, facility, staff_user, doc_type, pseudonym, **kwargs):
+        c = _make_client(facility, pseudonym=pseudonym, **kwargs)
+        Event.objects.create(
+            facility=facility,
+            client=c,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 1},
+            is_deleted=True,
+            created_by=staff_user,
+        )
+        return c
+
+    def test_singleton_bucket_falls_back_to_hard_anonymize(self, facility, staff_user, doc_type_contact):
+        self._settings(facility, k=5)
+        target = self._make_candidate(
+            facility,
+            staff_user,
+            doc_type_contact,
+            "Solo-01",
+            age_cluster=Client.AgeCluster.U18,
+        )
+        result = anonymize_clients(facility, dry_run=False)
+        target.refresh_from_db()
+        assert result["count"] == 1
+        assert target.k_anonymized is False, "Singleton-Bucket darf NICHT als k-anonym gelten (N5)"
+        assert target.pseudonym.startswith("Gelöscht-"), "Fallback muss Hard-Anonymize sein"
+
+    def test_full_bucket_is_k_anonymized(self, facility, staff_user, doc_type_contact):
+        self._settings(facility, k=5)
+        target = self._make_candidate(
+            facility,
+            staff_user,
+            doc_type_contact,
+            "Bucket-00",
+            age_cluster=Client.AgeCluster.AGE_27_PLUS,
+        )
+        # 4 Bucket-Genossen OHNE geloeschte Events — zaehlen fuer die
+        # Aequivalenzklasse, sind aber keine Anonymisierungs-Kandidaten.
+        for i in range(1, 5):
+            _make_client(
+                facility,
+                pseudonym=f"Bucket-{i:02d}",
+                age_cluster=Client.AgeCluster.AGE_27_PLUS,
+            )
+        anonymize_clients(facility, dry_run=False)
+        target.refresh_from_db()
+        assert target.k_anonymized is True
+        assert target.pseudonym.startswith("anon-")
+
+    def test_mixed_buckets_audit_both_categories(self, facility, staff_user, doc_type_contact):
+        self._settings(facility, k=5)
+        self._make_candidate(
+            facility,
+            staff_user,
+            doc_type_contact,
+            "Solo-02",
+            age_cluster=Client.AgeCluster.U18,
+        )
+        self._make_candidate(
+            facility,
+            staff_user,
+            doc_type_contact,
+            "Voll-00",
+            age_cluster=Client.AgeCluster.AGE_27_PLUS,
+        )
+        for i in range(1, 5):
+            _make_client(
+                facility,
+                pseudonym=f"Voll-{i:02d}",
+                age_cluster=Client.AgeCluster.AGE_27_PLUS,
+            )
+        anonymize_clients(facility, dry_run=False)
+        categories = set(
+            AuditLog.objects.filter(action=AuditLog.Action.DELETE).values_list("detail__category", flat=True)
+        )
+        assert {"client_k_anonymized", "client_anonymized"} <= categories

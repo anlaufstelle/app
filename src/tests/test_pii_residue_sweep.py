@@ -615,7 +615,7 @@ def test_retention_k_anonymization_cascades_to_cases(maximal_pii_graph):
     ``active_events == 0`` (alle Events soft-deletet). Der Fixture-Event ist live,
     daher wird er hier soft-deletet, damit der Klient zum Kandidaten wird.
     """
-    from core.models import Event, Settings
+    from core.models import Client, Event, Settings
     from core.retention.anonymization import anonymize_clients
 
     g = maximal_pii_graph
@@ -623,6 +623,20 @@ def test_retention_k_anonymization_cascades_to_cases(maximal_pii_graph):
         facility=g.facility,
         defaults={"retention_use_k_anonymization": True, "k_anonymity_threshold": 5},
     )
+    # Security N5: k wird jetzt erzwungen — der Ziel-Klient muss eine ehrlich
+    # besetzte Aequivalenzklasse haben, sonst faellt anonymize_clients fail-safe
+    # auf den Hard-Pfad zurueck. Der Fixture-Klient ist (age_cluster=UNKNOWN,
+    # contact_stage=QUALIFIED); 4 Genossen fuellen den Bucket auf k=5 (ohne
+    # Events -> keine Anonymisierungs-Kandidaten). Anforderungsaenderung per
+    # Review N5: dieser Test kodierte zuvor den Singleton-Bug (k-Anon bei
+    # bucket=1), das Setup erfuellt jetzt ehrlich die k-Bedingung.
+    for i in range(4):
+        Client.objects.create(
+            facility=g.facility,
+            pseudonym=f"K-Peer-{i}",
+            age_cluster=Client.AgeCluster.UNKNOWN,
+            contact_stage=Client.ContactStage.QUALIFIED,
+        )
     # Event soft-deletet -> Klient erfuellt die Kandidaten-Bedingung
     # (total_events>0, active_events=0).
     Event.objects.filter(pk=g.event.pk).update(is_deleted=True)
