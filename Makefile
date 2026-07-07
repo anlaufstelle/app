@@ -195,8 +195,18 @@ verify-vendor-js-sync:
 
 # Drift-Guard (Refs #1403): AGENTS.md ist die tool-neutrale SSOT der Agent-
 # Konventionen; CLAUDE.md verweist darauf und dupliziert sie nicht (12.11).
+#
+# Public-Tree-Verhalten: build-release strippt AGENTS.md + CLAUDE.md, das
+# Guard-Skript (scripts/, nicht scripts/dev/) bleibt aber im Snapshot. Ohne
+# die zu pruefenden Dateien wuerde `make ci` im Public-/Stage-Tree strukturell
+# failen. Darum hier ein sauberer Skip mit Hinweis, wenn AGENTS.md ODER das
+# Skript fehlt (Doku: docs/dev/release-exclusions.md).
 verify-agent-docs-sync:
-	$(PYTHON) scripts/verify_agent_docs_sync.py
+	@if [ -f AGENTS.md ] && [ -f scripts/verify_agent_docs_sync.py ]; then \
+		$(PYTHON) scripts/verify_agent_docs_sync.py; \
+	else \
+		echo "verify-agent-docs-sync: uebersprungen — AGENTS.md und/oder scripts/verify_agent_docs_sync.py fehlen (Public-/Release-Tree; Verhalten dokumentiert in docs/dev/release-exclusions.md)."; \
+	fi
 
 # Vendored JS-Libs aus node_modules/ neu kopieren (Refs #1076). Nach einem
 # Dependabot-Bump: erst 'npm ci', dann dieses Target, dann src/static/js/
