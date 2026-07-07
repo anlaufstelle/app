@@ -80,6 +80,18 @@ class TestMassExport:
         assert len(findings) == 1
         assert findings[0]["kind"] == "mass_export"
 
+    def test_offline_bundle_reads_do_not_trigger_mass_export(self, facility, admin_user, settings):
+        """Refs #1410 (b): Offline-Bundle-Reads (Sammel-Mitnahme + periodische
+        Revalidierung) laufen als ``OFFLINE_BUNDLE_READ`` und duerfen die
+        Massen-Export-Heuristik NICHT ausloesen — auch weit ueber der Schwelle.
+        Echte ``EXPORT``-Aktionen bleiben davon unberuehrt (siehe oben).
+        """
+        settings.BREACH_EXPORT_THRESHOLD = 3
+        settings.BREACH_DETECTION_WINDOW_MINUTES = 60
+        for _ in range(20):
+            _create_audit(facility, admin_user, AuditLog.Action.OFFLINE_BUNDLE_READ)
+        assert detect_mass_export(facility) == []
+
 
 @pytest.mark.django_db(transaction=True)
 class TestMassDelete:

@@ -531,19 +531,36 @@ class TestOfflineClientBundleView:
         assert response.status_code == 404
 
     def test_audit_log_created(self, client, client_identified, staff_user):
+        """Refs #1410 (b): Jeder 200-Bundle-GET schreibt genau EINEN
+        ``OFFLINE_BUNDLE_READ``-Eintrag — und KEINEN ``EXPORT`` mehr. Die
+        Umwidmung entrauscht die Massen-Export-Breach-Heuristik (die hart auf
+        ``EXPORT`` filtert), ohne die DSGVO-Rechenschaftsspur zu verlieren.
+        """
         client.force_login(staff_user)
-        before = AuditLog.objects.filter(
+        export_before = AuditLog.objects.filter(
             action=AuditLog.Action.EXPORT,
+            target_type="Client-OfflineBundle",
+            target_id=str(client_identified.pk),
+        ).count()
+        read_before = AuditLog.objects.filter(
+            action=AuditLog.Action.OFFLINE_BUNDLE_READ,
             target_type="Client-OfflineBundle",
             target_id=str(client_identified.pk),
         ).count()
         client.get(self._url(client_identified.pk))
-        after = AuditLog.objects.filter(
+        export_after = AuditLog.objects.filter(
             action=AuditLog.Action.EXPORT,
             target_type="Client-OfflineBundle",
             target_id=str(client_identified.pk),
         ).count()
-        assert after == before + 1
+        read_after = AuditLog.objects.filter(
+            action=AuditLog.Action.OFFLINE_BUNDLE_READ,
+            target_type="Client-OfflineBundle",
+            target_id=str(client_identified.pk),
+        ).count()
+        # Kein EXPORT mehr, dafuer genau ein OFFLINE_BUNDLE_READ.
+        assert export_after == export_before
+        assert read_after == read_before + 1
 
     def test_rate_limit_decorator_configured(self):
         """The view must be decorated with ``ratelimit`` (``RATELIMIT_OFFLINE_BUNDLE``,
@@ -623,6 +640,75 @@ class TestOfflineClientBundleView:
         events = response.json()["events"]
         # Staff must not see HIGH events
         assert events == []
+
+    # ── Refs #1410 (a): ETag-Revalidierung ──────────────────────────────────
+
+    def test_response_carries_etag_header(self, client, client_identified, staff_user):
+        """Der 200-Bundle-Response traegt einen (quoted) ETag, damit der Client
+        spaeter bedingt revalidieren kann."""
+        client.force_login(staff_user)
+        response = client.get(self._url(client_identified.pk))
+        assert response.status_code == 200
+        etag = response.headers.get("ETag")
+        assert etag, "Response muss einen ETag-Header tragen"
+        assert etag.startswith('"') and etag.endswith('"'), "ETag muss HTTP-konform gequotet sein"
+
+    def test_matching_if_none_match_returns_304_without_body_or_audit(self, client, client_identified, staff_user):
+        """Ein bedingter GET mit passendem If-None-Match liefert 304 (kein
+        Body) und schreibt KEINEN Audit-Eintrag (kein Datenabfluss)."""
+        client.force_login(staff_user)
+        etag = client.get(self._url(client_identified.pk)).headers["ETag"]
+
+        audit_before = AuditLog.objects.filter(
+            target_type="Client-OfflineBundle",
+            target_id=str(client_identified.pk),
+        ).count()
+        response = client.get(self._url(client_identified.pk), HTTP_IF_NONE_MATCH=etag)
+        assert response.status_code == 304
+        assert response.headers["ETag"] == etag
+        assert response.content == b""
+        audit_after = AuditLog.objects.filter(
+            target_type="Client-OfflineBundle",
+            target_id=str(client_identified.pk),
+        ).count()
+        assert audit_after == audit_before, "304 darf keine Audit-Spur schreiben"
+
+    def test_stale_if_none_match_returns_200_with_etag_and_audit(self, client, client_identified, staff_user):
+        """Ein nicht passender If-None-Match liefert 200 mit ETag und schreibt
+        eine OFFLINE_BUNDLE_READ-Spur (regulaerer Read-Pfad)."""
+        client.force_login(staff_user)
+        audit_before = AuditLog.objects.filter(
+            action=AuditLog.Action.OFFLINE_BUNDLE_READ,
+            target_id=str(client_identified.pk),
+        ).count()
+        response = client.get(self._url(client_identified.pk), HTTP_IF_NONE_MATCH='"stale-etag"')
+        assert response.status_code == 200
+        assert response.headers.get("ETag")
+        audit_after = AuditLog.objects.filter(
+            action=AuditLog.Action.OFFLINE_BUNDLE_READ,
+            target_id=str(client_identified.pk),
+        ).count()
+        assert audit_after == audit_before + 1
+
+    def test_etag_stable_and_changes_on_data_change(self, client, client_identified, staff_user, doc_type_contact):
+        """Der ETag ist stabil bei unveraenderten Daten (zwei Requests → gleicher
+        ETag, weil generated_at/expires_at/ttl NICHT einfliessen) und aendert
+        sich nach einer relevanten Datenaenderung (neues Event)."""
+        client.force_login(staff_user)
+        etag_1 = client.get(self._url(client_identified.pk)).headers["ETag"]
+        etag_2 = client.get(self._url(client_identified.pk)).headers["ETag"]
+        assert etag_1 == etag_2, "ETag muss ueber volatile Metadaten hinweg stabil sein"
+
+        Event.objects.create(
+            facility=staff_user.facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        etag_3 = client.get(self._url(client_identified.pk)).headers["ETag"]
+        assert etag_3 != etag_1, "Neues Event muss den ETag aendern"
 
 
 @pytest.mark.django_db

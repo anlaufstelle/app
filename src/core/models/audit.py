@@ -26,6 +26,13 @@ class AuditLog(models.Model):
         DOWNLOAD = "download", _("Download")
         LEGAL_HOLD = "legal_hold", _("Legal Hold")
         OFFLINE_KEY_FETCH = "offline_key_fetch", _("Offline-Schlüssel abgerufen")
+        # Refs #1410 (M15): Lesen eines Offline-Client-Bundles. Bewusst NICHT
+        # ``EXPORT`` — Sammel-Mitnahme + periodische Revalidierung erzeugen viele
+        # GETs; unter ``EXPORT`` floeteten sie die Massen-Export-Breach-Heuristik
+        # (``detect_mass_export``) mit Fehlalarmen. Die DSGVO-Rechenschaftsspur
+        # ("wer nahm wann welches Klientel offline mit") bleibt erhalten, nur die
+        # Klassifikation aendert sich.
+        OFFLINE_BUNDLE_READ = "offline_bundle_read", _("Offline-Bundle gelesen")
         CLIENT_CREATE = "client_create", _("Person angelegt")
         CLIENT_UPDATE = "client_update", _("Person aktualisiert")
         CLIENT_SOFT_DELETED = "client_soft_deleted", _("Person in Papierkorb")

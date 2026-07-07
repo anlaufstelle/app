@@ -9,10 +9,14 @@ cannot see more offline than it would online.
 
 from __future__ import annotations
 
-from django.http import JsonResponse
+import hashlib
+import json
+
+from django.http import HttpResponse, JsonResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import get_object_or_404, render
 from django.utils.decorators import method_decorator
+from django.utils.http import parse_etags
 from django.views import View
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django_ratelimit.decorators import ratelimit
@@ -23,6 +27,27 @@ from core.services.audit import log_audit_event
 from core.services.system import build_client_offline_bundle
 from core.views.mixins import AssistantOrAboveRequiredMixin
 
+# Refs #1410 (a): volatile Bundle-Metadaten, die sich pro Request aendern und
+# darum NICHT in den ETag einfliessen duerfen — sonst waere jede Antwort ein
+# neuer ETag und der 304-Pfad tot. ``schema_version`` bleibt bewusst DRIN: ein
+# Schema-Wechsel soll den ETag (und damit den Client-Cache) invalidieren.
+_ETAG_VOLATILE_FIELDS = ("generated_at", "expires_at", "ttl")
+
+
+def _bundle_etag(bundle: dict) -> str:
+    """Starker, HTTP-konform gequoteter Content-Hash des Bundles.
+
+    Hasht eine kanonische (sortierte Keys) JSON-Serialisierung des Bundles OHNE
+    die volatilen Metadaten. Ein Content-Hash ist inhaerent korrekt — ein
+    falsches 304 ist unmoeglich, weil jede inhaltliche Aenderung (inkl.
+    DocumentType-/Field-Aenderungen, die eine ``updated_at``-Aggregation
+    verpasst) den Hash aendert.
+    """
+    canonical_source = {k: v for k, v in bundle.items() if k not in _ETAG_VOLATILE_FIELDS}
+    canonical = json.dumps(canonical_source, sort_keys=True, ensure_ascii=False, default=str)
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+    return f'"{digest}"'
+
 
 class OfflineClientBundleView(AssistantOrAboveRequiredMixin, View):
     """``GET /api/v1/offline/bundle/client/<uuid>/`` — serializer-filtered snapshot.
@@ -30,6 +55,13 @@ class OfflineClientBundleView(AssistantOrAboveRequiredMixin, View):
     Rate-limited per user because building a bundle reads every event the user
     may see for a client; at scale that's cheap but a misbehaving SW could
     otherwise flood the origin.
+
+    Refs #1410 (a): Der Response traegt einen Content-``ETag``; ein bedingter
+    GET mit passendem ``If-None-Match`` antwortet ``304 Not Modified`` (kein
+    Body, keine Audit-Spur). Der Rate-Limit-Decorator zaehlt weiterhin vor der
+    View — ein 304 verbraucht Budget; der Gewinn ist die Bandbreiten-Ersparnis
+    (unveraenderte Bundles werden nicht mehr voll uebertragen), nicht Rechenzeit
+    (das Bundle wird zum Hashen ohnehin gebaut).
     """
 
     http_method_names = ["get"]
@@ -40,10 +72,21 @@ class OfflineClientBundleView(AssistantOrAboveRequiredMixin, View):
         client = get_object_or_404(Client, pk=pk, facility=facility)
 
         bundle = build_client_offline_bundle(request.user, facility, client)
+        etag = _bundle_etag(bundle)
+
+        if_none_match = request.headers.get("If-None-Match")
+        if if_none_match:
+            candidates = parse_etags(if_none_match)
+            if "*" in candidates or etag in candidates:
+                # 304: kein Body, keine Audit-Spur (kein Datenabfluss); ETag
+                # wird gespiegelt, damit der Client seinen Validator behaelt.
+                not_modified = HttpResponse(status=304)
+                not_modified["ETag"] = etag
+                return not_modified
 
         log_audit_event(
             request,
-            AuditLog.Action.EXPORT,
+            AuditLog.Action.OFFLINE_BUNDLE_READ,
             target_obj=client,
             target_type="Client-OfflineBundle",
             detail={
@@ -53,7 +96,9 @@ class OfflineClientBundleView(AssistantOrAboveRequiredMixin, View):
             },
         )
 
-        return JsonResponse(bundle)
+        response = JsonResponse(bundle)
+        response["ETag"] = etag
+        return response
 
 
 class OfflineCsrfTokenView(View):

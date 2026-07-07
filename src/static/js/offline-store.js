@@ -302,7 +302,7 @@
      * document types and workitems in its `data` envelope, so reading a
      * client is a single decrypt even for rarely-visited records.
      */
-    async function saveClientBundle(bundle) {
+    async function saveClientBundle(bundle, etag = null) {
         const crypto = _crypto();
         const pk = bundle.client && bundle.client.pk;
         if (!pk) throw new Error("MalformedBundle");
@@ -386,7 +386,15 @@
                 );
                 survivingEdits = survivingUnsyncedPks.size;
 
-                await db.clients.put({ pk: pk, lastSynced: now, data: clientEnvelope });
+                // Refs #1410 (a): den vom Server gelieferten Content-ETag
+                // PLAINTEXT in der clients-Row ablegen (nicht in den
+                // verschluesselten Envelope — er muss vor dem Decrypt als
+                // ``If-None-Match`` sendbar sein; ein ETag ist wie ``pk``/
+                // ``lastSynced`` keine PII, sondern ein Content-Hash). Nicht-
+                // indiziertes Feld ⇒ kein Dexie-Version-Bump noetig. Fehlt der
+                // ETag (Header nicht gesetzt), bleibt er ``null`` ⇒ die naechste
+                // Revalidierung schickt kein If-None-Match und holt voll (200).
+                await db.clients.put({ pk: pk, lastSynced: now, data: clientEnvelope, etag: etag || null });
                 for (const row of caseRows) {
                     await db.cases.put(row);
                 }
@@ -783,12 +791,22 @@
     }
 
     async function revalidateCachedClient(pk) {
+        // Refs #1410 (a): gespeicherten Content-ETag lesen und als
+        // ``If-None-Match`` mitschicken. Trifft er serverseitig, antwortet der
+        // Endpoint 304 (kein Body) und wir sparen die volle Bundle-Uebertragung.
+        // Fehlt der ETag (Altbestand vor #1410, oder Server lieferte keinen),
+        // bleibt es beim vollen 200-Fetch — kein Bruch.
+        const existing = await db.clients.get(pk);
+        const storedEtag = existing && existing.etag;
+        const headers = { Accept: "application/json" };
+        if (storedEtag) headers["If-None-Match"] = storedEtag;
+
         let response;
         try {
             response = await fetch(_bundleUrl(pk), {
                 method: "GET",
                 credentials: "same-origin",
-                headers: { Accept: "application/json" },
+                headers: headers,
             });
         } catch (_e) {
             // Offline / Netzfehler -> Cache bewusst behalten.
@@ -815,6 +833,14 @@
             return "purged";
         }
 
+        // Refs #1410 (a): 304 = der Server bestaetigt, dass sich das Bundle seit
+        // dem gespeicherten ETag nicht geaendert hat. Kein Body, kein Re-Save,
+        // Cache bleibt exakt wie er ist. Bewusst VOR dem unsynced-Check und dem
+        // ok-Zweig: ein 304 kann per Definition nichts ueberschreiben.
+        if (response.status === 304) {
+            return "not-modified";
+        }
+
         // Zugriff weiterhin gueltig: lokale unsynced Aenderungen NICHT mit
         // Server-Daten ueberschreiben -> Refresh ueberspringen.
         if (await _hasUnsyncedEvents(pk)) return "skipped";
@@ -822,7 +848,10 @@
         if (response.ok) {
             try {
                 const bundle = await response.json();
-                await saveClientBundle(bundle);
+                // Refs #1410 (a): neuen ETag mitspeichern, damit die naechste
+                // Revalidierung wieder bedingt fragen kann.
+                const newEtag = response.headers.get("ETag");
+                await saveClientBundle(bundle, newEtag);
                 return "refreshed";
             } catch (_e) {
                 return "error";

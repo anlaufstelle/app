@@ -922,6 +922,54 @@ class TestUnsyncedNeverDiesSilently:
         assert result["after"] == 2, "Beide Bundles muessen nach dem 429-Abbruch unversehrt bleiben"
         assert request_count["n"] == 1, "Nach dem ersten 429 darf kein weiterer Bundle-GET rausgehen (break)"
 
+    def test_revalidate_304_sends_if_none_match_and_keeps_cache(self, authenticated_page, base_url):
+        """Refs #1410 (a): Ist der gespeicherte Content-ETag noch gueltig, schickt
+        die Revalidierung ``If-None-Match`` mit — der Server antwortet ``304 Not
+        Modified`` (kein Body) und der Cache bleibt Byte-fuer-Byte unveraendert
+        (kein Re-Save, ``outcome === 'not-modified'``). ``page.route`` mockt die
+        304-Antwort und belegt den gesendeten Header.
+
+        ROT gegen den heutigen Code: ohne gespeichertes ``etag``-Feld sendet der
+        Client kein ``If-None-Match``, und ohne den 304-Zweig faellt die Antwort
+        durch bis in den ``'error'``-Rueckgabepfad."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        seen = {"inm": None}
+
+        def _assert_inm_and_304(route):
+            seen["inm"] = route.request.headers.get("if-none-match")
+            route.fulfill(status=304, headers={"ETag": '"etag-1410"'})
+
+        page.route(re.compile(r"/api/v1/offline/bundle/client/"), _assert_inm_and_304)
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                const PK = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+                await s.saveClientBundle({
+                    client: {pk: PK, pseudonym: 'ETAG-STABLE'},
+                    expires_at: future, ttl: 3600,
+                    schema_version: s.BUNDLE_SCHEMA_VERSION,
+                    events: [{pk: 'clean-ev-1410', occurred_at: future}],
+                }, '"etag-1410"');
+                const before = {
+                    clients: await s.count('clients'),
+                    events: await s.count('events'),
+                    pseudo: (await s.getOfflineClient(PK)).client.pseudonym,
+                };
+                const outcome = await s.revalidateCachedClient(PK);
+                const after = {
+                    clients: await s.count('clients'),
+                    events: await s.count('events'),
+                    pseudo: (await s.getOfflineClient(PK)).client.pseudonym,
+                };
+                return {outcome, before, after};
+            }"""
+        )
+        assert result["outcome"] == "not-modified"
+        assert seen["inm"] == '"etag-1410"', "Client muss den gespeicherten ETag als If-None-Match senden"
+        assert result["before"] == result["after"], "304 darf den Cache nicht veraendern (kein Re-Save)"
+
 
 # ── Schema-Version-Purge im Lesepfad (F-05, Refs #1425, ADR-022) ────────────
 # ADR-022 beschreibt "Schema-Mismatch zwingt Purge" als Gegenmittel gegen

@@ -96,7 +96,12 @@
             throw err;
         }
         const bundle = await response.json();
-        const saveResult = await store.saveClientBundle(bundle);
+        // Refs #1410 (a): Content-ETag der Erst-Mitnahme mitspeichern, damit die
+        // spaetere periodische Revalidierung bedingt (If-None-Match) fragen und
+        // bei unveraendertem Bundle einen 304 (statt vollem Re-Download) bekommen
+        // kann.
+        const etag = response.headers.get("ETag");
+        const saveResult = await store.saveClientBundle(bundle, etag);
         await _emitCountEvent();
         // Refs #1356: Aufrufer (Badge/Listen-Toggle) haengen bei Verweigerung
         // einen dezenten Hinweis an ihre Erfolgsmeldung. `null` (API fehlt/
