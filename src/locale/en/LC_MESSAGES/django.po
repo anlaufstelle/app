@@ -6211,3 +6211,93 @@ msgstr[1] "%(total)s open tasks without urgent action needed"
 #: src/templates/core/zeitstrom/index.html:190
 msgid "Zur Aufgabenübersicht"
 msgstr "To task overview"
+
+# Refs #1412 (M17): i18n fuer Service-Worker + offline.html
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Offline-Arbeitsplatz"
+msgstr "Offline workspace"
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Sie sind aktuell offline. Hier sind die Personen, die Sie für die Offline-Nutzung mitgenommen haben — auch ohne Netz lesbar und bearbeitbar. Änderungen werden bei Verbindung automatisch gesendet."
+msgstr "You are currently offline. Here are the people you took offline for use — readable and editable even without a network. Changes are sent automatically once you are connected."
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Person filtern…"
+msgstr "Filter person…"
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Personen filtern"
+msgstr "Filter people"
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Lade Offline-Daten…"
+msgstr "Loading offline data…"
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Datei-Uploads benötigen eine Verbindung. Sobald Sie wieder online sind, schließt die App offene Aufgaben automatisch ab."
+msgstr "File uploads require a connection. As soon as you are back online, the app completes open tasks automatically."
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "nicht übertragbare Änderung"
+msgstr "non-transferable change"
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "nicht übertragbare Änderungen"
+msgstr "non-transferable changes"
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Keine Person passt zum Suchbegriff."
+msgstr "No person matches the search term."
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Offline-Funktion nicht aktiv."
+msgstr "Offline feature not active."
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Bitte neu anmelden, damit die offline gespeicherten Personen entschlüsselt werden können."
+msgstr "Please log in again so the people stored offline can be decrypted."
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Keine Person für die Offline-Nutzung mitgenommen."
+msgstr "No person taken offline."
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Offline-Daten konnten nicht geladen werden."
+msgstr "Offline data could not be loaded."
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "(ohne Pseudonym)"
+msgstr "(no pseudonym)"
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "synchronisiert: {date}"
+msgstr "synced: {date}"
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "läuft ab: {date}"
+msgstr "expires: {date}"
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Offline — Datei-Uploads erfordern eine Internetverbindung. Bitte erneut versuchen, sobald Sie online sind."
+msgstr "Offline — file uploads require an internet connection. Please try again once you are online."
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Offline — Ihre Eingaben konnten nicht lokal gespeichert werden ({reason}). Bitte erneut versuchen, sobald Sie online sind."
+msgstr "Offline — your entries could not be saved locally ({reason}). Please try again once you are online."
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Offline — Ihre Eingaben wurden lokal verschlüsselt und werden bei Verbindung automatisch gesendet."
+msgstr "Offline — your entries were encrypted locally and will be sent automatically once connected."
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Offline — dieser Inhalt kann gerade nicht aktualisiert werden."
+msgstr "Offline — this content cannot be updated right now."
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Neue Version verfügbar."
+msgstr "New version available."
+
+#. Refs #1412 (M17): SW-/offline.html-i18n
+msgid "Neu laden"
+msgstr "Reload"
