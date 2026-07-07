@@ -4,12 +4,13 @@ from typing import Any
 
 from django import forms
 from django.conf import settings as django_settings
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
 from core.constants import DEFAULT_ALLOWED_FILE_TYPES, DEFAULT_MAX_FILE_SIZE_MB
 from core.forms.widgets import INPUT_CSS
-from core.models import Case, DocumentType, DocumentTypeField
+from core.models import Case, Client, DocumentType, DocumentTypeField
 from core.models.settings import Settings
 
 
@@ -113,6 +114,27 @@ class EventMetaForm(forms.Form):
             case_qs = Case.objects.for_facility(facility).filter(status=Case.Status.OPEN).select_related("client")
             self.fields["case"].queryset = case_qs  # type: ignore[attr-defined]
             self.fields["case"].label_from_instance = _case_label  # type: ignore[attr-defined]
+
+    def clean_client(self):
+        """Refs #1423 (N11): Client-UUID facility-scoped gegen die DB aufloesen.
+
+        Muster analog ``CaseForm.clean_client`` (``core/forms/cases.py``):
+        kein Wert ist legitim (anonyme Events bleiben erlaubt, ``client``
+        ist ``required=False``) -> ``None``. Ein Wert, der sich nicht auf
+        eine Person der eigenen Facility aufloesen laesst (fremde Facility
+        ODER unbekannte/geloeschte UUID), war vorher ein stiller
+        Anonym-Fallback im View (Datenintegritaetsverlust) — jetzt ein
+        harter Formularfehler, der ueber den bestehenden 422-Replay-
+        Contract sauber als ``invalid`` klassifiziert wird.
+        """
+        client_id = self.cleaned_data.get("client")
+        if not client_id:
+            return None
+        scoped = Client.objects.for_facility(self._facility) if self._facility else Client.objects.all()
+        try:
+            return scoped.get(pk=client_id)
+        except Client.DoesNotExist as exc:
+            raise ValidationError(_("Person existiert nicht.")) from exc  # pragma: no mutate
 
     def clean(self):
         cleaned = super().clean()

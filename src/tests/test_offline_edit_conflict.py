@@ -708,6 +708,104 @@ class TestEventCreateInvalid422:
         assert "__all__" in payload["errors"]
         assert not Event.objects.filter(created_by=staff_user).exists()
 
+    def test_event_create_foreign_facility_client_returns_422_json(
+        self, client, staff_user, second_facility, doc_type_contact
+    ):
+        """N11 (#1423): Client-UUID einer fremden Facility -> 422 mit
+        Feldfehler unter ``client``, kein Event angelegt (statt stillem
+        Anonym-Fallback)."""
+        from core.models import Client as ClientModel
+
+        foreign_client = ClientModel.objects.create(
+            facility=second_facility,
+            pseudonym="Fremd-01",
+            contact_stage=ClientModel.ContactStage.IDENTIFIED,
+        )
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_contact.pk),
+                "client": str(foreign_client.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "dauer": "15",
+                "notiz": "cross-tenant",
+            },
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 422
+        payload = response.json()
+        assert payload["error"] == "invalid"
+        assert "client" in payload["errors"]
+        assert not Event.objects.filter(created_by=staff_user).exists()
+
+    def test_event_create_unknown_client_returns_422_json(self, client, staff_user, doc_type_contact):
+        """N11 (#1423): nicht existierende/geloeschte Client-UUID -> 422
+        statt stillem Anonym-Fallback."""
+        import uuid
+
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_contact.pk),
+                "client": str(uuid.uuid4()),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "dauer": "15",
+                "notiz": "geisterklient",
+            },
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 422
+        payload = response.json()
+        assert payload["error"] == "invalid"
+        assert "client" in payload["errors"]
+        assert not Event.objects.filter(created_by=staff_user).exists()
+
+    def test_event_create_without_client_still_creates_anonymous_event(self, client, staff_user, doc_type_contact):
+        """Regression N11: kein ``client``-Wert -> Event bleibt weiterhin
+        anonym (die neue ``clean_client``-Pruefung darf leere Werte nicht
+        als Fehler werten)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_contact.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "dauer": "15",
+                "notiz": "anonym",
+            },
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 302
+        event = Event.objects.filter(created_by=staff_user).first()
+        assert event is not None
+        assert event.is_anonymous is True
+        assert event.client is None
+
+    def test_event_create_with_own_client_associates_event(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        """Regression N11: gueltige eigene Client-UUID -> Event wird mit dem
+        Client verknuepft (``cleaned_data["client"]`` ist jetzt eine
+        ``Client``-Instanz statt einer rohen UUID)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_contact.pk),
+                "client": str(client_identified.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "dauer": "15",
+                "notiz": "verknuepft",
+            },
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 302
+        event = Event.objects.filter(created_by=staff_user).first()
+        assert event is not None
+        assert event.client_id == client_identified.pk
+
     def test_event_create_valid_accept_json_still_redirects(
         self, client, staff_user, doc_type_contact, client_identified
     ):

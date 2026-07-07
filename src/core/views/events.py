@@ -241,10 +241,11 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                 {"meta_form": meta_form, "data_form": data_form},
             )
 
-        client = None
-        client_id = meta_form.cleaned_data.get("client")
-        if client_id:
-            client = Client.objects.for_facility(facility).filter(pk=client_id).first()
+        # Refs #1423 (N11): ``EventMetaForm.clean_client`` loest die UUID
+        # bereits facility-scoped gegen die DB auf und liefert eine
+        # ``Client``-Instanz oder ``None`` — der manuelle Lookup (der eine
+        # unbekannte/fremde UUID vorher still verwarf) entfaellt hier.
+        client = meta_form.cleaned_data.get("client")
 
         case = meta_form.cleaned_data.get("case")
 
