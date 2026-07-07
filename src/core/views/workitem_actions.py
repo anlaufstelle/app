@@ -179,12 +179,15 @@ class WorkItemCreateView(StaffRequiredMixin, View):
                         assigned_to=form.cleaned_data.get("assigned_to"),
                         idempotency_key=idem_key,
                     )
-            except IntegrityError:
+            except IntegrityError as exc:
                 # R6: zwei parallele Replays desselben Keys passieren beide den
-                # Cache-Check (get-then-set-Fenster). Der Unique-Constraint
-                # (workitem_idem_key_per_user_uniq) stoppt das zweite INSERT —
-                # dann auf das Original umleiten statt 500.
-                if idem_key:
+                # Cache-Check (get-then-set-Fenster). NUR der Idempotenz-Unique-
+                # Constraint (workitem_idem_key_per_user_uniq) darf als Duplikat
+                # gelten — ein fachfremder IntegrityError im selben Replay-Request
+                # wuerde sonst faelschlich als Duplikat maskiert, sobald zufaellig
+                # eine passende Key-Zeile existiert (Refs #1443). Dann auf das
+                # Original umleiten statt 500; jeden anderen IntegrityError re-raisen.
+                if idem_key and "idem_key_per_user_uniq" in str(exc):
                     existing = (
                         WorkItem.objects.for_facility(facility)
                         .filter(created_by=request.user, idempotency_key=idem_key)

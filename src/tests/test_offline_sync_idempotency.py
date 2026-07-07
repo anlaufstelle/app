@@ -34,10 +34,12 @@ Lücken deckt der Rest dieser Datei ab: WorkItem-Dedup
 
 from __future__ import annotations
 
+import threading
 import uuid
 
 import pytest
 from django.core.cache import cache
+from django.db import IntegrityError, close_old_connections, connection
 from django.urls import reverse
 from django.utils import timezone
 
@@ -379,3 +381,153 @@ class TestIdempotencyDbBackstop:
         assert event_staff.pk != event_lead.pk
         assert Event.objects.filter(created_by=staff_user, idempotency_key=shared_key).count() == 1
         assert Event.objects.filter(created_by=lead_user, idempotency_key=shared_key).count() == 1
+
+
+@pytest.mark.django_db(transaction=True)
+class TestIntegrityErrorScopedToConstraint:
+    """R6-Haertung (Refs #1443): der ``IntegrityError``-Fang in den Create-Views
+    darf NUR den Idempotenz-Unique-Constraint (``idem_key_per_user_uniq``, deckt
+    ``event_…`` wie ``workitem_…``) als Duplikat behandeln. Ein FACHFREMDER
+    IntegrityError im selben Replay-Request wuerde sonst als Duplikat maskiert
+    (stiller 302 statt 500), sobald zufaellig eine passende (user, key)-Zeile
+    existiert — der eigentliche Fehler bliebe unsichtbar.
+
+    Deterministisch nachgestellt: der Pre-Check laeuft leer, dann committet ein
+    konkurrierender Insert (eigener Thread + eigene DB-Connection) die
+    (user, key)-Zeile im get-then-set-Fenster, waehrend der eigene Insert (hier:
+    gepatchtes ``create_event``/``create_workitem``) einen IntegrityError wirft.
+    Traegt dessen Meldung den Constraint-Namen -> Duplikat-Redirect; ist sie
+    fachfremd -> Propagation.
+    """
+
+    def setup_method(self):
+        # Der Race braucht eine zweite, echt committende Connection — nur unter
+        # PostgreSQL (SQLite/Autocommit-in-memory verhaelt sich anders).
+        if connection.vendor != "postgresql":
+            pytest.skip("Race-Test erfordert PostgreSQL (eigene Thread-Connection)")
+
+    @staticmethod
+    def _insert_event_in_thread(*, facility, doc_type, user, key, sink=None):
+        def _worker():
+            try:
+                ev = Event.objects.create(
+                    facility=facility,
+                    document_type=doc_type,
+                    occurred_at=timezone.now(),
+                    data_json={},
+                    is_anonymous=True,
+                    created_by=user,
+                    idempotency_key=key,
+                )
+                if sink is not None:
+                    sink["pk"] = ev.pk
+            finally:
+                close_old_connections()
+
+        t = threading.Thread(target=_worker)
+        t.start()
+        t.join(timeout=10)
+
+    @staticmethod
+    def _insert_workitem_in_thread(*, facility, user, title, key, sink=None):
+        def _worker():
+            try:
+                wi = WorkItem.objects.create(
+                    facility=facility,
+                    created_by=user,
+                    item_type=WorkItem.ItemType.TASK,
+                    status=WorkItem.Status.OPEN,
+                    priority=WorkItem.Priority.NORMAL,
+                    title=title,
+                    idempotency_key=key,
+                )
+                if sink is not None:
+                    sink["pk"] = wi.pk
+            finally:
+                close_old_connections()
+
+        t = threading.Thread(target=_worker)
+        t.start()
+        t.join(timeout=10)
+
+    def test_event_foreign_integrity_error_propagates_not_masked(
+        self, client, staff_user, doc_type_contact, client_identified, facility, monkeypatch
+    ):
+        """Fachfremder IntegrityError im Event-Create -> Propagation, kein 302."""
+        import core.views.events as events_view
+
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+
+        def _raise_foreign(*args, **kwargs):
+            self._insert_event_in_thread(facility=facility, doc_type=doc_type_contact, user=staff_user, key=key)
+            raise IntegrityError("FOREIGN KEY constraint violated (fachfremd)")
+
+        monkeypatch.setattr(events_view, "create_event", _raise_foreign)
+
+        payload = _create_payload(doc_type_contact, client_identified)
+        with pytest.raises(IntegrityError):
+            client.post(reverse("core:event_create"), payload, HTTP_X_IDEMPOTENCY_KEY=key)
+
+    def test_event_constraint_integrity_error_still_redirects(
+        self, client, staff_user, doc_type_contact, client_identified, facility, monkeypatch
+    ):
+        """Echter Idempotenz-Constraint (Name in der Meldung) -> weiterhin
+        Duplikat-Redirect auf das im Race angelegte Event (Regressions-Guard)."""
+        import core.views.events as events_view
+
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        sink: dict = {}
+
+        def _raise_constraint(*args, **kwargs):
+            self._insert_event_in_thread(
+                facility=facility, doc_type=doc_type_contact, user=staff_user, key=key, sink=sink
+            )
+            raise IntegrityError('duplicate key value violates unique constraint "event_idem_key_per_user_uniq"')
+
+        monkeypatch.setattr(events_view, "create_event", _raise_constraint)
+
+        payload = _create_payload(doc_type_contact, client_identified)
+        r = client.post(reverse("core:event_create"), payload, HTTP_X_IDEMPOTENCY_KEY=key)
+        assert r.status_code == 302
+        assert r["Location"] == reverse("core:event_detail", kwargs={"pk": sink["pk"]})
+        assert Event.objects.count() == 1
+
+    def test_workitem_foreign_integrity_error_propagates_not_masked(self, client, staff_user, facility, monkeypatch):
+        """Fachfremder IntegrityError im WorkItem-Create -> Propagation, kein 302."""
+        import core.views.workitem_actions as wi_view
+
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        title = "Race-Aufgabe"
+
+        def _raise_foreign(*args, **kwargs):
+            self._insert_workitem_in_thread(facility=facility, user=staff_user, title=title, key=key)
+            raise IntegrityError("FOREIGN KEY constraint violated (fachfremd)")
+
+        monkeypatch.setattr(wi_view, "create_workitem", _raise_foreign)
+
+        payload = {"item_type": "task", "title": title, "priority": "normal"}
+        with pytest.raises(IntegrityError):
+            client.post(reverse("core:workitem_create"), payload, HTTP_X_IDEMPOTENCY_KEY=key)
+
+    def test_workitem_constraint_integrity_error_still_redirects(self, client, staff_user, facility, monkeypatch):
+        """Echter Idempotenz-Constraint -> weiterhin Duplikat-Redirect (Regressions-Guard)."""
+        import core.views.workitem_actions as wi_view
+
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        title = "Race-Aufgabe"
+
+        def _raise_constraint(*args, **kwargs):
+            self._insert_workitem_in_thread(facility=facility, user=staff_user, title=title, key=key)
+            raise IntegrityError('duplicate key value violates unique constraint "workitem_idem_key_per_user_uniq"')
+
+        monkeypatch.setattr(wi_view, "create_workitem", _raise_constraint)
+
+        payload = {"item_type": "task", "title": title, "priority": "normal"}
+        r = client.post(reverse("core:workitem_create"), payload, HTTP_X_IDEMPOTENCY_KEY=key)
+        assert r.status_code == 302
+        assert r["Location"] == reverse("core:workitem_inbox")
+        assert WorkItem.objects.count() == 1
