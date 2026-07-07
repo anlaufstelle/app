@@ -132,6 +132,18 @@ class WorkItem(SoftDeletableModel):
             "wurde. Verhindert doppelte Duplikate beim erneuten Setzen auf 'Erledigt'."
         ),
     )
+    idempotency_key = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        default=None,
+        editable=False,
+        verbose_name=_("Idempotenz-Schlüssel"),
+        help_text=_(
+            "X-Idempotency-Key des Offline-Replays — persistenter DB-Backstop "
+            "gegen Duplikate bei Cache-Verlust oder parallelen Replays (Review R5/R6)."
+        ),
+    )
 
     class Meta:
         verbose_name = _("Arbeitsauftrag")
@@ -141,6 +153,18 @@ class WorkItem(SoftDeletableModel):
         # priority_order + -created_at. Refs #638.
         indexes = [
             models.Index(fields=["facility", "status", "-created_at"], name="workitem_facility_status_idx"),
+        ]
+        constraints = [
+            # Review R5/R6: persistenter Backstop gegen Duplikat-Replays, wenn
+            # der Cache-Dedup ausfaellt (Eviction/Neustart) oder zwei Replays
+            # das get-then-set-Fenster gleichzeitig passieren. Partiell, damit
+            # Nicht-Offline-Writes (idempotency_key IS NULL) unbeschraenkt
+            # bleiben.
+            models.UniqueConstraint(
+                fields=["created_by", "idempotency_key"],
+                condition=models.Q(idempotency_key__isnull=False),
+                name="workitem_idem_key_per_user_uniq",
+            ),
         ]
 
     def __str__(self):

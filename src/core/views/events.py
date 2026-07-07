@@ -4,7 +4,7 @@ import logging
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -13,7 +13,7 @@ from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
 from core.forms.events import DynamicEventDataForm, EventMetaForm
-from core.models import Client, DocumentType
+from core.models import Client, DocumentType, Event
 from core.services.client import get_client_or_none
 from core.services.compliance import (
     get_visible_event_or_404,
@@ -35,6 +35,7 @@ from core.services.events import (
     filtered_server_data_json,
     get_idempotent_result,
     merge_update_payload,
+    normalize_idempotency_key,
     remember_idempotent_result,
     remove_restricted_fields,
     request_deletion,
@@ -158,9 +159,18 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
         # Response ab, spielt der Client dieselbe Queue-Zeile erneut. Trägt sie
         # den ``X-Idempotency-Key`` eines bereits angelegten Events, leiten wir
         # auf dieses Event um, statt einen Duplikat-Datensatz zu erzeugen.
-        idem_key = request.headers.get("X-Idempotency-Key")
+        idem_key = normalize_idempotency_key(request.headers.get("X-Idempotency-Key"))
         if idem_key:
             existing_pk = get_idempotent_result("event_create", request.user.pk, idem_key)
+            if existing_pk is None:
+                # R5: Cache-Eviction/Neustart ueberlebt nur der DB-Backstop —
+                # sonst legt der Replay nach Cache-Verlust ein Duplikat an.
+                existing_pk = (
+                    Event.objects.for_facility(facility)
+                    .filter(created_by=request.user, idempotency_key=idem_key)
+                    .values_list("pk", flat=True)
+                    .first()
+                )
             if existing_pk:
                 return redirect("core:event_detail", pk=existing_pk)
 
@@ -254,6 +264,7 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                     data_json=text_data,
                     client=client,
                     case=case,
+                    idempotency_key=idem_key,
                 )
                 attach_files_to_new_event(event, request.user, file_fields, doc_type)
         except ValidationError as e:
@@ -270,6 +281,20 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                 "core/events/create.html",
                 {"meta_form": meta_form, "data_form": data_form},
             )
+        except IntegrityError:
+            # R6: zwei parallele Replays desselben Keys passieren beide den
+            # Cache-Check (get-then-set-Fenster). Der Unique-Constraint
+            # (event_idem_key_per_user_uniq) stoppt das zweite INSERT —
+            # dann auf das Original umleiten statt 500.
+            if idem_key:
+                existing = (
+                    Event.objects.for_facility(facility)
+                    .filter(created_by=request.user, idempotency_key=idem_key)
+                    .first()
+                )
+                if existing:
+                    return redirect("core:event_detail", pk=existing.pk)
+            raise
 
         # Erfolgreich angelegt → Ergebnis unter dem Idempotenz-Schlüssel merken,
         # damit ein späterer Replay (F-09) hier oben kurzschließt statt ein

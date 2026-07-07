@@ -208,8 +208,24 @@ def _validate_contact_stage(document_type, client, is_anonymous):
 
 
 @transaction.atomic
-def create_event(facility, user, document_type, occurred_at, data_json, client=None, is_anonymous=False, case=None):
-    """Create an event + EventHistory(CREATE)."""
+def create_event(
+    facility,
+    user,
+    document_type,
+    occurred_at,
+    data_json,
+    client=None,
+    is_anonymous=False,
+    case=None,
+    idempotency_key=None,
+):
+    """Create an event + EventHistory(CREATE).
+
+    ``idempotency_key`` (Review R5/R6): der normalisierte X-Idempotency-Key des
+    Offline-Replays wird als persistenter DB-Backstop mitgeschrieben. Der
+    partielle Unique-Constraint (``event_idem_key_per_user_uniq``, je
+    ``created_by``) fängt Duplikate ab, wenn der Cache-Dedup ausfällt.
+    """
     if document_type.facility_id != facility.pk:
         raise ValueError("DocumentType gehört nicht zur Facility")
     if client and client.facility_id != facility.pk:
@@ -236,6 +252,7 @@ def create_event(facility, user, document_type, occurred_at, data_json, client=N
         is_anonymous=is_anonymous,
         created_by=user,
         case=case,
+        idempotency_key=idempotency_key,
     )
     event.save()
     EventHistory.objects.create(

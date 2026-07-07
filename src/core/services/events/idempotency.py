@@ -13,11 +13,19 @@ zweites Objekt zu erzeugen.
 
 **Grenzen (bewusst, vom Maintainer zu reviewen):**
 
-* Kein DB-Model → die Dedup-Garantie hängt am Cache-Backend. In Produktion ist
-  das der ``DatabaseCache`` (persistent, shared über Worker, ``settings/prod.py``),
-  also über Prozesse hinweg konsistent. Im LocMem-Default (dev/test) gilt sie
-  pro Prozess — für den dokumentierten Replay-Fall (serielles Re-Drainen
-  derselben Queue durch denselben Client) ausreichend.
+* Der Cache bleibt der Fast-Path, ist aber seit Review R5/R6 nicht mehr die
+  alleinige Dedup-Garantie: ``Event`` und ``WorkItem`` tragen den Schlüssel
+  zusätzlich als Spalte ``idempotency_key`` mit einem partiellen
+  Unique-Constraint je ``created_by`` (``event_idem_key_per_user_uniq`` /
+  ``workitem_idem_key_per_user_uniq``). Fällt der Cache aus (Eviction,
+  Worker-Neustart — R5) oder passieren zwei parallele Replays gleichzeitig das
+  get-then-set-Fenster (R6), fängt dieser DB-Backstop das Duplikat ab: der
+  View macht nach einem Cache-Miss bzw. einem ``IntegrityError`` einen
+  DB-Lookup und leitet auf den Originaldatensatz um. In Produktion ist der
+  Cache der ``DatabaseCache`` (persistent, shared über Worker,
+  ``settings/prod.py``); im LocMem-Default (dev/test) gilt der Fast-Path pro
+  Prozess — für den seriellen Replay-Fall ausreichend, den harten Rand deckt
+  der Constraint.
 * Das Zeitfenster ist die TTL (72 h, Refs #1329). Sie ist bewusst **länger**
   als die Offline-Bundle-Lease (``BUNDLE_TTL_SECONDS = 48 h`` in
   :mod:`core.services.system.offline`) plus ein Retry-Fenster für einen
@@ -31,7 +39,23 @@ zweites Objekt zu erzeugen.
 
 from __future__ import annotations
 
+import re
+
 from django.core.cache import cache
+
+# R6/N14: Der Client generiert UUIDs — alles ausserhalb dieses engen Formats
+# (ueberlang/binaer/Steuerzeichen) wird verworfen statt in DB-Spalte
+# (CharField max_length=64) und Cache-Key zu wandern.
+IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def normalize_idempotency_key(raw: str | None) -> str | None:
+    """Validiert den Client-Schluessel; ungueltige Keys degradieren zum
+    Legacy-Verhalten ohne Dedup (kein 500, kein Cache-Muell)."""
+    if not raw or not IDEMPOTENCY_KEY_RE.fullmatch(raw):
+        return None
+    return raw
+
 
 # Wie lange ein Idempotenz-Schlüssel als „erledigt" gilt. Muss >= der
 # Offline-Bundle-Lease sein (``BUNDLE_TTL_SECONDS`` in

@@ -6,7 +6,7 @@ bleiben dort, weil sie reine Read-Pfade sind.
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
@@ -23,7 +23,11 @@ from core.services.case import (
     update_workitem_status,
 )
 from core.services.client import get_client_or_none
-from core.services.events import get_idempotent_result, remember_idempotent_result
+from core.services.events import (
+    get_idempotent_result,
+    normalize_idempotency_key,
+    remember_idempotent_result,
+)
 from core.views._json_contracts import (
     _conflict_response,
     _invalid_form_response,
@@ -137,28 +141,58 @@ class WorkItemCreateView(StaffRequiredMixin, View):
         # ``X-Idempotency-Key`` eines bereits angelegten WorkItems, leiten
         # wir auf dasselbe Ziel um wie beim Original-Erfolg, statt ein
         # Duplikat zu erzeugen.
-        idem_key = request.headers.get("X-Idempotency-Key")
+        idem_key = normalize_idempotency_key(request.headers.get("X-Idempotency-Key"))
         if idem_key:
             existing_pk = get_idempotent_result("workitem_create", request.user.pk, idem_key)
+            if existing_pk is None:
+                # R5: Cache-Eviction/Neustart ueberlebt nur der DB-Backstop —
+                # sonst legt der Replay nach Cache-Verlust ein Duplikat an.
+                existing_pk = (
+                    WorkItem.objects.for_facility(facility)
+                    .filter(created_by=request.user, idempotency_key=idem_key)
+                    .values_list("pk", flat=True)
+                    .first()
+                )
             if existing_pk:
                 return redirect("core:workitem_inbox")
 
         form = WorkItemForm(request.POST, facility=facility)
 
         if form.is_valid():
-            workitem = create_workitem(
-                facility=facility,
-                user=request.user,
-                client=form.cleaned_data.get("client"),
-                item_type=form.cleaned_data["item_type"],
-                title=form.cleaned_data["title"],
-                description=form.cleaned_data.get("description", ""),
-                priority=form.cleaned_data["priority"],
-                due_date=form.cleaned_data.get("due_date"),
-                remind_at=form.cleaned_data.get("remind_at"),
-                recurrence=form.cleaned_data.get("recurrence") or WorkItem.Recurrence.NONE,
-                assigned_to=form.cleaned_data.get("assigned_to"),
-            )
+            try:
+                # Savepoint, damit ein IntegrityError am Unique-Constraint die
+                # laufende Transaktion nicht kaputt zurücklässt — sonst würde
+                # der Lookup im except-Zweig auf einer abgebrochenen
+                # Transaktion scheitern (Postgres). Analog zu EventCreateView.
+                with transaction.atomic():
+                    workitem = create_workitem(
+                        facility=facility,
+                        user=request.user,
+                        client=form.cleaned_data.get("client"),
+                        item_type=form.cleaned_data["item_type"],
+                        title=form.cleaned_data["title"],
+                        description=form.cleaned_data.get("description", ""),
+                        priority=form.cleaned_data["priority"],
+                        due_date=form.cleaned_data.get("due_date"),
+                        remind_at=form.cleaned_data.get("remind_at"),
+                        recurrence=form.cleaned_data.get("recurrence") or WorkItem.Recurrence.NONE,
+                        assigned_to=form.cleaned_data.get("assigned_to"),
+                        idempotency_key=idem_key,
+                    )
+            except IntegrityError:
+                # R6: zwei parallele Replays desselben Keys passieren beide den
+                # Cache-Check (get-then-set-Fenster). Der Unique-Constraint
+                # (workitem_idem_key_per_user_uniq) stoppt das zweite INSERT —
+                # dann auf das Original umleiten statt 500.
+                if idem_key:
+                    existing = (
+                        WorkItem.objects.for_facility(facility)
+                        .filter(created_by=request.user, idempotency_key=idem_key)
+                        .first()
+                    )
+                    if existing:
+                        return redirect("core:workitem_inbox")
+                raise
             # Erfolgreich angelegt → Ergebnis unter dem Idempotenz-Schlüssel
             # merken, damit ein späterer Replay (#1329) hier oben kurzschließt
             # statt ein zweites WorkItem zu erzeugen. No-op ohne Schlüssel.

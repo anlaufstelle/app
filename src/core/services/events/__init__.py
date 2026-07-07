@@ -68,6 +68,7 @@ from core.services.events.history_diff import (
 )
 from core.services.events.idempotency import (
     get_idempotent_result,
+    normalize_idempotency_key,
     remember_idempotent_result,
 )
 
@@ -100,6 +101,7 @@ __all__ = [
     "is_singleton_file_marker",
     "merge_update_payload",
     "normalize_file_marker",
+    "normalize_idempotency_key",
     "reject_deletion",
     "remember_idempotent_result",
     "remove_restricted_fields",

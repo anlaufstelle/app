@@ -253,3 +253,93 @@ class TestIdempotencyTtlCoupling:
     def test_ttl_is_72_hours_and_covers_bundle_lease(self):
         assert IDEMPOTENCY_TTL_SECONDS == 72 * 3600
         assert IDEMPOTENCY_TTL_SECONDS > BUNDLE_TTL_SECONDS
+
+
+class TestNormalizeIdempotencyKey:
+    """R6/N14-Vorgriff: nur ^[A-Za-z0-9_-]{1,64}$ wird akzeptiert, sonst None."""
+
+    @pytest.mark.parametrize(
+        "raw,expected_kept",
+        [
+            (str(uuid.UUID(int=1)), True),
+            ("a" * 64, True),
+            ("A-b_0", True),
+            (None, False),
+            ("", False),
+            ("a" * 65, False),
+            ("key with spaces", False),
+            ("=cmd|injection", False),
+            ("umlaut-ä", False),
+        ],
+    )
+    def test_normalize(self, raw, expected_kept):
+        from core.services.events.idempotency import normalize_idempotency_key
+
+        result = normalize_idempotency_key(raw)
+        assert (result == raw) if expected_kept else (result is None)
+
+
+@pytest.mark.django_db
+class TestIdempotencyDbBackstop:
+    """R5/R6: Cache-Verlust (Eviction/Worker-Neustart) darf den Dedup nicht
+    aufheben — der DB-Unique-Constraint ist der persistente Backstop."""
+
+    def test_event_replay_after_cache_loss_creates_no_duplicate(
+        self, client, staff_user, doc_type_contact, client_identified
+    ):
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        payload = _create_payload(doc_type_contact, client_identified)
+        r1 = client.post(reverse("core:event_create"), payload, HTTP_X_IDEMPOTENCY_KEY=key)
+        assert r1.status_code == 302
+        cache.clear()  # simuliert Eviction / Prozess-Neustart (R5)
+        r2 = client.post(reverse("core:event_create"), payload, HTTP_X_IDEMPOTENCY_KEY=key)
+        assert r2.status_code == 302
+        assert Event.objects.count() == 1
+        assert r1["Location"] == r2["Location"]
+
+    def test_workitem_replay_after_cache_loss_creates_no_duplicate(self, client, staff_user):
+        client.force_login(staff_user)
+        key = str(uuid.uuid4())
+        payload = {"item_type": "task", "title": "Backstop", "priority": "normal"}
+        client.post(reverse("core:workitem_create"), payload, HTTP_X_IDEMPOTENCY_KEY=key)
+        cache.clear()
+        client.post(reverse("core:workitem_create"), payload, HTTP_X_IDEMPOTENCY_KEY=key)
+        assert WorkItem.objects.count() == 1
+
+    def test_db_constraint_blocks_concurrent_duplicate(self, staff_user, doc_type_contact, facility):
+        """R6: zwei Replays im get-then-set-Fenster passieren beide den
+        Cache-Check — das zweite INSERT muss am Unique-Constraint scheitern."""
+        from django.db import IntegrityError
+        from django.utils import timezone
+
+        key = str(uuid.uuid4())
+        Event.objects.create(
+            facility=facility,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={},
+            is_anonymous=True,
+            created_by=staff_user,
+            idempotency_key=key,
+        )
+        with pytest.raises(IntegrityError):
+            Event.objects.create(
+                facility=facility,
+                document_type=doc_type_contact,
+                occurred_at=timezone.now(),
+                data_json={},
+                is_anonymous=True,
+                created_by=staff_user,
+                idempotency_key=key,
+            )
+
+    def test_malformed_key_is_ignored_not_500(self, client, staff_user, doc_type_contact, client_identified):
+        """Ueberlange/binaere Keys degradieren zum Legacy-Verhalten (kein Dedup, kein 500)."""
+        client.force_login(staff_user)
+        bad_key = "x" * 200
+        payload = _create_payload(doc_type_contact, client_identified)
+        r1 = client.post(reverse("core:event_create"), payload, HTTP_X_IDEMPOTENCY_KEY=bad_key)
+        r2 = client.post(reverse("core:event_create"), payload, HTTP_X_IDEMPOTENCY_KEY=bad_key)
+        assert r1.status_code == 302 and r2.status_code == 302
+        assert Event.objects.count() == 2

@@ -59,6 +59,18 @@ class Event(models.Model):
         related_name="created_events",
         verbose_name=_("Erstellt von"),
     )
+    idempotency_key = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        default=None,
+        editable=False,
+        verbose_name=_("Idempotenz-Schlüssel"),
+        help_text=_(
+            "X-Idempotency-Key des Offline-Replays — persistenter DB-Backstop "
+            "gegen Duplikate bei Cache-Verlust oder parallelen Replays (Review R5/R6)."
+        ),
+    )
     occurred_at = models.DateTimeField(verbose_name=_("Zeitpunkt"))
     data_json = models.JSONField(default=dict, verbose_name=_("Daten (JSON)"))
     # Refs #827 (C-60): expliziter Suchindex statt JSONB-icontains.
@@ -83,6 +95,18 @@ class Event(models.Model):
             # Composite-Index (facility, is_deleted, -occurred_at) für
             # Timeline-/Listen-Queries. Refs #638.
             models.Index(fields=["facility", "is_deleted", "-occurred_at"], name="event_facility_del_occ_idx"),
+        ]
+        constraints = [
+            # Review R5/R6: persistenter Backstop gegen Duplikat-Replays, wenn
+            # der Cache-Dedup ausfaellt (Eviction/Neustart) oder zwei Replays
+            # das get-then-set-Fenster gleichzeitig passieren. Partiell, damit
+            # Nicht-Offline-Writes (idempotency_key IS NULL) unbeschraenkt
+            # bleiben.
+            models.UniqueConstraint(
+                fields=["created_by", "idempotency_key"],
+                condition=models.Q(idempotency_key__isnull=False),
+                name="event_idem_key_per_user_uniq",
+            ),
         ]
 
     def __str__(self):
