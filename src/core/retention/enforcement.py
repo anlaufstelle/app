@@ -99,6 +99,13 @@ def enforce_anonymous(facility, settings_obj, now, dry_run):
     Returns ``{"count": N}``.
     """
 
+    # Security N8 (Refs #1445): 0/negative Fristen ergaeben einen Cutoff >= jetzt
+    # und wuerden den Gesamtbestand loeschen. Validator + DB-Constraint verhindern
+    # solche Werte ab jetzt; defensiv (Alt-Daten, Pre-Migration-Zustand) bricht der
+    # Loeschpfad hier zusaetzlich ab — symmetrisch zum Skip in iter_strategies.
+    if settings_obj.retention_anonymous_days < 1:
+        return {"count": 0}
+
     cutoff = now - timedelta(days=settings_obj.retention_anonymous_days)
     held_ids = get_active_hold_target_ids(facility, "Event")
     qs = Event.objects.filter(
@@ -123,6 +130,10 @@ def enforce_identified(facility, settings_obj, now, dry_run):
 
     Returns ``{"count": N}``.
     """
+
+    # Security N8 (Refs #1445): defensiver Abbruch bei 0/negativer Frist (s. enforce_anonymous).
+    if settings_obj.retention_identified_days < 1:
+        return {"count": 0}
 
     cutoff = now - timedelta(days=settings_obj.retention_identified_days)
     held_ids = get_active_hold_target_ids(facility, "Event")
@@ -152,6 +163,10 @@ def enforce_qualified(facility, settings_obj, now, dry_run):
 
     Returns ``{"count": N}``.
     """
+
+    # Security N8 (Refs #1445): defensiver Abbruch bei 0/negativer Frist (s. enforce_anonymous).
+    if settings_obj.retention_qualified_days < 1:
+        return {"count": 0}
 
     held_ids = get_active_hold_target_ids(facility, "Event")
     qualified_clients = Client.objects.filter(
@@ -198,6 +213,9 @@ def enforce_document_type_retention(facility, now, dry_run):
 
     count = 0
     for dt in doc_types_with_retention:
+        # Security N8 (Refs #1445): defensiver Skip bei 0/negativer Frist (s. enforce_anonymous).
+        if dt.retention_days < 1:
+            continue
         cutoff = now - timedelta(days=dt.retention_days)
         qs = Event.objects.filter(
             facility=facility,
@@ -224,6 +242,10 @@ def enforce_activities(facility, settings_obj, now, dry_run):
 
     Returns ``{"count": N}``.
     """
+
+    # Security N8 (Refs #1445): defensiver Abbruch bei 0/negativer Frist (s. enforce_anonymous).
+    if settings_obj.retention_activities_days < 1:
+        return {"count": 0}
 
     cutoff = now - timedelta(days=settings_obj.retention_activities_days)
     qs = Activity.objects.filter(

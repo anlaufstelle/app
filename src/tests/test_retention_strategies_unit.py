@@ -281,6 +281,26 @@ class TestNonPositiveDaysSkipped:
         settings_obj.retention_anonymous_days = -5
         assert collect_doomed_events(facility, settings_obj, timezone.now()).count() == 0
 
+    def test_zero_days_does_not_delete_in_enforce_path(self, facility, staff_user, doc_type_contact, settings_obj):
+        """Security N8: der DIREKTE Loeschpfad (``enforce_anonymous``, nicht nur
+        der Proposal-Pfad) darf bei 0/negativer Frist NICHTS soft-loeschen —
+        Defense-in-Depth neben dem DB-Constraint."""
+        from core.retention.enforcement import enforce_anonymous
+
+        event = Event.objects.create(
+            facility=facility,
+            document_type=doc_type_contact,
+            occurred_at=_at(100),
+            data_json={},
+            is_anonymous=True,
+            created_by=staff_user,
+        )
+        settings_obj.retention_anonymous_days = 0
+        result = enforce_anonymous(facility, settings_obj, timezone.now(), dry_run=False)
+        assert result == {"count": 0}
+        event.refresh_from_db()
+        assert event.is_deleted is False
+
 
 @pytest.mark.django_db
 class TestStrategyIntersection:
