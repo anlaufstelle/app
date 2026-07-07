@@ -69,10 +69,24 @@ def count_clients_in_bucket(facility, age_cluster, contact_stage=None) -> int:
     The equivalence class is ``(age_cluster, contact_stage)``. When
     ``contact_stage`` is ``None`` only ``age_cluster`` is matched.
     Used as input for the k-anonymity check.
+
+    Hart-anonymisierte ``Gelöscht-``-Tombstones werden bewusst AUSGESCHLOSSEN
+    (Refs #1442): ``Client.anonymize`` setzt ihren ``age_cluster`` auf
+    ``UNKNOWN`` zurueck und vergibt ein am Praefix erkennbares Pseudonym. Sie
+    tragen also keine echten Quasi-Identifikatoren mehr, blaehen aber gerade den
+    UNKNOWN-Bucket auf — ein Angreifer mit DB-Read filtert sie am Pseudonym-
+    Praefix weg, sodass das *effektive* k unter die konfigurierte Schwelle
+    faellt. Fail-safe-Richtung: eher Hard-Anonymize.
+
+    Bereits k-anonymisierte Zeilen (``k_anonymized=True``, ``anon-``-Pseudonym)
+    bleiben dagegen GEZAEHLT: sie behalten ihre echten Quasi-Identifikatoren
+    (age_cluster, contact_stage) und vergroessern die echte Anonymitaetsmenge
+    ehrlich — anders als die Tombstones wuerde ein Ausschluss hier das k zu
+    konservativ druecken, ohne dass die Zeilen re-identifizierbar waeren.
     """
     from core.models.client import Client
 
-    qs = Client.objects.filter(facility=facility, age_cluster=age_cluster)
+    qs = Client.objects.filter(facility=facility, age_cluster=age_cluster).exclude(pseudonym__startswith="Gelöscht-")
     if contact_stage is not None:
         qs = qs.filter(contact_stage=contact_stage)
     return qs.count()

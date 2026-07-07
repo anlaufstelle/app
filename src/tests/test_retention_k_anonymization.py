@@ -35,6 +35,59 @@ def _make_client(
 
 
 @pytest.mark.django_db
+class TestBucketExcludesTombstones:
+    """Security (Refs #1442): ``count_clients_in_bucket`` darf hart-anonymisierte
+    ``Gelöscht-``-Tombstones NICHT mitzaehlen. Sie tragen keine echten
+    Quasi-Identifikatoren mehr (age_cluster auf UNKNOWN zurueckgesetzt) und sind
+    am Pseudonym-Praefix erkennbar — ein Angreifer mit DB-Read filtert sie weg,
+    das effektive k faellt unter die Schwelle. Bereits k-anonymisierte Zeilen
+    (``k_anonymized=True``, ``anon-``-Pseudonym) bleiben dagegen gezaehlt: sie
+    erhalten echte Quasi-Identifikatoren und vergroessern die echte
+    Anonymitaetsmenge ehrlich."""
+
+    def test_geloescht_tombstones_do_not_pad_bucket(self, facility):
+        # Ziel + 4 Gelöscht-Tombstones in derselben Aequivalenzklasse. Vor dem
+        # Fix ergibt count=5 >= k -> faelschlich k-anonym (der Bug); nach dem
+        # Fix zaehlt nur das Ziel -> 1 < 5 -> False.
+        target = _make_client(
+            facility,
+            pseudonym="P-target",
+            age_cluster=Client.AgeCluster.UNKNOWN,
+            stage=Client.ContactStage.IDENTIFIED,
+        )
+        for i in range(4):
+            _make_client(
+                facility,
+                pseudonym=f"Gelöscht-{i:08d}",
+                age_cluster=Client.AgeCluster.UNKNOWN,
+                stage=Client.ContactStage.IDENTIFIED,
+            )
+        assert is_k_anonymous(target, k=5) is False
+
+    def test_k_anonymized_peers_still_count(self, facility):
+        # Ziel + 4 echte Genossen, zwei davon bereits k-anonymisiert
+        # (k_anonymized=True, anon-Pseudonym). Diese bleiben Teil der echten
+        # Anonymitaetsmenge -> bucket=5 >= k -> True.
+        target = _make_client(
+            facility,
+            pseudonym="P-target",
+            age_cluster=Client.AgeCluster.AGE_27_PLUS,
+            stage=Client.ContactStage.IDENTIFIED,
+        )
+        for i in range(4):
+            peer = _make_client(
+                facility,
+                pseudonym=f"anon-{i:012d}",
+                age_cluster=Client.AgeCluster.AGE_27_PLUS,
+                stage=Client.ContactStage.IDENTIFIED,
+            )
+            if i < 2:
+                peer.k_anonymized = True
+                peer.save(update_fields=["k_anonymized"])
+        assert is_k_anonymous(target, k=5) is True
+
+
+@pytest.mark.django_db
 class TestKAnonymity:
     def test_pos_bucket_at_or_above_k_returns_true(self, facility):
         # 5 Klienten mit denselben (age_cluster, contact_stage) → bucket=5
