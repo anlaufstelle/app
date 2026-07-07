@@ -82,6 +82,32 @@ class TestHtmxSessionRewrite:
 
         assert response.status_code == 200
 
+    def test_offline_replay_302_to_login_is_not_rewritten(self):
+        """Refs #1419 (P0-Fix): Ein Offline-Queue-Replay traegt den beim
+        Queueing eingefrorenen ``HX-Request: true``-Header, ist aber KEINE
+        Live-HTMX-Navigation, sondern ein Hintergrund-Sync ohne DOM.
+
+        Wuerde der Login-302 hier in ``200 + HX-Redirect`` umgeschrieben,
+        saehe der Queue-Klassifikator (offline-queue.js) ein ``ok &&
+        !redirected``-Ergebnis und wertete es als (HTMX-Partial-)Erfolg →
+        er loescht die Queue-Zeile, obwohl der Status-Wechsel NIE angewendet
+        wurde (stiller Datenverlust, ADR-030 §3). Fuer Replays
+        (``X-Offline-Replay``) muss der rohe 302 durchgereicht werden — der
+        Client folgt ihm (fetch redirect:follow) und klassifiziert ihn
+        ueber den bestehenden auth-pending-Zweig (redirected + /login/), der
+        die Schleife anhaelt OHNE zu loeschen. ROT vor dem Fix."""
+        rf = RequestFactory()
+        request = rf.post("/partials/workitems/x/status/", HTTP_HX_REQUEST="true", HTTP_X_OFFLINE_REPLAY="1")
+        middleware = _make_middleware(HttpResponseRedirect("/login/?next=/partials/workitems/x/status/"))
+
+        response = middleware(request)
+
+        assert response.status_code == 302, (
+            "Offline-Replay-Login-Redirect darf NICHT in HX-Redirect umgeschrieben werden"
+        )
+        assert response["Location"] == "/login/?next=/partials/workitems/x/status/"
+        assert "HX-Redirect" not in response
+
     @override_settings(LOGIN_URL="/auth/sign-in/")
     def test_respects_custom_login_url(self):
         """Umgeschrieben wird nur, wenn der Redirect auf die konfigurierte

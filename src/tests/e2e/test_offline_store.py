@@ -1468,6 +1468,65 @@ class TestQueueReplayClassification:
                 page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
             context.close()
 
+    def test_hx_redirect_login_bounce_is_auth_pending_not_success(self, browser, base_url, _login_storage_state):
+        """Refs #1419 (P0-Fix, Safety-Net): Ein Status-Toggle-Record traegt
+        den SW-eingefrorenen ``hx-request: true``-Header. Laeuft die
+        Server-Session waehrend der Offline-Zeit ab, wandelt
+        HtmxSessionMiddleware den Login-302 fuer HTMX-Requests in
+        ``200 + HX-Redirect`` um. Der Klassifikator sah bisher nur ``ok &&
+        !redirected && hasHxRequest`` → wertete das als HTMX-Partial-ERFOLG
+        und LOESCHTE die Queue-Zeile — stiller Datenverlust aller gequeueten
+        Status-Aenderungen (ADR-030 §3).
+
+        Die Middleware reicht Replays inzwischen den rohen 302 durch
+        (Root-Cause-Fix), aber der Klassifikator muss zusaetzlich JEDE
+        ``ok``-Antwort mit ``HX-Redirect`` auf die Login-URL als auth-pending
+        behandeln (Halt OHNE Loeschen) — als Netz gegen genau diese stille
+        Loesch-Klasse. Dieser Test mockt die Antwort direkt als 200 +
+        HX-Redirect (unabhaengig von der Middleware) und ist gegen den
+        heutigen Klassifikator ROT (Zeile wuerde geloescht)."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            url = "/partials/workitems/aaaaaaaa-1111-4aaa-8aaa-aaaaaaaaaaaa/status/"
+            hits = {"n": 0}
+
+            def _handler(route):
+                hits["n"] += 1
+                route.fulfill(
+                    status=200,
+                    headers={"HX-Redirect": "/login/?next=/workitems/", "Content-Type": "text/html"},
+                    body="",
+                )
+
+            page.route(re.compile(r"/partials/workitems/aaaaaaaa"), _handler)
+
+            result = page.evaluate(
+                """async (url) => {
+                    const s = window.offlineStore;
+                    await s.putEncrypted('queue', {
+                        url, createdAt: Date.now(), attempts: 0, retryAfter: 0, lastError: '',
+                        idempotencyKey: 'idem-hxr1',
+                        data: {method: 'POST', body: 'status=done&expected_updated_at=x',
+                               headers: {'hx-request': 'true'}},
+                    });
+                    await window.offlineQueue.replayQueue();
+                    const rows = await s.listDecrypted('queue');
+                    return { count: rows.length, localStatus: rows[0] && rows[0].localStatus };
+                }""",
+                url,
+            )
+            assert result["count"] == 1, "Die Queue-Zeile darf NICHT geloescht werden (auth-pending, kein Erfolg)"
+            assert not result["localStatus"], (
+                f"auth-pending darf die Zeile unveraendert lassen (kein conflict/dead): {result['localStatus']!r}"
+            )
+            assert hits["n"] == 1, "Genau ein Replay-Versuch erwartet"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
     def test_replay_sends_single_fresh_csrf_header(self, browser, base_url, _login_storage_state):
         """Refs #1419 (Bugfix, gefunden bei der manuellen Verifikation): die
         SW-Allowlist friert den ``x-csrftoken`` des Erstversuchs

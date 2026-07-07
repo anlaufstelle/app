@@ -252,6 +252,24 @@
                         response = await _send(record, csrf);
                     }
                 }
+                // Refs #1419 (P0-Safety-Net): Ein auth-pending-Login-Bounce
+                // kann als 200 statt als Redirect eintreffen — HtmxSession-
+                // Middleware wandelt fuer HTMX-Requests (der Replay eines
+                // Status-Toggle-Records traegt den eingefrorenen
+                // ``hx-request``-Header) den Login-302 in ``200 + HX-Redirect``
+                // um. Ohne diesen Zweig faenge der ``ok && !redirected &&
+                // hasHxRequest``-Erfolgspfad unten das ab und LOESCHTE die
+                // Zeile — stiller Datenverlust (ADR-030 §3). Ein echter
+                // Status-/Edit-Erfolg traegt NIE ``HX-Redirect`` (nur der
+                // Login-Bounce tut das), daher ist der Waechter
+                // false-positive-frei. Wie der Redirect-auth-pending-Zweig:
+                // Schleife anhalten OHNE zu loeschen (Middleware reicht
+                // Replays inzwischen den rohen 302 durch — Root-Cause-Fix —,
+                // dieser Zweig ist das Netz gegen die stille Loesch-Klasse).
+                const hxRedirect = response.headers.get("HX-Redirect");
+                if (response.ok && hxRedirect && hxRedirect.includes("/login/")) {
+                    break;
+                }
                 // Refs #1351/#1384: Klassifikation exakt nach der
                 // HTTP-Replay-Contract-Tabelle (Plan-Kopf) — kein
                 // Head-of-Line-Blocking mehr (ein 4xx haelt nur DIESEN

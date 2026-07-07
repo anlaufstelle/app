@@ -21,6 +21,20 @@ class HtmxSessionMiddleware:
         if not is_htmx:
             return response
 
+        # Refs #1419 (P0): Ein Offline-Queue-Replay traegt den beim Queueing
+        # eingefrorenen ``HX-Request: true``-Header, ist aber KEINE
+        # Live-HTMX-Navigation, sondern ein Hintergrund-Sync ohne DOM. Wuerde
+        # sein Login-302 hier in ``200 + HX-Redirect`` umgeschrieben, klassifi-
+        # zierte der Queue-Klassifikator (offline-queue.js) das ``ok &&
+        # !redirected``-Ergebnis als (HTMX-Partial-)Erfolg und LOESCHTE die
+        # Queue-Zeile, obwohl der Write nie ankam (stiller Datenverlust,
+        # ADR-030 §3). Der Replay markiert sich mit ``X-Offline-Replay``; fuer
+        # ihn den rohen 302 durchreichen — der Client folgt ihm und trifft den
+        # bestehenden auth-pending-Zweig (redirected + /login/), der die
+        # Schleife OHNE Loeschen anhaelt (identisch zum offline-edit.js-Pfad).
+        if request.headers.get("X-Offline-Replay"):
+            return response
+
         if response.status_code == 302:
             redirect_url = response.get("Location", "")
             login_url = getattr(settings, "LOGIN_URL", "/login/")
