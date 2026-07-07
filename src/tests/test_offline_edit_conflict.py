@@ -843,9 +843,15 @@ class TestOfflineConflictShellViews:
     conflict data lives in client-side IndexedDB.
     """
 
-    def test_conflict_list_requires_login(self, client):
+    def test_conflict_list_is_public(self, client):
+        """Vertragsaenderung #1396 (Option 1): die Liste ist pk-los + datenlos
+        und muss via SW ``cache.addAll`` precachebar sein — ein Auth-Gate
+        wuerde den Install-Fetch auf ``/login/`` redirecten. Siehe
+        ``test_offline_apis.py::test_offline_conflict_list_is_public`` (E2E)
+        und ``_authz_expectations.py`` (Matrix-Eintrag ``public``)."""
         response = client.get(reverse("core:offline_conflict_list"))
-        assert response.status_code in (302, 403)
+        assert response.status_code == 200
+        assert b"conflict-list-view" in response.content
 
     def test_conflict_list_renders_scaffold(self, client, staff_user):
         client.force_login(staff_user)
