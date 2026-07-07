@@ -53,6 +53,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Security
 
+- **Platzhalter-Secrets starten Prod nicht mehr** — .env.example liefert DJANGO_SECRET_KEY/DJANGO_AUDIT_HASH_KEY/BACKUP_ENCRYPTION_KEY leer aus, prod.py weist change-me-Werte und Secrets < 32 Zeichen fail-closed ab, der Container-Entrypoint führt manage.py check --deploy aus und die Backup-Skripte verweigern Platzhalter-Schlüssel.
 - **k-Anonymisierung erzwingt die Schwelle k** — der Retention-Pfad prüft die Äquivalenzklasse (Altersgruppe, Kontaktstufe) vor der Generalisierung; unterbesetzte Buckets werden fail-safe hart anonymisiert statt fälschlich als k-anonym markiert.
 - **Login-Lockout-/Passwort-Reset-Audits überstehen RLS** — log_audit_event synct die Postgres-Session-GUCs auf den übergebenen Pre-Auth-Kontext, sodass der AuditLog-INSERT unter der NOBYPASSRLS-App-Rolle nicht mehr an der WITH-CHECK-Policy scheitert.
 - **Optimistic-Lock-Token-Pflicht im Offline-Replay verhindert Lost-Update** (#1338) — der JSON-/Replay-Pfad der Ereignis- und Fallaufgaben-Updates verlangt jetzt einen Optimistic-Lock-Token (`expected_updated_at`), der unter `select_for_update` in derselben Transaktion geprüft wird; ein fehlender Token ist kein stilles Last-Write-Wins mehr, sondern ein 409-Konflikt mit vollem Server-Stand — konkurrierende Offline-Änderungen überschreiben sich nicht mehr gegenseitig.

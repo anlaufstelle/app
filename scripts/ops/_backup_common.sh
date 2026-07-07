@@ -42,3 +42,15 @@ backup_verify_hmac() {
         return 1
     fi
 }
+
+# Security N6: Die frueher ausgelieferte .env.example enthielt
+# "change-me"-Platzhalter. Ein Backup, das mit einem oeffentlich bekannten
+# Schluessel verschluesselt ist, ist faktisch unverschluesselt — fail-closed.
+backup_require_real_key() {
+    case "${BACKUP_ENCRYPTION_KEY:-}" in
+        change-me*)
+            echo "FEHLER: BACKUP_ENCRYPTION_KEY ist noch der Platzhalter aus .env.example — echten Zufallsschluessel setzen (z.B. openssl rand -base64 48)." >&2
+            exit 1
+            ;;
+    esac
+}

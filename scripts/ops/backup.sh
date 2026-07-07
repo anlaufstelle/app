@@ -35,6 +35,7 @@ fi
 : "${POSTGRES_USER:?POSTGRES_USER nicht gesetzt}"
 : "${POSTGRES_DB:?POSTGRES_DB nicht gesetzt}"
 : "${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY nicht gesetzt}"
+backup_require_real_key
 
 # pg_dump muss als POSTGRES_ADMIN_USER (BYPASSRLS) laufen — sonst scheitert
 # der Dump an FORCE ROW LEVEL SECURITY auf den Facility-Tabellen (Migrationen

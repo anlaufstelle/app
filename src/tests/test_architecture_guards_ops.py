@@ -138,3 +138,25 @@ class TestPublicBackupScriptsRlsRoles:
         )
         call = re.search(r"psql\s+-U\s+\"\$SU_USER\"[^\n]*", flat)
         assert call is not None, "Restore-Pipe in restore.sh muss psql -U \"$SU_USER\" nutzen (Review N4)."
+
+
+class TestDeployChecksWiredIntoStartup:
+    """Security N6: Platzhalter-/Fehlkonfigurations-Guards muessen beim
+    Container-Start greifen — nicht erst, wenn jemand manuell prueft."""
+
+    def test_entrypoint_runs_check_deploy(self) -> None:
+        content = Path("docker-entrypoint.sh").read_text(encoding="utf-8")
+        assert "check --deploy" in content, (
+            "docker-entrypoint.sh muss 'manage.py check --deploy' vor gunicorn "
+            "ausfuehren (Review N6) — set -e stoppt den Start bei Fehlern."
+        )
+
+    def test_backup_scripts_reject_placeholder_key(self) -> None:
+        common = Path("scripts/ops/_backup_common.sh").read_text(encoding="utf-8")
+        assert "backup_require_real_key" in common, (
+            "_backup_common.sh muss backup_require_real_key definieren — ein "
+            "change-me-BACKUP_ENCRYPTION_KEY verschluesselt faktisch nicht (Review N6)."
+        )
+        for script in ("scripts/ops/backup.sh", "scripts/ops/restore.sh"):
+            body = Path(script).read_text(encoding="utf-8")
+            assert "backup_require_real_key" in body, f"{script} muss backup_require_real_key aufrufen (Review N6)."

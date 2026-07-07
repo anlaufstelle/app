@@ -48,6 +48,7 @@ fi
 : "${POSTGRES_USER:?POSTGRES_USER nicht gesetzt}"
 : "${POSTGRES_DB:?POSTGRES_DB nicht gesetzt}"
 : "${BACKUP_ENCRYPTION_KEY:?BACKUP_ENCRYPTION_KEY nicht gesetzt}"
+backup_require_real_key
 
 # Der Plain-SQL-Dump enthaelt OWNER-TO-/FORCE-RLS-Statements und COPY in
 # FORCE-RLS-Tabellen — das scheitert unter der App-Rolle (NOBYPASSRLS, kein

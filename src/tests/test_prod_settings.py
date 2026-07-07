@@ -9,6 +9,7 @@ missing.
 
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -240,3 +241,48 @@ class TestProdSharedCacheGuard:
         assert data["backend"] == "django.core.cache.backends.db.DatabaseCache"
         assert data["location"] == "anlaufstelle_cache"
         assert data["rl_cache"] == "default"
+
+
+class TestProdPlaceholderSecretsGuard:
+    """Security N6: .env.example lieferte nicht-leere change-me-Platzhalter,
+    die Guards pruefen aber nur auf leer. Wer die Datei kopiert und nur
+    ENCRYPTION_KEY setzt, startet Prod mit oeffentlich bekanntem SECRET_KEY
+    (faelschbare Reset-/Invite-Token) und AUDIT_HASH_KEY."""
+
+    _VALID_ENV = {
+        "DJANGO_SECRET_KEY": "x" * 50,
+        "ALLOWED_HOSTS": "example.org",
+        "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "DJANGO_AUDIT_HASH_KEY": "y" * 50,
+    }
+
+    def test_change_me_secret_key_rejected(self):
+        result = _run_prod_import({**self._VALID_ENV, "DJANGO_SECRET_KEY": "change-me-to-a-random-string"})
+        assert result.returncode != 0
+        assert "DJANGO_SECRET_KEY" in result.stderr
+
+    def test_short_secret_key_rejected(self):
+        result = _run_prod_import({**self._VALID_ENV, "DJANGO_SECRET_KEY": "x" * 16})
+        assert result.returncode != 0
+        assert "DJANGO_SECRET_KEY" in result.stderr
+
+    def test_change_me_audit_hash_key_rejected(self):
+        result = _run_prod_import({**self._VALID_ENV, "DJANGO_AUDIT_HASH_KEY": "change-me-to-a-separate-random-string"})
+        assert result.returncode != 0
+        assert "AUDIT_HASH_KEY" in result.stderr
+
+    def test_valid_env_still_boots(self):
+        result = _run_prod_import(self._VALID_ENV)
+        assert result.returncode == 0, f"prod import failed: {result.stderr}"
+
+    def test_env_example_ships_empty_secret_placeholders(self):
+        """Die Wurzel des Footguns: .env.example darf keine nicht-leeren
+        Platzhalter fuer Secrets mehr ausliefern."""
+        content = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
+        for var in ("DJANGO_SECRET_KEY", "DJANGO_AUDIT_HASH_KEY", "BACKUP_ENCRYPTION_KEY"):
+            match = re.search(rf"^{var}=(.*)$", content, re.MULTILINE)
+            assert match is not None, f"{var} fehlt in .env.example"
+            assert match.group(1).strip() == "", (
+                f"{var} muss in .env.example LEER sein — nicht-leere Platzhalter "
+                "ueberleben den Nur-leer-Guard (Review N6)."
+            )

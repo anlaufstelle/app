@@ -8,6 +8,10 @@ set -e
 
 python manage.py collectstatic --noinput
 
+# Security N6: Deploy-Checks fail-closed beim Container-Start — faengt
+# Platzhalter-Secrets/unsichere Prod-Settings, bevor gunicorn startet.
+python manage.py check --deploy
+
 # Refs #1283: GUNICORN_TIMEOUT MUSS größer als CLAMAV_TIMEOUT (settings/base.py)
 # sein. Der ClamAV-Upload-Scan läuft synchron im Worker; ist das Worker-Timeout
 # <= dem Scan-Timeout, killt Gunicorn den Worker bei langsamem clamd zuerst

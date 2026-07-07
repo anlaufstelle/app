@@ -164,6 +164,24 @@ if "collectstatic" not in sys.argv and not AUDIT_HASH_KEY:  # noqa: F405
         'print(secrets.token_urlsafe(64))"'
     )
 
+# --- Platzhalter-/Entropie-Guard (Security N6) ---
+# .env.example lieferte frueher nicht-leere ``change-me``-Platzhalter; die
+# Nur-leer-Guards oben liessen die durch. Ein oeffentlich bekannter
+# SECRET_KEY macht Reset-/Invite-Token faelschbar, ein bekannter
+# AUDIT_HASH_KEY die Audit-Pseudonyme brute-forcebar. Fail-closed.
+_SECRET_MIN_LENGTH = 32
+if "collectstatic" not in sys.argv:
+    for _name, _value in (("DJANGO_SECRET_KEY", SECRET_KEY), ("DJANGO_AUDIT_HASH_KEY", AUDIT_HASH_KEY)):  # noqa: F405
+        if _value.startswith("change-me"):
+            raise ImproperlyConfigured(
+                f"{_name} ist noch der Platzhalter aus .env.example — bitte echten "
+                'Zufallswert setzen: python -c "import secrets; print(secrets.token_urlsafe(64))"'
+            )
+        if _value and len(_value) < _SECRET_MIN_LENGTH:
+            raise ImproperlyConfigured(
+                f"{_name} ist kuerzer als {_SECRET_MIN_LENGTH} Zeichen — zu wenig Entropie fuer Produktion."
+            )
+
 # --- Virenscan (ClamAV ist in Produktion Pflicht, Refs #1267) ---
 # base.py defaultet CLAMAV_ENABLED=false (Dev/Test-Bypass: ``virus_scan.scan_file``
 # liefert dann ohne ClamAV-Kontakt „clean"). In Produktion ist der Scanner Pflicht
