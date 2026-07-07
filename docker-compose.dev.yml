@@ -105,7 +105,12 @@ services:
       - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
       - caddy_data_dev:/data
       - caddy_config_dev:/config
-    env_file: .env.dev
+    # KEIN env_file: .env.dev hier — Caddy braucht keine App-/DB-/Krypto-Secrets
+    # (Blast-Radius). Nur die von Caddyfile.dev tatsaechlich referenzierten
+    # Variablen als Passthrough. Refs #1370.
+    environment:
+      - ACME_EMAIL
+      - DOMAIN
     depends_on:
       web:
         condition: service_healthy

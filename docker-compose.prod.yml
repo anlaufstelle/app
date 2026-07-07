@@ -106,7 +106,14 @@ services:
       - caddy_config:/config
       # Access-Log persistent — Refs #801.
       - caddy_logs:/var/log/caddy
-    env_file: .env
+    # KEIN env_file: .env hier — Caddy braucht keine App-/DB-/Krypto-Secrets
+    # (Blast-Radius). Nur die vom Caddyfile tatsaechlich referenzierten
+    # Variablen als Passthrough (DOMAIN, X_ROBOTS_TAG); leer/undefiniert
+    # bleibt unset, damit Caddys eigener `{$X_ROBOTS_TAG:default}` greift.
+    # Refs #1370.
+    environment:
+      - DOMAIN
+      - X_ROBOTS_TAG
     depends_on:
       web:
         condition: service_healthy
