@@ -71,6 +71,79 @@
         return json.home_url || null;
     }
 
+    /*
+     * Refs #1415: Zaehlt ungesyncte Offline-Arbeit fuer den Pre-Submit-Guard
+     * unten. Kombiniert die zwei vorhandenen Zaehler statt eine eigene
+     * Dexie-Abfrage zu duplizieren: ``countUnsyncedEvents`` (Events mit
+     * localStatus modified/new/conflict/dead) + das Total aus
+     * ``countQueueByStatus`` (generische Replay-Queue) — exakt die Summe,
+     * die ``offlineStore.hasUnsyncedData()`` intern als bool prueft
+     * (offline-store.js:808-811), hier aber als Zahl fuer die Warnmeldung.
+     */
+    function unsyncedEntryCount() {
+        if (!window.offlineStore) return Promise.resolve(0);
+        var events =
+            typeof window.offlineStore.countUnsyncedEvents === "function"
+                ? window.offlineStore.countUnsyncedEvents()
+                : Promise.resolve(0);
+        var queue =
+            typeof window.offlineStore.countQueueByStatus === "function"
+                ? window.offlineStore.countQueueByStatus()
+                : Promise.resolve({ total: 0 });
+        return Promise.all([events, queue]).then(function (results) {
+            return (results[0] || 0) + ((results[1] && results[1].total) || 0);
+        });
+    }
+
+    /*
+     * Refs #1415: Pre-Submit-Guard fuer den Passwortwechsel. Ein
+     * Passwortwechsel rotiert das Offline-Salt und macht bestehende
+     * Offline-Chiffrate kryptografisch unlesbar (docs/user-guide.md §8) —
+     * das ist bereits mit dem POST besiegelt, ein `confirm` DANACH koennte
+     * nichts mehr retten. Der Guard warnt daher ausschliesslich pre-submit.
+     *
+     * FAIL-OPEN (Pflicht): schlaegt der Zaehl-Check fehl, fehlt
+     * window.offlineStore oder ist der Offline-Modus nicht initialisiert,
+     * geht der Passwortwechsel ungehindert durch — Passwortwechsel ist
+     * sicherheitskritisch und darf nie blockiert werden. `confirm`
+     * erscheint nur, wenn der Zaehler nachweislich > 0 ist.
+     *
+     * Async/sync-Bruch (`confirm()` ist synchron, der Zaehl-Check async):
+     * `preventDefault` + `stopImmediatePropagation` auf dem ersten Submit,
+     * dann nach dem (asynchronen) Check ein programmatischer
+     * `form.requestSubmit()`. Ein `bypass`-Flag laesst den zweiten,
+     * programmatischen Submit unangetastet durch — kein natives
+     * `form.submit()` (das wuerde den unten registrierten Fetch-basierten
+     * Handler von `attach()` umgehen und die Salt-Ableitung nach dem
+     * Passwortwechsel verpassen) und keine Rekursion/Endlosschleife, weil
+     * der Guard-Listener beim Bypass fruehzeitig zurueckkehrt.
+     */
+    function attachUnsyncedGuard(form) {
+        var bypass = false;
+        form.addEventListener("submit", function (event) {
+            if (bypass) return; // programmatischer Re-Submit nach confirm/Fail-Open
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            unsyncedEntryCount()
+                .then(function (count) {
+                    if (count > 0) {
+                        var template = form.getAttribute("data-unsynced-confirm-text") || "";
+                        var msg = template.replace("{count}", String(count));
+                        if (msg && !window.confirm(msg)) return; // Abbruch: erst synchronisieren
+                    }
+                    bypass = true;
+                    if (form.requestSubmit) form.requestSubmit();
+                    else form.submit();
+                })
+                .catch(function () {
+                    // FAIL-OPEN: Zaehl-Check fehlgeschlagen → nicht blockieren.
+                    bypass = true;
+                    if (form.requestSubmit) form.requestSubmit();
+                    else form.submit();
+                });
+        });
+    }
+
     function attach(formId, passwordField, before) {
         var form = document.getElementById(formId);
         if (!form) return;
@@ -126,7 +199,13 @@
     if (document.getElementById("login-form")) {
         attach("login-form", "password");
     }
-    if (document.getElementById("password-change-form")) {
+    var passwordChangeForm = document.getElementById("password-change-form");
+    if (passwordChangeForm) {
+        // Muss VOR attach() registriert werden: addEventListener-Reihenfolge
+        // entscheidet, wer beim ersten Submit zuerst laeuft — der Guard
+        // braucht stopImmediatePropagation, um den Fetch-Handler von
+        // attach() beim (asynchronen) Zaehl-Check anzuhalten.
+        attachUnsyncedGuard(passwordChangeForm);
         attach("password-change-form", "new_password1", function () {
             // Purge any stale ciphertext that was encrypted with the old key
             var p1 = window.crypto_session
