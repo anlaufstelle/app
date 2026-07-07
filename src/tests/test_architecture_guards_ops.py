@@ -105,9 +105,7 @@ class TestPublicBackupScriptsRlsRoles:
 
     @staticmethod
     def _flat(path: Path) -> str:
-        lines = [
-            line for line in path.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")
-        ]
+        lines = [line for line in path.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
         return "\n".join(lines).replace("\\\n", " ")
 
     def test_backup_dump_runs_as_admin_role(self) -> None:
@@ -137,7 +135,7 @@ class TestPublicBackupScriptsRlsRoles:
             "OWNER-TO-/FORCE-RLS-Statements scheitern unter der App-Rolle (Review N4)."
         )
         call = re.search(r"psql\s+-U\s+\"\$SU_USER\"[^\n]*", flat)
-        assert call is not None, "Restore-Pipe in restore.sh muss psql -U \"$SU_USER\" nutzen (Review N4)."
+        assert call is not None, 'Restore-Pipe in restore.sh muss psql -U "$SU_USER" nutzen (Review N4).'
 
 
 class TestDeployChecksWiredIntoStartup:
