@@ -61,15 +61,26 @@ run-http:
 	fi
 	$(PYTHON) src/manage.py runserver 0.0.0.0:8000
 
-# Selbstsigniertes Zertifikat generieren
-# LAN-IP fürs Testen von Mobilgeräten/PWA: SSL_HOST_IP=192.168.x.y make ssl-cert
-SSL_HOST_IP ?= 192.168.1.193
+# Selbstsigniertes Zertifikat generieren.
+# Fuer LAN-Tests von Mobilgeraeten/PWA die eigene LAN-IP explizit setzen:
+#   SSL_HOST_IP=192.168.x.y make ssl-cert
+# Kein Default (kein realer Host im Repo) — ohne SSL_HOST_IP deckt das
+# Zertifikat nur localhost/127.0.0.1/0.0.0.0 ab.
+SSL_HOST_IP ?=
 ssl-cert:
 	@mkdir -p certs
+	@san="DNS:localhost,IP:127.0.0.1,IP:0.0.0.0"; \
+	if [ -n "$(SSL_HOST_IP)" ]; then \
+		san="$$san,IP:$(SSL_HOST_IP)"; \
+		echo "LAN-IP im Zertifikat: $(SSL_HOST_IP)"; \
+	else \
+		echo "Hinweis: SSL_HOST_IP nicht gesetzt — Zertifikat nur fuer localhost/127.0.0.1/0.0.0.0."; \
+		echo "         Fuer LAN-/Mobil-Tests: SSL_HOST_IP=192.168.x.y make ssl-cert"; \
+	fi; \
 	openssl req -x509 -newkey rsa:2048 -keyout certs/dev-key.pem -out certs/dev-cert.pem \
 		-days 365 -nodes -subj "/CN=localhost" \
-		-addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:0.0.0.0,IP:$(SSL_HOST_IP)"
-	@echo "Zertifikat erstellt: certs/dev-cert.pem + certs/dev-key.pem (LAN-IP: $(SSL_HOST_IP))"
+		-addext "subjectAltName=$$san"
+	@echo "Zertifikat erstellt: certs/dev-cert.pem + certs/dev-key.pem"
 
 seed:
 	$(PYTHON) src/manage.py seed
