@@ -6015,3 +6015,19 @@ msgstr "Neue Version verfügbar."
 #. Refs #1412 (M17): SW-/offline.html-i18n
 msgid "Neu laden"
 msgstr "Neu laden"
+
+#. Refs #1412 (M17b): Quota-/Persist-Status-Anzeige im Offline-Arbeitsplatz
+msgid "{used} / {quota} ({percent}% belegt)"
+msgstr "{used} / {quota} ({percent}% belegt)"
+
+#. Refs #1412 (M17b): Quota-/Persist-Status-Anzeige im Offline-Arbeitsplatz
+msgid "dauerhafter Speicher: gewährt"
+msgstr "dauerhafter Speicher: gewährt"
+
+#. Refs #1412 (M17b): Quota-/Persist-Status-Anzeige im Offline-Arbeitsplatz
+msgid "dauerhafter Speicher: nicht gewährt"
+msgstr "dauerhafter Speicher: nicht gewährt"
+
+#. Refs #1412 (M17b): Quota-/Persist-Status-Anzeige im Offline-Arbeitsplatz
+msgid "dauerhafter Speicher: nicht unterstützt"
+msgstr "dauerhafter Speicher: nicht unterstützt"
