@@ -512,3 +512,104 @@ class TestJugendamtPdfKAnonSuppression:
         assert "15" in html  # 27+
         # ... aber keine rohe ``None``-Ausgabe fuer unterdrueckte Zellen.
         assert "None" not in html
+
+
+@pytest.mark.django_db
+class TestReportPdfKAnonSuppression:
+    """Security R4: Der Halbjahres-Sachbericht (externes Artefakt fuer
+    Traeger/Foerderer) lieferte rohe Kleinstfallzahlen, waehrend Jugendamt-PDF
+    (#1278) und On-Screen-Bericht laengst unterdruecken."""
+
+    def _mk_events(self, facility, user, doc_name, n):
+        dt = DocumentType.objects.create(
+            facility=facility,
+            name=doc_name,
+            category=DocumentType.Category.CONTACT,
+        )
+        for _ in range(n):
+            Event.objects.create(
+                facility=facility,
+                document_type=dt,
+                occurred_at=timezone.now(),
+                data_json={},
+                is_anonymous=True,
+                created_by=user,
+            )
+
+    def test_external_mode_routes_stats_through_suppression(self, facility, admin_user, monkeypatch):
+        from core.services.dashboard import get_statistics_hybrid
+        from core.services.system import export as sys_export
+
+        self._mk_events(facility, admin_user, "Haeufig", 10)
+        self._mk_events(facility, admin_user, "Selten", 2)
+        # Zweite Kleinstfallzahl-Zelle: verhindert, dass die sekundaere
+        # Suppression (_apply_secondary_suppression, A6.1) bei genau EINER
+        # unterdrueckten Zelle zusaetzlich die groesste sichtbare Zelle
+        # (Haeufig) unterdrueckt — vgl. Jugendamt-Test (zwei Kleinstzellen).
+        self._mk_events(facility, admin_user, "Selten2", 3)
+
+        captured = {}
+
+        def fake_render(template_name, context):
+            captured["stats"] = context["stats"]
+            return "<html></html>"
+
+        monkeypatch.setattr(sys_export, "render_to_string", fake_render)
+        monkeypatch.setattr(sys_export.weasyprint, "HTML", _CaptureHTML)
+
+        today = date.today()
+        stats = get_statistics_hybrid(facility, today - timedelta(days=2), today)
+        sys_export.generate_report_pdf(facility, today - timedelta(days=2), today, stats, internal_mode=False)
+
+        rows = {r["name"]: r for r in captured["stats"]["by_document_type"]}
+        assert rows["Selten"]["suppressed"] is True and rows["Selten"]["count"] is None
+        assert rows["Haeufig"]["suppressed"] is False and rows["Haeufig"]["count"] == 10
+
+    def test_internal_mode_keeps_raw_counts(self, facility, admin_user, monkeypatch):
+        from core.services.dashboard import get_statistics_hybrid
+        from core.services.system import export as sys_export
+
+        self._mk_events(facility, admin_user, "Selten", 2)
+        captured = {}
+
+        def fake_render(template_name, context):
+            captured["stats"] = context["stats"]
+            return "<html></html>"
+
+        monkeypatch.setattr(sys_export, "render_to_string", fake_render)
+        monkeypatch.setattr(sys_export.weasyprint, "HTML", _CaptureHTML)
+
+        today = date.today()
+        stats = get_statistics_hybrid(facility, today - timedelta(days=2), today)
+        sys_export.generate_report_pdf(facility, today - timedelta(days=2), today, stats, internal_mode=True)
+
+        rows = {r["name"]: r for r in captured["stats"]["by_document_type"]}
+        assert rows["Selten"]["count"] == 2 and "suppressed" not in rows["Selten"]
+
+    def test_template_renders_marker_not_none(self):
+        from django.template.loader import render_to_string
+        from django.utils import timezone as tz
+
+        html = render_to_string(
+            "core/export/report_pdf.html",
+            {
+                "facility_name": "Teststelle",
+                "date_from": date.today(),
+                "date_to": date.today(),
+                "generated_at": tz.now(),
+                "internal_mode": False,
+                "stats": {
+                    "total_contacts": 12,
+                    "unique_clients": None,
+                    "by_contact_stage": {"anonym": 10, "identifiziert": None, "qualifiziert": None},
+                    "by_document_type": [
+                        {"name": "Haeufig", "category": "contact", "count": 10, "suppressed": False},
+                        {"name": "Selten", "category": "contact", "count": None, "suppressed": True},
+                    ],
+                    "by_age_cluster": [],
+                    "top_clients": [],
+                },
+            },
+        )
+        assert "unterdrückt" in html
+        assert "None" not in html

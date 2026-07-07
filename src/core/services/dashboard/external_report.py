@@ -146,3 +146,24 @@ def suppress_jugendamt_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
         "by_age_cluster": by_age_cluster,
         "unique_clients": unique if unique >= threshold else None,
     }
+
+
+def suppress_report_stats(facility, stats: dict[str, Any]) -> dict[str, Any]:
+    """K-Anon-Kleinstfallzahl-Suppression fuer den Halbjahres-Sachbericht.
+
+    Security R4: Das Sachbericht-PDF (Standard-Modus = externes Artefakt fuer
+    Traeger/Foerderer, Refs #792) lieferte rohe Kleinstfallzahlen, waehrend
+    Jugendamt-PDF (#1278) und On-Screen-Bericht laengst unterdruecken.
+    Gleiche Semantik wie ``build_external_report``: Zellen < Schwelle werden
+    ``count=None``/``suppressed=True`` (inkl. sekundaerer Suppression),
+    ``by_contact_stage`` ueber die Dict-Variante, ``unique_clients`` < k -> None.
+    Nicht mutierend — gibt eine Kopie zurueck.
+    """
+    threshold = _get_threshold(facility)
+    out = dict(stats)
+    out["by_document_type"] = _suppress_small(list(stats.get("by_document_type", [])), threshold)
+    out["by_age_cluster"] = _suppress_small(list(stats.get("by_age_cluster", [])), threshold)
+    out["by_contact_stage"] = _suppress_stage_dict(dict(stats.get("by_contact_stage", {})), threshold)
+    unique = stats.get("unique_clients", 0)
+    out["unique_clients"] = unique if unique is not None and unique >= threshold else None
+    return out

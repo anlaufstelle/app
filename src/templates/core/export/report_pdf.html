@@ -41,20 +41,20 @@
             <div class="kpi-label">{% trans "Gesamtkontakte" %}</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-value">{{ stats.by_contact_stage.anonym }}</div>
+            <div class="kpi-value">{% if stats.by_contact_stage.anonym is None %}{% trans "unterdrückt" %}{% else %}{{ stats.by_contact_stage.anonym }}{% endif %}</div>
             <div class="kpi-label">{% trans "Anonym" %}</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-value">{{ stats.by_contact_stage.identifiziert }}</div>
+            <div class="kpi-value">{% if stats.by_contact_stage.identifiziert is None %}{% trans "unterdrückt" %}{% else %}{{ stats.by_contact_stage.identifiziert }}{% endif %}</div>
             <div class="kpi-label">{% trans "Identifiziert" %}</div>
         </div>
         <div class="kpi-card">
-            <div class="kpi-value">{{ stats.by_contact_stage.qualifiziert }}</div>
+            <div class="kpi-value">{% if stats.by_contact_stage.qualifiziert is None %}{% trans "unterdrückt" %}{% else %}{{ stats.by_contact_stage.qualifiziert }}{% endif %}</div>
             <div class="kpi-label">{% trans "Qualifiziert" %}</div>
         </div>
     </div>
 
-    <p><strong>{% trans "Einzigartige Personen:" %}</strong> {{ stats.unique_clients }}</p>
+    <p><strong>{% trans "Einzigartige Personen:" %}</strong> {% if stats.unique_clients is None %}{% trans "unterdrückt" %}{% else %}{{ stats.unique_clients }}{% endif %}</p>
 
     <h2>{% trans "Kontakte nach Dokumentationstyp" %}</h2>
     {% if stats.by_document_type %}
@@ -71,7 +71,7 @@
             <tr>
                 <td>{{ row.name }}</td>
                 <td>{{ row.category }}</td>
-                <td class="num">{{ row.count }}</td>
+                <td class="num">{% if row.suppressed %}{% trans "unterdrückt" %}{% else %}{{ row.count }}{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -93,7 +93,7 @@
             {% for row in stats.by_age_cluster %}
             <tr>
                 <td>{{ row.label }}</td>
-                <td class="num">{{ row.count }}</td>
+                <td class="num">{% if row.suppressed %}{% trans "unterdrückt" %}{% else %}{{ row.count }}{% endif %}</td>
             </tr>
             {% endfor %}
         </tbody>

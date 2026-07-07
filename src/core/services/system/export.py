@@ -224,6 +224,14 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
     wird das Ranking gerendert und der Report mit einem ``INTERN``-Banner
     markiert.
     """
+    # Security R4: Standard-Modus ist das externe Artefakt (Traeger/Foerderer)
+    # — Kleinstfallzahlen unterdruecken wie Jugendamt-PDF/On-Screen-Bericht.
+    # Der Internal-Mode (Lead/Admin, INTERN-Banner, Refs #792) bleibt roh.
+    if not internal_mode:
+        from core.services.dashboard import suppress_report_stats
+
+        stats = suppress_report_stats(facility, stats)
+
     html = render_to_string(
         "core/export/report_pdf.html",
         {
