@@ -1511,7 +1511,9 @@ class TestQueueReplayClassification:
                 url,
             )
             assert len(seen) == 1, f"Genau ein Replay erwartet: {seen!r}"
-            assert "stale-token-vom-queueing" not in seen[0], f"Stale Record-Token darf nicht mitgesendet werden: {seen[0]!r}"
+            assert "stale-token-vom-queueing" not in seen[0], (
+                f"Stale Record-Token darf nicht mitgesendet werden: {seen[0]!r}"
+            )
             assert "," not in seen[0], f"Nur EIN CSRF-Header-Wert erlaubt: {seen[0]!r}"
             assert fresh and seen[0] == fresh, f"Es muss der frische Meta-Token ankommen: {seen[0]!r} != {fresh!r}"
         finally:
