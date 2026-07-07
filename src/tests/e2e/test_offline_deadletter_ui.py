@@ -448,6 +448,7 @@ def test_revoked_403_shows_explanatory_text_instead_of_generic_error(browser, ba
                 await window.offlineStore.saveClientBundle({
                     client: {pk: args.clientPk, pseudonym: 'REVOKED-TEST'},
                     expires_at: args.future, ttl: 3600,
+                    schema_version: window.offlineStore.BUNDLE_SCHEMA_VERSION,
                     document_types: [{pk: 'dt-1', name: 'Kontakt', fields: [
                         {slug: 'notiz', name: 'Notiz', field_type: 'text'}
                     ]}],

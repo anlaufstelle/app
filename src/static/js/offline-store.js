@@ -43,6 +43,11 @@
     const TABLES = ["queue", "drafts", "meta", "clients", "cases", "events"];
     const TTL_MS = 48 * 60 * 60 * 1000; // 48h
     const MAX_OFFLINE_CLIENTS = 20;
+    // F-05 (#1425, ADR-022): muss mit BUNDLE_SCHEMA_VERSION in
+    // core/services/system/offline.py synchron gehalten werden (kein
+    // Build-Sync, analog TTL_MS/BUNDLE_TTL_SECONDS oben) -- ein Mismatch
+    // zwingt den Lesepfad zum Purge, siehe _isSchemaMismatch.
+    const BUNDLE_SCHEMA_VERSION = 1;
 
     if (typeof Dexie === "undefined") {
         // eslint-disable-next-line no-console
@@ -258,6 +263,18 @@
         const exp = Date.parse(expiresAt);
         if (Number.isNaN(exp)) return false;
         return exp < (now || Date.now());
+    }
+
+    /*
+     * F-05 (#1425, ADR-022): True wenn ein Bundle-Envelope eine andere
+     * `schemaVersion` traegt als der aktuelle `BUNDLE_SCHEMA_VERSION` --
+     * inklusive fehlendem/`undefined` Wert. Bundles ohne `schemaVersion` gab
+     * es nie (das Feld ist seit dem ersten Bundle-Commit gesetzt), trotzdem
+     * fail-closed: ein fehlender Wert gilt als Mismatch statt als
+     * automatisch gueltig.
+     */
+    function _isSchemaMismatch(schemaVersion) {
+        return schemaVersion !== BUNDLE_SCHEMA_VERSION;
     }
 
     async function count(table) {
@@ -548,6 +565,20 @@
             return null;
         }
 
+        // F-05 (#1425, ADR-022): ein Bundle mit veralteter/fehlender
+        // `schemaVersion` (nicht-abwaertskompatibler Layout-Wechsel) darf
+        // ebenfalls nicht gerendert werden. Gleiches Muster wie das
+        // TTL-Gate direkt darunter — OHNE force (Refs #1353): nur der
+        // Server-Spiegel faellt weg, unsynced Events dieses Klienten
+        // bleiben erhalten. "Re-Fetch anstoßen" (Akzeptanzkriterium) ist
+        // hier bewusst kein neuer Mechanismus: der naechste Online-Kontakt
+        // (revalidateCachedClients) bzw. ein erneutes "Offline mitnehmen"
+        // schreibt ohnehin ein frisches Bundle mit aktueller Version.
+        if (_isSchemaMismatch(envelope.schemaVersion)) {
+            await removeOfflineClient(pk);
+            return null;
+        }
+
         // F-04/F-10 (#1110): Ein abgelaufener Bundle darf NICHT mehr gerendert
         // werden (veraltetes/anonymisiertes PII). Beim Lesen verwerfen — OHNE
         // force (Refs #1353): der Server-Spiegel (clients/cases/clean-events)
@@ -618,6 +649,13 @@
             } catch (_e) {
                 continue;
             }
+            // F-05 (#1425, ADR-022): List-Gate analog zum getOfflineClient-Gate
+            // oben -- bewusst read-only (kein Purge als Render-Seiteneffekt,
+            // wie schon beim TTL-Ausschluss darunter): ein Bundle mit
+            // veralteter/fehlender schemaVersion wird nur nicht gelistet, der
+            // tatsaechliche Purge passiert beim naechsten getOfflineClient-Read
+            // bzw. der naechsten Online-Revalidierung.
+            if (_isSchemaMismatch(envelope.schemaVersion)) continue;
             if (_isExpired(envelope.expiresAt)) continue;
             const client = envelope.client || {};
             out.push({
@@ -1168,6 +1206,8 @@
         ensurePersistentStorage: ensurePersistentStorage,
         TTL_MS: TTL_MS,
         MAX_OFFLINE_CLIENTS: MAX_OFFLINE_CLIENTS,
+        // F-05 (#1425) — Lesepfad-Gate vergleicht dagegen, siehe _isSchemaMismatch
+        BUNDLE_SCHEMA_VERSION: BUNDLE_SCHEMA_VERSION,
     };
 
     /*

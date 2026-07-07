@@ -304,9 +304,11 @@ def test_get_offline_client_rejects_expired_bundle(authenticated_page, base_url)
             const EXP = '22222222-2222-4222-8222-222222222222';
             await s.saveClientBundle({
                 client: {pk: FRESH, pseudonym: 'FRESH'}, expires_at: future, ttl: 3600,
+                schema_version: s.BUNDLE_SCHEMA_VERSION,
             });
             await s.saveClientBundle({
                 client: {pk: EXP, pseudonym: 'EXPIRED'}, expires_at: past, ttl: 3600,
+                schema_version: s.BUNDLE_SCHEMA_VERSION,
             });
             const fresh = await s.getOfflineClient(FRESH);
             const expired = await s.getOfflineClient(EXP);
@@ -389,7 +391,10 @@ def test_revalidate_overwrites_stale_bundle_with_server_data(authenticated_page,
         """async (pk) => {
             const s = window.offlineStore;
             const future = new Date(Date.now() + 3600e3).toISOString();
-            await s.saveClientBundle({client: {pk: pk, pseudonym: 'STALE-LOCAL'}, expires_at: future, ttl: 3600});
+            await s.saveClientBundle({
+                client: {pk: pk, pseudonym: 'STALE-LOCAL'}, expires_at: future, ttl: 3600,
+                schema_version: s.BUNDLE_SCHEMA_VERSION,
+            });
             const before = (await s.getOfflineClient(pk)).client.pseudonym;
             const outcome = await s.revalidateCachedClient(pk);
             const after = (await s.getOfflineClient(pk)).client.pseudonym;
@@ -918,6 +923,184 @@ class TestUnsyncedNeverDiesSilently:
         assert request_count["n"] == 1, "Nach dem ersten 429 darf kein weiterer Bundle-GET rausgehen (break)"
 
 
+# ── Schema-Version-Purge im Lesepfad (F-05, Refs #1425, ADR-022) ────────────
+# ADR-022 beschreibt "Schema-Mismatch zwingt Purge" als Gegenmittel gegen
+# einen nicht-abwaertskompatiblen Bundle-Layout-Wechsel. Bislang wurde
+# `schemaVersion` nur durchgereicht (F-05). Die folgenden Tests belegen:
+# getOfflineClient UND listOfflineClientsDetailed (Offline-Home) purgen den
+# Server-Spiegel eines Bundles mit veralteter/fehlender `schemaVersion` --
+# exakt wie das bestehende TTL-/expiresAt-Gate (non-force, S1-konform).
+
+
+class TestSchemaVersionPurge:
+    def test_get_offline_client_rejects_stale_schema(self, authenticated_page, base_url):
+        """Ein Bundle mit veralteter ``schemaVersion`` wird beim Lesen NICHT
+        gerendert (``null``) und der Klient aus dem Store entfernt -- ein
+        frisches Bundle mit aktueller Version bleibt unangetastet."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                const FRESH = '11111111-1111-4111-8111-111111111112';
+                const STALE = '22222222-2222-4222-8222-222222222223';
+                await s.saveClientBundle({
+                    client: {pk: FRESH, pseudonym: 'FRESH-SCHEMA'},
+                    expires_at: future, ttl: 3600, schema_version: s.BUNDLE_SCHEMA_VERSION,
+                });
+                await s.saveClientBundle({
+                    client: {pk: STALE, pseudonym: 'STALE-SCHEMA'},
+                    expires_at: future, ttl: 3600, schema_version: s.BUNDLE_SCHEMA_VERSION - 1,
+                });
+                const fresh = await s.getOfflineClient(FRESH);
+                const stale = await s.getOfflineClient(STALE);
+                return {
+                    fresh: fresh && fresh.client.pseudonym,
+                    staleIsNull: stale === null,
+                    remaining: await s.count('clients'),
+                };
+            }"""
+        )
+        assert result["fresh"] == "FRESH-SCHEMA"
+        assert result["staleIsNull"] is True
+        assert result["remaining"] == 1
+
+    def test_get_offline_client_rejects_missing_schema_version(self, authenticated_page, base_url):
+        """Ein Bundle ganz ohne ``schemaVersion`` (Altbestand vor diesem Feld,
+        siehe Praezisierung #1425) gilt fail-closed als Mismatch -- nicht als
+        automatisch gueltig."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                const PK = '33333333-3333-4333-8333-333333333334';
+                await s.saveClientBundle({
+                    client: {pk: PK, pseudonym: 'NO-SCHEMA'},
+                    expires_at: future, ttl: 3600,
+                });
+                return {
+                    result: await s.getOfflineClient(PK),
+                    remaining: await s.count('clients'),
+                };
+            }"""
+        )
+        assert result["result"] is None
+        assert result["remaining"] == 0
+
+    def test_list_gate_excludes_stale_schema(self, authenticated_page, base_url):
+        """``listOfflineClientsDetailed`` (Offline-Home-Liste) rendert keinen
+        Klienten mit veralteter ``schemaVersion`` -- analog zum bestehenden
+        TTL-Ausschluss dort (read-only, kein Purge als Render-Seiteneffekt)."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                const FRESH = '44444444-4444-4444-8444-444444444445';
+                const STALE = '55555555-5555-4555-8555-555555555556';
+                await s.saveClientBundle({
+                    client: {pk: FRESH, pseudonym: 'FRESH-LIST'},
+                    expires_at: future, ttl: 3600, schema_version: s.BUNDLE_SCHEMA_VERSION,
+                });
+                await s.saveClientBundle({
+                    client: {pk: STALE, pseudonym: 'STALE-LIST'},
+                    expires_at: future, ttl: 3600, schema_version: s.BUNDLE_SCHEMA_VERSION - 1,
+                });
+                const list = await s.listOfflineClientsDetailed();
+                return list.map((c) => c.pseudonym);
+            }"""
+        )
+        assert result == ["FRESH-LIST"]
+
+    def test_stale_schema_purge_preserves_unsynced(self, authenticated_page, base_url):
+        """S1-Invariante: der Schema-Purge (non-force, Muster #1353) entfernt
+        nur den Server-Spiegel (clients-Row + clean Event) -- eine ungesyncte
+        events-Row (``localStatus: 'modified'``) UND eine Queue-Row
+        ueberleben den Lesezugriff auf einen stale-schema Bundle
+        unangetastet."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                const PK = '66666666-6666-4666-8666-666666666667';
+                await s.saveClientBundle({
+                    client: {pk: PK, pseudonym: 'STALE-UNSYNCED'},
+                    expires_at: future, ttl: 3600, schema_version: s.BUNDLE_SCHEMA_VERSION - 1,
+                    events: [{pk: 'clean-ev-schema', occurred_at: future}],
+                });
+                await s.saveOfflineEdit({
+                    pk: 'modified-ev-schema',
+                    clientPk: PK,
+                    occurredAt: future,
+                    localStatus: 'modified',
+                    data: {formData: {note: 'pending edit'}, expectedUpdatedAt: ''},
+                });
+                await s.putEncrypted('queue', {
+                    url: '/pending-write', createdAt: Date.now(), attempts: 0,
+                    retryAfter: 0, lastError: '', data: {a: 1},
+                });
+                const before = {
+                    clients: await s.count('clients'),
+                    events: await s.count('events'),
+                    queue: await s.count('queue'),
+                };
+                const readResult = await s.getOfflineClient(PK);
+                const after = {
+                    clients: await s.count('clients'),
+                    events: await s.count('events'),
+                    queue: await s.count('queue'),
+                };
+                const survivor = await s.getOfflineEvent('modified-ev-schema');
+                return {
+                    readResult,
+                    before,
+                    after,
+                    survivorStatus: survivor && survivor.localStatus,
+                    hasUnsynced: await s.hasUnsyncedData(),
+                };
+            }"""
+        )
+        assert result["readResult"] is None
+        assert result["before"] == {"clients": 1, "events": 2, "queue": 1}
+        assert result["after"] == {"clients": 0, "events": 1, "queue": 1}, (
+            "Nur das clean Event darf dem Schema-Purge zum Opfer fallen"
+        )
+        assert result["survivorStatus"] == "modified"
+        assert result["hasUnsynced"] is True
+
+    def test_get_offline_client_accepts_current_schema_unchanged(self, authenticated_page, base_url):
+        """Happy Path: eine aktuelle ``schemaVersion`` aendert nichts am
+        bisherigen Verhalten -- weder beim Einzel-Read noch in der
+        Offline-Home-Liste."""
+        page = authenticated_page
+        _bootstrap(page, base_url)
+        result = page.evaluate(
+            """async () => {
+                const s = window.offlineStore;
+                const future = new Date(Date.now() + 3600e3).toISOString();
+                const PK = '77777777-7777-4777-8777-777777777778';
+                await s.saveClientBundle({
+                    client: {pk: PK, pseudonym: 'CURRENT-SCHEMA'},
+                    expires_at: future, ttl: 3600, schema_version: s.BUNDLE_SCHEMA_VERSION,
+                });
+                const client = await s.getOfflineClient(PK);
+                const list = await s.listOfflineClientsDetailed();
+                return {
+                    pseudonym: client && client.client.pseudonym,
+                    inList: list.some((c) => c.pk === PK),
+                };
+            }"""
+        )
+        assert result["pseudonym"] == "CURRENT-SCHEMA"
+        assert result["inList"] is True
+
+
 # ── Persistenter Speicher (Refs #1356) ───────────────────────────────────────
 
 
@@ -1232,6 +1415,7 @@ class TestWorkItemStoreMerge:
                 await s.saveClientBundle({
                     client: {pk: args.pk, pseudonym: 'WI-Merge'},
                     expires_at: future, ttl: 3600,
+                    schema_version: s.BUNDLE_SCHEMA_VERSION,
                     workitems: [{
                         pk: args.w1, title: 'Bundle-Aufgabe', description: 'Basis',
                         status: 'open', priority: 'normal', item_type: 'task',
@@ -1382,7 +1566,7 @@ class TestSaveClientBundleAtomic:
                 // Alt-Stand: Client 'OLD' mit einem clean-Event.
                 await s.saveClientBundle({
                     client: {pk: PK, pseudonym: 'OLD'},
-                    expires_at: future, ttl: 3600,
+                    expires_at: future, ttl: 3600, schema_version: s.BUNDLE_SCHEMA_VERSION,
                     events: [{pk: 'ev-old', occurred_at: future, data_fields: {note: 'alt'}}],
                 });
                 // Fault injizieren: der naechste events.put wirft mitten im Re-Take.
@@ -1433,7 +1617,7 @@ class TestSaveClientBundleAtomic:
                 const PK = 'b2b2b2b2-b2b2-4b2b-8b2b-b2b2b2b2b2b2';
                 await s.saveClientBundle({
                     client: {pk: PK, pseudonym: 'OLD-QUOTA'},
-                    expires_at: future, ttl: 3600,
+                    expires_at: future, ttl: 3600, schema_version: s.BUNDLE_SCHEMA_VERSION,
                 });
                 const origPut = s.db.clients.put.bind(s.db.clients);
                 s.db.clients.put = () => { throw new DOMException('quota', 'QuotaExceededError'); };

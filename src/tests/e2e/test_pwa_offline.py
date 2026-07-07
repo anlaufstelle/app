@@ -407,7 +407,10 @@ def test_offline_home_filters_taken_clients_by_pseudonym(browser, base_url):
                 const s = window.offlineStore;
                 const future = new Date(Date.now() + 3600e3).toISOString();
                 const mk = (pk, pseudonym) =>
-                    s.saveClientBundle({client: {pk, pseudonym}, expires_at: future, ttl: 3600});
+                    s.saveClientBundle({
+                        client: {pk, pseudonym}, expires_at: future, ttl: 3600,
+                        schema_version: s.BUNDLE_SCHEMA_VERSION,
+                    });
                 await mk('11111111-1111-4111-8111-111111111111', 'Anton-01');
                 await mk('22222222-2222-4222-8222-222222222222', 'Berta-02');
             }"""
