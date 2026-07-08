@@ -1636,6 +1636,140 @@ class TestQueueReplayClassification:
                 page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
             context.close()
 
+    def test_429_backoff_grows_exponentially_across_attempts(self, browser, base_url, _login_storage_state):
+        """#1426 (T21): Sequenzielle 429 auf DIESELBE Row → ``retryAfter`` waechst
+        exponentiell (``_backoffFor`` = BASE*2^attempts, offline-queue.js:142) und
+        ``attempts`` zaehlt hoch. Zwischen den Laeufen wird nur ``retryAfter``
+        zurueckgesetzt (Row wieder ``ready``), damit derselbe Record erneut sendet."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            url = "/events/dddddddd-dddd-4ddd-8ddd-dddddddddddd/edit/"
+            page.route(
+                re.compile(r"/events/dddddddd"),
+                lambda r: r.fulfill(status=429, content_type="application/json", body="{}"),
+            )
+            row_id = page.evaluate(
+                """async (u) => {
+                    await window.offlineStore.putEncrypted('queue', {
+                        url: u, createdAt: Date.now(), attempts: 0, retryAfter: 0,
+                        lastError: '', idempotencyKey: 'idem-bx', data: {method: 'POST', body: 'a', headers: {}},
+                    });
+                    return (await window.offlineStore.listDecrypted('queue'))[0].id;
+                }""",
+                url,
+            )
+            windows = []
+            attempts_seq = []
+            for _ in range(3):
+                res = page.evaluate(
+                    """async (id) => {
+                        await window.offlineStore.db.queue.update(id, {retryAfter: 0});
+                        const before = Date.now();
+                        await window.offlineQueue.replayQueue();
+                        const row = (await window.offlineStore.listDecrypted('queue'))[0];
+                        return {
+                            before, retryAfter: row.retryAfter, attempts: row.attempts, localStatus: row.localStatus,
+                        };
+                    }""",
+                    row_id,
+                )
+                windows.append(res["retryAfter"] - res["before"])
+                attempts_seq.append(res["attempts"])
+                assert res["localStatus"] is None, "429 darf die Row nicht dead machen"
+            assert attempts_seq == [1, 2, 3], f"attempts muss hochzaehlen: {attempts_seq}"
+            assert windows[0] < windows[1] < windows[2], f"Backoff muss exponentiell wachsen: {windows}"
+            assert windows[0] >= 60000, f"Erstes Backoff-Fenster ~120s (BASE*2) erwartet: {windows[0]}ms"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_5xx_sets_backoff_keeps_row_and_aborts_batch(self, browser, base_url, _login_storage_state):
+        """#1426 (T21): Ein 5xx setzt (wie 429) einen Backoff und bricht den Batch
+        ab, markiert die Row aber NICHT dead (bleibt retrybar) — anders als 4xx
+        (422/400/404 → dead). Refs offline-queue.js:354."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            url1 = "/events/dddddddd-dddd-4ddd-8ddd-dddddddddddd/edit/"
+            url2 = "/events/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee/edit/"
+            hits = {"n": 0}
+
+            def _handler(route):
+                hits["n"] += 1
+                route.fulfill(status=500, content_type="application/json", body="{}")
+
+            page.route(re.compile(r"/events/dddddddd|/events/eeeeeeee"), _handler)
+            result = page.evaluate(
+                """async (args) => {
+                    const s = window.offlineStore;
+                    await s.putEncrypted('queue', {
+                        url: args.url1, createdAt: Date.now(), attempts: 0, retryAfter: 0,
+                        lastError: '', idempotencyKey: 'idem-5a', data: {method: 'POST', body: 'a', headers: {}},
+                    });
+                    await s.putEncrypted('queue', {
+                        url: args.url2, createdAt: Date.now() + 1, attempts: 0, retryAfter: 0,
+                        lastError: '', idempotencyKey: 'idem-5b', data: {method: 'POST', body: 'b', headers: {}},
+                    });
+                    const before = Date.now();
+                    await window.offlineQueue.replayQueue();
+                    const rows = await s.listDecrypted('queue');
+                    return {before, rows: rows.map((r) => ({url: r.url, retryAfter: r.retryAfter,
+                        attempts: r.attempts, localStatus: r.localStatus, lastError: r.lastError}))};
+                }""",
+                {"url1": url1, "url2": url2},
+            )
+            assert hits["n"] == 1, "5xx muss den Batch abbrechen — die zweite Row darf nicht gesendet werden"
+            assert len(result["rows"]) == 2, "Beide Rows bleiben erhalten (kein Loeschen bei 5xx)"
+            row1 = next(r for r in result["rows"] if r["url"] == url1)
+            assert row1["retryAfter"] > result["before"], "retryAfter muss in der Zukunft liegen (Backoff)"
+            assert row1["attempts"] == 1
+            assert row1["localStatus"] is None, "5xx bleibt retrybar (NICHT dead)"
+            assert row1["lastError"] == "500"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_server_retry_after_header_ignored_client_uses_own_backoff(self, browser, base_url, _login_storage_state):
+        """#1426 (T21): offline-queue.js liest bewusst KEINEN serverseitigen
+        ``Retry-After``-Header, sondern berechnet den Backoff selbst
+        (``_backoffFor``). Ein 429 mit ``Retry-After: 1`` fuehrt daher NICHT zu
+        ~1s Wartezeit, sondern zum Client-Fenster (~BASE*2 = 120s)."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE", service_workers="block")
+        page = context.new_page()
+        try:
+            _bootstrap(page, base_url)
+            url = "/events/dddddddd-dddd-4ddd-8ddd-dddddddddddd/edit/"
+            page.route(
+                re.compile(r"/events/dddddddd"),
+                lambda r: r.fulfill(
+                    status=429, headers={"Retry-After": "1"}, content_type="application/json", body="{}"
+                ),
+            )
+            res = page.evaluate(
+                """async (u) => {
+                    await window.offlineStore.putEncrypted('queue', {
+                        url: u, createdAt: Date.now(), attempts: 0, retryAfter: 0,
+                        lastError: '', idempotencyKey: 'idem-ra', data: {method: 'POST', body: 'a', headers: {}},
+                    });
+                    const before = Date.now();
+                    await window.offlineQueue.replayQueue();
+                    const row = (await window.offlineStore.listDecrypted('queue'))[0];
+                    return {before, retryAfter: row.retryAfter};
+                }""",
+                url,
+            )
+            window = res["retryAfter"] - res["before"]
+            assert window > 60000, f"Client-Backoff (~120s) erwartet, nicht der Server-'Retry-After: 1s': {window}ms"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
     def test_login_redirect_is_auth_pending_and_keeps_row(self, browser, base_url, _login_storage_state):
         """Dieser Test ist gegen den heutigen Code ROT: `replayQueue` wertet
         JEDES `response.ok` (offline-queue.js:171-172) als Erfolg und loescht

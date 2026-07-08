@@ -665,6 +665,106 @@ class TestOfflineEditReplay:
                 page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
             context.close()
 
+    def test_conflict_resolver_keep_local_resolves(self, browser, base_url, e2e_env):
+        """#1426 (T21): „Meine Version behalten" (keepLocal) spielt den lokalen
+        Wert mit frischem Token gegen den Server-Stand → der Server uebernimmt den
+        lokalen Wert (Server-Round-Trip, anders als keepServer)."""
+        client_pk, event_pk = _seed_client_with_event(e2e_env, notiz="Originalwert")
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            assert _cache_bundle(page, client_pk)["ok"]
+            _open_offline_detail(page, base_url, client_pk)
+            _go_offline(page)
+            _edit_notiz_offline(page, event_pk, "Mein lokaler Wert")
+            _bump_server_event(e2e_env, event_pk, "Server hat zuerst geaendert")
+            _go_online(page)
+            page.locator("[data-testid='event-conflict-badge']").first.wait_for(state="visible", timeout=20000)
+
+            page.goto(f"{base_url}/offline/conflicts/{event_pk}/", wait_until="domcontentloaded")
+            page.locator("[data-testid='conflict-resolver-view']").wait_for(state="visible", timeout=10000)
+            page.locator("[data-testid='conflict-diff-table']").wait_for(state="visible", timeout=10000)
+
+            page.locator("[data-testid='conflict-keep-local']").click()
+            page.locator("[data-testid='conflict-resolved']").wait_for(state="visible", timeout=15000)
+
+            import time as _t
+
+            deadline = _t.time() + 15
+            val = None
+            while _t.time() < deadline:
+                val = _server_notiz(e2e_env, event_pk)
+                if val == "Mein lokaler Wert":
+                    break
+                _t.sleep(0.5)
+            assert val == "Mein lokaler Wert", f"keepLocal muss den lokalen Wert durchsetzen: {val!r}"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_conflict_resolver_merge_resolves(self, browser, base_url, e2e_env):
+        """#1426 (T21): „Manuell mergen" (keepMerged) uebernimmt pro Feld die
+        gewaehlte Seite. Hier notiz=lokal, dauer=server → der Server traegt nach
+        dem Merge eine MISCHUNG (weder rein-lokal noch rein-server) — genau das
+        unterscheidet den Merge-Pfad von keepLocal/keepServer."""
+        client_pk, event_pk = _seed_client_with_event(e2e_env, notiz="Originalwert")
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            assert _cache_bundle(page, client_pk)["ok"]
+            _open_offline_detail(page, base_url, client_pk)
+            _go_offline(page)
+            _edit_notiz_offline(page, event_pk, "Lokaler Wert")
+            # Server aendert BEIDE Felder (notiz UND dauer), damit die Feld-Wahl
+            # ein von beiden Reinformen verschiedenes Ergebnis erzeugen kann.
+            _shell(
+                e2e_env,
+                "from core.models import Event;"
+                f" e = Event.objects.get(pk='{event_pk}');"
+                " e.data_json = dict(e.data_json or {}, notiz='Server-Wert', dauer=99);"
+                " e.save()",
+            )
+            _go_online(page)
+            page.locator("[data-testid='event-conflict-badge']").first.wait_for(state="visible", timeout=20000)
+
+            page.goto(f"{base_url}/offline/conflicts/{event_pk}/", wait_until="domcontentloaded")
+            page.locator("[data-testid='conflict-diff-table']").wait_for(state="visible", timeout=10000)
+
+            # Pro Feld waehlen: notiz → lokal, dauer → server.
+            page.locator("[data-testid='conflict-row']").filter(has_text="notiz").locator(
+                "[data-testid='conflict-choice']"
+            ).select_option("local")
+            page.locator("[data-testid='conflict-row']").filter(has_text="dauer").locator(
+                "[data-testid='conflict-choice']"
+            ).select_option("server")
+            page.locator("[data-testid='conflict-merge']").click()
+            page.locator("[data-testid='conflict-resolved']").wait_for(state="visible", timeout=15000)
+
+            import time as _t
+
+            deadline = _t.time() + 15
+            notiz = dauer = None
+            while _t.time() < deadline:
+                notiz = _server_notiz(e2e_env, event_pk)
+                dauer = _shell(
+                    e2e_env,
+                    f"from core.models import Event; print(Event.objects.get(pk='{event_pk}').data_json.get('dauer'))",
+                )[-1]
+                if notiz == "Lokaler Wert" and dauer == "99":
+                    break
+                _t.sleep(0.5)
+            assert notiz == "Lokaler Wert", f"notiz muss die LOKALE Wahl tragen: {notiz!r}"
+            assert dauer == "99", f"dauer muss die SERVER-Wahl (99) tragen: {dauer!r}"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
 
 # ── Edit-Replay-Robustheit: 429-Batch-Abbruch, dead-Letter, Token-Fallback ──
 # Refs #1351/#1384. Diese Tests treiben offline-edit.js ausschliesslich gegen
