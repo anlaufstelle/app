@@ -10,6 +10,6 @@ pytest-playwright>=0.8.0
 pytest-xdist>=3.5
 filelock>=3.29.6
 mypy>=2.1.0
-django-stubs[compatible-mypy]>=6.0.5
+django-stubs[compatible-mypy]>=6.0.6
 # Mutation-Testing fuer core/services + core/forms (nightly, Refs #922/#923).
 mutmut>=3.6.0,<4.0
