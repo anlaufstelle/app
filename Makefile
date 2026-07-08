@@ -130,6 +130,15 @@ test-e2e-parallel:
 test-e2e-smoke:
 	$(PYTHON) -m pytest -m "e2e and smoke" --browser chromium -v
 
+# WebKit-Smoke der Offline-Kernsuite (Refs #1418) — seltener, SERIELL (RAM-Limit,
+# bewusst kein -n) auf Safari/WebKit, wo die riskanten Feld-Eigenheiten liegen:
+# IndexedDB-ITP-Eviction, aggressiver SW-Lebenszyklus, navigator.locks fuer den
+# Sync-Orchestrator, storage.persist. NICHT im Default-Gate (`make ci` laesst e2e aus).
+# Einmalige Voraussetzung:  playwright install webkit --with-deps
+# Ergaenzender manueller iOS/Android-Durchlauf: docs/testing/manual-test-matrix.md Anhang G (#1319).
+test-e2e-webkit-smoke:
+	$(PYTHON) -m pytest -m "e2e and offline_smoke" --browser webkit -v
+
 check:
 	$(PYTHON) src/manage.py check
 	$(PYTHON) src/manage.py makemigrations --check --dry-run

@@ -31,6 +31,7 @@
 - [Anhang D — Test-Daten-Cheatsheet](#anhang-d--test-daten-cheatsheet)
 - [Anhang E — Performance-Budgets](#anhang-e--performance-budgets)
 - [Anhang F — Sprachen×Rollen×Einrichtungen Cross-Coverage-Grid](#anhang-f--sprachenrolleneinrichtungen-cross-coverage-grid)
+- [Anhang G — Offline-Feld-Durchlauf iOS/Safari (WebKit)](#anhang-g--offline-feld-durchlauf-iossafari-webkit)
 
 ---
 
@@ -470,4 +471,55 @@ Legende: ✅ erlaubt (200) · ⛔ Deny erwartet (403/redirect) · 🔒 Sudo-Redi
 
 ---
 
-**Letzte Aktualisierung:** 2026-05-25 · Pflege durch: Tobias Nix · Issues: #864, #973
+## Anhang G — Offline-Feld-Durchlauf iOS/Safari (WebKit)
+
+> **Zweck (Refs #1418):** Die automatisierte Offline-E2E-Suite läuft ausschließlich unter **Chromium** — die realistischste Feld-Plattform der PWA ist aber **iOS/Safari/WebKit**, und genau dort liegen die kritischen Eigenheiten (IndexedDB-ITP-Eviction, aggressiver Service-Worker-Lebenszyklus, `navigator.locks`-Verfügbarkeit, `storage.persist()`-Grant). Dieser Durchlauf schließt die Lücke mit (a) dem seltenen **WebKit-Smoke** `make test-e2e-webkit-smoke` und (b) einem **manuellen iOS-Pass**. Schritt-für-Schritt-Grundlage: das Living-Doc #1319.
+
+### G.0 — Automatisierter WebKit-Smoke (vor dem manuellen Pass)
+
+Einmalige Einrichtung (Root/`apt` für die WebKit-Systembibliotheken):
+
+```bash
+playwright install webkit --with-deps   # einmalig
+make tailwind-build                      # styles.css muss gebaut sein, sonst SW-cache-404
+make test-e2e-webkit-smoke               # SERIELL (RAM-Limit), Marker: "e2e and offline_smoke"
+```
+
+Deckt die Offline-Kernsuite (`test_pwa_offline`, `test_sync_orchestrator`, `test_offline_deadletter_ui`) unter WebKit ab. Grün ⇒ Service-Worker-Lebenszyklus, Web-Locks-Orchestrator und Dead-Letter-Kern funktionieren auf der WebKit-Engine. **Nicht** Teil von `make ci` (bewusst seltener Lauf, `make ci` lässt `e2e` aus).
+
+### G.1 — Voraussetzungen (iOS)
+
+- **Echtes iPhone/iPad** mit Safari (Chrome/Firefox auf iOS nutzen ebenfalls die WebKit-Engine).
+- Zugriff über **HTTPS** — zwingend `https://dev.anlaufstelle.app` (kein LAN-`http://…`, sonst kein WebCrypto-Schlüssel).
+- **Frisch anmelden, Passwort wirklich eintippen** (AES-GCM-Key wird per PBKDF2 aus dem Passwort abgeleitet; eine nur per Cookie wiederhergestellte Sitzung hat keinen Schlüssel).
+- **Rolle ohne 2FA-Pflicht** (`miriam`/staff, `emma`/lead); `super_admin`/`facility_admin` laufen zweistufig über TOTP — auf dem Pfad entsteht der Offline-Schlüssel nicht zuverlässig.
+
+### G.2 — Kern-Durchlauf (entlang #1319 § B — Telefon)
+
+- [ ] **PWA installieren:** Safari → Teilen → **Zum Home-Bildschirm**.
+- [ ] **Person(en) offline mitnehmen:** Personenliste → **„Offline mitnehmen"** → Badge **„Lokal verfügbar"**.
+- [ ] **Detailseite einmal online öffnen** (die Personenliste ist offline **nicht** verfügbar — zuverlässiger Offline-Einstieg ist `/clients/<pk>/`).
+- [ ] **Flugmodus an.**
+- [ ] **Personenseite neu laden / erneut öffnen** → Offline-Ansicht aus dem verschlüsselten Cache (gelbes Offline-Banner).
+- [ ] **Ereignis erfassen/bearbeiten** → „… wird beim nächsten Online-Kontakt synchronisiert."; Banner zählt „1 nicht synchronisiert".
+- [ ] **WorkItem-Status ändern** (Übernehmen/Erledigt/Als nicht relevant schließen) offline → Klick landet in der Queue (Refs #1419).
+- [ ] **Flugmodus aus** → Queue synchronisiert **automatisch**; der Zähler geht auf 0.
+- [ ] **Konfliktfall:** dieselbe Aufgabe/dasselbe Ereignis zwischenzeitlich auf einem zweiten Gerät ändern → nach Reconnect erscheint der Konflikt in **`/offline/conflicts/`** und ist per **„Erneut anwenden"** gegen den gezeigten Server-Stand auflösbar (kein stilles Überschreiben).
+
+### G.3 — WebKit-spezifische Beobachtungspunkte (das eigentliche #1418-Ziel)
+
+| Risiko | Was prüfen | Erwartung |
+|---|---|---|
+| **IndexedDB-ITP-Eviction** | Nach „Offline mitnehmen": wurde `storage.persist()` gewährt? (Der Offline-Arbeitsplatz zeigt den Persist-/Speicher-Status, Refs #1412.) Ohne Grant kann Safari (ITP) die IndexedDB nach ~7 Tagen ohne Interaktion löschen. | Persist-Grant **oder** sichtbarer „Browser kann Offline-Daten verwerfen"-Hinweis (#1356); kein stiller Verlust. |
+| **SW-Lebenszyklus (aggressiv)** | App aus dem App-Switcher wischen, einige Minuten warten, **Kaltstart** über die Home-Kachel **und** über die Detail-URL. | Detail-URL rendert offline aus dem Cache; der Kachel-Kaltstart landet ggf. auf der generischen „Sie sind offline"-Seite (dokumentiert — deshalb Detailseite als Einstieg). Kein Absturz, kein Titel-Hijack (#1416). |
+| **`navigator.locks` (Web-Locks)** | Der Sync-Orchestrator (#1383) baut auf Web-Locks (Safari ≥ 15.4). Zwei Tabs/Fenster derselben App offline erfassen, dann online. | Genau **ein** koordinierter Sync-Lauf, keine Doppel-Anlagen. Fehlt die API (ältere iOS): Verhalten notieren (Degradation, kein Crash). |
+| **`storage.persist()`-Grant** | Erst-„Mitnehmen" fragt einmalig `persist()` an (kein Re-Prompt); nach PWA-Installation darf erneut gefragt werden. | Ergebnis wird gecacht; Verweigerung ergänzt einen dezenten Hinweis. |
+| **Datei-Upload offline** | Im Offline-Viewer eine Datei anhängen. | Klare Meldung „Datei-Upload erfordert Internetverbindung" (Uploads bleiben bewusst online-only). |
+
+### G.4 — Ergebnis festhalten
+
+Wie beim Rest der Matrix: der Lauf-Status wird **nicht** hier, sondern im Run-Log unter [`runs/`](runs/) erfasst (Vorlage [`run-template.md`](run-template.md)). Ein Fehlschlag wird `❌ Fail [#ISSUE]` mit Reproduktion + erwartetem vs. tatsächlichem Verhalten. Einordnung im Profil **Mobile-PWA-RC** ([`release-test-profiles.md`](release-test-profiles.md)).
+
+---
+
+**Letzte Aktualisierung:** 2026-07-08 · Pflege durch: Tobias Nix · Issues: #864, #973, #1418

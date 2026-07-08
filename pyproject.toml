@@ -69,6 +69,7 @@ addopts = "--reuse-db"
 markers = [
     "e2e: End-to-End-Tests mit Playwright (benötigen laufenden Server)",
     "smoke: Kritische User-Flows für schnelle lokale Validierung",
+    "offline_smoke: Offline-Kernsuite (SW-Lebenszyklus, Sync-Orchestrator/Web-Locks, Dead-Letter) für den seltenen, seriellen WebKit-Smoke (Refs #1418).",
     "slow: Tests mit Laufzeit > 2s (typisch: Seed-Läufe mit größerem Datensatz). Per `-m 'not slow'` deselektierbar.",
     "flaky_quarantine: Tests, die wegen Flakiness unter Beobachtung stehen (Refs #922).",
     "architecture: Meta-Tests, die Source-Files scannen (z.B. ``AuditLog.objects.create()``-Vorkommen zählen). Werden in Mutmut-Runs (#930) deselektiert, weil mutmut die gezählten Patterns vervielfacht.",

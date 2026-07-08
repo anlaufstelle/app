@@ -30,7 +30,7 @@ from contextlib import suppress
 
 import pytest
 
-pytestmark = pytest.mark.e2e
+pytestmark = [pytest.mark.e2e, pytest.mark.offline_smoke]  # Refs #1418 (WebKit-Smoke)
 
 
 # ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ import pytest
 
 from tests.e2e._selectors import find_first_client_link
 
-pytestmark = pytest.mark.e2e
+pytestmark = [pytest.mark.e2e, pytest.mark.offline_smoke]  # Refs #1418 (WebKit-Smoke)
 
 
 class TestPWASetup:
