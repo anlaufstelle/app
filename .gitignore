@@ -91,3 +91,6 @@ mutants/
 .mutmut-cache*
 # mutmut run-logs (Forensik nur, gehören nicht ins Repo)
 mutmut-*.log
+
+# Streu-Output von msgfmt im Repo-Root (echte .mo liegen in src/locale/**/LC_MESSAGES/)
+/messages.mo
