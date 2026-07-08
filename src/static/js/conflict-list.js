@@ -177,34 +177,55 @@
                     id: q.id,
                     label: ((q.method || "") + " " + (q.url || "")).trim(),
                     reasonText: "",
-                    // Refs #1419: CSP-Alpine erlaubt in x-if/x-show/x-text nur
-                    // einfache Property-Pfade — alle Darstellungswerte des
-                    // Status-Konflikts hier vorberechnen.
+                    // Refs #1419/#1390/#1465: CSP-Alpine erlaubt in
+                    // x-if/x-show/x-text nur einfache Property-Pfade — alle
+                    // Darstellungswerte hier vorberechnen. `canReapply` schaltet
+                    // "Erneut anwenden" fuer JEDE 409-Row mit server_state frei
+                    // (Status wie Edit); `isStatusConflict`/`serverSummaryText`
+                    // steuern nur die jeweilige Detail-Zeile.
+                    canReapply: false,
                     isStatusConflict: false,
+                    missingToken: false,
                     yourStatusText: "",
                     serverStatusText: "",
+                    serverSummaryText: "",
                     serverUpdatedAtFmt: "",
                 };
                 if (isDead) {
                     item.reasonText = this._reasonText[q.deadReason] || "";
                 }
-                const sc = q.statusConflict;
-                if (!isDead && sc && sc.serverState && sc.serverState.updated_at) {
-                    item.isStatusConflict = true;
-                    item.label = sc.serverState.title || this._labelWorkItem;
-                    item.yourStatusText =
-                        this._labelYourStatus + " " + (this._statusText[sc.intendedStatus] || sc.intendedStatus || "");
-                    item.serverStatusText =
-                        this._labelServerStatus +
-                        " " +
-                        (this._statusText[sc.serverState.status] || sc.serverState.status || "");
+                const ci = q.conflictInfo;
+                if (!isDead && ci && ci.serverState && ci.serverState.updated_at) {
+                    item.canReapply = true;
+                    item.missingToken = ci.conflictError === "missing-token";
+                    item.label = ci.serverState.title || this._labelWorkItem;
                     try {
-                        item.serverUpdatedAtFmt = new Date(sc.serverState.updated_at).toLocaleString("de-DE", {
+                        item.serverUpdatedAtFmt = new Date(ci.serverState.updated_at).toLocaleString("de-DE", {
                             dateStyle: "short",
                             timeStyle: "short",
                         });
                     } catch (_e) {
                         /* noop */
+                    }
+                    if (ci.isStatus) {
+                        item.isStatusConflict = true;
+                        item.yourStatusText =
+                            this._labelYourStatus +
+                            " " +
+                            (this._statusText[ci.intendedStatus] || ci.intendedStatus || "");
+                        item.serverStatusText =
+                            this._labelServerStatus +
+                            " " +
+                            (this._statusText[ci.serverState.status] || ci.serverState.status || "");
+                    } else {
+                        // Refs #1390: Edit-Konflikt (WORKITEM_EDIT via generische
+                        // Queue) — Server-Stand als Kurzfassung (Titel + Status).
+                        const st = this._statusText[ci.serverState.status] || ci.serverState.status || "";
+                        item.serverSummaryText =
+                            this._labelServerStatus +
+                            " " +
+                            (ci.serverState.title || "") +
+                            (st ? " (" + st + ")" : "");
                     }
                 }
                 return item;
@@ -231,6 +252,7 @@
                 try {
                     await window.offlineStore.retryDeadEvent(pk);
                     await this.load();
+                    this._refreshCounts();
                     this._setFeedback(this._labelRetried, "info");
                 } catch (_e) {
                     this._setFeedback(this._labelActionFailed, "error");
@@ -242,6 +264,7 @@
                 try {
                     await window.offlineStore.discardDeadEvent(pk);
                     await this.load();
+                    this._refreshCounts();
                     this._setFeedback(this._labelDiscarded, "info");
                 } catch (_e) {
                     this._setFeedback(this._labelActionFailed, "error");
@@ -252,6 +275,7 @@
                 try {
                     await window.offlineStore.retryQueueEntry(id);
                     await this.load();
+                    this._refreshCounts();
                     this._setFeedback(this._labelRetried, "info");
                 } catch (_e) {
                     this._setFeedback(this._labelActionFailed, "error");
@@ -272,6 +296,7 @@
                         await window.offlineQueue.replayQueue();
                     }
                     await this.load();
+                    this._refreshCounts();
                     this._setFeedback(this._labelRetried, "info");
                 } catch (_e) {
                     this._setFeedback(this._labelActionFailed, "error");
@@ -283,6 +308,7 @@
                 try {
                     await window.offlineStore.discardQueueEntry(id);
                     await this.load();
+                    this._refreshCounts();
                     this._setFeedback(this._labelDiscarded, "info");
                 } catch (_e) {
                     this._setFeedback(this._labelActionFailed, "error");
@@ -305,6 +331,22 @@
                     URL.revokeObjectURL(url);
                 } catch (_e) {
                     this._setFeedback(this._labelActionFailed, "error");
+                }
+            },
+
+            // Refs #1468: Konfliktlisten-Aktionen mutieren IndexedDB ueber
+            // offlineStore-Primitive, die KEINE Count-CustomEvents feuern — hier
+            // nach load() die Banner-Zaehler explizit auffrischen (analog
+            // offline-queue.js::_updateQueueCount + offline-edit.js::_fireCountEvent).
+            // Ohne das bleibt der base.html-Banner-Zaehler bis zur naechsten
+            // Navigation/dem naechsten Sync stale (reapplyQueueEntry ist ueber
+            // requestSync/replayQueue schon abgedeckt).
+            _refreshCounts() {
+                if (window.offlineQueue && window.offlineQueue.refreshCount) {
+                    window.offlineQueue.refreshCount();
+                }
+                if (window.offlineEdit && window.offlineEdit.refreshCounts) {
+                    window.offlineEdit.refreshCounts();
                 }
             },
 

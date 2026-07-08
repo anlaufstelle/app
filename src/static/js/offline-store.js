@@ -1117,23 +1117,31 @@
                 localStatus: r.localStatus || null,
                 method: (r.data && r.data.method) || "",
             };
-            // Refs #1419: fuer WorkItem-Status-Rows eine fachliche
-            // Konflikt-Sicht ableiten, damit die M8-Liste "Dein Status vs.
-            // Server-Stand" rendern kann — weiterhin KEIN Roh-Body an die
-            // UI, nur der Ziel-Status aus dem gequeuten Body plus der beim
-            // 409 persistierte server_state (offline-queue.js).
+            // Refs #1419/#1390/#1465: fuer JEDE 409-Row mit persistiertem
+            // server_state (Status ODER Edit) eine fachliche Konflikt-Sicht
+            // ableiten — damit die M8-Liste den Server-Stand rendern und per
+            // "Erneut anwenden" (Token-Rewrite) aufloesen kann, nicht nur bei
+            // WORKITEM_STATUS. Weiterhin KEIN Roh-Body an die UI; bei Status-
+            // Rows zusaetzlich der Ziel-Status aus dem gequeuten Body.
             const patterns = (typeof self !== "undefined" && self.URL_PATTERNS) || null;
-            if (patterns && patterns.WORKITEM_STATUS && patterns.WORKITEM_STATUS.test(r.url || "")) {
+            const conflict = (r.data && r.data.conflict) || null;
+            const serverState = (conflict && conflict.serverState) || null;
+            if (serverState && serverState.updated_at) {
+                const isStatus = !!(
+                    patterns && patterns.WORKITEM_STATUS && patterns.WORKITEM_STATUS.test(r.url || "")
+                );
                 let intended = null;
-                try {
-                    intended = new URLSearchParams((r.data && r.data.body) || "").get("status");
-                } catch (_e) {
-                    /* Body nicht parsebar — generische Darstellung */
+                if (isStatus) {
+                    try {
+                        intended = new URLSearchParams((r.data && r.data.body) || "").get("status");
+                    } catch (_e) {
+                        /* Body nicht parsebar — generische Darstellung */
+                    }
                 }
-                const conflict = (r.data && r.data.conflict) || null;
-                entry.statusConflict = {
+                entry.conflictInfo = {
+                    isStatus: isStatus,
                     intendedStatus: intended,
-                    serverState: (conflict && conflict.serverState) || null,
+                    serverState: serverState,
                     conflictError: (conflict && conflict.error) || null,
                 };
             }
@@ -1188,6 +1196,42 @@
             attempts: 0,
             lastError: "",
         });
+    }
+
+    /*
+     * Refs #1466: Coalescing eines WORKITEM_STATUS-POST auf dieselbe pk (URL).
+     * Liegt bereits eine replaybare (nicht conflict/dead) Queue-Row fuer die
+     * URL vor, wird deren Body durch den neuen (finalen) Intent ersetzt —
+     * Last-Write-Wins des Offline-Intents: EIN eingefrorener Token T0, EIN
+     * Idempotenz-Key. So erzeugen eine legitime Progression
+     * (open->in_progress->done) oder ein Doppelklick keinen
+     * Phantom-Selbstkonflikt beim Replay. Etwaige Alt-Duplikate derselben URL
+     * werden dabei mit eingesammelt. Rueckgabe: true, wenn coalesced wurde
+     * (Aufrufer legt dann NICHT neu an), sonst false.
+     */
+    async function coalescePendingQueueByUrl(url, method, body, headers) {
+        const all = await db.queue.toArray();
+        const pending = all
+            .filter((r) => r.url === url && r.localStatus !== "conflict" && r.localStatus !== "dead")
+            .sort((a, b) => a.id - b.id);
+        if (pending.length === 0) return false;
+        const keep = await getDecrypted("queue", pending[0].id);
+        if (!keep) return false;
+        const data = { ...(keep.data || {}), method: method, body: body, headers: headers || {} };
+        // Ein etwaiger frueherer 409-Server-Stand ist mit dem neuen Intent hinfaellig.
+        delete data.conflict;
+        await putEncrypted("queue", {
+            ...keep,
+            data: data,
+            localStatus: null,
+            retryAfter: 0,
+            attempts: 0,
+            lastError: "",
+        });
+        for (let i = 1; i < pending.length; i += 1) {
+            await db.queue.delete(pending[i].id);
+        }
+        return true;
     }
 
     /*
@@ -1338,6 +1382,7 @@
         discardDeadEvent: discardDeadEvent,
         // Refs #1351/#1384 — generische Queue: Listing + Nutzeraktionen (M8/Task 4)
         listQueueEntries: listQueueEntries,
+        coalescePendingQueueByUrl: coalescePendingQueueByUrl,
         retryQueueEntry: retryQueueEntry,
         reapplyQueueEntryWithServerVersion: reapplyQueueEntryWithServerVersion,
         discardQueueEntry: discardQueueEntry,

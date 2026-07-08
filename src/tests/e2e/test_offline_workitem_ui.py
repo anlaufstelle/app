@@ -520,3 +520,205 @@ def _server_workitem_assignee_by_pk(e2e_env, wi_pk):
         f" w = WorkItem.objects.get(pk='{wi_pk}');"
         " print(w.assigned_to.username if w.assigned_to else 'NONE')",
     )[-1]
+
+
+def _server_workitem_updated_at_iso(e2e_env, wi_pk):
+    return _shell(
+        e2e_env,
+        f"from core.models import WorkItem; print(WorkItem.objects.get(pk='{wi_pk}').updated_at.isoformat())",
+    )[-1]
+
+
+def _poll_js(page, expr, timeout_s=10):
+    import time as _time
+
+    deadline = _time.time() + timeout_s
+    while _time.time() < deadline:
+        value = page.evaluate(expr)
+        if value is not None:
+            return value
+        _time.sleep(0.3)
+    return None
+
+
+def _poll_queue_conflict(page, timeout_s=20):
+    """Auf DIESER Seite pollen, bis der Replay genau eine Row als Konflikt
+    klassifiziert hat (Python-seitig, s. Szenario-B-Kommentar)."""
+    import time as _time
+
+    deadline = _time.time() + timeout_s
+    rows = []
+    while _time.time() < deadline:
+        rows = page.evaluate("async () => await window.offlineStore.listQueueEntries()")
+        if len(rows) == 1 and rows[0]["localStatus"] == "conflict":
+            return rows
+        _time.sleep(0.5)
+    return rows
+
+
+class TestOfflineConflictResolverCluster:
+    """Refs #1466 (Coalescing), #1468 (Banner-Refresh), #1390/#1465/#1391
+    (WorkItem-Edit-Konflikt-Resolver fuer generische Queue-Rows)."""
+
+    def test_sequential_offline_status_clicks_coalesce_no_phantom(self, browser, base_url, e2e_env):
+        """#1466: Zwei Status-Enqueues fuer DIESELBE Aufgabe (pk == URL), beide
+        mit dem render-zeitig eingefrorenen Token T0, coalescen zu EINER Row
+        (LWW des Offline-Intents) — ein Token, ein Idempotenz-Key. Ohne
+        Coalescing erzeugt der Replay einen Phantom-Selbstkonflikt (erster
+        wendet an, der zweite kassiert 409); mit Coalescing wendet der Reconnect
+        nur den finalen Status an und die Queue bleibt konfliktfrei.
+
+        Direkt ueber ``enqueueRequest`` (deterministisch) — genau die Funktion,
+        die der Service Worker beim Offline-Klick aufruft und in der das
+        Coalescing sitzt. Header spiegeln einen echten HTMX-Status-POST
+        (``content-type`` fuer die Server-Formularparsung, ``hx-request`` fuer
+        die Replay-Erfolgsklassifikation)."""
+        title = f"E2E-Coalesce-{uuid.uuid4().hex[:6]}"
+        wi_pk = _seed_facility_workitem(e2e_env, title)
+        t0 = _server_workitem_updated_at_iso(e2e_env, wi_pk)
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+            _wait_for_active_service_worker(page)
+            status_url = f"/partials/workitems/{wi_pk}/status/"
+            page.evaluate(
+                """async ({url, t0}) => {
+                    await window.crypto_session.ready();
+                    const enc = encodeURIComponent(t0);
+                    const hdr = (k) => ({'content-type': 'application/x-www-form-urlencoded',
+                                         'hx-request': 'true', 'x-idempotency-key': k});
+                    await window.offlineQueue.enqueueRequest(
+                        url, 'POST', 'status=in_progress&expected_updated_at=' + enc, hdr('k1'));
+                    await window.offlineQueue.enqueueRequest(
+                        url, 'POST', 'status=done&expected_updated_at=' + enc, hdr('k2'));
+                }""",
+                {"url": status_url, "t0": t0},
+            )
+            rows = page.evaluate("async () => await window.offlineStore.listQueueEntries()")
+            assert len(rows) == 1, f"Zwei Status-Enqueues fuer dieselbe pk muessen coalescen: {rows!r}"
+
+            page.evaluate("async () => { await window.offlineQueue.replayQueue(); }")
+            status = _poll_server_field(e2e_env, wi_pk, "status", "done")
+            assert status == "done", f"Finaler Status nicht angewendet (Phantom-Konflikt?): {status}"
+            leftover = page.evaluate("async () => await window.offlineStore.listQueueEntries()")
+            assert len(leftover) == 0, f"Kein Phantom-Konflikt erwartet, Queue muss leer sein: {leftover!r}"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_conflict_list_discard_refreshes_banner_count(self, browser, base_url, e2e_env):
+        """#1468: 'Verwerfen' in der Konfliktliste feuert ``offline-queue-count``
+        (blocked=0), sodass der base.html-Banner-Zaehler sofort — ohne
+        Navigation — aktuell wird."""
+        title = f"E2E-Banner-{uuid.uuid4().hex[:6]}"
+        wi_pk = _seed_facility_workitem(e2e_env, title)
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        page.on("dialog", lambda d: d.accept())
+        try:
+            _do_real_login(page, base_url)
+            page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+            _wait_for_active_service_worker(page)
+            _go_offline(page)
+            card = page.locator(f"#workitem-{wi_pk}")
+            card.scroll_into_view_if_needed()
+            card.get_by_role("button", name="Als erledigt markieren").click()
+            page.wait_for_selector("#flash-messages div", timeout=15000)
+            _server_dismiss_workitem(e2e_env, wi_pk)
+            _go_online(page)
+            assert _poll_queue_conflict(page), "Row nicht als Konflikt klassifiziert"
+
+            page.goto(f"{base_url}/offline/conflicts/", wait_until="domcontentloaded")
+            page.wait_for_selector("[data-testid='queue-conflict-item']", timeout=15000)
+            page.evaluate(
+                "() => { window.__qc = undefined;"
+                " window.addEventListener('offline-queue-count', (e) => { window.__qc = e.detail; }); }"
+            )
+            page.locator("[data-testid^='queue-conflict-discard-']").click()
+            detail = _poll_js(page, "() => window.__qc")
+            assert detail is not None, "discard muss offline-queue-count feuern (#1468)"
+            assert detail["blocked"] == 0, f"blocked-Zaehler muss nach discard 0 sein: {detail!r}"
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def _seed_edit_conflict_row(self, page, edit_url, *, error="conflict", server_title="Server-Titel"):
+        page.evaluate(
+            """async ({url, error, serverTitle}) => {
+                await window.crypto_session.ready();
+                await window.offlineStore.putEncrypted('queue', {
+                    url: url, createdAt: Date.now(), attempts: 1, retryAfter: 0, lastError: '409',
+                    localStatus: 'conflict',
+                    idempotencyKey: 'e2e-edit-' + Math.random().toString(36).slice(2),
+                    data: {
+                        method: 'POST',
+                        body: 'title=Lokaler+Titel&item_type=task&priority=normal'
+                            + '&expected_updated_at=2000-01-01T00%3A00%3A00%2B00%3A00',
+                        headers: {},
+                        conflict: { error: error, serverState: {
+                            title: serverTitle, description: '', status: 'open',
+                            updated_at: '2026-07-08T10:00:00+00:00' } },
+                    },
+                });
+            }""",
+            {"url": edit_url, "error": error, "serverTitle": server_title},
+        )
+
+    def test_generic_edit_conflict_offers_reapply_not_futile_retry(self, browser, base_url, e2e_env):
+        """#1390(b)/#1465: eine generische WORKITEM_EDIT-409-Row mit
+        persistiertem server_state bekommt jetzt den Keep-local-Reapply-Pfad
+        (Token-Rewrite) statt eines futilen 'Erneut versuchen' — und rendert den
+        Server-Stand (Titel), damit die Nutzer:in entscheiden kann."""
+        wi_pk = _seed_facility_workitem(e2e_env, f"E2E-Edit-{uuid.uuid4().hex[:6]}")
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        page.on("dialog", lambda d: d.accept())
+        try:
+            _do_real_login(page, base_url)
+            page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+            _wait_for_active_service_worker(page)
+            self._seed_edit_conflict_row(page, f"/workitems/{wi_pk}/edit/")
+
+            page.goto(f"{base_url}/offline/conflicts/", wait_until="domcontentloaded")
+            page.wait_for_selector("[data-testid='queue-conflict-item']", timeout=15000)
+            page.locator("[data-testid^='queue-conflict-reapply-']").wait_for(state="visible", timeout=10000)
+            assert page.locator("[data-testid^='queue-conflict-retry-']").count() == 0, (
+                "Optimistic-Lock-409 (mit server_state) darf kein futiles 'Erneut versuchen' zeigen (#1465)"
+            )
+            assert "Server-Titel" in page.locator("[data-testid='queue-conflict-item']").inner_text(), (
+                "Der Server-Stand (Titel) muss gerendert werden (#1390)"
+            )
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()
+
+    def test_missing_token_conflict_shows_distinct_hint(self, browser, base_url, e2e_env):
+        """#1391: eine 409-Row mit ``error:'missing-token'`` bekommt einen
+        eigenen Hinweis (dein Geraet hatte kein Versions-Token), statt der
+        generischen Konfliktanzeige."""
+        wi_pk = _seed_facility_workitem(e2e_env, f"E2E-MissingToken-{uuid.uuid4().hex[:6]}")
+        context = browser.new_context(locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        page.on("dialog", lambda d: d.accept())
+        try:
+            _do_real_login(page, base_url)
+            page.goto(f"{base_url}/workitems/", wait_until="domcontentloaded")
+            _wait_for_active_service_worker(page)
+            self._seed_edit_conflict_row(page, f"/workitems/{wi_pk}/edit/", error="missing-token")
+
+            page.goto(f"{base_url}/offline/conflicts/", wait_until="domcontentloaded")
+            page.wait_for_selector("[data-testid='queue-conflict-item']", timeout=15000)
+            page.locator("[data-testid='queue-conflict-missing-token']").wait_for(state="visible", timeout=10000)
+        finally:
+            with suppress(Exception):
+                page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
+            context.close()

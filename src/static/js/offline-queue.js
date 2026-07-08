@@ -105,6 +105,20 @@
             err.name = "OfflineUploadError";
             throw err;
         }
+        // Refs #1466: Sequentielle WORKITEM_STATUS-POSTs derselben Aufgabe
+        // (pk == URL) zu EINER Row zusammenfassen (Last-Write-Wins des Offline-
+        // Intents). Beide Klicks tragen denselben eingefrorenen Token T0; mit
+        // einem Token und einem Idempotenz-Key erzeugt der Replay keinen
+        // Phantom-Selbstkonflikt mehr. Nur fuer Status-URLs (idempotenter
+        // Ziel-Status); Edits/Anlagen bleiben eigenstaendige Rows.
+        const patterns = (typeof self !== "undefined" && self.URL_PATTERNS) || null;
+        if (patterns && patterns.WORKITEM_STATUS && patterns.WORKITEM_STATUS.test(url)) {
+            const coalesced = await _store().coalescePendingQueueByUrl(url, method, body, headers);
+            if (coalesced) {
+                await _updateQueueCount();
+                return;
+            }
+        }
         await _store().putEncrypted("queue", {
             url: url,
             createdAt: Date.now(),
@@ -428,5 +442,8 @@
         enqueueRequest: enqueueRequest,
         replayQueue: replayQueue,
         getQueueCount: getQueueCount,
+        // Refs #1468: die Konfliktliste stoesst nach Verwerfen/Erneut den
+        // Queue-Zaehler-Refresh an (offlineStore-Primitive feuern selbst nichts).
+        refreshCount: _updateQueueCount,
     };
 })();

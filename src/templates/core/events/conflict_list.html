@@ -74,17 +74,31 @@
                                     <span class="ml-1" x-text="item.serverUpdatedAtFmt"></span>
                                 </div>
                             </template>
+                            {# Refs #1390: WorkItem-Edit-Konflikt — Server-Stand (Titel + Status) zeigen, damit die Nutzer:in Keep-local/Verwerfen entscheiden kann. #}
+                            <template x-if="item.serverSummaryText">
+                                <div class="mt-0.5 text-xs text-ink-muted" data-testid="queue-conflict-server-summary">
+                                    <span x-text="item.serverSummaryText"></span>
+                                    <span class="ml-1" x-text="item.serverUpdatedAtFmt"></span>
+                                </div>
+                            </template>
+                            {# Refs #1391: fehlendes Versions-Token clientseitig unterscheiden. #}
+                            <template x-if="item.missingToken">
+                                <div class="mt-0.5 text-xs text-amber-700" data-testid="queue-conflict-missing-token">
+                                    {% trans "Dein Gerät hatte kein Versions-Token — gegen den gezeigten Server-Stand erneut anwenden." %}
+                                </div>
+                            </template>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                            {# Refs #1419: "Erneut anwenden" setzt das Versions-Token auf den gezeigten Server-Stand und spielt die Aktion sofort nach — nur moeglich, wenn ein server_state persistiert wurde. #}
-                            <template x-if="item.isStatusConflict">
+                            {# Refs #1390/#1465: "Erneut anwenden" (Keep-local, Token-Rewrite) fuer JEDE 409-Row mit persistiertem server_state — Status wie Edit. #}
+                            <template x-if="item.canReapply">
                                 <button type="button" @click="reapplyQueueEntry(item.id)"
                                         class="text-xs text-accent hover:underline"
                                         :data-testid="'queue-conflict-reapply-' + item.id">
                                     {% trans "Erneut anwenden" %}
                                 </button>
                             </template>
-                            <template x-if="!item.isStatusConflict">
+                            {# Ohne server_state (aelterer Server / Proxy-Fehlerseite) bleibt nur der generische Retry. #}
+                            <template x-if="!item.canReapply">
                                 <button type="button" @click="retryQueueEntry(item.id)"
                                         class="text-xs text-accent hover:underline"
                                         :data-testid="'queue-conflict-retry-' + item.id">
