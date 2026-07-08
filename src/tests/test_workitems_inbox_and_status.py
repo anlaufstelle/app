@@ -18,7 +18,7 @@ import pytest
 from django.core.exceptions import ValidationError
 from django.urls import reverse
 
-from core.models import WorkItem
+from core.models import AuditLog, WorkItem
 from core.services.case import update_workitem_status
 
 
@@ -785,3 +785,50 @@ class TestUpdateWorkItemStatusVersionCheck:
     def test_no_token_without_requirement_keeps_lww(self, staff_user, workitem_open):
         result = update_workitem_status(workitem_open, "done", staff_user)
         assert result.status == WorkItem.Status.DONE
+
+
+@pytest.mark.django_db
+class TestUpdateWorkItemStatusAudit:
+    """#1467: Jeder Single-Status-Übergang schreibt eine unveränderliche
+    AuditLog-Spur (``WORKITEM_UPDATE``) — analog zum Bulk-Pfad
+    (``_log_workitem_update``). Die mutable ``Activity`` allein genügt der
+    Threat-Model-Zusage TB6 (``threat-model.md:150``: „autoritative AuditLog-
+    Spur beim Replay") nicht; ``DISMISSED`` hinterließ bisher gar keine Spur.
+    """
+
+    def _status_audits(self, workitem):
+        return AuditLog.objects.filter(
+            action=AuditLog.Action.WORKITEM_UPDATE,
+            target_type="WorkItem",
+            target_id=str(workitem.pk),
+        )
+
+    def test_done_transition_writes_immutable_audit(self, staff_user, workitem_open):
+        update_workitem_status(workitem_open, "done", staff_user)
+        entries = self._status_audits(workitem_open)
+        assert entries.count() == 1
+        assert entries.first().detail == {
+            "changed_fields": ["status"],
+            "from": "open",
+            "to": "done",
+        }
+
+    def test_dismissed_transition_writes_audit(self, staff_user, workitem_open):
+        # DISMISSED hatte bislang KEINEN log_activity-Zweig → gar keine Spur.
+        update_workitem_status(workitem_open, "dismissed", staff_user)
+        entries = self._status_audits(workitem_open)
+        assert entries.count() == 1
+        assert entries.first().detail == {
+            "changed_fields": ["status"],
+            "from": "open",
+            "to": "dismissed",
+        }
+
+    def test_in_progress_transition_writes_audit(self, staff_user, workitem_open):
+        update_workitem_status(workitem_open, "in_progress", staff_user)
+        assert self._status_audits(workitem_open).count() == 1
+
+    def test_noop_transition_writes_no_audit(self, staff_user, workitem_open):
+        # Idempotenz-Guard (gleicher Status): kein save(), keine Spur.
+        update_workitem_status(workitem_open, "open", staff_user)
+        assert not self._status_audits(workitem_open).exists()

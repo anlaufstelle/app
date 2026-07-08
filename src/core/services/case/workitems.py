@@ -223,6 +223,19 @@ def update_workitem_status(workitem, new_status, user, *, expected_updated_at=No
 
     locked.save()
 
+    # #1467: Unveränderliche AuditLog-Spur für JEDEN Statuswechsel — auf dem
+    # gemeinsamen Post-Save-Pfad (nicht in den status-spezifischen
+    # log_activity-Zweigen), damit auch IN_PROGRESS und DISMISSED erfasst
+    # werden. Analog Bulk-Pfad (_log_workitem_update); erfüllt Threat-Model TB6
+    # (threat-model.md:150). Die Activity bleibt zusätzlich als mutabler Feed.
+    audit_event(
+        AuditLog.Action.WORKITEM_UPDATE,
+        user=user,
+        facility=locked.facility,
+        target_obj=locked,
+        detail={"changed_fields": ["status"], "from": old_status, "to": new_status},
+    )
+
     if new_status == WorkItem.Status.DONE:
         log_activity(
             facility=locked.facility,
