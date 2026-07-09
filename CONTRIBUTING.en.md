@@ -7,7 +7,7 @@
 [![E2E](https://github.com/anlaufstelle/app/actions/workflows/e2e.yml/badge.svg)](https://github.com/anlaufstelle/app/actions/workflows/e2e.yml)
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](LICENSE)
-[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
+[![Python 3.14](https://img.shields.io/badge/python-3.14-blue.svg)](https://www.python.org/)
 [![Django 6.0](https://img.shields.io/badge/django-6.0-green.svg)](https://www.djangoproject.com/)
 [![PostgreSQL 18](https://img.shields.io/badge/postgresql-18-blue.svg)](https://www.postgresql.org/)
 [![HTMX](https://img.shields.io/badge/htmx-%E2%9C%93-blue.svg)](https://htmx.org/)
@@ -37,7 +37,7 @@ Welcome! This guide explains how to set up the development environment, how the 
 
 ### Prerequisites
 
-- **Python 3.13** (recommended: via [pyenv](https://github.com/pyenv/pyenv))
+- **Python 3.14** (recommended: via [pyenv](https://github.com/pyenv/pyenv))
 - **PostgreSQL 18** (or Docker, see below)
 - **Node.js 24+** (for Tailwind CSS)
 - **Docker** (optional, for the database)
@@ -54,7 +54,7 @@ cd app
 **2. Set up the Python environment**
 
 ```bash
-python3.13 -m venv .venv
+python3.14 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt   # includes runtime + test/lint tools
 # Or runtime only (e.g. for prod Docker build):
@@ -249,7 +249,7 @@ pkill -f gunicorn
 
 ### Python / Django
 
-- **Python 3.13** with full type hints where appropriate.
+- **Python 3.14** with full type hints where appropriate (codebase stays 3.13-compatible, see `requires-python`).
 - **Django 6.0+** — class-based views preferred, function views only for simple cases.
 - Business logic belongs in `core/services/`, not in views or models.
 - Models are split up: one model (or closely related models) per file under `core/models/`.

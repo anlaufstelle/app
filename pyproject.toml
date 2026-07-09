@@ -2,6 +2,11 @@
 name = "anlaufstelle"
 version = "0.16.0"
 description = "Open-Source-Fachsystem für niedrigschwellige soziale Einrichtungen"
+# Floor bewusst bei >=3.13 (Refs #1481): oeffentliches Projekt, Django 6.0
+# stuetzt 3.13+, Contributor auf 3.13 nicht aussperren. Dev + Prod fahren
+# primaer 3.14 (Docker python:3.14-slim, lokales .venv 3.14); der Code bleibt
+# 3.13-kompatibel — darum stehen mypy python_version + ruff target-version
+# (unten) bewusst weiter auf dem 3.13-Floor.
 requires-python = ">=3.13"
 license = "AGPL-3.0-or-later"
 
