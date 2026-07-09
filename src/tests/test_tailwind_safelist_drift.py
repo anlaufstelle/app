@@ -2,25 +2,33 @@
 
 Hintergrund (Refs #1480)
 ========================
-Bestimmte Tailwind-Utility-Klassen werden zur **Laufzeit** aus Python emittiert
-und sind für den statischen Content-Scanner nur teilweise auffindbar:
+Bestimmte Tailwind-Farb-Utilities werden zur **Laufzeit** aus Python emittiert:
 
 * ``core/templatetags/core_tags.py`` — ``_BADGE_COLOR_MAP`` (Badge-Farben wie
-  ``bg-indigo-100 text-indigo-800``),
+  ``bg-indigo-100 text-indigo-800``) **und** das Audit-Detail-``<pre>``
+  (``bg-gray-50``),
 * ``core/utils/dates.py`` — Fälligkeits-/Wiedervorlage-Status-Farben (z. B.
   ``text-red-600``, ``bg-orange-100 text-orange-800``).
 
-In Tailwind v3 hielt der ``safelist``-Key in ``tailwind.config.js`` diese Klassen.
-Tailwind v4 unterstützt ``safelist`` in der JS-Config **nicht** mehr (auch nicht
-via ``@config``); das Safelisting läuft über die CSS-Direktive
-``@source inline(...)`` in ``src/static/css/input.css``. Regressiert diese Liste,
-verschwinden die Farben **stillschweigend** — weder Build noch ``make ci`` fangen
-das (eine reine Visual-Regression).
+Diese Klassen stehen als **vollständige Literal-Strings** in den ``.py``-Quellen
+und werden vom v4-Content-Scan über den ``./src/core/**/*.py``-Glob
+(``tailwind.config.js``) bereits erfasst — der Build generiert sie also auch ohne
+Safelist. Das ``@source inline(...)`` in ``src/static/css/input.css`` ist daher
+**bewusste Absicherung** (defense-in-depth): fällt der ``.py``-Content-Glob je
+weg oder werden die Quell-Dateien umbenannt/verschoben, bleiben die Farben
+trotzdem im Build.
 
-Dieser Guard erzwingt die **Vollständigkeit**: jede aus den Python-Quellen
-ableitbare Farb-Klasse MUSS in ``input.css`` safelistet sein. ``input.css`` liegt
-im Public-Release-Snapshot (nicht gestrippt) — der Guard referenziert keine
-dev-only Pfade und läuft daher auch auf der Stage-CI.
+In Tailwind v3 hielt der ``safelist``-Key in ``tailwind.config.js`` diese Klassen;
+v4 unterstützt ``safelist`` in der JS-Config **nicht** mehr (auch nicht via
+``@config``) — daher die ``@source inline(...)``-Direktive. Regressierte diese
+Absicherung *und* änderte sich zugleich der Content-Glob, verschwänden die Farben
+**stillschweigend** (reine Visual-Regression, die weder Build noch ``make ci``
+fangen).
+
+Dieser Guard erzwingt die **Vollständigkeit** der Absicherung: jede aus den
+Python-Quellen ableitbare Farb-Klasse MUSS in ``input.css`` safelistet sein.
+``input.css`` liegt im Public-Release-Snapshot (nicht gestrippt) — der Guard
+referenziert keine dev-only Pfade und läuft daher auch auf der Stage-CI.
 
 Skeleton-Vorbild: ``src/tests/test_seed_doc_drift.py`` — reine Funktionen, mit
 synthetischem Input unit-getestet, kein ``django_db``, nur Datei-Reads.
@@ -54,27 +62,19 @@ COLOR_CLASS_RE = re.compile(r"\b(?:bg|text)-[a-z]+-\d{2,3}\b")
 # ---------------------------------------------------------------------------
 
 
-def _brace_block(src: str, name: str) -> str:
-    """Das ``{...}``-Literal, das ``name`` zugewiesen ist (balanciert)."""
-    match = re.search(rf"{re.escape(name)}\s*=\s*\{{", src)
-    if not match:
-        return ""
-    start = match.end() - 1
-    depth = 0
-    for i in range(start, len(src)):
-        if src[i] == "{":
-            depth += 1
-        elif src[i] == "}":
-            depth -= 1
-            if depth == 0:
-                return src[start : i + 1]
-    return ""
-
-
 def badge_color_classes(core_tags_src: str) -> set[str]:
-    """Farb-Klassen aus ``_BADGE_COLOR_MAP`` (Werte des Dict-Literals)."""
-    block = _brace_block(core_tags_src, "_BADGE_COLOR_MAP")
-    return set(COLOR_CLASS_RE.findall(block))
+    """Farb-Klassen aus ``core/templatetags/core_tags.py`` (ganze Datei).
+
+    Erfasst die ``_BADGE_COLOR_MAP``-Badge-Farben (``bg-indigo-100`` …) **und**
+    weitere aus Python emittierte Farb-Utilities außerhalb des Dict-Literals
+    (z. B. ``bg-gray-50`` im Audit-Detail-``<pre>``, ``format_html`` bei
+    core_tags.py:``json_pretty``). Wie in ``dates.py`` treten Farb-Utilities hier
+    ausschließlich in gerenderten Klassen-Strings auf; ein Scan der ganzen Datei
+    ist daher präzise genug und deckt — anders als ein reiner ``_BADGE_COLOR_MAP``-
+    Scan — **jede** aus dieser Quelle ableitbare Farb-Klasse ab (kein Widerspruch
+    zum erklärten Guard-Ziel).
+    """
+    return set(COLOR_CLASS_RE.findall(core_tags_src))
 
 
 def date_status_classes(dates_src: str) -> set[str]:
@@ -151,6 +151,9 @@ def test_badge_and_date_sources_contribute_expected_anchors() -> None:
     dates = date_status_classes(DATES.read_text(encoding="utf-8"))
     # _BADGE_COLOR_MAP: 9 Farben × {bg-100, text-800}
     assert {"bg-indigo-100", "text-indigo-800", "bg-gray-100", "text-gray-800"} <= badge
+    # Audit-Detail-<pre> emittiert bg-gray-50 AUSSERHALB von _BADGE_COLOR_MAP —
+    # der Voll-Datei-Scan muss auch diese Klasse erfassen (Refs #1480).
+    assert "bg-gray-50" in badge
     # dates.py: Fälligkeits- + Wiedervorlage-Farben (inkl. orange, das die
     # frühere JS-safelist NICHT enthielt — Content-Scan-Absicherung).
     assert {"text-red-600", "text-amber-500", "bg-orange-100", "text-orange-800"} <= dates
@@ -167,6 +170,8 @@ _BADGE_COLOR_MAP = {
     "gray": "bg-gray-100 text-gray-800",
 }
 _UNRELATED = "font-semibold rounded p-3"  # darf NICHT als Farb-Klasse zählen
+# Farb-Utility AUSSERHALB des Dict-Literals (analog bg-gray-50 im Audit-<pre>):
+_AUDIT_PRE = '<pre class="text-sm bg-gray-50 rounded p-3">'
 """
 
 _SYNTHETIC_DATES = """\
@@ -177,11 +182,15 @@ def f():
 
 
 def test_synthetic_badge_classes() -> None:
+    # Voll-Datei-Scan: Badge-Farben aus dem Dict PLUS die out-of-block-Klasse
+    # bg-gray-50 (Audit-<pre>); Nicht-Farb-Utilities (font-semibold/rounded/p-3/
+    # text-sm) bleiben ausgeschlossen.
     assert badge_color_classes(_SYNTHETIC_TAGS) == {
         "bg-indigo-100",
         "text-indigo-800",
         "bg-gray-100",
         "text-gray-800",
+        "bg-gray-50",
     }
 
 
@@ -206,6 +215,7 @@ def test_synthetic_missing_class_is_detected() -> None:
     # Safelist deckt alles AUSSER text-orange-800 ab → Drift muss auffallen.
     incomplete = (
         '@source inline("bg-{indigo,gray}-100");\n'
+        '@source inline("bg-gray-50");\n'  # out-of-block Audit-<pre>-Klasse
         '@source inline("text-{indigo,gray}-800");\n'
         '@source inline("bg-orange-100");\n'
         '@source inline("text-red-600");'
