@@ -42,7 +42,7 @@
 {# Mobile: Card layout #}
 <div class="sm:hidden space-y-2">
     {% for case in cases %}
-    <a href="{% url 'core:case_detail' case.pk %}" class="block bg-surface border border-subtle rounded-[10px] p-3 hover:shadow-sm transition">
+    <a href="{% url 'core:case_detail' case.pk %}" class="block bg-surface border border-subtle rounded-[10px] p-3 hover:shadow-xs transition">
         <div class="flex items-center justify-between gap-2">
             <span class="text-[13px] font-semibold text-accent truncate">{{ case.title }}</span>
             {% include "core/cases/partials/status_badge.html" with case=case %}

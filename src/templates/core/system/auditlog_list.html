@@ -37,7 +37,7 @@
         <div>
             <label for="filter-action" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Aktion" %}</label>
             <select id="filter-action" name="action"
-                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
+                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-hidden focus:ring-2 focus:ring-accent">
                 <option value="">{% trans "Alle Aktionen" %}</option>
                 {% for value, label in action_choices %}
                 <option value="{{ value }}" {% if filter_action == value %}selected{% endif %}>{{ label }}</option>
@@ -49,7 +49,7 @@
         <div>
             <label for="filter-user" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Benutzer" %}</label>
             <select id="filter-user" name="user"
-                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
+                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-hidden focus:ring-2 focus:ring-accent">
                 <option value="">{% trans "Alle Benutzer" %}</option>
                 {% for u in all_users %}
                 <option value="{{ u.pk }}" {% if filter_user == u.pk|stringformat:"s" %}selected{% endif %}>{{ u }}</option>
@@ -61,7 +61,7 @@
         <div>
             <label for="filter-facility" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Einrichtung" %}</label>
             <select id="filter-facility" name="facility"
-                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
+                    class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-hidden focus:ring-2 focus:ring-accent">
                 <option value="">{% trans "Alle Einrichtungen" %}</option>
                 <option value="{{ facility_null_sentinel }}" {% if filter_facility == facility_null_sentinel %}selected{% endif %}>
                     {% trans "(System / ohne Einrichtung)" %}
@@ -76,14 +76,14 @@
         <div>
             <label for="filter-date-from" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Von" %}</label>
             <input type="date" id="filter-date-from" name="date_from" value="{{ filter_date_from }}"
-                   class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
+                   class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-hidden focus:ring-2 focus:ring-accent">
         </div>
 
         {# Date to #}
         <div>
             <label for="filter-date-to" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Bis" %}</label>
             <input type="date" id="filter-date-to" name="date_to" value="{{ filter_date_to }}"
-                   class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-none focus:ring-2 focus:ring-accent">
+                   class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft focus:outline-hidden focus:ring-2 focus:ring-accent">
         </div>
 
         {# Submit #}

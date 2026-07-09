@@ -2,7 +2,7 @@
 {% if compact %}
 {# Compact mode: title + badges + due-date, no status buttons #}
 <a href="{% url 'core:workitem_detail' pk=wi.pk %}"
-   class="block bg-surface border border-subtle rounded-[10px] px-3 py-2.5 hover:shadow-sm transition-shadow"
+   class="block bg-surface border border-subtle rounded-[10px] px-3 py-2.5 hover:shadow-xs transition-shadow"
    id="workitem-{{ wi.pk }}">
     <div class="text-[12px] font-semibold text-ink leading-snug mb-1">{{ wi.title }}</div>
     <div class="flex flex-wrap items-center gap-1">

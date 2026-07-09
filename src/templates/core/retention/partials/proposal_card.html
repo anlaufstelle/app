@@ -1,6 +1,6 @@
 {% load i18n %}
 
-<div id="proposal-{{ proposal.pk }}" class="proposal-card bg-surface border-l-4 {% if proposal.urgency == 'red' %}border-red-500{% elif proposal.urgency == 'yellow' %}border-yellow-400{% else %}border-subtle{% endif %} rounded-md p-4 shadow-sm"
+<div id="proposal-{{ proposal.pk }}" class="proposal-card bg-surface border-l-4 {% if proposal.urgency == 'red' %}border-red-500{% elif proposal.urgency == 'yellow' %}border-yellow-400{% else %}border-subtle{% endif %} rounded-md p-4 shadow-xs"
      {% if proposal.status == 'pending' or proposal.status == 'deferred' %}x-data="proposalCard"{% endif %}>
 
     {# Header: status badge + due date #}

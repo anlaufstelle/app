@@ -189,7 +189,7 @@
         {% if events %}
         <div class="space-y-2">
             {% for event in events %}
-            <a href="{% url 'core:event_detail' event.pk %}" class="block bg-surface border border-subtle rounded-[10px] px-3.5 py-3 hover:shadow-sm transition">
+            <a href="{% url 'core:event_detail' event.pk %}" class="block bg-surface border border-subtle rounded-[10px] px-3.5 py-3 hover:shadow-xs transition">
                 <div class="flex items-center gap-3 flex-wrap">
                     <span class="font-mono text-[12px] text-ink-muted">{{ event.occurred_at|date:"DATETIME_FORMAT" }}</span>
                     <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-ink-soft">{{ event.document_type.name }}</span>
@@ -224,7 +224,7 @@
         {% if open_cases %}
         <div class="space-y-1.5">
             {% for case in open_cases %}
-            <a href="{% url 'core:case_detail' case.pk %}" class="block bg-surface border border-subtle rounded-[10px] px-3 py-2.5 hover:shadow-sm">
+            <a href="{% url 'core:case_detail' case.pk %}" class="block bg-surface border border-subtle rounded-[10px] px-3 py-2.5 hover:shadow-xs">
                 <div class="flex items-center justify-between gap-2">
                     <span class="text-[12px] font-semibold text-accent truncate">{{ case.title }}</span>
                     {% include "core/cases/partials/status_badge.html" with case=case %}

@@ -57,7 +57,7 @@
                        x-bind:autofocus="isTotp"
                        inputmode="numeric" pattern="[0-9 ]*" autocomplete="one-time-code"
                        data-testid="mfa-token-input"
-                       class="mt-1 block w-full rounded-md border-subtle shadow-sm focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 border text-center text-lg tracking-widest">
+                       class="mt-1 block w-full rounded-md border-subtle shadow-xs focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 border text-center text-lg tracking-widest">
             </div>
 
             <div x-show="isBackup" x-cloak>
@@ -70,12 +70,12 @@
                        inputmode="text" autocomplete="off" autocapitalize="none" spellcheck="false"
                        placeholder="z. B. Ab12Cd34Ef56Gh78Ij90Kl"
                        data-testid="mfa-backup-input"
-                       class="mt-1 block w-full rounded-md border-subtle shadow-sm focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 border font-mono">
+                       class="mt-1 block w-full rounded-md border-subtle shadow-xs focus:border-accent focus:ring-accent sm:text-sm px-3 py-2 border font-mono">
             </div>
 
             <button type="submit"
                     data-testid="mfa-verify-button"
-                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-accent hover:bg-accent focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent min-h-[44px]">
+                    class="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-xs text-sm font-medium text-white bg-accent hover:bg-accent focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-accent min-h-[44px]">
                 {% trans "Anmelden" %}
             </button>
         </form>

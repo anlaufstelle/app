@@ -6,7 +6,7 @@
     {# Refs #747: Crisis/Ban-Highlights aufklappbar wie _event_card; Aufgaben verlinken zur Detailseite. #}
     {% if h.type == 'task' %}
     <a href="{% url 'core:workitem_detail' pk=h.object.pk %}"
-       class="flex items-start gap-3 px-3 py-2.5 rounded-[10px] bg-event-soft hover:shadow-sm transition">
+       class="flex items-start gap-3 px-3 py-2.5 rounded-[10px] bg-event-soft hover:shadow-xs transition">
     {% else %}
     <div class="flex items-start gap-3 px-3 py-2.5 rounded-[10px] {% if h.type == 'crisis' %}bg-yellow-50{% else %}bg-ban-soft{% endif %}"
          x-data="expandableCard">
