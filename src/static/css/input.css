@@ -8,10 +8,14 @@
 /* ─── Safelist dynamischer Klassen (Refs #1480) ───
    v4 ignoriert den JS-`safelist`-Key auch mit @config; Safelisting laeuft ueber
    `@source inline(...)`. Diese Klassen werden zur LAUFZEIT aus Python emittiert
-   (core/templatetags/core_tags.py `_BADGE_COLOR_MAP`, core/utils/dates.py) und
-   sind fuer den Content-Scanner nur teilweise auffindbar — daher explizit hier.
-   Aenderungen an den Python-Quellen MUESSEN hier nachgezogen werden; der
-   Drift-Guard src/tests/test_tailwind_safelist_drift.py erzwingt das. */
+   (core/templatetags/core_tags.py `_BADGE_COLOR_MAP` + Audit-Detail-<pre>,
+   core/utils/dates.py) — als vollstaendige Literal-Strings, die der v4-Content-
+   Scan ueber den .py-Content-Glob (`./src/core/**`, tailwind.config.js) bereits
+   erfasst. Dieses `@source inline(...)` ist bewusste Absicherung (defense-in-depth):
+   faellt der .py-Content-Glob je weg oder werden core_tags.py/dates.py
+   umbenannt/verschoben, bleiben die Badge-/Faelligkeitsfarben trotzdem im Build.
+   Aenderungen an den Python-Quellen hier nachziehen; der Drift-Guard
+   src/tests/test_tailwind_safelist_drift.py erzwingt das. */
 /* Badge-Farben (_BADGE_COLOR_MAP + defensive Schattierungen bg-50/text-700): */
 @source inline("bg-{indigo,amber,red,green,blue,purple,teal,rose,gray,yellow}-{50,100}");
 @source inline("text-{indigo,amber,red,green,blue,purple,teal,rose,gray,yellow}-{700,800}");
