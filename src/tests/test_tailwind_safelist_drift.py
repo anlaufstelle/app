@@ -40,6 +40,8 @@ import re
 from pathlib import Path
 
 import pytest
+from django.core.management import call_command
+from django.test import override_settings
 
 # Meta-Test, der Source-/Asset-Files des Repos scannt (analog test_seed_doc_drift).
 # Im Mutmut-Subprozess läuft pytest aus ``mutants/`` und diese Pfade fehlen — daher
@@ -222,3 +224,18 @@ def test_synthetic_missing_class_is_detected() -> None:
     )
     missing = expected - safelisted_classes(incomplete)
     assert missing == {"text-orange-800"}
+
+
+def test_collectstatic_laesst_tailwind_quelle_aus(tmp_path) -> None:
+    """Regression (Refs #1480): ``css/input.css`` darf NICHT eingesammelt werden.
+
+    Die v4-Quelle beginnt mit ``@import "tailwindcss"`` — würde sie collected,
+    bräche das Manifest-Post-Processing (Prod-/Docker-Build) mit
+    ``MissingFileError: css/tailwindcss``. ``ProjectStaticFilesConfig``
+    (``anlaufstelle/apps.py``) schließt die Quelle via ``ignore_patterns`` aus;
+    das kompilierte ``css/styles.css`` wird weiterhin ausgeliefert.
+    """
+    with override_settings(STATIC_ROOT=str(tmp_path)):
+        call_command("collectstatic", "--noinput", verbosity=0)
+    assert not (tmp_path / "css" / "input.css").exists()
+    assert (tmp_path / "css" / "styles.css").exists()

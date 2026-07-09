@@ -60,7 +60,9 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
-    "django.contrib.staticfiles",
+    # staticfiles mit ignore_patterns: schliesst die Tailwind-Quelle
+    # css/input.css von collectstatic aus (Refs #1480, siehe anlaufstelle/apps.py).
+    "anlaufstelle.apps.ProjectStaticFilesConfig",
     # Notwendig für GinIndex auf Client.pseudonym (Trigram-Suche). Seit
     # Django 6.0 prüft postgres.E005 strikt, dass diese App registriert ist.
     "django.contrib.postgres",
