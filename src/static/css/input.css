@@ -1,6 +1,28 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Bestehende JS-Config (Theme-Tokens, content-Globs, fontFamily) explizit laden
+   — v4 auto-detektiert tailwind.config.js nicht mehr (Refs #1480). Pfad relativ
+   zu dieser Datei (src/static/css/) und identisch im Docker-Build-Kontext /build. */
+@config "../../../tailwind.config.js";
+
+/* ─── Safelist dynamischer Klassen (Refs #1480) ───
+   v4 ignoriert den JS-`safelist`-Key auch mit @config; Safelisting laeuft ueber
+   `@source inline(...)`. Diese Klassen werden zur LAUFZEIT aus Python emittiert
+   (core/templatetags/core_tags.py `_BADGE_COLOR_MAP`, core/utils/dates.py) und
+   sind fuer den Content-Scanner nur teilweise auffindbar — daher explizit hier.
+   Aenderungen an den Python-Quellen MUESSEN hier nachgezogen werden; der
+   Drift-Guard src/tests/test_tailwind_safelist_drift.py erzwingt das. */
+/* Badge-Farben (_BADGE_COLOR_MAP + defensive Schattierungen bg-50/text-700): */
+@source inline("bg-{indigo,amber,red,green,blue,purple,teal,rose,gray,yellow}-{50,100}");
+@source inline("text-{indigo,amber,red,green,blue,purple,teal,rose,gray,yellow}-{700,800}");
+/* Wiedervorlage-Badges (dates.py describe_remind_at, orange nur bg-100/text-800): */
+@source inline("bg-orange-100");
+@source inline("text-orange-800");
+/* Faelligkeits-Status-Farben (dates.py describe_due_date/_css_for_delta): */
+@source inline("text-red-600");
+@source inline("text-amber-{500,600}");
+@source inline("text-yellow-600");
+@source inline("text-gray-{400,500}");
 
 /* ─── Self-hosted Schriften (DSGVO, ohne Google-CDN-Verbindung) ─── */
 /* DM Sans — Variable Font (deckt 100–1000 ab). Lizenz: SIL OFL 1.1 */
@@ -89,6 +111,15 @@
 }
 
 @layer base {
+    /* v4-Kompat (Refs #1480): v4 setzt die Default-Border-Farbe hart auf
+       currentColor; v3 nutzte (via `borderColor.DEFAULT` in tailwind.config.js)
+       var(--border). Diese Regel stellt das v3-Verhalten global wieder her,
+       damit Elemente mit blossem `border`/`border-2`/`border-t` (ohne explizite
+       border-<farbe>) weiter die dezente Rahmenfarbe zeigen statt der Textfarbe.
+       Bewusst in @layer base, sodass border-<farbe>-Utilities weiter gewinnen. */
+    *, ::before, ::after {
+        border-color: var(--border);
+    }
     html {
         font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     }
@@ -103,7 +134,7 @@
 
     a:focus-visible, button:focus-visible, input:focus-visible,
     select:focus-visible, textarea:focus-visible {
-        @apply ring-2 ring-accent ring-offset-2 outline-none;
+        @apply ring-2 ring-accent ring-offset-2 outline-hidden;
     }
 }
 

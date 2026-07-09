@@ -1,24 +1,17 @@
 /** @type {import('tailwindcss').Config} */
 const defaultTheme = require('tailwindcss/defaultTheme');
 
-// Dynamische Badge-Farben (core_tags.py: _BADGE_COLOR_MAP) — Tailwind kann sie
-// im Content-Scan nicht entdecken, daher als Safelist eintragen.
-const BADGE_COLORS = ['indigo', 'amber', 'red', 'green', 'blue', 'purple', 'teal', 'rose', 'gray', 'yellow'];
-const BADGE_SAFELIST = BADGE_COLORS.flatMap((c) => [`bg-${c}-100`, `text-${c}-800`, `text-${c}-700`, `bg-${c}-50`]);
-
-// Dynamische due_date_info-css_class-Farben (core/utils/dates.py) — emittiert
-// text-{red,amber,yellow,gray}-{400..600} fuer Faelligkeits-Stati.
-const DATE_STATUS_SAFELIST = [
-  'text-red-600', 'text-amber-600', 'text-amber-500',
-  'text-yellow-600', 'text-gray-400', 'text-gray-500',
-];
-
 module.exports = {
   content: [
     "./src/templates/**/*.html",
     "./src/core/**/*.py",
   ],
-  safelist: [...BADGE_SAFELIST, ...DATE_STATUS_SAFELIST],
+  // Hinweis (Refs #1480): Der frühere `safelist`-Key (dynamische Badge-/
+  // Fälligkeits-Farben) ist entfernt — Tailwind v4 unterstützt `safelist` in der
+  // JS-Config NICHT mehr, auch nicht via `@config`. Das Safelisting steht jetzt
+  // als `@source inline(...)` in src/static/css/input.css (1:1 aus den Python-
+  // Quellen _BADGE_COLOR_MAP (core/templatetags/core_tags.py) + core/utils/dates.py).
+  // Der Drift-Guard src/tests/test_tailwind_safelist_drift.py hält beide synchron.
   theme: {
     extend: {
       fontFamily: {

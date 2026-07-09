@@ -18,7 +18,7 @@ COPY package.json package-lock.json tailwind.config.js ./
 COPY src/templates/ src/templates/
 COPY src/core/ src/core/
 COPY src/static/css/input.css src/static/css/input.css
-RUN npm ci && npx tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --minify
+RUN npm ci && npx @tailwindcss/cli -i src/static/css/input.css -o src/static/css/styles.css --minify
 
 # Stage 3: Runtime
 FROM python:3.14-slim@sha256:b877e50bd90de10af8d82c57a022fc2e0dc731c5320d762a27986facfc3355c1 AS final

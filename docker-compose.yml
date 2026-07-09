@@ -50,7 +50,7 @@ services:
     working_dir: /app
     volumes:
       - .:/app
-    command: npx tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --watch
+    command: npx @tailwindcss/cli -i src/static/css/input.css -o src/static/css/styles.css --watch
     profiles:
       - tailwind
 

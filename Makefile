@@ -25,12 +25,12 @@ db:
 db-stop:
 	docker stop anlaufstelle-db && docker rm anlaufstelle-db
 
-# Tailwind CSS kompilieren
+# Tailwind CSS kompilieren (v4-CLI, Refs #1480)
 tailwind:
-	npx tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --watch
+	npx @tailwindcss/cli -i src/static/css/input.css -o src/static/css/styles.css --watch
 
 tailwind-build:
-	npx tailwindcss -i src/static/css/input.css -o src/static/css/styles.css --minify
+	npx @tailwindcss/cli -i src/static/css/input.css -o src/static/css/styles.css --minify
 
 # Django
 migrate:
