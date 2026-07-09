@@ -124,6 +124,18 @@
     *, ::before, ::after {
         border-color: var(--border);
     }
+    /* v4-Kompat (Refs #1480): v4-Preflight setzt Buttons auf cursor: default
+       (native Semantik); v3 setzte cursor: pointer. Die App verlaesst sich
+       fast ueberall auf das v3-Verhalten (nur 13 explizite cursor-pointer). */
+    button:not(:disabled), [role="button"]:not(:disabled) {
+        cursor: pointer;
+    }
+    /* v4-Kompat (Refs #1480): v4-Placeholder = currentColor/50% statt v3
+       gray-400 — stellt die hellere, einheitliche v3-Optik der Formular-
+       Placeholder wieder her. */
+    input::placeholder, textarea::placeholder {
+        color: var(--color-gray-400, #9ca3af);
+    }
     html {
         font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     }
