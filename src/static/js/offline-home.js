@@ -240,10 +240,36 @@
         }
     }
 
-    if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", render);
-    } else {
+    // Refs #1483: Kalt-Navigation auf ein Create-Formular (/events/new/,
+    // /workitems/new/) faellt in-place auf diese Seite zurueck — die URL
+    // bleibt kanonisch. Anhand der precachten URL_PATTERNS (single source of
+    // truth, laedt vor diesem Script) den gezielten Wegweiser einblenden;
+    // den Anonym-Satz nur fuer die Kontakt-Erfassung (klientenlose Kontakte
+    // sind offline nicht erfassbar, Refs #1485).
+    function showCreateHint() {
+        const hint = document.querySelector('[data-testid="offline-create-hint"]');
+        const patterns = self.URL_PATTERNS;
+        if (!hint || !patterns) return;
+        const path = window.location.pathname;
+        const isEvent = patterns.EVENT_NEW.test(path);
+        const isWorkItem = patterns.WORKITEM_NEW.test(path);
+        if (!isEvent && !isWorkItem) return;
+        hint.hidden = false;
+        if (isEvent) {
+            const anon = hint.querySelector('[data-testid="offline-create-hint-anonymous"]');
+            if (anon) anon.hidden = false;
+        }
+    }
+
+    function init() {
+        showCreateHint();
         render();
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+    } else {
+        init();
     }
 
     window.offlineHome = { render: render };

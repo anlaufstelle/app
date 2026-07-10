@@ -136,6 +136,17 @@
         color: var(--ink-soft);
         margin: 0 0 1.5rem;
     }
+    /* Refs #1483: Wegweiser bei Kalt-Navigation auf ein Create-Formular —
+       Warn-Ton (Handlungsalternative), nicht Gefahren-Ton. */
+    .oh-hint {
+        padding: .8rem 1rem;
+        border: 1px solid var(--warn-border);
+        border-radius: 10px;
+        background: var(--warn-bg);
+        margin: 0 0 1rem;
+    }
+    .oh-hint p { color: var(--warn-ink); margin: 0 0 .5rem; font-size: .9rem; }
+    .oh-hint p:last-child { margin-bottom: 0; }
     .actions { display: flex; gap: .75rem; flex-wrap: wrap; }
     a.btn {
         display: inline-flex;
@@ -187,6 +198,16 @@
         <h1>{% trans "Offline-Arbeitsplatz" %}</h1>
         <p>{% trans "Sie sind aktuell offline. Hier sind die Personen, die Sie für die Offline-Nutzung mitgenommen haben — auch ohne Netz lesbar und bearbeitbar. Änderungen werden bei Verbindung automatisch gesendet." %}</p>
 
+        {# Refs #1483: Kalt-Navigation auf ein Create-Formular (/events/new/, #}
+        {# /workitems/new/) faellt in-place auf diese Seite zurueck (URL bleibt #}
+        {# kanonisch). offline-home.js blendet den Wegweiser anhand von #}
+        {# location.pathname + URL_PATTERNS ein; den Anonym-Satz nur fuer die #}
+        {# Kontakt-Erfassung (klientenlos ist offline nicht erfassbar, #1485). #}
+        <div class="oh-hint" data-testid="offline-create-hint" hidden>
+            <p>{% trans "Diese Aktion ist offline nicht direkt verfügbar: Neue Kontakte und Aufgaben legen Sie offline im Dossier einer zuvor „Offline mitgenommenen“ Person an — unten eine Person auswählen." %}</p>
+            <p data-testid="offline-create-hint-anonymous" hidden>{% trans "Kontakte ohne Personenbezug lassen sich offline nicht neu beginnen." %}</p>
+        </div>
+
         <div class="oh-status" data-testid="offline-home-status"></div>
         <!-- Refs #1412 (M17b): Storage-Quota-/Persist-Status — bewusst eigene
              Zeile, getrennt vom 20-Personen-Limit oben (oh-status). -->
@@ -208,15 +229,18 @@
         <p class="hint">{% trans "Datei-Uploads benötigen eine Verbindung. Sobald Sie wieder online sind, schließt die App offene Aufgaben automatisch ab." %}</p>
     </main>
 
-    <!-- Offline-Home-Stack: Reihenfolge dexie → crypto → offline-store → offline-home.
-         Alle vier sind im Service-Worker-APP_SHELL pre-cached (sw.js), damit die
-         Home auch beim ersten Offline-Aufruf (PWA-Kaltstart) rendert.
-         Refs #1486: static-Tag statt Literal-Pfaden — der Prod-Precache
-         enthaelt NUR die gehashten URLs (caches.match ist URL-exakt);
-         aufgeloest wird beim (Online-)Fetch des Precache, nicht offline. -->
+    <!-- Offline-Home-Stack: Reihenfolge dexie → crypto → offline-store →
+         url-patterns → offline-home. Alle sind im Service-Worker-APP_SHELL
+         pre-cached (sw.js), damit die Home auch beim ersten Offline-Aufruf
+         (PWA-Kaltstart) rendert. Refs #1486: static-Tag statt
+         Literal-Pfaden — der Prod-Precache enthaelt NUR die gehashten URLs
+         (caches.match ist URL-exakt); aufgeloest wird beim (Online-)Fetch
+         des Precache, nicht offline. Refs #1483: url-patterns.js fuer den
+         Create-Wegweiser (single source of truth der URL-Muster). -->
     <script src="{% static 'js/dexie.min.js' %}"></script>
     <script src="{% static 'js/crypto.js' %}"></script>
     <script src="{% static 'js/offline-store.js' %}"></script>
+    <script src="{% static 'js/url-patterns.js' %}"></script>
     <script src="{% static 'js/offline-home.js' %}"></script>
 </body>
 </html>
