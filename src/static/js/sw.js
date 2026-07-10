@@ -19,7 +19,11 @@ importScripts("/static/js/url-patterns.js");
 // nimmt WORKITEM_STATUS in QUEUE_PATTERNS auf; der Bump erzwingt bei
 // Bestandsnutzern Re-Install + Re-Precache, damit auch der laufende SW die
 // neuen Queue-Regeln laedt.
-const CACHE_NAME = "anlaufstelle-v18";
+// Refs #1482: v18 -> v19 -- APP_SHELL um die Shell-Renderer-Deps erweitert
+// (alpine-csp.min.js, alpine/base-layout.js, sync-orchestrator.js); der Bump
+// erzwingt Re-Install + Re-Precache, damit Bestandsnutzer die Module offline
+// bekommen.
+const CACHE_NAME = "anlaufstelle-v19";
 // Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
 // ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
 // auch beim ersten Offline-Aufruf garantiert verfuegbar ist.
@@ -108,6 +112,19 @@ const APP_SHELL = [
     "/static/js/offline-queue.js",
     "/static/js/offline-client.js",
     "/static/js/offline-edit.js",
+    // Refs #1482: Die In-Place-Shells (offline_detail.html/conflict_review.html)
+    // erweitern base.html — ihr gesamtes Rendering haengt an Alpine
+    // (alpine:init in offline-client-view.js/conflict-resolver.js;
+    // loading/unavailable/Inhalt stehen in <template x-if>), die mobile
+    // Bottom-Nav an den Layout-Komponenten (createMenu/mobileMore). Der
+    // Sync-Orchestrator ist der einzige koordinierte Replay-Trigger
+    // (ADR-030); ohne ihn fallen queue/edit/store auf ihre unkoordinierten
+    // online-Listener zurueck (Pre-M6-Race). Nach einem CACHE_NAME-Bump ist
+    // der SWR-Runtime-Cache leer — ohne Pre-Cache bleibt ein
+    // Offline-Kaltstart ohne Renderer/Nav/Koordinator.
+    "/static/js/alpine-csp.min.js",
+    "/static/js/alpine/base-layout.js",
+    "/static/js/sync-orchestrator.js",
     // Refs #1334: Das PWA-Manifest (aus Scope-Gruenden unter /manifest.json,
     // nicht /static/) und das deklarierte Site-Icon (favicon.svg) offline
     // verfuegbar machen — sonst net::ERR_INTERNET_DISCONNECTED beim Offline-

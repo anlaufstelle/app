@@ -94,8 +94,9 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v18"' in body, (
-            "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein (#1419: url-patterns.js/QUEUE_PATTERNS)."
+        assert 'CACHE_NAME = "anlaufstelle-v19"' in body, (
+            "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
+            "(#1482: APP_SHELL um Shell-Renderer/Nav/Orchestrator erweitert)."
         )
 
     def test_sw_caches_manifest_and_favicon(self, client):
@@ -157,12 +158,13 @@ class TestServiceWorkerCachesOfflineFallback:
             assert asset in body, f"{asset} fehlt im APP_SHELL — Offline-Home offline nicht ladbar."
 
     def test_sw_caches_offline_sync_core_assets(self, client):
-        """Dieser Test ist gegen den heutigen Code ROT: die Offline-Sync-Kern-
-        Module (CSRF-Refresh, URL-Whitelist, Queue, "Offline mitnehmen"-Cache,
-        Event-Edit-Replay) fehlen im APP_SHELL. Seiten, die selbst nicht im
+        """Invariante (#1351/#1386): Die Offline-Sync-Kern-Module
+        (CSRF-Refresh, URL-Whitelist, Queue, "Offline mitnehmen"-Cache,
+        Event-Edit-Replay) stehen im APP_SHELL. Seiten, die selbst nicht im
         APP_SHELL stehen (z.B. Client-Liste/-Detail), laden diese Module aber
         — ohne Pre-Cache waeren sie beim ersten Offline-Aufruf einer noch
-        nicht besuchten Seite nicht ladbar. Refs #1351, Refs #1386.
+        nicht besuchten Seite nicht ladbar. (Docstring war ein Alt-Text aus
+        der TDD-Rot-Phase; der Zustand ist seit #1386 gruen.)
         """
         response = client.get(reverse("service_worker"))
         body = response.content.decode()
@@ -178,6 +180,30 @@ class TestServiceWorkerCachesOfflineFallback:
             "/static/js/offline-edit.js",
         ):
             assert asset in body, f"{asset} fehlt im APP_SHELL — Offline-Sync-Kern offline nicht ladbar."
+
+    def test_sw_caches_shell_renderer_and_orchestrator(self, client):
+        """Refs #1482: Die In-Place-Shells (offline_detail.html /
+        conflict_review.html) erweitern base.html — ihr gesamtes Rendering
+        haengt an Alpine (``alpine:init`` in offline-client-view.js bzw.
+        conflict-resolver.js; loading/unavailable/Inhalt stehen in
+        ``<template x-if>``), die mobile Bottom-Nav an den Layout-Komponenten
+        (createMenu/mobileMore aus alpine/base-layout.js). Der
+        Sync-Orchestrator ist seit M6 (ADR-030) der einzige koordinierte
+        Replay-Trigger; fehlt er, reaktivieren offline-queue/edit/store ihre
+        unkoordinierten Fallback-Listener (Pre-M6-Race). Nach einem
+        CACHE_NAME-Bump ist der SWR-Runtime-Cache leer — ohne Pre-Cache
+        bleibt ein PWA-Kaltstart offline also ohne Renderer/Nav/Koordinator.
+        """
+        response = client.get(reverse("service_worker"))
+        shell_block = _app_shell_block(response.content.decode())
+        for asset in (
+            "/static/js/alpine-csp.min.js",
+            "/static/js/alpine/base-layout.js",
+            "/static/js/sync-orchestrator.js",
+        ):
+            assert asset in shell_block, (
+                f"{asset} fehlt im APP_SHELL — In-Place-Shells offline ohne Renderer/Nav/Koordinator."
+            )
 
 
 def _app_shell_block(body: str) -> str:

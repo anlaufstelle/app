@@ -237,11 +237,14 @@ def test_update_gate_requires_explicit_confirmation(browser, base_url):
 
 
 def test_precache_includes_offline_sync_core_assets(browser, base_url):
-    """Dieser Test ist gegen den heutigen Code ROT: dem Precache/APP_SHELL
-    fehlen die Offline-Sync-Kern-Module (u.a. offline-edit.js) — Seiten, die
-    diese Module laden, selbst aber nicht im APP_SHELL stehen (z.B. Client-
-    Liste/-Detail), waeren beim ersten Offline-Aufruf nicht ladbar.
-    Refs #1351, Refs #1386.
+    """Invariante (#1351/#1386, erweitert um #1482): Der echte Install-Precache
+    muss die Offline-Sync-Kern-Module (u.a. offline-edit.js) UND die
+    Shell-Renderer-Deps enthalten — die In-Place-Shells erweitern base.html,
+    ihr Rendering haengt an Alpine (alpine-csp.min.js), die mobile Bottom-Nav
+    an alpine/base-layout.js, die Replay-Koordination an sync-orchestrator.js
+    (ADR-030). Seiten, die diese Module laden, selbst aber nicht im APP_SHELL
+    stehen (z.B. Client-Liste/-Detail), waeren beim ersten Offline-Aufruf
+    sonst nicht ladbar.
 
     WICHTIG fuer die Beweiskraft: Der Cache wird DIREKT nach
     ``navigator.serviceWorker.ready`` inspiziert — ohne Login, ohne Reload.
@@ -277,6 +280,12 @@ def test_precache_includes_offline_sync_core_assets(browser, base_url):
             "/static/js/offline-queue.js",
             "/static/js/offline-client.js",
             "/static/js/offline-edit.js",
+            # Refs #1482: Renderer/Nav/Koordinator der base.html-basierten
+            # In-Place-Shells — ohne Pre-Cache rendert ein Offline-Kaltstart
+            # (leerer SWR-Runtime-Cache nach CACHE_NAME-Bump) nichts.
+            "/static/js/alpine-csp.min.js",
+            "/static/js/alpine/base-layout.js",
+            "/static/js/sync-orchestrator.js",
         ):
             assert asset in cached_paths, f"{asset} nicht im Precache gefunden: {cached_paths}"
     finally:
