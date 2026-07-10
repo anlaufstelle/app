@@ -14,6 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SRC_DIR = REPO_ROOT / "src"
 
@@ -275,9 +277,15 @@ class TestProdPlaceholderSecretsGuard:
         result = _run_prod_import(self._VALID_ENV)
         assert result.returncode == 0, f"prod import failed: {result.stderr}"
 
+    @pytest.mark.architecture
     def test_env_example_ships_empty_secret_placeholders(self):
         """Die Wurzel des Footguns: .env.example darf keine nicht-leeren
-        Platzhalter fuer Secrets mehr ausliefern."""
+        Platzhalter fuer Secrets mehr ausliefern.
+
+        ``architecture``-Marker: liest ``.env.example`` aus dem Repo-Root —
+        die Datei existiert in mutmuts ``mutants/``-Arbeitskopie nicht,
+        der Mutation-Vorlauf bräche sonst ab (in ``make ci`` läuft der
+        Guard weiterhin)."""
         content = (REPO_ROOT / ".env.example").read_text(encoding="utf-8")
         for var in ("DJANGO_SECRET_KEY", "DJANGO_AUDIT_HASH_KEY", "BACKUP_ENCRYPTION_KEY"):
             match = re.search(rf"^{var}=(.*)$", content, re.MULTILINE)
