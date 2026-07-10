@@ -179,8 +179,11 @@ class TestWorkItemClickableClientDetail:
         authenticated_page.click("button:has-text('Speichern')")
         authenticated_page.wait_for_url(re.compile(r"/workitems/$"))
 
-        # Zum Klientel-Detail navigieren
-        authenticated_page.goto(f"{base_url}/clients/")
+        # Zum Klientel-Detail navigieren — mit Suchfilter statt ungefilterter
+        # Liste: die ist mit 25/Seite paginiert und nach Pseudonym sortiert;
+        # im Voll-Lauf schieben die von Offline-Tests angelegten
+        # E2E-*-Klienten den Seed-Klienten Stern-42 sonst auf Seite 2.
+        authenticated_page.goto(f"{base_url}/clients/?q=Stern-42")
         authenticated_page.wait_for_load_state("domcontentloaded")
         find_client_link(authenticated_page, "Stern-42").click()
         authenticated_page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
