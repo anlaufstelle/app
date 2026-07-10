@@ -291,6 +291,30 @@ class TestServiceWorkerPrecacheHashedAssets:
                 "verfehlt sonst das von {% static %} referenzierte Asset."
             )
 
+    def test_offline_fallback_scripts_resolve_to_hashed_urls(self, client, tmp_path):
+        """Refs #1486 (Folgebefund zu #1413): /offline/ ist precached und laedt
+        seine Renderer (dexie/crypto/offline-store/offline-home) offline aus dem
+        SW-Cache. Der Cache enthaelt in Prod NUR die gehashten URLs
+        (_resolve_app_shell) — referenziert die Seite ihre Skripte
+        ungehasht-literal, verfehlt ``caches.match`` sie offline und der
+        Arbeitsplatz bleibt auf "Lade Offline-Daten…" haengen. Dev/E2E laufen
+        ungehasht und koennen den Bruch nicht sehen — genau deshalb dieser
+        Manifest-Storage-Guard.
+        """
+        manifest_storage = {"staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"}}
+        with override_settings(DEBUG=False, STATIC_ROOT=str(tmp_path), STORAGES=manifest_storage):
+            call_command("collectstatic", "--noinput", verbosity=0)
+            body = client.get(reverse("offline_fallback")).content.decode()
+
+        for stem in ("dexie.min", "crypto", "offline-store", "offline-home", "url-patterns"):
+            assert not re.search(rf'src="/static/js/{re.escape(stem)}\.js"', body), (
+                f"/offline/ referenziert {stem}.js ungehasht — der gehashte Prod-Precache "
+                "(caches.match ist URL-exakt) verfehlt das Skript offline."
+            )
+        assert re.search(r'src="/static/js/offline-home\.[0-9a-f]{8,}\.js"', body), (
+            "offline-home.js wurde nicht auf eine gehashte URL aufgeloest."
+        )
+
     def test_missing_manifest_entry_falls_back_and_never_500s(self, client, tmp_path):
         """/sw.js darf niemals 500en: fehlt ein Eintrag im Manifest (ValueError),
         faellt die Aufloesung auf den ungehashten Pfad zurueck. Simuliert durch

@@ -1,4 +1,4 @@
-{% load i18n %}{% get_current_language as LANG %}<!doctype html>
+{% load i18n static %}{% get_current_language as LANG %}<!doctype html>
 <html lang="{{ LANG }}">
 <head>
 <meta charset="utf-8" />
@@ -210,10 +210,13 @@
 
     <!-- Offline-Home-Stack: Reihenfolge dexie → crypto → offline-store → offline-home.
          Alle vier sind im Service-Worker-APP_SHELL pre-cached (sw.js), damit die
-         Home auch beim ersten Offline-Aufruf (PWA-Kaltstart) rendert. -->
-    <script src="/static/js/dexie.min.js"></script>
-    <script src="/static/js/crypto.js"></script>
-    <script src="/static/js/offline-store.js"></script>
-    <script src="/static/js/offline-home.js"></script>
+         Home auch beim ersten Offline-Aufruf (PWA-Kaltstart) rendert.
+         Refs #1486: static-Tag statt Literal-Pfaden — der Prod-Precache
+         enthaelt NUR die gehashten URLs (caches.match ist URL-exakt);
+         aufgeloest wird beim (Online-)Fetch des Precache, nicht offline. -->
+    <script src="{% static 'js/dexie.min.js' %}"></script>
+    <script src="{% static 'js/crypto.js' %}"></script>
+    <script src="{% static 'js/offline-store.js' %}"></script>
+    <script src="{% static 'js/offline-home.js' %}"></script>
 </body>
 </html>
