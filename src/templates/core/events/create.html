@@ -7,7 +7,8 @@
 <div class="max-w-2xl">
     <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Neuer Kontakt" %}</h1>
 
-    <form method="post" enctype="multipart/form-data" class="space-y-4" id="event-create-form" data-autosave{% if applied_template %} data-autosave-server-prefilled{% endif %}
+    {# Refs #1489: data-offline-enctype-downgrade — ohne gewaehlte Datei wird der Submit auf urlencoded umgestellt, damit der SW ihn offline queuen kann (multipart wird bewusst nie gequeued). #}
+    <form method="post" enctype="multipart/form-data" class="space-y-4" id="event-create-form" data-offline-enctype-downgrade data-autosave{% if applied_template %} data-autosave-server-prefilled{% endif %}
           x-data="eventClientAutocomplete"
           data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
           data-initial-client-id="{{ client_id|default:'' }}"
@@ -193,4 +194,5 @@
 {% block extra_js %}
 <script src="{% static 'js/autosave.js' %}"></script>
 <script src="{% static 'js/keyboard-shortcuts.js' %}" defer></script>
+<script src="{% static 'js/event-form-enctype.js' %}" defer></script>
 {% endblock %}
