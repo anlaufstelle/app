@@ -195,6 +195,44 @@
         });
     }
 
+    /* ─── Startup-Drain (Refs #1484) ─────────────────────────────────────── */
+    // Mobile PWAs starten haeufig bereits MIT Netz, NACHDEM offline erfasst
+    // wurde (App zu, Netz kam in der Tasche zurueck) — dann feuert nie ein
+    // ``online``-Event und die Queue bliebe bis zum naechsten
+    // Connectivity-Flap liegen. Ein Lauf beim Seitenstart, gedeckelt auf
+    // echten Bedarf, draint sie durch dieselbe Lock-/Koaleszierungs-
+    // Maschinerie — die ADR-030-Invariante (hoechstens EINE Sequenz pro
+    // Origin) bleibt unberuehrt. Gate ist hasReplayableWork (NUR auto-
+    // replaybares Werk, liest nur Klartext-Index-Spalten) — NICHT
+    // hasUnsyncedData: das zaehlt conflict/dead mit (Idle-Wipe-Praedikat)
+    // und wuerde den Drain auf jeder Navigation feuern lassen, solange ein
+    // unaufgeloester Konflikt existiert. Ohne Session-Key sind
+    // replayQueue/replayAllModifiedEvents No-ops (deren eigene Guards);
+    // Fehler werden geschluckt — der Seitenstart darf nie an der
+    // Drain-Heuristik scheitern.
+    function _startupDrain() {
+        if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+        const store = window.offlineStore;
+        if (!store || typeof store.hasReplayableWork !== "function") return;
+        Promise.resolve()
+            .then(function () {
+                return store.hasReplayableWork();
+            })
+            .then(function (pending) {
+                if (pending) requestSync("startup");
+            })
+            .catch(function () {
+                /* still — Startup nie blockieren */
+            });
+    }
+    if (typeof document !== "undefined" && typeof window !== "undefined") {
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", _startupDrain);
+        } else {
+            _startupDrain();
+        }
+    }
+
     window.syncOrchestrator = {
         requestSync: requestSync,
         runExclusive: runExclusive,

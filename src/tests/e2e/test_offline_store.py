@@ -162,6 +162,75 @@ def test_has_unsynced_data_reflects_pending_edits(authenticated_page, base_url):
     assert after is True
 
 
+def test_has_replayable_work_gates_startup_drain(authenticated_page, base_url):
+    """Refs #1484 (Review-Fix): Das Startup-Drain-Gate (``hasReplayableWork``)
+    zaehlt NUR auto-replaybares Werk. conflict-/dead-Zustaende und Queue-Rows
+    im Backoff (retryAfter in der Zukunft) triggern es NICHT — sonst liefe
+    der Drain auf jeder Navigation (Lock + Revalidierungs-Requests fuer bis
+    zu 20 Personen), solange ein einziger unaufgeloester Konflikt existiert.
+    ``hasUnsyncedData`` (Idle-Wipe-Praedikat) bleibt fuer dieselben Zustaende
+    bewusst true — die beiden Praedikate haben verschiedene Vertraege.
+    """
+    page = authenticated_page
+    _bootstrap(page, base_url)
+    state = page.evaluate(
+        """async () => {
+            const s = window.offlineStore;
+            const out = {};
+            out.empty = await s.hasReplayableWork();
+
+            // conflict-Event: unsynced (Idle-Wipe zaehlt es), NICHT replaybar.
+            await s.saveOfflineEdit({
+                pk: '22222222-2222-4222-8222-222222222222', clientPk: 'c1',
+                occurredAt: '2026-01-01T00:00:00Z', localStatus: 'new',
+                data: { formData: { note: 'x' }, documentTypePk: 'dt1' },
+            });
+            await s.updateEventLocalStatus('22222222-2222-4222-8222-222222222222', 'conflict');
+            out.conflictOnly = await s.hasReplayableWork();
+            out.conflictUnsynced = await s.hasUnsyncedData();
+
+            // dead-Queue-Row: NICHT replaybar.
+            await s.putEncrypted('queue', {
+                url: '/events/new/', createdAt: Date.now(), attempts: 3,
+                retryAfter: 0, localStatus: 'dead', idempotencyKey: 'dead-1',
+                data: { method: 'POST', body: 'x=1', headers: {} },
+            });
+            out.withDeadQueue = await s.hasReplayableWork();
+
+            // Backoff-Queue-Row (retryAfter Zukunft): (noch) NICHT replaybar.
+            await s.putEncrypted('queue', {
+                url: '/events/new/', createdAt: Date.now(), attempts: 1,
+                retryAfter: Date.now() + 3600000, idempotencyKey: 'backoff-1',
+                data: { method: 'POST', body: 'x=1', headers: {} },
+            });
+            out.withBackoffQueue = await s.hasReplayableWork();
+
+            // Faellige Queue-Row: replaybar.
+            await s.putEncrypted('queue', {
+                url: '/events/new/', createdAt: Date.now(), attempts: 0,
+                retryAfter: 0, idempotencyKey: 'due-1',
+                data: { method: 'POST', body: 'x=1', headers: {} },
+            });
+            out.withDueQueue = await s.hasReplayableWork();
+
+            // Nur modified-Event (Edit-Replay-Pfad): replaybar.
+            const dueRows = await s.db.queue.where('idempotencyKey').equals('due-1').toArray()
+                .catch(() => s.db.queue.filter((r) => r.idempotencyKey === 'due-1').toArray());
+            for (const r of dueRows) await s.db.queue.delete(r.id);
+            await s.updateEventLocalStatus('22222222-2222-4222-8222-222222222222', 'modified');
+            out.modifiedOnly = await s.hasReplayableWork();
+            return out;
+        }"""
+    )
+    assert state["empty"] is False
+    assert state["conflictOnly"] is False, "conflict-Event darf den Drain nicht triggern"
+    assert state["conflictUnsynced"] is True, "Idle-Wipe-Praedikat muss conflict weiter zaehlen"
+    assert state["withDeadQueue"] is False, "dead-Queue-Row darf den Drain nicht triggern"
+    assert state["withBackoffQueue"] is False, "Backoff-Row darf den Drain (noch) nicht triggern"
+    assert state["withDueQueue"] is True, "faellige Queue-Row muss den Drain triggern"
+    assert state["modifiedOnly"] is True, "modified-Event muss den Drain triggern"
+
+
 def test_idle_wipe_preserves_unsynced_data_for_relogin(authenticated_page, base_url):
     """Refs #1324: Idle-Wipe darf offline erfasste, noch ungesyncte Eintraege
     NICHT verwerfen — nur den Schluessel loeschen (Lock). Re-Login leitet

@@ -957,6 +957,32 @@
         return (await countUnsyncedEvents()) > 0;
     }
 
+    /*
+     * Refs #1484 (Review-Fix): Gate fuer den Startup-Drain — zaehlt NUR
+     * auto-replaybares Werk. Bewusst NICHT hasUnsyncedData(): das ist das
+     * Idle-Wipe-Praedikat und zaehlt conflict/dead MIT (damit sie nicht
+     * gepurgt werden) — als Drain-Gate liefe der Sync sonst auf JEDER
+     * Navigation (Lock + Revalidierungs-Requests fuer bis zu 20 Personen),
+     * solange ein einziger unaufgeloester Konflikt existiert. Kriterien
+     * spiegeln die Replay-Selektion: Queue-Rows nicht conflict/dead und
+     * retryAfter faellig (offline-queue.js), Events nur new/modified
+     * (offline-edit.js).
+     */
+    async function hasReplayableWork() {
+        const now = Date.now();
+        const queueReady = await db.queue
+            .filter(
+                (r) =>
+                    r.localStatus !== "conflict" &&
+                    r.localStatus !== "dead" &&
+                    (!r.retryAfter || r.retryAfter <= now)
+            )
+            .count();
+        if (queueReady > 0) return true;
+        const eventsReady = await db.events.where("localStatus").anyOf(["new", "modified"]).count();
+        return eventsReady > 0;
+    }
+
     async function updateEventLocalStatus(pk, status) {
         // Dexie's `update()` only touches the indexed fields; safe because
         // `localStatus` is an index and not inside the encrypted envelope.
@@ -1372,6 +1398,7 @@
         hasUnsyncedEventsFor: hasUnsyncedEventsFor,
         countUnsyncedEventsFor: countUnsyncedEventsFor,
         hasUnsyncedData: hasUnsyncedData,
+        hasReplayableWork: hasReplayableWork,
         updateEventLocalStatus: updateEventLocalStatus,
         saveConflictState: saveConflictState,
         clearOfflineEdit: clearOfflineEdit,
