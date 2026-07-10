@@ -61,18 +61,56 @@ def _attach_to_shared_store(page, base_url):
     page.evaluate("async () => { await window.crypto_session.ready(); }")
 
 
-def _seed_queue_record(page, url, idem):
+def _seed_queue_record(page, url, idem, retry_after_ms=0):
     """Einen replay-baren Queue-Record ablegen (hx-request → ein 200 gilt als
-    Erfolg per HTMX-Partial-Kontrakt, offline-queue.js loescht die Row dann)."""
+    Erfolg per HTMX-Partial-Kontrakt, offline-queue.js loescht die Row dann).
+
+    ``retry_after_ms`` > 0 legt die Row im Backoff ab (retryAfter in der
+    Zukunft): ``replayQueue`` ueberspringt sie, der Badge zaehlt sie trotzdem
+    — noetig, seit der Startup-Drain (Refs #1484) pendente Arbeit beim
+    Tab-Load mit Netz sofort selbst replayt.
+    """
     page.evaluate(
         """async (args) => {
             await window.offlineStore.putEncrypted('queue', {
-                url: args.url, createdAt: Date.now(), attempts: 0, retryAfter: 0,
+                url: args.url, createdAt: Date.now(), attempts: 0,
+                retryAfter: args.retryAfterMs > 0 ? Date.now() + args.retryAfterMs : 0,
                 lastError: '', idempotencyKey: args.idem,
                 data: {method: 'POST', body: 'notiz=x', headers: {'hx-request': 'true'}},
             });
         }""",
-        {"url": url, "idem": idem},
+        {"url": url, "idem": idem, "retryAfterMs": retry_after_ms},
+    )
+
+
+def _clear_queue_backoff(page):
+    """retryAfter aller Queue-Rows auf 0 setzen (Raw-IDB, Muster
+    ``_stamp_stale_activity``): retryAfter ist eine Klartext-Indexspalte,
+    der verschluesselte Envelope bleibt unberuehrt."""
+    page.evaluate(
+        """async () => {
+            await new Promise((resolve, reject) => {
+                const req = indexedDB.open('anlaufstelle-offline');
+                req.onerror = () => reject(req.error);
+                req.onsuccess = () => {
+                    const db = req.result;
+                    const tx = db.transaction('queue', 'readwrite');
+                    const store = tx.objectStore('queue');
+                    const cur = store.openCursor();
+                    cur.onsuccess = () => {
+                        const c = cur.result;
+                        if (c) {
+                            const row = c.value;
+                            row.retryAfter = 0;
+                            c.update(row);
+                            c.continue();
+                        }
+                    };
+                    tx.oncomplete = () => { db.close(); resolve(); };
+                    tx.onerror = () => { db.close(); reject(tx.error); };
+                };
+            });
+        }"""
     )
 
 
@@ -177,7 +215,13 @@ class TestSyncOrchestrator:
         page_b.set_default_timeout(30000)
         try:
             _boot_with_key(page_a, base_url)
-            _seed_queue_record(page_a, url, "idem-badge-crosstab")
+            # Refs #1484 (Startup-Drain): ein Tab-Load MIT Netz draint
+            # pendente Arbeit inzwischen sofort selbst. Der Seed liegt darum
+            # zunaechst im Backoff (retryAfter in der Zukunft): Tab B's
+            # Startup-Drain ueberspringt ihn (kein eigener Replay — der Test
+            # isoliert bewusst den Cross-Tab-Broadcast), der Badge zaehlt ihn
+            # trotzdem.
+            _seed_queue_record(page_a, url, "idem-badge-crosstab", retry_after_ms=120_000)
             # Tab B laedt ERST NACH dem Seed -> der Initial-Update
             # (_updateQueueCount beim Laden) zeigt den Sync-Banner sofort mit
             # 1 ausstehendem Eintrag.
@@ -188,7 +232,9 @@ class TestSyncOrchestrator:
             # NUR Tab A synchronisiert — Tab B bekommt bewusst NIE ein eigenes
             # 'online'-Event, sonst wuerde dessen EIGENER Replay-Lauf (nicht
             # der Cross-Tab-Listener) den Badge aktualisieren und den Test
-            # gegen den eigentlichen Bug blind machen.
+            # gegen den eigentlichen Bug blind machen. Vorher den Backoff
+            # aufheben, damit Tab A's Lauf die Row tatsaechlich replayt.
+            _clear_queue_backoff(page_a)
             page_a.evaluate("() => window.dispatchEvent(new Event('online'))")
             page_a.wait_for_function("async () => (await window.offlineStore.count('queue')) === 0", timeout=15000)
             assert posts["n"] == 1
