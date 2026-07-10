@@ -4,7 +4,7 @@
 
 **Dokumentation, Statistik und Teamkommunikation für die niedrigschwellige Soziale Arbeit — überall, wo Menschen ohne Termin und ohne Klarnamen kommen. Open Source, pseudonymisiert, kostenlos — für einen datenschutzkonformen Betrieb konzipiert.**
 
-> ⚠️ **Pre-Release (v0.16.0)** — Anlaufstelle ist funktionsfähig, aber noch nicht für den Produktiveinsatz freigegeben. Qualitätssicherung und Stabilisierung laufen. Wir suchen Piloteinrichtungen, die das System gemeinsam mit uns testen und weiterentwickeln möchten — [Kontakt aufnehmen](mailto:kontakt@anlaufstelle.app).
+> ⚠️ **Pre-Release (v0.20.0)** — Anlaufstelle ist funktionsfähig, aber noch nicht für den Produktiveinsatz freigegeben. Qualitätssicherung und Stabilisierung laufen. Wir suchen Piloteinrichtungen, die das System gemeinsam mit uns testen und weiterentwickeln möchten — [Kontakt aufnehmen](mailto:kontakt@anlaufstelle.app).
 
 ---
 

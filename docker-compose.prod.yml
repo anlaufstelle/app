@@ -60,7 +60,7 @@ services:
     # Image-Tag via APP_VERSION parametrisieren (Refs #800), Fallback auf
     # den zuletzt gepinnten Release-Tag — Operator-Setups ohne explizite
     # .env bleiben reproduzierbar.
-    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.16.0}
+    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.20.0}
     # Container-Runtime-Hardening (Refs #1374): kein Privilege-Escalation,
     # cap_drop ALL (web laeuft als non-root appuser auf :8000, braucht keine
     # Caps). read_only-Root-FS mit definiertem Schreib-Scratch: /tmp

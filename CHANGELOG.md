@@ -4,7 +4,9 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.20.0] - 2026-07-10
+
+Sammel-Release (Pre-Release) — die Versionen 0.17–0.19 wurden übersprungen, dieser Schnitt bündelt sie: kompletter Offline-Feldtauglichkeits-Block (Offline-Erfassung und -Bearbeitung inklusive Aufgaben und auflösbaren Status-Konflikten, Dead-Letter-Verwaltung, Android-Feldtest-Fixes), die Ergebnisse zweier Sicherheitsreview-Wellen (u. a. Audit-Kette mit automatisierter Tamper-Evidenz-Prüfung, IP-gebundener Login-Lockout, k-Anonymitäts-Härtung, Django 6.0.7), Tailwind CSS 4 und Python 3.14 als Produktions-Basis. Keine Datenmodell-Brüche; Vorwärts-Migration ohne Datenverlust. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
 
 ### Added
 
