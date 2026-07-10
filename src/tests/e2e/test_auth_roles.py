@@ -153,8 +153,12 @@ def _seed_failed_logins_and_check_lock(username, e2e_env, n=10):
                 f"u = User.objects.get(username='{username}'); "
                 f"[AuditLog.objects.create(facility=u.facility, user=u, "
                 f"action=AuditLog.Action.LOGIN_FAILED, "
+                # ip_address muss der Quell-IP des späteren UI-Logins
+                # entsprechen: seit #1446 zählt die Login-View Fehlversuche
+                # nur je (User, Quell-IP) — IP-lose Seeds sperren nicht mehr.
+                f"ip_address='127.0.0.1', "
                 f"detail={{'username': u.username}}) for _ in range({n})]; "
-                "print('LOCKED=' + str(is_locked(u)))"
+                "print('LOCKED=' + str(is_locked(u, ip_address='127.0.0.1')))"
             ),
         ],
         env=e2e_env,
@@ -248,14 +252,16 @@ class TestZZAccountLockout:
             page.fill('input[name="username"]', "miriam")
             page.fill('input[name="password"]', "anlaufstelle2026")
             page.click('button[type="submit"]')
-            page.wait_for_load_state("domcontentloaded")
 
-            # Weiterhin auf /login/ — kein Redirect auf /
-            assert page.url.endswith("/login/"), f"Unerwartete Weiterleitung: {page.url}"
-            # Sichtbare Sperr-Meldung — Timeout grosszuegig, um unter Parallel-Last
-            # nicht falsch-rot zu werden (Refs #761).
+            # Erst auf die Sperr-Meldung warten, DANN die URL prüfen:
+            # ein URL-Assert direkt nach domcontentloaded gewinnt sonst das
+            # Rennen gegen den Erfolgs-Redirect und kaschiert einen
+            # fälschlich durchgelassenen Login. Timeout grosszuegig, um
+            # unter Parallel-Last nicht falsch-rot zu werden (Refs #761).
             locked_msg = page.locator("text=gesperrt")
             locked_msg.wait_for(state="visible", timeout=10000)
+            # Weiterhin auf /login/ — kein Redirect auf /
+            assert page.url.endswith("/login/"), f"Unerwartete Weiterleitung: {page.url}"
             assert locked_msg.is_visible(), f"Seiten-HTML ohne Lockout-Text:\n{page.content()[:2000]}"
         finally:
             context.close()
