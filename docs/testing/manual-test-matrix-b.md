@@ -1153,9 +1153,9 @@
 5. `/offline/` direkt aufrufen.
 
 **Erwartetes Ergebnis:**
-- Schritt 2: SW-Fetch-Listener probiert Netz (fail) → versucht Cache-Match (Miss) → liefert `OFFLINE_FALLBACK_URL` (`/offline/`) als Fallback. Response: HTTP 200 mit Inline-CSS-Offline-Page.
-- Schritt 3: Cache-Match-Hit für `/clients/` → bekannte Seite (möglicherweise stale, aber sichtbar).
-- Schritt 4: SW erkennt via `URL_PATTERNS.extractClientPk` einen Klienten-Pfad und redirected (`Response.redirect("/offline/clients/<pk>/", 302)`) zur dedizierten Offline-Klienten-Ansicht (rendert aus IndexedDB).
+- Schritt 2: SW-Fetch-Listener probiert Netz (fail) → versucht Cache-Match (Miss) → liefert `OFFLINE_FALLBACK_URL` (`/offline/`) **in-place** als Fallback (URL bleibt kanonisch). Response: HTTP 200 mit Inline-CSS-Offline-Page.
+- Schritt 3: Navigations-HTML wird **nie** zur Laufzeit gecacht (nur der Install-Precache + `/static/`-SWR) → `/clients/` landet wie Schritt 2 in-place auf dem Offline-Arbeitsplatz, der die mitgenommenen Personen listet — nicht auf einer (stalen) Klientenliste.
+- Schritt 4: SW erkennt via `URL_PATTERNS.extractClientPk` einen Klienten-Pfad und liefert seit [#1322] den pk-losen Client-Shell (`/offline/client-shell/`) **in-place** an der kanonischen URL aus (kein Redirect mehr; `offline-client-view.js` liest die pk aus `location.pathname` und rendert aus IndexedDB).
 - Schritt 5: HTTP 200, Content-Type `text/html; charset=utf-8`, Body aus `render_to_string("offline.html")`.
 
 **DSGVO/Security-Note:**

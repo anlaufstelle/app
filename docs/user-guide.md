@@ -600,6 +600,8 @@ Für Einsätze ohne verlässliche Internetverbindung — etwa bei aufsuchender A
 
 - Öffnen Sie eine mitgenommene Person wie gewohnt über ihre Detailseite — die Ansicht bleibt an der **normalen Adresse** und wird aus dem verschlüsselten Offline-Speicher aufgebaut (kein separater „Offline"-Link mehr).
 - Sie können **neue Ereignisse erfassen** (über **„Neuer Kontakt"**) und **bestehende bearbeiten**; die Einträge werden verschlüsselt lokal gespeichert (AES-GCM-256; der Schlüssel wird aus Ihrem Passwort abgeleitet) und bei Verbindung automatisch gesendet. **Datei-Anhänge** können offline nicht erfasst werden — reichen Sie sie nach, sobald Sie online sind.
+- Die Offline-Erfassung (Kontakte **und Aufgaben**) findet **im Dossier der jeweiligen Person** statt — also bei einer Person, die Sie vorher „Offline mitgenommen" haben. Öffnen Sie die allgemeinen Formulare („Neuer Kontakt"/„Neue Aufgabe" aus der Navigation) ohne Netz, landen Sie auf dem Offline-Arbeitsplatz mit einem entsprechenden Wegweiser (#1483).
+- **Kontakte ohne Personenbezug** (anonyme Kontakte) lassen sich offline **nicht neu beginnen**. Ausnahme: War das Kontakt-Formular beim Verbindungsabriss bereits geöffnet, wird der abgeschickte Eintrag verschlüsselt zwischengespeichert und automatisch nachgesendet. Ein eigener Offline-Einstieg dafür ist eine offene Produktentscheidung (#1485).
 - In der Oberfläche sehen Sie einen Hinweis, dass Sie offline arbeiten und wie viele Einträge noch auf die Synchronisation warten.
 
 **Zurück im Netz:**

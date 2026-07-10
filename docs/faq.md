@@ -291,7 +291,7 @@ Ja — seit v0.10 gibt es einen sicheren **Offline-Modus** für Streetwork und m
 
 **Wichtig — Daten können verloren gehen:** Bei **Logout, Passwort-Änderung oder längerer Inaktivität (Session-Ablauf)** werden die lokal gespeicherten Offline-Daten unlesbar. Das bloße **Schließen des Tabs** löscht dagegen nichts — der Schlüssel wird beim erneuten Öffnen innerhalb der Session-Lebenszeit wiederhergestellt (Streetwork-Design, #1065/#1324). Daher gilt: **Erst synchronisieren, dann ausloggen!**
 
-**Einschränkung:** Datei-Anhänge (siehe FAQ #9) sind offline nicht möglich — das ist eine bewusste Sicherheitsentscheidung.
+**Einschränkungen:** Datei-Anhänge (siehe FAQ #9) sind offline nicht möglich — das ist eine bewusste Sicherheitsentscheidung. Kontakte **ohne Personenbezug** (anonyme Kontakte) lassen sich offline **nicht neu beginnen** — nur wenn das Kontakt-Formular beim Verbindungsabriss bereits geöffnet war, wird die Eingabe verschlüsselt zwischengespeichert und automatisch nachgesendet (ein eigener Offline-Einstieg dafür ist offen: #1485); die Offline-Erfassung von Kontakten und Aufgaben findet ansonsten im Dossier der jeweils „mitgenommenen" Person statt.
 
 ---
 
