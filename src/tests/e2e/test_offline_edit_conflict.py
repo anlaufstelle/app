@@ -207,13 +207,19 @@ class TestOfflineCreate:
             _do_real_login(page, base_url)
             assert _cache_bundle(page, client_pk)["ok"]
 
+            # Auswahl per Name, nicht per Index: die Bundle-Query sortiert
+            # documentTypes nicht, und frühere Suite-Tests (z. B.
+            # test_attachment_versioning_stage_b) legen weitere Typen in der
+            # geteilten Facility an — [0] wäre dann ein Typ ohne notiz-Feld.
             doc_type_pk = page.evaluate(
                 """async (pk) => {
                     const c = await window.offlineStore.getOfflineClient(pk);
-                    return c.documentTypes[0].pk;
+                    const dt = c.documentTypes.find((d) => d.name === 'Kontakt');
+                    return dt ? dt.pk : null;
                 }""",
                 client_pk,
             )
+            assert doc_type_pk, "Dokumenttyp 'Kontakt' fehlt im Offline-Bundle"
 
             # Offline neu erfassen + (online) direkt replizieren.
             result = page.evaluate(
