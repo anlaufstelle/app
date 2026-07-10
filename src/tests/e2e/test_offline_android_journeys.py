@@ -454,6 +454,36 @@ class TestMidSessionCaptureRoundtrip:
             context.close()
 
 
+class TestOfflineBannerLayout:
+    """Refs #1495: Die Statusbanner (Offline/Sync/Konflikt) duerfen den
+    Seiteninhalt nicht ueberdecken — der Wrapper nimmt als sticky-Element
+    Platz im Dokumentfluss ein, statt als fixed-Overlay ueber der
+    Seitenueberschrift zu liegen (Feldtest mobil: H1 halb unter dem Balken)."""
+
+    def test_offline_banner_pushes_content_instead_of_overlapping(self, browser, base_url):
+        context = _android_context(browser)
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _do_real_login(page, base_url)
+            page.goto(f"{base_url}/", wait_until="domcontentloaded")
+            page.evaluate("window.dispatchEvent(new Event('offline'))")
+            page.locator("[data-testid='offline-banner']").wait_for(state="visible", timeout=5000)
+            boxes = page.evaluate(
+                """() => {
+                    const banner = document.querySelector('[data-testid="offline-banner"]').getBoundingClientRect();
+                    const h1 = document.querySelector('h1').getBoundingClientRect();
+                    return {bannerBottom: banner.bottom, h1Top: h1.top};
+                }"""
+            )
+            assert boxes["bannerBottom"] <= boxes["h1Top"] + 0.5, (
+                "Offline-Banner ueberdeckt die Seitenueberschrift: "
+                f"banner.bottom={boxes['bannerBottom']} > h1.top={boxes['h1Top']}"
+            )
+        finally:
+            context.close()
+
+
 class TestAndroidDossierJourney:
     """Die 1:1-Android-Journey des Feldtests: mitnehmen → offline → Dossier →
     Aufgabe anlegen → Reconnect → serverseitig vorhanden."""

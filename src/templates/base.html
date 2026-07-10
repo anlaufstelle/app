@@ -41,7 +41,11 @@
         {% trans "Zum Inhalt springen" %}
     </a>
 
-    {# Offline-Banner und Sync-Indikator #}
+    {# Offline-Banner und Sync-Indikator. Refs #1495: Der WRAPPER ist sticky #}
+    {# (nimmt Platz im Dokumentfluss ein und schiebt den Inhalt darunter weg, #}
+    {# bleibt beim Scrollen oben) statt der Kinder als fixed-Overlays — die #}
+    {# ueberdeckten auf mobile die Seitenueberschrift und einander, wenn #}
+    {# mehrere Banner gleichzeitig sichtbar waren (alle top-0). #}
     <div x-data="offlineStatus"
          @online.window="onOnline"
          @offline.window="onOffline"
@@ -49,9 +53,9 @@
          @offline-clients-count.window="onClientsEvent"
          @offline-unsynced-count.window="onUnsyncedEvent"
          @offline-conflict-count.window="onConflictEvent"
-         id="offline-status">
+         id="offline-status" class="sticky top-0 z-50">
         <div x-show="offline" x-cloak
-             class="fixed top-0 inset-x-0 z-50 bg-yellow-500 text-white text-center text-sm py-2"
+             class="bg-yellow-500 text-white text-center text-sm py-2"
              data-testid="offline-banner">
             {% trans "Offline — Daten werden bei Verbindung gespeichert" %}
             {# Refs #1321: verlinkt den Offline-Arbeitsplatz (/offline/) — lokal verfuegbare Personen offline erreichbar. #}
@@ -63,12 +67,12 @@
             </span>
         </div>
         <div x-show="showSyncBanner" x-cloak
-             class="fixed top-0 inset-x-0 z-50 bg-blue-500 text-white text-center text-sm py-2"
+             class="bg-blue-500 text-white text-center text-sm py-2"
              data-testid="sync-banner">
             <span x-text="queueCount"></span><span x-show="isSingleQueued" x-cloak> {% trans "Änderung wird synchronisiert..." %}</span><span x-show="hasMultipleQueued" x-cloak> {% trans "Änderungen werden synchronisiert..." %}</span>
         </div>
         <div x-show="showConflictBanner" x-cloak
-             class="fixed top-0 inset-x-0 z-50 bg-red-500 text-white text-center text-sm py-2"
+             class="bg-red-500 text-white text-center text-sm py-2"
              data-testid="conflict-banner">
             <a href="{% url 'core:offline_conflict_list' %}" class="underline">
                 <span x-text="combinedConflictCount"></span><span x-show="isSingleConflict" x-cloak> {% trans "Konflikt — bitte auflösen" %}</span><span x-show="hasMultipleConflict" x-cloak> {% trans "Konflikte — bitte auflösen" %}</span>
