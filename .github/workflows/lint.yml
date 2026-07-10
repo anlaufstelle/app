@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
       # Refs #819: Ruff-Version aus dem Lockfile ziehen, damit lokale
       # ``make lint`` und CI dieselbe Version nutzen.
@@ -33,7 +33,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
       - run: pip install -r requirements.txt
       - run: pip install pip-licenses
@@ -52,7 +52,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
       - run: python scripts/check_translation_versions.py
 
   translations-coverage:
@@ -63,7 +63,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
       - run: sudo apt-get update && sudo apt-get install -y gettext
       - run: python scripts/check_translations.py
 
@@ -76,7 +76,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
       - run: pip install -r requirements.txt
       - run: pip install "mypy>=1.20" "django-stubs[compatible-mypy]>=6.0"

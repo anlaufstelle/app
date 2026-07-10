@@ -31,9 +31,18 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e  # v6.4.0
+        with:
+          node-version: "24"
+          cache: npm
       - run: pip install -r requirements-dev.txt
+      # ``styles.css`` ist ein gitignoriertes Tailwind-Build-Artefakt (v4, #1480):
+      # der Prod-Dockerfile baut es, die PWA-/APP_SHELL-Guards und der
+      # collectstatic-Test brauchen es ebenfalls. Schritt analog zu e2e.yml.
+      - run: npm ci
+      - run: npx @tailwindcss/cli -i src/static/css/input.css -o src/static/css/styles.css --minify
       # Refs #922 / #923: Drift-Check vor den Tests. Faillt, wenn die
       # Manual-Test-Matrix Test-Files referenziert, die nicht existieren.
       - name: Verify manual-test-matrix drift
@@ -76,7 +85,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
       - run: pip install -r requirements.txt
       - run: cd src && python manage.py check --settings=anlaufstelle.settings.dev
@@ -99,7 +108,7 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
       - run: pip install pip-audit
       - run: pip-audit -r requirements.txt
@@ -120,13 +129,17 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
-          python-version: "3.13"
+          python-version: "3.14"
           cache: pip
       - run: pip install pip-tools
+      # Flags müssen exakt dem Makefile-Target `deps-lock` entsprechen (SSOT),
+      # insb. --generate-hashes (Artefakt-Integrität, #1373) und --allow-unsafe
+      # für die dev-Datei (pinnt pip/setuptools/wheel) — sonst meldet der Check
+      # Phantom-Drift gegen die gehashten Lock-Files.
       - name: Verify requirements.txt is up to date
         run: |
           cp requirements.txt requirements.txt.bak
-          pip-compile --quiet --no-strip-extras --resolver=backtracking \
+          pip-compile --generate-hashes --quiet --no-strip-extras --resolver=backtracking \
             --output-file=requirements.txt requirements.in
           if ! diff -u requirements.txt.bak requirements.txt; then
             echo "::error::requirements.txt ist nicht aktuell — 'make deps-lock' ausführen."
@@ -135,7 +148,7 @@ jobs:
       - name: Verify requirements-dev.txt is up to date
         run: |
           cp requirements-dev.txt requirements-dev.txt.bak
-          pip-compile --quiet --no-strip-extras --resolver=backtracking \
+          pip-compile --generate-hashes --allow-unsafe --quiet --no-strip-extras --resolver=backtracking \
             --output-file=requirements-dev.txt requirements-dev.in
           if ! diff -u requirements-dev.txt.bak requirements-dev.txt; then
             echo "::error::requirements-dev.txt ist nicht aktuell — 'make deps-lock' ausführen."
