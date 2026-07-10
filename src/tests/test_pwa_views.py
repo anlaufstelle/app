@@ -634,6 +634,15 @@ class TestOfflineFallbackI18n:
         # Kein EN-Leak.
         assert "Offline workspace" not in body
 
+    def test_create_hint_localized_en(self, client, staff_user):
+        """Refs #1483: Der Create-Wegweiser (samt Anonym-Satz, #1485) ist
+        uebersetzt — EN-Nutzer:innen bekommen keine deutschen Saetze."""
+        _login_with_language(client, staff_user, "en")
+        body = client.get(reverse("offline_fallback")).content.decode()
+        assert "pick a person below" in body
+        assert "cannot be started offline" in body
+        assert "Diese Aktion ist offline nicht direkt" not in body
+
     def test_anonymous_renders_german_default(self, client):
         """Anonyme Requests → App-Default (DE), Accept-Language ignoriert."""
         body = client.get(reverse("offline_fallback")).content.decode()

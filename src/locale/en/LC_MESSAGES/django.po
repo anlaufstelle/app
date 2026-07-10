@@ -6317,3 +6317,11 @@ msgstr "persistent storage: not granted"
 #. Refs #1412 (M17b): Quota-/Persist-Status-Anzeige im Offline-Arbeitsplatz
 msgid "dauerhafter Speicher: nicht unterstützt"
 msgstr "persistent storage: not supported"
+
+#: templates/offline.html (Refs #1483)
+msgid "Diese Aktion ist offline nicht direkt verfügbar: Neue Kontakte und Aufgaben legen Sie offline im Dossier einer zuvor „Offline mitgenommenen“ Person an — unten eine Person auswählen."
+msgstr "This action isn’t directly available offline: create new contacts and tasks offline in the dossier of a person you previously took offline — pick a person below."
+
+#: templates/offline.html (Refs #1483/#1485)
+msgid "Kontakte ohne Personenbezug lassen sich offline nicht neu beginnen."
+msgstr "Contacts without a person reference cannot be started offline."
