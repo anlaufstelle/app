@@ -409,6 +409,22 @@ class TestServiceWorkerRobustness:
         assert 'event.data?.type === "SKIP_WAITING"' in message_src
         assert "self.skipWaiting();" in message_src
 
+    def test_synthetic_responses_declare_utf8_charset(self, client):
+        """Refs #1490: Die synthetischen SW-Antworten (Upload-503,
+        Queue-Persist-Fehler, queuedOk, Partial-Banner) sind Navigations-
+        bzw. Swap-Antworten — ohne ``charset=utf-8`` parst der Browser sie
+        nicht als UTF-8 und die deutschen Umlaute erscheinen als Mojibake
+        („verschlÃ¼sselt"). fetch().text() dekodiert dagegen immer UTF-8,
+        weshalb der Bruch nur im echten DOM sichtbar war.
+        """
+        body = client.get(reverse("service_worker")).content.decode()
+        assert '"Content-Type": "text/html"' not in body, (
+            "SW-Response ohne charset gefunden — text/html; charset=utf-8 verwenden (Mojibake, #1490)."
+        )
+        assert body.count('"Content-Type": "text/html; charset=utf-8"') >= 4, (
+            "Erwarte mindestens die vier synthetischen SW-Antworten mit charset=utf-8."
+        )
+
     def test_dead_sync_code_removed(self, client):
         """Dieser Test ist gegen den heutigen Code ROT: toter sync-Handler +
         notifyClients + REPLAY_QUEUE-Pfad sind noch vorhanden. Replay-

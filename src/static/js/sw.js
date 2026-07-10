@@ -265,7 +265,7 @@ self.addEventListener("fetch", (event) => {
                                 status: 503,
                                 statusText: "Offline-Upload not supported",
                                 headers: {
-                                    "Content-Type": "text/html",
+                                    "Content-Type": "text/html; charset=utf-8",
                                     "HX-Retarget": "#flash-messages",
                                     "HX-Reswap": "outerHTML",
                                 },
@@ -339,7 +339,7 @@ self.addEventListener("fetch", (event) => {
                             status: 503,
                             statusText: "Offline-Queue persistence failed",
                             headers: {
-                                "Content-Type": "text/html",
+                                "Content-Type": "text/html; charset=utf-8",
                                 "HX-Retarget": "#flash-messages",
                                 "HX-Reswap": "outerHTML",
                             },
@@ -356,7 +356,7 @@ self.addEventListener("fetch", (event) => {
                     {
                         status: 200,
                         headers: {
-                            "Content-Type": "text/html",
+                            "Content-Type": "text/html; charset=utf-8",
                             "HX-Retarget": "#flash-messages",
                             "HX-Reswap": "outerHTML",
                         },
@@ -452,7 +452,7 @@ self.addEventListener("fetch", (event) => {
                             "</div>",
                         {
                             status: 200,
-                            headers: { "Content-Type": "text/html" },
+                            headers: { "Content-Type": "text/html; charset=utf-8" },
                         }
                     );
                 }
