@@ -150,9 +150,17 @@ class TestZZPasswordChangeUnsyncedGuard:
         """7b: ungesyncte Einträge → confirm mit Bestätigen lässt den
         Passwortwechsel durchgehen."""
         orig_hash = _password_hash("emma", e2e_env)
+        # Vorher-Session als ruhenden Cookie-Snapshot einfrieren (wie die
+        # conftest-Storage-States). Der Kontext wird SOFORT geschlossen:
+        # eine offen gehaltene Seite feuert Hintergrund-Requests (Sync-
+        # Orchestrator/Polling), und ein Request im Fenster zwischen
+        # Passwortwechsel und Hash-Restore flusht die Session serverseitig
+        # endgültig (django.contrib.auth.get_user bei Hash-Mismatch).
         pre_context = browser.new_context(locale="de-DE")
         pre_page = pre_context.new_page()
         _login(pre_page, base_url, "emma")
+        pre_state = pre_context.storage_state()
+        pre_context.close()
 
         context = browser.new_context(locale="de-DE")
         page = context.new_page()
@@ -173,16 +181,20 @@ class TestZZPasswordChangeUnsyncedGuard:
             context.close()
             _restore_password_hash("emma", orig_hash, e2e_env)
 
-        _assert_session_still_valid(pre_page, base_url, "emma")
-        pre_context.close()
+        check_context = browser.new_context(storage_state=pre_state, locale="de-DE")
+        _assert_session_still_valid(check_context.new_page(), base_url, "emma")
+        check_context.close()
 
     def test_no_unsynced_entries_skips_confirm_and_changes_password(self, browser, base_url, e2e_env):
         """7c: ohne ungesyncte Daten erscheint kein confirm-Dialog, der
         Wechsel geht normal durch."""
         orig_hash = _password_hash("miriam", e2e_env)
+        # Ruhender Vorher-Session-Snapshot, s. 7b.
         pre_context = browser.new_context(locale="de-DE")
         pre_page = pre_context.new_page()
         _login(pre_page, base_url, "miriam")
+        pre_state = pre_context.storage_state()
+        pre_context.close()
 
         context = browser.new_context(locale="de-DE")
         page = context.new_page()
@@ -200,5 +212,6 @@ class TestZZPasswordChangeUnsyncedGuard:
             context.close()
             _restore_password_hash("miriam", orig_hash, e2e_env)
 
-        _assert_session_still_valid(pre_page, base_url, "miriam")
-        pre_context.close()
+        check_context = browser.new_context(storage_state=pre_state, locale="de-DE")
+        _assert_session_still_valid(check_context.new_page(), base_url, "miriam")
+        check_context.close()
