@@ -29,7 +29,8 @@ Welcome! This guide explains how to set up the development environment, how the 
 3. [Coding Conventions](#coding-conventions)
 4. [Tests](#tests)
 5. [Pull Request Process](#pull-request-process)
-6. [Architecture Overview](#architecture-overview)
+6. [Licensing of Contributions](#licensing-of-contributions)
+7. [Architecture Overview](#architecture-overview)
 
 ---
 
@@ -521,7 +522,62 @@ All contributors are bound by the [Contributor Covenant 2.1](CODE_OF_CONDUCT.md)
 
 5. **Review:** At least one approval required. Feedback should be objective and constructive.
 
-6. **Merge:** Squash-merge to `main` once CI is green and approval is given.
+6. **Merge:** Squash-merge to `main` once CI is green and approval is given. External pull requests are not merged directly but taken over via the release mirror (see below).
+
+### How your PR gets merged (release mirror)
+
+The `main` branch of this repository is a **release mirror**: it is rebuilt from the
+internal development branch on every release (with purely internal development tooling
+removed). External pull requests are therefore not merged directly into `main`. Instead:
+
+1. Review happens right here on the PR.
+2. Once approved, we take your commits over into the development branch — your Git author
+ field (and with it your authorship) is preserved.
+3. Your change appears on `main` with the next release; your PR is then closed with a
+ reference to that release and credited in the CHANGELOG.
+
+A PR showing as "closed" rather than "merged" is not a rejection — it is how the release
+mirror works.
+
+---
+
+## Licensing of Contributions
+
+### Inbound = outbound (AGPL-3.0)
+
+This project is licensed under the [GNU AGPL v3](LICENSE). By submitting a contribution
+(pull request, patch, documentation change) you license your contribution under the same
+license ("inbound = outbound", see also [GitHub Terms of Service, section D.6](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service#6-contributions-under-repository-license)).
+You keep your copyright — there is no transfer of rights, and we do not require a
+Contributor License Agreement (CLA).
+
+### Developer Certificate of Origin (DCO)
+
+With every commit you certify the [Developer Certificate of Origin 1.1](https://developercertificate.org/):
+that you have the right to submit the contribution under the project license — because you
+wrote it yourself or took it from compatibly licensed sources with license notices intact.
+
+To do so, sign off every commit with your name and a valid email address:
+
+ git commit -s
+
+This appends a line `Signed-off-by: First Last <email@example.org>` to the commit message.
+We cannot accept pull requests without a sign-off; a forgotten sign-off can be added with
+`git commit --amend -s` or `git rebase --signoff`.
+
+**Third-party material:** Do not include code or text from sources whose license is not
+AGPL-compatible. Mark any adopted material (source + license) in the commit or PR.
+
+**AI assistance:** Contributions may be created with AI tools (this project uses them
+itself). You vouch for the rights to the result via your sign-off, as with any other
+contribution — review AI output accordingly.
+
+### Attribution
+
+Your authorship is preserved: when your commits are taken over into the internal
+development branch, your Git author field (or a `Co-authored-by:` trailer) is kept. The
+public `main` branch is a release mirror (see above, "How your PR gets merged"); there,
+external contributions are credited by name in the release's [CHANGELOG](CHANGELOG.md).
 
 ---
 
@@ -600,4 +656,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.20.0 -->
 <!-- translation-date: 2026-06-12 -->
-<!-- source-hash: a70f21b -->
+<!-- source-hash: 087ab09 -->

@@ -29,7 +29,8 @@ Willkommen! Diese Anleitung erklärt, wie du die Entwicklungsumgebung einrichtes
 3. [Coding Conventions](#coding-conventions)
 4. [Tests](#tests)
 5. [Pull-Request-Prozess](#pull-request-prozess)
-6. [Architektur-Überblick](#architektur-überblick)
+6. [Lizenz von Beiträgen](#lizenz-von-beiträgen)
+7. [Architektur-Überblick](#architektur-überblick)
 
 ---
 
@@ -547,7 +548,64 @@ Alle Mitwirkenden verpflichten sich auf den [Contributor Covenant 2.1](CODE_OF_C
 
 5. **Review:** Mindestens ein Approval erforderlich. Feedback sachlich und konstruktiv.
 
-6. **Mergen:** Squash-Merge auf `main`, sobald CI grün und Approval vorhanden.
+6. **Mergen:** Squash-Merge auf `main`, sobald CI grün und Approval vorhanden. Externe Pull Requests werden nicht direkt gemergt, sondern über den Release-Spiegel übernommen (siehe unten).
+
+### Wie dein PR gemergt wird (Release-Spiegel)
+
+Der `main`-Branch dieses Repositories ist ein **Release-Spiegel**: Er wird bei jedem Release
+aus dem internen Entwicklungszweig aufgebaut (dabei werden rein interne
+Entwicklungswerkzeuge entfernt). Externe Pull Requests werden deshalb nicht direkt auf
+`main` gemergt, sondern:
+
+1. Das Review findet ganz normal hier am PR statt.
+2. Nach Freigabe übernehmen wir deine Commits in den Entwicklungszweig — dein
+ Git-Author-Feld (und damit deine Urheberschaft) bleibt erhalten.
+3. Mit dem nächsten Release erscheint deine Änderung auf `main`; dein PR wird dann mit
+ Verweis auf das Release geschlossen und im CHANGELOG genannt.
+
+Dass ein PR „geschlossen" statt „gemergt" angezeigt wird, ist also keine Ablehnung — es ist
+die Mechanik des Release-Spiegels.
+
+---
+
+## Lizenz von Beiträgen
+
+### Inbound = Outbound (AGPL-3.0)
+
+Dieses Projekt ist unter der [GNU AGPL v3](LICENSE) lizenziert. Mit dem Einreichen eines
+Beitrags (Pull Request, Patch, Doku-Änderung) lizenzierst du deinen Beitrag unter derselben
+Lizenz („inbound = outbound", vgl. auch [GitHub Terms of Service, D.6](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service#6-contributions-under-repository-license)).
+Du behältst dein Urheberrecht — es findet keine Rechteübertragung statt, und wir verlangen
+kein Contributor License Agreement (CLA).
+
+### Developer Certificate of Origin (DCO)
+
+Mit jedem Commit bestätigst du das [Developer Certificate of Origin 1.1](https://developercertificate.org/):
+dass du das Recht hast, den Beitrag unter der Projektlizenz einzureichen — weil er von dir
+stammt oder aus kompatibel lizenzierten Quellen mit intakten Lizenzhinweisen übernommen wurde.
+
+Dazu signierst du jeden Commit mit deinem Namen und einer gültigen E-Mail-Adresse:
+
+ git commit -s
+
+Das fügt eine Zeile `Signed-off-by: Vorname Nachname <email@example.org>` an die
+Commit-Message an. Pull Requests ohne Sign-off können wir nicht übernehmen; ein vergessenes
+Sign-off lässt sich mit `git commit --amend -s` bzw. `git rebase --signoff` nachholen.
+
+**Fremdmaterial:** Übernimm keinen Code und keine Texte aus Quellen, deren Lizenz nicht
+AGPL-kompatibel ist. Kennzeichne Übernahmen (Quelle + Lizenz) im Commit oder PR.
+
+**KI-Unterstützung:** Beiträge dürfen mit KI-Werkzeugen erstellt sein (dieses Projekt nutzt
+sie selbst). Für die Rechte am Ergebnis bürgst du per Sign-off wie für jeden anderen
+Beitrag — prüfe KI-Output entsprechend sorgfältig.
+
+### Namensnennung
+
+Deine Urheberschaft bleibt erhalten: Beim Übernehmen deiner Commits in den internen
+Entwicklungszweig bleibt dein Git-Author-Feld (bzw. ein `Co-authored-by:`-Trailer) bestehen.
+Der öffentliche `main`-Branch ist ein Release-Spiegel (s. o., „Wie dein PR gemergt wird");
+dort werden externe Beiträge im [CHANGELOG](CHANGELOG.md) des jeweiligen Releases namentlich
+genannt.
 
 ---
 
