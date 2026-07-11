@@ -40,7 +40,9 @@
     "use strict";
 
     const DB_NAME = "anlaufstelle-offline";
-    const TABLES = ["queue", "drafts", "meta", "clients", "cases", "events"];
+    // SI-2 (#1520/#1499): `facility` ist Teil von TABLES, damit purgeAll
+    // (Logout/Passwortwechsel) das personenlose Meta-Bundle mitloescht.
+    const TABLES = ["queue", "drafts", "meta", "clients", "cases", "events", "facility"];
     const TTL_MS = 48 * 60 * 60 * 1000; // 48h
     const MAX_OFFLINE_CLIENTS = 20;
     // F-05 (#1425, ADR-022): muss mit BUNDLE_SCHEMA_VERSION in
@@ -48,6 +50,16 @@
     // Build-Sync, analog TTL_MS/BUNDLE_TTL_SECONDS oben) -- ein Mismatch
     // zwingt den Lesepfad zum Purge, siehe _isSchemaMismatch.
     const BUNDLE_SCHEMA_VERSION = 1;
+    // SI-2 (#1520/#1499): eigene Schema-Version fuers personenlose
+    // Facility-Meta-Bundle -- UNABHAENGIG von BUNDLE_SCHEMA_VERSION (Klient),
+    // damit beide Bundles getrennt evolvieren koennen. Muss mit
+    // FACILITY_BUNDLE_SCHEMA_VERSION in core/services/system/offline.py
+    // synchron bleiben (kein Build-Sync, wie BUNDLE_SCHEMA_VERSION). Ein
+    // Mismatch zwingt den Lesepfad zum Purge, siehe _isFacilitySchemaMismatch.
+    const FACILITY_BUNDLE_SCHEMA_VERSION = 1;
+    // SI-2 (#1520/#1499): das Facility-Bundle ist ein Singleton (genau eine
+    // Facility pro Session) -> fixer Primaerkey, kein pk-Fan-out.
+    const FACILITY_ROW_KEY = "self";
 
     if (typeof Dexie === "undefined") {
         // eslint-disable-next-line no-console
@@ -79,6 +91,20 @@
         clients: "pk, lastSynced",
         cases: "pk, clientPk, lastSynced",
         events: "pk, clientPk, occurredAt, localStatus",
+    });
+    // SI-2 (#1520/#1499): additiver Upgrade — neue `facility`-Tabelle fuers
+    // personenlose Offline-Create-Meta-Bundle (Singleton, Primaerkey "key",
+    // fixer Wert "self"). Dexie verlangt die vollstaendige Wiederholung ALLER
+    // Tabellen der Vorversion — v3-Tabellen unveraendert uebernommen, niemand
+    // wird beim Upgrade umgeschrieben oder verworfen.
+    db.version(4).stores({
+        queue: "++id, url, createdAt, retryAfter, localStatus",
+        drafts: "formKey, updatedAt",
+        meta: "key",
+        clients: "pk, lastSynced",
+        cases: "pk, clientPk, lastSynced",
+        events: "pk, clientPk, occurredAt, localStatus",
+        facility: "key",
     });
 
     function _crypto() {
@@ -669,6 +695,12 @@
             out.push({
                 pk: row.pk,
                 pseudonym: client.pseudonym || "",
+                // SI-2 (#1520/#1499): Kontaktstufe fuer den Person-Picker-
+                // Vorfilter der Offline-Create-Shell durchreichen (Server
+                // liefert `contact_stage` bereits im Klient-Bundle) — DocTypes
+                // mit `min_contact_stage` sind bei "ohne Person"/anonym nicht
+                // waehlbar (SI-4).
+                contactStage: client.contact_stage || "",
                 lastSynced: row.lastSynced,
                 expiresAt: envelope.expiresAt || "",
             });
@@ -879,6 +911,168 @@
             }
         }
         return { purged: purged, refreshed: refreshed, total: rows.length, ratelimited: ratelimited };
+    }
+
+    /* ─── SI-2 (#1520/#1499) — personenloses Facility-Meta-Bundle ─────────── */
+
+    function _facilityBundleUrl() {
+        return "/api/v1/offline/bundle/facility/";
+    }
+
+    /*
+     * SI-2 (#1520/#1499): Spiegel von `_isSchemaMismatch` fuer die EIGENE
+     * Facility-Schema-Version. Fail-closed: ein fehlender/`undefined` Wert
+     * gilt als Mismatch (kein automatisches Gueltig).
+     */
+    function _isFacilitySchemaMismatch(schemaVersion) {
+        return schemaVersion !== FACILITY_BUNDLE_SCHEMA_VERSION;
+    }
+
+    /*
+     * SI-2 (#1520/#1499): Personenloses Facility-Meta-Bundle vom Server
+     * speichern (Analog `saveClientBundle`, aber ein Singleton ohne
+     * Roster/PII):
+     *   {schema_version, generated_at, ttl, expires_at, document_types,
+     *    assignable_users}
+     *
+     * Das GESAMTE Envelope wird VOR `db.transaction` verschluesselt (#1414):
+     * ein WebCrypto-`await` innerhalb einer Dexie-`rw`-Transaktion schliesst
+     * diese vorzeitig (stiller Teil-Commit). Die Transaktion unten fuehrt
+     * ausschliesslich IDB-Operationen aus. Der Content-ETag liegt PLAINTEXT
+     * auf der Row (wie bei `clients`) — er muss vor dem Decrypt als
+     * `If-None-Match` sendbar sein und ist ein Content-Hash, keine PII.
+     */
+    async function saveFacilityBundle(bundle, etag = null) {
+        const crypto = _crypto();
+        if (!bundle || !bundle.schema_version) throw new Error("MalformedFacilityBundle");
+        const now = Date.now();
+
+        // Refs #1414: ALLE WebCrypto-`encrypt()` VOR `db.transaction`.
+        const envelope = await crypto.encryptPayload({
+            document_types: bundle.document_types || [],
+            assignable_users: bundle.assignable_users || [],
+            generatedAt: bundle.generated_at,
+            expiresAt: bundle.expires_at,
+            ttl: bundle.ttl,
+            schemaVersion: bundle.schema_version,
+        });
+
+        try {
+            await db.transaction("rw", db.facility, async () => {
+                await db.facility.put({
+                    key: FACILITY_ROW_KEY,
+                    lastSynced: now,
+                    etag: etag || null,
+                    data: envelope,
+                });
+            });
+        } catch (e) {
+            // Refs #1414: QuotaExceededError sichtbar und stabil normalisiert
+            // melden (kein stilles Ueberspringen) — die Transaktion ist bereits
+            // zurueckgerollt, der alte Meta-Stand bleibt intakt.
+            if (_isQuotaError(e)) {
+                const quotaErr = new Error("OfflineQuotaExceeded");
+                quotaErr.name = "QuotaExceededError";
+                throw quotaErr;
+            }
+            throw e;
+        }
+    }
+
+    /*
+     * SI-2 (#1520/#1499): das gespeicherte Facility-Meta-Bundle lesen (Analog
+     * `getOfflineClient`, ohne cases/events). Gleiche Gates: TRANSIENT-Decrypt
+     * -> null ohne Loeschen (#1352); PERMANENT-Decrypt -> Row verwerfen
+     * (personenlos, kein force-Sonderfall); Schema-Mismatch (gegen die eigene
+     * FACILITY_BUNDLE_SCHEMA_VERSION) -> verwerfen; Expiry (48h) -> verwerfen.
+     * Ein neuer Fetch (revalidateCachedFacility / Login-Bootstrap) schreibt
+     * danach ein frisches Bundle.
+     */
+    async function getOfflineFacility() {
+        const crypto = _crypto();
+        const row = await db.facility.get(FACILITY_ROW_KEY);
+        if (!row) return null;
+        let envelope;
+        try {
+            envelope = await crypto.decryptPayload(row.data);
+        } catch (e) {
+            if (_isTransientDecryptError(e)) {
+                // Refs #1352: kein Schluessel geladen — Row behalten, null liefern.
+                return null;
+            }
+            // Permanent unentschluesselbar (Salt/Passwort rotiert) — verwerfen.
+            await db.facility.delete(FACILITY_ROW_KEY);
+            return null;
+        }
+        if (_isFacilitySchemaMismatch(envelope.schemaVersion)) {
+            await db.facility.delete(FACILITY_ROW_KEY);
+            return null;
+        }
+        if (_isExpired(envelope.expiresAt)) {
+            await db.facility.delete(FACILITY_ROW_KEY);
+            return null;
+        }
+        return {
+            lastSynced: row.lastSynced,
+            documentTypes: envelope.document_types || [],
+            assignableUsers: envelope.assignable_users || [],
+            generatedAt: envelope.generatedAt,
+            expiresAt: envelope.expiresAt,
+            ttl: envelope.ttl,
+            schemaVersion: envelope.schemaVersion,
+        };
+    }
+
+    /*
+     * SI-2 (#1520/#1499): das Facility-Meta-Bundle gegen den Server
+     * re-validieren (Analog `revalidateCachedClient`). Gespeicherten ETag als
+     * `If-None-Match` mitschicken; 304 -> `not-modified` (Cache bleibt); 200 ->
+     * frisch speichern; 429 -> `ratelimited`; INVALIDATION_STATUSES (401/404/
+     * 410) -> lokalen Meta-Cache verwerfen (Rolle/Facility-Kontext verloren);
+     * Netz-/Serverfehler -> `error`, Cache unangetastet (fail-open). Personenlos
+     * -> kein unsynced-Edit-Skip und kein force-Sicherheits-Purge noetig; auch
+     * fuer den Erst-Fetch nutzbar (keine Row -> kein ETag -> voller 200).
+     */
+    async function revalidateCachedFacility() {
+        const existing = await db.facility.get(FACILITY_ROW_KEY);
+        const storedEtag = existing && existing.etag;
+        const headers = { Accept: "application/json" };
+        if (storedEtag) headers["If-None-Match"] = storedEtag;
+
+        let response;
+        try {
+            response = await fetch(_facilityBundleUrl(), {
+                method: "GET",
+                credentials: "same-origin",
+                headers: headers,
+            });
+        } catch (_e) {
+            // Offline / Netzfehler -> Cache bewusst behalten.
+            return "error";
+        }
+
+        if (response.status === 429) {
+            return "ratelimited";
+        }
+        if (INVALIDATION_STATUSES.includes(response.status)) {
+            await db.facility.delete(FACILITY_ROW_KEY);
+            return "purged";
+        }
+        if (response.status === 304) {
+            return "not-modified";
+        }
+        if (response.ok) {
+            try {
+                const bundle = await response.json();
+                const newEtag = response.headers.get("ETag");
+                await saveFacilityBundle(bundle, newEtag);
+                return "refreshed";
+            } catch (_e) {
+                return "error";
+            }
+        }
+        // 5xx oder unerwartet -> nichts tun.
+        return "error";
     }
 
     /* ─── Stage 3 (#575) — Local-Status-Tracking on events ───────────────── */
@@ -1386,6 +1580,10 @@
         // F-10 (#1110) — Re-Validierung gegen den Server beim Online-Kontakt
         revalidateCachedClient: revalidateCachedClient,
         revalidateCachedClients: revalidateCachedClients,
+        // SI-2 (#1520/#1499) — personenloses Facility-Meta-Bundle
+        saveFacilityBundle: saveFacilityBundle,
+        getOfflineFacility: getOfflineFacility,
+        revalidateCachedFacility: revalidateCachedFacility,
         // Stage 3 (#575) — offline edit + conflict tracking
         saveOfflineEdit: saveOfflineEdit,
         getOfflineEvent: getOfflineEvent,
@@ -1423,6 +1621,8 @@
         MAX_OFFLINE_CLIENTS: MAX_OFFLINE_CLIENTS,
         // F-05 (#1425) — Lesepfad-Gate vergleicht dagegen, siehe _isSchemaMismatch
         BUNDLE_SCHEMA_VERSION: BUNDLE_SCHEMA_VERSION,
+        // SI-2 (#1520/#1499) — Facility-Meta-Bundle-Gate, siehe _isFacilitySchemaMismatch
+        FACILITY_BUNDLE_SCHEMA_VERSION: FACILITY_BUNDLE_SCHEMA_VERSION,
     };
 
     /*

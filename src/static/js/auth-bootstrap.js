@@ -64,6 +64,18 @@
         if (!saltResp.ok) return null;
         var json = await saltResp.json();
         await window.crypto_session.deriveSessionKey(password, json.salt);
+        // SI-2 (#1520/#1499): das personenlose Facility-Meta-Bundle EAGER beim
+        // Login-Bootstrap vorwaermen — direkt nach der Schluesselableitung
+        // (verschluesseltes At-Rest-Schreiben braucht den Session-Key). So hat
+        // die Offline-Create-Shell den Katalog + Feld-Metadaten schon KALT-
+        // offline, bevor je eine Person "mitgenommen" wurde.
+        // FIRE-AND-FORGET und NICHT-blockierend: ein Fehler (offline beim
+        // Login, Ratelimit) darf den Login-Redirect NIE aufhalten;
+        // `revalidateCachedFacility` holt ohne gespeicherten ETag voll (200)
+        // und der naechste online-Sync revalidiert ohnehin erneut.
+        if (window.offlineStore && window.offlineStore.revalidateCachedFacility) {
+            window.offlineStore.revalidateCachedFacility().catch(function () {});
+        }
         // Refs #867: Server-seitig bestimmter Post-Login-Redirect (z.B.
         // ``/system/`` fuer super_admin). Wird zurueckgegeben, weil der
         // POST /login/-Response mit ``redirect: "manual"`` als

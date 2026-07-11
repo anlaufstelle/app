@@ -17,7 +17,8 @@
  * Sequenz im Lock (Reihenfolge FIX — Writes RAUS vor Revalidierung):
  *   await replayQueue()            (offline-queue.js)
  *   await replayAllModifiedEvents()(offline-edit.js)
- *   purgeExpired() + revalidateCachedClients()  (offline-store.js; nur mit
+ *   purgeExpired() + revalidateCachedClients()
+ *     + revalidateCachedFacility()             (offline-store.js; nur mit
  *                                                Session-Key, wie der heutige
  *                                                store-online-Listener)
  * Danach broadcast({type:"sync-finished"}) — Task 4 (M8-UI) refresht darauf
@@ -147,6 +148,11 @@
             if (hasKey && st) {
                 if (st.purgeExpired) await st.purgeExpired(Date.now());
                 if (st.revalidateCachedClients) await st.revalidateCachedClients();
+                // SI-2 (#1520/#1499): das personenlose Facility-Meta-Bundle im
+                // SELBEN Lock/Key-Gate revalidieren (billig: 304 bei
+                // unveraendertem Katalog) — damit die Offline-Create-Shell auch
+                // ohne "Person mitnehmen" einen frischen Katalog vorhaelt.
+                if (st.revalidateCachedFacility) await st.revalidateCachedFacility();
             }
         } catch (_e) {
             // eslint-disable-next-line no-console
