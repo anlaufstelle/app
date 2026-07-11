@@ -454,6 +454,77 @@ einem meldungsfreien Lauf entfernen (der Lauf ist idempotent).
 
 ---
 
+## Username-Ratelimit bleibt Monitor-only statt hartem Fix (Issue #1372)
+
+**Status:** Design-Entscheidung mit Rationale — Monitoring statt hartem Fix.
+
+### Beobachtung
+
+Der Login trägt zwei Rate-Limits ([`auth.py`](../src/core/views/auth.py), Refs #598):
+ein IP-Limit (`5/m`, Schlüssel `ip`) und ein Username-Limit (`10/h`, Schlüssel = normalisierter
+`POST['username']`). Das Username-Limit bucketet auf den eingegebenen Namen — **nicht** auf die
+Herkunft. Wer einen (in einer Einrichtung semi-öffentlichen) Username kennt, kann mit 10
+Login-POSTs/h den `10/h`-Eimer dieses Namens füllen; der/die Betroffene erhält dann bis zu einer
+Stunde lang `429`, unabhängig von korrekten Credentials (Angriffsbild: **gezielter Victim-Lockout**).
+
+### Was bereits umgesetzt ist
+
+Die **Account-Lockout-Achse** — die die harte Sperre (`is_locked`, Refs #612)
+erzeugt — zählt Fehlversuche seit N9 
+**je Quell-IP**. Fremde Falschpasswörter sperren den Login des Opfers von dessen eigener IP damit
+**nicht** mehr; der frühere *harte* Victim-Lockout ist geschlossen.
+
+### Trade-off — warum das `10/h`-Username-Limit bleibt
+
+Das Username-Limit ist bewusst **herkunftsunabhängig**: Es ist die Schranke gegen einen verteilten
+Angriff auf **einen** Account von einem **Botnet mit rotierenden IPs** — genau der Fall, den das
+per-IP-Limit (`5/m`) nicht abdeckt (jede Bot-IP bleibt für sich unter `5/m`). Diese
+**Anti-Botnet-Garantie aus #598 bleibt
+bestehen**. Würde man das Limit an die IP koppeln oder anheben, öffnete man genau diesen verteilten
+Credential-Stuffing-Pfad wieder.
+
+Bewusst **nicht** eingeführt: **kein CAPTCHA** und **keine externe Abhängigkeit** — wegen
+Barrierefreiheit, Datenminimierung, Self-Host-Autarkie und der strikten same-origin-CSP (keine
+Third-Party-Ressource).
+
+### Restfläche (akzeptiert)
+
+Es bleibt eine **weiche** Rest-DoS-Fläche: Ein Dritter, der den Username kennt, kann den
+`10/h`-Eimer des Opfers füllen → dessen eigener Login-POST bekommt bis zu 1h lang `429`. Gegenüber
+dem früheren Zustand deutlich entschärft:
+
+- **fixes 1h-Fenster**, **nicht** self-sustaining (läuft ohne weitere Angreifer-Aktion aus);
+- erzeugt **keinen** `is_locked`-Zustand (kein Account-Lockout, keine Admin-Entsperrung nötig);
+- **Recovery-Pfade bleiben frei**: Password-Reset und die übrigen Auth-Flows bucketen nicht auf
+ denselben Username-Schlüssel und sind IP-basiert erreichbar.
+
+### Monitoring statt hartem Fix
+
+Statt die Restfläche hart zu schließen (und dabei die Anti-Botnet-Garantie zu opfern), wird die
+Angriffs-**Signatur sichtbar** gemacht: `detect_distributed_login_attack`
+([`breach_detection.py`](../src/core/services/compliance/breach_detection.py)) schreibt einen
+`SECURITY_VIOLATION`-Breach-Alarm, sobald Fehlversuche gegen **einen** Account von **vielen
+distinkten Quell-IPs** (Default `BREACH_DISTRIBUTED_LOGIN_IP_THRESHOLD`) im Fenster auflaufen — die
+Victim-Lockout-/Distributed-Bruteforce-Signatur. Damit ist die Restfläche **bewusst Monitor-only**
+abgedeckt: kein hartes Blocking, aber eine forensische Spur plus optionaler Webhook-Alarm.
+
+### Trigger für Re-Evaluation
+
+- Reale Missbrauchsfälle des `10/h`-Username-Limits als gezielter Victim-DoS (statt nur als
+ Anti-Botnet-Schranke).
+- Wenn progressive Delays / Proof-of-Work als datensparsame, abhängigkeitsfreie Alternative zu
+ einem flachen `429` reif sind (dann Backoff statt hartem Limit erwägen).
+
+### Verifikation
+
+- Threat-Model-Zeile „**S** Login-Brute-Force" in [`threat-model.md`](threat-model.md) verweist auf
+ diese Notiz.
+- `detect_distributed_login_attack`-Tests in [`test_breach_detection.py`](../src/tests/test_breach_detection.py):
+ Alarm über Schwelle, kein Alarm knapp darunter, viele Versuche von EINER IP sind kein
+ Distributed-Signal, Dedup greift.
+
+---
+
 ## Weitere Einstiegspunkte
 
 - [CONTRIBUTING.md § Facility-Scoping & Row Level Security](../CONTRIBUTING.md#facility-scoping--row-level-security)

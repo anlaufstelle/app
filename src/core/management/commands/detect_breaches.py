@@ -9,7 +9,7 @@ from django.core.management.base import BaseCommand
 
 from core.models import AuditLog, Facility
 from core.services.audit import audit_event
-from core.services.compliance import run_all_detections
+from core.services.compliance import run_all_detections, run_system_detections
 
 
 class Command(BaseCommand):
@@ -40,6 +40,16 @@ class Command(BaseCommand):
                 self.stdout.write(
                     f"  [{facility.name}] {entry.detail.get('kind')} - count={entry.detail.get('count')} "
                     f"(audit_id={entry.pk})"
+                )
+
+        # Refs #1368: installationsweite Heuristiken (Bursts gegen unbekannte
+        # Usernames haben keine Facility) — einmal pro Lauf, nicht je Facility.
+        # Nur beim Voll-Lauf (ohne ``--facility``-Einschraenkung).
+        if not facility_name:
+            for entry in run_system_detections():
+                total += 1
+                self.stdout.write(
+                    f"  [system] {entry.detail.get('kind')} - count={entry.detail.get('count')} (audit_id={entry.pk})"
                 )
 
         if total == 0:

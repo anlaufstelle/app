@@ -37,11 +37,16 @@ from core.services.compliance.audit_events import _audit_event_checks
 from core.services.compliance.backup import _backup_checks, _restore_checks
 from core.services.compliance.breach_detection import (
     _validate_webhook_url,
+    detect_anonymous_login_bursts,
+    detect_distributed_login_attack,
     detect_failed_login_burst,
+    detect_mass_client_destruction,
     detect_mass_delete,
     detect_mass_export,
     record_finding,
+    record_system_finding,
     run_all_detections,
+    run_system_detections,
 )
 from core.services.compliance.clamav import _clamav_checks
 from core.services.compliance.cron import (
@@ -199,7 +204,10 @@ __all__ = [
     "cron_job_checks",
     "allowed_sensitivities_for_user",
     "count_clients_in_bucket",
+    "detect_anonymous_login_bursts",
+    "detect_distributed_login_attack",
     "detect_failed_login_burst",
+    "detect_mass_client_destruction",
     "detect_mass_delete",
     "detect_mass_export",
     "effective_sensitivity",
@@ -210,7 +218,9 @@ __all__ = [
     "is_k_anonymous",
     "k_anonymize_client",
     "record_finding",
+    "record_system_finding",
     "run_all_detections",
+    "run_system_detections",
     "user_can_see_document_type",
     "user_can_see_event",
     "user_can_see_field",

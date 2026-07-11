@@ -196,6 +196,30 @@ BREACH_DETECTION_WINDOW_MINUTES = int(os.environ.get("BREACH_DETECTION_WINDOW_MI
 BREACH_FAILED_LOGIN_THRESHOLD = int(os.environ.get("BREACH_FAILED_LOGIN_THRESHOLD", "20"))
 BREACH_EXPORT_THRESHOLD = int(os.environ.get("BREACH_EXPORT_THRESHOLD", "10"))
 BREACH_DELETE_THRESHOLD = int(os.environ.get("BREACH_DELETE_THRESHOLD", "50"))
+# Sekundaeres Langzeitfenster gegen low-and-slow (Refs #1368): dieselben
+# per-User-/facility-weiten Heuristiken laufen zusaetzlich ueber ein breiteres
+# Fenster mit hoeheren Schwellen, damit Angriffe unter der 60-min-Schwelle nicht
+# durchrutschen. Default 24h.
+BREACH_DETECTION_LONG_WINDOW_MINUTES = int(os.environ.get("BREACH_DETECTION_LONG_WINDOW_MINUTES", "1440"))
+BREACH_FAILED_LOGIN_THRESHOLD_LONG = int(os.environ.get("BREACH_FAILED_LOGIN_THRESHOLD_LONG", "60"))
+BREACH_EXPORT_THRESHOLD_LONG = int(os.environ.get("BREACH_EXPORT_THRESHOLD_LONG", "30"))
+BREACH_DELETE_THRESHOLD_LONG = int(os.environ.get("BREACH_DELETE_THRESHOLD_LONG", "150"))
+# Massen-Client-Destruktion facility-weit (Refs #1368): CLIENT_SOFT_DELETED /
+# CLIENT_ANONYMIZED / DELETION_APPROVED schreiben KEIN Action.DELETE und blieben
+# fuer detect_mass_delete unsichtbar. Eigene, niedrigere Schwelle (gezieltes
+# Vernichten von Personendaten wiegt schwerer als generische Loeschungen).
+BREACH_CLIENT_DESTRUCTION_THRESHOLD = int(os.environ.get("BREACH_CLIENT_DESTRUCTION_THRESHOLD", "20"))
+BREACH_CLIENT_DESTRUCTION_THRESHOLD_LONG = int(os.environ.get("BREACH_CLIENT_DESTRUCTION_THRESHOLD_LONG", "60"))
+# Anonyme Login-Bursts (Refs #1368): fehlgeschlagene Logins gegen UNBEKANNTE
+# Usernames (user IS NULL, facility IS NULL) — Credential-Stuffing/Enumeration.
+# Pro Quell-IP + installationsweites Gesamtvolumen.
+BREACH_ANON_LOGIN_IP_THRESHOLD = int(os.environ.get("BREACH_ANON_LOGIN_IP_THRESHOLD", "20"))
+BREACH_ANON_LOGIN_TOTAL_THRESHOLD = int(os.environ.get("BREACH_ANON_LOGIN_TOTAL_THRESHOLD", "100"))
+# Verteilter Login-Angriff auf EINEN Account von vielen IPs (Refs #1372):
+# Victim-Lockout-/Distributed-Bruteforce-Signatur. Monitor-only-Gegenstueck zum
+# bewusst beibehaltenen 10/h-Username-Ratelimit (Anti-Botnet, #598). Zahl
+# distinkter Quell-IPs je User im Fenster.
+BREACH_DISTRIBUTED_LOGIN_IP_THRESHOLD = int(os.environ.get("BREACH_DISTRIBUTED_LOGIN_IP_THRESHOLD", "10"))
 # Optional: Webhook fuer externe Eskalation. Leer = kein Webhook.
 BREACH_NOTIFICATION_WEBHOOK_URL = os.environ.get("BREACH_NOTIFICATION_WEBHOOK_URL") or None
 
