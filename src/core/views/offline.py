@@ -235,6 +235,32 @@ class OfflineClientShellView(View):
         return render(request, "core/clients/offline_detail.html", {"client_pk": ""})
 
 
+class OfflineEventCreateShellView(View):
+    """Generic, pk-less scaffold for IN-PLACE offline event authoring at the
+    canonical ``/events/new/`` URL (Refs #1521, #1499, Muster #1322).
+
+    The Service Worker pre-caches this shell and serves it for offline
+    navigations to the event-create page **without** redirecting to
+    ``/offline/`` — so the URL stays canonical and the offline/online split
+    disappears. ``offline-create.js`` (Alpine ``offlineEventCreate``) then reads
+    the person-less facility bundle (DocumentTypes/field schema/assignable
+    users) and the offline-taken clients from IndexedDB and lets the user author
+    a new event cold-offline, with no client having been opened first.
+
+    Public on purpose, exactly like :class:`OfflineClientShellView`: the shell
+    carries no PII (the catalogue is decrypted client-side from IndexedDB) and
+    must be pre-cacheable via the SW ``cache.addAll`` — an auth gate would make
+    the install-time fetch redirect to ``/login/`` and fail ``addAll`` atomically
+    (killing the whole precache). Online this view is never reached: the SW only
+    serves it on a network failure for ``/events/new/``.
+    """
+
+    http_method_names = ["get"]
+
+    def get(self, request):
+        return render(request, "core/events/offline_create.html", {})
+
+
 class OfflineConflictReviewView(AssistantOrAboveRequiredMixin, View):
     """Shell page for the merge-UI at ``/offline/conflicts/<uuid>/``.
 

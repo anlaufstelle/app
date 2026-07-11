@@ -148,48 +148,8 @@
                             </div>
                         </template>
 
-                        <template x-for="field in editFields" :key="field.slug">
-                            <div>
-                                <label class="block text-xs font-medium text-ink-soft mb-1">
-                                    <span x-text="field.name"></span><template x-if="field.isRequired"><span> *</span></template>
-                                </label>
-                                <template x-if="field.isFile">
-                                    <p class="text-xs text-ink-muted italic">{% trans "Datei offline nicht erfassbar — später nachreichen." %}</p>
-                                </template>
-                                <template x-if="field.isPlainInput">
-                                    <input :type="field.inputType" x-model="editValues[field.slug]" :required="field.isRequired"
-                                           class="w-full rounded-md border-subtle text-sm" :data-testid="'offline-create-input-' + field.slug">
-                                </template>
-                                <template x-if="field.isTextarea">
-                                    <textarea x-model="editValues[field.slug]" :required="field.isRequired" rows="3"
-                                              class="w-full rounded-md border-subtle text-sm" :data-testid="'offline-create-input-' + field.slug"></textarea>
-                                </template>
-                                <template x-if="field.isBoolean">
-                                    <input type="checkbox" x-model="editValues[field.slug]"
-                                           class="rounded border-subtle text-accent" :data-testid="'offline-create-input-' + field.slug">
-                                </template>
-                                <template x-if="field.isSelect">
-                                    <select x-model="editValues[field.slug]" :required="field.isRequired"
-                                            class="w-full rounded-md border-subtle text-sm" :data-testid="'offline-create-input-' + field.slug">
-                                        <option value="">---------</option>
-                                        <template x-for="opt in field.options" :key="opt.value">
-                                            <option :value="opt.value" x-text="opt.label"></option>
-                                        </template>
-                                    </select>
-                                </template>
-                                <template x-if="field.isMultiSelect">
-                                    <select multiple x-model="editValues[field.slug]"
-                                            class="w-full rounded-md border-subtle text-sm" :data-testid="'offline-create-input-' + field.slug">
-                                        <template x-for="opt in field.options" :key="opt.value">
-                                            <option :value="opt.value" x-text="opt.label"></option>
-                                        </template>
-                                    </select>
-                                </template>
-                                <template x-if="field.helpText">
-                                    <p class="mt-1 text-xs text-ink-muted" x-text="field.helpText"></p>
-                                </template>
-                            </div>
-                        </template>
+                        {# Refs #1521 (#1499, SI-4): pk-loser Feld-Loop, geteilt mit der Event-Create-Shell. #}
+                        {% include "core/clients/_offline_event_fields.html" %}
 
                         <template x-if="editError">
                             <p class="text-sm text-red-600" x-text="editError" data-testid="offline-create-error"></p>

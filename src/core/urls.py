@@ -68,6 +68,7 @@ from core.views.offline import (
     OfflineConflictReviewView,
     OfflineConflictShellView,
     OfflineCsrfTokenView,
+    OfflineEventCreateShellView,
     OfflineFacilityBundleView,
 )
 from core.views.retention import (
@@ -296,6 +297,14 @@ urlpatterns = [
         "offline/client-shell/",
         OfflineClientShellView.as_view(),
         name="offline_client_shell",
+    ),
+    # Refs #1521 (#1499): generischer, pk-loser Shell fuer die In-Place-
+    # Offline-Erfassung eines Ereignisses an der kanonischen URL /events/new/
+    # (Service Worker serviert ihn offline) — Muster #1322.
+    path(
+        "offline/event-shell/",
+        OfflineEventCreateShellView.as_view(),
+        name="offline_event_shell",
     ),
     # Offline (Streetwork Stage 3) — conflict review UI
     path(
