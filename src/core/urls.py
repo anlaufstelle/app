@@ -70,6 +70,7 @@ from core.views.offline import (
     OfflineCsrfTokenView,
     OfflineEventCreateShellView,
     OfflineFacilityBundleView,
+    OfflineWorkItemCreateShellView,
 )
 from core.views.retention import (
     RetentionApproveView,
@@ -305,6 +306,15 @@ urlpatterns = [
         "offline/event-shell/",
         OfflineEventCreateShellView.as_view(),
         name="offline_event_shell",
+    ),
+    # Refs #1522 (#1499): generischer, pk-loser Shell fuer die In-Place-
+    # Offline-Erfassung einer Aufgabe an der kanonischen URL /workitems/new/
+    # (Service Worker serviert ihn offline) — Muster #1322. Staff+-Gate liegt
+    # im Client (assignable_users == Staff+-Marker), nicht am Server-View.
+    path(
+        "offline/workitem-shell/",
+        OfflineWorkItemCreateShellView.as_view(),
+        name="offline_workitem_shell",
     ),
     # Offline (Streetwork Stage 3) — conflict review UI
     path(

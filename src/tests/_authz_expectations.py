@@ -473,6 +473,12 @@ EXPECTATIONS = (
     # muss via SW cache.addAll pre-cachebar sein. Same-commit-as-URL
     # (authz-Completeness-Gate, Risiko #8 der).
     E("core:offline_event_shell", "public", get=ALL_AUTH, anonymous_ok=True),
+    # Refs #1522 (#1499): pk-lose Offline-WorkItem-Create-Shell. Public wie
+    # offline_client_shell — PII-frei (Roster liegt verschluesselt in IDB), muss
+    # via SW cache.addAll pre-cachebar sein. Same-commit-as-URL (authz-
+    # Completeness-Gate, Risiko #8). Der Staff+-Gate (Risiko #7) sitzt im Client
+    # (assignable_users == Staff+-Marker), nicht am Server-Auth des Scaffolds.
+    E("core:offline_workitem_shell", "public", get=ALL_AUTH, anonymous_ok=True),
     # Refs #1396: Konflikt-Liste + pk-loser Review-Shell sind pk-los, datenlos
     # (rendern rein aus IndexedDB) und muessen via SW cache.addAll pre-cachebar
     # sein — public wie offline_client_shell. Der auth-gated Review-pk-Endpoint

@@ -261,6 +261,40 @@ class OfflineEventCreateShellView(View):
         return render(request, "core/events/offline_create.html", {})
 
 
+class OfflineWorkItemCreateShellView(View):
+    """Generic, pk-less scaffold for IN-PLACE offline work-item authoring at the
+    canonical ``/workitems/new/`` URL (Refs #1522, #1499, Muster #1322).
+
+    The Service Worker pre-caches this shell and serves it for offline
+    navigations to the work-item-create page **without** redirecting to
+    ``/offline/`` — so the URL stays canonical and the offline/online split
+    disappears. ``offline-create.js`` (Alpine ``offlineWorkItemCreate``) then
+    reads the person-less facility bundle (assignable-user roster) and the
+    offline-taken clients from IndexedDB and lets the user author a new work item
+    cold-offline, with no client having been opened first (a person picker plus a
+    standalone "without person" option).
+
+    Staff+-gate parity (Risiko #7 der): the online
+    :class:`~core.views.workitem_actions.WorkItemCreateView` is
+    ``StaffRequiredMixin``, so a work item queued by an Assistant would replay to
+    ``403`` ("revoked"). The facility bundle ships ``assignable_users`` **only**
+    for Staff+ (Assistant gets ``[]``), so the Alpine component hides the whole
+    form for an empty roster — an Assistant never reaches the authoring path.
+
+    Public on purpose, exactly like :class:`OfflineClientShellView`: the shell
+    carries no PII (the roster is decrypted client-side from IndexedDB) and must
+    be pre-cacheable via the SW ``cache.addAll`` — an auth gate would make the
+    install-time fetch redirect to ``/login/`` and fail ``addAll`` atomically
+    (killing the whole precache). Online this view is never reached: the SW only
+    serves it on a network failure for ``/workitems/new/``.
+    """
+
+    http_method_names = ["get"]
+
+    def get(self, request):
+        return render(request, "core/workitems/offline_create.html", {})
+
+
 class OfflineConflictReviewView(AssistantOrAboveRequiredMixin, View):
     """Shell page for the merge-UI at ``/offline/conflicts/<uuid>/``.
 

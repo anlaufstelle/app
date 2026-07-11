@@ -1,19 +1,23 @@
 /*
- * Alpine-Komponente fuer die pk-lose Offline-Event-Create-Shell
- * (Refs #1521, #1499 SI-4). Auf Alpine.data() registriert fuer den
+ * Alpine-Komponenten fuer die pk-losen Offline-Create-Shells:
+ *   - offlineEventCreate     (Event,    /events/new/,    Refs #1521 SI-4)
+ *   - offlineWorkItemCreate  (WorkItem, /workitems/new/, Refs #1522 SI-5)
+ * Beide unter #1499. Auf Alpine.data() registriert fuer den
  * @alpinejs/csp-Build (Refs #672).
  *
- * Der Service Worker serviert die Shell offline IN-PLACE an /events/new/
- * (SI-6). Diese Komponente liest das PERSONENLOSE Facility-Meta-Bundle
- * (getOfflineFacility: DocumentTypes/Feld-Schema/assignable_users) und die
- * bereits offline mitgenommenen Personen (listOfflineClientsDetailed) aus
- * IndexedDB und legt via markEventNew (offline-edit.js) einen neuen Eintrag
- * in die Offline-Queue. KEIN Online-Dispatch hier — der Startup-Drain
- * repliziert beim naechsten Online-Kontakt.
+ * Der Service Worker serviert die Shells offline IN-PLACE an ihren
+ * kanonischen URLs (SI-6). Beide Komponenten lesen das PERSONENLOSE
+ * Facility-Meta-Bundle (getOfflineFacility: DocumentTypes/Feld-Schema/
+ * assignable_users) und die bereits offline mitgenommenen Personen
+ * (listOfflineClientsDetailed) aus IndexedDB und legen via markEventNew /
+ * markWorkItemNew (offline-edit.js) einen neuen Eintrag in die Offline-Queue.
+ * KEIN Online-Dispatch hier — der Startup-Drain repliziert beim naechsten
+ * Online-Kontakt.
  *
- * Die reinen Feld-Helfer stammen aus offline-form-fields.js (SI-3,
- * window.offlineFormFields); der geteilte Feld-Loop lebt im Partial
- * _offline_event_fields.html (auch offline_detail.html includet ihn).
+ * Die reinen Feld-Helfer (Event) stammen aus offline-form-fields.js (SI-3,
+ * window.offlineFormFields); der geteilte Event-Feld-Loop lebt im Partial
+ * _offline_event_fields.html, der WorkItem-Feld-Loop im bestehenden
+ * _offline_workitem_fields.html (beide auch von offline_detail.html includet).
  */
 (function () {
     "use strict";
@@ -56,6 +60,36 @@
         if (cur && cur.__file__) return "Datei vorhanden" + (cur.name ? " (" + cur.name + ")" : "");
         if (cur && cur.__files__) return "Dateien vorhanden (" + (cur.count || 0) + ")";
         return "Keine Datei";
+    }
+
+    // Refs #1398/#1522: heutiges Datum als date-Input-Wert (YYYY-MM-DD) — untere
+    // Datumsschranke fuer WorkItem due_date/remind_at. Spiegel von
+    // offline-client-view.js `_todayInput`.
+    function _todayInput() {
+        const d = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+    }
+
+    // Refs #1398/#708/#1522: obere Datumsschranke — 31.12. des Folgejahrs.
+    // Werte-Spiegel der WorkItemForm (offline-client-view.js `_maxWorkItemDateInput`).
+    function _maxWorkItemDateInput() {
+        return new Date().getFullYear() + 1 + "-12-31";
+    }
+
+    // Refs #1398/#1522: leere WorkItemForm-Defaults (Feldnamen + Werte 1:1 zur
+    // Server-WorkItemForm; Spiegel von offline-client-view.js `_emptyWorkItemValues`).
+    function _emptyWorkItemValues() {
+        return {
+            item_type: "task",
+            title: "",
+            description: "",
+            priority: "normal",
+            due_date: "",
+            remind_at: "",
+            recurrence: "none",
+            assigned_to: "",
+        };
     }
 
     document.addEventListener("alpine:init", () => {
@@ -213,6 +247,146 @@
                 this.editFields = [];
                 this.editValues = {};
                 this.createOccurredAt = _nowLocalInput();
+            },
+        }));
+
+        // ── SI-5 (#1522): pk-lose WorkItem-Create-Shell ─────────────────────
+        // Spiegel von offlineEventCreate fuer den WorkItem-Track. STAFF+-GATE:
+        // das personenlose Facility-Bundle liefert `assignableUsers` NUR fuer
+        // Staff+ (Assistenz bekommt []). canCreateWorkItem = assignableUsers>0
+        // ist damit der Bundle-Level-Staff+-Marker — bei leerem Roster wird die
+        // GESAMTE Form ausgeblendet (Assistenz-Hinweis), weil ein trotzdem
+        // gequeuetes Assistant-WorkItem gegen den StaffRequiredMixin-Create-View
+        // zu 403 "revoked" replayt (Risiko #7 der).
+        Alpine.data("offlineWorkItemCreate", () => ({
+            loading: true,
+            // Facility-Meta-Bundle (getOfflineFacility) bzw. null, wenn nicht
+            // vorbereitet/abgelaufen.
+            facility: null,
+            // Offline mitgenommene Personen (listOfflineClientsDetailed).
+            clients: [],
+            // Auswahl: "" == Standalone ("ohne Person"), sonst Klient-pk.
+            // WorkItems kennen keine Kontaktstufen-Anforderung — "ohne Person"
+            // ist immer erlaubt (kein DocType-Vorfilter wie bei Events).
+            clientPk: "",
+            // WorkItemForm-Felder flach (Feldnamen wie im Server-Form); das
+            // geteilte Partial _offline_workitem_fields.html bindet an wiValues.*.
+            wiValues: {},
+            wiError: "",
+            // HTML5-Datumsgrenzen (heute / 31.12. Folgejahr), spiegeln
+            // WorkItemForm.min_workitem_date/max_workitem_date. Server-clean()
+            // bleibt Autoritaet (422 beim Replay -> graceful).
+            wiDateMin: "",
+            wiDateMax: "",
+            wiDueMin: "",
+            wiRemindMin: "",
+            saving: false,
+            saved: false,
+
+            async init() {
+                this.wiDateMin = _todayInput();
+                this.wiDateMax = _maxWorkItemDateInput();
+                this.wiDueMin = this.wiDateMin;
+                this.wiRemindMin = this.wiDateMin;
+                this.wiValues = _emptyWorkItemValues();
+                try {
+                    const store = window.offlineStore;
+                    if (store && store.getOfflineFacility) {
+                        this.facility = await store.getOfflineFacility();
+                    }
+                    if (store && store.listOfflineClientsDetailed) {
+                        this.clients = (await store.listOfflineClientsDetailed()) || [];
+                    }
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.error("[offline-create] init workitem", e);
+                }
+                this.loading = false;
+            },
+
+            // ── Staff+-Gate ─────────────────────────────────────────────────
+            // Zuweisbare Nutzer:innen fuers assigned_to-Dropdown (Partial bindet
+            // an assignableUsers). Nur fuer Staff+ befuellt — leer bei Assistenz.
+            get assignableUsers() {
+                return (this.facility && this.facility.assignableUsers) || [];
+            },
+            // Bundle-Level-Staff+-Marker (s. Kopf-Kommentar).
+            get canCreateWorkItem() {
+                return this.assignableUsers.length > 0;
+            },
+            get hasFacility() {
+                return this.facility !== null;
+            },
+
+            // ── Sichtbarkeit ────────────────────────────────────────────────
+            // Kein Bundle offline vorhanden -> Edge-Fallback (einmal online
+            // oeffnen). Unterscheidet sich absichtlich vom Assistenz-Gate:
+            // dort IST ein Bundle da, es fehlt nur die Staff+-Berechtigung.
+            get showUnavailable() {
+                return !this.loading && !this.saved && !this.hasFacility;
+            },
+            get showAssistantGate() {
+                return !this.loading && !this.saved && this.hasFacility && !this.canCreateWorkItem;
+            },
+            get showForm() {
+                return !this.loading && !this.saved && this.canCreateWorkItem;
+            },
+
+            // ── Person-Picker ───────────────────────────────────────────────
+            get clientOptions() {
+                return (this.clients || []).map((c) => ({ value: c.pk, label: c.pseudonym || c.pk }));
+            },
+
+            _workItemFormData() {
+                // WorkItemForm-Feldnamen 1:1 (der Replay POSTet sie flach an
+                // /workitems/new/). Spiegel von offline-client-view.js.
+                return {
+                    item_type: this.wiValues.item_type,
+                    title: this.wiValues.title,
+                    description: this.wiValues.description,
+                    priority: this.wiValues.priority,
+                    due_date: this.wiValues.due_date,
+                    remind_at: this.wiValues.remind_at,
+                    recurrence: this.wiValues.recurrence,
+                    assigned_to: this.wiValues.assigned_to,
+                };
+            },
+
+            async saveCreate() {
+                if (this.saving) return;
+                this.saving = true;
+                this.wiError = "";
+                try {
+                    if (!window.offlineEdit || !window.offlineEdit.markWorkItemNew) {
+                        this.wiError = "Offline-Erfassung nicht verfügbar.";
+                        return;
+                    }
+                    if (!this.wiValues.title) {
+                        this.wiError = "Bitte einen Titel angeben.";
+                        return;
+                    }
+                    // clientPk leer == Standalone (WorkItemForm.client ist
+                    // optional; replayNewWorkItem laesst `client` dann weg).
+                    // KEIN Online-Dispatch hier: der Startup-Drain repliziert
+                    // beim naechsten Online-Kontakt.
+                    await window.offlineEdit.markWorkItemNew(this.clientPk || "", this._workItemFormData());
+                    this.saved = true;
+                } catch (e) {
+                    // eslint-disable-next-line no-console
+                    console.error("[offline-create] saveCreate workitem", e);
+                    this.wiError = "Erfassen fehlgeschlagen: " + (e.message || e);
+                } finally {
+                    this.saving = false;
+                }
+            },
+
+            reset() {
+                this.saved = false;
+                this.wiError = "";
+                this.clientPk = "";
+                this.wiValues = _emptyWorkItemValues();
+                this.wiDueMin = this.wiDateMin;
+                this.wiRemindMin = this.wiDateMin;
             },
         }));
     });
