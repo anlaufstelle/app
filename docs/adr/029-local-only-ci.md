@@ -1,9 +1,17 @@
 # ADR-029: Quality-Gates lokal-only durchgesetzt (Dev-CI bewusst deaktiviert)
 
-- **Status:** Accepted
+- **Status:** Accepted — **am 2026-07-11 abgelöst/revidiert** (Dev-CI nach Budget-Reset reaktiviert, siehe [Update 2026-07-11](#update-2026-07-11--dev-ci-reaktiviert))
 - **Date:** 2026-06-28
 - **Deciders:** Tobias Nix
-- **Refs:** #1150 (Härtung gegen „falsch grün"), #860 (CI-Kosten-Postmortem), [ADR-011](011-three-repo-release-pipeline.md) (3-Repo-Release-Pipeline)
+- **Refs:** #1150 (Härtung gegen „falsch grün"), #860 (CI-Kosten-Postmortem), #1309 (Reaktivierung), [ADR-011](011-three-repo-release-pipeline.md) (3-Repo-Release-Pipeline)
+
+## Update 2026-07-11 — Dev-CI reaktiviert
+
+Der in dieser ADR als Follow-up vorgesehene Fall ist eingetreten: Das Actions-Spending-Limit wurde zurückgesetzt und die Dev-Workflows wurden als eigener Vorgang wieder aktiviert (#1309). Reaktiviert sind **Test**, **Lint**, **E2E**, **CodeQL** (PR-/Push-Gate), **Dev-Image** (baut `ghcr:main` bei jedem `main`-Push, #1247) sowie **Mutation-Nightly** und **Perf-Nightly**; der **Release**-Workflow bleibt bewusst deaktiviert (auf dem Dev-Repo unnötig, Releases laufen über die Stage/App-Pipeline).
+
+**Verifiziert** an PR [#1513](https://github.com/anlaufstelle/app/pull/1513): Lint und E2E grün, Test/CodeQL liefen real gegen den PR — die Gates blocken/laufen also wieder serverseitig, nicht nur lokal. Damit ist der Dev-PR nicht länger nur disziplingetragen abgesichert (adressiert den `−`-Punkt „per `--no-verify` umgehbar" unten).
+
+Die **lokale** Durchsetzung (`make ci`, Pre-Push-Hook, `make release-gates`) bleibt unverändert die erste Verteidigungslinie und schnellste Feedback-Schleife — die reaktivierte Dev-CI ist ein zusätzliches serverseitiges Netz, kein Ersatz. Bekannte Einschränkung: der Release-Reproduzierbarkeits-Test `test_two_cold_builds_are_byte_identical` ist auf dem Runner nichtdeterministisch (getrackt in #1514); bis zu dessen Härtung bleibt `make ci` lokal das verbindliche Gate.
 
 ## Context
 
