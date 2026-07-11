@@ -31,8 +31,14 @@ jobs:
       - uses: github/codeql-action/init@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a  # v4.36.3
         with:
           languages: ${{ matrix.language }}
+          # python + javascript sind interpretiert -> kein Build noetig; der
+          # frühere autobuild-Step schlug daher fehl ("unable to build").
+          build-mode: none
           queries: security-and-quality
-      - uses: github/codeql-action/autobuild@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
-      - uses: github/codeql-action/analyze@8aad20d150bbac5944a9f9d289da16a4b0d87c1e  # v4.36.2
+      # Alle codeql-action-Steps MUESSEN auf dieselbe Version gepinnt sein
+      # (Monorepo, gleiche SHA) -- gemischte Pins (init 4.36.3 / analyze 4.36.2)
+      # brechen mit "config version X, running version Y". Kein autobuild-Step
+      # bei build-mode: none.
+      - uses: github/codeql-action/analyze@54f647b7e1bb85c95cddabcd46b0c578ec92bc1a  # v4.36.3
         with:
           category: "/language:${{ matrix.language }}"
