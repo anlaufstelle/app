@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Fixed
+
+- **Footer zeigte „vv0.20.0" + ERROR-Log-Rauschen bei jedem Health-Call in Container-Deploys** (#1504) — das Docker-Image kopierte `pyproject.toml` nicht ins finale Image; `app_versions()` (System-Health-Service) fand sie unter `/pyproject.toml` nicht, fiel auf den `APP_VERSION`-Env-Wert zurück (der per ADR-028 bereits ein führendes „v" trägt) und loggte dabei auf ERROR-Level. Der eingeloggte Footer rendert `v{{ app_version }}` und zeigte dadurch „vv0.20.0" statt „v0.20.0" — nur in Container-Deploys (Prod/Demo) sichtbar, lokal unauffällig. Behoben doppelt: `pyproject.toml` wird jetzt ins finale Image kopiert (Health liest wieder die echte SemVer, kein Log-Rauschen), und als Defense-in-Depth normalisiert der Footer-Context-Processor ein eventuell vorhandenes führendes „v" selbst; eine legitim fehlende `pyproject.toml` loggt nur noch auf INFO- statt ERROR-Level.
+
 ## [0.20.0] - 2026-07-10
 
 Sammel-Release (Pre-Release) — die Versionen 0.17–0.19 wurden übersprungen, dieser Schnitt bündelt sie: kompletter Offline-Feldtauglichkeits-Block (Offline-Erfassung und -Bearbeitung inklusive Aufgaben und auflösbaren Status-Konflikten, Dead-Letter-Verwaltung, Android-Feldtest-Fixes), die Ergebnisse zweier Sicherheitsreview-Wellen (u. a. Audit-Kette mit automatisierter Tamper-Evidenz-Prüfung, IP-gebundener Login-Lockout, k-Anonymitäts-Härtung, Django 6.0.7), Tailwind CSS 4 und Python 3.14 als Produktions-Basis. Keine Datenmodell-Brüche; Vorwärts-Migration ohne Datenverlust. Weiterhin **noch nicht für den Produktiveinsatz freigegeben**.
