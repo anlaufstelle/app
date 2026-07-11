@@ -47,6 +47,14 @@ RUN pip install --no-cache-dir --no-index --no-deps /tmp/wheels/* && rm -rf /tmp
 # Copy application code
 COPY src/ ./
 
+# pyproject.toml fuer die Versionsanzeige (Refs #1504): health.py liest
+# ``BASE_DIR.parent/pyproject.toml`` fuer die SemVer-Anzeige im Footer und
+# im System-Health-Dashboard. BASE_DIR liegt hier (WORKDIR /app, src/
+# unmittelbar hineinkopiert) auf /app, also .parent == / -- Zielpfad muss
+# exakt /pyproject.toml sein, sonst FileNotFoundError-Fallback auf den
+# APP_VERSION-ENV-Wert (samt ERROR-Log-Rauschen vor Refs #1504).
+COPY pyproject.toml /pyproject.toml
+
 # Copy compiled Tailwind CSS
 COPY --from=node /build/src/static/css/styles.css static/css/styles.css
 
