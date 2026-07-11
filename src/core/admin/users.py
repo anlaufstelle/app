@@ -84,6 +84,52 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
         ),
     )
 
+    # Django-native Permission-Felder (Refs #1371, Sicherheitsreview 2026-07-02;
+    # adversariales Review 2026-07-11): is_active bleibt fuer ALLE Editoren (auch
+    # facility_admin) sichtbar/setzbar — Accounts sperren ist Teil der Facility-
+    # Verwaltung. is_staff/is_superuser/groups/user_permissions werden dagegen fuer
+    # NIEMANDEN ausgegeben, auch nicht fuer super_admin. Begruendung:
+    #   1. Die App nutzt Djangos Permission-Framework nicht — Autorisierung laeuft
+    #      ausschliesslich ueber `role` (s. `is_super_admin`-Property).
+    #   2. Der Admin-Zugang haengt am Rollen-Gate der Custom-AdminSite
+    #      (`AnlaufstelleAdminSite.has_permission` -> `_has_admin_role`), NICHT an
+    #      Djangos is_staff/is_superuser (lead/staff/assistant werden geblockt,
+    #      selbst mit is_staff=True).
+    #   3. Die zur Laufzeit erzwungene Invariante aus #1271/#1297 (Bootstrap-Guard
+    #      + CRITICAL-Compliance-Check via `_app_superuser_checks`) verbietet
+    #      is_superuser=True fuer App-User ganz.
+    # Der legitime Verwaltungsbedarf dieser vier Felder ist damit null; jede
+    # Setzbarkeit — auch durch super_admin — waere nur eine latente Privilege-
+    # Escalation und ein Widerspruch zur is_superuser-Invariante.
+    _HIDDEN_PERMISSION_FIELDS = ("is_staff", "is_superuser", "groups", "user_permissions")
+
+    def get_fieldsets(self, request, obj=None):
+        """Djangos native Permission-Felder fuer ALLE Editoren entfernen (Refs #1371).
+
+        is_staff/is_superuser/groups/user_permissions werden bedingungslos aus
+        Fieldset UND Form entfernt — auch fuer super_admin, ohne Fruehausstieg.
+        Begruendung s. `_HIDDEN_PERMISSION_FIELDS`: die App nutzt Django-Perms
+        nicht, der Admin-Zugang haengt am Rollen-Gate der Custom-AdminSite statt
+        an is_staff, und die #1271/#1297-Invariante verbietet is_superuser=True
+        fuer App-User ganz — der legitime Verwaltungsbedarf ist null.
+
+        `ModelAdmin.get_form` berechnet seine Formfelder aus
+        `flatten_fieldsets(self.get_fieldsets(...))` — entfernte Felder existieren
+        also serverseitig gar nicht erst im Form. Ein POST-Smuggling-Versuch
+        (``is_superuser=on`` im Body ohne zugehoeriges Formfeld) hat dadurch
+        keine Wirkung, nicht nur ein UI-Verstecken.
+        """
+        fieldsets = super().get_fieldsets(request, obj)
+        filtered = []
+        for name, options in fieldsets:
+            fields = options.get("fields", ())
+            remaining = tuple(f for f in fields if f not in self._HIDDEN_PERMISSION_FIELDS)
+            if remaining == fields:
+                filtered.append((name, options))
+                continue
+            filtered.append((name, {**options, "fields": remaining}))
+        return tuple(filtered)
+
     def formfield_for_choice_field(self, db_field, request, **kwargs):
         """Rollen-Vergabe begrenzen (A2.1, Refs #1020).
 

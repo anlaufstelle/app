@@ -182,3 +182,154 @@ class TestChangePageAccessInvariant:
         response = client.get(url, follow=False)
         # 404 (get_queryset filtert) oder 302 (Djangos does-not-exist-Redirect) -> Zugriff verweigert.
         assert response.status_code in (302, 404)
+
+
+# ---------------------------------------------------------------------------
+# Django-native Permission-Felder (is_staff/is_superuser/groups/user_permissions)
+# ---------------------------------------------------------------------------
+# Refs #1371 — UserAdmin erbte Djangos "Berechtigungen"-Fieldset ungefiltert;
+# ein facility_admin (und selbst super_admin) konnte is_superuser=True setzen.
+# App-seitig folgenlos (Autorisierung laeuft ausschliesslich ueber `role`, der
+# Admin-Zugang am Rollen-Gate der Custom-AdminSite statt an is_staff), aber
+# latente Eskalation und ein Least-Privilege-Verstoss — und fuer is_superuser ein
+# Widerspruch zur zur Laufzeit erzwungenen #1271/#1297-Invariante (kein App-User
+# traegt is_superuser=True). Fix: `UserAdmin.get_fieldsets` entfernt
+# is_staff/is_superuser/groups/user_permissions fuer ALLE Editoren (auch
+# super_admin) vollstaendig aus Fieldset UND Form (nicht nur readonly) — der
+# legitime Verwaltungsbedarf ist null. `get_form` berechnet seine Felder daraus,
+# wodurch ein POST-Smuggling-Versuch auch fuer super_admin ins Leere laeuft.
+def _date_joined_post_data(form_cls, user):
+    """POST-Daten fuer das SplitDateTimeField `date_joined` ueber die Widget-
+    eigene decompress/format_value-Rundreise erzeugen -- robust gegen
+    Locale-/Input-Format-Details, die hier nicht Testgegenstand sind."""
+    widget = form_cls.base_fields["date_joined"].widget
+    date_part, time_part = widget.decompress(user.date_joined)
+    return {
+        "date_joined_0": widget.widgets[0].format_value(date_part),
+        "date_joined_1": widget.widgets[1].format_value(time_part),
+    }
+
+
+class TestPermissionFieldsHidden:
+    _RESTRICTED = ("is_staff", "is_superuser", "groups", "user_permissions")
+
+    def test_facility_admin_fieldsets_exclude_permission_fields(self, rf, admin_user, staff_user):
+        fieldsets = _admin().get_fieldsets(_request(rf, admin_user), obj=staff_user)
+        visible = {f for _name, options in fieldsets for f in options.get("fields", ())}
+        assert visible.isdisjoint(self._RESTRICTED)
+        # is_active bleibt: Accounts sperren gehoert zur Facility-Verwaltung.
+        assert "is_active" in visible
+
+    def test_super_admin_fieldsets_also_exclude_permission_fields(self, rf, super_admin_user, staff_user):
+        """Auch super_admin sieht die vier Django-Permission-Felder nicht (Refs #1371).
+
+        Die App nutzt Django-Perms nicht und die #1271/#1297-Invariante verbietet
+        is_superuser=True fuer App-User — der legitime Verwaltungsbedarf ist null.
+        """
+        fieldsets = _admin().get_fieldsets(_request(rf, super_admin_user), obj=staff_user)
+        visible = {f for _name, options in fieldsets for f in options.get("fields", ())}
+        assert visible.isdisjoint(self._RESTRICTED)
+        # is_active bleibt auch fuer super_admin: Accounts sperren gehoert zur Verwaltung.
+        assert "is_active" in visible
+
+    def test_facility_admin_form_has_no_permission_fields(self, rf, admin_user, staff_user):
+        form_cls = _admin().get_form(_request(rf, admin_user), obj=staff_user, change=True)
+        assert set(form_cls.base_fields).isdisjoint(self._RESTRICTED)
+
+    def test_super_admin_form_also_has_no_permission_fields(self, rf, super_admin_user, staff_user):
+        """Auch das super_admin-Editorformular traegt die vier Felder nicht (Refs #1371)."""
+        form_cls = _admin().get_form(_request(rf, super_admin_user), obj=staff_user, change=True)
+        assert set(form_cls.base_fields).isdisjoint(self._RESTRICTED)
+
+    def test_facility_admin_post_smuggled_is_superuser_has_no_effect(self, rf, admin_user, staff_user):
+        """POST-Smuggling: is_superuser/is_staff im Body ohne zugehoeriges
+        Formfeld aendern trotz gueltigem, sonst vollstaendigem POST nichts --
+        das Form-Feld existiert serverseitig gar nicht erst (Refs #1371)."""
+        staff_user.is_staff = False
+        staff_user.is_superuser = False
+        staff_user.save(update_fields=["is_staff", "is_superuser"])
+
+        request = _request(rf, admin_user, method="post")
+        form_cls = _admin().get_form(request, obj=staff_user, change=True)
+        data = {
+            "username": staff_user.username,
+            "role": staff_user.role,
+            "facility": str(staff_user.facility_id or ""),
+            "preferred_language": staff_user.preferred_language,
+            "is_active": "on",
+            **_date_joined_post_data(form_cls, staff_user),
+            # Smuggling: Felder, fuer die dieses Form-Objekt kein Feld besitzt.
+            "is_superuser": "on",
+            "is_staff": "on",
+        }
+        form = form_cls(data=data, instance=staff_user)
+        assert form.is_valid(), form.errors
+        saved = form.save(commit=False)
+        assert saved.is_superuser is False
+        assert saved.is_staff is False
+
+    def test_super_admin_post_smuggled_is_superuser_has_no_effect(self, rf, super_admin_user, staff_user):
+        """Auch super_admin kann is_superuser/is_staff nicht per POST-Smuggling setzen.
+
+        Das ins Gegenteil gedrehte Gegenprobe (Refs #1371, adversariales Review
+        2026-07-11): Die vier Django-Permission-Felder existieren serverseitig auch
+        im super_admin-Formular nicht — ein POST ``is_superuser=on``/``is_staff=on``
+        ohne zugehoeriges Formfeld bleibt wirkungslos. Der legitime Verwaltungsbedarf
+        ist null (App nutzt Django-Perms nicht; is_superuser=True per #1271/#1297
+        ganz verboten)."""
+        staff_user.is_staff = False
+        staff_user.is_superuser = False
+        staff_user.save(update_fields=["is_staff", "is_superuser"])
+
+        request = _request(rf, super_admin_user, method="post")
+        form_cls = _admin().get_form(request, obj=staff_user, change=True)
+        data = {
+            "username": staff_user.username,
+            "role": staff_user.role,
+            "facility": str(staff_user.facility_id or ""),
+            "preferred_language": staff_user.preferred_language,
+            "is_active": "on",
+            **_date_joined_post_data(form_cls, staff_user),
+            # Smuggling: Felder, fuer die auch dieses super_admin-Form kein Feld besitzt.
+            "is_superuser": "on",
+            "is_staff": "on",
+        }
+        form = form_cls(data=data, instance=staff_user)
+        assert form.is_valid(), form.errors
+        saved = form.save(commit=False)
+        assert saved.is_superuser is False
+        assert saved.is_staff is False
+
+    def test_super_admin_save_preserves_no_django_superuser_invariant(self, rf, super_admin_user, staff_user):
+        """Nach einem echten Admin-Save eines super_admin-Editors bleibt die
+        #1271/#1297-Invariante erhalten: KEIN App-User traegt is_superuser=True.
+
+        Voller Speicher-Roundtrip (commit=True) mit einem POST, der is_superuser/
+        is_staff einzuschmuggeln versucht — danach muss
+        ``User.objects.filter(is_superuser=True).exists()`` False bleiben (Refs #1371)."""
+        staff_user.is_staff = False
+        staff_user.is_superuser = False
+        staff_user.save(update_fields=["is_staff", "is_superuser"])
+        assert User.objects.filter(is_superuser=True).exists() is False
+
+        request = _request(rf, super_admin_user, method="post")
+        admin_cls = _admin()
+        form_cls = admin_cls.get_form(request, obj=staff_user, change=True)
+        data = {
+            "username": staff_user.username,
+            "role": staff_user.role,
+            "facility": str(staff_user.facility_id or ""),
+            "preferred_language": staff_user.preferred_language,
+            "is_active": "on",
+            **_date_joined_post_data(form_cls, staff_user),
+            "is_superuser": "on",
+            "is_staff": "on",
+        }
+        form = form_cls(data=data, instance=staff_user)
+        assert form.is_valid(), form.errors
+        admin_cls.save_model(request, form.save(commit=False), form, change=True)
+
+        staff_user.refresh_from_db()
+        assert staff_user.is_superuser is False
+        assert staff_user.is_staff is False
+        assert User.objects.filter(is_superuser=True).exists() is False
