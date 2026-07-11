@@ -94,10 +94,49 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v19"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v20"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
-            "(#1482: APP_SHELL um Shell-Renderer/Nav/Orchestrator erweitert)."
+            "(#1523/#1499 SI-6: APP_SHELL um Event-/WorkItem-Create-Shells + "
+            "offline-create.js/offline-form-fields.js erweitert)."
         )
+
+    def test_sw_caches_offline_create_shells(self, client):
+        """Refs #1523 (#1499, SI-6): Die pk-losen Create-Shells (Event/WorkItem)
+        werden offline IN-PLACE an /events/new/ bzw. /workitems/new/ serviert —
+        Shell-URLs und ihre Renderer (offline-create.js + der reine Feld-Helfer
+        offline-form-fields.js) muessen daher im APP_SHELL pre-cached sein, sonst
+        fehlt der Renderer im Kalt-Offline-Pfad nach einem SW-Update.
+        """
+        response = client.get(reverse("service_worker"))
+        body = response.content.decode()
+        shell_block = _app_shell_block(body)
+        assert "/offline/event-shell/" in body, "Event-Create-Shell fehlt im APP_SHELL."
+        assert "/offline/workitem-shell/" in body, "WorkItem-Create-Shell fehlt im APP_SHELL."
+        assert "/static/js/offline-create.js" in shell_block, "offline-create.js fehlt im APP_SHELL."
+        assert "/static/js/offline-form-fields.js" in shell_block, "offline-form-fields.js fehlt im APP_SHELL."
+
+    def test_sw_serves_create_shell_fallback_before_generic_offline(self, client):
+        """Refs #1523 (#1499, SI-6): Offline fallen /events/new/ und
+        /workitems/new/ VOR dem generischen /offline/-Fallback auf die
+        gecachten Create-Shells (In-Place, URL bleibt kanonisch — analog dem
+        Client-/Konflikt-Shell-Zweig). Ohne diesen Zweig lieferte die
+        generische ``caches.match(request.url)``-Stufe die /offline/-Home
+        statt der echten Erfassungs-Shell.
+        """
+        body = client.get(reverse("service_worker")).content.decode()
+        assert "self.URL_PATTERNS.EVENT_NEW.test(request.url)" in body
+        assert ".match(OFFLINE_EVENT_SHELL_URL)" in body
+        assert "self.URL_PATTERNS.WORKITEM_NEW.test(request.url)" in body
+        assert ".match(OFFLINE_WORKITEM_SHELL_URL)" in body
+        # Die Create-Shell-Zweige muessen VOR der generischen
+        # ``.match(request.url)``-Stufe stehen (sonst gewinnt /offline/). Die
+        # tatsaechliche generische Stufe ist das LETZTE ``.match(request.url)``
+        # (frueheres Vorkommen steht nur im erklaerenden Kommentar).
+        event_branch = body.index("self.URL_PATTERNS.EVENT_NEW.test(request.url)")
+        workitem_branch = body.index("self.URL_PATTERNS.WORKITEM_NEW.test(request.url)")
+        generic_match = body.rindex(".match(request.url)")
+        assert event_branch < generic_match, "EVENT_NEW-Zweig muss vor dem generischen /offline/-Match stehen."
+        assert workitem_branch < generic_match, "WORKITEM_NEW-Zweig muss vor dem generischen /offline/-Match stehen."
 
     def test_sw_caches_manifest_and_favicon(self, client):
         """Refs #1334: PWA-Manifest (/manifest.json — aus Scope-Gruenden nicht
@@ -283,6 +322,15 @@ class TestServiceWorkerPrecacheHashedAssets:
         )
         assert re.search(r'"/static/css/styles\.[0-9a-f]{8,}\.css"', prod_block), (
             "styles.css wurde nicht auf eine gehashte URL aufgeloest."
+        )
+        # Refs #1523 (#1499, SI-6): die neuen Create-Shell-Renderer muessen in
+        # Prod ebenfalls auf gehashte URLs aufgeloest werden, sonst verfehlt
+        # caches.match sie im Kalt-Offline-Pfad (Dev/E2E ungehasht sehen es nicht).
+        assert re.search(r'"/static/js/offline-create\.[0-9a-f]{8,}\.js"', prod_block), (
+            "offline-create.js wurde nicht auf eine gehashte URL aufgeloest."
+        )
+        assert re.search(r'"/static/js/offline-form-fields\.[0-9a-f]{8,}\.js"', prod_block), (
+            "offline-form-fields.js wurde nicht auf eine gehashte URL aufgeloest."
         )
         # 2) Kein ungehashtes /static/-Original-Literal mehr im APP_SHELL-Block.
         for literal in dev_static_literals:
@@ -635,12 +683,18 @@ class TestOfflineFallbackI18n:
         assert "Offline workspace" not in body
 
     def test_create_hint_localized_en(self, client, staff_user):
-        """Refs #1483: Der Create-Wegweiser (samt Anonym-Satz, #1485) ist
-        uebersetzt — EN-Nutzer:innen bekommen keine deutschen Saetze."""
+        """Refs #1523 (#1499, SI-6): Der #1483-Wegweiser ist auf einen schmalen
+        Edge-Fallback zurueckgebaut — der SW serviert offline jetzt echte
+        Create-Shells, die /offline/-Home wird nur noch erreicht, wenn der SW
+        noch nicht v20 ist (Rollout-Fenster). Der verbliebene Hinweis ist
+        uebersetzt; EN-Nutzer:innen bekommen keinen deutschen Satz und keinen
+        "geht gar nicht"-Text mehr."""
         _login_with_language(client, staff_user, "en")
         body = client.get(reverse("offline_fallback")).content.decode()
-        assert "pick a person below" in body
-        assert "cannot be started offline" in body
+        assert "is not prepared yet" in body
+        assert "open it once online" in body
+        # Kein DE-Leak (weder der neue noch der alte #1483-Wegweiser-Text).
+        assert "noch nicht vorbereitet" not in body
         assert "Diese Aktion ist offline nicht direkt" not in body
 
     def test_anonymous_renders_german_default(self, client):

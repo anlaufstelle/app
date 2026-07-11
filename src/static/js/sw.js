@@ -23,7 +23,13 @@ importScripts("/static/js/url-patterns.js");
 // (alpine-csp.min.js, alpine/base-layout.js, sync-orchestrator.js); der Bump
 // erzwingt Re-Install + Re-Precache, damit Bestandsnutzer die Module offline
 // bekommen.
-const CACHE_NAME = "anlaufstelle-v19";
+// Refs #1523 (#1499, SI-6): v19 -> v20 -- APP_SHELL um die pk-losen
+// Create-Shells (OFFLINE_EVENT_SHELL_URL/OFFLINE_WORKITEM_SHELL_URL) und ihre
+// Renderer (offline-create.js + der reine Feld-Helfer offline-form-fields.js)
+// erweitert; der Bump erzwingt Re-Install + Re-Precache, damit der
+// Kalt-Offline-Pfad (/events/new/, /workitems/new/) den neuen Erfassungs-Shell
+// findet statt der /offline/-Sackgasse.
+const CACHE_NAME = "anlaufstelle-v20";
 // Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
 // ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
 // auch beim ersten Offline-Aufruf garantiert verfuegbar ist.
@@ -35,6 +41,11 @@ const OFFLINE_CLIENT_SHELL_URL = "/offline/client-shell/";
 // kanonischen URL /offline/conflicts/<pk>/ (offline) — statt Bounce auf
 // /offline/. Muster wie OFFLINE_CLIENT_SHELL_URL.
 const OFFLINE_CONFLICT_SHELL_URL = "/offline/conflict-shell/";
+// Refs #1523 (#1499, SI-6): generische, pk-lose Create-Shells fuer das
+// In-Place-Rendern an den kanonischen URLs /events/new/ bzw. /workitems/new/
+// (offline) — statt Bounce auf /offline/. Muster wie OFFLINE_CLIENT_SHELL_URL.
+const OFFLINE_EVENT_SHELL_URL = "/offline/event-shell/";
+const OFFLINE_WORKITEM_SHELL_URL = "/offline/workitem-shell/";
 // Refs #1386: Timeouts gegen Lie-Fi (Verbindung meldet sich als "online",
 // haengt aber ohne Antwort/Fehler). Ohne Timeout haengt respondWith()
 // endlos, statt in die vorhandenen Queue-/Offline-Fallback-Ketten zu laufen.
@@ -86,6 +97,15 @@ const APP_SHELL = [
     // per stale-while-revalidate gecacht). Ohne Pre-Cache bliebe der Shell
     // offline ohne Renderer.
     "/static/js/offline-client-view.js",
+    // Refs #1523 (#1499, SI-6): Die pk-losen Create-Shells (offline_create.html
+    // fuer Event/WorkItem) rendern ueber offline-create.js; der reine
+    // Feld-Helfer offline-form-fields.js (SI-3) speist den Event-Feld-Loop.
+    // Beide werden NUR von den Create-/Detail-Templates geladen (sonst nirgends
+    // -> nicht per stale-while-revalidate gecacht). Ohne Pre-Cache bliebe der
+    // Kalt-Offline-Pfad (/events/new/, /workitems/new/) nach einem SW-Update
+    // ohne Renderer.
+    "/static/js/offline-form-fields.js",
+    "/static/js/offline-create.js",
     // Refs #1396: Die Konflikt-/Dead-Letter-Verwaltung (/offline/conflicts/)
     // und der pk-lose Review-Shell rendern client-seitig aus der
     // verschluesselten IndexedDB. Ihre Renderer werden NUR von den
@@ -135,6 +155,10 @@ const APP_SHELL = [
     OFFLINE_FALLBACK_URL,
     OFFLINE_CLIENT_SHELL_URL,
     OFFLINE_CONFLICT_SHELL_URL,
+    // Refs #1523 (#1499, SI-6): pk-lose Create-Shells — offline IN-PLACE an
+    // /events/new/ bzw. /workitems/new/ serviert (Fallback-Zweige unten).
+    OFFLINE_EVENT_SHELL_URL,
+    OFFLINE_WORKITEM_SHELL_URL,
     // Refs #1396: pk-lose Konflikt-Liste — public + datenlos, wird offline
     // ueber die generische caches.match(request)-Fallback-Stufe serviert.
     "/offline/conflicts/",
@@ -476,6 +500,25 @@ self.addEventListener("fetch", (event) => {
                 if (conflictPk) {
                     return caches
                         .match(OFFLINE_CONFLICT_SHELL_URL)
+                        .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
+                }
+                // Refs #1523 (#1499, SI-6): Create-Formular-Sonderfall — den
+                // gecachten, pk-losen Event-/WorkItem-Create-Shell IN-PLACE an
+                // der kanonischen URL (/events/new/ bzw. /workitems/new/)
+                // servieren (200, KEIN Redirect); offline-create.js liest den
+                // Katalog + die mitgenommenen Personen aus der verschluesselten
+                // IndexedDB. Diese Zweige stehen VOR der generischen
+                // caches.match(request.url)-Stufe, die sonst die /offline/-Home
+                // statt der echten Erfassungs-Shell liefern wuerde. Muster wie
+                // die OFFLINE_*_SHELL_URL-Zweige darueber.
+                if (self.URL_PATTERNS.EVENT_NEW.test(request.url)) {
+                    return caches
+                        .match(OFFLINE_EVENT_SHELL_URL)
+                        .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
+                }
+                if (self.URL_PATTERNS.WORKITEM_NEW.test(request.url)) {
+                    return caches
+                        .match(OFFLINE_WORKITEM_SHELL_URL)
                         .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
                 }
                 // Refs #1396: nach der URL (nicht dem Live-Request) matchen. Die

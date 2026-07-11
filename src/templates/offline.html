@@ -198,14 +198,16 @@
         <h1>{% trans "Offline-Arbeitsplatz" %}</h1>
         <p>{% trans "Sie sind aktuell offline. Hier sind die Personen, die Sie für die Offline-Nutzung mitgenommen haben — auch ohne Netz lesbar und bearbeitbar. Änderungen werden bei Verbindung automatisch gesendet." %}</p>
 
-        {# Refs #1483: Kalt-Navigation auf ein Create-Formular (/events/new/, #}
-        {# /workitems/new/) faellt in-place auf diese Seite zurueck (URL bleibt #}
-        {# kanonisch). offline-home.js blendet den Wegweiser anhand von #}
-        {# location.pathname + URL_PATTERNS ein; den Anonym-Satz nur fuer die #}
-        {# Kontakt-Erfassung (klientenlos ist offline nicht erfassbar, #1485). #}
+        {# Refs #1523 (#1499, SI-6): Rueckbau des #1483-Wegweisers zu einem #}
+        {# schmalen Edge-Fallback. Seit dem SW-Flip (v20) serviert der Service #}
+        {# Worker /events/new/ + /workitems/new/ offline direkt als echte #}
+        {# Create-Shell — diese /offline/-Home wird dafuer nur noch erreicht, #}
+        {# wenn der SW noch NICHT v20 ist (Rollout-Fenster) oder das #}
+        {# Facility-Bundle fehlt. Kein „geht gar nicht"-Text mehr; #}
+        {# offline-home.js blendet den Hinweis anhand location.pathname + #}
+        {# URL_PATTERNS ein. #}
         <div class="oh-hint" data-testid="offline-create-hint" hidden>
-            <p>{% trans "Diese Aktion ist offline nicht direkt verfügbar: Neue Kontakte und Aufgaben legen Sie offline im Dossier einer zuvor „Offline mitgenommenen“ Person an — unten eine Person auswählen." %}</p>
-            <p data-testid="offline-create-hint-anonymous" hidden>{% trans "Kontakte ohne Personenbezug lassen sich offline nicht neu beginnen." %}</p>
+            <p>{% trans "Diese Offline-Erfassung ist noch nicht vorbereitet. Bitte einmal online öffnen, damit sie auch offline verfügbar wird." %}</p>
         </div>
 
         <div class="oh-status" data-testid="offline-home-status"></div>

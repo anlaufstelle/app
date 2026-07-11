@@ -240,25 +240,22 @@
         }
     }
 
-    // Refs #1483: Kalt-Navigation auf ein Create-Formular (/events/new/,
-    // /workitems/new/) faellt in-place auf diese Seite zurueck — die URL
-    // bleibt kanonisch. Anhand der precachten URL_PATTERNS (single source of
-    // truth, laedt vor diesem Script) den gezielten Wegweiser einblenden;
-    // den Anonym-Satz nur fuer die Kontakt-Erfassung (klientenlose Kontakte
-    // sind offline nicht erfassbar, Refs #1485).
+    // Refs #1523 (#1499, SI-6): Rueckbau des #1483-Wegweisers zu einem
+    // schmalen Edge-Fallback. Seit dem SW-Flip (v20) serviert der Service
+    // Worker /events/new/ + /workitems/new/ offline direkt als echte
+    // Create-Shell — diese Home wird dafuer nur noch erreicht, wenn der SW
+    // noch NICHT v20 ist (Rollout-Fenster) oder das Facility-Bundle fehlt.
+    // Anhand der precachten URL_PATTERNS (single source of truth, laedt vor
+    // diesem Script) den schmalen Hinweis einblenden — ohne den frueheren
+    // Anonym-Sonderfall (die Create-Shell erledigt die personenlose Erfassung
+    // selbst).
     function showCreateHint() {
         const hint = document.querySelector('[data-testid="offline-create-hint"]');
         const patterns = self.URL_PATTERNS;
         if (!hint || !patterns) return;
         const path = window.location.pathname;
-        const isEvent = patterns.EVENT_NEW.test(path);
-        const isWorkItem = patterns.WORKITEM_NEW.test(path);
-        if (!isEvent && !isWorkItem) return;
+        if (!patterns.EVENT_NEW.test(path) && !patterns.WORKITEM_NEW.test(path)) return;
         hint.hidden = false;
-        if (isEvent) {
-            const anon = hint.querySelector('[data-testid="offline-create-hint-anonymous"]');
-            if (anon) anon.hidden = false;
-        }
     }
 
     function init() {

@@ -286,6 +286,11 @@ def test_precache_includes_offline_sync_core_assets(browser, base_url):
             "/static/js/alpine-csp.min.js",
             "/static/js/alpine/base-layout.js",
             "/static/js/sync-orchestrator.js",
+            # Refs #1523 (#1499, SI-6): Renderer der pk-losen Create-Shells
+            # (Event/WorkItem) — ohne Pre-Cache faellt der Kalt-Offline-Pfad
+            # (/events/new/, /workitems/new/) nach einem SW-Update ohne Renderer.
+            "/static/js/offline-form-fields.js",
+            "/static/js/offline-create.js",
         ):
             assert asset in cached_paths, f"{asset} nicht im Precache gefunden: {cached_paths}"
     finally:
