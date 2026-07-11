@@ -20,6 +20,16 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
+# Liest das echte ``scripts/ops/backup.sh`` aus dem Repo-Tree — mutmut kopiert
+# ``scripts/`` NICHT nach ``mutants/`` (nur ``src/``), sonst schlägt der
+# Baseline-Stats-Lauf mit FileNotFoundError fehl. Wie die
+# ``test_architecture_guards_*``-Files daher als ``architecture`` markiert und
+# in Mutmut-Runs deselektiert (#930/#1388); in ``make ci``/CI läuft der Test
+# regulär (nur ``e2e`` wird dort ausgeschlossen).
+pytestmark = pytest.mark.architecture
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 OPS_DIR = REPO_ROOT / "scripts" / "ops"
 
