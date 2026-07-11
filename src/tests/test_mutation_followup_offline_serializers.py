@@ -525,6 +525,9 @@ class TestSerializeDocumentType:
             "is_active",
             "category",
             "sensitivity",
+            # Refs #1518 (#1499): Mindest-Kontaktstufe fuer den Offline-Create-
+            # Picker-Vorfilter (weicher Filter „ohne Person").
+            "min_contact_stage",
             "icon",
             "color",
             "fields",

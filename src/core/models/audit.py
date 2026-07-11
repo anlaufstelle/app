@@ -33,6 +33,11 @@ class AuditLog(models.Model):
         # ("wer nahm wann welches Klientel offline mit") bleibt erhalten, nur die
         # Klassifikation aendert sich.
         OFFLINE_BUNDLE_READ = "offline_bundle_read", _("Offline-Bundle gelesen")
+        # Refs #1518 (#1499): Lesen des personenlosen Facility-Meta-Bundles
+        # (Offline-Create-Katalog). Wie ``OFFLINE_BUNDLE_READ`` bewusst NICHT
+        # ``EXPORT`` (haelt die Massen-Export-Breach-Heuristik sauber); zusaetzlich
+        # personenlos ⇒ PII-frei (kein Pseudonym, keine Klientel-Referenz).
+        OFFLINE_FACILITY_BUNDLE_READ = "offline_facility_bundle_read", _("Offline-Facility-Bundle gelesen")
         CLIENT_CREATE = "client_create", _("Person angelegt")
         CLIENT_UPDATE = "client_update", _("Person aktualisiert")
         CLIENT_SOFT_DELETED = "client_soft_deleted", _("Person in Papierkorb")

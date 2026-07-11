@@ -46,6 +46,7 @@ from core.services.system.field_types import (
 from core.services.system.offline import (
     BUNDLE_SCHEMA_VERSION,
     BUNDLE_TTL_SECONDS,
+    FACILITY_BUNDLE_SCHEMA_VERSION,
     LOOKBACK_DAYS,
     MAX_EVENTS_PER_BUNDLE,
     _serialize_case,
@@ -55,6 +56,7 @@ from core.services.system.offline import (
     _serialize_workitem,
     _visible_data_fields,
     build_client_offline_bundle,
+    build_facility_offline_bundle,
 )
 from core.services.system.settings import (
     _AUDIT_EXEMPT,
@@ -67,6 +69,7 @@ from core.services.system.settings import (
 __all__ = [
     "BUNDLE_SCHEMA_VERSION",
     "BUNDLE_TTL_SECONDS",
+    "FACILITY_BUNDLE_SCHEMA_VERSION",
     "FIELD_TYPE_REGISTRY",
     "FILE",
     "FieldTypeSpec",
@@ -91,6 +94,7 @@ __all__ = [
     "_serialize_workitem",
     "_visible_data_fields",
     "build_client_offline_bundle",
+    "build_facility_offline_bundle",
     "bypass_replication_triggers",
     "export_events_csv",
     "generate_jugendamt_pdf",

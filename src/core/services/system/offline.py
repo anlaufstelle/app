@@ -39,6 +39,12 @@ BUNDLE_TTL_SECONDS = 48 * 3600
 # caches after an app upgrade.
 BUNDLE_SCHEMA_VERSION = 1
 
+# Refs #1518 (#1499): eigene Schema-Version fuer das personenlose Facility-Meta-
+# Bundle. Bewusst UNABHAENGIG von ``BUNDLE_SCHEMA_VERSION`` — Klient- und
+# Facility-Bundle evolvieren getrennt, ein Layout-Wechsel im einen darf den
+# Cache des anderen nicht invalidieren.
+FACILITY_BUNDLE_SCHEMA_VERSION = 1
+
 
 def _serialize_field_template(field_template) -> dict[str, Any]:
     return {
@@ -68,6 +74,12 @@ def _serialize_document_type(user, doc_type) -> dict[str, Any]:
         "is_active": doc_type.is_active,
         "category": doc_type.category,
         "sensitivity": doc_type.sensitivity,
+        # Refs #1518 (#1499): Mindest-Kontaktstufe (leer = keine) fuer den
+        # weichen Picker-Vorfilter der Offline-Create-Shell — Typen mit einer
+        # Mindeststufe sind „ohne Person" (anonym) nicht waehlbar. Der harte
+        # Server-Validator bleibt beim Replay die letzte Instanz. ``None`` wird
+        # wie icon/color zu "" normalisiert (JSON-clean, JS-falsy).
+        "min_contact_stage": doc_type.min_contact_stage or "",
         "icon": doc_type.icon or "",
         "color": doc_type.color or "",
         # Refs #1111: Nur Felder serialisieren, deren Wert der Nutzer per
@@ -285,4 +297,44 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
         "assignable_users": _serialize_assignable_users(facility) if is_staff_or_above else [],
         "events": [_serialize_event(user, ev) for ev in events],
         "document_types": [_serialize_document_type(user, dt) for dt in doc_types.values()],
+    }
+
+
+def build_facility_offline_bundle(user, facility) -> dict[str, Any]:
+    """Assemble a *person-less* snapshot of a facility's offline-create metadata.
+
+    Refs #1518 (#1499). The facility bundle mirrors the client bundle but
+    carries NO client roster and NO per-person data (events/cases/work items).
+    It ships exactly what an offline "+"-create shell needs to author an event
+    or work item cold-offline — before any specific client has been taken
+    offline: the ACTIVE document-type catalogue (with field schema) plus the
+    assignable-user roster for work items.
+
+    The same field-level sensitivity boundary applies as in the client bundle:
+    ``_serialize_document_type`` runs each field through ``user_can_see_field``,
+    so a restricted field's schema (options/help text) never leaves the server
+    (Bundle-ist-Derivat-Invariante). ``assignable_users`` is a staff roster (no
+    client PII) and — mirroring the client builder — is only shipped to Staff+
+    (only they can create/assign work items); Assistants receive an empty list,
+    which the offline WorkItem shell uses as its create-gate.
+    """
+
+    # Personenlos: nur der aktive Offline-Create-Katalog (wie EventMetaForm),
+    # ohne Event-Vereinigung (kein Klient ⇒ keine referenzierten Alt-Typen).
+    doc_types = DocumentType.objects.filter(facility=facility, is_active=True).order_by("sort_order", "name")
+
+    is_staff_or_above = getattr(user, "is_staff_or_above", False)
+
+    generated_at = timezone.now()
+
+    return {
+        "schema_version": FACILITY_BUNDLE_SCHEMA_VERSION,
+        "generated_at": generated_at.isoformat(),
+        "ttl": BUNDLE_TTL_SECONDS,
+        "expires_at": (generated_at + timedelta(seconds=BUNDLE_TTL_SECONDS)).isoformat(),
+        "document_types": [_serialize_document_type(user, dt) for dt in doc_types],
+        # Refs #1398/#1518: zuweisbare Nutzer:innen nur fuer Staff+ (nur sie
+        # legen WorkItems an/weisen zu) — begrenzt die Roster-Exposition und
+        # speist den Staff+-Gate der Offline-WorkItem-Shell (SI-5).
+        "assignable_users": _serialize_assignable_users(facility) if is_staff_or_above else [],
     }

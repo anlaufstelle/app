@@ -24,7 +24,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_OFFLINE_BUNDLE
 from core.models import AuditLog, Client
 from core.services.audit import log_audit_event
-from core.services.system import build_client_offline_bundle
+from core.services.system import build_client_offline_bundle, build_facility_offline_bundle
 from core.views.mixins import AssistantOrAboveRequiredMixin
 
 # Refs #1410 (a): volatile Bundle-Metadaten, die sich pro Request aendern und
@@ -93,6 +93,57 @@ class OfflineClientBundleView(AssistantOrAboveRequiredMixin, View):
                 "event": "offline_bundle_fetched",
                 "pseudonym": client.pseudonym,
                 "event_count": len(bundle.get("events", [])),
+            },
+        )
+
+        response = JsonResponse(bundle)
+        response["ETag"] = etag
+        return response
+
+
+class OfflineFacilityBundleView(AssistantOrAboveRequiredMixin, View):
+    """``GET /api/v1/offline/bundle/facility/`` — person-less facility-meta snapshot.
+
+    Refs #1518 (#1499). Mirrors :class:`OfflineClientBundleView` (same rate
+    limit, same ``_bundle_etag``/304 revalidation) but ships a *person-less*
+    bundle: the offline-create catalogue (active DocumentTypes + field schema)
+    and the assignable-user roster, with NO client data. It lets the offline
+    "+"-create shell author events/work items cold-offline before any specific
+    client has been taken offline.
+
+    Because the bundle is person-less, the ``OFFLINE_FACILITY_BUNDLE_READ``
+    audit entry is PII-free (no pseudonym, no client reference) — its detail
+    carries only count/schema metadata. As with the client bundle, a matching
+    conditional GET returns ``304`` with no body and writes no audit trail.
+    """
+
+    http_method_names = ["get"]
+
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_OFFLINE_BUNDLE, method="GET", block=True))
+    def get(self, request):
+        facility = request.current_facility
+
+        bundle = build_facility_offline_bundle(request.user, facility)
+        etag = _bundle_etag(bundle)
+
+        if_none_match = request.headers.get("If-None-Match")
+        if if_none_match:
+            candidates = parse_etags(if_none_match)
+            if "*" in candidates or etag in candidates:
+                # 304: kein Body, keine Audit-Spur (kein Datenabfluss); ETag
+                # wird gespiegelt, damit der Client seinen Validator behaelt.
+                not_modified = HttpResponse(status=304)
+                not_modified["ETag"] = etag
+                return not_modified
+
+        log_audit_event(
+            request,
+            AuditLog.Action.OFFLINE_FACILITY_BUNDLE_READ,
+            target_type="Facility-OfflineBundle",
+            detail={
+                "event": "offline_facility_bundle_fetched",
+                "document_type_count": len(bundle.get("document_types", [])),
+                "schema_version": bundle.get("schema_version"),
             },
         )
 

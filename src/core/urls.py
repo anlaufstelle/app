@@ -68,6 +68,7 @@ from core.views.offline import (
     OfflineConflictReviewView,
     OfflineConflictShellView,
     OfflineCsrfTokenView,
+    OfflineFacilityBundleView,
 )
 from core.views.retention import (
     RetentionApproveView,
@@ -269,6 +270,13 @@ urlpatterns = [
         "api/v1/offline/bundle/client/<uuid:pk>/",
         OfflineClientBundleView.as_view(),
         name="offline_bundle",
+    ),
+    # Refs #1518 (#1499): personenloses Facility-Meta-Bundle (Offline-Create-
+    # Katalog) — kein pk, kein Roster-PII.
+    path(
+        "api/v1/offline/bundle/facility/",
+        OfflineFacilityBundleView.as_view(),
+        name="offline_facility_bundle",
     ),
     # Refs #1408: dedizierter CSRF-Token-Endpoint fuer den Offline-Replay-
     # Refresh-Pfad (loest das fragile /login/-HTML-Scraping ab).

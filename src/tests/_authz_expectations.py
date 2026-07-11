@@ -449,6 +449,10 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "client_identified.pk"),),
         idor=(("pk", "foreign_client.pk"),),
     ),
+    # Refs #1518 (#1499): personenloses Facility-Meta-Bundle. Wie offline_bundle
+    # ASSISTANT_PLUS, aber pk-los (kein Roster/kein IDOR — Facility-Scope aus
+    # request.current_facility).
+    E("core:offline_facility_bundle", "offline-api", get=ASSISTANT_PLUS),
     # Refs #1408: dedizierter CSRF-Token-Endpoint fuer den Offline-Replay-
     # Refresh-Pfad. Public wie offline_client_shell — der Token ist kein
     # Geheimnis (Django rendert ihn in jedes Formular), PII-frei; bisherige
