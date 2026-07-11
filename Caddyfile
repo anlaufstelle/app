@@ -6,6 +6,28 @@ www.{$DOMAIN} {
 {$DOMAIN} {
     reverse_proxy web:8000
 
+    # Defense-in-Depth gegen Disk-Fill/OOM (Refs #1363, N10 + Review-Nachschlag):
+    # weist Request-Bodies oberhalb der App-seitigen Obergrenze schon am Edge
+    # ab, bevor sie den Gunicorn-Worker erreichen. Dimensioniert fuer EIN
+    # volles Multi-File-Feld: ``FILE_VAULT_MAX_UPLOAD_BYTES`` (Default 50 MiB)
+    # * ``FILE_VAULT_MAX_UPLOAD_FILES`` (Default 20 Dateien/Feld,
+    # MultipleFileInput/Refs #622) = 1000 MiB, + 10 % Marge fuer
+    # Multipart-Overhead (Boundaries, Feld-Header, CSRF-Token u.ae.) = 1100 MiB.
+    # Ein kleinerer, nur auf EINE Datei dimensionierter Cap weist legitime
+    # Multi-File-Uploads (bereits unterstuetztes Feature) am Edge mit 413 ab,
+    # obwohl jede einzelne Datei alle App-seitigen Checks bestehen wuerde.
+    # WICHTIG: rein statisch, folgt NICHT automatisch einer per Env
+    # ueberschriebenen ``FILE_VAULT_MAX_UPLOAD_BYTES``/``FILE_VAULT_MAX_UPLOAD_FILES``
+    # — bei Aenderung eines der beiden App-Limits diesen Wert manuell
+    # nachziehen und Caddy neu laden (docs/ops-runbook.md § 5.7).
+    # Restrisiko (dokumentiert, nicht gefixt): ein DocumentType KANN mehrere
+    # FILE-Felder tragen (nur von facility_admin/super_admin konfigurierbar)
+    # — dann steigt der theoretische Worst-Case je zusaetzlichem Feld um
+    # weitere 1000 MiB. Test-Guard: test_architecture_guards_ops.py::TestCaddyUploadBodyLimit.
+    request_body {
+        max_size 1100MiB
+    }
+
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
         X-Content-Type-Options "nosniff"

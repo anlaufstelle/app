@@ -13,6 +13,13 @@
 {$DOMAIN} {
 	reverse_proxy web:8000
 
+	# Defense-in-Depth gegen Disk-Fill/OOM (Refs #1363, N10 + Review-Nachschlag):
+	# siehe Caddyfile (prod) fuer die ausfuehrliche Begruendung/Marge (1000 MiB
+	# fuer ein volles Multi-File-Feld + 10 % Marge).
+	request_body {
+		max_size 1100MiB
+	}
+
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
 		X-Content-Type-Options "nosniff"

@@ -23,7 +23,7 @@ from django.conf import settings as django_settings
 from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
-from core.constants import DEFAULT_ALLOWED_FILE_TYPES
+from core.constants import DEFAULT_ALLOWED_FILE_TYPES, DEFAULT_MAX_FILE_SIZE_MB
 from core.models.settings import Settings
 from core.services.file_vault.audit import log_attachment_violation
 from core.services.file_vault.virus_scan import VirusScannerUnavailableError, scan_file
@@ -39,17 +39,38 @@ _ARCHIVE_EXTENSIONS = frozenset({"zip", "docx", "xlsx", "pptx"})
 
 
 def enforce_upload_size(facility, uploaded_file, event, user):
-    """Reject uploads exceeding the hard service-layer size ceiling.
+    """Reject uploads exceeding ``min(Facility-Limit, globaler Cap)``.
 
-    Refs #1268 (T3): Die Form-Schicht prueft die per-Facility-Groesse; der
-    Service ist die letzte Bastion fuer programmatische Aufrufer.
-    ``FILE_VAULT_MAX_UPLOAD_BYTES`` ist eine absolute Obergrenze, die VOR jeder
-    Voll-Pufferung (Virenscan/Encrypt) greift — so wird eine Riesendatei nicht
-    erst in den RAM gelesen (authentifizierter Memory-Exhaustion-DoS). Jeder
-    Verstoss wird als ``SECURITY_VIOLATION`` protokolliert (Form-Bypass ist
-    verdaechtig).
+    Refs #1268 (T3): urspruenglich nur die harte globale Obergrenze
+    (``FILE_VAULT_MAX_UPLOAD_BYTES``) als letzte Bastion fuer programmatische
+    Aufrufer, die den Formular-Layer (``Settings.max_file_size_mb``) umgehen.
+
+    Refs #1363 (N10): Das reichte nicht — ``DynamicEventDataForm.clean()``
+    prueft das (typischerweise engere) Facility-Limit nur fuer regulaere
+    Formularfelder. Replace-Uploads (``<slug>__replace__<id>``,
+    ``services/events/crud.py:_apply_replace``) laufen direkt an
+    ``store_encrypted_file`` vorbei am Formular und wurden bis zur globalen
+    50-MB-Grenze durchgelassen. Diese Funktion ist die SSOT fuer JEDEN
+    Aufrufer: sie zieht ``Settings.max_file_size_mb`` selbst (gleiches
+    fail-closed-Muster wie ``enforce_allowed_file_types`` — fehlende Row
+    faellt auf :data:`core.constants.DEFAULT_MAX_FILE_SIZE_MB` zurueck) und
+    erzwingt das striktere der beiden Limits.
+
+    Greift VOR jeder Voll-Pufferung (Virenscan/Encrypt) — so wird eine
+    Riesendatei nicht erst in den RAM gelesen (authentifizierter
+    Memory-Exhaustion-DoS). Jeder Verstoss wird als ``SECURITY_VIOLATION``
+    protokolliert (Form-Bypass ist verdaechtig).
     """
-    max_bytes = getattr(django_settings, "FILE_VAULT_MAX_UPLOAD_BYTES", 50 * 1024 * 1024)
+    global_cap_bytes = getattr(django_settings, "FILE_VAULT_MAX_UPLOAD_BYTES", 50 * 1024 * 1024)
+
+    try:
+        facility_settings = Settings.objects.get(facility=facility)
+    except Settings.DoesNotExist:
+        facility_settings = None
+    facility_max_mb = facility_settings.max_file_size_mb if facility_settings else DEFAULT_MAX_FILE_SIZE_MB
+    facility_cap_bytes = facility_max_mb * 1024 * 1024
+
+    max_bytes = min(global_cap_bytes, facility_cap_bytes)
     size = getattr(uploaded_file, "size", None)
     if size is None or size <= max_bytes:
         return

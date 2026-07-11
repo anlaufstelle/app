@@ -186,3 +186,60 @@ class TestDeployChecksWiredIntoStartup:
             "per Case-Guard fail-closed abweisen — ein oeffentlich bekannter Key "
             "verschluesselt faktisch nicht (Refs #1441)."
         )
+
+
+class TestCaddyUploadBodyLimit:
+    """Refs #1363 (N10, Review-Nachschlag): Der Caddy ``request_body max_size``-
+    Cap (Defense-in-Depth gegen Disk-Fill/OOM) war urspruenglich nur auf EINE
+    Datei + kleine Multipart-Marge dimensioniert und ignorierte
+    ``FILE_VAULT_MAX_UPLOAD_FILES`` (Default 20 Dateien/Feld,
+    ``MultipleFileInput``/Refs #622) — ein bereits bestehendes, explizit
+    unterstuetztes Feature. Ein legitimer Multi-File-Upload nahe dem
+    Datei-Anzahl-Limit wurde am Edge mit 413 abgewiesen, obwohl jede einzelne
+    Datei alle App-seitigen Groessen-/Typ-Checks bestanden haette.
+
+    Dieser Guard haelt fest, dass der statische Caddy-Cap in JEDER der vier
+    Caddyfile-Varianten mindestens den Worst-Case eines vollen Multi-File-
+    Felds deckt (``FILE_VAULT_MAX_UPLOAD_BYTES * FILE_VAULT_MAX_UPLOAD_FILES``)
+    und alle Varianten synchron bleiben — schlaegt fehl, sobald eines der
+    beiden Settings ohne Nachziehen des Caddy-Werts geaendert wird.
+    """
+
+    _CADDYFILES = (
+        Path("Caddyfile"),
+        Path("Caddyfile.dev"),
+        Path("Caddyfile.demo"),
+        Path("Caddyfile.staging"),
+    )
+
+    _UNITS = {"B": 1, "KIB": 1024, "MIB": 1024**2, "GIB": 1024**3}
+
+    @classmethod
+    def _max_size_bytes(cls, path: Path) -> int:
+        content = path.read_text(encoding="utf-8")
+        match = re.search(r"max_size\s+(\d+)\s*(KiB|MiB|GiB|B)\b", content)
+        assert match is not None, f"kein 'request_body max_size' in {path} gefunden"
+        value, unit = match.groups()
+        return int(value) * cls._UNITS[unit.upper()]
+
+    def test_all_variants_cover_a_full_multi_file_field(self) -> None:
+        import anlaufstelle.settings.base as base_settings
+
+        worst_case_bytes = base_settings.FILE_VAULT_MAX_UPLOAD_BYTES * base_settings.FILE_VAULT_MAX_UPLOAD_FILES
+        for path in self._CADDYFILES:
+            caddy_cap_bytes = self._max_size_bytes(path)
+            assert caddy_cap_bytes >= worst_case_bytes, (
+                f"{path}: request_body max_size ({caddy_cap_bytes} Bytes) deckt "
+                "nicht den Worst-Case eines vollen Multi-File-Felds "
+                "(FILE_VAULT_MAX_UPLOAD_BYTES * FILE_VAULT_MAX_UPLOAD_FILES = "
+                f"{worst_case_bytes} Bytes) — legitime, bereits unterstuetzte "
+                "Multi-File-Uploads werden sonst am Edge mit 413 abgewiesen, "
+                "obwohl sie alle App-seitigen Checks bestehen wuerden (Refs #1363)."
+            )
+
+    def test_all_variants_share_the_same_cap(self) -> None:
+        caps = {str(path): self._max_size_bytes(path) for path in self._CADDYFILES}
+        assert len(set(caps.values())) == 1, (
+            f"Caddyfile-Varianten sind auseinandergedriftet: {caps} — alle vier "
+            "muessen denselben request_body-Cap tragen (Refs #1363)."
+        )

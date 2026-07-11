@@ -68,7 +68,9 @@ def store_encrypted_file(
     """
     enforce_allowed_file_types(facility, uploaded_file, event, user)
     # #1268: harte Service-Groessenobergrenze VOR der Voll-Pufferung im Virenscan
-    # (Memory-DoS-Schutz), unabhaengig von der per-Facility-Form-Groesse.
+    # (Memory-DoS-Schutz). #1363: erzwingt zugleich das per-Facility-Limit als SSOT
+    # (min(Facility-Limit, globaler Cap)) fuer ALLE Aufrufer, auch den Replace-Pfad,
+    # der am DynamicEventDataForm vorbeilaeuft.
     enforce_upload_size(facility, uploaded_file, event, user)
     run_virus_scan(facility, uploaded_file, event, user)
     # #1274: den verifizierten (libmagic) MIME festhalten, damit er beim Download
