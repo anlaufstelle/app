@@ -86,7 +86,7 @@ class SystemAuditLogDetailView(SystemAuditMixin, View):
     """
 
     def get(self, request, pk):
-        entry = AuditLog.objects.select_related("user", "facility").filter(pk=pk).first()
+        entry = AuditLog.objects.select_related("user", "actor", "facility").filter(pk=pk).first()
         if entry is None:
             # ``get_object_or_404`` haette die ``select_related`` verloren.
             entry = get_object_or_404(AuditLog, pk=pk)

@@ -209,19 +209,52 @@ def _capture_old_user_state(sender, instance, **kwargs):
     instance._audit_old_can_confirm_deletion = old.can_confirm_deletion
 
 
+def _resolve_audit_actor(instance):
+    """Handelnden Admin (Actor) fuer ziel-attribuierte User-Events aufloesen.
+
+    Refs #1369: Der Admin wird ueber das transiente ``_audit_actor``-Attribut
+    durchgereicht, das ``UserAdmin.save_model`` auf ``request.user`` setzt.
+    Fehlt es (nicht request-getriebener ORM-Pfad: Management-Command, Service,
+    Bootstrap, direkter ``save()``), gibt es keinen menschlichen Actor — der
+    Eintrag wird als ``system`` markiert.
+
+    Rueckgabe ``(actor, detail_attribution)``:
+
+    * ``actor`` — die ``User``-Instanz (oder ``None``); wird als ``AuditLog.actor``
+      gespeichert und (falls gesetzt) tamper-evident in die Hash-Kette gebunden.
+    * ``detail_attribution`` — namens-erhaltende, ebenfalls gehashte Kopie fuers
+      ``detail``: ``{"actor_id", "actor_username"}`` bei bekanntem Actor (bleibt
+      lesbar, auch wenn der Admin spaeter geloescht wird und ``actor`` per
+      ``SET_NULL`` auf NULL faellt), sonst ``{"system": True}`` als explizite
+      Systemkennzeichnung.
+    """
+    actor = getattr(instance, "_audit_actor", None)
+    if actor is None or getattr(actor, "pk", None) is None or not getattr(actor, "is_authenticated", False):
+        return None, {"system": True}
+    return actor, {"actor_id": actor.pk, "actor_username": actor.get_username()}
+
+
 @receiver(post_save, sender=User)
 def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
     """Vergleicht alten und neuen User-Zustand; loggt Rollenwechsel und
-    Deaktivierung (True → False) als eigene AuditLog-Einträge."""
+    Deaktivierung (True → False) als eigene AuditLog-Einträge.
+
+    Refs #1369: ``user`` traegt das **Ziel** (der veraenderte User), ``actor``
+    den **handelnden Admin**. So attribuiert der immutable Log die Eskalation
+    korrekt, statt so zu lesen, als haette das Ziel sich selbst das Flag gesetzt.
+    """
     if created:
         return  # Neu-Anlage wird via Admin-Create-Flow separat auditiert.
     old_role = getattr(instance, "_audit_old_role", None)
     old_is_active = getattr(instance, "_audit_old_is_active", None)
 
+    actor, attribution = _resolve_audit_actor(instance)
+
     if old_role is not None and old_role != instance.role:
         AuditLog.objects.create(
             facility=getattr(instance, "facility", None),
             user=instance,
+            actor=actor,
             action=AuditLog.Action.USER_ROLE_CHANGED,
             target_type="User",
             target_id=str(instance.pk),
@@ -229,6 +262,7 @@ def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
                 "old_role": old_role,
                 "new_role": instance.role,
                 "username": instance.username,
+                **attribution,
             },
         )
 
@@ -236,10 +270,11 @@ def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
         AuditLog.objects.create(
             facility=getattr(instance, "facility", None),
             user=instance,
+            actor=actor,
             action=AuditLog.Action.USER_DEACTIVATED,
             target_type="User",
             target_id=str(instance.pk),
-            detail={"username": instance.username},
+            detail={"username": instance.username, **attribution},
         )
 
     # Refs #1053: Vergabe/Entzug des Rechts „Löschbestätigung" ist
@@ -249,6 +284,7 @@ def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
         AuditLog.objects.create(
             facility=getattr(instance, "facility", None),
             user=instance,
+            actor=actor,
             action=AuditLog.Action.DELETION_CONFIRMER_CHANGED,
             target_type="User",
             target_id=str(instance.pk),
@@ -256,5 +292,6 @@ def _log_user_role_or_deactivation(sender, instance, created, **kwargs):
                 "old_value": old_confirmer,
                 "new_value": instance.can_confirm_deletion,
                 "username": instance.username,
+                **attribution,
             },
         )

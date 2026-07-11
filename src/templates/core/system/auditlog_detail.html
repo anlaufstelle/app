@@ -23,6 +23,12 @@
                     {% if entry.user %}{{ entry.user }}{% else %}<span class="text-ink-muted">–</span>{% endif %}
                 </p>
             </div>
+            {% if entry.actor %}
+            <div>
+                <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Handelnde Person" %}</span>
+                <p class="text-sm font-medium">{{ entry.actor }}</p>
+            </div>
+            {% endif %}
             <div>
                 <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Aktion" %}</span>
                 <p class="text-sm font-medium">

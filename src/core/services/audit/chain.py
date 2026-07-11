@@ -57,20 +57,32 @@ def _canonical_payload(row) -> str:
     Dict-Einfuegereihenfolge. Identisch beim Schreiben (In-Memory-Instanz) und
     beim Verify (aus der DB geladene Zeile).
     """
+    payload = {
+        "timestamp": _canonical_timestamp(row.timestamp),
+        "action": str(row.action),
+        "user_id": row.user_id,
+        "facility_id": row.facility_id,
+        "target_type": row.target_type,
+        "target_id": row.target_id,
+        # ``GenericIPAddressField`` hat ``empty_strings_allowed=False`` →
+        # die DB persistiert "" als NULL. Auf NULL normalisieren, damit der
+        # Write-Hash (In-Memory "") und der Verify-Hash (DB NULL) gleich sind.
+        "ip_address": row.ip_address or None,
+        "detail": row.detail,
+    }
+    # Refs #1369: der handelnde Admin (``actor``) geht nur dann in den
+    # Kettenhash ein, wenn er gesetzt ist. Bestandszeilen (vor Migration 0101)
+    # und system-getriebene Eintraege haben ``actor_id IS NULL`` → der Schluessel
+    # bleibt WEG und ihr Canonical-Payload (und damit ihr gespeicherter
+    # ``entry_hash``) ist bit-identisch zu vor der Migration; die bestehende
+    # Kette bleibt verifizierbar. Neu attribuierte Eintraege binden den Actor
+    # dagegen tamper-evident in die Kette ein. ``getattr`` haelt die Funktion
+    # robust gegen In-Memory-Rows ohne geladenes ``actor``-Attribut.
+    actor_id = getattr(row, "actor_id", None)
+    if actor_id is not None:
+        payload["actor_id"] = actor_id
     return json.dumps(
-        {
-            "timestamp": _canonical_timestamp(row.timestamp),
-            "action": str(row.action),
-            "user_id": row.user_id,
-            "facility_id": row.facility_id,
-            "target_type": row.target_type,
-            "target_id": row.target_id,
-            # ``GenericIPAddressField`` hat ``empty_strings_allowed=False`` →
-            # die DB persistiert "" als NULL. Auf NULL normalisieren, damit der
-            # Write-Hash (In-Memory "") und der Verify-Hash (DB NULL) gleich sind.
-            "ip_address": row.ip_address or None,
-            "detail": row.detail,
-        },
+        payload,
         sort_keys=True,
         separators=(",", ":"),
         default=str,

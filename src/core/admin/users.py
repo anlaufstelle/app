@@ -172,6 +172,16 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
         der Admin-Oberfläche anzeigen — mit Warnhinweis, dass dieser Weg
         unsicherer ist. Siehe Issue #528.
         """
+        # Refs #1369: Der handelnde Admin wird als transientes Instanz-Attribut
+        # durchgereicht (gleiches Muster wie ``_audit_old_*`` in signals/audit.py).
+        # Der ``post_save``-Signal-Handler liest es und schreibt es als ``actor``
+        # in die ziel-attribuierten Privileg-Audits (Rollenwechsel/Deaktivierung/
+        # Loeschbestaetigung) — sonst traegt der immutable Log nur das Ziel und
+        # liest sich, als haette es sich selbst das Flag gesetzt. Nicht-request-
+        # getriebene ORM-Pfade (Command/Service) setzen dieses Attribut nicht und
+        # werden im Signal explizit als ``system`` markiert.
+        obj._audit_actor = request.user
+
         # Defense-in-Depth gegen umgangene Form-Validierung (A2.1, Refs #1020):
         # nur super_admin darf die installationsweite Rolle super_admin vergeben.
         if obj.role == User.Role.SUPER_ADMIN and not getattr(request.user, "is_super_admin", False):

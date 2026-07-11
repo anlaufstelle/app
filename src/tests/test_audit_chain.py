@@ -75,6 +75,24 @@ class TestComputeEntryHash:
         other.timestamp = base.timestamp  # nur ``detail`` unterscheidet sich
         assert compute_entry_hash(base, "") != compute_entry_hash(other, "")
 
+    def test_actor_only_included_in_hash_when_set(self, facility, staff_user, admin_user):
+        """Refs #1369: ``actor`` geht nur in den Hash ein, wenn gesetzt.
+
+        Ein Eintrag ohne Actor (Bestandszeile / systemgetrieben) hat exakt den
+        Payload wie vor Migration 0101 (Rueckwaerts-Kompatibilitaet der Kette),
+        ein Eintrag MIT Actor bindet ihn tamper-evident ein → anderer Hash.
+        """
+        without = AuditLog(facility=facility, user=staff_user, action=AuditLog.Action.USER_ROLE_CHANGED, detail={})
+        with_actor = AuditLog(
+            facility=facility,
+            user=staff_user,
+            actor=admin_user,
+            action=AuditLog.Action.USER_ROLE_CHANGED,
+            detail={},
+        )
+        with_actor.timestamp = without.timestamp  # nur ``actor`` unterscheidet sich
+        assert compute_entry_hash(without, "") != compute_entry_hash(with_actor, "")
+
 
 # ---------------------------------------------------------------------------
 # Kettenaufbau
@@ -168,6 +186,30 @@ class TestTamperDetection:
 
         # Direkte Manipulation des ``detail`` — entry_hash bleibt unveraendert.
         _tamper(victim.pk, detail={"changed_fields": ["evil"]})
+
+        result = verify_chain(facility)
+        assert not result.ok
+        assert result.first_break_id == str(victim.pk)
+        assert "hash" in result.reason.lower()
+
+    def test_actor_tampering_breaks_chain(self, facility, staff_user, admin_user):
+        """Refs #1369: Ein lautloser Wechsel des ``actor`` (handelnder Admin) einer
+        attribuierten Privileg-Zeile bricht die Kette — der Actor ist damit
+        tamper-evident, obwohl er erst nachtraeglich (Migration 0101) hinzukam."""
+        victim = AuditLog.objects.create(
+            facility=facility,
+            user=staff_user,
+            actor=admin_user,
+            action=AuditLog.Action.USER_ROLE_CHANGED,
+            target_type="User",
+            target_id=str(staff_user.pk),
+            detail={"old_role": "staff", "new_role": "lead"},
+        )
+        audit_event(AuditLog.Action.LOGOUT, user=staff_user, facility=facility)
+        assert verify_chain(facility).ok
+
+        # Actor der Opferzeile umschreiben (Trigger umgangen) — entry_hash bleibt.
+        _tamper(victim.pk, actor_id=staff_user.pk)
 
         result = verify_chain(facility)
         assert not result.ok

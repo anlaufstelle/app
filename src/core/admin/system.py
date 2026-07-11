@@ -14,12 +14,14 @@ from core.models import AuditLog, Settings, StatisticsSnapshot
 
 @admin.register(AuditLog, site=anlaufstelle_admin_site)
 class AuditLogAdmin(FacilityScopedAdminMixin, ModelAdmin):
-    list_display = ("action", "user", "target_type", "target_id", "timestamp", "facility")
+    list_display = ("action", "user", "actor", "target_type", "target_id", "timestamp", "facility")
     list_filter = ("action", "facility")
     date_hierarchy = "timestamp"
     readonly_fields = (
         "facility",
         "user",
+        # Refs #1369: handelnder Admin bei ziel-attribuierten Privileg-Events.
+        "actor",
         "action",
         "target_type",
         "target_id",
@@ -27,7 +29,7 @@ class AuditLogAdmin(FacilityScopedAdminMixin, ModelAdmin):
         "ip_address",
         "timestamp",
     )
-    search_fields = ("user__username", "target_type", "detail")
+    search_fields = ("user__username", "actor__username", "target_type", "detail")
 
     def has_add_permission(self, request):
         return False

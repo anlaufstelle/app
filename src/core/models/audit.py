@@ -118,6 +118,25 @@ class AuditLog(models.Model):
         related_name="audit_logs",
         verbose_name=_("Benutzer"),
     )
+    # Refs #1369: die **handelnde** Person (Actor), getrennt vom ``user``-Feld.
+    # Fuer die meisten Aktionen ist ``user`` bereits der Actor (LOGIN, EXPORT,
+    # CLIENT_CREATE …) und ``actor`` bleibt NULL. Fuer die *ziel-attribuierten*
+    # Privileg-Events (USER_ROLE_CHANGED / USER_DEACTIVATED /
+    # DELETION_CONFIRMER_CHANGED) traegt ``user`` das **Ziel** und ``actor``
+    # den handelnden Admin — sonst laese sich der immutable Log, als haette das
+    # Ziel sich selbst das Flag gesetzt. ``NULL`` bei nicht-request-getriebenen
+    # ORM-Pfaden (Management-Command, Service, Bootstrap); die dann fehlende
+    # menschliche Zuordnung wird im ``detail`` explizit als ``system`` markiert.
+    # ``SET_NULL`` analog zu ``user`` — die tamper-evidente, namens-erhaltende
+    # Kopie liegt in ``detail`` (siehe signals/audit.py). Refs #1070.
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_actions",
+        verbose_name=_("Handelnde Person"),
+    )
     action = models.CharField(
         max_length=30,
         choices=Action.choices,

@@ -74,5 +74,5 @@ class AuditLogDetailView(FacilityAdminRequiredMixin, View):
 
     def get(self, request, pk):
         facility = request.current_facility
-        entry = get_object_or_404(AuditLog, pk=pk, facility=facility)
+        entry = get_object_or_404(AuditLog.objects.select_related("user", "actor"), pk=pk, facility=facility)
         return render(request, "core/audit/detail.html", {"entry": entry})

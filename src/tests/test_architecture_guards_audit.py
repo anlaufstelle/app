@@ -132,9 +132,9 @@ class TestAuditLogCreationAllowlist:
             133: "on_user_logged_out — auth signal",
             166: "on_user_login_failed — no-facility branch",
             174: "on_user_login_failed — with-facility branch",
-            222: "post_save User — role change detection",
-            236: "post_save User — deactivation detection",
-            249: "post_save User — Löschbestätigungs-Recht geändert (Refs #1053)",
+            254: "post_save User — role change detection (actor-Attribution, Refs #1369)",
+            270: "post_save User — deactivation detection (actor-Attribution, Refs #1369)",
+            284: "post_save User — Löschbestätigungs-Recht geändert (Refs #1053/#1369)",
         },
     }
 
