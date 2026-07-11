@@ -483,5 +483,8 @@
 
 {% block extra_js %}
 {# Ausgelagert wegen CSP (Refs #618). #}
+{# Refs #1519: offline-form-fields.js (pure Helfer) muss VOR #}
+{# offline-client-view.js laden, das sich darauf stuetzt. #}
+<script src="{% static 'js/offline-form-fields.js' %}"></script>
 <script src="{% static 'js/offline-client-view.js' %}"></script>
 {% endblock %}

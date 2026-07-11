@@ -364,41 +364,11 @@
                 if (cur && cur.__files__) return "Dateien vorhanden (" + (cur.count || 0) + ")";
                 return "Keine Datei";
             },
-            _fieldDescriptor(f, ev) {
-                const t = f.field_type;
-                const isFile = t === "file";
-                const cur = ev.data_fields ? ev.data_fields[f.slug] : null;
-                return {
-                    slug: f.slug,
-                    name: f.name,
-                    helpText: f.help_text || "",
-                    isRequired: Boolean(f.is_required),
-                    options: f.options || [],
-                    isFile: isFile,
-                    fileNote: isFile ? this._fileNote(cur) : "",
-                    isTextarea: t === "textarea",
-                    isBoolean: t === "boolean",
-                    isSelect: t === "select",
-                    isMultiSelect: t === "multi_select",
-                    // text/number/date/time teilen sich ein <input> mit type-Attr.
-                    isPlainInput: t === "text" || t === "number" || t === "date" || t === "time",
-                    inputType: t === "number" ? "number" : t === "date" ? "date" : t === "time" ? "time" : "text",
-                };
-            },
-            _initialValue(fieldType, current) {
-                if (fieldType === "boolean") {
-                    return current === true || current === "true" || current === "1";
-                }
-                if (fieldType === "multi_select") {
-                    if (Array.isArray(current)) return current.slice();
-                    if (current === null || current === undefined || current === "") return [];
-                    return [String(current)];
-                }
-                if (current === null || current === undefined) return "";
-                // File-Marker o.ä. sind nicht editierbar → leerer Initialwert.
-                if (typeof current === "object") return "";
-                return String(current);
-            },
+            // Refs #1519 (W1-C): _fieldDescriptor/_initialValue wurden pure nach
+            // offline-form-fields.js extrahiert (window.offlineFormFields,
+            // verhaltensneutral). _fileNote bleibt hier -- es ist die einzige
+            // this-Abhaengigkeit der urspruenglichen _fieldDescriptor-Methode
+            // und wird als dritter Parameter durchgereicht.
             startEdit(ev) {
                 this.editError = "";
                 this.lastSyncResult = "";
@@ -407,11 +377,11 @@
                 const descriptors = [];
                 const values = {};
                 for (const f of fields) {
-                    const desc = this._fieldDescriptor(f, ev);
+                    const desc = window.offlineFormFields.fieldDescriptor(f, ev, this._fileNote);
                     descriptors.push(desc);
                     if (!desc.isFile) {
                         const cur = ev.data_fields ? ev.data_fields[f.slug] : undefined;
-                        values[f.slug] = this._initialValue(f.field_type, cur);
+                        values[f.slug] = window.offlineFormFields.initialValue(f.field_type, cur);
                     }
                 }
                 this.editFields = descriptors;
@@ -472,9 +442,9 @@
                 const descriptors = [];
                 const values = {};
                 for (const f of fields) {
-                    const desc = this._fieldDescriptor(f, emptyEv);
+                    const desc = window.offlineFormFields.fieldDescriptor(f, emptyEv, this._fileNote);
                     descriptors.push(desc);
-                    if (!desc.isFile) values[f.slug] = this._initialValue(f.field_type, undefined);
+                    if (!desc.isFile) values[f.slug] = window.offlineFormFields.initialValue(f.field_type, undefined);
                 }
                 this.editFields = descriptors;
                 this.editValues = values;
@@ -502,12 +472,9 @@
                         this.editError = "Bitte einen Dokumentationstyp wählen.";
                         return;
                     }
-                    const formData = {};
-                    for (const f of this.editFields) {
-                        // FILE-Felder sind offline nicht erfassbar (kein Blob im Cache).
-                        if (f.isFile) continue;
-                        formData[f.slug] = this.editValues[f.slug];
-                    }
+                    // FILE-Felder sind offline nicht erfassbar (kein Blob im
+                    // Cache) -- buildFormData ueberspringt sie (Refs #1519).
+                    const formData = window.offlineFormFields.buildFormData(this.editFields, this.editValues);
                     const record = await window.offlineEdit.markEventNew(
                         this._pk,
                         this.createDocTypePk,
