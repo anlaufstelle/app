@@ -330,6 +330,81 @@ Hintergrund/Trade-offs: [ADR-023](adr/023-k-anonymization-statistik.md).
 
 ---
 
+## TOTP-Secret at rest Fernet-verschlüsselt (Issue #1362)
+
+**Status:** Design-Entscheidung, produktiv verdrahtet ([ADR-031](adr/031-totp-secret-at-rest.md)).
+
+### Beobachtung
+
+`django-otp` speichert das TOTP-Secret (`otp_totp_totpdevice.key`) als
+Klartext-Hex. Ein Leser eines DB-Dumps/einer Replica konnte damit jeden
+Authenticator rekonstruieren — auch für MFA-pflichtige Admins. Das widersprach
+der #790-Härtung (Hash-Backup-Codes, Fernet-PII).
+
+### Maßnahme
+
+Zugriff app-weit über das Proxy-Modell
+[`EncryptedTOTPDevice`](../src/core/models/mfa.py); das Secret wird mit dem
+vorhandenen MultiFernet ver-/entschlüsselt
+([`totp.py`](../src/core/services/security/totp.py)). Eine idempotente,
+reversible Datenmigration
+([`0101_totp_secret_at_rest`](../src/core/migrations/0101_totp_secret_at_rest.py))
+verschlüsselt Bestandsgeräte in place.
+
+### Trade-offs / Grenzen
+
+- **Schutz nur *at rest*.** Ein Angreifer mit gültigem `ENCRYPTION_KEY(S)` **und**
+ DB-Lesezugriff (z. B. kompromittierter App-Prozess) kann weiterhin
+ entschlüsseln — wie bei allen Fernet-Feldern. Transparente
+ DB-/Volume-Verschlüsselung bleibt eine **ergänzende** Operator-Kontrolle
+ (threat-model TB2/TB3, TB5), kein Ersatz.
+- **Spaltenbreite.** `otp_totp_totpdevice.key` wird per reversiblem `RunSQL` von
+ `varchar(80)` auf `varchar(255)` geweitet (ein Fernet-Token ist ~120–140
+ Zeichen). Die DB-Spalte ist damit breiter als die `max_length=80` des
+ Fremd-Modells — bewusst und beim Schreiben folgenlos (kein `full_clean` auf
+ dem Secret-Pfad). Wir kapern **keine** `otp_totp`-Migrationsdatei.
+- **Upgrade-Hazard bei `django-otp`-Bumps.** Ein künftiges `django-otp`-Release
+ (Dependabot bumpt automatisch) könnte eine `otp_totp`-Migration mit
+ `AlterField('key', max_length=80)` mitbringen. Django macht daraus
+ `ALTER … TYPE varchar(80)`, das an den bereits gespeicherten ~140-Zeichen-
+ Fernet-Tokens **hart scheitert** (`value too long for type character
+ varying(80)`) und `migrate` blockiert — potenziell mitten im Deploy.
+ **Gegenmaßnahme:** Beim `django-otp`-Bump die generierten Migrationen prüfen;
+ bei einem `AlterField` auf `key` eine core-Nachfolge-Migration hinterhersetzen,
+ die die Spalte (nach der `otp_totp`-Migration einsortiert) wieder auf
+ `varchar(255)` weitet. Der Guard-Test `TestTotpKeyColumnWidthGuard` prüft die
+ effektive Spaltenbreite und schlägt bei einer unbeabsichtigten Re-Verengung
+ früh an. Siehe [ADR-031 § Consequences](adr/031-totp-secret-at-rest.md).
+
+### Key-Rotation (MultiFernet)
+
+Neuen Primärschlüssel in `ENCRYPTION_KEYS` **voranstellen** (alten hinten
+behalten) → Alt-Tokens bleiben lesbar. `python manage.py reencrypt_fields`
+wickelt danach auch die TOTP-Secrets aktiv unter den neuen Schlüssel um; erst
+dann darf der alte Schlüssel entfernt werden.
+
+Der Rewrap ist **concurrency-sicher** gegenüber parallelen MFA-Logins: Ein
+`verify_token` schreibt intern zwar ein Voll-`save()` inkl. `key`, doch
+`EncryptedTOTPDevice.save()` lässt die `key`-Spalte bei einem Voll-`save()` auf
+eine bestehende Zeile mit bereits verschlüsseltem Secret unangetastet — ein
+Verify kann einen frischen Rewrap also nicht zurücksetzen (sonst bliebe das
+Gerät still unter dem Alt-Schlüssel → Lockout beim Entfernen des Alt-Keys).
+Meldet `reencrypt_fields` dennoch Geräte, die trotz Retries unter dem
+Alt-Schlüssel blieben, den Lauf **wiederholen** und den Alt-Schlüssel erst nach
+einem meldungsfreien Lauf entfernen (der Lauf ist idempotent).
+
+### Verifikation
+
+- [`src/tests/test_totp_secret_at_rest.py`](../src/tests/test_totp_secret_at_rest.py)
+ Roh-DB-Wert ohne Klartext-Hex, Verify-Pfad vor/nach Migration, Migration
+ idempotent + reversibel, MultiFernet-Rotation, kein Custom-Admin-Leak,
+ Rewrap-Concurrency (Verify-`save()` lässt `key` unberührt; `reencrypt_fields`
+ meldet Kontention) sowie ein Guard-Test zur effektiven Spaltenbreite
+ (Upgrade-Hazard).
+- CHANGELOG-`[Unreleased]`-Eintrag mit Issue-Referenz.
+
+---
+
 ## Weitere Einstiegspunkte
 
 - [CONTRIBUTING.md § Facility-Scoping & Row Level Security](../CONTRIBUTING.md#facility-scoping--row-level-security)

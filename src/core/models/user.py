@@ -120,9 +120,12 @@ class User(AbstractUser):
     @property
     def has_confirmed_totp_device(self):
         """True when the user has at least one confirmed TOTP device."""
-        from django_otp.plugins.otp_totp.models import TOTPDevice
+        # App-weit laeuft der TOTP-Zugriff ueber das Proxy-Modell mit at-rest
+        # verschluesseltem Secret (Refs #1362); ``exists()`` liest kein Secret,
+        # die Wahl ist reine Konsistenz.
+        from core.models.mfa import EncryptedTOTPDevice
 
-        return TOTPDevice.objects.filter(user=self, confirmed=True).exists()
+        return EncryptedTOTPDevice.objects.filter(user=self, confirmed=True).exists()
 
     @property
     def is_mfa_enforced(self):

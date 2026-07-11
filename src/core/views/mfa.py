@@ -30,11 +30,15 @@ from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django.views.generic import TemplateView
-from django_otp.plugins.otp_totp.models import TOTPDevice
 from django_ratelimit.decorators import ratelimit
 
 from core.constants import RATELIMIT_MUTATION
+
+# Alle TOTP-Zugriffe laufen ueber das Proxy-Modell, das ``key`` at rest
+# Fernet-verschluesselt (Refs #1362, ADR-031). Der Alias haelt den restlichen
+# View-Code unveraendert; Verify/QR/Provisioning ver-/entschluesseln transparent.
 from core.models import AuditLog
+from core.models import EncryptedTOTPDevice as TOTPDevice
 from core.services.audit import log_audit_event
 from core.services.security import (
     BACKUP_CODES_COUNT,

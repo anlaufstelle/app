@@ -6,7 +6,7 @@ import pytest
 from django_otp.oath import totp as oath_totp
 from django_otp.plugins.otp_totp.models import TOTPDevice
 
-from core.models import AuditLog
+from core.models import AuditLog, EncryptedTOTPDevice
 
 
 @pytest.mark.django_db
@@ -35,7 +35,9 @@ class TestMFASetupFlow:
         client.login(username="teststaff", password="testpass123")
         # Zuerst GET, damit das Device erzeugt wird.
         client.get("/mfa/setup/")
-        device = TOTPDevice.objects.get(user=staff_user, confirmed=False)
+        # Refs #1362: Das Secret liegt at rest verschlüsselt — der Klartext-Key
+        # ist nur über das entschlüsselnde Proxy-Modell lesbar.
+        device = EncryptedTOTPDevice.objects.get(user=staff_user, confirmed=False)
         # Gültigen Token direkt aus dem Secret berechnen.
         token = oath_totp(device.bin_key, step=device.step, t0=device.t0, digits=device.digits)
         response = client.post("/mfa/setup/", {"token": f"{token:0{device.digits}d}"})
@@ -73,7 +75,8 @@ class TestMFASetupFlow:
         client.login(username="teststaff", password="testpass123")
         response = client.get("/mfa/setup/")
         assert response.status_code == 200
-        device = TOTPDevice.objects.get(user=staff_user, confirmed=False)
+        # Refs #1362: bin_key über das entschlüsselnde Proxy-Modell lesen.
+        device = EncryptedTOTPDevice.objects.get(user=staff_user, confirmed=False)
         secret = response.context["secret"]
         padding = "=" * (-len(secret) % 8)
         decoded = base64.b32decode(secret + padding)

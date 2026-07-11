@@ -25,7 +25,10 @@ import secrets
 
 from django.db import transaction
 from django_otp.plugins.otp_static.models import StaticDevice, StaticToken
-from django_otp.plugins.otp_totp.models import TOTPDevice
+
+# TOTP-Zugriff ueber das Proxy-Modell mit at-rest verschluesseltem Secret
+# (Refs #1362, ADR-031) — ``verify_token`` entschluesselt transparent.
+from core.models import EncryptedTOTPDevice as TOTPDevice
 
 BACKUP_CODES_COUNT = 10
 BACKUP_DEVICE_NAME = "backup"

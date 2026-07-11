@@ -52,6 +52,11 @@ from core.services.security.sudo_mode import (
     enter_sudo,
     is_in_sudo,
 )
+from core.services.security.totp import (
+    decrypt_totp_key,
+    encrypt_totp_key,
+    is_encrypted_totp_key,
+)
 
 __all__ = [
     "BACKUP_CODES_COUNT",
@@ -64,8 +69,11 @@ __all__ = [
     "build_recovery_token",
     "check_version_conflict",
     "clear_sudo",
+    "decrypt_totp_key",
+    "encrypt_totp_key",
     "enter_sudo",
     "generate_backup_codes",
+    "is_encrypted_totp_key",
     "is_in_sudo",
     "is_locked",
     "remaining_backup_codes",

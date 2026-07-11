@@ -7,6 +7,7 @@ from .document_type import DocumentType, DocumentTypeField, FieldTemplate
 from .episode import Episode
 from .event import Event
 from .event_history import EventHistory
+from .mfa import EncryptedTOTPDevice
 from .organization import Facility, Organization
 from .outcome import Milestone, OutcomeGoal
 from .quick_template import QuickTemplate
@@ -26,6 +27,7 @@ __all__ = [
     "Client",
     "DeletionRequest",
     "DocumentType",
+    "EncryptedTOTPDevice",
     "Episode",
     "DocumentTypeField",
     "Event",

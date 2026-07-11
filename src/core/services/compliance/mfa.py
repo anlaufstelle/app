@@ -10,7 +10,9 @@ from core.services.compliance._types import _PRIVILEGED_ROLES, ComplianceCheck, 
 
 def _mfa_checks() -> list[ComplianceCheck]:
     """MFA-Quote bei privilegierten Rollen (super_admin/facility_admin/leitung)."""
-    from django_otp.plugins.otp_totp.models import TOTPDevice
+    # Zaehlt ueber dieselbe Tabelle wie django-otps ``TOTPDevice``; das Proxy-
+    # Modell (Refs #1362) ist die App-weite Zugriffsschicht.
+    from core.models import EncryptedTOTPDevice as TOTPDevice
 
     # Anzahl User pro Rolle und Anzahl mit confirmed TOTPDevice.
     privileged_total = User.objects.filter(role__in=_PRIVILEGED_ROLES, is_active=True).count()

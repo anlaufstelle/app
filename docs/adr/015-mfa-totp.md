@@ -15,7 +15,7 @@ Sozialarbeit verarbeitet besonders schutzbedürftige Personendaten (DSGVO Art. 9
 
 ## Decision
 
-- **TOTP (RFC 6238)** als primärer zweiter Faktor — Standard auf jeder Authenticator-App (Google Authenticator, Authy, FreeOTP, Bitwarden), kein Vendor-Lock-in. Implementierung über `django-otp` mit TOTPDevice — Setup in [`src/core/views/mfa.py`](../../src/core/views/mfa.py).
+- **TOTP (RFC 6238)** als primärer zweiter Faktor — Standard auf jeder Authenticator-App (Google Authenticator, Authy, FreeOTP, Bitwarden), kein Vendor-Lock-in. Implementierung über `django-otp` mit TOTPDevice — Setup in [`src/core/views/mfa.py`](../../src/core/views/mfa.py). Das TOTP-Secret liegt **at rest Fernet-verschlüsselt** vor ([ADR-031](031-totp-secret-at-rest.md), Refs #1362).
 - **Backup-Codes** als sekundärer Faktor: 10 zufällige 128-Bit-Codes (Base32-kodiert), serverseitig **nur als Hash** (`bcrypt`-äquivalent über `StaticDevice.token`) gespeichert. Verbrauchte Codes werden gelöscht; nach 3 verbleibenden Codes nervt das UI bis zum Re-Generate (Refs #790).
 - **Rollenbasierte Pflicht:** `Admin` und `Lead` haben `is_mfa_enforced=True` per Rolle. Pro Facility lässt sich das auf alle Rollen ausweiten (`Settings.mfa_enforced_facility_wide=True`). Mitarbeitende erhalten die `setup`-Aufforderung beim ersten Login nach Aktivierung.
 - **Sudo-Mode für sensible Operationen** (DSGVO-Pakete, Löschungen) verlangt MFA-Verifizierung in den letzten 15 Minuten — ein langlebiger Session-Cookie reicht für die DSGVO-Wirkungs­operationen nicht.
