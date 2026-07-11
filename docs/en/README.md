@@ -62,4 +62,4 @@ Templates included:
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.20.0 -->
 <!-- translation-date: 2026-06-14 -->
-<!-- source-hash: 02a2028 -->
+<!-- source-hash: cd7b197 -->

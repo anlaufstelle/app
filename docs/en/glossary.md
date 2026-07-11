@@ -77,4 +77,4 @@
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md (chapter 14) -->
 <!-- translation-version: v0.20.0 -->
 <!-- translation-date: 2026-06-14 -->
-<!-- source-hash: da1fa91 -->
+<!-- source-hash: 4ff5296 -->

@@ -600,4 +600,4 @@ src/
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.20.0 -->
 <!-- translation-date: 2026-06-12 -->
-<!-- source-hash: da1fa91 -->
+<!-- source-hash: a70f21b -->
