@@ -23,8 +23,12 @@ def _app_version_info():
     from core.services.system.health import app_versions
 
     semver = app_versions()["app_version"]
-    if semver == "unknown":
-        semver = ""
+    # Refs #1504: der ENV-Fallback (kein lesbares pyproject.toml, z.B. in
+    # Container-Deploys ohne die pyproject-COPY) traegt per ADR-028 ein
+    # fuehrendes "v" (z.B. "v0.20.0"); der lokale pyproject.toml-Lesepfad
+    # nicht. base.html prependet im Footer immer genau ein "v" -- ohne
+    # Normalisierung wuerde daraus "vv0.20.0".
+    semver = "" if semver == "unknown" else semver.removeprefix("v")
     build = os.environ.get("APP_VERSION", "")
     if build in ("", "dev", "unknown", semver, f"v{semver}"):
         build = ""

@@ -150,11 +150,18 @@ def app_versions() -> dict:
     app_version: str
     try:
         # ``settings.BASE_DIR`` zeigt auf ``src/``. ``pyproject.toml``
-        # liegt im Repo-Root, also eine Ebene darueber.
+        # liegt im Repo-Root, also eine Ebene darueber (im Container:
+        # ``/pyproject.toml``, seit Refs #1504 mit ins finale Image kopiert).
         pyproject_path = Path(settings.BASE_DIR).parent / "pyproject.toml"
         with pyproject_path.open("rb") as fh:
             data = tomllib.load(fh)
         app_version = data.get("project", {}).get("version") or os.environ.get("APP_VERSION", "unknown")
+    except FileNotFoundError:
+        # Refs #1504: legitimer Fallback-Pfad (z.B. Deploys auf einem
+        # Image-Stand vor der pyproject-COPY) -- kein Fehlerzustand, daher
+        # kein ERROR-Log-Rauschen bei jedem Health-Call.
+        logger.info("system_health: pyproject.toml not found, falling back to APP_VERSION env")
+        app_version = os.environ.get("APP_VERSION", "unknown")
     except Exception:
         logger.exception("system_health: pyproject.toml read failed")
         app_version = os.environ.get("APP_VERSION", "unknown")

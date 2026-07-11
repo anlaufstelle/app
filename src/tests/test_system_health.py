@@ -8,6 +8,7 @@ erwarteten Schluesselsetzt.
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -167,3 +168,48 @@ class TestAppVersions:
         monkeypatch.setattr("core.services.system.health.tomllib.load", boom)
         result = system_health.app_versions()
         assert result["app_version"] in (os.environ.get("APP_VERSION", "unknown"), "unknown")
+
+    def test_missing_pyproject_is_not_logged_as_error(self, monkeypatch, caplog):
+        """Refs #1504: eine fehlende ``pyproject.toml`` (Container-Deploys
+        vor der pyproject-COPY, oder legitim andere Deploy-Formen) ist ein
+        erwarteter Fallback-Pfad, kein Fehlerzustand -- darf im
+        System-Health-Call nicht auf ERROR/``logger.exception`` loggen.
+        Version faellt weiterhin auf den ENV-Wert zurueck."""
+
+        class _RaisingPath:
+            def __truediv__(self, _other):
+                return self
+
+            def open(self, *_a, **_kw):
+                raise FileNotFoundError(2, "No such file or directory", "pyproject.toml")
+
+        class _FakeBaseDirPath:
+            def __init__(self, *_a, **_kw):
+                pass
+
+            @property
+            def parent(self):
+                return _RaisingPath()
+
+        monkeypatch.setattr("core.services.system.health.Path", _FakeBaseDirPath)
+        caplog.set_level(logging.DEBUG, logger="core.services.system.health")
+
+        result = system_health.app_versions()
+
+        assert result["app_version"] == os.environ.get("APP_VERSION", "unknown")
+        assert not any(record.levelno >= logging.ERROR for record in caplog.records)
+
+    def test_other_pyproject_read_errors_stay_at_error_level(self, monkeypatch, caplog):
+        """Gegen-Check: Nicht-``FileNotFoundError``-Fehler (z.B. kaputtes
+        TOML) bleiben weiterhin auf ``exception``/ERROR-Level -- nur der
+        legitim fehlende Datei-Fall wird abgesenkt."""
+
+        def boom(_path):
+            raise ValueError("simulated corrupt pyproject.toml")
+
+        monkeypatch.setattr("core.services.system.health.tomllib.load", boom)
+        caplog.set_level(logging.DEBUG, logger="core.services.system.health")
+
+        system_health.app_versions()
+
+        assert any(record.levelno >= logging.ERROR for record in caplog.records)

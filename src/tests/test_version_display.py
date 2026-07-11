@@ -52,3 +52,40 @@ class TestAppVersionInfo:
         monkeypatch.delenv("APP_VERSION", raising=False)
         _semver, build = context_processors._app_version_info()
         assert build == ""
+
+    def test_fallback_env_version_strips_leading_v(self, monkeypatch):
+        """Refs #1504: Container-Deploys ohne lesbares ``pyproject.toml``
+        fallen in ``app_versions()`` auf den ``APP_VERSION``-Env-Wert
+        zurueck, der per ADR-028 das fuehrende 'v' traegt (z.B.
+        ``v0.20.0``). ``base.html`` prependet im Footer immer genau ein
+        'v' -- ohne Normalisierung ergaebe das 'vv0.20.0'."""
+        monkeypatch.setattr(
+            "core.services.system.health.app_versions",
+            lambda: {"app_version": "v0.20.0"},
+        )
+        semver, _build = context_processors._app_version_info()
+        assert semver == "0.20.0"
+
+    def test_local_pyproject_version_has_no_leading_v(self):
+        """Gegen-Check: der lokale Lesepfad (pyproject.toml vorhanden,
+        Version ohne 'v') bleibt unveraendert korrekt -- kein
+        Doppel-Strip o.ae."""
+        semver, _build = context_processors._app_version_info()
+        assert semver and not semver.startswith("v")
+
+
+@pytest.mark.django_db
+class TestVersionFooterExactRendering:
+    def test_footer_renders_exactly_v_prefix_once_from_env_fallback(self, client, staff_user, monkeypatch):
+        """Refs #1504: End-to-End-Beweis fuer den Footer-Bug -- Fallback
+        auf den 'v'-praefixierten Env-Wert darf im gerenderten Footer
+        nicht zu 'vv0.20.0' fuehren."""
+        monkeypatch.setattr(
+            "core.services.system.health.app_versions",
+            lambda: {"app_version": "v0.20.0"},
+        )
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom"))
+        content = response.content.decode()
+        assert 'data-testid="app-version">v0.20.0<' in content
+        assert "vv0.20.0" not in content
