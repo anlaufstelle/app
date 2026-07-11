@@ -13,8 +13,18 @@ set -euo pipefail
 # (`media/...` relativ zu `/data`).
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+# SCRIPT_DIR ist <repo>/scripts/ops — der Repo-Root (mit docker-compose.prod.yml)
+# liegt ZWEI Ebenen darueber. Ein einfaches ``dirname "$SCRIPT_DIR"`` zeigte
+# faelschlich auf <repo>/scripts, sodass COMPOSE_FILE ins Leere lief (Refs #1336).
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 COMPOSE_FILE="${PROJECT_DIR}/docker-compose.prod.yml"
+
+# Fruehzeitiger, klarer Abbruch statt kryptischem docker-Fehler (Refs #1336).
+if [[ ! -f "$COMPOSE_FILE" ]]; then
+    echo "FEHLER: Compose-Datei nicht gefunden: ${COMPOSE_FILE}" >&2
+    echo "  Erwartet im Repo-Root — liegt restore.sh unter <repo>/scripts/ops/?" >&2
+    exit 1
+fi
 
 # A4.3: Encrypt-then-MAC-Helfer (backup_verify_hmac).
 # shellcheck source=scripts/ops/_backup_common.sh

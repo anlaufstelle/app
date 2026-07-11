@@ -9,21 +9,27 @@ set -uo pipefail
 # der Lauf via ``manage.py mark_restore_verified`` im AuditLog
 # dokumentiert -> Compliance-Check „Restore-Test" springt auf gruen.
 #
-# WICHTIG (Refs #981): Dieses Skript ist auf das **dev-ops/deploy/backup.sh**-Format
-# ausgerichtet, das auf dev.anlaufstelle.app tatsaechlich laeuft:
-#   - Quelle:  $BACKUP_DIR/dump-*.pgc.enc  (Default /var/backups/anl)
-#   - Format:  pg_dump --format=custom -> braucht pg_restore (NICHT psql)
-#   - Crypto:  openssl AES-256-CBC -pbkdf2
-#   - Stack:   docker-compose.dev.yml --env-file .env.dev
-#   - User:    Postgres-Superuser (Default ``postgres``, ueber Local-Socket-
-#              Trust im db-Container). Noetig fuer CREATE DATABASE; bypassed
-#              zugleich RLS/FORCE-RLS beim pg_restore. (``anlaufstelle_admin``
-#              ist BYPASSRLS, hat aber kein CREATEDB.)
-# Das alte scripts/ops/backup.sh + scripts/ops/restore.sh-Schema (backups/daily/
-# *.sql.gz.enc, plain SQL) ist davon unberuehrt.
+# Zwei ausgelieferte Backup-Pfade -> zwei Formate; der Drill deckt BEIDE ab
+# (OPS-05, Refs #1336). Wahl per Flag ``--dev``/``--prod`` oder ``$DRILL_FORMAT``;
+# ohne Angabe wird anhand der vorhandenen Backup-Dateien auto-erkannt.
+#
+#   dev  : dev-ops/deploy/backup.sh (dev.anlaufstelle.app)
+#          - Quelle:  $BACKUP_DIR/dump-*.pgc.enc  (Default /var/backups/anl)
+#          - Format:  pg_dump --format=custom -> pg_restore (NICHT psql)
+#          - Stack:   docker-compose.dev.yml --env-file .env.dev
+#   prod : scripts/ops/backup.sh (der an Self-Hoster ausgelieferte Pfad)
+#          - Quelle:  backups/daily/anlaufstelle_*.sql.gz.enc
+#          - Format:  plain SQL + gzip + A4.3-HMAC-Sidecar -> psql
+#          - Stack:   docker-compose.prod.yml
+#
+# Beide nutzen openssl AES-256-CBC -pbkdf2 und den Postgres-Superuser (Default
+# ``postgres`` ueber Local-Socket-Trust im db-Container): noetig fuer CREATE
+# DATABASE (beide App-Rollen sind NOCREATEDB) und bypassed zugleich RLS/FORCE-RLS
+# beim Restore.
 #
 # Die Dump-Dateien sind 0600 und gehoeren root — daher als root ausfuehren:
-#   sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh
+#   sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh            # auto
+#   sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod     # explizit
 #
 # Empfohlen quartalsweise (per Timer/Cron) + Alert bei Exit-Code != 0.
 
@@ -35,17 +41,53 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=scripts/ops/_backup_common.sh
 source "${SCRIPT_DIR}/_backup_common.sh"
 
-COMPOSE_DIR="${COMPOSE_DIR:-/opt/anlaufstelle}"
-ENV_FILE="${ENV_FILE:-$COMPOSE_DIR/.env.dev}"
-BACKUP_DIR="${BACKUP_DIR:-/var/backups/anl}"
-COMPOSE=(docker compose -f docker-compose.dev.yml --env-file .env.dev)
+# --- Backup-Format / Modus (OPS-05, Refs #1336) ---------------------------
+DRILL_FORMAT="${DRILL_FORMAT:-}"
+case "${1:-}" in
+    --prod) DRILL_FORMAT="prod"; shift ;;
+    --dev)  DRILL_FORMAT="dev";  shift ;;
+    --*)    echo "FAIL - unbekannte Option: $1 (erlaubt: --dev, --prod)" >&2; exit 2 ;;
+esac
 
+COMPOSE_DIR="${COMPOSE_DIR:-/opt/anlaufstelle}"
 cd "$COMPOSE_DIR" || {
     echo "FAIL - COMPOSE_DIR $COMPOSE_DIR nicht erreichbar"
     exit 1
 }
 
-# .env.dev laden (nur Variablen) — liefert POSTGRES_*, BACKUP_ENCRYPTION_KEY.
+# Kandidaten-Verzeichnisse je Format (fuer Auto-Erkennung + Default).
+DEV_BACKUP_DIR="${DEV_BACKUP_DIR:-/var/backups/anl}"
+PROD_BACKUP_DIR="${PROD_BACKUP_DIR:-$COMPOSE_DIR/backups/daily}"
+if [[ -z "$DRILL_FORMAT" ]]; then
+    _dev_hit=$(find "$DEV_BACKUP_DIR" -maxdepth 1 -name 'dump-*.pgc.enc' -type f 2>/dev/null | head -n1)
+    _prod_hit=$(find "$PROD_BACKUP_DIR" -maxdepth 1 -name 'anlaufstelle_*.sql.gz.enc' -type f 2>/dev/null | head -n1)
+    if [[ -n "$_dev_hit" && -n "$_prod_hit" ]]; then
+        echo "FAIL - beide Backup-Formate gefunden (dev: $DEV_BACKUP_DIR, prod: $PROD_BACKUP_DIR)." >&2
+        echo "       Format explizit waehlen: restore-drill.sh --dev | --prod" >&2
+        exit 2
+    elif [[ -n "$_prod_hit" ]]; then
+        DRILL_FORMAT="prod"
+    else
+        DRILL_FORMAT="dev"
+    fi
+fi
+
+# Format-spezifische Konfiguration: Env-Datei, Backup-Verzeichnis + -Glob,
+# Compose-Stack. Alle per gleichnamiger Env-Variable ueberschreibbar.
+if [[ "$DRILL_FORMAT" == "prod" ]]; then
+    ENV_FILE="${ENV_FILE:-$COMPOSE_DIR/.env}"
+    BACKUP_DIR="${BACKUP_DIR:-$PROD_BACKUP_DIR}"
+    BACKUP_GLOB='anlaufstelle_*.sql.gz.enc'
+    COMPOSE=(docker compose -f docker-compose.prod.yml)
+else
+    ENV_FILE="${ENV_FILE:-$COMPOSE_DIR/.env.dev}"
+    BACKUP_DIR="${BACKUP_DIR:-$DEV_BACKUP_DIR}"
+    BACKUP_GLOB='dump-*.pgc.enc'
+    COMPOSE=(docker compose -f docker-compose.dev.yml --env-file .env.dev)
+fi
+echo "Restore-Drill — Format: ${DRILL_FORMAT}, Backups: ${BACKUP_DIR}"
+
+# Env laden (nur Variablen) — liefert POSTGRES_*, BACKUP_ENCRYPTION_KEY.
 if [[ -r "$ENV_FILE" ]]; then
     set -a
     # shellcheck disable=SC1090
@@ -59,12 +101,18 @@ fi
 # durchwinken. Fail-closed (Refs #1441).
 backup_require_real_key
 
+# Der Vollstaendigkeits-Guard (Schritt 3b) gleicht die Wegwerf-DB gegen die
+# Live-DB ab — dafuer muss der Live-DB-Name bekannt sein (wie backup.sh
+# --verify). Fehlt er, koennte ein leerer/teilweiser Restore nicht als solcher
+# erkannt werden; fail-closed statt still gruen (Refs #1336).
+: "${POSTGRES_DB:?POSTGRES_DB nicht gesetzt (aus $ENV_FILE) — der Vollstaendigkeits-Abgleich braucht die Live-DB}"
+
 # Der Drill braucht CREATE DATABASE — das kann auf dem 3-Rollen-Modell nur der
 # Postgres-Superuser (``anlaufstelle_admin`` ist BYPASSRLS, aber NICHT CREATEDB;
 # ``anlaufstelle`` ist der RLS-gebundene App-User). Der Superuser bypassed
-# zugleich RLS, sodass pg_restore die geschuetzten Tabellen fuellen kann.
-# Verbindung ueber den lokalen Socket im db-Container (pg_hba: local trust) —
-# daher kein Passwort noetig.
+# zugleich RLS, sodass der Restore (pg_restore bzw. psql) die geschuetzten
+# Tabellen fuellen kann. Verbindung ueber den lokalen Socket im db-Container
+# (pg_hba: local trust) — daher kein Passwort noetig.
 SU_USER="${POSTGRES_SUPERUSER:-postgres}"
 
 DRILL_FAILED=0
@@ -78,9 +126,9 @@ dc() { "${COMPOSE[@]}" "$@"; }
 psql_su() { dc exec -T db psql -U "$SU_USER" "$@"; }
 
 # Schritt 0: neuestes Backup finden
-LATEST_DB=$(find "$BACKUP_DIR" -maxdepth 1 -name 'dump-*.pgc.enc' -type f 2>/dev/null | sort -r | head -n1)
+LATEST_DB=$(find "$BACKUP_DIR" -maxdepth 1 -name "$BACKUP_GLOB" -type f 2>/dev/null | sort -r | head -n1)
 if [[ -z "$LATEST_DB" ]]; then
-    fail "Kein DB-Backup (dump-*.pgc.enc) in ${BACKUP_DIR} gefunden"
+    fail "Kein DB-Backup (${BACKUP_GLOB}) in ${BACKUP_DIR} gefunden"
     echo "Drill abgebrochen — keine Restore-Quelle. Laeuft der Backup-Timer? (Ops-Runbook §3.3)"
     exit 1
 fi
@@ -100,7 +148,8 @@ else
     exit 1
 fi
 
-# Schritt 2: decrypten + pg_restore (custom format) in die Wegwerf-DB.
+# Schritt 2: decrypten + restore in die Wegwerf-DB — Format-abhaengig
+# (prod: gunzip|psql, dev: pg_restore).
 #
 # Bekannte benigne Ausnahme: das Dump enthaelt ``REFRESH MATERIALIZED VIEW
 # core_statistics_event_flat``. Beim Restore scheitert dieser Refresh an
@@ -110,28 +159,70 @@ fi
 # die Nutzdaten — der mv-refresh-Timer baut ihn stuendlich neu. Solche reinen
 # MV-Refresh-Fehler tolerieren wir; jeder andere/zusaetzliche Fehler bleibt FAIL.
 RESTORE_ERR="$(mktemp)"
-openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$LATEST_DB" \
-    | dc exec -T db pg_restore -U "$SU_USER" -d "$DRILL_DB" >/dev/null 2>"$RESTORE_ERR"
-# PIPESTATUS sofort in einem Rutsch sichern — jede folgende Zuweisung wuerde es
-# ueberschreiben (und mit ``set -u`` zum unbound-Fehler fuehren).
-PIPE_RC=("${PIPESTATUS[@]}")
-OSSL_RC="${PIPE_RC[0]}"
-RESTORE_RC="${PIPE_RC[1]}"
-N_ERR=$(grep -c "pg_restore: error:" "$RESTORE_ERR" 2>/dev/null || true)
-N_MV=$(grep -c "REFRESH MATERIALIZED VIEW" "$RESTORE_ERR" 2>/dev/null || true)
-if [[ "$OSSL_RC" -ne 0 ]]; then
-    fail "Schritt 2: Entschluesselung fehlgeschlagen (openssl rc=$OSSL_RC) — BACKUP_ENCRYPTION_KEY falsch?"
-    rm -f "$RESTORE_ERR"
-    exit 1
-elif [[ "$RESTORE_RC" -eq 0 ]]; then
-    ok "Schritt 2: DB-Backup wiederhergestellt (pg_restore, custom format)"
-elif [[ "$N_ERR" -gt 0 && "$N_ERR" -eq "$N_MV" ]]; then
-    ok "Schritt 2: DB-Backup wiederhergestellt — ${N_MV} MV-Refresh(es) wg. FORCE-RLS uebersprungen (benigne)"
+if [[ "$DRILL_FORMAT" == "prod" ]]; then
+    # Prod-Format: plain SQL (gzip) -> psql. A4.3-HMAC-Sidecar VOR dem
+    # Entschluesseln pruefen (backup.sh schreibt ihn) — ein manipuliertes oder
+    # beschaedigtes Backup wird so erkannt, bevor etwas eingespielt wird.
+    if ! backup_verify_hmac "$LATEST_DB" 2>>"$RESTORE_ERR"; then
+        fail "Schritt 2: HMAC-Verifikation fehlgeschlagen — Backup manipuliert/beschaedigt oder Sidecar fehlt"
+        sed 's/^/       /' "$RESTORE_ERR" | head -5
+        rm -f "$RESTORE_ERR"
+        exit 1
+    fi
+    openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$LATEST_DB" \
+        | gunzip \
+        | dc exec -T db psql -U "$SU_USER" -d "$DRILL_DB" >/dev/null 2>"$RESTORE_ERR"
+    # PIPESTATUS sofort in einem Rutsch sichern — jede folgende Zuweisung wuerde
+    # es ueberschreiben (und mit ``set -u`` zum unbound-Fehler fuehren).
+    PIPE_RC=("${PIPESTATUS[@]}")
+    OSSL_RC="${PIPE_RC[0]}"
+    GUNZIP_RC="${PIPE_RC[1]}"
+    PSQL_RC="${PIPE_RC[2]}"
+    if [[ "$OSSL_RC" -ne 0 ]]; then
+        fail "Schritt 2: Entschluesselung fehlgeschlagen (openssl rc=$OSSL_RC) — BACKUP_ENCRYPTION_KEY falsch?"
+        rm -f "$RESTORE_ERR"
+        exit 1
+    elif [[ "$GUNZIP_RC" -ne 0 ]]; then
+        fail "Schritt 2: gunzip fehlgeschlagen (rc=$GUNZIP_RC) — Backup beschaedigt?"
+        rm -f "$RESTORE_ERR"
+        exit 1
+    fi
+    # psql laeuft ohne ON_ERROR_STOP (wie backup.sh --verify): der abschliessende
+    # REFRESH MATERIALIZED VIEW kann an FORCE-RLS scheitern, ohne die Nutzdaten
+    # zu betreffen (der mv-refresh-Timer baut den Cache neu). Der psql-Exit-Code
+    # ist damit KEIN Vollstaendigkeits-Beweis (er bleibt auch bei echten Fehlern
+    # 0) — die Vollstaendigkeit belegt fail-closed der Guard in Schritt 3b
+    # (Zeilenabgleich Restore vs. Live) plus RLS-/Trigger-Check (Schritt 4/5).
+    if [[ "$PSQL_RC" -eq 0 ]]; then
+        ok "Schritt 2: DB-Backup wiederhergestellt (psql, plain SQL)"
+    else
+        ok "Schritt 2: DB-Backup eingespielt — psql meldete rc=$PSQL_RC (i.d.R. benigner MV-Refresh unter FORCE-RLS; Schritt 3b prueft die Nutzdaten fail-closed)"
+    fi
 else
-    fail "Schritt 2: DB-Restore fehlgeschlagen (pg_restore rc=$RESTORE_RC, ${N_ERR} Fehler):"
-    sed 's/^/       /' "$RESTORE_ERR" | head -15
-    rm -f "$RESTORE_ERR"
-    exit 1
+    # Dev-Format: custom format -> pg_restore.
+    openssl enc -d -aes-256-cbc -pbkdf2 -pass env:BACKUP_ENCRYPTION_KEY -in "$LATEST_DB" \
+        | dc exec -T db pg_restore -U "$SU_USER" -d "$DRILL_DB" >/dev/null 2>"$RESTORE_ERR"
+    # PIPESTATUS sofort in einem Rutsch sichern — jede folgende Zuweisung wuerde es
+    # ueberschreiben (und mit ``set -u`` zum unbound-Fehler fuehren).
+    PIPE_RC=("${PIPESTATUS[@]}")
+    OSSL_RC="${PIPE_RC[0]}"
+    RESTORE_RC="${PIPE_RC[1]}"
+    N_ERR=$(grep -c "pg_restore: error:" "$RESTORE_ERR" 2>/dev/null || true)
+    N_MV=$(grep -c "REFRESH MATERIALIZED VIEW" "$RESTORE_ERR" 2>/dev/null || true)
+    if [[ "$OSSL_RC" -ne 0 ]]; then
+        fail "Schritt 2: Entschluesselung fehlgeschlagen (openssl rc=$OSSL_RC) — BACKUP_ENCRYPTION_KEY falsch?"
+        rm -f "$RESTORE_ERR"
+        exit 1
+    elif [[ "$RESTORE_RC" -eq 0 ]]; then
+        ok "Schritt 2: DB-Backup wiederhergestellt (pg_restore, custom format)"
+    elif [[ "$N_ERR" -gt 0 && "$N_ERR" -eq "$N_MV" ]]; then
+        ok "Schritt 2: DB-Backup wiederhergestellt — ${N_MV} MV-Refresh(es) wg. FORCE-RLS uebersprungen (benigne)"
+    else
+        fail "Schritt 2: DB-Restore fehlgeschlagen (pg_restore rc=$RESTORE_RC, ${N_ERR} Fehler):"
+        sed 's/^/       /' "$RESTORE_ERR" | head -15
+        rm -f "$RESTORE_ERR"
+        exit 1
+    fi
 fi
 rm -f "$RESTORE_ERR"
 
@@ -151,6 +242,39 @@ if [[ "$SAMPLE_FAIL" -eq 0 ]]; then
     ok "Schritt 3: Tabellen-Stichproben erfolgreich"
 else
     fail "Schritt 3: mindestens eine Tabelle nicht abfragbar"
+fi
+
+# Schritt 3b: Vollstaendigkeits-Guard — Restore vs. Quelle/Live-DB (Refs #1336).
+# Kritisch fuer den --prod-Zweig: dort wird via ``psql`` OHNE ON_ERROR_STOP
+# eingespielt (der benigne MV-Refresh unter FORCE-RLS darf nicht failen) —
+# dadurch bleibt der psql-Exit-Code aber auch bei ECHTEN Fehlern 0. Ein leerer
+# oder mittendrin abgebrochener Restore waere sonst unsichtbar, denn Schritt 3
+# laesst COUNT=0 als gueltige Zahl durch. Daher hier derselbe Mechanismus wie
+# ``backup.sh --verify``: Zeilenzahl-Abgleich kritischer RLS-Tabellen zwischen
+# Wegwerf-DB und Live-DB. Fail-closed-Signal: Live>0 aber Restore=0 (Dump
+# RLS-leer bzw. Restore unvollstaendig). Dieser Nachweis MUSS vor
+# mark_restore_verified (Schritt 7) stehen, sonst faerbt ein unvollstaendiger
+# Restore den Compliance-Check faelschlich gruen. Der benigne MV-Refresh
+# beruehrt die Nutzdaten NICHT — core_client/core_event/... bleiben gefuellt.
+COMPLETENESS_TABLES=("core_client" "core_event" "core_workitem" "core_auditlog")
+COMPLETENESS_FAIL=0
+for tbl in "${COMPLETENESS_TABLES[@]}"; do
+    RESTORED_COUNT=$(psql_su -d "$DRILL_DB" -t -A -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
+    LIVE_COUNT=$(psql_su -d "$POSTGRES_DB" -t -A -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
+    if [[ -z "$RESTORED_COUNT" || ! "$RESTORED_COUNT" =~ ^[0-9]+$ ]]; then
+        echo "       - ${tbl}: im Restore nicht abfragbar (${RESTORED_COUNT:-leer})"
+        COMPLETENESS_FAIL=1
+    elif [[ "$LIVE_COUNT" =~ ^[0-9]+$ && "$LIVE_COUNT" -gt 0 && "$RESTORED_COUNT" -eq 0 ]]; then
+        echo "       - ${tbl}: Live=${LIVE_COUNT} Zeilen, Restore=0 — leerer/teilweiser Restore"
+        COMPLETENESS_FAIL=1
+    else
+        echo "       - ${tbl}: Restore=${RESTORED_COUNT} (Live=${LIVE_COUNT:-n/a})"
+    fi
+done
+if [[ "$COMPLETENESS_FAIL" -eq 0 ]]; then
+    ok "Schritt 3b: Vollstaendigkeits-Guard bestanden — Restore vs. Live konsistent"
+else
+    fail "Schritt 3b: Restore unvollstaendig (Live>0 aber Restore=0 bzw. nicht abfragbar) — NICHT als verifiziert markieren"
 fi
 
 # Schritt 4: RLS-Policy-Check

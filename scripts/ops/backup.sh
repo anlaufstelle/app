@@ -16,9 +16,21 @@ set -euo pipefail
 # Pfad sichert sowohl gegen Volume-Verlust als auch gegen Pod-Neustart.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+# SCRIPT_DIR ist <repo>/scripts/ops — der Repo-Root (mit docker-compose.prod.yml)
+# liegt ZWEI Ebenen darueber. Frueher loeste ein einfaches
+# ``dirname "$SCRIPT_DIR"`` nur auf <repo>/scripts auf, wodurch COMPOSE_FILE ins
+# Leere zeigte und jedes Backup sofort scheiterte (Refs #1336).
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 BACKUP_DIR="${PROJECT_DIR}/backups"
 COMPOSE_FILE="${PROJECT_DIR}/docker-compose.prod.yml"
+
+# Fruehzeitiger, klarer Abbruch statt kryptischem docker-Fehler, falls die
+# Pfadaufloesung daneben liegt oder das Skript verschoben wurde (Refs #1336).
+if [[ ! -f "$COMPOSE_FILE" ]]; then
+    echo "FEHLER: Compose-Datei nicht gefunden: ${COMPOSE_FILE}" >&2
+    echo "  Erwartet im Repo-Root — liegt backup.sh unter <repo>/scripts/ops/?" >&2
+    exit 1
+fi
 
 # A4.3: Encrypt-then-MAC-Helfer (backup_write_hmac / backup_verify_hmac).
 # shellcheck source=scripts/ops/_backup_common.sh
@@ -93,27 +105,39 @@ if [[ "${1:-}" == "--verify" ]]; then
         | docker compose -f "$COMPOSE_FILE" exec -T db \
             psql -U "$SU_USER" "$VERIFY_DB" > /dev/null
 
-    # Einfache Pruefabfrage: eine RLS-Tabelle zaehlen. core_facility (ohne
-    # RLS) wuerde einen RLS-leeren Dump nicht erkennen (Review N4). Live-
-    # Vergleich nur als Plausibilitaet: Live>0 aber Restore=0 heisst, der
-    # Dump war RLS-leer.
-    echo "Pruefe wiederhergestellte Daten (RLS-Tabelle core_client)..."
-    RESTORED_CLIENT_COUNT=$(docker compose -f "$COMPOSE_FILE" exec -T db \
-        psql -U "$SU_USER" -d "$VERIFY_DB" -t -A \
-        -c "SELECT COUNT(*) FROM core_client;")
-    LIVE_CLIENT_COUNT=$(docker compose -f "$COMPOSE_FILE" exec -T db \
-        psql -U "$SU_USER" -d "$POSTGRES_DB" -t -A \
-        -c "SELECT COUNT(*) FROM core_client;")
-
-    if [[ -z "$RESTORED_CLIENT_COUNT" ]]; then
-        echo "FEHLER: Pruefabfrage fehlgeschlagen."
+    # Vollstaendigkeits-Guard (Refs #1336, DOC-P1): Zeilenzahl-Abgleich
+    # kritischer RLS-Tabellen zwischen Restore und Live-DB. Der stille
+    # Fehlerfall ist ein Dump unter einer NOBYPASSRLS-Rolle — er ist syntaktisch
+    # valide, enthaelt aber 0 Zeilen der FORCE-RLS-Tabellen. core_facility (ohne
+    # RLS) wuerde das NICHT erkennen (Review N4), daher werden mehrere
+    # RLS-gebundene Nutzdaten-Tabellen geprueft. Signal: Live>0 aber Restore=0.
+    echo "Vollstaendigkeits-Guard: RLS-Tabellen Restore vs. Live abgleichen..."
+    RLS_VERIFY_TABLES=(core_client core_event core_workitem core_auditlog)
+    VERIFY_FAILED=0
+    for tbl in "${RLS_VERIFY_TABLES[@]}"; do
+        RESTORED_COUNT=$(docker compose -f "$COMPOSE_FILE" exec -T db \
+            psql -U "$SU_USER" -d "$VERIFY_DB" -t -A \
+            -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
+        LIVE_COUNT=$(docker compose -f "$COMPOSE_FILE" exec -T db \
+            psql -U "$SU_USER" -d "$POSTGRES_DB" -t -A \
+            -c "SELECT COUNT(*) FROM ${tbl};" 2>/dev/null | tr -d '[:space:]')
+        if [[ -z "$RESTORED_COUNT" || ! "$RESTORED_COUNT" =~ ^[0-9]+$ ]]; then
+            echo "FEHLER: Pruefabfrage fuer ${tbl} fehlgeschlagen (Restore nicht abfragbar)."
+            VERIFY_FAILED=1
+            continue
+        fi
+        if [[ "$LIVE_COUNT" =~ ^[0-9]+$ && "$LIVE_COUNT" -gt 0 && "$RESTORED_COUNT" -eq 0 ]]; then
+            echo "FEHLER: ${tbl} — Backup 0 Zeilen, Live ${LIVE_COUNT}: Dump war RLS-leer (falsche Dump-Rolle?)."
+            VERIFY_FAILED=1
+        else
+            echo "  OK ${tbl}: Restore=${RESTORED_COUNT} (Live=${LIVE_COUNT:-n/a})."
+        fi
+    done
+    if [[ "$VERIFY_FAILED" -ne 0 ]]; then
+        echo "FEHLER: Vollstaendigkeits-Guard fehlgeschlagen — Backup unvollstaendig oder nicht wiederherstellbar."
         exit 1
     fi
-    if [[ "$LIVE_CLIENT_COUNT" -gt 0 && "$RESTORED_CLIENT_COUNT" -eq 0 ]]; then
-        echo "FEHLER: Backup enthaelt 0 core_client-Zeilen, Live-DB hat ${LIVE_CLIENT_COUNT} — Dump war RLS-leer (falsche Rolle?)."
-        exit 1
-    fi
-    echo "Verifikation erfolgreich: ${RESTORED_CLIENT_COUNT} Klient(en) in core_client (Live: ${LIVE_CLIENT_COUNT})."
+    echo "Vollstaendigkeits-Guard bestanden: gepruefte RLS-Tabellen konsistent."
     echo "DB-Backup ist gueltig: ${LATEST_BACKUP}"
 
     # Medien-Backup integritaetspruefen — kein Restore noetig, nur tar-listen.

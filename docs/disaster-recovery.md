@@ -44,7 +44,7 @@ Das Projekt hat **zwei getrennte, nicht austauschbare** Backup-/Restore-Pfade. W
 | Dateien | `dump-*.pgc.enc` | `*.sql.gz.enc` **+** `*.sql.gz.enc.hmac` |
 | Medien-Backup | — (nur DB) | `*_media.tar.gz.enc` (+ `.hmac`), `tar` aus dem `web`-Container |
 | Restore-Tool | `pg_restore` | `psql` über [`scripts/ops/restore.sh`](../scripts/ops/restore.sh) |
-| Restore-Drill | [`restore-drill.sh`](../scripts/ops/restore-drill.sh) zielt **genau hierauf** | nicht vom Drill abgedeckt — Verify via `backup.sh --verify` |
+| Restore-Drill | [`restore-drill.sh --dev`](../scripts/ops/restore-drill.sh) zielt **hierauf** (Default/Auto) | [`restore-drill.sh --prod`](../scripts/ops/restore-drill.sh) (seit #1336: HMAC-Check + `gunzip \| psql` + Zeilenabgleich gegen Live-DB); `backup.sh --verify` bleibt leichtgewichtige Alternative |
 | Ablage (Default) | `$BACKUP_DIR` = `/var/backups/anl` | `<projekt>/backups/{daily,weekly,monthly}` |
 | Off-Site-Sync | — (kein Off-Site im Skript) | `BACKUP_OFFSITE_TARGET` (rclone / `s3://` / scp) |
 

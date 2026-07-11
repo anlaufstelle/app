@@ -243,3 +243,163 @@ class TestCaddyUploadBodyLimit:
             f"Caddyfile-Varianten sind auseinandergedriftet: {caps} — alle vier "
             "muessen denselben request_body-Cap tragen (Refs #1363)."
         )
+
+
+
+def _flat_script(path: Path) -> str:
+    """Skript ohne Kommentarzeilen, Zeilenfortsetzungen aufgeloest.
+
+    Spiegelt das Muster aus ``TestPublicBackupScriptsRlsRoles._flat`` — damit
+    matchen mehrzeilige Aufrufe als ein Statement und Prosa in Kommentaren
+    verfaelscht die Guards nicht.
+    """
+    lines = [line for line in path.read_text(encoding="utf-8").splitlines() if not line.lstrip().startswith("#")]
+    return "\n".join(lines).replace("\\\n", " ")
+
+
+class TestOpsScriptPathResolution:
+    """Refs #1336: ``scripts/ops/{backup,restore}.sh`` liegen unter
+    ``<repo>/scripts/ops/``. PROJECT_DIR muss den Repo-Root treffen (dort liegt
+    ``docker-compose.prod.yml``). Ein einfaches ``dirname "$SCRIPT_DIR"`` loeste
+    nur auf ``<repo>/scripts`` auf -> COMPOSE_FILE zeigte ins Leere und jedes
+    Backup/Restore scheiterte sofort. ``scripts/ops/`` ist im Public-Snapshot,
+    also kein Skip.
+    """
+
+    SCRIPTS = ("scripts/ops/backup.sh", "scripts/ops/restore.sh")
+
+    @pytest.mark.parametrize("script", SCRIPTS)
+    def test_no_single_dirname_bug(self, script: str) -> None:
+        flat = _flat_script(Path(script))
+        assert 'PROJECT_DIR="$(dirname "$SCRIPT_DIR")"' not in flat, (
+            f"{script} berechnet PROJECT_DIR noch mit einfachem dirname -> zeigt "
+            "auf <repo>/scripts statt Repo-Root (Refs #1336)."
+        )
+
+    @pytest.mark.parametrize("script", SCRIPTS)
+    def test_project_dir_resolves_two_levels_up(self, script: str) -> None:
+        flat = _flat_script(Path(script))
+        assert "${SCRIPT_DIR}/../.." in flat, (
+            f"{script} muss PROJECT_DIR zwei Ebenen ueber scripts/ops/ aufloesen "
+            "(Repo-Root mit docker-compose.prod.yml, Refs #1336)."
+        )
+
+    @pytest.mark.parametrize("script", SCRIPTS)
+    def test_guards_missing_compose_file(self, script: str) -> None:
+        flat = _flat_script(Path(script))
+        assert '! -f "$COMPOSE_FILE"' in flat, (
+            f"{script} sollte fruehzeitig abbrechen, wenn COMPOSE_FILE fehlt — "
+            "statt einen kryptischen docker-Fehler zu werfen (Refs #1336)."
+        )
+
+
+class TestBackupVerifyCompletenessGuard:
+    """Refs #1336 (DOC-P1): der ``--verify``-Pfad muss den stillen
+    unvollstaendigen Dump (Dump unter NOBYPASSRLS-Rolle -> 0 Zeilen der
+    FORCE-RLS-Tabellen) erkennbar machen: Zeilenzahl-Abgleich MEHRERER
+    kritischer RLS-Tabellen zwischen Restore und Live-DB.
+    """
+
+    _BACKUP = Path("scripts/ops/backup.sh")
+
+    def test_verify_compares_multiple_rls_tables(self) -> None:
+        flat = _flat_script(self._BACKUP)
+        for tbl in ("core_client", "core_event", "core_workitem", "core_auditlog"):
+            assert tbl in flat, (
+                f"--verify muss auch {tbl} gegen die Live-DB abgleichen — eine "
+                "einzelne Tabelle laesst RLS-Luecken unentdeckt (Refs #1336)."
+            )
+
+    def test_verify_compares_restore_against_live(self) -> None:
+        flat = _flat_script(self._BACKUP)
+        assert '-d "$VERIFY_DB"' in flat and '-d "$POSTGRES_DB"' in flat, (
+            "Der Vollstaendigkeits-Guard muss Restore-DB (VERIFY_DB) und Live-DB "
+            "(POSTGRES_DB) vergleichen (Refs #1336)."
+        )
+        assert 'RESTORED_COUNT" -eq 0' in flat, (
+            "Der Guard muss auf 'Live>0 aber Restore=0' (RLS-leerer Dump) fail-closed reagieren (Refs #1336)."
+        )
+
+
+class TestRestoreDrillProdFormat:
+    """Refs #1336 (OPS-05): der Restore-Drill deckte nur das dev-Format
+    (``dump-*.pgc.enc``, pg_restore) ab. Der an Self-Hoster ausgelieferte
+    kanonische Backup-Pfad ist aber ``scripts/ops/backup.sh`` ->
+    ``backups/daily/anlaufstelle_*.sql.gz.enc`` (plain SQL, psql,
+    docker-compose.prod.yml). Der Drill muss dieses Prod-Format ebenso pruefen.
+    """
+
+    _DRILL = Path("scripts/ops/restore-drill.sh")
+
+    def test_supports_prod_sql_gz_enc_backups(self) -> None:
+        flat = _flat_script(self._DRILL)
+        assert "anlaufstelle_*.sql.gz.enc" in flat, (
+            "restore-drill.sh muss das Prod-Backup-Format (anlaufstelle_*.sql.gz.enc) kennen (OPS-05, Refs #1336)."
+        )
+
+    def test_supports_prod_compose_stack(self) -> None:
+        flat = _flat_script(self._DRILL)
+        assert "docker-compose.prod.yml" in flat, (
+            "restore-drill.sh muss den Prod-Stack (docker-compose.prod.yml) ansprechen koennen (OPS-05, Refs #1336)."
+        )
+
+    def test_prod_uses_psql_restore_path(self) -> None:
+        flat = _flat_script(self._DRILL)
+        assert "gunzip" in flat and 'psql -U "$SU_USER" -d "$DRILL_DB"' in flat, (
+            "Das Prod-Format ist plain SQL + gzip und wird via 'gunzip | psql' "
+            "eingespielt (nicht pg_restore, OPS-05, Refs #1336)."
+        )
+
+    def test_prod_verifies_hmac_sidecar(self) -> None:
+        flat = _flat_script(self._DRILL)
+        assert "backup_verify_hmac" in flat, (
+            "Prod-Backups tragen einen A4.3-HMAC-Sidecar — der Drill muss ihn VOR "
+            "dem Entschluesseln pruefen (Refs #1336)."
+        )
+
+    def test_format_flag_selectable(self) -> None:
+        flat = _flat_script(self._DRILL)
+        assert "--prod" in flat and "--dev" in flat, (
+            "restore-drill.sh muss das Format per --dev/--prod waehlbar machen (plus Auto-Erkennung, Refs #1336)."
+        )
+
+    def test_prod_completeness_guard_before_mark_verified(self) -> None:
+        """Refs #1336 (Cleanup): der --prod-Zweig spielt via ``psql`` bewusst
+        OHNE ON_ERROR_STOP ein (benigner MV-Refresh unter FORCE-RLS), wodurch der
+        psql-Exit-Code auch bei ECHTEN Fehlern 0 bleibt. Ein leerer/teilweiser
+        Restore darf den Compliance-Marker NICHT gruen faerben — daher muss ein
+        Vollstaendigkeits-Abgleich (Wegwerf-DB vs. Live-DB, fail-closed bei
+        Live>0 aber Restore=0, wie ``backup.sh --verify``) VOR
+        ``mark_restore_verified`` laufen.
+        """
+        flat = _flat_script(self._DRILL)
+        # Zeilenzahl-Abgleich Restore-DB (DRILL_DB) gegen Quelle/Live-DB (POSTGRES_DB).
+        assert '-d "$DRILL_DB"' in flat and '-d "$POSTGRES_DB"' in flat, (
+            "Der Drill muss die Wegwerf-DB (DRILL_DB) gegen die Live-DB "
+            "(POSTGRES_DB) abgleichen — sonst bleibt ein leerer Restore unsichtbar (Refs #1336)."
+        )
+        assert 'RESTORED_COUNT" -eq 0' in flat, (
+            "Der Vollstaendigkeits-Guard muss auf 'Live>0 aber Restore=0' "
+            "(leerer/teilweiser Restore) fail-closed reagieren (Refs #1336)."
+        )
+        # Der Nachweis muss VOR mark_restore_verified stehen, sonst dokumentiert
+        # der Drill einen unvollstaendigen Restore als verifiziert.
+        guard_pos = flat.find('RESTORED_COUNT" -eq 0')
+        mark_pos = flat.find("mark_restore_verified")
+        assert guard_pos != -1 and mark_pos != -1, (
+            "Vollstaendigkeits-Guard und mark_restore_verified muessen beide im Drill vorkommen (Refs #1336)."
+        )
+        assert guard_pos < mark_pos, (
+            "Der Vollstaendigkeits-Check muss VOR mark_restore_verified stehen — "
+            "sonst faerbt ein unvollstaendiger Restore den Compliance-Check gruen (Refs #1336)."
+        )
+
+    def test_requires_live_db_name_for_comparison(self) -> None:
+        """Der Abgleich braucht den Live-DB-Namen. Fehlt POSTGRES_DB, koennte ein
+        leerer Restore nicht erkannt werden — deshalb fail-closed abbrechen statt
+        stumm zu vergleichen (Refs #1336)."""
+        flat = _flat_script(self._DRILL)
+        assert '"${POSTGRES_DB:?' in flat, (
+            "restore-drill.sh muss POSTGRES_DB fail-closed einfordern (:?) — der "
+            "Vollstaendigkeits-Abgleich gegen die Live-DB braucht den Namen (Refs #1336)."
+        )

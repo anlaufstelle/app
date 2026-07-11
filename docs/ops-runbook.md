@@ -644,37 +644,45 @@ BACKUP_OFFSITE_TARGET=backup-user@offsite.example.com:/backups/anlaufstelle
 
 Verifiziert, dass das aktuellste Backup vollstaendig wiederherstellbar ist und die Verteidigungslinien (RLS, AuditLog-Immutability-Trigger) erhalten bleiben. **Empfehlung: quartalsweise per Cron + Alert-Mail bei Fehlschlag.**
 
-Das Skript ist auf das **`dev-ops/deploy/backup.sh`**-Format ausgerichtet, das auf `dev.anlaufstelle.app` tatsaechlich laeuft (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, Quelle `$BACKUP_DIR/dump-*.pgc.enc` (Default `/var/backups/anl`), Stack `docker-compose.dev.yml`, Restore als Postgres-Superuser (`postgres`, via Local-Socket-Trust im db-Container — nötig für `CREATE DATABASE`, bypassed zugleich RLS). Das alte `scripts/ops/backup.sh`/`scripts/ops/restore.sh`-Schema (`backups/daily/*.sql.gz.enc`, plain SQL) ist davon unberuehrt.
+Das Skript deckt seit OPS-05 (Refs #1336) **beide** ausgelieferten Backup-Formate ab. Die Wahl erfolgt per Flag `--dev`/`--prod` oder `$DRILL_FORMAT`; ohne Angabe wird das Format anhand der vorhandenen Backup-Dateien auto-erkannt (Default `dev`, rueckwaerts-kompatibel — der bestehende dev-Timer laeuft unveraendert). Liegen **beide** Formate gleichzeitig vor, bricht der Drill ab und verlangt eine explizite Wahl:
 
-**Kompatibilitaet Backup-Format × Restore-Pfad** — die beiden Backup-Welten sind *nicht* austauschbar; ein Drill gegen das jeweils fremde Format schlaegt fehl:
+- **`--dev`** — `dev-ops/deploy/backup.sh`, das auf `dev.anlaufstelle.app` tatsaechlich laeuft (Refs #981): `pg_dump --format=custom` → `pg_restore`, AES-256-CBC, Quelle `$BACKUP_DIR/dump-*.pgc.enc` (Default `/var/backups/anl`), Stack `docker-compose.dev.yml`.
+- **`--prod`** — `scripts/ops/backup.sh`, der an Self-Hoster ausgelieferte kanonische Pfad: plain SQL + `gzip` + A4.3-HMAC-Sidecar → `psql`, Quelle `backups/daily/anlaufstelle_*.sql.gz.enc`, Stack `docker-compose.prod.yml`. Der HMAC-Sidecar wird VOR dem Entschluesseln geprueft.
+
+Beide Formate spielen als Postgres-Superuser (`postgres`, via Local-Socket-Trust im db-Container) ein — noetig fuer `CREATE DATABASE`, bypassed zugleich RLS/FORCE-RLS beim Restore.
+
+**Kompatibilitaet Backup-Format × Restore-Pfad** — die beiden Backup-Welten sind *nicht* austauschbar; ein Drill gegen das jeweils fremde Format schlaegt fehl. Der Drill waehlt aber pro Format den passenden Pfad:
 
 | Backup-Quelle | Dump-Format | Verschluesselung | Datei(en) | Restore-Tool | Restore-Drill |
 |---|---|---|---|---|---|
-| `dev-ops/deploy/backup.sh` (laeuft auf `dev.anlaufstelle.app`) | `pg_dump -Fc` (custom) | AES-256-CBC (kein HMAC) | `dump-*.pgc.enc` | `pg_restore` | ✓ `restore-drill.sh` ist genau hierauf ausgelegt (Glob `dump-*.pgc.enc`) |
-| `scripts/ops/backup.sh` (Prod-Schema) | plain SQL + gzip | AES-256-CBC **+ HMAC-SHA256**-Sidecar (Refs #1024) | `*.sql.gz.enc` + `.hmac` | `psql` (`scripts/ops/restore.sh`) | ✗ nicht vom Drill abgedeckt — eigener Verify-Pfad (HMAC-Check vor Decrypt) |
+| `dev-ops/deploy/backup.sh` (laeuft auf `dev.anlaufstelle.app`) | `pg_dump -Fc` (custom) | AES-256-CBC (kein HMAC) | `dump-*.pgc.enc` | `pg_restore` | ✓ `restore-drill.sh --dev` (Glob `dump-*.pgc.enc`) |
+| `scripts/ops/backup.sh` (Prod-Schema) | plain SQL + gzip | AES-256-CBC **+ HMAC-SHA256**-Sidecar (Refs #1024) | `*.sql.gz.enc` + `.hmac` | `psql` (`scripts/ops/restore.sh`) | ✓ `restore-drill.sh --prod` (HMAC-Check vor Decrypt, Refs #1336); `backup.sh --verify` bleibt leichtgewichtige Alternative |
 
-Warum kein Cross-Restore: Der Drill sucht per Glob `dump-*.pgc.enc` und pipet in `pg_restore` — ein plain-SQL-Backup (`*.sql.gz.enc`) wird so gar nicht gefunden und ist auch kein gueltiges `pg_restore`-Archiv. Umgekehrt scheitert `scripts/ops/restore.sh` an einem `dump-*.pgc.enc` am fehlenden `.hmac`-Sidecar (`backup_verify_hmac`) und am Binaerformat. Wer den Prod-Pfad drillen will, nutzt `scripts/ops/backup.sh --verify` (HMAC + Probe-Decrypt), nicht `restore-drill.sh`.
+Warum kein Cross-Restore: Der `--dev`-Zweig sucht per Glob `dump-*.pgc.enc` und pipet in `pg_restore` — ein plain-SQL-Backup (`*.sql.gz.enc`) wird so gar nicht gefunden und ist auch kein gueltiges `pg_restore`-Archiv. Der `--prod`-Zweig sucht `anlaufstelle_*.sql.gz.enc`, prueft den `.hmac`-Sidecar und spielt via `gunzip | psql` ein — ein `dump-*.pgc.enc` traegt keinen Sidecar (`backup_verify_hmac` bricht ab) und ist Binaerformat. Ein Lauf gegen das jeweils fremde Format schlaegt also fehl. Wer keinen vollen Drill fahren will, nutzt fuer den Prod-Pfad `scripts/ops/backup.sh --verify` (HMAC + Probe-Decrypt + Zeilenabgleich gegen die Live-DB).
 
-Die Dump-Dateien sind `0600` und gehoeren root — daher **als root** ausfuehren:
+Die Backup-Dateien sind `0600` und gehoeren root — daher **als root** ausfuehren. Ohne Flag erkennt das Skript das Format automatisch; explizit per `--dev`/`--prod` (oder `DRILL_FORMAT=dev|prod`):
 
 ```bash
-sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh
+sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh           # Format auto-erkennen
+sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --prod    # Prod-Format erzwingen (*.sql.gz.enc)
+sudo bash /opt/anlaufstelle/scripts/ops/restore-drill.sh --dev     # Dev-Format erzwingen (dump-*.pgc.enc)
 ```
 
 | Schritt | Pruefung |
 |---|---|
-| 0 | Neuestes `dump-*.pgc.enc` in `$BACKUP_DIR` finden |
+| 0 | Neuestes Backup im format-spezifischen Verzeichnis finden (`--dev`: `dump-*.pgc.enc`; `--prod`: `anlaufstelle_*.sql.gz.enc`) |
 | 1 | Frische Wegwerf-DB (`anlaufstelle_drill_<pid>`) anlegen |
-| 2 | Backup decrypten + `pg_restore` (custom format) in die Wegwerf-DB |
-| 3 | Stichproben pro Tabelle (`core_facility`, `core_client`, `core_event`, `core_auditlog`, `core_workitem`) — Counts pruefen |
+| 2 | Backup decrypten + einspielen — `--prod` prueft zuerst den HMAC-Sidecar, dann `gunzip \| psql` (plain SQL); `--dev` `pg_restore` (custom format) |
+| 3 | Stichproben pro Tabelle (`core_facility`, `core_client`, `core_event`, `core_auditlog`, `core_workitem`) — Counts abfragbar? |
+| 3b | **Vollstaendigkeits-Guard (fail-closed):** Zeilenabgleich der kritischen RLS-Tabellen (`core_client`, `core_event`, `core_workitem`, `core_auditlog`) zwischen Wegwerf-DB und Live-DB (`$POSTGRES_DB`) — `Live>0` aber `Restore=0` faerbt rot. Faengt den unvollstaendigen `--prod`-Restore ab, den der `psql`-Exit-Code (ohne `ON_ERROR_STOP`) verschluckt (Refs #1336) |
 | 4 | RLS-Policy-Check — `SELECT COUNT(*) FROM pg_class WHERE relname LIKE 'core_%' AND relrowsecurity = true` muss `>= 18` ergeben (konservativer Mindestwert im Skript; tatsaechliche Anzahl liegt hoeher, siehe Abschnitt 9) |
 | 5 | `auditlog_immutable`-Trigger existiert UND blockt Raw UPDATE |
 | 6 | Cleanup: Wegwerf-DB drop (via trap) |
-| 7 | **Bei vollem Erfolg:** `mark_restore_verified` im web-Container → Compliance-Marker |
+| 7 | **Bei vollem Erfolg (alle Schritte inkl. 3b):** `mark_restore_verified` im web-Container → Compliance-Marker |
 
 Output: ein `OK` / `FAIL`-Eintrag pro Schritt. Exit-Code != 0 bei jedem `FAIL`. Bei `FAIL` sofort auf Backup-Integritaet pruefen — Trigger-Check fehlgeschlagen (Schritt 5) ist kritisch, weil die AuditLog-Immutability dann nach Restore nicht mehr greift.
 
-> **Benigne Ausnahme in Schritt 2:** Das Dump enthält ein `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, das beim Restore an `FORCE ROW LEVEL SECURITY` auf `core_event` scheitert (`pg_restore: errors ignored on restore: 1`). Das betrifft nur den Statistik-Cache, nicht die Nutzdaten — der mv-refresh-Timer baut ihn stündlich neu. Der Drill meldet das als `OK … MV-Refresh übersprungen (benigne)` und schlägt nur bei **anderen** Fehlern fehl.
+> **Benigne Ausnahme beim Restore (Schritt 2):** Das Dump enthält ein `REFRESH MATERIALIZED VIEW core_statistics_event_flat`, das beim Restore an `FORCE ROW LEVEL SECURITY` auf `core_event` scheitert (`--dev`: `pg_restore: errors ignored on restore: 1`). Das betrifft nur den Statistik-Cache, nicht die Nutzdaten — der mv-refresh-Timer baut ihn stündlich neu. Der `--dev`-Drill meldet das als `OK … MV-Refresh übersprungen (benigne)` und schlägt nur bei **anderen** Fehlern fehl. Im `--prod`-Zweig laeuft `psql` bewusst ohne `ON_ERROR_STOP` (derselbe MV-Refresh-Fehler wird toleriert), wodurch der Exit-Code allein keine Vollstaendigkeit belegt — den fail-closed-Beweis liefert der Zeilenabgleich in **Schritt 3b**, bevor der Restore als verifiziert markiert wird.
 
 **Compliance-Marker (Refs #919):** Schritt 7 schreibt bei Erfolg automatisch einen `RESTORE_VERIFIED`-AuditLog-Eintrag (`manage.py mark_restore_verified`), den das Compliance-Dashboard (`/system/compliance/`) als Alter-Indikator nutzt:
 
@@ -692,8 +700,10 @@ docker compose -f docker-compose.dev.yml --env-file .env.dev exec web \
 **Cron-Vorschlag:**
 
 ```cron
-# Quartalsweise (1. Monat im Quartal, 03:30 nach Backup um 02:00):
-30 3 1 1,4,7,10 * cd /opt/anlaufstelle && bash scripts/ops/restore-drill.sh \
+# Quartalsweise (1. Monat im Quartal, 03:30 nach Backup um 02:00). Ohne Flag
+# wird das Format auto-erkannt; auf einem Self-Hoster mit Prod-Backups explizit
+# --prod setzen, damit ein fehlendes Backup nicht still auf --dev zurueckfaellt:
+30 3 1 1,4,7,10 * cd /opt/anlaufstelle && bash scripts/ops/restore-drill.sh --prod \
     >> /var/log/anlaufstelle-restore-drill.log 2>&1 \
     || mail -s "Restore-Drill FAIL" ops@example.com < /var/log/anlaufstelle-restore-drill.log
 ```
