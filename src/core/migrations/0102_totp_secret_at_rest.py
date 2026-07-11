@@ -48,7 +48,7 @@ def decrypt_existing_totp_keys(apps, schema_editor):
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("core", "0100_alter_auditlog_action"),
+        ("core", "0101_auditlog_actor"),
         ("otp_totp", "0003_add_timestamps"),
     ]
 

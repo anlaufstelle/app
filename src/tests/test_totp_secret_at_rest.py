@@ -36,7 +36,7 @@ from core.services.security.totp import (
 )
 
 # Migrationsmodul hat einen ziffernstartigen Namen — nur via importlib ladbar.
-_migration = importlib.import_module("core.migrations.0101_totp_secret_at_rest")
+_migration = importlib.import_module("core.migrations.0102_totp_secret_at_rest")
 
 # Klartext-Default-Key: random_hex(20) → 40 Kleinbuchstaben-Hex.
 _HEX40 = re.compile(r"\A[0-9a-f]{40}\Z")
