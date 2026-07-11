@@ -222,9 +222,20 @@ class TestCaddyUploadBodyLimit:
         value, unit = match.groups()
         return int(value) * cls._UNITS[unit.upper()]
 
+    @staticmethod
+    def _skip_if_stripped_in_public_snapshot() -> None:
+        # Caddyfile.staging und Caddyfile.demo strippt der Release-Build
+        # (dev-ops/release/build-release.sh) aus dem Public-/Stage-Snapshot;
+        # dort existieren nur Caddyfile + Caddyfile.dev, der Guard ist moot.
+        if not Path("Caddyfile.staging").exists():
+            pytest.skip("Caddyfile.staging nicht im Public-Snapshot (Refs #1047, #1363)")
+        if not Path("Caddyfile.demo").exists():
+            pytest.skip("Caddyfile.demo nicht im Public-Snapshot (Refs #1047, #1363)")
+
     def test_all_variants_cover_a_full_multi_file_field(self) -> None:
         import anlaufstelle.settings.base as base_settings
 
+        self._skip_if_stripped_in_public_snapshot()
         worst_case_bytes = base_settings.FILE_VAULT_MAX_UPLOAD_BYTES * base_settings.FILE_VAULT_MAX_UPLOAD_FILES
         for path in self._CADDYFILES:
             caddy_cap_bytes = self._max_size_bytes(path)
@@ -238,6 +249,7 @@ class TestCaddyUploadBodyLimit:
             )
 
     def test_all_variants_share_the_same_cap(self) -> None:
+        self._skip_if_stripped_in_public_snapshot()
         caps = {str(path): self._max_size_bytes(path) for path in self._CADDYFILES}
         assert len(set(caps.values())) == 1, (
             f"Caddyfile-Varianten sind auseinandergedriftet: {caps} — alle vier "
