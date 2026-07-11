@@ -103,6 +103,20 @@ class TestKAnonymity:
         target = _make_client(facility, pseudonym="P-target")
         assert is_k_anonymous(target, k=5) is False
 
+    def test_model_default_is_hard_delete(self, facility):
+        """#1311: Client-Level-Retention-k-Anon bleibt per Default AUS.
+
+        Hard-Delete ist die staerkere, fail-safe Datenschutz-Voreinstellung (der
+        Datensatz wird zerstoert statt nur generalisiert). K-Anon im Retention-Pfad
+        erhaelt generalisierte Datensaetze und ist damit eine bewusste
+        Aufbewahrungs-Abwaegung, die eine Einrichtung aktiv opt-in setzen muss;
+        ein Default-``AN`` waere ein Compliance-Regress. Entscheidung dokumentiert
+        in ``docs/security-notes.md`` (§ K-Anonymitaet …) und
+        ``docs/adr/023-k-anonymization-statistik.md`` (Update 2026-07-11).
+        """
+        settings_obj = Settings.objects.create(facility=facility)
+        assert settings_obj.retention_use_k_anonymization is False
+
     def test_setting_disabled_uses_hard_anonymize(self, facility, staff_user, doc_type_contact, client_identified):
         """Setting=False (Default) → ``client.anonymize()``-Pfad (Refs #780)."""
         Settings.objects.create(

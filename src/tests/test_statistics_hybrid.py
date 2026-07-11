@@ -456,3 +456,38 @@ class TestPartialEdgeMonthsUseLive:
 
         # Only event on Jan 20 falls within 10–25, event on Jan 5 does not
         assert result["total_contacts"] == 1  # live query, not 99 from snapshot
+
+
+# ---------------------------------------------------------------------------
+# #1311 — k-Anon-Geltungsbereich: internes Dashboard zeigt BEWUSST Roh-Kleinstzellen
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestDashboardKAnonScopeRaw:
+    """#1311: Das interne Statistik-Dashboard (``StatisticsView`` ->
+    ``get_statistics_hybrid``) unterdrueckt Kleinstfallzahlen (< k) BEWUSST NICHT
+    — anders als der External-Report-/PDF-Pfad, der die Einrichtung verlaesst.
+
+    Begruendung (Lead/Admin-intern, RLS-Zeilen-Zugriff auf dieselben Rohdaten =>
+    kein Privacy-Gewinn, nur Usability-Kosten) und der artefakt-basierte
+    Geltungsbereich: ``docs/security-notes.md`` (§ K-Anonymitaet …, Geltungsbereich
+    der Suppression) und ``docs/adr/023-k-anonymization-statistik.md``
+    (Update 2026-07-11). Wer den internen Pfad kuenftig doch unterdrueckt, muss die
+    dokumentierte Entscheidung mit aendern.
+    """
+
+    def test_hybrid_returns_raw_small_cell_counts(self, facility, client_identified, doc_type_contact, staff_user):
+        today = timezone.localdate()
+        # 2 Events (< Default-Schwelle k=5) im laufenden Monat.
+        for _ in range(2):
+            _make_event(facility, client_identified, doc_type_contact, staff_user, timezone.now())
+
+        stats = get_statistics_hybrid(facility, today.replace(day=1), today)
+
+        # Randsumme roh, nicht None/"unterdrueckt".
+        assert stats["total_contacts"] == 2
+        kontakt = next(r for r in stats["by_document_type"] if r["name"] == "Kontakt")
+        assert kontakt["count"] == 2
+        # Kein Suppressions-Marker im internen Dashboard-Pfad.
+        assert "suppressed" not in kontakt

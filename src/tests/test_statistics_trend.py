@@ -208,3 +208,56 @@ class TestChartDataView:
         data = resp.json()
         assert resp.status_code == 200
         assert len(data["labels"]) == 3
+
+
+# ---------------------------------------------------------------------------
+# #1311 — k-Anon-Geltungsbereich: Trend-Pfad zeigt BEWUSST Roh-Kleinstzellen
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestTrendKAnonScopeRaw:
+    """#1311: Der Trend-Pfad (``get_statistics_trend`` -> ``ChartDataView``)
+    unterdrueckt Kleinstfallzahlen (< k) BEWUSST NICHT — anders als der
+    External-Report-/PDF-Pfad, der die Einrichtung verlaesst.
+
+    Begruendung (Lead/Admin-intern, RLS-Zeilen-Zugriff auf dieselben Rohdaten =>
+    kein Privacy-Gewinn, nur Usability-Kosten) und der artefakt-basierte
+    Geltungsbereich stehen in ``docs/security-notes.md`` (§ K-Anonymitaet …,
+    Geltungsbereich der Suppression) und ``docs/adr/023-k-anonymization-statistik.md``
+    (Update 2026-07-11). Dieser Test friert die Entscheidung ein: wer den internen
+    Trend-Pfad kuenftig doch unterdrueckt, muss die dokumentierte Entscheidung mit
+    aendern.
+    """
+
+    def test_trend_segment_keeps_raw_small_cell(self, facility, client_identified, doc_type_contact, staff_user):
+        today = timezone.localdate()
+        # 2 Events (< Default-Schwelle k=5) im laufenden Monat.
+        for _ in range(2):
+            _make_event(facility, client_identified, doc_type_contact, staff_user, timezone.now())
+
+        result = get_statistics_trend(facility, today.replace(day=1), today)
+
+        current = result[-1]
+        # Randsumme roh, nicht None/"unterdrueckt".
+        assert current["total_contacts"] == 2
+        kontakt = next(r for r in current["by_document_type"] if r["name"] == "Kontakt")
+        assert kontakt["count"] == 2
+        # Kein Suppressions-Marker im internen Trend-Pfad.
+        assert "suppressed" not in kontakt
+
+    def test_chart_api_exposes_raw_small_cell(
+        self, client, admin_user, facility, client_identified, doc_type_contact, staff_user
+    ):
+        for _ in range(2):
+            _make_event(facility, client_identified, doc_type_contact, staff_user, timezone.now())
+
+        client.force_login(admin_user)
+        resp = client.get(reverse("core:statistics_chart_data"))
+        data = resp.json()
+
+        kontakt = next((d for d in data["document_types"] if d.get("name") == "Kontakt"), None)
+        assert kontakt is not None
+        # 2 Kontakte (< k=5) erscheinen roh in der Chart-JSON, nicht unterdrueckt.
+        assert kontakt["count"] == 2
+        assert "suppressed" not in kontakt

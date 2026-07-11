@@ -58,6 +58,16 @@ Die oben beschriebene Trennung galt fuer den urspruenglichen Stand: Die Freitext
 
 Mit #1094 ergaenzt der Retention-Bridge-Layer ([`src/core/retention/anonymization.py`](../../src/core/retention/anonymization.py)) im `use_k_anon`-Zweig zusaetzlich `_redact_cases_and_episodes` + `_redact_workitems` (dieselben Helfer wie der Hard-Pfad). **Beide Retention-Pfade tilgen damit jetzt denselben Fall-/Episoden-/Aufgaben-Freitext.** Die Primitive `k_anonymize_client` bleibt bewusst client-only — die Kaskade liegt im Bridge-Layer, nicht in der Primitive. Die Berichts-Suppression (Aggregat-Buckets `< k`) ist davon unberuehrt.
 
+## Update 2026-07-11: Geltungsbereich der Aggregat-Suppression + Retention-Default (Refs #1311)
+
+Die urspruengliche Entscheidung nannte als Suppression-Ort den externen Bericht (`/statistics/external/`). Inzwischen zieht die Small-Cell-Suppression ueber **alle extern zirkulierenden Artefakte**, waehrend zwei einrichtungs-interne Pfade sie **bewusst nicht** anwenden. Der Geltungsbereich ist **artefakt-**, nicht rollenbasiert:
+
+- **Suppression aktiv:** On-Screen-External-Report (HTML **und** `?format=json`), Jugendamt-PDF / „Beispiel-Sachbericht" (#1278), Halbjahres-Sachbericht-PDF im Standard-(externen-)Modus (Review R4); Randsummen `< k` unterdruecken sich selbst (Review R14). Die Suppression-Logik liegt als **Single Source of Truth** in [`external_report.py`](../../src/core/services/dashboard/external_report.py) (`_suppress_small` / `_suppress_stage_dict` / `_apply_secondary_suppression`) und wird von drei form-spezifischen Wrappern (`build_external_report`, `suppress_jugendamt_stats`, `suppress_report_stats`) genutzt — kein Copy-Paste.
+- **Suppression bewusst NICHT aktiv:** internes Statistik-Dashboard (`StatisticsView` → `get_statistics_hybrid`) und Trend-JSON-API (`ChartDataView` → `get_statistics_trend`). Beide sind Lead/Admin-intern; unter Row Level Security haben diese Rollen ohnehin Zeilen-Zugriff auf dieselben Rohdaten → kein Privacy-Gewinn, nur Usability-Kosten. Die Schutzgrenze ist der **Zweck** des Artefakts (externe Weitergabe vs. interne Steuerung), nicht die betrachtende Rolle.
+- **Client-Level-Retention-k-Anon** (`Settings.retention_use_k_anonymization`) bleibt per **Default AUS**: Hard-Delete ist die staerkere, fail-safe Voreinstellung; K-Anon ist ein bewusstes Opt-in-Retention-Trade-off (mit N5-Fail-Safe im Bridge-Layer, der unterbesetzte Buckets auf Hard-Delete zuruecknimmt). Eine Default-Aenderung waere ein Compliance-Regress.
+
+Detaillierte Begruendung + Test-Verweise: [`docs/security-notes.md` § K-Anonymitaet … / Geltungsbereich der Suppression](../security-notes.md).
+
 ## References
 
 - [`src/core/services/compliance/k_anonymization.py`](../../src/core/services/compliance/k_anonymization.py) — `k_anonymize_client`, `is_k_anonymous`, `count_clients_in_bucket`

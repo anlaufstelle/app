@@ -323,10 +323,57 @@ Anlaufstelle wendet **K-Anonymität** an: Merkmalskombinationen mit weniger als 
 Personen werden im Aggregat unterdrückt (`count=None`, `suppressed=True`). Schwelle
 pro Einrichtung über [`Settings.k_anonymity_threshold`](../src/core/models/settings.py)
 (Default **5**). Verdrahtet in den datenschutzfreundlichen externen Berichten
-([`external_report.py`](../src/core/services/external_report.py), Refs #921)
+([`external_report.py`](../src/core/services/dashboard/external_report.py), Refs #921)
 und optional im Retention-Löschpfad (`retention_use_k_anonymization`, Refs #780).
 Konzeptionelle Definition mit Beispiel: [Glossar § K-Anonymität im Detail](glossar.md#k-anonymität-im-detail).
 Hintergrund/Trade-offs: [ADR-023](adr/023-k-anonymization-statistik.md).
+
+### Geltungsbereich der Suppression (Issue #1311)
+
+Die Small-Cell-Suppression ist **artefakt-**, nicht rollenbasiert: unterdrückt wird
+in genau den Ausgaben, die die Einrichtung **verlassen** und deren Empfänger **keinen**
+Row-Level-Zugriff auf die Rohdaten haben.
+
+**Suppression aktiv (verdrahtet + getestet):**
+
+- On-Screen-**External-Report** `/statistics/external/` (HTML **und** `?format=json`) — [`build_external_report`](../src/core/services/dashboard/external_report.py), Refs #921.
+- **Beispiel-Sachbericht / Jugendamt-PDF** (`generate_jugendamt_pdf` → `suppress_jugendamt_stats`) — das am ehesten extern zirkulierende Artefakt, Refs #1278.
+- **Halbjahres-Sachbericht-PDF** im Standard-(externen-)Modus (`generate_report_pdf` → `suppress_report_stats`); `?internal=1` mit INTERN-Banner (Lead/Admin) bleibt roh — Security-Review R4.
+- **Randsummen** (`total_contacts`/`total`) unterhalb der Schwelle sind selbst Kleinstfallzahlen und werden ebenfalls unterdrückt — Security-Review R14.
+
+Gemeinsame Logik (Single Source of Truth): `_suppress_small` / `_suppress_stage_dict` /
+`_apply_secondary_suppression` in [`external_report.py`](../src/core/services/dashboard/external_report.py);
+die drei Public-Wrapper (`build_external_report`, `suppress_jugendamt_stats`,
+`suppress_report_stats`) normalisieren nur die jeweilige Datenform — kein Copy-Paste
+der Suppression selbst.
+
+**Suppression BEWUSST NICHT aktiv:**
+
+- **Internes Statistik-Dashboard** (`StatisticsView` → `get_statistics_hybrid`) und
+- **Trend-JSON-API** (`ChartDataView` → `get_statistics_trend`).
+
+Begründung: Beide Sichten sind über `LeadOrAdminRequiredMixin` auf **einrichtungs-interne**
+Lead-/Admin-Rollen beschränkt, die unter Row Level Security ohnehin **Zeilen-Zugriff auf
+dieselben Roh-Events/-Klienten** haben — sie können jede Kleinstzelle per Drill-down in die
+Einzelfälle direkt einsehen. Eine Aggregat-Suppression brächte hier **keinen Privacy-Gewinn**,
+aber **Usability-Kosten** (das eigene operative Dashboard zeigte „unterdrückt" auf Zahlen,
+die die Rolle regulär sehen darf). Die Schutzgrenze ist der **Zweck des Artefakts** (externe
+Weitergabe vs. interne Steuerung), **nicht** die betrachtende Person — deshalb unterdrückt der
+On-Screen-External-Report (WYSIWYG-Vorschau des Herausgabe-Artefakts) trotz identischer
+Betrachterrolle. Ändert sich diese Entscheidung (Suppression im internen Pfad), muss diese
+Notiz mit — festgeschrieben in `test_statistics_hybrid.py::TestDashboardKAnonScopeRaw` und
+`test_statistics_trend.py::TestTrendKAnonScopeRaw`.
+
+**Client-Level-Retention-k-Anon bleibt per Default AUS** (`Settings.retention_use_k_anonymization = False`).
+Der Default ist **Hard-Delete** — die stärkere, fail-safe Datenschutz-Voreinstellung (der
+Datensatz wird zerstört, nicht nur generalisiert). K-Anonymisierung im Retention-Pfad
+**erhält** statistisch verwertbare, generalisierte Datensätze und ist damit eine bewusste
+Aufbewahrungs-Abwägung, die eine Einrichtung aktiv (Opt-in) setzen und im
+Verarbeitungsverzeichnis dokumentieren muss; ein Default-„AN" würde Daten still aufbewahren,
+die eine naive Betreiberin gelöscht glaubt (Compliance-Regress). Zusätzlich fällt der
+aktivierte K-Anon-Pfad bei unterbesetzten Buckets (< *k*) fail-safe auf Hard-Delete zurück
+(Security-Review N5). Default festgeschrieben in
+`test_retention_k_anonymization.py::TestKAnonymity::test_model_default_is_hard_delete`.
 
 ---
 
