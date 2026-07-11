@@ -5,7 +5,7 @@ import logging
 
 import pytest
 
-from core.logging import JsonFormatter, scrub
+from core.logging import JsonFormatter, VerboseScrubbingFormatter, scrub
 
 # --- Scrub-Regex direkt -------------------------------------------------
 
@@ -143,3 +143,56 @@ def test_formatter_scrubs_exception_text():
     data = json.loads(out)
     assert "tester@example.com" not in data["exception"]
     assert "<email>" in data["exception"]
+
+
+# --- Text-/verbose-Formatter (Default LOG_FORMAT=text) ------------------
+# Refs #1500: ``scrub()`` hing bisher nur am ``JsonFormatter``. Der
+# Default-``LOG_FORMAT=text`` nutzt den ``verbose``-Formatter, der ungescrubbt
+# war. Der ``VerboseScrubbingFormatter`` zieht die fertige Ausgabezeile
+# (Message + angehängter Traceback) durch denselben Scrubber (Defense-in-Depth).
+
+
+def test_verbose_formatter_scrubs_message():
+    formatter = VerboseScrubbingFormatter(fmt="{levelname} {module} {message}", style="{")
+    record = _make_record("User tester@example.com failed")
+    out = formatter.format(record)
+    assert "tester@example.com" not in out
+    assert "<email>" in out
+
+
+def test_verbose_formatter_scrubs_exception_traceback():
+    formatter = VerboseScrubbingFormatter(fmt="{levelname} {module} {message}", style="{")
+    try:
+        raise ValueError("Pseudonym tester@example.com already exists")
+    except ValueError:
+        import sys
+
+        record = logging.LogRecord(
+            name="core.test",
+            level=logging.ERROR,
+            pathname="test.py",
+            lineno=1,
+            msg="unhandled",
+            args=(),
+            exc_info=sys.exc_info(),
+        )
+        record.module = "test"
+    out = formatter.format(record)
+    assert "tester@example.com" not in out
+    assert "<email>" in out
+
+
+def test_verbose_formatter_preserves_plain_output():
+    formatter = VerboseScrubbingFormatter(fmt="{levelname} {module} {message}", style="{")
+    record = _make_record("Snapshot created facility=Teststelle year=2026")
+    out = formatter.format(record)
+    assert out == "INFO test Snapshot created facility=Teststelle year=2026"
+
+
+def test_verbose_formatter_does_not_mutate_record_message():
+    """Der Scrub läuft auf der Ausgabe-Zeichenkette, nicht auf dem Record —
+    ein zweiter Handler (z.B. JSON) sieht denselben unveränderten Record."""
+    formatter = VerboseScrubbingFormatter(fmt="{message}", style="{")
+    record = _make_record("User tester@example.com failed")
+    formatter.format(record)
+    assert record.getMessage() == "User tester@example.com failed"

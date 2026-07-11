@@ -40,6 +40,25 @@ def scrub(text):
     return text
 
 
+class VerboseScrubbingFormatter(logging.Formatter):
+    """Plain-Text-Formatter (Default ``LOG_FORMAT=text``) mit PII-Scrub.
+
+    Der ``JsonFormatter`` scrubbt bereits, aber die Default-Textausgabe
+    (``verbose``) lief bisher ungescrubbt (Refs #1500). Dieser Formatter zieht
+    die fertig formatierte Ausgabezeile — inklusive des von
+    ``logging.Formatter.format`` automatisch angehängten Tracebacks — durch
+    denselben ``scrub()`` (Defense-in-Depth).
+
+    Bewusst wird die *Ausgabe-Zeichenkette* gescrubbt, nicht der Record: so
+    bleibt ``record.message``/``record.exc_text`` unverändert, und ein zweiter
+    Handler am selben Record (z. B. der JSON-Handler) sieht keine doppelt
+    verarbeiteten Felder. ``scrub()`` ist zudem idempotent.
+    """
+
+    def format(self, record):
+        return scrub(super().format(record))
+
+
 class JsonFormatter(logging.Formatter):
     """Emit each log record as a single JSON line with PII scrubbing.
 

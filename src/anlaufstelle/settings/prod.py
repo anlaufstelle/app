@@ -9,6 +9,7 @@ import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
 
 from ._sentry import before_send as _sentry_before_send
+from ._sentry import before_send_transaction as _sentry_before_send_transaction
 from .base import *  # noqa: F401, F403
 from .base import LOGGING  # noqa: F401
 
@@ -35,6 +36,11 @@ if _sentry_dsn:
         # Event übertragen wird (Defense-in-Depth).
         include_local_variables=False,
         before_send=_sentry_before_send,
+        # Refs #1500: Performance-Transactions umgehen before_send in
+        # sentry-sdk 2.x. Sie tragen denselben Request-Kontext (inkl.
+        # query_string mit potenziellen Klient*innen-Namen als Suchbegriff),
+        # Spans und Breadcrumbs — daher derselbe Scrub über einen eigenen Hook.
+        before_send_transaction=_sentry_before_send_transaction,
     )
 
 # --- Media (encrypted attachments) ---

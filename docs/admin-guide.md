@@ -20,6 +20,7 @@ Dieses Handbuch richtet sich an IT-Administratoren sozialer Einrichtungen, die A
 5. [Monitoring](#5-monitoring)
  - 5.4 [CSP-Debugging](#54-csp-debugging)
  - 5.5 [Compliance-Dashboard](#55-compliance-dashboard)
+ - 5.6 [Error-Tracking & Datenminimierung](#56-error-tracking--datenminimierung)
 6. [Troubleshooting](#6-troubleshooting)
 7. [DSGVO-Hinweise](#7-dsgvo-hinweise)
  - 7.8 [Optimistic Locking](#78-optimistic-locking)
@@ -155,7 +156,7 @@ Seit v0.12 trennt Anlaufstelle drei DB-Rollen: einen hartkodierten `postgres`-Bo
 
 | Name | Default | Beschreibung |
 |---|---|---|
-| `SENTRY_DSN` || Wenn gesetzt, wird Sentry initialisiert (PII wird **nicht** gesendet, `send_default_pii=False`). |
+| `SENTRY_DSN` || Aktiviert das Error-Tracking (opt-in — ohne DSN verlässt keinerlei Telemetrie die Installation). Gesetzt werden `send_default_pii=False` und `include_local_variables=False`; ein serverseitiger Scrubber entfernt Request-Bodies/Cookies/Query-Strings und maskiert sensible Felder, bevor ein Event die Installation verlässt. Mechanismus **und Grenzen** siehe [§ 5.6 Error-Tracking & Datenminimierung](#56-error-tracking--datenminimierung). |
 | `SENTRY_TRACES_SAMPLE_RATE` | `0.1` | Sample-Rate für Performance-Traces (0.0–1.0). |
 
 **E-Mail (SMTP, Produktion)**
@@ -912,6 +913,30 @@ Bei CSP-Fehlern nach einem Update: Browser-Console auf **konkret blockierte URL/
 Der Superadmin-Bereich `/system/compliance/` (#919) bündelt typisierte Health-Checks in einem Dashboard: die drei DB-Rollen-Checks (über `check_db_roles`, siehe Datenbank-Variablen in [§ 1](#1-installation-docker-compose)), Backup-Alter, Restore-Verified-Alter, ClamAV-Ping + Signaturalter, Retention-Run-Alter, Frische der Hintergrundjobs (Statistik-Snapshot, Breach-Scan, Materialized-View-Refresh), MFA-Quote (Super-Admin/Facility-Admin/Leitung), ausstehende Django-Migrationen, App-/Django-/Python-Versionen sowie kritische Audit-Events der letzten 24 Stunden.
 
 Jeder Check liefert einen Status `ok` / `warning` / `critical` / `unknown`; ein einzelner Check-Fehler kippt das Dashboard nicht. Der Bereich ist **Super-Admins** vorbehalten (`facility_admin` erhält `403`). Die Frische-Schwellen der Hintergrundjobs und des Restore-Markers sind im [Ops-Runbook](ops-runbook.md) dokumentiert.
+
+### 5.6 Error-Tracking & Datenminimierung
+
+Das Error-Tracking (Sentry-kompatibel) ist **vollständig opt-in**: Das SDK wird nur initialisiert, wenn `SENTRY_DSN` gesetzt ist ([`prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py)). Ohne DSN verlässt **keinerlei Telemetrie** die Installation — es gibt kein gehostetes Angebot dieses Projekts, die Datenresidenz liegt vollständig beim Betreiber. Ein Ausfall oder Fehlen des Trackers beeinträchtigt die Anwendung nicht; Fehler stehen weiterhin in den Server-Logs (siehe **Logging** in [§ 1](#1-installation-docker-compose)).
+
+**Nur serverseitiges SDK.** Eingebunden ist ausschließlich das Server-SDK (`sentry-sdk[django]`), kein Browser-SDK. Session Replay, Feedback-Widgets, clientseitige Breadcrumbs und Browser-Profiling existieren im Projekt nicht — es kann also nichts davon unbemerkt mitlaufen. Genutzt werden nur Server-Error-Events und optionales Trace-Sampling (`SENTRY_TRACES_SAMPLE_RATE`).
+
+**Was gesendet und was entfernt/maskiert wird.** Sobald das Tracking aktiv ist, greifen mehrere Schichten der Datenminimierung, bevor ein Event die Installation verlässt:
+
+- `send_default_pii=False` — keine Cookies, keine Client-IP.
+- `include_local_variables=False` — Stack-Frame-Locals werden nicht erfasst (ein Frame könnte z. B. eine entschlüsselte Notiz enthalten).
+- Ein serverseitiger `before_send`-Hook entfernt Request-Bodies, Cookies und Query-Strings, maskiert sensible Header und Schlüssel (`Authorization`, Passwörter, Tokens …), zieht Exception- und Log-Messages sowie die aus Log-Zeilen gebauten **Breadcrumbs** durch einen Text-Scrubber (Emails/Tokens werden zu Platzhaltern) und maskiert frei befüllbare `extra`-Werte.
+- Ein `before_send_transaction`-Hook wendet dasselbe Scrubbing auf **Performance-Transactions** an (diese umgehen `before_send` im SDK): Request-Kontext inklusive `query_string` (Suchbegriffe können Klient*innen-Namen sein), Span-Beschreibungen und -Daten sowie der Transaction-Name werden mitbehandelt.
+
+**Grenzen — offen benannt.** Die Scrubber arbeiten regel- und schlüsselbasiert (Best-Effort, Defense-in-Depth); sie ersetzen keine inhaltliche Prüfung jedes einzelnen Event-Feldes. Wer maximale Datensparsamkeit braucht, wählt eine der folgenden Stufen:
+
+1. **`SENTRY_DSN` nicht setzen** — empfohlen für hochsensible Deployments, insbesondere auf älteren Ständen, deren SDK-Scrubber noch nicht alle oben genannten Schichten enthält: kein Error-Tracking-Prozessor, kein Datenabfluss; Fehler stehen weiterhin in den Server-Logs.
+2. **`SENTRY_TRACES_SAMPLE_RATE=0`** gegen einen Tracker **innerhalb der eigenen Trust-Boundary** (z. B. selbst gehostet): schaltet Performance-Transactions ganz ab und beschränkt den Abfluss auf gescrubbte Error-Events an eine Instanz, die keine zusätzliche Drittpartei ist.
+
+**Logs.** Die Server-Logs werden in **beiden** Formaten PII-gescrubbt — sowohl der Default `LOG_FORMAT=text` als auch `LOG_FORMAT=json` ziehen Messages und Tracebacks durch denselben Scrubber. Für DSGVO-Kontexte mit Log-Aggregation empfiehlt sich weiterhin `LOG_FORMAT=json` (strukturiert, maschinenlesbar); die Datenminimierung ist aber nicht mehr an dieses Format gebunden.
+
+**Selbst gehosteter Tracker (z. B. GlitchTip).** GlitchTip akzeptiert Standard-Sentry-DSNs, und dieses Projekt nutzt nur Kern-SDK-Features (Error-Events plus optionales Trace-Sampling). Das Umbiegen von `SENTRY_DSN` auf eine selbst gehostete Instanz sollte daher ohne Codeänderung funktionieren. **Diese Kombination ist von diesem Projekt nicht evaluiert und nicht formal unterstützt** — vor einem Produktiveinsatz sollten Sie mindestens Envelope-/API-Kompatibilität und das Verhalten bei nicht unterstützten Event-Typen selbst prüfen. Betrieb der Tracker-Instanz (Backups, Retention, Upgrades) ist Betreiber-Infrastruktur und in deren eigener Dokumentation beschrieben; die Tracker-Datenbank gehört in dieselbe Trust-Boundary wie die App-Daten und braucht dieselben Zugriffs- und Löschregeln.
+
+> **Kein Rechtsrat:** Dieser Abschnitt beschreibt technische Maßnahmen. Datenschutz-Folgenabschätzung und Verzeichnis der Verarbeitungstätigkeiten verbleiben beim Betreiber als Verantwortlichem.
 
 ---
 

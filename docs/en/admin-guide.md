@@ -23,6 +23,7 @@ This guide is intended for IT administrators of social service facilities who in
 5. [Monitoring](#5-monitoring)
  - 5.4 [CSP Debugging](#54-csp-debugging)
  - 5.5 [Compliance Dashboard](#55-compliance-dashboard)
+ - 5.6 [Error Tracking & Data Minimization](#56-error-tracking--data-minimization)
 6. [Troubleshooting](#6-troubleshooting)
 7. [GDPR Notes](#7-gdpr-notes)
  - 7.8 [Optimistic Locking](#78-optimistic-locking)
@@ -158,7 +159,7 @@ Since v0.12, Anlaufstelle separates three DB roles: a hardcoded `postgres` boots
 
 | Name | Default | Description |
 |---|---|---|
-| `SENTRY_DSN` | -- | If set, Sentry is initialized (PII is **not** sent, `send_default_pii=False`). |
+| `SENTRY_DSN` | -- | Enables error tracking (opt-in -- without a DSN, no telemetry at all leaves the installation). Sets `send_default_pii=False` and `include_local_variables=False`; a server-side scrubber removes request bodies/cookies/query strings and masks sensitive fields before an event leaves the installation. Mechanism **and limits** see [§ 5.6 Error Tracking & Data Minimization](#56-error-tracking--data-minimization). |
 | `SENTRY_TRACES_SAMPLE_RATE` | `0.1` | Sample rate for performance traces (0.0--1.0). |
 
 **Email (SMTP, production)**
@@ -910,6 +911,30 @@ The super-admin area `/system/compliance/` (#919) consolidates typed health chec
 
 Each check returns a status of `ok` / `warning` / `critical` / `unknown`; a single failing check does not bring down the whole dashboard. The area is **super-admin only** (`facility_admin` receives a `403`). The freshness thresholds for background jobs and the restore marker are documented in the [Ops Runbook](../ops-runbook.md).
 
+### 5.6 Error Tracking & Data Minimization
+
+Error tracking (Sentry-compatible) is **fully opt-in**: the SDK is initialized only when `SENTRY_DSN` is set ([`prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py)). Without a DSN, **no telemetry** leaves the installation -- there is no hosted offering of this project, so data residency rests entirely with the operator. An absent or unreachable tracker never affects the application; errors still land in the server logs (see **Logging** in [§ 1](#1-installation-docker-compose)).
+
+**Server-side SDK only.** Only the server SDK (`sentry-sdk[django]`) is used, no browser SDK. Session Replay, feedback widgets, client-side breadcrumbs and browser profiling do not exist in this project, so none of them can silently run along. The only features in use are server error events and optional trace sampling (`SENTRY_TRACES_SAMPLE_RATE`).
+
+**What is sent, and what is removed or masked.** Once tracking is enabled, several data-minimization layers apply before an event leaves the installation:
+
+- `send_default_pii=False` -- no cookies, no client IP.
+- `include_local_variables=False` -- stack-frame locals are not captured (a frame could hold, e.g., a decrypted note).
+- A server-side `before_send` hook removes request bodies, cookies and query strings, masks sensitive headers and keys (`Authorization`, passwords, tokens, …), runs exception and log messages plus the **breadcrumbs** built from log lines through a text scrubber (emails/tokens become placeholders), and masks free-form `extra` values.
+- A `before_send_transaction` hook applies the same scrubbing to **performance transactions** (which bypass `before_send` in the SDK): the request context including `query_string` (search terms can be client names), span descriptions and data, and the transaction name are all covered.
+
+**Limits -- stated plainly.** The scrubbers are rule- and key-based (best-effort, defense-in-depth); they do not replace a content review of every individual event field. For maximum data minimization, choose one of the following levels:
+
+1. **Leave `SENTRY_DSN` unset** -- recommended for high-sensitivity deployments, especially on older releases whose SDK scrubbers do not yet include all the layers above: no error-tracking processor, no data egress; errors still appear in the server logs.
+2. **`SENTRY_TRACES_SAMPLE_RATE=0`** against a tracker **inside your own trust boundary** (e.g. self-hosted): disables performance transactions entirely and limits egress to scrubbed error events sent to an instance that is not an additional third party.
+
+**Logs.** Server logs are PII-scrubbed in **both** formats -- the default `LOG_FORMAT=text` and `LOG_FORMAT=json` both run messages and tracebacks through the same scrubber. For GDPR contexts with log aggregation, `LOG_FORMAT=json` is still recommended (structured, machine-readable), but data minimization is no longer tied to that format.
+
+**Self-hosted tracker (e.g. GlitchTip).** GlitchTip accepts standard Sentry DSNs, and this project uses only core SDK features (error events plus optional trace sampling). Pointing `SENTRY_DSN` at a self-hosted instance should therefore work without code changes. **This combination is not evaluated and not formally supported by this project** -- before production use, at least verify envelope/API compatibility and the behavior for unsupported event types yourself. Operating the tracker instance (backups, retention, upgrades) is operator infrastructure and covered by its own documentation; the tracker's database belongs inside the same trust boundary as the app data and needs the same access and retention rules.
+
+> **Not legal advice:** This section describes technical measures. A data protection impact assessment and the record of processing activities remain with the operator as the controller.
+
 ---
 
 ## 6. Troubleshooting
@@ -1291,4 +1316,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.20.0 -->
 <!-- translation-date: 2026-06-12 -->
-<!-- source-hash: 0a589e8 -->
+<!-- source-hash: 1abae21 -->

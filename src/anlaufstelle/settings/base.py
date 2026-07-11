@@ -351,7 +351,11 @@ LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
+        # Default-Textausgabe mit PII-Scrub (Refs #1500). Ohne den
+        # Scrubbing-Formatter würde bei ``LOG_FORMAT=text`` (Default) rohe PII
+        # in stdout/Log-Dateien landen; nur ``LOG_FORMAT=json`` scrubbte bisher.
         "verbose": {
+            "()": "core.logging.VerboseScrubbingFormatter",
             "format": "{levelname} {asctime} {module} {message}",
             "style": "{",
         },
