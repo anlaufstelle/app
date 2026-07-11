@@ -2863,7 +2863,7 @@ msgstr "Kein Ereignis ausgewählt."
 
 #: src/core/views/workitem_bulk.py:65
 msgid "Keine gültigen Aufgaben gefunden."
-msgstr "Keine Klienten gefunden"
+msgstr "Keine gültigen Aufgaben gefunden."
 
 #: src/core/views/workitem_bulk.py:73
 #, fuzzy
@@ -3735,7 +3735,7 @@ msgstr "Herunterladen"
 
 #: src/templates/core/attachments/partials/attachment_table.html:71
 msgid "Keine Dateien gefunden"
-msgstr "Keine Klienten gefunden"
+msgstr "Keine Dateien gefunden"
 
 #: src/templates/core/audit/detail.html:4
 #: src/templates/core/audit/detail.html:9
@@ -5217,10 +5217,8 @@ msgid "Letztes Backup"
 msgstr "Letzter Kontakt"
 
 #: src/templates/core/system/dashboard.html:108
-#, fuzzy
-#| msgid "Keine Dateien gefunden"
 msgid "Kein Backup gefunden"
-msgstr "Keine Klienten gefunden"
+msgstr "Kein Backup gefunden"
 
 #: src/templates/core/system/dashboard.html:110
 #, python-format
