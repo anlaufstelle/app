@@ -2,7 +2,7 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-.venv/
+.venv
 venv/
 
 # Coverage
@@ -67,7 +67,7 @@ Thumbs.db
 *.pfx
 
 # Node (Tailwind)
-node_modules/
+node_modules
 # package-lock.json wird committet (Refs #656) — reproduzierbare
 # `npm ci`-Installs + GitHub-Actions setup-node Cache-Hit.
 
@@ -75,7 +75,7 @@ node_modules/
 backups/
 
 # SSL-Zertifikate (lokal generiert)
-certs/
+certs
 
 # Worktrees
 .worktrees/
