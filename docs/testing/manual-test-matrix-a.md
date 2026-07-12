@@ -342,7 +342,7 @@
 **Erwartung:**
 - Du hast offline gearbeitet, beim Wieder-Online sind die Daten synchron.
 
-> 🤖 **Automatisiert abgedeckt** (Playwright, echtes `context.set_offline`): `test_pwa_offline.py` (Offline-Banner sichtbar bei Netz-Aus, Service-Worker-`/offline/`-Fallback, Offline-`POST` → SW-Queue + Feedback) und `test_offline_store.py` (verschlüsselter IndexedDB-Store, Sync-Konflikt-Review). Vollständige Offline-/PWA-Fälle: ENT-OFFL-01…12 / ENT-PWA-01…05 in [Matrix B](manual-test-matrix-b.md).
+> 🤖 **Automatisiert abgedeckt** (Playwright, echtes `context.set_offline`): `test_pwa_offline.py` (Offline-Banner sichtbar bei Netz-Aus, Service-Worker-`/offline/`-Fallback, Offline-`POST` → SW-Queue + Feedback) und `test_offline_store.py` (verschlüsselter IndexedDB-Store, Sync-Konflikt-Review). Vollständige Offline-/PWA-Fälle: ENT-OFFL-01…12 / ENT-PWA-01…06 in [Matrix B](manual-test-matrix-b.md).
 
 **Status:** ☐ Offen
 

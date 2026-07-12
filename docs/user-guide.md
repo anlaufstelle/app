@@ -594,10 +594,11 @@ Für Einsätze ohne verlässliche Internetverbindung — etwa bei aufsuchender A
 
 1. Öffnen Sie die Personenliste.
 2. Tippen Sie bei jeder gewünschten Person in der Spalte **„Offline"** auf **„Mitnehmen"** — oder auf der Detailseite der Person auf **„Offline mitnehmen"**. Pseudonym, Stammdaten und die letzten Ereignisse werden dann verschlüsselt für die Offline-Nutzung auf Ihr Gerät geladen; ein Badge **„Lokal verfügbar"** bestätigt es. Maximal 20 Personen gleichzeitig.
-3. Der **Offline-Arbeitsplatz** unter **`/offline/`** listet jederzeit Ihre mitgenommenen Personen und dient auch als Einstieg, wenn Sie die App ohne Netz (bzw. als installierte App) öffnen.
+3. Eine Übersicht über Ihre mitgenommenen Personen finden Sie jederzeit unter **„Personen"** (`/clients/`) — diese Ansicht funktioniert seit auch offline (siehe unten).
 
 **Während des Einsatzes (offline):**
 
+- **Personen, Aufgaben und Zeitstrom bleiben an ihrer gewohnten Adresse verfügbar (seit/3, #1499):** Die **Personenliste** (`/clients/`), die **Aufgabenliste** (`/workitems/`) und der **Zeitstrom** als Startseite (`/`) rendern offline denselben lokalen Ausschnitt wie online — aus Ihren mitgenommenen Personen zusammengestellt, in gewohnter Optik. Die Aufgabenliste und der Zeitstrom zeigen dabei auch **anonyme bzw. personlose Einträge** (Standalone-Aufgaben, Kontakte ohne Personenbezug), klar als solche markiert; der Zeitstrom ist bewusst als „lokale Chronik" gekennzeichnet — er zeigt nur die offline verfügbaren Vorgänge, nicht die vollständige Historie der Einrichtung. Eine separate Offline-Startseite brauchen Sie dafür nicht mehr.
 - Öffnen Sie eine mitgenommene Person wie gewohnt über ihre Detailseite — die Ansicht bleibt an der **normalen Adresse** und wird aus dem verschlüsselten Offline-Speicher aufgebaut (kein separater „Offline"-Link mehr).
 - Sie können **neue Ereignisse erfassen** (über **„Neuer Kontakt"**) und **bestehende bearbeiten**; die Einträge werden verschlüsselt lokal gespeichert (AES-GCM-256; der Schlüssel wird aus Ihrem Passwort abgeleitet) und bei Verbindung automatisch gesendet. **Datei-Anhänge** können offline nicht erfasst werden — reichen Sie sie nach, sobald Sie online sind.
 - **Erfassung überall offline (seit, #1499):** Sie müssen dafür **kein Dossier mehr geöffnet** haben. Tippen Sie offline im **„+"-Menü** auf **„Kontakt dokumentieren"** bzw. **„Aufgabe erstellen"** (oder öffnen Sie die Formulare `/events/new/` / `/workitems/new/` direkt) — es öffnet sich **an der gewohnten Adresse** eine echte Erfassungsmaske: Dokumentationstyp wählen, optional eine „offline mitgenommene" Person zuordnen, speichern. Der Eintrag wird verschlüsselt lokal abgelegt und beim nächsten Netzkontakt automatisch gesendet.
@@ -605,6 +606,7 @@ Für Einsätze ohne verlässliche Internetverbindung — etwa bei aufsuchender A
 - **Aufgaben-Erfassung ist Fachkräften vorbehalten.** Öffnen Sie als Assistenz offline die Aufgaben-Maske, sehen Sie statt der Felder einen Hinweis — so entsteht kein Eintrag, der beim Senden ohnehin abgelehnt würde.
 - Ist für die Offline-Erfassung **noch nichts vorbereitet** (die Einrichtung wurde nie online geöffnet, der lokale Cache ist leer, oder die installierte App ist noch nicht aktualisiert), zeigt die Maske einen kurzen Hinweis **„einmal online öffnen"** statt der Formularfelder.
 - **Datei-Anhänge** können offline weiterhin nicht erfasst werden — reichen Sie sie nach, sobald Sie online sind.
+- **`/offline/` ist seit nur noch ein technischer Fallback**, kein Einstiegspunkt mehr: Die Seite „Keine lokale Ansicht verfügbar" erscheint ausschließlich, wenn für die aufgerufene Adresse **keine** lokale Ansicht vorliegt (z. B. eine unbekannte URL, oder die App wurde noch nicht auf den aktuellen Stand aktualisiert) — mit Links zur Personenliste, den Aufgaben und zum Zeitstrom sowie „Erneut versuchen".
 - In der Oberfläche sehen Sie einen Hinweis, dass Sie offline arbeiten und wie viele Einträge noch auf die Synchronisation warten.
 
 **Zurück im Netz:**

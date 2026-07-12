@@ -1138,7 +1138,7 @@
 |---------|-------|---------|--------|-----|
 | Pwa | fachkraft (`miriam`) | C/F/S | ✓ | `test_pwa_offline.py` |
 
-**Voraussetzung:** SW registriert + aktiviert (siehe ENT-PWA-02); `/offline/` ist im App-Shell-Cache.
+**Voraussetzung:** SW registriert + aktiviert (siehe ENT-PWA-02); `/offline/` ist im App-Shell-Cache. **Seit #1544/#1499 :** `/offline/` ist kein Einstiegspunkt mehr, sondern nur noch terminaler Fallback — `/clients/`, `/workitems/` und `/` haben eigene Shells (siehe ENT-PWA-06).
 
 **Vorbereitung:**
 - Login als `miriam`.
@@ -1147,15 +1147,15 @@
 
 **Schritte:**
 1. DevTools auf „Offline" setzen.
-2. Eine **bisher nicht** besuchte Route aufrufen, z.B. `/zeitstrom/?filter=foo`.
-3. Eine bekannte HTML-Seite aufrufen (z.B. `/clients/`).
+2. Eine **bisher nicht** besuchte Route aufrufen, die auch keine eigene Offline-Shell hat, z.B. `/reports/?filter=foo`.
+3. `/cases/` aufrufen (Fälle haben **keine** eigene Offline-Shell).
 4. Klienten-Detail-URL aufrufen, die ohnehin Offline-Variante hat: `/clients/<pk>/`.
 5. `/offline/` direkt aufrufen.
 
 **Erwartetes Ergebnis:**
-- Schritt 2: SW-Fetch-Listener probiert Netz (fail) → versucht Cache-Match (Miss) → liefert `OFFLINE_FALLBACK_URL` (`/offline/`) **in-place** als Fallback (URL bleibt kanonisch). Response: HTTP 200 mit Inline-CSS-Offline-Page.
-- Schritt 3: Navigations-HTML wird **nie** zur Laufzeit gecacht (nur der Install-Precache + `/static/`-SWR) → `/clients/` landet wie Schritt 2 in-place auf dem Offline-Arbeitsplatz, der die mitgenommenen Personen listet — nicht auf einer (stalen) Klientenliste.
-- Schritt 4: SW erkennt via `URL_PATTERNS.extractClientPk` einen Klienten-Pfad und liefert seit [#1322] den pk-losen Client-Shell (`/offline/client-shell/`) **in-place** an der kanonischen URL aus (kein Redirect mehr; `offline-client-view.js` liest die pk aus `location.pathname` und rendert aus IndexedDB).
+- Schritt 2: SW-Fetch-Listener probiert Netz (fail) → versucht Cache-Match (Miss) → liefert `OFFLINE_FALLBACK_URL` (`/offline/`) **in-place** als Fallback (URL bleibt kanonisch). Response: HTTP 200 mit der statischen Selbsthilfe-Seite „Keine lokale Ansicht verfügbar" (Links zu `/clients/`, `/workitems/`, `/`, „Erneut versuchen"; seit #1494 rein statisches Markup, kein JS-abhängiger Spinner).
+- Schritt 3: `/cases/` hat keine eigene Shell (Fälle sind bewusst **nicht** Teil des Tab-Shell-Zielbilds) → landet wie Schritt 2 in-place auf demselben Fallback.
+- Schritt 4: SW erkennt via `URL_PATTERNS.extractClientPk` einen Klienten-Pfad und liefert seit #1322 den pk-losen Client-Shell **in-place** an der kanonischen URL aus (kein Redirect mehr; `offline-client-view.js` liest die pk aus `location.pathname` und rendert aus IndexedDB).
 - Schritt 5: HTTP 200, Content-Type `text/html; charset=utf-8`, Body aus `render_to_string("offline.html")`.
 
 **DSGVO/Security-Note:**
@@ -1195,6 +1195,40 @@
 **DSGVO/Security-Note:**
 - Stale-while-revalidate (Refs #618) verhindert, dass alter Bug-Code über Cache-Lock festgehalten wird.
 - Keine PII in SW-Cache, deshalb ist Cache-Wipe bei Version-Bump unkritisch.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-PWA-06 — Offline-Tab-Shells (Aufgaben/Zeitstrom kalt-offline in-place) + `/offline/`-Rückbau
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Pwa | fachkraft (`miriam`) | C/F/S | ✓ | `test_pwa_offline.py` |
+
+**Voraussetzung:** SW registriert + aktiviert, `CACHE_NAME=anlaufstelle-v22` im App-Shell-Cache (Refs #1543); mindestens eine Person offline mitgenommen (siehe ENT-OFFL-01), davon idealerweise eine mit Aufgabe/Ereignis, plus ein personloser (anonymer) Offline-Eintrag aus vorheriger kalt-offline-Erfassung (ENT-PWA-Create-Shells, Refs #1499).
+
+**Vorbereitung:**
+- Login als `miriam`, mindestens eine Person „Offline mitnehmen".
+- App **einmal online** ausliefern lassen (Kaltstart-Precache: `/workitems/` und `/` müssen als Shells im App-Shell-Cache liegen).
+- DevTools → Network → Throttling → „Offline" (bzw. CDP `setOfflineMode`).
+
+**Schritte:**
+1. Kalt-offline direkt `/workitems/` aufrufen (Reload bzw. neuer Tab, keine vorherige Online-Navigation auf diese URL in dieser Session nötig).
+2. Kalt-offline direkt `/` aufrufen.
+3. Online zurückwechseln und `/` erneut aufrufen (Kontrollprobe).
+4. Eine URL ohne eigene Shell offline aufrufen, z.B. `/reports/` (Kontrollprobe gegen ENT-PWA-04).
+
+**Erwartetes Ergebnis:**
+- Schritt 1: SW liefert die pk-lose Aufgabenlisten-Shell **in-place** an `/workitems/` aus (kein Redirect, URL bleibt kanonisch). Gerendert wird `listOfflineWorkItemsAggregated()` — Aufgaben **aller** gültigen mitgenommenen Personen-Bundles **plus** personlose/anonyme Standalone-Aufgaben, klar als „ohne Person"/„Person offline entfernt" markiert; Titel, Status-/Prioritäts-Badges und Fälligkeit spiegeln `inbox_content.html`/`_workitem_row.html`.
+- Schritt 2: SW liefert die pk-lose Zeitstrom-Shell **in-place** an `/` aus. Gerendert wird `listOfflineEventsAggregated()` als chronologische „lokale Chronik" (neueste zuerst) über alle mitgenommenen Personen **plus** anonyme/personlose Einträge (als „Anonym" markiert); deutlicher Hinweis, dass nur die offline verfügbaren Vorgänge gezeigt werden, nicht die vollständige Historie der Einrichtung.
+- Schritt 3: **Online bleibt `/` der echte Zeitstrom-Cockpit** (kein Offline-Shell sichtbar) — der SW-Zweig (`isZeitstromRoot`) greift ausschließlich im `respondWith`-catch (Netzfehler), der Online-Login-Redirect an `/` ist unberührt.
+- Schritt 4: `/reports/` hat keine eigene Shell → Fallback auf `/offline/` (ENT-PWA-04) — die statische Seite „Keine lokale Ansicht verfügbar" mit Links zu `/clients/`, `/workitems/`, `/`.
+- Insgesamt: Mit ENT-PWA-04 (Rückbau) + diesem Test ist das Zielbild „Eine Welt" abgedeckt — Personen (`/clients/`,), Aufgaben (`/workitems/`) und Zeitstrom (`/`) rendern offline in gewohnter Optik an ihrer kanonischen Adresse; `/offline/` ist reiner technischer Fallback ohne Produktpfad.
+
+**DSGVO/Security-Note:**
+- Beide Shells sind PII-frei im Markup (Alpine `x-show` auf vorberechneten Booleans, CSP-konform) — die eigentlichen Personendaten kommen ausschließlich client-seitig aus der verschlüsselten IndexedDB, kein Server-Round-Trip.
+- Dieselbe read-only Gate-Logik wie die Personenliste: abgelaufene/schema-fremde Bundles werden beim Aggregieren nur ausgelassen (kein Purge als Render-Seiteneffekt); noch nicht synchronisierte Zeilen (modified/new/conflict/dead) bleiben laut S1-Invariante sichtbar.
 
 **Status:** ☐ Offen
 

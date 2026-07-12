@@ -284,7 +284,7 @@ Methodik:
 | B | MFA | 9 | 9 | 0 | 100 % |
 | B | Meilensteine | 3 | 3 | 0 | 100 % |
 | B | Offline | 18 | 13 | 5 | 72 % |
-| B | Pwa | 5 | 3 | 2 | 60 % |
+| B | Pwa | 6 | 4 | 2 | 67 % |
 | B | Statistik | 8 | 8 | 0 | 100 % |
 | B | Suche | 6 | 6 | 0 | 100 % |
 | B | Sudo | 4 | 4 | 0 | 100 % |
@@ -311,10 +311,10 @@ Methodik:
 | Sektion | Cases | mit E2E | Manuell-only | E2E-Quote |
 |---------|------:|--------:|-------------:|----------:|
 | A | 12 | 12 | 0 | 100 % |
-| B | 186 | 158 | 28 | 85 % |
+| B | 187 | 159 | 28 | 85 % |
 | C | 34 | 8 | 26 | 24 % |
 | D | 39 | 13 | 26 | 33 % |
-| **Gesamt** | **271** | **191** | **80** | **70 %** |
+| **Gesamt** | **272** | **192** | **80** | **71 %** |
 
 > Auto-generiert per `python scripts/build_test_matrix_index.py` (#909).
 <!-- ANHANG-C:END -->
