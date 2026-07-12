@@ -324,6 +324,34 @@ class OfflineClientListShellView(View):
         return render(request, "core/clients/offline_list.html", {})
 
 
+class OfflineWorkItemListShellView(View):
+    """Generic, pk-less scaffold for IN-PLACE offline rendering of the work-item
+    list at the canonical ``/workitems/`` URL (Refs #1541, #1499,
+    Muster #1322).
+
+    The Service Worker pre-caches this shell and serves it for offline
+    navigations to the work-item inbox **without** redirecting to ``/offline/``
+    — so the URL stays canonical and the offline/online split disappears.
+    ``offline-workitem-list.js`` then reads the aggregated offline work items
+    from IndexedDB (``listOfflineWorkItemsAggregated`` — the bundle work items of
+    every offline-taken client merged with their local overlays, plus person-less
+    standalone items) and renders the list client-side, a local excerpt of the
+    work taken offline.
+
+    Public on purpose, exactly like :class:`OfflineClientShellView`: the shell
+    carries no PII (the list is decrypted client-side from IndexedDB) and must be
+    pre-cacheable via the SW ``cache.addAll`` — an auth gate would make the
+    install-time fetch redirect to ``/login/`` and fail ``addAll`` atomically
+    (killing the whole precache). Online this view is never reached: the SW only
+    serves it on a network failure for ``/workitems/`` (SW flip in W3-E).
+    """
+
+    http_method_names = ["get"]
+
+    def get(self, request):
+        return render(request, "core/workitems/offline_workitem_list.html", {})
+
+
 class OfflineConflictReviewView(AssistantOrAboveRequiredMixin, View):
     """Shell page for the merge-UI at ``/offline/conflicts/<uuid>/``.
 

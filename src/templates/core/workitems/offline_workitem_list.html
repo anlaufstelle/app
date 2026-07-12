@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% load i18n static %}
+
+{% block title %}{% trans "Aufgaben" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+{# Refs #1541 (#1499 W3-C): In-Place-Offline-Rendern der Aufgabenliste #}
+{# an der kanonischen URL /workitems/ (Muster #1322). Kein PII im Scaffold —    #}
+{# die Alpine-Komponente offlineWorkItemList liest die aggregierten Aufgaben    #}
+{# client-seitig aus IndexedDB (listOfflineWorkItemsAggregated) und spiegelt    #}
+{# inbox_content.html/_workitem_row.html (Titel, Status-/Prioritaets-Badges,    #}
+{# Faelligkeit, Person). SW-Precache + Flip kommt W3-E.                         #}
+<div data-testid="offline-workitem-list"
+     x-data="offlineWorkItemList" x-init="load">
+
+    <div class="mb-3 flex items-center gap-2">
+        <span class="badge bg-yellow-100 text-yellow-800">{% trans "Offline-Ansicht" %}</span>
+    </div>
+    {# Verstaerkter Hinweis: die Liste ist bewusst nur ein Ausschnitt (nur die   #}
+    {# offline mitgenommenen/erfassten Aufgaben, nicht der gesamte Bestand).     #}
+    <p class="mb-4 text-[13px] text-ink-muted" data-testid="offline-workitem-list-hint">
+        {% trans "Dies ist ein lokaler Ausschnitt der offline mitgenommenen Aufgaben — nicht der vollständige Aufgabenbestand." %}
+    </p>
+
+    {# Ladezustand — nur bis der verschluesselte Store gelesen ist. #}
+    <div x-show="loading" x-cloak class="py-8 text-center text-ink-muted" data-testid="offline-workitem-list-loading">
+        {% trans "Lade Offline-Daten..." %}
+    </div>
+
+    {# Leerzustand — 1:1 wie die Online-Inbox (_empty_state, icon=clipboard). #}
+    <template x-if="isEmpty">
+        {% include "components/_empty_state.html" with icon="check" message=_("Keine Aufgaben gefunden") %}
+    </template>
+
+    {# role=table + Pseudo-row/columnheader/cell auf der CSS-Grid-Liste —        #}
+    {# gespiegelt aus partials/table.html-Konvention (Refs #812 C-45). #}
+    <div x-show="hasWorkItems" x-cloak class="workitem-list" role="table" aria-label="{% trans 'Aufgaben' %}">
+        {# Desktop-Header — nur ab sm: sichtbar. #}
+        <div role="row" class="hidden sm:grid sm:grid-cols-[minmax(0,2.5fr)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] gap-4 px-4 py-2.5 text-[12px] font-bold text-ink-muted uppercase tracking-wider bg-canvas border border-b-0 border-subtle rounded-t-[10px]">
+            <div role="columnheader">{% trans "Aufgabe" %}</div>
+            <div role="columnheader">{% trans "Person" %}</div>
+            <div role="columnheader">{% trans "Status" %}</div>
+            <div role="columnheader">{% trans "Fällig" %}</div>
+        </div>
+
+        <div role="rowgroup" class="sm:bg-surface sm:border sm:border-subtle sm:rounded-b-[10px] sm:divide-y sm:divide-subtle space-y-2 sm:space-y-0">
+            <template x-for="wi in workitems" :key="wi.pk">
+                <div role="row"
+                     class="bg-surface border border-subtle rounded-[10px] p-3 sm:p-0 sm:border-0 sm:rounded-none hover:shadow-xs sm:hover:shadow-none sm:hover:bg-canvas transition-colors"
+                     data-testid="offline-workitem-row" :data-pk="wi.pk">
+                    <div class="flex flex-col gap-2 sm:grid sm:grid-cols-[minmax(0,2.5fr)_minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)] sm:gap-4 sm:items-center sm:px-4 sm:py-3">
+
+                        {# Aufgabe: Titel + Typ-/Prioritaets-/Sync-Badges. #}
+                        <div role="cell" class="min-w-0">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-[14px] font-semibold text-ink truncate" x-text="wi.title"></span>
+                                {# Item-Typ (Hinweis hebt sich vom Standard-„Aufgabe" ab). #}
+                                <span x-show="wi.itemTypeHint" x-cloak
+                                      class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-ink-muted">
+                                    {% trans "Hinweis" %}
+                                </span>
+                                {# Prioritaet — nur urgent/important sichtbar (normal = kein Badge). #}
+                                <span x-show="wi.priorityUrgent" x-cloak
+                                      class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[12px] font-semibold bg-red-100 text-red-700">
+                                    {% trans "Dringend" %}
+                                </span>
+                                <span x-show="wi.priorityImportant" x-cloak
+                                      class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[12px] font-semibold bg-yellow-100 text-yellow-700">
+                                    {% trans "Wichtig" %}
+                                </span>
+                                {# Nicht uebertragene (offline erfasste/geaenderte) Aufgabe markieren. #}
+                                <span x-show="wi.isUnsynced" x-cloak
+                                      class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[12px] font-semibold bg-accent-light text-accent"
+                                      data-testid="offline-workitem-unsynced-badge">
+                                    {% trans "Nicht übertragen" %}
+                                </span>
+                            </div>
+                        </div>
+
+                        {# Person: Pseudonym (Link) | „ohne Person" (anonym/standalone) | #}
+                        {# „Person offline entfernt" (verwaistes ungesyncte Item).       #}
+                        <div role="cell" class="text-[13px] min-w-0">
+                            <template x-if="wi.hasPerson">
+                                <a :href="wi.href" class="font-semibold text-accent truncate hover:underline"
+                                   data-testid="offline-workitem-client-link" x-text="wi.pseudonym"></a>
+                            </template>
+                            <template x-if="wi.isAnonymous">
+                                <span class="text-ink-muted italic">{% trans "ohne Person" %}</span>
+                            </template>
+                            <template x-if="wi.isOrphaned">
+                                <span class="text-ink-muted italic">{% trans "Person offline entfernt" %}</span>
+                            </template>
+                        </div>
+
+                        {# Status — pro Zeile genau ein Badge (vorberechnete Booleans). #}
+                        <div role="cell">
+                            <span x-show="wi.statusOpen" x-cloak
+                                  class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-blue-50 text-blue-700">
+                                {% trans "Offen" %}
+                            </span>
+                            <span x-show="wi.statusInProgress" x-cloak
+                                  class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-blue-100 text-blue-800">
+                                {% trans "In Bearbeitung" %}
+                            </span>
+                            <span x-show="wi.statusDone" x-cloak
+                                  class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-green-100 text-green-700">
+                                {% trans "Erledigt" %}
+                            </span>
+                            <span x-show="wi.statusDismissed" x-cloak
+                                  class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-ink-muted">
+                                {% trans "Verworfen" %}
+                            </span>
+                        </div>
+
+                        {# Faelligkeit — vorformatiert (Mono, „–" ohne Datum). #}
+                        <div role="cell" class="text-[13px] font-mono text-ink-muted" x-text="wi.dueDateLabel"></div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{# Ausgelagert wegen CSP (Refs #672). W3-E nimmt die Datei in den SW-Precache    #}
+{# (APP_SHELL) auf und macht den Offline-Flip fuer /workitems/.                  #}
+<script src="{% static 'js/offline-workitem-list.js' %}"></script>
+{% endblock %}

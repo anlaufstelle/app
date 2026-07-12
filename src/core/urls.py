@@ -72,6 +72,7 @@ from core.views.offline import (
     OfflineEventCreateShellView,
     OfflineFacilityBundleView,
     OfflineWorkItemCreateShellView,
+    OfflineWorkItemListShellView,
 )
 from core.views.retention import (
     RetentionApproveView,
@@ -327,6 +328,15 @@ urlpatterns = [
         "offline/workitem-shell/",
         OfflineWorkItemCreateShellView.as_view(),
         name="offline_workitem_shell",
+    ),
+    # Refs #1541 (#1499): generischer, pk-loser Shell fuer In-Place-
+    # Offline-Rendern der Aufgabenliste an der kanonischen URL /workitems/
+    # (Service Worker serviert ihn offline) — Muster #1322. PII-frei; die
+    # aggregierten Offline-Aufgaben liest die Alpine-Komponente aus IndexedDB.
+    path(
+        "offline/workitems/",
+        OfflineWorkItemListShellView.as_view(),
+        name="offline_workitem_list_shell",
     ),
     # Offline (Streetwork Stage 3) — conflict review UI
     path(
