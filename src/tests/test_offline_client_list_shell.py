@@ -38,3 +38,69 @@ class TestOfflineClientListShellView:
         """offline/clients/ (Liste) vs. offline/clients/<uuid>/ (Detail,
         offline_client_detail) duerfen sich nicht ueberschneiden."""
         assert reverse("core:offline_client_list_shell") == "/offline/clients/"
+
+
+@pytest.mark.django_db
+class TestOfflineClientListShellSI4:
+    """SI-4 (#1532, #1499): offline_list.html spiegelt
+    partials/table.html 1:1 als Alpine ``x-for``-Liste ueber die gecachten
+    Klienten (``listOfflineClientsDetailed``). Der Shell traegt kein PII —
+    die Zeilen entstehen client-seitig; hier wird nur das statische Geruest
+    geprueft (Render + node --check der JS; Interaktion/Filter kommt SI-6,
+    E2E SI-9).
+    """
+
+    @pytest.fixture
+    def body(self, client):
+        response = client.get(reverse("core:offline_client_list_shell"))
+        assert response.status_code == 200
+        return response.content.decode()
+
+    def test_alpine_root_and_list_container(self, body):
+        assert 'x-data="offlineClientList"' in body
+        assert 'data-testid="offline-client-list"' in body
+
+    def test_role_table_scaffold_with_x_for(self, body):
+        assert 'role="table"' in body
+        assert 'x-for="c in clients"' in body
+        assert 'role="rowgroup"' in body
+
+    def test_grid_string_mirrors_table_partial_1to1(self, body):
+        # Muss dem pro-Row-Grid aus partials/table.html exakt entsprechen.
+        assert "sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto]" in body
+
+    def test_visibility_classes_mirrored(self, body):
+        # hidden sm:/md:-Sichtbarkeit aus table.html gespiegelt.
+        assert "hidden sm:grid" in body
+        assert "hidden md:block" in body
+
+    def test_row_and_link_testids_mirrored(self, body):
+        assert 'data-testid="client-row"' in body
+        assert 'data-testid="client-detail-link"' in body
+
+    def test_column_headers(self, body):
+        for header in ("Pseudonym", "Stufe", "Alter", "Letzter Kontakt"):
+            assert header in body
+
+    def test_badge_getters_referenced(self, body):
+        assert "stageClass(c.contactStage)" in body
+        assert "stageLabel(c)" in body
+
+    def test_deactivated_marker_present(self, body):
+        # is_active=False Klienten bleiben sichtbar mit "deaktiviert"-Markierung.
+        assert "deaktiviert" in body
+
+    def test_empty_state_message(self, body):
+        assert "Keine Personen gefunden" in body
+
+    def test_only_remove_no_take(self, body):
+        # In der Offline-Liste nur "Entfernen" — "Mitnehmen" waere redundant.
+        assert "Entfernen" in body
+        assert "Mitnehmen" not in body
+
+    def test_detail_link_is_canonical_string_not_url_tag(self, body):
+        # Link auf /clients/<pk>/ als client-seitiger String (kein {% url %}).
+        assert ':href="c.href"' in body
+
+    def test_alpine_script_included(self, body):
+        assert "js/offline-client-list.js" in body

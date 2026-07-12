@@ -1,16 +1,121 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}{% trans "Personen" %} – Anlaufstelle{% endblock %}
 
 {% block content %}
-{# Refs #1531 (#1499 SI-3): pk-loser Shell fuer In-Place-Offline-  #}
-{# Rendern der Personenliste an der kanonischen URL /clients/ (SI-5). Kein  #}
-{# PII im Scaffold — der Alpine-Renderer (SI-4/SI-6) liest die mitgenommenen #}
-{# Personen client-seitig aus IndexedDB und spiegelt partials/table.html.   #}
-<div data-testid="offline-client-list">
+{# Refs #1532 (#1499 SI-4): In-Place-Offline-Rendern der            #}
+{# Personenliste an der kanonischen URL /clients/ (Muster #1322). Kein PII   #}
+{# im Scaffold — die Alpine-Komponente offlineClientList liest die           #}
+{# mitgenommenen Personen client-seitig aus IndexedDB                        #}
+{# (listOfflineClientsDetailed, SI-2) und spiegelt partials/table.html 1:1   #}
+{# (Grid-String, hidden sm:/md:-Sichtbarkeit, data-testid client-row/        #}
+{# client-detail-link). Suche/Filter kommt SI-6, E2E SI-9.                   #}
+<div data-testid="offline-client-list"
+     x-data="offlineClientList" x-init="load"
+     data-confirm-remove-text="{% trans '{count} nicht übertragene Änderungen bleiben lokal erhalten, wenn Sie diese Person jetzt aus dem Offline-Cache entfernen. Trotzdem fortfahren?' %}"
+     @offline-clients-count.window="load">
+
     <div class="mb-4 flex items-center space-x-2">
         <span class="badge bg-yellow-100 text-yellow-800">{% trans "Offline-Ansicht" %}</span>
     </div>
+
+    {# Ladezustand — nur bis der verschluesselte Store gelesen ist. #}
+    <div x-show="loading" x-cloak class="py-8 text-center text-ink-muted" data-testid="offline-client-list-loading">
+        {% trans "Lade Offline-Daten..." %}
+    </div>
+
+    {# Leerzustand — 1:1 wie partials/table.html (_empty_state, icon=users). #}
+    <template x-if="isEmpty">
+        {% include "components/_empty_state.html" with icon="users" message=_("Keine Personen gefunden") %}
+    </template>
+
+    {# role=table + Pseudo-row/columnheader/cell auf der CSS-Grid-Liste —     #}
+    {# gespiegelt aus partials/table.html (Refs #812 C-45). #}
+    <div x-show="hasClients" x-cloak class="client-list" role="table" aria-label="{% trans 'Personen' %}">
+        {# Desktop-Header — nur ab sm: sichtbar (Tokens wie table.html). #}
+        <div role="row" class="hidden sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto] gap-4 px-4 py-2.5 text-[12px] font-bold text-ink-muted uppercase tracking-wider bg-canvas border border-b-0 border-subtle rounded-t-[10px]">
+            <div role="columnheader">{% trans "Pseudonym" %}</div>
+            <div role="columnheader">{% trans "Stufe" %}</div>
+            <div role="columnheader" class="hidden md:block">{% trans "Alter" %}</div>
+            <div role="columnheader" class="hidden md:block">{% trans "Letzter Kontakt" %}</div>
+            <div role="columnheader" class="text-right">{% trans "Offline" %}</div>
+        </div>
+
+        <div role="rowgroup" class="sm:bg-surface sm:border sm:border-subtle sm:rounded-b-[10px] sm:divide-y sm:divide-subtle space-y-2 sm:space-y-0">
+            <template x-for="c in clients" :key="c.pk">
+                <div role="row"
+                     class="bg-surface border border-subtle rounded-[10px] p-3 sm:p-0 sm:border-0 sm:rounded-none hover:shadow-xs sm:hover:shadow-none sm:hover:bg-canvas transition-colors"
+                     data-testid="client-row" :data-pk="c.pk">
+                    <div class="flex items-start justify-between gap-2 sm:grid sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.5fr)_auto] sm:gap-4 sm:items-center sm:px-4 sm:py-3">
+                        {# Pseudonym + "deaktiviert"-Markierung (is_active=False bleibt sichtbar). #}
+                        <div role="cell" class="flex-1 min-w-0 sm:flex-auto">
+                            <a :href="c.href" class="block sm:inline" data-testid="client-detail-link">
+                                <div class="flex items-center gap-2">
+                                    <span class="text-[14px] font-semibold text-accent truncate hover:underline" x-text="c.pseudonym"></span>
+                                    <span x-show="!c.isActive" x-cloak
+                                          class="inline-flex items-center px-1.5 py-0.5 rounded text-[12px] font-semibold bg-red-100 text-red-800 flex-shrink-0"
+                                          data-testid="client-row-inactive-badge">
+                                        {% trans "deaktiviert" %}
+                                    </span>
+                                </div>
+                            </a>
+                            {# Mobile-Only: Stufe + Alter + Datum inline unter dem Pseudonym. #}
+                            <div class="sm:hidden mt-1">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold" :class="stageClass(c.contactStage)" x-text="stageLabel(c)"></span>
+                                    <span class="text-[12px] text-ink-muted">
+                                        <span x-text="c.ageClusterDisplay"></span>
+                                        <template x-if="c.lastContact">
+                                            <span>· <span class="font-mono" x-text="lastContactLabel(c)"></span></span>
+                                        </template>
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {# Desktop-Only: Stufe als eigene Spalte. #}
+                        <div role="cell" class="hidden sm:block">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold" :class="stageClass(c.contactStage)" x-text="stageLabel(c)"></span>
+                        </div>
+
+                        {# Desktop-Only: Alter ab md:. #}
+                        <div role="cell" class="hidden md:block text-[13px] text-ink-soft" x-text="c.ageClusterDisplay"></div>
+
+                        {# Desktop-Only: Letzter Kontakt ab md: (Mono fuer Datum, "–" bei None). #}
+                        <div role="cell" class="hidden md:block text-[13px] font-mono text-ink-muted" x-text="lastContactLabel(c)"></div>
+
+                        {# Offline-Aktion — Mobile-Card-Variante: nur "Entfernen". #}
+                        <div class="flex-shrink-0 sm:hidden">
+                            <button type="button"
+                                    @click.prevent.stop="remove(c.pk)"
+                                    class="inline-flex items-center text-[12px] text-ink-muted hover:text-accent px-2 py-1"
+                                    data-testid="card-remove-offline-btn"
+                                    aria-label="{% trans 'Aus Offline-Cache entfernen' %}">
+                                <svg aria-hidden="true" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
+                        </div>
+                        {# Offline-Aktion — Desktop-Row-Variante (textuell): nur "Entfernen". #}
+                        <div role="cell" class="hidden sm:block flex-shrink-0 sm:text-right">
+                            <button type="button"
+                                    @click.prevent.stop="remove(c.pk)"
+                                    class="inline-flex items-center text-[12px] text-ink-muted hover:text-accent"
+                                    data-testid="row-remove-offline-btn"
+                                    aria-label="{% trans 'Aus Offline-Cache entfernen' %}">
+                                <svg aria-hidden="true" class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                                {% trans "Entfernen" %}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+    </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{# Ausgelagert wegen CSP (Refs #672). SI-6 ergaenzt Suche/Filter, SI-5/#1499 #}
+{# nimmt die Datei in den SW-Precache (APP_SHELL) auf.                       #}
+<script src="{% static 'js/offline-client-list.js' %}"></script>
 {% endblock %}
