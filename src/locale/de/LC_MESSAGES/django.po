@@ -3325,6 +3325,10 @@ msgstr "Offline — Daten werden bei Verbindung gespeichert"
 msgid "Person lokal verfügbar"
 msgstr "Person lokal verfügbar"
 
+#: src/templates/base.html:65
+msgid "Zur Personenliste"
+msgstr "Zur Personenliste"
+
 #: src/templates/base.html:57
 msgid "Personen lokal verfügbar"
 msgstr "Personen lokal verfügbar"

@@ -50,6 +50,11 @@ class TestOfflineBannerTranslationsEN:
         with override("en"):
             assert gettext("Konflikte — bitte auflösen") == "conflicts — please resolve"
 
+    # Aria-Label des Personenlisten-Links (cachedClients) — #1535
+    def test_cached_clients_link_aria_label(self):
+        with override("en"):
+            assert gettext("Zur Personenliste") == "Go to person list"
+
 
 @pytest.mark.django_db
 class TestOfflineBannerRendersBothForms:
@@ -77,3 +82,35 @@ class TestOfflineBannerRendersBothForms:
         html = self._banner_html(client, lead_user)
         assert "Konflikt — bitte auflösen" in html
         assert "Konflikte — bitte auflösen" in html
+
+
+@pytest.mark.django_db
+class TestOfflineBannerCachedClientsLink:
+    """Refs #1535 (#1499 SI-8): der "N Personen lokal verfügbar"-Link
+
+    fuehrt auf die kanonische Personenliste (``core:client_list``, /clients/),
+    die im Offline-Zustand in-place die gecachten Personen rendert (SI-3/SI-4),
+    statt auf die generische ``offline_fallback``-Seite (/offline/).
+    """
+
+    def _banner_html(self, client, user) -> str:
+        client.force_login(user)
+        return client.get(reverse("core:dashboard")).content.decode()
+
+    def test_link_points_to_client_list(self, client, lead_user):
+        html = self._banner_html(client, lead_user)
+        client_list_url = reverse("core:client_list")
+        assert f'href="{client_list_url}"' in html
+        assert 'data-testid="offline-cached-count"' in html
+
+    def test_link_no_longer_points_to_offline_fallback(self, client, lead_user):
+        html = self._banner_html(client, lead_user)
+        offline_fallback_url = reverse("offline_fallback")
+        # offline_fallback bleibt als eigenstaendige Route (SW-Navigations-
+        # Fallback) bestehen, darf aber nicht mehr das Ziel des Banner-Links
+        # sein.
+        assert f'href="{offline_fallback_url}"' not in html
+
+    def test_link_has_descriptive_aria_label(self, client, lead_user):
+        html = self._banner_html(client, lead_user)
+        assert 'aria-label="Zur Personenliste"' in html

@@ -3525,6 +3525,10 @@ msgstr "person available locally"
 msgid "Personen lokal verfügbar"
 msgstr "people available locally"
 
+#: src/templates/base.html:65
+msgid "Zur Personenliste"
+msgstr "Go to person list"
+
 #: src/templates/base.html:60
 msgid "nicht synchronisiert"
 msgstr "not synced"
