@@ -9,7 +9,13 @@
  * als role=table-Liste — 1:1-Spiegel von templates/core/clients/partials/
  * table.html (Grid, Sichtbarkeit, data-testid). Keine eigene Formatierung
  * der Anzeigetexte: Stufe/Alter kommen fertig lokalisiert vom Server
- * (contactStageDisplay/ageClusterDisplay). Suche/Filter kommt SI-6.
+ * (contactStageDisplay/ageClusterDisplay).
+ *
+ * SI-6 (#1534): client-seitige Suche + Stufe-/Alter-Filter (UND-kombiniert)
+ * ueber die gecachten Zeilen — reaktiv via Alpine ``x-model`` (searchQuery/
+ * stageFilter/ageFilter) + ``filteredClients``-Getter. Vorbild
+ * offline-home.js applyFilter, Parallele zur Online-Filterleiste
+ * (clients/list.html ``q``/``stage``/``age``). Keine Offline-Pagination.
  */
 (function () {
     "use strict";
@@ -63,10 +69,29 @@
         };
     }
 
+    // SI-6 (#1534): UND-kombinierter Match einer Zeile gegen die drei Filter
+    // — Pseudonym-Teilstring (case-insensitive, wie online ``q``) plus
+    // exakter Stufe- (contactStage) und Alter-Vergleich (ageCluster, Rohwert
+    // wie online, nicht der lokalisierte Anzeigetext). Leere Filter matchen
+    // alles. Reine Funktion (keine Alpine-/DOM-Abhaengigkeit) — leicht via
+    // node --check pruefbar und E2E-getestet (SI-9).
+    function matchesFilters(row, q, stage, age) {
+        if (q && (row.pseudonym || "").toLowerCase().indexOf(q) === -1) {
+            return false;
+        }
+        if (stage && row.contactStage !== stage) return false;
+        if (age && row.ageCluster !== age) return false;
+        return true;
+    }
+
     document.addEventListener("alpine:init", () => {
         Alpine.data("offlineClientList", () => ({
             loading: true,
             clients: [],
+            // SI-6: reaktive Filterzustaende (an x-model gebunden).
+            searchQuery: "",
+            stageFilter: "",
+            ageFilter: "",
             _confirmRemoveText: "",
 
             async load() {
@@ -99,11 +124,31 @@
                 }
             },
 
-            get hasClients() {
+            // SI-6: die gefilterte Sicht (Suche UND Stufe UND Alter) — die
+            // Liste iteriert sie statt der Rohliste. Ohne aktive Filter wird
+            // die Rohliste unveraendert durchgereicht (kein unnoetiges Kopieren).
+            get filteredClients() {
+                const q = (this.searchQuery || "").trim().toLowerCase();
+                const stage = this.stageFilter || "";
+                const age = this.ageFilter || "";
+                if (!q && !stage && !age) return this.clients;
+                return this.clients.filter((c) => matchesFilters(c, q, stage, age));
+            },
+
+            // SI-6: Filterleiste erst zeigen, sobald ueberhaupt Personen
+            // gecacht sind (Rohliste, nicht die gefilterte) — sonst blieben
+            // die Controls bei 0 Treffern unbedienbar/verschwaenden.
+            get hasCachedClients() {
                 return !this.loading && this.clients.length > 0;
             },
+            // hasClients/isEmpty steuern Tabelle vs. Leerzustand und beziehen
+            // sich auf die GEFILTERTE Sicht: greift ein Filter alle Zeilen ab,
+            // erscheint "Keine Personen gefunden" (wie die Online-Liste).
+            get hasClients() {
+                return !this.loading && this.filteredClients.length > 0;
+            },
             get isEmpty() {
-                return !this.loading && this.clients.length === 0;
+                return !this.loading && this.filteredClients.length === 0;
             },
 
             // CSP-konforme Getter (als Methoden aufgerufen) — s. o.

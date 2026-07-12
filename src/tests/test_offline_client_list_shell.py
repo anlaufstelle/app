@@ -62,7 +62,9 @@ class TestOfflineClientListShellSI4:
 
     def test_role_table_scaffold_with_x_for(self, body):
         assert 'role="table"' in body
-        assert 'x-for="c in clients"' in body
+        # SI-6: iteriert die gefilterte Sicht (Suche/Stufe/Alter), nicht die
+        # Rohliste — bleibt aber der 1:1-Spiegel von partials/table.html.
+        assert 'x-for="c in filteredClients"' in body
         assert 'role="rowgroup"' in body
 
     def test_grid_string_mirrors_table_partial_1to1(self, body):
@@ -104,3 +106,53 @@ class TestOfflineClientListShellSI4:
 
     def test_alpine_script_included(self, body):
         assert "js/offline-client-list.js" in body
+
+
+@pytest.mark.django_db
+class TestOfflineClientListShellSI6:
+    """SI-6 (#1534, #1499): client-seitige Suche + Stufe-/Alter-Filter
+    ueber die gecachten Klienten (Vorbild ``offline-home.js applyFilter``,
+    Parallele zur Online-Filterleiste ``clients/list.html``). Rein clientseitig
+    und reaktiv (Alpine ``x-model`` + ``filteredClients``-Getter) — hier wird
+    nur das statische Geruest der Controls geprueft; die Filterlogik selbst
+    faellt in JS (node --check) bzw. E2E (SI-9).
+    """
+
+    @pytest.fixture
+    def body(self, client):
+        response = client.get(reverse("core:offline_client_list_shell"))
+        assert response.status_code == 200
+        return response.content.decode()
+
+    def test_filter_bar_container(self, body):
+        assert 'data-testid="offline-client-filters"' in body
+
+    def test_search_input_bound_to_alpine(self, body):
+        assert 'data-testid="offline-client-search"' in body
+        assert 'x-model="searchQuery"' in body
+
+    def test_search_placeholder_matches_online(self, body):
+        # Gleiches i18n-msgid wie die Online-Liste (clients/list.html).
+        assert "Pseudonym suchen" in body
+
+    def test_stage_filter_select_and_options(self, body):
+        assert 'data-testid="offline-client-stage-filter"' in body
+        assert 'x-model="stageFilter"' in body
+        # Werte = Client.ContactStage.choices (1:1, wie _client_badge/stageClass).
+        assert 'value="identified"' in body
+        assert 'value="qualified"' in body
+        assert "Alle Stufen" in body
+
+    def test_age_filter_select_and_options(self, body):
+        assert 'data-testid="offline-client-age-filter"' in body
+        assert 'x-model="ageFilter"' in body
+        # Werte = Client.AgeCluster.choices (1:1).
+        assert 'value="u18"' in body
+        assert 'value="18_26"' in body
+        assert 'value="27_plus"' in body
+        assert 'value="unknown"' in body
+        assert "Alle Altersgruppen" in body
+
+    def test_filter_bar_only_when_clients_cached(self, body):
+        # Controls erst nach dem Laden mit >=1 gecachten Person (x-show).
+        assert 'x-show="hasCachedClients"' in body

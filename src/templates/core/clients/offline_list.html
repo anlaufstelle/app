@@ -20,6 +20,43 @@
         <span class="badge bg-yellow-100 text-yellow-800">{% trans "Offline-Ansicht" %}</span>
     </div>
 
+    {# SI-6 (#1534): Client-seitige Suche + Stufe-/Alter-Filter (UND-        #}
+    {# kombiniert) ueber die gecachten Personen — reines Alpine (x-model +   #}
+    {# filteredClients-Getter), kein Netz/HTMX (offline kein JSON-Endpoint). #}
+    {# Parallele zur Online-Filterleiste (clients/list.html); Optionswerte   #}
+    {# = Client.ContactStage/AgeCluster.choices 1:1. Keine Offline-          #}
+    {# Pagination (mitgenommene Personen sind wenige — alle am Stueck).      #}
+    {# Erst sichtbar, sobald >=1 Person geladen ist (x-show).                #}
+    <div x-show="hasCachedClients" x-cloak
+         class="mb-4 flex flex-col sm:flex-row gap-2.5"
+         data-testid="offline-client-filters">
+        <div class="relative flex-1">
+            <svg aria-hidden="true" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+            <input type="text"
+                   x-model="searchQuery"
+                   placeholder="{% trans 'Pseudonym suchen...' %}"
+                   aria-label="{% trans 'Pseudonym suchen' %}"
+                   class="w-full bg-surface border border-subtle rounded-[10px] pl-8 pr-3 py-2 text-[13px] text-ink"
+                   data-testid="offline-client-search">
+        </div>
+        <select x-model="stageFilter" aria-label="{% trans 'Kontaktstufe filtern' %}"
+                class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
+                data-testid="offline-client-stage-filter">
+            <option value="">{% trans "Alle Stufen" %}</option>
+            <option value="identified">{% trans "Identifiziert" %}</option>
+            <option value="qualified">{% trans "Qualifiziert" %}</option>
+        </select>
+        <select x-model="ageFilter" aria-label="{% trans 'Altersgruppe filtern' %}"
+                class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
+                data-testid="offline-client-age-filter">
+            <option value="">{% trans "Alle Altersgruppen" %}</option>
+            <option value="u18">{% trans "Unter 18" %}</option>
+            <option value="18_26">{% trans "18–26" %}</option>
+            <option value="27_plus">{% trans "27+" %}</option>
+            <option value="unknown">{% trans "Unbekannt" %}</option>
+        </select>
+    </div>
+
     {# Ladezustand — nur bis der verschluesselte Store gelesen ist. #}
     <div x-show="loading" x-cloak class="py-8 text-center text-ink-muted" data-testid="offline-client-list-loading">
         {% trans "Lade Offline-Daten..." %}
@@ -43,7 +80,7 @@
         </div>
 
         <div role="rowgroup" class="sm:bg-surface sm:border sm:border-subtle sm:rounded-b-[10px] sm:divide-y sm:divide-subtle space-y-2 sm:space-y-0">
-            <template x-for="c in clients" :key="c.pk">
+            <template x-for="c in filteredClients" :key="c.pk">
                 <div role="row"
                      class="bg-surface border border-subtle rounded-[10px] p-3 sm:p-0 sm:border-0 sm:rounded-none hover:shadow-xs sm:hover:shadow-none sm:hover:bg-canvas transition-colors"
                      data-testid="client-row" :data-pk="c.pk">
