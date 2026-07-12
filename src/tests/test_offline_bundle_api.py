@@ -11,6 +11,8 @@ Verifies the server-side filters in :mod:`core.services.offline`:
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from django.core.cache import cache
 from django.test import override_settings
@@ -488,8 +490,6 @@ class TestBuildClientOfflineBundleService:
         )
         # Defensive: das gesamte Bundle als JSON serialisieren und sicherstellen,
         # dass keine der drei UUIDs auftaucht.
-        import json
-
         body = json.dumps(bundle)
         for uid in (
             "11111111-1111-1111-1111-111111111111",
@@ -627,6 +627,85 @@ class TestBuildClientOfflineBundleService:
         assistant_flags = {e["pk"]: e["can_edit"] for e in assistant_bundle["events"]}
         assert assistant_flags[str(own_event.pk)] is True
         assert assistant_flags[str(foreign_event.pk)] is False
+
+
+@pytest.mark.django_db
+class TestClientBundleDocTypeSensitivityFilter:
+    """Refs #1525: der DocType-Katalog des Klient-Bundles muss denselben
+    DocType-EBENEN-Sensitivity-Filter durchlaufen wie das Online-
+    ``EventMetaForm`` (``sensitivity__in=allowed_sensitivities_for_user``,
+    ``forms/events.py``) — spiegelbildlich zu
+    ``TestFacilityBundleDocTypeSensitivityFilter`` fuer das Facility-Bundle.
+    Ohne den Filter erreichen Name/Metadaten eines HIGH/ELEVATED-DocType
+    (z. B. „Suizidgefaehrdung-GEHEIM") niedrigere Rollen offline, obwohl das
+    Online-Formular diese Typen nie anbietet — Verstoss gegen die
+    Bundle-ist-Derivat-Invariante (nur die Feld-Ebene war bisher gefiltert).
+
+    Rollen-Rang (ROLE_MAX_SENSITIVITY): Assistant=NORMAL, Staff=ELEVATED,
+    Lead/Admin=HIGH.
+    """
+
+    @staticmethod
+    def _dt_pks(bundle):
+        return {dt["pk"] for dt in bundle["document_types"]}
+
+    def test_high_doctype_absent_for_assistant(self, facility, client_identified, assistant_user, doc_type_high):
+        """Assistant (max NORMAL) darf einen HIGH-DocType weder als Eintrag noch
+        als Namens-Leak irgendwo im Bundle-JSON sehen."""
+        bundle = build_client_offline_bundle(assistant_user, facility, client_identified)
+        assert str(doc_type_high.pk) not in self._dt_pks(bundle)
+        assert doc_type_high.name not in json.dumps(bundle, default=str)
+
+    def test_elevated_doctype_absent_for_assistant(self, facility, client_identified, assistant_user, doc_type_crisis):
+        """Assistant (max NORMAL) darf auch einen ELEVATED-DocType nicht sehen."""
+        bundle = build_client_offline_bundle(assistant_user, facility, client_identified)
+        assert str(doc_type_crisis.pk) not in self._dt_pks(bundle)
+        assert doc_type_crisis.name not in json.dumps(bundle, default=str)
+
+    def test_high_doctype_absent_for_staff(self, facility, client_identified, staff_user, doc_type_high):
+        """Staff (max ELEVATED) darf einen HIGH-DocType nicht sehen."""
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        assert str(doc_type_high.pk) not in self._dt_pks(bundle)
+        assert doc_type_high.name not in json.dumps(bundle, default=str)
+
+    def test_elevated_doctype_present_for_staff(self, facility, client_identified, staff_user, doc_type_crisis):
+        """Staff (max ELEVATED) darf einen ELEVATED-DocType erstellen ⇒ er MUSS
+        im Bundle sein (Gegenprobe: der Filter darf nicht zu scharf sein)."""
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        assert str(doc_type_crisis.pk) in self._dt_pks(bundle)
+
+    def test_high_and_elevated_doctypes_present_for_lead(
+        self, facility, client_identified, lead_user, doc_type_high, doc_type_crisis
+    ):
+        """Lead (max HIGH) sieht beide berechtigten Typen — der Filter blendet
+        nur oberhalb des Rollen-Rangs aus."""
+        bundle = build_client_offline_bundle(lead_user, facility, client_identified)
+        pks = self._dt_pks(bundle)
+        assert str(doc_type_high.pk) in pks
+        assert str(doc_type_crisis.pk) in pks
+
+    def test_referenced_but_restricted_doctype_still_reaches_authorized_role(
+        self, facility, client_identified, lead_user, staff_user, doc_type_high
+    ):
+        """Gegenprobe zur Event-Vereinigung (Refs #1397): ein bereits vom
+        Klienten genutzter HIGH-DocType bleibt fuer eine berechtigte Rolle
+        (Lead) im Bundle — der neue Katalog-Filter darf referenzierte, dem
+        Nutzer sichtbare Typen nicht zusaetzlich unterdruecken."""
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_high,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=lead_user,
+        )
+        lead_bundle = build_client_offline_bundle(lead_user, facility, client_identified)
+        assert str(doc_type_high.pk) in self._dt_pks(lead_bundle)
+        # Staff (max ELEVATED) sieht weder das Event (visible_to-Gate) noch den
+        # DocType-Katalogeintrag — das Event ist bereits serverseitig gefiltert,
+        # der Katalogfilter darf hier keinen zusaetzlichen Leak oeffnen.
+        staff_bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        assert str(doc_type_high.pk) not in self._dt_pks(staff_bundle)
 
 
 @pytest.mark.django_db

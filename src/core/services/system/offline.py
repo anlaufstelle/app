@@ -250,7 +250,21 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
     # same choices as online (EventMetaForm: ``for_facility`` + ``is_active``),
     # PLUS any type referenced by the cached events even if since deactivated —
     # so existing event values still render offline (union). Refs #1397.
-    doc_types = {dt.pk: dt for dt in DocumentType.objects.for_facility(facility).filter(is_active=True)}
+    # Refs #1525 (Review MEDIUM, wie #1518/Facility-Bundle): denselben DocType-
+    # EBENEN-Sensitivity-Filter anwenden, den das Online-``EventMetaForm``
+    # fuehrt (forms/events.py: ``sensitivity__in=allowed_sensitivities_for_user``).
+    # Ohne ihn wuerde NAME/Metadaten eines HIGH/ELEVATED-DocType offline an
+    # niedrigere Rollen leaken — Verstoss gegen die Bundle-ist-Derivat-
+    # Invariante. Die per-Event referenzierten Typen unten bleiben ungefiltert:
+    # ``events_qs`` lief bereits durch ``Event.objects.visible_to(user)``
+    # (dieselbe ``allowed_sensitivities_for_user``-Grenze), sodass die Union
+    # keinen zusaetzlichen Leak oeffnen kann.
+    doc_types = {
+        dt.pk: dt
+        for dt in DocumentType.objects.for_facility(facility)
+        .filter(is_active=True)
+        .filter(sensitivity__in=allowed_sensitivities_for_user(user))
+    }
     for ev in events:
         if ev.document_type_id not in doc_types:
             doc_types[ev.document_type_id] = ev.document_type
