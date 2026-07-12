@@ -151,10 +151,14 @@ def test_lie_fi_navigation_falls_back_before_hanging(browser, base_url):
             f"Navigation kam nach nur {elapsed:.1f}s zurueck — die Route hat den Request offenbar nicht "
             "haengen lassen (Testaufbau pruefen)."
         )
-        # Ohne eigenen Cache-Treffer fuer /clients/ greift die Offline-Home
-        # als Fallback (Refs #701) — kein Klartext-Netzwerkfehler des
-        # Browsers, sondern die dedizierte Offline-Seite IN-PLACE.
-        page.locator('[data-testid="offline-home"]').wait_for(state="visible", timeout=3000)
+        # Refs #1533 (#1499 SI-5): /clients/ faellt offline NICHT mehr
+        # auf die Offline-Home, sondern der CLIENT_LIST-Zweig serviert die
+        # precachte, pk-lose Personenlisten-Shell IN-PLACE (kein Klartext-
+        # Netzwerkfehler, kein /offline/-Redirect). Ohne mitgenommene Personen
+        # rendert sie leer — der ``offline-client-list``-Wurzelmarker ist der
+        # sprach-/inhaltsunabhaengige Beweis, dass der Timeout in den richtigen
+        # Fallback-Zweig lief.
+        page.locator('[data-testid="offline-client-list"]').wait_for(state="visible", timeout=3000)
     finally:
         context.unroute(target_re)
         context.close()

@@ -528,14 +528,17 @@ class TestAndroidDossierJourney:
             _wait_for_active_service_worker(page)
 
             _go_offline(page)
-            # Klientel offline: /clients/ faellt in-place auf den
-            # Offline-Arbeitsplatz zurueck, der die mitgenommene Person listet.
+            # Refs #1533 (#1499 SI-5): /clients/ rendert offline
+            # IN-PLACE die role=table-Personenliste der mitgenommenen Person
+            # (nicht mehr die Offline-Home-Sackgasse). Klick auf den Detail-Link
+            # der gecachten Person -> gecachtes Dossier.
             page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
-            page.locator("[data-testid='offline-home']").wait_for(state="visible", timeout=10000)
-            page.locator("[data-testid='offline-home-item']").first.wait_for(state="visible", timeout=10000)
-            # Strict-Mode-Klick (genau EINE mitgenommene Person erwartet) —
-            # zugleich Selector-Stability-Guard-konform (kein first-Klick).
-            page.locator("[data-testid='offline-home-item'] a").click()
+            page.locator("[data-testid='offline-client-list']").wait_for(state="visible", timeout=10000)
+            row = page.locator(f"[data-testid='client-row'][data-pk='{client_pk}']")
+            row.wait_for(state="visible", timeout=10000)
+            # Deterministischer, scoped Klick (per data-pk) — Selector-Stability-
+            # Guard-konform (scoped statt ueber .first).
+            row.locator("[data-testid='client-detail-link']").click()
             page.locator("[data-testid='offline-client-view']").wait_for(state="visible", timeout=15000)
 
             # Aufgabe im Dossier anlegen (echte Offline-UI).

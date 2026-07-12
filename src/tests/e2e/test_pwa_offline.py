@@ -353,12 +353,16 @@ def test_offline_queue_replay_syncs_despite_stale_csrf(browser, base_url):
         context.close()
 
 
-def test_offline_home_lists_cached_clients(browser, base_url):
-    """Refs #1321: /offline/ ist der Offline-Arbeitsplatz und listet die lokal
-    mitgenommenen Personen aus der verschluesselten IndexedDB — mit Link in den
-    Offline-Viewer. Aktives Login (statt storage_state-Restore), damit
-    ``crypto_session`` den Schluessel ableitet und ``takeClientOffline`` das
-    Bundle verschluesseln kann. Refs #573/#574/#576.
+def test_offline_clients_shell_lists_cached_clients(browser, base_url):
+    """Refs #1533 (#1499 SI-5): Offline rendert der SW die kanonische
+    Personenliste ``/clients/`` IN-PLACE — die role=table-Liste der offline
+    mitgenommenen Personen (nicht mehr die ``/offline/``-Home). Warm-Session-
+    Pfad: echtes Login -> Person mitnehmen -> offline -> die Person erscheint als
+    ``client-row`` mit Detail-Link auf die kanonische ``/clients/<pk>/``-URL.
+    Aktives Login (statt storage_state-Restore), damit ``crypto_session`` den
+    Schluessel ableitet und das Bundle verschluesseln kann (Refs #573/#574/#576).
+    Der Kalt-Cache-Pfad + Suche/Filter liegt in
+    ``test_offline_client_list_journey.py``.
     """
     context = browser.new_context(locale="de-DE")
     page = context.new_page()
@@ -384,19 +388,37 @@ def test_offline_home_lists_cached_clients(browser, base_url):
         # Badge "Lokal verfügbar" bestaetigt das verschluesselte Bundle in IndexedDB.
         page.locator('[data-testid="offline-available-badge"]').wait_for(state="visible", timeout=10000)
 
-        # Offline-Arbeitsplatz zeigt die mitgenommene Person mit Viewer-Link.
-        page.goto(f"{base_url}/offline/", wait_until="domcontentloaded")
-        link = page.locator(f'[data-testid="offline-home-item"] a[href="/offline/clients/{client_pk}/"]')
-        link.wait_for(state="visible", timeout=10000)
-        assert link.count() >= 1, "Offline-Home listet die mitgenommene Person nicht"
+        # SW muss die Seite kontrollieren, bevor wir offline gehen.
+        _wait_for_active_service_worker(page, base_url)
+        page.context.set_offline(True)
+        page.evaluate("window.dispatchEvent(new Event('offline'))")
+
+        # Kanonische Personenliste offline: der SW serviert die pk-lose Listen-
+        # Shell IN-PLACE (kein /offline/-Redirect); offline-client-list.js rendert
+        # die mitgenommene Person aus der verschluesselten IndexedDB.
+        page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
+        assert page.url.rstrip("/").endswith("/clients"), f"URL nicht kanonisch: {page.url}"
+        page.locator('[data-testid="offline-client-list"]').wait_for(state="visible", timeout=10000)
+        row = page.locator(f'[data-testid="client-row"][data-pk="{client_pk}"]')
+        row.wait_for(state="visible", timeout=10000)
+        # Der Detail-Link zeigt auf die kanonische /clients/<pk>/-URL (offline
+        # in-place ins Dossier), nicht auf /offline/clients/<pk>/.
+        link = row.locator('[data-testid="client-detail-link"]')
+        assert link.get_attribute("href") == f"/clients/{client_pk}/", (
+            f"Detail-Link zeigt nicht auf die kanonische URL: {link.get_attribute('href')!r}"
+        )
     finally:
+        page.context.set_offline(False)
         context.close()
 
 
-def test_offline_home_filters_taken_clients_by_pseudonym(browser, base_url):
-    """Refs #1399: Ab zwei mitgenommenen Personen bietet der Offline-Arbeitsplatz
-    ein Filterfeld; die Eingabe blendet nicht passende Personen rein clientseitig
-    aus (kein Server-/Krypto-Zugriff), ohne Treffer erscheint ein Hinweis.
+def test_offline_clients_shell_filters_by_pseudonym(browser, base_url):
+    """Refs #1534 (#1499 SI-6): Die offline in-place gerenderte
+    Personenliste an ``/clients/`` bietet client-seitige Suche; die Eingabe
+    blendet nicht passende Personen rein lokal (kein Server-/Krypto-Zugriff) aus,
+    ohne Treffer erscheint der Standard-Leerzustand „Keine Personen gefunden".
+    Warm-Session-Pfad ueber zwei gezielt gesetzte Bundles (Schema v2 -> kein
+    List-Gate-Purge).
     """
     context = browser.new_context(locale="de-DE")
     page = context.new_page()
@@ -417,40 +439,54 @@ def test_offline_home_filters_taken_clients_by_pseudonym(browser, base_url):
                 const future = new Date(Date.now() + 3600e3).toISOString();
                 const mk = (pk, pseudonym) =>
                     s.saveClientBundle({
-                        client: {pk, pseudonym}, expires_at: future, ttl: 3600,
+                        client: {pk, pseudonym, is_active: true}, expires_at: future, ttl: 3600,
                         schema_version: s.BUNDLE_SCHEMA_VERSION,
                     });
                 await mk('11111111-1111-4111-8111-111111111111', 'Anton-01');
                 await mk('22222222-2222-4222-8222-222222222222', 'Berta-02');
             }"""
         )
-        page.goto(f"{base_url}/offline/", wait_until="domcontentloaded")
-        page.wait_for_selector('[data-testid="offline-home-item"]')
-        assert page.locator('[data-testid="offline-home-item"]').count() == 2
 
-        filter_input = page.locator('[data-testid="offline-home-filter"]')
-        assert filter_input.is_visible(), "Filterfeld muss ab 2 Personen sichtbar sein."
+        # SW muss die Seite kontrollieren, bevor wir offline gehen.
+        _wait_for_active_service_worker(page, base_url)
+        page.context.set_offline(True)
+        page.evaluate("window.dispatchEvent(new Event('offline'))")
 
-        # Filtern auf "anton" -> nur Anton bleibt sichtbar.
-        filter_input.fill("anton")
+        # Kanonische Personenliste offline -> in-place die role=table-Liste.
+        page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
+        page.locator('[data-testid="offline-client-list"]').wait_for(state="visible", timeout=10000)
         page.wait_for_function(
-            """() => {
-                const vis = [...document.querySelectorAll('[data-testid=offline-home-item]')]
-                    .filter(li => li.offsetParent !== null);
-                return vis.length === 1 &&
-                    (vis[0].getAttribute('data-pseudonym') || '').toLowerCase().includes('anton');
-            }"""
+            "() => document.querySelectorAll('[data-testid=client-row]').length === 2",
+            timeout=10000,
         )
-        # Leeren -> wieder beide sichtbar.
-        filter_input.fill("")
+
+        search = page.locator('[data-testid="offline-client-search"]')
+        search.wait_for(state="visible", timeout=10000)
+
+        # Filtern auf "anton" -> nur Anton bleibt (x-for iteriert die gefilterte Sicht).
+        search.fill("anton")
         page.wait_for_function(
-            "() => [...document.querySelectorAll('[data-testid=offline-home-item]')]"
-            ".filter(li => li.offsetParent !== null).length === 2"
+            "() => document.querySelectorAll('[data-testid=client-row]').length === 1",
+            timeout=10000,
         )
-        # Kein Treffer -> Hinweis.
-        filter_input.fill("zzz-kein-treffer")
-        page.locator('[data-testid="offline-home-no-match"]').wait_for(state="visible", timeout=5000)
+        page.locator(
+            '[data-testid="client-row"][data-pk="11111111-1111-4111-8111-111111111111"]'
+        ).wait_for(state="visible", timeout=10000)
+
+        # Leeren -> wieder beide.
+        search.fill("")
+        page.wait_for_function(
+            "() => document.querySelectorAll('[data-testid=client-row]').length === 2",
+            timeout=10000,
+        )
+
+        # Kein Treffer -> Standard-Leerzustand.
+        search.fill("zzz-kein-treffer")
+        page.get_by_text("Keine Personen gefunden").wait_for(state="visible", timeout=5000)
     finally:
+        page.context.set_offline(False)
+        with suppress(Exception):
+            page.evaluate("async () => { if (window.offlineStore) await window.offlineStore.purgeAll(); }")
         context.close()
 
 
