@@ -528,17 +528,15 @@ class TestAndroidDossierJourney:
             _wait_for_active_service_worker(page)
 
             _go_offline(page)
-            # Refs #1533 (#1499 SI-5): /clients/ rendert offline
-            # IN-PLACE die role=table-Personenliste der mitgenommenen Person
-            # (nicht mehr die Offline-Home-Sackgasse). Klick auf den Detail-Link
-            # der gecachten Person -> gecachtes Dossier.
-            page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
-            page.locator("[data-testid='offline-client-list']").wait_for(state="visible", timeout=10000)
-            row = page.locator(f"[data-testid='client-row'][data-pk='{client_pk}']")
-            row.wait_for(state="visible", timeout=10000)
-            # Deterministischer, scoped Klick (per data-pk) — Selector-Stability-
-            # Guard-konform (scoped statt ueber .first).
-            row.locator("[data-testid='client-detail-link']").click()
+            # Dossier offline in-place aufrufen (kanonische /clients/<pk>/-URL).
+            # Als Top-Level-Navigation gefahren: Playwrights ``set_offline`` blockt
+            # Top-Level-Navigationen (page.goto -> SW-Offline-Fallback -> Detail-
+            # Shell), simuliert aber die SW-eigenen fetch() eines Link-Klicks aus
+            # einer bereits SW-kontrollierten Shell NICHT adversarial. Dass die
+            # mitgenommene Person offline in der role=table-Liste an /clients/
+            # erscheint (), deckt
+            # test_offline_client_list_journey.py ab.
+            page.goto(f"{base_url}/clients/{client_pk}/", wait_until="domcontentloaded")
             page.locator("[data-testid='offline-client-view']").wait_for(state="visible", timeout=15000)
 
             # Aufgabe im Dossier anlegen (echte Offline-UI).
