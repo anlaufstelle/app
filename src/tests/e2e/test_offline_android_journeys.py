@@ -311,15 +311,38 @@ class TestColdStartShellAssets:
 
 
 class TestOfflineCreateEntryFallback:
-    """Refs #1483: Kalt-Navigation auf Create-Formulare endet auf dem
-    Offline-Arbeitsplatz — mit gezieltem Wegweiser statt kommentarlos."""
+    """Refs #1524 (#1499, SI-6/SI-7): Kalt-Navigation auf die Create-Formulare
+    endet NICHT mehr auf dem Offline-Arbeitsplatz mit "geht nur im Dossier"-
+    Sackgasse (#1483/#1485 ueberholt) — der Service Worker serviert IN-PLACE die
+    echte pk-lose Create-Shell. Diese Kalt-Faelle haben KEIN vorbereitetes
+    Bundle (frischer SW, kein Login → kein Krypto-Schluessel, kein gecachtes
+    Facility-Bundle), daher zeigt die Shell den schmalen Edge-Fallback
+    ("noch nicht vorbereitet / einmal online oeffnen") statt der Form. Der Fall
+    mit Form + Erfassung + Server-Verifikation liegt in
+    ``test_offline_create_shell_journeys.py``.
+    """
 
     @pytest.mark.parametrize(
-        ("path", "expect_anon_hint"),
-        [("/events/new/", True), ("/workitems/new/", False)],
+        ("path", "root_testid", "unavailable_testid", "form_testid"),
+        [
+            (
+                "/events/new/",
+                "offline-event-create",
+                "offline-event-create-unavailable",
+                "offline-event-create-form",
+            ),
+            (
+                "/workitems/new/",
+                "offline-workitem-create",
+                "offline-workitem-create-unavailable",
+                "offline-workitem-create-form",
+            ),
+        ],
         ids=["event-create", "workitem-create"],
     )
-    def test_cold_offline_create_navigation_shows_hint(self, browser, base_url, path, expect_anon_hint):
+    def test_cold_offline_create_navigation_serves_shell_edge_fallback(
+        self, browser, base_url, path, root_testid, unavailable_testid, form_testid
+    ):
         context = _android_context(browser)
         page = context.new_page()
         page.set_default_timeout(30000)
@@ -327,15 +350,18 @@ class TestOfflineCreateEntryFallback:
             _fresh_sw_only(page, base_url)
             page.context.set_offline(True)
             page.goto(f"{base_url}{path}", wait_until="domcontentloaded")
-            # In-Place-Fallback: URL bleibt kanonisch, Arbeitsplatz rendert.
+            # In-Place-Shell: URL bleibt kanonisch, die Create-Shell rendert —
+            # NICHT die alte Offline-Home-Sackgasse.
             assert path in page.url
-            page.locator("[data-testid='offline-home']").wait_for(state="visible", timeout=10000)
-            page.locator("[data-testid='offline-create-hint']").wait_for(state="visible", timeout=5000)
-            anon = page.locator("[data-testid='offline-create-hint-anonymous']")
-            if expect_anon_hint:
-                anon.wait_for(state="visible", timeout=5000)
-            else:
-                assert not anon.is_visible(), "Anonym-Hinweis darf nur fuer die Kontakt-Erfassung erscheinen"
+            page.locator(f"[data-testid='{root_testid}']").wait_for(state="attached", timeout=10000)
+            # Ohne vorbereitetes Bundle: schmaler Edge-Fallback, keine Form.
+            page.locator(f"[data-testid='{unavailable_testid}']").wait_for(state="visible", timeout=10000)
+            assert not page.locator(f"[data-testid='{form_testid}']").is_visible(), (
+                "Ohne vorbereitetes Bundle darf die Create-Form nicht erscheinen"
+            )
+            assert not page.locator("[data-testid='offline-home']").is_visible(), (
+                "Kalt-Create fuehrt nicht mehr auf die Offline-Home-Sackgasse (Shell statt Wegweiser)"
+            )
         finally:
             context.close()
 
