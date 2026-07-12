@@ -100,11 +100,11 @@
                             {# Mobile-Only: Stufe + Alter + Datum inline unter dem Pseudonym. #}
                             <div class="sm:hidden mt-1">
                                 <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold" :class="stageClass(c.contactStage)" x-text="stageLabel(c)"></span>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold" :class="c.stageClass" x-text="c.stageLabel"></span>
                                     <span class="text-[12px] text-ink-muted">
                                         <span x-text="c.ageClusterDisplay"></span>
                                         <template x-if="c.lastContact">
-                                            <span>· <span class="font-mono" x-text="lastContactLabel(c)"></span></span>
+                                            <span>· <span class="font-mono" x-text="c.lastContactLabel"></span></span>
                                         </template>
                                     </span>
                                 </div>
@@ -113,14 +113,14 @@
 
                         {# Desktop-Only: Stufe als eigene Spalte. #}
                         <div role="cell" class="hidden sm:block">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold" :class="stageClass(c.contactStage)" x-text="stageLabel(c)"></span>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold" :class="c.stageClass" x-text="c.stageLabel"></span>
                         </div>
 
                         {# Desktop-Only: Alter ab md:. #}
                         <div role="cell" class="hidden md:block text-[13px] text-ink-soft" x-text="c.ageClusterDisplay"></div>
 
                         {# Desktop-Only: Letzter Kontakt ab md: (Mono fuer Datum, "–" bei None). #}
-                        <div role="cell" class="hidden md:block text-[13px] font-mono text-ink-muted" x-text="lastContactLabel(c)"></div>
+                        <div role="cell" class="hidden md:block text-[13px] font-mono text-ink-muted" x-text="c.lastContactLabel"></div>
 
                         {# Offline-Aktion — Mobile-Card-Variante: nur "Entfernen". #}
                         <div class="flex-shrink-0 sm:hidden">

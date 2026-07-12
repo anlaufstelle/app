@@ -66,6 +66,13 @@
             lastContact: c.lastContact != null ? c.lastContact : null,
             isActive: c.isActive !== false,
             href: "/clients/" + c.pk + "/",
+            // CSP-Alpine (@alpinejs/csp, #693/#672) fuehrt keine Method-Calls mit
+            // Argumenten in Direktiven aus -> Badge-Klasse/-Label und das
+            // formatierte Kontaktdatum pro Zeile vorberechnen und als Property
+            // rendern (:class="c.stageClass" statt :class="stageClass(...)").
+            stageClass: stageClass(c.contactStage || ""),
+            stageLabel: stageLabel(c),
+            lastContactLabel: lastContactLabel(c),
         };
     }
 
