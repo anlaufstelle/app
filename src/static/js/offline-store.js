@@ -732,6 +732,152 @@
     }
 
     /*
+     * W3 (#1499): Gemeinsame Basis fuer die aggregierten Reader
+     * (`listOfflineEventsAggregated`/`listOfflineWorkItemsAggregated`).
+     * Entschluesselt jede `clients`-Row EINMAL und liefert nur GUELTIGE (nicht
+     * abgelaufene, schema-konforme) Bundles als Map `pk -> {pseudonym, envelope}`.
+     * Spiegelt exakt das read-only List-Gate aus `listOfflineClientsDetailed`
+     * (kein Purge als Render-Seiteneffekt) — der tatsaechliche Purge bleibt bei
+     * `getOfflineClient`/Re-Validierung. Ein Decrypt-Fehler (Idle-Lock/Re-Login)
+     * laesst die Zeile still aus.
+     */
+    async function _validClientBundles() {
+        const crypto = _crypto();
+        const rows = await db.clients.toArray();
+        const map = new Map();
+        for (const row of rows) {
+            let envelope;
+            try {
+                envelope = await crypto.decryptPayload(row.data);
+            } catch (_e) {
+                continue;
+            }
+            if (_isSchemaMismatch(envelope.schemaVersion)) continue;
+            if (_isExpired(envelope.expiresAt)) continue;
+            map.set(row.pk, {
+                pseudonym: (envelope.client || {}).pseudonym || "",
+                envelope: envelope,
+            });
+        }
+        return map;
+    }
+
+    // Refs #1353: die vier "unsynced"-Status, die Bundle-Ablauf ueberleben.
+    const _UNSYNCED_STATUSES = ["modified", "new", "conflict", "dead"];
+
+    /*
+     * W3-A (#1539/#1499): Chronologische "lokale Chronik" fuer die
+     * Zeitstrom-Offline-Shell (`/`). Aggregiert Events ueber ALLE offline
+     * mitgenommenen Personen hinweg PLUS personlose (anonyme) Offline-Eintraege
+     * — jede `events`-Row EINMAL entschluesselt (via `listDecrypted`, das
+     * Transient-/Permanent-Decrypt-Fehler bereits korrekt behandelt),
+     * WorkItem-Rows heraus-gefiltert.
+     *
+     * Gate (spiegelt `getOfflineClient`/`listOfflineClientsDetailed`, read-only):
+     *   - CLEAN Events (Server-Spiegel) erscheinen NUR, solange ihr Bundle
+     *     gueltig ist (nicht abgelaufen, schema-konform) — sonst waere es
+     *     veraltetes/anonymisiertes PII (F-04/F-10). Kein Purge hier; die Row
+     *     wird nur ausgelassen.
+     *   - UNSYNCED Events (modified/new/conflict/dead) erscheinen IMMER — sie
+     *     ueberleben Bundle-Ablauf laut Kern-Invariante (S1) und sind die
+     *     eigentliche lokale Arbeit. Personlose (`clientPk===""`) Eintraege sind
+     *     stets unsynced-new und werden als anonym markiert (ohne Pseudonym).
+     *
+     * Sortierung: `occurred_at` absteigend (neueste zuerst), wie der Online-Feed.
+     */
+    async function listOfflineEventsAggregated() {
+        const bundles = await _validClientBundles();
+        const rows = await listDecrypted("events", (r) => !_isWorkItemRow(r));
+        const out = [];
+        for (const r of rows) {
+            const clientPk = r.clientPk || "";
+            const isUnsynced = _UNSYNCED_STATUSES.indexOf(r.localStatus) !== -1;
+            // Stale CLEAN Event eines abgelaufenen/entfernten Bundles: auslassen.
+            if (!isUnsynced && clientPk && !bundles.has(clientPk)) continue;
+            const ev = normalizeOfflineEventRecord(r);
+            ev.clientPk = clientPk;
+            ev.isAnonymous = !clientPk;
+            ev.pseudonym =
+                clientPk && bundles.has(clientPk) ? bundles.get(clientPk).pseudonym : "";
+            out.push(ev);
+        }
+        out.sort((a, b) => (a.occurred_at < b.occurred_at ? 1 : -1));
+        return out;
+    }
+
+    /*
+     * W3-B (#1540/#1499): Aggregierte "lokale Aufgaben"-Sicht fuer die
+     * WorkItem-Offline-Shell (`/workitems/`). Fuehrt die Bundle-`workitems` JEDER
+     * gueltigen offline mitgenommenen Person mit ihren Offline-Overlays
+     * (neu/modified/conflict/dead) zusammen — Semantik `_mergeWorkItemOverlay`,
+     * das bislang nur per-Client in `getOfflineClient` lief — und ergaenzt
+     * personlose (standalone/anonyme) Offline-WorkItems.
+     *
+     * Gate wie bei den Events: nur gueltige Bundles liefern ihre `workitems`;
+     * unsynced WorkItem-Rows eines abgelaufenen/entfernten Bundles ueberleben
+     * (orphaned) und erscheinen ohne Pseudonym. Read-only (kein Purge).
+     */
+    async function listOfflineWorkItemsAggregated() {
+        const bundles = await _validClientBundles();
+        const wiRows = await listDecrypted("events", (r) => _isWorkItemRow(r));
+        const byClient = new Map();
+        const standalone = [];
+        for (const r of wiRows) {
+            const clientPk = r.clientPk || "";
+            if (!clientPk) {
+                standalone.push(r);
+                continue;
+            }
+            if (!byClient.has(clientPk)) byClient.set(clientPk, []);
+            byClient.get(clientPk).push(r);
+        }
+        const out = [];
+        for (const [clientPk, meta] of bundles) {
+            const merged = _mergeWorkItemOverlay(meta.envelope.workitems, byClient.get(clientPk) || []);
+            for (const wi of merged) {
+                out.push(
+                    Object.assign({}, wi, {
+                        clientPk: clientPk,
+                        pseudonym: meta.pseudonym,
+                        isAnonymous: false,
+                    })
+                );
+            }
+            byClient.delete(clientPk);
+        }
+        // Personlose (anonyme) Offline-WorkItems: nie ein Bundle-Pendant.
+        for (const r of standalone) {
+            const wi = normalizeOfflineWorkItemRecord(r);
+            out.push(
+                Object.assign({}, wi, {
+                    status: wi.status || "open",
+                    can_edit: true,
+                    clientPk: "",
+                    pseudonym: "",
+                    isAnonymous: true,
+                })
+            );
+        }
+        // Orphaned: unsynced WorkItem-Rows, deren Bundle abgelaufen/entfernt ist,
+        // ueberleben laut S1-Invariante und bleiben sichtbar (ohne Pseudonym).
+        for (const [clientPk, rows] of byClient) {
+            for (const r of rows) {
+                const wi = normalizeOfflineWorkItemRecord(r);
+                out.push(
+                    Object.assign({}, wi, {
+                        status: wi.status || "open",
+                        can_edit: true,
+                        clientPk: clientPk,
+                        pseudonym: "",
+                        isAnonymous: false,
+                    })
+                );
+            }
+        }
+        return out;
+    }
+
+    /*
      * Refs #1353: Invariante — Rows mit `localStatus` in
      * {modified, new, conflict, dead} ("unsynced") loescht NUR: (1) eine
      * explizite Nutzeraktion (P1/M8), (2) der Security-Purge bei
@@ -1596,6 +1742,10 @@
         getOfflineClient: getOfflineClient,
         listOfflineClients: listOfflineClients,
         listOfflineClientsDetailed: listOfflineClientsDetailed,
+        // W3 (#1499) — cross-client + anonyme Aggregatoren fuer die
+        // Zeitstrom-/Aufgaben-Offline-Shells (/ bzw. /workitems/)
+        listOfflineEventsAggregated: listOfflineEventsAggregated,
+        listOfflineWorkItemsAggregated: listOfflineWorkItemsAggregated,
         removeOfflineClient: removeOfflineClient,
         isClientOffline: isClientOffline,
         countOfflineClients: countOfflineClients,

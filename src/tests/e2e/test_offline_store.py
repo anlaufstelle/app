@@ -2129,3 +2129,125 @@ class TestSaveClientBundleAtomic:
         )
         assert result["errName"] == "QuotaExceededError", "QuotaExceededError muss als solcher gemeldet werden"
         assert result["pseudonym"] == "OLD-QUOTA", "Der alte Bundle-Stand muss nach einem Quota-Abbruch intakt bleiben"
+
+
+# ── W3 (#1499): cross-client + anonyme Aggregatoren ──────────────────
+
+
+def test_list_offline_events_aggregated_merges_clients_and_anonymous(authenticated_page, base_url):
+    """W3-A (#1539/#1499): ``listOfflineEventsAggregated`` fuehrt Events
+    ueber ALLE gueltigen Bundles + personlose (anonyme) Offline-Eintraege
+    chronologisch (occurred_at desc) zusammen. Abgelaufene Bundles (stale PII)
+    und WorkItem-Rows bleiben aussen vor; unsynced Events erscheinen immer."""
+    page = authenticated_page
+    _bootstrap(page, base_url)
+    result = page.evaluate(
+        """async () => {
+            const s = window.offlineStore;
+            const future = new Date(Date.now() + 3600e3).toISOString();
+            const past = new Date(Date.now() - 3600e3).toISOString();
+            const A = '11111111-1111-4111-8111-111111111111';
+            const B = '22222222-2222-4222-8222-222222222222';
+            // Gueltiges Bundle A mit clean Event (Maerz).
+            await s.saveClientBundle({
+                client: {pk: A, pseudonym: 'PS-A'}, expires_at: future, ttl: 3600,
+                schema_version: s.BUNDLE_SCHEMA_VERSION,
+                events: [{pk: 'ev-a-clean', occurred_at: '2026-03-01T10:00:00Z'}],
+            });
+            // Abgelaufenes Bundle B mit clean Event -> darf NICHT erscheinen.
+            await s.saveClientBundle({
+                client: {pk: B, pseudonym: 'PS-B'}, expires_at: past, ttl: 3600,
+                schema_version: s.BUNDLE_SCHEMA_VERSION,
+                events: [{pk: 'ev-b-clean', occurred_at: '2026-02-01T10:00:00Z'}],
+            });
+            // Client-A modifizierter Offline-Edit (April).
+            await s.saveOfflineEdit({
+                pk: 'ev-a-mod', clientPk: A, occurredAt: '2026-04-01T10:00:00Z',
+                localStatus: 'modified',
+                data: {occurredAt: '2026-04-01T10:00:00Z', documentTypeName: 'Notiz', formData: {}},
+            });
+            // Personloser (anonymer) neuer Offline-Event (Mai).
+            await s.saveOfflineEdit({
+                pk: 'ev-anon-new', clientPk: '', occurredAt: '2026-05-01T10:00:00Z',
+                localStatus: 'new',
+                data: {occurredAt: '2026-05-01T10:00:00Z', documentTypeName: 'Kontakt anonym', formData: {}},
+            });
+            // WorkItem-Row (muss aus der Event-Liste ausgeschlossen sein).
+            await s.saveOfflineEdit({
+                pk: 'wi-a-new', clientPk: A, occurredAt: '', localStatus: 'new',
+                data: {kind: 'workitem', formData: {title: 'Aufgabe X'}, expectedUpdatedAt: ''},
+            });
+            const list = await s.listOfflineEventsAggregated();
+            return {
+                pks: list.map((e) => e.pk),
+                anon: list.filter((e) => e.isAnonymous).map((e) => e.pk),
+                psA: (list.find((e) => e.pk === 'ev-a-clean') || {}).pseudonym,
+            };
+        }"""
+    )
+    # Chronologisch absteigend: Mai(anon) > April(mod) > Maerz(clean-A).
+    assert result["pks"] == ["ev-anon-new", "ev-a-mod", "ev-a-clean"]
+    assert result["anon"] == ["ev-anon-new"]
+    assert result["psA"] == "PS-A"
+
+
+def test_list_offline_workitems_aggregated_merges_clients_and_standalone(authenticated_page, base_url):
+    """W3-B (#1540/#1499): ``listOfflineWorkItemsAggregated`` fuehrt
+    Bundle-WorkItems ALLER gueltigen Personen mit Offline-Overlays
+    (modified/new) + personlosen (standalone/anonymen) Offline-WorkItems
+    zusammen. Abgelaufene Bundles bleiben aussen vor."""
+    page = authenticated_page
+    _bootstrap(page, base_url)
+    result = page.evaluate(
+        """async () => {
+            const s = window.offlineStore;
+            const future = new Date(Date.now() + 3600e3).toISOString();
+            const past = new Date(Date.now() - 3600e3).toISOString();
+            const A = '11111111-1111-4111-8111-111111111111';
+            const B = '22222222-2222-4222-8222-222222222222';
+            // Gueltiges Bundle A mit Bundle-WorkItem wi1.
+            await s.saveClientBundle({
+                client: {pk: A, pseudonym: 'PS-A'}, expires_at: future, ttl: 3600,
+                schema_version: s.BUNDLE_SCHEMA_VERSION,
+                workitems: [{pk: 'wi1', title: 'Original', status: 'open', can_edit: true}],
+            });
+            // Offline-Overlay: wi1 modifiziert (neuer Titel).
+            await s.saveOfflineEdit({
+                pk: 'wi1', clientPk: A, occurredAt: '', localStatus: 'modified',
+                data: {kind: 'workitem', formData: {title: 'Geaendert'}, expectedUpdatedAt: ''},
+            });
+            // Offline-neu, client-gebunden: wi2.
+            await s.saveOfflineEdit({
+                pk: 'wi2', clientPk: A, occurredAt: '', localStatus: 'new',
+                data: {kind: 'workitem', formData: {title: 'Neu mit Person'}, expectedUpdatedAt: ''},
+            });
+            // Personlos (anonym): wi3.
+            await s.saveOfflineEdit({
+                pk: 'wi3', clientPk: '', occurredAt: '', localStatus: 'new',
+                data: {kind: 'workitem', formData: {title: 'Standalone'}, expectedUpdatedAt: ''},
+            });
+            // Abgelaufenes Bundle B mit Bundle-WorkItem wi4 -> darf NICHT erscheinen.
+            await s.saveClientBundle({
+                client: {pk: B, pseudonym: 'PS-B'}, expires_at: past, ttl: 3600,
+                schema_version: s.BUNDLE_SCHEMA_VERSION,
+                workitems: [{pk: 'wi4', title: 'Abgelaufen', status: 'open', can_edit: true}],
+            });
+            const list = await s.listOfflineWorkItemsAggregated();
+            const by = {};
+            list.forEach((w) => { by[w.pk] = w; });
+            return {
+                pks: list.map((w) => w.pk).sort(),
+                wi1title: (by['wi1'] || {}).title,
+                wi1ps: (by['wi1'] || {}).pseudonym,
+                wi3anon: (by['wi3'] || {}).isAnonymous,
+                wi2edit: (by['wi2'] || {}).can_edit,
+                hasWi4: 'wi4' in by,
+            };
+        }"""
+    )
+    assert result["pks"] == ["wi1", "wi2", "wi3"]
+    assert result["wi1title"] == "Geaendert"  # Offline-Overlay gewinnt ueber Bundle
+    assert result["wi1ps"] == "PS-A"
+    assert result["wi3anon"] is True
+    assert result["wi2edit"] is True
+    assert result["hasWi4"] is False
