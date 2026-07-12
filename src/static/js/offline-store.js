@@ -706,6 +706,25 @@
                 contactStage: client.contact_stage || "",
                 lastSynced: row.lastSynced,
                 expiresAt: envelope.expiresAt || "",
+                // SI-2 (#1530/#1499): additive Felder fuer die Offline-
+                // Personenliste () -- reine Passthroughs aus dem
+                // Server-Bundle (SI-1, offline.py `client`-Dict), keine
+                // eigene Ableitung/Formatierung hier. Bestehende Konsumenten
+                // (offline-home.js, offline-create.js) lesen weiterhin nur
+                // die Felder oben; diese sind rein additiv.
+                ageCluster: client.age_cluster || "",
+                ageClusterDisplay: client.age_cluster_display || "",
+                contactStageDisplay: client.contact_stage_display || "",
+                // SI-1: server-seitig cutoff-frei berechnet, ISO-8601-String
+                // oder null (kontaktloser Klient) -- null bewusst NICHT auf
+                // "" gemappt (JSON-clean Unterscheidung "kein Kontakt" vs.
+                // "unbekannt" bleibt fuer SI-4 erhalten).
+                lastContact: client.last_contact != null ? client.last_contact : null,
+                // Default true, falls ein Alt-Bundle das Feld (noch) nicht
+                // gesetzt hat -- das Schema-Gate oben laesst nur v2-Bundles
+                // durch, die is_active immer setzen; die Absicherung ist
+                // defensiv, nicht der Regelfall.
+                isActive: client.is_active !== false,
             });
         }
         out.sort((a, b) => (a.pseudonym || "").localeCompare(b.pseudonym || "", "de"));
