@@ -94,10 +94,11 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v20"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v21"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
-            "(#1523/#1499 SI-6: APP_SHELL um Event-/WorkItem-Create-Shells + "
-            "offline-create.js/offline-form-fields.js erweitert)."
+            "(#1533/#1499 SI-5: APP_SHELL um die Offline-Personenlisten-Shell "
+            "(/offline/clients/) + offline-client-list.js erweitert; neuer "
+            "CLIENT_LIST-Fallback-Zweig)."
         )
 
     def test_sw_caches_offline_create_shells(self, client):
@@ -245,6 +246,89 @@ class TestServiceWorkerCachesOfflineFallback:
             )
 
 
+@pytest.mark.django_db
+class TestServiceWorkerCachesClientListShell:
+    """Refs #1533 (#1499, SI-5): Die pk-lose Offline-Personenliste wird offline
+    IN-PLACE an der kanonischen URL /clients/ serviert — die Listen-Shell-URL
+    (/offline/clients/) UND ihr Renderer (offline-client-list.js) muessen daher
+    im APP_SHELL pre-cached sein, sonst fehlt der Renderer im Kalt-Offline-Pfad
+    nach einem SW-Update.
+    """
+
+    def test_sw_caches_client_list_shell_and_renderer(self, client):
+        response = client.get(reverse("service_worker"))
+        body = response.content.decode()
+        shell_block = _app_shell_block(body)
+        assert "/offline/clients/" in body, "Offline-Personenlisten-Shell (/offline/clients/) fehlt im APP_SHELL."
+        assert "OFFLINE_CLIENT_LIST_SHELL_URL" in shell_block, (
+            "OFFLINE_CLIENT_LIST_SHELL_URL fehlt im APP_SHELL-Array."
+        )
+        assert "/static/js/offline-client-list.js" in shell_block, "offline-client-list.js fehlt im APP_SHELL."
+
+    def test_sw_serves_client_list_shell_fallback_before_generic_offline(self, client):
+        """Refs #1533 (#1499, SI-5): Offline faellt /clients/ VOR dem generischen
+        /offline/-Fallback auf die gecachte Listen-Shell (In-Place, URL bleibt
+        kanonisch — analog dem Client-/Konflikt-/Create-Shell-Zweig). Der Zweig
+        muss NACH dem HTMX-Such-Swap-Sonderfall stehen (ein HX-Request returnt
+        frueh mit dem Partial-Banner — sonst wuerde die Voll-Shell die
+        HTMX-Livesuche-Swaps kapern) und VOR der generischen
+        ``caches.match(request.url)``-Stufe (sonst gewinnt /offline/).
+        """
+        body = client.get(reverse("service_worker")).content.decode()
+        assert "self.URL_PATTERNS.CLIENT_LIST.test(request.url)" in body
+        assert ".match(OFFLINE_CLIENT_LIST_SHELL_URL)" in body
+        hx_branch = body.index('request.headers.get("HX-Request") === "true"')
+        list_branch = body.index("self.URL_PATTERNS.CLIENT_LIST.test(request.url)")
+        generic_match = body.rindex(".match(request.url)")
+        assert hx_branch < list_branch, "CLIENT_LIST-Zweig muss NACH dem HX-Request-Sonderfall stehen."
+        assert list_branch < generic_match, "CLIENT_LIST-Zweig muss VOR dem generischen /offline/-Match stehen."
+
+
+class TestClientListUrlPattern:
+    """Refs #1533 (#1499, SI-5): CLIENT_LIST_RE in url-patterns.js matcht GENAU
+    die kanonische Personenlisten-URL /clients/ (mit optionalem ?query) und
+    grenzt exakt gegen die Nachbarrouten ab — sonst faengt der neue SW-Zweig
+    (Listen-Shell) faelschlich Detail-/Create-/Trash-/Autocomplete-Requests
+    oder die pk-behaftete Offline-Detail-Route (/offline/clients/<uuid>/) ab.
+
+    Der Test liest die ECHTE RegExp-Quelle aus url-patterns.js (kein
+    Python-Nachbau) und prueft ihr Verhalten mit ``re.search`` (== JS
+    ``.test``, keine Verankerung) — so faellt jede Drift der Quelle auf.
+    """
+
+    _UUID = "1b4e28ba-2fa1-11d2-883f-0016d3cca427"
+
+    def _client_list_re(self):
+        from pathlib import Path
+
+        from django.conf import settings
+
+        src = (Path(settings.BASE_DIR) / "static" / "js" / "url-patterns.js").read_text()
+        m = re.search(r'CLIENT_LIST_RE = new RegExp\("([^"]*)", "i"\)', src)
+        assert m, "CLIENT_LIST_RE-Definition in url-patterns.js nicht gefunden (Quell-Drift?)."
+        # JS-String-Literal -> Regex-Quelle: das gedoppelte Backslash (\\?)
+        # zu einem entschaerfen, dann case-insensitive kompilieren.
+        js_source = m.group(1).replace("\\\\", "\\")
+        return re.compile(js_source, re.IGNORECASE)
+
+    def test_matches_canonical_client_list(self):
+        pattern = self._client_list_re()
+        assert pattern.search("https://host/clients/")
+        assert pattern.search("https://host/clients/?q=x")
+        assert pattern.search("https://host/clients/?stage=qualified&age=adult")
+
+    def test_does_not_match_neighbor_routes(self):
+        pattern = self._client_list_re()
+        for url in (
+            "https://host/clients/new/",
+            f"https://host/clients/{self._UUID}/",
+            "https://host/clients/trash/",
+            "https://host/partials/clients/autocomplete/",
+            f"https://host/offline/clients/{self._UUID}/",
+        ):
+            assert not pattern.search(url), f"CLIENT_LIST_RE darf {url} nicht matchen (Abgrenzung verletzt)."
+
+
 def _app_shell_block(body: str) -> str:
     """Schneidet den APP_SHELL-Array-Block aus dem SW-Body heraus.
 
@@ -331,6 +415,12 @@ class TestServiceWorkerPrecacheHashedAssets:
         )
         assert re.search(r'"/static/js/offline-form-fields\.[0-9a-f]{8,}\.js"', prod_block), (
             "offline-form-fields.js wurde nicht auf eine gehashte URL aufgeloest."
+        )
+        # Refs #1533 (#1499, SI-5): der Renderer der pk-losen Personenlisten-Shell
+        # muss in Prod ebenfalls auf eine gehashte URL aufgeloest werden, sonst
+        # verfehlt caches.match ihn im Kalt-Offline-Pfad (/clients/).
+        assert re.search(r'"/static/js/offline-client-list\.[0-9a-f]{8,}\.js"', prod_block), (
+            "offline-client-list.js wurde nicht auf eine gehashte URL aufgeloest."
         )
         # 2) Kein ungehashtes /static/-Original-Literal mehr im APP_SHELL-Block.
         for literal in dev_static_literals:

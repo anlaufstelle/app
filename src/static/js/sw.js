@@ -29,7 +29,13 @@ importScripts("/static/js/url-patterns.js");
 // erweitert; der Bump erzwingt Re-Install + Re-Precache, damit der
 // Kalt-Offline-Pfad (/events/new/, /workitems/new/) den neuen Erfassungs-Shell
 // findet statt der /offline/-Sackgasse.
-const CACHE_NAME = "anlaufstelle-v20";
+// Refs #1533 (#1499, SI-5): v20 -> v21 -- APP_SHELL um die pk-lose
+// Personenlisten-Shell (OFFLINE_CLIENT_LIST_SHELL_URL = /offline/clients/) und
+// ihren Renderer (offline-client-list.js) erweitert; der SW serviert die Liste
+// offline IN-PLACE an der kanonischen URL /clients/ (neuer CLIENT_LIST-Zweig).
+// Der Bump erzwingt Re-Install + Re-Precache, damit der Kalt-Offline-Pfad
+// (/clients/) den neuen Listen-Shell findet statt der /offline/-Home.
+const CACHE_NAME = "anlaufstelle-v21";
 // Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
 // ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
 // auch beim ersten Offline-Aufruf garantiert verfuegbar ist.
@@ -46,6 +52,11 @@ const OFFLINE_CONFLICT_SHELL_URL = "/offline/conflict-shell/";
 // (offline) — statt Bounce auf /offline/. Muster wie OFFLINE_CLIENT_SHELL_URL.
 const OFFLINE_EVENT_SHELL_URL = "/offline/event-shell/";
 const OFFLINE_WORKITEM_SHELL_URL = "/offline/workitem-shell/";
+// Refs #1533 (#1499, SI-5): generische, pk-lose Personenlisten-Shell fuer das
+// In-Place-Rendern an der kanonischen URL /clients/ (offline) — statt Bounce
+// auf /offline/. Muster wie OFFLINE_CLIENT_SHELL_URL; die Shell selbst ist PII-
+// frei, offline-client-list.js fuellt sie aus der verschluesselten IndexedDB.
+const OFFLINE_CLIENT_LIST_SHELL_URL = "/offline/clients/";
 // Refs #1386: Timeouts gegen Lie-Fi (Verbindung meldet sich als "online",
 // haengt aber ohne Antwort/Fehler). Ohne Timeout haengt respondWith()
 // endlos, statt in die vorhandenen Queue-/Offline-Fallback-Ketten zu laufen.
@@ -106,6 +117,12 @@ const APP_SHELL = [
     // ohne Renderer.
     "/static/js/offline-form-fields.js",
     "/static/js/offline-create.js",
+    // Refs #1533 (#1499, SI-5): Die pk-lose Personenlisten-Shell (offline_list.html)
+    // rendert ueber offline-client-list.js; das Modul wird NUR vom Listen-Template
+    // geladen (sonst nirgends -> nicht per stale-while-revalidate gecacht). Ohne
+    // Pre-Cache bliebe der Kalt-Offline-Pfad (/clients/) nach einem SW-Update ohne
+    // Renderer.
+    "/static/js/offline-client-list.js",
     // Refs #1396: Die Konflikt-/Dead-Letter-Verwaltung (/offline/conflicts/)
     // und der pk-lose Review-Shell rendern client-seitig aus der
     // verschluesselten IndexedDB. Ihre Renderer werden NUR von den
@@ -159,6 +176,9 @@ const APP_SHELL = [
     // /events/new/ bzw. /workitems/new/ serviert (Fallback-Zweige unten).
     OFFLINE_EVENT_SHELL_URL,
     OFFLINE_WORKITEM_SHELL_URL,
+    // Refs #1533 (#1499, SI-5): pk-lose Personenlisten-Shell — offline IN-PLACE
+    // an /clients/ serviert (CLIENT_LIST-Fallback-Zweig unten).
+    OFFLINE_CLIENT_LIST_SHELL_URL,
     // Refs #1396: pk-lose Konflikt-Liste — public + datenlos, wird offline
     // ueber die generische caches.match(request)-Fallback-Stufe serviert.
     "/offline/conflicts/",
@@ -519,6 +539,22 @@ self.addEventListener("fetch", (event) => {
                 if (self.URL_PATTERNS.WORKITEM_NEW.test(request.url)) {
                     return caches
                         .match(OFFLINE_WORKITEM_SHELL_URL)
+                        .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
+                }
+                // Refs #1533 (#1499, SI-5): Personenlisten-Sonderfall — den
+                // gecachten, pk-losen Listen-Shell IN-PLACE an der kanonischen
+                // URL /clients/ servieren (200, KEIN Redirect); offline-client-
+                // list.js liest die mitgenommenen Personen aus der
+                // verschluesselten IndexedDB. Dieser Zweig steht bewusst NACH dem
+                // HTMX-Such-Swap-Sonderfall oben (ein HX-Request hat da bereits
+                // mit dem Partial-Banner returnt — sonst kaperte die Voll-Shell
+                // die HTMX-Livesuche-Swaps in #client-table) und VOR der
+                // generischen caches.match(request.url)-Stufe, die sonst die
+                // /offline/-Home statt der echten Liste liefern wuerde. Muster
+                // wie die OFFLINE_*_SHELL_URL-Zweige darueber.
+                if (self.URL_PATTERNS.CLIENT_LIST.test(request.url)) {
+                    return caches
+                        .match(OFFLINE_CLIENT_LIST_SHELL_URL)
                         .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
                 }
                 // Refs #1396: nach der URL (nicht dem Live-Request) matchen. Die

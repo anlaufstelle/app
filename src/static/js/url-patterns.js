@@ -10,6 +10,15 @@
     "use strict";
     var UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
     var CLIENT_DETAIL_RE = new RegExp("/clients/(" + UUID + ")/(?:$|\\?)", "i");
+    // Refs #1533 (#1499, SI-5): die kanonische Personenlisten-URL /clients/
+    // (mit optionalem ?query). Bewusst OHNE ^-Anker (request.url ist eine volle
+    // URL) und mit exaktem Terminator ``(?:$|\?)`` — genau wie CLIENT_DETAIL_RE,
+    // nur ohne pk-Segment. So matcht GENAU /clients/ und /clients/?…, aber NICHT
+    // /clients/new/, /clients/<uuid>/, /clients/trash/, /partials/clients/
+    // autocomplete/ oder /offline/clients/<uuid>/ (nach /clients/ folgt dort ein
+    // Segment, kein Terminator). Der SW serviert offline an dieser URL die
+    // gecachte, pk-lose Listen-Shell IN-PLACE (kein Redirect).
+    var CLIENT_LIST_RE = new RegExp("/clients/(?:$|\\?)", "i");
     // Refs #1396: pk-behaftete Konflikt-Review-URL (/offline/conflicts/<uuid>/).
     // Bewusst mit dem /offline/conflicts/-Praefix, damit die pk-lose Liste
     // (/offline/conflicts/) NICHT matcht und extractClientPk Konflikt-URLs
@@ -25,6 +34,7 @@
         // der Detailseite, unter dem /partials/-Praefix (urls.py).
         WORKITEM_STATUS: new RegExp("/partials/workitems/" + UUID + "/status/", "i"),
         CLIENT_DETAIL: CLIENT_DETAIL_RE,
+        CLIENT_LIST: CLIENT_LIST_RE,
         CONFLICT_REVIEW: CONFLICT_REVIEW_RE,
         // Refs #751: Attachment-Downloads liefern Binärdaten, dürfen nicht
         // durch die HTML-Offline-Fallback-Kette ersetzt werden (sonst sieht
