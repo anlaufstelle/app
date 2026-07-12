@@ -115,6 +115,17 @@
             async init() {
                 this.createOccurredAt = _nowLocalInput();
                 try {
+                    // Refs #1524 (#1499, SI-7): Auf die eager Krypto-Hydration
+                    // warten, BEVOR aus dem verschluesselten Store gelesen wird.
+                    // Ohne dieses await liest der Kalt-Offline-Shell-Load das
+                    // Facility-Bundle waehrend die IndexedDB-Schluessel-Hydration
+                    // (crypto.js `initialLoad`) noch laeuft → TRANSIENT-Decrypt →
+                    // null → faelschlich der "nicht vorbereitet"-Edge-Fallback,
+                    // obwohl das Bundle gecacht ist. Spiegel von
+                    // offline-client-view.js `load()`.
+                    if (window.crypto_session && window.crypto_session.ready) {
+                        await window.crypto_session.ready();
+                    }
                     const store = window.offlineStore;
                     if (store && store.getOfflineFacility) {
                         this.facility = await store.getOfflineFacility();
@@ -290,6 +301,13 @@
                 this.wiRemindMin = this.wiDateMin;
                 this.wiValues = _emptyWorkItemValues();
                 try {
+                    // Refs #1524 (#1499, SI-7): siehe offlineEventCreate.init —
+                    // erst auf die Krypto-Hydration warten, dann lesen (sonst
+                    // zeigt der Kalt-Offline-WorkItem-Shell-Load faelschlich den
+                    // Unavailable-Fallback statt Form bzw. Assistenz-Gate).
+                    if (window.crypto_session && window.crypto_session.ready) {
+                        await window.crypto_session.ready();
+                    }
                     const store = window.offlineStore;
                     if (store && store.getOfflineFacility) {
                         this.facility = await store.getOfflineFacility();
