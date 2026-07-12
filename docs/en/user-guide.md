@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-07-07 (v0.16.0), § 8 offline section only (#1417).
+> The German version is the authoritative source. Last synced: 2026-07-11 (Offline V2 Wave 1, #1499), § 8 offline section only (#1417).
 
 # Anlaufstelle -- User Guide
 
@@ -603,6 +603,10 @@ For assignments without a reliable internet connection -- for example, outreach 
 
 - Open a taken-along client as usual via their detail page -- the view stays at the **normal address** and is built from the encrypted offline store (no separate "offline" link anymore).
 - You can **record new events** (via **"New Contact"**) and **edit existing ones**; entries are stored encrypted locally (AES-GCM-256; the key is derived from your password) and sent automatically once you are back online. **File attachments** cannot be captured offline -- add them once you are back online.
+- **Capture anywhere offline (since Wave 1, #1499):** you no longer need an **open client dossier**. Offline, tap **"Document contact"** or **"Create task"** in the **"+" menu** (or open the forms `/events/new/` / `/workitems/new/` directly) -- a real capture form opens **at the usual address**: pick a document type, optionally assign a client you took offline, and save. The old "only within the dossier" dead end (#1483/#1485) is gone.
+- **Contacts without a client** (anonymous contacts) and **standalone tasks** can now be **started offline too** -- choose **"-- no client --"** in the client picker. If the chosen document type requires a contact stage, "no client" is disabled; assign a taken-along client instead (the server re-checks the contact stage on sync).
+- **Task capture is staff-only.** As an assistant, opening the task form offline shows a note instead of the fields -- so no entry is created that would be rejected on sync.
+- If nothing has been **prepared for offline capture** yet (the facility was never opened online, the local cache is empty, or the installed app is not updated yet), the form shows a short **"open it once online"** hint instead of the fields.
 - The interface shows a hint that you are working offline and how many entries are still waiting to be synced.
 
 **Back online:**
@@ -838,5 +842,5 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.20.0 -->
 <!-- translation-date: 2026-06-12 -->
-<!-- source-hash: 0d43b34 -->
+<!-- source-hash: f8e4603 -->
 

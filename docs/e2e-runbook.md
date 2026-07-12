@@ -303,7 +303,11 @@ DJANGO_SETTINGS_MODULE=anlaufstelle.settings.e2e \
 
 ```bash
 # Einzelner Test
-make test-e2e ARGS="-x src/tests/e2e/test_cases.py::TestCaseCRUD::test_create_case"
+# Hinweis: `make test-e2e` nimmt KEINE ARGS/T-Variable entgegen (das Target ist
+# `pytest -m e2e --browser chromium -v` ohne Platzhalter). Fuer einen einzelnen
+# Test/eine Datei pytest direkt aufrufen:
+.venv/bin/python -m pytest -m e2e --browser chromium -v \
+  -x src/tests/e2e/test_cases.py::TestCaseCRUD::test_create_case
 
 # Ganze Datei
 .venv/bin/python -m pytest -m e2e --browser chromium -v \

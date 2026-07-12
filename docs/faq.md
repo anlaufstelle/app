@@ -291,7 +291,9 @@ Ja — seit v0.10 gibt es einen sicheren **Offline-Modus** für Streetwork und m
 
 **Wichtig — Daten können verloren gehen:** Bei **Logout, Passwort-Änderung oder längerer Inaktivität (Session-Ablauf)** werden die lokal gespeicherten Offline-Daten unlesbar. Das bloße **Schließen des Tabs** löscht dagegen nichts — der Schlüssel wird beim erneuten Öffnen innerhalb der Session-Lebenszeit wiederhergestellt (Streetwork-Design, #1065/#1324). Daher gilt: **Erst synchronisieren, dann ausloggen!**
 
-**Einschränkungen:** Datei-Anhänge (siehe FAQ #9) sind offline nicht möglich — das ist eine bewusste Sicherheitsentscheidung. Kontakte **ohne Personenbezug** (anonyme Kontakte) lassen sich offline **nicht neu beginnen** — nur wenn das Kontakt-Formular beim Verbindungsabriss bereits geöffnet war, wird die Eingabe verschlüsselt zwischengespeichert und automatisch nachgesendet (ein eigener Offline-Einstieg dafür ist offen: #1485); die Offline-Erfassung von Kontakten und Aufgaben findet ansonsten im Dossier der jeweils „mitgenommenen" Person statt.
+**Erfassung überall offline (seit, #1499):** Sie können offline auch **ohne vorher geöffnetes Dossier** erfassen — über das **„+"-Menü** („Kontakt dokumentieren"/„Aufgabe erstellen") öffnet sich an der gewohnten Adresse (`/events/new/` / `/workitems/new/`) eine echte Erfassungsmaske. **Kontakte ohne Personenbezug** (anonyme Kontakte) und **Standalone-Aufgaben** lassen sich damit jetzt **auch offline neu beginnen** (Auswahl „— ohne Person —"); erfordert der Dokumentationstyp eine Kontaktstufe, ordnen Sie eine „mitgenommene" Person zu. Die frühere Sackgasse (#1483/#1485) entfällt.
+
+**Einschränkungen:** Datei-Anhänge (siehe FAQ #9) sind offline nicht möglich — das ist eine bewusste Sicherheitsentscheidung. Die Aufgaben-Erfassung ist Fachkräften vorbehalten (Assistenz sieht offline statt der Aufgaben-Maske einen Hinweis). Ist für die Offline-Erfassung noch nichts vorbereitet (Einrichtung nie online geöffnet, leerer Cache, App noch nicht aktualisiert), zeigt die Maske einen kurzen „einmal online öffnen"-Hinweis.
 
 ---
 
