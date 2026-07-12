@@ -49,7 +49,10 @@
     // core/services/system/offline.py synchron gehalten werden (kein
     // Build-Sync, analog TTL_MS/BUNDLE_TTL_SECONDS oben) -- ein Mismatch
     // zwingt den Lesepfad zum Purge, siehe _isSchemaMismatch.
-    const BUNDLE_SCHEMA_VERSION = 1;
+    // SI-1 (#1529/#1499): v1->v2 (client.lastContact neu im Bundle) -- Alt-v1-
+    // Bundles fallen dadurch im getOfflineClient/listOfflineClientsDetailed-
+    // Gate raus und werden gepurged.
+    const BUNDLE_SCHEMA_VERSION = 2;
     // SI-2 (#1520/#1499): eigene Schema-Version fuers personenlose
     // Facility-Meta-Bundle -- UNABHAENGIG von BUNDLE_SCHEMA_VERSION (Klient),
     // damit beide Bundles getrennt evolvieren koennen. Muss mit

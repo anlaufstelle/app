@@ -19,10 +19,11 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
+from django.db.models import Max
 from django.utils import timezone
 
 from core.models import Case as CaseModel
-from core.models import DocumentType, Event, User, WorkItem
+from core.models import Client, DocumentType, Event, User, WorkItem
 from core.services.compliance import allowed_sensitivities_for_user, user_can_see_field
 from core.services.file_vault import safe_decrypt
 
@@ -36,8 +37,11 @@ BUNDLE_TTL_SECONDS = 48 * 3600
 
 # Schema version embedded in the bundle. Increment whenever the bundle layout
 # changes in a non-backwards-compatible way so the client can purge stale
-# caches after an app upgrade.
-BUNDLE_SCHEMA_VERSION = 1
+# caches after an app upgrade. MUSS mit ``BUNDLE_SCHEMA_VERSION`` in
+# ``src/static/js/offline-store.js`` synchron bleiben (kein Build-Sync).
+# v1->v2 (SI-1, #1529/#1499): ``client.last_contact`` neu im Bundle -> ein
+# Alt-v1-Bundle wird beim naechsten Read/Listing per Schema-Mismatch gepurged.
+BUNDLE_SCHEMA_VERSION = 2
 
 # Refs #1518 (#1499): eigene Schema-Version fuer das personenlose Facility-Meta-
 # Bundle. Bewusst UNABHAENGIG von ``BUNDLE_SCHEMA_VERSION`` — Klient- und
@@ -273,6 +277,20 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
         .order_by("-created_at")
     )
 
+    # SI-1 (#1529, #1499): ``last_contact`` fuer die Offline-Personenliste —
+    # BEWUSST cutoff- UND is_deleted-FREI, exakt die Online-Spalten-Annotation
+    # aus ``ClientListView`` (views/clients.py: ``Max("events__occurred_at")``),
+    # damit der offline gezeigte Wert dem Online-Listenwert 1:1 entspricht.
+    # NICHT aus der oben gefilterten 90-Tage-``events``-Liste ableiten: die
+    # waere fuer >90d zurueckliegende oder geloeschte Kontakte falsch. Der
+    # ``Max``-Join ueber die reverse ``events``-Relation ignoriert jeden
+    # Manager-Filter (raw SQL join) — genau wie die Online-Annotation, die
+    # deshalb ebenfalls geloeschte Events einschliesst. ``None`` (kontaktloser
+    # Klient) bleibt JSON-clean ``None``, sonst ISO-8601-String.
+    last_contact = Client.objects.filter(pk=client.pk).aggregate(
+        last_contact=Max("events__occurred_at"),
+    )["last_contact"]
+
     generated_at = timezone.now()
 
     return {
@@ -289,6 +307,7 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
             "age_cluster_display": client.get_age_cluster_display(),
             "notes": client.notes if is_staff_or_above else "",
             "is_active": client.is_active,
+            "last_contact": last_contact.isoformat() if last_contact else None,
         },
         "cases": [_serialize_case(user, c) for c in cases],
         "workitems": [_serialize_workitem(user, w) for w in workitems],

@@ -27,8 +27,9 @@ class TestBundleEnvelope:
 
     def test_schema_version_constant_is_set(self, facility, client_identified, staff_user):
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
-        # Mutation BUNDLE_SCHEMA_VERSION 1→2 oder Verschmelzung mit anderem Key.
-        assert bundle["schema_version"] == BUNDLE_SCHEMA_VERSION == 1
+        # SI-1 (#1529/#1499): Schema-Bump 1->2 (Purge der Alt-v1-Bundles).
+        # Mutation BUNDLE_SCHEMA_VERSION 2->x oder Verschmelzung mit anderem Key.
+        assert bundle["schema_version"] == BUNDLE_SCHEMA_VERSION == 2
 
     def test_ttl_is_48_hours_in_seconds(self, facility, client_identified, staff_user):
         bundle = build_client_offline_bundle(staff_user, facility, client_identified)
@@ -87,6 +88,9 @@ class TestBundleClientFields:
             "age_cluster_display",
             "notes",
             "is_active",
+            # SI-1 (#1529/#1499): Letzter-Kontakt-Spaltenwert fuer die
+            # Offline-Personenliste (Max(events__occurred_at), wie ClientListView).
+            "last_contact",
         }
 
     def test_client_pk_is_stringified_uuid(self, facility, client_identified, staff_user):

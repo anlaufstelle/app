@@ -74,6 +74,128 @@ class TestBuildClientOfflineBundleService:
         assert bundle["ttl"] == 48 * 3600
         assert bundle["client"]["pk"] == str(client_identified.pk)
 
+    def test_bundle_schema_version_is_2(self, facility, client_identified, staff_user):
+        """SI-1 (#1529, #1499): Schema-Bump 1->2 zwingt den JS-Lesepfad, alte
+        v1-Bundles zu purgen (``_isSchemaMismatch`` in offline-store.js)."""
+        assert BUNDLE_SCHEMA_VERSION == 2
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        assert bundle["schema_version"] == 2
+
+    def test_bundle_client_last_contact_is_max_event(self, facility, client_identified, doc_type_contact, staff_user):
+        """SI-1: ``last_contact`` = juengstes ``occurred_at`` als ISO-String."""
+        from datetime import timedelta
+
+        older = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now() - timedelta(days=30),
+            data_json={},
+            created_by=staff_user,
+        )
+        newest = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now() - timedelta(days=2),
+            data_json={},
+            created_by=staff_user,
+        )
+        older.refresh_from_db()
+        newest.refresh_from_db()
+
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        assert bundle["client"]["last_contact"] == newest.occurred_at.isoformat()
+        assert bundle["client"]["last_contact"] != older.occurred_at.isoformat()
+
+    def test_bundle_client_last_contact_none_without_events(self, facility, client_identified, staff_user):
+        """SI-1: kontaktloser Klient -> ``last_contact`` ist ``None`` (JSON-clean,
+        keine Serialisierung eines fehlenden Werts)."""
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        assert bundle["client"]["last_contact"] is None
+
+    def test_bundle_last_contact_is_cutoff_free(self, facility, client_identified, doc_type_contact, staff_user):
+        """SI-1: ``last_contact`` ist CUTOFF-FREI — ein Event aelter als
+        ``LOOKBACK_DAYS`` faellt zwar aus der 90-Tage-``events``-Liste, bestimmt
+        aber weiterhin ``last_contact`` (Semantik der Online-Spalte, NICHT der
+        gecachten Event-Liste)."""
+        from datetime import timedelta
+
+        from core.services.system import LOOKBACK_DAYS
+
+        old = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now() - timedelta(days=LOOKBACK_DAYS + 10),
+            data_json={},
+            created_by=staff_user,
+        )
+        old.refresh_from_db()
+
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        # Zu alt fuer die events-Liste ...
+        assert bundle["events"] == []
+        # ... aber last_contact spiegelt es trotzdem (cutoff-frei).
+        assert bundle["client"]["last_contact"] == old.occurred_at.isoformat()
+
+    def test_bundle_last_contact_matches_online_clientlistview_annotation(
+        self, facility, client_identified, doc_type_contact, staff_user
+    ):
+        """SI-1: exakte Semantik-Gleichheit mit der Online-Annotation aus
+        ``ClientListView`` (clients.py:57) — cutoff-FREI und OHNE
+        ``is_deleted``-Filter. Das juengste Event ist bewusst geloescht UND es
+        gibt ein >90d-Event; eine is_deleted- oder cutoff-gefilterte Berechnung
+        wuerde vom Online-Spaltenwert abweichen."""
+        from datetime import timedelta
+
+        from django.db.models import Max
+
+        from core.models import Client
+
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now() - timedelta(days=40),
+            data_json={},
+            created_by=staff_user,
+        )
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now() - timedelta(days=100),
+            data_json={},
+            created_by=staff_user,
+        )
+        deleted_newest = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now() - timedelta(days=1),
+            data_json={},
+            created_by=staff_user,
+            is_deleted=True,
+        )
+        deleted_newest.refresh_from_db()
+
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+
+        # Die exakte Online-Annotation aus ClientListView fuer denselben Klienten.
+        online_value = (
+            Client.objects.for_facility(facility)
+            .filter(is_active=True, is_deleted=False)
+            .annotate(last_contact=Max("events__occurred_at"))
+            .get(pk=client_identified.pk)
+            .last_contact
+        )
+        expected = online_value.isoformat() if online_value else None
+        assert bundle["client"]["last_contact"] == expected
+        # Beweis, dass die Semantik greift: das juengste (geloeschte) Event
+        # bestimmt den Wert — genau wie die filterlose Online-Spalte.
+        assert bundle["client"]["last_contact"] == deleted_newest.occurred_at.isoformat()
+
     def test_bundle_contains_only_visible_events(
         self, facility, client_identified, doc_type_contact, doc_type_high, staff_user
     ):
