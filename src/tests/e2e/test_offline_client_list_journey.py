@@ -217,9 +217,7 @@ def _prepare_cold_offline_list(page, base_url):
     # ihr Renderer muessen im Install-Precache liegen.
     cached = _precached_paths(page)
     assert "/offline/clients/" in cached, f"Listen-Shell nicht im Precache: {cached}"
-    assert "/static/js/offline-client-list.js" in cached, (
-        f"offline-client-list.js nicht im Precache: {cached}"
-    )
+    assert "/static/js/offline-client-list.js" in cached, f"offline-client-list.js nicht im Precache: {cached}"
 
     # Runtime-Cache kalt schalten -> die Shell MUSS jetzt aus dem Precache kommen.
     _isolate_http_cache(page)
@@ -259,9 +257,9 @@ def test_cold_offline_client_list_renders_and_marks_deactivated(browser, base_ur
         _row(page, CLARA_PK).locator("[data-testid='client-row-inactive-badge']").wait_for(
             state="visible", timeout=10000
         )
-        assert not _row(page, ANTON_PK).locator(
-            "[data-testid='client-row-inactive-badge']"
-        ).is_visible(), "Aktive Person darf keine Deaktiviert-Markierung tragen"
+        assert not _row(page, ANTON_PK).locator("[data-testid='client-row-inactive-badge']").is_visible(), (
+            "Aktive Person darf keine Deaktiviert-Markierung tragen"
+        )
 
         # Detail-Link der deaktivierten Person -> offline in-place ins Dossier
         # (kanonische /clients/<pk>/-URL, kein /offline/-Split).

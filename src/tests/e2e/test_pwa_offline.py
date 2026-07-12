@@ -469,9 +469,9 @@ def test_offline_clients_shell_filters_by_pseudonym(browser, base_url):
             "() => document.querySelectorAll('[data-testid=client-row]').length === 1",
             timeout=10000,
         )
-        page.locator(
-            '[data-testid="client-row"][data-pk="11111111-1111-4111-8111-111111111111"]'
-        ).wait_for(state="visible", timeout=10000)
+        page.locator('[data-testid="client-row"][data-pk="11111111-1111-4111-8111-111111111111"]').wait_for(
+            state="visible", timeout=10000
+        )
 
         # Leeren -> wieder beide.
         search.fill("")

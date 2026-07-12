@@ -260,9 +260,7 @@ class TestServiceWorkerCachesClientListShell:
         body = response.content.decode()
         shell_block = _app_shell_block(body)
         assert "/offline/clients/" in body, "Offline-Personenlisten-Shell (/offline/clients/) fehlt im APP_SHELL."
-        assert "OFFLINE_CLIENT_LIST_SHELL_URL" in shell_block, (
-            "OFFLINE_CLIENT_LIST_SHELL_URL fehlt im APP_SHELL-Array."
-        )
+        assert "OFFLINE_CLIENT_LIST_SHELL_URL" in shell_block, "OFFLINE_CLIENT_LIST_SHELL_URL fehlt im APP_SHELL-Array."
         assert "/static/js/offline-client-list.js" in shell_block, "offline-client-list.js fehlt im APP_SHELL."
 
     def test_sw_serves_client_list_shell_fallback_before_generic_offline(self, client):
