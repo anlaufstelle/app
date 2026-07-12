@@ -468,6 +468,11 @@ EXPECTATIONS = (
     # Refs #1322: pk-loser Shell fuer In-Place-Offline-Rendern. Public wie
     # offline_fallback — PII-frei, muss via SW cache.addAll cachebar sein.
     E("core:offline_client_shell", "public", get=ALL_AUTH, anonymous_ok=True),
+    # Refs #1531 (#1499): pk-lose Offline-Personenlisten-Shell.
+    # Public wie offline_client_shell — PII-frei (die Liste liegt
+    # verschluesselt in IDB), muss via SW cache.addAll pre-cachebar sein.
+    # Same-commit-as-URL (authz-Completeness-Gate).
+    E("core:offline_client_list_shell", "public", get=ALL_AUTH, anonymous_ok=True),
     # Refs #1521 (#1499): pk-lose Offline-Event-Create-Shell. Public wie
     # offline_client_shell — PII-frei (Katalog liegt verschluesselt in IDB),
     # muss via SW cache.addAll pre-cachebar sein. Same-commit-as-URL

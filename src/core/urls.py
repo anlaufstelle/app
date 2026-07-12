@@ -63,6 +63,7 @@ from core.views.lockout_recovery import (
 from core.views.offline import (
     OfflineClientBundleView,
     OfflineClientDetailView,
+    OfflineClientListShellView,
     OfflineClientShellView,
     OfflineConflictListView,
     OfflineConflictReviewView,
@@ -286,6 +287,17 @@ urlpatterns = [
         "api/v1/offline/csrf/",
         OfflineCsrfTokenView.as_view(),
         name="offline_csrf",
+    ),
+    # Refs #1531 (#1499): generischer, pk-loser Shell fuer In-Place-
+    # Offline-Rendern der Personenliste an der kanonischen URL /clients/
+    # (Service Worker serviert ihn offline) — Muster #1322. MUSS vor
+    # offline_client_detail stehen (Liste vor Detail, wie clients/ vor
+    # clients/<uuid:pk>/ online) — kollidiert nicht: literal ohne pk-Segment
+    # vs. <uuid:pk>-Segment sind disjunkte Patterns.
+    path(
+        "offline/clients/",
+        OfflineClientListShellView.as_view(),
+        name="offline_client_list_shell",
     ),
     path(
         "offline/clients/<uuid:pk>/",

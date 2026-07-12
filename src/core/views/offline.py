@@ -295,6 +295,35 @@ class OfflineWorkItemCreateShellView(View):
         return render(request, "core/workitems/offline_create.html", {})
 
 
+class OfflineClientListShellView(View):
+    """Generic, pk-less scaffold for IN-PLACE offline rendering of the client
+    list at the canonical ``/clients/`` URL (Refs #1531, #1499,
+    Muster #1322).
+
+    The Service Worker pre-caches this shell and serves it for offline
+    navigations to the client-list page **without** redirecting to
+    ``/offline/`` — so the URL stays canonical and the offline/online split
+    disappears. ``offline-client-list.js`` then reads the offline-taken
+    clients from IndexedDB (``listOfflineClientsDetailed``) and renders the
+    standard ``role=table`` list client-side, including client-side search/
+    filter (no HTMX live-search offline — the server would need to render
+    HTML, which is unavailable without network).
+
+    Public on purpose, exactly like :class:`OfflineClientShellView`: the
+    shell carries no PII (the list is decrypted client-side from IndexedDB)
+    and must be pre-cacheable via the SW ``cache.addAll`` — an auth gate
+    would make the install-time fetch redirect to ``/login/`` and fail
+    ``addAll`` atomically (killing the whole precache). Online this view is
+    never reached: the SW only serves it on a network failure for
+    ``/clients/``.
+    """
+
+    http_method_names = ["get"]
+
+    def get(self, request):
+        return render(request, "core/clients/offline_list.html", {})
+
+
 class OfflineConflictReviewView(AssistantOrAboveRequiredMixin, View):
     """Shell page for the merge-UI at ``/offline/conflicts/<uuid>/``.
 

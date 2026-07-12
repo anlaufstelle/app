@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Personen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+{# Refs #1531 (#1499 SI-3): pk-loser Shell fuer In-Place-Offline-  #}
+{# Rendern der Personenliste an der kanonischen URL /clients/ (SI-5). Kein  #}
+{# PII im Scaffold — der Alpine-Renderer (SI-4/SI-6) liest die mitgenommenen #}
+{# Personen client-seitig aus IndexedDB und spiegelt partials/table.html.   #}
+<div data-testid="offline-client-list">
+    <div class="mb-4 flex items-center space-x-2">
+        <span class="badge bg-yellow-100 text-yellow-800">{% trans "Offline-Ansicht" %}</span>
+    </div>
+</div>
+{% endblock %}
