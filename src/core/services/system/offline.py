@@ -23,7 +23,7 @@ from django.utils import timezone
 
 from core.models import Case as CaseModel
 from core.models import DocumentType, Event, User, WorkItem
-from core.services.compliance import user_can_see_field
+from core.services.compliance import allowed_sensitivities_for_user, user_can_see_field
 from core.services.file_vault import safe_decrypt
 
 # Include at most this many events per client, or all events within the
@@ -321,7 +321,20 @@ def build_facility_offline_bundle(user, facility) -> dict[str, Any]:
 
     # Personenlos: nur der aktive Offline-Create-Katalog (wie EventMetaForm),
     # ohne Event-Vereinigung (kein Klient ⇒ keine referenzierten Alt-Typen).
-    doc_types = DocumentType.objects.filter(facility=facility, is_active=True).order_by("sort_order", "name")
+    # Refs #1518 (Review MEDIUM): denselben DocType-EBENEN-Sensitivity-Filter
+    # anwenden, den das Online-``EventMetaForm`` fuehrt (forms/events.py:
+    # ``sensitivity__in=allowed_sensitivities_for_user(user)``). Ohne ihn wuerde
+    # NAME/Metadaten eines HIGH/ELEVATED-DocType offline an niedrigere Rollen
+    # leaken und in SI-4s Create-Picker auftauchen — Verstoss gegen die
+    # Bundle-ist-Derivat-Invariante. So traegt das Bundle nur die *erstellbaren*
+    # Typen (echtes Derivat des Online-Create-Formulars). Der bestehende
+    # ``user_can_see_field``-Filter in ``_serialize_document_type`` bleibt die
+    # zweite (Feld-EBENEN-)Grenze.
+    doc_types = (
+        DocumentType.objects.filter(facility=facility, is_active=True)
+        .filter(sensitivity__in=allowed_sensitivities_for_user(user))
+        .order_by("sort_order", "name")
+    )
 
     is_staff_or_above = getattr(user, "is_staff_or_above", False)
 

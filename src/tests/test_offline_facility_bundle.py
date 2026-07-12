@@ -68,6 +68,28 @@ def doc_type_qualified_only(facility):
     )
 
 
+@pytest.fixture
+def doc_type_high(facility):
+    """Active HIGH-sensitivity DocumentType (only Lead/Admin may create it)."""
+    return DocumentType.objects.create(
+        facility=facility,
+        category=DocumentType.Category.SERVICE,
+        sensitivity=DocumentType.Sensitivity.HIGH,
+        name="Suizidgefaehrdung-GEHEIM",
+    )
+
+
+@pytest.fixture
+def doc_type_elevated(facility):
+    """Active ELEVATED-sensitivity DocumentType (Staff+ may create it)."""
+    return DocumentType.objects.create(
+        facility=facility,
+        category=DocumentType.Category.SERVICE,
+        sensitivity=DocumentType.Sensitivity.ELEVATED,
+        name="Krisenintervention-ELEVATED",
+    )
+
+
 @pytest.mark.django_db
 class TestBuildFacilityOfflineBundleService:
     """Service-level invariants independent of the HTTP layer."""
@@ -156,6 +178,59 @@ class TestBuildFacilityOfflineBundleService:
         (``canCreateWorkItem``) an eine nicht-leere Liste."""
         bundle = build_facility_offline_bundle(assistant_user, facility)
         assert bundle["assignable_users"] == []
+
+
+@pytest.mark.django_db
+class TestFacilityBundleDocTypeSensitivityFilter:
+    """Refs #1518 (Review MEDIUM): der DocType-Katalog des Facility-Bundles muss
+    denselben DocType-EBENEN-Sensitivity-Filter durchlaufen wie das Online-
+    ``EventMetaForm`` (``sensitivity__in=allowed_sensitivities_for_user``,
+    ``forms/events.py``). Sonst leakt der NAME/die Metadaten eines HIGH/ELEVATED-
+    DocType offline an niedrigere Rollen und wuerden in SI-4s Create-Picker
+    auftauchen — Verstoss gegen die Bundle-ist-Derivat-Invariante. Das Bundle
+    darf also nur die *erstellbaren* Typen tragen (Derivat des Online-Create-
+    Formulars), nicht bloss die feld-gefilterten.
+
+    Rollen-Rang (ROLE_MAX_SENSITIVITY): Assistant=NORMAL, Staff=ELEVATED,
+    Lead/Admin=HIGH.
+    """
+
+    @staticmethod
+    def _dt_pks(bundle):
+        return {dt["pk"] for dt in bundle["document_types"]}
+
+    def test_high_doctype_absent_for_assistant(self, facility, assistant_user, doc_type_high):
+        """Assistant (max NORMAL) darf einen HIGH-DocType weder als Eintrag noch
+        als Namens-Leak irgendwo im Bundle-JSON sehen."""
+        bundle = build_facility_offline_bundle(assistant_user, facility)
+        assert str(doc_type_high.pk) not in self._dt_pks(bundle)
+        assert doc_type_high.name not in json.dumps(bundle, default=str)
+
+    def test_elevated_doctype_absent_for_assistant(self, facility, assistant_user, doc_type_elevated):
+        """Assistant (max NORMAL) darf auch einen ELEVATED-DocType nicht sehen."""
+        bundle = build_facility_offline_bundle(assistant_user, facility)
+        assert str(doc_type_elevated.pk) not in self._dt_pks(bundle)
+        assert doc_type_elevated.name not in json.dumps(bundle, default=str)
+
+    def test_high_doctype_absent_for_staff(self, facility, staff_user, doc_type_high):
+        """Staff (max ELEVATED) darf einen HIGH-DocType nicht sehen."""
+        bundle = build_facility_offline_bundle(staff_user, facility)
+        assert str(doc_type_high.pk) not in self._dt_pks(bundle)
+        assert doc_type_high.name not in json.dumps(bundle, default=str)
+
+    def test_elevated_doctype_present_for_staff(self, facility, staff_user, doc_type_elevated):
+        """Staff (max ELEVATED) darf einen ELEVATED-DocType erstellen ⇒ er MUSS
+        im Bundle sein (Gegenprobe: der Filter darf nicht zu scharf sein)."""
+        bundle = build_facility_offline_bundle(staff_user, facility)
+        assert str(doc_type_elevated.pk) in self._dt_pks(bundle)
+
+    def test_high_and_elevated_doctypes_present_for_lead(self, facility, lead_user, doc_type_high, doc_type_elevated):
+        """Lead (max HIGH) sieht beide berechtigten Typen — der Filter blendet
+        nur oberhalb des Rollen-Rangs aus."""
+        bundle = build_facility_offline_bundle(lead_user, facility)
+        pks = self._dt_pks(bundle)
+        assert str(doc_type_high.pk) in pks
+        assert str(doc_type_elevated.pk) in pks
 
 
 @pytest.mark.django_db
