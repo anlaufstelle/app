@@ -6033,3 +6033,18 @@ msgstr "dauerhafter Speicher: nicht gewährt"
 #. Refs #1412 (M17b): Quota-/Persist-Status-Anzeige im Offline-Arbeitsplatz
 msgid "dauerhafter Speicher: nicht unterstützt"
 msgstr "dauerhafter Speicher: nicht unterstützt"
+
+#. Refs #1494 (#1544): statischer Selbsthilfe-Text der /offline/-Fallback-Seite
+#: src/templates/offline.html
+msgid "Keine lokale Ansicht verfügbar"
+msgstr "Keine lokale Ansicht verfügbar"
+
+#. Refs #1494 (#1544): statischer Selbsthilfe-Text der /offline/-Fallback-Seite
+#: src/templates/offline.html
+msgid "Diese Seite erscheint nur, wenn für die aufgerufene Adresse keine lokale Ansicht vorliegt. Ihre offline mitgenommenen Personen, Aufgaben und der Zeitstrom bleiben an ihren gewohnten Adressen offline verfügbar."
+msgstr "Diese Seite erscheint nur, wenn für die aufgerufene Adresse keine lokale Ansicht vorliegt. Ihre offline mitgenommenen Personen, Aufgaben und der Zeitstrom bleiben an ihren gewohnten Adressen offline verfügbar."
+
+#. Refs #1494 (#1544): statischer Selbsthilfe-Text der /offline/-Fallback-Seite
+#: src/templates/offline.html
+msgid "Bitte nutzen Sie einen der Links unten. Falls das Problem bestehen bleibt, laden Sie die Seite einmal online neu."
+msgstr "Bitte nutzen Sie einen der Links unten. Falls das Problem bestehen bleibt, laden Sie die Seite einmal online neu."

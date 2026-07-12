@@ -6399,3 +6399,18 @@ msgstr "Another task"
 #: src/templates/core/workitems/offline_create.html:15
 msgid "Offline-Erfassung"
 msgstr "Offline entry"
+
+#. Refs #1494 (#1544): statischer Selbsthilfe-Text der /offline/-Fallback-Seite
+#: src/templates/offline.html
+msgid "Keine lokale Ansicht verfügbar"
+msgstr "No local view available"
+
+#. Refs #1494 (#1544): statischer Selbsthilfe-Text der /offline/-Fallback-Seite
+#: src/templates/offline.html
+msgid "Diese Seite erscheint nur, wenn für die aufgerufene Adresse keine lokale Ansicht vorliegt. Ihre offline mitgenommenen Personen, Aufgaben und der Zeitstrom bleiben an ihren gewohnten Adressen offline verfügbar."
+msgstr "This page only appears when no local view is available for the address you opened. The persons, tasks and timeline you took offline remain available offline at their usual addresses."
+
+#. Refs #1494 (#1544): statischer Selbsthilfe-Text der /offline/-Fallback-Seite
+#: src/templates/offline.html
+msgid "Bitte nutzen Sie einen der Links unten. Falls das Problem bestehen bleibt, laden Sie die Seite einmal online neu."
+msgstr "Please use one of the links below. If the problem persists, reload the page once while online."

@@ -71,18 +71,46 @@ class TestOfflineFallbackView:
         assert response.status_code == 200
 
     def test_renders_offline_workspace_scaffold(self, client):
-        """Refs #1321: /offline/ ist nicht mehr Sackgasse, sondern Offline-
-        Arbeitsplatz — PII-freies Scaffold + Renderer-Script, das die lokal
-        verfuegbaren Personen aus der verschluesselten IndexedDB fuellt.
+        """Refs #1494 (#1544, #1499): /offline/ ist zum reinen,
+        STATISCHEN Fallback zurueckgebaut. Seit dem SW-Flip (CACHE v22)
+        rendern /clients/, /workitems/ und / offline IN-PLACE ihre eigenen
+        Shells; diese Seite wird nur noch erreicht, wenn keine lokale Ansicht
+        matcht. Die frueher client-seitig gefuellte Personenliste (mitsamt
+        ``offline-home-list``/``offline-home-loading``-Spinner) ist entfernt —
+        die Selbsthilfe steht jetzt statisch im Markup.
         """
         response = client.get(reverse("offline_fallback"))
         body = response.content.decode()
+        # Root-Marker bleibt (viele Tests/SW haengen daran).
         assert 'data-testid="offline-home"' in body
-        # Container, den offline-home.js mit der Personenliste fuellt.
-        assert 'data-testid="offline-home-list"' in body
-        # Renderer + Datenschicht muessen geladen werden (CSP: externe Scripts).
+        # Personenliste + JS-abhaengiger Spinner sind RAUS (Rueckbau #1494).
+        assert 'data-testid="offline-home-list"' not in body
+        assert 'data-testid="offline-home-loading"' not in body
+        assert 'data-testid="offline-home-filter"' not in body
+        # Statische Selbsthilfe-Links (reine <a href>, CSP-konform).
+        assert 'href="/clients/"' in body
+        assert 'href="/workitems/"' in body
+        assert 'href="/"' in body
+        # offline-home.js fuellt weiter die additiven Status-/Storage-Badges.
         assert "offline-home.js" in body
         assert "offline-store.js" in body
+
+    def test_selfhelp_content_is_static_without_js(self, client):
+        """Refs #1494: Der Selbsthilfe-Inhalt (Hinweistext + Navigations-Links)
+        muss STATISCH im gerenderten HTML stehen — sofort sichtbar, ohne dass
+        offline-home.js oder der verschluesselte Store etwas beisteuern. Genau
+        das war der #1494-Bug: Alt-SW-Clients hingen stumm auf dem
+        ``offline-home-loading``-Spinner, wenn der Renderer nie befuellte.
+        """
+        body = client.get(reverse("offline_fallback")).content.decode()
+        # Erklaerender Selbsthilfe-Satz steht direkt im Markup.
+        assert "keine lokale Ansicht vorliegt" in body
+        assert "an ihren gewohnten Adressen offline verfügbar" in body
+        # Alle vier Navigations-Buttons stehen statisch (kein JS noetig).
+        assert 'href="/clients/"' in body  # Personenliste
+        assert 'href="/workitems/"' in body  # Aufgaben
+        assert 'href="/"' in body  # Startseite/Zeitstrom
+        assert 'href=""' in body  # Erneut versuchen (Reload, CSP-konform)
 
 
 @pytest.mark.django_db
@@ -515,7 +543,7 @@ class TestServiceWorkerPrecacheHashedAssets:
             call_command("collectstatic", "--noinput", verbosity=0)
             body = client.get(reverse("offline_fallback")).content.decode()
 
-        for stem in ("dexie.min", "crypto", "offline-store", "offline-home", "url-patterns"):
+        for stem in ("dexie.min", "crypto", "offline-store", "offline-home"):
             assert not re.search(rf'src="/static/js/{re.escape(stem)}\.js"', body), (
                 f"/offline/ referenziert {stem}.js ungehasht — der gehashte Prod-Precache "
                 "(caches.match ist URL-exakt) verfehlt das Skript offline."
@@ -824,55 +852,47 @@ class TestOfflineFallbackI18n:
         _login_with_language(client, staff_user, "en")
         body = client.get(reverse("offline_fallback")).content.decode()
         assert '<html lang="en">' in body
-        assert "Offline workspace" in body  # h1 + <title>
-        assert "Go to home page" in body  # Button (reuse bestehender msgid)
+        # Refs #1494: neuer statischer Fallback-Titel + Selbsthilfe-Links.
+        assert "No local view available" in body  # h1
+        assert "Go to person list" in body  # Button (reuse bestehender msgid)
+        assert "Tasks" in body  # Button (reuse bestehender msgid)
         assert "Try again" in body  # Button (reuse bestehender msgid)
-        assert "Loading offline data" in body  # Lade-Text
         # Kein DE-Leak der uebersetzten Strings.
-        assert "Offline-Arbeitsplatz" not in body
-        assert "Zur Startseite" not in body
+        assert "Keine lokale Ansicht verfügbar" not in body
+        assert "Zur Personenliste" not in body
         assert "Erneut versuchen" not in body
+        # Der alte JS-abhaengige Spinner-Text ist weg (Rueckbau #1494).
+        assert "Loading offline data" not in body
 
     def test_renders_german_for_de_user(self, client, staff_user):
         _login_with_language(client, staff_user, "de")
         body = client.get(reverse("offline_fallback")).content.decode()
         assert '<html lang="de">' in body
-        assert "Offline-Arbeitsplatz" in body
-        assert "Zur Startseite" in body
+        assert "Keine lokale Ansicht verfügbar" in body  # h1
+        assert "Zur Personenliste" in body
         assert "Erneut versuchen" in body
         # Kein EN-Leak.
-        assert "Offline workspace" not in body
-
-    def test_create_hint_localized_en(self, client, staff_user):
-        """Refs #1523 (#1499, SI-6): Der #1483-Wegweiser ist auf einen schmalen
-        Edge-Fallback zurueckgebaut — der SW serviert offline jetzt echte
-        Create-Shells, die /offline/-Home wird nur noch erreicht, wenn der SW
-        noch nicht v20 ist (Rollout-Fenster). Der verbliebene Hinweis ist
-        uebersetzt; EN-Nutzer:innen bekommen keinen deutschen Satz und keinen
-        "geht gar nicht"-Text mehr."""
-        _login_with_language(client, staff_user, "en")
-        body = client.get(reverse("offline_fallback")).content.decode()
-        assert "is not prepared yet" in body
-        assert "open it once online" in body
-        # Kein DE-Leak (weder der neue noch der alte #1483-Wegweiser-Text).
-        assert "noch nicht vorbereitet" not in body
-        assert "Diese Aktion ist offline nicht direkt" not in body
+        assert "No local view available" not in body
 
     def test_anonymous_renders_german_default(self, client):
         """Anonyme Requests → App-Default (DE), Accept-Language ignoriert."""
         body = client.get(reverse("offline_fallback")).content.decode()
         assert '<html lang="de">' in body
-        assert "Offline-Arbeitsplatz" in body
+        assert "Keine lokale Ansicht verfügbar" in body
 
     def test_offline_home_i18n_data_attributes_localized(self, client, staff_user):
-        """Die offline-home.js-Strings kommen als ``data-i18n-*``-Attribute aus
-        dem Template (etabliertes Muster) — offline-home.js liest ``dataset``,
-        kein hartkodiertes JS-Literal mehr."""
+        """Refs #1494: offline-home.js fuellt weiterhin die additiven Status-
+        Badges; deren Strings kommen als ``data-i18n-*``-Attribute aus dem
+        Template (etabliertes Muster) — offline-home.js liest ``dataset``. Die
+        Personenlisten-/Filter-/Create-Hint-Attribute sind mit dem Rueckbau
+        entfernt."""
         _login_with_language(client, staff_user, "en")
         body = client.get(reverse("offline_fallback")).content.decode()
         assert "data-i18n-conflict-one=" in body
         assert "conflict — please resolve" in body  # reuse bestehender msgid
-        assert "No person taken offline." in body  # neu uebersetzt
+        # Personenlisten-/Filter-Attribute sind entfernt.
+        assert "data-i18n-none-taken=" not in body
+        assert "data-i18n-no-match=" not in body
 
 
 @pytest.mark.django_db

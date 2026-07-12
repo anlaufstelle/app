@@ -1,30 +1,27 @@
 /*
- * Offline-Arbeitsplatz-Renderer (Refs #1321).
+ * Offline-Fallback-Statusleiste (Refs #1321, verschlankt #1494).
  *
- * Fuellt die /offline/-Seite (offline.html) client-seitig mit der Liste der
- * lokal verfuegbaren Personen aus der verschluesselten IndexedDB. Laeuft ohne
- * Netz — liest ausschliesslich den Offline-Store. CSP-konform als externes
- * Script (keine Inline-Handler); Pseudonyme werden per textContent gesetzt
- * (kein innerHTML mit Nutzerdaten). Refs #573/#574/#576.
+ * Die /offline/-Seite (offline.html) ist seit dem SW-Flip (CACHE v22) nur noch
+ * terminaler Fallback: /clients/, /workitems/ und / rendern offline IN-PLACE
+ * ihre eigenen Shells. Der Selbsthilfe-Inhalt der Fallback-Seite steht daher
+ * STATISCH im Markup (sofort sichtbar, kein JS noetig). Dieses Script fuellt
+ * nur noch die additiven, rein informativen Status-/Storage-Badges
+ * (nicht-synchronisiert / Konflikt / Belegung / Persist-Status) aus dem
+ * verschluesselten Offline-Store — fail-soft: bei fehlendem Store/Fehler
+ * bleiben die Badge-Zeilen leer (``:empty { display:none }``), die Seite
+ * haengt also nie an einem Spinner. CSP-konform als externes Script (keine
+ * Inline-Handler); Strings kommen als ``data-i18n-*``-Attribute aus dem
+ * Template (Refs #1412, kein hartkodiertes JS-Literal). Refs #573/#574/#576.
  */
 (function () {
     "use strict";
 
     // Refs #1412 (M17): Alle user-sichtbaren Strings kommen als data-i18n-*-
-    // Attribute vom offline-home-Root im Template (offline.html, {% trans %}) —
-    // kein hartkodiertes deutsches JS-Literal mehr. ``{date}`` ist ein
-    // Platzhalter, den der Renderer ersetzt. Leerer Fallback (etabliertes
-    // Muster), falls ein Attribut fehlt.
+    // Attribute vom offline-home-Root im Template (offline.html, {% trans %}).
+    // Leerer Fallback (etabliertes Muster), falls ein Attribut fehlt.
     function t(key) {
         const root = document.querySelector('[data-testid="offline-home"]');
         return (root && root.dataset && root.dataset[key]) || "";
-    }
-
-    function fmtDateTime(value) {
-        if (!value) return "";
-        const d = new Date(value);
-        if (Number.isNaN(d.getTime())) return "";
-        return d.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
     }
 
     function el(tag, opts) {
@@ -35,86 +32,6 @@
         if (opts.testid) node.setAttribute("data-testid", opts.testid);
         if (opts.href) node.setAttribute("href", opts.href);
         return node;
-    }
-
-    function renderEmpty(container, message) {
-        container.replaceChildren();
-        container.appendChild(
-            el("p", { class: "oh-empty", text: message, testid: "offline-home-empty" })
-        );
-    }
-
-    function renderClients(container, clients) {
-        container.replaceChildren();
-        const list = el("ul", { class: "oh-list" });
-        for (const c of clients) {
-            const li = el("li", { class: "oh-item", testid: "offline-home-item" });
-            // Refs #1399: Pseudonym fuer das clientseitige Filtern am <li> ablegen.
-            li.setAttribute("data-pseudonym", c.pseudonym || "");
-            const link = el("a", { class: "oh-link", href: "/offline/clients/" + c.pk + "/" });
-            link.appendChild(
-                el("span", { class: "oh-name", text: c.pseudonym || t("i18nNoPseudonym") })
-            );
-            const parts = [];
-            if (c.lastSynced) parts.push(t("i18nSyncedAt").replace("{date}", fmtDateTime(c.lastSynced)));
-            if (c.expiresAt) parts.push(t("i18nExpiresAt").replace("{date}", fmtDateTime(c.expiresAt)));
-            if (parts.length) {
-                link.appendChild(el("span", { class: "oh-meta", text: parts.join(" · ") }));
-            }
-            li.appendChild(link);
-            list.appendChild(li);
-        }
-        container.appendChild(list);
-    }
-
-    // Refs #1399: Client-seitiges Filtern der (bis zu 20) mitgenommenen Personen
-    // — rein im Renderer, kein Server-/Krypto-Zugriff, CSP-konform
-    // (addEventListener statt Inline-Handler). Blendet <li>s per Pseudonym-
-    // Teilstring ein/aus; bei 0 Treffern ein Hinweis.
-    function applyFilter(query) {
-        const container = document.querySelector('[data-testid="offline-home-list"]');
-        if (!container) return;
-        const q = (query || "").trim().toLowerCase();
-        const items = container.querySelectorAll('[data-testid="offline-home-item"]');
-        let visible = 0;
-        for (const li of items) {
-            const name = (li.getAttribute("data-pseudonym") || "").toLowerCase();
-            const match = !q || name.indexOf(q) !== -1;
-            li.style.display = match ? "" : "none";
-            if (match) visible++;
-        }
-        let noMatch = container.querySelector('[data-testid="offline-home-no-match"]');
-        if (q && visible === 0) {
-            if (!noMatch) {
-                noMatch = el("p", {
-                    class: "oh-empty",
-                    text: t("i18nNoMatch"),
-                    testid: "offline-home-no-match",
-                });
-                container.appendChild(noMatch);
-            }
-            noMatch.style.display = "";
-        } else if (noMatch) {
-            noMatch.style.display = "none";
-        }
-    }
-
-    function setupFilter(clientCount) {
-        const input = document.querySelector('[data-testid="offline-home-filter"]');
-        if (!input) return;
-        // Filter erst ab 2 Personen anbieten (bei einer ist er sinnlos).
-        if (clientCount > 1) {
-            input.style.display = "";
-            if (!input.dataset.wired) {
-                input.addEventListener("input", function () {
-                    applyFilter(input.value);
-                });
-                input.dataset.wired = "1";
-            }
-            if (input.value) applyFilter(input.value);
-        } else {
-            input.style.display = "none";
-        }
     }
 
     function renderStatus(unsynced, conflicts, dead) {
@@ -164,8 +81,8 @@
 
     // Refs #1412 (M17b): Storage-Quota-/Belegungsanzeige + Persist-Status —
     // eigene, dezente Badge-Zeile, GETRENNT von renderStatus (Konflikt/dead/
-    // unsynced) und vom 20-Personen-Limit (MAX_OFFLINE_CLIENTS): beides sind
-    // unabhaengige Kappungen, die nicht vermischt werden duerfen.
+    // unsynced). Beides sind unabhaengige Kappungen, die nicht vermischt
+    // werden duerfen.
     function renderStorage(estimate, persistStatus) {
         const storageEl = document.querySelector('[data-testid="offline-home-storage"]');
         if (!storageEl) return;
@@ -199,67 +116,30 @@
         }
     }
 
+    // Refs #1494: Nur noch die additiven Badges fuellen. Ohne Offline-Store
+    // (Alt-SW / Modul fehlt) bleiben die Zeilen leer — die statische
+    // Selbsthilfe im Markup traegt die Seite; hier gibt es keinen Spinner
+    // und keinen JS-abhaengigen Sackgassen-Zustand mehr.
     async function render() {
-        const container = document.querySelector('[data-testid="offline-home-list"]');
-        if (!container) return;
-        if (!window.offlineStore || !window.crypto_session) {
-            renderEmpty(container, t("i18nInactive"));
-            return;
-        }
+        if (!window.offlineStore) return;
         try {
-            if (window.crypto_session.ready) await window.crypto_session.ready();
-        } catch (_e) {
-            // weiter — hasSessionKey faengt den fehlenden Schluessel ab
-        }
-        if (window.crypto_session.hasSessionKey && !window.crypto_session.hasSessionKey()) {
-            renderEmpty(container, t("i18nRelogin"));
-            return;
-        }
-        try {
-            const clients = await window.offlineStore.listOfflineClientsDetailed();
-            if (!clients.length) {
-                renderEmpty(container, t("i18nNoneTaken"));
-                setupFilter(0);
-            } else {
-                renderClients(container, clients);
-                setupFilter(clients.length);
-            }
             const unsynced = await window.offlineStore.countUnsyncedEvents();
             const conflicts = await window.offlineStore.countConflictEvents();
             const dead = await window.offlineStore.countDeadEvents();
             renderStatus(unsynced, conflicts, dead);
             // Refs #1412 (M17b): Live-Belegung + gecachter Persist-Status —
-            // beide fail-soft (liefern null bei fehlender API/Fehler bzw.
-            // noch nie gefragt), renderStorage blendet dann das jeweilige
-            // Badge einfach aus statt einen falschen Wert zu zeigen.
+            // beide fail-soft (liefern null bei fehlender API/Fehler bzw. noch
+            // nie gefragt), renderStorage blendet dann das jeweilige Badge
+            // einfach aus statt einen falschen Wert zu zeigen.
             const estimate = await window.offlineStore.getStorageEstimate();
             const persistStatus = await window.offlineStore.getPersistStatus();
             renderStorage(estimate, persistStatus);
         } catch (_e) {
-            renderEmpty(container, t("i18nLoadError"));
+            // fail-soft: Badges bleiben leer, die statische Selbsthilfe steht.
         }
     }
 
-    // Refs #1523 (#1499, SI-6): Rueckbau des #1483-Wegweisers zu einem
-    // schmalen Edge-Fallback. Seit dem SW-Flip (v20) serviert der Service
-    // Worker /events/new/ + /workitems/new/ offline direkt als echte
-    // Create-Shell — diese Home wird dafuer nur noch erreicht, wenn der SW
-    // noch NICHT v20 ist (Rollout-Fenster) oder das Facility-Bundle fehlt.
-    // Anhand der precachten URL_PATTERNS (single source of truth, laedt vor
-    // diesem Script) den schmalen Hinweis einblenden — ohne den frueheren
-    // Anonym-Sonderfall (die Create-Shell erledigt die personenlose Erfassung
-    // selbst).
-    function showCreateHint() {
-        const hint = document.querySelector('[data-testid="offline-create-hint"]');
-        const patterns = self.URL_PATTERNS;
-        if (!hint || !patterns) return;
-        const path = window.location.pathname;
-        if (!patterns.EVENT_NEW.test(path) && !patterns.WORKITEM_NEW.test(path)) return;
-        hint.hidden = false;
-    }
-
     function init() {
-        showCreateHint();
         render();
     }
 

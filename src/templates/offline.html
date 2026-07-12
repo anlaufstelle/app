@@ -7,9 +7,12 @@
 <style>
     /* Inline-CSS, weil der Service-Worker dieses Template direkt
        ausliefert (kein Django-Rendering, kein /static/css/-Lookup
-       moeglich, wenn das Netz weg ist). Refs #701/#1321. Die
-       Personenliste fuellt offline-home.js client-seitig aus der
-       verschluesselten IndexedDB. */
+       moeglich, wenn das Netz weg ist). Refs #701/#1321/#1494. Seit
+       dem SW-Flip (CACHE v22) rendern /clients/, /workitems/ und /
+       offline IN-PLACE ihre eigenen Shells — diese /offline/-Seite ist
+       nur noch terminaler Fallback (Selbsthilfe steht STATISCH im
+       Markup, kein JS-abhaengiger Spinner mehr). offline-home.js fuellt
+       nur noch die additiven Status-/Storage-Badges. */
     :root {
         color-scheme: light dark;
         --ink: #0f172a;
@@ -82,17 +85,6 @@
     /* Status-Badges (Pending / Konflikt). */
     .oh-status { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
     .oh-status:empty { display: none; }
-    /* Refs #1399: Client-seitiges Filterfeld ueber die mitgenommenen Personen. */
-    .oh-filter {
-        width: 100%;
-        padding: .6rem .9rem;
-        margin: 0 0 .9rem;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        background: var(--surface);
-        color: var(--ink);
-        font-size: .95rem;
-    }
     .oh-badge {
         display: inline-block;
         font-size: .8rem;
@@ -111,42 +103,6 @@
        unabhaengige Kappungen und bleiben optisch getrennt. */
     .oh-storage { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1rem; }
     .oh-storage:empty { display: none; }
-    /* Personenliste. */
-    .oh-list { list-style: none; margin: 0 0 1.5rem; padding: 0; }
-    .oh-item { margin: 0 0 .5rem; }
-    .oh-link {
-        display: flex;
-        flex-direction: column;
-        gap: .15rem;
-        padding: .7rem .9rem;
-        border: 1px solid var(--border);
-        border-radius: 10px;
-        text-decoration: none;
-        color: var(--ink);
-        background: var(--surface);
-    }
-    .oh-link:hover { background: var(--canvas); }
-    .oh-name { font-weight: 600; font-size: .98rem; }
-    .oh-meta { font-size: .8rem; color: var(--ink-soft); }
-    .oh-empty {
-        padding: 1rem;
-        border: 1px dashed var(--border);
-        border-radius: 10px;
-        text-align: center;
-        color: var(--ink-soft);
-        margin: 0 0 1.5rem;
-    }
-    /* Refs #1483: Wegweiser bei Kalt-Navigation auf ein Create-Formular —
-       Warn-Ton (Handlungsalternative), nicht Gefahren-Ton. */
-    .oh-hint {
-        padding: .8rem 1rem;
-        border: 1px solid var(--warn-border);
-        border-radius: 10px;
-        background: var(--warn-bg);
-        margin: 0 0 1rem;
-    }
-    .oh-hint p { color: var(--warn-ink); margin: 0 0 .5rem; font-size: .9rem; }
-    .oh-hint p:last-child { margin-bottom: 0; }
     .actions { display: flex; gap: .75rem; flex-wrap: wrap; }
     a.btn {
         display: inline-flex;
@@ -172,59 +128,43 @@
 </style>
 </head>
 <body>
-    <!-- Refs #1412 (M17): Die von offline-home.js gerenderten Strings kommen als
-         uebersetzte data-i18n-*-Attribute aus dem Template — offline-home.js
-         liest dataset, kein hartkodiertes deutsches JS-Literal mehr. {date}
-         ist ein Platzhalter, den der Renderer client-seitig ersetzt. -->
+    <!-- Refs #1494 (#1544, #1499): Rueckbau der /offline/-Sonderseite
+         auf einen reinen, STATISCHEN Fallback. Seit dem SW-Flip (CACHE v22)
+         rendern /clients/, /workitems/ und / offline IN-PLACE ihre eigenen
+         Shells; diese Seite wird nur noch erreicht, wenn KEINE lokale Ansicht
+         zur aufgerufenen Adresse matcht (oder ein Alt-SW-Client vor v22).
+         Der Selbsthilfe-Inhalt (Text + Links) steht daher STATISCH im Markup
+         und ist SOFORT sichtbar — kein JS-abhaengiger „Lade Offline-Daten…"-
+         Spinner mehr, der bei Store-/Decrypt-/Alt-SW-Problemen stumm haengt.
+         offline-home.js fuellt nur noch die additiven, rein informativen
+         Status-/Storage-Badges (:empty ⇒ display:none, haengt also nie).
+         Die Strings der Badges kommen als uebersetzte data-i18n-*-Attribute
+         aus dem Template — offline-home.js liest dataset. {date}-Platzhalter
+         existiert hier nicht mehr (Personen-Meta ist nach /clients/ migriert). -->
     <main data-testid="offline-home"
           data-i18n-conflict-one="{% trans 'Konflikt — bitte auflösen' %}"
           data-i18n-conflict-other="{% trans 'Konflikte — bitte auflösen' %}"
           data-i18n-dead-one="{% trans 'nicht übertragbare Änderung' %}"
           data-i18n-dead-other="{% trans 'nicht übertragbare Änderungen' %}"
           data-i18n-unsynced="{% trans 'nicht synchronisiert' %}"
-          data-i18n-no-match="{% trans 'Keine Person passt zum Suchbegriff.' %}"
-          data-i18n-inactive="{% trans 'Offline-Funktion nicht aktiv.' %}"
-          data-i18n-relogin="{% trans 'Bitte neu anmelden, damit die offline gespeicherten Personen entschlüsselt werden können.' %}"
-          data-i18n-none-taken="{% trans 'Keine Person für die Offline-Nutzung mitgenommen.' %}"
-          data-i18n-load-error="{% trans 'Offline-Daten konnten nicht geladen werden.' %}"
-          data-i18n-no-pseudonym="{% trans '(ohne Pseudonym)' %}"
-          data-i18n-synced-at="{% trans 'synchronisiert: {date}' %}"
-          data-i18n-expires-at="{% trans 'läuft ab: {date}' %}"
           data-i18n-storage-usage="{% trans '{used} / {quota} ({percent}% belegt)' %}"
           data-i18n-persist-granted="{% trans 'dauerhafter Speicher: gewährt' %}"
           data-i18n-persist-denied="{% trans 'dauerhafter Speicher: nicht gewährt' %}"
           data-i18n-persist-unsupported="{% trans 'dauerhafter Speicher: nicht unterstützt' %}">
         <span class="badge">{% trans "Offline" %}</span>
-        <h1>{% trans "Offline-Arbeitsplatz" %}</h1>
-        <p>{% trans "Sie sind aktuell offline. Hier sind die Personen, die Sie für die Offline-Nutzung mitgenommen haben — auch ohne Netz lesbar und bearbeitbar. Änderungen werden bei Verbindung automatisch gesendet." %}</p>
-
-        {# Refs #1523 (#1499, SI-6): Rueckbau des #1483-Wegweisers zu einem #}
-        {# schmalen Edge-Fallback. Seit dem SW-Flip (v20) serviert der Service #}
-        {# Worker /events/new/ + /workitems/new/ offline direkt als echte #}
-        {# Create-Shell — diese /offline/-Home wird dafuer nur noch erreicht, #}
-        {# wenn der SW noch NICHT v20 ist (Rollout-Fenster) oder das #}
-        {# Facility-Bundle fehlt. Kein „geht gar nicht"-Text mehr; #}
-        {# offline-home.js blendet den Hinweis anhand location.pathname + #}
-        {# URL_PATTERNS ein. #}
-        <div class="oh-hint" data-testid="offline-create-hint" hidden>
-            <p>{% trans "Diese Offline-Erfassung ist noch nicht vorbereitet. Bitte einmal online öffnen, damit sie auch offline verfügbar wird." %}</p>
-        </div>
+        <h1>{% trans "Keine lokale Ansicht verfügbar" %}</h1>
+        <p>{% trans "Diese Seite erscheint nur, wenn für die aufgerufene Adresse keine lokale Ansicht vorliegt. Ihre offline mitgenommenen Personen, Aufgaben und der Zeitstrom bleiben an ihren gewohnten Adressen offline verfügbar." %}</p>
+        <p>{% trans "Bitte nutzen Sie einen der Links unten. Falls das Problem bestehen bleibt, laden Sie die Seite einmal online neu." %}</p>
 
         <div class="oh-status" data-testid="offline-home-status"></div>
         <!-- Refs #1412 (M17b): Storage-Quota-/Persist-Status — bewusst eigene
              Zeile, getrennt vom 20-Personen-Limit oben (oh-status). -->
         <div class="oh-storage" data-testid="offline-home-storage"></div>
 
-        <input type="search" data-testid="offline-home-filter" class="oh-filter"
-               placeholder="{% trans 'Person filtern…' %}" aria-label="{% trans 'Personen filtern' %}" style="display:none"
-               autocomplete="off" />
-
-        <div data-testid="offline-home-list">
-            <p class="oh-empty" data-testid="offline-home-loading">{% trans "Lade Offline-Daten…" %}</p>
-        </div>
-
         <div class="actions">
-            <a href="/" class="btn primary">{% trans "Zur Startseite" %}</a>
+            <a href="/clients/" class="btn primary">{% trans "Zur Personenliste" %}</a>
+            <a href="/workitems/" class="btn">{% trans "Aufgaben" %}</a>
+            <a href="/" class="btn">{% trans "Startseite" %}</a>
             <!-- href="" lädt die aktuelle URL neu, CSP-konform ohne Inline-Script. Refs #1016, C1 -->
             <a href="" class="btn">{% trans "Erneut versuchen" %}</a>
         </div>
@@ -232,17 +172,18 @@
     </main>
 
     <!-- Offline-Home-Stack: Reihenfolge dexie → crypto → offline-store →
-         url-patterns → offline-home. Alle sind im Service-Worker-APP_SHELL
-         pre-cached (sw.js), damit die Home auch beim ersten Offline-Aufruf
-         (PWA-Kaltstart) rendert. Refs #1486: static-Tag statt
+         offline-home. Alle sind im Service-Worker-APP_SHELL pre-cached
+         (sw.js), damit die additiven Status-/Storage-Badges auch beim ersten
+         Offline-Aufruf (PWA-Kaltstart) rendern. Refs #1486: static-Tag statt
          Literal-Pfaden — der Prod-Precache enthaelt NUR die gehashten URLs
          (caches.match ist URL-exakt); aufgeloest wird beim (Online-)Fetch
-         des Precache, nicht offline. Refs #1483: url-patterns.js fuer den
-         Create-Wegweiser (single source of truth der URL-Muster). -->
+         des Precache, nicht offline. Refs #1494: url-patterns.js hier
+         entfernt — der einzige Konsument (Create-Wegweiser) ist mit dem
+         Rueckbau auf den statischen Fallback weggefallen; die Selbsthilfe
+         steht ohne JS im Markup. -->
     <script src="{% static 'js/dexie.min.js' %}"></script>
     <script src="{% static 'js/crypto.js' %}"></script>
     <script src="{% static 'js/offline-store.js' %}"></script>
-    <script src="{% static 'js/url-patterns.js' %}"></script>
     <script src="{% static 'js/offline-home.js' %}"></script>
 </body>
 </html>
