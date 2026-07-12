@@ -73,6 +73,7 @@ from core.views.offline import (
     OfflineFacilityBundleView,
     OfflineWorkItemCreateShellView,
     OfflineWorkItemListShellView,
+    OfflineZeitstromShellView,
 )
 from core.views.retention import (
     RetentionApproveView,
@@ -337,6 +338,15 @@ urlpatterns = [
         "offline/workitems/",
         OfflineWorkItemListShellView.as_view(),
         name="offline_workitem_list_shell",
+    ),
+    # Refs #1542 (#1499): generischer, pk-loser Shell fuer In-Place-
+    # Offline-Rendern des Zeitstrom-Feeds an der kanonischen URL / (Service
+    # Worker serviert ihn offline) — Muster #1322. PII-frei; die aggregierte
+    # lokale Chronik liest die Alpine-Komponente aus IndexedDB.
+    path(
+        "offline/zeitstrom/",
+        OfflineZeitstromShellView.as_view(),
+        name="offline_zeitstrom_shell",
     ),
     # Offline (Streetwork Stage 3) — conflict review UI
     path(

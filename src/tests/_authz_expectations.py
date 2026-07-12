@@ -489,6 +489,11 @@ EXPECTATIONS = (
     # verschluesselt in IDB), muss via SW cache.addAll pre-cachebar sein.
     # Same-commit-as-URL (authz-Completeness-Gate).
     E("core:offline_workitem_list_shell", "public", get=ALL_AUTH, anonymous_ok=True),
+    # Refs #1542 (#1499): pk-lose Offline-Zeitstrom-Shell. Public wie
+    # offline_client_shell — PII-frei (die aggregierte lokale Chronik liegt
+    # verschluesselt in IDB), muss via SW cache.addAll pre-cachebar sein.
+    # Same-commit-as-URL (authz-Completeness-Gate).
+    E("core:offline_zeitstrom_shell", "public", get=ALL_AUTH, anonymous_ok=True),
     # Refs #1396: Konflikt-Liste + pk-loser Review-Shell sind pk-los, datenlos
     # (rendern rein aus IndexedDB) und muessen via SW cache.addAll pre-cachebar
     # sein — public wie offline_client_shell. Der auth-gated Review-pk-Endpoint

@@ -352,6 +352,33 @@ class OfflineWorkItemListShellView(View):
         return render(request, "core/workitems/offline_workitem_list.html", {})
 
 
+class OfflineZeitstromShellView(View):
+    """Generic, pk-less scaffold for IN-PLACE offline rendering of the Zeitstrom
+    feed at the canonical ``/`` URL (Refs #1542, #1499, Muster #1322).
+
+    The Service Worker pre-caches this shell and serves it for offline
+    navigations to the Zeitstrom home **without** redirecting to ``/offline/`` —
+    so the URL stays canonical and the offline/online split disappears.
+    ``offline-zeitstrom.js`` then reads the aggregated offline events from
+    IndexedDB (``listOfflineEventsAggregated`` — events across every offline-taken
+    client plus person-less/anonymous local entries, newest first) and renders a
+    local chronicle client-side: only the operations taken offline, not the full
+    facility timeline.
+
+    Public on purpose, exactly like :class:`OfflineClientShellView`: the shell
+    carries no PII (the chronicle is decrypted client-side from IndexedDB) and
+    must be pre-cacheable via the SW ``cache.addAll`` — an auth gate would make
+    the install-time fetch redirect to ``/login/`` and fail ``addAll`` atomically
+    (killing the whole precache). Online this view is never reached: the SW only
+    serves it on a network failure for ``/`` (SW flip in W3-E).
+    """
+
+    http_method_names = ["get"]
+
+    def get(self, request):
+        return render(request, "core/zeitstrom/offline_zeitstrom.html", {})
+
+
 class OfflineConflictReviewView(AssistantOrAboveRequiredMixin, View):
     """Shell page for the merge-UI at ``/offline/conflicts/<uuid>/``.
 

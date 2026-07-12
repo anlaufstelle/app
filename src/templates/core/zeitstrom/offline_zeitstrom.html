@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% load i18n static %}
+
+{% block title %}{% trans "Zeitstrom" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+{# Refs #1542 (#1499 W3-D): In-Place-Offline-Rendern des Zeitstrom-    #}
+{# Feeds an der kanonischen URL / (Muster #1322). Kein PII im Scaffold — die    #}
+{# Alpine-Komponente offlineZeitstrom liest die aggregierte lokale Chronik      #}
+{# client-seitig aus IndexedDB (listOfflineEventsAggregated) und spiegelt       #}
+{# feed_list.html/_event_card.html (Zeitstempel, "Kontakt"-Badge, Dokumen-     #}
+{# tationstyp, Person). SW-Precache + Flip kommt W3-E.                          #}
+<div data-testid="offline-zeitstrom"
+     x-data="offlineZeitstrom" x-init="load">
+
+    <div class="mb-3 flex items-center gap-2">
+        <span class="badge bg-yellow-100 text-yellow-800">{% trans "Offline-Ansicht" %}</span>
+    </div>
+    {# Verstaerkter Hinweis: bewusst nur ein Ausschnitt der Chronik (nur die     #}
+    {# offline mitgenommenen Vorgaenge, nicht der gesamte Facility-Feed).        #}
+    <p class="mb-4 text-[13px] text-ink-muted" data-testid="offline-zeitstrom-hint">
+        {% trans "Lokale Chronik — nur die offline mitgenommenen Vorgänge, nicht der vollständige Zeitstrom." %}
+    </p>
+
+    {# Ladezustand — nur bis der verschluesselte Store gelesen ist. #}
+    <div x-show="loading" x-cloak class="py-8 text-center text-ink-muted" data-testid="offline-zeitstrom-loading">
+        {% trans "Lade Offline-Daten..." %}
+    </div>
+
+    {# Leerzustand — 1:1 wie feed_list.html (_empty_state, icon=clock). #}
+    <template x-if="isEmpty">
+        {% include "components/_empty_state.html" with icon="clock" message=_("Keine Einträge für diesen Zeitraum") %}
+    </template>
+
+    {# Chronologische Chronik (neueste zuerst) — Spiegel von feed_list.html      #}
+    {# (space-y-2) mit _event_card-Optik pro Zeile. #}
+    <div x-show="hasEvents" x-cloak class="space-y-2" role="list" aria-label="{% trans 'Zeitstrom' %}">
+        <template x-for="ev in events" :key="ev.pk">
+            <div role="listitem"
+                 class="flex bg-surface border border-subtle rounded-[10px] overflow-hidden"
+                 data-testid="offline-zeitstrom-row" :data-pk="ev.pk">
+                {# Linke Kante in Kontakt-Farbe (wie _event_card). #}
+                <div class="w-[3px] bg-event flex-shrink-0"></div>
+                <div class="flex-1 px-3.5 py-3 min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                        {# Zeitstempel — vorformatiert (Mono). #}
+                        <span class="font-mono text-[13px] font-medium text-ink-muted flex-shrink-0" x-text="ev.occurredAtLabel"></span>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-event-soft text-event-deep">{% trans "Kontakt" %}</span>
+                        {# Dokumentationstyp (Rohname aus dem Bundle). #}
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[12px] font-semibold bg-canvas border border-subtle text-ink-soft" x-text="ev.documentTypeName"></span>
+                        {# Person: Pseudonym (Link) | "Anonym" (personlos) |       #}
+                        {# "Person offline entfernt" (verwaistes ungesyncte Event). #}
+                        <template x-if="ev.hasPerson">
+                            <a :href="ev.href" class="text-[12px] font-semibold text-accent truncate hover:underline"
+                               data-testid="offline-zeitstrom-client-link" x-text="ev.pseudonym"></a>
+                        </template>
+                        <template x-if="ev.isAnonymous">
+                            <span class="text-[12px] text-ink-muted italic">{% trans "Anonym" %}</span>
+                        </template>
+                        <template x-if="ev.isOrphaned">
+                            <span class="text-[12px] text-ink-muted italic">{% trans "Person offline entfernt" %}</span>
+                        </template>
+                        {# Nicht uebertragenes (offline erfasstes/geaendertes) Event markieren. #}
+                        <span x-show="ev.isUnsynced" x-cloak
+                              class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[12px] font-semibold bg-accent-light text-accent ml-auto"
+                              data-testid="offline-zeitstrom-unsynced-badge">
+                            {% trans "Nicht übertragen" %}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{# Ausgelagert wegen CSP (Refs #672). W3-E nimmt die Datei in den SW-Precache    #}
+{# (APP_SHELL) auf und macht den Offline-Flip fuer /.                           #}
+<script src="{% static 'js/offline-zeitstrom.js' %}"></script>
+{% endblock %}
