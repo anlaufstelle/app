@@ -6321,3 +6321,77 @@ msgstr "persistent storage: not supported"
 #: templates/offline.html (Refs #1523/#1499, SI-6)
 msgid "Diese Offline-Erfassung ist noch nicht vorbereitet. Bitte einmal online öffnen, damit sie auch offline verfügbar wird."
 msgstr "This offline entry is not prepared yet. Please open it once online so it becomes available offline, too."
+
+#: src/templates/core/clients/_offline_event_fields.html:14
+msgid "Datei offline nicht erfassbar — später nachreichen."
+msgstr "File cannot be captured offline — add it later."
+
+#: src/templates/core/clients/offline_detail.html:55
+#: src/templates/core/events/offline_create.html:42
+#: src/templates/core/workitems/offline_create.html:57
+msgid "Offline gespeichert – wird beim nächsten Online-Kontakt synchronisiert."
+msgstr "Saved offline – will sync the next time you're online."
+
+#: src/templates/core/clients/offline_detail.html:122
+#: src/templates/core/events/offline_create.html:54
+msgid "Neuer Kontakt (offline)"
+msgstr "New contact (offline)"
+
+#: src/templates/core/clients/offline_detail.html:127
+#: src/templates/core/events/offline_create.html:79
+msgid "– bitte wählen –"
+msgstr "– please select –"
+
+#: src/templates/core/clients/offline_detail.html:343
+#: src/templates/core/workitems/offline_create.html:4
+#: src/templates/core/workitems/offline_create.html:69
+msgid "Neue Aufgabe (offline)"
+msgstr "New task (offline)"
+
+#: src/templates/core/events/offline_create.html:4
+msgid "Neue Erfassung (offline)"
+msgstr "New entry (offline)"
+
+#: src/templates/core/events/offline_create.html:29
+#: src/templates/core/workitems/offline_create.html:29
+msgid ""
+"Für die Offline-Erfassung sind noch keine Vorlagen vorbereitet oder der "
+"lokale Cache ist leer. Bitte einmal online öffnen."
+msgstr "No templates have been prepared for offline entry yet, or the local cache is empty. Please open online once."
+
+#: src/templates/core/events/offline_create.html:47
+msgid "Weitere Erfassung"
+msgstr "Another entry"
+
+#: src/templates/core/events/offline_create.html:58
+#: src/templates/core/workitems/offline_create.html:75
+msgid "Mitgenommene Person"
+msgstr "Person taken offline"
+
+#: src/templates/core/events/offline_create.html:61
+#: src/templates/core/workitems/offline_create.html:78
+msgid "— ohne Person —"
+msgstr "— no person —"
+
+#: src/templates/core/events/offline_create.html:69
+msgid "Dieser Dokumentationstyp erfordert eine zugeordnete Person."
+msgstr "This document type requires an assigned person."
+
+#: src/templates/core/workitems/offline_create.html:44
+msgid ""
+"Aufgaben dürfen nur von Mitarbeitenden angelegt werden. Für Ihre Rolle ist "
+"die Aufgaben-Erfassung nicht verfügbar."
+msgstr "Tasks may only be created by staff members. Task entry is not available for your role."
+
+#: src/templates/core/workitems/offline_create.html:47
+msgid "Zur Offline-Übersicht"
+msgstr "To the offline overview"
+
+#: src/templates/core/workitems/offline_create.html:62
+msgid "Weitere Aufgabe"
+msgstr "Another task"
+
+#: src/templates/core/events/offline_create.html:15
+#: src/templates/core/workitems/offline_create.html:15
+msgid "Offline-Erfassung"
+msgstr "Offline entry"
