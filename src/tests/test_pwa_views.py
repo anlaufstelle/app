@@ -94,11 +94,11 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v21"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v22"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
-            "(#1533/#1499 SI-5: APP_SHELL um die Offline-Personenlisten-Shell "
-            "(/offline/clients/) + offline-client-list.js erweitert; neuer "
-            "CLIENT_LIST-Fallback-Zweig)."
+            "(#1543/#1499: APP_SHELL um die pk-losen Tab-Shells "
+            "(/offline/workitems/, /offline/zeitstrom/) + ihre Renderer "
+            "erweitert; neue WORKITEM_LIST-/ZEITSTROM-Fallback-Zweige)."
         )
 
     def test_sw_caches_offline_create_shells(self, client):
@@ -138,6 +138,43 @@ class TestServiceWorkerCachesOfflineFallback:
         generic_match = body.rindex(".match(request.url)")
         assert event_branch < generic_match, "EVENT_NEW-Zweig muss vor dem generischen /offline/-Match stehen."
         assert workitem_branch < generic_match, "WORKITEM_NEW-Zweig muss vor dem generischen /offline/-Match stehen."
+
+    def test_sw_caches_offline_tab_shells(self, client):
+        """Refs #1543 (#1499): Die pk-losen Tab-Shells (Aufgaben
+        /workitems/ und Zeitstrom /) werden offline IN-PLACE serviert —
+        Shell-URLs und ihre Renderer (offline-workitem-list.js /
+        offline-zeitstrom.js) muessen daher im APP_SHELL pre-cached sein, sonst
+        fehlt der Renderer im Kalt-Offline-Pfad nach einem SW-Update.
+        """
+        body = client.get(reverse("service_worker")).content.decode()
+        shell_block = _app_shell_block(body)
+        assert "/offline/workitems/" in body, "Aufgaben-Listen-Shell fehlt im APP_SHELL."
+        assert "/offline/zeitstrom/" in body, "Zeitstrom-Chronik-Shell fehlt im APP_SHELL."
+        assert "/static/js/offline-workitem-list.js" in shell_block, "offline-workitem-list.js fehlt im APP_SHELL."
+        assert "/static/js/offline-zeitstrom.js" in shell_block, "offline-zeitstrom.js fehlt im APP_SHELL."
+
+    def test_sw_serves_tab_shell_fallback_before_generic_offline(self, client):
+        """Refs #1543 (#1499): Offline fallen /workitems/ und / VOR dem
+        generischen /offline/-Fallback auf die gecachten Tab-Shells (In-Place,
+        URL bleibt kanonisch). Ohne diese Zweige lieferte die generische
+        ``caches.match(request.url)``-Stufe die /offline/-Home statt der echten
+        Aufgaben-/Zeitstrom-Ansicht. Zusaetzlich muss der WORKITEM_NEW-Zweig VOR
+        dem WORKITEM_LIST-Zweig stehen (Kalt-Offline-Create-Pfad).
+        """
+        body = client.get(reverse("service_worker")).content.decode()
+        assert "self.URL_PATTERNS.WORKITEM_LIST.test(request.url)" in body
+        assert ".match(OFFLINE_WORKITEM_LIST_SHELL_URL)" in body
+        assert "self.URL_PATTERNS.isZeitstromRoot(request.url)" in body
+        assert ".match(OFFLINE_ZEITSTROM_SHELL_URL)" in body
+        workitem_list_branch = body.index("self.URL_PATTERNS.WORKITEM_LIST.test(request.url)")
+        zeitstrom_branch = body.index("self.URL_PATTERNS.isZeitstromRoot(request.url)")
+        generic_match = body.rindex(".match(request.url)")
+        assert workitem_list_branch < generic_match, (
+            "WORKITEM_LIST-Zweig muss vor dem generischen /offline/-Match stehen."
+        )
+        assert zeitstrom_branch < generic_match, "ZEITSTROM-Zweig muss vor dem generischen /offline/-Match stehen."
+        workitem_new_branch = body.index("self.URL_PATTERNS.WORKITEM_NEW.test(request.url)")
+        assert workitem_new_branch < workitem_list_branch, "WORKITEM_NEW-Zweig muss VOR dem WORKITEM_LIST-Zweig stehen."
 
     def test_sw_caches_manifest_and_favicon(self, client):
         """Refs #1334: PWA-Manifest (/manifest.json — aus Scope-Gruenden nicht
@@ -325,6 +362,42 @@ class TestClientListUrlPattern:
             f"https://host/offline/clients/{self._UUID}/",
         ):
             assert not pattern.search(url), f"CLIENT_LIST_RE darf {url} nicht matchen (Abgrenzung verletzt)."
+
+
+class TestWorkItemListUrlPattern:
+    """Refs #1543 (#1499): WORKITEM_LIST_RE in url-patterns.js matcht
+    GENAU die kanonische Aufgaben-Inbox-URL /workitems/ (mit optionalem ?query)
+    und grenzt exakt gegen Create-/Edit-/Status-Nachbarrouten ab — sonst faengt
+    der neue SW-Zweig (Aufgaben-Shell) faelschlich den Kalt-Offline-Create-Pfad
+    (/workitems/new/) o.ae. ab. Liest die ECHTE RegExp-Quelle (kein Nachbau).
+    """
+
+    _UUID = "1b4e28ba-2fa1-11d2-883f-0016d3cca427"
+
+    def _workitem_list_re(self):
+        from pathlib import Path
+
+        from django.conf import settings
+
+        src = (Path(settings.BASE_DIR) / "static" / "js" / "url-patterns.js").read_text()
+        m = re.search(r'WORKITEM_LIST_RE = new RegExp\("([^"]*)", "i"\)', src)
+        assert m, "WORKITEM_LIST_RE-Definition in url-patterns.js nicht gefunden (Quell-Drift?)."
+        js_source = m.group(1).replace("\\\\", "\\")
+        return re.compile(js_source, re.IGNORECASE)
+
+    def test_matches_canonical_workitem_inbox(self):
+        pattern = self._workitem_list_re()
+        assert pattern.search("https://host/workitems/")
+        assert pattern.search("https://host/workitems/?due=today")
+
+    def test_does_not_match_neighbor_routes(self):
+        pattern = self._workitem_list_re()
+        for url in (
+            "https://host/workitems/new/",
+            f"https://host/workitems/{self._UUID}/edit/",
+            f"https://host/partials/workitems/{self._UUID}/status/",
+        ):
+            assert not pattern.search(url), f"WORKITEM_LIST_RE darf {url} nicht matchen (Abgrenzung verletzt)."
 
 
 def _app_shell_block(body: str) -> str:

@@ -19,6 +19,13 @@
     // Segment, kein Terminator). Der SW serviert offline an dieser URL die
     // gecachte, pk-lose Listen-Shell IN-PLACE (kein Redirect).
     var CLIENT_LIST_RE = new RegExp("/clients/(?:$|\\?)", "i");
+    // Refs #1543 (#1499): die kanonische Aufgaben-Inbox-URL /workitems/
+    // (mit optionalem ?query). Exakter Terminator ``(?:$|\?)`` wie CLIENT_LIST_RE:
+    // matcht GENAU /workitems/ und /workitems/?…, aber NICHT /workitems/new/,
+    // /workitems/<uuid>/edit/ oder /partials/workitems/<uuid>/status/ (dort folgt
+    // nach /workitems/ ein Segment, kein Terminator). Der SW serviert offline an
+    // dieser URL die pk-lose Aufgaben-Listen-Shell IN-PLACE (kein Redirect).
+    var WORKITEM_LIST_RE = new RegExp("/workitems/(?:$|\\?)", "i");
     // Refs #1396: pk-behaftete Konflikt-Review-URL (/offline/conflicts/<uuid>/).
     // Bewusst mit dem /offline/conflicts/-Praefix, damit die pk-lose Liste
     // (/offline/conflicts/) NICHT matcht und extractClientPk Konflikt-URLs
@@ -35,6 +42,7 @@
         WORKITEM_STATUS: new RegExp("/partials/workitems/" + UUID + "/status/", "i"),
         CLIENT_DETAIL: CLIENT_DETAIL_RE,
         CLIENT_LIST: CLIENT_LIST_RE,
+        WORKITEM_LIST: WORKITEM_LIST_RE,
         CONFLICT_REVIEW: CONFLICT_REVIEW_RE,
         // Refs #751: Attachment-Downloads liefern Binärdaten, dürfen nicht
         // durch die HTML-Offline-Fallback-Kette ersetzt werden (sonst sieht
@@ -66,5 +74,16 @@
     self.URL_PATTERNS.extractConflictPk = function (url) {
         var m = CONFLICT_REVIEW_RE.exec(url);
         return m ? m[1] : null;
+    };
+    // Refs #1543 (#1499): exakter Wurzel-URL-Test fuer den Zeitstrom-
+    // Fallback (pathname === "/"). Bewusst KEIN Regex auf request.url — nur der
+    // geparste Pfad ist eindeutig "die Startseite" (nicht /clients/ o.ae.). Der
+    // SW serviert offline an / die Zeitstrom-Chronik-Shell IN-PLACE.
+    self.URL_PATTERNS.isZeitstromRoot = function (url) {
+        try {
+            return new URL(url).pathname === "/";
+        } catch (e) {
+            return false;
+        }
     };
 })();

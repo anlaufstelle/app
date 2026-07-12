@@ -35,7 +35,15 @@ importScripts("/static/js/url-patterns.js");
 // offline IN-PLACE an der kanonischen URL /clients/ (neuer CLIENT_LIST-Zweig).
 // Der Bump erzwingt Re-Install + Re-Precache, damit der Kalt-Offline-Pfad
 // (/clients/) den neuen Listen-Shell findet statt der /offline/-Home.
-const CACHE_NAME = "anlaufstelle-v21";
+// Refs #1543 (#1499): v21 -> v22 -- APP_SHELL um die Aufgaben-Shell
+// (OFFLINE_WORKITEM_LIST_SHELL_URL = /offline/workitems/) und die Zeitstrom-
+// Chronik-Shell (OFFLINE_ZEITSTROM_SHELL_URL = /offline/zeitstrom/) samt ihrer
+// Renderer (offline-workitem-list.js/offline-zeitstrom.js) erweitert; der SW
+// serviert sie offline IN-PLACE an den kanonischen URLs /workitems/ bzw. /
+// (neue WORKITEM_LIST-/ZEITSTROM-Zweige). Der Bump erzwingt Re-Install +
+// Re-Precache, damit der Kalt-Offline-Pfad die neuen Tab-Shells findet statt
+// der /offline/-Home.
+const CACHE_NAME = "anlaufstelle-v22";
 // Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
 // ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
 // auch beim ersten Offline-Aufruf garantiert verfuegbar ist.
@@ -57,6 +65,17 @@ const OFFLINE_WORKITEM_SHELL_URL = "/offline/workitem-shell/";
 // auf /offline/. Muster wie OFFLINE_CLIENT_SHELL_URL; die Shell selbst ist PII-
 // frei, offline-client-list.js fuellt sie aus der verschluesselten IndexedDB.
 const OFFLINE_CLIENT_LIST_SHELL_URL = "/offline/clients/";
+// Refs #1543 (#1499): generische, pk-lose Aufgaben-Listen-Shell fuer
+// das In-Place-Rendern an der kanonischen URL /workitems/ (offline) — statt
+// Bounce auf /offline/. PII-frei; offline-workitem-list.js fuellt sie aus der
+// verschluesselten IndexedDB (listOfflineWorkItemsAggregated, cross-client +
+// standalone). Muster wie OFFLINE_CLIENT_LIST_SHELL_URL.
+const OFFLINE_WORKITEM_LIST_SHELL_URL = "/offline/workitems/";
+// Refs #1543 (#1499): generische, pk-lose Zeitstrom-Chronik-Shell fuer
+// das In-Place-Rendern an der Wurzel-URL / (offline). PII-frei; offline-
+// zeitstrom.js fuellt sie aus der verschluesselten IndexedDB
+// (listOfflineEventsAggregated, chronologisch inkl. anonymer Eintraege).
+const OFFLINE_ZEITSTROM_SHELL_URL = "/offline/zeitstrom/";
 // Refs #1386: Timeouts gegen Lie-Fi (Verbindung meldet sich als "online",
 // haengt aber ohne Antwort/Fehler). Ohne Timeout haengt respondWith()
 // endlos, statt in die vorhandenen Queue-/Offline-Fallback-Ketten zu laufen.
@@ -123,6 +142,14 @@ const APP_SHELL = [
     // Pre-Cache bliebe der Kalt-Offline-Pfad (/clients/) nach einem SW-Update ohne
     // Renderer.
     "/static/js/offline-client-list.js",
+    // Refs #1543 (#1499): Die pk-losen Tab-Shells (offline_workitem_list.html
+    // /offline_zeitstrom.html) rendern ueber offline-workitem-list.js bzw.
+    // offline-zeitstrom.js; die Module werden NUR von ihren Templates geladen
+    // (sonst nirgends -> nicht per stale-while-revalidate gecacht). Ohne
+    // Pre-Cache bliebe der Kalt-Offline-Pfad (/workitems/, /) nach einem
+    // SW-Update ohne Renderer.
+    "/static/js/offline-workitem-list.js",
+    "/static/js/offline-zeitstrom.js",
     // Refs #1396: Die Konflikt-/Dead-Letter-Verwaltung (/offline/conflicts/)
     // und der pk-lose Review-Shell rendern client-seitig aus der
     // verschluesselten IndexedDB. Ihre Renderer werden NUR von den
@@ -179,6 +206,10 @@ const APP_SHELL = [
     // Refs #1533 (#1499, SI-5): pk-lose Personenlisten-Shell — offline IN-PLACE
     // an /clients/ serviert (CLIENT_LIST-Fallback-Zweig unten).
     OFFLINE_CLIENT_LIST_SHELL_URL,
+    // Refs #1543 (#1499): pk-lose Tab-Shells — offline IN-PLACE an
+    // /workitems/ bzw. / serviert (WORKITEM_LIST-/ZEITSTROM-Fallback-Zweige unten).
+    OFFLINE_WORKITEM_LIST_SHELL_URL,
+    OFFLINE_ZEITSTROM_SHELL_URL,
     // Refs #1396: pk-lose Konflikt-Liste — public + datenlos, wird offline
     // ueber die generische caches.match(request)-Fallback-Stufe serviert.
     "/offline/conflicts/",
@@ -555,6 +586,34 @@ self.addEventListener("fetch", (event) => {
                 if (self.URL_PATTERNS.CLIENT_LIST.test(request.url)) {
                     return caches
                         .match(OFFLINE_CLIENT_LIST_SHELL_URL)
+                        .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
+                }
+                // Refs #1543 (#1499): Aufgaben-Sonderfall — den
+                // gecachten, pk-losen Aufgaben-Listen-Shell IN-PLACE an der
+                // kanonischen URL /workitems/ servieren (200, KEIN Redirect);
+                // offline-workitem-list.js liest die aggregierten WorkItems aus
+                // der verschluesselten IndexedDB. Steht NACH dem WORKITEM_NEW-
+                // Zweig oben (/workitems/new/ hat dort bereits returnt; WORKITEM_
+                // LIST matcht ihn ohnehin nicht — exakter (?:$|\?)-Terminator)
+                // und VOR der generischen Stufe. Muster wie der CLIENT_LIST-Zweig.
+                if (self.URL_PATTERNS.WORKITEM_LIST.test(request.url)) {
+                    return caches
+                        .match(OFFLINE_WORKITEM_LIST_SHELL_URL)
+                        .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
+                }
+                // Refs #1543 (#1499): Zeitstrom-Sonderfall — die
+                // "lokale Chronik" IN-PLACE an der Wurzel-URL / servieren.
+                // isZeitstromRoot prueft pathname === "/" EXAKT (nur die
+                // Startseite, nicht /clients/ o.ae.). Der Online-Login-Redirect
+                // bleibt unberuehrt: dieser Zweig greift ausschliesslich im
+                // Netz-Fehlerfall (respondWith-catch), nie online. Muster wie
+                // die anderen Shell-Zweige.
+                if (
+                    self.URL_PATTERNS.isZeitstromRoot &&
+                    self.URL_PATTERNS.isZeitstromRoot(request.url)
+                ) {
+                    return caches
+                        .match(OFFLINE_ZEITSTROM_SHELL_URL)
                         .then((shell) => shell || caches.match(OFFLINE_FALLBACK_URL));
                 }
                 // Refs #1396: nach der URL (nicht dem Live-Request) matchen. Die
