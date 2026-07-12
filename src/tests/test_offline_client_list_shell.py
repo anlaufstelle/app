@@ -85,8 +85,12 @@ class TestOfflineClientListShellSI4:
             assert header in body
 
     def test_badge_getters_referenced(self, body):
-        assert "stageClass(c.contactStage)" in body
-        assert "stageLabel(c)" in body
+        # CSP-Alpine (#693/#672) verbietet Method-Calls mit Argumenten in
+        # Direktiven -> die Badge-Klasse/-Label + das Kontaktdatum werden in
+        # toRow() pro Zeile vorberechnet und als Property gerendert.
+        assert ':class="c.stageClass"' in body
+        assert 'x-text="c.stageLabel"' in body
+        assert 'x-text="c.lastContactLabel"' in body
 
     def test_deactivated_marker_present(self, body):
         # is_active=False Klienten bleiben sichtbar mit "deaktiviert"-Markierung.
