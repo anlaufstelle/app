@@ -1049,3 +1049,26 @@ class TestBundleWorkItemAuthoring:
     def test_assistant_bundle_omits_assignable_users(self, facility, client_identified, assistant_user):
         bundle = build_client_offline_bundle(assistant_user, facility, client_identified)
         assert bundle["assignable_users"] == []
+
+    def test_assignable_users_role_set_matches_workitem_form_no_drift(
+        self, facility, client_identified, admin_user, lead_user, staff_user, assistant_user
+    ):
+        """Refs #1526: ``_serialize_assignable_users`` (Offline-Bundle-Roster)
+        muss dieselbe Nutzer:innen-Menge liefern wie das Online-
+        ``WorkItemForm.assigned_to``-Queryset — sonst zeigt der Offline-Zuweis-
+        Picker Personen an, die der Online-Replay als ungueltiges Ziel ablehnt
+        (oder umgekehrt verbirgt er zuweisbare Kolleg:innen). Der Vergleich
+        laeuft gegen das tatsaechliche Formular-Queryset (kein hartkodierter
+        Rollenwert), damit ein kuenftiger Drift in einer der beiden Stellen
+        garantiert auffliegt, unabhaengig davon, welche Seite sich aendert."""
+        from core.forms.workitems import WorkItemForm
+
+        form = WorkItemForm(facility=facility)
+        form_pks = {str(pk) for pk in form.fields["assigned_to"].queryset.values_list("pk", flat=True)}
+
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        bundle_pks = {u["pk"] for u in bundle["assignable_users"]}
+
+        expected = {str(admin_user.pk), str(lead_user.pk), str(staff_user.pk), str(assistant_user.pk)}
+        assert form_pks == expected
+        assert bundle_pks == expected

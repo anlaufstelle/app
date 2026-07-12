@@ -219,6 +219,13 @@ def _serialize_assignable_users(facility) -> list[dict[str, Any]]:
     # aktive Facility-Nutzer:innen der zuweisbaren Rollen. Nur pk + Anzeigename
     # (Staff-Roster, KEINE Klientel-PII; ADR-022-Notiz). Wird nur fuer Staff+ ins
     # Bundle gelegt (nur sie koennen WorkItems anlegen/zuweisen).
+    # Refs #1526: gegen ``WorkItemForm.assigned_to`` (forms/workitems.py)
+    # verifiziert — beide filtern auf FACILITY_ADMIN/LEAD/STAFF/ASSISTANT,
+    # kein Drift. ASSISTANT ist bewusst enthalten (Refs #1125: Assistenz ist
+    # als Zuweisungsziel zulaessig). Ein Regressionstest
+    # (``test_assignable_users_role_set_matches_workitem_form_no_drift``)
+    # vergleicht beide Rollenmengen direkt gegen das echte Formular-Queryset,
+    # damit ein kuenftiger Drift in einer der beiden Stellen auffliegt.
     users = User.objects.filter(
         facility=facility,
         is_active=True,
