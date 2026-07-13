@@ -1,11 +1,19 @@
 # ADR-029: Quality-Gates lokal-only durchgesetzt (Dev-CI bewusst deaktiviert)
 
-- **Status:** Accepted — **am 2026-07-11 abgelöst/revidiert** (Dev-CI nach Budget-Reset reaktiviert, siehe [Update 2026-07-11](#update-2026-07-11--dev-ci-reaktiviert))
+- **Status:** Accepted — **erneut wirksam ab 2026-07-13** (die Reaktivierung vom 2026-07-11 ist zurückgenommen, alle Dev-Workflows wieder `disabled_manually`; siehe [Update 2026-07-13](#update-2026-07-13--dev-ci-wieder-deaktiviert) und [Update 2026-07-11](#update-2026-07-11--dev-ci-reaktiviert))
 - **Date:** 2026-06-28
 - **Deciders:** Tobias Nix
-- **Refs:** #1150 (Härtung gegen „falsch grün"), #860 (CI-Kosten-Postmortem), #1309 (Reaktivierung), [ADR-011](011-three-repo-release-pipeline.md) (3-Repo-Release-Pipeline)
+- **Refs:** #1150 (Härtung gegen „falsch grün"), #860 (CI-Kosten-Postmortem), #1309 (Reaktivierung), #1514 (Runner-Nichtdeterminismus Release-Build), [ADR-011](011-three-repo-release-pipeline.md) (3-Repo-Release-Pipeline)
+
+## Update 2026-07-13 — Dev-CI wieder deaktiviert
+
+`gh workflow list --all --repo anlaufstelle/app` zeigt am **2026-07-13** wieder **alle** Dev-Workflows auf `disabled_manually` — einzig aktiv ist `Dependabot Updates`. Die Reaktivierung vom 2026-07-11 ([Update unten](#update-2026-07-11--dev-ci-reaktiviert)) ist damit **nicht mehr wirksam**; der in dieser ADR beschriebene lokal-only-Zustand gilt wieder unverändert. Die Aktivierung bleibt reversibel ([docs/dev/ci-workflows.md § Reaktivierung](../dev/ci-workflows.md)).
+
+Der Release-Reproduzierbarkeits-Test `test_two_cold_builds_are_byte_identical` war während der 07-11-Reaktivierung auf dem Runner nichtdeterministisch (#1514, Signaturverdacht). Der Test ist inzwischen **gehärtet**: die harte Determinismus-Garantie läuft über den *strukturellen* Snapshot (Tree + vollständige Metadaten je Boundary) statt über die signaturhaltige HEAD-SHA; die SSH-Signatur wird separat und diagnostisch geprüft. Die **Root-Cause bleibt bis zu einem echten Runner-Lauf unbestätigt** — bei allen `disabled_manually` derzeit nicht verifizierbar, daher bleibt #1514 **offen**. Bis dahin ist `make ci` lokal das verbindliche Gate.
 
 ## Update 2026-07-11 — Dev-CI reaktiviert
+
+> **Überholt (2026-07-13):** Dieses Update beschreibt einen zwischenzeitlichen Zustand; die Workflows sind seit 2026-07-13 wieder deaktiviert (siehe [Update 2026-07-13](#update-2026-07-13--dev-ci-wieder-deaktiviert)).
 
 Der in dieser ADR als Follow-up vorgesehene Fall ist eingetreten: Das Actions-Spending-Limit wurde zurückgesetzt und die Dev-Workflows wurden als eigener Vorgang wieder aktiviert (#1309). Reaktiviert sind **Test**, **Lint**, **E2E**, **CodeQL** (PR-/Push-Gate), **Dev-Image** (baut `ghcr:main` bei jedem `main`-Push, #1247) sowie **Mutation-Nightly** und **Perf-Nightly**; der **Release**-Workflow bleibt bewusst deaktiviert (auf dem Dev-Repo unnötig, Releases laufen über die Stage/App-Pipeline).
 
