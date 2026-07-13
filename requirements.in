@@ -2,7 +2,7 @@ Django>=6.0.7,<6.1
 psycopg[binary]>=3.3.4
 gunicorn>=26.0.0
 whitenoise>=6.5
-django-htmx>=1.17
+django-htmx>=1.28.0
 django-ratelimit>=4.1
 # Major-Bump auf 49.0.0 verifiziert (#1129); der GHSA-537c-gmf6-5ccf-Fix kam mit 48.0.1.
 cryptography>=49.0.0,<50
