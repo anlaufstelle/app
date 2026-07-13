@@ -20,6 +20,11 @@ from core.services.compliance import (
     run_system_detections,
 )
 
+# Refs #1512: Fixtures aus test_rls_functional.py fuer den RLS-Regressionstest
+# der ``app.is_super_admin``-GUC-Zeile in ``run_system_detections`` — analog
+# zum Import-Muster in test_rls.py::TestSuperAdminRLSBypass.
+from tests.test_rls_functional import as_rls_role, rls_test_role  # noqa: F401
+
 
 def _create_audit(facility, user, action, hours_ago=0):
     """Erstellt AuditLog + setzt timestamp via Trigger-Bypass."""
@@ -598,3 +603,76 @@ class TestAnonymousLoginBursts:
             cur.execute("SELECT current_setting('app.is_super_admin', true)")
             value = cur.fetchone()[0] or ""
         assert value != "true", f"app.is_super_admin blieb auf der Connection stehen: {value!r}"
+
+
+@pytest.mark.django_db(transaction=True)
+class TestRunSystemDetectionsRLSRegression:
+    """Refs #1512: Regressionstest fuer die ``app.is_super_admin``-GUC-Zeile in
+    ``run_system_detections()`` — sie setzt den Bypass, damit facility=NULL-
+    AuditLog-Zeilen (anonyme Login-Bursts) unter RLS lesbar sind. Die
+    Test-DB-Rolle ist normalerweise Superuser und bypasst RLS per Postgres-
+    Default; ohne den Wechsel auf ``rls_test_role`` (NOSUPERUSER, siehe
+    ``test_rls_functional.py``) waere dieser Test aussagelos — ein kuenftiges
+    Entfernen der GUC-Zeile wuerde ihn NICHT rot werden lassen.
+
+    ``transaction=True`` ist Pflicht: ``SET ROLE`` muss session-weit aktiv
+    bleiben, damit die Policies tatsaechlich greifen (wie
+    ``TestSuperAdminRLSBypass`` in ``test_rls.py``).
+    """
+
+    def setup_method(self):
+        if connection.vendor != "postgresql":
+            pytest.skip("RLS requires PostgreSQL")
+
+    def test_system_detection_finds_facility_less_burst_under_rls(
+        self,
+        rls_test_role,  # noqa: F811
+        settings,
+    ):
+        """(a) Unter ``rls_test_role`` liefert ``run_system_detections()`` trotz
+        RLS das erwartete facility-lose Finding — die ``set_config``-Zeile in
+        ``run_system_detections`` setzt den Bypass fuer die Dauer des Laufs,
+        sowohl fuer den ``facility IS NULL``-Read als auch (redundant, siehe
+        WITH-CHECK-NULL-Branch aus #863) den Write."""
+        settings.BREACH_ANON_LOGIN_IP_THRESHOLD = 3
+        settings.BREACH_ANON_LOGIN_TOTAL_THRESHOLD = 100
+        settings.BREACH_DETECTION_WINDOW_MINUTES = 60
+        settings.BREACH_NOTIFICATION_WEBHOOK_URL = None
+        for _ in range(3):
+            _make_audit(action=AuditLog.Action.LOGIN_FAILED, user=None, ip_address="198.51.100.7")
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            entries = run_system_detections()
+
+        assert len(entries) == 1, (
+            f"Erwartet 1 facility-loses Finding trotz RLS unter rls_test_role, erhalten: {entries}"
+        )
+        entry = entries[0]
+        assert entry.detail["kind"] == "anonymous_login_burst"
+        assert entry.facility_id is None
+
+    def test_control_direct_select_without_guc_sees_zero_rows(
+        self,
+        rls_test_role,  # noqa: F811
+    ):
+        """(b) Kontrolltest: direktes SELECT auf ``core_auditlog WHERE
+        facility_id IS NULL`` unter derselben Rolle OHNE gesetztes
+        ``app.is_super_admin``-GUC liefert 0 Zeilen — beweist, dass RLS hier
+        scharf ist und Test (a) tatsaechlich die ``set_config``-Zeile in
+        ``run_system_detections`` prueft (statt dass RLS ohnehin
+        durchlaessig waere und (a) auch ohne die GUC-Zeile gruen bliebe)."""
+        _make_audit(action=AuditLog.Action.LOGIN_FAILED, user=None, ip_address="198.51.100.9")
+
+        with as_rls_role(rls_test_role, facility_id="") as cur:
+            cur.execute("SELECT current_setting('app.is_super_admin', true)")
+            guc_value = cur.fetchone()[0] or ""
+            assert guc_value != "true", (
+                f"app.is_super_admin haette hier NICHT gesetzt sein duerfen: {guc_value!r}"
+            )
+            cur.execute("SELECT id FROM core_auditlog WHERE facility_id IS NULL")
+            rows = cur.fetchall()
+
+        assert rows == [], (
+            f"RLS-Kontrolltest: erwartet 0 sichtbare Zeile(n) ohne is_super_admin-GUC, "
+            f"erhalten {len(rows)} Zeile(n) — RLS ist hier nicht scharf."
+        )
