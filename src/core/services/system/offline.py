@@ -271,6 +271,7 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
         for dt in DocumentType.objects.for_facility(facility)
         .filter(is_active=True)
         .filter(sensitivity__in=allowed_sensitivities_for_user(user))
+        .order_by("sort_order", "name")
     }
     for ev in events:
         if ev.document_type_id not in doc_types:
@@ -336,7 +337,17 @@ def build_client_offline_bundle(user, facility, client) -> dict[str, Any]:
         # WorkItems an/weisen zu) — begrenzt die Roster-Exposition im Offline-Cache.
         "assignable_users": _serialize_assignable_users(facility) if is_staff_or_above else [],
         "events": [_serialize_event(user, ev) for ev in events],
-        "document_types": [_serialize_document_type(user, dt) for dt in doc_types.values()],
+        # Refs #1498: ``doc_types`` ist ein Dict (Insertion-Reihenfolge) — die
+        # Event-Vereinigung oben haengt referenzierte (ggf. inaktive) Typen
+        # NACHTRAEGLICH ans Ende. Explizit nach (sort_order, name) sortieren,
+        # analog zu ``DocumentType.Meta.ordering`` und ``EventMetaForm``, damit
+        # ein per Event nachgezogener Typ korrekt einsortiert wird statt am
+        # Ende zu landen — wie es ``build_facility_offline_bundle`` bereits per
+        # ``.order_by("sort_order", "name")`` tut (dort ohne Event-Union).
+        "document_types": [
+            _serialize_document_type(user, dt)
+            for dt in sorted(doc_types.values(), key=lambda dt: (dt.sort_order, dt.name))
+        ],
     }
 
 

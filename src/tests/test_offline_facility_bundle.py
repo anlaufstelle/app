@@ -132,6 +132,29 @@ class TestBuildFacilityOfflineBundleService:
         assert str(doc_type_contact.pk) in pks
         assert str(inactive.pk) not in pks
 
+    def test_bundle_document_types_sorted_by_sort_order_then_name(self, facility, staff_user):
+        """Refs #1498 (Regressionsanker): das Facility-Bundle sortiert bereits
+        explizit per ``.order_by("sort_order", "name")`` (Z.376) — dieser Test
+        haelt das fest, damit der Client-Bundle-Fix (#1498) hier nicht wieder
+        auseinanderdriftet."""
+        dt_c = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.SERVICE,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+            name="Charlie",
+            sort_order=10,
+        )
+        dt_a = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.SERVICE,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+            name="Alpha",
+            sort_order=5,
+        )
+        bundle = build_facility_offline_bundle(staff_user, facility)
+        names_in_order = [dt["name"] for dt in bundle["document_types"] if dt["pk"] in {str(dt_a.pk), str(dt_c.pk)}]
+        assert names_in_order == ["Alpha", "Charlie"]
+
     def test_high_field_schema_does_not_leak_to_staff(
         self, facility, staff_user, lead_user, doc_type_normal_with_high_field
     ):

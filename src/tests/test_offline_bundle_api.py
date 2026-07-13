@@ -427,6 +427,54 @@ class TestBuildClientOfflineBundleService:
         # Offline-Create-Dropdown (documentTypeOptions) inaktive Typen ausschließt.
         assert entry["is_active"] is False
 
+    def test_bundle_document_types_sorted_by_sort_order_then_name(self, facility, client_identified, staff_user):
+        """Refs #1498: das Bundle muss ``document_types`` exakt in
+        (sort_order, name)-Reihenfolge liefern — wie ``DocumentType.Meta.ordering``
+        und wie ``build_facility_offline_bundle`` es bereits per
+        ``.order_by("sort_order", "name")`` tut. Anlagereihenfolge in der DB
+        widerspricht hier bewusst der Zielreihenfolge, und ein NUR per Event
+        referenzierter (inaktiver) Typ muss korrekt EINsortiert werden statt
+        ans Ende gehaengt zu werden."""
+        dt_c = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.SERVICE,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+            name="Charlie",
+            sort_order=10,
+        )
+        dt_a = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.SERVICE,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+            name="Alpha",
+            sort_order=5,
+        )
+        # Inaktiv, nur per Event referenziert — muss trotzdem gemaess seiner
+        # sort_order zwischen dt_a und dt_c einsortiert werden, nicht ans Ende.
+        dt_b_inactive = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.CONTACT,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+            name="Bravo",
+            sort_order=7,
+            is_active=False,
+        )
+        Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=dt_b_inactive,
+            occurred_at=timezone.now(),
+            data_json={},
+            created_by=staff_user,
+        )
+        bundle = build_client_offline_bundle(staff_user, facility, client_identified)
+        names_in_order = [
+            dt["name"]
+            for dt in bundle["document_types"]
+            if dt["pk"] in {str(dt_a.pk), str(dt_b_inactive.pk), str(dt_c.pk)}
+        ]
+        assert names_in_order == ["Alpha", "Bravo", "Charlie"]
+
     def test_bundle_event_carries_updated_at_token(self, facility, client_identified, doc_type_contact, staff_user):
         """F-07 (Refs #1109): Jedes serialisierte Event muss seinen
         ``updated_at``-Optimistic-Lock-Token mitführen.
