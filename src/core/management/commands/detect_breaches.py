@@ -5,11 +5,15 @@ Facilities und schreibt SECURITY_VIOLATION-AuditLog-Eintraege fuer
 neue Findings. Geeignet als Cron-Job (z.B. stuendlich).
 """
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from core.models import AuditLog, Facility
 from core.services.audit import audit_event
 from core.services.compliance import run_all_detections, run_system_detections
+
+# Refs #1016/#1070/#1512: zentrale Fail-Loud-Pruefung in services/system/_db_admin —
+# als Modul-Name re-exportiert, damit Tests sie auf Command-Ebene patchen koennen.
+from core.services.system import has_rls_bypass_context as _has_rls_bypass_context
 
 
 class Command(BaseCommand):
@@ -24,6 +28,18 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
+        # Refs #1512: wie enforce_retention (Refs #1016 A1.1) und
+        # verify_audit_chain/backfill_audit_chain (Refs #1070) fail-loud, statt
+        # RLS-blind 0 Facilities/Zeilen zu scannen und faelschlich "Keine neuen
+        # Breach-Findings." zu melden. Der Compliance-Cron MUSS als Rolle mit
+        # BYPASSRLS (Admin) laufen.
+        if not _has_rls_bypass_context():
+            raise CommandError(
+                "detect_breaches laeuft als RLS-gefilterte App-Rolle ohne Bypass-Kontext "
+                "(weder SUPERUSER/BYPASSRLS-Rolle noch app.is_super_admin-GUC). Abbruch — sonst "
+                "saehe der Lauf 0 Facilities/Zeilen und meldete faelschlich 'Keine neuen "
+                "Breach-Findings.' (Refs #1512)."
+            )
         facility_name = options["facility"]
         facilities = Facility.objects.all()
         if facility_name:

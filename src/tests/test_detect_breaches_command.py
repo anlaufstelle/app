@@ -20,6 +20,7 @@ from unittest.mock import patch
 
 import pytest
 from django.core.management import call_command
+from django.core.management.base import CommandError
 
 
 @pytest.mark.django_db
@@ -88,4 +89,31 @@ class TestDetectBreachesCommand:
         called_pks = {call.args[0].pk for call in mock_run.call_args_list}
         assert called_pks == {facility.pk, second_facility.pk}, (
             f"Erwartet Aufrufe fuer beide Facilities, erhalten pks: {called_pks}"
+        )
+
+
+@pytest.mark.django_db
+class TestDetectBreachesCommandRlsBypassGuard:
+    """Refs #1512: ``detect_breaches`` war das einzige Compliance-Command ohne
+    ``has_rls_bypass_context()``-Guard (Schwestern ``enforce_retention`` Refs #1016,
+    ``verify_audit_chain``/``backfill_audit_chain`` Refs #1070). Ohne Bypass-Kontext
+    liefe der Cron RLS-blind auf 0 Zeilen und meldete faelschlich 'Keine neuen
+    Breach-Findings.' — fail-loud statt dessen, analog zu den Schwester-Commands."""
+
+    def test_aborts_loud_without_bypass_context(self, monkeypatch, facility):
+        from core.management.commands import detect_breaches as cmd
+
+        monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: False)
+        with pytest.raises(CommandError, match="RLS"):
+            call_command("detect_breaches")
+
+    def test_runs_through_with_bypass_context(self, monkeypatch, facility):
+        from core.management.commands import detect_breaches as cmd
+
+        monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: True)
+        out = StringIO()
+        call_command("detect_breaches", stdout=out)
+        output = out.getvalue()
+        assert "Keine neuen Breach-Findings." in output or "Breach-Finding(s)" in output, (
+            f"Erwartet Erfolgs- oder Warning-Meldung im stdout, erhalten: {output!r}"
         )
