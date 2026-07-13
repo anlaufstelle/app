@@ -666,9 +666,7 @@ class TestRunSystemDetectionsRLSRegression:
         with as_rls_role(rls_test_role, facility_id="") as cur:
             cur.execute("SELECT current_setting('app.is_super_admin', true)")
             guc_value = cur.fetchone()[0] or ""
-            assert guc_value != "true", (
-                f"app.is_super_admin haette hier NICHT gesetzt sein duerfen: {guc_value!r}"
-            )
+            assert guc_value != "true", f"app.is_super_admin haette hier NICHT gesetzt sein duerfen: {guc_value!r}"
             cur.execute("SELECT id FROM core_auditlog WHERE facility_id IS NULL")
             rows = cur.fetchall()
 
