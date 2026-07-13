@@ -11,6 +11,8 @@ stdout-Formatierung, Argument-Parsing und Iteration ueber Facilities.
 
 from datetime import timedelta
 
+from django.db import transaction
+
 # Refs #818 — Inline-Imports an Modulkopf gehoben. Nach den Submodul-Schnitten
 # in #744/#778 entstehen keine Zirkular-Imports mehr; die fruheren Workarounds
 # in den Funktionsruempfen sind dafur ueberfluessig.
@@ -45,32 +47,51 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
     Keeps the identical behavior of the original private ``_enforce_*`` helpers.
     """
 
-    deleted_event_ids = list(qs.values_list("pk", flat=True))
-    history_entries = []
-    for event in qs.iterator():
-        # Refs #714: Beide Soft-Delete-Pfade muessen redaktiert sein —
-        # frueher kopierte Retention den Klartext in EventHistory und
-        # die append-only-Trigger machten ihn unloeschbar (DSGVO-Blocker).
+    # Refs #1344: DSGVO-Nachweiskette — jedes Event MUSS atomar mit seiner
+    # ``EventHistory(DELETE)``-Zeile geleert werden. Frueher wurden alle Events
+    # einzeln (autocommittet) geleert und die History erst NACH der Schleife per
+    # ``bulk_create`` geschrieben; ein Crash mitten im Loop hinterliess geleerte
+    # Events OHNE Nachweis (Re-Runs uebersprangen sie wegen ``is_deleted``-Filter).
+    # Deshalb: pk-Liste vorab materialisieren (bounded, wie zuvor), dann pro Event
+    # in einer eigenen ``transaction.atomic()`` mutieren + Nachweis schreiben.
+    # Muster: ``core.retention.audit_pruning`` (atomic pro Loesch-Schnitt).
+    event_pks = list(qs.values_list("pk", flat=True))
+    deleted_event_ids = []
+    for pk in event_pks:
+        # Frisch laden (kein Server-Cursor ueber committete Transaktionen hinweg);
+        # zwischenzeitlich geloeschte Events defensiv ueberspringen.
+        event = Event.objects.select_related("document_type").filter(pk=pk).first()
+        if event is None:
+            continue
+        # Refs #714: Beide Soft-Delete-Pfade muessen redaktiert sein — frueher
+        # kopierte Retention den Klartext in EventHistory und die append-only-
+        # Trigger machten ihn unloeschbar (DSGVO-Blocker). Payload + Metadaten
+        # VOR der Mutation lesen (danach ist ``data_json`` leer).
         history_payload = build_redacted_delete_history(event)
         field_metadata = _snapshot_field_metadata(event.document_type)
-        event.is_deleted = True
-        event.data_json = {}
-        delete_event_attachments(event)
-        # Refs #1092: ``search_text`` MUSS in ``update_fields`` stehen, sonst
-        # persistiert Django den vom ``pre_save``-Signal
-        # (``_refresh_event_search_text``) berechneten Leerwert nicht und der
-        # Klartext-PII leakt in der search_text-Spalte (DSGVO-Residue).
-        event.save(update_fields=["is_deleted", "data_json", "search_text", "updated_at"])
-        history_entries.append(
-            EventHistory(
+        with transaction.atomic():
+            event.is_deleted = True
+            event.data_json = {}
+            # Refs #1092: ``search_text`` MUSS in ``update_fields`` stehen, sonst
+            # persistiert Django den vom ``pre_save``-Signal
+            # (``_refresh_event_search_text``) berechneten Leerwert nicht und der
+            # Klartext-PII leakt in der search_text-Spalte (DSGVO-Residue).
+            event.save(update_fields=["is_deleted", "data_json", "search_text", "updated_at"])
+            # EventHistory ist trigger-append-only (Migration 0012) — INSERT in
+            # atomic ist konform; genau ein DELETE-Nachweis pro geleertem Event.
+            EventHistory.objects.create(
                 event=event,
                 changed_by=None,
                 action=EventHistory.Action.DELETE,
                 data_before=history_payload,
                 field_metadata=field_metadata,
             )
-        )
-    EventHistory.objects.bulk_create(history_entries)
+        # Erst NACH erfolgreichem Commit die Dateien loeschen: Datei-Unlink ist
+        # nicht rollback-bar. Faellt der Commit aus, bleiben die Attachments auf
+        # Platte; verwaiste ``.enc``-Dateien deckt ``cleanup_orphan_storage_files``
+        # als Backstop ab (#662). deleted_event_ids zaehlt nur committete Events.
+        delete_event_attachments(event)
+        deleted_event_ids.append(pk)
 
     extra = dict(extra_detail) if extra_detail else {}
     audit_retention_decision(

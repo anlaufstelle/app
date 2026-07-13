@@ -7,13 +7,28 @@ in JSONB persistieren, weil EventHistory append-only ist.
 """
 
 from datetime import timedelta
+from unittest.mock import patch
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
-from core.models import DocumentType, Event, EventHistory
+from core.models import DocumentType, Event, EventHistory, FieldTemplate
+from core.retention import enforcement as enforcement_mod
 from core.services.events import build_redacted_delete_history, soft_delete_event
+from core.services.file_vault import store_encrypted_file
+from core.services.file_vault.storage import get_attachment_path
 from core.services.retention import _soft_delete_events
+
+# Minimal gueltiges PDF, das die libmagic-Pruefung in ``store_encrypted_file`` passiert.
+PDF_HEADER = (
+    b"%PDF-1.4\n"
+    b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Count 0/Kids[]>>endobj\n"
+    b"xref\n0 3\n0000000000 65535 f\n"
+    b"trailer<</Size 3/Root 1 0 R>>\n"
+    b"startxref\n9\n%%EOF\n"
+)
 
 
 @pytest.fixture
@@ -137,3 +152,87 @@ class TestRetentionSoftDeleteRedacts:
         history = EventHistory.objects.filter(event=event_with_pii, action=EventHistory.Action.DELETE).first()
         assert history is not None
         assert isinstance(history.field_metadata, dict)
+
+
+@pytest.mark.django_db
+class TestRetentionSoftDeleteAtomicOnCrash:
+    """Refs #1344: Ein Crash mitten im Loesch-Loop darf keine
+    DSGVO-Nachweisluecke hinterlassen.
+
+    Frueher wurden Events einzeln geleert, die ``EventHistory``-Zeilen aber
+    erst NACH der Schleife gesammelt per ``bulk_create`` geschrieben. Bricht
+    der Lauf mitten drin ab, bleiben geleerte Events OHNE DELETE-Nachweis
+    zurueck (und Re-Runs ueberspringen sie wegen ``is_deleted``-Filter).
+    Der Fix macht jedes Event atomar: geleert genau dann, wenn seine
+    ``EventHistory(DELETE)``-Zeile committet ist.
+    """
+
+    def _make_event(self, facility, doc_type, admin_user, client_identified, occurred_at):
+        return Event.objects.create(
+            facility=facility,
+            document_type=doc_type,
+            client=client_identified,
+            occurred_at=occurred_at,
+            data_json={"freitext": "sensibler Klartext", "ort": "Ort X"},
+            created_by=admin_user,
+        )
+
+    def test_crash_mid_loop_leaves_no_evidence_gap(self, facility, normal_doc_type, admin_user, client_identified):
+        ft = FieldTemplate.objects.create(facility=facility, name="Anhang", field_type="file")
+
+        now = timezone.now()
+        # Deterministische Reihenfolge ueber occurred_at (die qs ist danach sortiert).
+        e1 = self._make_event(facility, normal_doc_type, admin_user, client_identified, now - timedelta(days=300))
+        e2 = self._make_event(facility, normal_doc_type, admin_user, client_identified, now - timedelta(days=200))
+        e3 = self._make_event(facility, normal_doc_type, admin_user, client_identified, now - timedelta(days=100))
+
+        att1 = store_encrypted_file(
+            facility, SimpleUploadedFile("a.pdf", PDF_HEADER, content_type="application/pdf"), ft, e1, admin_user
+        )
+        att2 = store_encrypted_file(
+            facility, SimpleUploadedFile("b.pdf", PDF_HEADER, content_type="application/pdf"), ft, e2, admin_user
+        )
+
+        qs = Event.objects.filter(pk__in=[e1.pk, e2.pk, e3.pk]).order_by("occurred_at")
+
+        # Crash beim 2. verarbeiteten Event (e2) simulieren — das erste Event
+        # (e1) muss vollstaendig verarbeitet UND nachgewiesen sein.
+        real_build = enforcement_mod.build_redacted_delete_history
+        state = {"n": 0}
+
+        def flaky(event):
+            state["n"] += 1
+            if state["n"] == 2:
+                raise RuntimeError("simulierter Crash mitten im Retention-Loop")
+            return real_build(event)
+
+        with patch.object(enforcement_mod, "build_redacted_delete_history", side_effect=flaky):
+            with pytest.raises(RuntimeError):
+                _soft_delete_events(qs, facility, category="identified", retention_days=365)
+
+        e1.refresh_from_db()
+        e2.refresh_from_db()
+        e3.refresh_from_db()
+
+        # e1: committet — geleert UND mit genau einer DELETE-Nachweiszeile.
+        assert e1.is_deleted is True
+        assert e1.data_json == {}
+        assert EventHistory.objects.filter(event=e1, action=EventHistory.Action.DELETE).count() == 1
+        # Attachment-Datei des committeten Events wird nach dem Commit entfernt.
+        assert not get_attachment_path(att1).exists()
+
+        # e2: Crash-Item — VOLLSTAENDIG unangetastet, kein Halb-Zustand.
+        assert e2.is_deleted is False
+        assert e2.data_json == {"freitext": "sensibler Klartext", "ort": "Ort X"}
+        assert not EventHistory.objects.filter(event=e2, action=EventHistory.Action.DELETE).exists()
+        assert get_attachment_path(att2).exists()
+
+        # e3: nie erreicht.
+        assert e3.is_deleted is False
+        assert e3.data_json == {"freitext": "sensibler Klartext", "ort": "Ort X"}
+
+        # DSGVO-Kern: Anzahl geleerter Events == Anzahl EventHistory(DELETE).
+        pks = [e1.pk, e2.pk, e3.pk]
+        emptied = Event.objects.filter(pk__in=pks, is_deleted=True).count()
+        history_deletes = EventHistory.objects.filter(event__pk__in=pks, action=EventHistory.Action.DELETE).count()
+        assert emptied == history_deletes == 1
