@@ -1,0 +1,39 @@
+{% load i18n %}
+{% comment %}Strichlisten-/Tally-Panel (Refs #1349, Stufe 2): je anonymfähigem
+Dokumentationstyp ein „+1"-Button. Jeder Klick läuft per HTMX-POST durch den
+regulären create_event-Pfad und tauscht dieses Panel mit dem aktualisierten
+Zählerstand aus (hx-swap outerHTML).{% endcomment %}
+{% if tally_summary.rows %}
+<section id="tally-panel" class="mb-5 bg-surface border border-subtle rounded-[10px] overflow-hidden"
+         data-testid="tally-panel" aria-labelledby="tally-heading">
+    <div class="px-4 py-3 flex items-center gap-3 flex-wrap border-b border-subtle">
+        <svg aria-hidden="true" class="w-4 h-4 text-ink-muted flex-shrink-0" fill="none" stroke="currentColor" stroke-width="1.75" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h2a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2m-6 9l2 2 4-4"/></svg>
+        <div>
+            <h2 id="tally-heading" class="text-[11px] font-bold text-ink-muted uppercase tracking-wider leading-none">{% trans "Strichliste" %}</h2>
+            <span class="text-[13px] font-semibold text-ink-soft">{% trans "Anonyme Kontakte im aktuellen Zeitfenster" %}</span>
+        </div>
+    </div>
+    <div class="px-4 py-3 flex flex-col gap-2">
+        {% for row in tally_summary.rows %}
+        <div class="flex items-center justify-between gap-3">
+            <span class="text-[13px] text-ink truncate">{{ row.document_type.name }}</span>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <span class="text-[15px] font-bold text-ink tabular-nums min-w-[2ch] text-right"
+                      data-testid="tally-count-{{ row.document_type.pk }}"
+                      aria-label="{% blocktrans with name=row.document_type.name count counter=row.count %}{{ counter }} Kontakt für {{ name }}{% plural %}{{ counter }} Kontakte für {{ name }}{% endblocktrans %}">{{ row.count }}</span>
+                <button type="button"
+                        class="inline-flex items-center justify-center min-h-[36px] min-w-[36px] px-3 rounded-[10px] btn-secondary font-bold"
+                        data-testid="tally-increment-{{ row.document_type.pk }}"
+                        hx-post="{% url 'core:tally_increment' %}"
+                        hx-vals='{"document_type": "{{ row.document_type.pk }}"}'
+                        hx-target="#tally-panel"
+                        hx-swap="outerHTML"
+                        aria-label="{% blocktrans with name=row.document_type.name %}Anonymen Kontakt für {{ name }} zählen{% endblocktrans %}">
+                    +1
+                </button>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</section>
+{% endif %}

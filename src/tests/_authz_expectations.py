@@ -414,6 +414,11 @@ EXPECTATIONS = (
     ),
     E("core:client_autocomplete", "partials-htmx", get=ASSISTANT_PLUS),
     E("core:event_fields_partial", "partials-htmx", get=ASSISTANT_PLUS),
+    # Strichlisten-„+1" (Refs #1349): document_type kommt im POST-Body (nicht als
+    # URL-kwarg), daher liefert der matrix-Leer-POST für berechtigte Rollen ein
+    # 404 (get_object_or_404) — als extra_ok deklariert. Scoping/IDOR wird
+    # body-basiert in test_tally.py geprüft (Muster event_fields_partial).
+    E("core:tally_increment", "partials-htmx", post=ASSISTANT_PLUS, extra_ok=(404,)),
     E("core:zeitstrom_feed_partial", "partials-htmx", get=ASSISTANT_PLUS),
     E("core:cases_for_client", "partials-htmx", get=STAFF_PLUS),
     E("core:global_search", "partials-htmx", get=ASSISTANT_PLUS),

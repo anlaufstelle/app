@@ -12,6 +12,7 @@ import re
 import time
 
 import pytest
+from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -469,3 +470,30 @@ class TestSerienerfassung:
         save_next.click()
         page.wait_for_url(re.compile(r"/events/new/\?document_type=[0-9a-f-]+"))
         assert "document_type=" in page.url
+
+
+class TestTallyPanel:
+    """Strichlisten-/Tally-Panel auf der Zeitstrom-Startseite (Refs #1349, Stufe 2)."""
+
+    def test_increment_raises_counter(self, authenticated_page, base_url):
+        """„+1" legt über den regulären Erfassungspfad einen anonymen Kontakt an
+        und rendert den erhöhten Zählerstand als HTMX-Partial zurück."""
+        page = authenticated_page
+
+        page.goto(f"{base_url}/", wait_until="domcontentloaded")
+
+        panel = page.locator('[data-testid="tally-panel"]')
+        panel.wait_for(state="visible", timeout=5000)
+
+        # Ersten „+1"-Button greifen und dessen Dokumentationstyp bestimmen.
+        button = page.locator('[data-testid^="tally-increment-"]').first
+        button.wait_for(state="visible", timeout=5000)
+        dt_id = button.get_attribute("data-testid").replace("tally-increment-", "")
+
+        count = page.locator(f'[data-testid="tally-count-{dt_id}"]')
+        before = int(count.inner_text().strip())
+
+        button.click()
+
+        # Nach dem HTMX-outerHTML-Swap zeigt derselbe Zähler einen mehr.
+        expect(page.locator(f'[data-testid="tally-count-{dt_id}"]')).to_have_text(str(before + 1), timeout=5000)

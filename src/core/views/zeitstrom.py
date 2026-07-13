@@ -9,7 +9,7 @@ from django.views.generic import TemplateView
 from core.models import DocumentType, TimeFilter
 from core.services.case import build_handover_summary
 from core.services.dashboard import build_focus_box, staff_dashboard_context
-from core.services.events import build_feed_items, enrich_events_with_preview
+from core.services.events import build_feed_items, build_tally_summary, enrich_events_with_preview
 from core.services.system import get_active_bans
 from core.views.mixins import AssistantOrAboveRequiredMixin
 
@@ -96,6 +96,10 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
         # beim Durchklicken anderer Tage/Schichten nicht mitwechselt.
         current_shift_summary = self._build_current_shift_summary(facility, time_filters)
 
+        # Strichlisten-/Tally-Panel (Refs #1349): anonyme Massenkontakte je
+        # anonymfähigem Dokumentationstyp im aktuellen Zeitfenster zählen.
+        tally_summary = build_tally_summary(facility, self.request.user)
+
         # Active bans (from Dashboard)
         active_bans = get_active_bans(facility, user=self.request.user)
 
@@ -115,6 +119,7 @@ class ZeitstromView(AssistantOrAboveRequiredMixin, TemplateView):
                 "feed_items": feed_items,
                 "handover_summary": handover_summary,
                 "current_shift_summary": current_shift_summary,
+                "tally_summary": tally_summary,
                 "time_filters": time_filters,
                 "selected_filter": selected_filter,
                 "selected_filter_id": selected_filter_id,

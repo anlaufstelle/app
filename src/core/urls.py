@@ -53,6 +53,7 @@ from core.views.events import (
     EventDetailView,
     EventFieldsPartialView,
     EventUpdateView,
+    TallyIncrementView,
 )
 from core.views.lockout_recovery import (
     LockoutRecoveryBackupCodeView,
@@ -260,6 +261,7 @@ urlpatterns = [
     path("partials/workitems/<uuid:pk>/status/", WorkItemStatusUpdateView.as_view(), name="workitem_status_update"),
     path("partials/clients/autocomplete/", ClientAutocompleteView.as_view(), name="client_autocomplete"),
     path("partials/events/fields/", EventFieldsPartialView.as_view(), name="event_fields_partial"),
+    path("partials/tally/increment/", TallyIncrementView.as_view(), name="tally_increment"),
     path("partials/zeitstrom/feed/", ZeitstromFeedPartialView.as_view(), name="zeitstrom_feed_partial"),
     path("partials/cases/for-client/", CasesForClientView.as_view(), name="cases_for_client"),
     path("partials/search/global/", GlobalSearchPartialView.as_view(), name="global_search"),

@@ -72,6 +72,11 @@ from core.services.events.idempotency import (
     payload_fingerprint,
     remember_idempotent_result,
 )
+from core.services.events.tally import (
+    build_tally_summary,
+    current_tally_window,
+    tally_document_types,
+)
 
 __all__ = [
     "CONTACT_STAGE_ORDER",
@@ -91,7 +96,9 @@ __all__ = [
     "build_feed_items",
     "build_field_template_lookup",
     "build_redacted_delete_history",
+    "build_tally_summary",
     "compute_event_diff",
+    "current_tally_window",
     "create_event",
     "decrypt_event_text_data",
     "enrich_events_with_preview",
@@ -112,5 +119,6 @@ __all__ = [
     "soft_delete_event",
     "split_file_and_text_data",
     "stage_index",
+    "tally_document_types",
     "update_event",
 ]

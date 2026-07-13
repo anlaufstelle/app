@@ -5,9 +5,10 @@ import logging
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
-from django.http import Http404
+from django.http import Http404, HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -32,6 +33,7 @@ from core.services.events import (
     attach_files_to_new_event,
     build_attachment_context,
     build_event_detail_context,
+    build_tally_summary,
     create_event,
     decrypt_event_text_data,
     filtered_server_data_json,
@@ -393,6 +395,54 @@ class EventFieldsPartialView(AssistantOrAboveRequiredMixin, View):
         data_form = DynamicEventDataForm(document_type=doc_type, facility=request.current_facility)
         remove_restricted_fields(request.user, doc_type, data_form)
         return render(request, "core/events/partials/dynamic_fields.html", {"data_form": data_form})
+
+
+@method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True), name="post")
+class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
+    """Strichlisten-„+1" für anonyme Massenkontakte (Refs #1349, Stufe 2).
+
+    Legt pro Klick über den regulären ``create_event``-Service (NICHT per
+    Direkt-ORM/Bulk-Insert) einen anonymen Kontakt an — Audit, EventHistory und
+    Activity-Log greifen damit pro Kontakt wie bei jeder Einzelerfassung — und
+    rendert das Strichlisten-Panel mit dem aktualisierten Zählerstand als
+    HTMX-Partial zurück.
+    """
+
+    def post(self, request):
+        facility = request.current_facility
+
+        # Facility-Scope: unbekannter/fremder Typ → 404 (verrät keine Existenz
+        # in anderer Einrichtung).
+        doc_type = get_object_or_404(
+            DocumentType, pk=request.POST.get("document_type"), facility=facility, is_active=True
+        )
+
+        # Sensitivity-Guard (Muster EventFieldsPartialView): ein Assistant darf
+        # per manipuliertem POST keinen HIGH-/ELEVATED-Typ erfassen, den seine
+        # Rolle nicht sehen darf. create_event prüft das zusätzlich — hier
+        # bewusst früh, um vor dem Schreibpfad abzuweisen.
+        if not user_can_see_document_type(request.user, doc_type):
+            raise PermissionDenied
+
+        # Typen mit Mindest-Kontaktstufe sind NIE anonym (create_event erzwingt
+        # das): die Strichliste bietet sie nicht an, ein POST darauf ist Missbrauch.
+        if doc_type.min_contact_stage:
+            return HttpResponseBadRequest(_("Dieser Dokumentationstyp erfordert eine Person."))
+
+        create_event(
+            facility=facility,
+            user=request.user,
+            document_type=doc_type,
+            occurred_at=timezone.now(),
+            data_json={},
+            is_anonymous=True,
+        )
+
+        return render(
+            request,
+            "core/zeitstrom/partials/tally_panel.html",
+            {"tally_summary": build_tally_summary(facility, request.user)},
+        )
 
 
 class EventDetailView(AssistantOrAboveRequiredMixin, View):

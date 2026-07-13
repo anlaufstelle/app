@@ -125,6 +125,9 @@
 </section>
 {% endif %}
 
+{# Strichliste (Refs #1349): „+1"-Erfassung anonymer Massenkontakte je Typ. #}
+{% include "core/zeitstrom/partials/tally_panel.html" %}
+
 {# Filter + Feed-Layout: 1fr/220px Grid (Design) #}
 <div class="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-6 items-start">
     {# Feed-Spalte #}
