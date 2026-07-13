@@ -49,9 +49,14 @@ ROOT = Path(__file__).resolve().parent.parent
 # Tier 1/2 abgedeckt, die Restluecke kommt von Form-Labels, Help-
 # Texts und Audit-Action-Bezeichnern. Translator-Pass ist Pre-
 # Release-Anschlussarbeit.
+#
+# 2026-07-13 (#1527): Translator-Pass fuer en.po abgeschlossen — nach
+# frischem makemessages-Lauf alle 35 fuzzy + 46 untranslated Eintraege
+# (Sync-Konflikt-UI, Demo-Modus, Upload-/Bild-Validierung, Retention/
+# Audit, Locking, Idempotenz) uebersetzt. en-Baseline auf 0/0 gesenkt.
 BASELINES: dict[str, tuple[int, int]] = {
     "src/locale/de/LC_MESSAGES/django.po": (208, 406),
-    "src/locale/en/LC_MESSAGES/django.po": (120, 71),
+    "src/locale/en/LC_MESSAGES/django.po": (0, 0),
 }
 
 TRANSLATED_RE = re.compile(r"(\d+)\s+translated")
