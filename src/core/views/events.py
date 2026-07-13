@@ -5,7 +5,9 @@ import logging
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -120,6 +122,30 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                     meta_form.fields["client"].initial = client_id
                 prefill_data = apply_template(applied_template)
 
+        # Serienerfassung (Refs #1349): der „Speichern & nächster Kontakt"-
+        # Redirect trägt ``?document_type=<pk>`` — den Typ des gerade
+        # gespeicherten Kontakts. Er wird vorgewählt, damit der nächste
+        # (bewusst anonyme) Kontakt ohne erneute Typwahl erfasst werden kann.
+        # ZWINGEND facility-scoped + Sensitivity-Guard (Muster
+        # EventFieldsPartialView): sonst könnte ein Assistant per manipuliertem
+        # Query die Feldlabels/Help-Texte eines HIGH-Typs sichtbar machen (IDOR).
+        # Fremd-Facility/unbekannt → 404; sichtbarer-aber-unberechtigter Typ →
+        # still ignoriert (kein Leak), Formular rendert wie ohne Prefill.
+        serienerfassung = False
+        doc_type_param = request.GET.get("document_type")
+        if doc_type_param and applied_template is None:
+            try:
+                prefill_doc_type = DocumentType.objects.get(pk=doc_type_param, facility=facility, is_active=True)
+            except (DocumentType.DoesNotExist, ValidationError, ValueError):
+                raise Http404(_("Dokumentationstyp nicht gefunden.")) from None
+            if user_can_see_document_type(request.user, prefill_doc_type):
+                default_doc_type = prefill_doc_type
+                initial["document_type"] = prefill_doc_type.pk
+                meta_form = EventMetaForm(facility=facility, user=request.user, initial=initial)
+                if client_id:
+                    meta_form.fields["client"].initial = client_id
+                serienerfassung = True
+
         # Pre-render dynamic fields when default document type is set
         if default_doc_type:
             data_form = DynamicEventDataForm(
@@ -128,6 +154,13 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                 facility=facility,
             )
             remove_restricted_fields(request.user, default_doc_type, data_form)
+            # Refs #1349: Bei der Serienerfassung Fokus auf das erste dynamische
+            # Feld setzen, damit direkt getippt werden kann (CSP-konform via
+            # HTML-``autofocus``, kein Inline-Script). App-weites Fokus-
+            # Management ist #1339 — hier bewusst minimal.
+            if serienerfassung and data_form.fields:
+                first_field = next(iter(data_form.fields.values()))
+                first_field.widget.attrs["autofocus"] = True
         else:
             data_form = DynamicEventDataForm()
 
@@ -144,6 +177,10 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
             "quick_templates": quick_templates,
             "current_doc_type_templates": current_doc_type_templates,
             "applied_template": applied_template,
+            # Refs #1349: Serienerfassungs-Prefill zählt (wie ein Quick-Template)
+            # als bewusster Server-Prefill — der autosave-Draft desselben Pfads
+            # darf das vorbelegte Formular beim Laden NICHT überschreiben (#625).
+            "serienerfassung": serienerfassung,
         }
 
         client = get_client_or_none(facility, client_id)
@@ -318,6 +355,20 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
         # zweites Event zu erzeugen. Der Payload-Hash (N14) macht dabei eine
         # Key-Kollision mit anderem Body erkennbar. No-op ohne Schlüssel.
         remember_idempotent_result("event_create", request.user.pk, idem_key, event.pk, payload_hash=idem_payload_hash)
+
+        # Serienerfassung (Refs #1349): „Speichern & nächster Kontakt" leitet
+        # zurück auf das leere Formular mit vorgewähltem Dokumentationstyp,
+        # damit anonyme Massenkontakte zügig hintereinander erfasst werden
+        # können. Bewusst NUR für den klassischen Formular-Submit — NICHT für
+        # den Offline-Replay (roher ``Accept: application/json``): dessen
+        # generische Queue erwartet unverändert den normalen Erfolgs-Redirect
+        # auf die Detailseite, ein abweichender Ziel-Pfad würde den
+        # HTTP-Replay-Contract brechen. Der Redirect trägt den Typ, aber
+        # bewusst KEINEN client → der nächste Kontakt startet anonym; das
+        # ``occurred_at`` wird beim GET neu gesetzt.
+        if request.POST.get("_save_and_new") and not _wants_raw_json_response(request):
+            messages.success(request, _("Kontakt gespeichert – bereit für den nächsten."))
+            return redirect(f"{reverse('core:event_create')}?document_type={doc_type.pk}")
 
         messages.success(request, _("Kontakt wurde dokumentiert."))
         return redirect("core:event_detail", pk=event.pk)

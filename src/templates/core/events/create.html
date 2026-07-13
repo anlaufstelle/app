@@ -8,7 +8,7 @@
     <h1 class="text-[22px] font-bold text-ink mb-6">{% trans "Neuer Kontakt" %}</h1>
 
     {# Refs #1489: data-offline-enctype-downgrade — ohne gewaehlte Datei wird der Submit auf urlencoded umgestellt, damit der SW ihn offline queuen kann (multipart wird bewusst nie gequeued). #}
-    <form method="post" enctype="multipart/form-data" class="space-y-4" id="event-create-form" data-offline-enctype-downgrade data-autosave{% if applied_template %} data-autosave-server-prefilled{% endif %}
+    <form method="post" enctype="multipart/form-data" class="space-y-4" id="event-create-form" data-offline-enctype-downgrade data-autosave{% if applied_template or serienerfassung %} data-autosave-server-prefilled{% endif %}
           x-data="eventClientAutocomplete"
           data-initial-pseudonym="{{ client_pseudonym|default:'' }}"
           data-initial-client-id="{{ client_id|default:'' }}"
@@ -184,6 +184,16 @@
             <button type="submit" id="event-submit-btn"
                     class="w-full sm:w-auto px-4 py-2 btn-primary transition-colors">
                 {% trans "Speichern" %}
+            </button>
+            {% comment %}Serienerfassung (Refs #1349): speichert und öffnet direkt das
+            nächste leere Formular mit vorgewähltem Typ. Nur für anonymfähige Typen
+            sinnvoll — bei Typen mit Mindest-Kontaktstufe (anonymousAllowed=false)
+            ausgeblendet, weil der nächste Kontakt bewusst anonym startet.{% endcomment %}
+            <button type="submit" name="_save_and_new" value="1" id="event-submit-next"
+                    data-testid="event-submit-next"
+                    x-show="anonymousAllowed" x-cloak
+                    class="w-full sm:w-auto px-4 py-2 btn-secondary transition-colors">
+                {% trans "Speichern & nächster Kontakt" %}
             </button>
             <a href="{% url 'core:zeitstrom' %}" class="w-full sm:w-auto text-center px-4 py-2 btn-secondary">{% trans "Abbrechen" %}</a>
         </div>

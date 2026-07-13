@@ -314,6 +314,122 @@ class TestEventCreateView:
 
 
 @pytest.mark.django_db
+class TestEventCreateSerienerfassung:
+    """Serienerfassung „Speichern & nächster Kontakt" (Refs #1349, Stufe 1)."""
+
+    def test_save_and_new_redirects_to_create_with_document_type(self, client, staff_user, doc_type_contact):
+        """_save_and_new ohne Person → 302 auf event_create?document_type=<pk>, anonym."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_contact.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "dauer": "5",
+                "notiz": "",
+                "_save_and_new": "1",
+            },
+        )
+        assert response.status_code == 302
+        assert response.url.startswith(reverse("core:event_create"))
+        assert f"document_type={doc_type_contact.pk}" in response.url
+        # Redirect bewusst OHNE client → nächster Kontakt startet anonym.
+        assert "client=" not in response.url
+        event = Event.objects.filter(document_type=doc_type_contact, created_by=staff_user).first()
+        assert event is not None
+        assert event.is_anonymous is True
+
+    def test_save_and_new_raw_json_replay_keeps_normal_redirect(self, client, staff_user, doc_type_contact):
+        """Offline-Replay (Accept: application/json) darf sich NICHT ändern:
+        trotz _save_and_new normales Verhalten (Redirect auf Detail, nicht Create)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:event_create"),
+            {
+                "document_type": str(doc_type_contact.pk),
+                "occurred_at": timezone.now().strftime("%Y-%m-%dT%H:%M"),
+                "dauer": "5",
+                "notiz": "",
+                "_save_and_new": "1",
+            },
+            HTTP_ACCEPT="application/json",
+        )
+        assert response.status_code == 302
+        event = Event.objects.filter(document_type=doc_type_contact, created_by=staff_user).first()
+        assert event is not None
+        # Normaler Erfolgs-Redirect zeigt auf die Detail-Seite des Events.
+        assert response.url == reverse("core:event_detail", kwargs={"pk": event.pk})
+
+    def test_save_and_new_button_rendered(self, client, staff_user):
+        client.force_login(staff_user)
+        response = client.get(reverse("core:event_create"))
+        assert response.status_code == 200
+        assert 'name="_save_and_new"' in response.content.decode()
+        assert 'data-testid="event-submit-next"' in response.content.decode()
+
+    def test_get_prefill_document_type_preselects_and_renders_fields(self, client, staff_user, doc_type_contact):
+        """?document_type=<pk> wählt den Typ vor und rendert dessen dynamische Felder."""
+        client.force_login(staff_user)
+        response = client.get(reverse("core:event_create") + f"?document_type={doc_type_contact.pk}")
+        assert response.status_code == 200
+        body = response.content.decode()
+        # Dynamische Felder des Typs sind vorgerendert.
+        assert "Dauer" in body
+        assert "Notiz" in body
+        # Erste sinnvolle Eingabe bekommt Fokus (autofocus-Attribut).
+        assert "autofocus" in body
+
+    def test_get_prefill_marks_form_server_prefilled(self, client, staff_user, doc_type_contact):
+        """Serienerfassungs-Prefill markiert das Formular als server-prefilled,
+        damit der autosave-Draft desselben Pfads es beim Laden nicht überschreibt (#625)."""
+        client.force_login(staff_user)
+        response = client.get(reverse("core:event_create") + f"?document_type={doc_type_contact.pk}")
+        assert response.status_code == 200
+        assert "data-autosave-server-prefilled" in response.content.decode()
+
+    def test_get_without_prefill_not_server_prefilled(self, client, staff_user):
+        """Leeres Formular ohne Prefill trägt den Server-Prefill-Marker NICHT
+        (autosave-Wiederherstellung bleibt für die normale Erfassung aktiv)."""
+        client.force_login(staff_user)
+        response = client.get(reverse("core:event_create"))
+        assert response.status_code == 200
+        assert "data-autosave-server-prefilled" not in response.content.decode()
+
+    def test_get_prefill_document_type_foreign_facility_404(self, client, staff_user, organization):
+        """Fremd-Facility-DocumentType im Prefill → 404 (Facility-Guard)."""
+        from core.models import DocumentType, Facility
+
+        other_facility = Facility.objects.create(organization=organization, name="Fremd")
+        foreign_dt = DocumentType.objects.create(facility=other_facility, name="Fremd-Kontakt")
+        client.force_login(staff_user)
+        response = client.get(reverse("core:event_create") + f"?document_type={foreign_dt.pk}")
+        assert response.status_code == 404
+
+    def test_get_prefill_high_type_no_leak_for_assistant(self, client, assistant_user, facility):
+        """Assistant darf per ?document_type=<HIGH-pk> keine HIGH-Feldlabels sehen (IDOR)."""
+        from core.models import DocumentType, DocumentTypeField, FieldTemplate
+
+        unique_label = "Suizidrisiko-Klassifizierung-RF1349"
+        high_dt = DocumentType.objects.create(
+            facility=facility,
+            name="Krisen-Hochsensibel-1349",
+            sensitivity=DocumentType.Sensitivity.HIGH,
+        )
+        ft_secret = FieldTemplate.objects.create(
+            facility=facility,
+            name=unique_label,
+            field_type=FieldTemplate.FieldType.TEXTAREA,
+            sensitivity="high",
+        )
+        DocumentTypeField.objects.create(document_type=high_dt, field_template=ft_secret, sort_order=0)
+
+        client.force_login(assistant_user)
+        response = client.get(reverse("core:event_create") + f"?document_type={high_dt.pk}")
+        assert response.status_code == 200
+        assert unique_label not in response.content.decode()
+
+
+@pytest.mark.django_db
 class TestEventDetailView:
     def test_event_detail_renders(self, client, staff_user, sample_event):
         client.force_login(staff_user)

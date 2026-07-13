@@ -413,3 +413,59 @@ class TestAutoSave:
         assert stored is None, "Draft sollte beim Server-Prefill geloescht sein"
 
         page.evaluate(self._JS_CLEAR)
+
+
+class TestSerienerfassung:
+    """Serienerfassung „Speichern & nächster Kontakt" (Refs #1349, Stufe 1).
+
+    Für anonyme Massenkontakte (Strichlisten-Situation): der zweite Submit-Button
+    speichert und öffnet direkt das nächste leere Formular mit vorgewähltem
+    Dokumentationstyp — ohne Umweg über die Detailseite.
+    """
+
+    def test_save_and_new_reopens_empty_form_with_preselected_type(self, authenticated_page, base_url):
+        """„Speichern & nächster Kontakt" landet wieder auf /events/new/ mit vorgewähltem Typ."""
+        page = authenticated_page
+
+        page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
+
+        # „Kontakt" ist anonymfähig → der Save-and-new-Button ist sichtbar.
+        page.select_option("select[name='document_type']", label="Kontakt")
+        page.locator("#dynamic-fields input[name='dauer']").wait_for(state="attached", timeout=5000)
+
+        save_next = page.locator('[data-testid="event-submit-next"]')
+        save_next.wait_for(state="visible", timeout=5000)
+        save_next.click()
+
+        # Redirect zurück aufs leere Formular mit ?document_type=<uuid> (nicht Detail).
+        page.wait_for_url(re.compile(r"/events/new/\?document_type=[0-9a-f-]+"))
+        assert "document_type=" in page.url
+        assert "/events/new/" in page.url
+
+        # Der Typ ist im neuen Formular vorgewählt.
+        selected_label = page.locator("select[name='document_type'] option:checked").inner_text()
+        assert selected_label.strip() == "Kontakt"
+
+        # Das erste dynamische Feld erhält den Fokus (autofocus, CSP-konform).
+        assert page.get_attribute("[autofocus]", "name") == "dauer"
+
+    def test_save_and_new_twice_in_a_row(self, authenticated_page, base_url):
+        """Zwei Kontakte hintereinander per Button — der Zähler auf der Startseite steigt um zwei."""
+        page = authenticated_page
+
+        page.goto(f"{base_url}/events/new/", wait_until="domcontentloaded")
+        page.select_option("select[name='document_type']", label="Kontakt")
+        page.locator("#dynamic-fields input[name='dauer']").wait_for(state="attached", timeout=5000)
+
+        # Erster Kontakt.
+        save_next = page.locator('[data-testid="event-submit-next"]')
+        save_next.wait_for(state="visible", timeout=5000)
+        save_next.click()
+        page.wait_for_url(re.compile(r"/events/new/\?document_type=[0-9a-f-]+"))
+
+        # Zweiter Kontakt direkt hinterher — Typ ist bereits vorgewählt.
+        save_next = page.locator('[data-testid="event-submit-next"]')
+        save_next.wait_for(state="visible", timeout=5000)
+        save_next.click()
+        page.wait_for_url(re.compile(r"/events/new/\?document_type=[0-9a-f-]+"))
+        assert "document_type=" in page.url
