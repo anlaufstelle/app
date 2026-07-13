@@ -43,7 +43,27 @@ importScripts("/static/js/url-patterns.js");
 // (neue WORKITEM_LIST-/ZEITSTROM-Zweige). Der Bump erzwingt Re-Install +
 // Re-Precache, damit der Kalt-Offline-Pfad die neuen Tab-Shells findet statt
 // der /offline/-Home.
-const CACHE_NAME = "anlaufstelle-v22";
+// Refs #1546: v22 -> v23 -- SW-Cache-Hygiene / Storage-Budget. Der
+// stale-while-revalidate-Zweig schrieb bisher JEDE erfolgreiche
+// /static/-Antwort ungebremst in den Precache (CACHE_NAME) — gehashte
+// Asset-URLs akkumulierten ueber Release-Generationen (~245 MB beobachtet).
+// Ab jetzt landet die Laufzeit-Revalidierung in einem GETRENNTEN Runtime-Cache
+// (RUNTIME_CACHE_NAME) mit Eintrags-Budget (MAX_RUNTIME_ENTRIES); der Precache
+// bleibt unangetastet. Der Bump erzwingt Re-Install + Re-Activate und raeumt
+// dabei die alten, ungebremst gewachsenen v22-Caches (Precache + Runtime) weg.
+const CACHE_NAME = "anlaufstelle-v23";
+// Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
+// vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
+// automatisch auch den Runtime-Cache neu (alte Generation faellt im activate
+// weg). Der Precache (CACHE_NAME) enthaelt ausschliesslich das kuratierte
+// APP_SHELL und wird NIE getrimmt.
+const RUNTIME_CACHE_NAME = CACHE_NAME + "-runtime";
+// Refs #1546: Eintrags-Budget fuer den Runtime-Cache. Bewusst ein Eintrags-Cap
+// (nicht Byte-basiert): cache.keys() liefert die Eintraege in
+// Insertion-Reihenfolge, sodass sich die aeltesten ohne jeglichen In-Memory-
+// Zustand (der SW-Restarts nicht ueberlebte) zuerst verdraengen lassen. 150
+// deckt App-Shell-Revalidierungen + uebliche Runtime-Assets grosszuegig ab.
+const MAX_RUNTIME_ENTRIES = 150;
 // Refs #701: dediziertes Fallback-Template fuer Navigation-Requests
 // ohne Cache- und Netz-Hit. Wird als App-Shell pre-cached, damit es
 // auch beim ersten Offline-Aufruf garantiert verfuegbar ist.
@@ -233,12 +253,38 @@ self.addEventListener("message", (event) => {
 
 self.addEventListener("activate", (event) => {
     event.waitUntil(
+        // Refs #1546: Sowohl den aktuellen Precache (CACHE_NAME) als auch den
+        // zugehoerigen Runtime-Cache (RUNTIME_CACHE_NAME) behalten; alle
+        // uebrigen Caches — auch alte Precache- UND alte -runtime-Generationen
+        // frueherer Versionen — loeschen. So verschwindet der ungebremst
+        // gewachsene v22-Cache beim Aktivieren des v23-SW.
         caches.keys().then((keys) =>
-            Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+            Promise.all(
+                keys
+                    .filter((k) => k !== CACHE_NAME && k !== RUNTIME_CACHE_NAME)
+                    .map((k) => caches.delete(k))
+            )
         )
     );
     self.clients.claim();
 });
+
+// Refs #1546: Runtime-Cache nach jedem Schreiben auf das Eintrags-Budget
+// kappen. cache.keys() liefert die Requests in Insertion-Reihenfolge — die
+// aeltesten Eintraege stehen vorn und werden zuerst verdraengt, bis
+// MAX_RUNTIME_ENTRIES wieder eingehalten ist. Bewusst KEIN echtes LRU mit
+// Zugriffs-Tracking: dessen Zustand muesste In-Memory oder in IndexedDB liegen
+// und wuerde SW-Restarts nicht ueberleben (der SW wird zwischen Events
+// entladen). Nur der Runtime-Cache wird angefasst — der Precache (CACHE_NAME)
+// bleibt garantiert unberuehrt.
+async function _trimRuntimeCache() {
+    const cache = await caches.open(RUNTIME_CACHE_NAME);
+    const keys = await cache.keys();
+    const overflow = keys.length - MAX_RUNTIME_ENTRIES;
+    for (let i = 0; i < overflow; i++) {
+        await cache.delete(keys[i]);
+    }
+}
 
 function shouldQueueRequest(url) {
     return self.URL_PATTERNS.QUEUE_PATTERNS.some((pattern) => pattern.test(url));
@@ -472,7 +518,16 @@ self.addEventListener("fetch", (event) => {
                     .then((response) => {
                         if (response && response.ok) {
                             const clone = response.clone();
-                            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+                            // Refs #1546: Laufzeit-Revalidierung landet im
+                            // GETRENNTEN Runtime-Cache (nicht im Precache) und
+                            // wird direkt danach auf das Eintrags-Budget
+                            // gekappt. So waechst der Precache nie ueber das
+                            // kuratierte APP_SHELL hinaus, und gehashte
+                            // Asset-URLs akkumulieren nicht ueber
+                            // Release-Generationen.
+                            caches
+                                .open(RUNTIME_CACHE_NAME)
+                                .then((cache) => cache.put(request, clone).then(() => _trimRuntimeCache()));
                         }
                         return response;
                     })

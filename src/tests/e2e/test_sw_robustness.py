@@ -316,6 +316,159 @@ def test_precache_includes_offline_sync_core_assets(browser, base_url):
         context.close()
 
 
+def _read_sw_constants(page):
+    """Liest MAX_RUNTIME_ENTRIES und CACHE_NAME aus der ECHTEN SW-Quelle
+    (kein Hardcode-Drift): GET /sw.js im Seitenkontext, dann per Regex parsen.
+    """
+    src = page.evaluate("async () => (await fetch('/sw.js')).text()")
+    m_max = re.search(r"MAX_RUNTIME_ENTRIES = (\d+)", src)
+    m_cache = re.search(r'CACHE_NAME = "([^"]+)"', src)
+    assert m_max, "MAX_RUNTIME_ENTRIES in /sw.js nicht gefunden (Quell-Drift?)."
+    assert m_cache, "CACHE_NAME in /sw.js nicht gefunden (Quell-Drift?)."
+    return int(m_max.group(1)), m_cache.group(1)
+
+
+def test_runtime_cache_trim_enforces_entry_budget(browser, base_url):
+    """Refs #1546: Der stale-while-revalidate-Zweig schreibt gehashte
+    /static/-Assets nicht mehr ungebremst in den Precache, sondern in einen
+    getrennten Runtime-Cache mit Eintrags-Budget (MAX_RUNTIME_ENTRIES). Nach
+    mehr als MAX distinct /static/-GETs (durch den SW gejagt) muss der
+    Runtime-Cache das Budget wieder einhalten — ohne Trim waere er direkt auf
+    MAX+overflow gewachsen. Der Precache (CACHE_NAME) bleibt davon unberuehrt.
+    """
+    page, context = _login_with_retry(browser, base_url)
+    try:
+        _wait_for_active_service_worker(page, base_url)
+        max_entries, cache_name = _read_sw_constants(page)
+        runtime_name = cache_name + "-runtime"
+        overflow = 12
+
+        # Distinct /static/-GETs durch den SW jagen (jeder Query-String ist ein
+        # eigener Cache-Key) -> SWR-Zweig put+trim. styles.css wird in der
+        # E2E-Konfiguration direkt als 200 ausgeliefert.
+        page.evaluate(
+            """async (n) => {
+                for (let i = 0; i < n; i++) {
+                    await fetch('/static/css/styles.css?budget_probe=' + i);
+                }
+            }""",
+            max_entries + overflow,
+        )
+
+        # put+trim laufen im Hintergrund (im SWR-Zweig NICHT awaited, damit die
+        # Response sofort zurueckkommt) -> Python-seitig pollen, bis der
+        # Runtime-Cache das Budget einhaelt (async wait_for_function liefert
+        # sonst False-Positives, siehe Datei-Konventionen).
+        precache_count = None
+        runtime_count = None
+        for _ in range(60):
+            counts = page.evaluate(
+                """async (names) => {
+                    const [runtimeName, cacheName] = names;
+                    const rt = await caches.open(runtimeName);
+                    const pc = await caches.open(cacheName);
+                    return { runtime: (await rt.keys()).length, precache: (await pc.keys()).length };
+                }""",
+                [runtime_name, cache_name],
+            )
+            runtime_count = counts["runtime"]
+            precache_count = counts["precache"]
+            if 0 < runtime_count <= max_entries:
+                break
+            page.wait_for_timeout(250)
+
+        assert runtime_count is not None and runtime_count > 0, (
+            "Runtime-Cache blieb leer — die /static/-GETs liefen offenbar nicht durch den SWR-Zweig."
+        )
+        assert runtime_count <= max_entries, (
+            f"Runtime-Cache haelt das Budget nicht ein: {runtime_count} > {max_entries} — Trim hat nicht gegriffen."
+        )
+        # Der Precache darf durch die vielen Revalidierungen NICHT wachsen: er
+        # enthaelt nur das kuratierte APP_SHELL, kein einziges Probe-Asset.
+        assert precache_count <= max_entries, (
+            f"Precache ({cache_name}) ist auf {precache_count} Eintraege gewachsen — der SWR-Zweig schreibt "
+            "faelschlich weiterhin in den Precache statt in den Runtime-Cache."
+        )
+    finally:
+        context.close()
+
+
+def test_activate_evicts_orphaned_cache_generations(browser, base_url):
+    """Refs #1546: Der activate-Handler behaelt genau den aktuellen Precache
+    (CACHE_NAME) UND den zugehoerigen Runtime-Cache (RUNTIME_CACHE_NAME) und
+    loescht alle uebrigen — insbesondere alte Precache- UND alte
+    ``-runtime``-Generationen frueherer Releases (der ~245-MB-Altlast-Treiber).
+    Wir pflanzen verwaiste Alt-Generationen, triggern per ``register(?probe)``
+    + SKIP_WAITING einen echten activate-Zyklus und pruefen die Aufraeumung.
+    """
+    page, context = _login_with_retry(browser, base_url)
+    probe = f"e2e-hygiene-{uuid.uuid4().hex[:8]}"
+    try:
+        _wait_for_active_service_worker(page, base_url)
+        _max_entries, cache_name = _read_sw_constants(page)
+        runtime_name = cache_name + "-runtime"
+
+        # Verwaiste Alt-Generationen (Precache + Runtime) UND den aktuellen
+        # Runtime-Cache anlegen — letzterer MUSS den activate ueberleben.
+        page.evaluate(
+            """async (currentRuntime) => {
+                await caches.open('anlaufstelle-vOLD');
+                await caches.open('anlaufstelle-vOLD-runtime');
+                await caches.open(currentRuntime);
+            }""",
+            runtime_name,
+        )
+
+        # Update-Trigger: gleiche Scope, andere Script-URL (?probe) -> neuer
+        # Worker installiert und bleibt dank Gate in `waiting`.
+        page.evaluate(
+            """async (probe) => { await navigator.serviceWorker.register('/sw.js?' + probe, { scope: '/' }); }""",
+            probe,
+        )
+
+        # Auf den wartenden Worker warten (Python-poll), dann SKIP_WAITING ->
+        # activate laeuft (Cache-Cleanup in waitUntil) -> clients.claim().
+        has_waiting = False
+        for _ in range(60):
+            has_waiting = page.evaluate(
+                """async () => {
+                    const reg = await navigator.serviceWorker.getRegistration('/');
+                    return !!(reg && reg.waiting);
+                }"""
+            )
+            if has_waiting:
+                break
+            page.wait_for_timeout(250)
+        assert has_waiting, "Kein wartender SW nach ?probe-Update — Gate/Update-Trigger pruefen."
+
+        page.evaluate(
+            """async () => {
+                const reg = await navigator.serviceWorker.getRegistration('/');
+                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+            }"""
+        )
+
+        # Reload-sicher warten, bis der NEUE Worker (?probe) kontrolliert — nach
+        # activate + claim (sw-register.js laedt bei controllerchange neu).
+        page.wait_for_function(
+            "(probe) => navigator.serviceWorker.controller && "
+            "navigator.serviceWorker.controller.scriptURL.includes(probe)",
+            arg=probe,
+            timeout=15000,
+        )
+
+        names = page.evaluate("() => caches.keys()")
+        assert "anlaufstelle-vOLD" not in names, f"Verwaister Alt-Precache nicht geloescht: {names}"
+        assert "anlaufstelle-vOLD-runtime" not in names, f"Verwaister Alt-Runtime-Cache nicht geloescht: {names}"
+        assert cache_name in names, f"Aktueller Precache faelschlich geloescht: {names}"
+        assert runtime_name in names, (
+            f"Aktueller Runtime-Cache ({runtime_name}) wurde beim activate geloescht — "
+            f"die RUNTIME_CACHE_NAME-Ausnahme fehlt: {names}"
+        )
+    finally:
+        context.close()
+
+
 def test_queue_ack_handshake_survives_multiple_open_tabs(browser, base_url):
     """Regressionsschutz #1351/#1386: Mit zwei offenen Tabs muss der
     QUEUE_REQUEST/ACK-Handshake weiterhin einen Client erreichen und eine

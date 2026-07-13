@@ -122,11 +122,11 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v22"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v23"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
-            "(#1543/#1499: APP_SHELL um die pk-losen Tab-Shells "
-            "(/offline/workitems/, /offline/zeitstrom/) + ihre Renderer "
-            "erweitert; neue WORKITEM_LIST-/ZEITSTROM-Fallback-Zweige)."
+            "(#1546: SWR-Runtime-Cache vom Precache getrennt (RUNTIME_CACHE_NAME) "
+            "+ Eintrags-Budget; der Bump raeumt die alten, ungebremst "
+            "gewachsenen v22-Caches beim activate weg)."
         )
 
     def test_sw_caches_offline_create_shells(self, client):
@@ -309,6 +309,75 @@ class TestServiceWorkerCachesOfflineFallback:
             assert asset in shell_block, (
                 f"{asset} fehlt im APP_SHELL — In-Place-Shells offline ohne Renderer/Nav/Koordinator."
             )
+
+
+@pytest.mark.django_db
+class TestServiceWorkerRuntimeCacheHygiene:
+    """Refs #1546: Der stale-while-revalidate-Zweig darf nicht mehr ungebremst
+    in den Precache (CACHE_NAME) schreiben. Ein getrennter Runtime-Cache
+    (RUNTIME_CACHE_NAME) mit Eintrags-Budget verhindert, dass gehashte
+    Asset-URLs ueber Release-Generationen akkumulieren (~245 MB beobachtet).
+    Diese Guards lesen den ausgelieferten SW-Body (String), da es keine
+    JS-Testumgebung gibt — das echte Trim-/Bump-Verhalten deckt zusaetzlich
+    ``test_sw_robustness.py`` per E2E ab.
+    """
+
+    def test_runtime_cache_name_derived_from_cache_name(self, client):
+        body = client.get(reverse("service_worker")).content.decode()
+        assert 'RUNTIME_CACHE_NAME = CACHE_NAME + "-runtime"' in body, (
+            "RUNTIME_CACHE_NAME muss vom CACHE_NAME abgeleitet sein, damit ein "
+            "CACHE_NAME-Bump automatisch auch den zugehoerigen Runtime-Cache neu benennt."
+        )
+
+    def test_entry_budget_constant_defined(self, client):
+        body = client.get(reverse("service_worker")).content.decode()
+        assert re.search(r"const MAX_RUNTIME_ENTRIES = \d+;", body), (
+            "MAX_RUNTIME_ENTRIES (Eintrags-Cap fuer den Runtime-Cache) fehlt."
+        )
+
+    def test_swr_branch_writes_to_runtime_cache_not_precache(self, client):
+        """Der SWR-Revalidate-Put muss in den Runtime-Cache gehen, nicht in den
+        Precache. Der einzige ``caches.open(CACHE_NAME)`` darf im install-Handler
+        stehen (Precache), nicht mehr im fetch-/SWR-Zweig.
+        """
+        body = client.get(reverse("service_worker")).content.decode()
+        assert ".open(RUNTIME_CACHE_NAME)" in body, "SWR-Zweig schreibt nicht in den Runtime-Cache."
+        # CACHE_NAME wird nur noch beim Precache (install: cache.addAll) geoeffnet.
+        assert body.count("caches.open(CACHE_NAME)") == 1, (
+            "caches.open(CACHE_NAME) darf nur einmal (im install-Precache) vorkommen — "
+            "der SWR-Zweig muss RUNTIME_CACHE_NAME nutzen, sonst waechst der Precache ungebremst."
+        )
+        # Der Precache-open steht im install-Handler; im fetch-/SWR-Zweig wird
+        # nur noch der Runtime-Cache geoeffnet (letztes ``.open(RUNTIME_...)``).
+        install_open = body.index("caches.open(CACHE_NAME)")
+        install_handler = body.index('addEventListener("install"')
+        fetch_handler = body.index('addEventListener("fetch"')
+        swr_runtime_open = body.rindex(".open(RUNTIME_CACHE_NAME)")
+        assert install_handler < install_open < fetch_handler, "Precache-open muss im install-Handler bleiben."
+        assert swr_runtime_open > fetch_handler, "Runtime-open muss im fetch-/SWR-Zweig stehen."
+
+    def test_swr_put_triggers_trim(self, client):
+        """Nach jedem cache.put in den Runtime-Cache muss der Trim laufen (Budget
+        halten), ohne In-Memory-Zustand (SW-Restart-sicher).
+        """
+        body = client.get(reverse("service_worker")).content.decode()
+        assert "_trimRuntimeCache" in body, "Trim-Funktion _trimRuntimeCache fehlt."
+        # Trim iteriert ueber cache.keys() (Insertion-Reihenfolge) und loescht
+        # die aeltesten, bis das Budget wieder gilt.
+        assert "MAX_RUNTIME_ENTRIES" in body
+
+    def test_activate_preserves_precache_and_runtime_cache(self, client):
+        """Der activate-Handler loescht alle Caches AUSSER CACHE_NAME UND
+        RUNTIME_CACHE_NAME — alte Generationen (auch alte ``-runtime``-Caches)
+        werden weggeraeumt, der aktuelle Runtime-Cache ueberlebt.
+        """
+        body = client.get(reverse("service_worker")).content.decode()
+        activate_start = body.index('addEventListener("activate"')
+        activate_block = body[activate_start : activate_start + 1200]
+        assert "k !== CACHE_NAME" in activate_block, "activate muss CACHE_NAME behalten."
+        assert "k !== RUNTIME_CACHE_NAME" in activate_block, (
+            "activate muss auch den aktuellen RUNTIME_CACHE_NAME behalten, sonst wird er direkt nach install geleert."
+        )
 
 
 @pytest.mark.django_db

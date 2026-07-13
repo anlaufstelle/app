@@ -1694,7 +1694,83 @@
             if (typeof usage !== "number" || typeof quota !== "number" || quota <= 0) {
                 return null;
             }
-            return { usage: usage, quota: quota, percent: Math.round((usage / quota) * 100) };
+            // Refs #1546 (AC3): Aufschluesselung CacheStorage vs. IndexedDB,
+            // damit offline-Speicherwachstum intern nachvollziehbar wird (der
+            // SW-Runtime-Cache war der stille Treiber, ~245 MB). Beide Felder
+            // sind additiv und fail-soft: schlaegt die Ermittlung fehl, bleibt
+            // das jeweilige Feld null — die Gesamt-Belegung (usage/quota/
+            // percent) und alle bestehenden Aufrufer bleiben unberuehrt.
+            const cacheStorageBytes = await _measureCacheStorageBytes();
+            let indexedDbBytes = null;
+            // Bevorzugt der praezise Wert aus estimate().usageDetails (Chromium
+            // liefert ihn), sonst eine Naeherung aus Gesamt-Belegung minus
+            // gemessenem CacheStorage (nie negativ; enthaelt neben IndexedDB
+            // auch andere Quoten-Posten, daher nur als Fallback markiert).
+            const details = estimate.usageDetails;
+            if (details && typeof details.indexedDB === "number") {
+                indexedDbBytes = details.indexedDB;
+            } else if (typeof cacheStorageBytes === "number") {
+                indexedDbBytes = Math.max(0, usage - cacheStorageBytes);
+            }
+            return {
+                usage: usage,
+                quota: quota,
+                percent: Math.round((usage / quota) * 100),
+                cacheStorageBytes: cacheStorageBytes,
+                indexedDbBytes: indexedDbBytes,
+            };
+        } catch (_e) {
+            return null;
+        }
+    }
+
+    /*
+     * Refs #1546 (AC3): Summiert die belegten Bytes ueber ALLE
+     * CacheStorage-Eintraege (SW-Precache + Runtime-Cache). Pro Eintrag zuerst
+     * der Content-Length-Header, sonst die Blob-Groesse des geklonten Response.
+     * Jeder Einzelschritt ist defensiv gekapselt: ein einzelner unlesbarer
+     * Eintrag (opaque Response, verworfener Body) darf die Gesamt-Messung nicht
+     * kippen. Rueckgabe:
+     *   number — Summe in Bytes (0, wenn keine Caches vorhanden).
+     *   null   — CacheStorage fehlt (kein Secure Context / alter Browser) oder
+     *            die Iteration scheitert komplett; der Aufrufer behandelt null
+     *            als "unbekannt" und faellt auf die Differenz-Naeherung zurueck.
+     */
+    async function _measureCacheStorageBytes() {
+        const cacheStorage = typeof self !== "undefined" ? self.caches : null;
+        if (!cacheStorage || typeof cacheStorage.keys !== "function") {
+            return null;
+        }
+        try {
+            let total = 0;
+            const names = await cacheStorage.keys();
+            for (const name of names) {
+                let cache;
+                try {
+                    cache = await cacheStorage.open(name);
+                } catch (_e) {
+                    continue;
+                }
+                const requests = await cache.keys();
+                for (const request of requests) {
+                    try {
+                        const response = await cache.match(request);
+                        if (!response) {
+                            continue;
+                        }
+                        const len = response.headers.get("content-length");
+                        if (len && Number.isFinite(Number(len))) {
+                            total += Number(len);
+                        } else {
+                            const blob = await response.clone().blob();
+                            total += blob.size;
+                        }
+                    } catch (_e) {
+                        // einzelner Eintrag unlesbar -> ueberspringen
+                    }
+                }
+            }
+            return total;
         } catch (_e) {
             return null;
         }
