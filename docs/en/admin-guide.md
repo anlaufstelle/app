@@ -73,6 +73,7 @@ DOMAIN=anlaufstelle.meine-einrichtung.de
 
 # Django
 DJANGO_SECRET_KEY=<long-random-string>
+DJANGO_AUDIT_HASH_KEY=<separate-long-random-string>
 DJANGO_SETTINGS_MODULE=anlaufstelle.settings.prod
 ALLOWED_HOSTS=anlaufstelle.meine-einrichtung.de
 
@@ -112,6 +113,7 @@ All environment variables that the application evaluates at runtime (see [`src/a
 | Name | Default | Description |
 |---|---|---|
 | `DJANGO_SECRET_KEY` | -- (required in prod) | Signs sessions/CSRF. Generate with `secrets.token_urlsafe(50)`. |
+| `DJANGO_AUDIT_HASH_KEY` | -- (required in prod) | HMAC key for pseudonymized audit entries (e.g. password-reset emails), separate from `DJANGO_SECRET_KEY` -- without its own key, the audit hash would otherwise silently fall back to `SHA256(SECRET_KEY)`, which a `SECRET_KEY` leak could then exploit retroactively; hence fail-closed. Generate with: `python -c "import secrets; print(secrets.token_urlsafe(64))"`. |
 | `DJANGO_SETTINGS_MODULE` | -- | In production: `anlaufstelle.settings.prod`. |
 | `ALLOWED_HOSTS` | -- (required in prod) | Comma-separated host names, e.g. `anlaufstelle.example.de`. |
 | `TRUSTED_PROXY_HOPS` | `1` | Number of trusted proxies in front of the app (X-Forwarded-For evaluation). `0` = no proxy, `1` = Caddy only, `2` = CDN + Caddy. |
@@ -194,13 +196,24 @@ No changes are needed as long as `DOMAIN` is set in the `.env` file.
 
 ### Step 4: Start the Stack
 
+Django migrations do **not** run automatically on `web` service startup — they are a separate one-shot step (Refs #802). For a fresh install, follow this order:
+
 ```bash
+# 1. Start the database (+ ClamAV) first
+docker compose -f docker-compose.prod.yml up -d db clamav
+
+# 2. Create the schema once via the one-shot job
+docker compose -f docker-compose.prod.yml run --rm \
+    --entrypoint=/app/docker-migrate.sh web
+
+# 3. Start the full stack (web + caddy)
 docker compose -f docker-compose.prod.yml up -d
 ```
 
+For details on the migrate job (ownership normalization, advisory lock, expected output), see the canonical source [`docs/ops-runbook.md` § 1.2](../ops-runbook.md#12-deploy-schritte).
+
 On first start:
 - The PostgreSQL database is initialized
-- Django migrations are applied automatically
 - Caddy requests a TLS certificate
 
 Check the status:
@@ -783,15 +796,21 @@ docker compose -f docker-compose.prod.yml up -d
 
 ### 4.1 Pull New Image and Update the Stack
 
-```bash
-# Download the latest image
-docker compose -f docker-compose.prod.yml pull
+Migrations run as a separate one-shot job **before** the `web` service is restarted — it no longer runs migrations on startup itself (Refs #802). For details, see the canonical source [`docs/ops-runbook.md` § 1.2](../ops-runbook.md#12-deploy-schritte).
 
-# Restart the stack (brief downtime)
-docker compose -f docker-compose.prod.yml up -d
+```bash
+# 1. Download the latest image
+docker compose -f docker-compose.prod.yml pull web
+
+# 2. Run migrations as a one-shot job
+docker compose -f docker-compose.prod.yml run --rm \
+    --entrypoint=/app/docker-migrate.sh web
+
+# 3. Restart the stack (web + caddy, DB stays up; brief downtime)
+docker compose -f docker-compose.prod.yml up -d web caddy
 ```
 
-The `web` service automatically runs pending database migrations on startup. Check the logs afterwards:
+Check the logs afterwards:
 
 ```bash
 docker compose -f docker-compose.prod.yml logs web --tail=50
@@ -1316,4 +1335,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.20.0 -->
 <!-- translation-date: 2026-06-12 -->
-<!-- source-hash: 1abae21 -->
+<!-- source-hash: e86f008 -->
