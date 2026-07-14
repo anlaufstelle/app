@@ -2,7 +2,8 @@
 
 from datetime import date
 
-from django.http import HttpResponseBadRequest, HttpResponseNotAllowed, JsonResponse
+from django.db import IntegrityError, transaction
+from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseNotAllowed, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
@@ -85,7 +86,24 @@ class RetentionHoldView(LeadOrAdminRequiredMixin, View):
             except ValueError:
                 return HttpResponseBadRequest(_("Ungültiges Datum."))
 
-        hold = create_legal_hold(proposal, request.user, reason, expires_at)
+        try:
+            # Savepoint, damit ein IntegrityError an der Unique-Constraint
+            # die laufende Transaktion nicht kaputt zuruecklaesst — analog
+            # zu WorkItemCreateView/EventCreateView (Refs #1347).
+            with transaction.atomic():
+                hold = create_legal_hold(proposal, request.user, reason, expires_at)
+        except IntegrityError as exc:
+            # Zwei (Doppel-Klick-)Hold-Anfragen auf dieselbe pending
+            # Proposal koennen beide die Statuspruefung im Template
+            # passieren, bevor der HTMX-Swap greift — die zweite verletzt
+            # ``unique_active_legal_hold``. Nur diesen Fall abfangen, jeden
+            # anderen IntegrityError re-raisen (Refs #1347).
+            if "unique_active_legal_hold" not in str(exc):
+                raise
+            return HttpResponse(
+                _("Für diesen Vorschlag existiert bereits ein aktiver Hold."),
+                status=409,
+            )
 
         # Refresh proposal from DB
         proposal.refresh_from_db()

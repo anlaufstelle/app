@@ -675,6 +675,23 @@ class TestRetentionHoldView:
         hold = LegalHold.objects.filter(target_id=proposal.target_id).first()
         assert hold.expires_at == date.today() + timedelta(days=90)
 
+    def test_double_submit_does_not_500(self, client, lead_user, proposal):
+        """Refs #1347: zwei (Doppel-Klick-)Hold-Anfragen auf dieselbe
+        Proposal duerfen nicht mit einem ungefangenen IntegrityError an
+        ``unique_active_legal_hold`` abbrechen — der zweite Versuch soll
+        gracefully abgewiesen werden, nicht mit 500.
+        """
+        client.force_login(lead_user)
+        url = reverse("core:retention_hold", kwargs={"pk": proposal.pk})
+
+        resp1 = client.post(url, {"reason": "Erster Hold"})
+        assert resp1.status_code == 200
+
+        resp2 = client.post(url, {"reason": "Doppel-Klick"})
+        assert resp2.status_code == 409
+
+        assert LegalHold.objects.filter(target_id=proposal.target_id, dismissed_at__isnull=True).count() == 1
+
 
 @pytest.mark.django_db
 class TestRetentionDismissHoldView:

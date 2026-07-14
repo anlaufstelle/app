@@ -576,6 +576,8 @@ Drei Compliance-relevante Foreign Keys auf `settings.AUTH_USER_MODEL` trugen `on
 
 `LegalHold` hatte keine Unique-Constraint auf `(facility, target_type, target_id)` — anders als `RetentionProposal` (`unique_active_retention_proposal`) und `DeletionRequest` (`unique_pending_deletion_request`). Neu: `unique_active_legal_hold`, eine Partial-Unique mit `condition=Q(dismissed_at__isnull=True)`. Ein bereits abgelaufener, aber noch nicht per `dismissed_at` aufgehobener Hold blockiert bewusst weiterhin einen neuen Hold auf dasselbe Ziel — die Bedingung kann `expires_at` nicht einbeziehen, weil ein Index-Prädikat in Postgres `IMMUTABLE` sein muss und `CURRENT_DATE` das nicht ist.
 
+`RetentionHoldView.post` fängt die neue `IntegrityError` an `unique_active_legal_hold` gezielt ab (Savepoint via `transaction.atomic()`, analog zu `WorkItemCreateView`/`EventCreateView`) — zwei gleichzeitige oder per Doppel-Klick ausgelöste Hold-Anfragen auf dieselbe `pending` Proposal ergeben so einen sauberen `409` statt eines ungefangenen `500`. Jeder andere `IntegrityError` wird weiterhin re-raised.
+
 ### DAT-03: `on_delete` wirkt bei Django nur im Python-Collector
 
 Django bildet `on_delete` standardmäßig **nicht** auf DB-Ebene ab — die von Django erzeugten FK-Constraints sind auf Postgres immer `NO ACTION`, unabhängig vom gewählten `on_delete`-Wert (verifiziert u. a. an `LegalHold.dismissed_by`, das schon vor dieser Migration `SET_NULL` war, dessen DB-Constraint aber `NO ACTION` blieb). Der Schutz war damit ausschließlich Python-seitig wirksam — Raw-SQL-Pfade (z. B. ein direktes `DELETE FROM core_user` durch ein Skript oder eine zukünftige Erasure-Routine, die den ORM-Collector umgeht) hätten die `on_delete`-Semantik nicht respektiert. Der Kommentar in `src/tests/test_cases_cascade.py` bezeichnete diesen rein ORM-seitigen Vertrag bisher irreführend als „DB-Level-Cascade-Vertrag" — korrigiert.
@@ -588,6 +590,7 @@ Pro FK besteht die Migration aus einem DROP-RunSQL (löscht den ursprünglichen 
 
 - ORM- und DB-Level-Tests: [`src/tests/test_ondelete_hardening.py`](../src/tests/test_ondelete_hardening.py) — deckt sowohl `user.delete()` über den Django-Collector als auch einen Raw-SQL-`DELETE FROM core_user` (der den Collector umgeht) ab.
 - Migrations-Reversibilität: [`src/tests/test_migration_0104_reversible.py`](../src/tests/test_migration_0104_reversible.py) — fährt `migrate core 0103` und wieder `migrate core 0104` innerhalb der Test-Transaktion.
+- Doppel-Hold-Handling: [`src/tests/test_retention_dashboard.py`](../src/tests/test_retention_dashboard.py) (`TestRetentionHoldView::test_double_submit_does_not_500`).
 - Migration: [`src/core/migrations/0104_ondelete_hardening_legalhold_workitem_deletionrequest.py`](../src/core/migrations/0104_ondelete_hardening_legalhold_workitem_deletionrequest.py)
 
 ---
