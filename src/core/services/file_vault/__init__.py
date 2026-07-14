@@ -37,12 +37,15 @@ from core.services.file_vault.encryption import (
     safe_decrypt,
 )
 from core.services.file_vault.storage import (
+    StagedUpload,
     _facility_dir,  # noqa: F401 — verwendet in test_file_vault.py::TestStorageOrphanCleanup
+    commit_staged_upload,
     delete_attachment_file,
     get_attachment_path,
     get_current_entries_for_field,
     get_decrypted_file_stream,
     get_original_filename,
+    prepare_encrypted_upload,
     soft_delete_attachment_chain,
     store_encrypted_file,
 )
@@ -63,9 +66,11 @@ __all__ = [
     "EncryptionKeyMissing",
     "FILE_FORMAT_VERSION",
     "ScanResult",
+    "StagedUpload",
     "VirusScannerUnavailableError",
     "clamav_ping",
     "cleanup_orphan_storage_files",
+    "commit_staged_upload",
     "decrypt_field",
     "decrypt_file_stream",
     "delete_attachment_file",
@@ -81,6 +86,7 @@ __all__ = [
     "get_original_filename",
     "is_encrypted_value",
     "ping",
+    "prepare_encrypted_upload",
     "safe_decrypt",
     "scan_file",
     "signature_info",

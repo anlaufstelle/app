@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 
 from django.conf import settings as django_settings
@@ -34,37 +35,53 @@ def _facility_dir(facility):
     return Path(django_settings.MEDIA_ROOT) / str(facility.pk)
 
 
-def store_encrypted_file(
-    facility,
-    uploaded_file,
-    field_template,
-    event,
-    user,
-    supersedes=None,
-    sort_order=None,
-):
-    """Encrypt and store an uploaded file. Returns EventAttachment instance.
+@dataclass
+class StagedUpload:
+    """Ergebnis von :func:`prepare_encrypted_upload` — eine bereits verschluesselt
+    auf Disk liegende, aber noch NICHT als ``EventAttachment`` persistierte Datei.
 
-    Modi:
-    * ``supersedes=None`` → **add**: Neue Versionskette mit frischer ``entry_id``.
-    * ``supersedes=<attachment>`` → **replace**: Übernimmt ``entry_id`` und
-      ``sort_order`` des Vorgängers, markiert diesen als ersetzt
-      (``is_current=False``, ``superseded_by=<new>``, ``superseded_at``).
+    Traegt alle Werte, die :func:`commit_staged_upload` fuer den reinen DB-Write
+    braucht, sodass zwischen Scan/Encrypt (teuer, synchron) und dem DB-Insert
+    keine erneute Datei-Beruehrung noetig ist (Refs #1345).
+    """
+
+    storage_name: str
+    output_path: Path
+    detected_mime: str
+    file_size: int
+    original_name: str
+    content_type: str
+
+
+def prepare_encrypted_upload(facility, uploaded_file, user, *, event=None):
+    """Validieren, scannen und verschluesseln — OHNE DB-Write (Refs #1345).
+
+    Fuehrt die volle Pre-Encrypt-Policy-Pipeline plus ClamAV-Scan und
+    Fernet-Verschluesselung auf Disk aus und liefert einen :class:`StagedUpload`.
+    Bewusst OHNE Aufrufer-Transaktion gedacht: der teure, synchrone Teil (ClamAV
+    bis ``CLAMAV_TIMEOUT`` pro Datei + Verschluesselung) wird so VOR den
+    ``transaction.atomic()``-Block des Aufrufers gezogen. Dadurch wird der
+    per-Facility ``pg_advisory_xact_lock`` des AuditLog-Inserts (Hashkette) NICHT
+    ueber den Scan gehalten — andere audit-schreibende Aktionen derselben
+    Facility blockieren nicht mehr (Schreibserialisierung je Facility, #1345).
+
+    Reihenfolge der Checks bleibt EXAKT wie bisher (#1268: Groesse VOR
+    Voll-Pufferung im Virenscan — Memory-DoS-Schutz; #1274: verifizierter
+    libmagic-MIME festgehalten). ``event`` ist optional und geht nur in die
+    ``SECURITY_VIOLATION``-Audit-Attribution ein (``None`` bei Anlage eines noch
+    nicht existierenden Events). Bei jedem Fehler wird eine bereits geschriebene
+    ``.enc``-Datei entfernt und die Exception re-raised.
 
     1. Enforce ``Settings.allowed_file_types`` extension whitelist (Refs #610).
-    2. Scan file with ClamAV (if CLAMAV_ENABLED) BEFORE encryption — infected
-       uploads are rejected with ``ValidationError`` and logged as
-       ``SECURITY_VIOLATION``. Scanner errors are treated as fail-closed when
-       scanning is enabled (Issue #524).
-    3. Verify magic-bytes MIME matches the declared ``content_type`` — rejects
-       payload-smuggling attempts (Refs #610).
-    4. Generate UUID filename
-    5. Create facility subdirectory
-    6. Encrypt file stream to disk
-    7. Create EventAttachment record
-
-    Disk file stays until the event itself is deleted or anonymized
-    (Refs #587/622 — Versionshistorie + Stufe-B Multi-Entry).
+    2. Enforce ``min(Facility-Limit, globaler Cap)`` VOR jeder Voll-Pufferung
+       (#1268/#1363).
+    3. Scan file with ClamAV (if CLAMAV_ENABLED) BEFORE encryption — infizierte
+       Uploads werden mit ``ValidationError`` abgelehnt und als
+       ``SECURITY_VIOLATION`` protokolliert (fail-closed, Issue #524).
+    4. Verify magic-bytes MIME matches the declared ``content_type`` (Refs #610).
+    5. Decompression-/Zip-Bomb-Guards (#1268/#1310).
+    6. UUID-Dateiname + Facility-Unterverzeichnis + Fernet-Encrypt auf Disk
+       (Chunks an die Storage-ID gebunden, A4.5 / Refs #1016).
     """
     enforce_allowed_file_types(facility, uploaded_file, event, user)
     # #1268: harte Service-Groessenobergrenze VOR der Voll-Pufferung im Virenscan
@@ -86,8 +103,40 @@ def store_encrypted_file(
 
     # A4.5 (Refs #1016): Chunks an die Storage-ID binden (v2-Format) — schützt
     # Bestandsdateien gegen Reorder/Truncation/Cross-File-Splicing auf der Disk.
-    encrypt_file(uploaded_file, output_path, file_id=storage_name)
+    try:
+        encrypt_file(uploaded_file, output_path, file_id=storage_name)
+    except Exception:
+        # Scheitert die Verschluesselung, keine halbe ``.enc`` auf Disk lassen (#662).
+        output_path.unlink(missing_ok=True)
+        raise
 
+    return StagedUpload(
+        storage_name=storage_name,
+        output_path=output_path,
+        detected_mime=detected_mime or "",
+        file_size=uploaded_file.size,
+        original_name=uploaded_file.name,
+        content_type=uploaded_file.content_type or "application/octet-stream",
+    )
+
+
+def commit_staged_upload(event, field_template, staged, user, *, supersedes=None, sort_order=None):
+    """Persistiere eine per :func:`prepare_encrypted_upload` gestagte Datei als
+    ``EventAttachment`` — reiner DB-Write (Refs #1345).
+
+    Sicher innerhalb der Aufrufer-``transaction.atomic()`` aufzurufen: hier faellt
+    kein ClamAV-Scan und keine Verschluesselung mehr an, nur der schnelle Insert.
+
+    Modi:
+    * ``supersedes=None`` → **add**: Neue Versionskette mit frischer ``entry_id``.
+    * ``supersedes=<attachment>`` → **replace**: Übernimmt ``entry_id`` und
+      ``sort_order`` des Vorgängers, markiert diesen als ersetzt
+      (``is_current=False``, ``superseded_by=<new>``, ``superseded_at``).
+
+    Bei einem DB-Fehler wird die gestagte ``.enc``-Datei entfernt (#662).
+    Disk file stays until the event itself is deleted or anonymized
+    (Refs #587/622 — Versionshistorie + Stufe-B Multi-Entry).
+    """
     try:
         if supersedes is not None:
             # Replace-Modus: entry_id + sort_order vom Vorgänger übernehmen.
@@ -101,11 +150,11 @@ def store_encrypted_file(
         new_attachment = EventAttachment.objects.create(
             event=event,
             field_template=field_template,
-            storage_filename=storage_name,
-            original_filename_encrypted=encrypt_field(uploaded_file.name),
-            file_size=uploaded_file.size,
-            mime_type=uploaded_file.content_type or "application/octet-stream",
-            detected_mime=detected_mime or "",
+            storage_filename=staged.storage_name,
+            original_filename_encrypted=encrypt_field(staged.original_name),
+            file_size=staged.file_size,
+            mime_type=staged.content_type,
+            detected_mime=staged.detected_mime or "",
             created_by=user,
             is_current=True,
             entry_id=entry_id,
@@ -120,10 +169,32 @@ def store_encrypted_file(
     except Exception:
         # Synchroner Fehler in DB-Operationen — geschriebene Datei sofort
         # entfernen, damit der Disk nicht waechst (#662).
-        output_path.unlink(missing_ok=True)
+        staged.output_path.unlink(missing_ok=True)
         raise
 
     return new_attachment
+
+
+def store_encrypted_file(
+    facility,
+    uploaded_file,
+    field_template,
+    event,
+    user,
+    supersedes=None,
+    sort_order=None,
+):
+    """Encrypt and store an uploaded file. Returns EventAttachment instance.
+
+    Duenner Wrapper um :func:`prepare_encrypted_upload` + :func:`commit_staged_upload`
+    (Refs #1345). Fuer Aufrufer, die Scan/Encrypt und DB-Write NICHT trennen
+    muessen (Seed, Update/Replace-Pfad ``apply_attachment_changes``): der
+    Vertrag (Signatur, Reihenfolge der Checks, Cleanup-Garantie) bleibt
+    unveraendert. Der Create-Pfad (``EventCreateView``) ruft die beiden Phasen
+    dagegen getrennt, um den Scan aus der Audit-Lock-Transaktion zu ziehen.
+    """
+    staged = prepare_encrypted_upload(facility, uploaded_file, user, event=event)
+    return commit_staged_upload(event, field_template, staged, user, supersedes=supersedes, sort_order=sort_order)
 
 
 def soft_delete_attachment_chain(event, entry_id, user):
