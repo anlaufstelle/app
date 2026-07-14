@@ -94,18 +94,34 @@ In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.en
 
 ### 5. Ersten Deploy anstoßen
 
-Coolify zieht das Image automatisch aus `ghcr.io/anlaufstelle/app:latest`.
+Coolify zieht das Image automatisch aus `ghcr.io/anlaufstelle/app:${APP_VERSION}`
+([`docker-compose.prod.yml`](../docker-compose.prod.yml)). Es gibt **kein**
+`:latest`-Tag — ausgeliefert wird immer die per `APP_VERSION` gepinnte
+Release-Version (Default `v0.20.0`, siehe [`docker-compose.prod.yml`](../docker-compose.prod.yml)).
 
 ### 6. Initial-Setup
 
-Einmalig auf dem Server in der Web-Container-Shell:
+Einmalig nach dem ersten Deploy, per SSH auf dem Server:
 
 ```bash
-python manage.py migrate
-python manage.py setup_facility   # Admin-User + Facility anlegen
+# Migrationen laufen NICHT im Entrypoint, sondern als separater One-Shot-Job
+# vor dem Rolling-Restart (docker-migrate.sh, Refs #802/C-34) — prueft vorab
+# via check_db_roles das DB-Rollenprofil (Refs #1002).
+docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh web
+
+# Super-Admin anlegen (Pflicht-Schritt, kein Default-Passwort, ADR-018)
+docker compose -f docker-compose.prod.yml exec web \
+    python manage.py create_super_admin
 ```
 
-Der Admin erhält eine Einladungs-E-Mail mit Setup-Link (Token-Invite-Flow, #528).
+Der Super-Admin (`role=super_admin`) legt danach über die `/system/`-UI die erste
+Einrichtung sowie die erste Anwendungsbetreuung (`facility_admin`) an — empfohlen,
+weil über die UI auditierbar (`SYSTEM_VIEW`-Einträge). Für reine
+Single-Tenant-Installationen, in denen System- und Anwendungsbetreuung dieselbe
+Person sind, gibt es als interaktiven CLI-Fallback `python manage.py setup_facility`.
+Details: [ADR-018](adr/018-rollenmodell-superadmin.md),
+[docs/dev/dev-deployment.md § Production-Bootstrap](dev/dev-deployment.md),
+[docs/admin-guide.md § 2.2](admin-guide.md).
 
 > **⚠️ PostgreSQL-Rolle: NOSUPERUSER ist Pflicht.** Der in `POSTGRES_USER` konfigurierte DB-User darf **kein** PostgreSQL-Superuser sein — sonst wird Row Level Security (Migration [`0047_postgres_rls_setup.py`](../src/core/migrations/0047_postgres_rls_setup.py)) per Postgres-Default **bypasst** und das Facility-Isolations-Safety-Net ist wirkungslos.
 >

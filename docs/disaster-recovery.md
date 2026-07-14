@@ -60,7 +60,7 @@ Ein vollständiges Recovery rekonstruiert **drei** Dinge. Fehlt eines, ist die W
  - DB-Dump (`*.sql.gz.enc` + `.hmac` **oder** `dump-*.pgc.enc`)
  - Medien-Tarball (`*_media.tar.gz.enc` + `.hmac`) — **nur Welt B**. Ohne ihn fehlen alle Datei-Anhänge aus dem Encrypted File Vault.
 2. **Die Secrets/Schlüssel** ([§4](#4-schlüssel--und-secret-wiederbeschaffung)) — vor allem `ENCRYPTION_KEY(S)` und `BACKUP_ENCRYPTION_KEY`.
-3. **Die Deployment-Artefakte** — der Git-Stand bzw. das Release-Paket (Compose-Files, `deploy/postgres-init/`, `scripts/ops/`) und das Container-Image (`ghcr.io/anlaufstelle/app:<tag>`). Der Code ist öffentlich (AGPL) und damit immer wiederbeschaffbar — er ist **nicht** der Engpass.
+3. **Die Deployment-Artefakte** — der Git-Stand bzw. das Release-Paket (Compose-Files, `deploy/postgres-init/`, `scripts/ops/`) und das Container-Image (`ghcr.io/anlaufstelle/app:<APP_VERSION-Tag>`). Der Code ist öffentlich (AGPL) und damit immer wiederbeschaffbar — er ist **nicht** der Engpass.
 
 ---
 
