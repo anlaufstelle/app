@@ -480,6 +480,24 @@ class TestBulkPreservesFilterState:
         assert response.status_code == 302
         assert f"assigned_to={lead_user.pk}" in response["HX-Redirect"]
 
+    def test_bulk_status_redirect_preserves_status_and_done_period_filter(self, client, staff_user, workitems_open):
+        """Refs #1570: Der neue Status-/Zeitraumfilter (erledigte Aufgaben)
+        round-trippt nach einer Bulk-Aktion wie die übrigen Filter (#1132)."""
+        client.force_login(staff_user)
+        ids = [str(wi.pk) for wi in workitems_open]
+        response = client.post(
+            reverse("core:workitem_bulk_status"),
+            {
+                "workitem_ids": ids,
+                "status": "done",
+                "filter_status": "in_progress",
+                "filter_done_period": "30",
+            },
+        )
+        assert response.status_code == 302
+        assert "status=in_progress" in response.url
+        assert "done_period=30" in response.url
+
 
 @pytest.mark.django_db
 class TestBulkConcurrencyReload:

@@ -751,6 +751,69 @@ class TestWorkItemInboxRecentDonePreview:
 
 
 @pytest.mark.django_db
+class TestWorkItemInboxAllDoneAccess:
+    """Refs #1570: Zugriff auf alle erledigten Aufgaben über Link + gezielten
+    Statusfilter — ergänzt die passive "Kürzlich erledigt"-Vorschau (#1149) um
+    einen Pfad zu älteren erledigten Aufgaben, ohne die normale Übersicht
+    dauerhaft mit ihnen zu überladen.
+    """
+
+    def test_recent_done_widget_offers_link_to_all_done(self, client, staff_user):
+        """Der passive Rückblick bietet einen Link, der gezielt auf die
+        gefilterte Erledigt-Ansicht führt (kein bloßes Aufklappen)."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert 'data-testid="all-done-link"' in html
+        assert "Alle erledigten Aufgaben anzeigen" in html
+        assert "status=done" in html
+
+    def test_all_done_link_absent_when_status_filter_active(self, client, staff_user):
+        """In der bereits gezielt gefilterten Erledigt-Ansicht erscheint der
+        Link nicht redundant erneut (die passive Vorschau ist dann ausgeblendet)."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox"), {"status": "done"}).content.decode()
+        assert 'data-testid="all-done-link"' not in html
+
+    def test_status_done_view_shows_full_section_with_period_label(self, client, staff_user, facility):
+        """Die gezielte Erledigt-Ansicht zeigt eine eigene Sektion, deren
+        Beschriftung den gewählten Zeitraum eindeutig benennt."""
+        client.force_login(staff_user)
+        WorkItem.objects.create(
+            facility=facility, created_by=staff_user, title="Erledigt X", status=WorkItem.Status.DONE
+        )
+        html = client.get(reverse("core:workitem_inbox"), {"status": "done", "done_period": "30"}).content.decode()
+        assert 'data-testid="section-done-full"' in html
+        assert "Erledigt X" in html
+        assert "Letzte 30 Tage" in html
+
+    def test_status_open_hides_in_progress_and_done_sections(self, client, staff_user, facility):
+        """Gezielter Statusfilter blendet die anderen Sektionen vollständig aus
+        (nicht nur leer, sondern gar nicht gerendert)."""
+        client.force_login(staff_user)
+        WorkItem.objects.create(facility=facility, created_by=staff_user, title="Offen X", status=WorkItem.Status.OPEN)
+        WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=staff_user,
+            title="Läuft X",
+            status=WorkItem.Status.IN_PROGRESS,
+        )
+        html = client.get(reverse("core:workitem_inbox"), {"status": "open"}).content.decode()
+        assert 'data-testid="section-open"' in html
+        assert 'data-testid="section-in-progress"' not in html
+        assert 'data-testid="recent-done"' not in html
+        assert 'data-testid="section-done-full"' not in html
+
+    def test_status_filter_select_present_in_filter_bar(self, client, staff_user):
+        """Statusfilter steht als eigenes Select im bestehenden Filter-Muster,
+        analog zu Typ/Priorität/Fälligkeit."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert 'id="filter-status"' in html
+        assert 'id="filter-done-period"' in html
+
+
+@pytest.mark.django_db
 class TestUpdateWorkItemStatusVersionCheck:
     """Service-Contract: ``update_workitem_status`` mit Optimistic-Lock-Token (Refs #1419).
 

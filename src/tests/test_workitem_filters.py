@@ -1,9 +1,11 @@
 """Tests für WorkItem-Inbox-Filter."""
 
 import re
+from datetime import timedelta
 
 import pytest
 from django.urls import reverse
+from django.utils import timezone
 
 from core.models import WorkItem
 
@@ -509,3 +511,152 @@ class TestWorkItemInboxFilterHxIncludeScope:
                 "hx-include sammelt das Bulk-Assign-Select mit ein: " + include
             )
             assert "[name='priority']" not in include, "hx-include sammelt das Bulk-Priority-Select mit ein: " + include
+
+
+@pytest.mark.django_db
+class TestWorkItemInboxStatusFilter:
+    """Refs #1570: Status-/Zeitraumfilter für erledigte Aufgaben.
+
+    Ergänzt die passive 7-Tage-Vorschau ("Kürzlich erledigt", #1149) um einen
+    gezielten Statusfilter (Offen/In Bearbeitung/Erledigt) und — für Erledigt —
+    einen einfachen Zeitraum-Parameter (7/30 Tage/alle), damit ältere erledigte
+    Aufgaben über Filter statt ausschließlich über die passive Vorschau
+    erreichbar sind.
+    """
+
+    def test_default_view_shows_all_sections(self, client, staff_user):
+        """Ohne Statusfilter bleibt die bisherige Drei-Sektionen-Ansicht aktiv."""
+        client.force_login(staff_user)
+        ctx = client.get(reverse("core:workitem_inbox")).context
+        assert ctx["show_open"] is True
+        assert ctx["show_in_progress"] is True
+        assert ctx["show_done_widget"] is True
+        assert ctx["show_done_full"] is False
+        assert ctx["selected_status"] == ""
+
+    def test_status_open_shows_only_open_section(self, client, staff_user):
+        client.force_login(staff_user)
+        ctx = client.get(reverse("core:workitem_inbox"), {"status": "open"}).context
+        assert ctx["show_open"] is True
+        assert ctx["show_in_progress"] is False
+        assert ctx["show_done_widget"] is False
+        assert ctx["show_done_full"] is False
+
+    def test_status_in_progress_shows_only_in_progress_section(self, client, staff_user):
+        client.force_login(staff_user)
+        ctx = client.get(reverse("core:workitem_inbox"), {"status": "in_progress"}).context
+        assert ctx["show_open"] is False
+        assert ctx["show_in_progress"] is True
+        assert ctx["show_done_widget"] is False
+        assert ctx["show_done_full"] is False
+
+    def test_status_done_shows_only_done_full_section(self, client, staff_user):
+        client.force_login(staff_user)
+        ctx = client.get(reverse("core:workitem_inbox"), {"status": "done"}).context
+        assert ctx["show_open"] is False
+        assert ctx["show_in_progress"] is False
+        assert ctx["show_done_widget"] is False
+        assert ctx["show_done_full"] is True
+
+    def test_invalid_status_value_falls_back_to_default(self, client, staff_user):
+        client.force_login(staff_user)
+        ctx = client.get(reverse("core:workitem_inbox"), {"status": "bogus"}).context
+        assert ctx["selected_status"] == ""
+        assert ctx["show_open"] is True
+
+    def test_done_full_default_period_is_seven_days(self, client, staff_user, facility):
+        """Ohne ``done_period``-Parameter gilt für die gezielte Erledigt-Ansicht
+        derselbe 7-Tage-Zeitraum wie die passive Vorschau."""
+        client.force_login(staff_user)
+        recent = WorkItem.objects.create(
+            facility=facility, created_by=staff_user, title="Kürzlich erledigt X", status=WorkItem.Status.DONE
+        )
+        old = WorkItem.objects.create(
+            facility=facility, created_by=staff_user, title="Alt erledigt X", status=WorkItem.Status.DONE
+        )
+        WorkItem.objects.filter(pk=old.pk).update(updated_at=timezone.now() - timedelta(days=10))
+
+        ctx = client.get(reverse("core:workitem_inbox"), {"status": "done"}).context
+        assert ctx["selected_done_period"] == "7"
+        done_full = list(ctx["done_full_items"])
+        assert recent in done_full
+        assert old not in done_full
+
+    def test_done_full_period_thirty_days_includes_older_item(self, client, staff_user, facility):
+        client.force_login(staff_user)
+        within_30 = WorkItem.objects.create(
+            facility=facility, created_by=staff_user, title="Vor 20 Tagen erledigt", status=WorkItem.Status.DONE
+        )
+        WorkItem.objects.filter(pk=within_30.pk).update(updated_at=timezone.now() - timedelta(days=20))
+        beyond_30 = WorkItem.objects.create(
+            facility=facility, created_by=staff_user, title="Vor 40 Tagen erledigt", status=WorkItem.Status.DONE
+        )
+        WorkItem.objects.filter(pk=beyond_30.pk).update(updated_at=timezone.now() - timedelta(days=40))
+
+        ctx = client.get(reverse("core:workitem_inbox"), {"status": "done", "done_period": "30"}).context
+        done_full = list(ctx["done_full_items"])
+        assert within_30 in done_full
+        assert beyond_30 not in done_full
+
+    def test_done_full_period_all_includes_very_old_item(self, client, staff_user, facility):
+        client.force_login(staff_user)
+        very_old = WorkItem.objects.create(
+            facility=facility, created_by=staff_user, title="Uralt erledigt", status=WorkItem.Status.DONE
+        )
+        WorkItem.objects.filter(pk=very_old.pk).update(updated_at=timezone.now() - timedelta(days=400))
+
+        ctx = client.get(reverse("core:workitem_inbox"), {"status": "done", "done_period": "all"}).context
+        assert very_old in list(ctx["done_full_items"])
+
+    def test_invalid_done_period_falls_back_to_seven_days(self, client, staff_user):
+        client.force_login(staff_user)
+        ctx = client.get(reverse("core:workitem_inbox"), {"status": "done", "done_period": "bogus"}).context
+        assert ctx["selected_done_period"] == "7"
+
+    def test_status_done_includes_dismissed_items(self, client, staff_user, facility):
+        """Wie die passive Vorschau bündelt die gezielte Erledigt-Ansicht
+        DONE und DISMISSED unter "Erledigt"."""
+        client.force_login(staff_user)
+        dismissed = WorkItem.objects.create(
+            facility=facility, created_by=staff_user, title="Verworfen X", status=WorkItem.Status.DISMISSED
+        )
+        ctx = client.get(reverse("core:workitem_inbox"), {"status": "done"}).context
+        assert dismissed in list(ctx["done_full_items"])
+
+    def test_status_done_respects_assigned_to_me_scope(self, client, staff_user, lead_user, facility):
+        """Der Statusfilter kombiniert sich mit der bestehenden Rollen-
+        /Zuweisungs-Filterlogik ("Mir zugewiesen")."""
+        client.force_login(staff_user)
+        mine = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=staff_user,
+            title="Meine erledigte Aufgabe",
+            status=WorkItem.Status.DONE,
+        )
+        foreign = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=lead_user,
+            title="Fremde erledigte Aufgabe",
+            status=WorkItem.Status.DONE,
+        )
+
+        ctx = client.get(reverse("core:workitem_inbox"), {"status": "done", "assigned_to": "me"}).context
+        done_full = list(ctx["done_full_items"])
+        assert mine in done_full
+        assert foreign not in done_full
+
+    def test_status_done_all_scope_shows_foreign_assigned(self, client, staff_user, lead_user, facility):
+        """Der Statusfilter kombiniert sich mit "Alle" (auch fremd-zugewiesene
+        erledigte Aufgaben bleiben auffindbar, analog Offen/In Bearbeitung)."""
+        client.force_login(staff_user)
+        foreign = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            assigned_to=lead_user,
+            title="Fremde erledigte Aufgabe, über Alle auffindbar",
+            status=WorkItem.Status.DONE,
+        )
+        ctx = client.get(reverse("core:workitem_inbox"), {"status": "done", "assigned_to": ""}).context
+        assert foreign in list(ctx["done_full_items"])
