@@ -9,7 +9,7 @@ import logging
 
 from django.contrib import messages
 from django.http import Http404
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
@@ -20,6 +20,7 @@ from core.constants import RATELIMIT_MUTATION
 from core.models import Client, DeletionRequest, Event, User
 from core.services.client import approve_client_deletion, reject_client_deletion
 from core.services.events import approve_deletion, reject_deletion
+from core.services.scoping import get_scoped_object
 from core.views.mixins import DeletionConfirmerRequiredMixin, DeletionRequestListAccessMixin
 from core.views.utils import safe_redirect_path
 
@@ -73,10 +74,10 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
     """
 
     def get(self, request, pk):
-        dr = get_object_or_404(
+        dr = get_scoped_object(
             DeletionRequest,
+            request,
             pk=pk,
-            facility=request.current_facility,
             status=DeletionRequest.Status.PENDING,
         )
 
@@ -111,10 +112,10 @@ class DeletionRequestReviewView(DeletionConfirmerRequiredMixin, View):
         )
 
     def post(self, request, pk):
-        dr = get_object_or_404(
+        dr = get_scoped_object(
             DeletionRequest,
+            request,
             pk=pk,
-            facility=request.current_facility,
             status=DeletionRequest.Status.PENDING,
         )
 
