@@ -12,6 +12,7 @@
 |----------|-------------|----------|
 | [admin-guide.md](admin-guide.md) | Operations manual: installation, backup/restore, monitoring, MFA, retention, GDPR | IT Admins |
 | [user-guide.md](user-guide.md) | User handbook: work center, timeline, persons, events, search, export, statistics, roles | End users |
+| [../screenshots.en.md](../screenshots.en.md) | Illustrated tour of the interface (demo data, pseudonymized) | Stakeholders, End users |
 | [domain-concept-summary.md](domain-concept-summary.md) | Summary of the domain concept (not a 1:1 translation) | Stakeholders, Developers |
 | [glossary.md](glossary.md) | Bilingual glossary of domain terms (DE↔EN) | Everyone |
 | [data-protection.md](data-protection.md) | GDPR guide: article/right → ADR/template/code/FAQ (companion to German [datenschutz.md](../datenschutz.md)) | Everyone (Auditor/Dev/Operator) |
@@ -44,9 +45,12 @@ Templates included:
 | Document | Description |
 |----------|-------------|
 | [ops-runbook.md](../ops-runbook.md) | Operations runbook: monitoring, alerts, cron jobs, RLS, backup/restore, restore drill |
+| [monitoring-guide.md](../monitoring-guide.md) | `/health/` endpoint: fields, HTTP status codes, liveness vs. detail, hooking up uptime/monitoring tools (Refs #1071) |
+| [disaster-recovery.md](../disaster-recovery.md) | Total-loss recovery: obtaining an off-site backup, key escrow, restore on a fresh host, RTO/RPO (Refs #1071) |
 | [faq.md](../faq.md) | Frequently asked questions — operations & troubleshooting |
 | [security-notes.md](../security-notes.md) | Deliberate security design decisions (2FA, Fernet, RLS, audit, lockout) |
 | [threat-model.md](../threat-model.md) | Security model, attack surface, known open gaps |
+| [cra-einordnung.md](../compliance/cra-einordnung.md) | CRA classification (EU 2024/2847) — FOSS scope, gap check against Annex I, reporting-process sketch, review trigger (Refs #1077) |
 | `audit-inventar.md` (dev-only) | Index of audit classification codes (FND-\*, S-\*, phases, sprints) |
 | [dev-deployment.md](../dev/dev-deployment.md) | Dev/test environment deployment |
 | [coolify-deployment.md](../coolify-deployment.md) | Coolify deployment (supported alternative; primary is Docker Compose, see [ADR-017](../adr/017-deployment-topology.md)) |
@@ -61,5 +65,5 @@ Templates included:
 
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.20.0 -->
-<!-- translation-date: 2026-06-14 -->
+<!-- translation-date: 2026-07-13 -->
 <!-- source-hash: cd7b197 -->

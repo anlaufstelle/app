@@ -95,7 +95,7 @@ Click **Sign Out** in the top-right corner. For data protection reasons, you wil
 
 ---
 
-## 2. Home -- Zeitstrom
+## 2. Home — Zeitstrom
 
 After signing in, you land on the **Zeitstrom** (`/`) -- a chronological daily feed that unifies contacts, system activities, tasks, and entry bans in a single view.
 
@@ -843,6 +843,6 @@ Each episode shows its status:
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.20.0 -->
-<!-- translation-date: 2026-06-12 -->
+<!-- translation-date: 2026-07-13 -->
 <!-- source-hash: 67c1567 -->
 

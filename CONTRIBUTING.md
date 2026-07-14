@@ -190,7 +190,7 @@ Der Server ist unter `https://localhost:8443` erreichbar (selbstsigniertes Zerti
 | `make test` | Unit- und Integrationstests ausführen (ohne E2E) |
 | `make test-e2e` | End-to-End-Tests mit Playwright ausführen |
 | `make check` | Django-Systemcheck und Migrations-Konsistenz prüfen |
-| `make ci` | Vollständige CI-Pipeline lokal: `lint` + `check` + `test-parallel` |
+| `make ci` | Vollständige CI-Pipeline lokal: `lint` + `check` + Guards (deps/matrix/release-test/vendor-js/agent-docs) + `typecheck` + `test-parallel` |
 | `make test-focus T=<pfad>` | Einzelne Testdatei mit Fail-Fast |
 | `make test-parallel` | Unit- und Integrationstests parallel (pytest-xdist) |
 | `make test-e2e-parallel` | E2E-Tests parallel (Default 2 Worker, konfigurierbar) |
@@ -336,7 +336,7 @@ Neue Endpunkte gehören entsprechend in eine der beiden Pfad-Gruppen. URL-Namen 
 
 ### Übersetzungen (i18n)
 
-- **EN im selben Commit nachziehen (verbindlich, Refs #1215).** Wer übersetzbare Strings ändert — Django-`{% trans %}`/`.po` unter [`src/locale/`](src/locale/) oder die gespiegelten EN-Dokumente (`*.en.md`, [`docs/en/`](docs/en/)) — zieht die englische Entsprechung im **selben Commit** nach, nicht in einem nachgelagerten Sync-Commit. Konsistent mit der i18n-als-eigener-Commit-Regel in `CLAUDE.md` (dev-only): DE und EN gehören in *einen* `chore(i18n):`-Commit, getrennt vom Feature.
+- **EN im selben Commit nachziehen (verbindlich, Refs #1215).** Wer übersetzbare Strings ändert — Django-`{% trans %}`/`.po` unter [`src/locale/`](src/locale/) oder die gespiegelten EN-Dokumente (`*.en.md`, [`docs/en/`](docs/en/)) — zieht die englische Entsprechung im **selben Commit** nach, nicht in einem nachgelagerten Sync-Commit. Konsistent mit der i18n-als-eigener-Commit-Regel in `AGENTS.md` § Git & Commits (dev-only): DE und EN gehören in *einen* `chore(i18n):`-Commit, getrennt vom Feature.
 - **Stempel als Backstop:** [`scripts/check_translation_versions.py`](scripts/check_translation_versions.py) erzwingt für die EN-Dokumente einen `translation-version`-Header == aktuelle Minor-Version (Pre-Commit-Hook + `make release-gates`, hartes Gate seit #1078). Der Stempel fängt Drift zum Release ab; die „im selben Commit"-Regel verhindert, dass Drift überhaupt entsteht.
 
 ### Conventional Commits
@@ -487,7 +487,7 @@ Während der Entwicklung nie die volle Suite laufen lassen — in Schichten vorg
 
 ```bash
 make ci
-# entspricht: lint + check + test-parallel
+# entspricht: lint + check + Guards (deps/matrix/release-test/vendor-js/agent-docs) + typecheck + test-parallel
 ```
 
 Diese Pipeline muss vor jedem Pull Request lokal grün sein.

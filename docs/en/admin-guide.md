@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> The German version is the authoritative source. Last synced: 2026-07-07 (v0.16.0), § 2.10 offline key-lifecycle only (#1417).
+> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417) and 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500).
 
 # Anlaufstelle -- Admin Guide
 
@@ -1334,5 +1334,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.20.0 -->
-<!-- translation-date: 2026-06-12 -->
+<!-- translation-date: 2026-07-13 -->
 <!-- source-hash: 2662c80 -->

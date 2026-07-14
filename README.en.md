@@ -103,7 +103,7 @@ The configuration also governs data protection:
 ### For management
 
 - **Statistics and reports** — analysis at the push of a button, export as CSV and PDF
-- **Youth welfare report** — pre-formatted and ready to submit
+- **Example activity report** — structured, customizable template (not a binding official record)
 - **5-tier role model** — System administration (`super_admin`), Application support (`facility_admin`), Lead, Staff, Assistant
 - **Facility isolation** — data is fully separated, no mixing between locations
 
@@ -178,7 +178,7 @@ Report bugs and share ideas: [GitHub Issues](https://github.com/anlaufstelle/app
 
 ```bash
 git clone https://github.com/anlaufstelle/app.git
-cd anlaufstelle
+cd app
 docker compose up
 ```
 
@@ -207,4 +207,4 @@ docker compose exec web python src/manage.py seed
 
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.20.0 -->
-<!-- translation-date: 2026-06-12 -->
+<!-- translation-date: 2026-07-13 -->

@@ -189,7 +189,7 @@ The server is available at `https://localhost:8443` (self-signed certificate —
 | `make test` | Run unit and integration tests (excluding E2E) |
 | `make test-e2e` | Run end-to-end tests with Playwright |
 | `make check` | Run Django system checks and verify migration consistency |
-| `make ci` | Full CI pipeline locally: `lint` + `check` + `test-parallel` |
+| `make ci` | Full CI pipeline locally: `lint` + `check` + guards (deps/matrix/release-test/vendor-js/agent-docs) + `typecheck` + `test-parallel` |
 | `make test-focus T=<path>` | Single test file with fail-fast |
 | `make test-parallel` | Unit and integration tests in parallel (pytest-xdist) |
 | `make test-e2e-parallel` | E2E tests in parallel (default 2 workers, configurable) |
@@ -267,7 +267,7 @@ Every new facility-scoped model must be protected on **both** defense lines:
  - Views/services filter via `.for_facility(request.current_facility)`
 2. **PostgreSQL RLS (second line, defense in depth):**
  - New migration following the pattern of [`src/core/migrations/0047_postgres_rls_setup.py`](src/core/migrations/0047_postgres_rls_setup.py): add the table to `DIRECT_TABLES` (or `JOIN_TABLES` if no direct `facility_id` column exists). The migration sets `ENABLE + FORCE ROW LEVEL SECURITY` plus a `facility_isolation` policy.
- - Add the table to `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) so the RLS setup test guarantees coverage.
+ - `EXPECTED_TABLES` in [`src/tests/test_rls.py`](src/tests/test_rls.py) has been **derivation-based** since #1096: tables with a direct `facility` FK (DIRECT) are derived automatically from the model registry by the test suite — a new such model appears in `EXPECTED_TABLES` without any manual step, and the RLS coverage guard (`TestRLSCoverageGuard`) fails until the RLS migration **and** the PII classification exist. Only **JOIN-scoped** tables without a direct FK need a manual entry in the `JOIN_SCOPED_TABLES` constant; the auth-boundary exception (`core_user`) lives in `NOT_RLS_SCOPED`.
 
 Details: [docs/ops-runbook.md § 9](docs/ops-runbook.md). RLS only takes effect in production when the Django DB user is **not** a superuser (see `docs/dev/dev-deployment.md` (dev-only), primary path per [ADR-017](docs/adr/017-deployment-topology.md); [docs/coolify-deployment.md](docs/coolify-deployment.md) is an alternative platform guide).
 
@@ -293,6 +293,29 @@ The Ruff configuration is located in `pyproject.toml`.
 - Tailwind CSS for styling — avoid creating custom CSS classes where possible.
 - Adhere to accessibility standards (WCAG 2.1 AA).
 
+#### Updating Vendored JS Libraries (Refs #1076)
+
+There is **no frontend bundler** — four libraries are checked in (vendored) as prebuilt `*.min.js` under [`src/static/js/`](src/static/js/) and loaded via `{% static %}`. So that they still stay on the Dependabot/CVE radar, they are tracked as **exactly pinned** `devDependencies` in [`package.json`](package.json):
+
+| Library | npm package | vendored file | dist source in `node_modules/` |
+|---|---|---|---|
+| htmx | `htmx.org` | `htmx.min.js` | `dist/htmx.min.js` |
+| Alpine.js (CSP build) | `@alpinejs/csp` | `alpine-csp.min.js` | `dist/cdn.min.js` |
+| Dexie | `dexie` | `dexie.min.js` | `dist/dexie.min.js` |
+| Chart.js | `chart.js` | `chart.min.js` | `dist/chart.umd.js` *(already minified)* |
+
+> Note: Alpine's CSP build is the **separate** package `@alpinejs/csp`, not `alpinejs`. Chart.js does not ship its own `*.min.js` in the npm `dist`; the UMD build `chart.umd.js` is already minified.
+
+**Update procedure** (e.g. after a Dependabot bump that only changes `package.json`/`package-lock.json`):
+
+```bash
+npm ci                                # bring node_modules/ up to package-lock state
+make sync-vendor-js                   # copy dist builds into src/static/js/
+git add package.json package-lock.json src/static/js
+```
+
+**Verification:** `make ci` runs the drift guard `make verify-vendor-js-sync` ([`scripts/verify_vendor_js_sync.py`](scripts/verify_vendor_js_sync.py)). It compares the version pinned in `package.json` against the version string in the checked-in `*.min.js` and fails on drift — so re-vendoring cannot be forgotten. The guard is a pure string comparison (no node/npm required). Additionally E2E smoke (`make test-e2e-smoke`), since the offline flows depend on Dexie.
+
 #### HTMX & Live Regions (Refs #811)
 
 To ensure HTMX success messages reach screen-reader users:
@@ -312,7 +335,7 @@ New endpoints belong in one of these two path groups. URL names stay short and f
 
 ### Translations (i18n)
 
-- **Update EN in the same commit (binding, Refs #1215).** Whoever changes translatable strings — Django `{% trans %}`/`.po` under [`src/locale/`](src/locale/) or the mirrored EN docs (`*.en.md`, [`docs/en/`](docs/en/)) — updates the English counterpart in the **same commit**, not in a deferred sync commit. Consistent with the "i18n is its own commit" rule in `CLAUDE.md` (dev-only): DE and EN belong in *one* `chore(i18n):` commit, separate from the feature.
+- **Update EN in the same commit (binding, Refs #1215).** Whoever changes translatable strings — Django `{% trans %}`/`.po` under [`src/locale/`](src/locale/) or the mirrored EN docs (`*.en.md`, [`docs/en/`](docs/en/)) — updates the English counterpart in the **same commit**, not in a deferred sync commit. Consistent with the "i18n is its own commit" rule in `AGENTS.md` § Git & Commits (dev-only): DE and EN belong in *one* `chore(i18n):` commit, separate from the feature.
 - **Stamp as backstop:** [`scripts/check_translation_versions.py`](scripts/check_translation_versions.py) requires a `translation-version` header == current minor for the EN docs (pre-commit hook + `make release-gates`, hard gate since #1078). The stamp catches drift at release; the "same commit" rule prevents drift from arising.
 
 ### Conventional Commits
@@ -364,6 +387,8 @@ As of 2026-05-20, test-driven development is mandatory for the unit/service laye
 1. **Red** — write a pytest test in the appropriate file under `src/tests/` that describes the desired behavior but fails today. Run it with `pytest -x` and confirm it fails with the expected `AssertionError`.
 2. **Green** — minimal implementation in `src/core/...` until exactly that test passes. No additional features, no premature generalization.
 3. **Refactor** — clean up code (and the test if needed) while the suite stays green. Run `pytest -x` after each cleanup step.
+
+**No "false green" — protect assertion strength** (Refs #1150): By default, a red test means the **root cause is in the code** and must be fixed there — not the test. **Weakening an existing assertion** (loosening it, removing it, or bending it to the actually broken behavior) is a **hard review stop**: permissible only if the *requirement* has changed (not the code), and then only with an explicit justification in the commit body. For **bugfixes**, write a **failing test first** that reproduces the bug *before* touching the code (skill `superpowers:systematic-debugging`). Background: 96 % coverage measures *executed*, not *asserted* lines — a weakened assertion stays green and only surfaces in the mutation run.
 
 Example (service layer, pseudonym hashing from [Issue #844](https://github.com/anlaufstelle/app/issues/844)):
 
@@ -461,7 +486,7 @@ Never run the full suite during development — work in layers, always with fail
 
 ```bash
 make ci
-# equivalent to: lint + check + test-parallel
+# equivalent to: lint + check + guards (deps/matrix/release-test/vendor-js/agent-docs) + typecheck + test-parallel
 ```
 
 This pipeline must pass locally before every pull request.
@@ -655,5 +680,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.20.0 -->
-<!-- translation-date: 2026-06-12 -->
-<!-- source-hash: 087ab09 -->
+<!-- translation-date: 2026-07-13 -->
+<!-- source-hash: de7b115 -->
