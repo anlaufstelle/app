@@ -21,6 +21,7 @@ Dieses Handbuch richtet sich an IT-Administratoren sozialer Einrichtungen, die A
  - 5.4 [CSP-Debugging](#54-csp-debugging)
  - 5.5 [Compliance-Dashboard](#55-compliance-dashboard)
  - 5.6 [Error-Tracking & Datenminimierung](#56-error-tracking--datenminimierung)
+ - 5.7 [Breach-Detection-Scan](#57-breach-detection-scan)
 6. [Troubleshooting](#6-troubleshooting)
 7. [DSGVO-Hinweise](#7-dsgvo-hinweise)
  - 7.8 [Optimistic Locking](#78-optimistic-locking)
@@ -99,21 +100,30 @@ python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().
 python3 -c "import secrets; print(secrets.token_urlsafe(50))"
 ```
 
+**Audit-Hash-Key generieren:**
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+```
+
+Der `DJANGO_AUDIT_HASH_KEY` sichert die Audit-Hashes — pseudonymisierte Einträge (z. B. E-Mails in Passwort-Reset-Audits) ebenso wie die HMAC-Integritätskette des Audit-Logs — und wird bewusst getrennt vom `DJANGO_SECRET_KEY` gehalten (siehe [`docs/disaster-recovery.md`](https://github.com/anlaufstelle/app/blob/main/docs/disaster-recovery.md)).
+
 > **Wichtig:** Speichern Sie `ENCRYPTION_KEYS` und `DJANGO_SECRET_KEY` sicher (z. B. in einem Passwortmanager oder Secret-Management-System). Ohne die Schlüssel sind verschlüsselte Felddaten nicht mehr lesbar.
 
 #### Vollständige Umgebungsvariablen-Referenz
 
-Alle ENV-Variablen, die die Anwendung zur Laufzeit auswertet (siehe [`src/anlaufstelle/settings/base.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/base.py) und [`prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py)):
+Die betriebsrelevanten ENV-Variablen, die die Anwendung zur Laufzeit auswertet (siehe [`src/anlaufstelle/settings/base.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/base.py) und [`prod.py`](https://github.com/anlaufstelle/app/blob/main/src/anlaufstelle/settings/prod.py); `base.py`/`prod.py` bleiben die maßgebliche Quelle):
 
 **Django & Hosts**
 
 | Name | Default | Beschreibung |
 |---|---|---|
 | `DJANGO_SECRET_KEY` | — (Pflicht in prod) | Signierung von Sessions/CSRF. Mit `secrets.token_urlsafe(50)` generieren. |
-| `DJANGO_AUDIT_HASH_KEY` | — (Pflicht in prod) | HMAC-Schlüssel für pseudonymisierte Audit-Einträge (z. B. Passwort-Reset-E-Mails), separat vom `DJANGO_SECRET_KEY` — ohne eigenen Schlüssel fällt der Audit-Hash sonst still auf `SHA256(SECRET_KEY)` zurück, was ein `SECRET_KEY`-Leak rückwirkend ausnutzbar machen würde; daher fail-closed. Generieren: `python -c "import secrets; print(secrets.token_urlsafe(64))"`. |
+| `DJANGO_AUDIT_HASH_KEY` | — (Pflicht in prod) | HMAC-Schlüssel für die Audit-Hashes: pseudonymisierte Einträge (z. B. Passwort-Reset-E-Mails) und die Integritätskette des Audit-Logs. Bewusst separat vom `DJANGO_SECRET_KEY` — ohne eigenen Schlüssel fiele der Audit-Hash sonst still auf `SHA256(SECRET_KEY)` zurück, was ein Secret-Key-Leak rückwirkend ausnutzbar machen würde; daher fail-closed (ohne Wert verweigert die App in Produktion den Start). Generieren: `python -c "import secrets; print(secrets.token_urlsafe(64))"`. Siehe [`docs/disaster-recovery.md`](https://github.com/anlaufstelle/app/blob/main/docs/disaster-recovery.md). |
 | `DJANGO_SETTINGS_MODULE` || In Produktion `anlaufstelle.settings.prod`. |
 | `ALLOWED_HOSTS` | — (Pflicht in prod) | Komma-separierte Hostnamen, z. B. `anlaufstelle.example.de`. |
 | `TRUSTED_PROXY_HOPS` | `1` | Anzahl vertrauenswürdiger Proxies vor der App (X-Forwarded-For-Auswertung). `0` = kein Proxy, `1` = nur Caddy, `2` = CDN + Caddy. |
+| `DJANGO_HEALTH_DETAIL_TOKEN` || Token für den Header `X-Health-Token`; berechtigt anonyme Monitoring-Caller, die Detailfelder von `/health/` (`version`, `smtp`, Backup-Alter, Disk-frei) abzurufen. Ohne Token liefert `/health/` nur den schlanken Liveness-Payload (siehe [§ 5.1](#51-health-endpoint)). |
 
 **Datenbank (PostgreSQL — Drei-Rollen-Modell, #902)**
 
@@ -172,11 +182,42 @@ Seit v0.12 trennt Anlaufstelle drei DB-Rollen: einen hartkodierten `postgres`-Bo
 | `EMAIL_USE_TLS` | `True` | STARTTLS aktivieren. |
 | `DEFAULT_FROM_EMAIL` | `noreply@anlaufstelle.app` | Absenderadresse. |
 
+**File-Vault Upload-Limits (#1268)**
+
+Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-Einrichtung konfigurierbaren `Settings.max_file_size_mb`).
+
+| Name | Default | Beschreibung |
+|---|---|---|
+| `FILE_VAULT_MAX_UPLOAD_BYTES` | `52428800` (50 MB) | Harte Obergrenze pro Datei, greift vor jeder Voll-Pufferung. |
+| `FILE_VAULT_MAX_UPLOAD_FILES` | `20` | Maximale Datei-Anzahl pro File-Feld (Masse-Upload-Bremse). |
+| `FILE_VAULT_MAX_IMAGE_PIXELS` | `40000000` | Decompression-Bomb-Schutz: maximale Pixelzahl eines Bild-Uploads (setzt zugleich `PIL.Image.MAX_IMAGE_PIXELS`). |
+| `FILE_VAULT_MAX_ARCHIVE_BYTES` | `209715200` (200 MB) | Zip-Bomb-Schutz: maximale Summe der unkomprimierten Einträge (aus dem Zip-Directory gelesen). |
+| `FILE_VAULT_MAX_ARCHIVE_RATIO` | `100` | Zip-Bomb-Schutz: maximales Expansions-Verhältnis (unkomprimiert/komprimiert). |
+| `FILE_VAULT_MAX_ARCHIVE_ENTRIES` | `10000` | Zip-Bomb-Schutz: maximale Anzahl Einträge (aus dem EOCD-Record gelesen). |
+
+**Wartungsmodus (#700)**
+
+| Name | Default | Beschreibung |
+|---|---|---|
+| `MAINTENANCE_FLAG_FILE` | — (leer = aus) | Pfad einer Flag-Datei; solange sie existiert, antwortet die App mit HTTP 503. Ohne Wert ist die Middleware No-Op. |
+| `MAINTENANCE_ALLOW_IPS` || Komma-separierte IP-Liste für Ops-Zugriff während der Wartung. |
+| `MAINTENANCE_CACHE_TTL` | `5` | Caching-Dauer (Sekunden) der Flag-Datei-Prüfung. |
+| `MAINTENANCE_RETRY_AFTER` | `600` | Wert des `Retry-After`-Headers (Sekunden) bei aktivem Wartungsmodus. |
+
+**Breach-Detection (#685)**
+
+| Name | Default | Beschreibung |
+|---|---|---|
+| `BREACH_*` (Variablen-Familie) | siehe Runbook | Zeitfenster und Schwellen der heuristischen Anomalie-Erkennung (fehlgeschlagene Logins, Exporte, Löschungen, Langzeitfenster, verteilte Login-Angriffe) sowie `BREACH_NOTIFICATION_WEBHOOK_URL` (optionaler Eskalations-Webhook; leer = aus). Vollständige Liste samt Defaults: [Ops-Runbook § 6.5b](ops-runbook.md). |
+
 **Sonstiges**
 
 | Name | Default | Beschreibung |
 |---|---|---|
 | `MEDIA_ROOT` | `<BASE_DIR>/media` | Ablage verschlüsselter Dateianhänge (siehe [§ 2.9](#29-encrypted-file-vault--virus-scanning)). |
+| `BACKUP_DIR` | `<Repo>/backups` | Ablageverzeichnis der verschlüsselten DB-Backups (`.sql.gz.enc`); der Health-Endpoint liest daraus das Backup-Alter. |
+| `APP_VERSION` | `dev` | Versions-String, den `/health/` im `version`-Detailfeld ausweist (nur für Token-/authentifizierte Caller). |
+| `SUDO_MODE_TTL_SECONDS` | `900` | Gültigkeitsdauer (Sekunden) des Re-Auth-Fensters für sensible Aktionen (MFA-Disable, DSGVO-Export). |
 
 ### Schritt 3: Caddyfile prüfen
 
@@ -226,10 +267,10 @@ docker compose -f docker-compose.prod.yml logs web
 curl https://anlaufstelle.meine-einrichtung.de/health/
 ```
 
-Erwartete Antwort:
+Erwartete (anonyme) Antwort:
 
 ```json
-{"status": "ok", "database": "connected", "version": "dev"}
+{"status": "ok", "database": "connected", "virus_scanner": "connected", "clamav": "ok", "encryption_key": "ok"}
 ```
 
 ---
@@ -562,7 +603,7 @@ Seit v0.10.1 gibt es zusätzlich **Backup-Codes als zweiten Faktor** für genau 
 
 #### Account-Lockout
 
-Nach **10 fehlgeschlagenen Login-Versuchen** wird das Konto automatisch gesperrt (Login-Service liest die Schwelle aus [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py)). Der gesperrte User sieht eine Hinweis-Seite und kann sich nicht mehr anmelden. Es gibt vier Recovery-Pfade:
+Nach **10 fehlgeschlagenen Login-Versuchen** wird das Konto automatisch gesperrt (Login-Service liest die Schwelle aus [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py)). Der gesperrte User sieht eine Hinweis-Seite und kann sich nicht mehr anmelden. Es gibt vier Recovery-Pfade:
 
 **Pfad A — UI (für facility-gebundene User):** Die Anwendungsbetreuung (`facility_admin`) der Einrichtung kann den Account ihrer eigenen User entsperren:
 
@@ -859,7 +900,9 @@ GET /health/
 {
   "status": "ok",
   "database": "connected",
-  "version": "dev"
+  "virus_scanner": "connected",
+  "clamav": "ok",
+  "encryption_key": "ok"
 }
 ```
 
@@ -869,11 +912,13 @@ GET /health/
 {
   "status": "error",
   "database": "unavailable",
-  "version": "dev"
+  "virus_scanner": "connected",
+  "clamav": "ok",
+  "encryption_key": "ok"
 }
 ```
 
-Der Endpoint erfordert keine Authentifizierung und ist für externe Monitoring-Systeme geeignet.
+Der Endpoint erfordert keine Authentifizierung und ist für externe Monitoring-Systeme geeignet. Die anonyme Antwort enthält bewusst **kein** `version`-Feld und keine Infrastruktur-Details (Recon-Härtung); die Detailfelder (`version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`) liefert `/health/` nur an authentifizierte Sessions oder Caller mit dem Header `X-Health-Token` (= `DJANGO_HEALTH_DETAIL_TOKEN`). Die vollständige, autoritative Feld-Referenz (alle Felder, Werte, Status-Codes und Schwellen) steht im [Monitoring-Guide](monitoring-guide.md).
 
 ### 5.2 Monitoring-Integration
 
@@ -962,6 +1007,21 @@ Das Error-Tracking (Sentry-kompatibel) ist **vollständig opt-in**: Das SDK wird
 
 > **Kein Rechtsrat:** Dieser Abschnitt beschreibt technische Maßnahmen. Datenschutz-Folgenabschätzung und Verzeichnis der Verarbeitungstätigkeiten verbleiben beim Betreiber als Verantwortlichem.
 
+### 5.7 Breach-Detection-Scan
+
+Das Management-Kommando `detect_breaches` wertet das Audit-Log heuristisch auf Anomalien aus (fehlgeschlagene Login-Bursts, Massen-Exporte/-Löschungen, verteilte Login-Angriffe) und schreibt Treffer als Audit-Events; optional wird ein Webhook (`BREACH_NOTIFICATION_WEBHOOK_URL`) benachrichtigt. Die Fenster/Schwellen werden über die `BREACH_*`-Variablen gesteuert (siehe [ENV-Referenz in § 1](#vollständige-umgebungsvariablen-referenz) sowie [Ops-Runbook § 6.5b](ops-runbook.md)).
+
+**Empfohlener Cron (stündlich, jeweils zur 30. Minute):**
+
+```cron
+30 * * * * cd /opt/anlaufstelle && \
+  docker compose -f docker-compose.prod.yml exec -T web \
+  python manage.py detect_breaches \
+  >> /var/log/anlaufstelle-breach.log 2>&1
+```
+
+> **Hinweis:** Die vollständige, autoritative Liste aller Hintergrundjobs samt Zeitplan (Backup, Retention, Audit-Ketten-Verifikation, Statistik-Snapshots, Breach-Scan, View-Refresh) steht im [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs). Beim empfohlenen systemd-Timer-Setup werden diese Jobs zentral über `dev-ops/deploy/install-timers.sh` installiert (der Breach-Scan läuft dort als `anlaufstelle-breach.timer`, ebenfalls stündlich zur 30. Minute).
+
 ---
 
 ## 6. Troubleshooting
@@ -981,6 +1041,7 @@ Häufige Ursachen:
 | Fehlermeldung | Lösung |
 |---|---|
 | `ENCRYPTION_KEY must be set in production` | `ENCRYPTION_KEY` in `.env` setzen (siehe [Abschnitt 1.2](#schritt-2-umgebungsvariablen-konfigurieren)) |
+| `DJANGO_AUDIT_HASH_KEY muss in Produktion gesetzt sein` | `DJANGO_AUDIT_HASH_KEY` (separat vom Secret Key) in `.env` setzen (siehe [Abschnitt 1.2](#schritt-2-umgebungsvariablen-konfigurieren)) |
 | `connection refused` (Datenbank) | Prüfen ob `db`-Dienst läuft: `docker compose ps db` |
 | `django.db.utils.OperationalError` | Datenbankzugangsdaten in `.env` prüfen |
 | `ImproperlyConfigured` | Umgebungsvariablen unvollständig – Logs für Details lesen |

@@ -1335,4 +1335,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.20.0 -->
 <!-- translation-date: 2026-06-12 -->
-<!-- source-hash: eb6f52a -->
+<!-- source-hash: 2662c80 -->
