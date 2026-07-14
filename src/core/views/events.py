@@ -6,7 +6,7 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import IntegrityError, transaction
 from django.http import Http404, HttpResponseBadRequest
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.decorators import method_decorator
@@ -50,6 +50,7 @@ from core.services.events import (
     update_event,
 )
 from core.services.file_vault import prepare_encrypted_upload
+from core.services.scoping import get_scoped_object
 from core.views._json_contracts import (
     _conflict_response,
     _idempotency_mismatch_response,
@@ -434,10 +435,10 @@ class EventFieldsPartialView(AssistantOrAboveRequiredMixin, View):
         if not doc_type_id:
             return render(request, "core/events/partials/dynamic_fields.html", {"data_form": None})
 
-        doc_type = get_object_or_404(
+        doc_type = get_scoped_object(
             DocumentType,
+            request,
             pk=doc_type_id,
-            facility=request.current_facility,
             is_active=True,
         )
         if not user_can_see_document_type(request.user, doc_type):
@@ -463,9 +464,7 @@ class TallyIncrementView(AssistantOrAboveRequiredMixin, View):
 
         # Facility-Scope: unbekannter/fremder Typ → 404 (verrät keine Existenz
         # in anderer Einrichtung).
-        doc_type = get_object_or_404(
-            DocumentType, pk=request.POST.get("document_type"), facility=facility, is_active=True
-        )
+        doc_type = get_scoped_object(DocumentType, request, pk=request.POST.get("document_type"), is_active=True)
 
         # Sensitivity-Guard (Muster EventFieldsPartialView): ein Assistant darf
         # per manipuliertem POST keinen HIGH-/ELEVATED-Typ erfassen, den seine
