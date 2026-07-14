@@ -11,7 +11,7 @@ Aufbau analog ``views/event_deletion.py``:
 import logging
 
 from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -20,6 +20,7 @@ from django_ratelimit.decorators import ratelimit
 from core.constants import RATELIMIT_MUTATION
 from core.models import Client
 from core.services.client import request_client_deletion, restore_client
+from core.services.scoping import get_scoped_object
 from core.views.mixins import FacilityAdminRequiredMixin, StaffRequiredMixin
 
 logger = logging.getLogger(__name__)
@@ -33,8 +34,7 @@ class ClientDeleteRequestView(StaffRequiredMixin, View):
     """Fachkraft stellt Vier-Augen-Loeschantrag fuer eine Person."""
 
     def get(self, request, pk):
-        facility = request.current_facility
-        client = get_object_or_404(Client, pk=pk, facility=facility, is_deleted=False)
+        client = get_scoped_object(Client, request, pk=pk, is_deleted=False)
         return render(
             request,
             "core/clients/delete_request_confirm.html",
@@ -42,8 +42,7 @@ class ClientDeleteRequestView(StaffRequiredMixin, View):
         )
 
     def post(self, request, pk):
-        facility = request.current_facility
-        client = get_object_or_404(Client, pk=pk, facility=facility, is_deleted=False)
+        client = get_scoped_object(Client, request, pk=pk, is_deleted=False)
         reason = (request.POST.get("reason") or "").strip()
         if not reason:
             messages.error(request, _("Bitte eine Begruendung angeben."))
@@ -64,8 +63,7 @@ class ClientRestoreView(FacilityAdminRequiredMixin, View):
     """Admin stellt eine soft-geloeschte Person aus dem Papierkorb wieder her."""
 
     def post(self, request, pk):
-        facility = request.current_facility
-        client = get_object_or_404(Client, pk=pk, facility=facility, is_deleted=True)
+        client = get_scoped_object(Client, request, pk=pk, is_deleted=True)
         restore_client(client, request.user)
         messages.success(request, _("Person wiederhergestellt."))
         return redirect("core:client_detail", pk=pk)
