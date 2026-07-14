@@ -277,6 +277,14 @@ SESSION_SAVE_EVERY_REQUEST = False
 # X-Forwarded-For-Konvention: "client, proxy1, proxy2" — jeder Proxy hängt die IP
 # an, von der er den Request bekommen hat. Bei N vertrauenswürdigen Proxies ist
 # der N-te Eintrag von rechts die echte Client-IP.
+#
+# WARNUNG (L8, Refs #1375): Der Wert MUSS exakt der Anzahl der TATSÄCHLICH
+# vorgeschalteten, vertrauenswürdigen Reverse-Proxys entsprechen. Ist er HÖHER
+# als die reale Hop-Zahl, kann ein Client X-Forwarded-For spoofen (eigene
+# Fake-Hops anhängen), die dann als „vertrauenswürdig" gezählt werden — das
+# unterläuft IP-Ratelimits, Login-Lockout (N9) und die Audit-Client-IP. Jeder
+# gezählte Hop muss ein bekannter Proxy sein. Ein Django-System-Check
+# (``core.checks.check_trusted_proxy_hops``) warnt bei ungewöhnlich hohen Werten.
 TRUSTED_PROXY_HOPS = int(os.environ.get("TRUSTED_PROXY_HOPS", "1"))
 
 # django-ratelimit: die per-IP-Eimer (key="ip") sollen auf der ECHTEN Client-IP

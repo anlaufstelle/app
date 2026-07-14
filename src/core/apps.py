@@ -7,6 +7,7 @@ class CoreConfig(AppConfig):
     verbose_name = "Anlaufstelle Core"
 
     def ready(self):
+        import core.checks  # noqa: F401  # System-Checks registrieren (L8, Refs #1375)
         import core.signals.audit  # noqa: F401
         import core.signals.event_search  # noqa: F401
         import core.signals.facility_protection  # noqa: F401
