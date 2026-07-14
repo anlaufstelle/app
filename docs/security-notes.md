@@ -525,6 +525,39 @@ abgedeckt: kein hartes Blocking, aber eine forensische Spur plus optionaler Webh
 
 ---
 
+## `window.offlineStore` bleibt bewusst unkapselt — CSP ist der Schutzwall (Issue #1343)
+
+**Status:** Design-Entscheidung, bewusst nicht gekapselt. DSFA-/TOM-Einordnung in [ADR-022 § DSFA-/TOM-Einordnung des Offline-Pfads](adr/022-offline-snapshot-keys.md#dsfa-tom-einordnung-des-offline-pfads-1343).
+
+### Beobachtung
+
+Der verschlüsselte Offline-Store exportiert seine **entschlüsselnden** Aggregatoren als globales `window.offlineStore` — u. a. `getDecrypted`, `listDecrypted`, `getOfflineClient`, `listOfflineEventsAggregated`, `listOfflineWorkItemsAggregated` ([`src/static/js/offline-store.js`](../src/static/js/offline-store.js)). Jeder JavaScript-Code, der im Origin läuft, kann diese Methoden aufrufen und damit — bei geladenem Session-Key — Klartext-Offline-Daten lesen.
+
+### Trade-off — warum keine Closure-Kapselung
+
+Eine Kapselung (Closure statt `window`-Global, oder ein Capability-Token) wurde erwogen und **bewusst verworfen**:
+
+- Die UI selbst — Offline-Viewer, In-Place-Zeitstrom (`/`), Aufgabenliste (`/workitems/`) — braucht genau diese entschlüsselnden Aggregatoren. Sie müssten also für den legitimen App-Code erreichbar bleiben und lägen damit im selben JS-Realm; ein Angreifer mit Skriptausführung im Origin käme über dieselben Referenzen (oder direkt an die IndexedDB) heran.
+- Der reale Schutzwall gegen **fremden** JavaScript-Zugriff ist die strikte Content-Security-Policy `script-src 'self'` (kein `'unsafe-inline'`, kein `'unsafe-eval'`; per Architektur-Tests `test_architecture_guards_*` erzwungen, dazu Verbot von `|safe`/`mark_safe()`/Inline-`<script>`). Ohne Skriptausführung im Origin ruft niemand `window.offlineStore` auf.
+- Eine Closure-Kapselung gegen einen Angreifer, der bereits Code im Origin ausführt, ist **Scheinsicherheit**: er liest die entschlüsselten Daten dann direkt aus der (entsperrten) IndexedDB. Die Kapselung würde eine Schutzwirkung suggerieren, die tatsächlich die CSP trägt.
+
+**Was den Zugriff wirklich begrenzt:**
+- **Gerätediebstahl:** non-extractable AES-GCM-256-Key + Idle-Wipe (siehe [ADR-022](adr/022-offline-snapshot-keys.md), [`crypto.js`](../src/static/js/crypto.js)) — ohne aktive Session nur Chiffretext.
+- **Fremder Code im Browser:** `script-src 'self'` — kein Remote-/Inline-Script, keine `eval`-Auswertung.
+
+### Trigger für Re-Evaluation
+
+- Die CSP müsste auf einer offline-tragenden Route `'unsafe-inline'`/`'unsafe-eval'` zulassen (dann fällt der Schutzwall, und Kapselung/Isolierung des Stores wird relevant).
+- Ein dritter Ausführungskontext mit anderem Trust-Level (z. B. eingebettetes Widget/iframe fremden Ursprungs) erhielte Zugriff auf denselben `window`.
+
+### Verifikation
+
+- Export-Stelle: [`src/static/js/offline-store.js`](../src/static/js/offline-store.js) (`window.offlineStore = { … }`)
+- CSP-Erzwingung: [`src/tests/test_architecture_guards_templates.py`](../src/tests/test_architecture_guards_templates.py) und die weiteren `test_architecture_guards_*`
+- Krypto-/Wipe-Kern: [`src/static/js/crypto.js`](../src/static/js/crypto.js), [ADR-022 § Akzeptierte Restrisiken](adr/022-offline-snapshot-keys.md#akzeptierte-restrisiken)
+
+---
+
 ## Weitere Einstiegspunkte
 
 - [CONTRIBUTING.md § Facility-Scoping & Row Level Security](../CONTRIBUTING.md#facility-scoping--row-level-security)

@@ -34,7 +34,7 @@
 | Art. 32 Verschlüsselung at rest | [ADR-006](adr/006-fernet-field-encryption.md) (Felder) · [ADR-014](adr/014-encrypted-file-vault.md) (Datei-Vault, AES-GCM) | [Auditor] [Dev] |
 | Art. 32 Zugriffskontrolle | [ADR-005](adr/005-facility-scoping-and-rls.md) (RLS) · [ADR-018](adr/018-rollenmodell-superadmin.md)/[ADR-020](adr/020-three-role-postgres-model.md) (Rollen) · [ADR-015](adr/015-mfa-totp.md) (MFA) | [Auditor] [Dev] |
 | Art. 32 Integrität/Nachvollziehbarkeit | [ADR-007](adr/007-auditlog-append-only.md) — AuditLog append-only | [Auditor] [Dev] |
-| Art. 32 Offline-Daten | [ADR-022](adr/022-offline-snapshot-keys.md) — Offline-Snapshot & -Keys, verschlüsselte IndexedDB | [Dev] [Auditor] |
+| Art. 32 Offline-Daten | [ADR-022](adr/022-offline-snapshot-keys.md) — Offline-Snapshot & -Keys, verschlüsselte IndexedDB; [DSFA-/TOM-Einordnung des Offline-Pfads](adr/022-offline-snapshot-keys.md#dsfa-tom-einordnung-des-offline-pfads-1343) | [Dev] [Auditor] |
 
 ## D. Auftragsverarbeitung & Nachweisdokumente (Art. 28, 30, 35 DSGVO)
 
