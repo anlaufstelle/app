@@ -123,7 +123,7 @@ Die betriebsrelevanten ENV-Variablen, die die Anwendung zur Laufzeit auswertet (
 | `DJANGO_SETTINGS_MODULE` || In Produktion `anlaufstelle.settings.prod`. |
 | `ALLOWED_HOSTS` | — (Pflicht in prod) | Komma-separierte Hostnamen, z. B. `anlaufstelle.example.de`. |
 | `TRUSTED_PROXY_HOPS` | `1` | Anzahl vertrauenswürdiger Proxies vor der App (X-Forwarded-For-Auswertung). `0` = kein Proxy, `1` = nur Caddy, `2` = CDN + Caddy. |
-| `DJANGO_HEALTH_DETAIL_TOKEN` || Token für den Header `X-Health-Token`; berechtigt anonyme Monitoring-Caller, die Detailfelder von `/health/` (`version`, `smtp`, Backup-Alter, Disk-frei) abzurufen. Ohne Token liefert `/health/` nur den schlanken Liveness-Payload (siehe [§ 5.1](#51-health-endpoint)). |
+| `DJANGO_HEALTH_DETAIL_TOKEN` || Token für den Header `X-Health-Token`; berechtigt Monitoring-Caller, die Detailfelder von `/health/` (`database`, `virus_scanner`/`clamav`, `encryption_key`, `version`, `smtp`, Backup-Alter, Disk-frei, `stale_jobs`) abzurufen. Ohne Token liefert `/health/` nur `{"status": …}` (siehe [§ 5.1](#51-health-endpoint), #1375). |
 
 **Datenbank (PostgreSQL — Drei-Rollen-Modell, #902)**
 
@@ -267,10 +267,10 @@ docker compose -f docker-compose.prod.yml logs web
 curl https://anlaufstelle.meine-einrichtung.de/health/
 ```
 
-Erwartete (anonyme) Antwort:
+Erwartete (anonyme) Antwort — seit #1375 enthält sie **nur** das `status`-Feld:
 
 ```json
-{"status": "ok", "database": "connected", "virus_scanner": "connected", "clamav": "ok", "encryption_key": "ok"}
+{"status": "ok"}
 ```
 
 ---
@@ -894,31 +894,19 @@ Anlaufstelle stellt einen öffentlichen Health-Endpoint bereit:
 GET /health/
 ```
 
-**Antwort bei normalem Betrieb (HTTP 200):**
+**Antwort bei normalem Betrieb (HTTP 200, anonym):**
 
 ```json
-{
-  "status": "ok",
-  "database": "connected",
-  "virus_scanner": "connected",
-  "clamav": "ok",
-  "encryption_key": "ok"
-}
+{"status": "ok"}
 ```
 
-**Antwort bei Datenbankfehler (HTTP 503):**
+**Antwort bei Datenbank-/Encryption-Key-Fehler (HTTP 503, anonym):**
 
 ```json
-{
-  "status": "error",
-  "database": "unavailable",
-  "virus_scanner": "connected",
-  "clamav": "ok",
-  "encryption_key": "ok"
-}
+{"status": "error"}
 ```
 
-Der Endpoint erfordert keine Authentifizierung und ist für externe Monitoring-Systeme geeignet. Die anonyme Antwort enthält bewusst **kein** `version`-Feld und keine Infrastruktur-Details (Recon-Härtung); die Detailfelder (`version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`) liefert `/health/` nur an authentifizierte Sessions oder Caller mit dem Header `X-Health-Token` (= `DJANGO_HEALTH_DETAIL_TOKEN`). Die vollständige, autoritative Feld-Referenz (alle Felder, Werte, Status-Codes und Schwellen) steht im [Monitoring-Guide](monitoring-guide.md).
+Der Endpoint erfordert keine Authentifizierung und ist für externe Monitoring-Systeme geeignet. Die anonyme Antwort enthält seit #1375 bewusst **nur** das `status`-Feld (Recon-Härtung): Subsystem-Ausfälle bleiben anonym über `status`/HTTP-Code sichtbar (`degraded` bei Scanner-/SMTP-Problemen, `error` + 503 bei DB-/Key-Ausfall), aber alle Detailfelder (`database`, `virus_scanner`/`clamav`, `encryption_key`, `version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`) liefert `/health/` nur an authentifizierte Sessions oder Caller mit dem Header `X-Health-Token` (= `DJANGO_HEALTH_DETAIL_TOKEN`). Die vollständige, autoritative Feld-Referenz (alle Felder, Werte, Status-Codes und Schwellen) steht im [Monitoring-Guide](monitoring-guide.md).
 
 ### 5.2 Monitoring-Integration
 
