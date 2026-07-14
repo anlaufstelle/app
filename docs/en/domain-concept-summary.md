@@ -82,7 +82,7 @@ Anlaufstelle processes social data of highly vulnerable people. Privacy is not a
 - **Audit log.** An append-only, immutable log records all security-relevant actions: data access, modifications, deletions, login attempts, and exports. Since v0.20, each row carries a per-facility HMAC chain so that later tampering or deletion of individual entries is detectable (`verify_audit_chain`, run nightly).
 - **Breach detection.** Heuristic incident detection (GDPR Art. 33/34) flags mass deletions of person data, credential-stuffing bursts against unknown usernames, and distributed victim-lockout patterns, delivering SSRF-hardened webhook alerts. Error tracking stays off by default; when enabled, a scrubber strips PII before events leave the installation.
 - **Facility scoping.** Every query filters on `facility_id`, enforced by middleware. Since v0.10, PostgreSQL Row Level Security provides defense-in-depth on all facility-scoped tables, with session-variable-driven policies that enforce the tenant boundary at the database layer itself.
-- **Two-factor authentication.** Since v0.10, TOTP-based 2FA is available and can be enforced per user or facility-wide. Single-use backup codes and an account lockout back it up, the privileged roles (`super_admin`/`facility_admin`) are enforced into MFA by default, and the TOTP secret itself is encrypted at rest (Fernet, ADR-031).
+- **Two-factor authentication.** Since v0.10, TOTP-based 2FA is available and can be enforced per user or facility-wide. Single-use backup codes and an account lockout back it up, the privileged roles (`super_admin`/`facility_admin`) are enforced into MFA by default, and the TOTP secret itself is encrypted at rest (Fernet, ADR-031); a WebAuthn passkey can additionally be registered as a phishing-resistant second factor (ADR-032, no passwordless login).
 - **GDPR compliance.** Data subject rights (access, rectification, deletion, portability) are implemented as system functions. GDPR documentation templates (processing register, DPIA, DPA, TOMs) ship with the app ([`src/core/dsgvo_templates/`](../../src/core/dsgvo_templates/), since #784).
 
 ## Role Model
@@ -195,8 +195,11 @@ Collective pre-release bundling the skipped 0.17–0.19 — a complete offline f
 - **Offline "one world"** (offline V2, #1499): contacts and tasks can be captured offline even without a previously opened form, and the task list and timeline render offline in-place at their canonical URLs from the merged local snapshot.
 - **Extended breach detection**: a mass client-deletion heuristic, anonymous login bursts per source IP, a distributed victim-lockout signature, and a secondary 24-hour low-and-slow window.
 - **TOTP secrets encrypted at rest** (Fernet/MultiFernet, ADR-031); privilege-change audits now name the acting admin; the error-tracking scrubber closes remaining PII gaps (opt-in Sentry/GlitchTip).
+- **Passkeys/WebAuthn as an additional second factor** (ADR-032, #1492): a passkey (device biometrics, smartphone, or FIDO2 security key) can be registered as a phishing-resistant second factor alongside the authenticator app; when several methods are set up, the 2FA login page offers a chooser. A passkey is only possible *in addition* to a configured TOTP device (backup codes stay the recovery path) and removing one requires sudo mode; passwordless login is deliberately disabled.
+- **Serial capture of anonymous mass contacts** (#1349): a "Save & next contact" action creates the contact and immediately reopens a fresh, empty form with the documentation type pre-selected -- for quickly tallying many anonymous contacts without the detour via the detail page; the next contact starts anonymous with the first field focused.
+- **Task overview status and time filters** (#1570): the task overview gains an explicit status filter (open / in progress / done / all) and -- effective only for "done" -- a time-range filter (last 7/30 days / all), so all completed tasks become reachable beyond the passive seven-day "recently done" preview; both combine with the existing assignment and facility scoping filters.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.20.0 -->
-<!-- translation-date: 2026-07-13 -->
+<!-- translation-date: 2026-07-14 -->
 <!-- source-hash: 9575af2 -->
