@@ -101,7 +101,11 @@ def get_visible_attachment_or_404(user, facility, event_pk, attachment_pk):
     semantics rather than 404.
     """
     event = get_visible_event_or_404(user, facility, event_pk, select_related=("document_type",))
-    attachment = EventAttachment.objects.filter(pk=attachment_pk, event=event).first()
+    # L5 (Refs #1375): ``deleted_at__isnull=True`` schliesst soft-geloeschte
+    # Anhaenge aus. ``EventAttachment`` hat ein ``deleted_at``, aber keinen
+    # Soft-Delete-Manager — ohne diesen Filter blieb ein vom User entfernter
+    # Anhang per Direkt-URL (Download-View) weiter abrufbar.
+    attachment = EventAttachment.objects.filter(pk=attachment_pk, event=event, deleted_at__isnull=True).first()
     if attachment is None:
         raise Http404("Attachment not found")
     return event, attachment
