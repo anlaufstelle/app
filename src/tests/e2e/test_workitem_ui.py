@@ -1020,6 +1020,75 @@ def _cleanup_layout_items(e2e_env):
     _run_shell(code, e2e_env)
 
 
+class TestWorkItemRecentDoneOobInsert:
+    """Refs #1568: Nach dem Markieren als erledigt erscheint die Aufgabe OHNE
+    Reload direkt unter „Kürzlich erledigt" (Out-of-Band-Insert) — statt wie
+    vorher nur aus „Offen"/„In Bearbeitung" zu verschwinden, ohne dass der
+    untere Bereich mitzieht.
+    """
+
+    def test_mark_open_item_done_appears_in_recent_done_without_reload(self, authenticated_page, base_url, e2e_env):
+        """Klick auf „Als erledigt markieren" lässt die Karte aus „Offen"
+        verschwinden UND lässt sie (nach Aufklappen) unter „Kürzlich
+        erledigt" auftauchen — ohne dass die Seite neu geladen wird."""
+        _seed_items_for_done_confirm(e2e_env, status="open", count=1)
+        try:
+            page = authenticated_page
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+
+            row = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
+            row.wait_for(state="visible", timeout=10000)
+
+            page.once("dialog", lambda dialog: dialog.accept())
+            row.get_by_role("button", name="Als erledigt markieren").click()
+
+            # Ohne Reload: die Karte verschwindet aus „Offen" ...
+            row.wait_for(state="hidden", timeout=10000)
+
+            # ... und ist (nach Aufklappen) direkt unter „Kürzlich erledigt"
+            # sichtbar — kein Browser-Reload, kein Seitenwechsel nötig.
+            _open_recent_done(page)
+            done_row = page.locator(
+                "details[data-testid='recent-done'] [id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0"
+            ).first
+            done_row.wait_for(state="visible", timeout=10000)
+            assert done_row.is_visible()
+        finally:
+            _cleanup_done_confirm_items(e2e_env)
+
+    def test_mark_done_updates_recent_done_count_while_collapsed(self, authenticated_page, base_url, e2e_env):
+        """Der Zähler in der (eingeklappt bleibenden) „Kürzlich erledigt"-
+        Überschrift ändert sich sofort — sichtbares Signal, dass dort eine
+        neue erledigte Aufgabe hinzugekommen ist, auch ohne aufzuklappen."""
+        _seed_items_for_done_confirm(e2e_env, status="open", count=1)
+        try:
+            page = authenticated_page
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+
+            summary = page.locator(f"{_RECENT_DONE} > summary")
+            before_text = summary.inner_text()
+
+            row = page.locator("[id^='workitem-']", has_text=f"{_DONE_CONFIRM} 0").first
+            row.wait_for(state="visible", timeout=10000)
+            page.once("dialog", lambda dialog: dialog.accept())
+            row.get_by_role("button", name="Als erledigt markieren").click()
+            row.wait_for(state="hidden", timeout=10000)
+
+            # Bereich bleibt eingeklappt (keine Aufklapp-Aktion) — der Zähler
+            # in der Überschrift ändert sich trotzdem.
+            details = page.locator(_RECENT_DONE)
+            assert details.get_attribute("open") is None
+            page.wait_for_function(
+                """([selector, before]) => document.querySelector(selector).innerText !== before""",
+                arg=[f"{_RECENT_DONE} > summary", before_text],
+                timeout=10000,
+            )
+        finally:
+            _cleanup_done_confirm_items(e2e_env)
+
+
 class TestWorkItemTwoColumnLayout:
     """Refs #1149: Aufgabenübersicht als zweispaltige Arbeitsansicht (Offen +
     In Bearbeitung) mit aufklappbarem, eindeutig auf die letzten 7 Tage

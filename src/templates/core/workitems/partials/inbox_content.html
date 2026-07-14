@@ -13,7 +13,15 @@ sind die wichtigsten Zustände und sollen parallel sichtbar sein.
         {% if open_items %}
         <div class="space-y-3">
             {% for wi in open_items %}
-            {% include "core/workitems/partials/item_card.html" %}
+            {% comment %}
+            Refs #1568: hide_on_complete lässt die Karte beim Erledigen/Verwerfen
+            komplett verschwinden (statt in-place den neuen Status zu zeigen —
+            das bisherige Inbox-Verhalten war irreführend, siehe Issue).
+            recent_done_target markiert den Request zusätzlich für den
+            OOB-Insert in "Kürzlich erledigt" (nur in der Inbox sinnvoll, nicht
+            in Zeitstrom/Klientenansicht — dort bleibt hide_on_complete allein).
+            {% endcomment %}
+            {% include "core/workitems/partials/item_card.html" with hide_on_complete=True recent_done_target=True %}
             {% endfor %}
         </div>
         {% if open_has_more %}
@@ -32,7 +40,7 @@ sind die wichtigsten Zustände und sollen parallel sichtbar sein.
         {% if in_progress_items %}
         <div class="space-y-3">
             {% for wi in in_progress_items %}
-            {% include "core/workitems/partials/item_card.html" %}
+            {% include "core/workitems/partials/item_card.html" with hide_on_complete=True recent_done_target=True %}
             {% endfor %}
         </div>
         {% if in_progress_has_more %}
@@ -57,14 +65,29 @@ Standardmäßig eingeklappt. Die Überschrift benennt den Zeitraum eindeutig
     <summary class="flex items-center gap-2 cursor-pointer list-none select-none text-[12px] font-bold uppercase tracking-wider text-ink-muted hover:text-ink-soft">
         {# Chevron dreht beim Aufklappen (group-open) — klarer Aufklapp-Indikator. #}
         <svg aria-hidden="true" class="w-3.5 h-3.5 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
-        <span>{% trans "Erledigt in den letzten 7 Tagen" %} ({{ done_items|length }}{% if done_has_more %}+{% endif %})</span>
+        {% comment %}
+        Refs #1568: Die Zähl-Badge trägt eine stabile ID, damit der Status-
+        Update-Endpoint sie nach einem Erledigt-/Verworfen-Wechsel per OOB-Swap
+        aktualisieren kann — sichtbar auch bei eingeklapptem Bereich, weil
+        <summary> immer im DOM/Accessibility-Tree steht (Akzeptanzkriterium:
+        "sichtbar, dass eine neue erledigte Aufgabe hinzugekommen ist").
+        {% endcomment %}
+        <span>{% trans "Erledigt in den letzten 7 Tagen" %} <span id="recent-done-count" aria-live="polite">({{ done_items|length }}{% if done_has_more %}+{% endif %})</span></span>
     </summary>
 
     <div class="mt-4">
-        {% if done_items_preview %}
-        <div class="space-y-3">
+        {% comment %}
+        Refs #1568: #recent-done-items ist IMMER vorhanden (auch leer) — das ist
+        das OOB-Insert-Ziel des Status-Update-Endpoints (hx-swap-oob=
+        "afterbegin:#recent-done-items"). Der Platzhaltertext liegt als Kind
+        mit eigener ID darin, damit das OOB-Fragment ihn beim ersten Erledigen
+        gezielt per hx-swap-oob="delete:#recent-done-empty" entfernen kann.
+        {% endcomment %}
+        <div id="recent-done-items" class="space-y-3">
             {% for wi in done_items_preview %}
             {% include "core/workitems/partials/item_card.html" %}
+            {% empty %}
+            <p class="text-sm text-ink-muted" id="recent-done-empty">{% trans "Keine kürzlich erledigten Aufgaben" %}</p>
             {% endfor %}
         </div>
 
@@ -90,9 +113,6 @@ Standardmäßig eingeklappt. Die Überschrift benennt den Zeitraum eindeutig
 
         {% if done_has_more %}
         <p class="text-xs text-ink-muted mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
-        {% endif %}
-        {% else %}
-        <p class="text-sm text-ink-muted">{% trans "Keine kürzlich erledigten Aufgaben" %}</p>
         {% endif %}
     </div>
 </details>

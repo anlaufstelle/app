@@ -25,6 +25,61 @@ from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin
 logger = logging.getLogger(__name__)
 
 
+def apply_workitem_filters(qs, *, item_type="", priority="", assigned_to="", due="", user=None):
+    """Wendet die Inbox-Filter (Typ/Priorität/Zuweisung/Fälligkeit) auf ``qs`` an.
+
+    Refs #1568: aus ``WorkItemInboxView._apply_filters`` extrahiert, damit
+    ``WorkItemStatusUpdateView`` beim OOB-Insert in "Kürzlich erledigt"
+    (nach dem Markieren als erledigt/verworfen) dieselbe Filterlogik
+    wiederverwenden kann statt sie zu duplizieren — die Issue-Vorgabe
+    verlangt ausdrücklich "keine neue Filterlogik erfinden".
+
+    ``assigned_to`` ist hier bereits aufgelöst: der Default-Sentinel
+    (``WorkItemInboxView.DEFAULT_ASSIGNED_SCOPE``) muss der Aufrufer vorher
+    auf ``""`` normalisieren (siehe ``apply_workitem_default_scope``); "me"
+    wird hier noch in die User-ID übersetzt.
+    """
+    if item_type and item_type in dict(WorkItem.ItemType.choices):
+        qs = qs.filter(item_type=item_type)
+
+    if priority and priority in dict(WorkItem.Priority.choices):
+        qs = qs.filter(priority=priority)
+
+    if assigned_to == "me" and user is not None:
+        assigned_to = str(user.id)
+    if assigned_to:
+        qs = qs.filter(assigned_to_id=assigned_to)
+
+    if due:
+        today = timezone.localdate()
+        valid_due_values = {c[0] for c in WorkItemInboxView.DUE_FILTER_CHOICES}
+        if due in valid_due_values:
+            if due == "overdue":
+                qs = qs.filter(
+                    due_date__lt=today,
+                    status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS],
+                )
+            elif due == "today":
+                qs = qs.filter(due_date=today)
+            elif due == "week":
+                qs = qs.filter(due_date__gte=today, due_date__lte=today + timedelta(days=7))
+            elif due == "none":
+                qs = qs.filter(due_date__isnull=True)
+
+    return qs
+
+
+def apply_workitem_default_scope(qs, user, *, default_scope):
+    """Grenzt ``qs`` auf "Mir & unzugewiesene" ein, wenn ``default_scope`` True ist.
+
+    Refs #1145 (Ursprung), #1568 (extrahiert für Wiederverwendung durch den
+    OOB-Insert von ``WorkItemStatusUpdateView``).
+    """
+    if default_scope:
+        return qs.filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
+    return qs
+
+
 def can_user_mutate_workitem(user, workitem):
     """True if ``user`` darf ``workitem`` mutieren (Status/Priorität/Assignee).
 
@@ -102,15 +157,12 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
     DEFAULT_DONE_PERIOD = "7"
 
     def _apply_filters(self, qs, request):
-        """Evaluate GET parameters and filter the queryset."""
-        item_type = request.GET.get("item_type")
-        if item_type and item_type in dict(WorkItem.ItemType.choices):
-            qs = qs.filter(item_type=item_type)
+        """Evaluate GET parameters and filter the queryset.
 
-        priority = request.GET.get("priority")
-        if priority and priority in dict(WorkItem.Priority.choices):
-            qs = qs.filter(priority=priority)
-
+        Refs #1568: delegiert an das modulweite ``apply_workitem_filters`` —
+        die eigentliche Filterlogik lebt dort, damit der OOB-Insert von
+        ``WorkItemStatusUpdateView`` sie unverändert wiederverwenden kann.
+        """
         assigned_to = request.GET.get("assigned_to")
         # Refs #1145: Der Default-Sentinel ist kein Personen-/me-Filter, sondern
         # benennt nur die breitere Default-Sicht — die eigentliche Eingrenzung
@@ -118,30 +170,16 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
         # behandeln, damit ``mine_team`` nicht als (ungültiger) Personen-Wert in
         # die Query gerät.
         if assigned_to == self.DEFAULT_ASSIGNED_SCOPE:
-            assigned_to = None
-        if assigned_to == "me":
-            assigned_to = str(request.user.id)
-        if assigned_to:
-            qs = qs.filter(assigned_to_id=assigned_to)
+            assigned_to = ""
 
-        due = request.GET.get("due")
-        if due:
-            today = timezone.localdate()
-            valid_due_values = {c[0] for c in self.DUE_FILTER_CHOICES}
-            if due in valid_due_values:
-                if due == "overdue":
-                    qs = qs.filter(
-                        due_date__lt=today,
-                        status__in=[WorkItem.Status.OPEN, WorkItem.Status.IN_PROGRESS],
-                    )
-                elif due == "today":
-                    qs = qs.filter(due_date=today)
-                elif due == "week":
-                    qs = qs.filter(due_date__gte=today, due_date__lte=today + timedelta(days=7))
-                elif due == "none":
-                    qs = qs.filter(due_date__isnull=True)
-
-        return qs
+        return apply_workitem_filters(
+            qs,
+            item_type=request.GET.get("item_type", ""),
+            priority=request.GET.get("priority", ""),
+            assigned_to=assigned_to or "",
+            due=request.GET.get("due", ""),
+            user=request.user,
+        )
 
     def get(self, request):
         facility = request.current_facility
@@ -235,9 +273,7 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
         selected_assigned_to = self.DEFAULT_ASSIGNED_SCOPE if param_absent else raw_assigned_to
 
         def _apply_default_scope(qs):
-            if default_scope:
-                return qs.filter(Q(assigned_to=user) | Q(assigned_to__isnull=True))
-            return qs
+            return apply_workitem_default_scope(qs, user, default_scope=default_scope)
 
         open_qs = _apply_default_scope(base_qs.filter(status=WorkItem.Status.OPEN))
         open_items = list(open_qs[: cap + 1])

@@ -304,6 +304,40 @@ class TestWorkItemInboxRowActions:
         assert "nicht gelöscht" in confirm_text
         assert "offenen Aufgaben" in confirm_text
 
+    def test_open_row_done_button_sends_recent_done_target_and_filter_include(self, client, staff_user, workitem_open):
+        """Refs #1568: Der Erledigt-Button einer offenen Aufgabe markiert den
+        Request als Ziel für den OOB-Insert in "Kürzlich erledigt" und liest
+        den aktiven Filter aus den Filter-Selects mit (kein neuer Filter-Code,
+        Wiederverwendung der bestehenden Selects)."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        marker = 'hx-vals=\'{"status": "done"'
+        assert marker in html
+        done_block = html.split(marker, 1)[1].split("</button>", 1)[0]
+        assert '"recent_done_target": "1"' in done_block
+        assert 'hx-include="#filter-item-type,#filter-priority,#filter-assigned-to,#filter-due"' in done_block
+
+    def test_open_row_dismiss_button_sends_recent_done_target(self, client, staff_user, workitem_open):
+        """Auch „Als nicht relevant schließen" (dismiss) triggert den OOB-Insert
+        — verworfene Aufgaben gehören ebenfalls zu "Kürzlich erledigt"."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        marker = 'hx-vals=\'{"status": "dismissed"'
+        assert marker in html
+        dismiss_block = html.split(marker, 1)[1].split("</button>", 1)[0]
+        assert '"recent_done_target": "1"' in dismiss_block
+        assert 'hx-include="#filter-item-type,#filter-priority,#filter-assigned-to,#filter-due"' in dismiss_block
+
+    def test_in_progress_row_done_button_sends_recent_done_target(self, client, staff_user, workitem_in_progress):
+        """Auch der „Erledigt"-Button einer *In Bearbeitung*-Aufgabe triggert
+        den OOB-Insert — derselbe Endzustand, nur ein anderer Ausgangsstatus."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        marker = 'hx-vals=\'{"status": "done"'
+        assert marker in html
+        done_block = html.split(marker, 1)[1].split("</button>", 1)[0]
+        assert '"recent_done_target": "1"' in done_block
+
     def test_dismissed_status_label_unchanged(self, client, staff_user, facility, client_identified):
         """Gegenprobe: Die Statusanzeige ``Verworfen`` (bereits verworfene
         Aufgabe) bleibt als Begriff bestehen — nur die *Aktion* wurde umbenannt,
@@ -350,6 +384,135 @@ class TestWorkItemStatusUpdate:
             {"status": "invalid"},
         )
         assert response.status_code == 400
+
+
+@pytest.mark.django_db
+class TestWorkItemStatusUpdateRecentDoneOob:
+    """Refs #1568: Nach dem Markieren als erledigt/verworfen erscheint die
+    Aufgabe ohne Reload direkt unter "Kürzlich erledigt" — der Server liefert
+    dafür ein Out-of-Band-Fragment (hx-swap-oob), das den aktiven Inbox-Filter
+    respektiert (dieselbe Filterlogik wie ``WorkItemInboxView``, keine neue).
+    """
+
+    def _post_done(self, client, workitem, **extra):
+        payload = {"status": "done", "hide": "1", "recent_done_target": "1"}
+        payload.update(extra)
+        return client.post(
+            reverse("core:workitem_status_update", kwargs={"pk": workitem.pk}),
+            payload,
+            HTTP_HX_REQUEST="true",
+        )
+
+    def test_hide_without_recent_done_target_stays_empty(self, client, staff_user, workitem_open):
+        """Ohne den Marker (z.B. Zeitstrom-Sidebar) bleibt die Antwort leer —
+        das bestehende ``hide``-Verhalten (Refs #258) ändert sich nicht."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_status_update", kwargs={"pk": workitem_open.pk}),
+            {"status": "done", "hide": "1"},
+            HTTP_HX_REQUEST="true",
+        )
+        assert response.status_code == 200
+        assert response.content == b""
+
+    def test_done_with_recent_done_target_inserts_oob_fragment(self, client, staff_user, workitem_open):
+        """Der erledigte Eintrag kommt als OOB-Fragment für die Vorschauliste
+        zurück — oben eingefügt (``afterbegin``), mit dem eigenen Karten-Markup."""
+        client.force_login(staff_user)
+        response = self._post_done(client, workitem_open)
+        html = response.content.decode()
+        assert response.status_code == 200
+        assert 'hx-swap-oob="afterbegin:#recent-done-items"' in html
+        assert f'id="workitem-{workitem_open.pk}"' in html
+        assert workitem_open.title in html
+
+    def test_dismissed_with_recent_done_target_inserts_oob_fragment(self, client, staff_user, workitem_open):
+        """Dieselbe OOB-Ergänzung gilt für „Als nicht relevant schließen"
+        (dismissed) — nicht nur für „erledigt" (done)."""
+        client.force_login(staff_user)
+        response = client.post(
+            reverse("core:workitem_status_update", kwargs={"pk": workitem_open.pk}),
+            {"status": "dismissed", "hide": "1", "recent_done_target": "1"},
+            HTTP_HX_REQUEST="true",
+        )
+        html = response.content.decode()
+        assert 'hx-swap-oob="afterbegin:#recent-done-items"' in html
+        assert f'id="workitem-{workitem_open.pk}"' in html
+
+    def test_oob_deletes_empty_placeholder_when_list_was_empty(self, client, staff_user, workitem_open):
+        """War „Kürzlich erledigt" vorher leer, entfernt das OOB-Fragment den
+        Platzhaltertext per ``hx-swap-oob="delete:..."``."""
+        client.force_login(staff_user)
+        response = self._post_done(client, workitem_open)
+        html = response.content.decode()
+        assert 'hx-swap-oob="delete:#recent-done-empty"' in html
+
+    def test_oob_omits_empty_delete_when_other_done_items_already_shown(
+        self, client, staff_user, workitem_open, workitem_done
+    ):
+        """War bereits eine passende erledigte Aufgabe sichtbar, bleibt der
+        Platzhalter-Delete aus — der Platzhalter existiert im DOM ohnehin
+        nicht mehr."""
+        client.force_login(staff_user)
+        response = self._post_done(client, workitem_open)
+        html = response.content.decode()
+        assert 'hx-swap-oob="delete:#recent-done-empty"' not in html
+
+    def test_oob_count_reflects_total_after_transition(self, client, staff_user, workitem_open, workitem_done):
+        """Die Zähl-Badge in der (auch eingeklappten) Überschrift wird per OOB
+        mitaktualisiert — sichtbar auch bei eingeklapptem Bereich (AC:
+        "sichtbar, dass eine neue erledigte Aufgabe hinzugekommen ist")."""
+        client.force_login(staff_user)
+        response = self._post_done(client, workitem_open)
+        html = response.content.decode()
+        assert 'id="recent-done-count"' in html
+        assert "(2)" in html
+
+    def test_overdue_filter_excludes_item_from_oob_insert(self, client, staff_user, facility):
+        """Aktiver Fälligkeits-Filter „Überfällig" gilt nur für offene/laufende
+        Aufgaben — eine gerade erledigte Aufgabe passt danach nie mehr; kein
+        OOB-Insert (entspricht dem Stand nach einem Reload)."""
+        past = datetime.date.today() - datetime.timedelta(days=3)
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=staff_user,
+            title="Überfällige Aufgabe",
+            status=WorkItem.Status.OPEN,
+            due_date=past,
+        )
+        client.force_login(staff_user)
+        response = self._post_done(client, wi, due="overdue")
+        assert response.content == b""
+
+    def test_assigned_to_me_filter_excludes_item_assigned_to_others(self, client, lead_user, staff_user, facility):
+        """Strikter Filter „Mir zugewiesen" (assigned_to=me): eine Aufgabe, die
+        einer anderen Person zugewiesen ist, darf hier nicht auftauchen —
+        anders als bei „Alle" (Issue-Filterlogik-Abschnitt)."""
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=lead_user,
+            assigned_to=staff_user,
+            title="Für Staff zugewiesen",
+            status=WorkItem.Status.OPEN,
+        )
+        client.force_login(lead_user)
+        response = self._post_done(client, wi, assigned_to="me")
+        assert response.content == b""
+
+    def test_assigned_to_all_filter_includes_item_assigned_to_others(self, client, lead_user, staff_user, facility):
+        """Gegenprobe: unter „Alle" (leerer Wert) erscheint dieselbe fremd-
+        zugewiesene Aufgabe im OOB-Fragment."""
+        wi = WorkItem.objects.create(
+            facility=facility,
+            created_by=lead_user,
+            assigned_to=staff_user,
+            title="Für Staff zugewiesen",
+            status=WorkItem.Status.OPEN,
+        )
+        client.force_login(lead_user)
+        response = self._post_done(client, wi, assigned_to="")
+        html = response.content.decode()
+        assert 'hx-swap-oob="afterbegin:#recent-done-items"' in html
 
 
 @pytest.mark.django_db
@@ -748,6 +911,23 @@ class TestWorkItemInboxRecentDonePreview:
         assert "der letzten 7 Tage anzeigen" in html
         # Reine Kurzform darf es als alleinige Beschriftung nicht geben.
         assert ">Alle anzeigen<" not in html
+
+    def test_recent_done_container_has_stable_id_for_oob_insert(self, client, staff_user, facility):
+        """Refs #1568: Die Vorschauliste braucht eine stabile ID, in die der
+        Status-Update-Endpoint nach dem Erledigen per OOB-Swap einfügt."""
+        self._make_done(facility, staff_user, 2)
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert 'id="recent-done-items"' in html
+        assert 'id="recent-done-count"' in html
+
+    def test_recent_done_empty_placeholder_has_stable_id(self, client, staff_user):
+        """Ohne erledigte Aufgaben trägt der Platzhaltertext eine stabile ID,
+        damit das OOB-Fragment ihn beim ersten Erledigen gezielt entfernen kann."""
+        client.force_login(staff_user)
+        html = client.get(reverse("core:workitem_inbox")).content.decode()
+        assert 'id="recent-done-empty"' in html
+        assert "Keine kürzlich erledigten Aufgaben" in html
 
 
 @pytest.mark.django_db

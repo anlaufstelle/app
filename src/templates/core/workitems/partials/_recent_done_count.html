@@ -1,0 +1,8 @@
+{% load i18n %}
+{% comment %}
+Refs #1568: OOB-Fragment für die Zähl-Badge in der "Kürzlich erledigt"-
+Überschrift. Wird vom Status-Update-Endpoint nach einem Erledigt-/Verworfen-
+Wechsel per ``hx-swap-oob="true"`` (Match über die geteilte ID) eingespielt —
+sichtbar auch bei eingeklapptem Bereich, weil <summary> immer im DOM steht.
+{% endcomment %}
+<span id="recent-done-count" hx-swap-oob="true" aria-live="polite">({{ done_count }}{% if done_has_more %}+{% endif %})</span>

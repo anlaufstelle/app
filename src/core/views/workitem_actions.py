@@ -4,17 +4,21 @@ Abgeteilt von :file:`views/workitems.py`. Die Inbox- und Detail-Views
 bleiben dort, weil sie reine Read-Pfade sind.
 """
 
+from datetime import timedelta
+
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
 from django.shortcuts import redirect, render
+from django.template.loader import render_to_string
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
-from core.constants import RATELIMIT_FREQUENT, RATELIMIT_MUTATION
+from core.constants import RATELIMIT_FREQUENT, RATELIMIT_MUTATION, WORKITEM_INBOX_CAP
 from core.forms.workitems import WorkItemForm
 from core.models import WorkItem
 from core.services.case import (
@@ -39,7 +43,12 @@ from core.views._json_contracts import (
 )
 from core.views.mixins import AssistantOrAboveRequiredMixin, StaffRequiredMixin
 from core.views.utils import safe_redirect_path
-from core.views.workitems import can_user_mutate_workitem
+from core.views.workitems import (
+    WorkItemInboxView,
+    apply_workitem_default_scope,
+    apply_workitem_filters,
+    can_user_mutate_workitem,
+)
 
 
 def _workitem_conflict_response(workitem, client_expected, *, error="conflict"):
@@ -71,6 +80,80 @@ def _workitem_conflict_response(workitem, client_expected, *, error="conflict"):
         "updated_at": workitem.updated_at.isoformat() if workitem.updated_at else None,
     }
     return _conflict_response(server_state, client_expected, error=error)
+
+
+def _build_recent_done_oob(request, workitem):
+    """Baut das Out-of-Band-Fragment für "Kürzlich erledigt" (Refs #1568).
+
+    Fügt ``workitem`` (gerade auf erledigt/verworfen gesetzt) OBEN in die
+    "Kürzlich erledigt"-Vorschau der Inbox ein — respektiert dabei den
+    aktuell aktiven Filter (Typ/Priorität/Zuweisung/Fälligkeit), den der
+    Inbox-Client als ``item_type``/``priority``/``assigned_to``/``due``-Felder
+    mitschickt (dieselben Filter-Selects wie in inbox.html, per
+    ``hx-include`` — siehe ``components/_workitem_row.html``). Wendet dafür
+    dieselbe Filterlogik wie ``WorkItemInboxView`` an (``apply_workitem_filters``/
+    ``apply_workitem_default_scope``), statt sie neu zu erfinden.
+
+    Reine Best-Effort-Ergänzung: Fehlt der ``recent_done_target``-Marker
+    (Aufruf außerhalb der Inbox, z.B. Zeitstrom-Sidebar mit ``hide_on_complete``
+    allein) oder passt das Item nicht (mehr) zum aktiven Filter, liefert die
+    Funktion ``""`` — kein OOB-Fragment, das primäre Verschwinden der Karte
+    bleibt davon unberührt.
+    """
+    if request.POST.get("recent_done_target") != "1":
+        return ""
+    if workitem.status not in (WorkItem.Status.DONE, WorkItem.Status.DISMISSED):
+        return ""
+
+    due = request.POST.get("due", "")
+    # Der "Überfällig"-Filter gilt nur für offene/laufende Aufgaben
+    # (apply_workitem_filters) — ein soeben erledigtes/verworfenes Item passt
+    # danach nie mehr; das entspricht dem Stand nach einem Reload.
+    if due == "overdue":
+        return ""
+
+    raw_assigned_to = request.POST.get("assigned_to", WorkItemInboxView.DEFAULT_ASSIGNED_SCOPE)
+    default_scope = raw_assigned_to == WorkItemInboxView.DEFAULT_ASSIGNED_SCOPE
+    assigned_to = "" if default_scope else raw_assigned_to
+
+    qs = apply_workitem_filters(
+        WorkItem.objects.for_facility(request.current_facility),
+        item_type=request.POST.get("item_type", ""),
+        priority=request.POST.get("priority", ""),
+        assigned_to=assigned_to,
+        due=due,
+        user=request.user,
+    )
+    qs = apply_workitem_default_scope(qs, request.user, default_scope=default_scope)
+
+    # Das Item selbst muss durch den Filter passen — sonst war es (z.B. bei
+    # einem Personen-Filter auf jemand anderen) nach dem Statuswechsel gar
+    # nicht mehr im aktuellen Filterkontext sichtbar.
+    if not qs.filter(pk=workitem.pk).exists():
+        return ""
+
+    seven_days_ago = timezone.now() - timedelta(days=7)
+    done_qs = qs.filter(
+        status__in=[WorkItem.Status.DONE, WorkItem.Status.DISMISSED],
+        updated_at__gte=seven_days_ago,
+    )
+    total = done_qs.count()
+    was_empty = total <= 1  # das soeben erledigte Item zaehlt hier schon mit
+    cap = WORKITEM_INBOX_CAP
+    has_more = total > cap
+    shown = min(total, cap)
+
+    empty_oob = '<div hx-swap-oob="delete:#recent-done-empty"></div>' if was_empty else ""
+    count_html = render_to_string(
+        "core/workitems/partials/_recent_done_count.html",
+        {"done_count": shown, "done_has_more": has_more},
+    )
+    card_html = render_to_string(
+        "core/workitems/partials/item_card.html",
+        {"wi": workitem},
+        request=request,
+    )
+    return empty_oob + count_html + f'<div hx-swap-oob="afterbegin:#recent-done-items">{card_html}</div>'
 
 
 class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
@@ -166,11 +249,16 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
     def _success_response(self, request, workitem):
         """Erfolgsform des Status-POSTs — geteilt zwischen Erst-Request und
         Idempotenz-Cache-Hit, damit der Replay exakt die Antwort bekommt, der
-        die generische Queue als Erfolg folgt (HX: 200-Partial bzw. leere
-        Antwort bei ``hide``; sonst Redirect)."""
+        die generische Queue als Erfolg folgt (HX: 200-Partial bzw. leere/OOB-
+        Antwort bei ``hide``; sonst Redirect).
+
+        Refs #1568: Bei ``hide`` haengt ``_build_recent_done_oob`` optional ein
+        Out-of-Band-Fragment an, das die Karte oben in "Kürzlich erledigt"
+        einfügt — ohne Reload sichtbar, konsistent mit dem primären
+        Verschwinden aus Offen/In Bearbeitung (leere Primärantwort)."""
         if request.headers.get("HX-Request") == "true":
             if request.POST.get("hide"):
-                return HttpResponse("")
+                return HttpResponse(_build_recent_done_oob(request, workitem))
             return render(request, "core/workitems/partials/item_card.html", {"wi": workitem})
 
         messages.success(request, _("Status aktualisiert."))
