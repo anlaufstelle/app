@@ -1177,3 +1177,36 @@ class TestWorkItemTwoColumnLayout:
         assert page.locator(
             "details[data-testid='recent-done'] summary", has_text="Erledigt in den letzten 7 Tagen"
         ).first.is_visible()
+
+
+class TestWorkItemAllDoneStatusFilter:
+    """Refs #1570: Zugriff auf alle erledigten Aufgaben über Link + gezielten
+    Statusfilter — der Link aus der passiven "Kürzlich erledigt"-Vorschau
+    führt zu einer eigenen, ungecappten Erledigt-Ansicht statt nur
+    aufzuklappen."""
+
+    @pytest.mark.smoke
+    def test_all_done_link_leads_to_filtered_done_view(self, authenticated_page, base_url, e2e_env):
+        """Klick auf "Alle erledigten Aufgaben anzeigen" navigiert zur
+        Statusfilter-Ansicht ``?status=done`` und zeigt dort die erledigten
+        Aufgaben; Offen/In Bearbeitung sind dort ausgeblendet."""
+        _seed_done_unassigned_for_admin(e2e_env, count=2)
+        try:
+            page = authenticated_page
+            page.set_viewport_size({"width": 1280, "height": 900})
+            page.goto(f"{base_url}/workitems/")
+            page.wait_for_load_state("domcontentloaded")
+
+            link = page.locator("[data-testid='all-done-link']")
+            assert link.is_visible()
+            link.click()
+            page.wait_for_url(re.compile(r"status=done"))
+
+            section = page.locator("[data-testid='section-done-full']")
+            section.wait_for(state="visible", timeout=5000)
+            assert section.locator("[id^='workitem-']", has_text=_LAYOUT).count() == 2
+            # Statusfilter blendet die anderen Sektionen vollständig aus.
+            assert page.locator("[data-testid='section-open']").count() == 0
+            assert page.locator("details[data-testid='recent-done']").count() == 0
+        finally:
+            _cleanup_layout_items(e2e_env)
