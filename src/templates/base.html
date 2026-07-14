@@ -146,6 +146,9 @@
     <script src="{% static 'js/double-submit.js' %}" defer></script>
     {# C2 (#1016): globaler htmx:responseError-Fehler-Toast. #}
     <script src="{% static 'js/htmx-errors.js' %}" defer></script>
+    {# Refs #1339: globaler htmx:afterSwap-Fokus-Handler — setzt nach jedem #}
+    {# Partial-Swap den Tastatur-/Screenreader-Fokus ins getauschte Fragment. #}
+    <script src="{% static 'js/focus-management.js' %}" defer></script>
     <script src="{% static 'js/sw-register.js' %}" defer></script>
 </body>
 </html>

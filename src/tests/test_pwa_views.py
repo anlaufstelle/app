@@ -122,11 +122,25 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v23"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v24"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
-            "(#1546: SWR-Runtime-Cache vom Precache getrennt (RUNTIME_CACHE_NAME) "
-            "+ Eintrags-Budget; der Bump raeumt die alten, ungebremst "
-            "gewachsenen v22-Caches beim activate weg)."
+            "(#1339: focus-management.js ins APP_SHELL aufgenommen; der Bump "
+            "erzwingt Re-Install + Re-Precache, damit Bestandsnutzer den neuen "
+            "Fokus-Handler offline bekommen)."
+        )
+
+    def test_sw_caches_focus_management(self, client):
+        """Refs #1339: Der globale htmx:afterSwap-Fokus-Handler
+        (focus-management.js) wird von base.html auf jeder Seite geladen —
+        auch von den In-Place-Offline-Shells, die base.html erweitern. Er muss
+        daher im APP_SHELL pre-cached sein, sonst fehlt der Fokus-Handler im
+        Kalt-Offline-Pfad nach einem SW-Update.
+        """
+        response = client.get(reverse("service_worker"))
+        body = response.content.decode()
+        shell_block = _app_shell_block(body)
+        assert "/static/js/focus-management.js" in shell_block, (
+            "focus-management.js fehlt im APP_SHELL — Fokus-Handler offline nicht ladbar."
         )
 
     def test_sw_caches_offline_create_shells(self, client):

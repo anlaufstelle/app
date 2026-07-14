@@ -43,6 +43,11 @@ importScripts("/static/js/url-patterns.js");
 // (neue WORKITEM_LIST-/ZEITSTROM-Zweige). Der Bump erzwingt Re-Install +
 // Re-Precache, damit der Kalt-Offline-Pfad die neuen Tab-Shells findet statt
 // der /offline/-Home.
+// Refs #1339: v23 -> v24 -- APP_SHELL um den globalen HTMX-Fokus-Handler
+// (focus-management.js) erweitert. base.html laedt ihn auf jeder Seite (auch
+// in den In-Place-Offline-Shells, die base.html erweitern); ohne Pre-Cache
+// bliebe der Fokus-Handler im Kalt-Offline-Pfad nach einem SW-Update aus. Der
+// Bump erzwingt Re-Install + Re-Precache.
 // Refs #1546: v22 -> v23 -- SW-Cache-Hygiene / Storage-Budget. Der
 // stale-while-revalidate-Zweig schrieb bisher JEDE erfolgreiche
 // /static/-Antwort ungebremst in den Precache (CACHE_NAME) — gehashte
@@ -51,7 +56,7 @@ importScripts("/static/js/url-patterns.js");
 // (RUNTIME_CACHE_NAME) mit Eintrags-Budget (MAX_RUNTIME_ENTRIES); der Precache
 // bleibt unangetastet. Der Bump erzwingt Re-Install + Re-Activate und raeumt
 // dabei die alten, ungebremst gewachsenen v22-Caches (Precache + Runtime) weg.
-const CACHE_NAME = "anlaufstelle-v23";
+const CACHE_NAME = "anlaufstelle-v24";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate
@@ -209,6 +214,12 @@ const APP_SHELL = [
     "/static/js/alpine-csp.min.js",
     "/static/js/alpine/base-layout.js",
     "/static/js/sync-orchestrator.js",
+    // Refs #1339: Der globale HTMX-Fokus-Handler (htmx:afterSwap) wird von
+    // base.html auf jeder Seite geladen — auch von den In-Place-Offline-Shells
+    // (offline_detail.html etc.), die base.html erweitern und selbst hx-Swaps
+    // rendern. Ohne Pre-Cache bliebe der Fokus-Handler im Kalt-Offline-Pfad nach
+    // einem SW-Update (leerer SWR-Runtime-Cache) aus.
+    "/static/js/focus-management.js",
     // Refs #1334: Das PWA-Manifest (aus Scope-Gruenden unter /manifest.json,
     // nicht /static/) und das deklarierte Site-Icon (favicon.svg) offline
     // verfuegbar machen — sonst net::ERR_INTERNET_DISCONNECTED beim Offline-

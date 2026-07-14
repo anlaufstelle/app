@@ -4,7 +4,13 @@ Abgeleitet 1:1 aus der manuellen Playwright-Verifikation:
   * C2  — globaler htmx:responseError-Fehler-Toast (htmx-errors.js)
   * C3a — hx-indicator-Lade-Spinner an den Live-Such-Listen
   * C3b — Doppel-Submit-Schutz für Standard-Formulare (double-submit.js)
+
+Refs #1339 — globaler htmx:afterSwap-Fokus-Handler (focus-management.js):
+  * Statuswechsel-Swap → Fokus landet im getauschten Fragment (nicht <body>)
+  * Live-Suche → Fokus bleibt im Suchfeld (kein Fokus-Diebstahl)
 """
+
+import re
 
 import pytest
 
@@ -160,3 +166,94 @@ class TestDoubleSubmitGuard:
         page.get_by_role("button", name="DE", exact=True).click()
         page.wait_for_load_state("domcontentloaded")
         page.wait_for_function("() => document.title.indexOf('Personen') !== -1", timeout=5000)
+
+
+class TestHtmxFocusManagement:
+    """Refs #1339: Der globale htmx:afterSwap-Fokus-Handler (focus-management.js)
+    setzt den Tastatur-/Screenreader-Fokus nach einem Partial-Swap ins getauschte
+    Fragment — außer bei keyup-getriggerter Live-Suche, wo der Fokus im Eingabe-
+    feld bleiben MUSS. Abgeleitet aus der manuellen Playwright-Verifikation.
+    """
+
+    def _create_open_workitem(self, page, base_url, title):
+        page.goto(f"{base_url}/workitems/new/", wait_until="domcontentloaded")
+        page.select_option("select[name='item_type']", value="task")
+        page.fill("input[name='title']", title)
+        page.select_option("select[name='priority']", value="normal")
+        page.click("button:has-text('Speichern')")
+        page.wait_for_url(re.compile(r"/workitems/$"))
+
+    def test_status_swap_moves_focus_into_card_and_keeps_keyboard_nav(self, authenticated_page, base_url):
+        """Statuswechsel („Übernehmen", outerHTML-Swap von #workitem-<pk>) →
+        der Fokus liegt danach IM getauschten Fragment (nicht auf <body>), und
+        ein anschließendes Tab läuft weiter innerhalb der Karte (Tastatur-Smoke).
+        """
+        page = authenticated_page
+        self._create_open_workitem(page, base_url, "Fokus-Statuswechsel #1339")
+
+        row = page.locator("[id^='workitem-']", has_text="Fokus-Statuswechsel #1339").first
+        row.wait_for(state="visible", timeout=10000)
+        card_id = row.get_attribute("id")
+
+        # „Übernehmen" hat KEIN hx-confirm → direkter outerHTML-Swap der Karte.
+        row.get_by_role("button", name="Übernehmen").click()
+        # Nach dem Swap zeigt die Karte den in_progress-Zustand (Zurücksetzen-Btn).
+        page.locator(f"#{card_id}").get_by_role("button", name="Zurücksetzen").wait_for(state="visible", timeout=5000)
+
+        focus_info = page.evaluate(
+            """(id) => {
+                const active = document.activeElement;
+                const card = document.getElementById(id);
+                return {
+                    onBody: active === document.body,
+                    insideCard: !!(card && card.contains(active)),
+                };
+            }""",
+            card_id,
+        )
+        assert focus_info["onBody"] is False, "Fokus fiel nach dem Swap auf <body> zurück."
+        assert focus_info["insideCard"] is True, "Fokus liegt nicht im getauschten Fragment."
+
+        # Tastatur-Smoke: Tab läuft weiter INNERHALB der Karte (die Aktions-
+        # Buttons der neu gerenderten Zeile sind per Tastatur erreichbar).
+        page.keyboard.press("Tab")
+        still_inside = page.evaluate(
+            """(id) => {
+                const active = document.activeElement;
+                const card = document.getElementById(id);
+                return !!(card && card.contains(active)) && active !== document.body;
+            }""",
+            card_id,
+        )
+        assert still_inside is True, "Tab nach dem Swap verließ das getauschte Fragment."
+
+    def test_live_search_keeps_focus_in_input(self, authenticated_page, base_url):
+        """Live-Suche (keyup-getriggert) → der Fokus bleibt im Suchfeld, damit
+        der Nutzer weitertippen kann; der Handler stiehlt ihn NICHT ins Ergebnis.
+        """
+        page = authenticated_page
+        page.goto(f"{base_url}/clients/", wait_until="domcontentloaded")
+
+        # Swap des #client-table beobachten (deterministisch statt fixem Warten).
+        page.evaluate(
+            """() => {
+                window.__clientTableSwapped = false;
+                document.body.addEventListener('htmx:afterSwap', (e) => {
+                    if (e.detail && e.detail.target && e.detail.target.id === 'client-table') {
+                        window.__clientTableSwapped = true;
+                    }
+                });
+            }"""
+        )
+
+        search = page.locator("input[hx-target='#client-table']")
+        search.click()
+        # Zeichenweise tippen → löst keyup (hx-trigger="keyup changed delay:300ms") aus.
+        search.press_sequentially("Stern", delay=60)
+
+        page.wait_for_function("() => window.__clientTableSwapped === true", timeout=5000)
+
+        still_focused = page.evaluate(
+            "() => document.activeElement === document.querySelector(\"input[hx-target='#client-table']\")"
+        )
+        assert still_focused is True, "Der Fokus wurde bei der Live-Suche aus dem Eingabefeld gestohlen."
