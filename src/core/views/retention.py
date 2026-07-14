@@ -4,7 +4,7 @@ from datetime import date
 
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseNotAllowed, JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext as _
 from django.views import View
@@ -22,6 +22,7 @@ from core.services.retention import (
     create_legal_hold,
     dismiss_legal_hold,
 )
+from core.services.scoping import get_scoped_object
 from core.views.mixins import HTMXPartialMixin, LeadOrAdminRequiredMixin
 
 
@@ -44,11 +45,7 @@ class RetentionApproveView(LeadOrAdminRequiredMixin, View):
     """Approve a retention proposal for deletion."""
 
     def post(self, request, pk):
-        proposal = get_object_or_404(
-            RetentionProposal,
-            pk=pk,
-            facility=request.current_facility,
-        )
+        proposal = get_scoped_object(RetentionProposal, request, pk=pk)
         approve_proposal(proposal, request.user)
 
         annotate_urgency(proposal)
@@ -68,11 +65,7 @@ class RetentionHoldView(LeadOrAdminRequiredMixin, View):
     """Create a legal hold on a retention proposal."""
 
     def post(self, request, pk):
-        proposal = get_object_or_404(
-            RetentionProposal,
-            pk=pk,
-            facility=request.current_facility,
-        )
+        proposal = get_scoped_object(RetentionProposal, request, pk=pk)
 
         reason = request.POST.get("reason", "").strip()
         if not reason:
@@ -224,11 +217,7 @@ class RetentionDismissHoldView(LeadOrAdminRequiredMixin, View):
     """Dismiss an active legal hold."""
 
     def post(self, request, pk):
-        hold = get_object_or_404(
-            LegalHold,
-            pk=pk,
-            facility=request.current_facility,
-        )
+        hold = get_scoped_object(LegalHold, request, pk=pk)
 
         dismiss_legal_hold(hold, request.user)
 
