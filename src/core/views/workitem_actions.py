@@ -8,7 +8,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -29,6 +29,7 @@ from core.services.events import (
     payload_fingerprint,
     remember_idempotent_result,
 )
+from core.services.scoping import get_scoped_object
 from core.views._json_contracts import (
     _conflict_response,
     _idempotency_mismatch_response,
@@ -117,7 +118,7 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
                 # Key-Kollision — kein gecachter Erfolg, sondern 422.
                 if hit.payload_hash is not None and hit.payload_hash != idem_payload_hash:
                     return _idempotency_mismatch_response()
-                workitem = get_object_or_404(WorkItem, pk=pk, facility=request.current_facility)
+                workitem = get_scoped_object(WorkItem, request, pk=pk)
                 return self._success_response(request, workitem)
 
         # Permission-Check + Service-Call innerhalb derselben Transaktion,
@@ -126,10 +127,10 @@ class WorkItemStatusUpdateView(AssistantOrAboveRequiredMixin, View):
         # Check und Update veraendern kann (Refs #129 Teil A, Refs #733).
         try:
             with transaction.atomic():
-                workitem = get_object_or_404(
+                workitem = get_scoped_object(
                     WorkItem.objects.select_for_update(),
+                    request,
                     pk=pk,
-                    facility=request.current_facility,
                 )
                 if not can_user_mutate_workitem(request.user, workitem):
                     return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
@@ -316,10 +317,10 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
     """Edit a WorkItem."""
 
     def get(self, request, pk):
-        workitem = get_object_or_404(
+        workitem = get_scoped_object(
             WorkItem.objects.select_related("client"),
+            request,
             pk=pk,
-            facility=request.current_facility,
         )
         # Refs #735: Edit-Pfad richtet sich nach derselben Owner/Assignee-
         # Policy wie der Status-Pfad. Staff-User sehen das Form nur fuer
@@ -337,10 +338,10 @@ class WorkItemUpdateView(StaffRequiredMixin, View):
         return render(request, "core/workitems/form.html", context)
 
     def post(self, request, pk):
-        workitem = get_object_or_404(
+        workitem = get_scoped_object(
             WorkItem,
+            request,
             pk=pk,
-            facility=request.current_facility,
         )
         if not can_user_mutate_workitem(request.user, workitem):
             return HttpResponseForbidden(_("Keine Berechtigung für diese Aufgabe."))
