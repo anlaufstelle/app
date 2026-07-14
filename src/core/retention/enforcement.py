@@ -44,7 +44,14 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
     and clean up approved proposals. Returns ``(count, deleted_ids)``.
 
     Callers must pre-compute ``qs.count()`` before calling and skip if zero.
-    Keeps the identical behavior of the original private ``_enforce_*`` helpers.
+
+    Refs #1344: Jedes Event wird in einer eigenen ``transaction.atomic()``
+    geleert (``save`` + ``EventHistory(DELETE)`` + Anhang-Cleanup). Bricht der
+    Lauf mitten drin ab, bleibt das betroffene Event vollstaendig unangetastet
+    und wird beim naechsten Lauf erneut verarbeitet (kein Halb-Zustand ohne
+    Nachweis, keine verwaiste ``.enc``-Residue). ``count`` im ``AuditLog``
+    zaehlt daher nur tatsaechlich committete Events; zwischenzeitlich bereits
+    geloeschte Events werden defensiv uebersprungen.
     """
 
     # Refs #1344: DSGVO-Nachweiskette — jedes Event MUSS atomar mit seiner
@@ -86,11 +93,17 @@ def _soft_delete_events(qs, facility, category, retention_days, extra_detail=Non
                 data_before=history_payload,
                 field_metadata=field_metadata,
             )
-        # Erst NACH erfolgreichem Commit die Dateien loeschen: Datei-Unlink ist
-        # nicht rollback-bar. Faellt der Commit aus, bleiben die Attachments auf
-        # Platte; verwaiste ``.enc``-Dateien deckt ``cleanup_orphan_storage_files``
-        # als Backstop ab (#662). deleted_event_ids zaehlt nur committete Events.
-        delete_event_attachments(event)
+            # Refs #1344: Anhang-Cleanup MUSS in DERSELBEN Transaktion liegen.
+            # Der physische ``.enc``-Unlink ist zwar nicht rollback-bar, aber die
+            # zugehoerigen ``EventAttachment``-Record-Deletes UND der Event-Commit
+            # rollen bei einem Crash gemeinsam zurueck: das Event bleibt dann
+            # ``is_deleted=False`` und der naechste Lauf raeumt selbstheilend auf
+            # (``delete_attachment_file`` ist ``unlink(missing_ok)`` -> idempotent).
+            # Laege der Cleanup wie zuvor AUSSERHALB, koennte ein Crash zwischen
+            # Event-Commit und Datei-Unlink eine ``.enc``-Datei MIT Record
+            # hinterlassen; ``cleanup_orphan_storage_files`` ueberspringt Dateien
+            # MIT Record -> PII-Residue bliebe dauerhaft (DSGVO-Blocker).
+            delete_event_attachments(event)
         deleted_event_ids.append(pk)
 
     extra = dict(extra_detail) if extra_detail else {}

@@ -13,7 +13,7 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.utils import timezone
 
-from core.models import DocumentType, Event, EventHistory, FieldTemplate
+from core.models import DocumentType, Event, EventAttachment, EventHistory, FieldTemplate
 from core.retention import enforcement as enforcement_mod
 from core.services.events import build_redacted_delete_history, soft_delete_event
 from core.services.file_vault import store_encrypted_file
@@ -236,3 +236,103 @@ class TestRetentionSoftDeleteAtomicOnCrash:
         emptied = Event.objects.filter(pk__in=pks, is_deleted=True).count()
         history_deletes = EventHistory.objects.filter(event__pk__in=pks, action=EventHistory.Action.DELETE).count()
         assert emptied == history_deletes == 1
+
+
+@pytest.mark.django_db
+class TestRetentionAttachmentCleanupSelfHeals:
+    """Refs #1344: Ein Crash WAEHREND des Anhang-Cleanups darf keine dauerhafte
+    DSGVO-Anhang-Residue hinterlassen.
+
+    Der physische ``.enc``-Unlink ist nicht rollback-bar. Lag der Cleanup
+    AUSSERHALB der Event/History-Transaktion, war das Event bei einem Crash
+    mitten im Unlink bereits ``is_deleted=True`` committet: Re-Runs uebersprangen
+    es (``is_deleted``-Filter), die ``.enc``-Datei blieb MIT ihrem
+    ``EventAttachment``-Record liegen, und ``cleanup_orphan_storage_files``
+    ueberspringt Dateien MIT Record -> PII bliebe dauerhaft auf Platte. Der Fix
+    zieht den Cleanup in dieselbe Transaktion: ein Crash rollt das Event zurueck
+    (``is_deleted=False``), der naechste Lauf raeumt selbstheilend auf
+    (``delete_attachment_file`` ist ``unlink(missing_ok)`` -> idempotent).
+    """
+
+    def test_crash_during_attachment_cleanup_self_heals(self, facility, normal_doc_type, admin_user, client_identified):
+        ft = FieldTemplate.objects.create(facility=facility, name="Anhang", field_type="file")
+        event = Event.objects.create(
+            facility=facility,
+            document_type=normal_doc_type,
+            client=client_identified,
+            occurred_at=timezone.now() - timedelta(days=200),
+            data_json={"freitext": "sensibler Klartext", "ort": "Ort X"},
+            created_by=admin_user,
+        )
+        att = store_encrypted_file(
+            facility, SimpleUploadedFile("a.pdf", PDF_HEADER, content_type="application/pdf"), ft, event, admin_user
+        )
+        path = get_attachment_path(att)
+        assert path.exists()
+
+        real_delete = enforcement_mod.delete_event_attachments
+        calls = {"n": 0}
+
+        def flaky_delete(ev):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("simulierter Crash beim Anhang-Unlink")
+            return real_delete(ev)
+
+        # Produktions-Filter: die ``enforce_*``-Wrapper bauen die qs stets mit
+        # ``is_deleted=False`` — ein Re-Run erreicht ein schon geleertes Event nicht.
+        def prod_qs():
+            return Event.objects.filter(pk=event.pk, is_deleted=False)
+
+        with patch.object(enforcement_mod, "delete_event_attachments", side_effect=flaky_delete):
+            with pytest.raises(RuntimeError):
+                _soft_delete_events(prod_qs(), facility, category="identified", retention_days=365)
+
+            # Crash-Zustand: KEIN committeter Halb-Zustand. Solange die Anhaenge
+            # (mit Record) noch auf Platte liegen, darf das Event nicht als
+            # geleert+geloescht committet sein — sonst dauerhafte PII-Residue.
+            event.refresh_from_db()
+            assert event.is_deleted is False
+            assert event.data_json == {"freitext": "sensibler Klartext", "ort": "Ort X"}
+            assert EventHistory.objects.filter(event=event, action=EventHistory.Action.DELETE).count() == 0
+            assert EventAttachment.objects.filter(event=event).exists()
+            assert path.exists()
+
+            # Selbstheilung: der naechste Lauf (2. Aufruf ist real) raeumt vollstaendig auf.
+            _soft_delete_events(prod_qs(), facility, category="identified", retention_days=365)
+
+        event.refresh_from_db()
+        assert event.is_deleted is True
+        assert event.data_json == {}
+        assert not EventAttachment.objects.filter(event=event).exists()
+        assert not path.exists()
+        # Genau EIN DELETE-Nachweis trotz Crash + Re-Run.
+        assert EventHistory.objects.filter(event=event, action=EventHistory.Action.DELETE).count() == 1
+
+
+@pytest.mark.django_db
+class TestRetentionSaveHistoryAtomic:
+    """Refs #1344: ``event.save`` und die ``EventHistory(DELETE)``-Zeile bilden
+    EIN atomares Paar — schlaegt der Nachweis fehl, wird die Event-Mutation
+    zurueckgerollt (kein geleertes Event ohne Nachweis)."""
+
+    def test_history_create_failure_rolls_back_event(self, event_with_pii, facility):
+        original = {
+            "freitext": "psychische Krise, hat konsumiert",
+            "ort": "Cafe X",
+            "intervention": "Krisengespraech 30 min",
+        }
+        with patch.object(enforcement_mod.EventHistory.objects, "create", side_effect=RuntimeError("boom")):
+            with pytest.raises(RuntimeError):
+                _soft_delete_events(
+                    Event.objects.filter(pk=event_with_pii.pk, is_deleted=False),
+                    facility,
+                    category="anonymous",
+                    retention_days=90,
+                )
+
+        event_with_pii.refresh_from_db()
+        # Kern-Atomaritaet: der Nachweis-Fehler rollt die Event-Mutation zurueck.
+        assert event_with_pii.is_deleted is False
+        assert event_with_pii.data_json == original
+        assert EventHistory.objects.filter(event=event_with_pii, action=EventHistory.Action.DELETE).count() == 0
