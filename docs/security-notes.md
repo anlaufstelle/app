@@ -582,9 +582,12 @@ Django bildet `on_delete` standardmäßig **nicht** auf DB-Ebene ab — die von 
 
 Migration 0104 zieht für **genau diese drei** Compliance-FKs echte `ON DELETE`-Constraints per `RunSQL` nach (`RESTRICT` für `LegalHold.created_by`, `SET NULL` für die beiden anderen), inklusive exaktem `reverse_sql`. Eine Umstellung **aller** ~60 FKs im Projekt auf DB-seitige `ON DELETE`-Constraints ist bewusst **nicht** Teil dieser Migration (Konstraint-Namen sind Djangos deterministischer Hash aus Tabelle+Spalte, pro FK zu ermitteln; DEFERRABLE-Semantik variiert) — als separates Follow-up unter #1350 vorgeschlagen.
 
+Pro FK besteht die Migration aus einem DROP-RunSQL (löscht den ursprünglichen `NO ACTION`-Constraint) gefolgt von einem ADD-RunSQL (legt den neuen `RESTRICT`/`SET NULL`-Constraint an). Ein Review deckte auf, dass das `reverse_sql` der beiden Operationen zunächst vertauscht war — ein Unapply (`migrate core 0103`) brach dadurch mit „constraint already exists" ab, weil Djangos umgekehrte Ausführungsreihenfolge beim Zurückrollen zuerst versuchte, den bereits existierenden neuen Constraint erneut anzulegen. Korrigiert: `reverse_sql` der DROP-Operation legt den ursprünglichen `NO ACTION`-Constraint wieder an, `reverse_sql` der ADD-Operation löscht den neuen Constraint — beide Richtungen sind jetzt per Test abgedeckt.
+
 ### Verifikation
 
 - ORM- und DB-Level-Tests: [`src/tests/test_ondelete_hardening.py`](../src/tests/test_ondelete_hardening.py) — deckt sowohl `user.delete()` über den Django-Collector als auch einen Raw-SQL-`DELETE FROM core_user` (der den Collector umgeht) ab.
+- Migrations-Reversibilität: [`src/tests/test_migration_0104_reversible.py`](../src/tests/test_migration_0104_reversible.py) — fährt `migrate core 0103` und wieder `migrate core 0104` innerhalb der Test-Transaktion.
 - Migration: [`src/core/migrations/0104_ondelete_hardening_legalhold_workitem_deletionrequest.py`](../src/core/migrations/0104_ondelete_hardening_legalhold_workitem_deletionrequest.py)
 
 ---

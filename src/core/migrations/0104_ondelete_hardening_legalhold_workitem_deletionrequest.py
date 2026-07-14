@@ -95,7 +95,10 @@ class Migration(migrations.Migration):
         migrations.RunSQL(
             sql=("ALTER TABLE core_legalhold DROP CONSTRAINT core_legalhold_created_by_id_64b92dd8_fk_core_user_id;"),
             reverse_sql=(
-                "ALTER TABLE core_legalhold DROP CONSTRAINT core_legalhold_created_by_id_64b92dd8_fk_core_user_id;"
+                "ALTER TABLE core_legalhold "
+                "ADD CONSTRAINT core_legalhold_created_by_id_64b92dd8_fk_core_user_id "
+                "FOREIGN KEY (created_by_id) REFERENCES core_user (id) "
+                "DEFERRABLE INITIALLY DEFERRED;"
             ),
         ),
         migrations.RunSQL(
@@ -106,40 +109,39 @@ class Migration(migrations.Migration):
                 "ON DELETE RESTRICT DEFERRABLE INITIALLY DEFERRED;"
             ),
             reverse_sql=(
-                "ALTER TABLE core_legalhold "
-                "ADD CONSTRAINT core_legalhold_created_by_id_64b92dd8_fk_core_user_id "
+                "ALTER TABLE core_legalhold DROP CONSTRAINT core_legalhold_created_by_id_64b92dd8_fk_core_user_id;"
+            ),
+        ),
+        migrations.RunSQL(
+            sql=("ALTER TABLE core_workitem DROP CONSTRAINT core_workitem_created_by_id_6b59951e_fk_core_user_id;"),
+            reverse_sql=(
+                "ALTER TABLE core_workitem "
+                "ADD CONSTRAINT core_workitem_created_by_id_6b59951e_fk_core_user_id "
                 "FOREIGN KEY (created_by_id) REFERENCES core_user (id) "
                 "DEFERRABLE INITIALLY DEFERRED;"
             ),
         ),
         migrations.RunSQL(
-            sql=("ALTER TABLE core_workitem DROP CONSTRAINT core_workitem_created_by_id_6b59951e_fk_core_user_id;"),
+            sql=(
+                "ALTER TABLE core_workitem "
+                "ADD CONSTRAINT core_workitem_created_by_id_6b59951e_fk_core_user_id "
+                "FOREIGN KEY (created_by_id) REFERENCES core_user (id) "
+                "ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED;"
+            ),
             reverse_sql=(
                 "ALTER TABLE core_workitem DROP CONSTRAINT core_workitem_created_by_id_6b59951e_fk_core_user_id;"
             ),
         ),
         migrations.RunSQL(
             sql=(
-                "ALTER TABLE core_workitem "
-                "ADD CONSTRAINT core_workitem_created_by_id_6b59951e_fk_core_user_id "
-                "FOREIGN KEY (created_by_id) REFERENCES core_user (id) "
-                "ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED;"
+                "ALTER TABLE core_deletionrequest "
+                "DROP CONSTRAINT core_deletionrequest_requested_by_id_9dcf16ea_fk_core_user_id;"
             ),
             reverse_sql=(
-                "ALTER TABLE core_workitem "
-                "ADD CONSTRAINT core_workitem_created_by_id_6b59951e_fk_core_user_id "
-                "FOREIGN KEY (created_by_id) REFERENCES core_user (id) "
+                "ALTER TABLE core_deletionrequest "
+                "ADD CONSTRAINT core_deletionrequest_requested_by_id_9dcf16ea_fk_core_user_id "
+                "FOREIGN KEY (requested_by_id) REFERENCES core_user (id) "
                 "DEFERRABLE INITIALLY DEFERRED;"
-            ),
-        ),
-        migrations.RunSQL(
-            sql=(
-                "ALTER TABLE core_deletionrequest "
-                "DROP CONSTRAINT core_deletionrequest_requested_by_id_9dcf16ea_fk_core_user_id;"
-            ),
-            reverse_sql=(
-                "ALTER TABLE core_deletionrequest "
-                "DROP CONSTRAINT core_deletionrequest_requested_by_id_9dcf16ea_fk_core_user_id;"
             ),
         ),
         migrations.RunSQL(
@@ -151,9 +153,7 @@ class Migration(migrations.Migration):
             ),
             reverse_sql=(
                 "ALTER TABLE core_deletionrequest "
-                "ADD CONSTRAINT core_deletionrequest_requested_by_id_9dcf16ea_fk_core_user_id "
-                "FOREIGN KEY (requested_by_id) REFERENCES core_user (id) "
-                "DEFERRABLE INITIALLY DEFERRED;"
+                "DROP CONSTRAINT core_deletionrequest_requested_by_id_9dcf16ea_fk_core_user_id;"
             ),
         ),
     ]
