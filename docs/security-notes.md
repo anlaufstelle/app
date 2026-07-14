@@ -25,7 +25,7 @@ Auch ohne RLS-Isolation auf `core_user` gilt:
 
 - **Facility-Scoping im ORM-Layer:** Alle user-facing Views gehen über [`FacilityScopeMiddleware`](../src/core/middleware/facility_scope.py), die `request.current_facility` setzt. Queries, die User ausschließlich einer Facility liefern sollen, filtern explizit (z.B. in [`forms/workitems.py`](../src/core/forms/workitems.py): `User.objects.filter(facility=facility, ...)`).
 - **Rollen-Gates:** [`AdminRequiredMixin`](../src/core/views/mixins.py) hält Cross-Facility-User-Management Admin-only.
-- **AuditLog:** User-Role-Changes und Deaktivierungen werden via `post_save`-Signale geloggt (siehe [`signals/audit.py`](../src/core/signals/audit.py)).
+- **AuditLog:** User-Role-Changes und Deaktivierungen werden via `post_save`-Signale geloggt (siehe [`signals/audit.py`](../src/core/signals/audit.py)); der handelnde Admin wird dabei über das `actor`-Feld erfasst und tamper-evident in die HMAC-Audit-Kette eingebunden — der Eintrag trägt das Ziel im `user`-Feld und den Verursacher in `actor`, statt beide zu vermengen (#1369).
 
 ### Verifikation
 
@@ -410,7 +410,7 @@ Zugriff app-weit über das Proxy-Modell
 vorhandenen MultiFernet ver-/entschlüsselt
 ([`totp.py`](../src/core/services/security/totp.py)). Eine idempotente,
 reversible Datenmigration
-([`0101_totp_secret_at_rest`](../src/core/migrations/0101_totp_secret_at_rest.py))
+([`0102_totp_secret_at_rest`](../src/core/migrations/0102_totp_secret_at_rest.py))
 verschlüsselt Bestandsgeräte in place.
 
 ### Trade-offs / Grenzen
