@@ -95,10 +95,19 @@ class TestVerifyChooserContext:
         assert 'data-testid="mfa-token-input"' in content
 
 
+def _verify_session(client):
+    """Markiert die Client-Session als 2FA-verifiziert (wie nach erfolgreichem Verify)."""
+    session = client.session
+    session["mfa_verified"] = True
+    session.save()
+
+
 @pytest.mark.django_db
 class TestPasskeyRegistrationRequiresTOTP:
     def test_registration_begin_rejected_without_totp(self, client, staff_user):
         client.login(username="teststaff", password="testpass123")
+        # Verifizierte Session, aber kein TOTP: die fachliche Vorbedingung fehlt.
+        _verify_session(client)
         response = client.post("/webauthn/registration/begin/")
         assert response.status_code == 400
         assert json.loads(response.content)["code"] == "totp_required"
@@ -106,10 +115,46 @@ class TestPasskeyRegistrationRequiresTOTP:
     def test_registration_begin_allowed_with_totp(self, client, staff_user):
         _make_totp(staff_user)
         client.login(username="teststaff", password="testpass123")
+        _verify_session(client)
         response = client.post("/webauthn/registration/begin/")
         assert response.status_code == 200
         # py_webauthn liefert Registrierungs-Optionen mit einer Challenge.
         assert "challenge" in json.loads(response.content)
+
+
+@pytest.mark.django_db
+class TestPasskeyRegistrationRequiresVerifiedSession:
+    """Zweitfaktor-Bypass-Regression (adversarialer Review Refs #1492).
+
+    Die Registrierungs-Ceremony darf NICHT in einer nur per Passwort
+    authentifizierten, noch nicht 2FA-verifizierten Session laufen. Sonst
+    koennte ein Angreifer mit nur dem Passwort des Opfers (das bereits ein
+    bestaetigtes TOTP-Geraet hat) ueber die von der MFA-Enforcement
+    ausgenommenen ``/webauthn/``-Endpunkte einen EIGENEN Authenticator
+    registrieren und sich damit selbst verifizieren.
+    """
+
+    def test_registration_begin_rejected_in_unverified_session(self, client, staff_user):
+        # Opfer hat bereits ein bestaetigtes TOTP-Geraet …
+        _make_totp(staff_user)
+        # … Angreifer kennt nur das Passwort (Session ist NICHT mfa_verified).
+        client.login(username="teststaff", password="testpass123")
+        response = client.post("/webauthn/registration/begin/")
+        assert response.status_code == 403
+        assert json.loads(response.content)["code"] == "mfa_verification_required"
+
+    def test_registration_complete_rejected_in_unverified_session(self, client, staff_user):
+        _make_totp(staff_user)
+        client.login(username="teststaff", password="testpass123")
+        response = client.post(
+            "/webauthn/registration/complete/",
+            data="{}",
+            content_type="application/json",
+        )
+        assert response.status_code == 403
+        assert json.loads(response.content)["code"] == "mfa_verification_required"
+        # Der Bypass ist geschlossen: die Session bleibt unverifiziert.
+        assert client.session.get("mfa_verified") is not True
 
 
 @pytest.mark.django_db
@@ -139,7 +184,10 @@ class TestMfaVerifiedGlue:
             view.complete_auth(device)
         assert view.request.session.get("mfa_verified") is True
 
-    def test_registration_complete_sets_flag_and_audits_on_success(self, staff_user):
+    def test_registration_complete_audits_without_setting_flag(self, staff_user):
+        """Eine erfolgreiche Registrierung auditiert, hebt die Session aber NICHT
+        auf 2FA-verifiziert an — die Registrierung ist kein Besitznachweis des
+        zweiten Faktors (Zweitfaktor-Bypass-Schutz, Refs #1492)."""
         from core.views.mfa_webauthn import WebAuthnRegistrationCompleteView
 
         view = WebAuthnRegistrationCompleteView()
@@ -150,7 +198,8 @@ class TestMfaVerifiedGlue:
         ):
             response = view.post(view.request)
         assert response.status_code == 200
-        assert view.request.session.get("mfa_verified") is True
+        # Flag NICHT aus der Registrierung abgeleitet.
+        assert view.request.session.get("mfa_verified") is not True
         assert AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.WEBAUTHN_REGISTERED).exists()
 
     def test_registration_complete_does_not_set_flag_on_error(self, staff_user):

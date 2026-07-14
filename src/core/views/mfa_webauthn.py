@@ -5,13 +5,22 @@ zwei sicherheitskritischen Glue-Punkte, die die Bibliothek allein nicht kennt:
 
 * **``mfa_verified``-Session-Flag:** Unser ``MFAEnforcementMiddleware`` gated
   ueber ``request.session["mfa_verified"]``; die Bibliothek markiert nur ueber
-  django-otps ``otp_login``. Nach einer erfolgreichen Assertion/Registrierung
-  setzen wir das Flag — und NUR dann (ein Fehlschlag laesst es unberuehrt, sonst
-  entstuende ein Verify-Bypass).
-* **Passkey nur NEBEN TOTP:** Ein Passkey ist ein *zusaetzlicher* zweiter Faktor.
-  Voraussetzung fuer die Registrierung ist ein bestaetigtes TOTP-Geraet, damit
-  der Backup-Code-Recovery-Anker (an der TOTP-Einrichtung gesetzt) existiert und
-  niemand passkey-only ohne Wiederherstellungspfad ausgesperrt werden kann.
+  django-otps ``otp_login``. Das Flag wird ausschliesslich aus einer
+  erfolgreichen **Assertion** (Besitznachweis eines bestehenden Faktors,
+  ``complete_auth``) abgeleitet — und NUR dann (ein Fehlschlag laesst es
+  unberuehrt, sonst entstuende ein Verify-Bypass). Die **Registrierung** eines
+  Passkeys setzt das Flag bewusst NICHT: sie ist kein Besitznachweis des bereits
+  eingerichteten zweiten Faktors (siehe naechster Punkt).
+* **Passkey nur NEBEN TOTP, nur in verifizierter Session:** Ein Passkey ist ein
+  *zusaetzlicher* zweiter Faktor. Voraussetzung fuer die Registrierung ist (1)
+  eine bereits 2FA-verifizierte Session (``mfa_verified``) und (2) ein
+  bestaetigtes TOTP-Geraet. (1) schliesst den Zweitfaktor-Bypass: die
+  ``/webauthn/``-Endpunkte sind von der MFA-Enforcement ausgenommen (die
+  Assertion muss vor gesetztem ``mfa_verified`` erreichbar sein), also darf die
+  Registrierung nicht ihrerseits ueber eine nur per Passwort authentifizierte,
+  unverifizierte Session einen neuen Authenticator einschleusen. (2) sorgt dafuer,
+  dass der Backup-Code-Recovery-Anker (an der TOTP-Einrichtung gesetzt) existiert
+  und niemand passkey-only ohne Wiederherstellungspfad ausgesperrt wird.
 
 Kein passwordless Login: ``OTP_WEBAUTHN_ALLOW_PASSWORDLESS_LOGIN`` ist False und
 der ``WebAuthnBackend`` ist nicht in ``AUTHENTICATION_BACKENDS`` — die Ceremonies
@@ -34,6 +43,21 @@ from core.models import AuditLog
 from core.services.audit import log_audit_event
 
 
+class VerifiedSessionRequiredForPasskey(exceptions.OTPWebAuthnApiError):
+    """Passkey-Registrierung in unverifizierter Session abgelehnt (403).
+
+    Schliesst den Zweitfaktor-Bypass (Refs #1492): die ``/webauthn/``-Endpunkte
+    sind von der MFA-Enforcement ausgenommen. Ohne diesen Guard koennte ein
+    Angreifer, der nur das Passwort des Opfers kennt (das bereits ein
+    bestaetigtes TOTP-Geraet hat), in einer nur per Passwort authentifizierten,
+    noch nicht verifizierten Session einen EIGENEN Authenticator registrieren
+    und sich damit selbst 2FA-verifizieren.
+    """
+
+    status_code = 403
+    default_code = "mfa_verification_required"
+
+
 class TOTPRequiredForPasskey(exceptions.OTPWebAuthnApiError):
     """Passkey-Registrierung ohne bestaetigtes TOTP-Geraet abgelehnt (400).
 
@@ -45,39 +69,55 @@ class TOTPRequiredForPasskey(exceptions.OTPWebAuthnApiError):
     default_code = "totp_required"
 
 
-class _RequireConfirmedTOTPMixin:
-    """Verweigert die Passkey-Registrierung ohne bestaetigtes TOTP-Geraet.
+class _RequireVerifiedSessionAndTOTPMixin:
+    """Gated die Passkey-Registrierung an verifizierte Session UND TOTP-Geraet.
 
     ``check_can_register`` wird von den Registrierungs-Ceremony-Views (Begin und
     Complete) in ``initial()`` aufgerufen — der Guard greift also VOR jeder
-    Options-Ausgabe bzw. Persistierung.
+    Options-Ausgabe bzw. Persistierung. Reihenfolge bewusst: zuerst die
+    Session-Verifikation (die Sicherheitsgrenze, 403), dann die fachliche
+    TOTP-Vorbedingung (400).
     """
 
     def check_can_register(self):
         super().check_can_register()
+        # (1) Sicherheitsgrenze: Registrierung nur in bereits 2FA-verifizierter
+        # Session — sonst waere sie ein Bypass ueber die exempt /webauthn/-Route.
+        if not self.request.session.get("mfa_verified"):
+            raise VerifiedSessionRequiredForPasskey(
+                detail=(
+                    "Ein Passkey kann nur in einer bereits per zweitem Faktor bestätigten Sitzung hinzugefügt werden."
+                ),
+            )
+        # (2) Fachliche Vorbedingung: Passkey nur NEBEN TOTP.
         if not self.request.user.has_confirmed_totp_device:
             raise TOTPRequiredForPasskey(
                 detail="Ein Passkey kann erst nach Einrichtung der Authenticator-App (TOTP) hinzugefügt werden.",
             )
 
 
-class WebAuthnRegistrationBeginView(_RequireConfirmedTOTPMixin, BeginCredentialRegistrationView):
-    """Registrierungs-Options — nur mit bestaetigtem TOTP-Geraet."""
+class WebAuthnRegistrationBeginView(_RequireVerifiedSessionAndTOTPMixin, BeginCredentialRegistrationView):
+    """Registrierungs-Options — nur in verifizierter Session mit bestaetigtem TOTP-Geraet."""
 
 
 @method_decorator(
     ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
     name="post",
 )
-class WebAuthnRegistrationCompleteView(_RequireConfirmedTOTPMixin, CompleteCredentialRegistrationView):
-    """Registrierung abschliessen, Session als 2FA-verifiziert markieren, auditieren."""
+class WebAuthnRegistrationCompleteView(_RequireVerifiedSessionAndTOTPMixin, CompleteCredentialRegistrationView):
+    """Registrierung abschliessen und auditieren.
+
+    Setzt bewusst KEIN ``mfa_verified`` — die Registrierung laeuft ohnehin nur in
+    einer bereits verifizierten Session (``check_can_register``) und ist kein
+    Besitznachweis des zweiten Faktors. Das Flag aus ihr abzuleiten waere ein
+    Verify-Bypass (Refs #1492).
+    """
 
     def post(self, *args, **kwargs):
         response = super().post(*args, **kwargs)
-        # Nur bei Erfolg (2xx) markieren + auditieren; Fehlerpfade der Basisklasse
-        # liefern 4xx JsonResponses und duerfen das Flag NICHT setzen.
+        # Nur bei Erfolg (2xx) auditieren; Fehlerpfade der Basisklasse liefern
+        # 4xx JsonResponses und werden nicht als Registrierung auditiert.
         if 200 <= response.status_code < 300:
-            self.request.session["mfa_verified"] = True
             log_audit_event(
                 self.request,
                 AuditLog.Action.WEBAUTHN_REGISTERED,
