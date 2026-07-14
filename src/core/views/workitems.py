@@ -11,7 +11,7 @@ import logging
 from datetime import timedelta
 
 from django.db.models import Case, IntegerField, Q, Value, When
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import render
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -19,6 +19,7 @@ from django.views import View
 from core.constants import WORKITEM_INBOX_CAP, WORKITEM_RECENT_DONE_PREVIEW
 from core.models import WorkItem
 from core.models.user import User
+from core.services.scoping import get_scoped_object
 from core.views.mixins import AssistantOrAboveRequiredMixin, HTMXPartialMixin
 
 logger = logging.getLogger(__name__)
@@ -271,10 +272,10 @@ class WorkItemDetailView(AssistantOrAboveRequiredMixin, View):
     """WorkItem detail view."""
 
     def get(self, request, pk):
-        workitem = get_object_or_404(
+        workitem = get_scoped_object(
             WorkItem.objects.select_related("client", "created_by", "assigned_to"),
+            request,
             pk=pk,
-            facility=request.current_facility,
         )
         # Edit-Button-Sichtbarkeit folgt derselben Policy wie WorkItemUpdateView
         # (StaffRequiredMixin + can_user_mutate_workitem). Refs #753.
