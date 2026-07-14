@@ -397,7 +397,9 @@ class TestHTMXCaseEvents:
         autocomplete.fill(chosen_pseudonym)
         page.locator(f"button:has-text('{chosen_pseudonym}')").first.wait_for(state="visible", timeout=5000)
         page.locator(f"button:has-text('{chosen_pseudonym}')").first.click()
-        page.locator("#main-content button[type='submit']").click()
+        # Refs #1349: primärer Button — generischer Submit-Selektor ist auf
+        # der Event-Anlege-Seite seit "Speichern & nächster Kontakt" mehrdeutig.
+        page.locator("#event-submit-btn").click()
         page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
 
         return case_url

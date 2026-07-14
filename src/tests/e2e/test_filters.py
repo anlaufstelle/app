@@ -199,7 +199,9 @@ class TestTimelineDocTypeFilter:
         page.locator("button:has-text('Stern-42')").wait_for(state="visible", timeout=5000)
         page.locator("button:has-text('Stern-42')").click()
 
-        page.locator("#main-content button[type='submit']").click()
+        # Refs #1349: primärer Button — generischer Submit-Selektor ist auf
+        # der Event-Anlege-Seite seit "Speichern & nächster Kontakt" mehrdeutig.
+        page.locator("#event-submit-btn").click()
         page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
 
         # Zeitstrom aufrufen (Doc-Type-Filter ist auf /)

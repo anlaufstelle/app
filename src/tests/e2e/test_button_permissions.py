@@ -52,7 +52,10 @@ def _create_event_and_go_to_detail(page, base_url):
     if dauer.count() > 0:
         dauer.fill("5")
 
-    page.locator(SUBMIT).click()
+    # Refs #1349: seit dem zweiten Submit-Button ("Speichern & nächster
+    # Kontakt") ist der generische SUBMIT-Selektor auf dieser Seite
+    # mehrdeutig — gezielt den primären Button ansprechen.
+    page.locator("#event-submit-btn").click()
     page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"), timeout=15000)
     page.wait_for_load_state("domcontentloaded")
     return page.url
@@ -237,8 +240,9 @@ class TestEventCreateValidation:
             thema.fill("Testthema")
 
         # Do NOT select a client — leave it empty
-        # Submit the form
-        page.locator(SUBMIT).click()
+        # Submit the form (Refs #1349: primärer Button, SUBMIT ist wegen des
+        # zweiten Buttons "Speichern & nächster Kontakt" mehrdeutig)
+        page.locator("#event-submit-btn").click()
         page.wait_for_load_state("domcontentloaded")
 
         # Expect a validation error about requiring a client for this document type

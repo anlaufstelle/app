@@ -195,7 +195,9 @@ class TestIntegrationWorkflow:
         if dauer_field.count() > 0:
             dauer_field.fill("10")
 
-        page.locator(SUBMIT).click()
+        # Refs #1349: primärer Button — SUBMIT ist auf der Event-Anlege-Seite
+        # seit "Speichern & nächster Kontakt" mehrdeutig.
+        page.locator("#event-submit-btn").click()
         page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"), timeout=10000)
 
         # --- Verify event was created ---

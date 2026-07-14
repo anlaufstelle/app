@@ -28,7 +28,9 @@ def _create_qualified_event_and_request_deletion(page, base_url):
     page.locator("button:has-text('Stern-42')").wait_for(state="visible", timeout=5000)
     page.locator("button:has-text('Stern-42')").click()
 
-    page.locator(SUBMIT).click()
+    # Refs #1349: primärer Button — SUBMIT ist auf der Event-Anlege-Seite
+    # seit "Speichern & nächster Kontakt" mehrdeutig.
+    page.locator("#event-submit-btn").click()
     page.wait_for_url(re.compile(r"/events/[0-9a-f-]+/$"))
 
     assert re.search(r"/events/[0-9a-f-]+/$", page.url), f"Erwartete Event-Detail, bekam {page.url}"
