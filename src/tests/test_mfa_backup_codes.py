@@ -17,6 +17,8 @@ from core.services.security import (
 
 # Refs #790: token_urlsafe(16) -> 22 Zeichen aus Base64-URL-safe Alphabet.
 CODE_FORMAT = re.compile(r"^[A-Za-z0-9_-]{22}$")
+# Extrahiert die Codes gezielt aus den <li>-Elementen der Backup-Codes-Liste.
+CODE_IN_HTML = re.compile(r"select-all\">([A-Za-z0-9_-]{22})</li>")
 
 
 @pytest.mark.django_db
@@ -100,6 +102,47 @@ class TestBackupCodesService:
 
     def test_verify_without_device_returns_false(self, staff_user):
         assert verify_backup_code(staff_user, "abcd-ef01") is False
+
+
+@pytest.mark.django_db
+class TestBackupCodesSessionEncryption:
+    """L2 (Refs #1375): Frisch generierte Backup-Codes dürfen NICHT im Klartext
+    im (DB-)Session-Store liegen — sie werden für den Anzeige-Zwischenschritt at
+    rest verschlüsselt abgelegt (Fernet, wie TOTP-Keys ADR-031) und beim Lesen
+    entschlüsselt. Der Anzeige-/Quittungs-Flow bleibt unverändert."""
+
+    def _setup_and_show(self, client, user):
+        from core.models import EncryptedTOTPDevice
+
+        client.login(username="teststaff", password="testpass123")
+        client.get("/mfa/setup/")
+        device = EncryptedTOTPDevice.objects.get(user=user, confirmed=False)
+        token = oath_totp(device.bin_key, step=device.step, t0=device.t0, digits=device.digits)
+        client.post("/mfa/setup/", {"token": f"{token:0{device.digits}d}"})
+        shown = client.get("/mfa/backup-codes/")
+        rendered = CODE_IN_HTML.findall(shown.content.decode())
+        return rendered
+
+    def test_session_stores_encrypted_not_cleartext_codes(self, client, staff_user):
+        import json
+
+        from core.services.file_vault import decrypt_field
+
+        rendered = self._setup_and_show(client, staff_user)
+        assert len(rendered) == BACKUP_CODES_COUNT
+
+        stored = client.session["mfa_backup_codes"]
+        # Kein Klartext-List-Objekt, sondern der verschlüsselte Marker-Dict.
+        assert isinstance(stored, dict)
+        assert stored.get("__encrypted__") is True
+
+        # Kein einziger Klartext-Code steht in der serialisierten Session.
+        serialized = json.dumps(stored)
+        for code in rendered:
+            assert code not in serialized, "Klartext-Backup-Code in der Session gefunden (L2)"
+
+        # Entschlüsselt sind es exakt die angezeigten Codes.
+        assert json.loads(decrypt_field(stored)) == rendered
 
 
 @pytest.mark.django_db
@@ -287,7 +330,14 @@ class TestMFARegenerate:
         )
         assert response.status_code == 302
         assert response.url == "/mfa/backup-codes/"
-        new_codes = client.session.get("mfa_backup_codes")
-        assert new_codes is not None
+        # L2 (Refs #1375): Codes liegen verschlüsselt in der Session — entschlüsseln.
+        import json
+
+        from core.services.file_vault import decrypt_field
+
+        stored = client.session.get("mfa_backup_codes")
+        assert stored is not None
+        assert isinstance(stored, dict) and stored.get("__encrypted__") is True
+        new_codes = json.loads(decrypt_field(stored))
         assert set(first).isdisjoint(set(new_codes))
         assert AuditLog.objects.filter(user=staff_user, action=AuditLog.Action.BACKUP_CODES_REGENERATED).exists()

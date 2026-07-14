@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import base64
 import io
+import json
 import logging
 
 import qrcode
@@ -49,6 +50,46 @@ from core.services.security import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Session-Key, unter dem die frisch generierten Backup-Codes fuer den
+# Anzeige-/Quittungs-Zwischenschritt liegen.
+_SESSION_BACKUP_CODES_KEY = "mfa_backup_codes"
+
+
+def _store_session_backup_codes(request, codes: list[str]) -> None:
+    """L2 (Refs #1375): Backup-Codes NICHT im Klartext in der Session ablegen.
+
+    Der Django-Default-Session-Store ist die DB; frueher lagen die frisch
+    generierten Klartext-Codes bis zur Quittung transient im DB-Session-Row
+    (Leak-Aequivalenz zu DB-Read). Sie werden jetzt — analog zu den TOTP-Keys
+    at rest (ADR-031) — Fernet-verschluesselt abgelegt (JSON-serialisierbarer
+    Marker-Dict) und beim Lesen entschluesselt. Anzeige-/Quittungs-Flow bleibt
+    unveraendert.
+    """
+    from core.services.file_vault import encrypt_field
+
+    request.session[_SESSION_BACKUP_CODES_KEY] = encrypt_field(json.dumps(codes))
+
+
+def _read_session_backup_codes(request) -> list[str] | None:
+    """Liest die (verschluesselten) Backup-Codes aus der Session zurueck.
+
+    ``None`` wenn keine vorhanden oder nicht entschluesselbar. Ein bereits als
+    Liste vorliegender Wert (in-flight-Session aus der Zeit vor der
+    Verschluesselung) wird tolerant weitergereicht.
+    """
+    raw = request.session.get(_SESSION_BACKUP_CODES_KEY)
+    if not raw:
+        return None
+    if isinstance(raw, list):  # Legacy/in-flight (vor L2-Verschluesselung).
+        return raw
+    from core.services.file_vault import decrypt_field
+
+    try:
+        return json.loads(decrypt_field(raw))
+    except Exception:
+        logger.warning("Backup-Codes konnten nicht aus der Session entschluesselt werden")
+        return None
 
 
 def _totp_png_data_url(device: TOTPDevice) -> str:
@@ -102,7 +143,7 @@ class MFASetupView(LoginRequiredMixin, TemplateView):
             # ``has_confirmed_totp_device`` ist dann weiterhin False und die
             # Middleware führt beim nächsten Aufruf zurück ins Setup.
             codes = generate_backup_codes(request.user)
-            request.session["mfa_backup_codes"] = codes
+            _store_session_backup_codes(request, codes)
             request.session["mfa_setup_pending"] = True
             log_audit_event(
                 request,
@@ -197,7 +238,8 @@ class MFASettingsView(LoginRequiredMixin, TemplateView):
 class MFABackupCodesView(LoginRequiredMixin, TemplateView):
     """Anzeige + verbindliche Quittung frisch generierter Backup-Codes (Refs #588, #1118).
 
-    Die Codes liegen in ``request.session["mfa_backup_codes"]`` und bleiben
+    Die Codes liegen — Fernet-verschlüsselt (L2, Refs #1375; nie Klartext im
+    DB-Session-Row) — in ``request.session["mfa_backup_codes"]`` und bleiben
     über Reloads sichtbar, bis der Nutzer ihre Sicherung per POST bestätigt
     (Checkbox ``confirm_saved``). Diese Quittung wird **serverseitig** geprüft —
     eine im Frontend umgangene Checkbox schließt das Setup nicht ab. Erst die
@@ -213,7 +255,7 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
     template_name = "auth/mfa_backup_codes.html"
 
     def get(self, request, *args, **kwargs):
-        codes = request.session.get("mfa_backup_codes")
+        codes = _read_session_backup_codes(request)
         if not codes:
             messages.info(
                 request,
@@ -229,7 +271,7 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
 
     @method_decorator(ratelimit(key="user", rate="10/m", method="POST", block=True))
     def post(self, request, *args, **kwargs):
-        codes = request.session.get("mfa_backup_codes")
+        codes = _read_session_backup_codes(request)
         if not codes:
             # Nichts zu quittieren (z. B. Reload nach Abschluss) — still zurück.
             return redirect("mfa_settings")
@@ -250,7 +292,7 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
             device = TOTPDevice.objects.filter(user=request.user, confirmed=False).first()
             if device is None:
                 # Defensive: Pending-Marker ohne unbestätigtes Device → neu aufsetzen.
-                request.session.pop("mfa_backup_codes", None)
+                request.session.pop(_SESSION_BACKUP_CODES_KEY, None)
                 return redirect("mfa_setup")
             device.confirmed = True
             device.save(update_fields=["confirmed"])
@@ -267,7 +309,7 @@ class MFABackupCodesView(LoginRequiredMixin, TemplateView):
             # Regenerate-Flow: Device ist längst bestätigt, nur Codes quittieren.
             messages.success(request, _("Backup-Codes gespeichert."))
 
-        request.session.pop("mfa_backup_codes", None)
+        request.session.pop(_SESSION_BACKUP_CODES_KEY, None)
         return redirect("mfa_settings")
 
 
@@ -289,7 +331,7 @@ class MFARegenerateBackupCodesView(LoginRequiredMixin, View):
             messages.error(request, _("TOTP-Code fehlt oder ist ungültig."))
             return redirect("mfa_settings")
         codes = generate_backup_codes(user)
-        request.session["mfa_backup_codes"] = codes
+        _store_session_backup_codes(request, codes)
         log_audit_event(
             request,
             AuditLog.Action.BACKUP_CODES_REGENERATED,
