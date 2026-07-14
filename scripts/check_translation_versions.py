@@ -93,9 +93,7 @@ def check_source_hash(rel: str, text: str) -> list[str]:
         return errors
     stored = match.group(1).lower()
     if len(stored) < MIN_HASH_LEN:
-        errors.append(
-            f"{rel}: source-hash '{stored}' too short (min {MIN_HASH_LEN} hex chars)"
-        )
+        errors.append(f"{rel}: source-hash '{stored}' too short (min {MIN_HASH_LEN} hex chars)")
         return errors
     source_file = ROOT / src
     if not source_file.exists():
