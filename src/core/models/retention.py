@@ -102,7 +102,12 @@ class LegalHold(models.Model):
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        # Refs #1347 (DAT-04): PROTECT statt CASCADE — ein Legal Hold ist ein
+        # Compliance-Objekt (Nachweis einer Aufbewahrungspflicht/Spoliation-
+        # Schutz). Eine harte Loeschung des Erstellers darf den Hold nicht
+        # mitreissen; ``user.delete()`` muss stattdessen mit
+        # ``ProtectedError`` abbrechen, solange aktive Holds existieren.
+        on_delete=models.PROTECT,
         related_name="legal_holds",
         verbose_name=_("Erstellt von"),
     )
@@ -138,6 +143,22 @@ class LegalHold(models.Model):
         verbose_name = _("Legal Hold")
         verbose_name_plural = _("Legal Holds")
         ordering = ["-created_at"]
+        constraints = [
+            # Refs #1347 (DAT-02): verhindert doppelte AKTIVE Holds auf
+            # demselben Ziel — analog ``unique_active_retention_proposal``/
+            # ``unique_pending_deletion_request``. "Aktiv" wird hier ueber
+            # ``dismissed_at IS NULL`` gefasst (nicht zusaetzlich ueber
+            # ``expires_at``, da ein DB-Constraint-Predicate IMMUTABLE sein
+            # muss und ``CURRENT_DATE`` das nicht ist) — ein bereits
+            # abgelaufener, aber noch nicht aufgehobener Hold blockiert einen
+            # neuen Hold auf dasselbe Ziel bewusst weiterhin; er muss explizit
+            # aufgehoben (dismissed) werden.
+            models.UniqueConstraint(
+                fields=["facility", "target_type", "target_id"],
+                condition=models.Q(dismissed_at__isnull=True),
+                name="unique_active_legal_hold",
+            ),
+        ]
 
     def __str__(self):
         status = _("aktiv") if self.is_active else _("inaktiv")

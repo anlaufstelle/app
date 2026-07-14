@@ -558,6 +558,37 @@ Eine Kapselung (Closure statt `window`-Global, oder ein Capability-Token) wurde 
 
 ---
 
+## Compliance-FKs auf User: `on_delete`-Härtung + echte DB-Constraints (Issue #1347)
+
+**Status:** Behoben (Migration [`0104_ondelete_hardening_legalhold_workitem_deletionrequest`](../src/core/migrations/0104_ondelete_hardening_legalhold_workitem_deletionrequest.py)).
+
+### Beobachtung (DAT-04)
+
+Drei Compliance-relevante Foreign Keys auf `settings.AUTH_USER_MODEL` trugen `on_delete=CASCADE`: `LegalHold.created_by`, `WorkItem.created_by`, `DeletionRequest.requested_by`. Eine harte User-Löschung (Django-Admin/Shell; die App selbst hat aktuell keinen Hard-Delete-View, aber eine künftige DSGVO-Erasure würde genau diesen Pfad nutzen) hätte Legal Holds — den Nachweis einer Aufbewahrungspflicht — sowie Aufgaben- und Löschantrags-Historie mitgerissen. Bei einem Legal Hold ist das ein Spoliationsrisiko (Vernichtung von Beweismitteln/Nachweisen).
+
+### Fix
+
+- `LegalHold.created_by`: `CASCADE` → `PROTECT`. Eine User-Löschung schlägt mit `ProtectedError` fehl, solange der User noch Legal Holds erstellt hat — Compliance-Objekte können nicht "versehentlich" mitgelöscht werden.
+- `WorkItem.created_by` / `DeletionRequest.requested_by`: `CASCADE` → `SET_NULL` (beide Felder `null=True`). Die fachliche Historie bleibt erhalten, nur der Personenbezug fällt weg — analog zum bereits bestehenden Muster bei `Case.created_by`/`Event.created_by`/`Client.created_by`.
+- Betroffene Templates (`workitems/detail.html`, `deletion_requests/list.html`, `events/deletion_review.html`, `clients/deletion_review.html`) sichern die Anzeige jetzt explizit gegen `created_by`/`requested_by == None` ab (Fallback „–").
+
+### DAT-02: fehlende Doppel-Hold-Sperre
+
+`LegalHold` hatte keine Unique-Constraint auf `(facility, target_type, target_id)` — anders als `RetentionProposal` (`unique_active_retention_proposal`) und `DeletionRequest` (`unique_pending_deletion_request`). Neu: `unique_active_legal_hold`, eine Partial-Unique mit `condition=Q(dismissed_at__isnull=True)`. Ein bereits abgelaufener, aber noch nicht per `dismissed_at` aufgehobener Hold blockiert bewusst weiterhin einen neuen Hold auf dasselbe Ziel — die Bedingung kann `expires_at` nicht einbeziehen, weil ein Index-Prädikat in Postgres `IMMUTABLE` sein muss und `CURRENT_DATE` das nicht ist.
+
+### DAT-03: `on_delete` wirkt bei Django nur im Python-Collector
+
+Django bildet `on_delete` standardmäßig **nicht** auf DB-Ebene ab — die von Django erzeugten FK-Constraints sind auf Postgres immer `NO ACTION`, unabhängig vom gewählten `on_delete`-Wert (verifiziert u. a. an `LegalHold.dismissed_by`, das schon vor dieser Migration `SET_NULL` war, dessen DB-Constraint aber `NO ACTION` blieb). Der Schutz war damit ausschließlich Python-seitig wirksam — Raw-SQL-Pfade (z. B. ein direktes `DELETE FROM core_user` durch ein Skript oder eine zukünftige Erasure-Routine, die den ORM-Collector umgeht) hätten die `on_delete`-Semantik nicht respektiert. Der Kommentar in `src/tests/test_cases_cascade.py` bezeichnete diesen rein ORM-seitigen Vertrag bisher irreführend als „DB-Level-Cascade-Vertrag" — korrigiert.
+
+Migration 0104 zieht für **genau diese drei** Compliance-FKs echte `ON DELETE`-Constraints per `RunSQL` nach (`RESTRICT` für `LegalHold.created_by`, `SET NULL` für die beiden anderen), inklusive exaktem `reverse_sql`. Eine Umstellung **aller** ~60 FKs im Projekt auf DB-seitige `ON DELETE`-Constraints ist bewusst **nicht** Teil dieser Migration (Konstraint-Namen sind Djangos deterministischer Hash aus Tabelle+Spalte, pro FK zu ermitteln; DEFERRABLE-Semantik variiert) — als separates Follow-up unter #1350 vorgeschlagen.
+
+### Verifikation
+
+- ORM- und DB-Level-Tests: [`src/tests/test_ondelete_hardening.py`](../src/tests/test_ondelete_hardening.py) — deckt sowohl `user.delete()` über den Django-Collector als auch einen Raw-SQL-`DELETE FROM core_user` (der den Collector umgeht) ab.
+- Migration: [`src/core/migrations/0104_ondelete_hardening_legalhold_workitem_deletionrequest.py`](../src/core/migrations/0104_ondelete_hardening_legalhold_workitem_deletionrequest.py)
+
+---
+
 ## Weitere Einstiegspunkte
 
 - [CONTRIBUTING.md § Facility-Scoping & Row Level Security](../CONTRIBUTING.md#facility-scoping--row-level-security)

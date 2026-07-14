@@ -37,7 +37,7 @@
             {% endif %}
             <p class="text-sm text-ink-muted mb-1">{{ dr.reason|truncatewords:30 }}</p>
             <div class="text-xs text-ink-muted">
-                {% trans "Beantragt von:" %} {{ dr.requested_by.get_full_name|default:dr.requested_by.username }} – {{ dr.created_at|date:"DATETIME_FORMAT" }}
+                {% trans "Beantragt von:" %} {% if dr.requested_by %}{{ dr.requested_by.get_full_name|default:dr.requested_by.username }}{% else %}–{% endif %} – {{ dr.created_at|date:"DATETIME_FORMAT" }}
             </div>
         </div>
         {% endfor %}

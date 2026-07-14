@@ -140,7 +140,11 @@
 
         <div>
             <span class="text-[12px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Erstellt von" %}</span>
+            {% if workitem.created_by %}
             <p class="text-sm font-medium">{{ workitem.created_by.get_full_name|default:workitem.created_by.username }}</p>
+            {% else %}
+            <p class="text-sm font-medium text-ink-muted">–</p>
+            {% endif %}
         </div>
 
         {% if workitem.assigned_to %}

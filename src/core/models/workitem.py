@@ -54,7 +54,13 @@ class WorkItem(SoftDeletableModel):
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        # Refs #1347 (DAT-04): SET_NULL statt CASCADE — eine harte
+        # User-Loeschung darf die fachliche Aufgabenhistorie nicht mit sich
+        # reissen. Der Ersteller-Bezug faellt auf NULL, die Aufgabe bleibt
+        # erhalten (analog Case.created_by/Event.created_by).
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="created_work_items",
         verbose_name=_("Erstellt von"),
     )
@@ -203,7 +209,12 @@ class DeletionRequest(models.Model):
     )
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        # Refs #1347 (DAT-04): SET_NULL statt CASCADE — der 4-Augen-Nachweis
+        # (wer hat den Loeschantrag gestellt) darf eine harte User-Loeschung
+        # ueberleben; nur der Personenbezug faellt weg, der Antrag bleibt.
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="deletion_requests",
         verbose_name=_("Beantragt von"),
     )

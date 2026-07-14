@@ -8,12 +8,19 @@ Refs Matrix DEV-CASE-14: Events bleiben beim harten Loeschen eines Case
 erhalten und werden auf ``case=NULL`` gesetzt (``on_delete=SET_NULL``) —
 die Dokumentationskette bricht nicht ab.
 
-Diese Tests verifizieren den DB-Level-Cascade-Vertrag der Models
+Diese Tests verifizieren den ORM-Collector-Cascade-Vertrag der Models
 ``Case``, ``OutcomeGoal``, ``Milestone`` und ``Event`` (siehe
 ``src/core/models/case.py``, ``src/core/models/outcome.py``,
-``src/core/models/event.py``). Sie pruefen den IST-Zustand und sollen
-unveraendert weiterlaufen — eine Aenderung der ``on_delete``-Constraints
-ist eine API-Aenderung und braucht einen separaten Plan.
+``src/core/models/event.py``). ``on_delete`` wirkt bei Django standardmaessig
+NUR im Python-Collector — die von Django erzeugten FK-Constraints auf
+Postgres-Ebene sind ``NO ACTION`` (Ausnahme: die drei Compliance-FKs, fuer
+die #1347/DAT-03 echte DB-``ON DELETE``-Constraints per RunSQL nachzieht,
+siehe ``src/core/migrations/0104_ondelete_hardening_legalhold_workitem_deletionrequest.py``).
+``Case``/``OutcomeGoal``/``Milestone``/``Event`` sind davon nicht betroffen,
+der hier getestete Vertrag bleibt reiner ORM-Collector-Vertrag. Sie pruefen
+den IST-Zustand und sollen unveraendert weiterlaufen — eine Aenderung der
+``on_delete``-Constraints ist eine API-Aenderung und braucht einen
+separaten Plan.
 
 Refs #922 (Master), #926.
 """

@@ -12,7 +12,7 @@
         <dl class="space-y-2 text-sm">
             <div class="flex justify-between">
                 <dt class="text-ink-muted">{% trans "Beantragt von" %}</dt>
-                <dd class="font-medium">{{ deletion_request.requested_by.display_name|default:deletion_request.requested_by.username }}</dd>
+                <dd class="font-medium">{% if deletion_request.requested_by %}{{ deletion_request.requested_by.display_name|default:deletion_request.requested_by.username }}{% else %}–{% endif %}</dd>
             </div>
             <div class="flex justify-between">
                 <dt class="text-ink-muted">{% trans "Beantragt am" %}</dt>
