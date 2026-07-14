@@ -83,6 +83,10 @@ INSTALLED_APPS = [
     "django_otp",
     "django_otp.plugins.otp_totp",
     "django_otp.plugins.otp_static",
+    # Passkeys/WebAuthn als zweiter Faktor (ADR-032, Refs #1492). Credentials
+    # sind regulaere django-otp-Devices; der WebAuthnBackend wird bewusst NICHT
+    # in AUTHENTICATION_BACKENDS aufgenommen (kein passwordless Login, Etappe A).
+    "django_otp_webauthn",
     # Project
     "core",
 ]
@@ -181,6 +185,27 @@ LOGOUT_REDIRECT_URL = "/login/"
 # --- Two-Factor Authentication (TOTP) ---
 
 OTP_TOTP_ISSUER = "Anlaufstelle"
+
+# --- Passkeys/WebAuthn als zweiter Faktor (ADR-032, Refs #1492) ---
+# NUR zweiter Faktor: OTP_WEBAUTHN_ALLOW_PASSWORDLESS_LOGIN bleibt hart False
+# (kein passwordless Login — Etappe A). Der WebAuthnBackend wird nicht in
+# AUTHENTICATION_BACKENDS registriert; die Assertion-Views laufen ueber unsere
+# bereits authentifizierte Session und markieren sie als ``mfa_verified``.
+#
+# RP-ID = Hostname ohne Schema/Port (domaingebundene Credentials); Origin = volle
+# URL inkl. Schema/Port. Per-Umgebung ueberschrieben: dev/test/e2e -> localhost,
+# prod/devlive/demo -> aus ALLOWED_HOSTS abgeleitet (prod.py). Passkeys sind
+# domaingebunden — dev/demo/prod-Credentials sind bewusst nicht uebertragbar.
+OTP_WEBAUTHN_RP_NAME = "Anlaufstelle"
+OTP_WEBAUTHN_RP_ID = os.environ.get("OTP_WEBAUTHN_RP_ID", "")
+OTP_WEBAUTHN_ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get("OTP_WEBAUTHN_ALLOWED_ORIGINS", "").split(",") if o.strip()
+]
+# Der Passkey ist bei uns ein Zweitfaktor NACH dem Passwort. In diesem
+# Second-Factor-Zuschnitt verlangt django-otp-webauthn keine User-Verification
+# (die Assertion laeuft in einer bereits per Passwort authentifizierten Session)
+# — das haelt aeltere Security-Keys ohne PIN/Biometrie im Feld nutzbar (ADR-032).
+OTP_WEBAUTHN_ALLOW_PASSWORDLESS_LOGIN = False
 
 # Rollen-Default-Enforcement (A3.1, Refs #1019): erzwingt MFA fuer super_admin
 # und facility_admin allein ueber die Rolle (s. ``User.is_mfa_enforced``).

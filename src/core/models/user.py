@@ -128,6 +128,31 @@ class User(AbstractUser):
         return EncryptedTOTPDevice.objects.filter(user=self, confirmed=True).exists()
 
     @property
+    def has_confirmed_webauthn_device(self):
+        """True when the user has at least one confirmed WebAuthn credential (Passkey).
+
+        Passkeys sind django-otp-Devices (ADR-032, Refs #1492); ``confirmed=True``
+        markiert ein einsatzbereites Credential (bei der Registrierung ueber die
+        bereits verifizierte Session sofort gesetzt).
+        """
+        from django_otp_webauthn.models import WebAuthnCredential
+
+        return WebAuthnCredential.objects.filter(user=self, confirmed=True).exists()
+
+    @property
+    def has_confirmed_mfa_device(self):
+        """True when the user has ANY confirmed second factor (TOTP oder Passkey).
+
+        Methoden-uebergreifendes Praedikat (ADR-032, Refs #1492): loest das
+        TOTP-spezifische ``has_confirmed_totp_device`` in MFA-Enforcement und
+        Verify-Flow ab, sodass ein Passkey als vollwertiger zweiter Faktor zaehlt.
+        Passkeys werden nur ZUSAETZLICH zu einem TOTP-Geraet vergeben (der
+        Backup-Code-Recovery-Anker haengt an der TOTP-Einrichtung), daher
+        impliziert ein Passkey in der Praxis stets auch ein TOTP-Geraet.
+        """
+        return self.has_confirmed_totp_device or self.has_confirmed_webauthn_device
+
+    @property
     def is_mfa_enforced(self):
         """True if the user, the user's role, or the user's facility requires 2FA.
 

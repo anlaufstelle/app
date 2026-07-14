@@ -69,3 +69,13 @@ if not ENCRYPTION_KEY:  # noqa: F405
 
 # Demo-Seed in lokaler Entwicklung erlaubt (test.py/e2e.py erben). Refs #1040 (S1).
 SEED_ALLOWED = True
+
+# --- Passkeys/WebAuthn (ADR-032, Refs #1492) ---
+# Lokal ist die Relying Party ``localhost`` (Browser behandeln localhost als
+# secure context, auch ohne HTTPS). Origins decken den Dev-Server (:8000) und
+# den E2E-Server (:8844, via e2e.py geerbt) ab. Kaskadiert nach test.py/e2e.py.
+OTP_WEBAUTHN_RP_ID = "localhost"
+OTP_WEBAUTHN_ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://localhost:8844",
+]

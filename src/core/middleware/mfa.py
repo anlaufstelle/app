@@ -3,8 +3,9 @@
 Logik analog zu ForcePasswordChangeMiddleware. Zwei Fälle:
 
 1. User ist authentifiziert, MFA ist aktiv (``is_mfa_enforced``), und es
-   existiert noch kein bestätigtes ``TOTPDevice`` → Redirect zu ``/mfa/setup/``.
-2. User hat ein bestätigtes ``TOTPDevice``, aber die aktuelle Session ist
+   existiert noch kein bestätigter zweiter Faktor (TOTP oder Passkey) →
+   Redirect zu ``/mfa/setup/``.
+2. User hat einen bestätigten zweiten Faktor, aber die aktuelle Session ist
    noch nicht als 2FA-verifiziert markiert → Redirect zu ``/mfa/verify/``.
 
 Die Session-Flag ``mfa_verified`` wird gesetzt, wenn der Nutzer
@@ -23,6 +24,10 @@ EXEMPT_URLS = [
     "/password-reset/",
     "/static/",
     "/mfa/",
+    # Passkey-Ceremony-Endpoints (ADR-032, Refs #1492): die WebAuthn-Assertion
+    # muss VOR gesetztem ``mfa_verified`` erreichbar sein (analog ``/mfa/``),
+    # sonst wuerde die Verify-Seite den Assertion-Fetch auf sich selbst umleiten.
+    "/webauthn/",
     "/i18n/",
     "/health/",
     "/sw.js",
@@ -52,7 +57,9 @@ class MFAEnforcementMiddleware:
 
     @staticmethod
     def _required_redirect(request, user):
-        has_device = user.has_confirmed_totp_device
+        # Methoden-uebergreifend (ADR-032, Refs #1492): TOTP ODER Passkey zaehlt
+        # als bestaetigter zweiter Faktor.
+        has_device = user.has_confirmed_mfa_device
         # Case 1: Setup needed (user or facility requires MFA, but no device yet).
         if user.is_mfa_enforced and not has_device:
             return "/mfa/setup/"

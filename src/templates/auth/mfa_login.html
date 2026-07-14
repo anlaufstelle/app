@@ -1,4 +1,4 @@
-{% load i18n static %}
+{% load i18n static otp_webauthn %}
 <!DOCTYPE html>
 <html lang="de" class="h-full">
 <head>
@@ -33,6 +33,38 @@
             {% endfor %}
         {% endif %}
 
+        {% if has_webauthn %}
+        {# Passkey/WebAuthn als zweiter Faktor (ADR-032, Refs #1492): CSP-striktes Bundle verdrahtet den Button; bei mehreren Methoden Chooser (Passkey oben, TOTP/Backup unten). #}
+        <div class="mb-5">
+            <div id="passkey-verification-placeholder"></div>
+            <template id="passkey-verification-available-template">
+                <button type="button" id="passkey-verification-button"
+                        data-testid="mfa-passkey-button"
+                        class="w-full flex justify-center py-2 px-4 border border-accent rounded-md shadow-xs text-sm font-medium text-accent bg-surface hover:bg-canvas focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-accent min-h-[44px]">
+                    {% trans "Mit Passkey anmelden" %}
+                </button>
+                <p id="passkey-verification-status-message" data-status-enum=""
+                   class="mt-2 text-sm text-ink-muted text-center" role="status" aria-live="polite"></p>
+            </template>
+            <template id="passkey-verification-unavailable-template">
+                <p class="text-sm text-ink-muted text-center">
+                    {% trans "Passkeys werden von diesem Browser nicht unterstützt — nutze deine Authenticator-App oder einen Backup-Code." %}
+                </p>
+            </template>
+            {% if has_totp %}
+            <div class="relative my-4">
+                <div class="absolute inset-0 flex items-center" aria-hidden="true">
+                    <div class="w-full border-t border-subtle"></div>
+                </div>
+                <div class="relative flex justify-center">
+                    <span class="px-2 bg-surface text-xs text-ink-muted uppercase tracking-wide">{% trans "oder" %}</span>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% if has_totp %}
         <p class="text-sm text-ink-muted mb-4 text-center" x-show="isTotp">
             {% trans "Gib den 6-stelligen Code aus deiner Authenticator-App ein." %}
         </p>
@@ -88,6 +120,7 @@
                 <span x-show="isBackup" x-cloak>{% trans "Zurück zur Authenticator-App" %}</span>
             </button>
         </div>
+        {% endif %}
 
         <div class="text-center mt-4">
             <form method="post" action="{% url 'logout' %}">
@@ -98,5 +131,9 @@
             </form>
         </div>
     </div>
+    {% if has_webauthn %}
+    {# CSP-striktes Passkey-Bundle (kein Inline/eval), self-hosted via collectstatic. #}
+    {% render_otp_webauthn_auth_scripts %}
+    {% endif %}
 </body>
 </html>

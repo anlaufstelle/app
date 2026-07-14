@@ -116,6 +116,30 @@ EXPECTATIONS = (
     E("mfa_disable", "auth-flow", post=ALL_AUTH, sudo=True),
     E("mfa_backup_codes", "auth-flow", get=ALL_AUTH),
     E("mfa_backup_codes_regenerate", "auth-flow", post=ALL_AUTH),
+    # Passkeys/WebAuthn als zweiter Faktor (ADR-032, Refs #1492).
+    # Passkey entfernen ist sudo-pflichtig (analog mfa_disable, Refs #683) und
+    # streng auf den eigenen Nutzer gescopt: ein fremder/nicht existenter pk
+    # fuehrt zu „nicht gefunden" + Redirect nach /mfa/settings/ (kein 404-Leak,
+    # keine PII) — daher idor_exempt statt IDOR-Probe.
+    E(
+        "mfa_passkey_delete",
+        "auth-flow",
+        post=ALL_AUTH,
+        sudo=True,
+        url_kwargs=(("pk", "1"),),
+        idor_exempt="Auf request.user gescopt; fremder pk -> Redirect (kein Existenz-Leak)",
+    ),
+    # WebAuthn-Ceremony-API (JSON) unter Namespace otp_webauthn. Kein
+    # Login-Redirect: die Views antworten fuer Nicht-/Fehl-Autorisierung mit
+    # JSON-Fehlerstatus (401/403/400) statt 302 — daher anonymous_ok=True
+    # (der Gate prueft fuer Anonyme nur <500). Registrierung verlangt eine
+    # authentifizierte Session + bestaetigtes TOTP (Guard in core.views.mfa_webauthn).
+    E("otp_webauthn:credential-registration-begin", "auth-flow", post=ALL_AUTH, anonymous_ok=True),
+    E("otp_webauthn:credential-registration-complete", "auth-flow", post=ALL_AUTH, anonymous_ok=True),
+    E("otp_webauthn:credential-authentication-begin", "auth-flow", post=ALL_AUTH, anonymous_ok=True),
+    E("otp_webauthn:credential-authentication-complete", "auth-flow", post=ALL_AUTH, anonymous_ok=True),
+    # JS-i18n-Katalog fuer das Passkey-Bundle — public, statisch, PII-frei.
+    E("otp_webauthn:js-i18n-catalog", "public", get=ALL_AUTH, anonymous_ok=True),
     E("core:dashboard", "auth-flow", get=ALL_AUTH),
     E("core:account_profile", "auth-flow", get=ALL_AUTH),
     # ---- facility-read (Assistenz aufwärts; super_admin AUSGESCHLOSSEN) -

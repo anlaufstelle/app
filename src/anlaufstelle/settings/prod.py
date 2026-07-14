@@ -67,6 +67,19 @@ if "collectstatic" not in sys.argv and "*" in ALLOWED_HOSTS:
         "bleiben erlaubt."
     )
 
+# --- Passkeys/WebAuthn (ADR-032, Refs #1492) ---
+# RP-ID = Registrable Domain (Hostname ohne Schema/Port), Origins = volle HTTPS-URLs.
+# Default aus ALLOWED_HOSTS abgeleitet — fuer den Single-Domain-Regelfall ist keine
+# separate Env-Var noetig. Explizit setzbar ueber OTP_WEBAUTHN_RP_ID /
+# OTP_WEBAUTHN_ALLOWED_ORIGINS (z. B. wenn RP-ID eine Basis-Domain mehrerer
+# Subdomains sein soll). Passkeys sind domaingebunden: eine spaetere RP-ID-Aenderung
+# entwertet bestehende Credentials (Nutzer muessen neu registrieren).
+_wildcard_hosts = [h for h in ALLOWED_HOSTS if not h.startswith(".")]
+OTP_WEBAUTHN_RP_ID = os.environ.get("OTP_WEBAUTHN_RP_ID", "") or (_wildcard_hosts[0] if _wildcard_hosts else "")
+OTP_WEBAUTHN_ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get("OTP_WEBAUTHN_ALLOWED_ORIGINS", "").split(",") if o.strip()
+] or [f"https://{h}" for h in _wildcard_hosts]
+
 # --- Security ---
 
 # Trust-Boundary (Refs #841): Caddy als Reverse-Proxy strippt eingehendes

@@ -169,9 +169,20 @@ class MFAVerifyView(LoginRequiredMixin, TemplateView):
     def get(self, request, *args, **kwargs):
         if request.session.get("mfa_verified"):
             return redirect(django_settings.LOGIN_REDIRECT_URL)
-        if not request.user.has_confirmed_totp_device:
+        # Passkey ODER TOTP genuegt als bestaetigter zweiter Faktor (ADR-032).
+        if not request.user.has_confirmed_mfa_device:
             return redirect("mfa_setup")
         return super().get(request, *args, **kwargs)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        user = self.request.user
+        # Methoden-Chooser (ADR-032, Refs #1492): sind mehrere Methoden vorhanden,
+        # zeigt das Template eine Auswahl (kein fester Vorrang). Ist nur eine
+        # Methode bestaetigt, rendert direkt deren Formular.
+        context["has_totp"] = user.has_confirmed_totp_device
+        context["has_webauthn"] = user.has_confirmed_webauthn_device
+        return context
 
     @method_decorator(ratelimit(key="user", rate="5/m", method="POST", block=True))
     def post(self, request, *args, **kwargs):
@@ -232,6 +243,13 @@ class MFASettingsView(LoginRequiredMixin, TemplateView):
         context["backup_codes_remaining"] = remaining_backup_codes(user)
         context["backup_codes_total"] = BACKUP_CODES_COUNT
         context["backup_codes_low"] = context["backup_codes_remaining"] <= 3
+        # Passkeys/WebAuthn (ADR-032, Refs #1492): Liste + Verfuegbarkeit der
+        # Registrierung. Ein Passkey ist nur ZUSAETZLICH zu TOTP moeglich —
+        # ``can_add_passkey`` gated die Registrierungs-UI entsprechend.
+        from django_otp_webauthn.models import WebAuthnCredential
+
+        context["passkeys"] = list(WebAuthnCredential.objects.filter(user=user, confirmed=True).order_by("created_at"))
+        context["can_add_passkey"] = context["has_device"]
         return context
 
 
@@ -361,17 +379,55 @@ class MFADisableView(LoginRequiredMixin, RequireSudoModeMixin, View):
                 _("Zwei-Faktor-Authentifizierung ist für dein Konto verpflichtend."),
             )
             return redirect("mfa_settings")
+        # 2FA vollstaendig deaktivieren = beide Faktoren entfernen (ADR-032):
+        # ein Passkey darf nicht als verwaister zweiter Faktor zurueckbleiben.
+        from django_otp_webauthn.models import WebAuthnCredential
+
         deleted, _info = TOTPDevice.objects.filter(user=user).delete()
+        passkeys_deleted, _pk_info = WebAuthnCredential.objects.filter(user=user).delete()
         request.session.pop("mfa_verified", None)
-        if deleted:
+        if deleted or passkeys_deleted:
             log_audit_event(
                 request,
                 AuditLog.Action.MFA_DISABLED,
                 target_obj=user,
-                detail={"event": "mfa_disabled"},
+                detail={"event": "mfa_disabled", "passkeys_removed": passkeys_deleted},
                 facility=getattr(user, "facility", None),
             )
             messages.success(request, _("Zwei-Faktor-Authentifizierung deaktiviert."))
+        return redirect("mfa_settings")
+
+
+@method_decorator(
+    ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True),
+    name="post",
+)
+class MFAPasskeyDeleteView(LoginRequiredMixin, RequireSudoModeMixin, View):
+    """Entfernt einen einzelnen Passkey des aktuellen Nutzers (ADR-032, Refs #1492).
+
+    Sudo-pflichtig wie ``MFADisableView`` (Refs #683): eine gestohlene Session
+    darf keinen zweiten Faktor stilllegen. Da ein Passkey nur ZUSAETZLICH zu TOTP
+    existiert, bleibt nach dem Entfernen stets TOTP + Backup-Codes als Faktor und
+    Recovery-Anker erhalten — kein Downgrade-Risiko.
+    """
+
+    def post(self, request, *args, **kwargs):
+        from django_otp_webauthn.models import WebAuthnCredential
+
+        user = request.user
+        credential = WebAuthnCredential.objects.filter(user=user, pk=kwargs["pk"]).first()
+        if credential is None:
+            messages.error(request, _("Passkey nicht gefunden."))
+            return redirect("mfa_settings")
+        credential.delete()
+        log_audit_event(
+            request,
+            AuditLog.Action.WEBAUTHN_REMOVED,
+            target_obj=user,
+            detail={"event": "webauthn_removed", "credential_pk": kwargs["pk"]},
+            facility=getattr(user, "facility", None),
+        )
+        messages.success(request, _("Passkey entfernt."))
         return redirect("mfa_settings")
 
 

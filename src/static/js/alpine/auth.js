@@ -143,3 +143,18 @@ document.addEventListener("alpine:init", () => {
         },
     }));
 });
+
+// Passkey-Registrierung (ADR-032, Refs #1492): Das mitgelieferte, CSP-strikte
+// django-otp-webauthn-Bundle feuert nach erfolgreicher Registrierung ein
+// bubbelndes ``otp_webauthn.register_complete``-Event. Auf der 2FA-Einstellungs-
+// seite laden wir dann neu, damit der frisch registrierte Passkey in der Liste
+// erscheint. Nur aktiv, wenn die Registrierungs-Markup-Insel vorhanden ist —
+// kein Inline-Script, kein eval (CSP script-src 'self').
+document.addEventListener("DOMContentLoaded", () => {
+    if (!document.getElementById("passkey-registration-placeholder")) {
+        return;
+    }
+    document.addEventListener("otp_webauthn.register_complete", () => {
+        window.location.reload();
+    });
+});

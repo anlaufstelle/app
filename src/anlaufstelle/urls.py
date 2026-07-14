@@ -17,6 +17,7 @@ from core.views.health import HealthView
 from core.views.mfa import (
     MFABackupCodesView,
     MFADisableView,
+    MFAPasskeyDeleteView,
     MFARegenerateBackupCodesView,
     MFASettingsView,
     MFASetupView,
@@ -48,6 +49,13 @@ urlpatterns = [
         MFARegenerateBackupCodesView.as_view(),
         name="mfa_backup_codes_regenerate",
     ),
+    # Passkeys/WebAuthn als zweiter Faktor (ADR-032, Refs #1492).
+    path(
+        "mfa/passkey/<int:pk>/delete/",
+        MFAPasskeyDeleteView.as_view(),
+        name="mfa_passkey_delete",
+    ),
+    path("webauthn/", include("core.webauthn_urls")),
     # Password Reset
     path(
         "password-reset/",
