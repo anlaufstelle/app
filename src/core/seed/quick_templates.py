@@ -22,7 +22,7 @@ _TEMPLATES: dict[str, list[tuple[str, dict]]] = {
     "Kontakt": [
         ("Frühstück & Beratung", {"dauer": 15, "leistungen": ["essen", "beratung"]}),
         ("Dusche & Wäsche", {"dauer": 20, "leistungen": ["duschen", "waesche"]}),
-        ("Kurz-Check-in", {"dauer": 5, "leistungen": ["post"]}),
+        ("Kurz-Check-in", {"dauer": 5}),
     ],
     "Begleitung": [
         ("Behördengang Jobcenter", {"ziel": "Jobcenter"}),

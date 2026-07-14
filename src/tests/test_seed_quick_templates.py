@@ -43,6 +43,26 @@ class TestSeedQuickTemplates:
                 f"{tpl.name}: {set(tpl.prefilled_data) - valid_slugs} sind keine Feld-Slugs"
             )
 
+    def test_kurz_checkin_hat_keine_vorausgewaehlte_leistung(self):
+        """Regression #1569: 'Kurz-Check-in' ist allgemein und darf keine
+        Leistung (insbesondere nicht 'post') automatisch vorauswählen."""
+        facility = self._facility()
+        seed_quick_templates(facility)
+
+        tpl = QuickTemplate.objects.get(facility=facility, name="Kurz-Check-in")
+        assert tpl.prefilled_data.get("dauer") == 5
+        assert "leistungen" not in tpl.prefilled_data or not tpl.prefilled_data["leistungen"]
+
+    def test_andere_schnellvorlagen_bleiben_fachlich_vorbelegt(self):
+        facility = self._facility()
+        seed_quick_templates(facility)
+
+        fruehstueck = QuickTemplate.objects.get(facility=facility, name="Frühstück & Beratung")
+        assert set(fruehstueck.prefilled_data["leistungen"]) == {"essen", "beratung"}
+
+        dusche = QuickTemplate.objects.get(facility=facility, name="Dusche & Wäsche")
+        assert set(dusche.prefilled_data["leistungen"]) == {"duschen", "waesche"}
+
     def test_idempotent(self):
         facility = self._facility()
         seed_quick_templates(facility)
