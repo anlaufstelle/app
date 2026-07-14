@@ -132,10 +132,19 @@ EXPECTATIONS = (
     # WebAuthn-Ceremony-API (JSON) unter Namespace otp_webauthn. Kein
     # Login-Redirect: die Views antworten fuer Nicht-/Fehl-Autorisierung mit
     # JSON-Fehlerstatus (401/403/400) statt 302 — daher anonymous_ok=True
-    # (der Gate prueft fuer Anonyme nur <500). Registrierung verlangt eine
-    # authentifizierte Session + bestaetigtes TOTP (Guard in core.views.mfa_webauthn).
-    E("otp_webauthn:credential-registration-begin", "auth-flow", post=ALL_AUTH, anonymous_ok=True),
-    E("otp_webauthn:credential-registration-complete", "auth-flow", post=ALL_AUTH, anonymous_ok=True),
+    # (der Gate prueft fuer Anonyme nur <500).
+    #
+    # Registrierung (begin/complete) ist NICHT rollen-, sondern SESSION-gegatet:
+    # ``check_can_register`` verlangt eine bereits 2FA-verifizierte Session
+    # (``mfa_verified``) — sonst 403 ``mfa_verification_required`` (Zweitfaktor-
+    # Bypass-Schutz, Refs #1492). Diese Matrix-Zellen laufen mit ``force_login``
+    # OHNE verifizierte Session, daher wird die Registrierung fuer JEDE Rolle
+    # abgelehnt (leere Erlaubnis-Menge = 403 fuer alle). Der Positiv-Pfad
+    # (verifizierte Session) ist in ``test_mfa_webauthn.py`` abgedeckt.
+    E("otp_webauthn:credential-registration-begin", "auth-flow", post=frozenset(), anonymous_ok=True),
+    E("otp_webauthn:credential-registration-complete", "auth-flow", post=frozenset(), anonymous_ok=True),
+    # Assertion (authentication) laeuft bewusst in einer noch unverifizierten
+    # Session (das ist der Verify-Schritt selbst) — fuer alle Rollen erreichbar.
     E("otp_webauthn:credential-authentication-begin", "auth-flow", post=ALL_AUTH, anonymous_ok=True),
     E("otp_webauthn:credential-authentication-complete", "auth-flow", post=ALL_AUTH, anonymous_ok=True),
     # JS-i18n-Katalog fuer das Passkey-Bundle — public, statisch, PII-frei.
