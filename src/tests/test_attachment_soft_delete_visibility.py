@@ -21,9 +21,7 @@ pytestmark = pytest.mark.django_db
 
 class TestSoftDeletedAttachmentHidden:
     def test_active_attachment_is_returned(self, facility, sample_event, lead_user, authz_attachment):
-        event, attachment = get_visible_attachment_or_404(
-            lead_user, facility, sample_event.pk, authz_attachment.pk
-        )
+        event, attachment = get_visible_attachment_or_404(lead_user, facility, sample_event.pk, authz_attachment.pk)
         assert attachment.pk == authz_attachment.pk
 
     def test_soft_deleted_attachment_raises_404(self, facility, sample_event, lead_user, authz_attachment):

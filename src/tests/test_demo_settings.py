@@ -51,8 +51,7 @@ class TestDemoLogins:
         Login-Zugangsdaten-Panel (``DEMO_LOGINS``) mit publiziertem Passwort
         beworben werden. Das Konto darf existieren, nur nicht oeffentlich."""
         result = _run_demo_import(
-            "from anlaufstelle.settings.demo import DEMO_LOGINS;"
-            "print([entry['username'] for entry in DEMO_LOGINS])"
+            "from anlaufstelle.settings.demo import DEMO_LOGINS;print([entry['username'] for entry in DEMO_LOGINS])"
         )
         assert result.returncode == 0, result.stderr
         usernames = result.stdout.strip()
@@ -61,8 +60,7 @@ class TestDemoLogins:
     def test_non_privileged_demo_logins_remain(self):
         """Die uebrigen Demo-Logins bleiben unveraendert erhalten."""
         result = _run_demo_import(
-            "from anlaufstelle.settings.demo import DEMO_LOGINS;"
-            "print([entry['username'] for entry in DEMO_LOGINS])"
+            "from anlaufstelle.settings.demo import DEMO_LOGINS;print([entry['username'] for entry in DEMO_LOGINS])"
         )
         assert result.returncode == 0, result.stderr
         for username in ("admin", "emma", "miriam", "markus", "lena", "felix"):

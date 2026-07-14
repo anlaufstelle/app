@@ -80,6 +80,16 @@ EXPECTATIONS = (
         url_kwargs=(("uidb64", "MQ"), ("token", "abc-defghijklmnop")),
         idor_exempt="Token-basierter Flow, kein Objektbezug",
     ),
+    # L4 (Refs #1375): Einladungs-Setup — analog password_reset_confirm, eigener
+    # Token-Generator/Ablauf, anonym zugänglich (Token-basiert, kein Objektbezug).
+    E(
+        "invite_confirm",
+        "public",
+        get=ALL_AUTH,
+        anonymous_ok=True,
+        url_kwargs=(("uidb64", "MQ"), ("token", "abc-defghijklmnop")),
+        idor_exempt="Token-basierter Flow, kein Objektbezug",
+    ),
     E("password_reset_complete", "public", get=ALL_AUTH, anonymous_ok=True),
     E("core:lockout_recovery_request", "public", get=ALL_AUTH, post=ALL_AUTH, anonymous_ok=True),
     E("core:lockout_recovery_sent", "public", get=ALL_AUTH, anonymous_ok=True),

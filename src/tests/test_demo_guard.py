@@ -48,9 +48,7 @@ class DemoGuardTests(SimpleTestCase):
     @override_settings(DEMO_MODE=True)
     def test_same_origin_relative_referer_is_preserved(self):
         """Ein interner relativer Pfad bleibt als Redirect-Ziel erhalten."""
-        resp = DemoGuardMiddleware(_passthrough)(
-            _request("POST", "/system/maintenance/", HTTP_REFERER="/system/")
-        )
+        resp = DemoGuardMiddleware(_passthrough)(_request("POST", "/system/maintenance/", HTTP_REFERER="/system/"))
         self.assertEqual(resp.status_code, 302)
         self.assertEqual(resp["Location"], "/system/")
 

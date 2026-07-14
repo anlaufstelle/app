@@ -46,9 +46,7 @@ class TestSuperAdminLockoutExemption:
     def test_unlock_super_admin_is_noop(self, facility, super_admin_user, staff_user):
         result = unlock(super_admin_user, unlocked_by=staff_user)
         assert result is None
-        assert not AuditLog.objects.filter(
-            user=super_admin_user, action=AuditLog.Action.LOGIN_UNLOCK
-        ).exists()
+        assert not AuditLog.objects.filter(user=super_admin_user, action=AuditLog.Action.LOGIN_UNLOCK).exists()
 
     def test_regular_user_still_lockable(self, facility, staff_user):
         _seed_failed_logins(facility, staff_user, LOCKOUT_THRESHOLD)
