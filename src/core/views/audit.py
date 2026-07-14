@@ -2,12 +2,13 @@
 
 import logging
 
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import render
 from django.views import View
 
 from core.constants import AUDIT_PAGE_SIZE
 from core.models import AuditLog
 from core.models.user import User
+from core.services.scoping import get_scoped_object
 from core.utils.formatting import parse_date
 from core.views.mixins import FacilityAdminRequiredMixin, FilteredPaginatedListMixin, HTMXPartialMixin
 
@@ -73,6 +74,5 @@ class AuditLogDetailView(FacilityAdminRequiredMixin, View):
     """Detail view for a single audit log entry."""
 
     def get(self, request, pk):
-        facility = request.current_facility
-        entry = get_object_or_404(AuditLog.objects.select_related("user", "actor"), pk=pk, facility=facility)
+        entry = get_scoped_object(AuditLog.objects.select_related("user", "actor"), request, pk=pk)
         return render(request, "core/audit/detail.html", {"entry": entry})
