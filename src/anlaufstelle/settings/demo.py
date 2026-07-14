@@ -28,9 +28,16 @@ MFA_ENFORCE_PRIVILEGED_ROLES = False
 # Oeffentlich kommunizierte Seed-Logins fuer das Login-Zugangsdaten-Panel
 # (Refs #1062). Passwort fuer alle Konten gleich. scale=medium legt eine 2.
 # Einrichtung mit Suffix _1 an (admin_1, emma_1, ...).
+#
+# L11 (Refs #1375): Das ``superadmin``-Konto wird bewusst NICHT mehr im
+# oeffentlichen Panel beworben. Ein systemweiter Super-Admin mit publiziertem
+# Passwort + deaktivierter MFA-Pflicht (``MFA_ENFORCE_PRIVILEGED_ROLES=False``)
+# gaebe jedem Demo-Besucher installationsweite Rechte (Recon-/Missbrauchs-
+# flaeche, die der stuendliche Reset nicht mindert). Das Konto darf per Seed
+# weiter existieren — es wird nur nicht mehr oeffentlich mit Zugangsdaten
+# angezeigt.
 DEMO_PASSWORD = "anlaufstelle2026"  # noqa: S105 — oeffentliches Demo-Passwort, bewusst
 DEMO_LOGINS = [
-    {"username": "superadmin", "role": "Super-Admin (systemweit)"},
     {"username": "admin", "role": "Einrichtungs-Admin"},
     {"username": "emma", "role": "Leitung"},
     {"username": "miriam", "role": "Fachkraft"},
