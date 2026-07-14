@@ -13,6 +13,8 @@ import pytest
 from django.core.cache import cache
 from django.test import Client
 
+from core.services.compliance import ComplianceCheck, ComplianceStatus
+
 DETAIL_TOKEN = "test-health-detail-token"  # noqa: S105 — Test-Fixture, kein echtes Secret
 
 
@@ -169,6 +171,54 @@ class TestHealthDetail:
         data = _detail_get().json()
         assert data["disk_free_pct"] is not None
         assert 0 <= data["disk_free_pct"] <= 100
+
+    def test_stale_jobs_empty_when_all_ok(self, detail_token):
+        """Refs #1335: frische/gruene Cron-Marker -> leere stale_jobs-Liste, status ok."""
+        ok_check = ComplianceCheck(
+            key="backup_age",
+            label="Letztes Backup",
+            category="Backup",
+            status=ComplianceStatus.OK,
+            message="Backup juenger als 24h.",
+        )
+        with patch("core.views.health.cron_job_checks", return_value=[ok_check]):
+            data = _detail_get().json()
+        assert data["stale_jobs"] == []
+        assert data["status"] == "ok"
+
+    def test_stale_jobs_lists_critical_job_and_degrades(self, detail_token):
+        """Refs #1335: ein ``critical``-Cron-Job -> Key in stale_jobs, status degraded."""
+        critical_check = ComplianceCheck(
+            key="breach_scan_last_run",
+            label="Breach-Detection-Scan",
+            category="Hintergrundjobs",
+            status=ComplianceStatus.CRITICAL,
+            message="Letzter Scan vor 30h — Cron ausgefallen?",
+        )
+        with patch("core.views.health.cron_job_checks", return_value=[critical_check]):
+            data = _detail_get().json()
+        assert data["stale_jobs"] == ["breach_scan_last_run"]
+        assert data["status"] == "degraded"
+
+    def test_stale_jobs_unknown_does_not_degrade(self, detail_token):
+        """Refs #1335: ``unknown`` (frische Instanz, Job lief nie) darf NICHT degraden —
+        sonst waere jede frische Installation sofort im degraded-Zustand."""
+        unknown_check = ComplianceCheck(
+            key="snapshot_last_run",
+            label="Statistik-Snapshots",
+            category="Hintergrundjobs",
+            status=ComplianceStatus.UNKNOWN,
+            message="Noch kein Snapshot-Lauf — Cron lief vielleicht nie.",
+        )
+        with patch("core.views.health.cron_job_checks", return_value=[unknown_check]):
+            data = _detail_get().json()
+        assert data["stale_jobs"] == []
+        assert data["status"] == "ok"
+
+    def test_stale_jobs_not_in_anonymous_payload(self):
+        """A7.1: stale_jobs ist ein Recon-Detailfeld, nur intern/Token sichtbar."""
+        data = Client().get("/health/").json()
+        assert "stale_jobs" not in data
 
 
 # Refs #835 (C-68): SOURCE_CODE_URL ist im Footer ueber den Context-Processor.

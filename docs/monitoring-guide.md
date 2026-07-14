@@ -24,18 +24,18 @@
 
 `GET /health/` ist ein **auth-freier** JSON-Endpoint für Liveness- und Health-Monitoring. Er ist auch im Maintenance-Mode erreichbar ([ops-runbook §6.5a](ops-runbook.md): `/health/` steht auf der Whitelist). Die Antwort ist immer JSON; der HTTP-Status spiegelt die Liveness, das `status`-Feld die feinere Gesundheits-Bewertung.
 
-Implementiert als `HealthView` (`django.views.View`), rate-limitiert auf **120 Requests/Minute pro IP** ([`health.py`](../src/core/views/health.py) L130).
+Implementiert als `HealthView` (`django.views.View`), rate-limitiert auf **120 Requests/Minute pro IP** ([`health.py`](../src/core/views/health.py) L148).
 
 ---
 
 ## 2. Zwei Antwort-Tiefen: Liveness vs. Detail
 
-Der Endpoint liefert **zwei unterschiedlich umfangreiche Payloads** — abhängig davon, ob der Aufrufer als „intern" autorisiert ist (`_detail_authorized`, [`health.py`](../src/core/views/health.py) L38–49, Refs #1024 A7.1):
+Der Endpoint liefert **zwei unterschiedlich umfangreiche Payloads** — abhängig davon, ob der Aufrufer als „intern" autorisiert ist (`_detail_authorized`, [`health.py`](../src/core/views/health.py) L39–50, Refs #1024 A7.1):
 
 | Aufrufer | Bekommt | Warum |
 |---|---|---|
 | **Anonym** (Default für externes Monitoring) | Schlanker **Liveness**-Payload: `status`, `database`, `virus_scanner`/`clamav`, `encryption_key`. **Keine** Detailfelder. | Recon-Härtung: `version`, `disk_free_pct` etc. verraten Angreifern Infrastruktur-Details. Außerdem kein teurer SMTP-Handshake/Filesystem-Scan pro Poll. |
-| **Intern / Token** | Liveness **plus** Detailfelder: `version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`. | Operatives Monitoring will die Details. |
+| **Intern / Token** | Liveness **plus** Detailfelder: `version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`. | Operatives Monitoring will die Details. |
 
 **Als „intern" gilt ein Aufrufer, wenn** entweder
 
@@ -60,8 +60,8 @@ Nur **zwei** Codes — gesetzt ausschließlich durch die zwei *kritischen* Check
 
 | HTTP | Wann | Code-Beleg |
 |---|---|---|
-| **200 OK** | DB erreichbar **und** Encryption-Key-Roundtrip ok. Gilt auch bei `status: "degraded"` (siehe [§4](#4-das-status-feld)). | [`health.py`](../src/core/views/health.py) L153 (`http_status = 200 if db_ok`) |
-| **503 Service Unavailable** | DB nicht erreichbar **oder** Encryption-Key-Roundtrip fehlgeschlagen. | L153 (`else 503`) + L177 (`http_status = 503` bei `encryption_key == "error"`) |
+| **200 OK** | DB erreichbar **und** Encryption-Key-Roundtrip ok. Gilt auch bei `status: "degraded"` (siehe [§4](#4-das-status-feld)). | [`health.py`](../src/core/views/health.py) L176 (`http_status = 200 if db_ok`) |
+| **503 Service Unavailable** | DB nicht erreichbar **oder** Encryption-Key-Roundtrip fehlgeschlagen. | L176 (`else 503`) + L200 (`http_status = 503` bei `encryption_key == "error"`) |
 
 > **Wichtig fürs Alerting:** Ein `degraded`-Zustand (z. B. ClamAV weg, Backup zu alt, Disk knapp) bleibt **HTTP 200**. Wer nur den HTTP-Code überwacht, **verpasst** degraded-Zustände — dafür **muss** das JSON-`status`-Feld ausgewertet werden ([§7](#7-anbindung-an-monitoring-tools)).
 
@@ -90,10 +90,10 @@ Reihenfolge wie im Code. „Sichtbarkeit": **immer** = auch im anonymen Liveness
 | Feld | Typ | Werte | Bedeutung | Setzt Status |
 |---|---|---|---|---|
 | `status` | string | `ok` / `degraded` / `error` | Gesamtbewertung (siehe [§4](#4-das-status-feld)). ||
-| `database` | string | `connected` / `unavailable` | Ergebnis von `SELECT 1` gegen die DB ([`_check_database`](../src/core/views/health.py) L52–59). | `unavailable` → **`error` + HTTP 503** |
+| `database` | string | `connected` / `unavailable` | Ergebnis von `SELECT 1` gegen die DB ([`_check_database`](../src/core/views/health.py) L53–60). | `unavailable` → **`error` + HTTP 503** |
 | `virus_scanner` | string | `connected` / `unavailable` / `disabled` | ClamAV-Daemon-Ping, wenn `CLAMAV_ENABLED`. `disabled`, wenn ClamAV aus. | `unavailable` → **`degraded`** |
 | `clamav` | string | `ok` / `error` / `disabled` | Redundanter Klartext-Indikator zu `virus_scanner` (gleiche Quelle). | (gleicher Auslöser wie `virus_scanner`) |
-| `encryption_key` | string | `ok` / `error` | Fernet-Encrypt/Decrypt-**Roundtrip** ([`_check_encryption_key`](../src/core/views/health.py) L62–78). `error` = Schlüssel passt nicht zu den Daten → keine verschlüsselten Felder lesbar. | `error` → **`error` + HTTP 503** |
+| `encryption_key` | string | `ok` / `error` | Fernet-Encrypt/Decrypt-**Roundtrip** ([`_check_encryption_key`](../src/core/views/health.py) L63–79). `error` = Schlüssel passt nicht zu den Daten → keine verschlüsselten Felder lesbar. | `error` → **`error` + HTTP 503** |
 
 > `virus_scanner` **und** `clamav` kommen aus demselben Ping — `virus_scanner` ist der menschenlesbare Verbindungsstatus, `clamav` der ok/error-Kurzindikator. Bei Scanner-Ausfall trifft die harte Fail-closed-Entscheidung der Upload-Pfad im File-Vault, **nicht** der Health-Endpoint — daher nur `degraded`, nicht `error`.
 
@@ -102,11 +102,14 @@ Reihenfolge wie im Code. „Sichtbarkeit": **immer** = auch im anonymen Liveness
 | Feld | Typ | Werte | Bedeutung | Setzt Status |
 |---|---|---|---|---|
 | `version` | string | z. B. `v0.14.0` / `dev` | App-Version aus der ENV `APP_VERSION` (Fallback `dev`). ||
-| `smtp` | object | `{"status": "...", "latency_ms"?: int}` | SMTP-CONNECT-Test ([`_check_smtp`](../src/core/views/health.py) L81–103). | siehe unten |
+| `smtp` | object | `{"status": "...", "latency_ms"?: int}` | SMTP-CONNECT-Test ([`_check_smtp`](../src/core/views/health.py) L82–104). | siehe unten |
 | `smtp.status` | string | `ok` / `unreachable` / `disabled` | `disabled` = Console/Locmem-Backend oder leerer `EMAIL_HOST`. `unreachable` = Server antwortet nicht (Timeout 2 s) → Token-Invites/Passwort-Reset scheitern lautlos. | `unreachable` → **`degraded`** |
 | `smtp.latency_ms` | int | nur bei `ok` | CONNECT-Latenz in Millisekunden. ||
-| `last_backup_age_hours` | float \| null | z. B. `12.4` / `null` | Alter des jüngsten `*.sql.gz.enc` in `BACKUP_DIR` ([`_check_backup_age`](../src/core/views/health.py) L106–116). `null` = kein Backup gefunden / `BACKUP_DIR` fehlt. | `> 48` → **`degraded`** |
-| `disk_free_pct` | float \| null | z. B. `42.0` / `null` | Freier Speicher auf `MEDIA_ROOT` in Prozent ([`_check_disk_free_pct`](../src/core/views/health.py) L119–127). `null` = Pfad fehlt. | `< 10` → **`degraded`** |
+| `last_backup_age_hours` | float \| null | z. B. `12.4` / `null` | Alter des jüngsten `*.sql.gz.enc` in `BACKUP_DIR` ([`_check_backup_age`](../src/core/views/health.py) L107–117). `null` = kein Backup gefunden / `BACKUP_DIR` fehlt. | `> 48` → **`degraded`** |
+| `disk_free_pct` | float \| null | z. B. `42.0` / `null` | Freier Speicher auf `MEDIA_ROOT` in Prozent ([`_check_disk_free_pct`](../src/core/views/health.py) L137–145). `null` = Pfad fehlt. | `< 10` → **`degraded`** |
+| `stale_jobs` | array\<string\> | z. B. `[]` / `["breach_scan_last_run"]` | Keys der Hintergrundjobs (Backup, Retention, Snapshots, Breach-Scan, MV-Refresh) mit Status `critical` laut [`cron_job_checks`](../src/core/services/compliance/__init__.py) ([`_check_stale_jobs`](../src/core/views/health.py)). Refs #1335. | nicht-leer → **`degraded`** |
+
+> **`stale_jobs` degradet nur bei `critical`, nicht bei `unknown`.** Ein Job, der auf einer frischen Installation noch nie gelaufen ist (`unknown`), fehlt bewusst in `stale_jobs` — sonst wäre jede frische Instanz sofort `degraded`. `warning`-Jobs (leicht überfällig) tauchen ebenfalls nicht auf; die volle Ampel je Job zeigt das Compliance-Dashboard ([§9](#9-abgrenzung-health-vs-compliance-dashboard)). Voraussetzung für ein sinnvolles Signal ist ein eingerichteter Scheduler ([ops-runbook §3](ops-runbook.md#3-cron-jobs)) — ohne ihn bleiben die Jobs dauerhaft `unknown`, nicht `critical`, und `stale_jobs` bleibt leer, obwohl nichts läuft.
 
 > **`last_backup_age_hours` zählt nur Welt-B-Backups (`*.sql.gz.enc`).** Der Glob in `_check_backup_age` ist `*.sql.gz.enc` — Welt-A-Dumps (`dump-*.pgc.enc`, das Format auf `dev.anlaufstelle.app`) werden hier **nicht** erfasst und liefern `null`. Für die zwei Backup-Welten siehe [ops-runbook §6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739). `null` setzt **keinen** degraded-Status — eine Lücke, wenn Backups nur in Welt A laufen ([§9](#9-abgrenzung-health-vs-compliance-dashboard) verweist auf das Compliance-Dashboard als robusteren Backup-Alters-Check).
 
@@ -138,7 +141,8 @@ Reihenfolge wie im Code. „Sichtbarkeit": **immer** = auch im anonymen Liveness
   "version": "v0.14.0",
   "smtp": {"status": "ok", "latency_ms": 38},
   "last_backup_age_hours": 9.7,
-  "disk_free_pct": 41.3
+  "disk_free_pct": 41.3,
+  "stale_jobs": []
 }
 ```
 
@@ -154,7 +158,25 @@ Reihenfolge wie im Code. „Sichtbarkeit": **immer** = auch im anonymen Liveness
   "version": "v0.14.0",
   "smtp": {"status": "unreachable"},
   "last_backup_age_hours": 73.2,
-  "disk_free_pct": 38.0
+  "disk_free_pct": 38.0,
+  "stale_jobs": []
+}
+```
+
+**Degraded — Scheduler ausgefallen (HTTP 200, intern):**
+
+```json
+{
+  "status": "degraded",
+  "database": "connected",
+  "virus_scanner": "connected",
+  "clamav": "ok",
+  "encryption_key": "ok",
+  "version": "v0.14.0",
+  "smtp": {"status": "ok", "latency_ms": 38},
+  "last_backup_age_hours": 9.7,
+  "disk_free_pct": 41.3,
+  "stale_jobs": ["backup_age", "breach_scan_last_run"]
 }
 ```
 
@@ -212,7 +234,7 @@ So fangen `degraded`-Frühwarnungen (Backup-Lag, Disk knapp, SMTP weg, ClamAV we
 
 - **RAM/CPU des Hosts** (`/health/` misst nur Disk-frei auf `MEDIA_ROOT`).
 - **Off-Site-Backup-Status** — `scripts/ops/backup.sh` signalisiert Off-Site-Fehler über Exit-Code/State-File/optionalen Sentry-Hook, **nicht** über `/health/` ([ops-runbook §6.6a](ops-runbook.md#66a-off-site-backup-sync-refs-738)).
-- **Cron-/Timer-Erfolg** der Hintergrundjobs (Backup, Retention, Breach-Scan) — über systemd-Timer-Status bzw. das Compliance-Dashboard ([§9](#9-abgrenzung-health-vs-compliance-dashboard)).
+- **Cron-/Timer-Erfolg** der Hintergrundjobs (Backup, Retention, Breach-Scan) im Detail — `/health/` zeigt mit `stale_jobs` nur ein grobes `critical`-Signal (Refs #1335), die volle Ampel je Job (inkl. `warning`/`unknown`) liefert erst das Compliance-Dashboard ([§9](#9-abgrenzung-health-vs-compliance-dashboard)).
 
 ---
 
@@ -220,11 +242,12 @@ So fangen `degraded`-Frühwarnungen (Backup-Lag, Disk knapp, SMTP weg, ClamAV we
 
 | Aspekt | Wert | Quelle |
 |---|---|---|
-| Rate-Limit | **120 GET/min pro IP**, `block=True` (überschüssige Requests → HTTP 429) | [`health.py`](../src/core/views/health.py) L130 (`ratelimit` Decorator) |
-| Detail-Cache-TTL | **15 s** — SMTP-CONNECT, Disk-Scan, Backup-Scan werden gecacht, damit häufiges Polling nicht jedes Mal einen SMTP-Handshake + Filesystem-Scan auslöst | L35 (`_DETAIL_CACHE_TTL_SECONDS`) |
-| Backup-Warn-Schwelle | **48 h** → `degraded` | L28 (`BACKUP_WARN_HOURS`) |
-| Disk-Warn-Schwelle | **< 10 %** frei → `degraded` | L29 (`DISK_WARN_PCT`) |
-| SMTP-Timeout | **2 s** CONNECT | L30 (`SMTP_TIMEOUT_SECONDS`) |
+| Rate-Limit | **120 GET/min pro IP**, `block=True` (überschüssige Requests → HTTP 429) | [`health.py`](../src/core/views/health.py) L148 (`ratelimit` Decorator) |
+| Detail-Cache-TTL | **15 s** — SMTP-CONNECT, Disk-Scan, Backup-Scan, Stale-Jobs-Scan werden gecacht, damit häufiges Polling nicht jedes Mal einen SMTP-Handshake + Filesystem-/DB-Scan auslöst | L36 (`_DETAIL_CACHE_TTL_SECONDS`) |
+| Backup-Warn-Schwelle | **48 h** → `degraded` | L29 (`BACKUP_WARN_HOURS`) |
+| Disk-Warn-Schwelle | **< 10 %** frei → `degraded` | L30 (`DISK_WARN_PCT`) |
+| SMTP-Timeout | **2 s** CONNECT | L31 (`SMTP_TIMEOUT_SECONDS`) |
+| Stale-Jobs-Schwelle | jeder Job mit `critical` → `degraded` (Schwellwert je Job in [`services/compliance/cron.py`](../src/core/services/compliance/cron.py)/[`backup.py`](../src/core/services/compliance/backup.py)) | `_check_stale_jobs` (Refs #1335) |
 
 > **Poll-Intervall sinnvoll wählen:** Bei 120/min ist ein Poll alle 30–60 s reichlich. Die 15-s-Cache-TTL bedeutet, dass Detailfelder bei sehr schnellem Polling bis zu 15 s alt sein können — für Backup-Alter/Disk-frei irrelevant.
 

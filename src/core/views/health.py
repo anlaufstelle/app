@@ -20,6 +20,7 @@ from django.utils.decorators import method_decorator
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
+from core.services.compliance import ComplianceStatus, cron_job_checks
 from core.services.file_vault import ping as clamav_ping
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,23 @@ def _check_backup_age() -> float | None:
     return round(age_hours, 1)
 
 
+def _check_stale_jobs() -> list[str]:
+    """Refs #1335 (Scheduler-Doku-Haertung): Keys der Hintergrundjobs mit Status ``critical``.
+
+    Ohne eingerichtete Host-Crontab/Timer (docs/ops-runbook.md §3) laufen Backup,
+    Retention, Breach-Detection etc. nie — still, ohne Fehlermeldung. Dieser Check
+    macht das im Health-Endpoint sichtbar: wiederverwendet
+    :func:`core.services.compliance.cron_job_checks` (bereits das
+    Compliance-Dashboard), damit beide Stellen dieselbe Wahrheit zeigen.
+
+    ``unknown`` (Job lief noch nie, z.B. frische Installation) darf NICHT
+    degraden — das waere fuer jede frische Instanz ein falscher Alarm. Nur ein
+    bestaetigtes ``critical`` (Job lief zuletzt vor laenger als der jeweilige
+    Schwellwert) zeigt einen tatsaechlich ausgefallenen Scheduler an.
+    """
+    return [check.key for check in cron_job_checks() if check.status == ComplianceStatus.CRITICAL]
+
+
 def _check_disk_free_pct() -> float | None:
     """Freier Speicher (in %) auf MEDIA_ROOT; ``None`` falls Pfad fehlt."""
     media_root = getattr(settings, "MEDIA_ROOT", "")
@@ -139,9 +157,14 @@ class HealthView(View):
     Refs #796 (C-28): Komponenten ``smtp``, ``encryption_key``,
     ``last_backup_age_hours``, ``disk_free_pct``.
 
+    Refs #1335: ``stale_jobs`` listet die Keys der Hintergrundjobs (Backup,
+    Retention, Breach-Detection, Audit-Ketten-Verifikation, ...), deren
+    letzter Lauf laut Compliance-Dashboard ``critical`` ist — Indikator, dass
+    der Host-Scheduler (docs/ops-runbook.md §3) nicht eingerichtet ist.
+
     A7.1/A7.2 (Refs #1024): Die Recon-relevanten Detailfelder (``version``,
-    ``smtp``, ``last_backup_age_hours``, ``disk_free_pct``) werden nur an
-    interne/Token-Caller ausgeliefert (``_detail_authorized``); anonyme Caller
+    ``smtp``, ``last_backup_age_hours``, ``disk_free_pct``, ``stale_jobs``)
+    werden nur an interne/Token-Caller ausgeliefert (``_detail_authorized``); anonyme Caller
     erhalten einen schlanken, leichtgewichtigen Liveness-Payload (kein
     SMTP-Handshake / Filesystem-Scan). Die teuren Detail-Checks sind zusätzlich
     kurz gecacht, der Endpoint ist rate-limitiert.
@@ -196,6 +219,13 @@ class HealthView(View):
             disk_pct = cache.get_or_set("health:disk_free_pct", _check_disk_free_pct, _DETAIL_CACHE_TTL_SECONDS)
             payload["disk_free_pct"] = disk_pct
             if disk_pct is not None and disk_pct < DISK_WARN_PCT and status == "ok":
+                status = "degraded"
+
+            # Scheduler-Staleness (Refs #1335), gecacht (A7.2). ``unknown`` degradet
+            # bewusst nicht (frische Installation), nur bestaetigtes ``critical``.
+            stale_jobs = cache.get_or_set("health:stale_jobs", _check_stale_jobs, _DETAIL_CACHE_TTL_SECONDS)
+            payload["stale_jobs"] = stale_jobs
+            if stale_jobs and status == "ok":
                 status = "degraded"
 
         payload["status"] = status
