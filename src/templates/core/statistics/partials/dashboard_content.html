@@ -215,7 +215,7 @@
        class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas"
        title="{% trans 'Verwendet den oben gewählten Zeitraum als Berichtszeitraum.' %}">
         <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
-        {% trans "Halbjahresbericht (PDF)" %}
+        {% trans "PDF-Export" %}
     </a>
     <a href="{% url 'core:statistics_jugendamt_export' %}?date_from={{ date_from|date:'Y-m-d' }}&date_to={{ date_to|date:'Y-m-d' }}"
        class="inline-flex items-center gap-1.5 bg-surface border border-subtle text-ink-soft text-[13px] font-medium rounded-md px-3.5 py-2 hover:bg-canvas">

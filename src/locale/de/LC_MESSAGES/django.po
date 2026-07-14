@@ -4662,8 +4662,8 @@ msgstr "Ort, Datum, Unterschrift"
 
 #: src/templates/core/export/report_pdf.html:6
 #: src/templates/core/export/report_pdf.html:35
-msgid "Halbjahresbericht"
-msgstr "Halbjahresbericht"
+msgid "Statistikbericht"
+msgstr "Statistikbericht"
 
 #: src/templates/core/export/report_pdf.html:31
 msgid "INTERN — nicht zur Weitergabe. Enthält Pseudonym-Ranking."
@@ -5033,10 +5033,8 @@ msgid "Verwendet den oben gewählten Zeitraum als Berichtszeitraum."
 msgstr "Keine relevanten Kontakte im Berichtszeitraum."
 
 #: src/templates/core/statistics/partials/dashboard_content.html:218
-#, fuzzy
-#| msgid "Halbjahresbericht"
-msgid "Halbjahresbericht (PDF)"
-msgstr "Halbjahresbericht"
+msgid "PDF-Export"
+msgstr "PDF-Export"
 
 #: src/templates/core/statistics/partials/full_content.html:10
 msgid "Monat"

@@ -239,6 +239,17 @@ class TestStatisticsViewHTMX:
         content = response.content.decode()
         assert 'id="statistics-content"' in content
 
+    def test_pdf_export_button_label_is_neutral(self, client, admin_user):
+        """Refs #1571: Der PDF-Export-Button heisst neutral 'PDF-Export' statt
+        'Halbjahresbericht (PDF)' — der Export nutzt den frei gewaehlten
+        Zeitraum, kein festes Halbjahr."""
+        client.force_login(admin_user)
+        response = client.get(reverse("core:statistics"))
+        assert response.status_code == 200
+        content = response.content.decode()
+        assert "PDF-Export" in content
+        assert "Halbjahresbericht" not in content
+
 
 @pytest.mark.django_db
 class TestUniqueClientsApproximationFlag:

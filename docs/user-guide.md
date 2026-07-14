@@ -526,12 +526,12 @@ Der CSV-Export enthält alle Ereignisse des gewählten Zeitraums. Felder, deren 
 
 > **Hinweis:** Jeder Export wird im Audit-Log protokolliert.
 
-### PDF-Bericht
+### PDF-Export
 
-Der PDF-Bericht erstellt einen strukturierten Halbjahresbericht für die interne Dokumentation.
+Der PDF-Export erstellt einen strukturierten Statistikbericht für den oben im Dashboard gewählten Zeitraum, zur internen Dokumentation.
 
 1. Wählen Sie im Statistik-Dashboard den Zeitraum.
-2. Klicken Sie auf **PDF-Bericht**.
+2. Klicken Sie auf **PDF-Export**.
 3. Die PDF-Datei wird heruntergeladen (Dateiname: `bericht_YYYY-MM-DD_YYYY-MM-DD.pdf`).
 
 ### Beispiel-Sachbericht

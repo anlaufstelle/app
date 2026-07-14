@@ -3,7 +3,7 @@
 <html lang="de">
 <head>
     <meta charset="utf-8">
-    <title>{% trans "Halbjahresbericht" %}</title>
+    <title>{% trans "Statistikbericht" %}</title>
     <style>
         body { font-family: sans-serif; font-size: 12px; color: #1a1a1a; margin: 40px; }
         h1 { font-size: 20px; margin-bottom: 4px; }
@@ -32,7 +32,7 @@
     </div>
     {% endif %}
     <h1>{{ facility_name }}</h1>
-    <p class="meta">{% trans "Halbjahresbericht" %} · {{ date_from|date:"d.m.Y" }} – {{ date_to|date:"d.m.Y" }}</p>
+    <p class="meta">{% trans "Statistikbericht" %} · {{ date_from|date:"d.m.Y" }} – {{ date_to|date:"d.m.Y" }}</p>
 
     <h2>{% trans "Zusammenfassung" %}</h2>
     <div class="kpi-grid">
