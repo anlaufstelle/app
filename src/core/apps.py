@@ -9,6 +9,7 @@ class CoreConfig(AppConfig):
     def ready(self):
         import core.signals.audit  # noqa: F401
         import core.signals.event_search  # noqa: F401
+        import core.signals.facility_protection  # noqa: F401
         import core.signals.field_template  # noqa: F401
         import core.signals.offline_invalidation  # noqa: F401
         import core.signals.settings_seed  # noqa: F401
