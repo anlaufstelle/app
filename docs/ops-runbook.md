@@ -176,6 +176,8 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 
 ## 3. Cron-Jobs
 
+> Dieses Kapitel ist die **autoritative Liste der Hintergrundjobs**; das [Admin-Handbuch](admin-guide.md) verweist hierauf.
+
 > **⚠️ Ohne eingerichteten Scheduler laeuft nichts — still.** Anlaufstelle plant seine
 > Hintergrundjobs **nicht selbst**: kein eingebauter Scheduler, kein Compose-Sidecar
 > (bewusst so entschieden, siehe #794
@@ -198,6 +200,7 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 | `enforce_retention` | Taeglich 03:00 | Abgelaufene Events soft-loeschen, Clients anonymisieren |
 | `verify_audit_chain` | Taeglich 03:30 (nach Retention) | HMAC-Integritaetskette des AuditLog verifizieren; Exit-Code != 0 bei Tamper-Verdacht (Refs #1070) |
 | `create_statistics_snapshots` | Monatlich 1. Tag 04:00 | Monats-Aggregate sichern bevor Events geloescht werden |
+| `cleanup_orphan_storage_files` | Taeglich 04:30 | Verwaiste `.enc`-Dateien ohne `EventAttachment`-Record loeschen (Refs #662). **Nicht** von `install-timers.sh` als systemd-Timer installiert (siehe [§3.3](#33-dev-systemd-timer)) — auf Prod bei Bedarf manuell als Cron einrichten |
 | `detect_breaches` | Stuendlich:30 | Heuristik-basierte Breach-Detection (failed-login-burst / mass-export / mass-delete) → AuditLog SECURITY_VIOLATION + optionaler Webhook (Refs #685) |
 | `refresh_statistics_view` | Stuendlich:15 | Materialized View `core_statistics_event_flat` aktualisieren (Statistik-Dashboard) |
 | Invite-Token-Audit | Woechentlich So 05:00 | Verwaiste Invite-User-Konten aufspueren (siehe [10](#10-invite-token-hygiene)) |
@@ -225,6 +228,11 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 
 # Statistik-Snapshots (monatlich am 1. um 04:00)
 0 4 1 * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py create_statistics_snapshots >> /var/log/anlaufstelle-snapshots.log 2>&1
+
+# Orphan-Storage-Cleanup (taeglich 04:30; verwaiste .enc-Dateien ohne
+# EventAttachment-Record entfernen, Refs #662). Hinweis: install-timers.sh
+# installiert diesen Job NICHT als systemd-Timer (siehe Abschnitt 3.3).
+30 4 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py cleanup_orphan_storage_files >> /var/log/anlaufstelle-orphan-cleanup.log 2>&1
 
 # Breach-Detection-Scan (stuendlich zur 30. Minute, Refs #685)
 30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
@@ -254,6 +262,7 @@ installiert — aufgerufen bei **jedem** Deploy durch `dev-ops/deploy/deploy-dev
 |-------|-----------|---------|
 | `anlaufstelle-backup.timer` | `*-*-* 02:00` | `dev-ops/deploy/backup.sh` |
 | `anlaufstelle-retention.timer` | `*-*-* 03:00` | `… exec -T web python manage.py enforce_retention` |
+| `anlaufstelle-audit-verify.timer` | `*-*-* 03:30` | `… exec -T web python manage.py verify_audit_chain` |
 | `anlaufstelle-snapshots.timer` | `*-*-01 04:00` | `… exec -T web python manage.py create_statistics_snapshots` |
 | `anlaufstelle-breach.timer` | `*-*-* *:30` | `… exec -T web python manage.py detect_breaches` |
 | `anlaufstelle-mv-refresh.timer` | `*-*-* *:15` | `… exec -T web python manage.py refresh_statistics_view` |
@@ -263,13 +272,15 @@ installiert die Timer mit. Einmalig sofort nachziehen geht auch direkt:
 
 ```bash
 sudo bash /opt/anlaufstelle/dev-ops/deploy/install-timers.sh  # idempotent, als root
-systemctl list-timers "anlaufstelle-*"                # 5 Timer mit NEXT-Zeit
+systemctl list-timers "anlaufstelle-*"                # 6 Timer mit NEXT-Zeit
 systemctl start anlaufstelle-mv-refresh.service        # einmal manuell anstossen
 journalctl -u anlaufstelle-mv-refresh.service -n 20
 ```
 
 Den Lauf-Status je Job zeigt zusaetzlich das Compliance-Dashboard (`/system/compliance/`,
 Kategorie „Hintergrundjobs") — `unknown`/`warning`/`critical`, wenn ein Timer nicht laeuft.
+
+> **Hinweis:** `install-timers.sh` installiert diese 6 Timer. `cleanup_orphan_storage_files` (§ 3.1/§ 3.2, Refs #662) ist **bewusst nicht** dabei — auf Prod-Hosts bei Bedarf manuell als Cron einrichten.
 
 ### 3.4 Manuelle Ausfuehrung
 
@@ -1219,13 +1230,13 @@ Damit erkennt Django HTTPS auch hinter dem Caddy-Proxy. Voraussetzung: **Caddy s
 
 **Wichtig:** Wenn die App **direkt** exponiert wird (ohne Reverse-Proxy), MUSS dieses Setting entfernt werden. Sonst kann ein Angreifer `X-Forwarded-Proto: https` selbst setzen — `request.is_secure()` liefert dann `True`, obwohl die Verbindung Klartext ist; HSTS-/Secure-Cookie-Logik wird ausgehebelt.
 
-Caddy in `Caddyfile` ist so konfiguriert, dass es diesen Header beim Forwarden ueberschreibt:
+In `Caddyfile` (und den Varianten `Caddyfile.dev`, `Caddyfile.demo`, `Caddyfile.staging`) wird `X-Forwarded-Proto` **nicht explizit** gesetzt — die blanke Direktive genuegt:
 
 ```
-reverse_proxy web:8000 {
-    header_up X-Forwarded-Proto {scheme}
-}
+reverse_proxy web:8000
 ```
+
+Caddys `reverse_proxy` setzt `X-Forwarded-Proto` (sowie `X-Forwarded-For`/`X-Forwarded-Host`) per Default selbst auf den tatsaechlichen Verbindungsstatus und ueberschreibt dabei einen vom Client mitgeschickten Wert. `SECURE_PROXY_SSL_HEADER` verlaesst sich also auf dieses Caddy-Default-Verhalten, **nicht** auf eine explizite `header_up`-Direktive. (Ein zusaetzliches `header_up X-Forwarded-Proto {scheme}` waere redundant.)
 
 ### 12.2 TRUSTED_PROXY_HOPS
 
