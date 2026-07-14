@@ -9,7 +9,7 @@ import logging
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -28,6 +28,7 @@ from core.services.case import (
 )
 from core.services.client import get_client_or_none
 from core.services.compliance import get_visible_event_or_404
+from core.services.scoping import get_scoped_object
 from core.views.mixins import (
     FilteredPaginatedListMixin,
     HTMXPartialMixin,
@@ -150,10 +151,10 @@ class CaseDetailView(StaffRequiredMixin, View):
 
     def get(self, request, pk):
         facility = request.current_facility
-        case = get_object_or_404(
+        case = get_scoped_object(
             Case.objects.select_related("client", "lead_user", "created_by"),
+            request,
             pk=pk,
-            facility=facility,
         )
 
         episodes = case.episodes.all()
@@ -176,7 +177,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
 
     def get(self, request, pk):
         facility = request.current_facility
-        case = get_object_or_404(Case, pk=pk, facility=facility)
+        case = get_scoped_object(Case, request, pk=pk)
         form = CaseForm(instance=case, facility=facility)
         if case.client:
             form.fields["client"].initial = case.client.pk
@@ -192,7 +193,7 @@ class CaseUpdateView(StaffRequiredMixin, View):
 
     def post(self, request, pk):
         facility = request.current_facility
-        case = get_object_or_404(Case, pk=pk, facility=facility)
+        case = get_scoped_object(Case, request, pk=pk)
         form = CaseForm(request.POST, facility=facility)
         if form.is_valid():
             client_obj = form.cleaned_data.get("client")
@@ -230,8 +231,7 @@ class CaseCloseView(LeadOrAdminRequiredMixin, View):
     """Close a case (Lead or Admin only)."""
 
     def post(self, request, pk):
-        facility = request.current_facility
-        case = get_object_or_404(Case, pk=pk, facility=facility)
+        case = get_scoped_object(Case, request, pk=pk)
         close_case(case, request.user)
         messages.success(request, _("Fall wurde geschlossen."))
         return redirect("core:case_detail", pk=case.pk)
@@ -245,8 +245,7 @@ class CaseReopenView(LeadOrAdminRequiredMixin, View):
     """Reopen a case (Lead or Admin only)."""
 
     def post(self, request, pk):
-        facility = request.current_facility
-        case = get_object_or_404(Case, pk=pk, facility=facility)
+        case = get_scoped_object(Case, request, pk=pk)
         reopen_case(case, request.user)
         messages.success(request, _("Fall wurde wiedereröffnet."))
         return redirect("core:case_detail", pk=case.pk)
@@ -261,7 +260,7 @@ class CaseAssignEventView(StaffRequiredMixin, View):
 
     def post(self, request, pk):
         facility = request.current_facility
-        case = get_object_or_404(Case, pk=pk, facility=facility)
+        case = get_scoped_object(Case, request, pk=pk)
         event_id = request.POST.get("event_id")
         if not event_id:
             messages.error(request, _("Kein Ereignis ausgewählt."))
@@ -283,7 +282,7 @@ class CaseRemoveEventView(StaffRequiredMixin, View):
 
     def post(self, request, pk, event_pk):
         facility = request.current_facility
-        case = get_object_or_404(Case, pk=pk, facility=facility)
+        case = get_scoped_object(Case, request, pk=pk)
         event = get_visible_event_or_404(request.user, facility, event_pk)
         remove_event_from_case(event, request.user)
 
