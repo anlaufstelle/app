@@ -7,9 +7,9 @@ from django.test import RequestFactory, SimpleTestCase, override_settings
 from core.middleware.demo_guard import DemoGuardMiddleware
 
 
-def _request(method, path):
+def _request(method, path, **extra):
     rf = RequestFactory()
-    req = getattr(rf, method.lower())(path)
+    req = getattr(rf, method.lower())(path, **extra)
     req.session = {}
     req._messages = FallbackStorage(req)
     return req
@@ -24,6 +24,35 @@ class DemoGuardTests(SimpleTestCase):
     def test_blocks_maintenance_toggle_post(self):
         resp = DemoGuardMiddleware(_passthrough)(_request("POST", "/system/maintenance/"))
         self.assertEqual(resp.status_code, 302)
+
+    @override_settings(DEMO_MODE=True)
+    def test_external_referer_is_not_used_as_redirect_target(self):
+        """L6 (Refs #1375): Ein externer Referer darf nicht als Redirect-Ziel
+        dienen (Open Redirect). Die Middleware laeuft vor CSRF/Auth."""
+        resp = DemoGuardMiddleware(_passthrough)(
+            _request("POST", "/system/maintenance/", HTTP_REFERER="https://evil.example/phish")
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp["Location"], "/")
+
+    @override_settings(DEMO_MODE=True)
+    def test_protocol_relative_referer_is_not_used(self):
+        """``//evil`` (protokoll-relativ) wird vom Browser als externer Host
+        gelesen -> muss auf ``/`` normalisiert werden."""
+        resp = DemoGuardMiddleware(_passthrough)(
+            _request("POST", "/system/maintenance/", HTTP_REFERER="//evil.example/phish")
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp["Location"], "/")
+
+    @override_settings(DEMO_MODE=True)
+    def test_same_origin_relative_referer_is_preserved(self):
+        """Ein interner relativer Pfad bleibt als Redirect-Ziel erhalten."""
+        resp = DemoGuardMiddleware(_passthrough)(
+            _request("POST", "/system/maintenance/", HTTP_REFERER="/system/")
+        )
+        self.assertEqual(resp.status_code, 302)
+        self.assertEqual(resp["Location"], "/system/")
 
     @override_settings(DEMO_MODE=True)
     def test_allows_get_on_blocked_path(self):

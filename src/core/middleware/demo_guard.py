@@ -21,6 +21,8 @@ from django.contrib import messages
 from django.shortcuts import redirect
 from django.utils.translation import gettext as _
 
+from core.views.utils import safe_redirect_path
+
 DEFAULT_BLOCKED_PREFIXES = ("/system/maintenance/",)
 
 
@@ -33,5 +35,9 @@ class DemoGuardMiddleware:
             blocked = tuple(getattr(settings, "DEMO_GUARD_BLOCKED_PREFIXES", DEFAULT_BLOCKED_PREFIXES))
             if blocked and request.path.startswith(blocked):
                 messages.error(request, _("Diese Aktion ist im Demo-Modus deaktiviert."))
-                return redirect(request.META.get("HTTP_REFERER") or "/")
+                # L6 (Refs #1375): Open-Redirect-Schutz. Der Referer ist
+                # angreifer-kontrollierbar und diese Middleware laeuft vor
+                # CSRF/Auth; ``safe_redirect_path`` laesst nur same-origin-Pfade
+                # zu und mappt externe/protokoll-relative Ziele auf "/".
+                return redirect(safe_redirect_path(request.META.get("HTTP_REFERER")))
         return self.get_response(request)
