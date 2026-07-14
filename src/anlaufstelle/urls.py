@@ -7,6 +7,7 @@ from core.views.auth import (
     CustomLogoutView,
     CustomPasswordChangeView,
     CustomPasswordResetConfirmView,
+    InviteConfirmView,
     OfflineKeySaltView,
     RateLimitedPasswordResetView,
     set_user_language,
@@ -72,6 +73,17 @@ urlpatterns = [
             success_url=reverse_lazy("password_reset_complete"),
         ),
         name="password_reset_confirm",
+    ),
+    # L4 (Refs #1375): Eigene Setup-Route fuer Einladungen — gleicher
+    # Passwort-Set-Flow wie beim Reset, aber ueber den entkoppelten
+    # invite_token_generator (eigener, laengerer Ablauf INVITE_TOKEN_TIMEOUT).
+    path(
+        "invite/<uidb64>/<token>/",
+        InviteConfirmView.as_view(
+            template_name="registration/password_reset_confirm.html",
+            success_url=reverse_lazy("password_reset_complete"),
+        ),
+        name="invite_confirm",
     ),
     path(
         "password-reset/complete/",

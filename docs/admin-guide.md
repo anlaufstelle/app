@@ -337,13 +337,18 @@ Im Admin unter **Core → Benutzer → Benutzer hinzufügen**:
 
 #### Token-Invite-Flow (Refs #528)
 
-Neue Konten werden **ohne** Klartext-Passwort angelegt. Stattdessen versendet die Anwendung eine **Einladungs-E-Mail** mit einem personalisierten Setup-Link an die hinterlegte E-Mail-Adresse. Der Link führt den neuen Nutzer auf das Standard-Password-Reset-Formular, wo er eigenhändig ein Passwort setzt.
+Neue Konten werden **ohne** Klartext-Passwort angelegt. Stattdessen versendet die Anwendung eine **Einladungs-E-Mail** mit einem personalisierten Setup-Link (`/invite/<uid>/<token>/`) an die hinterlegte E-Mail-Adresse. Der Link führt den neuen Nutzer auf dasselbe Passwort-Setzen-Formular wie der Passwort-Reset, wo er eigenhändig ein Passwort setzt.
 
 1. Admin legt Nutzer mit E-Mail im Admin an.
-2. System ruft [`send_invite_email`](https://github.com/anlaufstelle/app/blob/main/src/core/services/invite.py) auf und generiert Token (Djangos `default_token_generator`, basierend auf `uidb64` + Token-Hash).
+2. System ruft [`send_invite_email`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/invite.py) auf und generiert einen Setup-Token (eigener `invite_token_generator`, basierend auf `uidb64` + Token-Hash).
 3. Nutzer empfängt Mail, klickt Link, setzt Passwort und wird eingeloggt.
 
-**Token-Gültigkeit:** Django-Default ist `PASSWORD_RESET_TIMEOUT = 259200` Sekunden (3 Tage). In der Anlaufstelle kann die Frist über die Django-Setting auf bis zu 7 Tage erhöht werden — der Token-Generator invalidiert den Token außerdem automatisch, sobald der Nutzer sein erstes Passwort gesetzt hat.
+**Token-Gültigkeit (L4, Refs #1375):** Einladungs- und Passwort-Reset-Tokens haben **getrennte** Gültigkeiten:
+
+- **Einladungen** laufen nach `INVITE_TOKEN_TIMEOUT` ab (Default **3 Tage** = 259200 s, per ENV `DJANGO_INVITE_TOKEN_TIMEOUT` anpassbar) — ein neu eingeladener Mitarbeitender braucht realistisch Tage, um den Link zu öffnen.
+- **Passwort-Resets** laufen nach `PASSWORD_RESET_TIMEOUT` ab (Default **2 Stunden**, früher Django-Default 3 Tage; per ENV `DJANGO_PASSWORD_RESET_TIMEOUT` anpassbar) — ein Reset-Link ist ein starkes Recovery-Primitiv und soll kurzlebig sein.
+
+Beide Generatoren sind zudem über ein eigenes `key_salt` getrennt (ein Reset-Token gilt nicht auf `/invite/` und umgekehrt) und invalidieren den Token automatisch, sobald der Nutzer sein erstes Passwort gesetzt hat.
 
 **Setup-Link erneut senden:** Ist die Mail nicht angekommen oder der Token abgelaufen, kann der Admin in der Benutzer-Detailansicht über „Setup-Link erneut senden" (bzw. den analogen „Einladung erneut senden"-Button) einen neuen Token ausstellen und eine frische Mail verschicken lassen.
 

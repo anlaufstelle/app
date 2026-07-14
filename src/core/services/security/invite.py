@@ -1,12 +1,17 @@
 """User-Invite-Service: Token-basierter Invite-Flow.
 
-Erzeugt beim Anlegen neuer User-Konten einen Password-Reset-Token (Django
-`default_token_generator`) und versendet eine Einladungs-E-Mail mit Setup-Link.
-Der Link nutzt die bestehende `password_reset_confirm`-Route — dieselbe
-Mechanik wie beim normalen "Passwort vergessen"-Flow.
+Erzeugt beim Anlegen neuer User-Konten einen Setup-Token und versendet eine
+Einladungs-E-Mail mit Setup-Link. Der Link nutzt die eigene
+`invite_confirm`-Route (dieselbe Passwort-Set-Mechanik wie „Passwort vergessen",
+aber ein eigener Token-Generator + eigene Gültigkeit).
 
-Gültigkeit: `PASSWORD_RESET_TIMEOUT` (Django-Default 3 Tage, bei Bedarf per
-Settings erhöhbar auf 7 Tage, siehe Issue #528).
+Gültigkeit (L4, Refs #1375): Ein Invite-Token läuft nach `INVITE_TOKEN_TIMEOUT`
+ab (Default 3 Tage) — bewusst LÄNGER als `PASSWORD_RESET_TIMEOUT` (kurzlebig,
+Stunden). Ein neu eingeladener Mitarbeitender braucht realistisch Tage, um den
+Link zu öffnen; ein Passwort-Reset-Token soll dagegen kurzlebig sein. Beide
+Gültigkeiten sind über getrennte Token-Generatoren entkoppelt — früher teilten
+sich Invite und Reset `default_token_generator` + `PASSWORD_RESET_TIMEOUT`,
+sodass ein kurzer Reset-Timeout die Invites mitverkürzt hätte.
 """
 
 from __future__ import annotations
@@ -14,14 +19,56 @@ from __future__ import annotations
 import logging
 
 from django.conf import settings
-from django.contrib.auth.tokens import default_token_generator
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.urls import reverse
+from django.utils.crypto import constant_time_compare
 from django.utils.encoding import force_bytes
-from django.utils.http import urlsafe_base64_encode
+from django.utils.http import base36_to_int, urlsafe_base64_encode
 
 logger = logging.getLogger(__name__)
+
+
+class InviteTokenGenerator(PasswordResetTokenGenerator):
+    """Setup-Token für Einladungen mit eigenem, längerem Ablauf (L4, Refs #1375).
+
+    Identisch zum Passwort-Reset-Token (HMAC über pk + Passwort-Hash +
+    last_login → automatisch einmalig, invalidiert nach dem ersten Setzen des
+    Passworts), aber mit zwei Unterschieden:
+
+    * eigenes ``key_salt`` — ein Invite-Token ist NICHT auf der
+      Passwort-Reset-Route verwendbar und umgekehrt (saubere Trennung);
+    * eigener Ablauf ``INVITE_TOKEN_TIMEOUT`` statt ``PASSWORD_RESET_TIMEOUT``.
+
+    ``check_token`` ist bewusst eine schlanke Kopie der Basis-Implementierung
+    (Django 6, `contrib/auth/tokens.py`) — nur der Timeout-Wert weicht ab. Das
+    Token-Format der Basisklasse ist seit Jahren stabil.
+    """
+
+    key_salt = "core.services.security.invite.InviteTokenGenerator"
+
+    def check_token(self, user, token):
+        if not (user and token):
+            return False
+        try:
+            ts_b36, _ = token.split("-")
+            ts = base36_to_int(ts_b36)
+        except ValueError:
+            return False
+
+        for secret in [self.secret, *self.secret_fallbacks]:
+            if constant_time_compare(self._make_token_with_timestamp(user, ts, secret), token):
+                break
+        else:
+            return False
+
+        timeout = getattr(settings, "INVITE_TOKEN_TIMEOUT", settings.PASSWORD_RESET_TIMEOUT)
+        return (self._num_seconds(self._now()) - ts) <= timeout
+
+
+# Modul-Singleton (analog Djangos ``default_token_generator``).
+invite_token_generator = InviteTokenGenerator()
 
 
 def build_invite_url(user, request=None) -> str:
@@ -31,8 +78,8 @@ def build_invite_url(user, request=None) -> str:
     zurückgegeben, andernfalls eine relative URL.
     """
     uid = urlsafe_base64_encode(force_bytes(user.pk))
-    token = default_token_generator.make_token(user)
-    path = reverse("password_reset_confirm", kwargs={"uidb64": uid, "token": token})
+    token = invite_token_generator.make_token(user)
+    path = reverse("invite_confirm", kwargs={"uidb64": uid, "token": token})
     if request is not None:
         return request.build_absolute_uri(path)
     return path
@@ -52,7 +99,7 @@ def send_invite_email(user, request=None) -> bool:
         return False
 
     uid = urlsafe_base64_encode(force_bytes(user.pk))
-    token = default_token_generator.make_token(user)
+    token = invite_token_generator.make_token(user)
 
     if request is not None:
         protocol = "https" if request.is_secure() else "http"

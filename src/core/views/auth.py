@@ -16,6 +16,7 @@ from django_ratelimit.decorators import ratelimit
 from core.models import AuditLog, User
 from core.services.audit import hmac_hash_email, log_audit_event
 from core.services.security import is_locked
+from core.services.security import invite_token_generator
 from core.services.security import unlock as unlock_user
 from core.signals.audit import get_client_ip
 
@@ -191,6 +192,17 @@ class CustomPasswordResetConfirmView(auth_views.PasswordResetConfirmView):
         if user is not None and getattr(user, "pk", None):
             unlock_user(user, unlocked_by=None, ip_address=None, trigger="password_reset")
         return response
+
+
+class InviteConfirmView(CustomPasswordResetConfirmView):
+    """Setup-Seite fuer Einladungen (L4, Refs #1375).
+
+    Identisch zum Passwort-Reset-Confirm (neues Passwort setzen + Lockout
+    aufheben), nutzt aber den entkoppelten ``invite_token_generator`` — Invite-
+    Tokens haben einen eigenen, laengeren Ablauf (``INVITE_TOKEN_TIMEOUT``) und
+    sind NICHT auf der Passwort-Reset-Route verwendbar (eigenes ``key_salt``)."""
+
+    token_generator = invite_token_generator
 
 
 class CustomPasswordChangeView(auth_views.PasswordChangeView):

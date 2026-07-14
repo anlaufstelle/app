@@ -39,6 +39,18 @@ AUDIT_HASH_KEY = os.environ.get("DJANGO_AUDIT_HASH_KEY", "")
 # Caller bekommen keine Recon-Details. Header: ``X-Health-Token``.
 HEALTH_DETAIL_TOKEN = os.environ.get("DJANGO_HEALTH_DETAIL_TOKEN", "")
 
+# L4 (Refs #1375): Passwort-Reset-Tokens kurzlebig halten. Der Django-Default
+# ist 3 Tage (259200 s) — fuer einen Reset-Link (starkes Recovery-Primitiv) zu
+# lang. Default hier 2 h; per ENV anpassbar. Invites sind davon ENTKOPPELT
+# (eigener Generator + INVITE_TOKEN_TIMEOUT), sonst wuerde der kurze Reset-Timeout
+# auch die Einladungs-Gueltigkeit verkuerzen.
+PASSWORD_RESET_TIMEOUT = int(os.environ.get("DJANGO_PASSWORD_RESET_TIMEOUT", str(2 * 60 * 60)))
+
+# L4 (Refs #1375): Getrennte Gueltigkeit fuer Einladungs-Setup-Links. Ein neu
+# eingeladener Mitarbeitender braucht realistisch Tage, um den Link zu oeffnen —
+# daher laenger als der Reset-Timeout. Default 3 Tage; per ENV anpassbar.
+INVITE_TOKEN_TIMEOUT = int(os.environ.get("DJANGO_INVITE_TOKEN_TIMEOUT", str(3 * 24 * 60 * 60)))
+
 # AGPL §13 (Refs #835): Quellcode-Link im Footer. Forks/Self-Hoster MUESSEN
 # SOURCE_CODE_URL auf ihren eigenen Quellcode-Spiegel zeigen lassen, sonst
 # liefert der Footer eine technisch falsche § 13-Network-Use-Disclosure.

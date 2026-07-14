@@ -25,7 +25,7 @@ Module:
   (``build_invite_url``, ``send_invite_email``).
 """
 
-from core.services.security.invite import build_invite_url, send_invite_email
+from core.services.security.invite import build_invite_url, invite_token_generator, send_invite_email
 from core.services.security.locking import check_version_conflict
 from core.services.security.lockout_recovery import (
     build_recovery_token,
@@ -73,6 +73,7 @@ __all__ = [
     "encrypt_totp_key",
     "enter_sudo",
     "generate_backup_codes",
+    "invite_token_generator",
     "is_encrypted_totp_key",
     "is_in_sudo",
     "is_locked",
