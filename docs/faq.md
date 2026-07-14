@@ -10,6 +10,7 @@ Sortiert nach Onboarding-Reihenfolge: Erstkonfiguration → Tägliche Arbeit →
 2. [Wie richte ich 2FA ein?](#2-wie-richte-ich-2fa-ein)
 3. [Authenticator-App zeigt „Code ungültig" — was tun?](#3-authenticator-app-zeigt-code-ungültig--was-tun)
 4. [Ich habe mein Handy verloren — wie komme ich wieder rein?](#4-ich-habe-mein-handy-verloren--wie-komme-ich-wieder-rein)
+4a. [Mein Konto ist nach mehreren Login-Fehlversuchen gesperrt — was tun?](#4a-mein-konto-ist-nach-mehreren-login-fehlversuchen-gesperrt--was-tun)
 
 **B. Tägliche Arbeit**
 5. [Wie funktioniert der Zeitstrom?](#5-wie-funktioniert-der-zeitstrom)
@@ -95,7 +96,7 @@ Wenn keine der Punkte hilft, wenden Sie sich an Ihren Administrator — fehlgesc
 
 ### 4a. Mein Konto ist nach mehreren Login-Fehlversuchen gesperrt — was tun?
 
-Nach **10 fehlgeschlagenen Anmeldungen** wird das Konto automatisch gesperrt (Schwelle in [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py), seit v0.10.1). Auch korrekte Eingaben funktionieren in der Sperrphase nicht — Sie sehen eine Hinweis-Seite.
+Nach **10 fehlgeschlagenen Anmeldungen** wird das Konto automatisch gesperrt (Schwelle in [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py), seit v0.10.1). Auch korrekte Eingaben funktionieren in der Sperrphase nicht — Sie sehen eine Hinweis-Seite.
 
 **Vorgehen:**
 
@@ -106,7 +107,7 @@ Nach **10 fehlgeschlagenen Anmeldungen** wird das Konto automatisch gesperrt (Sc
 **Hinweis für Admins:** Die `LOGIN_FAILED`-Einträge im AuditLog sind durch einen DB-Trigger (`auditlog_immutable`) unveränderbar — der Cleanup erfolgt deshalb über einen `LOGIN_UNLOCK`-Eintrag, nicht durch Löschen.
 
 **Relevante Dateien:**
-- [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py) — `is_locked()`, `unlock()`, Schwellenwert
+- [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py) — `is_locked()`, `unlock()`, Schwellenwert
 - [`src/core/views/account.py`](https://github.com/anlaufstelle/app/blob/main/src/core/views/account.py) — Lockout-Check beim Login
 
 ---
@@ -263,7 +264,7 @@ Die **Wiedervorlage** (Feld `remind_at`) ist ein **optionales Frühwarn-Datum**,
 
 ### 9. Wie lade ich eine Datei an ein Ereignis an?
 
-Beim Anlegen oder Bearbeiten eines Ereignisses gibt es ein **Datei-Upload-Feld**. Die Datei wird vor der Ablage automatisch per **ClamAV auf Viren geprüft** und anschließend **verschlüsselt gespeichert** (AES-GCM im Encrypted File Vault).
+Beim Anlegen oder Bearbeiten eines Ereignisses gibt es ein **Datei-Upload-Feld**. Die Datei wird vor der Ablage automatisch per **ClamAV auf Viren geprüft** und anschließend **verschlüsselt gespeichert** (Fernet/AES-128 im Encrypted File Vault).
 
 **Regeln auf einen Blick:**
 
@@ -271,7 +272,7 @@ Beim Anlegen oder Bearbeiten eines Ereignisses gibt es ein **Datei-Upload-Feld**
 |--------|------|
 | Maximale Dateigröße | Standard 10 MiB pro Datei (Admin kann erhöhen) |
 | Virenscan | ClamAV, automatisch vor der Speicherung |
-| Verschlüsselung | AES-GCM, Schlüssel in der Einrichtungs-Konfiguration |
+| Verschlüsselung | Fernet/AES-128, Schlüssel in der Einrichtungs-Konfiguration |
 | Offline-Modus | Datei-Anhänge sind offline nicht möglich |
 
 **Wenn der Upload abgelehnt wird:** Meldet das System die Datei als infiziert, ist sie mit hoher Wahrscheinlichkeit tatsächlich befallen — **nicht einfach erneut hochladen**. Informieren Sie Ihre IT/Administration und entfernen Sie die Datei aus Ihrem Arbeitsordner.
@@ -621,5 +622,5 @@ So gehen weder Ihre noch die parallelen Änderungen verloren.
 
 ---
 
-*Konsolidiert aus #105, #429, #471, #506. Alle Inhalte am 29.04.2026 gegen den Code verifiziert (v0.10.2). v0.10.0-Ergänzungen (#589): File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking. Ergänzung 25.04.2026: WorkItem-Hinweis-vs-Aufgabe und Wiedervorlage (FAQ #7, #8). Ergänzung 29.04.2026 (#703): MFA-Backup-Codes als Self-Service-Recovery (FAQ #4) und Account-Lockout nach 10 Fehlversuchen (FAQ #4a) — beide seit v0.10.1.*
+*Konsolidiert aus #105, #429, #471, #506. Erstverifikation der Inhalte am 29.04.2026 gegen v0.10.2. v0.10.0-Ergänzungen (#589): File Vault, Offline-Modus, Fuzzy Search, Quick-Templates, Optimistic Locking. Ergänzung 25.04.2026: WorkItem-Hinweis-vs-Aufgabe und Wiedervorlage (FAQ #7, #8). Ergänzung 29.04.2026 (#703): MFA-Backup-Codes als Self-Service-Recovery (FAQ #4) und Account-Lockout nach 10 Fehlversuchen (FAQ #4a) — beide seit v0.10.1. Die Krypto-, Lockout- und Offline-Angaben wurden am 2026-07-13 im Doku-Review gegen den Code nachgeprüft (Refs #1551).*
 

@@ -73,7 +73,9 @@
 
 ## Konkrete Sofortkorrekturen
 
-Die folgenden Stellen sind per `grep` verifiziert und kommen in einem eigenen Refactor-Sweep dran:
+> **Stand 2026-07-13:** Der _Klientel → Person_-Sweep in UI-Templates, View-Texten und Handbuch ist umgesetzt — `grep -r "Klientel"` über die unten gelisteten Templates, [`src/core/views/clients.py`](../src/core/views/clients.py) und [`docs/user-guide.md`](user-guide.md) liefert 0 Treffer; auch _obdachlos_ ist in [`seed.py`](../src/core/management/commands/seed.py) nicht mehr enthalten. Rest: In [`django.po`](../src/locale/de/LC_MESSAGES/django.po) stehen noch vereinzelte `msgstr "Klientel …"`-Strings zu inzwischen obsoleten bzw. nur noch in alten Migrationen eingefrorenen `msgid`s; diese werden beim nächsten `makemessages`-Lauf neu erzeugt.
+
+Die folgenden Stellen wurden für den Refactor-Sweep per `grep` identifiziert:
 
 **UI-Templates:**
 

@@ -34,7 +34,7 @@ Version: 1.7
 5. [Nutzungsperspektive & Praxisszenarien](#5-nutzungsperspektive--praxisszenarien)
 6. [Fachliche Kernkonzepte](#6-fachliche-kernkonzepte)
 7. [Modulstruktur](#7-modulstruktur)
-8. [Phasenplan](#8-phasenplan)
+8. [Aktueller Stand und Roadmap](#8-aktueller-stand-und-roadmap)
 
 **Teil II: Architektur & Domäne**
 
@@ -503,6 +503,9 @@ Anlaufstelle v1.0 umfasst:
 - Feldverschlüsselung (Fernet/AES) mit Key-Rotation
 - Audit-Trail, Löschfristen, 4-Augen-Löschprinzip
 - PWA, Mobile-first, Docker-Deployment
+- Falllogik: Fälle eröffnen/schließen, Episoden, Zuständigkeiten
+- Wirkungsmessung: Ziele, Meilensteine und Outcomes pro Fall
+- DSGVO-Dokumentationspaket: Verarbeitungsverzeichnis, DSFA, AV-Vertrag, TOMs und Informationspflichten als Vorlagen ([`src/core/dsgvo_templates/`](../src/core/dsgvo_templates/))
 
 Für den vollständigen Implementierungsstand siehe [CHANGELOG](../CHANGELOG.md).
 
@@ -510,14 +513,11 @@ Für den vollständigen Implementierungsstand siehe [CHANGELOG](../CHANGELOG.md)
 
 | Thema | Beschreibung | Priorität |
 |-------|-------------|-----------|
-| Falllogik | Fälle eröffnen/schließen, Episoden, Zuständigkeiten | Hoch |
 | KDS-Export | Aggregat-Export gemäß KDS 3.0 für Suchthilfestatistik | Hoch |
 | Betroffenenrechte | Self-Service für Auskunft, Berichtigung, Löschung, Portabilität | Hoch |
-| DSGVO-Dokumentationspaket | Verarbeitungsverzeichnis, DSFA, AV-Vertrag als Vorlagen | Mittel |
 | REST-API | Authentifizierte API mit Facility-Scoping | Mittel |
 | Import-Werkzeuge | CSV-Import für Datenmigration | Mittel |
 | Domänenbibliotheken | Installierbare Seed-Pakete für verschiedene Einrichtungstypen | Niedrig |
-| Wirkungsmessung | Ziele, Meilensteine, Outcomes pro Fall | Niedrig |
 
 ---
 
@@ -1073,7 +1073,7 @@ Anlaufstelle ist als PWA umgesetzt, nicht als native App. Die Begründung:
 
 ### Offline-Fähigkeit: Abgestuft (Streetwork-Modus M6A)
 
-Volle Offline-Synchronisation (wie bei CouchDB-basierten Systemen) ist mit Django + HTMX nicht realistisch und für die Zielgruppe überdimensioniert. Stattdessen ein abgestufter Ansatz, der seit Release v0.10 (April 2026) als Streetwork-Modus M6A produktiv zur Verfügung steht und aktuell in Produktion eingesetzt wird:
+Volle Offline-Synchronisation (wie bei CouchDB-basierten Systemen) ist mit Django + HTMX nicht realistisch und für die Zielgruppe überdimensioniert. Stattdessen ein abgestufter Ansatz, der seit Release v0.10 (April 2026) als Streetwork-Modus M6A zur Verfügung steht; die produktive Nutzung ist als Pre-Release noch nicht freigegeben (vgl. [README](../README.md)) — die einzigen laufenden Instanzen sind dev und demo:
 
 **Stufe 1 — Write-Queue für offline erfasste Ereignisse (implementiert).**
 - Schnellerfassung und Ereigniserfassung schreiben bei Netzausfall in eine lokale Write-Queue im Browser (IndexedDB, verschlüsselt).
@@ -1148,7 +1148,7 @@ Ergänzend zur Datenschutz-Architektur im Hauptdokument:
 - **Abhängigkeiten.** Automatische Schwachstellen-Prüfung mit `pip-audit` und `npm audit` in der CI-Pipeline.
 - **Rate-Limiting.** Login-Versuche: Maximal 5 pro Minute pro IP. API-Requests: Maximal 100 pro Minute pro authentifiziertem Nutzer.
 - **Zwei-Faktor-Authentifizierung (TOTP).** Nutzer:innen können einen zweiten Faktor auf Basis zeitbasierter Einmalpasswörter (TOTP, RFC 6238) einrichten. 2FA lässt sich wahlweise pro Nutzer:in aktivieren oder facility-weit erzwingen; im letzteren Fall wird der Login ohne eingerichteten zweiten Faktor zur Einrichtung zwangsweise umgeleitet. Recovery erfolgt über Einmal-Wiederherstellungscodes.
-- **Encrypted File Vault.** Hochgeladene Datei-Anhänge werden serverseitig mit AES-GCM verschlüsselt abgelegt; Klartext-Dateien liegen zu keinem Zeitpunkt auf dem Dateisystem. Jeder Upload durchläuft ein **ClamAV-Malware-Scanning fail-closed**: Solange der Scanner keine saubere Rückmeldung liefert, wird die Datei nicht freigegeben; Scanner-Ausfälle führen zur Ablehnung, nicht zur Annahme.
+- **Encrypted File Vault.** Hochgeladene Datei-Anhänge werden serverseitig mit Fernet (AES-128) verschlüsselt abgelegt; Klartext-Dateien liegen zu keinem Zeitpunkt auf dem Dateisystem. Jeder Upload durchläuft ein **ClamAV-Malware-Scanning fail-closed**: Solange der Scanner keine saubere Rückmeldung liefert, wird die Datei nicht freigegeben; Scanner-Ausfälle führen zur Ablehnung, nicht zur Annahme.
 - **Row Level Security (RLS).** Als Defense-in-Depth ergänzend zum applikationsseitigen Facility-Scoping sind 18 facility-gescoppte Tabellen mit PostgreSQL-RLS-Policies abgesichert. Die Policies werten die Session-Variable `app.current_facility_id` aus, die pro Request auf die Facility der authentifizierten Nutzer:in gesetzt wird. Ein Fehler im Applikationscode kann dadurch nicht zu Cross-Facility-Datenleaks führen.
 - **Optimistic Locking.** Zentrale Fachentitäten (Client, Case, WorkItem, Settings, Event) tragen eine Versions- bzw. Zeitstempelspalte. Beim Speichern wird geprüft, ob der geladene Stand noch aktuell ist; bei gleichzeitiger Bearbeitung entsteht ein sichtbarer Konflikt statt eines stillen Überschreibens. Diese Integritätsmaßnahme ist auch die Grundlage der Side-by-Side-Konfliktauflösung im Streetwork-Offline-Modus (§ 16).
 

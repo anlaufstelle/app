@@ -53,4 +53,4 @@ Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, s
 <!-- translation-source: docs/datenschutz.md -->
 <!-- translation-version: v0.20.0 -->
 <!-- translation-date: 2026-06-14 -->
-<!-- source-hash: b7ccb0c -->
+<!-- source-hash: c47b946 -->

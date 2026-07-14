@@ -137,4 +137,4 @@ Release v0.10.0 (2026-04-19) extends the domain concept with several capabilitie
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
 <!-- translation-version: v0.20.0 -->
 <!-- translation-date: 2026-06-12 -->
-<!-- source-hash: 4ff5296 -->
+<!-- source-hash: 9575af2 -->
