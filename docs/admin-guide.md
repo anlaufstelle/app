@@ -1008,7 +1008,7 @@ Das Management-Kommando `detect_breaches` wertet das Audit-Log heuristisch auf A
   >> /var/log/anlaufstelle-breach.log 2>&1
 ```
 
-> **Hinweis:** Die vollständige, autoritative Liste aller Hintergrundjobs samt Zeitplan (Backup, Retention, Audit-Ketten-Verifikation, Statistik-Snapshots, Breach-Scan, View-Refresh) steht im [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs). Beim empfohlenen systemd-Timer-Setup werden diese Jobs zentral über `dev-ops/deploy/install-timers.sh` installiert (der Breach-Scan läuft dort als `anlaufstelle-breach.timer`, ebenfalls stündlich zur 30. Minute).
+> **Hinweis:** Die vollständige, autoritative Liste aller Hintergrundjobs samt Zeitplan (Backup, Retention, Audit-Ketten-Verifikation, Statistik-Snapshots, Orphan-Cleanup, Breach-Scan, View-Refresh) steht im [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs). Beim empfohlenen systemd-Timer-Setup werden diese Jobs zentral über `dev-ops/deploy/install-timers.sh` installiert (der Breach-Scan läuft dort als `anlaufstelle-breach.timer`, ebenfalls stündlich zur 30. Minute).
 
 ---
 
