@@ -247,4 +247,7 @@ def test_client_admin_change_is_read_only(page: Page, base_url: str) -> None:
     page.wait_for_load_state("domcontentloaded")
     assert response is not None and response.status == 200
     # Read-Only: kein Speichern-Button in der Submit-Row.
-    assert page.locator("input[name='_save']").count() == 0
+    # Unfold rendert den ``_save``-Button als <button name="_save"> (nie als
+    # <input>); daher elementtyp-agnostisch per Attribut selektieren, sonst
+    # matcht der Selektor nie und die Assertion bleibt trivial gruen.
+    assert page.locator("[name='_save']").count() == 0
