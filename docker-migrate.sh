@@ -32,6 +32,21 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "anlaufstelle.settings.prod")
 django.setup()
 from django.db import connection
 
+from core.management.commands.check_db_roles import current_connection_bypasses_rls
+
+# L10 (Refs #1375): Laufzeit-Assertion auf DIESE Migrate-Connection. check_db_roles
+# prueft nur, DASS die Rollen mit den richtigen Attributen existieren — nicht, dass
+# der Migrate-Job selbst als BYPASSRLS-Admin verbindet (POSTGRES_USER-Override,
+# Refs #863). Laeuft er versehentlich als NOBYPASSRLS-App-Rolle, uebersehen
+# Daten-Migrationen unter RLS Zeilen und normalize_db_ownership (REASSIGN OWNED)
+# schlaegt fehl -> fail-fast, bevor neue Web-Replicas live gehen.
+if not current_connection_bypasses_rls():
+    sys.stderr.write(
+        "FATAL: Migrate-Connection umgeht RLS nicht (weder Superuser noch BYPASSRLS) "
+        "— falscher POSTGRES_USER? (Refs #1375 L10/#863) — Deploy abgebrochen.\n"
+    )
+    sys.exit(1)
+
 # Refs #1002: Rollen-Gate VOR dem Lock — read-only pg_roles-Query, kein
 # Lock noetig. Schlaegt fail-fast fehl, bevor neue Web-Replicas live gehen.
 roles = subprocess.run([sys.executable, "manage.py", "check_db_roles"])

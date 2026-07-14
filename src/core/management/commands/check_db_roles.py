@@ -78,6 +78,29 @@ def _query_role(role: str) -> tuple[bool | None, bool | None]:
     return bool(row[0]), bool(row[1])
 
 
+def current_connection_bypasses_rls() -> bool:
+    """True, wenn die AKTUELLE DB-Connection Row Level Security umgeht.
+
+    L10 (Refs #1375): :func:`check_db_roles` prueft nur, DASS App-/Admin-Rolle
+    mit den richtigen Attributen in ``pg_roles`` existieren — NICHT, dass der
+    laufende Migrate-Job selbst als der BYPASSRLS-Admin verbindet. Diese
+    Laufzeit-Assertion (via ``docker-migrate.sh``) schliesst die Luecke: laeuft
+    der Migrate versehentlich als die NOBYPASSRLS-App-Rolle, uebersehen
+    Daten-Migrationen unter RLS Zeilen und ``normalize_db_ownership``
+    (``REASSIGN OWNED``) schlaegt fehl — beides soll fail-fast abbrechen, bevor
+    neue Web-Replicas live gehen.
+
+    "Umgeht RLS" = Superuser ODER ``rolbypassrls`` — ein Superuser umgeht RLS
+    per Definition, auch wenn das ``rolbypassrls``-Attribut im Katalog false ist.
+    """
+    with connection.cursor() as cur:
+        cur.execute("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+        row = cur.fetchone()
+    if not row:
+        return False
+    return bool(row[0]) or bool(row[1])
+
+
 def check_db_roles() -> tuple[list[RoleCheck], list[str]]:
     """Fuehre den Rollencheck aus.
 
