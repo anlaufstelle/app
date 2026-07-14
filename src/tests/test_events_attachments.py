@@ -16,10 +16,13 @@ from core.services.events import (
 class TestEventAttachmentAtomicity:
     """Event + Attachment müssen atomar angelegt werden (Refs #584, Refs #591 WP2).
 
-    Scheitert der Attachment-Teil (Virus-Scan, Fernet, Disk, DB-Save), muss die
+    Scheitert der Attachment-Teil (DB-Insert des ``EventAttachment``), muss die
     Event-Row zurückgerollt werden — sonst verweist die DB auf einen Anhang,
     der nie persistiert wurde. Der View-Layer umschließt ``create_event()`` +
-    ``store_encrypted_file()`` bewusst mit ``transaction.atomic()``.
+    ``finalize_staged_files()`` bewusst mit ``transaction.atomic()``. Refs #1345:
+    Scan + Fernet-Encrypt (``prepare_encrypted_upload``) laufen bewusst VOR der
+    Transaktion; im ``atomic`` faellt nur noch der schnelle DB-Write an
+    (``commit_staged_upload``) — genau dessen Scheitern testet dieser Fall.
     """
 
     @pytest.fixture
@@ -41,12 +44,13 @@ class TestEventAttachmentAtomicity:
         return dt
 
     def test_attachment_store_failure_rolls_back_event_creation(self, client, staff_user, facility, doc_type_with_file):
-        """Wenn ``store_encrypted_file`` fehlschlägt, darf kein Event bestehen bleiben.
+        """Wenn ``commit_staged_upload`` fehlschlägt, darf kein Event bestehen bleiben.
 
-        Der View legt das Event zuerst per ``create_event()`` an und ruft erst
-        danach ``store_encrypted_file()``. Beide Aufrufe laufen innerhalb eines
-        gemeinsamen ``transaction.atomic()``-Blocks — ein Fehler im zweiten
-        Schritt muss den ersten rückgängig machen.
+        Der View legt das Event zuerst per ``create_event()`` an und persistiert
+        erst danach die vorab verschlüsselten Dateien per
+        ``finalize_staged_files()`` -> ``commit_staged_upload()``. Beide Aufrufe
+        laufen innerhalb eines gemeinsamen ``transaction.atomic()``-Blocks — ein
+        Fehler im zweiten Schritt muss den ersten rückgängig machen (Refs #1345).
         """
         from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -65,15 +69,15 @@ class TestEventAttachmentAtomicity:
         )
         uploaded = SimpleUploadedFile("test.pdf", pdf_bytes, content_type="application/pdf")
 
-        # ``store_encrypted_file`` wird jetzt aus ``core.services.events.
-        # attach_files_to_new_event`` heraus gerufen — den Lazy-Import-Alias
-        # in dem Service-Modul patchen, damit der Mock greift.
+        # Refs #1345: ``commit_staged_upload`` wird aus ``core.services.events.
+        # finalize_staged_files`` per Lazy-Import gerufen — den Alias im
+        # ``file_vault``-Package patchen, damit der Mock zur Aufrufzeit greift.
         with (
             patch(
-                "core.services.file_vault.store_encrypted_file",
-                side_effect=RuntimeError("Simulierter Fernet-Fail"),
+                "core.services.file_vault.commit_staged_upload",
+                side_effect=RuntimeError("Simulierter DB-Insert-Fail"),
             ),
-            pytest.raises(RuntimeError, match="Simulierter Fernet-Fail"),
+            pytest.raises(RuntimeError, match="Simulierter DB-Insert-Fail"),
         ):
             client.post(
                 reverse("core:event_create"),

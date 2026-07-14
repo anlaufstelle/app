@@ -30,13 +30,13 @@ from core.services.dashboard import (
 )
 from core.services.events import (
     apply_attachment_changes,
-    attach_files_to_new_event,
     build_attachment_context,
     build_event_detail_context,
     build_tally_summary,
     create_event,
     decrypt_event_text_data,
     filtered_server_data_json,
+    finalize_staged_files,
     get_idempotent_result,
     merge_update_payload,
     normalize_idempotency_key,
@@ -49,6 +49,7 @@ from core.services.events import (
     split_file_and_text_data,
     update_event,
 )
+from core.services.file_vault import prepare_encrypted_upload
 from core.views._json_contracts import (
     _conflict_response,
     _idempotency_mismatch_response,
@@ -303,10 +304,48 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
 
         file_fields, text_data = split_file_and_text_data(data_form.cleaned_data)
 
-        # Event + Dateianhänge atomar: scheitert die File-Verschlüsselung
-        # (Virus, Disk, Fernet), rollt die Transaktion auch das Event zurück
-        # — sonst verweist die DB auf einen Anhang, der nie persistiert
-        # wurde (Refs #584).
+        # Refs #1345: ClamAV-Scan + Fernet-Verschluesselung VOR die Transaktion
+        # ziehen. ``create_event`` schreibt eine AuditLog-Zeile, deren INSERT den
+        # per-Facility ``pg_advisory_xact_lock`` der Hashkette bis zum Commit der
+        # aeusseren Transaktion haelt. Lag die (bis CLAMAV_TIMEOUT dauernde)
+        # Datei-Verarbeitung mit im selben ``atomic``, blockierte sie jede andere
+        # audit-schreibende Aktion derselben Facility. Wir stagen deshalb hier
+        # (event=None: das Event existiert noch nicht) und persistieren die
+        # fertig verschluesselten Dateien erst im schnellen atomic-Block unten.
+        staged_all = []
+        staged_by_slug: dict[str, list] = {}
+        try:
+            for slug, uploaded_list in file_fields.items():
+                prepared = []
+                for uploaded_file in uploaded_list or []:
+                    staged = prepare_encrypted_upload(facility, uploaded_file, request.user, event=None)
+                    staged_all.append(staged)
+                    prepared.append(staged)
+                if prepared:
+                    staged_by_slug[slug] = prepared
+        except ValidationError as e:
+            # Policy-/Virus-Reject VOR der Transaktion. Der zugehoerige
+            # SECURITY_VIOLATION-Audit wurde bereits (durable) geschrieben und
+            # ueberlebt jetzt bewusst (Refs #1345) — er rollt nicht mehr mit dem
+            # Event zurueck. Bereits gestagte ``.enc`` wieder entfernen.
+            for staged in staged_all:
+                staged.output_path.unlink(missing_ok=True)
+            meta_form.add_error(None, e.message)
+            if _wants_raw_json_response(request):
+                return _invalid_form_response(meta_form)
+            return render(
+                request,
+                "core/events/create.html",
+                {"meta_form": meta_form, "data_form": data_form},
+            )
+
+        # Event + Dateianhänge atomar: scheitert der (jetzt schnelle) DB-Write,
+        # rollt die Transaktion auch das Event zurück — sonst verweist die DB auf
+        # einen Anhang, der nie persistiert wurde (Refs #584). Refs #1345: Wird
+        # die Transaktion NICHT committed (jede Exception, auch ein Duplikat-
+        # Replay-Redirect), sind die vorab verschluesselten ``.enc`` verwaiste
+        # Disk-Leichen — das ``finally`` unten entfernt sie dann restlos.
+        committed = False
         try:
             with transaction.atomic():
                 event = create_event(
@@ -319,7 +358,8 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                     case=case,
                     idempotency_key=idem_key,
                 )
-                attach_files_to_new_event(event, request.user, file_fields, doc_type)
+                finalize_staged_files(event, request.user, staged_by_slug, doc_type)
+            committed = True
         except ValidationError as e:
             meta_form.add_error(None, e.message)
             # Refs #1351 Task 8, #1387: analog zu den beiden Formular-Zweigen
@@ -341,7 +381,9 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
             # — ein fachfremder IntegrityError im selben Replay-Request wuerde
             # sonst faelschlich als Duplikat maskiert, sobald zufaellig eine
             # passende Key-Zeile existiert (Refs #1443). Dann auf das Original
-            # umleiten statt 500; jeden anderen IntegrityError re-raisen.
+            # umleiten statt 500; jeden anderen IntegrityError re-raisen. Der
+            # Duplikat-Replay verweist auf das Original-Event; die frisch
+            # verschluesselten ``.enc`` raeumt das ``finally`` unten auf (#1345).
             if idem_key and "idem_key_per_user_uniq" in str(exc):
                 existing = (
                     Event.objects.for_facility(facility)
@@ -351,6 +393,14 @@ class EventCreateView(AssistantOrAboveRequiredMixin, View):
                 if existing:
                     return redirect("core:event_detail", pk=existing.pk)
             raise
+        finally:
+            # Refs #1345: JEDE Nicht-Commit-Ausgang (Rollback, Duplikat-Redirect,
+            # unerwartete Exception) laesst die pre-tx verschluesselten ``.enc``
+            # verwaisen — restlos entfernen. Bei erfolgreichem Commit sind sie
+            # ueber gueltige ``EventAttachment``-Zeilen erreichbar und bleiben.
+            if not committed:
+                for staged in staged_all:
+                    staged.output_path.unlink(missing_ok=True)
 
         # Erfolgreich angelegt → Ergebnis unter dem Idempotenz-Schlüssel merken,
         # damit ein späterer Replay (F-09) hier oben kurzschließt statt ein

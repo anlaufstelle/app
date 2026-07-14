@@ -29,9 +29,9 @@ from core.services.events.context import (
 )
 from core.services.events.crud import (
     apply_attachment_changes,
-    attach_files_to_new_event,
     create_event,
     decrypt_event_text_data,
+    finalize_staged_files,
     merge_update_payload,
     soft_delete_event,
     update_event,
@@ -90,7 +90,6 @@ __all__ = [
     "_validate_data_json",
     "apply_attachment_changes",
     "approve_deletion",
-    "attach_files_to_new_event",
     "build_attachment_context",
     "build_event_detail_context",
     "build_feed_items",
@@ -102,6 +101,7 @@ __all__ = [
     "create_event",
     "decrypt_event_text_data",
     "enrich_events_with_preview",
+    "finalize_staged_files",
     "filtered_server_data_json",
     "get_idempotent_result",
     "get_time_range",

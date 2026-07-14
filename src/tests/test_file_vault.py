@@ -747,18 +747,29 @@ class TestEventAttachmentAtomicity:
     """
 
     def test_create_rolls_back_event_when_file_store_fails(self, client, staff_user, facility, doc_type_with_file):
-        """Virus/Upload-Fehler im Create-Pfad rollt das Event zurück."""
+        """Virus/Upload-Fehler im Create-Pfad legt kein Event an.
+
+        Refs #1345: Der Create-Pfad zieht Scan + Verschlüsselung als
+        ``prepare_encrypted_upload`` VOR die ``transaction.atomic()`` (der
+        AuditLog-Advisory-Lock soll nicht über den Scan gehalten werden). Ein
+        Virus-/Policy-Reject scheitert daher, BEVOR ``create_event`` läuft — es
+        entsteht gar kein Event, das zurückgerollt werden müsste. Wir mocken
+        genau diese pre-tx Stufe (unter dem Namen, unter dem der View sie
+        importiert) mit einem gültigen PDF-Upload, damit der Reject
+        nachweislich aus dem Mock und nicht aus einer beiläufig fehlgeschlagenen
+        Magic-Bytes-Prüfung stammt.
+        """
         dt, _, _ = doc_type_with_file
         Settings.objects.get_or_create(facility=facility)
 
         client.force_login(staff_user)
-        uploaded = SimpleUploadedFile("infected.pdf", b"X", content_type="application/pdf")
+        uploaded = SimpleUploadedFile("infected.pdf", PDF_HEADER, content_type="application/pdf")
 
         events_before = Event.objects.count()
         attachments_before = EventAttachment.objects.count()
 
         with patch(
-            "core.services.file_vault.store_encrypted_file",
+            "core.views.events.prepare_encrypted_upload",
             side_effect=ValidationError("virus"),
         ):
             response = client.post(

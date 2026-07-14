@@ -1,7 +1,7 @@
 """Event-CRUD-Pfade (Refs #777).
 
 ``create_event``, ``update_event``, ``soft_delete_event`` plus die
-Attachment-Schreiber ``attach_files_to_new_event`` und
+Attachment-Schreiber ``finalize_staged_files`` (Refs #1345) und
 ``apply_attachment_changes``. Alles, was ein Event oder seine Anhaenge
 mutiert, lebt hier.
 
@@ -30,25 +30,31 @@ from core.services.events.fields import (
 from core.services.file_vault import delete_event_attachments
 
 
-def attach_files_to_new_event(event, user, file_fields, document_type):
-    """Speichere File-Uploads fuer ein frisch erzeugtes Event.
+def finalize_staged_files(event, user, staged_by_slug, document_type):
+    """Persistiere vor-verschluesselte Uploads an ein frisch erzeugtes Event.
 
-    Erwartet die UploadedFile-Listen aus :func:`split_file_and_text_data` und
-    erzeugt pro Slug einen Stufe-B-Marker (``__files__``). Der Aufrufer ist
-    fuer den umliegenden ``transaction.atomic``-Block zustaendig (Refs #584).
+    Refs #1345: Der teure ClamAV-Scan + Fernet-Encrypt laeuft bereits VOR der
+    Transaktion (``prepare_encrypted_upload``); hier wird pro Slug nur noch der
+    schnelle DB-Insert (``commit_staged_upload``) plus der Stufe-B-Marker
+    (``__files__``) geschrieben. Dadurch haelt der AuditLog-Hashchain-Advisory-
+    Lock (aus ``create_event``) nicht mehr ueber den Scan. Der Aufrufer ist fuer
+    den umliegenden ``transaction.atomic``-Block zustaendig (Refs #584).
+
+    ``staged_by_slug`` ist ein ``{slug: [StagedUpload, ...]}``-Dict in
+    Upload-Reihenfolge (siehe ``EventCreateView.post``).
     """
-    from core.services.file_vault import store_encrypted_file
+    from core.services.file_vault import commit_staged_upload
 
-    if not file_fields:
+    if not staged_by_slug:
         return
     field_templates = build_field_template_lookup(document_type)
-    for slug, uploaded_list in file_fields.items():
+    for slug, staged_list in staged_by_slug.items():
         ft = field_templates.get(slug)
-        if not ft or not uploaded_list:
+        if not ft or not staged_list:
             continue
         entries = []
-        for idx, uploaded_file in enumerate(uploaded_list):
-            attachment = store_encrypted_file(event.facility, uploaded_file, ft, event, user, sort_order=idx)
+        for idx, staged in enumerate(staged_list):
+            attachment = commit_staged_upload(event, ft, staged, user, sort_order=idx)
             entries.append({"id": str(attachment.pk), "sort": idx})
         event.data_json[slug] = {"__files__": True, "entries": entries}
     event.save(update_fields=["data_json"])
