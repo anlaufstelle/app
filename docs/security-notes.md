@@ -608,6 +608,24 @@ Pro FK besteht die Migration aus einem DROP-RunSQL (löscht den ursprünglichen 
 
 ---
 
+## Passkeys/WebAuthn als zweiter Faktor — Glue-Härtung (Issue #1492)
+
+Passkeys werden über [`django-otp-webauthn`](https://github.com/Stormbase/django-otp-webauthn) als **zusätzlicher** zweiter Faktor neben TOTP angeboten (siehe [ADR-032](adr/032-webauthn-passkeys-2fa.md)). Drei bewusst gesetzte Härtungen:
+
+- **Nur zweiter Faktor, kein passwordless:** `OTP_WEBAUTHN_ALLOW_PASSWORDLESS_LOGIN = False`, `WebAuthnBackend` **nicht** in `AUTHENTICATION_BACKENDS`. Die Ceremonies laufen ausschließlich in einer bereits per Passwort authentifizierten Session — ein Passkey allein loggt niemanden ein.
+- **`mfa_verified`-Glue ist der kritische Punkt:** Unser `MFAEnforcementMiddleware` gated über das Session-Flag `mfa_verified`; die Bibliothek markiert nur über django-otps `otp_login`. Die Subklassen in [`src/core/views/mfa_webauthn.py`](../src/core/views/mfa_webauthn.py) setzen das Flag **ausschließlich** nach erfolgreicher Assertion/Registrierung (`complete_auth` bzw. `post`-2xx). Ein Fehlschlag lässt das Flag unberührt — sonst entstünde ein Verify-Bypass. Positiv- **und** Negativpfad sind getestet ([`src/tests/test_mfa_webauthn.py`](../src/tests/test_mfa_webauthn.py) `TestMfaVerifiedGlue`).
+- **Passkey nur NEBEN TOTP (Downgrade-Schutz + Recovery-Anker):** Die Registrierung verlangt ein bestätigtes TOTP-Gerät (`check_can_register`). Damit existieren immer Backup-Codes (an der TOTP-Einrichtung provisioniert), kein „passkey-only"-Lockout ist möglich, und das Entfernen eines Passkeys (sudo-pflichtig, `MFAPasskeyDeleteView`) lässt stets TOTP + Backup-Codes zurück.
+
+**Umgebungsbindung:** Passkeys sind an die RP-ID (Registrable Domain) gebunden. RP-ID/Origins werden pro Umgebung gesetzt (dev/test/e2e → `localhost`; prod/devlive/demo → aus `ALLOWED_HOSTS` abgeleitet). Eine spätere RP-ID-Änderung entwertet bestehende Credentials — Nutzer müssten neu registrieren.
+
+### Verifikation
+
+- Glue + Guard + Sudo-Entfernen + Prädikat: [`src/tests/test_mfa_webauthn.py`](../src/tests/test_mfa_webauthn.py)
+- AuthZ-Deklaration der neuen Endpoints (Vollständigkeits-Gate): [`src/tests/_authz_expectations.py`](../src/tests/_authz_expectations.py)
+- E2E gegen Chrome-Virtual-Authenticator: [`src/tests/e2e/test_mfa_webauthn.py`](../src/tests/e2e/test_mfa_webauthn.py)
+
+---
+
 ## Weitere Einstiegspunkte
 
 - [CONTRIBUTING.md § Facility-Scoping & Row Level Security](../CONTRIBUTING.md#facility-scoping--row-level-security)

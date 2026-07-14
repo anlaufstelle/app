@@ -844,5 +844,5 @@ Each episode shows its status:
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.20.0 -->
 <!-- translation-date: 2026-06-12 -->
-<!-- source-hash: d7e08c9 -->
+<!-- source-hash: 9d156be -->
 

@@ -86,6 +86,18 @@ Bei der 2FA-Einrichtung erhalten Sie **10 einmalig nutzbare Backup-Codes**. Bewa
 
 > **Alle Codes verbraucht oder verloren?** Wenden Sie sich an Ihre Administration — sie kann Ihr TOTP-Gerät zurücksetzen, danach richten Sie 2FA und neue Backup-Codes ein.
 
+**Passkey / Sicherheitsschlüssel (optional, zusätzlich zur Authenticator-App):**
+
+Ergänzend zur Authenticator-App können Sie einen **Passkey** als zweiten Faktor hinterlegen — z. B. die Biometrie Ihres Geräts (Fingerabdruck/Gesicht), ein Smartphone oder einen USB-Sicherheitsschlüssel (FIDO2). Ein Passkey ist phishing-resistent, weil er an die Adresse der Anwendung gebunden ist.
+
+1. Richten Sie **zuerst** die Authenticator-App (TOTP) ein — ein Passkey ist nur **zusätzlich** dazu möglich. So bleiben Ihre Backup-Codes der Wiederherstellungspfad, falls ein Passkey verloren geht.
+2. Unter `/mfa/settings/` im Abschnitt **Passkeys** auf **Passkey hinzufügen** klicken und den Anweisungen des Browsers folgen.
+3. Sie können mehrere Passkeys registrieren (z. B. Laptop und Smartphone) und einzelne wieder **entfernen** (verlangt eine erneute Bestätigung Ihres Passworts/2FA).
+
+Beim Login bietet die 2FA-Seite dann **Mit Passkey anmelden** an — alternativ nutzen Sie weiterhin die Authenticator-App oder einen Backup-Code.
+
+> **Hinweis:** Passkeys sind an die Web-Adresse gebunden. Ein auf `dev.anlaufstelle.app` registrierter Passkey funktioniert nicht auf einer anderen Adresse — registrieren Sie ihn dort, wo Sie die Anwendung tatsächlich nutzen.
+
 ### Abmelden
 
 Klicken Sie oben rechts auf **Abmelden**. Aus Datenschutzgründen werden Sie nach einer konfigurierten Inaktivitätszeit automatisch abgemeldet (Standard: 30 Minuten).

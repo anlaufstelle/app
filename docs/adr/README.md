@@ -62,6 +62,8 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-028](028-demo-release-versioning.md) | Demo-Instanz läuft nur auf getaggtem Release | Accepted |
 | [ADR-029](029-local-only-ci.md) | Quality-Gates lokal-only durchgesetzt (Dev-CI bewusst deaktiviert) | Accepted |
 | [ADR-030](030-offline-sync-orchestration-replay-contract.md) | Offline-Sync-Orchestrierung, Replay-Contract & Dead-Letter-Semantik | Accepted |
+| [ADR-031](031-totp-secret-at-rest.md) | TOTP-Secret at rest verschlüsselt (Proxy-Modell) | Accepted |
+| [ADR-032](032-webauthn-passkeys-2fa.md) | Passkeys/WebAuthn als zusätzlicher zweiter Faktor (neben TOTP) | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
