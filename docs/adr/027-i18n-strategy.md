@@ -18,9 +18,11 @@ Anlaufstelle ist deutsch-first (Zielgruppe: deutsche Träger und Beratungsstelle
 
 **Langform-Doku** (die 8 Dateien in `TRANSLATED_FILES`: `README.en.md`, `CONTRIBUTING.en.md`, `docs/en/*`) trägt zwei HTML-Kommentar-Header: `<!-- translation-source: … -->` und `<!-- translation-version: vX.Y.Z -->`. [`scripts/check_translation_versions.py`](../../scripts/check_translation_versions.py) prüft den Versions-Marker gegen `pyproject.toml`. **Hartes Release-Gate seit 2026-06-12 (#1078): `MAX_MINOR_BEHIND = 0`** — jede EN-Doku muss dem aktuellen *Minor* entsprechen (Patch toleriert); EN darf DE nie um einen Minor-Release hinterherhängen. „Ahead-of-source" und Major-Mismatch fallen ebenfalls.
 
-**Sync-Zeitpunkt folgt aus dem Gate:** weil der Marker dem Release-Minor gleichen muss, wird die EN-Aktualisierung **mit** dem Version-Bump-Commit ausgeliefert (siehe `docs/release-checklist.md`, dev-intern), nicht als nachgelagerter Follow-up. (Das ist die Antwort auf die in #1071 Block A aufgeworfene EN-Sync-Prozessfrage: „kein Minor-Rückstand", erzwungen — nicht „später best effort".)
+**Sync-Zeitpunkt folgt aus dem Gate:** weil der Marker dem Release-Minor gleichen muss, wird die EN-Aktualisierung **mit** dem Version-Bump-Commit ausgeliefert (siehe `docs/dev/release-checklist.md`, dev-intern), nicht als nachgelagerter Follow-up. (Das ist die Antwort auf die in #1071 Block A aufgeworfene EN-Sync-Prozessfrage: „kein Minor-Rückstand", erzwungen — nicht „später best effort".)
 
 **Bewusst DE-only:** Entwickler-/interne Doku außerhalb von `TRANSLATED_FILES` (ADRs, `docs/ai/*`, Runbooks, `threat-model.md`) bleibt absichtlich deutsch — sie adressiert Maintainer; eine Übersetzung brächte Sync-Kosten ohne Nutzerwert.
+
+> **Stand 2026-07-14:** #1548 (öffentliches Pendant: [anlaufstelle/app#48](https://github.com/anlaufstelle/app/issues/48)) plant den Wechsel der **Entwicklungssprache** auf Englisch; neue ADRs würden dann auf Englisch verfasst. Der Meilenstein ist offen. Diese ADR wird bei der Umsetzung amendiert. UI-Strings, i18n-Katalog (`LANGUAGE_CODE="de"`) und deutsche Fachbegriffe sind davon nicht berührt.
 
 ## Consequences
 
@@ -43,5 +45,5 @@ Anlaufstelle ist deutsch-first (Zielgruppe: deutsche Träger und Beratungsstelle
 - [`src/anlaufstelle/settings/base.py`](../../src/anlaufstelle/settings/base.py) — `LANGUAGE_CODE`, `LANGUAGES`, `LOCALE_PATHS`, `USE_I18N`
 - [`scripts/check_translation_versions.py`](../../scripts/check_translation_versions.py) — Doc-Versions-Gate (`MAX_MINOR_BEHIND=0`, `TRANSLATED_FILES`)
 - [`scripts/check_translations.py`](../../scripts/check_translations.py) — `.po`-Fuzzy/Untranslated-Baseline-Gate
-- `docs/release-checklist.md` (dev-intern) — EN-Sync-Schritt im Release-Flow
+- `docs/dev/release-checklist.md` (dev-intern) — EN-Sync-Schritt im Release-Flow
 - Issues #1071 §E, #1102; Versions-Gate #832/#1078; `.po`-Baseline #813/#814

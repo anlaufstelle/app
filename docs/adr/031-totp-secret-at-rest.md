@@ -50,7 +50,7 @@ das Secret **at rest mit dem vorhandenen MultiFernet** ver-/entschlüsselt:
  über `EncryptedTOTPDevice` zu; das nackte `TOTPDevice` wird nur noch von der
  Proxy-Definition und der Datenmigration referenziert.
 
-**Datenmigration** [`0101_totp_secret_at_rest`](../../src/core/migrations/0101_totp_secret_at_rest.py)
+**Datenmigration** [`0102_totp_secret_at_rest`](../../src/core/migrations/0102_totp_secret_at_rest.py)
 im **eigenen (core-)Namespace**:
 
 1. registriert das Proxy-Modell (kein Tabellen-DDL),
@@ -101,7 +101,7 @@ Primärschlüssel um, sodass ein ausrangierter Schlüssel entfernt werden kann.
  mitten im Deploy. **Gegenmaßnahme:** Bei jedem `django-otp`-Bump die
  generierten Migrationen prüfen; taucht ein `AlterField` auf `key` auf, im
  core-Namespace eine **Nachfolge-Migration** hinterhersetzen, die die Spalte
- wieder auf `varchar(255)` weitet (analog Migration 0101, nach der
+ wieder auf `varchar(255)` weitet (analog Migration 0102, nach der
  `otp_totp`-Migration einsortiert). Der Guard-Test
  `TestTotpKeyColumnWidthGuard` in
  [`test_totp_secret_at_rest.py`](../../src/tests/test_totp_secret_at_rest.py)
@@ -135,7 +135,7 @@ Primärschlüssel um, sodass ein ausrangierter Schlüssel entfernt werden kann.
 
 - [`src/core/models/mfa.py`](../../src/core/models/mfa.py) (Proxy-Modell)
 - [`src/core/services/security/totp.py`](../../src/core/services/security/totp.py) (Ver-/Entschlüsselung + Format-Erkennung)
-- [`src/core/migrations/0101_totp_secret_at_rest.py`](../../src/core/migrations/0101_totp_secret_at_rest.py) (idempotente, reversible Datenmigration)
+- [`src/core/migrations/0102_totp_secret_at_rest.py`](../../src/core/migrations/0102_totp_secret_at_rest.py) (idempotente, reversible Datenmigration)
 - [`src/tests/test_totp_secret_at_rest.py`](../../src/tests/test_totp_secret_at_rest.py)
 - [ADR-015](015-mfa-totp.md) (MFA-Verfahren), [ADR-014](014-encrypted-file-vault.md) (Fernet-Feldverschlüsselung)
 - [`docs/threat-model.md`](../threat-model.md) (Asset „MFA-Secrets"), [`docs/security-notes.md`](../security-notes.md)
