@@ -25,8 +25,8 @@
  - [SEKTION B — Anwender-Komplett (systematisch)](manual-test-matrix-b.md)
  - [SEKTION C — Auditor-DSGVO/Security](manual-test-matrix-c.md)
  - [SEKTION D — Entwickler-Probes (LOKAL/SSH)](manual-test-matrix-d.md)
-- [Anhang A — Browser/Mobile-Matrix](#anhang-a--browsermobile-matrix)
-- [Anhang B — Bekannte Risiken & Test-Lücken](#anhang-b--bekannte-risiken-und-test-luecken)
+- [Browser- und Mobile-Konventionen](#browser--und-mobile-konventionen)
+- [Anhang B — Bekannte Risiken und Test-Lücken](#anhang-b--bekannte-risiken-und-test-lücken)
 - [Anhang C — E2E-Coverage-Bilanz](#anhang-c--e2e-coverage-bilanz)
 - [Anhang D — Test-Daten-Cheatsheet](#anhang-d--test-daten-cheatsheet)
 - [Anhang E — Performance-Budgets](#anhang-e--performance-budgets)
@@ -58,7 +58,7 @@ Lokales Setup nur falls 🔧 LOKAL/SSH-Cases anstehen:
 | Repo aktuell | `git pull` |
 | DB & Container | `sudo docker compose up -d` |
 | Seed mit 2 Facilities | `python src/manage.py seed --flush --scale medium` (small=1, **medium=2**, large=5 Einrichtungen; ein `FACILITIES`-Argument existiert nicht — Refs #973) |
-| Dev-Server starten | `make runserver-e2e` (Port 8844, HTTP) oder `make runserver` (Port 8000) |
+| Dev-Server starten | `make run` (gunicorn, HTTPS, Port 8443) oder `make run-http` (Port 8000). Für den E2E-Server (Port 8844) gibt es kein Make-Target — manuelle gunicorn-Sequenz: [`docs/e2e-runbook.md`](../e2e-runbook.md) §6. |
 | Migrationen | `make migrate` |
 
 ### Browser, Mobile, MFA, ClamAV (gilt für dev und lokal)
