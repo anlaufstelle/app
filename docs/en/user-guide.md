@@ -1,5 +1,5 @@
 > This is the English translation of [user-guide.md](../user-guide.md).
-> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417).
+> The German version is the authoritative source. Last synced: 2026-07-12 (Offline V2 Wave 3, #1499), § 8 offline section only (#1417) and 2026-07-14 (§ 1 passkey second factor [#1492], § 7 PDF export rename, #1551).
 
 # Anlaufstelle -- User Guide
 
@@ -88,6 +88,18 @@ Under `/mfa/settings/` > **Disable 2FA**. This is **not possible** if your facil
 When setting up 2FA, you receive **10 single-use backup codes**. Store them safely -- e.g., printed and kept in your wallet, or in your password manager. If you lose your phone or your authenticator app has been reset, you can enter a backup code instead of a TOTP code at the 2FA login screen. Each code only works once.
 
 > **All codes used up or lost?** Contact your administrator -- they can reset your TOTP device, after which you set up 2FA and new backup codes again.
+
+**Passkey / security key (optional, in addition to the authenticator app):**
+
+In addition to the authenticator app, you can register a **passkey** as a second factor -- e.g., your device's biometrics (fingerprint/face), a smartphone, or a USB security key (FIDO2). A passkey is phishing-resistant because it is bound to the application's address.
+
+1. Set up the authenticator app (TOTP) **first** -- a passkey is only possible **in addition** to it. This keeps your backup codes as the recovery path in case a passkey is lost.
+2. Under `/mfa/settings/`, in the **Passkeys** section, click **Add passkey** and follow the browser's instructions.
+3. You can register multiple passkeys (e.g., laptop and smartphone) and **remove** individual ones again (requires re-confirming your password/2FA).
+
+At login, the 2FA page then offers **Sign in with passkey** -- alternatively, you can still use the authenticator app or a backup code.
+
+> **Note:** Passkeys are bound to the web address. A passkey registered on `dev.anlaufstelle.app` will not work on a different address -- register it where you actually use the application.
 
 ### Signing Out
 
@@ -517,12 +529,12 @@ The CSV export contains all events from the selected time period. Fields whose s
 
 > **Note:** Every export is recorded in the audit log.
 
-### PDF Report
+### PDF Export
 
-The PDF report generates a structured semi-annual report for internal documentation.
+The PDF export generates a structured statistics report for the period selected at the top of the dashboard, for internal documentation.
 
 1. Select the time period in the statistics dashboard.
-2. Click **PDF Report**.
+2. Click **PDF Export**.
 3. The PDF file is downloaded (filename: `bericht_YYYY-MM-DD_YYYY-MM-DD.pdf`).
 
 ### Example Activity Report
@@ -843,6 +855,6 @@ Each episode shows its status:
 
 <!-- translation-source: docs/user-guide.md -->
 <!-- translation-version: v0.20.0 -->
-<!-- translation-date: 2026-07-13 -->
+<!-- translation-date: 2026-07-14 -->
 <!-- source-hash: 67c1567 -->
 

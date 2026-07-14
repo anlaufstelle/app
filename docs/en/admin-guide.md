@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802).
+> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551).
 
 # Anlaufstelle -- Admin Guide
 
@@ -24,6 +24,7 @@ This guide is intended for IT administrators of social service facilities who in
  - 5.4 [CSP Debugging](#54-csp-debugging)
  - 5.5 [Compliance Dashboard](#55-compliance-dashboard)
  - 5.6 [Error Tracking & Data Minimization](#56-error-tracking--data-minimization)
+ - 5.7 [Breach Detection Scan](#57-breach-detection-scan)
 6. [Troubleshooting](#6-troubleshooting)
 7. [GDPR Notes](#7-gdpr-notes)
  - 7.8 [Optimistic Locking](#78-optimistic-locking)
@@ -102,6 +103,14 @@ python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().
 python3 -c "import secrets; print(secrets.token_urlsafe(50))"
 ```
 
+**Generate an audit hash key:**
+
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(64))"
+```
+
+The `DJANGO_AUDIT_HASH_KEY` secures the audit hashes — pseudonymized entries (e.g. emails in password-reset audits) as well as the HMAC integrity chain of the audit log — and is deliberately kept separate from `DJANGO_SECRET_KEY` (see [`docs/disaster-recovery.md`](https://github.com/anlaufstelle/app/blob/main/docs/disaster-recovery.md)).
+
 > **Important:** Store `ENCRYPTION_KEYS` and `DJANGO_SECRET_KEY` securely (e.g., in a password manager or secret management system). Without the keys, encrypted field data becomes permanently unreadable.
 
 #### Full Environment Variable Reference
@@ -117,6 +126,7 @@ All environment variables that the application evaluates at runtime (see [`src/a
 | `DJANGO_SETTINGS_MODULE` | -- | In production: `anlaufstelle.settings.prod`. |
 | `ALLOWED_HOSTS` | -- (required in prod) | Comma-separated host names, e.g. `anlaufstelle.example.de`. |
 | `TRUSTED_PROXY_HOPS` | `1` | Number of trusted proxies in front of the app (X-Forwarded-For evaluation). `0` = no proxy, `1` = Caddy only, `2` = CDN + Caddy. |
+| `DJANGO_HEALTH_DETAIL_TOKEN` | -- | Token for the `X-Health-Token` header; authorizes monitoring callers to retrieve the detail fields of `/health/` (`database`, `virus_scanner`/`clamav`, `encryption_key`, `version`, `smtp`, backup age, disk free, `stale_jobs`). Without a token, `/health/` returns only `{"status": ...}` (see [§ 5.1](#51-health-endpoint), #1375). |
 
 **Database (PostgreSQL — three-role model, #902)**
 
@@ -175,11 +185,42 @@ Since v0.12, Anlaufstelle separates three DB roles: a hardcoded `postgres` boots
 | `EMAIL_USE_TLS` | `True` | Enable STARTTLS. |
 | `DEFAULT_FROM_EMAIL` | `noreply@anlaufstelle.app` | Sender address. |
 
+**File Vault Upload Limits (#1268)**
+
+Service-layer hard limits as defense-in-depth (independent of the per-facility configurable `Settings.max_file_size_mb`).
+
+| Name | Default | Description |
+|---|---|---|
+| `FILE_VAULT_MAX_UPLOAD_BYTES` | `52428800` (50 MB) | Hard per-file limit, applied before any full buffering. |
+| `FILE_VAULT_MAX_UPLOAD_FILES` | `20` | Maximum number of files per file field (mass-upload brake). |
+| `FILE_VAULT_MAX_IMAGE_PIXELS` | `40000000` | Decompression-bomb protection: maximum pixel count of an image upload (also sets `PIL.Image.MAX_IMAGE_PIXELS`). |
+| `FILE_VAULT_MAX_ARCHIVE_BYTES` | `209715200` (200 MB) | Zip-bomb protection: maximum sum of uncompressed entries (read from the zip directory). |
+| `FILE_VAULT_MAX_ARCHIVE_RATIO` | `100` | Zip-bomb protection: maximum expansion ratio (uncompressed/compressed). |
+| `FILE_VAULT_MAX_ARCHIVE_ENTRIES` | `10000` | Zip-bomb protection: maximum number of entries (read from the EOCD record). |
+
+**Maintenance Mode (#700)**
+
+| Name | Default | Description |
+|---|---|---|
+| `MAINTENANCE_FLAG_FILE` | -- (empty = off) | Path of a flag file; while it exists, the app responds with HTTP 503. Without a value the middleware is a no-op. |
+| `MAINTENANCE_ALLOW_IPS` | -- | Comma-separated IP list for ops access during maintenance. |
+| `MAINTENANCE_CACHE_TTL` | `5` | Caching duration (seconds) of the flag-file check. |
+| `MAINTENANCE_RETRY_AFTER` | `600` | Value of the `Retry-After` header (seconds) while maintenance mode is active. |
+
+**Breach Detection (#685)**
+
+| Name | Default | Description |
+|---|---|---|
+| `BREACH_*` (variable family) | see runbook | Time windows and thresholds of the heuristic anomaly detection (failed logins, exports, deletions, long-term windows, distributed login attacks) as well as `BREACH_NOTIFICATION_WEBHOOK_URL` (optional escalation webhook; empty = off). Full list with defaults: [ops runbook § 6.5b](../ops-runbook.md). |
+
 **Misc**
 
 | Name | Default | Description |
 |---|---|---|
 | `MEDIA_ROOT` | `<BASE_DIR>/media` | Storage location for encrypted file attachments (see [§ 2.9](#29-encrypted-file-vault--virus-scanning)). |
+| `BACKUP_DIR` | `<repo>/backups` | Storage directory for the encrypted DB backups (`.sql.gz.enc`); the health endpoint reads the backup age from it. |
+| `APP_VERSION` | `dev` | Version string that `/health/` exposes in the `version` detail field (token/authenticated callers only). |
+| `SUDO_MODE_TTL_SECONDS` | `900` | Validity duration (seconds) of the re-auth window for sensitive actions (MFA disable, GDPR export). |
 
 ### Step 3: Review the Caddyfile
 
@@ -229,10 +270,10 @@ docker compose -f docker-compose.prod.yml logs web
 curl https://anlaufstelle.meine-einrichtung.de/health/
 ```
 
-Expected response:
+Expected (anonymous) response -- since #1375 it contains **only** the `status` field:
 
 ```json
-{"status": "ok", "database": "connected", "version": "dev"}
+{"status": "ok"}
 ```
 
 ---
@@ -340,13 +381,18 @@ Under **Core > Users > Add user** in the admin:
 
 #### Token Invite Flow (Refs #528)
 
-New accounts are created **without** a clear-text password. Instead, the application sends an **invitation email** containing a personalized setup link to the email address on file. The link takes the new user to the standard password-reset form, where they set a password themselves.
+New accounts are created **without** a clear-text password. Instead, the application sends an **invitation email** containing a personalized setup link (`/invite/<uid>/<token>/`) to the email address on file. The link takes the new user to the same password-setting form as the password reset, where they set a password themselves.
 
 1. Admin creates a user with an email address in the admin.
-2. The system calls [`send_invite_email`](https://github.com/anlaufstelle/app/blob/main/src/core/services/invite.py) and generates a token (Django's `default_token_generator`, based on `uidb64` + token hash).
+2. The system calls [`send_invite_email`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/invite.py) and generates a setup token (a dedicated `invite_token_generator`, based on `uidb64` + token hash).
 3. The user receives the email, clicks the link, sets a password, and is logged in.
 
-**Token validity:** Django's default is `PASSWORD_RESET_TIMEOUT = 259200` seconds (3 days). In Anlaufstelle this can be raised up to 7 days via the Django setting -- the token generator also invalidates the token automatically once the user has set their first password.
+**Token validity (L4, Refs #1375):** Invitation and password-reset tokens have **separate** validity periods:
+
+- **Invitations** expire after `INVITE_TOKEN_TIMEOUT` (default **3 days** = 259200 s, adjustable via the `DJANGO_INVITE_TOKEN_TIMEOUT` env var) — a newly invited staff member realistically needs days to open the link.
+- **Password resets** expire after `PASSWORD_RESET_TIMEOUT` (default **2 hours**, formerly Django's default of 3 days; adjustable via the `DJANGO_PASSWORD_RESET_TIMEOUT` env var) — a reset link is a strong recovery primitive and should be short-lived.
+
+Both generators are additionally separated by their own `key_salt` (a reset token is not valid on `/invite/` and vice versa) and invalidate the token automatically once the user has set their first password.
 
 **Resend the setup link:** If the email did not arrive or the token has expired, the admin can issue a fresh token from the user detail view via "Resend setup link" (or the equivalent "Resend invitation" button) and have a new email sent.
 
@@ -554,7 +600,7 @@ Since v0.10.1 there are also **backup codes as a second factor** for exactly thi
 
 #### Account Lockout
 
-After **10 failed login attempts** the account is automatically locked (the login service reads the threshold from [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py)). The locked user sees an information page and can no longer sign in. There are four recovery paths:
+After **10 failed login attempts** the account is automatically locked (the login service reads the threshold from [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py)). The locked user sees an information page and can no longer sign in. There are four recovery paths:
 
 **Path A -- UI (for facility-bound users):** The application manager (`facility_admin`) of the facility can unlock the accounts of their own users:
 
@@ -845,27 +891,19 @@ Anlaufstelle provides a public health endpoint:
 GET /health/
 ```
 
-**Response during normal operation (HTTP 200):**
+**Response during normal operation (HTTP 200, anonymous):**
 
 ```json
-{
-  "status": "ok",
-  "database": "connected",
-  "version": "dev"
-}
+{"status": "ok"}
 ```
 
-**Response on database error (HTTP 503):**
+**Response on database/encryption-key error (HTTP 503, anonymous):**
 
 ```json
-{
-  "status": "error",
-  "database": "unavailable",
-  "version": "dev"
-}
+{"status": "error"}
 ```
 
-The endpoint requires no authentication and is suitable for external monitoring systems.
+The endpoint requires no authentication and is suitable for external monitoring systems. Since #1375 the anonymous response deliberately contains **only** the `status` field (recon hardening): subsystem failures remain visible anonymously via `status`/HTTP code (`degraded` on scanner/SMTP problems, `error` + 503 on database/key failure), but all detail fields (`database`, `virus_scanner`/`clamav`, `encryption_key`, `version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`) are served by `/health/` only to authenticated sessions or callers presenting the `X-Health-Token` header (= `DJANGO_HEALTH_DETAIL_TOKEN`). The complete, authoritative field reference (all fields, values, status codes, and thresholds) is in the [monitoring guide](../monitoring-guide.md).
 
 ### 5.2 Monitoring Integration
 
@@ -953,6 +991,21 @@ Error tracking (Sentry-compatible) is **fully opt-in**: the SDK is initialized o
 **Self-hosted tracker (e.g. GlitchTip).** GlitchTip accepts standard Sentry DSNs, and this project uses only core SDK features (error events plus optional trace sampling). Pointing `SENTRY_DSN` at a self-hosted instance should therefore work without code changes. **This combination is not evaluated and not formally supported by this project** -- before production use, at least verify envelope/API compatibility and the behavior for unsupported event types yourself. Operating the tracker instance (backups, retention, upgrades) is operator infrastructure and covered by its own documentation; the tracker's database belongs inside the same trust boundary as the app data and needs the same access and retention rules.
 
 > **Not legal advice:** This section describes technical measures. A data protection impact assessment and the record of processing activities remain with the operator as the controller.
+
+### 5.7 Breach Detection Scan
+
+The `detect_breaches` management command heuristically analyzes the audit log for anomalies (failed-login bursts, mass exports/deletions, distributed login attacks) and writes hits as audit events; optionally a webhook (`BREACH_NOTIFICATION_WEBHOOK_URL`) is notified. The windows/thresholds are controlled via the `BREACH_*` variables (see the [ENV reference in § 1](#full-environment-variable-reference) as well as [ops runbook § 6.5b](../ops-runbook.md)).
+
+**Recommended cron (hourly, at minute 30):**
+
+```cron
+30 * * * * cd /opt/anlaufstelle && \
+  docker compose -f docker-compose.prod.yml exec -T web \
+  python manage.py detect_breaches \
+  >> /var/log/anlaufstelle-breach.log 2>&1
+```
+
+> **Note:** The complete, authoritative list of all background jobs including their schedule (backup, retention, audit chain verification, statistics snapshots, orphan cleanup, breach scan, view refresh) is in the [ops runbook § 3](../ops-runbook.md#3-cron-jobs). In the recommended systemd timer setup these jobs are installed centrally via `dev-ops/deploy/install-timers.sh` (the breach scan runs there as `anlaufstelle-breach.timer`, likewise hourly at minute 30).
 
 ---
 
@@ -1216,7 +1269,7 @@ To protect against **silent overwrites** when two users edit the same record in 
 
 ### 7.9 Row Level Security (RLS)
 
-In addition to ORM-side facility scoping, **PostgreSQL row-level security** is enabled on **18 facility-scoped tables** as **defense-in-depth**. A buggy ORM query that forgets facility scoping still returns no foreign data, thanks to RLS. Refs #542, #586.
+In addition to ORM-side facility scoping, **PostgreSQL row-level security** is enabled on **all facility-scoped tables** (currently 22, enforced derivation-based via a test) as **defense-in-depth**. A buggy ORM query that forgets facility scoping still returns no foreign data, thanks to RLS. Refs #542, #586.
 
 #### How It Works
 
@@ -1334,5 +1387,5 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.20.0 -->
-<!-- translation-date: 2026-07-13 -->
+<!-- translation-date: 2026-07-14 -->
 <!-- source-hash: 8e79b6e -->

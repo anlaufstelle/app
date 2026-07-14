@@ -151,6 +151,8 @@ This means: the source code is free to use, modify, and redistribute — even wh
 
 Anlaufstelle is provided "as is", without warranty of any kind (see [LICENSE](LICENSE), Sections 15-16). The software and its documentation do **not constitute legal advice**. Operators are solely responsible for compliance with data protection regulations (GDPR, SGB X) — in particular for data protection impact assessments, data processing agreements, and organizational measures.
 
+> **⚠️ After installation: set up background jobs.** Anlaufstelle does **not** schedule backups, retention enforcement, or breach detection itself — without a configured scheduler these jobs never run, silently and without any error message. Setup: [docs/ops-runbook.md § 3 "Cron jobs"](docs/ops-runbook.md#3-cron-jobs).
+
 ---
 
 ## Development
@@ -207,4 +209,5 @@ docker compose exec web python src/manage.py seed
 
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.20.0 -->
-<!-- translation-date: 2026-07-13 -->
+<!-- translation-date: 2026-07-14 -->
+<!-- source-hash: 02b127d -->

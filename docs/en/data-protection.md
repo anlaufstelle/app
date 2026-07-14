@@ -31,10 +31,10 @@
 | Measure | Reference | For |
 |---|---|---|
 | Art. 25 Privacy by design/default | [ADR-005](../adr/005-facility-scoping-and-rls.md) — facility scoping + RLS | [Auditor] [Dev] |
-| Art. 32 Encryption at rest | [ADR-006](../adr/006-fernet-field-encryption.md) (fields) · [ADR-014](../adr/014-encrypted-file-vault.md) (file vault, AES-GCM) | [Auditor] [Dev] |
+| Art. 32 Encryption at rest | [ADR-006](../adr/006-fernet-field-encryption.md) (fields) · [ADR-014](../adr/014-encrypted-file-vault.md) (file vault, Fernet/AES-128) | [Auditor] [Dev] |
 | Art. 32 Access control | [ADR-005](../adr/005-facility-scoping-and-rls.md) (RLS) · [ADR-018](../adr/018-rollenmodell-superadmin.md)/[ADR-020](../adr/020-three-role-postgres-model.md) (roles) · [ADR-015](../adr/015-mfa-totp.md) (MFA) | [Auditor] [Dev] |
 | Art. 32 Integrity/traceability | [ADR-007](../adr/007-auditlog-append-only.md) — append-only audit log | [Auditor] [Dev] |
-| Art. 32 Offline data | [ADR-022](../adr/022-offline-snapshot-keys.md) — offline snapshot & keys, encrypted IndexedDB | [Dev] [Auditor] |
+| Art. 32 Offline data | [ADR-022](../adr/022-offline-snapshot-keys.md) — offline snapshot & keys, encrypted IndexedDB; [DPIA/TOM classification of the offline path](../adr/022-offline-snapshot-keys.md#dsfa-tom-einordnung-des-offline-pfads-1343) | [Dev] [Auditor] |
 
 ## D. Processing agreements & evidence documents (Art. 28, 30, 35 GDPR)
 
@@ -52,5 +52,5 @@ Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, s
 
 <!-- translation-source: docs/datenschutz.md -->
 <!-- translation-version: v0.20.0 -->
-<!-- translation-date: 2026-06-14 -->
+<!-- translation-date: 2026-07-14 -->
 <!-- source-hash: c47b946 -->

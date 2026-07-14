@@ -8,7 +8,7 @@
 
 | Deutsch | English | Definition |
 |---------|---------|------------|
-| Account-Lockout | Account lockout | Automatic account lock after 10 failed login attempts (since v0.10.1). Lock is logged via `LOGIN_LOCKED` AuditLog entry; admins unlock affected users from the profile screen, which writes a `LOGIN_UNLOCK` entry. Implemented in [`src/core/services/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/login_lockout.py). |
+| Account-Lockout | Account lockout | Automatic account lock after 10 failed login attempts (since v0.10.1). The lock state is not stored separately but derived from the `LOGIN_FAILED` AuditLog entries within a sliding 15-minute window; admins unlock affected users from the profile screen, which writes a `LOGIN_UNLOCK` entry (earlier `LOGIN_FAILED` entries no longer count afterwards). Implemented in [`src/core/services/security/login_lockout.py`](https://github.com/anlaufstelle/app/blob/main/src/core/services/security/login_lockout.py). |
 | AdminCSPRelaxMiddleware | Admin CSP relax middleware | Per-request CSP relaxation that injects `'unsafe-eval'` only on `/admin-mgmt/*` routes (since v0.10.2). Required because django-unfold's bundled Alpine build uses `new AsyncFunction()` for the Cmd+K command palette. The global CSP stays strict (no `unsafe-eval`); admin routes are additionally protected by MFA-Gate and the `admin` role. See [`src/core/middleware/admin_csp_relax.py`](https://github.com/anlaufstelle/app/blob/main/src/core/middleware/admin_csp_relax.py). |
 | Alterscluster | Age cluster | Coarse age group for a person (e.g. under 18, 18–26, 27+, unknown). Configurable per facility. Used for statistics without requiring an exact date of birth. |
 | Anlaufstelle | Drop-in center | Name of the application. Also colloquial for the facility itself — the place where people come for help. |
@@ -35,7 +35,7 @@
 | Externer Bericht | External report | Privacy-friendly statistics report at `/statistics/external/` (Refs #921): no pseudonym ranking, K-anonymity suppression of small aggregates, privacy-profile header; HTML or JSON. Lead/Admin only; each call audit-logged as `EXPORT`. |
 | Facility | Facility | Technical term for an institution or site (Einrichtung). The primary scope boundary for staff. All entities carry a foreign key to Facility. |
 | FieldTemplate | Field template | Defines a field within a document type: name, data type, required flag, options, encryption, statistics mapping. |
-| File Vault | Encrypted file vault | File attachments stored encrypted at rest (AES-GCM). Files are scanned by ClamAV before encryption. Downloads use a central safe-download helper with RFC-5987 Content-Disposition. |
+| File Vault | Encrypted file vault | File attachments stored encrypted at rest (Fernet/AES-128). Files are scanned by ClamAV before encryption. Downloads use a central safe-download helper with RFC-5987 Content-Disposition. |
 | Fuzzy-Schwellwert | Fuzzy threshold / Trigram threshold | Per-facility similarity cutoff (`Settings.search_trigram_threshold`, 0.0–1.0, default ~0.3). Lower = more matches, more noise. |
 | Fuzzy-Suche | Fuzzy search | Typo-tolerant search using PostgreSQL `pg_trgm` trigram similarity. Finds "Müller" when searching for "Muller". |
 | Hausverbot | Site ban | A ban prohibiting a person from entering a facility, with reason, validity period, and issuer. Modeled in Anlaufstelle as a document type in the "Administration" category. |
@@ -44,7 +44,7 @@
 | JSONB | JSONB | PostgreSQL data type for binary JSON. Used in Anlaufstelle to store event field values together with the event record. Indexable (GIN index), queryable, performant. |
 | K-Anonymisierung | K-anonymization | Used two ways: (a) bucket suppression of small aggregates in the external report; (b) the retention path (`retention_use_k_anonymization`) that generalizes the client record instead of hard-deleting it, so statistics stay possible after the retention window. See [ADR-023](../adr/023-k-anonymization-statistik.md). |
 | k-Anon-Retention | k-anon retention | The retention deletion path that k-anonymizes the client record instead of hard-deleting it. Since #1094 the retention bridge also redacts case/episode/work-item free text in this path (same helpers as the hard path); the `k_anonymize_client` primitive itself stays client-only. |
-| Kontaktstufe | Contact level | Three-tier model describing a person's identification status in the system: anonymous (count only), identified (pseudonym), qualified (counseling process). Determines access rights, permitted document types, and retention periods. |
+| Kontaktstufe | Contact level | A person's identification status in the system. The data model has two contact stages (`Client.ContactStage`): identified (pseudonym known) and qualified (additional personal data, restricted access). Determines access rights, permitted document types, and retention periods. A purely anonymous contact (count only) is not a contact stage but a person-less event (`Event.is_anonymous`). |
 | Legal Hold | Legal hold | Flag on individual records that excludes them from automated retention deletion. |
 | Materialized View | Materialized view | Pre-aggregated PostgreSQL view (`core_statistics_event_flat`) that backs the statistics dashboard so reports do not re-scan the entire event table on every request (since v0.10.0, #544). Refreshed periodically via management command, ideally `CONCURRENTLY` (requires the unique index that the migration provides). |
 | Milestone | Milestone | A concrete step toward an outcome goal. |
@@ -74,7 +74,7 @@
 | WorkItem | Work item | An operational entry (note or task) with its own lifecycle and optional priority. Separate from case documentation. |
 | Zeitstrom | Timeline stream | The chronological flow of all events, unfiltered or filtered by time period, person, or document type. The core metaphor of documentation in Anlaufstelle. |
 
-<!-- translation-source: docs/fachkonzept-anlaufstelle.md (chapter 14) -->
+<!-- translation-source: docs/glossar.md -->
 <!-- translation-version: v0.20.0 -->
-<!-- translation-date: 2026-06-14 -->
-<!-- source-hash: 3a70087 -->
+<!-- translation-date: 2026-07-14 -->
+<!-- source-hash: 803dd15 -->
