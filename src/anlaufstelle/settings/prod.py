@@ -74,11 +74,22 @@ if "collectstatic" not in sys.argv and "*" in ALLOWED_HOSTS:
 # OTP_WEBAUTHN_ALLOWED_ORIGINS (z. B. wenn RP-ID eine Basis-Domain mehrerer
 # Subdomains sein soll). Passkeys sind domaingebunden: eine spaetere RP-ID-Aenderung
 # entwertet bestehende Credentials (Nutzer muessen neu registrieren).
-_wildcard_hosts = [h for h in ALLOWED_HOSTS if not h.startswith(".")]
-OTP_WEBAUTHN_RP_ID = os.environ.get("OTP_WEBAUTHN_RP_ID", "") or (_wildcard_hosts[0] if _wildcard_hosts else "")
+# ``_concrete_hosts`` = konkrete (nicht-Wildcard) Hostnamen; ``_wildcard_bases`` =
+# Basis-Domains aus Subdomain-Wildcards ('.example.com' -> 'example.com', eine
+# gueltige Registrable Domain fuer alle Subdomains).
+_concrete_hosts = [h for h in ALLOWED_HOSTS if not h.startswith(".")]
+_wildcard_bases = [h[1:] for h in ALLOWED_HOSTS if h.startswith(".")]
+# RP-ID-Fallback: bevorzugt ein konkreter Host, sonst die Basis-Domain eines
+# Subdomain-Wildcards. So bleibt die RP-ID auch bei reiner Wildcard-Config nicht
+# still leer (py_webauthn wuerfe sonst zur Laufzeit einen Fehler, die
+# Passkey-Registrierung schluege lautlos fehl).
+OTP_WEBAUTHN_RP_ID = os.environ.get("OTP_WEBAUTHN_RP_ID", "") or next(iter(_concrete_hosts + _wildcard_bases), "")
+# Origins lassen sich nur aus konkreten Hosts ableiten — eine Wildcard nennt
+# keinen konkreten Ursprung. Reine Wildcard-Deployments MUESSEN daher
+# OTP_WEBAUTHN_ALLOWED_ORIGINS explizit setzen.
 OTP_WEBAUTHN_ALLOWED_ORIGINS = [
     o.strip() for o in os.environ.get("OTP_WEBAUTHN_ALLOWED_ORIGINS", "").split(",") if o.strip()
-] or [f"https://{h}" for h in _wildcard_hosts]
+] or [f"https://{h}" for h in _concrete_hosts]
 
 # --- Security ---
 

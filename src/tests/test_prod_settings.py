@@ -296,6 +296,44 @@ class TestProdPlaceholderSecretsGuard:
             )
 
 
+class TestProdWebAuthnRpIdDerivation:
+    """ADR-032 (Refs #1492): die WebAuthn-RP-ID wird aus ALLOWED_HOSTS abgeleitet,
+    wenn keine Env-Var gesetzt ist. Sie darf dabei NICHT still leer bleiben, wenn
+    ALLOWED_HOSTS nur Subdomain-Wildcards ('.example.com') enthaelt — sonst
+    schluege die Passkey-Registrierung zur Laufzeit lautlos fehl (py_webauthn
+    verlangt eine nicht-leere RP-ID)."""
+
+    _VALID_ENV = {
+        "DJANGO_SECRET_KEY": "x" * 50,
+        "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "DJANGO_AUDIT_HASH_KEY": "y" * 50,
+    }
+
+    _READBACK = (
+        "import json, anlaufstelle.settings.prod as p; "
+        "print(json.dumps({'rp_id': p.OTP_WEBAUTHN_RP_ID, 'origins': p.OTP_WEBAUTHN_ALLOWED_ORIGINS}))"
+    )
+
+    def _resolve(self, env_overrides):
+        result = _run_prod_import({**self._VALID_ENV, **env_overrides}, code=self._READBACK)
+        assert result.returncode == 0, f"prod import failed: {result.stderr}"
+        return json.loads(result.stdout.strip().splitlines()[-1])
+
+    def test_rp_id_from_concrete_host(self):
+        resolved = self._resolve({"ALLOWED_HOSTS": "app.example.org"})
+        assert resolved["rp_id"] == "app.example.org"
+        assert resolved["origins"] == ["https://app.example.org"]
+
+    def test_rp_id_falls_back_to_wildcard_base_domain(self):
+        """Reine Wildcard-Config: RP-ID = Basis-Domain (Dot entfernt), nicht leer."""
+        resolved = self._resolve({"ALLOWED_HOSTS": ".example.org"})
+        assert resolved["rp_id"] == "example.org"
+
+    def test_explicit_env_rp_id_wins(self):
+        resolved = self._resolve({"ALLOWED_HOSTS": "app.example.org", "OTP_WEBAUTHN_RP_ID": "example.org"})
+        assert resolved["rp_id"] == "example.org"
+
+
 class TestProdAllowedHostsWildcardGuard:
     """C4 (Refs #1376 I4): Prod darf nicht mit einem Wildcard-Eintrag `*` in
     ALLOWED_HOSTS starten. `*` ist in Django Match-all — es hebelt die
