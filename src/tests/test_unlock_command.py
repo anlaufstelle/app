@@ -80,15 +80,19 @@ class TestUnlockCommand:
         # Keine Seiteneffekte (kein AuditLog).
         assert AuditLog.objects.count() == before, "CommandError-Zweig darf keinen LOGIN_UNLOCK schreiben."
 
-    def test_unlock_super_admin_writes_null_facility_audit(self, super_admin_user):
-        """Refs #867: Super-Admin hat ``facility=None`` — der LOGIN_UNLOCK-
-        Audit wird mit ``facility=NULL`` geschrieben (Migration 0083 + 0085
-        erlauben das ueber WITH-CHECK).
+    def test_unlock_super_admin_is_noop(self, super_admin_user):
+        """L14 (Refs #1375): Anforderungsänderung ggü. #867.
+
+        super_admin ist jetzt zentral im Service vom Lockout ausgenommen
+        (``is_locked`` -> immer False), damit ein Angreifer das Break-Glass-Konto
+        nicht per Fehlversuchs-Flut aussperren kann (DoS auf die Recovery-Rolle).
+        Damit ist ein CLI-Unlock eines super_admin folgerichtig ein **No-Op** —
+        es gibt keine Sperre aufzuheben. Der frühere #867-Pfad, der hier einen
+        ``facility=NULL``-``LOGIN_UNLOCK``-Audit schrieb, entfällt; die
+        ``facility=NULL``-WITH-CHECK-Policy (Migration 0083/0085) ist über die
+        Audit-Policy-Tests weiterhin abgedeckt.
         """
         call_command("unlock", super_admin_user.username)
 
         unlocks = AuditLog.objects.filter(user=super_admin_user, action=AuditLog.Action.LOGIN_UNLOCK)
-        assert unlocks.count() == 1
-        entry = unlocks.first()
-        assert entry.facility is None, "Super-Admin-Unlock muss facility=NULL liefern (Persona ohne Facility-Bindung)."
-        assert entry.detail.get("unlocked_by") is None
+        assert unlocks.count() == 0, "super_admin ist nie gesperrt -> CLI-Unlock schreibt keinen Audit (No-Op)."

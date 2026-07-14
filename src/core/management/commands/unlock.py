@@ -28,5 +28,7 @@ class Command(BaseCommand):
         except User.DoesNotExist as exc:
             raise CommandError(str(_("Benutzer '%s' existiert nicht. Bitte Username pruefen.")) % username) from exc
 
+        # L14 (Refs #1375): Fuer super_admin ist ``unlock`` ein No-Op (die Rolle
+        # ist nie gesperrt) und liefert ``None`` — der Command bleibt idempotent.
         login_lockout.unlock(user, unlocked_by=None, ip_address=None)
         self.stdout.write(self.style.SUCCESS(str(_("Account-Sperre aufgehoben: %s")) % user.username))

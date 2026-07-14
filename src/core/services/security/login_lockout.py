@@ -75,6 +75,14 @@ def is_locked(user, ip_address=None) -> bool:
     if user is None or not getattr(user, "pk", None):
         return False
 
+    # L14 (Refs #1375): super_admin ist vom Lockout ausgenommen (zentral im
+    # Service, nicht nur in der View). Sonst koennte ein Angreifer das
+    # Break-Glass-Konto gezielt aussperren (DoS auf die Recovery-Rolle), das die
+    # Unlock-UI genau ausschliesst. Brute-Force bleibt durch den Username-
+    # Ratelimit (10/h, views/auth.py) gedeckelt.
+    if getattr(user, "is_super_admin", False):
+        return False
+
     with transaction.atomic():
         # User-Zeile sperren — nachfolgende ``is_locked``-Aufrufe fuer
         # denselben User warten, bis diese Transaktion committet.
@@ -98,7 +106,7 @@ def is_locked(user, ip_address=None) -> bool:
         return qs.count() >= LOCKOUT_THRESHOLD
 
 
-def unlock(user, unlocked_by, ip_address=None, trigger: str = "admin") -> AuditLog:
+def unlock(user, unlocked_by, ip_address=None, trigger: str = "admin") -> AuditLog | None:
     """Record a LOGIN_UNLOCK audit entry for the user.
 
     Subsequent `is_locked(user)` calls ignore LOGIN_FAILED entries with
@@ -108,7 +116,13 @@ def unlock(user, unlocked_by, ip_address=None, trigger: str = "admin") -> AuditL
     Action), ``"cli"`` (manage.py unlock), ``"password_reset"``,
     ``"recovery_token"`` (dedizierter Token-Flow), ``"backup_code"``
     (MFA-Recovery).
+
+    L14 (Refs #1375): Fuer super_admin ein No-Op (``None``) — die Rolle ist per
+    :func:`is_locked` ohnehin nie gesperrt, ein Unlock-Audit waere sinnlos. Die
+    Ausnahme liegt damit zentral im Service (nicht nur in der View).
     """
+    if getattr(user, "is_super_admin", False):
+        return None
     return audit_event(
         AuditLog.Action.LOGIN_UNLOCK,
         user=user,
