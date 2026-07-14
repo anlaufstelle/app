@@ -267,3 +267,40 @@ def audit_system_view(
         detail=detail or None,
         ip_address=get_client_ip(request),
     )
+
+
+def audit_admin_view(
+    request,
+    target_obj: Any = None,
+    *,
+    target_type: str | None = None,
+    target_id: str | None = None,
+    **detail,
+):
+    """Auditiert einen facility-übergreifenden PII-Read im Django-Admin.
+
+    Refs #1341 (AUTHZ-2): Dünner Wrapper um :func:`audit_system_view` — leitet
+    ``target_type`` / ``target_id`` aus ``target_obj`` ab (falls übergeben) und
+    schreibt einen ``SYSTEM_VIEW``-Eintrag (``facility=None``). Für den
+    Changelist-Sammel-Audit wird ``target_obj`` weggelassen und ``target_type``
+    (Model-Name) explizit gesetzt.
+
+    Verwendung ausschließlich aus :class:`core.admin.mixins.AdminReadAuditMixin`;
+    der Aufrufer setzt vorher die RLS-Session-GUCs (facility=NULL /
+    is_super_admin=true).
+    """
+    from core.models import AuditLog
+
+    if target_obj is not None:
+        if target_type is None:
+            target_type = target_obj.__class__.__name__
+        if target_id is None:
+            target_id = str(target_obj.pk)
+
+    return audit_system_view(
+        request,
+        AuditLog.Action.SYSTEM_VIEW,
+        target_type=target_type or "",
+        target_id=target_id,
+        **detail,
+    )

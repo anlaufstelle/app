@@ -190,6 +190,43 @@ class TestAuditLogCreationAllowlist:
         )
 
 
+class TestDomainAdminReadOnlyGuard:
+    """Refs #1341 (AUTHZ-1): Fachobjekte mit reicher Service-Logik dürfen im
+    Django-Admin nicht direkt schreibbar sein.
+
+    Ein Admin-Save würde die Service-Invarianten (Feld-Verschlüsselung,
+    EventHistory-Diff, Vier-Augen-Löschung, Legal-Hold/Retention) und das
+    Domänen-AuditLog umgehen. Die betroffenen ModelAdmins müssen daher
+    ``ReadOnlyDomainAdminMixin`` erben. Der Guard schlägt fehl, sobald ein
+    neuer Fach-Model-Admin ohne den Mixin registriert wird — dann bewusst
+    entscheiden: read-only stellen oder an das Domänen-Audit anbinden.
+    """
+
+    def test_domain_model_admins_are_read_only(self):
+        from core.admin.mixins import ReadOnlyDomainAdminMixin
+        from core.admin_site import anlaufstelle_admin_site
+        from core.models import Case, Client, Event, WorkItem
+
+        # Fachobjekte mit Service-Logik / Klientel-PII (Refs #1341). Neue
+        # Modelle dieser Kategorie hier ergänzen.
+        domain_models = [Client, Case, Event, WorkItem]
+
+        offenders: list[str] = []
+        for model in domain_models:
+            model_admin = anlaufstelle_admin_site._registry.get(model)
+            if model_admin is None:
+                offenders.append(f"{model.__name__}: nicht in anlaufstelle_admin_site registriert")
+                continue
+            if not isinstance(model_admin, ReadOnlyDomainAdminMixin):
+                offenders.append(f"{model.__name__}: {type(model_admin).__name__} erbt kein ReadOnlyDomainAdminMixin")
+
+        assert not offenders, (
+            "Fach-Model-Admins müssen read-only sein (ReadOnlyDomainAdminMixin), "
+            "damit Admin-Saves nicht die Service-Invarianten/das Domänen-Audit "
+            "umgehen.\nRefs #1341.\nVerstöße:\n  " + "\n  ".join(offenders)
+        )
+
+
 class TestE2ESelectorStabilityGuard:
     """Blockt brüchige Playwright-Selektoren in src/tests/e2e/.
 

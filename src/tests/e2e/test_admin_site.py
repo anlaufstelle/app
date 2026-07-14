@@ -165,8 +165,14 @@ def test_super_admin_can_access_organization_admin(page: Page, base_url: str) ->
 # A2.2 (Refs #1021): facility-FK zentral gescopt (FacilityScopedAdminMixin)
 # ---------------------------------------------------------------------------
 def _facility_option_labels(page: Page, base_url: str) -> list[str]:
-    """Einrichtung-Select-Optionen der Client-Add-Page lesen (nicht-User-Admin)."""
-    page.goto(f"{base_url}/admin-mgmt/core/client/add/")
+    """Einrichtung-Select-Optionen einer schreibbaren facility-gescopten Add-Page lesen.
+
+    Refs #1341: ClientAdmin ist jetzt read-only (Add gesperrt) — die A2.2-Scope-
+    Pruefung nutzt daher die weiterhin schreibbare FieldTemplate-Add-Page, die
+    denselben zentralen ``FacilityScopedAdminMixin.formfield_for_foreignkey``
+    durchlaeuft.
+    """
+    page.goto(f"{base_url}/admin-mgmt/core/fieldtemplate/add/")
     page.wait_for_load_state("domcontentloaded")
     sel = page.locator("select[name='facility']")
     sel.wait_for(state="attached", timeout=30_000)
@@ -208,3 +214,37 @@ def test_facility_admin_facility_select_excludes_other_facility(page: Page, base
     admin_labels = _facility_option_labels(page, base_url)
     assert any("Hauptstelle" in label for label in admin_labels), admin_labels
     assert not any(other in label for label in admin_labels), admin_labels
+
+
+# ---------------------------------------------------------------------------
+# AUTHZ-1 (Refs #1341): Fachobjekte im Admin strikt read-only.
+# Ein Admin-Save wuerde die Service-Invarianten (Feld-Krypto, EventHistory-Diff,
+# Vier-Augen-Loeschung, Legal-Hold) und das Domaenen-AuditLog umgehen -> Add/
+# Change/Delete fuer Client/Case/Event/WorkItem sind gesperrt, die Read-Only-
+# Sicht bleibt.
+# ---------------------------------------------------------------------------
+def test_client_admin_add_is_forbidden(page: Page, base_url: str) -> None:
+    """AUTHZ-1: super_admin -> /admin-mgmt/core/client/add/ -> 403."""
+    _login_and_sudo(page, base_url, "superadmin")
+    response = page.goto(f"{base_url}/admin-mgmt/core/client/add/")
+    page.wait_for_load_state("domcontentloaded")
+    assert response is not None and response.status == 403
+
+
+def test_client_admin_change_is_read_only(page: Page, base_url: str) -> None:
+    """AUTHZ-1: Client-Change-Page laedt (200), aber ohne Speichern-Button.
+
+    Django rendert bei ``has_change_permission=False`` + ``has_view_permission=
+    True`` die read-only-Ansicht ohne Submit-Row (kein ``_save``).
+    """
+    _login_and_sudo(page, base_url, "superadmin")
+    page.goto(f"{base_url}/admin-mgmt/core/client/")
+    page.wait_for_load_state("domcontentloaded")
+    change_link = page.locator("a[href*='/core/client/'][href$='/change/']").first
+    change_link.wait_for(state="attached", timeout=30_000)
+    href = change_link.get_attribute("href")
+    response = page.goto(f"{base_url}{href}")
+    page.wait_for_load_state("domcontentloaded")
+    assert response is not None and response.status == 200
+    # Read-Only: kein Speichern-Button in der Submit-Row.
+    assert page.locator("input[name='_save']").count() == 0

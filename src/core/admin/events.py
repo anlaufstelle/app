@@ -8,14 +8,14 @@ weil weder History noch Attachment ein direktes facility-FK haben.
 from django.contrib import admin
 from unfold.admin import ModelAdmin
 
-from core.admin.mixins import FacilityScopedAdminMixin, RoleBasedPermissionMixin
+from core.admin.mixins import AdminReadAuditMixin, ReadOnlyDomainAdminMixin, RoleBasedPermissionMixin
 from core.admin_site import anlaufstelle_admin_site
 from core.models import Event, EventHistory
 from core.models.attachment import EventAttachment
 
 
 @admin.register(Event, site=anlaufstelle_admin_site)
-class EventAdmin(FacilityScopedAdminMixin, ModelAdmin):
+class EventAdmin(ReadOnlyDomainAdminMixin, AdminReadAuditMixin, ModelAdmin):
     list_display = ("document_type", "client", "occurred_at", "is_anonymous", "is_deleted", "facility")
     list_filter = ("is_anonymous", "is_deleted", "facility", "document_type")
     raw_id_fields = ("client", "created_by", "case")
@@ -24,7 +24,7 @@ class EventAdmin(FacilityScopedAdminMixin, ModelAdmin):
 
 
 @admin.register(EventHistory, site=anlaufstelle_admin_site)
-class EventHistoryAdmin(RoleBasedPermissionMixin, ModelAdmin):
+class EventHistoryAdmin(AdminReadAuditMixin, RoleBasedPermissionMixin, ModelAdmin):
     list_display = ("event", "action", "changed_by", "changed_at")
     list_filter = ("action",)
     readonly_fields = ("event", "changed_by", "changed_at", "action", "data_before", "data_after")
@@ -47,7 +47,7 @@ class EventHistoryAdmin(RoleBasedPermissionMixin, ModelAdmin):
 
 
 @admin.register(EventAttachment, site=anlaufstelle_admin_site)
-class EventAttachmentAdmin(RoleBasedPermissionMixin, ModelAdmin):
+class EventAttachmentAdmin(AdminReadAuditMixin, RoleBasedPermissionMixin, ModelAdmin):
     list_display = (
         "storage_filename",
         "event",

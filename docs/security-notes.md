@@ -51,6 +51,19 @@ Wenn wir den Token-Link-Flow (Invite, Passwort-Reset, 2FA-Backup-Download) jemal
 
 ---
 
+## Fachobjekte im Admin read-only + Cross-Facility-Read-Audit (Issue #1341)
+
+Das Django-Admin (`/admin-mgmt/`, Custom `AnlaufstelleAdminSite`) hatte zwei Rechenschafts-Lücken:
+
+- **AUTHZ-1 — Schreibpfad umgeht die Service-Schicht.** Add/Change/Delete auf `Client`/`Case`/`Event`/`WorkItem` liefen am Service-Layer vorbei und umgingen damit das Domänen-AuditLog (`CLIENT_UPDATE`/`EVENT_CREATE`/…), die `EventHistory`-Versionierung sowie die Vier-Augen-Löschung/Legal-Hold-/Retention-Workflows. Da ein Admin-Save diese Invarianten (u. a. Feld-Verschlüsselung, History-Diff) gar nicht replizieren kann, sind diese Fachobjekte im Admin jetzt **strikt read-only** ([`ReadOnlyDomainAdminMixin`](../src/core/admin/mixins.py) → `has_add/change/delete_permission = False`) — konsistent mit den bereits append-only gestellten Admins (`EventHistory`/`EventAttachment`/`AuditLog`/`DeletionRequest`). Konfig-Objekte ohne tamper-evidente Klientel-Historie (`DocumentType`/`FieldTemplate`/`QuickTemplate`/`TimeFilter`) bleiben schreibbar; `Settings`-Änderungen sind über `SettingsAdmin.save_model` → `log_settings_change` weiterhin auditiert.
+- **AUTHZ-2 — Cross-Facility-PII-Read unauditiert.** Ein `super_admin` konnte über die Admin-Listen/Change-Views facility-übergreifend Klientel-PII lesen, ohne Spur — im Gegensatz zu `/system/`, wo jeder Zugriff als `SYSTEM_VIEW` protokolliert wird. [`AdminReadAuditMixin`](../src/core/admin/mixins.py) schreibt für super_admin-Reads jetzt einen `SYSTEM_VIEW`-Eintrag (über den Helper [`audit_admin_view`](../src/core/services/audit/helpers.py), `facility=None`, RLS-GUCs via `_set_session_vars` gesetzt — exakt wie `SystemAuditMixin`). Die Changelist erzeugt genau **einen** Sammel-Audit pro Request (nicht pro Zeile). Ein same-facility-Read durch einen `facility_admin` erzeugt **keinen** Audit — sein Queryset ist bereits facility-gescopt (kein Cross-Facility-Read möglich), sodass `app.is_super_admin` nicht fälschlich in seiner Session gesetzt wird.
+
+Ein Architektur-Guard ([`TestDomainAdminReadOnlyGuard`](../src/tests/test_architecture_guards_audit.py)) lässt künftige Fach-Model-Admins ohne `ReadOnlyDomainAdminMixin` fehlschlagen; Verhaltensnachweis in [`test_admin_audit.py`](../src/tests/test_admin_audit.py).
+
+**Restrisiko / Trade-off:** Die Read-only-Sperre entfernt den legitimen Notfall-Korrektur-Pfad über das Admin — bewusste Konsequenz der Entscheidung „Sperren statt Audit-Wiring", weil ein Admin-Save die Service-Invarianten nicht sauber replizieren kann. Notfall-Korrekturen laufen über die reguläre App (Service-Schicht, auditiert) bzw. den forensischen psql-Pfad (`anlaufstelle_admin`, BYPASSRLS).
+
+---
+
 ## CSP `'unsafe-eval'` auf `/admin-mgmt/` (Issue #695)
 
 **Status:** Design-Entscheidung, Workaround akzeptiert. Trigger-Liste für Re-Evaluation am Ende.

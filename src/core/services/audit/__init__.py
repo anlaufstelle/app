@@ -30,6 +30,7 @@ vom Architekturtest (``TestAuditLogCreationAllowlist``) blockiert.
 from core.services.audit.chain import compute_entry_hash, verify_chain
 from core.services.audit.hash import hmac_hash_email
 from core.services.audit.helpers import (
+    audit_admin_view,
     audit_client_event,
     audit_event,
     audit_retention_decision,
@@ -39,6 +40,7 @@ from core.services.audit.helpers import (
 )
 
 __all__ = [
+    "audit_admin_view",
     "audit_client_event",
     "audit_event",
     "audit_retention_decision",
