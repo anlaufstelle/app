@@ -144,7 +144,12 @@ class ServiceWorkerView(View):
         return HttpResponse(
             content,
             content_type="application/javascript",
-            headers={"Service-Worker-Allowed": "/"},
+            # Refs #1575: no-cache (nicht no-store) — der Browser darf /sw.js
+            # weiter cachen, muss ihn aber vor JEDER Verwendung revalidieren.
+            # Ohne diesen Header erkennt Chrome ein geaendertes SW-Skript sonst
+            # erst bei einer Online-Navigation nach bis zu 24h (Standard-SW-
+            # Update-Intervall) statt sofort bei der naechsten Navigation.
+            headers={"Service-Worker-Allowed": "/", "Cache-Control": "no-cache, max-age=0"},
         )
 
 

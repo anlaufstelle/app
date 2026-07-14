@@ -4,10 +4,13 @@ Covers: Happy-Path (200 + korrekter Content-Type + Scope-Header),
 FileNotFoundError-Pfad (404), und die @lru_cache-Idempotenz.
 """
 
+import hashlib
 import re
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from django.conf import settings
 from django.contrib.staticfiles import finders
 from django.core.management import call_command
 from django.test import override_settings
@@ -47,6 +50,31 @@ class TestServiceWorkerView:
         """Kein Login, kein CSRF — SW muss public sein, sonst greift kein Browser."""
         response = client.get(reverse("service_worker"))
         assert response.status_code == 200
+
+    def test_has_no_cache_control_header(self, client):
+        """Refs #1575: GET /sw.js muss ``Cache-Control: no-cache, max-age=0``
+        tragen, damit der Browser bei JEDER Online-Navigation (nicht erst
+        nach bis zu 24h, siehe HTTP-Spezifikation der SW-Update-Erkennung)
+        pruefen muss, ob sich das SW-Skript geaendert hat — statt eine
+        veraltete Fassung aus dem HTTP-Cache zu servieren. ``no-cache`` statt
+        ``no-store``: der Browser darf die Antwort weiter im Cache halten,
+        muss sie aber vor jeder Verwendung revalidieren (kein Caching-Verbot).
+        """
+        response = client.get(reverse("service_worker"))
+        assert response["Cache-Control"] == "no-cache, max-age=0"
+
+    def test_has_no_cache_control_header_when_authenticated(self, client, staff_user):
+        """Refs #1575: Die NoStoreCacheMiddleware (#1342) setzt fuer
+        authentifizierte Requests per ``setdefault`` ``Cache-Control:
+        no-store, private`` — das darf den bewusst gesetzten
+        ``no-cache``-Header von /sw.js NICHT ueberschreiben (setdefault
+        greift nur, wenn der Header noch fehlt). /sw.js wird sowohl anonym
+        (Erstbesuch) als auch eingeloggt (Reload) geholt.
+        """
+        client.force_login(staff_user)
+        response = client.get(reverse("service_worker"))
+        assert response["Cache-Control"] == "no-cache, max-age=0"
+        assert "no-store" not in response["Cache-Control"]
 
 
 @pytest.mark.django_db
@@ -520,6 +548,72 @@ def _app_shell_block(body: str) -> str:
     start = body.index("const APP_SHELL = [")
     end = body.index("];", start)
     return body[start:end]
+
+
+class TestPrecachedShellBumpGuard:
+    """Refs #1575: Prozess-Guard gegen den 26078b7-Bug.
+
+    26078b7 ("/offline/ auf statischen Fallback zurueckbauen") aenderte den
+    Inhalt von ``src/templates/offline.html`` (OFFLINE_FALLBACK_URL), OHNE
+    ``CACHE_NAME`` in ``src/static/js/sw.js`` zu bumpen. Der Service Worker
+    liefert precachte Shells cache-first OHNE Revalidierung und precacht sie
+    nur bei einem NEUEN ``CACHE_NAME`` neu (install -> ``cache.addAll``).
+    Ergebnis: Geraete, die VOR 26078b7 zuletzt frisch installiert hatten,
+    blieben auf dem alten Offline-Screen haengen — Geraete, die DANACH
+    installierten, sahen den neuen. Gleicher ``CACHE_NAME``, zwei
+    Auslieferungs-Generationen im Feld (Split-Brain).
+
+    Dieser Test pinnt einen SHA-256-Hash ueber die precachte Shell-Quelle
+    (``offline.html`` + der komplette ``APP_SHELL``-Block aus ``sw.js``, in
+    dem u.a. alle ``OFFLINE_*_SHELL_URL``-Konstanten referenziert sind)
+    ZUSAMMEN mit dem aktuellen ``CACHE_NAME`` als EIN gepinntes Wertepaar.
+    Aendert sich einer der beiden Werte, ohne dass der andere mitgepflegt
+    wird, schlaegt der Test fehl — mit einer Anleitung, was zu tun ist.
+    """
+
+    # Gepinntes Wertepaar — bei jeder Aenderung an ``src/templates/offline.html``
+    # ODER am APP_SHELL-Block in ``src/static/js/sw.js`` MUESSEN beide Werte
+    # gemeinsam aktualisiert werden (CACHE_NAME bumpen, dann diesen Hash mit
+    # dem neuen Inhalt neu berechnen).
+    _PINNED_CACHE_NAME = "anlaufstelle-v24"
+    _PINNED_SHELL_HASH = "1e2e6853b3c2f22a1585590f0a23a761b7cb84ea27b4784aa5d0e9df3d54f452"
+
+    @staticmethod
+    def _current_cache_name(sw_src: str) -> str:
+        match = re.search(r'const CACHE_NAME = "([^"]+)"', sw_src)
+        assert match, "CACHE_NAME-Definition nicht in sw.js gefunden (Quell-Drift?)."
+        return match.group(1)
+
+    @staticmethod
+    def _shell_hash(sw_src: str) -> str:
+        offline_html = (Path(settings.BASE_DIR) / "templates" / "offline.html").read_text()
+        app_shell_block = _app_shell_block(sw_src)
+        # NUL-Trenner, damit ein Inhalt, der zufaellig am Ende des einen Teils
+        # den Anfang des anderen imitiert, den Hash nicht kollidieren laesst.
+        payload = "\x00".join((offline_html, app_shell_block))
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    def test_shell_change_requires_cache_name_bump(self):
+        from core.views.pwa import _read_service_worker
+
+        _read_service_worker.cache_clear()
+        sw_src = _read_service_worker()  # rohe, unaufgeloeste Quelle (dev-lesbar)
+        current_cache_name = self._current_cache_name(sw_src)
+        current_hash = self._shell_hash(sw_src)
+
+        assert (current_cache_name, current_hash) == (self._PINNED_CACHE_NAME, self._PINNED_SHELL_HASH), (
+            "Precachte Shell (src/templates/offline.html und/oder der "
+            "APP_SHELL-Block in src/static/js/sw.js) hat sich geaendert, ohne "
+            "dass das gepinnte Wertepaar mitaktualisiert wurde (Refs #1575). "
+            "Genau das war der 26078b7-Bug: der Service Worker liefert die "
+            "Shell cache-first ohne Revalidierung, Bestandsnutzer mit "
+            "unveraendertem CACHE_NAME bekommen den geaenderten Inhalt NIE.\n"
+            "So beheben: (1) CACHE_NAME in src/static/js/sw.js bumpen "
+            "(erzwingt Re-Install + Re-Precache bei Bestandsnutzern), (2) "
+            "_PINNED_CACHE_NAME und _PINNED_SHELL_HASH in "
+            "TestPrecachedShellBumpGuard (src/tests/test_pwa_views.py) auf "
+            "die neuen Werte aktualisieren."
+        )
 
 
 @pytest.mark.django_db
