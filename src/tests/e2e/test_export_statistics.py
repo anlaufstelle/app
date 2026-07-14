@@ -38,7 +38,7 @@ class TestPDFExportE2E:
         page.goto(f"{base_url}/statistics/")
 
         with page.expect_download() as download_info:
-            page.locator("a:has-text('Halbjahresbericht (PDF)')").click()
+            page.locator("a:has-text('PDF-Export')").click()
         download = download_info.value
         assert download.suggested_filename.endswith(".pdf")
 
