@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.db.models import Case, F, IntegerField, Max, Q, Value, When
 from django.http import JsonResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import redirect, render
 from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 from django.views import View
@@ -25,6 +25,7 @@ from core.services.client import (
     track_client_visit,
     update_client,
 )
+from core.services.scoping import get_scoped_object
 from core.services.security import RequireSudoModeMixin
 from core.services.system import get_active_bans_for_client
 from core.utils.downloads import safe_download_response
@@ -78,7 +79,7 @@ class ClientDetailView(AssistantOrAboveRequiredMixin, View):
         facility = request.current_facility
         # Soft-deletete Personen werden in der Detail-View nicht ausgespielt;
         # Admins kommen ueber die Papierkorb-Ansicht (#626) an den Datensatz.
-        client = get_object_or_404(Client, pk=pk, facility=facility, is_deleted=False)
+        client = get_scoped_object(Client, request, pk=pk, is_deleted=False)
         track_client_visit(request.user, client, facility)
 
         events = (
@@ -167,12 +168,12 @@ class ClientUpdateView(StaffRequiredMixin, View):
     """Edit a client."""
 
     def get(self, request, pk):
-        client = get_object_or_404(Client, pk=pk, facility=request.current_facility)
+        client = get_scoped_object(Client, request, pk=pk)
         form = ClientForm(instance=client, facility=request.current_facility)
         return render(request, "core/clients/form.html", {"form": form, "client": client, "is_edit": True})
 
     def post(self, request, pk):
-        client = get_object_or_404(Client, pk=pk, facility=request.current_facility)
+        client = get_scoped_object(Client, request, pk=pk)
         old_stage = client.contact_stage
         form = ClientForm(request.POST, instance=client, facility=request.current_facility)
         if form.is_valid():
@@ -245,7 +246,7 @@ class ClientDataExportJSONView(LeadOrAdminRequiredMixin, RequireSudoModeMixin, V
     @method_decorator(ratelimit(key="user", rate="10/h", method="GET", block=True))
     def get(self, request, pk):
         facility = request.current_facility
-        client = get_object_or_404(Client, pk=pk, facility=facility)
+        client = get_scoped_object(Client, request, pk=pk)
 
         data = export_client_data(client, facility, request.user)
 
@@ -273,7 +274,7 @@ class ClientDataExportPDFView(LeadOrAdminRequiredMixin, RequireSudoModeMixin, Vi
     @method_decorator(ratelimit(key="user", rate="10/h", method="GET", block=True))
     def get(self, request, pk):
         facility = request.current_facility
-        client = get_object_or_404(Client, pk=pk, facility=facility)
+        client = get_scoped_object(Client, request, pk=pk)
 
         pdf_bytes = export_client_data_pdf(client, facility, request.user)
 
