@@ -414,3 +414,38 @@ class TestRestoreDrillProdFormat:
             "restore-drill.sh muss POSTGRES_DB fail-closed einfordern (:?) — der "
             "Vollstaendigkeits-Abgleich gegen die Live-DB braucht den Namen (Refs #1336)."
         )
+
+
+class TestOpsRunbookRetentionCrontabAdminRole:
+    """Refs #1335 (Review-Nachschlag): ``enforce_retention`` bricht ohne
+    BYPASSRLS-Admin-Kontext genauso fail-loud ab wie ``verify_audit_chain``
+    (``enforce_retention.py:73`` — identischer ``_has_rls_bypass_context()``-Guard).
+    Die Beispiel-Crontab in ops-runbook.md §3.2 gibt der ``verify_audit_chain``-
+    Zeile bereits den ``-e POSTGRES_USER=$POSTGRES_ADMIN_USER``-Override; die
+    direkt darueberstehende ``enforce_retention``-Zeile muss denselben Override
+    tragen — sonst faehrt ein Self-Hoster, der den Block woertlich uebernimmt,
+    die Aufbewahrungsfrist-Durchsetzung als RLS-gefilterte App-Rolle und sie
+    bricht jede Nacht fail-loud ab: die exakte DSGVO-Retention-Luecke, die
+    #1335 schliessen soll."""
+
+    _RUNBOOK = Path("docs/ops-runbook.md")
+
+    def _crontab_block(self) -> str:
+        text = self._RUNBOOK.read_text(encoding="utf-8")
+        match = re.search(r"```cron\n(.*?)\n```", text, re.DOTALL)
+        assert match is not None, "kein ```cron-Block in ops-runbook.md §3.2 gefunden"
+        return match.group(1)
+
+    def test_enforce_retention_line_uses_admin_role_override(self) -> None:
+        block = self._crontab_block()
+        retention_line = next(
+            (line for line in block.splitlines() if "manage.py enforce_retention" in line),
+            None,
+        )
+        assert retention_line is not None, "keine enforce_retention-Crontab-Zeile in ops-runbook.md §3.2 gefunden"
+        assert "POSTGRES_ADMIN_USER" in retention_line, (
+            "enforce_retention bricht ohne BYPASSRLS-Admin-Kontext fail-loud ab "
+            "(enforce_retention.py:73) — die Beispiel-Crontab-Zeile muss denselben "
+            "-e POSTGRES_USER=$POSTGRES_ADMIN_USER-Override tragen wie verify_audit_chain "
+            "(Refs #1335)."
+        )

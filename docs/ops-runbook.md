@@ -213,7 +213,10 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 0 2 * * * cd /opt/anlaufstelle && ./scripts/ops/backup.sh >> /var/log/anlaufstelle-backup.log 2>&1
 
 # Retention-Durchsetzung (taeglich 03:00)
-0 3 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py enforce_retention >> /var/log/anlaufstelle-retention.log 2>&1
+# MUSS mit der Admin-DB-Rolle (BYPASSRLS) laufen, sonst bricht das Kommando
+# fail-loud ab (§9 DB-Rollenmodell), statt faelschlich 0 verarbeitete Zeilen
+# als RETENTION_RUN_COMPLETED zu melden.
+0 3 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD web python manage.py enforce_retention >> /var/log/anlaufstelle-retention.log 2>&1
 
 # Audit-Ketten-Verifikation (taeglich 03:30, nach Retention; Refs #1070)
 # MUSS mit der Admin-DB-Rolle (BYPASSRLS) laufen, sonst bricht das Kommando
