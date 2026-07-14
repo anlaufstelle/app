@@ -70,6 +70,10 @@ class _BulkActionMixin(AssistantOrAboveRequiredMixin):
         "filter_priority": "priority",
         "filter_assigned_to": "assigned_to",
         "filter_due": "due",
+        # Refs #1570: Status-/Zeitraumfilter (erledigte Aufgaben) ebenfalls
+        # nach dem Bulk-Submit erhalten.
+        "filter_status": "status",
+        "filter_done_period": "done_period",
     }
 
     # Refs #1134: Filter-Felder, deren *leerer* Wert eine eigene Bedeutung hat

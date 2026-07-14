@@ -73,11 +73,42 @@
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
-            hx-include="#filter-item-type,#filter-priority,#filter-assigned-to"
+            hx-include="#filter-item-type,#filter-priority,#filter-assigned-to,#filter-status,#filter-done-period"
         >
             <option value="">{% trans "Alle" %}</option>
             {% for value, label in due_filter_choices %}
             <option value="{{ value }}" {% if selected_due == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% comment %}Refs #1570: Statusfilter — "" (Alle Status) zeigt weiterhin die drei bestehenden Sektionen; eine gewählte Option blendet die anderen gezielt aus.{% endcomment %}
+    <div>
+        <label for="filter-status" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Status" %}</label>
+        <select id="filter-status" name="status"
+            class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
+            hx-get="{% url 'core:workitem_inbox' %}"
+            hx-target="#inbox-content"
+            hx-trigger="change"
+            hx-include="#filter-item-type,#filter-priority,#filter-assigned-to,#filter-due,#filter-done-period"
+        >
+            <option value="">{% trans "Alle Status" %}</option>
+            {% for value, label in status_filter_choices %}
+            <option value="{{ value }}" {% if selected_status == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% comment %}Refs #1570: Zeitraum wirkt nur zusammen mit Status=Erledigt (passive "Kürzlich erledigt"-Vorschau bleibt unabhängig davon fest auf 7 Tage).{% endcomment %}
+    <div>
+        <label for="filter-done-period" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Zeitraum (Erledigt)" %}</label>
+        <select id="filter-done-period" name="done_period"
+            class="block w-full bg-surface border border-subtle rounded-[10px] text-[13px] text-ink-soft px-2.5 py-1.5"
+            hx-get="{% url 'core:workitem_inbox' %}"
+            hx-target="#inbox-content"
+            hx-trigger="change"
+            hx-include="#filter-item-type,#filter-priority,#filter-assigned-to,#filter-due,#filter-status"
+        >
+            {% for value, label in done_period_choices %}
+            <option value="{{ value }}" {% if selected_done_period == value %}selected{% endif %}>{{ label }}</option>
             {% endfor %}
         </select>
     </div>

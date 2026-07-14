@@ -6,8 +6,9 @@ Bildschirmen (lg), mobil einspaltig untereinander. Offene und laufende Aufgaben
 sind die wichtigsten Zustände und sollen parallel sichtbar sein.
 {% endcomment %}
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 mb-8">
-    {# Offen #}
-    <section>
+    {# Offen — Refs #1570: nur gerendert, wenn der Statusfilter sie nicht ausblendet. #}
+    {% if show_open %}
+    <section data-testid="section-open">
         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Offen" %} ({{ open_items|length }}{% if open_has_more %}+{% endif %})</h2>
         {% if open_items %}
         <div class="space-y-3">
@@ -22,9 +23,11 @@ sind die wichtigsten Zustände und sollen parallel sichtbar sein.
         <p class="text-sm text-ink-muted">{% trans "Keine offenen Aufgaben" %}</p>
         {% endif %}
     </section>
+    {% endif %}
 
-    {# In Bearbeitung #}
-    <section>
+    {# In Bearbeitung — Refs #1570: nur gerendert, wenn der Statusfilter sie nicht ausblendet. #}
+    {% if show_in_progress %}
+    <section data-testid="section-in-progress">
         <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "In Bearbeitung" %} ({{ in_progress_items|length }}{% if in_progress_has_more %}+{% endif %})</h2>
         {% if in_progress_items %}
         <div class="space-y-3">
@@ -39,8 +42,10 @@ sind die wichtigsten Zustände und sollen parallel sichtbar sein.
         <p class="text-sm text-ink-muted">{% trans "Keine Aufgaben in Bearbeitung" %}</p>
         {% endif %}
     </section>
+    {% endif %}
 </div>
 
+{% if show_done_widget %}
 {% comment %}
 Kürzlich erledigt — Refs #1149: Rückblick/Kontrolle, daher unterhalb der beiden
 Hauptspalten und visuell zurückgenommen. Native <details>/<summary> (CSP-sicher,
@@ -91,3 +96,44 @@ Standardmäßig eingeklappt. Die Überschrift benennt den Zeitraum eindeutig
         {% endif %}
     </div>
 </details>
+
+{% comment %}
+Refs #1570: Zugriff auf ältere erledigte Aufgaben — führt zu einer gezielt
+gefilterten Aufgabenansicht (Statusfilter "Erledigt"), statt die Vorschau
+einfach nur aufzuklappen. Übernimmt die aktuell aktiven Filter (Typ,
+Priorität, Zuweisung, Fälligkeit), damit z.B. eine gewählte "Mir
+zugewiesen"-Eingrenzung erhalten bleibt.
+{% endcomment %}
+<p class="mt-3">
+    <a href="{% url 'core:workitem_inbox' %}?item_type={{ selected_item_type|urlencode }}&priority={{ selected_priority|urlencode }}&assigned_to={{ selected_assigned_to|urlencode }}&due={{ selected_due|urlencode }}&status=done&done_period=30"
+       class="inline-flex items-center gap-1 text-[13px] font-semibold text-accent hover:underline"
+       data-testid="all-done-link">
+        {% trans "Alle erledigten Aufgaben anzeigen" %}
+    </a>
+</p>
+{% endif %}
+
+{% if show_done_full %}
+{% comment %}
+Refs #1570: Gezielte Erledigt-Ansicht (Statusfilter "Erledigt") — im
+Unterschied zur passiven Vorschau oben nicht auf 7 Tage/5 Einträge begrenzt,
+sondern über ``selected_done_period`` steuerbar (7/30 Tage/alle) und immer
+sichtbar (kein Aufklappen nötig, da bewusst gewählt). Die Beschriftung nennt
+den gewählten Zeitraum eindeutig.
+{% endcomment %}
+<section class="border-t border-subtle pt-4" data-testid="section-done-full">
+    <h2 class="text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Erledigt" %} · {{ done_period_label }} ({{ done_full_items|length }}{% if done_full_has_more %}+{% endif %})</h2>
+    {% if done_full_items %}
+    <div class="space-y-3">
+        {% for wi in done_full_items %}
+        {% include "core/workitems/partials/item_card.html" %}
+        {% endfor %}
+    </div>
+    {% if done_full_has_more %}
+    <p class="text-xs text-ink-muted mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
+    {% endif %}
+    {% else %}
+    <p class="text-sm text-ink-muted">{% trans "Keine erledigten Aufgaben im gewählten Zeitraum" %}</p>
+    {% endif %}
+</section>
+{% endif %}
