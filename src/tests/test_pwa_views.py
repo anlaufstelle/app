@@ -563,20 +563,45 @@ class TestPrecachedShellBumpGuard:
     installierten, sahen den neuen. Gleicher ``CACHE_NAME``, zwei
     Auslieferungs-Generationen im Feld (Split-Brain).
 
-    Dieser Test pinnt einen SHA-256-Hash ueber die precachte Shell-Quelle
-    (``offline.html`` + der komplette ``APP_SHELL``-Block aus ``sw.js``, in
-    dem u.a. alle ``OFFLINE_*_SHELL_URL``-Konstanten referenziert sind)
-    ZUSAMMEN mit dem aktuellen ``CACHE_NAME`` als EIN gepinntes Wertepaar.
-    Aendert sich einer der beiden Werte, ohne dass der andere mitgepflegt
-    wird, schlaegt der Test fehl — mit einer Anleitung, was zu tun ist.
+    Dieser Test pinnt einen SHA-256-Hash ueber die precachte Shell-Quelle —
+    ALLE HTML-Templates, die eine der ``OFFLINE_*_SHELL_URL``-Views (bzw.
+    ``OFFLINE_FALLBACK_URL``) rendert, siehe ``_SHELL_TEMPLATES`` — ZUSAMMEN
+    mit dem kompletten ``APP_SHELL``-Block aus ``sw.js`` (in dem die
+    ``OFFLINE_*_SHELL_URL``-Konstanten referenziert sind) UND dem aktuellen
+    ``CACHE_NAME`` als EIN gepinntes Wertepaar. Aendert sich einer der beiden
+    Werte, ohne dass der andere mitgepflegt wird, schlaegt der Test fehl —
+    mit einer Anleitung, was zu tun ist.
+
+    Der urspruengliche 26078b7-Bug traf ``offline.html``; genauso cache-first
+    ohne Revalidierung ausgeliefert werden aber auch die uebrigen pk-losen
+    In-Place-Shells (``core/views/offline.py``) — die Vorlage fuer den Guard
+    deckt deshalb alle precachten HTML-Shells ab, nicht nur ``offline.html``.
     """
 
-    # Gepinntes Wertepaar — bei jeder Aenderung an ``src/templates/offline.html``
+    # Alle precachten HTML-Shell-Templates (relativ zu ``templates/``), die
+    # eine der OFFLINE_*_SHELL_URL-Views bzw. OFFLINE_FALLBACK_URL rendert
+    # (siehe core/views/offline.py) und die der SW cache-first OHNE
+    # Revalidierung ausliefert. Reihenfolge ist stabil (fuer den Hash), die
+    # Liste ist bewusst vollstaendig statt nur eine Teilmenge — jedes fehlende
+    # Template waere ein blinder Fleck fuer genau die 26078b7-Bugklasse.
+    _SHELL_TEMPLATES = (
+        "offline.html",
+        "core/clients/offline_detail.html",
+        "core/events/offline_create.html",
+        "core/workitems/offline_create.html",
+        "core/clients/offline_list.html",
+        "core/workitems/offline_workitem_list.html",
+        "core/zeitstrom/offline_zeitstrom.html",
+        "core/events/conflict_review.html",
+        "core/events/conflict_list.html",
+    )
+
+    # Gepinntes Wertepaar — bei jeder Aenderung an einem der _SHELL_TEMPLATES
     # ODER am APP_SHELL-Block in ``src/static/js/sw.js`` MUESSEN beide Werte
     # gemeinsam aktualisiert werden (CACHE_NAME bumpen, dann diesen Hash mit
     # dem neuen Inhalt neu berechnen).
     _PINNED_CACHE_NAME = "anlaufstelle-v24"
-    _PINNED_SHELL_HASH = "1e2e6853b3c2f22a1585590f0a23a761b7cb84ea27b4784aa5d0e9df3d54f452"
+    _PINNED_SHELL_HASH = "d3ce5f91d66f2d3300dd1fb71702387a14feb5fc93f337dab07eb0cad1b16eea"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:
@@ -584,13 +609,14 @@ class TestPrecachedShellBumpGuard:
         assert match, "CACHE_NAME-Definition nicht in sw.js gefunden (Quell-Drift?)."
         return match.group(1)
 
-    @staticmethod
-    def _shell_hash(sw_src: str) -> str:
-        offline_html = (Path(settings.BASE_DIR) / "templates" / "offline.html").read_text()
+    @classmethod
+    def _shell_hash(cls, sw_src: str) -> str:
+        templates_dir = Path(settings.BASE_DIR) / "templates"
+        shell_contents = [(templates_dir / name).read_text() for name in cls._SHELL_TEMPLATES]
         app_shell_block = _app_shell_block(sw_src)
         # NUL-Trenner, damit ein Inhalt, der zufaellig am Ende des einen Teils
         # den Anfang des anderen imitiert, den Hash nicht kollidieren laesst.
-        payload = "\x00".join((offline_html, app_shell_block))
+        payload = "\x00".join((*shell_contents, app_shell_block))
         return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def test_shell_change_requires_cache_name_bump(self):
@@ -602,9 +628,10 @@ class TestPrecachedShellBumpGuard:
         current_hash = self._shell_hash(sw_src)
 
         assert (current_cache_name, current_hash) == (self._PINNED_CACHE_NAME, self._PINNED_SHELL_HASH), (
-            "Precachte Shell (src/templates/offline.html und/oder der "
-            "APP_SHELL-Block in src/static/js/sw.js) hat sich geaendert, ohne "
-            "dass das gepinnte Wertepaar mitaktualisiert wurde (Refs #1575). "
+            "Precachte Shell (eines der _SHELL_TEMPLATES unter "
+            "src/templates/ und/oder der APP_SHELL-Block in "
+            "src/static/js/sw.js) hat sich geaendert, ohne dass das "
+            "gepinnte Wertepaar mitaktualisiert wurde (Refs #1575). "
             "Genau das war der 26078b7-Bug: der Service Worker liefert die "
             "Shell cache-first ohne Revalidierung, Bestandsnutzer mit "
             "unveraendertem CACHE_NAME bekommen den geaenderten Inhalt NIE.\n"
