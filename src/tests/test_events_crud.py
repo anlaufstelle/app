@@ -108,6 +108,28 @@ class TestEventService:
         assert history.data_before == {"_redacted": True, "fields": ["dauer"]}
         assert AuditLog.objects.filter(action=AuditLog.Action.DELETE, target_type="Event").exists()
 
+    def test_soft_delete_audit_detail_uses_client_id_not_pseudonym(
+        self, facility, staff_user, doc_type_contact, client_identified
+    ):
+        """L13 (Refs #1375): Der DELETE-AuditLog darf kein Klartext-Pseudonym
+        (Data-Min-Residuum) tragen — statt ``client_pseudonym`` steht die
+        neutrale ``client_id`` drin (konsistent zum gehärteten Client-Löschpfad,
+        Refs #1093)."""
+        event = create_event(
+            facility=facility,
+            user=staff_user,
+            document_type=doc_type_contact,
+            occurred_at=timezone.now(),
+            data_json={"dauer": 15},
+            client=client_identified,
+        )
+        soft_delete_event(event, staff_user)
+        entry = AuditLog.objects.filter(
+            action=AuditLog.Action.DELETE, target_type="Event", target_id=str(event.pk)
+        ).latest("timestamp")
+        assert "client_pseudonym" not in entry.detail
+        assert entry.detail.get("client_id") == str(client_identified.pk)
+
     def test_request_deletion_creates_request(self, sample_event, staff_user):
         dr = request_deletion(sample_event, staff_user, "DSGVO-Löschung")
         assert dr.status == DeletionRequest.Status.PENDING

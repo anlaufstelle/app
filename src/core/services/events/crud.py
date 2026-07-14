@@ -396,7 +396,11 @@ def soft_delete_event(event, user):
         target_obj=event,
         detail={
             "document_type": event.document_type.name,
-            "client_pseudonym": (event.client.pseudonym if event.client else None),
+            # L13 (Refs #1375): neutrale client_id statt Klartext-Pseudonym —
+            # Data-Min-Residuum, konsistent zum gehärteten Client-Löschpfad
+            # (Refs #1093). Das append-only-AuditLog konserviert das Pseudonym
+            # sonst dauerhaft, obwohl der Löschzweck es nicht braucht.
+            "client_id": (str(event.client_id) if event.client_id else None),
             "occurred_at": str(event.occurred_at),
         },
     )
