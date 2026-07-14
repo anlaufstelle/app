@@ -7,7 +7,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
 from django.utils import timezone
 
-from core.models import Activity, AuditLog, Case, Event, Facility, Settings
+from core.models import Activity, AuditLog, Case, Event, Facility, LegalHold, Settings
 
 
 @pytest.fixture
@@ -443,6 +443,25 @@ def test_activity_retention_custom_setting(facility_with_settings, staff_user):
 
     assert not Activity.objects.filter(pk=old_activity.pk).exists()
     assert Activity.objects.filter(pk=recent_activity.pk).exists()
+
+
+@pytest.mark.django_db
+def test_activity_under_active_legal_hold_is_not_deleted(facility_with_settings, staff_user):
+    """L12 (Refs #1375): Eine Activity mit aktivem Legal Hold darf NICHT hart
+    geloescht werden — sonst Spoliations-Luecke gegenueber den Event-Pfaden, die
+    ``get_active_hold_target_ids`` respektieren."""
+    old_activity = _create_activity(facility_with_settings, staff_user, days_ago=400)
+    LegalHold.objects.create(
+        facility=facility_with_settings,
+        target_type="Activity",
+        target_id=old_activity.pk,
+        reason="Aufbewahrungspflicht",
+        created_by=staff_user,
+    )
+
+    call_command("enforce_retention")
+
+    assert Activity.objects.filter(pk=old_activity.pk).exists()
 
 
 @pytest.mark.django_db

@@ -282,10 +282,15 @@ def enforce_activities(facility, settings_obj, now, dry_run):
         return {"count": 0}
 
     cutoff = now - timedelta(days=settings_obj.retention_activities_days)
+    # L12 (Refs #1375): Legal-Hold-Ausschluss auch fuer Activities — analog zu
+    # den Event-Pfaden (``get_active_hold_target_ids``). Ohne diesen Ausschluss
+    # riss der Hard-Delete eine unter aktivem Hold stehende Activity mit
+    # (Spoliations-Luecke); der Hold traegt ``target_type="Activity"``.
+    held_ids = get_active_hold_target_ids(facility, "Activity")
     qs = Activity.objects.filter(
         facility=facility,
         occurred_at__lt=cutoff,
-    )
+    ).exclude(pk__in=held_ids)
     count = qs.count()
     if count and not dry_run:
         qs.delete()
