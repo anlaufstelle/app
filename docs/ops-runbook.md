@@ -176,14 +176,29 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 
 ## 3. Cron-Jobs
 
+> **⚠️ Ohne eingerichteten Scheduler laeuft nichts — still.** Anlaufstelle plant seine
+> Hintergrundjobs **nicht selbst**: kein eingebauter Scheduler, kein Compose-Sidecar
+> (bewusst so entschieden, siehe #794
+> geplantes One-Command-Startup, gated auf Release 0.23/Milestone M6). Ohne die
+> Host-Crontab aus [§3.2](#32-crontab-eintraege) **loescht/sichert/scannt eine
+> Self-Host-Installation nie** — es gibt dabei **keine Fehlermeldung**, nur Stille.
+> Das verletzt insbesondere die Speicherbegrenzung nach **Art. 5 Abs. 1 lit. e DSGVO**
+> (Retention muss tatsaechlich laufen, nicht nur konfiguriert sein). Self-Hoster
+> **muessen** die Crontab-Eintraege aus §3.2 nach der Installation manuell einrichten.
+> Den Lauf-Status je Job zeigt das Compliance-Dashboard
+> ([`/system/compliance/`](admin-guide.md), Kategorie „Hintergrundjobs", nur
+> Super-Admins) — grob aggregiert auch der [`/health/`-Endpoint](monitoring-guide.md)
+> (`stale_jobs`).
+
 ### 3.1 Uebersicht
 
 | Job | Empfohlene Zeit | Zweck |
 |-----|----------------|-------|
 | `backup.sh` | Taeglich 02:00 | Verschluesseltes DB- und Medien-Backup mit Rotation; optionaler Off-Site-Sync (Refs #720, #738) |
-| `detect_breaches` | Stuendlich:30 | Heuristik-basierte Breach-Detection (failed-login-burst / mass-export / mass-delete) → AuditLog SECURITY_VIOLATION + optionaler Webhook (Refs #685) |
 | `enforce_retention` | Taeglich 03:00 | Abgelaufene Events soft-loeschen, Clients anonymisieren |
+| `verify_audit_chain` | Taeglich 03:30 (nach Retention) | HMAC-Integritaetskette des AuditLog verifizieren; Exit-Code != 0 bei Tamper-Verdacht (Refs #1070) |
 | `create_statistics_snapshots` | Monatlich 1. Tag 04:00 | Monats-Aggregate sichern bevor Events geloescht werden |
+| `detect_breaches` | Stuendlich:30 | Heuristik-basierte Breach-Detection (failed-login-burst / mass-export / mass-delete) → AuditLog SECURITY_VIOLATION + optionaler Webhook (Refs #685) |
 | `refresh_statistics_view` | Stuendlich:15 | Materialized View `core_statistics_event_flat` aktualisieren (Statistik-Dashboard) |
 | Invite-Token-Audit | Woechentlich So 05:00 | Verwaiste Invite-User-Konten aufspueren (siehe [10](#10-invite-token-hygiene)) |
 | Health-Check | Alle 5 Minuten | Verfuegbarkeit pruefen |
@@ -200,8 +215,16 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 # Retention-Durchsetzung (taeglich 03:00)
 0 3 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py enforce_retention >> /var/log/anlaufstelle-retention.log 2>&1
 
+# Audit-Ketten-Verifikation (taeglich 03:30, nach Retention; Refs #1070)
+# MUSS mit der Admin-DB-Rolle (BYPASSRLS) laufen, sonst bricht das Kommando
+# fail-loud ab (§9 DB-Rollenmodell) statt faelschlich "intakt" zu melden.
+30 3 * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T -e POSTGRES_USER=$POSTGRES_ADMIN_USER -e POSTGRES_PASSWORD=$POSTGRES_ADMIN_PASSWORD web python manage.py verify_audit_chain >> /var/log/anlaufstelle-audit-verify.log 2>&1
+
 # Statistik-Snapshots (monatlich am 1. um 04:00)
 0 4 1 * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py create_statistics_snapshots >> /var/log/anlaufstelle-snapshots.log 2>&1
+
+# Breach-Detection-Scan (stuendlich zur 30. Minute, Refs #685)
+30 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py detect_breaches >> /var/log/anlaufstelle-breach.log 2>&1
 
 # Materialized-View-Refresh (stuendlich zur 15. Minute, Details siehe Abschnitt 11)
 15 * * * * cd /opt/anlaufstelle && docker compose -f docker-compose.prod.yml exec -T web python manage.py refresh_statistics_view >> /var/log/anlaufstelle-mv.log 2>&1
@@ -213,7 +236,7 @@ werden, wenn das Backup einen anderen Stand abbildet als die aktuelle
 */5 * * * * curl -sf https://DOMAIN/health/ > /dev/null || echo "Anlaufstelle health check failed at $(date)" >> /var/log/anlaufstelle-health.log
 ```
 
-**Reihenfolge beachten:** Backup (02:00) → Retention (03:00) → Snapshots (04:00, monatlich) → MV-Refresh (stuendlich). Backup muss vor Retention laufen, damit geloeschte Daten im Backup enthalten sind. Der MV-Refresh nutzt `CONCURRENTLY` und blockiert laufende Reader nicht.
+**Reihenfolge beachten:** Backup (02:00) → Retention (03:00) → Audit-Ketten-Verifikation (03:30) → Snapshots (04:00, monatlich) → Breach-Detection/MV-Refresh (stuendlich). Backup muss vor Retention laufen, damit geloeschte Daten im Backup enthalten sind. Die Audit-Ketten-Verifikation laeuft nach der Retention, damit die von `prune_auditlog` frisch geschriebenen Checkpoint-Grenzen bereits in der Kette stehen. Der MV-Refresh nutzt `CONCURRENTLY` und blockiert laufende Reader nicht.
 
 ### 3.3 Dev (systemd-Timer)
 

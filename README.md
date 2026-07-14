@@ -151,6 +151,8 @@ Das bedeutet: Der Quellcode ist frei nutzbar, veränderbar und weiterzugeben —
 
 Anlaufstelle wird ohne Mängelgewähr bereitgestellt, ohne Gewährleistung jeglicher Art (siehe [LICENSE](LICENSE), §15–16). Die Software und ihre Dokumentation stellen **keine Rechtsberatung** dar. Betreiber sind eigenverantwortlich für die Einhaltung datenschutzrechtlicher Pflichten (DSGVO, SGB X) — insbesondere für Datenschutz-Folgenabschätzung, Auftragsverarbeitungsverträge und organisatorische Maßnahmen.
 
+> **⚠️ Nach der Installation: Hintergrundjobs einrichten.** Anlaufstelle plant Backup, Aufbewahrungsfristen und Breach-Detection **nicht selbst** — ohne eingerichteten Scheduler laufen diese Jobs nie, still und ohne Fehlermeldung. Einrichtung: [docs/ops-runbook.md § 3 „Cron-Jobs"](docs/ops-runbook.md#3-cron-jobs).
+
 ---
 
 ## Entwicklung
