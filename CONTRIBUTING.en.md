@@ -337,6 +337,7 @@ New endpoints belong in one of these two path groups. URL names stay short and f
 
 - **Update EN in the same commit (binding, Refs #1215).** Whoever changes translatable strings — Django `{% trans %}`/`.po` under [`src/locale/`](src/locale/) or the mirrored EN docs (`*.en.md`, [`docs/en/`](docs/en/)) — updates the English counterpart in the **same commit**, not in a deferred sync commit. Consistent with the "i18n is its own commit" rule in `AGENTS.md` § Git & Commits (dev-only): DE and EN belong in *one* `chore(i18n):` commit, separate from the feature.
 - **Stamp as backstop:** [`scripts/check_translation_versions.py`](scripts/check_translation_versions.py) requires a `translation-version` header == current minor for the EN docs (pre-commit hook + `make release-gates`, hard gate since #1078). The stamp catches drift at release; the "same commit" rule prevents drift from arising.
+- **Stamp convention (Refs #1552):** Every EN document carries the markers `translation-source` (path of the DE source), `translation-version`, `translation-date`, and `source-hash` at the end of the file. When you sync EN, set `source-hash` to `git hash-object <DE source>` (the blob hash of the corresponding German file) and update `translation-date` to the sync date. The guard runs `git hash-object` on the source itself and **fails hard** as soon as the stamped `source-hash` diverges (DE source changed since the last EN sync) — no warn mode. Short hashes (≥ 7 hex chars) are accepted as a prefix; a missing `source-hash` marker counts as an error.
 
 ### Conventional Commits
 
@@ -680,5 +681,5 @@ src/
 
 <!-- translation-source: CONTRIBUTING.md -->
 <!-- translation-version: v0.20.0 -->
-<!-- translation-date: 2026-07-13 -->
-<!-- source-hash: de7b115 -->
+<!-- translation-date: 2026-07-14 -->
+<!-- source-hash: b3db093 -->
