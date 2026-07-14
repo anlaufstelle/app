@@ -34,8 +34,10 @@ Der Endpoint liefert **zwei unterschiedlich umfangreiche Payloads** — abhängi
 
 | Aufrufer | Bekommt | Warum |
 |---|---|---|
-| **Anonym** (Default für externes Monitoring) | Schlanker **Liveness**-Payload: `status`, `database`, `virus_scanner`/`clamav`, `encryption_key`. **Keine** Detailfelder. | Recon-Härtung: `version`, `disk_free_pct` etc. verraten Angreifern Infrastruktur-Details. Außerdem kein teurer SMTP-Handshake/Filesystem-Scan pro Poll. |
-| **Intern / Token** | Liveness **plus** Detailfelder: `version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`. | Operatives Monitoring will die Details. |
+| **Anonym** (Default für externes Monitoring) | **Nur** `status` (+ HTTP-Code). **Keine** Subsystem- oder Detailfelder. | Recon-Härtung: Subsystem-Status (`database`, `virus_scanner`/`clamav`, `encryption_key`) und Infrastruktur-Details (`version`, `disk_free_pct` …) verraten Angreifern unauthentifiziert den Betriebszustand einzelner Komponenten (L9/N13, Refs #1375). Für Uptime bleibt `status` + HTTP-Code aussagekräftig. Außerdem kein teurer SMTP-Handshake/Filesystem-Scan pro Poll. |
+| **Intern / Token** | `status` **plus** Subsystemfelder (`database`, `virus_scanner`/`clamav`, `encryption_key`) **und** Detailfelder (`version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`). | Operatives Monitoring will die Details. |
+
+> **Änderung ggü. #1024 A7.1 (L9/N13, Refs #1375):** `database`, `virus_scanner`/`clamav` und `encryption_key` waren bis dahin auch im anonymen Payload enthalten. Sie liegen jetzt hinter dem Token-Gate. Der **kritische** Effekt eines DB-/Encryption-Key-Ausfalls (HTTP 503) und eines Scanner-Ausfalls (`status: degraded`) bleibt auch anonym sichtbar — nur die Subsystem-*Feldnamen* selbst sind Token-only.
 
 **Als „intern" gilt ein Aufrufer, wenn** entweder
 
@@ -85,22 +87,22 @@ Mechanik (aus [`health.py`](../src/core/views/health.py)): `status` startet auf 
 
 Reihenfolge wie im Code. „Sichtbarkeit": **immer** = auch im anonymen Liveness-Payload; **Detail** = nur für interne/Token-Aufrufer.
 
-### 5.1 Immer enthaltene Felder (Liveness)
+### 5.1 Immer enthaltenes Feld (Liveness)
 
 | Feld | Typ | Werte | Bedeutung | Setzt Status |
 |---|---|---|---|---|
-| `status` | string | `ok` / `degraded` / `error` | Gesamtbewertung (siehe [§4](#4-das-status-feld)). ||
-| `database` | string | `connected` / `unavailable` | Ergebnis von `SELECT 1` gegen die DB ([`_check_database`](../src/core/views/health.py) L53–60). | `unavailable` → **`error` + HTTP 503** |
-| `virus_scanner` | string | `connected` / `unavailable` / `disabled` | ClamAV-Daemon-Ping, wenn `CLAMAV_ENABLED`. `disabled`, wenn ClamAV aus. | `unavailable` → **`degraded`** |
-| `clamav` | string | `ok` / `error` / `disabled` | Redundanter Klartext-Indikator zu `virus_scanner` (gleiche Quelle). | (gleicher Auslöser wie `virus_scanner`) |
-| `encryption_key` | string | `ok` / `error` | Fernet-Encrypt/Decrypt-**Roundtrip** ([`_check_encryption_key`](../src/core/views/health.py) L63–79). `error` = Schlüssel passt nicht zu den Daten → keine verschlüsselten Felder lesbar. | `error` → **`error` + HTTP 503** |
-
-> `virus_scanner` **und** `clamav` kommen aus demselben Ping — `virus_scanner` ist der menschenlesbare Verbindungsstatus, `clamav` der ok/error-Kurzindikator. Bei Scanner-Ausfall trifft die harte Fail-closed-Entscheidung der Upload-Pfad im File-Vault, **nicht** der Health-Endpoint — daher nur `degraded`, nicht `error`.
+| `status` | string | `ok` / `degraded` / `error` | Gesamtbewertung (siehe [§4](#4-das-status-feld)); das **einzige** Feld im anonymen Payload. ||
 
 ### 5.2 Detail-Felder (nur intern/Token)
 
+Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„setzt Status"** markierten Checks laufen dennoch bei **jedem** Aufruf und fließen in das anonym sichtbare `status`/den HTTP-Code ein — nur der jeweilige *Feldname* ist Token-only (L9/N13, Refs #1375).
+
 | Feld | Typ | Werte | Bedeutung | Setzt Status |
 |---|---|---|---|---|
+| `database` | string | `connected` / `unavailable` | Ergebnis von `SELECT 1` gegen die DB ([`_check_database`](../src/core/views/health.py)). | `unavailable` → **`error` + HTTP 503** |
+| `virus_scanner` | string | `connected` / `unavailable` / `disabled` | ClamAV-Daemon-Ping, wenn `CLAMAV_ENABLED`. `disabled`, wenn ClamAV aus. | `unavailable` → **`degraded`** |
+| `clamav` | string | `ok` / `error` / `disabled` | Redundanter Klartext-Indikator zu `virus_scanner` (gleiche Quelle). | (gleicher Auslöser wie `virus_scanner`) |
+| `encryption_key` | string | `ok` / `error` | Fernet-Encrypt/Decrypt-**Roundtrip** ([`_check_encryption_key`](../src/core/views/health.py)). `error` = Schlüssel passt nicht zu den Daten → keine verschlüsselten Felder lesbar. | `error` → **`error` + HTTP 503** |
 | `version` | string | z. B. `v0.14.0` / `dev` | App-Version aus der ENV `APP_VERSION` (Fallback `dev`). ||
 | `smtp` | object | `{"status": "...", "latency_ms"?: int}` | SMTP-CONNECT-Test ([`_check_smtp`](../src/core/views/health.py) L82–104). | siehe unten |
 | `smtp.status` | string | `ok` / `unreachable` / `disabled` | `disabled` = Console/Locmem-Backend oder leerer `EMAIL_HOST`. `unreachable` = Server antwortet nicht (Timeout 2 s) → Token-Invites/Passwort-Reset scheitern lautlos. | `unreachable` → **`degraded`** |
@@ -121,13 +123,11 @@ Reihenfolge wie im Code. „Sichtbarkeit": **immer** = auch im anonymen Liveness
 
 ```json
 {
-  "status": "ok",
-  "database": "connected",
-  "virus_scanner": "connected",
-  "clamav": "ok",
-  "encryption_key": "ok"
+  "status": "ok"
 }
 ```
+
+> Der anonyme Payload enthält **nur** `status` (L9/N13, Refs #1375). Ein `degraded`/`error` erscheint hier ebenso, aber **ohne** die auslösenden Subsystemfelder — für die Ursache braucht es den Token-Payload.
 
 **Intern/Token, alles ok (HTTP 200):**
 
@@ -180,7 +180,7 @@ Reihenfolge wie im Code. „Sichtbarkeit": **immer** = auch im anonymen Liveness
 }
 ```
 
-**Error — DB weg (HTTP 503):**
+**Error — DB weg, intern/Token (HTTP 503):**
 
 ```json
 {
@@ -192,7 +192,15 @@ Reihenfolge wie im Code. „Sichtbarkeit": **immer** = auch im anonymen Liveness
 }
 ```
 
-> Die exakte Feld-Auswahl/Reihenfolge kann je nach Konfiguration (ClamAV an/aus, Token gesetzt/nicht) variieren — maßgeblich bleibt [`health.py`](../src/core/views/health.py).
+**Error — DB weg, anonym (HTTP 503):**
+
+```json
+{
+  "status": "error"
+}
+```
+
+> Die exakte Feld-Auswahl/Reihenfolge kann je nach Konfiguration (ClamAV an/aus, Token gesetzt/nicht, anonym vs. intern) variieren — maßgeblich bleibt [`health.py`](../src/core/views/health.py).
 
 ---
 

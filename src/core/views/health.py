@@ -187,32 +187,42 @@ class HealthView(View):
         status = "ok" if db_ok else "error"
         http_status = 200 if db_ok else 503
 
-        payload: dict = {"status": status, "database": db_status}
-
-        # ClamAV (Refs #524, #798) — Health-Indikator, auch für anonyme Liveness.
+        # ClamAV (Refs #524, #798) — Subsystem-Status. Fliesst in den
+        # Gesamtstatus ein; das Detailfeld selbst ist aber Recon (L9/N13, s.u.).
         if getattr(settings, "CLAMAV_ENABLED", False):
             if clamav_ping():
-                payload["virus_scanner"] = "connected"
-                payload["clamav"] = "ok"
+                virus_scanner, clamav_status = "connected", "ok"
             else:
-                payload["virus_scanner"] = "unavailable"
-                payload["clamav"] = "error"
+                virus_scanner, clamav_status = "unavailable", "error"
                 if status == "ok":
                     status = "degraded"
         else:
-            payload["virus_scanner"] = "disabled"
-            payload["clamav"] = "disabled"
+            virus_scanner, clamav_status = "disabled", "disabled"
 
-        # Encryption-Key Roundtrip (Refs #796) — kritisch, auch für Liveness.
+        # Encryption-Key Roundtrip (Refs #796) — kritisch: degradet den Status
+        # (und damit HTTP 503) auch fuer die anonyme Liveness, das Detailfeld
+        # bleibt aber Token-only.
         enc_status = _check_encryption_key()
-        payload["encryption_key"] = enc_status
         if enc_status == "error":
             # Ohne lesbare Encryption-Keys keine sichtbaren Daten — kritisch.
             status = "error"
             http_status = 503
 
-        # --- Detailfelder nur intern/Token (A7.1) ---
+        # L9/N13 (Refs #1375): Anonyme Caller erhalten NUR ``status`` (+ HTTP-Code);
+        # Uptime-Monitore werten beides. Die Subsystem-Status (``database``,
+        # ``virus_scanner``/``clamav``, ``encryption_key``) sind Recon und liegen
+        # jetzt — wie version/smtp/backup/disk/stale_jobs (A7.1, Refs #1024) —
+        # hinter ``_detail_authorized``. Frueher standen sie im anonymen Payload,
+        # was den Betriebszustand einzelner Subsysteme unauthentifiziert
+        # preisgab (N13). Interne Monitore nutzen ``X-Health-Token``.
+        payload: dict = {"status": status}
+
+        # --- Detailfelder nur intern/Token (A7.1 + L9/N13) ---
         if _detail_authorized(request):
+            payload["database"] = db_status
+            payload["virus_scanner"] = virus_scanner
+            payload["clamav"] = clamav_status
+            payload["encryption_key"] = enc_status
             payload["version"] = os.environ.get("APP_VERSION", "dev")
 
             # SMTP-CONNECT (Refs #796), gecacht (A7.2).

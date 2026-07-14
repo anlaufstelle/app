@@ -58,7 +58,10 @@ class TestHealthLiveness:
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "ok"
-        assert data["database"] == "connected"
+
+    def test_detail_caller_sees_database_connected(self, detail_token):
+        """``database`` ist jetzt Token-only (L9/N13, Refs #1375)."""
+        assert _detail_get().json()["database"] == "connected"
 
     def test_no_auth_required(self):
         assert Client().get("/health/").status_code == 200
@@ -67,61 +70,106 @@ class TestHealthLiveness:
         assert Client().get("/health/")["Content-Type"] == "application/json"
 
     def test_anonymous_payload_omits_recon_detail_fields(self):
-        """version, smtp, last_backup_age_hours, disk_free_pct nur intern/Token."""
-        data = Client().get("/health/").json()
-        for field in ("version", "smtp", "last_backup_age_hours", "disk_free_pct"):
-            assert field not in data, f"{field} darf nicht an anonyme Caller geliefert werden (A7.1)"
+        """version, smtp, last_backup_age_hours, disk_free_pct nur intern/Token.
 
-    def test_liveness_keeps_health_indicators(self):
-        """status/database/virus_scanner/clamav/encryption_key bleiben (Monitoring)."""
+        L9/N13 (Refs #1375): zusaetzlich database/virus_scanner/clamav/
+        encryption_key — die Subsystem-Status sind Recon und gehoeren hinter das
+        Token-Gate (Anforderungsaenderung ggue. #1024 A7.1, s.u.)."""
         data = Client().get("/health/").json()
+        for field in (
+            "version",
+            "smtp",
+            "last_backup_age_hours",
+            "disk_free_pct",
+            "database",
+            "virus_scanner",
+            "clamav",
+            "encryption_key",
+        ):
+            assert field not in data, f"{field} darf nicht an anonyme Caller geliefert werden (A7.1/N13)"
+
+    def test_anonymous_payload_is_status_only(self):
+        """L9/N13 (Refs #1375): anonymer Liveness-Payload enthaelt NUR ``status``
+        (Uptime-Monitore werten HTTP-Code + status; Subsystem-Details brauchen
+        das Token)."""
+        data = Client().get("/health/").json()
+        assert set(data.keys()) == {"status"}
+        assert data["status"] == "ok"
+
+    def test_detail_caller_keeps_health_indicators(self, detail_token):
+        """status/database/virus_scanner/clamav/encryption_key bleiben fuer
+        interne/Token-Caller sichtbar (Monitoring)."""
+        data = _detail_get().json()
         for field in ("status", "database", "virus_scanner", "clamav", "encryption_key"):
             assert field in data
 
-    def test_virus_scanner_disabled_by_default(self):
-        """In Tests ist CLAMAV_ENABLED=False — der Scanner gilt als ``disabled``."""
-        assert Client().get("/health/").json()["virus_scanner"] == "disabled"
+    def test_virus_scanner_disabled_by_default(self, detail_token):
+        """In Tests ist CLAMAV_ENABLED=False — der Scanner gilt als ``disabled``.
 
-    def test_virus_scanner_connected_when_reachable(self, settings):
+        L9/N13 (Refs #1375): ``virus_scanner`` ist jetzt Token-only."""
+        assert _detail_get().json()["virus_scanner"] == "disabled"
+
+    def test_virus_scanner_connected_when_reachable(self, settings, detail_token):
         settings.CLAMAV_ENABLED = True
         with patch("core.views.health.clamav_ping", return_value=True):
-            data = Client().get("/health/").json()
+            data = _detail_get().json()
         assert data["virus_scanner"] == "connected"
         assert data["status"] == "ok"
 
-    def test_virus_scanner_unavailable_degrades_status(self, settings):
+    def test_virus_scanner_unavailable_degrades_status(self, settings, detail_token):
         settings.CLAMAV_ENABLED = True
         with patch("core.views.health.clamav_ping", return_value=False):
-            data = Client().get("/health/").json()
+            data = _detail_get().json()
         assert data["virus_scanner"] == "unavailable"
         assert data["status"] == "degraded"
 
-    def test_clamav_alias_disabled(self):
-        """Refs #798 (C-30): ``clamav``-Alias bleibt im Liveness-Payload —
-        die Doku nutzt ``jq '.clamav'`` und erwartet ``ok``/``error``/``disabled``."""
-        assert Client().get("/health/").json()["clamav"] == "disabled"
-
-    def test_clamav_alias_ok_when_connected(self, settings):
-        settings.CLAMAV_ENABLED = True
-        with patch("core.views.health.clamav_ping", return_value=True):
-            assert Client().get("/health/").json()["clamav"] == "ok"
-
-    def test_clamav_alias_error_when_unavailable(self, settings):
+    def test_virus_scanner_unavailable_degrades_anonymous_status(self, settings):
+        """Der Gesamtstatus (nicht das Detailfeld) degradet auch anonym — der
+        HTTP-Code/status bleibt fuer Uptime-Monitore aussagekraeftig."""
         settings.CLAMAV_ENABLED = True
         with patch("core.views.health.clamav_ping", return_value=False):
-            assert Client().get("/health/").json()["clamav"] == "error"
+            data = Client().get("/health/").json()
+        assert data["status"] == "degraded"
+        assert "virus_scanner" not in data
 
-    def test_encryption_key_ok_in_test_env(self):
-        assert Client().get("/health/").json()["encryption_key"] == "ok"
+    def test_clamav_alias_disabled(self, detail_token):
+        """Refs #798 (C-30): ``clamav``-Alias — die Doku nutzt ``jq '.clamav'``
+        und erwartet ``ok``/``error``/``disabled``; jetzt Token-only (L9/N13)."""
+        assert _detail_get().json()["clamav"] == "disabled"
 
-    def test_encryption_key_error_is_critical(self):
-        """Encryption-Key bleibt ein kritischer Liveness-Check (503 für alle)."""
+    def test_clamav_alias_ok_when_connected(self, settings, detail_token):
+        settings.CLAMAV_ENABLED = True
+        with patch("core.views.health.clamav_ping", return_value=True):
+            assert _detail_get().json()["clamav"] == "ok"
+
+    def test_clamav_alias_error_when_unavailable(self, settings, detail_token):
+        settings.CLAMAV_ENABLED = True
+        with patch("core.views.health.clamav_ping", return_value=False):
+            assert _detail_get().json()["clamav"] == "error"
+
+    def test_encryption_key_ok_in_test_env(self, detail_token):
+        assert _detail_get().json()["encryption_key"] == "ok"
+
+    def test_encryption_key_error_is_critical(self, detail_token):
+        """Encryption-Key bleibt ein kritischer Check (503 für alle); das
+        Detailfeld ``encryption_key`` ist jetzt Token-only (L9/N13, Refs #1375),
+        der 503/status-Effekt aber auch anonym sichtbar (s.
+        ``test_encryption_key_error_is_critical_anonymously``)."""
         with patch("core.services.file_vault.encrypt_field", side_effect=RuntimeError("no key")):
-            response = Client().get("/health/")
+            response = _detail_get()
         data = response.json()
         assert data["encryption_key"] == "error"
         assert data["status"] == "error"
         assert response.status_code == 503
+
+    def test_encryption_key_error_is_critical_anonymously(self):
+        """Auch anonym: status=error + HTTP 503, ohne das Detailfeld selbst."""
+        with patch("core.services.file_vault.encrypt_field", side_effect=RuntimeError("no key")):
+            response = Client().get("/health/")
+        data = response.json()
+        assert data["status"] == "error"
+        assert response.status_code == 503
+        assert "encryption_key" not in data
 
 
 @pytest.mark.django_db
