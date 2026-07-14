@@ -61,7 +61,9 @@ class Shot:
 # features — no unreleased-milestone screens.
 SHOTS: list[Shot] = [
     # --- Highlights ---
-    Shot("zeitstrom", "core:zeitstrom", mobile=True),
+    # ?time_filter=all: "Alle"-Tab statt der uhrzeitabhaengigen aktuellen
+    # Schicht — sonst zeigt ein Nacht-Lauf einen leeren Nachtdienst-Feed.
+    Shot("zeitstrom", "/?time_filter=all", mobile=True),
     Shot("personenliste", "core:client_list"),
     Shot("statistiken", "core:statistics"),
     Shot("personendetail", "core:client_detail", pk_kind="client", full_page=True),
