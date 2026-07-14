@@ -5,6 +5,7 @@
 Dieses Verzeichnis enthält die gesamte Projektdokumentation. Interne Artefakte
 (`docs/archive/`, `docs/superpowers/`, `docs/ai/`) sind dev-only.
 
+
 ---
 
 ## Konzept & Architektur

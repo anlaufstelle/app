@@ -4,6 +4,7 @@
 > The [German documentation](../README.md) is the authoritative source.
 > Internal artifacts (`docs/archive/`, `docs/superpowers/`, `docs/ai/`) are dev-only.
 
+
 ---
 
 ## Available in English
@@ -65,5 +66,5 @@ Templates included:
 
 <!-- translation-source: docs/README.md -->
 <!-- translation-version: v0.20.0 -->
-<!-- translation-date: 2026-07-13 -->
-<!-- source-hash: cd7b197 -->
+<!-- translation-date: 2026-07-14 -->
+<!-- source-hash: 799604b -->
