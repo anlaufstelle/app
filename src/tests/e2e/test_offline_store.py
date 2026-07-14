@@ -1309,7 +1309,18 @@ class TestStorageEstimate:
         _bootstrap(page, base_url)
 
         result = page.evaluate("() => window.offlineStore.getStorageEstimate()")
-        assert result == {"usage": 52428800, "quota": 524288000, "percent": 10}
+        # Refs #1546 (AC3): getStorageEstimate() ergaenzt die Aufschluesselung
+        # ``cacheStorageBytes``/``indexedDbBytes`` — die bestehenden Aggregat-
+        # Felder (usage/quota/percent) bleiben unveraendert und werden exakt
+        # geprueft. Die Byte-Aufschluesselung haengt vom realen CacheStorage-
+        # Inhalt des Test-Runners ab (nicht wertstabil); geprueft wird daher die
+        # exakte Schluessel-Shape sowie fail-soft-Vertrag (null oder >= 0).
+        assert set(result) == {"usage", "quota", "percent", "cacheStorageBytes", "indexedDbBytes"}
+        assert result["usage"] == 52428800
+        assert result["quota"] == 524288000
+        assert result["percent"] == 10
+        assert result["cacheStorageBytes"] is None or result["cacheStorageBytes"] >= 0
+        assert result["indexedDbBytes"] is None or result["indexedDbBytes"] >= 0
         context.close()
 
     def test_missing_api_returns_null(self, browser, base_url, _login_storage_state):
