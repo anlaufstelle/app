@@ -30,6 +30,12 @@ class TestSafeDownloadResponse:
         response = safe_download_response("data.csv", "text/csv", b"a,b,c")
         assert response["X-Content-Type-Options"] == "nosniff"
 
+    def test_no_store_cache_control_header(self):
+        """Refs #1342: Exports duerfen nie im Browser-/Festplatten-Cache
+        landen — zentral im Helper statt in jeder Export-Call-Site."""
+        response = safe_download_response("data.csv", "text/csv", b"a,b,c")
+        assert response["Cache-Control"] == "no-store, private"
+
     def test_content_type_is_set(self):
         """Content-Type matches the provided MIME type."""
         response = safe_download_response("data.json", "application/json", b"{}")

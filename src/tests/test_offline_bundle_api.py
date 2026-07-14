@@ -902,6 +902,19 @@ class TestOfflineClientBundleView:
         assert etag, "Response muss einen ETag-Header tragen"
         assert etag.startswith('"') and etag.endswith('"'), "ETag muss HTTP-konform gequotet sein"
 
+    def test_response_carries_explicit_no_store_header(self, client, client_identified, staff_user, settings):
+        """Refs #1342: PII-kritischster Pfad — explizites no-store DIREKT in
+        der View, redundant zur Blanket-Middleware. Middleware bewusst aus dem
+        Stack entfernt, damit der Test wirklich den View-eigenen Header prueft
+        (nicht nur den der Middleware)."""
+        settings.MIDDLEWARE = [
+            m for m in settings.MIDDLEWARE if m != "core.middleware.no_store_cache.NoStoreCacheMiddleware"
+        ]
+        client.force_login(staff_user)
+        response = client.get(self._url(client_identified.pk))
+        assert response.status_code == 200
+        assert response["Cache-Control"] == "no-store, private"
+
     def test_matching_if_none_match_returns_304_without_body_or_audit(self, client, client_identified, staff_user):
         """Ein bedingter GET mit passendem If-None-Match liefert 304 (kein
         Body) und schreibt KEINEN Audit-Eintrag (kein Datenabfluss)."""

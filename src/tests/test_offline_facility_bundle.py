@@ -288,6 +288,18 @@ class TestOfflineFacilityBundleView:
         etag = response.headers.get("ETag")
         assert etag and etag.startswith('"') and etag.endswith('"')
 
+    def test_response_carries_explicit_no_store_header(self, client, staff_user, settings):
+        """Refs #1342: explizites no-store DIREKT in der View, redundant zur
+        Blanket-Middleware. Middleware bewusst aus dem Stack entfernt, damit
+        der Test wirklich den View-eigenen Header prueft."""
+        settings.MIDDLEWARE = [
+            m for m in settings.MIDDLEWARE if m != "core.middleware.no_store_cache.NoStoreCacheMiddleware"
+        ]
+        client.force_login(staff_user)
+        response = client.get(self._url())
+        assert response.status_code == 200
+        assert response["Cache-Control"] == "no-store, private"
+
     def test_audit_log_created_pii_free(self, client, staff_user, facility, doc_type_contact):
         """Refs #1518: ein 200-Read schreibt genau EINEN
         ``OFFLINE_FACILITY_BUNDLE_READ`` — PII-frei (personenlos, kein

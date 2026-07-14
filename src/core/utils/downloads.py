@@ -32,6 +32,12 @@ def safe_download_response(
     as_attachment:
         If ``True`` (default), the file is offered as a download.
         If ``False``, the file may be displayed inline by the browser.
+
+    Refs #1342: setzt zentral ``Cache-Control: no-store, private`` — Exports
+    tragen typischerweise personenbezogene Daten und duerfen nie im Browser-/
+    Festplatten-Cache landen. Zentral hier statt in jeder Export-Call-Site
+    (deckt alle heutigen und kuenftigen Aufrufer ab; redundant zur
+    Blanket-``NoStoreCacheMiddleware``, falls die je entfernt/umgangen wird).
     """
     if isinstance(content, (bytes, str)):
         response = HttpResponse(content, content_type=content_type)
@@ -40,4 +46,5 @@ def safe_download_response(
 
     response["Content-Disposition"] = content_disposition_header(as_attachment, filename)
     response["X-Content-Type-Options"] = "nosniff"
+    response["Cache-Control"] = "no-store, private"
     return response

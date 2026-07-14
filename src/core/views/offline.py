@@ -98,6 +98,11 @@ class OfflineClientBundleView(AssistantOrAboveRequiredMixin, View):
 
         response = JsonResponse(bundle)
         response["ETag"] = etag
+        # Refs #1342: PII-kritischster Pfad — explizites no-store zusaetzlich
+        # zur Blanket-Middleware (kein Datenabfluss ueber Browser-/
+        # Festplatten-Cache). Redundanz bewusst, falls die Middleware je
+        # entfernt/umgangen wird.
+        response["Cache-Control"] = "no-store, private"
         return response
 
 
@@ -149,6 +154,9 @@ class OfflineFacilityBundleView(AssistantOrAboveRequiredMixin, View):
 
         response = JsonResponse(bundle)
         response["ETag"] = etag
+        # Refs #1342: explizites no-store zusaetzlich zur Blanket-Middleware
+        # (kein Datenabfluss ueber Browser-/Festplatten-Cache).
+        response["Cache-Control"] = "no-store, private"
         return response
 
 

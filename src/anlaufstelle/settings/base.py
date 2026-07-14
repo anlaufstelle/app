@@ -95,6 +95,12 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # Refs #1342: Blanket-no-store fuer JEDE Response an einen authentifizierten
+    # User (DSGVO-Haertung, Browser-/bfcache-Schutz vor PII). Direkt nach
+    # AuthenticationMiddleware, weil sie request.user braucht; setdefault laesst
+    # bereits explizit gesetzte Cache-Control-Header (z.B. Offline-CSRF-Endpoint)
+    # unangetastet.
+    "core.middleware.no_store_cache.NoStoreCacheMiddleware",
     "django_otp.middleware.OTPMiddleware",
     "core.middleware.htmx_session.HtmxSessionMiddleware",
     "core.middleware.facility_scope.FacilityScopeMiddleware",
