@@ -7,7 +7,7 @@ Datenbank-Topologie und darf nicht in Models/Views auftauchen.
 
 from contextlib import contextmanager
 
-from django.db import connection
+from django.db import connection, transaction
 
 
 def has_rls_bypass_context() -> bool:
@@ -61,3 +61,43 @@ def bypass_replication_triggers():
             yield
         finally:
             cur.execute("SET LOCAL session_replication_role = origin")
+
+
+@contextmanager
+def rls_bypass_for_read():
+    """Transaktionslokaler ``app.is_super_admin``-Bypass fuer lesende Zugriffe auf
+    facility-lose (``facility_id IS NULL``) RLS-geschuetzte Zeilen (Refs #1335).
+
+    Migration 0047/0085 macht ``facility_id IS NULL``-Zeilen (installationsweite
+    AuditLog-Marker wie Cron-Last-Run) NUR sichtbar fuer SUPERUSER/BYPASSRLS-
+    Rollen oder wenn das GUC ``app.is_super_admin`` auf ``true`` steht. Die
+    Produktions-App-Rolle ist NOBYPASSRLS (ops-runbook §9); ``FacilityScopeMiddleware``
+    setzt das GUC nur fuer authentifizierte super_admin-Sessions — ein anonymer
+    Token-Caller (z.B. ``X-Health-Token``) oder eine nicht-super_admin
+    authentifizierte Session sehen die Zeilen sonst NIE.
+
+    Setzt das GUC — analog zu
+    :func:`core.services.compliance.breach_detection.run_system_detections`
+    (Refs #1368) — ``SET LOCAL`` (transaktionslokal) innerhalb eines
+    ``transaction.atomic()``-Blocks und stellt im ``finally`` den Vorwert
+    wieder her, damit die Erhoehung nicht auf einer (potenziell
+    wiederverwendeten) Connection stehen bleibt. No-op auf Nicht-PostgreSQL
+    (SQLite-Tests).
+
+    NUR fuer lesende Zugriffe gedacht — wer zusaetzlich facility-lose Zeilen
+    SCHREIBEN muss, braucht die Reads und Writes im selben GUC-Scope (siehe
+    ``run_system_detections``).
+    """
+    if connection.vendor != "postgresql":
+        yield
+        return
+
+    with connection.cursor() as cur:
+        cur.execute("SELECT current_setting('app.is_super_admin', true)")
+        previous = cur.fetchone()[0] or ""
+    with transaction.atomic(), connection.cursor() as cur:
+        cur.execute("SELECT set_config('app.is_super_admin', 'true', true)")
+        try:
+            yield
+        finally:
+            cur.execute("SELECT set_config('app.is_super_admin', %s, true)", [previous])

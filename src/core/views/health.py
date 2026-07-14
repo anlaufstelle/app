@@ -22,6 +22,7 @@ from django_ratelimit.decorators import ratelimit
 
 from core.services.compliance import ComplianceStatus, cron_job_checks
 from core.services.file_vault import ping as clamav_ping
+from core.services.system import rls_bypass_for_read
 
 logger = logging.getLogger(__name__)
 
@@ -130,8 +131,18 @@ def _check_stale_jobs() -> list[str]:
     degraden — das waere fuer jede frische Instanz ein falscher Alarm. Nur ein
     bestaetigtes ``critical`` (Job lief zuletzt vor laenger als der jeweilige
     Schwellwert) zeigt einen tatsaechlich ausgefallenen Scheduler an.
+
+    ``cron_job_checks()`` liest die Cron-Marker aus ``AuditLog(facility=None)``
+    — unter RLS (Migration 0047/0085) nur sichtbar mit SUPERUSER/BYPASSRLS-Rolle
+    oder gesetztem GUC ``app.is_super_admin``. Der Token-/authentifizierte
+    Monitoring-Caller dieses Endpoints (``_detail_authorized``) laeuft aber
+    i.d.R. NICHT als super_admin-Browsersession — ohne
+    :func:`~core.services.system.rls_bypass_for_read` waeren die Marker fuer
+    ihn unsichtbar und jeder Job faelschlich ``unknown`` statt ``critical``
+    (Refs #1335, das Kernszenario des Issues).
     """
-    return [check.key for check in cron_job_checks() if check.status == ComplianceStatus.CRITICAL]
+    with rls_bypass_for_read():
+        return [check.key for check in cron_job_checks() if check.status == ComplianceStatus.CRITICAL]
 
 
 def _check_disk_free_pct() -> float | None:
@@ -157,10 +168,11 @@ class HealthView(View):
     Refs #796 (C-28): Komponenten ``smtp``, ``encryption_key``,
     ``last_backup_age_hours``, ``disk_free_pct``.
 
-    Refs #1335: ``stale_jobs`` listet die Keys der Hintergrundjobs (Backup,
-    Retention, Breach-Detection, Audit-Ketten-Verifikation, ...), deren
-    letzter Lauf laut Compliance-Dashboard ``critical`` ist — Indikator, dass
-    der Host-Scheduler (docs/ops-runbook.md §3) nicht eingerichtet ist.
+    Refs #1335: ``stale_jobs`` listet die Keys der fuenf per Host-Cron laufenden
+    Hintergrundjobs (Backup, Retention, Statistik-Snapshots, Breach-Detection,
+    MV-Refresh — die Teilmenge aus ``cron_job_checks()``), deren letzter Lauf
+    laut Compliance-Dashboard ``critical`` ist — Indikator, dass der
+    Host-Scheduler (docs/ops-runbook.md §3) nicht eingerichtet ist.
 
     A7.1/A7.2 (Refs #1024): Die Recon-relevanten Detailfelder (``version``,
     ``smtp``, ``last_backup_age_hours``, ``disk_free_pct``, ``stale_jobs``)

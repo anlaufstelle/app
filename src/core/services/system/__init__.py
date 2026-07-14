@@ -18,6 +18,7 @@ Module:
 from core.services.system._db_admin import (
     bypass_replication_triggers,
     has_rls_bypass_context,
+    rls_bypass_for_read,
 )
 from core.services.system.bans import get_active_bans, get_active_bans_for_client
 from core.services.system.export import (
@@ -106,6 +107,7 @@ __all__ = [
     "get_jugendamt_statistics",
     "get_spec",
     "log_settings_change",
+    "rls_bypass_for_read",
     "snapshot_settings",
     "update_settings",
 ]

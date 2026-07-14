@@ -7,13 +7,23 @@ Detailfelder ``version``, ``smtp``, ``last_backup_age_hours`` und
 ``X-Health-Token`` == ``HEALTH_DETAIL_TOKEN``) oder authentifizierte Sessions.
 """
 
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
 from django.core.cache import cache
+from django.db import transaction
 from django.test import Client
+from django.utils import timezone
 
+from core.models import AuditLog
 from core.services.compliance import ComplianceCheck, ComplianceStatus
+from core.services.system import bypass_replication_triggers
+from core.views.health import _check_stale_jobs
+from tests.test_rls_functional import (  # noqa: F401
+    as_rls_role,
+    rls_test_role,
+)
 
 DETAIL_TOKEN = "test-health-detail-token"  # noqa: S105 — Test-Fixture, kein echtes Secret
 
@@ -219,6 +229,56 @@ class TestHealthDetail:
         """A7.1: stale_jobs ist ein Recon-Detailfeld, nur intern/Token sichtbar."""
         data = Client().get("/health/").json()
         assert "stale_jobs" not in data
+
+
+@pytest.mark.django_db(transaction=True)
+class TestStaleJobsRlsVisibility:
+    """Refs #1335: ``_check_stale_jobs()`` liest die facility-losen Cron-Marker
+    (``core_auditlog``, ``facility=NULL``) ueber ``cron_job_checks()``. Migration
+    0047/0085 macht diese Zeilen NUR sichtbar, wenn die DB-Rolle SUPERUSER/
+    BYPASSRLS ist oder das GUC ``app.is_super_admin`` auf ``true`` steht.
+
+    Der reale Prod-Pfad fuer den Token-/authentifizierten Monitoring-Caller
+    laeuft als App-Rolle NOBYPASSRLS (ops-runbook §9) und setzt (ausser fuer
+    super_admin-Browsersessions) niemals ``app.is_super_admin``. Diese Tests
+    laufen — anders als die gemockten Tests oben — ueber eine echte
+    Nicht-Superuser/Nicht-Bypass-Postgres-Rolle (``rls_test_role``, s.
+    ``tests.test_rls_functional``) und pruefen die tatsaechliche RLS-Sichtbarkeit."""
+
+    def test_critical_marker_visible_under_non_bypass_role(self, rls_test_role):  # noqa: F811
+        """Ohne RLS-Bypass-Read waere der Marker unsichtbar -> UNKNOWN statt
+        CRITICAL -> stale_jobs bliebe fuer den Token-/App-Rollen-Pfad IMMER []
+        (das #1335-Kernszenario: ein tatsaechlich ausgefallener Scheduler wird
+        nie gemeldet)."""
+        entry = AuditLog.objects.create(
+            action=AuditLog.Action.BREACH_SCAN_COMPLETED, facility=None, target_type="BreachScanRun"
+        )
+        # transaction=True (fuer rls_test_role/SET ROLE) laeuft ohne umschliessende
+        # Transaktion — SET LOCAL braucht einen expliziten transaction.atomic()-Block,
+        # sonst verpufft es vor dem UPDATE (analog test_audit_chain.py).
+        with transaction.atomic(), bypass_replication_triggers():
+            AuditLog.objects.filter(pk=entry.pk).update(timestamp=timezone.now() - timedelta(hours=30))
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            result = _check_stale_jobs()
+
+        assert "breach_scan_last_run" in result
+
+    def test_does_not_leak_super_admin_guc_after_read(self, rls_test_role):  # noqa: F811
+        """Der fuer den Read transaktionslokal gesetzte ``app.is_super_admin``-GUC
+        darf nach ``_check_stale_jobs()`` NICHT auf der (potenziell wiederverwendeten)
+        Connection stehen bleiben — sonst laeuft ein spaeterer Aufrufer auf derselben
+        Connection mit Superadmin-Sichtbarkeit weiter (latenter Privilege-Leak,
+        analog ``run_system_detections`` Refs #1368)."""
+        from django.db import connection
+
+        with as_rls_role(rls_test_role, facility_id=""):
+            _check_stale_jobs()
+
+        with connection.cursor() as cur:
+            cur.execute("SELECT current_setting('app.is_super_admin', true)")
+            value = cur.fetchone()[0] or ""
+        assert value != "true", f"app.is_super_admin blieb auf der Connection stehen: {value!r}"
 
 
 # Refs #835 (C-68): SOURCE_CODE_URL ist im Footer ueber den Context-Processor.
