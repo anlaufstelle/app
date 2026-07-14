@@ -14,6 +14,7 @@ from core.constants import RATELIMIT_MUTATION
 from core.forms.episodes import EpisodeForm
 from core.models import Case
 from core.models.episode import Episode
+from core.services.scoping import get_scoped_object
 from core.views.mixins import StaffRequiredMixin
 
 
@@ -21,8 +22,7 @@ class EpisodeCreateView(StaffRequiredMixin, View):
     """Create a new episode for a case."""
 
     def get(self, request, case_pk):
-        facility = request.current_facility
-        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        case = get_scoped_object(Case, request, pk=case_pk)
         if case.status != Case.Status.OPEN:
             messages.error(request, _("Episoden können nur für offene Fälle erstellt werden."))
             return redirect("core:case_detail", pk=case.pk)
@@ -33,8 +33,7 @@ class EpisodeCreateView(StaffRequiredMixin, View):
 
     @method_decorator(ratelimit(key="user", rate=RATELIMIT_MUTATION, method="POST", block=True))
     def post(self, request, case_pk):
-        facility = request.current_facility
-        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        case = get_scoped_object(Case, request, pk=case_pk)
         if case.status != Case.Status.OPEN:
             messages.error(request, _("Episoden können nur für offene Fälle erstellt werden."))
             return redirect("core:case_detail", pk=case.pk)
@@ -61,16 +60,14 @@ class EpisodeUpdateView(StaffRequiredMixin, View):
     """Edit an existing episode."""
 
     def get(self, request, case_pk, pk):
-        facility = request.current_facility
-        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        case = get_scoped_object(Case, request, pk=case_pk)
         episode = get_object_or_404(Episode, pk=pk, case=case)
         form = EpisodeForm(instance=episode)
         context = {"form": form, "case": case, "episode": episode, "is_edit": True}
         return render(request, "core/cases/episode_form.html", context)
 
     def post(self, request, case_pk, pk):
-        facility = request.current_facility
-        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        case = get_scoped_object(Case, request, pk=case_pk)
         episode = get_object_or_404(Episode, pk=pk, case=case)
         form = EpisodeForm(request.POST, instance=episode)
         if form.is_valid():
@@ -89,8 +86,7 @@ class EpisodeCloseView(StaffRequiredMixin, View):
     """Close an episode (POST only)."""
 
     def post(self, request, case_pk, pk):
-        facility = request.current_facility
-        case = get_object_or_404(Case, pk=case_pk, facility=facility)
+        case = get_scoped_object(Case, request, pk=case_pk)
         episode = get_object_or_404(Episode, pk=pk, case=case)
         episode.close()
         messages.success(request, _("Episode wurde abgeschlossen."))
