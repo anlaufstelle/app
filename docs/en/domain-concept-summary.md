@@ -190,7 +190,7 @@ Collective pre-release bundling the skipped 0.17–0.19 — a complete offline f
 - **Container-runtime hardening** (`no-new-privileges`, dropped capabilities, read-only filesystems) and **build integrity** (pip hash-pinning, digest-pinned base images).
 - **Tailwind CSS 4** and **Python 3.14** as the production base.
 
-### Unreleased
+### v0.22.0 (2026-07-15)
 
 - **Offline "one world"** (offline V2, #1499): contacts and tasks can be captured offline even without a previously opened form, and the task list and timeline render offline in-place at their canonical URLs from the merged local snapshot.
 - **Extended breach detection**: a mass client-deletion heuristic, anonymous login bursts per source IP, a distributed victim-lockout signature, and a secondary 24-hour low-and-slow window.
@@ -200,6 +200,6 @@ Collective pre-release bundling the skipped 0.17–0.19 — a complete offline f
 - **Task overview status and time filters** (#1570): the task overview gains an explicit status filter (open / in progress / done / all) and -- effective only for "done" -- a time-range filter (last 7/30 days / all), so all completed tasks become reachable beyond the passive seven-day "recently done" preview; both combine with the existing assignment and facility scoping filters.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.20.0 -->
+<!-- translation-version: v0.22.0 -->
 <!-- translation-date: 2026-07-14 -->
 <!-- source-hash: 3a70087 -->

@@ -1,6 +1,6 @@
 [project]
 name = "anlaufstelle"
-version = "0.20.0"
+version = "0.22.0"
 description = "Open-Source-Fachsystem für niedrigschwellige soziale Einrichtungen"
 # Floor bewusst bei >=3.13 (Refs #1481): oeffentliches Projekt, Django 6.0
 # stuetzt 3.13+, Contributor auf 3.13 nicht aussperren. Dev + Prod fahren

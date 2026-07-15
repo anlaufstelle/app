@@ -1386,6 +1386,6 @@ python manage.py create_statistics_snapshots --year 2026 --month 2
 Snapshots are visible in the Django admin under **Statistics snapshots** (read-only). You can check which months have been captured and when the last update took place.
 
 <!-- translation-source: docs/admin-guide.md -->
-<!-- translation-version: v0.20.0 -->
+<!-- translation-version: v0.22.0 -->
 <!-- translation-date: 2026-07-14 -->
 <!-- source-hash: 598bf61 -->
