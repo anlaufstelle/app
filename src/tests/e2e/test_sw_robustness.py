@@ -164,31 +164,31 @@ def test_lie_fi_navigation_falls_back_before_hanging(browser, base_url):
         context.close()
 
 
-def test_update_gate_requires_explicit_confirmation(browser, base_url):
-    """Dieser Test ist gegen den heutigen Code ROT: sw.js ruft skipWaiting()
-    ungegated im install-Handler auf — ein neu installierter SW uebernimmt
-    dadurch sofort (controllerchange feuert), bevor der Update-Toast
-    ueberhaupt angeklickt wurde. Refs #1351, Refs #1386.
+def test_update_activates_without_user_confirmation(browser, base_url):
+    """Refs #1593: Ein wartender SW muss OHNE Nutzerklick uebernehmen.
+
+    Kern des #1575-Mechanismus: Solange die Aktivierung an einer
+    Nutzerbestaetigung haengt, bleiben Geraete auf der alten precachten
+    Shell — der Offline-Screen bleibt alt. ``activate`` loescht nur Caches
+    und ruft ``clients.claim()`` (sw.js), IndexedDB bleibt unberuehrt; die
+    Aktivierung ist daher immer sicher. Gegated wird stattdessen der
+    *Reload* (siehe test_dirty_page_is_not_reloaded_on_update).
+
+    Teil-Ruecknahme des Aktivierungs-Gates aus #1386 — dessen Schutzzweck
+    ("sonst geht nicht-gespeicherter State verloren") sitzt jetzt am Reload.
 
     Update-Trigger: ``register('/sw.js?<probe>')`` — gleiche Scope, andere
     Script-URL = der Browser installiert einen neuen Worker (Inhalt identisch,
-    Django ignoriert den Query-String). ``updatefound`` feuert auf derselben
-    Registration, die sw-register.js beobachtet -> Toast.
+    Django ignoriert den Query-String).
     """
     page, context = _login_with_retry(browser, base_url)
-    probe = f"e2e-update-{uuid.uuid4().hex[:8]}"
+    probe = f"e2e-autoactivate-{uuid.uuid4().hex[:8]}"
     try:
         _wait_for_active_service_worker(page, base_url)
 
-        # Sensor VOR dem Update-Trigger registrieren.
-        page.evaluate(
-            """() => {
-                window.__controllerChanged = false;
-                navigator.serviceWorker.addEventListener('controllerchange', () => {
-                    window.__controllerChanged = true;
-                });
-            }"""
-        )
+        # Marker verschwindet nur durch einen echten Reload (Muster:
+        # TestOfflineRetryButton.test_retry_link_reloads_current_url).
+        page.evaluate("() => { window.__preUpdateMarker = true; }")
 
         page.evaluate(
             """async (probe) => {
@@ -197,45 +197,84 @@ def test_update_gate_requires_explicit_confirmation(browser, base_url):
             probe,
         )
 
-        # Toast erscheint, sobald der neue SW "installed" ist (und dank Gate
-        # in `registration.waiting` haengen bleibt).
-        page.locator("#sw-update-toast").wait_for(state="visible", timeout=15000)
-        waiting_state = page.evaluate(
-            """async () => {
-                const reg = await navigator.serviceWorker.getRegistration('/');
-                return {
-                    hasWaiting: !!(reg && reg.waiting),
-                    waitingUrl: reg && reg.waiting ? reg.waiting.scriptURL : null,
-                };
-            }"""
-        )
-
-        # Kernanforderung: OHNE Klick darf NICHTS uebernehmen. Feste Wartezeit
-        # ist hier bewusst, da wir das *Ausbleiben* eines Events pruefen
-        # (kein UI-Signal, auf das sich sinnvoll pollen liesse) — analog
-        # test_pwa_offline.TestOfflineEntrypointsMobile (dokumentierte
-        # Ausnahme von "niemals sleep").
-        page.wait_for_timeout(1500)
-        assert page.evaluate("() => window.__controllerChanged") is False, (
-            "SW hat ohne Nutzerbestaetigung uebernommen — skipWaiting() im install-Handler vermutlich noch ungegated."
-        )
-        assert waiting_state["hasWaiting"], f"Kein wartender SW trotz Update-Toast — Gate unwirksam? ({waiting_state})"
-        assert probe in (waiting_state["waitingUrl"] or ""), waiting_state
-
-        # Klick loest den Wechsel aus: SKIP_WAITING -> neuer SW aktiviert ->
-        # controllerchange -> sw-register laedt die Seite genau einmal neu.
-        page.evaluate("() => { window.__preClickMarker = true; }")
-        page.locator("#sw-update-toast").get_by_text("Neu laden").click()
-        # Marker verschwindet nur durch echten Reload (Muster:
-        # TestOfflineRetryButton.test_retry_link_reloads_current_url).
-        page.wait_for_function("() => window.__preClickMarker === undefined", timeout=15000)
-        # Nach dem Reload kontrolliert der NEUE Worker (?probe) die Seite.
+        # Kernanforderung: der neue Worker uebernimmt von selbst — kein Klick,
+        # kein Toast-Zutun.
         page.wait_for_function(
             "(probe) => navigator.serviceWorker.controller && "
             "navigator.serviceWorker.controller.scriptURL.includes(probe)",
             arg=probe,
-            timeout=10000,
+            timeout=15000,
         )
+
+        # Auf einer sauberen Seite (keine Eingaben, leere Queue) folgt der
+        # Reload direkt — ebenfalls ohne Zutun.
+        page.wait_for_function("() => window.__preUpdateMarker === undefined", timeout=15000)
+
+        # Bewusst NICHT geprueft: dass ``registration.waiting`` danach leer ist.
+        # Nach dem Reload registriert sw-register.js wieder '/sw.js' (ohne
+        # ?probe) — eine andere Script-URL, die der Browser als weiteres
+        # Update installiert. Dieses Nachwehen ist ein Artefakt des
+        # Test-Triggers, nicht des Produktionspfads (dort ist die URL stabil).
+    finally:
+        context.close()
+
+
+def test_dirty_page_is_not_reloaded_on_update(browser, base_url):
+    """Refs #1593/#1386: Der Reload ist gegated, die Aktivierung nicht.
+
+    Nur 1 von 41 Formular-Templates hat ``data-autosave`` — ein Reload
+    mitten im Tippen wuerde die Eingabe verwerfen. Zusaetzlich feuert
+    ``clients.claim()`` ``controllerchange`` in JEDEM offenen Tab, ein
+    ungegateter Reload wuerde also fremde Tabs mitreissen.
+
+    Erwartung: Update aktiviert (Caches frisch = #1575 gefixt), die Seite
+    bleibt aber stehen, die Eingabe ueberlebt, und der Toast bietet den
+    Reload manuell an.
+    """
+    page, context = _login_with_retry(browser, base_url)
+    probe = f"e2e-dirty-{uuid.uuid4().hex[:8]}"
+    try:
+        _wait_for_active_service_worker(page, base_url)
+
+        page.goto(f"{base_url}/clients/new/")
+        page.wait_for_load_state("domcontentloaded")
+        _wait_for_active_service_worker(page, base_url)
+
+        # Seite dirty machen: echte Nutzereingabe (loest input-Event aus).
+        typed = f"E2E-Dirty-{uuid.uuid4().hex[:6]}"
+        page.fill("input[name='pseudonym']", typed)
+
+        # Marker ueberlebt nur, wenn NICHT neu geladen wird (Muster:
+        # TestOfflineRetryButton.test_retry_link_reloads_current_url).
+        page.evaluate("() => { window.__preUpdateMarker = true; }")
+
+        page.evaluate(
+            """async (probe) => {
+                await navigator.serviceWorker.register('/sw.js?' + probe, { scope: '/' });
+            }""",
+            probe,
+        )
+
+        # Die Aktivierung passiert trotz dirty page.
+        page.wait_for_function(
+            "(probe) => navigator.serviceWorker.controller && "
+            "navigator.serviceWorker.controller.scriptURL.includes(probe)",
+            arg=probe,
+            timeout=15000,
+        )
+
+        # ... aber ohne Reload: Marker und Eingabe sind noch da.
+        assert page.evaluate("() => window.__preUpdateMarker") is True, (
+            "Seite mit ungespeicherter Eingabe wurde neu geladen — Dirty-Guard unwirksam (#1593)"
+        )
+        assert page.input_value("input[name='pseudonym']") == typed, "Eingabe ging beim SW-Update verloren (#1593)"
+
+        # Stattdessen bietet der Toast den Reload an — und er funktioniert,
+        # obwohl kein wartender Worker mehr existiert (registration.waiting
+        # ist nach der Aktivierung null).
+        page.locator("#sw-update-toast").wait_for(state="visible", timeout=15000)
+        page.locator("#sw-update-toast").get_by_text("Neu laden").click()
+        page.wait_for_function("() => window.__preUpdateMarker === undefined", timeout=15000)
     finally:
         context.close()
 
@@ -399,12 +438,26 @@ def test_activate_evicts_orphaned_cache_generations(browser, base_url):
     loescht alle uebrigen — insbesondere alte Precache- UND alte
     ``-runtime``-Generationen frueherer Releases (der ~245-MB-Altlast-Treiber).
     Wir pflanzen verwaiste Alt-Generationen, triggern per ``register(?probe)``
-    + SKIP_WAITING einen echten activate-Zyklus und pruefen die Aufraeumung.
+    einen echten activate-Zyklus und pruefen die Aufraeumung.
+
+    Refs #1593: Der Test laeuft bewusst auf einer *dirty* Seite (Eingabe im
+    Formular). Die Aktivierung passiert seither automatisch — auf einer
+    sauberen Seite wuerde sw-register.js danach sofort neu laden und
+    ``caches.keys()`` liefe in die Navigation ("Execution context was
+    destroyed"). Der Dirty-Guard haelt die Seite stehen; der activate-Zyklus
+    (und damit das, was dieser Test prueft) laeuft identisch ab.
     """
     page, context = _login_with_retry(browser, base_url)
     probe = f"e2e-hygiene-{uuid.uuid4().hex[:8]}"
     try:
         _wait_for_active_service_worker(page, base_url)
+
+        # Dirty machen -> kein Auto-Reload (siehe Docstring).
+        page.goto(f"{base_url}/clients/new/")
+        page.wait_for_load_state("domcontentloaded")
+        _wait_for_active_service_worker(page, base_url)
+        page.fill("input[name='pseudonym']", f"E2E-Hygiene-{uuid.uuid4().hex[:6]}")
+
         _max_entries, cache_name = _read_sw_constants(page)
         runtime_name = cache_name + "-runtime"
 
@@ -420,36 +473,16 @@ def test_activate_evicts_orphaned_cache_generations(browser, base_url):
         )
 
         # Update-Trigger: gleiche Scope, andere Script-URL (?probe) -> neuer
-        # Worker installiert und bleibt dank Gate in `waiting`.
+        # Worker installiert; sw-register.js aktiviert ihn selbsttaetig
+        # (Refs #1593), activate laeuft (Cache-Cleanup in waitUntil) ->
+        # clients.claim().
         page.evaluate(
             """async (probe) => { await navigator.serviceWorker.register('/sw.js?' + probe, { scope: '/' }); }""",
             probe,
         )
 
-        # Auf den wartenden Worker warten (Python-poll), dann SKIP_WAITING ->
-        # activate laeuft (Cache-Cleanup in waitUntil) -> clients.claim().
-        has_waiting = False
-        for _ in range(60):
-            has_waiting = page.evaluate(
-                """async () => {
-                    const reg = await navigator.serviceWorker.getRegistration('/');
-                    return !!(reg && reg.waiting);
-                }"""
-            )
-            if has_waiting:
-                break
-            page.wait_for_timeout(250)
-        assert has_waiting, "Kein wartender SW nach ?probe-Update — Gate/Update-Trigger pruefen."
-
-        page.evaluate(
-            """async () => {
-                const reg = await navigator.serviceWorker.getRegistration('/');
-                reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-            }"""
-        )
-
-        # Reload-sicher warten, bis der NEUE Worker (?probe) kontrolliert — nach
-        # activate + claim (sw-register.js laedt bei controllerchange neu).
+        # Warten, bis der NEUE Worker (?probe) kontrolliert — dann ist activate
+        # samt Cache-Cleanup durch.
         page.wait_for_function(
             "(probe) => navigator.serviceWorker.controller && "
             "navigator.serviceWorker.controller.scriptURL.includes(probe)",
@@ -457,7 +490,17 @@ def test_activate_evicts_orphaned_cache_generations(browser, base_url):
             timeout=15000,
         )
 
-        names = page.evaluate("() => caches.keys()")
+        # Auf den Endzustand pollen statt auf ein Proxy-Signal: sw.js ruft
+        # ``clients.claim()`` NEBEN ``waitUntil(...caches.delete...)``, nicht
+        # danach — der Controller-Wechsel beweist also nicht, dass der
+        # Cache-Cleanup schon durch ist.
+        names = []
+        for _ in range(60):
+            names = page.evaluate("() => caches.keys()")
+            if "anlaufstelle-vOLD" not in names:
+                break
+            page.wait_for_timeout(250)
+
         assert "anlaufstelle-vOLD" not in names, f"Verwaister Alt-Precache nicht geloescht: {names}"
         assert "anlaufstelle-vOLD-runtime" not in names, f"Verwaister Alt-Runtime-Cache nicht geloescht: {names}"
         assert cache_name in names, f"Aktueller Precache faelschlich geloescht: {names}"

@@ -7,17 +7,44 @@
  *   2. Purge all encrypted IndexedDB stores
  * The server still sends Clear-Site-Data: "storage" as defence in depth.
  *
- * Refs #573, #576, #1351, #1386.
+ * Refs #573, #576, #1351, #1386, #1593.
  */
 (function () {
     "use strict";
 
+    // Refs #1593: Aktivierung und Reload sind ENTKOPPELT.
+    //
+    // Aktivierung (SKIP_WAITING) passiert immer und sofort: ``activate`` in
+    // sw.js loescht nur alte Caches und ruft ``clients.claim()`` — IndexedDB
+    // (Offline-Queue, Krypto-Key) bleibt unberuehrt. Ein wartender Worker
+    // beweist ausserdem, dass ``install``/``cache.addAll`` durchlief. Die
+    // Aktivierung kann also nichts verlieren, und nur sie macht die
+    // precachten Shells frisch (Refs #1575).
+    //
+    // Gegated wird der RELOAD: er verwirft ungespeicherte Eingaben (nur
+    // core/events/create.html hat data-autosave) und trifft via
+    // ``clients.claim()`` JEDEN offenen Tab, nicht nur diesen.
+    //
+    // Damit bleibt der Schutzzweck von #1386/#659 erhalten; das dortige
+    // *Aktivierungs*-Gate entfaellt bewusst — es liess Geraete auf der alten
+    // Shell haengen, sobald niemand den Toast anklickte.
+    var _registration = null;
+    var _dirty = false;
+    var _userRequestedReload = false;
+
+    // Ungespeicherte Eingaben erkennen. Capture-Phase, damit auch Felder in
+    // HTMX-eingeswappten Fragmenten erfasst werden.
+    document.addEventListener("input", _markDirty, true);
+    document.addEventListener("change", _markDirty, true);
+
+    function _markDirty() {
+        _dirty = true;
+    }
+
     if ("serviceWorker" in navigator) {
-        // Refs #1386: Update-Gate. Der neue SW uebernimmt erst, wenn die
-        // Seite explizit SKIP_WAITING schickt (Klick auf "Neu laden" im
-        // Update-Toast, siehe _showUpdatePrompt). ``controllerchange``
-        // feuert danach — der ``reloaded``-Guard verhindert eine
-        // Reload-Schleife, falls der Browser das Event mehrfach ausloest.
+        // ``controllerchange`` feuert, sobald ein neuer SW die Seite
+        // uebernimmt — der ``reloaded``-Guard verhindert eine Reload-Schleife,
+        // falls der Browser das Event mehrfach ausloest.
         //
         // WICHTIG (``wasControlled``-Guard): Auch der ALLERERSTE SW-Install
         // feuert controllerchange — ``clients.claim()`` im activate-Handler
@@ -34,29 +61,26 @@
                 wasControlled = true;
                 return;
             }
-            if (reloaded) return;
-            reloaded = true;
-            window.location.reload();
+            _reloadIfSafe();
         });
 
         navigator.serviceWorker.register("/sw.js", { scope: "/" }).then(function (registration) {
-            // Update-Prompt: Wenn ein neuer SW installiert wird, wird
-            // `updatefound` ausgelöst. Der neue SW durchläuft States
-            // installing → installed (→ wartet in `registration.waiting`,
-            // bis die Seite SKIP_WAITING schickt). Wenn bereits ein aktiver
-            // SW existiert und der neue den State `installed` erreicht, ist
-            // ein Update pending.
-            //
-            // Wir zeigen dem Nutzer einen diskreten Hinweis statt stumm
-            // zu aktualisieren (Refs #659). Erst ein Klick auf "Neu laden"
-            // loest SKIP_WAITING aus — sonst geht evtl. nicht-gespeicherter
-            // State verloren.
+            _registration = registration;
+
+            // Refs #1593/#1575: Ein bereits WARTENDER Worker wird sonst nie
+            // aktiviert — ``updatefound`` feuert nur in dem Tab, in dem der
+            // Worker installiert wurde, und nur dieses eine Mal. Wer in dem
+            // Moment nicht hinschaut (oder den Tab schliesst), haengt sonst
+            // dauerhaft auf der alten Version fest.
+            _activateWaiting(registration);
+
+            // Update waehrend der Sitzung: installing → installed → waiting.
             registration.addEventListener("updatefound", function () {
                 var newWorker = registration.installing;
                 if (!newWorker) return;
                 newWorker.addEventListener("statechange", function () {
                     if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
-                        _showUpdatePrompt(registration);
+                        _activateWaiting(registration);
                     }
                 });
             });
@@ -97,10 +121,13 @@
 
     /**
      * Zeigt einen diskreten Hinweis-Toast "Neue Version verfügbar" unten
-     * rechts im Viewport. Ein Klick auf "Neu laden" schickt SKIP_WAITING an
-     * den wartenden SW (Refs #1386); der eigentliche Reload passiert erst
-     * im `controllerchange`-Handler oben, sobald der neue SW die Seite
-     * tatsächlich übernommen hat.
+     * rechts im Viewport.
+     *
+     * Refs #1593: Der Toast ist der FALLBACK-Pfad. Der Regelfall ist die
+     * stille Auto-Aktivierung samt Reload; hierher kommt nur, wessen Seite
+     * nicht ungefragt neu geladen werden darf (ungespeicherte Eingaben oder
+     * laufende Offline-Synchronisation). Der neue Worker ist dann bereits
+     * aktiv — der Toast bietet nur noch das Nachziehen dieser einen Seite an.
      *
      * Kein Alert(), keine Modal-Overlay-Library — nur DOM-Manipulation,
      * kompatibel mit unserer CSP (kein Inline-Script, keine unsafe-*
@@ -112,6 +139,69 @@
     // falls das Attribut mal fehlt.
     function _i18n(key) {
         return (document.body && document.body.dataset[key]) || "";
+    }
+
+    /**
+     * Fordert einen wartenden Worker zur Uebernahme auf (Refs #1593).
+     * Bewusst ohne Bedingung: siehe Kommentarblock oben — die Aktivierung
+     * ist immer verlustfrei, sie macht nur die Caches frisch.
+     */
+    function _activateWaiting(registration) {
+        if (registration && registration.waiting && navigator.serviceWorker.controller) {
+            registration.waiting.postMessage({ type: "SKIP_WAITING" });
+        }
+    }
+
+    /**
+     * Ist die Offline-Queue noch ungedrained? Dann nicht ungefragt neu laden —
+     * ein Reload mitten im Replay bricht ihn ab. Auf Seiten ohne
+     * offline-queue.js (login.html) gibt es keine Queue.
+     *
+     * Im Fehlerfall bewusst ``true``: lieber einen Toast zu viel als einen
+     * Reload, der laufende Synchronisation abschneidet.
+     */
+    function _queuePending() {
+        if (!window.offlineQueue || !window.offlineQueue.getQueueCount) {
+            return Promise.resolve(false);
+        }
+        return window.offlineQueue
+            .getQueueCount()
+            .then(function (count) {
+                return count > 0;
+            })
+            .catch(function () {
+                return true;
+            });
+    }
+
+    function _doReload() {
+        if (reloaded) return;
+        reloaded = true;
+        window.location.reload();
+    }
+
+    /**
+     * Der neue SW kontrolliert die Seite bereits (Caches sind frisch). Jetzt
+     * nur noch entscheiden, ob wir die Seite dafuer wegreissen duerfen.
+     * Ein ausdruecklicher Klick auf "Neu laden" schlaegt jeden Guard.
+     */
+    function _reloadIfSafe() {
+        if (reloaded) return;
+        if (_userRequestedReload) {
+            _doReload();
+            return;
+        }
+        if (_dirty) {
+            _showUpdatePrompt(_registration);
+            return;
+        }
+        _queuePending().then(function (pending) {
+            if (pending) {
+                _showUpdatePrompt(_registration);
+            } else {
+                _doReload();
+            }
+        });
     }
 
     function _showUpdatePrompt(registration) {
@@ -153,13 +243,19 @@
             "rounded hover:bg-indigo-50";
         reloadBtn.textContent = _i18n("i18nSwReload");
         reloadBtn.addEventListener("click", function () {
-            // Refs #1386: Erst hier — auf explizite Bestätigung — wird der
-            // wartende SW aufgefordert zu übernehmen. skipWaiting() selbst
-            // lebt im SW-Message-Handler, nicht mehr ungegated im
-            // install-Handler.
-            if (registration.waiting) {
+            // Ausdrueckliche Bestaetigung — schlaegt Dirty-/Queue-Guard.
+            _userRequestedReload = true;
+            if (registration && registration.waiting) {
+                // Noch nicht uebernommen: erst aktivieren, der Reload folgt
+                // im controllerchange-Handler (dann serviert der NEUE Worker).
                 registration.waiting.postMessage({ type: "SKIP_WAITING" });
+                return;
             }
+            // Refs #1593: Der Worker ist bereits aktiv (Auto-Aktivierung), die
+            // Seite wurde nur wegen Eingaben/Queue nicht neu geladen —
+            // ``registration.waiting`` ist null und controllerchange kommt
+            // nicht mehr. Ohne diesen Zweig waere der Button wirkungslos.
+            _doReload();
         });
         toast.appendChild(reloadBtn);
 
