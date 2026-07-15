@@ -21,3 +21,5 @@ qrcode>=7.4
 python-magic>=0.4.27
 # Pin transitiver dep wegen CVE-2026-44431 + CVE-2026-44432 (sentry-sdk zieht es ein).
 urllib3>=2.7.0
+# Pin transitiver dep wegen PYSEC-2026-2253 bis PYSEC-2026-2257 (weasyprint zieht es ein).
+pillow>=12.3.0
