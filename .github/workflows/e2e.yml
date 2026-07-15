@@ -13,6 +13,12 @@ permissions:
 jobs:
   test-e2e:
     runs-on: ubuntu-latest
+    # Ohne dieses Limit laeuft ein haengender Job bis in GitHubs 6-Stunden-Default
+    # (v0.22.0: 1h22m, bis er von Hand abgebrochen wurde) und brennt Actions-Minuten.
+    # 45 statt 30: seriell braucht die Suite lokal 15-16 min auf 8 Kernen, auf einem
+    # 2-Kern-Runner plus Setup eher ~25 -- das Limit soll Haenger abraeumen, nicht
+    # langsame Laeufe abschneiden.
+    timeout-minutes: 45
     services:
       postgres:
         image: postgres:18-alpine
@@ -57,7 +63,15 @@ jobs:
       - name: Install Playwright system deps only (cache hit)
         run: python -m playwright install-deps chromium
         if: steps.playwright-cache.outputs.cache-hit == 'true'
-      - run: python -m pytest -m "e2e" --timeout=120 -n 2 --dist loadfile
+      # Seriell (kein -n 2): Die Projekt-Konvention ist "E2E seriell laufen" --
+      # parallele Playwright-Laeufe auf ressourcenknappen Runnern sind instabil,
+      # und das Release-Gate (make test-e2e) faehrt aus demselben Grund seriell.
+      # Belegt bei v0.22.0: mit -n 2 auf 2 Kernen haengt der Passkey-Roundtrip
+      # dauerhaft (Chromium stirbt unter CPU-Druck weg, danach dreht die
+      # Playwright-Sync-API -- --timeout greift dort NICHT); seriell und auf
+      # 8 Kernen laeuft derselbe Test gruen durch. Zusaetzlich fiel unter -n 2 ein
+      # Locator-Race in test_file_vault auf. Beides Test-Defekte, nicht Produkt.
+      - run: python -m pytest -m "e2e" --timeout=120
         env:
           DJANGO_SETTINGS_MODULE: anlaufstelle.settings.e2e
           POSTGRES_HOST: localhost
