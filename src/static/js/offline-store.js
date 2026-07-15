@@ -707,7 +707,7 @@
                 lastSynced: row.lastSynced,
                 expiresAt: envelope.expiresAt || "",
                 // SI-2 (#1530/#1499): additive Felder fuer die Offline-
-                // Personenliste () -- reine Passthroughs aus dem
+                // Personenliste (#1499) -- reine Passthroughs aus dem
                 // Server-Bundle (SI-1, offline.py `client`-Dict), keine
                 // eigene Ableitung/Formatierung hier. Bestehende Konsumenten
                 // (offline-home.js, offline-create.js) lesen weiterhin nur

@@ -534,7 +534,7 @@ class TestAndroidDossierJourney:
             # Shell), simuliert aber die SW-eigenen fetch() eines Link-Klicks aus
             # einer bereits SW-kontrollierten Shell NICHT adversarial. Dass die
             # mitgenommene Person offline in der role=table-Liste an /clients/
-            # erscheint (), deckt
+            # erscheint (Offline-V2-Integration), deckt
             # test_offline_client_list_journey.py ab.
             page.goto(f"{base_url}/clients/{client_pk}/", wait_until="domcontentloaded")
             page.locator("[data-testid='offline-client-view']").wait_for(state="visible", timeout=15000)

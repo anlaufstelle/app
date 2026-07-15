@@ -1,6 +1,6 @@
 """Tests fuer OfflineZeitstromShellView (core/views/offline.py).
 
-Refs #1542 (#1499 W3-D): pk-lose, PUBLIC Zeitstrom-Shell. Der Service
+Refs #1542 (#1499, W3-D): pk-lose, PUBLIC Zeitstrom-Shell. Der Service
 Worker precacht sie und serviert sie offline IN-PLACE an der kanonischen URL /
 (W3-E). Der Shell selbst traegt kein PII — die lokale Chronik liest die
 Alpine-Komponente client-seitig aus IndexedDB (listOfflineEventsAggregated).

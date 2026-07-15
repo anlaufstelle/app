@@ -1,6 +1,6 @@
 """Tests fuer OfflineWorkItemListShellView (core/views/offline.py).
 
-Refs #1541 (#1499 W3-C): pk-lose, PUBLIC Aufgabenlisten-Shell. Der
+Refs #1541 (#1499, W3-C): pk-lose, PUBLIC Aufgabenlisten-Shell. Der
 Service Worker precacht sie und serviert sie offline IN-PLACE an der
 kanonischen URL /workitems/ (W3-E). Der Shell selbst traegt kein PII — die
 mitgenommenen/offline erfassten Aufgaben liest die Alpine-Komponente

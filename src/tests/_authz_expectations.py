@@ -524,7 +524,7 @@ EXPECTATIONS = (
     # Refs #1521 (#1499): pk-lose Offline-Event-Create-Shell. Public wie
     # offline_client_shell — PII-frei (Katalog liegt verschluesselt in IDB),
     # muss via SW cache.addAll pre-cachebar sein. Same-commit-as-URL
-    # (authz-Completeness-Gate, Risiko #8 der).
+    # (authz-Completeness-Gate, Risiko #8 der Design-Spec).
     E("core:offline_event_shell", "public", get=ALL_AUTH, anonymous_ok=True),
     # Refs #1522 (#1499): pk-lose Offline-WorkItem-Create-Shell. Public wie
     # offline_client_shell — PII-frei (Roster liegt verschluesselt in IDB), muss

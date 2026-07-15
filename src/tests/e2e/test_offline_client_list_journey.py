@@ -1,6 +1,6 @@
 """E2E: Offline-Personenliste an /clients/ — In-Place-Shell, Suche/Filter, Dossier.
 
-Refs #1536 (#1499 SI-9). Deckt die neue Kern-Journey der Welle ab:
+Refs #1536 (#1499, SI-9). Deckt die neue Kern-Journey der Welle ab:
 offline rendert der Service Worker die kanonische Personenliste ``/clients/``
 IN-PLACE aus der precachten, pk-losen Shell (OfflineClientListShellView, SI-3/
 SI-5) — kein Bounce mehr auf die ``/offline/``-Home. ``offline-client-list.js``
@@ -261,8 +261,8 @@ def test_cold_offline_client_list_renders_and_marks_deactivated(browser, base_ur
         )
 
         # Der Detail-Link zeigt auf die KANONISCHE /clients/<pk>/-URL (In-Place-
-        # Dossier, kein /offline/-Split) — das ist der der Liste.
-        # Das eigentliche Offline-Dossier-Rendering ist-
+        # Dossier, kein /offline/-Split) — das ist der Offline-V2-Vertrag der Liste.
+        # Das eigentliche Offline-Dossier-Rendering ist Offline-V2-Detail-Shell-
         # Verhalten und wird von test_offline_android_journeys.py::
         # TestColdStartShellAssets adversarial abgesichert; hier bewusst NICHT
         # nachgefahren (Playwrights ``set_offline`` blockt die SW-eigenen fetch()

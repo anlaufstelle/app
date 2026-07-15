@@ -354,7 +354,7 @@ def test_offline_queue_replay_syncs_despite_stale_csrf(browser, base_url):
 
 
 def test_offline_clients_shell_lists_cached_clients(browser, base_url):
-    """Refs #1533 (#1499 SI-5): Offline rendert der SW die kanonische
+    """Refs #1533 (#1499, SI-5): Offline rendert der SW die kanonische
     Personenliste ``/clients/`` IN-PLACE — die role=table-Liste der offline
     mitgenommenen Personen (nicht mehr die ``/offline/``-Home). Warm-Session-
     Pfad: echtes Login -> Person mitnehmen -> offline -> die Person erscheint als
@@ -413,7 +413,7 @@ def test_offline_clients_shell_lists_cached_clients(browser, base_url):
 
 
 def test_offline_clients_shell_filters_by_pseudonym(browser, base_url):
-    """Refs #1534 (#1499 SI-6): Die offline in-place gerenderte
+    """Refs #1534 (#1499, SI-6): Die offline in-place gerenderte
     Personenliste an ``/clients/`` bietet client-seitige Suche; die Eingabe
     blendet nicht passende Personen rein lokal (kein Server-/Krypto-Zugriff) aus,
     ohne Treffer erscheint der Standard-Leerzustand „Keine Personen gefunden".

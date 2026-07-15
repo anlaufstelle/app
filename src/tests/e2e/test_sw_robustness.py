@@ -151,7 +151,7 @@ def test_lie_fi_navigation_falls_back_before_hanging(browser, base_url):
             f"Navigation kam nach nur {elapsed:.1f}s zurueck — die Route hat den Request offenbar nicht "
             "haengen lassen (Testaufbau pruefen)."
         )
-        # Refs #1533 (#1499 SI-5): /clients/ faellt offline NICHT mehr
+        # Refs #1533 (#1499, SI-5): /clients/ faellt offline NICHT mehr
         # auf die Offline-Home, sondern der CLIENT_LIST-Zweig serviert die
         # precachte, pk-lose Personenlisten-Shell IN-PLACE (kein Klartext-
         # Netzwerkfehler, kein /offline/-Redirect). Ohne mitgenommene Personen

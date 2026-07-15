@@ -56,7 +56,13 @@ importScripts("/static/js/url-patterns.js");
 // (RUNTIME_CACHE_NAME) mit Eintrags-Budget (MAX_RUNTIME_ENTRIES); der Precache
 // bleibt unangetastet. Der Bump erzwingt Re-Install + Re-Activate und raeumt
 // dabei die alten, ungebremst gewachsenen v22-Caches (Precache + Runtime) weg.
-const CACHE_NAME = "anlaufstelle-v24";
+// Refs #1575: v24 -> v25 -- Kommentare in den Quellen der precachten Shells
+// ueberarbeitet. Der Shell-Bump-Guard pinnt auf die Shell-QUELLE, nicht auf das
+// gerenderte Ergebnis: jede Aenderung dort verlangt einen CACHE_NAME-Bump, sonst
+// bekaemen Bestandsnutzer die neue Shell nie zu sehen (cache-first, keine
+// Revalidierung). Nur den Pin zu aktualisieren wuerde genau die Luecke
+// aufreissen, die der Guard schliesst.
+const CACHE_NAME = "anlaufstelle-v25";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

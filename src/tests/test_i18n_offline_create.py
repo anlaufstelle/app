@@ -1,4 +1,4 @@
-"""Refs #1499 (), #1524: EN-Uebersetzungs-Lock fuer die pk-losen
+"""Refs #1499, #1524: EN-Uebersetzungs-Lock fuer die pk-losen
 Offline-Create-Shells (core/events/offline_create.html,
 core/workitems/offline_create.html, core/clients/_offline_event_fields.html).
 

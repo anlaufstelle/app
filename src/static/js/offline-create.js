@@ -268,7 +268,7 @@
         // ist damit der Bundle-Level-Staff+-Marker — bei leerem Roster wird die
         // GESAMTE Form ausgeblendet (Assistenz-Hinweis), weil ein trotzdem
         // gequeuetes Assistant-WorkItem gegen den StaffRequiredMixin-Create-View
-        // zu 403 "revoked" replayt (Risiko #7 der).
+        // zu 403 "revoked" replayt (Risiko #7 der Design-Spec).
         Alpine.data("offlineWorkItemCreate", () => ({
             loading: true,
             // Facility-Meta-Bundle (getOfflineFacility) bzw. null, wenn nicht

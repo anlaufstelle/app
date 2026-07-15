@@ -14,7 +14,7 @@ Zeitstrom (der SW-``isZeitstromRoot``-Zweig greift ausschliesslich im
 respondWith-catch/Netz-Fehler, NIE online) — der Online-Login-Redirect bzw. die
 echte Startseite bleiben unberuehrt.
 
-Test-Technik wie die (s. dortiger Docstring + Memory
+Test-Technik wie die Offline-V2-Listen-Journey (s. dortiger Docstring + Memory
 „Playwright-SW-Offline-Luecke"): Precache-Beweis ueber den Cache-INHALT (nicht
 ``set_offline``), kalt geschalteter Runtime-Cache (CDP), scoped data-pk-Selektoren.
 Helfer sind — etablierte Konvention dieser Suite — dateilokal aus

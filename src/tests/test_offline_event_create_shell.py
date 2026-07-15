@@ -1,6 +1,6 @@
 """Tests fuer OfflineEventCreateShellView (core/views/offline.py).
 
-Refs #1521 (#1499 SI-4): pk-lose, PUBLIC Event-Create-Shell. Der
+Refs #1521 (#1499, SI-4): pk-lose, PUBLIC Event-Create-Shell. Der
 Service Worker precacht sie und serviert sie offline IN-PLACE an der
 kanonischen URL /events/new/ (SI-6). Der Shell selbst traegt kein PII — die
 DocumentType-/Feld-Metadaten und die mitgenommenen Personen liest die

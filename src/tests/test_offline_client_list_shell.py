@@ -1,6 +1,6 @@
 """Tests fuer OfflineClientListShellView (core/views/offline.py).
 
-Refs #1531 (#1499 SI-3): pk-lose, PUBLIC Personenlisten-Shell. Der
+Refs #1531 (#1499, SI-3): pk-lose, PUBLIC Personenlisten-Shell. Der
 Service Worker precacht sie und serviert sie offline IN-PLACE an der
 kanonischen URL /clients/ (SI-5). Der Shell selbst traegt kein PII — die
 mitgenommenen Personen liest die Alpine-Komponente client-seitig aus

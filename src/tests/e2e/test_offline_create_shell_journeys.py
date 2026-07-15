@@ -1,6 +1,6 @@
-"""E2E: Offline-V2- — kalt-offline Erfassung ueber die "+"-Create-Shells.
+"""E2E: Offline-V2 — kalt-offline Erfassung ueber die "+"-Create-Shells.
 
-Refs #1524 (#1499, SI-7). ersetzt die alte Sackgasse (Kalt-Navigation
+Refs #1524 (#1499, SI-7). Offline-V2 ersetzt die alte Sackgasse (Kalt-Navigation
 auf /events/new/ bzw. /workitems/new/ landete auf dem Offline-Arbeitsplatz mit
 einem "geht nur im Dossier"-Wegweiser, #1483/#1485) durch **echte pk-lose
 Create-Shells**, die der Service Worker offline IN-PLACE an den kanonischen URLs
@@ -13,7 +13,7 @@ serviert (SI-6). Diese Journeys fahren den kompletten Feldpfad nach:
   Server-Verifikation (``is_anonymous``/``client IS NULL`` bzw. Event am Klienten).
 * Kalt-offline Standalone-Aufgabe ueber die WorkItem-Create-Shell
   (``mobile-create-workitem``) → Server-Verifikation ``client_id IS NULL``.
-* Assistenz-Gate (Risiko #7 der): Assistenz erreicht die
+* Assistenz-Gate (Risiko #7 der Design-Spec): Assistenz erreicht die
   WorkItem-Shell offline zwar per Direkt-URL (der SW serviert sie rollenlos),
   bekommt aber statt der Form das Staff+-Gate — ihr assignable_users-loses
   Facility-Bundle blendet die Erfassung aus, damit kein Assistant-WorkItem

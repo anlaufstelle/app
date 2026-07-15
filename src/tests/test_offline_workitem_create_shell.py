@@ -1,6 +1,6 @@
 """Tests fuer OfflineWorkItemCreateShellView (core/views/offline.py).
 
-Refs #1522 (#1499 SI-5): pk-lose, PUBLIC WorkItem-Create-Shell. Der
+Refs #1522 (#1499, SI-5): pk-lose, PUBLIC WorkItem-Create-Shell. Der
 Service Worker precacht sie und serviert sie offline IN-PLACE an der kanonischen
 URL /workitems/new/ (SI-6). Der Shell selbst traegt kein PII — das
 assignable_users-Roster (Staff+-Marker) und die mitgenommenen Personen liest die

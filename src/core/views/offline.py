@@ -283,7 +283,7 @@ class OfflineWorkItemCreateShellView(View):
     cold-offline, with no client having been opened first (a person picker plus a
     standalone "without person" option).
 
-    Staff+-gate parity (Risiko #7 der): the online
+    Staff+-gate parity (Risiko #7 der Design-Spec): the online
     :class:`~core.views.workitem_actions.WorkItemCreateView` is
     ``StaffRequiredMixin``, so a work item queued by an Assistant would replay to
     ``403`` ("revoked"). The facility bundle ships ``assignable_users`` **only**
