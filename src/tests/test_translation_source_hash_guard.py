@@ -32,6 +32,17 @@ pytestmark = pytest.mark.architecture
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "check_translation_versions.py"
 
+# Der ``architecture``-Marker deselektiert diesen Meta-Test im Mutmut-Run erst
+# NACH dem Sammeln — das Laden des Scripts unten laeuft aber schon beim Import.
+# Die mutants/-Kopie enthaelt kein ``scripts/``, der ImportError brach dort das
+# Test-Listing und damit den kompletten Mutation-Run ab ("Failed to collect list
+# of tests" -> alle Mutanten "not checked"). Refs #930.
+if not SCRIPT.exists():  # pragma: no cover - nur im mutants/-Tree
+    pytest.skip(
+        "scripts/check_translation_versions.py nicht erreichbar — Meta-Test ist nur im echten Repo-Tree sinnvoll",
+        allow_module_level=True,
+    )
+
 PYPROJECT = '[project]\nname = "x"\nversion = "0.20.0"\n'
 DE_SOURCE = "# Quelle\n\nHallo Welt.\n"
 UNDER_TEST = "README.en.md"
