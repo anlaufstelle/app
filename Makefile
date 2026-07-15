@@ -202,10 +202,10 @@ verify-vendor-js-sync:
 # failen. Darum hier ein sauberer Skip mit Hinweis, wenn AGENTS.md ODER das
 # Skript fehlt (Doku: docs/dev/release-exclusions.md).
 verify-agent-docs-sync:
-	@if [ -f AGENTS.md ] && [ -f scripts/verify_agent_docs_sync.py ]; then \
-		$(PYTHON) scripts/verify_agent_docs_sync.py; \
+	@if [ -f AGENTS.md ] && [ -f scripts/dev/verify_agent_docs_sync.py ]; then \
+		$(PYTHON) scripts/dev/verify_agent_docs_sync.py; \
 	else \
-		echo "verify-agent-docs-sync: uebersprungen — AGENTS.md und/oder scripts/verify_agent_docs_sync.py fehlen (Public-/Release-Tree; Verhalten dokumentiert in docs/dev/release-exclusions.md)."; \
+		echo "verify-agent-docs-sync: uebersprungen — AGENTS.md und/oder scripts/dev/verify_agent_docs_sync.py fehlen (Public-/Release-Tree; Verhalten dokumentiert in docs/dev/release-exclusions.md)."; \
 	fi
 
 # Vendored JS-Libs aus node_modules/ neu kopieren (Refs #1076). Nach einem
