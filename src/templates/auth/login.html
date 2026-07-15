@@ -27,7 +27,10 @@
     <script src="{% static 'js/crypto.js' %}"></script>
     <script src="{% static 'js/offline-store.js' %}"></script>
 </head>
-<body class="min-h-screen flex items-center justify-center p-6">
+{# Refs #1496: login.html erbt nicht von base.html, bringt sw-register.js aber mit — die #}
+{# Toast-Texte muessen daher hier stehen, sonst rendert der Update-Toast textlos. #}
+<body class="min-h-screen flex items-center justify-center p-6"
+      data-i18n-sw-update="{% trans 'Neue Version verfügbar.' %}" data-i18n-sw-reload="{% trans 'Neu laden' %}" data-i18n-sw-dismiss="{% trans 'Schließen' %}">
     <div class="w-full max-w-[380px]">
         {# Logo + Org-Header (Design: als-screens.jsx LoginScreen) #}
         <div class="text-center mb-8">
