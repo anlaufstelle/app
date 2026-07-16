@@ -67,7 +67,12 @@ importScripts("/static/js/url-patterns.js");
 // Boot-Idle-Gate. Ohne Bump bekaemen Bestandsnutzer die neue Serialisierung
 // nie (der Precache liefert die alten Module weiter). Der Bump erzwingt
 // Re-Install + Re-Precache.
-const CACHE_NAME = "anlaufstelle-v26";
+// Refs #1602: v26 -> v27 -- base.html bindet im <head> den Umami-Tracker ein
+// (partials/_umami.html, nur bei gesetzter UMAMI_WEBSITE_ID = devlive/demo).
+// Die precachten In-Place-Offline-Shells erweitern base.html; ohne Bump saehen
+// Bestandsnutzer die geaenderte Shell nie (cache-first ohne Revalidierung). Der
+// Bump erzwingt Re-Install + Re-Precache.
+const CACHE_NAME = "anlaufstelle-v27";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

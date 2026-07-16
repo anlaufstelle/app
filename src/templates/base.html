@@ -31,6 +31,8 @@
     <script src="{% static 'js/alpine/dashboards.js' %}" defer></script>
     <script src="{% static 'js/date-input-i18n.js' %}" defer></script>
     <script src="{% static 'js/alpine-csp.min.js' %}" defer></script>
+    {# Umami-Web-Analytics (Refs #1602/#1604) — rendert nur bei gesetzter Website-ID (devlive/demo). #}
+    {% include "partials/_umami.html" %}
     {% block extra_head %}{% endblock %}
 </head>
 {# Refs #1065: data-session-age (Sekunden) koppelt den Offline-Krypto-Schlüssel in crypto.js an die Session-Lebenszeit (inkl. Facility-Override via set_expiry). #}

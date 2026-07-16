@@ -134,6 +134,22 @@ def mfa_setup_reminder(request):
     }
 
 
+def umami(request):
+    """Refs #1602/#1604: Umami-Web-Analytics-Konfiguration in den Template-Context.
+
+    Standardmaessig AUS (``UMAMI_WEBSITE_ID=None``) — lokale dev/test/prod
+    bleiben tracking-frei. Konkrete Werte tragen nur devlive
+    (dev.anlaufstelle.app) und demo (demo.anlaufstelle.app). Das
+    base.html-Include ``partials/_umami.html`` rendert den Tracker nur, wenn
+    eine Website-ID gesetzt ist; ``login.html`` erbt bewusst nicht von
+    base.html und bleibt damit tracking-frei.
+    """
+    return {
+        "UMAMI_WEBSITE_ID": getattr(settings, "UMAMI_WEBSITE_ID", None),
+        "UMAMI_SCRIPT_SRC": getattr(settings, "UMAMI_SCRIPT_SRC", ""),
+    }
+
+
 def demo(request):
     """Refs #1062: Demo-Banner + Login-Zugangsdaten-Panel (nur bei DEMO_MODE).
 

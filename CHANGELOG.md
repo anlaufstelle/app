@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Umami-Web-Analytics auf dev.anlaufstelle.app** (#1602) — die Dev-Instanz (`devlive`) bindet auf den Post-Login-Seiten den datenschutzfreundlichen, self-hosted Umami-Tracker (`umami.example.org`) ein; die Anmeldeseite bleibt bewusst tracking-frei (login.html erbt nicht von base.html), und lokale dev/test/prod-Instanzen bleiben ohne gesetzte `UMAMI_WEBSITE_ID` vollständig tracking-frei. Der Umami-Host ist ausschließlich in der `devlive`-CSP freigegeben (`script-src` **und** `connect-src`, per Deep-Copy ohne Mutation der strikten globalen Policy); der Service-Worker-Precache wurde für die geänderte Shell auf `CACHE_NAME=anlaufstelle-v27` gebumpt.
 - **Zeitstrom: globaler Auf-/Zuklapp-Schalter mit persistenter Voreinstellung** (#1588) — im Feed des Zeitstroms lassen sich jetzt alle Einträge über eine sichtbare, tastaturbedienbare Steuerung („Alle aufklappen"/„Alle einklappen", `aria-pressed`) gleichzeitig auf- oder zuklappen; die Wahl wird geräteweit per `localStorage` gespeichert und überdauert Reload, Navigation und erneuten Login (Default weiterhin eingeklappt). Neu bzw. per HTMX nachgeladene Cards übernehmen den aktuellen globalen Zustand, das `aria-expanded` pro Card bleibt korrekt, und der Einzel-Toggle je Card bleibt lokal möglich (nur der globale Modus wird persistiert).
 
 ### Security

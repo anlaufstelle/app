@@ -153,6 +153,7 @@ TEMPLATES = [
                 "core.context_processors.source_code",
                 "core.context_processors.demo",
                 "core.context_processors.mfa_setup_reminder",
+                "core.context_processors.umami",
             ],
         },
     },
@@ -510,6 +511,15 @@ CONTENT_SECURITY_POLICY = {
         "report-uri": ["/csp-report/"],
     }
 }
+
+# --- Umami Web-Analytics (Refs #1602, #1604) ---
+# Standardmaessig AUS: lokale dev/test/prod-Instanzen bleiben tracking-frei.
+# Der Tracker wird ausschliesslich eingebunden, wenn UMAMI_WEBSITE_ID gesetzt
+# ist (siehe partials/_umami.html + core.context_processors.umami). Konkrete
+# Werte tragen NUR devlive.py (dev.anlaufstelle.app, Refs #1602) und demo.py
+# (demo.anlaufstelle.app, Refs #1604) — dort auch die CSP-Freigabe des Hosts.
+UMAMI_WEBSITE_ID = None
+UMAMI_SCRIPT_SRC = ""
 
 # --- Django Unfold ---
 

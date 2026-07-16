@@ -103,3 +103,51 @@ class TestDevLiveFailClosed:
         result = _run_devlive_import({"SUDO_MODE_ENABLED": "false"})
         assert result.returncode != 0
         assert "SUDO_MODE_ENABLED" in result.stderr
+
+
+class TestDevLiveUmami:
+    """Refs #1602: dev.anlaufstelle.app bindet den Umami-Tracker ein und gibt
+    den Umami-Host in der CSP frei — ohne das geteilte base-CSP-Dict zu
+    mutieren (Deep-Copy-Isolation)."""
+
+    def test_umami_website_id_is_set(self):
+        result = _run_devlive_import(
+            expr="from anlaufstelle.settings.devlive import UMAMI_WEBSITE_ID;print(UMAMI_WEBSITE_ID)"
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "00000000-0000-4000-8000-000000000001"
+
+    def test_umami_script_src_is_example_main_js(self):
+        result = _run_devlive_import(
+            expr="from anlaufstelle.settings.devlive import UMAMI_SCRIPT_SRC;print(UMAMI_SCRIPT_SRC)"
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "https://umami.example.org/main.js"
+
+    def test_csp_allows_umami_host_in_script_and_connect_src(self):
+        result = _run_devlive_import(
+            expr=(
+                "from anlaufstelle.settings.devlive import CONTENT_SECURITY_POLICY as c;"
+                "d=c['DIRECTIVES'];"
+                "print('https://umami.example.org' in d['script-src'],"
+                "'https://umami.example.org' in d['connect-src'])"
+            )
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "True True"
+
+    def test_deepcopy_leaves_base_csp_strict(self):
+        """Der Import von devlive darf das GETEILTE base-CSP-Dict nicht
+        mutieren — sonst wuerde die globale strikte script-src 'self'
+        (Schutzwall fuer window.offlineStore, ADR-022) fuer alle anderen
+        Settings-Module aufgeweicht."""
+        result = _run_devlive_import(
+            expr=(
+                "import anlaufstelle.settings.devlive;"  # importiert + mutiert die Kopie
+                "from anlaufstelle.settings.base import CONTENT_SECURITY_POLICY as b;"
+                "print('https://umami.example.org' in b['DIRECTIVES']['script-src'],"
+                "'https://umami.example.org' in b['DIRECTIVES']['connect-src'])"
+            )
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "False False"
