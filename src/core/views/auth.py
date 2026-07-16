@@ -117,6 +117,20 @@ class CustomLoginView(auth_views.LoginView):
         # 2FA: Die Session startet immer unverifiziert — die MFA-Middleware
         # leitet bei Bedarf nach /mfa/verify/ oder /mfa/setup/ weiter.
         self.request.session["mfa_verified"] = False
+        # Grace-Frist fuer den Rollen-MFA-Zwang beim ERSTEN Login stempeln
+        # (Refs #689): now + 30 Tage. Nur setzen, wenn noch keine Frist steht —
+        # Folge-Logins verlaengern die Frist nicht. Rollen-unabhaengig gestempelt,
+        # damit ein spaeter aktivierter Rollen-Zwang eine deterministische Frist
+        # vorfindet; das Feld wird nur konsultiert, wenn MFA rollen-erzwungen ist.
+        if user.mfa_setup_deadline is None:
+            from datetime import timedelta
+
+            from django.utils import timezone
+
+            from core.constants import MFA_SETUP_GRACE_DAYS
+
+            user.mfa_setup_deadline = timezone.now() + timedelta(days=MFA_SETUP_GRACE_DAYS)
+            user.save(update_fields=["mfa_setup_deadline"])
         return response
 
 

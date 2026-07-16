@@ -6826,3 +6826,14 @@ msgstr "No person taken offline."
 #, python-brace-format
 msgid "{used} / {quota} ({percent}% belegt)"
 msgstr "{used} / {quota} ({percent}% used)"
+
+#: src/templates/partials/_mfa_setup_reminder.html:7
+#, python-format
+msgid "Zwei-Faktor-Authentifizierung wird in %(days)s Tag verpflichtend."
+msgid_plural "Zwei-Faktor-Authentifizierung wird in %(days)s Tagen verpflichtend."
+msgstr[0] "Two-factor authentication becomes mandatory in %(days)s day."
+msgstr[1] "Two-factor authentication becomes mandatory in %(days)s days."
+
+#: src/templates/partials/_mfa_setup_reminder.html:9
+msgid "Jetzt einrichten"
+msgstr "Set up now"

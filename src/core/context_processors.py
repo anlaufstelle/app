@@ -89,6 +89,44 @@ def workitem_counts(request):
     }
 
 
+def mfa_setup_reminder(request):
+    """Refs #689: Reminder-Banner-Kontext für die 2FA-Setup-Grace-Frist.
+
+    Zeigt ab ``MFA_SETUP_REMINDER_DAYS`` Resttagen einen Banner mit Resttage-
+    Zähler, solange ein rollen-erzwungener Nutzer noch kein bestätigtes 2FA-Gerät
+    eingerichtet hat und die Grace-Frist läuft. Bewusst gesetzte Zwänge
+    (``mfa_required``/facility-weit) haben keine Frist — für sie greift die
+    Middleware sofort, ein Countdown-Banner wäre sinnlos. HTMX-Partials rendern
+    die Navigation/den Banner nicht — dort No-Op (spart die Queries).
+    """
+    from core.constants import MFA_SETUP_REMINDER_DAYS
+
+    if not hasattr(request, "user") or not request.user.is_authenticated:
+        return {}
+    if request.headers.get("HX-Request"):
+        return {}
+    user = request.user
+    deadline = getattr(user, "mfa_setup_deadline", None)
+    if deadline is None or not user.mfa_enforced_by_role or user.has_confirmed_mfa_device:
+        return {}
+    now = timezone.now()
+    if deadline <= now:
+        # Frist abgelaufen — die Middleware erzwingt bereits den Setup, kein
+        # Countdown mehr.
+        return {}
+    # Aufgerundete volle Resttage: ein angebrochener Tag zählt als ganzer
+    # (z.B. 4h vor Ablauf = noch "1 Tag").
+    delta = deadline - now
+    days_remaining = delta.days + (1 if delta.seconds or delta.microseconds else 0)
+    if days_remaining > MFA_SETUP_REMINDER_DAYS:
+        return {"mfa_setup_show_banner": False}
+    return {
+        "mfa_setup_show_banner": True,
+        "mfa_setup_days_remaining": days_remaining,
+        "mfa_setup_deadline": deadline,
+    }
+
+
 def demo(request):
     """Refs #1062: Demo-Banner + Login-Zugangsdaten-Panel (nur bei DEMO_MODE).
 

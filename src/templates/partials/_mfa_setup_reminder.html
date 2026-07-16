@@ -1,0 +1,10 @@
+{% load i18n %}
+{# Reminder-Banner fuer die 2FA-Setup-Grace-Frist (Refs #689). Erscheint ab den #}
+{# letzten MFA_SETUP_REMINDER_DAYS Tagen, solange die 2FA noch nicht eingerichtet #}
+{# ist. Kontext aus core.context_processors.mfa_setup_reminder. #}
+{% if mfa_setup_show_banner %}
+<div class="bg-red-100 border-b border-red-300 text-red-900 text-center text-[13px] py-1.5 px-4" data-testid="mfa-setup-reminder" role="alert">
+    {% blocktrans count days=mfa_setup_days_remaining %}Zwei-Faktor-Authentifizierung wird in {{ days }} Tag verpflichtend.{% plural %}Zwei-Faktor-Authentifizierung wird in {{ days }} Tagen verpflichtend.{% endblocktrans %}
+    <a href="{% url 'mfa_setup' %}" class="underline font-medium">{% trans "Jetzt einrichten" %}</a>
+</div>
+{% endif %}

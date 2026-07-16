@@ -62,6 +62,17 @@ class User(AbstractUser):
             "Einrichtung 2FA für alle verlangt."
         ),
     )
+    mfa_setup_deadline = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name=_("Frist für 2FA-Einrichtung"),
+        help_text=_(
+            "Ende der Übergangsfrist, bis zu der ein rollen-erzwungener Nutzer "
+            "die Zwei-Faktor-Authentifizierung einrichten muss. Wird beim ersten "
+            "Login auf 30 Tage gesetzt; nach Ablauf ist der Zugang bis zur "
+            "Einrichtung gesperrt (Refs #689)."
+        ),
+    )
     preferred_language = models.CharField(
         max_length=5,
         choices=settings.LANGUAGES,
@@ -153,21 +164,15 @@ class User(AbstractUser):
         return self.has_confirmed_totp_device or self.has_confirmed_webauthn_device
 
     @property
-    def is_mfa_enforced(self):
-        """True if the user, the user's role, or the user's facility requires 2FA.
+    def mfa_enforced_deliberately(self):
+        """MFA-Zwang aus einer bewussten Einzel-/Einrichtungsentscheidung.
 
-        Rollen-Default-Enforcement (A3.1, Refs #1019): super_admin und
-        facility_admin erzwingen MFA allein ueber ihre Rolle, sobald
-        ``MFA_ENFORCE_PRIVILEGED_ROLES`` aktiv ist (nur Produktion — dev/test/e2e
-        bleiben bewusst MFA-frei). ``mfa_required`` (User) und
-        ``mfa_enforced_facility_wide`` (Facility) wirken unabhaengig davon weiter.
+        ``mfa_required`` (per Admin-Aktion/Invite/create_super_admin gesetzt) und
+        das facility-weite Flag ``mfa_enforced_facility_wide`` greifen OHNE
+        Grace-Frist — der Zwang wurde bewusst und gezielt aktiviert, ein
+        sofortiger Setup-Redirect ist gewollt (Refs #689).
         """
         if self.mfa_required:
-            return True
-        if settings.MFA_ENFORCE_PRIVILEGED_ROLES and self.role in (
-            self.Role.SUPER_ADMIN,
-            self.Role.FACILITY_ADMIN,
-        ):
             return True
         facility = self.facility
         if facility is None:
@@ -176,6 +181,29 @@ class User(AbstractUser):
             return bool(facility.settings.mfa_enforced_facility_wide)
         except facility._meta.model.settings.RelatedObjectDoesNotExist:
             return False
+
+    @property
+    def mfa_enforced_by_role(self):
+        """Rollen-Default-Enforcement (A3.1 Refs #1019, erweitert Refs #689).
+
+        Greift MIT 30-Tage-Grace-Frist (Durchsetzung in
+        ``MFAEnforcementMiddleware``): die Rollen in ``mfa_enforced_roles()``
+        erzwingen MFA allein ueber ihre Rolle, sobald
+        ``MFA_ENFORCE_PRIVILEGED_ROLES`` aktiv ist (nur Produktion — dev/test/
+        e2e/demo bleiben bewusst MFA-frei).
+        """
+        return settings.MFA_ENFORCE_PRIVILEGED_ROLES and self.role in mfa_enforced_roles()
+
+    @property
+    def is_mfa_enforced(self):
+        """True if the user ultimately requires 2FA (deliberate OR role-based).
+
+        Contract unveraendert (genutzt u.a. in ``MFASettingsView`` und
+        ``MFADisableView``): sagt, ob 2FA fuer diesen Nutzer verpflichtend IST.
+        WANN der Zwang greift — sofort (bewusst) vs. nach Grace-Frist (Rolle) —
+        entscheidet die Middleware ueber die beiden Teil-Properties.
+        """
+        return self.mfa_enforced_deliberately or self.mfa_enforced_by_role
 
     def ensure_offline_key_salt(self) -> str:
         """Return the user's offline salt, lazily generating one on first access.
@@ -193,3 +221,30 @@ class User(AbstractUser):
             self.offline_key_salt = base64.urlsafe_b64encode(salt_bytes).decode().rstrip("=")
             self.save(update_fields=["offline_key_salt"])
         return self.offline_key_salt
+
+
+# EINE gemeinsame Quelle fuer die Rollen, die MFA ueber ihre Rolle erzwingen
+# (Refs #689). ``super_admin``/``facility_admin`` stammen aus der ersten
+# Ausbaustufe (A3.1, Refs #1019); ``staff``/``assistant`` kommen mit #689 hinzu.
+# Bewusst als Modul-Konstante, damit die Compliance-Quote (``_PRIVILEGED_ROLES``,
+# koppelbar in Folge-Issue #1478/COD-12) spaeter auf dieselbe Menge zeigen kann,
+# statt die Rollenliste ein zweites Mal zu pflegen.
+MFA_ENFORCED_ROLES = (
+    User.Role.SUPER_ADMIN,
+    User.Role.FACILITY_ADMIN,
+    User.Role.STAFF,
+    User.Role.ASSISTANT,
+)
+
+
+def mfa_enforced_roles():
+    """Effektive Menge der rollen-erzwungenen MFA-Rollen.
+
+    ``LEAD`` (Leitung) ist eine bewusst konfigurierbare, noch **offene
+    Maintainer-Entscheidung** (Refs #689): standardmaessig NICHT einbezogen,
+    per Setting ``MFA_ENFORCE_INCLUDE_LEAD`` zuschaltbar. Die Trennung haelt die
+    Produktentscheidung an genau einer klar markierten Stelle.
+    """
+    if settings.MFA_ENFORCE_INCLUDE_LEAD:
+        return (*MFA_ENFORCED_ROLES, User.Role.LEAD)
+    return MFA_ENFORCED_ROLES

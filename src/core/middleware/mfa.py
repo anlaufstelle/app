@@ -13,7 +13,12 @@ erfolgreich einen OTP eingibt. Sie lebt so lange wie die Session —
 bei Logout oder Session-Expiry ist die 2FA-Verifikation neu nötig.
 """
 
+from datetime import timedelta
+
 from django.shortcuts import redirect
+from django.utils import timezone
+
+from core.constants import MFA_SETUP_GRACE_DAYS
 
 # Pfade, die auch bei offenem MFA-Setup/Verify erreichbar sein müssen —
 # sonst gerät der Nutzer in eine Redirect-Schleife.
@@ -60,10 +65,34 @@ class MFAEnforcementMiddleware:
         # Methoden-uebergreifend (ADR-032, Refs #1492): TOTP ODER Passkey zaehlt
         # als bestaetigter zweiter Faktor.
         has_device = user.has_confirmed_mfa_device
-        # Case 1: Setup needed (user or facility requires MFA, but no device yet).
-        if user.is_mfa_enforced and not has_device:
-            return "/mfa/setup/"
+        # Case 1: Setup needed (MFA enforced, but no device yet).
+        if not has_device:
+            # Bewusst gesetzter Zwang (mfa_required / facility-weit) greift SOFORT
+            # (Refs #689) — kein Grace, der Admin hat ihn gezielt aktiviert.
+            if user.mfa_enforced_deliberately:
+                return "/mfa/setup/"
+            # Rollen-Default-Enforcement laeuft ueber eine 30-Tage-Grace-Frist,
+            # damit Bestandsnutzer beim Aktivieren des Rollen-Zwangs nicht
+            # ausgesperrt werden (Refs #689).
+            if user.mfa_enforced_by_role:
+                deadline = user.mfa_setup_deadline
+                now = timezone.now()
+                if deadline is None:
+                    # Erstkontakt (z.B. Session aus der Zeit vor dem Rollout, in
+                    # der das Login-Stamping nicht lief): Grace-Uhr JETZT starten
+                    # statt aussperren.
+                    from core.models import User
+
+                    deadline = now + timedelta(days=MFA_SETUP_GRACE_DAYS)
+                    # ``user`` ist im Request als SimpleLazyObject gewrappt —
+                    # daher das konkrete Modell statt ``type(user)``.
+                    User.objects.filter(pk=user.pk).update(mfa_setup_deadline=deadline)
+                    user.mfa_setup_deadline = deadline
+                if deadline > now:
+                    return None  # Grace aktiv — Zugang mit Banner
+                return "/mfa/setup/"
+            return None
         # Case 2: Device exists, but session not yet verified.
-        if has_device and not request.session.get("mfa_verified"):
+        if not request.session.get("mfa_verified"):
             return "/mfa/verify/"
         return None

@@ -68,19 +68,32 @@ class TestMFARoleEnforcementWhenEnabled:
         assert admin_user.is_mfa_enforced is True
 
     def test_lead_is_not_enforced_by_role(self, settings, lead_user):
-        # Bewusste Abweichung von der Tracker-Vorgabe {super_admin, facility_admin,
-        # lead}: lead bleibt ohne Rollen-Zwang (Entscheidung in #1019).
+        # LEAD bleibt ohne Rollen-Zwang, solange ``MFA_ENFORCE_INCLUDE_LEAD``
+        # aus ist (bewusst offene Produktentscheidung, Refs #689) — die
+        # Einbeziehung von lead ist per Setting zuschaltbar (s. test_mfa_grace).
         settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
         assert lead_user.is_mfa_enforced is False
 
-    def test_staff_is_not_enforced_by_role(self, settings, staff_user):
+    def test_staff_is_enforced_by_role(self, settings, staff_user):
+        # Anforderungsaenderung (Refs #689): staff (und assistant) werden mit
+        # aktivem Setting rollen-erzwungen. Vorher (nur #1019) war staff bewusst
+        # ausgenommen; #689 zieht den MFA-Default fuer Niedrigrechte-Rollen nach
+        # (Grace-Frist, s. test_mfa_grace).
         settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
-        assert staff_user.is_mfa_enforced is False
+        assert staff_user.is_mfa_enforced is True
 
-    def test_enforced_facility_admin_without_device_redirects_to_setup(self, settings, client, admin_user):
-        """Integrationsnachweis: ``MFAEnforcementMiddleware`` leitet einen
-        rollen-erzwungenen facility_admin ohne TOTP-Geraet auf ``/mfa/setup/``."""
+    def test_enforced_facility_admin_after_grace_redirects_to_setup(self, settings, client, admin_user):
+        """Integrationsnachweis: nach Ablauf der Grace-Frist leitet die
+        ``MFAEnforcementMiddleware`` einen rollen-erzwungenen facility_admin ohne
+        TOTP-Geraet auf ``/mfa/setup/`` (Refs #689). Innerhalb der Frist bleibt
+        der Zugang erhalten (s. test_mfa_grace)."""
+        import datetime
+
+        from django.utils import timezone
+
         settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
+        admin_user.mfa_setup_deadline = timezone.now() - datetime.timedelta(minutes=1)
+        admin_user.save(update_fields=["mfa_setup_deadline"])
         client.force_login(admin_user)
         response = client.get("/")
         assert response.status_code == 302

@@ -6046,3 +6046,14 @@ msgstr "Diese Seite erscheint nur, wenn für die aufgerufene Adresse keine lokal
 #: src/templates/offline.html
 msgid "Bitte nutzen Sie einen der Links unten. Falls das Problem bestehen bleibt, laden Sie die Seite einmal online neu."
 msgstr "Bitte nutzen Sie einen der Links unten. Falls das Problem bestehen bleibt, laden Sie die Seite einmal online neu."
+
+#: src/templates/partials/_mfa_setup_reminder.html:7
+#, python-format
+msgid "Zwei-Faktor-Authentifizierung wird in %(days)s Tag verpflichtend."
+msgid_plural "Zwei-Faktor-Authentifizierung wird in %(days)s Tagen verpflichtend."
+msgstr[0] "Zwei-Faktor-Authentifizierung wird in %(days)s Tag verpflichtend."
+msgstr[1] "Zwei-Faktor-Authentifizierung wird in %(days)s Tagen verpflichtend."
+
+#: src/templates/partials/_mfa_setup_reminder.html:9
+msgid "Jetzt einrichten"
+msgstr "Jetzt einrichten"

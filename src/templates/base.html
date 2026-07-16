@@ -88,6 +88,8 @@
 
     {# --- Main Content: always visible, offset on desktop --- #}
     <main id="main-content" class="md:ml-60 min-h-screen pb-20 md:pb-0 overflow-x-hidden">
+        {# 2FA-Setup-Reminder — Countdown der Grace-Frist (Refs #689). #}
+        {% include "partials/_mfa_setup_reminder.html" %}
         {# Demo-Banner — kennzeichnet synthetische Daten + naechsten Reset (Refs #1062). #}
         {% if demo_mode %}
         <div class="bg-amber-100 border-b border-amber-300 text-amber-900 text-center text-[13px] py-1.5 px-4" data-testid="demo-banner">

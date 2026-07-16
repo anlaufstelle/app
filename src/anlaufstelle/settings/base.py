@@ -152,6 +152,7 @@ TEMPLATES = [
                 "core.context_processors.workitem_counts",
                 "core.context_processors.source_code",
                 "core.context_processors.demo",
+                "core.context_processors.mfa_setup_reminder",
             ],
         },
     },
@@ -212,6 +213,13 @@ OTP_WEBAUTHN_ALLOW_PASSWORDLESS_LOGIN = False
 # In Produktion an (hier in base.py); dev/test/e2e schalten es bewusst aus
 # (dev.py -> kaskadiert nach test/e2e), damit Seed-Logins MFA-frei bleiben.
 MFA_ENFORCE_PRIVILEGED_ROLES = True
+
+# OFFENE MAINTAINER-FRAGE (Refs #689): Soll die Rolle "Leitung" (LEAD) in den
+# rollen-basierten MFA-Zwang einbezogen werden? Bewusst standardmaessig AUS —
+# die Einbeziehung ist eine Produktentscheidung, die hier an genau einer klar
+# markierten Stelle zugeschaltet werden kann (wirkt nur zusammen mit
+# ``MFA_ENFORCE_PRIVILEGED_ROLES``; s. ``core.models.user.mfa_enforced_roles``).
+MFA_ENFORCE_INCLUDE_LEAD = False
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},

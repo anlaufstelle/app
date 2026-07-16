@@ -34,6 +34,13 @@ WORKITEM_INBOX_CAP = 50
 # 7-Tage-Zeitraum zu beschneiden.
 WORKITEM_RECENT_DONE_PREVIEW = 5
 
+# MFA-Setup-Grace-Frist (Refs #689): Fenster nach dem ersten Login, in dem ein
+# rollen-erzwungener Nutzer die 2FA einrichten kann, bevor der Zugang gesperrt
+# wird. Bewusst gesetzte Zwaenge (``mfa_required``/facility-weit) greifen ohne
+# Grace. Der Reminder-Banner erscheint ab ``MFA_SETUP_REMINDER_DAYS`` Resttagen.
+MFA_SETUP_GRACE_DAYS = 30
+MFA_SETUP_REMINDER_DAYS = 14
+
 # Rate-Limits (django-ratelimit) — pro User, sliding window
 RATELIMIT_BULK_ACTION = "30/h"
 RATELIMIT_MUTATION = "60/h"

@@ -42,6 +42,29 @@ def unlock_selected_users(modeladmin, request, queryset):
         messages.info(request, "Keine der ausgewählten Accounts war gesperrt.")
 
 
+@admin.action(description="MFA für ausgewählte Nutzende verpflichtend setzen")
+def enforce_mfa_for_selected_users(modeladmin, request, queryset):
+    """Setzt ``mfa_required=True`` für die ausgewählten Nutzenden (Refs #689).
+
+    Opt-in-Weg für Bestandskunden („MFA für alle aktivieren"). Das Scoping wird
+    HIER explizit erzwungen: Row Level Security deckt die ``user``-Tabelle NICHT
+    ab (nur facility-übergreifende Fachtabellen), daher darf ein facility_admin
+    über einen manipulierten Changelist-Request keine fremden Konten treffen —
+    die Aktion filtert für Nicht-super_admins hart auf die eigene Einrichtung.
+    """
+    if not getattr(request.user, "is_super_admin", False):
+        current = getattr(request, "current_facility", None)
+        if current is None:
+            messages.error(request, "Keine Einrichtung im Kontext — Aktion abgebrochen.")
+            return
+        queryset = queryset.filter(facility=current)
+    updated = queryset.filter(mfa_required=False).update(mfa_required=True)
+    if updated:
+        messages.success(request, f"MFA für {updated} Nutzende verpflichtend gesetzt.")
+    else:
+        messages.info(request, "Keine Änderung — alle ausgewählten Nutzenden waren bereits MFA-pflichtig.")
+
+
 @admin.register(User, site=anlaufstelle_admin_site)
 class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
     form = UserChangeForm
@@ -49,7 +72,7 @@ class UserAdmin(FacilityScopedAdminMixin, BaseUserAdmin, ModelAdmin):
     change_password_form = AdminPasswordChangeForm
     list_display = ("username", "display_name", "role", "facility", "is_active")
     list_filter = ("role", "facility", "is_active", "is_staff")
-    actions = [unlock_selected_users]
+    actions = [unlock_selected_users, enforce_mfa_for_selected_users]
     fieldsets = BaseUserAdmin.fieldsets + (
         (
             "Anlaufstelle",
