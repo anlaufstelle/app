@@ -113,11 +113,18 @@ omit = [
 # Runner schliesst e2e und slow aus, damit ein Mutation-Run nicht Stunden
 # laeuft. Das Ziel ist ein nightly-Job ueber Cron, kein PR-Gate.
 [tool.mutmut]
-# Refs #930: ``paths_to_mutate`` muss in mutmut 3.x eine TOML-
-# Liste sein. Ein String wird zeichenweise iteriert (jeder ``/`` triggert
-# Filesystem-Root-Walk → Crash mit ``/etc/vconsole.conf``-FileNotFoundError).
-# Refs #923 hatte den String-Wert als regression eingeführt.
-paths_to_mutate = ["src/core/services/", "src/core/forms/"]
+# Refs #930/#1388: ``source_paths`` (früher ``paths_to_mutate``) muss in mutmut
+# 3.x eine TOML-Liste sein. Ein String wird zeichenweise iteriert (jeder ``/``
+# triggert Filesystem-Root-Walk → Crash mit ``/etc/vconsole.conf``-
+# FileNotFoundError). Refs #923 hatte den String-Wert als regression eingeführt.
+# Umbenannt von ``paths_to_mutate`` auf ``source_paths`` (Refs #1388): mutmut
+# wirft für den alten Namen eine ``UserWarning``-Deprecation. Die feuerte beim
+# ERSTEN mutmut-Import im pytest-Subprozess der Clean-/Forced-Fail-Phase
+# (mutierte ``core/services/__init__.py`` zieht das Trampolin) und wurde durch
+# ``filterwarnings=error`` fatal → Voll-Lauf zählte null Mutanten. Semantik
+# identisch: ``source_paths = source_paths or paths_to_mutate`` (mutmut/
+# configuration.py), die mutierte Datei-Menge bleibt unverändert.
+source_paths = ["src/core/services/", "src/core/forms/"]
 # Refs #930 / #1388 — Files mit reiner Ops/IO-Logik. Die Pfade folgen dem
 # Subpackage-Umzug (Refs #910), sonst mutiert mutmut die Wrapper wieder mit:
 # ``system/health.py`` ist ``shutil``-/``importlib``-Wrapper;
@@ -148,9 +155,14 @@ do_not_mutate = [
     # vollständig getestet.
     "src/core/services/file_vault/policy.py",
 ]
-# Auch ``tests_dir`` wird in mutmut 3.x als iterable behandelt — String führt
-# zur selben Zeichen-für-Zeichen-Iteration im pytest-Argv. TOML-Liste nötig.
-tests_dir = ["src/tests/"]
+# Test-Verzeichnis: als iterable behandelt — String führt zur selben Zeichen-
+# für-Zeichen-Iteration im pytest-Argv. TOML-Liste nötig. Umbenannt von
+# ``tests_dir`` auf ``pytest_add_cli_args_test_selection`` (Refs #1388): auch
+# ``tests_dir`` ist in dieser mutmut-Version deprecated und würde dieselbe
+# fatal-in-Subprozess-Warnung auslösen. mutmut faltet den alten Key ohnehin in
+# diesen (``pytest_add_cli_args_test_selection = s(...) + tests_dir``) — Semantik
+# identisch.
+pytest_add_cli_args_test_selection = ["src/tests/"]
 # In mutmut 3.x ist das Feld ``runner`` ein Dead-Letter — es gibt einen
 # eingebauten ``PytestRunner``. Marker- und Flag-Konfiguration läuft über
 # ``pytest_add_cli_args`` (Liste, NICHT String).
