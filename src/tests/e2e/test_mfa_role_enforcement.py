@@ -1,12 +1,14 @@
-"""E2E: Rollen-basiertes MFA-Enforcement (A3.1, Refs #1019).
+"""E2E: Rollen-basiertes MFA-Enforcement (A3.1, Refs #1019; erweitert Refs #689).
 
 Gegen den ``enforced_base_url``-Server (``E2E_MFA_ENFORCE_ROLES=1`` →
 ``MFA_ENFORCE_PRIVILEGED_ROLES=True``):
 
-* facility_admin (Seed-Login ``admin``) ohne TOTP-Gerät wird beim ersten
-  Request auf ``/mfa/setup/`` gezwungen.
-* staff (Seed-Login ``miriam``) ist nicht rollen-erzwungen und landet direkt
-  auf dem Dashboard.
+* facility_admin (Seed-Login ``admin``) ohne TOTP-Gerät wird als privilegierte
+  Rolle SOFORT (ohne Grace-Frist, #1019-Verhalten) auf ``/mfa/setup/`` gezwungen.
+* staff (Seed-Login ``miriam``) ist mit #689 zwar rollen-erzwungen, aber
+  grace-behaftet: beim ersten Login wird die 30-Tage-Frist gestempelt, innerhalb
+  derer der Zugang erhalten bleibt — miriam landet daher (noch) direkt auf dem
+  Dashboard statt auf ``/mfa/setup/``.
 
 Manuell-first verifiziert (Port 8944): admin → /mfa/setup/, miriam → /.
 Der Default-Server bleibt MFA-frei (s. Unit-Tests
@@ -32,7 +34,8 @@ def _login(browser, base_url, username, password="anlaufstelle2026"):
 
 
 def test_facility_admin_is_forced_into_mfa_setup(enforced_base_url, browser):
-    """facility_admin ohne Gerät → Rollen-Redirect auf /mfa/setup/."""
+    """facility_admin ohne Gerät → SOFORTIGER Rollen-Redirect auf /mfa/setup/
+    (privilegierte Rolle, keine Grace-Frist, Refs #689/#1019)."""
     page, context = _login(browser, enforced_base_url, "admin")
     try:
         page.wait_for_url("**/mfa/setup/", timeout=30000)
@@ -42,7 +45,8 @@ def test_facility_admin_is_forced_into_mfa_setup(enforced_base_url, browser):
 
 
 def test_staff_is_not_forced_into_mfa_setup(enforced_base_url, browser):
-    """staff ist nicht rollen-erzwungen → Dashboard statt /mfa/setup/."""
+    """staff ist mit #689 rollen-erzwungen, aber innerhalb der 30-Tage-Grace-
+    Frist (beim Login gestempelt) → Dashboard statt /mfa/setup/."""
     page, context = _login(browser, enforced_base_url, "miriam")
     try:
         page.wait_for_url(lambda url: "/login/" not in url, timeout=30000)

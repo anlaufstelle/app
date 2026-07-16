@@ -51,8 +51,10 @@ class TestMFAEnforcementProperty:
 
 @pytest.mark.django_db
 class TestMFARoleEnforcementWhenEnabled:
-    """A3.1 (Refs #1019): Bei aktivem ``MFA_ENFORCE_PRIVILEGED_ROLES`` erzwingen
-    super_admin und facility_admin MFA allein ueber ihre Rolle — lead/staff nicht.
+    """A3.1 (Refs #1019) + #689: Bei aktivem ``MFA_ENFORCE_PRIVILEGED_ROLES``
+    erzwingen super_admin/facility_admin (sofort) sowie staff/assistant (mit
+    Grace-Frist) MFA allein ueber ihre Rolle; lead nur mit
+    ``MFA_ENFORCE_INCLUDE_LEAD``.
 
     Das Setting ist nur in Produktion True (``base.py``); dev/test/e2e bleiben
     bewusst MFA-frei (s. ``TestMFARoleEnforcementDisabledByDefault``). Diese
@@ -82,17 +84,39 @@ class TestMFARoleEnforcementWhenEnabled:
         settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
         assert staff_user.is_mfa_enforced is True
 
-    def test_enforced_facility_admin_after_grace_redirects_to_setup(self, settings, client, admin_user):
-        """Integrationsnachweis: nach Ablauf der Grace-Frist leitet die
-        ``MFAEnforcementMiddleware`` einen rollen-erzwungenen facility_admin ohne
-        TOTP-Geraet auf ``/mfa/setup/`` (Refs #689). Innerhalb der Frist bleibt
-        der Zugang erhalten (s. test_mfa_grace)."""
+    def test_enforced_facility_admin_without_device_redirects_immediately(self, settings, client, admin_user):
+        """#1019-Sofort-Erzwingung wiederhergestellt (Refs #689): ein rollen-
+        erzwungener facility_admin OHNE zweiten Faktor wird SOFORT auf
+        ``/mfa/setup/`` geleitet — KEINE Grace-Frist, auch ohne gestempeltes
+        ``mfa_setup_deadline``. (Vor dem Fix lief die privilegierte Rolle
+        faelschlich durch die 30-Tage-Frist.)"""
+        settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
+        assert admin_user.mfa_setup_deadline is None
+        client.force_login(admin_user)
+        response = client.get("/")
+        assert response.status_code == 302
+        assert response.url == "/mfa/setup/"
+
+    def test_enforced_super_admin_without_device_redirects_immediately(self, settings, client, super_admin_user):
+        """Sofort-Erzwingung auch fuer super_admin (Refs #689/#1019)."""
+        settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
+        assert super_admin_user.mfa_setup_deadline is None
+        client.force_login(super_admin_user)
+        response = client.get("/")
+        assert response.status_code == 302
+        assert response.url == "/mfa/setup/"
+
+    def test_enforced_facility_admin_ignores_future_deadline(self, settings, client, admin_user):
+        """Die (harmlos beim Login gestempelte) Grace-Frist entfaltet fuer
+        privilegierte Rollen KEINE Wirkung: selbst mit zukuenftigem
+        ``mfa_setup_deadline`` wird der facility_admin ohne Geraet sofort
+        umgeleitet (Refs #689)."""
         import datetime
 
         from django.utils import timezone
 
         settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
-        admin_user.mfa_setup_deadline = timezone.now() - datetime.timedelta(minutes=1)
+        admin_user.mfa_setup_deadline = timezone.now() + datetime.timedelta(days=20)
         admin_user.save(update_fields=["mfa_setup_deadline"])
         client.force_login(admin_user)
         response = client.get("/")

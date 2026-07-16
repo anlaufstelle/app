@@ -68,6 +68,43 @@ class TestDeliberateVsRoleEnforcement:
 
 
 @pytest.mark.django_db
+class TestImmediateVsGraceRoleSplit:
+    """Abgrenzung (Refs #689): privilegierte Rollen (super_admin/facility_admin)
+    erzwingen MFA SOFORT (#1019-Verhalten), die mit #689 neu einbezogenen
+    Niedrigrechte-Rollen (staff/assistant [, lead]) erst nach der Grace-Frist.
+    """
+
+    def test_facility_admin_is_immediate_not_grace(self, settings, admin_user):
+        settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
+        assert admin_user.mfa_enforced_by_role_immediate is True
+        assert admin_user.mfa_enforced_by_role_grace is False
+
+    def test_super_admin_is_immediate_not_grace(self, settings, super_admin_user):
+        settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
+        assert super_admin_user.mfa_enforced_by_role_immediate is True
+        assert super_admin_user.mfa_enforced_by_role_grace is False
+
+    def test_staff_is_grace_not_immediate(self, settings, staff_user):
+        settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
+        assert staff_user.mfa_enforced_by_role_grace is True
+        assert staff_user.mfa_enforced_by_role_immediate is False
+
+    def test_assistant_is_grace_not_immediate(self, settings, assistant_user):
+        settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
+        assert assistant_user.mfa_enforced_by_role_grace is True
+        assert assistant_user.mfa_enforced_by_role_immediate is False
+
+    def test_lead_grace_only_with_include_flag(self, settings, lead_user):
+        settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
+        settings.MFA_ENFORCE_INCLUDE_LEAD = False
+        assert lead_user.mfa_enforced_by_role_grace is False
+        assert lead_user.mfa_enforced_by_role_immediate is False
+        settings.MFA_ENFORCE_INCLUDE_LEAD = True
+        assert lead_user.mfa_enforced_by_role_grace is True
+        assert lead_user.mfa_enforced_by_role_immediate is False
+
+
+@pytest.mark.django_db
 class TestGraceMiddleware:
     def test_deliberate_without_device_redirects_immediately(self, rf, staff_user):
         """mfa_required = kein Grace: sofort auf /mfa/setup/."""
@@ -114,6 +151,34 @@ class TestGraceMiddleware:
         response = _middleware()(request)
         assert response.status_code == 302
         assert "/mfa/setup/" in response.url
+
+    def test_immediate_role_without_device_redirects_regardless_of_deadline(self, settings, rf, admin_user):
+        """Abgrenzung (Refs #689): facility_admin taucht NICHT im Grace-Pfad
+        auf — ohne Geraet sofortiger Redirect, selbst mit zukuenftiger Frist."""
+        settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
+        admin_user.mfa_setup_deadline = timezone.now() + timedelta(days=20)
+        admin_user.save(update_fields=["mfa_setup_deadline"])
+        request = rf.get("/")
+        request.user = admin_user
+        request.session = {"mfa_verified": False}
+        response = _middleware()(request)
+        assert response.status_code == 302
+        assert "/mfa/setup/" in response.url
+
+    def test_immediate_role_does_not_stamp_deadline(self, settings, rf, super_admin_user):
+        """Der Grace-Stamp-Pfad (Frist setzen statt aussperren) darf fuer
+        privilegierte Rollen nicht anlaufen — sie werden sofort umgeleitet und
+        bekommen keine Frist untergeschoben (Refs #689)."""
+        settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
+        assert super_admin_user.mfa_setup_deadline is None
+        request = rf.get("/")
+        request.user = super_admin_user
+        request.session = {"mfa_verified": False}
+        response = _middleware()(request)
+        assert response.status_code == 302
+        assert "/mfa/setup/" in response.url
+        super_admin_user.refresh_from_db()
+        assert super_admin_user.mfa_setup_deadline is None
 
     def test_device_present_but_unverified_still_redirects_to_verify(self, settings, rf, staff_user):
         """Grace betrifft nur den Setup-Fall — mit Gerät gilt weiter Case 2."""
@@ -177,6 +242,20 @@ class TestReminderBannerContext:
         staff_user.save(update_fields=["mfa_setup_deadline"])
         response = self._get(client, staff_user)
         assert response.context.get("mfa_setup_show_banner") is not True
+
+    def test_no_countdown_banner_for_immediate_role(self, settings, rf, admin_user):
+        """Der Countdown-Banner ist ein Grace-Artefakt: eine sofort erzwungene
+        privilegierte Rolle sieht ihn NIE — ohne Geraet wird sie ohnehin sofort
+        umgeleitet. Direkt am Context-Processor geprueft, weil die Middleware
+        eine geraetelose Seite gar nicht erst rendern liesse (Refs #689)."""
+        from core.context_processors import mfa_setup_reminder
+
+        settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
+        admin_user.mfa_setup_deadline = timezone.now() + timedelta(days=3)
+        admin_user.save(update_fields=["mfa_setup_deadline"])
+        request = rf.get("/")
+        request.user = admin_user
+        assert mfa_setup_reminder(request) == {}
 
 
 class TestReminderBannerTranslationsEN:

@@ -93,11 +93,14 @@ def mfa_setup_reminder(request):
     """Refs #689: Reminder-Banner-Kontext für die 2FA-Setup-Grace-Frist.
 
     Zeigt ab ``MFA_SETUP_REMINDER_DAYS`` Resttagen einen Banner mit Resttage-
-    Zähler, solange ein rollen-erzwungener Nutzer noch kein bestätigtes 2FA-Gerät
-    eingerichtet hat und die Grace-Frist läuft. Bewusst gesetzte Zwänge
-    (``mfa_required``/facility-weit) haben keine Frist — für sie greift die
-    Middleware sofort, ein Countdown-Banner wäre sinnlos. HTMX-Partials rendern
-    die Navigation/den Banner nicht — dort No-Op (spart die Queries).
+    Zähler, solange ein grace-behaftet rollen-erzwungener Nutzer (staff/assistant
+    [, lead], Refs #689) noch kein bestätigtes 2FA-Gerät eingerichtet hat und die
+    Grace-Frist läuft. Sofort erzwungene Zwänge — bewusst gesetzt
+    (``mfa_required``/facility-weit) ODER privilegierte Rolle
+    (super_admin/facility_admin) — haben keine Frist: für sie greift die
+    Middleware sofort (Redirect ohne Gerät), ein Countdown-Banner wäre sinnlos.
+    HTMX-Partials rendern die Navigation/den Banner nicht — dort No-Op (spart die
+    Queries).
     """
     from core.constants import MFA_SETUP_REMINDER_DAYS
 
@@ -107,7 +110,7 @@ def mfa_setup_reminder(request):
         return {}
     user = request.user
     deadline = getattr(user, "mfa_setup_deadline", None)
-    if deadline is None or not user.mfa_enforced_by_role or user.has_confirmed_mfa_device:
+    if deadline is None or not user.mfa_enforced_by_role_grace or user.has_confirmed_mfa_device:
         return {}
     now = timezone.now()
     if deadline <= now:

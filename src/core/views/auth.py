@@ -121,7 +121,10 @@ class CustomLoginView(auth_views.LoginView):
         # (Refs #689): now + 30 Tage. Nur setzen, wenn noch keine Frist steht —
         # Folge-Logins verlaengern die Frist nicht. Rollen-unabhaengig gestempelt,
         # damit ein spaeter aktivierter Rollen-Zwang eine deterministische Frist
-        # vorfindet; das Feld wird nur konsultiert, wenn MFA rollen-erzwungen ist.
+        # vorfindet. Das Feld wird aber nur fuer die grace-behafteten Rollen
+        # (staff/assistant [, lead], Refs #689) konsultiert — privilegierte Rollen
+        # (super_admin/facility_admin) werden ohne Geraet SOFORT umgeleitet, ihre
+        # gestempelte Frist bleibt wirkungslos.
         if user.mfa_setup_deadline is None:
             from datetime import timedelta
 

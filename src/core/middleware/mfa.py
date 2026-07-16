@@ -67,14 +67,17 @@ class MFAEnforcementMiddleware:
         has_device = user.has_confirmed_mfa_device
         # Case 1: Setup needed (MFA enforced, but no device yet).
         if not has_device:
-            # Bewusst gesetzter Zwang (mfa_required / facility-weit) greift SOFORT
-            # (Refs #689) — kein Grace, der Admin hat ihn gezielt aktiviert.
-            if user.mfa_enforced_deliberately:
+            # SOFORT-Erzwingung ohne Grace (Refs #689): bewusst gesetzter Zwang
+            # (mfa_required / facility-weit) ODER privilegierte Rolle
+            # (super_admin/facility_admin, wiederhergestelltes #1019-Verhalten).
+            # Der Admin hat den Zwang gezielt aktiviert bzw. die Rolle ist per se
+            # hochprivilegiert — eine 30-Tage-Frist waere hier ein Loch.
+            if user.mfa_enforced_deliberately or user.mfa_enforced_by_role_immediate:
                 return "/mfa/setup/"
-            # Rollen-Default-Enforcement laeuft ueber eine 30-Tage-Grace-Frist,
-            # damit Bestandsnutzer beim Aktivieren des Rollen-Zwangs nicht
-            # ausgesperrt werden (Refs #689).
-            if user.mfa_enforced_by_role:
+            # Rollen-Default fuer die mit #689 neu erzwungenen Niedrigrechte-
+            # Rollen (staff/assistant [, lead]) laeuft ueber eine 30-Tage-Grace-
+            # Frist, damit Bestandsnutzer beim Aktivieren nicht ausgesperrt werden.
+            if user.mfa_enforced_by_role_grace:
                 deadline = user.mfa_setup_deadline
                 now = timezone.now()
                 if deadline is None:
