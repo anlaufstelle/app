@@ -6,7 +6,11 @@ sonst laedt der Tracker nicht bzw. sendet keine Beacons (Lehre aus webseite#9).
 
 login.html erbt NICHT von base.html und bleibt damit tracking-frei
 (Anmeldeseite ohne Analytics). Refs #1602.
+
+Bei UMAMI_REQUIRE_CONSENT (Demo, Refs #1604) wird hier NICHTS eingebunden —
+der Tracker startet erst nach Opt-in-Zustimmung ueber das Consent-Banner
+(partials/_umami_consent.html im <body>); kein stilles Tracking.
 {% endcomment %}
-{% if UMAMI_WEBSITE_ID %}
+{% if UMAMI_WEBSITE_ID and not UMAMI_REQUIRE_CONSENT %}
 <script defer src="{{ UMAMI_SCRIPT_SRC }}" data-website-id="{{ UMAMI_WEBSITE_ID }}"></script>
 {% endif %}

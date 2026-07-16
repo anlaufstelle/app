@@ -104,6 +104,10 @@ MIDDLEWARE = [
     # Outbound-Reihenfolge den von CSPMiddleware gesetzten Header noch ändern
     # kann (Django ruft Response-Verarbeitung in umgekehrter Listen-Reihenfolge).
     "core.middleware.admin_csp_relax.AdminCSPRelaxMiddleware",
+    # DemoUmamiCSPRelaxMiddleware ebenfalls VOR CSPMiddleware (Header-Rewrite in
+    # Outbound-Reihenfolge). No-Op ausserhalb DEMO_MODE — lockert die CSP nur
+    # auf der Demo, Post-Login, fuer den Umami-Host. Refs #1604.
+    "core.middleware.demo_umami_csp_relax.DemoUmamiCSPRelaxMiddleware",
     "csp.middleware.CSPMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -520,6 +524,17 @@ CONTENT_SECURITY_POLICY = {
 # (demo.anlaufstelle.app, Refs #1604) — dort auch die CSP-Freigabe des Hosts.
 UMAMI_WEBSITE_ID = None
 UMAMI_SCRIPT_SRC = ""
+# Session-Recorder/Heatmap-Skript (nur demo.anlaufstelle.app, Refs #1604).
+UMAMI_RECORDER_SRC = ""
+# Consent-Gate: bei True wird der Tracker NICHT direkt eingebunden, sondern
+# erst nach expliziter Opt-in-Zustimmung client-seitig injiziert (DSGVO). Nur
+# die Demo setzt dies auf True; devlive trackt ohne Consent (interne Instanz).
+UMAMI_REQUIRE_CONSENT = False
+
+# Rechtstext-Verlinkung (Impressum/Datenschutz) im Demo-Footer + Consent-Banner.
+# Leer = kein Link. Nur die Demo setzt konkrete URLs (auf die Webseite). Refs #1604.
+DEMO_LEGAL_IMPRINT_URL = ""
+DEMO_LEGAL_PRIVACY_URL = ""
 
 # --- Django Unfold ---
 

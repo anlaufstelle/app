@@ -1,0 +1,43 @@
+{% load i18n static %}
+{% comment %}
+Umami-Consent-Banner (Opt-in) für die öffentliche Demo (Refs #1604).
+
+Nur gerendert, wenn eine Website-ID gesetzt ist UND Consent verlangt wird
+(demo.py: UMAMI_REQUIRE_CONSENT=True). DSGVO: kein stilles Tracking — der
+Tracker (main.js) und der Session-Recorder/die Heatmap (recorder.js) werden
+erst client-seitig injiziert, NACHDEM der/die Nutzer:in zugestimmt hat
+(umami-consent.js liest die data-Attribute, kein Inline-Script wegen CSP
+`script-src 'self'`). login.html erbt nicht von base.html und bleibt tracking-frei.
+{% endcomment %}
+{% if UMAMI_WEBSITE_ID and UMAMI_REQUIRE_CONSENT %}
+<div id="umami-consent"
+     data-testid="umami-consent"
+     data-umami-website-id="{{ UMAMI_WEBSITE_ID }}"
+     data-umami-src="{{ UMAMI_SCRIPT_SRC }}"
+     data-umami-recorder-src="{{ UMAMI_RECORDER_SRC }}"
+     class="fixed inset-x-0 bottom-0 z-[60] bg-white border-t border-subtle shadow-lg px-4 py-4 hidden"
+     role="region"
+     aria-label="{% trans 'Einwilligung in Analyse und Sitzungsaufzeichnung' %}">
+  <div class="max-w-[900px] mx-auto flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+    <p class="text-[13px] text-ink">
+      {% trans "Diese Demo verwendet Umami-Analyse inklusive Sitzungsaufzeichnung (Recording) und Heatmaps." %}
+      {% trans "Nach der Anmeldung werden Ihre Interaktionen pseudonym aufgezeichnet und ausgewertet, um die Demo zu verbessern; die Nutzung der Demo ist nur mit Ihrer Zustimmung möglich." %}
+      {% if DEMO_LEGAL_PRIVACY_URL %}
+      <a href="{{ DEMO_LEGAL_PRIVACY_URL }}" rel="noopener" target="_blank" class="text-accent hover:underline">{% trans "Datenschutzerklärung" %}</a>{% if DEMO_LEGAL_IMPRINT_URL %} ·
+      <a href="{{ DEMO_LEGAL_IMPRINT_URL }}" rel="noopener" target="_blank" class="text-accent hover:underline">{% trans "Impressum" %}</a>{% endif %}
+      {% endif %}
+    </p>
+    <div class="flex gap-2 shrink-0">
+      <button type="button" data-umami-consent-decline
+              class="px-3 py-1.5 text-[13px] rounded-md border border-subtle text-ink hover:bg-gray-50">
+        {% trans "Ablehnen" %}
+      </button>
+      <button type="button" data-umami-consent-accept
+              class="px-3 py-1.5 text-[13px] rounded-md bg-accent text-white hover:opacity-90">
+        {% trans "Zustimmen und fortfahren" %}
+      </button>
+    </div>
+  </div>
+</div>
+<script src="{% static 'js/umami-consent.js' %}" defer></script>
+{% endif %}

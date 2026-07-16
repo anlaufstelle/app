@@ -46,6 +46,18 @@
 | TOM (Gesamtübersicht) | [TOM](../src/core/dsgvo_templates/toms.md) | [Träger] [Auditor] |
 | App-Feature „DSGVO-Paket" (Bündel-Download) | [`DSGVOPackageView`](../src/core/views/dsgvo.py) · [`generate_dsgvo_package`](../src/core/management/commands/generate_dsgvo_package.py) | [Träger] [Dev] |
 
+## D2. Öffentliche Demo-Instanz — Web-Analyse & Sitzungsaufzeichnung (Refs #1604)
+
+> Betrifft **ausschließlich** die öffentliche Demo `demo.anlaufstelle.app`, **nicht** das Self-Host-Produkt. Selbst gehostete Träger-Instanzen betreiben kein Umami/Tracking.
+
+| Aspekt | Regelung | Für |
+|---|---|---|
+| Rechtsgrundlage | Art. 6(1)(a) — **Opt-in-Einwilligung**: Tracking/Recording/Heatmap starten technisch **erst nach Zustimmung** (kein stilles Tracking); Ablehnen ist möglich | [Auditor] [Träger] |
+| Umfang | Umami-Web-Analyse **inkl. Session-Recording + Heatmap** (self-hosted, `umami.example.org`); **nur nach Login**, **nicht** auf der Anmeldeseite | [Auditor] [Dev] |
+| Datenbestand | ausschließlich **synthetische Seed-Daten** (stündlicher Reset) — keine realen Betroffenendaten | [Auditor] |
+| Rechtstexte | Impressum + Datenschutzerklärung der [Webseite](https://anlaufstelle.app) (im Demo-Footer + Consent-Banner verlinkt) | [Träger] |
+| Technik / CSP-Scoping | Consent-Gate [`umami-consent.js`](../src/static/js/umami-consent.js) · CSP-Freigabe eng gescoped [`DemoUmamiCSPRelaxMiddleware`](../src/core/middleware/demo_umami_csp_relax.py) · [security-notes.md](security-notes.md#eng-gescopte-ausnahme--umami-analytics-auf-der-demo-issue-1604) · [ADR-022 § (c)](adr/022-offline-snapshot-keys.md#dsfa-tom-einordnung-des-offline-pfads-1343) | [Dev] [Auditor] |
+
 ## E. Begriffe
 
 Definitionen (PII, K-Anonymität, k-Anon-Retention, Pseudonymisierung, Legal Hold, Speicherbegrenzung, Soft-Delete-Strategien) → [glossar.md](glossar.md).

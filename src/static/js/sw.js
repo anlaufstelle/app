@@ -72,7 +72,11 @@ importScripts("/static/js/url-patterns.js");
 // Die precachten In-Place-Offline-Shells erweitern base.html; ohne Bump saehen
 // Bestandsnutzer die geaenderte Shell nie (cache-first ohne Revalidierung). Der
 // Bump erzwingt Re-Install + Re-Precache.
-const CACHE_NAME = "anlaufstelle-v27";
+// Refs #1604: v27 -> v28 -- base.html bindet zusaetzlich das Demo-Consent-Banner
+// (partials/_umami_consent.html) im <body> ein und ergaenzt die Rechtstext-
+// Footerlinks der Demo. Erneut base.html-Shell-Aenderung -> Bump erzwingt
+// Re-Install + Re-Precache.
+const CACHE_NAME = "anlaufstelle-v28";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

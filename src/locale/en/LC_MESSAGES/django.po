@@ -6845,3 +6845,39 @@ msgstr[1] "Two-factor authentication becomes mandatory in %(days)s days."
 #: src/templates/partials/_mfa_setup_reminder.html:9
 msgid "Jetzt einrichten"
 msgstr "Set up now"
+
+#: templates/partials/_umami_consent.html:20
+msgid "Einwilligung in Analyse und Sitzungsaufzeichnung"
+msgstr "Consent to analytics and session recording"
+
+#: templates/partials/_umami_consent.html:23
+msgid ""
+"Diese Demo verwendet Umami-Analyse inklusive Sitzungsaufzeichnung (Recording) "
+"und Heatmaps."
+msgstr ""
+"This demo uses Umami analytics including session recording and heatmaps."
+
+#: templates/partials/_umami_consent.html:24
+msgid ""
+"Nach der Anmeldung werden Ihre Interaktionen pseudonym aufgezeichnet und "
+"ausgewertet, um die Demo zu verbessern; die Nutzung der Demo ist nur mit Ihrer "
+"Zustimmung möglich."
+msgstr ""
+"After login, your interactions are recorded and analysed pseudonymously to "
+"improve the demo; the demo can only be used with your consent."
+
+#: templates/partials/_umami_consent.html:26
+msgid "Datenschutzerklärung"
+msgstr "Privacy policy"
+
+#: templates/base.html:123 templates/partials/_umami_consent.html:27
+msgid "Impressum"
+msgstr "Legal notice"
+
+#: templates/partials/_umami_consent.html:37
+msgid "Zustimmen und fortfahren"
+msgstr "Accept and continue"
+
+#: templates/base.html:127
+msgid "Datenschutz"
+msgstr "Privacy"

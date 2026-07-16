@@ -13,10 +13,34 @@ Verwendung:
     DJANGO_SETTINGS_MODULE=anlaufstelle.settings.demo
 """
 
+import copy
+
+from . import base as _base
 from .devlive import *  # noqa: F401, F403
 
 # Schalter fuer Demo-Banner, Login-Zugangsdaten-Panel und Demo-Guard.
 DEMO_MODE = True
+
+# --- Umami Web-Analytics inkl. Recorder/Heatmap (Refs #1604) ---
+# Eigene Website-ID der Demo (nicht die devlive-ID) + Session-Recorder/Heatmap.
+# Consent-Opt-in: kein stilles Tracking — der Tracker wird erst nach expliziter
+# Zustimmung client-seitig injiziert (umami-consent.js / partials/_umami_consent.html).
+UMAMI_WEBSITE_ID = "00000000-0000-4000-8000-000000000002"
+UMAMI_SCRIPT_SRC = "https://umami.example.org/main.js"
+UMAMI_RECORDER_SRC = "https://umami.example.org/recorder.js"
+UMAMI_REQUIRE_CONSENT = True
+
+# Rechtstexte der Demo verlinken (Webseite als SoT). Konkrete URL = Maintainer-
+# Entscheid beim Release-Deploy; hier die kanonische Webseite als Default.
+DEMO_LEGAL_IMPRINT_URL = "https://anlaufstelle.app/impressum"
+DEMO_LEGAL_PRIVACY_URL = "https://anlaufstelle.app/datenschutz"
+
+# CSP zurueck auf STRIKT (frische Deep-Copy aus base): devlive gibt den
+# Umami-Host GLOBAL frei — auf der oeffentlichen Demo mit Art-9-Offline-Daten
+# (window.offlineStore, ADR-022 § (c)) darf die Lockerung NICHT global gelten.
+# Sie ist statt dessen eng gescoped (DEMO_MODE + Post-Login) in
+# DemoUmamiCSPRelaxMiddleware; die Login-/Anon-Seite bleibt strikt.
+CONTENT_SECURITY_POLICY = copy.deepcopy(_base.CONTENT_SECURITY_POLICY)
 
 # devlive erbt von prod -> MFA_ENFORCE_PRIVILEGED_ROLES=True. Auf der
 # oeffentlichen Demo muessen superadmin/facility_admin OHNE TOTP-Einrichtung

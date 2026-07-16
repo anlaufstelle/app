@@ -117,6 +117,15 @@
             {% endif %}
             <span aria-hidden="true" class="mx-1.5">·</span>
             <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
+            {# Demo: Rechtstexte der Webseite verlinken (Refs #1604). #}
+            {% if demo_mode and DEMO_LEGAL_IMPRINT_URL %}
+            <span aria-hidden="true" class="mx-1.5">·</span>
+            <a href="{{ DEMO_LEGAL_IMPRINT_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Impressum" %}</a>
+            {% endif %}
+            {% if demo_mode and DEMO_LEGAL_PRIVACY_URL %}
+            <span aria-hidden="true" class="mx-1.5">·</span>
+            <a href="{{ DEMO_LEGAL_PRIVACY_URL }}" rel="noopener" target="_blank" class="hover:underline">{% trans "Datenschutz" %}</a>
+            {% endif %}
             {# Refs #1050: deployte Version nur fuer Eingeloggte (Login-Seite bleibt bewusst versionslos). #}
             {% if user.is_authenticated and app_version %}
             <span aria-hidden="true" class="mx-1.5">·</span>
@@ -127,6 +136,9 @@
 
     {# --- Mobile Bottom-Nav. Refs #911. --- #}
     {% include "partials/_navigation_mobile.html" %}
+
+    {# Umami-Consent-Banner (Opt-in) — nur Demo mit UMAMI_REQUIRE_CONSENT. Refs #1604. #}
+    {% include "partials/_umami_consent.html" %}
 
     {% block extra_js %}{% endblock %}
 

@@ -147,6 +147,10 @@ def umami(request):
     return {
         "UMAMI_WEBSITE_ID": getattr(settings, "UMAMI_WEBSITE_ID", None),
         "UMAMI_SCRIPT_SRC": getattr(settings, "UMAMI_SCRIPT_SRC", ""),
+        "UMAMI_RECORDER_SRC": getattr(settings, "UMAMI_RECORDER_SRC", ""),
+        "UMAMI_REQUIRE_CONSENT": getattr(settings, "UMAMI_REQUIRE_CONSENT", False),
+        "DEMO_LEGAL_IMPRINT_URL": getattr(settings, "DEMO_LEGAL_IMPRINT_URL", ""),
+        "DEMO_LEGAL_PRIVACY_URL": getattr(settings, "DEMO_LEGAL_PRIVACY_URL", ""),
     }
 
 

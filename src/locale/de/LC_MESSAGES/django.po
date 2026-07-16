@@ -6065,3 +6065,41 @@ msgstr[1] "Zwei-Faktor-Authentifizierung wird in %(days)s Tagen verpflichtend."
 #: src/templates/partials/_mfa_setup_reminder.html:9
 msgid "Jetzt einrichten"
 msgstr "Jetzt einrichten"
+
+#: templates/partials/_umami_consent.html:20
+msgid "Einwilligung in Analyse und Sitzungsaufzeichnung"
+msgstr "Einwilligung in Analyse und Sitzungsaufzeichnung"
+
+#: templates/partials/_umami_consent.html:23
+msgid ""
+"Diese Demo verwendet Umami-Analyse inklusive Sitzungsaufzeichnung (Recording) "
+"und Heatmaps."
+msgstr ""
+"Diese Demo verwendet Umami-Analyse inklusive Sitzungsaufzeichnung (Recording) "
+"und Heatmaps."
+
+#: templates/partials/_umami_consent.html:24
+msgid ""
+"Nach der Anmeldung werden Ihre Interaktionen pseudonym aufgezeichnet und "
+"ausgewertet, um die Demo zu verbessern; die Nutzung der Demo ist nur mit Ihrer "
+"Zustimmung möglich."
+msgstr ""
+"Nach der Anmeldung werden Ihre Interaktionen pseudonym aufgezeichnet und "
+"ausgewertet, um die Demo zu verbessern; die Nutzung der Demo ist nur mit Ihrer "
+"Zustimmung möglich."
+
+#: templates/partials/_umami_consent.html:26
+msgid "Datenschutzerklärung"
+msgstr "Datenschutzerklärung"
+
+#: templates/base.html:123 templates/partials/_umami_consent.html:27
+msgid "Impressum"
+msgstr "Impressum"
+
+#: templates/partials/_umami_consent.html:37
+msgid "Zustimmen und fortfahren"
+msgstr "Zustimmen und fortfahren"
+
+#: templates/base.html:127
+msgid "Datenschutz"
+msgstr "Datenschutz"

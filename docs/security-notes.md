@@ -558,10 +558,22 @@ Eine Kapselung (Closure statt `window`-Global, oder ein Capability-Token) wurde 
 - **Gerätediebstahl:** non-extractable AES-GCM-256-Key + Idle-Wipe (siehe [ADR-022](adr/022-offline-snapshot-keys.md), [`crypto.js`](../src/static/js/crypto.js)) — ohne aktive Session nur Chiffretext.
 - **Fremder Code im Browser:** `script-src 'self'` — kein Remote-/Inline-Script, keine `eval`-Auswertung.
 
+### Eng gescopte Ausnahme — Umami-Analytics auf der Demo (Issue #1604)
+
+Auf `demo.anlaufstelle.app` läuft nach **Opt-in-Einwilligung** ein Umami-Tracker samt Session-Recorder/Heatmap (`umami.example.org`). Skript und Beacons brauchen `script-src`/`connect-src` für den Umami-Host — also genau die Lockerung, gegen die der Schutzwall oben schützt. Damit `script-src 'self'` als Schutz von `window.offlineStore` nicht global fällt, ist die Freigabe **maximal eng gescoped**:
+
+- **nicht global**, sondern per [`DemoUmamiCSPRelaxMiddleware`](../src/core/middleware/demo_umami_csp_relax.py) als Response-Header-Rewrite (analog [`AdminCSPRelaxMiddleware`](../src/core/middleware/admin_csp_relax.py) für `/admin-mgmt/`);
+- **nur bei `DEMO_MODE=True`** — prod/`devlive`/dev/test lockern nie (Architektur-Guard [`test_demo_umami_csp_relax.py`](../src/tests/test_demo_umami_csp_relax.py));
+- **nur für authentifizierte Requests (Post-Login)** — die Login-/Anon-Seite bleibt strikt und damit tracking-frei;
+- **nur für HTML-Dokumente** — JSON/CSV/Statik führen kein Skript aus.
+
+Akzeptabel, weil der Offline-Bestand der Demo ausschließlich **synthetische Seed-Daten** sind (stündlicher Reset) — kein realer Art-9-Bestand hinter dem gelockerten `script-src`. Die interne Dev-Instanz `devlive` (dev.anlaufstelle.app, #1602) gibt den Umami-Host demgegenüber bewusst **global** frei (ohne Recorder/Consent, ohne Produktivdaten). Einordnung im Offline-Threat-Model: [ADR-022 § DSFA-/TOM-Einordnung](adr/022-offline-snapshot-keys.md#dsfa-tom-einordnung-des-offline-pfads-1343), Abschnitt (c).
+
 ### Trigger für Re-Evaluation
 
 - Die CSP müsste auf einer offline-tragenden Route `'unsafe-inline'`/`'unsafe-eval'` zulassen (dann fällt der Schutzwall, und Kapselung/Isolierung des Stores wird relevant).
 - Ein dritter Ausführungskontext mit anderem Trust-Level (z. B. eingebettetes Widget/iframe fremden Ursprungs) erhielte Zugriff auf denselben `window`.
+- Die Umami-CSP-Ausnahme würde über `DEMO_MODE`/Post-Login hinaus ausgeweitet (z. B. auf eine reale Instanz mit echten Offline-Daten) — dann ist der Trade-off neu zu bewerten.
 
 ### Verifikation
 

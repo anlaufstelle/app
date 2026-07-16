@@ -36,7 +36,9 @@ class TestUmamiPartial:
             {"UMAMI_WEBSITE_ID": None, "UMAMI_SCRIPT_SRC": ""},
         )
         assert "<script" not in html
-        assert "" not in html
+        # Allowlist-Form umami.example.org (statt der nackten Org-Nennung, die der
+        # Release-Sanitizer #1601 strippen wuerde).
+        assert "umami.example.org" not in html
 
     def test_renders_tracker_when_website_id_set(self):
         html = render_to_string(
@@ -49,6 +51,57 @@ class TestUmamiPartial:
         assert 'src="https://umami.example.org/main.js"' in html
         assert 'data-website-id="00000000-0000-4000-8000-000000000001"' in html
         assert "defer" in html
+
+    def test_no_direct_tracker_when_consent_required(self):
+        """Refs #1604: bei Consent-Pflicht (Demo) wird der Tracker NICHT direkt
+        eingebunden — kein stilles Tracking, erst nach Opt-in."""
+        html = render_to_string(
+            "partials/_umami.html",
+            {
+                "UMAMI_WEBSITE_ID": "00000000-0000-4000-8000-000000000002",
+                "UMAMI_SCRIPT_SRC": "https://umami.example.org/main.js",
+                "UMAMI_REQUIRE_CONSENT": True,
+            },
+        )
+        assert "<script" not in html
+
+
+class TestUmamiConsentPartial:
+    """Refs #1604: das Consent-Banner erscheint nur bei Consent-Pflicht (Demo)
+    und lädt den Tracker erst nach Zustimmung (umami-consent.js)."""
+
+    def _ctx(self, **over):
+        ctx = {
+            "UMAMI_WEBSITE_ID": "00000000-0000-4000-8000-000000000002",
+            "UMAMI_SCRIPT_SRC": "https://umami.example.org/main.js",
+            "UMAMI_RECORDER_SRC": "https://umami.example.org/recorder.js",
+            "UMAMI_REQUIRE_CONSENT": True,
+            "DEMO_LEGAL_PRIVACY_URL": "https://anlaufstelle.app/datenschutz",
+            "DEMO_LEGAL_IMPRINT_URL": "https://anlaufstelle.app/impressum",
+        }
+        ctx.update(over)
+        return ctx
+
+    def test_renders_banner_and_consent_js_on_demo(self):
+        html = render_to_string("partials/_umami_consent.html", self._ctx())
+        assert 'id="umami-consent"' in html
+        assert 'data-umami-src="https://umami.example.org/main.js"' in html
+        assert 'data-umami-recorder-src="https://umami.example.org/recorder.js"' in html
+        assert "js/umami-consent.js" in html
+        # Das Tracker-Skript selbst wird NICHT direkt als <script> geladen (nur
+        # nach Consent via umami-consent.js). data-umami-src=... ist nur Config.
+        assert '<script defer src="https://umami.example.org/main.js"' not in html
+        # Rechtstext-Links.
+        assert "https://anlaufstelle.app/datenschutz" in html
+        assert "https://anlaufstelle.app/impressum" in html
+
+    def test_renders_nothing_without_consent_flag(self):
+        html = render_to_string("partials/_umami_consent.html", self._ctx(UMAMI_REQUIRE_CONSENT=False))
+        assert html.strip() == ""
+
+    def test_renders_nothing_without_website_id(self):
+        html = render_to_string("partials/_umami_consent.html", self._ctx(UMAMI_WEBSITE_ID=None))
+        assert html.strip() == ""
 
 
 @pytest.mark.django_db
