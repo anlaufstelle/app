@@ -23,7 +23,10 @@
     //
     // Gegated wird der RELOAD: er verwirft ungespeicherte Eingaben (nur
     // core/events/create.html hat data-autosave) und trifft via
-    // ``clients.claim()`` JEDEN offenen Tab, nicht nur diesen.
+    // ``clients.claim()`` JEDEN offenen Tab, nicht nur diesen. Fluechtiger
+    // UI-Zustand (Scroll-Position, aufgeklappte Panels, HTMX-nachgeladene
+    // Fragmente) ist bewusst NICHT Teil des Gates — geschuetzt sind genau
+    // Formulareingaben (``_dirty``) und der Queue-Replay (``_queuePending``).
     //
     // Damit bleibt der Schutzzweck von #1386/#659 erhalten; das dortige
     // *Aktivierungs*-Gate entfaellt bewusst — es liess Geraete auf der alten
@@ -157,8 +160,11 @@
      * ein Reload mitten im Replay bricht ihn ab. Auf Seiten ohne
      * offline-queue.js (login.html) gibt es keine Queue.
      *
-     * Im Fehlerfall bewusst ``true``: lieber einen Toast zu viel als einen
-     * Reload, der laufende Synchronisation abschneidet.
+     * Fehlerpfad: ``getQueueCount`` faengt IndexedDB-Fehler bereits selbst
+     * ab und liefert dann 0 — in dem Fall wird also neu geladen. Vertretbar,
+     * weil der Replay idempotent ist (Idempotenz-Keys) und ein Reload ihn nur
+     * unterbricht, nicht verwirft. Der ``catch`` unten greift nur bei
+     * unerwarteten Rejections ausserhalb dieses Kontrakts.
      */
     function _queuePending() {
         if (!window.offlineQueue || !window.offlineQueue.getQueueCount) {
