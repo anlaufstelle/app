@@ -16,7 +16,16 @@
 </div>
 
 {# Filter-Leiste (Card mit Selects, Tokens) #}
-<div class="flex flex-wrap gap-3 mb-5 px-4 py-3 bg-surface rounded-[10px] border border-subtle" data-filter-persist>
+{% comment %}
+Refs #1611: ``data-filter-persist-url`` meldet filter-persistence.js, dass der
+Filter-Restore beim Einstieg ohne Querystring per URL-Redirect (voller
+Server-Render mit korrekten Filtern) statt per künstlichem ``change``-Trigger
+laufen soll — beseitigt den ungefiltert→gefiltert-Flash. Zusammen mit
+``hx-replace-url`` an den Selects landet die aktive Sicht als Querystring in
+der URL (reload-/teilbar), ohne die History bei jedem Filterwechsel
+vollzuschreiben.
+{% endcomment %}
+<div class="flex flex-wrap gap-3 mb-5 px-4 py-3 bg-surface rounded-[10px] border border-subtle" data-filter-persist data-filter-persist-url>
     <div>
         <label for="filter-item-type" class="block text-[12px] font-bold uppercase tracking-wider text-ink-muted mb-1">{% trans "Typ" %}</label>
         <select id="filter-item-type" name="item_type"
@@ -24,6 +33,7 @@
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
+            hx-replace-url="true"
             {% comment %}Refs #1145 (Reopen): Geschwister-Filter über ihre IDs einbinden, nicht über [name='…']. Die Bulk-Forms tragen eigene Selects name="assigned_to"/name="priority"; ein [name='…']-Include zog deren leeren Wert als zweiten Query-Parameter mit, der den echten Filter überschrieb (Anzeige „Mir & unzugewiesene" / „Mir zugewiesen", Liste aber „Alle").{% endcomment %}
             hx-include="#filter-priority,#filter-assigned-to,#filter-due"
         >
@@ -40,6 +50,7 @@
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
+            hx-replace-url="true"
             hx-include="#filter-item-type,#filter-assigned-to,#filter-due"
         >
             <option value="">{% trans "Alle" %}</option>
@@ -55,6 +66,7 @@
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
+            hx-replace-url="true"
             hx-include="#filter-item-type,#filter-priority,#filter-due"
         >
             {% comment %}Refs #1145: Eigene Default-Option, deren sichtbare Auswahl zur Default-Query (eigene + nicht zugewiesene Teamaufgaben) passt. „Mir zugewiesen" (value="me") bleibt der strikte Filter, der ausschließlich eigene Aufgaben zeigt.{% endcomment %}
@@ -73,6 +85,7 @@
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
+            hx-replace-url="true"
             hx-include="#filter-item-type,#filter-priority,#filter-assigned-to,#filter-status,#filter-done-period"
         >
             <option value="">{% trans "Alle" %}</option>
@@ -89,6 +102,7 @@
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
+            hx-replace-url="true"
             hx-include="#filter-item-type,#filter-priority,#filter-assigned-to,#filter-due,#filter-done-period"
         >
             <option value="">{% trans "Alle Status" %}</option>
@@ -105,6 +119,7 @@
             hx-get="{% url 'core:workitem_inbox' %}"
             hx-target="#inbox-content"
             hx-trigger="change"
+            hx-replace-url="true"
             hx-include="#filter-item-type,#filter-priority,#filter-assigned-to,#filter-due,#filter-status"
         >
             {% for value, label in done_period_choices %}

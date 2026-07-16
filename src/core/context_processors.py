@@ -51,7 +51,18 @@ def source_code(request):
 
 
 def workitem_counts(request):
-    """Open and overdue WorkItem counts for navigation badges."""
+    """Open and overdue WorkItem counts for navigation badges.
+
+    Refs #1611: Der Badge zählt bewusst eine **feste** Sicht — offene bzw. in
+    Bearbeitung befindliche Aufgaben, die mir zugewiesen oder unzugewiesen sind
+    — und ist von der Filterleiste der Aufgabenübersicht **entkoppelt**. Er
+    beantwortet "Wie viel liegt insgesamt für mich an?", nicht "Wie viele
+    Treffer hat mein aktueller Filter?". Deshalb kann neben einer durch einen
+    Filter geleerten Liste weiterhin z.B. "Aufgaben 3" stehen. Ob Badge und
+    Liste stattdessen gekoppelt werden sollen, ist eine offene
+    Produktentscheidung (Trade-off im PR zu #1611 benannt) und wird hier
+    absichtlich NICHT eigenmächtig geändert.
+    """
     if not hasattr(request, "user") or not request.user.is_authenticated:
         return {}
 

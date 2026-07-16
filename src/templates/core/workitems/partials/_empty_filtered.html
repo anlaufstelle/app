@@ -1,0 +1,15 @@
+{% load i18n %}
+{% comment %}
+Refs #1611: Filterbewusster Empty-State. Wird gerendert, wenn eine Sektion
+(Offen/In Bearbeitung) unter aktiven, nicht-default Filtern keine Treffer hat.
+Der "Filter zurücksetzen"-Link trägt ``data-filter-reset``: filter-persistence.js
+löscht darauf den persistierten Filter-State (sessionStorage), damit die
+Rücksetzung dauerhaft ist und der URL-Restore beim nächsten Einstieg nicht
+erneut die alten Filter herstellt. Das ``href`` zeigt auf die ungefilterte
+Übersicht (Fallback, falls JS deaktiviert ist).
+{% endcomment %}
+<p class="text-sm text-ink-muted">{% trans "Keine Treffer für die aktuellen Filter" %}</p>
+<a href="{% url 'core:workitem_inbox' %}" data-filter-reset
+   class="inline-flex items-center gap-1 mt-1 text-[13px] font-semibold text-accent hover:underline">
+    {% trans "Filter zurücksetzen" %}
+</a>

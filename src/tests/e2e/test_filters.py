@@ -171,6 +171,85 @@ class TestWorkItemInboxFilters:
         assert select.input_value() == "mine_team"
 
 
+class TestInboxFilterUrlPersistence:
+    """Refs #1611: Der aktive Filter landet in der URL und wird ohne Flash restauriert.
+
+    Ersetzt den bisherigen "ungefiltert rendern -> ~50 ms später per HTMX-Swap
+    gefiltert ersetzen"-Flash: Die Filter-Selects tragen ``hx-replace-url``
+    (Querystring landet in der URL, ohne History-Spam), und der Restore beim
+    Einstieg ohne Querystring läuft per ``location.replace`` — der Server
+    rendert sofort korrekt gefiltert.
+    """
+
+    def _create_workitem(self, page, base_url, title, item_type="Aufgabe", priority="Normal"):
+        page.goto(f"{base_url}/workitems/new/")
+        page.wait_for_load_state("domcontentloaded")
+        page.fill("input[name='title']", title)
+        page.select_option("select[name='item_type']", label=item_type)
+        page.select_option("select[name='priority']", label=priority)
+        page.locator("#main-content button[type='submit']").click()
+        page.wait_for_url(re.compile(r"/workitems/$"))
+
+    def test_filter_writes_querystring_to_url(self, authenticated_page, base_url):
+        """Ein Filterwechsel schreibt den Querystring per hx-replace-url in die URL."""
+        page = authenticated_page
+        page.goto(f"{base_url}/workitems/")
+        page.wait_for_load_state("domcontentloaded")
+
+        page.select_option("#filter-priority", value="important")
+        page.wait_for_load_state("domcontentloaded")
+
+        expect(page).to_have_url(re.compile(r"[?&]priority=important"))
+
+    def test_persisted_filter_restored_via_url_without_flash(self, authenticated_page, base_url):
+        """Rückkehr ohne Querystring (Sidebar-Stil) landet direkt auf der gefilterten URL.
+
+        Der persistierte Filter wird per Redirect in die URL gehoben; die nicht
+        passende Aufgabe fehlt vom ersten Server-Render an (kein Flash).
+        """
+        page = authenticated_page
+        self._create_workitem(page, base_url, "E2E-URL-Aufgabe", item_type="Aufgabe")
+        self._create_workitem(page, base_url, "E2E-URL-Hinweis", item_type="Hinweis")
+
+        page.goto(f"{base_url}/workitems/")
+        page.wait_for_load_state("domcontentloaded")
+        # Typ-Filter setzen -> in sessionStorage persistiert und in der URL.
+        page.select_option("#filter-item-type", value="task")
+        page.wait_for_load_state("domcontentloaded")
+
+        # Woanders hin, dann per query-loser URL (wie über den Sidebar-Link) zurück.
+        page.goto(f"{base_url}/clients/")
+        page.wait_for_load_state("domcontentloaded")
+        page.goto(f"{base_url}/workitems/")
+
+        # Restore-Redirect hebt den Filter in die URL.
+        page.wait_for_url(re.compile(r"[?&]item_type=task"))
+        # Der Hinweis ist vom ersten (gefilterten) Server-Render an nicht sichtbar.
+        expect(page.locator("#inbox-content").locator("text=E2E-URL-Hinweis")).to_have_count(0)
+        assert page.locator("text=E2E-URL-Aufgabe").count() > 0
+
+    def test_reset_link_clears_persisted_filters(self, authenticated_page, base_url):
+        """ "Filter zurücksetzen" löscht den persistierten State dauerhaft."""
+        page = authenticated_page
+        self._create_workitem(page, base_url, "E2E-Reset-Aufgabe", item_type="Aufgabe", priority="Normal")
+
+        page.goto(f"{base_url}/workitems/")
+        page.wait_for_load_state("domcontentloaded")
+        # Auf eine Priorität ohne Treffer filtern -> filterbewusster Empty-State.
+        page.select_option("#filter-priority", value="urgent")
+        page.wait_for_load_state("domcontentloaded")
+
+        reset = page.locator("#inbox-content [data-filter-reset]").first
+        expect(reset).to_be_visible()
+        reset.click()
+        page.wait_for_url(re.compile(r"/workitems/$"))
+
+        # sessionStorage ist geleert -> kein Restore-Redirect zurück in die leere Sicht.
+        stored = page.evaluate("() => sessionStorage.getItem('filters:/workitems/')")
+        assert stored is None
+        assert page.locator("text=E2E-Reset-Aufgabe").count() > 0
+
+
 class TestTimelineDocTypeFilter:
     """Timeline-Dokumentationstyp-Filter filtert Events."""
 

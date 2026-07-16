@@ -27,6 +27,8 @@ sind die wichtigsten Zustände und sollen parallel sichtbar sein.
         {% if open_has_more %}
         <p class="text-xs text-ink-muted mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
         {% endif %}
+        {% elif has_active_filters %}
+        {% include "core/workitems/partials/_empty_filtered.html" %}
         {% else %}
         <p class="text-sm text-ink-muted">{% trans "Keine offenen Aufgaben" %}</p>
         {% endif %}
@@ -46,6 +48,8 @@ sind die wichtigsten Zustände und sollen parallel sichtbar sein.
         {% if in_progress_has_more %}
         <p class="text-xs text-ink-muted mt-2">{% blocktrans with limit=inbox_list_limit %}Weitere Einträge vorhanden — Anzeige auf {{ limit }} begrenzt. Nutze Filter, um die Liste einzuschränken.{% endblocktrans %}</p>
         {% endif %}
+        {% elif has_active_filters %}
+        {% include "core/workitems/partials/_empty_filtered.html" %}
         {% else %}
         <p class="text-sm text-ink-muted">{% trans "Keine Aufgaben in Bearbeitung" %}</p>
         {% endif %}

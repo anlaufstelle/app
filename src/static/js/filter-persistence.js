@@ -74,35 +74,51 @@
   }
 
   /**
-   * Restore saved filter values and trigger HTMX reload.
-   * Only runs when the URL has no query parameters.
+   * Restore persisted filters by redirecting to the persisted querystring.
+   *
+   * Refs #1611: Ersetzt den früheren "Set-Values + künstlicher change-Trigger"
+   * für Listen, die sich per ``[data-filter-persist-url]`` dafür entscheiden
+   * (aktuell die Aufgaben-Inbox). Statt die volle Liste ungefiltert zu rendern
+   * und ~50 ms später per HTMX-Swap gefiltert zu ersetzen (sichtbarer Flash),
+   * navigiert ein einzelner ``location.replace`` direkt zur gefilterten URL —
+   * der Server rendert sofort korrekt, die Sicht ist reload-/teilbar.
+   *
+   * ``replace`` (kein ``assign``): der query-lose Einstiegs-Eintrag bleibt aus
+   * der History (kein zusätzlicher Zurück-Schritt), und es entsteht keine
+   * Redirect-Schleife — die neu geladene URL trägt einen Querystring, sodass
+   * ``restoreFilters`` beim nächsten Lauf sofort früh aussteigt.
    */
-  function restoreFilters() {
-    // If URL has query parameters, the user navigated with explicit filters —
-    // those take precedence, so we do NOT restore from storage.
-    if (window.location.search) return;
+  function restoreViaUrl(elements, state) {
+    var knownNames = {};
+    elements.forEach(function (el) {
+      var name = el.getAttribute("name");
+      if (name) knownNames[name] = true;
+    });
 
-    var key = getStorageKey();
-    var raw;
-    try {
-      raw = sessionStorage.getItem(key);
-    } catch (e) {
-      return;
-    }
-    if (!raw) return;
+    var params = new URLSearchParams();
+    var hasValue = false;
+    Object.keys(state).forEach(function (name) {
+      // Nur Filter übernehmen, die auf dieser Seite tatsächlich existieren —
+      // stale Keys aus anderen Ansichten überspringen.
+      if (!knownNames[name]) return;
+      var value = state[name];
+      if (value) {
+        params.set(name, value);
+        hasValue = true;
+      }
+    });
 
-    var state;
-    try {
-      state = JSON.parse(raw);
-    } catch (e) {
-      sessionStorage.removeItem(key);
-      return;
-    }
+    if (!hasValue) return;
+    window.location.replace(window.location.pathname + "?" + params.toString());
+  }
 
-    var elements = getFilterElements();
-    if (elements.length === 0) return;
-
-    // Track whether we actually changed anything
+  /**
+   * Set persisted filter values in-place and trigger an HTMX reload.
+   *
+   * Legacy-Pfad für Listen ohne ``[data-filter-persist-url]`` (z.B. Klientel,
+   * Zeitstrom): Werte setzen und einmal ``change`` feuern.
+   */
+  function restoreInPlace(elements, state) {
     var changed = false;
 
     elements.forEach(function (el) {
@@ -135,6 +151,68 @@
   }
 
   /**
+   * Restore saved filter values on page load.
+   * Only runs when the URL has no query parameters.
+   */
+  function restoreFilters() {
+    // If URL has query parameters, the user navigated with explicit filters —
+    // those take precedence, so we do NOT restore from storage.
+    if (window.location.search) return;
+
+    var key = getStorageKey();
+    var raw;
+    try {
+      raw = sessionStorage.getItem(key);
+    } catch (e) {
+      return;
+    }
+    if (!raw) return;
+
+    var state;
+    try {
+      state = JSON.parse(raw);
+    } catch (e) {
+      sessionStorage.removeItem(key);
+      return;
+    }
+
+    var elements = getFilterElements();
+    if (elements.length === 0) return;
+
+    // Refs #1611: Views mit [data-filter-persist-url] heben den Filter-State in
+    // die URL (voller, gefilterter Server-Render ohne Flash). Alle übrigen
+    // Listen behalten den bisherigen In-Place-Restore.
+    var urlRestore =
+      document.querySelector("[data-filter-persist][data-filter-persist-url]") !== null;
+
+    if (urlRestore) {
+      restoreViaUrl(elements, state);
+    } else {
+      restoreInPlace(elements, state);
+    }
+  }
+
+  /**
+   * Refs #1611: Reset-Links im filterbewussten Empty-State ("Filter
+   * zurücksetzen") löschen den persistierten Filter-State, damit die
+   * Rücksetzung dauerhaft ist und der URL-Restore beim nächsten Einstieg ohne
+   * Querystring nicht erneut die alten Filter herstellt. Delegiert auf
+   * ``document``, weil der Link Teil des per HTMX getauschten Inhalts ist. Die
+   * eigentliche Navigation überlässt der Handler dem ``href`` (kein
+   * ``preventDefault``) — ``removeItem`` läuft synchron davor.
+   */
+  function handleResetClick(e) {
+    var target = e.target;
+    if (!target || !target.closest) return;
+    if (!target.closest("[data-filter-reset]")) return;
+    try {
+      sessionStorage.removeItem(getStorageKey());
+    } catch (err) {
+      // sessionStorage unavailable — nothing to clear.
+    }
+  }
+
+  /**
    * Attach change listeners to filter elements.
    */
   function attachListeners() {
@@ -151,6 +229,10 @@
       }
     });
   }
+
+  // Reset-Link-Delegation global registrieren (Refs #1611) — greift auch,
+  // wenn der Link erst per HTMX-Swap in den DOM kommt.
+  document.addEventListener("click", handleResetClick);
 
   // Initialise on DOMContentLoaded
   document.addEventListener("DOMContentLoaded", function () {

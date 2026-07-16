@@ -329,6 +329,22 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
 
         done_period_label = dict(self.DONE_PERIOD_CHOICES).get(done_period, "")
 
+        # Refs #1611: Ist gerade eine nicht-default Filtersicht aktiv? Das
+        # Template nutzt das Flag, um einen leeren Ergebnisbereich als "Keine
+        # Treffer für die aktuellen Filter" (statt "Keine offenen Aufgaben")
+        # auszuweisen und einen "Filter zurücksetzen"-Weg anzubieten. Der
+        # Default-Sentinel ``mine_team`` (bzw. der fehlende Parameter) zählt
+        # NICHT als aktiver Filter — er ist die Default-Sicht. Der Zeitraum
+        # (``done_period``) ist an ``status=done`` gekoppelt und wird über
+        # ``status_filter`` bereits miterfasst.
+        has_active_filters = bool(
+            request.GET.get("item_type", "")
+            or request.GET.get("priority", "")
+            or request.GET.get("due", "")
+            or status_filter
+            or not default_scope
+        )
+
         facility_users = User.objects.filter(facility=facility).order_by("last_name", "first_name", "username")
 
         # Refs #1148 (Folge-Feedback): Nach einer wegen fehlender Berechtigung
@@ -374,6 +390,7 @@ class WorkItemInboxView(AssistantOrAboveRequiredMixin, HTMXPartialMixin, View):
             "selected_due": request.GET.get("due", ""),
             "selected_status": status_filter,
             "selected_done_period": done_period,
+            "has_active_filters": has_active_filters,
             "forbidden_ids": forbidden_ids,
         }
 
