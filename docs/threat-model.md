@@ -116,7 +116,8 @@ TB6│   Snapshot-Bundle AES-GCM-256 (non-extractable Key)    │
 | Threat | Mitigation (Bestand) | Quelle | Offene Lücke |
 |---|---|---|---|
 | **S** Connection-Pool-Tenant-Leak | `FacilityScopeMiddleware` setzt `app.current_facility_id` pro Request — auch leer für anonyme Requests | [`facility_scope.py`](../src/core/middleware/facility_scope.py) — Refs #733 ||
-| **T** AuditLog-Manipulation | DB-Trigger `auditlog_immutable` (BEFORE UPDATE/DELETE) + Python-Override; Test [`test_audit_trigger.py`](../src/tests/test_audit_trigger.py) | Migration [`0024`](../src/core/migrations/0024_auditlog_immutable_trigger.py) | Retention-Pruning: Restrisiko intern getrackt |
+| **T** AuditLog-Manipulation | DB-Trigger `auditlog_immutable` (BEFORE UPDATE/DELETE), seit #1026 `ENABLE ALWAYS` (feuert auch bei `session_replication_role=replica`) + Python-Override; Test [`test_audit_trigger.py`](../src/tests/test_audit_trigger.py) | Migration [`0024`](../src/core/migrations/0024_auditlog_immutable_trigger.py), [`0107`](../src/core/migrations/0107_append_only_triggers_enable_always.py) ||
+| **E** Audit-Bypass via DB-Owner-DDL (`DISABLE TRIGGER`) | Runtime-/Owner-Rollentrennung (A1.4): Web-Runtime-Rolle ist **kein** DB-Owner mehr → kann Append-Only-Trigger nicht per `ALTER TABLE … DISABLE TRIGGER` abschalten; Owner ist die BYPASSRLS-Wartungs-Rolle. Test [`test_rls.py::TestAppendOnlyTriggerOwnership`](../src/tests/test_rls.py) | [`01-app-role.sh`](../deploy/postgres-init/01-app-role.sh), [`_db_admin.py`](../src/core/services/system/_db_admin.py) — #1026 | Prod-Rollout des Ownership-Umzugs für Bestandsinstallationen: [`ops-runbook.md` § 9.6](ops-runbook.md) |
 | **T** Verschlüsselungs-Bypass via `bulk_create`/`update(data_json=...)` | Verschlüsselung in `Event.save()`/`encrypt_field`; Architektur-Test gegen `bulk_create`/`update(data_json=...)` außerhalb Service-Layer | | Guard-Härtung intern getrackt |
 | **R** Insider-Aktion ohne Spur | AuditLog mit ~30 Action-Typen + DB-Immutable; alle State-Transitions sollten loggen; Privileg-Änderungs-Audits (Rollenwechsel/Deaktivierung/Vier-Augen-Recht) erfassen den handelnden Admin im `actor`-Feld tamper-evident in der HMAC-Kette (#1369); massenhafte Löschung von Personendaten (soft-delete/anonymize/deletion-approved) triggert die Breach-Detection (#1368) | [`audit.py`](../src/core/models/audit.py), [`chain.py`](../src/core/services/audit/chain.py) | WorkItem-Status-Übergänge jetzt append-only geloggt (#1467, inkl. offline-replaybar #1419); übrige State-Transitions intern getrackt |
 | **I** Cross-Facility-Read | RLS FORCE-Modus auf 22 Tabellen + Manager-Layer + Mixin-Layer (Defense-in-Depth) | Migration [`0047`](../src/core/migrations/0047_postgres_rls_setup.py), ableitungsbasiert erzwungen in [`test_rls.py`](../src/tests/test_rls.py) | Statistik-MV bewusst ohne RLS — siehe [`security-notes.md`](security-notes.md) |
@@ -124,6 +125,34 @@ TB6│   Snapshot-Bundle AES-GCM-256 (non-extractable Key)    │
 | **I** TOTP-Secret-Leak at rest (Dump/Replica/Backup) | TOTP-Secret Fernet-verschlüsselt über das Proxy-Modell `EncryptedTOTPDevice` (vorhandenes MultiFernet, Key-Rotation) — ein DB-Dump liefert nur Chiffretext; konsistent zu den Hash-Backup-Codes (#790) | [ADR-031](adr/031-totp-secret-at-rest.md), [`mfa.py`](../src/core/models/mfa.py), [`totp.py`](../src/core/services/security/totp.py) | — (Refs #1362 geschlossen) |
 | **D** AuditLog-Tabelle wächst unbegrenzt | Composite-Indexes + 24-Monat-Retention via `enforce_retention` | [`audit.py`](../src/core/models/audit.py), [`retention.py`](../src/core/services/retention.py) ||
 | **E** RLS-Bypass via Superuser-DB-Rolle | DB-User darf **kein** Superuser sein; FORCE-Modus aktiv; CI laedt ``rls_test_role`` (``NOSUPERUSER``) und verifiziert Cross-Tenant-0-Rows ([test_rls_functional.py](../src/tests/test_rls_functional.py)) | [`ops-runbook.md` § 9](ops-runbook.md) | — ( #718 geschlossen) |
+
+#### A1.4 — Runtime-/Owner-Rollentrennung (Append-Only-Immutability)
+
+Die Append-Only-Trigger (`auditlog_immutable`, `eventhistory_no_update`/`_no_delete`)
+schützen die revisionssichere Historie gegen `UPDATE`/`DELETE`. Zwei Umgehungswege
+sind zu betrachten:
+
+1. **`session_replication_role = replica`** — ein Trigger im Default-Modus `ENABLE`
+ (`tgenabled='O'`) feuert in diesem Modus nicht. Gegenmaßnahme: die Trigger stehen
+ seit Migration [`0107`](../src/core/migrations/0107_append_only_triggers_enable_always.py)
+ auf **`ENABLE ALWAYS`** (`tgenabled='A'`) und feuern damit auch im `replica`-Modus.
+ Zusätzlich hat die Runtime-App-Rolle kein `GRANT SET ON PARAMETER
+ session_replication_role` — sie kann `replica` gar nicht setzen.
+2. **Owner-DDL `ALTER TABLE … DISABLE TRIGGER`** — der **Table-Owner** darf jeden
+ Trigger abschalten; `ENABLE ALWAYS` ändert daran nichts. Gegenmaßnahme: Die
+ Web-Runtime-Rolle (`POSTGRES_USER`) ist **nicht** mehr DB-/Objekt-Owner, sondern
+ hat nur DML-Rechte; Owner ist die BYPASSRLS-Wartungs-Rolle (`POSTGRES_ADMIN_USER`),
+ die migrate/seed/Retention ohnehin fährt ([`01-app-role.sh`](../deploy/postgres-init/01-app-role.sh),
+ [ADR-033](adr/033-runtime-owner-role-separation.md)). Eine kompromittierte
+ Runtime-Verbindung kann die Trigger daher weder DISABLE-n (kein Owner) noch per
+ `replica` umgehen (kein GRANT).
+
+Der legitime DSGVO-/Retention-Wartungspfad (`prune_auditlog`, `Client.anonymize()`,
+`backfill_audit_chain`, `reencrypt_fields`) umgeht die Trigger als Owner-Rolle
+transaktional per `ALTER TABLE … DISABLE TRIGGER` + Re-`ENABLE ALWAYS` in **einem**
+`transaction.atomic()` — bei Prozessabbruch vor dem Commit rollt PostgreSQL das
+DDL (inkl. DISABLE) mit zurück, der Schutz bleibt aktiv
+([`_db_admin.py`](../src/core/services/system/_db_admin.py)).
 
 ### TB4 — Django ↔ ClamAV
 

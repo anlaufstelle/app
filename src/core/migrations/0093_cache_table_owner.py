@@ -9,11 +9,13 @@ Tabelle *admin-owned*, und die NOSUPERUSER/NOBYPASSRLS-Runtime-App-Rolle bekommt
 Die ``ALTER DEFAULT PRIVILEGES`` in ``deploy/postgres-init/01-app-role.sh``
 greifen nur in Richtung App→Admin, nicht Admin→App.
 
-Fix: Owner **env-agnostisch** auf den Datenbank-Owner setzen. Der DB-Owner ist
-per ``ALTER DATABASE OWNER TO app_user`` (01-app-role.sh) die App-Rolle. In
-dev/test/e2e, wo Migrationen ohnehin als App-Rolle/DB-Owner laufen, ist der
-``ALTER TABLE … OWNER`` ein No-op. Im Deploy darf die Admin-Rolle den Owner
-wechseln, weil sie Mitglied der App-Rolle ist (``GRANT app_user TO admin``).
+Fix: Owner **env-agnostisch** auf den Datenbank-Owner (``pg_database.datdba``)
+setzen. Seit A1.4 (Refs #1026) ist der DB-Owner die Admin-Rolle selbst
+(``ALTER DATABASE OWNER TO admin`` in 01-app-role.sh) und ``migrate`` läuft als
+eben diese Rolle — der ``ALTER TABLE … OWNER`` ist dann ein No-op, die
+App-Runtime bekommt ihre Cache-Tabellen-Rechte per DML-Grant. In dev/test/e2e
+(Single-Role = DB-Owner) ebenfalls No-op. Der Guard bleibt als Sicherheitsnetz
+gegen versehentlich fremd-owned Tabellen.
 """
 
 from django.db import migrations

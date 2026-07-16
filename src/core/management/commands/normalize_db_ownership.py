@@ -2,22 +2,23 @@
 
 Refs #1085: Der Deploy-Migrate-Job (``docker-migrate.sh``) connectet als
 BYPASSRLS-**Admin**-Rolle (``POSTGRES_USER``-Override, Refs #863) — damit
-RunPython-Datenmigrationen in RLS-geschützte Tabellen schreiben können. Auf
-einem **frischen** Cluster entstehen dadurch *alle* migrierten Tabellen
-admin-owned; die NOSUPERUSER/NOBYPASSRLS-App-Runtime-Rolle bekommt dann
-``permission denied for table …`` (web-Crash-Loop).
+RunPython-Datenmigrationen in RLS-geschützte Tabellen schreiben können.
 
 ``REASSIGN OWNED BY current_user TO <db_owner>`` überträgt sämtliche vom
 aktuellen DB-User besessenen Objekte (Tabellen, Sequenzen, Views, …) auf den
-Datenbank-Owner. Der DB-Owner ist per ``ALTER DATABASE OWNER TO app_user``
-(``deploy/postgres-init/01-app-role.sh``) die App-Rolle; im Deploy darf die
-Admin-Rolle den Wechsel vollziehen, weil sie Mitglied der App-Rolle ist
-(``GRANT app_user TO admin``). Das generalisiert das per-Tabelle-Muster aus
-``0093_cache_table_owner.py`` (Refs #1030) auf den gesamten Migrate-Job.
+**Datenbank-Owner** (``pg_database.datdba``, env-agnostisch ermittelt).
 
-env-agnostisch & idempotent: In dev/test/e2e läuft ``migrate`` ohnehin als
-DB-Owner — dann ist ``current_user == db_owner`` und das Command ist ein
-reiner No-op. Mehrfachläufe sind unschädlich.
+Refs #1026 (A1.4): Seit der Runtime-/Owner-Rollentrennung ist der DB-Owner die
+**Admin-Rolle** selbst (``ALTER DATABASE OWNER TO admin`` in
+``deploy/postgres-init/01-app-role.sh``). Da ``migrate`` als eben diese Rolle
+läuft, ist ``current_user == db_owner`` und das Command ein **No-op** — die
+App-Runtime bekommt ihre Tabellen-Rechte per DML-Grant
+(``ALTER DEFAULT PRIVILEGES … TO app``), nicht mehr über Ownership. Das Command
+bleibt als idempotentes Sicherheitsnetz: liefe ``migrate`` versehentlich als
+eine Nicht-Owner-Rolle, würde es die entstandenen Objekte wieder dem DB-Owner
+zuweisen (generalisiert das per-Tabelle-Muster aus ``0093_cache_table_owner.py``,
+Refs #1030). In dev/test/e2e läuft ``migrate`` ohnehin als DB-Owner — ebenfalls
+No-op. Mehrfachläufe sind unschädlich.
 
 Wird in ``docker-migrate.sh`` direkt nach erfolgreichem ``migrate`` aufgerufen
 (analog zum ``check_db_roles``-Gate, Refs #1002).

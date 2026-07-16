@@ -79,7 +79,7 @@ docker compose -f docker-compose.prod.yml up -d web caddy
 
 **Erwartete Downtime:** ~3-5 Sekunden (nur Gunicorn-Restart). Migrationen laufen vorab im One-Shot-Job — der Web-Container faehrt erst hoch, wenn das Schema bereit ist. Bei mehreren Web-Replicas wartet keine mehr auf den Migrate-Lock.
 
-> **Ownership-Normalisierung (Refs #1085):** Der One-Shot-Job fuehrt nach `migrate` zusaetzlich `normalize_db_ownership` aus. Da Migrationen als Admin-Rolle laufen (BYPASSRLS, Refs #863), entstehen frisch erstellte Tabellen admin-owned — `REASSIGN OWNED` uebertraegt sie auf den DB-Owner (App-Rolle), sonst bekaeme die App-Runtime auf einem frischen Cluster `permission denied`. Idempotent; auf Bestands-/Dev-Clustern (migrate laeuft als Owner) ein No-op. Ein Fehler bricht den Deploy fail-fast ab, bevor neue Web-Replicas live gehen.
+> **Ownership-Normalisierung (Refs #1085, #1026):** Der One-Shot-Job fuehrt nach `migrate` weiterhin `normalize_db_ownership` aus. Seit A1.4 ist der **DB-Owner die Admin-Rolle** selbst; da `migrate` als eben diese Rolle laeuft, ist `REASSIGN OWNED BY current_user TO db_owner` ein **No-op** (`current_user == db_owner`). Die App-Runtime bekommt ihre Tabellen-Rechte nicht mehr ueber Ownership, sondern per DML-Grant (`ALTER DEFAULT PRIVILEGES … TO app` im Init-Script, § 9). Der Schritt bleibt als idempotentes Sicherheitsnetz; ein Fehler bricht den Deploy fail-fast ab, bevor neue Web-Replicas live gehen.
 
 ### 1.3 Post-Deploy-Verifizierung
 
@@ -969,20 +969,24 @@ Bootstrap, und das Init-Script legt **zwei** entrechtete Application-Rollen an:
 | Rolle (`.env`-Variable) | Beispiel-Name | Attribute | Wofuer |
 |---|---|---|---|
 | `postgres` (Bootstrap, `POSTGRES_BOOTSTRAP_PASSWORD`) | `postgres` | SUPERUSER | Nur DB-Init + Notfall-Wartung. **Nicht** fuer Runtime/Operator-Tasks. |
-| `POSTGRES_USER` (App) | `anlaufstelle` | `NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB`, ist DB-Owner | Django-Runtime. RLS-Policies greifen scharf (`FORCE ROW LEVEL SECURITY`). |
-| `POSTGRES_ADMIN_USER` (Admin/Wartung) | `anlaufstelle_admin` | `NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB`, Mitglied der App-Rolle | `migrate`, `seed`, Retention-/Anonymisierungs-Cron. |
+| `POSTGRES_USER` (App) | `anlaufstelle` | `NOSUPERUSER NOBYPASSRLS NOCREATEROLE NOCREATEDB`, **kein Owner** — nur DML (`SELECT/INSERT/UPDATE/DELETE`) + Sequenz-/Schema-`USAGE` | Django-Runtime. RLS-Policies greifen scharf (`FORCE ROW LEVEL SECURITY`). |
+| `POSTGRES_ADMIN_USER` (Admin/Wartung/**Owner**) | `anlaufstelle_admin` | `NOSUPERUSER BYPASSRLS NOCREATEROLE NOCREATEDB`, **DB-/Objekt-Owner** | `migrate`, `seed`, Retention-/Anonymisierungs-Cron. Als Owner umgeht die Wartung die Append-Only-Trigger per DDL (A1.4, § 9.5). |
 
 Eigenschaften, die das Init-Script code-treu garantiert:
 
 - Beide Rollen sind **NOSUPERUSER** — kein Pfad zur Rechte-Eskalation.
-- Die App-Rolle ist **NOBYPASSRLS** und DB-Owner; durch `FORCE ROW LEVEL
- SECURITY` greifen die Policies auch fuer den Owner (Fail-closed, § 9 oben).
-- Die Admin-Rolle ist **BYPASSRLS** (fuer Migrationen/Wartung) und wird per
- `GRANT <app> TO <admin>` Mitglied der App-Rolle — noetig fuer `DROP POLICY`
- / `ALTER TABLE` in Migrationen, weil `BYPASSRLS` allein nicht fuer DDL reicht.
-- Die Admin-Rolle erhaelt `GRANT SET ON PARAMETER session_replication_role`
- (PostgreSQL 15+) — sonst scheitert die DSGVO-Art.-17-Anonymisierung in Prod
- (Details § 9.5).
+- Die App-Rolle ist **NOBYPASSRLS** und **nicht Owner** (A1.4, Refs
+ #1026); sie kann die
+ Append-Only-Trigger daher weder per `ALTER TABLE … DISABLE TRIGGER`
+ abschalten noch — mangels `SET PARAMETER`-Grant — per
+ `session_replication_role` umgehen. `FORCE ROW LEVEL SECURITY` greift
+ zusätzlich (Fail-closed, § 9 oben).
+- Die Admin-Rolle ist **BYPASSRLS** (fuer Migrationen/Wartung) und **Owner** der
+ Datenbank + aller Objekte — nötig für `DROP POLICY`/`ALTER TABLE` in
+ Migrationen (BYPASSRLS allein reicht nicht für DDL) und für den
+ Append-Only-Trigger-Bypass im Wartungspfad. `ALTER DEFAULT PRIVILEGES FOR ROLE
+ admin … TO app` grantet jeder migrierten Tabelle/Sequenz automatisch die
+ App-DML-Rechte.
 
 Operator-/Wartungs-Tasks connecten als Admin-Rolle ueber einen ENV-Override
 (`POSTGRES_USER`/`POSTGRES_PASSWORD` auf die Admin-Werte); der Migrate-Job
@@ -1056,48 +1060,83 @@ nachfolgende Queries dieser Session gueltig.
 Refs #542,
 #586.
 
-### 9.5 Wartungsrolle: `SET ON PARAMETER session_replication_role` (A1.2)
+### 9.5 Append-Only-Trigger-Bypass via Owner-DDL (A1.4)
 
-Die DSGVO-Art.-17-Anonymisierung (`Client.anonymize`) und das Audit-Pruning
-umgehen den Append-Only-Trigger transaktional via `bypass_replication_triggers()`,
-das `session_replication_role = replica` setzt. Das ist ein **SUPERUSER-Parameter**;
-die Wartungsrolle (`anlaufstelle_admin`, `NOSUPERUSER BYPASSRLS`, unter der seit
-A1.1 der Retention-/Breach-Cron laeuft) darf ihn ab PostgreSQL 15 nur mit
-explizitem `GRANT SET ON PARAMETER` setzen. Ohne den Grant scheitert eine echte
-Anonymisierung in Prod mit `permission denied to set parameter
-session_replication_role` (Refs
-#1016 A1.2,
-#1021).
+Die DSGVO-Art.-17-Anonymisierung (`Client.anonymize`), das Audit-Pruning
+(`prune_auditlog`) sowie `backfill_audit_chain`/`reencrypt_fields` müssen die
+Append-Only-Trigger (`auditlog_immutable`, `eventhistory_no_update`/`_no_delete`)
+für ihre legitimen Schreibzugriffe kurz umgehen. Seit A1.4 (Refs
+#1026) läuft das **nicht**
+mehr über `session_replication_role = replica` (das feuert einen
+`ENABLE ALWAYS`-Trigger nicht mehr still), sondern `bypass_replication_triggers()`
+deaktiviert die Trigger gezielt per **Owner-DDL** `ALTER TABLE … DISABLE TRIGGER`
+und stellt sie per `ENABLE ALWAYS` wieder her — alles in **einem**
+`transaction.atomic()` (SIGKILL-sicher).
 
-**Fresh DBs:** [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh)
-setzt den Grant automatisch beim ersten DB-Provisioning.
+Konsequenz für den Betrieb: Der Wartungspfad braucht **Owner-Rechte**. Die
+Management-Commands `enforce_retention`, `backfill_audit_chain` und
+`reencrypt_fields` müssen daher als **Owner-/Admin-Rolle** (`POSTGRES_ADMIN_USER`)
+laufen — das ist über den ENV-Override (`POSTGRES_USER`/`POSTGRES_PASSWORD` auf die
+Admin-Werte) bereits so eingerichtet (Retention-Cron § 6). Läuft ein solcher
+Command versehentlich als App-Rolle, bricht der Bypass mit `must be owner of
+table core_auditlog` ab — Fail-loud, kein stiller Audit-Verlust.
 
-**Bestands-DBs (vor dem A1.2-Fix provisioniert):** Der Grant fehlt und muss
-**einmalig als Superuser** nachgezogen werden (idempotent):
+Das frühere `GRANT SET ON PARAMETER session_replication_role` wird **nicht mehr
+benötigt** und ist aus dem Init-Script entfernt. Auf Bestands-DBs kann es als
+Aufräum-Schritt entzogen werden (optional, Least Privilege):
 
 ```sql
--- als Superuser (postgres), in der Anwendungs-DB:
-GRANT SET ON PARAMETER session_replication_role TO anlaufstelle_admin;
+-- als Superuser (postgres), in der Anwendungs-DB, optional:
+REVOKE SET ON PARAMETER session_replication_role FROM anlaufstelle_admin;
 ```
 
-**Verifikation** (Grant vorhanden + funktional):
+**Verifikation** (App-Rolle kann Trigger NICHT abschalten, Owner-Rolle schon):
 
 ```sql
--- 1. ACL-Eintrag pruefen -> erwartet u.a. 'anlaufstelle_admin=s/...'
-SELECT parname, array_to_string(paracl, ',') AS acl
-FROM pg_parameter_acl WHERE parname = 'session_replication_role';
-
--- 2. funktional als Wartungsrolle (session-lokal, harmlos):
-SET ROLE anlaufstelle_admin;
-SET session_replication_role = replica;   -- muss 'SET' liefern, kein permission denied
-RESET session_replication_role;
+-- App-Rolle (kein Owner) -> muss scheitern:
+SET ROLE anlaufstelle;      -- POSTGRES_USER
+ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable;  -- ERROR: must be owner
 RESET ROLE;
+-- Trigger-Ruhezustand -> 'A' (ENABLE ALWAYS):
+SELECT tgname, tgenabled FROM pg_trigger
+WHERE tgname IN ('auditlog_immutable','eventhistory_no_update','eventhistory_no_delete');
 ```
 
-**Status:** `dev.anlaufstelle.app` ist bereits versorgt (Grant vorhanden +
-funktional verifiziert 2026-06-03). **Prod muss den Grant einmalig nachziehen**,
-falls die DB vor dem A1.2-Fix angelegt wurde — am besten direkt nach dem
-naechsten Deploy als Teil der Post-Deploy-Verifizierung (§ 1.3).
+### 9.6 Rollout der Runtime-/Owner-Rollentrennung auf Bestandsinstallationen (A1.4)
+
+**Fresh DBs** ziehen die Trennung automatisch auf
+([`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh):
+Admin wird Owner, App bekommt nur DML). **Bestandsinstallationen** (App ist noch
+DB-Owner) brauchen einen **einmaligen, Maintainer-geführten** Ownership-Umzug
+kurze Downtime empfohlen (keine schreibenden Requests währenddessen). Ablauf als
+**Bootstrap-Superuser** (`postgres`), in der Anwendungs-DB:
+
+```sql
+-- 0. Vorher: web-Service stoppen / in Wartung (keine App-Schreibzugriffe).
+-- 1. Ownership Datenbank + alle Objekte auf die Admin-Rolle uebertragen.
+ALTER DATABASE anlaufstelle OWNER TO anlaufstelle_admin;
+REASSIGN OWNED BY anlaufstelle TO anlaufstelle_admin;   -- Tabellen/Sequenzen/Views
+-- 2. App-Rolle: Ownership weg, nur noch DML.
+GRANT USAGE ON SCHEMA public TO anlaufstelle;
+ALTER DEFAULT PRIVILEGES FOR ROLE anlaufstelle_admin IN SCHEMA public
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anlaufstelle;
+ALTER DEFAULT PRIVILEGES FOR ROLE anlaufstelle_admin IN SCHEMA public
+    GRANT USAGE, SELECT ON SEQUENCES TO anlaufstelle;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO anlaufstelle;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anlaufstelle;
+-- 3. Trigger haerten (macht sonst die Migration 0107 beim naechsten Deploy):
+--    kann entfallen, wenn direkt danach `docker-migrate.sh` laeuft.
+```
+
+Danach normal deployen (`docker-migrate.sh` wendet Migration `0107` an, falls
+noch nicht geschehen) und mit § 9.5-Verifikation prüfen. `check_db_roles` bleibt
+unverändert grün (Attributprofil App/Admin ist gleich geblieben — geändert hat
+sich nur die Ownership).
+
+> **Hinweis `normalize_db_ownership`:** Der One-Shot-Migrate-Job ruft weiterhin
+> `normalize_db_ownership` — im neuen Modell ein **No-op**, weil `migrate` als
+> Admin = DB-Owner läuft (`current_user == db_owner`). Er bleibt als idempotentes
+> Sicherheitsnetz erhalten.
 
 ---
 

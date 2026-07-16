@@ -87,7 +87,7 @@ Alle Secrets leben zur Laufzeit in der `.env` des Prod-Hosts (`chmod 600`). Bei 
 | `DJANGO_SECRET_KEY` | Session-/CSRF-/Signing-Key. Ein **neuer** Wert ist technisch zulässig (invalidiert nur bestehende Sessions/Signaturen); für saubere Forensik den alten bevorzugen. | [`settings/prod.py`](../src/anlaufstelle/settings/prod.py) L38 |
 | `DJANGO_AUDIT_HASH_KEY` | HMAC-Key für pseudonymisierte AuditLog-Einträge. Ein neuer Wert macht **alte** Audit-Hashes nicht mehr nachvollziehbar — für DSGVO-Beweiskraft den alten wiederbeschaffen. | [`.env.example`](../.env.example) L14 |
 
-> **`POSTGRES_USER`/`POSTGRES_ADMIN_USER` sind keine Geheimnisse, aber load-bearing.** Der Rollenname muss identisch zum verlorenen Setup sein, weil der Dump `OWNER`/`GRANT`-Klauseln auf genau diese Rollennamen enthält ([`01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) macht den App-User zum DB-Owner). Andere Passwörter sind ok; andere **Rollennamen** brechen den Restore.
+> **`POSTGRES_USER`/`POSTGRES_ADMIN_USER` sind keine Geheimnisse, aber load-bearing.** Der Rollenname muss identisch zum verlorenen Setup sein, weil der Dump `OWNER`/`GRANT`-Klauseln auf genau diese Rollennamen enthält (seit A1.4 ist die **Admin-Rolle** DB-/Objekt-Owner, die App-Rolle hat nur DML — [`01-app-role.sh`](../deploy/postgres-init/01-app-role.sh)). Andere Passwörter sind ok; andere **Rollennamen** brechen den Restore.
 
 ### 4.3 Optional
 
