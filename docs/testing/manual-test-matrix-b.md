@@ -16,7 +16,7 @@
 
 **Routen:** `/login/`, `/logout/`, `/password-change/`, `/password-reset/`, `/password-reset/done/`, `/password-reset/<uidb64>/<token>/`, `/password-reset/complete/` 
 **Views:** `src/core/views/auth.py` (`CustomLoginView`, `CustomLogoutView`, `RateLimitedPasswordResetView`, `CustomPasswordChangeView`) 
-**Services:** `src/core/services/login_lockout.py` (`is_locked`, `unlock`, Schwelle 10/15min), `src/core/services/password.py` (12-Zeichen-Initial-Generator), `src/core/services/audit_hash.py` (`hmac_hash_email`), `src/core/services/offline_keys.py` 
+**Services:** `src/core/services/login_lockout.py` (`is_locked`, `unlock`, Schwelle 10/15min), `src/core/services/password.py` (12-Zeichen-Initial-Generator), `src/core/services/audit_hash.py` (`hmac_hash_email`), `src/core/models/user.py` (`User.ensure_offline_key_salt`) 
 **Middleware:** `core.middleware.password_change.ForcePasswordChangeMiddleware` 
 **Settings:** `AUTH_PASSWORD_VALIDATORS` (min_length=12, BSI/NIST), `SESSION_COOKIE_AGE=1800`, `SESSION_SAVE_EVERY_REQUEST=False`, `AUDIT_HASH_KEY`, Audit-Action-Choices in `src/core/models/audit.py` 
 **Signals:** `src/core/signals/audit.py` (LOGIN/LOGOUT/LOGIN_FAILED via Django-Auth-Signals) 
@@ -674,7 +674,7 @@
 **Routen:** `/account/`, `/i18n/setlang/`, `/auth/offline-key-salt/` 
 **Views:** `src/core/views/account.py` (`AccountProfileView`), `src/core/views/auth.py` (`OfflineKeySaltView`, `set_user_language`) 
 **Mixin:** `AssistantOrAboveRequiredMixin` (Account ist für Assistenz und höher) 
-**Services:** `src/core/services/offline_keys.py` (`ensure_offline_key_salt`) 
+**Services:** `src/core/models/user.py` (`User.ensure_offline_key_salt`) 
 **Modelfelder:** `User.preferred_language`, `User.phone`, `User.notes`, `User.offline_key_salt` 
 **E2E-Coverage:** `test_account_profile.py` 
 **Spezial-Setup:**
@@ -4785,7 +4785,7 @@
 
 **Routen:** `/offline/`, `/offline/clients/<uuid>/`, `/offline/conflicts/`, `/api/offline/bundle/client/<uuid>/`, `/auth/offline-key-salt/`, `/manifest.json`, `/sw.js` 
 **Views:** `src/core/views/offline.py` (OfflineBootstrapView, OfflineBundleView, OfflineClientDetailView, OfflineConflictListView) 
-**Services:** `src/core/services/offline.py`, `src/core/services/offline_keys.py` 
+**Services:** `src/core/services/system/offline.py` 
 **E2E-Coverage:** `test_offline_apis.py`, `test_offline_login_bootstrap.py`, `test_offline_store.py`, `test_pwa_offline.py` 
 **Spezial-Setup:** Service Worker im Browser, IndexedDB, DevTools → Application-Tab. Streetwork-Geräte simulieren (mobile Viewport 375x667).
 
@@ -5098,12 +5098,12 @@
 
 **Schritte:**
 1. Pwd-Wechsel via `/accounts/password_change/` durchführen.
-2. Im Backend wird neuer Salt generiert und gespeichert (`offline_keys.rotate_salt()`).
+2. Im Backend wird `User.offline_key_salt` geleert und gespeichert (`CustomPasswordChangeView`, `src/core/views/auth.py:219-220`; Queryset-Reset bei Rollen-/Aktiv-Änderung in `src/core/signals/offline_invalidation.py:89-97`).
 3. Logout, dann erneuter Login mit neuem Pwd.
 4. Salt-Endpoint liefert neuen Salt → neuer abgeleiteter Key.
 5. IndexedDB-Decrypt-Versuch alter Eintrag mit neuem Key → Fehler (alte Daten nicht entschlüsselbar).
 6. Offline-Bootstrap lädt Daten neu mit neuem Key (Re-Bootstrap).
-7. Audit-Log-Eintrag `OFFLINE_KEY_ROTATED`.
+7. Audit-Log-Eintrag `OFFLINE_KEY_FETCH` mit Detail `offline_key_salt_fetched` (`src/core/views/auth.py:240`).
 
 **Erwartetes Ergebnis:**
 - Alte lokale Daten unentschlüsselbar nach Pwd-Wechsel (gewollt: Schutz bei kompromittiertem Pwd).
