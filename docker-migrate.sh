@@ -66,13 +66,17 @@ with connection.cursor() as cursor:
     cursor.execute("SELECT pg_advisory_lock(1)")
     try:
         result = subprocess.run([sys.executable, "manage.py", "migrate", "--noinput"])
-        # Refs #1085: Nach erfolgreichem Migrate die Tabellen-Ownership auf den
-        # DB-Owner (App-Rolle) normalisieren. Der Migrate-Job connectet als
-        # BYPASSRLS-Admin (POSTGRES_USER-Override, Refs #863) — frisch migrierte
-        # Tabellen sind dadurch admin-owned, und die NOSUPERUSER-App-Runtime-Rolle
-        # bekäme 'permission denied'. REASSIGN OWNED überträgt sie env-agnostisch
-        # und idempotent auf den DB-Owner; ein Fehler bricht den Deploy fail-fast
-        # ab, bevor neue Web-Replicas live gehen.
+        # Refs #1085/#1026: Ownership-Normalisierung als idempotentes Sicherheits-
+        # netz. Seit A1.4 (Runtime-/Owner-Trennung) ist der DB-Owner die
+        # BYPASSRLS-Admin-Rolle selbst — nicht mehr die App-Rolle. Der Migrate-Job
+        # connectet als eben diese Admin-Rolle (POSTGRES_USER-Override, Refs #863),
+        # frisch migrierte Tabellen entstehen also bereits admin-owned, und
+        # REASSIGN OWNED BY current_user TO db_owner ist ein No-op
+        # (current_user == db_owner). Die App-Runtime-Rolle bekommt ihre Tabellen-
+        # Rechte nicht mehr ueber Ownership, sondern per DML-GRANT (ALTER DEFAULT
+        # PRIVILEGES im Init-Script). Der Schritt bleibt als Sicherheitsnetz fuer
+        # Bestands-/Edge-Faelle; ein Fehler bricht den Deploy fail-fast ab, bevor
+        # neue Web-Replicas live gehen.
         if result.returncode == 0:
             normalize = subprocess.run([sys.executable, "manage.py", "normalize_db_ownership"])
             if normalize.returncode != 0:

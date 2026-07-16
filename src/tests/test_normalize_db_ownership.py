@@ -1,18 +1,27 @@
-"""Tests für das ``normalize_db_ownership`` Management-Command (Refs #1085).
+"""Tests für das ``normalize_db_ownership`` Management-Command (Refs #1085, #1026).
 
 Der Deploy-Migrate-Job (``docker-migrate.sh``) läuft als BYPASSRLS-**Admin**-
-Rolle (``POSTGRES_USER``-Override, Refs #863) — dadurch entstehen alle
-migrierten Tabellen admin-owned, und die NOSUPERUSER/NOBYPASSRLS-App-Runtime-
-Rolle bekommt ``permission denied`` (Fresh-Install-Crash, Refs #1085).
-``normalize_db_ownership`` weist alle vom aktuellen User (Admin) besessenen
-Objekte dem Datenbank-Owner (= App-Rolle, gesetzt per ``ALTER DATABASE OWNER``
-in ``01-app-role.sh``) zu — das 0093-Muster (Refs #1030) generalisiert.
+Rolle (``POSTGRES_USER``-Override, Refs #863) — migrierte Tabellen entstehen
+dadurch admin-owned. ``normalize_db_ownership`` weist alle vom aktuellen User
+(Admin) besessenen Objekte dem **Datenbank-Owner** (``pg_database.datdba``,
+gesetzt per ``ALTER DATABASE OWNER`` in ``01-app-role.sh``) zu — das
+0093-Muster (Refs #1030) generalisiert.
+
+Seit der Runtime-/Owner-Trennung (A1.4, Refs #1026) ist der Datenbank-Owner die
+**Admin-Rolle** selbst (nicht mehr die App-Rolle). Weil ``migrate`` als eben
+diese Admin-Rolle läuft, gilt ``current_user == db_owner`` und der Reassign ist
+im Prod-Modell ein **No-op**; die App-Runtime bekommt ihre Tabellen-Rechte per
+DML-GRANT (``ALTER DEFAULT PRIVILEGES``), nicht mehr über Ownership. Der Command
+bleibt als idempotentes Sicherheitsnetz für Bestands-/Edge-Fälle erhalten und
+wird hier weiterhin auf beiden Pfaden (No-op + Reassign) getestet.
 
 ``transaction=True``: CREATE/DROP ROLE + SET ROLE brauchen echte Sessions
-(Muster aus ``test_rls.py::TestReplicationRoleGrant``). Der DB-Test-User ist
-Superuser und DB-Owner; ``current_user == db_owner`` ist daher der Default-
-No-op-Pfad. Für den Reassign-Pfad simuliert ``TMP_ADMIN`` die Deploy-Admin-
-Rolle: NOSUPERUSER, aber Mitglied des DB-Owners (= ``GRANT app TO admin``).
+(Muster aus ``test_rls.py::TestAppendOnlyTriggerOwnership``). Der DB-Test-User
+ist Superuser und DB-Owner; ``current_user == db_owner`` ist daher der Default-
+No-op-Pfad. Für den Reassign-Pfad simuliert ``TMP_ADMIN`` eine Rolle, die
+Objekte besitzt, aber selbst nicht der Datenbank-Owner ist: NOSUPERUSER und
+Mitglied des DB-Owners (``GRANT <db_owner> TO tmp_admin``), damit der Reassign
+die Objekte an den Datenbank-Owner zurückgeben kann.
 """
 
 from __future__ import annotations
