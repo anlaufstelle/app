@@ -59,7 +59,15 @@ def _role_option_values(page: Page, base_url: str, username: str) -> list[str]:
 
 
 def test_superadmin_accesses_admin_via_sudo(page: Page, base_url: str) -> None:
-    """super_admin: /admin-mgmt/ -> Sudo-Form -> Re-Auth -> Admin-Index."""
+    """super_admin: /admin-mgmt/ -> Sudo-Form -> Re-Auth -> Admin-Index mit Inhalt.
+
+    Refs #1612: reine Titel-/URL-Pruefung haette den leeren app_list-Bug (fehlendes
+    has_module_permission) nicht gefangen — Django zeigt bei leerer app_list die
+    Standardmeldung, aber Titel und URL bleiben unauffaellig. Deshalb zusaetzlich
+    auf sichtbaren Index-Inhalt pruefen: Modell-Links vorhanden, keine "keine
+    Rechte"-Standardmeldung, super_admin sieht auch die SuperAdminOnly-Modelle
+    (Organization/Facility).
+    """
     _login(page, base_url, "superadmin")
 
     page.goto(f"{base_url}/admin-mgmt/")
@@ -72,10 +80,22 @@ def test_superadmin_accesses_admin_via_sudo(page: Page, base_url: str) -> None:
     page.wait_for_url(lambda url: url.rstrip("/").endswith("/admin-mgmt"), timeout=30_000)
     page.wait_for_load_state("domcontentloaded")
     assert "Anlaufstelle" in page.title()
+    # app_list nicht leer: Standard-"keine Rechte"-Meldung darf nicht erscheinen.
+    assert page.get_by_text("nicht die nötigen Rechte").count() == 0
+    # Modell-Links im Index sichtbar (belegt gefuellte app_list).
+    assert page.locator("a[href*='/admin-mgmt/core/user/']").count() > 0
+    # super_admin sieht auch SuperAdminOnly-Modelle (Refs #1021).
+    assert page.locator("a[href*='/admin-mgmt/core/organization/']").count() > 0
+    assert page.locator("a[href*='/admin-mgmt/core/facility/']").count() > 0
 
 
 def test_facility_admin_accesses_admin_via_sudo(page: Page, base_url: str) -> None:
-    """facility_admin: /admin-mgmt/ -> Sudo -> Admin-Index."""
+    """facility_admin: /admin-mgmt/ -> Sudo -> Admin-Index mit Inhalt (Refs #1612).
+
+    Prueft wie beim super_admin-Pendant den sichtbaren Index-Inhalt statt nur
+    Titel/URL, zusaetzlich: SuperAdminOnly-Modelle (Organization/Facility)
+    fehlen einem facility_admin im Index (A2.3, Refs #1021).
+    """
     _login(page, base_url, "admin")
 
     page.goto(f"{base_url}/admin-mgmt/")
@@ -85,6 +105,11 @@ def test_facility_admin_accesses_admin_via_sudo(page: Page, base_url: str) -> No
     _do_sudo(page)
     page.wait_for_url(lambda url: url.rstrip("/").endswith("/admin-mgmt"), timeout=30_000)
     page.wait_for_load_state("domcontentloaded")
+    assert page.get_by_text("nicht die nötigen Rechte").count() == 0
+    assert page.locator("a[href*='/admin-mgmt/core/user/']").count() > 0
+    # SuperAdminOnly-Modelle fehlen einem facility_admin im Index.
+    assert page.locator("a[href*='/admin-mgmt/core/organization/']").count() == 0
+    assert page.locator("a[href*='/admin-mgmt/core/facility/']").count() == 0
 
 
 def test_lead_blocked_from_admin(page: Page, base_url: str) -> None:

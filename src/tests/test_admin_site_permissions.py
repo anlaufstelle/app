@@ -106,3 +106,63 @@ class TestAdminSiteSudoGate:
         response = client.get("/admin-mgmt/", follow=False)
         assert response.status_code == 302
         assert "/admin-mgmt/login/" in response["Location"]
+
+
+@pytest.mark.django_db
+class TestAdminSiteModulePermission:
+    """Index-Seite (``/admin-mgmt/``) muss ``app_list`` befuellen (Refs #1612).
+
+    Ohne ``has_module_permission`` in den Mixins fragt Djangos Default
+    ``request.user.has_module_perms('core')`` ab — das kennt seit #1271 kein
+    App-User mehr, ``app_list`` bleibt leer und der Index zeigt Djangos
+    Standardmeldung, obwohl Rollen-Gate und Deep-Links funktionieren.
+    """
+
+    def test_super_admin_sees_non_empty_app_list(self, client, super_admin_user):
+        client.force_login(super_admin_user)
+        response = client.get("/admin-mgmt/", follow=False)
+        assert response.status_code == 200
+        assert response.context["app_list"], "app_list darf fuer super_admin nicht leer sein"
+
+    def test_facility_admin_sees_non_empty_app_list(self, client, admin_user):
+        client.force_login(admin_user)
+        response = client.get("/admin-mgmt/", follow=False)
+        assert response.status_code == 200
+        assert response.context["app_list"], "app_list darf fuer facility_admin nicht leer sein"
+
+    def test_facility_admin_does_not_see_super_admin_only_models(self, client, admin_user):
+        """Organization/Facility (SuperAdminOnlyAdminMixin) fehlen einem facility_admin."""
+        client.force_login(admin_user)
+        response = client.get("/admin-mgmt/", follow=False)
+        assert response.status_code == 200
+        model_names = {model["object_name"] for app in response.context["app_list"] for model in app["models"]}
+        assert "Organization" not in model_names
+        assert "Facility" not in model_names
+
+    def test_super_admin_sees_super_admin_only_models(self, client, super_admin_user):
+        """Gegenprobe: super_admin sieht Organization/Facility im Index."""
+        client.force_login(super_admin_user)
+        response = client.get("/admin-mgmt/", follow=False)
+        assert response.status_code == 200
+        model_names = {model["object_name"] for app in response.context["app_list"] for model in app["models"]}
+        assert "Organization" in model_names
+        assert "Facility" in model_names
+
+    def test_lead_still_blocked_from_admin_index(self, client, lead_user):
+        """Rollen-Gate unveraendert: lead/staff/assistant bleiben ausgesperrt."""
+        client.force_login(lead_user)
+        response = client.get("/admin-mgmt/", follow=False)
+        assert response.status_code == 302
+        assert "/admin-mgmt/login/" in response["Location"]
+
+    def test_staff_still_blocked_from_admin_index(self, client, staff_user):
+        client.force_login(staff_user)
+        response = client.get("/admin-mgmt/", follow=False)
+        assert response.status_code == 302
+        assert "/admin-mgmt/login/" in response["Location"]
+
+    def test_assistant_still_blocked_from_admin_index(self, client, assistant_user):
+        client.force_login(assistant_user)
+        response = client.get("/admin-mgmt/", follow=False)
+        assert response.status_code == 302
+        assert "/admin-mgmt/login/" in response["Location"]

@@ -28,6 +28,9 @@ class RoleBasedPermissionMixin:
     gegen diesen Mixin.
     """
 
+    def has_module_permission(self, request):
+        return self.admin_site.has_role_permission(request)
+
     def has_view_permission(self, request, obj=None):
         return self.admin_site.has_role_permission(request)
 
@@ -49,6 +52,9 @@ class SuperAdminOnlyAdminMixin:
     ``self.admin_site.has_super_admin_permission`` (Single Source of Truth) —
     analog ``RoleBasedPermissionMixin``.
     """
+
+    def has_module_permission(self, request):
+        return self.admin_site.has_super_admin_permission(request)
 
     def has_view_permission(self, request, obj=None):
         return self.admin_site.has_super_admin_permission(request)

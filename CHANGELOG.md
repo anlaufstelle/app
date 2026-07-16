@@ -9,6 +9,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Security
 
 - **Aufgaben- und Klienten-Updates schreiben wieder eine AuditLog-Zeile** (#1613) — über die Bearbeiten-Maske geänderte Aufgaben und Personen erschienen zwar im Zeitstrahl, aber nicht mehr im revisionssicheren Audit-Log (Threat-Model TB6): das `ModelForm(instance=…)` mutiert die Instanz bereits vor dem Service-Diff, sodass der Vergleich „neu gegen neu" nie eine Änderung erkannte und `WORKITEM_UPDATE`/`CLIENT_UPDATE` nie geschrieben wurde; der Diff läuft jetzt gegen den unveränderten Datenbank-Stand (neuer Helper `changed_fields_vs_db`, FK-Vergleich über `attname`). Bereits erfolgte Updates aus der Zeit vor dem Fix sind nachträglich nicht rekonstruierbar (keine Feldnamen im Zeitstrahl) und werden nicht nachgetragen.
+### Fixed
+
+- **`/admin-mgmt/`-Index war für alle Rollen leer trotz funktionierender Deep-Links** (#1612) — die Rollen-Mixins in `core/admin/mixins.py` überschrieben `has_view/add/change/delete_permission`, aber nicht `has_module_permission`: Djangos Default fragte dafür `request.user.has_module_perms('core')` ab, das seit der Entfernung von `is_superuser` bei App-Usern (#1271) immer `False` lieferte. Die Administrationsseite zeigte dadurch für `facility_admin` und `super_admin` nur Djangos Standardmeldung „Das Benutzerkonto besitzt nicht die nötigen Rechte …“, obwohl das Rollen-Gate griff und Deep-Links (z. B. `/admin-mgmt/core/user/`) weiterhin funktionierten. `has_module_permission` delegiert jetzt wie die übrigen Permissions an die zentrale Rollen-/Sudo-Logik in `AnlaufstelleAdminSite`.
 
 ## [0.22.0] - 2026-07-15
 
