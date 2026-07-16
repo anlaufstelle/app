@@ -17,6 +17,7 @@ ist bewusst ohne RLS modelliert (Aggregat-Lese, keine Pseudonyme) —
 out of scope fuer diesen Test.
 """
 
+import os
 from contextlib import contextmanager
 
 import pytest
@@ -26,6 +27,28 @@ from django.utils import timezone
 
 from core.models import Activity, AuditLog, Client, DocumentType, Event
 from tests.conftest import xdist_role_suffix
+
+# Unter mutmut überspringen (Refs #1388/#930). Die ``rls_test_role``-Fixture ist
+# session-scoped und räumt im Teardown per ``django_db_blocker.unblock()`` +
+# Roh-SQL auf. mutmut ruft ``pytest.main()`` über mehrere Phasen auf (in-process:
+# stats; Subprozess: clean/forced-fail/pro-Mutant) — pytest-djangos
+# DatabaseBlocker leakt dabei zwischen den Sessions (bekanntes Problem, siehe
+# ``scripts/dev/run_mutmut.py``). Beim Session-Teardown ist der Blocker dann
+# korrumpiert, ``unblock()`` greift nicht mehr und der Roh-SQL-Zugriff wirft
+# ``RuntimeError: Database access not allowed`` → mutmut bricht die Phase ab
+# (``-x``) und der Voll-Lauf zählt null Mutanten. Der Test prüft RLS-Policies auf
+# DB-Ebene und killt keine ``core.services``/``core.forms``-Mutanten; sein
+# Ausschluss aus dem Mutanten-Testpool kostet keine Mutation-Coverage.
+#
+# PRÄSENZ-Check, nicht Truthy-Check: mutmut setzt ``MUTANT_UNDER_TEST`` in JEDER
+# Phase — aber in der Clean-Phase auf den LEEREN String (``""``, falsy). Ein
+# ``os.environ.get(...)``-Truthy-Test würde dort nicht greifen und der Teardown
+# liefe im Clean-Subprozess erneut auf. ``make ci`` setzt die Variable nie.
+if "MUTANT_UNDER_TEST" in os.environ:
+    pytest.skip(
+        "RLS-Funktionaltest inkompatibel mit mutmut-Lauf (DatabaseBlocker-Leak im Session-Teardown, Refs #1388)",
+        allow_module_level=True,
+    )
 
 
 @pytest.fixture(scope="session")
