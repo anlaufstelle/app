@@ -39,6 +39,11 @@ from core.models import Case, Client, User
 
 SEED_PASSWORD = "anlaufstelle2026"  # noqa: S105 — seed-only credential (dev/e2e)
 
+# Seed-Usernamen, deren `preferred_language` je Sprachdurchlauf umgestellt wird.
+# Refs #1595: "admin" ergaenzt, weil der dsgvo-paket-Shot als FacilityAdmin
+# laeuft und sonst auch im EN-Durchlauf deutsch rendert.
+LANG_SWITCH_USERNAMES = ("emma", "superadmin", "admin")
+
 DESKTOP = {"width": 1280, "height": 800}
 MOBILE = {"width": 375, "height": 812}
 
@@ -74,7 +79,9 @@ SHOTS: list[Shot] = [
     Shot("fallakte", "core:case_detail", pk_kind="case", full_page=True),
     Shot("uebergabe", "/?view=uebergabe"),
     Shot("statistik-extern", "core:statistics_external_report"),
-    Shot("dsgvo-paket", "core:dsgvo_package"),
+    # Refs #1595: FacilityAdminRequiredMixin verlangt mehr als die Default-Rolle
+    # "emma" (LEAD) — sonst 403 statt der DSGVO-Paket-Uebersicht.
+    Shot("dsgvo-paket", "core:dsgvo_package", role="admin"),
     # NOTE: /system/-Screens (compliance, systembereich) brauchen Sudo-Mode und
     # sind hier (noch) ausgeklammert — Follow-up.
 ]
@@ -113,7 +120,7 @@ class Command(BaseCommand):
             browser = pw.chromium.launch()
             for lang in ("de", "en"):
                 # Drive the UI language through the seeded users' preference.
-                User.objects.filter(username__in=["emma", "superadmin"]).update(preferred_language=lang)
+                User.objects.filter(username__in=LANG_SWITCH_USERNAMES).update(preferred_language=lang)
                 for viewport, is_mobile in ((DESKTOP, False), (MOBILE, True)):
                     locale = "de-DE" if lang == "de" else "en-US"
                     context = browser.new_context(viewport=viewport, locale=locale, ignore_https_errors=True)
