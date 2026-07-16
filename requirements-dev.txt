@@ -642,6 +642,10 @@ django-stubs-ext==6.0.3 \
     --hash=sha256:3307d42132bc295d5744de6276bc5fdf6896efc70f891e21c0ae8bdf529d2762 \
     --hash=sha256:9e4105955419ae310d7da9cfd808e039d4dae3092c628f021057bb4f2c237f8f
     # via django-stubs
+django-test-migrations==1.5.0 \
+    --hash=sha256:1cbff04b1e82c5564a6f635284907b381cc11a2ff883adff46776d9126824f07 \
+    --hash=sha256:96a08f085fc8bfaa53d44618341d82a2d22fd194c821cd81b147b66f0bec0da8
+    # via -r requirements-dev.in
 django-unfold==0.100.0 \
     --hash=sha256:4bfc6d148a9dfc9cbed7501db81cc8040510fa0b2bfe664067ceebcedd861ee6 \
     --hash=sha256:b153cac2fd5c36338767ec7bed72c1560b5f5d88a3429dc5484560c705c335bb
@@ -1542,6 +1546,7 @@ typing-extensions==4.15.0 \
     # via
     #   django-stubs
     #   django-stubs-ext
+    #   django-test-migrations
     #   mypy
     #   pyee
     #   textual
