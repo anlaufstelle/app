@@ -90,7 +90,7 @@ Anhang I gliedert sich in **Teil I** (Sicherheitseigenschaften des Produkts) und
 
 **Meldeweg:** über die **zentrale Meldeplattform der ENISA** (Single Reporting Platform, Art. 16) an das als Koordinator benannte **CSIRT** (in Deutschland voraussichtlich das BSI/CERT-Bund) und an ENISA. Der genaue Plattform-Zugang und die nationale CSIRT-Benennung sind anhand der finalen Durchführungsrechtsakte/Leitlinien zu bestätigen.
 
-**Verantwortlicher:** der Maintainer (derzeit Solo-Maintainer, vgl. [SECURITY.md §SLA](../../SECURITY.md)), Kontakt [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app). **Vor dem 11.09.2026 ist eine Vertretung zu benennen**, damit die 24-h-Frist auch bei Ausfall der Hauptperson eingehalten werden kann. Die operative Einbettung (Eskalation, Logging des Meldevorgangs) gehört ins [ops-runbook.md](../ops-runbook.md).
+**Verantwortlicher:** der Maintainer (derzeit Solo-Maintainer, vgl. [SECURITY.md §SLA](../../SECURITY.md) sowie [MAINTAINERS.md](../../MAINTAINERS.md) und [GOVERNANCE.md](../../GOVERNANCE.md)), Kontakt [kontakt@anlaufstelle.app](mailto:kontakt@anlaufstelle.app). **Vor dem 11.09.2026 ist eine Vertretung zu benennen**, damit die 24-h-Frist auch bei Ausfall der Hauptperson eingehalten werden kann; der dafür offene organisatorische Punkt (inkl. Signing-Key-/Secret-Escrow-Trennung) ist in [MAINTAINERS.md § Vertretung](../../MAINTAINERS.md#vertretung-tbd--vor-2026-09-11-vom-maintainer-zu-benennen) ausgewiesen. Die operative Einbettung (Eskalation, Logging des Meldevorgangs) gehört ins [ops-runbook.md](../ops-runbook.md).
 
 ---
 
@@ -98,7 +98,7 @@ Anhang I gliedert sich in **Teil I** (Sicherheitseigenschaften des Produkts) und
 
 | Termin / Anlass | Aktion |
 |---|---|
-| **11.09.2026** — Meldepflichten (Art. 14) anwendbar | Meldeprozess (§3) operativ scharf schalten; Verantwortlichen **und Vertretung** final benennen; CSIRT-Kontakt/Plattform-Zugang klären |
+| **11.09.2026** — Meldepflichten (Art. 14) anwendbar | Meldeprozess (§3) operativ scharf schalten; Verantwortlichen **und Vertretung** final benennen (in [MAINTAINERS.md](../../MAINTAINERS.md) eintragen, Signing-Key-/Secret-Escrow-Trennung klären); CSIRT-Kontakt/Plattform-Zugang klären |
 | **11.12.2027** — Hauptpflichten (Anhang I) anwendbar | Scope erneut prüfen; bei Scope-Bejahung Konformitätsbewertung, CE, definierter Support-Zeitraum und SBOM-/Advisory-Lücken (§2) schließen |
 | **Betriebsmodell-Änderung** (jederzeit) | Neubewertung bei kostenpflichtigem **Hosting-/SaaS-Angebot**, Produktverkauf oder Kommerzialisierung der Demo-Instanz (#971) — dann volle Hersteller-Pflichten ab 11.12.2027 denkbar |
 | **Kommissions-/ENISA-Guidance final** | FOSS-Leitlinien/FAQ in §1 einarbeiten; ggf. Einschätzung extern validieren (-/NGI-Kontext, Fachanwalt bei Bedarf) |

@@ -1,0 +1,31 @@
+# Code Owners für Anlaufstelle
+#
+# Diese Datei ordnet Pfade automatisch angeforderten Reviewern zu (GitHub-Mechanik).
+# Kontext, Bus-Faktor und offene Vertretungsfrage: ../MAINTAINERS.md
+# Entscheidungs-/Review-Modell: ../GOVERNANCE.md
+#
+# HINWEIS — Self-Review ist die dokumentierte Realität: Bei aktuell nur einer
+# aktiven Person ist der Owner überall @tobiasnix. GitHub kann daher kein
+# unabhängiges zweites Augenpaar erzwingen; der Maintainer prüft und merged eigene
+# Änderungen. Kompensiert wird das durch automatisierte CI-/Test-/Security-Gates
+# (siehe GOVERNANCE.md § Review & Self-Review), nicht durch einen zweiten Reviewer.
+# Sobald eine zweite Person Maintainer wird, werden die granularen Zeilen unten auf
+# echte Vier-Augen-Reviews (v. a. für sicherheitskritische Pfade) umgestellt.
+
+# Standard-Owner für das gesamte Repository
+*                       @tobiasnix
+
+# Anwendungscode
+/src/                   @tobiasnix
+
+# Dokumentation
+/docs/                  @tobiasnix
+
+# CI/CD, Automatisierung, Repo-Metadaten
+/.github/               @tobiasnix
+
+# Governance-/Sicherheits-Kernartefakte (bewusst explizit gelistet)
+/MAINTAINERS.md         @tobiasnix
+/GOVERNANCE.md          @tobiasnix
+/SECURITY.md            @tobiasnix
+/CONTRIBUTING.md        @tobiasnix

@@ -624,7 +624,7 @@ Anlaufstelle muss Datenschutzverletzungen innerhalb **72 Stunden** an die Aufsic
 #### Manueller Prozess bei SECURITY_VIOLATION
 
 1. **T+0** — `AuditLog`-Detail pruefen, betroffene User/Daten identifizieren.
-2. **T+24h** — Vorgang an [DPO/Datenschutzbeauftragten](https://github.com/anlaufstelle/app/blob/main/SECURITY.md) eskalieren, Risiko-Einschaetzung erstellen.
+2. **T+24h** — Vorgang an [DPO/Datenschutzbeauftragten](https://github.com/anlaufstelle/app/blob/main/SECURITY.md) eskalieren, Risiko-Einschaetzung erstellen. Faellt die verantwortliche Hauptperson aus, uebernimmt die benannte **Vertretung** die Eskalation und Meldung ([MAINTAINERS.md](../MAINTAINERS.md), [GOVERNANCE.md § Eskalationspfad](../GOVERNANCE.md)) — dieselbe Vertretung, die die CRA-24-h-Fruehwarnfrist absichert; solange sie nicht benannt ist, bleibt dies ein offener Bus-Faktor-1-Posten.
 3. **T+72h** — Meldung an Aufsichtsbehoerde (Bayern: BayLDA; andere Bundeslaender analog) + ggf. Betroffenenmeldung.
 4. **Post-Incident** — Lessons-Learned + Anpassung der Heuristik-Schwellen.
 

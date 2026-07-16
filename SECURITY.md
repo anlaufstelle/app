@@ -38,7 +38,7 @@ Bei Bedarf unterstützen wir bei einer koordinierten Offenlegung (Coordinated Di
 
 ## Bearbeitungs-SLA (Best Effort, Pre-Release)
 
-Anlaufstelle wird derzeit von einem Solo-Maintainer gepflegt. Die folgenden Zeiten sind **Richtwerte als Best-Effort-Ziel**, keine vertraglich zugesicherten Reaktionszeiten — sobald `1.0` erreicht ist und ein Maintainer-Team etabliert ist, werden sie verbindlicher gefasst:
+Anlaufstelle wird derzeit von einem Solo-Maintainer gepflegt (Verantwortliche, Bus-Faktor und die noch offene Vertretungsfrage: [MAINTAINERS.md](MAINTAINERS.md); Entscheidungs-/Eskalationsmodell: [GOVERNANCE.md](GOVERNANCE.md)). Die folgenden Zeiten sind **Richtwerte als Best-Effort-Ziel**, keine vertraglich zugesicherten Reaktionszeiten — sobald `1.0` erreicht ist und ein Maintainer-Team etabliert ist, werden sie verbindlicher gefasst:
 
 | Schritt | Zielwert |
 |-------------------------------|--------------------------------|
@@ -105,7 +105,7 @@ We support coordinated disclosure on request.
 
 ## Response SLA (best effort, pre-release)
 
-Anlaufstelle is currently maintained by a single person. The targets below are **best-effort goals**, not contractually guaranteed response times — they will be tightened once `1.0` ships and a maintainer team is in place:
+Anlaufstelle is currently maintained by a single person (maintainers, bus factor and the still-open deputy question: [MAINTAINERS.md](MAINTAINERS.md); decision/escalation model: [GOVERNANCE.md](GOVERNANCE.md)). The targets below are **best-effort goals**, not contractually guaranteed response times — they will be tightened once `1.0` ships and a maintainer team is in place:
 
 | Step | Target |
 |-------------------------------|-------------------------------------------|

@@ -167,6 +167,8 @@ Das fachliche Fundament basiert auf einer Diplomarbeit zur Dokumentation in der 
 
 Beiträge sind willkommen. Bitte lies zuerst die [Contributing-Richtlinien](CONTRIBUTING.md), bevor du einen Pull Request öffnest.
 
+Wie Entscheidungen getroffen werden und wer das Projekt verantwortet, steht in [GOVERNANCE.md](GOVERNANCE.md) und [MAINTAINERS.md](MAINTAINERS.md).
+
 Fehler melden und Ideen einbringen: [GitHub Issues](https://github.com/anlaufstelle/app/issues)
 
 ---
