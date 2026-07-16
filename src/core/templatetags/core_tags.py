@@ -141,6 +141,7 @@ _STATUS_COLOR_MAP = {
     "discarded": "gray",
     "neutral": "gray",
     "draft": "gray",
+    "deferred": "gray",
     "pending": "amber",
     "warning": "amber",
     "important": "amber",
@@ -150,6 +151,11 @@ _STATUS_COLOR_MAP = {
     "urgent": "red",
     "rejected": "red",
     "info": "blue",
+    # Retention: RetentionProposal.Status.HELD ("Legal Hold") / APPROVED
+    # ("Freigegeben"). Routet die Löschvorschlag-Badges über die zentrale Karte
+    # statt hartkodierter Labels/Shades (Refs #1478, COD-03).
+    "held": "blue",
+    "approved": "green",
     "qualified": "purple",
 }
 
