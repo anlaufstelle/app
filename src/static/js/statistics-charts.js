@@ -62,6 +62,10 @@ function buildStatisticsCharts() {
         this.renderContactsChart(data);
         this.renderDocTypeChart(data);
         this.renderAgeClusterChart(data);
+        // Refs #1594: plain data-attribute marker (kein Alpine-x-Binding auf
+        // <body>, kollisionsfrei) — Doku-Screenshot-Command wartet darauf,
+        // damit die Charts nicht leer/halb gezeichnet im Screenshot landen.
+        document.body.setAttribute("data-charts-ready", "true");
       } catch (e) {
         this.error = e.message;
       } finally {

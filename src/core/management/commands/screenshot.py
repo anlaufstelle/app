@@ -60,6 +60,10 @@ class Shot:
     full_page: bool = False
     wait: str = "#main-content"  # selector to await before shooting
     pk_kind: str | None = None  # "client" | "case" → fill route kwargs from the DB
+    # Refs #1594: optional page.wait_for_function() expression — for pages that
+    # render async (e.g. Chart.js) where the `wait` selector is present in the
+    # DOM before the content inside it is actually drawn. Best-effort like `wait`.
+    wait_js: str | None = None
 
 
 # Highlights (README) + full gallery (docs/screenshots.md). Only shipped
@@ -70,7 +74,13 @@ SHOTS: list[Shot] = [
     # Schicht — sonst zeigt ein Nacht-Lauf einen leeren Nachtdienst-Feed.
     Shot("zeitstrom", "/?time_filter=all", mobile=True),
     Shot("personenliste", "core:client_list"),
-    Shot("statistiken", "core:statistics"),
+    # Refs #1594: die Charts werden clientseitig async gezeichnet — der
+    # #main-content-Selektor ist sofort da, die Canvases aber noch leer.
+    Shot(
+        "statistiken",
+        "core:statistics",
+        wait_js="document.body.getAttribute('data-charts-ready')==='true'",
+    ),
     Shot("personendetail", "core:client_detail", pk_kind="client", full_page=True),
     Shot("arbeitszentrale", "core:dashboard", mobile=True),
     # --- Gallery ---
@@ -203,6 +213,12 @@ class Command(BaseCommand):
                 page.wait_for_load_state("domcontentloaded")
                 with contextlib.suppress(Exception):
                     page.wait_for_selector(shot.wait, timeout=8000)
+                if shot.wait_js:
+                    # Best-effort like the selector wait above: a slow/failed
+                    # async render still produces a (possibly incomplete) shot
+                    # instead of aborting the whole run.
+                    with contextlib.suppress(Exception):
+                        page.wait_for_function(shot.wait_js, timeout=8000)
                 png = page.screenshot(full_page=shot.full_page)
                 path = out_dir / self._filename(shot.name, lang, is_mobile)
                 Image.open(io.BytesIO(png)).convert("RGB").save(path, "WEBP", quality=quality, method=6)
