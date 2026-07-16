@@ -14,7 +14,7 @@ import pytest
 from django.db import DatabaseError, connection, transaction
 from django.utils import timezone
 
-from core.models import AuditLog
+from core.models import AuditLog, Settings
 from core.services.retention import prune_auditlog
 
 
@@ -107,6 +107,31 @@ class TestPruneAuditlog:
         assert not AuditLog.objects.filter(pk=generic.pk).exists()
         assert AuditLog.objects.filter(pk=viol.pk).exists(), "SECURITY_VIOLATION muss erhalten bleiben."
         assert AuditLog.objects.filter(pk=marker.pk).exists(), "RETENTION_RUN_COMPLETED muss erhalten bleiben."
+
+    def test_prune_is_scoped_to_target_facility(self, facility, second_facility, settings_obj):
+        """A1.4-Umfeld / T12: ``prune_auditlog`` laeuft unter der BYPASSRLS-
+        Wartungs-/Owner-Rolle — RLS greift dort NICHT (Refs #1026). Die
+        Facility-Isolation haengt damit allein am Python-Filter
+        ``filter(facility=...)``. Regression: das Pruning einer Facility darf die
+        AuditLogs einer ANDEREN Facility niemals loeschen.
+        """
+        settings_obj.auditlog_retention_months = 24
+        settings_obj.save()
+        # Zweite Facility mit gleicher, ebenfalls abgelaufener Frist — waere ohne
+        # korrektes Scoping ein Loeschkandidat.
+        Settings.objects.create(facility=second_facility, auditlog_retention_months=24)
+        now = timezone.now()
+        old_a = self._create_log_with_timestamp(facility, now - timedelta(days=24 * 31))
+        old_b = self._create_log_with_timestamp(second_facility, now - timedelta(days=24 * 31))
+
+        result = prune_auditlog(facility, settings_obj, now=now, dry_run=False)
+
+        assert result["count"] == 1, "Nur der Eintrag der Ziel-Facility darf gepruned werden."
+        assert not AuditLog.objects.filter(pk=old_a.pk).exists()
+        assert AuditLog.objects.filter(pk=old_b.pk).exists(), (
+            "Fremd-Facility-AuditLog wurde faelschlich gepruned — Facility-Scoping-Regression. "
+            "Die BYPASSRLS-Wartungsrolle umgeht RLS; nur der Python-Filter schuetzt."
+        )
 
     def test_prune_dry_run_does_not_delete(self, facility, settings_obj):
         settings_obj.auditlog_retention_months = 24
