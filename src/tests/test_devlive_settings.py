@@ -24,7 +24,9 @@ _VALID_ENV = {
     "DJANGO_AUDIT_HASH_KEY": "y" * 50,
     "POSTGRES_DB": "x",
     "POSTGRES_USER": "u",
-    "POSTGRES_PASSWORD": "p",
+    # 32+ Zeichen, kein change-me-Prefix — der N6-Guard (POSTGRES_PASSWORD)
+    # aus prod.py greift auch beim devlive-Import (Refs #1591).
+    "POSTGRES_PASSWORD": "p" * 40,
     "POSTGRES_HOST": "localhost",
     "POSTGRES_PORT": "5432",
 }

@@ -169,7 +169,11 @@ DATABASES = {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": os.environ.get("POSTGRES_DB", "anlaufstelle"),
         "USER": os.environ.get("POSTGRES_USER", "anlaufstelle"),
-        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "anlaufstelle"),
+        # Kein Default (Refs #1591): das schwache Literal "anlaufstelle" ist
+        # entfernt, damit ein prod-Deploy ohne gesetztes POSTGRES_PASSWORD nicht
+        # still auf ein bekanntes Passwort faellt. dev.py setzt fuer die lokale
+        # Entwicklung ohne .env-Wert einen eigenen Fallback.
+        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", ""),
         "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
         "PORT": os.environ.get("POSTGRES_PORT", "5432"),
     }

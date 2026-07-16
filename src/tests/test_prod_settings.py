@@ -39,7 +39,9 @@ def _run_prod_import(env_overrides, code="import anlaufstelle.settings.prod  # n
         "DATABASE_URL": "postgres://u:p@localhost:5432/x",
         "POSTGRES_DB": "x",
         "POSTGRES_USER": "u",
-        "POSTGRES_PASSWORD": "p",
+        # 32+ Zeichen, kein change-me-Prefix — der N6-Guard (POSTGRES_PASSWORD)
+        # laesst diesen Wert passieren, sodass "should boot"-Tests gruen bleiben.
+        "POSTGRES_PASSWORD": "p" * 40,
         "POSTGRES_HOST": "localhost",
         "POSTGRES_PORT": "5432",
         # Pre-empt dotenv pass-through of local secrets.
@@ -48,6 +50,13 @@ def _run_prod_import(env_overrides, code="import anlaufstelle.settings.prod  # n
         "ENCRYPTION_KEY": "",
         "ENCRYPTION_KEYS": "",
         "DJANGO_AUDIT_HASH_KEY": "",
+        # Der N6-Guard liest die DB-Admin-/Bootstrap-Passwoerter direkt aus
+        # os.environ (keine Django-Settings). Ohne Vorbelegung koennte eine
+        # lokale .env (z.B. POSTGRES_ADMIN_PASSWORD=change-me-admin) per
+        # load_dotenv(override=False) durchgreifen und "should boot"-Tests
+        # faelschlich rot faerben — daher hier ebenfalls auf leer vorbelegen.
+        "POSTGRES_ADMIN_PASSWORD": "",
+        "POSTGRES_BOOTSTRAP_PASSWORD": "",
     }
     env.update(env_overrides)
     result = subprocess.run(
@@ -272,6 +281,29 @@ class TestProdPlaceholderSecretsGuard:
         result = _run_prod_import({**self._VALID_ENV, "DJANGO_AUDIT_HASH_KEY": "change-me-to-a-separate-random-string"})
         assert result.returncode != 0
         assert "AUDIT_HASH_KEY" in result.stderr
+
+    def test_change_me_postgres_password_rejected(self):
+        """`.env.example` liefert `POSTGRES_PASSWORD=change-me` (Refs #1591) —
+        der N6-Guard muss den Platzhalter genauso ablehnen wie bei SECRET_KEY."""
+        result = _run_prod_import({**self._VALID_ENV, "POSTGRES_PASSWORD": "change-me"})
+        assert result.returncode != 0
+        assert "POSTGRES_PASSWORD" in result.stderr
+
+    def test_change_me_postgres_admin_password_rejected(self):
+        result = _run_prod_import({**self._VALID_ENV, "POSTGRES_ADMIN_PASSWORD": "change-me-admin"})
+        assert result.returncode != 0
+        assert "POSTGRES_ADMIN_PASSWORD" in result.stderr
+
+    def test_change_me_postgres_bootstrap_password_rejected(self):
+        result = _run_prod_import({**self._VALID_ENV, "POSTGRES_BOOTSTRAP_PASSWORD": "change-me-bootstrap"})
+        assert result.returncode != 0
+        assert "POSTGRES_BOOTSTRAP_PASSWORD" in result.stderr
+
+    def test_short_postgres_password_rejected(self):
+        """Zu wenig Entropie (< 32 Zeichen) wird wie bei den anderen Secrets abgelehnt."""
+        result = _run_prod_import({**self._VALID_ENV, "POSTGRES_PASSWORD": "x" * 16})
+        assert result.returncode != 0
+        assert "POSTGRES_PASSWORD" in result.stderr
 
     def test_valid_env_still_boots(self):
         result = _run_prod_import(self._VALID_ENV)

@@ -209,9 +209,21 @@ if "collectstatic" not in sys.argv and not AUDIT_HASH_KEY:  # noqa: F405
 # Nur-leer-Guards oben liessen die durch. Ein oeffentlich bekannter
 # SECRET_KEY macht Reset-/Invite-Token faelschbar, ein bekannter
 # AUDIT_HASH_KEY die Audit-Pseudonyme brute-forcebar. Fail-closed.
+# Refs #1591: Auch die DB-Passwoerter (``POSTGRES_PASSWORD``,
+# ``POSTGRES_ADMIN_PASSWORD``, ``POSTGRES_BOOTSTRAP_PASSWORD``) werden geprueft —
+# .env.example liefert sie als ``change-me`` / ``change-me-admin`` /
+# ``change-me-bootstrap`` aus. ADMIN/BOOTSTRAP sind keine Django-Settings
+# (nur von ``deploy/postgres-init`` + compose gelesen), daher direkt aus
+# ``os.environ``; identische change-me-/Mindestlaengen-Logik.
 _SECRET_MIN_LENGTH = 32
 if "collectstatic" not in sys.argv:
-    for _name, _value in (("DJANGO_SECRET_KEY", SECRET_KEY), ("DJANGO_AUDIT_HASH_KEY", AUDIT_HASH_KEY)):  # noqa: F405
+    for _name, _value in (
+        ("DJANGO_SECRET_KEY", SECRET_KEY),  # noqa: F405
+        ("DJANGO_AUDIT_HASH_KEY", AUDIT_HASH_KEY),  # noqa: F405
+        ("POSTGRES_PASSWORD", os.environ.get("POSTGRES_PASSWORD", "")),
+        ("POSTGRES_ADMIN_PASSWORD", os.environ.get("POSTGRES_ADMIN_PASSWORD", "")),
+        ("POSTGRES_BOOTSTRAP_PASSWORD", os.environ.get("POSTGRES_BOOTSTRAP_PASSWORD", "")),
+    ):
         if _value.startswith("change-me"):
             raise ImproperlyConfigured(
                 f"{_name} ist noch der Platzhalter aus .env.example — bitte echten "

@@ -11,6 +11,14 @@ from .base import *  # noqa: F401, F403
 if not SECRET_KEY:  # noqa: F405
     SECRET_KEY = "django-insecure-dev-only-change-in-production"  # noqa: S105
 
+# Dev/Test-Default für POSTGRES_PASSWORD — NUR in dev/test (kaskadiert nach
+# test.py/e2e.py). base.py hat seinen schwachen Default "anlaufstelle" entfernt
+# (Refs #1591), damit prod ohne gesetztes Passwort nicht still darauf zurueckfaellt.
+# Lokal (Docker-Container mit POSTGRES_PASSWORD=anlaufstelle) braucht die
+# DB-Verbindung ohne .env-Wert aber weiterhin diesen Fallback.
+if not DATABASES["default"]["PASSWORD"]:  # noqa: F405
+    DATABASES["default"]["PASSWORD"] = "anlaufstelle"  # noqa: F405, S105
+
 # E-Mails in der Konsole ausgeben (kein SMTP nötig)
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
