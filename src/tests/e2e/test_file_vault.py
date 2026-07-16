@@ -3,6 +3,7 @@
 import os
 
 import pytest
+from playwright.sync_api import expect
 
 pytestmark = pytest.mark.e2e
 
@@ -414,7 +415,10 @@ class TestStaffAttachmentReachable:
         page.wait_for_url(lambda url: "/events/" in url and "/new/" not in url, timeout=10000)
 
         # Datei erscheint auf der Detailseite und ist byte-genau herunterladbar.
-        assert page.locator("text=e2e-test.pdf").count() >= 1
+        # Wartendes ``expect`` statt ``.count()`` (Refs #1606): Unter Last (``-n 2``)
+        # ist der Anhang beim Assert noch nicht gerendert; ``.count()`` wartet nicht
+        # und liefert dann ``0`` (``AssertionError: assert 0 >= 1``), ``expect`` pollt.
+        expect(page.locator("text=e2e-test.pdf").first).to_be_visible()
         with page.expect_download() as download_info:
             page.locator("a:has-text('e2e-test.pdf')").click()
         download = download_info.value
