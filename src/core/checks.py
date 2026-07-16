@@ -14,6 +14,9 @@ ungültige (negative) Werte ab.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 from django.conf import settings
 from django.core.checks import Error, Warning, register
 
@@ -54,6 +57,58 @@ def check_trusted_proxy_hops(app_configs, **kwargs):
                     "Stelle sicher, dass jeder gezählte Hop ein bekannter, vertrauenswürdiger Proxy ist."
                 ),
                 id="core.W001",
+            )
+        )
+
+    return messages
+
+
+@register()
+def check_media_root_persistent(app_configs, **kwargs):
+    """Validiert, dass ``MEDIA_ROOT`` in Produktion nicht unter ``BASE_DIR`` liegt (Refs #1453).
+
+    Mit #1374 laufen die ``web``-Container ``read_only``. Ein prod-Deploy ohne
+    gesetztes ``MEDIA_ROOT`` fällt in ``prod.py`` still auf ``BASE_DIR/media``
+    (= ``/app/media``) zurück — das liegt auf dem schreibgeschützten Root-FS und
+    ist zudem über ``docker compose pull`` nie persistent (vgl. #720). Der
+    Container startet trotzdem healthy; erst der erste Datei-Upload bricht mit
+    ``OSError: Read-only file system`` (HTTP 500). Dieser Deploy-Check fängt die
+    Fehlkonfiguration laut beim Start statt leise beim ersten Upload.
+
+    Nur unter ``DEBUG=False`` aktiv — dev/tests nutzen bewusst ``BASE_DIR/media``.
+    Während ``collectstatic`` wird nicht abgebrochen (analog zu den prod.py-Guards).
+    """
+    messages = []
+    if settings.DEBUG or "collectstatic" in sys.argv:
+        return messages
+
+    base_dir = Path(settings.BASE_DIR)
+    media_root = Path(settings.MEDIA_ROOT)
+    # Relativpfade löst Django relativ zum CWD (= BASE_DIR im Container) auf —
+    # sie liegen damit ebenfalls unter BASE_DIR.
+    if not media_root.is_absolute():
+        media_root = base_dir / media_root
+
+    try:
+        under_base = media_root.resolve().is_relative_to(base_dir.resolve())
+    except (ValueError, OSError):
+        # is_relative_to wirft auf inkompatiblen Pfaden (z. B. verschiedene
+        # Windows-Laufwerke) ValueError → dann liegt MEDIA_ROOT nicht unter BASE_DIR.
+        under_base = False
+
+    if under_base:
+        messages.append(
+            Error(
+                f"MEDIA_ROOT ({settings.MEDIA_ROOT}) liegt unter BASE_DIR ({base_dir}) — "
+                "in Produktion nicht persistent und unter read_only nicht beschreibbar.",
+                hint=(
+                    "Setze MEDIA_ROOT auf ein persistentes, beschreibbares Volume außerhalb "
+                    "des Anwendungs-Verzeichnisses (z. B. MEDIA_ROOT=/data/media, wie in "
+                    ".env.example). Ein Pfad unter BASE_DIR (/app) liegt auf dem read_only-"
+                    "Root-FS der web-Container (#1374) und überlebt kein 'docker compose pull' "
+                    "(#720) — Datei-Uploads scheitern sonst erst zur Laufzeit mit HTTP 500."
+                ),
+                id="core.E002",
             )
         )
 
