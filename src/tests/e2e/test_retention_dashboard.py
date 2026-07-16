@@ -171,7 +171,7 @@ class TestRetentionHoldFlow:
     """Legal Hold setzen und aufheben via HTMX."""
 
     def test_set_hold_on_proposal(self, authenticated_page, base_url, e2e_env):
-        """Hold setzen — Badge wechselt zu 'Aufgeschoben'."""
+        """Hold setzen — Badge wechselt zu 'Legal Hold' (Refs #1478 COD-03)."""
         _ensure_proposals(e2e_env)
         page = authenticated_page
         page.goto(f"{base_url}/retention/")
@@ -190,11 +190,12 @@ class TestRetentionHoldFlow:
         # Submit hold form
         page.locator("button:has-text('Hold erstellen')").first.click()
 
-        # The card should now show "Aufgeschoben" — warten bis Badge UND
-        # der eingegebene Reason-Text gerendert sind (beides nach HTMX-Swap).
-        page.locator("span:has-text('Aufgeschoben')").first.wait_for(state="visible", timeout=5000)
+        # The card should now show "Legal Hold" (get_status_display, seit
+        # #1478/COD-03 statt des irrefuehrenden "Aufgeschoben") — warten bis
+        # Badge UND der eingegebene Reason-Text gerendert sind (nach HTMX-Swap).
+        page.locator("span:has-text('Legal Hold')").first.wait_for(state="visible", timeout=5000)
         page.locator("text=E2E-Test: Gerichtsverfahren").wait_for(state="visible", timeout=5000)
-        assert page.locator("span:has-text('Aufgeschoben')").count() >= 1
+        assert page.locator("span:has-text('Legal Hold')").count() >= 1
         assert page.locator("text=E2E-Test: Gerichtsverfahren").is_visible()
 
     def test_dismiss_hold(self, authenticated_page, base_url, e2e_env):
