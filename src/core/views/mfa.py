@@ -234,6 +234,25 @@ class MFASettingsView(LoginRequiredMixin, TemplateView):
 
     template_name = "auth/mfa_settings.html"
 
+    def dispatch(self, request, *args, **kwargs):
+        # Refs #1590: Info-Disclosure-Gate. Die MFA-Enforcement-Middleware nimmt
+        # den gesamten ``/mfa/``-Prefix aus (``EXEMPT_URLS``), damit die Setup-/
+        # Verify-Zeremonie erreichbar bleibt. Diese read-only Settings-Seite
+        # gehört aber NICHT zur Zeremonie: eine passwort-authentifizierte, aber
+        # noch nicht per zweitem Faktor verifizierte Session (bestätigtes Gerät
+        # vorhanden, ``session["mfa_verified"]`` fehlt) darf Passkey-Aliasse und
+        # Backup-Code-Zahl nicht sehen. Redirect nach ``/mfa/verify/`` VOR dem
+        # Kontextaufbau — Logik analog ``middleware/mfa.py::_required_redirect``
+        # Case 2. Ohne bestätigtes Gerät gibt es nichts zu verifizieren; der
+        # Erstsetup-Einstieg über die Settings-Seite bleibt erreichbar.
+        if (
+            request.user.is_authenticated
+            and request.user.has_confirmed_mfa_device
+            and not request.session.get("mfa_verified")
+        ):
+            return redirect("mfa_verify")
+        return super().dispatch(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         user = self.request.user
