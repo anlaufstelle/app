@@ -1,7 +1,7 @@
 {% load i18n core_tags %}
 
 {% activity_target_url activity as target_url %}
-<div class="flex bg-surface border border-subtle rounded-[10px] overflow-hidden" x-data="expandableActivityCard">
+<div class="flex bg-surface border border-subtle rounded-[10px] overflow-hidden" x-data="expandableActivityCard" x-init="applyGlobalCollapse" @zeitstrom-collapse-all.window="applyGlobalCollapse">
     {# Linke Kante in Aktivitaeten-Farbe #}
     <div class="w-[3px] bg-activity flex-shrink-0"></div>
     <div class="flex-1 px-3.5 py-2.5 min-w-0">

@@ -1,6 +1,6 @@
 {% load i18n core_tags %}
 
-<div class="flex bg-surface border border-subtle rounded-[10px] overflow-hidden" x-data="expandableCard">
+<div class="flex bg-surface border border-subtle rounded-[10px] overflow-hidden" x-data="expandableCard" x-init="applyGlobalCollapse" @zeitstrom-collapse-all.window="applyGlobalCollapse">
     {# Linke Kante in Kontakt-Farbe #}
     <div class="w-[3px] bg-event flex-shrink-0"></div>
     <div class="flex-1 px-3.5 py-3 min-w-0">

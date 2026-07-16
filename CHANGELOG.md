@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **Zeitstrom: globaler Auf-/Zuklapp-Schalter mit persistenter Voreinstellung** (#1588) — im Feed des Zeitstroms lassen sich jetzt alle Einträge über eine sichtbare, tastaturbedienbare Steuerung („Alle aufklappen"/„Alle einklappen", `aria-pressed`) gleichzeitig auf- oder zuklappen; die Wahl wird geräteweit per `localStorage` gespeichert und überdauert Reload, Navigation und erneuten Login (Default weiterhin eingeklappt). Neu bzw. per HTMX nachgeladene Cards übernehmen den aktuellen globalen Zustand, das `aria-expanded` pro Card bleibt korrekt, und der Einzel-Toggle je Card bleibt lokal möglich (nur der globale Modus wird persistiert).
+
 ### Security
 
 - **Deploy-Check bricht laut ab, wenn `MEDIA_ROOT` unter `BASE_DIR` liegt** (#1453) — seit die `web`-Container `read_only` laufen (#1374) fiel ein prod-Deploy ohne gesetztes `MEDIA_ROOT` still auf den Default `BASE_DIR/media` (= `/app/media`) zurück: der Container startete healthy, erst der erste Datei-Upload scheiterte mit `OSError: Read-only file system` (HTTP 500), und der Pfad wäre ohnehin nie über `docker compose pull` persistent gewesen (#720). Ein neuer Django-System-Check (`core.E002`) meldet die Fehlkonfiguration jetzt beim `manage.py check --deploy`/Start statt leise beim ersten Upload; dev/tests (bewusst `BASE_DIR/media`) sind über die `DEBUG=False`-Gate ausgenommen. Der kanonische Deploy mit `MEDIA_ROOT=/data/media` (`.env.example`) bleibt unverändert lauffähig.

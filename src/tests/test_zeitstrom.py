@@ -179,6 +179,23 @@ class TestZeitstromView:
         response = client.get(reverse("core:zeitstrom"))
         assert "document_types" in response.context
 
+    def test_collapse_toggle_rendered_in_feed_mode(self, client, staff_user, facility):
+        """Refs #1588: Feed-Modus zeigt die globale Auf-/Zuklapp-Steuerung."""
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom"))
+        content = response.content.decode()
+        assert 'data-testid="zeitstrom-collapse-toggle"' in content
+        assert 'x-data="zeitstromCollapseToggle"' in content
+        assert "Alle aufklappen" in content
+        assert "Alle einklappen" in content
+
+    def test_collapse_toggle_absent_in_uebergabe_mode(self, client, staff_user, facility):
+        """Refs #1588: Im Übergabe-Modus gibt es keinen Feed und keinen Toggle."""
+        client.force_login(staff_user)
+        response = client.get(reverse("core:zeitstrom") + "?view=uebergabe")
+        content = response.content.decode()
+        assert 'data-testid="zeitstrom-collapse-toggle"' not in content
+
     def test_staff_sees_cockpit_header(self, client, staff_user, facility):
         client.force_login(staff_user)
         response = client.get(reverse("core:zeitstrom"))
