@@ -64,3 +64,17 @@ RETENTION_URGENCY_YELLOW_DAYS = 30
 # die produktiven Default-Settings (vgl. ``Settings.allowed_file_types``).
 DEFAULT_ALLOWED_FILE_TYPES = frozenset({"pdf", "jpg", "jpeg", "png", "docx", "odt"})
 DEFAULT_MAX_FILE_SIZE_MB = 10
+
+# Default fuer die ``Settings.allowed_file_types``-Row einer KONFIGURIERTEN
+# Facility. Bewusst als benannte Konstante gefuehrt, damit der Model-Default
+# nicht als Magic-String driftet, sondern an genau einer Stelle steht und der
+# Drift-Guard (``src/tests/test_allowed_file_types_drift.py``, Refs #1478/COD-11)
+# ihn gegen ``DEFAULT_ALLOWED_FILE_TYPES`` prueft.
+#
+# OFFENE MAINTAINER-FRAGE (Refs #1478, COD-11): Dieser Model-Default enthaelt
+# KEIN ``odt``, der fail-closed-Fallback ``DEFAULT_ALLOWED_FILE_TYPES`` schon —
+# eine konfigurierte Facility lehnt ``.odt`` also still ab, eine unkonfigurierte
+# akzeptiert es. Ob ``odt`` in den Model-Default aufgenommen (beide angleichen)
+# oder aus dem Fallback entfernt werden soll, ist eine Produktentscheidung; der
+# Drift-Guard pinnt die aktuelle Divergenz, bis sie entschieden ist.
+DEFAULT_SETTINGS_ALLOWED_FILE_TYPES = "pdf,jpg,jpeg,png,docx"

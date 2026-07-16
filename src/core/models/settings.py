@@ -4,6 +4,7 @@ from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
+from core.constants import DEFAULT_SETTINGS_ALLOWED_FILE_TYPES
 from core.models.managers import FacilityScopedManager
 
 # Default retention periods (days). Shared so tests can assert the same values
@@ -88,7 +89,10 @@ class Settings(models.Model):
     allowed_file_types = models.CharField(
         max_length=500,
         blank=True,
-        default="pdf,jpg,jpeg,png,docx",
+        # Refs #1478 (COD-11): benannte Konstante statt Magic-String, damit der
+        # Model-Default nicht gegen DEFAULT_ALLOWED_FILE_TYPES driftet (Wert
+        # unveraendert -> keine Migration).
+        default=DEFAULT_SETTINGS_ALLOWED_FILE_TYPES,
         verbose_name=_("Erlaubte Dateitypen"),
         help_text=_("Kommagetrennte Dateiendungen (z.B. pdf,jpg,png,docx)"),
     )
