@@ -169,7 +169,8 @@ class TestClientAnonymizeCharacterization:
 
         # Snapshot: der Bypass-Block wurde genau einmal betreten und sauber
         # verlassen — der append-only-Trigger der EventHistory-Tabelle wird
-        # durch ``SET LOCAL session_replication_role = replica`` umgangen.
+        # transaktional per Owner-``ALTER TABLE ... DISABLE/ENABLE TRIGGER``
+        # umgangen (A1.4, Refs #1026).
         assert called == ["entered", "exited"]
 
 

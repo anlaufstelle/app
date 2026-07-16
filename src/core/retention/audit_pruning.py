@@ -52,15 +52,16 @@ def prune_auditlog(facility, settings_obj, now=None, dry_run=False):
     """Loescht AuditLog-Eintraege aelter als ``settings_obj.auditlog_retention_months``.
 
     AuditLog ist append-only (siehe ``AuditLog.delete()``-Override + DB-
-    Trigger ``auditlog_immutable`` in Migration 0024). Refs #781 (C-13):
-    statt ``ALTER TABLE ... DISABLE TRIGGER`` / ``ENABLE TRIGGER`` wird
-    der Trigger jetzt transaktional ueber ``bypass_replication_triggers``
-    (``SET LOCAL session_replication_role = replica``) umgangen.
+    Trigger ``auditlog_immutable`` in Migration 0024). Der Trigger wird
+    transaktional ueber ``bypass_replication_triggers`` umgangen (A1.4,
+    Refs #1026): gezieltes Owner-``ALTER TABLE ... DISABLE TRIGGER`` +
+    Re-``ENABLE ALWAYS`` in EINEM ``transaction.atomic()``.
 
-    Vorteil: ``pg_trigger.tgenabled`` bleibt durchgaengig ``'O'`` — bei
-    SIGKILL zwischen den ALTER-Statements bleibt vorher der Trigger
-    disabled, jetzt nicht mehr (``SET LOCAL`` wird beim Connection-Drop
-    automatisch verworfen).
+    SIGKILL-Sicherheit (Refs #781 C-13): DISABLE, DELETE und Re-ENABLE liegen
+    in derselben Transaktion — bricht der Prozess vor dem Commit ab, rollt
+    PostgreSQL das transaktionale DDL inkl. DISABLE zurueck, der Trigger bleibt
+    aktiv. Die Wartungs-Rolle ist Owner der Tabelle (Runtime-/Owner-Trennung),
+    die App-Runtime-Rolle kann den Trigger mangels Ownership NICHT abschalten.
 
     ``settings_obj.auditlog_retention_months == 0`` -> No-op (deaktiviert).
 

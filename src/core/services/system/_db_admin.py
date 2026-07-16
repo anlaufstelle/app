@@ -34,19 +34,51 @@ def has_rls_bypass_context() -> bool:
         return bool(cur.fetchone()[0])
 
 
+# A1.4 (Refs #1026): Die legitimen Wartungspfade umgehen GENAU diese drei
+# Append-Only-Trigger — kein pauschales ``session_replication_role = replica``
+# mehr, das auch FK-/Constraint-Trigger stillgelegt haette.
+_APPEND_ONLY_TRIGGERS = (
+    ("core_auditlog", "auditlog_immutable"),
+    ("core_eventhistory", "eventhistory_no_update"),
+    ("core_eventhistory", "eventhistory_no_delete"),
+)
+
+# ``pg_trigger.tgenabled`` -> passendes ENABLE-Statement, um den Vorzustand
+# exakt wiederherzustellen (``A`` = ENABLE ALWAYS ist der gehaertete Ruhezustand,
+# Migration 0107). Ein bereits ``D`` (disabled) markierter Trigger wird nicht
+# angefasst.
+_TGENABLED_TO_ENABLE = {
+    "O": "ENABLE",  # origin (frueherer Default)
+    "A": "ENABLE ALWAYS",  # gehaertet, Refs #1026
+    "R": "ENABLE REPLICA",
+}
+
+
 @contextmanager
 def bypass_replication_triggers():
-    """Disable session-local trigger firing for the wrapped block.
+    """Umgeht die Append-Only-Trigger fuer den umschlossenen Block per Owner-DDL.
 
-    Sets ``session_replication_role = replica`` on PostgreSQL so triggers
-    marked ``ENABLE TRIGGER`` (the default) skip firing for writes
-    inside the block. The flag is restored to ``origin`` in a ``finally``
-    so the protection re-engages even on errors.
+    A1.4 (Refs #1026): Frueher lief das ueber ``SET LOCAL
+    session_replication_role = replica``. Das setzt aber (a) voraus, dass die
+    Rolle ``GRANT SET ON PARAMETER`` hat, und (b) wirkt NICHT gegen einen
+    ``ENABLE ALWAYS``-Trigger — der feuert auch im ``replica``-Modus. Da die
+    Trigger jetzt ``ENABLE ALWAYS`` sind (Defense-in-Depth gegen den
+    ``replica``-Vektor) und die Wartungs-Rolle ohnehin **Owner** der Tabellen
+    ist (Runtime-/Owner-Trennung), umgehen wir sie gezielt per
+    ``ALTER TABLE ... DISABLE TRIGGER`` / ``ENABLE ...`` — nur fuer die drei
+    Append-Only-Trigger, nicht pauschal alle Trigger.
 
-    Used for redacting ``EventHistory`` rows during DSGVO Art. 17
-    aggregate-anonymization (see :func:`core.services.client.main.anonymize_client`)
-    where the append-only trigger from migration 0012 would otherwise
-    block the ``UPDATE``.
+    SIGKILL-Sicherheit: DISABLE, Arbeit und Re-ENABLE laufen in EINEM
+    ``transaction.atomic()``. Bricht der Prozess vor dem Commit ab, rollt
+    PostgreSQL das transaktionale DDL (inkl. DISABLE) zurueck — der Trigger
+    bleibt aktiv. Das war die urspruengliche Motivation, weg von
+    ``ALTER TABLE`` zu gehen (Refs #781); durch die Transaktionsklammer ist
+    genau dieser Fall jetzt abgedeckt. Der Vorzustand jedes Triggers wird aus
+    ``pg_trigger.tgenabled`` gelesen und exakt wiederhergestellt.
+
+    Aufrufer (alle laufen als Owner-/Admin-Wartungsrolle): ``prune_auditlog``,
+    ``Client.anonymize()`` (DSGVO Art. 17), ``backfill_audit_chain``,
+    ``reencrypt_fields``.
 
     No-op on non-PostgreSQL backends (test SQLite) — callers must
     accept that behaviour.
@@ -55,12 +87,35 @@ def bypass_replication_triggers():
         yield
         return
 
-    with connection.cursor() as cur:
-        cur.execute("SET LOCAL session_replication_role = replica")
-        try:
-            yield
-        finally:
-            cur.execute("SET LOCAL session_replication_role = origin")
+    with transaction.atomic(), connection.cursor() as cur:
+        # Django legt FK-Constraints als DEFERRABLE INITIALLY DEFERRED an. Hat
+        # die umschliessende Transaktion vorher schon in eine der Tabellen
+        # geschrieben (z.B. ``anonymize_client`` fuegt EventHistory-Zeilen ein,
+        # bevor es sie redigiert), stehen deren Constraint-Trigger-Events noch
+        # aus — dann bricht ``ALTER TABLE ... DISABLE TRIGGER`` mit
+        # ``cannot ALTER TABLE ... because it has pending trigger events`` ab.
+        # ``SET CONSTRAINTS ALL IMMEDIATE`` feuert die (gueltigen) Deferred-
+        # Checks jetzt und raeumt die Warteschlange, sodass das Owner-DDL greift.
+        cur.execute("SET CONSTRAINTS ALL IMMEDIATE")
+        restore: list[tuple[str, str, str]] = []
+        for table, trigger in _APPEND_ONLY_TRIGGERS:
+            cur.execute(
+                "SELECT tgenabled FROM pg_trigger WHERE tgname = %s AND tgrelid = %s::regclass",
+                [trigger, table],
+            )
+            row = cur.fetchone()
+            if row is None:
+                continue  # Trigger existiert (noch) nicht — nichts zu umgehen.
+            enable_kw = _TGENABLED_TO_ENABLE.get(row[0])
+            if enable_kw is None:
+                continue  # bereits DISABLE ('D') — Vorzustand belassen.
+            cur.execute(f"ALTER TABLE {table} DISABLE TRIGGER {trigger}")  # noqa: S608 — konstante Identifier
+            restore.append((table, trigger, enable_kw))
+        yield
+        # Erfolgspfad: Vorzustand exakt wiederherstellen. Bei einer Exception im
+        # yield rollt die Transaktion das DISABLE ohnehin mit zurueck.
+        for table, trigger, enable_kw in restore:
+            cur.execute(f"ALTER TABLE {table} {enable_kw} TRIGGER {trigger}")  # noqa: S608 — konstante Identifier
 
 
 @contextmanager

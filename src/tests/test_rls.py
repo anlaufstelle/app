@@ -347,78 +347,78 @@ class TestRLSFunctional:
 
 
 @pytest.mark.django_db(transaction=True)
-class TestReplicationRoleGrant:
-    """Refs #1016 A1.2: ``session_replication_role`` ist ein SUPERUSER-Parameter.
-    ``bypass_replication_triggers()`` (DSGVO-Art.-17-Anonymisierung + Audit-Pruning,
-    laufen seit A1.1 als NOSUPERUSER-Admin-Rolle via run-as-admin.sh) setzt ihn —
-    das gelingt einer NOSUPERUSER-Rolle nur mit ``GRANT SET ON PARAMETER``
-    (PostgreSQL 15+). ``01-app-role.sh`` erteilt der Admin-Rolle genau diesen GRANT;
-    ohne ihn bricht der Wartungs-Cron mit ``permission denied to set parameter``.
+class TestAppendOnlyTriggerOwnership:
+    """Refs #1026 (A1.4): Nur der Table-Owner darf die Append-Only-Trigger per
+    ``ALTER TABLE ... DISABLE TRIGGER`` abschalten. Die Runtime-App-Rolle ist in
+    Prod NOSUPERUSER/NOBYPASSRLS und NICHT Owner (Runtime-/Owner-Trennung,
+    ``01-app-role.sh``) — sie kann den Audit-/EventHistory-Immutability-Schutz
+    daher nicht aushebeln. Fruehere Umgehungsversuche liefen ueber
+    ``session_replication_role = replica``; dieser Vektor ist mit ``ENABLE
+    ALWAYS`` + Owner-DDL abgeloest (siehe ``services/system/_db_admin.py``).
+
+    Dieser Test simuliert die Prod-Runtime-Rolle ueber ``SET ROLE`` auf eine
+    frisch angelegte NOSUPERUSER/NOBYPASSRLS-Nicht-Owner-Rolle: DML ist erlaubt,
+    ``DISABLE TRIGGER`` scheitert mit ``must be owner``.
 
     ``transaction=True``: CREATE/DROP ROLE + SET ROLE brauchen echte Sessions.
     """
 
+    _APPEND_ONLY_TRIGGERS = (
+        ("core_auditlog", "auditlog_immutable"),
+        ("core_eventhistory", "eventhistory_no_update"),
+        ("core_eventhistory", "eventhistory_no_delete"),
+    )
+
     def setup_method(self):
         if connection.vendor != "postgresql":
-            pytest.skip("RLS/Rollen-Test benoetigt PostgreSQL")
+            pytest.skip("Trigger-/Owner-Test benoetigt PostgreSQL")
 
     # Refs #1479 (TST-03): Worker-Suffix — Postgres-Rollen sind cluster-global,
     # ohne Suffix kollidieren zwei xdist-Worker beim CREATE/DROP.
     @property
-    def _nogrant_role(self):
-        return f"a1_repl_nogrant{xdist_role_suffix()}"
+    def _runtime_role(self):
+        return f"a1_4_runtime{xdist_role_suffix()}"
 
-    @property
-    def _granted_role(self):
-        return f"a1_repl_granted{xdist_role_suffix()}"
-
-    def _drop_roles(self):
+    def _drop_role(self):
         with connection.cursor() as cur:
             cur.execute("RESET ROLE")
-            # REVOKE vor DROP: der Parameter-GRANT erzeugt sonst eine Abhaengigkeit
-            # ('role cannot be dropped because some objects depend on it').
+            # DROP OWNED widerruft auch die an die Rolle erteilten GRANTs auf
+            # fremd-owned Tabellen, sonst blockt eine Abhaengigkeit den DROP.
             cur.execute(
-                "DO $$ DECLARE r text; BEGIN "
-                f"FOREACH r IN ARRAY ARRAY['{self._nogrant_role}', '{self._granted_role}'] LOOP "
-                "IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN "
-                "EXECUTE format('REVOKE SET ON PARAMETER session_replication_role FROM %I', r); "
-                "EXECUTE format('DROP ROLE %I', r); "
-                "END IF; END LOOP; END $$;"
+                "DO $$ BEGIN "
+                f"IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{self._runtime_role}') THEN "
+                f"  EXECUTE format('DROP OWNED BY %I', '{self._runtime_role}'); "
+                f"  EXECUTE format('DROP ROLE %I', '{self._runtime_role}'); "
+                "END IF; END $$;"
             )
 
-    def test_nosuperuser_needs_grant_for_session_replication_role(self):
+    def test_non_owner_runtime_role_cannot_disable_append_only_triggers(self):
         from django.db import Error as DjangoDBError
         from django.db import transaction
 
-        nogrant, granted = self._nogrant_role, self._granted_role
-        self._drop_roles()
-        with connection.cursor() as cur:
-            cur.execute(f"CREATE ROLE {nogrant} NOSUPERUSER NOBYPASSRLS")
-            cur.execute(f"CREATE ROLE {granted} NOSUPERUSER NOBYPASSRLS")
-            cur.execute(f"GRANT SET ON PARAMETER session_replication_role TO {granted}")
+        role = self._runtime_role
+        self._drop_role()
         try:
-            # Ohne GRANT → permission denied. atomic() kapselt den Transaktions-Abort,
-            # damit die Connection danach weiterverwendbar bleibt.
-            with pytest.raises(DjangoDBError) as exc, transaction.atomic():
-                with connection.cursor() as cur:
-                    cur.execute(f"SET ROLE {nogrant}")
-                    cur.execute("SET session_replication_role = replica")
-            assert "session_replication_role" in str(exc.value) or "permission denied" in str(exc.value).lower()
             with connection.cursor() as cur:
-                cur.execute("RESET ROLE")
+                cur.execute(f"CREATE ROLE {role} NOSUPERUSER NOBYPASSRLS")
+                # Prod-analog: die App-Rolle hat DML, aber KEINE Ownership.
+                cur.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON core_auditlog TO {role}")
+                cur.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON core_eventhistory TO {role}")
 
-            # Mit GRANT → erfolgreich (das ist der Fix in 01-app-role.sh).
-            with transaction.atomic():
+            for table, trigger in self._APPEND_ONLY_TRIGGERS:
+                # atomic() kapselt den Transaktions-Abort (und rollt SET ROLE
+                # zurueck), damit die Connection danach weiterverwendbar bleibt.
+                with pytest.raises(DjangoDBError) as exc, transaction.atomic():
+                    with connection.cursor() as cur:
+                        cur.execute(f"SET ROLE {role}")
+                        cur.execute(f"ALTER TABLE {table} DISABLE TRIGGER {trigger}")
+                assert "must be owner" in str(exc.value).lower(), (
+                    f"Nicht-Owner-Rolle konnte {trigger} auf {table} abschalten — A1.4-Regression!"
+                )
                 with connection.cursor() as cur:
-                    cur.execute(f"SET ROLE {granted}")
-                    cur.execute("SET session_replication_role = replica")
-                    cur.execute("SHOW session_replication_role")
-                    assert cur.fetchone()[0] == "replica"
-                    cur.execute("SET session_replication_role = origin")
-            with connection.cursor() as cur:
-                cur.execute("RESET ROLE")
+                    cur.execute("RESET ROLE")
         finally:
-            self._drop_roles()
+            self._drop_role()
 
 
 @pytest.mark.django_db(transaction=True)

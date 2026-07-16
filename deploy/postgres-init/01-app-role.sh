@@ -113,10 +113,6 @@ if [ -n "$ADMIN_DB_USER" ] && [ -n "$ADMIN_DB_PASSWORD" ]; then
 		-- Bestehende Objekte (idempotenter Re-Run / Upgrade-Pfad) nachziehen.
 		GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO :"app_user";
 		GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO :"app_user";
-		-- Refs #1016 A1.2: session_replication_role ist ein SUPERUSER-Parameter.
-		-- Die NOSUPERUSER-Admin-Rolle darf ihn nur mit explizitem GRANT SET ON
-		-- PARAMETER (PostgreSQL 15+) setzen.
-		GRANT SET ON PARAMETER session_replication_role TO :"admin_user";
 		SQL
 else
 	# --- Legacy-Einzelrollen-Fallback: App = Owner -----------------------
