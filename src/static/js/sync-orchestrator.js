@@ -96,23 +96,48 @@
 
     /* ─── Exklusiver Web Lock ─────────────────────────────────────────────── */
 
+    // Reentrancy-Marker (Refs #1493): zaehlt, ob DIESER Tab die Sync-Sequenz-fn
+    // gerade unter dem Lock ausfuehrt (pro Tab/Modul-Instanz — der Web Lock
+    // selbst ist origin-weit geteilt). crypto.js liest ihn ueber ``isLockHeld()``,
+    // um den aus einer gehaltenen Sequenz (replay -> decrypt -> _loadKey)
+    // REENTRANT erreichten Idle-Gate NICHT erneut ins nicht-reentrante Lock zu
+    // schicken (Selbst-Deadlock), sondern direkt (bereits serialisiert) laufen
+    // zu lassen — waehrend der Boot-Idle-Gate (nicht gehalten) jetzt UNTER dem
+    // Lock laeuft und so nicht mehr mit einer laufenden Fremd-Tab-Sequenz
+    // verschraenkt.
+    let _lockHeldDepth = 0;
+
     // Fuehrt ``fn`` unter dem origin-weiten exklusiven Lock aus und gibt dessen
     // Ergebnis zurueck. navigator.locks serialisiert konkurrierende Anforderungen
     // (auch aus DEMSELBEN Tab) — zwei getrennte runExclusive-Aufrufe laufen also
     // nie verschraenkt. Fallback ohne navigator.locks: direkte Ausfuehrung
     // (heutiges Verhalten, keine Cross-Tab-Serialisierung).
     //
-    // KEIN Reentrancy-Guard noetig: die einzige aus dem Lock heraus erreichbare
-    // Ruecksprungstelle in crypto.js (enforceIdleWipe via _loadKey) nutzt bewusst
-    // den UNGESPERRTEN Idle-Gate, damit sie nicht denselben nicht-reentranten
-    // Lock erneut anfordert und sich selbst deadlockt (siehe crypto.js:_loadKey).
+    // Der Marker wird um ``fn`` herum gesetzt/geloescht — ``try/finally`` ist
+    // ZWINGEND: bliebe ``_lockHeldDepth`` bei einem Fehler in ``fn`` stehen,
+    // saehe crypto.js den Lock faelschlich dauerhaft als gehalten und liefe den
+    // Boot-Idle-Gate nie wieder gesperrt (echter Deadlock des Fix-Effekts).
     function runExclusive(fn) {
+        const guarded = async function () {
+            _lockHeldDepth += 1;
+            try {
+                return await fn();
+            } finally {
+                _lockHeldDepth -= 1;
+            }
+        };
         if (!_hasLocks) {
-            return (async function () {
-                return fn();
-            })();
+            return guarded();
         }
-        return navigator.locks.request(LOCK_NAME, { mode: "exclusive" }, fn);
+        return navigator.locks.request(LOCK_NAME, { mode: "exclusive" }, guarded);
+    }
+
+    // Refs #1493: true, solange DIESER Tab eine ``runExclusive``-fn ausfuehrt
+    // (unter dem Lock bzw. dem direkten Fallback). Gelesen von crypto.js
+    // ``_loadKey``, um Reentranz (Idle-Gate aus einer gehaltenen Sequenz) vom
+    // freien Boot-/Decrypt-Gate zu unterscheiden.
+    function isLockHeld() {
+        return _lockHeldDepth > 0;
     }
 
     /* ─── Sync-Sequenz + Pro-Tab-Koaleszenz ───────────────────────────────── */
@@ -242,6 +267,7 @@
     window.syncOrchestrator = {
         requestSync: requestSync,
         runExclusive: runExclusive,
+        isLockHeld: isLockHeld,
         broadcast: broadcast,
         onMessage: onMessage,
     };

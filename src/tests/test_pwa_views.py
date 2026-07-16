@@ -150,7 +150,7 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v25"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v26"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
             "(#1339: focus-management.js ins APP_SHELL aufgenommen; der Bump "
             "erzwingt Re-Install + Re-Precache, damit Bestandsnutzer den neuen "
@@ -600,7 +600,7 @@ class TestPrecachedShellBumpGuard:
     # ODER am APP_SHELL-Block in ``src/static/js/sw.js`` MUESSEN beide Werte
     # gemeinsam aktualisiert werden (CACHE_NAME bumpen, dann diesen Hash mit
     # dem neuen Inhalt neu berechnen).
-    _PINNED_CACHE_NAME = "anlaufstelle-v25"
+    _PINNED_CACHE_NAME = "anlaufstelle-v26"
     _PINNED_SHELL_HASH = "ba71981439f5bfd3ec6fb0c6f3e1c1c7b6173923751b0ecf6d93a514f9056102"
 
     @staticmethod

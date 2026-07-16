@@ -328,22 +328,58 @@
         return true;
     }
 
+    // Refs #1493: Reentranz-bewusster Idle-Gate fuer ``_loadKey``.
+    //
+    // ``_loadKey`` wird auf ZWEI Wegen erreicht:
+    //   (1) REENTRANT aus einer bereits gesperrten Sync-Sequenz
+    //       (replayQueue/replayModifiedEvent → encrypt/decrypt → _loadKey).
+    //       Der Web Lock ist NICHT reentrant — ein erneutes ``_runExclusive``
+    //       wuerde sich selbst deadlocken (die haltende Sequenz awaited genau
+    //       diesen Aufruf). Daher DIREKT (``_enforceIdleWipeLocked`` ohne Lock)
+    //       — schon unter jenem Lock serialisiert.
+    //   (2) FREI beim Boot/Decrypt (kein Lock dieses Tabs gehalten). Hier NICHT
+    //       mehr ungesperrt (das war das #1493-Restfenster: ein bootender Tab
+    //       konnte purgen, waehrend ein Fremd-Tab eine gesperrte Sequenz fuhr),
+    //       sondern UNTER dem origin-weiten Lock — er wartet damit auf eine
+    //       laufende Fremd-Tab-Sequenz statt mit ihr zu verschraenken.
+    //
+    // Unterschieden per ``syncOrchestrator.isLockHeld()`` (pro Tab). Der Marker
+    // ist ein FALSE-POSITIV-toleranter Konservativ-Schalter: schlaegt er faelsch
+    // auf gehalten aus (z.B. Boot waehrend eines EIGENEN Startup-Drains dieses
+    // Tabs), degradiert der Gate auf den frueheren ungesperrten Pfad — nie
+    // schlechter als heute, und datenverlustfrei (bei ungesyncter Arbeit wird
+    // nur der Key verworfen).
+    async function _runIdleGate() {
+        let orch = window.syncOrchestrator;
+        if (!orch) {
+            // Seiten-Boot: crypto.js laeuft VOR sync-orchestrator.js. Der erste
+            // (eager) ``_loadKey()``-Aufruf entschiede sonst synchron ueber
+            // gesperrt-vs-direkt, bevor ``window.syncOrchestrator`` existiert.
+            // Ein echter IndexedDB-Roundtrip ist ein Macrotask — wenn er
+            // aufloest, ist die synchrone <script>-Kette (inkl.
+            // sync-orchestrator.js) gelaufen. (Nur im Boot-Fenster fuellig — ist
+            // der Orchestrator schon geladen, entfaellt der Extra-Read.)
+            await _idbGet(ACTIVITY_KEY);
+            orch = window.syncOrchestrator;
+        }
+        if (orch && orch.isLockHeld && orch.isLockHeld()) {
+            return _enforceIdleWipeLocked(); // (1) reentrant → direkt
+        }
+        // (2) frei → unter dem Lock serialisieren. Ohne Orchestrator/
+        // navigator.locks (Login-/Shell-Seiten, alte Engines) faellt
+        // ``_runExclusive`` auf direkte Ausfuehrung zurueck — heutiges Verhalten.
+        return _runExclusive(_enforceIdleWipeLocked);
+    }
+
     async function _loadKey() {
         if (cachedKey) return cachedKey;
         // Idle gate (Refs #1065): before rehydrating from IndexedDB, check
         // whether the session age has passed since the last activity — then
-        // wipe instead of making the key usable again without re-auth.
-        //
-        // Refs #1351/#1383: bewusst der UNGESPERRTE Idle-Gate
-        // (``_enforceIdleWipeLocked`` OHNE ``_runExclusive``). ``_loadKey`` ist
-        // aus einer bereits gesperrten Sync-Sequenz heraus erreichbar
-        // (replayQueue/replayModifiedEvent → encrypt/decrypt) — ein erneutes
-        // Anfordern desselben, NICHT reentranten Web Locks wuerde sich selbst
-        // deadlocken. Beim Boot (Haupt-Use dieses Gates) gibt es keinen
-        // Konkurrenten; die GESPERRTE Variante nutzen die Top-Level-Trigger
-        // (Interval/visibilitychange/direkter ``enforceIdleWipe``-Aufruf).
+        // wipe instead of making the key usable again without re-auth. Der Gate
+        // laeuft reentranz-bewusst gesperrt/direkt (Refs #1493, siehe
+        // ``_runIdleGate``).
         try {
-            if (await _enforceIdleWipeLocked()) return null;
+            if (await _runIdleGate()) return null;
         } catch (_e) {
             // ignore — a stamp read error must not break online operation
         }

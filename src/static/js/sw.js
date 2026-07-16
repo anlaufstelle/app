@@ -62,7 +62,12 @@ importScripts("/static/js/url-patterns.js");
 // bekaemen Bestandsnutzer die neue Shell nie zu sehen (cache-first, keine
 // Revalidierung). Nur den Pin zu aktualisieren wuerde genau die Luecke
 // aufreissen, die der Guard schliesst.
-const CACHE_NAME = "anlaufstelle-v25";
+// Refs #1493: v25 -> v26 -- crypto.js + sync-orchestrator.js (beide im
+// APP_SHELL, cache-first ohne Revalidierung) tragen den reentranz-bewussten
+// Boot-Idle-Gate. Ohne Bump bekaemen Bestandsnutzer die neue Serialisierung
+// nie (der Precache liefert die alten Module weiter). Der Bump erzwingt
+// Re-Install + Re-Precache.
+const CACHE_NAME = "anlaufstelle-v26";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

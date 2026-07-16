@@ -371,6 +371,250 @@ class TestSyncOrchestrator:
                 )
             context.close()
 
+    def test_runexclusive_marks_lock_held_only_while_running(self, browser, base_url, _login_storage_state):
+        """Refs #1493: der Reentrancy-Marker ``isLockHeld()`` ist NUR waehrend
+        einer laufenden ``runExclusive``-fn true — davor/danach false. Rein
+        deterministisch (kein Timing-Race): crypto.js ``_loadKey`` liest genau
+        diesen Marker, um Reentranz (Idle-Gate aus einer gehaltenen Sequenz) vom
+        freien Boot-/Decrypt-Gate zu unterscheiden. Der ``try/finally``-Reset im
+        Wrapper muss den Marker auch nach fn-Abschluss sauber zuruecksetzen."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            page.goto(base_url, wait_until="domcontentloaded")
+            page.wait_for_function("() => !!(window.syncOrchestrator && window.syncOrchestrator.isLockHeld)")
+            result = page.evaluate(
+                """async () => {
+                    const o = window.syncOrchestrator;
+                    const before = o.isLockHeld();
+                    let during = null;
+                    await o.runExclusive(async () => { during = o.isLockHeld(); });
+                    const after = o.isLockHeld();
+                    return { before, during, after };
+                }"""
+            )
+            assert result == {"before": False, "during": True, "after": False}, (
+                f"isLockHeld() muss nur waehrend runExclusive true sein, war: {result!r}"
+            )
+        finally:
+            context.close()
+
+    def test_idle_gate_reentrant_from_held_lock_does_not_deadlock(self, browser, base_url, _login_storage_state):
+        """Refs #1493 (Deadlock-Guard, komplementaer): Wird ``_loadKey`` REENTRANT
+        aus einer bereits gehaltenen Sync-Sequenz erreicht (replay -> decrypt ->
+        _loadKey), MUSS sein Idle-Gate DIREKT laufen — nicht erneut denselben
+        nicht-reentranten Web Lock anfordern (das wuerde sich selbst deadlocken,
+        weil die haltende Sequenz genau diesen Aufruf awaited).
+
+        HINWEIS: Dieser Test liefe auch auf ungepatchtem ``main`` gruen (dort lief
+        ``_loadKey`` STETS direkt, also nie Deadlock) — er belegt daher nicht den
+        #1493-Fix, sondern sichert das reentrante Verhalten gegen einen kuenftigen
+        naiven ``immer-sperren``-Umbau. Den geaenderten (frei serialisierten)
+        Pfad deckt ``test_free_loadkey_idle_gate_serializes_behind_other_tabs_lock``
+        ab.
+
+        Wir simulieren das deterministisch: ``clearSessionKey`` setzt den
+        In-Memory-Key auf null (sonst greift der ``if (cachedKey) return``-
+        Kurzschluss und der Gate laeuft gar nicht), dann triggert ein
+        ``encryptPayload`` INNERHALB von ``runExclusive`` den ``_loadKey`` ->
+        Idle-Gate-Pfad unter gehaltenem Lock. Gegen eine (hypothetische)
+        Immer-Sperren-Implementierung liefe dieser ``evaluate`` in den Timeout
+        (Deadlock); reentranz-bewusst kehrt er zurueck."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page = context.new_page()
+        page.set_default_timeout(30000)
+        try:
+            _boot_with_key(page, base_url)
+            outcome = page.evaluate(
+                """async () => {
+                    const o = window.syncOrchestrator;
+                    // cachedKey auf null zwingen, damit _loadKey den Idle-Gate
+                    // ueberhaupt betritt (sonst Kurzschluss auf den Memory-Key).
+                    await window.crypto_session.clearSessionKey();
+                    return await o.runExclusive(async () => {
+                        try {
+                            await window.crypto_session.encryptPayload({ x: 1 });
+                            return 'encrypted';
+                        } catch (e) {
+                            return e.name;
+                        }
+                    });
+                }"""
+            )
+            # Ohne Key (clearSessionKey) liefert _loadKey null -> encryptPayload
+            # wirft NoSessionKeyError. Entscheidend ist NUR, dass der Aufruf
+            # ZURUECKKEHRT (kein Deadlock).
+            assert outcome == "NoSessionKeyError", (
+                "Der reentrant erreichte Idle-Gate muss ohne Deadlock zurueckkehren "
+                f"(NoSessionKeyError ohne Key), bekam: {outcome!r}"
+            )
+        finally:
+            with suppress(Exception):
+                page.evaluate(
+                    "async () => { if (window.offlineStore) await window.offlineStore.purgeAll();"
+                    " if (window.crypto_session) await window.crypto_session.clearSessionKey(); }"
+                )
+            context.close()
+
+    def test_free_idle_gate_waits_for_other_tabs_lock(self, browser, base_url, _login_storage_state):
+        """Refs #1493 (komplementaer): Haelt ein FREMD-Tab die origin-weite
+        Sync-Sequenz-Sperre, muss der Top-Level-``enforceIdleWipe`` eines anderen
+        Tabs hinter dem Lock warten statt mit der laufenden Sequenz zu
+        verschraenken.
+
+        HINWEIS: ``enforceIdleWipe`` lief schon vor #1493 gesperrt
+        (``_runExclusive``) — dieser Test deckt daher NICHT den mit #1493
+        geaenderten ``_loadKey``-Pfad ab (das tut
+        ``test_free_loadkey_idle_gate_serializes_behind_other_tabs_lock``),
+        sondern sichert die unveraenderte Top-Level-Serialisierung als Regression.
+
+        Der Reentrancy-Marker ``_lockHeldDepth`` ist PRO Tab: Tab B haelt den
+        Lock (Marker in B = 1), Tab A sieht ``isLockHeld()`` = false (eigener
+        Marker = 0) und geht damit korrekt in den GESPERRTEN Pfad — dort wartet
+        er auf den vom geteilten ``navigator.locks`` blockierten Lock. Erst nach
+        Freigabe durch Tab B wiped Tab A. Deterministisch, weil Tab Bs Lock
+        beweisbar gehalten wird (``isLockHeld()`` in B), bevor Tab A prueft."""
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page_a = context.new_page()
+        page_b = context.new_page()
+        page_a.set_default_timeout(30000)
+        page_b.set_default_timeout(30000)
+        try:
+            _boot_with_key(page_a, base_url)
+            _attach_to_shared_store(page_b, base_url)
+            assert page_a.evaluate("() => window.crypto_session.hasSessionKey()") is True
+
+            # Tab B: den Lock erwerben und HALTEN (Freigabe erst per __release).
+            page_b.evaluate(
+                """() => {
+                    let release;
+                    const held = new Promise((r) => { release = r; });
+                    window.__release = release;
+                    window.__holder = window.syncOrchestrator.runExclusive(async () => { await held; });
+                }"""
+            )
+            # Beweisbar halten, BEVOR Tab A prueft — kein Timing-Race.
+            page_b.wait_for_function("() => window.syncOrchestrator.isLockHeld() === true", timeout=10000)
+
+            # Tab A: Idle-Grenze ueberschreiten und den freien Idle-Wipe treiben.
+            # enforceIdleWipe laeuft ueber runExclusive → wartet hinter Tab Bs
+            # Lock. Der Aufruf wird NICHT ge-awaited (er wuerde bis zur Freigabe
+            # blockieren) — wir pruefen nur, dass Tab A noch NICHT gewiped hat.
+            _stamp_stale_activity(page_a)
+            page_a.evaluate("() => { window.__gate = window.crypto_session.enforceIdleWipe(); }")
+            assert page_a.evaluate("() => window.crypto_session.hasSessionKey()") is True, (
+                "Tab A darf nicht wipen, solange Tab B die Sequenz-Sperre haelt "
+                "(freier Idle-Gate muss unter dem origin-weiten Lock warten)."
+            )
+
+            # Tab B gibt frei → Tab As wartender Idle-Wipe laeuft jetzt und wiped.
+            page_b.evaluate("() => window.__release()")
+            page_a.wait_for_function("() => window.crypto_session.hasSessionKey() === false", timeout=10000)
+        finally:
+            with suppress(Exception):
+                page_a.evaluate(
+                    "async () => { if (window.offlineStore) await window.offlineStore.purgeAll();"
+                    " if (window.crypto_session) await window.crypto_session.clearSessionKey(); }"
+                )
+            context.close()
+
+    def test_free_loadkey_idle_gate_serializes_behind_other_tabs_lock(self, browser, base_url, _login_storage_state):
+        """Refs #1493 (Regression fuer den GEAENDERTEN Pfad): der FREIE Idle-Gate
+        in crypto.js ``_loadKey`` (Boot/Decrypt, KEIN Lock dieses Tabs gehalten)
+        muss seit dem Fix UNTER dem origin-weiten Sync-Lock laufen
+        (``_runIdleGate`` -> ``_runExclusive``). Auf ungepatchtem ``main`` lief
+        ``_loadKey`` den Idle-Wipe DIREKT (``_enforceIdleWipeLocked`` OHNE
+        ``_runExclusive``) — der freie Gate forderte GAR KEINEN Lock an.
+
+        Genau DAS deckt dieser Test ab (und nur er): Anders als
+        ``test_free_idle_gate_waits_for_other_tabs_lock`` treibt er NICHT den
+        Top-Level-``enforceIdleWipe`` (der lief schon vor #1493 gesperrt),
+        sondern ``_loadKey`` selbst — ueber ``encryptPayload``. ``cachedKey``
+        wird zuvor via ``clearSessionKey`` genullt, sonst greift der
+        ``if (cachedKey) return``-Kurzschluss und der Gate laeuft nicht. Er ist
+        damit auch gegen einen Revert scharf, der ``_runIdleGate`` bei
+        ERHALTENEM ``isLockHeld`` wieder auf den ungesperrten ``_loadKey`` legt.
+
+        Deterministisch (kein Timing-Race) ueber ``navigator.locks.query()``:
+        waehrend Tab B den Mutex exklusiv HAELT, erzeugt der freie
+        ``_loadKey``-Gate von Tab A gepatcht eine PENDING Mutex-Anforderung
+        (Tab A sieht die EIGENE Anforderung in ``query().pending``); ungepatcht
+        bleibt sie aus -> das Flag wird nie true -> Timeout -> ROT.
+        """
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page_a = context.new_page()
+        page_b = context.new_page()
+        page_a.set_default_timeout(30000)
+        page_b.set_default_timeout(30000)
+        try:
+            _boot_with_key(page_a, base_url)
+            _attach_to_shared_store(page_b, base_url)
+            assert page_a.evaluate("() => window.crypto_session.hasSessionKey()") is True
+
+            # Tab B: den origin-weiten Mutex erwerben und HALTEN (Freigabe erst
+            # per __release). Beweisbar halten, BEVOR Tab A den freien Gate treibt.
+            page_b.evaluate(
+                """() => {
+                    let release;
+                    const held = new Promise((r) => { release = r; });
+                    window.__release = release;
+                    window.__holder = window.syncOrchestrator.runExclusive(async () => { await held; });
+                }"""
+            )
+            page_b.wait_for_function("() => window.syncOrchestrator.isLockHeld() === true", timeout=10000)
+
+            # Tab A: den FREIEN _loadKey-Idle-Gate treiben. clearSessionKey nullt
+            # cachedKey (sonst Kurzschluss); encryptPayload ruft dann _loadKey ->
+            # _runIdleGate. isLockHeld() ist in Tab A false (eigener Marker = 0)
+            # -> freier Pfad -> _runExclusive -> navigator.locks.request, das
+            # hinter Tab Bs Lock PENDING haengt. Der encryptPayload-Aufruf wird
+            # NICHT ge-awaited (er blockiert bis zur Freigabe); ein JS-Poll setzt
+            # ein SYNCHRON lesbares Flag, sobald die eigene PENDING-Anforderung in
+            # navigator.locks.query() auftaucht (query() ist async -> bewusst NICHT
+            # per wait_for_function-Predicate, sondern in ein Flag gepollt).
+            page_a.evaluate(
+                """() => {
+                    window.__pendingSeen = false;
+                    (async () => {
+                        await window.crypto_session.clearSessionKey();
+                        // Fire-and-forget: blockiert gepatcht am Lock, wirft
+                        // ungepatcht (ohne Key) NoSessionKeyError — beides hier egal.
+                        window.crypto_session.encryptPayload({ x: 1 }).catch(() => {});
+                        const NAME = 'anlaufstelle-offline-mutex';
+                        (function poll() {
+                            if (!navigator.locks || !navigator.locks.query) return;
+                            navigator.locks.query().then((state) => {
+                                const pending = state.pending || [];
+                                if (pending.some((l) => l.name === NAME)) {
+                                    window.__pendingSeen = true;
+                                } else {
+                                    setTimeout(poll, 50);
+                                }
+                            });
+                        })();
+                    })();
+                }"""
+            )
+
+            # GEPATCHT: der freie Gate reiht sich hinter Tab Bs Lock ein -> die
+            # eigene PENDING-Anforderung wird sichtbar. UNGEPATCHT: kein
+            # Lock-Request -> Flag bleibt false -> Timeout (ROT).
+            page_a.wait_for_function("() => window.__pendingSeen === true", timeout=10000)
+
+            # Solange Tab B haelt, konnte Tab As gesperrter Gate nicht durchlaufen.
+            assert page_b.evaluate("() => window.syncOrchestrator.isLockHeld() === true") is True
+
+            # Freigeben -> Tab As wartender Gate laeuft und kehrt zurueck.
+            page_b.evaluate("() => window.__release()")
+        finally:
+            with suppress(Exception):
+                page_a.evaluate(
+                    "async () => { if (window.offlineStore) await window.offlineStore.purgeAll();"
+                    " if (window.crypto_session) await window.crypto_session.clearSessionKey(); }"
+                )
+            context.close()
+
     def test_runexclusive_passes_through_return_value(self, browser, base_url, _login_storage_state):
         """Regressionsschutz #1351/#1383: ``runExclusive(fn)`` fuehrt ``fn`` unter
         dem Lock aus UND reicht dessen Rueckgabewert durch. saveEdit/saveCreate
