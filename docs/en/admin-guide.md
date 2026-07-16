@@ -988,7 +988,15 @@ Error tracking (Sentry-compatible) is **fully opt-in**: the SDK is initialized o
 
 **Logs.** Server logs are PII-scrubbed in **both** formats -- the default `LOG_FORMAT=text` and `LOG_FORMAT=json` both run messages and tracebacks through the same scrubber. For GDPR contexts with log aggregation, `LOG_FORMAT=json` is still recommended (structured, machine-readable), but data minimization is no longer tied to that format.
 
-**Self-hosted tracker (e.g. GlitchTip).** GlitchTip accepts standard Sentry DSNs, and this project uses only core SDK features (error events plus optional trace sampling). Pointing `SENTRY_DSN` at a self-hosted instance should therefore work without code changes. **This combination is not evaluated and not formally supported by this project** -- before production use, at least verify envelope/API compatibility and the behavior for unsupported event types yourself. Operating the tracker instance (backups, retention, upgrades) is operator infrastructure and covered by its own documentation; the tracker's database belongs inside the same trust boundary as the app data and needs the same access and retention rules.
+**Self-hosted tracker (GlitchTip).** GlitchTip accepts standard Sentry DSNs, and this project uses only core SDK features (error events plus optional trace sampling). This combination was verified empirically: with the pinned `sentry-sdk[django]` (currently `2.64.0`) against GlitchTip `6.2.1` (Docker image `glitchtip/glitchtip:6`), server error events are transmitted, parsed plausibly (stack trace, tags, request context) and shown as issues; performance transactions (`SENTRY_TRACES_SAMPLE_RATE > 0`) are **accepted** as well and grouped into transaction groups -- they are neither silently dropped nor do they raise an error. The server-side `before_send`/`before_send_transaction` scrubber applies unchanged (no frame locals, stripped query strings/cookies/request bodies); the rule- and key-based limits described above still hold. Other version combinations are untested, and a third-party project naturally remains outside this project's control.
+
+To connect a self-hosted tracker:
+
+1. Run a GlitchTip instance and create a project there -- GlitchTip shows its DSN in the form `https://<public_key>@<glitchtip-host>/<project_id>`.
+2. Pass that value to the app as `SENTRY_DSN` -- **no code change required**. Optionally set `SENTRY_TRACES_SAMPLE_RATE` (default `0.1`; `0` disables transactions entirely, see the escalation levels above).
+3. Expectation: server error events appear as issues, optional trace sampling as transaction groups. Only the server SDK runs (no browser SDK, no Session Replay).
+
+Operating the tracker instance (setup, backups, retention, upgrades) is operator infrastructure and covered by the [GlitchTip documentation](https://glitchtip.com/documentation) -- **out of scope** here; the tracker's database belongs inside the same trust boundary as the app data and needs the same access and retention rules.
 
 > **Not legal advice:** This section describes technical measures. A data protection impact assessment and the record of processing activities remain with the operator as the controller.
 
@@ -1388,4 +1396,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.22.0 -->
 <!-- translation-date: 2026-07-14 -->
-<!-- source-hash: 598bf61 -->
+<!-- source-hash: fdea67d -->

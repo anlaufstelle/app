@@ -38,6 +38,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Docs
 
 - **Governance-, Maintainer- und CODEOWNERS-Artefakte ergänzt (Bus-Faktor + CRA-Vertretung transparent)** (#1477) — neu sind `GOVERNANCE.md` (Solo-Maintainer-/BDFL-Modell, ADR-Prozess, Eskalationspfad, Aufnahmekriterien), `MAINTAINERS.md` (ein aktiver Maintainer, offen ausgewiesene Bus-Faktor-1-Lage und die vor dem 11.09.2026 vom Maintainer zu benennende Vertretung inkl. Signing-Key-/Secret-Escrow-Trennung) sowie `.github/CODEOWNERS`; `SECURITY.md`, die CRA-Einordnung und das ops-runbook verweisen jetzt darauf.
+- **GlitchTip als selbst gehosteter Error-Tracker empirisch verifiziert** (#1511) — der Admin-Guide (§ 5.6, DE+EN) ersetzt den bisherigen „nicht evaluiert"-Vorbehalt zu GlitchTip durch den verifizierten Stand mit Versionsangaben (`sentry-sdk[django]` 2.64.0 gegen GlitchTip 6.2.1, Image `glitchtip/glitchtip:6`) und ergänzt eine kurze Anbindungs-Anleitung: Server-Error-Events werden übertragen und plausibel geparst, Performance-Transactions angenommen (nicht still verworfen), der serverseitige `before_send`-Scrubber greift unverändert.
 
 ## [0.22.0] - 2026-07-15
 
