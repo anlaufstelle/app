@@ -157,7 +157,7 @@ def matrix_users(db, facility):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("exp,method,allowed,actor", _cells())
+@pytest.mark.parametrize("exp,method,allowed,actor", list(_cells()))
 def test_authz_cell(client, exp, method, allowed, actor, request):
     """Eine Matrix-Zelle: erlaubt = kein 403/404/Login-Redirect, verboten = 403/404."""
     kwargs = resolve_fixture_kwargs(exp.url_kwargs, request)

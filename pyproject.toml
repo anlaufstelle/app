@@ -71,6 +71,14 @@ pythonpath = ["src"]
 # der dev-ops/-Ordner ausgeschlossen (Excludes in dev-ops/release/build-release.sh).
 testpaths = ["src/tests"]
 addopts = "--reuse-db"
+# Refs #1609: Warnings sind ab jetzt Fehler — neu eingeschleppte Deprecation-/
+# Resource-/UserWarnings failen die Suite, statt unbemerkt aufzulaufen. Die
+# Bestandsaufnahme (#1609) ergab, dass alle Warnings aus eigenem Code stammen
+# und nach dem Fix 0 uebrig bleiben; daher kein Fremd-Ignore noetig. Sollte der
+# serielle E2E-Lauf ein nichtdeterministisches Playwright-/Service-Worker-
+# Warning zeigen, wird es hier GEZIELT ergaenzt (mit Kommentar), nicht der Gate
+# insgesamt aufgeweicht.
+filterwarnings = ["error"]
 markers = [
     "e2e: End-to-End-Tests mit Playwright (benötigen laufenden Server)",
     "smoke: Kritische User-Flows für schnelle lokale Validierung",

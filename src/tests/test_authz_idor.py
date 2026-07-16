@@ -80,7 +80,7 @@ def idor_actor_users(db, facility):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("exp,method,actor", _idor_cells())
+@pytest.mark.parametrize("exp,method,actor", list(_idor_cells()))
 def test_idor_foreign_object_is_404(client, exp, method, actor, idor_actor_users, request):
     """Eine IDOR-Zelle: Zugriff auf das Objekt der zweiten Facility muss 404 liefern."""
     kwargs = resolve_fixture_kwargs(exp.idor, request)
@@ -107,7 +107,7 @@ def _not_probeable_cells():
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("exp,method", _not_probeable_cells())
+@pytest.mark.parametrize("exp,method", list(_not_probeable_cells()))
 def test_not_probeable_cell_still_answers_405(client, exp, method, idor_actor_users, request):
     """Drift-Guard: NOT_PROBEABLE setzt voraus, dass die View die Methode pauschal mit 405 beantwortet.
 

@@ -97,7 +97,7 @@ class TestCheckDbRolesFunction:
     """Pruefe die Top-Level-Auswertung mit gemocktem ``_query_role``."""
 
     def test_app_role_correctly_classified_when_secure(self, monkeypatch, settings):
-        settings.DATABASES = {"default": {"USER": "anlaufstelle_app"}}
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.setattr(
             cmd,
@@ -114,7 +114,7 @@ class TestCheckDbRolesFunction:
         assert all(c.ok for c in checks)
 
     def test_app_role_as_superuser_is_flagged(self, monkeypatch, settings):
-        settings.DATABASES = {"default": {"USER": "anlaufstelle_app"}}
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.setattr(
             cmd,
@@ -131,7 +131,7 @@ class TestCheckDbRolesFunction:
         assert any("rolsuper=True" in p for p in app_check.problems())
 
     def test_app_role_with_bypassrls_is_flagged(self, monkeypatch, settings):
-        settings.DATABASES = {"default": {"USER": "anlaufstelle_app"}}
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.setattr(
             cmd,
@@ -148,7 +148,7 @@ class TestCheckDbRolesFunction:
         assert any("rolbypassrls=True" in p for p in app_check.problems())
 
     def test_admin_role_without_bypass_is_flagged(self, monkeypatch, settings):
-        settings.DATABASES = {"default": {"USER": "anlaufstelle_app"}}
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.setattr(
             cmd,
@@ -164,7 +164,7 @@ class TestCheckDbRolesFunction:
         assert not admin_check.ok
 
     def test_missing_admin_env_is_config_error_but_not_fatal(self, monkeypatch, settings):
-        settings.DATABASES = {"default": {"USER": "anlaufstelle_app"}}
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
         monkeypatch.delenv("POSTGRES_ADMIN_USER", raising=False)
         monkeypatch.setattr(cmd, "_query_role", lambda role: (False, False))
 
@@ -176,7 +176,7 @@ class TestCheckDbRolesFunction:
         assert any("POSTGRES_ADMIN_USER" in msg for msg in config_errors)
 
     def test_nonexistent_role_appears_as_failure(self, monkeypatch, settings):
-        settings.DATABASES = {"default": {"USER": "ghost_user"}}
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "ghost_user")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "ghost_admin")
         monkeypatch.setattr(cmd, "_query_role", lambda role: (None, None))
 
@@ -190,7 +190,7 @@ class TestCommandExitCodes:
     """Smoke: management-command exit-codes via SystemExit."""
 
     def test_exit_0_when_all_ok(self, monkeypatch, settings):
-        settings.DATABASES = {"default": {"USER": "app"}}
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "admin")
         monkeypatch.setattr(
             cmd,
@@ -204,7 +204,7 @@ class TestCommandExitCodes:
         call_command("check_db_roles")  # kein SystemExit
 
     def test_exit_1_when_role_misconfigured(self, monkeypatch, settings):
-        settings.DATABASES = {"default": {"USER": "app"}}
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "admin")
         monkeypatch.setattr(
             cmd,
@@ -219,8 +219,9 @@ class TestCommandExitCodes:
         assert exc.value.code == 1
 
     def test_exit_2_when_only_config_errors(self, monkeypatch, settings):
-        # Weder App- noch Admin-Rolle ableitbar.
-        settings.DATABASES = {"default": {}}
+        # Weder App- noch Admin-Rolle ableitbar: USER-Key fehlt (statt Ganzobjekt-
+        # Override), damit der Settings-Fallback in check_db_roles ins Leere greift.
+        monkeypatch.delitem(settings.DATABASES["default"], "USER", raising=False)
         monkeypatch.delenv("POSTGRES_ADMIN_USER", raising=False)
 
         from django.core.management import call_command
@@ -239,7 +240,7 @@ class TestAppRoleIdentification:
     def test_app_role_from_postgres_app_user_when_connection_is_admin(self, monkeypatch, settings):
         # Migrate-Kontext: settings USER ist auf den Admin-User ueberschrieben,
         # POSTGRES_APP_USER traegt die echte App-Rolle.
-        settings.DATABASES = {"default": {"USER": "anlaufstelle_admin"}}
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_admin")
         monkeypatch.setenv("POSTGRES_APP_USER", "anlaufstelle_app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.setattr(
@@ -260,7 +261,7 @@ class TestAppRoleIdentification:
         assert all(c.ok for c in checks)
 
     def test_app_role_falls_back_to_settings_user_without_env(self, monkeypatch, settings):
-        settings.DATABASES = {"default": {"USER": "anlaufstelle_app"}}
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
         monkeypatch.delenv("POSTGRES_APP_USER", raising=False)
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.setattr(
@@ -280,7 +281,7 @@ class TestAppRoleIdentification:
     def test_app_misconfig_still_caught_in_migrate_context(self, monkeypatch, settings):
         # #902-Schutz bleibt: eine zu privilegierte App-Rolle wird auch im
         # Migrate-Kontext (Connection=Admin) ueber POSTGRES_APP_USER erkannt.
-        settings.DATABASES = {"default": {"USER": "anlaufstelle_admin"}}
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_admin")
         monkeypatch.setenv("POSTGRES_APP_USER", "anlaufstelle_app")
         monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
         monkeypatch.setattr(
