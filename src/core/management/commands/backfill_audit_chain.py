@@ -9,9 +9,11 @@ geschrieben — ein zweiter Lauf ist ein No-op.
 
 Da ``UPDATE`` auf ``core_auditlog`` vom Immutability-Trigger (Migration 0024)
 blockiert wird, laufen die Schreibzugriffe transaktional ueber
-``bypass_replication_triggers`` — das Kommando MUSS daher als Admin-Rolle mit
-``GRANT SET ON PARAMETER session_replication_role`` (BYPASSRLS) laufen, analog
-zum Retention-Cron.
+``bypass_replication_triggers`` — das umgeht den Trigger seit A1.4 (Refs #1026)
+per Owner-DDL ``ALTER TABLE ... DISABLE TRIGGER``. Das Kommando MUSS daher als
+**Owner-/Admin-Rolle** (``POSTGRES_ADMIN_USER``, BYPASSRLS) laufen; als
+Nicht-Owner-App-Rolle scheitert der Bypass mit ``must be owner``. Analog zum
+Retention-Cron (ENV-Override auf die Admin-Werte).
 
 Beispiel::
 
