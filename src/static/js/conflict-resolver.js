@@ -58,6 +58,22 @@
         return Array.from(keys).sort();
     }
 
+    // Refs #575: Pro-Feld-Aufloesung eines Konflikts. Fuer jeden diff-Key
+    // gewinnt entweder der lokale oder der Server-Wert, gesteuert ueber
+    // ``perFieldChoice[key]`` ("local" | "server", Default "local"). Dieselbe
+    // reine Funktion deckt alle drei UI-Modi ab: "keep local" (alle Keys
+    // "local"), "keep server" (alle "server") und "merge manually" (gemischt).
+    // Herausgezogen aus ``keepMerged`` als testbare Export-Oberflaeche
+    // (Refs #1479, TST-01) — verhaltensidentisch.
+    function _mergeByChoice(diffKeys, perFieldChoice, localData, serverData) {
+        const merged = {};
+        for (const key of diffKeys) {
+            const choice = (perFieldChoice && perFieldChoice[key]) || "local";
+            merged[key] = choice === "server" ? (serverData || {})[key] : (localData || {})[key];
+        }
+        return merged;
+    }
+
     /*
      * Alpine.data factory — used as ``x-data="conflictResolver"`` mit
      * ``data-event-pk="<uuid>"`` (CSP-friendly). Refs #672.
@@ -197,11 +213,7 @@
             async keepMerged() {
                 this.resolving = true;
                 try {
-                    const merged = {};
-                    for (const key of this.diffKeys) {
-                        const choice = this.perFieldChoice[key] || "local";
-                        merged[key] = choice === "server" ? this.serverData[key] : this.localData[key];
-                    }
+                    const merged = _mergeByChoice(this.diffKeys, this.perFieldChoice, this.localData, this.serverData);
                     const record = await window.offlineStore.getOfflineEvent(this.eventPk);
                     if (!record) return;
                     const data = record.data || {};
@@ -247,6 +259,8 @@
         diffKeys: _diffKeys,
         formatValue: _formatValue,
         asList: _asList,
+        // Refs #1479 (TST-01): reine Merge-Aufloesung fuer den JS-Unit-Runner.
+        mergeByChoice: _mergeByChoice,
     };
 
     document.addEventListener("alpine:init", () => {

@@ -445,5 +445,12 @@
         // Refs #1468: die Konfliktliste stoesst nach Verwerfen/Erneut den
         // Queue-Zaehler-Refresh an (offlineStore-Primitive feuern selbst nichts).
         refreshCount: _updateQueueCount,
+        // Refs #1479 (TST-01): reine Export-Oberflaeche fuer den JS-Unit-Runner
+        // (vitest) — kein Verhaltens-Refactor. Diese internen Helfer tragen die
+        // sicherheitskritische Replay-Klassifikation (Backoff, CSRF-Refresh,
+        // Ready-Gate) und werden isoliert getestet.
+        _backoffFor: _backoffFor,
+        _refreshCsrf: _refreshCsrf,
+        _isReady: _isReady,
     };
 })();
