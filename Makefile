@@ -126,8 +126,17 @@ maintenance-off:
 test:
 	$(PYTHON) -m pytest -m "not e2e"
 
+# --timeout-method=thread ist fuer die E2E-Laeufe Pflicht (Refs #1606): Stirbt
+# Chromium unter CPU-Knappheit weg, dreht die Playwright-Sync-API in einem
+# Greenlet frei — ausserhalb jeder Python-Ebene, die die Default-``signal``-
+# Methode (SIGALRM im Main-Thread) je erreicht. Die ``thread``-Methode laeuft in
+# einem eigenen Timer-Thread, dumpt die Stacks und beendet den Prozess hart
+# (``os._exit(1)``); so wird der Endlos-Dreher wenigstens zum Fehlschlag statt
+# zum Haenger. Gilt seriell wie parallel — der Hang haengt an der CPU-Knappheit,
+# nicht an xdist (Passkey-Roundtrip #1606 hing seriell nur nicht, weil der
+# Release-Host 8 Kerne hat).
 test-e2e:
-	$(PYTHON) -m pytest -m e2e --browser chromium -v
+	$(PYTHON) -m pytest -m e2e --browser chromium --timeout=120 --timeout-method=thread -v
 
 test-focus:
 	$(PYTHON) -m pytest -m "not e2e" -x $(T)
@@ -135,8 +144,11 @@ test-focus:
 test-parallel:
 	$(PYTHON) -m pytest -m "not e2e" -n auto -x
 
+# --timeout-method=thread wie bei ``test-e2e`` (Refs #1606): harter Kill des
+# Workers gegen den Greenlet-Endlos-Dreher bei totem Chromium — unter -n 2 auf
+# 2 Kernen der reproduzierte Haenger.
 test-e2e-parallel:
-	$(PYTHON) -m pytest -m e2e --browser chromium -n $(E2E_WORKERS) --dist loadfile -v
+	$(PYTHON) -m pytest -m e2e --browser chromium -n $(E2E_WORKERS) --dist loadfile --timeout=120 --timeout-method=thread -v
 
 test-e2e-smoke:
 	$(PYTHON) -m pytest -m "e2e and smoke" --browser chromium -v

@@ -71,7 +71,14 @@ jobs:
       # Playwright-Sync-API -- --timeout greift dort NICHT); seriell und auf
       # 8 Kernen laeuft derselbe Test gruen durch. Zusaetzlich fiel unter -n 2 ein
       # Locator-Race in test_file_vault auf. Beides Test-Defekte, nicht Produkt.
-      - run: python -m pytest -m "e2e" --timeout=120
+      # --timeout-method=thread statt der Default-``signal``-Methode (Refs #1606):
+      # Bei totem Chromium dreht die Playwright-Sync-API in einem Greenlet frei;
+      # SIGALRM im Main-Thread greift dort nicht (v0.22.0 lief 28 min trotz
+      # --timeout=120 durch). Die thread-Methode dumpt die Stacks aus einem
+      # eigenen Timer-Thread und beendet den Prozess hart (os._exit) -- macht den
+      # Hänger zum Fehlschlag. Der Job-Level ``timeout-minutes`` bleibt als
+      # zweite Sicherung.
+      - run: python -m pytest -m "e2e" --timeout=120 --timeout-method=thread
         env:
           DJANGO_SETTINGS_MODULE: anlaufstelle.settings.e2e
           POSTGRES_HOST: localhost
