@@ -21,9 +21,13 @@ import importlib
 import pytest
 from django.db import connection
 
+from tests.conftest import xdist_role_suffix
+
 _MIGRATION = "core.migrations.0093_cache_table_owner"
 _TABLE = "anlaufstelle_cache"
-_THROWAWAY_ROLE = "test_cache_owner_probe"
+# Refs #1479 (TST-03): Worker-Suffix — Postgres-Rollen sind cluster-global,
+# zwei xdist-Worker wuerden sonst auf demselben Namen kollidieren.
+_THROWAWAY_ROLE = f"test_cache_owner_probe{xdist_role_suffix()}"
 
 
 def _scalar(cur, sql, params=None):

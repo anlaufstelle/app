@@ -21,8 +21,12 @@ import pytest
 from django.db import connection
 
 from core.management.commands.normalize_db_ownership import normalize_db_ownership
+from tests.conftest import xdist_role_suffix
 
-TMP_ADMIN = "norm_owner_test_admin"
+# Refs #1479 (TST-03): Worker-Suffix am cluster-globalen Rollennamen, sonst
+# kollidieren zwei xdist-Worker beim CREATE/DROP ROLE. Der Tabellenname ist
+# DB-lokal (jeder Worker hat eine eigene Test-DB) und braucht keinen Suffix.
+TMP_ADMIN = f"norm_owner_test_admin{xdist_role_suffix()}"
 TMP_TABLE = "norm_owner_test_tbl"
 
 

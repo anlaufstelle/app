@@ -25,34 +25,74 @@ from django.db import connection
 from django.utils import timezone
 
 from core.models import Activity, AuditLog, Client, DocumentType, Event
+from tests.conftest import xdist_role_suffix
 
 
 @pytest.fixture(scope="session")
 def rls_test_role(django_db_setup, django_db_blocker):
     """Erstellt eine session-globale Postgres-Rolle ohne Superuser.
 
-    Idempotent: bei wiederholtem Lauf (oder unter pytest-xdist) wird die
-    Rolle nicht doppelt angelegt. Grants auf schema + alle Tabellen +
-    Sequenzen, damit die Rolle ueberhaupt SELECT/INSERT ausfuehren kann.
+    Der Rollenname traegt unter pytest-xdist einen Worker-Suffix
+    (``rls_test_role_gw0`` …), weil Postgres-Rollen cluster-global sind und
+    zwei Worker sonst beim ``CREATE``/``DROP`` kollidieren (Refs #1479, TST-03).
+    Idempotent: bei wiederholtem Lauf wird die Rolle nicht doppelt angelegt.
+    Grants auf schema + alle Tabellen + Sequenzen, damit die Rolle ueberhaupt
+    SELECT/INSERT ausfuehren kann.
+
+    Yield-Teardown mit **REVOKE vor DROP**: die Grants erzeugen sonst eine
+    Abhaengigkeit (``role cannot be dropped because some objects depend on
+    it``). Ohne expliziten Finalizer blieb die Rolle nach dem Lauf cluster-
+    global stehen und liess Folgelaeufe unter ``--reuse-db`` auf
+    ``role already exists`` auflaufen.
     """
     if connection.vendor != "postgresql":
         pytest.skip("Non-Superuser-Test erfordert PostgreSQL")
 
+    role = f"rls_test_role{xdist_role_suffix()}"
+
     with django_db_blocker.unblock(), connection.cursor() as cur:
         cur.execute(
-            """
+            f"""
                 DO $do$ BEGIN
-                    CREATE ROLE rls_test_role NOSUPERUSER NOREPLICATION
+                    CREATE ROLE {role} NOSUPERUSER NOREPLICATION
                         INHERIT NOLOGIN;
                 EXCEPTION WHEN duplicate_object THEN
                     NULL;
                 END $do$;
                 """
         )
-        cur.execute("GRANT USAGE ON SCHEMA public TO rls_test_role")
-        cur.execute("GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO rls_test_role")
-        cur.execute("GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO rls_test_role")
-    return "rls_test_role"
+        cur.execute(f"GRANT USAGE ON SCHEMA public TO {role}")
+        cur.execute(f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {role}")
+        cur.execute(f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {role}")
+
+    yield role
+
+    with django_db_blocker.unblock(), connection.cursor() as cur:
+        cur.execute("RESET ROLE")
+        cur.execute(
+            f"""
+                DO $do$ BEGIN
+                    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}') THEN
+                        REVOKE USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public FROM {role};
+                        REVOKE SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public FROM {role};
+                        REVOKE USAGE ON SCHEMA public FROM {role};
+                        BEGIN
+                            DROP ROLE {role};
+                        EXCEPTION WHEN dependent_objects_still_exist THEN
+                            -- In einem GETEILTEN Test-Cluster (mehrere Worktrees,
+                            -- viele zurueckgelassene Test-DBs) traegt eine
+                            -- un-suffixte ``rls_test_role`` noch Grants in FREMDEN
+                            -- Datenbanken; REVOKE wirkt nur DB-lokal, der DROP
+                            -- schlaegt dann fehl. Kein harter Teardown-Fehler:
+                            -- der idempotente CREATE oben faengt einen Rest-
+                            -- bestand beim naechsten Lauf ab. Unter ``-n auto``
+                            -- ist der Name worker-suffixt/frisch → DROP gelingt.
+                            NULL;
+                        END;
+                    END IF;
+                END $do$;
+                """
+        )
 
 
 @contextmanager

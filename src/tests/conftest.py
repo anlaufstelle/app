@@ -1,5 +1,7 @@
 """Pytest fixtures for Anlaufstelle test suite."""
 
+import os
+
 import pytest
 from django.utils import timezone
 
@@ -30,6 +32,26 @@ from core.models import (
     User,
     WorkItem,
 )
+
+
+def xdist_role_suffix() -> str:
+    """Worker-Suffix fuer cluster-globale Postgres-Rollennamen unter ``-n auto``.
+
+    Postgres-Rollen sind **cluster-global** — parallele pytest-xdist-Worker
+    teilen sich den Rollen-Namespace, obwohl jeder Worker seine eigene Test-DB
+    hat. Ohne Suffix kollidieren die ``CREATE ROLE``/``DROP ROLE`` zweier Worker
+    (``role already exists`` / ``cannot drop role``). Alle ``transaction=True``-
+    Tests, die statische Testrollen anlegen, haengen daher diesen Suffix an ihre
+    Rollennamen. Generalisiert das Worker-Erkennungsmuster aus
+    ``src/tests/e2e/conftest.py::_get_worker_info`` (Refs #1479, TST-03).
+
+    Seriell (kein xdist, ``PYTEST_XDIST_WORKER`` leer oder ``master``): leerer
+    Suffix, damit die Rollennamen unveraendert bleiben.
+    """
+    worker = os.environ.get("PYTEST_XDIST_WORKER", "")
+    if not worker or worker == "master":
+        return ""
+    return f"_{worker}"
 
 
 @pytest.fixture

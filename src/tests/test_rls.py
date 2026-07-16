@@ -20,6 +20,7 @@ from django.db.models import ForeignKey, OneToOneField
 # Re-Export wuerde nicht reichen, der Import macht sie hier sichtbar.
 # Ruff-F811-Warnung an den Test-Method-Args ist ein bekanntes
 # pytest-Pattern; mit Inline-Suppression an den Tests behandelt.
+from tests.conftest import xdist_role_suffix
 from tests.test_rls_functional import (  # noqa: F401
     facility_a_with_data,
     facility_b_with_data,
@@ -361,6 +362,16 @@ class TestReplicationRoleGrant:
         if connection.vendor != "postgresql":
             pytest.skip("RLS/Rollen-Test benoetigt PostgreSQL")
 
+    # Refs #1479 (TST-03): Worker-Suffix — Postgres-Rollen sind cluster-global,
+    # ohne Suffix kollidieren zwei xdist-Worker beim CREATE/DROP.
+    @property
+    def _nogrant_role(self):
+        return f"a1_repl_nogrant{xdist_role_suffix()}"
+
+    @property
+    def _granted_role(self):
+        return f"a1_repl_granted{xdist_role_suffix()}"
+
     def _drop_roles(self):
         with connection.cursor() as cur:
             cur.execute("RESET ROLE")
@@ -368,7 +379,7 @@ class TestReplicationRoleGrant:
             # ('role cannot be dropped because some objects depend on it').
             cur.execute(
                 "DO $$ DECLARE r text; BEGIN "
-                "FOREACH r IN ARRAY ARRAY['a1_repl_nogrant', 'a1_repl_granted'] LOOP "
+                f"FOREACH r IN ARRAY ARRAY['{self._nogrant_role}', '{self._granted_role}'] LOOP "
                 "IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = r) THEN "
                 "EXECUTE format('REVOKE SET ON PARAMETER session_replication_role FROM %I', r); "
                 "EXECUTE format('DROP ROLE %I', r); "
@@ -379,17 +390,18 @@ class TestReplicationRoleGrant:
         from django.db import Error as DjangoDBError
         from django.db import transaction
 
+        nogrant, granted = self._nogrant_role, self._granted_role
         self._drop_roles()
         with connection.cursor() as cur:
-            cur.execute("CREATE ROLE a1_repl_nogrant NOSUPERUSER NOBYPASSRLS")
-            cur.execute("CREATE ROLE a1_repl_granted NOSUPERUSER NOBYPASSRLS")
-            cur.execute("GRANT SET ON PARAMETER session_replication_role TO a1_repl_granted")
+            cur.execute(f"CREATE ROLE {nogrant} NOSUPERUSER NOBYPASSRLS")
+            cur.execute(f"CREATE ROLE {granted} NOSUPERUSER NOBYPASSRLS")
+            cur.execute(f"GRANT SET ON PARAMETER session_replication_role TO {granted}")
         try:
             # Ohne GRANT → permission denied. atomic() kapselt den Transaktions-Abort,
             # damit die Connection danach weiterverwendbar bleibt.
             with pytest.raises(DjangoDBError) as exc, transaction.atomic():
                 with connection.cursor() as cur:
-                    cur.execute("SET ROLE a1_repl_nogrant")
+                    cur.execute(f"SET ROLE {nogrant}")
                     cur.execute("SET session_replication_role = replica")
             assert "session_replication_role" in str(exc.value) or "permission denied" in str(exc.value).lower()
             with connection.cursor() as cur:
@@ -398,7 +410,7 @@ class TestReplicationRoleGrant:
             # Mit GRANT → erfolgreich (das ist der Fix in 01-app-role.sh).
             with transaction.atomic():
                 with connection.cursor() as cur:
-                    cur.execute("SET ROLE a1_repl_granted")
+                    cur.execute(f"SET ROLE {granted}")
                     cur.execute("SET session_replication_role = replica")
                     cur.execute("SHOW session_replication_role")
                     assert cur.fetchone()[0] == "replica"
