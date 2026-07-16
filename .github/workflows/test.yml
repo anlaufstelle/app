@@ -13,6 +13,8 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Ohne Limit läuft ein Hänger bis in GitHubs 6-Stunden-Default (Refs #1606).
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:18-alpine
@@ -67,6 +69,7 @@ jobs:
 
   check:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:18-alpine
@@ -104,6 +107,7 @@ jobs:
 
   audit:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
@@ -125,6 +129,7 @@ jobs:
     # Stellt sicher, dass requirements*.txt (Lock-Files) synchron zu
     # requirements*.in sind. Schlägt fehl, wenn pip-compile Drift erkennt.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0

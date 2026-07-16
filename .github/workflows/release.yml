@@ -7,6 +7,9 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+    # Ohne Limit laeuft ein Haenger bis in GitHubs 6-Stunden-Default (Refs #1606);
+    # 60, weil der arm64-Teil des Multi-Arch-Builds unter QEMU-Emulation langsam ist.
+    timeout-minutes: 60
     permissions:
       contents: read
       packages: write

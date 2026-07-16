@@ -13,6 +13,8 @@ permissions:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    # Ohne Limit laeuft ein Haenger bis in GitHubs 6-Stunden-Default (Refs #1606).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
@@ -29,6 +31,7 @@ jobs:
     # Refs #839: pip-licenses prueft jede installierte Dependency gegen die
     # AGPLv3-kompatible Allowlist in scripts/check_licenses.py.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
@@ -48,6 +51,7 @@ jobs:
     # Refs #832: EN-Translations duerfen nicht mehr als 2 Minor-Releases
     # hinter pyproject.toml zuruckliegen.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
@@ -59,6 +63,7 @@ jobs:
     # Refs #813 (C-46): Wachhund gegen fuzzy/untranslated-Regression in
     # de.po + en.po. Faellt wenn Werte oberhalb der Baseline klettern.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
@@ -72,6 +77,7 @@ jobs:
     # inkrementell. Eigener Job, damit lint + typecheck parallel laufen
     # und ein Type-Fehler die ruff-Resultate nicht versteckt.
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0

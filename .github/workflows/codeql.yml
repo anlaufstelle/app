@@ -18,6 +18,9 @@ jobs:
     # ans Security-Tab. Refs Issue #687.
     if: github.event.repository.private == false
     runs-on: ubuntu-latest
+    # Ohne Limit laeuft ein Haenger bis in GitHubs 6-Stunden-Default (Refs #1606);
+    # 30 statt 15, weil die CodeQL-Analyse (python + javascript) laenger braucht.
+    timeout-minutes: 30
     permissions:
       actions: read
       contents: read
