@@ -197,6 +197,10 @@ class TestCommandExitCodes:
             "_query_role",
             lambda role: {"app": (False, False), "admin": (False, True)}[role],
         )
+        # Ownership-Guard (Refs #1026) hier neutralisieren — dieser Test isoliert
+        # die Rollen-ATTRIBUT-Logik; die Ownership-Assertion hat eigene Tests
+        # (TestCheckDbOwnership) und wuerde sonst die reale Test-DB abfragen.
+        monkeypatch.setattr(cmd, "check_db_ownership", lambda: [])
 
         from django.core.management import call_command
 
@@ -211,6 +215,7 @@ class TestCommandExitCodes:
             "_query_role",
             lambda role: {"app": (True, False), "admin": (False, True)}[role],
         )
+        monkeypatch.setattr(cmd, "check_db_ownership", lambda: [])
 
         from django.core.management import call_command
 
@@ -298,3 +303,115 @@ class TestAppRoleIdentification:
         assert app_check.role == "anlaufstelle_app"
         assert not app_check.ok
         assert any("rolsuper=True" in p for p in app_check.problems())
+
+
+class TestCheckDbOwnership:
+    """Refs #1026 (A1.4, MUST-FIX): ``check_db_roles`` prueft nur die Rollen-
+    ATTRIBUTE (rolsuper/rolbypassrls), NICHT die Ownership. Auf einer Bestands-DB
+    (App-Rolle war vor A1.4 Owner) laeuft Migration 0107 (ENABLE ALWAYS) gruen
+    durch — aber die App-Rolle bleibt Owner und kann die Append-Only-Trigger
+    weiterhin per ``ALTER TABLE ... DISABLE TRIGGER`` abschalten (stiller
+    Fail-open). ``check_db_ownership`` schliesst die Luecke fail-loud.
+
+    Wir mocken ``_query_db_owner``/``_query_table_owner`` (kein Postgres-
+    Roundtrip), analog zum ``_query_role``-Muster der uebrigen Tests.
+    """
+
+    def _patch_owners(self, monkeypatch, *, db_owner: str, table_owner: str):
+        monkeypatch.setattr(cmd, "_query_db_owner", lambda: db_owner)
+        monkeypatch.setattr(cmd, "_query_table_owner", lambda table: table_owner)
+
+    def test_app_owning_appendonly_table_is_flagged(self, monkeypatch, settings):
+        # Drei-Rollen-Modell: Admin != App. App besitzt faelschlich die
+        # Append-Only-Tabellen -> Bestands-DB ohne §9.6-Umzug.
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
+        monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
+        monkeypatch.delenv("POSTGRES_APP_USER", raising=False)
+        self._patch_owners(monkeypatch, db_owner="anlaufstelle_admin", table_owner="anlaufstelle_app")
+
+        problems = cmd.check_db_ownership()
+        assert problems, "App-Owner der Append-Only-Tabelle muss ein Problem melden."
+        assert any("core_auditlog" in p for p in problems)
+        assert any("anlaufstelle_app" in p for p in problems)
+        # Verweis auf den Runbook-Rollout-Schritt (§ 9.6) ist Pflicht.
+        assert any("9.6" in p for p in problems)
+
+    def test_app_owning_database_is_flagged(self, monkeypatch, settings):
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
+        monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
+        monkeypatch.delenv("POSTGRES_APP_USER", raising=False)
+        # DB-Owner ist die App-Rolle, Tabellen (frisch admin-owned) sauber.
+        self._patch_owners(monkeypatch, db_owner="anlaufstelle_app", table_owner="anlaufstelle_admin")
+
+        problems = cmd.check_db_ownership()
+        assert any("Datenbank" in p and "anlaufstelle_app" in p for p in problems)
+
+    def test_clean_three_role_ownership_passes(self, monkeypatch, settings):
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
+        monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
+        monkeypatch.delenv("POSTGRES_APP_USER", raising=False)
+        # Sauberes A1.4-Setup: Admin ist Owner von DB + Tabellen.
+        self._patch_owners(monkeypatch, db_owner="anlaufstelle_admin", table_owner="anlaufstelle_admin")
+
+        assert cmd.check_db_ownership() == []
+
+    def test_uses_postgres_app_user_over_settings_in_migrate_context(self, monkeypatch, settings):
+        # Migrate-Kontext: settings USER ist auf den Admin ueberschrieben,
+        # POSTGRES_APP_USER traegt die echte App-Rolle. Die Ownership-Assertion
+        # muss die App-Rolle (nicht den Connection-User) pruefen.
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_admin")
+        monkeypatch.setenv("POSTGRES_APP_USER", "anlaufstelle_app")
+        monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
+        self._patch_owners(monkeypatch, db_owner="anlaufstelle_admin", table_owner="anlaufstelle_app")
+
+        problems = cmd.check_db_ownership()
+        assert any("anlaufstelle_app" in p for p in problems)
+
+    def test_single_role_dev_setup_skips_ownership_check(self, monkeypatch, settings):
+        # Dev/Legacy-Einzelrollen-Setup: kein POSTGRES_ADMIN_USER -> die App-Rolle
+        # ist bewusst Owner. Kein Falsch-Positiv, auch wenn App alles besitzt.
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle")
+        monkeypatch.delenv("POSTGRES_ADMIN_USER", raising=False)
+        monkeypatch.delenv("POSTGRES_APP_USER", raising=False)
+        # Query-Helfer wuerden bei einem Bug die reale DB treffen -> hart failen.
+        monkeypatch.setattr(cmd, "_query_db_owner", lambda: (_ for _ in ()).throw(AssertionError("DB nicht abfragen")))
+        monkeypatch.setattr(
+            cmd, "_query_table_owner", lambda table: (_ for _ in ()).throw(AssertionError("DB nicht abfragen"))
+        )
+
+        assert cmd.check_db_ownership() == []
+
+    def test_admin_equal_app_skips_ownership_check(self, monkeypatch, settings):
+        # Degeneriertes Setup (Admin == App): keine Trennung moeglich -> No-op,
+        # kein Falsch-Positiv.
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle")
+        monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle")
+        monkeypatch.delenv("POSTGRES_APP_USER", raising=False)
+        monkeypatch.setattr(cmd, "_query_db_owner", lambda: (_ for _ in ()).throw(AssertionError("DB nicht abfragen")))
+        monkeypatch.setattr(
+            cmd, "_query_table_owner", lambda table: (_ for _ in ()).throw(AssertionError("DB nicht abfragen"))
+        )
+
+        assert cmd.check_db_ownership() == []
+
+    def test_command_exits_1_when_app_owns_appendonly_table(self, monkeypatch, settings):
+        # Deploy-Gate-Verhalten: Rollen-Attribute korrekt, aber App ist noch
+        # Owner (Bestands-DB) -> das Kommando MUSS mit Exit 1 abbrechen.
+        monkeypatch.setitem(settings.DATABASES["default"], "USER", "anlaufstelle_app")
+        monkeypatch.setenv("POSTGRES_ADMIN_USER", "anlaufstelle_admin")
+        monkeypatch.delenv("POSTGRES_APP_USER", raising=False)
+        monkeypatch.setattr(
+            cmd,
+            "_query_role",
+            lambda role: {
+                "anlaufstelle_app": (False, False),
+                "anlaufstelle_admin": (False, True),
+            }[role],
+        )
+        self._patch_owners(monkeypatch, db_owner="anlaufstelle_admin", table_owner="anlaufstelle_app")
+
+        from django.core.management import call_command
+
+        with pytest.raises(SystemExit) as exc:
+            call_command("check_db_roles")
+        assert exc.value.code == 1
