@@ -6,6 +6,7 @@ import logging
 from collections import OrderedDict
 
 import weasyprint
+import weasyprint.urls
 from django.db.models import Count
 from django.template.loader import render_to_string
 from django.utils import timezone
@@ -18,6 +19,15 @@ from core.services.file_vault import safe_decrypt
 logger = logging.getLogger(__name__)
 
 
+# Restriktiver Fetcher fuer inline ``data:``-URIs (Refs #1610). WeasyPrint 69.0
+# deprecatet ``default_url_fetcher`` (Removal in 69.0 angekuendigt) zugunsten von
+# ``URLFetcher``; die neue API bringt die ``data:``-Whitelist nativ mit
+# (``allowed_protocols``). ``allow_redirects=False`` bewahrt die restriktive
+# Vorgabe (``URLFetcher``-Default ist ``True``). Einmalige Modul-Instanz statt
+# einer Neuallokation pro Aufruf.
+_DATA_URI_FETCHER = weasyprint.urls.URLFetcher(allowed_protocols={"data"}, allow_redirects=False)
+
+
 def restricted_url_fetcher(url, *args, **kwargs):
     """Restriktiver WeasyPrint-``url_fetcher`` (Refs #1272, T8).
 
@@ -26,7 +36,8 @@ def restricted_url_fetcher(url, *args, **kwargs):
     WeasyPrints Default-Fetcher liest ``file://``-URLs jedoch vom lokalen
     Dateisystem und ruft externe ``http(s)://``-Ressourcen ab. Dieser Fetcher
     lehnt daher jeden ``file://``- oder Netzwerk-Fetch hart ab und reicht nur
-    inline ``data:``-URIs an den Default-Fetcher durch.
+    inline ``data:``-URIs an den restriktiven ``URLFetcher`` (Whitelist
+    ``allowed_protocols={"data"}``) durch.
 
     Bisher griff der Schutz nur, weil die Templates kein ``|safe`` enthalten
     (injizierte Tags rendern inert) — fragil. Da die legitimen Templates keine
@@ -34,7 +45,11 @@ def restricted_url_fetcher(url, *args, **kwargs):
     nie aufgerufen → byte-gleiche PDF-Ausgabe.
     """
     if url.startswith("data:"):
-        return weasyprint.default_url_fetcher(url, *args, **kwargs)
+        # ``URLFetcher.fetch(url, headers=None)`` weicht in der Signatur von
+        # ``default_url_fetcher`` ab — WeasyPrint (und unsere Tests) rufen den
+        # Fetcher nur mit ``url`` auf, daher werden ``*args/**kwargs`` bewusst
+        # nicht durchgereicht.
+        return _DATA_URI_FETCHER.fetch(url)
     raise ValueError(f"Externe Ressourcen sind in PDF-Exporten nicht erlaubt: {url!r}")
 
 

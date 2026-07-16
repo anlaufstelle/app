@@ -24,6 +24,7 @@ from datetime import date, timedelta
 
 import pytest
 import weasyprint
+import weasyprint.urls
 
 from core.services.system.export import restricted_url_fetcher
 
@@ -48,16 +49,43 @@ class TestRestrictedUrlFetcherUnit:
 
     def test_allows_inline_data_uri(self):
         # data:-URIs sind inline (kein Datei-/Netzwerk-Fetch) und werden an den
-        # Default-Fetcher delegiert — sonst koennte legitimes Inline-Markup brechen.
+        # restriktiven ``URLFetcher`` delegiert — sonst koennte legitimes
+        # Inline-Markup brechen. Response schliessen (WeasyPrint tut das im
+        # Prod-Pfad selbst), damit unter ``filterwarnings=error`` (Refs #1609)
+        # keine ResourceWarning aus dem GC-Finalizer failt.
         resp = restricted_url_fetcher("data:text/plain;charset=utf-8,hello")
-        assert resp is not None
+        try:
+            assert resp is not None
+        finally:
+            resp.close()
+
+    def test_data_uri_does_not_emit_deprecation_warning(self):
+        # Regression #1610: der interne data:-Fetch darf nicht mehr ueber das in
+        # WeasyPrint 69.0 deprecatete ``default_url_fetcher`` laufen (Removal in
+        # 69.0 angekuendigt) — sondern ueber eine ``URLFetcher``-Instanz.
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", DeprecationWarning)
+            resp = restricted_url_fetcher("data:text/plain;charset=utf-8,hello")
+        try:
+            assert resp is not None
+        finally:
+            resp.close()
 
     def test_file_url_is_a_real_vector_default_would_read_it(self):
-        """Sanity: der Default-Fetcher LIEST file:// — ohne unseren Fetcher
-        waere das ein Local-File-Read. Macht den Schutz nicht-trivial."""
-        # Wenn dieser Default-Fetch fehlschluege, waere der ganze Schutz moot.
-        resp = weasyprint.default_url_fetcher("file:///etc/hostname")
-        assert resp is not None
+        """Sanity: ein permissiver ``URLFetcher`` LIEST file:// — ohne unseren
+        restriktiven Fetcher waere das ein Local-File-Read. Macht den Schutz
+        nicht-trivial."""
+        # Ein URLFetcher ohne data:-Whitelist (WeasyPrint-Default erlaubt
+        # file://) liest die Datei tatsaechlich — genau diesen Zugriff blockt
+        # restricted_url_fetcher. Response schliessen, damit unter
+        # ``filterwarnings=error`` (Refs #1609) keine ResourceWarning failt.
+        resp = weasyprint.urls.URLFetcher().fetch("file:///etc/hostname")
+        try:
+            assert resp is not None
+        finally:
+            resp.close()
 
 
 class _CapturingHTML:
