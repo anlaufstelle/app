@@ -80,7 +80,11 @@ def workitem_counts(request):
     base_qs = WorkItem.objects.for_facility(facility).filter(active_filter).filter(user_filter)
 
     count = base_qs.count()
-    overdue_count = base_qs.filter(due_date__lt=datetime.date.today()).count()
+    # Refs #1478 (COD-02): Überfälligkeits-Anker über ``timezone.localdate()``
+    # (Europe/Berlin) statt des naiven, server-lokalen ``date.today()`` — sonst
+    # weicht der Nav-Badge nahe Mitternacht um einen Tag von Dashboard/Focus-Box
+    # ab, die bereits die lokale Kalenderdatum-Grenze nutzen (analog #1191).
+    overdue_count = base_qs.filter(due_date__lt=timezone.localdate()).count()
 
     return {
         "open_workitems_count": count,
