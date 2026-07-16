@@ -40,7 +40,9 @@ class TestPruneAuditlog:
                     [ts, str(log.pk)],
                 )
             finally:
-                cur.execute("ALTER TABLE core_auditlog ENABLE TRIGGER auditlog_immutable")
+                # ENABLE ALWAYS: gehaerteter Ruhezustand aus Migration 0107 (A1.4,
+                # Refs #1026); ein einfaches ENABLE wuerde auf 'O' zurueckstufen.
+                cur.execute("ALTER TABLE core_auditlog ENABLE ALWAYS TRIGGER auditlog_immutable")
         return log
 
     def test_prune_deletes_entries_older_than_cutoff(self, facility, settings_obj):
@@ -148,17 +150,17 @@ class TestPruneAuditlog:
             )
         assert "immutable" in str(excinfo.value).lower()
 
-    def test_trigger_tgenabled_stays_origin_after_pruning(self, facility, settings_obj):
-        """Refs #781 (C-13): Health-Check-aequivalenter Test —
-        ``pg_trigger.tgenabled`` muss immer ``'O'`` sein.
+    def test_trigger_tgenabled_stays_always_after_pruning(self, facility, settings_obj):
+        """A1.4 (Refs #1026) + Refs #781 (C-13): Nach dem Pruning muss der Trigger
+        wieder im gehaerteten Ruhezustand ``ENABLE ALWAYS`` (``pg_trigger.tgenabled
+        = 'A'``, Migration 0107) stehen.
 
-        Vor dem Fix lief ``ALTER TABLE ... DISABLE TRIGGER`` und
-        ``... ENABLE TRIGGER`` als Klammer. Bei SIGKILL zwischen den
-        Statements blieb der Trigger disabled.
-
-        Mit ``bypass_replication_triggers()`` veraendert nur
-        ``session_replication_role`` die Trigger-Sicht — auf Tabellen-Ebene
-        bleibt ``tgenabled='O'`` durchgaengig erhalten.
+        ``prune_auditlog`` umgeht den Trigger transaktional per Owner-DDL
+        (``ALTER TABLE ... DISABLE TRIGGER`` + Re-``ENABLE ALWAYS``) in EINEM
+        ``transaction.atomic()``. Bricht der Lauf vor dem Commit ab, rollt die
+        Transaktion das DISABLE mit zurueck — der Trigger bleibt aktiv (die
+        SIGKILL-Sorge aus #781 ist damit abgedeckt). Im Erfolgsfall wird der
+        Vorzustand ('A') exakt wiederhergestellt.
         """
         settings_obj.auditlog_retention_months = 24
         settings_obj.save()
@@ -174,8 +176,8 @@ class TestPruneAuditlog:
             )
             row = cur.fetchone()
         assert row is not None, "Trigger 'auditlog_immutable' fehlt"
-        assert row[0] == "O", (
+        assert row[0] == "A", (
             f"pg_trigger.tgenabled fuer auditlog_immutable ist '{row[0]}', "
-            "erwartet 'O' (origin/local). Refs #781 — der neue Pfad nutzt "
-            "session_replication_role, nicht ALTER TABLE DISABLE TRIGGER."
+            "erwartet 'A' (ENABLE ALWAYS). Refs #1026 — der Wartungspfad stellt "
+            "den gehaerteten Trigger-Ruhezustand nach dem Bypass wieder her."
         )

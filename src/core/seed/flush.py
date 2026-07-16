@@ -49,18 +49,21 @@ def flush_seed_data() -> None:
         OutcomeGoal.objects.all().delete()
         Episode.objects.all().delete()
         Case.objects.all().delete()
-        # EventHistory has append-only DB trigger -> temporarily disable
+        # EventHistory has append-only DB trigger -> temporarily disable.
+        # Re-ENABLE ALWAYS (nicht ENABLE) haelt den gehaerteten Ruhezustand aus
+        # Migration 0107 (A1.4, Refs #1026) -- ein einfaches ENABLE wuerde den
+        # Trigger auf 'O' zurueckstufen.
         with connection.cursor() as cursor:
             cursor.execute("ALTER TABLE core_eventhistory DISABLE TRIGGER eventhistory_no_delete")
         EventHistory.objects.all().delete()
         with connection.cursor() as cursor:
-            cursor.execute("ALTER TABLE core_eventhistory ENABLE TRIGGER eventhistory_no_delete")
+            cursor.execute("ALTER TABLE core_eventhistory ENABLE ALWAYS TRIGGER eventhistory_no_delete")
         # AuditLog has immutable DB trigger -> temporarily disable
         with connection.cursor() as cursor:
             cursor.execute("ALTER TABLE core_auditlog DISABLE TRIGGER auditlog_immutable")
         AuditLog.objects.all().delete()
         with connection.cursor() as cursor:
-            cursor.execute("ALTER TABLE core_auditlog ENABLE TRIGGER auditlog_immutable")
+            cursor.execute("ALTER TABLE core_auditlog ENABLE ALWAYS TRIGGER auditlog_immutable")
         Event.objects.all().delete()
         Client.objects.all().delete()
         DocumentTypeField.objects.all().delete()
