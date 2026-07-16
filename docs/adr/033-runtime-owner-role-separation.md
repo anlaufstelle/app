@@ -85,6 +85,30 @@ umgingen ihn bisher über `session_replication_role = replica`, was einen
 - **−** `SET CONSTRAINTS ALL IMMEDIATE` im Bypass stellt für den Rest der
  Transaktion Deferred-Constraints auf Immediate; für die betroffenen
  Wartungspfade ohne Nebenwirkung, aber als Verhalten dokumentiert.
+- **−** **Tabellen-Lock-Regression.** `ALTER TABLE … DISABLE/ENABLE TRIGGER`
+ nimmt einen `ShareRowExclusiveLock` auf die betroffene Tabelle und **hält ihn
+ bis zum Commit** der umschließenden Transaktion. Der Lock konfligiert mit dem
+ `RowExclusiveLock` gewöhnlicher `INSERT`s — solange ein Wartungslauf im Bypass
+ offen ist, **blockieren parallele Audit-/EventHistory-`INSERT`s** (also nahezu
+ jeder mutierende Request). Das frühere `session_replication_role = replica`
+ nahm diesen Tabellen-Lock **nicht**. Bei `Client.anonymize()` besteht zusätzlich
+ ein **Lock-Upgrade-Risiko**: der Pfad schreibt erst EventHistory-Zeilen
+ (`RowExclusiveLock`) und fordert danach im selben `atomic()` den
+ `ShareRowExclusiveLock` an — läuft parallel ein Request, der die Locks in
+ umgekehrter Reihenfolge hält, kann PostgreSQL einen Deadlock erkennen und eine
+ Seite abbrechen. **Konsequenz für den Betrieb** (Details
+ [`ops-runbook.md` § 9.5](../ops-runbook.md)): Die Bypass-Commands
+ (`enforce_retention`/Retention-Cron, `backfill_audit_chain`, `reencrypt_fields`,
+ `Client.anonymize()`) gehören in **Wartungs-/Nebenzeiten** mit wenig
+ Schreiblast; ein `lock_timeout` (per Rollen-/Session-Default) begrenzt die
+ Wartezeit eines blockierten `ALTER`.
+ *Entscheidung gegen ein hartkodiertes `SET LOCAL lock_timeout` im Bypass:* Ein
+ belastbarer Regressionstest bräuchte zwei konkurrierende Sessions mit
+ konfligierenden Locks — auf dem RAM-limitierten, xdist-parallelen CI inhärent
+ flaky; und ein fester Wert würde ohne Betriebsprofil legitime (u. U. synchron
+ im Request laufende) `anonymize`-Läufe in spurious Hard-Fails drehen. Der
+ `lock_timeout` wird daher **operativ** (Rollen-Default) empfohlen statt im Code
+ erzwungen.
 
 ## Alternatives considered
 

@@ -1090,6 +1090,38 @@ Aufräum-Schritt entzogen werden (optional, Least Privilege):
 REVOKE SET ON PARAMETER session_replication_role FROM anlaufstelle_admin;
 ```
 
+**Lock-Verhalten & Wartungsfenster (wichtig).** `ALTER TABLE … DISABLE/ENABLE
+TRIGGER` nimmt einen `ShareRowExclusiveLock` auf die Tabelle und **hält ihn bis
+zum Commit** der umschließenden Transaktion. Dieser Lock konfligiert mit dem
+`RowExclusiveLock` gewöhnlicher `INSERT`s — solange ein Bypass-Lauf offen ist,
+**blockieren parallele Audit-/EventHistory-`INSERT`s** (nahezu jeder mutierende
+Request). Das frühere `session_replication_role = replica` nahm diesen
+Tabellen-Lock nicht; die Owner-DDL-Umstellung (A1.4) ist hier eine bewusste
+Regression zugunsten der Sicherheit. Bei `Client.anonymize()` kommt ein
+**Lock-Upgrade-Deadlock-Risiko** hinzu (erst `RowExclusiveLock` durch die
+EventHistory-`INSERT`s, dann `ShareRowExclusiveLock` durch das `DISABLE`).
+
+Betriebsregeln daraus:
+
+- Die Bypass-Commands `enforce_retention` (Retention-Cron, § 6),
+ `backfill_audit_chain`, `reencrypt_fields` und die DSGVO-Anonymisierung
+ (`Client.anonymize()`) in **Wartungs-/Nebenzeiten** mit geringer Schreiblast
+ fahren — nicht zur Stoßzeit.
+- Einen **`lock_timeout` als Rollen-/Session-Default** für die Wartungs-/Owner-
+ Rolle setzen, damit ein blockiertes `ALTER TABLE` nicht unbegrenzt wartet,
+ sondern fail-loud abbricht und retry-bar bleibt:
+
+ ```sql
+  -- als Superuser (postgres): begrenzt die Lock-Wartezeit der Wartungsläufe.
+  ALTER ROLE anlaufstelle_admin SET lock_timeout = '5s';
+  ```
+
+ Bewusst **nicht** im Bypass-Code hartkodiert (`SET LOCAL lock_timeout`): ein
+ fester Wert würde ohne Betriebsprofil legitime, u. U. synchron im Request
+ laufende `anonymize`-Läufe in spurious Hard-Fails drehen, und ein belastbarer
+ Regressionstest bräuchte zwei konkurrierende Sessions (auf dem CI flaky). Der
+ Timeout ist daher operativ steuerbar (ADR-033 § Consequences).
+
 **Verifikation** (App-Rolle kann Trigger NICHT abschalten, Owner-Rolle schon):
 
 ```sql
@@ -1129,9 +1161,17 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO anlaufstelle;
 ```
 
 Danach normal deployen (`docker-migrate.sh` wendet Migration `0107` an, falls
-noch nicht geschehen) und mit § 9.5-Verifikation prüfen. `check_db_roles` bleibt
-unverändert grün (Attributprofil App/Admin ist gleich geblieben — geändert hat
-sich nur die Ownership).
+noch nicht geschehen) und mit § 9.5-Verifikation prüfen.
+
+**Fail-loud-Gate (Refs #1026):**
+`check_db_roles` prüft seit A1.4 **zusätzlich zur Attribut-Prüfung die Ownership**.
+Solange der Umzug oben noch nicht gelaufen ist (App-Rolle ist noch DB-/Tabellen-
+Owner), meldet das Gate `FAIL … Ownership-Umzug … § 9.6` und bricht mit **Exit 1**
+ab — `docker-migrate.sh` stoppt den Deploy, bevor neue Web-Replicas live gehen.
+Das verhindert den früheren stillen Fail-open, bei dem der Deploy trotz noch
+App-owned Tabellen grün wurde (das Attributprofil App/Admin allein bleibt beim
+Ownership-Umzug ja gleich). Nach durchgeführtem Umzug (Admin ist Owner) ist das
+Gate wieder grün.
 
 > **Hinweis `normalize_db_ownership`:** Der One-Shot-Migrate-Job ruft weiterhin
 > `normalize_db_ownership` — im neuen Modell ein **No-op**, weil `migrate` als
