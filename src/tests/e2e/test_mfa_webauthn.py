@@ -24,6 +24,14 @@ import sys
 import pytest
 from django_otp.oath import TOTP
 
+# ``TargetClosedError`` ist in dieser Playwright-Version (1.61) noch nicht über
+# ``playwright.sync_api`` exportiert, die Basisklasse ``Error`` schon. Wir
+# importieren die konkrete Klasse gezielt aus dem Impl-Modul, um im Roundtrip
+# AUSSCHLIESSLICH den Browser-Tod abzufangen und NICHT etwa ``TimeoutError``
+# (ebenfalls ``Error``-Subklasse), der seine aussagekräftige Meldung behalten
+# soll. Refs #1606.
+from playwright._impl._errors import TargetClosedError
+
 pytestmark = pytest.mark.e2e
 
 
@@ -85,38 +93,49 @@ def _setup_totp(page, base):
 
 
 class TestZZMfaWebAuthn:
-    def test_register_and_verify_passkey_roundtrip(self, base_url, browser, e2e_env):
+    def test_register_and_verify_passkey_roundtrip(self, base_url, browser_type, browser_type_launch_args, e2e_env):
         base = _localhost_base(base_url)
         _cleanup("admin", e2e_env)
+
+        # Eigener Browser statt des session-weiten ``browser``-Fixtures (Refs #1606):
+        # Der Virtual-Authenticator-Pfad (CDP/``WebAuthn.addVirtualAuthenticator``)
+        # hängt stärker als üblich an den Browser-Internals. Stirbt Chromium unter
+        # CPU-Knappheit weg (``-n 2`` auf 2 Kernen), darf das NICHT den geteilten
+        # Browser der übrigen Tests auf diesem xdist-Worker beschädigen. Ein
+        # dedizierter, im ``finally`` geschlossener Browser kapselt den Ausfall.
+        browser = browser_type.launch(**browser_type_launch_args)
+        console_msgs: list[str] = []
         try:
             context = browser.new_context(locale="de-DE")
-            page = context.new_page()
-            page.set_default_timeout(30000)
-
-            # Virtual Authenticator (CTAP2, intern, user-verified) an den Context.
-            cdp = context.new_cdp_session(page)
-            cdp.send("WebAuthn.enable")
-            cdp.send(
-                "WebAuthn.addVirtualAuthenticator",
-                {
-                    "options": {
-                        "protocol": "ctap2",
-                        "transport": "internal",
-                        "hasResidentKey": True,
-                        "hasUserVerification": True,
-                        "isUserVerified": True,
-                        "automaticPresenceSimulation": True,
-                    }
-                },
-            )
-
             try:
+                page = context.new_page()
+                page.set_default_timeout(30000)
+                page.on("console", lambda m: console_msgs.append(f"{m.type}: {m.text}"))
+
+                # Virtual Authenticator (CTAP2, intern, user-verified) an den Context.
+                # Resident-Key + User-Verification sind für Passkey-als-2FA zwingend
+                # (discoverable credential, UV im Verify-Schritt) — daher nicht
+                # weiter abspeckbar. ``automaticPresenceSimulation`` ist Default.
+                cdp = context.new_cdp_session(page)
+                cdp.send("WebAuthn.enable")
+                cdp.send(
+                    "WebAuthn.addVirtualAuthenticator",
+                    {
+                        "options": {
+                            "protocol": "ctap2",
+                            "transport": "internal",
+                            "hasResidentKey": True,
+                            "hasUserVerification": True,
+                            "isUserVerified": True,
+                            "automaticPresenceSimulation": True,
+                        }
+                    },
+                )
+
                 _login(page, base)
                 _setup_totp(page, base)
 
                 # --- Passkey registrieren ---
-                console_msgs = []
-                page.on("console", lambda m: console_msgs.append(f"{m.type}: {m.text}"))
                 page.goto(f"{base}/mfa/settings/", wait_until="domcontentloaded")
                 register_btn = page.locator("[data-testid='passkey-register-button']")
                 register_btn.wait_for(state="visible", timeout=5000)
@@ -146,7 +165,20 @@ class TestZZMfaWebAuthn:
                 # Erfolgreiche Assertion setzt mfa_verified und leitet weiter.
                 page.wait_for_url(lambda url: "/mfa/verify/" not in url and "/login/" not in url, timeout=15000)
                 assert "/mfa/" not in page.url
+            except TargetClosedError as exc:
+                # Stirbt der Browser unter Ressourcenknappheit weg, wirft die
+                # Playwright-Sync-API ``TargetClosedError``. Hier als sauberen
+                # Fehlschlag quittieren, statt ihn eine Assertion verschleiern
+                # zu lassen. Den Endlos-Dreher der Sync-Greenlets (der Fall, in
+                # dem KEINE Exception fliegt) fängt zusätzlich der harte
+                # ``--timeout-method=thread`` der E2E-Läufe ab. Refs #1606.
+                pytest.fail(
+                    "Passkey-Roundtrip abgebrochen: Browser/Target wurde geschlossen "
+                    f"({exc}). Unter CPU-Knappheit stirbt Chromium weg; dieser saubere "
+                    f"Fehlschlag ersetzt den früheren Endlos-Dreher.\nConsole: {console_msgs}"
+                )
             finally:
                 context.close()
         finally:
+            browser.close()
             _cleanup("admin", e2e_env)
