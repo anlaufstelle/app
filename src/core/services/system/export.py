@@ -14,6 +14,7 @@ from django.utils.translation import gettext_lazy as _
 
 from core.models import DocumentType, Event, FieldTemplate
 from core.services.compliance import user_can_see_field
+from core.services.facility import resolve_facility_display_name
 from core.services.file_vault import safe_decrypt
 
 logger = logging.getLogger(__name__)
@@ -250,7 +251,7 @@ def generate_report_pdf(facility, date_from, date_to, stats, *, internal_mode=Fa
     html = render_to_string(
         "core/export/report_pdf.html",
         {
-            "facility_name": getattr(getattr(facility, "settings", None), "facility_full_name", facility.name),
+            "facility_name": resolve_facility_display_name(facility),
             "date_from": date_from,
             "date_to": date_to,
             "stats": stats,
@@ -346,7 +347,7 @@ def generate_jugendamt_pdf(facility, date_from, date_to):
     html = render_to_string(
         "core/export/jugendamt_pdf.html",
         {
-            "facility_name": getattr(getattr(facility, "settings", None), "facility_full_name", facility.name),
+            "facility_name": resolve_facility_display_name(facility),
             "date_from": date_from,
             "date_to": date_to,
             "stats": stats,

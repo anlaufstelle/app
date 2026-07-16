@@ -10,6 +10,7 @@ from django.conf import settings as django_settings
 from django.utils import timezone
 
 from core.models import Settings
+from core.services.facility import resolve_facility_display_name
 
 logger = logging.getLogger(__name__)
 
@@ -96,7 +97,7 @@ def render_document(slug, facility):
     except Settings.DoesNotExist:
         settings_obj = None
 
-    facility_name = getattr(settings_obj, "facility_full_name", "") or facility.name
+    facility_name = resolve_facility_display_name(facility)
 
     replacements = {
         "{{ facility_name }}": facility_name,

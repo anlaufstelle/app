@@ -6,6 +6,7 @@ from django.utils import timezone
 
 from core.models import Case as CaseModel
 from core.models import DeletionRequest, Event, EventHistory, WorkItem
+from core.services.facility import resolve_facility_display_name
 from core.services.file_vault import safe_decrypt
 from core.services.system.export import restricted_url_fetcher
 
@@ -132,10 +133,9 @@ def _gather_workitems(client):
 
 def _build_export_meta(facility):
     """Return export metadata (timestamp + resolved facility name)."""
-    facility_name = getattr(getattr(facility, "settings", None), "facility_full_name", "") or facility.name
     return {
         "timestamp": timezone.now().isoformat(),
-        "facility_name": facility_name,
+        "facility_name": resolve_facility_display_name(facility),
     }
 
 
