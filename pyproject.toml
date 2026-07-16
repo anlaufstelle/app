@@ -155,6 +155,19 @@ do_not_mutate = [
     # vollständig getestet.
     "src/core/services/file_vault/policy.py",
 ]
+# Refs #1388: ``# pragma: no mutate`` zeilenweise wieder erzwingen. mutmut 3.6.0
+# honoriert den CST-basierten Pragma-Pfad nur für Trailing-Comments an
+# SimpleStatementLines und Block-Headern — NICHT für Kommentare an
+# Argument-Zeilen INNERHALB mehrzeiliger Aufrufe (``ComplianceCheck(label=...,
+# # pragma: no mutate)``). Genau dort platziert die compliance-UI-String-
+# Pragmas; nach dem mutmut-3.5→3.6-Bump wurden sie still ignoriert (~400-500
+# UI-String-Mutanten tauchten wieder als Survivor auf und drückten den Score).
+# ``do_not_mutate_patterns`` greift zeilenbasiert per Regex (mutmut/mutation/
+# file_mutation.py, ``_ignored_pattern_lines``) und ist vom CST-Pfad unabhängig:
+# jede Zeile mit dem Pragma-Kommentar wird von der Mutation ausgenommen — das
+# stellt die wieder her, ohne die 144 Pragma-Kommentare
+# anzufassen.
+do_not_mutate_patterns = ["# pragma: no mutate"]
 # Test-Verzeichnis: als iterable behandelt — String führt zur selben Zeichen-
 # für-Zeichen-Iteration im pytest-Argv. TOML-Liste nötig. Umbenannt von
 # ``tests_dir`` auf ``pytest_add_cli_args_test_selection`` (Refs #1388): auch
