@@ -460,3 +460,135 @@ class TestParseStatisticsPeriod:
 
         assert ps.date_from == date(2026, 3, 1)
         assert ps.date_to == date(2026, 3, 31)
+
+
+# Refs #1589: custom-Zeitraum darf nicht unbegrenzt sein (Query-Amplification-DoS).
+class TestParseStatisticsPeriodRangeGuard:
+    @staticmethod
+    def _today():
+        return date(2026, 5, 1)
+
+    def _parse(self, **params):
+        from core.services.dashboard import parse_statistics_period
+
+        return parse_statistics_period(params, self._today())
+
+    def test_custom_range_at_limit_is_allowed(self):
+        from core.services.dashboard.statistics import STATISTICS_MAX_CUSTOM_RANGE_DAYS
+
+        date_from = date(2023, 1, 1)
+        date_to = date_from + timedelta(days=STATISTICS_MAX_CUSTOM_RANGE_DAYS)
+        ps = self._parse(
+            period="custom",
+            date_from=date_from.isoformat(),
+            date_to=date_to.isoformat(),
+        )
+        assert ps.date_from == date_from
+        assert ps.date_to == date_to
+
+    def test_custom_range_too_large_raises(self):
+        from core.services.dashboard import InvalidStatisticsPeriodError
+        from core.services.dashboard.statistics import STATISTICS_MAX_CUSTOM_RANGE_DAYS
+
+        date_from = date(2023, 1, 1)
+        date_to = date_from + timedelta(days=STATISTICS_MAX_CUSTOM_RANGE_DAYS + 1)
+        with pytest.raises(InvalidStatisticsPeriodError):
+            self._parse(
+                period="custom",
+                date_from=date_from.isoformat(),
+                date_to=date_to.isoformat(),
+            )
+
+    def test_custom_from_after_to_raises(self):
+        from core.services.dashboard import InvalidStatisticsPeriodError
+
+        with pytest.raises(InvalidStatisticsPeriodError):
+            self._parse(period="custom", date_from="2026-03-31", date_to="2026-03-01")
+
+
+@pytest.mark.django_db
+class TestStatisticsRangeGuardViews:
+    """Refs #1589: Views mappen ungueltigen custom-Zeitraum auf HTTP 400."""
+
+    def _huge_range(self):
+        return {"period": "custom", "date_from": "0001-01-01", "date_to": "9999-12-31"}
+
+    def test_statistics_view_rejects_huge_range(self, client, admin_user):
+        client.force_login(admin_user)
+        resp = client.get(reverse("core:statistics"), self._huge_range())
+        assert resp.status_code == 400
+
+    def test_statistics_view_accepts_small_custom_range(self, client, admin_user):
+        client.force_login(admin_user)
+        resp = client.get(
+            reverse("core:statistics"),
+            {"period": "custom", "date_from": "2026-03-01", "date_to": "2026-03-31"},
+        )
+        assert resp.status_code == 200
+
+    def test_statistics_view_rejects_inverted_range(self, client, admin_user):
+        client.force_login(admin_user)
+        resp = client.get(
+            reverse("core:statistics"),
+            {"period": "custom", "date_from": "2026-03-31", "date_to": "2026-03-01"},
+        )
+        assert resp.status_code == 400
+
+    def test_chart_data_view_rejects_huge_range(self, client, admin_user):
+        client.force_login(admin_user)
+        resp = client.get(reverse("core:statistics_chart_data"), self._huge_range())
+        assert resp.status_code == 400
+
+    def test_external_report_view_rejects_huge_range(self, client, admin_user):
+        client.force_login(admin_user)
+        resp = client.get(reverse("core:statistics_external_report"), self._huge_range())
+        assert resp.status_code == 400
+
+    def test_csv_export_rejects_huge_range(self, client, admin_user):
+        client.force_login(admin_user)
+        resp = client.get(reverse("core:statistics_csv_export"), self._huge_range())
+        assert resp.status_code == 400
+
+    def test_pdf_export_rejects_huge_range(self, client, admin_user):
+        client.force_login(admin_user)
+        resp = client.get(reverse("core:statistics_pdf_export"), self._huge_range())
+        assert resp.status_code == 400
+
+    def test_jugendamt_export_rejects_huge_range(self, client, admin_user):
+        client.force_login(admin_user)
+        resp = client.get(reverse("core:statistics_jugendamt_export"), self._huge_range())
+        assert resp.status_code == 400
+
+
+@pytest.mark.django_db
+class TestStatisticsRateLimit:
+    """Refs #1589: interaktive Statistik-Endpunkte tragen ein User-Ratelimit."""
+
+    @pytest.fixture(autouse=True)
+    def _enable_ratelimit(self, settings):
+        from django.core.cache import cache
+
+        settings.RATELIMIT_ENABLE = True
+        cache.clear()
+        yield
+        cache.clear()
+
+    def test_statistics_view_is_rate_limited(self, client, admin_user):
+        from core.constants import RATELIMIT_FREQUENT
+
+        limit = int(RATELIMIT_FREQUENT.split("/")[0])
+        client.force_login(admin_user)
+        url = reverse("core:statistics")
+        for _i in range(limit):
+            assert client.get(url).status_code == 200
+        assert client.get(url).status_code == 429
+
+    def test_chart_data_view_is_rate_limited(self, client, admin_user):
+        from core.constants import RATELIMIT_FREQUENT
+
+        limit = int(RATELIMIT_FREQUENT.split("/")[0])
+        client.force_login(admin_user)
+        url = reverse("core:statistics_chart_data")
+        for _i in range(limit):
+            assert client.get(url).status_code == 200
+        assert client.get(url).status_code == 429

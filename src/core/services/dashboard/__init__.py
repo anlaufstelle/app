@@ -53,17 +53,22 @@ from core.services.dashboard.snapshot import (
     is_multi_month_range,
 )
 from core.services.dashboard.statistics import (
+    STATISTICS_MAX_CUSTOM_RANGE_DAYS,
     STATISTICS_MV_NAME,
+    InvalidStatisticsPeriodError,
     PeriodState,
     _flat_view_enabled,
     _parse_year,
     get_event_counts_by_month,
     get_statistics,
     parse_statistics_period,
+    validate_statistics_range,
 )
 
 __all__ = [
+    "InvalidStatisticsPeriodError",
     "PeriodState",
+    "STATISTICS_MAX_CUSTOM_RANGE_DAYS",
     "STATISTICS_MV_NAME",
     "_empty_jugendamt_stats",
     "_empty_stats",
@@ -98,4 +103,5 @@ __all__ = [
     "super_admin_dashboard_context",
     "suppress_jugendamt_stats",
     "suppress_report_stats",
+    "validate_statistics_range",
 ]

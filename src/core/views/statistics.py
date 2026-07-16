@@ -10,9 +10,17 @@ from django.utils.translation import gettext as _
 from django.views import View
 from django_ratelimit.decorators import ratelimit
 
+from core.constants import RATELIMIT_FREQUENT
 from core.models import AuditLog, DocumentType
 from core.services.audit import log_audit_event
-from core.services.dashboard import _merge_stats, build_external_report, get_statistics_hybrid, get_statistics_trend
+from core.services.dashboard import (
+    InvalidStatisticsPeriodError,
+    _merge_stats,
+    build_external_report,
+    get_statistics_hybrid,
+    get_statistics_trend,
+    validate_statistics_range,
+)
 from core.services.system import export_events_csv, generate_jugendamt_pdf, generate_report_pdf
 from core.utils.downloads import safe_download_response
 from core.utils.formatting import parse_date
@@ -27,13 +35,22 @@ class StatisticsView(LeadOrAdminRequiredMixin, HTMXPartialMixin, View):
     template_name = "core/statistics/index.html"
     partial_template_name = "core/statistics/partials/full_content.html"
 
+    # Refs #1589: interaktives Dashboard (Filterwechsel loesen je einen GET aus),
+    # daher hoehere Frequenz als die 10/h der Export-Views — RATELIMIT_FREQUENT
+    # (120/h). Der eigentliche DoS-Vektor (unbegrenzter custom-Range) ist bereits
+    # durch das Clamping in parse_statistics_period entschaerft; das Ratelimit ist
+    # Defense-in-Depth gegen wiederholtes Haemmern.
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="GET", block=True))
     def get(self, request):
         from core.services.dashboard import is_multi_month_range, parse_statistics_period
 
         facility = request.current_facility
         today = timezone.localdate()
         # Refs #816 (C-49): Period-Parsing zentral in der Service-Schicht.
-        period_state = parse_statistics_period(request.GET, today)
+        try:
+            period_state = parse_statistics_period(request.GET, today)
+        except InvalidStatisticsPeriodError as exc:
+            return HttpResponse(str(exc), status=400)
 
         stats = get_statistics_hybrid(facility, period_state.date_from, period_state.date_to)
 
@@ -75,13 +92,20 @@ GERMAN_MONTHS = [
 class ChartDataView(LeadOrAdminRequiredMixin, View):
     """JSON API endpoint returning chart-ready statistics data."""
 
+    # Refs #1589: siehe StatisticsView — hoehere Frequenz (RATELIMIT_FREQUENT,
+    # 120/h) als die Export-Views, da die Chart-API bei jedem Filterwechsel per
+    # JS nachgeladen wird.
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_FREQUENT, method="GET", block=True))
     def get(self, request):
         from core.services.dashboard import parse_statistics_period
 
         facility = request.current_facility
         today = timezone.localdate()
         # Refs #816 (C-49): Period-Parsing zentral in der Service-Schicht.
-        period_state = parse_statistics_period(request.GET, today)
+        try:
+            period_state = parse_statistics_period(request.GET, today)
+        except InvalidStatisticsPeriodError as exc:
+            return JsonResponse({"error": str(exc)}, status=400)
         date_from = period_state.date_from
         date_to = period_state.date_to
 
@@ -135,6 +159,12 @@ class CSVExportView(LeadOrAdminRequiredMixin, View):
         date_to = parse_date(request.GET.get("date_to"), None)
         if not date_from or not date_to:
             return HttpResponse(_("date_from und date_to erforderlich"), status=400)
+        # Refs #1589: gleiche Range-Validierung wie parse_statistics_period —
+        # die Export-Views lesen date_from/date_to direkt aus der Query.
+        try:
+            validate_statistics_range(date_from, date_to)
+        except InvalidStatisticsPeriodError as exc:
+            return HttpResponse(str(exc), status=400)
 
         response = safe_download_response(
             f"export_{date_from}_{date_to}.csv",
@@ -162,6 +192,12 @@ class PDFExportView(LeadOrAdminRequiredMixin, View):
         date_to = parse_date(request.GET.get("date_to"), None)
         if not date_from or not date_to:
             return HttpResponse(_("date_from und date_to erforderlich"), status=400)
+        # Refs #1589: gleiche Range-Validierung wie parse_statistics_period —
+        # die Export-Views lesen date_from/date_to direkt aus der Query.
+        try:
+            validate_statistics_range(date_from, date_to)
+        except InvalidStatisticsPeriodError as exc:
+            return HttpResponse(str(exc), status=400)
 
         stats = get_statistics_hybrid(facility, date_from, date_to)
         # Refs #792 (C-24): ``?internal=1`` aktiviert den internen Report-Modus
@@ -197,6 +233,12 @@ class JugendamtExportView(LeadOrAdminRequiredMixin, View):
         date_to = parse_date(request.GET.get("date_to"), None)
         if not date_from or not date_to:
             return HttpResponse(_("date_from und date_to erforderlich"), status=400)
+        # Refs #1589: gleiche Range-Validierung wie parse_statistics_period —
+        # die Export-Views lesen date_from/date_to direkt aus der Query.
+        try:
+            validate_statistics_range(date_from, date_to)
+        except InvalidStatisticsPeriodError as exc:
+            return HttpResponse(str(exc), status=400)
 
         pdf_bytes = generate_jugendamt_pdf(facility, date_from, date_to)
 
@@ -234,7 +276,12 @@ class ExternalReportView(LeadOrAdminRequiredMixin, View):
 
         facility = request.current_facility
         today = timezone.localdate()
-        period_state = parse_statistics_period(request.GET, today)
+        # Refs #1589: parse_statistics_period ist Single Source of Truth — das
+        # Range-Clamping haertet den externen Bericht automatisch mit.
+        try:
+            period_state = parse_statistics_period(request.GET, today)
+        except InvalidStatisticsPeriodError as exc:
+            return HttpResponse(str(exc), status=400)
 
         report = build_external_report(facility, period_state.date_from, period_state.date_to)
 

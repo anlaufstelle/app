@@ -16,6 +16,38 @@ logger = logging.getLogger(__name__)
 
 STATISTICS_MV_NAME = "core_statistics_event_flat"
 
+# Refs #1589: Obergrenze fuer den ``period=custom``-Zeitraum. Ohne Cap laeuft
+# ``_split_into_segments`` den Bereich Monat fuer Monat ohne Ende ab und loest
+# pro Segment ~6 Live-Aggregat-Queries aus — ein einziger Request mit
+# ``date_from=0001-01-01&date_to=9999-12-31`` ergibt ~10^5 Segmente und wird zum
+# synchronen DB-DoS. 1096 Tage (~3 Jahre inkl. Schaltjahr) deckt jeden
+# plausiblen Traeger-/Foerderberichtszeitraum ab; der Wert ist eine
+# Produktentscheidung und kann bei Bedarf angehoben werden.
+STATISTICS_MAX_CUSTOM_RANGE_DAYS = 1096
+
+
+class InvalidStatisticsPeriodError(ValueError):
+    """Refs #1589: Ungueltiger custom-Zeitraum (Bereich zu gross oder invertiert).
+
+    Die Views fangen diese Exception und antworten mit HTTP 400 statt einen
+    unbegrenzten Live-Aggregationslauf auszuloesen.
+    """
+
+
+def validate_statistics_range(date_from: date, date_to: date) -> None:
+    """Refs #1589: erzwingt ``date_from <= date_to`` und die Maximalspanne.
+
+    Single Source of Truth fuer die Bereichsvalidierung — genutzt vom
+    Period-Parsing (Dashboard/Chart/External-Report) und den Export-Views, die
+    ``date_from``/``date_to`` direkt aus der Query lesen.
+    """
+    if date_from > date_to:
+        raise InvalidStatisticsPeriodError(f"date_from ({date_from}) darf nicht nach date_to ({date_to}) liegen.")
+    if (date_to - date_from).days > STATISTICS_MAX_CUSTOM_RANGE_DAYS:
+        raise InvalidStatisticsPeriodError(
+            f"Der Zeitraum ueberschreitet das Maximum von {STATISTICS_MAX_CUSTOM_RANGE_DAYS} Tagen."
+        )
+
 
 @dataclass(frozen=True)
 class PeriodState:
@@ -56,6 +88,8 @@ def parse_statistics_period(query_params, today: date) -> PeriodState:
         custom_default_from = today - timedelta(days=30)
         date_from = parse_date(query_params.get("date_from"), custom_default_from) or custom_default_from
         date_to = parse_date(query_params.get("date_to"), today) or today
+        # Refs #1589: unbegrenzte custom-Spanne = Query-Amplification-DoS.
+        validate_statistics_range(date_from, date_to)
     elif period == "year":
         selected_year = _parse_year(query_params.get("year"), today.year)
         date_from = date(selected_year, 1, 1)
