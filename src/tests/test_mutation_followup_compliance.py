@@ -217,6 +217,14 @@ class TestMfaChecks:
         User.Role.LEAD,
     ]
 
+    @pytest.fixture(autouse=True)
+    def _include_lead(self, settings):
+        # Refs #1478 (COD-12): Der Quoten-Nenner haengt jetzt an
+        # ``mfa_enforced_roles()``; LEAD (diese Tests nutzen LEAD-User) zaehlt
+        # nur bei aktivem ``MFA_ENFORCE_INCLUDE_LEAD``. Das Flag hier zu setzen
+        # haelt die Schwellwert-Tests (0/80/100 %) valide.
+        settings.MFA_ENFORCE_INCLUDE_LEAD = True
+
     @staticmethod
     def _make_privileged_user(facility, *, with_mfa: bool, suffix: str) -> User:
         user = User.objects.create_user(
@@ -238,7 +246,7 @@ class TestMfaChecks:
         result = _mfa_checks()
         assert len(result) == 1
         assert result[0].status == ComplianceStatus.UNKNOWN
-        assert "Keine privilegierten" in result[0].message
+        assert "Keine MFA-pflichtigen" in result[0].message
 
     def test_hundred_percent_mfa_is_ok(self, facility):
         """Boundary: ``percent >= 100`` → OK."""

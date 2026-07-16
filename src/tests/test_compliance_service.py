@@ -334,13 +334,22 @@ class TestRetentionChecks:
 @pytest.mark.django_db
 class TestMfaChecks:
     def test_unknown_when_no_privileged_users(self, facility):
-        User.objects.filter(role__in=compliance._PRIVILEGED_ROLES).delete()
+        # Refs #1478 (COD-12): Der Quoten-Nenner haengt jetzt an
+        # ``mfa_enforced_roles()`` statt am entfernten ``_PRIVILEGED_ROLES``.
+        from core.models.user import mfa_enforced_roles
+
+        User.objects.filter(role__in=mfa_enforced_roles()).delete()
         checks = compliance._mfa_checks()
         assert checks[0].status == compliance.ComplianceStatus.UNKNOWN
 
-    def test_critical_when_no_mfa(self, facility):
-        # Erstelle privilegierte User ohne MFA
-        User.objects.filter(role__in=compliance._PRIVILEGED_ROLES).delete()
+    def test_critical_when_no_mfa(self, settings, facility):
+        # Refs #1478 (COD-12): LEAD zaehlt nur noch mit, wenn LEAD auch
+        # tatsaechlich erzwungen wird (MFA_ENFORCE_INCLUDE_LEAD). Mit aktivem
+        # Flag sind die drei LEAD-User MFA-pflichtig und ohne Geraet CRITICAL.
+        from core.models.user import mfa_enforced_roles
+
+        settings.MFA_ENFORCE_INCLUDE_LEAD = True
+        User.objects.filter(role__in=mfa_enforced_roles()).delete()
         for i in range(3):
             User.objects.create_user(
                 username=f"prov{i}",

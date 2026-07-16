@@ -28,7 +28,6 @@ import logging
 
 from core.services.compliance._types import (
     _CRITICAL_AUDIT_ACTIONS,
-    _PRIVILEGED_ROLES,
     ComplianceCheck,
     ComplianceStatus,
 )
@@ -183,7 +182,6 @@ __all__ = [
     "ROLE_MAX_SENSITIVITY",
     "SENSITIVITY_RANK",
     "_CRITICAL_AUDIT_ACTIONS",
-    "_PRIVILEGED_ROLES",
     "_app_superuser_checks",
     "_audit_event_checks",
     "_backup_checks",

@@ -11,7 +11,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from core.models import AuditLog
-from core.models.user import User
 
 
 class ComplianceStatus(StrEnum):
@@ -59,11 +58,8 @@ _CRITICAL_AUDIT_ACTIONS = (
     AuditLog.Action.USER_DEACTIVATED,
 )
 
-# Rollen, fuer die MFA-Quote erhoben wird (Audit: "privilegierte Rollen").
-# STAFF/ASSISTANT bleiben aussen vor — die werden ueber
-# ``mfa_enforced_facility_wide`` adressiert.
-_PRIVILEGED_ROLES = (
-    User.Role.SUPER_ADMIN,
-    User.Role.FACILITY_ADMIN,
-    User.Role.LEAD,
-)
+# Hinweis (Refs #1478, COD-12): Der fruehere ``_PRIVILEGED_ROLES``-Nenner der
+# MFA-Quote wurde entfernt — er duplizierte die Rollenmenge und zaehlte LEAD
+# unabhaengig davon, ob LEAD tatsaechlich MFA-erzwungen ist. Die Quote in
+# ``compliance.mfa._mfa_checks`` bindet den Nenner jetzt direkt an die
+# gemeinsame Quelle ``core.models.user.mfa_enforced_roles()``.

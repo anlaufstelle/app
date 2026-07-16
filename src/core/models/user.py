@@ -258,9 +258,12 @@ class User(AbstractUser):
 #   Rollen staff/assistant (optional lead): Erzwingung erst nach der 30-Tage-
 #   Grace-Frist, damit Bestandsnutzer beim Aktivieren nicht ausgesperrt werden.
 #
-# Bewusst als Modul-Konstanten, damit Konsumenten (z.B. die Compliance-Quote
-# ``_PRIVILEGED_ROLES``, koppelbar in Folge-Issue #1478/COD-12) auf die Gesamtmenge
-# ``mfa_enforced_roles()`` zeigen koennen, statt die Rollenliste erneut zu pflegen.
+# Bewusst als Modul-Konstanten, damit Konsumenten auf die Gesamtmenge
+# ``mfa_enforced_roles()`` zeigen koennen, statt die Rollenliste erneut zu
+# pflegen. Die MFA-Compliance-Quote (``compliance.mfa._mfa_checks``) ist genau
+# so an diese Quelle gebunden (Refs #1478, COD-12) — vorher fuehrte sie ein
+# eigenes ``_PRIVILEGED_ROLES``-Duplikat, das LEAD unabhaengig vom Enforcement
+# zaehlte.
 MFA_ENFORCED_ROLES_IMMEDIATE = (
     User.Role.SUPER_ADMIN,
     User.Role.FACILITY_ADMIN,
