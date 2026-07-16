@@ -2,7 +2,7 @@
 
 **Open-Source-Fachsystem für niedrigschwellige soziale Arbeit**
 
-Autor: Barbara Nix, Tobias Nix
+Autor: Erika Musterfrau, Tobias Nix
 Stand: Juli 2026
 Version: 1.7
 

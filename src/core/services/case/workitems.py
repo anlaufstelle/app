@@ -151,13 +151,17 @@ def update_workitem(workitem, user, *, expected_updated_at=None, require_version
     Clients müssen dadurch einen Token mitschicken, während der klassische
     HTML-Formular-Pfad beim Default ``False`` bleibt (kein Verhaltensbruch).
     """
+    from core.services.audit.diff import changed_fields_vs_db
     from core.services.security import check_version_conflict
 
     check_version_conflict(workitem, expected_updated_at, require_token=require_version_token)
-    changed_fields = []
+    # Refs #1613: Diff gegen den DB-Stand, NICHT gegen die übergebene Instanz.
+    # ``WorkItemForm(instance=workitem)`` hat die Instanz in ``_post_clean()``
+    # bereits mutiert — ein ``getattr(workitem, key) != value`` sähe hier
+    # ``neu == neu`` und schriebe nie ``WORKITEM_UPDATE`` (TB6). Der Helper
+    # liest die noch unveränderte DB-Zeile (FK-Vergleich über ``attname``).
+    changed_fields = changed_fields_vs_db(workitem, fields)
     for key, value in fields.items():
-        if getattr(workitem, key) != value:
-            changed_fields.append(key)
         setattr(workitem, key, value)
     workitem.save()
 

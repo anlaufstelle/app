@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Security
+
+- **Aufgaben- und Klienten-Updates schreiben wieder eine AuditLog-Zeile** (#1613) — über die Bearbeiten-Maske geänderte Aufgaben und Personen erschienen zwar im Zeitstrahl, aber nicht mehr im revisionssicheren Audit-Log (Threat-Model TB6): das `ModelForm(instance=…)` mutiert die Instanz bereits vor dem Service-Diff, sodass der Vergleich „neu gegen neu" nie eine Änderung erkannte und `WORKITEM_UPDATE`/`CLIENT_UPDATE` nie geschrieben wurde; der Diff läuft jetzt gegen den unveränderten Datenbank-Stand (neuer Helper `changed_fields_vs_db`, FK-Vergleich über `attname`). Bereits erfolgte Updates aus der Zeit vor dem Fix sind nachträglich nicht rekonstruierbar (keine Feldnamen im Zeitstrahl) und werden nicht nachgetragen.
+
 ## [0.22.0] - 2026-07-15
 
 ### Added

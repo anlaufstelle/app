@@ -300,15 +300,22 @@ def update_client(client, user, *, old_stage=None, expected_updated_at=None, **f
 
     # Allowlist (Refs #734): Verhindert Mass-Assignment durch versehentlich
     # durchgereichte Felder (z.B. ``facility``, ``id``, ``created_at``). Liste
-    # spiegelt die Felder von ``ClientForm`` wider.
+    # spiegelt die Felder von ``ClientForm`` wider. Läuft ZUERST — die
+    # Mass-Assignment-Prüfung darf nicht vom Diff abhängen.
     allowed = {"pseudonym", "contact_stage", "age_cluster", "notes"}
-    # Diff erfassen — nur Feldnamen, keine PII-Werte selbst
-    changed_fields = []
-    for key, value in fields.items():
+    for key in fields:
         if key not in allowed:
             raise ValueError(f"Feld '{key}' darf nicht aktualisiert werden.")
-        if getattr(client, key) != value:
-            changed_fields.append(key)
+
+    # Refs #1613: Diff gegen den DB-Stand, NICHT gegen die übergebene Instanz.
+    # ``ClientForm(instance=client)`` hat die Instanz in ``_post_clean()``
+    # bereits mutiert — ein ``getattr(client, key) != value`` sähe hier
+    # ``neu == neu`` und schriebe nie ``CLIENT_UPDATE`` (TB6). Nur Feldnamen
+    # ins Audit, keine PII-Werte.
+    from core.services.audit.diff import changed_fields_vs_db
+
+    changed_fields = changed_fields_vs_db(client, fields)
+    for key, value in fields.items():
         setattr(client, key, value)
     client.save()
 

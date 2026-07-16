@@ -28,6 +28,7 @@ vom Architekturtest (``TestAuditLogCreationAllowlist``) blockiert.
 """
 
 from core.services.audit.chain import compute_entry_hash, verify_chain
+from core.services.audit.diff import changed_fields_vs_db
 from core.services.audit.hash import hmac_hash_email
 from core.services.audit.helpers import (
     audit_admin_view,
@@ -46,6 +47,7 @@ __all__ = [
     "audit_retention_decision",
     "audit_security_violation",
     "audit_system_view",
+    "changed_fields_vs_db",
     "compute_entry_hash",
     "hmac_hash_email",
     "log_audit_event",

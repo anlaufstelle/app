@@ -8,6 +8,7 @@ Verify that:
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.urls import reverse
 
 from core.models import AuditLog, Case
 from core.services.case import update_case, update_workitem
@@ -205,3 +206,229 @@ class TestOptimisticLockingSettings:
         )
         settings_obj.refresh_from_db()
         assert settings_obj.session_timeout_minutes == 55
+
+
+@pytest.mark.django_db
+class TestUpdateViewAuditCoverage:
+    """Regression über den VIEW-Pfad (Refs #1613).
+
+    Der Bug: ``ModelForm(instance=…)`` mutiert die Instanz bereits in
+    ``_post_clean()`` — bevor der Service den Diff bildet. Ein Diff gegen
+    die (schon mutierte) Instanz sieht ``neu == neu`` und schreibt nie
+    ``*_UPDATE``. Diese Tests fahren daher bewusst ``POST → View → Form →
+    Service → DB`` (nicht den Service direkt — das maskierte den Bug
+    bisher, weil dort die Instanz unberührt ankam).
+    """
+
+    def _workitem_update_url(self, workitem):
+        return reverse("core:workitem_update", kwargs={"pk": workitem.pk})
+
+    def test_workitem_update_view_writes_audit_on_fk_change(
+        self, client, staff_user, lead_user, sample_workitem, client_identified
+    ):
+        """FK-Feld-Wechsel (``assigned_to``: None → lead_user) über den View
+        muss eine ``WORKITEM_UPDATE``-Zeile schreiben.
+
+        ``assigned_to`` ist ein ``Meta.fields``-Feld → wird von
+        ``construct_instance`` mutiert; ``client`` bleibt bewusst unverändert
+        (sonst würde der Nicht-Meta-Feld-Pfad die Lücke maskieren).
+        """
+        client.force_login(staff_user)
+        before = AuditLog.objects.filter(
+            action=AuditLog.Action.WORKITEM_UPDATE, target_id=str(sample_workitem.pk)
+        ).count()
+        response = client.post(
+            self._workitem_update_url(sample_workitem),
+            {
+                "item_type": sample_workitem.item_type,
+                "title": sample_workitem.title,
+                "priority": sample_workitem.priority,
+                "client": str(client_identified.pk),
+                "assigned_to": str(lead_user.pk),
+            },
+        )
+        assert response.status_code == 302
+        after = AuditLog.objects.filter(
+            action=AuditLog.Action.WORKITEM_UPDATE, target_id=str(sample_workitem.pk)
+        ).count()
+        assert after == before + 1
+        entry = AuditLog.objects.filter(
+            action=AuditLog.Action.WORKITEM_UPDATE, target_id=str(sample_workitem.pk)
+        ).latest("timestamp")
+        assert "assigned_to" in entry.detail.get("changed_fields", [])
+        sample_workitem.refresh_from_db()
+        assert sample_workitem.assigned_to_id == lead_user.pk
+
+    def test_workitem_update_view_no_audit_on_identical_post(
+        self, client, staff_user, sample_workitem, client_identified
+    ):
+        """Negativfall: ein identischer POST darf KEINE neue Zeile schreiben
+        (Schutz gegen „einfach immer auditieren" als Pseudo-Fix)."""
+        client.force_login(staff_user)
+        before = AuditLog.objects.filter(
+            action=AuditLog.Action.WORKITEM_UPDATE, target_id=str(sample_workitem.pk)
+        ).count()
+        response = client.post(
+            self._workitem_update_url(sample_workitem),
+            {
+                "item_type": sample_workitem.item_type,
+                "title": sample_workitem.title,
+                "priority": sample_workitem.priority,
+                "client": str(client_identified.pk),
+            },
+        )
+        assert response.status_code == 302
+        after = AuditLog.objects.filter(
+            action=AuditLog.Action.WORKITEM_UPDATE, target_id=str(sample_workitem.pk)
+        ).count()
+        assert after == before
+
+    def test_client_update_view_writes_audit_without_stage_change(self, client, staff_user, client_identified):
+        """Klienten-Update OHNE Stage-Wechsel muss ``CLIENT_UPDATE`` schreiben.
+
+        Bewusst ohne Stage-Wechsel: sonst überlebt ``STAGE_CHANGE`` (View
+        captured ``old_stage`` vor ``is_valid``) und maskiert den Befund, dass
+        ``CLIENT_UPDATE`` über den View nie geschrieben wird.
+        """
+        client.force_login(staff_user)
+        url = reverse("core:client_update", kwargs={"pk": client_identified.pk})
+        before = AuditLog.objects.filter(
+            action=AuditLog.Action.CLIENT_UPDATE, target_id=str(client_identified.pk)
+        ).count()
+        stage_before = AuditLog.objects.filter(
+            action=AuditLog.Action.STAGE_CHANGE, target_id=str(client_identified.pk)
+        ).count()
+        response = client.post(
+            url,
+            {
+                "pseudonym": client_identified.pseudonym,
+                "contact_stage": client_identified.contact_stage,
+                "age_cluster": client_identified.age_cluster,
+                "notes": "Geänderte Notiz",
+            },
+        )
+        assert response.status_code == 302
+        after = AuditLog.objects.filter(
+            action=AuditLog.Action.CLIENT_UPDATE, target_id=str(client_identified.pk)
+        ).count()
+        stage_after = AuditLog.objects.filter(
+            action=AuditLog.Action.STAGE_CHANGE, target_id=str(client_identified.pk)
+        ).count()
+        assert after == before + 1
+        # Kein Stage-Wechsel → STAGE_CHANGE darf den Befund nicht maskieren.
+        assert stage_after == stage_before
+        entry = AuditLog.objects.filter(
+            action=AuditLog.Action.CLIENT_UPDATE, target_id=str(client_identified.pk)
+        ).latest("timestamp")
+        assert "notes" in entry.detail.get("changed_fields", [])
+        assert "Geänderte Notiz" not in str(entry.detail)
+
+    def test_client_update_view_no_audit_on_identical_post(self, client, staff_user, client_identified):
+        """Negativfall Klient: identischer POST ⇒ keine neue ``CLIENT_UPDATE``-Zeile."""
+        client.force_login(staff_user)
+        url = reverse("core:client_update", kwargs={"pk": client_identified.pk})
+        before = AuditLog.objects.filter(
+            action=AuditLog.Action.CLIENT_UPDATE, target_id=str(client_identified.pk)
+        ).count()
+        response = client.post(
+            url,
+            {
+                "pseudonym": client_identified.pseudonym,
+                "contact_stage": client_identified.contact_stage,
+                "age_cluster": client_identified.age_cluster,
+                "notes": client_identified.notes,
+            },
+        )
+        assert response.status_code == 302
+        after = AuditLog.objects.filter(
+            action=AuditLog.Action.CLIENT_UPDATE, target_id=str(client_identified.pk)
+        ).count()
+        assert after == before
+
+
+@pytest.mark.django_db
+class TestUpdateRouteAuditEnrollment:
+    """Guard gegen Wiederholung — Registry der sieben ``*_update``-Routen (Refs #1613).
+
+    Jede AUDITIERTE Route muss über einen echten HTTP-POST
+    (View→Form→Service→DB) tatsächlich eine ``*_UPDATE``-AuditLog-Zeile
+    schreiben (prüft TB6, nicht Code-Syntax — deshalb kein AST-/Grep-Guard,
+    der ``episode_update`` sofort als False-Positive flaggen würde).
+
+    Die drei nicht-auditierten Routen sind bewusst dokumentiert und
+    out-of-scope (Follow-up): ``episode_update`` ruft ``form.save()`` direkt,
+    ``event_update``/``goal_update`` haben gar keine ``EVENT_UPDATE``/
+    ``GOAL_UPDATE``-Action. Der Guard macht diese Lücke sichtbar, ohne sie
+    hier zu fixen.
+    """
+
+    #: name → auditiert? Vollständige Registry der sieben Edit-Routen.
+    AUDITED_ROUTES = {"case_update", "client_update", "workitem_update", "workitem_status_update"}
+    UNAUDITED_ROUTES = {"episode_update", "event_update", "goal_update"}
+
+    def test_case_update_route_writes_audit(self, client, staff_user, case_open, client_identified):
+        client.force_login(staff_user)
+        before = AuditLog.objects.filter(action=AuditLog.Action.CASE_UPDATE, target_id=str(case_open.pk)).count()
+        response = client.post(
+            reverse("core:case_update", kwargs={"pk": case_open.pk}),
+            {
+                "title": "Geänderter Falltitel",
+                "description": case_open.description or "",
+                "client": str(client_identified.pk),
+            },
+        )
+        assert response.status_code == 302
+        after = AuditLog.objects.filter(action=AuditLog.Action.CASE_UPDATE, target_id=str(case_open.pk)).count()
+        assert after == before + 1
+
+    def test_workitem_status_update_route_writes_audit(self, client, staff_user, sample_workitem):
+        client.force_login(staff_user)
+        before = AuditLog.objects.filter(
+            action=AuditLog.Action.WORKITEM_UPDATE, target_id=str(sample_workitem.pk)
+        ).count()
+        response = client.post(
+            reverse("core:workitem_status_update", kwargs={"pk": sample_workitem.pk}),
+            {"status": "in_progress"},
+        )
+        assert response.status_code in (200, 302)
+        after = AuditLog.objects.filter(
+            action=AuditLog.Action.WORKITEM_UPDATE, target_id=str(sample_workitem.pk)
+        ).count()
+        assert after == before + 1
+
+    def test_unaudited_update_routes_have_no_update_action(self):
+        """Macht die Design-Lücke sichtbar (Follow-up), ohne sie zu fixen:
+        für die drei Out-of-Scope-Routen existiert bewusst keine passende
+        ``*_UPDATE``-Action in ``AuditLog.Action``."""
+        action_values = {a.value for a in AuditLog.Action}
+        assert "episode_update" not in action_values
+        assert "event_update" not in action_values
+        assert "goal_update" not in action_values
+
+    def test_registry_covers_exactly_the_seven_edit_routes(self):
+        """Alle sieben Registry-Routen müssen in ``core.urls`` auflösbar sein —
+        Schutz gegen eine umbenannte/entfernte Edit-Route, die den Guard
+        still leerlaufen ließe."""
+        from django.urls import NoReverseMatch
+
+        kwargs_by_route = {
+            "case_update": {"pk": "00000000-0000-0000-0000-000000000000"},
+            "client_update": {"pk": "00000000-0000-0000-0000-000000000000"},
+            "workitem_update": {"pk": "00000000-0000-0000-0000-000000000000"},
+            "workitem_status_update": {"pk": "00000000-0000-0000-0000-000000000000"},
+            "episode_update": {
+                "case_pk": "00000000-0000-0000-0000-000000000000",
+                "pk": "00000000-0000-0000-0000-000000000000",
+            },
+            "event_update": {"pk": "00000000-0000-0000-0000-000000000000"},
+            "goal_update": {
+                "case_pk": "00000000-0000-0000-0000-000000000000",
+                "pk": "00000000-0000-0000-0000-000000000000",
+            },
+        }
+        assert set(kwargs_by_route) == self.AUDITED_ROUTES | self.UNAUDITED_ROUTES
+        for name, kwargs in kwargs_by_route.items():
+            try:
+                reverse(f"core:{name}", kwargs=kwargs)
+            except NoReverseMatch:  # pragma: no cover
+                pytest.fail(f"Edit-Route 'core:{name}' ist nicht (mehr) auflösbar.")
