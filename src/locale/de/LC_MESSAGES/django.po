@@ -3425,6 +3425,14 @@ msgstr "Zeitstrom"
 msgid "Feed"
 msgstr "Feed"
 
+#: src/templates/core/zeitstrom/index.html:172
+msgid "Alle aufklappen"
+msgstr "Alle aufklappen"
+
+#: src/templates/core/zeitstrom/index.html:173
+msgid "Alle einklappen"
+msgstr "Alle einklappen"
+
 #: src/templates/base.html:142 src/templates/base.html:326
 #: src/templates/core/zeitstrom/index.html:29
 msgid "Übergabe"

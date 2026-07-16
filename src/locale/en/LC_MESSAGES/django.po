@@ -6490,6 +6490,14 @@ msgstr "Timeline"
 msgid "Feed"
 msgstr "Feed"
 
+#: templates/core/zeitstrom/index.html:172
+msgid "Alle aufklappen"
+msgstr "Expand all"
+
+#: templates/core/zeitstrom/index.html:173
+msgid "Alle einklappen"
+msgstr "Collapse all"
+
 #: templates/core/zeitstrom/index.html:46
 msgid "Übergabe"
 msgstr "Handover"
