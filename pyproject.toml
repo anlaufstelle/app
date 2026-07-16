@@ -155,11 +155,19 @@ tests_dir = ["src/tests/"]
 # eingebauten ``PytestRunner``. Marker- und Flag-Konfiguration läuft über
 # ``pytest_add_cli_args`` (Liste, NICHT String).
 #
-# ``not architecture`` schließt die ``test_architecture_guards_*``-Files aus.
+# ``not architecture`` DESELEKTIERT die ``test_architecture_guards_*``-Files.
 # Die Guards scannen Source-Files und zählen Vorkommen (z.B.
 # ``AuditLog.objects.create()``); im Mutmut-Tree multipliziert mutmut diese
 # Patterns künstlich. Marker statt ``--ignore``, damit ``make ci`` die
 # Guards weiterhin ausführt.
+#
+# WICHTIG (Refs #1600): Dieser Marker-Filter greift erst NACH dem Sammeln —
+# er schützt NICHT vor Collection-/Import-Fehlern. Wirft ein ``architecture``-
+# markiertes Modul beim Import (z.B. Zugriff auf einen im ``mutants/``-Tree
+# fehlenden ``scripts/``-Pfad), bricht das Test-Listing komplett ab, BEVOR der
+# Marker überhaupt ausgewertet wird. Solche Import-Zeit-Zugriffe verbietet
+# ``src/tests/test_architecture_guards_mutation_isolation.py`` (Modul-Level-Skip-
+# Kapselung nötig), nicht dieser Marker.
 pytest_add_cli_args = [
     "-x",
     "-m",
