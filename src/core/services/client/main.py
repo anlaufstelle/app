@@ -439,6 +439,12 @@ def approve_client_deletion(deletion_request, reviewer):
     schließt den DeletionRequest. Nach Ablauf der Papierkorb-Frist
     (``Settings.client_trash_days``) anonymisiert ``enforce_retention``
     den Datensatz automatisch.
+
+    TOCTOU-Fix (Refs #1376, I9): analog ``approve_deletion`` (Event-Pfad) —
+    der Antrag wird innerhalb der Transaktion per ``select_for_update()``
+    neu geladen und der Status erneut geprueft, damit zwei zeitgleiche
+    Approve-Aufrufe fuer denselben (noch PENDING gelesenen) Antrag nicht
+    beide den Soft-Delete ausloesen.
     """
     if deletion_request.requested_by_id == reviewer.pk:
         raise ValidationError("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip).")
@@ -446,6 +452,14 @@ def approve_client_deletion(deletion_request, reviewer):
     # nicht nur in der View).
     if not reviewer.can_confirm_deletion:
         raise ValidationError("Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip).")
+
+    # Refs #1376 (I9): facility-scoped Lookup wahrt die RLS-Scopung, der Lock
+    # haelt die Zeile bis zum Commit dieser Transaktion.
+    deletion_request = DeletionRequest.objects.select_for_update().get(
+        pk=deletion_request.pk, facility=deletion_request.facility
+    )
+    if deletion_request.status != DeletionRequest.Status.PENDING:
+        raise ValidationError("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend).")
 
     client = Client.objects.get(pk=deletion_request.target_id, facility=deletion_request.facility)
     client.soft_delete(user=reviewer)

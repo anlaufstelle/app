@@ -185,6 +185,38 @@ class TestApproveDeletion:
         pending_request.refresh_from_db()
         assert pending_request.status == DeletionRequest.Status.APPROVED
 
+    def test_double_approve_rejected_after_status_change(self, pending_request, lead_user, admin_user, event_qualified):
+        """Refs #1376 (I9): TOCTOU-Race zwischen zwei zeitgleichen Approve-
+        Aufrufen. Beide Reviewer haben den Antrag im PENDING-Zustand gelesen
+        (dasselbe Python-Objekt, kein ``refresh_from_db()`` zwischen den
+        Aufrufen — simuliert zwei parallele Requests). Der zweite Aufruf muss
+        den unter ``select_for_update()`` neu gelesenen, bereits fortge-
+        schrittenen Status sehen und sauber ``ValidationError`` werfen, statt
+        das Event ein zweites Mal zu verarbeiten."""
+        from django.core.exceptions import ValidationError
+
+        approve_deletion(pending_request, lead_user)
+        with pytest.raises(ValidationError):
+            approve_deletion(pending_request, admin_user)
+
+        # Kein Doppel-Approve-Nebeneffekt: genau ein DELETE- und ein
+        # DELETION_APPROVED-Audit-Eintrag, nicht zwei.
+        assert (
+            AuditLog.objects.filter(
+                action=AuditLog.Action.DELETE,
+                target_type="Event",
+                target_id=str(event_qualified.pk),
+            ).count()
+            == 1
+        )
+        assert (
+            AuditLog.objects.filter(
+                action=AuditLog.Action.DELETION_APPROVED,
+                target_id=str(pending_request.pk),
+            ).count()
+            == 1
+        )
+
 
 @pytest.mark.django_db
 class TestRejectDeletion:

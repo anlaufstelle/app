@@ -74,6 +74,15 @@ def approve_deletion(deletion_request, reviewer):
     Truth) — analog ``approve_client_deletion`` — und greift *vor* jedem
     DB-Schreibzugriff, statt sich auf die DB-CHECK-Constraint (IntegrityError)
     oder die View zu verlassen.
+
+    TOCTOU-Fix (Refs #1376, I9): Zwei zeitgleiche Approve-Aufrufe fuer
+    denselben (noch PENDING gelesenen) Antrag koennten sonst das Event
+    doppelt verarbeiten und zwei DELETION_APPROVED-Audit-Eintraege schreiben.
+    Der Antrag wird deshalb innerhalb der Transaktion per
+    ``select_for_update()`` neu geladen und der Status erneut geprueft —
+    analog ``core.services.case.workitems.update_workitem_status``. Der
+    zweite (wartende) Aufruf sieht danach den bereits fortgeschrittenen
+    Status und bricht sauber mit ``ValidationError`` ab.
     """
     if deletion_request.requested_by_id == reviewer.pk:
         raise ValidationError("Reviewer darf nicht der Antragsteller sein (Vier-Augen-Prinzip).")
@@ -81,6 +90,14 @@ def approve_deletion(deletion_request, reviewer):
     # nicht nur in der View).
     if not reviewer.can_confirm_deletion:
         raise ValidationError("Reviewer benötigt das Recht 'Löschbestätigung' (Vier-Augen-Prinzip).")
+
+    # Refs #1376 (I9): facility-scoped Lookup wahrt die RLS-Scopung, der Lock
+    # haelt die Zeile bis zum Commit dieser Transaktion.
+    deletion_request = DeletionRequest.objects.select_for_update().get(
+        pk=deletion_request.pk, facility=deletion_request.facility
+    )
+    if deletion_request.status != DeletionRequest.Status.PENDING:
+        raise ValidationError("Löschantrag wurde bereits bearbeitet (nicht mehr ausstehend).")
 
     event = Event.objects.get(pk=deletion_request.target_id, facility=deletion_request.facility)
     soft_delete_event(event, reviewer)

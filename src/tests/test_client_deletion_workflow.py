@@ -76,6 +76,29 @@ class TestApproveClientDeletion:
         with pytest.raises(ValidationError):
             approve_client_deletion(dr, staff_user)
 
+    def test_double_approve_rejected_after_status_change(self, facility, staff_user, lead_user, admin_user):
+        """Refs #1376 (I9): TOCTOU-Race, analog services.events.approve_deletion.
+        Beide Reviewer haben den Antrag im PENDING-Zustand gelesen (dasselbe
+        Python-Objekt, kein ``refresh_from_db()`` zwischen den Aufrufen). Der
+        zweite Aufruf muss den bereits fortgeschrittenen Status sehen und
+        sauber ``ValidationError`` werfen, statt die Person ein zweites Mal
+        zu verarbeiten."""
+        client = _make_client(facility)
+        dr = request_client_deletion(client, staff_user, "Grund")
+
+        approve_client_deletion(dr, lead_user)
+        with pytest.raises(ValidationError):
+            approve_client_deletion(dr, admin_user)
+
+        # Kein Doppel-Approve-Nebeneffekt: genau ein CLIENT_SOFT_DELETED-Eintrag.
+        assert (
+            AuditLog.objects.filter(
+                action=AuditLog.Action.CLIENT_SOFT_DELETED,
+                target_id=str(client.pk),
+            ).count()
+            == 1
+        )
+
 
 class TestRejectClientDeletion:
     def test_reject_sets_status_only(self, facility, staff_user, lead_user):
