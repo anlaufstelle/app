@@ -91,8 +91,12 @@ class OfflineClientBundleView(AssistantOrAboveRequiredMixin, View):
             target_obj=client,
             target_type="Client-OfflineBundle",
             detail={
+                # Refs #1476 (R20): kein Pseudonym ins detail (= PII im
+                # append-only Audit-Log, Wiederkehr von L13, vgl. Refs #1093
+                # in services/client/main.py und services/events/deletion.py).
+                # target_obj verlinkt das Objekt ohnehin; client_id reicht.
                 "event": "offline_bundle_fetched",
-                "pseudonym": client.pseudonym,
+                "client_id": str(client.pk),
                 "event_count": len(bundle.get("events", [])),
             },
         )

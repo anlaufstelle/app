@@ -18,6 +18,12 @@ Trade-offs:
   ``core/views/errors.py``, Refs #1354).
 - Body-Limit: 32 KiB harter Cap, damit ein Angreifer nicht beliebig
   grosse Payloads dem Logging-Pipeline zu fressen gibt.
+- Feld-Whitelist (Refs #1476): das Report-JSON kommt vom Browser, ist aber
+  letztlich vom Betreiber der blockierten Ressource (Angreifer bei einer
+  echten Injection) beeinflussbar. Vor dem Logging filtert
+  ``_sanitize_violation`` auf bekannte CSP-Report-Felder, koerziert Werte
+  auf str/int und kappt Strings — verhindert Log-Forging/Stored-XSS im
+  Downstream-Sink (Sentry-Dashboard).
 """
 
 import json
@@ -44,6 +50,69 @@ _VALID_CONTENT_TYPES = {
     "application/reports+json",  # CSP Level 3 (report-to / Reporting API)
     "application/json",  # Fallback fuer Browser, die nur generisches JSON liefern
 }
+
+# Refs #1476 (R19): Whitelist bekannter CSP-Report-Felder — sowohl die
+# kebab-case-Namen aus CSP Level 2 (report-uri) als auch die camelCase-
+# Pendants aus CSP Level 3 / der Reporting API (report-to). Nur diese Keys
+# werden aus dem Angreifer-kontrollierten Report-JSON uebernommen; alles
+# andere (unbekannte Keys, verschachtelte Strukturen) wird verworfen, bevor
+# es ins Log-``extra`` und damit potenziell in einen Downstream-Sink
+# (Sentry-Dashboard etc.) gelangt — Log-Forging/Stored-XSS-Risiko.
+_ALLOWED_VIOLATION_KEYS = frozenset(
+    {
+        "blocked-uri",
+        "document-uri",
+        "violated-directive",
+        "effective-directive",
+        "original-policy",
+        "referrer",
+        "source-file",
+        "line-number",
+        "column-number",
+        "disposition",
+        "status-code",
+        "script-sample",
+        # CSP Level 3 / Reporting API (camelCase)
+        "blockedURL",
+        "documentURL",
+        "violatedDirective",
+        "effectiveDirective",
+        "originalPolicy",
+        "sourceFile",
+        "lineNumber",
+        "columnNumber",
+        "statusCode",
+        "scriptSample",
+    }
+)
+_MAX_FIELD_LEN = 512
+
+
+def _sanitize_violation(violation):
+    """Filtert ein CSP-Violation-Dict auf die Whitelist bekannter Felder.
+
+    Unbekannte Keys werden gedroppt, verschachtelte Werte (dict/list)
+    verworfen, Werte auf str/int koerziert und Strings auf
+    ``_MAX_FIELD_LEN`` gekappt. So landet nie rohes, Angreifer-
+    kontrolliertes JSON im Log-``extra``.
+    """
+    if not isinstance(violation, dict):
+        return {}
+    sanitized = {}
+    for key, value in violation.items():
+        if key not in _ALLOWED_VIOLATION_KEYS:
+            continue
+        if isinstance(value, bool):
+            sanitized[key] = str(value)
+        elif isinstance(value, int):
+            sanitized[key] = value
+        elif isinstance(value, (dict, list)):
+            continue  # Verschachtelung verwerfen
+        elif value is None:
+            continue
+        else:
+            sanitized[key] = str(value)[:_MAX_FIELD_LEN]
+    return sanitized
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -80,7 +149,7 @@ class CSPReportView(View):
             logger.warning(
                 "csp_violation",
                 extra={
-                    "csp_violation": violation,
+                    "csp_violation": _sanitize_violation(violation),
                     "remote_addr": get_client_ip(request),
                     "user_agent": request.META.get("HTTP_USER_AGENT", ""),
                 },

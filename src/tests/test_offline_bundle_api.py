@@ -811,6 +811,24 @@ class TestOfflineClientBundleView:
         assert export_after == export_before
         assert read_after == read_before + 1
 
+    def test_audit_log_detail_has_no_pseudonym(self, client, client_identified, staff_user):
+        """Refs #1476 (R20): ``detail`` des ``OFFLINE_BUNDLE_READ``-Eintrags
+        darf kein Klartext-Pseudonym tragen (PII im append-only Audit-Log,
+        Wiederkehr von L13 — vgl. Refs #1093 in ``services/client/main.py``
+        und ``services/events/deletion.py``, die bewusst nur IDs schreiben).
+        ``target_obj`` verlinkt das Objekt ohnehin; ``detail`` traegt
+        stattdessen die ``client_id``.
+        """
+        client.force_login(staff_user)
+        client.get(self._url(client_identified.pk))
+        entry = AuditLog.objects.filter(
+            action=AuditLog.Action.OFFLINE_BUNDLE_READ,
+            target_type="Client-OfflineBundle",
+            target_id=str(client_identified.pk),
+        ).latest("timestamp")
+        assert "pseudonym" not in entry.detail
+        assert entry.detail["client_id"] == str(client_identified.pk)
+
     def test_rate_limit_decorator_configured(self):
         """The view must be decorated with ``ratelimit`` (``RATELIMIT_OFFLINE_BUNDLE``,
         120/h/user — Refs #1354) so that the production settings

@@ -91,6 +91,42 @@ class TestCSPReportEndpoint:
         assert len(warnings) == 1
         assert warnings[0].csp_violation["blockedURL"] == "https://evil.example.com/payload.js"
 
+    def test_malicious_nested_report_is_sanitized(self, client, csp_url, caplog):
+        """Refs #1476 (R19): Angreifer-kontrolliertes Report-JSON darf nicht
+        verbatim ins ``extra`` des Loggers wandern (Log-Forging/Stored-XSS-
+        Risiko im Downstream-Sink, z.B. Sentry). Nur eine Whitelist bekannter
+        Felder wird uebernommen, unbekannte Keys und Verschachtelung werden
+        verworfen, Strings auf 512 Zeichen gekappt.
+        """
+        malicious = {
+            "csp-report": {
+                "blocked-uri": "https://evil.example.com/payload.js",
+                "document-uri": "https://anlaufstelle.app/clients/",
+                "line-number": 42,
+                "source-file": "x" * 600,  # > 512 Zeichen, muss gekappt werden
+                "__proto__": {"nested": "<script>alert(1)</script>"},
+                "unknown-field": "sollte gedroppt werden",
+                "nested-array": [1, 2, {"a": "b"}],
+            }
+        }
+        with caplog.at_level(logging.WARNING, logger="security.csp"):
+            response = client.post(
+                csp_url,
+                data=json.dumps(malicious),
+                content_type="application/csp-report",
+            )
+        assert response.status_code == 204
+        warnings = [r for r in caplog.records if r.message == "csp_violation"]
+        assert len(warnings) == 1
+        logged = warnings[0].csp_violation
+        assert "unknown-field" not in logged
+        assert "__proto__" not in logged
+        assert "nested-array" not in logged
+        assert logged["blocked-uri"] == "https://evil.example.com/payload.js"
+        assert logged["line-number"] == 42
+        assert logged["source-file"] == "x" * 512
+        assert len(logged["source-file"]) == 512
+
     def test_unsupported_content_type_rejected(self, client, csp_url):
         response = client.post(
             csp_url,

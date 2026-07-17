@@ -228,6 +228,24 @@ class TestServiceSizeCap:
         attachment = store_encrypted_file(facility_with_settings, uploaded, ft_file, event, staff_user)
         assert attachment.pk is not None
 
+    def test_unknown_size_bypasses_cap(self, facility_with_settings, staff_user, event, settings):
+        """Refs #1476 (T3): dokumentiert den Bypass in ``enforce_upload_size``
+        (``policy.py``): ``if size is None or size <= max_bytes: return`` —
+        bei ``uploaded_file.size is None`` (z.B. Streaming-Uploads ohne
+        bekannte Content-Length) wird der Cap komplett uebersprungen, statt
+        fail-closed abzulehnen. Akzeptiert als bestehendes Verhalten (kein
+        Fix hier, reiner Regressionstest); TODO: siehe #1476 fuer eine
+        moegliche fail-closed-Variante (size=None ablehnen statt durchlassen).
+        """
+        from core.services.file_vault.policy import enforce_upload_size
+
+        settings.FILE_VAULT_MAX_UPLOAD_BYTES = 1024  # 1 KiB
+        uploaded = SimpleUploadedFile("unknown-size.pdf", VALID_PDF_BYTES + b"a" * 2048, content_type="application/pdf")
+        uploaded.size = None  # simuliert unbekannte Content-Length
+        # Kein raise — der Cap greift bei size=None nicht, obwohl die Datei
+        # (3+ KiB) den 1-KiB-Cap deutlich ueberschreitet.
+        enforce_upload_size(facility_with_settings, uploaded, event, staff_user)
+
 
 @pytest.mark.django_db
 @pytest.mark.usefixtures("_encryption_key")
