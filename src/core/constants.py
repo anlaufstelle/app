@@ -71,10 +71,8 @@ DEFAULT_MAX_FILE_SIZE_MB = 10
 # Drift-Guard (``src/tests/test_allowed_file_types_drift.py``, Refs #1478/COD-11)
 # ihn gegen ``DEFAULT_ALLOWED_FILE_TYPES`` prueft.
 #
-# OFFENE MAINTAINER-FRAGE (Refs #1478, COD-11): Dieser Model-Default enthaelt
-# KEIN ``odt``, der fail-closed-Fallback ``DEFAULT_ALLOWED_FILE_TYPES`` schon —
-# eine konfigurierte Facility lehnt ``.odt`` also still ab, eine unkonfigurierte
-# akzeptiert es. Ob ``odt`` in den Model-Default aufgenommen (beide angleichen)
-# oder aus dem Fallback entfernt werden soll, ist eine Produktentscheidung; der
-# Drift-Guard pinnt die aktuelle Divergenz, bis sie entschieden ist.
-DEFAULT_SETTINGS_ALLOWED_FILE_TYPES = "pdf,jpg,jpeg,png,docx"
+# Maintainer-Entscheid (2026-07-17, Refs #1640): ``odt`` ist erlaubt — das
+# Risikoprofil entspricht ``docx``, LibreOffice ist in Sozialarbeit/Verwaltung
+# verbreitet. Beide Defaults sind deckungsgleich; der Drift-Guard sichert das
+# per Gleichheits-Assertion ab, statt eine Divergenz zu pinnen.
+DEFAULT_SETTINGS_ALLOWED_FILE_TYPES = "pdf,jpg,jpeg,png,docx,odt"

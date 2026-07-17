@@ -2,6 +2,7 @@
 
 from datetime import time
 
+from core.constants import DEFAULT_SETTINGS_ALLOWED_FILE_TYPES
 from core.models import DocumentType, Facility, Settings, TimeFilter
 
 
@@ -18,7 +19,9 @@ def seed_settings(facility: Facility) -> None:
             "retention_qualified_days": 3650,
             "retention_activities_days": 365,
             "default_document_type": default_dt,
-            "allowed_file_types": "pdf,jpg,jpeg,png,docx",
+            # Refs #1640: benannte Konstante statt Magic-String, damit der Seed-
+            # Default nicht erneut gegen Settings.allowed_file_types driftet.
+            "allowed_file_types": DEFAULT_SETTINGS_ALLOWED_FILE_TYPES,
             "max_file_size_mb": 10,
         },
     )

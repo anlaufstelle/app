@@ -8,27 +8,31 @@ Two defaults describe which upload extensions are allowed:
 * ``Settings.allowed_file_types`` model default — what a facility WITH a
   ``Settings`` row starts out allowing.
 
-These drifted: the fallback set contains ``odt``, the model default does not.
-Realised divergence: a facility with a Settings row silently rejects ``.odt``,
-while an unconfigured one accepts it.
+These drifted for a while: the fallback set contained ``odt``, the model
+default did not — a facility with a ``Settings`` row silently rejected
+``.odt`` while an unconfigured one accepted it.
 
-This guard *technically couples* the two (the model default is derived from a
-single named constant, no magic string) and pins the current relationship so any
-future change trips a conscious review. It deliberately does NOT decide the
-``odt`` question (should the model default include it, or should the fallback
-drop it?) — that is a maintainer/product call, flagged as an open question in
-the PR. Refs #1478 (COD-11).
+**Maintainer decision (2026-07-17, Refs #1640):** ``odt`` is allowed. Both
+defaults are now identical (``odt``'s risk profile matches ``docx``, and
+LibreOffice is common in social-work/administrative contexts). This guard no
+longer pins a divergence — it asserts **equality** of the two sets, so any
+future change to either constant must deliberately keep them in sync (or
+consciously break the guard with a documented reason). Refs #1478 (COD-11).
 """
 
 from __future__ import annotations
 
+import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
+
 from core.constants import DEFAULT_ALLOWED_FILE_TYPES, DEFAULT_SETTINGS_ALLOWED_FILE_TYPES
 from core.models.settings import Settings
+from core.services.file_vault.policy import enforce_allowed_file_types
 
 
-def _model_default_types() -> set[str]:
+def _model_default_types() -> frozenset[str]:
     field = Settings._meta.get_field("allowed_file_types")
-    return {t.strip() for t in field.default.split(",") if t.strip()}
+    return frozenset(t.strip() for t in field.default.split(",") if t.strip())
 
 
 def test_model_default_is_coupled_to_named_constant():
@@ -37,22 +41,27 @@ def test_model_default_is_coupled_to_named_constant():
     assert field.default == DEFAULT_SETTINGS_ALLOWED_FILE_TYPES
 
 
-def test_model_default_is_subset_of_failclosed_fallback():
-    """Invariant: every type a configured facility allows by default must also be
-    in the fail-closed fallback whitelist (never a type the fallback rejects)."""
-    assert _model_default_types() <= set(DEFAULT_ALLOWED_FILE_TYPES)
+def test_model_default_equals_failclosed_fallback():
+    """The model default and the fail-closed fallback must allow exactly the
+    same extensions — a configured facility (has a ``Settings`` row) and an
+    unconfigured one (no row, fallback applies) must behave identically for
+    a freshly created facility. Refs #1640."""
+    assert _model_default_types() == frozenset(DEFAULT_ALLOWED_FILE_TYPES)
 
 
-def test_known_divergence_is_exactly_odt_pending_maintainer_decision():
-    """Pin the CURRENT, deliberate gap so any change to either default trips this
-    guard and forces the open ``odt`` question to be answered explicitly.
+@pytest.mark.django_db
+def test_freshly_created_settings_row_allows_odt_upload(facility, staff_user, sample_event):
+    """Behaviour test (Refs #1640): a facility whose ``Settings`` row was just
+    created — no explicit ``allowed_file_types`` override, i.e. the model
+    default applies — must accept ``.odt`` uploads through the extension
+    whitelist, the same as an unconfigured facility (fail-closed fallback)."""
+    Settings.objects.create(facility=facility)
 
-    If this assertion fails, do not just update the expected set — decide whether
-    ``odt`` belongs in the model default (configured facilities accept it, matching
-    the fallback) or should be dropped from the fallback, then update BOTH the
-    constants and this guard. Refs #1478 (COD-11).
-    """
-    only_in_fallback = set(DEFAULT_ALLOWED_FILE_TYPES) - _model_default_types()
-    only_in_model_default = _model_default_types() - set(DEFAULT_ALLOWED_FILE_TYPES)
-    assert only_in_fallback == {"odt"}
-    assert only_in_model_default == set()
+    uploaded = SimpleUploadedFile(
+        "bericht.odt",
+        b"PK\x03\x04odt-stub-content",
+        content_type="application/vnd.oasis.opendocument.text",
+    )
+
+    # Must not raise — .odt is part of the (now-aligned) model default.
+    enforce_allowed_file_types(facility, uploaded, sample_event, staff_user)
