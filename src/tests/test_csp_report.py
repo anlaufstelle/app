@@ -103,6 +103,7 @@ class TestCSPReportEndpoint:
                 "blocked-uri": "https://evil.example.com/payload.js",
                 "document-uri": "https://anlaufstelle.app/clients/",
                 "line-number": 42,
+                "column-number": 10**100,  # Riesen-int, muss auf int32 gekappt werden
                 "source-file": "x" * 600,  # > 512 Zeichen, muss gekappt werden
                 "__proto__": {"nested": "<script>alert(1)</script>"},
                 "unknown-field": "sollte gedroppt werden",
@@ -124,6 +125,7 @@ class TestCSPReportEndpoint:
         assert "nested-array" not in logged
         assert logged["blocked-uri"] == "https://evil.example.com/payload.js"
         assert logged["line-number"] == 42
+        assert logged["column-number"] == 2**31 - 1
         assert logged["source-file"] == "x" * 512
         assert len(logged["source-file"]) == 512
 

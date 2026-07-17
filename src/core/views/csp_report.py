@@ -105,7 +105,9 @@ def _sanitize_violation(violation):
         if isinstance(value, bool):
             sanitized[key] = str(value)
         elif isinstance(value, int):
-            sanitized[key] = value
+            # Python-ints sind unbegrenzt — auf int32 kappen, damit kein
+            # Riesen-Zahlenliteral ins Log-``extra`` wandert.
+            sanitized[key] = max(-(2**31), min(value, 2**31 - 1))
         elif isinstance(value, (dict, list)):
             continue  # Verschachtelung verwerfen
         elif value is None:
