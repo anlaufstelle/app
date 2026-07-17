@@ -278,30 +278,75 @@
         document.body.appendChild(toast);
     }
 
+    // Refs #1476 (R2): harter Deckel, damit der Logout NIE am Wipe haengen
+    // bleibt (blockierte IndexedDB, klemmender Purge o.ae.).
+    var _LOGOUT_WIPE_TIMEOUT_MS = 3000;
+
     function _wipeOfflineState() {
         // Refs #1065: gemeinsamer Wipe-Pfad lebt in crypto.js — Logout
         // (hier) und Idle-Timeout (crypto.js) räumen identisch ab:
         // CryptoKey + Aktivitäts-Stempel + alle Dexie-Tabellen.
+        //
+        // Refs #1476: Gibt IMMER ein Promise zurueck, das erfuellt, wenn der
+        // (asynchrone) Purge durch ist — der Logout-Handler serialisiert den
+        // nativen POST dahinter. ``Promise.resolve`` umschliesst sowohl das
+        // echte async-Ergebnis als auch den No-Store-Fall.
         try {
             if (window.crypto_session) {
-                window.crypto_session.wipeOfflineState();
-            } else if (window.offlineStore) {
-                window.offlineStore.purgeAll();
+                return Promise.resolve(window.crypto_session.wipeOfflineState());
+            }
+            if (window.offlineStore) {
+                return Promise.resolve(window.offlineStore.purgeAll());
             }
         } catch (_e) {
-            // ignore
+            // synchroner Wurf (z.B. TypeError) — trotzdem sauber aufloesen,
+            // damit der Logout unten in jedem Fall abgeschickt wird.
         }
+        return Promise.resolve();
     }
 
     // Hook every logout-form submit. Both desktop and mobile nav use a
     // POST form to {% url 'logout' %} — we match by action attribute.
+    //
+    // Refs #1476 (R2): Der Wipe war fire-and-forget — der native Logout-POST
+    // rannte gegen den asynchronen IndexedDB-Purge, und auf Browsern ohne
+    // Clear-Site-Data-Support ueberlebten Schluessel + PII sichtbar auf der
+    // oeffentlichen /offline/-Seite. Wir halten den POST jetzt an
+    // (preventDefault), lassen den Wipe fertig laufen (mit hartem
+    // Timeout-Fallback, damit der Logout nie haengt) und loesen ihn erst
+    // DANACH programmatisch aus. ``form.submit()`` feuert das submit-Event
+    // NICHT erneut — genau richtig hier; der Re-Entrancy-Guard schuetzt nur
+    // gegen einen zweiten Nutzer-Klick, waehrend der Wipe noch laeuft.
     document.addEventListener("submit", function (event) {
         var form = event.target;
         if (!form || form.tagName !== "FORM") return;
         var action = form.getAttribute("action") || "";
-        if (action.indexOf("/logout/") !== -1 || action.endsWith("/logout/")) {
-            _wipeOfflineState();
+        if (action.indexOf("/logout/") === -1 && !action.endsWith("/logout/")) return;
+
+        // Re-Entrancy-Guard pro Form: der zweite Klick darf nicht am
+        // laufenden Wipe vorbei nativ abschicken.
+        if (form._logoutWipeInFlight) {
+            event.preventDefault();
+            return;
         }
+        form._logoutWipeInFlight = true;
+
+        event.preventDefault();
+
+        var timeout = new Promise(function (resolve) {
+            setTimeout(resolve, _LOGOUT_WIPE_TIMEOUT_MS);
+        });
+
+        // Fehlerpfad: Wirft der Wipe, wird trotzdem ausgeloggt (``catch`` ->
+        // resolved). Haengt er, gewinnt der Timeout via ``Promise.race``.
+        Promise.race([
+            _wipeOfflineState().catch(function () {
+                // ignore — Rest-Chiffrat ist ohne Schluessel unlesbar (F-01)
+            }),
+            timeout,
+        ]).then(function () {
+            form.submit();
+        });
     });
 
     // Bootstrap: on every page load with an authenticated user, drop expired
