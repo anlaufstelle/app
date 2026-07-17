@@ -69,6 +69,12 @@ EXPECTATIONS = (
     E("service_worker", "public", get=ALL_AUTH, anonymous_ok=True),
     E("manifest", "public", get=ALL_AUTH, anonymous_ok=True),
     E("offline_fallback", "public", get=ALL_AUTH, anonymous_ok=True),
+    # Demo-Rechtstexte (Refs #1641): nur bei DEMO_MODE erreichbar, dann
+    # oeffentlich ohne Login. Ausserhalb DEMO_MODE (Test-/E2E-/Prod-Config)
+    # geben die Views 404 fuer JEDEN Akteur — extra_ok=(404,) deckt die
+    # erlaubten Rollen, anonymous_ok den anonymen Zugriff.
+    E("demo_imprint", "public", get=ALL_AUTH, anonymous_ok=True, extra_ok=(404,)),
+    E("demo_privacy", "public", get=ALL_AUTH, anonymous_ok=True, extra_ok=(404,)),
     E("set_language", "public", post=ALL_AUTH, anonymous_ok=True),
     E("password_reset", "public", get=ALL_AUTH, post=ALL_AUTH, anonymous_ok=True),
     E("password_reset_done", "public", get=ALL_AUTH, anonymous_ok=True),

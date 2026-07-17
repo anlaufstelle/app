@@ -30,10 +30,14 @@ UMAMI_SCRIPT_SRC = "https://umami.example.org/main.js"
 UMAMI_RECORDER_SRC = "https://umami.example.org/recorder.js"
 UMAMI_REQUIRE_CONSENT = True
 
-# Rechtstexte der Demo verlinken (Webseite als SoT). Konkrete URL = Maintainer-
-# Entscheid beim Release-Deploy; hier die kanonische Webseite als Default.
-DEMO_LEGAL_IMPRINT_URL = "https://anlaufstelle.app/impressum"
-DEMO_LEGAL_PRIVACY_URL = "https://anlaufstelle.app/datenschutz"
+# Rechtstexte der Demo: eigene Seiten der Demo-Instanz (Refs #1641). Die Demo
+# verarbeitet mehr als die Marketing-Webseite (Umami-Opt-in inkl. Recording,
+# geteilte Demo-Logins, stuendlicher Reset), daher eigene, darauf zugeschnittene
+# Impressum-/Datenschutz-Seiten statt Links auf die Webseite (deren .html-URLs
+# lieferten ausserdem 404). Die Views (DemoImprintView/DemoPrivacyView) sind nur
+# bei DEMO_MODE erreichbar und oeffentlich ohne Login.
+DEMO_LEGAL_IMPRINT_URL = "/impressum/"
+DEMO_LEGAL_PRIVACY_URL = "/datenschutz/"
 
 # CSP zurueck auf STRIKT (frische Deep-Copy aus base): devlive gibt den
 # Umami-Host GLOBAL frei — auf der oeffentlichen Demo mit Art-9-Offline-Daten

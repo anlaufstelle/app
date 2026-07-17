@@ -91,13 +91,16 @@ class TestDemoUmami:
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == "True"
 
-    def test_legal_urls_point_to_website(self):
+    def test_legal_urls_point_to_own_demo_pages(self):
+        """Refs #1641: Die Rechtstexte sind eigene Seiten der Demo (interne
+        Pfade ``/impressum/`` + ``/datenschutz/``), nicht mehr die (404
+        liefernden) Webseiten-Links."""
         result = _run_demo_import(
             "from anlaufstelle.settings.demo import DEMO_LEGAL_IMPRINT_URL, DEMO_LEGAL_PRIVACY_URL;"
             "print(DEMO_LEGAL_IMPRINT_URL, DEMO_LEGAL_PRIVACY_URL)"
         )
         assert result.returncode == 0, result.stderr
-        assert result.stdout.strip() == "https://anlaufstelle.app/impressum https://anlaufstelle.app/datenschutz"
+        assert result.stdout.strip() == "/impressum/ /datenschutz/"
 
     def test_global_csp_stays_strict_no_umami_host(self):
         """Auf der Demo darf der Umami-Host NICHT global in der CSP stehen —

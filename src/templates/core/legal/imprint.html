@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% comment %}
+Impressum der oeffentlichen Demo (Refs #1641).
+
+Bewusst DEUTSCH und ohne {% trans %} (Rechtstext, keine i18n-Volluebersetzung).
+Adaptiert aus dem Webseiten-Impressum (anlaufstelle.app/impressum.html), auf die
+Demo-Instanz demo.anlaufstelle.app zugeschnitten — nicht 1:1 uebernommen.
+Nur bei DEMO_MODE erreichbar (DemoImprintView gibt sonst 404).
+{% endcomment %}
+
+{% block title %}Impressum – anlaufstelle Demo{% endblock %}
+
+{% block content %}
+<article class="max-w-3xl" data-testid="demo-imprint">
+    <h1 class="text-[22px] font-bold text-ink mb-1">Impressum</h1>
+    <p class="text-[13px] text-ink-muted">Öffentliche Demo-Instanz <span class="font-mono">demo.anlaufstelle.app</span></p>
+
+    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">Angaben gemäß § 5 DDG</h2>
+    <address class="not-italic text-[14px] text-ink-muted leading-relaxed">
+        Erika Musterfrau<br>
+        handelnd unter der Geschäftsbezeichnung „anlaufstelle“<br>
+        Musterstrasse 1<br>
+        12345 Musterstadt, Portugal
+    </address>
+    <p class="text-[14px] text-ink-muted leading-relaxed mt-3">
+        „anlaufstelle“ ist die Geschäftsbezeichnung, unter der Erika Musterfrau die Software
+        Anlaufstelle sowie die zugehörige Beratung und Begleitung anbietet. „anlaufstelle“
+        ist keine eigenständige juristische Person.
+    </p>
+
+    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">Vertreten durch</h2>
+    <p class="text-[14px] text-ink-muted leading-relaxed">Erika Musterfrau</p>
+
+    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">Kontakt</h2>
+    <p class="text-[14px] text-ink-muted leading-relaxed">
+        E-Mail: <a href="mailto:kontakt@anlaufstelle.app" class="text-accent hover:underline">kontakt@anlaufstelle.app</a><br>
+        Telefon: +49 000 0000000
+    </p>
+
+    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">Zielgruppe</h2>
+    <p class="text-[14px] text-ink-muted leading-relaxed">
+        Diese Instanz ist eine unverbindliche Demonstration der Software Anlaufstelle für
+        Unternehmen, Organisationen, Träger, selbständig Tätige und öffentliche Einrichtungen.
+        Verträge mit Verbraucherinnen und Verbrauchern werden hierüber nicht geschlossen.
+    </p>
+
+    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">Umsatzsteuer-Identifikationsnummer</h2>
+    <p class="text-[14px] text-ink-muted leading-relaxed">
+        NIF-IVA: XX000000000<br>
+        Kein Eintrag in einem Vereins- oder Handelsregister (freiberufliche Tätigkeit).
+    </p>
+
+    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">Verantwortlich für den Inhalt (§ 18 Abs. 2 MStV)</h2>
+    <p class="text-[14px] text-ink-muted leading-relaxed">Erika Musterfrau, Anschrift wie oben.</p>
+
+    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">Urheberrecht</h2>
+    <p class="text-[14px] text-ink-muted leading-relaxed">
+        Die in dieser Demo dargestellten Inhalte und Werke sind urheberrechtlich geschützt.
+        Hiervon unberührt bleibt die Software Anlaufstelle selbst: Sie steht als Open Source
+        unter der GNU AGPL v3 und darf im Rahmen dieser Lizenz genutzt, verändert und
+        weitergegeben werden.
+    </p>
+
+    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">Hinweis zur Demo</h2>
+    <p class="text-[14px] text-ink-muted leading-relaxed">
+        Diese Instanz dient ausschließlich der Vorführung. Sie enthält nur synthetische
+        Testdaten und wird stündlich zurückgesetzt. Wie Ihre Zugriffe verarbeitet werden,
+        beschreibt die <a href="{{ DEMO_LEGAL_PRIVACY_URL|default:'/datenschutz/' }}" class="text-accent hover:underline">Datenschutzerklärung</a>.
+    </p>
+
+    <p class="text-[12px] text-ink-muted mt-8">Stand: Juli 2026</p>
+</article>
+{% endblock %}

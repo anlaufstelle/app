@@ -120,6 +120,15 @@
             {% endif %}
             <span aria-hidden="true" class="mx-1.5">·</span>
             <a href="{{ SOURCE_CODE_URL }}/blob/main/LICENSE" rel="noopener" target="_blank" class="hover:underline">AGPL-3.0</a>
+            {# Demo: Rechtstexte muessen ohne Login von der Anmeldeseite aus erreichbar sein (Refs #1641). #}
+            {% if demo_mode and DEMO_LEGAL_IMPRINT_URL %}
+            <span aria-hidden="true" class="mx-1.5">·</span>
+            <a href="{{ DEMO_LEGAL_IMPRINT_URL }}" class="hover:underline">{% trans "Impressum" %}</a>
+            {% endif %}
+            {% if demo_mode and DEMO_LEGAL_PRIVACY_URL %}
+            <span aria-hidden="true" class="mx-1.5">·</span>
+            <a href="{{ DEMO_LEGAL_PRIVACY_URL }}" class="hover:underline">{% trans "Datenschutz" %}</a>
+            {% endif %}
         </footer>
     </div>
     <script src="{% static 'js/csrf.js' %}"></script>
