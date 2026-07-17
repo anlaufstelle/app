@@ -15,7 +15,7 @@ from django_ratelimit.decorators import ratelimit
 
 from core.models import AuditLog, User
 from core.services.audit import hmac_hash_email, log_audit_event
-from core.services.security import invite_token_generator, is_locked
+from core.services.security import clear_sudo, invite_token_generator, is_locked
 from core.services.security import unlock as unlock_user
 from core.signals.audit import get_client_ip
 
@@ -235,6 +235,11 @@ class CustomPasswordChangeView(auth_views.PasswordChangeView):
         self.request.user.must_change_password = False
         self.request.user.offline_key_salt = ""
         self.request.user.save(update_fields=["must_change_password", "offline_key_salt"])
+        # I8 (Refs #1376): SudoMode-Fenster leeren — ein neues Passwort
+        # entwertet die alte Re-Auth; ohne clear_sudo bliebe eine bereits
+        # erreichte Sudo-Session (z.B. per gestohlenem Session-Cookie vor
+        # dem Passwortwechsel) trotz neuem Passwort weiter gueltig.
+        clear_sudo(self.request)
         return response
 
 

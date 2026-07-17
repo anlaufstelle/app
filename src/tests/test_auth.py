@@ -1,5 +1,7 @@
 """Tests für Auth-Middleware und Rollen."""
 
+import time
+
 import pytest
 from django.contrib.auth.models import AnonymousUser
 from django.contrib.auth.signals import user_logged_in, user_logged_out, user_login_failed
@@ -217,6 +219,28 @@ class TestLoginLogout:
         assert response.url == "/"
         staff_user.refresh_from_db()
         assert staff_user.must_change_password is False
+
+    def test_password_change_clears_sudo_mode(self, client, staff_user):
+        """I8 (Refs #1376): Passwortwechsel muss das SudoMode-Fenster leeren —
+        sonst bleibt eine per gestohlener Session bereits erreichte Re-Auth
+        nach dem Passwortwechsel weiter gueltig."""
+        from core.services.security import SUDO_SESSION_KEY
+
+        client.login(username="teststaff", password="testpass123")
+        session = client.session
+        session[SUDO_SESSION_KEY] = int(time.time()) + 900
+        session.save()
+
+        response = client.post(
+            "/password-change/",
+            {
+                "old_password": "testpass123",
+                "new_password1": "newSecurePass42",
+                "new_password2": "newSecurePass42",
+            },
+        )
+        assert response.status_code == 302
+        assert SUDO_SESSION_KEY not in client.session
 
 
 # --- B.5: ForcePasswordChange Middleware ---
