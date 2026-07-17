@@ -147,6 +147,43 @@ class TestDocumentTypeRetention:
         event.refresh_from_db()
         assert event.is_deleted is False  # Legal Hold bewahrt
 
+    def test_doc_type_retention_respects_legal_hold_on_client(
+        self, facility, settings_obj, client_identified, staff_user
+    ):
+        """Refs #1376 (I10): Ein Legal Hold auf den KLIENTEN (nicht auf das
+        Event selbst) muss dessen Events ebenso schuetzen wie ein direkter
+        Event-Hold — vorher wurde nur ``target_type="Event"`` beruecksichtigt."""
+        from core.models import LegalHold
+
+        doc_type = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.CONTACT,
+            name="Hält (Client-Hold)",
+            retention_days=30,
+        )
+        old_time = timezone.now() - timedelta(days=60)
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=doc_type,
+            occurred_at=old_time,
+            data_json={"x": 1},
+            created_by=staff_user,
+        )
+        Event.objects.filter(pk=event.pk).update(occurred_at=old_time)
+        LegalHold.objects.create(
+            facility=facility,
+            target_type="Client",
+            target_id=client_identified.pk,
+            reason="Prüfung",
+            created_by=staff_user,
+        )
+
+        call_command("enforce_retention")
+
+        event.refresh_from_db()
+        assert event.is_deleted is False  # Client-Hold bewahrt das Event
+
 
 @pytest.mark.django_db
 class TestRlsBypassContextGuard:

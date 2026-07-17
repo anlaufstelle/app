@@ -11,6 +11,7 @@ stdout-Formatierung, Argument-Parsing und Iteration ueber Facilities.
 
 from datetime import timedelta
 
+from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 
 # Refs #818 — Inline-Imports an Modulkopf gehoben. Nach den Submodul-Schnitten
@@ -33,10 +34,13 @@ def collect_doomed_events(facility, settings_obj, now):
     parallel gepflegt werden muessen.
     """
     held_ids = get_active_hold_target_ids(facility, "Event")
+    # Refs #1376 (I10): ein Legal Hold auf den KLIENTEN schuetzt bisher nicht
+    # dessen Events — zusaetzlich zu direkten Event-Holds ausschliessen.
+    held_client_ids = get_active_hold_target_ids(facility, "Client")
     combined = Event.objects.none()
     for strategy in iter_strategies(facility, settings_obj, now):
         combined = combined | strategy.queryset
-    return combined.exclude(pk__in=held_ids).distinct()
+    return combined.exclude(pk__in=held_ids).exclude(client_id__in=held_client_ids).distinct()
 
 
 def _soft_delete_events(qs, facility, category, retention_days, extra_detail=None):
@@ -142,12 +146,20 @@ def enforce_anonymous(facility, settings_obj, now, dry_run):
 
     cutoff = now - timedelta(days=settings_obj.retention_anonymous_days)
     held_ids = get_active_hold_target_ids(facility, "Event")
-    qs = Event.objects.filter(
-        facility=facility,
-        is_anonymous=True,
-        is_deleted=False,
-        occurred_at__lt=cutoff,
-    ).exclude(pk__in=held_ids)
+    # Refs #1376 (I10): Client-Hold schuetzt auch anonyme Events, falls sie
+    # (entgegen der Regel) doch mit einem Klienten verknuepft sind — no-op
+    # fuer echte ``client=None``-Anonyma.
+    held_client_ids = get_active_hold_target_ids(facility, "Client")
+    qs = (
+        Event.objects.filter(
+            facility=facility,
+            is_anonymous=True,
+            is_deleted=False,
+            occurred_at__lt=cutoff,
+        )
+        .exclude(pk__in=held_ids)
+        .exclude(client_id__in=held_client_ids)
+    )
     count = qs.count()
     if count and not dry_run:
         _soft_delete_events(
@@ -171,16 +183,23 @@ def enforce_identified(facility, settings_obj, now, dry_run):
 
     cutoff = now - timedelta(days=settings_obj.retention_identified_days)
     held_ids = get_active_hold_target_ids(facility, "Event")
+    # Refs #1376 (I10): Legal Hold auf den Klienten selbst schuetzt dessen
+    # Events ebenso wie ein direkter Event-Hold.
+    held_client_ids = get_active_hold_target_ids(facility, "Client")
     identified_clients = Client.objects.filter(
         facility=facility,
         contact_stage=Client.ContactStage.IDENTIFIED,
     )
-    qs = Event.objects.filter(
-        facility=facility,
-        client__in=identified_clients,
-        is_deleted=False,
-        occurred_at__lt=cutoff,
-    ).exclude(pk__in=held_ids)
+    qs = (
+        Event.objects.filter(
+            facility=facility,
+            client__in=identified_clients,
+            is_deleted=False,
+            occurred_at__lt=cutoff,
+        )
+        .exclude(pk__in=held_ids)
+        .exclude(client_id__in=held_client_ids)
+    )
     count = qs.count()
     if count and not dry_run:
         _soft_delete_events(
@@ -203,6 +222,9 @@ def enforce_qualified(facility, settings_obj, now, dry_run):
         return {"count": 0}
 
     held_ids = get_active_hold_target_ids(facility, "Event")
+    # Refs #1376 (I10): Legal Hold auf den Klienten selbst schuetzt dessen
+    # Events ebenso wie ein direkter Event-Hold.
+    held_client_ids = get_active_hold_target_ids(facility, "Client")
     qualified_clients = Client.objects.filter(
         facility=facility,
         contact_stage=Client.ContactStage.QUALIFIED,
@@ -216,12 +238,16 @@ def enforce_qualified(facility, settings_obj, now, dry_run):
         closed_at__lt=case_cutoff,
     )
 
-    qs = Event.objects.filter(
-        facility=facility,
-        client__in=qualified_clients,
-        case__in=expired_cases,
-        is_deleted=False,
-    ).exclude(pk__in=held_ids)
+    qs = (
+        Event.objects.filter(
+            facility=facility,
+            client__in=qualified_clients,
+            case__in=expired_cases,
+            is_deleted=False,
+        )
+        .exclude(pk__in=held_ids)
+        .exclude(client_id__in=held_client_ids)
+    )
     count = qs.count()
     if count and not dry_run:
         _soft_delete_events(
@@ -240,6 +266,9 @@ def enforce_document_type_retention(facility, now, dry_run):
     """
 
     held_ids = get_active_hold_target_ids(facility, "Event")
+    # Refs #1376 (I10): Legal Hold auf den Klienten selbst schuetzt dessen
+    # Events ebenso wie ein direkter Event-Hold.
+    held_client_ids = get_active_hold_target_ids(facility, "Client")
     doc_types_with_retention = DocumentType.objects.filter(
         facility=facility,
         retention_days__isnull=False,
@@ -251,12 +280,16 @@ def enforce_document_type_retention(facility, now, dry_run):
         if dt.retention_days < 1:
             continue
         cutoff = now - timedelta(days=dt.retention_days)
-        qs = Event.objects.filter(
-            facility=facility,
-            document_type=dt,
-            is_deleted=False,
-            occurred_at__lt=cutoff,
-        ).exclude(pk__in=held_ids)
+        qs = (
+            Event.objects.filter(
+                facility=facility,
+                document_type=dt,
+                is_deleted=False,
+                occurred_at__lt=cutoff,
+            )
+            .exclude(pk__in=held_ids)
+            .exclude(client_id__in=held_client_ids)
+        )
         dt_count = qs.count()
         if dt_count and not dry_run:
             _soft_delete_events(
@@ -287,10 +320,20 @@ def enforce_activities(facility, settings_obj, now, dry_run):
     # riss der Hard-Delete eine unter aktivem Hold stehende Activity mit
     # (Spoliations-Luecke); der Hold traegt ``target_type="Activity"``.
     held_ids = get_active_hold_target_ids(facility, "Activity")
-    qs = Activity.objects.filter(
-        facility=facility,
-        occurred_at__lt=cutoff,
-    ).exclude(pk__in=held_ids)
+    # Refs #1376 (I10): Activities, deren generisches Ziel ein Klient mit
+    # aktivem Client-Hold ist (z. B. der CLIENT_SOFT_DELETED-Feed-Eintrag),
+    # ebenfalls ausschliessen — sonst umgeht der Aktivitaeten-Feed den
+    # Client-Hold, analog zur Event-Spoliations-Luecke oben.
+    held_client_ids = get_active_hold_target_ids(facility, "Client")
+    client_content_type = ContentType.objects.get_for_model(Client)
+    qs = (
+        Activity.objects.filter(
+            facility=facility,
+            occurred_at__lt=cutoff,
+        )
+        .exclude(pk__in=held_ids)
+        .exclude(target_type=client_content_type, target_id__in=held_client_ids)
+    )
     count = qs.count()
     if count and not dry_run:
         qs.delete()

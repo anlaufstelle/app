@@ -7,7 +7,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.management import call_command
 from django.utils import timezone
 
-from core.models import Activity, AuditLog, Case, Event, Facility, LegalHold, Settings
+from core.models import Activity, AuditLog, Case, Client, Event, Facility, LegalHold, Settings
 
 
 @pytest.fixture
@@ -187,6 +187,26 @@ def test_identified_event_within_retention_stays(identified_event_recent):
 
 
 @pytest.mark.django_db
+def test_identified_event_client_hold_stays(identified_event_expired, client_identified, staff_user):
+    """Refs #1376 (I10): Ein Legal Hold auf den KLIENTEN (nicht auf das Event)
+    muss dessen Events ebenfalls schuetzen — vorher schlossen die enforce_*-
+    Pfade nur ``target_type="Event"``-Holds aus."""
+    LegalHold.objects.create(
+        facility=identified_event_expired.facility,
+        target_type="Client",
+        target_id=client_identified.pk,
+        reason="Aufbewahrungspflicht",
+        created_by=staff_user,
+    )
+
+    call_command("enforce_retention")
+
+    identified_event_expired.refresh_from_db()
+    assert identified_event_expired.is_deleted is False
+    assert identified_event_expired.data_json != {}
+
+
+@pytest.mark.django_db
 def test_qualified_event_open_case_stays(qualified_event_open_case):
     """Event from QUALIFIED client with open case is not deleted, even if very old."""
     call_command("enforce_retention")
@@ -203,6 +223,23 @@ def test_qualified_event_closed_case_expired_gets_deleted(qualified_event_closed
     qualified_event_closed_case_expired.refresh_from_db()
     assert qualified_event_closed_case_expired.is_deleted is True
     assert qualified_event_closed_case_expired.data_json == {}
+
+
+@pytest.mark.django_db
+def test_qualified_event_client_hold_stays(qualified_event_closed_case_expired, client_qualified, staff_user):
+    """Refs #1376 (I10): Client-Hold schuetzt auch den Qualified-Event-Pfad."""
+    LegalHold.objects.create(
+        facility=qualified_event_closed_case_expired.facility,
+        target_type="Client",
+        target_id=client_qualified.pk,
+        reason="Aufbewahrungspflicht",
+        created_by=staff_user,
+    )
+
+    call_command("enforce_retention")
+
+    qualified_event_closed_case_expired.refresh_from_db()
+    assert qualified_event_closed_case_expired.is_deleted is False
 
 
 @pytest.mark.django_db
@@ -455,6 +492,41 @@ def test_activity_under_active_legal_hold_is_not_deleted(facility_with_settings,
         facility=facility_with_settings,
         target_type="Activity",
         target_id=old_activity.pk,
+        reason="Aufbewahrungspflicht",
+        created_by=staff_user,
+    )
+
+    call_command("enforce_retention")
+
+    assert Activity.objects.filter(pk=old_activity.pk).exists()
+
+
+@pytest.mark.django_db
+def test_activity_targeting_held_client_is_not_deleted(facility_with_settings, staff_user):
+    """Refs #1376 (I10): Eine Activity, deren generisches Ziel ein Klient mit
+    aktivem Client-Hold ist (z. B. der ``CLIENT_SOFT_DELETED``-Feed-Eintrag),
+    darf nicht hart geloescht werden — sonst umgeht der Aktivitaeten-Feed den
+    Client-Hold (Spoliations-Luecke analog L12)."""
+    client = Client.objects.create(
+        facility=facility_with_settings,
+        contact_stage=Client.ContactStage.IDENTIFIED,
+        pseudonym="Test-Hold-01",
+        created_by=staff_user,
+    )
+    ct = ContentType.objects.get_for_model(Client)
+    old_activity = Activity.objects.create(
+        facility=facility_with_settings,
+        actor=staff_user,
+        verb=Activity.Verb.DELETED,
+        target_type=ct,
+        target_id=client.pk,
+        summary="Person Test-Hold-01 in den Papierkorb verschoben",
+        occurred_at=timezone.now() - timedelta(days=400),
+    )
+    LegalHold.objects.create(
+        facility=facility_with_settings,
+        target_type="Client",
+        target_id=client.pk,
         reason="Aufbewahrungspflicht",
         created_by=staff_user,
     )
