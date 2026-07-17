@@ -29,15 +29,23 @@ class TestCheckDatabase:
 
     def test_returns_false_when_ensure_connection_raises(self, monkeypatch):
         """Wenn ``connection.ensure_connection`` failt, faellt der
-        Check defensiv auf False zurueck — kein Crash."""
+        Check defensiv auf False zurueck — kein Crash.
 
-        def boom():
-            raise RuntimeError("simulated DB outage")
+        Bewusst ein Stub fuer die MODUL-Referenz statt eines Patches auf dem
+        ``connection``-Proxy: der Proxy delegiert setattr an die geteilte
+        ``DatabaseWrapper``-Instanz, und monkeypatchs Undo schreibt den im
+        geblockten Zustand gelesenen pytest-django-Blocker-Wrapper als
+        Instanz-Attribut zurueck — das ueberschattet dauerhaft jedes
+        klassenbasierte ``unblock()`` und kippt das Session-Teardown der
+        ``rls_test_role``-Fixture (Refs #1647).
+        """
 
-        monkeypatch.setattr(
-            "core.services.system.health.connection.ensure_connection",
-            boom,
-        )
+        class _BrokenConnection:
+            @staticmethod
+            def ensure_connection():
+                raise RuntimeError("simulated DB outage")
+
+        monkeypatch.setattr(system_health, "connection", _BrokenConnection())
         assert system_health.check_database() is False
 
 
