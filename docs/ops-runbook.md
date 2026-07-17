@@ -487,6 +487,29 @@ docker compose -f docker-compose.prod.yml restart web
 
 **Root Cause suchen:** Lang laufende Requests deuten auf langsame DB-Queries. Django Debug Toolbar (nur Dev) oder `EXPLAIN ANALYZE` nutzen.
 
+### 5.4a Cache-Backend / Multi-Worker (Refs #795)
+
+Sobald `GUNICORN_WORKERS > 1` läuft (siehe [5.4](#54-gunicorn-timeout)), brauchen `django-ratelimit` (Login/Sudo/Health-Bruteforce-Schutz) und das Health-Detail-Caching einen **prozessübergreifenden** Cache. Andernfalls (Django-Default `LocMemCache`) hält jeder Worker seinen eigenen Zähler und die effektiven Rate-Limits ver-N-fachen sich mit der Worker-Zahl.
+
+**Default (empfohlen, kein Zusatzdienst): `DatabaseCache`.**
+Ohne weitere Konfiguration nutzt `settings/prod.py` einen shared `DatabaseCache` (`RATELIMIT_USE_CACHE=default`). Die Cache-Tabelle `anlaufstelle_cache` wird per Migration (`0092`) angelegt und läuft im normalen One-Shot-Migrate-Job (`docker-migrate.sh`, siehe [1.2](#12-deploy-schritte)) automatisch mit hoch — **kein** separater `createcachetable`-Schritt nötig.
+
+**Optional: externes Redis via `REDIS_URL`.**
+Betreiber, die **bereits** ein Redis betreiben, können darauf umschalten:
+
+```bash
+# in .env
+REDIS_URL=redis://redis.internal:6379/1
+```
+
+Ist `REDIS_URL` gesetzt (nicht leer), verwendet `prod.py` `django.core.cache.backends.redis.RedisCache` mit dieser Location; sonst bleibt es beim `DatabaseCache`. Wichtig:
+
+- Es wird **kein** Redis-Dienst mitgeliefert (kein Compose-Service) — der Redis muss selbst bereitgestellt und erreichbar sein.
+- `redis-py` ist **keine** Standard-Dependency des Images. Wer diesen Pfad nutzt, installiert die Client-Bibliothek zusätzlich (`pip install redis` bzw. eigenes Image-Layer).
+- Ein gesetztes, aber nicht erreichbares/nicht installiertes `REDIS_URL` lässt Cache-Zugriffe (und damit Rate-Limit-/Health-Pfade) zur Laufzeit fehlschlagen — vor dem Setzen also Erreichbarkeit und Client-Installation prüfen.
+
+Für die meisten Single-Node-Deployments ist der `DatabaseCache`-Default ausreichend; `REDIS_URL` ist nur für Setups gedacht, in denen ohnehin ein Redis vorhanden ist.
+
 ### 5.5 Speicherplatz voll
 
 ```bash

@@ -57,6 +57,10 @@ def _run_prod_import(env_overrides, code="import anlaufstelle.settings.prod  # n
         # faelschlich rot faerben — daher hier ebenfalls auf leer vorbelegen.
         "POSTGRES_ADMIN_PASSWORD": "",
         "POSTGRES_BOOTSTRAP_PASSWORD": "",
+        # Refs #795/#1657: den optionalen Redis-Umschalter leer vorbelegen, damit
+        # eine lokale .env den DatabaseCache-Default-Test nicht per dotenv-
+        # Durchgriff auf RedisCache kippt.
+        "REDIS_URL": "",
     }
     env.update(env_overrides)
     result = subprocess.run(
@@ -251,6 +255,28 @@ class TestProdSharedCacheGuard:
         data = json.loads(result.stdout.strip().splitlines()[-1])
         assert data["backend"] == "django.core.cache.backends.db.DatabaseCache"
         assert data["location"] == "anlaufstelle_cache"
+        assert data["rl_cache"] == "default"
+
+    def test_redis_url_switches_to_redis_cache(self):
+        """Refs #795/#1657 (reduzierter Scope): Ist ``REDIS_URL`` gesetzt, schaltet
+        prod.py von der DatabaseCache-Fallback auf RedisCache um — ein reiner
+        Konfigurationspfad fuer Betreiber mit eigenem, extern betriebenem Redis.
+        Es wird KEIN Compose-Service mitgeliefert und redis-py bleibt out-of-core;
+        hier wird nur die Settings-Aufloesung geprueft (kein Redis-Verbindungsaufbau)."""
+        code = (
+            "import json, anlaufstelle.settings.prod as p; "
+            "print(json.dumps({"
+            "'backend': p.CACHES['default']['BACKEND'], "
+            "'location': p.CACHES['default']['LOCATION'], "
+            "'rl_cache': getattr(p, 'RATELIMIT_USE_CACHE', None)}))"
+        )
+        redis_url = "redis://cache.internal:6379/1"
+        result = _run_prod_import({**self._VALID_ENV, "REDIS_URL": redis_url}, code=code)
+        assert result.returncode == 0, f"prod import failed: {result.stderr}"
+        data = json.loads(result.stdout.strip().splitlines()[-1])
+        assert data["backend"] == "django.core.cache.backends.redis.RedisCache"
+        assert data["location"] == redis_url
+        # Rate-Limit haengt am selben "default"-Alias, egal welches Backend.
         assert data["rl_cache"] == "default"
 
 

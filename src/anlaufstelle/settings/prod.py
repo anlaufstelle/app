@@ -166,19 +166,39 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@anlaufstelle.
 
 CONN_MAX_AGE = 60
 
-# --- Shared Cache (A5.1, Refs #1024 / #1016) ---
+# --- Shared Cache (A5.1, Refs #1024 / #1016; env-Umschalter Refs #795 / #1657) ---
 # Ohne expliziten Cache nutzt Django LocMemCache — pro Gunicorn-Worker isoliert.
 # django-ratelimit (Login/Sudo/Health) und das Health-Detail-Caching (A7.2)
 # zählen dann pro Worker getrennt, sodass Rate-Limits in Multi-Worker-Prod
-# faktisch ge-N-facht werden. DatabaseCache teilt den Zustand prozessübergreifend
-# ohne neue Dependency (Redis-Vollausbau bleibt #795). Tabelle wird per Migration
-# 0092 angelegt (createcachetable-äquivalent).
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
-        "LOCATION": "anlaufstelle_cache",
+# faktisch ge-N-facht werden.
+#
+# Default/Fallback = DatabaseCache: teilt den Zustand prozessübergreifend ohne
+# neue Dependency. Die Tabelle wird per Migration 0092 angelegt
+# (createcachetable-äquivalent) und läuft im One-Shot-Migrate-Job
+# (``docker-migrate.sh``) mit hoch.
+#
+# Optionaler Konfigurationspfad (Refs #795 reduzierter Scope): Betreiber mit
+# einem BEREITS extern betriebenen Redis können per ``REDIS_URL`` darauf
+# umschalten. Es wird bewusst KEIN Redis-Compose-Service mitgeliefert
+# (bleibt embargo-gated) und ``redis-py`` ist KEINE Core-Dependency —
+# wer den Pfad nutzt, installiert ``redis`` selbst und stellt einen Redis bereit
+# (siehe docs/ops-runbook.md § Cache-Backend / Multi-Worker). Ohne gesetztes
+# ``REDIS_URL`` bleibt das Verhalten unverändert (DatabaseCache).
+_redis_url = os.environ.get("REDIS_URL", "").strip()
+if _redis_url:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": _redis_url,
+        }
     }
-}
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+            "LOCATION": "anlaufstelle_cache",
+        }
+    }
 # django-ratelimit gegen den shared Cache laufen lassen (statt LocMem-Default).
 RATELIMIT_USE_CACHE = "default"
 
