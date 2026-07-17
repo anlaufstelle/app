@@ -38,3 +38,9 @@
 		format json
 	}
 }
+
+# Weitere Site-Bloecke auf demselben Host (Multi-Stack, ADR-017 "sites.d"):
+# jede *.caddy-Datei unter sites.d/ definiert einen eigenen Site-Block mit
+# eigenen Headern/Limits. Ein Glob ohne Treffer ignoriert Caddy beim Start
+# (kein Fehler); das Verzeichnis kommt als ro-Mount aus docker-compose.dev.yml.
+import sites.d/*.caddy

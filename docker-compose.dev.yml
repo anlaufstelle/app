@@ -188,6 +188,10 @@ services:
       - "443:443/udp"
     volumes:
       - ./Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      # Zusaetzliche Site-Bloecke (ADR-017 "sites.d", siehe import in
+      # Caddyfile.dev). Darf leer sein/fehlen — der Bind-Mount legt das
+      # Verzeichnis bei Bedarf an, ein leeres Import-Glob ist kein Fehler.
+      - ./sites.d:/etc/caddy/sites.d:ro
       - caddy_data_dev:/data
       - caddy_config_dev:/config
       # Access-Log-Volume: unter read_only muss /var/log/caddy beschreibbar
