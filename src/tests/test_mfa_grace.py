@@ -38,15 +38,17 @@ class TestRoleEnforcementExpanded:
         settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
         assert assistant_user.is_mfa_enforced is True
 
-    def test_lead_not_enforced_without_include_flag(self, settings, lead_user):
+    def test_lead_enforced_by_role_default(self, settings, lead_user):
+        # Refs #1639: LEAD ist jetzt per Default rollen-erzwungen (Grace-Set).
         settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
-        settings.MFA_ENFORCE_INCLUDE_LEAD = False
-        assert lead_user.is_mfa_enforced is False
-
-    def test_lead_enforced_when_include_flag_on(self, settings, lead_user):
-        settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
-        settings.MFA_ENFORCE_INCLUDE_LEAD = True
         assert lead_user.is_mfa_enforced is True
+
+    def test_lead_not_enforced_when_removed_from_grace_set(self, settings, lead_user):
+        # Konfigurierbar per Env (Refs #1639): LEAD aus dem Grace-Set nehmen
+        # schaltet den Rollen-Zwang fuer die Leitung ab.
+        settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
+        settings.MFA_ENFORCED_ROLES_GRACE = ("staff", "assistant")
+        assert lead_user.is_mfa_enforced is False
 
     def test_role_enforcement_off_means_no_role_enforcement(self, settings, staff_user):
         settings.MFA_ENFORCE_PRIVILEGED_ROLES = False
@@ -94,14 +96,16 @@ class TestImmediateVsGraceRoleSplit:
         assert assistant_user.mfa_enforced_by_role_grace is True
         assert assistant_user.mfa_enforced_by_role_immediate is False
 
-    def test_lead_grace_only_with_include_flag(self, settings, lead_user):
+    def test_lead_is_grace_by_default_immediate_when_moved(self, settings, lead_user):
+        # Refs #1639: LEAD ist per Default grace-behaftet; per Env in die
+        # Sofort-Menge verschiebbar (dann ohne Grace).
         settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
-        settings.MFA_ENFORCE_INCLUDE_LEAD = False
-        assert lead_user.mfa_enforced_by_role_grace is False
-        assert lead_user.mfa_enforced_by_role_immediate is False
-        settings.MFA_ENFORCE_INCLUDE_LEAD = True
         assert lead_user.mfa_enforced_by_role_grace is True
         assert lead_user.mfa_enforced_by_role_immediate is False
+        settings.MFA_ENFORCED_ROLES_IMMEDIATE = ("super_admin", "facility_admin", "lead")
+        settings.MFA_ENFORCED_ROLES_GRACE = ("staff", "assistant")
+        assert lead_user.mfa_enforced_by_role_grace is False
+        assert lead_user.mfa_enforced_by_role_immediate is True
 
 
 @pytest.mark.django_db

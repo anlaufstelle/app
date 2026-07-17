@@ -585,8 +585,18 @@ Anlaufstelle supports TOTP-based 2FA via [`django-otp`](https://django-otp-offic
 |---|---|---|---|
 | **Single user** | `User.mfa_required` | Core > Users > *User* > "MFA required" field | 2FA mandatory for this user, disabling is blocked |
 | **Facility-wide** | `Settings.mfa_enforced_facility_wide` | Core > Settings > *Facility* > "Facility-wide 2FA enforcement" field | 2FA mandatory for **all** users of this facility |
+| **Role default** | `MFA_ENFORCE_PRIVILEGED_ROLES` (+ `MFA_ENFORCED_ROLES_IMMEDIATE` / `MFA_ENFORCED_ROLES_GRACE`) | Environment variables (deployment) | 2FA mandatory by role alone -- enabled by default in production |
 
-Evaluation happens via [`User.is_mfa_enforced`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) -- a user is considered enforced if **either** level applies. The MFA middleware blocks access to protected areas until a TOTP code has been verified in the session.
+Evaluation happens via [`User.is_mfa_enforced`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) -- a user is considered enforced if **any** level applies. The MFA middleware blocks access to protected areas until a TOTP code has been verified in the session.
+
+**Configure the role default via environment variables** (#1639). Independently of single-user and facility-wide enforcement, the application already requires 2FA in production **by role alone** (`MFA_ENFORCE_PRIVILEGED_ROLES=True`, the production default; deliberately off in dev/test/e2e/demo). Which roles this covers is controlled by two settings that can be overridden per env as a **comma-separated list**:
+
+| Setting | Default | Effect |
+|---|---|---|
+| `MFA_ENFORCED_ROLES_IMMEDIATE` | `super_admin,facility_admin` | 2FA required **immediately** (no grace) -- without a second factor, an immediate redirect to `/mfa/setup/` |
+| `MFA_ENFORCED_ROLES_GRACE` | `lead,staff,assistant` | 2FA required, but only **after a 30-day transition period** (reminder banner from 14 days remaining) so existing users are not locked out |
+
+The **Lead** role (`lead`) is mandatory by default (in the grace set) -- if staff/assistant are enforced, so is the hierarchically higher lead. Valid role names are `super_admin`, `facility_admin`, `lead`, `staff`, `assistant`; an **empty** list deliberately disables that level. An **unknown role name** or an **overlap** between the two lists aborts startup fail-closed with `ImproperlyConfigured` (no silent misconfiguration).
 
 #### Reset 2FA for a User
 
@@ -964,7 +974,7 @@ If CSP errors appear after an update: check the browser console for the **specif
 
 ### 5.5 Compliance Dashboard
 
-The super-admin area `/system/compliance/` (#919) consolidates typed health checks in a single dashboard: the three DB role checks (via `check_db_roles`, see the database variables in [§ 1](#1-installation-docker-compose)), backup age, restore-verified age, ClamAV ping and signature age, retention run age, background job freshness (statistics snapshot, breach scan, materialized view refresh), MFA quota (super-admin / facility-admin / lead), pending Django migrations, app/Django/Python versions, and critical audit events from the last 24 hours.
+The super-admin area `/system/compliance/` (#919) consolidates typed health checks in a single dashboard: the three DB role checks (via `check_db_roles`, see the database variables in [§ 1](#1-installation-docker-compose)), backup age, restore-verified age, ClamAV ping and signature age, retention run age, background job freshness (statistics snapshot, breach scan, materialized view refresh), MFA quota (roles requiring MFA), pending Django migrations, app/Django/Python versions, and critical audit events from the last 24 hours.
 
 Each check returns a status of `ok` / `warning` / `critical` / `unknown`; a single failing check does not bring down the whole dashboard. The area is **super-admin only** (`facility_admin` receives a `403`). The freshness thresholds for background jobs and the restore marker are documented in the [Ops Runbook](../ops-runbook.md).
 
@@ -1396,4 +1406,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.22.0 -->
 <!-- translation-date: 2026-07-14 -->
-<!-- source-hash: fdea67d -->
+<!-- source-hash: ae175f8 -->

@@ -51,10 +51,11 @@ class TestMFAEnforcementProperty:
 
 @pytest.mark.django_db
 class TestMFARoleEnforcementWhenEnabled:
-    """A3.1 (Refs #1019) + #689: Bei aktivem ``MFA_ENFORCE_PRIVILEGED_ROLES``
-    erzwingen super_admin/facility_admin (sofort) sowie staff/assistant (mit
-    Grace-Frist) MFA allein ueber ihre Rolle; lead nur mit
-    ``MFA_ENFORCE_INCLUDE_LEAD``.
+    """A3.1 (Refs #1019) + #689/#1639: Bei aktivem ``MFA_ENFORCE_PRIVILEGED_ROLES``
+    erzwingen super_admin/facility_admin (sofort) sowie lead/staff/assistant (mit
+    Grace-Frist) MFA allein ueber ihre Rolle. Welche Rollen zu welcher Ebene
+    gehoeren, ist per ``MFA_ENFORCED_ROLES_IMMEDIATE`` /
+    ``MFA_ENFORCED_ROLES_GRACE`` konfigurierbar (Default: LEAD im Grace-Set).
 
     Das Setting ist nur in Produktion True (``base.py``); dev/test/e2e bleiben
     bewusst MFA-frei (s. ``TestMFARoleEnforcementDisabledByDefault``). Diese
@@ -69,12 +70,13 @@ class TestMFARoleEnforcementWhenEnabled:
         settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
         assert admin_user.is_mfa_enforced is True
 
-    def test_lead_is_not_enforced_by_role(self, settings, lead_user):
-        # LEAD bleibt ohne Rollen-Zwang, solange ``MFA_ENFORCE_INCLUDE_LEAD``
-        # aus ist (bewusst offene Produktentscheidung, Refs #689) — die
-        # Einbeziehung von lead ist per Setting zuschaltbar (s. test_mfa_grace).
+    def test_lead_is_enforced_by_role(self, settings, lead_user):
+        # Refs #1639: LEAD gehoert jetzt per Default in die Rollen-Pflicht
+        # (Grace-Set) — wer Fachkraft/Assistenz erzwingt, erst recht die
+        # hierarchisch hoehere Leitung. Konfigurierbar per Env
+        # ``MFA_ENFORCED_ROLES_GRACE`` (s. test_mfa_role_config / test_mfa_grace).
         settings.MFA_ENFORCE_PRIVILEGED_ROLES = True
-        assert lead_user.is_mfa_enforced is False
+        assert lead_user.is_mfa_enforced is True
 
     def test_staff_is_enforced_by_role(self, settings, staff_user):
         # Anforderungsaenderung (Refs #689): staff (und assistant) werden mit

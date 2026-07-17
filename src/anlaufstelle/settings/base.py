@@ -9,6 +9,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from ._mfa_roles import parse_enforced_role_sets
+
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # A7.3 (Refs #1024 / #1016): .env nur laden, wenn explizit erlaubt UND
@@ -217,20 +219,29 @@ OTP_WEBAUTHN_ALLOWED_ORIGINS = [
 # — das haelt aeltere Security-Keys ohne PIN/Biometrie im Feld nutzbar (ADR-032).
 OTP_WEBAUTHN_ALLOW_PASSWORDLESS_LOGIN = False
 
-# Rollen-Default-Enforcement (A3.1, Refs #1019; erweitert Refs #689): erzwingt
-# MFA allein ueber die Rolle — super_admin/facility_admin SOFORT, staff/assistant
-# (optional lead) erst nach 30-Tage-Grace-Frist (s. ``User.is_mfa_enforced`` und
+# Rollen-Default-Enforcement (A3.1, Refs #1019; erweitert Refs #689/#1639):
+# erzwingt MFA allein ueber die Rolle (s. ``User.is_mfa_enforced`` und
 # ``core.models.user.mfa_enforced_roles``). In Produktion an (hier in base.py);
 # dev/test/e2e schalten es bewusst aus (dev.py -> kaskadiert nach test/e2e),
 # damit Seed-Logins MFA-frei bleiben.
 MFA_ENFORCE_PRIVILEGED_ROLES = True
 
-# OFFENE MAINTAINER-FRAGE (Refs #689): Soll die Rolle "Leitung" (LEAD) in den
-# rollen-basierten MFA-Zwang einbezogen werden? Bewusst standardmaessig AUS —
-# die Einbeziehung ist eine Produktentscheidung, die hier an genau einer klar
-# markierten Stelle zugeschaltet werden kann (wirkt nur zusammen mit
-# ``MFA_ENFORCE_PRIVILEGED_ROLES``; s. ``core.models.user.mfa_enforced_roles``).
-MFA_ENFORCE_INCLUDE_LEAD = False
+# Welche Rollen der Rollen-Default-Zwang umfasst, ist ueber zwei Kommalisten
+# konfigurierbar (Refs #1639), per Env ueberschreibbar:
+# * ``MFA_ENFORCED_ROLES_IMMEDIATE`` — SOFORTIGE Erzwingung ohne Grace-Frist
+#   (Default super_admin/facility_admin): ein privilegierter Account ohne
+#   zweiten Faktor wird sofort zum Setup geleitet.
+# * ``MFA_ENFORCED_ROLES_GRACE`` — Erzwingung erst nach der 30-Tage-Grace-Frist
+#   (Default lead/staff/assistant): LEAD ist seit #1639 per Default pflichtig
+#   (wer Fachkraft/Assistenz erzwingt, erst recht die hoehere Leitung), aber mit
+#   Grace, damit Bestandsnutzer beim Aktivieren nicht ausgesperrt werden.
+# Fail-loud: unbekannter Rollenname oder Ueberschneidung beider Mengen bricht
+# den Start ab (``parse_enforced_role_sets``). Leere Listen sind erlaubt und
+# schalten die jeweilige Ebene bewusst ab.
+MFA_ENFORCED_ROLES_IMMEDIATE, MFA_ENFORCED_ROLES_GRACE = parse_enforced_role_sets(
+    os.environ.get("MFA_ENFORCED_ROLES_IMMEDIATE", "super_admin,facility_admin"),
+    os.environ.get("MFA_ENFORCED_ROLES_GRACE", "lead,staff,assistant"),
+)
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},

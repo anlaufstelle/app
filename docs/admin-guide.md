@@ -588,8 +588,18 @@ Die Anlaufstelle unterstützt TOTP-basierte 2FA über [`django-otp`](https://dja
 |---|---|---|---|
 | **Einzeluser** | `User.mfa_required` | Core → Benutzer → *User* → Feld „MFA erforderlich" | 2FA verpflichtend für diesen User, Deaktivieren gesperrt |
 | **Einrichtungsweit** | `Settings.mfa_enforced_facility_wide` | Core → Einstellungen → *Einrichtung* → Feld „2FA einrichtungsweit verpflichtend" | 2FA verpflichtend für **alle** User dieser Einrichtung |
+| **Rollen-Default** | `MFA_ENFORCE_PRIVILEGED_ROLES` (+ `MFA_ENFORCED_ROLES_IMMEDIATE` / `MFA_ENFORCED_ROLES_GRACE`) | Umgebungsvariablen (Deployment) | 2FA verpflichtend allein über die Rolle — in Produktion ab Werk aktiv |
 
-Die Auswertung erfolgt über [`User.is_mfa_enforced`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) — User gilt als verpflichtet, wenn **eine** der beiden Ebenen zutrifft. Die MFA-Middleware blockiert den Zugriff auf geschützte Bereiche, bis ein TOTP-Code in der Session verifiziert wurde.
+Die Auswertung erfolgt über [`User.is_mfa_enforced`](https://github.com/anlaufstelle/app/blob/main/src/core/models/user.py) — User gilt als verpflichtet, wenn **eine** der Ebenen zutrifft. Die MFA-Middleware blockiert den Zugriff auf geschützte Bereiche, bis ein TOTP-Code in der Session verifiziert wurde.
+
+**Rollen-Default über Umgebungsvariablen konfigurieren** (#1639). Unabhängig von der Einzeluser- und der einrichtungsweiten Erzwingung verlangt die Anwendung 2FA in Produktion bereits **allein über die Rolle** (`MFA_ENFORCE_PRIVILEGED_ROLES=True`, Default in Produktion; in dev/test/e2e/demo bewusst aus). Welche Rollen das umfasst, steuern zwei per Env als **Kommaliste** überschreibbare Settings:
+
+| Setting | Default | Wirkung |
+|---|---|---|
+| `MFA_ENFORCED_ROLES_IMMEDIATE` | `super_admin,facility_admin` | 2FA **sofort** verpflichtend (kein Aufschub) — ohne zweiten Faktor sofortiger Redirect auf `/mfa/setup/` |
+| `MFA_ENFORCED_ROLES_GRACE` | `lead,staff,assistant` | 2FA verpflichtend, aber erst **nach 30-tägiger Übergangsfrist** (Erinnerungsbanner ab 14 Resttagen), damit Bestandsnutzende nicht ausgesperrt werden |
+
+Die Rolle **Leitung** (`lead`) ist per Default pflichtig (im Grace-Set) — wer Fachkraft/Assistenz erzwingt, erst recht die hierarchisch höhere Leitung. Gültige Rollennamen sind `super_admin`, `facility_admin`, `lead`, `staff`, `assistant`; eine **leere** Liste schaltet die jeweilige Ebene bewusst ab. Ein **unbekannter Rollenname** oder eine **Überschneidung** beider Listen bricht den Start fail-closed mit `ImproperlyConfigured` ab (keine stille Fehlkonfiguration).
 
 #### 2FA für einen Benutzer zurücksetzen
 
@@ -967,7 +977,7 @@ Bei CSP-Fehlern nach einem Update: Browser-Console auf **konkret blockierte URL/
 
 ### 5.5 Compliance-Dashboard
 
-Der Superadmin-Bereich `/system/compliance/` (#919) bündelt typisierte Health-Checks in einem Dashboard: die drei DB-Rollen-Checks (über `check_db_roles`, siehe Datenbank-Variablen in [§ 1](#1-installation-docker-compose)), Backup-Alter, Restore-Verified-Alter, ClamAV-Ping + Signaturalter, Retention-Run-Alter, Frische der Hintergrundjobs (Statistik-Snapshot, Breach-Scan, Materialized-View-Refresh), MFA-Quote (Super-Admin/Facility-Admin/Leitung), ausstehende Django-Migrationen, App-/Django-/Python-Versionen sowie kritische Audit-Events der letzten 24 Stunden.
+Der Superadmin-Bereich `/system/compliance/` (#919) bündelt typisierte Health-Checks in einem Dashboard: die drei DB-Rollen-Checks (über `check_db_roles`, siehe Datenbank-Variablen in [§ 1](#1-installation-docker-compose)), Backup-Alter, Restore-Verified-Alter, ClamAV-Ping + Signaturalter, Retention-Run-Alter, Frische der Hintergrundjobs (Statistik-Snapshot, Breach-Scan, Materialized-View-Refresh), MFA-Quote (MFA-pflichtige Rollen), ausstehende Django-Migrationen, App-/Django-/Python-Versionen sowie kritische Audit-Events der letzten 24 Stunden.
 
 Jeder Check liefert einen Status `ok` / `warning` / `critical` / `unknown`; ein einzelner Check-Fehler kippt das Dashboard nicht. Der Bereich ist **Super-Admins** vorbehalten (`facility_admin` erhält `403`). Die Frische-Schwellen der Hintergrundjobs und des Restore-Markers sind im [Ops-Runbook](ops-runbook.md) dokumentiert.
 

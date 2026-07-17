@@ -217,13 +217,10 @@ class TestMfaChecks:
         User.Role.LEAD,
     ]
 
-    @pytest.fixture(autouse=True)
-    def _include_lead(self, settings):
-        # Refs #1478 (COD-12): Der Quoten-Nenner haengt jetzt an
-        # ``mfa_enforced_roles()``; LEAD (diese Tests nutzen LEAD-User) zaehlt
-        # nur bei aktivem ``MFA_ENFORCE_INCLUDE_LEAD``. Das Flag hier zu setzen
-        # haelt die Schwellwert-Tests (0/80/100 %) valide.
-        settings.MFA_ENFORCE_INCLUDE_LEAD = True
+    # Refs #1478 (COD-12) / #1639: Der Quoten-Nenner haengt an
+    # ``mfa_enforced_roles()``; LEAD (diese Tests nutzen LEAD-User) ist per
+    # Default im Grace-Set und zaehlt daher mit — kein Extra-Flag noetig, die
+    # Schwellwert-Tests (0/80/100 %) bleiben valide.
 
     @staticmethod
     def _make_privileged_user(facility, *, with_mfa: bool, suffix: str) -> User:

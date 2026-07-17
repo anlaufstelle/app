@@ -14,9 +14,10 @@ def _mfa_checks() -> list[ComplianceCheck]:
     Refs #1478 (COD-12): Der Nenner ist an die gemeinsame Quelle
     ``mfa_enforced_roles()`` gebunden (kein separates ``_PRIVILEGED_ROLES``-
     Duplikat mehr) — gezaehlt wird genau die Rollenmenge, die auch tatsaechlich
-    MFA-erzwungen ist. LEAD folgt damit exakt dem ``MFA_ENFORCE_INCLUDE_LEAD``-
-    Flag: eine Rolle im Quoten-Nenner ist immer auch eine erzwungene Rolle,
-    sodass keine dauerhaft unschliessbare Quoten-Luecke entstehen kann.
+    MFA-erzwungen ist. Der Nenner folgt damit exakt den konfigurierbaren Sets
+    ``MFA_ENFORCED_ROLES_IMMEDIATE``/``MFA_ENFORCED_ROLES_GRACE`` (Refs #1639):
+    eine Rolle im Quoten-Nenner ist immer auch eine erzwungene Rolle, sodass
+    keine dauerhaft unschliessbare Quoten-Luecke entstehen kann.
     """
     # Zaehlt ueber dieselbe Tabelle wie django-otps ``TOTPDevice``; das Proxy-
     # Modell (Refs #1362) ist die App-weite Zugriffsschicht.

@@ -184,27 +184,28 @@ class User(AbstractUser):
 
     @property
     def mfa_enforced_by_role_immediate(self):
-        """SOFORT greifender Rollen-Zwang (super_admin/facility_admin, Refs #1019).
+        """SOFORT greifender Rollen-Zwang (Refs #1019).
 
-        Diese privilegierten Rollen erzwingen MFA OHNE Grace-Frist — ein
-        privilegierter Account ohne zweiten Faktor wird von der
+        Die in ``settings.MFA_ENFORCED_ROLES_IMMEDIATE`` gefuehrten Rollen
+        (Default super_admin/facility_admin) erzwingen MFA OHNE Grace-Frist — ein
+        solcher Account ohne zweiten Faktor wird von der
         ``MFAEnforcementMiddleware`` sofort auf ``/mfa/setup/`` geleitet.
         Greift nur bei aktivem ``MFA_ENFORCE_PRIVILEGED_ROLES`` (nur Produktion —
         dev/test/e2e/demo bleiben bewusst MFA-frei).
         """
-        return settings.MFA_ENFORCE_PRIVILEGED_ROLES and self.role in MFA_ENFORCED_ROLES_IMMEDIATE
+        return settings.MFA_ENFORCE_PRIVILEGED_ROLES and self.role in settings.MFA_ENFORCED_ROLES_IMMEDIATE
 
     @property
     def mfa_enforced_by_role_grace(self):
-        """Rollen-Zwang MIT 30-Tage-Grace-Frist (Refs #689).
+        """Rollen-Zwang MIT 30-Tage-Grace-Frist (Refs #689/#1639).
 
-        Die mit #689 neu einbezogenen Niedrigrechte-Rollen (staff/assistant und
-        optional lead, s. ``mfa_enforced_roles_grace()``) erzwingen MFA ueber
-        ihre Rolle, aber erst nach Ablauf der Setup-Frist (Durchsetzung in
-        ``MFAEnforcementMiddleware``), damit Bestandsnutzer nicht ausgesperrt
-        werden. Greift nur bei aktivem ``MFA_ENFORCE_PRIVILEGED_ROLES``.
+        Die in ``settings.MFA_ENFORCED_ROLES_GRACE`` gefuehrten Rollen (Default
+        lead/staff/assistant) erzwingen MFA ueber ihre Rolle, aber erst nach
+        Ablauf der Setup-Frist (Durchsetzung in ``MFAEnforcementMiddleware``),
+        damit Bestandsnutzer nicht ausgesperrt werden. Greift nur bei aktivem
+        ``MFA_ENFORCE_PRIVILEGED_ROLES``.
         """
-        return settings.MFA_ENFORCE_PRIVILEGED_ROLES and self.role in mfa_enforced_roles_grace()
+        return settings.MFA_ENFORCE_PRIVILEGED_ROLES and self.role in settings.MFA_ENFORCED_ROLES_GRACE
 
     @property
     def mfa_enforced_by_role(self):
@@ -247,53 +248,15 @@ class User(AbstractUser):
         return self.offline_key_salt
 
 
-# Zwei Rollen-Mengen fuer den rollen-basierten MFA-Zwang (Refs #689):
-#
-# * ``MFA_ENFORCED_ROLES_IMMEDIATE`` — super_admin/facility_admin aus der ersten
-#   Ausbaustufe (A3.1, Refs #1019): SOFORTIGE Erzwingung, keine Grace-Frist. Ein
-#   neu angelegter privilegierter Account ohne zweiten Faktor wird sofort zum
-#   Setup geleitet — privilegierte Rollen sind kein Bestands-Rollout-Risiko, und
-#   eine 30-Tage-Frist waere hier ein Loch.
-# * ``MFA_ENFORCED_ROLES_GRACE`` — die mit #689 neu einbezogenen Niedrigrechte-
-#   Rollen staff/assistant (optional lead): Erzwingung erst nach der 30-Tage-
-#   Grace-Frist, damit Bestandsnutzer beim Aktivieren nicht ausgesperrt werden.
-#
-# Bewusst als Modul-Konstanten, damit Konsumenten auf die Gesamtmenge
-# ``mfa_enforced_roles()`` zeigen koennen, statt die Rollenliste erneut zu
-# pflegen. Die MFA-Compliance-Quote (``compliance.mfa._mfa_checks``) ist genau
-# so an diese Quelle gebunden (Refs #1478, COD-12) — vorher fuehrte sie ein
-# eigenes ``_PRIVILEGED_ROLES``-Duplikat, das LEAD unabhaengig vom Enforcement
-# zaehlte.
-MFA_ENFORCED_ROLES_IMMEDIATE = (
-    User.Role.SUPER_ADMIN,
-    User.Role.FACILITY_ADMIN,
-)
-MFA_ENFORCED_ROLES_GRACE = (
-    User.Role.STAFF,
-    User.Role.ASSISTANT,
-)
-
-
-def mfa_enforced_roles_grace():
-    """Effektive Menge der Rollen mit grace-behaftetem MFA-Zwang (Refs #689).
-
-    ``LEAD`` (Leitung) ist eine bewusst konfigurierbare, noch **offene
-    Maintainer-Entscheidung** (Refs #689): standardmaessig NICHT einbezogen,
-    per Setting ``MFA_ENFORCE_INCLUDE_LEAD`` zuschaltbar. Die Trennung haelt die
-    Produktentscheidung an genau einer klar markierten Stelle.
-    """
-    if settings.MFA_ENFORCE_INCLUDE_LEAD:
-        return (*MFA_ENFORCED_ROLES_GRACE, User.Role.LEAD)
-    return MFA_ENFORCED_ROLES_GRACE
-
-
 def mfa_enforced_roles():
     """Gesamtmenge aller rollen-erzwungenen MFA-Rollen (sofort + grace).
 
     EINE gemeinsame Quelle fuer Konsumenten, die nur die Rollenmenge brauchen
-    (z.B. die Compliance-Quote). OB der Zwang sofort
-    (``MFA_ENFORCED_ROLES_IMMEDIATE``, Refs #1019) oder erst nach der Grace-Frist
-    (``mfa_enforced_roles_grace``, Refs #689) greift, entscheidet die
-    ``MFAEnforcementMiddleware``.
+    (z.B. die Compliance-Quote ``compliance.mfa._mfa_checks``, Refs #1478/COD-12).
+    Die beiden Teilmengen sind per Setting konfigurierbar (Refs #1639):
+    ``MFA_ENFORCED_ROLES_IMMEDIATE`` (sofort, Refs #1019) und
+    ``MFA_ENFORCED_ROLES_GRACE`` (nach der 30-Tage-Grace-Frist, Refs #689).
+    OB sofort oder erst nach der Frist erzwungen wird, entscheidet die
+    ``MFAEnforcementMiddleware`` ueber die beiden Teil-Properties.
     """
-    return (*MFA_ENFORCED_ROLES_IMMEDIATE, *mfa_enforced_roles_grace())
+    return (*settings.MFA_ENFORCED_ROLES_IMMEDIATE, *settings.MFA_ENFORCED_ROLES_GRACE)

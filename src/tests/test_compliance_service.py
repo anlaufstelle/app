@@ -343,12 +343,11 @@ class TestMfaChecks:
         assert checks[0].status == compliance.ComplianceStatus.UNKNOWN
 
     def test_critical_when_no_mfa(self, settings, facility):
-        # Refs #1478 (COD-12): LEAD zaehlt nur noch mit, wenn LEAD auch
-        # tatsaechlich erzwungen wird (MFA_ENFORCE_INCLUDE_LEAD). Mit aktivem
-        # Flag sind die drei LEAD-User MFA-pflichtig und ohne Geraet CRITICAL.
+        # Refs #1478 (COD-12) / #1639: LEAD zaehlt nur mit, wenn LEAD auch
+        # erzwungen wird. LEAD ist per Default im Grace-Set (Refs #1639), daher
+        # sind die drei LEAD-User MFA-pflichtig und ohne Geraet CRITICAL.
         from core.models.user import mfa_enforced_roles
 
-        settings.MFA_ENFORCE_INCLUDE_LEAD = True
         User.objects.filter(role__in=mfa_enforced_roles()).delete()
         for i in range(3):
             User.objects.create_user(
