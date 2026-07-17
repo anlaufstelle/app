@@ -94,32 +94,40 @@ class TestAdminCSPRelaxMiddleware:
         out = _make_middleware(response)(request)
         assert "'unsafe-eval'" in out.headers["Content-Security-Policy"]
 
-    # I3 (Refs #1376): Die Lockerung darf NICHT fuer anonyme Requests greifen —
-    # die anonym erreichbare /admin-mgmt/login/-Seite braucht kein 'unsafe-eval'.
-    def test_admin_login_page_anonymous_user_not_relaxed(self):
+    # I3-Revert (Refs #1376, Review 2026-07-17): Die anonym erreichbare
+    # /admin-mgmt/login/-Seite erbt via login.html -> unauthenticated.html
+    # -> skeleton.html DASSELBE x-data="theme()" + Alpine-Bundle wie jede
+    # andere Unfold-Seite. Ohne 'unsafe-eval' wirft Alpine beim Auswerten
+    # von theme() auf <html> einen EvalError, bevor x-cloak entfernt wird —
+    # die Login-Seite bleibt komplett display:none (leere Seite). Die
+    # fruehere Annahme, die Login-Seite brauche keinen Unfold-Alpine-Build,
+    # war empirisch falsch; die Lockerung muss daher unabhaengig vom
+    # Auth-Status greifen.
+    def test_admin_login_page_anonymous_user_is_relaxed(self):
         rf = RequestFactory()
         request = rf.get("/admin-mgmt/login/")
         request.user = AnonymousUser()
         response = HttpResponse("ok", content_type="text/html")
         response.headers["Content-Security-Policy"] = "script-src 'self'"
         out = _make_middleware(response)(request)
-        assert "'unsafe-eval'" not in out.headers["Content-Security-Policy"]
+        assert "'unsafe-eval'" in out.headers["Content-Security-Policy"]
 
-    def test_admin_path_anonymous_user_not_relaxed(self):
+    def test_admin_path_anonymous_user_is_relaxed(self):
         rf = RequestFactory()
         request = rf.get("/admin-mgmt/users/")
         request.user = AnonymousUser()
         response = HttpResponse("ok", content_type="text/html")
         response.headers["Content-Security-Policy"] = "script-src 'self'"
         out = _make_middleware(response)(request)
-        assert "'unsafe-eval'" not in out.headers["Content-Security-Policy"]
+        assert "'unsafe-eval'" in out.headers["Content-Security-Policy"]
 
-    def test_admin_path_missing_user_attribute_not_relaxed(self):
-        """Fail-closed: fehlt request.user komplett (z.B. Middleware-Reihenfolge
-        kaputt), bleibt die strikte CSP bestehen statt zu relaxen."""
+    def test_admin_path_missing_user_attribute_is_relaxed(self):
+        """Die Middleware liest request.user nicht mehr — fehlt das Attribut
+        komplett (z.B. Middleware-Reihenfolge kaputt), darf das nicht crashen
+        und die Lockerung bleibt unveraendert wirksam."""
         rf = RequestFactory()
         request = rf.get("/admin-mgmt/")
         response = HttpResponse("ok", content_type="text/html")
         response.headers["Content-Security-Policy"] = "script-src 'self'"
         out = _make_middleware(response)(request)
-        assert "'unsafe-eval'" not in out.headers["Content-Security-Policy"]
+        assert "'unsafe-eval'" in out.headers["Content-Security-Policy"]

@@ -12,10 +12,21 @@ Statt die globale CSP aufzuweichen, wird ``unsafe-eval`` hier nur für die
 ``/admin-mgmt/``-Pfade ergänzt — diese Routes sind ohnehin auf authentifizierte
 Admin/Lead-Rollen mit MFA beschränkt, der Trade-off ist akzeptabel.
 
-I3 (Refs #1376): Die Lockerung greift NUR fuer authentifizierte Requests.
-``/admin-mgmt/login/`` ist anonym erreichbar und laedt keinen Unfold-Alpine-
-Build, der ``unsafe-eval`` braucht — dort bleibt die strikte globale CSP
-bestehen (fail-closed bei fehlendem/anonymem User).
+I3 (Refs #1376), Revert nach Review 2026-07-17: Ein frueherer Versuch hat die
+Lockerung auf authentifizierte Requests eingeschraenkt, in der Annahme,
+``/admin-mgmt/login/`` laede keinen Unfold-Alpine-Build, der ``unsafe-eval``
+braucht. Das ist empirisch falsch: ``admin/login.html`` erbt ueber
+``unfold/layouts/unauthenticated.html`` von ``unfold/layouts/skeleton.html``,
+und dieses Skeleton setzt ``x-data="theme(...)"`` auf ``<html>`` und laedt
+``unfold/js/alpine/alpine.js`` **unconditional** — also auch fuer die anonym
+erreichbare Login-Seite. Ohne ``unsafe-eval`` wirft Alpines Evaluator beim
+Auswerten von ``theme()`` einen ``EvalError``, bevor ``x-cloak`` entfernt
+wird; die Login-Seite bliebe komplett ``display:none`` (leere Seite). Die
+Lockerung muss deshalb unabhaengig vom Auth-Status greifen; I3 ist mit dem
+aktuellen Unfold-Alpine-Build nicht umsetzbar, ohne die Login-Seite zu
+zerstoeren (offen bleibt nur eine tiefere Unfold-Anpassung, z. B. CSP-sicherer
+Alpine-Build oder Verzicht auf die ``theme()``-Bindung im unauthentifizierten
+Skeleton — siehe #1376).
 
 Die Middleware muss **nach** ``csp.middleware.CSPMiddleware`` registriert sein,
 damit der bereits gesetzte ``Content-Security-Policy``-Header umgeschrieben
@@ -31,7 +42,7 @@ _SCRIPT_SRC_RE = re.compile(r"(script-src\s+[^;]*?)(?=\s*;|$)", re.IGNORECASE)
 
 
 class AdminCSPRelaxMiddleware:
-    """Ergänzt ``unsafe-eval`` in script-src für authentifizierte Admin-Routes."""
+    """Ergänzt ``unsafe-eval`` in script-src für Admin-Routes."""
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -39,18 +50,6 @@ class AdminCSPRelaxMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
         if not request.path.startswith(ADMIN_PREFIX):
-            return response
-
-        # I3 (Refs #1376): Relax nur fuer authentifizierte Requests — sonst
-        # bekaeme auch die anonym erreichbare /admin-mgmt/login/-Seite
-        # 'unsafe-eval'. AuthenticationMiddleware laeuft in MIDDLEWARE zwar
-        # NACH uns, setzt request.user aber bereits VOR dem View-Aufruf; da
-        # wir erst nach self.get_response() pruefen, ist request.user hier
-        # zuverlaessig gesetzt. getattr-Fallback + fail-closed: fehlt das
-        # Attribut (z.B. in Tests ohne AuthenticationMiddleware) oder ist der
-        # User anonym, bleibt die strikte globale CSP unveraendert.
-        user = getattr(request, "user", None)
-        if not getattr(user, "is_authenticated", False):
             return response
 
         # S4 (Refs #1084): Relax nur fuer HTML-Dokumente — JSON-/CSV-Responses
