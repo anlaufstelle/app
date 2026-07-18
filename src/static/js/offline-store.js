@@ -110,11 +110,54 @@
         facility: "key",
     });
 
+    // Refs #1476 (R8): Die Krypto-Primitive per Einmal-Handshake beziehen und
+    // cachen — crypto.js stellt encrypt/decrypt nicht mehr auf der
+    // oeffentlichen `window.crypto_session`-Oberflaeche bereit. Faellt `_link`
+    // (aeltere crypto.js oder ein Test-Mock, der encrypt/decrypt direkt auf das
+    // Objekt legt), wird die Oberflaeche direkt genutzt.
+    let _cryptoImpl = null;
     function _crypto() {
-        if (!window.crypto_session) {
+        if (_cryptoImpl) return _cryptoImpl;
+        const cs = window.crypto_session;
+        if (!cs) {
             throw new Error("CryptoSessionNotLoaded");
         }
-        return window.crypto_session;
+        if (typeof cs._link === "function") {
+            const primitives = cs._link();
+            if (!primitives) {
+                // Der Einmal-Handshake wurde bereits konsumiert — darf nur EINEN
+                // legitimen Konsumenten geben (dieses Modul). Laut aufschlagen
+                // statt still ein kaputtes Krypto zu benutzen.
+                throw new Error("CryptoPrimitivesAlreadyConsumed");
+            }
+            _cryptoImpl = primitives;
+        } else {
+            _cryptoImpl = cs;
+        }
+        return _cryptoImpl;
+    }
+
+    /*
+     * Refs #1476 (R7): AES-GCM-AAD-Kontext fuer einen Record. Bindet jeden
+     * Umschlag an seine logische Identitaet (Tabelle + Primaerschluessel), damit
+     * ein Chiffrat nicht innerhalb von IndexedDB auf einen anderen Record/eine
+     * andere Tabelle umgezogen werden kann (Umzug/Rollback-Schutz). Der
+     * ``queue``-Primaerschluessel ist ``++id`` (autoincrement) und steht beim
+     * Ersteinreihen noch nicht fest; ein Zwei-Phasen-Write scheidet aus, weil
+     * ein WebCrypto-``await`` innerhalb einer Dexie-rw-Transaktion diese
+     * vorzeitig schliesst (#1414). Die generische Replay-Queue wird daher nur an
+     * ihre TABELLE gebunden — ihre Rows sind selbstbeschreibende Requests, die
+     * beim Replay serverseitig neu autorisiert werden (Restposten in #1476
+     * dokumentiert). Alle PII-tragenden Tabellen (clients/cases/events/facility/
+     * drafts/meta) binden Tabelle + Primaerschluessel.
+     */
+    function _aad(table, primaryKey) {
+        if (table === "queue") return "queue";
+        return table + ":" + String(primaryKey);
+    }
+
+    function _primKeyName(table) {
+        return db[table].schema.primKey.name;
     }
 
     /*
@@ -127,7 +170,18 @@
      * wieder lesbar.
      */
     function _isTransientDecryptError(e) {
-        return e && (e.name === "NoSessionKeyError" || e.message === "NoSessionKey");
+        return (
+            e &&
+            (e.name === "NoSessionKeyError" ||
+                e.message === "NoSessionKey" ||
+                // Refs #1476 (R7): Ein v1-Umschlag ohne mitgegebenen AAD-Kontext
+                // ist ein Programmierfehler an einer neuen Aufrufstelle — als
+                // TRANSIENT behandeln (Row NICHT verwerfen), damit ein
+                // uebersehener Kontext keinen stillen Datenverlust ausloest,
+                // sondern in Tests/Read als null auffaellt.
+                e.name === "AadRequiredError" ||
+                e.message === "AadRequired")
+        );
     }
 
     // Refs R1 (Sicherheitsreview 2026-07-05): Ungesyncte Arbeit — jede
@@ -163,7 +217,11 @@
     async function putEncrypted(table, record) {
         const crypto = _crypto();
         const { data, ...rest } = record;
-        const envelope = await crypto.encryptPayload(data);
+        // Refs #1476 (R7): an Tabelle + Primaerschluessel binden. Fuer die
+        // ``queue`` bindet ``_aad`` tabellenweit (id noch unbekannt); fuer alle
+        // anderen Tabellen traegt ``rest`` den Primaerschluessel bereits.
+        const aad = _aad(table, rest[_primKeyName(table)]);
+        const envelope = await crypto.encryptPayload(data, aad);
         return db[table].put({ ...rest, data: envelope });
     }
 
@@ -172,7 +230,7 @@
         const row = await db[table].get(primaryKey);
         if (!row) return null;
         try {
-            row.data = await crypto.decryptPayload(row.data);
+            row.data = await crypto.decryptPayload(row.data, _aad(table, primaryKey));
             return row;
         } catch (e) {
             if (_isTransientDecryptError(e)) {
@@ -191,10 +249,16 @@
     async function listDecrypted(table, filterFn) {
         const crypto = _crypto();
         const rows = await db[table].toArray();
+        const pkName = _primKeyName(table);
         const out = [];
         for (const row of rows) {
             try {
-                const decrypted = { ...row, data: await crypto.decryptPayload(row.data) };
+                const decrypted = {
+                    ...row,
+                    // Refs #1476 (R7): mit demselben Kontext (Tabelle + pk)
+                    // entschluesseln, mit dem geschrieben wurde.
+                    data: await crypto.decryptPayload(row.data, _aad(table, row[pkName])),
+                };
                 if (!filterFn || filterFn(decrypted)) {
                     out.push(decrypted);
                 }
@@ -255,7 +319,7 @@
         for (const row of rows) {
             let envelope;
             try {
-                envelope = await crypto.decryptPayload(row.data);
+                envelope = await crypto.decryptPayload(row.data, _aad("clients", row.pk));
             } catch (e) {
                 if (_isTransientDecryptError(e)) {
                     // Refs #1352: kein Schluessel geladen — ob der Bundle
@@ -356,7 +420,7 @@
             expiresAt: bundle.expires_at,
             ttl: bundle.ttl,
             schemaVersion: bundle.schema_version,
-        });
+        }, _aad("clients", pk));
 
         const caseRows = [];
         for (const caseRec of bundle.cases || []) {
@@ -364,7 +428,7 @@
                 pk: caseRec.pk,
                 clientPk: pk,
                 lastSynced: now,
-                data: await crypto.encryptPayload(caseRec),
+                data: await crypto.encryptPayload(caseRec, _aad("cases", caseRec.pk)),
             });
         }
 
@@ -375,7 +439,7 @@
                 clientPk: pk,
                 occurredAt: event.occurred_at,
                 localStatus: "clean",
-                data: await crypto.encryptPayload(event),
+                data: await crypto.encryptPayload(event, _aad("events", event.pk)),
             });
         }
 
@@ -587,7 +651,7 @@
         if (!row) return null;
         let envelope;
         try {
-            envelope = await crypto.decryptPayload(row.data);
+            envelope = await crypto.decryptPayload(row.data, _aad("clients", row.pk));
         } catch (e) {
             if (_isTransientDecryptError(e)) {
                 // Refs #1352: kein Schluessel geladen — Row behalten, nur
@@ -682,7 +746,7 @@
         for (const row of rows) {
             let envelope;
             try {
-                envelope = await crypto.decryptPayload(row.data);
+                envelope = await crypto.decryptPayload(row.data, _aad("clients", row.pk));
             } catch (_e) {
                 continue;
             }
@@ -748,7 +812,7 @@
         for (const row of rows) {
             let envelope;
             try {
-                envelope = await crypto.decryptPayload(row.data);
+                envelope = await crypto.decryptPayload(row.data, _aad("clients", row.pk));
             } catch (_e) {
                 continue;
             }
@@ -1123,7 +1187,7 @@
             expiresAt: bundle.expires_at,
             ttl: bundle.ttl,
             schemaVersion: bundle.schema_version,
-        });
+        }, _aad("facility", FACILITY_ROW_KEY));
 
         try {
             await db.transaction("rw", db.facility, async () => {
@@ -1162,7 +1226,7 @@
         if (!row) return null;
         let envelope;
         try {
-            envelope = await crypto.decryptPayload(row.data);
+            envelope = await crypto.decryptPayload(row.data, _aad("facility", FACILITY_ROW_KEY));
         } catch (e) {
             if (_isTransientDecryptError(e)) {
                 // Refs #1352: kein Schluessel geladen — Row behalten, null liefern.
@@ -1264,7 +1328,7 @@
             clientPk: clientPk || "",
             occurredAt: occurredAt || "",
             localStatus: localStatus || "modified",
-            data: await crypto.encryptPayload(data),
+            data: await crypto.encryptPayload(data, _aad("events", pk)),
         });
     }
 
@@ -1365,7 +1429,7 @@
         }
         let envelope;
         try {
-            envelope = await crypto.decryptPayload(existing.data);
+            envelope = await crypto.decryptPayload(existing.data, _aad("events", existing.pk));
         } catch (e) {
             if (_isTransientDecryptError(e)) {
                 // Refs #1352: kein Schluessel geladen — Row unangetastet
@@ -1385,7 +1449,7 @@
         await db.events.put({
             ...existing,
             localStatus: "conflict",
-            data: await crypto.encryptPayload(envelope),
+            data: await crypto.encryptPayload(envelope, _aad("events", existing.pk)),
         });
     }
 
@@ -1414,7 +1478,7 @@
         if (!existing) return; // Race mit einer anderen Aktion — nichts zu markieren.
         let envelope;
         try {
-            envelope = await crypto.decryptPayload(existing.data);
+            envelope = await crypto.decryptPayload(existing.data, _aad("events", existing.pk));
         } catch (e) {
             if (_isTransientDecryptError(e)) {
                 // Refs #1352: kein Schluessel geladen — Row unangetastet
@@ -1436,7 +1500,7 @@
         await db.events.put({
             ...existing,
             localStatus: "dead",
-            data: await crypto.encryptPayload(envelope),
+            data: await crypto.encryptPayload(envelope, _aad("events", existing.pk)),
         });
     }
 
@@ -1460,7 +1524,7 @@
         if (!existing) throw new Error("NoEventToRetry:" + pk);
         let envelope;
         try {
-            envelope = await crypto.decryptPayload(existing.data);
+            envelope = await crypto.decryptPayload(existing.data, _aad("events", existing.pk));
         } catch (e) {
             if (_isTransientDecryptError(e)) throw e;
             await db.events.delete(pk);
@@ -1474,7 +1538,7 @@
         await db.events.put({
             ...existing,
             localStatus: nextStatus,
-            data: await crypto.encryptPayload(envelope),
+            data: await crypto.encryptPayload(envelope, _aad("events", existing.pk)),
         });
         return nextStatus;
     }

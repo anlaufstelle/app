@@ -37,13 +37,40 @@
  *     ciphertext can never be decrypted with the current key — callers
  *     auto-discard the row (#576/F-03).
  *
- * Refs #573, #576, #1065, #1352.
+ * Envelope-Bindung (Refs #1476, R7): encryptPayload/decryptPayload nehmen
+ * optional einen `aad`-Kontext (Tabelle + Primaerschluessel, von
+ * offline-store.js geliefert). Neue Umschlaege tragen `v: ENVELOPE_VERSION`
+ * und binden diesen Kontext als AES-GCM `additionalData` — ein innerhalb von
+ * IndexedDB umgezogenes/zurueckgerolltes Chiffrat entschluesselt unter der
+ * falschen Identitaet nicht mehr. Bestandsdaten ohne `v` bleiben lesbar.
+ *
+ * Oberflaechen-Minimierung (Refs #1476, R8): Die Primitive stehen nicht auf
+ * dem oeffentlichen `window.crypto_session`, sondern werden per Einmal-
+ * Handshake (`_link()`) nur an offline-store.js uebergeben; das oeffentliche
+ * Objekt ist eingefroren und non-configurable.
+ *
+ * Refs #573, #576, #1065, #1352, #1476.
  */
 (function () {
     "use strict";
 
     const PBKDF2_ITERATIONS = 600000;
     const KEY_LENGTH = 256;
+    // Refs #1476 (R7): Envelope-Format-Version + AAD-Bindung. Ein AES-GCM-
+    // Umschlag {iv, ct} liess sich bislang innerhalb von IndexedDB von einem
+    // Record auf einen anderen kopieren (Umzug) oder auf einen aelteren Stand
+    // zuruecksetzen (Rollback), OHNE den Schluessel zu kennen — der Lesepfad
+    // entschluesselte ihn dann unter falscher Identitaet. Neue Umschlaege
+    // tragen `v: ENVELOPE_VERSION` und binden einen von der Aufruferin
+    // gelieferten Kontext (Tabelle + Primaerschluessel, siehe offline-store.js
+    // `_aad`) als `additionalData` in den GCM-Auth-Tag: ein umgezogenes
+    // Chiffrat entschluesselt unter der Ziel-Identitaet nicht mehr. Bestands-
+    // Umschlaege OHNE `v` wurden ohne AAD geschrieben und werden weiterhin OHNE
+    // AAD entschluesselt (graceful Upgrade, kein Zwangs-Purge); beim naechsten
+    // Schreiben erhalten sie die Bindung. Ein spaeteres Strippen des `v`-Felds
+    // hilft der Angreiferin nicht: das Chiffrat ist kryptografisch an die AAD
+    // gebunden, ein AAD-loser Decrypt eines v1-Umschlags schlaegt fehl.
+    const ENVELOPE_VERSION = 1;
     // Separate IndexedDB so the crypto key is not coupled to the Dexie
     // schema version of offline-store.js. Tests that rebuild the offline
     // store would otherwise hit "VersionError" when crypto.js opens v1 of
@@ -98,6 +125,14 @@
             bytes[i] = bin.charCodeAt(i);
         }
         return bytes;
+    }
+
+    // Refs #1476 (R7): Domaenen-getrennte AAD-Bytes aus der Format-Version und
+    // dem aufruferseitigen Record-Kontext. Der feste Praefix trennt diese
+    // Bindung von jeder anderen (moeglichen) GCM-Nutzung derselben Schluessel-
+    // klasse; der Kontext (`aad`) traegt die logische Record-Identitaet.
+    function _aadBytes(aad) {
+        return new TextEncoder().encode("anlaufstelle-offline/v" + ENVELOPE_VERSION + "|" + aad);
     }
 
     /*
@@ -527,7 +562,13 @@
         await _idbPut({ key: KEY_NAME, cryptoKey: key });
     }
 
-    async function encryptPayload(plain) {
+    // Refs #1476 (R7): `aad` bindet den Umschlag an seine Record-Identitaet
+    // (Tabelle + Primaerschluessel, von offline-store.js geliefert). Wird ein
+    // `aad` uebergeben, traegt der Umschlag `v: ENVELOPE_VERSION` und der
+    // Kontext geht als GCM-`additionalData` in den Auth-Tag ein. Ohne `aad`
+    // (Alt-Aufrufer / generischer Gebrauch) bleibt das fruehere ungebundene
+    // Format erhalten — abwaertskompatibel.
+    async function encryptPayload(plain, aad) {
         const key = await _loadKey();
         if (!key) {
             // Refs #1352: typisiert (Praezedenz offline-queue.js) — TRANSIENT,
@@ -538,18 +579,23 @@
         }
         const iv = window.crypto.getRandomValues(new Uint8Array(12));
         const data = new TextEncoder().encode(JSON.stringify(plain));
-        const ctBuffer = await window.crypto.subtle.encrypt(
-            { name: "AES-GCM", iv: iv },
-            key,
-            data
-        );
-        return {
+        const params = { name: "AES-GCM", iv: iv };
+        const bound = aad !== undefined && aad !== null && aad !== "";
+        if (bound) {
+            params.additionalData = _aadBytes(aad);
+        }
+        const ctBuffer = await window.crypto.subtle.encrypt(params, key, data);
+        const envelope = {
             iv: bytesToB64(iv),
             ct: bytesToB64(new Uint8Array(ctBuffer)),
         };
+        if (bound) {
+            envelope.v = ENVELOPE_VERSION;
+        }
+        return envelope;
     }
 
-    async function decryptPayload(envelope) {
+    async function decryptPayload(envelope, aad) {
         const key = await _loadKey();
         if (!key) {
             // Refs #1352: typisiert (Praezedenz offline-queue.js) — TRANSIENT,
@@ -567,16 +613,34 @@
         }
         const iv = b64ToBytes(envelope.iv);
         const ct = b64ToBytes(envelope.ct);
-        // Refs #1352: bewusst UNGEWRAPPT — ein GCM-Auth-Tag-Mismatch wirft
-        // nativ eine DOMException mit name === "OperationError" (PERMANENT,
-        // Salt/Passwort gewechselt). Ein try/catch hier wuerde sie in eine
-        // generische Error-Instanz verwandeln und die Namens-basierte
+        const params = { name: "AES-GCM", iv: iv };
+        // Refs #1476 (R7): Nur ein v-getragener Umschlag wurde mit AAD
+        // geschrieben — dann MUSS mit demselben Kontext entschluesselt werden.
+        // Bestands-Umschlaege ohne `v` wurden ohne AAD geschrieben und werden
+        // hier auch ohne AAD gelesen (graceful Upgrade), unabhaengig davon, ob
+        // die Aufruferin schon ein `aad` mitgibt.
+        if (envelope.v) {
+            if (aad === undefined || aad === null || aad === "") {
+                // Ein v1-Umschlag OHNE Bindungskontext ist ein Programmierfehler
+                // an einer neuen Aufrufstelle — NICHT als PERMANENT-Fehler
+                // (#576-Auto-Discard = stiller Datenverlust) behandeln, sondern
+                // wie TRANSIENT klassifiziert (offline-store.js
+                // `_isTransientDecryptError` matcht diesen Namen mit): Row
+                // bleibt erhalten, Read liefert null, der Fehler faellt in
+                // Tests laut auf.
+                const err = new Error("AadRequired");
+                err.name = "AadRequiredError";
+                throw err;
+            }
+            params.additionalData = _aadBytes(aad);
+        }
+        // Refs #1352: bewusst UNGEWRAPPT — ein GCM-Auth-Tag-Mismatch (Salt/
+        // Passwort gewechselt ODER umgezogenes/verfaelschtes AAD-gebundenes
+        // Chiffrat, R7) wirft nativ eine DOMException mit
+        // name === "OperationError" (PERMANENT). Ein try/catch hier wuerde sie
+        // in eine generische Error-Instanz verwandeln und die Namens-basierte
         // Transient/Permanent-Unterscheidung in offline-store.js zerstoeren.
-        const plainBuffer = await window.crypto.subtle.decrypt(
-            { name: "AES-GCM", iv: iv },
-            key,
-            ct
-        );
+        const plainBuffer = await window.crypto.subtle.decrypt(params, key, ct);
         return JSON.parse(new TextDecoder().decode(plainBuffer));
     }
 
@@ -598,11 +662,27 @@
         return cachedKey !== null;
     }
 
-    window.crypto_session = {
+    // Refs #1476 (R8): Die Krypto-Primitive (encrypt/decrypt) stehen bewusst
+    // NICHT mehr auf der oeffentlichen `window.crypto_session`-Oberflaeche.
+    // Zusammen mit dem in IndexedDB persistierten Schluessel waeren sie sonst
+    // ein dauerhaft erreichbares Entschluesselungs-Orakel fuer Art.-9-Daten,
+    // sobald irgendwo Skript im Origin ausgefuehrt wird (XSS). Stattdessen ein
+    // Einmal-Handshake: `_link()` liefert die Primitive beim ERSTEN Aufruf
+    // (der einzige legitime Konsument offline-store.js holt sie beim Laden ab)
+    // und danach `null`. Ein spaeter injiziertes Skript findet weder
+    // decryptPayload auf dem Objekt noch bekommt es sie ueber `_link()`.
+    // Primaere Kontrolle bleibt die strikte `script-src 'self'`-CSP; dies ist
+    // Defense-in-Depth (Angriffsflaeche verkleinern).
+    let _primitives = { encryptPayload: encryptPayload, decryptPayload: decryptPayload };
+    function _link() {
+        const p = _primitives;
+        _primitives = null;
+        return p;
+    }
+
+    const api = {
         isSupported: isSupported,
         deriveSessionKey: deriveSessionKey,
-        encryptPayload: encryptPayload,
-        decryptPayload: decryptPayload,
         clearSessionKey: clearSessionKey,
         wipeOfflineState: wipeOfflineState,
         // Refs #1324: exponiert fuer den deterministischen Idle-Wipe-Trigger
@@ -610,5 +690,22 @@
         enforceIdleWipe: enforceIdleWipe,
         hasSessionKey: hasSessionKey,
         ready: ready,
+        // Refs #1476 (R8): Einmal-Handshake fuer die Krypto-Primitive.
+        _link: _link,
     };
+    // Refs #1476 (R8): Das oeffentliche Objekt einfrieren (Object.freeze) — so
+    // kann ein XSS-Skript keine Methode gegen einen Key-Logger-Shim
+    // austauschen und den Logout-/Idle-Wipe (`clearSessionKey`/
+    // `wipeOfflineState`) nicht durch Ueberschreiben einer Objekt-Methode
+    // deaktivieren. Zusaetzlich non-writable ans window binden, damit ein
+    // schlichtes `window.crypto_session = evil` fehlschlaegt. `configurable`
+    // bleibt true (der Modul-Reload im JS-Testharness ersetzt die Bindung per
+    // defineProperty); die harte Grenze gegen Skriptinjektion ist ohnehin die
+    // strikte `script-src 'self'`-CSP.
+    Object.defineProperty(window, "crypto_session", {
+        value: Object.freeze(api),
+        writable: false,
+        configurable: true,
+        enumerable: true,
+    });
 })();
