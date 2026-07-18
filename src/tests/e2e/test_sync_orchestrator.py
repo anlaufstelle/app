@@ -371,6 +371,68 @@ class TestSyncOrchestrator:
                 )
             context.close()
 
+    def test_key_cleared_keeps_grounded_key_of_receiver(self, browser, base_url, _login_storage_state):
+        """Refs #1393 (Boot-Gate, geteilter Key-Zustand): Ein ``key-cleared``-
+        Broadcast darf einen Empfaenger, dessen Schluessel weiter in der
+        (geteilten) IndexedDB verankert ist, NICHT entkleiden. Das modelliert
+        die Race, in der ein Fremd-Tab beim Boot seinen Key clearte, ein
+        anderer Tab sich aber zwischenzeitlich neu angemeldet hat (KEY_NAME
+        wieder vorhanden) — der Empfaenger konsumiert das Signal nur, wenn der
+        (fehlende) Key-Zustand tatsaechlich geteilt ist.
+
+        Gegen den ungepatchten Empfaenger ROT: der verwarf ``cachedKey`` SOFORT
+        bei jedem ``key-cleared`` (ohne die IndexedDB-Grundlage zu pruefen) und
+        haette so einen frisch abgeleiteten Key weggeraeumt. Deterministisch,
+        kein Timing-Race: der Broadcast wird OHNE echten Wipe abgesetzt, die
+        IndexedDB-Grundlage bleibt also nachweislich bestehen.
+        """
+        context = browser.new_context(storage_state=_login_storage_state, locale="de-DE")
+        page_a = context.new_page()
+        page_b = context.new_page()
+        page_a.set_default_timeout(30000)
+        page_b.set_default_timeout(30000)
+        try:
+            _boot_with_key(page_b, base_url)  # Empfaenger haelt einen verankerten Key
+            _attach_to_shared_store(page_a, base_url)  # Absender teilt den Origin
+            assert page_b.evaluate("() => window.crypto_session.hasSessionKey()") is True
+
+            # Sonde auf dem Empfaenger: eine eigene Channel-Instanz meldet, sobald
+            # die key-cleared-Nachricht tatsaechlich angekommen ist — so warten wir
+            # deterministisch auf die Zustellung (statt auf einen sleep).
+            page_b.evaluate(
+                """() => {
+                    window.__kcSeen = false;
+                    const ch = new BroadcastChannel('anlaufstelle-offline');
+                    ch.onmessage = (ev) => {
+                        if (ev && ev.data && ev.data.type === 'key-cleared') window.__kcSeen = true;
+                    };
+                }"""
+            )
+
+            # Absender broadcastet key-cleared, OHNE die IndexedDB zu wipen
+            # (KEY_NAME bleibt) — BroadcastChannel liefert nicht an den Absender,
+            # nur der Empfaenger (page_b) hoert es.
+            page_a.wait_for_function("() => !!(window.syncOrchestrator && window.syncOrchestrator.broadcast)")
+            page_a.evaluate("() => window.syncOrchestrator.broadcast({ type: 'key-cleared' })")
+
+            # Zustellung abwarten, dann den Lock-Durchlauf des Empfaengers
+            # abwarten: ein eigener Gang durch den exklusiven Lock queued HINTER
+            # dem key-cleared-Apply und garantiert dessen Abschluss, bevor wir
+            # pruefen (deterministisch statt sleep).
+            page_b.wait_for_function("() => window.__kcSeen === true")
+            page_b.evaluate("async () => { await window.syncOrchestrator.runExclusive(() => {}); }")
+
+            assert page_b.evaluate("() => window.crypto_session.hasSessionKey()") is True, (
+                "Empfaenger mit weiter verankertem IndexedDB-Key darf key-cleared NICHT konsumieren (Refs #1393)"
+            )
+        finally:
+            with suppress(Exception):
+                page_b.evaluate(
+                    "async () => { if (window.offlineStore) await window.offlineStore.purgeAll();"
+                    " if (window.crypto_session) await window.crypto_session.clearSessionKey(); }"
+                )
+            context.close()
+
     def test_runexclusive_marks_lock_held_only_while_running(self, browser, base_url, _login_storage_state):
         """Refs #1493: der Reentrancy-Marker ``isLockHeld()`` ist NUR waehrend
         einer laufenden ``runExclusive``-fn true — davor/danach false. Rein

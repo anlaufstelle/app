@@ -275,8 +275,27 @@
     // Echo-Loop). Danach das bestehende UI-Refresh-Signal feuern, damit
     // Banner/Offline-Ansicht den gesperrten Zustand widerspiegeln (der
     // Offline-Viewer rendert dann seinen "bitte neu anmelden"-Zustand).
-    function _onOrchestratorMessage(msg) {
-        if (!msg || msg.type !== "key-cleared") return;
+    //
+    // Refs #1393 (Boot-Gate): key-cleared wird NUR konsumiert, wenn der
+    // Empfaenger denselben (fehlenden) Key-Zustand teilt. Hat die IndexedDB
+    // seit dem Broadcast wieder einen Schluessel (ein Fremd-Tab hat sich neu
+    // angemeldet -> deriveSessionKey, unter DEMSELBEN origin-weiten Lock
+    // committed), ist der in-memory-Key NICHT verwaist und wird stattdessen
+    // re-verankert — der Broadcast eines Boot-Wipes darf keinen frisch
+    // abgeleiteten Key wegraeumen. Erst wenn die Grundlage nachweislich fehlt,
+    // faellt cachedKey und das UI-Refresh feuert.
+    async function _applyKeyCleared() {
+        try {
+            const row = await _idbGet(KEY_NAME);
+            if (row && row.cryptoKey) {
+                // Geteilter Key-Zustand NICHT (mehr) fehlend -> re-verankern,
+                // kein Drop, kein Sequenz-Abbruch.
+                cachedKey = row.cryptoKey;
+                return;
+            }
+        } catch (_e) {
+            // Lese-Fehler: konservativ verwerfen (Key ohne pruefbare Grundlage).
+        }
         cachedKey = null;
         try {
             if (window.offlineEdit && window.offlineEdit.refreshCounts) {
@@ -285,6 +304,25 @@
         } catch (_e) {
             // ignore — UI-Refresh ist best-effort
         }
+    }
+
+    // Refs #1393 (Boot-Gate): Den Drop unter den origin-weiten Sync-Lock
+    // stellen, statt cachedKey sofort aus dem Empfaenger-Kontext zu nullen.
+    // Fuehrt DIESER Tab gerade eine Sync-Sequenz (haelt also den Lock), queued
+    // die exklusive Anforderung DAHINTER — der laufende Web-Lock-Halter wird
+    // nicht von aussen abgebrochen; der (dann per IndexedDB verifizierte) Drop
+    // passiert ZWISCHEN Sequenzen. Der in-memory-CryptoKey bleibt bis dahin
+    // gueltiges Krypto-Material, sodass die laufende Sequenz sauber zu Ende
+    // laeuft (kein transienter No-op-Neuversuch, Refs #1393). Haelt der Tab
+    // keinen Lock, laeuft der Drop praktisch sofort. Ohne
+    // navigator.locks/Orchestrator faellt ``_runExclusive`` auf direkte
+    // Ausfuehrung zurueck (heutiges Verhalten) — dort feuert mangels
+    // BroadcastChannel ohnehin nie ein key-cleared.
+    function _onOrchestratorMessage(msg) {
+        if (!msg || msg.type !== "key-cleared") return;
+        _runExclusive(_applyKeyCleared).catch(function () {
+            // ignore — best-effort; ein Lese-/Lock-Fehler darf nicht werfen.
+        });
     }
 
     async function enforceIdleWipe() {
