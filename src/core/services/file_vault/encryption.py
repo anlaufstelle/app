@@ -174,6 +174,7 @@ _FILE_FORMAT_V1 = 1
 _FILE_FORMAT_V2 = 2
 FILE_FORMAT_VERSION = _FILE_FORMAT_V1  # Default-Schreibversion ohne file_id (Legacy)
 CHUNK_SIZE = 64 * 1024  # 64 KB per chunk
+_FID_LEN = 16  # 16B Datei-Bindung (SHA256(file_id)[:16])
 _CTX_LEN = 24  # 16B Datei-Bindung + 4B chunk_index + 4B total
 
 
@@ -314,10 +315,22 @@ def decrypt_file_stream(input_path, file_id=None):
 
             if version == _FILE_FORMAT_V1:
                 # Downgrade-Erkennung: ein als v2 gebundener Chunk, dessen
-                # Header-Byte auf v1 gefaelscht wurde, beginnt mit genau seinem
-                # erwarteten Kontext. Echte v1-Daten treffen das nicht (und ein
+                # Header-Byte auf v1 gefaelscht wurde, beginnt mit genau seiner
+                # 16-Byte-Datei-Bindung. Echte v1-Daten treffen das nicht (und ein
                 # Angreifer kann es ohne Schluessel nicht erzeugen).
-                if fid16 is not None and plaintext[:_CTX_LEN] == _chunk_context(fid16, index, chunk_count):
+                #
+                # R12 (Refs #1476/#1666): NUR gegen die count-/index-invariante
+                # Datei-Bindung ``fid16`` pruefen — NICHT gegen den vollen
+                # 24-Byte-Kontext ``_chunk_context(fid16, index, chunk_count)``.
+                # Der Header (Version + ``chunk_count``) liegt ausserhalb jedes
+                # Fernet-Tokens und ist damit angreifer-kontrolliert. Wer v2->v1
+                # herabstuft UND den ``chunk_count`` umschreibt, liesse den
+                # rekonstruierten Kontext (mit gefaelschtem ``total``) vom im
+                # Token gebundenen (originales ``total``) abweichen und umginge
+                # so die Downgrade-/Truncation-Erkennung fail-open. Die
+                # 16-Byte-Bindung ist von ``index``/``chunk_count`` unabhaengig
+                # und schlaegt daher auch bei umgeschriebenem Header/Reorder an.
+                if fid16 is not None and plaintext[:_FID_LEN] == fid16:
                     raise EncryptionError("Chunk binding mismatch — v1 header on bound chunk (possible downgrade)")
                 yield plaintext
                 continue

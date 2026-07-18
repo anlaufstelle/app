@@ -277,6 +277,28 @@ class TestFileEncryptionV2Binding:
         with pytest.raises(EncryptionError, match="binding"):
             list(decrypt_file_stream(out, file_id="file-A"))
 
+    def test_v2_downgrade_with_rewritten_chunk_count_rejected(self, tmp_path):
+        """R12 (Refs #1476/#1666): v2→v1-Downgrade PLUS umgeschriebener
+        ``chunk_count`` wird abgewiesen.
+
+        Die alte Downgrade-Erkennung rekonstruierte den erwarteten Kontext mit
+        dem angreifer-kontrollierten Header-``chunk_count``. Fälscht ein
+        Angreifer Versionsbyte v2→v1 UND den ``chunk_count`` (z.B. Truncation
+        auf 1 Chunk), wich der rekonstruierte Kontext (gefälschtes ``total``)
+        vom im Token gebundenen (originales ``total``) ab → die Erkennung lief
+        fail-open, ein truncated/korruptes File wurde ohne Fehler akzeptiert.
+        Die count-invariante 16-Byte-Datei-Bindung schlägt jetzt trotzdem an.
+        """
+        out = tmp_path / "v2countforge.enc"
+        data = b"A" * CHUNK_SIZE + b"B" * CHUNK_SIZE + b"C" * CHUNK_SIZE
+        encrypt_file(io.BytesIO(data), out, file_id="file-A")
+        version, count, tokens = _split_v2(out)
+        assert version == 2 and count == 3
+        # Header v2→v1 UND count 3→1 (Truncation auf den ersten Chunk).
+        _write_v2(out, 1, 1, tokens[:1])
+        with pytest.raises(EncryptionError, match="binding"):
+            list(decrypt_file_stream(out, file_id="file-A"))
+
     def test_legit_v1_with_file_id_not_flagged(self, tmp_path):
         """Echtes v1 (ungebunden) wird auch mit file_id NICHT fälschlich als
         Downgrade markiert — kein False-Positive auf dem Storage-Lesepfad."""

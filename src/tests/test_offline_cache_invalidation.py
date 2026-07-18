@@ -192,3 +192,86 @@ class TestCombinedInvalidationContract:
         # Ohne erneutes refresh_from_db: die Instanz wurde vom Receiver
         # angepasst.
         assert staff_user.offline_key_salt == ""
+
+
+@pytest.mark.django_db
+class TestRevokeOfflineAccessHelper:
+    """R18 (Refs #1476/#1666): gemeinsamer Revocation-Einstieg + begrenzter Scan."""
+
+    def test_helper_rotates_salt_and_flushes_session(self, staff_user):
+        """``revoke_offline_access`` bündelt Salt-Rotation + Session-Flush."""
+        from core.signals.offline_invalidation import revoke_offline_access
+
+        staff_user.ensure_offline_key_salt()
+        key = _make_db_session_for(staff_user)
+        assert staff_user.offline_key_salt
+        assert Session.objects.filter(session_key=key).exists()
+
+        revoke_offline_access(staff_user)
+
+        staff_user.refresh_from_db()
+        assert staff_user.offline_key_salt == ""
+        assert not Session.objects.filter(session_key=key).exists()
+
+    def test_session_scan_respects_cap(self, staff_user, settings, caplog):
+        """Die Scan-Obergrenze begrenzt den Dekodier-Aufwand: bei ``cap=0`` wird
+        keine Session dekodiert/geflusht (Salt rotiert trotzdem), und der
+        Kappungs-Fall wird laut geloggt."""
+        import logging
+
+        from core.signals.offline_invalidation import revoke_offline_access
+
+        settings.OFFLINE_REVOCATION_SESSION_SCAN_LIMIT = 0
+        staff_user.ensure_offline_key_salt()
+        key = _make_db_session_for(staff_user)
+
+        with caplog.at_level(logging.ERROR):
+            revoke_offline_access(staff_user)
+
+        # Salt global entwertet, aber die Session wurde wegen cap=0 NICHT geflusht.
+        staff_user.refresh_from_db()
+        assert staff_user.offline_key_salt == ""
+        assert Session.objects.filter(session_key=key).exists()
+        assert any("Session-Scan-Obergrenze" in r.message for r in caplog.records)
+
+
+@pytest.mark.django_db
+class TestLockoutTriggersRevocation:
+    """R18 (Refs #1476/#1666): Ein Account-Lockout rotiert den Offline-Salt und
+    flusht die Sessions — der Login-Block-Zweig feuert nur bei KORREKTEM Passwort
+    gegen einen gesperrten Account (nicht angreifer-getrieben)."""
+
+    def _seed_lockout(self, facility, user, ip):
+        from core.models import AuditLog
+        from core.services.security import LOCKOUT_THRESHOLD
+
+        for _ in range(LOCKOUT_THRESHOLD):
+            AuditLog.objects.create(
+                facility=facility,
+                user=user,
+                action=AuditLog.Action.LOGIN_FAILED,
+                ip_address=ip,
+                detail={"username": user.username},
+            )
+
+    def test_blocked_login_on_locked_account_revokes_offline_access(self, client, facility, staff_user):
+        from django.urls import reverse
+
+        staff_user.ensure_offline_key_salt()
+        assert staff_user.offline_key_salt
+        # Bestehende (Fremd-)Session, die die Rotation überdauern würde.
+        key = _make_db_session_for(staff_user)
+        # Lockout für die Test-Client-IP (REMOTE_ADDR default 127.0.0.1) seeden.
+        self._seed_lockout(facility, staff_user, "127.0.0.1")
+
+        response = client.post(
+            reverse("login"),
+            {"username": staff_user.username, "password": "testpass123"},
+            REMOTE_ADDR="127.0.0.1",
+        )
+        # Login bleibt blockiert (Formular-Fehler, kein Redirect).
+        assert response.status_code == 200
+
+        staff_user.refresh_from_db()
+        assert staff_user.offline_key_salt == ""
+        assert not Session.objects.filter(session_key=key).exists()

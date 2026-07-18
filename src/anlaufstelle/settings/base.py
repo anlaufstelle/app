@@ -329,6 +329,13 @@ SESSION_COOKIE_AGE = 1800  # 30 Minuten
 # der Cookie laeuft 30 Min nach der letzten Modifikation ab. Refs #733.
 SESSION_SAVE_EVERY_REQUEST = False
 
+# R18 (Refs #1476/#1666): Obergrenze fuer den Session-Scan der Offline-Revocation
+# (``core.signals.offline_invalidation._flush_user_sessions``). Djangos
+# DB-Session-Backend hat keinen queryable User-Index, daher muss jede aktive
+# Session dekodiert werden — der Deckel bounded den Worst-Case je Revocation.
+# Default weit ueber realistischem Bestand; bei Ueberschreitung wird laut geloggt.
+OFFLINE_REVOCATION_SESSION_SCAN_LIMIT = int(os.environ.get("OFFLINE_REVOCATION_SESSION_SCAN_LIMIT", "10000"))
+
 # --- Trusted Proxy Hops (Client-IP-Ermittlung) ---
 # Anzahl der vertrauenswürdigen Proxy-Hops vor der Django-App. Bestimmt, welcher
 # Eintrag aus X-Forwarded-For als echte Client-IP interpretiert wird.

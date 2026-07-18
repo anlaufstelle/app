@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import logging
 
+from django.conf import settings
 from django.contrib.sessions.models import Session
 from django.db.models.signals import post_save, pre_save
 from django.dispatch import receiver
@@ -45,6 +46,18 @@ from django.utils import timezone
 from core.models import User
 
 logger = logging.getLogger(__name__)
+
+# R18 (Refs #1476/#1666): Obergrenze fuer den Session-Scan in
+# ``_flush_user_sessions``. Djangos DB-Session-Backend traegt keinen
+# queryable User-Index — der User haengt nur im signierten ``session_data``.
+# Der Flush muss daher jede nicht-abgelaufene Session dekodieren. Ohne Deckel
+# ist das O(alle aktiven Sessions) je Revocation (DoS-Flaeche, wenn ein
+# Angreifer viele anonyme Sessions erzeugt). Der Default liegt weit ueber dem
+# realistischen Bestand (Pilot < 30 User); wird er ueberschritten, wird das
+# laut geloggt (Salt-Rotation entwertet den Offline-Schluessel ohnehin global,
+# der ungeflushte Rest ist durch die Session-TTL begrenzt).
+_SESSION_SCAN_CAP_DEFAULT = 10000
+_SESSION_SCAN_CHUNK = 2000
 
 
 @receiver(pre_save, sender=User, dispatch_uid="offline_invalidation_capture_old")
@@ -81,8 +94,20 @@ def _invalidate_offline_cache_on_revoke(sender, instance, created, **kwargs):
     if not (role_changed or deactivated):
         return
 
-    _rotate_offline_salt(instance)
-    _flush_user_sessions(instance)
+    revoke_offline_access(instance)
+
+
+def revoke_offline_access(user) -> None:
+    """Entwerte den Offline-Zugang eines Users: Salt rotieren + Sessions flushen.
+
+    Gemeinsamer Einstieg fuer alle Revocation-Ausloeser (Rollenwechsel,
+    Deaktivierung — via ``post_save`` — sowie Account-Lockout, Refs #1476/#1666).
+    Beide Schritte gehoeren zusammen: die Salt-Rotation allein liefe ins Leere,
+    solange eine noch gueltige Session ueber ``OfflineKeySaltView`` den frisch
+    rotierten Salt sofort nachladen koennte.
+    """
+    _rotate_offline_salt(user)
+    _flush_user_sessions(user)
 
 
 def _rotate_offline_salt(user) -> None:
@@ -104,10 +129,27 @@ def _flush_user_sessions(user) -> None:
     über ``_auth_user_id`` im dekodierten Payload. Wir scannen nur die noch
     nicht abgelaufenen Sessions (abgelaufene tragen ohnehin keinen lebenden
     Schlüssel mehr und werden vom Clearsessions-Housekeeping getilgt).
+
+    R18 (Refs #1476/#1666): Der Scan ist begrenzt — nur die zwei benötigten
+    Spalten (``.only``), gestreamt (``.iterator``) statt materialisiert, und
+    hart gedeckelt (``OFFLINE_REVOCATION_SESSION_SCAN_LIMIT``). Wird der Deckel
+    erreicht, wird laut geloggt und abgebrochen; die bereits gerotierte Salt
+    entwertet den Offline-Schlüssel global, ein etwaiger ungeflushter
+    Session-Rest ist durch die Session-TTL begrenzt.
     """
     user_id = str(user.pk)
+    cap = getattr(settings, "OFFLINE_REVOCATION_SESSION_SCAN_LIMIT", _SESSION_SCAN_CAP_DEFAULT)
     stale_keys = []
-    for session in Session.objects.filter(expire_date__gte=timezone.now()):
+    capped = False
+    qs = (
+        Session.objects.filter(expire_date__gte=timezone.now())
+        .only("session_key", "session_data")
+        .iterator(chunk_size=_SESSION_SCAN_CHUNK)
+    )
+    for scanned, session in enumerate(qs):
+        if scanned >= cap:
+            capped = True
+            break
         if session.get_decoded().get("_auth_user_id") == user_id:
             stale_keys.append(session.session_key)
     if stale_keys:
@@ -115,5 +157,12 @@ def _flush_user_sessions(user) -> None:
         logger.info(
             "Offline-Invalidierung: %d Session(s) für User %s geflusht.",
             len(stale_keys),
+            user.pk,
+        )
+    if capped:
+        logger.error(
+            "Offline-Invalidierung: Session-Scan-Obergrenze (%d) für User %s erreicht — "
+            "Rest nicht geflusht (Salt ist rotiert, Rest durch Session-TTL begrenzt).",
+            cap,
             user.pk,
         )

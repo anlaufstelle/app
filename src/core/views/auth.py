@@ -18,6 +18,7 @@ from core.services.audit import hmac_hash_email, log_audit_event
 from core.services.security import clear_sudo, invite_token_generator, is_locked
 from core.services.security import unlock as unlock_user
 from core.signals.audit import get_client_ip
+from core.signals.offline_invalidation import revoke_offline_access
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,14 @@ class CustomLoginView(auth_views.LoginView):
         # "reason=locked"-Audit-Write trägt (über log_audit_event) die Request-IP
         # mit, sodass der Block je Quell-IP self-sustaining bleibt (gewollt).
         if is_locked(user, ip_address=get_client_ip(self.request)):
+            # R18 (Refs #1476/#1666): Ein gesperrter Account ist ein Revocation-
+            # Ereignis — sein Offline-Bundle-Schlüssel (und etwaige noch aktive
+            # Fremd-Sessions) dürfen die Sperre nicht überdauern. Salt rotieren +
+            # Sessions flushen wie bei Rollenwechsel/Deaktivierung. Der Zweig
+            # feuert NUR bei korrektem Passwort gegen einen gesperrten Account
+            # (AuthenticationForm hat validiert) → nicht angreifer-getrieben:
+            # wer das Passwort nicht kennt, erreicht ihn nie.
+            revoke_offline_access(user)
             log_audit_event(
                 self.request,
                 AuditLog.Action.LOGIN_FAILED,

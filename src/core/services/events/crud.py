@@ -133,10 +133,25 @@ def apply_attachment_changes(event, user, request_post, request_files, file_fiel
 
     Aktualisiert anschliessend den Marker im ``event.data_json``.
     """
+    from core.services.compliance import user_can_see_field
+
     field_templates = build_field_template_lookup(document_type)
     facility = event.facility
+    doc_sensitivity = document_type.sensitivity
     for slug, ft in field_templates.items():
         if ft.field_type != FieldTemplate.FieldType.FILE:
+            continue
+
+        # R11 (Refs #1476/#1666): Sensitivity-Gate auch auf Anhang-Mutation.
+        # Der Event-Update-Pfad entfernt Text-Felder oberhalb der Rollen-Sicht
+        # per ``remove_restricted_fields`` aus dem Form; die Anhang-Mutation
+        # liest REMOVE/REPLACE/ADD aber direkt aus ``request.POST``/``FILES``
+        # und umging dieses Gate. Ein User, der das Event sieht (Doc-Type-Gate),
+        # aber dieses FILE-Feld wegen eines feldbezogenen Sensitivity-Overrides
+        # NICHT sehen darf, darf dessen Anhaenge nicht loeschen/ersetzen/
+        # ergaenzen — der Marker bleibt dann unveraendert. (``user is None`` =
+        # System-/Service-Kontext ohne Rolle → kein Gate.)
+        if user is not None and not user_can_see_field(user, doc_sensitivity, ft.sensitivity):
             continue
 
         existing_marker = (event.data_json or {}).get(slug)
