@@ -22,13 +22,23 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from contextlib import contextmanager
+import threading
 from dataclasses import dataclass
 from datetime import UTC, timedelta
 
 from django.db import connection
 
 from core.services.audit.hash import _get_audit_hash_key
+
+# R15 (Refs #1476/#1665): Reentrancy-Guard fuer das kurze Fenster, in dem der
+# System-Ketten-Read die RLS-Sicht transient auf ``app.is_super_admin='true'``
+# anhebt. Das angehobene Fenster umschliesst bewusst NUR einen einzigen
+# Raw-Cursor-SELECT (kein ORM). Der Guard macht diese Invariante fail-loud
+# durchsetzbar: schoebe ein kuenftiges Refactor je eine weitere (ORM-)Query in
+# das Fenster, die selbst wieder einen System-Ketten-Read ausloeste, wuerde die
+# geschachtelte Elevation hier hart abbrechen — statt lautlos volle Zeilen
+# unter Super-Admin-Sicht zu lesen.
+_system_read_active = threading.local()
 
 
 def _canonical_timestamp(ts) -> str:
@@ -95,47 +105,77 @@ def compute_entry_hash(row, prev_hash: str) -> str:
     return hmac.new(_get_audit_hash_key(), message, hashlib.sha256).hexdigest()
 
 
-@contextmanager
-def _chain_read_visibility(facility_id):
-    """Macht die System-Ketten-Zeilen (``facility=NULL``) fuer den Ketten-Read
-    sichtbar.
+def _system_chain_latest_link_raw():
+    """``(timestamp, entry_hash)`` der juengsten System-Ketten-Zeile
+    (``facility=NULL``) via **einzelnem Raw-Cursor-SELECT** unter transient
+    angehobener RLS-Sicht (R15, Refs #1476/#1665).
 
     NULL-facility-Zeilen sind unter der RLS-USING-Policy nur fuer
     ``app.is_super_admin='true'`` sichtbar (Migration 0085). Ein nicht-super
     Schreiber unter der NOBYPASSRLS-App-Rolle (z.B. LOGIN_FAILED fuer einen
-    unbekannten User) saehe den Ketten-Tail sonst NICHT und wuerde
-    faelschlich ``prev_hash=""`` setzen — die System-Kette risse.
+    unbekannten User) saehe den Ketten-Tail sonst NICHT und wuerde faelschlich
+    ``prev_hash=""`` setzen — die System-Kette risse.
 
-    Wir heben die GUC daher transient (``SET LOCAL``, Transaktions-scoped) nur
-    fuer den Predecessor-Read an und setzen sie im ``finally`` zurueck. Gelesen
-    werden ausschliesslich Hash-/Ordnungs-Metadaten der eigenen Kette — keine
-    PII. No-op fuer gesetzte Facility (eigener Read immer sichtbar) und auf
-    Nicht-PostgreSQL.
+    Die GUC wird transient (``SET LOCAL`` / ``is_local=true``, Transaktions-
+    scoped) angehoben und im ``finally`` exakt auf den Vorwert zurueckgesetzt
+    (kein Leak auf gepoolter Connection). **Das angehobene Fenster umschliesst
+    ausschliesslich den einen ``SELECT``** — bewusst KEINE ORM-Query (die die
+    volle Instanz unter Super-Admin-Sicht materialisieren wuerde); gelesen
+    werden nur Hash-/Ordnungs-Metadaten der eigenen Kette, keine PII. Ein
+    Reentrancy-Guard bricht eine geschachtelte Elevation fail-loud ab.
     """
-    if connection.vendor != "postgresql" or facility_id is not None:
-        yield
-        return
-    with connection.cursor() as cur:
-        cur.execute("SELECT current_setting('app.is_super_admin', true)")
-        previous = cur.fetchone()[0] or ""
-        cur.execute("SELECT set_config('app.is_super_admin', 'true', true)")
-        try:
-            yield
-        finally:
-            cur.execute("SELECT set_config('app.is_super_admin', %s, true)", [previous])
+    from core.models import AuditLog
+
+    if getattr(_system_read_active, "flag", False):
+        raise RuntimeError(
+            "geschachtelte System-Ketten-Elevation (R15): das angehobene "
+            "app.is_super_admin-Fenster darf ausschliesslich den einen "
+            "Raw-Cursor-Read umschliessen — keine weitere (ORM-)Query."
+        )
+
+    table = connection.ops.quote_name(AuditLog._meta.db_table)
+    ts_col = connection.ops.quote_name(AuditLog._meta.get_field("timestamp").column)
+    hash_col = connection.ops.quote_name(AuditLog._meta.get_field("entry_hash").column)
+    id_col = connection.ops.quote_name(AuditLog._meta.get_field("id").column)
+    fac_col = connection.ops.quote_name(AuditLog._meta.get_field("facility").column)
+
+    _system_read_active.flag = True
+    try:
+        with connection.cursor() as cur:
+            cur.execute("SELECT current_setting('app.is_super_admin', true)")
+            previous = cur.fetchone()[0] or ""
+            cur.execute("SELECT set_config('app.is_super_admin', 'true', true)")
+            try:
+                # Alle Identifier stammen aus ``_meta`` + ``quote_name`` (konstant,
+                # kein User-Input); die WHERE-Bedingung ist literal.
+                sql = (
+                    f"SELECT {ts_col}, {hash_col} FROM {table} "  # noqa: S608 — konstante, gequotete Identifier
+                    f"WHERE {fac_col} IS NULL ORDER BY {ts_col} DESC, {id_col} DESC LIMIT 1"
+                )
+                cur.execute(sql)
+                return cur.fetchone()
+            finally:
+                cur.execute("SELECT set_config('app.is_super_admin', %s, true)", [previous])
+    finally:
+        _system_read_active.flag = False
 
 
 def _latest_link(facility_id):
     """``(timestamp, entry_hash)`` der juengsten Zeile der Facility-Kette."""
     from core.models import AuditLog
 
-    with _chain_read_visibility(facility_id):
-        return (
-            AuditLog.objects.filter(facility_id=facility_id)
-            .order_by("-timestamp", "-id")
-            .values_list("timestamp", "entry_hash")
-            .first()
-        )
+    # System-Kette (facility=NULL) auf PostgreSQL: Raw-Read unter eng
+    # gescopeter RLS-Elevation (R15). Facility-Ketten sind fuer den eigenen
+    # Schreiber ohnehin RLS-sichtbar; SQLite-Tests kennen keine RLS/GUC.
+    if facility_id is None and connection.vendor == "postgresql":
+        return _system_chain_latest_link_raw()
+
+    return (
+        AuditLog.objects.filter(facility_id=facility_id)
+        .order_by("-timestamp", "-id")
+        .values_list("timestamp", "entry_hash")
+        .first()
+    )
 
 
 def assign_chain_fields(instance) -> None:
@@ -175,6 +215,10 @@ class ChainResult:
     rows_checked: int
     first_break_id: str | None = None
     reason: str = ""
+    # R16 (Refs #1476/#1665): ``entry_hash`` der juengsten ueberlebenden Zeile
+    # (Tail) — der Anker, den der externe High-Water-Mark fortschreibt. ``None``
+    # bei leerer Kette. Rein informativ; aeltere Aufrufer ignorieren das Feld.
+    last_entry_hash: str | None = None
 
 
 def _checkpoint_boundaries(rows) -> set[str]:
@@ -217,7 +261,7 @@ def _checkpoint_boundaries(rows) -> set[str]:
     return boundaries
 
 
-def verify_chain(facility) -> ChainResult:
+def verify_chain(facility, *, hwm=None) -> ChainResult:
     """Verifiziert die HMAC-Kette einer Facility und meldet den ersten Bruch.
 
     Pro ueberlebender Zeile (in ``(timestamp, id)``-Reihenfolge):
@@ -235,20 +279,25 @@ def verify_chain(facility) -> ChainResult:
     ``facility`` darf eine ``Facility``-Instanz, ein PK oder ``None`` (System-
     Kette) sein. Vergleich via :func:`hmac.compare_digest`.
 
-    **Bekannte Grenze (Tail-Truncation):** Erkannt werden In-Place-Manipulation
-    und MITTIGE Loeschung/Einschuebe (der Nachfolger traegt dann einen
-    danglenden ``prev_hash``). NICHT erkennbar ist das Abschneiden der
-    *juengsten* Zeile(n) am Ketten-Ende: loescht ein Angreifer den Tail, bleibt
-    die verbleibende Kette in sich konsistent und es gibt keinen Nachfolger mit
-    danglendem ``prev_hash``. Dafuer braeuchte es einen extern verankerten
-    High-Water-Mark (juengster ``entry_hash`` + Count, ausserhalb der DB
-    gespeichert) — ein bewusst offener Folge-Schritt, kein Teil dieser Pruefung.
+    **Tail-Truncation / whole-chain wipe (R16, Refs #1476/#1665).** Die
+    Zeilen-gegen-Zeilen-Pruefung allein erkennt In-Place-Manipulation und
+    MITTIGE Loeschung/Einschuebe, aber NICHT das Abschneiden der *juengsten*
+    Zeile(n) am Ketten-Ende bzw. eine komplett geleerte Kette — die Restkette
+    bleibt in sich konsistent. Wird ein
+    :class:`~core.services.audit.hwm.HighWaterMarkStore` als ``hwm`` uebergeben,
+    prueft ``verify_chain`` zusaetzlich, ob der zuletzt extern verankerte
+    Tail-``entry_hash`` noch physisch in der Kette liegt; fehlt er, wird der
+    Abschnitt/die Leerung als Bruch gemeldet. Ohne ``hwm`` bleibt diese Grenze
+    bestehen (Verhalten unveraendert).
     """
     from core.models import AuditLog, Facility
 
     facility_id = facility.pk if isinstance(facility, Facility) else facility
     rows = list(AuditLog.objects.filter(facility_id=facility_id).order_by("timestamp", "id"))
     boundaries = _checkpoint_boundaries(rows)
+    # R16: Menge aller physisch vorhandenen entry_hashes — der HWM-Anker muss
+    # darin liegen, sonst wurde der Tail abgeschnitten / die Kette geleert.
+    present_hashes = {r.entry_hash for r in rows if r.entry_hash}
 
     prev_entry: str | None = None
     checked = 0
@@ -269,4 +318,9 @@ def verify_chain(facility) -> ChainResult:
             return ChainResult(False, checked, str(row.pk), "prev_hash linkage break (row deleted/inserted)")
         prev_entry = row.entry_hash
 
-    return ChainResult(True, checked)
+    if hwm is not None:
+        reason = hwm.check(facility_id, present_hashes)
+        if reason:
+            return ChainResult(False, checked, None, reason, last_entry_hash=prev_entry)
+
+    return ChainResult(True, checked, last_entry_hash=prev_entry)

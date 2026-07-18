@@ -576,7 +576,7 @@ def run_system_detections() -> list[AuditLog]:
     Mechanik wie im ``/system/``-Bereich (Migration 0085). Unter einer
     SUPERUSER/BYPASSRLS-Cron-Rolle ist das GUC-Setzen ein harmloser No-Op.
 
-    Der Bypass wird — analog zu ``chain._chain_read_visibility`` — TRANSAKTIONS-
+    Der Bypass wird — analog zu ``chain._system_chain_latest_link_raw`` — TRANSAKTIONS-
     LOKAL (``SET LOCAL``/``is_local=true``) innerhalb einer ``transaction.atomic``
     gesetzt und im ``finally`` auf den Vorwert zurueckgesetzt. So bleibt das
     Superuser-GUC NICHT auf einer (gepoolten) Connection stehen — ``run_system_

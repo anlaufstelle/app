@@ -34,6 +34,15 @@ SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
 # DJANGO_AUDIT_HASH_KEY explizit gesetzt sein.
 AUDIT_HASH_KEY = os.environ.get("DJANGO_AUDIT_HASH_KEY", "")
 
+# AUDIT_HWM_PATH (R16, Refs #1476/#1665) — Pfad einer externen, HMAC-signierten
+# High-Water-Mark-Datei fuer die Audit-Kette. Ist er gesetzt, erkennt
+# ``verify_audit_chain`` zusaetzlich Tail-Truncation und whole-chain wipe
+# (der zuletzt verankerte juengste ``entry_hash`` muss noch in der Kette liegen)
+# und ruckt den Anker nach jedem gruenen Lauf vor. Leer ⇒ Feature aus (Verhalten
+# unveraendert). Der Pfad sollte ausserhalb des DB-Volumes liegen; die
+# betriebliche Verankerung (Offsite-Backup, Cron-Frequenz) ist Deployment-Sache.
+AUDIT_HWM_PATH = os.environ.get("DJANGO_AUDIT_HWM_PATH", "")
+
 # HEALTH_DETAIL_TOKEN (A7.1, Refs #1024) — optionaler Token, mit dem ein
 # interner Monitoring-Caller die Detailfelder von ``/health/`` (version, smtp,
 # Backup-Alter, Disk-frei) abrufen darf. Ohne Token bzw. ohne authentifizierten

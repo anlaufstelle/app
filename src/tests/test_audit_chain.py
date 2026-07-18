@@ -25,7 +25,9 @@ from django.utils import timezone
 
 from core.models import AuditLog
 from core.services.audit import audit_event, log_audit_event
+from core.services.audit import chain as chain_mod
 from core.services.audit.chain import compute_entry_hash, verify_chain
+from core.services.audit.hwm import HighWaterMarkStore, HwmIntegrityError
 from core.services.retention import prune_auditlog
 from core.services.system import bypass_replication_triggers
 
@@ -449,6 +451,193 @@ class TestChainCommandRlsBypassGuard:
         monkeypatch.setattr(cmd, "_has_rls_bypass_context", lambda: False)
         with pytest.raises(CommandError, match="RLS"):
             call_command("backfill_audit_chain")
+
+
+# ---------------------------------------------------------------------------
+# R15 (Refs #1476/#1665): RLS-Elevation strikt auf den Raw-Read gescopet
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestSystemChainReadElevationScope:
+    """Refs #1476/#1665: Der System-Ketten-Read (``facility=NULL``) hebt
+    ``app.is_super_admin`` nur transient und ausschliesslich um den EINEN
+    Raw-Cursor-SELECT an — kein ORM im Fenster, GUC danach zurueckgesetzt,
+    geschachtelte Elevation fail-loud."""
+
+    def setup_method(self):
+        if connection.vendor != "postgresql":
+            pytest.skip("RLS-GUC-Scope ist PostgreSQL-spezifisch.")
+
+    def test_guc_restored_after_system_chain_write(self, super_admin_user):
+        # Ausgangswert der GUC festhalten.
+        with connection.cursor() as cur:
+            cur.execute("SELECT current_setting('app.is_super_admin', true)")
+            before = cur.fetchone()[0] or ""
+        audit_event(AuditLog.Action.SYSTEM_VIEW, user=super_admin_user, facility=None)
+        with connection.cursor() as cur:
+            cur.execute("SELECT current_setting('app.is_super_admin', true)")
+            after = cur.fetchone()[0] or ""
+        assert after == before, "Elevation ist nicht auf den Vorwert zurueckgesetzt (Leak-Gefahr)."
+        assert verify_chain(None).ok
+
+    def test_reentrancy_guard_fails_loud(self):
+        """Ein bereits aktives Elevation-Fenster (z.B. weil ein Refactor eine
+        weitere Query hineinschoebe, die selbst wieder einen System-Read
+        ausloest) bricht hart ab — statt volle Zeilen unter Super-Admin-Sicht
+        zu lesen."""
+        chain_mod._system_read_active.flag = True
+        try:
+            with pytest.raises(RuntimeError, match="geschachtelte"):
+                chain_mod._system_chain_latest_link_raw()
+        finally:
+            chain_mod._system_read_active.flag = False
+
+
+# ---------------------------------------------------------------------------
+# R16 (Refs #1476/#1665): externer High-Water-Mark gegen Tail-Truncation
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestHighWaterMark:
+    def setup_method(self):
+        if connection.vendor != "postgresql":
+            pytest.skip("HWM-Truncation-Tests umgehen den Immutability-Trigger (PostgreSQL).")
+
+    def _wipe(self, **filter_kwargs):
+        with transaction.atomic(), bypass_replication_triggers():
+            AuditLog.objects.filter(**filter_kwargs).delete()
+
+    def test_verify_without_hwm_misses_tail_truncation(self, facility, staff_user, tmp_path):
+        """Dokumentiert die bekannte Grenze: OHNE HWM gilt eine tail-gekuerzte
+        (und sogar geleerte) Kette weiter als intakt — Motivation fuer R16."""
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        tail = audit_event(AuditLog.Action.LOGOUT, user=staff_user, facility=facility)
+        self._wipe(pk=tail.pk)
+        assert verify_chain(facility).ok  # unerkannt ohne HWM
+
+    def test_hwm_flags_tail_truncation(self, facility, staff_user, tmp_path):
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        tail = audit_event(AuditLog.Action.LOGOUT, user=staff_user, facility=facility)
+        tail.refresh_from_db()
+
+        path = str(tmp_path / "hwm.json")
+        res = verify_chain(facility)
+        store = HighWaterMarkStore(path=path)
+        store.record(facility.pk, res.rows_checked, res.last_entry_hash)
+        store.save()
+
+        # Juengste Zeile abschneiden — Restkette bleibt in sich konsistent.
+        self._wipe(pk=tail.pk)
+
+        reloaded = HighWaterMarkStore.load(path)
+        res2 = verify_chain(facility, hwm=reloaded)
+        assert not res2.ok
+        assert "tail" in res2.reason.lower() or "wipe" in res2.reason.lower()
+
+    def test_hwm_flags_whole_chain_wipe(self, facility, staff_user, tmp_path):
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        audit_event(AuditLog.Action.LOGOUT, user=staff_user, facility=facility)
+
+        path = str(tmp_path / "hwm.json")
+        res = verify_chain(facility)
+        store = HighWaterMarkStore(path=path)
+        store.record(facility.pk, res.rows_checked, res.last_entry_hash)
+        store.save()
+
+        # Ganze Kette leeren.
+        self._wipe(facility_id=facility.pk)
+        assert not AuditLog.objects.filter(facility_id=facility.pk).exists()
+
+        reloaded = HighWaterMarkStore.load(path)
+        res2 = verify_chain(facility, hwm=reloaded)
+        assert not res2.ok
+        assert res2.rows_checked == 0
+        assert "wipe" in res2.reason.lower() or "tail" in res2.reason.lower()
+
+    def test_hwm_clean_growth_stays_ok_and_advances(self, facility, staff_user, tmp_path):
+        r1 = audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        r1.refresh_from_db()
+        path = str(tmp_path / "hwm.json")
+        store = HighWaterMarkStore(path=path)
+        store.record(facility.pk, 1, r1.entry_hash)
+        store.save()
+
+        # Legitim wachsen: der alte Anker (r1) bleibt physisch vorhanden.
+        r2 = audit_event(AuditLog.Action.LOGOUT, user=staff_user, facility=facility)
+        r2.refresh_from_db()
+
+        reloaded = HighWaterMarkStore.load(path)
+        res = verify_chain(facility, hwm=reloaded)
+        assert res.ok, res.reason
+        assert res.last_entry_hash == r2.entry_hash
+        # Anker vorruecken und persistieren.
+        reloaded.record(facility.pk, res.rows_checked, res.last_entry_hash)
+        reloaded.save()
+        assert HighWaterMarkStore.load(path).get(facility.pk)["last_entry_hash"] == r2.entry_hash
+
+    def test_hwm_file_tamper_detected(self, tmp_path):
+        path = str(tmp_path / "hwm.json")
+        store = HighWaterMarkStore(path=path)
+        store.record(1, 3, "a" * 64)
+        store.save()
+
+        # Datei-Manipulation: Anker verschieben, ohne die Signatur zu kennen.
+        import json as _json
+
+        with open(path, encoding="utf-8") as fh:
+            data = _json.load(fh)
+        data["chains"]["1"]["last_entry_hash"] = "b" * 64
+        with open(path, "w", encoding="utf-8") as fh:
+            _json.dump(data, fh)
+
+        with pytest.raises(HwmIntegrityError):
+            HighWaterMarkStore.load(path)
+
+    def test_hwm_no_prior_anchor_is_noop(self, facility, staff_user, tmp_path):
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        empty = HighWaterMarkStore(path=str(tmp_path / "hwm.json"))
+        assert verify_chain(facility, hwm=empty).ok
+
+
+@pytest.mark.django_db
+class TestVerifyCommandHwm:
+    def setup_method(self):
+        if connection.vendor != "postgresql":
+            pytest.skip("HWM-Command-Test umgeht den Immutability-Trigger (PostgreSQL).")
+
+    def test_command_records_and_then_flags_tail_truncation(self, settings, tmp_path, facility, staff_user):
+        settings.AUDIT_HWM_PATH = str(tmp_path / "hwm.json")
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        tail = audit_event(AuditLog.Action.LOGOUT, user=staff_user, facility=facility)
+        tail.refresh_from_db()
+
+        # Erster Lauf: gruen, verankert den Tail.
+        call_command("verify_audit_chain")
+        recorded = HighWaterMarkStore.load(settings.AUDIT_HWM_PATH).get(facility.pk)
+        assert recorded and recorded["last_entry_hash"] == tail.entry_hash
+
+        # Tail abschneiden -> zweiter Lauf muss fail-loud (Exit != 0).
+        with transaction.atomic(), bypass_replication_triggers():
+            AuditLog.objects.filter(pk=tail.pk).delete()
+        with pytest.raises(SystemExit) as exc:
+            call_command("verify_audit_chain")
+        assert exc.value.code != 0
+
+    def test_command_aborts_on_corrupt_hwm_file(self, settings, tmp_path, facility, staff_user):
+        settings.AUDIT_HWM_PATH = str(tmp_path / "hwm.json")
+        audit_event(AuditLog.Action.LOGIN, user=staff_user, facility=facility)
+        call_command("verify_audit_chain")  # legt HWM an
+
+        # Anker verschieben, ohne die Signatur mitzuziehen -> Integritaets-Bruch.
+        import json as _json
+
+        data = {"version": 1, "chains": {"system": {"count": 9, "last_entry_hash": "c" * 64}}, "sig": "deadbeef"}
+        with open(settings.AUDIT_HWM_PATH, "w", encoding="utf-8") as fh:
+            _json.dump(data, fh)
+        with pytest.raises(CommandError, match="Signatur"):
+            call_command("verify_audit_chain")
 
 
 @pytest.fixture
