@@ -496,7 +496,14 @@ class TestSyncOrchestrator:
                     await window.crypto_session.clearSessionKey();
                     return await o.runExclusive(async () => {
                         try {
-                            await window.crypto_session.encryptPayload({ x: 1 });
+                            // Refs #1476 (R8): encryptPayload steht nicht mehr
+                            // auf crypto_session — ueber den Store treiben, der
+                            // die Primitive intern haelt. Ohne Key wirft er
+                            // ebenso NoSessionKeyError (und laeuft durch den
+                            // reentrant erreichten Idle-Gate).
+                            await window.offlineStore.putEncrypted('events', {
+                                pk: 'idle-probe', clientPk: '', localStatus: 'clean', data: { x: 1 },
+                            });
                             return 'encrypted';
                         } catch (e) {
                             return e.name;
@@ -642,7 +649,11 @@ class TestSyncOrchestrator:
                         await window.crypto_session.clearSessionKey();
                         // Fire-and-forget: blockiert gepatcht am Lock, wirft
                         // ungepatcht (ohne Key) NoSessionKeyError — beides hier egal.
-                        window.crypto_session.encryptPayload({ x: 1 }).catch(() => {});
+                        // Refs #1476 (R8): ueber den Store (haelt die Primitive),
+                        // encryptPayload ist nicht mehr oeffentlich.
+                        window.offlineStore.putEncrypted('events', {
+                            pk: 'lock-probe', clientPk: '', localStatus: 'clean', data: { x: 1 },
+                        }).catch(() => {});
                         const NAME = 'anlaufstelle-offline-mutex';
                         (function poll() {
                             if (!navigator.locks || !navigator.locks.query) return;

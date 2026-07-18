@@ -349,6 +349,10 @@ def test_export_dead_event_downloads_note_text(authenticated_page, base_url):
     export_btn = page.locator(f"[data-testid='dead-event-export-{event_pk}']")
     export_btn.wait_for(state="visible", timeout=10000)
 
+    # Refs #1476 (R10): der Export ist jetzt eine bewusste Aktion mit
+    # Hinweis/Bestaetigung (window.confirm). Ohne Zustimmung kein Download —
+    # der Dialog wird hier bewusst angenommen.
+    page.once("dialog", lambda dialog: dialog.accept())
     with page.expect_download() as download_info:
         export_btn.click()
     download = download_info.value

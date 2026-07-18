@@ -150,11 +150,11 @@ class TestServiceWorkerCachesOfflineFallback:
         assert response.status_code == 200
         body = response.content.decode()
         assert "/offline/" in body, "/offline/ muss im APP_SHELL stehen, sonst greift der Fallback nicht."
-        assert 'CACHE_NAME = "anlaufstelle-v28"' in body, (
+        assert 'CACHE_NAME = "anlaufstelle-v29"' in body, (
             "CACHE_NAME muss bei SW-Struktur-Aenderung gebumpt sein "
-            "(#1604: Demo-Consent-Banner via partials/_umami_consent.html in "
-            "base.html eingebunden; der Bump erzwingt Re-Install + Re-Precache, "
-            "damit Bestandsnutzer die geaenderte Shell bekommen)."
+            "(#1476/R10: Offline-Notiz-Export-Hinweis via data-*-Attribut in "
+            "conflict_list.html geaendert; der Bump erzwingt Re-Install + "
+            "Re-Precache, damit Bestandsnutzer die geaenderte Shell bekommen)."
         )
 
     def test_sw_caches_focus_management(self, client):
@@ -600,8 +600,8 @@ class TestPrecachedShellBumpGuard:
     # ODER am APP_SHELL-Block in ``src/static/js/sw.js`` MUESSEN beide Werte
     # gemeinsam aktualisiert werden (CACHE_NAME bumpen, dann diesen Hash mit
     # dem neuen Inhalt neu berechnen).
-    _PINNED_CACHE_NAME = "anlaufstelle-v28"
-    _PINNED_SHELL_HASH = "ba71981439f5bfd3ec6fb0c6f3e1c1c7b6173923751b0ecf6d93a514f9056102"
+    _PINNED_CACHE_NAME = "anlaufstelle-v29"
+    _PINNED_SHELL_HASH = "30d7c4a14e97e193f3b5f43e5063f764a02c03ac3fa31b482a1e06d620da401b"
 
     @staticmethod
     def _current_cache_name(sw_src: str) -> str:

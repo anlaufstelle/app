@@ -76,7 +76,10 @@ importScripts("/static/js/url-patterns.js");
 // (partials/_umami_consent.html) im <body> ein und ergaenzt die Rechtstext-
 // Footerlinks der Demo. Erneut base.html-Shell-Aenderung -> Bump erzwingt
 // Re-Install + Re-Precache.
-const CACHE_NAME = "anlaufstelle-v28";
+// Refs #1476 (R10): v28 -> v29 -- conflict_list.html (precachte Shell) traegt
+// jetzt den Offline-Notiz-Export-Hinweis (data-confirm-export/data-label-
+// exported). Shell-Aenderung -> Bump erzwingt Re-Install + Re-Precache.
+const CACHE_NAME = "anlaufstelle-v29";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

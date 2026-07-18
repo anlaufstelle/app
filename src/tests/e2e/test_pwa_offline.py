@@ -781,7 +781,23 @@ def test_take_offline_shows_secure_context_hint_when_unsupported(staff_page, bas
     find_first_client_link(page).click()
     page.wait_for_url(re.compile(r"/clients/[0-9a-f-]+/$"))
 
-    page.evaluate("() => { window.crypto_session.isSupported = () => false; }")
+    # Refs #1476 (R8): window.crypto_session ist eingefroren — eine Methode
+    # laesst sich nicht mehr direkt austauschen. Die Bindung bleibt configurable;
+    # den isSupported-Stub daher ueber ein delegierendes Objekt (Prototyp = das
+    # echte crypto_session) per defineProperty setzen.
+    page.evaluate(
+        """() => {
+            // Frisches Objekt (Object.assign, NICHT Object.create): eine
+            // Zuweisung ueber einem eingefrorenen Prototyp (orig) waere ein
+            // stiller No-op (nicht-schreibbare geerbte Property). Die echten
+            // Methoden werden kopiert, nur isSupported ueberschrieben.
+            const fake = Object.assign({}, window.crypto_session);
+            fake.isSupported = () => false;
+            Object.defineProperty(window, 'crypto_session', {
+                value: fake, configurable: true, writable: false, enumerable: true,
+            });
+        }"""
+    )
 
     take = page.locator('[data-testid="take-offline-btn"]').first
     take.wait_for(state="visible", timeout=10000)

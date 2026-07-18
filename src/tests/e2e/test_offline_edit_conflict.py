@@ -869,18 +869,35 @@ def test_transient_key_loss_during_replay_skips_without_tokenless_post(authentic
                 }
                 return origFetch(url, opts);
             };
+            // Record noch mit dem ECHTEN Schluessel lesen (getOfflineEvent
+            // entschluesselt).
+            const record = await s.getOfflineEvent(PK);
+
+            // Refs #1476 (R8): window.crypto_session ist eingefroren — eine
+            // Methode laesst sich nicht mehr austauschen. Die Bindung bleibt
+            // aber configurable; die transiente Key-Verlust-Race (erster
+            // hasSessionKey()-Aufruf true, zweiter false) wird daher ueber das
+            // UNTERSTUETZTE Ersetzen der ganzen Bindung per defineProperty
+            // simuliert (genau der Weg, den auch der Modul-Reload nimmt).
+            const orig = window.crypto_session;
             let calls = 0;
-            const origHasKey = window.crypto_session.hasSessionKey;
-            window.crypto_session.hasSessionKey = () => {
-                calls += 1;
-                return calls === 1;
+            const fake = {
+                ready: () => (orig.ready ? orig.ready() : Promise.resolve()),
+                hasSessionKey: () => {
+                    calls += 1;
+                    return calls === 1;
+                },
             };
+            Object.defineProperty(window, 'crypto_session', {
+                value: fake, configurable: true, writable: false, enumerable: true,
+            });
             let replayResult;
             try {
-                const record = await s.getOfflineEvent(PK);
                 replayResult = await window.offlineEdit.replayModifiedEvent(record);
             } finally {
-                window.crypto_session.hasSessionKey = origHasKey;
+                Object.defineProperty(window, 'crypto_session', {
+                    value: orig, configurable: true, writable: false, enumerable: true,
+                });
                 window.fetch = origFetch;
             }
             return { replayResult, postWentOut, calls };

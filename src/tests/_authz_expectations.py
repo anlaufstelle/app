@@ -512,6 +512,16 @@ EXPECTATIONS = (
     # Geheimnis (Django rendert ihn in jedes Formular), PII-frei; bisherige
     # Refresh-Quelle /login/ war ebenfalls public.
     E("core:offline_csrf", "public", get=ALL_AUTH, anonymous_ok=True),
+    # Refs #1476 (R10): Audit-Spur fuer den Offline-Notiz-Export. POST-only,
+    # ASSISTANT_PLUS (wie die uebrigen Offline-APIs). Kein Objekt-Lookup: die
+    # View schreibt nur einen AuditLog-Eintrag mit der client-seitigen Event-pk
+    # als opakem Bezug (kein facility-gescopter DB-Fetch) -> idor_exempt.
+    E(
+        "core:offline_note_export_audit",
+        "offline-api",
+        post=ASSISTANT_PLUS,
+        idor_exempt="Kein Objekt-Lookup; schreibt nur einen AuditLog-Eintrag (opake Event-pk)",
+    ),
     E(
         "core:offline_client_detail",
         "offline-api",

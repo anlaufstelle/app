@@ -9,6 +9,53 @@ import pytest
 
 pytestmark = pytest.mark.e2e
 
+# Refs #1476 (R8): Die Krypto-Primitive (encrypt/decrypt) stehen seit der
+# Oberflaechen-Minimierung NICHT mehr auf ``window.crypto_session`` — sie werden
+# per Einmal-Handshake nur an den einzigen legitimen Konsumenten
+# ``offline-store.js`` uebergeben. Die Verschluesselungs-Eigenschaften (Roundtrip,
+# Tamper-Erkennung, IV-Eindeutigkeit, Schluessel-/Salt-Abhaengigkeit) werden
+# daher ueber genau diese unterstuetzte Oberflaeche geprueft
+# (``offlineStore.putEncrypted``/``getDecrypted``), plus direkter IndexedDB-Lesung
+# des gespeicherten Umschlags fuer die Krypto-Detailtests. Das deckt zusaetzlich
+# die R7-AAD-Bindung mit ab (der Store liefert Tabelle+pk als AAD-Kontext).
+
+# In-Page-Helfer: rohen (verschluesselten) events-Row-Umschlag lesen/schreiben,
+# ohne ueber den Store zu gehen — fuer Tamper/IV-Inspektion.
+_RAW_HELPERS = """
+    const rawGet = (pk) => new Promise((resolve, reject) => {
+        const req = indexedDB.open('anlaufstelle-offline');
+        req.onsuccess = () => {
+            const db = req.result;
+            const g = db.transaction('events', 'readonly').objectStore('events').get(pk);
+            g.onsuccess = () => { db.close(); resolve(g.result || null); };
+            g.onerror = () => { db.close(); reject(g.error); };
+        };
+        req.onerror = () => reject(req.error);
+    });
+    const rawPut = (row) => new Promise((resolve, reject) => {
+        const req = indexedDB.open('anlaufstelle-offline');
+        req.onsuccess = () => {
+            const db = req.result;
+            const tx = db.transaction('events', 'readwrite');
+            tx.objectStore('events').put(row);
+            tx.oncomplete = () => { db.close(); resolve(); };
+            tx.onerror = () => { db.close(); reject(tx.error); };
+        };
+        req.onerror = () => reject(req.error);
+    });
+    const store = window.offlineStore;
+    const putRec = (pk, data) => store.putEncrypted('events', {
+        pk, clientPk: '', localStatus: 'clean', data,
+    });
+"""
+
+
+def _js(body):
+    # Playwright ruft einen uebergebenen Funktions-Ausdruck auf; ein
+    # Top-Level-``return`` waere ein SyntaxError. Helfer + Body daher in eine
+    # aufrufbare async-Arrow-Funktion wickeln.
+    return "async () => {" + _RAW_HELPERS + body + "}"
+
 
 def _bootstrap(page, base_url):
     page.goto(base_url, wait_until="domcontentloaded")
@@ -37,60 +84,61 @@ def test_encrypt_decrypt_roundtrip(authenticated_page, base_url):
     page = authenticated_page
     _bootstrap(page, base_url)
     result = page.evaluate(
-        """async () => {
-            const cs = window.crypto_session;
-            await cs.deriveSessionKey('hunter2', 'YWJjZGVmZ2hpamtsbW5vcA');
-            const env = await cs.encryptPayload({pseudonym: 'PS-001', note: 'Geheim'});
-            const back = await cs.decryptPayload(env);
-            return { env, back };
-        }"""
+        _js("""
+            await window.crypto_session.deriveSessionKey('hunter2', 'YWJjZGVmZ2hpamtsbW5vcA');
+            await putRec('rt1', {pseudonym: 'PS-001', note: 'Geheim'});
+            const raw = await rawGet('rt1');
+            const row = await store.getDecrypted('events', 'rt1');
+            return { env: raw.data, back: row.data };
+        """)
     )
+    # Refs #1476 (R7): neuer Umschlag traegt Versionsmarker + iv/ct, nie Klartext.
     assert "iv" in result["env"]
     assert "ct" in result["env"]
+    assert result["env"]["v"] == 1
     assert result["back"] == {"pseudonym": "PS-001", "note": "Geheim"}
 
 
 def test_decrypt_fails_with_tampered_ct(authenticated_page, base_url):
     page = authenticated_page
     _bootstrap(page, base_url)
-    error = page.evaluate(
-        """async () => {
-            const cs = window.crypto_session;
-            await cs.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
-            const env = await cs.encryptPayload({x: 1});
-            const bytes = atob(env.ct);
+    # Ein manipuliertes Chiffrat scheitert am GCM-Auth-Tag; der Store behandelt
+    # das als PERMANENTEN Decrypt-Fehler und verwirft die (rein gecachte, clean)
+    # Row — getDecrypted liefert null statt Klartext.
+    outcome = page.evaluate(
+        _js("""
+            await window.crypto_session.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+            await putRec('tamper1', {x: 1});
+            const row = await rawGet('tamper1');
+            const bytes = atob(row.data.ct);
             const arr = new Uint8Array(bytes.length);
             for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
             arr[arr.length - 1] ^= 0x01;
             let bin = '';
             for (let i = 0; i < arr.length; i++) bin += String.fromCharCode(arr[i]);
-            env.ct = btoa(bin);
-            try {
-                await cs.decryptPayload(env);
-                return null;
-            } catch (e) {
-                return e.name || e.message;
-            }
-        }"""
+            row.data = { ...row.data, ct: btoa(bin) };
+            await rawPut(row);
+            const decrypted = await store.getDecrypted('events', 'tamper1');
+            return { decrypted };
+        """)
     )
-    assert error is not None
+    assert outcome["decrypted"] is None
 
 
 def test_clear_session_key_invalidates_encrypt(authenticated_page, base_url):
     page = authenticated_page
     _bootstrap(page, base_url)
     error = page.evaluate(
-        """async () => {
-            const cs = window.crypto_session;
-            await cs.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
-            await cs.clearSessionKey();
+        _js("""
+            await window.crypto_session.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+            await window.crypto_session.clearSessionKey();
             try {
-                await cs.encryptPayload({x: 1});
+                await putRec('nokey1', {x: 1});
                 return null;
             } catch (e) {
                 return e.message;
             }
-        }"""
+        """)
     )
     assert error == "NoSessionKey"
     assert page.evaluate("window.crypto_session.hasSessionKey()") is False
@@ -100,35 +148,41 @@ def test_iv_is_unique_per_record(authenticated_page, base_url):
     page = authenticated_page
     _bootstrap(page, base_url)
     ivs = page.evaluate(
-        """async () => {
-            const cs = window.crypto_session;
-            await cs.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
+        _js("""
+            await window.crypto_session.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
             const seen = new Set();
             for (let i = 0; i < 20; i++) {
-                const env = await cs.encryptPayload({i});
-                seen.add(env.iv);
+                await putRec('iv' + i, {i});
+                const raw = await rawGet('iv' + i);
+                seen.add(raw.data.iv);
             }
             return seen.size;
-        }"""
+        """)
     )
     assert ivs == 20
 
 
-def test_different_salt_produces_different_ciphertext(authenticated_page, base_url):
+def test_salt_determines_key(authenticated_page, base_url):
     page = authenticated_page
     _bootstrap(page, base_url)
-    cts = page.evaluate(
-        """async () => {
+    # Ein anderes Salt leitet einen anderen Schluessel ab: unter Salt B laesst
+    # sich ein unter Salt A geschriebener Umschlag nicht mehr lesen (Store
+    # verwirft die clean Row -> null). Dasselbe Salt (A, deterministisch aus dem
+    # Passwort) liefert dagegen wieder einen lesbaren Schluessel.
+    result = page.evaluate(
+        _js("""
             const cs = window.crypto_session;
             await cs.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
-            const e1 = await cs.encryptPayload({x: 1});
+            await putRec('sA', {x: 1});
+            // Anderes Salt -> anderer Schluessel -> A's Umschlag unlesbar.
             await cs.deriveSessionKey('pw', 'ZmZmZmZmZmZmZmZmZmZmZmY');
-            const e2 = await cs.encryptPayload({x: 1});
-            await cs.clearSessionKey();
+            const crossSalt = await store.getDecrypted('events', 'sA');
+            // Wieder Salt A -> Schluessel deterministisch -> Roundtrip klappt.
             await cs.deriveSessionKey('pw', 'YWJjZGVmZ2hpamtsbW5vcA');
-            const back1 = await cs.decryptPayload(e1);
-            return { back1, sameKey: e1.ct === e2.ct };
-        }"""
+            await putRec('sA2', {x: 1});
+            const sameSalt = await store.getDecrypted('events', 'sA2');
+            return { crossSalt, sameSalt: sameSalt && sameSalt.data };
+        """)
     )
-    assert cts["back1"] == {"x": 1}
-    assert cts["sameKey"] is False
+    assert result["crossSalt"] is None
+    assert result["sameSalt"] == {"x": 1}
