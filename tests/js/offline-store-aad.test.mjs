@@ -43,13 +43,13 @@ function bundle(pk, pseudonym) {
 // zugriff ohne Schluessel) zu simulieren.
 function rawDb() {
     const db = new Dexie("anlaufstelle-offline");
-    db.version(4).stores({
+    db.version(5).stores({
         queue: "++id, url, createdAt, retryAfter, localStatus",
         drafts: "formKey, updatedAt",
         meta: "key",
         clients: "pk, lastSynced",
         cases: "pk, clientPk, lastSynced",
-        events: "pk, clientPk, occurredAt, localStatus",
+        events: "pk, clientPk, localStatus",
         facility: "key",
     });
     return db;
@@ -132,6 +132,48 @@ describe("R7 — AAD-Bindung im offline-store", () => {
         expect(tombstoned).not.toBeUndefined();
         expect(tombstoned.localStatus).toBe("dead");
         expect(tombstoned.keyRotated).toBe(true);
+    });
+
+    it("legt occurredAt NICHT plaintext ab, rendert ihn aber aus dem Envelope (R9)", async () => {
+        const b = bundle("C", "Milan");
+        b.events = [
+            {
+                pk: "ev-c1",
+                occurred_at: "2026-07-18T09:00:00Z",
+                document_type_name: "Kontakt",
+                data_fields: {},
+            },
+        ];
+        await store.saveClientBundle(b);
+
+        // Kein Plaintext-Zeitstempel auf der Row.
+        const db = rawDb();
+        const raw = await db.events.get("ev-c1");
+        db.close();
+        expect(raw).not.toBeUndefined();
+        expect("occurredAt" in raw).toBe(false);
+
+        // Der Zeitstempel wird trotzdem (aus dem verschluesselten Envelope)
+        // gerendert.
+        const got = await store.getOfflineClient("C");
+        expect(got.events).toHaveLength(1);
+        expect(got.events[0].occurred_at).toBe("2026-07-18T09:00:00Z");
+    });
+
+    it("rendert occurredAt eines Offline-Edits aus dem Envelope (R9)", async () => {
+        await store.saveOfflineEdit({
+            pk: "ev-e1",
+            clientPk: "A",
+            occurredAt: "2026-07-18T11:00:00Z",
+            localStatus: "modified",
+            data: { formData: { title: "N" }, occurredAt: "2026-07-18T11:00:00Z" },
+        });
+        const db = rawDb();
+        const raw = await db.events.get("ev-e1");
+        db.close();
+        expect("occurredAt" in raw).toBe(false);
+        const got = await store.getOfflineEvent("ev-e1");
+        expect(got.data.occurredAt).toBe("2026-07-18T11:00:00Z");
     });
 
     it("round-trippt eine Queue-Row (tabellen-gebundene AAD, ++id)", async () => {

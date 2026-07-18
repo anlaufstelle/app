@@ -35,6 +35,12 @@
  * Dexie stores them regardless of whether they're listed in the index
  * string, only `.where()` queries need the index.
  *   queue: ++id, url, createdAt, retryAfter, localStatus
+ *
+ * Schema v5 (Refs #1476, R9): `occurredAt` faellt aus dem events-Index und aus
+ * dem Plaintext-Row-Feld (unverschluesselte PII-Verknuepfungsmetadaten, nie per
+ * Index abgefragt). Der Zeitstempel lebt weiter im verschluesselten
+ * `data`-Envelope. `.upgrade` strippt das Feld auch aus Bestands-Rows.
+ *   events: pk, clientPk, localStatus
  */
 (function () {
     "use strict";
@@ -109,6 +115,36 @@
         events: "pk, clientPk, occurredAt, localStatus",
         facility: "key",
     });
+    // Refs #1476 (R9): `occurredAt` (Ereignis-Zeitstempel) faellt aus dem
+    // events-Index UND aus dem Plaintext-Row-Feld — es war unverschluesselte
+    // PII-Verknuepfungsmetadaten (wann fand welcher Kontakt statt) und wurde
+    // nie per Index abgefragt (`.where("occurredAt")` existiert nicht). Der
+    // Zeitstempel steckt ohnehin im verschluesselten `data`-Envelope (clean:
+    // `occurred_at`; Edit/New: `occurredAt`) und wird von dort gerendert
+    // (`normalizeOfflineEventRecord`). Die `.upgrade`-Modify entfernt das
+    // Plaintext-Feld auch aus BESTEHENDEN Rows (reine Plaintext-Aenderung,
+    // kein Decrypt/Re-Encrypt, der verschluesselte `data`-Envelope bleibt
+    // unangetastet). `pk` (Primaerschluessel) und `clientPk` (Fremdschluessel-
+    // Index fuer per-Klient-Operationen) bleiben — sie sind funktional
+    // zwingend und opake Zufalls-UUIDs.
+    db.version(5)
+        .stores({
+            queue: "++id, url, createdAt, retryAfter, localStatus",
+            drafts: "formKey, updatedAt",
+            meta: "key",
+            clients: "pk, lastSynced",
+            cases: "pk, clientPk, lastSynced",
+            events: "pk, clientPk, localStatus",
+            facility: "key",
+        })
+        .upgrade((tx) =>
+            tx
+                .table("events")
+                .toCollection()
+                .modify((row) => {
+                    delete row.occurredAt;
+                })
+        );
 
     // Refs #1476 (R8): Die Krypto-Primitive per Einmal-Handshake beziehen und
     // cachen — crypto.js stellt encrypt/decrypt nicht mehr auf der
@@ -437,7 +473,8 @@
             eventRows.push({
                 pk: event.pk,
                 clientPk: pk,
-                occurredAt: event.occurred_at,
+                // Refs #1476 (R9): occurred_at NICHT plaintext ablegen — steckt
+                // im verschluesselten Envelope (`event.occurred_at`).
                 localStatus: "clean",
                 data: await crypto.encryptPayload(event, _aad("events", event.pk)),
             });
@@ -541,7 +578,9 @@
         // keys the read template + edit form expect.
         return {
             pk: r.pk,
-            occurred_at: data.occurredAt || r.occurredAt || "",
+            // Refs #1476 (R9): occurredAt kommt aus dem verschluesselten
+            // Envelope, nicht mehr aus dem (entfernten) Plaintext-Row-Feld.
+            occurred_at: data.occurredAt || "",
             document_type_name: data.documentTypeName || "",
             document_type_pk: data.documentTypePk || "",
             // Refs #1111: Datei-Marker (display-only) wieder einmischen, damit der
@@ -1322,11 +1361,13 @@
     async function saveOfflineEdit(record) {
         const crypto = _crypto();
         if (!record || !record.pk) throw new Error("MalformedEdit");
-        const { pk, clientPk, occurredAt, localStatus, data } = record;
+        const { pk, clientPk, localStatus, data } = record;
         await db.events.put({
             pk: pk,
             clientPk: clientPk || "",
-            occurredAt: occurredAt || "",
+            // Refs #1476 (R9): occurredAt NICHT plaintext ablegen — der
+            // Zeitstempel liegt im verschluesselten `data`-Envelope
+            // (`data.occurredAt`) und wird von dort gerendert.
             localStatus: localStatus || "modified",
             data: await crypto.encryptPayload(data, _aad("events", pk)),
         });
