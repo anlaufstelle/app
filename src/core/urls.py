@@ -72,6 +72,7 @@ from core.views.offline import (
     OfflineCsrfTokenView,
     OfflineEventCreateShellView,
     OfflineFacilityBundleView,
+    OfflineNoteExportAuditView,
     OfflineWorkItemCreateShellView,
     OfflineWorkItemListShellView,
     OfflineZeitstromShellView,
@@ -291,6 +292,14 @@ urlpatterns = [
         "api/v1/offline/csrf/",
         OfflineCsrfTokenView.as_view(),
         name="offline_csrf",
+    ),
+    # Refs #1476 (R10): Audit-Spur fuer den Offline-Notiz-Export
+    # (entschluesselte Art.-9-PII als Klartext-Datei). Client meldet online
+    # direkt, offline ueber die Replay-Queue.
+    path(
+        "api/v1/offline/audit/note-export/",
+        OfflineNoteExportAuditView.as_view(),
+        name="offline_note_export_audit",
     ),
     # Refs #1531 (#1499): generischer, pk-loser Shell fuer In-Place-
     # Offline-Rendern der Personenliste an der kanonischen URL /clients/

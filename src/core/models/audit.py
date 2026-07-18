@@ -107,6 +107,15 @@ class AuditLog(models.Model):
         # HMAC-Kette wird nie umgeschrieben — der Checkpoint legitimiert die
         # Diskontinuitaet, die das Loeschen alter Zeilen hinterlaesst.
         AUDIT_PRUNE_CHECKPOINT = "audit_prune_checkpoint", _("Audit-Pruning-Checkpoint")
+        # Refs #1476 (R10): Export einer nicht uebertragbaren Offline-Notiz als
+        # Klartext-Datei auf die Platte (entschluesselte Art.-9-PII verlaesst die
+        # App). Der Client meldet diese bewusste Nutzeraktion offline-tauglich
+        # ueber die Replay-Queue. Bewusst NICHT ``EXPORT`` (analog
+        # ``OFFLINE_BUNDLE_READ``): der Offline-Konflikt-Workflow soll die
+        # Massen-Export-Breach-Heuristik nicht mit Einzel-Notiz-Exporten
+        # fluten; die DSGVO-Rechenschaftsspur ("wer exportierte wann eine
+        # Offline-Notiz") bleibt als distinkte Aktion erhalten.
+        OFFLINE_NOTE_EXPORT = "offline_note_export", _("Offline-Notiz exportiert")
 
     objects = FacilityScopedManager()
 

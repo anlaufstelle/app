@@ -165,6 +165,50 @@ class OfflineFacilityBundleView(AssistantOrAboveRequiredMixin, View):
         return response
 
 
+class OfflineNoteExportAuditView(AssistantOrAboveRequiredMixin, View):
+    """``POST /api/v1/offline/audit/note-export/`` — Audit-Spur fuer den
+    Offline-Notiz-Export (Refs #1476, R10).
+
+    Der Export einer nicht uebertragbaren Offline-Notiz (``conflict-list.js``
+    ``exportNote``) schreibt entschluesselte Art.-9-PII als Klartext-Datei auf
+    die Platte. Der Client meldet diese bewusste Nutzeraktion hierher — online
+    direkt, offline ueber die Replay-Queue (``offline-queue.js``), damit die
+    DSGVO-Rechenschaftsspur nicht am fehlenden Netz haengt.
+
+    Bewusst schmal: der Eintrag traegt nur die (client-seitige) Event-``pk`` als
+    Bezug, keine Notiz-Inhalte und kein Pseudonym (Refs #1476/R20). Der Replay
+    kann denselben Export mehrfach melden (Idempotenz-Key-Retry nach
+    Verbindungsabbruch) — ein doppelter Audit-Eintrag ist harmlos und der
+    fail-open-Preis dafuer, dass keine Meldung verloren geht.
+    """
+
+    http_method_names = ["post"]
+
+    @method_decorator(ratelimit(key="user", rate=RATELIMIT_OFFLINE_BUNDLE, method="POST", block=True))
+    def post(self, request):
+        event_pk = ""
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+            if isinstance(payload, dict):
+                # Nur einen kurzen, opaken Bezeichner uebernehmen — nie
+                # angreifer-/PII-lastige Freitexte ins append-only Audit-Log.
+                event_pk = str(payload.get("event_pk", ""))[:64]
+        except (ValueError, UnicodeDecodeError):
+            event_pk = ""
+
+        log_audit_event(
+            request,
+            AuditLog.Action.OFFLINE_NOTE_EXPORT,
+            target_type="Event-OfflineNoteExport",
+            target_id=event_pk or None,
+            detail={
+                "event": "offline_note_exported",
+                "event_pk": event_pk,
+            },
+        )
+        return JsonResponse({"ok": True})
+
+
 class OfflineCsrfTokenView(View):
     """``GET /api/v1/offline/csrf/`` — dedizierter, günstiger CSRF-Token-Endpoint
     für den Offline-/Replay-Refresh-Pfad (Refs #1408).

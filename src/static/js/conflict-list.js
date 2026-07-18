@@ -41,6 +41,10 @@
             _statusText: {},
             _labelYourStatus: "",
             _labelServerStatus: "",
+            // Refs #1476 (R10): Bestaetigungs-/Hinweis- + Erfolgstext fuer den
+            // Klartext-Export einer Offline-Notiz.
+            _confirmExportText: "",
+            _labelExported: "",
 
             init() {
                 const ds = this.$el.dataset;
@@ -63,6 +67,8 @@
                 };
                 this._labelYourStatus = ds.labelYourStatus || "";
                 this._labelServerStatus = ds.labelServerStatus || "";
+                this._confirmExportText = ds.confirmExport || "";
+                this._labelExported = ds.labelExported || "";
                 // Refs #1351/#1385: Cross-Tab-Refresh — ein Sync in Tab A
                 // (BroadcastChannel liefert dessen eigenen Lauf nicht an sich
                 // selbst zurueck) aktualisiert die Liste in Tab B ohne Polling.
@@ -315,10 +321,16 @@
                 }
             },
 
-            // Refs ENT-OFFL-16: Blob-Download, keine Netzwerkanfrage — der Text
-            // stammt bereits entschluesselt aus `item.noteText` (in load()
-            // vorbereitet).
+            // Refs ENT-OFFL-16 / #1476 (R10): Blob-Download, keine
+            // Netzwerkanfrage — der Text stammt bereits entschluesselt aus
+            // `item.noteText` (in load() vorbereitet). Da hier entschluesselte
+            // Art.-9-PII als Klartext-Datei die App verlaesst, ist der Export
+            // eine BEWUSSTE Aktion: erst ein expliziter Hinweis/Bestaetigung,
+            // dann eine Audit-Meldung (online direkt, offline ueber die
+            // Replay-Queue), dann der Download.
             exportNote(item) {
+                if (!window.confirm(this._confirmExportText)) return;
+                this._auditNoteExport(item.pk);
                 try {
                     const blob = new Blob([item.noteText || ""], { type: "text/plain" });
                     const url = URL.createObjectURL(blob);
@@ -329,8 +341,32 @@
                     a.click();
                     a.remove();
                     URL.revokeObjectURL(url);
+                    this._setFeedback(this._labelExported, "info");
                 } catch (_e) {
                     this._setFeedback(this._labelActionFailed, "error");
+                }
+            },
+
+            // Refs #1476 (R10): Den Export als Audit-Ereignis melden. BEST-
+            // EFFORT: der Export selbst darf am Protokoll nie scheitern (kein
+            // await, Fehler verschluckt). Ueber die Offline-Replay-Queue, damit
+            // die Meldung auch offline nicht verloren geht — sie wird beim
+            // naechsten Online-Kontakt an /api/v1/offline/audit/note-export/
+            // gesendet (revisionssicherer AuditLog-Eintrag serverseitig).
+            _auditNoteExport(pk) {
+                try {
+                    if (window.offlineQueue && window.offlineQueue.enqueueRequest) {
+                        window.offlineQueue
+                            .enqueueRequest(
+                                "/api/v1/offline/audit/note-export/",
+                                "POST",
+                                JSON.stringify({ event_pk: pk || "" }),
+                                { "content-type": "application/json", "hx-request": "true" }
+                            )
+                            .catch(() => {});
+                    }
+                } catch (_e) {
+                    /* best-effort — Protokoll darf den Export nicht blockieren */
                 }
             },
 

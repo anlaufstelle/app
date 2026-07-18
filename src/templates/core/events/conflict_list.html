@@ -20,7 +20,10 @@
      data-status-done="{% trans 'Erledigt' %}"
      data-status-dismissed="{% trans 'Verworfen' %}"
      data-label-your-status="{% trans 'Deine Änderung:' %}"
-     data-label-server-status="{% trans 'Inzwischen auf dem Server:' %}">
+     data-label-server-status="{% trans 'Inzwischen auf dem Server:' %}"
+     {# Refs #1476 (R10): Klartext-Export von Art.-9-PII ist eine bewusste, protokollierte Aktion. #}
+     data-confirm-export="{% trans 'Achtung: Diese Notiz enthält unverschlüsselte personenbezogene Daten und wird als lesbare Datei auf diesem Gerät gespeichert. Der Export wird protokolliert. Wirklich exportieren?' %}"
+     data-label-exported="{% trans 'Exportiert und protokolliert.' %}">
 
     <div class="flex items-center justify-between">
         <div>
