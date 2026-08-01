@@ -212,12 +212,59 @@ def _flat_view_enabled() -> bool:
     return bool(getattr(settings, "STATISTICS_USE_FLAT_VIEW", False)) and connection.vendor == "postgresql"
 
 
+def _query_statistics_mv(
+    facility,
+    *,
+    select: str,
+    where_extra: str = "",
+    extra_params=(),
+    group_by: str = "",
+    order_by: str = "",
+) -> list[tuple]:
+    """Einziger erlaubter Lesezugriff auf die Statistik-Matview (Refs #1659).
+
+    Die Matview ``core_statistics_event_flat`` hat keine RLS (Migration
+    0049) — Zugriffsschutz ist reine Service-Schicht. Damit ein künftiger
+    zweiter Zugriffspfad den ``facility_id``-Filter nicht vergessen kann,
+    läuft JEDER lesende Zugriff auf die Matview durch diese Funktion:
+
+    - ``facility`` ist ein Pflichtparameter ohne Default — ein Aufruf ohne
+      Facility ist ein ``TypeError``, kein stiller Vollzugriff.
+    - Der ``WHERE facility_id = %s``-Filter ist fest verdrahtet und steht
+      vor jeder Zusatzbedingung; ``where_extra`` kann ihn per ``AND`` nur
+      ERGÄNZEN, nie ersetzen.
+
+    Ein Architecture-Guard
+    (``src/tests/test_architecture_guards_statistics_mv.py``) stellt sicher,
+    dass kein anderer Code in ``src/core`` den Matview-Namen referenziert —
+    jeder künftige Zugriffspfad muss durch diese Funktion.
+    """
+    if facility is None:
+        raise TypeError("facility ist Pflicht fuer einen Statistik-Matview-Zugriff (Refs #1659).")
+
+    # STATISTICS_MV_NAME ist eine Modul-Konstante, kein User-Input.
+    sql = f"SELECT {select} FROM {STATISTICS_MV_NAME} WHERE facility_id = %s"  # noqa: S608 — kein User-Input
+    params = [facility.pk]
+    if where_extra:
+        sql += f" AND {where_extra}"
+        params.extend(extra_params)
+    if group_by:
+        sql += f" GROUP BY {group_by}"
+    if order_by:
+        sql += f" ORDER BY {order_by}"
+
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params)
+        return cursor.fetchall()
+
+
 def get_event_counts_by_month(facility, year):
     """Gesamte Event-Anzahl pro Monat für ein Kalenderjahr.
 
     Wählt je nach Feature-Flag den Pfad:
     - ``STATISTICS_USE_FLAT_VIEW=True`` + Postgres → Materialized View
-      ``core_statistics_event_flat`` (dramatisch schneller bei vielen Events).
+      ``core_statistics_event_flat`` über ``_query_statistics_mv`` (dramatisch
+      schneller bei vielen Events).
     - sonst → klassisches ``Event``-Queryset als Fallback.
 
     Rückgabe: Liste von Dicts ``{"month": 1..12, "count": int}``, lückenlos
@@ -226,17 +273,16 @@ def get_event_counts_by_month(facility, year):
     counts = {month: 0 for month in range(1, 13)}
 
     if _flat_view_enabled():
-        # STATISTICS_MV_NAME ist eine Modul-Konstante, kein User-Input.
-        sql = (
-            f"SELECT EXTRACT(MONTH FROM month)::int AS m, COUNT(*)::bigint "  # noqa: S608 — kein User-Input
-            f"FROM {STATISTICS_MV_NAME} "
-            f"WHERE facility_id = %s AND EXTRACT(YEAR FROM month)::int = %s "
-            f"GROUP BY m ORDER BY m"
+        rows = _query_statistics_mv(
+            facility,
+            select="EXTRACT(MONTH FROM month)::int AS m, COUNT(*)::bigint",
+            where_extra="EXTRACT(YEAR FROM month)::int = %s",
+            extra_params=[year],
+            group_by="m",
+            order_by="m",
         )
-        with connection.cursor() as cursor:
-            cursor.execute(sql, [facility.pk, year])
-            for month, count in cursor.fetchall():
-                counts[int(month)] = int(count)
+        for month, count in rows:
+            counts[int(month)] = int(count)
     else:
         rows = (
             Event.objects.filter(

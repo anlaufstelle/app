@@ -1,5 +1,7 @@
 """Tests für die Statistik-Materialized-View (Refs #544)."""
 
+from unittest.mock import patch
+
 import pytest
 from django.core.management import call_command
 from django.db import connection, transaction
@@ -9,6 +11,7 @@ from django.utils import timezone
 from core.models import Event
 from core.services.dashboard import (
     STATISTICS_MV_NAME,
+    _query_statistics_mv,
     get_event_counts_by_month,
 )
 
@@ -403,3 +406,111 @@ class TestMaterializedViewRLS:
         counts = {row["month"]: row["count"] for row in result}
         # Nur das Event der eigenen Facility zählt, nicht der zweiten.
         assert counts[6] == 1
+
+
+# ---------------------------------------------------------------------------
+# Zugriffs-Helper: facility-Filter strukturell erzwungen (Refs #1659)
+# ---------------------------------------------------------------------------
+
+
+class TestQueryStatisticsMvHelper:
+    """``_query_statistics_mv`` ist der einzige erlaubte Lesezugriff auf die
+    Matview — der ``facility_id``-Filter ist fest verdrahtet, nicht optional.
+
+    Ein Architecture-Guard (``test_architecture_guards_statistics_mv.py``)
+    stellt sicher, dass kein anderer Code-Pfad in ``src/core`` die Matview
+    direkt anfasst — jeder Zugriff muss durch diese Funktion laufen.
+    """
+
+    def test_facility_is_a_mandatory_positional_argument(self):
+        """Ohne ``facility`` ist der Aufruf ein ``TypeError`` — kein
+        stiller Vollzugriff auf die Matview."""
+        with pytest.raises(TypeError):
+            _query_statistics_mv(select="COUNT(*)")
+
+    def test_none_facility_is_rejected(self):
+        """Explizites ``facility=None`` darf den Positional-Zwang nicht
+        aushebeln — zusätzliche Verteidigungslinie."""
+        with pytest.raises(TypeError):
+            _query_statistics_mv(None, select="COUNT(*)")
+
+    def test_sql_always_scopes_by_facility_id_even_with_extra_clauses(self, facility):
+        """Der ``facility_id``-Filter steht immer VOR jeder ``where_extra``-
+        Zusatzbedingung — sie kann ihn nur per ``AND`` ergänzen, nicht
+        ersetzen."""
+        captured = {}
+
+        class _FakeCursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc_info):
+                return False
+
+            def execute(self, sql, params):
+                captured["sql"] = sql
+                captured["params"] = list(params)
+
+            def fetchall(self):
+                return []
+
+        with patch("core.services.dashboard.statistics.connection") as mock_connection:
+            mock_connection.cursor.return_value = _FakeCursor()
+            _query_statistics_mv(
+                facility,
+                select="COUNT(*)",
+                where_extra="EXTRACT(YEAR FROM month)::int = %s",
+                extra_params=[2025],
+                group_by="m",
+                order_by="m",
+            )
+
+        assert "WHERE facility_id = %s" in captured["sql"]
+        assert captured["sql"].index("facility_id = %s") < captured["sql"].index("EXTRACT(YEAR")
+        assert captured["params"][0] == facility.pk
+        assert captured["params"][1] == 2025
+
+    def test_where_extra_without_params_still_scopes_by_facility(self, facility):
+        """Auch ohne ``extra_params`` bleibt der facility-Filter der einzige
+        gebundene Parameter — kein Pfad kommt ohne ihn aus."""
+        captured = {}
+
+        class _FakeCursor:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc_info):
+                return False
+
+            def execute(self, sql, params):
+                captured["sql"] = sql
+                captured["params"] = list(params)
+
+            def fetchall(self):
+                return []
+
+        with patch("core.services.dashboard.statistics.connection") as mock_connection:
+            mock_connection.cursor.return_value = _FakeCursor()
+            _query_statistics_mv(facility, select="COUNT(*)")
+
+        assert captured["sql"].endswith("WHERE facility_id = %s")
+        assert captured["params"] == [facility.pk]
+
+    def test_get_event_counts_by_month_delegates_to_helper(self, facility):
+        """Callsite-Verdrahtung: ``get_event_counts_by_month`` baut kein SQL
+        mehr selbst, sondern ruft den Helper auf (Refs #1659)."""
+        with (
+            patch("core.services.dashboard.statistics._flat_view_enabled", return_value=True),
+            patch(
+                "core.services.dashboard.statistics._query_statistics_mv",
+                return_value=[(3, 5)],
+            ) as mock_query,
+        ):
+            result = get_event_counts_by_month(facility, 2025)
+
+        assert mock_query.call_count == 1
+        called_facility = mock_query.call_args[0][0]
+        assert called_facility is facility
+        counts = {row["month"]: row["count"] for row in result}
+        assert counts[3] == 5
+        assert counts[1] == 0
