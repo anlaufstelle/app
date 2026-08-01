@@ -141,18 +141,34 @@ class TestAdminCSPRelaxStyleSrc:
     Ohne Lockerung verlöre die Admin-UI ihr komplettes Farbschema.
     """
 
-    def test_admin_path_adds_unsafe_inline_to_style_src(self):
+    def test_admin_path_rebuilds_style_src_without_hashes(self):
+        """Hand-Check-Befund 2026-08-01: ``'unsafe-inline'`` NEBEN einem
+        Hash-Token ist laut CSP-Spezifikation wirkungslos (Browser ignorieren
+        es, sobald ein Hash/eine Nonce in der Direktive steht) — das Admin-UI
+        verlor sein komplettes Farbschema. Die Middleware muss die Hashes aus
+        der Admin-``style-src`` ENTFERNEN, nicht nur anhängen."""
         rf = RequestFactory()
         request = rf.get("/admin-mgmt/users/")
         response = HttpResponse("ok", content_type="text/html")
         response.headers["Content-Security-Policy"] = (
-            "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-abc='; img-src 'self'"
+            "default-src 'self'; script-src 'self'; style-src 'self' 'sha256-abc=' 'sha256-def='; img-src 'self'"
         )
         out = _make_middleware(response)(request)
         csp = out.headers["Content-Security-Policy"]
-        assert "style-src 'self' 'sha256-abc=' 'unsafe-inline'" in csp
+        assert "style-src 'self' 'unsafe-inline'" in csp
+        assert "sha256-abc" not in csp and "sha256-def" not in csp
         assert "script-src 'self' 'unsafe-eval'" in csp
         assert "img-src 'self'" in csp
+
+    def test_admin_path_strips_nonce_tokens_from_style_src(self):
+        rf = RequestFactory()
+        request = rf.get("/admin-mgmt/users/")
+        response = HttpResponse("ok", content_type="text/html")
+        response.headers["Content-Security-Policy"] = "script-src 'self'; style-src 'self' 'nonce-xyz123'"
+        out = _make_middleware(response)(request)
+        csp = out.headers["Content-Security-Policy"]
+        assert "style-src 'self' 'unsafe-inline'" in csp
+        assert "nonce-" not in csp
 
     def test_non_admin_path_style_src_untouched(self):
         rf = RequestFactory()

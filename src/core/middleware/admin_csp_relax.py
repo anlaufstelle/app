@@ -45,6 +45,17 @@ rate-limited, auditiert und durch RLS gegen Cross-Facility-Leaks abgesichert.
 Die Middleware muss **nach** ``csp.middleware.CSPMiddleware`` registriert sein,
 damit der bereits gesetzte ``Content-Security-Policy``-Header umgeschrieben
 werden kann.
+
+Hand-Check-Befund 2026-08-01 (v0.23-Vorbereitung): ``'unsafe-inline'`` nur
+ANHÄNGEN reicht für ``style-src`` nicht — die globale Direktive führt seit der
+Härtung sha256-Hashes für die selbsttragenden Sonderseiten, und die
+CSP-Spezifikation lässt Browser ``'unsafe-inline'`` **ignorieren**, sobald ein
+Hash oder eine Nonce in derselben Direktive steht (Abwärtskompatibilitäts-
+Mechanik; Chromium meldet wörtlich „'unsafe-inline' is ignored if either a
+hash or nonce value is present"). Folge war ein komplett entfärbtes Admin-UI.
+Für Admin-HTML wird ``style-src`` deshalb umgebaut: Hash-/Nonce-Tokens fliegen
+raus (sie sichern nur die Sonderseiten ab, die unter ``/admin-mgmt/`` nie
+ausgeliefert werden), dann kommt ``'unsafe-inline'`` dazu.
 """
 
 from __future__ import annotations
@@ -52,11 +63,16 @@ from __future__ import annotations
 import re
 
 ADMIN_PREFIX = "/admin-mgmt/"
-# (Directive, Token) — pro Direktive genau eine Lockerung, idempotent.
-_RELAXATIONS = (
-    (re.compile(r"(script-src\s+[^;]*?)(?=\s*;|$)", re.IGNORECASE), "'unsafe-eval'"),
-    (re.compile(r"(style-src\s+[^;]*?)(?=\s*;|$)", re.IGNORECASE), "'unsafe-inline'"),
+# script-src: pro Direktive genau eine angehängte Lockerung, idempotent —
+# die globale script-src führt weder Hashes noch Nonces, Anhängen wirkt.
+_SCRIPT_RELAX = (
+    re.compile(r"(script-src\s+[^;]*?)(?=\s*;|$)", re.IGNORECASE),
+    "'unsafe-eval'",
 )
+# style-src: Direktive wird umgebaut (Hashes raus, 'unsafe-inline' rein) —
+# siehe Modul-Docstring, Hand-Check-Befund 2026-08-01.
+_STYLE_SRC = re.compile(r"style-src\s+([^;]*?)(?=\s*;|$)", re.IGNORECASE)
+_HASH_OR_NONCE = re.compile(r"'(?:sha(?:256|384|512)|nonce)-[^']*'", re.IGNORECASE)
 
 
 class AdminCSPRelaxMiddleware:
@@ -81,15 +97,23 @@ class AdminCSPRelaxMiddleware:
             csp = response.headers.get(header)
             if not csp:
                 continue
-            for pattern, token in _RELAXATIONS:
-                # Idempotent: der Token darf nur genau einmal in seiner
-                # Direktive landen (Middleware kann bei Retry/Rewrite doppelt
-                # laufen). Geprueft wird gegen die Direktive selbst, nicht
-                # gegen die ganze Policy — 'unsafe-inline' in style-src darf
-                # 'unsafe-eval' in script-src nicht blockieren.
-                match = pattern.search(csp)
-                if match is None or token in match.group(1):
-                    continue
+            # script-src: 'unsafe-eval' anhaengen. Idempotent: der Token darf
+            # nur genau einmal in seiner Direktive landen (Middleware kann bei
+            # Retry/Rewrite doppelt laufen). Geprueft wird gegen die Direktive
+            # selbst, nicht gegen die ganze Policy.
+            pattern, token = _SCRIPT_RELAX
+            match = pattern.search(csp)
+            if match is not None and token not in match.group(1):
                 csp = pattern.sub(lambda m, _t=token: f"{m.group(1)} {_t}", csp, count=1)
+            # style-src: Hash-/Nonce-Tokens entfernen (sie wuerden
+            # 'unsafe-inline' laut CSP-Spezifikation wirkungslos machen) und
+            # 'unsafe-inline' ergaenzen. Idempotent per Konstruktion.
+            match = _STYLE_SRC.search(csp)
+            if match is not None:
+                sources = _HASH_OR_NONCE.sub("", match.group(1))
+                tokens = sources.split()
+                if "'unsafe-inline'" not in tokens:
+                    tokens.append("'unsafe-inline'")
+                csp = csp[: match.start()] + "style-src " + " ".join(tokens) + csp[match.end() :]
             response.headers[header] = csp
         return response
