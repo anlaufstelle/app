@@ -35,7 +35,7 @@ Der Endpoint liefert **zwei unterschiedlich umfangreiche Payloads** — abhängi
 | Aufrufer | Bekommt | Warum |
 |---|---|---|
 | **Anonym** (Default für externes Monitoring) | **Nur** `status` (+ HTTP-Code). **Keine** Subsystem- oder Detailfelder. | Recon-Härtung: Subsystem-Status (`database`, `virus_scanner`/`clamav`, `encryption_key`) und Infrastruktur-Details (`version`, `disk_free_pct` …) verraten Angreifern unauthentifiziert den Betriebszustand einzelner Komponenten (L9/N13, Refs #1375). Für Uptime bleibt `status` + HTTP-Code aussagekräftig. Außerdem kein teurer SMTP-Handshake/Filesystem-Scan pro Poll. |
-| **Intern / Token** | `status` **plus** Subsystemfelder (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`) **und** Detailfelder (`version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`). | Operatives Monitoring will die Details. |
+| **Intern / Token** | `status` **plus** Subsystemfelder (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`) **und** Detailfelder (`version`, `cache`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`). | Operatives Monitoring will die Details. |
 
 > **Änderung ggü. #1024 A7.1 (L9/N13, Refs #1375):** `database`, `virus_scanner`/`clamav` und `encryption_key` waren bis dahin auch im anonymen Payload enthalten. Sie liegen jetzt hinter dem Token-Gate. Der **kritische** Effekt eines DB-/Encryption-Key-Ausfalls (HTTP 503) und eines Scanner-Ausfalls (`status: degraded`) bleibt auch anonym sichtbar — nur die Subsystem-*Feldnamen* selbst sind Token-only.
 
@@ -106,6 +106,9 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
 | `db_user_is_superuser` | bool \| null | `false` / `true` / `null` | Ist die DB-Rolle **dieser Verbindung** PostgreSQL-Superuser? ([`_query_runtime_role_posture`](../src/core/views/health.py), Refs #793). `null` = nicht ermittelbar (Nicht-PostgreSQL-Backend, Rolle nicht im Katalog, DB weg). | `true` → **`degraded`** |
 | `db_role_posture` | string | `ok` / `bypasses_rls` / `unknown` | Zusammenfassung derselben Prüfung inkl. `rolbypassrls`: `bypasses_rls` = die Runtime umgeht Row Level Security (Superuser **oder** `BYPASSRLS`), `ok` = beides aus, `unknown` = nicht ermittelbar. | `bypasses_rls` → **`degraded`** |
 | `version` | string | z. B. `v0.14.0` / `dev` | App-Version aus der ENV `APP_VERSION` (Fallback `dev`). ||
+| `cache` | object | `{"backend": "...", "status": "ok"\|"error"}` | Aktives Shared-Cache-Backend und Erreichbarkeits-Probe ([`_check_cache`](../src/core/views/health.py)). Refs #795. | siehe unten |
+| `cache.backend` | string | `django.core.cache.backends.redis.RedisCache` / `...db.DatabaseCache` | Welches Backend `settings.CACHES['default']` tatsächlich auflöst. Macht den absichtlichen Rückfall auf den `DatabaseCache` sichtbar (gesetztes `REDIS_URL`, aber kein `redis`-Paket im Image — z. B. altes `APP_VERSION` mit neuem Compose-File). ||
+| `cache.status` | string | `ok` / `error` | Set/Get-Roundtrip gegen das konfigurierte Backend. `error` = Cache konfiguriert, aber nicht erreichbar → `django-ratelimit` zählt nicht mehr, der Bruteforce-Schutz auf Login/Sudo ist faktisch aus. | `error` → **`degraded`** |
 | `smtp` | object | `{"status": "...", "latency_ms"?: int}` | SMTP-CONNECT-Test ([`_check_smtp`](../src/core/views/health.py) L82–104). | siehe unten |
 | `smtp.status` | string | `ok` / `unreachable` / `disabled` | `disabled` = Console/Locmem-Backend oder leerer `EMAIL_HOST`. `unreachable` = Server antwortet nicht (Timeout 2 s) → Token-Invites/Passwort-Reset scheitern lautlos. | `unreachable` → **`degraded`** |
 | `smtp.latency_ms` | int | nur bei `ok` | CONNECT-Latenz in Millisekunden. ||
@@ -113,7 +116,7 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
 | `disk_free_pct` | float \| null | z. B. `42.0` / `null` | Freier Speicher auf `MEDIA_ROOT` in Prozent ([`_check_disk_free_pct`](../src/core/views/health.py) L137–145). `null` = Pfad fehlt. | `< 10` → **`degraded`** |
 | `stale_jobs` | array\<string\> | z. B. `[]` / `["breach_scan_last_run"]` | Keys der Hintergrundjobs (Backup, Retention, Snapshots, Breach-Scan, MV-Refresh) mit Status `critical` laut [`cron_job_checks`](../src/core/services/compliance/__init__.py) ([`_check_stale_jobs`](../src/core/views/health.py)). Refs #1335. | nicht-leer → **`degraded`** |
 
-> **`stale_jobs` degradet nur bei `critical`, nicht bei `unknown`.** Ein Job, der auf einer frischen Installation noch nie gelaufen ist (`unknown`), fehlt bewusst in `stale_jobs` — sonst wäre jede frische Instanz sofort `degraded`. `warning`-Jobs (leicht überfällig) tauchen ebenfalls nicht auf; die volle Ampel je Job zeigt das Compliance-Dashboard ([§9](#9-abgrenzung-health-vs-compliance-dashboard)). Voraussetzung für ein sinnvolles Signal ist ein eingerichteter Scheduler ([ops-runbook §3](ops-runbook.md#3-cron-jobs)) — ohne ihn bleiben die Jobs dauerhaft `unknown`, nicht `critical`, und `stale_jobs` bleibt leer, obwohl nichts läuft.
+> **`stale_jobs` degradet nur bei `critical`, nicht bei `unknown`.** Ein Job, der auf einer frischen Installation noch nie gelaufen ist (`unknown`), fehlt bewusst in `stale_jobs` — sonst wäre jede frische Instanz sofort `degraded`. `warning`-Jobs (leicht überfällig) tauchen ebenfalls nicht auf; die volle Ampel je Job zeigt das Compliance-Dashboard ([§9](#9-abgrenzung-health-vs-compliance-dashboard)). Voraussetzung für ein sinnvolles Signal ist ein laufender Scheduler — im mitgelieferten Compose-Stack der `cron`-Sidecar, sonst Host-Cron/Timer ([ops-runbook §3](ops-runbook.md#3-cron-jobs)). Ohne ihn bleiben die Jobs dauerhaft `unknown`, nicht `critical`, und `stale_jobs` bleibt leer, obwohl nichts läuft.
 
 > **`db_role_posture` misst die laufende Verbindung, nicht die `.env`.** `manage.py check_db_roles` (Refs #902) verifiziert, dass App- und Admin-Rolle mit dem richtigen Attributprofil im Katalog **existieren** — ob die Django-Runtime auch tatsächlich als die App-Rolle verbindet, sagt es nicht. Genau das prüft dieses Feld (`SELECT rolsuper, rolbypassrls … WHERE rolname = current_user`) und schließt damit die Selbst-Hosting-Falle aus #793: läuft die Runtime als Superuser, werden die RLS-Policies (Migration 0047/0084/0085) **still** umgangen — nichts schlägt fehl, die Facility-Isolation ist aber weg. Der Statuswechsel auf `degraded` ist deshalb auch anonym sichtbar; das konkrete Rollen-Detail steht nur im Token-Payload und im Log (`WARNING` in `core.views.health`). Behebung: [ops-runbook §9](ops-runbook.md) (Rollenmodell) bzw. [`scripts/initial-setup.sh`](../scripts/initial-setup.sh) bei der Erstinbetriebnahme. `unknown` degradet bewusst **nicht** (Fremd-Backends, kurzzeitige DB-Ausfälle sind bereits über `database` abgedeckt).
 
@@ -145,6 +148,7 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
   "db_user_is_superuser": false,
   "db_role_posture": "ok",
   "version": "v0.14.0",
+  "cache": {"backend": "django.core.cache.backends.redis.RedisCache", "status": "ok"},
   "smtp": {"status": "ok", "latency_ms": 38},
   "last_backup_age_hours": 9.7,
   "disk_free_pct": 41.3,
@@ -164,6 +168,7 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
   "db_user_is_superuser": false,
   "db_role_posture": "ok",
   "version": "v0.14.0",
+  "cache": {"backend": "django.core.cache.backends.redis.RedisCache", "status": "ok"},
   "smtp": {"status": "unreachable"},
   "last_backup_age_hours": 73.2,
   "disk_free_pct": 38.0,
@@ -183,6 +188,7 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
   "db_user_is_superuser": false,
   "db_role_posture": "ok",
   "version": "v0.14.0",
+  "cache": {"backend": "django.core.cache.backends.redis.RedisCache", "status": "ok"},
   "smtp": {"status": "ok", "latency_ms": 38},
   "last_backup_age_hours": 9.7,
   "disk_free_pct": 41.3,

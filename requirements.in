@@ -4,6 +4,12 @@ gunicorn>=26.0.0
 whitenoise>=6.5
 django-htmx>=1.28.0
 django-ratelimit>=4.1
+# Client fuer den mitgelieferten Redis-Cache-Service (Refs #795). Django
+# spricht ihn ueber den eingebauten ``django.core.cache.backends.redis``-
+# Backend an — kein django-redis noetig. Bleibt bei leerem REDIS_URL
+# ungenutzt (dann greift der DatabaseCache-Fallback), muss aber im Image
+# liegen, weil docker-compose.prod.yml den Cache ab Werk auf Redis zeigt.
+redis>=6.0
 # Major-Bump auf 49.0.0 verifiziert (#1129); der GHSA-537c-gmf6-5ccf-Fix kam mit 48.0.1.
 cryptography>=49.0.0,<50
 python-dotenv>=1.0

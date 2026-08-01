@@ -156,9 +156,12 @@ def _check_backup_age() -> float | None:
 def _check_stale_jobs() -> list[str]:
     """Refs #1335 (Scheduler-Doku-Haertung): Keys der Hintergrundjobs mit Status ``critical``.
 
-    Ohne eingerichtete Host-Crontab/Timer (docs/ops-runbook.md §3) laufen Backup,
-    Retention, Breach-Detection etc. nie — still, ohne Fehlermeldung. Dieser Check
-    macht das im Health-Endpoint sichtbar: wiederverwendet
+    Laeuft der Scheduler nicht (docs/ops-runbook.md § 3), passieren Backup,
+    Retention, Breach-Detection etc. nie — still, ohne Fehlermeldung. Seit dem
+    ``cron``-Sidecar (Refs #794) deckt der mitgelieferte Stack die
+    manage.py-Jobs ab; Backup bleibt Host-Cron, und Deployments ohne unser
+    Compose-File (Coolify/k8s) planen weiterhin alles selbst — der Check bleibt
+    also der Wirksamkeits-Nachweis. Er wiederverwendet
     :func:`core.services.compliance.cron_job_checks` (bereits das
     Compliance-Dashboard), damit beide Stellen dieselbe Wahrheit zeigen.
 
@@ -178,6 +181,47 @@ def _check_stale_jobs() -> list[str]:
     """
     with rls_bypass_for_read():
         return [check.key for check in cron_job_checks() if check.status == ComplianceStatus.CRITICAL]
+
+
+def _check_cache() -> dict:
+    """Refs #795: welches Cache-Backend ist aktiv, und antwortet es?
+
+    Seit ``docker-compose.prod.yml`` einen Redis mitliefert, gibt es zwei
+    Backends im Feld — und einen stillen Uebergang zwischen ihnen: Ist
+    ``REDIS_URL`` gesetzt, das ``redis``-Paket im Image aber nicht vorhanden
+    (altes ``APP_VERSION``-Image mit neuem Compose-File), faellt ``prod.py``
+    bewusst auf den DatabaseCache zurueck. ``backend`` macht diesen Fall von
+    aussen pruefbar; ``status`` deckt den davon unabhaengigen Fall ab, dass das
+    konfigurierte Backend nicht erreichbar ist (Rate-Limit-Schutz waere dann
+    wirkungslos).
+
+    Bewusst NICHT gecacht — ein Cache-Check durch den Cache waere zirkulaer.
+    """
+    backend = (settings.CACHES.get("default") or {}).get("BACKEND", "")
+    try:
+        cache.set("health:cache_probe", "1", _DETAIL_CACHE_TTL_SECONDS)
+        alive = cache.get("health:cache_probe") == "1"
+    except Exception:
+        logger.exception("health: cache check failed")
+        alive = False
+    return {"backend": backend, "status": "ok" if alive else "error"}
+
+
+def _cached_detail(key: str, producer, *, cache_alive: bool):
+    """``cache.get_or_set`` fuer die teuren Detail-Checks — mit Not-Aus.
+
+    A7.2 cacht SMTP-CONNECT/Disk-Scan/Backup-Scan, damit haeufiges
+    Monitoring-Polling sie nicht jedes Mal ausloest. Ist der Cache selbst
+    ausgefallen, wuerde ``get_or_set`` hier werfen und der ganze
+    ``/health/``-Endpoint mit 500 aussteigen — ausgerechnet in dem Moment, in
+    dem das Monitoring ihn braucht. Mit Redis als Standard-Backend ist
+    „Cache tot, App gesund" ein realer Zustand (der DatabaseCache fiel immer
+    zusammen mit der DB aus, die schon fuer sich 503 ausgeloest hat). Also:
+    Cache tot -> Check direkt ausfuehren, ungecacht. Refs #795.
+    """
+    if not cache_alive:
+        return producer()
+    return cache.get_or_set(key, producer, _DETAIL_CACHE_TTL_SECONDS)
 
 
 def _check_disk_free_pct() -> float | None:
@@ -203,11 +247,15 @@ class HealthView(View):
     Refs #796 (C-28): Komponenten ``smtp``, ``encryption_key``,
     ``last_backup_age_hours``, ``disk_free_pct``.
 
-    Refs #1335: ``stale_jobs`` listet die Keys der fuenf per Host-Cron laufenden
+    Refs #1335: ``stale_jobs`` listet die Keys der fuenf ueberwachten
     Hintergrundjobs (Backup, Retention, Statistik-Snapshots, Breach-Detection,
     MV-Refresh — die Teilmenge aus ``cron_job_checks()``), deren letzter Lauf
-    laut Compliance-Dashboard ``critical`` ist — Indikator, dass der
-    Host-Scheduler (docs/ops-runbook.md §3) nicht eingerichtet ist.
+    laut Compliance-Dashboard ``critical`` ist — Indikator, dass der Scheduler
+    (``cron``-Sidecar bzw. Host-Cron, docs/ops-runbook.md § 3) nicht laeuft.
+
+    Refs #795: ``cache`` nennt Backend und Erreichbarkeit des Shared Cache —
+    seit der Stack einen Redis mitliefert, ist der stille Rueckfall auf den
+    DatabaseCache sonst von aussen nicht erkennbar.
 
     C-25 (Refs #793): ``db_user_is_superuser``/``db_role_posture`` melden, ob die
     DB-Rolle der laufenden Verbindung Row Level Security umgeht (Superuser oder
@@ -294,27 +342,38 @@ class HealthView(View):
             payload["db_role_posture"] = db_role_posture
             payload["version"] = os.environ.get("APP_VERSION", "dev")
 
+            # Cache-Backend + Liveness (Refs #795). MUSS vor den gecachten
+            # Checks stehen: das Ergebnis entscheidet, ob die ueberhaupt ueber
+            # den Cache laufen duerfen.
+            cache_payload = _check_cache()
+            cache_alive = cache_payload["status"] == "ok"
+            payload["cache"] = cache_payload
+            if not cache_alive and status == "ok":
+                # Ohne Cache zaehlt django-ratelimit nicht mehr — der
+                # Bruteforce-Schutz auf Login/Sudo ist dann faktisch aus.
+                status = "degraded"
+
             # SMTP-CONNECT (Refs #796), gecacht (A7.2).
-            smtp_payload = cache.get_or_set("health:smtp", _check_smtp, _DETAIL_CACHE_TTL_SECONDS)
+            smtp_payload = _cached_detail("health:smtp", _check_smtp, cache_alive=cache_alive)
             payload["smtp"] = smtp_payload
             if smtp_payload["status"] == "unreachable" and status == "ok":
                 status = "degraded"
 
             # Backup-Alter (Refs #796), gecacht (A7.2).
-            backup_age = cache.get_or_set("health:backup_age", _check_backup_age, _DETAIL_CACHE_TTL_SECONDS)
+            backup_age = _cached_detail("health:backup_age", _check_backup_age, cache_alive=cache_alive)
             payload["last_backup_age_hours"] = backup_age
             if backup_age is not None and backup_age > BACKUP_WARN_HOURS and status == "ok":
                 status = "degraded"
 
             # Disk-Frei (Refs #796), gecacht (A7.2).
-            disk_pct = cache.get_or_set("health:disk_free_pct", _check_disk_free_pct, _DETAIL_CACHE_TTL_SECONDS)
+            disk_pct = _cached_detail("health:disk_free_pct", _check_disk_free_pct, cache_alive=cache_alive)
             payload["disk_free_pct"] = disk_pct
             if disk_pct is not None and disk_pct < DISK_WARN_PCT and status == "ok":
                 status = "degraded"
 
             # Scheduler-Staleness (Refs #1335), gecacht (A7.2). ``unknown`` degradet
             # bewusst nicht (frische Installation), nur bestaetigtes ``critical``.
-            stale_jobs = cache.get_or_set("health:stale_jobs", _check_stale_jobs, _DETAIL_CACHE_TTL_SECONDS)
+            stale_jobs = _cached_detail("health:stale_jobs", _check_stale_jobs, cache_alive=cache_alive)
             payload["stale_jobs"] = stale_jobs
             if stale_jobs and status == "ok":
                 status = "degraded"

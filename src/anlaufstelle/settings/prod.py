@@ -4,6 +4,7 @@ Production settings for Anlaufstelle.
 
 import os
 import sys
+import warnings
 
 import sentry_sdk
 from django.core.exceptions import ImproperlyConfigured
@@ -185,25 +186,51 @@ DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "noreply@anlaufstelle.
 
 CONN_MAX_AGE = 60
 
-# --- Shared Cache (A5.1, Refs #1024 / #1016; env-Umschalter Refs #795 / #1657) ---
+# --- Shared Cache (A5.1, Refs #1024 / #1016; Redis-Service Refs #795 / #1657) ---
 # Ohne expliziten Cache nutzt Django LocMemCache — pro Gunicorn-Worker isoliert.
 # django-ratelimit (Login/Sudo/Health) und das Health-Detail-Caching (A7.2)
 # zählen dann pro Worker getrennt, sodass Rate-Limits in Multi-Worker-Prod
 # faktisch ge-N-facht werden.
 #
-# Default/Fallback = DatabaseCache: teilt den Zustand prozessübergreifend ohne
-# neue Dependency. Die Tabelle wird per Migration 0092 angelegt
+# Standard seit dem vollen #795-Scope: ``REDIS_URL`` zeigt auf den in
+# ``docker-compose.prod.yml`` mitgelieferten ``redis``-Service, Django spricht
+# ihn über sein eingebautes RedisCache-Backend an (kein django-redis nötig).
+# Redis ist hier eine reine Performance-Entscheidung: der DatabaseCache-Pfad
+# unten ist funktional gleichwertig (ebenfalls prozessübergreifend), kostet
+# aber pro Rate-Limit-Zähler und pro Health-Detail einen DB-Roundtrip inklusive
+# Zeilen-Lock und Ablauf-Garbage-Collection.
+#
+# Fallback = DatabaseCache (unverändert seit #1024): greift, sobald
+# ``REDIS_URL`` leer/ungesetzt ist. Bestands-Deployments ohne Redis und
+# Betreiber, die bewusst keinen zusätzlichen Dienst wollen, laufen damit
+# unverändert weiter. Die Tabelle wird per Migration 0092 angelegt
 # (createcachetable-äquivalent) und läuft im One-Shot-Migrate-Job
 # (``docker-migrate.sh``) mit hoch.
 #
-# Optionaler Konfigurationspfad (Refs #795 reduzierter Scope): Betreiber mit
-# einem BEREITS extern betriebenen Redis können per ``REDIS_URL`` darauf
-# umschalten. Es wird bewusst KEIN Redis-Compose-Service mitgeliefert
-# (bleibt embargo-gated) und ``redis-py`` ist KEINE Core-Dependency —
-# wer den Pfad nutzt, installiert ``redis`` selbst und stellt einen Redis bereit
-# (siehe docs/ops-runbook.md § Cache-Backend / Multi-Worker). Ohne gesetztes
-# ``REDIS_URL`` bleibt das Verhalten unverändert (DatabaseCache).
+# Externes Redis: ``REDIS_URL`` in der ``.env`` überschreibt den Compose-Default,
+# der mitgelieferte Service kann dann entfallen. Siehe docs/ops-runbook.md
+# § 5.4a.
 _redis_url = os.environ.get("REDIS_URL", "").strip()
+if _redis_url:
+    # Kompatibilitäts-Netz für gemischte Stände: Wer das neue Compose-File
+    # zieht (setzt ``REDIS_URL`` ab Werk), aber per ``APP_VERSION`` noch ein
+    # Image ohne ``redis-py`` fährt, bekäme sonst bei JEDEM Cache-Zugriff eine
+    # Exception — also 500er auf allen rate-limitierten Views statt nur
+    # langsamerer Caches. Fällt daher sichtbar (Warning im Container-Log,
+    # ``cache.backend`` im /health/-Payload) auf den DatabaseCache zurück,
+    # statt den Stack zu zerlegen. Refs #795.
+    try:
+        import redis  # noqa: F401
+    except ImportError:
+        warnings.warn(
+            "REDIS_URL ist gesetzt, aber das Paket 'redis' fehlt im Image — "
+            "Cache faellt auf DatabaseCache zurueck. Passiert typischerweise, "
+            "wenn ein aelteres APP_VERSION-Image mit dem neuen "
+            "docker-compose.prod.yml gefahren wird (Refs #795).",
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        _redis_url = ""
 if _redis_url:
     CACHES = {
         "default": {

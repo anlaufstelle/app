@@ -12,6 +12,7 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
+from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
 from django.test import Client
@@ -319,6 +320,43 @@ class TestHealthDetail:
         """A7.1: stale_jobs ist ein Recon-Detailfeld, nur intern/Token sichtbar."""
         data = Client().get("/health/").json()
         assert "stale_jobs" not in data
+
+    def test_cache_field_reports_backend_and_liveness(self, detail_token):
+        """Refs #795: ``cache.backend``/``cache.status`` machen sichtbar, WELCHES
+        Cache-Backend tatsaechlich laeuft.
+
+        Braucht es, seit ``docker-compose.prod.yml`` einen Redis mitliefert:
+        prod.py faellt bei fehlendem ``redis``-Paket bewusst auf den
+        DatabaseCache zurueck. Ohne dieses Feld waere der Unterschied zwischen
+        „Redis laeuft" und „still auf den langsamen Fallback degradiert" von
+        aussen nicht feststellbar."""
+        data = _detail_get().json()
+        assert data["cache"]["backend"] == settings.CACHES["default"]["BACKEND"]
+        assert data["cache"]["status"] == "ok"
+
+    def test_cache_unreachable_degrades_status(self, detail_token):
+        """Refs #795: ein toter Cache degradiert, statt den Endpoint zu killen.
+
+        Mit Redis als Standard-Backend ist „Cache weg, DB da" ein realer
+        Zustand (vorher fiel der DatabaseCache immer mit der DB zusammen aus,
+        die ohnehin schon 503 ausgeloest haette). Der Endpoint muss ihn melden
+        — und darf dabei nicht selbst an den gecachten Detail-Checks
+        (``cache.get_or_set``) scheitern."""
+        with patch("core.views.health.cache") as mocked_cache:
+            mocked_cache.set.side_effect = ConnectionError("redis down")
+            mocked_cache.get.side_effect = ConnectionError("redis down")
+            mocked_cache.get_or_set.side_effect = ConnectionError("redis down")
+            response = _detail_get()
+        data = response.json()
+        assert data["cache"]["status"] == "error"
+        assert data["status"] == "degraded"
+        # Liveness bleibt 200 — die DB ist erreichbar, nur der Cache nicht.
+        assert response.status_code == 200
+
+    def test_cache_not_in_anonymous_payload(self):
+        """A7.1/N13: das Cache-Backend ist Recon (verraet die Stack-Topologie)."""
+        data = Client().get("/health/").json()
+        assert "cache" not in data
 
 
 @pytest.mark.django_db

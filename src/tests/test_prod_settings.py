@@ -263,11 +263,12 @@ class TestProdSharedCacheGuard:
         assert data["rl_cache"] == "default"
 
     def test_redis_url_switches_to_redis_cache(self):
-        """Refs #795/#1657 (reduzierter Scope): Ist ``REDIS_URL`` gesetzt, schaltet
-        prod.py von der DatabaseCache-Fallback auf RedisCache um — ein reiner
-        Konfigurationspfad fuer Betreiber mit eigenem, extern betriebenem Redis.
-        Es wird KEIN Compose-Service mitgeliefert und redis-py bleibt out-of-core;
-        hier wird nur die Settings-Aufloesung geprueft (kein Redis-Verbindungsaufbau)."""
+        """Refs #795 (voller Scope): Ist ``REDIS_URL`` gesetzt, schaltet prod.py
+        vom DatabaseCache-Fallback auf RedisCache um. ``docker-compose.prod.yml``
+        setzt die Variable ab Werk auf den mitgelieferten ``redis``-Service;
+        derselbe Pfad traegt Betreiber mit einem eigenen, extern betriebenen
+        Redis. Hier wird nur die Settings-Aufloesung geprueft (kein
+        Verbindungsaufbau)."""
         code = (
             "import json, anlaufstelle.settings.prod as p; "
             "print(json.dumps({"
@@ -283,6 +284,62 @@ class TestProdSharedCacheGuard:
         assert data["location"] == redis_url
         # Rate-Limit haengt am selben "default"-Alias, egal welches Backend.
         assert data["rl_cache"] == "default"
+
+    def test_single_cache_alias_stays_wired_to_ratelimit(self):
+        """Refs #795: genau EIN Cache-Alias, und ``RATELIMIT_USE_CACHE`` zeigt darauf.
+
+        Die urspruengliche Issue-Skizze sah einen zweiten Alias ``ratelimit`` auf
+        Redis-DB ``/2`` vor. Umgesetzt ist er bewusst nicht: kein Code liest
+        ``caches["ratelimit"]``, django-ratelimit haengt an
+        ``RATELIMIT_USE_CACHE`` — ein zweiter Alias waere tote Konfiguration und
+        muesste im DatabaseCache-Fallback zusaetzlich eine zweite Cache-Tabelle
+        (= weitere Migration) tragen. Dieser Guard haelt beides zusammen: wer
+        spaeter einen Alias ergaenzt, muss ``RATELIMIT_USE_CACHE`` bewusst
+        mitziehen, statt den Rate-Limit-Zaehler still im Default-Alias zu lassen
+        (wo ihn ein ``cache.clear()`` mit abraeumt)."""
+        code = (
+            "import json, anlaufstelle.settings.prod as p; "
+            "print(json.dumps({"
+            "'aliases': sorted(p.CACHES), "
+            "'rl_cache': getattr(p, 'RATELIMIT_USE_CACHE', None)}))"
+        )
+        result = _run_prod_import(self._VALID_ENV, code=code)
+        assert result.returncode == 0, f"prod import failed: {result.stderr}"
+        data = json.loads(result.stdout.strip().splitlines()[-1])
+        assert data["aliases"] == ["default"]
+        assert data["rl_cache"] in data["aliases"]
+
+    def test_missing_redis_package_falls_back_to_database_cache(self, tmp_path):
+        """Refs #795: gesetztes ``REDIS_URL`` + fehlendes ``redis``-Paket degradiert
+        sichtbar, statt den Stack zu zerlegen.
+
+        Reales Szenario: Betreiber zieht das neue ``docker-compose.prod.yml``
+        (das ``REDIS_URL`` ab Werk setzt), faehrt per ``APP_VERSION`` aber noch
+        ein aelteres App-Image ohne ``redis-py``. Ohne dieses Netz wuerde JEDER
+        Cache-Zugriff werfen — also 500er auf allen rate-limitierten Views.
+        Simuliert wird das ueber ein Shadow-Modul ``redis.py``, das den Import
+        scheitern laesst; es liegt vor ``site-packages`` im PYTHONPATH."""
+        shadow = tmp_path / "redis.py"
+        shadow.write_text("raise ImportError('simulated: redis-py not installed')\n", encoding="utf-8")
+        code = (
+            "import json, anlaufstelle.settings.prod as p; "
+            "print(json.dumps({'backend': p.CACHES['default']['BACKEND'], "
+            "'location': p.CACHES['default']['LOCATION']}))"
+        )
+        result = _run_prod_import(
+            {
+                **self._VALID_ENV,
+                "REDIS_URL": "redis://redis:6379/1",
+                "PYTHONPATH": os.pathsep.join([str(tmp_path), str(SRC_DIR)]),
+            },
+            code=code,
+        )
+        assert result.returncode == 0, f"prod import failed: {result.stderr}"
+        data = json.loads(result.stdout.strip().splitlines()[-1])
+        assert data["backend"] == "django.core.cache.backends.db.DatabaseCache"
+        assert data["location"] == "anlaufstelle_cache"
+        # Der Rueckfall darf nicht still passieren.
+        assert "REDIS_URL" in result.stderr and "DatabaseCache" in result.stderr
 
 
 class TestProdPlaceholderSecretsGuard:
