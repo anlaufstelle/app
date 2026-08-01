@@ -190,6 +190,13 @@ Collective pre-release bundling the skipped 0.17–0.19 — a complete offline f
 - **Container-runtime hardening** (`no-new-privileges`, dropped capabilities, read-only filesystems) and **build integrity** (pip hash-pinning, digest-pinned base images).
 - **Tailwind CSS 4** and **Python 3.14** as the production base.
 
+### v0.23.0 (2026-08-01)
+
+- **Defense-in-depth wave**: the Content-Security-Policy now ships `style-src` without `'unsafe-inline'` (special pages via sha256 hashes, narrow admin-UI exception); statistics materialized-view access is funneled through a facility-enforcing helper; an AST guard fails CI on unscoped queries against the three non-RLS tables; upload temp files are pinned to tmpfs with a new deploy check.
+- **Operations out of the box**: `scripts/initial-setup.sh` performs the full first-run setup idempotently; the health endpoint continuously reports whether the runtime DB connection could bypass row-level security (`db_role_posture`); `docker-compose.prod.yml` gains a supercronic cron sidecar for the six background jobs (backup stays host-side) and a Redis cache service (database-cache fallback unchanged).
+- **Governance clarified**: the CRA deadline is documented as a self-imposed precaution (the project is outside the CRA's scope in its current operating model), and funding-programme references were removed project-wide.
+- **"Works ≠ correct" pilot**: the first synthetic-persona walk against the dev instance produced eleven triage candidates and directly led to two pre-release fixes (htmx settle attributes, admin CSP exception).
+
 ### v0.22.0 (2026-07-15)
 
 - **Offline "one world"** (offline V2, #1499): contacts and tasks can be captured offline even without a previously opened form, and the task list and timeline render offline in-place at their canonical URLs from the merged local snapshot.
@@ -200,6 +207,6 @@ Collective pre-release bundling the skipped 0.17–0.19 — a complete offline f
 - **Task overview status and time filters** (#1570): the task overview gains an explicit status filter (open / in progress / done / all) and -- effective only for "done" -- a time-range filter (last 7/30 days / all), so all completed tasks become reachable beyond the passive seven-day "recently done" preview; both combine with the existing assignment and facility scoping filters.
 
 <!-- translation-source: docs/fachkonzept-anlaufstelle.md -->
-<!-- translation-version: v0.22.0 -->
+<!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-07-14 -->
 <!-- source-hash: b9be8bb -->

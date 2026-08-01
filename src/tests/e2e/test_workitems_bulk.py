@@ -743,7 +743,7 @@ class TestBulkForbiddenMessageConcrete:
         die Auswahl direkt korrigieren kann.
 
         Hintergrund: Die vorherige Lösung zeigte zwar den Alert, verwarf aber die
-        Auswahl — die betroffene Aufgabe war nicht mehr erkennbar .
+        Auswahl — die betroffene Aufgabe war nicht mehr erkennbar (UI-Monitoring-Befund).
         Spiegelt die manuelle Beobachtung auf Port 8844 wider.
         """
         # Emma (Lead) legt eine sich selbst zugewiesene Aufgabe an.

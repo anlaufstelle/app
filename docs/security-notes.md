@@ -599,7 +599,7 @@ Eine Kapselung (Closure statt `window`-Global, oder ein Capability-Token) wurde 
 
 ### Eng gescopte Ausnahme — Umami-Analytics auf der Demo (Issue #1604)
 
-Auf `demo.anlaufstelle.app` läuft nach **Opt-in-Einwilligung** ein Umami-Tracker samt Session-Recorder/Heatmap (`umami.example.org`). Skript und Beacons brauchen `script-src`/`connect-src` für den Umami-Host — also genau die Lockerung, gegen die der Schutzwall oben schützt. Damit `script-src 'self'` als Schutz von `window.offlineStore` nicht global fällt, ist die Freigabe **maximal eng gescoped**:
+Auf `demo.anlaufstelle.app` läuft nach **Opt-in-Einwilligung** ein Umami-Tracker samt Session-Recorder/Heatmap (Endpoint per Deploy-Env konfiguriert, #1701). Skript und Beacons brauchen `script-src`/`connect-src` für den Umami-Host — also genau die Lockerung, gegen die der Schutzwall oben schützt. Damit `script-src 'self'` als Schutz von `window.offlineStore` nicht global fällt, ist die Freigabe **maximal eng gescoped**:
 
 - **nicht global**, sondern per [`DemoUmamiCSPRelaxMiddleware`](../src/core/middleware/demo_umami_csp_relax.py) als Response-Header-Rewrite (analog [`AdminCSPRelaxMiddleware`](../src/core/middleware/admin_csp_relax.py) für `/admin-mgmt/`);
 - **nur bei `DEMO_MODE=True`** — prod/`devlive`/dev/test lockern nie (Architektur-Guard [`test_demo_umami_csp_relax.py`](../src/tests/test_demo_umami_csp_relax.py));

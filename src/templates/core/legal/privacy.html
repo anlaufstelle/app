@@ -1,145 +1,33 @@
 {% extends "base.html" %}
 {% comment %}
-Datenschutzerklaerung der oeffentlichen Demo (Refs #1641).
+Platzhalter-Datenschutzerklaerung der Demo (Refs #1641, #1701).
 
-Bewusst DEUTSCH, Sie-Form, ohne {% trans %} (Rechtstext, keine
-i18n-Volluebersetzung). Adaptiert aus dem Webseiten-Datenschutz
-(anlaufstelle.app/datenschutz.html) und um die Demo-spezifischen Verarbeitungen
-erweitert — Umami-Opt-in inkl. Session-Recording/Heatmap, synthetische
-Testdaten mit stuendlichem Reset, geteilte Demo-Logins. Die Angaben zu
-Server-Logs entsprechen der tatsaechlichen Demo-Konfiguration (Caddyfile.demo:
-JSON-Zugriffsprotokoll, groessenbasierte Rotation). Nur bei DEMO_MODE
-erreichbar (DemoPrivacyView gibt sonst 404).
+Die ECHTEN Rechtstexte sind Instanz-Konfiguration (Betreiber-Kontaktdaten,
+Analyse-Endpunkte, Log-Konfiguration!) und liegen NICHT im oeffentlichen
+Release-Quelltext: Der Betreiber mountet sie zur Deploy-Zeit als
+Template-Overlay unter demselben Template-Pfad (core/legal/privacy.html) und
+setzt EXTRA_TEMPLATE_DIR auf das Overlay-Verzeichnis (siehe settings/base.py).
+Ohne Overlay rendert dieser neutrale Hinweis. Nur bei DEMO_MODE erreichbar
+(DemoPrivacyView gibt sonst 404), oeffentlich ohne Login.
 {% endcomment %}
 
-{% block title %}Datenschutzerklärung – anlaufstelle Demo{% endblock %}
+{% block title %}Datenschutzerklärung{% endblock %}
 
 {% block content %}
 <article class="max-w-3xl" data-testid="demo-privacy">
     <h1 class="text-[22px] font-bold text-ink mb-1">Datenschutzerklärung</h1>
-    <p class="text-[13px] text-ink-muted">Öffentliche Demo-Instanz <span class="font-mono">demo.anlaufstelle.app</span></p>
 
-    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">1. Verantwortlicher</h2>
-    <address class="not-italic text-[14px] text-ink-muted leading-relaxed">
-        Erika Musterfrau<br>
-        handelnd unter der Geschäftsbezeichnung „anlaufstelle“<br>
-        Musterstrasse 1, 12345 Musterstadt, Portugal<br>
-        E-Mail: <a href="mailto:kontakt@anlaufstelle.app" class="text-accent hover:underline">kontakt@anlaufstelle.app</a> · Telefon: +49 000 0000000
-    </address>
-    <p class="text-[14px] text-ink-muted leading-relaxed mt-3">
-        Für Anfragen zum Datenschutz und zur Wahrnehmung Ihrer Rechte wenden Sie sich bitte
-        an die oben genannten Kontaktdaten.
-    </p>
-
-    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">2. Charakter dieser Demo — bitte keine echten Daten eingeben</h2>
-    <p class="text-[14px] text-ink-muted leading-relaxed">
-        <span class="font-semibold text-ink">Diese Instanz ist eine öffentliche Demo.</span>
-        Sie enthält ausschließlich synthetische Testdaten. Alle Inhalte werden stündlich
-        vollständig zurückgesetzt (Reset); dabei gehen sämtliche in der Demo angelegten
-        Daten unwiederbringlich verloren. Die Anmeldedaten (Demo-Logins) sind öffentlich
-        bekannt und werden von allen Besucherinnen und Besuchern geteilt — in der Demo
-        eingegebene Inhalte sind daher für andere sichtbar.
+    <p class="text-[14px] text-ink-muted leading-relaxed mt-4">
+        Für diese Installation ist noch keine Datenschutzerklärung hinterlegt.
     </p>
     <p class="text-[14px] text-ink-muted leading-relaxed mt-3">
-        <span class="font-semibold text-ink">Geben Sie in diese Demo bitte keine echten
-        personenbezogenen Daten ein</span> — weder zu sich selbst noch zu Dritten. Verwenden
-        Sie ausschließlich frei erfundene Angaben. Für in der Demo eingegebene reale Daten
-        kann keine vertrauliche Verarbeitung gewährleistet werden.
-    </p>
-
-    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">3. Server-Logs beim Aufruf der Demo</h2>
-    <p class="text-[14px] text-ink-muted leading-relaxed">
-        Beim Aufruf der Demo fallen im vorgelagerten Reverse-Proxy (Caddy) technisch bedingte
-        Zugriffsprotokolle (Server-Logs) an. Protokolliert werden je Anfrage insbesondere:
-        IP-Adresse, Datum und Uhrzeit, angefragte Adresse (Pfad/URL) und HTTP-Methode,
-        HTTP-Statuscode, übertragene Datenmenge, Referrer sowie der Browser-User-Agent.
-        Zweck ist der sichere und stabile Betrieb der Demo sowie der Schutz vor Missbrauch;
-        Rechtsgrundlage ist Art. 6 Abs. 1 lit. f DSGVO (berechtigtes Interesse an einem
-        sicheren Betrieb).
-    </p>
-    <p class="text-[14px] text-ink-muted leading-relaxed mt-3">
-        Die Zugriffsprotokolle werden lokal auf dem Demo-Server als Dateien im JSON-Format
-        gehalten und größenbasiert rotiert (je Protokolldatei rund 10 MiB, es werden einige
-        ältere Dateien vorgehalten). Eine feste, kalendarische Löschfrist besteht nicht —
-        ältere Einträge werden im Zuge der Rotation überschrieben. Eine Weitergabe der
-        Server-Logs an Dritte zu anderen Zwecken findet nicht statt.
-    </p>
-
-    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">4. Webanalyse mit Umami — nur nach Ihrer Einwilligung</h2>
-    <p class="text-[14px] text-ink-muted leading-relaxed">
-        Zur Verbesserung der Demo setzen wir nach dem Login das selbst gehostete,
-        cookielose Analyse-Werkzeug <span class="font-semibold text-ink">Umami</span> ein —
-        einschließlich einer pseudonymen <span class="font-semibold text-ink">Sitzungsaufzeichnung
-        (Session-Recording) und Heatmaps</span>, mit denen wir die Bedienung nachvollziehen
-        und verbessern. Umami wird auf einem eigenen Server unter der Domain
-        <span class="font-mono">umami.example.org</span> betrieben; es werden keine Daten an den
-        Softwarehersteller oder sonstige Dritte übermittelt.
-    </p>
-    <p class="text-[14px] text-ink-muted leading-relaxed mt-3">
-        <span class="font-semibold text-ink">Einwilligung (Opt-in).</span> Analyse, Aufzeichnung
-        und Heatmap starten technisch erst, nachdem Sie über den Einwilligungs-Hinweis nach der
-        Anmeldung ausdrücklich zugestimmt haben. Ohne Ihre Zustimmung findet keine Analyse und
-        keine Aufzeichnung statt — es wird kein Umami-Code geladen. Rechtsgrundlage ist Ihre
-        Einwilligung nach Art. 6 Abs. 1 lit. a DSGVO. Die Anmeldeseite selbst ist von der
-        Analyse ausgenommen.
-    </p>
-    <p class="text-[14px] text-ink-muted leading-relaxed mt-3">
-        <span class="font-semibold text-ink">Erhobene Daten.</span> Erfasst werden aufgerufene
-        Seiten (Adresse und Seitentitel), die Verweisquelle (Referrer), verwendeter Browser,
-        Betriebssystem und Gerätetyp sowie eine gekürzte bzw. gehashte IP-Adresse. Die volle
-        IP-Adresse wird durch Umami nicht dauerhaft gespeichert. Umami setzt keine Cookies und
-        legt keine dauerhaften Kennungen auf Ihrem Endgerät ab; eine Identifizierung einzelner
-        Personen sowie eine seitenübergreifende Verfolgung („Cross-Site-Tracking“) finden nicht
-        statt.
-    </p>
-    <p class="text-[14px] text-ink-muted leading-relaxed mt-3">
-        <span class="font-semibold text-ink">Widerruf.</span> Ihre Entscheidung (Zustimmung oder
-        Ablehnung) wird ausschließlich lokal in Ihrem Browser gespeichert (im
-        <span class="font-mono">localStorage</span> dieses Geräts), nicht auf unserem Server.
-        Sie können eine erteilte Einwilligung jederzeit widerrufen, indem Sie die
-        Website-Daten dieser Demo in Ihrem Browser löschen (z. B. über die Browser-Einstellungen
-        „Websitedaten/Cookies löschen“ für <span class="font-mono">demo.anlaufstelle.app</span>).
-        Danach wird der gespeicherte Zustand entfernt, es wird nichts mehr geladen und der
-        Einwilligungs-Hinweis erscheint beim nächsten Besuch erneut, sodass Sie ablehnen können.
-        Der Widerruf wirkt für die Zukunft.
-    </p>
-
-    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">5. Cookies</h2>
-    <p class="text-[14px] text-ink-muted leading-relaxed">
-        Diese Demo setzt keine Tracking- oder Marketing-Cookies. Die Reichweitenmessung mit
-        Umami (Abschnitt 4) arbeitet vollständig ohne Cookies. Für den technischen Betrieb
-        werden ausschließlich notwendige Cookies verwendet: ein Sitzungs-Cookie für die
-        Anmeldung sowie ein CSRF-Cookie zum Schutz vor gefälschten Anfragen; die
-        Einwilligungs-Entscheidung zur Analyse wird im localStorage Ihres Geräts abgelegt.
-    </p>
-
-    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">6. Kontaktaufnahme</h2>
-    <p class="text-[14px] text-ink-muted leading-relaxed">
-        Wenn Sie uns per E-Mail (<a href="mailto:kontakt@anlaufstelle.app" class="text-accent hover:underline">kontakt@anlaufstelle.app</a>)
-        schreiben, verarbeiten wir Ihre Angaben zur Bearbeitung der Anfrage — Art. 6 Abs. 1
-        lit. b und f DSGVO. Wir löschen diese Daten, sobald die Anfrage abschließend bearbeitet
-        ist und keine gesetzlichen Aufbewahrungspflichten entgegenstehen.
-    </p>
-
-    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">7. Ihre Rechte</h2>
-    <p class="text-[14px] text-ink-muted leading-relaxed">Sie haben nach der DSGVO das Recht auf:</p>
-    <ul class="list-disc pl-5 mt-2 text-[14px] text-ink-muted leading-relaxed space-y-1">
-        <li>Auskunft (Art. 15), Berichtigung (Art. 16) und Löschung (Art. 17),</li>
-        <li>Einschränkung der Verarbeitung (Art. 18) und Datenübertragbarkeit (Art. 20),</li>
-        <li>Widerspruch (Art. 21) sowie Beschwerde bei einer Aufsichtsbehörde (Art. 77).</li>
-    </ul>
-
-    <h2 class="text-[16px] font-semibold text-ink mt-8 mb-2">8. Aufsichtsbehörde</h2>
-    <p class="text-[14px] text-ink-muted leading-relaxed">
-        Zuständig nach der Niederlassung des Verantwortlichen (Portugal): Comissão Nacional de
-        Proteção de Dados (CNPD), Av. D. Carlos I, 134 – 1.º, 1200-651 Lisboa, Portugal
-        (www.cnpd.pt). Unabhängig davon können Sie sich mit einer Beschwerde auch an die
-        Aufsichtsbehörde Ihres Wohnsitz- oder Arbeitsorts wenden — in Deutschland an die für
-        Ihr Bundesland zuständige Landesdatenschutzbehörde.
-    </p>
-
-    <p class="text-[12px] text-ink-muted mt-8">
-        Stand: Juli 2026 · Siehe auch das <a href="{{ DEMO_LEGAL_IMPRINT_URL|default:'/impressum/' }}" class="text-accent hover:underline">Impressum</a>.
+        Hinweis an den Betreiber dieser Instanz: Stellen Sie Ihre eigene
+        Datenschutzerklärung als Template-Overlay bereit — Datei
+        <span class="font-mono">core/legal/privacy.html</span> in dem Verzeichnis,
+        auf das die Umgebungsvariable <span class="font-mono">EXTRA_TEMPLATE_DIR</span>
+        zeigt. Beschreiben Sie darin die tatsächlichen Verarbeitungen Ihrer
+        Instanz (z. B. Server-Logs, eingesetzte Analyse-Werkzeuge samt
+        Einwilligungs-Mechanik).
     </p>
 </article>
 {% endblock %}

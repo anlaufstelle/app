@@ -21,13 +21,13 @@ from .devlive import *  # noqa: F401, F403
 # Schalter fuer Demo-Banner, Login-Zugangsdaten-Panel und Demo-Guard.
 DEMO_MODE = True
 
-# --- Umami Web-Analytics inkl. Recorder/Heatmap (Refs #1604) ---
-# Eigene Website-ID der Demo (nicht die devlive-ID) + Session-Recorder/Heatmap.
-# Consent-Opt-in: kein stilles Tracking — der Tracker wird erst nach expliziter
-# Zustimmung client-seitig injiziert (umami-consent.js / partials/_umami_consent.html).
-UMAMI_WEBSITE_ID = "00000000-0000-4000-8000-000000000002"
-UMAMI_SCRIPT_SRC = "https://umami.example.org/main.js"
-UMAMI_RECORDER_SRC = "https://umami.example.org/recorder.js"
+# --- Umami Web-Analytics inkl. Recorder/Heatmap (Refs #1604, #1701) ---
+# Website-ID (eigene der Demo, nicht die devlive-ID) und Skript-URLs kommen per
+# Vererbung aus devlive und dort aus der Deploy-Env (.env.demo auf dem Host) —
+# keine instanzspezifischen Werte im Release-Quelltext (Refs #1701).
+# Consent-Opt-in bleibt hart verdrahtet: kein stilles Tracking — der Tracker
+# wird erst nach expliziter Zustimmung client-seitig injiziert
+# (umami-consent.js / partials/_umami_consent.html).
 UMAMI_REQUIRE_CONSENT = True
 
 # Rechtstexte der Demo: eigene Seiten der Demo-Instanz (Refs #1641). Die Demo

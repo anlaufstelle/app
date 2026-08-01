@@ -12,8 +12,8 @@ Sicherheitsupdates werden für die folgende Version bereitgestellt:
 
 | Version | Status |
 |-----------|------------------------------|
-| `0.22.x` | Unterstützt (Pre-Release) |
-| `< 0.22` | Nicht unterstützt |
+| `0.23.x` | Unterstützt (Pre-Release) |
+| `< 0.23` | Nicht unterstützt |
 
 Das Projekt befindet sich derzeit in einer Pre-Release-Phase. Sobald `1.0` veröffentlicht ist, werden mindestens die jeweils aktuelle und die vorherige Minor-Version mit Sicherheitsupdates versorgt.
 
@@ -79,8 +79,8 @@ Anlaufstelle processes sensitive social data under GDPR Art. 9. Security reports
 
 | Version | Status |
 |-----------|------------------------------|
-| `0.22.x` | Supported (pre-release) |
-| `< 0.22` | Not supported |
+| `0.23.x` | Supported (pre-release) |
+| `< 0.23` | Not supported |
 
 After the `1.0` release we will support at least the current and the previous minor version with security updates.
 

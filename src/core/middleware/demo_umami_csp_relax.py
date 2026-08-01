@@ -1,9 +1,12 @@
-"""Per-Request-CSP-Relax für den Umami-Tracker auf der Demo (Refs #1604).
+"""Per-Request-CSP-Relax für den Umami-Tracker auf der Demo (Refs #1604, #1701).
 
 Auf ``demo.anlaufstelle.app`` soll — nach Einwilligung (Opt-in) — der Umami-
-Tracker samt Session-Recorder/Heatmap laufen (``umami.example.org``). Das Tracker-
-Skript und seine Beacons brauchen dafür ``script-src`` **und** ``connect-src``
-für den Umami-Host.
+Tracker samt Session-Recorder/Heatmap laufen. Das Tracker-Skript und seine
+Beacons brauchen dafür ``script-src`` **und** ``connect-src`` für den
+Umami-Host. Der Host ist der Origin des per Deploy-Env konfigurierten
+Tracker-Skripts (``settings.UMAMI_SCRIPT_SRC``, Refs #1701) — der Quelltext
+trägt keinen instanzspezifischen Host; ohne konfiguriertes Skript ist die
+Middleware ein No-Op (fail-closed).
 
 Die globale CSP bleibt bewusst strikt ``script-src 'self'``: laut
 [ADR-022](../../../docs/adr/022-offline-snapshot-keys.md) § (c) ist genau diese
@@ -29,10 +32,24 @@ bereits gesetzten ``Content-Security-Policy``-Header noch umschreiben kann.
 from __future__ import annotations
 
 import re
+from urllib.parse import urlsplit
 
 from django.conf import settings
 
-UMAMI_HOST = "https://umami.example.org"
+
+def _umami_host() -> str:
+    """Origin des per Deploy-Env konfigurierten Tracker-Skripts (Refs #1701).
+
+    Leer, wenn kein (vollstaendiges, absolutes) Skript konfiguriert ist — die
+    Middleware bleibt dann No-Op und die CSP strikt.
+    """
+    script_src = getattr(settings, "UMAMI_SCRIPT_SRC", "")
+    if not script_src:
+        return ""
+    split = urlsplit(script_src)
+    if not (split.scheme and split.netloc):
+        return ""
+    return f"{split.scheme}://{split.netloc}"
 
 
 def _extend_directive(csp: str, directive: str, token: str) -> str:
@@ -76,11 +93,17 @@ class DemoUmamiCSPRelaxMiddleware:
         if user is None or not user.is_authenticated:
             return response
 
+        # Ohne konfiguriertes Tracker-Skript gibt es nichts freizugeben —
+        # fail-closed, die strikte CSP bleibt unveraendert (Refs #1701).
+        umami_host = _umami_host()
+        if not umami_host:
+            return response
+
         for header in ("Content-Security-Policy", "Content-Security-Policy-Report-Only"):
             csp = response.headers.get(header)
             if not csp:
                 continue
-            csp = _extend_directive(csp, "script-src", UMAMI_HOST)
-            csp = _extend_directive(csp, "connect-src", UMAMI_HOST)
+            csp = _extend_directive(csp, "script-src", umami_host)
+            csp = _extend_directive(csp, "connect-src", umami_host)
             response.headers[header] = csp
         return response

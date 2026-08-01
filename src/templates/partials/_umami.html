@@ -1,8 +1,9 @@
 {% comment %}
 Umami-Web-Analytics — nur eingebunden, wenn eine Website-ID konfiguriert ist
-(devlive/demo; lokale dev/test/prod bleiben tracking-frei). Der Host
-umami.example.org muss in der CSP (script-src + connect-src) freigegeben sein,
-sonst laedt der Tracker nicht bzw. sendet keine Beacons (Lehre aus webseite#9).
+(per Deploy-Env auf devlive/demo, Refs #1701; lokale dev/test/prod bleiben
+tracking-frei). Der Origin des konfigurierten Tracker-Skripts muss in der CSP
+(script-src + connect-src) freigegeben sein, sonst laedt der Tracker nicht
+bzw. sendet keine Beacons (Lehre aus webseite#9).
 
 login.html erbt NICHT von base.html und bleibt damit tracking-frei
 (Anmeldeseite ohne Analytics). Refs #1602.

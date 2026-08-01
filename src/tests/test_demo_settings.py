@@ -30,14 +30,20 @@ _VALID_ENV = {
 }
 
 
-def _run_demo_import(expr):
+def _run_demo_import(expr, env_overrides=None):
     env = {
         "PATH": os.environ.get("PATH", ""),
         "PYTHONPATH": str(SRC_DIR),
         "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.demo",
         "ENCRYPTION_KEYS": "",
+        # .env-Laden abschalten: die UMAMI_*-Werte kommen seit #1701 aus der
+        # Deploy-Env — eine lokale .env mit echten Werten wuerde sonst die
+        # Default-leer-Asserts dieser Tests unterlaufen.
+        "DJANGO_LOAD_DOTENV": "false",
     }
     env.update(_VALID_ENV)
+    if env_overrides:
+        env.update(env_overrides)
     return subprocess.run(
         [sys.executable, "-c", expr],
         env=env,
@@ -69,18 +75,40 @@ class TestDemoLogins:
             assert username in result.stdout, f"{username} fehlt in DEMO_LOGINS: {result.stdout}"
 
 
+_UMAMI_ENV = {
+    "UMAMI_WEBSITE_ID": "22222222-3333-4444-5555-666666666666",
+    "UMAMI_SCRIPT_SRC": "https://umami.example.org/main.js",
+    "UMAMI_RECORDER_SRC": "https://umami.example.org/recorder.js",
+}
+
+
 class TestDemoUmami:
-    """Refs #1604: Demo trackt via Umami inkl. Recorder/Heatmap, aber
-    Consent-Opt-in, eigene Website-ID und STRIKTE globale CSP (Lockerung nur
-    Post-Login per Middleware)."""
+    """Refs #1604/#1701: Demo trackt via Umami inkl. Recorder/Heatmap —
+    Website-ID/Script-URLs kommen aus der Deploy-Env (keine instanzspezifischen
+    Werte im Release-Quelltext), Consent-Opt-in bleibt hart verdrahtet und die
+    globale CSP STRIKT (Lockerung nur Post-Login per Middleware)."""
 
-    def test_website_id_is_demo_specific(self):
-        result = _run_demo_import("from anlaufstelle.settings.demo import UMAMI_WEBSITE_ID;print(UMAMI_WEBSITE_ID)")
+    def test_unset_env_disables_tracking(self):
+        result = _run_demo_import(
+            "from anlaufstelle.settings.demo import UMAMI_WEBSITE_ID, UMAMI_SCRIPT_SRC, UMAMI_RECORDER_SRC;"
+            "print(UMAMI_WEBSITE_ID, repr(UMAMI_SCRIPT_SRC), repr(UMAMI_RECORDER_SRC))"
+        )
         assert result.returncode == 0, result.stderr
-        assert result.stdout.strip() == "00000000-0000-4000-8000-000000000002"
+        assert result.stdout.strip() == "None '' ''"
 
-    def test_recorder_src_is_example_recorder_js(self):
-        result = _run_demo_import("from anlaufstelle.settings.demo import UMAMI_RECORDER_SRC;print(UMAMI_RECORDER_SRC)")
+    def test_website_id_passes_through_from_env(self):
+        result = _run_demo_import(
+            "from anlaufstelle.settings.demo import UMAMI_WEBSITE_ID;print(UMAMI_WEBSITE_ID)",
+            env_overrides=_UMAMI_ENV,
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "22222222-3333-4444-5555-666666666666"
+
+    def test_recorder_src_passes_through_from_env(self):
+        result = _run_demo_import(
+            "from anlaufstelle.settings.demo import UMAMI_RECORDER_SRC;print(UMAMI_RECORDER_SRC)",
+            env_overrides=_UMAMI_ENV,
+        )
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == "https://umami.example.org/recorder.js"
 
@@ -102,15 +130,17 @@ class TestDemoUmami:
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == "/impressum/ /datenschutz/"
 
-    def test_global_csp_stays_strict_no_umami_host(self):
+    def test_global_csp_stays_strict_even_with_env_values(self):
         """Auf der Demo darf der Umami-Host NICHT global in der CSP stehen —
-        die Lockerung ist Post-Login-scoped (DemoUmamiCSPRelaxMiddleware).
-        devlive gibt ihn global frei; demo setzt die CSP wieder strikt."""
+        auch dann nicht, wenn die UMAMI_*-Env-Werte gesetzt sind. devlive gibt
+        den Host global frei; demo setzt die CSP wieder strikt, die Lockerung
+        ist Post-Login-scoped (DemoUmamiCSPRelaxMiddleware)."""
         result = _run_demo_import(
             "from anlaufstelle.settings.demo import CONTENT_SECURITY_POLICY as c;"
             "d=c['DIRECTIVES'];"
             "print('https://umami.example.org' in d['script-src'],"
-            "'https://umami.example.org' in d['connect-src'])"
+            "'https://umami.example.org' in d['connect-src'])",
+            env_overrides=_UMAMI_ENV,
         )
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == "False False"
@@ -122,3 +152,26 @@ class TestDemoUmami:
         )
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == "True"
+
+
+class TestExtraTemplateDir:
+    """Refs #1701: ``EXTRA_TEMPLATE_DIR`` haengt ein Deploy-Overlay VOR die
+    Projekt-Templates — so liefert die Demo ihre echten Rechtstexte per
+    gemountetem Verzeichnis, ohne dass die Inhalte im Release-Quelltext liegen."""
+
+    def test_unset_env_keeps_project_templates_only(self):
+        result = _run_demo_import(
+            "from anlaufstelle.settings.demo import TEMPLATES;"
+            "dirs=TEMPLATES[0]['DIRS'];"
+            "print(len(dirs), str(dirs[0]).endswith('/templates'))"
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "1 True"
+
+    def test_env_dir_is_prepended_and_wins(self):
+        result = _run_demo_import(
+            "from anlaufstelle.settings.demo import TEMPLATES;dirs=TEMPLATES[0]['DIRS'];print(len(dirs), str(dirs[0]))",
+            env_overrides={"EXTRA_TEMPLATE_DIR": "/srv/overlay-templates"},
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "2 /srv/overlay-templates"

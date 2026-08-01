@@ -940,7 +940,7 @@ class TestBulkForbiddenPreservesSelection:
     abgelehnten Bulk-Aktion darf die vorherige Auswahl nicht kommentarlos
     verloren gehen.
 
-    Beobachtung: Die konkrete Meldung erscheint zwar als Inline-Alert,
+    Beobachtung aus dem UI-Monitoring: Die konkrete Meldung erscheint zwar als Inline-Alert,
     aber die zuvor ausgewählte (blockierende) Aufgabe ist danach abgewählt — die
     Nutzerin sieht nicht mehr, welche Aufgabe gemeint ist, und kann die Auswahl
     nicht direkt korrigieren. Die abgelehnte Aktion reicht daher die PKs der

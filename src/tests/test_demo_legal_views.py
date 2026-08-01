@@ -1,4 +1,4 @@
-"""Routen-Gating + Inhalts-Garantien fuer die Demo-Rechtstexte (Refs #1641).
+"""Routen-Gating + Overlay-Verhalten der Demo-Rechtstexte (Refs #1641, #1701).
 
 Impressum (``/impressum/``) und Datenschutz (``/datenschutz/``) sind eigene
 Seiten der oeffentlichen Demo. Sie sind:
@@ -7,17 +7,22 @@ Seiten der oeffentlichen Demo. Sie sind:
   Betrieb einen ``Http404`` zurueck, analog zum request-zeitigen
   ``DEMO_MODE``-Check der Demo-Middleware),
 - **oeffentlich ohne Login** aufrufbar (kein ``LoginRequiredMixin``; von der
-  Anmeldeseite aus zugaenglich),
-- inhaltlich Demo-spezifisch (Umami-Opt-in, stuendlicher Reset, synthetische
-  Daten, Server-Logs).
+  Anmeldeseite aus zugaenglich).
+
+Seit #1701 liegen die ECHTEN Rechtstexte (mit Betreiber-Kontaktdaten) NICHT
+mehr im Release-Quelltext: der Quelltext traegt nur neutrale Platzhalter, die
+konkreten Texte kommen als Deploy-Overlay (``EXTRA_TEMPLATE_DIR``, siehe
+``test_demo_settings.TestExtraTemplateDir``) auf die Instanz.
 """
+
+from copy import deepcopy
 
 import pytest
 
 
 @pytest.fixture
 def demo_mode(settings):
-    """Aktiviert die Demo (Routen registriert) + die neuen internen Rechts-URLs."""
+    """Aktiviert die Demo (Routen registriert) + die internen Rechts-URLs."""
     settings.DEMO_MODE = True
     settings.DEMO_LEGAL_IMPRINT_URL = "/impressum/"
     settings.DEMO_LEGAL_PRIVACY_URL = "/datenschutz/"
@@ -36,20 +41,30 @@ class TestGatingWithoutDemoMode:
 
 
 @pytest.mark.django_db
-class TestImprintPage:
+class TestImprintPlaceholder:
     def test_public_access_returns_200(self, client, demo_mode):
         """Anonym (ohne Login) erreichbar."""
         assert client.get("/impressum/").status_code == 200
 
-    def test_core_content_present(self, client, demo_mode):
+    def test_placeholder_content_without_operator_overlay(self, client, demo_mode):
+        """Ohne Deploy-Overlay rendert der neutrale Platzhalter: Hinweis an den
+        Betreiber, KEINE konkreten Kontakt-/Betreiberdaten im Quelltext."""
         body = client.get("/impressum/").content.decode()
         assert "Impressum" in body
-        # Geschaeftsbezeichnung + Verantwortliche (aus dem Webseiten-Impressum).
-        assert "anlaufstelle" in body
-        assert "Erika Musterfrau" in body
-        assert "Geschäftsbezeichnung" in body
-        # Kontakt fuer Datenschutz-/Rechtsanfragen.
-        assert "kontakt@anlaufstelle.app" in body
+        assert "Betreiber" in body
+        assert "EXTRA_TEMPLATE_DIR" in body
+
+    def test_no_instance_specific_data_in_source(self, client, demo_mode):
+        """Der Release-Quelltext darf keine personenbezogenen Betreiberdaten
+        mehr ausliefern (Refs #1701)."""
+        body = client.get("/impressum/").content.decode()
+        assert "Erika Musterfrau" not in body
+        # Bewusst die Komposition (nie das nackte Token): der Release-Sanitizer
+        # swapt umami.example.org konsistent auf einen Beispiel-Host; den nackten
+        # Plattform-Namen strippte er zum Leerstring -> Assertion im Public-Baum
+        # immer rot (Stage-CI-Befund #1701).
+        assert "umami.example.org" not in body
+        assert "kontakt@anlaufstelle.app" not in body
 
     def test_extends_base_shell(self, client, demo_mode):
         """Baut auf base.html auf — die App-Shell (Offline-Banner) ist da."""
@@ -58,43 +73,61 @@ class TestImprintPage:
 
 
 @pytest.mark.django_db
-class TestPrivacyPage:
+class TestPrivacyPlaceholder:
     def test_public_access_returns_200(self, client, demo_mode):
         assert client.get("/datenschutz/").status_code == 200
 
-    def test_umami_consent_section(self, client, demo_mode):
-        """Umami nur nach Einwilligung (Opt-in), Endpoint umami.example.org,
-        cookielos, kein seitenuebergreifendes Tracking."""
+    def test_placeholder_content_without_operator_overlay(self, client, demo_mode):
         body = client.get("/datenschutz/").content.decode()
-        assert "Umami" in body
-        assert "umami.example.org" in body
-        assert "Einwilligung" in body
-        # Consent-Zustand liegt geraetelokal im localStorage.
-        assert "localStorage" in body
-        # Kein Cross-Site-Tracking.
-        assert "seitenübergreifend" in body
+        assert "Datenschutzerklärung" in body
+        assert "Betreiber" in body
+        assert "EXTRA_TEMPLATE_DIR" in body
 
-    def test_demo_character_section(self, client, demo_mode):
-        """Synthetische Daten, stuendlicher Reset, keine echten Daten eingeben."""
+    def test_no_instance_specific_data_in_source(self, client, demo_mode):
         body = client.get("/datenschutz/").content.decode()
-        assert "synthetische" in body or "synthetischen" in body
-        assert "Reset" in body
-        assert "keine echten" in body
+        assert "Erika Musterfrau" not in body
+        # Bewusst die Komposition (nie das nackte Token): der Release-Sanitizer
+        # swapt umami.example.org konsistent auf einen Beispiel-Host; den nackten
+        # Plattform-Namen strippte er zum Leerstring -> Assertion im Public-Baum
+        # immer rot (Stage-CI-Befund #1701).
+        assert "umami.example.org" not in body
+        assert "kontakt@anlaufstelle.app" not in body
 
-    def test_server_logs_section(self, client, demo_mode):
-        """Server-Logs wahrheitsgemaess (Caddy-Zugriffsprotokoll)."""
-        body = client.get("/datenschutz/").content.decode()
-        assert "Server-Log" in body or "Zugriffsprotokoll" in body
 
-    def test_contact_for_privacy_requests(self, client, demo_mode):
+@pytest.mark.django_db
+class TestOperatorOverlay:
+    """Das Deploy-Overlay (vorangestelltes Template-Verzeichnis) gewinnt die
+    Template-Aufloesung gegen die Platzhalter — so kommen die echten
+    Rechtstexte auf die Instanz, ohne im Release-Quelltext zu liegen."""
+
+    def _with_overlay(self, settings, tmp_path, name, marker):
+        legal = tmp_path / "core" / "legal"
+        legal.mkdir(parents=True)
+        (legal / name).write_text(
+            "{% extends 'base.html' %}{% block content %}" + marker + "{% endblock %}",
+            encoding="utf-8",
+        )
+        templates = deepcopy(settings.TEMPLATES)
+        templates[0]["DIRS"] = [tmp_path, *templates[0]["DIRS"]]
+        settings.TEMPLATES = templates
+
+    def test_overlay_imprint_wins_over_placeholder(self, client, demo_mode, tmp_path):
+        self._with_overlay(demo_mode, tmp_path, "imprint.html", "OVERLAY-IMPRESSUM-MARKER")
+        body = client.get("/impressum/").content.decode()
+        assert "OVERLAY-IMPRESSUM-MARKER" in body
+        assert "EXTRA_TEMPLATE_DIR" not in body
+
+    def test_overlay_privacy_wins_over_placeholder(self, client, demo_mode, tmp_path):
+        self._with_overlay(demo_mode, tmp_path, "privacy.html", "OVERLAY-DATENSCHUTZ-MARKER")
         body = client.get("/datenschutz/").content.decode()
-        assert "kontakt@anlaufstelle.app" in body
+        assert "OVERLAY-DATENSCHUTZ-MARKER" in body
+        assert "EXTRA_TEMPLATE_DIR" not in body
 
 
 @pytest.mark.django_db
 class TestFooterLinks:
     def test_base_footer_points_to_demo_paths(self, client, demo_mode):
-        """Der Demo-Footer (base.html) verlinkt die neuen internen Pfade."""
+        """Der Demo-Footer (base.html) verlinkt die internen Pfade."""
         body = client.get("/impressum/").content.decode()
         assert 'href="/impressum/"' in body
         assert 'href="/datenschutz/"' in body

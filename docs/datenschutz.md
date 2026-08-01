@@ -53,9 +53,9 @@
 | Aspekt | Regelung | Für |
 |---|---|---|
 | Rechtsgrundlage | Art. 6(1)(a) — **Opt-in-Einwilligung**: Tracking/Recording/Heatmap starten technisch **erst nach Zustimmung** (kein stilles Tracking); Ablehnen ist möglich | [Auditor] [Träger] |
-| Umfang | Umami-Web-Analyse **inkl. Session-Recording + Heatmap** (self-hosted, `umami.example.org`); **nur nach Login**, **nicht** auf der Anmeldeseite | [Auditor] [Dev] |
+| Umfang | Umami-Web-Analyse **inkl. Session-Recording + Heatmap** (self-hosted; Endpoint per Deploy-Env konfiguriert, #1701, und in der Datenschutzerklärung der Demo benannt); **nur nach Login**, **nicht** auf der Anmeldeseite | [Auditor] [Dev] |
 | Datenbestand | ausschließlich **synthetische Seed-Daten** (stündlicher Reset) — keine realen Betroffenendaten | [Auditor] |
-| Rechtstexte | Impressum + Datenschutzerklärung der [Webseite](https://anlaufstelle.app) (im Demo-Footer + Consent-Banner verlinkt) | [Träger] |
+| Rechtstexte | eigene Demo-Seiten `/impressum/` + `/datenschutz/` (#1641; Inhalte als Deploy-Overlay des Betreibers, im Demo-Footer + Consent-Banner verlinkt) | [Träger] |
 | Technik / CSP-Scoping | Consent-Gate [`umami-consent.js`](../src/static/js/umami-consent.js) · CSP-Freigabe eng gescoped [`DemoUmamiCSPRelaxMiddleware`](../src/core/middleware/demo_umami_csp_relax.py) · [security-notes.md](security-notes.md#eng-gescopte-ausnahme--umami-analytics-auf-der-demo-issue-1604) · [ADR-022 § (c)](adr/022-offline-snapshot-keys.md#dsfa-tom-einordnung-des-offline-pfads-1343) | [Dev] [Auditor] |
 
 ## E. Begriffe

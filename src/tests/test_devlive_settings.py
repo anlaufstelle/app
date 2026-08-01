@@ -39,6 +39,10 @@ def _run_devlive_import(env_overrides=None, expr="import anlaufstelle.settings.d
         "DJANGO_SETTINGS_MODULE": "anlaufstelle.settings.devlive",
         # dotenv-Smuggling unterbinden (siehe test_prod_settings.py).
         "ENCRYPTION_KEYS": "",
+        # .env-Laden komplett abschalten: die UMAMI_*-Werte kommen seit #1701
+        # aus der Deploy-Env — eine lokale .env mit echten Werten wuerde sonst
+        # die Default-leer-Asserts dieser Tests unterlaufen.
+        "DJANGO_LOAD_DOTENV": "false",
     }
     env.update(_VALID_ENV)
     if env_overrides:
@@ -106,32 +110,89 @@ class TestDevLiveFailClosed:
 
 
 class TestDevLiveUmami:
-    """Refs #1602: dev.anlaufstelle.app bindet den Umami-Tracker ein und gibt
-    den Umami-Host in der CSP frei — ohne das geteilte base-CSP-Dict zu
-    mutieren (Deep-Copy-Isolation)."""
+    """Refs #1602/#1701: Die Umami-Werte kommen aus der Deploy-Env — der
+    Release-Quelltext traegt keine instanzspezifischen Website-IDs/Hosts mehr.
+    Ohne Env bleibt devlive tracking-frei mit strikter base-CSP; mit Env wird
+    der Host des Tracker-Skripts in script-src/connect-src freigegeben — ohne
+    das geteilte base-CSP-Dict zu mutieren (Deep-Copy-Isolation)."""
 
-    def test_umami_website_id_is_set(self):
+    _UMAMI_ENV = {
+        "UMAMI_WEBSITE_ID": "11111111-2222-3333-4444-555555555555",
+        "UMAMI_SCRIPT_SRC": "https://umami.example.org/main.js",
+    }
+
+    def test_unset_env_leaves_tracking_disabled(self):
         result = _run_devlive_import(
-            expr="from anlaufstelle.settings.devlive import UMAMI_WEBSITE_ID;print(UMAMI_WEBSITE_ID)"
+            expr=(
+                "from anlaufstelle.settings.devlive import UMAMI_WEBSITE_ID, UMAMI_SCRIPT_SRC;"
+                "print(UMAMI_WEBSITE_ID, repr(UMAMI_SCRIPT_SRC))"
+            )
         )
         assert result.returncode == 0, result.stderr
-        assert result.stdout.strip() == "00000000-0000-4000-8000-000000000001"
+        assert result.stdout.strip() == "None ''"
 
-    def test_umami_script_src_is_example_main_js(self):
+    def test_empty_env_values_leave_tracking_disabled(self):
+        """Leere Env-Strings (z.B. auskommentierte .env-Zeile) zaehlen als
+        nicht gesetzt — kein halb-konfigurierter Tracker."""
         result = _run_devlive_import(
-            expr="from anlaufstelle.settings.devlive import UMAMI_SCRIPT_SRC;print(UMAMI_SCRIPT_SRC)"
+            {"UMAMI_WEBSITE_ID": "", "UMAMI_SCRIPT_SRC": ""},
+            expr=(
+                "from anlaufstelle.settings.devlive import UMAMI_WEBSITE_ID, UMAMI_SCRIPT_SRC;"
+                "print(UMAMI_WEBSITE_ID, repr(UMAMI_SCRIPT_SRC))"
+            ),
         )
         assert result.returncode == 0, result.stderr
-        assert result.stdout.strip() == "https://umami.example.org/main.js"
+        assert result.stdout.strip() == "None ''"
 
-    def test_csp_allows_umami_host_in_script_and_connect_src(self):
+    def test_half_configured_env_disables_tracking(self):
+        """Nur ID ohne Skript-URL (oder umgekehrt) zaehlt als AUS — sonst
+        wuerde base.html ein ``<script src="">`` einbinden (die Seite selbst
+        als Skript) bzw. ein Skript ohne Website-ID laden."""
         result = _run_devlive_import(
+            {"UMAMI_WEBSITE_ID": "11111111-2222-3333-4444-555555555555"},
+            expr=(
+                "from anlaufstelle.settings.devlive import UMAMI_WEBSITE_ID, UMAMI_SCRIPT_SRC;"
+                "print(UMAMI_WEBSITE_ID, repr(UMAMI_SCRIPT_SRC))"
+            ),
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "None ''"
+
+    def test_unset_env_keeps_csp_identical_to_base(self):
+        """Ohne konfigurierten Tracker gibt es KEINE CSP-Lockerung — devlive
+        ist dann von der strikten base-CSP nicht unterscheidbar."""
+        result = _run_devlive_import(
+            expr=(
+                "from anlaufstelle.settings.devlive import CONTENT_SECURITY_POLICY as c;"
+                "from anlaufstelle.settings.base import CONTENT_SECURITY_POLICY as b;"
+                "print(c == b)"
+            )
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == "True"
+
+    def test_env_values_are_passed_through(self):
+        result = _run_devlive_import(
+            self._UMAMI_ENV,
+            expr=(
+                "from anlaufstelle.settings.devlive import UMAMI_WEBSITE_ID, UMAMI_SCRIPT_SRC;"
+                "print(UMAMI_WEBSITE_ID, UMAMI_SCRIPT_SRC)"
+            ),
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.strip() == ("11111111-2222-3333-4444-555555555555 https://umami.example.org/main.js")
+
+    def test_csp_allows_configured_host_in_script_and_connect_src(self):
+        """Der CSP-Token ist der HOST des Tracker-Skripts (Origin, ohne Pfad)
+        — script-src (Tracker-Skript) UND connect-src (Beacon-POSTs)."""
+        result = _run_devlive_import(
+            self._UMAMI_ENV,
             expr=(
                 "from anlaufstelle.settings.devlive import CONTENT_SECURITY_POLICY as c;"
                 "d=c['DIRECTIVES'];"
                 "print('https://umami.example.org' in d['script-src'],"
                 "'https://umami.example.org' in d['connect-src'])"
-            )
+            ),
         )
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == "True True"
@@ -142,12 +203,13 @@ class TestDevLiveUmami:
         (Schutzwall fuer window.offlineStore, ADR-022) fuer alle anderen
         Settings-Module aufgeweicht."""
         result = _run_devlive_import(
+            self._UMAMI_ENV,
             expr=(
                 "import anlaufstelle.settings.devlive;"  # importiert + mutiert die Kopie
                 "from anlaufstelle.settings.base import CONTENT_SECURITY_POLICY as b;"
                 "print('https://umami.example.org' in b['DIRECTIVES']['script-src'],"
                 "'https://umami.example.org' in b['DIRECTIVES']['connect-src'])"
-            )
+            ),
         )
         assert result.returncode == 0, result.stderr
         assert result.stdout.strip() == "False False"

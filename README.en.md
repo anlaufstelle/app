@@ -4,7 +4,7 @@
 
 **Documentation, statistics, and team communication for low-threshold social work — wherever people come without an appointment and without giving their real name. Open source, pseudonymized, free — designed for privacy-compliant operation.**
 
-> ⚠️ **Pre-Release (v0.22.0)** — Anlaufstelle is functional but not yet cleared for production use. Quality assurance and stabilization are ongoing. We are looking for pilot facilities to test and co-develop the system — [get in touch](mailto:kontakt@anlaufstelle.app).
+> ⚠️ **Pre-Release (v0.23.0)** — Anlaufstelle is functional but not yet cleared for production use. Quality assurance and stabilization are ongoing. We are looking for pilot facilities to test and co-develop the system — [get in touch](mailto:kontakt@anlaufstelle.app).
 
 ---
 
@@ -210,6 +210,6 @@ docker compose exec web python src/manage.py seed
 </details>
 
 <!-- translation-source: README.md -->
-<!-- translation-version: v0.22.0 -->
+<!-- translation-version: v0.23.0 -->
 <!-- translation-date: 2026-08-01 -->
-<!-- source-hash: 1b5f64ce55e4506752027fcc959ec92d6148bebd -->
+<!-- source-hash: 903eec318d4818b4a90b843199074636a34ed1a1 -->

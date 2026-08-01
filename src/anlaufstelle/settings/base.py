@@ -152,10 +152,16 @@ ROOT_URLCONF = "anlaufstelle.urls"
 
 # --- Templates ---
 
+# Deploy-Overlay (Refs #1701): ein per Env benanntes Template-Verzeichnis wird
+# VOR den Projekt-Templates aufgeloest. Damit liefern Instanzen eigene Inhalte
+# zur Deploy-Zeit (z.B. die echten Demo-Rechtstexte ``core/legal/*.html`` als
+# ro-Volume-Mount), ohne dass diese im oeffentlichen Release-Quelltext liegen.
+_EXTRA_TEMPLATE_DIR = os.environ.get("EXTRA_TEMPLATE_DIR", "")
+
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": ([Path(_EXTRA_TEMPLATE_DIR)] if _EXTRA_TEMPLATE_DIR else []) + [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -583,12 +589,15 @@ CONTENT_SECURITY_POLICY = {
     }
 }
 
-# --- Umami Web-Analytics (Refs #1602, #1604) ---
+# --- Umami Web-Analytics (Refs #1602, #1604, #1701) ---
 # Standardmaessig AUS: lokale dev/test/prod-Instanzen bleiben tracking-frei.
 # Der Tracker wird ausschliesslich eingebunden, wenn UMAMI_WEBSITE_ID gesetzt
 # ist (siehe partials/_umami.html + core.context_processors.umami). Konkrete
-# Werte tragen NUR devlive.py (dev.anlaufstelle.app, Refs #1602) und demo.py
-# (demo.anlaufstelle.app, Refs #1604) — dort auch die CSP-Freigabe des Hosts.
+# Werte (Website-ID, Skript-URLs) sind Instanz-Konfiguration und kommen aus
+# der Deploy-Env der Betreiber-Instanzen — eingelesen NUR in devlive.py
+# (dev-Instanz, Refs #1602; vererbt an demo.py, Refs #1604), dort auch die
+# CSP-Freigabe des konfigurierten Hosts. Der Release-Quelltext traegt keine
+# instanzspezifischen Hosts/IDs (Refs #1701).
 UMAMI_WEBSITE_ID = None
 UMAMI_SCRIPT_SRC = ""
 # Session-Recorder/Heatmap-Skript (nur demo.anlaufstelle.app, Refs #1604).
