@@ -10,9 +10,9 @@ python-dotenv>=1.0
 # Obergrenze <70, damit ein Major-Bump (Dependabot) den PDF-Export nicht
 # ueberraschend bricht — insb. den SSRF-url_fetcher (Refs #1610, #1596).
 weasyprint>=69.0,<70
-django-unfold>=0.100.0
+django-unfold>=0.101.0
 django-csp>=4.0
-sentry-sdk[django]>=2.64.0
+sentry-sdk[django]>=2.66.0
 pyclamd>=0.4.0
 django-otp>=1.3
 # Passkeys/WebAuthn als zweiter Faktor (ADR-032, Refs #1492). Zieht
