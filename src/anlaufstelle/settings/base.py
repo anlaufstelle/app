@@ -530,7 +530,47 @@ CONTENT_SECURITY_POLICY = {
         # AuditLog auf Schreib-Aktionen, RLS gegen Cross-Facility-Leaks.
         # Folgemigration auf reinen `@alpinejs/csp`-Build im Admin: Issue #695.
         "script-src": ["'self'"],
-        "style-src": ["'self'", "'unsafe-inline'"],
+        # style-src ist seit Refs #1660 (I5 aus #1376) strikt: kein
+        # 'unsafe-inline'. Damit blockt der Browser jedes `style="…"`-Attribut
+        # und jeden nicht freigegebenen `<style>`-Block — ein zusaetzlicher
+        # Riegel gegen CSS-basierte Hebel (UI-Redressing, Exfiltration ueber
+        # Attribut-Selektoren), falls irgendwo eine HTML-Injektion gelaenge.
+        #
+        # Nicht betroffen ist die CSSOM-API: `el.style.setProperty(...)` bzw.
+        # `el.style.display = …` sind CSP-frei — genau darueber setzen Alpine
+        # (`x-show`/`x-cloak`/`x-transition`) und Chart.js ihre Styles.
+        # Bewusst NICHT gesetzt ist 'unsafe-hashes'; die Hashes unten gelten
+        # deshalb ausschliesslich fuer `<style>`-Elemente, nie fuer Attribute.
+        #
+        # Templates duerfen keine Inline-Styles mehr enthalten — Guard:
+        # tests/test_architecture_guards_templates.py::TestNoInlineStylesGuard.
+        # Zwei dokumentierte Ausnahmen:
+        #
+        # (a) `core/export/*_pdf.html` rendern serverseitig ueber WeasyPrint zu
+        #     PDF und erreichen nie einen Browser — dort gilt keine CSP.
+        # (b) Die drei selbsttragenden Sonderseiten unten muessen auch dann
+        #     korrekt aussehen, wenn `/static/` nicht ausgeliefert wird
+        #     (500 = Serverfehler, 503 = Wartungsmodus, Static ggf. mit
+        #     abgeraeumt) oder wenn das Netz weg ist (offline.html liegt im
+        #     Service-Worker-Precache). Ihr `<style>`-Block bleibt inline und
+        #     ist per sha256 gepinnt. Hash statt Nonce, weil der SW gecachtes
+        #     HTML samt gecachtem Header ausliefert — eine Nonce im Header
+        #     passte dann nicht mehr zum gecachten Markup.
+        #
+        # Die Hashes werden aus dem Template-Quelltext berechnet (Inhalt
+        # zwischen `<style>` und `</style>`, UTF-8, byte-genau). Aendert sich
+        # dort auch nur ein Leerzeichen, faellt das im Guard-Test
+        # `test_hashed_style_blocks_are_pinned_in_csp` auf — nicht erst im
+        # Browser als ungestylte Fehlerseite.
+        "style-src": [
+            "'self'",
+            # src/templates/500.html
+            "'sha256-ihZyCwioNqKY8Y5RQ80S5h0NmUocyt17nt67LWBDkRo='",
+            # src/templates/503.html
+            "'sha256-smcD4VNUZNP7lE3q3hqIklcptwARfdDqbtDrd3iaqu8='",
+            # src/templates/offline.html
+            "'sha256-8Nca09dL0IQR+QxkyIdvyuGA1Vhg0qhdZUqzFccOUls='",
+        ],
         "img-src": ["'self'", "data:"],
         "font-src": ["'self'"],
         "connect-src": ["'self'"],

@@ -79,7 +79,13 @@ importScripts("/static/js/url-patterns.js");
 // Refs #1476 (R10): v28 -> v29 -- conflict_list.html (precachte Shell) traegt
 // jetzt den Offline-Notiz-Export-Hinweis (data-confirm-export/data-label-
 // exported). Shell-Aenderung -> Bump erzwingt Re-Install + Re-Precache.
-const CACHE_NAME = "anlaufstelle-v29";
+// Refs #1660 (I5 aus #1376): v29 -> v30 -- die style-src-Haertung aendert
+// styles.css (htmx-Indicator-Regeln + VVT-Print-Regeln wandern aus geloeschten
+// Inline-<style>-Bloecken ins Stylesheet) und base.html (htmx-config-Meta).
+// styles.css liegt UNGEHASHT im Precache: ohne Bump bekaeme ein bestehender
+// Client die neuen Regeln offline nie zu sehen und die Lade-Spinner blieben
+// dauerhaft eingeblendet. Bump erzwingt Re-Install + Re-Precache.
+const CACHE_NAME = "anlaufstelle-v30";
 // Refs #1546: Getrennter Laufzeit-Cache fuer den stale-while-revalidate-Zweig,
 // vom Namen des Precache abgeleitet — so benennt ein CACHE_NAME-Bump
 // automatisch auch den Runtime-Cache neu (alte Generation faellt im activate

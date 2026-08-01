@@ -89,7 +89,7 @@
         {# Liniendiagramm: Kontakte im Zeitverlauf (volle Breite) #}
         <div class="bg-surface rounded-[10px] border border-subtle p-5">
             <h3 class="text-[13px] font-bold text-ink-soft mb-3">{% trans "Kontakte im Zeitverlauf" %}</h3>
-            <div class="relative" style="height: 300px;">
+            <div class="relative h-[300px]">
                 <canvas id="chart-contacts"></canvas>
             </div>
             <div class="flex gap-4 mt-2 text-[12px] text-ink-muted" x-show="hasSources">
@@ -108,7 +108,7 @@
             {# Balkendiagramm: Dokumentationstypen #}
             <div class="bg-surface rounded-[10px] border border-subtle p-5">
                 <h3 class="text-[13px] font-bold text-ink-soft mb-3">{% trans "Dokumentationstypen" %}</h3>
-                <div class="relative" style="height: 300px;">
+                <div class="relative h-[300px]">
                     <canvas id="chart-doc-types"></canvas>
                 </div>
             </div>
@@ -116,7 +116,7 @@
             {# Doughnut: Altersgruppen #}
             <div class="bg-surface rounded-[10px] border border-subtle p-5">
                 <h3 class="text-[13px] font-bold text-ink-soft mb-3">{% trans "Altersgruppen" %}</h3>
-                <div class="relative" style="height: 300px;">
+                <div class="relative h-[300px]">
                     <canvas id="chart-age-clusters"></canvas>
                 </div>
             </div>

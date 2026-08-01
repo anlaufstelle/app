@@ -28,6 +28,20 @@ zerstoeren (offen bleibt nur eine tiefere Unfold-Anpassung, z. B. CSP-sicherer
 Alpine-Build oder Verzicht auf die ``theme()``-Bindung im unauthentifizierten
 Skeleton — siehe #1376).
 
+Refs #1660 (I5 aus #1376): Dieselbe eng gescopte Ausnahme gilt seit der
+``style-src``-Härtung auch für ``'unsafe-inline'`` in ``style-src``. Die
+**eigene** App kommt ohne Inline-Styles aus (Guard:
+``tests/test_architecture_guards_templates.py::TestNoInlineStylesGuard``), das
+gevendorte django-unfold nicht: ``unfold/layouts/skeleton.html`` rendert einen
+``<style id="unfold-theme-colors">``-Block, dessen Inhalt aus der
+``UNFOLD["COLORS"]``-Konfiguration **dynamisch** zusammengesetzt wird — ein
+statischer sha256-Hash ist damit prinzipiell unmöglich. Dazu kommen rund ein
+Dutzend ``style="…"``-Attribute in Unfold-Templates (Progress-Bars, Avatare,
+Sidebar). Ohne die Lockerung verlöre die Admin-UI ihr komplettes Farbschema.
+Der Trade-off ist derselbe wie bei ``unsafe-eval``: ``/admin-mgmt/`` ist auf
+``super_admin``/``facility_admin`` mit MFA- und Sudo-Mode-Pflicht beschränkt,
+rate-limited, auditiert und durch RLS gegen Cross-Facility-Leaks abgesichert.
+
 Die Middleware muss **nach** ``csp.middleware.CSPMiddleware`` registriert sein,
 damit der bereits gesetzte ``Content-Security-Policy``-Header umgeschrieben
 werden kann.
@@ -38,11 +52,16 @@ from __future__ import annotations
 import re
 
 ADMIN_PREFIX = "/admin-mgmt/"
-_SCRIPT_SRC_RE = re.compile(r"(script-src\s+[^;]*?)(?=\s*;|$)", re.IGNORECASE)
+# (Directive, Token) — pro Direktive genau eine Lockerung, idempotent.
+_RELAXATIONS = (
+    (re.compile(r"(script-src\s+[^;]*?)(?=\s*;|$)", re.IGNORECASE), "'unsafe-eval'"),
+    (re.compile(r"(style-src\s+[^;]*?)(?=\s*;|$)", re.IGNORECASE), "'unsafe-inline'"),
+)
 
 
 class AdminCSPRelaxMiddleware:
-    """Ergänzt ``unsafe-eval`` in script-src für Admin-Routes."""
+    """Ergänzt ``unsafe-eval`` in script-src und ``unsafe-inline`` in style-src
+    für Admin-Routes."""
 
     def __init__(self, get_response):
         self.get_response = get_response
@@ -60,12 +79,17 @@ class AdminCSPRelaxMiddleware:
 
         for header in ("Content-Security-Policy", "Content-Security-Policy-Report-Only"):
             csp = response.headers.get(header)
-            if not csp or "'unsafe-eval'" in csp:
+            if not csp:
                 continue
-            new_csp = _SCRIPT_SRC_RE.sub(
-                lambda m: f"{m.group(1)} 'unsafe-eval'",
-                csp,
-                count=1,
-            )
-            response.headers[header] = new_csp
+            for pattern, token in _RELAXATIONS:
+                # Idempotent: der Token darf nur genau einmal in seiner
+                # Direktive landen (Middleware kann bei Retry/Rewrite doppelt
+                # laufen). Geprueft wird gegen die Direktive selbst, nicht
+                # gegen die ganze Policy — 'unsafe-inline' in style-src darf
+                # 'unsafe-eval' in script-src nicht blockieren.
+                match = pattern.search(csp)
+                if match is None or token in match.group(1):
+                    continue
+                csp = pattern.sub(lambda m, _t=token: f"{m.group(1)} {_t}", csp, count=1)
+            response.headers[header] = csp
         return response

@@ -16,6 +16,15 @@
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    {% comment %}
+    Refs #1660: htmx injiziert seine ``.htmx-indicator``-Regeln beim Start als
+    Inline-``<style>``. Die CSP setzt ``style-src`` ohne ``'unsafe-inline'`` —
+    der Block waere stumm blockiert und jeder Lade-Spinner dauerhaft sichtbar.
+    Also Injektion aus; die Regeln stehen statisch in static/css/input.css.
+    Das Meta muss VOR htmx.min.js stehen: htmx liest die Konfiguration beim
+    DOMContentLoaded-Init (``Yn()``), unmittelbar bevor es die Styles einhaengt.
+    {% endcomment %}
+    <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
     <script src="{% static 'js/htmx.min.js' %}" defer></script>
     {% comment %}
     Alpine-Komponenten MUESSEN vor alpine-csp.min.js geladen werden, damit

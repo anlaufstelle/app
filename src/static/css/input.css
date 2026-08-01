@@ -175,8 +175,34 @@
     }
 }
 
+/* ─── htmx-Lade-Indicator (Refs #1660) ───
+   htmx bringt diese beiden Regeln selbst mit und injiziert sie beim Start als
+   Inline-``<style>`` (``config.includeIndicatorStyles``). Mit ``style-src``
+   ohne ``'unsafe-inline'`` wuerde der Browser das stumm blocken — Folge: jeder
+   ``.htmx-indicator``-Spinner (components/_htmx_spinner.html) waere dauerhaft
+   sichtbar. base.html schaltet die Injektion daher per
+   ``<meta name="htmx-config">`` ab; die Regeln stehen hier 1:1 (htmx 2.0.10)
+   und bewusst ungelayert — genau wie htmx' eigener Block, damit sie wie bisher
+   gegenueber Tailwind-Utilities (``@layer utilities``) gewinnen. */
+.htmx-indicator {
+    opacity: 0;
+    visibility: hidden;
+}
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 200ms ease-in;
+}
+
 @media print {
     nav, .no-print, button, [role="navigation"] {
+        display: none !important;
+    }
+    /* Refs #1660: vormals Inline-``<style>`` in core/system/vvt.html.
+       ``.no-print`` deckt Banner/Subnav bereits ab; der data-testid-Selektor
+       bleibt als Gurt-und-Hosentraeger fuer den Cross-Facility-Banner. */
+    [data-testid="system-cross-facility-banner"] {
         display: none !important;
     }
     body {
@@ -190,5 +216,13 @@
     }
     table, tr {
         page-break-inside: avoid;
+    }
+    /* Refs #1660: Karten-Layout im Druck (VVT-Verzeichnis) — vormals
+       ``article { … }`` im Inline-``<style>`` von core/system/vvt.html, jetzt
+       bewusst ueber eine explizite Klasse statt global auf ``article``. */
+    .print-card {
+        page-break-inside: avoid;
+        border: 1px solid #ccc !important;
+        margin-bottom: 12px;
     }
 }

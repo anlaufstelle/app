@@ -3,22 +3,12 @@
 
 {% block title %}{% trans "Verzeichnis Verarbeitungstätigkeiten (System)" %} – Anlaufstelle{% endblock %}
 
-{% block extra_head %}
-<style>
-    /* Print-CSS: Banner/Subnav verstecken, Cards zusammenhalten. */
-    @media print {
-        nav[aria-label], .no-print, [data-testid="system-cross-facility-banner"] {
-            display: none !important;
-        }
-        article {
-            page-break-inside: avoid;
-            border: 1px solid #ccc !important;
-            margin-bottom: 12px;
-        }
-    }
-</style>
-{% endblock %}
-
+{% comment %}
+Refs #1660: Das Print-CSS lag hier als Inline-``<style>`` im ``extra_head``-Block;
+mit style-src ohne 'unsafe-inline' blockt der Browser das stumm. Die Regeln stehen
+jetzt in src/static/css/input.css (@media print) — Banner/Subnav ueber ``.no-print``,
+die Karten ueber ``.print-card``.
+{% endcomment %}
 {% block content %}
 <div class="no-print">
     {% include "core/system/_banner.html" %}
@@ -49,7 +39,7 @@
 <div class="space-y-4 print:space-y-2" data-testid="system-vvt-list">
     {% for activity in activities %}
     <article id="vvt-{{ activity.id }}"
-             class="card p-5 print:p-3 print:break-inside-avoid"
+             class="card p-5 print:p-3 print:break-inside-avoid print-card"
              data-testid="system-vvt-card-{{ activity.id }}">
         <header class="mb-3 print:mb-2">
             <h2 class="text-[16px] font-semibold text-ink">{{ activity.title }}</h2>

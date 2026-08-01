@@ -1,5 +1,7 @@
 """Architecture-Guards — Template-Guards (CSP, Alpine, SVG-A11y, i18n, Kommentare) (Refs #929)."""
 
+import base64
+import hashlib
 import re
 from pathlib import Path
 
@@ -291,6 +293,182 @@ class TestAlpineCspCompatibilityGuard:
             f"Verbotene Tokens: {violations}\n"
             f"Aktueller script-src: {script_src}\n"
             "Refs #672 (CSP-Migration), #669, #618, #662."
+        )
+
+
+class TestNoInlineStylesGuard:
+    """CSP ``style-src`` ist strikt: kein ``'unsafe-inline'`` (Refs #1660, I5 aus #1376).
+
+    Ohne ``'unsafe-inline'`` blockt der Browser **stumm**
+
+    * jedes ``style="…"``-Attribut im Markup (auch ``style="--var: x"``) und
+    * jeden ``<style>``-Block, dessen Inhalt nicht per ``'sha256-…'``/Nonce
+      freigegeben ist.
+
+    Nicht blockiert ist die CSSOM-API (``el.style.setProperty(…)``) — genau
+    darüber setzen Alpine (``x-show``/``x-cloak``) und Chart.js ihre Styles.
+
+    Zwei Ausnahmen, beide bewusst:
+
+    * ``core/export/*_pdf.html`` rendern **serverseitig** über WeasyPrint
+      (``weasyprint.HTML(string=…)``) zu PDF und erreichen nie einen Browser —
+      dort gilt keine CSP.
+    * Die selbsttragenden Sonderseiten ``500.html``/``503.html``/``offline.html``
+      müssen auch dann korrekt aussehen, wenn ``/static/`` nicht ausgeliefert
+      wird (Serverfehler, Wartungsmodus) bzw. wenn das Netz weg ist
+      (Service-Worker-Precache). Ihr ``<style>``-Block bleibt inline und ist
+      per sha256-Hash in ``style-src`` gepinnt — Hashes sind gegenüber Nonces
+      stabil, weil der SW gecachtes HTML mit altem Header ausliefert.
+    """
+
+    _TEMPLATES_DIR = Path("src/templates")
+    # Serverseitig via WeasyPrint gerendert -> keine Browser-CSP.
+    _PDF_TEMPLATE_PREFIX = "core/export/"
+    # Sonderseiten mit gehashtem Inline-``<style>``.
+    _HASHED_STYLE_TEMPLATES = ("500.html", "503.html", "offline.html")
+
+    # ``style=`` als Attribut (mit fuehrendem Whitespace, um ``data-style=``
+    # o. ae. nicht zu treffen).
+    _STYLE_ATTR = re.compile(r"""\sstyle\s*=\s*["']""", re.IGNORECASE)
+    _STYLE_BLOCK = re.compile(r"<style[^>]*>(.*?)</style>", re.DOTALL | re.IGNORECASE)
+
+    @classmethod
+    def _browser_templates(cls):
+        for template_file in sorted(cls._TEMPLATES_DIR.rglob("*.html")):
+            rel = template_file.relative_to(cls._TEMPLATES_DIR).as_posix()
+            if rel.startswith(cls._PDF_TEMPLATE_PREFIX):
+                continue
+            yield rel, template_file
+
+    @staticmethod
+    def _csp_hash(block: str) -> str:
+        digest = hashlib.sha256(block.encode("utf-8")).digest()
+        return f"'sha256-{base64.b64encode(digest).decode('ascii')}'"
+
+    def test_no_style_attributes_in_browser_templates(self):
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = []
+        for rel, template_file in self._browser_templates():
+            source = template_file.read_text(errors="ignore")
+            for match in self._STYLE_ATTR.finditer(source):
+                violations.append(f"{rel}:{source[: match.start()].count('\n') + 1}")
+        assert not violations, (
+            "Diese Templates setzen Inline-``style=``-Attribute. Die CSP "
+            "(style-src ohne 'unsafe-inline') blockt die stumm — das Element "
+            "rendert ungestylt, ohne Fehlermeldung.\n"
+            "Loesung: statische Werte als Tailwind-Utility/CSS-Klasse "
+            "(src/static/css/input.css), dynamische Werte aus JS heraus per "
+            "``el.style.setProperty(...)`` (CSSOM ist CSP-frei). Auch "
+            '``style="--var: x"`` ist ein Inline-Style und braucht '
+            "'unsafe-hashes' — daher ebenfalls verboten.\n"
+            "Refs #1660 (I5 aus #1376).\n"
+            f"Betroffen: {violations}"
+        )
+
+    def test_no_unhashed_style_blocks_in_browser_templates(self):
+        if not self._TEMPLATES_DIR.exists():
+            pytest.skip(f"{self._TEMPLATES_DIR} nicht vorhanden")
+        violations = []
+        for rel, template_file in self._browser_templates():
+            if rel in self._HASHED_STYLE_TEMPLATES:
+                continue
+            source = template_file.read_text(errors="ignore")
+            if self._STYLE_BLOCK.search(source):
+                violations.append(rel)
+        assert not violations, (
+            "Diese Templates enthalten Inline-``<style>``-Bloecke. Die CSP "
+            "(style-src ohne 'unsafe-inline') blockt die stumm.\n"
+            "Loesung: CSS nach src/static/css/input.css auslagern (wird ueber "
+            "styles.css ausgeliefert). Nur selbsttragende Sonderseiten, die "
+            "OHNE /static/ funktionieren muessen, duerfen inline bleiben — "
+            "dann Hash in CONTENT_SECURITY_POLICY['DIRECTIVES']['style-src'] "
+            "eintragen und hier allowlisten.\n"
+            "Refs #1660 (I5 aus #1376).\n"
+            f"Betroffen: {violations}"
+        )
+
+    def test_hashed_style_blocks_are_pinned_in_csp(self):
+        """Jeder erlaubte Inline-``<style>``-Block muss per sha256 in
+        ``style-src`` stehen — sonst blockt der Browser ihn stumm.
+
+        Der Test rechnet die Hashes aus dem Template neu aus: schon ein
+        geaendertes Leerzeichen bricht den Hash und faellt hier auf, statt
+        erst im Browser (ungestylte Fehler-/Offline-Seite).
+        """
+        from anlaufstelle.settings.base import CONTENT_SECURITY_POLICY
+
+        style_src = CONTENT_SECURITY_POLICY["DIRECTIVES"].get("style-src", [])
+        missing = []
+        expected = []
+        for name in self._HASHED_STYLE_TEMPLATES:
+            template_file = self._TEMPLATES_DIR / name
+            if not template_file.exists():
+                pytest.skip(f"{template_file} nicht vorhanden")
+            blocks = self._STYLE_BLOCK.findall(template_file.read_text())
+            assert blocks, f"{name} enthaelt keinen <style>-Block mehr — Allowlist bereinigen."
+            for block in blocks:
+                digest = self._csp_hash(block)
+                expected.append(f"{name} -> {digest}")
+                if digest not in style_src:
+                    missing.append(f"{name} -> {digest}")
+        assert not missing, (
+            "Der Inline-``<style>``-Block dieser Sonderseiten ist nicht (mehr) "
+            "per Hash in der CSP freigegeben — der Browser blockt ihn stumm, "
+            "die Seite rendert ungestylt.\n"
+            "Loesung: Hash in src/anlaufstelle/settings/base.py "
+            "(CONTENT_SECURITY_POLICY -> style-src) aktualisieren.\n"
+            "Refs #1660.\n"
+            f"Fehlend: {missing}\n"
+            f"Soll: {expected}\n"
+            f"Aktueller style-src: {style_src}"
+        )
+
+    def test_csp_style_src_is_strict(self):
+        """``style-src`` darf kein ``'unsafe-inline'`` und kein
+        ``'unsafe-hashes'`` enthalten.
+
+        Inline-``style=``-Attribute und ungehashte ``<style>``-Bloecke sind
+        durch die Guards oben ausgeschlossen — ``'unsafe-inline'`` ist damit
+        nirgends noetig. ``'unsafe-hashes'`` wuerde die Hash-Freigabe wieder
+        auf ``style=``-Attribute ausdehnen und den Gewinn zunichtemachen.
+        """
+        from anlaufstelle.settings.base import CONTENT_SECURITY_POLICY
+
+        style_src = CONTENT_SECURITY_POLICY["DIRECTIVES"].get("style-src", [])
+        forbidden = ["'unsafe-inline'", "'unsafe-hashes'"]
+        violations = [t for t in forbidden if t in style_src]
+        assert not violations, (
+            "CSP style-src enthaelt verbotene Lockerungen. Inline-Styles sind "
+            "durch TestNoInlineStylesGuard ausgeschlossen; selbsttragende "
+            "Sonderseiten laufen ueber sha256-Hashes.\n"
+            f"Verbotene Tokens: {violations}\n"
+            f"Aktueller style-src: {style_src}\n"
+            "Refs #1660 (I5 aus #1376)."
+        )
+
+    def test_htmx_indicator_styles_are_disabled(self):
+        """htmx injiziert ohne ``includeIndicatorStyles: false`` selbst einen
+        Inline-``<style>``-Block fuer ``.htmx-indicator`` (htmx 2.0.10,
+        ``Wn()``) — der waere ohne ``'unsafe-inline'`` blockiert und alle
+        Lade-Spinner blieben dauerhaft sichtbar. base.html schaltet das per
+        ``<meta name="htmx-config">`` ab, input.css liefert die Regeln
+        statisch nach.
+        """
+        base_template = self._TEMPLATES_DIR / "base.html"
+        if not base_template.exists():
+            pytest.skip("base.html nicht vorhanden")
+        source = base_template.read_text()
+        assert 'name="htmx-config"' in source and '"includeIndicatorStyles"' in source, (
+            'base.html muss ``<meta name="htmx-config" '
+            "content='{\"includeIndicatorStyles\": false}'>`` setzen, sonst "
+            "injiziert htmx einen von der CSP blockierten Inline-<style>.\n"
+            "Refs #1660."
+        )
+        css = Path("src/static/css/input.css")
+        assert css.exists() and ".htmx-indicator" in css.read_text(), (
+            "src/static/css/input.css muss die .htmx-indicator-Regeln statisch "
+            "enthalten (Ersatz fuer die abgeschaltete htmx-Injektion).\nRefs #1660."
         )
 
 
