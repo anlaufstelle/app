@@ -46,11 +46,23 @@
 | TOMs (overview) | [TOMs](../../src/core/dsgvo_templates/toms.md) | [Operator] [Auditor] |
 | App feature "GDPR package" (bundle download) | [`DSGVOPackageView`](../../src/core/views/dsgvo.py) · [`generate_dsgvo_package`](../../src/core/management/commands/generate_dsgvo_package.py) | [Operator] [Dev] |
 
+## D2. Public demo instance — web analytics & session recording (Refs #1604)
+
+> Applies **exclusively** to the public demo `demo.anlaufstelle.app`, **not** to the self-hosted product. Self-hosted operator instances run no Umami/tracking at all.
+
+| Aspect | Rule | For |
+|---|---|---|
+| Legal basis | Art. 6(1)(a) — **opt-in consent**: tracking/recording/heatmap only start technically **after** consent is given (no silent tracking); declining is possible | [Auditor] [Operator] |
+| Scope | Umami web analytics **including session recording + heatmap** (self-hosted, `umami.example.org`); **only after login**, **not** on the sign-in page | [Auditor] [Dev] |
+| Data | exclusively **synthetic seed data** (hourly reset) — no real data subjects | [Auditor] |
+| Legal texts | Imprint + privacy policy of the [website](https://anlaufstelle.app) (linked from the demo footer + consent banner) | [Operator] |
+| Technology / CSP scoping | consent gate [`umami-consent.js`](../../src/static/js/umami-consent.js) · narrowly scoped CSP allowance [`DemoUmamiCSPRelaxMiddleware`](../../src/core/middleware/demo_umami_csp_relax.py) · [security-notes.md](../security-notes.md#eng-gescopte-ausnahme--umami-analytics-auf-der-demo-issue-1604) · [ADR-022 § (c)](../adr/022-offline-snapshot-keys.md#dsfa-tom-einordnung-des-offline-pfads-1343) | [Dev] [Auditor] |
+
 ## E. Terms
 
 Definitions (PII, k-anonymity, k-anon retention, pseudonymization, legal hold, storage limitation, soft-delete strategies) → [glossary.md](glossary.md).
 
 <!-- translation-source: docs/datenschutz.md -->
 <!-- translation-version: v0.22.0 -->
-<!-- translation-date: 2026-07-14 -->
-<!-- source-hash: 3729c4a -->
+<!-- translation-date: 2026-08-01 -->
+<!-- source-hash: 3729c4ae2d5cfc4290bc7cc3442bfcf9b5bfc82c -->

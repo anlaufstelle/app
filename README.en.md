@@ -167,6 +167,8 @@ The domain foundation is based on a diploma thesis on documentation in low-thres
 
 Contributions are welcome. Please read the [contributing guidelines](CONTRIBUTING.md) before opening a pull request.
 
+How decisions are made and who is responsible for the project is documented in [GOVERNANCE.md](GOVERNANCE.md) and [MAINTAINERS.md](MAINTAINERS.md).
+
 Report bugs and share ideas: [GitHub Issues](https://github.com/anlaufstelle/app/issues)
 
 ---
@@ -209,5 +211,5 @@ docker compose exec web python src/manage.py seed
 
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.22.0 -->
-<!-- translation-date: 2026-07-15 -->
-<!-- source-hash: d992684 -->
+<!-- translation-date: 2026-08-01 -->
+<!-- source-hash: d992684c3cff6e154783f71dedb8c87da1f59b7c -->
