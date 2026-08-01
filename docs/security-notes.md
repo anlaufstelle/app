@@ -113,6 +113,45 @@ Wer kann von der CSP-Lockerung profitieren?
 
 ---
 
+## CSP `style-src` ohne `'unsafe-inline'` (Issue #1660)
+
+**Status:** umgesetzt. `style-src` ist seit #1660 strikt — `'unsafe-inline'` ist entfernt, drei Sonderseiten laufen über sha256-Hashes, `/admin-mgmt/` behält eine eng gescopte Ausnahme.
+
+### Ausgangslage
+
+`'unsafe-inline'` in `style-src` war historisch gewachsen (Django-typisch, im Bestands-Audit als L10 „low-risk" eingestuft). Ein realer Style-Injection-Sink existierte nicht — die Erlaubnis schwächte aber die Defense-in-Depth: gelänge irgendwo eine HTML-/Attribut-Injektion, wären Inline-Styles ein zusätzlicher Hebel (UI-Redressing, Exfiltration über CSS-Attribut-Selektoren).
+
+### Umsetzung
+
+| Fundstelle | Strategie |
+|---|---|
+| `components/_password_input.html` (`style="display:none"` am Auge-durchgestrichen-SVG) | `x-cloak` — `[x-cloak]{display:none!important}` steht in `input.css`, Alpine entfernt das Attribut erst nach dem ersten `x-show`-Durchlauf |
+| `core/statistics/partials/dashboard_content.html` (3× `style="height: 300px"` an den Chart-Containern) | Tailwind-Utility `h-[300px]` |
+| `core/system/vvt.html` (`<style>` mit Print-Regeln) | ausgelagert nach `src/static/css/input.css` (`@media print`, Karten über `.print-card`) |
+| htmx-Lade-Indicator (htmx injiziert `.htmx-indicator`-Regeln selbst als Inline-`<style>`) | `<meta name="htmx-config" content='{"includeIndicatorStyles": false}'>` in `base.html`, Regeln statisch in `input.css` |
+| `500.html`, `503.html`, `offline.html` | **bleiben inline**, per `'sha256-…'` in `style-src` gepinnt |
+| `core/export/*_pdf.html` | unverändert — serverseitig via WeasyPrint zu PDF gerendert, erreichen nie einen Browser |
+
+**Warum Hash statt Auslagern bei den drei Sonderseiten:** Sie müssen genau dann korrekt aussehen, wenn der Normalpfad kaputt ist — `500.html` bei Serverfehler und ggf. defektem Static-Serving, `503.html` im Wartungsmodus, `offline.html` ohne Netz. Ein `<link rel="stylesheet">` auf `/static/css/styles.css` wäre dort die unzuverlässigste Abhängigkeit.
+
+**Warum Hash statt Nonce:** `offline.html` liegt im Service-Worker-Precache. Der SW liefert gecachtes HTML **samt gecachtem Header** aus — eine frisch generierte Nonce im Header passte nach dem ersten Cache-Treffer nicht mehr zum Markup. Hashes sind über die Cache-Generation stabil.
+
+`'unsafe-hashes'` ist bewusst **nicht** gesetzt: die Hashes gelten dadurch ausschließlich für `<style>`-Elemente, nie für `style=`-Attribute.
+
+Nicht betroffen ist die CSSOM-API: `el.style.setProperty(…)` / `el.style.display = …` unterliegt keiner CSP — genau darüber setzen Alpine (`x-show`/`x-cloak`/`x-transition`) und Chart.js ihre Styles. Blockiert wären nur Markup-`style=`-Attribute (auch `style="--var: x"`) und `el.setAttribute("style", …)`.
+
+### Ausnahme `/admin-mgmt/`
+
+[`AdminCSPRelaxMiddleware`](../src/core/middleware/admin_csp_relax.py) hängt jetzt — analog zu `'unsafe-eval'` in `script-src` (siehe Abschnitt oben / [ADR-025](adr/025-csp-unsafe-eval-admin.md)) — `'unsafe-inline'` in `style-src` an, ausschließlich für HTML-Antworten unter `/admin-mgmt/`. Grund: `unfold/layouts/skeleton.html` rendert einen `<style id="unfold-theme-colors">`-Block, dessen Inhalt aus `UNFOLD["COLORS"]` **dynamisch** zusammengesetzt wird — ein statischer Hash ist prinzipiell unmöglich. Dazu kommen rund ein Dutzend `style=`-Attribute in Unfold-Templates (Progress-Bars, Avatare, Sidebar, Change-List). Ohne die Lockerung verlöre die Admin-UI ihr komplettes Farbschema. Die Trade-off-Bewertung ist dieselbe wie bei `'unsafe-eval'`: MFA-Pflicht, Rollen-Beschränkung, Sudo-Mode, Rate-Limit, AuditLog, RLS. Der Trigger für Re-Evaluation ist ebenfalls derselbe — ein CSP-taugliches Upstream-Unfold.
+
+### Verifikation
+
+- Guards (Quelltext + Settings): [`test_architecture_guards_templates.py::TestNoInlineStylesGuard`](../src/tests/test_architecture_guards_templates.py) — verbietet neue `style=`-Attribute und neue `<style>`-Blöcke in Browser-Templates (PDF-Templates ausgenommen, drei Sonderseiten allowlistet), rechnet die gepinnten Hashes aus dem Template neu nach und verbietet `'unsafe-inline'`/`'unsafe-hashes'` in `style-src`.
+- Ende-zu-Ende (ausgelieferter Header vs. gerendertes Markup): [`test_csp_style_src.py`](../src/tests/test_csp_style_src.py).
+- Admin-Ausnahme: [`test_admin_csp_relax.py::TestAdminCSPRelaxStyleSrc`](../src/tests/test_admin_csp_relax.py).
+
+---
+
 ## Klartext-Freitexte ausserhalb des Sensitivity-Modells (Issue #716)
 
 **Status:** Inventarisierung + UI-Warnung umgesetzt; feldweise Encryption deferred bis post-v1.0 (Audit-Item 17).
