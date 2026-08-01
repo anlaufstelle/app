@@ -31,8 +31,9 @@ Architektur- und Plattformentscheidungen werden als ADR unter
 [`docs/adr/`](docs/adr/) dokumentiert. Format, Kriterien („wann eine neue ADR")
 und Nummerierung sind in [docs/adr/README.md](docs/adr/README.md) beschrieben
 (schlankes MADR-Light, fortlaufend nummeriert, überholte ADRs werden auf
-`Superseded` gesetzt statt gelöscht). Die aktuell höchste vergebene Nummer ist
-**ADR-032**; die nächste freie Nummer ist entsprechend fortlaufend zu wählen.
+`Superseded` gesetzt statt gelöscht). Die nächste freie Nummer ergibt sich
+fortlaufend aus dem Index in [docs/adr/README.md](docs/adr/README.md) — dort steht
+der aktuelle Stand; eine hier fest eingetragene Nummer würde nur veralten.
 
 Eine ADR ist der reguläre Weg, eine getroffene Grundsatzentscheidung
 nachvollziehbar zu machen — auch im Solo-Betrieb, gerade damit spätere Maintainer

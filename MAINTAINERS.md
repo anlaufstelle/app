@@ -25,13 +25,24 @@ Person aus, steht das Projekt ohne handlungsfähige Zweitperson da.
 **Aktuell ist keine Vertretung benannt.** Es wird hier bewusst **keine** Person
 erfunden oder in Aussicht gestellt.
 
-Die eigene CRA-Einordnung fordert, dass **vor dem 11.09.2026** eine Vertretung
-benannt wird, damit die behördliche 24-Stunden-Frühwarnfrist auch bei Ausfall der
-Hauptperson eingehalten werden kann
+Die eigene CRA-Einordnung sieht **zum 11.09.2026** eine Wiedervorlage vor, zu der
+eine Vertretung benannt sein soll, damit die 24-Stunden-Frühwarnfrist auch bei
+Ausfall der Hauptperson eingehalten werden kann
 ([docs/compliance/cra-einordnung.md § 3/§ 4](docs/compliance/cra-einordnung.md)).
-Das ist eine **organisatorische Personalentscheidung** des Maintainers, keine rein
-dokumentarische Aufgabe — dieser Abschnitt kann sie nur sichtbar halten, nicht
-ersetzen.
+
+**Einordnung dieser Frist:** Nach der eigenen Scope-Einschätzung liegt das Projekt
+im heutigen Betriebsmodell (quelloffen, kostenlos, kein Hosting-/SaaS-Angebot)
+**außerhalb des CRA-Anwendungsbereichs**; einschlägig wären allenfalls die
+anteiligen Meldepflichten des Verwalter-Light-Regimes (Art. 24)
+([docs/compliance/cra-einordnung.md § 1.4](docs/compliance/cra-einordnung.md)).
+Die Frist ist damit **keine bereits feststehende Rechtspflicht**, sondern eine
+selbst gesetzte Vorsichtsmarke — sie wird verbindlich, sobald das Betriebsmodell
+wechselt (kostenpflichtiges Hosting/SaaS, Produktverkauf, kommerzialisierte Demo).
+Unabhängig von der CRA bleibt die Vertretung schon wegen des Bus-Faktors 1 sinnvoll.
+
+Die Benennung selbst ist eine **organisatorische Personalentscheidung** des
+Maintainers, keine rein dokumentarische Aufgabe — dieser Abschnitt kann sie nur
+sichtbar halten, nicht ersetzen.
 
 Zur Vertretung gehören mindestens:
 
