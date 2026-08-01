@@ -575,6 +575,29 @@ docker compose -f docker-compose.prod.yml exec caddy \
 
 **Rollout-Hinweis:** Diese Aenderung selbst braucht nach dem Deploy ebenfalls einen Caddy-Reload (obiger Befehl, Dateipfad je nach Compose-Variante anpassen) — ein reiner Web-Container-Neustart laedt keine neue Caddyfile-Config.
 
+### 5.7a Upload-Temp-Verzeichnis (Klartext-Zwischenpuffer, Refs #1661)
+
+**Hintergrund:** Uploads oberhalb von `FILE_UPLOAD_MAX_MEMORY_SIZE` (Default 2,5 MB) puffert Django als **Klartext-Tempdatei** auf Platte, bevor sie von `core/services/file_vault/storage.py` gescannt und verschluesselt werden. Ohne explizites `FILE_UPLOAD_TEMP_DIR` faellt Django auf `tempfile.gettempdir()` zurueck (i. d. R. `/tmp`). Das ist nur ein kurzes Zeitfenster, aber unverschluesselter Klienten-Content liegt fuer diesen Moment auf Disk.
+
+**Gegenmassnahme:** `docker-compose.prod.yml`/`staging.yml`/`demo.yml`/`dev.yml` mounten `/tmp` im `web`-Container bereits als **tmpfs** (RAM) — noetig, weil der Container `read_only` laeuft (Refs #1374). `FILE_UPLOAD_TEMP_DIR=/tmp` ist dort explizit im `environment:`-Block der jeweiligen Compose-Datei gesetzt und pinnt Djangos Upload-Puffer nachweislich auf dieses tmpfs, statt sich auf Pythons `TMPDIR`-Ermittlungsreihenfolge zu verlassen (ein spaeter versehentlich gesetztes `TMPDIR` wuerde den impliziten Fallback sonst unbemerkt von tmpfs weg auf ein persistentes Volume umlenken). Der Tempdatei-Inhalt existiert also nur fluechtig im RAM und ist beim Container-Neustart weg — kein Aufraeum-Cronjob noetig.
+
+```bash
+# Verifizieren, dass /tmp im web-Container tatsaechlich ein tmpfs ist
+docker compose -f docker-compose.prod.yml exec web mount | grep "on /tmp"
+# erwartet: "tmpfs on /tmp type tmpfs (rw,...)"
+
+# Aktuell gesetzten Wert pruefen
+docker compose -f docker-compose.prod.yml exec web printenv FILE_UPLOAD_TEMP_DIR
+```
+
+**Fallback ohne tmpfs:** Auf einem Bare-Metal-Deploy oder einer individuell orchestrierten Umgebung ohne tmpfs-Mount (kein Docker Compose, eigenes Kubernetes-Manifest, o. ae.) bewirkt `FILE_UPLOAD_TEMP_DIR` allein nichts, wenn der referenzierte Pfad kein tmpfs ist — der Klartext-Puffer landet dann auf demselben Storage wie der Rest des Dateisystems. Optionen fuer Betreiber ohne tmpfs:
+
+1. **Eigenes tmpfs mounten** und `FILE_UPLOAD_TEMP_DIR` darauf zeigen lassen (bevorzugt) — z. B. `mount -t tmpfs -o size=512M,mode=1777 tmpfs /path/to/upload-tmp` und `FILE_UPLOAD_TEMP_DIR=/path/to/upload-tmp` setzen.
+2. **Verschluesseltes Volume** (LUKS/dm-crypt o. ae.) als Temp-Ziel verwenden, falls RAM-Kapazitaet fuer grosse Uploads knapp ist.
+3. **Variable unset lassen** und das Restrisiko bewusst akzeptieren — das kurze Klartext-Fenster bleibt dann auf dem regulaeren (unverschluesselten) Dateisystem-Storage bestehen. `python manage.py check --deploy` warnt in diesem Fall (`core.W002`) beim Start, damit die Entscheidung sichtbar getroffen wird statt still zu passieren.
+
+Ein voller RAM-Buffer statt Disk-Streaming (`FILE_UPLOAD_MAX_MEMORY_SIZE` sehr hoch setzen) ist **kein** Ersatz: das wuerde grosse Uploads komplett im Prozessspeicher halten (DoS-Risiko bei mehreren parallelen Uploads) statt das Zeitfenster zu schliessen.
+
 ---
 
 ## 6. Notfall-Prozeduren

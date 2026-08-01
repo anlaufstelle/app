@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551).
+> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), and 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661).
 
 # Anlaufstelle -- Admin Guide
 
@@ -218,6 +218,7 @@ Service-layer hard limits as defense-in-depth (independent of the per-facility c
 | Name | Default | Description |
 |---|---|---|
 | `MEDIA_ROOT` | `<BASE_DIR>/media` | Storage location for encrypted file attachments (see [§ 2.9](#29-encrypted-file-vault--virus-scanning)). |
+| `FILE_UPLOAD_TEMP_DIR` | Django default (`tempfile.gettempdir()`) | Directory for the plaintext staging buffer of uploads > `FILE_UPLOAD_MAX_MEMORY_SIZE`, before they are encrypted into the file vault (see [§ 2.9](#29-encrypted-file-vault--virus-scanning)). Pinned to `/tmp` (tmpfs/RAM) in the shipped Compose files -- [ops runbook § 5.7a](../ops-runbook.md). |
 | `BACKUP_DIR` | `<repo>/backups` | Storage directory for the encrypted DB backups (`.sql.gz.enc`); the health endpoint reads the backup age from it. |
 | `APP_VERSION` | `dev` | Version string that `/health/` exposes in the `version` detail field (token/authenticated callers only). |
 | `SUDO_MODE_TTL_SECONDS` | `900` | Validity duration (seconds) of the re-auth window for sensitive actions (MFA disable, GDPR export). |
@@ -704,6 +705,8 @@ File attachments (photos, scans, documents) on events are stored in an **encrypt
  - Virus detected → the upload is discarded and an audit-log entry is written.
 4. The payload is encrypted with AES-GCM (write key = first entry in `ENCRYPTION_KEYS`) and stored under `MEDIA_ROOT`.
 5. Downloads happen exclusively through the protected Django view (no direct webserver access to `MEDIA_ROOT`).
+
+> **Plaintext staging buffer** (#1661): Uploads above `FILE_UPLOAD_MAX_MEMORY_SIZE` (default 2.5 MB) are buffered by Django as a plaintext temp file on disk (`FILE_UPLOAD_TEMP_DIR`) before step 3, ahead of scanning and encryption. In the shipped Compose files this buffer lives on a `/tmp` tmpfs (RAM) rather than persistent storage. Details, verification, and fallback options without tmpfs: [ops runbook § 5.7a](../ops-runbook.md).
 
 #### ClamAV Service (`docker-compose.prod.yml`)
 
@@ -1406,4 +1409,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.22.0 -->
 <!-- translation-date: 2026-07-14 -->
-<!-- source-hash: ae175f8 -->
+<!-- source-hash: f9f8ad2 -->

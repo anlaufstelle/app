@@ -215,6 +215,7 @@ Service-Layer-Obergrenzen als Defense-in-Depth (greifen unabhängig von der per-
 | Name | Default | Beschreibung |
 |---|---|---|
 | `MEDIA_ROOT` | `<BASE_DIR>/media` | Ablage verschlüsselter Dateianhänge (siehe [§ 2.9](#29-encrypted-file-vault--virus-scanning)). |
+| `FILE_UPLOAD_TEMP_DIR` | Django-Default (`tempfile.gettempdir()`) | Verzeichnis für den Klartext-Zwischenpuffer von Uploads > `FILE_UPLOAD_MAX_MEMORY_SIZE`, bevor sie in den File-Vault verschlüsselt werden (siehe [§ 2.9](#29-encrypted-file-vault--virus-scanning)). In den mitgelieferten Compose-Dateien fest auf `/tmp` (tmpfs/RAM) gesetzt — [Ops-Runbook § 5.7a](ops-runbook.md). |
 | `BACKUP_DIR` | `<Repo>/backups` | Ablageverzeichnis der verschlüsselten DB-Backups (`.sql.gz.enc`); der Health-Endpoint liest daraus das Backup-Alter. |
 | `APP_VERSION` | `dev` | Versions-String, den `/health/` im `version`-Detailfeld ausweist (nur für Token-/authentifizierte Caller). |
 | `SUDO_MODE_TTL_SECONDS` | `900` | Gültigkeitsdauer (Sekunden) des Re-Auth-Fensters für sensible Aktionen (MFA-Disable, DSGVO-Export). |
@@ -707,6 +708,8 @@ Dateianhänge (Fotos, Scans, Dokumente) an Ereignissen werden in einem **verschl
  - Erkannter Virus → Upload wird verworfen, ein Audit-Log-Eintrag wird geschrieben.
 4. Inhalt wird chunk-weise mit Fernet (MultiFernet) verschlüsselt (Write-Key = erster Eintrag aus `ENCRYPTION_KEYS`) und in `MEDIA_ROOT` gespeichert.
 5. Download erfolgt ausschließlich über die geschützte Django-View (kein direkter Webserver-Zugriff auf `MEDIA_ROOT`).
+
+> **Klartext-Zwischenpuffer (Refs #1661):** Uploads oberhalb von `FILE_UPLOAD_MAX_MEMORY_SIZE` (Default 2,5 MB) puffert Django vor Schritt 3 als Klartext-Tempdatei auf Platte (`FILE_UPLOAD_TEMP_DIR`), bevor sie gescannt und verschlüsselt werden. In den mitgelieferten Compose-Dateien liegt dieser Puffer auf einem `/tmp`-tmpfs (RAM) statt auf persistentem Storage. Details, Verifikation und Fallback-Optionen ohne tmpfs: [Ops-Runbook § 5.7a](ops-runbook.md).
 
 #### ClamAV-Service (`docker-compose.prod.yml`)
 

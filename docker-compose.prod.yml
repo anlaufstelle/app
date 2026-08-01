@@ -68,7 +68,10 @@ services:
     # Caps). read_only-Root-FS mit definiertem Schreib-Scratch: /tmp
     # (Django-Upload-Tempfiles > 2,5 MB + Gunicorn-Worker-Heartbeat) und
     # /app/staticfiles (Entrypoint-collectstatic + WhiteNoise-Manifest);
-    # MEDIA_ROOT liegt auf dem beschreibbaren media-Volume.
+    # MEDIA_ROOT liegt auf dem beschreibbaren media-Volume. FILE_UPLOAD_TEMP_DIR
+    # unten pinnt Djangos Upload-Klartext-Puffer explizit auf dieses tmpfs
+    # (RAM) statt sich auf den impliziten tempfile.gettempdir()-Fallback zu
+    # verlassen (Refs #1661).
     security_opt:
       - "no-new-privileges:true"
     cap_drop:
@@ -98,6 +101,10 @@ services:
       # (docker-migrate.sh) überschreibt POSTGRES_USER auf die Admin-Rolle; ohne
       # diese Variable prüfte das Rollen-Gate fälschlich die Admin- statt App-Rolle.
       POSTGRES_APP_USER: ${POSTGRES_USER}
+      # Upload-Klartext-Puffer (> FILE_UPLOAD_MAX_MEMORY_SIZE) explizit auf das
+      # /tmp-tmpfs (RAM) pinnen, statt sich auf Djangos impliziten
+      # tempfile.gettempdir()-Fallback zu verlassen (Refs #1661).
+      FILE_UPLOAD_TEMP_DIR: /tmp
     volumes:
       # Persistenter Mount fuer MEDIA_ROOT (=/data/media) — verhindert
       # stillen Datenverlust bei docker compose pull && up -d.

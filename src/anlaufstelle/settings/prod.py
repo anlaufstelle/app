@@ -149,6 +149,25 @@ SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
 DATA_UPLOAD_MAX_MEMORY_SIZE = 2_621_440  # 2.5 MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2_621_440  # 2.5 MB
 
+# --- Upload-Temp-Verzeichnis (RAM/tmpfs, Refs #1661, I7 aus #1376) ---
+# Uploads oberhalb von FILE_UPLOAD_MAX_MEMORY_SIZE puffert Django als
+# KLARTEXT-Tempdatei auf Platte, bevor der File-Vault sie scannt und
+# verschlüsselt (core/services/file_vault/storage.py). Ohne explizites
+# FILE_UPLOAD_TEMP_DIR fällt Django auf tempfile.gettempdir() zurück — in den
+# mitgelieferten Compose-Dateien (docker-compose.prod/staging/demo/dev.yml)
+# ist /tmp dort bereits ein tmpfs-Mount (RAM, Schreib-Scratch für den
+# read_only-Root-FS, #1374), der implizite Fallback landet also ohnehin im
+# RAM. Das Setting hier macht diese Annahme explizit/auditierbar statt sich
+# auf Pythons TMPDIR-Ermittlungsreihenfolge zu verlassen (ein später
+# gesetztes TMPDIR würde den impliziten Fallback sonst unbemerkt von tmpfs
+# weg umlenken) — die Compose-Dateien setzen die Variable entsprechend auf
+# den gemounteten tmpfs-Pfad. Leer/unset behält den Django-Default für
+# Umgebungen ohne tmpfs (Fallback-Doku: docs/ops-runbook.md § 5.7a;
+# core.W002 warnt beim Deploy-Check, falls die Variable fehlt).
+_file_upload_temp_dir = os.environ.get("FILE_UPLOAD_TEMP_DIR", "").strip()
+if _file_upload_temp_dir:
+    FILE_UPLOAD_TEMP_DIR = _file_upload_temp_dir
+
 # --- E-Mail (SMTP) ---
 # Für Passwort-zurücksetzen und andere E-Mail-Funktionen.
 # Konfiguration via Umgebungsvariablen:

@@ -15,7 +15,11 @@ from pathlib import Path
 
 from django.test import override_settings
 
-from core.checks import check_media_root_persistent, check_trusted_proxy_hops
+from core.checks import (
+    check_file_upload_temp_dir_configured,
+    check_media_root_persistent,
+    check_trusted_proxy_hops,
+)
 
 
 def _ids(messages):
@@ -73,3 +77,31 @@ class TestMediaRootPersistentCheck:
         # Container) aufgeloest und liegt damit ebenfalls unter BASE_DIR.
         messages = check_media_root_persistent(None)
         assert "core.E002" in _ids(messages)
+
+
+class TestFileUploadTempDirCheck:
+    """#1661: FILE_UPLOAD_TEMP_DIR sollte in Produktion explizit gesetzt sein,
+    damit der Klartext-Zwischenpuffer fuer Uploads > FILE_UPLOAD_MAX_MEMORY_SIZE
+    nachweislich auf einem tmpfs/verschluesselten Volume liegt, statt sich auf
+    Pythons impliziten tempfile.gettempdir()-Fallback zu verlassen. Nur eine
+    Warnung (kein Error) — anders als core.E002/MEDIA_ROOT bricht ein fehlendes
+    FILE_UPLOAD_TEMP_DIR den Betrieb nicht, es ist ein Haertungshinweis."""
+
+    @override_settings(DEBUG=True, FILE_UPLOAD_TEMP_DIR=None)
+    def test_debug_skips_check(self):
+        # dev/tests nutzen bewusst keinen expliziten Upload-Tmp-Pfad.
+        assert check_file_upload_temp_dir_configured(None) == []
+
+    @override_settings(DEBUG=False, FILE_UPLOAD_TEMP_DIR="/mnt/tmpfs-uploads")
+    def test_configured_is_clean(self):
+        assert check_file_upload_temp_dir_configured(None) == []
+
+    @override_settings(DEBUG=False, FILE_UPLOAD_TEMP_DIR=None)
+    def test_unset_warns(self):
+        messages = check_file_upload_temp_dir_configured(None)
+        assert "core.W002" in _ids(messages)
+
+    @override_settings(DEBUG=False, FILE_UPLOAD_TEMP_DIR="")
+    def test_blank_warns(self):
+        messages = check_file_upload_temp_dir_configured(None)
+        assert "core.W002" in _ids(messages)

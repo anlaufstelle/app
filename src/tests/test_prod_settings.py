@@ -61,6 +61,11 @@ def _run_prod_import(env_overrides, code="import anlaufstelle.settings.prod  # n
         # eine lokale .env den DatabaseCache-Default-Test nicht per dotenv-
         # Durchgriff auf RedisCache kippt.
         "REDIS_URL": "",
+        # Refs #1661: analog REDIS_URL — ohne Vorbelegung koennte eine lokale
+        # .env (z. B. FILE_UPLOAD_TEMP_DIR=/tmp) per load_dotenv(override=False)
+        # durchgreifen und den "unset bleibt Django-Default"-Test faelschlich
+        # gruen/rot faerben.
+        "FILE_UPLOAD_TEMP_DIR": "",
     }
     env.update(env_overrides)
     result = subprocess.run(
@@ -420,3 +425,49 @@ class TestProdAllowedHostsWildcardGuard:
         und duerfen den Guard nicht ausloesen."""
         result = _run_prod_import({**self._VALID_ENV, "ALLOWED_HOSTS": "example.org,.example.org"})
         assert result.returncode == 0, f"prod import failed: {result.stderr}"
+
+
+class TestProdFileUploadTempDir:
+    """Refs #1661 (I7 aus #1376): Uploads oberhalb von
+    FILE_UPLOAD_MAX_MEMORY_SIZE puffert Django als Klartext-Tempdatei auf
+    Platte, bevor sie verschluesselt in den File-Vault wandern
+    (core/services/file_vault/storage.py). FILE_UPLOAD_TEMP_DIR muss aus der
+    Umgebung durchgereicht werden, damit Betreiber diesen Puffer explizit auf
+    ein tmpfs/verschluesseltes Volume legen koennen, statt sich auf Pythons
+    impliziten tempfile.gettempdir()-Fallback zu verlassen."""
+
+    _VALID_ENV = {
+        "DJANGO_SECRET_KEY": "x" * 50,
+        "ALLOWED_HOSTS": "example.org",
+        "ENCRYPTION_KEY": "Zm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZm9vYmFyZmE=",
+        "DJANGO_AUDIT_HASH_KEY": "y" * 50,
+    }
+
+    _READBACK = (
+        "import json, anlaufstelle.settings.prod as p; "
+        "print(json.dumps({'temp_dir': getattr(p, 'FILE_UPLOAD_TEMP_DIR', None)}))"
+    )
+
+    def _resolved(self, env_overrides=None):
+        result = _run_prod_import({**self._VALID_ENV, **(env_overrides or {})}, code=self._READBACK)
+        assert result.returncode == 0, f"prod import failed: {result.stderr}"
+        return json.loads(result.stdout.strip().splitlines()[-1])
+
+    def test_unset_keeps_django_default(self):
+        """Kein FILE_UPLOAD_TEMP_DIR gesetzt → Django faellt auf seinen
+        eigenen Default (None → tempfile.gettempdir()) zurueck; prod.py darf
+        das Setting dann nicht auf einen leeren String o.ae. erzwingen."""
+        assert self._resolved()["temp_dir"] is None
+
+    def test_env_var_is_passed_through(self):
+        # Ein beliebiger Pfad genuegt hier - geprueft wird nur die
+        # Durchreichung, nicht der konkrete Compose-Wert (der ist "/tmp",
+        # siehe docker-compose.prod.yml, aber ein Literal-"/tmp" triggert
+        # Ruffs S108-Regel fuer Test-Code).
+        resolved = self._resolved({"FILE_UPLOAD_TEMP_DIR": "/mnt/tmpfs-uploads"})
+        assert resolved["temp_dir"] == "/mnt/tmpfs-uploads"
+
+    def test_blank_env_var_keeps_django_default(self):
+        """Eine leer gesetzte Variable (z. B. `FILE_UPLOAD_TEMP_DIR=` in .env)
+        darf nicht als expliziter Leerstring-Pfad durchgereicht werden."""
+        assert self._resolved({"FILE_UPLOAD_TEMP_DIR": ""})["temp_dir"] is None

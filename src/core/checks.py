@@ -113,3 +113,51 @@ def check_media_root_persistent(app_configs, **kwargs):
         )
 
     return messages
+
+
+@register()
+def check_file_upload_temp_dir_configured(app_configs, **kwargs):
+    """Warnt, wenn ``FILE_UPLOAD_TEMP_DIR`` in Produktion nicht gesetzt ist (Refs #1661).
+
+    Uploads oberhalb von ``FILE_UPLOAD_MAX_MEMORY_SIZE`` puffert Django als
+    **Klartext**-Tempdatei auf Platte, bevor sie gescannt und verschlüsselt in
+    den File-Vault wandern (``core/services/file_vault/storage.py``). Ohne
+    explizites ``FILE_UPLOAD_TEMP_DIR`` fällt Django auf
+    ``tempfile.gettempdir()`` zurück — in den mitgelieferten Compose-Dateien
+    (docker-compose.prod/staging/demo/dev.yml) ist ``/tmp`` dort bereits ein
+    tmpfs-Mount (RAM, Schreib-Scratch für den ``read_only``-Root-FS, #1374),
+    der implizite Fallback landet also ohnehin im RAM. Auf einem
+    Bare-Metal-/individuell orchestrierten Deploy ohne tmpfs würde derselbe
+    Fallback den Klartext-Puffer dagegen still auf persistentem,
+    unverschlüsseltem Storage ablegen.
+
+    Nur eine **Warnung** (kein Error): anders als bei ``core.E002``/MEDIA_ROOT
+    bricht ein fehlendes ``FILE_UPLOAD_TEMP_DIR`` den Betrieb nicht — es ist
+    ein Härtungshinweis, kein Funktionsbruch. Fallback-Verhalten für
+    Umgebungen ohne tmpfs: docs/ops-runbook.md § 5.7a.
+
+    Nur unter ``DEBUG=False`` aktiv — dev/tests nutzen bewusst keinen
+    expliziten Upload-Tmp-Pfad. Während ``collectstatic`` wird nicht gewarnt
+    (analog zu den prod.py-Guards).
+    """
+    messages = []
+    if settings.DEBUG or "collectstatic" in sys.argv:
+        return messages
+
+    if not getattr(settings, "FILE_UPLOAD_TEMP_DIR", None):
+        messages.append(
+            Warning(
+                "FILE_UPLOAD_TEMP_DIR ist nicht gesetzt.",
+                hint=(
+                    "Uploads oberhalb von FILE_UPLOAD_MAX_MEMORY_SIZE puffert Django als "
+                    "Klartext-Tempdatei auf Platte, bevor sie verschlüsselt in den File-Vault "
+                    "wandern. Setze FILE_UPLOAD_TEMP_DIR auf ein tmpfs (RAM) oder "
+                    "verschlüsseltes Volume, z. B. FILE_UPLOAD_TEMP_DIR=/tmp bei einem "
+                    "gemounteten tmpfs (wie in docker-compose.prod.yml). Fallback-Hinweis für "
+                    "Umgebungen ohne tmpfs: docs/ops-runbook.md § 5.7a."
+                ),
+                id="core.W002",
+            )
+        )
+
+    return messages

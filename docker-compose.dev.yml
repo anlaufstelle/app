@@ -98,6 +98,9 @@ services:
     # (Django-Upload-Tempfiles > 2,5 MB + Gunicorn-Worker-Heartbeat) und
     # /app/staticfiles (Entrypoint-collectstatic + WhiteNoise-Manifest);
     # MEDIA_ROOT + BACKUP_DIR liegen auf beschreibbaren Mounts.
+    # FILE_UPLOAD_TEMP_DIR unten pinnt Djangos Upload-Klartext-Puffer explizit
+    # auf dieses tmpfs (RAM) statt sich auf den impliziten
+    # tempfile.gettempdir()-Fallback zu verlassen (Refs #1661).
     security_opt:
       - "no-new-privileges:true"
     cap_drop:
@@ -129,6 +132,10 @@ services:
       CLAMAV_HOST: clamav
       # Refs #1017: Stabiler App-Rollenname für check_db_roles (siehe prod-Compose).
       POSTGRES_APP_USER: ${POSTGRES_USER}
+      # Upload-Klartext-Puffer (> FILE_UPLOAD_MAX_MEMORY_SIZE) explizit auf das
+      # /tmp-tmpfs (RAM) pinnen, statt sich auf Djangos impliziten
+      # tempfile.gettempdir()-Fallback zu verlassen (Refs #1661).
+      FILE_UPLOAD_TEMP_DIR: /tmp
     volumes:
       - media_dev:/data
       # Refs #871: BACKUP_DIR aus .env.dev (Default /var/backups/anl) muss
