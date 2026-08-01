@@ -2,6 +2,7 @@
 
 import base64
 import hashlib
+import json
 import re
 from pathlib import Path
 
@@ -469,6 +470,30 @@ class TestNoInlineStylesGuard:
         assert css.exists() and ".htmx-indicator" in css.read_text(), (
             "src/static/css/input.css muss die .htmx-indicator-Regeln statisch "
             "enthalten (Ersatz fuer die abgeschaltete htmx-Injektion).\nRefs #1660."
+        )
+
+    def test_htmx_does_not_settle_style_attributes(self):
+        """htmx settled per Default ``class,style,width,height`` zwischen
+        id-gleichen Swap-Elementen via ``setAttribute`` — fuer ``style`` ist das
+        unter ``style-src`` ohne ``'unsafe-hashes'`` ein stummer CSP-Verstoss
+        (Konsolen-/csp-report-Rauschen; Befund R12 aus dem Persona-Pilot
+        #1501; Material sind von Alpine ``x-show`` materialisierte
+        ``style``-Attribute). base.html muss ``attributesToSettle`` OHNE
+        ``style`` konfigurieren.
+        """
+        base_template = self._TEMPLATES_DIR / "base.html"
+        if not base_template.exists():
+            pytest.skip("base.html nicht vorhanden")
+        source = base_template.read_text()
+        match = re.search(r'name="htmx-config"\s+content=\'(?P<cfg>\{.*?\})\'', source)
+        assert match, 'base.html: <meta name="htmx-config"> nicht gefunden.'
+        config = json.loads(match.group("cfg"))
+        settle = config.get("attributesToSettle")
+        assert settle is not None and "style" not in settle, (
+            "htmx-config in base.html muss attributesToSettle ohne 'style' "
+            'setzen (z. B. ["class", "width", "height"]) — sonst kopiert '
+            "der Settle-Schritt style-Attribute per setAttribute und die CSP "
+            "blockiert das als Inline-Style.\nRefs #1660, #1501 (R12)."
         )
 
 
