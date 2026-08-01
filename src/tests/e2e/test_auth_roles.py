@@ -229,27 +229,39 @@ class TestPasswordToggle:
 class TestZZAccountLockout:
     """Account-Lockout nach Schwelle (Refs #612). ZZ-Prefix, da mehrere
     AuditLog-Einträge in die Session geschrieben werden und andere Auth-Tests
-    auf einen sauberen Zustand angewiesen sind."""
+    auf einen sauberen Zustand angewiesen sind.
+
+    WICHTIG: Der Lockout-Block-Test darf KEINEN User mit geteiltem
+    Storage-State (miriam/lena/emma/admin) verwenden: Seit R18 (Refs
+    #1476/#1666) behandelt die Login-View einen korrekten Passwort-Login
+    gegen ein gesperrtes Konto als Revocation-Ereignis und flusht ALLE
+    Sessions des Users — der session-gescopte Storage-State wäre für den
+    Rest der Suite tot (jeder spätere Test der Rolle landet auf /login/).
+    Deshalb läuft der Test mit dem sonst ungenutzten Seed-User ``markus``
+    (STAFF wie miriam)."""
 
     @pytest.fixture(autouse=True)
     def _cleanup_lockout_state(self, e2e_env):
-        """Räumt LOGIN_FAILED-Counts für miriam + lena nach jedem Test auf,
-        damit ``_staff_storage_state`` / ``_assistant_storage_state`` und andere
-        Auth-Fixtures sich nicht plötzlich gegen einen gesperrten User
-        einloggen müssen.
+        """Räumt LOGIN_FAILED-Counts für markus + lena nach jedem Test auf,
+        damit sich Folge-Logins (z. B. spätere Fixture-Neuanlagen) nicht
+        gegen einen gesperrten User einloggen müssen.
         """
         yield
-        _clear_lockout_for(["miriam", "lena"], e2e_env)
+        _clear_lockout_for(["markus", "lena"], e2e_env)
 
     def test_lockout_blocks_correct_password_login(self, base_url, browser, e2e_env):
-        """10 LOGIN_FAILED → auch korrektes Passwort blockiert, Fehlermeldung sichtbar."""
-        _seed_failed_logins_and_check_lock("miriam", e2e_env, n=10)
+        """10 LOGIN_FAILED → auch korrektes Passwort blockiert, Fehlermeldung sichtbar.
+
+        Nutzt bewusst ``markus`` (kein Storage-State-User, s. Klassen-Docstring):
+        der R18-Zweig der Login-View flusht beim Treffer die Sessions des Users.
+        """
+        _seed_failed_logins_and_check_lock("markus", e2e_env, n=10)
 
         context = browser.new_context(locale="de-DE")
         page = context.new_page()
         try:
             page.goto(f"{base_url}/login/")
-            page.fill('input[name="username"]', "miriam")
+            page.fill('input[name="username"]', "markus")
             page.fill('input[name="password"]', "anlaufstelle2026")
             page.click('button[type="submit"]')
 
