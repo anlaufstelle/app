@@ -1035,6 +1035,8 @@ Operating the tracker instance (setup, backups, retention, upgrades) is operator
 
 The `detect_breaches` management command heuristically analyzes the audit log for anomalies (failed-login bursts, mass exports/deletions, distributed login attacks) and writes hits as audit events; optionally a webhook (`BREACH_NOTIFICATION_WEBHOOK_URL`) is notified. The windows/thresholds are controlled via the `BREACH_*` variables (see the [ENV reference in § 1](#full-environment-variable-reference) as well as [ops runbook § 6.5b](../ops-runbook.md)).
 
+> **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only to deployments **without** that compose file (Coolify, k8s, custom orchestration). Setting up both makes the job run twice — details and migration steps: [ops runbook § 3](../ops-runbook.md#3-cron-jobs).
+
 **Recommended cron (hourly, at minute 30):**
 
 ```cron
@@ -1044,7 +1046,7 @@ The `detect_breaches` management command heuristically analyzes the audit log fo
   >> /var/log/anlaufstelle-breach.log 2>&1
 ```
 
-> **Note:** The complete, authoritative list of all background jobs including their schedule (backup, retention, audit chain verification, statistics snapshots, orphan cleanup, breach scan, view refresh) is in the [ops runbook § 3](../ops-runbook.md#3-cron-jobs). In the recommended systemd timer setup these jobs are installed centrally via `dev-ops/deploy/install-timers.sh` (the breach scan runs there as `anlaufstelle-breach.timer`, likewise hourly at minute 30).
+> **Note:** The complete, authoritative list of all background jobs including their schedule (backup, retention, audit chain verification, statistics snapshots, orphan cleanup, breach scan, view refresh) is in the [ops runbook § 3](../ops-runbook.md#3-cron-jobs). In the bundled compose stack they run in the `cron` sidecar (`deploy/crontab`); on the dev server they run as systemd timers via `dev-ops/deploy/install-timers.sh` — in both cases the breach scan runs hourly at minute 30.
 
 ---
 
@@ -1204,6 +1206,8 @@ docker compose -f docker-compose.prod.yml exec web \
   python manage.py enforce_retention --facility "Beratungsstelle Nord"
 ```
 
+> **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only to deployments **without** that compose file (Coolify, k8s, custom orchestration). Setting up both makes the job run twice — details and migration steps: [ops runbook § 3](../ops-runbook.md#3-cron-jobs).
+
 **Set up as a daily cron job (recommended):**
 
 ```cron
@@ -1357,6 +1361,8 @@ docker compose -f docker-compose.prod.yml exec web \
 
 Implementation: [`src/core/management/commands/refresh_statistics_view.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/refresh_statistics_view.py).
 
+> **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only to deployments **without** that compose file (Coolify, k8s, custom orchestration). Setting up both makes the job run twice — details and migration steps: [ops runbook § 3](../ops-runbook.md#3-cron-jobs).
+
 **Recommended cron cadence:**
 
 ```cron
@@ -1385,6 +1391,8 @@ Snapshots are created automatically whenever `enforce_retention` deletes events 
 ### Periodic Cron Job (Recommended)
 
 It is also recommended to create snapshots regularly via cron:
+
+> **Already automated (Refs #794):** The bundled `cron` sidecar in `docker-compose.prod.yml` runs this job out of the box. The crontab example below applies only to deployments **without** that compose file (Coolify, k8s, custom orchestration). Setting up both makes the job run twice — details and migration steps: [ops runbook § 3](../ops-runbook.md#3-cron-jobs).
 
 ```bash
 # Monthly on the 1st at 02:00 -- captures the previous month
@@ -1427,4 +1435,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.22.0 -->
 <!-- translation-date: 2026-08-01 -->
-<!-- source-hash: 6aa0e1ba7d474ac04d3a5251d37439b4dda46a7d -->
+<!-- source-hash: cba1653258edca825fa753ca78a779631e0f206c -->

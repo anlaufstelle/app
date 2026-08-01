@@ -1,0 +1,53 @@
+# Anlaufstelle — Hintergrundjobs des ``cron``-Sidecars (Refs #794).
+#
+# Wird von ``docker-compose.prod.yml`` als ``/etc/anlaufstelle/crontab:ro`` in
+# den ``cron``-Service gemountet und dort von **supercronic** abgearbeitet.
+# Autoritative Job-Liste inkl. Begruendung der Reihenfolge: docs/ops-runbook.md
+# § 3. Diese Datei und die Tabelle in § 3.1 muessen synchron bleiben — der
+# Guard ``src/tests/test_ops_cron_sidecar.py`` prueft das.
+#
+# Format: klassische 5-Felder-Crontab (Minute Stunde Tag Monat Wochentag).
+# KEIN User-Feld (das kennt nur /etc/crontab im System-Format) — supercronic
+# fuehrt jede Zeile als der Container-User ``appuser`` in /app aus.
+#
+# Zeitzone: der ``cron``-Service setzt ``TZ`` (Default ``Europe/Berlin``,
+# ueber .env aenderbar). Ohne ``TZ`` liefe der Container in UTC und "02:00"
+# waere im Winter 03:00 Ortszeit — siehe docs/ops-runbook.md § 3.2.
+#
+# DB-Rolle: alle Kommandos hier brauchen die Admin-Rolle (BYPASSRLS). Sie
+# kommt NICHT aus dieser Datei, sondern aus der ``environment:``-Sektion des
+# ``cron``-Service (POSTGRES_USER=${POSTGRES_ADMIN_USER}). Grund: ausserhalb
+# eines HTTP-Requests ist keine ``app.current_facility_id``-GUC gesetzt; als
+# RLS-gefilterte App-Rolle brechen enforce_retention / verify_audit_chain /
+# cleanup_orphan_storage_files fail-loud ab (Refs #1016 A1.1).
+#
+# NICHT hier: ``backup.sh``. Das Backup faehrt ``docker compose exec``
+# (pg_dump im db-Container, tar im web-Container) und braeuchte dafuer den
+# Docker-Socket im Sidecar — das waere root-aequivalent auf dem Host und
+# widerspraeche cap_drop/no-new-privileges des ganzen Stacks. Backup bleibt
+# Host-Cron, siehe docs/ops-runbook.md § 3.3.
+
+# Retention durchsetzen (DSGVO Art. 5 Abs. 1 lit. e) — taeglich 03:00,
+# nach dem Host-Backup um 02:00, damit geloeschte Daten noch im Backup sind.
+0 3 * * * python manage.py enforce_retention
+
+# HMAC-Integritaetskette des AuditLog verifizieren — taeglich 03:30, nach der
+# Retention (die von prune_auditlog gesetzten Checkpoint-Grenzen sollen schon
+# in der Kette stehen). Exit != 0 bei Tamper-Verdacht: supercronic loggt den
+# Fehlschlag, Host-Monitoring sollte darauf alarmieren (Refs #1070).
+30 3 * * * python manage.py verify_audit_chain
+
+# Statistik-Snapshots — monatlich am 1. um 04:00. Sichert Monats-Aggregate,
+# bevor die Retention die zugrundeliegenden Events entfernt.
+0 4 1 * * python manage.py create_statistics_snapshots
+
+# Orphan-Storage-Cleanup — taeglich 04:30, nach den Snapshots. Entfernt
+# verwaiste .enc-Dateien ohne EventAttachment-Record (Refs #662/#1554).
+30 4 * * * python manage.py cleanup_orphan_storage_files
+
+# Breach-Detection-Scan (DSGVO Art. 33) — stuendlich zur 30. Minute.
+30 * * * * python manage.py detect_breaches
+
+# Materialized-View-Refresh fuer das Statistik-Dashboard — stuendlich zur
+# 15. Minute. Laeuft CONCURRENTLY und blockiert keine Reader.
+15 * * * * python manage.py refresh_statistics_view

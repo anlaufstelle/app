@@ -11,6 +11,18 @@ COPY requirements.txt .
 # Hier — am Download/Wheel-Bau — sitzt die Integritaetsgarantie der App-Deps.
 RUN pip wheel --no-cache-dir --require-hashes --wheel-dir /build/wheels -r requirements.txt
 
+# supercronic — Cron-Daemon des ``cron``-Sidecars (Refs #794, C-26).
+# Container-tauglicher Ersatz fuer cron/crond: laeuft im Vordergrund, loggt
+# nach stdout/stderr, beendet auf SIGTERM sauber und braucht kein setuid.
+# Das Binary wird versions- UND sha256-gepinnt geladen; die Pins und die
+# Verifikation stehen in ``deploy/fetch_supercronic.py`` (dieselbe
+# Integritaetsgarantie wie ``pip wheel --require-hashes`` eine Zeile darueber).
+# TARGETARCH liefert buildx pro Zielplattform (linux/amd64, linux/arm64 —
+# siehe .github/workflows/release.yml); Default fuer plain ``docker build``.
+ARG TARGETARCH
+COPY deploy/fetch_supercronic.py /build/fetch_supercronic.py
+RUN python /build/fetch_supercronic.py --arch "${TARGETARCH:-amd64}" --output /build/supercronic
+
 # Stage 2: Compile Tailwind CSS
 FROM node:26-alpine@sha256:e88a35be04478413b7c71c455cd9865de9b9360e1f43456be5951032d7ac1a66 AS node
 WORKDIR /build
@@ -43,6 +55,12 @@ WORKDIR /app
 # --no-deps korrekt und schliesst jeden Netzwerk-Fallback aus. Refs #1373.
 COPY --from=builder /build/wheels /tmp/wheels
 RUN pip install --no-cache-dir --no-index --no-deps /tmp/wheels/* && rm -rf /tmp/wheels
+
+# supercronic-Binary aus dem Builder uebernehmen (dort gegen den sha256-Pin
+# verifiziert, Mode 0755). Nur der ``cron``-Sidecar startet es; fuer den
+# web-Container ist es totes Gewicht von ~16 MB, aber ein zweites Image
+# waere mehr Betriebs-/Release-Aufwand als der Platz wert (Refs #794).
+COPY --from=builder /build/supercronic /usr/local/bin/supercronic
 
 # Copy application code
 COPY src/ ./

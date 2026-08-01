@@ -151,7 +151,7 @@ This means: the source code is free to use, modify, and redistribute — even wh
 
 Anlaufstelle is provided "as is", without warranty of any kind (see [LICENSE](LICENSE), Sections 15-16). The software and its documentation do **not constitute legal advice**. Operators are solely responsible for compliance with data protection regulations (GDPR, SGB X) — in particular for data protection impact assessments, data processing agreements, and organizational measures.
 
-> **⚠️ After installation: set up background jobs.** Anlaufstelle does **not** schedule backups, retention enforcement, or breach detection itself — without a configured scheduler these jobs never run, silently and without any error message. Setup: [docs/ops-runbook.md § 3 "Cron jobs"](docs/ops-runbook.md#3-cron-jobs).
+> **⚠️ After installation: set up backups.** Retention enforcement, breach detection, and the remaining background jobs are handled automatically by the bundled `cron` sidecar from `docker compose up -d` onwards. **Backups** still require a host crontab entry (the script uses `docker compose exec` and must not have the Docker socket inside a container) — without it nothing is ever backed up, silently and without any error message. Setup and migration of existing crontabs: [docs/ops-runbook.md § 3 "Cron jobs"](docs/ops-runbook.md#3-cron-jobs).
 
 ---
 
@@ -212,4 +212,4 @@ docker compose exec web python src/manage.py seed
 <!-- translation-source: README.md -->
 <!-- translation-version: v0.22.0 -->
 <!-- translation-date: 2026-08-01 -->
-<!-- source-hash: d992684c3cff6e154783f71dedb8c87da1f59b7c -->
+<!-- source-hash: 1b5f64ce55e4506752027fcc959ec92d6148bebd -->

@@ -54,6 +54,69 @@ services:
     networks:
       - internal
 
+  redis:
+    # Shared Cache fuer django-ratelimit + Health-Detail-Caching (Refs #795,
+    # C-27). Ersetzt den DatabaseCache-Default; der bleibt als Fallback
+    # bestehen (leeres REDIS_URL, siehe web-Service oben und
+    # docs/ops-runbook.md § 5.4a) — Bestands-Deployments ohne Redis brechen
+    # dadurch nicht.
+    #
+    # Warum Redis 8 und nicht das im Issue skizzierte ``redis:7-alpine``:
+    # Redis 7.4 wechselte auf RSALv2/SSPL (nicht OSI-konform); erst Redis 8
+    # steht wieder unter AGPLv3 und passt damit zur Lizenz dieses Projekts.
+    # Digest-Pin analog zu den uebrigen Images (Refs #1373).
+    image: redis:8-alpine@sha256:e8eb6f2980c06c6a25c08f62cb2e00dc7d2fead9aa492cfdd8b54a42109ae0f2
+    # REINER Cache, KEINE Persistenz — daher auch kein Volume:
+    #   --save ""        schaltet die RDB-Snapshots ab
+    #   --appendonly no  schaltet das AOF ab
+    # Begruendung: im Cache liegen ausschliesslich regenerierbare Daten
+    # (Rate-Limit-Zaehler mit Minuten-/Stunden-TTL, 15s-Health-Details).
+    # Persistenz waere hier ein Datenschutz-Minus statt eines Plus — sie
+    # schriebe Rate-Limit-Schluessel (u.a. Client-IPs, User-IDs) unnoetig auf
+    # die Platte, wo sie keine Retention erfasst. Ein Redis-Neustart kostet
+    # nur einen kalten Cache; die Zaehler starten dann neu (fail-open ist
+    # hier akzeptabel, weil der Login-Lockout zusaetzlich in der DB haengt).
+    # maxmemory + allkeys-lru deckelt den Speicher hart, statt den Container
+    # ins mem_limit-OOM laufen zu lassen.
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 256mb
+      - --maxmemory-policy
+      - allkeys-lru
+    # Container-Runtime-Hardening (Refs #1374). ``user: redis`` umgeht den
+    # root+gosu-Pfad des offiziellen Entrypoints — damit kommt der Service
+    # ohne SETUID/SETGID/CHOWN aus (anders als db/clamav) und laeuft mit
+    # leerem Capability-Set. read_only: redis-server schreibt ohne Persistenz
+    # nichts; /data (VOLUME-Deklaration des Images) wird als tmpfs
+    # ueberdeckt, damit kein anonymes Volume entsteht.
+    user: redis
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /data:mode=1777
+    pids_limit: 128
+    mem_limit: 512m
+    # KEIN env_file: .env — Redis braucht keine App-/DB-/Krypto-Secrets
+    # (Blast-Radius, analog caddy). KEIN ports: — der Cache ist nur im
+    # internal-Netz erreichbar und darf nie am Host haengen (Redis hat hier
+    # bewusst kein requirepass; die Netzgrenze ist die Zugriffskontrolle).
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - internal
+
   web:
     # Migrationen laufen NICHT im Entrypoint, sondern als separater One-Shot-Job
     # vor dem Rolling-Restart (``docker-migrate.sh``; Refs #802/C-34). Der
@@ -105,6 +168,13 @@ services:
       # /tmp-tmpfs (RAM) pinnen, statt sich auf Djangos impliziten
       # tempfile.gettempdir()-Fallback zu verlassen (Refs #1661).
       FILE_UPLOAD_TEMP_DIR: /tmp
+      # Shared Cache (Refs #795): zeigt per Default auf den mitgelieferten
+      # redis-Service unten. Wer stattdessen ein bereits vorhandenes,
+      # externes Redis nutzt, setzt REDIS_URL in der .env — der Wert hier
+      # ist nur der Fallback. Leert man REDIS_URL bewusst (REDIS_URL= in der
+      # .env), faellt prod.py auf den DatabaseCache zurueck; dann kann der
+      # redis-Service entfallen (docker compose up --scale redis=0).
+      REDIS_URL: ${REDIS_URL-redis://redis:6379/1}
     volumes:
       # Persistenter Mount fuer MEDIA_ROOT (=/data/media) — verhindert
       # stillen Datenverlust bei docker compose pull && up -d.
@@ -115,6 +185,8 @@ services:
         condition: service_healthy
       clamav:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')\""]
       interval: 30s
@@ -124,6 +196,84 @@ services:
     networks:
       - internal
       - frontend
+
+  cron:
+    # Hintergrundjob-Scheduler (Refs #794, C-26). Vor diesem Sidecar musste
+    # jede Installation die Jobs per Host-Crontab selbst einrichten — tat sie
+    # das nicht, liefen Retention (DSGVO Art. 5 Abs. 1 lit. e), Breach-
+    # Detection (Art. 33), Audit-Ketten-Verifikation, Snapshots und
+    # Orphan-Cleanup **nie**, ohne jede Fehlermeldung. Der Sidecar macht sie
+    # ab Werk aktiv. Job-Liste + Zeitplan: ./deploy/crontab, Doku:
+    # docs/ops-runbook.md § 3.2.
+    #
+    # ACHTUNG Bestandsinstallationen: Wer die Host-Crontab aus dem Runbook
+    # bereits eingerichtet hat, laesst die Jobs sonst DOPPELT laufen. Vor dem
+    # ersten Start dieses Service die entsprechenden Host-Eintraege entfernen
+    # (Backup ausgenommen, das bleibt Host-seitig) — docs/ops-runbook.md § 3.3.
+    image: ghcr.io/anlaufstelle/app:${APP_VERSION:-v0.22.0}
+    # Der Image-Entrypoint faehrt collectstatic + gunicorn hoch; hier soll
+    # stattdessen nur supercronic laufen (im Image unter /usr/local/bin,
+    # sha256-gepinnt gebaut — siehe Dockerfile).
+    entrypoint: ["/usr/local/bin/supercronic"]
+    command: ["-passthrough-logs", "/etc/anlaufstelle/crontab"]
+    # Container-Runtime-Hardening wie web (Refs #1374): non-root appuser,
+    # keine Caps, read_only-Root-FS. KEIN /app/staticfiles-tmpfs — anders als
+    # web laeuft hier kein Entrypoint-collectstatic, ein tmpfs wuerde das im
+    # Image gebackene Manifest verdecken und {% static %} in Templates
+    # (z.B. Breach-Benachrichtigungen) brechen.
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+      # WeasyPrint/fontconfig-Cache, falls ein Job PDF rendert.
+      - /home/appuser/.cache:mode=1777
+    pids_limit: 256
+    mem_limit: 1g
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: anlaufstelle.settings.prod
+      POSTGRES_HOST: db
+      CLAMAV_HOST: clamav
+      FILE_UPLOAD_TEMP_DIR: /tmp
+      REDIS_URL: ${REDIS_URL-redis://redis:6379/1}
+      POSTGRES_APP_USER: ${POSTGRES_USER}
+      # Alle Jobs hier laufen als Admin-DB-Rolle (BYPASSRLS) — NICHT als die
+      # RLS-gefilterte App-Rolle aus der .env. Ausserhalb eines HTTP-Requests
+      # ist keine ``app.current_facility_id``-GUC gesetzt; als App-Rolle
+      # brechen enforce_retention / verify_audit_chain /
+      # cleanup_orphan_storage_files fail-loud ab (Refs #1016 A1.1), und ein
+      # Lauf ohne Guard saehe 0 Zeilen und meldete faelschlich Erfolg. Genau
+      # dieselbe Rollen-Umschaltung macht der Dev-Pfad in
+      # dev-ops/deploy/run-as-admin.sh und der Migrate-Job (Refs #863).
+      POSTGRES_USER: ${POSTGRES_ADMIN_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_ADMIN_PASSWORD}
+      # Zeitzone der Schedules. Ohne TZ liefe der Container in UTC und
+      # "03:00" waere je nach Jahreszeit 04:00/05:00 Ortszeit. Default passt
+      # zu settings.TIME_ZONE (Europe/Berlin); per .env ueberschreibbar.
+      TZ: ${TZ:-Europe/Berlin}
+    volumes:
+      # Job-Definitionen read-only aus dem Repo (analog Caddyfile/postgres-init).
+      - ./deploy/crontab:/etc/anlaufstelle/crontab:ro
+      # MEDIA_ROOT: cleanup_orphan_storage_files und enforce_retention
+      # loeschen Anhaenge — dieselbe Volume-Sicht wie web.
+      - media:/data
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Bewusst KEIN healthcheck und KEIN ports: supercronic hat keinen
+    # Endpunkt. Ob die Jobs wirklich laufen, zeigt das Compliance-Dashboard
+    # (/system/compliance/, Kategorie „Hintergrundjobs") bzw. ``stale_jobs``
+    # im /health/-Payload — beide lesen die Cron-Marker aus dem AuditLog
+    # (Refs #919/#1335) und sind damit ein echter Wirksamkeits-Nachweis
+    # statt eines blossen Prozess-Liveness-Checks.
+    restart: unless-stopped
+    networks:
+      - internal
 
   clamav:
     image: clamav/clamav:stable@sha256:6f4a9e7d616ffc8d1070200fe35ac860735fdd522161a1043f94856e6ee13c28

@@ -67,6 +67,27 @@ Initial-Admin anlegen über `http://<server-ip>:8000`.
 > im Dockerfile liefert dann ungesund, das HTTP bleibt aber 200, damit der
 > Last-Balancer den Pod nicht direkt rauswirft.
 
+> **Cron-Sidecar + Redis-Cache:** `docker-compose.prod.yml` definiert seit
+> Refs #794/#795
+> zwei weitere Services, die Coolify beim Compose-Deploy automatisch mitstartet:
+>
+> - **`cron`** — faehrt dasselbe App-Image mit dem Cron-Daemon supercronic und
+> arbeitet [`deploy/crontab`](../deploy/crontab) ab (Retention,
+> Audit-Ketten-Verifikation, Statistik-Snapshots, Orphan-Cleanup,
+> Breach-Detection, MV-Refresh). Er braucht `POSTGRES_ADMIN_USER` /
+> `POSTGRES_ADMIN_PASSWORD` in den ENVs — die Jobs laufen als BYPASSRLS-Rolle,
+> sonst brechen sie fail-loud ab. **Das Backup deckt er NICHT ab**: es setzt
+> `docker compose exec` ein und braeuchte den Docker-Socket im Container.
+> Backup bleibt ein Host-seitiger Cron-Job — auf einem Coolify-Server per
+> *Scheduled Task* bzw. Host-Crontab, siehe
+> [docs/ops-runbook.md § 3](ops-runbook.md#3-cron-jobs).
+> - **`redis`** — Shared Cache fuer Rate-Limiting und Health-Details, ohne
+> Persistenz und ohne Host-Port. `REDIS_URL` wird im Compose-File gesetzt und
+> muss in Coolify **nicht** konfiguriert werden. Wer keinen Redis will, setzt
+> `REDIS_URL` explizit **leer** — dann greift der `DatabaseCache`-Fallback
+> (funktional gleichwertig, nur langsamer), siehe
+> [docs/ops-runbook.md § 5.4a](ops-runbook.md).
+
 ### 4. Environment-Variablen
 
 In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.env.example):
@@ -74,6 +95,7 @@ In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.en
 **Pflicht:**
 - `DJANGO_SECRET_KEY` — frisch generiert (`python -c "import secrets; print(secrets.token_urlsafe(50))"`)
 - `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`
+- `POSTGRES_ADMIN_USER`, `POSTGRES_ADMIN_PASSWORD`, `POSTGRES_BOOTSTRAP_PASSWORD` — Drei-Rollen-Modell (Refs #902, #1026); der `cron`-Sidecar faehrt seine Jobs als Admin-Rolle
 - `ENCRYPTION_KEY` oder `ENCRYPTION_KEYS` — Fernet-Key (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`)
 - `ALLOWED_HOSTS=anlaufstelle.app,www.anlaufstelle.app`
 - `DOMAIN=anlaufstelle.app`
@@ -91,6 +113,12 @@ In Coolify unter *Environment Variables* nach Muster aus [`.env.example`](../.en
  Bei externem ClamAV auf dessen Hostname/IP setzen.
 - `CLAMAV_PORT` — default `3310` (clamd TCP-Port).
 - `CLAMAV_TIMEOUT` — Timeout in Sekunden für Scan-Requests (optional).
+- `REDIS_URL` — nur setzen, um vom mitgelieferten `redis`-Service abzuweichen:
+ eigener Endpunkt (`redis://host:6379/1`) oder **leer** fuer den
+ `DatabaseCache`-Fallback (Refs #795).
+- `TZ` — Zeitzone der Hintergrundjobs im `cron`-Sidecar (Default `Europe/Berlin`).
+ Ohne passende Zeitzone verschieben sich die im Runbook zugesagten Laufzeiten
+ (Refs #794).
 
 ### 5. Ersten Deploy anstoßen
 

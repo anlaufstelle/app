@@ -1038,6 +1038,8 @@ Betrieb der Tracker-Instanz (Setup, Backups, Retention, Upgrades) ist Betreiber-
 
 Das Management-Kommando `detect_breaches` wertet das Audit-Log heuristisch auf Anomalien aus (fehlgeschlagene Login-Bursts, Massen-Exporte/-Löschungen, verteilte Login-Angriffe) und schreibt Treffer als Audit-Events; optional wird ein Webhook (`BREACH_NOTIFICATION_WEBHOOK_URL`) benachrichtigt. Die Fenster/Schwellen werden über die `BREACH_*`-Variablen gesteuert (siehe [ENV-Referenz in § 1](#vollständige-umgebungsvariablen-referenz) sowie [Ops-Runbook § 6.5b](ops-runbook.md)).
 
+> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (Coolify, k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details und Migrationsschritte: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
+
 **Empfohlener Cron (stündlich, jeweils zur 30. Minute):**
 
 ```cron
@@ -1047,7 +1049,7 @@ Das Management-Kommando `detect_breaches` wertet das Audit-Log heuristisch auf A
   >> /var/log/anlaufstelle-breach.log 2>&1
 ```
 
-> **Hinweis:** Die vollständige, autoritative Liste aller Hintergrundjobs samt Zeitplan (Backup, Retention, Audit-Ketten-Verifikation, Statistik-Snapshots, Orphan-Cleanup, Breach-Scan, View-Refresh) steht im [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs). Beim empfohlenen systemd-Timer-Setup werden diese Jobs zentral über `dev-ops/deploy/install-timers.sh` installiert (der Breach-Scan läuft dort als `anlaufstelle-breach.timer`, ebenfalls stündlich zur 30. Minute).
+> **Hinweis:** Die vollständige, autoritative Liste aller Hintergrundjobs samt Zeitplan (Backup, Retention, Audit-Ketten-Verifikation, Statistik-Snapshots, Orphan-Cleanup, Breach-Scan, View-Refresh) steht im [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs). Im mitgelieferten Compose-Stack laufen sie im `cron`-Sidecar (`deploy/crontab`), auf dem Dev-Server als systemd-Timer via `dev-ops/deploy/install-timers.sh` — in beiden Fällen der Breach-Scan stündlich zur 30. Minute.
 
 ---
 
@@ -1208,6 +1210,8 @@ docker compose -f docker-compose.prod.yml exec web \
   python manage.py enforce_retention --facility "Beratungsstelle Nord"
 ```
 
+> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (Coolify, k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details und Migrationsschritte: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
+
 **Als täglicher Cron einrichten (empfohlen):**
 
 ```cron
@@ -1361,6 +1365,8 @@ docker compose -f docker-compose.prod.yml exec web \
 
 Implementierung: [`src/core/management/commands/refresh_statistics_view.py`](https://github.com/anlaufstelle/app/blob/main/src/core/management/commands/refresh_statistics_view.py).
 
+> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (Coolify, k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details und Migrationsschritte: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
+
 **Empfohlener Cron-Rhythmus:**
 
 ```cron
@@ -1389,6 +1395,8 @@ Snapshots werden automatisch erstellt, wenn `enforce_retention` Events löscht �
 ### Periodischer Cron-Job (empfohlen)
 
 Zusätzlich empfiehlt es sich, Snapshots regelmäßig per Cron zu erstellen:
+
+> **Bereits automatisiert (Refs #794):** Der mitgelieferte `cron`-Sidecar aus `docker-compose.prod.yml` führt diesen Job ab Werk aus. Das folgende Crontab-Beispiel gilt nur für Deployments **ohne** dieses Compose-File (Coolify, k8s, eigene Orchestrierung). Wer beides einrichtet, lässt den Job doppelt laufen — Details und Migrationsschritte: [Ops-Runbook § 3](ops-runbook.md#3-cron-jobs).
 
 ```bash
 # Monatlich am 1. um 02:00 — sichert den Vormonat
