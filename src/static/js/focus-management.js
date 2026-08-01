@@ -13,7 +13,7 @@
  * wie der globale Body-Listener in htmx-errors.js (Refs #1016, C2).
  *
  * Bewusst KEIN systematisches WCAG-Audit / axe-core (das bliebe M3/#1059 unter
- *-Sperre); dies ist der non-gated Fokus-Quick-Fix (Milestone release-0.22).
+ * der Feature-Sperre); dies ist der non-gated Fokus-Quick-Fix (Milestone release-0.22).
  *
  * Abgrenzung Live-Suche: Bei keyup-getriggerten Live-Such-/Filterfeldern (z.B.
  * core/search/index.html, core/clients/list.html) darf der Fokus NICHT ins

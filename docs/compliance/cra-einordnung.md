@@ -101,4 +101,4 @@ Anhang I gliedert sich in **Teil I** (Sicherheitseigenschaften des Produkts) und
 | **11.09.2026** — Meldepflichten (Art. 14) anwendbar | Meldeprozess (§3) operativ scharf schalten; Verantwortlichen **und Vertretung** final benennen (in [MAINTAINERS.md](../../MAINTAINERS.md) eintragen, Signing-Key-/Secret-Escrow-Trennung klären); CSIRT-Kontakt/Plattform-Zugang klären |
 | **11.12.2027** — Hauptpflichten (Anhang I) anwendbar | Scope erneut prüfen; bei Scope-Bejahung Konformitätsbewertung, CE, definierter Support-Zeitraum und SBOM-/Advisory-Lücken (§2) schließen |
 | **Betriebsmodell-Änderung** (jederzeit) | Neubewertung bei kostenpflichtigem **Hosting-/SaaS-Angebot**, Produktverkauf oder Kommerzialisierung der Demo-Instanz (#971) — dann volle Hersteller-Pflichten ab 11.12.2027 denkbar |
-| **Kommissions-/ENISA-Guidance final** | FOSS-Leitlinien/FAQ in §1 einarbeiten; ggf. Einschätzung extern validieren (-/NGI-Kontext, Fachanwalt bei Bedarf) |
+| **Kommissions-/ENISA-Guidance final** | FOSS-Leitlinien/FAQ in §1 einarbeiten; ggf. Einschätzung extern validieren (Fachanwalt bei Bedarf) |
