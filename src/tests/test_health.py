@@ -7,6 +7,7 @@ Detailfelder ``version``, ``smtp``, ``last_backup_age_hours`` und
 ``X-Health-Token`` == ``HEALTH_DETAIL_TOKEN``) oder authentifizierte Sessions.
 """
 
+import logging
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -19,13 +20,19 @@ from django.utils import timezone
 from core.models import AuditLog
 from core.services.compliance import ComplianceCheck, ComplianceStatus
 from core.services.system import bypass_replication_triggers
-from core.views.health import _check_stale_jobs
+from core.views.health import _check_stale_jobs, _query_runtime_role_posture
 from tests.test_rls_functional import (  # noqa: F401
     as_rls_role,
     rls_test_role,
 )
 
 DETAIL_TOKEN = "test-health-detail-token"  # noqa: S105 — Test-Fixture, kein echtes Secret
+
+# C-25 (Refs #793): Pfad für den Monkeypatch der Rollen-Posture-Abfrage. Bewusst
+# die Modul-Referenz in ``core.views.health`` — NICHT ``django.db.connection``
+# (Proxy-Objekt; ein Instanz-Attribut darauf überschattet den Unblocker und
+# vergiftet nachfolgende Tests mit wandernden Teardown-Fehlern).
+_POSTURE_TARGET = "core.views.health._query_runtime_role_posture"
 
 
 @pytest.fixture(autouse=True)
@@ -35,6 +42,25 @@ def _clear_health_cache():
     cache.clear()
     yield
     cache.clear()
+
+
+@pytest.fixture(autouse=True)
+def _runtime_role_posture_secure():
+    """C-25 (Refs #793): Für alle Tests eine RLS-treue Runtime-Rolle vortäuschen.
+
+    Die *lokale* Test-/CI-Postgres-Rolle ist in aller Regel ein Superuser (das
+    offizielle ``postgres``-Image legt den per ``POSTGRES_USER`` angelegten Login
+    als Superuser an; die CI-Service-Container in ``.github/workflows/test.yml``
+    ebenso). Ohne diesen Stub würde der neue Posture-Check den Gesamtstatus in
+    JEDEM Health-Test auf ``degraded`` ziehen und dutzende bestehende
+    ``status == "ok"``-Assertions kippen — obwohl auf den echten Deploy-Zielen
+    (Drei-Rollen-Modell, ADR-020/ADR-033) genau der geprüfte Zustand herrscht.
+
+    Die Tests, die den unsicheren Fall abbilden, patchen dieselbe Modul-Referenz
+    innerhalb des Tests erneut (innerer ``patch`` gewinnt).
+    """
+    with patch(_POSTURE_TARGET, return_value=(False, False)):
+        yield
 
 
 @pytest.fixture
@@ -47,6 +73,22 @@ def detail_token(settings):
 def _detail_get(**extra):
     """GET /health/ mit gültigem Detail-Token -> voller Payload."""
     return Client().get("/health/", HTTP_X_HEALTH_TOKEN=DETAIL_TOKEN, **extra)
+
+
+def _capture_health_warnings(caplog, call) -> list[str]:
+    """Fuehrt ``call()`` aus und liefert die WARNING-Meldungen des Health-Loggers.
+
+    Der ``core``-Logger hat ``propagate=False`` (``settings/base.py``) — der
+    ``caplog``-Handler muss daher explizit an den Modul-Logger gehaengt werden
+    (gleiches Muster wie ``test_refresh_statistics_view.py``)."""
+    module_logger = logging.getLogger("core.views.health")
+    caplog.set_level(logging.WARNING)
+    module_logger.addHandler(caplog.handler)
+    try:
+        call()
+    finally:
+        module_logger.removeHandler(caplog.handler)
+    return [record.getMessage() for record in caplog.records]
 
 
 @pytest.mark.django_db
@@ -277,6 +319,120 @@ class TestHealthDetail:
         """A7.1: stale_jobs ist ein Recon-Detailfeld, nur intern/Token sichtbar."""
         data = Client().get("/health/").json()
         assert "stale_jobs" not in data
+
+
+@pytest.mark.django_db
+class TestHealthDbRolePosture:
+    """C-25 (Refs #793): Umgeht die DB-Runtime-Rolle Row Level Security?
+
+    Die Self-Hosting-Postscript-Falle aus #793: laeuft die Django-Runtime als
+    PostgreSQL-Superuser (oder mit ``BYPASSRLS``), sind die RLS-Policies aus
+    Migration 0047/0084/0085 wirkungslos — die Facility-Isolation faellt still
+    aus, ohne dass irgendetwas fehlschlaegt. Der Health-Endpoint macht das
+    sichtbar: Gesamtstatus ``degraded`` (auch anonym, damit Uptime-Monitore
+    anschlagen), Detailfelder nur fuer Token-/interne Caller (L9/N13).
+    """
+
+    def test_detail_reports_secure_runtime_role(self, detail_token):
+        data = _detail_get().json()
+        assert data["db_user_is_superuser"] is False
+        assert data["db_role_posture"] == "ok"
+        assert data["status"] == "ok"
+
+    def test_superuser_runtime_role_degrades_status(self, detail_token):
+        with patch(_POSTURE_TARGET, return_value=(True, False)):
+            data = _detail_get().json()
+        assert data["db_user_is_superuser"] is True
+        assert data["db_role_posture"] == "bypasses_rls"
+        assert data["status"] == "degraded"
+
+    def test_bypassrls_runtime_role_degrades_status(self, detail_token):
+        """Auch ohne Superuser-Flag: ``rolbypassrls`` umgeht RLS genauso."""
+        with patch(_POSTURE_TARGET, return_value=(False, True)):
+            data = _detail_get().json()
+        assert data["db_user_is_superuser"] is False
+        assert data["db_role_posture"] == "bypasses_rls"
+        assert data["status"] == "degraded"
+
+    def test_anonymous_caller_sees_degraded_status_without_detail(self):
+        """L9/N13: der Statuswechsel ist anonym sichtbar (Monitoring), das
+        konkrete Rollen-Detail bleibt hinter dem Token-Gate."""
+        with patch(_POSTURE_TARGET, return_value=(True, True)):
+            data = Client().get("/health/").json()
+        assert data["status"] == "degraded"
+        assert set(data.keys()) == {"status"}
+
+    def test_unknown_posture_does_not_degrade(self, detail_token):
+        """Nicht ermittelbar (Nicht-PostgreSQL / Rolle nicht im Katalog) darf
+        NICHT degraden — sonst waere jede SQLite-/Fremdbackend-Installation
+        dauerhaft falsch-alarmiert."""
+        with patch(_POSTURE_TARGET, return_value=(None, None)):
+            data = _detail_get().json()
+        assert data["db_user_is_superuser"] is None
+        assert data["db_role_posture"] == "unknown"
+        assert data["status"] == "ok"
+
+    def test_error_status_is_not_downgraded_to_degraded(self, detail_token):
+        """Ein kritischer Encryption-Key-Fehler bleibt ``error`` (HTTP 503) —
+        der Posture-Check darf ihn nicht auf ``degraded`` abschwaechen."""
+        with (
+            patch(_POSTURE_TARGET, return_value=(True, True)),
+            patch("core.services.file_vault.encrypt_field", side_effect=RuntimeError("no key")),
+        ):
+            response = _detail_get()
+        assert response.json()["status"] == "error"
+        assert response.status_code == 503
+
+    def test_bypassing_role_is_logged_with_actionable_hint(self, detail_token, caplog):
+        """Das Detail gehoert ins Log (nicht in den anonymen Payload) — inklusive
+        des Kommandos, mit dem Betreiber:innen die Posture pruefen.
+
+        Der ``core``-Logger hat ``propagate=False`` (settings/base.py), deshalb
+        haengen wir den ``caplog``-Handler explizit an den Modul-Logger."""
+        with patch(_POSTURE_TARGET, return_value=(True, False)):
+            messages = _capture_health_warnings(caplog, _detail_get)
+        assert any("check_db_roles" in message for message in messages), messages
+
+    def test_secure_role_logs_nothing(self, detail_token, caplog):
+        messages = _capture_health_warnings(caplog, _detail_get)
+        assert [m for m in messages if "Row Level Security" in m] == []
+
+    def test_posture_fields_not_in_anonymous_payload(self):
+        data = Client().get("/health/").json()
+        assert "db_user_is_superuser" not in data
+        assert "db_role_posture" not in data
+
+
+@pytest.mark.django_db
+class TestRuntimeRolePostureQuery:
+    """Die Katalog-Abfrage selbst — gegen die echte Test-Datenbank.
+
+    Der autouse-Stub oben ersetzt das *Modul-Attribut*
+    ``core.views.health._query_runtime_role_posture``; der hier per ``from ...
+    import`` gebundene Name zeigt weiterhin auf die echte Funktion. Diese Klasse
+    testet also den ungestubbten Original-Pfad.
+    """
+
+    def test_returns_real_catalog_values_for_current_user(self):
+        """Guard gegen ein kaputtes ``pg_roles``-Statement: die Abfrage muss fuer
+        ``current_user`` zwei Booleans liefern, nicht ``(None, None)``."""
+        is_superuser, bypassrls = _query_runtime_role_posture()
+        assert isinstance(is_superuser, bool)
+        assert isinstance(bypassrls, bool)
+
+    def test_returns_unknown_when_query_fails(self):
+        """DB-Ausfall darf den Health-Endpoint nicht mit einer Exception killen —
+        ``(None, None)`` = unbekannt, kein Degrade."""
+        with patch("core.views.health.connection") as fake_connection:
+            fake_connection.vendor = "postgresql"
+            fake_connection.cursor.side_effect = RuntimeError("db down")
+            assert _query_runtime_role_posture() == (None, None)
+
+    def test_returns_unknown_on_non_postgres_backend(self):
+        with patch("core.views.health.connection") as fake_connection:
+            fake_connection.vendor = "sqlite"
+            assert _query_runtime_role_posture() == (None, None)
+            fake_connection.cursor.assert_not_called()
 
 
 @pytest.mark.django_db(transaction=True)

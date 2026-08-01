@@ -35,7 +35,7 @@ Der Endpoint liefert **zwei unterschiedlich umfangreiche Payloads** — abhängi
 | Aufrufer | Bekommt | Warum |
 |---|---|---|
 | **Anonym** (Default für externes Monitoring) | **Nur** `status` (+ HTTP-Code). **Keine** Subsystem- oder Detailfelder. | Recon-Härtung: Subsystem-Status (`database`, `virus_scanner`/`clamav`, `encryption_key`) und Infrastruktur-Details (`version`, `disk_free_pct` …) verraten Angreifern unauthentifiziert den Betriebszustand einzelner Komponenten (L9/N13, Refs #1375). Für Uptime bleibt `status` + HTTP-Code aussagekräftig. Außerdem kein teurer SMTP-Handshake/Filesystem-Scan pro Poll. |
-| **Intern / Token** | `status` **plus** Subsystemfelder (`database`, `virus_scanner`/`clamav`, `encryption_key`) **und** Detailfelder (`version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`). | Operatives Monitoring will die Details. |
+| **Intern / Token** | `status` **plus** Subsystemfelder (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`) **und** Detailfelder (`version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`). | Operatives Monitoring will die Details. |
 
 > **Änderung ggü. #1024 A7.1 (L9/N13, Refs #1375):** `database`, `virus_scanner`/`clamav` und `encryption_key` waren bis dahin auch im anonymen Payload enthalten. Sie liegen jetzt hinter dem Token-Gate. Der **kritische** Effekt eines DB-/Encryption-Key-Ausfalls (HTTP 503) und eines Scanner-Ausfalls (`status: degraded`) bleibt auch anonym sichtbar — nur die Subsystem-*Feldnamen* selbst sind Token-only.
 
@@ -76,7 +76,7 @@ Das Top-Level-`status` ist die **feinere** Gesundheits-Bewertung. Drei Werte, hi
 | `status` | Bedeutung | Auslöser | HTTP |
 |---|---|---|---|
 | `"ok"` | Alles im grünen Bereich. | Startwert, solange kein Check etwas anderes setzt. | 200 |
-| `"degraded"` | Service funktioniert, aber eine **nicht-kritische** Komponente ist beeinträchtigt — zeitnah ansehen. | ClamAV nicht erreichbar **oder** SMTP unreachable **oder** Backup älter als 48 h **oder** Disk-frei < 10 %. | **200** |
+| `"degraded"` | Service funktioniert, aber eine **nicht-kritische** Komponente ist beeinträchtigt — zeitnah ansehen. | ClamAV nicht erreichbar **oder** SMTP unreachable **oder** Backup älter als 48 h **oder** Disk-frei < 10 % **oder** die DB-Runtime-Rolle umgeht RLS (`db_role_posture = bypasses_rls`, Refs #793). | **200** |
 | `"error"` | Service effektiv unbenutzbar — **sofort** handeln. | DB nicht erreichbar **oder** Encryption-Key-Roundtrip fehlgeschlagen. | 503 |
 
 Mechanik (aus [`health.py`](../src/core/views/health.py)): `status` startet auf `"ok"`; ein fehlgeschlagener kritischer Check setzt `"error"` + HTTP 503; ein beeinträchtigter unkritischer Check setzt `"degraded"` **nur, wenn status noch `"ok"` ist** (`if … and status == "ok"`) — ein bestehendes `"error"` wird also nie zu `"degraded"` heruntergestuft.
@@ -103,6 +103,8 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
 | `virus_scanner` | string | `connected` / `unavailable` / `disabled` | ClamAV-Daemon-Ping, wenn `CLAMAV_ENABLED`. `disabled`, wenn ClamAV aus. | `unavailable` → **`degraded`** |
 | `clamav` | string | `ok` / `error` / `disabled` | Redundanter Klartext-Indikator zu `virus_scanner` (gleiche Quelle). | (gleicher Auslöser wie `virus_scanner`) |
 | `encryption_key` | string | `ok` / `error` | Fernet-Encrypt/Decrypt-**Roundtrip** ([`_check_encryption_key`](../src/core/views/health.py)). `error` = Schlüssel passt nicht zu den Daten → keine verschlüsselten Felder lesbar. | `error` → **`error` + HTTP 503** |
+| `db_user_is_superuser` | bool \| null | `false` / `true` / `null` | Ist die DB-Rolle **dieser Verbindung** PostgreSQL-Superuser? ([`_query_runtime_role_posture`](../src/core/views/health.py), Refs #793). `null` = nicht ermittelbar (Nicht-PostgreSQL-Backend, Rolle nicht im Katalog, DB weg). | `true` → **`degraded`** |
+| `db_role_posture` | string | `ok` / `bypasses_rls` / `unknown` | Zusammenfassung derselben Prüfung inkl. `rolbypassrls`: `bypasses_rls` = die Runtime umgeht Row Level Security (Superuser **oder** `BYPASSRLS`), `ok` = beides aus, `unknown` = nicht ermittelbar. | `bypasses_rls` → **`degraded`** |
 | `version` | string | z. B. `v0.14.0` / `dev` | App-Version aus der ENV `APP_VERSION` (Fallback `dev`). ||
 | `smtp` | object | `{"status": "...", "latency_ms"?: int}` | SMTP-CONNECT-Test ([`_check_smtp`](../src/core/views/health.py) L82–104). | siehe unten |
 | `smtp.status` | string | `ok` / `unreachable` / `disabled` | `disabled` = Console/Locmem-Backend oder leerer `EMAIL_HOST`. `unreachable` = Server antwortet nicht (Timeout 2 s) → Token-Invites/Passwort-Reset scheitern lautlos. | `unreachable` → **`degraded`** |
@@ -112,6 +114,8 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
 | `stale_jobs` | array\<string\> | z. B. `[]` / `["breach_scan_last_run"]` | Keys der Hintergrundjobs (Backup, Retention, Snapshots, Breach-Scan, MV-Refresh) mit Status `critical` laut [`cron_job_checks`](../src/core/services/compliance/__init__.py) ([`_check_stale_jobs`](../src/core/views/health.py)). Refs #1335. | nicht-leer → **`degraded`** |
 
 > **`stale_jobs` degradet nur bei `critical`, nicht bei `unknown`.** Ein Job, der auf einer frischen Installation noch nie gelaufen ist (`unknown`), fehlt bewusst in `stale_jobs` — sonst wäre jede frische Instanz sofort `degraded`. `warning`-Jobs (leicht überfällig) tauchen ebenfalls nicht auf; die volle Ampel je Job zeigt das Compliance-Dashboard ([§9](#9-abgrenzung-health-vs-compliance-dashboard)). Voraussetzung für ein sinnvolles Signal ist ein eingerichteter Scheduler ([ops-runbook §3](ops-runbook.md#3-cron-jobs)) — ohne ihn bleiben die Jobs dauerhaft `unknown`, nicht `critical`, und `stale_jobs` bleibt leer, obwohl nichts läuft.
+
+> **`db_role_posture` misst die laufende Verbindung, nicht die `.env`.** `manage.py check_db_roles` (Refs #902) verifiziert, dass App- und Admin-Rolle mit dem richtigen Attributprofil im Katalog **existieren** — ob die Django-Runtime auch tatsächlich als die App-Rolle verbindet, sagt es nicht. Genau das prüft dieses Feld (`SELECT rolsuper, rolbypassrls … WHERE rolname = current_user`) und schließt damit die Selbst-Hosting-Falle aus #793: läuft die Runtime als Superuser, werden die RLS-Policies (Migration 0047/0084/0085) **still** umgangen — nichts schlägt fehl, die Facility-Isolation ist aber weg. Der Statuswechsel auf `degraded` ist deshalb auch anonym sichtbar; das konkrete Rollen-Detail steht nur im Token-Payload und im Log (`WARNING` in `core.views.health`). Behebung: [ops-runbook §9](ops-runbook.md) (Rollenmodell) bzw. [`scripts/initial-setup.sh`](../scripts/initial-setup.sh) bei der Erstinbetriebnahme. `unknown` degradet bewusst **nicht** (Fremd-Backends, kurzzeitige DB-Ausfälle sind bereits über `database` abgedeckt).
 
 > **`last_backup_age_hours` zählt nur Welt-B-Backups (`*.sql.gz.enc`).** Der Glob in `_check_backup_age` ist `*.sql.gz.enc` — Welt-A-Dumps (`dump-*.pgc.enc`, das Format auf `dev.anlaufstelle.app`) werden hier **nicht** erfasst und liefern `null`. Für die zwei Backup-Welten siehe [ops-runbook §6.6](ops-runbook.md#66-backup-restore-drill-refs-720-739). `null` setzt **keinen** degraded-Status — eine Lücke, wenn Backups nur in Welt A laufen ([§9](#9-abgrenzung-health-vs-compliance-dashboard) verweist auf das Compliance-Dashboard als robusteren Backup-Alters-Check).
 
@@ -138,6 +142,8 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
   "virus_scanner": "connected",
   "clamav": "ok",
   "encryption_key": "ok",
+  "db_user_is_superuser": false,
+  "db_role_posture": "ok",
   "version": "v0.14.0",
   "smtp": {"status": "ok", "latency_ms": 38},
   "last_backup_age_hours": 9.7,
@@ -155,6 +161,8 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
   "virus_scanner": "connected",
   "clamav": "ok",
   "encryption_key": "ok",
+  "db_user_is_superuser": false,
+  "db_role_posture": "ok",
   "version": "v0.14.0",
   "smtp": {"status": "unreachable"},
   "last_backup_age_hours": 73.2,
@@ -172,6 +180,8 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
   "virus_scanner": "connected",
   "clamav": "ok",
   "encryption_key": "ok",
+  "db_user_is_superuser": false,
+  "db_role_posture": "ok",
   "version": "v0.14.0",
   "smtp": {"status": "ok", "latency_ms": 38},
   "last_backup_age_hours": 9.7,
@@ -188,7 +198,9 @@ Diese Felder liefert der Endpoint nur an interne/Token-Aufrufer. Die mit **„se
   "database": "unavailable",
   "virus_scanner": "disabled",
   "clamav": "disabled",
-  "encryption_key": "ok"
+  "encryption_key": "ok",
+  "db_user_is_superuser": null,
+  "db_role_posture": "unknown"
 }
 ```
 
@@ -224,7 +236,9 @@ healthcheck:
   start_period: 40s
 ```
 
-`curl -f` failt bei HTTP ≥ 400 → der Container wird bei DB-/Key-Ausfall (503) `unhealthy`. **Achtung:** `degraded` (200) macht den Container **nicht** unhealthy — das ist gewollt (Last-Balancer soll den Pod bei ClamAV-Ausfall nicht rauswerfen), bedeutet aber, dass degraded-Zustände **separat** überwacht werden müssen.
+`curl -f` failt bei HTTP ≥ 400 → der Container wird bei DB-/Key-Ausfall (503) `unhealthy`. **Achtung:** `degraded` (200) macht den Container **nicht** unhealthy — das ist gewollt (Last-Balancer soll den Pod bei ClamAV-Ausfall nicht rauswerfen), bedeutet aber, dass degraded-Zustände **separat** überwacht werden müssen. So verhält sich auch [`docker-compose.prod.yml`](../docker-compose.prod.yml) (reiner `urlopen`-Aufruf, nur der HTTP-Code zählt).
+
+> **Ausnahme `docker-compose.dev.yml`:** Dessen `web`-Healthcheck parst den Body und verlangt `status == "ok"` — dort macht **jeder** `degraded`-Zustand den Container `unhealthy`, und `caddy` (`depends_on: service_healthy`) startet nicht. Das ist für die Dev-Instanz beabsichtigt (streng), heißt aber: Bevor eine bestehende Installation mit diesem Compose-File aktualisiert wird, muss `manage.py check_db_roles` Exit `0` liefern — sonst zieht die neue `db_role_posture`-Prüfung (Refs #793) den Status auf `degraded` und der Stack fährt nicht hoch. Auf frisch per [`deploy/postgres-init/01-app-role.sh`](../deploy/postgres-init/01-app-role.sh) initialisierten Clustern ist das automatisch erfüllt.
 
 ### 7.3 Externes Tool mit Body-Matching (empfohlen)
 
@@ -256,6 +270,7 @@ So fangen `degraded`-Frühwarnungen (Backup-Lag, Disk knapp, SMTP weg, ClamAV we
 | Disk-Warn-Schwelle | **< 10 %** frei → `degraded` | L30 (`DISK_WARN_PCT`) |
 | SMTP-Timeout | **2 s** CONNECT | L31 (`SMTP_TIMEOUT_SECONDS`) |
 | Stale-Jobs-Schwelle | jeder Job mit `critical` → `degraded` (Schwellwert je Job in [`services/compliance/cron.py`](../src/core/services/compliance/cron.py)/[`backup.py`](../src/core/services/compliance/backup.py)) | `_check_stale_jobs` (Refs #1335) |
+| DB-Rollen-Posture | `rolsuper` **oder** `rolbypassrls` auf `current_user` → `degraded`; **ungecacht** (ein indizierter Katalog-Lookup, billiger als der Cache-Table-Read) | `_query_runtime_role_posture` (Refs #793) |
 
 > **Poll-Intervall sinnvoll wählen:** Bei 120/min ist ein Poll alle 30–60 s reichlich. Die 15-s-Cache-TTL bedeutet, dass Detailfelder bei sehr schnellem Polling bis zu 15 s alt sein können — für Backup-Alter/Disk-frei irrelevant.
 

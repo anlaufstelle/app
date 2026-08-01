@@ -61,6 +61,41 @@ def _check_database() -> tuple[str, bool]:
         return "unavailable", False
 
 
+def _query_runtime_role_posture() -> tuple[bool | None, bool | None]:
+    """C-25 (Refs #793): ``(rolsuper, rolbypassrls)`` der DB-Rolle DIESER Connection.
+
+    Misst bewusst die *laufende Verbindung* (``current_user``) und nicht die
+    Env-Konfiguration: ``manage.py check_db_roles`` (Refs #902) verifiziert, dass
+    App-/Admin-Rolle mit dem richtigen Attributprofil im Katalog **existieren** —
+    ob die Django-Runtime auch tatsaechlich als die App-Rolle verbindet, sagt es
+    nicht. Genau diese Luecke ist die Self-Hosting-Falle aus #793: laeuft die
+    Runtime als Superuser (das offizielle ``postgres``-Image legt den per
+    ``POSTGRES_USER`` angelegten Login ohne
+    ``deploy/postgres-init/01-app-role.sh`` als Superuser an), werden die
+    RLS-Policies aus Migration 0047/0084/0085 **still** umgangen — nichts
+    schlaegt fehl, die Facility-Isolation ist aber weg.
+
+    ``(None, None)`` = nicht ermittelbar (Nicht-PostgreSQL-Backend, Rolle nicht
+    im Katalog, DB nicht erreichbar) und degradet bewusst NICHT.
+
+    Kosten: ein einzelner indizierter Katalog-Lookup — billiger als die
+    gecachten Detail-Checks (A7.2) und deshalb ungecacht, damit auch der anonyme
+    Liveness-Pfad die Posture jederzeit korrekt bewertet.
+    """
+    if connection.vendor != "postgresql":
+        return None, None
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user")
+            row = cursor.fetchone()
+    except Exception:
+        logger.exception("health: db role posture check failed")
+        return None, None
+    if not row:
+        return None, None
+    return bool(row[0]), bool(row[1])
+
+
 def _check_encryption_key() -> str:
     """Refs #796 (C-28): Roundtrip-Test gegen die aktive Fernet-Key-Konfiguration.
 
@@ -174,6 +209,12 @@ class HealthView(View):
     laut Compliance-Dashboard ``critical`` ist — Indikator, dass der
     Host-Scheduler (docs/ops-runbook.md §3) nicht eingerichtet ist.
 
+    C-25 (Refs #793): ``db_user_is_superuser``/``db_role_posture`` melden, ob die
+    DB-Rolle der laufenden Verbindung Row Level Security umgeht (Superuser oder
+    ``BYPASSRLS``). Trifft das zu, ist die Facility-Isolation still wirkungslos —
+    der Gesamtstatus faellt auf ``degraded`` (auch anonym, damit
+    Uptime-Monitore anschlagen), das Detail steht im Log und im Token-Payload.
+
     A7.1/A7.2 (Refs #1024): Die Recon-relevanten Detailfelder (``version``,
     ``smtp``, ``last_backup_age_hours``, ``disk_free_pct``, ``stale_jobs``)
     werden nur an interne/Token-Caller ausgeliefert (``_detail_authorized``); anonyme Caller
@@ -208,6 +249,29 @@ class HealthView(View):
             status = "error"
             http_status = 503
 
+        # C-25 (Refs #793): Umgeht die DB-Runtime-Rolle Row Level Security?
+        # Der Statuswechsel ist — wie bei ClamAV/Encryption-Key — auch anonym
+        # sichtbar, damit Uptime-Monitore anschlagen; das konkrete Rollen-Detail
+        # bleibt hinter dem Token-Gate (L9/N13) und steht ansonsten nur im Log.
+        db_user_is_superuser, db_role_bypassrls = _query_runtime_role_posture()
+        if db_user_is_superuser is None:
+            db_role_posture = "unknown"
+        elif db_user_is_superuser or db_role_bypassrls:
+            db_role_posture = "bypasses_rls"
+            logger.warning(
+                "health: DB-Runtime-Rolle umgeht Row Level Security "
+                "(rolsuper=%s, rolbypassrls=%s) — die Facility-Isolation aus "
+                "Migration 0047/0084/0085 ist wirkungslos. Pruefen mit "
+                "'manage.py check_db_roles', Erstinbetriebnahme via "
+                "scripts/initial-setup.sh (Refs #793/#902).",
+                db_user_is_superuser,
+                db_role_bypassrls,
+            )
+            if status == "ok":
+                status = "degraded"
+        else:
+            db_role_posture = "ok"
+
         # L9/N13 (Refs #1375): Anonyme Caller erhalten NUR ``status`` (+ HTTP-Code);
         # Uptime-Monitore werten beides. Die Subsystem-Status (``database``,
         # ``virus_scanner``/``clamav``, ``encryption_key``) sind Recon und liegen
@@ -223,6 +287,11 @@ class HealthView(View):
             payload["virus_scanner"] = virus_scanner
             payload["clamav"] = clamav_status
             payload["encryption_key"] = enc_status
+            # C-25 (Refs #793): ``db_user_is_superuser`` ist das im Issue
+            # geforderte Feld; ``db_role_posture`` ergaenzt es um die heutige
+            # Terminologie (BYPASSRLS zaehlt genauso, ADR-020/ADR-033).
+            payload["db_user_is_superuser"] = db_user_is_superuser
+            payload["db_role_posture"] = db_role_posture
             payload["version"] = os.environ.get("APP_VERSION", "dev")
 
             # SMTP-CONNECT (Refs #796), gecacht (A7.2).

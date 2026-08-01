@@ -1,5 +1,5 @@
 > This is the English translation of [admin-guide.md](../admin-guide.md).
-> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) and 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661).
+> The German version is the authoritative source. Last content syncs: 2026-07-07 (§ 2.10 offline key-lifecycle, #1417), 2026-07-11 (§ 5.6 Error Tracking & Data Minimization, #1500) and 2026-07-14 (§ 1 `DJANGO_AUDIT_HASH_KEY`, § 1.4/§ 4.1 one-shot migrate job, #802), followed by a full re-sync to the current German source on 2026-07-14 (§ 1 audit-hash-key generation & extended ENV reference, § 1.4 token-invite token separation [L4, #1375], § 5.1 real `/health/` payloads, § 5.7 breach-detection scan, § 7.9 RLS on 22 tables, #1551), 2026-07-16 (§ 5.6 GlitchTip verified empirically + how-to, #1511), 2026-07-17 (§ 2.7 configurable MFA enforcement role sets, § 5.5 MFA quota wording, #1639) 2026-08-01 (§ 1 `FILE_UPLOAD_TEMP_DIR` ENV reference, § 2.9 plaintext upload staging buffer, #1661) and 2026-08-01 (§ 1 Step 4 one-command `scripts/initial-setup.sh`, § 1 DB-role tip, § 2.1 bootstrap note, § 5.1 `db_user_is_superuser`/`db_role_posture` health fields, #793).
 
 # Anlaufstelle -- Admin Guide
 
@@ -126,7 +126,7 @@ All environment variables that the application evaluates at runtime (see [`src/a
 | `DJANGO_SETTINGS_MODULE` | -- | In production: `anlaufstelle.settings.prod`. |
 | `ALLOWED_HOSTS` | -- (required in prod) | Comma-separated host names, e.g. `anlaufstelle.example.de`. |
 | `TRUSTED_PROXY_HOPS` | `1` | Number of trusted proxies in front of the app (X-Forwarded-For evaluation). `0` = no proxy, `1` = Caddy only, `2` = CDN + Caddy. |
-| `DJANGO_HEALTH_DETAIL_TOKEN` | -- | Token for the `X-Health-Token` header; authorizes monitoring callers to retrieve the detail fields of `/health/` (`database`, `virus_scanner`/`clamav`, `encryption_key`, `version`, `smtp`, backup age, disk free, `stale_jobs`). Without a token, `/health/` returns only `{"status": ...}` (see [§ 5.1](#51-health-endpoint), #1375). |
+| `DJANGO_HEALTH_DETAIL_TOKEN` | -- | Token for the `X-Health-Token` header; authorizes monitoring callers to retrieve the detail fields of `/health/` (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`, `version`, `smtp`, backup age, disk free, `stale_jobs`). Without a token, `/health/` returns only `{"status": ...}` (see [§ 5.1](#51-health-endpoint), #1375). |
 
 **Database (PostgreSQL — three-role model, #902)**
 
@@ -143,7 +143,7 @@ Since v0.12, Anlaufstelle separates three DB roles: a hardcoded `postgres` boots
 | `POSTGRES_HOST` | `localhost` (via Compose: `db`) | DB host. |
 | `POSTGRES_PORT` | `5432` | DB port. |
 
-> **Tip:** `python manage.py check_db_roles` verifies the role topology at runtime (exit `0` = ok, `1` = incorrect attribute profile, `2` = configuration incomplete). The [Compliance Dashboard](#55-compliance-dashboard) uses the same check.
+> **Tip:** `python manage.py check_db_roles` verifies the role topology at runtime (exit `0` = ok, `1` = incorrect attribute profile, `2` = configuration incomplete). The [Compliance Dashboard](#55-compliance-dashboard) uses the same check, and [`scripts/initial-setup.sh`](../../scripts/initial-setup.sh) runs it during first-time setup. In addition, the [health endpoint](#51-health-endpoint) continuously checks the connection **actually in use** (`db_role_posture`) -- `check_db_roles` verifies that the roles *exist* with the right attributes, not that the application connects as the app role (Refs #793).
 
 **Field Encryption (MultiFernet rotation)**
 
@@ -238,7 +238,19 @@ No changes are needed as long as `DOMAIN` is set in the `.env` file.
 
 ### Step 4: Start the Stack
 
-Django migrations do **not** run automatically on `web` service startup — they are a separate one-shot step (Refs #802). For a fresh install, follow this order:
+**Recommended -- a single command:** the bundled script [`scripts/initial-setup.sh`](../../scripts/initial-setup.sh) runs the complete first-time setup in the correct order (Refs #793):
+
+```bash
+./scripts/initial-setup.sh
+```
+
+It starts the database and waits for it to become ready, creates the schema via the one-shot job, brings up the full stack, and then **verifies the security posture**: `manage.py check --deploy` (deployment settings) and `manage.py check_db_roles` (database roles and ownership). Finally it creates the super-admin interactively -- unless one already exists (see [§ 2.1](#21-initial-installation-create-a-super-admin-bootstrap)).
+
+The script is **idempotent** (a second run is safe: migrations become no-ops, an existing super-admin is skipped) and **fail-loud** -- if a step fails, it exits with a non-zero code and an explanation. Optional environment variables: `COMPOSE_FILE` (default `docker-compose.prod.yml`), `ADMIN_USERNAME`, `ADMIN_EMAIL`, `WAIT_TIMEOUT`, `SKIP_SUPER_ADMIN=1`. It deliberately accepts **no** password -- `create_super_admin` prompts for it interactively ([ADR-018](../adr/018-rollenmodell-superadmin.md)).
+
+> **Why the role verification belongs here:** if the application's database role runs as a PostgreSQL superuser, Row Level Security is **silently** bypassed -- facility isolation stops working without anything failing. The script checks this fail-loud; in addition, the health endpoint reports that state permanently as `degraded` (see [§ 5.1](#51-health-endpoint)).
+
+**Manual (equivalent, for step-by-step control):** Django migrations do **not** run automatically on `web` service startup — they are a separate one-shot step (Refs #802). For a fresh install, follow this order:
 
 ```bash
 # 1. Start the database (+ ClamAV) first
@@ -250,6 +262,10 @@ docker compose -f docker-compose.prod.yml run --rm \
 
 # 3. Start the full stack (web + caddy)
 docker compose -f docker-compose.prod.yml up -d
+
+# 4. Verify the security posture
+docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
+docker compose -f docker-compose.prod.yml exec web python manage.py check_db_roles
 ```
 
 For details on the migrate job (ownership normalization, advisory lock, expected output), see the canonical source [`docs/ops-runbook.md` § 1.2](../ops-runbook.md#12-deploy-schritte).
@@ -289,6 +305,8 @@ Expected (anonymous) response -- since #1375 it contains **only** the `status` f
 docker compose -f docker-compose.prod.yml exec web \
   python manage.py create_super_admin
 ```
+
+> **Note:** if you used [`scripts/initial-setup.sh`](../../scripts/initial-setup.sh) ([§ 1, Step 4](#step-4-start-the-stack)), this step is already done -- the script invokes the same command at the end and skips it when a super-admin already exists.
 
 The script interactively prompts for:
 
@@ -916,7 +934,7 @@ GET /health/
 {"status": "error"}
 ```
 
-The endpoint requires no authentication and is suitable for external monitoring systems. Since #1375 the anonymous response deliberately contains **only** the `status` field (recon hardening): subsystem failures remain visible anonymously via `status`/HTTP code (`degraded` on scanner/SMTP problems, `error` + 503 on database/key failure), but all detail fields (`database`, `virus_scanner`/`clamav`, `encryption_key`, `version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`) are served by `/health/` only to authenticated sessions or callers presenting the `X-Health-Token` header (= `DJANGO_HEALTH_DETAIL_TOKEN`). The complete, authoritative field reference (all fields, values, status codes, and thresholds) is in the [monitoring guide](../monitoring-guide.md).
+The endpoint requires no authentication and is suitable for external monitoring systems. Since #1375 the anonymous response deliberately contains **only** the `status` field (recon hardening): subsystem failures remain visible anonymously via `status`/HTTP code (`degraded` on scanner/SMTP problems as well as on an RLS-bypassing database runtime role, `error` + 503 on database/key failure), but all detail fields (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`, `version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`) are served by `/health/` only to authenticated sessions or callers presenting the `X-Health-Token` header (= `DJANGO_HEALTH_DETAIL_TOKEN`). The complete, authoritative field reference (all fields, values, status codes, and thresholds) is in the [monitoring guide](../monitoring-guide.md).
 
 ### 5.2 Monitoring Integration
 
@@ -1409,4 +1427,4 @@ Snapshots are visible in the Django admin under **Statistics snapshots** (read-o
 <!-- translation-source: docs/admin-guide.md -->
 <!-- translation-version: v0.22.0 -->
 <!-- translation-date: 2026-08-01 -->
-<!-- source-hash: f9f8ad2b0f4f436e0a5d2a13285588649a87bd0e -->
+<!-- source-hash: 6aa0e1ba7d474ac04d3a5251d37439b4dda46a7d -->

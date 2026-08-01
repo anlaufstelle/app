@@ -63,6 +63,8 @@ done
 
 Refs #802 (C-34): Migrationen laufen als separater One-Shot-Job **vor** dem Rolling-Restart. Der Web-Entrypoint macht nur noch `collectstatic` + `gunicorn` — keine Migrationen mehr.
 
+> **Erstinbetriebnahme statt Deploy?** Dieser Abschnitt beschreibt den *laufenden* Deploy. Für die **erste** Installation gibt es [`scripts/initial-setup.sh`](../scripts/initial-setup.sh) (Refs #793): DB starten und auf Bereitschaft warten → Migrate-One-Shot → Stack hochfahren → `check --deploy` → `check_db_roles` → Super-Admin-Bootstrap. Idempotent und fail-loud; Anleitung in [docs/admin-guide.md § 1 Schritt 4](admin-guide.md).
+
 ```bash
 # 1. Neues Image ziehen
 docker compose -f docker-compose.prod.yml pull web
@@ -996,6 +998,21 @@ Produktions-DB-User versehentlich Superuser wird, schlaegt der Cross-
 Tenant-Test in CI **nicht** fehl (er nutzt die explizite Test-Rolle),
 aber die Smoke-Query aus § 9.2 unten muss in Prod liefern: ``rolsuper =
 false`` fuer den Django-DB-User.
+
+**Daueruberwachung statt Einmal-Smoke-Query (Refs
+#793):** Der
+Health-Endpoint fuehrt genau diese Pruefung jetzt bei **jedem** Aufruf auf der
+laufenden Verbindung aus (``SELECT rolsuper, rolbypassrls … WHERE rolname =
+current_user``). Umgeht die Runtime-Rolle RLS, faellt ``status`` dauerhaft auf
+``degraded`` (HTTP bleibt 200) und Token-Caller sehen die Felder
+``db_user_is_superuser``/``db_role_posture``; das Detail steht zusaetzlich als
+``WARNING`` im Log (Logger ``core.views.health``). Damit faellt ein
+fehlkonfigurierter Cluster im Monitoring auf, ohne dass jemand die Smoke-Query
+manuell fahren muss — Feld-Referenz:
+[docs/monitoring-guide.md](monitoring-guide.md). Abgrenzung: ``check_db_roles``
+prueft, dass App-/Admin-Rolle mit den richtigen Attributen im Katalog
+**existieren**; der Health-Endpoint prueft, als **wer** die Anwendung
+tatsaechlich verbindet.
 
 ### DB-Rollenmodell (Goldstandard)
 

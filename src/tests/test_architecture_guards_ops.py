@@ -1,6 +1,8 @@
 """Architecture-Guards — dev-ops-Wartungsskripte (Refs #1047)."""
 
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -186,6 +188,161 @@ class TestDeployChecksWiredIntoStartup:
             "per Case-Guard fail-closed abweisen — ein oeffentlich bekannter Key "
             "verschluesselt faktisch nicht (Refs #1441)."
         )
+
+
+class TestInitialSetupScript:
+    """C-25 (Refs #793): ``scripts/initial-setup.sh`` ist der One-Command-Pfad
+    fuer die Erstinbetriebnahme (`docker compose up` -> lauffaehige Installation).
+
+    Die Falle, die das Skript schliesst: ohne es muessen Betreiber:innen den
+    Migrate-One-Shot, den Bootstrap-Super-Admin und die Verifikation der
+    DB-Rollen-Posture aus der Doku zusammensuchen. Wird die Rollen-Pruefung
+    vergessen, laeuft die Runtime womoeglich als Superuser und Row Level
+    Security (Migration 0047) ist **still** wirkungslos.
+
+    ``scripts/`` liegt im Public-Snapshot (nur ``scripts/dev/`` wird von
+    ``build-release.sh`` gestrippt) — kein ``pytest.skip`` noetig.
+    """
+
+    _SCRIPT = Path("scripts/initial-setup.sh")
+
+    def _body(self) -> str:
+        return self._SCRIPT.read_text(encoding="utf-8")
+
+    def _flat(self) -> str:
+        """Skript ohne Kommentarzeilen, Zeilenfortsetzungen aufgeloest."""
+        lines = [line for line in self._body().splitlines() if not line.lstrip().startswith("#")]
+        return "\n".join(lines).replace("\\\n", " ")
+
+    def test_script_exists_and_is_executable(self) -> None:
+        assert self._SCRIPT.exists(), "scripts/initial-setup.sh fehlt (Refs #793)."
+        assert self._SCRIPT.stat().st_mode & 0o111, (
+            "scripts/initial-setup.sh muss ausfuehrbar sein (Git-Executable-Bit) — "
+            "sonst scheitert der dokumentierte './scripts/initial-setup.sh'-Aufruf."
+        )
+
+    def test_script_is_fail_loud(self) -> None:
+        head = self._body().splitlines()[:3]
+        assert any("set -euo pipefail" in line for line in head), (
+            "initial-setup.sh muss 'set -euo pipefail' direkt nach dem Shebang "
+            "setzen — ein halb durchgelaufenes Setup darf nicht als Erfolg enden."
+        )
+
+    def test_runs_migrate_one_shot(self) -> None:
+        # Auf den tatsaechlichen Aufruf gematcht, nicht auf die Erwaehnung in
+        # einer Statusmeldung — sonst haelt der Guard, waehrend der Schritt fehlt.
+        assert re.search(r"--entrypoint=/app/docker-migrate\.sh", self._flat()), (
+            "initial-setup.sh muss das Schema ueber den One-Shot-Job "
+            "docker-migrate.sh anlegen (Refs #802) — Migrationen laufen bewusst "
+            "NICHT im Web-Entrypoint."
+        )
+
+    def test_verifies_db_role_posture(self) -> None:
+        assert re.search(r"^\s*manage(\.py)?\s+check_db_roles\b", self._flat(), re.MULTILINE), (
+            "initial-setup.sh muss 'manage.py check_db_roles' ausfuehren — das ist "
+            "der Kern von #793: die Verifikation, dass die Runtime-Rolle RLS nicht "
+            "umgeht (Refs #902/#1026)."
+        )
+
+    def test_runs_check_deploy(self) -> None:
+        assert re.search(r"^\s*manage(\.py)?\s+check\s+--deploy\b", self._flat(), re.MULTILINE), (
+            "initial-setup.sh muss 'manage.py check --deploy' ausfuehren (Refs #793)."
+        )
+
+    def test_does_not_alter_db_roles_itself(self) -> None:
+        """Abgleich mit #1026/ADR-033: das Skript VERIFIZIERT die Rollen, es
+        REPARIERT sie nicht.
+
+        Der urspruengliche #793-Entwurf sah ein manuelles ``ALTER ROLE
+        anlaufstelle_user NOSUPERUSER;`` vor. Seit dem Drei-Rollen-Modell
+        (ADR-020) legt ``deploy/postgres-init/01-app-role.sh`` die Attribute
+        beim ersten Cluster-Start korrekt an; auf Bestands-Clustern ist der
+        Ownership-Umzug ein eigener, Maintainer-gefuehrter Vorgang
+        (ops-runbook § 9.6). Ein blindes ALTER ROLE aus dem Setup-Skript waere
+        dort wirkungslos bis schaedlich — und wuerde einen echten
+        Fehlkonfigurations-Alarm stillschweigend uebertuenchen.
+        """
+        flat = self._flat().upper()
+        assert "ALTER ROLE" not in flat, (
+            "initial-setup.sh darf keine Rollen-DDL ausfuehren — Rollen-Attribute "
+            "setzt deploy/postgres-init/01-app-role.sh, das Skript prueft nur "
+            "(ADR-020/ADR-033, Refs #1026)."
+        )
+        assert "REASSIGN OWNED" not in flat, (
+            "Der Ownership-Umzug auf Bestandsinstallationen ist Maintainer-gefuehrt "
+            "(ops-runbook § 9.6) und gehoert nicht in das Erstinbetriebnahme-Skript."
+        )
+
+    def test_never_passes_a_password_non_interactively(self) -> None:
+        """ADR-018: kein Default-Passwort, Passworteingabe nur ueber ``getpass``.
+
+        Ein ``--password``-Flag oder eine Passwort-Env im Setup-Skript landete
+        sonst in Shell-History, Prozessliste und CI-Logs.
+        """
+        flat = self._flat()
+        # Bewusst eng gefasst: ``POSTGRES_ADMIN_PASSWORD`` darf als .env-Pflichtfeld
+        # in den Preflight-Meldungen vorkommen — verboten ist die Weitergabe eines
+        # *Anwendungs*-Passworts an den Bootstrap-Befehl.
+        for forbidden in ("--password", "DJANGO_SUPERUSER_PASSWORD", "${ADMIN_PASSWORD"):
+            assert forbidden not in flat, (
+                f"initial-setup.sh darf {forbidden!r} nicht verwenden — Passwoerter "
+                "werden ausschliesslich interaktiv per getpass gesetzt (ADR-018)."
+            )
+        bootstrap_lines = re.findall(r"[^\n]*create_super_admin[^\n]*", flat)
+        assert bootstrap_lines, "initial-setup.sh muss create_super_admin aufrufen (ADR-018)."
+        for line in bootstrap_lines:
+            for piped in ("<<<", "echo ", "printf "):
+                assert piped not in line, (
+                    "Der create_super_admin-Aufruf darf keine Eingabe hineinpipen — "
+                    "das Passwort wird interaktiv per getpass abgefragt (ADR-018)."
+                )
+
+
+class TestShippedShellScriptsSyntax:
+    """Refs #793: Bis C-25 gab es keinen Guard, der die ausgelieferten
+    Shell-Skripte ueberhaupt auf Syntax prueft — ein Tippfehler in
+    ``scripts/ops/backup.sh`` waere erst beim naechtlichen Backup aufgefallen.
+
+    Bewusst KEINE Modul-Level-Sammlung der Pfade: ``src/tests/**`` wird in den
+    mutmut-``mutants/``-Tree kopiert, ``scripts/`` nicht — ein Import-Zeit-
+    Zugriff wuerde dort das gesamte Test-Listing killen (Refs #1600).
+    """
+
+    @staticmethod
+    def _shipped_scripts() -> list[Path]:
+        scripts = sorted(Path("scripts").rglob("*.sh"))
+        scripts += [p for p in (Path("docker-entrypoint.sh"), Path("docker-migrate.sh")) if p.exists()]
+        return scripts
+
+    def test_scripts_parse_with_bash_n(self) -> None:
+        bash = shutil.which("bash")
+        if bash is None:
+            pytest.skip("bash nicht verfuegbar — Syntax-Guard nicht ausfuehrbar")
+        scripts = self._shipped_scripts()
+        assert scripts, "keine Shell-Skripte unter scripts/ gefunden — Glob kaputt?"
+        failures = []
+        for script in scripts:
+            result = subprocess.run(  # noqa: S603 — fester bash-Pfad, Repo-eigene Dateien
+                [bash, "-n", str(script)], capture_output=True, text=True, check=False
+            )
+            if result.returncode != 0:
+                failures.append(f"{script}: {result.stderr.strip()}")
+        assert not failures, "Shell-Syntaxfehler:\n" + "\n".join(failures)
+
+    def test_scripts_are_shellcheck_clean(self) -> None:
+        """Laeuft nur, wenn shellcheck installiert ist (nicht Teil der
+        Dev-Dependencies) — sonst Skip statt Fehlalarm."""
+        shellcheck = shutil.which("shellcheck")
+        if shellcheck is None:
+            pytest.skip("shellcheck nicht installiert — optionaler Lint")
+        failures = []
+        for script in self._shipped_scripts():
+            result = subprocess.run(  # noqa: S603 — fester Pfad, Repo-eigene Dateien
+                [shellcheck, "--severity=error", str(script)], capture_output=True, text=True, check=False
+            )
+            if result.returncode != 0:
+                failures.append(f"{script}:\n{result.stdout.strip()}")
+        assert not failures, "shellcheck (severity=error):\n" + "\n".join(failures)
 
 
 class TestCaddyUploadBodyLimit:

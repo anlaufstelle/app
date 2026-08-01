@@ -101,13 +101,38 @@ Release-Version (Default `v0.22.0`, siehe [`docker-compose.prod.yml`](../docker-
 
 ### 6. Initial-Setup
 
-Einmalig nach dem ersten Deploy, per SSH auf dem Server:
+Einmalig nach dem ersten Deploy, per SSH auf dem Server. **Erster Schritt ist das
+mitgelieferte Setup-Skript** (Refs #793)
+es fasst Migrate-Job, Stack-Start, Deployment-Checks, DB-Rollen-Verifikation und
+Super-Admin-Bootstrap idempotent und fail-loud zusammen:
+
+```bash
+cd /path/to/repo   # das Verzeichnis mit docker-compose.prod.yml und .env
+./scripts/initial-setup.sh
+```
+
+Optionale Umgebungsvariablen: `COMPOSE_FILE` (Default `docker-compose.prod.yml`),
+`ADMIN_USERNAME`, `ADMIN_EMAIL`, `WAIT_TIMEOUT`, `SKIP_SUPER_ADMIN=1`. Das
+Passwort des Super-Admins fragt das Skript interaktiv ab (ADR-018) — es braucht
+daher ein Terminal und bricht sonst mit einer Erklärung ab.
+
+> **Coolify-Besonderheit:** Coolify verwaltet den Compose-Stack selbst. Das Skript
+> ist deshalb hier vor allem der bequeme Weg für die **Verifikations- und
+> Bootstrap-Schritte**; wer den Stack ausschließlich über die Coolify-UI
+> hochfahren will, führt die Einzelbefehle unten aus. Beide Wege sind
+> gleichwertig, das Skript ist idempotent.
+
+Die Einzelschritte, die das Skript kapselt:
 
 ```bash
 # Migrationen laufen NICHT im Entrypoint, sondern als separater One-Shot-Job
 # vor dem Rolling-Restart (docker-migrate.sh, Refs #802/C-34) — prueft vorab
 # via check_db_roles das DB-Rollenprofil (Refs #1002).
 docker compose -f docker-compose.prod.yml run --rm --entrypoint=/app/docker-migrate.sh web
+
+# Deployment-Settings und DB-Rollen-Posture verifizieren (Refs #793)
+docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
+docker compose -f docker-compose.prod.yml exec web python manage.py check_db_roles
 
 # Super-Admin anlegen (Pflicht-Schritt, kein Default-Passwort, ADR-018)
 docker compose -f docker-compose.prod.yml exec web \
@@ -133,7 +158,9 @@ Details: [ADR-018](adr/018-rollenmodell-superadmin.md),
 > docker compose exec web python manage.py check_db_roles
 > ```
 >
-> Erwartet: App-Rolle `rolsuper=False, rolbypassrls=False` und Admin-Rolle `rolsuper=False, rolbypassrls=True` (Exit-Code 0).
+> Erwartet: App-Rolle `rolsuper=False, rolbypassrls=False` und Admin-Rolle `rolsuper=False, rolbypassrls=True` (Exit-Code 0). `scripts/initial-setup.sh` fuehrt genau diese Pruefung aus und bricht bei Exit-Code 1 ab.
+>
+> **Daueruberwachung:** Zusaetzlich meldet der Health-Endpoint eine RLS-umgehende Runtime-Rolle fortlaufend als `status: degraded` und liefert Token-Callern die Felder `db_user_is_superuser`/`db_role_posture` (Refs #793, Feld-Referenz: [docs/monitoring-guide.md](monitoring-guide.md)). `check_db_roles` prueft die Rollen im Katalog, der Health-Endpoint die **tatsaechlich verwendete** Verbindung — beides zusammen schliesst die Luecke.
 
 ### 7. 2FA aktivieren
 

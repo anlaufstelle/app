@@ -123,7 +123,7 @@ Die betriebsrelevanten ENV-Variablen, die die Anwendung zur Laufzeit auswertet (
 | `DJANGO_SETTINGS_MODULE` || In Produktion `anlaufstelle.settings.prod`. |
 | `ALLOWED_HOSTS` | — (Pflicht in prod) | Komma-separierte Hostnamen, z. B. `anlaufstelle.example.de`. |
 | `TRUSTED_PROXY_HOPS` | `1` | Anzahl vertrauenswürdiger Proxies vor der App (X-Forwarded-For-Auswertung). `0` = kein Proxy, `1` = nur Caddy, `2` = CDN + Caddy. |
-| `DJANGO_HEALTH_DETAIL_TOKEN` || Token für den Header `X-Health-Token`; berechtigt Monitoring-Caller, die Detailfelder von `/health/` (`database`, `virus_scanner`/`clamav`, `encryption_key`, `version`, `smtp`, Backup-Alter, Disk-frei, `stale_jobs`) abzurufen. Ohne Token liefert `/health/` nur `{"status": …}` (siehe [§ 5.1](#51-health-endpoint), #1375). |
+| `DJANGO_HEALTH_DETAIL_TOKEN` || Token für den Header `X-Health-Token`; berechtigt Monitoring-Caller, die Detailfelder von `/health/` (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`, `version`, `smtp`, Backup-Alter, Disk-frei, `stale_jobs`) abzurufen. Ohne Token liefert `/health/` nur `{"status": …}` (siehe [§ 5.1](#51-health-endpoint), #1375). |
 
 **Datenbank (PostgreSQL — Drei-Rollen-Modell, #902)**
 
@@ -140,7 +140,7 @@ Seit v0.12 trennt Anlaufstelle drei DB-Rollen: einen hartkodierten `postgres`-Bo
 | `POSTGRES_HOST` | `localhost` (via Compose: `db`) | DB-Host. |
 | `POSTGRES_PORT` | `5432` | DB-Port. |
 
-> **Tipp:** `python manage.py check_db_roles` verifiziert die Rollen-Topologie zur Laufzeit (Exit `0` = ok, `1` = falsches Attributprofil, `2` = Konfiguration unvollständig). Das [Compliance-Dashboard](#55-compliance-dashboard) nutzt dieselbe Prüfung.
+> **Tipp:** `python manage.py check_db_roles` verifiziert die Rollen-Topologie zur Laufzeit (Exit `0` = ok, `1` = falsches Attributprofil, `2` = Konfiguration unvollständig). Das [Compliance-Dashboard](#55-compliance-dashboard) nutzt dieselbe Prüfung, [`scripts/initial-setup.sh`](../scripts/initial-setup.sh) führt sie bei der Erstinbetriebnahme aus. Ergänzend prüft der [Health-Endpoint](#51-health-endpoint) fortlaufend die **tatsächlich verwendete** Verbindung (`db_role_posture`) — `check_db_roles` prüft, dass die Rollen mit den richtigen Attributen *existieren*, nicht, dass die Anwendung auch als die App-Rolle verbindet (Refs #793).
 
 **Feldverschlüsselung (MultiFernet-Rotation)**
 
@@ -235,7 +235,19 @@ Keine Anpassung nötig, solange `DOMAIN` in der `.env` gesetzt ist.
 
 ### Schritt 4: Stack starten
 
-Django-Migrationen laufen **nicht** automatisch beim Start des `web`-Dienstes — sie sind ein separater One-Shot-Schritt (Refs #802). Bei der Erstinstallation daher in dieser Reihenfolge:
+**Empfohlen — ein Befehl:** Das mitgelieferte Skript [`scripts/initial-setup.sh`](../scripts/initial-setup.sh) führt die komplette Erstinbetriebnahme in der richtigen Reihenfolge aus (Refs #793):
+
+```bash
+./scripts/initial-setup.sh
+```
+
+Es startet die Datenbank und wartet auf ihre Bereitschaft, legt das Schema per One-Shot-Job an, fährt den vollen Stack hoch und **verifiziert anschließend die Sicherheits-Posture**: `manage.py check --deploy` (Deployment-Settings) und `manage.py check_db_roles` (DB-Rollen und Ownership). Zum Schluss legt es — sofern noch keiner existiert — interaktiv den Super-Admin an (siehe [§ 2.1](#21-erstinstallation-super-admin-anlegen-bootstrap)).
+
+Das Skript ist **idempotent** (ein zweiter Lauf ist gefahrlos: Migrationen sind dann No-ops, ein vorhandener Super-Admin wird übersprungen) und **fail-loud** — bricht ein Schritt ab, endet es mit einem Exit-Code ≠ 0 und einer Erklärung. Optionale Umgebungsvariablen: `COMPOSE_FILE` (Default `docker-compose.prod.yml`), `ADMIN_USERNAME`, `ADMIN_EMAIL`, `WAIT_TIMEOUT`, `SKIP_SUPER_ADMIN=1`. Ein Passwort nimmt es bewusst **nicht** entgegen — das fragt `create_super_admin` interaktiv ab ([ADR-018](adr/018-rollenmodell-superadmin.md)).
+
+> **Warum die Rollen-Verifikation dazugehört:** Läuft die Datenbank-Rolle der Anwendung als PostgreSQL-Superuser, wird Row Level Security **still** umgangen — die Einrichtungs-Isolation fällt aus, ohne dass irgendetwas fehlschlägt. Das Skript prüft das fail-loud; zusätzlich meldet der Health-Endpoint diesen Zustand dauerhaft als `degraded` (siehe [§ 5.1](#51-health-endpoint)).
+
+**Manuell (gleichwertig, für Schritt-für-Schritt-Kontrolle):** Django-Migrationen laufen **nicht** automatisch beim Start des `web`-Dienstes — sie sind ein separater One-Shot-Schritt (Refs #802). Bei der Erstinstallation daher in dieser Reihenfolge:
 
 ```bash
 # 1. Datenbank (+ ClamAV) zuerst hochfahren
@@ -247,6 +259,10 @@ docker compose -f docker-compose.prod.yml run --rm \
 
 # 3. Vollen Stack starten (web + caddy)
 docker compose -f docker-compose.prod.yml up -d
+
+# 4. Sicherheits-Posture verifizieren
+docker compose -f docker-compose.prod.yml exec web python manage.py check --deploy
+docker compose -f docker-compose.prod.yml exec web python manage.py check_db_roles
 ```
 
 Details zum Migrate-Job (Ownership-Normalisierung, Advisory-Lock, erwartete Ausgabe) siehe die kanonische Quelle [`docs/ops-runbook.md` § 1.2](ops-runbook.md#12-deploy-schritte).
@@ -286,6 +302,8 @@ Erwartete (anonyme) Antwort — seit #1375 enthält sie **nur** das `status`-Fel
 docker compose -f docker-compose.prod.yml exec web \
   python manage.py create_super_admin
 ```
+
+> **Hinweis:** Wer [`scripts/initial-setup.sh`](../scripts/initial-setup.sh) genutzt hat ([§ 1, Schritt 4](#schritt-4-stack-starten)), hat diesen Schritt bereits erledigt — das Skript ruft denselben Befehl am Ende auf und überspringt ihn, falls schon ein Super-Admin existiert.
 
 Das Skript fragt interaktiv nach:
 
@@ -919,7 +937,7 @@ GET /health/
 {"status": "error"}
 ```
 
-Der Endpoint erfordert keine Authentifizierung und ist für externe Monitoring-Systeme geeignet. Die anonyme Antwort enthält seit #1375 bewusst **nur** das `status`-Feld (Recon-Härtung): Subsystem-Ausfälle bleiben anonym über `status`/HTTP-Code sichtbar (`degraded` bei Scanner-/SMTP-Problemen, `error` + 503 bei DB-/Key-Ausfall), aber alle Detailfelder (`database`, `virus_scanner`/`clamav`, `encryption_key`, `version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`) liefert `/health/` nur an authentifizierte Sessions oder Caller mit dem Header `X-Health-Token` (= `DJANGO_HEALTH_DETAIL_TOKEN`). Die vollständige, autoritative Feld-Referenz (alle Felder, Werte, Status-Codes und Schwellen) steht im [Monitoring-Guide](monitoring-guide.md).
+Der Endpoint erfordert keine Authentifizierung und ist für externe Monitoring-Systeme geeignet. Die anonyme Antwort enthält seit #1375 bewusst **nur** das `status`-Feld (Recon-Härtung): Subsystem-Ausfälle bleiben anonym über `status`/HTTP-Code sichtbar (`degraded` bei Scanner-/SMTP-Problemen sowie bei einer RLS-umgehenden DB-Runtime-Rolle, `error` + 503 bei DB-/Key-Ausfall), aber alle Detailfelder (`database`, `virus_scanner`/`clamav`, `encryption_key`, `db_user_is_superuser`/`db_role_posture`, `version`, `smtp`, `last_backup_age_hours`, `disk_free_pct`, `stale_jobs`) liefert `/health/` nur an authentifizierte Sessions oder Caller mit dem Header `X-Health-Token` (= `DJANGO_HEALTH_DETAIL_TOKEN`). Die vollständige, autoritative Feld-Referenz (alle Felder, Werte, Status-Codes und Schwellen) steht im [Monitoring-Guide](monitoring-guide.md).
 
 ### 5.2 Monitoring-Integration
 
