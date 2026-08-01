@@ -1,5 +1,6 @@
 """Architecture-Guards — Model-Guards (Facility-Scoping, Event-Access-Policy) (Refs #929)."""
 
+import ast
 import re
 from pathlib import Path
 
@@ -76,6 +77,109 @@ def find_unscoped_get_object_or_404(scan_dir: Path, *, whitelist_prefixes: tuple
                 continue
             line_no = source.count("\n", 0, match.start()) + 1
             violations.append(f"{rel}:{line_no}: get_object_or_404({model_name}, ...) ohne facility=")
+    return violations
+
+
+# --- Tenant-Model-Scope-Guard (Refs #1658) -----------------------------------
+#
+# ``core_user``/``core_facility``/``core_organization`` liegen ausserhalb von
+# RLS (Auth-Grenze, siehe ``NOT_RLS_SCOPED`` in ``src/tests/test_rls.py``).
+# Fuer diese drei Models ist der explizite Filter die einzige Huerde.
+_TENANT_MODELS = frozenset({"User", "Facility", "Organization"})
+
+# Scope-Evidenz: taucht eines dieser Tokens im *entparsten Quelltext der
+# Manager-Kette* auf, gilt der Zugriff als gescoped. Bewusst tokenbasiert
+# (statt Keyword-Introspektion), damit auch ``Q(facility=...)``-Ausdruecke,
+# ``**{"facility": …}``-Lookups und Follow-Filter in derselben Kette zaehlen.
+# ``request.user``/``current_facility`` decken den Selbst-Scope ab
+# (``filter(pk=request.user.pk)``) — ein reines ``pk=<irgendwas>`` gilt
+# absichtlich NICHT als Scope, genau das ist das IDOR-Muster.
+_SCOPE_EVIDENCE = (
+    "facility=",
+    "facility_id=",
+    "facility__",
+    "current_facility",
+    "request.user",
+)
+
+
+def _parent_map(tree: "ast.AST") -> dict:
+    """child -> parent fuer den gesamten Baum (ast kennt keine Rueckwaertskante)."""
+    parents: dict = {}
+    for parent in ast.walk(tree):
+        for child in ast.iter_child_nodes(parent):
+            parents[child] = parent
+    return parents
+
+
+def _enclosing_qualname(parents: dict, node: "ast.AST") -> str:
+    """``Klasse.methode`` des umschliessenden def/class — stabiler als Zeilennummern."""
+    parts: list[str] = []
+    current = parents.get(node)
+    while current is not None:
+        if isinstance(current, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            parts.append(current.name)
+        current = parents.get(current)
+    return ".".join(reversed(parts)) or "<module>"
+
+
+def _chain_top(parents: dict, node: "ast.AST") -> "ast.AST":
+    """Aeusserster Ausdruck der Attribut-/Call-Kette ab ``node``.
+
+    ``User.objects`` -> ``User.objects.filter(...).order_by(...)``. Damit
+    erfasst der Guard multi-line-Ketten vollstaendig, ohne Regex-Heuristik.
+    """
+    current = node
+    while True:
+        parent = parents.get(current)
+        extends_chain = (isinstance(parent, ast.Attribute) and parent.value is current) or (
+            isinstance(parent, ast.Call) and parent.func is current
+        )
+        if not extends_chain:
+            return current
+        current = parent
+
+
+def find_unscoped_tenant_access(
+    scan_dir: Path,
+    *,
+    allowlist: dict[str, str] | None = None,
+    whitelist_prefixes: tuple[str, ...] = (),
+) -> list[str]:
+    """Findet ``User``/``Facility``/``Organization``-Manager-Zugriffe ohne Facility-Scope.
+
+    AST-basiert: gesucht wird der Knoten ``<Model>.objects``; bewertet wird die
+    gesamte umschliessende Kette. Kommentare, Docstrings und Strings koennen
+    dadurch nicht faelschlich matchen (anders als bei reiner Textsuche).
+
+    ``allowlist``-Schluessel: ``"<relpath>:<qualname>:<Model>"``, Wert = kurze
+    Begruendung. Die Granularitaet ist bewusst zeilenunabhaengig, aber pro
+    Model getrennt — ein neuer ``User``-Zugriff in einer nur fuer ``Facility``
+    freigegebenen Funktion faellt weiterhin auf.
+    """
+    allowlist = allowlist or {}
+    violations: list[str] = []
+    for py_file in sorted(scan_dir.rglob("*.py")):
+        if py_file.name == "__init__.py":
+            continue
+        rel = py_file.relative_to(scan_dir).as_posix()
+        if any(rel.startswith(prefix) for prefix in whitelist_prefixes):
+            continue
+        tree = ast.parse(py_file.read_text())
+        parents = _parent_map(tree)
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Attribute) and node.attr == "objects"):
+                continue
+            if not (isinstance(node.value, ast.Name) and node.value.id in _TENANT_MODELS):
+                continue
+            model = node.value.id
+            chain_source = ast.unparse(_chain_top(parents, node))
+            if any(token in chain_source for token in _SCOPE_EVIDENCE):
+                continue
+            identifier = f"{rel}:{_enclosing_qualname(parents, node)}:{model}"
+            if identifier in allowlist:
+                continue
+            violations.append(f"{identifier} (Zeile {node.lineno}): {chain_source[:120]}")
     return violations
 
 
@@ -225,3 +329,220 @@ class TestEventAccessPolicyGuard:
                     "use core.services.compliance.sensitivity.get_visible_event_or_404 instead"
                 )
         assert not violations, f"Event access policy violations: {violations}"
+
+
+class TestTenantModelScopeGuard:
+    """Kein ungescopter ``User``/``Facility``/``Organization``-Manager-Zugriff (Refs #1658).
+
+    ``core_user``, ``core_facility`` und ``core_organization`` liegen bewusst
+    **ausserhalb** von RLS (Auth-Grenze — siehe ``NOT_RLS_SCOPED`` in
+    ``src/tests/test_rls.py`` und ADR-005). Fuer alle anderen facility-
+    tragenden Tabellen faengt Postgres ein vergessenes Filter noch ab; hier
+    ist der explizite ``facility=``-Filter die **einzige** Huerde — und auf
+    SQLite (dev/test) gibt es ohnehin keinen RLS-Backstop.
+
+    Der Guard scannt die request-nahen Schichten (``views/``, ``forms/``,
+    ``services/``) nach ``<Model>.objects``-Ketten und verlangt, dass die
+    Kette selbst eine Scope-Evidenz traegt (``facility=``/``facility__``/
+    ``request.user``/``current_facility``). Alles andere muss mit Begruendung
+    in ``_ALLOWLIST`` stehen.
+    """
+
+    def test_synthetic_unscoped_filter_is_detected(self, tmp_path):
+        (tmp_path / "offender.py").write_text(
+            "from core.models import User\n\ndef view(request):\n    return User.objects.filter(is_active=True)\n"
+        )
+        violations = find_unscoped_tenant_access(tmp_path)
+        assert violations
+        assert "offender.py" in violations[0]
+        assert "User.objects" in violations[0]
+
+    def test_synthetic_unscoped_facility_access_is_detected(self, tmp_path):
+        (tmp_path / "offender.py").write_text(
+            "from core.models import Facility\n\ndef view(request):\n    return Facility.objects.all()\n"
+        )
+        assert find_unscoped_tenant_access(tmp_path)
+
+    def test_facility_kwarg_is_not_flagged(self, tmp_path):
+        (tmp_path / "ok.py").write_text(
+            "from core.models import User\n\n"
+            "def view(request, facility):\n"
+            "    return User.objects.filter(facility=facility, is_active=True)\n"
+        )
+        assert not find_unscoped_tenant_access(tmp_path)
+
+    def test_multiline_chain_with_facility_kwarg_is_not_flagged(self, tmp_path):
+        (tmp_path / "ok.py").write_text(
+            "from core.models import User\n\n"
+            "def view(request, facility):\n"
+            "    return (\n"
+            "        User.objects.filter(\n"
+            "            facility=facility,\n"
+            "        )\n"
+            "        .order_by('username')\n"
+            "    )\n"
+        )
+        assert not find_unscoped_tenant_access(tmp_path)
+
+    def test_self_scoped_request_user_is_not_flagged(self, tmp_path):
+        (tmp_path / "ok.py").write_text(
+            "from core.models import User\n\n"
+            "def view(request):\n"
+            "    return User.objects.filter(pk=request.user.pk).update(preferred_language='de')\n"
+        )
+        assert not find_unscoped_tenant_access(tmp_path)
+
+    def test_non_tenant_model_is_not_flagged(self, tmp_path):
+        (tmp_path / "ok.py").write_text(
+            "from core.models import Client\n\ndef view(request):\n    return Client.objects.filter(is_active=True)\n"
+        )
+        assert not find_unscoped_tenant_access(tmp_path)
+
+    def test_allowlisted_call_site_is_skipped(self, tmp_path):
+        (tmp_path / "auth.py").write_text(
+            "from core.models import User\n\n"
+            "class ResetView:\n"
+            "    def form_valid(self, form):\n"
+            "        return User.objects.filter(email__iexact='a@b.c').first()\n"
+        )
+        assert find_unscoped_tenant_access(tmp_path)
+        assert not find_unscoped_tenant_access(
+            tmp_path,
+            allowlist={"auth.py:ResetView.form_valid:User": "pre-auth"},
+        )
+
+    def test_allowlist_is_per_model_not_per_function(self, tmp_path):
+        """Ein Freibrief fuer ``Facility`` deckt keinen ``User``-Zugriff mit ab."""
+        (tmp_path / "mixed.py").write_text(
+            "from core.models import Facility, User\n\n"
+            "def report(request):\n"
+            "    return Facility.objects.count(), User.objects.count()\n"
+        )
+        remaining = find_unscoped_tenant_access(
+            tmp_path,
+            allowlist={"mixed.py:report:Facility": "systemweite Kennzahl"},
+        )
+        assert len(remaining) == 1
+        assert "mixed.py:report:User" in remaining[0]
+
+    def test_whitelisted_prefix_is_skipped(self, tmp_path):
+        system_dir = tmp_path / "system"
+        system_dir.mkdir()
+        (system_dir / "dashboard.py").write_text(
+            "from core.models import Facility\n\ndef view(request):\n    return Facility.objects.all()\n"
+        )
+        assert not find_unscoped_tenant_access(tmp_path, whitelist_prefixes=("system/",))
+
+    # --- Bestandsaufnahme: Scan-Bereiche + begruendete Allowlist ------------
+    #
+    # Gescannt werden die drei request-nahen Schichten. ``views/system/`` ist
+    # wie bei ``TestFacilityScopingGuard._OBJECTS_ALL_WHITELIST_PREFIXES``
+    # ausgenommen (Refs #867/#904): cross-facility-Sicht ist dort die Aufgabe
+    # des Subpackages, RLS gibt super_admin per ``app.is_super_admin`` ohnehin
+    # alle Zeilen frei.
+    _VIEWS_DIR = Path("src/core/views")
+    _FORMS_DIR = Path("src/core/forms")
+    _SERVICES_DIR = Path("src/core/services")
+    _VIEW_WHITELIST_PREFIXES = ("system/",)
+
+    # Pre-Auth-Identitaetslookups: zum Zeitpunkt des Lookups existiert noch
+    # keine Session und damit kein ``request.current_facility`` — die Facility
+    # ist erst das *Ergebnis* der Identifikation, nicht ihre Voraussetzung.
+    _VIEWS_ALLOWLIST = {
+        "auth.py:RateLimitedPasswordResetView.form_valid:User": (
+            "Passwort-Reset: E-Mail-Lookup vor jeder Authentifizierung; Anti-Enumeration "
+            "ist separat geloest (identische Antwort mit/ohne Treffer, Refs #598/#791)."
+        ),
+        "lockout_recovery.py:LockoutRecoveryRequestView.form_valid:User": (
+            "Lockout-Recovery per E-Mail — pre-auth, kein Facility-Kontext vorhanden."
+        ),
+        "lockout_recovery.py:LockoutRecoveryBackupCodeView.form_valid:User": (
+            "Backup-Code-Recovery per Benutzername — pre-auth, kein Facility-Kontext."
+        ),
+    }
+
+    # Forms bauen ausschliesslich facility-gefilterte Auswahl-Querysets
+    # (``assigned_to``/``lead_user``) — bewusst leer.
+    _FORMS_ALLOWLIST: dict[str, str] = {}
+
+    # Zwei legitime Kategorien: (1) deploymentweite Compliance-/Super-Admin-
+    # Kennzahlen, (2) Identitaets-Reloads eines bereits serverseitig
+    # aufgeloesten Subjekts per Primaerschluessel.
+    _SERVICES_ALLOWLIST = {
+        "compliance/app_superuser.py:_app_superuser_checks:User": (
+            "Compliance-Check auf DB-Superuser — deploymentweit per Definition; "
+            "gerendert nur im Super-Admin-Bereich (views/system/compliance.py)."
+        ),
+        "compliance/mfa.py:_mfa_checks:User": (
+            "MFA-Quote ueber alle MFA-pflichtigen Rollen — deploymentweite Kennzahl "
+            "des Compliance-Dashboards, nicht facility-bezogen."
+        ),
+        "dashboard/main.py:super_admin_dashboard_context:Facility": (
+            "Super-Admin-Dashboard: Anzahl aller Einrichtungen ist der Zweck der Kachel."
+        ),
+        "dashboard/main.py:super_admin_dashboard_context:User": (
+            "Super-Admin-Dashboard: deploymentweite Nutzerzahl ist der Zweck der Kachel."
+        ),
+        "compliance/breach_detection.py:record_finding:User": (
+            "Reload einer serverseitig ermittelten ``user_id`` aus dem Scan-Finding — "
+            "kein Request-Input; die Facility steckt bereits im Finding."
+        ),
+        "security/lockout_recovery.py:verify_recovery_token:User": (
+            "Aufloesung der PK aus einem signierten Recovery-Token — pre-auth."
+        ),
+        "security/login_lockout.py:is_locked:User": (
+            "``select_for_update()``-Reload des bereits aufgeloesten Users per eigener "
+            "PK (Lock-Reihenfolge, Refs #1000) — kein Request-Input."
+        ),
+    }
+
+    _FAILURE_HINT = (
+        "Ungescopter Manager-Zugriff auf User/Facility/Organization gefunden. Diese drei "
+        "Tabellen liegen ausserhalb von RLS (Auth-Grenze, siehe NOT_RLS_SCOPED in "
+        "src/tests/test_rls.py) — der explizite Filter ist die einzige Huerde, und auf "
+        "SQLite gibt es keinen DB-Backstop. Bitte ``facility=…`` ergaenzen (bzw. "
+        "``core.services.scoping.get_scoped_object`` nutzen). Ist der Zugriff bewusst "
+        "global, gehoert er mit Begruendung in die passende Allowlist von "
+        "TestTenantModelScopeGuard.\nRefs #1658 / #1376.\nBetroffen: "
+    )
+
+    def test_no_unscoped_tenant_access_in_views(self):
+        violations = find_unscoped_tenant_access(
+            self._VIEWS_DIR,
+            allowlist=self._VIEWS_ALLOWLIST,
+            whitelist_prefixes=self._VIEW_WHITELIST_PREFIXES,
+        )
+        assert not violations, f"{self._FAILURE_HINT}{violations}"
+
+    def test_no_unscoped_tenant_access_in_forms(self):
+        violations = find_unscoped_tenant_access(self._FORMS_DIR, allowlist=self._FORMS_ALLOWLIST)
+        assert not violations, f"{self._FAILURE_HINT}{violations}"
+
+    def test_no_unscoped_tenant_access_in_services(self):
+        violations = find_unscoped_tenant_access(self._SERVICES_DIR, allowlist=self._SERVICES_ALLOWLIST)
+        assert not violations, f"{self._FAILURE_HINT}{violations}"
+
+    @pytest.mark.parametrize(
+        ("scan_dir_attr", "allowlist_attr", "prefixes_attr"),
+        [
+            ("_VIEWS_DIR", "_VIEWS_ALLOWLIST", "_VIEW_WHITELIST_PREFIXES"),
+            ("_FORMS_DIR", "_FORMS_ALLOWLIST", None),
+            ("_SERVICES_DIR", "_SERVICES_ALLOWLIST", None),
+        ],
+    )
+    def test_allowlist_has_no_stale_entries(self, scan_dir_attr, allowlist_attr, prefixes_attr):
+        """Jeder Allowlist-Eintrag muss einer real existierenden Call-Site entsprechen.
+
+        Verhindert, dass ein Freibrief nach einem Refactor stehen bleibt und
+        spaeter unbemerkt eine *neue* ungescopte Stelle mit abdeckt.
+        """
+        prefixes = getattr(self, prefixes_attr) if prefixes_attr else ()
+        found = {
+            violation.split(" (Zeile ")[0]
+            for violation in find_unscoped_tenant_access(getattr(self, scan_dir_attr), whitelist_prefixes=prefixes)
+        }
+        stale = sorted(set(getattr(self, allowlist_attr)) - found)
+        assert not stale, (
+            "Veraltete Allowlist-Eintraege in TestTenantModelScopeGuard — die Call-Site "
+            f"existiert nicht mehr oder ist inzwischen gescoped. Bitte entfernen: {stale}"
+        )
