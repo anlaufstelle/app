@@ -267,10 +267,43 @@ class TestBoard:
             target_field=notiz, depends_on_field=dauer, operator="greater_than", value=1, group_index=2
         )
         client.force_login(admin_user)
-        response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_contact.pk}))
-        assert response.status_code == 200
-        assert response.context["condition_next_group_index"] == 3
-        assert response.context["condition_form"].initial["group_index"] == 3
+        detail = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_contact.pk}))
+        assert detail.status_code == 200
+        assert detail.context["condition_next_group_index"] == 3
+        assert detail.context["condition_form"].initial["group_index"] == 3
+        content = detail.content.decode()
+        # ODER-Affordanz vorhanden + auf max(group_index)+1 vorbelegt.
+        assert 'data-testid="condition-add-or-group"' in content
+        assert "group_index=3" in content
+        # Der Button (hx-get) rendert das Neu-Formular mit verstecktem group_index=3.
+        seeded = client.get(
+            reverse("core:config_condition_create", kwargs={"pk": doc_type_contact.pk}), {"group_index": "3"}
+        )
+        assert seeded.status_code == 200
+        body = seeded.content.decode()
+        assert 'type="hidden"' in body and 'name="group_index"' in body and 'value="3"' in body
+
+    def test_and_button_uses_group_index(self, client, admin_user, doc_type_contact):
+        dauer, notiz = _dtf(doc_type_contact, "dauer"), _dtf(doc_type_contact, "notiz")
+        FieldCondition.objects.create(
+            target_field=notiz, depends_on_field=dauer, operator="greater_than", value=1, group_index=2
+        )
+        client.force_login(admin_user)
+        detail = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_contact.pk}))
+        content = detail.content.decode()
+        # UND-Affordanz je Gruppe vorhanden + auf DEN Gruppenindex (2) + Zielfeld vorbelegt.
+        assert 'data-testid="condition-add-and"' in content
+        assert "group_index=2" in content
+        assert f"target={notiz.pk}" in content
+        # Der Button rendert das Neu-Formular mit verstecktem group_index=2 + vorausgewähltem Ziel.
+        seeded = client.get(
+            reverse("core:config_condition_create", kwargs={"pk": doc_type_contact.pk}),
+            {"group_index": "2", "target": str(notiz.pk)},
+        )
+        assert seeded.status_code == 200
+        body = seeded.content.decode()
+        assert 'name="group_index"' in body and 'value="2"' in body
+        assert f'value="{notiz.pk}" selected' in body
 
     def test_htmx_returns_board_partial_full_request_redirects(self, client, admin_user, doc_type_contact):
         client.force_login(admin_user)

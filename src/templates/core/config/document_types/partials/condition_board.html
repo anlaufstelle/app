@@ -52,6 +52,12 @@ condition_form (FieldConditionForm), condition_next_group_index, condition_field
                 {% endfor %}
             </ul>
             {% for row in group.rows %}<div id="condition-edit-{{ row.pk }}" class="mt-2 empty:hidden"></div>{% endfor %}
+            {# „UND-Bedingung hinzufügen": belegt das Neu-Formular mit dem Index DIESER Gruppe vor. #}
+            <button type="button"
+                    hx-get="{% url 'core:config_condition_create' doc_type.pk %}?group_index={{ group.index }}&target={{ entry.target.pk }}"
+                    hx-target="#condition-add-slot" hx-swap="innerHTML"
+                    class="mt-1 text-[12px] text-ink-muted hover:text-ink hover:underline"
+                    data-testid="condition-add-and">{% trans "UND-Bedingung hinzufügen" %}</button>
         </div>
         {% endfor %}
     </div>
@@ -59,8 +65,18 @@ condition_form (FieldConditionForm), condition_next_group_index, condition_field
 
     {# --- Neue Bedingung --------------------------------------------------- #}
     <div class="card p-4" data-testid="condition-add-card">
-        <h3 class="text-[13px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Neue Bedingung" %}</h3>
-        {% include "core/config/document_types/partials/condition_form.html" with condition_form=condition_form doc_type=doc_type is_edit=False %}
+        <div class="flex items-center justify-between gap-2 mb-3">
+            <h3 class="text-[13px] font-bold uppercase tracking-wider text-ink-muted">{% trans "Neue Bedingung" %}</h3>
+            {# „ODER-Gruppe hinzufügen": belegt das Neu-Formular mit max(group_index)+1 vor. #}
+            <button type="button"
+                    hx-get="{% url 'core:config_condition_create' doc_type.pk %}?group_index={{ condition_next_group_index }}"
+                    hx-target="#condition-add-slot" hx-swap="innerHTML"
+                    class="px-2.5 py-1.5 btn-secondary text-[12px]"
+                    data-testid="condition-add-or-group">{% trans "ODER-Gruppe hinzufügen" %}</button>
+        </div>
+        <div id="condition-add-slot">
+            {% include "core/config/document_types/partials/condition_form.html" with condition_form=condition_form doc_type=doc_type is_edit=False %}
+        </div>
     </div>
     {% endif %}
 </div>

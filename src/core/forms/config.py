@@ -286,12 +286,13 @@ class FieldConditionForm(forms.Form):
         label=_("Vergleichswert"),
         widget=forms.TextInput(attrs={"class": INPUT_CSS, "data-testid": "condition-value"}),
     )
+    # Hidden (Plan § 5): die OR-Gruppe wird nicht getippt, sondern über die
+    # Board-Affordanzen „UND-Bedingung hinzufügen" (Index der Gruppe) bzw.
+    # „ODER-Gruppe hinzufügen" (max+1, server-vorbelegt) gesetzt.
     group_index = forms.IntegerField(
         min_value=0,
         required=False,
-        label=_("ODER-Gruppe"),
-        help_text=_("Gleiche Nummer = UND-Verknüpfung, neue Nummer = ODER-Gruppe."),
-        widget=forms.NumberInput(attrs={"class": INPUT_CSS, "min": 0, "data-testid": "condition-group-index"}),
+        widget=forms.HiddenInput(attrs={"data-testid": "condition-group-index"}),
     )
 
     def __init__(self, *args: Any, document_type: DocumentType | None = None, **kwargs: Any) -> None:

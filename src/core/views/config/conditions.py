@@ -13,6 +13,7 @@ Board-Formularfehler im HTMX-Reswap sichtbar. Antwort-Muster analog
 (Swap-Ziel ``#condition-board``), sonst Redirect zur Detailseite.
 """
 
+import contextlib
 import logging
 import uuid
 
@@ -128,7 +129,27 @@ def _apply_model_errors(form, exc):
 
 
 class ConditionCreateView(FacilityAdminRequiredMixin, View):
-    """Legt eine Feldbedingung für den Dokumentationstyp an (Board-Mutation)."""
+    """Legt eine Feldbedingung für den Dokumentationstyp an (Board-Mutation).
+
+    GET rendert das Neu-Formular für die beiden Board-Affordanzen (Plan § 5):
+    ``?group_index=<n>`` (+ optional ``?target=<dtf-pk>``) belegt die verdeckte
+    OR-Gruppe vor — „UND-Bedingung hinzufügen" reicht den Index der bestehenden
+    Gruppe durch, „ODER-Gruppe hinzufügen" den server-vorbelegten ``max+1``.
+    """
+
+    def get(self, request, pk):
+        doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
+        initial: dict = {}
+        raw_group = request.GET.get("group_index")
+        if raw_group is not None:
+            with contextlib.suppress(ValueError, TypeError):
+                initial["group_index"] = max(0, int(raw_group))
+        raw_target = request.GET.get("target")
+        if raw_target:
+            with contextlib.suppress(ValueError, TypeError):
+                initial["target_field"] = uuid.UUID(raw_target)
+        form = FieldConditionForm(document_type=doc_type, initial=initial)
+        return render(request, FORM_TEMPLATE, {"condition_form": form, "doc_type": doc_type, "is_edit": False})
 
     def post(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)

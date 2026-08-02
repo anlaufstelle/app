@@ -31,6 +31,8 @@ Textfeld der Form.
       hx-swap="outerHTML"
       class="grid grid-cols-1 sm:grid-cols-2 gap-3 items-end" data-testid="condition-form">
     {% csrf_token %}
+    {# OR-Gruppe wird nicht getippt — Hidden-Feld, von den Board-Affordanzen belegt (Plan § 5). #}
+    {{ condition_form.group_index }}
     <div>
         <label for="{{ condition_form.target_field.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Zeige dieses Feld" %}</label>
         {{ condition_form.target_field }}
@@ -46,11 +48,6 @@ Textfeld der Form.
     <div>
         <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Vergleichswert" %}</label>
         <div class="condition-value-slot" data-testid="condition-value-slot">{{ condition_form.value }}</div>
-    </div>
-    <div>
-        <label for="{{ condition_form.group_index.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "ODER-Gruppe" %}</label>
-        {{ condition_form.group_index }}
-        <p class="text-[11px] text-ink-muted mt-1">{{ condition_form.group_index.help_text }}</p>
     </div>
     <div class="sm:col-span-2 flex items-center gap-2">
         <button type="submit" class="px-3.5 py-2 btn-primary text-[13px]" data-testid="condition-submit">

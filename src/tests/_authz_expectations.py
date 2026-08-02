@@ -576,6 +576,7 @@ EXPECTATIONS = (
     E(
         "core:config_condition_create",
         "config",
+        get=ADMIN_ONLY,  # GET rendert das (server-vorbelegte) Neu-Formular für die UND-/ODER-Affordanzen
         post=ADMIN_ONLY,
         url_kwargs=(("pk", "doc_type_contact.pk"),),
         idor=(("pk", "foreign_doc_type.pk"),),
