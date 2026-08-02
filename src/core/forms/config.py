@@ -61,7 +61,9 @@ class DocumentTypeForm(forms.ModelForm):
             self.instance.facility = facility
         # Bearbeitung: system_type ist unveränderbar (Model erzwingt es beim
         # save()); disabled-Feld hält den Instanzwert und ignoriert POST-Manipulation.
-        if self.instance.pk:
+        # ACHTUNG: nicht über instance.pk prüfen — der UUID-Default macht den pk
+        # schon VOR dem ersten Speichern truthy; _state.adding unterscheidet korrekt.
+        if not self.instance._state.adding:
             self.fields["system_type"].disabled = True
 
     def clean(self):

@@ -15,6 +15,7 @@ from django.contrib.messages import get_messages
 from django.urls import reverse
 from django.utils import timezone
 
+from core.forms.config import DocumentTypeForm
 from core.models import AuditLog, DocumentType, Event, QuickTemplate
 
 
@@ -123,6 +124,23 @@ class TestCreate:
         assert obj.facility == facility
         assert response.url == reverse("core:config_doctype_detail", kwargs={"pk": obj.pk})
         assert AuditLog.objects.filter(action=AuditLog.Action.CONFIG_CREATE, target_id=str(obj.pk)).exists()
+
+    def test_create_form_offers_system_type(self, facility):
+        # Regression: UUID-Default-PK macht instance.pk auch VOR dem ersten
+        # Speichern truthy — ein pk-basierter disabled-Guard sperrt system_type
+        # dann faelschlich schon beim Anlegen (richtig: _state.adding).
+        form = DocumentTypeForm(facility=facility)
+        assert form.fields["system_type"].disabled is False
+
+    def test_create_persists_chosen_system_type(self, client, admin_user, facility):
+        client.force_login(admin_user)
+        response = client.post(
+            reverse("core:config_doctype_create"),
+            _valid_post(name="Krisenbogen", system_type=DocumentType.SystemType.CRISIS),
+        )
+        assert response.status_code == 302
+        obj = DocumentType.objects.get(name="Krisenbogen")
+        assert obj.system_type == DocumentType.SystemType.CRISIS
 
     def test_empty_post_re_renders_without_500(self, client, admin_user):
         client.force_login(admin_user)
