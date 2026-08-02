@@ -8,6 +8,7 @@ Anwendungsbetreuung; jeder Objekt-Lookup ist über
 """
 
 import logging
+import uuid
 from urllib.parse import urlencode
 
 from django.contrib import messages
@@ -217,8 +218,16 @@ class ConfigDocTypeFieldAddView(FacilityAdminRequiredMixin, View):
         # der Plan verlangt hier aber den harten 400-Pfad.
         group_pk = request.POST.get("field_group")
         if group_pk:
+            # Roh in den UUID-pk-Filter gefüttert würde ein Nicht-UUID-String
+            # Djangos UUIDField beim Query-Ausführen eine ``ValidationError``
+            # werfen (NICHT ValueError) → ungefangen → 500. Vorab kanonisieren
+            # (Muster: ``_parse_uuids`` in views/config/reorder.py).
+            try:
+                group_uuid = uuid.UUID(group_pk)
+            except (ValueError, TypeError):
+                return HttpResponseBadRequest(_("Ungültige Feldgruppen-ID."))
             foreign_group = (
-                FieldGroup.objects.filter(pk=group_pk, document_type__facility=request.current_facility)
+                FieldGroup.objects.filter(pk=group_uuid, document_type__facility=request.current_facility)
                 .exclude(document_type=doc_type)
                 .first()
             )

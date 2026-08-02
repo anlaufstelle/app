@@ -109,6 +109,18 @@ class TestFieldAdd:
             document_type=doc_type_contact, field_template=field_template
         ).exists()
 
+    def test_add_with_malformed_group_id_is_400_not_500(self, client, admin_user, doc_type_contact, field_template):
+        # Nicht-UUID im field_group-POST → HTTP 400. Djangos UUIDField wirft
+        # beim Query-Ausführen eine ValidationError (NICHT ValueError); roh in
+        # den pk-Filter gefüttert wäre das ein ungefangener 500.
+        client.force_login(admin_user)
+        url = reverse("core:config_doctype_field_add", kwargs={"pk": doc_type_contact.pk})
+        response = client.post(url, {"field_template": str(field_template.pk), "field_group": "garbage"})
+        assert response.status_code == 400
+        assert not DocumentTypeField.objects.filter(
+            document_type=doc_type_contact, field_template=field_template
+        ).exists()
+
     def test_add_htmx_returns_board_partial_not_redirect(self, client, admin_user, doc_type_contact, field_template):
         client.force_login(admin_user)
         url = reverse("core:config_doctype_field_add", kwargs={"pk": doc_type_contact.pk})
