@@ -60,9 +60,12 @@ def test_is_empty_false_and_zero_not_empty():
 
 
 def test_normalize_time_isoformat():
-    """E11: time -> ``"HH:MM:SS"`` (Python ``time.isoformat``)."""
+    """E11: time -> ``"HH:MM:SS"`` (Python ``time.isoformat``, Mikrosekunden gekappt)."""
     assert normalize_value("time", datetime.time(14, 30)) == "14:30:00"
     assert normalize_value("time", datetime.time(9, 5, 15)) == "09:05:15"
+    # Mikrosekunden werden auf Sekunden gekappt (isoformat(timespec="seconds")) —
+    # sonst driftet die Python-Seite von der JS-Seite ab, die nie Sub-Sekunden kennt.
+    assert normalize_value("time", datetime.time(12, 30, 45, 500000)) == "12:30:45"
     # Bereits als String vorliegende Werte werden unveraendert durchgereicht.
     assert normalize_value("time", "14:30:00") == "14:30:00"
     assert normalize_value("time", "") is None
@@ -70,7 +73,7 @@ def test_normalize_time_isoformat():
 
 
 def test_normalize_date_isoformat():
-    """E11: date -> ``"YYYY-MM-DD"`` (Python ``date.isoformat``)."""
+    """E11: date -> ``"YYYY-MM-DD"`` (Python ``date.isoformat``, unberuehrt von der time-Kappung)."""
     assert normalize_value("date", datetime.date(2026, 1, 5)) == "2026-01-05"
     assert normalize_value("date", "2026-01-05") == "2026-01-05"
     assert normalize_value("date", "") is None

@@ -19,8 +19,10 @@ Swap-Verhalten (Muster group_form.html):
 
 Das typisierte Wert-Feld (E19) liegt im .condition-value-slot und wird bei
 Änderung von Quellfeld/Operator per hx-get (config_condition_value_input,
-hx-target="next .condition-value-slot") nachgeladen; initial das generische
-Textfeld der Form.
+hx-target="next .condition-value-slot") nachgeladen. Das Formular bindet
+bereits initial das typisierte Partial (condition_value_input.html) ein —
+ohne Quelltyp-Kontext (Create) rendert dessen else-Zweig lediglich das
+generische Textfeld, kein separates Feld der Form selbst.
 {% endcomment %}
 <form method="post"
       {% if is_edit %}action="{% url 'core:config_condition_update' doc_type.pk condition.pk %}"

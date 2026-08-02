@@ -602,6 +602,76 @@
       "conditions": [],
       "values": {},
       "expected_visible": ["a", "b"]
+    },
+    {
+      "name": "text_not_equals_empty_value_false",
+      "fields": {"q": "text", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "not_equals", "value": "abc", "group": 0}],
+      "values": {"q": ""},
+      "expected_visible": ["q"]
+    },
+    {
+      "name": "text_contains_missing_value_false",
+      "fields": {"q": "text", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "contains", "value": "abc", "group": 0}],
+      "values": {},
+      "expected_visible": ["q"]
+    },
+    {
+      "name": "number_greater_than_missing_value_false",
+      "fields": {"q": "number", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "greater_than", "value": 10, "group": 0}],
+      "values": {},
+      "expected_visible": ["q"]
+    },
+    {
+      "name": "text_equals_case_sensitive_false",
+      "fields": {"q": "text", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "equals", "value": "ja", "group": 0}],
+      "values": {"q": "Ja"},
+      "expected_visible": ["q"]
+    },
+    {
+      "name": "text_equals_whitespace_sensitive_false",
+      "fields": {"q": "text", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "equals", "value": "x", "group": 0}],
+      "values": {"q": " x"},
+      "expected_visible": ["q"]
+    },
+    {
+      "name": "text_contains_case_sensitive_false",
+      "fields": {"q": "text", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "contains", "value": "beratung", "group": 0}],
+      "values": {"q": "Beratung"},
+      "expected_visible": ["q"]
+    },
+    {
+      "name": "number_greater_than_boundary_equal_false",
+      "fields": {"q": "number", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "greater_than", "value": 10, "group": 0}],
+      "values": {"q": 10},
+      "expected_visible": ["q"]
+    },
+    {
+      "name": "number_less_than_boundary_equal_false",
+      "fields": {"q": "number", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "less_than", "value": 10, "group": 0}],
+      "values": {"q": 10},
+      "expected_visible": ["q"]
+    },
+    {
+      "name": "date_greater_than_boundary_equal_false",
+      "fields": {"q": "date", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "greater_than", "value": "2026-01-01", "group": 0}],
+      "values": {"q": "2026-01-01"},
+      "expected_visible": ["q"]
+    },
+    {
+      "name": "time_less_than_boundary_equal_false",
+      "fields": {"q": "time", "ziel": "text"},
+      "conditions": [{"target": "ziel", "source": "q", "operator": "less_than", "value": "09:00:00", "group": 0}],
+      "values": {"q": "09:00:00"},
+      "expected_visible": ["q"]
     }
   ]
 }

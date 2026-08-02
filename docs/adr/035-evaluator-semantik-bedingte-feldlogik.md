@@ -126,7 +126,7 @@ Ein verstecktes Feld verliert seinen Wert nicht. `x-show` blendet nur per `displ
 - [`src/core/services/conditions.py`](../../src/core/services/conditions.py) — Python-Evaluator (Konstanten, `OPERATORS_BY_FIELD_TYPE`, `is_empty`, `normalize_value`, `evaluate_condition`, `evaluate_conditions`, `find_cycle`)
 - [`src/tests/data/condition_vectors.json`](../../src/tests/data/condition_vectors.json) — ausführbare Spezifikation (gemeinsame Testvektoren)
 - [`src/tests/test_conditions_evaluator.py`](../../src/tests/test_conditions_evaluator.py) — parametrisierte Python-Tests über die Vektoren
-- `src/static/js/alpine/conditions.js` — JS-Pendant (P5, folgt); `window.AnlaufstelleConditions.evaluate(...)`
+- [`src/static/js/alpine/conditions.js`](../../src/static/js/alpine/conditions.js) — JS-Pendant (P5); `window.AnlaufstelleConditions.evaluate(...)`
 - Issue #1057 — M1-Planung (Grundsatzentscheidungen E5–E14)
 - Issue #774 — Sensitivitäts-Leak, Grundlage der Drop-Regel
 - [ADR-024](024-slug-based-identifiers.md) — Slug-basierte, stabile Identifikatoren

@@ -21,6 +21,7 @@ lokal über Helfer gebaut (Basis: die Bestands-Fixtures ``facility`` /
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 from unittest.mock import patch
 from uuid import uuid4
@@ -412,13 +413,21 @@ class TestUpdateViewMarkerTransport:
 @pytest.mark.django_db
 class TestRequiredStarRendering:
     def test_conditional_required_star_in_shared_field_partial(self, client, staff_user, facility, cond_doctype):
-        """Der Nicht-FILE-Renderer (``_form_field.html``) zeigt den Stern trotz required=False."""
+        """Der Nicht-FILE-Renderer (``_form_field.html``) zeigt den Stern trotz required=False.
+
+        Gezielt statt eines bloßen ``" *" in body``: der Stern muss am Label des
+        ZIEL-Felds (notiz) hängen, nicht irgendwo im Dokument. Negativkontrolle:
+        das Quellfeld (dauer) ist nicht pflichtig und trägt keinen Stern.
+        """
         client.force_login(staff_user)
         resp = client.get(reverse("core:event_fields_partial") + f"?document_type={cond_doctype.pk}")
         body = resp.content.decode()
-        # Der Notiz-Block trägt einen Stern, obwohl das Feld Django-seitig optional ist.
-        assert "Notiz" in body
-        assert " *" in body
+        notiz_label = re.search(r'for="id_notiz"[^>]*>(.*?)</label>', body, re.DOTALL)
+        assert notiz_label is not None, "Label für das Ziel-Feld notiz nicht gefunden"
+        assert "*" in notiz_label.group(1)
+        dauer_label = re.search(r'for="id_dauer"[^>]*>(.*?)</label>', body, re.DOTALL)
+        assert dauer_label is not None, "Label für das Quellfeld dauer nicht gefunden"
+        assert "*" not in dauer_label.group(1)
 
     def test_conditional_required_star_in_file_block(self, client, staff_user, facility):
         """Der FILE-Inline-Block (``dynamic_fields.html``) zeigt den Stern für ein FILE-Ziel."""

@@ -109,8 +109,10 @@ def normalize_value(field_type: str, value: Any) -> Any:
 
     * ``number``            -> Zahl oder ``None`` (leer)
     * ``date``             -> ``"YYYY-MM-DD"`` oder ``None``
-    * ``time``             -> ``"HH:MM:SS"`` oder ``None`` (``time.isoformat``!
-      die JS-Seite haengt an ``"HH:MM"`` ein ``":00"`` an — sonst schlagen
+    * ``time``             -> ``"HH:MM:SS"`` oder ``None`` (``time.isoformat``
+      mit ``timespec="seconds"`` — kappt Mikrosekunden, damit ``time``-Objekte
+      mit Sub-Sekunden-Praezision nicht an der JS-Seite vorbeidriften; die
+      JS-Seite haengt an ``"HH:MM"`` ein ``":00"`` an — sonst schlagen
       ``equals``-Vergleiche fehl)
     * ``boolean``          -> ``bool``
     * ``select``/``text``/``textarea`` -> String oder ``None`` (``""`` -> ``None``)
@@ -121,6 +123,14 @@ def normalize_value(field_type: str, value: Any) -> Any:
             return None
         isoformat = getattr(value, "isoformat", None)
         if callable(isoformat):
+            if field_type == TIME:
+                # Mikrosekunden kappen (isoformat(timespec="seconds")) — sonst
+                # weicht die Python-Seite von der JS-Seite ab, die aus dem DOM
+                # nur "HH:MM"/"HH:MM:SS" liest und nie Mikrosekunden kennt.
+                try:
+                    return isoformat(timespec="seconds")
+                except TypeError:
+                    return isoformat()
             return isoformat()
         return value
     if field_type == NUMBER:

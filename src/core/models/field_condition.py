@@ -135,7 +135,7 @@ class FieldCondition(models.Model):
             raise ValidationError({"operator": _("Dieser Operator ist für den Feldtyp des Quellfelds nicht zulässig.")})
 
     def _validate_value(self) -> None:
-        from core.services.conditions import VALUELESS_OPERATORS
+        from core.services.conditions import BOOLEAN, MULTI_SELECT, SELECT, VALUELESS_OPERATORS
 
         source_template = self.depends_on_field.field_template
         if self.operator in VALUELESS_OPERATORS:
@@ -144,9 +144,9 @@ class FieldCondition(models.Model):
             return
         if self.value is None:
             raise ValidationError({"value": _("Für diesen Operator ist ein Vergleichswert erforderlich.")})
-        if source_template.field_type == "boolean" and self.value not in (True, False):
+        if source_template.field_type == BOOLEAN and self.value not in (True, False):
             raise ValidationError({"value": _("Der Vergleichswert muss „wahr“ oder „falsch“ sein.")})
-        if source_template.field_type in ("select", "multi_select"):
+        if source_template.field_type in (SELECT, MULTI_SELECT):
             self._validate_option_slug_value(source_template.options_json, self.value)
 
     @staticmethod
@@ -156,7 +156,7 @@ class FieldCondition(models.Model):
         # ``is_active`` wird hier bewusst nicht geprueft.
         known_slugs = {option.get("slug") for option in options_json}
         if value not in known_slugs:
-            raise ValidationError({"value": _("Der Vergleichswert muss eine gültige Options-Slug sein.")})
+            raise ValidationError({"value": _("Der Vergleichswert muss ein gültiger Options-Slug sein.")})
 
     def _validate_no_cycle(self) -> None:
         document_type_id = self.target_field.document_type_id
