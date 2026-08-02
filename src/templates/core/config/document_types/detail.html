@@ -53,24 +53,10 @@
         {% endif %}
     </div>
 
-    {# Feldliste (read-only; interaktives Feld-Board folgt in P6) #}
-    <div class="card p-5">
+    {# Interaktives Feld-Board (P6): Feld-Zuordnung + FieldGroup-Verwaltung #}
+    <div class="mb-2">
         <h2 class="text-[13px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Felder" %}</h2>
-        {% if fields %}
-        <ul class="divide-y divide-subtle" data-testid="doctype-field-list">
-            {% for f in fields %}
-            <li class="py-2.5 flex items-center justify-between gap-3">
-                <div class="min-w-0">
-                    <span class="text-[14px] text-ink font-medium">{{ f.field_template.name }}</span>
-                    {% if f.field_group %}<span class="text-[12px] text-ink-muted ml-2">· {{ f.field_group.name }}</span>{% endif %}
-                </div>
-                <span class="text-[12px] text-ink-muted flex-shrink-0">{{ f.field_template.get_field_type_display }}</span>
-            </li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <p class="text-[13px] text-ink-muted">{% trans "Diesem Typ sind noch keine Felder zugeordnet." %}</p>
-        {% endif %}
+        {% include "core/config/document_types/partials/field_board.html" %}
     </div>
 </div>
 {% endblock %}

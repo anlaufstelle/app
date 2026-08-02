@@ -504,6 +504,46 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "field_template.pk"),),
         idor=(("pk", "foreign_field_template.pk"),),
     ),
+    # M0 P6 (Refs #1056): Feld-Zuordnung + FieldGroup-Verwaltung im
+    # DocumentType-Detail (HTMX-Board). facility_admin only; IDOR → fremder
+    # doc_type → 404 VOR jeder weiteren Pruefung, gemischte Kombis ebenfalls 404.
+    E(
+        "core:config_doctype_field_add",
+        "config",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"),),
+        idor=(("pk", "foreign_doc_type.pk"),),
+    ),
+    E(
+        "core:config_doctype_field_remove",
+        "config",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"), ("dtf_pk", "doc_type_field.pk")),
+        idor=(("pk", "foreign_doc_type.pk"), ("dtf_pk", "foreign_doc_type_field.pk")),
+    ),
+    E(
+        "core:config_fieldgroup_create",
+        "config",
+        get=ADMIN_ONLY,
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"),),
+        idor=(("pk", "foreign_doc_type.pk"),),
+    ),
+    E(
+        "core:config_fieldgroup_update",
+        "config",
+        get=ADMIN_ONLY,
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"), ("group_pk", "field_group.pk")),
+        idor=(("pk", "foreign_doc_type.pk"), ("group_pk", "foreign_field_group.pk")),
+    ),
+    E(
+        "core:config_fieldgroup_delete",
+        "config",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"), ("group_pk", "field_group.pk")),
+        idor=(("pk", "foreign_doc_type.pk"), ("group_pk", "foreign_field_group.pk")),
+    ),
     # ---- partials-htmx --------------------------------------------------------
     E(
         "core:workitem_status_update",

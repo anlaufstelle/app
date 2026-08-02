@@ -1,0 +1,47 @@
+{% load i18n %}
+{% comment %}
+Inline-Formular für eine Feldgruppe (M0 P6, Refs #1056) — genutzt von
+ConfigFieldGroupCreateView (im Board, „Neue Gruppe") und
+ConfigFieldGroupUpdateView (per hx-get in eine Gruppen-Bearbeiten-Slot geladen).
+
+Kontext:
+  form      FieldGroupForm (gebunden bei Fehlern)
+  doc_type  DocumentType (für die Action-URL)
+  group     FieldGroup (nur im Edit-Modus)
+  is_edit   bool
+
+Swap-Verhalten:
+  - Anlegen (is_edit=False): postet auf #field-board (outerHTML). Bei Fehlern
+    rendert der View das ganze Board neu (dieses Formular liegt darin, Fehler
+    werden dort sichtbar).
+  - Bearbeiten (is_edit=True): postet per hx-target="this" (outerHTML). Fehler
+    ersetzen das Formular an Ort und Stelle; bei Erfolg setzt der View
+    HX-Retarget auf #field-board und ersetzt das ganze Board.
+{% endcomment %}
+<form method="post"
+      {% if is_edit %}action="{% url 'core:config_fieldgroup_update' doc_type.pk group.pk %}"
+      hx-post="{% url 'core:config_fieldgroup_update' doc_type.pk group.pk %}"
+      hx-target="this"{% else %}action="{% url 'core:config_fieldgroup_create' doc_type.pk %}"
+      hx-post="{% url 'core:config_fieldgroup_create' doc_type.pk %}"
+      hx-target="#field-board"{% endif %}
+      hx-swap="outerHTML"
+      class="flex flex-wrap items-end gap-2" data-testid="group-form">
+    {% csrf_token %}
+    <div class="flex-1 min-w-[10rem]">
+        <label for="{{ form.name.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">
+            {% if is_edit %}{% trans "Gruppe umbenennen" %}{% else %}{% trans "Neue Gruppe" %}{% endif %}
+        </label>
+        {{ form.name }}
+        {% if form.name.errors %}
+        <ul class="mt-1 text-[12px] text-red-600" role="alert" data-testid="group-form-errors">
+            {% for error in form.name.errors %}<li>{{ error }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    <label class="flex items-center gap-1.5 text-[13px] text-ink pb-2">
+        {{ form.is_collapsible }} {% trans "Einklappbar" %}
+    </label>
+    <button type="submit" class="px-3.5 py-2 btn-secondary text-[13px] whitespace-nowrap">
+        {% if is_edit %}{% trans "Speichern" %}{% else %}{% trans "Anlegen" %}{% endif %}
+    </button>
+</form>

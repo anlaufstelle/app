@@ -11,13 +11,15 @@ import logging
 from urllib.parse import urlencode
 
 from django.contrib import messages
-from django.db.models import Count
+from django.core.exceptions import ValidationError
+from django.db.models import Count, Prefetch
+from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
 from django.views import View
 
-from core.forms.config import DocumentTypeForm
-from core.models import DocumentType, Event
+from core.forms.config import DocumentTypeFieldAddForm, DocumentTypeForm
+from core.models import DocumentType, DocumentTypeField, Event, FieldGroup
 from core.services import config as config_service
 from core.services.config import ConfigDeleteBlocked
 from core.views.mixins import (
@@ -29,6 +31,65 @@ from core.views.mixins import (
 logger = logging.getLogger(__name__)
 
 FORM_TEMPLATE = "core/config/document_types/form.html"
+BOARD_TEMPLATE = "core/config/document_types/partials/field_board.html"
+
+
+# ---------------------------------------------------------------------------
+# Feld-Board — gemeinsamer Render-Helper (P6)
+# ---------------------------------------------------------------------------
+#
+# Das interaktive Feld-Board ist EIN Swap-Ziel ``#field-board``. Jede
+# Board-Mutation (Feld zuordnen/entfernen, Gruppe anlegen/umbenennen/löschen)
+# rendert es bei ``HX-Request`` frisch, sonst redirectet sie zur Detailseite.
+# Sortierung wird hier (View/DB) vorbereitet, NICHT im Template: Gruppen nach
+# ``(sort_order, name)``, Felder je Gruppe nach ``sort_order``, ungruppierte
+# Felder als fixer „Ohne Gruppe"-Block zuletzt.
+
+
+def board_context(doc_type, *, add_form=None, group_form=None):
+    """Baut den Kontext des Feld-Boards (Gruppen + ungruppierte Felder + Formulare)."""
+    from core.forms.config import FieldGroupForm
+
+    groups = list(
+        FieldGroup.objects.filter(document_type=doc_type)
+        .order_by("sort_order", "name")
+        .prefetch_related(
+            Prefetch(
+                "fields",
+                queryset=DocumentTypeField.objects.select_related("field_template").order_by("sort_order"),
+            )
+        )
+    )
+    ungrouped_fields = list(
+        DocumentTypeField.objects.filter(document_type=doc_type, field_group__isnull=True)
+        .select_related("field_template")
+        .order_by("sort_order")
+    )
+    return {
+        "doc_type": doc_type,
+        "groups": groups,
+        "ungrouped_fields": ungrouped_fields,
+        "add_form": add_form if add_form is not None else DocumentTypeFieldAddForm(doc_type=doc_type),
+        "group_form": group_form if group_form is not None else FieldGroupForm(doc_type=doc_type),
+    }
+
+
+def board_response(request, doc_type, *, add_form=None, group_form=None, retarget=False):
+    """HX-Request → frisch gerendertes ``field_board.html``, sonst Redirect zum Detail.
+
+    ``retarget=True`` setzt ``HX-Retarget``/``HX-Reswap`` auf ``#field-board`` —
+    genutzt vom Inline-Editier-Formular einer Gruppe, das per ``hx-target="this"``
+    postet: bei Erfolg soll trotzdem das ganze Board (nicht nur das Formular)
+    ersetzt werden.
+    """
+    if request.headers.get("HX-Request") == "true":
+        context = board_context(doc_type, add_form=add_form, group_form=group_form)
+        response = render(request, BOARD_TEMPLATE, context)
+        if retarget:
+            response["HX-Retarget"] = "#field-board"
+            response["HX-Reswap"] = "outerHTML"
+        return response
+    return redirect("core:config_doctype_detail", pk=doc_type.pk)
 
 
 class ConfigDocumentTypeListView(FacilityAdminRequiredMixin, PaginatedListMixin, HTMXPartialMixin, View):
@@ -86,21 +147,12 @@ class ConfigDocumentTypeCreateView(FacilityAdminRequiredMixin, View):
 
 
 class ConfigDocumentTypeDetailView(FacilityAdminRequiredMixin, View):
-    """Stammdaten + read-only Feldliste (interaktives Feld-Board kommt in P6)."""
+    """Stammdaten + interaktives Feld-Board (Feld-Zuordnung + FieldGroup-Verwaltung)."""
 
     def get(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
-        fields = doc_type.fields.select_related("field_template", "field_group").order_by(
-            "field_group__sort_order", "sort_order"
-        )
-        groups = doc_type.field_groups.order_by("sort_order", "name")
         event_count = Event.objects.filter(document_type=doc_type).count()
-        context = {
-            "doc_type": doc_type,
-            "fields": fields,
-            "groups": groups,
-            "event_count": event_count,
-        }
+        context = {**board_context(doc_type), "event_count": event_count}
         return render(request, "core/config/document_types/detail.html", context)
 
 
@@ -145,3 +197,61 @@ class ConfigDocumentTypeDeleteView(FacilityAdminRequiredMixin, View):
             return redirect("core:config_doctype_detail", pk=doc_type.pk)
         messages.success(request, _("Dokumentationstyp „%(name)s“ wurde gelöscht.") % {"name": name})
         return redirect("core:config_doctype_list")
+
+
+# ---------------------------------------------------------------------------
+# DocumentTypeField — Zuordnung/Entfernung (P6, HTMX-Board)
+# ---------------------------------------------------------------------------
+
+
+class ConfigDocTypeFieldAddView(FacilityAdminRequiredMixin, View):
+    """Ordnet eine Feldvorlage dem Dokumentationstyp zu (Board-Mutation)."""
+
+    def post(self, request, pk):
+        doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
+
+        # Eine Feldgruppe aus einem ANDEREN Dokumentationstyp (derselben
+        # Einrichtung) ist ein bewusster 400 — konsistent zur Service-Semantik
+        # (add_field_to_doctype/move_field: ValueError → HTTP 400). Das doc-type-
+        # gescopte Formularfeld würde sie zwar als „ungültige Auswahl" ablehnen,
+        # der Plan verlangt hier aber den harten 400-Pfad.
+        group_pk = request.POST.get("field_group")
+        if group_pk:
+            foreign_group = (
+                FieldGroup.objects.filter(pk=group_pk, document_type__facility=request.current_facility)
+                .exclude(document_type=doc_type)
+                .first()
+            )
+            if foreign_group is not None:
+                return HttpResponseBadRequest(_("Die Feldgruppe gehört nicht zu diesem Dokumentationstyp."))
+
+        form = DocumentTypeFieldAddForm(request.POST, doc_type=doc_type)
+        if not form.is_valid():
+            messages.error(request, _("Die Feldvorlage konnte nicht zugeordnet werden."))
+            return board_response(request, doc_type, add_form=form)
+
+        field_template = form.cleaned_data["field_template"]
+        field_group = form.cleaned_data.get("field_group")
+        try:
+            config_service.add_field_to_doctype(request, doc_type, field_template, field_group=field_group)
+        except ValueError as exc:
+            return HttpResponseBadRequest(str(exc))
+        except ValidationError as exc:
+            form.add_error("field_template", exc)
+            messages.error(request, _("Die Feldvorlage konnte nicht zugeordnet werden."))
+            return board_response(request, doc_type, add_form=form)
+
+        messages.success(request, _("Feld „%(name)s“ wurde zugeordnet.") % {"name": field_template.name})
+        return board_response(request, doc_type)
+
+
+class ConfigDocTypeFieldRemoveView(FacilityAdminRequiredMixin, View):
+    """Entfernt eine Feld-Zuordnung vom Dokumentationstyp (Board-Mutation)."""
+
+    def post(self, request, pk, dtf_pk):
+        doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
+        dtf = get_object_or_404(DocumentTypeField, pk=dtf_pk, document_type=doc_type)
+        name = dtf.field_template.name
+        config_service.remove_field_from_doctype(request, dtf)
+        messages.success(request, _("Feld „%(name)s“ wurde entfernt.") % {"name": name})
+        return board_response(request, doc_type)

@@ -45,11 +45,18 @@ from core.views.clients import (
     ClientUpdateView,
 )
 from core.views.config.document_types import (
+    ConfigDocTypeFieldAddView,
+    ConfigDocTypeFieldRemoveView,
     ConfigDocumentTypeCreateView,
     ConfigDocumentTypeDeleteView,
     ConfigDocumentTypeDetailView,
     ConfigDocumentTypeListView,
     ConfigDocumentTypeUpdateView,
+)
+from core.views.config.field_groups import (
+    ConfigFieldGroupCreateView,
+    ConfigFieldGroupDeleteView,
+    ConfigFieldGroupUpdateView,
 )
 from core.views.config.field_templates import (
     ConfigFieldTemplateCreateView,
@@ -248,6 +255,32 @@ urlpatterns = [
         "config/document-types/<uuid:pk>/delete/",
         ConfigDocumentTypeDeleteView.as_view(),
         name="config_doctype_delete",
+    ),
+    # P6: Feld-Zuordnung + FieldGroup-Verwaltung im DocumentType-Detail (HTMX-Board).
+    path(
+        "config/document-types/<uuid:pk>/fields/add/",
+        ConfigDocTypeFieldAddView.as_view(),
+        name="config_doctype_field_add",
+    ),
+    path(
+        "config/document-types/<uuid:pk>/fields/<uuid:dtf_pk>/remove/",
+        ConfigDocTypeFieldRemoveView.as_view(),
+        name="config_doctype_field_remove",
+    ),
+    path(
+        "config/document-types/<uuid:pk>/groups/new/",
+        ConfigFieldGroupCreateView.as_view(),
+        name="config_fieldgroup_create",
+    ),
+    path(
+        "config/document-types/<uuid:pk>/groups/<uuid:group_pk>/edit/",
+        ConfigFieldGroupUpdateView.as_view(),
+        name="config_fieldgroup_update",
+    ),
+    path(
+        "config/document-types/<uuid:pk>/groups/<uuid:group_pk>/delete/",
+        ConfigFieldGroupDeleteView.as_view(),
+        name="config_fieldgroup_delete",
     ),
     path("config/field-templates/", ConfigFieldTemplateListView.as_view(), name="config_fieldtemplate_list"),
     path("config/field-templates/new/", ConfigFieldTemplateCreateView.as_view(), name="config_fieldtemplate_create"),

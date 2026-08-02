@@ -1,0 +1,125 @@
+{% load i18n %}
+{% comment %}
+Interaktives Feld-Board (M0 P6, Refs #1056) — DAS zentrale HTMX-Swap-Ziel
+`#field-board`. Jede Board-Mutation (Feld zuordnen/entfernen, Gruppe anlegen/
+umbenennen/löschen) ersetzt diesen Container per outerHTML.
+
+Sortierung ist im View/Service vorbereitet (Gruppen nach (sort_order, name),
+Felder je Gruppe nach sort_order, „Ohne Gruppe" als fixer Block zuletzt) — NICHT
+hier sortieren. Die data-group-id/data-dtf-id-Attribute markieren die Zeilen für
+die Drag-and-Drop-Sortierung (P7); hier wird noch kein Sortable initialisiert.
+
+Kontext: doc_type, groups (mit vorsortierten .fields), ungrouped_fields,
+add_form (DocumentTypeFieldAddForm), group_form (FieldGroupForm).
+{% endcomment %}
+<div id="field-board" class="space-y-4">
+
+    {# --- Benannte Gruppen (sort_order, name) ------------------------------ #}
+    {% for group in groups %}
+    <div class="card p-4" data-group-id="{{ group.pk }}" data-testid="field-group">
+        <div class="flex items-center justify-between gap-3 mb-3">
+            <div class="flex items-center gap-2 min-w-0">
+                <h3 class="text-[14px] font-semibold text-ink truncate">{{ group.name }}</h3>
+                {% if group.is_collapsible %}{% include "components/_badge.html" with text=_("Einklappbar") color="blue" %}{% endif %}
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <button type="button"
+                        hx-get="{% url 'core:config_fieldgroup_update' doc_type.pk group.pk %}"
+                        hx-target="#group-edit-{{ group.pk }}" hx-swap="innerHTML"
+                        class="px-2.5 py-1.5 btn-secondary text-[12px]"
+                        data-testid="group-edit-btn">{% trans "Bearbeiten" %}</button>
+                <form method="post" action="{% url 'core:config_fieldgroup_delete' doc_type.pk group.pk %}"
+                      hx-post="{% url 'core:config_fieldgroup_delete' doc_type.pk group.pk %}"
+                      hx-target="#field-board" hx-swap="outerHTML">
+                    {% csrf_token %}
+                    <button type="submit"
+                            class="px-2.5 py-1.5 text-[12px] font-medium rounded-md border border-red-200 text-red-700 hover:bg-red-50"
+                            data-testid="group-delete-btn">{% trans "Löschen" %}</button>
+                </form>
+            </div>
+        </div>
+        <div id="group-edit-{{ group.pk }}" class="mb-3 empty:hidden"></div>
+        {% if group.fields.all %}
+        <ul class="divide-y divide-subtle">
+            {% for f in group.fields.all %}
+            <li class="py-2 flex items-center justify-between gap-3" data-dtf-id="{{ f.pk }}" data-testid="field-row">
+                <div class="min-w-0">
+                    <span class="text-[14px] text-ink">{{ f.field_template.name }}</span>
+                    {% if f.field_template.is_required %}<span class="text-[12px] text-red-600 ml-1" title="{% trans 'Pflichtfeld' %}">*</span>{% endif %}
+                </div>
+                <div class="flex items-center gap-3 flex-shrink-0">
+                    <span class="text-[12px] text-ink-muted">{{ f.field_template.get_field_type_display }}</span>
+                    <form method="post" action="{% url 'core:config_doctype_field_remove' doc_type.pk f.pk %}"
+                          hx-post="{% url 'core:config_doctype_field_remove' doc_type.pk f.pk %}"
+                          hx-target="#field-board" hx-swap="outerHTML">
+                        {% csrf_token %}
+                        <button type="submit" class="text-[12px] text-red-600 hover:underline" data-testid="field-remove-btn">{% trans "Entfernen" %}</button>
+                    </form>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-[12px] text-ink-muted">{% trans "Keine Felder in dieser Gruppe." %}</p>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+    {# --- Ohne Gruppe (fixer Block, selbst nicht verschiebbar) ------------- #}
+    <div class="card p-4" data-group-id="" data-testid="field-group-ungrouped">
+        <h3 class="text-[14px] font-semibold text-ink mb-3">{% trans "Ohne Gruppe" %}</h3>
+        {% if ungrouped_fields %}
+        <ul class="divide-y divide-subtle">
+            {% for f in ungrouped_fields %}
+            <li class="py-2 flex items-center justify-between gap-3" data-dtf-id="{{ f.pk }}" data-testid="field-row">
+                <div class="min-w-0">
+                    <span class="text-[14px] text-ink">{{ f.field_template.name }}</span>
+                    {% if f.field_template.is_required %}<span class="text-[12px] text-red-600 ml-1" title="{% trans 'Pflichtfeld' %}">*</span>{% endif %}
+                </div>
+                <div class="flex items-center gap-3 flex-shrink-0">
+                    <span class="text-[12px] text-ink-muted">{{ f.field_template.get_field_type_display }}</span>
+                    <form method="post" action="{% url 'core:config_doctype_field_remove' doc_type.pk f.pk %}"
+                          hx-post="{% url 'core:config_doctype_field_remove' doc_type.pk f.pk %}"
+                          hx-target="#field-board" hx-swap="outerHTML">
+                        {% csrf_token %}
+                        <button type="submit" class="text-[12px] text-red-600 hover:underline" data-testid="field-remove-btn">{% trans "Entfernen" %}</button>
+                    </form>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-[12px] text-ink-muted">{% trans "Keine ungruppierten Felder." %}</p>
+        {% endif %}
+    </div>
+
+    {# --- Feld zuordnen ---------------------------------------------------- #}
+    <form method="post" action="{% url 'core:config_doctype_field_add' doc_type.pk %}"
+          hx-post="{% url 'core:config_doctype_field_add' doc_type.pk %}"
+          hx-target="#field-board" hx-swap="outerHTML"
+          class="card p-4 flex flex-wrap items-end gap-2" data-testid="field-add-form">
+        {% csrf_token %}
+        <div class="flex-1 min-w-[12rem]">
+            <label for="{{ add_form.field_template.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Feldvorlage" %}</label>
+            {{ add_form.field_template }}
+        </div>
+        <div class="flex-1 min-w-[10rem]">
+            <label for="{{ add_form.field_group.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Feldgruppe" %}</label>
+            {{ add_form.field_group }}
+        </div>
+        <button type="submit" class="px-3.5 py-2 btn-primary text-[13px] whitespace-nowrap">{% trans "Feld hinzufügen" %}</button>
+        {% if add_form.errors %}
+        <ul class="w-full mt-1 text-[12px] text-red-600" role="alert" data-testid="field-add-errors">
+            {% for error in add_form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+            {% for error in add_form.field_template.errors %}<li>{{ error }}</li>{% endfor %}
+            {% for error in add_form.field_group.errors %}<li>{{ error }}</li>{% endfor %}
+        </ul>
+        {% endif %}
+    </form>
+
+    {# --- Neue Gruppe ------------------------------------------------------ #}
+    <div class="card p-4">
+        {% include "core/config/document_types/partials/group_form.html" with form=group_form doc_type=doc_type is_edit=False %}
+    </div>
+
+</div>
