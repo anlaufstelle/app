@@ -12,8 +12,6 @@ import datetime
 import json
 from pathlib import Path
 
-import pytest
-
 from core.services.conditions import (
     OPERATORS_BY_FIELD_TYPE,
     evaluate_condition,
@@ -24,10 +22,24 @@ from core.services.conditions import (
 )
 
 _VECTORS_PATH = Path(__file__).parent / "data" / "condition_vectors.json"
-_VECTORS = json.loads(_VECTORS_PATH.read_text(encoding="utf-8"))["cases"]
 
 
-@pytest.mark.parametrize("case", _VECTORS, ids=[c["name"] for c in _VECTORS])
+def _load_vectors() -> list[dict]:
+    """Liest die Vektoren erst zur Testlaufzeit (Collection), nicht beim Import.
+
+    Guard-konform (``test_architecture_guards_mutation_isolation.py``): der
+    Dateizugriff steckt in einer Funktion, die nur von ``pytest_generate_tests``
+    (einem Collection-Hook, nie einem Modul-Level-Aufruf) ausgefuehrt wird.
+    """
+    return json.loads(_VECTORS_PATH.read_text(encoding="utf-8"))["cases"]
+
+
+def pytest_generate_tests(metafunc):
+    if "case" in metafunc.fixturenames:
+        vectors = _load_vectors()
+        metafunc.parametrize("case", vectors, ids=[c["name"] for c in vectors])
+
+
 def test_vectors(case):
     """Ausfuehrbare Spezifikation: jeder JSON-Vektor gegen den Evaluator."""
     result = evaluate_conditions(case["fields"], case["conditions"], case["values"])
