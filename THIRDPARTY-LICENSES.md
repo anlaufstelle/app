@@ -55,6 +55,16 @@ every dependency bump and would cause PR churn. Regenerate it locally:
 CI also exposes the inventory: the `licenses` job in [`lint.yml`](.github/workflows/lint.yml)
 prints a summary and uploads the JSON/Markdown reports as build artefacts.
 
+## Vendored JavaScript
+
+`scripts/check_licenses.py` only scans Python (pip) metadata; it does not
+cover JavaScript. Vendored JS files (checked into `src/static/js/`, not
+installed via a package manager) are documented here manually instead.
+
+| Package | Version | License | Upstream | Vendored Path |
+|---|---|---|---|---|
+| SortableJS | 1.15.7 | MIT | <https://github.com/SortableJS/Sortable> | `src/static/js/vendor/sortable.min.js` |
+
 ## Disallowed Categories
 
 Anything that is **not** on the allowlist fails the CI step. In particular:
