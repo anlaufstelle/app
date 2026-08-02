@@ -631,9 +631,7 @@ def test_reseed_transition_from_legacy_autoslug_is_idempotent():
 
     # Simuliert eine Bestands-Gruppe mit abweichendem Legacy-Slug.
     FieldGroup.objects.filter(document_type=kontakt, slug="basisdaten").delete()
-    legacy = FieldGroup.objects.create(
-        document_type=kontakt, name="Basisdaten", slug="basisdaten-legacy", sort_order=0
-    )
+    legacy = FieldGroup.objects.create(document_type=kontakt, name="Basisdaten", slug="basisdaten-legacy", sort_order=0)
     dtf_dauer = DocumentTypeField.objects.get(document_type=kontakt, field_template__slug="dauer")
     dtf_dauer.field_group = legacy
     dtf_dauer.save(update_fields=["field_group"])
