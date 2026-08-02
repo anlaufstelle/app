@@ -11,9 +11,10 @@ dort als Vektor** ergaenzt.
 
 Der Kern ist bewusst **DB-frei** und ohne Django-Model-Import — reine
 Funktionen auf einfachen Datenstrukturen. Der modell-abhaengige
-``build_conditions_payload`` (E12) wird erst in P2/P4 ergaenzt, sobald das
-``FieldCondition``-Modell existiert; der Evaluator-Kern bleibt importierbar
-ohne App-Registry.
+``build_conditions_payload`` (E12, P2) importiert ``FieldCondition``/
+``DocumentTypeField`` erst innerhalb der Funktion (bzw. nur unter
+``TYPE_CHECKING`` fuer Annotationen) — der restliche Evaluator-Kern bleibt
+importierbar ohne App-Registry.
 
 Kanonischer Identifier ist der ``FieldTemplate.slug`` (E1): ``fields`` bildet
 jeden Formular-Slug auf seinen Feldtyp ab, ``values`` traegt die bereits
@@ -22,8 +23,14 @@ normalisierten Ist-Werte, das Ergebnis ist die Menge sichtbarer Slugs.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
-from typing import Any
+from collections.abc import Collection, Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    # Nur fuer Typannotationen (PEP 563 macht sie ohnehin lazy) — kein
+    # Laufzeit-Import, damit der Evaluator-Kern ohne Django-App-Registry
+    # importierbar bleibt (Modulheader oben).
+    from core.models import DocumentType
 
 # --- Operator-Strings -------------------------------------------------------
 # Identisch zu den ``FieldCondition.Operator``-Choices-Values (P2) und zu den
@@ -282,3 +289,55 @@ def find_cycle(edges: Iterable[tuple[str, str]]) -> list[str] | None:
             if found is not None:
                 return found
     return None
+
+
+def build_conditions_payload(document_type: DocumentType, form_field_slugs: Collection[str]) -> dict[str, Any] | None:
+    """Baut das E12-Payload-Dict fuer ein konkretes Formular, oder ``None``.
+
+    Modell-abhaengig (P2) — der Django-Model-Import bleibt lokal in dieser
+    Funktion, damit der Rest des Moduls (Evaluator-Kern) weiterhin ohne
+    App-Registry importierbar ist (Modulheader).
+
+    * ``fields``     -- ``{slug: {"type": field_type}}`` fuer alle
+      ``form_field_slugs`` dieses ``document_type`` (die Kurzform, die
+      ``evaluate_conditions`` als ``fields``-Parameter erwartet).
+    * ``conditions`` -- alle ``FieldCondition``s des ``document_type``,
+      E12-Format; Bedingungen mit ``source`` oder ``target`` ausserhalb von
+      ``form_field_slugs`` werden verworfen (Drop-Regel E8, #774).
+
+    Rueckgabe ``None``, wenn nach der Drop-Regel keine Bedingung uebrig
+    bleibt (kein Payload noetig — auch wenn ``FieldCondition``s fuer den
+    ``document_type`` existieren, aber keine davon zum aktuellen
+    Formular-Feldset passt).
+    """
+    from core.models import DocumentTypeField, FieldCondition
+
+    slugs = set(form_field_slugs)
+
+    dtfs = DocumentTypeField.objects.filter(document_type=document_type, field_template__slug__in=slugs).select_related(
+        "field_template"
+    )
+    fields = {dtf.field_template.slug: {"type": dtf.field_template.field_type} for dtf in dtfs}
+
+    condition_qs = FieldCondition.objects.filter(target_field__document_type=document_type).select_related(
+        "target_field__field_template", "depends_on_field__field_template"
+    )
+    conditions: list[dict[str, Any]] = []
+    for condition in condition_qs:
+        source_slug = condition.depends_on_field.field_template.slug
+        target_slug = condition.target_field.field_template.slug
+        if source_slug not in slugs or target_slug not in slugs:
+            continue  # Drop-Regel E8/#774
+        conditions.append(
+            {
+                "target": target_slug,
+                "source": source_slug,
+                "operator": condition.operator,
+                "value": condition.value,
+                "group": condition.group_index,
+            }
+        )
+
+    if not conditions:
+        return None
+    return {"fields": fields, "conditions": conditions}

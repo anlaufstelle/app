@@ -7,6 +7,7 @@ from .document_type import DocumentType, DocumentTypeField, FieldGroup, FieldTem
 from .episode import Episode
 from .event import Event
 from .event_history import EventHistory
+from .field_condition import FieldCondition
 from .mfa import EncryptedTOTPDevice
 from .organization import Facility, Organization
 from .outcome import Milestone, OutcomeGoal
@@ -32,6 +33,7 @@ __all__ = [
     "DocumentTypeField",
     "Event",
     "EventHistory",
+    "FieldCondition",
     "FieldGroup",
     "FieldTemplate",
     "Milestone",
