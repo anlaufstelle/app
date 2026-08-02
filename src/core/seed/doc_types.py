@@ -1,6 +1,6 @@
 """DocumentType + FieldTemplate + DocumentTypeField seeding."""
 
-from core.models import DocumentType, DocumentTypeField, Facility, FieldTemplate
+from core.models import DocumentType, DocumentTypeField, Facility, FieldGroup, FieldTemplate
 
 
 def get_document_type_definitions() -> list[dict]:
@@ -54,6 +54,18 @@ def get_document_type_definitions() -> list[dict]:
                 # für FILE, store_encrypted_file verschlüsselt zusätzlich den Blob.
                 {"name": "Anhang", "slug": "anhang", "type": FieldTemplate.FieldType.FILE, "required": False},
             ],
+            # Beispiel-Feldgruppen (M0, Refs #1056): "strassenkontakt" bleibt
+            # bewusst in keiner Gruppe gelistet — demonstriert "Ohne Gruppe"
+            # im UI. Slugs müssen zu "fields" oben passen.
+            "groups": [
+                {"name": "Basisdaten", "sort_order": 0, "fields": ["dauer", "alterscluster"]},
+                {
+                    "name": "Leistungen & Notizen",
+                    "sort_order": 1,
+                    "is_collapsible": True,
+                    "fields": ["leistungen", "notiz", "anhang"],
+                },
+            ],
         },
         {
             "name": "Krisengespräch",
@@ -80,6 +92,13 @@ def get_document_type_definitions() -> list[dict]:
                 {"name": "Dauer", "slug": "dauer", "type": "number", "help_text": "Dauer in Minuten"},
                 {"name": "Notiz (Krise)", "slug": "notiz-krise", "type": "textarea", "encrypted": True},
                 {"name": "Weitervermittlung", "slug": "weitervermittlung", "type": "text"},
+            ],
+            "groups": [
+                {
+                    "name": "Krisendetails",
+                    "sort_order": 0,
+                    "fields": ["art-der-krise", "dauer", "notiz-krise", "weitervermittlung"],
+                },
             ],
         },
         {
@@ -235,3 +254,47 @@ def seed_document_types(facility: Facility) -> None:
                 field_template=ft,
                 defaults={"sort_order": idx},
             )
+
+        _seed_field_groups(dt, dt_def.get("groups", []))
+
+
+def _seed_field_groups(dt: DocumentType, groups_def: list[dict]) -> None:
+    """Create/refresh a DocumentType's FieldGroups and field assignment.
+
+    Refs #1056 (M0). ``update_or_create`` looks the group up via
+    ``(document_type, name)`` — never via ``slug``: FieldGroup.slug is
+    auto-generated on creation and immutable afterwards (raises on change),
+    so passing it as a lookup value would risk trying to overwrite it.
+    ``name`` is the stable, human-authored key in the seed catalog above and
+    is itself unique per document_type, so it doubles as the idempotency key
+    without ever touching ``slug``.
+
+    Field assignment is re-applied on every run via an explicit ``.save()``
+    when it differs from the target (not get_or_create-defaults, which only
+    fire on first creation), so a changed grouping in the catalog also takes
+    effect on re-seed. Fields with a slug that appears in no group's
+    "fields" list (e.g. "strassenkontakt" for Kontakt) are explicitly reset
+    to ungrouped, so removing a slug from a group in this file also
+    un-groups it on the next seed run.
+    """
+    if not groups_def:
+        return
+
+    slug_to_group: dict[str, FieldGroup] = {}
+    for group_def in groups_def:
+        fg, _ = FieldGroup.objects.update_or_create(
+            document_type=dt,
+            name=group_def["name"],
+            defaults={
+                "sort_order": group_def.get("sort_order", 0),
+                "is_collapsible": group_def.get("is_collapsible", False),
+            },
+        )
+        for slug in group_def.get("fields", []):
+            slug_to_group[slug] = fg
+
+    for dtf in DocumentTypeField.objects.filter(document_type=dt).select_related("field_template"):
+        target = slug_to_group.get(dtf.field_template.slug)
+        if dtf.field_group_id != (target.id if target else None):
+            dtf.field_group = target
+            dtf.save(update_fields=["field_group"])

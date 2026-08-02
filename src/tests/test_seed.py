@@ -21,7 +21,9 @@ from core.models import (  # noqa: E402
     Case,
     Client,
     DocumentType,
+    DocumentTypeField,
     Facility,
+    FieldGroup,
     FieldTemplate,
     Organization,
     Settings,
@@ -362,3 +364,128 @@ def test_seed_super_admin_idempotent():
     call_command("seed")
 
     assert User.objects.filter(username="superadmin").count() == 1
+
+
+# ---------------------------------------------------------------------------
+# Field groups (M0, Refs #1056)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_seed_creates_kontakt_field_groups():
+    """Kontakt bekommt die zwei Beispiel-Feldgruppen aus dem Seed-Katalog."""
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    kontakt = DocumentType.objects.get(facility=facility, name="Kontakt")
+    groups = {g.name: g for g in FieldGroup.objects.filter(document_type=kontakt)}
+
+    assert set(groups) == {"Basisdaten", "Leistungen & Notizen"}
+    assert groups["Basisdaten"].sort_order == 0
+    assert groups["Basisdaten"].is_collapsible is False
+    assert groups["Leistungen & Notizen"].sort_order == 1
+    assert groups["Leistungen & Notizen"].is_collapsible is True
+
+
+@pytest.mark.django_db
+def test_seed_kontakt_field_group_assignment():
+    """Kontakt-Felder landen slugweise in der jeweils passenden Gruppe."""
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    kontakt = DocumentType.objects.get(facility=facility, name="Kontakt")
+    assignment = {
+        dtf.field_template.slug: (dtf.field_group.name if dtf.field_group else None)
+        for dtf in DocumentTypeField.objects.filter(document_type=kontakt).select_related(
+            "field_template", "field_group"
+        )
+    }
+
+    assert assignment["dauer"] == "Basisdaten"
+    assert assignment["alterscluster"] == "Basisdaten"
+    assert assignment["leistungen"] == "Leistungen & Notizen"
+    assert assignment["notiz"] == "Leistungen & Notizen"
+    assert assignment["anhang"] == "Leistungen & Notizen"
+
+
+@pytest.mark.django_db
+def test_seed_strassenkontakt_stays_ungrouped():
+    """Refs #1056: strassenkontakt demonstriert 'Ohne Gruppe' im UI bewusst."""
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    kontakt = DocumentType.objects.get(facility=facility, name="Kontakt")
+    dtf = DocumentTypeField.objects.get(document_type=kontakt, field_template__slug="strassenkontakt")
+
+    assert dtf.field_group is None
+
+
+@pytest.mark.django_db
+def test_seed_creates_krisengespraech_field_group():
+    """Krisengespräch bekommt eine Gruppe 'Krisendetails' mit allen Feldern."""
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    krise = DocumentType.objects.get(facility=facility, name="Krisengespräch")
+    groups = list(FieldGroup.objects.filter(document_type=krise))
+
+    assert len(groups) == 1
+    assert groups[0].name == "Krisendetails"
+
+    assignment = {
+        dtf.field_template.slug: (dtf.field_group.name if dtf.field_group else None)
+        for dtf in DocumentTypeField.objects.filter(document_type=krise).select_related("field_template", "field_group")
+    }
+    assert assignment == {
+        "art-der-krise": "Krisendetails",
+        "dauer": "Krisendetails",
+        "notiz-krise": "Krisendetails",
+        "weitervermittlung": "Krisendetails",
+    }
+
+
+@pytest.mark.django_db
+def test_seed_doctypes_without_groups_key_have_no_field_groups():
+    """DocTypes ohne 'groups'-Key im Katalog bleiben ohne FieldGroup."""
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    for name in ["Medizinische Versorgung", "Spritzentausch", "Begleitung", "Beratungsgespräch", "Notiz", "Hausverbot"]:
+        dt = DocumentType.objects.get(facility=facility, name=name)
+        assert FieldGroup.objects.filter(document_type=dt).count() == 0
+
+
+@pytest.mark.django_db
+def test_seed_field_groups_idempotent_no_duplicates():
+    """Zweiter Seed-Lauf erzeugt keine neuen FieldGroup-/Zuordnungs-Rows."""
+    call_command("seed")
+
+    facility = Facility.objects.get(name="Hauptstelle")
+    kontakt = DocumentType.objects.get(facility=facility, name="Kontakt")
+    krise = DocumentType.objects.get(facility=facility, name="Krisengespräch")
+
+    group_ids_first = set(FieldGroup.objects.values_list("id", flat=True))
+    kontakt_assignment_first = {
+        dtf.field_template.slug: dtf.field_group_id for dtf in DocumentTypeField.objects.filter(document_type=kontakt)
+    }
+    krise_assignment_first = {
+        dtf.field_template.slug: dtf.field_group_id for dtf in DocumentTypeField.objects.filter(document_type=krise)
+    }
+    total_dtf_first = DocumentTypeField.objects.count()
+
+    call_command("seed")
+
+    group_ids_second = set(FieldGroup.objects.values_list("id", flat=True))
+    kontakt_assignment_second = {
+        dtf.field_template.slug: dtf.field_group_id for dtf in DocumentTypeField.objects.filter(document_type=kontakt)
+    }
+    krise_assignment_second = {
+        dtf.field_template.slug: dtf.field_group_id for dtf in DocumentTypeField.objects.filter(document_type=krise)
+    }
+    total_dtf_second = DocumentTypeField.objects.count()
+
+    assert FieldGroup.objects.count() == 3  # 2× Kontakt + 1× Krisengespräch
+    assert group_ids_second == group_ids_first
+    assert kontakt_assignment_second == kontakt_assignment_first
+    assert krise_assignment_second == krise_assignment_first
+    assert total_dtf_second == total_dtf_first
