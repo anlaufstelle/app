@@ -6529,3 +6529,156 @@
 **Status:** ☐ Offen
 
 </details>
+
+<details open>
+<summary><strong>🔀 COND — Bedingte Feldlogik (6 Cases)</strong></summary>
+
+**Routen:** `/config/document-types/<uuid>/` (Abschnitt „Bedingte Sichtbarkeit"), `/config/document-types/<uuid>/conditions/new/`, `/config/document-types/<uuid>/conditions/<uuid>/edit/`, `/config/document-types/<uuid>/conditions/<uuid>/delete/`, `/config/document-types/<uuid>/conditions/value-input/`, `/events/new/` + `/partials/events/fields/` (Live-Sichtbarkeit im Event-Formular) 
+**Views:** `src/core/views/config/conditions.py` (`ConditionCreateView`, `ConditionUpdateView`, `ConditionDeleteView`, `ConditionValueInputView`, alle `FacilityAdminRequiredMixin`); `src/core/views/events.py` (`EventFieldsPartialView`, Event-CRUD-Views mit `DynamicEventDataForm`) 
+**Services:** `src/core/services/config.py` (`create_field_condition`, `update_field_condition`, `delete_field_condition`); `src/core/services/conditions.py` (`evaluate_conditions`, `find_cycle`, `normalize_value`, `build_conditions_payload` — gemeinsamer Evaluator FE/BE, ADR-035) 
+**Models:** `FieldCondition` (`target_field`, `depends_on_field`, `operator`, `value`, `group_index`; kein eigener facility-FK, transitiv über `target_field.document_type.facility`, RLS doppelt-transitiv) 
+**Frontend:** `src/static/js/alpine/conditions.js` (`window.AnlaufstelleConditions`, `Alpine.data("conditionEvaluator"/"conditionalField")`) — CSP-safe (kein `unsafe-eval`), Payload via `json_script` 
+**E2E-Coverage:** `test_field_conditions.py`, `test_condition_parity.py`; Unit-/Modell-/Formularsuiten: `test_conditions_evaluator.py`, `test_field_condition_model.py`, `test_event_form_conditions.py`, `test_config_conditions.py` 
+**Spezial-Setup:**
+- Rolle **facility_admin** (`admin`) ist Voraussetzung für den Regel-Editor (Config-UI); das Event-Formular selbst nutzt `miriam` (fachkraft) analog zum regulären Dokumentationsfluss.
+- Wegwerf-DocType-Konvention `E2E-Cond-<uuid4>` mit mindestens zwei Feldern (mindestens eine zulässige Quelle) — bewusst kein Seed-DocType mit vorkonfigurierten Bedingungen (Scope-Auslassung E20).
+- Für ENT-COND-06 zusätzlich ein verschlüsseltes Textfeld und ein `file`-Feld am Wegwerf-DocType (beide als Quelle unzulässig).
+
+---
+
+### TC-ID: ENT-COND-01 — Regel anlegen (typisiertes Wert-Input)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration / Bedingte Feldlogik | admin (facility_admin) | C/F | ⚪ | `test_field_conditions.py`, `test_config_conditions.py` |
+
+**Vorbereitung:**
+- Mit `admin` eingeloggt.
+- Wegwerf-DocType (`E2E-Cond-…`) mit mindestens zwei Feldern angelegt: einer Zahl-Quelle und einem mehrzeiligen Text-Ziel.
+
+**Schritte:**
+1. DocType-Detailseite öffnen → Abschnitt „Bedingte Sichtbarkeit" → „Neue Bedingung".
+2. Zielfeld auswählen, danach Quellfeld auswählen — das Wert-Eingabefeld lädt automatisch typisiert nach (bei einer Zahl-Quelle ein `number`-Input).
+3. Operator „ist größer als" wählen, Wert `10` eingeben, „Bedingung hinzufügen" absenden.
+
+**Erwartetes Ergebnis:**
+- Das Board zeigt die neue Regel „Wenn „<Quelle>" ist größer als" mit dem Wert `10` unter „Zeige „<Ziel>"".
+- Das Wert-Eingabefeld wechselt je nach Quelltyp typisiert (number/date/time-Input, select/boolean-Dropdown; bei `is_empty`/`is_not_empty` kein Eingabefeld, sondern ein Hinweistext).
+- Ein `config_create`-AuditLog-Eintrag mit `target_slug`, `source_slug`, `operator`, `group_index` im Detail wird erzeugt.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-COND-02 — Zyklusfehler
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration / Bedingte Feldlogik | admin (facility_admin) | C || `test_field_conditions.py`, `test_field_condition_model.py`, `test_config_conditions.py` |
+
+**Vorbereitung:**
+- ENT-COND-01 durchgeführt (Regel „Quelle → Ziel" existiert bereits).
+
+**Schritte:**
+1. Im selben Board eine Gegenrichtungs-Regel anlegen: Zielfeld = Quelle (aus ENT-COND-01), Quellfeld = Ziel, Operator „ist nicht leer".
+2. Formular absenden.
+
+**Erwartetes Ergebnis:**
+- Das Formular wird mit einer Fehlermeldung neu gerendert: „Diese Bedingung erzeugt einen Zyklus: …" inkl. Pfad über beide Feldnamen.
+- Die Zyklus-Regel wird NICHT gespeichert — das Board zeigt weiterhin ausschließlich die ursprüngliche Regel aus ENT-COND-01.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-COND-03 — Live-Ein-/Ausblenden ohne Reload
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Events | fachkraft (`miriam`) | C/F | ✓ | `test_field_conditions.py`, `test_condition_parity.py` |
+
+**Vorbereitung:**
+- ENT-COND-01 durchgeführt.
+- Mit `miriam` eingeloggt.
+
+**Schritte:**
+1. Neues Event mit dem Wegwerf-DocType anlegen — das Zielfeld ist initial NICHT sichtbar (Quelle leer).
+2. Quellfeld auf einen Wert über dem Schwellenwert setzen (z.B. `15`).
+3. Quellfeld wieder auf einen Wert unter dem Schwellenwert setzen (z.B. `5`).
+4. Im selben Formular den Dokumentationstyp abwählen und erneut auf den Wegwerf-DocType wechseln (HTMX-Swap von `#dynamic-fields`).
+
+**Erwartetes Ergebnis:**
+- Das Zielfeld erscheint SOFORT nach Schritt 2 — ganz ohne Reload oder Server-Roundtrip.
+- Das Zielfeld verschwindet SOFORT wieder nach Schritt 3.
+- Nach dem DocType-Wechsel (Schritt 4) greift die Bedingung erneut unverändert (Payload + Evaluator-Komponente werden mit dem geswappten Partial neu initialisiert).
+- Keine CSP-Violations/JS-Fehler in der Konsole während des gesamten Ablaufs.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-COND-04 — Hidden-Required
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Events | fachkraft (`miriam`) | C/F | ✓ | `test_field_conditions.py`, `test_event_form_conditions.py` |
+
+**Vorbereitung:**
+- Am Wegwerf-DocType ist das Zielfeld als Pflichtfeld (`is_required`) konfiguriert; die Quelle bleibt leer, sodass das Zielfeld versteckt ist.
+
+**Schritte:**
+1. Event-Formular OHNE das (versteckte) Pflichtfeld auszufüllen absenden.
+2. Gegenprobe: Quellfeld vor dem Absenden über den Schwellenwert setzen (Zielfeld wird sichtbar), Zielfeld leer lassen, erneut absenden.
+
+**Erwartetes Ergebnis:**
+- Schritt 1: kein Validierungsfehler auf dem versteckten Pflichtfeld — das Formular wird erfolgreich gespeichert, Redirect auf die Event-Detailseite.
+- Schritt 2: sobald das Feld sichtbar ist, greift die reguläre Pflichtfeld-Validierung wieder — Absenden schlägt mit dem Standard-Pflichtfeld-Fehler fehl.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-COND-05 — Kaskade (zweistufig)
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration / Events | admin + fachkraft (`miriam`) | C || `test_event_form_conditions.py`, `test_conditions_evaluator.py` |
+
+**Vorbereitung:**
+- Wegwerf-DocType mit drei Feldern: A (Zahl) → B (Text, Pflicht, Bedingung „A ist größer als 10") → C (Text, Pflicht, Bedingung „B ist nicht leer").
+
+**Schritte:**
+1. Event anlegen, Feld A auf einen Wert unter dem Schwellenwert setzen (B bleibt versteckt).
+2. Beobachten, dass C ebenfalls versteckt bleibt — obwohl C keine eigene Bedingung auf A hat, sondern nur auf B.
+3. Feld A über den Schwellenwert setzen, B ausfüllen.
+4. Beobachten, dass C daraufhin erscheint.
+
+**Erwartetes Ergebnis:**
+- Ein verstecktes Quellfeld gilt für seine Abhängigen als leer — die Kaskade versteckt C automatisch mit, sobald B versteckt ist.
+- Das Formular mit versteckten B/C (beide Pflichtfelder) ist ohne Validierungsfehler absendbar.
+- Sobald B und C sichtbar werden, greift deren jeweilige Pflichtfeld-Validierung wieder normal.
+
+**Status:** ☐ Offen
+
+---
+
+### TC-ID: ENT-COND-06 — verschlüsselte/file-Quelle abgewiesen
+
+| Bereich | Rolle | Browser | Mobile | E2E |
+|---------|-------|---------|--------|-----|
+| Konfiguration / Bedingte Feldlogik | admin (facility_admin) | C || `test_field_conditions.py`, `test_field_condition_model.py`, `test_config_conditions.py` |
+
+**Vorbereitung:**
+- Wegwerf-DocType zusätzlich um ein verschlüsseltes Textfeld und ein `file`-Feld ergänzt.
+
+**Schritte:**
+1. Im Regel-Editor „Neue Bedingung" öffnen und das Quellfeld-Dropdown betrachten.
+2. Zur Gegenprobe per direktem POST (DevTools/curl) das `file`-Feld bzw. das verschlüsselte Feld als `depends_on_field` übergeben.
+
+**Erwartetes Ergebnis:**
+- Das Quellfeld-Dropdown enthält weder das `file`-Feld noch das verschlüsselte Feld (das Zielfeld-Dropdown enthält beide weiterhin).
+- Ein erzwungener POST mit `file`-/verschlüsseltem Feld als Quelle wird serverseitig abgewiesen — Modell-`clean()`-Defense mit „Dieser Feldtyp kann nicht als Quelle für Bedingungen verwendet werden." bzw. „Verschlüsselte Felder sind als Quelle nicht zulässig.".
+
+**Status:** ☐ Offen
+
+</details>
