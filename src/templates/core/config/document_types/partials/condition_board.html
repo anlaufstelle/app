@@ -13,6 +13,12 @@ jeden outerHTML-Swap. Feld-Board-Mutationen feuern (board_response) neben
 `refresh-preview` jetzt auch `refresh-conditions`; das gebubbelte Event lädt
 dieses Board über `config_condition_board` neu (kein Reload). Der Endpoint setzt
 selbst KEINEN HX-Trigger → kein Selbst-Refresh-Loop.
+
+Bewusster Tradeoff (#1718, Review 2026-08-02): Der Voll-Swap verwirft ein
+gerade offenes (ungespeichertes) Bedingungs-Formular, wenn parallel das
+Feld-Board mutiert wird. Akzeptiert: recoverable (erneut öffnen), der Gewinn
+(Board spiegelt die Feldlage sofort, Empty-State in beide Richtungen korrekt)
+überwiegt; ein Teil-Swap müsste Feldzähler UND Zeilen-Kontexte einzeln pflegen.
 {% endcomment %}
 <div id="condition-board" class="space-y-4"
      hx-get="{% url 'core:config_condition_board' doc_type.pk %}"

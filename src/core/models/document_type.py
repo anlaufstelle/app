@@ -449,8 +449,10 @@ class DocumentTypeField(models.Model):
 
     Die kanonische, interleavte Reihenfolge liefert
     ``core.services.config.iter_blocks_in_order`` /
-    ``iter_fields_in_block_order``; Board, Event-Formular, Offline-Bundle und
-    Feed-Vorschau nutzen sie gemeinsam.
+    ``iter_fields_in_block_order``; Board, Offline-Bundle und Feed-Vorschau
+    nutzen sie direkt. Das Event-Formular (``grouped_fields()``) wendet
+    dieselbe Semantik auf BoundFields an (eigene Implementierung, per Tests
+    gegen die Iteratoren-Semantik fixiert).
     """
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

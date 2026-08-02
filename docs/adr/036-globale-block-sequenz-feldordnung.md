@@ -34,7 +34,7 @@ Die Datenmigration `0115_global_block_sequence` überführt Bestandsdaten layout
 
 ### Konsequente Anwendung auf allen Rendering-Flächen
 
-Die Block-Ordnung ist über die zentralen Service-Iteratoren (`iter_blocks_in_order`, `iter_fields_in_block_order`) EINMAL implementiert und wird überall verwendet: Feld-Board (`board_context`), Ereignis-Formular (`DynamicEventDataForm.grouped_fields()`, aufeinanderfolgende freie Felder als headerlose Runs), **Offline-Sync-Serialisierer** und **Feed-Vorschau**. Ein flaches `order_by("sort_order")` über alle Felder eines Typs ist unter der neuen Semantik **falsch** (Innen-Indizes gruppierter Felder kollidieren mit globalen Positionen) — neue Konsumenten müssen die Iteratoren nutzen.
+Die Block-Ordnung ist über die zentralen Service-Iteratoren (`iter_blocks_in_order`, `iter_fields_in_block_order`) implementiert und wird von Feld-Board (`board_context`), **Offline-Sync-Serialisierer** und **Feed-Vorschau** direkt verwendet. Das Ereignis-Formular (`DynamicEventDataForm.grouped_fields()`) wendet dieselbe Semantik auf BoundFields an (eigene, testfixierte Implementierung); aufeinanderfolgende freie Felder werden zu Runs zusammengeführt, die — sobald benannte Gruppen existieren — weiterhin unter der Überschrift „Ohne Gruppe" stehen. Ein flaches `order_by("sort_order")` über alle Felder eines Typs ist unter der neuen Semantik **falsch** (Innen-Indizes gruppierter Felder kollidieren mit globalen Positionen) — neue Konsumenten müssen die Iteratoren nutzen.
 
 ### Endpunkte und Board
 

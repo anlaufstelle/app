@@ -276,10 +276,11 @@ class FieldConditionForm(forms.Form):
         label=_("Quellfeld"),
         widget=forms.Select(attrs={"class": INPUT_CSS, "data-testid": "condition-source"}),
     )
+    # Reines Validierungsfeld: gerendert wird der Operator über das
+    # HTMX-Partial ``condition_operator_input.html`` (#1715), nicht das Widget.
     operator = forms.ChoiceField(
         choices=FieldCondition.Operator.choices,
         label=_("Operator"),
-        widget=forms.Select(attrs={"class": INPUT_CSS, "data-testid": "condition-operator"}),
     )
     value = forms.CharField(
         required=False,
