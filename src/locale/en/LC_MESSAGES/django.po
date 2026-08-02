@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-02 21:30+0200\n"
+"POT-Creation-Date: 2026-08-03 01:04+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -73,14 +73,14 @@ msgid ""
 msgstr "A field group with this name already exists for this document type."
 
 #: core/forms/config.py:226 core/models/attachment.py:44
-#: core/models/document_type.py:218 core/models/document_type.py:445
-#: templates/core/config/document_types/partials/field_board.html:121
+#: core/models/document_type.py:218 core/models/document_type.py:467
+#: templates/core/config/document_types/partials/field_board.html:122
 msgid "Feldvorlage"
 msgstr "Field template"
 
-#: core/forms/config.py:232 core/models/document_type.py:368
-#: core/models/document_type.py:453
-#: templates/core/config/document_types/partials/field_board.html:125
+#: core/forms/config.py:232 core/models/document_type.py:376
+#: core/models/document_type.py:475
+#: templates/core/config/document_types/partials/field_board.html:126
 msgid "Feldgruppe"
 msgstr "Field group"
 
@@ -102,35 +102,35 @@ msgid "Operator"
 msgstr "Operator"
 
 #: core/forms/config.py:286 core/models/field_condition.py:72
-#: templates/core/config/document_types/partials/condition_form.html:51
+#: templates/core/config/document_types/partials/condition_form.html:56
 msgid "Vergleichswert"
 msgstr "Comparison value"
 
-#: core/forms/config.py:350 core/models/field_condition.py:135
+#: core/forms/config.py:354 core/models/field_condition.py:135
 msgid "Dieser Operator ist für den Feldtyp des Quellfelds nicht zulässig."
 msgstr "This operator is not allowed for the source field's type."
 
-#: core/forms/config.py:360 core/models/field_condition.py:146
+#: core/forms/config.py:364 core/models/field_condition.py:146
 msgid "Für diesen Operator ist ein Vergleichswert erforderlich."
 msgstr "A comparison value is required for this operator."
 
-#: core/forms/config.py:380
+#: core/forms/config.py:384
 msgid "Bitte eine gültige Zahl eingeben."
 msgstr "Please enter a valid number."
 
-#: core/forms/config.py:387
+#: core/forms/config.py:391
 msgid "Bitte „wahr“ oder „falsch“ auswählen."
 msgstr "Please select \"true\" or \"false\"."
 
-#: core/forms/config.py:392
+#: core/forms/config.py:396
 msgid "Bitte ein gültiges Datum (JJJJ-MM-TT) eingeben."
 msgstr "Please enter a valid date (YYYY-MM-DD)."
 
-#: core/forms/config.py:398
+#: core/forms/config.py:402
 msgid "Bitte eine gültige Uhrzeit eingeben."
 msgstr "Please enter a valid time."
 
-#: core/forms/config.py:405
+#: core/forms/config.py:409
 msgid "Bitte eine gültige Option auswählen."
 msgstr "Please select a valid option."
 
@@ -148,7 +148,7 @@ msgid "Zu viele Dateien (%(n)d). Maximal %(max)d pro Feld."
 msgstr "Too many files (%(n)d). Maximum %(max)d per field."
 
 #: core/forms/events.py:75 core/models/document_type.py:106
-#: core/models/document_type.py:356 core/models/document_type.py:439
+#: core/models/document_type.py:364 core/models/document_type.py:461
 #: core/models/event.py:36 core/models/quick_template.py:41
 #: core/services/system/export.py:108
 #: templates/core/attachments/partials/attachment_table.html:12
@@ -377,7 +377,7 @@ msgid "Entry-ID (Versionskette)"
 msgstr "Entry ID (version chain)"
 
 #: core/models/attachment.py:31 core/models/document_type.py:93
-#: core/models/document_type.py:364 core/models/document_type.py:455
+#: core/models/document_type.py:372 core/models/document_type.py:477
 #: core/models/quick_template.py:56 core/models/time_filter.py:38
 msgid "Sortierung"
 msgstr "Sort order"
@@ -1132,7 +1132,7 @@ msgid "Vermittlung"
 msgstr "Referral"
 
 #: core/models/document_type.py:53 core/models/document_type.py:161
-#: core/models/document_type.py:358 core/models/organization.py:13
+#: core/models/document_type.py:366 core/models/organization.py:13
 #: core/models/organization.py:35 templates/core/account/profile.html:14
 #: templates/core/config/document_types/partials/table.html:8
 #: templates/core/config/field_templates/partials/table.html:8
@@ -1255,7 +1255,7 @@ msgstr "Multi-select"
 msgid "Datei"
 msgstr "Data"
 
-#: core/models/document_type.py:164 core/models/document_type.py:361
+#: core/models/document_type.py:164 core/models/document_type.py:369
 #: templates/core/config/field_templates/form.html:18
 #: templates/core/config/field_templates/partials/table.html:9
 msgid "Slug"
@@ -1275,8 +1275,8 @@ msgid "Feldtyp"
 msgstr "Field type"
 
 #: core/models/document_type.py:173
-#: templates/core/config/document_types/partials/field_board.html:62
-#: templates/core/config/document_types/partials/field_board.html:95
+#: templates/core/config/document_types/partials/field_board.html:72
+#: templates/core/config/document_types/partials/field_board.html:97
 msgid "Pflichtfeld"
 msgstr "Required field"
 
@@ -1326,14 +1326,16 @@ msgstr ""
 #: templates/core/config/field_templates/list.html:4
 #: templates/core/config/field_templates/list.html:9
 #: templates/core/config/field_templates/partials/table.html:5
+#: templates/partials/_navigation_desktop.html:134
+#: templates/partials/_navigation_mobile.html:84
 msgid "Feldvorlagen"
 msgstr "Field templates"
 
-#: core/models/document_type.py:236 core/models/document_type.py:386
+#: core/models/document_type.py:236 core/models/document_type.py:394
 msgid "Name ergibt keinen gültigen Slug."
 msgstr "Name does not produce a valid slug."
 
-#: core/models/document_type.py:247 core/models/document_type.py:397
+#: core/models/document_type.py:247 core/models/document_type.py:405
 msgid "Nur a-z, 0-9 und Bindestriche erlaubt."
 msgstr "Only a-z, 0-9, and hyphens allowed."
 
@@ -1345,15 +1347,15 @@ msgstr "Fields with sensitivity=High must be encrypted."
 msgid "Für Datei-Felder ist kein Default-Wert zulässig."
 msgstr "Default value is not allowed for file fields."
 
-#: core/models/document_type.py:296 core/models/document_type.py:407
+#: core/models/document_type.py:296 core/models/document_type.py:415
 msgid "Slug ist nicht gültig (nur a-z, 0-9, Bindestriche)."
 msgstr "Slug is not valid (only a-z, 0-9, hyphens)."
 
-#: core/models/document_type.py:313 core/models/document_type.py:424
+#: core/models/document_type.py:313 core/models/document_type.py:432
 msgid "Slug kann nach Erstellung nicht geändert werden."
 msgstr "Slug cannot be changed after creation."
 
-#: core/models/document_type.py:362
+#: core/models/document_type.py:370
 msgid ""
 "Stabiler Identifier — wird im M2-Paketformat referenziert. Nach Erstellung "
 "unveränderbar."
@@ -1361,25 +1363,25 @@ msgstr ""
 "Stable identifier — referenced by the M2 package format. Cannot be changed "
 "after creation."
 
-#: core/models/document_type.py:365
-#: templates/core/config/document_types/partials/field_board.html:34
+#: core/models/document_type.py:373
+#: templates/core/config/document_types/partials/field_board.html:44
 #: templates/core/config/document_types/partials/group_form.html:42
 msgid "Einklappbar"
 msgstr "Collapsible"
 
-#: core/models/document_type.py:369
+#: core/models/document_type.py:377
 msgid "Feldgruppen"
 msgstr "Field groups"
 
-#: core/models/document_type.py:458
+#: core/models/document_type.py:480
 msgid "Dokumentationstyp-Feld"
 msgstr "Document type field"
 
-#: core/models/document_type.py:459
+#: core/models/document_type.py:481
 msgid "Dokumentationstyp-Felder"
 msgstr "Document type fields"
 
-#: core/models/document_type.py:474
+#: core/models/document_type.py:496
 msgid "Die Feldgruppe muss zum selben Dokumentationstyp gehören."
 msgstr "The field group must belong to the same document type."
 
@@ -2815,7 +2817,7 @@ msgstr "Audit log on every access / rectification / deletion"
 msgid "Verschluesselte Auslieferung der Datenpakete"
 msgstr "Encrypted delivery of data packages"
 
-#: core/services/config.py:85
+#: core/services/config.py:90
 #, python-format
 msgid ""
 "%(n)d Ereignis(se) verweisen auf diesen Dokumentationstyp und müssten zuerst "
@@ -2824,12 +2826,12 @@ msgstr ""
 "%(n)d event(s) reference this document type and would have to be removed "
 "first."
 
-#: core/services/config.py:94
+#: core/services/config.py:99
 #, python-format
 msgid "Der Dokumentationstyp wird noch von %(n)d Objekt(en) referenziert."
 msgstr "The document type is still referenced by %(n)d object(s)."
 
-#: core/services/config.py:153
+#: core/services/config.py:158
 #, python-format
 msgid ""
 "%(n)d Dokumentationstyp-Zuordnung(en) verwenden diese Feldvorlage — bitte "
@@ -2838,25 +2840,25 @@ msgstr ""
 "%(n)d document type assignment(s) use this field template — please remove it "
 "there first."
 
-#: core/services/config.py:159
+#: core/services/config.py:164
 #, python-format
 msgid "%(n)d Dateianhang/-anhänge sind an diese Feldvorlage gebunden."
 msgstr "%(n)d file attachment(s) are bound to this field template."
 
-#: core/services/config.py:168
+#: core/services/config.py:173
 #, python-format
 msgid "%(n)d Ereignis(se) enthalten Daten unter dem Slug „%(slug)s“."
 msgstr "%(n)d event(s) contain data under the slug \"%(slug)s\"."
 
-#: core/services/config.py:281 core/views/config/document_types.py:266
+#: core/services/config.py:314 core/views/config/document_types.py:258
 msgid "Die Feldgruppe gehört nicht zu diesem Dokumentationstyp."
 msgstr "The field group does not belong to this document type."
 
-#: core/services/config.py:284 core/services/config.py:307
+#: core/services/config.py:317 core/services/config.py:344
 msgid "Diese Feldvorlage ist dem Dokumentationstyp bereits zugeordnet."
 msgstr "This field template is already assigned to the document type."
 
-#: core/services/config.py:460
+#: core/services/config.py:507
 msgid ""
 "Die übergebene Reihenfolge stimmt nicht mit dem Bestand überein (fremde, "
 "fehlende oder doppelte IDs)."
@@ -2864,15 +2866,15 @@ msgstr ""
 "The submitted order does not match the existing records (foreign, missing, "
 "or duplicate IDs)."
 
-#: core/services/config.py:514
+#: core/services/config.py:689
 msgid "Das zu verschiebende Feld gehört nicht zu diesem Dokumentationstyp."
 msgstr "The field to be moved does not belong to this document type."
 
-#: core/services/config.py:520
+#: core/services/config.py:706
 msgid "Die Zielgruppe gehört nicht zu diesem Dokumentationstyp."
 msgstr "The target group does not belong to this document type."
 
-#: core/services/config.py:532
+#: core/services/config.py:719
 msgid ""
 "Die übergebene Reihenfolge stimmt nicht mit der Zielgruppe überein (fremde, "
 "fehlende oder doppelte IDs)."
@@ -2917,13 +2919,13 @@ msgstr ""
 "K-anonymization is disabled — the deletion run removes records permanently. "
 "If you want to retain statistics, enable it in Settings."
 
-#: core/services/events/context.py:64
+#: core/services/events/context.py:64 core/views/config/conditions.py:72
 #: templates/core/config/document_types/partials/condition_value_input.html:24
 #: templates/core/export/client_data_pdf.html:32
 msgid "Ja"
 msgstr "Yes"
 
-#: core/services/events/context.py:64
+#: core/services/events/context.py:64 core/views/config/conditions.py:72
 #: templates/core/config/document_types/partials/condition_value_input.html:25
 #: templates/core/export/client_data_pdf.html:32
 msgid "Nein"
@@ -3210,64 +3212,64 @@ msgstr "Person has been created."
 msgid "Person wurde aktualisiert."
 msgstr "Person has been updated."
 
-#: core/views/config/conditions.py:159 core/views/config/conditions.py:174
+#: core/views/config/conditions.py:236 core/views/config/conditions.py:251
 msgid "Die Bedingung konnte nicht angelegt werden."
 msgstr "The condition could not be created."
 
-#: core/views/config/conditions.py:176
+#: core/views/config/conditions.py:253
 msgid "Bedingung wurde angelegt."
 msgstr "Condition has been created."
 
-#: core/views/config/conditions.py:226
+#: core/views/config/conditions.py:305
 msgid "Bedingung wurde gespeichert."
 msgstr "Condition has been saved."
 
-#: core/views/config/conditions.py:237
+#: core/views/config/conditions.py:322
 msgid "Die Bedingung konnte nicht gespeichert werden."
 msgstr "The condition could not be saved."
 
-#: core/views/config/conditions.py:247
+#: core/views/config/conditions.py:332
 msgid "Bedingung wurde gelöscht."
 msgstr "Condition has been deleted."
 
-#: core/views/config/conditions.py:265
+#: core/views/config/conditions.py:350 core/views/config/conditions.py:378
 msgid "Kein Quellfeld angegeben."
 msgstr "No source field specified."
 
-#: core/views/config/conditions.py:269
+#: core/views/config/conditions.py:354 core/views/config/conditions.py:382
 msgid "Ungültige Quellfeld-ID."
 msgstr "Invalid source field ID."
 
-#: core/views/config/document_types.py:164
+#: core/views/config/document_types.py:156
 #, python-format
 msgid "Dokumentationstyp „%(name)s“ wurde angelegt."
 msgstr "Document type \"%(name)s\" was created."
 
-#: core/views/config/document_types.py:201
+#: core/views/config/document_types.py:193
 #, python-format
 msgid "Dokumentationstyp „%(name)s“ wurde aktualisiert."
 msgstr "Document type \"%(name)s\" was updated."
 
-#: core/views/config/document_types.py:230
+#: core/views/config/document_types.py:222
 #, python-format
 msgid "Dokumentationstyp „%(name)s“ wurde gelöscht."
 msgstr "Document type \"%(name)s\" was deleted."
 
-#: core/views/config/document_types.py:259
+#: core/views/config/document_types.py:251
 msgid "Ungültige Feldgruppen-ID."
 msgstr "Invalid field group ID."
 
-#: core/views/config/document_types.py:271
-#: core/views/config/document_types.py:283
+#: core/views/config/document_types.py:263
+#: core/views/config/document_types.py:275
 msgid "Die Feldvorlage konnte nicht zugeordnet werden."
 msgstr "The field template could not be assigned."
 
-#: core/views/config/document_types.py:287
+#: core/views/config/document_types.py:279
 #, python-format
 msgid "Feld „%(name)s“ wurde zugeordnet."
 msgstr "Field \"%(name)s\" was assigned."
 
-#: core/views/config/document_types.py:299
+#: core/views/config/document_types.py:291
 #, python-format
 msgid "Feld „%(name)s“ wurde entfernt."
 msgstr "Field \"%(name)s\" was removed."
@@ -3320,20 +3322,21 @@ msgstr "Field template \"%(name)s\" was activated."
 msgid "Feldvorlage „%(name)s“ wurde deaktiviert."
 msgstr "Field template \"%(name)s\" was deactivated."
 
-#: core/views/config/reorder.py:75
-msgid "Ungültige Gruppen-ID im Payload."
-msgstr "Invalid group ID in payload."
+#: core/views/config/reorder.py:95 core/views/config/reorder.py:161
+msgid "Ungültiger Block-Wert im Payload."
+msgstr "Invalid block value in payload."
 
-#: core/views/config/reorder.py:77 core/views/config/reorder.py:96
-#: core/views/config/reorder.py:119
+#: core/views/config/reorder.py:97 core/views/config/reorder.py:116
+#: core/views/config/reorder.py:151 core/views/config/reorder.py:163
 msgid "Keine Reihenfolge übergeben."
 msgstr "No order provided."
 
-#: core/views/config/reorder.py:94 core/views/config/reorder.py:117
+#: core/views/config/reorder.py:114 core/views/config/reorder.py:142
+#: core/views/config/reorder.py:149
 msgid "Ungültige ID im Payload."
 msgstr "Invalid ID in payload."
 
-#: core/views/config/reorder.py:111
+#: core/views/config/reorder.py:137
 msgid "Kein zu verschiebendes Feld übergeben."
 msgstr "No field to move provided."
 
@@ -4109,8 +4112,8 @@ msgid "Zurück zur Authenticator-App"
 msgstr "Back to home page"
 
 #: templates/auth/mfa_login.html:129
-#: templates/partials/_navigation_desktop.html:170
-#: templates/partials/_navigation_mobile.html:99
+#: templates/partials/_navigation_desktop.html:174
+#: templates/partials/_navigation_mobile.html:100
 msgid "Abmelden"
 msgstr "Log out"
 
@@ -4215,8 +4218,8 @@ msgstr "Registered on %(created)s"
 #: templates/core/cases/partials/event_list.html:21
 #: templates/core/clients/offline_list.html:143
 #: templates/core/clients/partials/table.html:96
-#: templates/core/config/document_types/partials/field_board.html:70
-#: templates/core/config/document_types/partials/field_board.html:103
+#: templates/core/config/document_types/partials/field_board.html:80
+#: templates/core/config/document_types/partials/field_board.html:105
 #: templates/core/events/partials/dynamic_fields.html:82
 msgid "Entfernen"
 msgstr "Remove"
@@ -4677,8 +4680,8 @@ msgstr "No entries found."
 #: templates/core/clients/offline_detail.html:219
 #: templates/core/clients/offline_detail.html:405
 #: templates/core/config/document_types/detail.html:24
-#: templates/core/config/document_types/partials/condition_board.html:43
-#: templates/core/config/document_types/partials/field_board.html:41
+#: templates/core/config/document_types/partials/condition_board.html:52
+#: templates/core/config/document_types/partials/field_board.html:51
 #: templates/core/events/detail.html:20 templates/core/events/detail.html:32
 #: templates/core/workitems/detail.html:12
 msgid "Bearbeiten"
@@ -5357,8 +5360,8 @@ msgid "Endgültig löschen"
 msgstr "Delete permanently"
 
 #: templates/core/config/document_types/detail.html:25
-#: templates/core/config/document_types/partials/condition_board.html:48
-#: templates/core/config/document_types/partials/field_board.html:48
+#: templates/core/config/document_types/partials/condition_board.html:57
+#: templates/core/config/document_types/partials/field_board.html:58
 #: templates/core/config/field_templates/partials/table.html:43
 #: templates/core/events/detail.html:25 templates/core/events/detail.html:44
 msgid "Löschen"
@@ -5459,7 +5462,7 @@ msgstr "Active only"
 msgid "Nur inaktive"
 msgstr "Inactive only"
 
-#: templates/core/config/document_types/partials/condition_board.html:13
+#: templates/core/config/document_types/partials/condition_board.html:22
 msgid ""
 "Blende ein Feld nur ein, wenn ein anderes Feld eine Bedingung erfüllt. UND "
 "innerhalb einer Gruppe, ODER über Gruppen hinweg."
@@ -5467,40 +5470,40 @@ msgstr ""
 "Show a field only when another field meets a condition. AND within a group, "
 "OR across groups."
 
-#: templates/core/config/document_types/partials/condition_board.html:18
+#: templates/core/config/document_types/partials/condition_board.html:27
 msgid ""
 "Dieser Dokumentationstyp braucht mindestens zwei Felder, bevor Bedingungen "
 "möglich sind."
 msgstr ""
 "This document type needs at least two fields before conditions are possible."
 
-#: templates/core/config/document_types/partials/condition_board.html:26
+#: templates/core/config/document_types/partials/condition_board.html:35
 #, python-format
 msgid "Zeige „%(name)s\""
 msgstr "Show \"%(name)s\""
 
-#: templates/core/config/document_types/partials/condition_board.html:30
+#: templates/core/config/document_types/partials/condition_board.html:39
 msgid "ODER"
 msgstr "OR"
 
-#: templates/core/config/document_types/partials/condition_board.html:35
+#: templates/core/config/document_types/partials/condition_board.html:44
 msgid "UND"
 msgstr "AND"
 
-#: templates/core/config/document_types/partials/condition_board.html:36
+#: templates/core/config/document_types/partials/condition_board.html:45
 #, python-format
 msgid "Wenn „%(source)s\" %(op)s"
 msgstr "If \"%(source)s\" %(op)s"
 
-#: templates/core/config/document_types/partials/condition_board.html:60
+#: templates/core/config/document_types/partials/condition_board.html:69
 msgid "UND-Bedingung hinzufügen"
 msgstr "Add AND condition"
 
-#: templates/core/config/document_types/partials/condition_board.html:69
+#: templates/core/config/document_types/partials/condition_board.html:78
 msgid "Neue Bedingung"
 msgstr "New condition"
 
-#: templates/core/config/document_types/partials/condition_board.html:75
+#: templates/core/config/document_types/partials/condition_board.html:84
 msgid "ODER-Gruppe hinzufügen"
 msgstr "Add OR group"
 
@@ -5512,11 +5515,11 @@ msgstr "Show this field"
 msgid "Wenn dieses Feld"
 msgstr "If this field"
 
-#: templates/core/config/document_types/partials/condition_form.html:60
+#: templates/core/config/document_types/partials/condition_form.html:66
 msgid "Bedingung speichern"
 msgstr "Save condition"
 
-#: templates/core/config/document_types/partials/condition_form.html:60
+#: templates/core/config/document_types/partials/condition_form.html:66
 msgid "Bedingung hinzufügen"
 msgstr "Add condition"
 
@@ -5524,26 +5527,21 @@ msgstr "Add condition"
 msgid "Für diesen Operator ist kein Vergleichswert nötig."
 msgstr "No comparison value is needed for this operator."
 
-#: templates/core/config/document_types/partials/field_board.html:32
-#: templates/core/config/document_types/partials/field_board.html:60
-#: templates/core/config/document_types/partials/field_board.html:93
+#: templates/core/config/document_types/partials/field_board.html:42
+#: templates/core/config/document_types/partials/field_board.html:70
+#: templates/core/config/document_types/partials/field_board.html:95
 msgid "Zum Sortieren ziehen"
 msgstr "Drag to reorder"
 
-#: templates/core/config/document_types/partials/field_board.html:77
+#: templates/core/config/document_types/partials/field_board.html:87
 msgid "Keine Felder in dieser Gruppe."
 msgstr "No fields in this group."
 
-#: templates/core/config/document_types/partials/field_board.html:85
-#: templates/core/events/partials/dynamic_fields.html:45
-msgid "Ohne Gruppe"
-msgstr "No group"
+#: templates/core/config/document_types/partials/field_board.html:111
+msgid "Noch keine Felder oder Gruppen — unten hinzufügen."
+msgstr "No fields or groups yet — add one below."
 
-#: templates/core/config/document_types/partials/field_board.html:110
-msgid "Keine ungruppierten Felder."
-msgstr "No ungrouped fields."
-
-#: templates/core/config/document_types/partials/field_board.html:128
+#: templates/core/config/document_types/partials/field_board.html:129
 msgid "Feld hinzufügen"
 msgstr "Add field"
 
@@ -6157,6 +6155,10 @@ msgstr "— no person —"
 msgid "Dieser Dokumentationstyp erfordert eine zugeordnete Person."
 msgstr "This document type requires an assigned person."
 
+#: templates/core/events/partials/dynamic_fields.html:45
+msgid "Ohne Gruppe"
+msgstr "No group"
+
 #: templates/core/events/partials/dynamic_fields.html:71
 msgid "Ersetzen"
 msgstr "Reset"
@@ -6579,7 +6581,7 @@ msgid "Datenschutzprofil"
 msgstr "Privacy profile"
 
 #: templates/core/statistics/external_report.html:19
-#: templates/partials/_navigation_mobile.html:93
+#: templates/partials/_navigation_mobile.html:94
 msgid "Profil"
 msgstr "My Profile"
 
@@ -6857,9 +6859,9 @@ msgstr ""
 
 #: templates/core/system/dashboard.html:4
 #: templates/core/system/dashboard.html:10
-#: templates/partials/_navigation_desktop.html:140
+#: templates/partials/_navigation_desktop.html:144
 #: templates/partials/_navigation_mobile.html:10
-#: templates/partials/_navigation_mobile.html:87
+#: templates/partials/_navigation_mobile.html:88
 msgid "Systembereich"
 msgstr "System area"
 
@@ -7614,7 +7616,7 @@ msgid "Hauptnavigation"
 msgstr "Main navigation"
 
 #: templates/partials/_navigation_desktop.html:19
-#: templates/partials/_navigation_mobile.html:111
+#: templates/partials/_navigation_mobile.html:112
 msgid "Suche..."
 msgstr "Search..."
 
@@ -7669,10 +7671,10 @@ msgstr "GDPR Package"
 msgid "Konfiguration"
 msgstr "Configuration"
 
-#: templates/partials/_navigation_desktop.html:134
-#: templates/partials/_navigation_desktop.html:144
-#: templates/partials/_navigation_mobile.html:84
-#: templates/partials/_navigation_mobile.html:88
+#: templates/partials/_navigation_desktop.html:138
+#: templates/partials/_navigation_desktop.html:148
+#: templates/partials/_navigation_mobile.html:85
+#: templates/partials/_navigation_mobile.html:89
 msgid "Administration"
 msgstr "Administration"
 
@@ -7859,3 +7861,9 @@ msgstr "No person taken offline."
 #, python-brace-format
 msgid "{used} / {quota} ({percent}% belegt)"
 msgstr "{used} / {quota} ({percent}% used)"
+
+#~ msgid "Ungültige Gruppen-ID im Payload."
+#~ msgstr "Invalid group ID in payload."
+
+#~ msgid "Keine ungruppierten Felder."
+#~ msgstr "No ungrouped fields."
