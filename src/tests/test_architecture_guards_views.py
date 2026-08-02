@@ -310,6 +310,11 @@ class TestUserFacingEntryPointGuard:
         "core:global_search",
         "core:account_profile",
         "core:dsgvo_package",
+        # Refs #1717: 'Feldvorlagen' fehlte bislang komplett als Nav-Einstieg
+        # (nur Deep-Link von der Dokumentationstyp-Konfiguration aus
+        # erreichbar) — Guard-Härtung, damit diese Lücken-Klasse nicht
+        # unbemerkt wieder entsteht.
+        "core:config_fieldtemplate_list",
     }
     # Routes, die bewusst nur deep-verlinkt / HTMX-getrieben sind.
     _ALLOWLIST: set[str] = {

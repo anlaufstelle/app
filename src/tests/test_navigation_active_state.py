@@ -46,3 +46,30 @@ class TestSidebarActiveState:
 
         assert ACTIVE_MARKER in system_anchor, "Systembereich sollte aktiv sein"
         assert ACTIVE_MARKER not in dashboard_anchor, "Arbeitszentrale darf im Systembereich nicht aktiv sein"
+
+
+@pytest.mark.django_db
+class TestFeldvorlagenNavActiveState:
+    """Refs #1717: 'Feldvorlagen' ist ein eigener Nav-Eintrag, getrennt von
+    'Konfiguration' (Dokumentationstypen) — beide duerfen nie gleichzeitig
+    aktiv sein."""
+
+    def test_fieldtemplate_list_activates_feldvorlagen_not_konfiguration(self, client, admin_user):
+        client.force_login(admin_user)
+        content = client.get(reverse("core:config_fieldtemplate_list")).content.decode()
+
+        feldvorlagen_anchor = _opening_anchor(content, "nav-config-fieldtemplates")
+        konfiguration_anchor = _opening_anchor(content, "nav-config")
+
+        assert ACTIVE_MARKER in feldvorlagen_anchor, "Feldvorlagen sollte aktiv sein"
+        assert ACTIVE_MARKER not in konfiguration_anchor, "Konfiguration darf hier nicht aktiv sein"
+
+    def test_doctype_list_activates_konfiguration_not_feldvorlagen(self, client, admin_user):
+        client.force_login(admin_user)
+        content = client.get(reverse("core:config_doctype_list")).content.decode()
+
+        feldvorlagen_anchor = _opening_anchor(content, "nav-config-fieldtemplates")
+        konfiguration_anchor = _opening_anchor(content, "nav-config")
+
+        assert ACTIVE_MARKER in konfiguration_anchor, "Konfiguration sollte aktiv sein"
+        assert ACTIVE_MARKER not in feldvorlagen_anchor, "Feldvorlagen darf hier nicht aktiv sein"

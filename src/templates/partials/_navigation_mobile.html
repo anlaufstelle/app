@@ -81,6 +81,7 @@
                 <a href="{% url 'core:audit_log' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "Audit-Log" %}</a>
                 <a href="{% url 'core:dsgvo_package' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "DSGVO-Paket" %}</a>
                 <a href="{% url 'core:config_doctype_list' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "Konfiguration" %}</a>
+                <a href="{% url 'core:config_fieldtemplate_list' %}" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas">{% trans "Feldvorlagen" %}</a>
                 <a href="/admin-mgmt/" class="block px-4 py-2 text-[13px] text-ink hover:bg-canvas" target="_blank" rel="noopener">{% trans "Administration" %}</a>
                 {% endif %}
                 {% if user.is_super_admin %}
