@@ -37,6 +37,11 @@
   // Alle in der aktuellen Board-Generation erzeugten Sortable-Instanzen.
   var instances = [];
 
+  // URLs der aktuell/zuletzt abgesetzten Reorder-POSTs. Dient dazu, ein
+  // htmx:responseError EINDEUTIG einem Reorder (nicht einer Button-Mutation)
+  // zuzuordnen — nur dann ist ein Board-Reload nötig (s. u.).
+  var reorderUrls = {};
+
   function board() {
     return document.getElementById("field-board");
   }
@@ -63,6 +68,10 @@
     if (!url || typeof window.htmx === "undefined") {
       return;
     }
+    // URL merken, damit der Fehler-Listener einen fehlgeschlagenen Reorder-POST
+    // von den Button-Mutationen (Feld add/remove, Gruppe create/delete) trennen
+    // kann — die laufen über hx-post-Attribute, nicht über postBatch.
+    reorderUrls[url] = true;
     window.htmx.ajax("POST", url, {
       target: "#field-board",
       swap: "outerHTML",
@@ -154,6 +163,22 @@
   document.addEventListener("htmx:afterSettle", function () {
     if (board()) {
       initBoard();
+    }
+  });
+
+  // Ein fehlgeschlagener Reorder-POST (z. B. HTTP 400: veraltetes oder
+  // konkurrierend geändertes Board) löst KEINEN Swap aus → die von SortableJS
+  // optimistisch umsortierte Anzeige bliebe stehen, während die DB unverändert
+  // ist (stille Divergenz). htmx feuert bei 4xx/5xx `htmx:responseError`; für
+  // genau die Reorder-POSTs (Pfad in reorderUrls) stellen wir den konsistenten
+  // Zustand per Voll-Reload wieder her. Button-Mutationen laufen nicht über
+  // postBatch, ihre URLs stehen also nicht in reorderUrls und lösen hier nichts
+  // aus. Reines Browser-Verhalten — manuelle Prüfung in P9.
+  document.addEventListener("htmx:responseError", function (evt) {
+    var cfg = evt.detail && evt.detail.requestConfig;
+    var path = cfg && cfg.path;
+    if (path && reorderUrls[path]) {
+      window.location.reload();
     }
   });
 })();
