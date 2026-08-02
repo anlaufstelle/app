@@ -546,3 +546,129 @@ class TestTenantModelScopeGuard:
             "Veraltete Allowlist-Eintraege in TestTenantModelScopeGuard — die Call-Site "
             f"existiert nicht mehr oder ist inzwischen gescoped. Bitte entfernen: {stale}"
         )
+
+
+# --- Slug-Bulk-Mutation-Guard (Refs #1709) -----------------------------------
+#
+# FieldGroup/FieldTemplate.slug ist der M2-Paketformat-Identifier und seit
+# Migration 0116 per DB-Trigger unveraenderlich (ENABLE ALWAYS). Der Trigger
+# ist die Wahrheit — dieser Guard verhindert nur, dass ein ORM-Bulk-Pfad, der
+# ihn zwangslaeufig zum Scheitern bringen wuerde (statt frueh und lesbar im
+# Code aufzufallen), ueberhaupt erst geschrieben wird.
+_SLUG_IMMUTABLE_MODELS = frozenset({"FieldGroup", "FieldTemplate"})
+
+
+def find_slug_mutating_bulk_calls(source: str) -> list[str]:
+    """Findet ``.update(slug=...)`` / ``bulk_update(..., ["slug", ...])`` auf
+    ``FieldGroup``/``FieldTemplate``.
+
+    AST-basiert (Muster ``find_unscoped_tenant_access``): Kommentare/Docstrings/
+    Strings ausserhalb echter Call-Argumente koennen nicht faelschlich matchen.
+
+    (a) ``<chain>.update(slug=…)``: die volle Call-Kette muss den Modellnamen
+        ``FieldGroup``/``FieldTemplate`` als Token enthalten (z.B.
+        ``FieldGroup.objects.filter(pk=x)``) — ein Update auf einem anderen
+        Modell mit zufaellig gleichnamigem ``slug=``-Kwarg wird NICHT geflaggt.
+    (b) ``<chain>.bulk_update(objs, [...])``: die Feldliste (2. Positions-
+        argument) enthaelt das String-Literal ``"slug"`` UND die Call-Kette
+        nennt eines der beiden Modelle.
+    """
+    tree = ast.parse(source)
+    parents = _parent_map(tree)
+    violations: list[str] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        if not isinstance(func, ast.Attribute):
+            continue
+
+        if func.attr == "update":
+            if not any(kw.arg == "slug" for kw in node.keywords):
+                continue
+        elif func.attr == "bulk_update":
+            if len(node.args) < 2 or not isinstance(node.args[1], (ast.List, ast.Tuple)):
+                continue
+            if not any(isinstance(elt, ast.Constant) and elt.value == "slug" for elt in node.args[1].elts):
+                continue
+        else:
+            continue
+
+        chain_source = ast.unparse(_chain_top(parents, node))
+        if not any(model in chain_source for model in _SLUG_IMMUTABLE_MODELS):
+            continue
+        violations.append(f"Zeile {node.lineno} ({_enclosing_qualname(parents, node)}): {chain_source[:160]}")
+    return violations
+
+
+class TestSlugMutationGuard:
+    """Kein ``.update(slug=…)``/``bulk_update(…, ["slug"])`` auf FieldGroup/
+    FieldTemplate (Refs #1709) — der DB-Trigger aus Migration 0116 wuerde
+    jeden solchen Aufruf ohnehin mit ``DatabaseError`` scheitern lassen; der
+    Guard macht das strukturell unmoeglich statt es dem Trigger zur Laufzeit
+    zu ueberlassen.
+    """
+
+    def test_synthetic_update_call_is_detected(self) -> None:
+        source = (
+            "from core.models import FieldGroup\n\n"
+            "def reorder(pk):\n"
+            "    FieldGroup.objects.filter(pk=pk).update(slug='x')\n"
+        )
+        violations = find_slug_mutating_bulk_calls(source)
+        assert violations
+        assert "FieldGroup" in violations[0]
+
+    def test_synthetic_bulk_update_call_is_detected(self) -> None:
+        source = (
+            "from core.models import FieldTemplate\n\n"
+            "def sync(objs):\n"
+            "    FieldTemplate.objects.bulk_update(objs, ['name', 'slug'])\n"
+        )
+        assert find_slug_mutating_bulk_calls(source)
+
+    def test_sort_order_update_is_not_flagged(self) -> None:
+        source = (
+            "from core.models import FieldGroup\n\n"
+            "def reorder(pk, position):\n"
+            "    FieldGroup.objects.filter(pk=pk).update(sort_order=position)\n"
+        )
+        assert not find_slug_mutating_bulk_calls(source)
+
+    def test_unrelated_model_with_slug_kwarg_is_not_flagged(self) -> None:
+        source = (
+            "from core.models import DocumentType\n\n"
+            "def rename(pk, value):\n"
+            "    DocumentType.objects.filter(pk=pk).update(slug=value)\n"
+        )
+        assert not find_slug_mutating_bulk_calls(source)
+
+    def test_bulk_update_without_slug_in_fields_is_not_flagged(self) -> None:
+        source = (
+            "from core.models import FieldGroup\n\n"
+            "def sync(objs):\n"
+            "    FieldGroup.objects.bulk_update(objs, ['name', 'sort_order'])\n"
+        )
+        assert not find_slug_mutating_bulk_calls(source)
+
+    def test_bare_slug_string_literal_outside_bulk_update_is_not_flagged(self) -> None:
+        source = (
+            "from core.models import FieldGroup\n\n"
+            "def audit_payload(group):\n"
+            "    return {'slug': group.slug, 'operation': 'slug'}\n"
+        )
+        assert not find_slug_mutating_bulk_calls(source)
+
+    def test_no_slug_mutating_bulk_calls_in_core(self) -> None:
+        scan_dir = Path("src/core")
+        violations = []
+        for py_file in sorted(scan_dir.rglob("*.py")):
+            if py_file.name == "__init__.py":
+                continue
+            rel = py_file.relative_to(scan_dir).as_posix()
+            for hit in find_slug_mutating_bulk_calls(py_file.read_text()):
+                violations.append(f"{rel}: {hit}")
+        assert not violations, (
+            "Bulk-Update auf FieldGroup/FieldTemplate.slug gefunden — verletzt den DB-Trigger "
+            f"aus Migration 0116 (Refs #1709). Betroffen: {violations}"
+        )
