@@ -23,6 +23,7 @@ DB bleibt unverändert (der View macht daraus später ein HTTP 400).
 
 from __future__ import annotations
 
+import uuid
 from collections import defaultdict
 
 from django.core.exceptions import ValidationError
@@ -258,7 +259,7 @@ def delete_field_group(request, group: FieldGroup) -> None:
     with transaction.atomic():
         # Blockliste VOR dem Delete erfassen und den Gruppenblock durch seine
         # Innen-Felder (als freie Blöcke) an gleicher Stelle ersetzen.
-        new_order = []
+        new_order: list[tuple[str, uuid.UUID]] = []
         for block in iter_blocks_in_order(doc_type):
             if block["kind"] == "group" and block["group"].pk == group.pk:
                 new_order.extend(("field", dtf.pk) for dtf in inner_fields)
