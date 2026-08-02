@@ -65,6 +65,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-031](031-totp-secret-at-rest.md) | TOTP-Secret at rest verschlüsselt (Proxy-Modell) | Accepted |
 | [ADR-032](032-webauthn-passkeys-2fa.md) | Passkeys/WebAuthn als zusätzlicher zweiter Faktor (neben TOTP) | Accepted |
 | [ADR-033](033-runtime-owner-role-separation.md) | Runtime-DB-Rolle von der DB-Ownership trennen (A1.4) | Accepted |
+| [ADR-034](034-config-ui-category-system-type.md) | category vs. system_type in der Konfigurations-UI | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
