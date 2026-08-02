@@ -1,46 +1,56 @@
 {% load i18n %}
 {% comment %}
-Interaktives Feld-Board (M0 P6/P7, Refs #1056) — DAS zentrale HTMX-Swap-Ziel
-`#field-board`. Jede Board-Mutation (Feld zuordnen/entfernen, Gruppe anlegen/
-umbenennen/löschen, Drag-and-Drop-Sortierung) ersetzt diesen Container per
-outerHTML.
+Interaktives Feld-Board (M0 P6/P7 + #1713, Refs #1056/#1058) — DAS zentrale
+HTMX-Swap-Ziel `#field-board`. Jede Board-Mutation (Feld zuordnen/entfernen,
+Gruppe anlegen/umbenennen/löschen, Drag-and-Drop-Sortierung) ersetzt diesen
+Container per outerHTML.
 
-Sortierung ist im View/Service vorbereitet (Gruppen nach (sort_order, name),
-Felder je Gruppe nach sort_order, „Ohne Gruppe" als fixer Block zuletzt) — NICHT
-hier sortieren.
+Globale Block-Sequenz (#1713): Gruppen UND ungruppierte Felder sind Top-Level-
+„Blöcke" in EINER Reihenfolge (im Service via iter_blocks_in_order vorbereitet,
+NICHT hier sortieren). Es gibt keinen fixen „Ohne Gruppe"-Block mehr — freie
+Felder sitzen als eigenständige Top-Level-Zeilen zwischen den Gruppen.
 
 Drag-and-Drop (P7, config-sortable.js):
-* `data-sortable="groups"` umschließt die verschiebbaren Gruppen-Karten (jede mit
-  `data-group-id` + `.group-drag-handle`); Reorder-Ziel-URL in `data-reorder-url`.
-* je Gruppe/„Ohne Gruppe" eine `data-sortable="fields"`-Liste (`data-group-id`,
-  Felder-Reorder-URL in `data-reorder-url`, Move-URL in `data-move-url`); jede
-  Feldzeile trägt `data-dtf-id` + `.field-drag-handle`. Distinkte Handle-Klassen
-  für Gruppen vs. Felder verhindern die Handle-Kollision verschachtelter
-  Sortables. Das Sortable wird NICHT im Template initialisiert (kein Inline-JS).
+* `data-sortable="blocks"` umschließt ALLE Top-Level-Blöcke (Gruppen-Karten mit
+  `data-group-id`, freie Feldzeilen mit `data-dtf-id`; beide tragen `data-block`
+  und einen `.drag-handle`). Block-Reorder-URL in `data-reorder-url`
+  (config_reorder_blocks), Move-URL in `data-move-url` (config_move_field, für
+  den Gruppe→Top-Level-Zweig).
+* je Gruppe eine `data-sortable="fields"`-Liste (`data-group-id`, Felder-Reorder-
+  URL in `data-reorder-url`, Move-URL in `data-move-url`); jede Feldzeile trägt
+  `data-dtf-id` + `.drag-handle`. Die Nicht-Doppelaktivierung der verschachtelten
+  Sortables beruht auf dem SortableJS-dragEl-Guard (innere Liste bubbelt zuerst),
+  nicht auf disjunkten Handles. Das Sortable wird NICHT im Template initialisiert
+  (kein Inline-JS).
 
-Kontext: doc_type, groups (mit vorsortierten .fields), ungrouped_fields,
-add_form (DocumentTypeFieldAddForm), group_form (FieldGroupForm).
+Kontext: doc_type, blocks (Liste aus {"kind":"group","group":g,"fields":[...]} |
+{"kind":"field","field":dtf}), add_form (DocumentTypeFieldAddForm), group_form
+(FieldGroupForm).
 {% endcomment %}
 <div id="field-board" class="space-y-4">
 
-    {# --- Benannte Gruppen (sort_order, name) — verschiebbar ---------------- #}
-    <div data-sortable="groups" data-reorder-url="{% url 'core:config_reorder_groups' doc_type.pk %}" class="space-y-4">
-    {% for group in groups %}
-    <div class="card p-4" data-group-id="{{ group.pk }}" data-testid="field-group">
+    {# --- Globale Block-Sequenz: Gruppen + freie Felder, gemischt ---------- #}
+    <div data-sortable="blocks"
+         data-reorder-url="{% url 'core:config_reorder_blocks' doc_type.pk %}"
+         data-move-url="{% url 'core:config_move_field' doc_type.pk %}"
+         class="space-y-4 min-h-[1.5rem]">
+    {% for block in blocks %}
+    {% if block.kind == "group" %}
+    <div class="card p-4" data-block data-group-id="{{ block.group.pk }}" data-testid="field-group">
         <div class="flex items-center justify-between gap-3 mb-3">
             <div class="flex items-center gap-2 min-w-0">
                 <span class="drag-handle group-drag-handle cursor-grab text-ink-muted select-none" aria-hidden="true" title="{% trans 'Zum Sortieren ziehen' %}">⠿</span>
-                <h3 class="text-[14px] font-semibold text-ink truncate">{{ group.name }}</h3>
-                {% if group.is_collapsible %}{% include "components/_badge.html" with text=_("Einklappbar") color="blue" %}{% endif %}
+                <h3 class="text-[14px] font-semibold text-ink truncate">{{ block.group.name }}</h3>
+                {% if block.group.is_collapsible %}{% include "components/_badge.html" with text=_("Einklappbar") color="blue" %}{% endif %}
             </div>
             <div class="flex items-center gap-2 flex-shrink-0">
                 <button type="button"
-                        hx-get="{% url 'core:config_fieldgroup_update' doc_type.pk group.pk %}"
-                        hx-target="#group-edit-{{ group.pk }}" hx-swap="innerHTML"
+                        hx-get="{% url 'core:config_fieldgroup_update' doc_type.pk block.group.pk %}"
+                        hx-target="#group-edit-{{ block.group.pk }}" hx-swap="innerHTML"
                         class="px-2.5 py-1.5 btn-secondary text-[12px]"
                         data-testid="group-edit-btn">{% trans "Bearbeiten" %}</button>
-                <form method="post" action="{% url 'core:config_fieldgroup_delete' doc_type.pk group.pk %}"
-                      hx-post="{% url 'core:config_fieldgroup_delete' doc_type.pk group.pk %}"
+                <form method="post" action="{% url 'core:config_fieldgroup_delete' doc_type.pk block.group.pk %}"
+                      hx-post="{% url 'core:config_fieldgroup_delete' doc_type.pk block.group.pk %}"
                       hx-target="#field-board" hx-swap="outerHTML">
                     {% csrf_token %}
                     <button type="submit"
@@ -49,12 +59,12 @@ add_form (DocumentTypeFieldAddForm), group_form (FieldGroupForm).
                 </form>
             </div>
         </div>
-        <div id="group-edit-{{ group.pk }}" class="mb-3 empty:hidden"></div>
+        <div id="group-edit-{{ block.group.pk }}" class="mb-3 empty:hidden"></div>
         <ul class="divide-y divide-subtle min-h-[1.5rem]"
-            data-sortable="fields" data-group-id="{{ group.pk }}"
+            data-sortable="fields" data-group-id="{{ block.group.pk }}"
             data-reorder-url="{% url 'core:config_reorder_fields' doc_type.pk %}"
             data-move-url="{% url 'core:config_move_field' doc_type.pk %}">
-            {% for f in group.fields.all %}
+            {% for f in block.fields %}
             <li class="py-2 flex items-center justify-between gap-3" data-dtf-id="{{ f.pk }}" data-testid="field-row">
                 <div class="flex items-center gap-2 min-w-0">
                     <span class="drag-handle field-drag-handle cursor-grab text-ink-muted select-none" aria-hidden="true" title="{% trans 'Zum Sortieren ziehen' %}">⠿</span>
@@ -73,42 +83,33 @@ add_form (DocumentTypeFieldAddForm), group_form (FieldGroupForm).
             </li>
             {% endfor %}
         </ul>
-        {% if not group.fields.all %}
+        {% if not block.fields %}
         <p class="text-[12px] text-ink-muted">{% trans "Keine Felder in dieser Gruppe." %}</p>
         {% endif %}
     </div>
-    {% endfor %}
+    {% else %}
+    {# --- Freies (ungruppiertes) Feld als Top-Level-Block ------------------ #}
+    <div class="card px-4 py-2 flex items-center justify-between gap-3"
+         data-block data-dtf-id="{{ block.field.pk }}" data-testid="free-field-row">
+        <div class="flex items-center gap-2 min-w-0">
+            <span class="drag-handle field-drag-handle cursor-grab text-ink-muted select-none" aria-hidden="true" title="{% trans 'Zum Sortieren ziehen' %}">⠿</span>
+            <span class="text-[14px] text-ink">{{ block.field.field_template.name }}</span>
+            {% if block.field.field_template.is_required %}<span class="text-[12px] text-red-600 ml-1" title="{% trans 'Pflichtfeld' %}">*</span>{% endif %}
+        </div>
+        <div class="flex items-center gap-3 flex-shrink-0">
+            <span class="text-[12px] text-ink-muted">{{ block.field.field_template.get_field_type_display }}</span>
+            <form method="post" action="{% url 'core:config_doctype_field_remove' doc_type.pk block.field.pk %}"
+                  hx-post="{% url 'core:config_doctype_field_remove' doc_type.pk block.field.pk %}"
+                  hx-target="#field-board" hx-swap="outerHTML">
+                {% csrf_token %}
+                <button type="submit" class="text-[12px] text-red-600 hover:underline" data-testid="field-remove-btn">{% trans "Entfernen" %}</button>
+            </form>
+        </div>
     </div>
-
-    {# --- Ohne Gruppe (fixer Block, selbst nicht verschiebbar) ------------- #}
-    <div class="card p-4" data-group-id="" data-testid="field-group-ungrouped">
-        <h3 class="text-[14px] font-semibold text-ink mb-3">{% trans "Ohne Gruppe" %}</h3>
-        <ul class="divide-y divide-subtle min-h-[1.5rem]"
-            data-sortable="fields" data-group-id=""
-            data-reorder-url="{% url 'core:config_reorder_fields' doc_type.pk %}"
-            data-move-url="{% url 'core:config_move_field' doc_type.pk %}">
-            {% for f in ungrouped_fields %}
-            <li class="py-2 flex items-center justify-between gap-3" data-dtf-id="{{ f.pk }}" data-testid="field-row">
-                <div class="flex items-center gap-2 min-w-0">
-                    <span class="drag-handle field-drag-handle cursor-grab text-ink-muted select-none" aria-hidden="true" title="{% trans 'Zum Sortieren ziehen' %}">⠿</span>
-                    <span class="text-[14px] text-ink">{{ f.field_template.name }}</span>
-                    {% if f.field_template.is_required %}<span class="text-[12px] text-red-600 ml-1" title="{% trans 'Pflichtfeld' %}">*</span>{% endif %}
-                </div>
-                <div class="flex items-center gap-3 flex-shrink-0">
-                    <span class="text-[12px] text-ink-muted">{{ f.field_template.get_field_type_display }}</span>
-                    <form method="post" action="{% url 'core:config_doctype_field_remove' doc_type.pk f.pk %}"
-                          hx-post="{% url 'core:config_doctype_field_remove' doc_type.pk f.pk %}"
-                          hx-target="#field-board" hx-swap="outerHTML">
-                        {% csrf_token %}
-                        <button type="submit" class="text-[12px] text-red-600 hover:underline" data-testid="field-remove-btn">{% trans "Entfernen" %}</button>
-                    </form>
-                </div>
-            </li>
-            {% endfor %}
-        </ul>
-        {% if not ungrouped_fields %}
-        <p class="text-[12px] text-ink-muted">{% trans "Keine ungruppierten Felder." %}</p>
-        {% endif %}
+    {% endif %}
+    {% empty %}
+    <p class="text-[12px] text-ink-muted" data-testid="board-empty">{% trans "Noch keine Felder oder Gruppen — unten hinzufügen." %}</p>
+    {% endfor %}
     </div>
 
     {# --- Feld zuordnen ---------------------------------------------------- #}

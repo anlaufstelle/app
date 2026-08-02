@@ -1,12 +1,13 @@
-"""Batch-Reorder-Views für das interaktive Feld-Board (M0 P7, Refs #1056).
+"""Batch-Reorder-Views für das interaktive Feld-Board (M0 P7 / #1713, Refs #1056/#1058).
 
 Drei dünne POST-``View``-CBVs für die Drag-and-Drop-Sortierung, jeweils als
 gebündelter Batch-Endpunkt (nicht ein Request pro verschobenem Element):
 
-* :class:`ConfigReorderGroupsView`  — Gruppen-Reihenfolge.
-* :class:`ConfigReorderFieldsView`  — Feld-Reihenfolge innerhalb einer Gruppe
-  (oder der „Ohne Gruppe"-Menge).
-* :class:`ConfigMoveFieldView`      — ein Feld in eine (andere) Gruppe schieben.
+* :class:`ConfigReorderBlocksView`  — globale Block-Sequenz (Gruppen UND
+  ungruppierte Felder gemischt, ``blocks`` = ``kind:uuid``-Liste).
+* :class:`ConfigReorderFieldsView`  — Feld-Reihenfolge innerhalb einer Gruppe.
+* :class:`ConfigMoveFieldView`      — ein Feld in eine Gruppe (``order``) oder an
+  eine Top-Level-Block-Position (``blocks``) schieben.
 
 Ablauf jeder View (bewusst in dieser Reihenfolge):
 
@@ -55,7 +56,7 @@ def _parse_uuids(raw_values) -> list[uuid.UUID]:
 
 
 def _parse_optional_group(raw) -> uuid.UUID | None:
-    """Leerer/fehlender ``group``-Wert → ``None`` („Ohne Gruppe"), sonst ``UUID``.
+    """Leerer/fehlender ``group``-Wert → ``None`` (Top-Level), sonst ``UUID``.
 
     Ein kaputter, nicht-leerer Wert wirft ``ValueError`` → HTTP 400.
     """
@@ -64,19 +65,38 @@ def _parse_optional_group(raw) -> uuid.UUID | None:
     return uuid.UUID(raw)
 
 
-class ConfigReorderGroupsView(FacilityAdminRequiredMixin, View):
-    """Setzt die Reihenfolge der Feldgruppen eines DocumentType neu (Batch)."""
+def _parse_blocks(raw_values) -> list[tuple[str, uuid.UUID]]:
+    """POST-Liste ``kind:uuid`` → ``[("group"|"field", UUID), ...]`` (#1713).
+
+    Jeder Wert muss die Form ``group:<uuid>`` oder ``field:<uuid>`` haben; ein
+    kaputtes Prefix/eine kaputte UUID wirft ``ValueError`` → HTTP 400.
+    """
+    blocks: list[tuple[str, uuid.UUID]] = []
+    for raw in raw_values:
+        kind, sep, id_str = str(raw).partition(":")
+        if not sep or kind not in ("group", "field") or not id_str:
+            raise ValueError("Ungültiger Block-Wert.")
+        blocks.append((kind, uuid.UUID(id_str)))
+    return blocks
+
+
+class ConfigReorderBlocksView(FacilityAdminRequiredMixin, View):
+    """Setzt die globale Block-Sequenz eines DocumentType neu (Batch, #1713).
+
+    ``blocks`` = wiederholte ``kind:uuid``-Werte (Gruppen und ungruppierte
+    Felder gemischt, DOM-Reihenfolge).
+    """
 
     def post(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         try:
-            ordered_ids = _parse_uuids(request.POST.getlist("order"))
+            ordered_blocks = _parse_blocks(request.POST.getlist("blocks"))
         except ValueError:
-            return HttpResponseBadRequest(_("Ungültige Gruppen-ID im Payload."))
-        if not ordered_ids:
+            return HttpResponseBadRequest(_("Ungültiger Block-Wert im Payload."))
+        if not ordered_blocks:
             return HttpResponseBadRequest(_("Keine Reihenfolge übergeben."))
         try:
-            config_service.reorder_groups(request, doc_type, ordered_ids)
+            config_service.reorder_blocks(request, doc_type, ordered_blocks)
         except ValueError as exc:
             return HttpResponseBadRequest(str(exc))
         return board_response(request, doc_type)
@@ -102,7 +122,13 @@ class ConfigReorderFieldsView(FacilityAdminRequiredMixin, View):
 
 
 class ConfigMoveFieldView(FacilityAdminRequiredMixin, View):
-    """Verschiebt ein Feld in eine (andere) Gruppe und ordnet die Zielgruppe neu."""
+    """Verschiebt ein Feld in eine Gruppe (``order``) oder an Top-Level (``blocks``).
+
+    * Zielgruppe gesetzt ⇒ ``order`` = Innen-Reihenfolge der Zielgruppe (DTF-IDs
+      inkl. des bewegten Felds).
+    * Ziel Top-Level (``group`` leer/fehlt) ⇒ ``blocks`` = gemischte Top-Level-
+      Blockreihenfolge (``kind:uuid``, inkl. des bewegten, nun freien Felds).
+    """
 
     def post(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
@@ -112,13 +138,31 @@ class ConfigMoveFieldView(FacilityAdminRequiredMixin, View):
         try:
             moved_id = uuid.UUID(moved_raw)
             target_group_id = _parse_optional_group(request.POST.get("group"))
-            ordered_ids = _parse_uuids(request.POST.getlist("order"))
         except ValueError:
             return HttpResponseBadRequest(_("Ungültige ID im Payload."))
-        if not ordered_ids:
-            return HttpResponseBadRequest(_("Keine Reihenfolge übergeben."))
-        try:
-            config_service.move_field(request, doc_type, moved_id, target_group_id, ordered_ids)
-        except ValueError as exc:
-            return HttpResponseBadRequest(str(exc))
+
+        if target_group_id is not None:
+            # Ziel = Gruppe: DTF-Innen-Reihenfolge über ``order``.
+            try:
+                ordered_ids = _parse_uuids(request.POST.getlist("order"))
+            except ValueError:
+                return HttpResponseBadRequest(_("Ungültige ID im Payload."))
+            if not ordered_ids:
+                return HttpResponseBadRequest(_("Keine Reihenfolge übergeben."))
+            try:
+                config_service.move_field(request, doc_type, moved_id, target_group_id, ordered_dtf_ids=ordered_ids)
+            except ValueError as exc:
+                return HttpResponseBadRequest(str(exc))
+        else:
+            # Ziel = Top-Level: gemischte Blockreihenfolge über ``blocks``.
+            try:
+                ordered_blocks = _parse_blocks(request.POST.getlist("blocks"))
+            except ValueError:
+                return HttpResponseBadRequest(_("Ungültiger Block-Wert im Payload."))
+            if not ordered_blocks:
+                return HttpResponseBadRequest(_("Keine Reihenfolge übergeben."))
+            try:
+                config_service.move_field(request, doc_type, moved_id, None, ordered_blocks=ordered_blocks)
+            except ValueError as exc:
+                return HttpResponseBadRequest(str(exc))
         return board_response(request, doc_type)

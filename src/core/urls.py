@@ -73,8 +73,8 @@ from core.views.config.field_templates import (
 )
 from core.views.config.reorder import (
     ConfigMoveFieldView,
+    ConfigReorderBlocksView,
     ConfigReorderFieldsView,
-    ConfigReorderGroupsView,
 )
 from core.views.dashboard import RoleDashboardView
 from core.views.dsgvo import DSGVODocumentDownloadView, DSGVOPackageView
@@ -293,11 +293,12 @@ urlpatterns = [
         ConfigFieldGroupDeleteView.as_view(),
         name="config_fieldgroup_delete",
     ),
-    # P7: Drag-and-Drop-Batch-Reorder (Gruppen, Felder, Feld verschieben).
+    # P7 / #1713: Drag-and-Drop-Batch-Reorder (globale Block-Sequenz, Felder,
+    # Feld verschieben).
     path(
-        "config/document-types/<uuid:pk>/reorder/groups/",
-        ConfigReorderGroupsView.as_view(),
-        name="config_reorder_groups",
+        "config/document-types/<uuid:pk>/reorder/blocks/",
+        ConfigReorderBlocksView.as_view(),
+        name="config_reorder_blocks",
     ),
     path(
         "config/document-types/<uuid:pk>/reorder/fields/",

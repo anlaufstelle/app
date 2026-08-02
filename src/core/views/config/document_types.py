@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.db.models import Count, Prefetch
+from django.db.models import Count
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils.translation import gettext_lazy as _
@@ -42,34 +42,23 @@ BOARD_TEMPLATE = "core/config/document_types/partials/field_board.html"
 # Das interaktive Feld-Board ist EIN Swap-Ziel ``#field-board``. Jede
 # Board-Mutation (Feld zuordnen/entfernen, Gruppe anlegen/umbenennen/löschen)
 # rendert es bei ``HX-Request`` frisch, sonst redirectet sie zur Detailseite.
-# Sortierung wird hier (View/DB) vorbereitet, NICHT im Template: Gruppen nach
-# ``(sort_order, name)``, Felder je Gruppe nach ``sort_order``, ungruppierte
-# Felder als fixer „Ohne Gruppe"-Block zuletzt.
+# Sortierung wird hier (Service/DB) vorbereitet, NICHT im Template: die globale
+# Block-Sequenz (#1713) interleavt Gruppen und ungruppierte Felder in EINER
+# Reihenfolge (``iter_blocks_in_order``) — es gibt keinen fixen „Ohne Gruppe"-
+# Block mehr, freie Felder sitzen als Top-Level-Blöcke zwischen den Gruppen.
 
 
 def board_context(doc_type, *, add_form=None, group_form=None):
-    """Baut den Kontext des Feld-Boards (Gruppen + ungruppierte Felder + Formulare)."""
+    """Baut den Kontext des Feld-Boards (globale Block-Sequenz + Formulare, #1713)."""
     from core.forms.config import FieldGroupForm
 
-    groups = list(
-        FieldGroup.objects.filter(document_type=doc_type)
-        .order_by("sort_order", "name")
-        .prefetch_related(
-            Prefetch(
-                "fields",
-                queryset=DocumentTypeField.objects.select_related("field_template").order_by("sort_order"),
-            )
-        )
-    )
-    ungrouped_fields = list(
-        DocumentTypeField.objects.filter(document_type=doc_type, field_group__isnull=True)
-        .select_related("field_template")
-        .order_by("sort_order")
-    )
+    # Interleavte Top-Level-Blöcke (Gruppen inkl. Innen-Feldern + freie Felder),
+    # sortiert nach globaler Blockposition — gemeinsame Wahrheitsquelle mit
+    # Formular/Offline/Feed.
+    blocks = config_service.iter_blocks_in_order(doc_type)
     return {
         "doc_type": doc_type,
-        "groups": groups,
-        "ungrouped_fields": ungrouped_fields,
+        "blocks": blocks,
         "add_form": add_form if add_form is not None else DocumentTypeFieldAddForm(doc_type=doc_type),
         # Prefix "group-new": das stets vorhandene Neu-Formular bekommt eindeutige
         # Feld-IDs (id_group-new-name), damit es nicht mit einem gleichzeitig

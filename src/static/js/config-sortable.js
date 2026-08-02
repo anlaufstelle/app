@@ -1,25 +1,37 @@
 /**
  * Drag-and-Drop-Sortierung für das Feld-Board der Formular-Konfiguration
- * (M0 P7, Refs #1056).
+ * (M0 P7 + globale Block-Sequenz #1713, Refs #1056/#1058).
  *
  * Verdrahtet SortableJS (vendored, MIT) datengetrieben — keine hartkodierten
  * URLs, kein Inline-JS (CSP: script-src ohne 'unsafe-inline'/'unsafe-eval'):
  *
- *   [data-sortable="groups"]  — verschiebbare Gruppen-Karten (Reorder-URL in
- *                               data-reorder-url; Handle .group-drag-handle).
- *   [data-sortable="fields"]  — Feld-Listen je Gruppe/„Ohne Gruppe"
- *                               (data-group-id; Felder-Reorder-URL in
- *                               data-reorder-url, Move-URL in data-move-url;
- *                               Handle .field-drag-handle; group:"fields" für
- *                               Cross-Gruppen-Drag).
+ *   [data-sortable="blocks"] — die globale Block-Sequenz: Gruppen-Karten
+ *                              (data-group-id) UND freie Feldzeilen (data-dtf-id),
+ *                              beide als [data-block]. Block-Reorder-URL in
+ *                              data-reorder-url, Move-URL in data-move-url.
+ *   [data-sortable="fields"] — Feld-Listen je Gruppe (data-group-id;
+ *                              Felder-Reorder-URL in data-reorder-url, Move-URL
+ *                              in data-move-url; group:"fields").
  *
- * onEnd-Fallunterscheidung (drei Batch-Endpunkte):
- *   1. Groups-Sortable          → POST reorder/groups   (order = alle Group-IDs).
- *   2. Fields-Sortable, from===to → POST reorder/fields (group = Container-Gruppe
- *                                   oder leer, order = alle DTF-IDs).
- *   3. Fields-Sortable, from!==to → POST reorder/move-field (moved, group = Ziel
- *                                   oder leer, order = alle DTF-IDs der Zielliste
- *                                   inkl. moved).
+ * onEnd ist QUELL-getrieben (feuert am Quell-Sortable). Beide Handler
+ * verzweigen daher über evt.to.getAttribute("data-sortable"):
+ *
+ *   Blocks-onEnd, to=blocks → POST reorder/blocks (blocks = kind:uuid-Liste).
+ *   Blocks-onEnd, to=fields → freies Feld in eine Gruppe → POST move-field
+ *                             (group = Ziel, order = DTF-IDs der Zielliste).
+ *   Fields-onEnd, to=blocks → Feld aus Gruppe an Top-Level → POST move-field
+ *                             (group = "", blocks = kind:uuid-Liste der Blocks).
+ *   Fields-onEnd, from===to → POST reorder/fields (group, order = DTF-IDs).
+ *   Fields-onEnd, from!==to → Feld in ANDERE Gruppe → POST move-field
+ *                             (group = Ziel, order = DTF-IDs der Zielliste).
+ *
+ * Handle: EIN gemeinsamer Selektor `.drag-handle` deckt Gruppen-, freie-Feld-
+ * und Gruppen-Feld-Handles ab. Dass ein Griff an einem inneren Feld-Handle
+ * NICHT zusätzlich die umgebende Gruppen-Karte im Blocks-Sortable aktiviert,
+ * beruht auf dem SortableJS-dragEl-Guard: die innere Feld-Liste liegt näher am
+ * Ereignis-Target, ihr pointerdown-Listener feuert daher zuerst und setzt den
+ * modul-globalen dragEl; der Blocks-Listener bubbelt danach und bricht wegen
+ * `!dragEl` ab. (NICHT auf disjunkte Handles gestützt.)
  *
  * Versand über htmx.ajax (Ziel #field-board, outerHTML) — CSRF erbt htmx aus
  * dem globalen hx-headers am <body>. Da jeder erfolgreiche Batch das gesamte
@@ -30,8 +42,7 @@
 (function () {
   "use strict";
 
-  var GROUP_HANDLE = ".group-drag-handle";
-  var FIELD_HANDLE = ".field-drag-handle";
+  var HANDLE = ".drag-handle";
   var ANIMATION_MS = 150;
 
   // Alle in der aktuellen Board-Generation erzeugten Sortable-Instanzen.
@@ -92,19 +103,59 @@
     return values;
   }
 
-  function initGroups(root) {
-    var container = root.querySelector('[data-sortable="groups"]');
+  // Klassifiziert die DIREKTEN Kinder des Blocks-Containers in DOM-Reihenfolge
+  // als "group:<id>" bzw. "field:<id>" (der einfache directAttrValues-Helper
+  // läse nur EIN Attribut und verlöre die jeweils andere Block-Sorte).
+  function collectBlocks(container) {
+    var values = [];
+    var children = container.children;
+    for (var i = 0; i < children.length; i++) {
+      var child = children[i];
+      if (!child.getAttribute) {
+        continue;
+      }
+      var groupId = child.getAttribute("data-group-id");
+      if (groupId) {
+        values.push("group:" + groupId);
+        continue;
+      }
+      var dtfId = child.getAttribute("data-dtf-id");
+      if (dtfId) {
+        values.push("field:" + dtfId);
+      }
+    }
+    return values;
+  }
+
+  function initBlocks(root) {
+    var container = root.querySelector('[data-sortable="blocks"]');
     if (!container) {
       return;
     }
     var reorderUrl = container.getAttribute("data-reorder-url");
     instances.push(
       window.Sortable.create(container, {
-        handle: GROUP_HANDLE,
-        draggable: "[data-group-id]",
+        group: {
+          name: "blocks",
+          put: function (to, from, dragEl) {
+            return dragEl.hasAttribute("data-group-id") || dragEl.hasAttribute("data-dtf-id");
+          },
+        },
+        draggable: "[data-block]",
+        handle: HANDLE,
         animation: ANIMATION_MS,
-        onEnd: function () {
-          postBatch(reorderUrl, { order: directAttrValues(container, "data-group-id") });
+        onEnd: function (evt) {
+          if (evt.to.getAttribute("data-sortable") === "blocks") {
+            // Block-Reorder (Gruppen + freie Felder gemischt).
+            postBatch(reorderUrl, { blocks: collectBlocks(container) });
+          } else {
+            // Freies Feld in eine Gruppen-Feldliste gezogen → move_field.
+            postBatch(evt.to.getAttribute("data-move-url"), {
+              moved: evt.item.getAttribute("data-dtf-id"),
+              group: evt.to.getAttribute("data-group-id") || "",
+              order: directAttrValues(evt.to, "data-dtf-id"),
+            });
+          }
         },
       })
     );
@@ -116,25 +167,37 @@
       var list = lists[i];
       instances.push(
         window.Sortable.create(list, {
-          group: "fields",
-          handle: FIELD_HANDLE,
+          group: {
+            name: "fields",
+            put: function (to, from, dragEl) {
+              return dragEl.hasAttribute("data-dtf-id");
+            },
+          },
+          handle: HANDLE,
           draggable: "[data-dtf-id]",
           animation: ANIMATION_MS,
           onEnd: function (evt) {
-            if (evt.from === evt.to) {
-              // Sortierung innerhalb derselben Liste.
-              var sameList = evt.to;
-              postBatch(sameList.getAttribute("data-reorder-url"), {
-                group: sameList.getAttribute("data-group-id") || "",
-                order: directAttrValues(sameList, "data-dtf-id"),
+            if (evt.to.getAttribute("data-sortable") === "blocks") {
+              // Feld aus einer Gruppe an eine Top-Level-Block-Position gezogen.
+              // Ziel = Blocks-Container (hat data-move-url auf config_move_field);
+              // NICHT reorder/blocks — das Feld wechselt die Ebene (group="").
+              postBatch(evt.to.getAttribute("data-move-url"), {
+                moved: evt.item.getAttribute("data-dtf-id"),
+                group: "",
+                blocks: collectBlocks(evt.to),
+              });
+            } else if (evt.from === evt.to) {
+              // Sortierung innerhalb derselben Gruppenliste.
+              postBatch(evt.to.getAttribute("data-reorder-url"), {
+                group: evt.to.getAttribute("data-group-id") || "",
+                order: directAttrValues(evt.to, "data-dtf-id"),
               });
             } else {
-              // Feld in eine andere Liste verschoben — Zielliste = evt.to.
-              var target = evt.to;
-              postBatch(target.getAttribute("data-move-url"), {
+              // Feld in eine ANDERE Gruppenliste verschoben.
+              postBatch(evt.to.getAttribute("data-move-url"), {
                 moved: evt.item.getAttribute("data-dtf-id"),
-                group: target.getAttribute("data-group-id") || "",
-                order: directAttrValues(target, "data-dtf-id"),
+                group: evt.to.getAttribute("data-group-id") || "",
+                order: directAttrValues(evt.to, "data-dtf-id"),
               });
             }
           },
@@ -152,7 +215,7 @@
     if (!root) {
       return;
     }
-    initGroups(root);
+    initBlocks(root);
     initFields(root);
   }
 

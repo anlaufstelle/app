@@ -549,7 +549,7 @@ EXPECTATIONS = (
     # leerer Matrix-POST liefert für berechtigte Rollen 400 (nichts umzusortieren)
     # — kein 5xx, kein 403/404 → in der Matrix erlaubt.
     E(
-        "core:config_reorder_groups",
+        "core:config_reorder_blocks",
         "config",
         post=ADMIN_ONLY,
         url_kwargs=(("pk", "doc_type_contact.pk"),),

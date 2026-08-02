@@ -251,7 +251,8 @@ class TestGroupUpdate:
         assert GROUP_FORM_PARTIAL in names  # das Board bettet das Neu-Formular ein
         body = response.content.decode()
         assert "Sektion Neu" in body  # umbenannte Gruppe erscheint im Board
-        assert "Ohne Gruppe" in body  # vollständiges Board inkl. „Ohne Gruppe"-Sektion
+        # Vollständiges Board: das „Feld hinzufügen"-Formular ist ebenfalls dabei.
+        assert b'data-testid="field-add-form"' in response.content
 
     def test_update_htmx_invalid_renders_inline_form_without_retarget(
         self, client, admin_user, doc_type_contact, field_group
@@ -299,24 +300,33 @@ class TestGroupDelete:
 
 
 # ---------------------------------------------------------------------------
-# Board-Rendering — Gruppen sortiert, „Ohne Gruppe" zuletzt, data-Attribute
+# Board-Rendering — globale Block-Sequenz (Gruppen + freie Felder interleaved)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.django_db
 class TestBoardRendering:
-    def test_groups_sorted_ungrouped_last_with_data_attrs(self, client, admin_user, doc_type_contact):
-        g_b = FieldGroup.objects.create(document_type=doc_type_contact, name="B-Gruppe", sort_order=1)
-        g_a = FieldGroup.objects.create(document_type=doc_type_contact, name="A-Gruppe", sort_order=0)
+    def test_blocks_interleaved_by_position_with_data_attrs(self, client, admin_user, facility, doc_type_contact):
+        # Layout: freies Feld (Blockpos 0), Gruppe G (Blockpos 1), freies Feld (Blockpos 2).
+        free = list(doc_type_contact.fields.filter(field_group__isnull=True).order_by("sort_order"))
+        a, b = free[0], free[1]
+        a.sort_order = 0
+        a.save(update_fields=["sort_order"])
+        b.sort_order = 2
+        b.save(update_fields=["sort_order"])
+        grp = FieldGroup.objects.create(document_type=doc_type_contact, name="Mittelgruppe", sort_order=1)
         client.force_login(admin_user)
         response = client.get(reverse("core:config_doctype_detail", kwargs={"pk": doc_type_contact.pk}))
         body = response.content.decode()
-        assert body.index("A-Gruppe") < body.index("B-Gruppe")
-        assert body.index("B-Gruppe") < body.index("Ohne Gruppe")
-        assert f'data-group-id="{g_a.pk}"' in body
-        assert f'data-group-id="{g_b.pk}"' in body
-        dtf = doc_type_contact.fields.first()
-        assert f'data-dtf-id="{dtf.pk}"' in body
+        # Es gibt keinen fixen „Ohne Gruppe"-Block mehr (das gleichnamige Wort
+        # bleibt nur als Dropdown-Leeroption); freie Felder sitzen als eigene
+        # Top-Level-Zeilen interleaved zwischen den Gruppen.
+        assert 'data-testid="field-group-ungrouped"' not in body
+        assert body.index(f'data-dtf-id="{a.pk}"') < body.index("Mittelgruppe")
+        assert body.index("Mittelgruppe") < body.index(f'data-dtf-id="{b.pk}"')
+        assert f'data-group-id="{grp.pk}"' in body
+        assert 'data-testid="free-field-row"' in body
+        assert 'data-sortable="blocks"' in body
 
     def test_detail_renders_board_swap_target(self, client, admin_user, doc_type_contact):
         client.force_login(admin_user)
