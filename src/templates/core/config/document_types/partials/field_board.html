@@ -1,24 +1,35 @@
 {% load i18n %}
 {% comment %}
-Interaktives Feld-Board (M0 P6, Refs #1056) — DAS zentrale HTMX-Swap-Ziel
+Interaktives Feld-Board (M0 P6/P7, Refs #1056) — DAS zentrale HTMX-Swap-Ziel
 `#field-board`. Jede Board-Mutation (Feld zuordnen/entfernen, Gruppe anlegen/
-umbenennen/löschen) ersetzt diesen Container per outerHTML.
+umbenennen/löschen, Drag-and-Drop-Sortierung) ersetzt diesen Container per
+outerHTML.
 
 Sortierung ist im View/Service vorbereitet (Gruppen nach (sort_order, name),
 Felder je Gruppe nach sort_order, „Ohne Gruppe" als fixer Block zuletzt) — NICHT
-hier sortieren. Die data-group-id/data-dtf-id-Attribute markieren die Zeilen für
-die Drag-and-Drop-Sortierung (P7); hier wird noch kein Sortable initialisiert.
+hier sortieren.
+
+Drag-and-Drop (P7, config-sortable.js):
+* `data-sortable="groups"` umschließt die verschiebbaren Gruppen-Karten (jede mit
+  `data-group-id` + `.group-drag-handle`); Reorder-Ziel-URL in `data-reorder-url`.
+* je Gruppe/„Ohne Gruppe" eine `data-sortable="fields"`-Liste (`data-group-id`,
+  Felder-Reorder-URL in `data-reorder-url`, Move-URL in `data-move-url`); jede
+  Feldzeile trägt `data-dtf-id` + `.field-drag-handle`. Distinkte Handle-Klassen
+  für Gruppen vs. Felder verhindern die Handle-Kollision verschachtelter
+  Sortables. Das Sortable wird NICHT im Template initialisiert (kein Inline-JS).
 
 Kontext: doc_type, groups (mit vorsortierten .fields), ungrouped_fields,
 add_form (DocumentTypeFieldAddForm), group_form (FieldGroupForm).
 {% endcomment %}
 <div id="field-board" class="space-y-4">
 
-    {# --- Benannte Gruppen (sort_order, name) ------------------------------ #}
+    {# --- Benannte Gruppen (sort_order, name) — verschiebbar ---------------- #}
+    <div data-sortable="groups" data-reorder-url="{% url 'core:config_reorder_groups' doc_type.pk %}" class="space-y-4">
     {% for group in groups %}
     <div class="card p-4" data-group-id="{{ group.pk }}" data-testid="field-group">
         <div class="flex items-center justify-between gap-3 mb-3">
             <div class="flex items-center gap-2 min-w-0">
+                <span class="drag-handle group-drag-handle cursor-grab text-ink-muted select-none" aria-hidden="true" title="{% trans 'Zum Sortieren ziehen' %}">⠿</span>
                 <h3 class="text-[14px] font-semibold text-ink truncate">{{ group.name }}</h3>
                 {% if group.is_collapsible %}{% include "components/_badge.html" with text=_("Einklappbar") color="blue" %}{% endif %}
             </div>
@@ -39,11 +50,14 @@ add_form (DocumentTypeFieldAddForm), group_form (FieldGroupForm).
             </div>
         </div>
         <div id="group-edit-{{ group.pk }}" class="mb-3 empty:hidden"></div>
-        {% if group.fields.all %}
-        <ul class="divide-y divide-subtle">
+        <ul class="divide-y divide-subtle min-h-[1.5rem]"
+            data-sortable="fields" data-group-id="{{ group.pk }}"
+            data-reorder-url="{% url 'core:config_reorder_fields' doc_type.pk %}"
+            data-move-url="{% url 'core:config_move_field' doc_type.pk %}">
             {% for f in group.fields.all %}
             <li class="py-2 flex items-center justify-between gap-3" data-dtf-id="{{ f.pk }}" data-testid="field-row">
-                <div class="min-w-0">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="drag-handle field-drag-handle cursor-grab text-ink-muted select-none" aria-hidden="true" title="{% trans 'Zum Sortieren ziehen' %}">⠿</span>
                     <span class="text-[14px] text-ink">{{ f.field_template.name }}</span>
                     {% if f.field_template.is_required %}<span class="text-[12px] text-red-600 ml-1" title="{% trans 'Pflichtfeld' %}">*</span>{% endif %}
                 </div>
@@ -59,20 +73,24 @@ add_form (DocumentTypeFieldAddForm), group_form (FieldGroupForm).
             </li>
             {% endfor %}
         </ul>
-        {% else %}
+        {% if not group.fields.all %}
         <p class="text-[12px] text-ink-muted">{% trans "Keine Felder in dieser Gruppe." %}</p>
         {% endif %}
     </div>
     {% endfor %}
+    </div>
 
     {# --- Ohne Gruppe (fixer Block, selbst nicht verschiebbar) ------------- #}
     <div class="card p-4" data-group-id="" data-testid="field-group-ungrouped">
         <h3 class="text-[14px] font-semibold text-ink mb-3">{% trans "Ohne Gruppe" %}</h3>
-        {% if ungrouped_fields %}
-        <ul class="divide-y divide-subtle">
+        <ul class="divide-y divide-subtle min-h-[1.5rem]"
+            data-sortable="fields" data-group-id=""
+            data-reorder-url="{% url 'core:config_reorder_fields' doc_type.pk %}"
+            data-move-url="{% url 'core:config_move_field' doc_type.pk %}">
             {% for f in ungrouped_fields %}
             <li class="py-2 flex items-center justify-between gap-3" data-dtf-id="{{ f.pk }}" data-testid="field-row">
-                <div class="min-w-0">
+                <div class="flex items-center gap-2 min-w-0">
+                    <span class="drag-handle field-drag-handle cursor-grab text-ink-muted select-none" aria-hidden="true" title="{% trans 'Zum Sortieren ziehen' %}">⠿</span>
                     <span class="text-[14px] text-ink">{{ f.field_template.name }}</span>
                     {% if f.field_template.is_required %}<span class="text-[12px] text-red-600 ml-1" title="{% trans 'Pflichtfeld' %}">*</span>{% endif %}
                 </div>
@@ -88,7 +106,7 @@ add_form (DocumentTypeFieldAddForm), group_form (FieldGroupForm).
             </li>
             {% endfor %}
         </ul>
-        {% else %}
+        {% if not ungrouped_fields %}
         <p class="text-[12px] text-ink-muted">{% trans "Keine ungruppierten Felder." %}</p>
         {% endif %}
     </div>

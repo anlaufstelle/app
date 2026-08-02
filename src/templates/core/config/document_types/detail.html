@@ -1,7 +1,14 @@
 {% extends "base.html" %}
-{% load i18n %}
+{% load i18n static %}
 
 {% block title %}{{ doc_type.name }} – {% trans "Dokumentationstyp" %}{% endblock %}
+
+{% block extra_head %}
+{# P7 (Refs #1056): Drag-and-Drop-Sortierung des Feld-Boards. SortableJS zuerst #}
+{# laden (defer = Dokumentreihenfolge), dann der Initialisierer. Kein Inline-JS. #}
+<script src="{% static 'js/vendor/sortable.min.js' %}" defer></script>
+<script src="{% static 'js/config-sortable.js' %}" defer></script>
+{% endblock %}
 
 {% block content %}
 <div class="max-w-2xl">

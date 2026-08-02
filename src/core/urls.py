@@ -65,6 +65,11 @@ from core.views.config.field_templates import (
     ConfigFieldTemplateToggleActiveView,
     ConfigFieldTemplateUpdateView,
 )
+from core.views.config.reorder import (
+    ConfigMoveFieldView,
+    ConfigReorderFieldsView,
+    ConfigReorderGroupsView,
+)
 from core.views.dashboard import RoleDashboardView
 from core.views.dsgvo import DSGVODocumentDownloadView, DSGVOPackageView
 from core.views.event_deletion import DeletionRequestListView, DeletionRequestReviewView
@@ -281,6 +286,22 @@ urlpatterns = [
         "config/document-types/<uuid:pk>/groups/<uuid:group_pk>/delete/",
         ConfigFieldGroupDeleteView.as_view(),
         name="config_fieldgroup_delete",
+    ),
+    # P7: Drag-and-Drop-Batch-Reorder (Gruppen, Felder, Feld verschieben).
+    path(
+        "config/document-types/<uuid:pk>/reorder/groups/",
+        ConfigReorderGroupsView.as_view(),
+        name="config_reorder_groups",
+    ),
+    path(
+        "config/document-types/<uuid:pk>/reorder/fields/",
+        ConfigReorderFieldsView.as_view(),
+        name="config_reorder_fields",
+    ),
+    path(
+        "config/document-types/<uuid:pk>/reorder/move-field/",
+        ConfigMoveFieldView.as_view(),
+        name="config_move_field",
     ),
     path("config/field-templates/", ConfigFieldTemplateListView.as_view(), name="config_fieldtemplate_list"),
     path("config/field-templates/new/", ConfigFieldTemplateCreateView.as_view(), name="config_fieldtemplate_create"),

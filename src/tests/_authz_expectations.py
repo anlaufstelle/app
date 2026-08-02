@@ -544,6 +544,31 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "doc_type_contact.pk"), ("group_pk", "field_group.pk")),
         idor=(("pk", "foreign_doc_type.pk"), ("group_pk", "foreign_field_group.pk")),
     ),
+    # M0 P7 (Refs #1056): Drag-and-Drop-Batch-Reorder. facility_admin only; der
+    # IDOR-Lookup (fremder doc_type → 404) läuft VOR jeder Payload-Prüfung. Ein
+    # leerer Matrix-POST liefert für berechtigte Rollen 400 (nichts umzusortieren)
+    # — kein 5xx, kein 403/404 → in der Matrix erlaubt.
+    E(
+        "core:config_reorder_groups",
+        "config",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"),),
+        idor=(("pk", "foreign_doc_type.pk"),),
+    ),
+    E(
+        "core:config_reorder_fields",
+        "config",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"),),
+        idor=(("pk", "foreign_doc_type.pk"),),
+    ),
+    E(
+        "core:config_move_field",
+        "config",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"),),
+        idor=(("pk", "foreign_doc_type.pk"),),
+    ),
     # ---- partials-htmx --------------------------------------------------------
     E(
         "core:workitem_status_update",
