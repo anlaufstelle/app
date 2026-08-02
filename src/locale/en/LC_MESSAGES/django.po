@@ -2,7 +2,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-02 17:22+0200\n"
+"POT-Creation-Date: 2026-08-02 21:30+0200\n"
 "Language: en\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
@@ -24,7 +24,7 @@ msgstr "Identified"
 msgid "Qualifiziert"
 msgstr "Qualified"
 
-#: core/forms/cases.py:17 core/forms/events.py:79 core/models/case.py:34
+#: core/forms/cases.py:17 core/forms/events.py:87 core/models/case.py:34
 #: core/models/client.py:86 core/models/event.py:30 core/models/workitem.py:53
 #: core/models/workitem.py:190 core/services/system/export.py:109
 #: templates/core/attachments/partials/attachment_table.html:13
@@ -45,7 +45,7 @@ msgid ""
 "Bitte eine Person auswählen — Fälle müssen einer Person zugeordnet sein."
 msgstr "Please select a person — cases must be assigned to a person."
 
-#: core/forms/cases.py:58 core/forms/events.py:138
+#: core/forms/cases.py:58 core/forms/events.py:146
 msgid "Person existiert nicht."
 msgstr "Person does not exist."
 
@@ -54,38 +54,85 @@ msgid ""
 "Eine Person mit diesem Pseudonym existiert bereits in dieser Einrichtung."
 msgstr "A person with this pseudonym already exists in this facility."
 
-#: core/forms/config.py:82
+#: core/forms/config.py:93
 msgid ""
 "Ein Dokumentationstyp mit diesem Namen und dieser Kategorie existiert in "
 "dieser Einrichtung bereits."
-msgstr "A document type with this name and category already exists in this facility."
+msgstr ""
+"A document type with this name and category already exists in this facility."
 
-#: core/forms/config.py:138
+#: core/forms/config.py:149
 msgid ""
 "Eine Feldvorlage mit diesem Namen existiert in dieser Einrichtung bereits."
 msgstr "A field template with this name already exists in this facility."
 
-#: core/forms/config.py:189
+#: core/forms/config.py:200
 msgid ""
 "Eine Feldgruppe mit diesem Namen existiert für diesen Dokumentationstyp "
 "bereits."
 msgstr "A field group with this name already exists for this document type."
 
-#: core/forms/config.py:215 core/models/attachment.py:44
+#: core/forms/config.py:226 core/models/attachment.py:44
 #: core/models/document_type.py:218 core/models/document_type.py:445
 #: templates/core/config/document_types/partials/field_board.html:121
 msgid "Feldvorlage"
 msgstr "Field template"
 
-#: core/forms/config.py:221 core/models/document_type.py:368
+#: core/forms/config.py:232 core/models/document_type.py:368
 #: core/models/document_type.py:453
 #: templates/core/config/document_types/partials/field_board.html:125
 msgid "Feldgruppe"
 msgstr "Field group"
 
-#: core/forms/config.py:222
+#: core/forms/config.py:233
 msgid "– Ohne Gruppe –"
 msgstr "– No group –"
+
+#: core/forms/config.py:271 core/models/field_condition.py:53
+msgid "Zielfeld"
+msgstr "Target field"
+
+#: core/forms/config.py:276 core/models/field_condition.py:60
+msgid "Quellfeld"
+msgstr "Source field"
+
+#: core/forms/config.py:281 core/models/field_condition.py:66
+#: templates/core/config/document_types/partials/condition_form.html:47
+msgid "Operator"
+msgstr "Operator"
+
+#: core/forms/config.py:286 core/models/field_condition.py:72
+#: templates/core/config/document_types/partials/condition_form.html:51
+msgid "Vergleichswert"
+msgstr "Comparison value"
+
+#: core/forms/config.py:350 core/models/field_condition.py:135
+msgid "Dieser Operator ist für den Feldtyp des Quellfelds nicht zulässig."
+msgstr "This operator is not allowed for the source field's type."
+
+#: core/forms/config.py:360 core/models/field_condition.py:146
+msgid "Für diesen Operator ist ein Vergleichswert erforderlich."
+msgstr "A comparison value is required for this operator."
+
+#: core/forms/config.py:380
+msgid "Bitte eine gültige Zahl eingeben."
+msgstr "Please enter a valid number."
+
+#: core/forms/config.py:387
+msgid "Bitte „wahr“ oder „falsch“ auswählen."
+msgstr "Please select \"true\" or \"false\"."
+
+#: core/forms/config.py:392
+msgid "Bitte ein gültiges Datum (JJJJ-MM-TT) eingeben."
+msgstr "Please enter a valid date (YYYY-MM-DD)."
+
+#: core/forms/config.py:398
+msgid "Bitte eine gültige Uhrzeit eingeben."
+msgstr "Please enter a valid time."
+
+#: core/forms/config.py:405
+msgid "Bitte eine gültige Option auswählen."
+msgstr "Please select a valid option."
 
 #: core/forms/episodes.py:42 core/models/episode.py:32
 msgid "Beginn"
@@ -95,12 +142,12 @@ msgstr "Start"
 msgid "Ende"
 msgstr "End"
 
-#: core/forms/events.py:51
+#: core/forms/events.py:59
 #, python-format
 msgid "Zu viele Dateien (%(n)d). Maximal %(max)d pro Feld."
 msgstr "Too many files (%(n)d). Maximum %(max)d per field."
 
-#: core/forms/events.py:67 core/models/document_type.py:106
+#: core/forms/events.py:75 core/models/document_type.py:106
 #: core/models/document_type.py:356 core/models/document_type.py:439
 #: core/models/event.py:36 core/models/quick_template.py:41
 #: core/services/system/export.py:108
@@ -115,7 +162,7 @@ msgstr "Too many files (%(n)d). Maximum %(max)d per field."
 msgid "Dokumentationstyp"
 msgstr "Document type"
 
-#: core/forms/events.py:83 core/models/event.py:74
+#: core/forms/events.py:91 core/models/event.py:74
 #: templates/core/clients/offline_detail.html:134
 #: templates/core/events/delete_confirm.html:28
 #: templates/core/events/deletion_review.html:37
@@ -125,22 +172,22 @@ msgstr "Document type"
 msgid "Zeitpunkt"
 msgstr "Timestamp"
 
-#: core/forms/events.py:95 core/models/case.py:84 core/models/episode.py:21
+#: core/forms/events.py:103 core/models/case.py:84 core/models/episode.py:21
 #: core/models/event.py:44 templates/core/cases/episode_form.html:11
 #: templates/core/events/create.html:156 templates/core/events/detail.html:83
 msgid "Fall"
 msgstr "Case"
 
-#: core/forms/events.py:96 templates/core/events/create.html:159
+#: core/forms/events.py:104 templates/core/events/create.html:159
 msgid "– Keinem Fall zuordnen –"
 msgstr "– Do not assign to any case –"
 
-#: core/forms/events.py:254
+#: core/forms/events.py:262
 #, python-format
 msgid "Dateityp .%(ext)s nicht erlaubt. Erlaubt: %(allowed)s"
 msgstr "File type .%(ext)s not allowed. Allowed: %(allowed)s"
 
-#: core/forms/events.py:259
+#: core/forms/events.py:267
 #, python-format
 msgid "Datei zu groß (%(size)d MB). Maximum: %(max)d MB"
 msgstr "File too large (%(size)d MB). Maximum: %(max)d MB"
@@ -1310,7 +1357,9 @@ msgstr "Slug cannot be changed after creation."
 msgid ""
 "Stabiler Identifier — wird im M2-Paketformat referenziert. Nach Erstellung "
 "unveränderbar."
-msgstr "Stable identifier — referenced by the M2 package format. Cannot be changed after creation."
+msgstr ""
+"Stable identifier — referenced by the M2 package format. Cannot be changed "
+"after creation."
 
 #: core/models/document_type.py:365
 #: templates/core/config/document_types/partials/field_board.html:34
@@ -1431,6 +1480,91 @@ msgstr "Event history"
 #: core/models/event_history.py:56
 msgid "Ereignis-Historien"
 msgstr "Event histories"
+
+#: core/models/field_condition.py:40
+msgid "ist gleich"
+msgstr "equals"
+
+#: core/models/field_condition.py:41
+msgid "ist ungleich"
+msgstr "does not equal"
+
+#: core/models/field_condition.py:42
+msgid "enthält"
+msgstr "contains"
+
+#: core/models/field_condition.py:43
+msgid "ist größer als"
+msgstr "is greater than"
+
+#: core/models/field_condition.py:44
+msgid "ist kleiner als"
+msgstr "is less than"
+
+#: core/models/field_condition.py:45
+msgid "ist leer"
+msgstr "is empty"
+
+#: core/models/field_condition.py:46
+msgid "ist nicht leer"
+msgstr "is not empty"
+
+#: core/models/field_condition.py:54
+msgid "Wird ein-/ausgeblendet, je nachdem ob die Bedingung erfüllt ist."
+msgstr "Shown or hidden depending on whether the condition is met."
+
+#: core/models/field_condition.py:61
+msgid "Der Wert dieses Felds wird gegen die Bedingung geprüft."
+msgstr "This field's value is checked against the condition."
+
+#: core/models/field_condition.py:73
+msgid "Typisierter Vergleichswert (JSON). Leer bei is_empty/is_not_empty."
+msgstr "Typed comparison value (JSON). Empty for is_empty/is_not_empty."
+
+#: core/models/field_condition.py:77
+msgid "Gruppe"
+msgstr "Group"
+
+#: core/models/field_condition.py:78
+msgid "AND innerhalb einer Gruppe, OR über Gruppen hinweg."
+msgstr "AND within a group, OR across groups."
+
+#: core/models/field_condition.py:82
+msgid "Feldbedingung"
+msgstr "Field condition"
+
+#: core/models/field_condition.py:83
+msgid "Feldbedingungen"
+msgstr "Field conditions"
+
+#: core/models/field_condition.py:112
+msgid "Ziel- und Quellfeld müssen zum selben Dokumentationstyp gehören."
+msgstr "Target and source field must belong to the same document type."
+
+#: core/models/field_condition.py:124
+msgid "Dieser Feldtyp kann nicht als Quelle für Bedingungen verwendet werden."
+msgstr "This field type cannot be used as a source for conditions."
+
+#: core/models/field_condition.py:127
+msgid "Verschlüsselte Felder sind als Quelle nicht zulässig."
+msgstr "Encrypted fields are not allowed as a source."
+
+#: core/models/field_condition.py:143
+msgid "Für diesen Operator darf kein Vergleichswert gesetzt sein."
+msgstr "This operator must not have a comparison value set."
+
+#: core/models/field_condition.py:148
+msgid "Der Vergleichswert muss „wahr“ oder „falsch“ sein."
+msgstr "The comparison value must be \"true\" or \"false\"."
+
+#: core/models/field_condition.py:159
+msgid "Der Vergleichswert muss ein gültiger Options-Slug sein."
+msgstr "The comparison value must be a valid option slug."
+
+#: core/models/field_condition.py:183
+#, python-format
+msgid "Diese Bedingung erzeugt einen Zyklus: %(path)s"
+msgstr "This condition creates a cycle: %(path)s"
 
 #: core/models/mixins.py:22 templates/core/clients/trash.html:18
 msgid "Gelöscht am"
@@ -1876,7 +2010,10 @@ msgid ""
 "Ende der Übergangsfrist, bis zu der ein rollen-erzwungener Nutzer die Zwei-"
 "Faktor-Authentifizierung einrichten muss. Wird beim ersten Login auf 30 Tage "
 "gesetzt; nach Ablauf ist der Zugang bis zur Einrichtung gesperrt (Refs #689)."
-msgstr "End of the grace period by which a role-enforced user must set up two-factor authentication. Set to 30 days on first login; after it expires, access is locked until setup is complete (Refs #689)."
+msgstr ""
+"End of the grace period by which a role-enforced user must set up two-factor "
+"authentication. Set to 30 days on first login; after it expires, access is "
+"locked until setup is complete (Refs #689)."
 
 #: core/models/user.py:80
 msgid "Bevorzugte Sprache"
@@ -2678,62 +2815,70 @@ msgstr "Audit log on every access / rectification / deletion"
 msgid "Verschluesselte Auslieferung der Datenpakete"
 msgstr "Encrypted delivery of data packages"
 
-#: core/services/config.py:84
+#: core/services/config.py:85
 #, python-format
 msgid ""
 "%(n)d Ereignis(se) verweisen auf diesen Dokumentationstyp und müssten zuerst "
 "entfernt werden."
-msgstr "%(n)d event(s) reference this document type and would have to be removed first."
+msgstr ""
+"%(n)d event(s) reference this document type and would have to be removed "
+"first."
 
-#: core/services/config.py:93
+#: core/services/config.py:94
 #, python-format
 msgid "Der Dokumentationstyp wird noch von %(n)d Objekt(en) referenziert."
 msgstr "The document type is still referenced by %(n)d object(s)."
 
-#: core/services/config.py:152
+#: core/services/config.py:153
 #, python-format
 msgid ""
 "%(n)d Dokumentationstyp-Zuordnung(en) verwenden diese Feldvorlage — bitte "
 "zuerst dort entfernen."
-msgstr "%(n)d document type assignment(s) use this field template — please remove it there first."
+msgstr ""
+"%(n)d document type assignment(s) use this field template — please remove it "
+"there first."
 
-#: core/services/config.py:158
+#: core/services/config.py:159
 #, python-format
 msgid "%(n)d Dateianhang/-anhänge sind an diese Feldvorlage gebunden."
 msgstr "%(n)d file attachment(s) are bound to this field template."
 
-#: core/services/config.py:167
+#: core/services/config.py:168
 #, python-format
 msgid "%(n)d Ereignis(se) enthalten Daten unter dem Slug „%(slug)s“."
 msgstr "%(n)d event(s) contain data under the slug \"%(slug)s\"."
 
-#: core/services/config.py:280 core/views/config/document_types.py:257
+#: core/services/config.py:281 core/views/config/document_types.py:266
 msgid "Die Feldgruppe gehört nicht zu diesem Dokumentationstyp."
 msgstr "The field group does not belong to this document type."
 
-#: core/services/config.py:283 core/services/config.py:306
+#: core/services/config.py:284 core/services/config.py:307
 msgid "Diese Feldvorlage ist dem Dokumentationstyp bereits zugeordnet."
 msgstr "This field template is already assigned to the document type."
 
-#: core/services/config.py:346
+#: core/services/config.py:460
 msgid ""
 "Die übergebene Reihenfolge stimmt nicht mit dem Bestand überein (fremde, "
 "fehlende oder doppelte IDs)."
-msgstr "The submitted order does not match the existing records (foreign, missing, or duplicate IDs)."
+msgstr ""
+"The submitted order does not match the existing records (foreign, missing, "
+"or duplicate IDs)."
 
-#: core/services/config.py:400
+#: core/services/config.py:514
 msgid "Das zu verschiebende Feld gehört nicht zu diesem Dokumentationstyp."
 msgstr "The field to be moved does not belong to this document type."
 
-#: core/services/config.py:406
+#: core/services/config.py:520
 msgid "Die Zielgruppe gehört nicht zu diesem Dokumentationstyp."
 msgstr "The target group does not belong to this document type."
 
-#: core/services/config.py:418
+#: core/services/config.py:532
 msgid ""
 "Die übergebene Reihenfolge stimmt nicht mit der Zielgruppe überein (fremde, "
 "fehlende oder doppelte IDs)."
-msgstr "The submitted order does not match the target group (foreign, missing, or duplicate IDs)."
+msgstr ""
+"The submitted order does not match the target group (foreign, missing, or "
+"duplicate IDs)."
 
 #: core/services/dashboard/focus_box.py:42 core/views/workitems.py:129
 #: templates/core/dashboard/role_staff.html:27
@@ -2773,11 +2918,13 @@ msgstr ""
 "If you want to retain statistics, enable it in Settings."
 
 #: core/services/events/context.py:64
+#: templates/core/config/document_types/partials/condition_value_input.html:24
 #: templates/core/export/client_data_pdf.html:32
 msgid "Ja"
 msgstr "Yes"
 
 #: core/services/events/context.py:64
+#: templates/core/config/document_types/partials/condition_value_input.html:25
 #: templates/core/export/client_data_pdf.html:32
 msgid "Nein"
 msgstr "No"
@@ -3063,36 +3210,64 @@ msgstr "Person has been created."
 msgid "Person wurde aktualisiert."
 msgstr "Person has been updated."
 
+#: core/views/config/conditions.py:159 core/views/config/conditions.py:174
+msgid "Die Bedingung konnte nicht angelegt werden."
+msgstr "The condition could not be created."
+
+#: core/views/config/conditions.py:176
+msgid "Bedingung wurde angelegt."
+msgstr "Condition has been created."
+
+#: core/views/config/conditions.py:226
+msgid "Bedingung wurde gespeichert."
+msgstr "Condition has been saved."
+
+#: core/views/config/conditions.py:237
+msgid "Die Bedingung konnte nicht gespeichert werden."
+msgstr "The condition could not be saved."
+
+#: core/views/config/conditions.py:247
+msgid "Bedingung wurde gelöscht."
+msgstr "Condition has been deleted."
+
+#: core/views/config/conditions.py:265
+msgid "Kein Quellfeld angegeben."
+msgstr "No source field specified."
+
+#: core/views/config/conditions.py:269
+msgid "Ungültige Quellfeld-ID."
+msgstr "Invalid source field ID."
+
 #: core/views/config/document_types.py:164
 #, python-format
 msgid "Dokumentationstyp „%(name)s“ wurde angelegt."
 msgstr "Document type \"%(name)s\" was created."
 
-#: core/views/config/document_types.py:192
+#: core/views/config/document_types.py:201
 #, python-format
 msgid "Dokumentationstyp „%(name)s“ wurde aktualisiert."
 msgstr "Document type \"%(name)s\" was updated."
 
-#: core/views/config/document_types.py:221
+#: core/views/config/document_types.py:230
 #, python-format
 msgid "Dokumentationstyp „%(name)s“ wurde gelöscht."
 msgstr "Document type \"%(name)s\" was deleted."
 
-#: core/views/config/document_types.py:250
+#: core/views/config/document_types.py:259
 msgid "Ungültige Feldgruppen-ID."
 msgstr "Invalid field group ID."
 
-#: core/views/config/document_types.py:262
-#: core/views/config/document_types.py:274
+#: core/views/config/document_types.py:271
+#: core/views/config/document_types.py:283
 msgid "Die Feldvorlage konnte nicht zugeordnet werden."
 msgstr "The field template could not be assigned."
 
-#: core/views/config/document_types.py:278
+#: core/views/config/document_types.py:287
 #, python-format
 msgid "Feld „%(name)s“ wurde zugeordnet."
 msgstr "Field \"%(name)s\" was assigned."
 
-#: core/views/config/document_types.py:290
+#: core/views/config/document_types.py:299
 #, python-format
 msgid "Feld „%(name)s“ wurde entfernt."
 msgstr "Field \"%(name)s\" was removed."
@@ -3174,31 +3349,31 @@ msgstr "Deletion request has been approved."
 msgid "Löschantrag wurde abgelehnt."
 msgstr "Deletion request has been rejected."
 
-#: core/views/events.py:144
+#: core/views/events.py:145
 msgid "Dokumentationstyp nicht gefunden."
 msgstr "Document type not found."
 
-#: core/views/events.py:423
+#: core/views/events.py:424
 msgid "Kontakt gespeichert – bereit für den nächsten."
 msgstr "Contact saved – ready for the next one."
 
-#: core/views/events.py:426
+#: core/views/events.py:427
 msgid "Kontakt wurde dokumentiert."
 msgstr "Contact has been documented."
 
-#: core/views/events.py:479
+#: core/views/events.py:480
 msgid "Dieser Dokumentationstyp erfordert eine Person."
 msgstr "This document type requires a person."
 
-#: core/views/events.py:628
+#: core/views/events.py:636
 msgid "Ereignis wurde aktualisiert."
 msgstr "Event has been updated."
 
-#: core/views/events.py:687
+#: core/views/events.py:695
 msgid "Löschantrag wurde gestellt und muss von einer Leitung genehmigt werden."
 msgstr "Deletion request has been submitted and must be approved by a manager."
 
-#: core/views/events.py:690
+#: core/views/events.py:698
 msgid "Ereignis wurde gelöscht."
 msgstr "Event has been deleted."
 
@@ -3761,17 +3936,17 @@ msgstr "The link is valid for 30 minutes. Please also check your spam folder."
 msgid "Anmelden"
 msgstr "Log in"
 
-#: templates/auth/login.html:33 templates/base.html:61
+#: templates/auth/login.html:33 templates/base.html:63
 #: tests/test_pwa_views.py:1200
 msgid "Neue Version verfügbar."
 msgstr "New version available."
 
-#: templates/auth/login.html:33 templates/base.html:61
+#: templates/auth/login.html:33 templates/base.html:63
 #: tests/test_pwa_views.py:1201
 msgid "Neu laden"
 msgstr "Reload"
 
-#: templates/auth/login.html:33 templates/base.html:61
+#: templates/auth/login.html:33 templates/base.html:63
 #: templates/core/cases/detail.html:41 templates/core/cases/detail.html:69
 msgid "Schließen"
 msgstr "Close"
@@ -3817,16 +3992,16 @@ msgstr ""
 "Screen\"Tap Share <span class=\"inline-block\">&#x2191;</span> → \"Add to "
 "Home Screen\""
 
-#: templates/auth/login.html:117 templates/base.html:135
+#: templates/auth/login.html:117 templates/base.html:137
 msgid "Quellcode"
 msgstr "Source code"
 
-#: templates/auth/login.html:126 templates/base.html:144
+#: templates/auth/login.html:126 templates/base.html:146
 #: templates/partials/_umami_consent.html:27
 msgid "Impressum"
 msgstr "Legal notice"
 
-#: templates/auth/login.html:130 templates/base.html:148
+#: templates/auth/login.html:130 templates/base.html:150
 msgid "Datenschutz"
 msgstr "Privacy"
 
@@ -3902,7 +4077,9 @@ msgstr "Sign in with passkey"
 msgid ""
 "Passkeys werden von diesem Browser nicht unterstützt — nutze deine "
 "Authenticator-App oder einen Backup-Code."
-msgstr "Passkeys are not supported by this browser — use your authenticator app or a backup code."
+msgstr ""
+"Passkeys are not supported by this browser — use your authenticator app or a "
+"backup code."
 
 #: templates/auth/mfa_login.html:60
 msgid "oder"
@@ -4020,7 +4197,10 @@ msgid ""
 "Ein Passkey (Gerät-Biometrie, Sicherheitsschlüssel oder Smartphone) ist ein "
 "zusätzlicher zweiter Faktor neben deiner Authenticator-App. Backup-Codes "
 "bleiben dein Wiederherstellungspfad."
-msgstr "A passkey (device biometrics, security key, or smartphone) is an additional second factor alongside your authenticator app. Backup codes remain your recovery path."
+msgstr ""
+"A passkey (device biometrics, security key, or smartphone) is an additional "
+"second factor alongside your authenticator app. Backup codes remain your "
+"recovery path."
 
 #: templates/auth/mfa_settings.html:99
 msgid "Passkey"
@@ -4037,7 +4217,7 @@ msgstr "Registered on %(created)s"
 #: templates/core/clients/partials/table.html:96
 #: templates/core/config/document_types/partials/field_board.html:70
 #: templates/core/config/document_types/partials/field_board.html:103
-#: templates/core/events/partials/dynamic_fields.html:69
+#: templates/core/events/partials/dynamic_fields.html:82
 msgid "Entfernen"
 msgstr "Remove"
 
@@ -4164,50 +4344,50 @@ msgstr "Confirm and continue"
 msgid "Brechen Sie ab und kehren Sie zurück:"
 msgstr "Cancel and return:"
 
-#: templates/base.html:64
+#: templates/base.html:66
 msgid "Zum Inhalt springen"
 msgstr "Skip to content"
 
-#: templates/base.html:83
+#: templates/base.html:85
 msgid "Offline — Daten werden bei Verbindung gespeichert"
 msgstr "Offline — Data will be saved when connected"
 
-#: templates/base.html:88 templates/offline.html:165
+#: templates/base.html:90 templates/offline.html:165
 #: tests/test_i18n_offline_banner.py:56
 msgid "Zur Personenliste"
 msgstr "Go to person list"
 
-#: templates/base.html:89 tests/test_i18n_offline_banner.py:29
+#: templates/base.html:91 tests/test_i18n_offline_banner.py:29
 msgid "Person lokal verfügbar"
 msgstr "person available locally"
 
-#: templates/base.html:89 tests/test_i18n_offline_banner.py:33
+#: templates/base.html:91 tests/test_i18n_offline_banner.py:33
 msgid "Personen lokal verfügbar"
 msgstr "people available locally"
 
-#: templates/base.html:92 templates/offline.html:149
+#: templates/base.html:94 templates/offline.html:149
 msgid "nicht synchronisiert"
 msgstr "not synced"
 
-#: templates/base.html:98 tests/test_i18n_offline_banner.py:38
+#: templates/base.html:100 tests/test_i18n_offline_banner.py:38
 msgid "Änderung wird synchronisiert..."
 msgstr "change is being synced..."
 
-#: templates/base.html:98 tests/test_i18n_offline_banner.py:42
+#: templates/base.html:100 tests/test_i18n_offline_banner.py:42
 msgid "Änderungen werden synchronisiert..."
 msgstr "changes are being synced..."
 
-#: templates/base.html:104 templates/offline.html:145
+#: templates/base.html:106 templates/offline.html:145
 #: tests/test_i18n_offline_banner.py:47
 msgid "Konflikt — bitte auflösen"
 msgstr "conflict — please resolve"
 
-#: templates/base.html:104 templates/offline.html:146
+#: templates/base.html:106 templates/offline.html:146
 #: tests/test_i18n_offline_banner.py:51
 msgid "Konflikte — bitte auflösen"
 msgstr "conflicts — please resolve"
 
-#: templates/base.html:119
+#: templates/base.html:121
 #, python-format
 msgid ""
 "Demo — synthetische Daten, Reset jede volle Stunde (nächster: %(reset)s "
@@ -4497,6 +4677,7 @@ msgstr "No entries found."
 #: templates/core/clients/offline_detail.html:219
 #: templates/core/clients/offline_detail.html:405
 #: templates/core/config/document_types/detail.html:24
+#: templates/core/config/document_types/partials/condition_board.html:43
 #: templates/core/config/document_types/partials/field_board.html:41
 #: templates/core/events/detail.html:20 templates/core/events/detail.html:32
 #: templates/core/workitems/detail.html:12
@@ -5145,8 +5326,10 @@ msgid ""
 msgid_plural ""
 "%(n)s Ereignisse verweisen auf diesen Typ — ein Löschen ist daher nicht "
 "möglich."
-msgstr[0] "%(n)s event references this type — deletion is therefore not possible."
-msgstr[1] "%(n)s events reference this type — deletion is therefore not possible."
+msgstr[0] ""
+"%(n)s event references this type — deletion is therefore not possible."
+msgstr[1] ""
+"%(n)s events reference this type — deletion is therefore not possible."
 
 #: templates/core/config/document_types/confirm_delete.html:24
 #, python-format
@@ -5159,7 +5342,9 @@ msgstr[1] "%(n)s quick templates will be removed along with it."
 msgid ""
 "Empfehlung: Statt zu löschen, können Sie den Typ deaktivieren. Er "
 "verschwindet dann aus den Formularen, bestehende Ereignisse bleiben erhalten."
-msgstr "Recommendation: instead of deleting, you can deactivate the type. It then disappears from the forms while existing events are preserved."
+msgstr ""
+"Recommendation: instead of deleting, you can deactivate the type. It then "
+"disappears from the forms while existing events are preserved."
 
 #: templates/core/config/document_types/confirm_delete.html:34
 msgid "Stattdessen bearbeiten / deaktivieren"
@@ -5172,6 +5357,7 @@ msgid "Endgültig löschen"
 msgstr "Delete permanently"
 
 #: templates/core/config/document_types/detail.html:25
+#: templates/core/config/document_types/partials/condition_board.html:48
 #: templates/core/config/document_types/partials/field_board.html:48
 #: templates/core/config/field_templates/partials/table.html:43
 #: templates/core/events/detail.html:25 templates/core/events/detail.html:44
@@ -5202,19 +5388,23 @@ msgid "Inaktiv"
 msgstr "Inactive"
 
 #: templates/core/config/document_types/detail.html:68
-#: templates/core/events/partials/dynamic_fields.html:34
+#: templates/core/events/partials/dynamic_fields.html:45
 msgid "Felder"
 msgstr "Fields"
 
-#: templates/core/config/document_types/detail.html:85
+#: templates/core/config/document_types/detail.html:74
+msgid "Bedingte Sichtbarkeit"
+msgstr "Conditional visibility"
+
+#: templates/core/config/document_types/detail.html:91
 msgid "Live-Vorschau"
 msgstr "Live preview"
 
-#: templates/core/config/document_types/detail.html:97
+#: templates/core/config/document_types/detail.html:103
 msgid "Vorschau wird geladen …"
 msgstr "Loading preview …"
 
-#: templates/core/config/document_types/detail.html:101
+#: templates/core/config/document_types/detail.html:107
 msgid "Vorschau nur für aktive Typen."
 msgstr "Preview only available for active types."
 
@@ -5269,6 +5459,71 @@ msgstr "Active only"
 msgid "Nur inaktive"
 msgstr "Inactive only"
 
+#: templates/core/config/document_types/partials/condition_board.html:13
+msgid ""
+"Blende ein Feld nur ein, wenn ein anderes Feld eine Bedingung erfüllt. UND "
+"innerhalb einer Gruppe, ODER über Gruppen hinweg."
+msgstr ""
+"Show a field only when another field meets a condition. AND within a group, "
+"OR across groups."
+
+#: templates/core/config/document_types/partials/condition_board.html:18
+msgid ""
+"Dieser Dokumentationstyp braucht mindestens zwei Felder, bevor Bedingungen "
+"möglich sind."
+msgstr ""
+"This document type needs at least two fields before conditions are possible."
+
+#: templates/core/config/document_types/partials/condition_board.html:26
+#, python-format
+msgid "Zeige „%(name)s\""
+msgstr "Show \"%(name)s\""
+
+#: templates/core/config/document_types/partials/condition_board.html:30
+msgid "ODER"
+msgstr "OR"
+
+#: templates/core/config/document_types/partials/condition_board.html:35
+msgid "UND"
+msgstr "AND"
+
+#: templates/core/config/document_types/partials/condition_board.html:36
+#, python-format
+msgid "Wenn „%(source)s\" %(op)s"
+msgstr "If \"%(source)s\" %(op)s"
+
+#: templates/core/config/document_types/partials/condition_board.html:60
+msgid "UND-Bedingung hinzufügen"
+msgstr "Add AND condition"
+
+#: templates/core/config/document_types/partials/condition_board.html:69
+msgid "Neue Bedingung"
+msgstr "New condition"
+
+#: templates/core/config/document_types/partials/condition_board.html:75
+msgid "ODER-Gruppe hinzufügen"
+msgstr "Add OR group"
+
+#: templates/core/config/document_types/partials/condition_form.html:39
+msgid "Zeige dieses Feld"
+msgstr "Show this field"
+
+#: templates/core/config/document_types/partials/condition_form.html:43
+msgid "Wenn dieses Feld"
+msgstr "If this field"
+
+#: templates/core/config/document_types/partials/condition_form.html:60
+msgid "Bedingung speichern"
+msgstr "Save condition"
+
+#: templates/core/config/document_types/partials/condition_form.html:60
+msgid "Bedingung hinzufügen"
+msgstr "Add condition"
+
+#: templates/core/config/document_types/partials/condition_value_input.html:21
+msgid "Für diesen Operator ist kein Vergleichswert nötig."
+msgstr "No comparison value is needed for this operator."
+
 #: templates/core/config/document_types/partials/field_board.html:32
 #: templates/core/config/document_types/partials/field_board.html:60
 #: templates/core/config/document_types/partials/field_board.html:93
@@ -5280,7 +5535,7 @@ msgid "Keine Felder in dieser Gruppe."
 msgstr "No fields in this group."
 
 #: templates/core/config/document_types/partials/field_board.html:85
-#: templates/core/events/partials/dynamic_fields.html:34
+#: templates/core/events/partials/dynamic_fields.html:45
 msgid "Ohne Gruppe"
 msgstr "No group"
 
@@ -5317,7 +5572,9 @@ msgstr "Deletion not possible — this field template is still in use:"
 msgid ""
 "Empfehlung: Statt zu löschen, können Sie die Feldvorlage deaktivieren. Sie "
 "verschwindet dann aus den Formularen, bestehende Werte bleiben erhalten."
-msgstr "Recommendation: instead of deleting, you can deactivate the field template. It then disappears from the forms while existing values are preserved."
+msgstr ""
+"Recommendation: instead of deleting, you can deactivate the field template. "
+"It then disappears from the forms while existing values are preserved."
 
 #: templates/core/config/field_templates/confirm_delete.html:32
 msgid "Stattdessen deaktivieren"
@@ -5633,7 +5890,9 @@ msgid ""
 "Achtung: Diese Notiz enthält unverschlüsselte personenbezogene Daten und "
 "wird als lesbare Datei auf diesem Gerät gespeichert. Der Export wird "
 "protokolliert. Wirklich exportieren?"
-msgstr "Warning: this note contains unencrypted personal data and will be saved as a readable file on this device. The export is logged. Really export?"
+msgstr ""
+"Warning: this note contains unencrypted personal data and will be saved as a "
+"readable file on this device. The export is logged. Really export?"
 
 #: templates/core/events/conflict_list.html:26
 msgid "Exportiert und protokolliert."
@@ -5898,11 +6157,11 @@ msgstr "— no person —"
 msgid "Dieser Dokumentationstyp erfordert eine zugeordnete Person."
 msgstr "This document type requires an assigned person."
 
-#: templates/core/events/partials/dynamic_fields.html:58
+#: templates/core/events/partials/dynamic_fields.html:71
 msgid "Ersetzen"
 msgstr "Reset"
 
-#: templates/core/events/partials/dynamic_fields.html:75
+#: templates/core/events/partials/dynamic_fields.html:88
 msgid "Weitere Dateien hinzufügen (mehrere möglich):"
 msgstr "Add more files (multiple possible):"
 
