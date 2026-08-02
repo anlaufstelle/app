@@ -126,9 +126,11 @@ def _delete_event(page, base_url, event_url) -> None:
         reason = page.locator("textarea#id_reason")
         if reason.count():
             reason.fill("E2E-Cleanup")
-        # Die Löschform eindeutig über das Begründungsfeld scopen (nicht ein nackter
-        # Submit — der matcht auch Logout/Sprach-Switch).
-        page.locator('form:has(#id_reason) button[type="submit"]').first.click()
+        # Anonymes Event → Direktlösch-Zweig; der Button-Text ist auf der
+        # Bestätigungsseite eindeutig (Logout-/Sprach-Submits heißen anders).
+        # Vorher scopte `form:has(#id_reason)` — das Begründungsfeld rendert
+        # bei anonymen Events aber gar nicht, das Cleanup war ein No-op.
+        page.locator('button[type="submit"]:has-text("Endgültig löschen")').click()
         page.wait_for_url(lambda url: "/delete/" not in url, timeout=10000)
     except Exception:
         pass
