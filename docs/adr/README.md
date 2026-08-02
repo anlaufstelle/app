@@ -67,6 +67,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-033](033-runtime-owner-role-separation.md) | Runtime-DB-Rolle von der DB-Ownership trennen (A1.4) | Accepted |
 | [ADR-034](034-config-ui-category-system-type.md) | category vs. system_type in der Konfigurations-UI | Accepted |
 | [ADR-035](035-evaluator-semantik-bedingte-feldlogik.md) | Evaluator-Semantik der bedingten Feldlogik (gemeinsame FE/BE-Regeln + Testvektoren) | Accepted |
+| [ADR-036](036-globale-block-sequenz-feldordnung.md) | Globale Block-Sequenz für Feldgruppen und ungruppierte Felder | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
