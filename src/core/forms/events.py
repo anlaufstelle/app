@@ -11,8 +11,16 @@ from django.utils.translation import gettext_lazy as _
 
 from core.constants import DEFAULT_ALLOWED_FILE_TYPES, DEFAULT_MAX_FILE_SIZE_MB
 from core.forms.widgets import INPUT_CSS
-from core.models import Case, Client, DocumentType, DocumentTypeField, FieldGroup
+from core.models import Case, Client, DocumentType, DocumentTypeField, FieldCondition, FieldGroup, FieldTemplate
 from core.models.settings import Settings
+from core.services.conditions import (
+    FILE,
+    NUMBER,
+    build_conditions_payload,
+    evaluate_conditions,
+    is_empty,
+    normalize_value,
+)
 
 
 class MultipleFileInput(forms.ClearableFileInput):
@@ -265,6 +273,29 @@ def _file_upload_errors(uploaded, allowed, max_mb, max_bytes):
     return errors
 
 
+# Sentinel für das lazy-gecachte Conditions-Payload (``None`` ist ein gültiges
+# Ergebnis „keine Bedingungen", muss vom „noch nicht berechnet" unterscheidbar sein).
+_PAYLOAD_UNSET: Any = object()
+
+
+def _coerce_condition_number(value: Any) -> Any:
+    """Number-Ist-Werte für die Bedingungsauswertung auf ``float`` ziehen (M1/P4).
+
+    Djangos Number-Formfelder liefern je nach Registry-Wahl ``int`` oder ``Decimal``
+    in ``cleaned_data``. Der Bedingungs-``value`` kommt als JSON-Zahl (``int``/``float``).
+    Ein ``Decimal`` ist NICHT gleich dem gleichlautenden ``float`` (``Decimal("1.1")
+    != 1.1``) — ohne Koerzierung schlägt eine ``equals``-Bedingung genau dann
+    fehl. ``float`` spiegelt zugleich die JS-Seite (``parseFloat``, P5) und hält
+    FE/BE deckungsgleich. ``None`` (leerer Wert) bleibt ``None``.
+    """
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return value
+
+
 class DynamicEventDataForm(forms.Form):
     """Dynamic form based on DocumentType fields.
 
@@ -275,13 +306,24 @@ class DynamicEventDataForm(forms.Form):
     (``initial_data``, deaktivierte Options) zugreifen.
     """
 
-    def __init__(self, *args, document_type=None, initial_data=None, facility=None, **kwargs):
+    def __init__(self, *args, document_type=None, initial_data=None, facility=None, existing_file_slugs=None, **kwargs):
         self.facility = facility
         self.document_type = document_type
         # M0/P4 (Refs #1056): slug -> FieldGroup | None. Aus dem select_related
         # unten (kein Extra-Query). ``grouped_fields`` liest daraus die Gruppe je
         # Feld — auch nachdem ``remove_restricted_fields`` (#774) Felder entfernt.
         self._field_group_of: dict[str, FieldGroup | None] = {}
+        # M1/P4 (Refs #1057): slug -> FieldTemplate. Fällt kostenlos aus demselben
+        # select_related-Query ab und wird von clean() (Feldtyp/Pflicht) gebraucht;
+        # ``ft`` wurde bislang im Loop verworfen.
+        self._field_templates: dict[str, FieldTemplate] = {}
+        # E17: FILE-Slugs mit bestehendem Anhang-Marker (aus den Update-Views), damit
+        # ein vorhandener Anhang beim Bearbeiten als „gefüllt" zählt.
+        self._existing_file_slugs: set[str] = set(existing_file_slugs or ())
+        # Ziel-Slugs aller Bedingungen dieses DocumentType (Pflicht wird für sie nur
+        # bedingt/sichtbarkeitsabhängig durchgesetzt). Vor remove_restricted_fields
+        # bestimmt — clean() schneidet zur Aufrufzeit mit self.fields.
+        self._condition_target_slugs: set[str] = set()
         super().__init__(*args, **kwargs)
         if not document_type:
             return
@@ -298,6 +340,21 @@ class DynamicEventDataForm(forms.Form):
             ft = dtf.field_template
             self.fields[ft.slug] = _build_dynamic_field(ft, initial_data)
             self._field_group_of[ft.slug] = dtf.field_group
+            self._field_templates[ft.slug] = ft
+
+        # E16: Ziel-Felder einer Bedingung Django-seitig optional machen
+        # (required=False) und den Pflicht-Marker separat setzen — die Pflicht
+        # erzwingt clean() nur für tatsächlich sichtbare Ziele. Der Marker trägt
+        # die ursprüngliche Pflicht (Pflicht-Stern im Template).
+        self._condition_target_slugs = set(
+            FieldCondition.objects.filter(target_field__document_type=document_type).values_list(
+                "target_field__field_template__slug", flat=True
+            )
+        )
+        for slug in self._condition_target_slugs & set(self.fields):
+            ft = self._field_templates[slug]
+            self.fields[slug].required = False
+            self.fields[slug].is_conditionally_required = ft.is_required  # type: ignore[attr-defined]
 
     def grouped_fields(self) -> list[tuple[FieldGroup | None, list[BoundField]]]:
         """Gebundene Felder nach :class:`FieldGroup` gruppiert (M0/P4, Refs #1056).
@@ -330,6 +387,83 @@ class DynamicEventDataForm(forms.Form):
             result.append(buckets[None])
         return result
 
+    def conditions_payload(self) -> dict[str, Any] | None:
+        """E12-Payload der Feld-Bedingungen f\u00fcr das AKTUELLE Feldset \u2014 oder ``None``.
+
+        **Vertrag (Refs #1057, E8/#774):** Die Feld-Slugs werden **zur Aufrufzeit**
+        aus ``self.fields`` gelesen, also NACH ``remove_restricted_fields`` (die
+        Views rufen das unmittelbar nach der Konstruktion). Dadurch flie\u00dfen die
+        Vergleichswerte sensibilit\u00e4ts-beschr\u00e4nkter Quellfelder nie ins Frontend-
+        JSON: :func:`~core.services.conditions.build_conditions_payload` verwirft
+        jede Bedingung, deren ``source`` **oder** ``target`` nicht (mehr) im
+        Feldset liegt. ``None``, wenn danach keine Bedingung \u00fcbrig bleibt.
+
+        Lazy-gecacht \u2014 der erste Aufruf muss also NACH dem Restrict-Schritt
+        erfolgen (Template-Rendering und ``clean()`` tun das).
+        """
+        cached = getattr(self, "_conditions_payload_cache", _PAYLOAD_UNSET)
+        if cached is _PAYLOAD_UNSET:
+            if self.document_type is None:
+                cached = None
+            else:
+                cached = build_conditions_payload(self.document_type, list(self.fields.keys()))
+            self._conditions_payload_cache = cached
+        return cached
+
+    def _condition_values(self, cleaned: dict[str, Any]) -> dict[str, Any]:
+        """Normalisierte Ist-Werte je aktuellem Feld-Slug (Evaluator-Eingabe E11/E14).
+
+        Fehlt ein Feld in ``cleaned`` (z.B. eigener Validierungsfehler des
+        Quellfelds), gilt sein Wert als ``None`` \u2192 leer (Risiko 6). Number-Werte
+        werden auf ``float`` gezogen (Decimal-Falle, :func:`_coerce_condition_number`).
+        """
+        values: dict[str, Any] = {}
+        for slug in self.fields:
+            ft = self._field_templates.get(slug)
+            if ft is None:
+                continue
+            normalized = normalize_value(ft.field_type, cleaned.get(slug))
+            if ft.field_type == NUMBER:
+                normalized = _coerce_condition_number(normalized)
+            values[slug] = normalized
+        return values
+
+    def _enforce_conditional_required(self, cleaned: dict[str, Any]) -> None:
+        """Pflicht nur f\u00fcr **sichtbare** konditionale Ziel-Felder erzwingen (E16/E17).
+
+        Versteckte Ziele bleiben leer zul\u00e4ssig (Issue-Kernfall); Kaskaden-Verstecken
+        (E7) folgt aus dem gemeinsamen Evaluator. Ein FILE-Ziel gilt als gef\u00fcllt,
+        wenn eine neue Datei hochgeladen wurde ODER bereits ein Anhang existiert
+        (``existing_file_slugs``, E17).
+        """
+        targets = self._condition_target_slugs & set(self.fields)
+        if not targets:
+            return
+
+        values = self._condition_values(cleaned)
+        payload = self.conditions_payload()
+        if payload is not None:
+            # E12 liefert ``{slug: {"type": t}}``; der Evaluator erwartet die
+            # Kurzform ``{slug: t}`` (ADR-035 \u00a7 8).
+            fields_short = {slug: spec["type"] for slug, spec in payload["fields"].items()}
+            visible = evaluate_conditions(fields_short, payload["conditions"], values)
+        else:
+            # Keine (verbleibende) Bedingung \u21d2 alle Felder unbedingt sichtbar (E5):
+            # ein Pflicht-Ziel beh\u00e4lt damit seine Pflicht (kein stiller Opt-out,
+            # etwa wenn die Quelle per #774-Drop wegfiel).
+            visible = set(self.fields)
+
+        for slug in targets:
+            ft = self._field_templates[slug]
+            if not ft.is_required or slug not in visible or slug in self.errors:
+                continue
+            if ft.field_type == FILE:
+                filled = bool(cleaned.get(slug)) or slug in self._existing_file_slugs
+            else:
+                filled = not is_empty(values.get(slug))
+            if not filled:
+                self.add_error(slug, self.fields[slug].error_messages["required"])
+
     def clean(self):
         cleaned = super().clean() or {}
         if not self.facility:
@@ -348,4 +482,6 @@ class DynamicEventDataForm(forms.Form):
                     continue
                 for error in _file_upload_errors(uploaded, allowed, max_mb, max_bytes):
                     self.add_error(field_name, error)
+        # M1/P4 (Refs #1057): Hidden-Required im Anschluss an die File-Checks.
+        self._enforce_conditional_required(cleaned)
         return cleaned

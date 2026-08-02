@@ -131,6 +131,20 @@ def is_multi_file_marker(value):
     return isinstance(value, dict) and value.get("__files__") is True and isinstance(value.get("entries"), list)
 
 
+def file_marker_slugs(data_json):
+    """Slugs in ``data_json``, deren Wert ein FILE-Marker ist (beide Formate).
+
+    E17 (M1, Refs #1057): Der Update-Pfad reicht diese Menge über den Form-kwarg
+    ``existing_file_slugs`` an :class:`~core.forms.events.DynamicEventDataForm`, damit
+    ein bereits vorhandener Datei-Anhang beim Bearbeiten als „gefüllt" zählt. Die
+    Klartext-Vorbelegung (:func:`decrypt_event_text_data`) strippt die Marker — sie
+    erreichen die Form also nicht mehr über ``initial_data``. Reiner Lese-Helfer.
+    """
+    if not data_json:
+        return set()
+    return {slug for slug, value in data_json.items() if _is_file_marker(value)}
+
+
 def normalize_file_marker(value):
     """Liefert eine Liste von ``{"id": <attachment_id>, "sort": <int>}``.
 

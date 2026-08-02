@@ -49,6 +49,7 @@ from core.services.events import (
     split_file_and_text_data,
     update_event,
 )
+from core.services.events.fields import file_marker_slugs
 from core.services.file_vault import prepare_encrypted_upload
 from core.services.scoping import get_scoped_object
 from core.views._json_contracts import (
@@ -543,6 +544,10 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             document_type=event.document_type,
             initial_data=initial_data,
             facility=request.current_facility,
+            # E17 (Refs #1057): Marker werden von decrypt_event_text_data gestrippt —
+            # die FILE-Slugs mit bestehendem Anhang separat durchreichen, damit ein
+            # vorhandener Anhang beim Bearbeiten als „gefüllt" zählt.
+            existing_file_slugs=file_marker_slugs(event.data_json),
         )
 
         # Remove sensitive fields from the form
@@ -569,6 +574,9 @@ class EventUpdateView(AssistantOrAboveRequiredMixin, View):
             document_type=event.document_type,
             initial_data=existing_data,
             facility=facility,
+            # E17 (Refs #1057): bestehende FILE-Anhänge zählen bei der
+            # Hidden-Required-Prüfung als „gefüllt" (Marker aus data_json).
+            existing_file_slugs=file_marker_slugs(event.data_json),
         )
 
         # Remove sensitive fields and preserve existing values

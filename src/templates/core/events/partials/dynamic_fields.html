@@ -41,7 +41,7 @@ im Create-Kontext fehlen sie und der Attachment-Block bleibt leer.
         {% if field.field.widget.input_type == "file" %}
         <div>
             <label for="{{ field.id_for_label }}" class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1.5">
-                {{ field.label }}{% if field.field.required %} *{% endif %}
+                {{ field.label }}{% if field.field.required or field.field.is_conditionally_required %} *{% endif %}
             </label>
             {% with entries=existing_attachments|get_item:field.name %}
             {% if entries %}
