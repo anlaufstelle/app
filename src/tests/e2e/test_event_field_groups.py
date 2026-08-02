@@ -46,7 +46,9 @@ class TestKontaktFieldGroups:
         expect(page.locator(COLLAPSIBLE_TOGGLE)).to_be_visible()
 
         # „Ohne Gruppe" ist die letzte Sektion und enthält „Straßenkontakt".
-        cards = page.locator("#dynamic-fields > div.card")
+        # Seit M1 wrappt der conditionEvaluator-Wurzelknoten die Gruppen-Cards
+        # (eine Ebene unter #dynamic-fields, Refs #1057).
+        cards = page.locator("#dynamic-fields > div > div.card")
         expect(cards).to_have_count(3, timeout=10000)
         last_card = cards.last
         expect(last_card.locator("h2")).to_contain_text("Ohne Gruppe")
