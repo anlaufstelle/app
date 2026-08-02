@@ -341,3 +341,44 @@ class TestOfflineFacilityBundleView:
         get = OfflineFacilityBundleView.get
         assert hasattr(get, "__wrapped__"), "get() should be wrapped by ratelimit"
         assert RATELIMIT_OFFLINE_BUNDLE == "120/h"
+
+
+@pytest.mark.django_db
+class TestOfflineFieldOrderMatchesForm:
+    """#1713: die serialisierte Feldreihenfolge folgt der globalen Block-Sequenz.
+
+    Ein flaches ``order_by("sort_order")`` würde gruppierte Felder (Innen-Index)
+    mit freien Feldern (Globalposition) mischen — der Offline-Editor zeigte dann
+    eine andere Reihenfolge als das Online-Formular. Regressionsanker: die
+    Bundle-Reihenfolge == ``iter_fields_in_block_order`` (== grouped_fields flach).
+    """
+
+    def test_interleaved_doctype_field_order(self, facility, staff_user):
+        from core.models import FieldGroup
+        from core.services.config import iter_fields_in_block_order
+
+        dt = DocumentType.objects.create(
+            facility=facility,
+            category=DocumentType.Category.CONTACT,
+            sensitivity=DocumentType.Sensitivity.NORMAL,
+            name="OfflineInterleaved",
+        )
+
+        def _ft(name):
+            return FieldTemplate.objects.create(facility=facility, name=name, field_type=FieldTemplate.FieldType.TEXT)
+
+        # freies Feld (Blockpos 0), Gruppe (Blockpos 1) mit zwei Innen-Feldern,
+        # freies Feld (Blockpos 2).
+        DocumentTypeField.objects.create(document_type=dt, field_template=_ft("Frei A"), field_group=None, sort_order=0)
+        grp = FieldGroup.objects.create(document_type=dt, name="Mitte", sort_order=1)
+        DocumentTypeField.objects.create(document_type=dt, field_template=_ft("Innen 1"), field_group=grp, sort_order=0)
+        DocumentTypeField.objects.create(document_type=dt, field_template=_ft("Innen 2"), field_group=grp, sort_order=1)
+        DocumentTypeField.objects.create(document_type=dt, field_template=_ft("Frei B"), field_group=None, sort_order=2)
+
+        bundle = build_facility_offline_bundle(staff_user, facility)
+        serialized = next(d for d in bundle["document_types"] if d["pk"] == str(dt.pk))
+        bundle_slugs = [f["slug"] for f in serialized["fields"]]
+        expected = [dtf.field_template.slug for dtf in iter_fields_in_block_order(dt)]
+        assert bundle_slugs == expected
+        # Explizit: freies Feld A, dann die Gruppenfelder, dann freies Feld B.
+        assert bundle_slugs == ["frei-a", "innen-1", "innen-2", "frei-b"]

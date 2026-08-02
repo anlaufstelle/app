@@ -85,20 +85,54 @@ class TestGroupedFields:
         form = DynamicEventDataForm(document_type=dt, facility=facility)
         assert _group_names(form.grouped_fields()) == ["Alpha", "Beta"]
 
-    def test_ungrouped_fields_come_last(self, facility):
-        """Ungruppierte Felder landen in der None-Sektion — garantiert zuletzt."""
+    def test_free_field_interleaves_by_block_position(self, facility):
+        """#1713: ein freies Feld an Blockpos 0 steht VOR der Gruppe an Blockpos 5.
+
+        Invertiert die frühere „Ohne Gruppe zuletzt"-Fixregel: unter der globalen
+        Block-Sequenz bestimmt allein die Blockposition die Reihenfolge.
+        """
         dt = DocumentType.objects.create(facility=facility, name="Gemischt")
         g = FieldGroup.objects.create(document_type=dt, name="Gruppe", sort_order=5)
         _assign(dt, _text_field(facility, "Ohne"), group=None, sort_order=0)
-        _assign(dt, _text_field(facility, "In Gruppe"), group=g, sort_order=1)
+        _assign(dt, _text_field(facility, "In Gruppe"), group=g, sort_order=0)
 
         form = DynamicEventDataForm(document_type=dt, facility=facility)
         grouped = form.grouped_fields()
 
-        # Trotz sort_order=5 der Gruppe steht die None-Sektion zuletzt.
-        assert _group_names(grouped) == ["Gruppe", None]
-        assert _field_names_of(grouped, 0) == ["in-gruppe"]
-        assert _field_names_of(grouped, 1) == ["ohne"]
+        # Freies Feld (Blockpos 0) VOR der Gruppe (Blockpos 5).
+        assert _group_names(grouped) == [None, "Gruppe"]
+        assert _field_names_of(grouped, 0) == ["ohne"]
+        assert _field_names_of(grouped, 1) == ["in-gruppe"]
+
+    def test_free_group_free_yields_two_none_runs(self, facility):
+        """Freier Block, Gruppe, freier Block → zwei getrennte None-Runs."""
+        dt = DocumentType.objects.create(facility=facility, name="Interleaved")
+        g = FieldGroup.objects.create(document_type=dt, name="Mitte", sort_order=1)
+        _assign(dt, _text_field(facility, "Vorne"), group=None, sort_order=0)
+        _assign(dt, _text_field(facility, "In Gruppe"), group=g, sort_order=0)
+        _assign(dt, _text_field(facility, "Hinten"), group=None, sort_order=2)
+
+        form = DynamicEventDataForm(document_type=dt, facility=facility)
+        grouped = form.grouped_fields()
+
+        assert _group_names(grouped) == [None, "Mitte", None]
+        assert _field_names_of(grouped, 0) == ["vorne"]
+        assert _field_names_of(grouped, 1) == ["in-gruppe"]
+        assert _field_names_of(grouped, 2) == ["hinten"]
+
+    def test_consecutive_free_blocks_merge_into_one_run(self, facility):
+        """Zwei aufeinanderfolgende freie Blöcke werden zu einem None-Run gemerged."""
+        dt = DocumentType.objects.create(facility=facility, name="Merge")
+        g = FieldGroup.objects.create(document_type=dt, name="Kopf", sort_order=0)
+        _assign(dt, _text_field(facility, "In Gruppe"), group=g, sort_order=0)
+        _assign(dt, _text_field(facility, "Frei A"), group=None, sort_order=1)
+        _assign(dt, _text_field(facility, "Frei B"), group=None, sort_order=2)
+
+        form = DynamicEventDataForm(document_type=dt, facility=facility)
+        grouped = form.grouped_fields()
+
+        assert _group_names(grouped) == ["Kopf", None]
+        assert _field_names_of(grouped, 1) == ["frei-a", "frei-b"]
 
     def test_field_order_within_group_by_document_type_field_sort_order(self, facility):
         """Feld-Reihenfolge innerhalb einer Gruppe = DocumentTypeField.sort_order."""

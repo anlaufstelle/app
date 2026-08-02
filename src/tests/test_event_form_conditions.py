@@ -437,3 +437,52 @@ class TestRequiredStarRendering:
         body = resp.content.decode()
         assert "Anhang" in body
         assert " *" in body
+
+
+# ---------------------------------------------------------------------------
+# #1716: FieldCondition-Query dedupen — Bedingungen werden in __init__ EINMAL
+# geladen und in conditions_payload injiziert (statt zweitem Condition-Query).
+# ---------------------------------------------------------------------------
+
+
+def _fieldcondition_query_count(captured):
+    return sum(1 for q in captured.captured_queries if "core_fieldcondition" in q["sql"].lower())
+
+
+@pytest.mark.django_db
+class TestConditionQueryDedupe:
+    def test_single_condition_query_when_payload_built(self, facility, cond_doctype):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as ctx:
+            form = DynamicEventDataForm(document_type=cond_doctype, facility=facility)
+            payload = form.conditions_payload()
+        assert payload is not None
+        # Genau EIN core_fieldcondition-Query über Konstruktion + Payload-Bau
+        # (die Bedingungen aus __init__ werden injiziert, kein zweiter Query).
+        assert _fieldcondition_query_count(ctx) == 1
+
+    def test_single_condition_query_without_payload(self, facility, cond_doctype):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+
+        with CaptureQueriesContext(connection) as ctx:
+            DynamicEventDataForm(document_type=cond_doctype, facility=facility)
+        # Auch ohne Payload-Bau bleibt es bei EINEM Condition-Query (wie zuvor).
+        assert _fieldcondition_query_count(ctx) == 1
+
+    def test_injected_payload_equals_freshly_queried(self, facility, cond_doctype):
+        from core.services.conditions import build_conditions_payload
+
+        slugs = ["dauer", "notiz"]
+        fresh = build_conditions_payload(cond_doctype, slugs)
+        injected = build_conditions_payload(
+            cond_doctype,
+            slugs,
+            conditions=list(FieldCondition.objects.filter(target_field__document_type=cond_doctype)),
+        )
+        assert fresh == injected
+        assert injected is not None
+        assert injected["conditions"][0]["target"] == "notiz"
+        assert injected["conditions"][0]["source"] == "dauer"

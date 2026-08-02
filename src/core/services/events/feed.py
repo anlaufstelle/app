@@ -1,6 +1,5 @@
 """Service for building unified activity feeds."""
 
-from collections import defaultdict
 from datetime import datetime, time, timedelta
 
 from django.db.models import Q
@@ -9,8 +8,9 @@ from django.utils.translation import gettext as _
 from django.utils.translation import ngettext
 
 from core.constants import FEED_MAX_PER_TYPE
-from core.models import Activity, DocumentTypeField, Event, WorkItem
+from core.models import Activity, Event, WorkItem
 from core.services.compliance import user_can_see_field
+from core.services.config import iter_fields_in_block_order
 from core.services.file_vault import safe_decrypt
 
 
@@ -198,14 +198,11 @@ def enrich_events_with_preview(feed_items, user):
     if not dt_ids:
         return
 
-    dtf_qs = (
-        DocumentTypeField.objects.filter(document_type_id__in=dt_ids)
-        .select_related("field_template")
-        .order_by("document_type_id", "sort_order")
-    )
-    dt_fields = defaultdict(list)
-    for dtf in dtf_qs:
-        dt_fields[dtf.document_type_id].append(dtf.field_template)
+    # #1713: Vorschau-Feldreihenfolge = globale Block-Sequenz je DocumentType
+    # (identisch zur Formular-Reihenfolge), damit die Feed-Vorschau nicht anders
+    # sortiert als das Event-Formular. Ein flaches ``order_by("sort_order")``
+    # würde gruppierte Felder unter neuer Semantik scrambeln.
+    dt_fields = {dt_id: [dtf.field_template for dtf in iter_fields_in_block_order(dt_id)] for dt_id in dt_ids}
 
     for item in feed_items:
         if item["type"] not in ("event", "ban"):

@@ -317,9 +317,22 @@ class DynamicEventDataForm(forms.Form):
         # select_related-Query ab und wird von clean() (Feldtyp/Pflicht) gebraucht;
         # ``ft`` wurde bislang im Loop verworfen.
         self._field_templates: dict[str, FieldTemplate] = {}
+        # M2/#1713 (globale Block-Sequenz): slug -> Blockposition. Für ein freies
+        # (ungruppiertes) Feld ist das seine globale Position, für ein gruppiertes
+        # Feld sein Innen-Index. ``grouped_fields`` interleavt Gruppen- und freie
+        # Feldblöcke ausschließlich anhand dieser Position (NICHT anhand der
+        # ``self.fields``-Iterationsreihenfolge). ``_dtf_pk`` liefert den
+        # deterministischen Tie-Break bei Positionsgleichheit.
+        self._block_position: dict[str, int] = {}
+        self._dtf_pk: dict[str, str] = {}
         # E17: FILE-Slugs mit bestehendem Anhang-Marker (aus den Update-Views), damit
         # ein vorhandener Anhang beim Bearbeiten als „gefüllt" zählt.
         self._existing_file_slugs: set[str] = set(existing_file_slugs or ())
+        # M1/P4 (#1716): FieldConditions dieses Typs werden EINMAL vollständig
+        # geladen; sowohl die Ziel-Slugs (Pflicht-Relaxierung) als auch das
+        # E12-Payload (``conditions_payload``) leiten sich daraus ab — statt zweier
+        # separater Condition-Queries (values_list-Slugs + Payload-Query).
+        self._field_conditions: list[FieldCondition] = []
         # Ziel-Slugs aller Bedingungen dieses DocumentType (Pflicht wird für sie nur
         # bedingt/sichtbarkeitsabhängig durchgesetzt). Vor remove_restricted_fields
         # bestimmt — clean() schneidet zur Aufrufzeit mit self.fields.
@@ -341,50 +354,78 @@ class DynamicEventDataForm(forms.Form):
             self.fields[ft.slug] = _build_dynamic_field(ft, initial_data)
             self._field_group_of[ft.slug] = dtf.field_group
             self._field_templates[ft.slug] = ft
+            self._block_position[ft.slug] = dtf.sort_order
+            self._dtf_pk[ft.slug] = str(dtf.pk)
 
-        # E16: Ziel-Felder einer Bedingung Django-seitig optional machen
-        # (required=False) und den Pflicht-Marker separat setzen — die Pflicht
-        # erzwingt clean() nur für tatsächlich sichtbare Ziele. Der Marker trägt
-        # die ursprüngliche Pflicht (Pflicht-Stern im Template).
-        self._condition_target_slugs = set(
-            FieldCondition.objects.filter(target_field__document_type=document_type).values_list(
-                "target_field__field_template__slug", flat=True
+        # E16 (#1716): Bedingungen EINMAL laden (select_related für die Payload-
+        # Erzeugung), Ziel-Slugs in Python ableiten. Ziel-Felder Django-seitig
+        # optional machen (required=False) und den Pflicht-Marker separat setzen —
+        # die Pflicht erzwingt clean() nur für tatsächlich sichtbare Ziele. Der
+        # Marker trägt die ursprüngliche Pflicht (Pflicht-Stern im Template).
+        self._field_conditions = list(
+            FieldCondition.objects.filter(target_field__document_type=document_type).select_related(
+                "target_field__field_template", "depends_on_field__field_template"
             )
         )
+        self._condition_target_slugs = {c.target_field.field_template.slug for c in self._field_conditions}
         for slug in self._condition_target_slugs & set(self.fields):
             ft = self._field_templates[slug]
             self.fields[slug].required = False
             self.fields[slug].is_conditionally_required = ft.is_required  # type: ignore[attr-defined]
 
     def grouped_fields(self) -> list[tuple[FieldGroup | None, list[BoundField]]]:
-        """Gebundene Felder nach :class:`FieldGroup` gruppiert (M0/P4, Refs #1056).
+        """Gebundene Felder als **interleavte Block-Sequenz** (M0/P4 + #1713).
 
-        Liefert ``[(gruppe_oder_None, [BoundField, ...]), ...]``:
+        Liefert ``[(gruppe_oder_None, [BoundField, ...]), ...]`` — Gruppenblöcke
+        und ``None``-Runs freier Felder in EINER globalen Reihenfolge:
 
-        - benannte Gruppen zuerst, sortiert nach ``(sort_order, name)``;
-        - die ``None``-Sektion („Ohne Gruppe") steht **garantiert zuletzt**;
+        - **Blockposition** = ``FieldGroup.sort_order`` (Gruppenblock) bzw. der
+          ``DocumentTypeField.sort_order`` des FREIEN Felds (Feldblock); die
+          Blockliste wird nach dieser Position sortiert (Tie-Break: Gruppe vor
+          Feld, dann Name), NICHT nach der ``self.fields``-Iterationsreihenfolge
+          (das flache ``order_by("sort_order")`` in ``__init__`` mischt Innen-
+          Indizes gruppierter Felder mit globalen Positionen);
+        - aufeinanderfolgende freie Blöcke werden zu ``(None, [fields…])``-Runs
+          zusammengefasst (deshalb kann ``None`` mehrfach vorkommen, jeweils
+          zwischen Gruppen);
         - **leere Gruppen entfallen** — iteriert wird ausschliesslich ueber die
           im Formular tatsaechlich vorhandenen Felder, sodass eine Gruppe, deren
           Felder z.B. von ``remove_restricted_fields`` (#774) entfernt wurden,
-          automatisch verschwindet;
-        - Feld-Reihenfolge innerhalb einer Gruppe folgt der ``DocumentTypeField.
-          sort_order`` (Einfuegereihenfolge aus ``__init__``).
+          automatisch verschwindet (das kann zwei zuvor getrennte freie Runs
+          verschmelzen);
+        - Feld-Reihenfolge innerhalb einer Gruppe folgt dem Innen-``sort_order``.
 
-        Gruppiert wird in Python — bewusst **kein** SQL-``NULLS LAST`` (DB-fragil).
+        Sortiert wird in Python — bewusst **kein** SQL-``NULLS LAST`` (DB-fragil).
         """
-        buckets: dict[Any, tuple[FieldGroup | None, list[BoundField]]] = {}
+        group_blocks: dict[Any, tuple[FieldGroup, list]] = {}
+        free_blocks: list[tuple[int, str, str, BoundField]] = []
         for name in self.fields:
             group = self._field_group_of.get(name)
-            key = group.pk if group is not None else None
-            if key not in buckets:
-                buckets[key] = (group, [])
-            buckets[key][1].append(self[name])
+            position = self._block_position.get(name, 0)
+            bound = self[name]
+            if group is None:
+                ft = self._field_templates.get(name)
+                sort_name = ft.name if ft is not None else name
+                free_blocks.append((position, sort_name, self._dtf_pk.get(name, ""), bound))
+            else:
+                _group, members = group_blocks.setdefault(group.pk, (group, []))
+                members.append((self._block_position.get(name, 0), self._dtf_pk.get(name, ""), bound))
 
-        named = [(group, bound) for group, bound in buckets.values() if group is not None]
-        named.sort(key=lambda entry: (entry[0].sort_order, entry[0].name))
-        result: list[tuple[FieldGroup | None, list[BoundField]]] = list(named)
-        if None in buckets:
-            result.append(buckets[None])
+        # (sort_key, group_or_None, [BoundField, ...]) — sort_key wie im Board.
+        blocks: list[tuple[tuple, FieldGroup | None, list[BoundField]]] = []
+        for group, members in group_blocks.values():
+            members.sort(key=lambda member: (member[0], member[1]))
+            blocks.append(((group.sort_order, 0, group.name, ""), group, [member[2] for member in members]))
+        for position, sort_name, pk, bound in free_blocks:
+            blocks.append(((position, 1, sort_name, pk), None, [bound]))
+        blocks.sort(key=lambda entry: entry[0])
+
+        result: list[tuple[FieldGroup | None, list[BoundField]]] = []
+        for _key, group, bounds in blocks:
+            if group is None and result and result[-1][0] is None:
+                result[-1][1].extend(bounds)
+            else:
+                result.append((group, list(bounds)))
         return result
 
     def conditions_payload(self) -> dict[str, Any] | None:
@@ -406,7 +447,13 @@ class DynamicEventDataForm(forms.Form):
             if self.document_type is None:
                 cached = None
             else:
-                cached = build_conditions_payload(self.document_type, list(self.fields.keys()))
+                # #1716: die in ``__init__`` einmal geladenen Bedingungen
+                # injizieren — kein zweiter Condition-Query.
+                cached = build_conditions_payload(
+                    self.document_type,
+                    list(self.fields.keys()),
+                    conditions=self._field_conditions,
+                )
             self._conditions_payload_cache = cached
         return cached
 

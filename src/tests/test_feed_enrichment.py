@@ -588,3 +588,47 @@ class TestActivityTargetUrl:
         )
         url = activity_target_url(activity)
         assert url == ""
+
+
+@pytest.mark.django_db
+class TestPreviewOrderMatchesBlockSequence:
+    """#1713: die Vorschau-Feldreihenfolge folgt der globalen Block-Sequenz.
+
+    Damit Feed-Vorschau und Event-Formular NICHT unterschiedlich sortieren:
+    ``expanded_fields`` muss der ``iter_fields_in_block_order``-Reihenfolge folgen
+    (gruppierte Felder innerhalb ihres Gruppenblocks, freie Felder an ihrer
+    Blockposition) — ein flaches ``order_by("sort_order")`` würde scrambeln.
+    """
+
+    def test_expanded_fields_follow_block_order(self, facility, staff_user, client_identified):
+        from core.models import FieldGroup
+        from core.services.config import iter_fields_in_block_order
+
+        dt = DocumentType.objects.create(facility=facility, name="FeedInterleaved", category="contact")
+
+        def _ft(name):
+            return FieldTemplate.objects.create(facility=facility, name=name, field_type="text")
+
+        # freies Feld (0), Gruppe (1) mit zwei Feldern, freies Feld (2).
+        DocumentTypeField.objects.create(document_type=dt, field_template=_ft("Frei A"), field_group=None, sort_order=0)
+        grp = FieldGroup.objects.create(document_type=dt, name="Mitte", sort_order=1)
+        DocumentTypeField.objects.create(document_type=dt, field_template=_ft("Innen 1"), field_group=grp, sort_order=0)
+        DocumentTypeField.objects.create(document_type=dt, field_template=_ft("Innen 2"), field_group=grp, sort_order=1)
+        DocumentTypeField.objects.create(document_type=dt, field_template=_ft("Frei B"), field_group=None, sort_order=2)
+
+        data = {"frei-a": "a", "innen-1": "1", "innen-2": "2", "frei-b": "b"}
+        event = Event.objects.create(
+            facility=facility,
+            client=client_identified,
+            document_type=dt,
+            occurred_at=timezone.now(),
+            data_json=data,
+            created_by=staff_user,
+        )
+        feed_items = [{"type": "event", "occurred_at": event.occurred_at, "object": event}]
+        enrich_events_with_preview(feed_items, staff_user)
+
+        labels_in_order = [f["label"] for f in event.expanded_fields]
+        expected = [dtf.field_template.name for dtf in iter_fields_in_block_order(dt)]
+        assert labels_in_order == expected
+        assert labels_in_order == ["Frei A", "Innen 1", "Innen 2", "Frei B"]

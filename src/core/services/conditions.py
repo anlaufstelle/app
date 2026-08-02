@@ -301,7 +301,11 @@ def find_cycle(edges: Iterable[tuple[str, str]]) -> list[str] | None:
     return None
 
 
-def build_conditions_payload(document_type: DocumentType, form_field_slugs: Collection[str]) -> dict[str, Any] | None:
+def build_conditions_payload(
+    document_type: DocumentType,
+    form_field_slugs: Collection[str],
+    conditions=None,
+) -> dict[str, Any] | None:
     """Baut das E12-Payload-Dict fuer ein konkretes Formular, oder ``None``.
 
     Modell-abhaengig (P2) — der Django-Model-Import bleibt lokal in dieser
@@ -314,6 +318,13 @@ def build_conditions_payload(document_type: DocumentType, form_field_slugs: Coll
     * ``conditions`` -- alle ``FieldCondition``s des ``document_type``,
       E12-Format; Bedingungen mit ``source`` oder ``target`` ausserhalb von
       ``form_field_slugs`` werden verworfen (Drop-Regel E8, #774).
+
+    ``conditions`` (optional, #1716): bereits geladene ``FieldCondition``-Objekte
+    des ``document_type`` (select_related auf beide ``field_template``-Ketten).
+    Ist der Parameter gesetzt, entfaellt der eigene Condition-Query — der Aufrufer
+    (``DynamicEventDataForm``) hat sie in ``__init__`` schon einmal geladen. Der
+    Vertrag (ADR-035 § 8) bleibt unangetastet: der Payload-Bau laeuft weiterhin
+    NACH ``remove_restricted_fields``, die Drop-Regel unveraendert hier.
 
     Rueckgabe ``None``, wenn nach der Drop-Regel keine Bedingung uebrig
     bleibt (kein Payload noetig — auch wenn ``FieldCondition``s fuer den
@@ -329,16 +340,17 @@ def build_conditions_payload(document_type: DocumentType, form_field_slugs: Coll
     )
     fields = {dtf.field_template.slug: {"type": dtf.field_template.field_type} for dtf in dtfs}
 
-    condition_qs = FieldCondition.objects.filter(target_field__document_type=document_type).select_related(
-        "target_field__field_template", "depends_on_field__field_template"
-    )
-    conditions: list[dict[str, Any]] = []
-    for condition in condition_qs:
+    if conditions is None:
+        conditions = FieldCondition.objects.filter(target_field__document_type=document_type).select_related(
+            "target_field__field_template", "depends_on_field__field_template"
+        )
+    result_conditions: list[dict[str, Any]] = []
+    for condition in conditions:
         source_slug = condition.depends_on_field.field_template.slug
         target_slug = condition.target_field.field_template.slug
         if source_slug not in slugs or target_slug not in slugs:
             continue  # Drop-Regel E8/#774
-        conditions.append(
+        result_conditions.append(
             {
                 "target": target_slug,
                 "source": source_slug,
@@ -348,6 +360,6 @@ def build_conditions_payload(document_type: DocumentType, form_field_slugs: Coll
             }
         )
 
-    if not conditions:
+    if not result_conditions:
         return None
-    return {"fields": fields, "conditions": conditions}
+    return {"fields": fields, "conditions": result_conditions}

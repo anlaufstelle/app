@@ -25,6 +25,7 @@ from django.utils import timezone
 from core.models import Case as CaseModel
 from core.models import Client, DocumentType, Event, User, WorkItem
 from core.services.compliance import allowed_sensitivities_for_user, user_can_see_field
+from core.services.config import iter_fields_in_block_order
 from core.services.file_vault import safe_decrypt
 
 # Include at most this many events per client, or all events within the
@@ -91,9 +92,14 @@ def _serialize_document_type(user, doc_type) -> dict[str, Any]:
         # Wert-Filterung in ``_visible_data_fields``. So verlässt kein
         # zusätzliches Schema (Optionen/Hilfetext) für gesperrte Felder den
         # Server und der Offline-Editor rendert nur editierbare Felder.
+        # #1713: Reihenfolge = globale Block-Sequenz (gruppierte Felder innerhalb
+        # ihres Gruppenblocks, freie Felder an ihrer Blockposition), damit der
+        # Offline-Viewer dieselbe Feldordnung zeigt wie das Online-Formular
+        # (``grouped_fields`` flach ausgerollt) — ein flaches ``order_by(
+        # "sort_order")`` würde gruppierte Felder unter neuer Semantik scrambeln.
         "fields": [
             _serialize_field_template(dtf.field_template)
-            for dtf in doc_type.fields.select_related("field_template").order_by("sort_order")
+            for dtf in iter_fields_in_block_order(doc_type)
             if user_can_see_field(user, doc_type.sensitivity, dtf.field_template.sensitivity or "")
         ],
     }
