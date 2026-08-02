@@ -25,7 +25,8 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import connection
 from django.utils import timezone
 
-from core.models import Activity, AuditLog, Client, DocumentType, Event, FieldGroup
+from core.models import Activity, AuditLog, Client, DocumentType, Event, FieldCondition, FieldGroup
+from core.models.document_type import DocumentTypeField, FieldTemplate
 from tests.conftest import xdist_role_suffix
 
 # Unter mutmut überspringen (Refs #1388/#930). Die ``rls_test_role``-Fixture ist
@@ -312,6 +313,34 @@ class TestRLSCrossTenantIsolation:
             f"Cross-Facility-INSERT auf core_fieldgroup wurde nicht durch die RLS-Policy "
             f"abgelehnt (USING-only greift nicht als WITH CHECK?). Fehler: {exc.value!r}"
         )
+
+    def test_fieldcondition_cross_tenant_invisible(self, rls_test_role, facility_a_with_data, facility_b_with_data):
+        """FieldCondition (M1, Refs #1057) ist doppelt-transitiv facility-gescopt
+        (``fieldcondition.target_field.document_type.facility_id``, Migration
+        0114). Unter facility_a-Setting darf keine Bedingung aus Facility B
+        sichtbar sein.
+        """
+        dt_b = DocumentType.objects.get(facility=facility_b_with_data, name="B-Doc")
+        ft_source = FieldTemplate.objects.create(
+            facility=facility_b_with_data, name="B-Quelle", field_type=FieldTemplate.FieldType.NUMBER
+        )
+        ft_target = FieldTemplate.objects.create(
+            facility=facility_b_with_data, name="B-Ziel", field_type=FieldTemplate.FieldType.TEXTAREA
+        )
+        dtf_source = DocumentTypeField.objects.create(document_type=dt_b, field_template=ft_source, sort_order=0)
+        dtf_target = DocumentTypeField.objects.create(document_type=dt_b, field_template=ft_target, sort_order=1)
+        condition = FieldCondition.objects.create(
+            target_field=dtf_target,
+            depends_on_field=dtf_source,
+            operator=FieldCondition.Operator.GREATER_THAN,
+            value=10,
+            group_index=0,
+        )
+
+        with as_rls_role(rls_test_role, facility_id=facility_a_with_data.pk) as cur:
+            cur.execute("SELECT id FROM core_fieldcondition WHERE id = %s", [str(condition.pk)])
+            leaked = cur.fetchall()
+        assert leaked == [], "Cross-Tenant-Read auf core_fieldcondition hat B's Bedingung geliefert."
 
     def test_own_tenant_client_visible(self, rls_test_role, facility_a_with_data):
         """Smoke: A-Client ist unter facility_a-Setting sichtbar — sonst

@@ -47,6 +47,10 @@ JOIN_SCOPED_TABLES = frozenset(
         # FieldGroup (M0, Refs #1056) hat keinen eigenen facility-FK — gescopt
         # transitiv ueber document_type.facility_id (Migration 0111).
         "core_fieldgroup",
+        # FieldCondition (M1, Refs #1057) hat keinen eigenen facility-FK —
+        # gescopt doppelt-transitiv ueber
+        # target_field.document_type.facility_id (Migration 0114).
+        "core_fieldcondition",
     }
 )
 # facility-FK, aber bewusst AUSSERHALB von RLS (Auth-Grenze: super_admin hat
