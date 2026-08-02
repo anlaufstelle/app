@@ -97,7 +97,8 @@ class TestBoardResponseRefreshHeader:
         url = reverse("core:config_doctype_field_add", kwargs={"pk": doc_type_contact.pk})
         response = client.post(url, {"field_template": str(field_template.pk)}, HTTP_HX_REQUEST="true")
         assert response.status_code == 200
-        assert response["HX-Trigger"] == "refresh-preview"
+        # #1718: neben der Vorschau stößt die Mutation auch das Bedingungs-Board an.
+        assert response["HX-Trigger"] == "refresh-preview, refresh-conditions"
         # Verhalten sonst unverändert: weiterhin das Board-Partial.
         assert BOARD_PARTIAL in _template_names(response)
 
@@ -109,7 +110,7 @@ class TestBoardResponseRefreshHeader:
         )
         response = client.post(url, HTTP_HX_REQUEST="true")
         assert response.status_code == 200
-        assert response["HX-Trigger"] == "refresh-preview"
+        assert response["HX-Trigger"] == "refresh-preview, refresh-conditions"
 
     def test_non_htmx_redirect_has_no_trigger_header(self, client, admin_user, doc_type_contact, doc_type_field):
         """Der Nicht-HX-Zweig (Redirect) trägt den Header NICHT — Verhalten unverändert."""

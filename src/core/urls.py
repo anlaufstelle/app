@@ -45,6 +45,7 @@ from core.views.clients import (
     ClientUpdateView,
 )
 from core.views.config.conditions import (
+    ConditionBoardView,
     ConditionCreateView,
     ConditionDeleteView,
     ConditionUpdateView,
@@ -331,6 +332,11 @@ urlpatterns = [
         "config/document-types/<uuid:pk>/conditions/value-input/",
         ConditionValueInputView.as_view(),
         name="config_condition_value_input",
+    ),
+    path(
+        "config/document-types/<uuid:pk>/conditions/board/",
+        ConditionBoardView.as_view(),
+        name="config_condition_board",
     ),
     path("config/field-templates/", ConfigFieldTemplateListView.as_view(), name="config_fieldtemplate_list"),
     path("config/field-templates/new/", ConfigFieldTemplateCreateView.as_view(), name="config_fieldtemplate_create"),

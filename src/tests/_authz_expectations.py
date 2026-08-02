@@ -603,6 +603,15 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "doc_type_contact.pk"),),
         idor=(("pk", "foreign_doc_type.pk"),),
     ),
+    # #1718: GET-Refresh des Bedingungs-Boards (HTMX-Nachzug nach Feld-Board-
+    # Mutation). facility_admin only; IDOR (fremder doc_type → 404) vor Rendern.
+    E(
+        "core:config_condition_board",
+        "config",
+        get=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"),),
+        idor=(("pk", "foreign_doc_type.pk"),),
+    ),
     # ---- partials-htmx --------------------------------------------------------
     E(
         "core:workitem_status_update",

@@ -124,6 +124,29 @@ def _apply_model_errors(form, exc):
 
 
 # ---------------------------------------------------------------------------
+# Board-Refresh-View (#1718)
+# ---------------------------------------------------------------------------
+
+
+class ConditionBoardView(FacilityAdminRequiredMixin, View):
+    """Rendert NUR das Bedingungs-Board frisch (GET) — HTMX-Refresh nach Feld-Board-Mutation.
+
+    Der Board-Wurzel-Div (``condition_board.html``) lauscht per
+    ``hx-trigger="refresh-conditions from:body"`` auf das Event, das die
+    Feld-Board-Mutationen (``board_response``) jetzt zusätzlich zu
+    ``refresh-preview`` feuern, und ersetzt sich per outerHTML über diesen
+    Endpoint (#1718). Ohne Reload werden so Empty-State ↔ Regel-Editor-Karte und
+    die Zielfeld-Dropdowns nachgezogen. Zugriffskontrolle wie die übrigen
+    Condition-Views: FacilityAdmin + DocType über ``facility=request.current_facility``
+    (IDOR → 404). Der Endpoint selbst setzt KEINEN HX-Trigger (kein Selbst-Refresh-Loop).
+    """
+
+    def get(self, request, pk):
+        doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
+        return render(request, BOARD_TEMPLATE, condition_board_context(doc_type))
+
+
+# ---------------------------------------------------------------------------
 # Mutations-Views
 # ---------------------------------------------------------------------------
 

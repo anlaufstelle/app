@@ -16,7 +16,9 @@ import pytest
 from django.urls import reverse
 
 from core.forms.config import FieldConditionForm
-from core.models import AuditLog, DocumentTypeField, FieldCondition, FieldTemplate
+from core.models import AuditLog, DocumentType, DocumentTypeField, FieldCondition, FieldTemplate
+
+BOARD_TEMPLATE = "core/config/document_types/partials/condition_board.html"
 
 
 def _dtf(doc_type, slug):
@@ -346,6 +348,114 @@ class TestBoard:
         assert 'value="abc"' not in body
         assert f'value="{dauer.pk}" selected' not in body
         assert f'value="{notiz.pk}" selected' not in body
+
+
+# ---------------------------------------------------------------------------
+# #1718 — GET-Refresh-Endpoint + Feld-Board-Verkabelung
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestConditionBoardRefresh:
+    """Das Bedingungs-Board aktualisiert sich nach Feld-Board-Mutationen ohne Reload.
+
+    Der neue GET-Endpoint ``config_condition_board`` rendert NUR das Board-Partial;
+    der Board-Wurzel-Div lauscht CSP-konform auf das am Body gebubbelte
+    ``refresh-conditions``-Event (das die Feld-Board-Mutationen jetzt zusätzlich zu
+    ``refresh-preview`` im HX-Trigger tragen) und ersetzt sich per outerHTML.
+    """
+
+    def test_board_view_returns_fresh_partial(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        url = reverse("core:config_condition_board", kwargs={"pk": doc_type_contact.pk})
+        response = client.get(url)
+        assert response.status_code == 200
+        assert BOARD_TEMPLATE in {t.name for t in response.templates if t.name}
+        # doc_type_contact hat 2 Felder → Regel-Editor-Karte sichtbar.
+        assert 'data-testid="condition-add-card"' in response.content.decode()
+
+    def test_board_view_with_hx_header_returns_partial(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        url = reverse("core:config_condition_board", kwargs={"pk": doc_type_contact.pk})
+        response = client.get(url, HTTP_HX_REQUEST="true")
+        assert response.status_code == 200
+        assert BOARD_TEMPLATE in {t.name for t in response.templates if t.name}
+
+    def test_board_root_carries_refresh_hx_attrs(self, client, admin_user, doc_type_contact):
+        client.force_login(admin_user)
+        url = reverse("core:config_condition_board", kwargs={"pk": doc_type_contact.pk})
+        body = client.get(url).content.decode()
+        assert f'hx-get="{url}"' in body
+        assert 'hx-trigger="refresh-conditions from:body"' in body
+        assert 'hx-swap="outerHTML"' in body
+
+    def test_empty_state_when_fewer_than_two_fields(self, client, admin_user, facility):
+        dt = DocumentType.objects.create(
+            facility=facility, category=DocumentType.Category.CONTACT, name="Einzelfeld-Typ"
+        )
+        ft = FieldTemplate.objects.create(facility=facility, name="Solo", field_type=FieldTemplate.FieldType.TEXT)
+        DocumentTypeField.objects.create(document_type=dt, field_template=ft, sort_order=0)
+        client.force_login(admin_user)
+        body = client.get(reverse("core:config_condition_board", kwargs={"pk": dt.pk})).content.decode()
+        assert 'data-testid="condition-board-empty"' in body
+        assert 'data-testid="condition-add-card"' not in body
+
+    def test_foreign_doctype_404(self, client, admin_user, foreign_doc_type):
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_condition_board", kwargs={"pk": foreign_doc_type.pk}))
+        assert response.status_code == 404
+
+    def test_non_admin_forbidden(self, client, assistant_user, doc_type_contact):
+        client.force_login(assistant_user)
+        response = client.get(reverse("core:config_condition_board", kwargs={"pk": doc_type_contact.pk}))
+        assert response.status_code == 403
+
+    def test_field_add_triggers_refresh_preview_and_conditions(
+        self, client, admin_user, doc_type_contact, field_template
+    ):
+        client.force_login(admin_user)
+        url = reverse("core:config_doctype_field_add", kwargs={"pk": doc_type_contact.pk})
+        response = client.post(url, {"field_template": str(field_template.pk)}, HTTP_HX_REQUEST="true")
+        assert response.status_code == 200
+        triggers = {part.strip() for part in response["HX-Trigger"].split(",")}
+        assert triggers == {"refresh-preview", "refresh-conditions"}
+
+    def test_field_remove_triggers_refresh_preview_and_conditions(
+        self, client, admin_user, doc_type_contact, doc_type_field
+    ):
+        client.force_login(admin_user)
+        url = reverse(
+            "core:config_doctype_field_remove",
+            kwargs={"pk": doc_type_contact.pk, "dtf_pk": doc_type_field.pk},
+        )
+        response = client.post(url, HTTP_HX_REQUEST="true")
+        assert response.status_code == 200
+        triggers = {part.strip() for part in response["HX-Trigger"].split(",")}
+        assert triggers == {"refresh-preview", "refresh-conditions"}
+
+    def test_empty_state_toggle_after_field_board_mutations(self, client, admin_user, facility, field_template):
+        """Empty-State ↔ Regel-Editor-Karte kippt in BEIDE Richtungen über den Refresh-Endpoint."""
+        dt = DocumentType.objects.create(
+            facility=facility, category=DocumentType.Category.CONTACT, name="Kipp-Typ"
+        )
+        ft_a = FieldTemplate.objects.create(facility=facility, name="Feld A", field_type=FieldTemplate.FieldType.TEXT)
+        first = DocumentTypeField.objects.create(document_type=dt, field_template=ft_a, sort_order=0)
+        client.force_login(admin_user)
+        board_url = reverse("core:config_condition_board", kwargs={"pk": dt.pk})
+
+        # 1 Feld → Empty-State.
+        assert 'data-testid="condition-board-empty"' in client.get(board_url).content.decode()
+
+        # 2. Feld hinzu → Regel-Editor-Karte erscheint (Board frisch geladen).
+        add_url = reverse("core:config_doctype_field_add", kwargs={"pk": dt.pk})
+        client.post(add_url, {"field_template": str(field_template.pk)}, HTTP_HX_REQUEST="true")
+        assert 'data-testid="condition-add-card"' in client.get(board_url).content.decode()
+
+        # Feld weg → wieder Empty-State.
+        second = dt.fields.exclude(pk=first.pk).first()
+        remove_url = reverse("core:config_doctype_field_remove", kwargs={"pk": dt.pk, "dtf_pk": second.pk})
+        client.post(remove_url, HTTP_HX_REQUEST="true")
+        assert 'data-testid="condition-board-empty"' in client.get(board_url).content.decode()
 
 
 # ---------------------------------------------------------------------------
