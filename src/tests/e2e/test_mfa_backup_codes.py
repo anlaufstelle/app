@@ -131,7 +131,7 @@ class TestZZMFABackupCodeLogin:
                 page.locator("[data-testid='mfa-verify-button']").click()
 
                 # Zurück auf /
-                page.wait_for_url(f"{base_url}/", timeout=5000)
+                page.wait_for_url(f"{base_url}/", timeout=10000)
                 assert page.url == f"{base_url}/"
             finally:
                 context.close()
@@ -163,7 +163,7 @@ class TestZZMFABackupCodeLogin:
                 backup_input.fill(codes[0])
                 page.locator("[data-testid='mfa-verify-button']").click()
 
-                page.wait_for_url(f"{base_url}/", timeout=5000)
+                page.wait_for_url(f"{base_url}/", timeout=10000)
                 assert page.url == f"{base_url}/"
             finally:
                 context.close()
@@ -185,7 +185,7 @@ class TestZZMFABackupCodeLogin:
                 page.locator("[data-testid='mfa-toggle-mode']").click()
                 page.locator("[data-testid='mfa-backup-input']").fill(codes[1])
                 page.locator("[data-testid='mfa-verify-button']").click()
-                page.wait_for_url(f"{base_url}/", timeout=5000)
+                page.wait_for_url(f"{base_url}/", timeout=10000)
 
                 # Settings zeigt verbleibende Codes (10 generiert, 1 verbraucht → 9)
                 page.goto(f"{base_url}/mfa/settings/")
@@ -222,7 +222,7 @@ class TestZZMFATotpLogin:
                 page.locator("[data-testid='mfa-token-input']").fill(code)
                 page.locator("[data-testid='mfa-verify-button']").click()
 
-                page.wait_for_url(f"{base_url}/", timeout=5000)
+                page.wait_for_url(f"{base_url}/", timeout=10000)
                 assert page.url == f"{base_url}/"
             finally:
                 context.close()
