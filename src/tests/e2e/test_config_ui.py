@@ -402,13 +402,28 @@ class TestFieldBoardDragAndDrop:
         """Feld-Zeile per nativer Maus-Sequenz in die Ziel-Gruppenliste ziehen."""
         handle = page.locator(f'li[data-dtf-id="{dtf_id}"] .field-drag-handle')
         target = page.locator(f'ul[data-sortable="fields"][data-group-id="{target_group_pk}"]')
+        # Die Seite kann nach den Board-Mutationen so gescrollt sein, dass das
+        # Board oberhalb des Viewports liegt (bounding_box liefert dann negative
+        # y-Werte und mouse-Events laufen ins Leere — seit der Live-Vorschau
+        # (P11) ist die Seite deutlich länger). Erst in den Viewport scrollen,
+        # DANN Koordinaten nehmen.
+        # Zentrieren statt minimal scrollen: die Ziel-Liste kann OBERHALB der
+        # Quellzeile liegen (Gruppen mit gleichem sort_order ordnen nach Name) —
+        # mit der Quellzeile in der Viewport-Mitte sind beide Karten sichtbar.
+        handle.evaluate("el => el.scrollIntoView({block: 'center'})")
+        page.wait_for_timeout(200)
         hb = handle.bounding_box()
         tb = target.bounding_box()
         assert hb and tb, "Bounding-Box für Drag-Quelle/-Ziel nicht verfügbar"
+        assert hb["y"] >= 0 and tb["y"] >= 0, (
+            f"Drag-Elemente außerhalb des Viewports (handle y={hb['y']}, ziel y={tb['y']})"
+        )
         page.mouse.move(hb["x"] + hb["width"] / 2, hb["y"] + hb["height"] / 2)
         page.mouse.down()
         # Mehrstufige Bewegung, damit SortableJS die dragover-Events sieht.
-        page.mouse.move(tb["x"] + tb["width"] / 2, tb["y"] + tb["height"] / 2, steps=25)
+        # Ziel-Offset mit Untergrenze: eine leere Ziel-Liste ist nur
+        # min-h-[1.5rem] hoch — der Mittelpunkt darf nicht auf der Kante liegen.
+        page.mouse.move(tb["x"] + tb["width"] / 2, tb["y"] + max(tb["height"] / 2, 10), steps=25)
         page.wait_for_timeout(300)
         page.mouse.up()
         # Board-Swap nach dem move-field-POST abwarten.
