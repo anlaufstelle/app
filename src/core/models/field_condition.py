@@ -28,12 +28,9 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from core.models.document_type import DocumentTypeField
-from core.services.conditions import (
-    ALLOWED_SOURCE_FIELD_TYPES,
-    OPERATORS_BY_FIELD_TYPE,
-    VALUELESS_OPERATORS,
-)
-from core.services.conditions import find_cycle as _find_cycle
+
+# Schichtregel (Architektur-Guard): Models importieren ``core.services`` nur
+# funktionslokal in den clean()-Helfern, nie auf Modul-Ebene.
 
 
 class FieldCondition(models.Model):
@@ -116,6 +113,8 @@ class FieldCondition(models.Model):
             )
 
     def _validate_source_field_type(self) -> None:
+        from core.services.conditions import ALLOWED_SOURCE_FIELD_TYPES
+
         source_template = self.depends_on_field.field_template
         # Reihenfolge (Plan P2): erst Typ-Zugehoerigkeit, dann Verschluesselung —
         # ein FILE-Feld (immer verschluesselt) faellt damit unter die
@@ -128,12 +127,16 @@ class FieldCondition(models.Model):
             raise ValidationError({"depends_on_field": _("Verschlüsselte Felder sind als Quelle nicht zulässig.")})
 
     def _validate_operator_allowed(self) -> None:
+        from core.services.conditions import OPERATORS_BY_FIELD_TYPE
+
         source_template = self.depends_on_field.field_template
         allowed = OPERATORS_BY_FIELD_TYPE.get(source_template.field_type, frozenset())
         if self.operator not in allowed:
             raise ValidationError({"operator": _("Dieser Operator ist für den Feldtyp des Quellfelds nicht zulässig.")})
 
     def _validate_value(self) -> None:
+        from core.services.conditions import VALUELESS_OPERATORS
+
         source_template = self.depends_on_field.field_template
         if self.operator in VALUELESS_OPERATORS:
             if self.value is not None:
@@ -172,7 +175,9 @@ class FieldCondition(models.Model):
             )
         edges.append((self.depends_on_field.field_template.slug, self.target_field.field_template.slug))
 
-        cycle = _find_cycle(edges)
+        from core.services.conditions import find_cycle
+
+        cycle = find_cycle(edges)
         if cycle is not None:
             raise ValidationError(
                 {"depends_on_field": _("Diese Bedingung erzeugt einen Zyklus: %(path)s") % {"path": " → ".join(cycle)}}
