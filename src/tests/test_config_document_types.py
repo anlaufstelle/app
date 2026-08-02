@@ -15,7 +15,7 @@ from django.contrib.messages import get_messages
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import AuditLog, DocumentType, Event
+from core.models import AuditLog, DocumentType, Event, QuickTemplate
 
 
 def _valid_post(**overrides):
@@ -226,6 +226,26 @@ class TestDelete:
         response = client.get(reverse("core:config_doctype_delete", kwargs={"pk": doc_type_contact.pk}))
         assert response.status_code == 200
         assert b"doctype-delete-blocker" in response.content
+
+    def test_confirm_page_shows_quick_template_cascade_hint(self, client, admin_user, facility, doc_type_contact):
+        # QuickTemplate.document_type ist FK CASCADE → beim Löschen des Typs
+        # werden zugehörige Schnellvorlagen still mitgelöscht; der Dialog muss
+        # die Kaskade ausweisen.
+        QuickTemplate.objects.create(facility=facility, document_type=doc_type_contact, name="Vorlage A")
+        QuickTemplate.objects.create(facility=facility, document_type=doc_type_contact, name="Vorlage B")
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_delete", kwargs={"pk": doc_type_contact.pk}))
+        assert response.status_code == 200
+        assert response.context["quick_template_count"] == 2
+        assert b"doctype-delete-quicktemplates" in response.content
+
+    def test_confirm_page_hides_quick_template_hint_when_none(self, client, admin_user, facility):
+        dt = DocumentType.objects.create(facility=facility, name="Ohne Vorlagen", category="contact")
+        client.force_login(admin_user)
+        response = client.get(reverse("core:config_doctype_delete", kwargs={"pk": dt.pk}))
+        assert response.status_code == 200
+        assert response.context["quick_template_count"] == 0
+        assert b"doctype-delete-quicktemplates" not in response.content
 
 
 # ---------------------------------------------------------------------------

@@ -18,6 +18,14 @@
     </div>
     {% endif %}
 
+    {% if quick_template_count %}
+    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="doctype-delete-quicktemplates">
+        <p class="text-[13px] text-amber-800">
+            {% blocktrans count n=quick_template_count %}{{ n }} Schnellvorlage wird beim Löschen mit entfernt.{% plural %}{{ n }} Schnellvorlagen werden beim Löschen mit entfernt.{% endblocktrans %}
+        </p>
+    </div>
+    {% endif %}
+
     <div class="card p-5 mb-5">
         <p class="text-[13px] text-ink-soft mb-3">
             {% trans "Empfehlung: Statt zu löschen, können Sie den Typ deaktivieren. Er verschwindet dann aus den Formularen, bestehende Ereignisse bleiben erhalten." %}

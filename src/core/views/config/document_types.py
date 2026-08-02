@@ -20,7 +20,7 @@ from django.utils.translation import gettext_lazy as _
 from django.views import View
 
 from core.forms.config import DocumentTypeFieldAddForm, DocumentTypeForm
-from core.models import DocumentType, DocumentTypeField, Event, FieldGroup
+from core.models import DocumentType, DocumentTypeField, Event, FieldGroup, QuickTemplate
 from core.services import config as config_service
 from core.services.config import ConfigDeleteBlocked
 from core.views.mixins import (
@@ -194,10 +194,13 @@ class ConfigDocumentTypeDeleteView(FacilityAdminRequiredMixin, View):
     def get(self, request, pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         event_count = Event.objects.filter(document_type=doc_type).count()
+        # QuickTemplate.document_type ist FK CASCADE: zugehörige Schnellvorlagen
+        # werden beim Löschen still mitentfernt — die Kaskade im Dialog ausweisen.
+        quick_template_count = QuickTemplate.objects.filter(document_type=doc_type).count()
         return render(
             request,
             "core/config/document_types/confirm_delete.html",
-            {"doc_type": doc_type, "event_count": event_count},
+            {"doc_type": doc_type, "event_count": event_count, "quick_template_count": quick_template_count},
         )
 
     def post(self, request, pk):
