@@ -159,9 +159,17 @@
   document.addEventListener("DOMContentLoaded", initBoard);
 
   // Jede Board-Mutation ersetzt #field-board per outerHTML → alte Instanzen
-  // zeigen auf abgehängtes DOM. Nach dem Settle komplett neu aufbauen.
-  document.addEventListener("htmx:afterSettle", function () {
-    if (board()) {
+  // zeigen auf abgehängtes DOM. Nach dem Settle komplett neu aufbauen — aber
+  // NUR wenn der Settle das Board selbst betrifft: Fremd-Swaps auf derselben
+  // Seite (z. B. der Live-Vorschau-Refresh nach jeder Board-Mutation, P11)
+  // dürfen keine laufende Drag-Geste per destroyAll() abwürgen.
+  document.addEventListener("htmx:afterSettle", function (evt) {
+    var elt = (evt.detail && evt.detail.elt) || evt.target;
+    var b = board();
+    if (!b || !elt || !elt.nodeType) {
+      return;
+    }
+    if (elt === b || b.contains(elt) || elt.contains(b)) {
       initBoard();
     }
   });
