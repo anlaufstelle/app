@@ -17,6 +17,7 @@ from django.urls import reverse
 from core.models import AuditLog, DocumentType, DocumentTypeField, FieldGroup, FieldTemplate
 
 BOARD_PARTIAL = "core/config/document_types/partials/field_board.html"
+GROUP_FORM_PARTIAL = "core/config/document_types/partials/group_form.html"
 
 
 def _messages(response):
@@ -234,6 +235,42 @@ class TestGroupUpdate:
         field_group.refresh_from_db()
         assert field_group.name == "Ganz Anders"
         assert field_group.slug == original_slug
+
+    def test_update_htmx_success_retargets_whole_board(self, client, admin_user, doc_type_contact, field_group):
+        # Das Edit-Formular postet per hx-target="this"; bei Erfolg soll trotzdem
+        # das GANZE Board ersetzt werden → board_response(retarget=True) setzt
+        # HX-Retarget/HX-Reswap und rendert das komplette field_board.
+        client.force_login(admin_user)
+        url = reverse("core:config_fieldgroup_update", kwargs={"pk": doc_type_contact.pk, "group_pk": field_group.pk})
+        response = client.post(url, {f"group-{field_group.pk}-name": "Sektion Neu"}, HTTP_HX_REQUEST="true")
+        assert response.status_code == 200
+        assert response["HX-Retarget"] == "#field-board"
+        assert response["HX-Reswap"] == "outerHTML"
+        names = _template_names(response)
+        assert BOARD_PARTIAL in names
+        assert GROUP_FORM_PARTIAL in names  # das Board bettet das Neu-Formular ein
+        body = response.content.decode()
+        assert "Sektion Neu" in body  # umbenannte Gruppe erscheint im Board
+        assert "Ohne Gruppe" in body  # vollständiges Board inkl. „Ohne Gruppe"-Sektion
+
+    def test_update_htmx_invalid_renders_inline_form_without_retarget(
+        self, client, admin_user, doc_type_contact, field_group
+    ):
+        # Duplikat-Name → Formfehler. Der Invalid-HX-Zweig ersetzt NUR das
+        # Inline-group_form (kein Board, kein HX-Retarget) mit sichtbarem Fehler.
+        FieldGroup.objects.create(document_type=doc_type_contact, name="Bereits Da")
+        client.force_login(admin_user)
+        url = reverse("core:config_fieldgroup_update", kwargs={"pk": doc_type_contact.pk, "group_pk": field_group.pk})
+        response = client.post(url, {f"group-{field_group.pk}-name": "Bereits Da"}, HTTP_HX_REQUEST="true")
+        assert response.status_code == 200
+        assert "HX-Retarget" not in response
+        names = _template_names(response)
+        assert GROUP_FORM_PARTIAL in names
+        assert BOARD_PARTIAL not in names
+        assert b"group-form-errors" in response.content
+        assert b"bereits" in response.content
+        field_group.refresh_from_db()
+        assert field_group.name != "Bereits Da"
 
 
 @pytest.mark.django_db
