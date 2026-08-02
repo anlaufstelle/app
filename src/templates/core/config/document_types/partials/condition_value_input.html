@@ -2,15 +2,23 @@
 {% comment %}
 Typisiertes Wert-Eingabefeld für den Regel-Editor (M1 P6, E19, Refs #1057).
 
-Wird per HTMX-GET (config_condition_value_input) in den Slot #condition-value-slot
-geladen, sobald sich Quellfeld oder Operator ändern. Je Quelltyp+Operator das
-passende Eingabefeld — immer mit name="value" (der Server konvertiert das
-generische Feld typabhängig nach JSON, FieldConditionForm.clean).
+Wird per HTMX-GET (config_condition_value_input) geladen, sobald sich Quellfeld
+oder Operator ändern. Je Quelltyp+Operator das passende Eingabefeld — immer mit
+name="value" (der Server konvertiert das generische Feld typabhängig nach JSON,
+FieldConditionForm.clean).
+
+WICHTIG (Bug-Fix Runde 2): Dieses Partial rendert seinen EIGENEN Wurzel-Wrapper
+`<div class="condition-value-slot">` mit. Die auslösenden Selects erben vom
+umgebenden <form> `hx-swap="outerHTML"` und zielen auf `next .condition-value-slot`
+— ohne eigenen Wrapper würde der erste Swap den Wrapper samt Klasse entfernen und
+jeder Folgeswap `htmx:targetError` werfen. Mit Wrapper-als-Wurzel ist der Swap
+idempotent über beliebig viele Quell-/Operator-Wechsel (Wrapper ersetzt Wrapper).
 
 Kontext: field_type, operator, valueless (bool), choices [(slug,label)], current_value.
 {% endcomment %}
+<div class="condition-value-slot" data-testid="condition-value-slot">
 {% if valueless %}
-    <p class="text-[12px] text-ink-muted" data-testid="condition-value-none">{% trans "Für diesen Operator ist kein Vergleichswert nötig." %}</p>
+    <p class="text-[12px] text-ink-muted py-2" data-testid="condition-value-none">{% trans "Für diesen Operator ist kein Vergleichswert nötig." %}</p>
 {% elif field_type == "boolean" %}
     <select name="value" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
         <option value="true"{% if current_value == "true" %} selected{% endif %}>{% trans "Ja" %}</option>
@@ -31,3 +39,4 @@ Kontext: field_type, operator, valueless (bool), choices [(slug,label)], current
 {% else %}
     <input type="text" name="value" value="{{ current_value }}" class="w-full bg-canvas border border-subtle rounded-md px-3 py-2 text-[13px] text-ink" data-testid="condition-value-input">
 {% endif %}
+</div>

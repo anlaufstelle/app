@@ -47,7 +47,11 @@ Textfeld der Form.
     </div>
     <div>
         <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Vergleichswert" %}</label>
-        <div class="condition-value-slot" data-testid="condition-value-slot">{{ condition_form.value }}</div>
+        {# Value-Slot als eigenständiges Partial (Wurzel = .condition-value-slot): identische
+           Struktur wie die HTMX-Swap-Antwort → idempotent über beliebig viele Swaps. Ohne
+           Quelltyp-Kontext (Create) rendert der else-Zweig das generische Textfeld; im Edit-
+           Flow setzt der View field_type/operator/choices → typisiertes Input vorbefüllt. #}
+        {% include "core/config/document_types/partials/condition_value_input.html" with current_value=condition_form.value.value|default:"" %}
     </div>
     <div class="sm:col-span-2 flex items-center gap-2">
         <button type="submit" class="px-3.5 py-2 btn-primary text-[13px]" data-testid="condition-submit">

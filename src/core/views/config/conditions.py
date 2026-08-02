@@ -182,21 +182,27 @@ class ConditionUpdateView(FacilityAdminRequiredMixin, View):
     def get(self, request, pk, condition_pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
         condition = get_object_or_404(FieldCondition, pk=condition_pk, target_field__document_type=doc_type)
+        current_value = _value_for_input(condition.value)
         form = FieldConditionForm(
             document_type=doc_type,
             initial={
                 "target_field": condition.target_field_id,
                 "depends_on_field": condition.depends_on_field_id,
                 "operator": condition.operator,
-                "value": _value_for_input(condition.value),
+                "value": current_value,
                 "group_index": condition.group_index,
             },
         )
-        return render(
-            request,
-            FORM_TEMPLATE,
-            {"condition_form": form, "doc_type": doc_type, "condition": condition, "is_edit": True},
-        )
+        # Value-Slot-Kontext mitgeben → der Edit-Prefill rendert das TYPISIERTE Input
+        # (number→type=number etc.) statt des generischen Textfelds (Minor 2).
+        context = {
+            "condition_form": form,
+            "doc_type": doc_type,
+            "condition": condition,
+            "is_edit": True,
+            **_value_input_context(condition.depends_on_field.field_template, condition.operator, current_value),
+        }
+        return render(request, FORM_TEMPLATE, context)
 
     def post(self, request, pk, condition_pk):
         doc_type = get_object_or_404(DocumentType, pk=pk, facility=request.current_facility)
@@ -262,15 +268,27 @@ class ConditionValueInputView(FacilityAdminRequiredMixin, View):
         except (ValueError, TypeError):
             return HttpResponseBadRequest(_("Ungültige Quellfeld-ID."))
         dtf = get_object_or_404(DocumentTypeField, pk=source_uuid, document_type=doc_type)
-        template = dtf.field_template
-        context = {
-            "field_type": template.field_type,
-            "operator": operator,
-            "valueless": operator in VALUELESS_OPERATORS,
-            "choices": template.choices,
-            "current_value": request.GET.get("value", ""),
-        }
-        return render(request, VALUE_INPUT_TEMPLATE, context)
+        return render(
+            request,
+            VALUE_INPUT_TEMPLATE,
+            _value_input_context(dtf.field_template, operator, request.GET.get("value", "")),
+        )
+
+
+def _value_input_context(field_template, operator, current_value) -> dict:
+    """Kontext für ``condition_value_input.html`` — je Quelltyp+Operator (E19).
+
+    Gemeinsam genutzt vom HTMX-Swap-Endpoint (``ConditionValueInputView``) und vom
+    Edit-Formular (``ConditionUpdateView.get``), damit der Prefill im Edit-Flow das
+    identische typisierte Input rendert wie der Live-Swap (Bug-Fix Runde 2, Minor 2).
+    """
+    return {
+        "field_type": field_template.field_type,
+        "operator": operator,
+        "valueless": operator in VALUELESS_OPERATORS,
+        "choices": field_template.choices,
+        "current_value": current_value,
+    }
 
 
 def _value_for_input(value):

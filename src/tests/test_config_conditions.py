@@ -413,3 +413,60 @@ class TestValueInputPartial:
         url = reverse("core:config_condition_value_input", kwargs={"pk": doc_type_contact.pk})
         response = client.get(url)
         assert response.status_code == 400
+
+    def test_value_input_root_is_slot_wrapper(self, client, admin_user, doc_type_contact):
+        """Bug 1: Die Swap-Antwort trägt `.condition-value-slot` an der WURZEL.
+
+        Die auslösenden Selects erben `hx-swap="outerHTML"` vom <form> und zielen
+        auf `next .condition-value-slot` — nur wenn die Antwort ihren eigenen
+        Wrapper mitrendert, bleibt das Ziel über beliebig viele Swaps erhalten.
+        """
+        client.force_login(admin_user)
+        dauer = _dtf(doc_type_contact, "dauer")  # number
+        url = reverse("core:config_condition_value_input", kwargs={"pk": doc_type_contact.pk})
+        response = client.get(url, {"depends_on_field": str(dauer.pk), "operator": "greater_than"})
+        assert response.status_code == 200
+        body = response.content.decode().strip()
+        assert body.startswith('<div class="condition-value-slot"')
+        assert body.endswith("</div>")
+        assert 'type="number"' in body
+
+    def test_value_input_two_consecutive_swaps_keep_slot(self, client, admin_user, doc_type_contact, facility):
+        """Bug 1: Zwei aufeinanderfolgende Swaps (Quellwechsel → Operatorwechsel)
+        liefern beide eine Antwort mit `.condition-value-slot`-Wurzel — das Ziel
+        für den jeweils nächsten Swap bleibt idempotent erhalten."""
+        client.force_login(admin_user)
+        dauer = _dtf(doc_type_contact, "dauer")  # number
+        select_dtf = _make_dtf(
+            doc_type_contact,
+            facility,
+            "Auswahl",
+            FieldTemplate.FieldType.SELECT,
+            options_json=[{"slug": "a", "label": "A"}],
+        )
+        url = reverse("core:config_condition_value_input", kwargs={"pk": doc_type_contact.pk})
+        # Swap 1: Quellfeld number gewählt.
+        first = client.get(url, {"depends_on_field": str(dauer.pk), "operator": "greater_than"})
+        # Swap 2: Quellfeld auf select gewechselt (Folgeswap).
+        second = client.get(url, {"depends_on_field": str(select_dtf.pk), "operator": "equals"})
+        for response in (first, second):
+            assert response.status_code == 200
+            assert 'class="condition-value-slot"' in response.content.decode()
+            # Genau EINE Wrapper-Wurzel je Antwort (kein Verschachteln/Verlust).
+            assert response.content.decode().count('class="condition-value-slot"') == 1
+
+    def test_edit_form_prefills_typed_input(self, client, admin_user, doc_type_contact, field_condition):
+        """Minor 2: Der Edit-GET rendert für eine number-Quelle das typisierte
+        Input (`type="number"`) vorbefüllt (Wert 10), nicht das generische Textfeld."""
+        client.force_login(admin_user)
+        url = reverse(
+            "core:config_condition_update",
+            kwargs={"pk": doc_type_contact.pk, "condition_pk": field_condition.pk},
+        )
+        response = client.get(url)
+        assert response.status_code == 200
+        body = response.content.decode()
+        assert 'type="number"' in body
+        assert 'value="10"' in body
+        # Value-Slot-Wrapper auch im Edit-Formular vorhanden (Swap-Ziel).
+        assert 'class="condition-value-slot"' in body
