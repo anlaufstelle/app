@@ -79,11 +79,19 @@ def _partial(client, doc_type):
     return client.get(reverse("core:event_fields_partial") + f"?document_type={doc_type.pk}")
 
 
+def _wrapper_tag(body, slug):
+    """Öffnendes ``conditionalField``-Wrapper-Tag eines Feld-Slugs."""
+    match = re.search(
+        r'<div x-data="conditionalField" data-field-slug="' + re.escape(slug) + r'"[^>]*>',
+        body,
+    )
+    assert match, f"conditionalField-Wrapper für {slug} fehlt"
+    return match.group(0)
+
+
 @pytest.mark.django_db
 class TestDynamicFieldsTemplate:
-    def test_dynamic_fields_template_renders_json_script_and_wrappers(
-        self, client, staff_user, facility, cond_doctype
-    ):
+    def test_dynamic_fields_template_renders_json_script_and_wrappers(self, client, staff_user, facility, cond_doctype):
         """MIT Bedingungen: Wurzel-Wrapper, json_script und Feld-Wrapper vorhanden."""
         client.force_login(staff_user)
         body = _partial(client, cond_doctype).content.decode()
@@ -98,6 +106,21 @@ class TestDynamicFieldsTemplate:
         assert 'data-field-slug="dauer"' in body
         assert 'data-field-slug="notiz"' in body
         assert 'data-field-slug="anhang"' in body
+
+    def test_x_cloak_only_on_condition_targets(self, client, staff_user, facility, cond_doctype):
+        """``x-cloak`` NUR an Bedingungs-Zielen — nicht an Quell-/unkonditionierten Feldern.
+
+        Resilienz: bei Alpine-Boot-Fehler bleiben Kern-Inputs (Quelle ``dauer``)
+        sichtbar; nur je verborgene Ziele (``notiz``, ``anhang``) werden gecloakt.
+        """
+        client.force_login(staff_user)
+        body = _partial(client, cond_doctype).content.decode()
+
+        # Ziele: gecloakt.
+        assert "x-cloak" in _wrapper_tag(body, "notiz")
+        assert "x-cloak" in _wrapper_tag(body, "anhang")
+        # Quellfeld (nie Ziel): NICHT gecloakt → ohne Alpine bedienbar.
+        assert "x-cloak" not in _wrapper_tag(body, "dauer")
 
     def test_json_script_matches_e12_schema(self, client, staff_user, facility, cond_doctype):
         """Der json_script-Inhalt entspricht dem E12-Payload-Schema."""
@@ -117,9 +140,7 @@ class TestDynamicFieldsTemplate:
         assert payload["fields"]["notiz"] == {"type": "textarea"}
         assert payload["fields"]["anhang"] == {"type": "file"}
         # Beide Bedingungen im E12-Format (Reihenfolge egal).
-        assert {
-            (c["target"], c["source"], c["operator"], c["value"], c["group"]) for c in payload["conditions"]
-        } == {
+        assert {(c["target"], c["source"], c["operator"], c["value"], c["group"]) for c in payload["conditions"]} == {
             ("notiz", "dauer", "greater_than", 10, 0),
             ("anhang", "dauer", "greater_than", 10, 0),
         }
@@ -137,3 +158,5 @@ class TestDynamicFieldsTemplate:
         assert 'x-data="conditionEvaluator"' in body
         assert 'data-field-slug="frei"' in body
         assert 'x-show="visible"' in body
+        # Ohne Bedingungen kein Ziel → gar kein x-cloak (volle Resilienz).
+        assert "x-cloak" not in body

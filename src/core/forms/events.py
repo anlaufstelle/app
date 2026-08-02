@@ -410,6 +410,24 @@ class DynamicEventDataForm(forms.Form):
             self._conditions_payload_cache = cached
         return cached
 
+    @property
+    def condition_target_slugs(self) -> set[str]:
+        """Slugs der Felder, die im AKTUELLEN Payload ein Bedingungs-**Ziel** sind.
+
+        Basis ist :meth:`conditions_payload` — also NACH ``remove_restricted_fields``
+        und der #774-Drop-Regel. Nur diese Felder können clientseitig je verborgen
+        werden und tragen daher im Template ``x-cloak`` (Flacker-Schutz gegen das
+        Aufblitzen versteckter Ziele vor dem Alpine-Init). Unkonditionierte Felder
+        und Quellfelder cloaken NIE — sie bleiben bei einem Alpine-Boot-Fehler
+        sichtbar/bedienbar (App-Resilienz). Ein per #774 verworfenes Ziel taucht
+        nicht im Payload auf, ist also unbedingt sichtbar und wird ebenfalls nicht
+        gecloakt.
+        """
+        payload = self.conditions_payload()
+        if not payload:
+            return set()
+        return {condition["target"] for condition in payload["conditions"]}
+
     def _condition_values(self, cleaned: dict[str, Any]) -> dict[str, Any]:
         """Normalisierte Ist-Werte je aktuellem Feld-Slug (Evaluator-Eingabe E11/E14).
 

@@ -28,7 +28,7 @@ Komponentennamen, ``x-show="visible"`` und ``data-field-slug`` als Ausdrücke.
 <div x-data="conditionEvaluator">
 {% if data_form.conditions_payload %}{{ data_form.conditions_payload|json_script:"field-conditions" }}{% endif %}
 {% if data_form and data_form.fields %}
-{% with grouped=data_form.grouped_fields %}
+{% with grouped=data_form.grouped_fields target_slugs=data_form.condition_target_slugs %}
 {% for group, fields in grouped %}
 <div class="card p-4 space-y-4"{% if group.is_collapsible %} x-data="collapsibleGroup" data-start-open="true"{% endif %}>
     {% if group.is_collapsible %}
@@ -47,8 +47,8 @@ Komponentennamen, ``x-show="visible"`` und ``data-field-slug`` als Ausdrücke.
     {% endif %}
     <div class="space-y-4"{% if group.is_collapsible %} x-show="open"{% endif %}>
         {% for field in fields %}
-        {# M1/P5 (Refs #1057): conditionalField-Wrapper je Feld; x-show liest den Store, x-cloak gegen Erst-Render-Flackern. #}
-        <div x-data="conditionalField" data-field-slug="{{ field.name }}" x-show="visible" x-cloak>
+        {# M1/P5 (Refs #1057): conditionalField-Wrapper je Feld; x-show liest den Store. x-cloak NUR an Bedingungs-Zielen (Flacker-Schutz); unkonditionierte/Quellfelder bleiben bei Alpine-Ausfall sichtbar. #}
+        <div x-data="conditionalField" data-field-slug="{{ field.name }}" x-show="visible"{% if field.name in target_slugs %} x-cloak{% endif %}>
         {# Stufe B (#622): FILE-Felder bekommen pro Entry Ersetzen- und Soft-Delete-Steuerung + Multi-Upload unten. #}
         {# Refs #1143: gezielt auf den Datei-Widget-Typ prüfen — allow_multiple_selected ist auch bei CheckboxSelectMultiple True. #}
         {% if field.field.widget.input_type == "file" %}
