@@ -136,7 +136,9 @@ class TestConfigReachableNoConsoleErrors:
         # Detail-Seite eines Seed-Typs (rendert das volle Feld-Board inkl.
         # SortableJS + config-sortable.js — der CSP-kritischste Pfad).
         page.goto(f"{base_url}{DOCTYPE_LIST}", wait_until="domcontentloaded")
-        page.locator('[data-testid="doctype-detail-link"]').first.click()
+        # Deterministisch den Seed-Typ „Kontakt" öffnen (Selector-Stability-Guard:
+        # kein first-Klick — Seed-Drift/Wegwerf-Typen ändern die Reihenfolge).
+        page.locator('[data-testid="doctype-detail-link"]').filter(has_text="Kontakt").click()
         page.wait_for_url(_DETAIL_RE)
         page.wait_for_load_state("domcontentloaded")
         # Board-Init (defer-Skripte) kurz settlen lassen, damit ein etwaiger
