@@ -1,0 +1,43 @@
+{% load i18n %}
+
+{% if doc_types %}
+<div class="overflow-x-auto border border-subtle rounded-[10px] bg-surface">
+    <table class="w-full text-left" aria-label="{% trans 'Dokumentationstypen' %}">
+        <thead>
+            <tr class="text-[12px] font-bold text-ink-muted uppercase tracking-wider bg-canvas border-b border-subtle">
+                <th scope="col" class="px-4 py-2.5">{% trans "Name" %}</th>
+                <th scope="col" class="px-4 py-2.5">{% trans "Kategorie" %}</th>
+                <th scope="col" class="px-4 py-2.5 hidden md:table-cell">{% trans "Systemtyp" %}</th>
+                <th scope="col" class="px-4 py-2.5 hidden md:table-cell">{% trans "Ereignisse" %}</th>
+                <th scope="col" class="px-4 py-2.5">{% trans "Status" %}</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-subtle">
+            {% for dt in doc_types %}
+            <tr class="hover:bg-canvas transition-colors" data-testid="doctype-row">
+                <td class="px-4 py-3">
+                    <a href="{% url 'core:config_doctype_detail' dt.pk %}" class="text-[14px] font-semibold text-accent hover:underline" data-testid="doctype-detail-link">{{ dt.name }}</a>
+                </td>
+                <td class="px-4 py-3 text-[13px] text-ink-soft">{{ dt.get_category_display }}</td>
+                <td class="px-4 py-3 text-[13px] text-ink-muted hidden md:table-cell">
+                    {% if dt.system_type %}{{ dt.get_system_type_display }}{% else %}<span class="text-ink-muted">–</span>{% endif %}
+                </td>
+                <td class="px-4 py-3 text-[13px] font-mono text-ink-muted hidden md:table-cell">{{ dt.event_count }}</td>
+                <td class="px-4 py-3">
+                    {% if dt.is_active %}
+                    {% include "components/_badge.html" with text=_("Aktiv") color="green" %}
+                    {% else %}
+                    {% include "components/_badge.html" with text=_("Inaktiv") color="gray" %}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% include "components/_pagination.html" with page=doc_types extra_params=pagination_params %}
+
+{% else %}
+{% include "components/_empty_state.html" with icon="search" message=_("Keine Dokumentationstypen gefunden") %}
+{% endif %}

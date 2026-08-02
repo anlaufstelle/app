@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% if is_edit %}{% trans "Dokumentationstyp bearbeiten" %}{% else %}{% trans "Neuer Dokumentationstyp" %}{% endif %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+    <h1 class="text-[22px] font-bold text-ink mb-6">{% if is_edit %}{% trans "Dokumentationstyp bearbeiten" %}{% else %}{% trans "Neuer Dokumentationstyp" %}{% endif %}</h1>
+
+    <form method="post" class="space-y-4">
+        {% csrf_token %}
+        {% include "core/_form_errors.html" %}
+
+        <div class="card p-5 space-y-4">
+            {% for field in form %}
+            {% include "components/_form_field.html" %}
+            {% endfor %}
+            {% if is_edit %}
+            <p class="text-[12px] text-ink-muted">{% trans "Der Systemtyp ist nach dem Anlegen unveränderbar." %}</p>
+            {% endif %}
+        </div>
+
+        <div class="flex flex-col sm:flex-row gap-2.5 pt-2">
+            <button type="submit" class="w-full sm:w-auto px-4 py-2 btn-primary">
+                {% if is_edit %}{% trans "Speichern" %}{% else %}{% trans "Anlegen" %}{% endif %}
+            </button>
+            {% if is_edit %}
+            <a href="{% url 'core:config_doctype_detail' doc_type.pk %}" class="w-full sm:w-auto text-center px-4 py-2 btn-secondary">{% trans "Abbrechen" %}</a>
+            {% else %}
+            <a href="{% url 'core:config_doctype_list' %}" class="w-full sm:w-auto text-center px-4 py-2 btn-secondary">{% trans "Abbrechen" %}</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
+{% endblock %}

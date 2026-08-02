@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Dokumentationstyp löschen" %} – {{ doc_type.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+    <h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Dokumentationstyp löschen" %}</h1>
+    <p class="text-sm text-ink-muted mb-5">
+        {% blocktrans with name=doc_type.name %}Sie sind dabei, <strong>{{ name }}</strong> dauerhaft zu löschen.{% endblocktrans %}
+    </p>
+
+    {% if event_count %}
+    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="doctype-delete-blocker">
+        <p class="text-[13px] text-amber-800">
+            {% blocktrans count n=event_count %}{{ n }} Ereignis verweist auf diesen Typ — ein Löschen ist daher nicht möglich.{% plural %}{{ n }} Ereignisse verweisen auf diesen Typ — ein Löschen ist daher nicht möglich.{% endblocktrans %}
+        </p>
+    </div>
+    {% endif %}
+
+    <div class="card p-5 mb-5">
+        <p class="text-[13px] text-ink-soft mb-3">
+            {% trans "Empfehlung: Statt zu löschen, können Sie den Typ deaktivieren. Er verschwindet dann aus den Formularen, bestehende Ereignisse bleiben erhalten." %}
+        </p>
+        <a href="{% url 'core:config_doctype_update' doc_type.pk %}" class="inline-flex items-center px-4 py-2 btn-primary" data-testid="doctype-deactivate-link">
+            {% trans "Stattdessen bearbeiten / deaktivieren" %}
+        </a>
+    </div>
+
+    <form method="post" class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        {% csrf_token %}
+        <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50" {% if event_count %}disabled aria-disabled="true"{% endif %} data-testid="doctype-delete-confirm">
+            {% trans "Endgültig löschen" %}
+        </button>
+        <a href="{% url 'core:config_doctype_detail' doc_type.pk %}" class="px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
+    </form>
+</div>
+{% endblock %}

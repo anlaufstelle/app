@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Dokumentationstypen" %} – Anlaufstelle{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-[22px] font-bold text-ink">{% trans "Dokumentationstypen" %}</h1>
+        <p class="text-[13px] text-ink-muted mt-1">{% trans "Formular-Konfiguration Ihrer Einrichtung" %}</p>
+    </div>
+    <a href="{% url 'core:config_doctype_create' %}" class="inline-flex items-center gap-1.5 btn-primary px-3.5 py-2" data-testid="doctype-create-link">
+        <svg aria-hidden="true" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+        {% trans "Neuer Typ" %}
+    </a>
+</div>
+
+{# Suchleiste + Filter #}
+<div class="mb-4 flex flex-col sm:flex-row gap-2.5 no-print">
+    <div class="relative flex-1">
+        <svg aria-hidden="true" class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-ink-muted pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <input type="text"
+               name="q"
+               value="{{ q }}"
+               placeholder="{% trans 'Name suchen...' %}"
+               class="w-full bg-surface border border-subtle rounded-[10px] pl-8 pr-3 py-2 text-[13px] text-ink"
+               hx-get="{% url 'core:config_doctype_list' %}"
+               hx-trigger="keyup changed delay:300ms"
+               hx-target="#doctype-table"
+               hx-include="[name='category'],[name='is_active']"
+               hx-indicator="#doctype-table-spinner">
+        {% include "components/_htmx_spinner.html" with spinner_id="doctype-table-spinner" position_class="absolute right-2.5 top-1/2 -translate-y-1/2" %}
+    </div>
+    <select name="category" aria-label="{% trans 'Kategorie filtern' %}" class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
+            hx-get="{% url 'core:config_doctype_list' %}"
+            hx-trigger="change"
+            hx-target="#doctype-table"
+            hx-include="[name='q'],[name='is_active']"
+            hx-indicator="#doctype-table-spinner">
+        <option value="">{% trans "Alle Kategorien" %}</option>
+        {% for value, label in categories %}
+        <option value="{{ value }}" {% if value == selected_category %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+    </select>
+    <select name="is_active" aria-label="{% trans 'Status filtern' %}" class="bg-surface border border-subtle rounded-[10px] px-3 py-2 text-[13px] text-ink-soft cursor-pointer"
+            hx-get="{% url 'core:config_doctype_list' %}"
+            hx-trigger="change"
+            hx-target="#doctype-table"
+            hx-include="[name='q'],[name='category']"
+            hx-indicator="#doctype-table-spinner">
+        <option value="">{% trans "Alle Status" %}</option>
+        <option value="true" {% if selected_active == "true" %}selected{% endif %}>{% trans "Nur aktive" %}</option>
+        <option value="false" {% if selected_active == "false" %}selected{% endif %}>{% trans "Nur inaktive" %}</option>
+    </select>
+</div>
+
+<div id="doctype-table">
+    {% include "core/config/document_types/partials/table.html" %}
+</div>
+{% endblock %}

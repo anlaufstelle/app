@@ -22,6 +22,7 @@ from core.models import (
     Episode,
     Event,
     Facility,
+    FieldGroup,
     FieldTemplate,
     LegalHold,
     Milestone,
@@ -582,4 +583,69 @@ def foreign_deletion_request(second_facility, foreign_event, foreign_staff):
         target_id=foreign_event.pk,
         reason="AuthZ-IDOR-Test",
         requested_by=foreign_staff,
+    )
+
+
+# ---- Config-CRUD-Fixtures (M0, Refs #1056) -------------------------------
+# FieldTemplate/FieldGroup/DocumentTypeField der Haupt-facility für die
+# Config-CRUD-Matrix (P5) sowie die interaktive Feld-Zuordnung (P6/P7); die
+# foreign_*-Spiegel auf second_facility/foreign_doc_type dienen den IDOR-Proben.
+
+
+@pytest.fixture
+def field_template(facility):
+    return FieldTemplate.objects.create(
+        facility=facility,
+        name="Feldvorlage (Config)",
+        field_type=FieldTemplate.FieldType.TEXT,
+    )
+
+
+@pytest.fixture
+def doc_type_field(doc_type_contact, facility):
+    """Eine dedizierte Feld-Zuordnung auf doc_type_contact (zusätzlich zu den
+    beiden Fixture-Feldern), mit stabilem, eigenem FieldTemplate."""
+    ft = FieldTemplate.objects.create(
+        facility=facility,
+        name="Feld (Config-Zuordnung)",
+        field_type=FieldTemplate.FieldType.TEXT,
+    )
+    return DocumentTypeField.objects.create(
+        document_type=doc_type_contact,
+        field_template=ft,
+        sort_order=2,
+    )
+
+
+@pytest.fixture
+def field_group(doc_type_contact):
+    return FieldGroup.objects.create(
+        document_type=doc_type_contact,
+        name="Feldgruppe (Config)",
+    )
+
+
+@pytest.fixture
+def foreign_field_template(second_facility):
+    return FieldTemplate.objects.create(
+        facility=second_facility,
+        name="Feldvorlage (fremd)",
+        field_type=FieldTemplate.FieldType.TEXT,
+    )
+
+
+@pytest.fixture
+def foreign_field_group(foreign_doc_type):
+    return FieldGroup.objects.create(
+        document_type=foreign_doc_type,
+        name="Feldgruppe (fremd)",
+    )
+
+
+@pytest.fixture
+def foreign_doc_type_field(foreign_doc_type, foreign_field_template):
+    return DocumentTypeField.objects.create(
+        document_type=foreign_doc_type,
+        field_template=foreign_field_template,
+        sort_order=0,
     )

@@ -453,6 +453,32 @@ EXPECTATIONS = (
     E("core:system_vvt", "system", get=SUPER_ONLY),
     E("core:system_legal_hold_list", "system", get=SUPER_ONLY),
     E("core:system_compliance", "system", get=SUPER_ONLY),
+    # ---- config (Formular-Konfiguration, M0, Refs #1056; facility_admin only) --
+    E("core:config_doctype_list", "config", get=ADMIN_ONLY),
+    E("core:config_doctype_create", "config", get=ADMIN_ONLY, post=ADMIN_ONLY),
+    E(
+        "core:config_doctype_detail",
+        "config",
+        get=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"),),
+        idor=(("pk", "foreign_doc_type.pk"),),
+    ),
+    E(
+        "core:config_doctype_update",
+        "config",
+        get=ADMIN_ONLY,
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"),),
+        idor=(("pk", "foreign_doc_type.pk"),),
+    ),
+    E(
+        "core:config_doctype_delete",
+        "config",
+        get=ADMIN_ONLY,
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "doc_type_contact.pk"),),
+        idor=(("pk", "foreign_doc_type.pk"),),
+    ),
     # ---- partials-htmx --------------------------------------------------------
     E(
         "core:workitem_status_update",

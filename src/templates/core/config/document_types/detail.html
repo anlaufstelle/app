@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{{ doc_type.name }} – {% trans "Dokumentationstyp" %}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl">
+    <div class="flex items-center justify-between mb-6">
+        <div>
+            <a href="{% url 'core:config_doctype_list' %}" class="text-[13px] text-ink-muted hover:text-ink hover:underline">← {% trans "Dokumentationstypen" %}</a>
+            <h1 class="text-[22px] font-bold text-ink mt-1">{{ doc_type.name }}</h1>
+        </div>
+        <div class="flex items-center gap-2">
+            <a href="{% url 'core:config_doctype_update' doc_type.pk %}" class="px-3.5 py-2 btn-secondary text-[13px]" data-testid="doctype-edit-link">{% trans "Bearbeiten" %}</a>
+            <a href="{% url 'core:config_doctype_delete' doc_type.pk %}" class="px-3.5 py-2 text-[13px] font-medium rounded-md border border-red-200 text-red-700 hover:bg-red-50" data-testid="doctype-delete-link">{% trans "Löschen" %}</a>
+        </div>
+    </div>
+
+    {# Stammdaten #}
+    <div class="card p-5 mb-5">
+        <h2 class="text-[13px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Stammdaten" %}</h2>
+        <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-[13px]">
+            <div>
+                <dt class="text-ink-muted">{% trans "Kategorie" %}</dt>
+                <dd class="text-ink font-medium">{{ doc_type.get_category_display }}</dd>
+            </div>
+            <div>
+                <dt class="text-ink-muted">{% trans "Sensibilität" %}</dt>
+                <dd class="text-ink font-medium">{{ doc_type.get_sensitivity_display }}</dd>
+            </div>
+            <div>
+                <dt class="text-ink-muted">{% trans "Systemtyp" %}</dt>
+                <dd class="text-ink font-medium">{% if doc_type.system_type %}{{ doc_type.get_system_type_display }}{% else %}–{% endif %}</dd>
+            </div>
+            <div>
+                <dt class="text-ink-muted">{% trans "Aufbewahrungsfrist" %}</dt>
+                <dd class="text-ink font-medium">{% if doc_type.retention_days %}{% blocktrans count days=doc_type.retention_days %}{{ days }} Tag{% plural %}{{ days }} Tage{% endblocktrans %}{% else %}–{% endif %}</dd>
+            </div>
+            <div>
+                <dt class="text-ink-muted">{% trans "Status" %}</dt>
+                <dd>{% if doc_type.is_active %}{% include "components/_badge.html" with text=_("Aktiv") color="green" %}{% else %}{% include "components/_badge.html" with text=_("Inaktiv") color="gray" %}{% endif %}</dd>
+            </div>
+            <div>
+                <dt class="text-ink-muted">{% trans "Ereignisse" %}</dt>
+                <dd class="text-ink font-medium">{{ event_count }}</dd>
+            </div>
+        </dl>
+        {% if doc_type.description %}
+        <div class="mt-4 pt-4 border-t border-subtle">
+            <dt class="text-ink-muted text-[13px]">{% trans "Beschreibung" %}</dt>
+            <dd class="text-ink text-[13px] mt-1 whitespace-pre-line">{{ doc_type.description }}</dd>
+        </div>
+        {% endif %}
+    </div>
+
+    {# Feldliste (read-only; interaktives Feld-Board folgt in P6) #}
+    <div class="card p-5">
+        <h2 class="text-[13px] font-bold uppercase tracking-wider text-ink-muted mb-3">{% trans "Felder" %}</h2>
+        {% if fields %}
+        <ul class="divide-y divide-subtle" data-testid="doctype-field-list">
+            {% for f in fields %}
+            <li class="py-2.5 flex items-center justify-between gap-3">
+                <div class="min-w-0">
+                    <span class="text-[14px] text-ink font-medium">{{ f.field_template.name }}</span>
+                    {% if f.field_group %}<span class="text-[12px] text-ink-muted ml-2">· {{ f.field_group.name }}</span>{% endif %}
+                </div>
+                <span class="text-[12px] text-ink-muted flex-shrink-0">{{ f.field_template.get_field_type_display }}</span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-[13px] text-ink-muted">{% trans "Diesem Typ sind noch keine Felder zugeordnet." %}</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -44,6 +44,13 @@ from core.views.clients import (
     ClientListView,
     ClientUpdateView,
 )
+from core.views.config.document_types import (
+    ConfigDocumentTypeCreateView,
+    ConfigDocumentTypeDeleteView,
+    ConfigDocumentTypeDetailView,
+    ConfigDocumentTypeListView,
+    ConfigDocumentTypeUpdateView,
+)
 from core.views.dashboard import RoleDashboardView
 from core.views.dsgvo import DSGVODocumentDownloadView, DSGVOPackageView
 from core.views.event_deletion import DeletionRequestListView, DeletionRequestReviewView
@@ -225,6 +232,16 @@ urlpatterns = [
     path("system/legal-holds/", SystemLegalHoldListView.as_view(), name="system_legal_hold_list"),
     # Refs #919: Compliance-Dashboard (DB-Rollen, Backup, ClamAV, Retention, MFA, Audit-Events).
     path("system/compliance/", SystemComplianceView.as_view(), name="system_compliance"),
+    # Config — Formular-Konfiguration (M0, Refs #1056): facility_admin only.
+    path("config/document-types/", ConfigDocumentTypeListView.as_view(), name="config_doctype_list"),
+    path("config/document-types/new/", ConfigDocumentTypeCreateView.as_view(), name="config_doctype_create"),
+    path("config/document-types/<uuid:pk>/", ConfigDocumentTypeDetailView.as_view(), name="config_doctype_detail"),
+    path("config/document-types/<uuid:pk>/edit/", ConfigDocumentTypeUpdateView.as_view(), name="config_doctype_update"),
+    path(
+        "config/document-types/<uuid:pk>/delete/",
+        ConfigDocumentTypeDeleteView.as_view(),
+        name="config_doctype_delete",
+    ),
     # Statistics
     path("statistics/", StatisticsView.as_view(), name="statistics"),
     path("statistics/export/csv/", CSVExportView.as_view(), name="statistics_csv_export"),
