@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% load i18n %}
+
+{% block title %}{% trans "Feldvorlage löschen" %} – {{ field_template.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-lg">
+    <h1 class="text-[22px] font-bold text-ink mb-2">{% trans "Feldvorlage löschen" %}</h1>
+    <p class="text-sm text-ink-muted mb-5">
+        {% blocktrans with name=field_template.name %}Sie sind dabei, <strong>{{ name }}</strong> dauerhaft zu löschen.{% endblocktrans %}
+    </p>
+
+    {% if blockers %}
+    <div class="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-5" role="alert" data-testid="fieldtemplate-delete-blockers">
+        <p class="text-[13px] font-semibold text-amber-800 mb-2">{% trans "Löschen nicht möglich — diese Feldvorlage wird noch verwendet:" %}</p>
+        <ul class="list-disc list-inside space-y-1 text-[13px] text-amber-800">
+            {% for reason in blockers %}
+            <li>{{ reason }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <div class="card p-5 mb-5">
+        <p class="text-[13px] text-ink-soft mb-3">
+            {% trans "Empfehlung: Statt zu löschen, können Sie die Feldvorlage deaktivieren. Sie verschwindet dann aus den Formularen, bestehende Werte bleiben erhalten." %}
+        </p>
+        {% if field_template.is_active %}
+        <form method="post" action="{% url 'core:config_fieldtemplate_toggle' field_template.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="inline-flex items-center px-4 py-2 btn-primary" data-testid="fieldtemplate-deactivate-btn">
+                {% trans "Stattdessen deaktivieren" %}
+            </button>
+        </form>
+        {% else %}
+        <p class="text-[13px] text-ink-muted">{% trans "Diese Feldvorlage ist bereits deaktiviert." %}</p>
+        {% endif %}
+    </div>
+
+    <form method="post" class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+        {% csrf_token %}
+        <button type="submit" class="px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-md hover:bg-red-700 disabled:opacity-50" {% if blockers %}disabled aria-disabled="true"{% endif %} data-testid="fieldtemplate-delete-confirm">
+            {% trans "Endgültig löschen" %}
+        </button>
+        <a href="{% url 'core:config_fieldtemplate_list' %}" class="px-4 py-2 border border-subtle text-sm font-medium rounded-md hover:bg-canvas">{% trans "Abbrechen" %}</a>
+    </form>
+</div>
+{% endblock %}

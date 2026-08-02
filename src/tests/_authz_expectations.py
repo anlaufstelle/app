@@ -479,6 +479,31 @@ EXPECTATIONS = (
         url_kwargs=(("pk", "doc_type_contact.pk"),),
         idor=(("pk", "foreign_doc_type.pk"),),
     ),
+    E("core:config_fieldtemplate_list", "config", get=ADMIN_ONLY),
+    E("core:config_fieldtemplate_create", "config", get=ADMIN_ONLY, post=ADMIN_ONLY),
+    E(
+        "core:config_fieldtemplate_update",
+        "config",
+        get=ADMIN_ONLY,
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "field_template.pk"),),
+        idor=(("pk", "foreign_field_template.pk"),),
+    ),
+    E(
+        "core:config_fieldtemplate_delete",
+        "config",
+        get=ADMIN_ONLY,
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "field_template.pk"),),
+        idor=(("pk", "foreign_field_template.pk"),),
+    ),
+    E(
+        "core:config_fieldtemplate_toggle",
+        "config",
+        post=ADMIN_ONLY,
+        url_kwargs=(("pk", "field_template.pk"),),
+        idor=(("pk", "foreign_field_template.pk"),),
+    ),
     # ---- partials-htmx --------------------------------------------------------
     E(
         "core:workitem_status_update",

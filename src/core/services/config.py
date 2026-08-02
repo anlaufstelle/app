@@ -130,19 +130,19 @@ def save_field_template(request, form, *, creating: bool, facility) -> FieldTemp
     return obj
 
 
-def delete_field_template(request, field_template: FieldTemplate) -> None:
-    """Löscht eine FieldTemplate — blockiert bei jeder referenzierenden Datenspur.
+def field_template_delete_blockers(field_template: FieldTemplate) -> list[str]:
+    """Liefert alle UI-tauglichen Lösch-Blocker-Gründe (leere Liste = löschbar).
 
-    Drei Gründe können (auch gemeinsam) greifen:
+    Read-only Vorberechnung für die Confirm-Seite (P5b) — die Gründe sind
+    identisch zu denen, die :func:`delete_field_template` als
+    :class:`ConfigDeleteBlocked` wirft. Drei Gründe können (auch gemeinsam)
+    greifen:
 
     a) **DocumentTypeField-Zuordnungen** (``CASCADE``) — würden beim Delete
-       still mitgelöscht, daher muss der Service sie **vor** dem Delete prüfen.
+       still mitgelöscht, daher **vor** dem Delete prüfen.
     b) **EventAttachment-Referenzen** (``PROTECT``).
     c) **Event-Daten** unter dem Slug — das ``pre_delete``-Signal (#356) würfe
        sonst eine ``ProtectedError``.
-
-    Es werden **alle** zutreffenden Gründe gesammelt, nicht nur der erste.
-    Alternative bleibt das Deaktivieren (:func:`set_field_template_active`).
     """
     reasons: list[str] = []
 
@@ -168,6 +168,17 @@ def delete_field_template(request, field_template: FieldTemplate) -> None:
                 % {"n": data_event_count, "slug": field_template.slug}
             )
 
+    return reasons
+
+
+def delete_field_template(request, field_template: FieldTemplate) -> None:
+    """Löscht eine FieldTemplate — blockiert bei jeder referenzierenden Datenspur.
+
+    Es werden **alle** zutreffenden Gründe gesammelt (siehe
+    :func:`field_template_delete_blockers`), nicht nur der erste. Alternative
+    bleibt das Deaktivieren (:func:`set_field_template_active`).
+    """
+    reasons = field_template_delete_blockers(field_template)
     if reasons:
         raise ConfigDeleteBlocked(reasons)
 

@@ -1,0 +1,55 @@
+{% load i18n %}
+
+{% if field_templates %}
+<div class="overflow-x-auto border border-subtle rounded-[10px] bg-surface">
+    <table class="w-full text-left" aria-label="{% trans 'Feldvorlagen' %}">
+        <thead>
+            <tr class="text-[12px] font-bold text-ink-muted uppercase tracking-wider bg-canvas border-b border-subtle">
+                <th scope="col" class="px-4 py-2.5">{% trans "Name" %}</th>
+                <th scope="col" class="px-4 py-2.5 hidden sm:table-cell">{% trans "Slug" %}</th>
+                <th scope="col" class="px-4 py-2.5">{% trans "Typ" %}</th>
+                <th scope="col" class="px-4 py-2.5 hidden md:table-cell">{% trans "Verwendung" %}</th>
+                <th scope="col" class="px-4 py-2.5">{% trans "Status" %}</th>
+                <th scope="col" class="px-4 py-2.5 text-right">{% trans "Aktionen" %}</th>
+            </tr>
+        </thead>
+        <tbody class="divide-y divide-subtle">
+            {% for ft in field_templates %}
+            <tr class="hover:bg-canvas transition-colors" data-testid="fieldtemplate-row">
+                <td class="px-4 py-3">
+                    <a href="{% url 'core:config_fieldtemplate_update' ft.pk %}" class="text-[14px] font-semibold text-accent hover:underline" data-testid="fieldtemplate-edit-link">{{ ft.name }}</a>
+                </td>
+                <td class="px-4 py-3 text-[13px] font-mono text-ink-muted hidden sm:table-cell">{{ ft.slug }}</td>
+                <td class="px-4 py-3 text-[13px] text-ink-soft">{{ ft.get_field_type_display }}</td>
+                <td class="px-4 py-3 text-[13px] text-ink-muted hidden md:table-cell" data-testid="fieldtemplate-usage">
+                    {% blocktrans count n=ft.doctype_count %}{{ n }} Typ{% plural %}{{ n }} Typen{% endblocktrans %}
+                    ·
+                    {% blocktrans count n=ft.attachment_count %}{{ n }} Anhang{% plural %}{{ n }} Anhänge{% endblocktrans %}
+                </td>
+                <td class="px-4 py-3">
+                    {% if ft.is_active %}
+                    {% include "components/_badge.html" with text=_("Aktiv") color="green" %}
+                    {% else %}
+                    {% include "components/_badge.html" with text=_("Inaktiv") color="gray" %}
+                    {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right whitespace-nowrap">
+                    <form method="post" action="{% url 'core:config_fieldtemplate_toggle' ft.pk %}" class="inline">
+                        {% csrf_token %}
+                        <button type="submit" class="text-[12px] text-ink-muted hover:text-accent" data-testid="fieldtemplate-toggle-btn">
+                            {% if ft.is_active %}{% trans "Deaktivieren" %}{% else %}{% trans "Aktivieren" %}{% endif %}
+                        </button>
+                    </form>
+                    <a href="{% url 'core:config_fieldtemplate_delete' ft.pk %}" class="text-[12px] text-red-600 hover:underline ml-3" data-testid="fieldtemplate-delete-link">{% trans "Löschen" %}</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% include "components/_pagination.html" with page=field_templates extra_params=pagination_params %}
+
+{% else %}
+{% include "components/_empty_state.html" with icon="search" message=_("Keine Feldvorlagen gefunden") %}
+{% endif %}

@@ -12,7 +12,7 @@ from django.core.exceptions import ValidationError
 from django.utils.translation import gettext_lazy as _
 
 from core.forms.widgets import INPUT_CSS
-from core.models import DocumentType
+from core.models import DocumentType, FieldTemplate
 
 
 class DocumentTypeForm(forms.ModelForm):
@@ -80,3 +80,65 @@ class DocumentTypeForm(forms.ModelForm):
                     )
                 )
         return cleaned
+
+
+class FieldTemplateForm(forms.ModelForm):
+    """Anlegen/Bearbeiten einer Feldvorlage.
+
+    * ``facility`` kommt aus dem Request-Scope (kein Formularfeld) — der Service
+      :func:`core.services.config.save_field_template` setzt sie beim Anlegen.
+      Sie dient hier nur dem freundlichen Unique-Namens-Fehler.
+    * ``slug`` ist **kein** Formularfeld: beim Anlegen erzeugt das Model ihn
+      automatisch, danach ist er unveränderbar (``FieldTemplate.save``); die
+      Update-Ansicht zeigt ihn read-only an.
+    * Die inhaltlichen Regeln (HIGH-Sensibilität ⇒ verschlüsselt,
+      ``default_value``-Registry-Validierung, Slug-Zeichensatz) liegen im Model
+      (``FieldTemplate.clean``) und laufen über den ModelForm-``_post_clean``.
+    """
+
+    class Meta:
+        model = FieldTemplate
+        fields = [
+            "name",
+            "field_type",
+            "is_required",
+            "is_encrypted",
+            "sensitivity",
+            "options_json",
+            "default_value",
+            "statistics_category",
+            "help_text",
+            "is_active",
+        ]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": INPUT_CSS}),
+            "field_type": forms.Select(attrs={"class": INPUT_CSS}),
+            "sensitivity": forms.Select(attrs={"class": INPUT_CSS}),
+            "options_json": forms.Textarea(attrs={"class": INPUT_CSS, "rows": 3}),
+            "default_value": forms.TextInput(attrs={"class": INPUT_CSS}),
+            "statistics_category": forms.TextInput(attrs={"class": INPUT_CSS}),
+            "help_text": forms.TextInput(attrs={"class": INPUT_CSS}),
+        }
+
+    def __init__(self, *args, facility=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.facility = facility
+
+    def clean_name(self):
+        name = self.cleaned_data["name"]
+        if name and self.facility is not None:
+            qs = FieldTemplate.objects.for_facility(self.facility).filter(name=name)
+            if self.instance.pk:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise ValidationError(_("Eine Feldvorlage mit diesem Namen existiert in dieser Einrichtung bereits."))
+        return name
+
+    def clean_options_json(self):
+        # JSONField liefert bei leerem Textarea ``None``; das Model-Feld ist
+        # NOT NULL mit ``default=list`` — leeres Feld also als leere Liste
+        # normalisieren, damit kein IntegrityError am Save entsteht.
+        value = self.cleaned_data.get("options_json")
+        if value in (None, ""):
+            return []
+        return value

@@ -51,6 +51,13 @@ from core.views.config.document_types import (
     ConfigDocumentTypeListView,
     ConfigDocumentTypeUpdateView,
 )
+from core.views.config.field_templates import (
+    ConfigFieldTemplateCreateView,
+    ConfigFieldTemplateDeleteView,
+    ConfigFieldTemplateListView,
+    ConfigFieldTemplateToggleActiveView,
+    ConfigFieldTemplateUpdateView,
+)
 from core.views.dashboard import RoleDashboardView
 from core.views.dsgvo import DSGVODocumentDownloadView, DSGVOPackageView
 from core.views.event_deletion import DeletionRequestListView, DeletionRequestReviewView
@@ -241,6 +248,23 @@ urlpatterns = [
         "config/document-types/<uuid:pk>/delete/",
         ConfigDocumentTypeDeleteView.as_view(),
         name="config_doctype_delete",
+    ),
+    path("config/field-templates/", ConfigFieldTemplateListView.as_view(), name="config_fieldtemplate_list"),
+    path("config/field-templates/new/", ConfigFieldTemplateCreateView.as_view(), name="config_fieldtemplate_create"),
+    path(
+        "config/field-templates/<uuid:pk>/edit/",
+        ConfigFieldTemplateUpdateView.as_view(),
+        name="config_fieldtemplate_update",
+    ),
+    path(
+        "config/field-templates/<uuid:pk>/delete/",
+        ConfigFieldTemplateDeleteView.as_view(),
+        name="config_fieldtemplate_delete",
+    ),
+    path(
+        "config/field-templates/<uuid:pk>/toggle-active/",
+        ConfigFieldTemplateToggleActiveView.as_view(),
+        name="config_fieldtemplate_toggle",
     ),
     # Statistics
     path("statistics/", StatisticsView.as_view(), name="statistics"),
