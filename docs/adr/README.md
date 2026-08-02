@@ -66,6 +66,7 @@ Keine ADR für lokale Refactorings, Bugfixes, Renamings.
 | [ADR-032](032-webauthn-passkeys-2fa.md) | Passkeys/WebAuthn als zusätzlicher zweiter Faktor (neben TOTP) | Accepted |
 | [ADR-033](033-runtime-owner-role-separation.md) | Runtime-DB-Rolle von der DB-Ownership trennen (A1.4) | Accepted |
 | [ADR-034](034-config-ui-category-system-type.md) | category vs. system_type in der Konfigurations-UI | Accepted |
+| [ADR-035](035-evaluator-semantik-bedingte-feldlogik.md) | Evaluator-Semantik der bedingten Feldlogik (gemeinsame FE/BE-Regeln + Testvektoren) | Accepted |
 
 ## Backlog — geplante / noch zu schreibende ADRs
 
