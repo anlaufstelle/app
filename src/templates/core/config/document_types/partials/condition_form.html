@@ -49,10 +49,10 @@ generische Textfeld, kein separates Feld der Form selbst.
     </div>
     <div>
         <label class="block text-[12px] font-bold uppercase tracking-[0.05em] text-ink-soft mb-1">{% trans "Vergleichswert" %}</label>
-        {# Value-Slot als eigenständiges Partial (Wurzel = .condition-value-slot): identische
-           Struktur wie die HTMX-Swap-Antwort → idempotent über beliebig viele Swaps. Ohne
-           Quelltyp-Kontext (Create) rendert der else-Zweig das generische Textfeld; im Edit-
-           Flow setzt der View field_type/operator/choices → typisiertes Input vorbefüllt. #}
+        {% comment %}Value-Slot als eigenständiges Partial (Wurzel = .condition-value-slot):
+        identische Struktur wie die HTMX-Swap-Antwort → idempotent über beliebig viele Swaps.
+        Ohne Quelltyp-Kontext (Create) rendert der else-Zweig das generische Textfeld; im
+        Edit-Flow setzt der View field_type/operator/choices → typisiertes Input vorbefüllt.{% endcomment %}
         {% include "core/config/document_types/partials/condition_value_input.html" with current_value=condition_form.value.value|default:"" %}
     </div>
     <div class="sm:col-span-2 flex items-center gap-2">
