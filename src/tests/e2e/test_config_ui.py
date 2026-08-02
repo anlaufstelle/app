@@ -400,22 +400,44 @@ class TestFieldBoardDragAndDrop:
             _delete_doctype(page, base_url, pk)
 
     @staticmethod
-    def _native_move(page, dtf_id, target_group_pk):
+    def _center_for_drag(page, handle, target):
+        """Zentriert die Quellzeile und liefert stabile Bounding-Boxes (Quelle, Ziel).
+
+        Warum wiederholt zentriert wird: Nach jeder Board-Mutation lädt die
+        Live-Vorschau-Pane (P11) asynchron neu. Deren ``htmx:afterSwap`` fokussiert
+        über ``focus-management.js`` (Refs #1339) das getauschte Vorschau-Fragment
+        am SEITENENDE mit ``preventScroll:false`` — der Viewport springt ans Ende
+        (``document.activeElement`` == ``config-preview-pane``, ``scrollY`` == max).
+        Seit der Regel-Editor (M1 / Refs #1057) die Detailseite verlängert hat,
+        landet das Feld-Board bei diesem Scroll-Reflex OBERHALB des Viewports
+        (negative ``y`` → die Maus-Sequenz läuft ins Leere). Der Reflex feuert
+        genau EINMAL pro Mutation und kann ein einzelnes ``scrollIntoView``
+        überholen. Daher zentrieren, bis Quelle UND Ziel stabil im Viewport
+        liegen — das Re-Zentrieren nach dem einmaligen Fokus-Sprung hält.
+        """
+        vh = page.viewport_size["height"]
+        hb = tb = None
+        for _ in range(12):
+            handle.evaluate("el => el.scrollIntoView({block: 'center'})")
+            page.wait_for_timeout(150)
+            hb = handle.bounding_box()
+            tb = target.bounding_box()
+            if hb and tb and 0 <= hb["y"] <= vh - hb["height"] and 0 <= tb["y"] <= vh - tb["height"]:
+                break
+        return hb, tb
+
+    @classmethod
+    def _native_move(cls, page, dtf_id, target_group_pk):
         """Feld-Zeile per nativer Maus-Sequenz in die Ziel-Gruppenliste ziehen."""
         handle = page.locator(f'li[data-dtf-id="{dtf_id}"] .field-drag-handle')
         target = page.locator(f'ul[data-sortable="fields"][data-group-id="{target_group_pk}"]')
-        # Die Seite kann nach den Board-Mutationen so gescrollt sein, dass das
-        # Board oberhalb des Viewports liegt (bounding_box liefert dann negative
-        # y-Werte und mouse-Events laufen ins Leere — seit der Live-Vorschau
-        # (P11) ist die Seite deutlich länger). Erst in den Viewport scrollen,
-        # DANN Koordinaten nehmen.
         # Zentrieren statt minimal scrollen: die Ziel-Liste kann OBERHALB der
         # Quellzeile liegen (Gruppen mit gleichem sort_order ordnen nach Name) —
         # mit der Quellzeile in der Viewport-Mitte sind beide Karten sichtbar.
-        handle.evaluate("el => el.scrollIntoView({block: 'center'})")
-        page.wait_for_timeout(200)
-        hb = handle.bounding_box()
-        tb = target.bounding_box()
+        # Robust gegen den asynchronen Fokus-Scroll der Live-Vorschau (Details in
+        # ``_center_for_drag``): wiederholt zentrieren, bis beide Boxen stabil im
+        # Viewport liegen, DANN Koordinaten nehmen.
+        hb, tb = cls._center_for_drag(page, handle, target)
         assert hb and tb, "Bounding-Box für Drag-Quelle/-Ziel nicht verfügbar"
         assert hb["y"] >= 0 and tb["y"] >= 0, (
             f"Drag-Elemente außerhalb des Viewports (handle y={hb['y']}, ziel y={tb['y']})"
