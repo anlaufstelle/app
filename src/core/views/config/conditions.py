@@ -42,6 +42,43 @@ VALUE_INPUT_TEMPLATE = "core/config/document_types/partials/condition_value_inpu
 # ---------------------------------------------------------------------------
 
 
+def _condition_display_value(condition):
+    """Menschenlesbarer Vergleichswert einer Bedingung fürs Board (#1714).
+
+    Löst den Roh-``value`` je **Quelltyp** auf, statt ihn roh anzuzeigen:
+
+    * ``boolean`` → ``Ja``/``Nein`` (übersetzbar, Muster
+      ``services/events/context.py:_format_field_display_value``);
+    * ``select``/``multi_select`` → Options-Label über eine ``label_map`` DIREKT
+      aus ``options_json`` (NICHT ``FieldTemplate.choices`` — das filtert
+      ``is_active`` und würde Bestandswerte mit inaktivem Slug nicht auflösen);
+      unbekannter Slug → Roh-Slug als Fallback;
+    * ``VALUELESS_OPERATORS`` (``is_empty``/``is_not_empty``) → ``None`` (kein Wert);
+    * sonst → ``str(value)``.
+
+    Rückgabe ``None`` bedeutet „kein Wert anzeigen" (das Template guardet mit
+    ``is not None``, damit auch ``0``/``False`` als Wert erscheinen).
+    """
+    if condition.operator in VALUELESS_OPERATORS:
+        return None
+    value = condition.value
+    if value is None:
+        return None
+    template = condition.depends_on_field.field_template
+    field_type = template.field_type
+    types = template.FieldType
+    if field_type == types.BOOLEAN:
+        return _("Ja") if value else _("Nein")
+    if field_type in (types.SELECT, types.MULTI_SELECT) and isinstance(value, str):
+        label_map = {
+            option["slug"]: option["label"]
+            for option in (template.options_json or [])
+            if isinstance(option, dict) and "slug" in option and "label" in option
+        }
+        return label_map.get(value, value)
+    return str(value)
+
+
 def condition_board_context(doc_type, *, form=None):
     """Baut den Kontext des Bedingungs-Boards.
 
@@ -50,6 +87,9 @@ def condition_board_context(doc_type, *, form=None):
     hier (View/DB) vorbereitet, nicht im Template. ``condition_next_group_index``
     ist ``max(group_index)+1`` (bzw. 0) und belegt das Neu-Formular als frische
     ODER-Gruppe vor (E21/Board-„ODER-Gruppe hinzufügen").
+
+    Jede Condition-Instanz bekommt zusätzlich ``display_value`` (#1714) — den
+    aufgelösten Anzeigewert (Label/Ja-Nein) fürs Template.
     """
     conditions = list(
         FieldCondition.objects.filter(target_field__document_type=doc_type)
@@ -59,6 +99,7 @@ def condition_board_context(doc_type, *, form=None):
 
     by_target: dict = {}
     for condition in conditions:
+        condition.display_value = _condition_display_value(condition)
         entry = by_target.setdefault(
             condition.target_field_id,
             {"target": condition.target_field, "groups": {}},

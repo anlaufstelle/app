@@ -42,7 +42,7 @@ selbst KEINEN HX-Trigger → kein Selbst-Refresh-Loop.
                 <li class="flex items-center justify-between gap-3 text-[13px]" data-testid="condition-row">
                     <span class="text-ink">
                         {% if not forloop.first %}<span class="text-ink-muted">{% trans "UND" %}</span> {% endif %}
-                        {% blocktrans with source=row.depends_on_field.field_template.name op=row.get_operator_display %}Wenn „{{ source }}" {{ op }}{% endblocktrans %}{% if row.value is not None %} <span class="font-medium">{{ row.value }}</span>{% endif %}
+                        {% blocktrans with source=row.depends_on_field.field_template.name op=row.get_operator_display %}Wenn „{{ source }}" {{ op }}{% endblocktrans %}{% if row.display_value is not None %} <span class="font-medium">{{ row.display_value }}</span>{% endif %}
                     </span>
                     <span class="flex items-center gap-2 flex-shrink-0">
                         <button type="button"

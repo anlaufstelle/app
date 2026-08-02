@@ -459,6 +459,105 @@ class TestConditionBoardRefresh:
 
 
 # ---------------------------------------------------------------------------
+# #1714 — Anzeige-Wert (Label/Ja-Nein) statt Roh-value im Board
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+class TestBoardDisplayValue:
+    """Das Board zeigt den menschenlesbaren Vergleichswert statt des Roh-``value``."""
+
+    def _board(self, client, doc_type):
+        return client.get(reverse("core:config_condition_board", kwargs={"pk": doc_type.pk})).content.decode()
+
+    def test_select_shows_option_label_including_inactive_slug(self, client, admin_user, doc_type_contact, facility):
+        notiz = _dtf(doc_type_contact, "notiz")
+        select_dtf = _make_dtf(
+            doc_type_contact,
+            facility,
+            "Farbe",
+            FieldTemplate.FieldType.SELECT,
+            options_json=[
+                {"slug": "rot", "label": "Rot", "is_active": True},
+                {"slug": "alt", "label": "Altbestand", "is_active": False},
+            ],
+            sort_order=6,
+        )
+        # Bestandswert mit INAKTIVEM Slug — .choices würde ihn filtern; options_json löst ihn auf.
+        FieldCondition.objects.create(
+            target_field=notiz, depends_on_field=select_dtf, operator="equals", value="alt", group_index=0
+        )
+        client.force_login(admin_user)
+        body = self._board(client, doc_type_contact)
+        assert '<span class="font-medium">Altbestand</span>' in body
+
+    def test_unknown_slug_falls_back_to_raw_slug(self, client, admin_user, doc_type_contact, facility):
+        notiz = _dtf(doc_type_contact, "notiz")
+        select_dtf = _make_dtf(
+            doc_type_contact,
+            facility,
+            "Status",
+            FieldTemplate.FieldType.SELECT,
+            options_json=[{"slug": "rot", "label": "Rot"}],
+            sort_order=6,
+        )
+        FieldCondition.objects.create(
+            target_field=notiz, depends_on_field=select_dtf, operator="equals", value="verschwunden", group_index=0
+        )
+        client.force_login(admin_user)
+        body = self._board(client, doc_type_contact)
+        assert '<span class="font-medium">verschwunden</span>' in body
+
+    def test_boolean_shows_ja_nein(self, client, admin_user, doc_type_contact, facility):
+        notiz = _dtf(doc_type_contact, "notiz")
+        bool_dtf = _make_dtf(doc_type_contact, facility, "Flag", FieldTemplate.FieldType.BOOLEAN, sort_order=6)
+        FieldCondition.objects.create(
+            target_field=notiz, depends_on_field=bool_dtf, operator="equals", value=True, group_index=0
+        )
+        FieldCondition.objects.create(
+            target_field=notiz, depends_on_field=bool_dtf, operator="equals", value=False, group_index=1
+        )
+        client.force_login(admin_user)
+        body = self._board(client, doc_type_contact)
+        assert '<span class="font-medium">Ja</span>' in body
+        assert '<span class="font-medium">Nein</span>' in body
+
+    def test_number_stays_number(self, client, admin_user, doc_type_contact, field_condition):
+        # field_condition: dauer(number) greater_than 10.
+        client.force_login(admin_user)
+        body = self._board(client, doc_type_contact)
+        assert '<span class="font-medium">10</span>' in body
+
+    def test_is_empty_shows_no_value(self, client, admin_user, doc_type_contact):
+        dauer, notiz = _dtf(doc_type_contact, "dauer"), _dtf(doc_type_contact, "notiz")
+        FieldCondition.objects.create(
+            target_field=notiz, depends_on_field=dauer, operator="is_empty", value=None, group_index=0
+        )
+        client.force_login(admin_user)
+        body = self._board(client, doc_type_contact)
+        # Einzige Bedingung, VALUELESS → kein Wert-Span im Board.
+        assert '<span class="font-medium">' not in body
+
+    def test_option_label_is_html_escaped(self, client, admin_user, doc_type_contact, facility):
+        notiz = _dtf(doc_type_contact, "notiz")
+        select_dtf = _make_dtf(
+            doc_type_contact,
+            facility,
+            "Markup",
+            FieldTemplate.FieldType.SELECT,
+            options_json=[{"slug": "x", "label": "<b>Fett</b>"}],
+            sort_order=6,
+        )
+        FieldCondition.objects.create(
+            target_field=notiz, depends_on_field=select_dtf, operator="equals", value="x", group_index=0
+        )
+        client.force_login(admin_user)
+        body = self._board(client, doc_type_contact)
+        assert "&lt;b&gt;Fett&lt;/b&gt;" in body
+        assert "<b>Fett</b>" not in body
+
+
+# ---------------------------------------------------------------------------
 # AuthZ / IDOR
 # ---------------------------------------------------------------------------
 
